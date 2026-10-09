@@ -11,6 +11,8 @@ Python 3.12以降を用意して `start-demo.cmd` をダブルクリックしま
 ポート競合時は `python app/server.py --port 8766 --open` を使えます。
 
 ## 現在できること
+- コンパクトな検索・広い一覧・右の詳細/タグ編集パネル（狭い画面ではスライド表示）
+- 未保存変更の確認、検索の空結果・通信エラーからの復帰
 - 5万件の一覧を60件ずつ表示
 - タイトル・タグの文字検索、メディア種別で絞り込み
 - お気に入り・未確認・棚に入れたものの表示
@@ -24,7 +26,7 @@ Python 3.12以降を用意して `start-demo.cmd` をダブルクリックしま
 ## 開発と検証
 - `python -m unittest discover -s tests -v`
 - `node --check web/app.js`
-- UI操作テスト: PlaywrightとEdgeを用意し、デモ起動中に `node tools/check-ui.cjs`
+- UI操作テスト: Node版PlaywrightとEdgeを用意し、専用デモDBでデモ起動中に `node tools/check-ui.cjs`（開発PCで実行）
 
 UIテストは専用デモDBで使用してください。架空レコードを編集して元に戻します。
 
@@ -32,6 +34,7 @@ UIテストは専用デモDBで使用してください。架空レコードを�
 - [仕様](docs/spec.md)
 - [GUI比較計画](docs/gui-comparison.md)
 - [作業状況・次の作業](docs/status.md)
+- [UI監査・今回の改修と検証](docs/ui-audit.md)
 - [共通API](docs/api.md)
 
 ## 保存先
