@@ -41,4 +41,4 @@ API、SQLiteスキーマ、ページ60件、文字検索、種類/表示フィ�
 - `app/server.py --db <path> --port 0` で、既存デモDBを汚染しないテスト用サーバーを起動できるようにした。通常起動の挙動は変更なし。
 - `tools/run-ui-check.cjs` が一時SQLiteを生成・終了時に破棄し、Edgeによる実HTTP UI検証を実行する。
 - `tools/check-ui.cjs` へ通信失敗後の空一覧・再試行検証を追加。GitHub ActionsにWindows Edgeの自動UI検証を追加した。
-- CI結果を確認するまで成功扱いにはしない。ローカルのNode Playwright/Edgeによる直接テストも引き続き未検証。
+- GitHub Actions run #28（Windows）で `tests` と `browser-smoke` 両ジョブが成功。実HTTP＋Edge操作をCIで検証済み。ただしユーザーのPC上でのEdge実機操作やWindows DPI確認は引き続き未検証。
