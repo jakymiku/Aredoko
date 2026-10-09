@@ -83,8 +83,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--open', action='store_true')
+    parser.add_argument('--db', type=Path, default=ROOT / 'data' / 'demo.sqlite',
+                        help='SQLite path (dedicated temporary DB recommended for UI tests)')
     args = parser.parse_args()
-    catalog = Catalog(ROOT / 'data' / 'demo.sqlite')
+    catalog = Catalog(args.db)
     catalog.seed()
     server = ThreadingHTTPServer(('127.0.0.1', args.port), handler_for(catalog, secrets.token_urlsafe(32)))
     url = f'http://127.0.0.1:{server.server_port}'
