@@ -47,6 +47,26 @@ class CatalogTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.catalog.update([1], {'title': 'not editable'})
 
+    def test_filters_and_validation_do_not_mutate_records(self):
+        self.catalog.update([1], {'tags': ['雨の街', '雨の街', ' 映画 '], 'favorite': True, 'shelf': '閲覧'})
+        self.assertEqual(self.catalog.get(1)['tags'], ['雨の街', '映画'])
+        self.assertEqual(self.catalog.search(view='favorites')['total'], 1)
+        self.assertEqual(self.catalog.search(view='shelf')['total'], 1)
+        self.assertEqual(self.catalog.search(view='unreviewed')['total'], 250)
+        self.assertEqual(self.catalog.search(query='_')['total'], 0)
+        for updates in ({'tags': ['x' * 61]}, {'shelf': 'x' * 81},
+                        {'favorite': 1}, {'reviewed': 'yes'}, {'tags': 'not-list'}):
+            with self.subTest(updates=updates), self.assertRaises(ValueError):
+                self.catalog.update([1], updates)
+        self.assertTrue(self.catalog.get(1)['favorite'])
+        self.assertEqual(self.catalog.get(1)['shelf'], '閲覧')
+
+    def test_search_rejects_invalid_queries(self):
+        for kwargs in ({'kind': 'other'}, {'view': 'missing'}, {'page': -1},
+                       {'limit': 0}, {'limit': 121}, {'query': 'x' * 301}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                self.catalog.search(**kwargs)
+
     def test_http_session_boundary(self):
         server = ThreadingHTTPServer(('127.0.0.1', 0), handler_for(self.catalog, 'test-token'))
         thread = threading.Thread(target=server.serve_forever, daemon=True)
