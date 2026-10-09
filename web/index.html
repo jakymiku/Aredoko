@@ -1,17 +1,101 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Aredoko — Your collection, rediscovered.</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151a1d">
+  <title>Aredoko — ライブラリ</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
 <body>
-<aside class="sidebar"><a class="brand" href="/">a<span>Aredoko<small>YOUR PERSONAL LIBRARY</small></span></a>
-<div class="section-label">ライブラリ</div><nav id="nav"><button class="active" data-view="all">▦　すべてのアイテム <span id="total"></span></button><button data-view="favorites">☆　お気に入り</button><button data-view="unreviewed">◷　未確認</button><button data-view="shelf">▤　棚に入れたもの</button></nav>
-<div class="section-label">この試作について</div><p class="side-note">5万件の架空データで<br>探す・選ぶ・整理する操作を確認。<br><br>本物のファイルは読み込みません。</p>
-<div class="local"><i></i> LOCAL DEMO <small>AI解析・Komga接続は未実装</small></div></aside>
-<main><header><span>MY COLLECTION / <b id="breadcrumb">すべて</b></span><span class="badge">GUI PROTOTYPE · 01</span></header>
-<section class="intro"><div><div class="eyebrow">REDISCOVER WHAT YOU HAVE</div><h1 id="heading">持っているものを、もう一度。</h1><p>画像、本、動画、音楽。あなたのコレクションをひとつの棚に。</p></div></section>
-<div class="searchbar"><span>⌕</span><input id="query" aria-label="タイトル・タグ検索" placeholder="タイトルやタグで探す… 例：雨の街"><kbd>Ctrl K</kbd></div>
-<p class="search-note">現在は文字検索です。意味・雰囲気によるAI検索は、次の段階で接続します。</p>
-<div class="toolbar"><div id="filters"><button class="active" data-kind="">すべて</button><button data-kind="book">本</button><button data-kind="image">画像</button><button data-kind="video">動画</button><button data-kind="audio">音楽</button></div><span id="result-count" aria-live="polite"></span></div>
-<div class="selection"><label><input id="select-page" type="checkbox"> このページを選択</label><span id="selected-count">0件選択</span><button id="bulk">まとめて整理</button><button id="clear">選択解除</button></div>
-<div id="grid" class="grid" aria-busy="true"></div>
-<footer><button id="prev">← 前へ</button><span id="page-info"></span><button id="next">次へ →</button></footer></main>
-<dialog id="editor"><form id="edit-form"><div class="dialog-head"><span class="eyebrow">ORGANIZE</span><button type="button" id="close" aria-label="閉じる">×</button></div><h2 id="edit-title"></h2><p id="edit-description"></p><label>タグ（カンマ区切り）<input id="tags" maxlength="1800"></label><label>棚<input id="shelf" maxlength="80" placeholder="例：次の制作に使う"></label><div class="checks"><label><input id="favorite" type="checkbox"> お気に入り</label><label><input id="reviewed" type="checkbox"> 確認済み</label></div><p class="notice" id="bulk-note"></p><button class="primary" type="submit">変更を保存</button></form></dialog>
-<div id="toast" role="status" aria-live="polite"></div></body></html>
+  <a class="skip-link" href="#workspace">一覧へ移動</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="ライブラリのナビゲーション">
+      <a class="brand" href="/" translate="no" aria-label="Aredoko ホーム">
+        <span class="brand-symbol" aria-hidden="true">a<span>.</span></span>
+        <span class="brand-name">Aredoko<small>ローカルライブラリ</small></span>
+      </a>
+      <div class="side-group">
+        <p class="section-label">ライブラリ</p>
+        <nav id="nav" aria-label="表示範囲">
+          <button type="button" class="active" data-view="all" aria-pressed="true"><span aria-hidden="true">▦</span> すべて <span class="nav-count" id="total">—</span></button>
+          <button type="button" data-view="favorites" aria-pressed="false"><span aria-hidden="true">☆</span> お気に入り</button>
+          <button type="button" data-view="unreviewed" aria-pressed="false"><span aria-hidden="true">◷</span> 未確認</button>
+          <button type="button" data-view="shelf" aria-pressed="false"><span aria-hidden="true">▤</span> 棚に入れたもの</button>
+        </nav>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="demo-state"><span class="status-dot" aria-hidden="true"></span>ローカルデモ</div>
+        <p>架空の5万件で操作を検証中。実ファイルは読み込みません。</p>
+        <p>AI検索・Komga連携は未実装</p>
+      </div>
+    </aside>
+
+    <main class="workspace" id="workspace">
+      <header class="topbar">
+        <div class="location"><span class="location-parent">コレクション</span><span class="location-divider" aria-hidden="true">/</span><strong id="breadcrumb">すべて</strong></div>
+        <span class="prototype-label">操作試作 <span aria-hidden="true">·</span> 文字検索</span>
+      </header>
+      <section class="library" aria-labelledby="heading">
+        <div class="page-heading">
+          <div><h1 id="heading">ライブラリ</h1><p>探して、選んで、整理する。</p></div>
+          <span class="data-label">DEMO DATA <span aria-hidden="true">/</span> 実ファイル未接続</span>
+        </div>
+        <div class="searchbar" role="search">
+          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+          <label class="visually-hidden" for="query">タイトル・タグを文字検索</label>
+          <input id="query" type="search" name="query" autocomplete="off" maxlength="300" placeholder="タイトル・タグで検索…">
+          <kbd>Ctrl K</kbd>
+        </div>
+        <div class="query-hint">ファイル名・タグの部分一致検索です。意味検索には対応していません。</div>
+        <div class="toolbar">
+          <div id="filters" class="filters" role="group" aria-label="メディアの種類">
+            <button type="button" class="active" data-kind="" aria-pressed="true">すべて</button>
+            <button type="button" data-kind="book" aria-pressed="false">本</button>
+            <button type="button" data-kind="image" aria-pressed="false">画像</button>
+            <button type="button" data-kind="video" aria-pressed="false">動画</button>
+            <button type="button" data-kind="audio" aria-pressed="false">音楽</button>
+          </div>
+          <span id="result-count" class="result-count" aria-live="polite">読み込み中…</span>
+        </div>
+        <div class="selection">
+          <label class="select-all"><input id="select-page" type="checkbox"> このページを選択</label>
+          <span id="selected-count" class="selected-count" aria-live="polite">0件選択</span>
+          <div class="selection-actions">
+            <button id="clear" type="button" disabled>選択解除</button>
+            <button id="bulk" type="button" class="emphasis" disabled>選択した項目を編集</button>
+          </div>
+        </div>
+        <div id="grid-status" class="grid-status" role="alert" hidden></div>
+        <div id="grid" class="grid" aria-label="検索結果" aria-busy="true"></div>
+        <footer class="pagination" aria-label="ページ移動">
+          <button id="prev" type="button" disabled>← 前の60件</button>
+          <span id="page-info" aria-live="polite">—</span>
+          <button id="next" type="button" disabled>次の60件 →</button>
+        </footer>
+      </section>
+    </main>
+
+    <div id="panel-scrim" class="panel-scrim" hidden></div>
+    <aside class="inspector" id="inspector" aria-labelledby="inspector-heading">
+      <div class="inspector-top"><div><span class="panel-overline">ITEM INSPECTOR</span><h2 id="inspector-heading">詳細と編集</h2></div><button type="button" id="close" class="icon-button" aria-label="詳細パネルを閉じる" title="閉じる">×</button></div>
+      <div id="panel-empty" class="panel-empty"><div class="empty-symbol" aria-hidden="true">▤</div><h3>アイテムを選択</h3><p>一覧から作品を選ぶと、ここでタグや棚を編集できます。</p><p class="panel-tip">複数選択ならまとめて編集できます。</p></div>
+      <form id="edit-form" novalidate hidden>
+        <div class="detail-summary">
+          <img id="detail-cover" alt="架空データの表紙" width="112" height="140">
+          <div class="detail-copy"><span class="detail-kind" id="detail-kind">—</span><h3 id="edit-title"></h3><p id="edit-description"></p></div>
+        </div>
+        <p id="bulk-note" class="bulk-note" hidden></p>
+        <div class="form-section"><label for="tags">タグ <span class="form-label-hint">カンマで区切る</span></label><textarea id="tags" name="tags" autocomplete="off" rows="3" maxlength="1800" placeholder="例：雨の街, お気に入り"></textarea><span class="field-help">最大30個・各60文字まで</span></div>
+        <div class="form-section"><label for="shelf">棚 <span class="form-label-hint">1つまで</span></label><input id="shelf" name="shelf" autocomplete="off" maxlength="80" placeholder="例：次の制作に使う"></div>
+        <fieldset class="form-section flags"><legend>整理状態</legend><label><input type="checkbox" id="favorite" name="favorite"> お気に入りに登録</label><label><input type="checkbox" id="reviewed" name="reviewed"> 確認済みにする</label></fieldset>
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+        <div class="form-actions"><span class="save-state" id="save-state" role="status" aria-live="polite">変更なし</span><button id="reset-edit" type="button">元に戻す</button><button id="save" class="primary" type="submit">変更を保存</button></div>
+        <p class="detail-footnote">変更はこのPCのデモDBへ保存されます。元ファイルは変更しません。</p>
+      </form>
+    </aside>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
