@@ -170,12 +170,15 @@ async function load() {
   const myRequest = ++listRequest;
   const grid = $('#grid');
   grid.setAttribute('aria-busy', 'true');
+  // Prevent interacting with stale cards while a new filter/page is loading.
+  $('#prev').disabled = true;
+  $('#next').disabled = true;
   grid.classList.add('is-loading');
   $('#grid-status').hidden = true;
   try {
     const params = new URLSearchParams({q: state.q, kind: state.kind, view: state.view, page: String(state.page)});
     const data = await api('/api/items?' + params);
-    if (myRequest !== listRequest) return;
+    if (myRequest !== listRequest) return false;
     state.items = data.items;
     state.total = data.total;
     if (!state.items.length && state.page > 0) {
@@ -184,8 +187,9 @@ async function load() {
       return load();
     }
     render();
+    return true;
   } catch (error) {
-    if (myRequest !== listRequest) return;
+    if (myRequest !== listRequest) return false;
     const status = $('#grid-status');
     status.textContent = `一覧を読み込めませんでした: ${error.message} `;
     const retry = document.createElement('button');
@@ -194,7 +198,16 @@ async function load() {
     retry.onclick = load;
     status.append(retry);
     status.hidden = false;
+    state.items = [];
+    state.total = 0;
+    state.selected.clear();
+    grid.replaceChildren();
+    $('#prev').disabled = true;
+    $('#next').disabled = true;
+    $('#page-info').textContent = '—';
+    selection();
     $('#result-count').textContent = '読み込みに失敗しました';
+    return false;
   } finally {
     if (myRequest === listRequest) {
       grid.setAttribute('aria-busy', 'false');
@@ -392,20 +405,32 @@ $('#edit-form').onsubmit = async (event) => {
   $('#save').textContent = '保存中…';
   $('#save').disabled = true;
   $('#reset-edit').disabled = true;
+  let committed = false;
   try {
     const ids = state.panel.ids;
     await api('/api/items/update', {ids, changes});
+    committed = true;
     setDirty(false);
-    if (state.panel.mode === 'single') state.panel.item = await api('/api/items/' + ids[0]);
-    else state.panel = {mode: 'bulk', ids, item: null};
+    // A successful write must never be presented as a failed save if refresh fails.
+    if (state.panel.mode === 'single') {
+      state.panel.item = {...state.panel.item, ...changes};
+    } else {
+      state.panel = {mode: 'bulk', ids, item: null};
+    }
     state.selected.clear();
-    await load();
     fillPanel();
+    if (!await load()) throw Error('一覧の再読込に失敗しました');
     toast(`${numberFormat.format(ids.length)}件を保存しました`);
   } catch (error) {
-    $('#form-error').textContent = `保存できませんでした: ${error.message}。入力内容を確認し、再試行してください。`;
-    $('#form-error').hidden = false;
-    toast('保存に失敗しました');
+    if (committed) {
+      $('#form-error').textContent = `変更は保存しましたが、画面を更新できませんでした: ${error.message}。一覧を再読み込みしてください。`;
+      $('#form-error').hidden = false;
+      toast('変更は保存済みです');
+    } else {
+      $('#form-error').textContent = `保存できませんでした: ${error.message}。入力内容を確認し、再試行してください。`;
+      $('#form-error').hidden = false;
+      toast('保存に失敗しました');
+    }
   } finally {
     state.saving = false;
     $('#save').textContent = '変更を保存';
