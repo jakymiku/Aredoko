@@ -36,3 +36,9 @@ API、SQLiteスキーマ、ページ60件、文字検索、種類/表示フィ�
 - 更新POST成功後に再読込が失敗した場合は「保存済み・再読込失敗」と表示し、重複保存を促さない。
 - Pythonの項目バリデーション/絞込検索テストを追加（計6件）。
 - Chromiumの `about:blank` でHTML/CSS/JSを描画し、fetchを実ローカルAPIに橋渡しして、架空DBへのタグ保存と360pxでのパネル表示を再確認した。直接HTTP遷移はブラウザ管理ポリシーでブロックされているため未検証。
+
+## Edge自動検証のCI追加
+- `app/server.py --db <path> --port 0` で、既存デモDBを汚染しないテスト用サーバーを起動できるようにした。通常起動の挙動は変更なし。
+- `tools/run-ui-check.cjs` が一時SQLiteを生成・終了時に破棄し、Edgeによる実HTTP UI検証を実行する。
+- `tools/check-ui.cjs` へ通信失敗後の空一覧・再試行検証を追加。GitHub ActionsにWindows Edgeの自動UI検証を追加した。
+- CI結果を確認するまで成功扱いにはしない。ローカルのNode Playwright/Edgeによる直接テストも引き続き未検証。
