@@ -31,7 +31,7 @@
 ## 追加のUI自動検証（PR #1 更新）
 - `node tools/run-ui-check.cjs` を追加。OS一時ディレクトリに検証用SQLiteを生成し、`--db` 指定・ポート自動割り当てでサーバーを起動してEdgeのE2Eを実施する。終了時は一時DBを破棄する。
 - CIにWindows Edgeでの実HTTP画面操作ジョブを追加。検索、単体保存、再読込、一括編集警告、未保存確認、画面幅と通信エラーの復帰を自動確認する。
-- ローカルPython6件とJS構文検査は完了。CIのEdgeジョブは実行結果を別途確認する。
+- ローカルPython6件とJS構文検査が成功。GitHub Actions run #28（Windows）の `tests` および `browser-smoke` 両ジョブが成功した。
 
 ## 未完了
 AI検索、実ファイル登録、ZIP/CBZ読書、Komga連携、移動検出、複数棚、解析キュー。
