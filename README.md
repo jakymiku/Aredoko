@@ -26,9 +26,10 @@ Python 3.12以降を用意して `start-demo.cmd` をダブルクリックしま
 ## 開発と検証
 - `python -m unittest discover -s tests -v`
 - `node --check web/app.js`
-- UI操作テスト: Node版PlaywrightとEdgeを用意し、専用デモDBでデモ起動中に `node tools/check-ui.cjs`（開発PCで実行）
+- UI操作テスト（自動で一時DBを作成・破棄）: Node版PlaywrightとMicrosoft Edgeを用意し、`node tools/run-ui-check.cjs`
+- `node tools/check-ui.cjs` は既に起動しているデモを検査する従来コマンドです。必ず検証専用DBで使ってください。
 
-UIテストは専用デモDBで使用してください。架空レコードを編集して元に戻します。
+UI自動テストは `--db` オプションを使用してシステム一時フォルダに5万件の架空レコードを作り、HTTPサーバーをランダムな空きポートで起動します。通常の `data/demo.sqlite` を読み書きしません。WindowsのGitHub ActionsでもEdge自動操作を実施します。手動でテスト用DBを作る場合は `python app/server.py --db data/ui-test.sqlite --port 8766` を利用できます。
 
 ## 文書
 - [仕様](docs/spec.md)
