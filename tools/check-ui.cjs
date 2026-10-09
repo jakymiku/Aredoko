@@ -1,16 +1,17 @@
-// Run against a dedicated demo database: this test edits one fictional record and restores it.
-// Playwright and Microsoft Edge are required in the Windows environment.
+// Run against a dedicated demo database; see run-ui-check.cjs for isolated startup.
+// Node Playwright + Edge are required unless AREDOKO_BROWSER_CHANNEL=chromium.
 const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
 
 (async () => {
-  const browser = await chromium.launch({channel: 'msedge', headless: true});
+  const channel = process.env.AREDOKO_BROWSER_CHANNEL || 'msedge';
+  const browser = await chromium.launch(channel === 'chromium' ? {headless: true} : {channel, headless: true});
   const page = await browser.newPage({viewport: {width: 1440, height: 1050}});
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('http://127.0.0.1:8765');
+  await page.goto(process.env.AREDOKO_BASE_URL || 'http://127.0.0.1:8765');
   await page.waitForFunction(() => document.querySelectorAll('.card').length === 60);
   assert.equal(await page.locator('#result-count').textContent(), '50,000 件');
   assert.ok(await page.locator('#inspector').isVisible());
@@ -86,7 +87,19 @@ const fs = require('node:fs');
   assert.equal(await page.locator('#inspector').evaluate(el => el.classList.contains('is-open')), true);
   await page.locator('#close').click();
   assert.ok(await page.locator('#edit-form').isHidden());
+
+  // Simulate a failed list request and ensure stale cards cannot be acted on.
+  await page.route('**/api/items?**', route => route.fulfill({
+    status: 503, contentType: 'application/json', body: JSON.stringify({error: '一時的なテスト障害'})
+  }), {times: 1});
+  await page.locator('[data-kind="image"]').click();
+  await page.locator('#grid-status button').waitFor({state: 'visible'});
+  assert.equal(await page.locator('.card').count(), 0);
+  assert.equal(await page.locator('#select-page').isDisabled(), true);
+  await page.locator('#grid-status button').click();
+  await page.waitForFunction(() => document.querySelectorAll('.card').length === 60);
+  assert.ok(await page.locator('#grid-status').isHidden());
   assert.deepEqual(errors, []);
-  console.log('PASS: filters, search, inspector edit/persistence, paging, bulk warning, unsaved prompt, shortcut, responsive');
+  console.log('PASS: filters, search, inspector edit/persistence, paging, bulk warning, unsaved prompt, shortcut, responsive, failed-request recovery');
   await browser.close();
 })().catch(error => { console.error(error); process.exit(1); });
