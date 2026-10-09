@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Aredoko — Your collection, rediscovered.</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<aside class="sidebar"><a class="brand" href="/">a<span>Aredoko<small>YOUR PERSONAL LIBRARY</small></span></a>
+<div class="section-label">ライブラリ</div><nav id="nav"><button class="active" data-view="all">▦　すべてのアイテム <span id="total"></span></button><button data-view="favorites">☆　お気に入り</button><button data-view="unreviewed">◷　未確認</button><button data-view="shelf">▤　棚に入れたもの</button></nav>
+<div class="section-label">この試作について</div><p class="side-note">5万件の架空データで<br>探す・選ぶ・整理する操作を確認。<br><br>本物のファイルは読み込みません。</p>
+<div class="local"><i></i> LOCAL DEMO <small>AI解析・Komga接続は未実装</small></div></aside>
+<main><header><span>MY COLLECTION / <b id="breadcrumb">すべて</b></span><span class="badge">GUI PROTOTYPE · 01</span></header>
+<section class="intro"><div><div class="eyebrow">REDISCOVER WHAT YOU HAVE</div><h1 id="heading">持っているものを、もう一度。</h1><p>画像、本、動画、音楽。あなたのコレクションをひとつの棚に。</p></div></section>
+<div class="searchbar"><span>⌕</span><input id="query" aria-label="タイトル・タグ検索" placeholder="タイトルやタグで探す… 例：雨の街"><kbd>Ctrl K</kbd></div>
+<p class="search-note">現在は文字検索です。意味・雰囲気によるAI検索は、次の段階で接続します。</p>
+<div class="toolbar"><div id="filters"><button class="active" data-kind="">すべて</button><button data-kind="book">本</button><button data-kind="image">画像</button><button data-kind="video">動画</button><button data-kind="audio">音楽</button></div><span id="result-count" aria-live="polite"></span></div>
+<div class="selection"><label><input id="select-page" type="checkbox"> このページを選択</label><span id="selected-count">0件選択</span><button id="bulk">まとめて整理</button><button id="clear">選択解除</button></div>
+<div id="grid" class="grid" aria-busy="true"></div>
+<footer><button id="prev">← 前へ</button><span id="page-info"></span><button id="next">次へ →</button></footer></main>
+<dialog id="editor"><form id="edit-form"><div class="dialog-head"><span class="eyebrow">ORGANIZE</span><button type="button" id="close" aria-label="閉じる">×</button></div><h2 id="edit-title"></h2><p id="edit-description"></p><label>タグ（カンマ区切り）<input id="tags" maxlength="1800"></label><label>棚<input id="shelf" maxlength="80" placeholder="例：次の制作に使う"></label><div class="checks"><label><input id="favorite" type="checkbox"> お気に入り</label><label><input id="reviewed" type="checkbox"> 確認済み</label></div><p class="notice" id="bulk-note"></p><button class="primary" type="submit">変更を保存</button></form></dialog>
+<div id="toast" role="status" aria-live="polite"></div></body></html>
