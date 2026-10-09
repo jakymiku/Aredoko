@@ -1,6 +1,8 @@
 # 作業状況 — 2026-10-10
 
 ## 完了
+- Web試作のUIを「左ナビ/中央一覧/右詳細タグ編集」へ変更。検索バー・カード密度・狭幅パネル・未保存確認・エラー/空状態を改善。
+- HallmarkおよびWeb Interface Guidelinesを参照したソース監査結果を `docs/ui-audit.md` に記録。
 - 名称・仕様・GUI比較条件を文書化。
 - 非公開GitHubリポジトリ jakymiku/Aredoko に接続・pushを確認。
 - Python標準ライブラリでSQLiteカタログとローカルHTTP APIを実装。
@@ -9,6 +11,10 @@
 - Webの操作試作を作成。HTML/CSS/JavaScriptによる試作でありReact/Tauriは未導入。
 
 ## 検証済み
+- **今回の改修後:** Pythonバックエンド4件、JS構文検査、Chromiumによる描画・操作検証（ローカルAPIへの橋渡し利用）が成功。詳細は `docs/ui-audit.md`。
+- **今回の環境では未検証:** Edgeからの実HTTP画面遷移/Node Playwright E2E、WinUI/Tauri/Windows実機。
+
+### 前回の検証履歴（改修前）
 - バックエンド4テスト: ページ分割と検索、再起動後の保持、不正な一括変更の原子性、HTTP更新のセッション検証。
 - JavaScript構文検査。
 - Edgeヘッドレスで一覧・本フィルタ・文字検索・タグ編集・再読込後の保持・ページ送り・60件選択を確認。
@@ -21,7 +27,7 @@ WinUI 3とTauriのネイティブアプリ試作・性能比較は未実施。
 .NET SDKは一覧に出ず、cargoはPATH上に見つからない。Visual Studio 2022 Communityは存在するが必要なワークロードは未確認。
 
 ## 次に進める順番
-1. 操作試作の方向性を確認。実データの読み取り対象フォルダを指定してもらう。
+1. 更新したUIをWindows上のEdgeで `node tools/check-ui.cjs` により再検証し、画面の方向性を確認する。実データの読み取り対象フォルダはユーザーの許可を得て指定する。
 2. 比較用SDK/ビルド環境を準備し、同じAPIを使う両GUIを作る。
 3. 共通サムネイルと読書データを追加してGUI性能を比較する。
 4. 採用GUIにフォルダ登録と段階的インデックスを接続する。
