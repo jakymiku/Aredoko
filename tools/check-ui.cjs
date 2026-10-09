@@ -1,53 +1,92 @@
-// Set NODE_PATH to your Playwright installation or install it in a separate dev environment.
+// Run against a dedicated demo database: this test edits one fictional record and restores it.
+// Playwright and Microsoft Edge are required in the Windows environment.
 const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
-(async()=>{
-  const browser = await chromium.launch({channel:'msedge',headless:true});
-  const page = await browser.newPage({viewport:{width:1440,height:1050}});
-  const errors=[];
-  page.on('pageerror', e=>errors.push(e.message));
+
+(async () => {
+  const browser = await chromium.launch({channel: 'msedge', headless: true});
+  const page = await browser.newPage({viewport: {width: 1440, height: 1050}});
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
   await page.goto('http://127.0.0.1:8765');
-  await page.waitForFunction(()=>document.querySelectorAll('.card').length===60);
-  assert.match(await page.locator('#result-count').textContent(), /50,000/);
+  await page.waitForFunction(() => document.querySelectorAll('.card').length === 60);
+  assert.equal(await page.locator('#result-count').textContent(), '50,000 件');
+  assert.ok(await page.locator('#inspector').isVisible());
+
   await page.locator('[data-kind="book"]').click();
-  await page.waitForFunction(()=>document.querySelector('#result-count').textContent.includes('12,500'));
+  await page.waitForFunction(() => document.querySelector('#result-count').textContent === '12,500 件');
   await page.locator('#query').fill('雨の街');
-  await page.waitForFunction(()=>[...document.querySelectorAll('.card h3')].every(x=>x.textContent.includes('雨の街')));
-  await page.locator('.art button').first().click();
+  await page.waitForFunction(() => document.querySelector('#result-count').textContent === '1,562 件');
+  assert.ok((await page.locator('.card h3').allTextContents()).every(text => text.includes('雨の街')));
+  await page.locator('.art-open').first().click();
+  await page.locator('#edit-form').waitFor({state: 'visible'});
+  const original = {
+    tags: await page.locator('#tags').inputValue(),
+    shelf: await page.locator('#shelf').inputValue(),
+    favorite: await page.locator('#favorite').isChecked(),
+    reviewed: await page.locator('#reviewed').isChecked()
+  };
+
   await page.locator('#tags').fill('雨の街, サンプル, UI検証済み');
   await page.locator('#shelf').fill('試作チェック');
   await page.locator('#favorite').check();
-  await page.locator('button[type=submit]').click();
-  await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  await page.locator('#save').click();
+  await page.waitForFunction(() => document.querySelector('#save-state').textContent === '変更なし');
   await page.reload();
   await page.locator('#query').fill('UI検証済み');
-  await page.waitForFunction(()=>document.querySelector('#result-count').textContent==='1 items');
-  assert.equal(await page.locator('.card .star').count(),1);
-  await page.locator('.art button').first().click();
-  assert.equal(await page.locator('#shelf').inputValue(),'試作チェック');
-  // Restore the fixture record modified by this test.
-  await page.locator('#tags').fill('雨の街, サンプル');
-  await page.locator('#shelf').fill('');
-  await page.locator('#favorite').uncheck();
-  await page.locator('button[type=submit]').click();
-  await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  await page.waitForFunction(() => document.querySelector('#result-count').textContent === '1 件');
+  assert.equal(await page.locator('.card .star').count(), 1);
+  await page.locator('.art-open').first().click();
+  await page.locator('#edit-form').waitFor({state: 'visible'});
+  assert.equal(await page.locator('#shelf').inputValue(), '試作チェック');
+
+  // Restore the fictional record to its original state.
+  await page.locator('#tags').fill(original.tags);
+  await page.locator('#shelf').fill(original.shelf);
+  if (original.favorite) await page.locator('#favorite').check();
+  else await page.locator('#favorite').uncheck();
+  if (original.reviewed) await page.locator('#reviewed').check();
+  else await page.locator('#reviewed').uncheck();
+  await page.locator('#save').click();
+  await page.waitForFunction(() => document.querySelector('#save-state').textContent === '変更なし');
   await page.locator('#query').fill('');
-  await page.waitForFunction(()=>document.querySelector('#result-count').textContent==='50,000 items');
+  await page.waitForFunction(() => document.querySelector('#result-count').textContent === '12,500 件');
+  await page.locator('[data-kind=""]').click();
+  await page.waitForFunction(() => document.querySelector('#result-count').textContent === '50,000 件');
   await page.locator('#next').click();
-  await page.waitForFunction(()=>document.querySelector('#page-info').textContent.startsWith('2 /'));
+  await page.waitForFunction(() => document.querySelector('#page-info').textContent.startsWith('2 /'));
   await page.locator('#select-page').check();
-  assert.equal(await page.locator('#selected-count').textContent(),'60件選択');
-  await page.locator('#clear').click();
-  await page.locator('#prev').click();
-  await page.waitForFunction(()=>document.querySelector('#page-info').textContent.startsWith('1 /'));
-  const out=path.resolve('cache/qa');fs.mkdirSync(out,{recursive:true});
-  await page.screenshot({path:path.join(out,'desktop.png'),fullPage:false});
-  await page.setViewportSize({width:540,height:900});
-  await page.screenshot({path:path.join(out,'narrow.png'),fullPage:false});
-  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-  assert.deepEqual(errors,[]);
-  console.log('PASS: 50000 records, filtering, edit persistence, pagination, selection, narrow layout, no JS errors');
+  assert.equal(await page.locator('#selected-count').textContent(), '60件選択');
+  await page.locator('#bulk').click();
+  await page.locator('#edit-form').waitFor({state: 'visible'});
+  assert.match(await page.locator('#bulk-note').textContent(), /置き換え/);
+  await page.locator('#tags').fill('未保存のテスト');
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('[data-view="favorites"]').click();
+  await page.waitForFunction(() => document.querySelector('#breadcrumb').textContent === 'お気に入り');
+  assert.ok(await page.locator('#edit-form').isHidden());
+  await page.locator('[data-view="all"]').click();
+  await page.waitForFunction(() => document.querySelectorAll('.card').length === 60);
+  await page.keyboard.press('Control+k');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'query');
+
+  const out = path.resolve('cache/qa');
+  fs.mkdirSync(out, {recursive: true});
+  await page.screenshot({path: path.join(out, 'desktop.png'), animations: 'disabled'});
+  for (const width of [320, 375, 414, 540, 768]) {
+    await page.setViewportSize({width, height: 900});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `overflow ${width}px`);
+  }
+  await page.setViewportSize({width: 540, height: 900});
+  await page.screenshot({path: path.join(out, 'narrow.png'), animations: 'disabled'});
+  await page.locator('.art-open').first().click();
+  await page.locator('#edit-form').waitFor({state: 'visible'});
+  assert.equal(await page.locator('#inspector').evaluate(el => el.classList.contains('is-open')), true);
+  await page.locator('#close').click();
+  assert.ok(await page.locator('#edit-form').isHidden());
+  assert.deepEqual(errors, []);
+  console.log('PASS: filters, search, inspector edit/persistence, paging, bulk warning, unsaved prompt, shortcut, responsive');
   await browser.close();
-})().catch(e=>{console.error(e);process.exit(1)});
+})().catch(error => { console.error(error); process.exit(1); });
