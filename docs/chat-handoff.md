@@ -20,10 +20,10 @@ Aredokoの開発を引き継いでください。添付ZIPまたはアクセス�
 GUIはTauriとWinUI 3を比較予定で未決定。Pythonを共通バックエンドとする。
 
 ## 実装済みと未実装
-Python標準ライブラリ+SQLite+HTML/CSS/JavaScriptのWeb試作あり。
+Python標準ライブラリ+SQLite+HTML/CSS/JavaScriptのWeb試作あり。2026-10-10の改修で、左ナビ/中央のコンパクトな検索と広い一覧/右詳細タグ編集パネルを実装。画面の空状態・エラー状態・未保存確認も追加。
 架空データ5万件、60件ずつ一覧、タイトル/タグの文字検索、種類別表示、タグ/単一棚/お気に入り/確認済みの単体・一括編集、保存。
 AI検索、実ファイル走査、読書ビューア、Komga接続、移動検出、複数棚、解析キューは未実装。
-React/Tauri/WinUI本体も未実装。Hallmark等での正式UI監査は未完了。
+React/Tauri/WinUI本体も未実装。HallmarkとWeb Interface Guidelinesを参照したWeb UIソース監査は `docs/ui-audit.md` に記録。WinUI正式監査は未完了。
 
 ## スキルの扱い
 このPCには以下を導入済み。ただし添付ZIPにスキル本体は含めていない。
@@ -50,13 +50,13 @@ Windows: start-demo.cmd
 テスト: python -m unittest discover -s tests -v
 JS構文: node --check web/app.js
 UIテスト: デモ起動中、PlaywrightとEdgeが使える環境で node tools/check-ui.cjs
-前回はバックエンド4件とEdge操作テストが成功。変更後に必要な検証を再実施する。
+改修後はバックエンド4件・JS構文・Chromiumでの操作検証（ローカルAPIへの橋渡し）が成功。Edge/Node Playwrightの実HTTP E2Eはこの環境では未検証。`docs/ui-audit.md` を参照。
 
 ## 資料の順番
 README.md → docs/spec.md → docs/status.md → docs/gui-comparison.md → docs/api.md → docs/development-skills.md
 
 ## 次の作業
-1. 現行UIの監査と操作試作の改善。
+1. 改修後のWeb UIをWindows/Edgeで直接起動して検証・微調整する。
 2. WinUI/Tauriの開発環境を整え、共通APIで比較試作。
 3. 使用許可された少量の実データで閲覧と検索精度を検証。
 4. GUI方式を決めて段階的なインデックスとAI検索を実装。
