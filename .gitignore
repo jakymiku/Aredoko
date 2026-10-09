@@ -1,0 +1,19 @@
+# Local/private/generated content
+/data/
+/cache/
+/models/
+/fixtures/generated/
+/private/
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+*.sqlite*
+.venv/
+__pycache__/
+node_modules/
+target/
+dist/
+bin/
+obj/
