@@ -6,13 +6,14 @@ import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from mimetypes import guess_type
 from urllib.parse import parse_qs, urlparse
 from catalog import Catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def handler_for(catalog, token):
+def handler_for(catalog, token, benchmark_dist=None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass
@@ -46,6 +47,17 @@ def handler_for(catalog, token):
                     return self.send(200, catalog.search(param('q'), param('kind'), param('view', 'all'), int(param('page', '0'))))
                 if url.path.startswith('/api/items/'):
                     return self.send(200, catalog.get(int(url.path.rsplit('/', 1)[1])))
+                if benchmark_dist is not None and (url.path == '/bench/' or url.path.startswith('/bench/')):
+                    # Optional, isolated React comparison fixture, served from the same origin as API.
+                    relative = url.path.removeprefix('/bench/') or 'index.html'
+                    base = Path(benchmark_dist).resolve()
+                    asset = (base / relative).resolve()
+                    if not asset.is_relative_to(base) or asset.suffix not in ('.html', '.css', '.js', '.svg'):
+                        return self.send(404, {'error': 'Not found'})
+                    if not asset.is_file():
+                        return self.send(404, {'error': 'Benchmark frontend not built'})
+                    mime = guess_type(asset)[0] or 'application/octet-stream'
+                    return self.send(200, asset.read_bytes(), mime + '; charset=utf-8')
                 assets = {'/': ('index.html', 'text/html; charset=utf-8'),
                           '/app.js': ('app.js', 'text/javascript; charset=utf-8'),
                           '/style.css': ('style.css', 'text/css; charset=utf-8')}
@@ -83,12 +95,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--open', action='store_true')
+    parser.add_argument('--benchmark-dist', type=Path, default=None,
+                        help='Optional prebuilt React comparison UI; only exposed under /bench/')
     parser.add_argument('--db', type=Path, default=ROOT / 'data' / 'demo.sqlite',
                         help='SQLite path (dedicated temporary DB recommended for UI tests)')
     args = parser.parse_args()
     catalog = Catalog(args.db)
     catalog.seed()
-    server = ThreadingHTTPServer(('127.0.0.1', args.port), handler_for(catalog, secrets.token_urlsafe(32)))
+    server = ThreadingHTTPServer(('127.0.0.1', args.port), handler_for(catalog, secrets.token_urlsafe(32), args.benchmark_dist))
     url = f'http://127.0.0.1:{server.server_port}'
     print(f'Aredoko demo: {url}\nFictional data only. Ctrl+C to stop.', flush=True)
     if args.open:

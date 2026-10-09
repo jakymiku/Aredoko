@@ -17,3 +17,6 @@ target/
 dist/
 bin/
 obj/
+# Native GUI comparison generated output (never commit built packages or measured data)
+/experiments/gui-compare/winui3/generated/
+/experiments/gui-compare/tauri-react/package-lock.json

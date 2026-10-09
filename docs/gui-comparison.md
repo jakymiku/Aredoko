@@ -28,3 +28,7 @@ Private BytesとWorking Setを別に記録し、共有メモリの二重計上�
 ## 必要な準備
 .NET SDK / Windows App SDK / Windows向けビルドツール、およびRust / Tauriビルド環境を確認・導入する。
 架空メタデータだけでは画像展開の負荷を測れないため、共通サムネイルと使用許可済み実ファイルを追加する。
+
+## 実装中の比較キット
+
+[比較キット手順](gui-compare.md) に、Tauri/ReactとWinUI 3の試作コード、架空の共通API、Windows環境の確認とプロセス計測方法を追加。ネイティブビルド実機検証とGUI方式の採用判断は未完了。

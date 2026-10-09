@@ -13,6 +13,17 @@ jobs:
           node-version: '22'
       - run: python -m unittest discover -s tests -v
       - run: node --check web/app.js
+      - run: python -m unittest discover -s experiments/gui-compare/tests -v
+      - run: node --check experiments/gui-compare/tauri-react/vite.config.js
+      - name: Validate comparison PowerShell syntax
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem experiments/gui-compare -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw "PowerShell parsing failed for $($_.FullName): $($errors -join ', ')" }
+          }
   browser-smoke:
     runs-on: windows-latest
     timeout-minutes: 12
