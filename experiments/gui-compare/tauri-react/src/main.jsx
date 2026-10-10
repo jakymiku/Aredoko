@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useRef} from 'react';
+import React, {useState, useEffect, useCallback, useRef, useLayoutEffect} from 'react';
 import {createRoot} from 'react-dom/client';
 import './style.css';
 
@@ -29,6 +29,14 @@ function App() {
   const sequence = useRef(0);
   const latest = useRef(0);
   const [scrollTop, setScrollTop] = useState(0);
+  const listRef = useRef(null);
+  // Reset the DOM scroll position as well as React state when the dataset changes.
+  // Otherwise the virtual window renders rows 0..N while the scroll container
+  // remains at an old offset, leaving the page blank until the next scroll event.
+  useLayoutEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+    setScrollTop(0);
+  }, [page, search, kind]);
   useEffect(() => {request('/api/session').then(x => {setToken(x.token);}).catch(e => setMessage(e.message));}, []);
   useEffect(() => {const id = setTimeout(() => {setSearch(query);setPage(0);}, 220);return () => clearTimeout(id);}, [query]);
   const load = useCallback(async () => {
@@ -78,14 +86,14 @@ function App() {
       <label className="filter">種類<select aria-label="メディアの種類" value={kind} onChange={e=> {setKind(e.target.value);setPage(0);}}>{Object.entries(kinds).map(([value,label])=><option key={value} value={value === 'all' ? '' : value}>{label}</option>)}</select></label></div>
       <div className="message" role="status" aria-live="polite">{message || '60件ずつの一覧・行仮想化'}</div>
       <div className="list-heading"><span>作品</span><span>種別 / タグ</span></div>
-      <div className="list" aria-label="作品一覧" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
+      <div ref={listRef} className="list" aria-label="作品一覧" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
         <div style={{height: result.items.length * rowHeight, position:'relative'}}>
           {result.items.slice(startIndex, endIndex).map((item,index) => <button type="button" key={item.id} className={'item '+(selected?.id===item.id?'chosen':'')}
             style={{position:'absolute',top:(startIndex+index)*rowHeight,left:0,right:0,height:rowHeight}} onClick={()=>openItem(item.id)}>
             <strong>{item.title}</strong><span>{kinds[item.kind]} · {item.tags.join('、')}</span></button>)}
         </div>
       </div>
-      <footer><button disabled={page===0} onClick={() => {setPage(page-1);setScrollTop(0);}}>前へ</button><span>{page+1} / {Math.max(1,Math.ceil(result.total/60))}</span><button disabled={(page+1)*60>=result.total} onClick={() => {setPage(page+1);setScrollTop(0);}}>次へ</button></footer>
+      <footer><button disabled={page===0} onClick={() => setPage(p => Math.max(0, p-1))}>前へ</button><span>{page+1} / {Math.max(1,Math.ceil(result.total/60))}</span><button disabled={(page+1)*60>=result.total} onClick={() => setPage(p => p+1)}>次へ</button></footer>
     </main>
     <aside className="inspector"><h2>詳細・タグ編集</h2>{selected ? <><strong className="item-title">{selected.title}</strong><span className="small">ID {selected.id} · {kinds[selected.kind]}</span>
       <label>タグ（カンマ区切り）<textarea value={tags} onChange={e=>{setTags(e.target.value);setDirty(true);}}/></label>
