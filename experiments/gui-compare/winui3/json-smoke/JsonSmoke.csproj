@@ -8,5 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../overrides/BenchJson.cs" Link="BenchJson.cs"/>
+    <Compile Include="../overrides/EditorState.cs" Link="EditorState.cs"/>
   </ItemGroup>
 </Project>
