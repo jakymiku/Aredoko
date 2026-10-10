@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1] / "winui3"
 NS = {"p": "http://schemas.microsoft.com/winfx/2006/xaml/presentation", "x": "http://schemas.microsoft.com/winfx/2006/xaml"}
 
 class WinUIListBindingTests(unittest.TestCase):
-    def test_listview_binding_is_explicit_and_template_is_present(self):
+    def test_listview_uses_native_rows_and_never_projects_managed_collection(self):
         window = ET.parse(ROOT / "overrides" / "MainWindow.xaml").getroot()
         lists = window.findall(".//p:ListView", NS)
         self.assertEqual(len(lists), 1)
@@ -18,11 +18,15 @@ class WinUIListBindingTests(unittest.TestCase):
         self.assertEqual(element.get("Grid.Row"), "3")
         self.assertEqual(element.get("{" + NS["x"] + "}Name"), "ItemList")
         self.assertNotIn("ItemsSource", element.attrib, "Explicit source should not be overridden by x:Bind")
-        self.assertEqual(len(element.findall(".//p:DataTemplate", NS)), 1)
+        self.assertEqual(len(element.findall(".//p:DataTemplate", NS)), 0)
+        self.assertNotIn("x:Bind", ET.tostring(element, encoding="unicode"))
         cs = (ROOT / "overrides" / "MainWindow.xaml.cs").read_text(encoding="utf-8")
-        self.assertIn("ItemList.ItemsSource = Items;", cs)
-        self.assertIn("foreach (var item in result.Items) Items.Add(item);", cs)
-        self.assertIn("BuildTag = \"LIST-v4\"", cs)
+        self.assertNotIn("ItemList.ItemsSource = Items;", cs)
+        self.assertNotIn("ObservableCollection<MediaRow>", cs)
+        self.assertIn("ItemList.Items.Add(CreateNativeRow(item));", cs)
+        self.assertIn("new ListViewItem { Content = grid", cs)
+        self.assertIn("var row = _visibleRows[index];", cs)
+        self.assertIn('BuildTag = "NATIVE-v5"', cs)
         self.assertIn("ItemList.Items.Count", cs)
         self.assertIn("ItemList.ActualHeight", cs)
 
@@ -30,7 +34,7 @@ class WinUIListBindingTests(unittest.TestCase):
         script = (ROOT / "update-winui.ps1").read_text(encoding="utf-8")
         self.assertIn("'MainWindow.xaml.cs', 'MainWindow.xaml', 'BenchJson.cs'", script)
         self.assertIn("Get-FileHash", script)
-        self.assertIn("LIST-v4", script)
+        self.assertIn("NATIVE-v5", script)
 
 if __name__ == "__main__":
     unittest.main()
