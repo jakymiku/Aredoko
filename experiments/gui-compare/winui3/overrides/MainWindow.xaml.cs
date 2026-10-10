@@ -1,12 +1,9 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Net.Http;
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -14,54 +11,10 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace AredokoWinUiBench;
 
-public sealed class MediaRow
-{
-    [JsonPropertyName("id")] public int Id { get; set; }
-    [JsonPropertyName("title")] public string Title { get; set; } = "";
-    [JsonPropertyName("kind")] public string Kind { get; set; } = "";
-    [JsonPropertyName("tags")] public string[] Tags { get; set; } = [];
-    [JsonPropertyName("shelf")] public string Shelf { get; set; } = "";
-    [JsonPropertyName("favorite")] public bool Favorite { get; set; }
-    [JsonPropertyName("reviewed")] public bool Reviewed { get; set; }
-    public string KindAndTags => $"{Kind} · {string.Join("、", Tags)}";
-}
-
-public sealed class SearchResponse
-{
-    [JsonPropertyName("total")] public int Total { get; set; }
-    [JsonPropertyName("items")] public List<MediaRow> Items { get; set; } = [];
-}
-
-public sealed class SessionResponse
-{
-    [JsonPropertyName("token")] public string Token { get; set; } = "";
-}
-
-// Source-generated JSON metadata works with WinUI's reflection-disabled serialization.
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
-[JsonSerializable(typeof(SessionResponse))]
-[JsonSerializable(typeof(SearchResponse))]
-[JsonSerializable(typeof(MediaRow))]
-[JsonSerializable(typeof(UpdateRequest))]
-internal partial class LibraryJsonContext : JsonSerializerContext { }
-
-public sealed class UpdateChanges
-{
-    [JsonPropertyName("tags")] public string[] Tags { get; set; } = [];
-    [JsonPropertyName("shelf")] public string Shelf { get; set; } = "";
-    [JsonPropertyName("favorite")] public bool Favorite { get; set; }
-    [JsonPropertyName("reviewed")] public bool Reviewed { get; set; }
-}
-
-public sealed class UpdateRequest
-{
-    [JsonPropertyName("ids")] public int[] Ids { get; set; } = [];
-    [JsonPropertyName("changes")] public UpdateChanges Changes { get; set; } = new();
-}
-
 public sealed partial class MainWindow : Window
 {
     private const string RootUrl = "http://127.0.0.1:8768/";
+    private const string BuildTag = "DOM-v3";
     private readonly HttpClient _api = new() { BaseAddress = new Uri(RootUrl) };
     private readonly DispatcherQueueTimer _searchDelay;
     public ObservableCollection<MediaRow> Items { get; } = [];
@@ -91,9 +44,15 @@ public sealed partial class MainWindow : Window
     private async Task InitializeAsync()
     {
         try {
-            _token = (await _api.GetFromJsonAsync("api/session", LibraryJsonContext.Default.SessionResponse))?.Token ?? "";
+            TxtStatus.Text = $"接続中 [{BuildTag}]";
+            // JsonDocument avoids reflection serialization in trimmed/Native AOT WinUI builds.
+            _token = BenchJson.ParseSession(await _api.GetStringAsync("api/session")).Token;
+            if (string.IsNullOrEmpty(_token)) throw new InvalidOperationException("Session token missing");
             await LoadAsync();
-        } catch (Exception ex) { TxtStatus.Text = $"起動に失敗: {ex.Message}"; }
+        } catch (Exception ex) {
+            TxtStatus.Text = $"起動に失敗 [{BuildTag}]: {ex.GetType().Name}: {ex.Message}";
+            Debug.WriteLine(ex);
+        }
     }
 
     private async Task LoadAsync()
@@ -104,7 +63,7 @@ public sealed partial class MainWindow : Window
         var kind = CmbKind.SelectedIndex switch { 1 => "book", 2 => "image", 3 => "video", 4 => "audio", _ => "" };
         var url = $"api/items?q={Uri.EscapeDataString(TxtQuery.Text)}&kind={kind}&page={_page}";
         try {
-            var result = await _api.GetFromJsonAsync(url, LibraryJsonContext.Default.SearchResponse) ?? throw new Exception("応答が空です");
+            var result = BenchJson.ParseSearch(await _api.GetStringAsync(url));
             if (requestId != _searchVersion) return;
             _total = result.Total;
             Items.Clear();
@@ -113,9 +72,9 @@ public sealed partial class MainWindow : Window
             TxtPage.Text = $"{_page + 1} / {Math.Max(1, (_total + 59) / 60)}";
             BtnPrev.IsEnabled = _page > 0;
             BtnNext.IsEnabled = (_page + 1) * 60 < _total;
-            TxtStatus.Text = $"読み込み {watch.Elapsed.TotalMilliseconds:F1} ms · 60件ずつ · ListView仮想化";
+            TxtStatus.Text = $"読み込み {watch.Elapsed.TotalMilliseconds:F1} ms · 60件ずつ · [{BuildTag}]";
         } catch (Exception ex) {
-            if (requestId == _searchVersion) { Items.Clear(); TxtStatus.Text = $"読み込み失敗: {ex.Message}"; }
+            if (requestId == _searchVersion) { Items.Clear(); TxtStatus.Text = $"読み込み失敗 [{BuildTag}]: {ex.GetType().Name}: {ex.Message}"; Debug.WriteLine(ex); }
         }
     }
 
@@ -129,8 +88,7 @@ public sealed partial class MainWindow : Window
         if (ItemList.SelectedItem is not MediaRow row) return;
         if (_dirty) { TxtStatus.Text = "未保存の変更があります。保存してから別の項目を選んでください。"; return; }
         try {
-            var item = await _api.GetFromJsonAsync($"api/items/{row.Id}", LibraryJsonContext.Default.MediaRow);
-            if (item is null) return;
+            var item = BenchJson.ParseItem(await _api.GetStringAsync($"api/items/{row.Id}"));
             _settingFields = true;
             _active = item;
             TxtTitle.Text = item.Title;
@@ -161,17 +119,12 @@ public sealed partial class MainWindow : Window
         }
         BtnSave.IsEnabled = false;
         try {
-            var payload = new UpdateRequest {
-                Ids = [_active.Id],
-                Changes = new UpdateChanges {
-                    Tags = tags, Shelf = TxtShelf.Text, Favorite = ChkFavorite.IsChecked == true,
-                    Reviewed = ChkReviewed.IsChecked == true
-                }
-            };
+            var body = BenchJson.CreateUpdate(_active.Id, tags, TxtShelf.Text,
+                ChkFavorite.IsChecked == true, ChkReviewed.IsChecked == true);
             using var req = new HttpRequestMessage(HttpMethod.Post, "api/items/update");
             req.Headers.TryAddWithoutValidation("Origin", RootUrl.TrimEnd('/'));
             req.Headers.TryAddWithoutValidation("X-Aredoko-Token", _token);
-            req.Content = JsonContent.Create(payload, LibraryJsonContext.Default.UpdateRequest);
+            req.Content = new StringContent(body, Encoding.UTF8, "application/json");
             using var response = await _api.SendAsync(req);
             response.EnsureSuccessStatusCode();
             _dirty = false;
