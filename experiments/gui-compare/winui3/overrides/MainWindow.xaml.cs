@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -34,6 +35,28 @@ public sealed class SearchResponse
 public sealed class SessionResponse
 {
     [JsonPropertyName("token")] public string Token { get; set; } = "";
+}
+
+// Source-generated JSON metadata works with WinUI's reflection-disabled serialization.
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSerializable(typeof(SessionResponse))]
+[JsonSerializable(typeof(SearchResponse))]
+[JsonSerializable(typeof(MediaRow))]
+[JsonSerializable(typeof(UpdateRequest))]
+internal partial class LibraryJsonContext : JsonSerializerContext { }
+
+public sealed class UpdateChanges
+{
+    [JsonPropertyName("tags")] public string[] Tags { get; set; } = [];
+    [JsonPropertyName("shelf")] public string Shelf { get; set; } = "";
+    [JsonPropertyName("favorite")] public bool Favorite { get; set; }
+    [JsonPropertyName("reviewed")] public bool Reviewed { get; set; }
+}
+
+public sealed class UpdateRequest
+{
+    [JsonPropertyName("ids")] public int[] Ids { get; set; } = [];
+    [JsonPropertyName("changes")] public UpdateChanges Changes { get; set; } = new();
 }
 
 public sealed partial class MainWindow : Window
@@ -68,7 +91,7 @@ public sealed partial class MainWindow : Window
     private async Task InitializeAsync()
     {
         try {
-            _token = (await _api.GetFromJsonAsync<SessionResponse>("api/session"))?.Token ?? "";
+            _token = (await _api.GetFromJsonAsync("api/session", LibraryJsonContext.Default.SessionResponse))?.Token ?? "";
             await LoadAsync();
         } catch (Exception ex) { TxtStatus.Text = $"起動に失敗: {ex.Message}"; }
     }
@@ -81,7 +104,7 @@ public sealed partial class MainWindow : Window
         var kind = CmbKind.SelectedIndex switch { 1 => "book", 2 => "image", 3 => "video", 4 => "audio", _ => "" };
         var url = $"api/items?q={Uri.EscapeDataString(TxtQuery.Text)}&kind={kind}&page={_page}";
         try {
-            var result = await _api.GetFromJsonAsync<SearchResponse>(url) ?? throw new Exception("応答が空です");
+            var result = await _api.GetFromJsonAsync(url, LibraryJsonContext.Default.SearchResponse) ?? throw new Exception("応答が空です");
             if (requestId != _searchVersion) return;
             _total = result.Total;
             Items.Clear();
@@ -106,7 +129,7 @@ public sealed partial class MainWindow : Window
         if (ItemList.SelectedItem is not MediaRow row) return;
         if (_dirty) { TxtStatus.Text = "未保存の変更があります。保存してから別の項目を選んでください。"; return; }
         try {
-            var item = await _api.GetFromJsonAsync<MediaRow>($"api/items/{row.Id}");
+            var item = await _api.GetFromJsonAsync($"api/items/{row.Id}", LibraryJsonContext.Default.MediaRow);
             if (item is null) return;
             _settingFields = true;
             _active = item;
@@ -138,14 +161,17 @@ public sealed partial class MainWindow : Window
         }
         BtnSave.IsEnabled = false;
         try {
-            var payload = new { ids = new[]{_active.Id}, changes = new {
-                tags, shelf = TxtShelf.Text, favorite = ChkFavorite.IsChecked == true,
-                reviewed = ChkReviewed.IsChecked == true
-            }};
+            var payload = new UpdateRequest {
+                Ids = [_active.Id],
+                Changes = new UpdateChanges {
+                    Tags = tags, Shelf = TxtShelf.Text, Favorite = ChkFavorite.IsChecked == true,
+                    Reviewed = ChkReviewed.IsChecked == true
+                }
+            };
             using var req = new HttpRequestMessage(HttpMethod.Post, "api/items/update");
             req.Headers.TryAddWithoutValidation("Origin", RootUrl.TrimEnd('/'));
             req.Headers.TryAddWithoutValidation("X-Aredoko-Token", _token);
-            req.Content = JsonContent.Create(payload);
+            req.Content = JsonContent.Create(payload, LibraryJsonContext.Default.UpdateRequest);
             using var response = await _api.SendAsync(req);
             response.EnsureSuccessStatusCode();
             _dirty = false;
