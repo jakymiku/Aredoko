@@ -44,11 +44,24 @@ async function main() {
   await page.waitForFunction(()=>document.querySelector('.list').scrollTop > 500);
   // Change page while scrolled. It must reset BOTH React state and the DOM scroll container.
   await page.getByRole('button',{name:'次へ'}).click();
-  await page.waitForFunction(()=>{
-    const first=document.querySelector('.item');
-    const container=document.querySelector('.list');
-    return container?.scrollTop===0 && first?.textContent.includes('00061') && first.getBoundingClientRect().top < container.getBoundingClientRect().bottom;
-  });
+  try {
+    await page.waitForFunction(()=>{
+      const first=document.querySelector('.item');
+      const container=document.querySelector('.list');
+      return container?.scrollTop===0 && first?.textContent.includes('00061') && first.getBoundingClientRect().top < container.getBoundingClientRect().bottom;
+    }, {timeout: 12000});
+  } catch (e) {
+    const diagnostics = await page.evaluate(() => ({
+      scrollTop: document.querySelector('.list')?.scrollTop,
+      first: document.querySelector('.item')?.textContent,
+      displayedRows: document.querySelectorAll('.item').length,
+      footer: document.querySelector('footer')?.textContent,
+      status: document.querySelector('.message')?.textContent,
+      benchmark: window.__aredokoBench
+    }));
+    console.error('Virtual paging diagnostics:', JSON.stringify(diagnostics));
+    throw e;
+  }
   assert.match(await page.locator('.item').first().textContent(),/00061/);
   await list.evaluate(el=>{el.scrollTop=el.scrollHeight});
   await page.waitForFunction(()=>document.querySelector('.list').scrollTop > 500);
