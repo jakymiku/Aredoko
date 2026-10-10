@@ -38,7 +38,13 @@ function App() {
     setScrollTop(0);
   }, [page, search, kind]);
   useEffect(() => {request('/api/session').then(x => {setToken(x.token);}).catch(e => setMessage(e.message));}, []);
-  useEffect(() => {const id = setTimeout(() => {setSearch(query);setPage(0);}, 220);return () => clearTimeout(id);}, [query]);
+  // Debounce only when the query has actually changed. The previous initial
+  // 220ms timer always reset page 0, racing a quick user's first Next click.
+  useEffect(() => {
+    if (query === search) return;
+    const id = setTimeout(() => {setSearch(query);setPage(0);}, 220);
+    return () => clearTimeout(id);
+  }, [query, search]);
   const load = useCallback(async () => {
     const n = ++sequence.current;
     const start = performance.now();
