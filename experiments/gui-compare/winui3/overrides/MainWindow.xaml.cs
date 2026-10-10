@@ -14,7 +14,7 @@ namespace AredokoWinUiBench;
 public sealed partial class MainWindow : Window
 {
     private const string RootUrl = "http://127.0.0.1:8768/";
-    private const string BuildTag = "DOM-v3";
+    private const string BuildTag = "LIST-v4";
     private readonly HttpClient _api = new() { BaseAddress = new Uri(RootUrl) };
     private readonly DispatcherQueueTimer _searchDelay;
     public ObservableCollection<MediaRow> Items { get; } = [];
@@ -30,6 +30,9 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // Explicitly wire the data source instead of relying on the Window x:Bind lifecycle.
+        // The API returned 50,000 records, but the former compiled binding left the list blank.
+        ItemList.ItemsSource = Items;
         _searchDelay = DispatcherQueue.CreateTimer();
         _searchDelay.Interval = TimeSpan.FromMilliseconds(220);
         _searchDelay.Tick += async (_, _) => {
@@ -72,7 +75,16 @@ public sealed partial class MainWindow : Window
             TxtPage.Text = $"{_page + 1} / {Math.Max(1, (_total + 59) / 60)}";
             BtnPrev.IsEnabled = _page > 0;
             BtnNext.IsEnabled = (_page + 1) * 60 < _total;
-            TxtStatus.Text = $"読み込み {watch.Elapsed.TotalMilliseconds:F1} ms · 60件ずつ · [{BuildTag}]";
+            var fetched = result.Items.Count;
+            var fetchMs = watch.Elapsed.TotalMilliseconds;
+            TxtStatus.Text = $"読込 {fetchMs:F1}ms · API {fetched}件 / ListView {ItemList.Items.Count}件 [{BuildTag}]";
+            // Diagnostics after layout: distinguishes an empty source from an unrealized template.
+            DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => {
+                if (requestId != _searchVersion) return;
+                var realized = fetched == 0 ? "empty" :
+                    ItemList.ContainerFromIndex(0) is null ? "not-realized" : "realized";
+                TxtStatus.Text = $"読込 {fetchMs:F1}ms · API {fetched} / ListView {ItemList.Items.Count} · 高さ {ItemList.ActualHeight:F0} · {realized} [{BuildTag}]";
+            });
         } catch (Exception ex) {
             if (requestId == _searchVersion) { Items.Clear(); TxtStatus.Text = $"読み込み失敗 [{BuildTag}]: {ex.GetType().Name}: {ex.Message}"; Debug.WriteLine(ex); }
         }
