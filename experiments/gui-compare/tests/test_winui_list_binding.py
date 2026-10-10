@@ -27,15 +27,29 @@ class WinUIListBindingTests(unittest.TestCase):
         self.assertIn("ItemList.Items.Add(CreateNativeRow(item));", cs)
         self.assertIn("new ListViewItem { Content = grid", cs)
         self.assertIn("var row = _visibleRows[index];", cs)
-        self.assertIn('BuildTag = "NATIVE-v5"', cs)
+        self.assertIn('BuildTag = "EDITOR-v6"', cs)
         self.assertIn("ItemList.Items.Count", cs)
         self.assertIn("ItemList.ActualHeight", cs)
 
+    def test_editor_change_detection_is_value_based_and_navigation_confirms_only_real_edits(self):
+        cs = (ROOT / "overrides" / "MainWindow.xaml.cs").read_text(encoding="utf-8")
+        state = (ROOT / "overrides" / "EditorState.cs").read_text(encoding="utf-8")
+        self.assertIn("readonly record struct EditorState(", state)
+        self.assertIn("saved != current", state)
+        self.assertIn("_savedEditor = CaptureEditor();", cs)
+        self.assertIn("EditorState.IsDirty(_savedEditor, CaptureEditor())", cs)
+        self.assertIn("if (_dirty)", cs)
+        self.assertIn("await ConfirmDiscardAsync()", cs)
+        self.assertIn("SetSelectedIndex(_selectedIndex);", cs)
+        self.assertIn("requestId != _detailRequestVersion", cs)
+        self.assertNotIn("_dirty = true;", cs)
+        self.assertIn('BuildTag = "EDITOR-v6"', cs)
+
     def test_updater_copies_xaml_and_cpp_independently_of_json_protocol(self):
         script = (ROOT / "update-winui.ps1").read_text(encoding="utf-8")
-        self.assertIn("'MainWindow.xaml.cs', 'MainWindow.xaml', 'BenchJson.cs'", script)
+        self.assertIn("'MainWindow.xaml.cs', 'MainWindow.xaml', 'BenchJson.cs', 'EditorState.cs'", script)
         self.assertIn("Get-FileHash", script)
-        self.assertIn("NATIVE-v5", script)
+        self.assertIn("EDITOR-v6", script)
 
 if __name__ == "__main__":
     unittest.main()
