@@ -12,4 +12,5 @@ $cs = @(Get-ChildItem -LiteralPath $Root -Filter MainWindow.xaml.cs -Recurse -Fi
 if ($xaml.Count -ne 1 -or $cs.Count -ne 1) { throw 'Unexpected official template layout; leave generated project unmodified and inspect it.' }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'overrides/MainWindow.xaml') -Destination $xaml[0].FullName
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'overrides/MainWindow.xaml.cs') -Destination $cs[0].FullName
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'overrides/BenchJson.cs') -Destination (Join-Path $cs[0].DirectoryName 'BenchJson.cs')
 Write-Host "WinUI benchmark prepared at $Root. Start common Python server first, then run: winapp run '$Root' -c Release --detach --json"
