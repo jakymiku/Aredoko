@@ -14,7 +14,7 @@ namespace AredokoWinUiBench;
 public sealed partial class MainWindow : Window
 {
     private const string RootUrl = "http://127.0.0.1:8768/";
-    private const string BuildTag = "NATIVE-v5";
+    private const string BuildTag = "EDITOR-v6";
     private readonly HttpClient _api = new() { BaseAddress = new Uri(RootUrl) };
     private readonly DispatcherQueueTimer _searchDelay;
     private readonly List<MediaRow> _visibleRows = [];
@@ -25,8 +25,13 @@ public sealed partial class MainWindow : Window
     private int _total;
     private int _searchVersion;
     private bool _settingFields;
+    private bool _changingSelection;
     private bool _ready;
     private bool _dirty;
+    private bool _saving;
+    private int _selectedIndex = -1;
+    private int _detailRequestVersion;
+    private EditorState _savedEditor;
 
     public MainWindow()
     {
@@ -80,6 +85,9 @@ public sealed partial class MainWindow : Window
                     ItemList.Items.Add(CreateNativeRow(item));
                 }
             } finally { _populatingRows = false; }
+            // Reuse the selection only when that same ID remains in this page.
+            _selectedIndex = _active is null ? -1 : _visibleRows.FindIndex(row => row.Id == _active.Id);
+            SetSelectedIndex(_selectedIndex);
             TxtCount.Text = $"{_total:N0} 件";
             TxtPage.Text = $"{_page + 1} / {Math.Max(1, (_total + 59) / 60)}";
             BtnPrev.IsEnabled = _page > 0;
@@ -126,34 +134,95 @@ public sealed partial class MainWindow : Window
     private async void Prev_Click(object sender, RoutedEventArgs args) { if (_page > 0) { _page--; await LoadAsync(); } }
     private async void Next_Click(object sender, RoutedEventArgs args) { if ((_page + 1) * 60 < _total) { _page++; await LoadAsync(); } }
 
-    private async void ItemList_SelectionChanged(object sender, SelectionChangedEventArgs args)
+    private void SetSelectedIndex(int index)
     {
-        var index = ItemList.SelectedIndex;
-        if (_populatingRows || index < 0 || index >= _visibleRows.Count) return;
-        var row = _visibleRows[index];
-        if (_dirty) { TxtStatus.Text = "未保存の変更があります。保存してから別の項目を選んでください。"; return; }
-        try {
-            var item = BenchJson.ParseItem(await _api.GetStringAsync($"api/items/{row.Id}"));
-            _settingFields = true;
-            _active = item;
-            TxtTitle.Text = item.Title;
-            TxtTags.Text = string.Join(", ", item.Tags);
-            TxtShelf.Text = item.Shelf;
-            ChkFavorite.IsChecked = item.Favorite;
-            ChkReviewed.IsChecked = item.Reviewed;
-            _dirty = false;
-            BtnSave.IsEnabled = false;
-        } catch (Exception ex) { TxtStatus.Text = $"詳細の取得に失敗: {ex.Message}"; }
-        finally { _settingFields = false; }
+        // Programmatic selection restoration must not recursively open an item.
+        _changingSelection = true;
+        try { ItemList.SelectedIndex = index; }
+        finally { _changingSelection = false; }
     }
 
-    private void Editor_Changed(object sender, TextChangedEventArgs args) => MarkDirty();
-    private void Editor_Checked(object sender, RoutedEventArgs args) => MarkDirty();
-    private void MarkDirty() {
+    private EditorState CaptureEditor() => new(
+        TxtTags.Text ?? "", TxtShelf.Text ?? "",
+        ChkFavorite.IsChecked == true, ChkReviewed.IsChecked == true);
+
+    private void RecheckDirty()
+    {
         if (_settingFields || _active is null || BtnSave is null) return;
-        _dirty = true;
-        BtnSave.IsEnabled = true;
+        _dirty = EditorState.IsDirty(_savedEditor, CaptureEditor());
+        BtnSave.IsEnabled = _dirty && !_saving && !string.IsNullOrEmpty(_token);
     }
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        var root = (Content as FrameworkElement)?.XamlRoot
+            ?? throw new InvalidOperationException("XamlRoot is unavailable");
+        var dialog = new ContentDialog {
+            XamlRoot = root,
+            Title = "未保存の変更があります",
+            Content = "現在の作品への編集内容を破棄して、別の作品を開きますか？",
+            PrimaryButtonText = "破棄して移動",
+            CloseButtonText = "キャンセル",
+            DefaultButton = ContentDialogButton.Close
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    private async void ItemList_SelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (_populatingRows || _changingSelection) return;
+        var index = ItemList.SelectedIndex;
+        if (index < 0 || index >= _visibleRows.Count) return;
+        var row = _visibleRows[index];
+        if (_active?.Id == row.Id) {
+            _selectedIndex = index;
+            return;
+        }
+        var requestId = ++_detailRequestVersion;
+        // Some native controls raise TextChanged/Checked after their values are set.
+        // Only a change from the saved snapshot counts as an unsaved user edit.
+        RecheckDirty();
+        if (_dirty) {
+            // Keep the highlighted row consistent with the currently displayed editor.
+            SetSelectedIndex(_selectedIndex);
+            try {
+                if (!await ConfirmDiscardAsync()) {
+                    TxtStatus.Text = "編集内容を保持しました。";
+                    return;
+                }
+            } catch (Exception ex) {
+                TxtStatus.Text = $"切替確認に失敗: {ex.Message}";
+                return;
+            }
+            if (requestId != _detailRequestVersion) return;
+            SetSelectedIndex(index);
+        }
+        try {
+            var item = BenchJson.ParseItem(await _api.GetStringAsync($"api/items/{row.Id}"));
+            if (requestId != _detailRequestVersion) return;
+            _settingFields = true;
+            try {
+                _active = item;
+                _selectedIndex = index;
+                TxtTitle.Text = item.Title;
+                TxtTags.Text = string.Join(", ", item.Tags);
+                TxtShelf.Text = item.Shelf;
+                ChkFavorite.IsChecked = item.Favorite;
+                ChkReviewed.IsChecked = item.Reviewed;
+                _savedEditor = CaptureEditor();
+                _dirty = false;
+                BtnSave.IsEnabled = false;
+            } finally { _settingFields = false; }
+            TxtStatus.Text = $"詳細を表示: {item.Title} [{BuildTag}]";
+        } catch (Exception ex) {
+            if (requestId != _detailRequestVersion) return;
+            SetSelectedIndex(_selectedIndex);
+            TxtStatus.Text = $"詳細の取得に失敗: {ex.Message}";
+        }
+    }
+
+    private void Editor_Changed(object sender, TextChangedEventArgs args) => RecheckDirty();
+    private void Editor_Checked(object sender, RoutedEventArgs args) => RecheckDirty();
 
     private async void Save_Click(object sender, RoutedEventArgs args)
     {
@@ -162,6 +231,8 @@ public sealed partial class MainWindow : Window
         if (tags.Length > 30 || tags.Any(t => t.Length > 60) || TxtShelf.Text.Length > 80) {
             TxtStatus.Text = "タグは30個・各60文字、棚は80文字以内にしてください。"; return;
         }
+        var savedValues = CaptureEditor();
+        _saving = true;
         BtnSave.IsEnabled = false;
         try {
             var body = BenchJson.CreateUpdate(_active.Id, tags, TxtShelf.Text,
@@ -172,10 +243,14 @@ public sealed partial class MainWindow : Window
             req.Content = new StringContent(body, Encoding.UTF8, "application/json");
             using var response = await _api.SendAsync(req);
             response.EnsureSuccessStatusCode();
-            _dirty = false;
+            _savedEditor = savedValues;
+            _dirty = EditorState.IsDirty(_savedEditor, CaptureEditor());
             TxtStatus.Text = "保存しました";
             await LoadAsync();
         } catch (Exception ex) { TxtStatus.Text = $"保存または再読込に失敗: {ex.Message}"; }
-        finally { BtnSave.IsEnabled = _dirty; }
+        finally {
+            _saving = false;
+            RecheckDirty();
+        }
     }
 }
