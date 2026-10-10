@@ -90,3 +90,10 @@ python .\experiments\gui-compare\scripts\report.py .\cache\gui-compare\*.csv --j
 - Python HTTPルーティング/ディレクトリ境界のテストを追加。
 - React/WinUIの**Windows Releaseビルド、UI操作、パフォーマンス計測は未検証**。この文書に結果の数字を作らない。
 - 機能の完全一致や性能順位は現時点で保証しない。WinUI固有のシステムウィンドウ/スクリーンリーダーやTauri WebView2の比較は実機確認が必要。
+
+## Windows初回ビルドで判明した不具合と再検証（2026-10-10）
+- Tauri: 旧版は下へスクロールしたあとにページ切替すると、仮想表示範囲とDOMスクロール位置がずれて空白になった。両者をページ/検索条件の変更に合わせてリセットした。自動Edge回帰テストを `tools/check-gui-bench.cjs` に追加。
+- WinUI 3: Release実機起動時に `Reflection-based serialization has been disabled` が出て一覧表示できなかった。HTTP GET / POST のJSONを `LibraryJsonContext` のソース生成メタデータ経由に変更した。
+- 以前に `setup-winui.ps1` で生成した `winui3/generated` は削除しない。最新版を取得後、変更された `overrides/MainWindow.xaml.cs` を、バックアップを取ってから既存生成プロジェクトの同名ファイルへコピーし、WinUIを再ビルドする。
+- Tauri試作のWindows向け `src-tauri/icons/icon.ico` は初回Windowsビルドで不足したため、既存環境では `npm run tauri icon -- .\\src-tauri\\app-icon.svg` でローカル生成済み。そのファイルは消さない。
+- この修正以降のWinUI/ Tauri Release実機再ビルドと画面操作は、ユーザーのWindows環境で再確認が必要。動作確認が済むまで性能比較を開始しない。
