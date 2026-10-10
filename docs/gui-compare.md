@@ -120,3 +120,10 @@ winapp run . -c Release --detach --json
 ```
 
 新しい起動結果には必ず `[DOM-v3]` が表示される。新しい版でもエラーが出る場合、そのメッセージ（例外型と段階）と実行PIDを保存して次の調査に進む。**GUI両者が動作するまで性能の優劣を判定しない**。
+
+## WinUI ListViewの空白表示（LIST-v4、実機確認待ち）
+- DOM-v3でWindows実機のJSON例外は解消。50,000件、全834ページ、約223msの読込を確認。ただし画面の一覧は空白。読込時間は描画完了時間ではない。
+- `MainWindow.xaml` から Window 直下の `ItemsSource="{x:Bind Items, Mode=OneWay}"` を外し、`MainWindow.xaml.cs` の `InitializeComponent()` 直後に `ItemList.ItemsSource = Items;` を設定。ListView仮想化とメディア行テンプレート自体は維持する。
+- 画面に `[LIST-v4]`、`API n / ListView n`、ListView高さ・最初の行が実体化したかを表示する。空白が続く場合は、この表示が次の調査材料。
+- **WinUIネイティブ描画はこの修正で未検証**。WinUI性能比較は依然として開始しない。
+- 既存の `generated` は削除しない。最新版取得後に `update-winui.ps1` を実行すると `MainWindow.xaml`、`MainWindow.xaml.cs`、`BenchJson.cs` がバックアップとハッシュ検証付きで更新される。WinUIウィンドウを閉じてから `winapp run . -c Release --detach --json` で再ビルドする。
