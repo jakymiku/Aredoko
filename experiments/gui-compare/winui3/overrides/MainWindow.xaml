@@ -40,7 +40,7 @@
                 </ComboBox>
             </Grid>
             <TextBlock x:Name="TxtStatus" Grid.Row="2" Text="検索中…" Margin="0,4,0,8" Opacity="0.7" AutomationProperties.AutomationId="TxtStatus"/>
-            <ListView Grid.Row="3" x:Name="ItemList" ItemsSource="{x:Bind Items, Mode=OneWay}" SelectionMode="Single" SelectionChanged="ItemList_SelectionChanged" AutomationProperties.AutomationId="ItemList">
+            <ListView Grid.Row="3" x:Name="ItemList" SelectionMode="Single" SelectionChanged="ItemList_SelectionChanged" AutomationProperties.AutomationId="ItemList">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:MediaRow">
                         <Grid MinHeight="48" ColumnSpacing="12">
