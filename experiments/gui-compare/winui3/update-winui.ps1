@@ -11,11 +11,11 @@ if ($mainCandidates.Count -ne 1) { throw "Expected exactly one project MainWindo
 $destinationDir = $mainCandidates[0].DirectoryName
 $sourceDir = Join-Path $PSScriptRoot 'overrides'
 $mainSource = Join-Path $sourceDir 'MainWindow.xaml.cs'
-if (-not ((Get-Content -LiteralPath $mainSource -Raw).Contains('BuildTag = "NATIVE-v5"'))) {
-    throw 'Expected NATIVE-v5 source marker is missing. Fetch the latest PR #3 source before updating.'
+if (-not ((Get-Content -LiteralPath $mainSource -Raw).Contains('BuildTag = "EDITOR-v6"'))) {
+    throw 'Expected EDITOR-v6 source marker is missing. Fetch the latest PR #3 source before updating.'
 }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-foreach ($name in @('MainWindow.xaml.cs', 'MainWindow.xaml', 'BenchJson.cs')) {
+foreach ($name in @('MainWindow.xaml.cs', 'MainWindow.xaml', 'BenchJson.cs', 'EditorState.cs')) {
     $src = Join-Path $sourceDir $name
     $dest = Join-Path $destinationDir $name
     if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "Source missing: $src" }
@@ -32,4 +32,4 @@ foreach ($name in @('MainWindow.xaml.cs', 'MainWindow.xaml', 'BenchJson.cs')) {
     }
     Write-Host "Updated: $name"
 }
-Write-Host 'WinUI NATIVE-v5 rows and JSON sources are installed. Close the old app and run: winapp run . -c Release --detach --json'
+Write-Host 'WinUI EDITOR-v6 rows and JSON sources are installed. Close the old app and run: winapp run . -c Release --detach --json'
