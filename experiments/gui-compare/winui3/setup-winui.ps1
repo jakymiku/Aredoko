@@ -13,4 +13,5 @@ if ($xaml.Count -ne 1 -or $cs.Count -ne 1) { throw 'Unexpected official template
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'overrides/MainWindow.xaml') -Destination $xaml[0].FullName
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'overrides/MainWindow.xaml.cs') -Destination $cs[0].FullName
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'overrides/BenchJson.cs') -Destination (Join-Path $cs[0].DirectoryName 'BenchJson.cs')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'overrides/EditorState.cs') -Destination (Join-Path $cs[0].DirectoryName 'EditorState.cs')
 Write-Host "WinUI benchmark prepared at $Root. Start common Python server first, then run: winapp run '$Root' -c Release --detach --json"
