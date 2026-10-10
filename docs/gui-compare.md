@@ -97,3 +97,26 @@ python .\experiments\gui-compare\scripts\report.py .\cache\gui-compare\*.csv --j
 - 以前に `setup-winui.ps1` で生成した `winui3/generated` は削除しない。最新版を取得後、変更された `overrides/MainWindow.xaml.cs` を、バックアップを取ってから既存生成プロジェクトの同名ファイルへコピーし、WinUIを再ビルドする。
 - Tauri試作のWindows向け `src-tauri/icons/icon.ico` は初回Windowsビルドで不足したため、既存環境では `npm run tauri icon -- .\\src-tauri\\app-icon.svg` でローカル生成済み。そのファイルは消さない。
 - この修正以降のWinUI/ Tauri Release実機再ビルドと画面操作は、ユーザーのWindows環境で再確認が必要。動作確認が済むまで性能比較を開始しない。
+
+## WinUIの起動時JSON例外（再修正・診断用 DOM-v3）
+Windows実機の `Reflection-based serialization has been disabled` は、source-generated JSONへ変えた後にも発生した。ソースコピーとReleaseビルドは正常だったため、「古いコードを使った」と決めつけず、**WinUI側の実行時JSON処理を根本的に変更**した。
+
+- `winui3/overrides/BenchJson.cs` は `JsonDocument` でJSON応答を読み、`Utf8JsonWriter` でPOST JSONを作る。実行時のリフレクション、`JsonSerializer`、`HttpClientJsonExtensions` を使用しない。
+- `winui3/overrides/MainWindow.xaml.cs` はこの処理を使用し、起動失敗/読込成功メッセージに `DOM-v3` と表示する。これが出ない場合、実行中のアプリは依然として古い版。
+- `winui3/update-winui.ps1` は**既存の生成プロジェクトを削除せず** `MainWindow.xaml.cs` と `BenchJson.cs` をバックアップ付きで更新し、ハッシュ検証する。
+- `winui3/setup-winui.ps1` は新規の公式テンプレートに両方のC#ファイルを適用する。すでに `generated` がある場合は再実行しない。
+- `winui3/json-smoke` はWinUIに依存しない.NET 10コンソールテスト。反射JSONを明示的に禁止してセッション、一覧、詳細、更新JSONの互換性をチェックする。**これはWinUI実機動作テストの代用ではない**。
+
+更新後、ユーザーのPCでWinUIウィンドウを閉じて次を実行：
+
+```powershell
+cd C:\AI\Aredoko-gui-compare
+$repo = 'C:/AI/Aredoko-gui-compare'
+git -c "safe.directory=$repo" fetch origin
+git -c "safe.directory=$repo" merge --ff-only origin/feat/gui-framework-comparison-20261010
+.\experiments\gui-compare\winui3\update-winui.ps1
+cd .\experiments\gui-compare\winui3\generated
+winapp run . -c Release --detach --json
+```
+
+新しい起動結果には必ず `[DOM-v3]` が表示される。新しい版でもエラーが出る場合、そのメッセージ（例外型と段階）と実行PIDを保存して次の調査に進む。**GUI両者が動作するまで性能の優劣を判定しない**。
