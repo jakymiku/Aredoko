@@ -29,4 +29,18 @@ Check(changes.GetProperty("tags")[1].GetString() == "quoted \"tag\"" &&
       changes.GetProperty("shelf").GetString() == "制作" &&
       changes.GetProperty("favorite").GetBoolean() &&
       !changes.GetProperty("reviewed").GetBoolean(), "POST editable fields and JSON escaping");
-Console.WriteLine("PASS: Aredoko WinUI JSON DOM smoke completed");
+var selected = new EditorState("森の散歩, サンプル", "", false, false);
+var sameAfterProgrammaticSelection = new EditorState("森の散歩, サンプル", "", false, false);
+Check(!EditorState.IsDirty(selected, sameAfterProgrammaticSelection),
+    "selection-only value change events must not mark dirty");
+Check(EditorState.IsDirty(selected, selected with { Tags = "編集したタグ" }),
+    "real tag edit marks dirty");
+Check(EditorState.IsDirty(selected, selected with { Shelf = "新しい棚" }),
+    "real shelf edit marks dirty");
+Check(EditorState.IsDirty(selected, selected with { Favorite = true }),
+    "favorite edit marks dirty");
+Check(EditorState.IsDirty(selected, selected with { Reviewed = true }),
+    "reviewed edit marks dirty");
+Check(!EditorState.IsDirty(selected, selected with { Tags = "森の散歩, サンプル" }),
+    "restoring saved values clears dirty state");
+Console.WriteLine("PASS: Aredoko WinUI JSON / editor state smoke completed");
