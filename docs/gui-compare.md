@@ -127,3 +127,22 @@ winapp run . -c Release --detach --json
 - 画面に `[LIST-v4]`、`API n / ListView n`、ListView高さ・最初の行が実体化したかを表示する。空白が続く場合は、この表示が次の調査材料。
 - **WinUIネイティブ描画はこの修正で未検証**。WinUI性能比較は依然として開始しない。
 - 既存の `generated` は削除しない。最新版取得後に `update-winui.ps1` を実行すると `MainWindow.xaml`、`MainWindow.xaml.cs`、`BenchJson.cs` がバックアップとハッシュ検証付きで更新される。WinUIウィンドウを閉じてから `winapp run . -c Release --detach --json` で再ビルドする。
+
+## WinUI LIST-v4 startup crash: WinRT collection marshaling (NATIVE-v5)
+- Windows実機でLIST-v4のReleaseビルドは成功したが画面が出ず即終了。ユーザーの`winapp run . -c Release --debug-output` とデバッグログで `NullReferenceException` (`0x80004003`) を確認。スタックは `AredokoWinUiBench.MainWindow..ctor` → `IItemsControlMethods.set_ItemsSource` → `WinRT.ComWrappersSupport`。したがって **`ItemList.ItemsSource = Items;` の.NET `ObservableCollection<MediaRow>` 受け渡しが今回のクラッシュを起こした処理** と確認できた。
+- 修正: `MainWindow.xaml` のMediaRow型`x:Bind`テンプレートを除去。C#では管理モデルを`List<MediaRow>`として手元に保持し、ListViewの`Items`へWinUIネイティブの `ListViewItem` / `Grid` / `TextBlock` を追加。選択された行は `SelectedIndex` から管理モデルへ対応させる。JSON DOM-v3も維持。
+- `update-winui.ps1` はNATIVE-v5識別子を検査して、MainWindowのXAMLとC#、BenchJsonをバックアップ付きで更新する。
+- 1ページ最大60行についてネイティブ行を明示生成する安全性重視の試作。**Reactの仮想行表示と完全に同じ描画方式ではない**ため、性能の結論には描画条件統一が必要。
+- 静的テストは管理コレクションの`ItemsSource`代入と型付きx:Bindが再導入されていないことを検査する。**実機WinUI Release起動・描画は未検証**で、ユーザーのPCで再確認してから比較する。
+
+Windowsでアプリを閉じて修正を適用するには：
+```powershell
+cd C:\AI\Aredoko-gui-compare
+$repo = 'C:/AI/Aredoko-gui-compare'
+git -c "safe.directory=$repo" fetch origin
+git -c "safe.directory=$repo" merge --ff-only origin/feat/gui-framework-comparison-20261010
+.\experiments\gui-compare\winui3\update-winui.ps1
+cd .\experiments\gui-compare\winui3\generated
+winapp run . -c Release --detach --json
+```
+成功すると診断表示は `[NATIVE-v5]`。まだ問題があれば診断表示・ビルドログ・クラッシュログを確認する。
