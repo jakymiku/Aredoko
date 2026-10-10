@@ -40,9 +40,10 @@ jobs:
       - name: Test real HTTP + Edge on an isolated fixture
         run: node tools/run-ui-check.cjs
       - name: Build React comparison fixture
+        working-directory: experiments/gui-compare/tauri-react
         run: |
-          npm install --prefix experiments/gui-compare/tauri-react --no-package-lock --no-audit --no-fund
-          npm run build --prefix experiments/gui-compare/tauri-react
+          npm install --no-package-lock --no-audit --no-fund
+          npm run build
       - name: Test React virtual paging in Edge
         run: node tools/check-gui-bench.cjs
       - name: Upload UI screenshots (even if the test fails)
