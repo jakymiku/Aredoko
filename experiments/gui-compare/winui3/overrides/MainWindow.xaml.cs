@@ -75,6 +75,8 @@ public sealed partial class MainWindow : Window
         try {
             var result = BenchJson.ParseSearch(await _api.GetStringAsync(url));
             if (requestId != _searchVersion) return;
+            // A pending detail request belongs to the previous list; discard its result.
+            ++_detailRequestVersion;
             _total = result.Total;
             _populatingRows = true;
             try {
