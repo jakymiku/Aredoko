@@ -8,10 +8,14 @@ import threading
 import time
 
 from laya_config import IDENTITY, REVISION, ARTIFACTS, CONTRACT
-from search_intent import IntentUnavailable, validate_query
+from search_intent import IntentUnavailable, validate_query,validate_decision
+from intent_questions import get_questions,question_key
 
 class LayaProcess:
-    def __init__(self,python,model,*,cold_timeout=60,warm_timeout=5):
+    def __init__(self,python,model,*,cold_timeout=60,warm_timeout=5,question_set='v1',check_order=False):
+        self.question_set=question_set;self.questions=get_questions(question_set)
+        if type(check_order) is not bool:raise ValueError('Order check must be boolean')
+        self.check_order=check_order;self.question_key=question_key(question_set)
         self.python,self.model=Path(python),Path(model)
         self.cold_timeout,self.warm_timeout=cold_timeout,warm_timeout
         self.process=None;self.responses=queue.Queue(maxsize=2)
@@ -56,14 +60,18 @@ class LayaProcess:
             env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',
                        PYTHONIOENCODING='utf-8',TOKENIZERS_PARALLELISM='false')
             self.responses=queue.Queue(maxsize=2)
-            self.process=subprocess.Popen([str(self.python),'-u',str(Path(__file__).with_name('laya_worker.py')),
-                '--model',str(self.model.resolve()),'--parent-pid',str(os.getpid())],
+            command=[str(self.python),'-u',str(Path(__file__).with_name('laya_worker.py')),
+                '--model',str(self.model.resolve()),'--parent-pid',str(os.getpid()),'--question-set',self.question_set]
+            if self.check_order:command.append('--check-order')
+            self.process=subprocess.Popen(command,
                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,text=True,encoding='utf-8',env=env,
                 creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             threading.Thread(target=self._read,args=(self.process,self.responses),daemon=True).start()
         hello=self._response(self.cold_timeout)
         if hello.get('ready') is not True or hello.get('identity')!=IDENTITY or hello.get('contract')!=CONTRACT:
             raise IntentUnavailable('Incompatible decision worker')
+        if hello.get('question_key')!=self.question_key or hello.get('check_order') is not self.check_order:
+            raise IntentUnavailable('Decision question contract mismatch')
         if hello.get('device') not in ('cpu','cuda','cuda:0'):raise IntentUnavailable('Invalid device')
         pid=hello.get('worker_pid')
         if isinstance(pid,bool) or not isinstance(pid,int) or pid<=0:raise IntentUnavailable('Invalid worker identity')
@@ -83,6 +91,8 @@ class LayaProcess:
             result=self._response(self.warm_timeout)
             self.telemetry.update({k:result[k] for k in ('elapsed_ms','peak_memory_mib','network_blocked_calls') if k in result})
             if not isinstance(result.get('result'),dict):raise IntentUnavailable('Missing decision result')
+            checked=validate_decision(result['result'],self.questions)
+            if self.check_order and 'order_consistent' not in checked:raise IntentUnavailable('Missing order verification')
             return result['result']
         except (OSError,ValueError,TypeError,IntentUnavailable) as ex:
             self._stop();self.retry_after=time.monotonic()+30

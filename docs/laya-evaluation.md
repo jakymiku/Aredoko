@@ -1,6 +1,6 @@
 # Laya evaluation before integration
 
-Status: offline runtime, suggestion-only API and first actual GPU evaluation implemented (2026-10-12). The GUI integration gate is not met; automatic routing/filtering remains disabled. EmbeddingGemma 2 is already the retrieval engine. Laya would suggest which existing retrieval mode fits a query. Do not equate package documentation or confidence with validated Japanese accuracy.
+Status: offline runtime, suggestion-only API and two rounds of actual GPU evaluation implemented (2026-10-12). Latest question/order experiments are recorded at the end; earlier sections describe the first round. The GUI integration gate is not met; automatic routing/filtering remains disabled. EmbeddingGemma 2 is already the retrieval engine. Laya would suggest which existing retrieval mode fits a query. Do not equate package documentation or confidence with validated Japanese accuracy.
 
 ## Runtime candidate
 
@@ -109,3 +109,39 @@ Actual HTTP/lifecycle check passed: literal request during cold Laya startup 12.
 ## Next decision
 
 Keep the experimental provider opt-in. Improve question/option wording on development examples, add option-order/abstention checks and a fresh held-out set before choosing a policy. Compare against an EmbeddingGemma-only baseline and simple explicit cues as well. Require measured retrieval benefit before adding a user-confirmed GUI suggestion; improve retrieval scoring separately because choosing cover alone can also worsen a color query. Never reuse this evaluated held-out set as an unseen accuracy claim after tuning.
+
+## 日本語質問・順序棄権の第2回評価（2026-10-12）
+
+既存24文＋新8文をdevelopment32、過去held-out12をlegacy-regressionに改称、新しい24文をheld-out-v2として候補比較前に固定した。fixtureは `tests/fixtures/laya-ja-v2.json`。過去の12文も今回の24文も今後「未見」として再利用しない。
+
+`app/intent_questions.py` にv1/短い英語v2-en/短い日本語v2-ja/旧intent＋日本語kindのv2-hybridを登録。kindに素材のmaterialを追加した候補を比較。質問文・選択肢順序のSHA256とorder-check設定をworker handshakeへ含める。v2判断契約は旧workerを誤接続しない。各質問を通常順／逆順で推論し、不一致のheadだけintent=mixed / kind=anyへ棄権する。確率は未校正のままで閾値を設定しない。同順で一致しても正解保証ではない。
+
+さらにモデルがcoverを提案しながらaudio/video/materialと判断した場合は、その種類に現在cover vectorがないためintentのみmixedへ棄権する。モデル自身の提案の整合性確認であり、ユーザーの手動source/kindは変更しない。名前やタグの内容に対する拒否ではない。
+
+developmentでは英語/日本語へ質問全体を置き換えるとintentが悪化したため、v2-hybrid＋上記棄権を選んだ。raw/effectiveの違いは、effectiveが棄権後の値を含むこと。棄権が期待mixed/anyと一致しただけの正解を、モデルの確信した正解と混同しない。
+
+| development32（順序確認あり） | intent raw/effective | kind raw/effective |
+| --- | --- | --- |
+| v1（種類矛盾guard追加前） | 21 / 22 | 20 / 21 |
+| v2-en（同上） | 17 / 14 | 15 / 19 |
+| v2-ja（同上） | 16 / 14 | 21 / 24 |
+| 選定hybrid＋種類矛盾guard | 21 / 24 | 21 / 24 |
+
+選定後に新24文へv1とhybridを適用し、以後質問/棄権規則を調整していない。比較v1にも同じ順序・種類矛盾guardを適用した。
+
+| 新held-out24 | intent raw/effective | kind raw/effective | intent 提示数/提示正解 | kind 提示数/提示正解 |
+| --- | --- | --- | --- | --- |
+| v1 | 17 / 17 | 11 / 12 | 18 / 14 | 21 / 11 |
+| v2-hybrid | 17 / 17 | 13 / 15 | 18 / 14 | 18 / 12 |
+
+hybridではintent6・kind6件を棄権。kindは modest improvement、intentは改善せず、棄権後でも15/24・17/24でGUI採用条件未達。新しいGUI提案・自動モード変更・種類の自動絞込みは追加しない。
+
+既存の明示 `--laya-intent` / launcher `-LayaIntent` で有効にした実験用APIは、選定hybrid＋順序確認を既定にする。Laya自体の既定起動は無効のまま。再現用に `--intent-questions v1` と `--intent-no-order-check` を用意し、statusで設定を返す。`LayaProcess` 直接構築の既定v1/no-checkは旧開発ツール互換用。`tools/evaluate_intent_v2.py --phase development --output <new-dir>`、次に選定を固定し `--phase held-out --selected v2-hybrid --output <new-dir>`。今回のfresh集合はもう評価済みなので、次回調整後の検証には別集合を作る。
+
+実CUDA hybrid held-out: 冷間12,937ms、warm中央値81.53ms、PyTorch peak allocated GPU 1,506.02MiB、Pythonネット接続試行0。順序確認で2回推論するので旧1回の約40msより増える。全24推論成功。モデル重み/依存関係は変更せず、追加取得なし。
+
+実HTTP新契約PASS: cold中の文字検索10.42ms、競合fallback5.98ms、手動条件保持、order evidence、強制timeoutでreal worker停止・通常検索継続、owner突然終了でもreal worker停止。APIとworker終了をCIMで確認。
+
+混合順位はLayaから独立して改善し既定GUIへ適用した。[ai-ranking.md](ai-ranking.md) に23素材/28条件・下着テンプレート例・実native GUI検証を記録。これはLayaの分類精度が上がった証拠ではない。
+
+証拠（Git対象外）: `data/laya-evaluation/v2-dev-01/result.json`, `v2-hybrid-dev-01`, `v2-hybrid-guard-dev-01`, `v2-heldout-01`, `api-v2-01`。Python90/C#13/Release PASS、旧SDK IL2104警告2件。CPU/量子化/idle unloadは未検証。次は別の未見集合を用意した精度検証と、ユーザーが選んだ実サンプルでの検索順位測定を行う。

@@ -1,5 +1,5 @@
 # Development launcher: no dependency installation, no media scanning.
-param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile,[switch]$LayaIntent)
+param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile,[switch]$LayaIntent,[ValidateSet('max','mean-rrf')][string]$AIRanking='mean-rrf')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $logDirectory = Join-Path $env:LOCALAPPDATA 'Aredoko/logs'
@@ -14,7 +14,7 @@ try {
     catch [Net.Sockets.SocketException] { } finally { $probe.Dispose() }
     $databasePath = [IO.Path]::GetFullPath($Database)
     if ($databasePath.Contains('"')) { throw 'Invalid database path' }
-    $backendArguments=@('app/production_server.py','--db',('"'+$databasePath+'"'))
+    $backendArguments=@('app/production_server.py','--db',('"'+$databasePath+'"'),'--ai-ranking',$AIRanking)
     if($AIProfile){
         $profilePath=[IO.Path]::GetFullPath($AIProfile)
         if($profilePath.Contains('"') -or -not (Test-Path -LiteralPath $profilePath -PathType Leaf)){throw 'Invalid AI profile path'}

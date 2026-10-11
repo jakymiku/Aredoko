@@ -18,7 +18,7 @@ ARTIFACTS = {
     'rl_agent_config.json': (472, '25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6'),
 }
 MODEL_BYTES = sum(size for size, _ in ARTIFACTS.values())
-CONTRACT = 'aredoko-search-intent-v1'
+CONTRACT = 'aredoko-search-intent-v2'
 IDENTITY = {'model_id':MODEL_ID, 'revision':REVISION, 'package':PACKAGE_VERSION}
 
 def model_path(repo):

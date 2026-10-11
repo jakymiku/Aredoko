@@ -122,6 +122,19 @@ class AISearchTests(unittest.TestCase):
         self.assertEqual(result['items'][0]['id'],sun['id'])
         self.assertEqual(result['source'],'cover')
         with self.assertRaises(ValueError): self.ai.search('雨',source='invalid')
+    def test_ranking_override_score_contract_and_manual_source_precedence(self):
+        self.build()
+        default=self.ai.search('雨')
+        self.assertEqual(default['ranking'],'mean-rrf');self.assertEqual(default['score_kind'],'reciprocal-rank')
+        legacy=self.ai.search('雨',ranking='max')
+        self.assertEqual(legacy['ranking'],'max');self.assertEqual(legacy['score_kind'],'cosine')
+        cover=self.ai.search('雨',source='cover',ranking='mean-rrf')
+        self.assertEqual(cover['source'],'cover');self.assertEqual(cover['ranking'],'max')
+        text=self.ai.search('雨',source='text',ranking='mean-rrf')
+        self.assertEqual(text['ranking'],'max');self.assertEqual(text['score_kind'],'cosine')
+        self.assertEqual({r['id'] for r in default['items']},{r['id'] for r in legacy['items']})
+        with self.assertRaises(ValueError):self.ai.search('雨',ranking='unknown')
+
     def test_http_token_origin_and_semantic_route(self):
         self.build()
         server=ThreadingHTTPServer(('127.0.0.1',0),production_handler(self.catalog,'test-token',self.ai))

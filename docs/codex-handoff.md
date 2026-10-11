@@ -192,3 +192,20 @@
 - GPU推論・独立API/競合/timeout/親終了の検証PASS。Layaの日本語精度・検索順位の改善はGUI採用条件未達、提案APIは開発者の明示起動のみ。通常検索/GUIを保持。
 - Python76/C#13/WinUI Release PASS、SDK IL2104 2件は既存のまま。質問/fixture変更なく最終manual material条件だけ修正・intent11再検証PASS。
 - 検証用APIと所有Laya/EmbeddingGemmaプロセスは停止済み。モデルとvenvはローカルに保持、private/generatedデータはGit対象外。
+
+
+### 日本語判定・混合順位改善（2026-10-12開始）
+- 開始HEAD d7d7fb9/clean、Issue #4/AGENTS/PR #5 base確認。既存ローカル重みのみ使用、追加取得や私物走査なし。下着デザイン等の非露骨な架空素材検索を評価へ追加。内容による拒否処理は追加しない。
+- v1質問を保ち、英語/短い日本語のv2候補と順序一致確認を実装中。判断契約hashに質問文と選択肢順序を含め、workerと照合。kind material候補を追加。旧24+新8のdevelopment32で候補を選び、旧held-out12はregressionに改称、新held-out24を選定後の検証に限定する。現時点で候補改善は未確認。
+
+### 日本語判定・混合順位改善の完了（2026-10-12）
+- 実装HEADは後続提出記録で確定。同じ製品feature/Draft PR #5/base維持。追加download/installなし、導入済み固定GPUモデルのみ、私物走査なし。内容拒否処理なし。
+- AI意味検索の既定をmean-rrf（k60・cosine同点は平均順位・利用可能modalityで平均）へ変更。旧maxと明示text/cover cosineを維持し、launcher -AIRanking max/API rankingで復帰可能。候補filter/fingerprint/negative score維持。vector schema/profile/namespaceは変更せず再索引不要。応答ranking/score_kind追加、semantic_scoreは尺度が方式で異なりconfidenceではない。docs/ai-ranking.md。
+- 実EmbeddingGemma CUDA/生成23素材14文×kind有無28条件: top1 max25→fusion27（旧6文12条件10→12、新8文16条件15→15）、悪化0。赤表紙期待CBZ2→1、青表紙1維持。「下着のデザインテンプレート」架空PSD名前・タグで両kind条件1位。ランジェリーひな形の未指定条件はPSD2位/関連PDF1位のまま。音声動画/PSD/PDF内部は依然読まず、個人ライブラリ精度/1TB速度未検証。sourcehash不変。
+- Laya registry候補/質問・順序hash/判断契約v2、二順序推論とhead別棄権、cover＋未対応kind(audio/video/material)矛盾時intent棄権を実装。手動source/kind保持、確率閾値/自動検索なし。旧intent＋新日本語kindのhybridをdevelopment32で選定してから、新24を検証。旧held12はlegacy-regression、新24も以後未見扱い不可。
+- 実Laya fresh24: v1 intent raw/effective17/17、kind11/12 → hybrid intent17/17、kind13/15。hybrid intent提示18/正解14、kind提示18/正解12、各6件棄権。warm81.53ms/cold12,937ms/PyTorch GPU peak1,506.02MiB/networkcalls0。種類は小幅改善、GUI gate未達。既定無効の-LayaIntent実験APIだけhybrid/order-checkを採用、GUI control/自動mode/filter追加なし。docs/laya-evaluation.md。
+- 実HTTP新契約PASS: cold中literal10.42ms、競合5.98ms、manual保持/order証拠/timeout realworker停止/literal継続/os._exit親終了停止。モデル/依存変更なし。
+- Python **90 tests PASS**、C# **13 checks PASS**、WinUI Release PASS（旧SDK IL2104 2件、抑制なし）、launcher/native-test構文PASS。新規native GUI実機PASS: generated17登録/索引CUDA/意味検索/保存/dirty keep/文字復帰/赤表紙fusion第一候補/max復帰/青coverタイル/sourcehash。4枚実スクリーンショット目視確認。Sandboxなしでlocal、今回再起動GUIは未実行（過去結果は前節）。検証用API/GUI/worker終了済み。
+- WinUIコードレビュー: XAML/C#変更なし。既存async検索・stale判定・native ListView/60paging・JSON DOM・token/Origin・ThemeResource/AutomationIdを確認。追加計算は既存2,000上限内、Laya/torchは隔離workerのみ。WinUI analyzerなし、高DPI/Light/HighContrast/reader/ピッカー全体/AOT/配布は継続未検証。
+- ignored証拠: data/ai-smoke/ranking-01、data/ai-ui/ranking-01/full、data/laya-evaluation/v2-dev-01/v2-hybrid-guard-dev-01/v2-heldout-01/api-v2-01。fake fixtureだけGit管理し、models/venv/DB/個人paths/PNG証拠はcommit対象外。
+- **次の3手:** (1) GUIでモデルprofile選択と不足時案内を追加（既存旧索引互換/手動mode維持）、(2) ユーザー選択の実サンプルで混合順位と追加の未見日本語判定セットを評価（Layaは精度を満たすまでGUI提案保留）、(3) 2,000件超の索引を段階的checkpoint/増分・resource上限で拡張。本文/OCR/音声動画内容は別段階。

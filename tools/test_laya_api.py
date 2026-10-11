@@ -36,7 +36,7 @@ def main():
     if os.name!='nt':raise RuntimeError('Windows lifecycle check')
     target=args.output.resolve();target.mkdir(parents=True,exist_ok=False)
     catalog=ProductionCatalog(target/'catalog.sqlite')
-    provider=LayaProcess(REPO/'.venv-ai/Scripts/python.exe',model_path(REPO))
+    provider=LayaProcess(REPO/'.venv-ai/Scripts/python.exe',model_path(REPO),question_set='v2-hybrid',check_order=True)
     service=SearchIntent(provider)
     server=ThreadingHTTPServer(('127.0.0.1',0),production_handler(catalog,'generated-token',DisabledAI(),service))
     threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -63,6 +63,7 @@ def main():
             if busy['state']!='unavailable' or report['busy_ms']>1000:raise RuntimeError('Busy request queued')
             first=pending.result(timeout=75)
         if first['state']!='suggested':raise RuntimeError('Actual Laya API failed')
+        if not first['suggestion']['order_checked']:raise RuntimeError('Order evidence missing')
         if first['requested']!={'source':'text','kind':'audio'}:raise RuntimeError('Manual settings changed')
         if first['suggestion']['source']!='cover' or first['suggestion']['kind']!='image':
             raise RuntimeError('Generated smoke suggestion failed')
@@ -82,7 +83,7 @@ from pathlib import Path
 repo=Path(sys.argv[1]);sys.path.insert(0,str(repo/'app'))
 from laya_process import LayaProcess
 from laya_config import model_path
-p=LayaProcess(repo/'.venv-ai/Scripts/python.exe',model_path(repo))
+p=LayaProcess(repo/'.venv-ai/Scripts/python.exe',model_path(repo),question_set='v2-hybrid',check_order=True)
 p.decide('generated query')
 print(json.dumps({'worker_pid':p.worker_pid}),flush=True)
 os._exit(0)

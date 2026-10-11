@@ -1,6 +1,6 @@
 # Native actual-model test. Fresh test DB + generated fixture directory only.
 # RestartOnly checks the same dedicated 17-item DB after the full flow and app restart.
-param([Parameter(Mandatory)][int]$AppPid,[Parameter(Mandatory)][string]$FixtureDirectory,[Parameter(Mandatory)][string]$ArtifactDirectory,[switch]$RestartOnly)
+param([Parameter(Mandatory)][int]$AppPid,[Parameter(Mandatory)][string]$FixtureDirectory,[Parameter(Mandatory)][string]$ArtifactDirectory,[switch]$RestartOnly,[switch]$CheckFusion)
 $ErrorActionPreference='Stop'
 $previous=$env:WINAPP_UI_WORKFLOW_ID
 $env:WINAPP_UI_WORKFLOW_ID=[guid]::NewGuid().ToString('N')
@@ -97,6 +97,20 @@ try {
         Start-Sleep -Milliseconds 600
         UI @('wait-for',"Item$first",'-t','5000') | Out-Null
         UI @('screenshot','--output',(Join-Path $ArtifactDirectory 'literal-after-ai.png')) | Out-Null
+        if($CheckFusion){
+            SelectMode 'ModeSemantic' 'AI意味検索'
+            UI @('set-value','TxtQuery','赤い表紙の本') | Out-Null
+            Start-Sleep -Milliseconds 600
+            UI @('invoke','BtnSearch') | Out-Null
+            Ready
+            $fused=Invoke-RestMethod 'http://127.0.0.1:8769/api/library/ai/search' -Method Post -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes('{"query":"赤い表紙の本"}')) -TimeoutSec 45
+            if($fused.ranking -ne 'mean-rrf' -or $fused.score_kind -ne 'reciprocal-rank' -or $fused.items[0].title -ne 'book-03.cbz'){throw 'Default fused red-cover ranking failed'}
+            UI @('wait-for',"Item$($fused.items[0].id)",'-t','5000') | Out-Null
+            UI @('screenshot','--output',(Join-Path $ArtifactDirectory 'semantic-fused-red.png')) | Out-Null
+            $legacy=Invoke-RestMethod 'http://127.0.0.1:8769/api/library/ai/search' -Method Post -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes('{"query":"赤い表紙の本","ranking":"max"}')) -TimeoutSec 45
+            if($legacy.ranking -ne 'max' -or $legacy.score_kind -ne 'cosine' -or $legacy.items[0].title -ne 'book-01.cbz'){throw 'Legacy ranking override failed'}
+            @{fused=$fused;legacy=$legacy} | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 (Join-Path $ArtifactDirectory 'fusion.json')
+        }
         SelectMode 'ModeVisual' 'AI画像・表紙'
         UI @('set-value','TxtQuery','青い画像') | Out-Null
         Start-Sleep -Milliseconds 600
@@ -136,7 +150,7 @@ try {
     foreach($file in Get-ChildItem -LiteralPath $FixtureDirectory -File){if($hashes[$file.Name] -ne (Get-FileHash -LiteralPath $file.FullName).Hash){throw 'Generated source changed'}}
     $state | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $ArtifactDirectory 'ai-state.json')
     $result.status='PASS'
-    $result.details=if($RestartOnly){'Restarted GUI tag/vector persistence, CUDA cover query, source hashes'}else{'GUI CUDA index/search/save/mode/dirty keep/source hashes'}
+    $result.details=if($RestartOnly){'Restarted GUI tag/vector persistence, CUDA cover query, source hashes'}else{'GUI CUDA index/search/save/mode/dirty keep/source hashes; fusion checked=' + $CheckFusion}
     "PASS: $($result.details)"
 } catch {
     $result.details=$_.Exception.Message

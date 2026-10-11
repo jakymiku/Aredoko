@@ -1,6 +1,8 @@
 # AI search — implemented preview and next milestone (2026-10-12)
 
-Status (2026-10-12): first EmbeddingGemma 2 retrieval slice implemented and verified with actual offline CUDA inference on generated fixtures. The user explicitly authorized project-local packages/model download with a shared 6 MB/s cap. Laya remains planned. Filename/tag search stays available independently.
+Historical first-slice plan/results below; latest mixed-ranking and Laya updates are at the end.
+
+Status (first slice, 2026-10-12): first EmbeddingGemma 2 retrieval slice implemented and verified with actual offline CUDA inference on generated fixtures. The user explicitly authorized project-local packages/model download with a shared 6 MB/s cap. Laya remains planned. Filename/tag search stays available independently.
 
 ## First usable slice
 
@@ -44,3 +46,7 @@ The retrieval engine now has local JSON profiles and registered loading adapters
 
 ## Laya実験の更新（2026-10-12）
 ローカル多言語Layaの独立判断provider/明示setup/提案APIを実装してGPU検証済み。36文の意図26/36・種類22/36、生成素材の順位比較は1改善/1悪化のためGUI採用条件は未達。通常検索には自動適用せず、既定起動は無効。正確な結果・メモリ・終了検証・手順は [laya-evaluation.md](laya-evaluation.md)。
+
+## 混合順位・Laya v2の更新（2026-10-12）
+
+AI意味検索の既定をmean-rrfへ変更し、既存vectorをそのまま利用。23生成素材/28条件で期待top1が25→27、悪化0。下着デザインテンプレートは架空PSDの名前・タグから1位。GUI実機17素材の索引・保存・dirty keep・文字復帰・赤表紙融合・max復帰・青cover検索もPASS。[ai-ranking.md](ai-ranking.md) に計算・rollback・制約を記録。Laya v2は独立した実験APIにのみ採用し、新held-out24でintent17/24・kind15/24、GUI採用は依然保留。[laya-evaluation.md](laya-evaluation.md) の最新節を参照。上記の「未導入」「maxがcurrent」は各段階当時の記録。

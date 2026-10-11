@@ -10,6 +10,7 @@ import threading
 from ai_process import AIUnavailable
 from ai_profiles import DEFAULT_PROFILE
 from ai_vectors import normalized
+from ai_ranking import POLICIES,fuse_modalities
 from library_index import TYPES, _excluded
 from previews import PreviewReader, PreviewUnavailable
 
@@ -60,7 +61,8 @@ class VectorStore:
         with self.connect() as db:
             db.execute('DELETE FROM ai_vectors WHERE item_id=?',(item_id,))
             db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',[(item_id,rev,mode,data) for mode,data in packed.items()])
-    def rank(self,rows,query,source="all"):
+    def rank(self,rows,query,source="all",ranking="max"):
+        if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
         query=normalized(query,self.dimension)
         eligible={row['id']:revision(row) for row in rows}
         scores={}
@@ -70,12 +72,13 @@ class VectorStore:
                 vec=array('f');vec.frombytes(data)
                 if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec): continue
                 score=sum(a*b for a,b in zip(query,vec))
-                # Separate text and cover vectors; either modality can find the item.
-                scores[item_id]=max(scores.get(item_id,-2),score)
-        return sorted(scores.items(),key=lambda x:(-x[1],x[0]))
+                scores.setdefault(item_id,{})[mode]=score
+        return fuse_modalities(scores,ranking)
 
 class AISearch:
-    def __init__(self,catalog,encoder,store_path=None):
+    def __init__(self,catalog,encoder,store_path=None,ranking='mean-rrf'):
+        if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
+        self.ranking=ranking
         self.catalog,self.encoder=catalog,encoder
         self.profile=getattr(encoder,'profile',DEFAULT_PROFILE)
         self.store=VectorStore(store_path or self.profile.store_path(catalog.path),self.profile)
@@ -100,7 +103,7 @@ class AISearch:
         with self.guard: state=self.store.state()
         return {**state,'available':self.encoder.available,'device':getattr(self.encoder,'device',''),
                 'limit':MAX_ITEMS,'model':self.profile.label,'model_id':self.profile.model_id,'profile':self.profile.key,
-                'modalities':list(self.profile.modalities),'dimension':self.profile.dimension,'telemetry':getattr(self.encoder,'telemetry',{})}
+                'modalities':list(self.profile.modalities),'dimension':self.profile.dimension,'ranking':self.ranking,'telemetry':getattr(self.encoder,'telemetry',{})}
     def start(self,limit=MAX_ITEMS):
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS: raise ValueError('Invalid index limit')
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。setup-ai.ps1を実行してください。')
@@ -150,9 +153,11 @@ class AISearch:
             state=self.store.state()
             if state['state']=='running': self.store.save_state({**state,'state':'cancelling'})
         return {'cancel_requested':True}
-    def search(self,query,kind='',view='all',page=0,limit=60,source='all'):
+    def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None):
         if not isinstance(query,str) or not 0<len(query.strip())<=300 or type(page) is not int or page<0 or not 1<=limit<=120:
             raise ValueError('Invalid semantic search')
+        ranking=self.ranking if ranking is None else ranking
+        if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
         if source not in ('all','text','cover'): raise ValueError('Invalid semantic source')
         if source=='cover' and 'cover' not in self.profile.modalities:
             raise AIUnavailable('選択中のモデルは画像・表紙検索に対応していません。AI意味検索を使ってください。')
@@ -160,10 +165,12 @@ class AISearch:
         if not self.inference.acquire(blocking=False): raise AIBusy('AI索引を作成中です。完了後に検索してください。')
         try:
             rows=self._rows(kind,view)
-            ranked=self.store.rank(rows,self.encoder.encode('query',query),source)
+            policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
+            ranked=self.store.rank(rows,self.encoder.encode('query',query),source,policy)
             by_id={row['id']:row for row in rows}
             items=[{**by_id[item_id],'semantic_score':round(score,6)} for item_id,score in ranked[page*limit:(page+1)*limit]]
-            return {'total':len(ranked),'page':page,'limit':limit,'items':items,'mode':'semantic','coverage_limit':MAX_ITEMS,'source':source}
+            return {'total':len(ranked),'page':page,'limit':limit,'items':items,'mode':'semantic','coverage_limit':MAX_ITEMS,'source':source,'ranking':policy,
+                    'score_kind':'reciprocal-rank' if policy=='mean-rrf' else 'cosine'}
         finally: self.inference.release()
     def close(self):
         self.cancel.set()

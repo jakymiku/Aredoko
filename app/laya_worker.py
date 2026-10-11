@@ -11,13 +11,17 @@ import threading
 import time
 from ai_worker import monitor_parent
 from laya_config import PACKAGE_VERSION, IDENTITY, CONTRACT, validate_artifacts
-from search_intent import QUESTIONS, validate_query, validate_decision
+from search_intent import validate_query, validate_decision
+from intent_questions import QUESTION_SETS,get_questions,question_key,reversed_questions
 
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--model',required=True,type=Path)
     parser.add_argument('--parent-pid',type=int,default=os.getppid())
+    parser.add_argument('--question-set',choices=tuple(QUESTION_SETS),default='v1')
+    parser.add_argument('--check-order',action='store_true')
     args=parser.parse_args()
+    questions=get_questions(args.question_set)
     # Windows venv python.exe may be a redirector with a second interpreter child.
     # Watch BOTH the API owner and immediate OS parent so killing the redirector
     # terminates an in-flight worker, not just its idle stdin loop.
@@ -45,7 +49,7 @@ def main():
             # Full question definitions and a 300-character request must not truncate silently.
             agent.cfg['max_len']=1024
             agent.cfg['head_max_len']=512
-        print(json.dumps({'ready':True,'identity':IDENTITY,'contract':CONTRACT,'device':str(agent.device),'worker_pid':os.getpid(),
+        print(json.dumps({'ready':True,'identity':IDENTITY,'contract':CONTRACT,'question_key':question_key(args.question_set),'check_order':args.check_order,'device':str(agent.device),'worker_pid':os.getpid(),
             'load_ms':round((time.perf_counter()-started)*1000,2),
             'network_blocked_calls':blocked[0],
             'peak_memory_mib':round(torch.cuda.max_memory_allocated()/1024**2,2) if device=='cuda' else 0}),file=wire,flush=True)
@@ -60,8 +64,12 @@ def main():
                 if not query:raise ValueError('Empty query')
                 started=time.perf_counter()
                 with contextlib.redirect_stdout(sys.stderr),torch.inference_mode():
-                    result=agent.system_one(query,QUESTIONS,lang='ja',max_len=1024,head_max_len=512)
-                    validate_decision(result)
+                    result=agent.system_one(query,questions,lang='ja',max_len=1024,head_max_len=512)
+                    validate_decision(result,questions)
+                    if args.check_order:
+                        alternative=agent.system_one(query,reversed_questions(questions),lang='ja',max_len=1024,head_max_len=512)
+                        validate_decision(alternative,questions)
+                        result['order_consistent']={k:result['answers'][k]['choice']==alternative['answers'][k]['choice'] for k in ('intent','kind')}
                 print(json.dumps({'result':result,'elapsed_ms':round((time.perf_counter()-started)*1000,2),
                     'network_blocked_calls':blocked[0],
                     'peak_memory_mib':round(torch.cuda.max_memory_allocated()/1024**2,2) if device=='cuda' else 0},

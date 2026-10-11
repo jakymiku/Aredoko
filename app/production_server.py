@@ -12,7 +12,9 @@ import sqlite3
 from ai_process import EncoderProcess, AIUnavailable
 from ai_search import AISearch, AIBusy
 from ai_profiles import load_profile
+from ai_ranking import POLICIES
 from search_intent import SearchIntent
+from intent_questions import QUESTION_SETS
 from laya_process import LayaProcess
 from laya_config import model_path as laya_model_path
 from server import handler_for
@@ -26,17 +28,17 @@ class DisabledAI:
     def cancel_build(self): return {'cancel_requested':False}
     def close(self): pass
 
-def create_ai(catalog,profile_path=None):
+def create_ai(catalog,profile_path=None,ranking='mean-rrf'):
     repo=Path(__file__).resolve().parents[1]
     try:
         profile=load_profile(profile_path)
-        return AISearch(catalog,EncoderProcess(repo/'.venv-ai/Scripts/python.exe',profile.model_path(repo),profile))
+        return AISearch(catalog,EncoderProcess(repo/'.venv-ai/Scripts/python.exe',profile.model_path(repo),profile),ranking=ranking)
     except (AIUnavailable,sqlite3.DatabaseError,OSError,ValueError): return DisabledAI()
 
-def create_intent(enabled=False):
+def create_intent(enabled=False,question_set='v2-hybrid',check_order=True):
     repo=Path(__file__).resolve().parents[1]
     try:
-        return SearchIntent(LayaProcess(repo/'.venv-ai/Scripts/python.exe',laya_model_path(repo))) if enabled else SearchIntent()
+        return SearchIntent(LayaProcess(repo/'.venv-ai/Scripts/python.exe',laya_model_path(repo),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
 def production_handler(catalog,token,ai=None,intent=None):
@@ -100,7 +102,7 @@ def production_handler(catalog,token,ai=None,intent=None):
                 if self.path=='/api/library/ai/index': return self.send(200,ai.start(body.get('limit',2000)))
                 if self.path=='/api/library/ai/cancel': return self.send(200,ai.cancel_build())
                 if self.path=='/api/library/ai/search':
-                    return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all')))
+                    return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking')))
                 if self.path=='/api/library/roots':
                     if body.get('consent') is not True: raise ValueError('Explicit folder consent required')
                     return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'))})
@@ -123,10 +125,13 @@ def main():
     parser.add_argument('--port',type=int,default=8769)
     parser.add_argument('--ai-profile',type=Path)
     parser.add_argument('--laya-intent',action='store_true',help='Experimental suggestions only; no auto-routing')
+    parser.add_argument('--ai-ranking',choices=POLICIES,default='mean-rrf')
+    parser.add_argument('--intent-questions',choices=QUESTION_SETS,default='v2-hybrid')
+    parser.add_argument('--intent-no-order-check',action='store_true',help='Developer comparison only')
     args=parser.parse_args()
     catalog=ProductionCatalog(args.db)
-    ai=create_ai(catalog,args.ai_profile)
-    intent=create_intent(args.laya_intent)
+    ai=create_ai(catalog,args.ai_profile,args.ai_ranking)
+    intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check)
     server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent))
     print(f'Aredoko production: http://127.0.0.1:{server.server_port}',flush=True)
     try: server.serve_forever()
