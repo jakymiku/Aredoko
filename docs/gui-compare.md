@@ -188,3 +188,10 @@ git -c "safe.directory=$repo" merge --ff-only origin/feat/gui-framework-comparis
 explorer.exe .\experiments\gui-compare
 # GUI-Compare.bat をダブルクリック
 ```
+
+## Windows UI Automation初回実機で発見したエラー（2026-10-11、GUIドライバー修正）
+- ユーザー実行ではビルドとAPI起動まで成功し、Tauriの`Check`段階で`操作対象「変更を保存」がアクセシビリティツリーにありません` として停止した。Tauri Reactは作品の選択前に右側の詳細・編集欄（保存ボタン含む）をレンダリングしない。一方ドライバーは作品を選ぶ前に`FindRequired(SaveLabel)`を実行していた。**GUI本体の保存不具合を示すログではない**。
+- 修正: 初期確認は検索欄・一覧のみに絞り、`EditOnce` で作品選択後、右側詳細を確認してからタグ欄と保存ボタンを探す。
+- 同時点検: native `SendInput` 用の `INPUT` 共用体に `MOUSEINPUT` を定義して、x64では40-byteサイズとなるよう修正（旧コードの32-byte宣言はキーボード入力失敗の恐れ）。ドライバー自己診断でサイズを検査。
+- スクロール時、Tauriの非フォーカス可能な `role=group` に`SetFocus`しないよう、表示中の行へフォーカスしてホームキーを送る方式に修正。
+- 再実行は最新版をgit fetch/ff-onlyで取得後、同じ`GUI-Compare.bat`のモード1を使用。**Windows実機での一連のUI操作の成功は未確認**。再度止まれば`Tauri-Check-0-automation.json`、`Tauri-Check-0-automation.tree.txt`、`Tauri-Check-0-automation.stdout.txt`を送る。
