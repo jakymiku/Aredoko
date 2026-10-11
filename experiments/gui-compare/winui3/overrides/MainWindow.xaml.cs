@@ -24,6 +24,7 @@ public sealed partial class MainWindow : Window
     private int _page;
     private int _total;
     private int _searchVersion;
+    private string _lastLoadedQuery = "";
     private bool _settingFields;
     private bool _changingSelection;
     private bool _ready;
@@ -44,6 +45,10 @@ public sealed partial class MainWindow : Window
         _searchDelay.Interval = TimeSpan.FromMilliseconds(220);
         _searchDelay.Tick += async (_, _) => {
             _searchDelay.Stop();
+            // Avoid a delayed timer resetting pagination after the query has
+            // already been loaded (or edited back to its original value).
+            if (string.Equals(TxtQuery.Text, _lastLoadedQuery, StringComparison.Ordinal))
+                return;
             _page = 0;
             await LoadAsync();
         };
@@ -71,10 +76,12 @@ public sealed partial class MainWindow : Window
         var watch = Stopwatch.StartNew();
         TxtStatus.Text = "検索中…";
         var kind = CmbKind.SelectedIndex switch { 1 => "book", 2 => "image", 3 => "video", 4 => "audio", _ => "" };
-        var url = $"api/items?q={Uri.EscapeDataString(TxtQuery.Text)}&kind={kind}&page={_page}";
+        var query = TxtQuery.Text;
+        var url = $"api/items?q={Uri.EscapeDataString(query)}&kind={kind}&page={_page}";
         try {
             var result = BenchJson.ParseSearch(await _api.GetStringAsync(url));
             if (requestId != _searchVersion) return;
+            _lastLoadedQuery = query;
             // A pending detail request belongs to the previous list; discard its result.
             ++_detailRequestVersion;
             _total = result.Total;
@@ -131,10 +138,40 @@ public sealed partial class MainWindow : Window
         return new ListViewItem { Content = grid, MinHeight = 48 };
     }
 
-    private void Query_Changed(object sender, TextChangedEventArgs args) { if (!_ready) return; _searchDelay.Stop(); _searchDelay.Start(); }
-    private async void Kind_Changed(object sender, SelectionChangedEventArgs args) { if (!_ready) return; _page = 0; await LoadAsync(); }
-    private async void Prev_Click(object sender, RoutedEventArgs args) { if (_page > 0) { _page--; await LoadAsync(); } }
-    private async void Next_Click(object sender, RoutedEventArgs args) { if ((_page + 1) * 60 < _total) { _page++; await LoadAsync(); } }
+    private void Query_Changed(object sender, TextChangedEventArgs args)
+    {
+        if (!_ready) return;
+        _searchDelay.Stop();
+        if (!string.Equals(TxtQuery.Text, _lastLoadedQuery, StringComparison.Ordinal))
+            _searchDelay.Start();
+    }
+    private async void Kind_Changed(object sender, SelectionChangedEventArgs args)
+    {
+        if (!_ready) return;
+        _searchDelay.Stop();
+        _page = 0;
+        await LoadAsync();
+    }
+    private async void Prev_Click(object sender, RoutedEventArgs args)
+    {
+        // Resolve any pending query first instead of allowing a stale debounce
+        // tick to change pages after the navigation has completed.
+        _searchDelay.Stop();
+        if (!string.Equals(TxtQuery.Text, _lastLoadedQuery, StringComparison.Ordinal))
+            _page = 0;
+        else if (_page > 0)
+            _page--;
+        await LoadAsync();
+    }
+    private async void Next_Click(object sender, RoutedEventArgs args)
+    {
+        _searchDelay.Stop();
+        if (!string.Equals(TxtQuery.Text, _lastLoadedQuery, StringComparison.Ordinal))
+            _page = 0;
+        else if ((_page + 1) * 60 < _total)
+            _page++;
+        await LoadAsync();
+    }
 
     private void SetSelectedIndex(int index)
     {
