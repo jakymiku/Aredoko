@@ -46,7 +46,11 @@ internal static class Program
             {
                 if (!Regex.IsMatch("雨の街 — Sample 00001", @"Sample\s*0*1\b"))
                     throw new Exception("Title parser failed");
-                Console.WriteLine("PASS: GUI driver options and title parser");
+                int inputSize = Native.InputSizeProbe.Size;
+                int expected = IntPtr.Size == 8 ? 40 : 28;
+                if (inputSize != expected)
+                    throw new Exception($"SendInput native struct layout mismatch: {inputSize}, expected {expected}");
+                Console.WriteLine("PASS: GUI driver options, title parser and Win32 input layout");
                 return 0;
             }
             outputPath = a["result"];
@@ -63,7 +67,8 @@ internal static class Program
             Activate();
             FindRequired(QueryLabel);
             FindRequired(ListLabel);
-            FindRequired(SaveLabel);
+            // React renders the inspector (including Save) only after an item
+            // is selected. Do not require Save before the first selection.
             VerifyListHasRows();
             if (phase == "Check")
             {
@@ -313,8 +318,15 @@ internal static class Program
                 catch (InvalidOperationException) { /* keyboard fallback */ }
             }
         }
-        list.SetFocus();
-        Native.Press(0x24); // HOME
+        // React uses a <div role="group"> which is not keyboard-focusable.
+        // Focusing a visible row lets HOME scroll without throwing for group.
+        var target = list.Current.IsKeyboardFocusable ? list
+            : FindRows().FirstOrDefault(x => x.Current.IsKeyboardFocusable);
+        if (target is not null)
+        {
+            target.SetFocus();
+            Native.Press(0x24); // HOME
+        }
         Thread.Sleep(160);
     }
 
@@ -433,7 +445,10 @@ internal static class Program
         }
         if (!ok) throw new InvalidOperationException("編集対象の詳細が表示されません");
         var original = GetOriginalAsync(1).GetAwaiter().GetResult().tags;
+        // On Tauri both the tag field and Save button exist only after
+        // selection. Validate them here, once the detail pane is populated.
         var tag = FindRequired(TagLabel);
+        var save = FindRequired(SaveLabel);
         var before = string.Join(", ", original);
         var marker = "aredoko_auto_test";
         var changed = original.Contains(marker) ?
@@ -441,7 +456,6 @@ internal static class Program
             original.Concat([marker]).ToArray();
         var after = string.Join(", ", changed);
         Type(tag, after);
-        var save = FindRequired(SaveLabel);
         // Only click when a real change was detected (button must be enabled).
         if (!save.Current.IsEnabled) throw new InvalidOperationException("編集後に保存ボタンが有効になりません");
         Click(save);
@@ -477,6 +491,11 @@ internal static class Program
 
 internal static class Native
 {
+    internal static Type InputType => typeof(Input);
+    internal readonly struct InputSizeProbe
+    {
+        internal static int Size => Marshal.SizeOf<Input>();
+    }
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] internal static extern bool SetCursorPos(int x, int y);
@@ -489,10 +508,21 @@ internal static class Native
         internal uint flags, time;
         internal IntPtr extra;
     }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseInput
+    {
+        internal int dx, dy;
+        internal uint mouseData, flags, time;
+        internal IntPtr extra;
+    }
     [StructLayout(LayoutKind.Explicit)]
     private struct InputData
     {
         [FieldOffset(0)] internal KeyboardInput keyboard;
+        // INPUT's native union is sized for MOUSEINPUT (32 bytes on x64).
+        // Without this, Marshal.SizeOf<Input>() was 32 instead of 40,
+        // so SendInput would reject every unicode keystroke.
+        [FieldOffset(0)] internal MouseInput mouse;
     }
     [StructLayout(LayoutKind.Sequential)]
     private struct Input
