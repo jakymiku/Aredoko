@@ -22,6 +22,23 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(python['median_private_mib'], 20.0)
         self.assertEqual(ui['samples'], 2)
 
+    def test_estimates_cpu_usage_from_sampled_counters(self):
+        a = self.row('2026-10-11T01:00:00+00:00', 'ui-tree', 11, 10, 10)
+        b = self.row('2026-10-11T01:00:10+00:00', 'ui-tree', 11, 10, 10)
+        c = self.row('2026-10-11T01:00:00+00:00', 'ui-tree', 12, 5, 5)
+        d = self.row('2026-10-11T01:00:10+00:00', 'ui-tree', 12, 5, 5)
+        for row, cpu in ((a, 4.0), (b, 6.0), (c, 1.0), (d, 2.0)):
+            row['cpu_seconds'] = str(cpu)
+        summary = summarize([a, b, c, d])[0]
+        self.assertEqual(summary['avg_cpu_pct_one_core'], 30.0)
+        self.assertIsNotNone(summary['avg_cpu_pct_machine'])
+
+    def test_rejects_invalid_cpu_counters(self):
+        sample = self.row('2026-10-11T01:00:00+00:00','ui-tree',1,100,100)
+        sample['cpu_seconds'] = 'nan'
+        with self.assertRaises(ValueError):
+            summarize([sample])
+
     def test_invalid_samples_rejected(self):
         with self.assertRaises(ValueError): summarize([self.row('t1','ui-tree',1,-1,10)])
         with self.assertRaises(ValueError): summarize([dict(timestamp='t1')])
