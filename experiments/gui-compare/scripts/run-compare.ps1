@@ -233,13 +233,15 @@ try {
     }
     $summary = Join-Path $runDir 'summary.json'
     $summaryText = Join-Path $runDir 'summary.txt'
+    $summaryHtml = Join-Path $runDir 'comparison.html'
     $paths = @($csv | ForEach-Object { $_.FullName })
-    & python $report @paths --json $summary | Tee-Object -FilePath $summaryText
+    & python $report @paths --json $summary --html $summaryHtml | Tee-Object -FilePath $summaryText
     Check-Native 'report.py'
     Write-Host ''
     Write-Host 'すべて完了！summary.json と summary.txt を送ってください。' -ForegroundColor Green
-    Write-Host "Results: $runDir"
+    Write-Host "結果の保存先: $runDir"
     Start-Process -FilePath explorer.exe -ArgumentList @([char]34 + $runDir + [char]34) | Out-Null
+    Write-Host "グラフ: $summaryHtml"
 } catch {
     Write-Host "中断: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "Any completed CSVs and logs were kept in: $runDir"
