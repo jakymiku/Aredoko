@@ -2,7 +2,8 @@
 # Uses only the 50,000-row synthetic fixture. Does not inspect personal files.
 param(
     [ValidateRange(0,3)][int]$Trials = 0,
-    [ValidateRange(0,300)][int]$Seconds = 0
+    [ValidateRange(0,300)][int]$Seconds = 0,
+    [ValidateSet('Tauri','WinUI')][string]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -106,12 +107,13 @@ function Start-Backend {
     if (-not $ready) { throw "Fixture server did not become ready. See $stderr" }
     Write-Host "Python API ready: 50,000 synthetic records (PID $($script:backend.Id))" -ForegroundColor Green
 }
-function Build-Benchmarks {
+function Build-Benchmarks([switch]$WinUiOnly) {
     Ensure-Exists (Join-Path $script:tauriDir 'package.json') 'React project'
     Ensure-Exists $script:measure 'measure.ps1'
     Ensure-Exists $script:report 'report.py'
     Ensure-Exists $script:driverProject 'Windows UI Automation driver'
-    foreach ($exe in @('python','npm.cmd','cargo','dotnet','winapp')) {
+    $requirements = if ($WinUiOnly) { @('python','dotnet','winapp') } else { @('python','npm.cmd','cargo','dotnet','winapp') }
+    foreach ($exe in $requirements) {
         if (-not (Get-Command $exe -ErrorAction SilentlyContinue)) { throw "Missing tool: $exe" }
     }
     $oldApps = @(Get-Process -Name 'aredoko_tauri_bench','AredokoWinUiBench' -ErrorAction SilentlyContinue)
@@ -119,6 +121,7 @@ function Build-Benchmarks {
         throw "Close all existing Tauri/WinUI Aredoko test windows first. PIDs: $(($oldApps.Id) -join ', ')"
     }
     Ensure-Exists $script:winuiDir 'generated WinUI project'
+    if (-not $WinUiOnly) {
     Write-Host 'Building latest React/Tauri Release (may take a few minutes)...'
     Push-Location $script:tauriDir
     try {
@@ -138,6 +141,7 @@ function Build-Benchmarks {
         & npm.cmd run tauri build -- --no-bundle
         Check-Native 'Tauri Release build'
     } finally { Pop-Location }
+    }
     # Validate/compile the native Windows UI Automation program before launching any app.
     Write-Host 'GUIの自動操作プログラムを検証・ビルドしています...'
     & dotnet build $script:driverProject -c Release --nologo -v minimal
@@ -214,7 +218,7 @@ try {
     $transcriptOn = $true
     Write-Host '=== Aredoko Tauri vs WinUI GUI Compare ===' -ForegroundColor Cyan
     Write-Host "Results: $runDir"
-    if ($Trials -eq 0) {
+    if (-not $CheckOnly -and $Trials -eq 0) {
         $mode = Read-Host 'モードを選択: 1 = お試し（10秒×1回）、2 = 本測定（20秒×3回） [Enterで1]'
         if ($mode -eq '2') { $Trials = 3; $Seconds = 20 } else { $Trials = 1; $Seconds = 10 }
     }
@@ -223,22 +227,31 @@ try {
     Write-Host '個人ファイルは操作せず、架空のテストデータのみ使用します。'
     Write-Host '計測中は他のアプリを操作せず、同じ画面解像度・表示倍率・電源モードを保ってください。'
     Write-Host 'GUI入力を自動化し、結果の検証に失敗したら停止します。'
-    Build-Benchmarks
-    Start-Backend
-    foreach ($variant in @('Tauri','WinUI')) { Measure-Variant $variant }
-    $csv = @(Get-ChildItem -LiteralPath $runDir -Filter '*.csv' -File | Sort-Object Name)
-    $expected = 2 * $Trials * 5
-    if ($csv.Count -ne $expected) {
-        throw "Incomplete measurements: expected $expected CSVs, got $($csv.Count)"
+    if ($CheckOnly) {
+        Write-Host "単独GUI検証モード: $CheckOnly。Tauri/WinUIを順番に測定する本測定ではありません。" -ForegroundColor Cyan
+        Build-Benchmarks -WinUiOnly:($CheckOnly -eq 'WinUI')
+        Start-Backend
+        Start-Variant $CheckOnly
+        Run-GuiOperation -variant $CheckOnly -phase 'Check' -duration 12 -trial 0
+        Write-Host "完了: $CheckOnly の検索・スクロール・詳細選択・タグ保存の事前チェックが成功しました。" -ForegroundColor Green
+    } else {
+        Build-Benchmarks
+        Start-Backend
+        foreach ($variant in @('Tauri','WinUI')) { Measure-Variant $variant }
+        $csv = @(Get-ChildItem -LiteralPath $runDir -Filter '*.csv' -File | Sort-Object Name)
+        $expected = 2 * $Trials * 5
+        if ($csv.Count -ne $expected) {
+            throw "Incomplete measurements: expected $expected CSVs, got $($csv.Count)"
+        }
+        $summary = Join-Path $runDir 'summary.json'
+        $summaryText = Join-Path $runDir 'summary.txt'
+        $summaryHtml = Join-Path $runDir 'comparison.html'
+        $paths = @($csv | ForEach-Object { $_.FullName })
+        & python $report @paths --json $summary --html $summaryHtml | Tee-Object -FilePath $summaryText
+        Check-Native 'report.py'
+        Write-Host ''
+        Write-Host 'すべて完了！summary.json と summary.txt を送ってください。' -ForegroundColor Green
     }
-    $summary = Join-Path $runDir 'summary.json'
-    $summaryText = Join-Path $runDir 'summary.txt'
-    $summaryHtml = Join-Path $runDir 'comparison.html'
-    $paths = @($csv | ForEach-Object { $_.FullName })
-    & python $report @paths --json $summary --html $summaryHtml | Tee-Object -FilePath $summaryText
-    Check-Native 'report.py'
-    Write-Host ''
-    Write-Host 'すべて完了！summary.json と summary.txt を送ってください。' -ForegroundColor Green
     Write-Host "結果の保存先: $runDir"
     Start-Process -FilePath explorer.exe -ArgumentList @([char]34 + $runDir + [char]34) | Out-Null
     Write-Host "グラフ: $summaryHtml"
