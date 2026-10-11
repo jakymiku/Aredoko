@@ -5,7 +5,7 @@
 
 ## 最新の再開地点（2026-10-12・Codex実機追記）
 
-最新実機追記は前回b77506eから続行したモデル選択GUI検証。実装HEADはdocs/codex-handoff.md末尾の提出記録を参照。チャット側f4273ffとlauncher等9e8efadを保持。製品C#/XAML/API/workerの変更は今回なし。
+最新実機追記は前回b77506eから続行したモデル選択GUI検証。実装/検証記録HEADは0271dc1（後続は提出文書）。チャット側f4273ffとlauncher等9e8efadを保持。製品C#/XAML/API/workerの変更は今回なし。
 
 検索方法PopupHostがmainのchild paneとして公開される問題をテスト側で修正し、native GUIでdefault/text-only再起動適用・別17件CUDA索引・日本語検索・画像非対応案内・旧索引再利用・不足/invalidの文字検索復帰・明示起動引数優先まで確認した。8枚の最終状態/失敗PNGを目視確認。
 

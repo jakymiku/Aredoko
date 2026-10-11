@@ -266,3 +266,10 @@
 - ignored証拠 data/ai-ui/profile-picker-04/05/06/result.json は全体FAIL（モデル段階到達を全体PASSと誤称しない）。06/post-run-check.json PASSでdisk favorite/UI tree on、source17のsize/mtimeと別fresh生成payload一致。06開始byte hashの保存なし、全byte hash不変とは主張しない。別生成ZIPはcontainer timestampが異なる。前回HTTP/CUDA profile-preference-01 PASSは再実行していない。
 - 個人AppData/私物は無変更、download/installなし。05の所有API残留を確認して停止、cleanupを修正、06終了後の所有GUI/API/workerなし。作成test profileのみcleanup。read-only favorite monitorは最終段階未到達で停止、証拠に含めない。
 - **次の3手:** (1) tools/test_ai_profile_ui.py --editor-only --output data/ai-ui/profile-editor-01 でdirty/favorite再起動だけ確認（重いモデル段階は再実装不要）、(2) 小window/DPI/themeの警告表示と非対応検索の案内、(3) 明示実サンプル評価と2,000件超索引。Layaは精度未達の実験APIのみ。
+
+
+### nativeモデル切替確認の提出
+- 実装/検証記録HEAD **0271dc1**。後続はこの提出記録のみ。同じfeature/Draft PR #5/baseへ通常push、未マージ。b77506eから続行しチャット変更を保持。
+- nativeモデル段階は確認済み（default/text-only/旧索引復帰/missing/invalid/override）。全体は最後の保存待ちでFAIL、dirty/favorite再起動は未完。最終save-wait/editor-only修正はnative未再実行。この境界をdocs/model-profiles.md/chat-handoff.md/PRにも記録。
+- Python96/C#13/x64 SelfContained Release（既存IL2104 2件）/py_compile/--help/diff PASS。製品本体無変更、12新PNG目視。所有test GUI/API/worker停止、生成profile cleanup、私物/個人設定/依存/重み変更なし。
+- **最初に行う作業:** python tools/test_ai_profile_ui.py --editor-only --output data/ai-ui/profile-editor-01 。同名folderが既にある場合は新規suffixを使う。実GUIと保存済みPNGを見てdirty keep/次回favoriteを確認し、成功前に全体PASSへ書き換えない。
