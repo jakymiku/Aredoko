@@ -1,62 +1,109 @@
-# Aredoko — ChatGPT引き継ぎ
+# Aredoko — GPTチャットへの最新引継ぎ
 
-## 最初に貼る依頼
-Aredokoの開発を引き継いでください。添付ZIPまたはアクセス可能な https://github.com/jakymiku/Aredoko を読み、実装済みと未実装を区別してください。最初の作業は、現行Web試作のUI監査と、コンパクトな検索バー・広い一覧・右側の詳細/タグ編集パネルを持つ操作試作への改善です。既存の検索・編集・保存機能を維持し、必要なテストと画面確認を行ってください。編集できる環境なら変更ファイルを作成し、実行環境がなければ適用可能な差分または変更ファイルを返してください。実行していないテストを成功と報告しないでください。スキルが利用可能なら目的に合うものを読み、利用不能なら下記の開発ルールに従ってください。
+更新: 2026-10-12。旧Web試作段階の引継ぎを置き換える。**製品GUIはWinUI 3に決定済みで、EmbeddingGemma 2検索まで実装・実GPU検証済み。最初から作り直さない。**
 
-## アクセスに関する前提
-- リポジトリは非公開。URLだけでは読めない場合、添付のコードZIPを使う。
-- 元のPCの C:\AI\Aredoko や http://127.0.0.1:8765 は別環境から自動的にアクセスできない。
-- PCのスキルはチャットへ自動転送される前提にしない。
-- この資料は開始時点のスナップショット。以降は実際のコードと最新docsを優先する。
-- Windows GUI/GPUの実測には対応する実行環境が必要。環境がなければその部分は未検証と記載する。
+## そのままチャットへ貼る依頼文
 
-## ユーザーの目的・決定事項
-複数フォルダの画像・動画・音楽・素材・購入同人誌を、曖昧検索・関連表示・仮想棚で探し直せるWindowsアプリ。
-数万ファイル・1TB以上。Core i7-13700K / RAM32GB / RTX4070Ti 12GB。
-本は画像フォルダ・ZIP・CBZが混在し、PDFは少数。Komgaは読む時だけ起動する。
-元ファイルの移動を強制しない。元データを変更せず、タグや棚をアプリ側で持つ。
-移動/変換後も整理情報を引き継ぐ設計。実ファイルの対象フォルダは未指定。
-ローカル処理が基本。ツール/OSS検索は別企画。
-GUIはTauriとWinUI 3を比較予定で未決定。Pythonを共通バックエンドとする。
+```text
+Aredokoの開発を現在の実装から引き継いでください。
+リポジトリ: https://github.com/jakymiku/Aredoko （非公開）
+作業ブランチ: feat/winui3-production-mvp-20261011
+最新引継ぎ: https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/chat-handoff.md
+Draft PR: https://github.com/jakymiku/Aredoko/pull/5
 
-## 実装済みと未実装
-Python標準ライブラリ+SQLite+HTML/CSS/JavaScriptのWeb試作あり。2026-10-10の改修で、左ナビ/中央のコンパクトな検索と広い一覧/右詳細タグ編集パネルを実装。画面の空状態・エラー状態・未保存確認も追加。
-架空データ5万件、60件ずつ一覧、タイトル/タグの文字検索、種類別表示、タグ/単一棚/お気に入り/確認済みの単体・一括編集、保存。
-AI検索、実ファイル走査、読書ビューア、Komga接続、移動検出、複数棚、解析キューは未実装。
-React/Tauri/WinUI本体も未実装。HallmarkとWeb Interface Guidelinesを参照したWeb UIソース監査は `docs/ui-audit.md` に記録。WinUI正式監査は未完了。
+まず、このブランチのAGENTS.md、docs/chat-handoff.md、docs/codex-handoff.mdの最新節、Issue #4、PR #5を確認してください。mainや古いWeb試作の状態を現状と混同しないでください。
+WinUI 3製品MVP、EmbeddingGemma 2の曖昧検索、交換可能なモデルprofile、混合順位改善は実装済みです。Layaは精度不足のため明示実験APIだけで、GUIの自動切替や種類絞込みには使っていません。
+次の作業はGUIからモデルprofileを選択できる機能と、不足・無効モデルの案内です。既存の起動時profile選択・旧索引互換を保ち、まず再起動で反映する小さい実装から進めてください。動作中のhot swapや自動ダウンロードは追加しないでください。
+既存資産・手動検索・タグ保存を維持し、実装できる環境なら必要なテスト、コミット、同じDraft PRの更新まで進め、進捗を引継ぎへ記録してください。直接編集やWindows実行ができない場合は、実コードに対応した変更ファイルか適用可能な差分と、PCで実行する検証手順を返してください。未実行のテストを成功と報告しないでください。
+非公開リポジトリを読めない場合はアクセスできないと明記し、ユーザーが共有するこのブランチのソースを使ってください。仕様だけから実装済みコードを想像して書き直さないでください。
+```
+
+## 現在のGit状態
+
+- 最新機能実装: `e21c7aa`。直前の提出記録: `afb189c`。この引継ぎはその後の文書更新で、機能変更なし。実際のブランチHEADを確認すること。
+- HEADブランチ: `feat/winui3-production-mvp-20261011`。
+- Draft PR [#5](https://github.com/jakymiku/Aredoko/pull/5)、base `feat/gui-framework-comparison-20261010`。未マージ。PR #1/#2/#3も保持し、mainへmerge・force-push・squashしない。
+- 引継ぎ開始時点はclean、機能作業の未コミット残りなし。テスト用API/GUI/GPU workerは停止済み。
+- 元PCのプロジェクトはユーザー指定の `C:\AI\Aredoko`。別チャットの実行環境へこのフォルダ、localhost、GPU、venv、モデルが自動で移る前提にしない。
+- 非公開GitHubの閲覧可否と、コード編集・push可否は実際の利用環境で確認する。読めない場合はブランチのコードZIP等をユーザーから受け取る。venv/models/DB/私物をZIPへ含めない。
+
+## ユーザーの目的・決定
+
+指定した複数フォルダの画像・動画・音楽・素材・購入同人誌を、曖昧な文章で探し、タグ/仮想棚で整理するWindows GUIアプリ「あれどこ / Aredoko」。数万ファイル・1TB以上が将来の対象。PCはCore i7-13700K、RAM32GB、RTX4070Ti 12GB。
+
+画像フォルダ・ZIP・CBZが混在、PDFは少数。Komgaは読む時に起動する。将来の読書/Komga検索補完は希望だが未実装。ツール/OSS検索は別企画。ダウンロードフォルダ限定ではなく、ユーザーが明示選択したフォルダを使う。元ファイルの移動・変換を強制せず、タグ等をアプリDBへ保存する。移動後の追跡は未実装。
+
+ユーザーは後発の互換モデル（非検閲モデル等）へ交換しやすい構造を希望。任意のモデルが無条件に互換という意味ではない。アプリに検索内容の拒否処理は追加していない。「下着のデザインテンプレート」は架空PSDの名前/タグ入力から1位で検索できたが、実PSD内部や私物精度の検証ではない。
+
+## 実装済み
+
+| 範囲 | 現状 |
+| --- | --- |
+| 製品GUI | 独立したWinUI 3/C#アプリ。登録同意→read-only走査→一覧/検索→タグ・棚・お気に入り・確認済み保存。60件paging、詳細pane、未保存確認、async stale検索対策 |
+| プレビュー | 画像、CBZ/ZIPの先頭画像。サイズ/画素/並行処理を制限、archiveを展開しない |
+| 通常検索 | Python stdlib + SQLite APIによる名前・タグ検索。AI不足/失敗でも独立して利用可能 |
+| AI検索 | ローカルEmbeddingGemma 2/CUDA。名前/タグtextと画像/表紙coverを別vector保存。AI索引dialog、意味検索、画像・表紙検索 |
+| 索引 | prototype上限2,000件。増分fingerprint、cancel/checkpoint、除外/手動filter、旧索引再利用。数万件対応は未完 |
+| モデル交換 | 検証済みJSON profile +登録adapter、起動時-AIProfile。vector-space identityごとに索引分離、旧default互換。text-only adapterは契約実装済み、別重み未検証 |
+| 混合順位 | AI意味検索の既定mean-rrf。k60、cosine同点平均順位、利用可能modality平均。maxへrollback可、明示text/coverはcosine。再索引不要 |
+| Laya | 固定0.4.2/多言語重み、owned offline worker、独立suggestion API。起動既定無効、-LayaIntentで明示有効。hybrid質問＋順序棄権。GUI採用保留 |
+| 過去資産 | Webデモ、read-only索引試作、GUI比較アプリを保持。製品とは区別 |
+
+## 検証済みの範囲と限界
+
+- 最新実装でPython **90 tests PASS**、C# **13 checks PASS**、WinUI Release build PASS。旧SDK IL2104警告2件は未解消・抑制していない。
+- 実EmbeddingGemma CUDA、生成23素材/28条件: 期待top1 **25→27**、期待順位悪化0。赤表紙2→1、青表紙1維持。新validation16条件は15→15で、改善2件は既知development条件。個人ライブラリの性能保証ではない。
+- 最新WinUI実機local生成17素材: 登録/走査/CUDA索引/意味検索/タグ保存/dirty keep/文字復帰/赤表紙融合/max復帰/青coverタイルPASS。4枚目視確認、sourcehash不変。
+- 過去段階でGUI restart保存・vector再利用、旧索引互換、profile切替もPASS。最新順位更新でrestartは再実行していない。
+- Laya development32で選定後、新held-out24を評価: hybrid effective intent17/24、kind15/24（v1 kind12/24）、各head6件棄権。warm中央値81.53ms、cold12.94秒。精度不足なのでGUI提案/自動mode/filterを追加しない。
+- 新Laya HTTP契約・cold中literal・busy fallback・timeout・親終了でrealworker停止PASS。Windows venv redirectorと実Pythonを区別し、ownerと即時親の両方を監視する。
+- 旧held-out12と新24はいずれも評価済み。今後調整するなら別の未見集合を先に作る。確率や類似度をconfidence/正解率とみなさない。
+- Sandbox/WinUI analyzerなし。高DPI/Light/HighContrast/reader/ピッカー全体/AOT/配布未検証。CPU/量子化/idle unload、1TB throughput、実私物精度も未検証。
+- 本文/OCR、PDF内部、音声/動画内容、PSD/SVG等の内部は未解析。関連表示、読書ビューア、Komga、画像フォルダを一冊にまとめる処理、移動追跡、複数棚は未完。
+
+## 次の実装: GUIモデルprofile選択
+
+1. [model-profiles.md](model-profiles.md) と既存launcher/API/dialogコードを読み、設定をGUIから選ぶ最小経路を設計する。既定profileへ戻す操作、現モデル/対応入力の表示、無効JSON/重み不足の案内を含める。
+2. 選んだ設定はまず次回起動に適用。進行中の検索/索引・未保存タグの調停を維持する。既存-AIProfile引数との優先順位と設定保存先を明記し、選択だけでDL/依存導入しない。JSONをアプリ設定として扱い、任意Pythonコードやremote codeを許可しない。
+3. 設定と既存vector identityを共通実装で扱い、GUI側に別の互換性判定を作らない。別profile索引・旧default復帰・text-only画像検索案内・invalid/missingでもliteralを維持する回帰を確認する。
+4. 対応環境でPython/C#/Releaseと生成素材GUIフローを検証、コミット、同じDraft PR更新、引継ぎを記録。実GPU重みがない環境ではmock契約と実モデル検証を区別する。
+
+その次は、ユーザー選択の実サンプルで順位を評価し、2,000件超をcheckpoint/増分・resource上限で拡張する。実サンプル指定がない間は生成素材で進める。
+
+## 守るべき実装上の境界
+
+- AGENTS.mdを優先し、既存資産を削除/再scaffoldしない。特に `experiments/gui-compare/winui3/generated` を触って作り直さない。
+- ソースの移動/削除/rename/reencode/archive展開なし。私物走査は明示フォルダ選択後のみ。モデル/DB/cache/venv/個人paths/credentialsをGitへ含めない。
+- APIはloopback/token/Originを維持。torch等はowned workerへ隔離、stdlib catalogを重くしない。通常検索fallback、同時数/出力/timeout制限を維持する。
+- .NET Releaseでreflection JSONが無効なためJsonDocument/JsonNode/Utf8JsonWriter経路を保つ。過去のWinRT/ComWrappers crashを起こしたmanaged ListView.ItemsSourceへ安易に戻さず、現在のnative Items/60pagingを維持する。
+- AI index identityをmodel ID/revision/dimension/modalities/prompts/precision/preprocessingから分離しない。未保存編集・async選択競合・stale search対策を崩さない。
+- 新しいcheckpoint、package、OS変更は今回の文書引継ぎの範囲外。過去にEG2と固定Layaの取得は承認済み、今後の新規取得は必要性/対象を確認。全DL合計 **6,000,000bytes/s以下** を維持する。
+
+## コード・資料の入口
+
+- 詳細履歴: [codex-handoff.md](codex-handoff.md) の末尾。仕様: [winui-mvp.md](winui-mvp.md)、[model-profiles.md](model-profiles.md)、[ai-ranking.md](ai-ranking.md)、[laya-evaluation.md](laya-evaluation.md)。旧README/spec/statusの時点が古い場合は最新コードと本資料を優先。
+- WinUI: `src/Aredoko.WinUI/MainPage.xaml`, `MainPage.xaml.cs`, `MainWindow.xaml.cs`。共通C#: `src/Aredoko.Core/LibraryApi.cs`, `Protocol.cs`。
+- API/catalog: `app/production_server.py`, `production.py`, `library_index.py`。launcher: `tools/start-winui.ps1`。
+- embedding: `app/ai_profiles.py`, `ai_adapters.py`, `ai_process.py`, `ai_worker.py`, `ai_search.py`, `ai_ranking.py`、`config/ai-profiles/embeddinggemma-2.json`。
+- Laya: `app/search_intent.py`, `intent_questions.py`, `laya_config.py`, `laya_process.py`, `laya_worker.py`。検証定義: `tests/fixtures/laya-ja-v2.json`。
+
+## 起動・検証コマンド（repo root）
+
+```powershell
+python -m unittest discover -s tests -q
+dotnet run --project tests/Aredoko.Core.Tests -c Release
+dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64
+pwsh -File tools/start-winui.ps1 -Database data/chat-test/catalog.sqlite
+# 既存local JSON profileで起動（不足時もダウンロードしない）
+pwsh -File tools/start-winui.ps1 -Database data/chat-test/catalog.sqlite -AIProfile data/ai-profiles/custom.json
+# 旧順位へ戻す
+pwsh -File tools/start-winui.ps1 -Database data/chat-test/catalog.sqlite -AIRanking max
+```
+
+元PCのGPU用 `.venv-ai` と `models` はGit対象外。別環境にあるとは限らない。実GPUテストの新outputは既存証拠と重ならないignoredディレクトリを指定する。`tools/evaluate_ranking.py`, `evaluate_intent_v2.py`, `test_laya_api.py`, `test-ai-ui-local.ps1` の引数/生成素材条件を読んでから使う。元PCの `data/ai-smoke/ranking-01`, `data/ai-ui/ranking-01`, `data/laya-evaluation/v2-heldout-01` 等はローカル証拠でGitHubに実体はない。
 
 ## スキルの扱い
-このPCには以下を導入済み。ただし添付ZIPにスキル本体は含めていない。
-- Hallmark: https://github.com/Nutlope/hallmark （見た目・構造の監査と改善）
-- Web Design Guidelines: https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines （Webの操作性・アクセシビリティ）
-- WinUI: https://github.com/microsoft/winappCli/tree/main/plugins/winui/agent-plugin/skills （setup/design/dev-workflow/code-review/ui-testing/packaging）
-利用可能ならSKILL.mdと必要な参照ファイルを読む。WinUIスキルはWinUI実装時に適用する。
-以下はAredoko向けの引き継ぎルールであり、スキル全文や正式監査の代わりではない。
 
-## 環境に依存しない開発ルール
-- 一覧・検索・連続整理を優先。大きな宣伝見出しや意味のない英語装飾を減らす。
-- 既存機能とデータを保持し、実装範囲を小さく区切る。
-- 色・文字・余白を一貫させる。日本語を読みやすく、Windows拡大表示でも操作できる設計にする。
-- キーボード操作、明確なラベル、フォーカス、読み込み中、空結果、エラー、未保存編集の扱いを確認する。
-- 画面に必要な件数と縮小画像だけを読み込み、キャッシュと先読みに上限を持たせる。
-- ファイルや購入作品をGitや外部サービスに送らない。試作は架空データを使用する。
-- DB・モデル・キャッシュ・認証情報はGit対象外にする。
-- AI類似度を正解率と呼ばない。文字検索を意味検索として見せない。
-- GUI性能は同一データ/画像/先読み条件で比較し、関連プロセス全体を測る。推測値を実測として報告しない。
+元PCにはHallmark、Web Design Guidelines、WinUI setup/design/dev-workflow/code-review/ui-testing/packaging等を導入済み。スキル本体が別GPTチャットへ自動で渡る前提にしない。利用可能なら対応するSKILL.mdを読んで適用する。ない場合も上記の検証・安全境界・Fluent/アクセシビリティ・async/dirty制御を守り、正式スキル監査を実施したと報告しない。XAML変更時はWinUI design、ビルド後commit前はcode-review、実機検証はui-testingが対応する。
 
-## 実行・検証
-起動: python app/server.py --open
-Windows: start-demo.cmd
-テスト: python -m unittest discover -s tests -v
-JS構文: node --check web/app.js
-UIテスト: デモ起動中、PlaywrightとEdgeが使える環境で node tools/check-ui.cjs
-改修後はバックエンド4件・JS構文・Chromiumでの操作検証（ローカルAPIへの橋渡し）が成功。Edge/Node Playwrightの実HTTP E2Eはこの環境では未検証。`docs/ui-audit.md` を参照。
-
-## 資料の順番
-README.md → docs/spec.md → docs/status.md → docs/gui-comparison.md → docs/api.md → docs/development-skills.md
-
-## 次の作業
-1. 改修後のWeb UIをWindows/Edgeで直接起動して検証・微調整する。
-2. WinUI/Tauriの開発環境を整え、共通APIで比較試作。
-3. 使用許可された少量の実データで閲覧と検索精度を検証。
-4. GUI方式を決めて段階的なインデックスとAI検索を実装。
+この引継ぎだけでソース読取は代替できない。アクセスできるコードと実行環境を確認してから、次の実装を始めること。

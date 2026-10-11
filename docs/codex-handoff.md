@@ -214,3 +214,9 @@
 - 実装HEAD: e21c7aa。この後続コミットは提出記録のみ。同じfeatureブランチ/Draft PR #5へpushし、stacked base維持・未マージ。
 - Python90/C#13/WinUI Release/実CUDA評価/実HTTP lifecycle/WinUI local生成17素材フローPASS、4枚目視確認。旧SDK IL2104 2件は継続。所有API/GUI/embedding/Laya worker停止を確認。
 - mean-rrfはGUI意味検索の既定、maxへ復帰可・旧vector再利用。Layaは新未見24の精度不足でGUI採用保留、明示実験APIのみ。最新仕様と次の3手は直前節・docs/ai-ranking.md・docs/laya-evaluation.md。
+
+### GPTチャットへの引継ぎ（2026-10-12）
+- ユーザーがCodex残量節約のためGitHub Markdownへ進捗と再開手順を残すよう依頼。開始HEAD afb189c/clean、機能実装HEAD e21c7aa。今回は文書のみで新規機能/テスト再実行なし。
+- docs/chat-handoff.mdをWinUI/AI実装済みの最新状態へ更新。古い「GUI未決定/AI未実装/Web監査が次」を置換。完了機能・90Python/13C#/Release/実GPU/native結果・Laya精度制約・未検証・主要ファイル・コマンド・そのまま貼れる依頼文を収録。
+- 次の3手はGUI profile選択/不足案内、選択された実サンプルと新しい未見集合、2,000超の索引。チャットにPC/モデル/venv/スキルが転送されるとは扱わず、private repoアクセス不可時は実ソース共有が必要と明記。
+- 同じfeature/Draft PR #5へ文書更新をpush。base/既存PR/未マージを維持。文書差分チェックのみ実行、前回の機能検証結果は再実行結果ではない。
