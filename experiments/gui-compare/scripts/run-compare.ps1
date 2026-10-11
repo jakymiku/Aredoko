@@ -147,7 +147,7 @@ function Build-Benchmarks {
     Check-Native 'Windows UI Automation self-test'
     # Safe updater backs up modified generated source and validates hashes.
     & (Join-Path $script:root 'experiments/gui-compare/winui3/update-winui.ps1')
-    Write-Host '両方のGUIと自動操作ツールの準備が完了しました。' -ForegroundColor Green -ForegroundColor Green
+    Write-Host '両方のGUIと自動操作ツールの準備が完了しました。' -ForegroundColor Green
 }
 function Run-GuiOperation([string]$variant, [string]$phase, [int]$duration, [int]$trial) {
     $stem = "$variant-$phase-$trial"
