@@ -76,7 +76,13 @@ class Tunnel(socketserver.BaseRequestHandler):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--rate',type=int,default=6_000_000)
+    parser.add_argument('--profile',type=Path)
     args = parser.parse_args()
+    import sys
+    sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
+    from ai_profiles import load_profile
+    profile=load_profile(args.profile)
+    profile.model_path(Path(__file__).resolve().parents[1])
     if not 1_000_000 <= args.rate <= 6_000_000:
         parser.error('Rate must be 1 to 6 million bytes/s')
     repo = Path(__file__).resolve().parents[1]
@@ -98,7 +104,9 @@ def main():
                         '--index-url','https://download.pytorch.org/whl/cu128'],env=env,check=True,cwd=repo)
         subprocess.run([str(python),'-m','pip','install','sentence-transformers==6.1.0',
                         'transformers==5.19.0','Pillow>=11,<13'],env=env,check=True,cwd=repo)
-        subprocess.run([str(python),str(repo/'tools/download-ai-model.py')],env=env,check=True,cwd=repo)
+        download=[str(python),str(repo/'tools/download-ai-model.py')]
+        if args.profile: download+=['--profile',str(args.profile.resolve())]
+        subprocess.run(download,env=env,check=True,cwd=repo)
         with (repo/'models/ai-environment.txt').open('w',encoding='utf-8') as output:
             subprocess.run([str(python),'-m','pip','freeze'],stdout=output,env=env,check=True)
     finally:

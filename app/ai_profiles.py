@@ -1,0 +1,107 @@
+"""Validated local embedding profiles; no packages or model downloads."""
+from dataclasses import asdict, dataclass
+import hashlib
+import json
+from pathlib import Path, PurePosixPath
+import re
+
+REVISION = '914f7f89142e33e77833254d9c9b90c3cef7303b'
+LEGACY_PROFILE = 'embeddinggemma-2:' + REVISION + ':text-vision:768:v1'
+
+@dataclass(frozen=True)
+class ModelProfile:
+    model_id: str = 'google/embeddinggemma-2'
+    revision: str = REVISION
+    label: str = 'EmbeddingGemma 2'
+    directory: str = 'embeddinggemma-2'
+    adapter: str = 'embeddinggemma2'
+    dimension: int = 768
+    modalities: tuple = ('text', 'cover')
+    query_prompt_name: str | None = 'SearchQuery'
+    document_prompt_name: str | None = 'Document'
+    query_prefix: str = ''
+    document_prefix: str = ''
+    precision: str = 'auto-bf16'
+
+    def __post_init__(self):
+        if self.adapter not in ('embeddinggemma2', 'sentence-transformers'):
+            raise ValueError('Unsupported embedding adapter')
+        if type(self.dimension) is not int or not 1 <= self.dimension <= 4096:
+            raise ValueError('Embedding dimension must be 1..4096')
+        if self.modalities not in (('text',), ('text','cover')):
+            raise ValueError('Unsupported modalities')
+        if self.adapter == 'sentence-transformers' and self.modalities != ('text',):
+            raise ValueError('Generic adapter currently supports text only')
+        if self.precision not in ('auto-bf16', 'float32'):
+            raise ValueError('Unsupported precision')
+        for value in (self.model_id, self.label):
+            if not isinstance(value,str) or not 0 < len(value) <= 128 or any(ord(c)<32 for c in value):
+                raise ValueError('Invalid model identity')
+        if not isinstance(self.revision,str) or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}',self.revision):
+            raise ValueError('Use an immutable commit or content hash')
+        if not isinstance(self.directory,str) or len(self.directory)>128:
+            raise ValueError('Invalid model directory')
+        path=PurePosixPath(self.directory)
+        if not self.directory or path.is_absolute() or any(x in ('..','.') for x in self.directory.split('/')) or '\\' in self.directory or ':' in self.directory:
+            raise ValueError('Model directory must be relative to models')
+        for name,prefix in ((self.query_prompt_name,self.query_prefix),(self.document_prompt_name,self.document_prefix)):
+            if name is not None and (not isinstance(name,str) or not 0<len(name)<=64):
+                raise ValueError('Invalid prompt name')
+            if not isinstance(prefix,str) or len(prefix)>256 or name is not None and prefix:
+                raise ValueError('Choose prompt name or explicit prefix')
+
+    def to_dict(self):
+        data=asdict(self)
+        data["modalities"]=list(self.modalities)
+        return data
+
+    @classmethod
+    def from_dict(cls,data):
+        if not isinstance(data,dict):
+            raise ValueError('Expected profile object')
+        unknown=set(data)-set(cls.__dataclass_fields__)
+        if unknown:
+            raise ValueError('Unknown profile fields')
+        values=dict(data)
+        if 'modalities' in values:
+            if not isinstance(values['modalities'],list):
+                raise ValueError('Expected modalities list')
+            values['modalities']=tuple(values['modalities'])
+        try:
+            return cls(**values)
+        except TypeError as ex:
+            raise ValueError('Invalid profile types') from ex
+
+    def identity(self):
+        data=self.to_dict()
+        # UI labels and relocation do not change the vector space.
+        data.pop('label');data.pop('directory')
+        return data
+
+    @property
+    def key(self):
+        if self.identity()==DEFAULT_PROFILE.identity():
+            return LEGACY_PROFILE
+        payload={'contract':'normalized-f32:text4096:exif-rgb-image768:v1',**self.identity()}
+        return 'embedding-profile:'+hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
+
+    def store_path(self,catalog):
+        suffix='.ai.sqlite' if self.key==LEGACY_PROFILE else '.ai.'+hashlib.sha256(self.key.encode()).hexdigest()[:24]+'.sqlite'
+        return Path(str(catalog)+suffix)
+
+    def model_path(self,repo):
+        base=(Path(repo)/'models').resolve()
+        path=(base/self.directory).resolve()
+        if not path.is_relative_to(base):
+            raise ValueError('Model path escapes models')
+        return path
+
+DEFAULT_PROFILE=ModelProfile()
+
+def load_profile(path=None):
+    if path is None:
+        return DEFAULT_PROFILE
+    path=Path(path)
+    if path.stat().st_size>8192:
+        raise ValueError('Profile file exceeds limit')
+    return ModelProfile.from_dict(json.loads(path.read_text(encoding='utf-8-sig')))

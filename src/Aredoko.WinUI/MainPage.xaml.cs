@@ -1,4 +1,4 @@
-using Aredoko.Core;
+﻿using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Automation;
@@ -272,7 +272,7 @@ public sealed partial class MainPage : Page
         {
             if(!await ConfirmDiscardAsync())return;
             dialogOpen=true;reload=true;
-            var explanation=new TextBlock {Text="登録済みフォルダの最大2,000件をAI検索用に準備します。名前・タグと対応画像・表紙が対象です。初回は時間がかかります。",TextWrapping=TextWrapping.Wrap};
+            var explanation=new TextBlock {Text="選択中のモデルで登録済みフォルダの最大2,000件を準備します。モデルを変更した場合は索引を作成してください。初回は時間がかかります。",TextWrapping=TextWrapping.Wrap};
             var status=new TextBlock {TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(status,"AIStatus");
             var start=new Button {Content="索引を作成・更新",IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
             var cancel=new Button {Content="中断",IsEnabled=false};AutomationProperties.SetAutomationId(cancel,"CancelAIIndex");
@@ -287,7 +287,9 @@ public sealed partial class MainPage : Page
                     var state=data["state"]!.GetValue<string>();
                     var running=state is "running" or "cancelling";
                     var label=state switch {"idle"=>"未作成","running"=>"作成中","cancelling"=>"中断待ち","complete"=>"準備完了","cancelled"=>"中断済み","interrupted"=>"前回中断","failed"=>"失敗",_=>state};
-                    status.Text=available ? $"{label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "AI環境が未導入です。導入手順を確認してください。";
+                    var model=data["model"]?.GetValue<string>() ?? "未選択";
+                    var capabilities=data["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "名前・タグ／画像・表紙" : "名前・タグ";
+                    status.Text=available ? $"{model} · {capabilities}\n{label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "AI環境が未導入です。導入手順を確認してください。";
                     start.IsEnabled=available&&!running;cancel.IsEnabled=running;
                 }
                 catch(Exception ex){status.Text=ex.Message;start.IsEnabled=false;}

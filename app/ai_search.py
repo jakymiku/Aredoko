@@ -7,28 +7,24 @@ import math
 from pathlib import Path
 import sqlite3
 import threading
-from ai_process import PROFILE, AIUnavailable
+from ai_process import AIUnavailable
+from ai_profiles import DEFAULT_PROFILE
+from ai_vectors import normalized
 from library_index import TYPES, _excluded
 from previews import PreviewReader, PreviewUnavailable
 
-DIMENSION=768
 MAX_ITEMS=2000
 class AIBusy(RuntimeError): pass
-
-def normalized(vector):
-    if len(vector)!=DIMENSION or any(not math.isfinite(x) for x in vector):
-        raise ValueError('Invalid embedding')
-    norm=math.sqrt(sum(x*x for x in vector))
-    if norm<1e-12: raise ValueError('Zero embedding')
-    return [x/norm for x in vector]
 
 def revision(row):
     fields=[row['root_id'],row['relative_path'],row['size_bytes'],row['mtime_ns'],row['title'],row['tags']]
     return hashlib.sha256(json.dumps(fields,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
 
 class VectorStore:
-    def __init__(self,path):
+    def __init__(self,path,profile=DEFAULT_PROFILE):
         self.path=Path(path)
+        self.profile=profile
+        self.dimension=profile.dimension
         with self.connect() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS ai_profile(value TEXT NOT NULL);
@@ -37,8 +33,8 @@ class VectorStore:
                 CREATE TABLE IF NOT EXISTS ai_state(id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
             ''')
             profile=db.execute('SELECT value FROM ai_profile').fetchone()
-            if profile and profile[0]!=PROFILE: raise AIUnavailable('Vector profile mismatch')
-            if not profile: db.execute('INSERT INTO ai_profile VALUES(?)',(PROFILE,))
+            if profile and profile[0]!=self.profile.key: raise AIUnavailable('Vector profile mismatch')
+            if not profile: db.execute('INSERT INTO ai_profile VALUES(?)',(self.profile.key,))
         state=self.state()
         if state.get('state') in ('running','cancelling'):
             self.save_state({**state,'state':'interrupted','error':'索引作成が中断されました。再実行で保存済み分から続けられます。'})
@@ -58,19 +54,21 @@ class VectorStore:
             return db.execute("SELECT 1 FROM ai_vectors WHERE item_id=? AND revision=? AND modality='text'",(item_id,rev)).fetchone() is not None
     def put(self,item_id,rev,vectors):
         # Validate every modality before replacing the previous revision atomically.
-        packed={mode:array('f',normalized(vec)).tobytes() for mode,vec in vectors.items()}
+        if not vectors or any(mode not in self.profile.modalities for mode in vectors):
+            raise ValueError('Unsupported vector modality')
+        packed={mode:array('f',normalized(vec,self.dimension)).tobytes() for mode,vec in vectors.items()}
         with self.connect() as db:
             db.execute('DELETE FROM ai_vectors WHERE item_id=?',(item_id,))
             db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',[(item_id,rev,mode,data) for mode,data in packed.items()])
     def rank(self,rows,query,source="all"):
-        query=normalized(query)
+        query=normalized(query,self.dimension)
         eligible={row['id']:revision(row) for row in rows}
         scores={}
         with self.connect() as db:
             for item_id,rev,mode,data in db.execute('SELECT * FROM ai_vectors'):
-                if eligible.get(item_id)!=rev or source!='all' and mode!=source: continue
+                if mode not in self.profile.modalities or eligible.get(item_id)!=rev or source!='all' and mode!=source: continue
                 vec=array('f');vec.frombytes(data)
-                if len(vec)!=DIMENSION or any(not math.isfinite(x) for x in vec): continue
+                if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec): continue
                 score=sum(a*b for a,b in zip(query,vec))
                 # Separate text and cover vectors; either modality can find the item.
                 scores[item_id]=max(scores.get(item_id,-2),score)
@@ -79,7 +77,8 @@ class VectorStore:
 class AISearch:
     def __init__(self,catalog,encoder,store_path=None):
         self.catalog,self.encoder=catalog,encoder
-        self.store=VectorStore(store_path or str(catalog.path)+'.ai.sqlite')
+        self.profile=getattr(encoder,'profile',DEFAULT_PROFILE)
+        self.store=VectorStore(store_path or self.profile.store_path(catalog.path),self.profile)
         self.previews=PreviewReader(catalog)
         self.guard=threading.Lock()
         self.cancel=threading.Event()
@@ -100,7 +99,8 @@ class AISearch:
     def status(self):
         with self.guard: state=self.store.state()
         return {**state,'available':self.encoder.available,'device':getattr(self.encoder,'device',''),
-                'limit':MAX_ITEMS,'model':'EmbeddingGemma 2','dimension':DIMENSION,'telemetry':getattr(self.encoder,'telemetry',{})}
+                'limit':MAX_ITEMS,'model':self.profile.label,'model_id':self.profile.model_id,'profile':self.profile.key,
+                'modalities':list(self.profile.modalities),'dimension':self.profile.dimension,'telemetry':getattr(self.encoder,'telemetry',{})}
     def start(self,limit=MAX_ITEMS):
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS: raise ValueError('Invalid index limit')
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。setup-ai.ps1を実行してください。')
@@ -123,7 +123,7 @@ class AISearch:
                     if not self.store.fresh(row['id'],rev):
                         text=row['title']+'\n'+row['relative_path']+'\n'+'、'.join(row['tags'])
                         vectors={'text':self.encoder.encode('document',text[:4096])}
-                        if row['kind'] in ('image','book','archive'):
+                        if 'cover' in self.profile.modalities and row['kind'] in ('image','book','archive'):
                             try:
                                 source,_=self.previews.read(row['id'])
                                 cover=self.encoder.encode('image',source)
@@ -154,6 +154,8 @@ class AISearch:
         if not isinstance(query,str) or not 0<len(query.strip())<=300 or type(page) is not int or page<0 or not 1<=limit<=120:
             raise ValueError('Invalid semantic search')
         if source not in ('all','text','cover'): raise ValueError('Invalid semantic source')
+        if source=='cover' and 'cover' not in self.profile.modalities:
+            raise AIUnavailable('選択中のモデルは画像・表紙検索に対応していません。AI意味検索を使ってください。')
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。')
         if not self.inference.acquire(blocking=False): raise AIBusy('AI索引を作成中です。完了後に検索してください。')
         try:

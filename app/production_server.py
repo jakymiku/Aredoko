@@ -11,21 +11,24 @@ import zipfile
 import sqlite3
 from ai_process import EncoderProcess, AIUnavailable
 from ai_search import AISearch, AIBusy
+from ai_profiles import load_profile
 from server import handler_for
 
 class DisabledAI:
     def status(self):
         return {'available':False,'state':'failed','processed':0,'total':0,'indexed':0,
-                'skipped':0,'error':'AI索引を開けません。文字検索は引き続き利用できます。'}
+                'skipped':0,'error':'モデル設定またはAI索引を開けません。文字検索は引き続き利用できます。'}
     def start(self,*args): raise AIUnavailable(self.status()['error'])
     def search(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def cancel_build(self): return {'cancel_requested':False}
     def close(self): pass
 
-def create_ai(catalog):
+def create_ai(catalog,profile_path=None):
     repo=Path(__file__).resolve().parents[1]
-    try: return AISearch(catalog,EncoderProcess(repo/'.venv-ai/Scripts/python.exe',repo/'models/embeddinggemma-2'))
-    except (AIUnavailable,sqlite3.DatabaseError,OSError): return DisabledAI()
+    try:
+        profile=load_profile(profile_path)
+        return AISearch(catalog,EncoderProcess(repo/'.venv-ai/Scripts/python.exe',profile.model_path(repo),profile))
+    except (AIUnavailable,sqlite3.DatabaseError,OSError,ValueError): return DisabledAI()
 
 def production_handler(catalog,token,ai=None):
     ai=ai or create_ai(catalog)
@@ -105,9 +108,10 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--db',type=Path,required=True)
     parser.add_argument('--port',type=int,default=8769)
+    parser.add_argument('--ai-profile',type=Path)
     args=parser.parse_args()
     catalog=ProductionCatalog(args.db)
-    ai=create_ai(catalog)
+    ai=create_ai(catalog,args.ai_profile)
     server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai))
     print(f'Aredoko production: http://127.0.0.1:{server.server_port}',flush=True)
     try: server.serve_forever()

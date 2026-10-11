@@ -1,0 +1,17 @@
+{
+  "model_id": "google/embeddinggemma-2",
+  "revision": "914f7f89142e33e77833254d9c9b90c3cef7303b",
+  "label": "EmbeddingGemma 2",
+  "directory": "embeddinggemma-2",
+  "adapter": "embeddinggemma2",
+  "dimension": 768,
+  "modalities": [
+    "text",
+    "cover"
+  ],
+  "query_prompt_name": "SearchQuery",
+  "document_prompt_name": "Document",
+  "query_prefix": "",
+  "document_prefix": "",
+  "precision": "auto-bf16"
+}

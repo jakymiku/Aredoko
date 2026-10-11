@@ -8,12 +8,14 @@ import subprocess
 import sys
 import threading
 
-REVISION = '914f7f89142e33e77833254d9c9b90c3cef7303b'
-PROFILE = 'embeddinggemma-2:' + REVISION + ':text-vision:768:v1'
+from ai_profiles import DEFAULT_PROFILE, REVISION
+from ai_vectors import normalized
+PROFILE = DEFAULT_PROFILE.key
 class AIUnavailable(RuntimeError): pass
 class EncoderProcess:
-    def __init__(self, python, model):
+    def __init__(self, python, model, profile=DEFAULT_PROFILE):
         self.python,self.model = Path(python),Path(model)
+        self.profile=profile
         self.process = None
         self.lock = threading.Lock()
         self.responses = queue.Queue(maxsize=2)
@@ -22,7 +24,7 @@ class EncoderProcess:
     @property
     def available(self):
         marker = self.model/'aredoko-revision.txt'
-        try: return self.python.is_file() and marker.is_file() and marker.read_text(encoding='utf-8').strip()==REVISION
+        try: return self.python.is_file() and marker.is_file() and marker.read_text(encoding='utf-8').strip()==self.profile.revision
         except OSError: return False
     def _read(self, process, responses):
         try:
@@ -47,12 +49,12 @@ class EncoderProcess:
         env=os.environ.copy()
         env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',PYTHONIOENCODING='utf-8')
         self.responses=queue.Queue(maxsize=2)
-        self.process=subprocess.Popen([str(self.python),'-u',str(Path(__file__).with_name('ai_worker.py')),'--model',str(self.model),'--parent-pid',str(os.getpid())],
+        self.process=subprocess.Popen([str(self.python),'-u',str(Path(__file__).with_name('ai_worker.py')),'--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,text=True,encoding='utf-8',env=env,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         threading.Thread(target=self._read,args=(self.process,self.responses),daemon=True).start()
         hello=self._response()
-        if hello.get('dimension')!=768 or hello.get('revision')!=REVISION:
+        if hello.get('dimension')!=self.profile.dimension or hello.get('profile')!=self.profile.key:
             self._stop();raise AIUnavailable('Incompatible AI worker')
         self.device=hello['device']
     def encode(self, operation, value):
@@ -65,7 +67,14 @@ class EncoderProcess:
                 self.process.stdin.flush()
                 result=self._response()
                 self.telemetry={k:result[k] for k in ('elapsed_ms','peak_memory_mib') if k in result}
-                return result.get('vector')
+                vector=result.get('vector')
+                if vector is not None:
+                    try: vector=normalized(vector,self.profile.dimension)
+                    except (TypeError,ValueError) as ex:
+                        self._stop();raise AIUnavailable('Invalid embedding from worker') from ex
+                elif not (operation=='image' and result.get('skip') is True):
+                    raise AIUnavailable('Missing embedding')
+                return vector
             except (OSError,KeyError) as ex:
                 self._stop();raise AIUnavailable('AI worker disconnected') from ex
     def _stop(self):

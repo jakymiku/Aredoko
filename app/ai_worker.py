@@ -1,4 +1,4 @@
-"""Offline EmbeddingGemma worker. JSON stdin/stdout; dependencies isolated."""
+"""Offline embedding adapter worker. JSON stdin/stdout; dependencies isolated."""
 import argparse
 import base64
 import contextlib
@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 
-REVISION = '914f7f89142e33e77833254d9c9b90c3cef7303b'
+from ai_profiles import DEFAULT_PROFILE, ModelProfile
 
 def monitor_parent(pid):
     if os.name != 'nt': return
@@ -27,7 +27,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model',required=True)
     parser.add_argument('--parent-pid',type=int,default=os.getppid())
+    parser.add_argument('--profile-json')
     args = parser.parse_args()
+    profile=ModelProfile.from_dict(json.loads(args.profile_json)) if args.profile_json else DEFAULT_PROFILE
     threading.Thread(target=monitor_parent,args=(args.parent_pid,),daemon=True).start()
     os.environ.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1')
     # Library status/progress may print to stdout; preserve the protocol channel.
@@ -35,13 +37,12 @@ def main():
     with contextlib.redirect_stdout(sys.stderr):
         import torch
         from PIL import Image
-        from sentence_transformers import SentenceTransformer
+        from ai_adapters import load_adapter
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        dtype = torch.bfloat16 if device == 'cuda' and torch.cuda.is_bf16_supported() else torch.float32
-        model = SentenceTransformer(args.model,local_files_only=True,device=device,
-            config_kwargs={'audio_config':None},model_kwargs={'torch_dtype':dtype},
-            trust_remote_code=False)
-    print(json.dumps({'ready':True,'device':device,'dimension':768,'revision':REVISION}),file=wire,flush=True)
+        dtype = torch.bfloat16 if profile.precision=='auto-bf16' and device == 'cuda' and torch.cuda.is_bf16_supported() else torch.float32
+        model=load_adapter(profile,args.model,device,dtype)
+        actual_dimension=model.dimension
+    print(json.dumps({'ready':True,'device':device,'dimension':actual_dimension,'profile':profile.key}),file=wire,flush=True)
     for line in sys.stdin:
         try:
             request = json.loads(line)
@@ -49,6 +50,7 @@ def main():
             started=time.perf_counter()
             with contextlib.redirect_stdout(sys.stderr), torch.inference_mode():
                 if operation == 'image':
+                    if 'cover' not in profile.modalities: raise ValueError('Unsupported modality')
                     data = base64.b64decode(request['image'],validate=True)
                     if len(data) > 8*1024*1024: raise ValueError('Source limit')
                     try:
@@ -60,12 +62,11 @@ def main():
                     except (OSError,ValueError,Image.DecompressionBombError):
                         print(json.dumps({'skip':True}),file=wire,flush=True)
                         continue
-                    vector = model.encode({'image':image},normalize_embeddings=True)
+                    vector = model.encode_image(image)
                 elif operation in ('query','document'):
                     text = request['text']
                     if not isinstance(text,str) or len(text)>4096: raise ValueError('Text limit')
-                    vector = model.encode(text,prompt_name='SearchQuery' if operation=='query' else 'Document',
-                                          normalize_embeddings=True)
+                    vector=model.encode_text(operation,text)
                 else: raise ValueError('Invalid operation')
             response = {'vector':vector.tolist(),'elapsed_ms':round((time.perf_counter()-started)*1000,1),
                         'peak_memory_mib':round(torch.cuda.max_memory_allocated()/1024**2,1) if device=='cuda' else 0}

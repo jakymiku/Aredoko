@@ -1,5 +1,5 @@
-﻿# Development launcher: no dependency installation, no media scanning.
-param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'))
+# Development launcher: no dependency installation, no media scanning.
+param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $logDirectory = Join-Path $env:LOCALAPPDATA 'Aredoko/logs'
@@ -14,7 +14,13 @@ try {
     catch [Net.Sockets.SocketException] { } finally { $probe.Dispose() }
     $databasePath = [IO.Path]::GetFullPath($Database)
     if ($databasePath.Contains('"')) { throw 'Invalid database path' }
-    $backend = Start-Process python -ArgumentList @('app/production_server.py','--db',('"'+$databasePath+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDirectory 'backend.log') -RedirectStandardError (Join-Path $logDirectory 'backend-error.log')
+    $backendArguments=@('app/production_server.py','--db',('"'+$databasePath+'"'))
+    if($AIProfile){
+        $profilePath=[IO.Path]::GetFullPath($AIProfile)
+        if($profilePath.Contains('"') -or -not (Test-Path -LiteralPath $profilePath -PathType Leaf)){throw 'Invalid AI profile path'}
+        $backendArguments+=@('--ai-profile',('"'+$profilePath+'"'))
+    }
+    $backend = Start-Process python -ArgumentList $backendArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDirectory 'backend.log') -RedirectStandardError (Join-Path $logDirectory 'backend-error.log')
     $connected = $false
     for ($attempt=0; $attempt -lt 30; $attempt++) {
         if ($backend.HasExited) { throw 'Backend stopped. See backend-error.log.' }
