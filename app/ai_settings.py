@@ -24,13 +24,22 @@ class AIProfileSettings:
         self.path = Path(settings_path) if settings_path is not None else default_settings_path(self.repo)
         self.override = Path(command_line_profile).resolve() if command_line_profile is not None else None
         self.startup_error = ""
+        self.started = "default"
+        self.startup_path = None
         try:
-            self.started = self.selected()
-            self.startup_path = self.path_for(self.started) if self.override is None else self.override
+            if self.override is not None:
+                # An explicit -AIProfile must override a damaged saved preference.
+                try:
+                    self.started = self.selected()
+                except (ValueError, OSError, json.JSONDecodeError):
+                    self.started = "invalid"
+                self.startup_path = self.override
+            else:
+                self.started = self.selected()
+                self.startup_path = self.path_for(self.started)
             if self.startup_path is not None:
                 load_profile(self.startup_path)
         except (ValueError, OSError, json.JSONDecodeError) as ex:
-            self.started = "default"
             self.startup_path = None
             self.startup_error = "モデル設定が無効です（" + type(ex).__name__ + "）。設定を確認してください。文字検索は利用できます。"
         self.active = "command-line" if self.override is not None else self.started
