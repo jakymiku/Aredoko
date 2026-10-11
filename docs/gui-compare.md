@@ -161,3 +161,28 @@ winapp run . -c Release --detach --json
 - 起動直後の検索入力欄は`query`と確定検索`search`が同値でも220msタイマーを作成していた。ページ2へすぐ移動するとタイマーが遅れて`setPage(0)`を呼び、ページ1に戻る競合がEdge回帰テストで検出された。
 - `query === search` の間はタイマーを生成しないよう修正。検索内容が変わるときのみデバウンスしてページ1へ戻す。
 - GUI比較の採用評価は、Tauri/WinUI両方で正常なページ切り替えと編集操作を確認後に実施。
+
+## 5. ダブルクリックの比較ランチャー（GUI-Compare.bat）
+`experiments/gui-compare/GUI-Compare.bat` をダブルクリックすると、同じリポジトリにある `scripts/run-compare.ps1` が起動する。**このブランチの最新版を取得済みの状態で使用する**。bat自体はネットワークからコードを自動更新しない。
+
+- 必要な環境がそろっているか確認し、既存のAredoko GUI試作が起動中なら安全のため停止するよう案内する。**既存プロセスを勝手に終了しない**。
+- ReactのdistとTauriのRelease実行ファイルを再ビルド。初回だけ必要なNode依存をプロジェクト内に導入する。Tauriのローカルアイコンは保持し、不足時は保存済みSVGから生成。
+- WinUIの生成済みプロジェクトに最新版のXAML/C#差分を `update-winui.ps1` でバックアップ付き反映。WinUI実行時は`winapp run . -c Release --detach --json` でReleaseビルド・起動する。
+- 127.0.0.1:8768で**この実行専用の新しい50,000件架空データSQLite**を作って起動（既存DBは使わない）。既に8768番が使われていたら停止し、既存サーバーは触らない。
+- Tauri→WinUIの順に、一度に1アプリだけ起動して機能の手動確認を求める。機能確認は「未編集での連続選択／検索／ページ移動／編集・保存」。失敗時は `q` で中断（無理に性能比較しない）。
+- 比較フェーズは **Idle / Search / Scroll / Detail / Edit**。各フェーズの開始前にユーザーが同じ作業を準備し、Enterで自動計測開始。**この5操作のWindows GUI入力は自動化されていない**。この操作は左右のGUIで同条件にする。
+- モードは1回×10秒の「お試し」か、3回×20秒の「本測定」。1実行内では各アプリを起動したまま連続計測するため「起動後のwarm測定」であり、コールド起動時間は計測しない。
+- `cache/gui-compare/runs/<date>-<id>/` に測定CSV（各プロセス/時点）、`summary.json`, `summary.txt`, `session.log`, `manual-checks.txt`、バックエンドログ・テスト用SQLiteを作る。実行ごと別フォルダで上書きしない。
+- レポートはプロセスごとのPrivate BytesとWorking Set合算、累積CPU時間から計算したCPU使用率の**概算**。共有Working Setの二重計上やWebView2子プロセスの取りこぼしがあり得る。**FPS、VRAM、正確な操作遅延、コールド起動時間は計測しない**。表示方式もTauri仮想行、WinUIネイティブ行なので総合的な採用判断は暫定。
+- 終了時はこのツールが起動したベンチ用アプリとPythonだけを終了。測定ログ・デモSQLiteは結果フォルダに保持する。WinUI自動化を強制したり、個人のライブラリを走査したりはしない。
+
+```powershell
+cd C:\AI\Aredoko-gui-compare
+$repo = 'C:/AI/Aredoko-gui-compare'
+git -c "safe.directory=$repo" fetch origin
+git -c "safe.directory=$repo" merge --ff-only origin/feat/gui-framework-comparison-20261010
+# 以降はエクスプローラーから次のファイルをダブルクリック
+# C:\AI\Aredoko-gui-compare\experiments\gui-compare\GUI-Compare.bat
+```
+
+なお、スクリプトをコマンドラインから使う場合は、`GUI-Compare.bat -Trials 3 -Seconds 20` でも実行できる（引数指定時はモード選択をスキップ）。
