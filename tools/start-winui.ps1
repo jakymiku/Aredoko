@@ -1,5 +1,5 @@
 # Development launcher: no dependency installation, no media scanning.
-param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile)
+param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile,[switch]$LayaIntent)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $logDirectory = Join-Path $env:LOCALAPPDATA 'Aredoko/logs'
@@ -20,6 +20,7 @@ try {
         if($profilePath.Contains('"') -or -not (Test-Path -LiteralPath $profilePath -PathType Leaf)){throw 'Invalid AI profile path'}
         $backendArguments+=@('--ai-profile',('"'+$profilePath+'"'))
     }
+    if($LayaIntent){$backendArguments+='--laya-intent'}
     $backend = Start-Process python -ArgumentList $backendArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDirectory 'backend.log') -RedirectStandardError (Join-Path $logDirectory 'backend-error.log')
     $connected = $false
     for ($attempt=0; $attempt -lt 30; $attempt++) {

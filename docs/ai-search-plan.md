@@ -40,3 +40,7 @@ See [the Laya evaluation plan](laya-evaluation.md) for the next bounded experime
 ## Swappable embedding profiles (2026-10-12)
 
 The retrieval engine now has local JSON profiles and registered loading adapters. Launch with -AIProfile, then build the selected profile's index; omit it to restore the original. Identity includes the full vector-space configuration, and alternate stores never reinterpret the old vectors. The exact default keeps legacy vectors. Native full flow and old-index compatibility both passed. See [model profiles](model-profiles.md); generic Sentence Transformers text loading is implemented but an independent alternative model has not been fetched/tested. Laya remains a separate future decision provider.
+
+
+## Laya実験の更新（2026-10-12）
+ローカル多言語Layaの独立判断provider/明示setup/提案APIを実装してGPU検証済み。36文の意図26/36・種類22/36、生成素材の順位比較は1改善/1悪化のためGUI採用条件は未達。通常検索には自動適用せず、既定起動は無効。正確な結果・メモリ・終了検証・手順は [laya-evaluation.md](laya-evaluation.md)。

@@ -12,6 +12,9 @@ import sqlite3
 from ai_process import EncoderProcess, AIUnavailable
 from ai_search import AISearch, AIBusy
 from ai_profiles import load_profile
+from search_intent import SearchIntent
+from laya_process import LayaProcess
+from laya_config import model_path as laya_model_path
 from server import handler_for
 
 class DisabledAI:
@@ -30,8 +33,15 @@ def create_ai(catalog,profile_path=None):
         return AISearch(catalog,EncoderProcess(repo/'.venv-ai/Scripts/python.exe',profile.model_path(repo),profile))
     except (AIUnavailable,sqlite3.DatabaseError,OSError,ValueError): return DisabledAI()
 
-def production_handler(catalog,token,ai=None):
+def create_intent(enabled=False):
+    repo=Path(__file__).resolve().parents[1]
+    try:
+        return SearchIntent(LayaProcess(repo/'.venv-ai/Scripts/python.exe',laya_model_path(repo))) if enabled else SearchIntent()
+    except (ValueError,OSError):return SearchIntent()
+
+def production_handler(catalog,token,ai=None,intent=None):
     ai=ai or create_ai(catalog)
+    intent=intent or SearchIntent()
     base=handler_for(catalog,token)
     previews=PreviewReader(catalog)
     class Handler(base):
@@ -54,6 +64,7 @@ def production_handler(catalog,token,ai=None):
                         return self.send(404,{'error':'Preview unavailable'})
                     except ValueError:
                         return self.send(400,{'error':'Invalid item'})
+                if path=='/api/library/intent/status':return self.send(200,intent.status())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/roots': return self.send(200,{'items':catalog.index.roots()})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
@@ -84,6 +95,8 @@ def production_handler(catalog,token,ai=None):
                 if not 0<length<=32768: return self.send(413,{'error':'Invalid body size'})
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path=='/api/library/intent/suggest':
+                    return self.send(200,intent.suggest(body.get('query'),body.get('source','all'),body.get('kind','')))
                 if self.path=='/api/library/ai/index': return self.send(200,ai.start(body.get('limit',2000)))
                 if self.path=='/api/library/ai/cancel': return self.send(200,ai.cancel_build())
                 if self.path=='/api/library/ai/search':
@@ -109,13 +122,15 @@ def main():
     parser.add_argument('--db',type=Path,required=True)
     parser.add_argument('--port',type=int,default=8769)
     parser.add_argument('--ai-profile',type=Path)
+    parser.add_argument('--laya-intent',action='store_true',help='Experimental suggestions only; no auto-routing')
     args=parser.parse_args()
     catalog=ProductionCatalog(args.db)
     ai=create_ai(catalog,args.ai_profile)
-    server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai))
+    intent=create_intent(args.laya_intent)
+    server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent))
     print(f'Aredoko production: http://127.0.0.1:{server.server_port}',flush=True)
     try: server.serve_forever()
     except KeyboardInterrupt: pass
-    finally: ai.close(); catalog.close(); server.server_close()
+    finally: intent.close(); ai.close(); catalog.close(); server.server_close()
 
 if __name__=='__main__': main()

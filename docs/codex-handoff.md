@@ -164,3 +164,24 @@
 - 実装HEAD: `64b0af9`（本体 `6fa3e69`＋将来default変更の互換性固定）。後続はこの記録のみ。既存Draft PR #5へpush、未マージ。
 - 61 Pythonテスト、13 C#チェック、WinUI Release、実GPU profile切替、新規GUI通し/旧索引GUI互換の検証成功。所有AIワーカー/API/GUIの終了確認、ランチャー終了0。追加モデル取得なし。
 - 最新仕様/制約/次の3手は上記と docs/model-profiles.md。別実モデルや将来checkpointは未検証、Layaは次段階。
+
+
+### Laya判断実験（2026-10-12開始）
+- 開始HEAD 2ea24f0、clean/Issue #4/AGENTS確認、Draft PR #5継続。EmbeddingGemma 2公式カードはpost-training alignment/safety tuning/output moderationなし、学習データのフィルタありと明記。Aredokoの検索に内容拒否処理なし。
+- 固定Laya 0.4.2/多言語revision 1720e3e3357cfe1e281542e223f8273b0890ca34、モデル678,201,614bytes+wheel380,522bytes。既存依存は条件を満たしpip check成功。ユーザーが新しいLaya取得/GPU検証を明示承認、共有6MB/s制限で取得中。
+- 計画モード/既存依存不変更/--no-deps/固定hash/モデル整合性/中断再開/別revision拒否を実装、setup4テストPASS。embedding profileとは別の判断interface/owned offline worker/提案専用APIを実装中。現時点で実モデル精度・GUI提案は未検証。
+
+
+### Laya独立判断provider・実GPU評価（2026-10-12完了）
+- 実装HEADはこの節を含むコミットを後続の提出記録で確定する。製品ブランチ/既存Draft PR #5/baseを維持。既存WinUI/Web/embedding profile/旧索引/タグ・棚・手動検索を保持。
+- app/search_intent.py にベクトル検索とは別の判断interface、app/laya_process.py / laya_worker.py にowned stdin/stdout worker、app/laya_config.py に固定ID/revision/package/全artifact SHA256。300文字・応答32,768文字・同時1・冷間60s/推論5s・失敗cooldown30s。推論はローカルのみ、HF offline+Python socket接続遮断、ネットワーク接続試行0。Laya 0.4.2 +固定多言語重みを明示承認後に取得。共有6,000,000bytes/s、679,568,032TLS bytes/180.14s。既存依存バージョン全不変/pip check成功、system/driver変更なし。
+- tools/setup-laya.ps1 は無指定planのみ。-InstallAndDownloadで--no-deps/固定wheel hash/取得中断再開/別revision上書き拒否/モデル全hash検証。upstream tokenizerのリスト→mapping互換修正を許す場合も全original configを復元して固定hashと照合。最初の再起動実験first-01でその差を検知、修正してfirst-02/03成功。
+- GET /api/library/intent/status、POST /api/library/intent/suggestに既存token/Origin保護。既定は無効、--laya-intent / tools/start-winui.ps1 -LayaIntentで開発者が明示起動。結果はexperimental提案のみ、手動source/kindをrequestedとして保持、検索本体は呼ばず種類で絞らない。missing/busy/timeout/malformedはnull提案で通常検索維持。GUI提案control・自動切替/フィルタは追加していない。
+- 固定36件の架空日本語fixtureを追加（development24/held-out12）。実CUDA: 意図16/24+10/12=26/36、種類16/24+6/12=22/36、両方14/36。全36推論成功。プロンプト/閾値を結果に合わせて調整していない。漫画→archive、種類不明→archive等の誤分類を記録。held-outは評価済みであり、以後の調整で未見検証と再主張しない。
+- 生成17素材/6検索の実EmbeddingGemma比較: Laya source提案を実験内だけで適用。赤表紙は期待順位2→1、青表紙は1→2、残り4は同順位。top1はmixedもLayaも5/6、全体改善を確認できずGUI採用条件未達。sourcehash不変、私物未走査。本文/OCR/音声動画内容は依然未解析。
+- 実測first-03: 冷間first query13,133ms、残り35の中央値40.65ms/p95 43.78ms、PyTorch GPU peak allocated1,501MiB（driver全使用量ではない）。実interpreter Working Set1,965MiB/peak2,707MiB、Private Bytes5,766MiB（commitでresident RAMとは異なる）。first-02の3MiBはvenv redirector誤計測で無効。CPU/量子化/idle unload未検証。
+- Windows venv redirector/実interpreterの2プロセスを区別し、workerでAPI親と直接OS親の両方を監視。tools/test_laya_api.py 実CUDA/HTTP PASS: cold読込中literal12.78ms、競合fallback5.76ms、異なる手動条件を保持、強制timeoutでrealworker終了/文字検索継続、os._exitによるowner突然終了でもrealworker終了。終了後CIMで全所有laya/embedding workerなしを確認。
+- Python **76 tests PASS**（新setup4/intent11、既存61を保持）、C# **13 checks PASS**、WinUI Release PASS（旧SDK IL2104警告2件を抑制せず維持）。launcher構文PASS。コードレビュー: XAML/C#変更なし、JSON/非同期GUI/テーマ/AutomationIdの既存コードを維持。stdlib APIにtorch等をimportせず、全外部推論依存をworkerへ分離、有限probability/label/truncation/worker identity/provenance/busy/閉鎖・再起動境界を手動確認。analyzerなし、今回native GUI操作なし。既存GUI実機成功は前節の証拠を参照。
+- ローカルignored evidence: data/laya-setup/result.json、data/laya-evaluation/first-03/result.json、api-01/result.json。docs/laya-evaluation.mdに手順・全結果・不採用理由と次の評価条件を記録。モデル/venv/DB/スクリーンショット/私物はcommit対象外。
+- **次の3手:** (1) Laya質問/選択肢をdevelopment文で改善、選択肢順序/棄権と新しいheld-out集合を用意し、種類の推測は当面提案のみ、(2) text/cover混合順位を別途改善して実検索の総合利益を再測定、(3) GUIモデルprofile選択と明示サンプル/2,000件超の索引規模を進める。精度・順位・初回待ち・メモリを満たしてからGUI提案を追加する。
+- 最終レビューで既存material条件を提案APIが拒否する不整合を修正。手動kindは既存TYPESを正として素材も保持し、判断ラベルの種類数で制限しない。質問/fixture/実測分類には変更なし。intent11テスト再実行PASS。
