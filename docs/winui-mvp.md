@@ -4,13 +4,13 @@ Run from the repository with `pwsh -File tools/start-winui.ps1`. Requires the al
 
 The launcher starts the production-only API on `127.0.0.1:8769`, refuses an occupied port, and stops only its own backend when the window exits. Persistent catalog: `%LOCALAPPDATA%/Aredoko/catalog.sqlite`; logs: `%LOCALAPPDATA%/Aredoko/logs`. A custom `-Database` may be supplied. Do not put the database under a library root. The Web demo on port 8765 remains separate.
 
-Use フォルダ管理 to select a **test folder**, explicitly consent, register and scan. Registration alone does not scan. Search matches filenames/tags; this is not AI semantic search. Sixty records are loaded per page. Select a record to edit tags, shelf, favorite and reviewed status, then save. Ctrl+F focuses search, Ctrl+S saves. Narrow windows use a details drawer.
+Use フォルダ管理 to select a **test folder**, explicitly consent, register and scan. Registration alone does not scan. The default search matches filenames/tags. AI意味検索 and AI画像・表紙 are now optional modes, prepared from AI索引; see the AI section below. Sixty records are loaded per page. Select a record to edit tags, shelf, favorite and reviewed status, then save. Ctrl+F focuses search, Ctrl+S saves. Narrow windows use a details drawer.
 
 Scanning reads directory entries and filesystem metadata only, skips links/reparse points and preserves missing locations. A failed or cancelled scan rolls back the partial index. Resume currently means a fresh atomic traversal, not a checkpoint resume. A process crash is marked interrupted on the next start. Metadata publication is repaired on startup if interrupted after the index commits. Paths identify records; moved files are not automatically matched. Folder contents are indexed as individual files, not grouped books yet. ZIP/CBZ first-image previews are read in memory; nothing is extracted to disk.
 
 Excluded records retain annotations but disappear from search after a rescan. Offline roots are shown in folder management and failed scans preserve previous records. Large scans use one SQLite write transaction; metadata edits, root registration and exclusion changes return HTTP 409 promptly while a scan is active (the editor retains changes for retry after the scan). This first slice has not been benchmarked against 1 TB of real media.
 
-Batch updates remain available in the original API; the new native editor edits one record. Readers, Komga, OCR, embeddings, folder-to-book grouping, move tracking, advanced shelves and installer distribution remain outside this slice. AI search is the proposed next milestone; see [ai-search-plan.md](ai-search-plan.md).
+Batch updates remain available in the original API; the new native editor edits one record. Readers, Komga, OCR, folder-to-book grouping, move tracking, advanced shelves and installer distribution remain outside this slice. The initial optional EmbeddingGemma 2 slice is described in [ai-search-plan.md](ai-search-plan.md).
 
 Validation:
 ```
@@ -39,3 +39,11 @@ Production API additions (same existing catalog routes):
 All writes require the token and matching loopback Origin. Catalog search adds relative_path, availability, root_id, mtime_ns and size_bytes to records. Missing records are retained; excluded records are hidden from search.
 
 Preview route: GET /api/library/preview/<id> requires the session token and accepts only an indexed ID. It returns bounded encoded source bytes, 404 for fallback and 503 when both reader workers are busy.
+
+AI search developer preview:
+- Explicit project setup: pwsh -File tools/setup-ai.ps1 -InstallAndDownload. It uses existing Python3.11 in .venv-ai and a pinned local model under models, with a shared 6 MB/s download cap. No system driver/SDK changes. Setup has been performed on this machine with user approval.
+- In WinUI: consent/register/scan a test folder, click AI索引 then 索引を作成・更新. Choose AI意味検索 or AI画像・表紙 and enter a description. Normal 名前・タグ remains available. Current cap: earliest 2,000 eligible records; inspect progress and cancel in AI索引.
+- Text/cover input only. PDF/video/audio names and tags can be searched, but their contents and book interiors are not analyzed. Actual user-library accuracy is unverified. Broad combined scoring is experimental; choose visual mode for visual queries.
+- The sibling <catalog>.ai.sqlite contains vectors/checkpoints; keep catalog/cache outside library roots. Updates to title/tags/source revision require AI index update; stale revisions are not ranked. Current exclusions and metadata filters apply when searching.
+- AI failures preserve normal search. Runtime never downloads weights. The owned worker is stopped when its backend parent exits. Laya is pending.
+- Manual actual-model smoke: python -X utf8 tools/test_ai_model.py --output <new ignored output directory>. Native actual-model flow: tools/test-ai-ui-local.ps1 with a fresh DB/PID and generated fixture/artifact directories. These operate generated test files only.

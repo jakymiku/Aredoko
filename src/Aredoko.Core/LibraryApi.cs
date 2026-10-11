@@ -14,7 +14,15 @@ public sealed class LibraryApi : IDisposable
         client.DefaultRequestHeaders.Remove("Origin");
         client.DefaultRequestHeaders.Add("Origin", "http://127.0.0.1:8769");
     }
-    public async Task<SearchResponse> SearchAsync(string q,string kind,string view,int page) => Protocol.ParseSearch(await client.GetStringAsync($"api/items?q={Uri.EscapeDataString(q)}&kind={kind}&view={view}&page={page}"));
+    public async Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all")
+    {
+        if(semantic && !string.IsNullOrWhiteSpace(q))
+        {
+            var result=await PostAsync("api/library/ai/search",new JsonObject{{"query",q},{"kind",kind},{"view",view},{"page",page},{"source",source}});
+            return Protocol.ParseSearch(result.ToJsonString());
+        }
+        return Protocol.ParseSearch(await client.GetStringAsync($"api/items?q={Uri.EscapeDataString(q)}&kind={kind}&view={view}&page={page}"));
+    }
     public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed));
     public async Task<JsonNode> GetAsync(string route) => JsonNode.Parse(await client.GetStringAsync(route))!;
     public Task<JsonNode> PostAsync(string route,JsonObject data) => PostAsync(route,data.ToJsonString());

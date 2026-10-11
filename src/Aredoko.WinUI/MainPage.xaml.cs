@@ -23,15 +23,16 @@ public sealed partial class MainPage : Page
     private MediaRow? active;
     private EditorState saved;
     private bool ready, populating, saving, dialogOpen, tiles, disposed;
-    private int page, lastKind;
+    private int page, lastKind, lastMode;
     private string view="all", lastQuery="";
 
     public MainPage() {
         InitializeComponent();
         thumbnails = new ThumbnailService(api);
         searchTimer=DispatcherQueue.CreateTimer(); searchTimer.Interval=TimeSpan.FromMilliseconds(300);
-        searchTimer.Tick+=async (_,_)=>{searchTimer.Stop(); if(Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind) await NavigateAsync(0);};
+        searchTimer.Tick+=async (_,_)=>{searchTimer.Stop(); if(PendingSearch) await NavigateAsync(0);};
     }
+    private bool PendingSearch => Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind||SearchMode.SelectedIndex!=lastMode;
     private EditorState Current()=>new(Tags.Text,Shelf.Text,Favorite.IsChecked==true,Reviewed.IsChecked==true);
     private bool Dirty=>active is not null && EditorState.IsDirty(saved,Current());
     private void Notice(string title,string message="",InfoBarSeverity severity=InfoBarSeverity.Informational) {
@@ -59,20 +60,20 @@ public sealed partial class MainPage : Page
         var version=searches.Next(); Busy.Visibility=Visibility.Visible;
         // Do not allow editing an old record while a different result is loading.
         Editor.IsEnabled=false; Items.IsEnabled=false;
-        var query=Query.Text; var kind=KindValue();var selectedKind=Kind.SelectedIndex;
+        var query=Query.Text; var kind=KindValue();var selectedKind=Kind.SelectedIndex;var selectedMode=SearchMode.SelectedIndex;
         try {
-            var result=await api.SearchAsync(query,kind,view,page);
+            var result=await api.SearchAsync(query,kind,view,page,selectedMode>0,selectedMode==2?"cover":"all");
             if(!searches.IsCurrent(version)||disposed)return;
             if(result.Items.Count==0 && page>0){page=Math.Max(0,(result.Total-1)/60);await LoadAsync();return;}
-            lastQuery=query; lastKind=selectedKind;
+            lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;
             rows=result.Items; active=null; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+59)/60)}";
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*60<result.Total;
             Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
-            Empty.Text=query.Length>0?"一致する名前・タグがありません。検索条件を変えてください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
-            Notice("読込完了","名前・タグの文字検索。元ファイルは変更しません。");
-        } catch(Exception ex) { if(searches.IsCurrent(version)){rows=[];active=null;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Empty.Text="再接続からやり直してください。";Failure(ex);} }
+            Empty.Text=query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
+            Notice("読込完了",selectedMode>0 && query.Length>0 ? "AI検索の候補です。索引済みの最大2,000件から類似順に表示します。" : selectedMode>0 ? "探したい内容を文章で入力してください。AI索引の作成は「AI索引」から。" : "名前・タグの文字検索。");
+        } catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;rows=[];active=null;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Empty.Text="再接続からやり直してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
     private void RenderRows()
@@ -151,9 +152,9 @@ public sealed partial class MainPage : Page
     private async Task NavigateAsync(int nextPage) {
         if(!ready||saving||!await transitions.WaitAsync(0))return;
         try {
-            if(!await ConfirmDiscardAsync()){populating=true;Query.Text=lastQuery;Kind.SelectedIndex=lastKind;populating=false;return;}
+            if(!await ConfirmDiscardAsync()){populating=true;Query.Text=lastQuery;Kind.SelectedIndex=lastKind;SearchMode.SelectedIndex=lastMode;populating=false;return;}
             page=nextPage;await LoadAsync();
-        }finally{transitions.Release();if((Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind)&&!disposed){searchTimer.Stop();searchTimer.Start();}}
+        }finally{transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
     private async void Items_Changed(object sender,SelectionChangedEventArgs e) {
         if(populating||!ready)return;
@@ -192,13 +193,14 @@ public sealed partial class MainPage : Page
             saved=snapshot;active.Tags=snapshot.ParsedTags;active.Shelf=snapshot.Shelf;active.Favorite=snapshot.Favorite;active.Reviewed=snapshot.Reviewed;
             RenderRows();RestoreSelection();EditStatus.Text="保存しました";Notice("保存しました");
         }catch(Exception ex){Failure(ex);EditStatus.Text="保存できませんでした。変更内容は残っています。";}
-        finally{saving=false;Editor.IsEnabled=true;Save.IsEnabled=Dirty;if(Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind){searchTimer.Stop();searchTimer.Start();}}
+        finally{saving=false;Editor.IsEnabled=true;Save.IsEnabled=Dirty;if(PendingSearch){searchTimer.Stop();searchTimer.Start();}}
     }
     private async void Save_Click(object sender,RoutedEventArgs e)=>await SaveAsync();
     private async void SaveShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;await SaveAsync();}
     private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;Query.Focus(FocusState.Keyboard);}
     private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0);}
+    private void SearchMode_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){Query.PlaceholderText=SearchMode.SelectedIndex>0?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";searchTimer.Stop();searchTimer.Start();}}
     private void Kind_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Previous_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(Math.Max(0,page-1));
     private async void Next_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(page+1);
@@ -216,7 +218,7 @@ public sealed partial class MainPage : Page
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
             view=next;page=0;await LoadAsync();
         }
-        finally { transitions.Release();if((Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind)&&!disposed){searchTimer.Stop();searchTimer.Start();} }
+        finally { transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();} }
     }
     private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=tiles?"リスト表示":"タイル表示";RenderRows();RestoreSelection();}
     private void OpenDetails_Click(object sender,RoutedEventArgs e){if(active is not null)Details.IsPaneOpen=true;}
@@ -260,5 +262,48 @@ public sealed partial class MainPage : Page
         }catch(Exception ex){Failure(ex);}
         finally{timer.Stop();dialogOpen=false;try{if(!disposed){renderCancellation.Cancel();thumbnails.Clear();await LoadAsync();}}finally{transitions.Release();}}
     }
+
+    private async void AI_Click(object sender,RoutedEventArgs e)
+    {
+        if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
+        var timer=DispatcherQueue.CreateTimer();timer.Interval=TimeSpan.FromSeconds(1);
+        bool reload=false;
+        try
+        {
+            if(!await ConfirmDiscardAsync())return;
+            dialogOpen=true;reload=true;
+            var explanation=new TextBlock {Text="登録済みフォルダの最大2,000件をAI検索用に準備します。名前・タグと対応画像・表紙が対象です。初回は時間がかかります。",TextWrapping=TextWrapping.Wrap};
+            var status=new TextBlock {TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(status,"AIStatus");
+            var start=new Button {Content="索引を作成・更新",IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
+            var cancel=new Button {Content="中断",IsEnabled=false};AutomationProperties.SetAutomationId(cancel,"CancelAIIndex");
+            bool polling=false;
+            async Task Refresh()
+            {
+                if(polling||disposed)return;polling=true;
+                try
+                {
+                    var data=await api.GetAsync("api/library/ai/status");
+                    var available=data["available"]!.GetValue<bool>();
+                    var state=data["state"]!.GetValue<string>();
+                    var running=state is "running" or "cancelling";
+                    var label=state switch {"idle"=>"未作成","running"=>"作成中","cancelling"=>"中断待ち","complete"=>"準備完了","cancelled"=>"中断済み","interrupted"=>"前回中断","failed"=>"失敗",_=>state};
+                    status.Text=available ? $"{label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "AI環境が未導入です。導入手順を確認してください。";
+                    start.IsEnabled=available&&!running;cancel.IsEnabled=running;
+                }
+                catch(Exception ex){status.Text=ex.Message;start.IsEnabled=false;}
+                finally{polling=false;}
+            }
+            start.Click+=async(_,_)=>{start.IsEnabled=false;try{await api.PostAsync("api/library/ai/index",new JsonObject{{"limit",2000}});await Refresh();}catch(Exception ex){status.Text=ex.Message;start.IsEnabled=true;}};
+            cancel.Click+=async(_,_)=>{try{await api.PostAsync("api/library/ai/cancel",new JsonObject());await Refresh();}catch(Exception ex){status.Text=ex.Message;}};
+            timer.Tick+=async(_,_)=>await Refresh();
+            var panel=new StackPanel {Spacing=12,MinWidth=320};panel.Children.Add(explanation);panel.Children.Add(status);panel.Children.Add(start);panel.Children.Add(cancel);
+            await Refresh();timer.Start();
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,Title="AI検索の準備",Content=panel,CloseButtonText="閉じる"};
+            await dialog.ShowAsync();
+        }
+        catch(Exception ex){Failure(ex);}
+        finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
+    }
+
     public void Stop(){renderCancellation.Cancel();detailCancellation?.Cancel();disposed=true;searches.Next();searchTimer.Stop();api.Dispose();}
 }

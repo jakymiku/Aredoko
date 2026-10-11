@@ -6,7 +6,7 @@
 - 目的: **Aredoko**（Windows用のローカルメディアライブラリ検索・整理アプリ）の**製品版MVPをWinUI 3 + C#で新規実装する**。以前はGUI方式としてTauri + Reactも評価したが、2026-10-11にユーザー判断で**WinUI 3を先行採用**した。Tauriの比較コードは削除しない。
 - 理由: Tauri/WinUI双方の実機GUI基本操作が完走し、WinUIのPrivate Bytes（アプリ本体関連プロセス）が一貫して小さかった。CPUは操作回数の差や負荷条件が統一できておらず優劣は未確定。安定性に関しては**WinUIだから無条件に安全と証明されたわけではない**。過去にWinUI試作固有のクラッシュも修正済み。
 - GUI: Fluent 2 / Windows 11らしいモダンで密度の高いUI。左ナビ・上部検索・中央の大きい作品一覧・右の詳細/タグ編集。狭い画面は詳細をドロワーに。Mica等の見栄えは安定性・操作性を損なわない範囲。
-- 開発実務: **製品用の最初の縦切り実装と実機GUI検証まで完了**。登録・走査・文字検索・整理・再起動保持に加え、画像/CBZ/ZIPのプレビューが動く。AI検索は次の予定。Issue #4全体の完成宣言ではない。最新結果と残課題は末尾、起動手順は [winui-mvp.md](winui-mvp.md)。
+- 開発実務: **製品用の最初の縦切り実装と実機GUI検証まで完了**。登録・走査・文字検索・整理・再起動保持に加え、画像/CBZ/ZIPのプレビューが動く。EmbeddingGemma2の最初のAI索引/検索APIとGUI接続も追加。GUIのAI検索通しテストは未完了。Issue #4全体の完成宣言ではない。最新結果と残課題は末尾、起動手順は [winui-mvp.md](winui-mvp.md)。
 
 ## GitHub上の資産と現在位置
 | 作業 | 場所 | 状態・意味 |
@@ -103,3 +103,20 @@
 - Draft PR #5: https://github.com/jakymiku/Aredoko/pull/5 。比較ブランチbaseを維持、未マージ。
 - 検証用アプリを閉じ、ランチャー終了コード0と専用バックエンド停止を確認。AI環境/モデルは未導入。
 
+
+### AI検索段階（2026-10-12開始）
+- 開始HEAD 701730d、製品ブランチclean。Issue #4/AGENTS確認済み。
+- ユーザーが専用AI環境・EmbeddingGemma2取得・生成素材GPU検証を明示承認。追加条件: 回線85Mbpsのため合計約6MB/s以下。ローカルCONNECTプロキシで全依存/モデルTLS受信を共通制限し、Xet/transfer高速経路を無効にして実行中。システムPython/ドライバーは変更しない。
+- Python3.11既存、RTX4070Ti12GBを実機確認。固定CUDA版torch2.9.1、sentence-transformers6.1.0、transformers5.19.0、EmbeddingGemma2固定revisionで分離。AI索引/API/GUIを実装中、意味検索成功はまだ未確認。
+
+### EmbeddingGemma2初回実装・実測（2026-10-12）
+- 専用.venv-ai、固定モデルを承認済み手順で導入。依存/モデルのTLS受信は合計6,000,000bytes/sの共通上限。初回取得4,482,870,732TLS bytes/968.3秒（インストール時間含む）、追加torchvisionも同じ上限。システムPython/SDK/GPUドライバー変更なし。Layaは導入していない。
+- stdlibカタログから分離Pythonプロセスでオフライン推論。SentenceTransformer text+vision、audio encoder無効、bf16 CUDA（CPUはfloat32）。入力は名前/タグ/相対名と、既存安全リーダーの画像/CBZ/ZIP先頭画像。PDF/動画/音楽の中身や本の本文は未解析。
+- sibling AI SQLiteに768次元の正規化float32、text/cover別、固定モデルprofileとsource/metadata指紋を保存。初版は登録済みpresent対象の先頭最大2,000件。途中キャンセル/再起動中断状態/保存済み分再利用、更新済みタグや源の旧vector除外、現在の除外/お気に入り等フィルタを実装。AIキャッシュ破損時も通常検索は起動可能。
+- GET /api/library/ai/status、POST index/cancel/search追加、既存token/Origin保護。実推論中の競合を拒否。WinUIにAI索引の進捗/作成/中断画面、AI意味検索とAI画像・表紙の切替を追加。空検索は通常一覧を表示。通常検索/API/Web比較は維持。
+- 実モデルの生成17件検証成功: 日本語言い換え「傘が必要な暗い都会の景色」→雨の夜の街並み.wav（名前だけの入力）、cover専用で「青い画像」→image-01.png、「赤い表紙の本」→book-03.cbzが各1位。破損源はテキストのみ、元ファイル全ハッシュ不変。最終warm検索104–106ms、PyTorch peak allocated 931.8MiB（OS/プロセス全GPU消費ではない）。初回全検証40秒、warmファイルキャッシュの回では約12–16秒。個人ライブラリ/数千件への速度や精度は未実測。
+- textとcoverのcosine最大値で混ぜた初回は色順位が名前側に偏った。coverのみの明示モードで上記色条件が改善。複合検索の順位補正・意図判定は未完成。意味検索は全候補を類似順で返し、適合閾値はまだ校正していない。
+- Python **51テスト成功**、C# **13チェック成功**。新テストの既知vectorはAPI/永続化の検証であり精度証拠ではない。別途tools/test_ai_model.pyで実CUDAモデルを検証。Releaseビルド成功、SDK IL2104警告2件は引き続き未解消。analyzer追加なし。
+- 元のnativeメタデータ回帰テストは新しい検索切替を加えた版でも成功。**AI GUI通しテストはFAIL/未完了**: 初回は非同期登録待ち不足、1回目再実行はフォルダ画面終了直後の待ち不足を修正。2回目再実行でGUIから17件の実CUDA索引作成が成功したが、テストCLIがAI意味検索という同じ表示名のListItem/Textを重複検出し停止。選択肢にModeLiteral/ModeSemantic/ModeVisualの専用AutomationIdを追加しビルド済みだが、その修正後のGUI再実行は未実施。winui-ui-testingスキルの最大2 fix-and-rerun cyclesに従い、再試行を打ち切って失敗を残す。検索画面のタグ保存/dirty keep/文字モード戻しについて新AI通しテスト成功は主張しない。
+- AI GUI失敗時スクリーンショットとJSON結果を保存して目視確認（generated test artifacts、Git対象外）。源カバーと一覧/詳細/検索切替のUIを確認。Sandbox不在でローカルWindows。アプリ終了時に所有AIプロセス2つとAPIポートが消えることを確認済み（親終了監視）。
+- **次の3手:** (1) 専用IDを使うAI GUI通しテストを次回再実行し、選択/保存/未保存保持/モード切替を完走、(2) 明示選択した小規模サンプルで日本語・同人誌表紙の精度と混合順位、2,000件の初回速度を評価、(3) Laya multilingualの具体的導入案を作り検索意図/種類補助を比較し、索引上限拡大/大規模応答性へ進む。今後のダウンロードも6MB/s上限を維持。

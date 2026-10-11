@@ -8,9 +8,27 @@ from urllib.parse import urlparse
 from production import ProductionCatalog, ScanBusyError
 from previews import PreviewReader, PreviewUnavailable, PreviewBusyError
 import zipfile
+import sqlite3
+from ai_process import EncoderProcess, AIUnavailable
+from ai_search import AISearch, AIBusy
 from server import handler_for
 
-def production_handler(catalog,token):
+class DisabledAI:
+    def status(self):
+        return {'available':False,'state':'failed','processed':0,'total':0,'indexed':0,
+                'skipped':0,'error':'AI索引を開けません。文字検索は引き続き利用できます。'}
+    def start(self,*args): raise AIUnavailable(self.status()['error'])
+    def search(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
+    def cancel_build(self): return {'cancel_requested':False}
+    def close(self): pass
+
+def create_ai(catalog):
+    repo=Path(__file__).resolve().parents[1]
+    try: return AISearch(catalog,EncoderProcess(repo/'.venv-ai/Scripts/python.exe',repo/'models/embeddinggemma-2'))
+    except (AIUnavailable,sqlite3.DatabaseError,OSError): return DisabledAI()
+
+def production_handler(catalog,token,ai=None):
+    ai=ai or create_ai(catalog)
     base=handler_for(catalog,token)
     previews=PreviewReader(catalog)
     class Handler(base):
@@ -33,6 +51,7 @@ def production_handler(catalog,token):
                         return self.send(404,{'error':'Preview unavailable'})
                     except ValueError:
                         return self.send(400,{'error':'Invalid item'})
+                if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/roots': return self.send(200,{'items':catalog.index.roots()})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
@@ -62,6 +81,10 @@ def production_handler(catalog,token):
                 if not 0<length<=32768: return self.send(413,{'error':'Invalid body size'})
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path=='/api/library/ai/index': return self.send(200,ai.start(body.get('limit',2000)))
+                if self.path=='/api/library/ai/cancel': return self.send(200,ai.cancel_build())
+                if self.path=='/api/library/ai/search':
+                    return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all')))
                 if self.path=='/api/library/roots':
                     if body.get('consent') is not True: raise ValueError('Explicit folder consent required')
                     return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'))})
@@ -71,7 +94,8 @@ def production_handler(catalog,token):
                 if self.path=='/api/library/scan': return self.send(200,catalog.start_scan(body.get('root_id')))
                 if self.path=='/api/library/cancel': return self.send(200,catalog.cancel_scan())
                 return self.send(404,{'error':'Not found'})
-            except ScanBusyError: return self.send(409,{'error':'Wait for the scan to finish'})
+            except (ScanBusyError,AIBusy) as ex: return self.send(409,{'error':str(ex)})
+            except AIUnavailable as ex: return self.send(503,{'error':str(ex)})
             except (ValueError,TypeError): return self.send(400,{'error':'Invalid request: check folder, exclusions or scan state'})
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})
@@ -83,10 +107,11 @@ def main():
     parser.add_argument('--port',type=int,default=8769)
     args=parser.parse_args()
     catalog=ProductionCatalog(args.db)
-    server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32)))
+    ai=create_ai(catalog)
+    server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai))
     print(f'Aredoko production: http://127.0.0.1:{server.server_port}',flush=True)
     try: server.serve_forever()
     except KeyboardInterrupt: pass
-    finally: catalog.close(); server.server_close()
+    finally: ai.close(); catalog.close(); server.server_close()
 
 if __name__=='__main__': main()
