@@ -1,8 +1,9 @@
 import sys
 import unittest
+import tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from report import summarize
+from report import summarize, write_html_report
 
 
 class ReportTests(unittest.TestCase):
@@ -32,6 +33,23 @@ class ReportTests(unittest.TestCase):
         summary = summarize([a, b, c, d])[0]
         self.assertEqual(summary['avg_cpu_pct_one_core'], 30.0)
         self.assertIsNotNone(summary['avg_cpu_pct_machine'])
+
+    def test_html_report_contains_both_variants_and_japanese_labels(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "report.html"
+            self.assertIsNone(write_html_report([
+                {'variant': 'Tauri', 'phase': 'Idle', 'component': 'ui-tree',
+                 'median_private_mib': 220.0, 'median_sum_working_set_mib': 440.0,
+                 'avg_cpu_pct_one_core': 8.0},
+                {'variant': 'WinUI', 'phase': 'Idle', 'component': 'ui-tree',
+                 'median_private_mib': 110.0, 'median_sum_working_set_mib': 155.0,
+                 'avg_cpu_pct_one_core': 2.0}], str(path)))
+            page = path.read_text(encoding='utf-8')
+            self.assertIn("Tauri", page)
+            self.assertIn("WinUI", page)
+            self.assertIn("待機", page)
+            self.assertIn("50.0%", page)
+            self.assertIn("データなし", page)
 
     def test_rejects_invalid_cpu_counters(self):
         sample = self.row('2026-10-11T01:00:00+00:00','ui-tree',1,100,100)
