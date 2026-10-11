@@ -46,7 +46,7 @@ class AISettingsTests(unittest.TestCase):
         self.assertFalse(next(p for p in choice["profiles"] if p["id"] == "local:custom.json")["ready"])
         restarted = self.controller()
         self.assertEqual(restarted.active, "local:custom.json")
-        self.assertEqual(restarted.startup_path, self.folder / "custom.json")
+        self.assertEqual(restarted.startup_path, (self.folder / "custom.json").resolve())
         self.assertFalse(restarted.snapshot()["restart_required"])
         restarted.choose("default")
         self.assertEqual(restarted.active, "local:custom.json")
