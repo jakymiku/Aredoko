@@ -272,7 +272,68 @@ public sealed partial class MainPage : Page
         {
             if(!await ConfirmDiscardAsync())return;
             dialogOpen=true;reload=true;
-            var explanation=new TextBlock {Text="選択中のモデルで登録済みフォルダの最大2,000件を準備します。モデルを変更した場合は索引を作成してください。初回は時間がかかります。",TextWrapping=TextWrapping.Wrap};
+            var explanation=new TextBlock {Text="現在動いているモデルは変更しません。モデル選択は次回起動で反映します。新しいモデルではAI索引を作成してください。自動ダウンロードはしません。",TextWrapping=TextWrapping.Wrap};
+            var modelChoice=new ComboBox {Header="次回起動で使用するAIモデル",HorizontalAlignment=HorizontalAlignment.Stretch};
+            AutomationProperties.SetAutomationId(modelChoice,"AIProfileChoice");
+            var modelWarning=new TextBlock {TextWrapping=TextWrapping.Wrap};
+            AutomationProperties.SetAutomationId(modelWarning,"AIProfileWarning");
+            var modelApply=new Button {Content="次回起動に設定",IsEnabled=false};
+            AutomationProperties.SetAutomationId(modelApply,"AIProfileApply");
+            var modelFeedback=new TextBlock {TextWrapping=TextWrapping.Wrap};
+            AutomationProperties.SetAutomationId(modelFeedback,"AIProfileFeedback");
+            var profileWarnings=new Dictionary<string,string>();
+            string savedProfile="default";
+            bool fetchingProfiles=false;
+            void UpdateProfileWarning()
+            {
+                if(modelChoice.SelectedItem is not ComboBoxItem selected || selected.Tag is not string id) {
+                    modelApply.IsEnabled=false;return;
+                }
+                modelWarning.Text=profileWarnings.GetValueOrDefault(id,"");
+                modelApply.IsEnabled=!fetchingProfiles && id!=savedProfile && selected.IsEnabled;
+            }
+            modelChoice.SelectionChanged+=(_,_)=>UpdateProfileWarning();
+            async Task RefreshProfiles()
+            {
+                fetchingProfiles=true;modelApply.IsEnabled=false;
+                try
+                {
+                    var data=await api.GetAsync("api/library/ai/profiles");
+                    savedProfile=data["selected"]?.GetValue<string>() ?? "default";
+                    profileWarnings.Clear();modelChoice.Items.Clear();
+                    foreach(var entry in data["profiles"]!.AsArray())
+                    {
+                        if(entry is null)continue;
+                        var id=entry["id"]!.GetValue<string>();
+                        var label=entry["label"]?.GetValue<string>() ?? id;
+                        var valid=entry["valid"]?.GetValue<bool>()==true;
+                        var ready=entry["ready"]?.GetValue<bool>()==true;
+                        var caps=entry["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "文字・表紙" : "文字のみ";
+                        var item=new ComboBoxItem {Content=$"{label} ({caps}){(ready ? "" : " · 要確認")}",Tag=id,IsEnabled=valid};
+                        profileWarnings[id]=entry["warning"]?.GetValue<string>() ?? "";
+                        modelChoice.Items.Add(item);
+                        if(id==savedProfile)modelChoice.SelectedItem=item;
+                    }
+                    if(modelChoice.SelectedItem is null && modelChoice.Items.Count>0)modelChoice.SelectedIndex=0;
+                    var active=data["active"]?.GetValue<string>() ?? "default";
+                    var overridden=data["command_line_override"]?.GetValue<bool>()==true;
+                    var restart=data["restart_required"]?.GetValue<bool>()==true;
+                    modelFeedback.Text=(overridden?"起動引数 -AIProfile が優先。GUI選択は引数なしの次回起動で有効です。":
+                        restart?"保存済み。Aredokoを閉じ、同じ起動スクリプトで起動し直してください。":"変更する場合は次回起動に設定を押してください。")
+                        +"\n現在起動中: "+active
+                        +(data["error"]?.GetValue<string>() is string err && err.Length>0?"\n"+err:"");
+                }
+                catch(Exception ex) {modelFeedback.Text="モデル一覧を取得できません: "+ex.Message;}
+                finally {fetchingProfiles=false;UpdateProfileWarning();}
+            }
+            modelApply.Click+=async(_,_)=>{
+                if(modelChoice.SelectedItem is not ComboBoxItem item || item.Tag is not string id)return;
+                modelApply.IsEnabled=false;
+                try {
+                    await api.PostAsync("api/library/ai/profile",new JsonObject{{"id",id}});
+                    await RefreshProfiles();
+                } catch(Exception ex) {modelFeedback.Text="設定を保存できません: "+ex.Message;UpdateProfileWarning();}
+            };
             var status=new TextBlock {TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(status,"AIStatus");
             var start=new Button {Content="索引を作成・更新",IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
             var cancel=new Button {Content="中断",IsEnabled=false};AutomationProperties.SetAutomationId(cancel,"CancelAIIndex");
@@ -289,7 +350,7 @@ public sealed partial class MainPage : Page
                     var label=state switch {"idle"=>"未作成","running"=>"作成中","cancelling"=>"中断待ち","complete"=>"準備完了","cancelled"=>"中断済み","interrupted"=>"前回中断","failed"=>"失敗",_=>state};
                     var model=data["model"]?.GetValue<string>() ?? "未選択";
                     var capabilities=data["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "名前・タグ／画像・表紙" : "名前・タグ";
-                    status.Text=available ? $"{model} · {capabilities}\n{label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "AI環境が未導入です。導入手順を確認してください。";
+                    status.Text=available ? $"{model} · {capabilities}\n{label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
                     start.IsEnabled=available&&!running;cancel.IsEnabled=running;
                 }
                 catch(Exception ex){status.Text=ex.Message;start.IsEnabled=false;}
@@ -298,8 +359,9 @@ public sealed partial class MainPage : Page
             start.Click+=async(_,_)=>{start.IsEnabled=false;try{await api.PostAsync("api/library/ai/index",new JsonObject{{"limit",2000}});await Refresh();}catch(Exception ex){status.Text=ex.Message;start.IsEnabled=true;}};
             cancel.Click+=async(_,_)=>{try{await api.PostAsync("api/library/ai/cancel",new JsonObject());await Refresh();}catch(Exception ex){status.Text=ex.Message;}};
             timer.Tick+=async(_,_)=>await Refresh();
-            var panel=new StackPanel {Spacing=12,MinWidth=320};panel.Children.Add(explanation);panel.Children.Add(status);panel.Children.Add(start);panel.Children.Add(cancel);
-            await Refresh();timer.Start();
+            var panel=new StackPanel {Spacing=12,MinWidth=320};
+            foreach(var element in new UIElement[]{explanation,modelChoice,modelWarning,modelApply,modelFeedback,new TextBlock {Text="現在のAI索引",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},status,start,cancel})panel.Children.Add(element);
+            await RefreshProfiles();await Refresh();timer.Start();
             var dialog=new ContentDialog {XamlRoot=XamlRoot,Title="AI検索の準備",Content=panel,CloseButtonText="閉じる"};
             await dialog.ShowAsync();
         }
