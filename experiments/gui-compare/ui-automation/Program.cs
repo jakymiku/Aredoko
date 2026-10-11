@@ -308,6 +308,27 @@ internal static class Program
         Native.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
     }
 
+    // WinUI TextBox may focus its inner edit provider rather than the outer
+    // UIA Edit element. Treat focus on a descendant as valid; never count focus
+    // elsewhere in the window.
+    private static bool HasEffectiveKeyboardFocus(AutomationElement edit)
+    {
+        try
+        {
+            if (edit.Current.HasKeyboardFocus) return true;
+            var focused = AutomationElement.FocusedElement;
+            if (focused is null) return false;
+            var walker = TreeWalker.RawViewWalker;
+            for (var current = focused; current is not null; current = walker.GetParent(current))
+            {
+                if (current.Equals(edit)) return true;
+                if (current.Equals(Window)) break;
+            }
+            return false;
+        }
+        catch (ElementNotAvailableException) { return false; }
+    }
+
     // WebView2 may hand focus back to the page between rapid search cycles.
     // Re-acquire the live element on every attempt; do not keep an obsolete UIA
     // reference across React renders. Require actual keyboard focus and verify
@@ -323,12 +344,12 @@ internal static class Program
             try { target.SetFocus(); }
             catch (InvalidOperationException) { /* click-to-focus fallback */ }
 
-            if (attempt > 1 || !target.Current.HasKeyboardFocus)
+            if (attempt > 1 || !HasEffectiveKeyboardFocus(target))
                 Click(target); // an actual mouse click also foregrounds WebView2
-            for (var wait = 0; wait < 8 && !target.Current.HasKeyboardFocus; wait++)
+            for (var wait = 0; wait < 8 && !HasEffectiveKeyboardFocus(target); wait++)
                 Thread.Sleep(60);
 
-            if (!target.Current.HasKeyboardFocus)
+            if (!HasEffectiveKeyboardFocus(target))
             {
                 lastFocus = "キーボードフォーカスがありません";
                 Log($"入力先を再フォーカスします: {label} ({attempt}/3)");
