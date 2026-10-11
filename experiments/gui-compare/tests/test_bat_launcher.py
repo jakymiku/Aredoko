@@ -40,7 +40,7 @@ class GuiCompareLauncherTests(unittest.TestCase):
         self.assertIn("Type(TagLabel, after);", source)
         self.assertNotIn("Type(FindRequired(QueryLabel)", source)
         self.assertNotIn("var tag = FindRequired(TagLabel);", source)
-        self.assertIn("if (!IsUsableEdit(target))", source)
+        self.assertIn("var target = FindEditRequired(label);", source)
 
     def test_keyboard_retry_requires_verified_value_and_focus(self):
         source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
