@@ -13,11 +13,14 @@ $tauriExe = Join-Path $tauriDir 'src-tauri/target/release/aredoko_tauri_bench.ex
 $winuiDir = Join-Path $root 'experiments/gui-compare/winui3/generated'
 $measure = Join-Path $PSScriptRoot 'measure.ps1'
 $report = Join-Path $PSScriptRoot 'report.py'
+$driverProject = Join-Path $root 'experiments/gui-compare/ui-automation/GuiDriver.csproj'
+$driverDll = Join-Path $root 'experiments/gui-compare/ui-automation/bin/Release/net10.0-windows/GuiDriver.dll'
 $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,6)
 $runDir = Join-Path $root ('cache/gui-compare/runs/' + $runId)
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 $backend = $null
 $appProcessId = $null
+$driverProcess = $null
 $transcriptOn = $false
 $port = 8768
 $base = 'http://127.0.0.1:8768'
@@ -107,6 +110,7 @@ function Build-Benchmarks {
     Ensure-Exists (Join-Path $script:tauriDir 'package.json') 'React project'
     Ensure-Exists $script:measure 'measure.ps1'
     Ensure-Exists $script:report 'report.py'
+    Ensure-Exists $script:driverProject 'Windows UI Automation driver'
     foreach ($exe in @('python','npm.cmd','cargo','dotnet','winapp')) {
         if (-not (Get-Command $exe -ErrorAction SilentlyContinue)) { throw "Missing tool: $exe" }
     }
@@ -134,50 +138,91 @@ function Build-Benchmarks {
         & npm.cmd run tauri build -- --no-bundle
         Check-Native 'Tauri Release build'
     } finally { Pop-Location }
+    # Validate/compile the native Windows UI Automation program before launching any app.
+    Write-Host 'GUIの自動操作プログラムを検証・ビルドしています...'
+    & dotnet build $script:driverProject -c Release --nologo -v minimal
+    Check-Native 'Windows UI Automation build'
+    Ensure-Exists $script:driverDll 'Windows UI Automation driver DLL'
+    & dotnet $script:driverDll --self-test true
+    Check-Native 'Windows UI Automation self-test'
     # Safe updater backs up modified generated source and validates hashes.
     & (Join-Path $script:root 'experiments/gui-compare/winui3/update-winui.ps1')
-    Write-Host 'Tauri and WinUI benchmark sources prepared.' -ForegroundColor Green
+    Write-Host '両方のGUIと自動操作ツールの準備が完了しました。' -ForegroundColor Green -ForegroundColor Green
+}
+function Run-GuiOperation([string]$variant, [string]$phase, [int]$duration, [int]$trial) {
+    $stem = "$variant-$phase-$trial"
+    $result = Join-Path $script:runDir "$stem-automation.json"
+    $stdout = Join-Path $script:runDir "$stem-automation.stdout.txt"
+    $stderr = Join-Path $script:runDir "$stem-automation.stderr.txt"
+    $script:driverProcess = Start-Process -FilePath (Get-Command dotnet).Source -ArgumentList @(
+        ('"' + $script:driverDll + '"'), '--pid', "$script:appProcessId", '--variant', $variant,
+        '--phase', $phase, '--seconds', "$duration", '--result', ('"' + $result + '"')
+    ) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
+    if ($phase -ne 'Check') {
+        # CPU/RAM sampler and actual mouse/keyboard actions run at the same time.
+        # The C# driver independently proves each GUI change using UIA + API.
+        & $script:measure -Variant $variant -Phase $phase -AppPid $script:appProcessId -BackendPid $script:backend.Id -Seconds $duration -Trial $trial -OutputDirectory $script:runDir
+    }
+    $deadlineMs = [int](($duration + 45) * 1000)
+    if (-not $script:driverProcess.WaitForExit($deadlineMs)) {
+        Stop-Process -Id $script:driverProcess.Id -Force -ErrorAction SilentlyContinue
+        throw "GUI自動操作が時間内に終わりませんでした。診断ログ: $stderr"
+    }
+    $exitCode = $script:driverProcess.ExitCode
+    $script:driverProcess = $null
+    if (-not (Test-Path -LiteralPath $result)) {
+        throw "GUI自動操作の検証結果が作成されていません。ログ: $stderr / $stdout"
+    }
+    $checked = Get-Content -LiteralPath $result -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($exitCode -ne 0 -or $checked.success -ne $true) {
+        $errText = $checked.error
+        throw "GUI自動操作が失敗したため測定を中止します。$errText / 詳細: $result / $stdout"
+    }
+    if ($phase -ne 'Idle' -and $checked.verified -le 0) {
+        throw "GUIの操作結果を検証できません。無効な測定として中止: $result"
+    }
+    Write-Host "確認済み: $variant $phase (操作検証: $($checked.verified) 回)" -ForegroundColor Green
 }
 function Measure-Variant([string]$variant) {
     Start-Variant $variant
     Write-Host ''
-    Write-Host "==== $variant : manual functionality check ====" -ForegroundColor Cyan
-    Write-Host 'In the GUI: select several items; search; change page; edit a tag and SAVE it.'
-    Write-Host 'Make sure the detail pane follows selection and the save is retained.'
-    Check-Abort 'When functionality PASS, press Enter. If it fails type q then Enter'
-    Add-Content -LiteralPath (Join-Path $script:runDir 'manual-checks.txt') -Value "$variant : manually marked PASS at $(Get-Date -Format o)"
+    Write-Host "==== $variant : 自動操作チェック ====" -ForegroundColor Cyan
+    Write-Host '検索・スクロール・作品選択・タグ保存を自動実行し、画面とDBへの反映を確認します。'
+    Run-GuiOperation -variant $variant -phase 'Check' -duration 12 -trial 0
+    Add-Content -LiteralPath (Join-Path $script:runDir 'automatic-checks.txt') -Value "$variant : GUI自動操作の全チェックPASS ($((Get-Date).ToString('o')))"
     $tasks = @(
-        @{ Name='Idle'; Message='Hands off mouse/keyboard; leave list visible.' },
-        @{ Name='Search'; Message='During sampling, search for a title/tag (same text in both apps).' },
-        @{ Name='Scroll'; Message='During sampling, scroll list up/down repeatedly.' },
-        @{ Name='Detail'; Message='During sampling, select several different items.' },
-        @{ Name='Edit'; Message='During sampling, edit a tag and save; only synthetic DB is changed.' }
+        @{ Name='Idle'; Description='待機（操作なし）' },
+        @{ Name='Search'; Description='検索（「雨の街」を入力・クリア）' },
+        @{ Name='Scroll'; Description='一覧を上下にスクロール' },
+        @{ Name='Detail'; Description='3作品を順番に選択して詳細確認' },
+        @{ Name='Edit'; Description='テストタグを編集・保存し、DB反映を検証' }
     )
     for ($trial = 1; $trial -le $script:Trials; $trial++) {
         foreach ($task in $tasks) {
             Write-Host ''
-            Write-Host "[$variant, run $trial/$script:Trials] $($task.Name): $($task.Message)" -ForegroundColor Yellow
-            Check-Abort 'Prepare the GUI first; press Enter to start timed sampling (q to cancel)'
+            Write-Host "[$variant / $trial / $script:Trials] $($task.Description)・$($script:Seconds) 秒を自動実行..." -ForegroundColor Yellow
             Ensure-AppAlive $script:appProcessId $variant
-            & $script:measure -Variant $variant -Phase $task.Name -AppPid $script:appProcessId -BackendPid $script:backend.Id -Seconds $script:Seconds -Trial $trial -OutputDirectory $script:runDir
+            Run-GuiOperation -variant $variant -phase $task.Name -duration $script:Seconds -trial $trial
         }
     }
-    Write-Host "Completed $variant; closing only the benchmark app started by this tool."
+    Write-Host "$variant の検証完了。起動したテストアプリだけを終了します。"
     Stop-OwnedApp
 }
+
 try {
     Start-Transcript -LiteralPath (Join-Path $runDir 'session.log') | Out-Null
     $transcriptOn = $true
     Write-Host '=== Aredoko Tauri vs WinUI GUI Compare ===' -ForegroundColor Cyan
     Write-Host "Results: $runDir"
     if ($Trials -eq 0) {
-        $mode = Read-Host 'Mode: 1 = quick (1 trial x 10s), 2 = full (3 trials x 20s). Default 1'
+        $mode = Read-Host 'モードを選択: 1 = お試し（10秒×1回）、2 = 本測定（20秒×3回） [Enterで1]'
         if ($mode -eq '2') { $Trials = 3; $Seconds = 20 } else { $Trials = 1; $Seconds = 10 }
     }
     if ($Seconds -eq 0) { $Seconds = 20 }
-    Write-Host "Selected $Trials trial(s), $Seconds seconds per phase."
-    Write-Host 'Only fictional fixture data is used. Existing libraries and other files are untouched.'
-    Write-Host 'Keep resolution, display scale and power mode identical for both apps.'
+    Write-Host "測定条件: $Trials 回 × 各操作 $Seconds 秒"
+    Write-Host '個人ファイルは操作せず、架空のテストデータのみ使用します。'
+    Write-Host '計測中は他のアプリを操作せず、同じ画面解像度・表示倍率・電源モードを保ってください。'
+    Write-Host 'GUI入力を自動化し、結果の検証に失敗したら停止します。'
     Build-Benchmarks
     Start-Backend
     foreach ($variant in @('Tauri','WinUI')) { Measure-Variant $variant }
@@ -192,14 +237,19 @@ try {
     & python $report @paths --json $summary | Tee-Object -FilePath $summaryText
     Check-Native 'report.py'
     Write-Host ''
-    Write-Host 'Completed! Share summary.json and summary.txt for the comparison.' -ForegroundColor Green
+    Write-Host 'すべて完了！summary.json と summary.txt を送ってください。' -ForegroundColor Green
     Write-Host "Results: $runDir"
     Start-Process -FilePath explorer.exe -ArgumentList @([char]34 + $runDir + [char]34) | Out-Null
 } catch {
-    Write-Host "STOPPED: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "中断: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "Any completed CSVs and logs were kept in: $runDir"
     exit 1
 } finally {
+    if ($null -ne $driverProcess) {
+        if (Get-Process -Id $driverProcess.Id -ErrorAction SilentlyContinue) {
+            Stop-Process -Id $driverProcess.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
     Stop-OwnedApp
     if ($null -ne $backend) {
         if (Get-Process -Id $backend.Id -ErrorAction SilentlyContinue) {
