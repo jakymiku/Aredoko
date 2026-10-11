@@ -228,3 +228,18 @@
 - `tests/test_ai_settings.py`と `.github/workflows/ai-profile-checks.yml`、`docs/model-profiles.md`を追加/更新。テストは一時フォルダ・架空DB、no download/ no user media。
 - テスト状況: Windows CIによるPython AI単体テストとC# Releaseチェックを実施。WinUI Releaseでは.NET linkerの `NETSDK1102`（SelfContained未指定）が初回CIで出たため、CIビルド引数を `-p:SelfContained=true` に修正。**最終CI結果は対応するGitHub Actionsで確認**。GUI画面の実機操作・再起動後の実モデルロードは未検証。成功と混同しない。
 - 次の3手: ①JakyのWindows実機で `tools/start-winui.ps1` からAI索引→候補を設定→終了/再起動してactive表示と旧索引復帰、text-only cover拒否、missing/invalidからliteral復帰を検証、②UIの説明文/高DPI・ライトテーマ・アクセシビリティを確認、③新しい実サンプル/未見データで順位を確認し2,000件上限拡張の設計を進める。
+
+### チャット実装を実機へ戻す検証（2026-10-12開始）
+- ローカル9190114/cleanからGitHubのf4273ffへfast-forwardし、チャット側のGUI profile選択/API設定/CI修正を全保持。Issue #4/AGENTS/PR #5を確認、base/Draft維持。
+- 取り込んだ状態でPython96/C#13/WinUI Release（SelfContained=true）PASS、旧IL2104 2件。native確認は別作業。私物未走査・追加取得なし。
+- 最初の画面probeはno-buildのPlatform指定がなく旧bin/Releaseを起動したためモデル欄がなく失敗。実機対象をPlatform=x64/SelfContained=trueへ揃えて最新dialogの表示・目視確認に成功。旧出力の結果を新コードの不具合・成功としない。
+- launcherもCIと同じx64/self-contained指定へ揃え、テスト用-AISettingsを公開し個人AppDataを変更しない。profile候補のAutomationIdと人向けactiveモデル名、保存中の重複操作防止を追加中。実CUDA再起動/旧索引復帰/不足・破損のnative検証はこれから。
+
+### GUI profile実装の実機確認・残件（2026-10-12）
+- 実装HEADは後続提出記録で確定。f4273ffのチャット側実装を維持。launcher x64/SelfContainedをCI/実機と統一、-AISettingsで専用保存先を指定可能にした。候補AutomationId、人向けactiveラベル、保存中重複操作防止を追加。新規download/installなし、私物未走査。
+- Python96/C#13/WinUI Release PASS、既存SDK IL2104 2件、launcher parse/diffチェックPASS。変更後ReleaseもPASS、初回フルと増分0警告は別で、IL2104解消とは主張しない。
+- native baseline probeは古いbin出力のためモデル欄なしでFAIL。Platform指定して最新dialog表示を確認。新native harnessは01ウィンドウ生成待ちでFAIL→02はGUI17件CUDA索引/profile保存/no hot swap後に検索方法PopupHost検出FAIL→03も同じpopup問題でFAIL。window/popupの2回修正再実行後はwinui-ui-testing skillの上限により同じ通し再試行を止め、未達を報告した。GUI selector保存は確認、text-only/missing/invalid再起動画面と最新dirty通しは未完。probe旧/最新、02保存後/失敗、03失敗の計5枚を目視確認。成功/失敗の両証拠を含み、通し成功と誤称しない。
+- 新 tools/test_profile_preference_gpu.py の独立実HTTP/CUDAはPASS。03でGUI保存したtest preference/生成17DBのコピーを使用してtext-only次回適用/別索引17/日本語hit/cover非対応、設定保存hot swapなし、default復帰の旧17vector＋cover再利用（再構築なし）、不足/invalidでAI unavailable/literal17、corrupt保存に対しexplicit -AIProfile優先、sourcehash不変。GUIの通し成功ではなくAPI/GPUの証拠。同じ既存EG2重みの2profileで、別checkpoint未検証。
+- ignored証拠 data/ai-ui/profile-probe-01/dialog-latest.png、profile-picker-01/02/03（全FAIL/部分到達）とdata/ai-smoke/profile-preference-01/result.json（PASS）。生成profileは厳密に作成したファイルだけcleanup。個人AppData設定未変更、検証用GUI/API/worker終了確認。
+- コードレビュー: JSON DOM/async・native ListView・dirty guard/Origin-token/immutable index keyを維持。新C# APIは既存ComboBoxItem/AutomationPropertiesのみ、テーマstyleは既存platform。analyzer/Sandboxなし、高DPI/Light/HC/reader/AOT/配布未検証。ScrollViewer APIを調べたが現サイズのdialogは表示できたため不要なレイアウト変更なし。表示リソース化は将来課題。
+- **次の3手:** (1) 保存済みfailure-tree.jsonからPopupHostの公開境界を診断し、新ターンでnative全profile再起動/不足/破損/dirty回帰、(2) 小さいwindow/DPI/themeの警告表示を検証、(3) 明示選択の実サンプル・新未見分類集合と2,000超の索引へ。Layaは依然実験APIだけ。

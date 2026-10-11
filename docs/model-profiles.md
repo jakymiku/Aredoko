@@ -64,3 +64,21 @@ Known-vector tests cover different dimensions and same-dimension revisions, iden
 The actual local-model test tools/test_ai_profile_switch.py uses existing weights in default text+vision and text-only float32 profiles, then switches back without rebuilding. This validates loader/config/cache switching on CUDA, not an unreleased derivative or a second independent model. Generated filenames only; source hashes unchanged.
 
 [Sentence Transformers API](https://sbert.net/docs/package_reference/sentence_transformer/model.html) documents local loading and prompt options.
+
+## Windows実機へ戻した確認（2026-10-12）
+
+チャット側で実装したGUI選択/API設定をf4273ffまでfast-forwardで取り込み、Python96/C#13/WinUI Releaseをローカル確認した。SDK IL2104 2件は未解消。新規重み取得・依存導入はない。
+
+起動/検証のPlatform差で古いbin/Releaseが起動することがあったため、launcherを `--arch x64 -p Platform=x64 -p SelfContained=true` へ揃えた。テスト用の `-AISettings <path>` も追加し、個人AppDataの保存設定を変更せず検証できる。指定しなければ従来の保存先を使う。
+
+    pwsh -File tools/start-winui.ps1 -Database data/profile-test/catalog.sqlite -AISettings data/profile-test/settings.json
+
+モデル候補に安定したAutomationId、現在のモデルに人向けラベルを表示。設定保存中は再選択と重複保存を止める。索引のidentityや現在のworkerは変更しない。
+
+**実機で確認できた範囲:** 新dialogの表示、生成17件のGUI CUDA索引、GUIで文字専用設定を次回用に保存、保存後も旧モデル/索引がactive、再起動案内。probe旧/最新、02保存後/失敗、03失敗の計5枚のスクリーンショットを目視確認。完全なGUI通しテストはFAILで、検索方法ComboBoxのPopupHost検出時に停止した。ウィンドウ待機とpopup待機の2回修正再実行後も残り、成功としない。文字専用/不足/破損のGUI再起動画面、最新変更後のタグdirty通し回帰は未完。
+
+**独立した実HTTP/CUDA再起動検証はPASS:** GUIで保存できた設定と生成DBをコピーし、その設定を起動時に読ませた。text-only索引分離/17件構築/日本語hit/cover非対応、保存時hot swapなし、defaultへ戻して旧17件vectorとcoverを再作成なしで検索、不足重み/不正JSONのoptional AI停止＋literal17件、破損保存設定に対する明示起動profile優先、sourcehash不変を確認。これは設定/API/GPUの証拠であり、未完のGUI通しテストの代わりではない。別checkpointではなく同じ既存重みの2設定。
+
+再現用 `tools/test_ai_profile_ui.py --output <fresh-ignored-directory>` はnative Windows/local専用で、現在上記のpopup検出問題が残る。`tools/test_profile_preference_gpu.py --gui-evidence <generated-ui-evidence> --output <fresh-ignored-directory>` は保存済みtest設定/DBから独立HTTP/GPU再起動を検証する。モデル取得は行わず、作成したtest profileだけ終了時に削除。対応重みとx64 SelfContained Releaseが必要。
+
+ignored結果: `data/ai-ui/profile-probe-01/dialog-latest.png`, `data/ai-ui/profile-picker-01/02/03/result.json`（FAIL/部分到達）、`data/ai-smoke/profile-preference-01/result.json`（PASS）。private/元AppData設定は未変更。検証用API/GUI/workersは終了。Sandbox/analyzer/高DPI/theme/reader/AOTは未検証。

@@ -1,5 +1,5 @@
 # Development launcher: no dependency installation, no media scanning.
-param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile,[switch]$LayaIntent,[ValidateSet('max','mean-rrf')][string]$AIRanking='mean-rrf')
+param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile,[string]$AISettings,[switch]$LayaIntent,[ValidateSet('max','mean-rrf')][string]$AIRanking='mean-rrf')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $logDirectory = Join-Path $env:LOCALAPPDATA 'Aredoko/logs'
@@ -20,6 +20,11 @@ try {
         if($profilePath.Contains('"') -or -not (Test-Path -LiteralPath $profilePath -PathType Leaf)){throw 'Invalid AI profile path'}
         $backendArguments+=@('--ai-profile',('"'+$profilePath+'"'))
     }
+    if($AISettings){
+        $settingsPath=[IO.Path]::GetFullPath($AISettings)
+        if($settingsPath.Contains('"')){throw 'Invalid AI settings path'}
+        $backendArguments+=@('--ai-settings',('"'+$settingsPath+'"'))
+    }
     if($LayaIntent){$backendArguments+='--laya-intent'}
     $backend = Start-Process python -ArgumentList $backendArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDirectory 'backend.log') -RedirectStandardError (Join-Path $logDirectory 'backend-error.log')
     $connected = $false
@@ -29,7 +34,7 @@ try {
         Start-Sleep -Milliseconds 200
     }
     if (-not $connected) { throw 'Backend connection timed out.' }
-    $result = & winapp run src/Aredoko.WinUI -c Release --detach --json
+    $result = & winapp run src/Aredoko.WinUI -c Release --arch x64 -p Platform=x64 -p SelfContained=true --detach --json
     if ($LASTEXITCODE -ne 0) { throw 'WinUI build/launch failed.' }
     $launch = ($result -join "`n") | ConvertFrom-Json
     if (-not $launch.ProcessId) { throw 'No application process returned.' }

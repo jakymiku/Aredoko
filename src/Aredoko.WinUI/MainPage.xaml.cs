@@ -282,6 +282,8 @@ public sealed partial class MainPage : Page
             var modelFeedback=new TextBlock {TextWrapping=TextWrapping.Wrap};
             AutomationProperties.SetAutomationId(modelFeedback,"AIProfileFeedback");
             var profileWarnings=new Dictionary<string,string>();
+            var profileLabels=new Dictionary<string,string>();
+            bool savingProfile=false;
             string savedProfile="default";
             bool fetchingProfiles=false;
             void UpdateProfileWarning()
@@ -290,7 +292,7 @@ public sealed partial class MainPage : Page
                     modelApply.IsEnabled=false;return;
                 }
                 modelWarning.Text=profileWarnings.GetValueOrDefault(id,"");
-                modelApply.IsEnabled=!fetchingProfiles && id!=savedProfile && selected.IsEnabled;
+                modelApply.IsEnabled=!fetchingProfiles && !savingProfile && id!=savedProfile && selected.IsEnabled;
             }
             modelChoice.SelectionChanged+=(_,_)=>UpdateProfileWarning();
             async Task RefreshProfiles()
@@ -300,7 +302,7 @@ public sealed partial class MainPage : Page
                 {
                     var data=await api.GetAsync("api/library/ai/profiles");
                     savedProfile=data["selected"]?.GetValue<string>() ?? "default";
-                    profileWarnings.Clear();modelChoice.Items.Clear();
+                    profileWarnings.Clear();profileLabels.Clear();modelChoice.Items.Clear();
                     foreach(var entry in data["profiles"]!.AsArray())
                     {
                         if(entry is null)continue;
@@ -310,6 +312,8 @@ public sealed partial class MainPage : Page
                         var ready=entry["ready"]?.GetValue<bool>()==true;
                         var caps=entry["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "文字・表紙" : "文字のみ";
                         var item=new ComboBoxItem {Content=$"{label} ({caps}){(ready ? "" : " · 要確認")}",Tag=id,IsEnabled=valid};
+                        AutomationProperties.SetAutomationId(item,"AIProfile_"+id.Replace(':','_'));
+                        profileLabels[id]=label;
                         profileWarnings[id]=entry["warning"]?.GetValue<string>() ?? "";
                         modelChoice.Items.Add(item);
                         if(id==savedProfile)modelChoice.SelectedItem=item;
@@ -320,19 +324,20 @@ public sealed partial class MainPage : Page
                     var restart=data["restart_required"]?.GetValue<bool>()==true;
                     modelFeedback.Text=(overridden?"起動引数 -AIProfile が優先。GUI選択は引数なしの次回起動で有効です。":
                         restart?"保存済み。Aredokoを閉じ、同じ起動スクリプトで起動し直してください。":"変更する場合は次回起動に設定を押してください。")
-                        +"\n現在起動中: "+active
+                        +"\n現在起動中: "+(active=="command-line"?"起動引数で指定したモデル":profileLabels.GetValueOrDefault(active,"設定を確認してください"))
                         +(data["error"]?.GetValue<string>() is string err && err.Length>0?"\n"+err:"");
                 }
                 catch(Exception ex) {modelFeedback.Text="モデル一覧を取得できません: "+ex.Message;}
                 finally {fetchingProfiles=false;UpdateProfileWarning();}
             }
             modelApply.Click+=async(_,_)=>{
-                if(modelChoice.SelectedItem is not ComboBoxItem item || item.Tag is not string id)return;
-                modelApply.IsEnabled=false;
+                if(savingProfile || modelChoice.SelectedItem is not ComboBoxItem item || item.Tag is not string id)return;
+                savingProfile=true;modelApply.IsEnabled=false;modelChoice.IsEnabled=false;
                 try {
                     await api.PostAsync("api/library/ai/profile",new JsonObject{{"id",id}});
                     await RefreshProfiles();
-                } catch(Exception ex) {modelFeedback.Text="設定を保存できません: "+ex.Message;UpdateProfileWarning();}
+                } catch(Exception ex) {modelFeedback.Text="設定を保存できません: "+ex.Message;}
+                finally {savingProfile=false;modelChoice.IsEnabled=true;UpdateProfileWarning();}
             };
             var status=new TextBlock {TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(status,"AIStatus");
             var start=new Button {Content="索引を作成・更新",IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");

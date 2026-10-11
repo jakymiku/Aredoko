@@ -2,6 +2,17 @@
 
 更新: 2026-10-12。旧Web試作段階の引継ぎを置き換える。**製品GUIはWinUI 3に決定済みで、EmbeddingGemma 2検索まで実装・実GPU検証済み。最初から作り直さない。**
 
+
+## 最新の再開地点（2026-10-12・Codex実機追記）
+
+チャット側f4273ffまで取り込み済み。GUIモデルprofile選択は実装済みで、上記の旧「次の実装: GUIモデルprofile選択」は過去の依頼。今回launcherのx64/SelfContainedを統一し、テスト用-AISettings、候補AutomationId、人向けactive名、保存中の重複操作防止を追加。
+
+ローカルPython96/C#13/Release PASS（IL2104 2件）。GUIで生成17件CUDA索引・次回profile保存・hot swapしない動作は実機確認。GUI通しは検索方法PopupHost検出でFAIL、2回の修正再実行後も未完。nativeの不足/破損/text-only再起動画面まで完了したとは扱わない。
+
+独立HTTP/CUDA再起動はPASS: GUI保存設定からtext-only起動/別17件索引/日本語検索、cover非対応、default復帰で旧索引再利用、不足/破損でもliteral維持、明示profile引数の優先、sourcehash不変。GUIの成功とは分けて記載する。新しい重み/DLなし。
+
+**次の3手:** ① `tools/test_ai_profile_ui.py` のPopupHost検出を保存済みUI tree/CLI仕様から修正し、残るnative再起動/不足/破損/dirty回帰を確認、②小さい画面/DPI/themeでモデル警告を確認、③選択された実サンプルの検索評価と2,000件超索引へ。詳細/証拠はdocs/codex-handoff.md末尾、docs/model-profiles.md末尾。実際のHEADを確認し、次回も同じDraft PR #5へ続ける。
+
 ## そのままチャットへ貼る依頼文
 
 ```text
@@ -13,7 +24,7 @@ Draft PR: https://github.com/jakymiku/Aredoko/pull/5
 
 まず、このブランチのAGENTS.md、docs/chat-handoff.md、docs/codex-handoff.mdの最新節、Issue #4、PR #5を確認してください。mainや古いWeb試作の状態を現状と混同しないでください。
 WinUI 3製品MVP、EmbeddingGemma 2の曖昧検索、交換可能なモデルprofile、混合順位改善は実装済みです。Layaは精度不足のため明示実験APIだけで、GUIの自動切替や種類絞込みには使っていません。
-次の作業はGUIからモデルprofileを選択できる機能と、不足・無効モデルの案内です。既存の起動時profile選択・旧索引互換を保ち、まず再起動で反映する小さい実装から進めてください。動作中のhot swapや自動ダウンロードは追加しないでください。
+GUIモデルprofile選択と不足案内は実装済みです。まず最新追記のPopupHost検出問題と未完のnative再起動検証を確認してください。既存の起動時profile選択・旧索引互換を保ち、動作中のhot swapや自動ダウンロードは追加しないでください。
 既存資産・手動検索・タグ保存を維持し、実装できる環境なら必要なテスト、コミット、同じDraft PRの更新まで進め、進捗を引継ぎへ記録してください。直接編集やWindows実行ができない場合は、実コードに対応した変更ファイルか適用可能な差分と、PCで実行する検証手順を返してください。未実行のテストを成功と報告しないでください。
 非公開リポジトリを読めない場合はアクセスできないと明記し、ユーザーが共有するこのブランチのソースを使ってください。仕様だけから実装済みコードを想像して書き直さないでください。
 ```
