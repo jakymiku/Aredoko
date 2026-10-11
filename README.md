@@ -1,4 +1,7 @@
 # Aredoko
+
+> **開発再開ガイド（2026-10-11）**: 本ブランチではGUI方式を**WinUI 3に決定**し、製品版MVP実装に着手する段階へ移行しました。現在の作業状況は [docs/codex-handoff.md](docs/codex-handoff.md)、実装仕様は [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) を参照。以下のREADME本文はデモ段階の説明で、製品版実装の完了を意味しません。
+
 画像・本・動画・音楽を、あいまいな記憶から探す。
 
 Windows向けローカルライブラリ。現在は **架空データを使った操作試作** です。
