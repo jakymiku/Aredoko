@@ -65,7 +65,7 @@ The actual local-model test tools/test_ai_profile_switch.py uses existing weight
 
 [Sentence Transformers API](https://sbert.net/docs/package_reference/sentence_transformer/model.html) documents local loading and prompt options.
 
-## Windows実機へ戻した確認（2026-10-12）
+## Windows実機へ戻した初回確認（2026-10-12・以下は当時の記録）
 
 チャット側で実装したGUI選択/API設定をf4273ffまでfast-forwardで取り込み、Python96/C#13/WinUI Releaseをローカル確認した。SDK IL2104 2件は未解消。新規重み取得・依存導入はない。
 
@@ -82,3 +82,32 @@ The actual local-model test tools/test_ai_profile_switch.py uses existing weight
 再現用 `tools/test_ai_profile_ui.py --output <fresh-ignored-directory>` はnative Windows/local専用で、現在上記のpopup検出問題が残る。`tools/test_profile_preference_gpu.py --gui-evidence <generated-ui-evidence> --output <fresh-ignored-directory>` は保存済みtest設定/DBから独立HTTP/GPU再起動を検証する。モデル取得は行わず、作成したtest profileだけ終了時に削除。対応重みとx64 SelfContained Releaseが必要。
 
 ignored結果: `data/ai-ui/profile-probe-01/dialog-latest.png`, `data/ai-ui/profile-picker-01/02/03/result.json`（FAIL/部分到達）、`data/ai-smoke/profile-preference-01/result.json`（PASS）。private/元AppData設定は未変更。検証用API/GUI/workersは終了。Sandbox/analyzer/高DPI/theme/reader/AOTは未検証。
+
+
+## 最新: nativeモデル切替の到達結果（2026-10-12）
+
+前回の検索方法popup問題を修正した。03のUI treeではPopupHostがmain HWNDのchild paneで、独立window列挙からは見つからない。検索方法は既知の選択肢へ実キーボード操作し、表示値もUIAで確認する。前景が必要なので `focus` の成功を確認してから入力する。モデル候補のpopup HWND操作は維持。
+
+生成17ファイル、専用DB/settings、既存重みで06を実行し、以下はnative GUIと実CUDAで確認できた。
+
+- default GUI索引17件、次回text-only設定の保存、実行中モデルを変えないこと、日本語意味検索。
+- 再起動でtext-only適用、別索引0→17件、CUDA日本語検索。画像検索の非対応案内をGUIに表示し、名前・タグ検索へ戻れること。
+- GUIでdefaultへ戻し、再起動後に元の17件索引を再作成せず再利用、日本語検索。
+- 不足モデルとinvalid JSONの再起動でAIを無効にし、GUIの索引ボタンを無効化/理由を表示しながら文字検索を維持。invalid状態からdefault設定をGUI保存。
+- 破損settingsに対して明示 `-AIProfile` が優先し、検索/起動引数の説明/default設定の再保存ができること。
+
+**通しバッチ全体はFAILのまま。** 04はdialog表示直後の索引操作でidleのまま、05は前景条件でkeyboard操作を安全に拒否、06は上記モデル段階を終えた後のfavorite保存直後のAPI確認で停止した。最後はボタンが親editorの無効化で先にdisabledになることを、保存完了と誤認したテストの待機条件。失敗時PNGには「保存しました」とfavoriteチェックがあり、終了後read-only DB/保存UI treeでもfavorite=true/onを確認した。dirty保持とfavoriteのnative再起動段階には未到達で、過去のGUI成功を今回の結果として転用しない。
+
+06の7状態＋failureの計8 PNG、04のfailure、05の3 PNGをすべて目視確認した。標準1200×820/96 DPI/darkのモデル説明は欠けず読める。02の索引文はAPI完了より1秒pollが遅れた「作成中14/17」のsnapshotで、次の操作では完成索引を使った。04-restored-indexのPNGにはCLIが合成したCtrl+F tooltipもある。小画面/高DPI/Light/HighContrast/readerは未検証。画像非対応時の中央「再接続」汎用案内は具体的なstatus説明と合わず、後続UX改善候補。
+
+索引クリックの準備待ち、実クリック、foreground focus、失敗時にもAPIを必ず終了するcleanupを実行済み。最後に `TxtEditStatus=保存しました` とAPI反映を待つ修正、実UI treeのfavorite toggle assertion、`--editor-only`（AIをロードせず編集/dirty/restartだけ実行）、初期source-hash保存と失敗時hash記録を追加した。**この最後の修正はpy_compile/--help/diffチェックのみで、native再実行していない。** winui-ui-testing skillの同依頼で2回のfix/rerun上限に達したため、修正済みだから通ったとは扱わない。
+
+次回の軽い再確認:
+
+    python tools/test_ai_profile_ui.py --editor-only --output data/ai-ui/profile-editor-01
+
+Python96 tests、C#13 checks、x64 SelfContained Releaseは今回もPASS。SDK IL2104は従来の2件を維持。C#/XAML/モデルworker/API本体は今回無変更。独立HTTP/CUDAの前回PASSも保持し、今回は再実行していない。
+
+ignored evidence: `data/ai-ui/profile-picker-04/05/06/result.json`（全体FAIL/到達段階は上記）、06の`post-run-check.json`（read-only確認PASS）。後者はfavoriteのdisk保存と失敗UI treeのon、17元ファイルのscan時size/mtime不変、別fresh fixtureとの全payload一致を確認した。ZIP container timestampは生成時刻で異なるため、別生成ZIPのbyte hash比較を源変更の証拠とは扱わない。06開始時のbyte-hash記録は残っておらず、全byte hash不変と主張しない。新しいharnessでは開始hashを残す。
+
+個人AppData/私物ライブラリは無変更、download/installなし。05でcleanup例外により残った所有APIを確認して停止し、cleanupを修正。06終了後は所有GUI/API/embedding/Laya workerなし、作ったtest profileだけcleanup。補助read-only favorite監視はeditor-restart未到達のため終了し、成功証拠に含めない。

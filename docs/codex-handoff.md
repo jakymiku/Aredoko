@@ -248,3 +248,21 @@
 - 実装HEAD 9e8efad。後続はこの記録のみ。f4273ffまでのチャット変更を全保持し、同じfeature/Draft PR #5へ通常push、base維持・未マージ。
 - 新ランチャー起動指定/保存中操作を実装、96Python/13C#/Release・独立HTTP/CUDA再起動PASS。nativeはモデル選択/保存/索引まで確認、検索方法popup問題で通しFAILのまま。次回は残件を再開し、今回の部分到達を完全成功と扱わない。
 - 文書差分チェック/実装レビュー済み。生成設定だけcleanup、所有GUI/API/worker停止。最新の次の3手は直前節。
+
+
+### native profile回帰の再開（2026-10-12）
+- ユーザーの「確認したよ続きをお願い」で前回残件を再開。開始HEAD b77506e/clean、Issue #4/PR #5/最新remote一致を確認。既存Draft/base/チャット実装を保持。新規取得・私物走査・個人AppData設定変更なし。
+- 保存済み03のUIツリーで検索方法PopupHostがmain windowのchild paneとして公開され、list-windowsの独立window列挙条件が合わないと判明。検索方法を実キーボード操作＋選択値のUIA assertionに変更。
+- 04はGUI索引操作後にidleのままでFAIL。ダイアログ準備を待って実クリックするよう修正し05を実行中。05はGUI17件CUDA索引/次回profile保存/no hot swap/日本語検索/再起動でtext-only適用まで到達。通し成功はまだ未確定。
+- 次は文字専用索引/cover案内、default旧vector復帰、missing/invalid/override、dirty保護とfavorite再起動保持。結果・PNG目視・cleanupを確認後に記録を更新する。
+
+
+### native profile再開の結果（2026-10-12）
+- 開始b77506e/remote一致。C#/XAML/API/worker無変更、生成素材だけ。検索方法をfocus＋keyboard＋選択表示値assertionへ変更し、UIA child PopupHostの独立window検出依存を解消。dialog準備待ちとindex実クリック、API cleanupのfinallyを修正。
+- 04 FAIL（index操作後idle）→05 FAIL（keyboardの前景安全拒否）→06は全モデル段階到達: default GUI17件CUDA索引/次回text設定/no hot swap、日本語検索、text-only再起動/別索引17/画像非対応GUI案内/literal復帰、default旧17vector再利用、missing/invalid再起動の警告/索引不可/文字検索、corrupt settingsへのexplicit override/GUI default再保存。
+- **06通しはFAIL**: favorite保存直後のAPI確認が早すぎた。PNG/失敗UI tree/終了後read-only SQLiteでfavorite保存成立を確認（post-run-check.json PASS）。dirty keepとfavoriteのnative再起動は未到達。保存表示・APIの反映待ち、実tree toggle assertion、--editor-only、初期sourcehash記録＋finally hashを準備したが、**最後の修正はnative未再実行**。py_compile/--help/diffチェックPASS。skillの2回fix/rerun上限を守り、未達を残す。
+- 全新PNGを目視:04 failure、05保存/text/失敗3枚、06の7モデル状態＋failure8枚。1200×820/96 DPI/darkの説明・警告は読める。02はUI pollよりAPI完了が先で「作成中」snapshot、04 PNGにはCLI合成tooltipあり。small-window/DPI/theme/readerは未確認、画像非対応時の中央汎用再接続案内は改善候補。
+- Python96 tests/C#13 checks/x64 SelfContained Release PASS（既存IL2104 2件、抑制なし）。WinUI review:製品無変更、JSON DOM/native ListView/async/dirty/認証/モデルindex分離を維持。test側のUIA enableと保存完了を区別し、最終修正の実機確認は後続。analyzer/Sandboxなし。
+- ignored証拠 data/ai-ui/profile-picker-04/05/06/result.json は全体FAIL（モデル段階到達を全体PASSと誤称しない）。06/post-run-check.json PASSでdisk favorite/UI tree on、source17のsize/mtimeと別fresh生成payload一致。06開始byte hashの保存なし、全byte hash不変とは主張しない。別生成ZIPはcontainer timestampが異なる。前回HTTP/CUDA profile-preference-01 PASSは再実行していない。
+- 個人AppData/私物は無変更、download/installなし。05の所有API残留を確認して停止、cleanupを修正、06終了後の所有GUI/API/workerなし。作成test profileのみcleanup。read-only favorite monitorは最終段階未到達で停止、証拠に含めない。
+- **次の3手:** (1) tools/test_ai_profile_ui.py --editor-only --output data/ai-ui/profile-editor-01 でdirty/favorite再起動だけ確認（重いモデル段階は再実装不要）、(2) 小window/DPI/themeの警告表示と非対応検索の案内、(3) 明示実サンプル評価と2,000件超索引。Layaは精度未達の実験APIのみ。

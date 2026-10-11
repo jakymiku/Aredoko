@@ -5,13 +5,15 @@
 
 ## 最新の再開地点（2026-10-12・Codex実機追記）
 
-最新実機追記の実装HEADは9e8efad（後続は提出文書）。チャット側f4273ffまで取り込み済み。GUIモデルprofile選択は実装済みで、上記の旧「次の実装: GUIモデルprofile選択」は過去の依頼。今回launcherのx64/SelfContainedを統一し、テスト用-AISettings、候補AutomationId、人向けactive名、保存中の重複操作防止を追加。
+最新実機追記は前回b77506eから続行したモデル選択GUI検証。実装HEADはdocs/codex-handoff.md末尾の提出記録を参照。チャット側f4273ffとlauncher等9e8efadを保持。製品C#/XAML/API/workerの変更は今回なし。
 
-ローカルPython96/C#13/Release PASS（IL2104 2件）。GUIで生成17件CUDA索引・次回profile保存・hot swapしない動作は実機確認。GUI通しは検索方法PopupHost検出でFAIL、2回の修正再実行後も未完。nativeの不足/破損/text-only再起動画面まで完了したとは扱わない。
+検索方法PopupHostがmainのchild paneとして公開される問題をテスト側で修正し、native GUIでdefault/text-only再起動適用・別17件CUDA索引・日本語検索・画像非対応案内・旧索引再利用・不足/invalidの文字検索復帰・明示起動引数優先まで確認した。8枚の最終状態/失敗PNGを目視確認。
 
-独立HTTP/CUDA再起動はPASS: GUI保存設定からtext-only起動/別17件索引/日本語検索、cover非対応、default復帰で旧索引再利用、不足/破損でもliteral維持、明示profile引数の優先、sourcehash不変。GUIの成功とは分けて記載する。新しい重み/DLなし。
+**通し全体はまだFAIL:** 最後のfavorite保存直後に、親editorのdisabledを保存完了と誤認してAPIを早く読んだ。終了後read-only DBと失敗UI treeでは保存成立を確認。dirty保持とfavoriteのnative再起動は未到達。保存表示/APIを待つ修正と実toggle assertion、AIをロードしない `--editor-only` を準備したが、スキルの2回fix/rerun上限でnative再実行は未実施。py_compile/--helpのみPASS。
 
-**次の3手:** ① `tools/test_ai_profile_ui.py` のPopupHost検出を保存済みUI tree/CLI仕様から修正し、残るnative再起動/不足/破損/dirty回帰を確認、②小さい画面/DPI/themeでモデル警告を確認、③選択された実サンプルの検索評価と2,000件超索引へ。詳細/証拠はdocs/codex-handoff.md末尾、docs/model-profiles.md末尾。実際のHEADを確認し、次回も同じDraft PR #5へ続ける。
+今回もPython96/C#13/x64 SelfContained Release PASS（既存IL2104 2件）。独立HTTP/CUDA再起動の前回PASSを保持。私物・AppData設定未変更、追加取得なし、所有test GUI/API/worker停止、生成profileだけcleanup。
+
+**次の3手:** ① `python tools/test_ai_profile_ui.py --editor-only --output data/ai-ui/profile-editor-01` で未到達のdirty/favorite再起動を軽く確認、②小画面/DPI/themeで警告表示と画像非対応時の汎用案内を改善、③明示選択された実サンプル評価と2,000件超索引へ。モデル段階を一から再実装/再取得しない。詳細はdocs/codex-handoff.md末尾、docs/model-profiles.md末尾。同じDraft PR #5/baseを維持。
 
 ## そのままチャットへ貼る依頼文
 
@@ -24,7 +26,7 @@ Draft PR: https://github.com/jakymiku/Aredoko/pull/5
 
 まず、このブランチのAGENTS.md、docs/chat-handoff.md、docs/codex-handoff.mdの最新節、Issue #4、PR #5を確認してください。mainや古いWeb試作の状態を現状と混同しないでください。
 WinUI 3製品MVP、EmbeddingGemma 2の曖昧検索、交換可能なモデルprofile、混合順位改善は実装済みです。Layaは精度不足のため明示実験APIだけで、GUIの自動切替や種類絞込みには使っていません。
-GUIモデルprofile選択と不足案内は実装済みです。まず最新追記のPopupHost検出問題と未完のnative再起動検証を確認してください。既存の起動時profile選択・旧索引互換を保ち、動作中のhot swapや自動ダウンロードは追加しないでください。
+GUIモデルprofile選択と不足案内は実装済みです。モデル切替のnative確認は最新追記のとおり到達済みです。まず --editor-only で未到達のdirty保護/favorite再起動回帰を確認してください。最後の保存待機修正はnative未再実行です。既存の起動時profile選択・旧索引互換を保ち、動作中のhot swapや自動ダウンロードは追加しないでください。
 既存資産・手動検索・タグ保存を維持し、実装できる環境なら必要なテスト、コミット、同じDraft PRの更新まで進め、進捗を引継ぎへ記録してください。直接編集やWindows実行ができない場合は、実コードに対応した変更ファイルか適用可能な差分と、PCで実行する検証手順を返してください。未実行のテストを成功と報告しないでください。
 非公開リポジトリを読めない場合はアクセスできないと明記し、ユーザーが共有するこのブランチのソースを使ってください。仕様だけから実装済みコードを想像して書き直さないでください。
 ```
