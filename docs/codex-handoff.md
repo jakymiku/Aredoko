@@ -185,3 +185,10 @@
 - ローカルignored evidence: data/laya-setup/result.json、data/laya-evaluation/first-03/result.json、api-01/result.json。docs/laya-evaluation.mdに手順・全結果・不採用理由と次の評価条件を記録。モデル/venv/DB/スクリーンショット/私物はcommit対象外。
 - **次の3手:** (1) Laya質問/選択肢をdevelopment文で改善、選択肢順序/棄権と新しいheld-out集合を用意し、種類の推測は当面提案のみ、(2) text/cover混合順位を別途改善して実検索の総合利益を再測定、(3) GUIモデルprofile選択と明示サンプル/2,000件超の索引規模を進める。精度・順位・初回待ち・メモリを満たしてからGUI提案を追加する。
 - 最終レビューで既存material条件を提案APIが拒否する不整合を修正。手動kindは既存TYPESを正として素材も保持し、判断ラベルの種類数で制限しない。質問/fixture/実測分類には変更なし。intent11テスト再実行PASS。
+
+
+### Laya実験の提出
+- 実装HEAD: 1e49592。後続はこの提出記録のみ。同じ製品ブランチとDraft PR #5へpush、base維持/未マージ。
+- GPU推論・独立API/競合/timeout/親終了の検証PASS。Layaの日本語精度・検索順位の改善はGUI採用条件未達、提案APIは開発者の明示起動のみ。通常検索/GUIを保持。
+- Python76/C#13/WinUI Release PASS、SDK IL2104 2件は既存のまま。質問/fixture変更なく最終manual material条件だけ修正・intent11再検証PASS。
+- 検証用APIと所有Laya/EmbeddingGemmaプロセスは停止済み。モデルとvenvはローカルに保持、private/generatedデータはGit対象外。
