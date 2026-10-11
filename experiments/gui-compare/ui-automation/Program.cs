@@ -491,7 +491,6 @@ internal static class Program
 
 internal static class Native
 {
-    internal static Type InputType => typeof(Input);
     internal readonly struct InputSizeProbe
     {
         internal static int Size => Marshal.SizeOf<Input>();
