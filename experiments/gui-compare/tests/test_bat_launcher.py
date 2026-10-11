@@ -29,6 +29,19 @@ class GuiCompareLauncherTests(unittest.TestCase):
         self.assertIn("var save = FindRequired(SaveLabel);", edit)
         self.assertLess(edit.index("Click(rows[0]);"), edit.index("var save = FindRequired(SaveLabel);"))
 
+    def test_text_entry_uses_focusable_edit_not_label(self):
+        source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
+        self.assertIn("private static AutomationElement FindEditRequired(", source)
+        self.assertIn("c.ControlType == ControlType.Edit", source)
+        self.assertIn("c.IsKeyboardFocusable && c.IsEnabled && !c.IsOffscreen", source)
+        self.assertIn("new OrCondition(", source)
+        self.assertIn("foreach (var child in Descendants(candidate))", source)
+        self.assertIn("Type(FindEditRequired(QueryLabel),", source)
+        self.assertIn("var tag = FindEditRequired(TagLabel);", source)
+        self.assertNotIn("Type(FindRequired(QueryLabel)", source)
+        self.assertNotIn("var tag = FindRequired(TagLabel);", source)
+        self.assertIn("if (!IsUsableEdit(target))", source)
+
     def test_keyboard_native_input_union_handles_mouse_size(self):
         source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
         self.assertIn("internal MouseInput mouse;", source)
