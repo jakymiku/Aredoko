@@ -195,3 +195,10 @@ explorer.exe .\experiments\gui-compare
 - 同時点検: native `SendInput` 用の `INPUT` 共用体に `MOUSEINPUT` を定義して、x64では40-byteサイズとなるよう修正（旧コードの32-byte宣言はキーボード入力失敗の恐れ）。ドライバー自己診断でサイズを検査。
 - スクロール時、Tauriの非フォーカス可能な `role=group` に`SetFocus`しないよう、表示中の行へフォーカスしてホームキーを送る方式に修正。
 - 再実行は最新版をgit fetch/ff-onlyで取得後、同じ`GUI-Compare.bat`のモード1を使用。**Windows実機での一連のUI操作の成功は未確認**。再度止まれば`Tauri-Check-0-automation.json`、`Tauri-Check-0-automation.tree.txt`、`Tauri-Check-0-automation.stdout.txt`を送る。
+
+## Tauri UIA タグ入力の非フォーカス可能要素（2026-10-11 21:32、ドライバー修正）
+- Windows実機でTauriのCheckが検索・スクロール・詳細選択を通過し、`EditOnce` → `Type` → `AutomationElement.SetFocus()` で「ターゲット要素は、フォーカスを受け取ることができません」となった。
+- WebView2アクセシビリティツリーではReactの`<label>`と`<textarea aria-label="タグ（カンマ区切り）">`の名前が一致する場合、旧`FindRequired(TagLabel)`がフォーカス不可のラベルを返す可能性がある。実ツリーが未提供のため断定はせず、型検査を追加。
+- GUIドライバーに`FindEditRequired`を追加し、指定AutomationId/Nameに一致する要素またはその配下から`ControlType.Edit`かつ`IsKeyboardFocusable`・`IsEnabled`・画面内の入力欄のみを採用する。入力直前にも検証し、入力先がラベル等だった場合は安全に停止する。
+- 検索欄とタグ欄の両方に使用。失敗時ツリーにフォーカス可否と有効状態を出力する。Regression testでフォーカス可能なEditor選択を静的確認。
+- **修正版のWindows実機UIA操作はまだ未検証**。CIビルド通過後、最新版で`GUI-Compare.bat`モード1を実行。次の失敗時は`Tauri-Check-0-automation.tree.txt`と`Tauri-Check-0-automation.json`の提出が診断に有効。
