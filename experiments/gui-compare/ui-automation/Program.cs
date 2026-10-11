@@ -187,6 +187,21 @@ internal static class Program
         var collection = root.FindAll(TreeScope.Descendants, Condition.TrueCondition);
         return collection.Cast<AutomationElement>().ToList();
     }
+    private static string RowName(AutomationElement item)
+    {
+        var accessibleName = NameOf(item);
+        if (accessibleName.Contains("Sample ", StringComparison.OrdinalIgnoreCase))
+            return accessibleName;
+        // Some WinUI 3 ListViewItem wrappers expose an empty Name while their
+        // nested TextBlock contains the actual title. Inspect only that row.
+        var descendants = Descendants(item);
+        var texts = descendants
+            .Where(x => x.Current.ControlType == ControlType.Text)
+            .Select(NameOf)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Take(5);
+        return string.Join(" ", texts);
+    }
     private static void VerifyListHasRows()
     {
         for (var i = 0; i < 35; i++)
@@ -208,7 +223,7 @@ internal static class Program
                 var type = item.Current.ControlType;
                 if (Variant == "Tauri" && type != ControlType.Button) continue;
                 if (Variant == "WinUI" && type != ControlType.ListItem) continue;
-                var title = NameOf(item);
+                var title = RowName(item);
                 if (title.Contains("Sample ", StringComparison.OrdinalIgnoreCase) &&
                     !item.Current.IsOffscreen && !item.Current.BoundingRectangle.IsEmpty)
                     matching.Add(item);
@@ -278,7 +293,7 @@ internal static class Program
         Thread.Sleep(450); // both UIs debounce search by ~220ms
         VerifyListHasRows();
         var rows = FindRows();
-        if (rows.Count == 0 || !rows.Any(x => NameOf(x).Contains("雨の街")))
+        if (rows.Count == 0 || !rows.Any(x => RowName(x).Contains("雨の街")))
             throw new InvalidOperationException("検索しても「雨の街」の行が表示されません");
         ClearQuery();
         VerifyListHasRows();
@@ -310,7 +325,7 @@ internal static class Program
         var list = FindRequired(ListLabel);
         var b = list.Current.BoundingRectangle;
         if (b.IsEmpty) throw new InvalidOperationException("一覧表示領域がありません");
-        var before = FindRows().Select(NameOf).FirstOrDefault();
+        var before = FindRows().Select(RowName).FirstOrDefault();
         var scroll = FindScrollContainer(list);
         double old = scroll is null ? -1 : scroll.Current.VerticalScrollPercent;
         Native.SetCursorPos((int)(b.Left + b.Width / 2), (int)(b.Top + Math.Min(b.Height / 2, 260)));
@@ -320,7 +335,7 @@ internal static class Program
             Thread.Sleep(70);
         }
         Thread.Sleep(230);
-        var after = FindRows().Select(NameOf).FirstOrDefault();
+        var after = FindRows().Select(RowName).FirstOrDefault();
         var moved = before != after;
         if (scroll is not null)
         {
@@ -375,7 +390,7 @@ internal static class Program
         var first3 = rows.Take(3).ToList();
         foreach (var row in first3)
         {
-            var intended = NameOf(row);
+            var intended = RowName(row);
             Click(row);
             var ok = false;
             for (var i = 0; i < 25; i++)
