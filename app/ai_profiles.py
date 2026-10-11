@@ -5,8 +5,18 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 
-REVISION = '914f7f89142e33e77833254d9c9b90c3cef7303b'
-LEGACY_PROFILE = 'embeddinggemma-2:' + REVISION + ':text-vision:768:v1'
+LEGACY_REVISION = '914f7f89142e33e77833254d9c9b90c3cef7303b'
+REVISION = LEGACY_REVISION
+LEGACY_PROFILE = 'embeddinggemma-2:' + LEGACY_REVISION + ':text-vision:768:v1'
+LEGACY_CONTRACT = 'normalized-f32:text4096:exif-rgb-image768:v1'
+VECTOR_CONTRACT = LEGACY_CONTRACT
+# Historical compatibility must never follow a future DEFAULT_PROFILE change.
+LEGACY_IDENTITY = {
+    'model_id':'google/embeddinggemma-2','revision':LEGACY_REVISION,
+    'adapter':'embeddinggemma2','dimension':768,'modalities':['text','cover'],
+    'query_prompt_name':'SearchQuery','document_prompt_name':'Document',
+    'query_prefix':'','document_prefix':'','precision':'auto-bf16'
+}
 
 @dataclass(frozen=True)
 class ModelProfile:
@@ -80,9 +90,9 @@ class ModelProfile:
 
     @property
     def key(self):
-        if self.identity()==DEFAULT_PROFILE.identity():
+        if VECTOR_CONTRACT==LEGACY_CONTRACT and self.identity()==LEGACY_IDENTITY:
             return LEGACY_PROFILE
-        payload={'contract':'normalized-f32:text4096:exif-rgb-image768:v1',**self.identity()}
+        payload={'contract':VECTOR_CONTRACT,**self.identity()}
         return 'embedding-profile:'+hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
 
     def store_path(self,catalog):

@@ -26,7 +26,7 @@ Prompt names and explicit prefixes are mutually exclusive. To use a prefix, set 
 
 Vector-space identity includes model ID, immutable revision, adapter, dimension, modalities, query/document prompt settings, precision and the preprocessing contract. Changing any of these selects a separate sibling AI SQLite database. Same dimension alone never makes two models compatible. Worker startup must echo the exact identity and actual dimension, and all returned vectors are validated.
 
-Cosmetic labels and relocating the same weights do not change identity. The exact default profile retains the original <catalog>.ai.sqlite and its legacy identity: no initial rebuild required after this application upgrade. Other profiles use <catalog>.ai.<identity hash>.sqlite. Their stored full identity is also checked.
+Cosmetic labels and relocating the same weights do not change identity. The exact default profile retains the original <catalog>.ai.sqlite and its legacy identity: no initial rebuild required after this application upgrade. Other profiles use <catalog>.ai.<identity hash>.sqlite. Their stored full identity is also checked. Legacy recognition is frozen to the historical settings, independent of future default changes. Changing preprocessing requires bumping VECTOR_CONTRACT and then selects a new store even for the original model.
 
 Switching back reuses the previous index; source/title/tag revision checks still exclude stale records. Old indexes are preserved for rollback and consume disk until explicitly managed. Raw cosine scores from different profiles are not mixed or compared as calibrated probabilities.
 

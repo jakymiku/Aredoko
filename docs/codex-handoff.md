@@ -151,9 +151,11 @@
 - app/ai_profiles.py に検証済みJSON profile、app/ai_adapters.py に登録式loader、app/ai_vectors.py にモデル非依存vector契約を追加。EmbeddingGemma2 text/coverと汎用Sentence Transformers text-onlyを分離。既存標準profileはlegacyキー/DBを維持。他profileはID/revision/adapter/次元/入力/prompt/precision/前処理契約の識別で別DB。label/同一重みの配置変更のみは再利用。workerの実次元/完全profile照合、返却vector検証で混在を拒否。
 - tools/start-winui.ps1 -AIProfile <JSON> / backend --ai-profileで再起動時に選択。切替時に新索引を作成、戻すと元の索引を再利用。GUI AI索引画面に選択モデルと対応入力を表示。text-onlyの画像モードは説明付きで失敗し、通常検索を維持。GUIモデルピッカー/稼働中切替は未実装。
 - 明示setupにも-AIProfileを追加、既存pin/合計6MB/s制限を再利用。download途中の再開用source記録と別revisionの上書き防止。今回追加download/installなし。互換派生モデルは設定交換、異なる構造はadapter追加が必要。どんな非検閲モデルでも自動互換とは主張しない。
-- Python **60テストPASS**、C# **13チェックPASS**、Windows Release PASS（既存SDK IL2104 2件）。不同次元/同次元別revisionの分離、旧profileへの復帰、prompt/能力/誤handshake/不正設定/取得中断を検証。汎用adapterはモック契約のみで別実モデル未検証。
+- Python **61テストPASS**、C# **13チェックPASS**、Windows Release PASS（既存SDK IL2104 2件）。不同次元/同次元別revisionの分離、旧profileへの復帰、prompt/能力/誤handshake/不正設定/取得中断を検証。汎用adapterはモック契約のみで別実モデル未検証。
 - 既存ローカル重みを用いた実CUDA検証PASS: 標準text+vision → text-only/float32 → 標準へ戻し、索引分離と再構築なし再利用、2件の生成名前で日本語top hit/源hash不変を確認。これは2つの設定の試験であり、別重みや将来の派生モデルの精度証明ではない。
 - native GUI PASS: explicit profileで生成17素材の新規索引/意味検索/表紙検索/保存/dirty keep/文字モード復帰。native legacy互換 PASS: 変更前の17件AI DBをそのまま開き、保存タグとCUDA表紙検索を再索引なしで使用。モデル表示を含む6枚の実スクリーンショットを目視確認。私物フォルダ未走査。
 - WinUIコードレビュー: 新規XAML/API追加なし、TextBlockのモデル表示と非同期dialog調停を確認。JSON DOM/既存テーマ/AutomationId維持。WinUI analyzerなし、AOT/高DPI等の旧未検証項目は継続。
 - 開発手順 docs/model-profiles.md、default sample config/ai-profiles/embeddinggemma-2.json。model/revision/次元/prompt変更が再索引条件、既存タグ/棚とは別管理。モデルmarkerは由来の宣言で全重みの暗号学的検証ではない。
 - **次の3手:** (1) Layaもembeddingとは別の判断用interfaceに分離してoffline評価セット/明示setupを実装、(2) GUIのモデルprofile選択/不足モデル案内を追加、(3) 実サンプルで順位/索引速度を評価し2,000件を超える索引へ拡張。Laya実導入/別checkpoint取得はまだなし。モデル交換の基盤は完了。
+
+- 最終互換性レビューでlegacy条件を現在のDEFAULT_PROFILEから切り離して歴史的設定へ固定。将来defaultモデル/前処理契約を変えても旧DBを誤再利用しない回帰テストを追加。前処理変更はVECTOR_CONTRACT更新が必要。

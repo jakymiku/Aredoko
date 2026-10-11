@@ -150,3 +150,13 @@ class ProfilesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'profile.json';path.write_text(' '*8193)
             with self.assertRaises(ValueError): load_profile(path)
+
+    def test_future_default_or_preprocessing_change_cannot_reuse_legacy_space(self):
+        new_default=replace(DEFAULT_PROFILE,model_id='test/future',revision='c'*40)
+        with patch('ai_profiles.DEFAULT_PROFILE',new_default):
+            self.assertEqual(DEFAULT_PROFILE.key,LEGACY_PROFILE)
+            self.assertNotEqual(new_default.key,LEGACY_PROFILE)
+            self.assertNotEqual(new_default.store_path('catalog'),DEFAULT_PROFILE.store_path('catalog'))
+        with patch('ai_profiles.VECTOR_CONTRACT','next-preprocessing-contract'):
+            self.assertNotEqual(DEFAULT_PROFILE.key,LEGACY_PROFILE)
+            self.assertNotEqual(str(DEFAULT_PROFILE.store_path('catalog')),'catalog.ai.sqlite')
