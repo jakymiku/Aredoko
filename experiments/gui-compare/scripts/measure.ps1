@@ -19,7 +19,7 @@ $records = [Collections.Generic.List[object]]::new()
 $allCounters = [Collections.Generic.Dictionary[int, object]]::new()
 $started = [DateTime]::UtcNow
 $end = $started.AddSeconds($Seconds)
-Write-Host "Sampling $Variant / $Phase / Trial $Trial for $Seconds seconds. Perform the same actions for both apps now."
+Write-Host "測定中: $Variant / $Phase / $Trial 回目 / $Seconds 秒（画面操作は自動ドライバーが実行します）"
 
 while ([DateTime]::UtcNow -lt $end) {
     $all = @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId)
@@ -64,5 +64,5 @@ if (-not $records.Count) { throw 'No samples: app may have exited' }
 $name = "$Variant-$Phase-$Trial-$(Get-Date -Format 'yyyyMMdd-HHmmss').csv"
 $path = Join-Path $root $name
 $records.ToArray() | Export-Csv -NoTypeInformation -Path $path -Encoding utf8
-Write-Host "Saved raw per-process measurements: $path ($($records.Count) records)"
-Write-Host 'WorkingSet totals are upper-bound sums of possibly shared pages; do not call them unique RAM.'
+Write-Host "計測CSV保存: $path ($($records.Count) 件)"
+Write-Host '注意: Working Setの合算には共有ページの重複が含まれます。専用RAM量とは異なります。'
