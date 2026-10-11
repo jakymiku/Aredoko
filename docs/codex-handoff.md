@@ -220,3 +220,11 @@
 - docs/chat-handoff.mdをWinUI/AI実装済みの最新状態へ更新。古い「GUI未決定/AI未実装/Web監査が次」を置換。完了機能・90Python/13C#/Release/実GPU/native結果・Laya精度制約・未検証・主要ファイル・コマンド・そのまま貼れる依頼文を収録。
 - 次の3手はGUI profile選択/不足案内、選択された実サンプルと新しい未見集合、2,000超の索引。チャットにPC/モデル/venv/スキルが転送されるとは扱わず、private repoアクセス不可時は実ソース共有が必要と明記。
 - 同じfeature/Draft PR #5へ文書更新をpush。base/既存PR/未マージを維持。文書差分チェックのみ実行、前回の機能検証結果は再実行結果ではない。
+
+### 2026-10-12: WinUIのモデルprofile選択（GPT引継ぎ作業）
+- 開始HEAD `9190114`。変更は同じ `feat/winui3-production-mvp-20261011` と既存Draft PR #5に追加。従来のモデルprofile、旧default index、mean-rrf、Laya experimental API、個人データ不変更。
+- `app/ai_settings.py`でGUI用ローカルprofile選択を検証・atomic保存し、起動時引数 `-AIProfile` を優先する。無効profileやモデル重み不足を表示し、**実行中のworker切替とモデルDLはしない**。選択肢は既定とignored `data/ai-profiles/*.json`。settingはユーザーの `%LOCALAPPDATA%/Aredoko/settings.json`（テスト時 `--ai-settings`）。
+- `app/production_server.py` の認証済みprofile GET/POST経路と `src/Aredoko.WinUI/MainPage.xaml.cs` の「AI索引」ダイアログにprofileセレクタ、再起動案内、不足・無効モデルの警告を追加。既存のAPIと編集ロック・dirty制御は変更せず、AI使用不能でもliteral文字検索可能。
+- `tests/test_ai_settings.py`と `.github/workflows/ai-profile-checks.yml`、`docs/model-profiles.md`を追加/更新。テストは一時フォルダ・架空DB、no download/ no user media。
+- テスト状況: Windows CIによるPython AI単体テストとC# Releaseチェックを実施。WinUI Releaseでは.NET linkerの `NETSDK1102`（SelfContained未指定）が初回CIで出たため、CIビルド引数を `-p:SelfContained=true` に修正。**最終CI結果は対応するGitHub Actionsで確認**。GUI画面の実機操作・再起動後の実モデルロードは未検証。成功と混同しない。
+- 次の3手: ①JakyのWindows実機で `tools/start-winui.ps1` からAI索引→候補を設定→終了/再起動してactive表示と旧索引復帰、text-only cover拒否、missing/invalidからliteral復帰を検証、②UIの説明文/高DPI・ライトテーマ・アクセシビリティを確認、③新しい実サンプル/未見データで順位を確認し2,000件上限拡張の設計を進める。
