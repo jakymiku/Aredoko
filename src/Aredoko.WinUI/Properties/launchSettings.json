@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Aredoko.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Aredoko.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

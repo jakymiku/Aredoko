@@ -56,3 +56,10 @@
 [PR #1 UI試作](https://github.com/jakymiku/Aredoko/pull/1) · [PR #2 索引](https://github.com/jakymiku/Aredoko/pull/2) · [PR #3 GUI比較](https://github.com/jakymiku/Aredoko/pull/3) · [Issue #4 MVP実装指示](https://github.com/jakymiku/Aredoko/issues/4)
 
 > Codexが作業を終える都度、この文書の「今どこまで進んだか」を更新する。単発チャットを唯一の作業記録にしない。
+
+## 実装進捗 2026-10-11（Codex）
+- 開始HEAD: 33e37bd系の製品版ブランチを確認（正確な親はGit履歴参照）。既存PRは未マージ。
+- 公式インストール済みテンプレートから src/Aredoko.WinUI を新規作成。比較用generatedには触れていない。
+- 最初の起動骨格にAPI接続と再試行/失敗表示を追加。テンプレートのNuGet参照を復元済みバージョンに固定。
+- dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore -v:q: 成功、警告0/エラー0。
+- この時点ではGUI操作未検証。続いて読み取り専用索引との統合を実装中。

@@ -1,0 +1,3 @@
+<Page x:Class="Aredoko_WinUI.MainPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Loaded="Page_Loaded">
+ <StackPanel Padding="24" Spacing="16"><TextBlock Text="Aredoko" Style="{StaticResource TitleTextBlockStyle}"/><TextBlock Text="ローカルライブラリ"/><InfoBar x:Name="Connection" IsOpen="True" IsClosable="False" Title="接続準備中"/><Button Content="再接続" Click="Retry_Click" AutomationProperties.AutomationId="BtnReconnect"/></StackPanel>
+</Page>
