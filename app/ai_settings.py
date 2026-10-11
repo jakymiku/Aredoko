@@ -20,7 +20,7 @@ def default_settings_path(repo):
 class AIProfileSettings:
     def __init__(self, repo, settings_path=None, command_line_profile=None):
         self.repo = Path(repo).resolve()
-        self.folder = (self.repo / "data" / "ai-profiles").resolve()
+        self.folder = self.repo / "data" / "ai-profiles"
         self.path = Path(settings_path) if settings_path is not None else default_settings_path(self.repo)
         self.override = Path(command_line_profile).resolve() if command_line_profile is not None else None
         self.startup_error = ""
@@ -64,7 +64,7 @@ class AIProfileSettings:
         if not NAME.fullmatch(filename):
             raise ValueError("Unsafe profile identifier")
         path = self.folder / filename
-        if path.is_symlink() or path.resolve().parent != self.folder:
+        if self.folder.is_symlink() or path.is_symlink() or path.resolve().parent != self.folder.resolve():
             raise ValueError("Profile must stay in local profile directory")
         return path
 
@@ -97,7 +97,7 @@ class AIProfileSettings:
 
     def snapshot(self):
         candidates = [self._candidate("default")]
-        if self.folder.is_dir():
+        if self.folder.is_dir() and not self.folder.is_symlink():
             # No recursive/symlink traversal; bounded file enumeration.
             for entry in sorted(self.folder.iterdir(), key=lambda p: p.name)[:MAX_FILES]:
                 if NAME.fullmatch(entry.name) and (entry.is_file() or entry.is_symlink()):
