@@ -50,7 +50,13 @@ internal static class Program
                 int expected = IntPtr.Size == 8 ? 40 : 28;
                 if (inputSize != expected)
                     throw new Exception($"SendInput native struct layout mismatch: {inputSize}, expected {expected}");
-                Console.WriteLine("PASS: GUI driver options, title parser and Win32 input layout");
+                string[] defaultRows = ["作品: 雨の街 — Sample 00001", "作品: 夜の図書館 — Sample 00004"];
+                string[] filteredRows = ["作品: 雨の街 — Sample 00001", "作品: 雨の街 — Sample 00002"];
+                if (SearchRowsMatch(defaultRows, true) || !SearchRowsMatch(defaultRows, false) ||
+                    !SearchRowsMatch(filteredRows, true) || SearchRowsMatch(filteredRows, false) ||
+                    SearchRowsMatch([], true) || SearchRowsMatch([], false))
+                    throw new Exception("Search UI verification predicates failed");
+                Console.WriteLine("PASS: GUI driver title/input layout and search-state checks");
                 return 0;
             }
             outputPath = a["result"];
@@ -363,23 +369,22 @@ internal static class Program
             $"入力の反映を3回試しましたが確認できません: {label}, expected {value}, actual {lastValue}, focus {lastFocus}");
     }
 
+    private static bool SearchRowsMatch(IEnumerable<string> names, bool filtered)
+    {
+        // The first unfiltered page already includes "雨の街"; checking for
+        // its mere presence is not proof a search actually filtered anything.
+        var rows = names.ToArray();
+        return filtered
+            ? rows.Length > 0 && rows.All(x => x.Contains("雨の街", StringComparison.Ordinal))
+            : rows.Any(x => x.Contains("夜の図書館", StringComparison.Ordinal));
+    }
+
     private static void WaitForSearchState(bool filtered)
     {
-        // A default page already contains "雨の街", so merely finding that
-        // title incorrectly marked the old search test PASS even if filtering
-        // had not happened. The first page also contains "夜の図書館".
         for (var wait = 0; wait < 40; wait++)
         {
-            var names = FindRows().Select(RowName).ToArray();
-            if (filtered)
-            {
-                if (names.Length > 0 && names.All(x => x.Contains("雨の街", StringComparison.Ordinal)))
-                    return;
-            }
-            else if (names.Any(x => x.Contains("夜の図書館", StringComparison.Ordinal)))
-            {
+            if (SearchRowsMatch(FindRows().Select(RowName), filtered))
                 return;
-            }
             Thread.Sleep(125);
         }
         throw new InvalidOperationException(filtered
