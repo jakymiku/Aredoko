@@ -28,7 +28,7 @@ jobs:
       - name: Core protocol Release checks
         run: dotnet run --project tests/Aredoko.Core.Tests -c Release
       - name: WinUI 3 Release build (not an actual GUI test)
-        run: dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --nologo
+        run: dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --nologo
       - name: Parse launcher PowerShell
         shell: pwsh
         run: |
