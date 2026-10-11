@@ -55,8 +55,8 @@ class GuiCompareLauncherTests(unittest.TestCase):
     def test_search_requires_filtered_and_restored_list(self):
         source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
         self.assertIn("WaitForSearchState(bool filtered)", source)
-        self.assertIn('names.All(x => x.Contains("雨の街"', source)
-        self.assertIn('names.Any(x => x.Contains("夜の図書館"', source)
+        self.assertIn('rows.All(x => x.Contains("雨の街"', source)
+        self.assertIn('rows.Any(x => x.Contains("夜の図書館"', source)
         self.assertIn("WaitForSearchState(filtered: true);", source)
         self.assertIn("WaitForSearchState(filtered: false);", source)
 
