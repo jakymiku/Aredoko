@@ -1,0 +1,143 @@
+"""Production catalog: read-only locations + separately editable metadata."""
+import json
+import threading
+from contextlib import closing
+from pathlib import Path
+from catalog import Catalog
+from library_index import LibraryIndex, TYPES
+
+
+class ProductionCatalog(Catalog):
+    def __init__(self, path):
+        # Never reinterpret an existing fictional demo database as a real library.
+        import sqlite3
+        if Path(path).exists():
+            with closing(sqlite3.connect(path)) as db:
+                tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                if 'items' in tables and 'production_marker' not in tables:
+                    raise ValueError('Use a separate production database, not the demo database')
+        super().__init__(path)
+        self.index = LibraryIndex(path)
+        with self.connect() as db:
+            db.executescript('''
+                CREATE TABLE IF NOT EXISTS production_marker(version INTEGER);
+                CREATE TABLE IF NOT EXISTS item_locations (
+                    item_id INTEGER PRIMARY KEY REFERENCES items(id),
+                    location_id INTEGER NOT NULL UNIQUE REFERENCES library_locations(id));
+                CREATE TABLE IF NOT EXISTS scan_jobs (
+                    id INTEGER PRIMARY KEY, root_id INTEGER NOT NULL, state TEXT NOT NULL,
+                    discovered INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '');
+                UPDATE scan_jobs SET state='interrupted',error='Restart the scan to resume safely'
+                    WHERE state IN ('running','cancelling');
+            ''')
+        self._guard = threading.Lock()
+        self._cancel = threading.Event()
+        self._worker = None
+        self._progress = 0
+        # Recover a crash between index commit and catalog publication.
+        self.sync_index()
+
+    def seed(self, count=0):
+        raise ValueError('Synthetic seeding is not available in production')
+
+    def sync_index(self):
+        with self.connect() as db:
+            rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id FROM library_locations l '
+                              'LEFT JOIN item_locations m ON m.location_id=l.id').fetchall()
+            for row in rows:
+                if row['item_id'] is None:
+                    item_id = db.execute('INSERT INTO items(title,kind,tags) VALUES(?,?,?)',
+                                         (Path(row['relative_path']).name,row['kind'],'[]')).lastrowid
+                    db.execute('INSERT INTO item_locations VALUES(?,?)',(item_id,row['id']))
+                else:
+                    # Only source-derived fields; never overwrite user tags/favorites.
+                    db.execute('UPDATE items SET title=?,kind=? WHERE id=?',
+                               (Path(row['relative_path']).name,row['kind'],row['item_id']))
+
+    @staticmethod
+    def item(row):
+        result = Catalog.item(row)
+        result['synthetic'] = False
+        return result
+
+    JOIN = (' FROM items i JOIN item_locations m ON m.item_id=i.id '
+            'JOIN library_locations l ON l.id=m.location_id ')
+    FIELDS = 'i.*,l.root_id,l.relative_path,l.status AS availability,l.size_bytes'
+
+    def search(self, query='', kind='', view='all', page=0, limit=60):
+        if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
+            raise ValueError('Invalid filter')
+        if type(page) is not int or page<0 or not 1<=limit<=120 or len(query)>300:
+            raise ValueError('Invalid paging')
+        where, values = ["l.status<>'excluded'"], []
+        if query.strip():
+            q=query.strip().replace('!','!!').replace('%','!%').replace('_','!_')
+            where.append("(i.title LIKE ? ESCAPE '!' OR i.tags LIKE ? ESCAPE '!')")
+            values.extend([f'%{q}%']*2)
+        if kind:
+            where.append('i.kind=?'); values.append(kind)
+        where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],
+                      'shelf':["i.shelf<>''"],'all':[]}[view])
+        clause=self.JOIN+' WHERE '+' AND '.join(where)
+        with self.connect() as db:
+            total=db.execute('SELECT count(*)'+clause,values).fetchone()[0]
+            rows=db.execute('SELECT '+self.FIELDS+clause+' ORDER BY i.id LIMIT ? OFFSET ?',
+                            values+[limit,page*limit]).fetchall()
+        return {'total':total,'page':page,'limit':limit,'items':[self.item(r) for r in rows]}
+
+    def get(self,item_id):
+        with self.connect() as db:
+            row=db.execute('SELECT '+self.FIELDS+self.JOIN+' WHERE i.id=?',(item_id,)).fetchone()
+        if row is None: raise KeyError(item_id)
+        return self.item(row)
+
+    def add_root(self,path,excludes=None):
+        if not isinstance(path,str) or not path or not Path(path).is_absolute():
+            raise ValueError('Choose an absolute folder path')
+        source=Path(path).resolve()
+        if self.path.resolve().is_relative_to(source):
+            raise ValueError('The library must not contain the application database')
+        return self.index.add_root(path,excludes)
+
+    def scan_state(self):
+        with self.connect() as db:
+            row=db.execute('SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 1').fetchone()
+        result=dict(row) if row else {'id':0,'state':'idle','discovered':0,'error':''}
+        if result['state'] in ('running','cancelling'):
+            result['discovered']=self._progress
+        return result
+
+    def start_scan(self, root_id):
+        if type(root_id) is not int or root_id<1: raise ValueError('Invalid root')
+        with self._guard:
+            if self._worker and self._worker.is_alive(): raise ValueError('A scan is already running')
+            self.index.locations(root_id,limit=1)  # Validate before creating a job.
+            self._cancel.clear(); self._progress=0
+            with self.connect() as db:
+                job=db.execute("INSERT INTO scan_jobs(root_id,state) VALUES(?,'running')",(root_id,)).lastrowid
+            self._worker=threading.Thread(target=self._scan,args=(job,root_id),daemon=True)
+            self._worker.start()
+            return {'job_id':job}
+
+    def _scan(self,job,root_id):
+        state,error='complete',''
+        try:
+            result=self.index.scan(root_id,cancelled=self._cancel.is_set,
+                                   progress=lambda n:setattr(self,'_progress',n))
+            self.sync_index()
+            self._progress=result['discovered']
+        except InterruptedError: state='cancelled'
+        except Exception as ex:
+            # Store a concise local diagnostic, never returned with filesystem paths.
+            state,error='failed',type(ex).__name__+': scan failed; check folder availability'
+        with self.connect() as db:
+            db.execute('UPDATE scan_jobs SET state=?,discovered=?,error=? WHERE id=?',
+                       (state,self._progress,error,job))
+
+    def cancel_scan(self):
+        self._cancel.set()
+        return {'cancel_requested':True}
+
+    def close(self):
+        self._cancel.set()
+        if self._worker: self._worker.join(timeout=10)

@@ -1,27 +1,18 @@
 using Microsoft.UI.Xaml;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
-
+using System.Runtime.InteropServices;
 namespace Aredoko_WinUI;
-
-/// <summary>
-/// The application window. This hosts a Frame that displays pages. Add your
-/// UI and logic to MainPage.xaml / MainPage.xaml.cs instead of here so you
-/// can use Page features such as navigation events and the Loaded lifecycle.
-/// </summary>
 public sealed partial class MainWindow : Window
 {
-    public MainWindow()
-    {
-        InitializeComponent();
-
-        ExtendsContentIntoTitleBar = true;
-        SetTitleBar(AppTitleBar);
-
+    public new static MainWindow Current { get; private set; } = null!;
+    private bool closing;
+    [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
+    public MainWindow() {
+        Current=this;InitializeComponent();ExtendsContentIntoTitleBar=true;SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
-
-        // Navigate the root frame to the main page on startup.
+        var scale=GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this))/96.0;
+        AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1200*scale),(int)(820*scale)));
         RootFrame.Navigate(typeof(MainPage));
+        AppWindow.Closing+=async(_,e)=>{if(closing)return;e.Cancel=true;if(RootFrame.Content is MainPage page && await page.ConfirmDiscardAsync()){closing=true;Close();}};
+        Closed+=(_,_)=>{if(RootFrame.Content is MainPage page)page.Stop();};
     }
 }
