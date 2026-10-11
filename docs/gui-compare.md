@@ -162,27 +162,29 @@ winapp run . -c Release --detach --json
 - `query === search` の間はタイマーを生成しないよう修正。検索内容が変わるときのみデバウンスしてページ1へ戻す。
 - GUI比較の採用評価は、Tauri/WinUI両方で正常なページ切り替えと編集操作を確認後に実施。
 
-## 5. ダブルクリックの比較ランチャー（GUI-Compare.bat）
-`experiments/gui-compare/GUI-Compare.bat` をダブルクリックすると、同じリポジトリにある `scripts/run-compare.ps1` が起動する。**このブランチの最新版を取得済みの状態で使用する**。bat自体はネットワークからコードを自動更新しない。
+## 5. 日本語・GUI自動操作つき比較BAT（2026-10-11）
 
-- 必要な環境がそろっているか確認し、既存のAredoko GUI試作が起動中なら安全のため停止するよう案内する。**既存プロセスを勝手に終了しない**。
-- ReactのdistとTauriのRelease実行ファイルを再ビルド。初回だけ必要なNode依存をプロジェクト内に導入する。Tauriのローカルアイコンは保持し、不足時は保存済みSVGから生成。
-- WinUIの生成済みプロジェクトに最新版のXAML/C#差分を `update-winui.ps1` でバックアップ付き反映。WinUI実行時は`winapp run . -c Release --detach --json` でReleaseビルド・起動する。
-- 127.0.0.1:8768で**この実行専用の新しい50,000件架空データSQLite**を作って起動（既存DBは使わない）。既に8768番が使われていたら停止し、既存サーバーは触らない。
-- Tauri→WinUIの順に、一度に1アプリだけ起動して機能の手動確認を求める。機能確認は「未編集での連続選択／検索／ページ移動／編集・保存」。失敗時は `q` で中断（無理に性能比較しない）。
-- 比較フェーズは **Idle / Search / Scroll / Detail / Edit**。各フェーズの開始前にユーザーが同じ作業を準備し、Enterで自動計測開始。**この5操作のWindows GUI入力は自動化されていない**。この操作は左右のGUIで同条件にする。
-- モードは1回×10秒の「お試し」か、3回×20秒の「本測定」。1実行内では各アプリを起動したまま連続計測するため「起動後のwarm測定」であり、コールド起動時間は計測しない。
-- `cache/gui-compare/runs/<date>-<id>/` に測定CSV（各プロセス/時点）、`summary.json`, `summary.txt`, `session.log`, `manual-checks.txt`、バックエンドログ・テスト用SQLiteを作る。実行ごと別フォルダで上書きしない。
-- レポートはプロセスごとのPrivate BytesとWorking Set合算、累積CPU時間から計算したCPU使用率の**概算**。共有Working Setの二重計上やWebView2子プロセスの取りこぼしがあり得る。**FPS、VRAM、正確な操作遅延、コールド起動時間は計測しない**。表示方式もTauri仮想行、WinUIネイティブ行なので総合的な採用判断は暫定。
-- 終了時はこのツールが起動したベンチ用アプリとPythonだけを終了。測定ログ・デモSQLiteは結果フォルダに保持する。WinUI自動化を強制したり、個人のライブラリを走査したりはしない。
+`experiments/gui-compare/GUI-Compare.bat` をダブルクリックする。**最新版を一度git fetch/mergeしてから**実行する。選択は「1: お試し10秒×1回」または「2: 本測定20秒×3回」のみ。GUIへの英語指示・手作業は不要。
+
+### 自動実行される工程
+- 既存のベンチ用Tauri/WinUIウィンドウが開いていたら停止するよう案内（勝手に既存アプリを殺さない）。TCP 8768使用中なら中断。ユーザーの既存DB・個人ファイルを変更しない。
+- npm/Vite+Tauri Releaseビルド、既存WinUI `generated` のソース差分をバックアップ付き更新。.NET 10のWindows UI Automationドライバー `ui-automation/GuiDriver.csproj` をReleaseビルドしCLI自己診断。
+- 毎回固有の `cache/gui-compare/runs/<日時>-<短いID>/synthetic.sqlite` へ5万件の架空データを作り、共通Python APIをlocalhost:8768で起動。Tauri → WinUIの順に**片方ずつ起動**する。
+- 各GUIで、実際のWindows UI Automationツリーから入力欄・リスト・保存ボタンを特定。検索「雨の街」とクリア、スクロール、3作品の選択と右側詳細一致、タグ編集・保存とバックエンドDB反映の**事前自動チェック**を行う。
+- 事前チェックがPASSした場合、同じドライバーが待機/検索/スクロール/詳細選択/タグ編集を操作しながら `measure.ps1` でCPU/メモリを同時計測。操作した**つもり**で成功扱いにしないため、操作の反映を検証し、失敗した場合はその回で中断。
+- 結果は生CSV、`summary.json`、`summary.txt`、`comparison.html`（グラフ付き日本語・オフライン）、各操作の検証結果 `*-automation.json`、診断用 `*.stdout.txt`/`*.stderr.txt`、失敗時の`*.tree.txt`、`session.log`。終了時はこの実行で作成したアプリとサーバーのみ停止し、結果フォルダを開く。
+
+### 大事な制限
+- WindowsのUI AutomationはネイティブWinUIとWebView2でアクセシビリティツリーが異なる。利用するボタン名・AutomationIdをソース側で揃えたが、**Windows実機での全自動操作の検証はまだ済んでいない**。失敗時はフォルダの `*-automation.json` と `*.tree.txt` と `session.log` を送って調査する。**CIはドライバーのWindowsコンパイルとCLI自己診断・Python集計・ブラウザー回帰テストまで**で、Tauri/WinUI実ウィンドウ操作の成功を証明するものではない。
+- ベンチ中は同じWindowsセッションのマウス・キーボード・フォーカスをドライバーが使用する。**ユーザーがPCを並行操作しないこと**。リモート接続が切断/ロック中、UAC画面中、異なるDPIやモニター構成では失敗することがある。
+- 自動編集はその回専用の架空データのみ。GUI経由で保存し、APIの読み取りでタグ反映を検査する。既存の利用者データへAPI経由で編集はしない。
+- CPUはプロセス累積時間による概算。Working Set合算は共有ページの二重計上あり。WebView2子プロセス取りこぼしに注意。Tauriの仮想行レンダリングとWinUIの60ネイティブ行は異なる。**FPS・コールド起動時間・GPUメモリ・入力遅延は測定しない**。3回の測定でも採用判断は暫定。
 
 ```powershell
 cd C:\AI\Aredoko-gui-compare
 $repo = 'C:/AI/Aredoko-gui-compare'
 git -c "safe.directory=$repo" fetch origin
 git -c "safe.directory=$repo" merge --ff-only origin/feat/gui-framework-comparison-20261010
-# 以降はエクスプローラーから次のファイルをダブルクリック
-# C:\AI\Aredoko-gui-compare\experiments\gui-compare\GUI-Compare.bat
+explorer.exe .\experiments\gui-compare
+# GUI-Compare.bat をダブルクリック
 ```
-
-なお、スクリプトをコマンドラインから使う場合は、`GUI-Compare.bat -Trials 3 -Seconds 20` でも実行できる（引数指定時はモード選択をスキップ）。
