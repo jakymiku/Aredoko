@@ -36,11 +36,29 @@ class GuiCompareLauncherTests(unittest.TestCase):
         self.assertIn("c.IsKeyboardFocusable && c.IsEnabled && !c.IsOffscreen", source)
         self.assertIn("new OrCondition(", source)
         self.assertIn("foreach (var child in Descendants(candidate))", source)
-        self.assertIn("Type(FindEditRequired(QueryLabel),", source)
-        self.assertIn("var tag = FindEditRequired(TagLabel);", source)
+        self.assertIn("Type(QueryLabel,", source)
+        self.assertIn("Type(TagLabel, after);", source)
         self.assertNotIn("Type(FindRequired(QueryLabel)", source)
         self.assertNotIn("var tag = FindRequired(TagLabel);", source)
         self.assertIn("if (!IsUsableEdit(target))", source)
+
+    def test_keyboard_retry_requires_verified_value_and_focus(self):
+        source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
+        self.assertIn("private static void Type(string label, string value)", source)
+        self.assertIn("attempt <= 3", source)
+        self.assertIn("target.Current.HasKeyboardFocus", source)
+        self.assertIn("Click(target);", source)
+        self.assertIn("var current = FindEditRequired(label);", source)
+        self.assertIn("lastValue = ((ValuePattern)pattern).Current.Value;", source)
+        self.assertIn("if (string.Equals(value, lastValue, StringComparison.Ordinal))", source)
+
+    def test_search_requires_filtered_and_restored_list(self):
+        source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
+        self.assertIn("WaitForSearchState(bool filtered)", source)
+        self.assertIn('names.All(x => x.Contains("雨の街"', source)
+        self.assertIn('names.Any(x => x.Contains("夜の図書館"', source)
+        self.assertIn("WaitForSearchState(filtered: true);", source)
+        self.assertIn("WaitForSearchState(filtered: false);", source)
 
     def test_keyboard_native_input_union_handles_mouse_size(self):
         source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
