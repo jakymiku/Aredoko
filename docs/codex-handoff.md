@@ -243,3 +243,8 @@
 - ignored証拠 data/ai-ui/profile-probe-01/dialog-latest.png、profile-picker-01/02/03（全FAIL/部分到達）とdata/ai-smoke/profile-preference-01/result.json（PASS）。生成profileは厳密に作成したファイルだけcleanup。個人AppData設定未変更、検証用GUI/API/worker終了確認。
 - コードレビュー: JSON DOM/async・native ListView・dirty guard/Origin-token/immutable index keyを維持。新C# APIは既存ComboBoxItem/AutomationPropertiesのみ、テーマstyleは既存platform。analyzer/Sandboxなし、高DPI/Light/HC/reader/AOT/配布未検証。ScrollViewer APIを調べたが現サイズのdialogは表示できたため不要なレイアウト変更なし。表示リソース化は将来課題。
 - **次の3手:** (1) 保存済みfailure-tree.jsonからPopupHostの公開境界を診断し、新ターンでnative全profile再起動/不足/破損/dirty回帰、(2) 小さいwindow/DPI/themeの警告表示を検証、(3) 明示選択の実サンプル・新未見分類集合と2,000超の索引へ。Layaは依然実験APIだけ。
+
+### 実機へ戻した作業の提出
+- 実装HEAD 9e8efad。後続はこの記録のみ。f4273ffまでのチャット変更を全保持し、同じfeature/Draft PR #5へ通常push、base維持・未マージ。
+- 新ランチャー起動指定/保存中操作を実装、96Python/13C#/Release・独立HTTP/CUDA再起動PASS。nativeはモデル選択/保存/索引まで確認、検索方法popup問題で通しFAILのまま。次回は残件を再開し、今回の部分到達を完全成功と扱わない。
+- 文書差分チェック/実装レビュー済み。生成設定だけcleanup、所有GUI/API/worker停止。最新の次の3手は直前節。

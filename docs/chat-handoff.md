@@ -5,7 +5,7 @@
 
 ## 最新の再開地点（2026-10-12・Codex実機追記）
 
-チャット側f4273ffまで取り込み済み。GUIモデルprofile選択は実装済みで、上記の旧「次の実装: GUIモデルprofile選択」は過去の依頼。今回launcherのx64/SelfContainedを統一し、テスト用-AISettings、候補AutomationId、人向けactive名、保存中の重複操作防止を追加。
+最新実機追記の実装HEADは9e8efad（後続は提出文書）。チャット側f4273ffまで取り込み済み。GUIモデルprofile選択は実装済みで、上記の旧「次の実装: GUIモデルprofile選択」は過去の依頼。今回launcherのx64/SelfContainedを統一し、テスト用-AISettings、候補AutomationId、人向けactive名、保存中の重複操作防止を追加。
 
 ローカルPython96/C#13/Release PASS（IL2104 2件）。GUIで生成17件CUDA索引・次回profile保存・hot swapしない動作は実機確認。GUI通しは検索方法PopupHost検出でFAIL、2回の修正再実行後も未完。nativeの不足/破損/text-only再起動画面まで完了したとは扱わない。
 
