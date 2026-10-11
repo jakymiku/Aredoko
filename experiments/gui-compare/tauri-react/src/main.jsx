@@ -92,17 +92,17 @@ function App() {
       <label className="filter">種類<select aria-label="メディアの種類" value={kind} onChange={e=> {setKind(e.target.value);setPage(0);}}>{Object.entries(kinds).map(([value,label])=><option key={value} value={value === 'all' ? '' : value}>{label}</option>)}</select></label></div>
       <div className="message" role="status" aria-live="polite">{message || '60件ずつの一覧・行仮想化'}</div>
       <div className="list-heading"><span>作品</span><span>種別 / タグ</span></div>
-      <div ref={listRef} className="list" aria-label="作品一覧" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
+      <div ref={listRef} className="list" role="group" aria-label="作品一覧" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
         <div style={{height: result.items.length * rowHeight, position:'relative'}}>
-          {result.items.slice(startIndex, endIndex).map((item,index) => <button type="button" key={item.id} className={'item '+(selected?.id===item.id?'chosen':'')}
+          {result.items.slice(startIndex, endIndex).map((item,index) => <button type="button" key={item.id} aria-label={`作品: ${item.title}`} className={'item '+(selected?.id===item.id?'chosen':'')}
             style={{position:'absolute',top:(startIndex+index)*rowHeight,left:0,right:0,height:rowHeight}} onClick={()=>openItem(item.id)}>
             <strong>{item.title}</strong><span>{kinds[item.kind]} · {item.tags.join('、')}</span></button>)}
         </div>
       </div>
       <footer><button disabled={page===0} onClick={() => setPage(p => Math.max(0, p-1))}>前へ</button><span>{page+1} / {Math.max(1,Math.ceil(result.total/60))}</span><button disabled={(page+1)*60>=result.total} onClick={() => setPage(p => p+1)}>次へ</button></footer>
     </main>
-    <aside className="inspector"><h2>詳細・タグ編集</h2>{selected ? <><strong className="item-title">{selected.title}</strong><span className="small">ID {selected.id} · {kinds[selected.kind]}</span>
-      <label>タグ（カンマ区切り）<textarea value={tags} onChange={e=>{setTags(e.target.value);setDirty(true);}}/></label>
+    <aside className="inspector"><h2>詳細・タグ編集</h2>{selected ? <><strong className="item-title" role="status" aria-label={`選択中の作品: ${selected.title}`}>{selected.title}</strong><span className="small">ID {selected.id} · {kinds[selected.kind]}</span>
+      <label>タグ（カンマ区切り）<textarea aria-label="タグ（カンマ区切り）" value={tags} onChange={e=>{setTags(e.target.value);setDirty(true);}}/></label>
       <label>棚<input value={shelf} onChange={e=>{setShelf(e.target.value);setDirty(true);}}/></label>
       <label className="check"><input type="checkbox" checked={favorite} onChange={e=>{setFavorite(e.target.checked);setDirty(true);}}/> お気に入り</label>
       <label className="check"><input type="checkbox" checked={reviewed} onChange={e=>{setReviewed(e.target.checked);setDirty(true);}}/> 確認済み</label>
