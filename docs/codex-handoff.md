@@ -209,3 +209,8 @@
 - WinUIコードレビュー: XAML/C#変更なし。既存async検索・stale判定・native ListView/60paging・JSON DOM・token/Origin・ThemeResource/AutomationIdを確認。追加計算は既存2,000上限内、Laya/torchは隔離workerのみ。WinUI analyzerなし、高DPI/Light/HighContrast/reader/ピッカー全体/AOT/配布は継続未検証。
 - ignored証拠: data/ai-smoke/ranking-01、data/ai-ui/ranking-01/full、data/laya-evaluation/v2-dev-01/v2-hybrid-guard-dev-01/v2-heldout-01/api-v2-01。fake fixtureだけGit管理し、models/venv/DB/個人paths/PNG証拠はcommit対象外。
 - **次の3手:** (1) GUIでモデルprofile選択と不足時案内を追加（既存旧索引互換/手動mode維持）、(2) ユーザー選択の実サンプルで混合順位と追加の未見日本語判定セットを評価（Layaは精度を満たすまでGUI提案保留）、(3) 2,000件超の索引を段階的checkpoint/増分・resource上限で拡張。本文/OCR/音声動画内容は別段階。
+
+### 混合順位・Laya v2の提出
+- 実装HEAD: e21c7aa。この後続コミットは提出記録のみ。同じfeatureブランチ/Draft PR #5へpushし、stacked base維持・未マージ。
+- Python90/C#13/WinUI Release/実CUDA評価/実HTTP lifecycle/WinUI local生成17素材フローPASS、4枚目視確認。旧SDK IL2104 2件は継続。所有API/GUI/embedding/Laya worker停止を確認。
+- mean-rrfはGUI意味検索の既定、maxへ復帰可・旧vector再利用。Layaは新未見24の精度不足でGUI採用保留、明示実験APIのみ。最新仕様と次の3手は直前節・docs/ai-ranking.md・docs/laya-evaluation.md。
