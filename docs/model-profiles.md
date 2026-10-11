@@ -14,6 +14,19 @@ Omit -AIProfile to return to the original model. Selection takes effect on resta
 
 The backend also supports --ai-profile. Invalid settings disable optional AI while literal search remains available.
 
+## WinUI 3での選択（2026-10-12追加）
+
+**「AI索引」→「次回起動で使用するAIモデル」** からモデルprofileを選べます。通常の文字検索はいつでも利用可能です。
+
+- 選択肢は既定のEmbeddingGemma 2と、`data/ai-profiles/*.json`（ignoredのローカルJSON）のみ。既存の`config/ai-profiles/embeddinggemma-2.json`を複製したファイルをローカルフォルダへ置き、モデルの情報を編集します。**GUIはモデル自体をダウンロードしません。**
+- 対応adapter・identity等のスキーマは `app/ai_profiles.py` が一元検証します。無効なJSON・不明なadapter・逃避パス・リンク先のモデルprofileは選択禁止。重みフォルダ、`.venv-ai/Scripts/python.exe`、`aredoko-revision.txt`の不足やリビジョン不一致は、モデル選択画面に警告を表示。検出できた場合でも実モデルのロード成功までは保証しません。
+- モデルを選び「次回起動に設定」を押すと、`%LOCALAPPDATA%/Aredoko/settings.json`（デフォルト）へ**原子的に保存**します。現在のworkerとベクトル索引は**そのまま**。**Aredokoを閉じて起動し直す**と新しいprofileが有効になります。既定モデルへ戻す場合は同じ欄で既定を選び直してください。
+- **優先順位は明示 `-AIProfile <JSONパス>` ＞ GUIの保存済み選択 ＞ 既定profile**。毎回 `-AIProfile` を付けて起動した場合、GUIの選択は保存されても優先されません。引数を外して再起動すると反映します。
+- 起動時に保存profileが消失・JSONが無効なら、そのAI機能を無効にして**文字検索を維持**。GUIのモデル選択画面で修正方法を案内します。既定へ戻すと設定を復旧できます。起動引数で有効なprofileを明示した場合は破損した保存済み選択より優先されます。
+- 既存のvector identityとprofile別SQLite索引は変えません。新profileへ切り替えたら必要に応じ「索引を作成・更新」。旧profileへ戻れば以前の対応する索引を再利用できます。text-onlyモデルは画像/表紙の入力に非対応なので、AI画像・表紙では既存の非対応メッセージが表示されます。
+- profile選択APIは `GET /api/library/ai/profiles` / `POST /api/library/ai/profile`（body `{"id":"default"}` または `{"id":"local:custom.json"}`）。既存のlocalhost／トークン／Origin境界を維持し、POSTは候補IDしか受け取りません。任意ファイルパスやPythonモジュールをPOSTさせず、remote codeも読みません。
+- テスト専用の設定パスはサーバー `--ai-settings <path>` で指定可能。デフォルトの個人用設定をテストで汚さないためのものです。自動ダウンロード・hot swap・LayaのGUI統合は実装しません。
+
 ## Supported adapters
 
 - embeddinggemma2: compatible EmbeddingGemma 2 Sentence Transformers exports; text and optional image/cover inputs. Audio is unloaded; a text-only profile also unloads vision. Named task prompts default to SearchQuery and Document.
