@@ -19,6 +19,10 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Test WinUI JSON protocol without reflection
         run: dotnet run --project experiments/gui-compare/winui3/json-smoke/JsonSmoke.csproj -c Release
+      - name: Compile Windows GUI Automation driver
+        run: dotnet build experiments/gui-compare/ui-automation/GuiDriver.csproj -c Release --nologo
+      - name: Exercise GUI Automation driver CLI self-check
+        run: dotnet run --project experiments/gui-compare/ui-automation/GuiDriver.csproj -c Release --no-build -- --self-test true
       - run: node --check experiments/gui-compare/tauri-react/vite.config.js
       - name: Validate comparison PowerShell syntax
         shell: pwsh
