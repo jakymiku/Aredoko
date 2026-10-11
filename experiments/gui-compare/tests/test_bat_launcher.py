@@ -46,7 +46,7 @@ class GuiCompareLauncherTests(unittest.TestCase):
         source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
         self.assertIn("private static void Type(string label, string value)", source)
         self.assertIn("attempt <= 3", source)
-        self.assertIn("target.Current.HasKeyboardFocus", source)
+        self.assertIn("HasEffectiveKeyboardFocus(target)", source)
         self.assertIn("Click(target);", source)
         self.assertIn("var current = FindEditRequired(label);", source)
         self.assertIn("lastValue = ((ValuePattern)pattern).Current.Value;", source)
