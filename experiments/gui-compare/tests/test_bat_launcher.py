@@ -21,6 +21,20 @@ class GuiCompareLauncherTests(unittest.TestCase):
         self.assertIn("Build-Benchmarks", source)
         self.assertIn("Run-GuiOperation", source)
 
+    def test_gui_driver_finds_save_only_after_selection(self):
+        source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
+        bootstrap, edit = source.split("private static void EditOnce()", 1)
+        self.assertNotIn("FindRequired(SaveLabel)", bootstrap)
+        self.assertIn("Click(rows[0]);", edit)
+        self.assertIn("var save = FindRequired(SaveLabel);", edit)
+        self.assertLess(edit.index("Click(rows[0]);"), edit.index("var save = FindRequired(SaveLabel);"))
+
+    def test_keyboard_native_input_union_handles_mouse_size(self):
+        source = (ROOT / "ui-automation" / "Program.cs").read_text(encoding="utf-8")
+        self.assertIn("internal MouseInput mouse;", source)
+        self.assertIn("Marshal.SizeOf<Input>()", source)
+        self.assertIn("Native.InputSizeProbe.Size", source)
+
     def test_bat_launches_powershell_script(self):
         source = (ROOT / "GUI-Compare.bat").read_text(encoding="utf-8")
         self.assertIn("scripts\\run-compare.ps1", source)
