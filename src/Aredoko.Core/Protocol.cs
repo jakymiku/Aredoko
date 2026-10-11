@@ -19,6 +19,10 @@ public sealed class MediaRow
     public string Shelf { get; set; } = "";
     public bool Favorite { get; set; }
     public bool Reviewed { get; set; }
+    public int RootId { get; set; }
+    public long Modified { get; set; }
+    public long Size { get; set; }
+    public string PreviewKey => $"{RootId}:{Id}:{Modified}:{Size}";
     public string Location { get; set; } = "";
     public string Availability { get; set; } = "";
     public string KindAndTags => $"{Kind} · {string.Join("、", Tags)}";
@@ -69,6 +73,9 @@ public static class Protocol
         Shelf = row.GetProperty("shelf").GetString() ?? "",
         Favorite = row.GetProperty("favorite").GetBoolean(),
         Reviewed = row.GetProperty("reviewed").GetBoolean(),
+        RootId = row.TryGetProperty("root_id", out var rootId) ? rootId.GetInt32() : 0,
+        Modified = row.TryGetProperty("mtime_ns", out var modified) ? modified.GetInt64() : 0,
+        Size = row.TryGetProperty("size_bytes", out var size) ? size.GetInt64() : 0,
         Location = row.TryGetProperty("relative_path", out var loc) ? loc.GetString() ?? "" : "",
         Availability = row.TryGetProperty("availability", out var av) ? av.GetString() ?? "" : ""
     };

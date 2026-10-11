@@ -20,15 +20,22 @@
    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
     <ComboBox x:Name="Kind" SelectedIndex="0" SelectionChanged="Kind_Changed" MinWidth="116" AutomationProperties.Name="種類" AutomationProperties.AutomationId="CmbKind"><ComboBoxItem Content="すべての種類"/><ComboBoxItem Content="本"/><ComboBoxItem Content="画像"/><ComboBoxItem Content="動画"/><ComboBoxItem Content="音楽"/><ComboBoxItem Content="ZIP"/><ComboBoxItem Content="素材"/></ComboBox>
     <Button x:Name="LayoutButton" Content="タイル表示" Click="Layout_Click" AutomationProperties.AutomationId="BtnLayout"/>
+    <Button x:Name="DetailsButton" Content="詳細" IsEnabled="False" Click="OpenDetails_Click" AutomationProperties.AutomationId="BtnDetails"/>
     <TextBlock x:Name="Count" VerticalAlignment="Center" AutomationProperties.AutomationId="TxtCount"/>
    </StackPanel>
    <SplitView x:Name="Details" Grid.Row="3" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="True" OpenPaneLength="320" PaneBackground="{ThemeResource CardBackgroundFillColorDefaultBrush}">
     <SplitView.Pane>
-     <ScrollViewer Padding="16"><StackPanel Spacing="12">
-      <TextBlock Text="詳細と整理" Style="{StaticResource SubtitleTextBlockStyle}"/>
+     <Grid RowSpacing="8" Padding="16">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <TextBlock Text="詳細と整理" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+       <Button Grid.Column="1" Click="CloseDetails_Click" AutomationProperties.Name="詳細を閉じる" AutomationProperties.AutomationId="BtnCloseDetails"><SymbolIcon Symbol="Cancel"/></Button>
+      </Grid>
+      <ScrollViewer Grid.Row="1"><StackPanel Spacing="12">
       <TextBlock x:Name="ItemTitle" Text="作品を選んでください" TextWrapping="Wrap"/>
       <TextBlock x:Name="ItemPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-      <TextBlock Text="サムネイル・読書機能は準備中" Style="{StaticResource CaptionTextBlockStyle}"/>
+      <Image x:Name="DetailPreview" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
+      <TextBlock Text="読書機能は準備中" Style="{StaticResource CaptionTextBlockStyle}"/>
       <ContentControl x:Name="Editor" IsEnabled="False" HorizontalContentAlignment="Stretch"><StackPanel Spacing="12">
        <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextChanged="Editor_Changed" AutomationProperties.AutomationId="TxtTags"/>
        <TextBox x:Name="Shelf" Header="棚" MaxLength="80" TextChanged="Editor_Changed" AutomationProperties.AutomationId="TxtShelf"/>
@@ -37,8 +44,8 @@
        <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>
        <Button x:Name="Save" Content="保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.AutomationId="BtnSave"/>
       </StackPanel></ContentControl>
-      <Button Content="詳細を閉じる" Click="CloseDetails_Click" AutomationProperties.AutomationId="BtnCloseDetails"/>
      </StackPanel></ScrollViewer>
+     </Grid>
     </SplitView.Pane>
     <Grid Margin="0,0,12,0">
      <ListView x:Name="Items" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.AutomationId="ItemList"/>

@@ -25,5 +25,23 @@ public sealed class LibraryApi : IDisposable
         if(!response.IsSuccessStatusCode) throw new InvalidOperationException(JsonNode.Parse(text)?["error"]?.GetValue<string>() ?? response.StatusCode.ToString());
         return JsonNode.Parse(text)!;
     }
+    public async Task<byte[]?> PreviewAsync(int id, CancellationToken cancellation)
+    {
+        using var response = await client.GetAsync($"api/library/preview/{id}", HttpCompletionOption.ResponseHeadersRead, cancellation);
+        if ((int)response.StatusCode >= 500) response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode) return null;
+        if (response.Content.Headers.ContentLength is not long size || size < 1 || size > PreviewPolicy.MaxSourceBytes)
+            return null;
+        await using var source = await response.Content.ReadAsStreamAsync(cancellation);
+        using var output = new MemoryStream((int)size);
+        var buffer = new byte[16 * 1024];
+        int read;
+        while ((read = await source.ReadAsync(buffer, cancellation)) != 0)
+        {
+            if (output.Length + read > PreviewPolicy.MaxSourceBytes) return null;
+            output.Write(buffer, 0, read);
+        }
+        return output.ToArray();
+    }
     public void Dispose()=>client.Dispose();
 }
