@@ -1,3 +1,7 @@
+> **最新の状況（2026-10-11）**：GUI比較を終え、**WinUI 3を製品版の採用方針として決定**。Codex向け開発開始ブランチ `feat/winui3-production-mvp-20261011` を作成済み。**製品版WinUIの実装はこれから**。作業済み/未完了/次の工程は [Codex引継ぎ](codex-handoff.md)、具体的な実装要件は [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) を参照。以下は**2026-10-10時点の履歴**で、現状を上書きするものではない。
+
+---
+
 # 作業状況 — 2026-10-10
 
 ## 完了
