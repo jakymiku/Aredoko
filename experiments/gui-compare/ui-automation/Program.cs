@@ -302,48 +302,105 @@ internal static class Program
         Native.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
     }
 
-    private static void Type(AutomationElement target, string value)
+    // WebView2 may hand focus back to the page between rapid search cycles.
+    // Re-acquire the live element on every attempt; do not keep an obsolete UIA
+    // reference across React renders. Require actual keyboard focus and verify
+    // the exact displayed value, rather than treating SendInput as success.
+    private static void Type(string label, string value)
     {
-        if (!IsUsableEdit(target))
-            throw new InvalidOperationException(
-                $"操作対象「{NameOf(target)}」は、フォーカス可能なテキスト入力欄ではありません");
-        Activate();
-        target.SetFocus();
-        Thread.Sleep(70);
-        Native.Key(0x11, true);
-        Native.Key(0x41, true);
-        Native.Key(0x41, false);
-        Native.Key(0x11, false);
-        Native.Press(0x08); // erase selection before typing
-        foreach (var ch in value) Native.Unicode(ch);
-        Thread.Sleep(340);
-        if (target.TryGetCurrentPattern(ValuePattern.Pattern, out var vp))
+        string lastValue = "(取得できず)";
+        string lastFocus = "(未確認)";
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            var actual = ((ValuePattern)vp).Current.Value;
-            if (!string.Equals(value, actual, StringComparison.Ordinal))
-                throw new InvalidOperationException($"入力の反映を確認できません: expected {value}, actual {actual}");
+            var target = FindEditRequired(label);
+            Activate();
+            try { target.SetFocus(); }
+            catch (InvalidOperationException) { /* click-to-focus fallback */ }
+
+            if (attempt > 1 || !target.Current.HasKeyboardFocus)
+                Click(target); // an actual mouse click also foregrounds WebView2
+            for (var wait = 0; wait < 8 && !target.Current.HasKeyboardFocus; wait++)
+                Thread.Sleep(60);
+
+            if (!target.Current.HasKeyboardFocus)
+            {
+                lastFocus = "キーボードフォーカスがありません";
+                Log($"入力先を再フォーカスします: {label} ({attempt}/3)");
+                Thread.Sleep(180);
+                continue;
+            }
+
+            lastFocus = "フォーカスあり";
+            Native.Key(0x11, true);
+            Native.Key(0x41, true);
+            Native.Key(0x41, false);
+            Native.Key(0x11, false);
+            Thread.Sleep(60);
+            Native.Press(0x08);
+            Thread.Sleep(80);
+            foreach (var ch in value)
+            {
+                Native.Unicode(ch);
+                Thread.Sleep(35);
+            }
+
+            // React controlled inputs can re-render while async search results
+            // arrive. Check the *current* UIA element, not a pre-render handle.
+            for (var wait = 0; wait < 12; wait++)
+            {
+                Thread.Sleep(100);
+                var current = FindEditRequired(label);
+                if (!current.TryGetCurrentPattern(ValuePattern.Pattern, out var pattern))
+                    throw new InvalidOperationException($"入力欄「{label}」はValuePatternを提供していません");
+                lastValue = ((ValuePattern)pattern).Current.Value;
+                if (string.Equals(value, lastValue, StringComparison.Ordinal))
+                    return;
+            }
+            Log($"入力を再試行します: {label} ({attempt}/3)、期待値={value}、実際={lastValue}");
+            Thread.Sleep(220);
         }
+        throw new InvalidOperationException(
+            $"入力の反映を3回試しましたが確認できません: {label}, expected {value}, actual {lastValue}, focus {lastFocus}");
+    }
+
+    private static void WaitForSearchState(bool filtered)
+    {
+        // A default page already contains "雨の街", so merely finding that
+        // title incorrectly marked the old search test PASS even if filtering
+        // had not happened. The first page also contains "夜の図書館".
+        for (var wait = 0; wait < 40; wait++)
+        {
+            var names = FindRows().Select(RowName).ToArray();
+            if (filtered)
+            {
+                if (names.Length > 0 && names.All(x => x.Contains("雨の街", StringComparison.Ordinal)))
+                    return;
+            }
+            else if (names.Any(x => x.Contains("夜の図書館", StringComparison.Ordinal)))
+            {
+                return;
+            }
+            Thread.Sleep(125);
+        }
+        throw new InvalidOperationException(filtered
+            ? "検索入力後も、一覧が「雨の街」の結果に切り替わりませんでした"
+            : "検索を消したあと、5万件の通常一覧に戻ったことを確認できませんでした");
     }
 
     private static void ClearQuery()
     {
-        Type(FindEditRequired(QueryLabel), "");
-        Thread.Sleep(350);
+        Type(QueryLabel, "");
+        WaitForSearchState(filtered: false);
     }
 
     private static void SearchOnce()
     {
         Attempts++;
-        Type(FindEditRequired(QueryLabel), "雨の街");
-        Thread.Sleep(450); // both UIs debounce search by ~220ms
-        VerifyListHasRows();
-        var rows = FindRows();
-        if (rows.Count == 0 || !rows.Any(x => RowName(x).Contains("雨の街")))
-            throw new InvalidOperationException("検索しても「雨の街」の行が表示されません");
+        Type(QueryLabel, "雨の街");
+        WaitForSearchState(filtered: true);
         ClearQuery();
-        VerifyListHasRows();
         Verified++;
-        Log("検索の入力・結果表示・クリアを確認");
+        Log("検索入力・絞り込み結果・5万件一覧への復帰を確認");
     }
 
     private static void ResetList()
@@ -487,7 +544,6 @@ internal static class Program
         var original = GetOriginalAsync(1).GetAwaiter().GetResult().tags;
         // On Tauri both the tag field and Save button exist only after
         // selection. Validate them here, once the detail pane is populated.
-        var tag = FindEditRequired(TagLabel);
         var save = FindRequired(SaveLabel);
         var before = string.Join(", ", original);
         var marker = "aredoko_auto_test";
@@ -495,7 +551,7 @@ internal static class Program
             original.Where(x => x != marker).ToArray() :
             original.Concat([marker]).ToArray();
         var after = string.Join(", ", changed);
-        Type(tag, after);
+        Type(TagLabel, after);
         // Only click when a real change was detected (button must be enabled).
         if (!save.Current.IsEnabled) throw new InvalidOperationException("編集後に保存ボタンが有効になりません");
         Click(save);
