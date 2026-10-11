@@ -1,4 +1,4 @@
-# AI search — proposed next milestone (2026-10-11)
+# AI search — implemented preview and next milestone (2026-10-12)
 
 Status (2026-10-12): first EmbeddingGemma 2 retrieval slice implemented and verified with actual offline CUDA inference on generated fixtures. The user explicitly authorized project-local packages/model download with a shared 6 MB/s cap. Laya remains planned. Filename/tag search stays available independently.
 
@@ -19,7 +19,7 @@ Cover-only indexing cannot establish unseen interior content. Anime/doujin accur
 - [laya-mlx](https://github.com/mizorewww/laya-mlx): requires Apple Silicon/macOS; unsuitable for this Windows PC.
 - [Upstream Laya](https://github.com/NandhaKishorM/laya): PyTorch implementation documents Windows setup and typed choice/score/yes-no decisions. Validate a multilingual checkpoint locally; documentation is not proof that the current Python/GPU stack has been tested.
 
-GPU latency, VRAM use, full-library initial indexing duration and personal-library ranking accuracy are not yet measured.
+Small generated-fixture latency and PyTorch allocated GPU memory have been measured below. Full-library indexing time, total GPU memory and personal-library ranking accuracy remain unmeasured.
 
 ## Implemented first slice
 
@@ -33,4 +33,6 @@ GPU latency, VRAM use, full-library initial indexing duration and personal-libra
 
 Next: evaluate Laya multilingual intent choices locally, then calibrate mixed-mode ranking and scale incremental/checkpoint indexing beyond this deliberately small prototype. Laya setup has not been performed.
 
-Native verification status: the original metadata regression passed, and the new native AI flow created 17 records with actual CUDA inference via the GUI. The new full AI flow is **not passed**: after two fix/rerun cycles it stopped on ambiguous text selection of the mode ComboBox. Dedicated mode AutomationIds have been added and built, but their native rerun is pending. Screenshots/results were saved and visually inspected. Owned model workers stopped after launcher exit. Resolve this pending GUI flow before claiming end-to-end completion.
+Native verification status (2026-10-12): **PASS** for the actual-model GUI flow. A fresh generated-only DB indexed 17 records on CUDA through WinUI, then completed Japanese semantic search, result selection/tag save, unsaved-edit keep, literal-mode recovery and cover-only color search/tile display. Source hashes stayed unchanged. Screenshots were visually checked. The test now waits for the popup HWND and scopes selection to it; app-wide UIA enumeration otherwise duplicates the same ComboBox item. Owned workers/API stopped on launcher exit. Restart persistence also **PASS**: saved tag read back in the native editor, all 17 checkpointed records retained, existing cover vectors returned blue top candidates using CUDA without rerunning the index. Five screenshots across the two successful flows were visually checked.
+
+See [the Laya evaluation plan](laya-evaluation.md) for the next bounded experiment; no Laya package/model has been installed.
