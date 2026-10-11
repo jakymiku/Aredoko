@@ -145,7 +145,7 @@
 - 最終の検証アプリ/API/所有モデルワーカー停止、ランチャー終了0を確認。作業内容をPR説明へ反映。
 
 ### モデル交換対応（2026-10-12完了）
-- 開始HEAD fa30b9c、clean/Issue #4/AGENTS確認。ユーザー要望によりEmbeddingGemma 2固定設定をモデルprofileへ分離中。
+- 開始HEAD fa30b9c、clean/Issue #4/AGENTS確認。ユーザー要望によりEmbeddingGemma 2固定設定をモデルprofileへ分離。
 - 起動時の設定ファイル選択、adapter/次元/入力能力/immutable revision/promptを検証し、異なるprofileの索引を別DBへ保存。既存標準profileは既存AI DBを再利用する設計。新しいモデルやLayaのダウンロードは行っていない。
 
 - app/ai_profiles.py に検証済みJSON profile、app/ai_adapters.py に登録式loader、app/ai_vectors.py にモデル非依存vector契約を追加。EmbeddingGemma2 text/coverと汎用Sentence Transformers text-onlyを分離。既存標準profileはlegacyキー/DBを維持。他profileはID/revision/adapter/次元/入力/prompt/precision/前処理契約の識別で別DB。label/同一重みの配置変更のみは再利用。workerの実次元/完全profile照合、返却vector検証で混在を拒否。
@@ -159,3 +159,8 @@
 - **次の3手:** (1) Layaもembeddingとは別の判断用interfaceに分離してoffline評価セット/明示setupを実装、(2) GUIのモデルprofile選択/不足モデル案内を追加、(3) 実サンプルで順位/索引速度を評価し2,000件を超える索引へ拡張。Laya実導入/別checkpoint取得はまだなし。モデル交換の基盤は完了。
 
 - 最終互換性レビューでlegacy条件を現在のDEFAULT_PROFILEから切り離して歴史的設定へ固定。将来defaultモデル/前処理契約を変えても旧DBを誤再利用しない回帰テストを追加。前処理変更はVECTOR_CONTRACT更新が必要。
+
+### モデル交換対応の提出
+- 実装HEAD: `64b0af9`（本体 `6fa3e69`＋将来default変更の互換性固定）。後続はこの記録のみ。既存Draft PR #5へpush、未マージ。
+- 61 Pythonテスト、13 C#チェック、WinUI Release、実GPU profile切替、新規GUI通し/旧索引GUI互換の検証成功。所有AIワーカー/API/GUIの終了確認、ランチャー終了0。追加モデル取得なし。
+- 最新仕様/制約/次の3手は上記と docs/model-profiles.md。別実モデルや将来checkpointは未検証、Layaは次段階。
