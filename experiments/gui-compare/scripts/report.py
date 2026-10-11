@@ -12,6 +12,7 @@ import statistics
 import os
 import math
 from datetime import datetime
+from html import escape
 from collections import defaultdict
 from pathlib import Path
 
@@ -82,10 +83,66 @@ def load(paths: list[str]) -> list[dict]:
     return records
 
 
+
+def write_html_report(summary: list[dict], path: str) -> None:
+    phases = ('Idle', 'Search', 'Scroll', 'Detail', 'Edit')
+    labels = {'Idle': '待機', 'Search': '検索', 'Scroll': 'スクロール',
+              'Detail': '詳細表示', 'Edit': 'タグ編集'}
+    metrics = (
+        ('median_private_mib', 'Private Bytes 中央値（MiB）', '確保した専用仮想メモリの合計。実RAM使用量ではない'),
+        ('median_sum_working_set_mib', 'Working Set 合算中央値（MiB）', '共有物理ページの二重計上を含む'),
+        ('avg_cpu_pct_one_core', '平均 CPU 使用率（1論理コア＝100%）', '累積CPU時間からの近似で、操作時間の差に影響される'),
+    )
+    ui = {(row['variant'], row['phase']): row for row in summary
+          if row['component'] == 'ui-tree'}
+    parts = ['<!doctype html><html lang="ja"><meta charset="utf-8">',
+             '<meta name="viewport" content="width=device-width,initial-scale=1">',
+             '<title>Aredoko GUI比較結果</title>',
+             '<style>body{font:16px/1.6 system-ui,sans-serif;background:#10151b;color:#e9eff6;'
+             'max-width:1080px;padding:24px;margin:auto}h1{font-size:28px}h2{margin-top:38px}'
+             '.panel{background:#19222d;border:1px solid #394656;border-radius:12px;'
+             'padding:18px;margin:12px 0}.pair{display:grid;grid-template-columns:105px 1fr 110px;'
+             'align-items:center;gap:10px;margin:8px 0}.bar{background:#354050;height:14px;'
+             'border-radius:7px;overflow:hidden}.fill{display:block;height:100%;border-radius:7px}'
+             '.tauri{background:#70a5f1}.winui{background:#c6a5ef}'
+             '.muted{color:#b4c1cf}strong{font-weight:700}small{display:block}'
+             '@media(max-width:560px){.pair{grid-template-columns:80px 1fr 80px}}'
+             '</style><h1>Aredoko GUI比較結果</h1>',
+             '<p class="muted">Tauri + React と WinUI 3 / Windows / 5万件の架空データ</p>']
+    for key, title, caveat in metrics:
+        parts.append('<h2>' + escape(title) + '</h2><p class="muted">'
+                     + escape(caveat) + '</p>')
+        for phase in phases:
+            pairs = [(name, ui.get((name, phase))) for name in ('Tauri', 'WinUI')]
+            scale = max((r.get(key) or 0 for _, r in pairs if r), default=0)
+            parts.append('<div class="panel"><strong>' + escape(labels[phase]) + '</strong>')
+            for variant, row in pairs:
+                value = None if row is None else row.get(key)
+                if value is None:
+                    bar = ''
+                    label = 'データなし'
+                else:
+                    bar = ('<span class="fill ' + variant.lower() + '" style="width:'
+                           + f'{(value / scale * 100 if scale else 0):.1f}%' + '"></span>')
+                    label = f'{value:.2f}'
+                parts.append('<div class="pair"><span>' + escape(variant)
+                             + '</span><div class="bar">' + bar + '</div><span>'
+                             + escape(label) + '</span></div>')
+            parts.append('</div>')
+    parts.append('<div class="panel"><strong>比較上の注意</strong><small>'
+                 'アプリ本体と子プロセスの計測値。共通Pythonバックエンドは除外。'
+                 '本測定でもUI操作速度・描画方式・起動条件の影響は残る。'
+                 'FPS、GPUメモリ、入力遅延、コールド起動時間は測定していない。'
+                 '性能の順位を保証するものではない。</small></div></html>')
+    Path(path).write_text('\n'.join(parts), encoding='utf-8')
+
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('csv_files', nargs='+')
     parser.add_argument('--json', help='Optional JSON report path')
+    parser.add_argument('--html', help='Optional offline Japanese HTML graph report')
     args = parser.parse_args()
     summary = summarize(load(args.csv_files))
     print('NOTE: summed Working Set double-counts shared pages; results are not unique physical memory.')
@@ -96,6 +153,8 @@ def main():
         print('{variant:5} {phase:8} #{trial} {component:7} samples={samples:2} private median={median_private_mib:8.2f} MiB peak={max_private_mib:8.2f} MiB summed-WS median={median_sum_working_set_mib:8.2f} MiB'.format(**item))
         if item['avg_cpu_pct_one_core'] is not None:
             print('    CPU estimate (100% = one logical core): {avg_cpu_pct_one_core:.2f}%, normalized machine share ~{avg_cpu_pct_machine:.2f}%'.format(**item))
+    if args.html:
+        write_html_report(summary, args.html)
     if args.json:
         Path(args.json).write_text(json.dumps({'samples': summary, 'caveats': [
             'Working Set sums can double count shared pages',
