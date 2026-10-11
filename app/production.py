@@ -7,6 +7,10 @@ from catalog import Catalog
 from library_index import LibraryIndex, TYPES
 
 
+class ScanBusyError(ValueError):
+    """A mutation should be retried after the atomic scan completes."""
+
+
 class ProductionCatalog(Catalog):
     def __init__(self, path):
         # Never reinterpret an existing fictional demo database as a real library.
@@ -62,7 +66,7 @@ class ProductionCatalog(Catalog):
 
     JOIN = (' FROM items i JOIN item_locations m ON m.item_id=i.id '
             'JOIN library_locations l ON l.id=m.location_id ')
-    FIELDS = 'i.*,l.root_id,l.relative_path,l.status AS availability,l.size_bytes'
+    FIELDS = 'i.*,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns'
 
     def search(self, query='', kind='', view='all', page=0, limit=60):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
@@ -91,13 +95,31 @@ class ProductionCatalog(Catalog):
         if row is None: raise KeyError(item_id)
         return self.item(row)
 
+    def _require_idle(self):
+        if self._worker and self._worker.is_alive():
+            raise ScanBusyError('Scan in progress; retry after it completes')
+
+    def update(self, ids, changes):
+        # Share the launch guard so a scan cannot start between the check and
+        # metadata commit. Fail promptly rather than waiting on SQLite's writer.
+        with self._guard:
+            self._require_idle()
+            return super().update(ids, changes)
+
+    def set_excludes(self, root_id, patterns):
+        with self._guard:
+            self._require_idle()
+            return self.index.set_excludes(root_id, patterns)
+
     def add_root(self,path,excludes=None):
         if not isinstance(path,str) or not path or not Path(path).is_absolute():
             raise ValueError('Choose an absolute folder path')
         source=Path(path).resolve()
         if self.path.resolve().is_relative_to(source):
             raise ValueError('The library must not contain the application database')
-        return self.index.add_root(path,excludes)
+        with self._guard:
+            self._require_idle()
+            return self.index.add_root(path,excludes)
 
     def scan_state(self):
         with self.connect() as db:

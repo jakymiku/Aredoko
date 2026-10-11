@@ -5,11 +5,14 @@ import secrets
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 from urllib.parse import urlparse
-from production import ProductionCatalog
+from production import ProductionCatalog, ScanBusyError
+from previews import PreviewReader, PreviewUnavailable, PreviewBusyError
+import zipfile
 from server import handler_for
 
 def production_handler(catalog,token):
     base=handler_for(catalog,token)
+    previews=PreviewReader(catalog)
     class Handler(base):
         def do_GET(self):
             if not self.valid_host(): return self.send(403,{'error':'Invalid host'})
@@ -20,12 +23,35 @@ def production_handler(catalog,token):
             if path.startswith('/api/library'):
                 if self.headers.get('X-Aredoko-Token')!=token:
                     return self.send(403,{'error':'Invalid session'})
+                if path.startswith('/api/library/preview/'):
+                    try:
+                        data,mime=previews.read(int(path.rsplit('/',1)[1]))
+                        return self.send(200,data,mime)
+                    except PreviewBusyError:
+                        return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,zipfile.BadZipFile,RuntimeError,NotImplementedError):
+                        return self.send(404,{'error':'Preview unavailable'})
+                    except ValueError:
+                        return self.send(400,{'error':'Invalid item'})
                 if path=='/api/library/roots': return self.send(200,{'items':catalog.index.roots()})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
             return super().do_GET()
 
         def do_POST(self):
+            if self.path=='/api/items/update':
+                origin=f'http://127.0.0.1:{self.server.server_port}'
+                if not self.valid_host() or self.headers.get('Origin')!=origin or self.headers.get('X-Aredoko-Token')!=token:
+                    return self.send(403,{'error':'Invalid session'})
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 0<length<=32768: return self.send(413,{'error':'Invalid body size'})
+                    body=json.loads(self.rfile.read(length))
+                    if not isinstance(body,dict): raise ValueError('Expected object')
+                    return self.send(200,catalog.update(body.get('ids'),body.get('changes')))
+                except ScanBusyError: return self.send(409,{'error':'スキャン中です。完了後に保存し直してください。編集内容は保持されます。'})
+                except (ValueError,TypeError): return self.send(400,{'error':'Invalid update'})
+                except KeyError: return self.send(404,{'error':'Item not found'})
             if not self.path.startswith('/api/library/'):
                 return super().do_POST()
             origin=f'http://127.0.0.1:{self.server.server_port}'
@@ -41,11 +67,11 @@ def production_handler(catalog,token):
                     return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'))})
                 if self.path=='/api/library/excludes':
                     # Avoid racing the index transaction while scanning.
-                    if catalog._worker and catalog._worker.is_alive(): raise ValueError('Wait for the scan to finish')
-                    return self.send(200,{'excludes':catalog.index.set_excludes(body.get('root_id'),body.get('patterns'))})
+                    return self.send(200,{'excludes':catalog.set_excludes(body.get('root_id'),body.get('patterns'))})
                 if self.path=='/api/library/scan': return self.send(200,catalog.start_scan(body.get('root_id')))
                 if self.path=='/api/library/cancel': return self.send(200,catalog.cancel_scan())
                 return self.send(404,{'error':'Not found'})
+            except ScanBusyError: return self.send(409,{'error':'Wait for the scan to finish'})
             except (ValueError,TypeError): return self.send(400,{'error':'Invalid request: check folder, exclusions or scan state'})
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})

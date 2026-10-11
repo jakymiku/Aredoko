@@ -79,3 +79,8 @@
 - 実装HEAD: `eb461f0`（起動骨格 `acfb0c2`）。この追記のみの後続コミットを最終HEADとしてpush。
 - [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5) 作成済み。base: `feat/gui-framework-comparison-20261010`。未マージ。
 - テスト用GUIとバックエンドは検証終了後に停止。通常起動は `pwsh -File tools/start-winui.ps1`。
+
+### 次の段階（開始）
+- 開始HEAD `4de6c67`、作業ツリーcleanを確認。既存Draft PR #5の製品ブランチで続行。
+- 画像/CBZ/ZIPのサムネイル縦切りと基盤の競合修正を実装中。追加依存なし。元素材は読み取りのみ、ZIP展開保存なし。私物スキャンなし。
+- スキャン中の保存は即座に409を返して編集を保持する方針。サムネイルは読み取り8MiB、デコード16MP、同時2、256px、メモリキャッシュ64件を上限とする。
