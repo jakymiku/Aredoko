@@ -182,6 +182,43 @@ internal static class Program
         => Find(idOrName) ?? throw new InvalidOperationException(
             $"操作対象「{idOrName}」がアクセシビリティツリーにありません。tree.txt を確認してください");
 
+    // React's <label> and its nested <textarea> can share the same accessible
+    // name. FindFirst(name) may resolve to the label, which cannot take focus.
+    // Only return an actual, enabled and focusable text-entry UIA control.
+    // WinUI TextBox also advertises ControlType.Edit.
+    private static bool IsUsableEdit(AutomationElement item)
+    {
+        try
+        {
+            var c = item.Current;
+            return c.ControlType == ControlType.Edit
+                && c.IsKeyboardFocusable && c.IsEnabled && !c.IsOffscreen;
+        }
+        catch (ElementNotAvailableException) { return false; }
+    }
+
+    private static AutomationElement FindEditRequired(string idOrName)
+    {
+        var identifier = new OrCondition(
+            new PropertyCondition(AutomationElement.AutomationIdProperty, idOrName),
+            new PropertyCondition(AutomationElement.NameProperty, idOrName));
+        for (var retry = 0; retry < 15; retry++)
+        {
+            var named = Window.FindAll(TreeScope.Descendants, identifier);
+            foreach (AutomationElement candidate in named)
+            {
+                if (IsUsableEdit(candidate)) return candidate;
+                // For React's nested <label><textarea>, walk the associated
+                // descendants instead of treating the label as an input.
+                foreach (var child in Descendants(candidate))
+                    if (IsUsableEdit(child)) return child;
+            }
+            Thread.Sleep(100);
+        }
+        throw new InvalidOperationException(
+            $"編集対象「{idOrName}」に対応するフォーカス可能なテキスト入力欄がありません。UIA tree.txtを確認してください");
+    }
+
     private static string NameOf(AutomationElement e)
     {
         try { return e.Current.Name ?? ""; }
@@ -267,6 +304,9 @@ internal static class Program
 
     private static void Type(AutomationElement target, string value)
     {
+        if (!IsUsableEdit(target))
+            throw new InvalidOperationException(
+                $"操作対象「{NameOf(target)}」は、フォーカス可能なテキスト入力欄ではありません");
         Activate();
         target.SetFocus();
         Thread.Sleep(70);
@@ -287,14 +327,14 @@ internal static class Program
 
     private static void ClearQuery()
     {
-        Type(FindRequired(QueryLabel), "");
+        Type(FindEditRequired(QueryLabel), "");
         Thread.Sleep(350);
     }
 
     private static void SearchOnce()
     {
         Attempts++;
-        Type(FindRequired(QueryLabel), "雨の街");
+        Type(FindEditRequired(QueryLabel), "雨の街");
         Thread.Sleep(450); // both UIs debounce search by ~220ms
         VerifyListHasRows();
         var rows = FindRows();
@@ -447,7 +487,7 @@ internal static class Program
         var original = GetOriginalAsync(1).GetAwaiter().GetResult().tags;
         // On Tauri both the tag field and Save button exist only after
         // selection. Validate them here, once the detail pane is populated.
-        var tag = FindRequired(TagLabel);
+        var tag = FindEditRequired(TagLabel);
         var save = FindRequired(SaveLabel);
         var before = string.Join(", ", original);
         var marker = "aredoko_auto_test";
@@ -480,7 +520,7 @@ internal static class Program
             try
             {
                 var c = node.Current;
-                items.Add($"{c.ControlType.ProgrammaticName} | {c.AutomationId} | {c.Name} | visible={!c.IsOffscreen}");
+                items.Add($"{c.ControlType.ProgrammaticName} | {c.AutomationId} | {c.Name} | visible={!c.IsOffscreen} | focusable={c.IsKeyboardFocusable} | enabled={c.IsEnabled}");
             }
             catch (ElementNotAvailableException) {}
         }
