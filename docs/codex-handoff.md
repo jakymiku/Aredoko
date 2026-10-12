@@ -19,6 +19,8 @@
 3. Laya日本語gate再評価、既定無効維持。reader/Komgaは別slice。
 
 
+今回のフォルダ検索・ページ選択・全文パスの実装/テスト/仕様commitは **2c1b167310574c6b6d9530d01502d19d6f703ccd**。このSHA追記は同commitからの文書だけの後続commit。通常push後の最終HEAD・CIの読み取り観測はGit/PR head・PR説明で確認する。Draft未マージ・comparison baseを維持。
+
 ---
 
 ## 最新：5万件metadata・258フォルダのCPUと実GUI（2026-10-13）
