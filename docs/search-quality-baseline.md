@@ -55,3 +55,5 @@ primary=2、関連候補=1、その他=0の固定graded qrels。検索結果に�
 visual qrelsのprimary PNG4枚を目視し、色/形/白背景がqueryの定義と合うことを確認。PNG8/CBZ6すべての美観や実表紙の品質を目視評価したとは扱わない。
 
 次は入力として不足している情報と混合順位の観測を分けて評価する。ここで見た20文は今後development probesとして扱い、新しい改善候補を判定する際は別に凍結したholdoutと、text/coverのどちらに根拠があるかを記録する。種類選択や既存画像・表紙モードは手動で使えるが、自動mode/routingはこの結果だけで有効化しない。
+
+2026-10-13後続：新規入力を推論前に固定した[holdout v2](search-quality-holdout.md)を追加。v1の入力/SHA/順位観測は変更しない。v1/v2とも今後development evidenceであり、新しい改善の判定には別の固定入力が必要。

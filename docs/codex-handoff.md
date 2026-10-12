@@ -1,8 +1,21 @@
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
-## 作業中：text/pixel根拠別の固定holdout v2（2026-10-13）
+## 最新：text/pixel根拠別の新規固定評価 holdout v2（2026-10-13）
 
-開始HEAD **7d7facc749103eaf7798a3d0345831fc4163fd33**。別の30素材/30問を推論前に固定し、CPU契約と目視確認後にcommitしてからCUDA測定予定。結果・順位変更はまだない。旧品質v1/GUI/モデルを維持し、Layaは使わない。詳細は[search-quality-holdout.md](search-quality-holdout.md)。
+開始HEAD **7d7facc749103eaf7798a3d0345831fc4163fd33**。同じfeature/Draft PR #5/comparison baseを維持。入力/コードをGPU観測前commit **82427c528fcc273edb601cd62f69fe3c3251ab5e**で凍結し、結果後にqrels/queries/items・モデル・順位・GUIを変更しない。提出SHAは後続記録/Git/PR headで確認。
+
+- v2 SHA256 **021e0984797727c6a79c97fb588165ce49db7c4e12fcdb1f265e02a7793b08fa**、30素材（PNG12/CBZ6/灰SVG8/無音WAV4）・日本語30問・220相関行/160query推論。全18unique coversを推論前に目視。metadata/pixel/一致/誤タグ/filename/no-answerを別集計。external statistical holdoutや製品quality gateではなく、以後developmentとして扱う。
+- 実CUDA `search-holdout-01` **runtime PASS / 258checks / index27.155秒 / document30/image18/query160**。元bytes/mtime/hash、frozen manifest/Git blob、検索前後vectors不変、所有handles3件全終了。私物/モデルDL/OS変更/Laya/GUI操作なし。
+- 種類なしmetadata text12/12・combined10/12、pixel cover6/6・combined0/6・text0/6。一致4問はAI各4/4。kind指定metadata combined11/12だがpixel combined0/6。誤タグのpixel検索cover2/2・combined1/2、分類タグ検索text2/2・combined0/2。no-answerでもAIは最近傍候補を返すためconfidence/存在保証/閾値は未実装。詳細は[search-quality-holdout.md](search-quality-holdout.md)。
+- 新規CPU5 PASS / 0.570秒、旧quality CPU5 PASS / 0.187秒、全Python155 PASS / 106.705秒、Core29 PASS、Release PASS / 40.75秒 / errors0・既存IL2104 2warnings。syntax/CLI/diff PASS。GUI source/nativeは今回変更/再実行なし、旧keyboard partial/DPI等の境界は維持。
+- CLIは `--suite holdout-v2`、既定baseline-v1とv1 SHA/入力/結果を維持。任意のmanifest/private path入力はなし。評価DB/メディア/結果/weights/handle IDsはignoredでcommitしない。CI manual-only・Draft未マージ。
+
+### 次の3手
+
+1. GUIでtext-onlyを明示選択できるmodeを設け、混合/画像との違いを説明しnative検証する。自動routing/既定順位変更なし。
+2. v1/v2以外の根拠を持つ新規固定入力で次の品質判断を行い、観測した小図形へfusionを過適合させない。
+3. Laya日本語gateは別実験で再評価し既定無効維持。reader/Komga/高DPI/全面keyboardは別slice。
+
 
 ---
 
