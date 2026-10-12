@@ -98,6 +98,48 @@ class AISearch:
         self.inference=threading.Lock()
         self._closed=False
         self._last_activity=time.monotonic()
+        self._idle_seconds=0
+        self._index_pause_ms=0
+        self._idle_stop=threading.Event()
+        self._idle_wake=threading.Event()
+        self._idle_thread=None
+
+    def configure(self,idle_release_seconds=0,index_pause_ms=0):
+        """Runtime resource policy, independent of vector-space identity."""
+        if type(idle_release_seconds) is not int or not 0<=idle_release_seconds<=3600:
+            raise ValueError('Idle release must be 0..3600 seconds')
+        if type(index_pause_ms) is not int or not 0<=index_pause_ms<=2000:
+            raise ValueError('Index pause must be 0..2000 milliseconds')
+        with self.guard:
+            if self._closed: raise AIUnavailable('AI is closing')
+            self._idle_seconds=idle_release_seconds
+            self._index_pause_ms=index_pause_ms
+            if idle_release_seconds and self._idle_thread is None:
+                self._idle_thread=threading.Thread(target=self._idle_loop,name='aredoko-ai-idle',daemon=True)
+                self._idle_thread.start()
+            self._idle_wake.set()
+        return self.resource_policy()
+
+    def resource_policy(self):
+        return {'idle_release_seconds':self._idle_seconds,'index_pause_ms':self._index_pause_ms}
+
+    def _idle_loop(self):
+        """Cancelable monotonic timer; release() shares the inference guard."""
+        while not self._idle_stop.is_set():
+            self._idle_wake.wait(timeout=0.2)
+            self._idle_wake.clear()
+            if self._idle_stop.is_set() or not self._idle_seconds:
+                continue
+            if not bool(getattr(self.encoder,'resident',False)):
+                continue
+            if time.monotonic()-self._last_activity < self._idle_seconds:
+                continue
+            try:
+                self.release()
+            except (AIBusy,AIUnavailable):
+                # The next tick checks again. Never interrupt a live query/job.
+                continue
+
     def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
@@ -144,7 +186,8 @@ class AISearch:
                 'device':getattr(self.encoder,'device','') if resident else '',
                 'limit':MAX_ITEMS,'model':self.profile.label,'model_id':self.profile.model_id,'profile':self.profile.key,
                 'modalities':list(self.profile.modalities),'dimension':self.profile.dimension,'ranking':self.ranking,
-                'telemetry':getattr(self.encoder,'telemetry',{}) if resident else {}}
+                'telemetry':getattr(self.encoder,'telemetry',{}) if resident else {},
+                'resource_policy':self.resource_policy()}
     def start(self,limit=MAX_ITEMS):
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS: raise ValueError('Invalid index limit')
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。setup-ai.ps1を実行してください。')
@@ -195,6 +238,11 @@ class AISearch:
                         if state['processed']%PROGRESS_INTERVAL==0:
                             with self.guard:
                                 self.store.save_state({**state,'state':'cancelling' if self.cancel.is_set() else 'running'})
+                        # Load-shedding is optional and cancelable. Not a GPU
+                        # utilization/FPS limit. Never pace interactive search.
+                        if state['processed']<len(ids) and self._index_pause_ms:
+                            if self.cancel.wait(self._index_pause_ms/1000):
+                                break
                 state['state']='cancelled' if self.cancel.is_set() else 'complete'
         except Exception as ex:
             state['state']='failed';state['error']='AI索引を作成できませんでした（'+type(ex).__name__+'）。ローカルログを確認してください。'
@@ -256,6 +304,10 @@ class AISearch:
             if self._closed:return
             self._closed=True
             self.cancel.set()
+            self._idle_stop.set()
+            self._idle_wake.set()
+        if self._idle_thread and self._idle_thread is not threading.current_thread():
+            self._idle_thread.join()
         if self.worker and self.worker.is_alive():
             self.worker.join()
         with self.inference:
