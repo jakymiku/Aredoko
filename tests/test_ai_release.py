@@ -104,7 +104,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(self.encoder.loads,2)
         self.build()
         self.assertEqual(self.encoder.documents,old_documents)
-        self.assertEqual(before,self.ai.store.path.read_bytes())
+        with self.ai.store.connect() as db:
+            self.assertEqual(before,db.execute("SELECT item_id,revision,modality,vector FROM ai_vectors ORDER BY item_id,modality").fetchall())
     def test_busy_search_and_build_returns_promptly(self):
         self.build()
         self.encoder.block=True
