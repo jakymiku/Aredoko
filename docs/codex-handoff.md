@@ -290,3 +290,19 @@
 - 実装/検証記録HEAD **1945aa7**（1945aa76410a2639851b6b5ea2420f97714b6722）。後続はこの提出文書のみ。同じfeature/Draft PR #5へ通常push、base維持・未マージ。
 - 未到達の編集/再起動は別native軽量バッチで完了。最終ui-polish-02は32 checks PASS、4回正常終了、生成元hash不変、6 PNG目視。過去の全モデルバッチFAILと今回のeditor/layout PASSを分けて記録。
 - Python96/C#13/WinUI Release（既存IL2104 2件）/py_compile/diff PASS。Light/HC/高DPIと新AIエラー案内操作は次回。私物/AppData/モデル/依存変更なし、所有test GUI/API/worker停止済み。
+
+
+### テーマとAIエラー復帰の確認を開始（2026-10-12）
+- 開始HEAD 988d55e/clean、AGENTS/Issue #4/PR #5のDraft/baseを確認。次の作業としてLight/Darkと実AI非対応エラー→文字検索復帰を検証する。
+- Windows全体のテーマ/Contrast/DPI設定は変更しない。限定したprocess-local UITheme起動指定を追加し通常はSystemへ追従。実DPI/Contrastはread-onlyで記録し、未実行の高DPI/HCを成功扱いしない。
+- generated17と隔離DB/settingsだけ、追加download/installなし。実機テスト/build/reviewの結果は後続に追記する。
+
+
+### テーマ・AIエラー復帰の結果（2026-10-12）
+- 開始988d55e、同じfeature/Draft PR #5/base。実装HEADは提出節に記録。限定のUITheme System/Light/Darkをwinapp --argsで渡し、実プロセスargsからWindowRoot.RequestedThemeへ適用。既定System追従。環境変数/OnLaunched.Arguments方式は実機で届かず削除。公式注意書きをdocs/ui-polish.mdにリンク。
+- 新--appearance-checksはeditor-only必須。text-only profileの実cover503をLight/Dark、missing profileの実意味検索失敗をLightで確認し、中央案内/件数ページ消去/前後disabled/文字検索復帰1件/InfoBar子Title・Message成功をassert。モデル推論なし。既存favorite/dirty/native再起動も再確認。
+- 01 FAIL（二重候補）、02 FAIL（InfoBar本体のvalueがない）、03 **UIA68 checks PASS / visual FAIL**。候補を所有PopupHost HWNDへ限定し、InfoBar実子テキストを検査。9 PNG全目視、700×620本体の明暗/詳細drawer/案内は読めるが、16-Light-dialogは暗い。03/result.jsonはUIA pass=trueを保持し、別visual-review.jsonでvisual_pass=falseを保存。
+- 全3ContentDialog（dirty/roots/AI）へRequestedTheme=ActualThemeを追加。**最後の表示修正はbuild/code reviewのみ、native未再実行。** skill winui-ui-testingは “Maximum **two** fix-and-rerun cycles; then report remaining failures.” と指定、今回は2回に達し停止。68項目で見栄え合格/全体完了とはしない。
+- Python96/C#13/最終x64 SelfContained Release PASS（旧IL2104 2件）。py_compile/launcher構文/diff確認。WinUI review:新APIはrestored projectで確認、theme resources/自然なnative Items/60paging/async・dirty/JSON DOM/認証/index identityを維持。analyzerなし。
+- read-only DPI96/HC=false、OSテーマ/拡大率/Contrast設定無変更。高DPI/HC/reader/AOT/配布/1TB未検証。actual_model=false/profile_verification=not_run、重み/依存取得/私物走査/個人AppData設定変更なし。既存アプリ診断ログは使用。生成17元hash不変、所有6GUI正常終了/cleanup warningなし、API/GPUworkerなし、生成profileのみcleanup。
+- **次の3手:** (1) python tools/test_ai_profile_ui.py --editor-only --appearance-checks --output data/ai-ui/appearance-04 で修正後Light/Dark dialogを実画面確認（04未実行、存在時は新suffix）、(2) 2,000件超をcheckpoint/増分/resource制限で段階拡張し生成大規模集合で測定、(3) 明示実サンプル評価と用意された高DPI/HC環境での確認。モデル段階やGPU導入を作り直さない。

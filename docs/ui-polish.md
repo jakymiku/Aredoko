@@ -44,10 +44,38 @@ dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -
 
 Python96 tests、C#13 checks、WinUI Release PASS。従来のSDK IL2104警告2件は抑制していない。native screenshot/UI treeは実行した範囲の証拠で、WinUI analyzerは未導入。
 
-## まだ確認していないこと
+## この段階で未確認だったこと（後続確認は下記）
 
 今回のnativeはdark/通常DPI。Light/HighContrast/高DPI、スクリーンリーダー、ピッカー全体、Native AOT/配布、1TB性能は未確認。数値的な色コントラスト合格も主張しない。標準のテーマ資源を使い、今回の実画面ではラベル/警告が読めることを確認した。
 
 AI失敗時の案内変更はbuild/code reviewまでで、非対応画像modeの実AI操作は今回未実行。全モデル切替/GPUバッチも今回再実行していない。前回profile-picker-06はモデル段階到達・全体FAILとして記録を保持し、今回の別バッチで残った編集/再起動を検証した。モデル結果は[model-profiles.md](model-profiles.md)を参照。
 
 次はtheme/DPIとAIエラー復帰を実機確認。その後、2,000件超のcheckpoint/増分/resource制限と、明示選択された小さな実サンプル評価を進める。本文/OCR/読書/Komgaは別の実装段階。
+
+
+## 続行: 明暗テーマと実AIエラー復帰（2026-10-12）
+
+開発用launcherへ `-UITheme System|Light|Dark` を追加した。起動したアプリのroot RequestedThemeだけを変え、既定SystemではWindowsに追従する。OS設定/保存設定/個人ライブラリには影響しない。明暗の画面比較を再現する指定で、製品GUIの永続的なテーマ設定ではない。
+
+```powershell
+pwsh -File tools/start-winui.ps1 -Database <dedicated-test-db> -AISettings <dedicated-test-settings> -UITheme Light
+python tools/test_ai_profile_ui.py --editor-only --appearance-checks --output data/ai-ui/appearance-04
+```
+
+appearance-04は**次回の再確認用で未実行**。存在するoutputを再使用しない。
+
+Windows App SDKではOnLaunchedのArgumentsは非対応で、[公式のLaunchActivatedEventArgs.Argumentsの注意書き](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.launchactivatedeventargs.arguments)に従いEnvironment.GetCommandLineArgsから指定を読む。値はLight/Dark以外Systemに戻す。最初の環境変数方式もpackaged activationへ引き継がれなかったため削除し、winapp --argsで渡す。
+
+### 到達結果と未完部分
+
+- 最終native `appearance-03/result.json`: **UIA 68 checks PASS**、**visual-review.jsonはvisual_pass=false**。UIAだけのPASSを全体完了としない。
+- text-only実profileのcover非対応をLight/Dark両方、missing profileの意味検索エラーをLightで検証。実503→具体的な中央案内、件数/ページの消去、前後ボタン無効、文字検索で実1件/InfoBar成功子テキストへ復帰。favorite保存/dirty keep/再起動も再確認。
+- 700×620のエラー案内/操作、AI dialog候補/警告/閉じるboundsを実UIAで確認。9 PNGを全目視。Light/Dark本体、詳細drawer、エラー文は読みやすい。エラーPNGはCLI合成のCtrl+F tooltipを含む。
+- **16-Light-dialog.pngはLight画面上でDark dialogだった。** 全3dialogへRequestedTheme=ActualThemeを追加してRelease build/code reviewを確認したが、この最後の修正はnative未再実行。高DPI/HCは未確認。各phaseのread-only記録はDPI96/HighContrast=false。
+- 6回正常終了、cleanup warningなし、生成元開始/終了hash一致、所有test GUI/API/workerなし。generated17/専用DB/settingsだけ。重み/依存取得・GPU推論・私物走査・個人AppData設定変更なし。通常のアプリ診断ログは使用した。
+- appearance-01はUIA二重候補でFAIL、02はInfoBar本体のvalue待ちでFAIL。実popup HWNDとInfoBar子Title/Messageの判定へ修正し03の操作は成功。01/02は要求Lightでも本体Darkで、03のプロセス引数からLight表示を確認した。失敗履歴を保持する。
+- Python96/C#13/最後のWinUI x64 SelfContained Release PASS（既存IL2104 2件）、py_compile/launcher構文/diffチェック。最後のdialog修正もビルド済み。Sandbox/analyzerなし、reader/AOT/配布/1TB未検証。
+
+再試行を止めた根拠: winui-ui-testing/SKILL.mdは “Maximum **two** fix-and-rerun cycles; then report remaining failures.” と指定する。今回01→02→03で2回を使用したため、新しいdialog修正の目視再確認を最優先の残件として記録した。操作68項目を視覚合格に転用しない。
+
+次は修正後のLight/Dark dialogを同じlocal targetで新規outputへ再確認。その後2,000件超の索引をcheckpoint/増分/resource制限込みで拡張する。高DPI/HCは用意された環境で確認し、ユーザーのOS設定を変更して検証範囲を埋めない。

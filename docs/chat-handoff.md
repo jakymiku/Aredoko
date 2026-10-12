@@ -3,19 +3,21 @@
 更新: 2026-10-12。旧Web試作段階の引継ぎを置き換える。**製品GUIはWinUI 3に決定済みで、EmbeddingGemma 2検索まで実装・実GPU検証済み。最初から作り直さない。**
 
 
-## 最新の再開地点（2026-10-12・編集回帰完了とUI整理）
+## 最新の再開地点（2026-10-12・テーマとAIエラー復帰）
 
-aee9421から続行し、前回未到達だったdirty保持とfavoriteのnative再起動を別の軽量バッチで確認した。チャット側f4273ff、launcher、モデル選択、旧索引互換を保持。今回はWinUIの画面配置と案内、nativeテストを変更した。実装/検証記録HEADは1945aa7。後続は提出文書で、最新HEADは実際のGitを確認すること。
+開始HEAD 988d55e。同じfeature/Draft PR #5/base、チャット側f4273ffとモデル/旧索引互換を保持。実装HEADはdocs/codex-handoff.md末尾と実際のGitを確認すること。
 
-**最新の軽量nativeバッチはPASS:** `profile-editor-02` は11 checks、UI整理後の `ui-polish-02` は32 checks。保存表示とAPI反映を待ち、お気に入り保存→未保存タグを残したまま編集継続→再起動後の実checkbox onとAPI保存値を確認した。1200×820の一覧/タイル、700×620の操作欄、不足モデルdialogの警告/閉じるを実UI treeで検査し、最終6 PNGをすべて目視。4回の所有GUI終了は正常、cleanup warningなし、生成元ファイルの開始/終了hash不変。
+開発起動の `-UITheme System|Light|Dark` を追加した。Windows全体の設定を変えず、アプリのrootだけへ適用する。既定Systemで通常のテーマ追従を維持し、保存設定は追加しない。WinUIのOnLaunched.Argumentsは非対応なので、実プロセスのcommand-line argumentsから限定した値だけを読む。
 
-検索欄の見出し/アクセントボタン、件数の位置、行タイトルと補助情報の強弱を整理。作品を選ぶまで詳細paneを閉じ、狭いwindowでは操作群を二段に配置した。AI設定dialogをスクロール可能にし、AI検索失敗時は名前・タグ検索やAI設定を案内する。最後の案内変更の実AIエラー操作は今回未実行。
+**native appearance-03はUIA 68 checks PASS、視覚レビューはFAIL。** 生成17素材/専用DB/settingsで、文字専用profileの実cover非対応エラーをLight/Dark両方、missing profileの実意味検索エラーをLightで再現。中央の具体的案内、古い件数/ページの消去、前後ボタン無効、名前・タグへの復帰/1件の実作品表示/InfoBar成功文まで確認した。favorite保存/dirty keep/native再起動も再確認。9 PNGを全目視し6回正常終了/cleanup warningなし/元ファイルhash不変。
 
-**検証範囲を混同しない:** この軽量バッチは `actual_model=false / profile_verification=not_run`。前回 `profile-picker-06` はモデル切替段階に到達したが全体FAILの歴史を保つ。今回の別バッチで残った編集段階を確認できたのであって、全モデル/GPU通しを再実行してPASSにしたわけではない。
+目視でLight画面のAI dialogだけDarkになる不一致を発見し、全3 ContentDialog（未保存確認/フォルダ管理/AI設定）に `RequestedTheme=ActualTheme` を追加した。**最後の表示修正はRelease build/code reviewまでで、native未再実行。** winui-ui-testing skillの最大2回fix/rerunへ達したため、残件として記録。68項目のUIA成功をテーマ完了と扱わない。ignored visual-review.jsonはvisual_pass=false。
 
-Python96/C#13/x64 SelfContained Release PASS（既存IL2104 2件）。追加取得/依存導入/私物走査/個人AppData変更なし。所有test GUI/API/worker停止、作成したtest profileのみcleanup。
+appearance-01は候補のUIA二重公開でFAIL、02はInfoBar本体に存在しない値を待ってFAIL（実復帰は画面/子Title・Messageに表示）。候補を所有PopupHost HWNDへ限定し、成功判定を実子テキストへ修正して03のUIAはPASS。01の環境変数、02のOnLaunched.Argumentsはテーマ指定が届かず、03でプロセス引数のLight/Dark本体表示を実確認した。過去failureを消さない。
 
-**次の3手:** ①Light/HighContrast/高DPIとAI非対応modeの案内・文字検索への復帰を実機で確認、②2,000件超の索引をcheckpoint/増分/resource上限込みで段階拡張、③ユーザーが明示選択した小さな実サンプルで検索品質を評価。実サンプル未指定の間は生成素材で進める。Layaは精度未達の実験APIのみ。詳細はdocs/ui-polish.md、docs/model-profiles.md末尾、docs/codex-handoff.md末尾。同じDraft PR #5/baseを維持。
+Python96/C#13/WinUI x64 SelfContained Release PASS（既存IL2104 2件）。actual_model=false/profile_verification=not_run、AI推論/重み取得なし。モデルcapabilityチェックは推論前に失敗する実APIで、CUDA索引/品質の再検証ではない。実DPIは96/HighContrast=false、OS設定変更なし。高DPI/HC/reader/配布/1TBは未確認。私物/個人AppData設定は変更せず、既存のアプリ診断ログは使用した。所有test GUI/API/workerなし、生成profileのみcleanup。
+
+**次の3手:** ① `--editor-only --appearance-checks` を新規outputへ実行しLight/Dark dialogの修正後実画面を最優先確認、②2,000件超をcheckpoint/増分/resource上限込みで段階拡張し生成大規模集合で測定、③明示実サンプル評価と用意された高DPI/Contrast環境での確認。私物サンプル未指定時は生成素材。Layaは実験APIのみ。詳細はdocs/ui-polish.md、docs/codex-handoff.md末尾。同じDraft PR #5/baseを維持。
 
 ## そのままチャットへ貼る依頼文
 
@@ -28,14 +30,14 @@ Draft PR: https://github.com/jakymiku/Aredoko/pull/5
 
 まず、このブランチのAGENTS.md、docs/chat-handoff.md、docs/codex-handoff.mdの最新節、Issue #4、PR #5を確認してください。mainや古いWeb試作の状態を現状と混同しないでください。
 WinUI 3製品MVP、EmbeddingGemma 2の曖昧検索、交換可能なモデルprofile、混合順位改善は実装済みです。Layaは精度不足のため明示実験APIだけで、GUIの自動切替や種類絞込みには使っていません。
-GUIモデルprofile選択と不足案内、dirty保護/favorite再起動回帰、小画面を含むUI整理は実装・確認済みです。最新ui-polish-02は32 checks PASSですが、AIモデルをロードしない軽量バッチです。前回profile-picker-06の全体FAILと到達済みモデル段階の記録は保持してください。次はLight/HighContrast/高DPIとAIエラーからの復帰確認、その後2,000件超索引と明示サンプル評価です。既存の起動時profile選択・旧索引互換を保ち、動作中のhot swapや自動ダウンロードは追加しないでください。
+GUIモデルprofile選択、dirty/favorite再起動、小画面UI、実AI非対応/不足案内から文字検索への復帰は確認済みです。最新appearance-03はUIA68 checks PASSですが、Light dialogのテーマ不一致でvisual FAILです。全3dialogのRequestedTheme修正はビルド済み・native未再実行なので、まず --editor-only --appearance-checks を新しいoutputで実行し全PNGを見てください。その後2,000件超索引と明示サンプル評価へ進めてください。高DPI/HCは未確認でOS設定を勝手に変更しないでください。過去profile-picker-06全体FAILを消さず、起動時profile選択・旧索引互換を保ち、hot swap/自動ダウンロードは追加しないでください。
 既存資産・手動検索・タグ保存を維持し、実装できる環境なら必要なテスト、コミット、同じDraft PRの更新まで進め、進捗を引継ぎへ記録してください。直接編集やWindows実行ができない場合は、実コードに対応した変更ファイルか適用可能な差分と、PCで実行する検証手順を返してください。未実行のテストを成功と報告しないでください。
 非公開リポジトリを読めない場合はアクセスできないと明記し、ユーザーが共有するこのブランチのソースを使ってください。仕様だけから実装済みコードを想像して書き直さないでください。
 ```
 
 ## 現在のGit状態
 
-- 今回の実装/検証記録HEAD: `1945aa7`。開始HEADは `aee9421`。後続は提出文書のみで、最新HEADは実際のGitを確認すること。
+- 今回の開始HEAD: `988d55e`。最新実装/提出HEADはdocs/codex-handoff.md末尾と実際のブランチHEADを確認すること。
 - HEADブランチ: `feat/winui3-production-mvp-20261011`。
 - Draft PR [#5](https://github.com/jakymiku/Aredoko/pull/5)、base `feat/gui-framework-comparison-20261010`。未マージ。PR #1/#2/#3も保持し、mainへmerge・force-push・squashしない。
 - 引継ぎ開始時点はclean、機能作業の未コミット残りなし。テスト用API/GUI/GPU workerは停止済み。

@@ -26,9 +26,9 @@ from ai_profiles import DEFAULT_PROFILE
 from create_preview_fixture import create
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--editor-only',action='store_true',help='Run literal editor/dirty/restart checks without loading AI');parser.add_argument('--layout-checks',action='store_true',help='Also capture wide/narrow list/tile and missing-model dialog')
+    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--editor-only',action='store_true',help='Run literal editor/dirty/restart checks without loading AI');parser.add_argument('--layout-checks',action='store_true',help='Also capture wide/narrow list/tile and missing-model dialog');parser.add_argument('--appearance-checks',action='store_true',help='Also check Light/Dark error guidance and literal recovery without GPU loading')
     args=parser.parse_args()
-    if args.layout_checks and not args.editor_only:parser.error("--layout-checks requires --editor-only")
+    if (args.layout_checks or args.appearance_checks) and not args.editor_only:parser.error("--layout-checks/--appearance-checks require --editor-only")
     if os.name!='nt':raise RuntimeError('Native Windows only')
     target=args.output.resolve();target.mkdir(parents=True,exist_ok=False)
     media=create(target/'media')
@@ -40,6 +40,7 @@ def main():
     names={key:nonce+'-'+key+'.json' for key in ('text','missing','invalid')}
     profile_files=[];logs=[];backend=None;app_pid=None;hwnd=None;headers={}
     origin='http://127.0.0.1:8769';settings=target/'settings.json'
+    ui_theme='System'
     env=os.environ.copy();env['WINAPP_UI_WORKFLOW_ID']='aredoko-profile-'+nonce
     report={'target':'local','actual_model':not args.editor_only,'profile_verification':'not_run','pass':False,'checks':[],'screenshots':[]}
     def cli(*arguments):
@@ -88,6 +89,49 @@ def main():
         for id in ids:
             matches=[n for n in nodes if n.get('automationId')==id]
             check(name+' '+id+' fits',len(matches)==1 and not matches[0].get('isOffscreen') and matches[0]['x']>=root['x'] and matches[0]['y']>=root['y'] and matches[0]['x']+matches[0]['width']<=root['x']+root['width'] and matches[0]['y']+matches[0]['height']<=root['y']+root['height'])
+    def record_display(phase):
+        import ctypes
+        from ctypes import wintypes
+        user32=ctypes.WinDLL('user32',use_last_error=True)
+        user32.GetDpiForWindow.argtypes=[wintypes.HWND];user32.GetDpiForWindow.restype=wintypes.UINT
+        class HighContrast(ctypes.Structure):
+            _fields_=[('cbSize',wintypes.UINT),('dwFlags',wintypes.DWORD),('lpszDefaultScheme',wintypes.LPWSTR)]
+        contrast=HighContrast();contrast.cbSize=ctypes.sizeof(contrast)
+        user32.SystemParametersInfoW.argtypes=[wintypes.UINT,wintypes.UINT,ctypes.c_void_p,wintypes.UINT]
+        if not user32.SystemParametersInfoW(0x0042,contrast.cbSize,ctypes.byref(contrast),0):raise ctypes.WinError(ctypes.get_last_error())
+        dpi=user32.GetDpiForWindow(int(hwnd))
+        if not dpi:raise RuntimeError('Cannot read owned window DPI')
+        report.setdefault('display',[]).append({'phase':phase,'requested_theme':ui_theme,'dpi':dpi,'high_contrast':bool(contrast.dwFlags&1)})
+    def recovery_mode(option,label):
+        # A popup can also appear under main, duplicating its UIA items. Scope
+        # the operation to the unique observed popup HWND owned by this app.
+        ui('invoke','CmbSearchMode','--action','expand')
+        popup=[]
+        for _ in range(30):
+            windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+            popup=[w for w in windows if w.get('title')=='PopupHost']
+            if len(popup)==1:break
+            time.sleep(.1)
+        if len(popup)!=1:raise RuntimeError('Expected one owned recovery popup')
+        ui('wait-for',option,'-t','3000',window=str(popup[0]['hwnd']))
+        ui('invoke',option,'--action','select',window=str(popup[0]['hwnd']))
+        ui('wait-for','CmbSearchMode','--value',label,'-t','3000')
+        check('Recovery mode '+label,True)
+    def unavailable_search(option,label,name):
+        recovery_mode(option,label)
+        ui('set-value','TxtQuery','青い画像');time.sleep(.6);ui('invoke','BtnSearch')
+        ui('wait-for','TxtEmpty','--value','名前・タグ検索に切り替えるか','--contains','-t','5000');ready()
+        ui('wait-for','TxtCount','--value','—','-t','3000')
+        ui('wait-for','TxtPageNumber','--value','—','-t','3000')
+        ui('wait-for','BtnPrevious','-p','IsEnabled','--value','False','-t','3000')
+        ui('wait-for','BtnNext','-p','IsEnabled','--value','False','-t','3000')
+        check(name+' guidance and cleared pagination',True)
+        visible_controls(name,{'TxtEmpty','TxtQuery','CmbSearchMode','BtnSearch','TxtCount','TxtPageNumber','StatusBar'})
+        screenshot(name)
+        recovery_mode('ModeLiteral','名前・タグ')
+        literal();ui('wait-for','TxtCount','--value','1 件','-t','3000')
+        ui('wait-for','Title','--value','読込完了','-t','3000');ui('wait-for','Message','--value','名前・タグの文字検索。','-t','3000')
+        check(name+' literal recovery',True)
     def status():return api('/api/library/ai/status')
     def profiles():return api('/api/library/ai/profiles')
     def ready():
@@ -196,7 +240,7 @@ def main():
             try:
                 session=api('/api/session');headers={'X-Aredoko-Token':session['token'],'Origin':origin};break
             except urllib.error.URLError:time.sleep(.1)
-        launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build','--detach','--json'))
+        launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build','--detach','--json','--args','--ui-theme '+ui_theme.lower()))
         app_pid=int(launch['ProcessId'])
         for _ in range(50):
             windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
@@ -288,6 +332,26 @@ def main():
             start('layout-missing');resize(700,620);dialog()
             ui('wait-for','StartAIIndex','-p','IsEnabled','--value','False','-t','3000')
             visible_controls('13-small-dialog',{'CloseButton','AIProfileChoice','AIProfileWarning'});screenshot('13-small-missing-dialog');close_dialog();stop()
+        if args.appearance_checks:
+            for theme in ('Light','Dark'):
+                ui_theme=theme
+                settings.write_text(json.dumps({'version':1,'profile':'local:'+names['text']}),encoding='utf-8')
+                start('appearance-'+theme);record_display('appearance-'+theme);resize(700,620)
+                check(theme+' text-only available',status()['available'] and status()['modalities']==['text'])
+                # The production API rejects unsupported covers before encoder loading.
+                error=api('/api/library/ai/search',{'query':'青い画像','source':'cover'},expected=503)
+                check(theme+' real cover capability error','画像' in error['error'])
+                unavailable_search('ModeVisual','AI画像・表紙','14-'+theme+'-cover-error')
+                row=api('/api/items?q='+urllib.parse.quote('雨の夜'))['items'][0]
+                ui('invoke','Item'+str(row['id']),'--action','select');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','3000')
+                screenshot('15-'+theme+'-details');dialog()
+                visible_controls('16-'+theme+'-dialog',{'CloseButton','AIProfileChoice','AIProfileWarning'})
+                screenshot('16-'+theme+'-dialog');close_dialog();stop()
+            ui_theme='Light'
+            settings.write_text(json.dumps({'version':1,'profile':'local:'+names['missing']}),encoding='utf-8')
+            start('appearance-missing');record_display('appearance-missing');resize(700,620)
+            check('Missing profile unavailable for semantic search',not status()['available'])
+            unavailable_search('ModeSemantic','AI意味検索','17-Light-missing-error');stop()
         check('Generated source hashes unchanged',hashes=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in media.iterdir()})
         report['pass']=True
     except Exception as ex:

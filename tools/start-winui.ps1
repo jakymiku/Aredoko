@@ -1,5 +1,5 @@
 # Development launcher: no dependency installation, no media scanning.
-param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile,[string]$AISettings,[switch]$LayaIntent,[ValidateSet('max','mean-rrf')][string]$AIRanking='mean-rrf')
+param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile,[string]$AISettings,[switch]$LayaIntent,[ValidateSet('max','mean-rrf')][string]$AIRanking='mean-rrf',[ValidateSet('System','Light','Dark')][string]$UITheme='System')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $logDirectory = Join-Path $env:LOCALAPPDATA 'Aredoko/logs'
@@ -34,7 +34,7 @@ try {
         Start-Sleep -Milliseconds 200
     }
     if (-not $connected) { throw 'Backend connection timed out.' }
-    $result = & winapp run src/Aredoko.WinUI -c Release --arch x64 -p Platform=x64 -p SelfContained=true --detach --json
+    $result = & winapp run src/Aredoko.WinUI -c Release --arch x64 -p Platform=x64 -p SelfContained=true --detach --json --args ("--ui-theme "+$UITheme.ToLowerInvariant())
     if ($LASTEXITCODE -ne 0) { throw 'WinUI build/launch failed.' }
     $launch = ($result -join "`n") | ConvertFrom-Json
     if (-not $launch.ProcessId) { throw 'No application process returned.' }

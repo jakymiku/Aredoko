@@ -179,7 +179,7 @@ public sealed partial class MainPage : Page
         if(!Dirty)return true;
         dialogOpen=true;
         try {
-            var dialog=new ContentDialog {XamlRoot=XamlRoot,Title="変更を破棄しますか？",Content=active?.Title,PrimaryButtonText="変更を破棄",CloseButtonText="編集を続ける",DefaultButton=ContentDialogButton.Close};
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="変更を破棄しますか？",Content=active?.Title,PrimaryButtonText="変更を破棄",CloseButtonText="編集を続ける",DefaultButton=ContentDialogButton.Close};
             return await dialog.ShowAsync()==ContentDialogResult.Primary;
         }finally{dialogOpen=false;}
     }
@@ -267,7 +267,7 @@ public sealed partial class MainPage : Page
             timer.Tick+=async(_,_)=>{if(polling)return;polling=true;try{var state=await api.GetAsync("api/library/scan");var phase=state["state"]!.GetValue<string>();progress.Text=$"{phase} · {state["discovered"]} 件 {state["error"]}";scan.IsEnabled=phase!="running";rules.IsEnabled=phase!="running";add.IsEnabled=phase!="running";cancel.IsEnabled=phase=="running";}catch(Exception ex){progress.Text=ex.Message;}finally{polling=false;}};
             foreach(var element in new UIElement[]{list,folder,choose,exclusions,consent,add,rules,scan,cancel,progress})panel.Children.Add(element);
             await RefreshRoots();timer.Start();
-            var dialog=new ContentDialog {XamlRoot=XamlRoot,Title="フォルダ管理",Content=new ScrollViewer {Content=panel,MaxHeight=480},CloseButtonText="閉じる"};
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="フォルダ管理",Content=new ScrollViewer {Content=panel,MaxHeight=480},CloseButtonText="閉じる"};
             await dialog.ShowAsync();
         }catch(Exception ex){Failure(ex);}
         finally{timer.Stop();dialogOpen=false;try{if(!disposed){renderCancellation.Cancel();thumbnails.Clear();await LoadAsync();}}finally{transitions.Release();}}
@@ -377,7 +377,7 @@ public sealed partial class MainPage : Page
             var panel=new StackPanel {Spacing=12,MinWidth=320};
             foreach(var element in new UIElement[]{explanation,modelChoice,modelWarning,modelApply,modelFeedback,new TextBlock {Text="現在のAI索引",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},status,start,cancel})panel.Children.Add(element);
             await RefreshProfiles();await Refresh();timer.Start();
-            var dialog=new ContentDialog {XamlRoot=XamlRoot,Title="AI検索の準備",Content=new ScrollViewer {Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled},CloseButtonText="閉じる"};
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI検索の準備",Content=new ScrollViewer {Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled},CloseButtonText="閉じる"};
             await dialog.ShowAsync();
         }
         catch(Exception ex){Failure(ex);}

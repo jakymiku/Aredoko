@@ -113,7 +113,7 @@ ignored evidence: `data/ai-ui/profile-picker-04/05/06/result.json`（全体FAIL/
 個人AppData/私物ライブラリは無変更、download/installなし。05でcleanup例外により残った所有APIを確認して停止し、cleanupを修正。06終了後は所有GUI/API/embedding/Laya workerなし、作ったtest profileだけcleanup。補助read-only favorite監視はeditor-restart未到達のため終了し、成功証拠に含めない。
 
 
-## 最新: 残った編集/再起動回帰と小画面UI（2026-10-12）
+## 残った編集/再起動回帰と小画面UI（2026-10-12・当時の記録）
 
 aee9421から続行し、AIをロードしない `--editor-only` で前節の未到達部分を確認した。`profile-editor-02/result.json` は11 checks PASS。UI整理後 `--editor-only --layout-checks` の `ui-polish-02/result.json` は32 checks PASS。保存表示とAPI反映を待ち、favorite保存→dirty保持/DBタグ不変→再起動→UI checkbox on/API favorite=trueを確認した。生成17元ファイルの開始/終了hash一致。
 
@@ -122,3 +122,10 @@ aee9421から続行し、AIをロードしない `--editor-only` で前節の未
 このバッチは `actual_model=false / profile_verification=not_run`。前回profile-picker-06をPASSへ書き換えず、nativeモデル段階の履歴と今回の独立した編集PASSを分ける。全GPU/profile切替および新しいAIエラー文を伴う非対応modeの操作は今回再実行していない。Light/HighContrast/高DPI/readerも未確認。
 
 Python96/C#13/x64 SelfContained Release PASS（既存SDK IL2104 2件）。追加取得/依存導入/私物走査/個人AppData変更なし。作成した検証profileのみcleanup。モデルidentity/namespace/重み/worker/APIは変更していない。
+
+
+## 最新: 実非対応エラーからの文字検索復帰（2026-10-12）
+
+`appearance-03` のLight/Darkでtext-only profileのcover検索が実503/画像非対応文を返し、GUI中央の具体的な案内と古い件数/ページの消去、文字検索に戻した実1件と成功InfoBarを確認。missing profileの意味検索でも同じ復帰をLightで確認した。capability/availability判定は推論前なのでGPUモデルをロードしない（actual_model=false/profile_verification=not_run）。CUDA検索/全profile切替/別checkpointの追加検証ではない。
+
+UIA68項目はPASS、9 PNG目視でLight AI dialogのDark不一致が見つかり、視覚レビューはFAIL。全3dialogのRequestedTheme修正はRelease build済み、native未再実行。docs/ui-polish.md/chat-handoff.mdの最新節を参照し、次回まず新規outputで修正後dialogを確認すること。生成元hash不変、6回正常終了、所有test GUI/API/worker停止済み。重み/依存/モデルidentity/APIは無変更。
