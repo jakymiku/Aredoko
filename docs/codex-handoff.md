@@ -1,6 +1,37 @@
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
-## 2026-10-12最新：AI worker解放／リソース設定、引継ぎ開始HEAD 753ae518
+## 最新：Chat分を取り込み、AI解放GPU合格・GUI機能確認、表示検査は未完（2026-10-12）
+
+再開前ローカルHEAD `753ae518b58a2fb97d5e8cc0e353909396e76697`、Chat提出HEAD `e63a5f955459f29e1b6082d44ecc3b21b1a69189`。同じ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)、base `feat/gui-framework-comparison-20261010` を保持し、Chatの29コミットをfast-forwardで取り込んだ。以下は今回の新しい確認。旧GPU10k 126 checks / HTTP28は今回再実行していない。
+
+### 修正したこと
+
+- resource設定を保存してから動作中のpolicyへ反映する。壊れたJSONや書き込み失敗は409、動作中の設定を維持。profile/resourceのread-modify-writeを同じsettingsインスタンスのlockで直列化し、同時保存で片方が失われることを防ぐ（別プロセス間の排他を保証する設計ではない）。
+- idle timerの事前確認後に検索が完了したり設定が無効化された場合、inference/guard内でidle条件を再検査して誤解放を防ぐ。
+- WinUIの新ComboBoxに読み上げName/選択肢ID、設定パネルと固定行にUIA ID。保存中は選択を固定し、解放中のtimer更新でボタンを再有効化しない。モデル・catalog・vector identityを変更しない。
+
+### 実行した確認
+
+- `python -m unittest discover -s tests -v`: **117 tests PASS / 73.187秒**。保存失敗時のpolicy不変、profile/resource同時保存、idle条件再検査の回帰を追加。C#契約 **15 checks PASS**。
+- x64 SelfContained Releaseビルド **PASS**。既存のSDK/WinRT IL2104 **2 warnings**を保持、無効化していない。WinUI manual code review実施（async/dialog配線、JSON-DOM、token/Origin、native行、テーマ、操作ID）。WinUI専用analyzerは未導入のため未実行。日本語固定文言、多言語化/AOT/installerは今後。
+- `python tools/test_ai_release_gpu.py --output data/ai-ui/resource-gpu-02`: **30 checks PASS**。既存EG2既定text+cover/auto-bf16/768、生成17件、document17 / valid cover12 / damaged image skip1 / query4。手動解放→所有launcher/実worker終了→query再ロード、query guardを試験gateで保持した重複releaseの即時409、1秒idle自動解放→再ロード、source/vector hash不変、再索引なしを確認。所有process-instance handle **9件すべて終了**。
+- query再ロード **10.55秒 / 12.41秒**（手動後/idle後）、PyTorch peak allocated **931.8MiB**。これは総VRAM量でもゲームへの影響測定でもない。プロセス終了は実測したが、他アプリを含む総VRAM/物理メモリの減少量は測定していない。
+- `python tools/test_ai_profile_ui.py --output data/ai-ui/resource-native-02 --editor-only --appearance-checks --coverage-checks --resource-checks`: **機能の153 assertionsは通過**。Light/Dark、700×620px、DPI96/Contrast OFF。60秒/50ms保存、手動解放後のresident/device/telemetry消去・ボタン無効化、実CUDA再検索、restart後保存値復元とlazy unloaded状態、既存17件検索/dirty/favoritesを確認。**8回正常終了 / cleanup warningなし**。旧profile-only設定から開始。GUIは生成テスト用text-only profile、別checkpointではない。**23枚すべて目視した結果、解放メッセージとrestart選択値の撮影時のスクロール位置が不十分で、GUI全体のvisual PASSとは認めない。**
+- 厳格化した `resource-native-03` は **FAIL / 44 assertions後 / 8枚すべて目視**。`AIIdleRelease cannot be brought into settings viewport`。WinUI ScrollViewerのUIA boundsはcontent extentを含み、Grid/StackPanelはIDだけではUIA peerを生成しないため、固定パネルIDを探すテスト側が失敗した。観測済みTextBlock peer（dialog title / 現在のAI索引）でviewportを挟むようhelperを静的に修正・構文確認したが、**この最終helperは実画面再実行していない**。新GUIの完全可視検査は次回優先。03のcleanupは3回正常終了＋失敗時の所有test PID停止1回（warning）で、02の8回正常終了と混同しない。
+- 試験履歴: `resource-gpu-01`は計測器が破損PNGの正常skipを例外にしたためFAIL→計測器のみ修正。`resource-native-01`はスクロールしない可視検査でFAIL、02は構造化検査通過後に目視で不足発見、03は上記FAIL。winui-ui-testing SKILLの「Maximum two fix-and-rerun cycles」に従い今回は再試行を止めた。失敗をPASSに読み替えない。
+- 生成データ/DB/settings/モデル/log/画像はgitignore下、個人AppData/素材は未使用。既存runtime/weightsのみ、DL/依存変更なし。
+
+### GitHubと次の3手
+
+Chat HEAD e63a5f9のActions: AI profile/build checks成功、prototype testsジョブ成功。owned-worker CPUジョブとbrowser-smokeはfailure、step/logは取得不能（Azure Blob404）で原因未確定。ローカルの上記PASSと区別する。今回の提出HEADのCIは最終ジョブを別途確認し、未確認の成功を推測しない。
+
+1. 修正したviewport helperで新しい生成テストrunを行い、AI解放メッセージ/各選択値が実際に映るLight/Dark画像と設定復元を確認する。03の失敗はテストpeer探索の問題であり、製品レイアウト故障とはまだ断定しない。
+2. 現在HEADのGitHub CI最終状態を確認し、実行前failure/log欠落なら原因を特定する。ローカルPASSをCI成功と混同しない。
+3. 上記の確認後に、10,000件超へ向け明示root/種類/棚とcoverage選択の仕様、架空日本語品質評価を進める。既存上限は維持。個人サンプル/1TB、Komga、OCR、folder-to-book、ゲームFPS、高DPI/Contrast/AOTは未検証。Layaは精度gate未達の既定無効実験APIを維持。
+
+---
+
+## Chat担当時点：AI worker解放／リソース設定（履歴）
 
 **直近の変更は `docs/chat-handoff.md` の最新節と `docs/ai-resource-policy.md` 冒頭を必ず参照。** 製品版WinUI 3＋実GPU10,000件 / HTTP28 checksは従来の検証済み資産として維持。今回は**新AIモデルとGPU再測定は行っていない**。
 
@@ -487,3 +518,8 @@ preflightは768×768/30tag/128件で49 checks PASS。CLI guardはbenchmark9/API5
 ### 実GPU1万件・HTTP検証の提出
 実装/結果コミット **82134643ce11018919048094f779e569f77ec148**。後続は提出文書のみ、最新HEADは実Gitで確認。同じfeature/Draft PR #5/baseへ通常push、未マージ。gpu-large-10k-01は126 checks PASS、text10000/cover938、document10000/image938/query21、所有9handles全終了。HTTPは28 checks PASS/query7だけ/所有3handles全終了、注釈復元/vector/source/既存result digest不変。benchmark guard9/API guard5 PASS。Python103 tests PASS（78.438秒）、C#15 checks PASS、WinUI x64 SelfContained Release PASS（37.72秒、既存IL2104 2警告を抑制せず保持）。WinUI code reviewの変更関連確認済み、analyzer未導入。GUIは今回変更/再実行せず前回105checks/17PNG目視PASSを保持。私物/個人設定/OS/モデル/依存変更・取得なし、検証worker残留なし。
 次の3手: 明示worker解放の実装/実GPU停止再ロード競合検証、選択式idle解放/索引待機/上限超対象選択、小さな明示実サンプル品質評価。ai-resource-policy.mdは未実装の次段階仕様。全1TB/GUI1万件負荷/一般的検索精度/別checkpoint/Laya改善/reader/Komga/AOT/配布を合格にしない。
+
+
+### 応答停止後の実機再開（2026-10-12）
+開始local HEAD753ae51、remote e63a5f9へcleanな状態からff-onlyで29コミット取込み。チャット側は手動解放・自動idle・新規推論だけの待機・設定互換・WinUI controlまで実装済み。初期local Python115/C#15/Release PASS（既存IL2104 2警告）。最新e63a5f9のActionsはWinUI関連workflow success、CPU lifecycle failure、Prototypeのtests job success/browser-smoke failure。失敗2jobのlog取得はBlobNotFoundで原因未確定、CI成功と断定しない。
+追加reviewで設定保存失敗時にruntime policyだけ変わる問題とprofile/resource同時保存のlost update、idle判定後の新activity/disable競合を修正しregressionを追加。実GPUと新GUI確認はこれから、過去1万件試験は再実行しない。

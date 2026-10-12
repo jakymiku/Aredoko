@@ -1,6 +1,6 @@
 # 実装状況（2026-10-12：Python/API/WinUI実装、CPU検証済み）
 
-**手動解放・選択式自動idle解放・索引処理の待機設定を実装しました。** 以下の古い「未実装」記述は元の設計の履歴として残します。GPU解放の実機測定および新しいWinUIダイアログの実画面操作は未検証です。
+**手動解放・選択式自動idle解放・索引処理の待機設定を実装しました。** 以下の古い「未実装」記述は元の設計の履歴として残します。実GPU30項目は合格、WinUI新設定の機能操作は確認済みですが、厳格な表示検査は未完です。最新の証拠と制限は [codex-handoff.md](codex-handoff.md) 冒頭を参照。
 
 - 手動解放: WinUI「AI索引」→「AIをメモリから解放」、またはtoken/Origin認証済み`POST /api/library/ai/release`、本文`{}`。索引や検索が進行中は即時409 Busy（強制中断しない）。返値`released`は所有workerの停止有無。解放後はstatusの`resident=false`、`worker_state=unloaded`、`device=""`、`telemetry={}`となり、次の検索で同一profileを自動再ロードする。モデル重み・catalog・vectors・index identityを削除しない。
 - 選択式自動解放: **初期値0（無効）**。候補は無効/60/300/900秒（APIの整数許容範囲0..3600秒）。`time.monotonic()`で推論/索引完了後のアイドル時間を測り、共有inference lockを通す。処理中のworkerには触れず、アプリ終了時にtimerの停止と終了フラグを保証。処理中の再起動や高頻度timerを導入しない。
@@ -8,11 +8,12 @@
 - 設定保存: `%LOCALAPPDATA%/Aredoko/settings.json`に`resource: {"idle_release_seconds":0,"index_pause_ms":0}`を追加。既存の`{"version":1,"profile":"default"}`のような**旧profile-only形式は引き続き読み書きできる**。GUIの変更は保存直後に反映され、profile/embedding index identityは変更しない。テストは一時settingsと生成ソースのみを使用。
 - API: token認証済み`GET /api/library/ai/resource`、token+Origin認証済み`POST /api/library/ai/resource`で両設定を整数・境界チェックして保存。API外部公開をしない。`GET /api/library/ai/status`にも`resident`と`resource_policy`を追加。
 - **検証済みの範囲**: `python -m unittest discover -s tests -p test_ai_release.py -v`によるCPU専用偽encoder/workerテストがGitHub ActionsでPASS。解放→検索/worker再生成、busy中は即拒否、closeとの競合、VectorStoreを読み直した一致、token/Origin拒否、idle timer・索引待機キャンセル・終了、legacy設定互換を検査。PythonフルスイートとWinUI x64 ReleaseビルドはActionsで別途確認する。
-- **未検証**: 実GPU workerのVRAM/物理メモリ減少量、Windows GUIの新ボタン・Light/Dark・狭幅、ゲームとの同時動作。旧GPU 10,000件126項目とHTTP 28項目は**今回再実行していない**。
+- **実機検証**: GPUの所有worker終了と再ロード、元データ/vector不変、WinUIの新ボタン・Light/Dark・狭幅・設定保存/restartの機能を生成17件で確認。新設定の完全可視検査は最終03でFAIL、helper修正後の再実行待ち。
+- **未検証**: 総VRAM/物理メモリの減少量、ゲームとの同時動作。旧GPU 10,000件126項目とHTTP 28項目は**今回再実行していない**。
 
-# AI動作設定の次段階仕様（未実装）
+# 初期設計（実装前の履歴）
 
-2026-10-12。これは次回実装用の方針であり、現行アプリに設定や自動解放があるという意味ではない。現状は既存の所有GPU workerを必要時に起動し、アプリ終了まで保持する。逐次推論・画像byte/pixel制限・中断再開・10,000件上限を保持する。
+2026-10-12。以下は実装前に記録した方針。現在の実装は上の節を参照。当時は既存の所有GPU workerを必要時に起動し、アプリ終了まで保持する。逐次推論・画像byte/pixel制限・中断再開・10,000件上限を保持する。
 
 ## 最初に実装する範囲
 

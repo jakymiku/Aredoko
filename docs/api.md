@@ -23,3 +23,9 @@
 - POST /api/library/ai/search: query、任意kind/view/page/source/ranking。coverage_limit=10000は対象枠上限、totalは対象中のfresh vector件数。itemsは既定60件。current除外とmanual filter適用後、eligible item ID順の先頭10,000件から検索。索引作成中はAI検索409だが文字検索は利用可能。
 
 この段階は全ライブラリ無制限検索ではない。詳細と生成データ測定は[index-scaling.md](index-scaling.md)。
+
+## AIリソース設定（2026-10-12）
+
+- POST /api/library/ai/release: 本文 `{}`。所有idle workerだけ停止し、検索/索引処理中は即時409。次のAI検索は同一profileでlazy reload。vectors/sourceは変更しない。
+- GET /api/library/ai/resource: 保存済みpolicy。POSTは `{"idle_release_seconds":0,"index_pause_ms":0}`。整数0..3600秒 / 0..2000ms、両項目必須。初期は無効、保存成功後すぐ適用。設定JSON破損/保存失敗は409、動作中の設定を維持。型/範囲不正は400。
+- statusにはresident/worker_state/device/telemetry/resource_policy。解放後はresident=false、device空、telemetry空。profile/vector identityは維持。token/Origin規約は他のlibrary APIと共通。

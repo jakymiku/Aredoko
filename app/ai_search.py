@@ -135,7 +135,7 @@ class AISearch:
             if time.monotonic()-self._last_activity < self._idle_seconds:
                 continue
             try:
-                self.release()
+                self._release(if_idle=True)
             except (AIBusy,AIUnavailable):
                 # The next tick checks again. Never interrupt a live query/job.
                 continue
@@ -283,6 +283,9 @@ class AISearch:
 
     def release(self):
         """Refuse a busy encoder; never touch the profile, catalog or vector DB."""
+        return self._release()
+
+    def _release(self,if_idle=False):
         if not self.inference.acquire(blocking=False):
             raise AIBusy('AI検索または索引を処理中です。完了後に解放してください。')
         try:
@@ -292,6 +295,11 @@ class AISearch:
                 if self._closed: raise AIUnavailable('AI is closing')
                 if self.worker and self.worker.is_alive():
                     raise AIBusy('AI索引を作成中です。')
+                # A query or policy update can finish after the timer
+                # precheck. Recheck age under both shared guards.
+                if if_idle and (not self._idle_seconds or
+                        time.monotonic()-self._last_activity < self._idle_seconds):
+                    return {"released":False,"resident":bool(getattr(self.encoder,"resident",False))}
                 result=self.encoder.release()
                 self._last_activity=time.monotonic()
                 return result

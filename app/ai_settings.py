@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import threading
 from ai_profiles import DEFAULT_PROFILE, load_profile
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json\Z")
@@ -32,6 +33,7 @@ def default_settings_path(repo):
 
 class AIProfileSettings:
     def __init__(self, repo, settings_path=None, command_line_profile=None):
+        self._write_lock = threading.RLock()
         self.repo = Path(repo).resolve()
         self.folder = self.repo / "data" / "ai-profiles"
         self.path = Path(settings_path) if settings_path is not None else default_settings_path(self.repo)
@@ -95,6 +97,10 @@ class AIProfileSettings:
                 Path(tmp_path).unlink()
 
     def set_resource(self,resource):
+        with self._write_lock:
+            return self._set_resource(resource)
+
+    def _set_resource(self,resource):
         resource=validate_resource(resource)
         data=self._read_settings()
         data["resource"]=resource
@@ -167,6 +173,10 @@ class AIProfileSettings:
                            "モデルの変更は次回起動時に適用されます。現在の検索・索引処理は切り替わりません。"}
 
     def choose(self, profile_id):
+        with self._write_lock:
+            return self._choose(profile_id)
+
+    def _choose(self, profile_id):
         candidate = self._candidate(profile_id)
         if not candidate["valid"]:
             raise ValueError("Invalid or missing profile. Fix the JSON before selecting.")

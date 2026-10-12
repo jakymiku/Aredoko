@@ -358,14 +358,18 @@ public sealed partial class MainPage : Page
             AutomationProperties.SetAutomationId(releaseResult,"AIReleaseResult");
             var idleChoice=new ComboBox {Header="自動解放（検索・索引の終了後）",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(idleChoice,"AIIdleRelease");
+            AutomationProperties.SetName(idleChoice,"自動解放までの時間");
             var pauseChoice=new ComboBox {Header="索引中の待機（新規AI推論後）",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(pauseChoice,"AIIndexPause");
+            AutomationProperties.SetName(pauseChoice,"新規AI推論後の待機時間");
             var saveResource=new Button {Content="リソース設定を保存"};
             AutomationProperties.SetAutomationId(saveResource,"AISaveResource");
             var resourceResult=new TextBlock {TextWrapping=TextWrapping.Wrap};
             AutomationProperties.SetAutomationId(resourceResult,"AIResourceStatus");
             void AddOption(ComboBox control,int value,string label) {
-                control.Items.Add(new ComboBoxItem {Content=label,Tag=value});
+                var option=new ComboBoxItem {Content=label,Tag=value};
+                AutomationProperties.SetAutomationId(option,$"{AutomationProperties.GetAutomationId(control)}_{value}");
+                control.Items.Add(option);
             }
             foreach(var seconds in new[]{0,60,300,900})
                 AddOption(idleChoice,seconds,seconds==0?"使わない":seconds<60?$"{seconds}秒":$"{seconds/60}分");
@@ -388,22 +392,23 @@ public sealed partial class MainPage : Page
             saveResource.Click+=async (_,_)=>{
                 if(idleChoice.SelectedItem is not ComboBoxItem idle || idle.Tag is not int idleValue ||
                    pauseChoice.SelectedItem is not ComboBoxItem pause || pause.Tag is not int pauseValue)return;
-                saveResource.IsEnabled=false;
+                saveResource.IsEnabled=false;idleChoice.IsEnabled=false;pauseChoice.IsEnabled=false;
                 try {
                     await api.PostAsync("api/library/ai/resource",new JsonObject{{"idle_release_seconds",idleValue},{"index_pause_ms",pauseValue}});
                     resourceResult.Text="保存しました。モデル・索引は変更しません。自動解放は次のアイドル時間から有効です。";
                 }catch(Exception ex){resourceResult.Text="設定を保存できません: "+ex.Message;}
-                finally{saveResource.IsEnabled=true;}
+                finally{saveResource.IsEnabled=true;idleChoice.IsEnabled=true;pauseChoice.IsEnabled=true;}
             };
             bool polling=false;
+            bool releasing=false;
             int? indexLimit=null;
             release.Click+=async (_,_)=>{
-                release.IsEnabled=false;
+                releasing=true;release.IsEnabled=false;
                 try {
                     var result=await api.PostAsync("api/library/ai/release",new JsonObject());
                     releaseResult.Text=result["released"]?.GetValue<bool>()==true?"解放しました。次の検索でモデルを準備します。":"AIは既にメモリから解放されています。";
                 }catch(Exception ex){releaseResult.Text="解放できません: "+ex.Message;}
-                finally{await Refresh();}
+                finally{releasing=false;await Refresh();}
             };
             async Task Refresh()
             {
@@ -421,7 +426,7 @@ public sealed partial class MainPage : Page
                     status.Text=available ? $"{model} · {capabilities}{(indexLimit is int cap ? $" · 最大{cap:N0}件" : "")}\n{label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
                     start.IsEnabled=available&&!running;cancel.IsEnabled=running;
                     var resident=data["resident"]?.GetValue<bool>()==true;
-                    release.IsEnabled=available&&!running&&resident;
+                    release.IsEnabled=available&&!running&&resident&&!releasing;
                     if(available)status.Text+=(resident?"\nAIはメモリ内で待機中。":"\nAIは待機中・次の検索でモデルを準備します。");
                 }
                 catch(Exception ex){status.Text=ex.Message;start.IsEnabled=false;}
@@ -435,12 +440,16 @@ public sealed partial class MainPage : Page
                 new TextBlock {Text="AIのメモリ・索引負荷",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},
                 release,releaseResult,idleChoice,pauseChoice,saveResource,resourceResult})panel.Children.Add(element);
             var content=new Grid {RowSpacing=12,MaxHeight=Math.Max(160,ActualHeight-240)};
+            AutomationProperties.SetAutomationId(content,"AISettingsLayout");
             content.RowDefinitions.Add(new RowDefinition {Height=new GridLength(1,GridUnitType.Star)});
             content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
             content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
             var modelOptions=new ScrollViewer {Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            AutomationProperties.SetAutomationId(modelOptions,"AIOptions");
+            AutomationProperties.SetName(modelOptions,"モデル・AIリソース設定");
             content.Children.Add(modelOptions);
             var indexInfo=new StackPanel {Spacing=8};
+            AutomationProperties.SetAutomationId(indexInfo,"AIIndexSummary");
             indexInfo.Children.Add(new TextBlock {Text="現在のAI索引",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]});
             indexInfo.Children.Add(status);Grid.SetRow(indexInfo,1);content.Children.Add(indexInfo);
             var actions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};

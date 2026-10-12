@@ -7,6 +7,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from ai_profiles import DEFAULT_PROFILE
@@ -33,6 +34,35 @@ class AISettingsTests(unittest.TestCase):
 
     def controller(self, override=None):
         return AIProfileSettings(self.repo, self.settings, override)
+
+    def test_profile_and_resource_writes_do_not_lose_each_other(self):
+        self.custom()
+        ctrl=self.controller()
+        entered=threading.Event(); finish=threading.Event(); second_started=threading.Event()
+        errors=[]; original=ctrl._save_settings
+        def save(payload):
+            if payload.get("resource",{}).get("index_pause_ms")==50 and payload["profile"]=="default":
+                entered.set()
+                if not finish.wait(5): raise RuntimeError("bounded test gate")
+            original(payload)
+        def task(operation):
+            try: operation()
+            except Exception as error: errors.append(error)
+        def choose():
+            second_started.set(); ctrl.choose("local:custom.json")
+        first=threading.Thread(target=task,args=(lambda:ctrl.set_resource({"idle_release_seconds":60,"index_pause_ms":50}),))
+        second=threading.Thread(target=task,args=(choose,))
+        with patch.object(ctrl,"_save_settings",side_effect=save):
+            try:
+                first.start(); self.assertTrue(entered.wait(5))
+                second.start(); self.assertTrue(second_started.wait(5))
+            finally:
+                finish.set(); first.join(5)
+                if second.ident is not None: second.join(5)
+        self.assertFalse(first.is_alive()); self.assertFalse(second.is_alive())
+        self.assertFalse(errors,errors)
+        self.assertEqual(ctrl.selected(),"local:custom.json")
+        self.assertEqual(ctrl.resource(),{"idle_release_seconds":60,"index_pause_ms":50})
 
     def test_default_and_persisted_switch_only_on_restart(self):
         ctrl = self.controller()

@@ -2,6 +2,7 @@
 import argparse
 import json
 import secrets
+import threading
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -51,6 +52,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
     base=handler_for(catalog,token)
     previews=PreviewReader(catalog)
+    resource_updates=threading.Lock()
     class Handler(base):
         def do_GET(self):
             if not self.valid_host(): return self.send(403,{'error':'Invalid host'})
@@ -121,8 +123,14 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                 if self.path=='/api/library/ai/resource':
                     policy=validate_resource(body)
                     # No model-space change; the active encoder is never reloaded.
-                    if isinstance(ai,AISearch): ai.configure(**policy)
-                    profiles.set_resource(policy)
+                    # Serialize resource posts; failed persistence must not
+                    # change the running policy or start an idle timer.
+                    with resource_updates:
+                        try:
+                            profiles.set_resource(policy)
+                        except (ValueError,OSError,json.JSONDecodeError):
+                            return self.send(409,{'error':'AIリソース設定を保存できません。設定ファイルを確認してください。動作中の設定は保持されます。'})
+                        if isinstance(ai,AISearch): ai.configure(**policy)
                     return self.send(200,{'saved':True,'policy':policy})
                 if self.path=='/api/library/ai/search':
                     return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking')))

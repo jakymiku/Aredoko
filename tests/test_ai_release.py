@@ -309,8 +309,37 @@ class ReleaseTests(unittest.TestCase):
         invalid.exception.close()
         with urllib.request.urlopen(root+"/api/items?q=rain") as response:
             self.assertEqual(json.load(response)["total"],1)
+        previous=self.ai.resource_policy()
+        with self.assertRaises(urllib.error.HTTPError) as invalid_post:
+            post({"idle_release_seconds":2,"index_pause_ms":200})
+        self.assertEqual(invalid_post.exception.code,409)
+        invalid_post.exception.close()
+        self.assertEqual(self.ai.resource_policy(),previous)
         profiles.choose("default")  # GUI can repair an invalid settings file.
+        with patch.object(profiles,"_save_settings",side_effect=OSError("test write failure")):
+            with self.assertRaises(urllib.error.HTTPError) as failed_write:
+                post({"idle_release_seconds":2,"index_pause_ms":200})
+            self.assertEqual(failed_write.exception.code,409)
+            failed_write.exception.close()
+        self.assertEqual(self.ai.resource_policy(),previous)
+
         self.assertEqual(profiles.resource(),{"idle_release_seconds":0,"index_pause_ms":0})
+
+    def test_idle_precheck_cannot_release_after_new_activity_or_disable(self):
+        self.build()
+        # Deterministically exercise the gap between the timer's initial
+        # check and guarded release, without starting a real timer.
+        self.ai._idle_seconds=1
+        self.ai._last_activity=time.monotonic()
+        self.assertFalse(self.ai._release(if_idle=True)["released"])
+        self.assertTrue(self.encoder.resident)
+        self.ai._last_activity=time.monotonic()-5
+        self.ai._idle_seconds=0
+        self.assertFalse(self.ai._release(if_idle=True)["released"])
+        self.assertTrue(self.encoder.resident)
+        self.ai._idle_seconds=1
+        self.assertTrue(self.ai._release(if_idle=True)["released"])
+        self.assertFalse(self.encoder.resident)
 
     def test_encoderprocess_owned_stop_and_close(self):
         from ai_profiles import DEFAULT_PROFILE

@@ -29,7 +29,9 @@ from create_preview_fixture import create
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--editor-only',action='store_true',help='Run literal editor/dirty/restart checks without loading AI');parser.add_argument('--layout-checks',action='store_true',help='Also capture wide/narrow list/tile and missing-model dialog');parser.add_argument('--appearance-checks',action='store_true',help='Also check Light/Dark error guidance and literal recovery without GPU loading')
     parser.add_argument('--coverage-checks',action='store_true',help='With editor-only/appearance checks, index the 17 generated items on existing CUDA weights and verify semantic coverage text')
+    parser.add_argument('--resource-checks',action='store_true',help='Also save resource policy, release/reload CUDA and verify saved GUI values after restart')
     args=parser.parse_args()
+    if args.resource_checks and not args.coverage_checks:parser.error('--resource-checks requires --coverage-checks')
     if args.coverage_checks and not (args.editor_only and args.appearance_checks):parser.error('--coverage-checks requires --editor-only --appearance-checks')
     if (args.layout_checks or args.appearance_checks) and not args.editor_only:parser.error("--layout-checks/--appearance-checks require --editor-only")
     if os.name!='nt':raise RuntimeError('Native Windows only')
@@ -45,7 +47,7 @@ def main():
     origin='http://127.0.0.1:8769';settings=target/'settings.json'
     ui_theme='System'
     env=os.environ.copy();env['WINAPP_UI_WORKFLOW_ID']='aredoko-profile-'+nonce
-    report={'target':'local','actual_model':not args.editor_only or args.coverage_checks,'profile_verification':'not_run','coverage_verification':'not_run','pass':False,'checks':[],'screenshots':[]}
+    report={'target':'local','actual_model':not args.editor_only or args.coverage_checks,'profile_verification':'not_run','coverage_verification':'not_run','resource_verification':'not_run','pass':False,'checks':[],'screenshots':[]}
     def cli(*arguments):
         result=subprocess.run(['winapp',*map(str,arguments)],cwd=REPO,env=env,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=90)
         if result.returncode:raise RuntimeError('winapp '+str(arguments)+': '+result.stderr+result.stdout)
@@ -189,6 +191,63 @@ def main():
         report.setdefault('index_states',[]).append({key:state[key] for key in ('state','processed','total','indexed','device','profile')})
         check('GUI index complete',state['state']=='complete' and state['indexed']==17 and (not expect_inference or state['device']=='cuda'))
         ui('wait-for','AIStatus','--value','準備完了','--contains','-t','5000')
+    def show_resource_control(identifier):
+        # UIA Focus alone does not scroll this nested WinUI ScrollViewer.
+        # Scroll the actual owned settings viewport and check observed bounds.
+        ui('scroll','AIOptions','--to','top')
+        for _ in range(35):
+            tree=json.loads(ui('inspect','--json','--depth','12'));stack=[tree];nodes={}
+            while stack:
+                node=stack.pop()
+                if isinstance(node,dict):
+                    if node.get('automationId')==identifier:nodes[identifier]=node
+                    if node.get('type')=='Text' and node.get('name') in ('AI検索の準備','現在のAI索引'):
+                        nodes[node['name']]=node
+                    stack.extend(node.values())
+                elif isinstance(node,list):stack.extend(node)
+            title=nodes.get('AI検索の準備');summary=nodes.get('現在のAI索引');item=nodes.get(identifier)
+            # ScrollViewer reports content extent. Grid/StackPanel do not expose
+            # UIA peers just because they have an ID. These observed TextBlock
+            # peers bound the settings viewport (title gap / fixed row spacing).
+            if title and summary and item and item['height']>0 and item['width']>0 and not item.get('isOffscreen') and item['y']>=title['y']+title['height']+8 and item['y']+item['height']<=summary['y']-12:
+                time.sleep(.4)
+                check(identifier+' visible in scrolled settings',True);return
+            ui('scroll','AIOptions','--direction','down');time.sleep(.1)
+        raise RuntimeError(identifier+' cannot be brought into settings viewport')
+    def resource_checks(theme):
+        policy={'idle_release_seconds':60,'index_pause_ms':50}
+        dialog()
+        show_resource_control('AIIdleRelease');ui('focus','AIIdleRelease')
+        select('AIIdleRelease','AIIdleRelease_60')
+        ui('wait-for','AIIdleRelease','--value','1分','-t','3000')
+        show_resource_control('AIIndexPause');ui('focus','AIIndexPause')
+        select('AIIndexPause','AIIndexPause_50')
+        ui('wait-for','AIIndexPause','--value','50ms','-t','3000')
+        show_resource_control('AISaveResource');ui('focus','AISaveResource');ui('invoke','AISaveResource')
+        ui('wait-for','AIResourceStatus','--value','保存しました','--contains','-t','5000')
+        check(theme+' GUI policy saved and applied',api('/api/library/ai/resource')['policy']==policy and status()['resource_policy']==policy)
+        ui('scroll','AIOptions','--to','bottom');time.sleep(.3)
+        visible_controls('22-'+theme+'-resource',{'CloseButton','AISaveResource','AIResourceStatus','StartAIIndex','CancelAIIndex'})
+        screenshot('22-'+theme+'-resource-settings')
+        show_resource_control('AIRelease');ui('focus','AIRelease');ui('wait-for','AIRelease','-p','IsEnabled','--value','True','-t','3000')
+        ui('invoke','AIRelease')
+        ui('wait-for','AIReleaseResult','--value','解放しました','--contains','-t','10000')
+        state=status()
+        check(theme+' GUI release clears resident and telemetry',not state['resident'] and state['device']=='' and state['telemetry']=={})
+        ui('wait-for','AIRelease','-p','IsEnabled','--value','False','-t','3000')
+        show_resource_control('AIReleaseResult');screenshot('23-'+theme+'-resource-released');close_dialog()
+        recovery_mode('ModeSemantic','AI意味検索')
+        ui('set-value','TxtQuery','傘が必要な暗い都会の景色');time.sleep(.6);ui('invoke','BtnSearch');ready()
+        ui('wait-for','Message','--value','最大10,000件','--contains','-t','60000')
+        check(theme+' GUI search reloads CUDA',status()['resident'] and status()['device']=='cuda')
+        ui('wait-for','TxtCount','--value','17 件','-t','5000')
+        recovery_mode('ModeLiteral','名前・タグ');literal();stop()
+        start('resource-restart-'+theme);resize(700,620);dialog()
+        show_resource_control('AIIndexPause')
+        ui('wait-for','AIIdleRelease','--value','1分','-t','3000')
+        ui('wait-for','AIIndexPause','--value','50ms','-t','3000')
+        check(theme+' saved resource policy survives restart',api('/api/library/ai/resource')['policy']==policy and status()['resource_policy']==policy and not status()['resident'])
+        screenshot('24-'+theme+'-resource-restart');close_dialog();literal()
     def stop():
         nonlocal app_pid,backend,hwnd
         try:
@@ -377,6 +436,7 @@ def main():
                     check(theme+' real CUDA search and coverage',status()['device']=='cuda' and result['coverage_limit']==10000 and result['total']==17 and result['items'][0]['title']=='雨の夜の街並み.wav')
                     screenshot('19-'+theme+'-semantic-coverage')
                     recovery_mode('ModeLiteral','名前・タグ');literal()
+                if args.resource_checks:resource_checks(theme)
                 ui('invoke','Item'+str(row['id']),'--action','select');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','3000')
                 ui('set-value','TxtTags','unsaved-'+theme+'-theme-proof');ui('invoke','BtnAIIndex')
                 ui('wait-for','PrimaryButton','-t','3000');screenshot('20-'+theme+'-dirty-dialog')
@@ -392,6 +452,7 @@ def main():
             check('Missing profile unavailable for semantic search',not status()['available'])
             unavailable_search('ModeSemantic','AI意味検索','17-Light-missing-error');stop()
         if args.coverage_checks:report['coverage_verification']='pass'
+        if args.resource_checks:report['resource_verification']='pass'
         check('Generated source hashes unchanged',hashes=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in media.iterdir()})
         report['pass']=True
     except Exception as ex:
