@@ -1,0 +1,1239 @@
+{
+  "version": 2,
+  "name": "holdout-v2",
+  "description": "Frozen before inference on new fictional inputs. Text/pixel agreement and deliberate label conflicts are explicit. No real audio/story/SVG content inference. Once observed, this becomes development evidence; no product gate/tuning from this tiny synthetic set.",
+  "items": [
+    {
+      "key": "h_p01",
+      "file": "h_p01.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "orange",
+            "shape": "circle",
+            "x": 50,
+            "y": 120,
+            "sx": 25,
+            "sy": 25
+          },
+          {
+            "color": "orange",
+            "shape": "circle",
+            "x": 130,
+            "y": 120,
+            "sx": 25,
+            "sy": 25
+          }
+        ]
+      },
+      "tags": [],
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p02",
+      "file": "h_p02.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "purple",
+            "shape": "diamond",
+            "x": 90,
+            "y": 120,
+            "sx": 40,
+            "sy": 40
+          }
+        ]
+      },
+      "tags": [],
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p03",
+      "file": "h_p03.png",
+      "kind": "image",
+      "scene": {
+        "background": "cyan",
+        "objects": [
+          {
+            "color": "black",
+            "shape": "cross",
+            "x": 90,
+            "y": 120,
+            "sx": 40,
+            "sy": 40
+          }
+        ]
+      },
+      "tags": [],
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p04",
+      "file": "h_p04.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "cyan",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 65,
+            "sx": 50,
+            "sy": 15
+          },
+          {
+            "color": "cyan",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 175,
+            "sx": 50,
+            "sy": 15
+          }
+        ]
+      },
+      "tags": [],
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p05",
+      "file": "h_p05.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "red",
+            "shape": "triangle",
+            "x": 50,
+            "y": 120,
+            "sx": 25,
+            "sy": 40
+          },
+          {
+            "color": "blue",
+            "shape": "triangle",
+            "x": 130,
+            "y": 120,
+            "sx": 25,
+            "sy": 40
+          }
+        ]
+      },
+      "tags": [],
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p06",
+      "file": "h_p06.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "green",
+            "shape": "circle",
+            "x": 90,
+            "y": 65,
+            "sx": 30,
+            "sy": 30
+          },
+          {
+            "color": "yellow",
+            "shape": "square",
+            "x": 90,
+            "y": 165,
+            "sx": 30,
+            "sy": 30
+          }
+        ]
+      },
+      "tags": [],
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p07",
+      "file": "h_p07.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "orange",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 65,
+            "sx": 50,
+            "sy": 10
+          },
+          {
+            "color": "orange",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 120,
+            "sx": 50,
+            "sy": 10
+          },
+          {
+            "color": "orange",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 175,
+            "sx": 50,
+            "sy": 10
+          }
+        ]
+      },
+      "tags": [
+        "白背景",
+        "オレンジ色の横棒が三本",
+        "メニュー風の図形"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p08",
+      "file": "h_p08.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "purple",
+            "shape": "diamond",
+            "x": 50,
+            "y": 70,
+            "sx": 20,
+            "sy": 25
+          },
+          {
+            "color": "purple",
+            "shape": "diamond",
+            "x": 50,
+            "y": 170,
+            "sx": 20,
+            "sy": 25
+          },
+          {
+            "color": "purple",
+            "shape": "diamond",
+            "x": 130,
+            "y": 70,
+            "sx": 20,
+            "sy": 25
+          },
+          {
+            "color": "purple",
+            "shape": "diamond",
+            "x": 130,
+            "y": 170,
+            "sx": 20,
+            "sy": 25
+          }
+        ]
+      },
+      "tags": [
+        "紫のひし形が四つ",
+        "白背景",
+        "二列二段"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p09",
+      "file": "h_p09.png",
+      "kind": "image",
+      "scene": {
+        "background": "yellow",
+        "objects": [
+          {
+            "color": "blue",
+            "shape": "circle",
+            "x": 90,
+            "y": 120,
+            "sx": 40,
+            "sy": 40
+          }
+        ]
+      },
+      "tags": [
+        "青い丸が一つ",
+        "黄色い背景"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p10",
+      "file": "h_p10.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "red",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 120,
+            "sx": 60,
+            "sy": 65
+          },
+          {
+            "color": "white",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 120,
+            "sx": 50,
+            "sy": 55
+          }
+        ]
+      },
+      "tags": [
+        "白背景",
+        "赤い四角い枠",
+        "中は白く空いている"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p11",
+      "file": "h_p11.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "red",
+            "shape": "circle",
+            "x": 90,
+            "y": 120,
+            "sx": 40,
+            "sy": 40
+          }
+        ]
+      },
+      "tags": [
+        "青い三角形",
+        "白背景"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_p12",
+      "file": "h_p12.png",
+      "kind": "image",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "blue",
+            "shape": "triangle",
+            "x": 90,
+            "y": 120,
+            "sx": 40,
+            "sy": 40
+          }
+        ]
+      },
+      "tags": [
+        "赤い円",
+        "白背景"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "h_b01",
+      "file": "h_b01.cbz",
+      "kind": "book",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "orange",
+            "shape": "square",
+            "x": 90,
+            "y": 50,
+            "sx": 25,
+            "sy": 20
+          },
+          {
+            "color": "orange",
+            "shape": "circle",
+            "x": 90,
+            "y": 165,
+            "sx": 20,
+            "sy": 20
+          }
+        ]
+      },
+      "tags": [
+        "架空の漫画",
+        "故障したロボット",
+        "修理工房",
+        "ものづくり"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "unrelated abstract cover; no story evidence"
+      }
+    },
+    {
+      "key": "h_b02",
+      "file": "h_b02.cbz",
+      "kind": "book",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "purple",
+            "shape": "square",
+            "x": 90,
+            "y": 50,
+            "sx": 25,
+            "sy": 20
+          },
+          {
+            "color": "purple",
+            "shape": "circle",
+            "x": 90,
+            "y": 165,
+            "sx": 20,
+            "sy": 20
+          }
+        ]
+      },
+      "tags": [
+        "架空の漫画",
+        "孤島",
+        "宝の地図",
+        "探検"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "unrelated abstract cover; no story evidence"
+      }
+    },
+    {
+      "key": "h_b03",
+      "file": "h_b03.cbz",
+      "kind": "book",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "cyan",
+            "shape": "square",
+            "x": 90,
+            "y": 50,
+            "sx": 25,
+            "sy": 20
+          },
+          {
+            "color": "cyan",
+            "shape": "circle",
+            "x": 90,
+            "y": 165,
+            "sx": 20,
+            "sy": 20
+          }
+        ]
+      },
+      "tags": [
+        "架空の園芸本",
+        "室内",
+        "観葉植物",
+        "水やり",
+        "初心者"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "unrelated abstract cover; no story evidence"
+      }
+    },
+    {
+      "key": "h_b04",
+      "file": "h_b04.cbz",
+      "kind": "book",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "green",
+            "shape": "square",
+            "x": 90,
+            "y": 50,
+            "sx": 25,
+            "sy": 20
+          },
+          {
+            "color": "green",
+            "shape": "circle",
+            "x": 90,
+            "y": 165,
+            "sx": 20,
+            "sy": 20
+          }
+        ]
+      },
+      "tags": [
+        "架空の漫画",
+        "時間旅行",
+        "届かなかった手紙",
+        "再会"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "unrelated abstract cover; no story evidence"
+      }
+    },
+    {
+      "key": "h_b05",
+      "file": "h_b05.cbz",
+      "kind": "book",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "yellow",
+            "shape": "square",
+            "x": 90,
+            "y": 50,
+            "sx": 25,
+            "sy": 20
+          },
+          {
+            "color": "yellow",
+            "shape": "circle",
+            "x": 90,
+            "y": 165,
+            "sx": 20,
+            "sy": 20
+          }
+        ]
+      },
+      "tags": [
+        "架空の実用書",
+        "珈琲",
+        "抽出",
+        "豆の挽き方",
+        "淹れ方"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "unrelated abstract cover; no story evidence"
+      }
+    },
+    {
+      "key": "h_b06",
+      "file": "h_b06.cbz",
+      "kind": "book",
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "black",
+            "shape": "square",
+            "x": 90,
+            "y": 50,
+            "sx": 25,
+            "sy": 20
+          },
+          {
+            "color": "black",
+            "shape": "circle",
+            "x": 90,
+            "y": 165,
+            "sx": 20,
+            "sy": 20
+          }
+        ]
+      },
+      "tags": [
+        "架空の漫画",
+        "博物館",
+        "古代の遺物",
+        "盗難",
+        "推理"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": "unrelated abstract cover; no story evidence"
+      }
+    },
+    {
+      "key": "h_m01",
+      "file": "h_m01.svg",
+      "kind": "material",
+      "tags": [
+        "週間予定表",
+        "日程管理",
+        "書き込み欄",
+        "編集用テンプレート"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "gray placeholder SVG"
+      }
+    },
+    {
+      "key": "h_m02",
+      "file": "h_m02.svg",
+      "kind": "material",
+      "tags": [
+        "習慣の記録",
+        "毎日のチェック",
+        "継続",
+        "記録表"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "gray placeholder SVG"
+      }
+    },
+    {
+      "key": "h_m03",
+      "file": "h_m03.svg",
+      "kind": "material",
+      "tags": [
+        "セール告知",
+        "お店",
+        "縦長ポスター",
+        "販促",
+        "編集用"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "gray placeholder SVG"
+      }
+    },
+    {
+      "key": "h_m04",
+      "file": "h_m04.svg",
+      "kind": "material",
+      "tags": [
+        "商品価格",
+        "値札",
+        "小さなラベル",
+        "店舗"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "gray placeholder SVG"
+      }
+    },
+    {
+      "key": "h_m05",
+      "file": "h_m05.svg",
+      "kind": "material",
+      "tags": [
+        "配信動画",
+        "画面下",
+        "字幕帯",
+        "テロップ枠"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "gray placeholder SVG"
+      }
+    },
+    {
+      "key": "h_m06",
+      "file": "h_m06.svg",
+      "kind": "material",
+      "tags": [
+        "配信画面",
+        "視聴者コメント",
+        "会話",
+        "吹き出し枠"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "gray placeholder SVG"
+      }
+    },
+    {
+      "key": "h_m07",
+      "file": "h_m07.svg",
+      "kind": "material",
+      "tags": [
+        "星座",
+        "夜空",
+        "繰り返し模様",
+        "背景素材"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "gray placeholder SVG"
+      }
+    },
+    {
+      "key": "h_m08",
+      "file": "h_m08.svg",
+      "kind": "material",
+      "tags": [
+        "幾何学",
+        "格子",
+        "タイル",
+        "繰り返し模様",
+        "背景素材"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "gray placeholder SVG"
+      }
+    },
+    {
+      "key": "h_a01",
+      "file": "h_a01.wav",
+      "kind": "audio",
+      "tags": [
+        "架空の音源設定",
+        "焚き火",
+        "薪がはぜる",
+        "キャンプ",
+        "環境音"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "generated silence; not described sounds"
+      }
+    },
+    {
+      "key": "h_a02",
+      "file": "h_a02.wav",
+      "kind": "audio",
+      "tags": [
+        "架空の音源設定",
+        "朝",
+        "鳥のさえずり",
+        "森",
+        "環境音"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "generated silence; not described sounds"
+      }
+    },
+    {
+      "key": "h_a03",
+      "file": "h_a03.wav",
+      "kind": "audio",
+      "tags": [
+        "架空の音源設定",
+        "足音",
+        "広い廊下",
+        "反響",
+        "効果音"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "generated silence; not described sounds"
+      }
+    },
+    {
+      "key": "h_a04",
+      "file": "h_a04.wav",
+      "kind": "audio",
+      "tags": [
+        "架空の音源設定",
+        "地下鉄",
+        "到着",
+        "駅",
+        "効果音"
+      ],
+      "evidence": {
+        "metadata": true,
+        "pixels": null,
+        "content": "generated silence; not described sounds"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "t01",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "一週間分の予定をまとめて書き込めるひな形",
+      "kind": "material",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_m01": 2
+      }
+    },
+    {
+      "id": "t02",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "毎日続けたことをチェックして残せる表",
+      "kind": "material",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_m02": 2
+      }
+    },
+    {
+      "id": "t03",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "お店の安売りを知らせる縦長の貼り紙を作りたい",
+      "kind": "material",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_m03": 2
+      }
+    },
+    {
+      "id": "t04",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "商品のそばに置く金額表示の小さな札",
+      "kind": "material",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_m04": 2
+      }
+    },
+    {
+      "id": "t05",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "動画の下のほうに説明の文字を載せる帯",
+      "kind": "material",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_m05": 2
+      }
+    },
+    {
+      "id": "t06",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "配信中の会話を囲って表示する枠",
+      "kind": "material",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_m06": 2
+      }
+    },
+    {
+      "id": "t07",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "壊れた機械の相棒を直す工房の物語",
+      "kind": "book",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_b01": 2
+      }
+    },
+    {
+      "id": "t08",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "島で地図を頼りにお宝を探す話",
+      "kind": "book",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_b02": 2
+      }
+    },
+    {
+      "id": "t09",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "部屋に置く緑を枯らさない育て方の入門書",
+      "kind": "book",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_b03": 2
+      }
+    },
+    {
+      "id": "t10",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "おいしいコーヒーをいれる手順が載った本",
+      "kind": "book",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_b05": 2
+      }
+    },
+    {
+      "id": "t11",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "野外で火を囲んでいる場面に合うパチパチという音",
+      "kind": "audio",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_a01": 2
+      }
+    },
+    {
+      "id": "t12",
+      "group": "metadata",
+      "evidence": "metadata-only",
+      "query": "森の朝らしい鳥の声を背景に使いたい",
+      "kind": "audio",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_a02": 2
+      }
+    },
+    {
+      "id": "v01",
+      "group": "pixels",
+      "evidence": "pixels-only",
+      "query": "白地でオレンジの丸が左右に二つ並ぶ絵",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p01": 2
+      }
+    },
+    {
+      "id": "v02",
+      "group": "pixels",
+      "evidence": "pixels-only",
+      "query": "白い背景の中央に紫のひし形が一つ",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p02": 2
+      }
+    },
+    {
+      "id": "v03",
+      "group": "pixels",
+      "evidence": "pixels-only",
+      "query": "水色の背景に黒い十字が描かれたもの",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p03": 2
+      }
+    },
+    {
+      "id": "v04",
+      "group": "pixels",
+      "evidence": "pixels-only",
+      "query": "白地の上と下に水色の長方形がある画像",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p04": 2
+      }
+    },
+    {
+      "id": "v05",
+      "group": "pixels",
+      "evidence": "pixels-only",
+      "query": "左に赤い三角、右に青い三角が並んでいる",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p05": 2
+      }
+    },
+    {
+      "id": "v06",
+      "group": "pixels",
+      "evidence": "pixels-only",
+      "query": "上に緑の丸、下に黄色い四角がある絵",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p06": 2
+      }
+    },
+    {
+      "id": "d01",
+      "group": "agreement",
+      "evidence": "metadata-and-pixels",
+      "query": "白地にオレンジ色の横棒が三本並んだもの",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p07": 2
+      }
+    },
+    {
+      "id": "d02",
+      "group": "agreement",
+      "evidence": "metadata-and-pixels",
+      "query": "白い背景に紫色のひし形が二列二段で四つ",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p08": 2
+      }
+    },
+    {
+      "id": "d03",
+      "group": "agreement",
+      "evidence": "metadata-and-pixels",
+      "query": "黄色い背景の中央に青い丸が一つ",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p09": 2
+      }
+    },
+    {
+      "id": "d04",
+      "group": "agreement",
+      "evidence": "metadata-and-pixels",
+      "query": "赤い四角い枠があり内側は白く空いている画像",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p10": 2
+      }
+    },
+    {
+      "id": "x01",
+      "group": "conflict-pixels",
+      "evidence": "pixels-despite-wrong-tags",
+      "query": "見た目が白背景に赤い丸一つの画像",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p11": 2
+      }
+    },
+    {
+      "id": "x02",
+      "group": "conflict-pixels",
+      "evidence": "pixels-despite-wrong-tags",
+      "query": "見た目が白背景に青い三角の画像",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p12": 2
+      }
+    },
+    {
+      "id": "x03",
+      "group": "conflict-metadata",
+      "evidence": "metadata-despite-wrong-pixels",
+      "query": "青い三角形というタグで分類した画像",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p11": 2
+      }
+    },
+    {
+      "id": "x04",
+      "group": "conflict-metadata",
+      "evidence": "metadata-despite-wrong-pixels",
+      "query": "赤い円というタグで分類した画像",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {
+        "h_p12": 2
+      }
+    },
+    {
+      "id": "f01",
+      "group": "filename-control",
+      "evidence": "filename",
+      "query": "h_m07.svg",
+      "kind": "material",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_m07": 2
+      }
+    },
+    {
+      "id": "f02",
+      "group": "filename-control",
+      "evidence": "filename",
+      "query": "h_a04.wav",
+      "kind": "audio",
+      "sources": [
+        "text",
+        "all"
+      ],
+      "relevance": {
+        "h_a04": 2
+      }
+    },
+    {
+      "id": "n01",
+      "group": "no-answer",
+      "evidence": "absent",
+      "query": "雪に覆われた山の上にいる動物の写真",
+      "kind": "image",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {}
+    },
+    {
+      "id": "n02",
+      "group": "no-answer",
+      "evidence": "absent",
+      "query": "自転車のブレーキを整備する手順書",
+      "kind": "book",
+      "sources": [
+        "text",
+        "cover",
+        "all"
+      ],
+      "relevance": {}
+    }
+  ]
+}

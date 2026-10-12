@@ -1,5 +1,11 @@
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
+## 作業中：text/pixel根拠別の固定holdout v2（2026-10-13）
+
+開始HEAD **7d7facc749103eaf7798a3d0345831fc4163fd33**。別の30素材/30問を推論前に固定し、CPU契約と目視確認後にcommitしてからCUDA測定予定。結果・順位変更はまだない。旧品質v1/GUI/モデルを維持し、Layaは使わない。詳細は[search-quality-holdout.md](search-quality-holdout.md)。
+
+---
+
 ## 最新：検索可能なフォルダ選択・全文パス・疎な分布（2026-10-13）
 
 開始HEAD **5b4ac4c79c3a012cea72ba2fdaf85acb68f6f716**。同じfeature/Draft PR #5/comparison baseを維持。実装SHAは後続提出記録/Git/PR headで確認。
