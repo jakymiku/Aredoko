@@ -2,7 +2,7 @@
 
 ## 最新：保存focus・高さを使う詳細と固定保存欄（2026-10-13）
 
-開始HEAD **d93bf21d5a88d8ae8a1ee89b63814ed0e0fa907f**。同じfeature/Draft PR #5/comparison base。今回の実装commitは後続文書commitで記録する。
+開始HEAD **d93bf21d5a88d8ae8a1ee89b63814ed0e0fa907f**。同じfeature/Draft PR #5/comparison base。今回の実装・検証・仕様commitは **93f90c7244bfa9cea497fbfdd6d11fcf850852ce**。このSHA記録は文書だけの後続commit。通常push後の最終HEAD/CI観測はGit/PR head・PR説明で確認。
 
 - 詳細をNavigationView内の利用可能な高さ全体へ配置。狭幅overlayでも作品名・表紙・編集欄を広く表示し、不透明背景を維持。保存ボタン/編集状態は下部固定、詳細/編集fieldsだけ縦scroll。toolbarの折返しはwindow幅ではなく実content幅で選び、wide Inlineの320幅を引いた場合にも対応。
 - SaveAsyncはeditor内の元controlとfocus state、disable直後の退避先を記録。完了時にfocusがそのまま・同一作品・pane openの場合だけ成功/失敗とも復帰。成功後にSaveがdisabledならタグ欄へ。保存中に検索欄へ移った場合はfocusを奪わない。エラーでは編集内容と再試行を維持。モデル/API/順位/source変更なし。
