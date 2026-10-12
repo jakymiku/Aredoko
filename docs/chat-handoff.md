@@ -5,7 +5,7 @@
 
 ## 最新の再開地点（2026-10-12・テーマとAIエラー復帰）
 
-開始HEAD 988d55e。同じfeature/Draft PR #5/base、チャット側f4273ffとモデル/旧索引互換を保持。実装HEADはdocs/codex-handoff.md末尾と実際のGitを確認すること。
+開始HEAD 988d55e。同じfeature/Draft PR #5/base、チャット側f4273ffとモデル/旧索引互換を保持。実装/検証記録HEADは8418d68。後続は提出文書で、最新HEADは実際のGitを確認すること。
 
 開発起動の `-UITheme System|Light|Dark` を追加した。Windows全体の設定を変えず、アプリのrootだけへ適用する。既定Systemで通常のテーマ追従を維持し、保存設定は追加しない。WinUIのOnLaunched.Argumentsは非対応なので、実プロセスのcommand-line argumentsから限定した値だけを読む。
 
@@ -37,7 +37,7 @@ GUIモデルprofile選択、dirty/favorite再起動、小画面UI、実AI非対�
 
 ## 現在のGit状態
 
-- 今回の開始HEAD: `988d55e`。最新実装/提出HEADはdocs/codex-handoff.md末尾と実際のブランチHEADを確認すること。
+- 今回の実装/検証記録HEAD: `8418d68`。開始HEADは `988d55e`。後続は提出文書のみで最新HEADは実際のGitを確認すること。
 - HEADブランチ: `feat/winui3-production-mvp-20261011`。
 - Draft PR [#5](https://github.com/jakymiku/Aredoko/pull/5)、base `feat/gui-framework-comparison-20261010`。未マージ。PR #1/#2/#3も保持し、mainへmerge・force-push・squashしない。
 - 引継ぎ開始時点はclean、機能作業の未コミット残りなし。テスト用API/GUI/GPU workerは停止済み。

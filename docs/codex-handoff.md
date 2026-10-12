@@ -306,3 +306,9 @@
 - Python96/C#13/最終x64 SelfContained Release PASS（旧IL2104 2件）。py_compile/launcher構文/diff確認。WinUI review:新APIはrestored projectで確認、theme resources/自然なnative Items/60paging/async・dirty/JSON DOM/認証/index identityを維持。analyzerなし。
 - read-only DPI96/HC=false、OSテーマ/拡大率/Contrast設定無変更。高DPI/HC/reader/AOT/配布/1TB未検証。actual_model=false/profile_verification=not_run、重み/依存取得/私物走査/個人AppData設定変更なし。既存アプリ診断ログは使用。生成17元hash不変、所有6GUI正常終了/cleanup warningなし、API/GPUworkerなし、生成profileのみcleanup。
 - **次の3手:** (1) python tools/test_ai_profile_ui.py --editor-only --appearance-checks --output data/ai-ui/appearance-04 で修正後Light/Dark dialogを実画面確認（04未実行、存在時は新suffix）、(2) 2,000件超をcheckpoint/増分/resource制限で段階拡張し生成大規模集合で測定、(3) 明示実サンプル評価と用意された高DPI/HC環境での確認。モデル段階やGPU導入を作り直さない。
+
+
+### テーマ・エラー復帰の提出
+- 実装/検証記録HEAD **8418d68**（8418d68f2fa6839be201df164988482c00859a6b）。後続は提出文書のみ。同じfeature/Draft PR #5/base、通常push・未マージ。
+- native appearance-03は操作68 checks PASS、9 PNGのvisual reviewはLight dialogのDark不一致でFAIL。全3dialogのRequestedTheme修正は最終Release build PASSだがnative未再実行。最大2回fix/rerunに達し、次回の最初はappearance-04等新規outputで修正後dialogを確認する。
+- Python96/C#13/最終Release（既存IL2104 2件）/py_compile/launcher構文/diff PASS。私物/個人設定/モデル/依存/OS設定無変更、生成元hash不変、所有test GUI/API/worker停止済み。高DPI/HC/1TB未確認。
