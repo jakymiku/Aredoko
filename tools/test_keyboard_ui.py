@@ -63,6 +63,7 @@ def main():
     def wait(identifier,value):ui('wait-for',identifier,'--value',value,'-t','10000')
     def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000');time.sleep(.4)
     def keys(sequence,identifier=None):
+        if kernel32.WaitForSingleObject(process,0)==0:raise RuntimeError('Owned process exited before input')
         owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
         if owner.value!=app_pid:raise RuntimeError('Owned window changed before input')
         if user32.GetForegroundWindow()!=int(hwnd):user32.SetForegroundWindow(int(hwnd));time.sleep(.1)
@@ -76,9 +77,18 @@ def main():
         if user32.GetForegroundWindow()!=int(hwnd):
             report['keyboard_skipped'].append({'target':identifier,'keys':sequence,'reason':'Foreground changed after focus'})
             return False
-        args=['send-keys',sequence,'--via','send-input']
-        if identifier:args+=['--target',identifier]
-        ui(*args);report['keyboard_actions'].append({'target':identifier,'keys':sequence})
+        if identifier:
+            observed=json.loads(ui('get-property',identifier,'--property','HasKeyboardFocus','--json'))
+            if not focused_property(observed):raise RuntimeError('Keyboard focus changed before input: '+identifier)
+        owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
+        if owner.value!=app_pid or kernel32.WaitForSingleObject(process,0)==0:raise RuntimeError('Owned input target changed')
+        if user32.GetForegroundWindow()!=int(hwnd):
+            report['keyboard_skipped'].append({'target':identifier,'keys':sequence,'reason':'Foreground changed before dispatch'})
+            return False
+        # focus already verified the exact peer. Do not refocus it with --target:
+        # rendering can replace that peer between the two separate CLI commands.
+        ui('send-keys',sequence,'--via','send-input')
+        report['keyboard_actions'].append({'target':identifier,'keys':sequence,'dispatch':'verified focus; owned HWND only'})
         return True
     def focus_assert(identifier):ui('wait-for',identifier,'-p','HasKeyboardFocus','--value','True','-t','5000')
     def shot(name):
@@ -175,6 +185,11 @@ def main():
             if not physical:ui('invoke','BtnSave')
             wait('TxtEditStatus','保存しました');check(theme+(' physical' if physical else ' UIA')+' save persisted',catalog.search()['items'][0]['tags']==[tags] and catalog.search()['items'][0]['favorite']==(not favorite_before))
             shot(theme+'-saved-wide')
+            # Switching SplitView display mode may close its pane. Use the
+            # existing Details route and wait before capturing the open drawer.
+            resize(700,620);ui('invoke','BtnDetails');wait('TxtTags',tags)
+            shot(theme+'-saved-list-narrow')
+            resize(1200,820);ui('invoke','BtnDetails');wait('TxtTags',tags)
             physical=keys('esc','TxtTags')
             if not physical:ui('invoke','BtnCloseDetails')
             ui('wait-for','BtnDetails','-p','IsEnabled','--value','False','-t','5000')
@@ -189,6 +204,7 @@ def main():
             physical=keys('space','Item'+str(first))
             if not physical:ui('invoke','Item'+str(first),'--action','select')
             wait('TxtEditStatus','保存済み');check(theme+(' physical' if physical else ' UIA')+' grid selection opens editor',True)
+            shot(theme+'-selected-grid-narrow')
             physical=keys('ctrl+a text=unsaved-keyboard','TxtTags')
             if not physical:ui('set-value','TxtTags','unsaved-keyboard')
             wait('TxtEditStatus','未保存の変更')

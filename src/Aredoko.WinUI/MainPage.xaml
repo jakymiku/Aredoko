@@ -36,7 +36,7 @@
     </StackPanel>
     <TextBlock x:Name="SearchMethodHint" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,8,0,0" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtSearchMethodHint"/>
    </Grid>
-   <SplitView x:Name="Details" Grid.Row="3" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="320" PaneBackground="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+   <SplitView x:Name="Details" Grid.Row="3" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="320" PaneBackground="{ThemeResource SolidBackgroundFillColorBaseBrush}">
     <SplitView.Pane>
      <Border KeyDown="Detail_KeyDown" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource OverlayCornerRadius}">
      <Grid RowSpacing="16" Padding="16">

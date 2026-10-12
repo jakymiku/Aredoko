@@ -1,6 +1,26 @@
 # 詳細パネルのキーボード操作・アクセシビリティ
 
-2026-10-13。詳細内のEscと一覧へのフォーカス復帰を追加。検証は**一部完了、native batch全体はFAIL**。Dark側の残り操作を成功扱いにしない。
+## 最新：狭幅詳細パネルの透けを修正・keyboard完走（2026-10-13）
+
+開始HEAD **76a4393c67f1c65aa2ad2422e38a32066f5a60e2**。同じfeature/Draft PR #5/comparison base。今回の実装commitは後続文書commitで記録する。
+
+- ユーザーの狭幅詳細が一覧に重なって見づらい指摘を確認。SplitView.PaneBackgroundを半透明CardBackgroundFillColorDefaultBrushから不透明SolidBackgroundFillColorBaseBrushへ変更。既存の境界線/角丸、wide Inline/narrow Overlay、編集/保存/未保存確認は維持。復元済みWinUI2.3.9 resourcesでLight #F3F3F3/Dark #202020/HighContrast SystemColorWindowColorを確認し、ThemeResourceのまま追従。HighContrast実機は未検証。
+- キー送信前に所有process-instance/HWND/PID/foregroundと実HasKeyboardFocusを再確認。focus後のsend-keysで再度--targetを指定しない。入力guardは維持、過去peer失効の根本原因が確定したとは扱わない。
+- **native06 構造化PASS / 74 checks / 実入力40 / skip0 / 10PNG全目視 / scoped visual PASS / 正常close2 / cleanup警告0**。Light/DarkでCtrl+F/Tab/Shift+Tab/文字検索/前次ページ/list・grid選択/タグ入力/favorite/Ctrl+S DB保存/Esc一覧focus復帰/dirty dialog cancel・discardを完走。DPI96/Contrast off、生成65PNG/1root/隔離DB・settings/CPU契約encoderのみ。終端AI calls/workerなし・settings byte不変・source bytes/mtime/hash不変も到達。
+- 1200x820の保存済みlist、700x620の開いたlist drawer/開いたgrid drawer/未保存dialog/閉じたgridを各themeで撮影。詳細の下へ一覧の画像/文字が透けないことを目視。詳細は縦scroll、狭幅では表示領域が小さくscroll位置でタイトル/プレビューの一部が見える。list/gridのviewport末端で一部の行が見えるのは既存scroll境界。今回のvisual PASSは背景の不透明化と指定controls/dialogに限定し、狭幅の情報密度/表示領域や全面accessibility auditの合格ではない。
+- **native04 構造化PASS70checks/実入力40/skip0/6PNG全目視/正常close2**。両themeの操作は完走したが、狭幅画像で透けが見つかりvisual FAIL。**native05 FAIL28checks/実入力12/skip0/3PNG全目視/正常close1**。サイズ切替でpaneが閉じたためTxtTags focusが見つからず停止、narrow list画像はdrawerが閉じた未成立証拠。06では既存BtnDetailsから開き直し、タグ値を待って撮影。04/05と以前01/02/03の失敗履歴は保持、06まで2 fix-and-rerun cyclesで終了。
+- Fresh **Core35 PASS**。背景変更前Release PASS28.27秒、最終背景変更後 **x64 SelfContained Release PASS26.38秒/errors0/既存IL2104 2warnings（抑制なし）**。syntax/help/path/negative-focus guard/diff・手動WinUIレビュー済み、project scoped PaneBackground APIと実package theme resources確認。専用WinUI analyzer未導入・未実行。production Python6/全Python155/AI・GPU suitesは今回再実行なし。
+- API/モデル/順位/既定Laya無効は変更なし、実GPU/検索品質/高DPI/HighContrast/Narrator/全面Tab順/保存後editor focus保持は今回未確認。OS/依存/ダウンロード/私物scanなし。生JSON/DB/設定/PNG/素材はignored。CI manual-only・Draft未マージを維持。
+
+### 次の3手
+
+1. 保存後editor内のfocus保持を独立sliceで改善・検証（既存SaveAsyncの一時disableでfocusがページボタンへ移る観測あり）。
+2. 実高DPI/Contrast/Narratorと全面keyboardを別検証。OS設定は勝手に変更しない。
+3. reader/Komga/フォルダ本の仕様から次の小さなsliceを選ぶか、未観測の固定品質入力を準備。Laya既定無効を維持。
+
+---
+
+以下はnative01/02/03時点の履歴。2026-10-13。詳細内のEscと一覧へのフォーカス復帰を追加。検証は**一部完了、native batch全体はFAIL**。Dark側の残り操作を成功扱いにしない。
 
 ## 変更
 
