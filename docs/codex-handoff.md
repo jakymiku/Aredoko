@@ -360,3 +360,9 @@
 - **次の3手:** (1) python tools/test_ai_profile_ui.py --editor-only --appearance-checks --coverage-checks --output data/ai-ui/appearance-07（新規のみ）で最終cache修正と未到達状態を全PNG確認、(2) 実EG2の生成段階的な負荷/メモリ測定、(3) 10,000超の対象/資源設定と明示小実サンプル評価。ゲーム前面制約は現在解除、Layaは実験APIのみ。
 
 - 最終Python **103 tests PASS**（appearance-unit、68.88秒）、C# **15 checks PASS**、最終WinUI x64 SelfContained Release **PASS（IL2104 2警告）**。最後のharness修正はpy_compile/--help/git diff --check PASS、native未再実行。生成privateではない素材だけ、所有test processは終了済み。
+
+
+### 通常GUI再開の提出
+- 実装/検証記録HEAD **5ac973b**（5ac973bdb9650ba1a0d0c634c17ae178397779ab）。後続は提出文書のみ。同じfeature/Draft PR #5/baseへ通常push、未マージ。最新HEADは実Gitを確認。
+- 最終Python103/C#15/WinUI Release（旧IL2104 2警告）/syntax/help/diff PASS。GUI明暗AI/上限/固定action、Light3dialogと17件CUDA検索は確認。最新appearance-06は75 recorded successful checks/13 PNG全目視だが全体FAIL、最終cache期待修正はnative未再実行。撮影状態visualと全体結果を区別。旧FAIL/cleanup warningsを消さない。
+- 所有GUI/API/GPUworker/test process終了、sourcehash不変、生成profileのみcleanup。私物/個人設定/モデル/依存/OS変更や取得なし。新規outputで最終cache条件/Dark残件確認から続行、実GPU大規模/高DPI/HC/1TBは後続。

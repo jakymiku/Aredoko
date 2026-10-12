@@ -5,7 +5,7 @@
 
 ## 最新の再開地点（2026-10-12・通常GUI再開）
 
-開始HEAD **8a62492**。同じfeature/Draft PR #5/baseを保持。実装/検証記録HEADは最新codex-handoff.md提出節、最新HEADは実Gitを確認。
+開始HEAD **8a62492**。同じfeature/Draft PR #5/baseを保持。実装/検証記録HEAD **5ac973b**。後続は提出文書のみで、最新HEADは実Gitを確認。
 
 **ユーザーが通常のGUIテストを許可し、ゲーム前面維持の制約を解除した。** Sandboxはdisabledなのでlocal target、専用DB/settings/生成17素材。OS/私物/個人設定/依存/重みの変更・取得なし。
 
@@ -71,7 +71,7 @@ AI対象10,000件、256件取得・16件進捗保存・旧cache/global fusionを
 
 ## 現在のGit状態
 
-- 今回の開始HEADは `8a62492`。実装/検証記録HEADはdocs/codex-handoff.md最新提出節、最新HEADは実Gitを確認すること。前段階の索引拡張は `5be9b88`、テーマ修正は `8418d68`。
+- 今回の開始HEADは `8a62492`、実装/検証記録HEADは `5ac973b`。後続は提出文書のみで最新HEADは実Gitを確認すること。前段階の索引拡張は `5be9b88`、テーマ修正は `8418d68`。
 - HEADブランチ: `feat/winui3-production-mvp-20261011`。
 - Draft PR [#5](https://github.com/jakymiku/Aredoko/pull/5)、base `feat/gui-framework-comparison-20261010`。未マージ。PR #1/#2/#3も保持し、mainへmerge・force-push・squashしない。
 - 引継ぎ開始時点はclean、機能作業の未コミット残りなし。テスト用API/GUI/GPU workerは停止済み。
