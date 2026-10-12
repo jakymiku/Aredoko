@@ -1,5 +1,7 @@
 # AI索引の対象選択 — GUI・設定保存・CPU/API
 
+> 2026-10-13追記：root欄を最大160 DIPの標準ScrollViewerへ収めた。先頭256＋保存ID（最大512 controls）は未仮想化のまま。生成metadata5万/258登録rootでsaved258への到達・restart/CPU countsを確認。複数rootのID keyset反復sortを修正し、同分布256root countsは14.2→1.41秒。scope配列256・対象1万・settings16KiBの上限は維持。詳細/限界は[規模検証](library-scale.md)。
+
 2026-10-12。**GUI選択欄・ユーザー設定保存・CPU/APIと生成少数件の実CUDAは実装・検証済み**。現行は登録済み・present・除外適用後の候補から最大10,000件。上限を維持したまま、ユーザーが必要な範囲を指定できるようにする。個人フォルダの登録・走査・データ移動を自動で行わない。
 
 ## 最初の実装範囲

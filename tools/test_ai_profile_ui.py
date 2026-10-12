@@ -33,7 +33,10 @@ def main():
     parser.add_argument('--coverage-checks',action='store_true',help='With editor-only/appearance checks, index the 17 generated items on existing CUDA weights and verify semantic coverage text')
     parser.add_argument('--resource-checks',action='store_true',help='Also save resource policy, release/reload CUDA and verify saved GUI values after restart')
     parser.add_argument('--scope-checks',action='store_true',help='Generated native scoped index/search/save/restart slice on existing CUDA')
+    parser.add_argument('--scale-checks',action='store_true',help='CPU-only 50k metadata, 258 roots and long-name native checks')
     args=parser.parse_args()
+    if args.scale_checks and (not args.editor_only or args.scope_checks or args.layout_checks or args.appearance_checks or args.coverage_checks or args.resource_checks):parser.error('--scale-checks requires only --editor-only')
+    if args.scale_checks and not args.output.resolve().is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Scale evidence must stay in data/ai-ui')
     if args.scope_checks and (not args.editor_only or args.layout_checks or args.appearance_checks or args.coverage_checks or args.resource_checks):parser.error('--scope-checks requires only --editor-only')
     if args.scope_checks and not args.output.resolve().is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Scope evidence must stay in data/ai-ui')
     if args.resource_checks and not args.coverage_checks:parser.error('--resource-checks requires --coverage-checks')
@@ -195,10 +198,10 @@ def main():
         report.setdefault('index_states',[]).append({key:state[key] for key in ('state','processed','total','indexed','device','profile')})
         check('GUI index complete',state['state']=='complete' and state['indexed']==17 and (not expect_inference or state['device']=='cuda'))
         ui('wait-for','AIStatus','--value','準備完了','--contains','-t','5000')
-    def show_resource_control(identifier):
+    def show_resource_control(identifier,from_bottom=False):
         # UIA Focus alone does not scroll this nested WinUI ScrollViewer.
         # Scroll the actual owned settings viewport and check observed bounds.
-        ui('scroll','AIOptions','--to','top')
+        ui('scroll','AIOptions','--to','bottom' if from_bottom else 'top')
         for _ in range(35):
             tree=json.loads(ui('inspect','--json','--depth','12'));stack=[tree];nodes={}
             while stack:
@@ -218,7 +221,7 @@ def main():
             if resource_control_visible(title,summary,item):
                 time.sleep(.4)
                 check(identifier+' visible in scrolled settings',True);return
-            ui('scroll','AIOptions','--direction','down');time.sleep(.1)
+            ui('scroll','AIOptions','--direction','up' if from_bottom else 'down');time.sleep(.1)
         raise RuntimeError(identifier+' cannot be brought into settings viewport')
     def resource_checks(theme):
         policy={'idle_release_seconds':60,'index_pause_ms':50}
@@ -345,6 +348,63 @@ def main():
             data=DEFAULT_PROFILE.to_dict();data.update(label='GUI test '+key,modalities=['text'],precision='float32')
             if key=='missing':data['directory']=nonce+'-missing-weights'
             path.write_text('{invalid' if key=='invalid' else json.dumps(data),encoding='utf-8');profile_files.append(path)
+        if args.scale_checks:
+            import shutil
+            from create_library_scale_fixture import create as create_scale,digest as scale_digest
+            info=create_scale(target/'large');shutil.copyfile(target/'large/catalog.sqlite',target/'catalog.sqlite')
+            report['scale_fixture']=info;report['scale_timings_seconds']=[]
+            last=info['long_root_id'];selected={'root_ids':[last],'kind':'','shelf':None}
+            settings.write_text(json.dumps({'version':1,'profile':'default','scope':selected}),encoding='utf-8')
+            for theme in ('Light','Dark'):
+                ui_theme=theme;begin=time.perf_counter();start('scale-'+theme,folder/names['text'])
+                report['scale_timings_seconds'].append({'phase':theme+' launch-to-ready','seconds':round(time.perf_counter()-begin,3)})
+                resize(1200,800);record_display(theme)
+                ui('wait-for','TxtCount','--value','50,000 件','-t','10000')
+                ui('wait-for','TxtPageNumber','--value','1 / 834','-t','5000')
+                screenshot(theme+'-50k-list')
+                begin=time.perf_counter();ui('invoke','BtnNext');ready()
+                ui('wait-for','TxtPageNumber','--value','2 / 834','-t','5000')
+                report['scale_timings_seconds'].append({'phase':theme+' next-page-observed','seconds':round(time.perf_counter()-begin,3)})
+                ui('invoke','BtnPrevious');ready();ui('invoke','BtnLayout');ready();resize(700,620)
+                visible_controls(theme+'-grid',{'BtnLayout','BtnSearch','TxtCount'});screenshot(theme+'-50k-narrow-grid')
+                ui('invoke','BtnLayout');ready();resize(1200,800)
+                begin=time.perf_counter();ui('set-value','TxtQuery','最後の検証候補');ui('invoke','BtnSearch');ready()
+                ui('wait-for','TxtCount','--value','1 件','-t','10000');ui('wait-for','Item50000','-t','5000')
+                report['scale_timings_seconds'].append({'phase':theme+' literal-last-observed','seconds':round(time.perf_counter()-begin,3)})
+                screenshot(theme+'-50k-literal-last')
+                ui('set-value','TxtQuery','');ui('invoke','BtnSearch');ready()
+                begin=time.perf_counter();dialog();show_resource_control('AIScopeOptions');ui('invoke','AIScopeOptions','--action','expand')
+                ui('wait-for','AIScopeRefresh','-p','IsEnabled','--value','True','-t','20000')
+                show_resource_control('AIScopeRootsScroll');ui('scroll','AIScopeRootsScroll','--to','bottom')
+                show_resource_control('AIScopeRoot_'+str(last))
+                ui('wait-for','AIScopeRoot_'+str(last),'--value','On','-t','5000')
+                report['scale_timings_seconds'].append({'phase':theme+' scope-open-and-last-root-visible','seconds':round(time.perf_counter()-begin,3)})
+                tree=json.loads(ui('inspect','--json','--depth','12'))
+                def collect(node):
+                    if isinstance(node,dict):
+                        yield node
+                        for value in node.values():yield from collect(value)
+                    elif isinstance(node,list):
+                        for value in node:yield from collect(value)
+                ids=[n.get('automationId','') for n in collect(tree) if n.get('automationId','').startswith('AIScopeRoot_')]
+                check(theme+' bounded root choices include saved beyond256',len(set(ids))==257 and 'AIScopeRoot_'+str(last) in ids)
+                resize(700,620);show_resource_control('AIScopeRootsScroll');ui('scroll','AIScopeRootsScroll','--to','bottom');show_resource_control('AIScopeRoot_'+str(last));screenshot(theme+'-258-roots-long-path')
+                show_resource_control('AIScopeCount3',from_bottom=True)
+                ui('wait-for','AIScopeCount0','--value',str(info['per_root'][str(last)])+' 件','--contains','-t','5000')
+                screenshot(theme+'-last-root-counts')
+                resize(1200,800);show_resource_control('AIScopeAllRoots');ui('invoke','AIScopeAllRoots','--action','toggle-on')
+                show_resource_control('AIScopeRefresh',from_bottom=True);ui('invoke','AIScopeRefresh')
+                ui('wait-for','AIScopeCount0','--value','50,000 件','--contains','-t','15000')
+                ui('wait-for','AIScopeCount1','--value','10,000 件','--contains','-t','5000')
+                show_resource_control('AIScopeCount3',from_bottom=True);screenshot(theme+'-50k-capped-counts')
+                show_resource_control('AIScopeSave',from_bottom=True);ui('invoke','AIScopeSave')
+                ui('wait-for','AIScopeFeedback','--value','保存しました','--contains','-t','15000')
+                check(theme+' all scope saved',api('/api/library/ai/scope')['scope']['root_ids'] is None)
+                check(theme+' no model loaded',not status()['resident'])
+                close_dialog();api('/api/library/ai/scope',{'scope':selected});stop()
+            check('real PNG bytes/mtime unchanged',scale_digest(target/'large/generated')==info['source_digest'])
+            report['scale_verification']='pass';report['pass']=True
+            return
         if args.scope_checks:
             import sqlite3
             second=target/'second-media';second.mkdir()

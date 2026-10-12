@@ -1,4 +1,4 @@
-> **最新の状況（2026-10-12）**：WinUIの閲覧/整理・グリッド・交換可能なAI検索・対象GUI/設定保存を実装済み。今回は架空26素材/日本語20文の固定評価ツールを追加し、実CUDAで130条件を測定。semantic12問の種類指定text/combinedはprimary Top1 12/12、種類なしcombined10/12、視覚4問の画像指定cover4/4・combined2/4。全Python147 tests PASS。製品順位やGUIは変更せず、品質gate未定義。1TB/私物/実本文・音声内容/reader/Komga/AOT/配布完了とは区別する。CI manual-only・Draft PR #5未マージ。最新の詳細は [検索品質ベースライン](search-quality-baseline.md) / [Codex引継ぎ](codex-handoff.md)。以下は過去の履歴。
+> **最新の状況（2026-10-13）**：WinUI閲覧/整理・グリッド・交換可能なAI検索・対象GUI/設定保存に加え、5万生成metadata/実PNG75件/258rootでCPUと実GUIを検証。256root件数確認14.2→1.41秒、root欄をbounded scrollへ修正。全Python150/Core19/Release PASS、native45checks/12PNG全目視。1TB私物走査や5万実メディア索引の証拠ではない。Laya gate未通過、reader/Komga/AOT/配布は未完。CI manual-only・Draft PR #5未マージ。詳細は[規模検証](library-scale.md) / [引継ぎ](codex-handoff.md)。以下は過去の履歴。
 
 ---
 

@@ -174,11 +174,16 @@ class AISearch:
         # New records cannot lengthen a running enumeration indefinitely.
         with self.catalog.connect() as db:
             upper=db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
+        # Multiple root indexes can make SQLite repeatedly sort the whole
+        # selected population for each 256-row page. Pin the ID-range driver
+        # for multi-root keyset reads; keep the selective single-root plan.
+        join=self.catalog.JOIN+'JOIN library_roots r ON r.id=l.root_id '
+        if scope is not None and scope['root_ids'] is not None and len(scope['root_ids'])>1:
+            join=join.replace(' JOIN ',' CROSS JOIN ')
         last=0;yielded=0
         while last<upper and (all_candidates or yielded<limit):
             with self.catalog.connect() as db:
-                rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+self.catalog.JOIN+
-                    'JOIN library_roots r ON r.id=l.root_id WHERE '+' AND '.join(where)+
+                rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+join+'WHERE '+' AND '.join(where)+
                     ' AND i.id>? AND i.id<=? ORDER BY i.id LIMIT ?',
                     values+[last,upper,ROW_BATCH_SIZE]).fetchall()
             if not rows:break

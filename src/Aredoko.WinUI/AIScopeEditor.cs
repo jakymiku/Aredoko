@@ -56,7 +56,13 @@ public sealed class AIScopeEditor : IDisposable
         kind.SelectedIndex=0;shelfMode.SelectedIndex=0;
         all.Checked+=(_,_)=>Changed();all.Unchecked+=(_,_)=>Changed();
         kind.SelectionChanged+=(_,_)=>Changed();shelfMode.SelectionChanged+=(_,_)=>Changed();shelf.TextChanged+=(_,_)=>Changed();
-        foreach(var element in new UIElement[]{all,rootList,kind,shelfMode,shelf})fields.Children.Add(element);
+        // Bound the expanding settings extent even with hundreds of roots.
+        var rootViewport=new ScrollViewer {Content=rootList,MaxHeight=160,
+            HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
+        AutomationProperties.SetAutomationId(rootViewport,"AIScopeRootsScroll");
+        AutomationProperties.SetName(rootViewport,"AI対象フォルダ一覧");
+        foreach(var element in new UIElement[]{all,rootViewport,kind,shelfMode,shelf})fields.Children.Add(element);
         var panel=new StackPanel {Spacing=12};
         panel.Children.Add(new TextBlock {Text="保存するまで現在のAI対象は変わりません。閉じると未保存の条件は破棄します。文字検索には適用しません。",TextWrapping=TextWrapping.Wrap});
         panel.Children.Add(fields);panel.Children.Add(refresh);
@@ -107,7 +113,7 @@ public sealed class AIScopeEditor : IDisposable
             var ids=registeredById.Keys.Take(256).ToHashSet();
             if(value["root_ids"] is JsonArray selected)foreach(var node in selected)ids.Add(node!.GetValue<int>());
             foreach(var id in ids.Order()) {
-                var box=new CheckBox {Content=new TextBlock {Text=registeredById.GetValueOrDefault(id,$"登録が見つかりません（ID {id}）"),TextWrapping=TextWrapping.Wrap}};
+                var box=new CheckBox {HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch,Content=new TextBlock {Text=registeredById.GetValueOrDefault(id,$"登録が見つかりません（ID {id}）"),TextWrapping=TextWrapping.Wrap}};
                 AutomationProperties.SetAutomationId(box,$"AIScopeRoot_{id}");AutomationProperties.SetName(box,registeredById.GetValueOrDefault(id,$"未登録フォルダ ID {id}"));
                 box.Checked+=(_,_)=>Changed();box.Unchecked+=(_,_)=>Changed();roots[id]=box;rootList.Children.Add(box);
             }
