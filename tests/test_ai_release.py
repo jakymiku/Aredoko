@@ -242,6 +242,15 @@ class ReleaseTests(unittest.TestCase):
         self.build()
         self.assertEqual(self.ai.status()["indexed"],2)
         self.assertEqual(self.encoder.documents,2)
+        # A fully cached rebuild should not sleep for a configured inference
+        # pause. Only freshly encoded documents are paced.
+        self.ai.configure(index_pause_ms=2000)
+        started=time.monotonic()
+        self.ai.start()
+        self.ai.worker.join(1.5)
+        self.assertFalse(self.ai.worker.is_alive())
+        self.assertLess(time.monotonic()-started,1.5)
+        self.assertEqual(self.encoder.documents,2)
 
     def test_resource_invalid_values_and_timer_stops_at_close(self):
         for args in ({"idle_release_seconds":True},{"idle_release_seconds":3601},
