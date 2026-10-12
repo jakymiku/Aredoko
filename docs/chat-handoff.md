@@ -1,5 +1,28 @@
 # Aredoko — GPTチャットへの最新引継ぎ
 
+## 最新の作業：所有AI workerの解放と選択式リソース設定（2026-10-12）
+
+開始HEAD **753ae518b58a2fb97d5e8cc0e353909396e76697**。**同じ`feat/winui3-production-mvp-20261011` / Draft PR #5（base `feat/gui-framework-comparison-20261010`）に追記。** 最新の機能実装コミットは **ecad513e76928b79edb442107674edd4ede8f234**（CPU負荷テストの待機上限調整まで）。この引継ぎドキュメント以降の正確なHEADはGitHubで取得する。
+
+### 変更したこと
+
+1. `app/ai_process.py` は`EncoderProcess.release()`を追加。**自身が所有するアイドル中のsubprocessのみ**を停止し、device/telemetryを消去。次のencodeで同じprofile/重みを再ロードできる。対して`close()`は永続終了フラグとlockで再起動を禁止する。`_stop()`は元ファイル/VectorStoreには触らない。
+2. `app/ai_search.py`: 既存の`inference` guard共有、検索/索引worker生存中の解放を即時`AIBusy`、closeとstart/searchの競合防止。statusに`resident/worker_state/resource_policy`を追加。自動解放は**既定0秒（無効）**で、`time.monotonic()`から処理後のアイドル時間を測り、`Event`で終了する。索引待機は**既定0ms（無効）**で`cancel.wait`を用い、検索には適用しない。
+3. `app/production_server.py`: 既存localhost/token/Originを使った`POST /api/library/ai/release`（本文`{}`、Busyは409）、`GET/POST /api/library/ai/resource`（`{"idle_release_seconds":0..3600,"index_pause_ms":0..2000}`）。失敗時AIだけエラー、文字検索を保持。
+4. `app/ai_settings.py`: `settings.json`の`resource`設定を原子的に保存。**従来のversion1/profileのみのJSONにも後方互換**。`profile`選択/adapter/model identity/旧vectorキャッシュと独立。GUIの変更は即時に有効で、再索引不要。
+5. `src/Aredoko.WinUI/MainPage.xaml.cs` の既存「AI索引」ダイアログで、**「AIをメモリから解放」**、自動解放0/1/5/15分、索引待機0/50/200/500/1000msの選択・保存、現在の待機/常駐表示。元の索引status/start/cancelは固定領域に維持。利用可能な既定設定でも元ファイル/索引は削除しない。Layaは今回未変更の既定無効実験API。
+
+### テスト・検証を混同しない
+
+- CPU専用`tests/test_ai_release.py`: 偽encoder/所有subprocess、解放→再検索、VectorStore行不変、検索・索引のbusy、close後再起動禁止、timer/索引待機キャンセル、API token/Origin/不正値、文字検索。**[Actionsの専用CI](https://github.com/jakymiku/Aredoko/actions/runs/38233333368) PASS。**
+- `tests/test_ai_settings.py`: 古いprofile-only JSON、保存後のprofile切替でresource維持、型や範囲外拒否。その他既存AI/GUI比較コードを変更せず。**WindowsフルCI/WinUI Release結果は各Actionsの最終ジョブで確認すること。**
+- 並列CI環境で以前の`test_ai_scaling.py`の2,105件CPU索引が60秒以内に終わらず失敗したため、**テスト用join上限だけ180秒**へ調整。製品のworker推論タイムアウト/対象上限や既存テストの正当性判定は変更しない。
+- **今回やっていない**: 以前PASSした実GPU 10,000件126項目・HTTP 28項目の再実行、実VRAMの解放量測定、Windows実画面の新AI dialog操作、一般検索精度/別checkpoint/1TBや個人メディア走査。GPU/FPS上限は保証しない。新たなモデルや依存DL・OS変更なし。元ファイル不変、mainマージ/force pushなし。
+
+次の3手: (1) 生成素材の実GPUでquery→解放→所有worker消滅→再queryとベクトルhash確認、(2) Windows実画面でAI dialogのLight/Dark・狭幅・busy表示と設定保存・旧profile JSONを確認、(3) 未検証の1万件超の対象root/種類/棚/coverage設計と架空日本語品質セットを検討（上限は撤廃しない）。
+
+---
+
 更新: 2026-10-12。旧Web試作段階の引継ぎを置き換える。**製品GUIはWinUI 3に決定済みで、EmbeddingGemma 2検索まで実装・実GPU検証済み。最初から作り直さない。**
 
 
