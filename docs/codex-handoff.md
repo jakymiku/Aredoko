@@ -465,3 +465,8 @@ preflightは768×768/30tag/128件で49 checks PASS。CLI guardはbenchmark9/API5
 既定の小素材/stagesを保持。cover各32..768、metadata-tags0..30、tag長60。build1phaseは測定toolだけ最大3600秒、製品timeoutは変更なし。APItoolは生成/合格/実GPU10000/生成rootを確認し、api-result.jsonがない時だけ実行する。全result/DB/生成素材/logはignored。途中pass=falseを失敗と混同せず最終exit/resultを確認。
 
 次の3手: (1) [ai-resource-policy.md](ai-resource-policy.md)の明示worker解放を実装し生成実GPUで停止/再ロード/競合を検証、(2) 選択式idle解放/索引待機と上限超の対象選択をGUIへ、(3) 明示指定の小実サンプルで意味/表紙の検索品質を評価。Layaは精度gate未達の既定無効実験APIを保持。
+
+
+### 実GPU1万件・HTTP検証の提出
+実装/結果コミット **82134643ce11018919048094f779e569f77ec148**。後続は提出文書のみ、最新HEADは実Gitで確認。同じfeature/Draft PR #5/baseへ通常push、未マージ。gpu-large-10k-01は126 checks PASS、text10000/cover938、document10000/image938/query21、所有9handles全終了。HTTPは28 checks PASS/query7だけ/所有3handles全終了、注釈復元/vector/source/既存result digest不変。benchmark guard9/API guard5 PASS。Python103 tests PASS（78.438秒）、C#15 checks PASS、WinUI x64 SelfContained Release PASS（37.72秒、既存IL2104 2警告を抑制せず保持）。WinUI code reviewの変更関連確認済み、analyzer未導入。GUIは今回変更/再実行せず前回105checks/17PNG目視PASSを保持。私物/個人設定/OS/モデル/依存変更・取得なし、検証worker残留なし。
+次の3手: 明示worker解放の実装/実GPU停止再ロード競合検証、選択式idle解放/索引待機/上限超対象選択、小さな明示実サンプル品質評価。ai-resource-policy.mdは未実装の次段階仕様。全1TB/GUI1万件負荷/一般的検索精度/別checkpoint/Laya改善/reader/Komga/AOT/配布を合格にしない。
