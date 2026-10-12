@@ -5,7 +5,7 @@
 **直近の変更は `docs/chat-handoff.md` の最新節と `docs/ai-resource-policy.md` 冒頭を必ず参照。** 製品版WinUI 3＋実GPU10,000件 / HTTP28 checksは従来の検証済み資産として維持。今回は**新AIモデルとGPU再測定は行っていない**。
 
 - `app/ai_process.py`: 同じencoder lockで`release()`（一時的な所有worker解放）と`close()`（終了フラグを先に立てる永続停止）を区別。device/telemetry reset。検索でlazy reload。close後の再spawnは禁止。
-- `app/ai_search.py`: 既存`inference`と索引生存をnonblockingで検査し、実行中の解放を409 Busyへ。statusのresident/worker_state。単調時計による**任意**idle解放（初期0秒OFF）、item間のキャンセル可能な**任意**待機（初期0ms OFF）、close時timer停止。モデルidentity/ベクトルは不変。
+- `app/ai_search.py`: 既存`inference`と索引生存をnonblockingで検査し、実行中の解放を409 Busyへ。statusのresident/worker_state。単調時計による**任意**idle解放（初期0秒OFF）、新規推論後だけのキャンセル可能な**任意**待機（初期0ms OFF、cache rebuildは待機なし）、close時timer停止。モデルidentity/ベクトルは不変。
 - `app/production_server.py`: 認証済みPOST `/api/library/ai/release`, GET/POST `/api/library/ai/resource`; `app/ai_settings.py`: version1/profile-only JSONとの後方互換・独立resource設定をatomic保存。0..3600秒 / 0..2000ms、型/範囲外を拒否。
 - `src/Aredoko.WinUI/MainPage.xaml.cs`: 既存小窓の固定索引status/start/cancelを保ちつつ、手動解放・自動解放時間・索引待機選択/保存/注意文を追加。GUI画面操作は未実行。
 - 新規`tests/test_ai_release.py`＋`.github/workflows/ai-release-checks.yml`、既存`tests/test_ai_settings.py`、`docs/ai-resource-policy.md`更新。**専用Windows CPU CI PASS** [run 38233333368](https://github.com/jakymiku/Aredoko/actions/runs/38233333368)。一般Pythonテスト/WinUI Releaseの最終結果はworkflowで確認し、未完了をPASS扱いしない。
