@@ -19,6 +19,8 @@
 3. Laya日本語gate再評価。既定無効を維持し、reader/Komga/フォルダ本集約は別sliceで設計する。
 
 
+今回の実装・検証・仕様更新commitは **f440e5916579ce1f1b4e0daca331a00466f236eb**。この提出記録は同commitからの文書のみの後続commit。通常push後の最終HEADとCI runs/checks観測はGit/PR head・PR説明で確認する。Draft/base/main境界は維持。
+
 ---
 
 ## 最新：架空日本語の検索品質ベースライン（2026-10-12）
