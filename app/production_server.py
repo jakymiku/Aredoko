@@ -12,7 +12,7 @@ import sqlite3
 from ai_process import EncoderProcess, AIUnavailable
 from ai_search import AISearch, AIBusy, MAX_ITEMS
 from ai_profiles import load_profile
-from ai_settings import AIProfileSettings
+from ai_settings import AIProfileSettings,validate_resource,RESOURCE_DEFAULT
 from ai_ranking import POLICIES
 from search_intent import SearchIntent
 from intent_questions import QUESTION_SETS
@@ -74,6 +74,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())
+                if path=='/api/library/ai/resource': return self.send(200,{'policy':profiles.resource()})
                 if path=='/api/library/roots': return self.send(200,{'items':catalog.index.roots()})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
@@ -114,6 +115,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                 if self.path=='/api/library/ai/release':
                     if body: raise ValueError('Release takes no arguments')
                     return self.send(200,ai.release())
+                if self.path=='/api/library/ai/resource':
+                    policy=validate_resource(body)
+                    # No model-space change; the active encoder is never reloaded.
+                    if isinstance(ai,AISearch): ai.configure(**policy)
+                    profiles.set_resource(policy)
+                    return self.send(200,{'saved':True,'policy':policy})
                 if self.path=='/api/library/ai/search':
                     return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking')))
                 if self.path=='/api/library/roots':
@@ -146,6 +153,9 @@ def main():
     catalog=ProductionCatalog(args.db)
     profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile)
     ai=DisabledAI(profiles.startup_error) if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking)
+    if isinstance(ai,AISearch):
+        try: ai.configure(**profiles.resource())
+        except (ValueError,OSError,json.JSONDecodeError): ai.configure(**RESOURCE_DEFAULT)
     intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check)
     server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles))
     print(f'Aredoko production: http://127.0.0.1:{server.server_port}',flush=True)
