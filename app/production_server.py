@@ -29,6 +29,7 @@ class DisabledAI:
     def start(self,*args): raise AIUnavailable(self.status()['error'])
     def search(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def cancel_build(self): return {'cancel_requested':False}
+    def release(self): raise AIUnavailable(self.status()['error'])
     def close(self): pass
 
 def create_ai(catalog,profile_path=None,ranking='mean-rrf'):
@@ -110,6 +111,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     return self.send(200,profiles.choose(body['id']))
                 if self.path=='/api/library/ai/index': return self.send(200,ai.start(body.get('limit',MAX_ITEMS)))
                 if self.path=='/api/library/ai/cancel': return self.send(200,ai.cancel_build())
+                if self.path=='/api/library/ai/release':
+                    if body: raise ValueError('Release takes no arguments')
+                    return self.send(200,ai.release())
                 if self.path=='/api/library/ai/search':
                     return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking')))
                 if self.path=='/api/library/roots':
