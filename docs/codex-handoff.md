@@ -1,5 +1,22 @@
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
+## 2026-10-12最新：AI worker解放／リソース設定、引継ぎ開始HEAD 753ae518
+
+**直近の変更は `docs/chat-handoff.md` の最新節と `docs/ai-resource-policy.md` 冒頭を必ず参照。** 製品版WinUI 3＋実GPU10,000件 / HTTP28 checksは従来の検証済み資産として維持。今回は**新AIモデルとGPU再測定は行っていない**。
+
+- `app/ai_process.py`: 同じencoder lockで`release()`（一時的な所有worker解放）と`close()`（終了フラグを先に立てる永続停止）を区別。device/telemetry reset。検索でlazy reload。close後の再spawnは禁止。
+- `app/ai_search.py`: 既存`inference`と索引生存をnonblockingで検査し、実行中の解放を409 Busyへ。statusのresident/worker_state。単調時計による**任意**idle解放（初期0秒OFF）、item間のキャンセル可能な**任意**待機（初期0ms OFF）、close時timer停止。モデルidentity/ベクトルは不変。
+- `app/production_server.py`: 認証済みPOST `/api/library/ai/release`, GET/POST `/api/library/ai/resource`; `app/ai_settings.py`: version1/profile-only JSONとの後方互換・独立resource設定をatomic保存。0..3600秒 / 0..2000ms、型/範囲外を拒否。
+- `src/Aredoko.WinUI/MainPage.xaml.cs`: 既存小窓の固定索引status/start/cancelを保ちつつ、手動解放・自動解放時間・索引待機選択/保存/注意文を追加。GUI画面操作は未実行。
+- 新規`tests/test_ai_release.py`＋`.github/workflows/ai-release-checks.yml`、既存`tests/test_ai_settings.py`、`docs/ai-resource-policy.md`更新。**専用Windows CPU CI PASS** [run 38233333368](https://github.com/jakymiku/Aredoko/actions/runs/38233333368)。一般Pythonテスト/WinUI Releaseの最終結果はworkflowで確認し、未完了をPASS扱いしない。
+- 既存CPU2,105件の`tests/test_ai_scaling.py`は同時に走るWindows CIで旧join60sを超えたため**テストjoinのみ180sに調整**。製品timeout/IndexStore/GPU仕様変更なし。実GPU10,000件126 checksを不要に再実行しない。
+- Layaは未変更（experimental/disabled-by-default）。main未マージ、既存Draft PR #5/base/安全なテスト素材境界を保持。
+- **残件・次の3手**: ①実GPU所有subprocessの停止/再ロードと元source/vectorのhash不変をユーザー側で確認、②新WinUI AI dialogのLight/Dark・狭幅・busy/保存設定を実機確認、③10,000超のroot/種類/棚/coverage選択と架空日本語品質セットを設計（上限の無制限解放や自動Laya適用は禁止）。
+
+最新実装コミット: **ecad513e76928b79edb442107674edd4ede8f234**。この文書更新分を含む最終HEADは`git rev-parse HEAD`で確認し、報告/PR本文に正確な値を反映する。
+
+---
+
 > **最初に読む文書。** 2026-10-10時点の旧 `docs/status.md` / README には「GUI未決定」「ネイティブGUI未実装」という古い記述が残っている。現在の方針・分岐状況はこのファイルと [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) を優先する。ファイル上の実装が異なるときは実際のコードを調査してから更新する。
 
 ## 今、何をしているのか
