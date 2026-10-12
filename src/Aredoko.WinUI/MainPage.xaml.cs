@@ -66,14 +66,14 @@ public sealed partial class MainPage : Page
             if(!searches.IsCurrent(version)||disposed)return;
             if(result.Items.Count==0 && page>0){page=Math.Max(0,(result.Total-1)/60);await LoadAsync();return;}
             lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;
-            rows=result.Items; active=null; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
+            rows=result.Items; active=null; Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+59)/60)}";
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*60<result.Total;
             Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
             Empty.Text=query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
             Notice("読込完了",selectedMode>0 && query.Length>0 ? "AI検索の候補です。索引済みの最大2,000件から類似順に表示します。" : selectedMode>0 ? "探したい内容を文章で入力してください。AI索引の作成は「AI索引」から。" : "名前・タグの文字検索。");
-        } catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;rows=[];active=null;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Empty.Text="再接続からやり直してください。";Failure(ex);} }
+        } catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;rows=[];active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=selectedMode>0?"この条件ではAI検索を利用できません。\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。":"検索を完了できませんでした。再接続からやり直してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
     private void RenderRows()
@@ -93,9 +93,9 @@ public sealed partial class MainPage : Page
                 AutomationProperties.SetAutomationId(image, $"Preview{row.Id}");
                 AutomationProperties.SetName(image, row.Title + "のサムネイル");
                 var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-                text.Children.Add(new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis });
-                text.Children.Add(new TextBlock { Text = $"{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"] });
-                var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" ? "読込中" : "プレビューなし", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"] };
+                text.Children.Add(new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] });
+                text.Children.Add(new TextBlock { Text = $"{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
+                var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
                 AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
                 text.Children.Add(previewStatus);
                 if (tiles)
@@ -200,7 +200,7 @@ public sealed partial class MainPage : Page
     private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;Query.Focus(FocusState.Keyboard);}
     private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0);}
-    private void SearchMode_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){Query.PlaceholderText=SearchMode.SelectedIndex>0?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";searchTimer.Stop();searchTimer.Start();}}
+    private void SearchMode_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){AutomationProperties.SetName(Query,SearchMode.SelectedIndex>0?"AI検索の文章":"名前・タグ検索");Query.PlaceholderText=SearchMode.SelectedIndex>0?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";searchTimer.Stop();searchTimer.Start();}}
     private void Kind_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Previous_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(Math.Max(0,page-1));
     private async void Next_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(page+1);
@@ -222,8 +222,18 @@ public sealed partial class MainPage : Page
     }
     private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=tiles?"リスト表示":"タイル表示";RenderRows();RestoreSelection();}
     private void OpenDetails_Click(object sender,RoutedEventArgs e){if(active is not null)Details.IsPaneOpen=true;}
-    private async void CloseDetails_Click(object sender,RoutedEventArgs e){if(await ConfirmDiscardAsync()){active=null;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;Editor.IsEnabled=false;Details.IsPaneOpen=false;RestoreSelection();}}
-    private void Page_SizeChanged(object sender,SizeChangedEventArgs e){if(Details is null)return;Details.DisplayMode=e.NewSize.Width<1000?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;Details.OpenPaneLength=Math.Min(320,Math.Max(240,e.NewSize.Width-64));if(e.NewSize.Width>=1000)Details.IsPaneOpen=true;else if(active is null)Details.IsPaneOpen=false;}
+    private async void CloseDetails_Click(object sender,RoutedEventArgs e){if(await ConfirmDiscardAsync()){active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;Editor.IsEnabled=false;Details.IsPaneOpen=false;RestoreSelection();}}
+    private void Page_SizeChanged(object sender,SizeChangedEventArgs e)
+    {
+        if(Details is null || ViewTools is null)return;
+        var narrow=e.NewSize.Width<840;
+        Grid.SetRow(ViewTools,narrow?1:0);Grid.SetColumn(ViewTools,narrow?0:1);Grid.SetColumnSpan(ViewTools,narrow?2:1);
+        ViewTools.HorizontalAlignment=narrow?HorizontalAlignment.Left:HorizontalAlignment.Right;
+        ViewTools.Margin=narrow?new Thickness(0,8,0,0):new Thickness(0);
+        Details.DisplayMode=e.NewSize.Width<1000?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
+        Details.OpenPaneLength=Math.Min(320,Math.Max(240,e.NewSize.Width-64));
+        if(active is null)Details.IsPaneOpen=false;
+    }
 
     private async void Roots_Click(object sender,RoutedEventArgs e) {
         if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
@@ -367,7 +377,7 @@ public sealed partial class MainPage : Page
             var panel=new StackPanel {Spacing=12,MinWidth=320};
             foreach(var element in new UIElement[]{explanation,modelChoice,modelWarning,modelApply,modelFeedback,new TextBlock {Text="現在のAI索引",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},status,start,cancel})panel.Children.Add(element);
             await RefreshProfiles();await Refresh();timer.Start();
-            var dialog=new ContentDialog {XamlRoot=XamlRoot,Title="AI検索の準備",Content=panel,CloseButtonText="閉じる"};
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,Title="AI検索の準備",Content=new ScrollViewer {Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled},CloseButtonText="閉じる"};
             await dialog.ShowAsync();
         }
         catch(Exception ex){Failure(ex);}

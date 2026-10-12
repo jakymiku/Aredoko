@@ -3,17 +3,19 @@
 更新: 2026-10-12。旧Web試作段階の引継ぎを置き換える。**製品GUIはWinUI 3に決定済みで、EmbeddingGemma 2検索まで実装・実GPU検証済み。最初から作り直さない。**
 
 
-## 最新の再開地点（2026-10-12・Codex実機追記）
+## 最新の再開地点（2026-10-12・編集回帰完了とUI整理）
 
-最新実機追記は前回b77506eから続行したモデル選択GUI検証。実装/検証記録HEADは0271dc1（後続は提出文書）。チャット側f4273ffとlauncher等9e8efadを保持。製品C#/XAML/API/workerの変更は今回なし。
+aee9421から続行し、前回未到達だったdirty保持とfavoriteのnative再起動を別の軽量バッチで確認した。チャット側f4273ff、launcher、モデル選択、旧索引互換を保持。今回はWinUIの画面配置と案内、nativeテストを変更した。提出HEADはdocs/codex-handoff.md末尾と実際のGit HEADを確認すること。
 
-検索方法PopupHostがmainのchild paneとして公開される問題をテスト側で修正し、native GUIでdefault/text-only再起動適用・別17件CUDA索引・日本語検索・画像非対応案内・旧索引再利用・不足/invalidの文字検索復帰・明示起動引数優先まで確認した。8枚の最終状態/失敗PNGを目視確認。
+**最新の軽量nativeバッチはPASS:** `profile-editor-02` は11 checks、UI整理後の `ui-polish-02` は32 checks。保存表示とAPI反映を待ち、お気に入り保存→未保存タグを残したまま編集継続→再起動後の実checkbox onとAPI保存値を確認した。1200×820の一覧/タイル、700×620の操作欄、不足モデルdialogの警告/閉じるを実UI treeで検査し、最終6 PNGをすべて目視。4回の所有GUI終了は正常、cleanup warningなし、生成元ファイルの開始/終了hash不変。
 
-**通し全体はまだFAIL:** 最後のfavorite保存直後に、親editorのdisabledを保存完了と誤認してAPIを早く読んだ。終了後read-only DBと失敗UI treeでは保存成立を確認。dirty保持とfavoriteのnative再起動は未到達。保存表示/APIを待つ修正と実toggle assertion、AIをロードしない `--editor-only` を準備したが、スキルの2回fix/rerun上限でnative再実行は未実施。py_compile/--helpのみPASS。
+検索欄の見出し/アクセントボタン、件数の位置、行タイトルと補助情報の強弱を整理。作品を選ぶまで詳細paneを閉じ、狭いwindowでは操作群を二段に配置した。AI設定dialogをスクロール可能にし、AI検索失敗時は名前・タグ検索やAI設定を案内する。最後の案内変更の実AIエラー操作は今回未実行。
 
-今回もPython96/C#13/x64 SelfContained Release PASS（既存IL2104 2件）。独立HTTP/CUDA再起動の前回PASSを保持。私物・AppData設定未変更、追加取得なし、所有test GUI/API/worker停止、生成profileだけcleanup。
+**検証範囲を混同しない:** この軽量バッチは `actual_model=false / profile_verification=not_run`。前回 `profile-picker-06` はモデル切替段階に到達したが全体FAILの歴史を保つ。今回の別バッチで残った編集段階を確認できたのであって、全モデル/GPU通しを再実行してPASSにしたわけではない。
 
-**次の3手:** ① `python tools/test_ai_profile_ui.py --editor-only --output data/ai-ui/profile-editor-01` で未到達のdirty/favorite再起動を軽く確認、②小画面/DPI/themeで警告表示と画像非対応時の汎用案内を改善、③明示選択された実サンプル評価と2,000件超索引へ。モデル段階を一から再実装/再取得しない。詳細はdocs/codex-handoff.md末尾、docs/model-profiles.md末尾。同じDraft PR #5/baseを維持。
+Python96/C#13/x64 SelfContained Release PASS（既存IL2104 2件）。追加取得/依存導入/私物走査/個人AppData変更なし。所有test GUI/API/worker停止、作成したtest profileのみcleanup。
+
+**次の3手:** ①Light/HighContrast/高DPIとAI非対応modeの案内・文字検索への復帰を実機で確認、②2,000件超の索引をcheckpoint/増分/resource上限込みで段階拡張、③ユーザーが明示選択した小さな実サンプルで検索品質を評価。実サンプル未指定の間は生成素材で進める。Layaは精度未達の実験APIのみ。詳細はdocs/ui-polish.md、docs/model-profiles.md末尾、docs/codex-handoff.md末尾。同じDraft PR #5/baseを維持。
 
 ## そのままチャットへ貼る依頼文
 
@@ -26,14 +28,14 @@ Draft PR: https://github.com/jakymiku/Aredoko/pull/5
 
 まず、このブランチのAGENTS.md、docs/chat-handoff.md、docs/codex-handoff.mdの最新節、Issue #4、PR #5を確認してください。mainや古いWeb試作の状態を現状と混同しないでください。
 WinUI 3製品MVP、EmbeddingGemma 2の曖昧検索、交換可能なモデルprofile、混合順位改善は実装済みです。Layaは精度不足のため明示実験APIだけで、GUIの自動切替や種類絞込みには使っていません。
-GUIモデルprofile選択と不足案内は実装済みです。モデル切替のnative確認は最新追記のとおり到達済みです。まず --editor-only で未到達のdirty保護/favorite再起動回帰を確認してください。最後の保存待機修正はnative未再実行です。既存の起動時profile選択・旧索引互換を保ち、動作中のhot swapや自動ダウンロードは追加しないでください。
+GUIモデルprofile選択と不足案内、dirty保護/favorite再起動回帰、小画面を含むUI整理は実装・確認済みです。最新ui-polish-02は32 checks PASSですが、AIモデルをロードしない軽量バッチです。前回profile-picker-06の全体FAILと到達済みモデル段階の記録は保持してください。次はLight/HighContrast/高DPIとAIエラーからの復帰確認、その後2,000件超索引と明示サンプル評価です。既存の起動時profile選択・旧索引互換を保ち、動作中のhot swapや自動ダウンロードは追加しないでください。
 既存資産・手動検索・タグ保存を維持し、実装できる環境なら必要なテスト、コミット、同じDraft PRの更新まで進め、進捗を引継ぎへ記録してください。直接編集やWindows実行ができない場合は、実コードに対応した変更ファイルか適用可能な差分と、PCで実行する検証手順を返してください。未実行のテストを成功と報告しないでください。
 非公開リポジトリを読めない場合はアクセスできないと明記し、ユーザーが共有するこのブランチのソースを使ってください。仕様だけから実装済みコードを想像して書き直さないでください。
 ```
 
 ## 現在のGit状態
 
-- 最新機能実装: `e21c7aa`。直前の提出記録: `afb189c`。この引継ぎはその後の文書更新で、機能変更なし。実際のブランチHEADを確認すること。
+- 今回の開始HEAD: `aee9421`。最新実装/提出HEADはdocs/codex-handoff.md末尾と実際のブランチHEADを確認すること。
 - HEADブランチ: `feat/winui3-production-mvp-20261011`。
 - Draft PR [#5](https://github.com/jakymiku/Aredoko/pull/5)、base `feat/gui-framework-comparison-20261010`。未マージ。PR #1/#2/#3も保持し、mainへmerge・force-push・squashしない。
 - 引継ぎ開始時点はclean、機能作業の未コミット残りなし。テスト用API/GUI/GPU workerは停止済み。
@@ -62,7 +64,7 @@ GUIモデルprofile選択と不足案内は実装済みです。モデル切替�
 | Laya | 固定0.4.2/多言語重み、owned offline worker、独立suggestion API。起動既定無効、-LayaIntentで明示有効。hybrid質問＋順序棄権。GUI採用保留 |
 | 過去資産 | Webデモ、read-only索引試作、GUI比較アプリを保持。製品とは区別 |
 
-## 検証済みの範囲と限界
+## 検証済みの範囲と限界（順位改善時点の履歴・最新結果は上記）
 
 - 最新実装でPython **90 tests PASS**、C# **13 checks PASS**、WinUI Release build PASS。旧SDK IL2104警告2件は未解消・抑制していない。
 - 実EmbeddingGemma CUDA、生成23素材/28条件: 期待top1 **25→27**、期待順位悪化0。赤表紙2→1、青表紙1維持。新validation16条件は15→15で、改善2件は既知development条件。個人ライブラリの性能保証ではない。
@@ -74,7 +76,7 @@ GUIモデルprofile選択と不足案内は実装済みです。モデル切替�
 - Sandbox/WinUI analyzerなし。高DPI/Light/HighContrast/reader/ピッカー全体/AOT/配布未検証。CPU/量子化/idle unload、1TB throughput、実私物精度も未検証。
 - 本文/OCR、PDF内部、音声/動画内容、PSD/SVG等の内部は未解析。関連表示、読書ビューア、Komga、画像フォルダを一冊にまとめる処理、移動追跡、複数棚は未完。
 
-## 次の実装: GUIモデルprofile選択
+## GUIモデルprofile選択の実装計画（実装済み・当時の履歴）
 
 1. [model-profiles.md](model-profiles.md) と既存launcher/API/dialogコードを読み、設定をGUIから選ぶ最小経路を設計する。既定profileへ戻す操作、現モデル/対応入力の表示、無効JSON/重み不足の案内を含める。
 2. 選んだ設定はまず次回起動に適用。進行中の検索/索引・未保存タグの調停を維持する。既存-AIProfile引数との優先順位と設定保存先を明記し、選択だけでDL/依存導入しない。JSONをアプリ設定として扱い、任意Pythonコードやremote codeを許可しない。

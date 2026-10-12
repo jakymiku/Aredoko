@@ -273,3 +273,14 @@
 - nativeモデル段階は確認済み（default/text-only/旧索引復帰/missing/invalid/override）。全体は最後の保存待ちでFAIL、dirty/favorite再起動は未完。最終save-wait/editor-only修正はnative未再実行。この境界をdocs/model-profiles.md/chat-handoff.md/PRにも記録。
 - Python96/C#13/x64 SelfContained Release（既存IL2104 2件）/py_compile/--help/diff PASS。製品本体無変更、12新PNG目視。所有test GUI/API/worker停止、生成profile cleanup、私物/個人設定/依存/重み変更なし。
 - **最初に行う作業:** python tools/test_ai_profile_ui.py --editor-only --output data/ai-ui/profile-editor-01 。同名folderが既にある場合は新規suffixを使う。実GUIと保存済みPNGを見てdirty keep/次回favoriteを確認し、成功前に全体PASSへ書き換えない。
+
+
+### 編集回帰の完了とWinUI画面整理（2026-10-12）
+- 開始HEAD **aee9421** / 同じfeature/Draft PR #5/base。AGENTS/Issue #4/前回引継ぎを確認し、チャット側f4273ffと既存モデル/launcherを保持。実装HEADは後続提出節に記録。
+- 前回未到達だった編集段階を `--editor-only` で確認。profile-editor-01は既定literalの不要なfocusでFAIL、現在値をUIA確認するよう修正して02は11 checks PASS。保存表示/APIを待ちfavorite保存、dirty keepの実text/DB保持、再起動後favorite API値/UI checkbox onを確認。
+- 製品UI: 選択前/検索更新時の詳細paneを閉じ一覧幅を使う。検索見出し/Accentボタン/ヘッダー件数、タイトルSemibold/補助Caption、テーマ色の詳細枠。840 DIP未満は操作群を二段へ。AI dialog内容をScrollViewerにし、検索失敗時は名前・タグ検索/AI設定を案内して古い件数とページ操作を消す。
+- native `--editor-only --layout-checks` のui-polish-02は **32 checks PASS**。1200×820一覧/タイル、700×620操作欄、不足profile dialogの候補/警告/閉じるbounds、保存/dirty/restart/生成元hash不変。最終6 PNGを全目視。ui-polish-01も32 checks PASSだが旧cleanup warningあり、foreground不要の所有HWND WM_CLOSEに改善した02は **4回正常終了/cleanup warningなし**。初回失敗と途中警告は証拠に保持。
+- Python **96 tests PASS**、C# **13 checks PASS**、x64 SelfContained Release PASS（既存IL2104 2件）。py_compile/diff check。WinUI code reviewでnative Items/60paging、JSON DOM、async/stale/dirty、loopback認証、モデルindex identityを維持。analyzer未導入。
+- 検証境界: editor/layoutは `actual_model=false/profile_verification=not_run`。前回06のモデル段階到達/全体FAILは歴史として保持し、今回の別バッチで未到達編集を確認。全GPU/profile通し、新AIエラー文での非対応mode操作は今回未実行。dark/通常DPIのみ、Light/HC/高DPI/reader/AOT/配布/1TB性能未確認。
+- ignored証拠: data/ai-ui/profile-editor-01（FAIL）、02（PASS）、ui-polish-01/02（PASS）。生成test17/専用DB/settingsのみ。私物/個人AppData変更、download/installなし。所有GUI/API/embedding/Laya workerなし、作成test profileのみcleanup。docs/ui-polish.mdを追加し、chat/model引継ぎの最新再開地点を更新。
+- **次の3手:** (1) Light/HighContrast/高DPIとAI非対応mode案内→文字検索復帰の実機確認、(2) 2,000件超をcheckpoint/増分/resource上限で段階拡張、(3) 明示選択の小さい実サンプルで検索品質評価。未指定時は生成素材。Layaは精度未達の明示実験APIのみ、本文/OCR/読書/Komgaは後続。

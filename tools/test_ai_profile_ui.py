@@ -4,8 +4,8 @@ Requires built x64 SelfContained Release, existing local weights, unlocked Windo
 Never touches the default AppData settings or private library. No setup/download.
 Search modes use real keyboard input and assert the resulting selected value.
 PopupHost can be a child UIA pane rather than a separately enumerated window.
-The final save-wait/editor-only changes have syntax checks only; see the latest
-validation status in docs/model-profiles.md before treating this batch as passed.
+Each run reports its own checked scope; editor-only does not test model loading.
+See docs/model-profiles.md and docs/ui-polish.md for the latest native evidence.
 """
 import argparse
 import hashlib
@@ -26,8 +26,9 @@ from ai_profiles import DEFAULT_PROFILE
 from create_preview_fixture import create
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--editor-only',action='store_true',help='Run literal editor/dirty/restart checks without loading AI')
+    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--editor-only',action='store_true',help='Run literal editor/dirty/restart checks without loading AI');parser.add_argument('--layout-checks',action='store_true',help='Also capture wide/narrow list/tile and missing-model dialog')
     args=parser.parse_args()
+    if args.layout_checks and not args.editor_only:parser.error("--layout-checks requires --editor-only")
     if os.name!='nt':raise RuntimeError('Native Windows only')
     target=args.output.resolve();target.mkdir(parents=True,exist_ok=False)
     media=create(target/'media')
@@ -63,6 +64,30 @@ def main():
         ui('screenshot','--output',path)
         check('Screenshot '+name,path.is_file() and path.stat().st_size>0)
         report['screenshots'].append(path.name)
+    def resize(width,height):
+        import ctypes
+        from ctypes import wintypes
+        user32=ctypes.WinDLL('user32',use_last_error=True)
+        user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
+        owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
+        if owner.value!=app_pid:raise RuntimeError('Resize target is not the owned app')
+        user32.SetWindowPos.argtypes=[wintypes.HWND,wintypes.HWND,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,wintypes.UINT]
+        if not user32.SetWindowPos(int(hwnd),None,0,0,width,height,0x2|0x4|0x10):raise ctypes.WinError(ctypes.get_last_error())
+        time.sleep(.5);ready()
+    def visible_controls(name,ids):
+        tree=json.loads(ui('inspect','--json','--depth','12'))
+        (target/(name+'-tree.json')).write_text(json.dumps(tree,ensure_ascii=False,indent=2),encoding='utf-8')
+        stack=[tree];nodes=[]
+        while stack:
+            node=stack.pop()
+            if isinstance(node,dict):
+                if node.get('automationId') in ids:nodes.append(node)
+                stack.extend(node.values())
+            elif isinstance(node,list):stack.extend(node)
+        root=tree['windows'][0]['elements'][0]
+        for id in ids:
+            matches=[n for n in nodes if n.get('automationId')==id]
+            check(name+' '+id+' fits',len(matches)==1 and not matches[0].get('isOffscreen') and matches[0]['x']>=root['x'] and matches[0]['y']>=root['y'] and matches[0]['x']+matches[0]['width']<=root['x']+root['width'] and matches[0]['y']+matches[0]['height']<=root['y']+root['height'])
     def status():return api('/api/library/ai/status')
     def profiles():return api('/api/library/ai/profiles')
     def ready():
@@ -75,6 +100,12 @@ def main():
         if combo=='CmbSearchMode':
             modes={'ModeLiteral':(0,'名前・タグ'),'ModeSemantic':(1,'AI意味検索'),'ModeVisual':(2,'AI画像・表紙')}
             index,label=modes[option]
+            # Literal is already selected on each editor-only startup; no input
+            # or foreground activation is needed to verify that unchanged state.
+            if args.editor_only and option=='ModeLiteral':
+                ui('wait-for',combo,'--value',label,'-t','3000')
+                check('GUI mode '+label,True)
+                return
             ui('focus',combo)
             ui('send-keys','home '+('down '*index)+'esc','--target',combo,'--via','send-input')
             ui('wait-for',combo,'--value',label,'-t','3000')
@@ -114,9 +145,26 @@ def main():
                 try:
                     try:ui('invoke','CloseButton')
                     except RuntimeError:pass
-                    ui('focus','BtnSearch')
-                    ui('send-keys','alt+f4','--via','send-input','--allow-system-keys')
-                    time.sleep(.6)
+                    # WM_CLOSE is confined to the verified owned HWND and invokes
+                    # the app's normal Closing guard, without foreground/global keys.
+                    import ctypes
+                    from ctypes import wintypes
+                    user32=ctypes.WinDLL('user32',use_last_error=True)
+                    kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
+                    user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
+                    owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
+                    if owner.value!=app_pid:raise RuntimeError('Close target is not the owned app')
+                    kernel32.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD];kernel32.OpenProcess.restype=wintypes.HANDLE
+                    kernel32.WaitForSingleObject.argtypes=[wintypes.HANDLE,wintypes.DWORD]
+                    kernel32.CloseHandle.argtypes=[wintypes.HANDLE]
+                    process=kernel32.OpenProcess(0x100000,False,app_pid)
+                    if not process:raise RuntimeError('Cannot observe owned app exit')
+                    try:
+                        user32.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
+                        if not user32.PostMessageW(int(hwnd),0x0010,0,0):raise RuntimeError('Owned window close failed')
+                        if kernel32.WaitForSingleObject(process,5000)!=0:raise RuntimeError('Owned app did not close normally')
+                        report['graceful_close_count']=report.get('graceful_close_count',0)+1
+                    finally:kernel32.CloseHandle(process)
                 except RuntimeError:
                     report.setdefault('cleanup_warnings',[]).append('Graceful UI close unavailable; stopped owned test PID')
                 finally:
@@ -181,6 +229,11 @@ def main():
             time.sleep(.1)
         # Refresh native catalog after API registration; actual index is started in GUI.
         ui('invoke','BtnSearch');ready()
+        if args.layout_checks:
+            visible_controls('10-wide',{'TxtQuery','CmbKind','CmbSearchMode','BtnAIIndex','BtnLayout','BtnSearch','TxtCount'})
+            screenshot('10-wide-library');ui('invoke','BtnLayout');ready();screenshot('11-wide-tiles');ui('invoke','BtnLayout')
+            resize(700,620);visible_controls('12-narrow',{'TxtQuery','CmbKind','CmbSearchMode','BtnAIIndex','BtnLayout','BtnSearch','TxtCount'});screenshot('12-narrow-library')
+            resize(1200,820)
         if not args.editor_only:
             dialog();build()
             default_profile=status()['profile'];check('Default active',profiles()['active']=='default')
@@ -230,6 +283,11 @@ def main():
             elif isinstance(node,list):stack.extend(node)
         check('GUI restored favorite toggle',len(favorites)==1 and favorites[0].get('isEnabled') and favorites[0].get('toggleState')=='on')
         screenshot('09-editor-restart');stop()
+        if args.layout_checks:
+            settings.write_text(json.dumps({'version':1,'profile':'local:'+names['missing']}),encoding='utf-8')
+            start('layout-missing');resize(700,620);dialog()
+            ui('wait-for','StartAIIndex','-p','IsEnabled','--value','False','-t','3000')
+            visible_controls('13-small-dialog',{'CloseButton','AIProfileChoice','AIProfileWarning'});screenshot('13-small-missing-dialog');close_dialog();stop()
         check('Generated source hashes unchanged',hashes=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in media.iterdir()})
         report['pass']=True
     except Exception as ex:

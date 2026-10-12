@@ -84,7 +84,7 @@ The actual local-model test tools/test_ai_profile_switch.py uses existing weight
 ignored結果: `data/ai-ui/profile-probe-01/dialog-latest.png`, `data/ai-ui/profile-picker-01/02/03/result.json`（FAIL/部分到達）、`data/ai-smoke/profile-preference-01/result.json`（PASS）。private/元AppData設定は未変更。検証用API/GUI/workersは終了。Sandbox/analyzer/高DPI/theme/reader/AOTは未検証。
 
 
-## 最新: nativeモデル切替の到達結果（2026-10-12）
+## nativeモデル切替の到達結果（2026-10-12・以下は当時の記録）
 
 前回の検索方法popup問題を修正した。03のUI treeではPopupHostがmain HWNDのchild paneで、独立window列挙からは見つからない。検索方法は既知の選択肢へ実キーボード操作し、表示値もUIAで確認する。前景が必要なので `focus` の成功を確認してから入力する。モデル候補のpopup HWND操作は維持。
 
@@ -111,3 +111,14 @@ Python96 tests、C#13 checks、x64 SelfContained Releaseは今回もPASS。SDK I
 ignored evidence: `data/ai-ui/profile-picker-04/05/06/result.json`（全体FAIL/到達段階は上記）、06の`post-run-check.json`（read-only確認PASS）。後者はfavoriteのdisk保存と失敗UI treeのon、17元ファイルのscan時size/mtime不変、別fresh fixtureとの全payload一致を確認した。ZIP container timestampは生成時刻で異なるため、別生成ZIPのbyte hash比較を源変更の証拠とは扱わない。06開始時のbyte-hash記録は残っておらず、全byte hash不変と主張しない。新しいharnessでは開始hashを残す。
 
 個人AppData/私物ライブラリは無変更、download/installなし。05でcleanup例外により残った所有APIを確認して停止し、cleanupを修正。06終了後は所有GUI/API/embedding/Laya workerなし、作ったtest profileだけcleanup。補助read-only favorite監視はeditor-restart未到達のため終了し、成功証拠に含めない。
+
+
+## 最新: 残った編集/再起動回帰と小画面UI（2026-10-12）
+
+aee9421から続行し、AIをロードしない `--editor-only` で前節の未到達部分を確認した。`profile-editor-02/result.json` は11 checks PASS。UI整理後 `--editor-only --layout-checks` の `ui-polish-02/result.json` は32 checks PASS。保存表示とAPI反映を待ち、favorite保存→dirty保持/DBタグ不変→再起動→UI checkbox on/API favorite=trueを確認した。生成17元ファイルの開始/終了hash一致。
+
+今回の製品変更は検索/操作欄の配置・文字の強弱・初期詳細pane非表示、狭いwindowの二段操作群、AI dialogのスクロールと検索失敗時の具体的案内。1200×820一覧/タイル、700×620操作欄と不足profile dialogで候補/警告/閉じるのboundsを確認し、最終6 PNGをすべて目視。4回の所有GUI終了は正常、cleanup warning/所有GUI/API/worker残留なし。詳細と再現コマンドは[ui-polish.md](ui-polish.md)。
+
+このバッチは `actual_model=false / profile_verification=not_run`。前回profile-picker-06をPASSへ書き換えず、nativeモデル段階の履歴と今回の独立した編集PASSを分ける。全GPU/profile切替および新しいAIエラー文を伴う非対応modeの操作は今回再実行していない。Light/HighContrast/高DPI/readerも未確認。
+
+Python96/C#13/x64 SelfContained Release PASS（既存SDK IL2104 2件）。追加取得/依存導入/私物走査/個人AppData変更なし。作成した検証profileのみcleanup。モデルidentity/namespace/重み/worker/APIは変更していない。
