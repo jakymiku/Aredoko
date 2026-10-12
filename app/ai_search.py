@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 import sqlite3
 import threading
+import time
 from ai_process import AIUnavailable
 from ai_profiles import DEFAULT_PROFILE
 from ai_vectors import normalized
@@ -95,6 +96,8 @@ class AISearch:
         self.cancel=threading.Event()
         self.worker=None
         self.inference=threading.Lock()
+        self._closed=False
+        self._last_activity=time.monotonic()
     def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
@@ -135,13 +138,18 @@ class AISearch:
                 if not _excluded(row['relative_path'],tuple(json.loads(row['excludes_json'])))}
     def status(self):
         with self.guard: state=self.store.state()
-        return {**state,'available':self.encoder.available,'device':getattr(self.encoder,'device',''),
+        resident=bool(getattr(self.encoder,'resident',False))
+        return {**state,'available':self.encoder.available,
+                'resident':resident,'worker_state':'loaded' if resident else 'unloaded',
+                'device':getattr(self.encoder,'device','') if resident else '',
                 'limit':MAX_ITEMS,'model':self.profile.label,'model_id':self.profile.model_id,'profile':self.profile.key,
-                'modalities':list(self.profile.modalities),'dimension':self.profile.dimension,'ranking':self.ranking,'telemetry':getattr(self.encoder,'telemetry',{})}
+                'modalities':list(self.profile.modalities),'dimension':self.profile.dimension,'ranking':self.ranking,
+                'telemetry':getattr(self.encoder,'telemetry',{}) if resident else {}}
     def start(self,limit=MAX_ITEMS):
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS: raise ValueError('Invalid index limit')
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。setup-ai.ps1を実行してください。')
         with self.guard:
+            if self._closed: raise AIUnavailable('AI is closing')
             if self.worker and self.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
             if self.catalog.scan_state()['state'] in ('running','cancelling'): raise AIBusy('フォルダのスキャン完了後に実行してください。')
             ids=[row['id'] for row in self._iter_rows(limit=limit)]
@@ -191,6 +199,8 @@ class AISearch:
         except Exception as ex:
             state['state']='failed';state['error']='AI索引を作成できませんでした（'+type(ex).__name__+'）。ローカルログを確認してください。'
         finally:
+            # Covers both actual inference and cached rebuilds.
+            self._last_activity=time.monotonic()
             with self.guard:self.store.save_state(state)
     def cancel_build(self):
         self.cancel.set()
@@ -209,6 +219,7 @@ class AISearch:
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。')
         if not self.inference.acquire(blocking=False): raise AIBusy('AI索引を作成中です。完了後に検索してください。')
         try:
+            if self._closed: raise AIUnavailable('AI is closing')
             rows=self._rows(kind,view)
             policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
             ranked=self.store.rank(rows,self.encoder.encode('query',query),source,policy)
@@ -216,9 +227,37 @@ class AISearch:
             items=[{**by_id[item_id],'semantic_score':round(score,6)} for item_id,score in ranked[page*limit:(page+1)*limit]]
             return {'total':len(ranked),'page':page,'limit':limit,'items':items,'mode':'semantic','coverage_limit':MAX_ITEMS,'source':source,'ranking':policy,
                     'score_kind':'reciprocal-rank' if policy=='mean-rrf' else 'cosine'}
-        finally: self.inference.release()
+        finally:
+            self._last_activity=time.monotonic()
+            self.inference.release()
+
+    def release(self):
+        """Refuse a busy encoder; never touch the profile, catalog or vector DB."""
+        if not self.inference.acquire(blocking=False):
+            raise AIBusy('AI検索または索引を処理中です。完了後に解放してください。')
+        try:
+            if not self.guard.acquire(blocking=False):
+                raise AIBusy('AIの状態更新中です。')
+            try:
+                if self._closed: raise AIUnavailable('AI is closing')
+                if self.worker and self.worker.is_alive():
+                    raise AIBusy('AI索引を作成中です。')
+                result=self.encoder.release()
+                self._last_activity=time.monotonic()
+                return result
+            finally:
+                self.guard.release()
+        finally:
+            self.inference.release()
+
     def close(self):
-        self.cancel.set()
-        self.encoder.close()
-        if self.worker: self.worker.join(timeout=10)
+        # Set shutdown first; a pending search cannot relaunch after close.
+        with self.guard:
+            if self._closed:return
+            self._closed=True
+            self.cancel.set()
+        if self.worker and self.worker.is_alive():
+            self.worker.join()
+        with self.inference:
+            self.encoder.close()
 
