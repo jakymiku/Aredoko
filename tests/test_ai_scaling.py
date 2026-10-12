@@ -42,7 +42,10 @@ class ScalingTests(unittest.TestCase):
         return catalog,encoder,ai,media,root
     def build(self,ai,limit=None):
         ai.start() if limit is None else ai.start(limit)
-        ai.worker.join(60)
+        # 2,105 synchronous SQLite writes can exceed 60 s on a shared Windows
+        # runner when other CI jobs are active. Keep a bounded timeout and
+        # validate completion/state/document count instead of timing out early.
+        ai.worker.join(180)
         self.assertFalse(ai.worker.is_alive())
         self.assertEqual(ai.status()['state'],'complete')
     def test_legacy_2000_cache_extends_and_late_item_is_searchable(self):
