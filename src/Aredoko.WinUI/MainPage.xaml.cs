@@ -396,6 +396,7 @@ public sealed partial class MainPage : Page
                 finally{saveResource.IsEnabled=true;}
             };
             bool polling=false;
+            int? indexLimit=null;
             release.Click+=async (_,_)=>{
                 release.IsEnabled=false;
                 try {
@@ -404,7 +405,6 @@ public sealed partial class MainPage : Page
                 }catch(Exception ex){releaseResult.Text="解放できません: "+ex.Message;}
                 finally{await Refresh();}
             };
-            int? indexLimit=null;
             async Task Refresh()
             {
                 if(polling||disposed)return;polling=true;
