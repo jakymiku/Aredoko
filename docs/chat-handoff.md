@@ -1,5 +1,24 @@
 # Aredoko — GPTチャットへの最新引継ぎ
 
+
+## 最新：GUIの明示的なAI文章検索（2026-10-13）
+
+開始HEAD **f792d6a334834f1f8281509e74bfeb940b06919d**。同じfeature/Draft PR #5/comparison baseを維持。今回の実装SHAは後続記録/Git/PR headで確認。
+
+- 検索方法に「AI文章」（API source=text）を追加。「AI意味検索」は「AI混合」へ改称、既存index0/1/2とIDs/literal/all/coverは維持、textをindex3へ。種類・検索方法のvisible labelsと根拠説明を追加。名前・タグの意味だけを使い本文/音声は読まないことを表示。
+- saved scope/coverage/filter/page/stale/dirty規約を維持。未保存のモード変更をcancelするとmode/query/kindとhint/placeholder/accessibility nameが同期して戻る。モデル/順位/自動routingは変更しない。session-only・初期literal。
+- Core **35 PASS**、Python scope12 PASS / 14.098秒・retrieval13 PASS / 4.625秒、最終Release PASS / 30.23秒 / errors0・既存IL2104 2warnings。syntax/CLI/diff PASS。手動WinUIレビュー済み、専用analyzer未実行。全Python155は前回履歴で今回未再実行。
+- native03 **65 checks PASS / 6 PNG全目視 / scoped visual PASS / 正常close2 / cleanup warnings0**、Light/Dark wide/narrow・DPI96/Contrast off。実HTTP/AISearch/Release GUI、生成PNG3/2root・隔離設定、CPU契約stub encoderで実GUI sourceとscope/kind/favorites/page0の要求20件、blank/literal復帰・dirty cancel/discard・source bytes/mtime/hashと設定byte不変を確認。実GPU/検索品質・physical keyboard・高DPIは今回未確認。
+- native01/02はUIA peer失効/名前substring曖昧でFAIL、各2PNG全目視・正常close1。03まで2 fix cycles、失敗履歴は[検索方法](search-methods.md)。ignored artifacts/DB/私物/credentialsはcommitしない。CI manual-only・Draft未マージ。
+
+### 次の3手
+
+1. 小さな生成fixture＋実CUDAで新mode/nativeとtext-only profileのcover非対応案内を確認。
+2. 高DPI/HighContrast/読み上げ・全面keyboardの独立確認。OS設定は勝手に変更しない。
+3. 新規固定品質入力/Laya gateを別実験で準備。Laya既定無効、reader/Komgaは後続slice。
+
+---
+
 ## 最新：text/pixel根拠別の新規固定評価 holdout v2（2026-10-13）
 
 開始HEAD **7d7facc749103eaf7798a3d0345831fc4163fd33**。同じfeature/Draft PR #5/comparison baseを維持。入力/コードをGPU観測前commit **82427c528fcc273edb601cd62f69fe3c3251ab5e**で凍結し、結果後にqrels/queries/items・モデル・順位・GUIを変更しない。結果・テスト・仕様記録commitは **873bd5ad12a7c9684e3d6c81d93ffdc21d4f825e**。このSHA追記は文書だけの後続commitで、通常push後の最終HEAD/CI観測はGit/PR head・PR説明で確認。

@@ -56,3 +56,5 @@ existing dedicated venv/weightsだけ。outputはfresh data/ai-uiのignored dire
 1. 製品GUIにAPIのtext-onlyを明示選択できる検索方法を設け、混合/画像との違いを説明する。勝手な自動routingや既定の順位変更はしない。既存scope/coverage/未保存規約を維持してnative確認する。
 2. v1/v2はdevelopmentとして、次の品質判断には新しい入力とより実質的なtext/cover根拠を固定する。幾何図形の結果だけでfusion重みを最適化しない。
 3. Laya日本語quality gate再評価は独立した実験で行い既定無効を維持。reader/Komga/フォルダ本集約、高DPI/全面keyboardは別slice。
+
+2026-10-13後続：[GUIの明示AI文章検索](search-methods.md)を追加。上記固定入力/SHA/観測値・製品ランキングは維持。GUI契約のCPU/native検証とこの実CUDA品質観測を分けて記録。

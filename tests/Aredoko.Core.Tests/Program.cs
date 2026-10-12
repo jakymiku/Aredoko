@@ -51,3 +51,14 @@ picker.Restore([999]);picker.Filter("見つかりません");Check(!picker.Visib
 picker.Restore([1]);picker.Filter("ROOT-001");Check(picker.Visible.Single().Id==1&&picker.Selected.SequenceEqual(new[]{1}),"root filter is case insensitive and draft neutral");
 bool tooMany=false;try{picker.Restore(Enumerable.Range(1,257));}catch(ArgumentException){tooMany=true;}
 Check(tooMany&&picker.Selected.SequenceEqual(new[]{1}),"oversize restore cannot partially replace draft");
+
+
+foreach(var (index,ai,source) in new[]{(0,false,"all"),(1,true,"all"),(2,true,"cover"),(3,true,"text")})
+{
+    var method=SearchMethod.FromIndex(index);
+    Check(method.IsAI==ai&&method.Source==source,$"search method {index} preserves API route/modality");
+}
+var textRequest=AIScopeRequests.Search("曖昧な素材","image","favorites",2,SearchMethod.FromIndex(3).Source,scopedIndex["scope"]!.AsObject());
+Check(textRequest["source"]!.GetValue<string>()=="text"&&textRequest["kind"]!.GetValue<string>()=="image"&&textRequest["view"]!.GetValue<string>()=="favorites"&&textRequest["page"]!.GetValue<int>()==2&&textRequest["scope"]!["root_ids"]!.AsArray().Count==1,"text-only mode preserves filters/page and frozen scope");
+bool invalidMode=false;try{SearchMethod.FromIndex(4);}catch(ArgumentOutOfRangeException){invalidMode=true;}
+Check(invalidMode,"invalid search mode cannot silently broaden retrieval");

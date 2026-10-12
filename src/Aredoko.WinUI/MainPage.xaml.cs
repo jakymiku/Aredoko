@@ -30,6 +30,7 @@ public sealed partial class MainPage : Page
 
     public MainPage() {
         InitializeComponent();
+        UpdateSearchMethod();
         thumbnails = new ThumbnailService(api);
         searchTimer=DispatcherQueue.CreateTimer(); searchTimer.Interval=TimeSpan.FromMilliseconds(300);
         searchTimer.Tick+=async (_,_)=>{searchTimer.Stop(); if(PendingSearch) await NavigateAsync(0);};
@@ -73,8 +74,9 @@ public sealed partial class MainPage : Page
         Editor.IsEnabled=false; Items.IsEnabled=false;
         var query=Query.Text; var kind=KindValue();var selectedKind=Kind.SelectedIndex;var selectedMode=SearchMode.SelectedIndex;
         try {
+            var method=SearchMethod.FromIndex(selectedMode);
             if(selectedMode>0&&!string.IsNullOrWhiteSpace(query)&&aiScope is null)throw new InvalidOperationException(aiScopeError);
-            var result=await api.SearchAsync(query,kind,view,page,selectedMode>0,selectedMode==2?"cover":"all",aiScope);
+            var result=await api.SearchAsync(query,kind,view,page,method.IsAI,method.Source,aiScope);
             if(!searches.IsCurrent(version)||disposed)return;
             if(result.Items.Count==0 && page>0){page=Math.Max(0,(result.Total-1)/60);await LoadAsync();return;}
             lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;
@@ -212,7 +214,26 @@ public sealed partial class MainPage : Page
     private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;Query.Focus(FocusState.Keyboard);}
     private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0);}
-    private void SearchMode_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){AutomationProperties.SetName(Query,SearchMode.SelectedIndex>0?"AI検索の文章":"名前・タグ検索");Query.PlaceholderText=SearchMode.SelectedIndex>0?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";searchTimer.Stop();searchTimer.Start();}}
+    private void UpdateSearchMethod()
+    {
+        // SelectionChanged also runs during initialization and dirty-state rollback.
+        if(Query is null || SearchMethodHint is null)return;
+        var ai=SearchMode.SelectedIndex>0;
+        AutomationProperties.SetName(Query,ai?"AI検索の文章":"名前・タグ検索");
+        Query.PlaceholderText=ai?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
+        SearchMethodHint.Text=SearchMode.SelectedIndex switch
+        {
+            1=>"名前・タグと画像・表紙を組み合わせて探します。",
+            2=>"色・形・見た目を文章で指定し、画像・表紙から探します。",
+            3=>"名前・タグの意味から探します。本の本文や音声は読み取りません。",
+            _=>"名前・タグに含まれる文字で探します。"
+        };
+    }
+    private void SearchMode_Changed(object sender,SelectionChangedEventArgs e)
+    {
+        UpdateSearchMethod();
+        if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}
+    }
     private void Kind_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Previous_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(Math.Max(0,page-1));
     private async void Next_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(page+1);

@@ -178,7 +178,7 @@ def main():
     def close_dialog():ui('invoke','CloseButton');ready()
     def select(combo,option):
         if combo=='CmbSearchMode':
-            modes={'ModeLiteral':(0,'名前・タグ'),'ModeSemantic':(1,'AI意味検索'),'ModeVisual':(2,'AI画像・表紙')}
+            modes={'ModeLiteral':(0,'名前・タグ'),'ModeSemantic':(1,'AI混合'),'ModeVisual':(2,'AI画像・表紙'),'ModeText':(3,'AI文章')}
             index,label=modes[option]
             # Literal is already selected on each editor-only startup; no input
             # or foreground activation is needed to verify that unchanged state.
@@ -274,7 +274,7 @@ def main():
         check(theme+' GUI release clears resident and telemetry',not state['resident'] and state['device']=='' and state['telemetry']=={})
         ui('wait-for','AIRelease','-p','IsEnabled','--value','False','-t','3000')
         show_resource_control('AIReleaseResult');screenshot('23-'+theme+'-resource-released');close_dialog()
-        recovery_mode('ModeSemantic','AI意味検索')
+        recovery_mode('ModeSemantic','AI混合')
         ui('set-value','TxtQuery','傘が必要な暗い都会の景色');time.sleep(.6);ui('invoke','BtnSearch');ready()
         ui('wait-for','Message','--value','最大10,000件','--contains','-t','60000')
         check(theme+' GUI search reloads CUDA',status()['resident'] and status()['device']=='cuda')
@@ -564,7 +564,7 @@ def main():
                 with sqlite3.connect(databases[0]) as db:
                     return db.execute('SELECT item_id,revision,modality,vector FROM ai_vectors ORDER BY item_id,modality').fetchall()
             def query_scope(scope,name):
-                recovery_mode('ModeSemantic','AI意味検索');ui('set-value','TxtQuery','雨のある景色');time.sleep(.6);ui('invoke','BtnSearch');ready()
+                recovery_mode('ModeSemantic','AI混合');ui('set-value','TxtQuery','雨のある景色');time.sleep(.6);ui('invoke','BtnSearch');ready()
                 ui('wait-for','TxtCount','--value','2 件','-t','30000')
                 tree=json.loads(ui('inspect','--json','--depth','12'));stack=[tree];ids=set()
                 while stack:
@@ -602,14 +602,14 @@ def main():
             ui('wait-for','StartAIIndex','-p','IsEnabled','--value','False','-t','3000')
             show_resource_control('AIScopeCount3');screenshot('Light-empty-selection')
             close_dialog()
-            recovery_mode('ModeSemantic','AI意味検索');ui('set-value','TxtQuery','雨');time.sleep(.6);ui('invoke','BtnSearch');ready()
+            recovery_mode('ModeSemantic','AI混合');ui('set-value','TxtQuery','雨');time.sleep(.6);ui('invoke','BtnSearch');ready()
             ui('wait-for','TxtCount','--value','0 件','-t','5000');check('Empty saved scope query does not load GPU',not status()['resident']);screenshot('Light-empty-query')
             api('/api/library/ai/scope',{'scope':b});stop()
             # Isolated catalog fault injection only; generated source folders stay intact.
             with sqlite3.connect(target/'catalog.sqlite') as db:db.execute('DELETE FROM library_roots WHERE id=?',(roots[1],))
             start('scope-stale')
             check('Deleted saved root reported without fallback',not api('/api/library/ai/scope')['valid'])
-            recovery_mode('ModeSemantic','AI意味検索');ui('set-value','TxtQuery','雨');time.sleep(.6);ui('invoke','BtnSearch');ready()
+            recovery_mode('ModeSemantic','AI混合');ui('set-value','TxtQuery','雨');time.sleep(.6);ui('invoke','BtnSearch');ready()
             ui('wait-for','TxtEmpty','--value','AI検索を利用できません','--contains','-t','5000')
             check('Stale saved scope blocks GUI AI without GPU',not status()['resident']);screenshot('Light-stale-scope-error')
             recovery_mode('ModeLiteral','名前・タグ');ui('set-value','TxtQuery','雨の夜');time.sleep(.6);ui('invoke','BtnSearch');ready()
@@ -735,7 +735,7 @@ def main():
                     screenshot('18-'+theme+'-indexed-dialog')
                 close_dialog()
                 if args.coverage_checks:
-                    recovery_mode('ModeSemantic','AI意味検索')
+                    recovery_mode('ModeSemantic','AI混合')
                     ui('set-value','TxtQuery','傘が必要な暗い都会の景色');time.sleep(.6);ui('invoke','BtnSearch');ready()
                     # Do not race a direct API query against the GUI's first
                     # lazy-load search: AISearch intentionally rejects overlap.
@@ -760,7 +760,7 @@ def main():
             settings.write_text(json.dumps({'version':1,'profile':'local:'+names['missing']}),encoding='utf-8')
             start('appearance-missing');record_display('appearance-missing');resize(700,620)
             check('Missing profile unavailable for semantic search',not status()['available'])
-            unavailable_search('ModeSemantic','AI意味検索','17-Light-missing-error');stop()
+            unavailable_search('ModeSemantic','AI混合','17-Light-missing-error');stop()
         if args.coverage_checks:report['coverage_verification']='pass'
         if args.resource_checks:report['resource_verification']='pass'
         check('Generated source hashes unchanged',hashes=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in media.iterdir()})

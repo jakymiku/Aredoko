@@ -1,3 +1,7 @@
+> **最新の状況（2026-10-13）**：GUIに「AI文章」単独検索を追加し混合/画像と根拠説明で選択。Core35・Python scope12/retrieval13・Release PASS。native03 65 checks/6 PNG全目視/正常close2、生成素材とCPU契約encoderで要求・条件・dirty rollbackを確認（実GPU/品質は前回v2の別証拠）。詳細は[検索方法](search-methods.md)/[引継ぎ](codex-handoff.md)。CI manual-only・Draft未マージ。以下は履歴。
+
+---
+
 > **最新の状況（2026-10-13）**：前回の検索可能なroot pickerに続き、新規30素材/30問を推論前に固定してtext/pixel根拠別に評価。実CUDA runtime258checks PASS、155Python/Core29/Release PASS。metadata text12/12・混合10/12、pixel cover6/6・混合0/6（種類なし）。これは生成入力の観測で製品quality gateではない。モデル/順位/GUIは今回未変更。次はtext-onlyの明示GUI選択。詳細は[新規固定評価](search-quality-holdout.md) / [引継ぎ](codex-handoff.md)。CI manual-only・Draft未マージ。以下は履歴。
 
 ---
