@@ -76,3 +76,40 @@ gpu-01も索引/増分/検索/中断再開/推論回数/元source不変はPASS�
 既定stagesは64 256 1024 2304。`--stages`は32..10000の厳密な昇順。重み・依存を取得せず、私物folder指定を受け付けない。実行ごとに専用catalog/生成素材を作り、result.jsonは途中の完了段階と最終結果を保存する。今回の証拠はgpu-02/result.json、gpu-02.out/err、gpu-tool-contract.json（全てignored）。途中pass=falseを最終失敗と混同せず、最終exit/resultを読む。
 
 次の3手: (1) 生成768px表紙/長めの日本語metadataでメモリ・応答を測り1万件へ段階拡張、(2) 中断/負荷設定・不要時のworker解放と上限超の対象選択を設計/実装、(3) 明示指定された小実サンプルで検索品質を評価。全1TBへ勝手に走査しない。
+
+
+## 大きめ生成素材で実GPU1万件・HTTP検索確認（2026-10-12）
+
+開始HEAD **44ecd51**。同じfeature/Draft PR #5/baseを保持。`gpu-large-10k-01`は**126 checks PASS**、既存default EG2/text+cover/auto-bf16/768次元で実CUDA索引。生成10,000件（架空WAVメタデータ9,062、PNG625、1ページCBZ313）。cover938枚は768×768px、tag30個×60文字、実encoderの文字入力1865..1881文字とPNG寸法を記録・検証。
+
+| 段階 | 保存済み件数 | 新規文字推論 | 新規表紙推論 | 秒 |
+| --- | ---: | ---: | ---: | ---: |
+| index-64 | 64 | 64 | 6 | 21.67 |
+| index-256 | 256 | 192 | 18 | 24.71 |
+| index-1024 | 1,024 | 768 | 72 | 94.12 |
+| index-2304 | 2,304 | 1,280 | 120 | 156.50 |
+| index-5000 | 5,000 | 2,696 | 254 | 300.62 |
+| cancel-10000 | 5,096 | 96 | 9 | 14.51 |
+| resume-10000 | 10,000 | 4,904 | 459 | 567.52 |
+| fresh-restart-cache | 10,000 | 0 | 0 | 10.47 |
+
+5,000既存+96新規で中断し、新encoder/AISearchから残り4,904件だけ推論。最終text10,000/cover938、累計document10,000/image938/query21で重複文字/表紙推論なし。fresh cache buildでは推論0・worker未起動、その後のqueryのみCUDAロード。元source bytes/size/mtime digest不変、所有9 process-instance handles全終了。
+
+10,000件の単発検索: text 1.98秒（10,000候補） / cover 0.99秒（938候補） / all 1.89秒（10,000候補）。warm/cold等の条件はresult phasesで区別する。最初のbuildと再開buildはlazy model load込み、cached後最初のqueryは再ロード込み。一般的な検索精度の合格率ではない。
+
+build RAMの0.2秒sample peak: controller **101.2MiB working set**、所有worker tree **2049.9MiB working set**、同tree private commit **5330.1MiB**。private commitを全て物理RAMとして足さない。torch CUDA lifetime max allocated **994.0MiB**（reserved/context/他アプリ/ボード総VRAMを含まない）。baseline `NVIDIA GeForce RTX 4070 Ti, 616.64, 12282 MiB, 3069 MiB, 15 %`。単発・他GPU利用ありで独占benchmarkではない。
+
+`test_index_gpu_api.py`で完了済みの生成1万件のみを受け付け、製品loopback/token/Origin APIを専用processで確認。**28 checks PASS**: 60/60/40/0件のページ0/1/166/167、重複しないページID、画像625件、cover938件、ID1と10000のお気に入りをHTTP更新→検索で2件。変更はfinallyで元に戻し、vector/source/benchmark result digest不変。query7回のみ、文書/画像推論0、所有3 process-instance handles全終了。HTTP controllerのprocess lifetime peak working set **116.0MiB**（API/検証処理込み、GUI除外）。各request単発: first 15.31秒 / second 1.78秒 / last 1.79秒 / beyond 1.81秒 / images 0.28秒 / covers 1.91秒 / favorites 0.12秒。HTTP初回はmodel再ロード込み。HTTP試験終了後の所有worker停止を確認し、native GUI1万件負荷は未実行。
+
+preflightは768×768/30tag/128件で49 checks PASS。CLI guardはbenchmark9/API5 checks PASS: 範囲外/既存/未完了/1万件でない入力、寸法/tag上限等を拒否し既存証拠を保護。新しいtoolのsyntax/help/diff checks PASS。Python103 tests/C#15 checks/WinUI x64 SelfContained Releaseも再確認（実行logはdata/index-scaling/gpu-large-*）。WinUI code reviewは変更差分とnative Items/60 paging、async/dirty、DOM JSON、theme/profile/auth境界を確認。WinUI analyzer未導入。今回GUIは変更・再実行なし、前回appearance-09の105 checks/17 PNG目視PASSと区別する。
+
+画像は単純図柄でPNG約6KB、生成source全体は**5.9MiB**。768px画像decodeと現行processorによるresize/280 soft-token上限を通る測定であり、大きな実ZIP/JPEGのI/Oや最大byte/pixel限界を網羅しない。tag内容は共通の架空負荷文で、品質コーパスではない。実1TB/多数root/実作品・GUI込み総資源/一般検索品質/別checkpoint/Laya精度改善/reader/Komga/HC/高DPI/AOT/配布は未確認。私物・個人設定・OS・依存・モデルは変更/取得なし。
+
+再現（生成素材のみ、新規output）:
+
+    python tools/test_index_gpu_scaling.py --output data/index-scaling/<fresh-folder> --stages 64 256 1024 2304 5000 10000 --cover-width 768 --cover-height 768 --metadata-tags 30
+    python tools/test_index_gpu_api.py --fixture data/index-scaling/<same-completed-folder>
+
+既定の小素材/stagesを保持。cover各32..768、metadata-tags0..30、tag長60。build1phaseは測定toolだけ最大3600秒、製品timeoutは変更なし。APItoolは生成/合格/実GPU10000/生成rootを確認し、api-result.jsonがない時だけ実行する。全result/DB/生成素材/logはignored。途中pass=falseを失敗と混同せず最終exit/resultを確認。
+
+次の3手: (1) [ai-resource-policy.md](ai-resource-policy.md)の明示worker解放を実装し生成実GPUで停止/再ロード/競合を検証、(2) 選択式idle解放/索引待機と上限超の対象選択をGUIへ、(3) 明示指定の小実サンプルで意味/表紙の検索品質を評価。Layaは精度gate未達の既定無効実験APIを保持。

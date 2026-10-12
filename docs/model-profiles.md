@@ -147,3 +147,6 @@ eligible上限2,000→10,000、256件metadata/vector取得と進捗16件保存�
 
 
 生成素材でdefault EG2文字+表紙2,304件のgpu-02（86 checks PASS）を追加。profile identity/schemaを保持し、増分/中断再開/zero-inference cache/worker tree終了を検証。モデル交換や別checkpointの新テストではない。詳細はindex-scaling.md。
+
+
+生成1万件/768px cover938枚/長い日本語tagの実GPU索引と製品HTTP paging/kind/favoriteまで合格。default profile/identity/既存vector schemaの変更はなく、別checkpointやGUIモデル切替の新検証ではない。正確な資源/限界/次のworker解放仕様はindex-scaling.md/ai-resource-policy.md。

@@ -3,7 +3,44 @@
 更新: 2026-10-12。旧Web試作段階の引継ぎを置き換える。**製品GUIはWinUI 3に決定済みで、EmbeddingGemma 2検索まで実装・実GPU検証済み。最初から作り直さない。**
 
 
-## 最新の再開地点（2026-10-12・GUI完走／実GPU2,304件確認）
+## 大きめ生成素材で実GPU1万件・HTTP検索確認（2026-10-12）
+
+開始HEAD **44ecd51**。同じfeature/Draft PR #5/baseを保持。`gpu-large-10k-01`は**126 checks PASS**、既存default EG2/text+cover/auto-bf16/768次元で実CUDA索引。生成10,000件（架空WAVメタデータ9,062、PNG625、1ページCBZ313）。cover938枚は768×768px、tag30個×60文字、実encoderの文字入力1865..1881文字とPNG寸法を記録・検証。
+
+| 段階 | 保存済み件数 | 新規文字推論 | 新規表紙推論 | 秒 |
+| --- | ---: | ---: | ---: | ---: |
+| index-64 | 64 | 64 | 6 | 21.67 |
+| index-256 | 256 | 192 | 18 | 24.71 |
+| index-1024 | 1,024 | 768 | 72 | 94.12 |
+| index-2304 | 2,304 | 1,280 | 120 | 156.50 |
+| index-5000 | 5,000 | 2,696 | 254 | 300.62 |
+| cancel-10000 | 5,096 | 96 | 9 | 14.51 |
+| resume-10000 | 10,000 | 4,904 | 459 | 567.52 |
+| fresh-restart-cache | 10,000 | 0 | 0 | 10.47 |
+
+5,000既存+96新規で中断し、新encoder/AISearchから残り4,904件だけ推論。最終text10,000/cover938、累計document10,000/image938/query21で重複文字/表紙推論なし。fresh cache buildでは推論0・worker未起動、その後のqueryのみCUDAロード。元source bytes/size/mtime digest不変、所有9 process-instance handles全終了。
+
+10,000件の単発検索: text 1.98秒（10,000候補） / cover 0.99秒（938候補） / all 1.89秒（10,000候補）。warm/cold等の条件はresult phasesで区別する。最初のbuildと再開buildはlazy model load込み、cached後最初のqueryは再ロード込み。一般的な検索精度の合格率ではない。
+
+build RAMの0.2秒sample peak: controller **101.2MiB working set**、所有worker tree **2049.9MiB working set**、同tree private commit **5330.1MiB**。private commitを全て物理RAMとして足さない。torch CUDA lifetime max allocated **994.0MiB**（reserved/context/他アプリ/ボード総VRAMを含まない）。baseline `NVIDIA GeForce RTX 4070 Ti, 616.64, 12282 MiB, 3069 MiB, 15 %`。単発・他GPU利用ありで独占benchmarkではない。
+
+`test_index_gpu_api.py`で完了済みの生成1万件のみを受け付け、製品loopback/token/Origin APIを専用processで確認。**28 checks PASS**: 60/60/40/0件のページ0/1/166/167、重複しないページID、画像625件、cover938件、ID1と10000のお気に入りをHTTP更新→検索で2件。変更はfinallyで元に戻し、vector/source/benchmark result digest不変。query7回のみ、文書/画像推論0、所有3 process-instance handles全終了。HTTP controllerのprocess lifetime peak working set **116.0MiB**（API/検証処理込み、GUI除外）。各request単発: first 15.31秒 / second 1.78秒 / last 1.79秒 / beyond 1.81秒 / images 0.28秒 / covers 1.91秒 / favorites 0.12秒。HTTP初回はmodel再ロード込み。HTTP試験終了後の所有worker停止を確認し、native GUI1万件負荷は未実行。
+
+preflightは768×768/30tag/128件で49 checks PASS。CLI guardはbenchmark9/API5 checks PASS: 範囲外/既存/未完了/1万件でない入力、寸法/tag上限等を拒否し既存証拠を保護。新しいtoolのsyntax/help/diff checks PASS。Python103 tests/C#15 checks/WinUI x64 SelfContained Releaseも再確認（実行logはdata/index-scaling/gpu-large-*）。WinUI code reviewは変更差分とnative Items/60 paging、async/dirty、DOM JSON、theme/profile/auth境界を確認。WinUI analyzer未導入。今回GUIは変更・再実行なし、前回appearance-09の105 checks/17 PNG目視PASSと区別する。
+
+画像は単純図柄でPNG約6KB、生成source全体は**5.9MiB**。768px画像decodeと現行processorによるresize/280 soft-token上限を通る測定であり、大きな実ZIP/JPEGのI/Oや最大byte/pixel限界を網羅しない。tag内容は共通の架空負荷文で、品質コーパスではない。実1TB/多数root/実作品・GUI込み総資源/一般検索品質/別checkpoint/Laya精度改善/reader/Komga/HC/高DPI/AOT/配布は未確認。私物・個人設定・OS・依存・モデルは変更/取得なし。
+
+再現（生成素材のみ、新規output）:
+
+    python tools/test_index_gpu_scaling.py --output data/index-scaling/<fresh-folder> --stages 64 256 1024 2304 5000 10000 --cover-width 768 --cover-height 768 --metadata-tags 30
+    python tools/test_index_gpu_api.py --fixture data/index-scaling/<same-completed-folder>
+
+既定の小素材/stagesを保持。cover各32..768、metadata-tags0..30、tag長60。build1phaseは測定toolだけ最大3600秒、製品timeoutは変更なし。APItoolは生成/合格/実GPU10000/生成rootを確認し、api-result.jsonがない時だけ実行する。全result/DB/生成素材/logはignored。途中pass=falseを失敗と混同せず最終exit/resultを確認。
+
+次の3手: (1) [ai-resource-policy.md](ai-resource-policy.md)の明示worker解放を実装し生成実GPUで停止/再ロード/競合を検証、(2) 選択式idle解放/索引待機と上限超の対象選択をGUIへ、(3) 明示指定の小実サンプルで意味/表紙の検索品質を評価。Layaは精度gate未達の既定無効実験APIを保持。
+
+
+## 前段階の再開地点（2026-10-12・GUI完走／実GPU2,304件確認）
 
 開始HEAD **a4690a1**。GUI検証コミット **b7de729**、実GPU測定/記録コミット **7d28a6e**。後続は提出文書のみ、最新HEADは実Gitで確認。同じfeature/Draft PR #5/baseを保持。通常GUIテスト許可は継続、専用DB/settings/生成17素材と既存EG2のみ。
 
@@ -78,7 +115,7 @@ Draft PR: https://github.com/jakymiku/Aredoko/pull/5
 
 まず、このブランチのAGENTS.md、docs/chat-handoff.md、docs/codex-handoff.mdの最新節、Issue #4、PR #5を確認してください。mainや古いWeb試作の状態を現状と混同しないでください。
 WinUI 3製品MVP、EmbeddingGemma 2の曖昧検索、交換可能なモデルprofile、混合順位改善は実装済みです。Layaは精度不足のため明示実験APIだけで、GUIの自動切替や種類絞込みには使っていません。
-AI対象10,000件、256件取得・16件進捗保存・旧cache/global fusionを保持し、CPU生成1万件cancel/restart/searchは確認済みです。通常GUIテストを許可された最新作業は、固定index actionsと明暗AI dialog、Lightの3dialog/17件CUDA検索/10,000表示まで確認。ただしappearance-06全体はDark fresh cacheにもcudaを要求したテスト条件でFAILです。最後の条件修正はnative未再実行なので、まず --editor-only --appearance-checks --coverage-checks を新規outputへ実行し全PNGを見て未到達Dark/missingまで確認してください。過去visual/通しFAILを消さず、実GPU大規模/高DPI/HC/1TBを未確認と区別してください。OS設定/私物を勝手に変更せず、起動時profile/旧索引互換/hot swapなし/自動DLなしを保持してください。
+最新は生成1万件の実EG2文字+768px表紙/長い日本語tagのGPU検証と、HTTPのpaging/種類/お気に入り検索までPASSです。増分・中断5096から残4904だけ再開・fresh cache全推論0・所有worker終了を確認。前回native appearance-09も105 checks/17 PNG目視PASSであり、appearance-06等の過去FAILは履歴として残しています。まずdocs/ai-resource-policy.mdに従って明示worker解放を実装し、実GPUで停止/再ロード/競合を検証してください。次に選択式idle解放/索引待機/上限超の対象選択、明示小実サンプルの品質評価へ。私物を未指定で走査せず、全1TBやGUI1万件負荷を検証済みとは扱わないでください。
 既存資産・手動検索・タグ保存を維持し、実装できる環境なら必要なテスト、コミット、同じDraft PRの更新まで進め、進捗を引継ぎへ記録してください。直接編集やWindows実行ができない場合は、実コードに対応した変更ファイルか適用可能な差分と、PCで実行する検証手順を返してください。未実行のテストを成功と報告しないでください。
 非公開リポジトリを読めない場合はアクセスできないと明記し、ユーザーが共有するこのブランチのソースを使ってください。仕様だけから実装済みコードを想像して書き直さないでください。
 ```
