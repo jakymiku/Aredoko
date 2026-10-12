@@ -1,6 +1,20 @@
 # Aredoko
 
-> **開発再開ガイド（2026-10-11）**: 本ブランチではGUI方式を**WinUI 3に決定**し、製品版MVP実装に着手する段階へ移行しました。現在の作業状況は [docs/codex-handoff.md](docs/codex-handoff.md)、実装仕様は [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) を参照。以下のREADME本文はデモ段階の説明で、製品版実装の完了を意味しません。
+> **開発版（2026-10-13）**：このfeatureブランチにはWinUI 3製品版MVPの開発プレビューがあります。明示登録したフォルダの一覧・検索、リスト/グリッド、画像/CBZ/ZIPの先頭プレビュー、タグ/棚/お気に入り保存、交換可能profileでのoffline AI文章・画像・混合検索を実装済み。配布完成版ではありません。現状と未検証項目は[引継ぎ](docs/codex-handoff.md)、最新の詳細UIは[詳細とfocus](docs/editor-layout.md)、元の実装委任は[Issue #4](https://github.com/jakymiku/Aredoko/issues/4)を参照。
+
+## WinUI開発版の起動
+
+Windowsの既存Python/.NET/WinApp環境で、repository rootから実行します。依存の自動導入や私物フォルダの自動scanは行いません。
+
+```powershell
+pwsh -NoProfile -File tools/start-winui.ps1
+```
+
+新しいフォルダは「フォルダ管理」から明示登録・scanします。AIモデル/profileの準備とGPU検証は[WinUI MVP](docs/winui-mvp.md)・[モデルprofile](docs/model-profiles.md)・引継ぎを参照。Layaは実験的なopt-inで既定無効。本文OCR・音声内容検索・本格読書ビューア・Komga連携・配布installerは未実装です。
+
+## 既存のWeb操作試作
+
+以下は保存済みWeb demoの説明です。WinUI開発版とは別の資産として保持しています。
 
 画像・本・動画・音楽を、あいまいな記憶から探す。
 

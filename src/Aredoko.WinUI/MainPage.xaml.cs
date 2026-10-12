@@ -201,13 +201,31 @@ public sealed partial class MainPage : Page
         if(active is null||saving||dialogOpen||!Dirty)return;
         var snapshot=Current();var error=snapshot.Validate();
         if(error is not null){EditStatus.Text=error;return;}
+        // Disabling the editor moves WinUI focus elsewhere. Restore only an
+        // editor control, and only if the user has not chosen another control
+        // while the request was pending. Never take focus from another window.
+        var focused=FocusManager.GetFocusedElement(XamlRoot) as Control;
+        var restore=focused==Tags||focused==Shelf||focused==Favorite||focused==Reviewed||focused==Save;
+        var focusState=focused?.FocusState==FocusState.Keyboard?FocusState.Keyboard:FocusState.Programmatic;
         saving=true;Editor.IsEnabled=false;var id=active.Id;
+        var displacedFocus=FocusManager.GetFocusedElement(XamlRoot);
         try {
             await api.SaveAsync(id,snapshot);
             saved=snapshot;active.Tags=snapshot.ParsedTags;active.Shelf=snapshot.Shelf;active.Favorite=snapshot.Favorite;active.Reviewed=snapshot.Reviewed;
             RenderRows();RestoreSelection();EditStatus.Text="保存しました";Notice("保存しました");
         }catch(Exception ex){Failure(ex);EditStatus.Text="保存できませんでした。変更内容は残っています。";}
-        finally{saving=false;Editor.IsEnabled=true;Save.IsEnabled=Dirty;if(PendingSearch){searchTimer.Stop();searchTimer.Start();}}
+        finally
+        {
+            var unchangedFocus=ReferenceEquals(displacedFocus,FocusManager.GetFocusedElement(XamlRoot));
+            saving=false;Editor.IsEnabled=true;Save.IsEnabled=Dirty;
+            if(!disposed&&active?.Id==id&&Details.IsPaneOpen&&restore&&unchangedFocus)
+            {
+                // A successful save disables Save; continue at the tag field.
+                var target=focused==Save&&!Save.IsEnabled?Tags:focused;
+                target?.Focus(focusState);
+            }
+            if(PendingSearch){searchTimer.Stop();searchTimer.Start();}
+        }
     }
     private async void Save_Click(object sender,RoutedEventArgs e)=>await SaveAsync();
     private async void SaveShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;await SaveAsync();}
@@ -280,13 +298,19 @@ public sealed partial class MainPage : Page
     private void Page_SizeChanged(object sender,SizeChangedEventArgs e)
     {
         if(Details is null || ViewTools is null)return;
+        Details.DisplayMode=e.NewSize.Width<1000?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
+        Details.OpenPaneLength=Math.Min(320,Math.Max(240,e.NewSize.Width-64));
+        if(active is null)Details.IsPaneOpen=false;
+    }
+    private void LibraryLayout_SizeChanged(object sender,SizeChangedEventArgs e)
+    {
+        if(ViewTools is null)return;
+        // Inline details reduce the actual toolbar width independently of the
+        // window width; choose wrapping from the content's measured space.
         var narrow=e.NewSize.Width<840;
         Grid.SetRow(ViewTools,narrow?1:0);Grid.SetColumn(ViewTools,narrow?0:1);Grid.SetColumnSpan(ViewTools,narrow?2:1);
         ViewTools.HorizontalAlignment=narrow?HorizontalAlignment.Left:HorizontalAlignment.Right;
         ViewTools.Margin=narrow?new Thickness(0,8,0,0):new Thickness(0);
-        Details.DisplayMode=e.NewSize.Width<1000?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
-        Details.OpenPaneLength=Math.Min(320,Math.Max(240,e.NewSize.Width-64));
-        if(active is null)Details.IsPaneOpen=false;
     }
 
     private async void Roots_Click(object sender,RoutedEventArgs e) {

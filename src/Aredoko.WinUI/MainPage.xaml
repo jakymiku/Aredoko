@@ -11,7 +11,37 @@
    <NavigationViewItem Content="未確認" Tag="unreviewed" Icon="Clock" AutomationProperties.AutomationId="NavUnreviewed"/>
    <NavigationViewItem Content="棚" Tag="shelf" Icon="Folder" AutomationProperties.AutomationId="NavShelf"/>
   </NavigationView.MenuItems>
-  <Grid Padding="16" RowSpacing="12">
+   <SplitView x:Name="Details" Margin="16" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="320" PaneBackground="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+    <SplitView.Pane>
+     <Border KeyDown="Detail_KeyDown" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource OverlayCornerRadius}">
+     <Grid RowSpacing="16" Padding="16">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <TextBlock Text="詳細と整理" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+       <Button Grid.Column="1" Click="CloseDetails_Click" ToolTipService.ToolTip="詳細を閉じる（Esc）" AutomationProperties.Name="詳細を閉じる" AutomationProperties.AutomationId="BtnCloseDetails"><SymbolIcon Symbol="Cancel"/></Button>
+      </Grid>
+      <ContentControl x:Name="Editor" Grid.Row="1" IsEnabled="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+       <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+       <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="DetailScroll" AutomationProperties.Name="作品の詳細と編集"><StackPanel Spacing="12">
+      <TextBlock x:Name="ItemTitle" Text="作品を選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap"/>
+      <TextBlock x:Name="ItemPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+      <Image x:Name="DetailPreview" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
+      <TextBlock Text="読書機能は準備中" Style="{StaticResource CaptionTextBlockStyle}"/>
+
+       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
+       <TextBox x:Name="Shelf" Header="棚" MaxLength="80" TextChanged="Editor_Changed" AutomationProperties.Name="棚" AutomationProperties.AutomationId="TxtShelf"/>
+       <CheckBox x:Name="Favorite" Content="お気に入り" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkFavorite"/>
+       <CheckBox x:Name="Reviewed" Content="確認済み" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkReviewed"/>
+       </StackPanel></ScrollViewer>
+       <StackPanel Grid.Row="1" Spacing="8">
+      <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>
+       <Button x:Name="Save" Content="保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.AutomationId="BtnSave"/>
+      </StackPanel>
+       </Grid></ContentControl>
+     </Grid>
+     </Border>
+    </SplitView.Pane>
+  <Grid x:Name="LibraryLayout" SizeChanged="LibraryLayout_SizeChanged" RowSpacing="12">
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
    <Grid ColumnSpacing="16"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
     <TextBlock Text="ライブラリ" Style="{StaticResource TitleTextBlockStyle}"/>
@@ -36,42 +66,17 @@
     </StackPanel>
     <TextBlock x:Name="SearchMethodHint" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,8,0,0" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtSearchMethodHint"/>
    </Grid>
-   <SplitView x:Name="Details" Grid.Row="3" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="320" PaneBackground="{ThemeResource SolidBackgroundFillColorBaseBrush}">
-    <SplitView.Pane>
-     <Border KeyDown="Detail_KeyDown" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource OverlayCornerRadius}">
-     <Grid RowSpacing="16" Padding="16">
-      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-      <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-       <TextBlock Text="詳細と整理" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
-       <Button Grid.Column="1" Click="CloseDetails_Click" ToolTipService.ToolTip="詳細を閉じる（Esc）" AutomationProperties.Name="詳細を閉じる" AutomationProperties.AutomationId="BtnCloseDetails"><SymbolIcon Symbol="Cancel"/></Button>
-      </Grid>
-      <ScrollViewer Grid.Row="1"><StackPanel Spacing="12">
-      <TextBlock x:Name="ItemTitle" Text="作品を選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap"/>
-      <TextBlock x:Name="ItemPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-      <Image x:Name="DetailPreview" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
-      <TextBlock Text="読書機能は準備中" Style="{StaticResource CaptionTextBlockStyle}"/>
-      <ContentControl x:Name="Editor" IsEnabled="False" HorizontalContentAlignment="Stretch"><StackPanel Spacing="12">
-       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
-       <TextBox x:Name="Shelf" Header="棚" MaxLength="80" TextChanged="Editor_Changed" AutomationProperties.Name="棚" AutomationProperties.AutomationId="TxtShelf"/>
-       <CheckBox x:Name="Favorite" Content="お気に入り" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkFavorite"/>
-       <CheckBox x:Name="Reviewed" Content="確認済み" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkReviewed"/>
-       <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>
-       <Button x:Name="Save" Content="保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.AutomationId="BtnSave"/>
-      </StackPanel></ContentControl>
-     </StackPanel></ScrollViewer>
-     </Grid>
-     </Border>
-    </SplitView.Pane>
-    <Grid Margin="0,0,12,0">
+
+    <Grid Grid.Row="3" Margin="0,0,12,0">
      <ListView x:Name="Items" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.AutomationId="ItemList"/>
      <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
     </Grid>
-   </SplitView>
    <StackPanel Grid.Row="4" Spacing="8">
     <StackPanel Orientation="Horizontal" Spacing="8"><Button x:Name="Previous" Content="前へ" Click="Previous_Click" AutomationProperties.AutomationId="BtnPrevious"/><TextBlock x:Name="PageNumber" AutomationProperties.AutomationId="TxtPageNumber" VerticalAlignment="Center"/><Button x:Name="Next" Content="次へ" Click="Next_Click" AutomationProperties.AutomationId="BtnNext"/><Button Content="再接続" Click="Reconnect_Click" AutomationProperties.AutomationId="BtnReconnect"/></StackPanel>
     <ProgressBar x:Name="Busy" IsIndeterminate="True" Visibility="Collapsed"/>
     <InfoBar x:Name="Status" IsOpen="True" IsClosable="False" Title="接続準備中" AutomationProperties.AutomationId="StatusBar"/>
    </StackPanel>
   </Grid>
+   </SplitView>
  </NavigationView>
 </Page>

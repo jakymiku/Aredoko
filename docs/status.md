@@ -1,3 +1,7 @@
+> **最新の状況（2026-10-13）**：詳細パネルを利用可能な高さへ拡張、保存/状態を固定。成功/失敗後の編集focus復帰・retryと保存中に選んだQuery focus維持を確認。editor-native-03 93 checks/実入力50/skip0/12PNG全目視・正常close2、Core35/Python6/最終Release PASS。resize時の自動open保持、高DPI/Contrast/読み上げは残作業。詳細は[詳細とfocus](editor-layout.md)/[引継ぎ](codex-handoff.md)。CI manual-only・Draft未マージ。以下は履歴。
+
+---
+
 > **最新の状況（2026-10-13、一部確認）**：詳細内Esc/未保存確認と一覧focus復帰、編集欄の明示Nameを追加。Core35/Python6/最終Release PASS。native03は全体FAIL、50 recorded checks/26実入力/4PNG全目視/正常close2。Light操作は完走、DarkはUIA peer失効で未到達が残る。高DPI/Contrast/読み上げは未確認。詳細は[キーボード検証](keyboard-accessibility.md)/[引継ぎ](codex-handoff.md)。CI manual-only・Draft未マージ。以下は履歴。
 
 ---

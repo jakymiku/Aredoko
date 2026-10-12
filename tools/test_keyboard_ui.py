@@ -11,7 +11,7 @@ from pathlib import Path
 
 REPO=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(REPO/'app'))
-from production import ProductionCatalog
+from production import ProductionCatalog,ScanBusyError
 from production_server import production_handler
 from ai_settings import AIProfileSettings
 from test_search_methods_ui import ContractEncoder,RecordedAI
@@ -41,6 +41,7 @@ def main():
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-keyboard-'+uuid.uuid4().hex}
     report={'pass':False,'target':'local','actual_model':False,'checks':[],'screenshots':[],'keyboard_actions':[],'keyboard_skipped':[],'display':[],'audit_scope':'main toolbar, selected editor and discard dialog; not whole-app/screen-reader audit'}
     catalog=engine=server=thread=None;hwnd=app_pid=process=None;original={}
+    save_fault={'fail':False,'delay':False};save_entered=threading.Event();save_release=threading.Event()
     user32=ctypes.WinDLL('user32',use_last_error=True);kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
     user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
     user32.GetForegroundWindow.restype=wintypes.HWND
@@ -92,6 +93,9 @@ def main():
         return True
     def focus_assert(identifier):ui('wait-for',identifier,'-p','HasKeyboardFocus','--value','True','-t','5000')
     def shot(name):
+        # Move only over this owned app's harmless reconnect button so the
+        # close-button tooltip cannot obscure/extend the window capture.
+        ui('hover','BtnReconnect');time.sleep(.8)
         p=target/(name+'.png');ui('screenshot','--output',p)
         check('Delivered '+name,p.is_file() and p.stat().st_size>0);report['screenshots'].append(p.name)
     def resize(width,height):
@@ -134,6 +138,20 @@ def main():
         first=catalog.search()['items'][0]['id']
         settings=target/'settings.json';settings.write_text(json.dumps({'version':1,'profile':'default','scope':{'root_ids':[root],'kind':'','shelf':None}}),encoding='utf-8');settings_before=settings.read_bytes()
         encoder=ContractEncoder();engine=RecordedAI(catalog,encoder);profiles=AIProfileSettings(REPO,settings)
+        # Test-only catalog faults retain the real handler's token/Origin/body
+        # validation and production response handling. Never affect user data.
+        original_update=catalog.update
+        def controlled_update(ids,changes):
+            if save_fault['fail']:
+                save_fault['fail']=False
+                report['injected_save_failures']=report.get('injected_save_failures',0)+1
+                raise ScanBusyError('Generated test save failure')
+            if save_fault['delay']:
+                save_fault['delay']=False;save_entered.set()
+                if not save_release.wait(30):raise ScanBusyError('Generated delay timed out')
+                report['delayed_saves']=report.get('delayed_saves',0)+1
+            return original_update(ids,changes)
+        catalog.update=controlled_update
         handler=production_handler(catalog,secrets.token_urlsafe(32),engine,profiles=profiles)
         class Quiet(handler):
             def log_message(self,*args):pass
@@ -184,10 +202,42 @@ def main():
             physical=keys('ctrl+s','TxtShelf')
             if not physical:ui('invoke','BtnSave')
             wait('TxtEditStatus','保存しました');check(theme+(' physical' if physical else ' UIA')+' save persisted',catalog.search()['items'][0]['tags']==[tags] and catalog.search()['items'][0]['favorite']==(not favorite_before))
+            if physical:
+                focus_assert('TxtShelf');check(theme+' save retains shelf keyboard focus',True)
+            # Failed save retains edits/focus and leaves persisted metadata alone.
+            before=catalog.search()['items'][0]['tags'];failed_tags=tags+'-retry'
+            physical=keys('ctrl+a text='+failed_tags,'TxtTags')
+            if not physical:ui('set-value','TxtTags',failed_tags)
+            save_fault['fail']=True;physical=keys('ctrl+s','TxtTags')
+            if not physical:ui('invoke','BtnSave')
+            wait('TxtEditStatus','保存できませんでした。変更内容は残っています。')
+            wait('TxtTags',failed_tags)
+            check(theme+' failed save leaves DB and edits intact',catalog.search()['items'][0]['tags']==before)
+            if physical:focus_assert('TxtTags');check(theme+' failed save retains tag keyboard focus',True)
+            shot(theme+'-save-error-wide')
+            physical=keys('enter','BtnSave')
+            if not physical:ui('invoke','BtnSave')
+            wait('TxtEditStatus','保存しました');tags=failed_tags
+            check(theme+' retry saves retained edits',catalog.search()['items'][0]['tags']==[tags])
+            if physical:focus_assert('TxtTags');check(theme+' disabled save button falls back to tags',True)
+            # While an authenticated save is pending, explicitly choosing the
+            # query control via UIA must not be undone by save completion.
+            tags+='-delayed';physical=keys('ctrl+a text='+tags,'TxtTags')
+            if not physical:ui('set-value','TxtTags',tags)
+            save_entered.clear();save_release.clear();save_fault['delay']=True
+            physical=keys('ctrl+s','TxtTags')
+            if not physical:ui('invoke','BtnSave')
+            check(theme+' delayed save started',save_entered.wait(5))
+            ui('focus','TxtQuery');focus_assert('TxtQuery');save_release.set()
+            wait('TxtEditStatus','保存しました');focus_assert('TxtQuery')
+            check(theme+' UIA focus chosen during save is preserved',catalog.search()['items'][0]['tags']==[tags])
             shot(theme+'-saved-wide')
-            # Switching SplitView display mode may close its pane. Use the
-            # existing Details route and wait before capturing the open drawer.
+            # Mode changes can close the pane. Reopen explicitly; this does
+            # not verify automatic open-state retention across resize.
             resize(700,620);ui('invoke','BtnDetails');wait('TxtTags',tags)
+            tree=json.loads(ui('inspect','--json','--depth','16'))
+            footer=[n for n in nodes(tree) if n.get('automationId')=='BtnSave']
+            check(theme+' narrow fixed save footer is onscreen',len(footer)==1 and footer[0].get('isOffscreen') is False)
             shot(theme+'-saved-list-narrow')
             resize(1200,820);ui('invoke','BtnDetails');wait('TxtTags',tags)
             physical=keys('esc','TxtTags')
@@ -223,6 +273,7 @@ def main():
             ui('wait-for','BtnDetails','-p','IsEnabled','--value','False','-t','5000')
             check(theme+(' physical' if physical else ' UIA')+' discard leaves saved tags',catalog.search()['items'][0]['tags']==[tags]);shot(theme+'-closed-narrow')
             close()
+        check('Failure and delayed save fixtures exercised',report.get('injected_save_failures')==2 and report.get('delayed_saves')==2)
         check('No AI inference or worker',not engine.encoder.resident and not engine.encoder.calls and not engine.requests)
         check('Settings bytes unchanged',settings.read_bytes()==settings_before)
         check('Source bytes and mtime unchanged',original==source_digest())
@@ -238,6 +289,7 @@ def main():
         raise
     finally:
         try:
+            save_release.set()
             close()
             if thread:server.shutdown();thread.join(5)
             if server:server.server_close()
