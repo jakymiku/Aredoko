@@ -68,6 +68,37 @@ class AISettingsTests(unittest.TestCase):
         self.assertIsNone(self.controller().startup_path)
         self.assertEqual(self.controller().active, "default")
 
+    def test_legacy_profile_only_preferences_and_resource_policy(self):
+        from ai_settings import RESOURCE_DEFAULT
+        self.settings.parent.mkdir(parents=True)
+        self.settings.write_text('{"version":1,"profile":"default"}',encoding="utf-8")
+        controller=self.controller()
+        self.assertEqual(controller.resource(),RESOURCE_DEFAULT)
+        self.assertEqual(controller.snapshot()["selected"],"default")
+        self.assertEqual(controller.set_resource({"idle_release_seconds":60,"index_pause_ms":200}),
+                         {"idle_release_seconds":60,"index_pause_ms":200})
+        self.custom()
+        controller.choose("local:custom.json")
+        after=self.controller()
+        self.assertEqual(after.selected(),"local:custom.json")
+        self.assertEqual(after.resource(),{"idle_release_seconds":60,"index_pause_ms":200})
+        self.assertEqual(after.startup_path,(self.folder/"custom.json").resolve())
+        self.assertEqual(after.resource(),controller.resource())
+        self.assertEqual(after.snapshot()["selected"],"local:custom.json")
+
+    def test_resource_rejects_out_of_range_and_unknown_fields_without_persisting(self):
+        ctrl=self.controller()
+        for bad in ({"idle_release_seconds":True,"index_pause_ms":0},
+                    {"idle_release_seconds":-1,"index_pause_ms":0},
+                    {"idle_release_seconds":3601,"index_pause_ms":0},
+                    {"idle_release_seconds":0,"index_pause_ms":2001},
+                    {"idle_release_seconds":0,"index_pause_ms":False},
+                    {"idle_release_seconds":0},
+                    {"idle_release_seconds":0,"index_pause_ms":0,"identity":"bad"}):
+            with self.subTest(bad=bad),self.assertRaises(ValueError):
+                ctrl.set_resource(bad)
+        self.assertFalse(self.settings.exists())
+
     def test_missing_corrupt_and_unsupported_settings_never_import_code(self):
         self.custom("broken.json", adapter="evil.module")
         (self.folder / "malformed.json").write_text("{")
