@@ -1,0 +1,23 @@
+name: AI owned-worker release CPU checks
+on:
+  push:
+    branches: [feat/winui3-production-mvp-20261011]
+  pull_request:
+    paths:
+      - app/ai_process.py
+      - app/ai_search.py
+      - app/production_server.py
+      - app/ai_settings.py
+      - tests/test_ai_release.py
+      - .github/workflows/ai-release-checks.yml
+jobs:
+  cpu-lifecycle:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Owned worker release / busy / shutdown / localhost auth only
+        run: python -m unittest discover -s tests -p "test_ai_release.py" -v
