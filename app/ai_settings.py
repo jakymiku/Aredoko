@@ -12,6 +12,19 @@ from ai_profiles import DEFAULT_PROFILE, load_profile
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json\Z")
 MAX_FILES = 64
+RESOURCE_DEFAULT = {"idle_release_seconds": 0, "index_pause_ms": 0}
+
+def validate_resource(value):
+    if not isinstance(value, dict) or set(value) != set(RESOURCE_DEFAULT):
+        raise ValueError("Invalid AI resource settings")
+    idle = value["idle_release_seconds"]
+    pause = value["index_pause_ms"]
+    if type(idle) is not int or idle < 0 or idle > 3600:
+        raise ValueError("Idle seconds must be 0..3600")
+    if type(pause) is not int or pause < 0 or pause > 2000:
+        raise ValueError("Index pause must be 0..2000 ms")
+    return {"idle_release_seconds":idle,"index_pause_ms":pause}
+
 
 def default_settings_path(repo):
     base = os.environ.get("LOCALAPPDATA")
@@ -44,16 +57,49 @@ class AIProfileSettings:
             self.startup_error = "モデル設定が無効です（" + type(ex).__name__ + "）。設定を確認してください。文字検索は利用できます。"
         self.active = "command-line" if self.override is not None else self.started
 
-    def selected(self):
+    def _read_settings(self):
         if not self.path.exists():
-            return "default"
+            return {"version":1,"profile":"default"}
         if self.path.is_symlink() or self.path.stat().st_size > 2048:
             raise ValueError("Invalid settings file")
         payload = json.loads(self.path.read_text(encoding="utf-8-sig"))
-        if not isinstance(payload, dict) or set(payload) != {"version", "profile"} or payload["version"] != 1 or not isinstance(payload["profile"], str):
+        if (not isinstance(payload,dict)
+                or set(payload) not in ({"version","profile"},{"version","profile","resource"})
+                or type(payload["version"]) is not int or payload["version"] != 1
+                or not isinstance(payload["profile"],str)):
             raise ValueError("Invalid AI settings")
         self.path_for(payload["profile"])
-        return payload["profile"]
+        if "resource" in payload:
+            validate_resource(payload["resource"])
+        return payload
+
+    def selected(self):
+        return self._read_settings()["profile"]
+
+    def resource(self):
+        data=self._read_settings()
+        return validate_resource(data.get("resource",RESOURCE_DEFAULT))
+
+    def _save_settings(self,payload):
+        self.path.parent.mkdir(parents=True,exist_ok=True)
+        if self.path.is_symlink():
+            raise ValueError("Unsafe settings file")
+        tmp_path=None
+        try:
+            fd,tmp_path=tempfile.mkstemp(prefix=".ai-settings-",suffix=".tmp",dir=self.path.parent)
+            with os.fdopen(fd,"w",encoding="utf-8") as stream:
+                stream.write(json.dumps(payload,ensure_ascii=False))
+            os.replace(tmp_path,self.path)
+        finally:
+            if tmp_path and Path(tmp_path).exists():
+                Path(tmp_path).unlink()
+
+    def set_resource(self,resource):
+        resource=validate_resource(resource)
+        data=self._read_settings()
+        data["resource"]=resource
+        self._save_settings(data)
+        return self.resource()
 
     def path_for(self, profile_id):
         if profile_id == "default":
@@ -110,7 +156,10 @@ class AIProfileSettings:
             error = "保存済みのモデル設定が無効です（" + type(ex).__name__ + "）。"
         if pending not in {row["id"] for row in candidates} and pending not in ("default", "invalid"):
             candidates.append(self._candidate(pending))
+        try: resource=self.resource()
+        except (ValueError,OSError,json.JSONDecodeError): resource=dict(RESOURCE_DEFAULT)
         return {"profiles": candidates, "selected": pending, "active": self.active,
+                "resource":resource,
                 "command_line_override": self.override is not None,
                 "restart_required": self.override is None and pending != self.started,
                 "error": error,
@@ -121,17 +170,13 @@ class AIProfileSettings:
         candidate = self._candidate(profile_id)
         if not candidate["valid"]:
             raise ValueError("Invalid or missing profile. Fix the JSON before selecting.")
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        if self.path.is_symlink():
-            raise ValueError("Unsafe settings file")
-        payload = json.dumps({"version": 1, "profile": profile_id}, ensure_ascii=False)
-        tmp_path = None
+        # A damaged profile-only preference may still be repaired in the GUI.
         try:
-            fd, tmp_path = tempfile.mkstemp(prefix=".ai-settings-", suffix=".tmp", dir=self.path.parent)
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                stream.write(payload)
-            os.replace(tmp_path, self.path)
-        finally:
-            if tmp_path and Path(tmp_path).exists():
-                Path(tmp_path).unlink()
+            resource=self.resource()
+        except (ValueError,OSError,json.JSONDecodeError):
+            resource=dict(RESOURCE_DEFAULT)
+        payload={"version":1,"profile":profile_id}
+        if resource != RESOURCE_DEFAULT:
+            payload["resource"]=resource
+        self._save_settings(payload)
         return self.snapshot()
