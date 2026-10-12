@@ -211,6 +211,7 @@ class AISearch:
                     rows=self._current_rows(batch)
                     for item_id in batch:
                         if self.cancel.is_set():break
+                        did_infer=False
                         row=rows.get(item_id)
                         if row is None:
                             state['skipped']+=1
@@ -219,6 +220,7 @@ class AISearch:
                             if not self.store.fresh(item_id,rev):
                                 text=row['title']+'\n'+row['relative_path']+'\n'+'、'.join(row['tags'])
                                 vectors={'text':self.encoder.encode('document',text[:4096])}
+                                did_infer=True
                                 if 'cover' in self.profile.modalities and row['kind'] in ('image','book','archive'):
                                     try:
                                         source,_=self.previews.read(item_id)
@@ -240,7 +242,7 @@ class AISearch:
                                 self.store.save_state({**state,'state':'cancelling' if self.cancel.is_set() else 'running'})
                         # Load-shedding is optional and cancelable. Not a GPU
                         # utilization/FPS limit. Never pace interactive search.
-                        if state['processed']<len(ids) and self._index_pause_ms:
+                        if did_infer and state['processed']<len(ids) and self._index_pause_ms:
                             if self.cancel.wait(self._index_pause_ms/1000):
                                 break
                 state['state']='cancelled' if self.cancel.is_set() else 'complete'
