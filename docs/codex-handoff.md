@@ -3,7 +3,7 @@
 
 ## 最新：GUIの明示的なAI文章検索（2026-10-13）
 
-開始HEAD **f792d6a334834f1f8281509e74bfeb940b06919d**。同じfeature/Draft PR #5/comparison baseを維持。今回の実装SHAは後続記録/Git/PR headで確認。
+開始HEAD **f792d6a334834f1f8281509e74bfeb940b06919d**。同じfeature/Draft PR #5/comparison baseを維持。今回の実装・検証・仕様commitは **03acb7598b41507632a24a594662336cb5768b52**。このSHA記録は文書だけの後続commit。通常push後の最終HEADとread-only CI観測はGit/PR head・PR説明で確認。
 
 - 検索方法に「AI文章」（API source=text）を追加。「AI意味検索」は「AI混合」へ改称、既存index0/1/2とIDs/literal/all/coverは維持、textをindex3へ。種類・検索方法のvisible labelsと根拠説明を追加。名前・タグの意味だけを使い本文/音声は読まないことを表示。
 - saved scope/coverage/filter/page/stale/dirty規約を維持。未保存のモード変更をcancelするとmode/query/kindとhint/placeholder/accessibility nameが同期して戻る。モデル/順位/自動routingは変更しない。session-only・初期literal。
