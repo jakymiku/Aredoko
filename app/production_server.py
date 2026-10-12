@@ -74,7 +74,10 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())
-                if path=='/api/library/ai/resource': return self.send(200,{'policy':profiles.resource()})
+                if path=='/api/library/ai/resource':
+                    try: return self.send(200,{'policy':profiles.resource()})
+                    except (ValueError,OSError,json.JSONDecodeError):
+                        return self.send(409,{'error':'AIリソース設定が無効です。設定ファイルを修正するか、モデル選択を保存し直してください。'})
                 if path=='/api/library/roots': return self.send(200,{'items':catalog.index.roots()})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
