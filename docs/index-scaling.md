@@ -39,3 +39,7 @@ Windows processをHidden/BelowNormalで起動しゲームの前面操作を避�
 ユーザーがゲーム中のため、製品GUI起動/Activate/クリック/キーボード入力/OS設定変更は今回行わない。GUIの新しい上限文と前回のContentDialogテーマ修正はRelease build/code reviewまで。前回appearance-03はUIA68 PASS / visual FAILのままで、今回のCPU検証によって視覚合格へ変更しない。WinUI analyzer未導入、既存SDK IL2104 2警告は抑制しない。
 
 次は前面操作が可能なときLight/Dark dialogと新上限表示のnative確認、ゲームとGPUを共有しない時に生成素材で実EG2の段階的な負荷/メモリ測定、10,000件超の対象選択・進捗/資源設定の設計。私物は明示指定された小サンプルから。Layaは引き続き既定無効の実験APIのみ。
+
+
+## 後続GUI確認（2026-10-12）
+通常テストを許可された後、明暗dialogの10,000上限と固定status/start/cancel、Lightで17件の実CUDA索引・日本語検索後の上限文を確認。小画面で隠れていたindex actionsをmodel設定scrollから分離した。appearance-06全体はDark fresh cacheにcudaを要求したテスト条件でFAIL、修正はnative未再実行。全13 captured states目視、全17vector revisionのread-only確認を記録。[ui-polish.md](ui-polish.md)末尾の再開手順を使う。実GPU1万件の測定ではなく、上記CPU synthetic性能値もそのまま区別する。

@@ -267,7 +267,7 @@ public sealed partial class MainPage : Page
             timer.Tick+=async(_,_)=>{if(polling)return;polling=true;try{var state=await api.GetAsync("api/library/scan");var phase=state["state"]!.GetValue<string>();progress.Text=$"{phase} · {state["discovered"]} 件 {state["error"]}";scan.IsEnabled=phase!="running";rules.IsEnabled=phase!="running";add.IsEnabled=phase!="running";cancel.IsEnabled=phase=="running";}catch(Exception ex){progress.Text=ex.Message;}finally{polling=false;}};
             foreach(var element in new UIElement[]{list,folder,choose,exclusions,consent,add,rules,scan,cancel,progress})panel.Children.Add(element);
             await RefreshRoots();timer.Start();
-            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="フォルダ管理",Content=new ScrollViewer {Content=panel,MaxHeight=480},CloseButtonText="閉じる"};
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="フォルダ管理",Content=new ScrollViewer {Content=panel,MaxHeight=Math.Max(160,ActualHeight-240)},CloseButtonText="閉じる"};
             await dialog.ShowAsync();
         }catch(Exception ex){Failure(ex);}
         finally{timer.Stop();dialogOpen=false;try{if(!disposed){renderCancellation.Cancel();thumbnails.Clear();await LoadAsync();}}finally{transitions.Release();}}
@@ -377,9 +377,20 @@ public sealed partial class MainPage : Page
             cancel.Click+=async(_,_)=>{try{await api.PostAsync("api/library/ai/cancel",new JsonObject());await Refresh();}catch(Exception ex){status.Text=ex.Message;}};
             timer.Tick+=async(_,_)=>await Refresh();
             var panel=new StackPanel {Spacing=12,MinWidth=320};
-            foreach(var element in new UIElement[]{explanation,modelChoice,modelWarning,modelApply,modelFeedback,new TextBlock {Text="現在のAI索引",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},status,start,cancel})panel.Children.Add(element);
+            foreach(var element in new UIElement[]{explanation,modelChoice,modelWarning,modelApply,modelFeedback})panel.Children.Add(element);
+            var content=new Grid {RowSpacing=12,MaxHeight=Math.Max(160,ActualHeight-240)};
+            content.RowDefinitions.Add(new RowDefinition {Height=new GridLength(1,GridUnitType.Star)});
+            content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
+            content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
+            var modelOptions=new ScrollViewer {Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            content.Children.Add(modelOptions);
+            var indexInfo=new StackPanel {Spacing=8};
+            indexInfo.Children.Add(new TextBlock {Text="現在のAI索引",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]});
+            indexInfo.Children.Add(status);Grid.SetRow(indexInfo,1);content.Children.Add(indexInfo);
+            var actions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
+            actions.Children.Add(start);actions.Children.Add(cancel);Grid.SetRow(actions,2);content.Children.Add(actions);
             await RefreshProfiles();await Refresh();timer.Start();
-            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI検索の準備",Content=new ScrollViewer {Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled},CloseButtonText="閉じる"};
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI検索の準備",Content=content,CloseButtonText="閉じる"};
             await dialog.ShowAsync();
         }
         catch(Exception ex){Failure(ex);}

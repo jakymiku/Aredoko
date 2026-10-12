@@ -62,7 +62,7 @@ pwsh -File tools/start-winui.ps1 -Database <dedicated-test-db> -AISettings <dedi
 python tools/test_ai_profile_ui.py --editor-only --appearance-checks --output data/ai-ui/appearance-04
 ```
 
-appearance-04は**次回の再確認用で未実行**。存在するoutputを再使用しない。
+この節の時点ではappearance-04未実行だった。現在04/05/06を実行済みで、結果・修正後の残件は末尾に記録。存在するoutputは再使用しない。
 
 Windows App SDKではOnLaunchedのArgumentsは非対応で、[公式のLaunchActivatedEventArgs.Argumentsの注意書き](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.launchactivatedeventargs.arguments)に従いEnvironment.GetCommandLineArgsから指定を読む。値はLight/Dark以外Systemに戻す。最初の環境変数方式もpackaged activationへ引き継がれなかったため削除し、winapp --argsで渡す。
 
@@ -79,3 +79,30 @@ Windows App SDKではOnLaunchedのArgumentsは非対応で、[公式のLaunchAct
 再試行を止めた根拠: winui-ui-testing/SKILL.mdは “Maximum **two** fix-and-rerun cycles; then report remaining failures.” と指定する。今回01→02→03で2回を使用したため、新しいdialog修正の目視再確認を最優先の残件として記録した。操作68項目を視覚合格に転用しない。
 
 次は修正後のLight/Dark dialogを同じlocal targetで新規outputへ再確認。その後2,000件超の索引をcheckpoint/増分/resource制限込みで拡張する。高DPI/HCは用意された環境で確認し、ユーザーのOS設定を変更して検証範囲を埋めない。
+
+
+## 通常GUI検証の再開結果（2026-10-12）
+
+開始8a62492。ユーザーが通常テストを許可したため、ゲーム前面制約を解除。Sandbox featureはread-only CIMでInstallState=2（disabled）、snapshotはstale/stoppedだった。機能有効化はせず同じlocal targetで実行。生成17素材、専用DB/settings、既存EG2重みだけ。OS/私物/個人設定/依存/重みの変更・取得なし。
+
+製品変更: AI dialogのmodel設定だけをscrollし、現在の索引statusと開始/中断を別の固定Grid行へ移した。700×620でも開始ボタンを実clickでき、状態・上限・中断/閉じるが見える。フォルダ管理scrollもwindow高に応じた上限へ。既存AutomationIds、ActualTheme、native Items/60 paging/async/dirty/JSON DOM/認証/モデルidentityは保持。
+
+`--editor-only --appearance-checks --coverage-checks` は通常のeditor-only例外として、生成17件を実CUDAで索引/日本語検索する。実模型は既存EG2のtext-only/float32設定（768次元）、独立した別checkpointではない。profile_verification=not_runは全モデル選択バッチ未実行という意味で、actual_model=true。cover非対応とliteral復帰を先に検証する。
+
+- appearance-04: Light dialogは正しくLight/最大10,000表示。ただしStartAIIndexがscroll外でzero size、全体FAIL。6 PNG全目視、3正常終了＋1owned PID fallback warning。GPU索引未到達。
+- appearance-05: 固定status/start/cancel bounds、Light 17件GUI CUDA索引、日本語top1とGUI検索上限文まで成功。既存literal helperの「既定literalを検査するだけ」という条件を追加coverage段階にも使ったため全体FAIL。8 PNG全目視、4正常終了/warningなし。
+- appearance-06: **75 recorded successful checks、全体はFAIL**。13 PNGすべて目視。明暗AI dialogの正しいtheme/最大10,000と固定buttons、両テーマの実cover503案内/literal復帰、Lightの17件CUDA索引/日本語top1/semantic上限文、Light dirty keep/DB tag不変、Light roots/閉じるbounds、favorite保存/dirty/native再起動まで確認。
+- 06のDark再起動後は保存済み17件がfreshなので、再索引で推論不要。テストが常にdevice=cudaを要求して失敗。read-only disk確認は17 text vectors/17 current revisions一致・complete17、Dark API logにはモデルloadがない。空のlazy encoder deviceが原因という説明はこのdisk/logとソースからの推定で、失敗時のDark runtime statusを直接記録したものではない。post-run-check.jsonはこの確認だけで、native成功へ転用しない。
+- buildの期待をfresh reuse時だけ推論不要へ変更し、後の実semantic queryでCUDAをassertするよう修正。index stateも結果へ記録する。**最後のテスト修正はpy_compile/--helpのみ、native未再実行。** Dark semantic/追加dirty/rootsと最後のmissing-error段階は06で未到達。all-profile通し/高DPI/HC/reader/AOT/配布/実GPU大規模/1TBは未検証。
+- 06は4正常終了＋1owned PID fallback warning。初回04と06のwarningを消さない。所有GUI/API/embedding worker残留なしをread-only process確認、sourcehash全一致、生成profileのみcleanup。新GUIテストの27 PNGをすべて見た（04:6/05:8/06:13）。通常のapp診断ログは使用する。
+
+06/result.jsonのpass=falseは保持し、visual-review.jsonのvisual_pass=trueは**撮影された13状態の表示だけ**。旧appearance-03 visual FAILを後から変更しない。今回の明暗AI dialog表示は新しい証拠で確認したが、新batch全体がPASSとは扱わない。
+
+winui-ui-testing/SKILL.mdの “Maximum **two** fix-and-rerun cycles; then report remaining failures.” に従い04→05→06で停止。次回は存在しない新規output（例appearance-07）で、修正後のcache条件と未到達状態を最優先確認する。
+
+    python tools/test_ai_profile_ui.py --editor-only --appearance-checks --coverage-checks --output data/ai-ui/appearance-07
+
+実GPUで1万件索引したわけではない。1万件CPU synthetic測定は前段階の結果を保持する。次はnative残件、実EG2負荷を段階測定、明示小実サンプルと用意されたHC/高DPIの順。追加資源制限/idle検出はまだない。Layaは実験APIのみ。
+
+
+最終Python103 tests/C#15 checks/WinUI x64 SelfContained Release/構文/help/diff PASS。Releaseは既存IL2104 2警告を維持し抑制なし。WinUI reviewは新Gridのnative API/自然なテーマ/既存AutomationIds/async・dirty/native Items/JSON DOM/認証の保持を確認。WinUI analyzer未導入。これらの成功とappearance-06全体FAILを区別する。

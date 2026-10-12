@@ -136,3 +136,7 @@ UIA68項目はPASS、9 PNG目視でLight AI dialogのDark不一致が見つか�
 eligible上限2,000→10,000、256件metadata/vector取得と進捗16件保存を実装。profile identity/store namespace/vector schema/worker/model weightsは変更しない。保存済みfresh vectorを再利用し追加分のみ生成する。生成2,105件の旧2,000→追加105互換、生成768次元text-only 10,000件のcancel/restart/reuseをCPUで確認。別checkpointや実GPU大規模推論の検証ではない。[index-scaling.md](index-scaling.md)参照。
 
 ゲームの前面表示を維持するユーザー指定によりnative起動は今回保留。前節のLight dialog最終修正と今回の上限表示はbuild/reviewのみ。appearance-03 visual FAILを変えず、前面操作が可能になってから新規outputで確認する。
+
+
+## 続行: 小画面操作と実GPUの上限表示（2026-10-12）
+通常GUIテストを許可された後、明暗AI dialogとLightのdirty/roots、17件text-only CUDA索引/日本語検索/10,000上限表示を実確認。新batch appearance-06は75 successful checks/13 PNG目視だが全体FAIL。Dark fresh cache時にもdevice=cudaを要求したテスト条件を修正、最後はnative未再実行。全17revisionをread-only diskで確認。全profile切替/独立checkpoint/実GPU大規模は再検証していない。正確な到達・cleanup warning・skill上限・次回コマンドは[ui-polish.md](ui-polish.md)末尾。現在は通常のGUIテスト許可済み、ゲーム前面制約は解除。

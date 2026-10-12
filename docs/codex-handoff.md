@@ -337,3 +337,26 @@
 - 最終Python103/C#15/WinUI Release（既存IL2104 2警告）PASS、1万件CPU synthetic14 checks PASS、変更Python py_compile/測定tool --help/git diff --check PASS。WinUI review済み、analyzerなし。現在の索引上限/候補batch/checkpointと測定・未実行境界はdocs/index-scaling.md/chat-handoff.md/PRへ記録。
 - ユーザーのゲーム前面維持に従いnative GUI/GPUテストは未起動。Light dialog修正後と新上限文はnative未確認、appearance-03 visual FAILを保持。生成のみ、source hash/size/mtime不変、新規取得/私物/OS/モデル/個人設定変更なし。所有CPU測定と回帰processは終了済み。
 - 次は前面操作可能時のdialog/new coverage実機確認、GPU使用可能時の実EG2段階測定、10,000超の対象/資源設定と明示小実サンプル評価。ゲーム中はHidden/BelowNormalのCPU検証を優先し、既存harnessのActivate/入力を行わない。
+
+
+### 通常GUI検証を再開（2026-10-12）
+- 開始HEAD 8a62492/clean、AGENTS/Issue #4/同じDraft PR #5/baseを確認。ユーザーが通常テストを許可し、ゲーム前面維持による保留を解除。
+- Sandbox snapshotはstale/stopped、read-only Win32_OptionalFeatureでContainers-DisposableClientVM InstallState=2（disabled）を確認。OS機能は有効化せず同じlocal targetを使う。既存harnessを拡張し明暗AI/dirty/roots dialogとAPI上限、任意coverage-checksで生成17件の実CUDA索引/意味検索後の上限表示を確認する。
+- 所有PID/HWND、専用DB/settings、生成素材のみ。新規model/download/依存導入なし。実機/PNG目視/cleanupの結果は後続へ記録し、旧appearance-03 visual FAILは履歴として残す。
+
+- appearance-04はLight dialogが正しくLight/上限10,000を表示したが、小画面のStartAIIndexがscroll内容の外でzero sizeのためFAIL。6 PNGを全目視、sourcehash一致、3正常終了＋1owned PID fallbackのcleanup warning。GPU索引未到達。固定index status/action rowsを追加しmodel選択の部分だけscrollするよう修正、button boundsもassertして05へ再実行（fix/rerun 1回目）。
+
+- appearance-05は固定status/start/cancelの小画面boundsと実Light表示、17件GUI CUDA索引、日本語top1/semantic上限10,000表示までPASS。ただし既存editor-only literal helperは既定literalの検査専用で、追加coverage段階のsemanticから切替をしておらずそこで全体FAIL。8 PNG全目視、4正常終了/cleanup warningなし、sourcehash一致。明示popup literal切替を追加し、roots scrollもwindow高に合わせて06へ再実行（fix/rerun 2回目、最後）。Dark/3dialogは未到達のまま記録し、Lightの部分成功を全体成功へ転用しない。
+
+
+### 通常GUI再開の到達結果
+- 開始8a62492。同じfeature/Draft PR #5/base、ユーザーの通常テスト許可で前面制約解除。local/生成17/専用DB settings/既存EG2だけ。Sandboxはdisabled(CIM InstallState2)/snapshot stale、OSは変更しない。
+- 製品: 小画面の隠れたindex actionを修正、model optionsだけscroll、status/start/cancel固定Grid行。roots scroll高もwindowへ。skill winui-designのfind-ui/実project API確認、Release後winui-code-review実施。Error hidden actionを解消、既存SDK警告2件維持、analyzer未導入。native Items/60paging/async/stale/dirty/JSON DOM/theme/auth/identity無変更。
+- 04全体FAIL（Start zero size）、05全体FAIL（追加semantic後にliteral helperが切替なし）、06全体FAIL（Dark fresh再索引にもdevice cudaを要求）。04:6/05:8/06:13 PNGを全目視。06は75 successful recorded checks、撮影13状態だけvisual PASS。明暗AI theme/10,000と固定action bounds、Lightのdirty/rootsと17件GUI CUDA/日本語top1/semantic上限文、favorite/dirty/native restartを確認。
+- 06 disk read-only post-run-check: catalog17/text17/fresh17/state complete17/skipped0、Dark API weights loadなし。このcache/lazy解釈はdisk/log/sourceからの推定で、失敗時Dark runtime statusは直接記録していない。fresh buildでcudaを条件にしない修正と後のqueryでcuda assert、index states記録を追加。**最終harness修正はpy_compile/--helpのみ、native未再実行。** Dark semantic/追加dirty/roots/missingとfull profile batchは未到達。
+- 04→05→06はwinui-ui-testingの “Maximum **two** fix-and-rerun cycles; then report remaining failures.” に従い停止。初回skill上限の残件から今回新依頼で再開したが、この依頼内の3回目以降へは進めない。旧03/04/05/06のFAILは保持。再開は新規appearance-07等で同じlocal target。
+- 最終Release build PASS（appearance-build-02、27.67秒、既存IL2104 2警告）、C#15 PASS、構文/help/diffチェック。Python最終結果は提出節に記録。WinUI analyzer/HC/高DPI/reader/AOT/配布/実GPU1万件/1TBは未確認。text-only/float32/768の既存EG2を17件のみ、別checkpointではない。Light最終doc telemetry peak1045.9MiBはworkerの記録で全appメモリではない。
+- 04:3正常＋1owned PID fallback warning、05:4正常/warningなし、06:4正常＋1warning。新sourcehash全一致、generated profile cleanup、所有GUI/API/embedding workerなしをread-only確認。私物/個人AppData設定/OS/依存/モデル変更・取得なし。新証拠 data/ai-ui/appearance-04/05/06 (全体FAIL)、visual-review、06/post-run-check、appearance-build-01/02.outとunit logはignored。通常app診断ログ使用。
+- **次の3手:** (1) python tools/test_ai_profile_ui.py --editor-only --appearance-checks --coverage-checks --output data/ai-ui/appearance-07（新規のみ）で最終cache修正と未到達状態を全PNG確認、(2) 実EG2の生成段階的な負荷/メモリ測定、(3) 10,000超の対象/資源設定と明示小実サンプル評価。ゲーム前面制約は現在解除、Layaは実験APIのみ。
+
+- 最終Python **103 tests PASS**（appearance-unit、68.88秒）、C# **15 checks PASS**、最終WinUI x64 SelfContained Release **PASS（IL2104 2警告）**。最後のharness修正はpy_compile/--help/git diff --check PASS、native未再実行。生成privateではない素材だけ、所有test processは終了済み。

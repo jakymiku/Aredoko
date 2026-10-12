@@ -3,7 +3,25 @@
 更新: 2026-10-12。旧Web試作段階の引継ぎを置き換える。**製品GUIはWinUI 3に決定済みで、EmbeddingGemma 2検索まで実装・実GPU検証済み。最初から作り直さない。**
 
 
-## 最新の再開地点（2026-10-12・ゲーム中のバックグラウンド検証）
+## 最新の再開地点（2026-10-12・通常GUI再開）
+
+開始HEAD **8a62492**。同じfeature/Draft PR #5/baseを保持。実装/検証記録HEADは最新codex-handoff.md提出節、最新HEADは実Gitを確認。
+
+**ユーザーが通常のGUIテストを許可し、ゲーム前面維持の制約を解除した。** Sandboxはdisabledなのでlocal target、専用DB/settings/生成17素材。OS/私物/個人設定/依存/重みの変更・取得なし。
+
+AI dialogはmodel設定だけscrollし、索引status/start/cancelを固定行へ。roots scrollも開いた時のwindow高に応じて制限。明暗AI dialogと最大10,000/ボタンbounds、Light dirty/rootsと17件実CUDA日本語検索の上限文を実確認。
+
+**最新appearance-06全体はFAIL。75 successful checks/13 PNG全目視で撮影状態のvisualはPASSだが、Dark fresh cacheの再索引でもcuda deviceを要求したテスト条件で停止。** diskの17 current vector revision/complete17とDarkのmodel loadなしをread-only確認。これはnative全体成功ではない。fresh reuse時のみcudaをbuild条件から外し後の実queryでassertする修正、index state記録を追加。最後はsyntax/helpまででnative未再実行。Dark semantic/追加dirty/roots/missing段階が未到達。04→05→06の2回fix/rerun上限を守り、新依頼の最初に修正後を再確認する。
+
+    python tools/test_ai_profile_ui.py --editor-only --appearance-checks --coverage-checks --output data/ai-ui/appearance-07
+
+新規outputを使う。--coverage-checksはeditor-onlyの例外で既存EG2 text-only/float32/768を実GPUで17件使い、全profile切替を意味しない。06は4正常終了＋1owned PID fallback warning、04にもwarning。所有GUI/API/worker残留なし、sourcehash一致、生成profile cleanup。旧appearance-03 visual FAILと04/05/06全体FAILを消さない。
+
+最終Python **103 tests PASS**、C# **15 checks PASS**、最終WinUI x64 SelfContained Release PASS（既存IL2104 2警告）、syntax/help/diff PASS。analyzer未導入。GUI通しFAILとこれらの成功を区別する。
+
+次の3手: (1) 上記でcache条件と未到達nativeを全PNG込みで確認、(2) 生成素材で実EG2の段階的な負荷/メモリ測定、(3) 10,000超の対象/資源設定と明示小実サンプル品質評価。実GPU1万件/HC/高DPI/reader/AOT/配布/1TBは未確認。Layaは実験APIのみ。詳細はui-polish.md/codex-handoff.md最新節。
+
+## 前段階の再開地点（ゲーム中のバックグラウンド検証）
 
 開始HEAD **1f77172**。同じfeature/Draft PR #5/baseを維持。実装/検証記録HEAD **5be9b88**。後続は提出文書のみで、最新HEADは実Gitで確認。
 
@@ -46,14 +64,14 @@ Draft PR: https://github.com/jakymiku/Aredoko/pull/5
 
 まず、このブランチのAGENTS.md、docs/chat-handoff.md、docs/codex-handoff.mdの最新節、Issue #4、PR #5を確認してください。mainや古いWeb試作の状態を現状と混同しないでください。
 WinUI 3製品MVP、EmbeddingGemma 2の曖昧検索、交換可能なモデルprofile、混合順位改善は実装済みです。Layaは精度不足のため明示実験APIだけで、GUIの自動切替や種類絞込みには使っていません。
-AI対象は10,000件まで拡張済みで、256件取得・16件進捗保存・旧cache再利用・global fusionを保持し、生成768次元CPUデータの1万件cancel/restart/searchを確認済みです。実GPU大規模性能と全数万件/1TBは未確認です。ユーザーはゲーム中で前面windowを変えないテストを希望しているため、その状態ではGUI起動/Activate/入力を行わず非表示・低優先度のCPU検証を選んでください。前面操作可能になったら、appearance-03 UIA68 PASS/visual FAIL後の全3dialogテーマ修正と新上限表示を --editor-only --appearance-checks の新規outputで確認し全PNGを見てください。実GPUの段階的な負荷測定と10,000件超設計はその後です。高DPI/HCは未確認でOS設定を勝手に変更しないでください。過去profile-picker-06全体FAILを消さず、起動時profile選択・旧索引互換を保ち、hot swap/自動ダウンロードは追加しないでください。
+AI対象10,000件、256件取得・16件進捗保存・旧cache/global fusionを保持し、CPU生成1万件cancel/restart/searchは確認済みです。通常GUIテストを許可された最新作業は、固定index actionsと明暗AI dialog、Lightの3dialog/17件CUDA検索/10,000表示まで確認。ただしappearance-06全体はDark fresh cacheにもcudaを要求したテスト条件でFAILです。最後の条件修正はnative未再実行なので、まず --editor-only --appearance-checks --coverage-checks を新規outputへ実行し全PNGを見て未到達Dark/missingまで確認してください。過去visual/通しFAILを消さず、実GPU大規模/高DPI/HC/1TBを未確認と区別してください。OS設定/私物を勝手に変更せず、起動時profile/旧索引互換/hot swapなし/自動DLなしを保持してください。
 既存資産・手動検索・タグ保存を維持し、実装できる環境なら必要なテスト、コミット、同じDraft PRの更新まで進め、進捗を引継ぎへ記録してください。直接編集やWindows実行ができない場合は、実コードに対応した変更ファイルか適用可能な差分と、PCで実行する検証手順を返してください。未実行のテストを成功と報告しないでください。
 非公開リポジトリを読めない場合はアクセスできないと明記し、ユーザーが共有するこのブランチのソースを使ってください。仕様だけから実装済みコードを想像して書き直さないでください。
 ```
 
 ## 現在のGit状態
 
-- 今回の開始HEADは `1f77172`、実装/検証記録HEADは `5be9b88`。後続は提出文書のみで最新HEADは実Gitを確認すること。前段階のテーマ修正は `8418d68`。
+- 今回の開始HEADは `8a62492`。実装/検証記録HEADはdocs/codex-handoff.md最新提出節、最新HEADは実Gitを確認すること。前段階の索引拡張は `5be9b88`、テーマ修正は `8418d68`。
 - HEADブランチ: `feat/winui3-production-mvp-20261011`。
 - Draft PR [#5](https://github.com/jakymiku/Aredoko/pull/5)、base `feat/gui-framework-comparison-20261010`。未マージ。PR #1/#2/#3も保持し、mainへmerge・force-push・squashしない。
 - 引継ぎ開始時点はclean、機能作業の未コミット残りなし。テスト用API/GUI/GPU workerは停止済み。

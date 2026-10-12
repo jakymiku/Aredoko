@@ -4,7 +4,8 @@ Requires built x64 SelfContained Release, existing local weights, unlocked Windo
 Never touches the default AppData settings or private library. No setup/download.
 Search modes use real keyboard input and assert the resulting selected value.
 PopupHost can be a child UIA pane rather than a separately enumerated window.
-Each run reports its own checked scope; editor-only does not test model loading.
+Each run reports its checked scope; editor-only does not load models unless
+--coverage-checks explicitly adds the generated 17-item CUDA coverage slice.
 See docs/model-profiles.md and docs/ui-polish.md for the latest native evidence.
 """
 import argparse
@@ -27,7 +28,9 @@ from create_preview_fixture import create
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--editor-only',action='store_true',help='Run literal editor/dirty/restart checks without loading AI');parser.add_argument('--layout-checks',action='store_true',help='Also capture wide/narrow list/tile and missing-model dialog');parser.add_argument('--appearance-checks',action='store_true',help='Also check Light/Dark error guidance and literal recovery without GPU loading')
+    parser.add_argument('--coverage-checks',action='store_true',help='With editor-only/appearance checks, index the 17 generated items on existing CUDA weights and verify semantic coverage text')
     args=parser.parse_args()
+    if args.coverage_checks and not (args.editor_only and args.appearance_checks):parser.error('--coverage-checks requires --editor-only --appearance-checks')
     if (args.layout_checks or args.appearance_checks) and not args.editor_only:parser.error("--layout-checks/--appearance-checks require --editor-only")
     if os.name!='nt':raise RuntimeError('Native Windows only')
     target=args.output.resolve();target.mkdir(parents=True,exist_ok=False)
@@ -42,7 +45,7 @@ def main():
     origin='http://127.0.0.1:8769';settings=target/'settings.json'
     ui_theme='System'
     env=os.environ.copy();env['WINAPP_UI_WORKFLOW_ID']='aredoko-profile-'+nonce
-    report={'target':'local','actual_model':not args.editor_only,'profile_verification':'not_run','pass':False,'checks':[],'screenshots':[]}
+    report={'target':'local','actual_model':not args.editor_only or args.coverage_checks,'profile_verification':'not_run','coverage_verification':'not_run','pass':False,'checks':[],'screenshots':[]}
     def cli(*arguments):
         result=subprocess.run(['winapp',*map(str,arguments)],cwd=REPO,env=env,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=90)
         if result.returncode:raise RuntimeError('winapp '+str(arguments)+': '+result.stderr+result.stdout)
@@ -172,7 +175,7 @@ def main():
             time.sleep(.1)
         check('GUI saved '+profile_id,profiles()['selected']==profile_id)
         ui('wait-for','AIProfileApply','-p','IsEnabled','--value','False','-t','3000')
-    def build():
+    def build(expect_inference=True):
         ui('wait-for','StartAIIndex','-p','IsEnabled','--value','True','-t','5000')
         ui('click','StartAIIndex')
         for _ in range(240):
@@ -180,7 +183,8 @@ def main():
             if state['state'] in ('complete','failed'):break
             if state['state']=='idle' and _>=20:raise RuntimeError('GUI did not start index within 10 seconds')
             time.sleep(.5)
-        check('GUI index complete',state['state']=='complete' and state['indexed']==17 and state['device']=='cuda')
+        report.setdefault('index_states',[]).append({key:state[key] for key in ('state','processed','total','indexed','device','profile')})
+        check('GUI index complete',state['state']=='complete' and state['indexed']==17 and (not expect_inference or state['device']=='cuda'))
         ui('wait-for','AIStatus','--value','準備完了','--contains','-t','5000')
     def stop():
         nonlocal app_pid,backend,hwnd
@@ -345,13 +349,43 @@ def main():
                 row=api('/api/items?q='+urllib.parse.quote('雨の夜'))['items'][0]
                 ui('invoke','Item'+str(row['id']),'--action','select');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','3000')
                 screenshot('15-'+theme+'-details');dialog()
-                visible_controls('16-'+theme+'-dialog',{'CloseButton','AIProfileChoice','AIProfileWarning'})
-                screenshot('16-'+theme+'-dialog');close_dialog();stop()
+                visible_controls('16-'+theme+'-dialog',{'CloseButton','AIProfileChoice','AIProfileWarning','AIStatus','StartAIIndex','CancelAIIndex'})
+                ui('wait-for','AIStatus','--value','最大10,000件','--contains','-t','5000')
+                check(theme+' API and dialog coverage',status()['limit']==10000)
+                screenshot('16-'+theme+'-dialog')
+                if args.coverage_checks:
+                    if theme=='Dark':check('Dark saved index available before reuse',status()['state']=='complete' and status()['indexed']==17)
+                    # A fully fresh restart intentionally leaves the lazy encoder
+                    # unloaded. The later real semantic query asserts CUDA.
+                    build(expect_inference=(theme=='Light'))
+                    state=status()
+                    report.setdefault('coverage_gpu_states',[]).append({key:state[key] for key in ('device','processed','total','indexed','dimension','modalities','telemetry')})
+                    screenshot('18-'+theme+'-indexed-dialog')
+                close_dialog()
+                if args.coverage_checks:
+                    recovery_mode('ModeSemantic','AI意味検索')
+                    ui('set-value','TxtQuery','傘が必要な暗い都会の景色');time.sleep(.6);ui('invoke','BtnSearch');ready()
+                    result=api('/api/library/ai/search',{'query':'傘が必要な暗い都会の景色','source':'text'})
+                    check(theme+' real CUDA search and coverage',status()['device']=='cuda' and result['coverage_limit']==10000 and result['total']==17 and result['items'][0]['title']=='雨の夜の街並み.wav')
+                    ui('wait-for','Item'+str(row['id']),'-t','5000')
+                    ui('wait-for','Message','--value','最大10,000件','--contains','-t','5000')
+                    screenshot('19-'+theme+'-semantic-coverage')
+                    recovery_mode('ModeLiteral','名前・タグ');literal()
+                ui('invoke','Item'+str(row['id']),'--action','select');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','3000')
+                ui('set-value','TxtTags','unsaved-'+theme+'-theme-proof');ui('invoke','BtnAIIndex')
+                ui('wait-for','PrimaryButton','-t','3000');screenshot('20-'+theme+'-dirty-dialog')
+                ui('invoke','CloseButton');ui('wait-for','TxtTags','--value','unsaved-'+theme+'-theme-proof','-t','3000')
+                check(theme+' dirty keep leaves saved tags unchanged',api('/api/items?q='+urllib.parse.quote('雨の夜'))['items'][0]['tags']==row['tags'])
+                ui('set-value','TxtTags',', '.join(row['tags']))
+                ui('invoke','BtnRoots');ui('wait-for','RootPath','-t','5000')
+                visible_controls('21-'+theme+'-roots',{'CloseButton','RootPath','RootList'})
+                screenshot('21-'+theme+'-roots-dialog');close_dialog();stop()
             ui_theme='Light'
             settings.write_text(json.dumps({'version':1,'profile':'local:'+names['missing']}),encoding='utf-8')
             start('appearance-missing');record_display('appearance-missing');resize(700,620)
             check('Missing profile unavailable for semantic search',not status()['available'])
             unavailable_search('ModeSemantic','AI意味検索','17-Light-missing-error');stop()
+        if args.coverage_checks:report['coverage_verification']='pass'
         check('Generated source hashes unchanged',hashes=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in media.iterdir()})
         report['pass']=True
     except Exception as ex:
