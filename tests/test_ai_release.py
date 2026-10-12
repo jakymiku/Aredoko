@@ -188,6 +188,110 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(data["device"],"")
         with urllib.request.urlopen(root+"/api/items?q=rain") as response:
             self.assertEqual(json.load(response)["total"],1)
+    def test_auto_idle_release_and_reload_using_monotonic_timer(self):
+        self.build()
+        self.ai.configure(idle_release_seconds=1,index_pause_ms=0)
+        deadline=time.monotonic()+3
+        while self.encoder.resident and time.monotonic()<deadline:
+            time.sleep(0.05)
+        self.assertFalse(self.encoder.resident)
+        self.assertEqual(self.ai.status()["worker_state"],"unloaded")
+        loads=self.encoder.loads
+        self.ai.search("雨")
+        self.assertEqual(self.encoder.loads,loads+1)
+        self.ai.configure(idle_release_seconds=0,index_pause_ms=0)
+        time.sleep(0.3)
+        self.assertTrue(self.encoder.resident)
+
+    def test_auto_idle_does_not_interrupt_an_active_query(self):
+        self.build()
+        self.encoder.block=True
+        self.ai.configure(idle_release_seconds=1)
+        t=threading.Thread(target=lambda:self.ai.search("雨"))
+        t.start()
+        self.assertTrue(self.encoder.enter.wait(3))
+        time.sleep(1.2)
+        self.assertTrue(self.encoder.resident)
+        self.assertEqual(self.encoder.releases,0)
+        self.encoder.resume.set()
+        t.join(10)
+        self.assertFalse(t.is_alive())
+        # Timer counts from completion, not query start.
+        self.assertTrue(self.encoder.resident)
+        self.ai.configure(idle_release_seconds=0)
+
+    def test_index_pause_can_be_cancelled_without_waiting_full_duration(self):
+        # Add a second fixture so the first checkpoint pauses before item two.
+        folder=Path(self.catalog.index.roots()[0]["path"])
+        (folder/"two.wav").write_bytes(b"generated-2")
+        self.catalog.start_scan(self.catalog.index.roots()[0]["id"])
+        self.catalog._worker.join(10)
+        self.ai.configure(index_pause_ms=2000)
+        self.ai.start()
+        deadline=time.monotonic()+5
+        while self.encoder.documents==0 and time.monotonic()<deadline:
+            time.sleep(0.01)
+        self.assertGreater(self.encoder.documents,0)
+        start=time.monotonic()
+        self.ai.cancel_build()
+        self.ai.worker.join(1.5)
+        self.assertFalse(self.ai.worker.is_alive())
+        self.assertLess(time.monotonic()-start,1.5)
+        self.assertEqual(self.ai.status()["state"],"cancelled")
+        self.ai.configure(index_pause_ms=0)
+        self.build()
+        self.assertEqual(self.ai.status()["indexed"],2)
+        self.assertEqual(self.encoder.documents,2)
+
+    def test_resource_invalid_values_and_timer_stops_at_close(self):
+        for args in ({"idle_release_seconds":True},{"idle_release_seconds":3601},
+                     {"index_pause_ms":-1},{"index_pause_ms":False},{"index_pause_ms":2001}):
+            with self.subTest(args=args),self.assertRaises(ValueError):
+                self.ai.configure(**args)
+        self.ai.configure(idle_release_seconds=1,index_pause_ms=15)
+        ticker=self.ai._idle_thread
+        self.assertTrue(ticker.is_alive())
+        self.ai.close()
+        self.assertFalse(ticker.is_alive())
+        with self.assertRaises(AIUnavailable):self.ai.configure(idle_release_seconds=1)
+
+    def test_resource_api_auth_validation_and_persistence(self):
+        from ai_settings import AIProfileSettings
+        folder=Path(self.catalog.path).parent
+        profiles=AIProfileSettings(folder,folder/"isolated-settings.json")
+        server=ThreadingHTTPServer(("127.0.0.1",0),
+            production_handler(self.catalog,"token",self.ai,profiles=profiles))
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        root=f"http://127.0.0.1:{server.server_port}"
+        path=root+"/api/library/ai/resource"
+        payload={"idle_release_seconds":1,"index_pause_ms":50}
+        def post(body,token="token",origin=True):
+            headers={"X-Aredoko-Token":token,"Content-Type":"application/json"}
+            if origin:headers["Origin"]=root
+            request=urllib.request.Request(path,json.dumps(body).encode(),headers)
+            return urllib.request.urlopen(request)
+        for data,token,origin,code in [
+            (payload,"bad",True,403),(payload,"token",False,403),
+            ({"idle_release_seconds":True,"index_pause_ms":0},"token",True,400),
+            ({"idle_release_seconds":1},"token",True,400),
+            ({"idle_release_seconds":1,"index_pause_ms":50,"model":"x"},"token",True,400)]:
+            with self.subTest(data=data),self.assertRaises(urllib.error.HTTPError) as failure:
+                post(data,token,origin)
+            self.assertEqual(failure.exception.code,code)
+            failure.exception.close()
+        self.assertFalse(profiles.path.exists())
+        with post(payload) as response:
+            self.assertEqual(json.load(response)["policy"],payload)
+        self.assertEqual(profiles.resource(),payload)
+        self.assertEqual(self.ai.status()["resource_policy"],payload)
+        request=urllib.request.Request(path,headers={"X-Aredoko-Token":"token"})
+        with urllib.request.urlopen(request) as response:
+            self.assertEqual(json.load(response)["policy"],payload)
+        profiles.choose("default")
+        self.assertEqual(AIProfileSettings(folder,profiles.path).resource(),payload)
+
     def test_encoderprocess_owned_stop_and_close(self):
         from ai_profiles import DEFAULT_PROFILE
         proc=EncoderProcess("fake-python","fake-model",DEFAULT_PROFILE)
