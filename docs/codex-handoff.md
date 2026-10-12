@@ -6,7 +6,7 @@
 - 目的: **Aredoko**（Windows用のローカルメディアライブラリ検索・整理アプリ）の**製品版MVPをWinUI 3 + C#で新規実装する**。以前はGUI方式としてTauri + Reactも評価したが、2026-10-11にユーザー判断で**WinUI 3を先行採用**した。Tauriの比較コードは削除しない。
 - 理由: Tauri/WinUI双方の実機GUI基本操作が完走し、WinUIのPrivate Bytes（アプリ本体関連プロセス）が一貫して小さかった。CPUは操作回数の差や負荷条件が統一できておらず優劣は未確定。安定性に関しては**WinUIだから無条件に安全と証明されたわけではない**。過去にWinUI試作固有のクラッシュも修正済み。
 - GUI: Fluent 2 / Windows 11らしいモダンで密度の高いUI。左ナビ・上部検索・中央の大きい作品一覧・右の詳細/タグ編集。狭い画面は詳細をドロワーに。Mica等の見栄えは安定性・操作性を損なわない範囲。
-- 開発実務: **製品用の最初の縦切り実装と実機GUI検証まで完了**。登録・走査・文字検索・整理・再起動保持に加え、画像/CBZ/ZIPのプレビューが動く。EmbeddingGemma2の最初のAI索引/検索APIとGUI接続も追加。GUIのAI検索通しテストは未完了。Issue #4全体の完成宣言ではない。最新結果と残課題は末尾、起動手順は [winui-mvp.md](winui-mvp.md)。
+- 開発実務: **製品用の最初の縦切り実装と実機GUI検証まで完了**。登録・走査・文字検索・整理・再起動保持に加え、画像/CBZ/ZIPのプレビューが動く。EmbeddingGemma2の最初のAI索引/検索APIとGUI接続も追加。最新の生成17素材のGUI AI検索通し確認はPASS（詳細は末尾）。Issue #4全体の完成宣言ではない。最新結果と残課題は末尾、起動手順は [winui-mvp.md](winui-mvp.md)。
 
 ## GitHub上の資産と現在位置
 | 作業 | 場所 | 状態・意味 |
@@ -415,3 +415,10 @@ gpu-01も索引/増分/検索/中断再開/推論回数/元source不変はPASS�
 実GPU1万件、768px等の大きめ表紙/長文metadata、実ライブラリ/1TB、GUI込み総メモリ、idle release/負荷制限は未確認・未実装。CPU synthetic1万件と今回の実GPU2,304件を区別する。Layaは精度未達の既定無効実験APIのみ。
 
 次の3手: (1) 生成768px表紙/長文metadata→1万件段階測定、(2) 負荷/idle解放と上限超の対象選択、(3) 明示小実サンプルの品質評価。
+
+### GUI・GPU確認の提出
+- GUI確認コミット b7de729、実GPU測定/記録コミット **7d28a6ea558bdf68b30a58b6094c29995961516e**。後続は提出文書のみ。同じfeature/Draft PR #5/baseへ通常push、未マージ。
+- appearance-09:105 recorded checks/全17 PNG目視PASS、6正常終了/warningなし。07/08のFAIL/cleanup warning、以前のFAILは保持。全profile chooserや高DPI/HC/reader/AOT/配布を合格にしない。
+- gpu-02:86 checks PASS、生成2,304 text/216 cover、document/image重複推論なし、中断1,120→残り1,184、fresh cache全推論0→queryだけCUDA。実worker treeも含むRAM/終了確認、10 process-instance handles全終了。gpu-01のlauncher-only RAMは使用禁止。
+- Python103/C#15/WinUI x64 SelfContained Release（旧IL2104 2件）PASS、CLI guard5/py_compile/help/diff PASS。WinUI code review済み、analyzer未導入。ソースhash/size/mtime不変、所有GUI/API/GPUプロセス終了を確認。私物/個人設定/OS/依存/モデルの変更・取得なし。
+- 次の3手: (1) 生成768px表紙/長文metadata→実GPU1万件段階測定、(2) 負荷/idle解放・対象上限超の選択、(3) 明示小実サンプルの品質評価。全1TB/一般的検索精度は未確認、Layaは既定無効の実験APIのみ。

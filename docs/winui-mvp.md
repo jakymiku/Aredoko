@@ -1,5 +1,7 @@
 # WinUI 3 production MVP — developer preview
 
+Latest validation (2026-10-12): Python103 tests, C#15 checks and x64 SelfContained Release pass (two existing IL2104 warnings). Generated 17-item native AI/editor/appearance flow passes 105 recorded checks and visual review of all 17 screenshots, including Light/Dark small-window dialogs. Offline EG2 text+cover scaling passes through 2,304 generated works with cancellation, restart and inference-free cached rebuild; see [index-scaling.md](index-scaling.md). This is still a developer preview; actual-GPU 10,000, real-library/1TB, high-DPI/Contrast/screen-reader, AOT and installer remain unverified.
+
 Run from the repository with `pwsh -File tools/start-winui.ps1`. Requires the already installed Python, .NET 10, Windows App SDK/WinApp CLI development prerequisites. The launcher builds and registers a development package; it is not an end-user installer. No dependency or model installation is performed by this script.
 
 The launcher starts the production-only API on `127.0.0.1:8769`, refuses an occupied port, and stops only its own backend when the window exits. Persistent catalog: `%LOCALAPPDATA%/Aredoko/catalog.sqlite`; logs: `%LOCALAPPDATA%/Aredoko/logs`. A custom `-Database` may be supplied. Do not put the database under a library root. The Web demo on port 8765 remains separate.
@@ -19,7 +21,7 @@ dotnet run --project tests/Aredoko.Core.Tests -c Release
 dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64
 ```
 
-Native GUI regression: launch with a **fresh dedicated test database**, then run `pwsh -File tools/test-winui-local.ps1 -AppPid <actual PID>`. The script operates a local window and creates 75 fictional fixtures under ignored `data/mvp-ui/<run-id>`. It requires a fresh catalog and never targets private roots. The launcher was also tested through close/restart; saved tags were read back in WinUI. Screen capture was visually reviewed at 100% DPI/dark theme. The preview test also operated the details drawer at 700px width. Other DPI/theme/screen-reader checks remain pending. WinUI analyzer is not installed; no analyzer result is claimed. SDK trim warnings IL2104 remain and Native AOT has not been tested.
+Native GUI regression: launch with a **fresh dedicated test database**, then run `pwsh -File tools/test-winui-local.ps1 -AppPid <actual PID>`. The script operates a local window and creates 75 fictional fixtures under ignored `data/mvp-ui/<run-id>`. It requires a fresh catalog and never targets private roots. The launcher was also tested through close/restart; saved tags were read back in WinUI. Screen capture was visually reviewed at 100% DPI/dark theme. The preview test also operated the details drawer at 700px width. Later Light/Dark coverage is recorded above and in ui-polish.md; other DPI/Contrast/screen-reader checks remain pending. WinUI analyzer is not installed; no analyzer result is claimed. SDK trim warnings IL2104 remain and Native AOT has not been tested.
 
 Image and book previews:
 - Registered present images and the first supported image in CBZ/ZIP appear in lists, tiles and details. Archive entries sort naturally (page 2 before page 10). PDF, video, audio, unsupported, changed, oversized and corrupt sources show a fallback label.
@@ -27,7 +29,7 @@ Image and book previews:
 - Archive limits: 512 MiB archive, 4 MiB central directory, 10,000 entries, 8 MiB selected image, compression ratio at most 200. Encrypted, split and unsupported ZIP64 boundary cases fall back. No archive member is written to disk.
 - Two workers derive at most 256px PNGs in a 64-entry memory LRU keyed by root/id/mtime/size. Visible rows load asynchronously, unload cancels and clears images; stale selections cannot replace the current detail image. No persistent thumbnail cache or new codec package.
 - Fixture creation: python tools/create_preview_fixture.py --output <new test directory>. Launch with a fresh dedicated DB, then pwsh -File tools/test-preview-ui-local.ps1 -AppPid <PID> -FixtureDirectory <fixture directory> -ArtifactDirectory <ignored artifact directory>.
-- Latest verification: 40 Python tests, 13 pure-C# checks, Windows Release build, native preview test and original metadata regression passed. Generated fixture hashes remained unchanged. Sandbox executable is absent; native tests ran on local Windows. No private media was scanned.
+- Earlier preview-specific verification: 40 Python tests, 13 pure-C# checks, Windows Release build, native preview test and original metadata regression passed. Generated fixture hashes remained unchanged. Sandbox executable is absent; native tests ran on local Windows. No private media was scanned.
 
 Production API additions (same existing catalog routes):
 - `GET /api/session`: production mode and per-process token.
