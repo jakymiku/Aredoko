@@ -330,3 +330,10 @@
 - ignored証拠 data/index-scaling/{unit-01,unit-02,http-01,core-01,build-01,smoke-01} とsmoke-01.out/err。actual_model=false/gpu_used=false/native_gui_run=false、所有CPUテスト/scan/index threadsは正常終了。production API/GUI/GPUworkerは今回起動していない。生成dummy WAVは音声として未読。
 - 前回appearance-03のUIA68 PASS / visual FAILは保持。全3dialogのRequestedTheme最終修正と今回上限文はbuild/reviewのみ、native未再実行。今回保留の理由はゲーム前面維持というユーザー希望。前回skill fix/rerun上限による停止と混同しない。HC/高DPI/reader/AOT/配布/実ライブラリ/1TBは未確認。
 - **次の3手:** (1) ゲーム終了など前面操作可能な時に新規outputで --editor-only --appearance-checks、Light/Dark dialogと10,000表示を全PNG目視、(2) GPUを使ってよい時に生成素材の実EG2負荷/メモリを段階測定、(3) 10,000件超の対象選択/資源設定と明示小実サンプル品質評価。私物未指定なら生成素材、Layaは精度未達の実験APIのみ。
+
+
+### バックグラウンド索引拡張の提出
+- 実装/検証記録HEAD **5be9b88**（5be9b88ec6322c40013a251b561fc892006b4902）。後続は提出文書のみ。同じfeature/Draft PR #5/baseへ通常push、未マージ。最新HEADは実際のGitで確認。
+- 最終Python103/C#15/WinUI Release（既存IL2104 2警告）PASS、1万件CPU synthetic14 checks PASS、変更Python py_compile/測定tool --help/git diff --check PASS。WinUI review済み、analyzerなし。現在の索引上限/候補batch/checkpointと測定・未実行境界はdocs/index-scaling.md/chat-handoff.md/PRへ記録。
+- ユーザーのゲーム前面維持に従いnative GUI/GPUテストは未起動。Light dialog修正後と新上限文はnative未確認、appearance-03 visual FAILを保持。生成のみ、source hash/size/mtime不変、新規取得/私物/OS/モデル/個人設定変更なし。所有CPU測定と回帰processは終了済み。
+- 次は前面操作可能時のdialog/new coverage実機確認、GPU使用可能時の実EG2段階測定、10,000超の対象/資源設定と明示小実サンプル評価。ゲーム中はHidden/BelowNormalのCPU検証を優先し、既存harnessのActivate/入力を行わない。
