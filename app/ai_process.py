@@ -7,6 +7,7 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 
 from ai_profiles import DEFAULT_PROFILE, REVISION
 from ai_vectors import normalized
@@ -21,11 +22,17 @@ class EncoderProcess:
         self.responses = queue.Queue(maxsize=2)
         self.device = ''
         self.telemetry = {}
+        self._closed = False
+        self.last_used = time.monotonic()
     @property
     def available(self):
         marker = self.model/'aredoko-revision.txt'
         try: return self.python.is_file() and marker.is_file() and marker.read_text(encoding='utf-8').strip()==self.profile.revision
         except OSError: return False
+    @property
+    def resident(self):
+        return self.process is not None and self.process.poll() is None
+
     def _read(self, process, responses):
         try:
             while True:
@@ -44,7 +51,12 @@ class EncoderProcess:
         if 'error' in result: raise AIUnavailable('AI inference failed: '+result['error'])
         return result
     def _start(self):
+        if self._closed:
+            raise AIUnavailable('AI worker is closed')
         if self.process and self.process.poll() is None: return
+        # A previously exited worker must not leave stale CUDA/device telemetry.
+        self.device = ''
+        self.telemetry = {}
         if not self.available: raise AIUnavailable('AI runtime/model is not installed')
         env=os.environ.copy()
         env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',PYTHONIOENCODING='utf-8')
@@ -77,13 +89,33 @@ class EncoderProcess:
                 return vector
             except (OSError,KeyError) as ex:
                 self._stop();raise AIUnavailable('AI worker disconnected') from ex
+            finally:
+                self.last_used = time.monotonic()
     def _stop(self):
+        self.device = ''
+        self.telemetry = {}
         if self.process:
             process,self.process=self.process,None
             if process.poll() is None: process.kill()
             process.wait(timeout=10)
             process.stdin.close();process.stdout.close()
+    def release(self):
+        """Drop only this owner's idle worker; next encode may relaunch it."""
+        if not self.lock.acquire(blocking=False):
+            raise AIUnavailable('AI worker is busy')
+        try:
+            if self._closed:
+                raise AIUnavailable('AI worker is closed')
+            was_resident = self.resident
+            self._stop()
+            self.last_used = time.monotonic()
+            return {'released': was_resident, 'resident': False}
+        finally:
+            self.lock.release()
+
     def close(self):
-        # Kill the owned child promptly even if the index thread is waiting.
-        self._stop()
+        """Permanent shutdown: no in-flight encode can relaunch after return."""
+        with self.lock:
+            self._closed = True
+            self._stop()
 
