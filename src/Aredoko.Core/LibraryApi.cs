@@ -14,11 +14,11 @@ public sealed class LibraryApi : IDisposable
         client.DefaultRequestHeaders.Remove("Origin");
         client.DefaultRequestHeaders.Add("Origin", "http://127.0.0.1:8769");
     }
-    public async Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all")
+    public async Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all",JsonObject? scope=null)
     {
         if(semantic && !string.IsNullOrWhiteSpace(q))
         {
-            var result=await PostAsync("api/library/ai/search",new JsonObject{{"query",q},{"kind",kind},{"view",view},{"page",page},{"source",source}});
+            var result=await PostAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,scope));
             return Protocol.ParseSearch(result.ToJsonString());
         }
         return Protocol.ParseSearch(await client.GetStringAsync($"api/items?q={Uri.EscapeDataString(q)}&kind={kind}&view={view}&page={page}"));

@@ -1,4 +1,4 @@
-> **最新の状況（2026-10-12）**：WinUI 3開発プレビューで登録フォルダの閲覧・タグ/棚/お気に入り保存・限定プレビュー・リスト/グリッド表示・交換可能なオフラインAI検索/解放を実装。今回グリッド実機確認、AI対象root/種類/棚のCPU/APIと実CUDAを検証。scopeのGUI選択・設定保存は次段階。Python137/C#15/native182checks（29PNG目視）/scope GPU15がPASS、CI自動起動は一時抑制。Draft PR #5は未マージ。完全な製品版/1TB実素材/reader/Komga/AOT/配布の完了ではない。最新の契約・結果・次の3手は [Codex引継ぎ](codex-handoff.md)。以下は過去の履歴として保持。
+> **最新の状況（2026-10-12）**：WinUI 3開発プレビューで登録フォルダ閲覧・タグ/棚/お気に入り・限定プレビュー・リスト/グリッド・交換可能なオフラインAI検索/解放を実装。今回AI対象root/種類/棚をGUIで明示選択し、CPU件数を確認、atomic設定保存、同じscopeで索引/検索、再起動復元まで接続。Python142/C#19、scope native133checks/31PNG全目視と実CUDAがPASS。空/削除rootで全件へ広がらず文字検索は独立。CI自動起動は抑制を維持、Draft PR #5未マージ。検索順位品質、1TB実素材/reader/Komga/AOT/配布の完了ではない。最新の証拠と次の3手は [Codex引継ぎ](codex-handoff.md)。以下は過去の履歴として保持。
 
 ---
 

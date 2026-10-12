@@ -27,3 +27,13 @@ Check(rejected,"image dimension multiplication cannot overflow");
 
 Check(Protocol.ParseSearch("""{"total":0,"items":[],"coverage_limit":10000}""").CoverageLimit==10000,"AI coverage from server");
 Check(Protocol.ParseSearch("""{"total":0,"items":[]}""").CoverageLimit is null,"literal/old API coverage optional");
+
+var scope=System.Text.Json.Nodes.JsonNode.Parse("""{"root_ids":[2],"kind":"image","shelf":"素材"}""")!.AsObject();
+var scopedIndex=AIScopeRequests.Scoped(scope);
+var scopedSearch=AIScopeRequests.Search("青い素材","","favorites",1,"cover",scope);
+scope["root_ids"]!.AsArray().Add((System.Text.Json.Nodes.JsonNode?)System.Text.Json.Nodes.JsonValue.Create(9));scope["shelf"]="別の棚";
+Check(scopedIndex["scope"]!["root_ids"]!.AsArray().Count==1&&scopedSearch["scope"]!["shelf"]!.GetValue<string>()=="素材","AI request owns frozen scope JSON");
+Check(scopedSearch["view"]!.GetValue<string>()=="favorites"&&scopedSearch["source"]!.GetValue<string>()=="cover","search filters remain separate from AI scope");
+Check(!AIScopeRequests.Search("雨","audio","all",0,"all",null).ContainsKey("scope"),"legacy API scope omitted");
+using var scopedDoc=JsonDocument.Parse(scopedIndex.ToJsonString());
+Check(scopedDoc.RootElement.GetProperty("scope").GetProperty("shelf").GetString()=="素材","scope request uses reflection-free JSON DOM");

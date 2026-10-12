@@ -82,6 +82,15 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     try: return self.send(200,{'policy':profiles.resource()})
                     except (ValueError,OSError,json.JSONDecodeError):
                         return self.send(409,{'error':'AIリソース設定が無効です。設定ファイルを修正するか、モデル選択を保存し直してください。'})
+                if path=='/api/library/ai/scope':
+                    try:
+                        scope=profiles.scope()
+                        registered={root['id'] for root in catalog.index.roots()}
+                        missing=[root for root in scope['root_ids'] or [] if root not in registered]
+                        return self.send(200,{'scope':scope,'valid':not missing,'missing_root_ids':missing,
+                            'error':'登録が見つからないフォルダがあります。対象を選び直してください。' if missing else ''})
+                    except (ValueError,OSError,json.JSONDecodeError):
+                        return self.send(409,{'error':'AI対象設定を読み込めません。対象を選び直して保存してください。文字検索は利用できます。'})
                 if path=='/api/library/roots': return self.send(200,{'items':catalog.index.roots()})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
@@ -117,6 +126,18 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     if set(body) != {'id'} or type(body['id']) is not str:
                         raise ValueError('Only a profile identifier is accepted')
                     return self.send(200,profiles.choose(body['id']))
+                if self.path=='/api/library/ai/scope':
+                    if set(body)!={'scope'}:raise ValueError('Only scope is accepted')
+                    scope=validate_scope(body['scope'])
+                    registered={root['id'] for root in catalog.index.roots()}
+                    if any(root not in registered for root in scope['root_ids'] or []):
+                        raise ValueError('Unknown registered root')
+                    if catalog.scan_state()['state'] in ('running','cancelling') or ai.status()['state'] in ('running','cancelling'):
+                        raise AIBusy('スキャンまたはAI索引の完了後に対象を保存してください。')
+                    try: saved=profiles.set_scope(scope)
+                    except (ValueError,OSError,json.JSONDecodeError):
+                        return self.send(409,{'error':'AI対象を保存できません。保存済みの条件を維持します。'})
+                    return self.send(200,{'scope':saved,'valid':True,'missing_root_ids':[],'error':''})
                 if self.path=='/api/library/ai/coverage':
                     if set(body)-{'scope','limit'}:raise ValueError('Invalid coverage request')
                     scope=validate_scope(body['scope']) if 'scope' in body else None

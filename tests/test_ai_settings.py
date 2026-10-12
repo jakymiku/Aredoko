@@ -64,6 +64,65 @@ class AISettingsTests(unittest.TestCase):
         self.assertEqual(ctrl.selected(),"local:custom.json")
         self.assertEqual(ctrl.resource(),{"idle_release_seconds":60,"index_pause_ms":50})
 
+    def test_scope_preserves_profile_resource_and_restarts(self):
+        ctrl=self.controller();self.custom()
+        ctrl.choose("local:custom.json")
+        ctrl.set_resource({"idle_release_seconds":60,"index_pause_ms":50})
+        chosen={"root_ids":[2,1],"kind":"image","shelf":"素材"}
+        saved=ctrl.set_scope(chosen);chosen['root_ids'].append(3)
+        ctrl.choose("default");ctrl.set_resource({"idle_release_seconds":0,"index_pause_ms":200})
+        restarted=self.controller()
+        self.assertEqual(restarted.scope(),saved)
+        self.assertEqual(saved['root_ids'],[1,2])
+        self.assertEqual(restarted.selected(),"default")
+        self.assertEqual(restarted.resource(),{"idle_release_seconds":0,"index_pause_ms":200})
+        self.assertEqual(self.controller().scope(),saved)
+
+    def test_scope_save_failure_keeps_previous_bytes(self):
+        ctrl=self.controller();ctrl.set_scope({'root_ids':[]})
+        before=self.settings.read_bytes()
+        with patch('ai_settings.os.replace',side_effect=OSError('generated failure')):
+            with self.assertRaises(OSError):ctrl.set_scope({'root_ids':[1]})
+        self.assertEqual(self.settings.read_bytes(),before)
+        self.assertEqual(ctrl.scope()['root_ids'],[])
+        self.assertEqual(list(self.settings.parent.glob('.ai-settings-*.tmp')),[])
+
+    def test_bad_saved_scope_can_be_explicitly_repaired_without_widening(self):
+        ctrl=self.controller();ctrl.set_scope({'root_ids':[]})
+        payload=json.loads(self.settings.read_text(encoding='utf-8'));payload['scope']={'root_ids':[True]}
+        self.settings.write_text(json.dumps(payload),encoding='utf-8')
+        with self.assertRaises(ValueError):ctrl.scope()
+        ctrl.choose('default')
+        with self.assertRaises(ValueError):ctrl.scope()
+        ctrl.set_scope({'root_ids':[]})
+        self.assertEqual(ctrl.scope()['root_ids'],[])
+        self.settings.write_text('{bad json',encoding='utf-8')
+        ctrl.choose('default')
+        self.assertEqual(ctrl.scope()['root_ids'],[])
+
+    def test_scope_and_resource_concurrent_writes_preserve_both(self):
+        ctrl=self.controller();entered=threading.Event();finish=threading.Event();errors=[]
+        original=ctrl._save_settings
+        def save(payload):
+            if 'scope' in payload and 'resource' not in payload:
+                entered.set()
+                if not finish.wait(5):raise RuntimeError('bounded gate')
+            original(payload)
+        def task(operation):
+            try:operation()
+            except Exception as error:errors.append(error)
+        first=threading.Thread(target=task,args=(lambda:ctrl.set_scope({'root_ids':[1]}),))
+        second=threading.Thread(target=task,args=(lambda:ctrl.set_resource({'idle_release_seconds':60,'index_pause_ms':50}),))
+        with patch.object(ctrl,'_save_settings',side_effect=save):
+            try:
+                first.start();self.assertTrue(entered.wait(5));second.start()
+            finally:
+                finish.set();first.join(5)
+                if second.ident is not None:second.join(5)
+        self.assertFalse(errors,errors);self.assertFalse(first.is_alive());self.assertFalse(second.is_alive())
+        self.assertEqual(ctrl.scope()['root_ids'],[1])
+        self.assertEqual(ctrl.resource(),{'idle_release_seconds':60,'index_pause_ms':50})
+
     def test_default_and_persisted_switch_only_on_restart(self):
         ctrl = self.controller()
         self.assertEqual(ctrl.active, "default")

@@ -32,7 +32,10 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--editor-only',action='store_true',help='Run literal editor/dirty/restart checks without loading AI');parser.add_argument('--layout-checks',action='store_true',help='Also capture wide/narrow list/tile and missing-model dialog');parser.add_argument('--appearance-checks',action='store_true',help='Also check Light/Dark error guidance and literal recovery without GPU loading')
     parser.add_argument('--coverage-checks',action='store_true',help='With editor-only/appearance checks, index the 17 generated items on existing CUDA weights and verify semantic coverage text')
     parser.add_argument('--resource-checks',action='store_true',help='Also save resource policy, release/reload CUDA and verify saved GUI values after restart')
+    parser.add_argument('--scope-checks',action='store_true',help='Generated native scoped index/search/save/restart slice on existing CUDA')
     args=parser.parse_args()
+    if args.scope_checks and (not args.editor_only or args.layout_checks or args.appearance_checks or args.coverage_checks or args.resource_checks):parser.error('--scope-checks requires only --editor-only')
+    if args.scope_checks and not args.output.resolve().is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Scope evidence must stay in data/ai-ui')
     if args.resource_checks and not args.coverage_checks:parser.error('--resource-checks requires --coverage-checks')
     if args.coverage_checks and not (args.editor_only and args.appearance_checks):parser.error('--coverage-checks requires --editor-only --appearance-checks')
     if (args.layout_checks or args.appearance_checks) and not args.editor_only:parser.error("--layout-checks/--appearance-checks require --editor-only")
@@ -49,7 +52,7 @@ def main():
     origin='http://127.0.0.1:8769';settings=target/'settings.json'
     ui_theme='System'
     env=os.environ.copy();env['WINAPP_UI_WORKFLOW_ID']='aredoko-profile-'+nonce
-    report={'target':'local','actual_model':not args.editor_only or args.coverage_checks,'profile_verification':'not_run','coverage_verification':'not_run','resource_verification':'not_run','pass':False,'checks':[],'screenshots':[]}
+    report={'target':'local','actual_model':not args.editor_only or args.coverage_checks or args.scope_checks,'profile_verification':'not_run','coverage_verification':'not_run','resource_verification':'not_run','pass':False,'checks':[],'screenshots':[]}
     def cli(*arguments):
         result=subprocess.run(['winapp',*map(str,arguments)],cwd=REPO,env=env,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=90)
         if result.returncode:raise RuntimeError('winapp '+str(arguments)+': '+result.stderr+result.stdout)
@@ -342,6 +345,139 @@ def main():
             data=DEFAULT_PROFILE.to_dict();data.update(label='GUI test '+key,modalities=['text'],precision='float32')
             if key=='missing':data['directory']=nonce+'-missing-weights'
             path.write_text('{invalid' if key=='invalid' else json.dumps(data),encoding='utf-8');profile_files.append(path)
+        if args.scope_checks:
+            import sqlite3
+            second=target/'second-media';second.mkdir()
+            for name in ('別の雨.wav','別の晴れ.wav'):(second/name).write_bytes(b'generated audio metadata only')
+            def second_digest():return {p.name:(hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns) for p in second.iterdir()}
+            second_before=second_digest()
+            settings.write_text(json.dumps({'version':1,'profile':'local:'+names['text']}),encoding='utf-8')
+            ui_theme='Light';start('scope-Light')
+            roots=[]
+            for folder_path in (media,second):
+                root=api('/api/library/roots',{'path':str(folder_path),'consent':True})['root_id'];roots.append(root)
+                api('/api/library/scan',{'root_id':root})
+                for _ in range(100):
+                    if api('/api/library/scan')['state']=='complete':break
+                    time.sleep(.1)
+                check('Scope generated root scan',api('/api/library/scan')['state']=='complete')
+            rows=api('/api/items')['items']
+            selected={root:[row['id'] for row in rows if row['root_id']==root and row['kind']=='audio'] for root in roots}
+            check('Two generated audio works per root',all(len(ids)==2 for ids in selected.values()))
+            api('/api/items/update',{'ids':selected[roots[0]],'changes':{'shelf':'テスト素材'}})
+            api('/api/library/ai/resource',{'idle_release_seconds':0,'index_pause_ms':50})
+            a={'root_ids':[roots[0]],'kind':'audio','shelf':'テスト素材'}
+            b={'root_ids':[roots[1]],'kind':'audio','shelf':None}
+            def saved_scope():return api('/api/library/ai/scope')['scope']
+            def scope_dialog():
+                dialog();show_resource_control('AIScopeOptions');ui('invoke','AIScopeOptions','--action','expand')
+                ui('wait-for','AIScopeRefresh','-p','IsEnabled','--value','True','-t','10000')
+            def count_scope(name):
+                show_resource_control('AIScopeRefresh');ui('invoke','AIScopeRefresh')
+                ui('wait-for','AIScopeCount1','--value','今回の対象枠: 2 件','--contains','-t','10000')
+                show_resource_control('AIScopeCount3');screenshot(name+'-counts')
+            def set_scope(scope,name):
+                show_resource_control('AIScopeAllRoots');ui('invoke','AIScopeAllRoots','--action','toggle-off')
+                for root in roots:
+                    show_resource_control('AIScopeRoot_'+str(root));ui('invoke','AIScopeRoot_'+str(root),'--action','toggle-on' if root in scope['root_ids'] else 'toggle-off')
+                show_resource_control('AIScopeKind');select('AIScopeKind','AIScopeKind_audio')
+                show_resource_control('AIScopeShelfMode');select('AIScopeShelfMode','AIScopeShelfMode_'+('0' if scope['shelf'] is None else '1'))
+                if scope['shelf'] is not None:
+                    show_resource_control('AIScopeShelf');ui('set-value','AIScopeShelf',scope['shelf'])
+                show_resource_control('AIScopeKind');screenshot(name+'-selection')
+                ui('wait-for','StartAIIndex','-p','IsEnabled','--value','False','-t','3000')
+                count_scope(name)
+                show_resource_control('AIScopeSave');ui('wait-for','AIScopeSave','-p','IsEnabled','--value','True','-t','3000');ui('invoke','AIScopeSave')
+                try:ui('wait-for','AIScopeFeedback','--value','保存しました','--contains','-t','15000')
+                except RuntimeError:
+                    # One explicit GUI retry only after observing a failed save.
+                    # Do not mistake a missing reply for a successful write.
+                    show_resource_control('AIScopeFeedback');screenshot(name+'-save-retry')
+                    ui('wait-for','AIScopeFeedback','--value','保存','--contains','-t','3000')
+                    check(name+' save result differs before explicit retry',saved_scope()!=scope)
+                    count_scope(name+'-retry');show_resource_control('AIScopeSave');ui('invoke','AIScopeSave')
+                    ui('wait-for','AIScopeFeedback','--value','保存しました','--contains','-t','15000')
+                    report.setdefault('save_retry_observations',[]).append(name)
+                check(name+' saved exact scope',saved_scope()==scope)
+                show_resource_control('AIScopeFeedback');screenshot(name+'-saved')
+                ui('wait-for','StartAIIndex','-p','IsEnabled','--value','True','-t','5000')
+            def build_scope(scope,name,cached=False):
+                previous=status();ui('invoke','StartAIIndex','--action','invoke')
+                # Observe persisted scoped state (including cached rebuild after restart).
+                for _ in range(180):
+                    state=status()
+                    if state.get('scope')==scope and state['state'] in ('complete','failed'):break
+                    time.sleep(.5)
+                check(name+' GUI index two scoped works',state.get('scope')==scope and state['state']=='complete' and state['total']==state['indexed']==2)
+                if cached:check(name+' cached rebuild does not load GPU',not state['resident'])
+                else:check(name+' real CUDA index',state['device']=='cuda')
+                ui('wait-for','AIStatus','--value','準備完了','--contains','-t','5000')
+                screenshot(name+'-indexed');count_scope(name+'-indexed')
+                ui('wait-for','AIScopeCount3','--value','残り: 0 件','--contains','-t','3000')
+            def vector_snapshot():
+                databases=list(target.glob('catalog.sqlite.ai*.sqlite'))
+                check('One generated profile vector database',len(databases)==1)
+                with sqlite3.connect(databases[0]) as db:
+                    return db.execute('SELECT item_id,revision,modality,vector FROM ai_vectors ORDER BY item_id,modality').fetchall()
+            def query_scope(scope,name):
+                recovery_mode('ModeSemantic','AI意味検索');ui('set-value','TxtQuery','雨のある景色');time.sleep(.6);ui('invoke','BtnSearch');ready()
+                ui('wait-for','TxtCount','--value','2 件','-t','30000')
+                tree=json.loads(ui('inspect','--json','--depth','12'));stack=[tree];ids=set()
+                while stack:
+                    node=stack.pop()
+                    if isinstance(node,dict):
+                        slug=node.get('automationId','')
+                        if slug.startswith('Item') and slug[4:].isdigit():ids.add(int(slug[4:]))
+                        stack.extend(node.values())
+                    elif isinstance(node,list):stack.extend(node)
+                check(name+' GUI query stays in saved root',ids==set(selected[scope['root_ids'][0]]) and status()['device']=='cuda')
+                screenshot(name+'-query')
+            scope_dialog();set_scope(a,'Light-A');resize(700,620);count_scope('Light-narrow-A');show_resource_control('AIScopeKind');screenshot('Light-narrow-A-selection');resize(1200,800);build_scope(a,'Light-A');close_dialog();query_scope(a,'Light-A')
+            recovery_mode('ModeLiteral','名前・タグ');ui('set-value','TxtQuery','別の雨');time.sleep(.6);ui('invoke','BtnSearch');ready()
+            outside=api('/api/items?q='+urllib.parse.quote('別の雨'))['items'][0]['id'];ui('wait-for','Item'+str(outside),'-t','5000')
+            check('Literal search outside AI scope still works',api('/api/items?q='+urllib.parse.quote('別の雨'))['total']==1)
+            screenshot('Light-literal-independent')
+            scope_dialog();set_scope(b,'Light-B');build_scope(b,'Light-B');close_dialog();query_scope(b,'Light-B')
+            before=vector_snapshot()
+            api('/api/library/ai/release',{});check('Light owned worker released before restart',not status()['resident']);stop()
+            ui_theme='Dark';start('scope-Dark-restart')
+            check('Saved B scope restored',saved_scope()==b and not status()['resident'])
+            check('Profile/resource writes retained with scope',profiles()['selected']=='local:'+names['text'] and api('/api/library/ai/resource')['policy']['index_pause_ms']==50)
+            scope_dialog();count_scope('Dark-B-restored');show_resource_control('AIScopeShelfMode');screenshot('Dark-B-restored-selection')
+            close_dialog();query_scope(b,'Dark-B-restored');api('/api/library/ai/release',{});scope_dialog();set_scope(a,'Dark-A');resize(700,620);count_scope('Dark-narrow-A');show_resource_control('AIScopeKind');screenshot('Dark-narrow-A-selection');resize(1200,800);build_scope(a,'Dark-A',cached=True)
+            check('A rebuild retains all A/B vectors',vector_snapshot()==before)
+            close_dialog();query_scope(a,'Dark-A')
+            api('/api/library/ai/release',{});stop();ui_theme='Light';start('scope-empty')
+            scope_dialog();show_resource_control('AIScopeAllRoots');ui('invoke','AIScopeAllRoots','--action','toggle-off')
+            for root in roots:
+                show_resource_control('AIScopeRoot_'+str(root));ui('invoke','AIScopeRoot_'+str(root),'--action','toggle-off')
+            show_resource_control('AIScopeRefresh');ui('invoke','AIScopeRefresh')
+            ui('wait-for','AIScopeCount1','--value','今回の対象枠: 0 件','--contains','-t','5000')
+            show_resource_control('AIScopeSave');ui('invoke','AIScopeSave');ui('wait-for','AIScopeFeedback','--value','保存しました','--contains','-t','5000')
+            check('Explicit empty selection saved without fallback',saved_scope()['root_ids']==[] and not status()['resident'])
+            ui('wait-for','StartAIIndex','-p','IsEnabled','--value','False','-t','3000')
+            show_resource_control('AIScopeCount3');screenshot('Light-empty-selection')
+            close_dialog()
+            recovery_mode('ModeSemantic','AI意味検索');ui('set-value','TxtQuery','雨');time.sleep(.6);ui('invoke','BtnSearch');ready()
+            ui('wait-for','TxtCount','--value','0 件','-t','5000');check('Empty saved scope query does not load GPU',not status()['resident']);screenshot('Light-empty-query')
+            api('/api/library/ai/scope',{'scope':b});stop()
+            # Isolated catalog fault injection only; generated source folders stay intact.
+            with sqlite3.connect(target/'catalog.sqlite') as db:db.execute('DELETE FROM library_roots WHERE id=?',(roots[1],))
+            start('scope-stale')
+            check('Deleted saved root reported without fallback',not api('/api/library/ai/scope')['valid'])
+            recovery_mode('ModeSemantic','AI意味検索');ui('set-value','TxtQuery','雨');time.sleep(.6);ui('invoke','BtnSearch');ready()
+            ui('wait-for','TxtEmpty','--value','AI検索を利用できません','--contains','-t','5000')
+            check('Stale saved scope blocks GUI AI without GPU',not status()['resident']);screenshot('Light-stale-scope-error')
+            recovery_mode('ModeLiteral','名前・タグ');ui('set-value','TxtQuery','雨の夜');time.sleep(.6);ui('invoke','BtnSearch');ready()
+            ui('wait-for','TxtCount','--value','1 件','-t','5000');check('Literal still works with stale AI scope',True)
+            scope_dialog();show_resource_control('AIScopeFeedback');screenshot('Light-stale-scope-settings')
+            show_resource_control('AIScopeRoot_'+str(roots[1]));ui('invoke','AIScopeRoot_'+str(roots[1]),'--action','toggle-off')
+            show_resource_control('AIScopeRefresh');ui('invoke','AIScopeRefresh');ui('wait-for','AIScopeCount1','--value','今回の対象枠: 0 件','--contains','-t','5000')
+            show_resource_control('AIScopeSave');ui('invoke','AIScopeSave');ui('wait-for','AIScopeFeedback','--value','保存しました','--contains','-t','5000')
+            check('Missing root explicitly repaired to empty',saved_scope()['root_ids']==[] and not status()['resident'])
+            show_resource_control('AIScopeCount3');screenshot('Light-stale-repaired-empty');close_dialog();stop()
+            check('Second generated source byte/mtime unchanged' ,second_before==second_digest())
+            report['scope_verification']='pass';report['pass']=True;return
         start('default');api('/api/library/roots',{'path':str(media),'consent':True});api('/api/library/scan',{'root_id':1})
         for _ in range(100):
             if api('/api/library/scan')['state']=='complete':break

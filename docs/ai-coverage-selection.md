@@ -1,6 +1,6 @@
-# AI索引の対象選択 — CPU/API実装とGUIの次段階
+# AI索引の対象選択 — GUI・設定保存・CPU/API
 
-2026-10-12。**CPU/APIと生成少数件の実CUDAは実装・検証済み。GUI選択欄とユーザー設定保存は未実装**。現行は登録済み・present・除外適用後の候補から最大10,000件。上限を維持したまま、ユーザーが必要な範囲を指定できるようにする。個人フォルダの登録・走査・データ移動を自動で行わない。
+2026-10-12。**GUI選択欄・ユーザー設定保存・CPU/APIと生成少数件の実CUDAは実装・検証済み**。現行は登録済み・present・除外適用後の候補から最大10,000件。上限を維持したまま、ユーザーが必要な範囲を指定できるようにする。個人フォルダの登録・走査・データ移動を自動で行わない。
 
 ## 最初の実装範囲
 
@@ -34,10 +34,19 @@ scopeはmodel/vector-space identityに含めない。同じprofile・item revisi
 
 上限境界はCPUの偽encoderで検証し、対象選択追加だけのために実GPU10,000件測定を繰り返さない。まず小さな実CUDA sliceとWinUI Light/Dark・狭幅で範囲表示を通す。1TB実ライブラリ、ANN、複雑な表紙の品質は別の評価である。
 
-## 現在のAPI sliceと残作業
+## 現在のAPIとGUI
 
 - `POST /api/library/ai/coverage` 本文 `{}` または `{"scope":{...},"limit":10000}`。既定limitは10000、1..10000の整数のみ。本文の未知キーを拒否。戻り値 `scope,candidate_total,target_total,fresh_total,remaining_total,coverage_limit,index_limit,refresh_required_on_change`。省略scopeはnull、明示scopeは既定値を補ったobject。scan中は409。encoder推論/起動を行わず、読み取りは256行単位。
 - 候補/集計は取得時の観測値で、catalog変更をまたぐtransaction snapshotではない。表示は更新が必要になる。indexは開始時ID/正規化scopeを固定し、publish前に再検査。検索の対象枠は現在catalogから再取得する。
 - indexの小さいlimitは今回のjob量のみを制限する。searchはscope内の最大10000件の枠を維持し、fresh vectorだけを返す。GUIでは最初は既定10000を使い、custom job limitと検索枠を同一件数と誤表示しない。
-- scopeはai_stateのjob情報として保存済み。GUIが使う次回対象scope設定・保存APIはまだない。scope省略の既存GUIは従来通り動作する。
-- CPU11件、全suite137件、実CUDA15checks（生成6件/PNG4件、document4/image4/query3、所有3handles全終了）がPASS。native182checks/29PNGは既存GUI・グリッド・解放画面の証拠で、未実装のscope選択UIを操作した証拠ではない。
+- scopeはai_stateのjob情報と別にユーザー設定へ保存。GUIは保存済みscopeをindex/searchへ明示送信し、一覧kind/viewは暗黙コピーしない。APIでscope省略する外部クライアントは既存互換のまま。
+- 今回全CPU142/C#19、scope-native-03は133checks・31PNG全目視、Light/Dark・狭幅・実CUDA・scope保存/restart/空/削除root修復がPASS。前回CUDA15（表紙含む）とnative182/29PNGは過去の検証。詳細と失敗履歴は[引継ぎ](codex-handoff.md)。
+
+## 保存APIとGUIの操作
+
+- GET `/api/library/ai/scope`: `scope,valid,missing_root_ids,error`。削除済みIDは保持してvalid=false、設定破損は409。全rootへのfallbackなし。GETにもlibrary tokenが必要。
+- POST同route: 本文は `{"scope":{...}}` のみ。保存した正規化scopeとvalid=trueを返す。未登録ID/明示null/不正型/未知キーは400、scan/AI索引中と保存失敗は409。更新はOrigin/token必須。モデルを起動せず、索引を削除しない。
+- AI索引→「AI検索と索引の対象」→条件を選ぶ→件数確認→「保存してAI検索に適用」。未保存で閉じるとdraft破棄。変更/古い応答で件数確認を無効化し、保存中の編集・closeを抑止。保存済みで確認した非ゼロの対象だけ索引を開始できる。文字検索は独立。
+- profile/resource/scopeは同じlockとatomic replace、16KiB上限。旧scopeなし設定は従来の全登録root。scope単体の不正値は選び直して修復できる。JSON全体/基礎設定の破損はscope保存だけでは修復できず、モデル選択保存または設定ファイル修復が必要。モデル選択による全体修復では空scopeを設定する。
+- 通信エラー後はGETで要求値/以前の保存値と照合、不明な結果ではAIを停止。書込みの自動retryはしない。専用のネット応答喪失fault injectionは未実施。
+- 個別root表示は先頭256＋保存済みID（最大512 controls）。大量rootの仮想化、高DPI/HighContrast/読み上げ、意味検索の順位品質は別の評価。

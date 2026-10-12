@@ -189,3 +189,40 @@ class ScopeTests(unittest.TestCase):
         for custom in ({'Origin':url},{'X-Aredoko-Token':'test-token'}):
             with self.assertRaises(urllib.error.HTTPError) as error:request('/api/library/ai/coverage',{},custom)
             self.assertEqual(error.exception.code,403);error.exception.close()
+
+    def test_scope_preference_http_stale_roots_auth_busy_and_failure(self):
+        settings=AIProfileSettings(self.base,self.base/'saved-scope.json')
+        server=ThreadingHTTPServer(('127.0.0.1',0),production_handler(self.catalog,'test-token',self.ai,profiles=settings))
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        origin=f'http://127.0.0.1:{server.server_port}'
+        headers={'Origin':origin,'X-Aredoko-Token':'test-token','Content-Type':'application/json'}
+        def request(body=None,custom=None,expected=200):
+            req=urllib.request.Request(origin+'/api/library/ai/scope',None if body is None else json.dumps(body).encode(),headers if custom is None else custom)
+            try:
+                with urllib.request.urlopen(req) as response:code=response.status;data=json.load(response)
+            except urllib.error.HTTPError as error:
+                with error:code=error.code;data=json.load(error)
+            self.assertEqual(code,expected);return data
+        self.assertEqual(request()['scope'],validate_scope({}))
+        scoped={'root_ids':[self.roots[0]],'kind':'audio'}
+        request({'scope':scoped})
+        before=settings.path.read_bytes()
+        with patch.object(settings,'_save_settings',side_effect=OSError('generated failure')):
+            request({'scope':{}},expected=409)
+        self.assertEqual(settings.path.read_bytes(),before)
+        with patch.object(self.ai,'status',return_value={'state':'running'}):
+            request({'scope':{}},expected=409)
+        with patch.object(self.catalog,'scan_state',return_value={'state':'running'}):
+            request({'scope':{}},expected=409)
+        for body in ({'scope':None},{'scope':{'root_ids':[99999]}},{'scope':{},'path':'private'}):request(body,expected=400)
+        request(custom={},expected=403);request({'scope':{}},custom={'Origin':origin},expected=403)
+        request({'scope':{}},custom={'X-Aredoko-Token':'test-token'},expected=403)
+        with self.catalog.connect() as db:db.execute('DELETE FROM library_roots WHERE id=?',(self.roots[0],))
+        stale=request()
+        self.assertFalse(stale['valid']);self.assertEqual(stale['missing_root_ids'],[self.roots[0]])
+        self.assertEqual(stale['scope']['root_ids'],[self.roots[0]])
+        self.assertEqual(settings.path.read_bytes(),before)
+        request({'scope':{'root_ids':[]}})
+        self.assertEqual(request()['scope']['root_ids'],[])
+        self.assertEqual(self.encoder.calls,[])

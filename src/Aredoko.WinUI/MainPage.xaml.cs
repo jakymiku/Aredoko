@@ -24,6 +24,8 @@ public sealed partial class MainPage : Page
     private EditorState saved;
     private bool ready, populating, saving, dialogOpen, tiles, disposed;
     private int page, lastKind, lastMode;
+    private JsonObject? aiScope;
+    private string aiScopeError="AI索引の画面で対象を確認・保存してください。";
     private string view="all", lastQuery="";
 
     public MainPage() {
@@ -47,8 +49,17 @@ public sealed partial class MainPage : Page
         await ConnectAsync();
     }
     private async Task ConnectAsync() {
-        try { renderCancellation.Cancel(); thumbnails.Clear(); await api.ConnectAsync(); await LoadAsync(); }
+        try { renderCancellation.Cancel(); thumbnails.Clear(); await api.ConnectAsync(); await LoadAIScopeAsync(); await LoadAsync(); }
         catch(Exception ex) { Notice("バックエンドに接続できません", "start-winui.ps1を起動して再接続してください。"+ex.Message,InfoBarSeverity.Error); }
+    }
+    private async Task LoadAIScopeAsync()
+    {
+        aiScope=null;
+        try {
+            var data=await api.GetAsync("api/library/ai/scope");
+            if(data["valid"]?.GetValue<bool>()!=true){aiScopeError=data["error"]?.GetValue<string>()??"AI対象を選び直してください。";return;}
+            aiScope=(JsonObject)data["scope"]!.DeepClone();
+        } catch(Exception ex){aiScopeError="AI対象を取得できません。AI索引の画面で確認してください。"+ex.Message;}
     }
     private async void Reconnect_Click(object sender,RoutedEventArgs e)
     {
@@ -62,7 +73,8 @@ public sealed partial class MainPage : Page
         Editor.IsEnabled=false; Items.IsEnabled=false;
         var query=Query.Text; var kind=KindValue();var selectedKind=Kind.SelectedIndex;var selectedMode=SearchMode.SelectedIndex;
         try {
-            var result=await api.SearchAsync(query,kind,view,page,selectedMode>0,selectedMode==2?"cover":"all");
+            if(selectedMode>0&&!string.IsNullOrWhiteSpace(query)&&aiScope is null)throw new InvalidOperationException(aiScopeError);
+            var result=await api.SearchAsync(query,kind,view,page,selectedMode>0,selectedMode==2?"cover":"all",aiScope);
             if(!searches.IsCurrent(version)||disposed)return;
             if(result.Items.Count==0 && page>0){page=Math.Max(0,(result.Total-1)/60);await LoadAsync();return;}
             lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;
@@ -399,6 +411,10 @@ public sealed partial class MainPage : Page
                 }catch(Exception ex){resourceResult.Text="設定を保存できません: "+ex.Message;}
                 finally{saveResource.IsEnabled=true;idleChoice.IsEnabled=true;pauseChoice.IsEnabled=true;}
             };
+            using var scopeEditor=new AIScopeEditor(api,value=>{aiScope=value;aiScopeError="AI索引の画面で対象を選び直して保存してください。";});
+            bool availableForIndex=false,indexRunning=false,starting=false;
+            void UpdateStart()=>start.IsEnabled=availableForIndex&&!indexRunning&&!starting&&scopeEditor.Ready;
+            scopeEditor.StateChanged+=UpdateStart;
             bool polling=false;
             bool releasing=false;
             int? indexLimit=null;
@@ -423,20 +439,26 @@ public sealed partial class MainPage : Page
                     var label=state switch {"idle"=>"未作成","running"=>"作成中","cancelling"=>"中断待ち","complete"=>"準備完了","cancelled"=>"中断済み","interrupted"=>"前回中断","failed"=>"失敗",_=>state};
                     var model=data["model"]?.GetValue<string>() ?? "未選択";
                     var capabilities=data["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "名前・タグ／画像・表紙" : "名前・タグ";
-                    status.Text=available ? $"{model} · {capabilities}{(indexLimit is int cap ? $" · 最大{cap:N0}件" : "")}\n{label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
-                    start.IsEnabled=available&&!running;cancel.IsEnabled=running;
+                    status.Text=available ? $"{model} · {capabilities}{(indexLimit is int cap ? $" · 最大{cap:N0}件" : "")}\n索引処理（開始時の対象）: {label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
+                    availableForIndex=available;indexRunning=running;scopeEditor.SetJobBusy(running);UpdateStart();cancel.IsEnabled=running;
                     var resident=data["resident"]?.GetValue<bool>()==true;
                     release.IsEnabled=available&&!running&&resident&&!releasing;
                     if(available)status.Text+=(resident?"\nAIはメモリ内で待機中。":"\nAIは待機中・次の検索でモデルを準備します。");
                 }
-                catch(Exception ex){status.Text=ex.Message;start.IsEnabled=false;}
+                catch(Exception ex){availableForIndex=false;status.Text=ex.Message;start.IsEnabled=false;}
                 finally{polling=false;}
             }
-            start.Click+=async(_,_)=>{start.IsEnabled=false;try{await api.PostAsync("api/library/ai/index",new JsonObject());await Refresh();}catch(Exception ex){status.Text=ex.Message;start.IsEnabled=true;}};
+            start.Click+=async(_,_)=>{
+                if(!start.IsEnabled||aiScope is null)return;
+                starting=true;UpdateStart();
+                try{await api.PostAsync("api/library/ai/index",AIScopeRequests.Scoped(aiScope));await Refresh();}
+                catch(Exception ex){status.Text=ex.Message;}
+                finally{starting=false;UpdateStart();}
+            };
             cancel.Click+=async(_,_)=>{try{await api.PostAsync("api/library/ai/cancel",new JsonObject());await Refresh();}catch(Exception ex){status.Text=ex.Message;}};
             timer.Tick+=async(_,_)=>await Refresh();
             var panel=new StackPanel {Spacing=12,MinWidth=320};
-            foreach(var element in new UIElement[]{explanation,modelChoice,modelWarning,modelApply,modelFeedback,
+            foreach(var element in new UIElement[]{explanation,modelChoice,modelWarning,modelApply,modelFeedback,scopeEditor.Content,
                 new TextBlock {Text="AIのメモリ・索引負荷",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},
                 release,releaseResult,idleChoice,pauseChoice,saveResource,resourceResult})panel.Children.Add(element);
             var content=new Grid {RowSpacing=12,MaxHeight=Math.Max(160,ActualHeight-240)};
@@ -456,6 +478,7 @@ public sealed partial class MainPage : Page
             actions.Children.Add(start);actions.Children.Add(cancel);Grid.SetRow(actions,2);content.Children.Add(actions);
             await RefreshProfiles();await RefreshResource();await Refresh();timer.Start();
             var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI検索の準備",Content=content,CloseButtonText="閉じる"};
+            dialog.Closing+=(_,args)=>{if(scopeEditor.Saving)args.Cancel=true;};
             await dialog.ShowAsync();
         }
         catch(Exception ex){Failure(ex);}

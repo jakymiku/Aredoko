@@ -10,6 +10,7 @@ import re
 import tempfile
 import threading
 from ai_profiles import DEFAULT_PROFILE, load_profile
+from ai_scope import validate_scope
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json\Z")
 MAX_FILES = 64
@@ -62,11 +63,12 @@ class AIProfileSettings:
     def _read_settings(self):
         if not self.path.exists():
             return {"version":1,"profile":"default"}
-        if self.path.is_symlink() or self.path.stat().st_size > 2048:
+        if self.path.is_symlink() or self.path.stat().st_size > 16384:
             raise ValueError("Invalid settings file")
         payload = json.loads(self.path.read_text(encoding="utf-8-sig"))
         if (not isinstance(payload,dict)
-                or set(payload) not in ({"version","profile"},{"version","profile","resource"})
+                or not {"version","profile"} <= set(payload)
+                or set(payload) - {"version","profile","resource","scope"}
                 or type(payload["version"]) is not int or payload["version"] != 1
                 or not isinstance(payload["profile"],str)):
             raise ValueError("Invalid AI settings")
@@ -82,7 +84,21 @@ class AIProfileSettings:
         data=self._read_settings()
         return validate_resource(data.get("resource",RESOURCE_DEFAULT))
 
+    def scope(self):
+        return validate_scope(self._read_settings().get("scope",{}))
+
+    def set_scope(self,scope):
+        # Root existence is checked by the authenticated catalog API.
+        scope=validate_scope(scope)
+        with self._write_lock:
+            data=self._read_settings()
+            data["scope"]=scope
+            self._save_settings(data)
+            return self.scope()
+
     def _save_settings(self,payload):
+        serialized=json.dumps(payload,ensure_ascii=False)
+        if len(serialized.encode("utf-8"))>16384:raise ValueError("Settings exceed size limit")
         self.path.parent.mkdir(parents=True,exist_ok=True)
         if self.path.is_symlink():
             raise ValueError("Unsafe settings file")
@@ -90,7 +106,7 @@ class AIProfileSettings:
         try:
             fd,tmp_path=tempfile.mkstemp(prefix=".ai-settings-",suffix=".tmp",dir=self.path.parent)
             with os.fdopen(fd,"w",encoding="utf-8") as stream:
-                stream.write(json.dumps(payload,ensure_ascii=False))
+                stream.write(serialized)
             os.replace(tmp_path,self.path)
         finally:
             if tmp_path and Path(tmp_path).exists():
@@ -185,7 +201,12 @@ class AIProfileSettings:
             resource=self.resource()
         except (ValueError,OSError,json.JSONDecodeError):
             resource=dict(RESOURCE_DEFAULT)
-        payload={"version":1,"profile":profile_id}
+        try:
+            payload=self._read_settings()
+        except (ValueError,OSError,json.JSONDecodeError):
+            # Repairing damaged settings must not silently widen an old scope.
+            payload={"version":1,"profile":profile_id,"scope":validate_scope({"root_ids":[]})}
+        payload["profile"]=profile_id
         if resource != RESOURCE_DEFAULT:
             payload["resource"]=resource
         self._save_settings(payload)

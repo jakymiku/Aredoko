@@ -30,7 +30,7 @@
 - GET /api/library/ai/resource: 保存済みpolicy。POSTは `{"idle_release_seconds":0,"index_pause_ms":0}`。整数0..3600秒 / 0..2000ms、両項目必須。初期は無効、保存成功後すぐ適用。設定JSON破損/保存失敗は409、動作中の設定を維持。型/範囲不正は400。
 - statusにはresident/worker_state/device/telemetry/resource_policy。解放後はresident=false、device空、telemetry空。profile/vector identityは維持。token/Origin規約は他のlibrary APIと共通。
 
-## AI対象scope（CPU/API slice、2026-10-12）
+## AI対象scope（GUI・設定保存・CPU/API、2026-10-12）
 
 index/searchは任意 `scope:{root_ids:[1,2],kind:"image",shelf:"素材"}` を受け付ける。登録rootだけ、配列最大256・正整数・重複不可、nullは全登録root、空配列はゼロ件。kindは既存TYPESまたは空文字、shelfは完全一致80文字まで、nullは指定なし・空文字は未整理。未知キー/不正型/削除済みID/明示scope:nullは400。scope省略は既存の互換経路。
 
@@ -38,4 +38,7 @@ index/searchは任意 `scope:{root_ids:[1,2],kind:"image",shelf:"素材"}` を�
 - POST index: scopeで絞ってpresent/除外後のID順を選ぶ。job scopeをコピーしてai_stateに保持、restart後もstatus.scopeで取得。範囲を切り替えてもvector store/model identityは変えず、他範囲を削除しない。
 - POST search: 明示scope内の共通先頭10000件に追加kind/viewを適用し、対象枠を検索側だけ選び直さない。省略scopeは旧manual filter適用後の先頭10000互換経路。custom index limitはjob量だけで、search対象枠は10000のまま。
 
-件数と検索枠はcatalog変更後に更新が必要。jobは開始時ID/範囲を固定してpublish前に再検査。Host/token/Origin規約を維持。GUIのscope選択欄とユーザーscope preferenceの保存は未実装。詳細は [対象選択の契約](ai-coverage-selection.md)。
+件数と検索枠はcatalog変更後に更新が必要。jobは開始時ID/範囲を固定してpublish前に再検査。Host/token/Origin規約を維持。GUIは保存済みuser scopeをindex/searchへ明示送信する。job scopeとは独立に次回起動へ永続化。scope省略APIの挙動を暗黙変更しない。詳細は [対象選択の契約](ai-coverage-selection.md)。
+
+- GET `/api/library/ai/scope`: `{scope,valid,missing_root_ids,error}`。削除済みrootはIDを保持してvalid=false。設定破損は409でAI利用を止め、文字検索は独立。scope単体の不正値はPOSTで修復可能だが、JSON全体/基礎設定破損はモデル選択保存または設定ファイル修復が必要。
+- POST同route: `{"scope":{...}}` のみ。型/未登録ID/未知キーは400、scan/AI索引busyまたはatomic保存失敗は409。成功応答はGETと同じshape、valid=true。既存profile/resource保存を保持し、モデル起動・索引削除なし。認証は他のlibrary APIと共通。
