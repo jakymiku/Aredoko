@@ -21,6 +21,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from ui_geometry import resource_control_visible
+
 REPO=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(REPO/'app'))
 from ai_profiles import DEFAULT_PROFILE
@@ -179,10 +181,9 @@ def main():
         ui('wait-for','AIProfileApply','-p','IsEnabled','--value','False','-t','3000')
     def build(expect_inference=True):
         ui('wait-for','StartAIIndex','-p','IsEnabled','--value','True','-t','5000')
-        # Focus verifies the scoped window is foreground before real input;
-        # click retains the CLI's wrong-window safety check.
-        ui('focus','StartAIIndex')
-        ui('click','StartAIIndex')
+        # Invoke the real button's UIA pattern on the owned HWND. This runs
+        # its Click handler without requiring foreground keyboard/mouse input.
+        ui('invoke','StartAIIndex','--action','invoke')
         for _ in range(240):
             state=status()
             if state['state'] in ('complete','failed'):break
@@ -206,10 +207,12 @@ def main():
                     stack.extend(node.values())
                 elif isinstance(node,list):stack.extend(node)
             title=nodes.get('AI検索の準備');summary=nodes.get('現在のAI索引');item=nodes.get(identifier)
+            report.setdefault('resource_scroll_observations',[]).append({'control':identifier,'step':_,
+                'title':title,'summary':summary,'item':item})
             # ScrollViewer reports content extent. Grid/StackPanel do not expose
             # UIA peers just because they have an ID. These observed TextBlock
             # peers bound the settings viewport (title gap / fixed row spacing).
-            if title and summary and item and item['height']>0 and item['width']>0 and not item.get('isOffscreen') and item['y']>=title['y']+title['height']+8 and item['y']+item['height']<=summary['y']-12:
+            if resource_control_visible(title,summary,item):
                 time.sleep(.4)
                 check(identifier+' visible in scrolled settings',True);return
             ui('scroll','AIOptions','--direction','down');time.sleep(.1)
@@ -217,19 +220,25 @@ def main():
     def resource_checks(theme):
         policy={'idle_release_seconds':60,'index_pause_ms':50}
         dialog()
-        show_resource_control('AIIdleRelease');ui('focus','AIIdleRelease')
+        show_resource_control('AIIdleRelease')
         select('AIIdleRelease','AIIdleRelease_60')
         ui('wait-for','AIIdleRelease','--value','1分','-t','3000')
-        show_resource_control('AIIndexPause');ui('focus','AIIndexPause')
+        show_resource_control('AIIndexPause')
         select('AIIndexPause','AIIndexPause_50')
         ui('wait-for','AIIndexPause','--value','50ms','-t','3000')
-        show_resource_control('AISaveResource');ui('focus','AISaveResource');ui('invoke','AISaveResource')
+        show_resource_control('AISaveResource');ui('invoke','AISaveResource')
         ui('wait-for','AIResourceStatus','--value','保存しました','--contains','-t','5000')
         check(theme+' GUI policy saved and applied',api('/api/library/ai/resource')['policy']==policy and status()['resource_policy']==policy)
         ui('scroll','AIOptions','--to','bottom');time.sleep(.3)
         visible_controls('22-'+theme+'-resource',{'CloseButton','AISaveResource','AIResourceStatus','StartAIIndex','CancelAIIndex'})
         screenshot('22-'+theme+'-resource-settings')
-        show_resource_control('AIRelease');ui('focus','AIRelease');ui('wait-for','AIRelease','-p','IsEnabled','--value','True','-t','3000')
+        show_resource_control('AIRelease')
+        # UIA settings traversal may exceed the saved 60-second idle policy.
+        # Warm the isolated generated fixture immediately before manual release,
+        # so this assertion tests the button rather than racing idle eviction.
+        api('/api/library/ai/search',{'query':'傘が必要な暗い都会の景色','source':'text'})
+        check(theme+' worker ready for manual GUI release',status()['resident'] and status()['device']=='cuda')
+        ui('wait-for','AIRelease','-p','IsEnabled','--value','True','-t','10000')
         ui('invoke','AIRelease')
         ui('wait-for','AIReleaseResult','--value','解放しました','--contains','-t','10000')
         state=status()

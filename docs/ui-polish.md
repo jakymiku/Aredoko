@@ -1,6 +1,6 @@
 # WinUI画面の整理と実機検証
 
-最新（2026-10-12）: AIリソース操作を追加確認。`resource-native-02` 機能 **153項目通過 / 23枚すべて目視 / 正常終了8回**。画像で新設定の可視検査の不足を発見、厳格化した03は44項目後FAIL。最終helper修正は再実行待ちで、visual合格ではない。Light/Dark 700×620px、実CUDA検索、手動解放後の再読込、自動解放/待機設定の保存とrestart。上部設定はスクロール、索引status/start/cancel/closeは固定。UIA content extentとpeerの無い固定パネルIDによる誤判定が残ったため、観測したTextBlock peerで範囲を挟むhelperへ静的修正した。詳しい修正・失敗試験履歴・未検証範囲は[codex-handoff.md](codex-handoff.md)の最新節。
+最新（2026-10-12）: `resource-native-06` **155機能項目PASS / 23 PNG全目視 / 8正常終了・cleanup warningなし / source hash不変**。Light/Dark 700×620px、DPI96、生成17件、実CUDA再検索、60秒/50ms保存とrestart値を確認。**visual PASSではない**。解放メッセージはUIAのheight1pxでも可視扱いしたhelperの誤判定で画像に映らず、Text最低20px・操作control最低32pxのguardへ修正。実測例のCPU8回帰PASS、最終guardのnative再実行は未実施。04 foreground拒否、05 idle60秒との競合を直した2修正再試験で停止。詳しい証拠・失敗履歴とCI課金/上限によるjob未開始は [codex-handoff.md](codex-handoff.md) 最新節。
 
 2026-10-12。製品WinUI 3を維持し、既存画面を読みやすくする小さな改善。Hallmarkのaudit/anti-pattern/slop-testを画面評価の観点として使い、WinUI design/review/testingの手順で実装・確認した。ネイティブFluentの字体/テーマ/操作を優先し、Web向けCSSやモバイル合格判定をWinUIに転用していない。
 
