@@ -1,4 +1,4 @@
-> **最新の状況（2026-10-13）**：WinUI閲覧/整理・グリッド・交換可能なAI検索・対象GUI/設定保存に加え、5万生成metadata/実PNG75件/258rootでCPUと実GUIを検証。256root件数確認14.2→1.41秒、root欄をbounded scrollへ修正。全Python150/Core19/Release PASS、native45checks/12PNG全目視。1TB私物走査や5万実メディア索引の証拠ではない。Laya gate未通過、reader/Komga/AOT/配布は未完。CI manual-only・Draft PR #5未マージ。詳細は[規模検証](library-scale.md) / [引継ぎ](codex-handoff.md)。以下は過去の履歴。
+> **最新の状況（2026-10-13）**：WinUI閲覧/整理・交換可能なAI検索・対象設定保存に、全登録フォルダの検索/32件paging・非表示選択保持・全文パス欄を追加。Core29/Python150/Release PASS。native03 **51 checks PASS / 6 PNG全目視 / scoped visual PASS / 正常close 2回**、keyboard=partial、cleanup warnings=0。 keyboard=partial。疎な5万metadata分布10checks PASS。詳細は[フォルダ選択](root-picker.md) / [引継ぎ](codex-handoff.md)。私物1TB/実GPU大量索引/DPI・全面accessibility/reader/Komga/AOT/配布は別工程。CI manual-only・Draft未マージ。以下は履歴。
 
 ---
 

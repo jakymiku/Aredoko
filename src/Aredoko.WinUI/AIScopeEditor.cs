@@ -13,6 +13,15 @@ public sealed class AIScopeEditor : IDisposable
     private readonly Action<JsonObject?> applied;
     private readonly StackPanel fields=new() {Spacing=12};
     private readonly StackPanel rootList=new() {Spacing=4};
+    private RootPicker picker=new([]);
+    private bool renderingRoots;
+    private readonly TextBox rootQuery=new() {Header="フォルダを探す",PlaceholderText="フォルダ名・パスで絞り込み",MaxLength=512};
+    private readonly TextBlock rootSummary=new() {TextWrapping=TextWrapping.Wrap};
+    private readonly TextBlock rootPage=new();
+    private readonly Button rootPrevious=new() {Content="前へ"};
+    private readonly Button rootNext=new() {Content="次へ"};
+    private readonly TextBox rootPath=new() {Header="フォルダのフルパス（選択・コピーできます）",IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MaxHeight=120,Visibility=Visibility.Collapsed};
+    private readonly List<Button> pathButtons=[];
     private readonly CheckBox all=new() {Content="登録フォルダをすべて対象にする"};
     private readonly ComboBox kind=new() {Header="対象の種類",HorizontalAlignment=HorizontalAlignment.Stretch};
     private readonly ComboBox shelfMode=new() {Header="棚の条件",HorizontalAlignment=HorizontalAlignment.Stretch};
@@ -37,6 +46,12 @@ public sealed class AIScopeEditor : IDisposable
     {
         this.api=api;this.applied=applied;
         AutomationProperties.SetAutomationId(all,"AIScopeAllRoots");
+        foreach(var (control,id) in new (DependencyObject,string)[]{(rootQuery,"AIScopeRootQuery"),(rootSummary,"AIScopeRootSummary"),(rootPage,"AIScopeRootPage"),(rootPrevious,"AIScopeRootPrevious"),(rootNext,"AIScopeRootNext"),(rootPath,"AIScopeRootPath")})AutomationProperties.SetAutomationId(control,id);
+        AutomationProperties.SetName(rootQuery,"対象フォルダを名前・パスで絞り込み");
+        AutomationProperties.SetName(rootPath,"対象フォルダのフルパス");
+        rootQuery.TextChanged+=(_,_)=>{if(!initializing&&!closed&&!renderingRoots){picker.Filter(rootQuery.Text);RenderRoots();}};
+        rootPrevious.Click+=(_,_)=>{picker.Move(-1);RenderRoots();};
+        rootNext.Click+=(_,_)=>{picker.Move(1);RenderRoots();};
         AutomationProperties.SetAutomationId(kind,"AIScopeKind");AutomationProperties.SetName(kind,"AI対象の種類");
         AutomationProperties.SetAutomationId(shelfMode,"AIScopeShelfMode");AutomationProperties.SetName(shelfMode,"AI対象の棚条件");
         AutomationProperties.SetAutomationId(shelf,"AIScopeShelf");
@@ -62,7 +77,9 @@ public sealed class AIScopeEditor : IDisposable
             VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
         AutomationProperties.SetAutomationId(rootViewport,"AIScopeRootsScroll");
         AutomationProperties.SetName(rootViewport,"AI対象フォルダ一覧");
-        foreach(var element in new UIElement[]{all,rootViewport,kind,shelfMode,shelf})fields.Children.Add(element);
+        var rootPager=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
+        rootPager.Children.Add(rootPrevious);rootPager.Children.Add(rootPage);rootPager.Children.Add(rootNext);
+        foreach(var element in new UIElement[]{all,rootQuery,rootSummary,rootViewport,rootPager,rootPath,kind,shelfMode,shelf})fields.Children.Add(element);
         var panel=new StackPanel {Spacing=12};
         panel.Children.Add(new TextBlock {Text="保存するまで現在のAI対象は変わりません。閉じると未保存の条件は破棄します。文字検索には適用しません。",TextWrapping=TextWrapping.Wrap});
         panel.Children.Add(fields);panel.Children.Add(refresh);
@@ -80,7 +97,7 @@ public sealed class AIScopeEditor : IDisposable
     private static JsonObject Empty()=>new() {{"root_ids",new JsonArray()},{"kind",""},{"shelf",null}};
     private JsonObject Draft()
     {
-        var ids=new JsonArray();foreach(var id in roots.Where(p=>p.Value.IsChecked==true).Select(p=>p.Key).Order())ids.Add((JsonNode?)JsonValue.Create(id));
+        var ids=new JsonArray();foreach(var id in picker.Selected)ids.Add((JsonNode?)JsonValue.Create(id));
         return new JsonObject {{"root_ids",all.IsChecked==true?null:ids},{"kind",kind.SelectedItem is ComboBoxItem selected?selected.Tag as string??"":""},
             {"shelf",shelfMode.SelectedIndex==0?null:shelfMode.SelectedIndex==2?"":shelf.Text}};
     }
@@ -89,7 +106,7 @@ public sealed class AIScopeEditor : IDisposable
         initializing=true;
         all.IsChecked=value["root_ids"] is null;
         var chosen=value["root_ids"] is JsonArray ids?ids.Select(n=>n!.GetValue<int>()).ToHashSet():[];
-        foreach(var pair in roots)pair.Value.IsChecked=chosen.Contains(pair.Key);
+        picker.Restore(chosen);rootQuery.Text="";rootPath.Visibility=Visibility.Collapsed;RenderRoots();
         kind.SelectedIndex=Array.IndexOf(kinds,value["kind"]?.GetValue<string>()??"");
         var name=value["shelf"]?.GetValue<string>();shelfMode.SelectedIndex=name is null?0:name.Length==0?2:1;shelf.Text=name??"";
         initializing=false;Changed();
@@ -109,18 +126,34 @@ public sealed class AIScopeEditor : IDisposable
             } catch(Exception ex){feedback.Text="対象を取得できません。選び直して保存してください: "+ex.Message;saved=null;}
             if(closed)return;
             applied(saved is null?null:(JsonObject)saved.DeepClone());
-            var registeredById=registered.Where(n=>n is not null).ToDictionary(n=>n!["id"]!.GetValue<int>(),n=>n!["path"]!.GetValue<string>());
-            var ids=registeredById.Keys.Take(256).ToHashSet();
-            if(value["root_ids"] is JsonArray selected)foreach(var node in selected)ids.Add(node!.GetValue<int>());
-            foreach(var id in ids.Order()) {
-                var box=new CheckBox {HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch,Content=new TextBlock {Text=registeredById.GetValueOrDefault(id,$"登録が見つかりません（ID {id}）"),TextWrapping=TextWrapping.Wrap}};
-                AutomationProperties.SetAutomationId(box,$"AIScopeRoot_{id}");AutomationProperties.SetName(box,registeredById.GetValueOrDefault(id,$"未登録フォルダ ID {id}"));
-                box.Checked+=(_,_)=>Changed();box.Unchecked+=(_,_)=>Changed();roots[id]=box;rootList.Children.Add(box);
-            }
-            if(registeredById.Count>256)rootList.Children.Add(new TextBlock {Text="個別選択は先頭256フォルダと保存済み選択を表示します。すべてを対象にすることもできます。",TextWrapping=TextWrapping.Wrap});
+            picker=new RootPicker(registered.Where(n=>n is not null).Select(n=>new RootChoice(n!["id"]!.GetValue<int>(),n["path"]!.GetValue<string>())));
             Restore(value);await RefreshCountsAsync();
         } catch(Exception ex){initializing=false;feedback.Text="登録フォルダを取得できません: "+ex.Message;applied(null);}
         finally {if(!closed)Sync();}
+    }
+    private void RenderRoots()
+    {
+        renderingRoots=true;
+        rootList.Children.Clear();roots.Clear();pathButtons.Clear();
+        foreach(var choice in picker.Visible) {
+            var box=new CheckBox {HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch,IsChecked=picker.IsSelected(choice.Id),
+                Content=new TextBlock {Text=choice.Path,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis}};
+            AutomationProperties.SetAutomationId(box,$"AIScopeRoot_{choice.Id}");AutomationProperties.SetName(box,choice.Path);
+            ToolTipService.SetToolTip(box,choice.Path);
+            void ToggleRoot(){
+                if(initializing||renderingRoots||closed)return;
+                if(!picker.Select(choice.Id,box.IsChecked==true)){renderingRoots=true;box.IsChecked=false;renderingRoots=false;Sync();return;}
+                Changed();
+            }
+            box.Checked+=(_,_)=>ToggleRoot();box.Unchecked+=(_,_)=>ToggleRoot();
+            var detail=new Button {Content="パス",VerticalAlignment=VerticalAlignment.Center};
+            AutomationProperties.SetAutomationId(detail,$"AIScopeRootPath_{choice.Id}");AutomationProperties.SetName(detail,choice.Path+" のフルパスを表示");
+            detail.Click+=(_,_)=>{rootPath.Text=choice.Path;rootPath.Visibility=Visibility.Visible;rootPath.Focus(FocusState.Programmatic);};
+            var row=new Grid {ColumnSpacing=8};row.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto});
+            row.Children.Add(box);Grid.SetColumn(detail,1);row.Children.Add(detail);rootList.Children.Add(row);roots[choice.Id]=box;pathButtons.Add(detail);
+        }
+        if(picker.MatchCount==0)rootList.Children.Add(new TextBlock {Text="一致するフォルダがありません。選択済みの対象は保持しています。",TextWrapping=TextWrapping.Wrap});
+        renderingRoots=false;Sync();
     }
     private void Changed()
     {
@@ -134,7 +167,13 @@ public sealed class AIScopeEditor : IDisposable
     {
         if(closed)return;
         all.IsEnabled=kind.IsEnabled=shelfMode.IsEnabled=!initializing&&!saving;
-        foreach(var box in roots.Values)box.IsEnabled=!initializing&&!saving&&all.IsChecked!=true;
+        foreach(var pair in roots)pair.Value.IsEnabled=!initializing&&!saving&&all.IsChecked!=true&&(picker.SelectionCount<RootPicker.SelectionLimit||picker.IsSelected(pair.Key));
+        rootQuery.IsEnabled=!initializing&&!saving;
+        rootPrevious.IsEnabled=!initializing&&!saving&&picker.Page>0;
+        rootNext.IsEnabled=!initializing&&!saving&&picker.Page+1<picker.PageCount;
+        rootPage.Text=$"{picker.Page+1} / {picker.PageCount}";
+        rootSummary.Text=$"一致: {picker.MatchCount:N0} フォルダ · 個別選択: {picker.SelectionCount:N0} / {RootPicker.SelectionLimit}（絞り込みやページ切替でも保持）";
+        foreach(var button in pathButtons)button.IsEnabled=!initializing&&!saving;
         shelf.IsEnabled=!initializing&&!saving&&shelfMode.SelectedIndex==1;
         refresh.IsEnabled=!initializing&&!counting&&!saving;
         save.IsEnabled=!initializing&&!saving&&!counting&&confirmed&&Dirty&&!jobBusy;

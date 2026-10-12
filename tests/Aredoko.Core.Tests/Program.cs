@@ -37,3 +37,17 @@ Check(scopedSearch["view"]!.GetValue<string>()=="favorites"&&scopedSearch["sourc
 Check(!AIScopeRequests.Search("雨","audio","all",0,"all",null).ContainsKey("scope"),"legacy API scope omitted");
 using var scopedDoc=JsonDocument.Parse(scopedIndex.ToJsonString());
 Check(scopedDoc.RootElement.GetProperty("scope").GetProperty("shelf").GetString()=="素材","scope request uses reflection-free JSON DOM");
+
+
+var picker=new RootPicker(Enumerable.Range(1,258).Select(id=>new RootChoice(id,$"架空/root-{id:000}")));
+picker.Restore([1]);picker.Filter("root-258");
+Check(picker.Visible.Single().Id==258&&picker.Select(258,true),"root beyond256 can be discovered and selected");
+picker.Filter("no match");Check(picker.Visible.Count==0&&picker.Selected.SequenceEqual(new[]{1,258}),"hidden selections survive empty filter");
+picker.Filter("");picker.Move(8);Check(picker.Visible.Count==2&&picker.PageCount==9&&picker.IsSelected(258),"root page boundary keeps selection");
+picker.Move(99);Check(picker.Page==8,"root page forward bounded");picker.Move(-99);Check(picker.Page==0,"root page backward bounded");
+picker.Restore(Enumerable.Range(1,256));Check(!picker.Select(258,true)&&picker.SelectionCount==256,"selection cap blocks overflow");
+Check(picker.Select(1,false)&&picker.Select(258,true)&&picker.SelectionCount==256,"uncheck frees a selection slot");
+picker.Restore([999]);picker.Filter("見つかりません");Check(!picker.Visible.Single().Registered&&picker.Select(999,false),"missing saved root is visible and explicitly removable");
+picker.Restore([1]);picker.Filter("ROOT-001");Check(picker.Visible.Single().Id==1&&picker.Selected.SequenceEqual(new[]{1}),"root filter is case insensitive and draft neutral");
+bool tooMany=false;try{picker.Restore(Enumerable.Range(1,257));}catch(ArgumentException){tooMany=true;}
+Check(tooMany&&picker.Selected.SequenceEqual(new[]{1}),"oversize restore cannot partially replace draft");

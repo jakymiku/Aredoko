@@ -34,8 +34,11 @@ def main():
     parser.add_argument('--resource-checks',action='store_true',help='Also save resource policy, release/reload CUDA and verify saved GUI values after restart')
     parser.add_argument('--scope-checks',action='store_true',help='Generated native scoped index/search/save/restart slice on existing CUDA')
     parser.add_argument('--scale-checks',action='store_true',help='CPU-only 50k metadata, 258 roots and long-name native checks')
+    parser.add_argument('--root-picker-checks',action='store_true',help='CPU-only searchable root picker, hidden selections, keyboard and path/restart checks')
     args=parser.parse_args()
-    if args.scale_checks and (not args.editor_only or args.scope_checks or args.layout_checks or args.appearance_checks or args.coverage_checks or args.resource_checks):parser.error('--scale-checks requires only --editor-only')
+    if args.root_picker_checks and (not args.editor_only or args.scale_checks or args.scope_checks or args.layout_checks or args.appearance_checks or args.coverage_checks or args.resource_checks):parser.error('--root-picker-checks requires only --editor-only')
+    if args.root_picker_checks and not args.output.resolve().is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Picker evidence must stay in data/ai-ui')
+    if args.scale_checks and (not args.editor_only or args.root_picker_checks or args.scope_checks or args.layout_checks or args.appearance_checks or args.coverage_checks or args.resource_checks):parser.error('--scale-checks requires only --editor-only')
     if args.scale_checks and not args.output.resolve().is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Scale evidence must stay in data/ai-ui')
     if args.scope_checks and (not args.editor_only or args.layout_checks or args.appearance_checks or args.coverage_checks or args.resource_checks):parser.error('--scope-checks requires only --editor-only')
     if args.scope_checks and not args.output.resolve().is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Scope evidence must stay in data/ai-ui')
@@ -61,6 +64,26 @@ def main():
         if result.returncode:raise RuntimeError('winapp '+str(arguments)+': '+result.stderr+result.stdout)
         return result.stdout
     def ui(*arguments,window=None):return cli('ui',*arguments,'-w',window or hwnd)
+    def picker_keys(keys,identifier):
+        import ctypes
+        from ctypes import wintypes
+        user32=ctypes.WinDLL('user32',use_last_error=True)
+        user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
+        user32.GetForegroundWindow.restype=wintypes.HWND
+        user32.SetForegroundWindow.argtypes=[wintypes.HWND]
+        owned=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owned))
+        if owned.value!=app_pid:raise RuntimeError('Keyboard target is not the owned app')
+        # Normal activation of this test window only. Never attach input queues,
+        # weaken foreground guards, send system hotkeys or touch other apps.
+        if user32.GetForegroundWindow()!=int(hwnd):
+            user32.SetForegroundWindow(int(hwnd));time.sleep(.1)
+        if user32.GetForegroundWindow()!=int(hwnd):
+            report.setdefault('keyboard_skipped',[]).append(identifier+': Windows denied owned-window activation')
+            return False
+        ui('focus',identifier)
+        ui('send-keys',keys,'--target',identifier,'--via','send-input')
+        report.setdefault('keyboard_actions',[]).append(identifier+': '+keys)
+        return True
     def api(route,body=None,expected=200):
         request=urllib.request.Request(origin+route,None if body is None else json.dumps(body,ensure_ascii=False).encode('utf-8'),headers={**headers,'Content-Type':'application/json'})
         try:
@@ -348,6 +371,67 @@ def main():
             data=DEFAULT_PROFILE.to_dict();data.update(label='GUI test '+key,modalities=['text'],precision='float32')
             if key=='missing':data['directory']=nonce+'-missing-weights'
             path.write_text('{invalid' if key=='invalid' else json.dumps(data),encoding='utf-8');profile_files.append(path)
+        if args.root_picker_checks:
+            import shutil
+            from create_library_scale_fixture import create as create_scale,digest as scale_digest
+            info=create_scale(target/'picker',count=901);shutil.copyfile(target/'picker/catalog.sqlite',target/'catalog.sqlite')
+            report['picker_fixture']=info
+            last=info['long_root_id'];selected={'root_ids':[1,last],'kind':'','shelf':None}
+            settings.write_text(json.dumps({'version':1,'profile':'default','scope':{'root_ids':[1],'kind':'','shelf':None}}),encoding='utf-8')
+            for theme in ('Light','Dark'):
+                ui_theme=theme;start('picker-'+theme,folder/names['text']);resize(1200,800);record_display(theme)
+                dialog();show_resource_control('AIScopeOptions');ui('invoke','AIScopeOptions','--action','expand')
+                ui('wait-for','AIScopeRefresh','-p','IsEnabled','--value','True','-t','20000')
+                show_resource_control('AIScopeRootQuery');ui('set-value','AIScopeRootQuery','root-257')
+                show_resource_control('AIScopeRoot_'+str(last))
+                ui('wait-for','AIScopeRoot_'+str(last),'--value','Off' if theme=='Light' else 'On','-t','5000')
+                ui('wait-for','AIScopeSave','-p','IsEnabled','--value','False','-t','5000')
+                check(theme+' filter alone is draft neutral',api('/api/library/ai/scope')['scope']['root_ids']==([1] if theme=='Light' else [1,last]))
+                if theme=='Light':
+                    used_keyboard=picker_keys('space','AIScopeRoot_'+str(last))
+                    if not used_keyboard:ui('invoke','AIScopeRoot_'+str(last),'--action','toggle-on')
+                    ui('wait-for','AIScopeRoot_'+str(last),'--value','On','-t','5000')
+                    check(('Keyboard' if used_keyboard else 'UIA')+' selects previously unsaved root beyond256',True)
+                ui('set-value','AIScopeRootQuery','no-such-generated-root')
+                ui('wait-for','AIScopeRootSummary','--value','個別選択: 2 / 256','--contains','-t','5000')
+                check(theme+' empty filter retains selections',True)
+                show_resource_control('AIScopeRootQuery');screenshot(theme+'-picker-empty-filter')
+                ui('set-value','AIScopeRootQuery','');show_resource_control('AIScopeRootNext')
+                used_keyboard=picker_keys('enter','AIScopeRootNext')
+                if not used_keyboard:ui('invoke','AIScopeRootNext')
+                ui('wait-for','AIScopeRootPage','--value','2 / 9','-t','5000')
+                check(theme+(' keyboard' if used_keyboard else ' UIA')+' page navigation',True)
+                show_resource_control('AIScopeRootPrevious');ui('invoke','AIScopeRootPrevious')
+                show_resource_control('AIScopeRoot_1');ui('wait-for','AIScopeRoot_1','--value','On','-t','5000')
+                tree=json.loads(ui('inspect','--json','--depth','12'))
+                def nodes(value):
+                    if isinstance(value,dict):
+                        yield value
+                        for child in value.values():yield from nodes(child)
+                    elif isinstance(value,list):
+                        for child in value:yield from nodes(child)
+                check(theme+' root controls bounded32',len({n['automationId'] for n in nodes(tree) if n.get('automationId','').startswith('AIScopeRoot_')})==32)
+                ui('set-value','AIScopeRootQuery','root-257');show_resource_control('AIScopeRoot_'+str(last))
+                ui('wait-for','AIScopeRoot_'+str(last),'--value','On','-t','5000')
+                ui('invoke','AIScopeRootPath_'+str(last));resize(700,620)
+                show_resource_control('AIScopeRootPath',from_bottom=True)
+                path=api('/api/library/roots')['items'][-1]['path']
+                ui('wait-for','AIScopeRootPath','--value',path,'-t','5000');picker_keys('ctrl+a text=readonly-probe','AIScopeRootPath');ui('wait-for','AIScopeRootPath','--value',path,'-t','5000')
+                picker_keys('ctrl+a','AIScopeRootPath')
+                check(theme+' full path exact value',True);screenshot(theme+'-picker-full-path-narrow')
+                resize(1200,800);show_resource_control('AIScopeRefresh',from_bottom=True);ui('invoke','AIScopeRefresh')
+                ui('wait-for','AIScopeCount0','--value',str(info['per_root']['1']+info['per_root'][str(last)])+' 件','--contains','-t','10000')
+                if theme=='Light':
+                    show_resource_control('AIScopeSave',from_bottom=True);ui('invoke','AIScopeSave');ui('wait-for','AIScopeFeedback','--value','保存しました','--contains','-t','15000')
+                check(theme+' hidden selected roots persisted',api('/api/library/ai/scope')['scope']==selected)
+                show_resource_control('AIScopeCount0',from_bottom=True);screenshot(theme+'-picker-saved-counts')
+                if theme=='Dark':
+                    show_resource_control('AIScopeRootQuery');ui('set-value','AIScopeRootQuery','root-257');show_resource_control('AIScopeRoot_'+str(last));ui('invoke','AIScopeRoot_'+str(last),'--action','toggle-off')
+                    close_dialog();dialog();show_resource_control('AIScopeOptions');ui('invoke','AIScopeOptions','--action','expand');ui('wait-for','AIScopeRefresh','-p','IsEnabled','--value','True','-t','20000');show_resource_control('AIScopeRootQuery');ui('set-value','AIScopeRootQuery','root-257');show_resource_control('AIScopeRoot_'+str(last));ui('wait-for','AIScopeRoot_'+str(last),'--value','On','-t','5000')
+                    check('Unsaved hidden-root edit discarded on close',api('/api/library/ai/scope')['scope']==selected)
+                check(theme+' picker does not load model',not status()['resident']);close_dialog();stop()
+            check('Picker PNG bytes/mtime unchanged',scale_digest(target/'picker/generated')==info['source_digest'])
+            report['picker_verification']='pass';report['keyboard_verification']='partial' if report.get('keyboard_skipped') else 'pass';report['pass']=True;return
         if args.scale_checks:
             import shutil
             from create_library_scale_fixture import create as create_scale,digest as scale_digest
@@ -375,7 +459,7 @@ def main():
                 ui('set-value','TxtQuery','');ui('invoke','BtnSearch');ready()
                 begin=time.perf_counter();dialog();show_resource_control('AIScopeOptions');ui('invoke','AIScopeOptions','--action','expand')
                 ui('wait-for','AIScopeRefresh','-p','IsEnabled','--value','True','-t','20000')
-                show_resource_control('AIScopeRootsScroll');ui('scroll','AIScopeRootsScroll','--to','bottom')
+                show_resource_control('AIScopeRootQuery');ui('set-value','AIScopeRootQuery','root-257');show_resource_control('AIScopeRootsScroll')
                 show_resource_control('AIScopeRoot_'+str(last))
                 ui('wait-for','AIScopeRoot_'+str(last),'--value','On','-t','5000')
                 report['scale_timings_seconds'].append({'phase':theme+' scope-open-and-last-root-visible','seconds':round(time.perf_counter()-begin,3)})
@@ -387,8 +471,8 @@ def main():
                     elif isinstance(node,list):
                         for value in node:yield from collect(value)
                 ids=[n.get('automationId','') for n in collect(tree) if n.get('automationId','').startswith('AIScopeRoot_')]
-                check(theme+' bounded root choices include saved beyond256',len(set(ids))==257 and 'AIScopeRoot_'+str(last) in ids)
-                resize(700,620);show_resource_control('AIScopeRootsScroll');ui('scroll','AIScopeRootsScroll','--to','bottom');show_resource_control('AIScopeRoot_'+str(last));screenshot(theme+'-258-roots-long-path')
+                check(theme+' filtered root choices include saved beyond256',len(set(ids))==1 and 'AIScopeRoot_'+str(last) in ids)
+                resize(700,620);show_resource_control('AIScopeRootQuery');ui('set-value','AIScopeRootQuery','root-257');show_resource_control('AIScopeRootsScroll');show_resource_control('AIScopeRoot_'+str(last));screenshot(theme+'-258-roots-long-path')
                 show_resource_control('AIScopeCount3',from_bottom=True)
                 ui('wait-for','AIScopeCount0','--value',str(info['per_root'][str(last)])+' 件','--contains','-t','5000')
                 screenshot(theme+'-last-root-counts')

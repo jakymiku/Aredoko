@@ -1,5 +1,26 @@
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
+## 最新：検索可能なフォルダ選択・全文パス・疎な分布（2026-10-13）
+
+開始HEAD **5b4ac4c79c3a012cea72ba2fdaf85acb68f6f716**。同じfeature/Draft PR #5/comparison baseを維持。実装SHAは後続提出記録/Git/PR headで確認。
+
+- 全登録rootを名前/パスで絞り込み32件ずつ表示。256番目以後の未選択rootも新規選択可能。Coreで非表示の選択を保持し、256選択上限/空scope/JSON DOM/保存freeze・古い応答規約を維持。表示のみの変更はdraftを変更しない。
+- 「パス」で読み取り専用・折返しの全文欄を表示。狭幅でも全文を目視。tooltip/32行native controlsを使用し、危険なmanaged ItemsSourceを再導入しない。
+- Core29 PASS、全Python150 PASS / 101.163秒、Release PASS / 34.02秒 / errors0・既存IL2104 2warnings。手動WinUIレビュー済み、専用analyzer未実行。
+- native03 **51 checks PASS / 6 PNG全目視 / scoped visual PASS / 正常close 2回**、keyboard=partial、cleanup warnings=0。 OSが所有窓の前面化を拒否した操作は入力せず、同じowned HWNDのUIAで機能確認を続行。keyboard_skippedへ明記し、全キーボード経路PASSとは扱わない。01ではSpace選択/Enterページ送りが観測済みだが途中失敗の別履歴。
+- native01/02はforeground拒否でそれぞれFAIL16checks/2PNG・FAIL5checks/1PNG、全画像目視、owned PID終了fallbackを記録。03は生成901 metadata/75実PNG/258rootで検索・隠れた選択/保存/restart/未保存破棄・全文パスを確認しGPU未ロード。詳細とkeyboard/cleanup境界は[root-picker.md](root-picker.md)。
+- 5万生成metadataの疎な2root分布（前方2/後方2/分散500）は最終CLI03 10checks PASS、ID順/件数/上限/元PNG不変。5回median/maxは詳細文書。私物走査/GPU索引/1TB性能保証ではない。
+- CI manual-only・Draft未マージ。push後HEADのruns/checksをread-only確認してPR説明へ記録する。
+
+### 次の3手
+
+1. 高DPI/High Contrast/読み上げ・全面keyboardと大量root metadataの応答性を確認。
+2. 新しいtext/cover holdoutを凍結して混合順位を評価する。
+3. Laya日本語gate再評価、既定無効維持。reader/Komgaは別slice。
+
+
+---
+
 ## 最新：5万件metadata・258フォルダのCPUと実GUI（2026-10-13）
 
 開始HEAD **33e65d8acdea153af0b6d48d26c3f406f50adafe**。同じfeature / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5) / comparison baseを維持。今回の提出SHAは後続の提出記録/Git/PR headで確認。
