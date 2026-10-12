@@ -387,3 +387,31 @@ Darkのindex_states/coverage_gpu_statesは別時点で、短時間のcached rebu
 Python103 tests PASS（81.92秒）、C#15 checks PASS、WinUI x64 SelfContained Release PASS（37.04秒/既存IL2104 2警告）。WinUI code reviewはnative Items/60 paging、async/stale/dirty、テーマ/AutomationId、DOM JSON、認証/所有worker/profile identity保持を確認。analyzer未導入。
 
 - 実GPU段階測定を開始。GPU-01のCPU worker値はvenv起動launcherだけで実モデルprocessを含まないため、全体メモリ値として使用禁止。所有子process treeのsampleとprocess-instance handle終了確認を追加し、修正後は新しいoutputで確認する。結果は後続。
+
+
+### 実GPU段階測定の結果
+GUI確認実装/検証記録コミット **b7de729**、この後は同じDraft PR #5/baseを保持。
+既存EmbeddingGemma 2/default text+cover/auto-bf16/768 profile、生成**2,304件**（メタデータだけの架空WAV 2,088/PNG 144/CBZ 72、画像96×128px）で、**gpu-02: 86 checks PASS**。実CUDA/製品scanner/AISearch/VectorStoreを使用。GUI/HTTPの大規模負荷ではなくPython製品層＋所有GPU workerの測定。
+
+64→256→1,024→2,304と同じcatalogを増分拡張。最後は1,024既存＋96新規で中断（1,120保存済み）し、新しいencoder/AISearchから残り1,184だけ推論。全text 2,304/cover 216 vectorを確認。別のfresh再起動でcached buildはdocument/image/queryすべて0・worker未ロード、その後の実queryだけでCUDAをロード。累計document 2,304/image 216/query 15、document/imageの重複推論なし。全source bytes/size/mtime digest不変、所有workerとvenv launcher/実Python等のprocess-instance handle全終了。
+
+| 段階 | 対象合計 | 新規文字推論 | 新規表紙推論 | 秒 |
+| --- | ---: | ---: | ---: | ---: |
+| index-64 | 64 | 64 | 6 | 22.07 |
+| index-256 | 256 | 192 | 18 | 24.27 |
+| index-1024 | 1,024 | 768 | 72 | 96.83 |
+| cancel-2304 | 1,120 | 96 | 9 | 13.61 |
+| resume-2304 | 2,304 | 1,184 | 111 | 165.46 |
+| fresh-restart-cache | 2,304 | 0 | 0 | 2.78 |
+
+2,304件時のtext/cover/combined検索は0.23〜0.44秒。生成した雨の街並みがtext/combinedのtop候補だったが、チェックは結果有無/件数/CUDA/上限であり、一般的な精度合格率の証明ではない。
+
+build中0.2秒間隔sampleのRAM peak: controller **40.1MiB**、所有worker process tree合計 **2062.2MiB**。PyTorchのCUDA max_memory_allocatedはworker lifetime peak **931.8MiB**。RAMはGUI/API込みの全アプリ使用量ではなく、sample間の瞬間peakを保証しない。CUDA値はreserved/context/他アプリ/ボード総VRAMを含まない。baseline `NVIDIA GeForce RTX 4070 Ti, 616.64, 12282 MiB, 6127 MiB, 48 %`、GPUの独占を保証しない単発測定であり、時間差・background負荷・小画像/短文に注意。初期lazy model loadを最初のbuild、再開後のlazy loadをresume、cache後のlazy loadを最初のqueryに含む。
+
+gpu-01も索引/増分/検索/中断再開/推論回数/元source不変はPASSだが、CPU workerの値はvenv起動launcherだけで実モデルprocessを含まない。**gpu-01のworker RAM値を総メモリとして使用しない。**修正版gpu-02はToolhelpでlive owned Popen配下だけを列挙し、持続handleでPID再利用と区別して終了を確認。所有外process/OS設定は変更しない。
+
+新toolのCLI guard 5 checks PASS: 範囲外output/既存output/逆順stages/重複stages/上限超を拒否。拒否先を作成せず既存result hash保持。syntax/help/diffも確認。モデル/依存/私物/個人設定/OS変更・新規取得なし。
+
+実GPU1万件、768px等の大きめ表紙/長文metadata、実ライブラリ/1TB、GUI込み総メモリ、idle release/負荷制限は未確認・未実装。CPU synthetic1万件と今回の実GPU2,304件を区別する。Layaは精度未達の既定無効実験APIのみ。
+
+次の3手: (1) 生成768px表紙/長文metadata→1万件段階測定、(2) 負荷/idle解放と上限超の対象選択、(3) 明示小実サンプルの品質評価。

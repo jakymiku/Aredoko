@@ -3,7 +3,7 @@
 更新: 2026-10-12。旧Web試作段階の引継ぎを置き換える。**製品GUIはWinUI 3に決定済みで、EmbeddingGemma 2検索まで実装・実GPU検証済み。最初から作り直さない。**
 
 
-## 最新の再開地点（2026-10-12・GUI完走／実GPU測定中）
+## 最新の再開地点（2026-10-12・GUI完走／実GPU2,304件確認）
 
 開始HEAD **a4690a1**。同じfeature/Draft PR #5/baseを保持。通常GUIテスト許可は継続、専用DB/settings/生成17素材と既存EG2のみ。
 
@@ -15,7 +15,7 @@ Darkのindex_states/coverage_gpu_statesは別時点で、短時間のcached rebu
 
 Python103 tests PASS（81.92秒）、C#15 checks PASS、WinUI x64 SelfContained Release PASS（37.04秒/既存IL2104 2警告）。WinUI code reviewはnative Items/60 paging、async/stale/dirty、テーマ/AutomationId、DOM JSON、認証/所有worker/profile identity保持を確認。analyzer未導入。
 
-現在は生成素材だけの実EG2負荷を段階測定中。新規取得なし。CPU1万件synthetic/実GPU17件を作り直さず、GPU測定結果を末尾へ記録する。次の3手: (1) 段階GPU測定のcache/所有worker全体メモリ/終了を確認、(2) 1万件への段階拡張と資源設定、(3) 明示指定の小実サンプル品質評価。私物/1TB/HC/高DPI/reader/Komga/AOT/配布は未検証・未実装の範囲を維持。Layaは実験APIのみ。
+**gpu-02:実EG2文字+表紙2,304件、86 checks PASS**。64→256→1,024→2,304、中断1,120から残り1,184だけ推論、fresh再起動cache build全推論0→queryだけCUDA。text2,304/cover216、source bytes/size/mtime不変、所有worker tree handle全終了。RAM sample peak controller40.1MiB/worker tree2062.2MiB、torch CUDA確保peak931.8MiB（総VRAMではない）。96×128の生成小表紙/短いmetadata、GPU baseline48%で独占なし。gpu-01のworker RAMはlauncherのみで使用禁止。詳細・秒・再現はindex-scaling.md最新節。実GPU1万件/1TBを合格にしない。新規取得なし。次の3手: (1) 生成768px表紙/長文metadataで1万件へ段階測定、(2) 負荷/idle解放・上限超対象選択を実装、(3) 明示小実サンプル品質評価。私物/1TB/HC/高DPI/reader/Komga/AOT/配布は未検証・未実装の範囲を維持。Layaは実験APIのみ。
 
 ## 前段階の再開地点（2026-10-12・通常GUI再開）
 

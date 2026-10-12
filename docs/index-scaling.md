@@ -43,3 +43,36 @@ Windows processをHidden/BelowNormalで起動しゲームの前面操作を避�
 
 ## 後続GUI確認（2026-10-12）
 通常テストを許可された後、明暗dialogの10,000上限と固定status/start/cancel、Lightで17件の実CUDA索引・日本語検索後の上限文を確認。小画面で隠れていたindex actionsをmodel設定scrollから分離した。appearance-06全体はDark fresh cacheにcudaを要求したテスト条件でFAIL、修正はnative未再実行。全13 captured states目視、全17vector revisionのread-only確認を記録。[ui-polish.md](ui-polish.md)末尾の再開手順を使う。実GPU1万件の測定ではなく、上記CPU synthetic性能値もそのまま区別する。
+
+
+## 生成素材での実GPU段階測定（2026-10-12）
+既存EmbeddingGemma 2/default text+cover/auto-bf16/768 profile、生成**2,304件**（メタデータだけの架空WAV 2,088/PNG 144/CBZ 72、画像96×128px）で、**gpu-02: 86 checks PASS**。実CUDA/製品scanner/AISearch/VectorStoreを使用。GUI/HTTPの大規模負荷ではなくPython製品層＋所有GPU workerの測定。
+
+64→256→1,024→2,304と同じcatalogを増分拡張。最後は1,024既存＋96新規で中断（1,120保存済み）し、新しいencoder/AISearchから残り1,184だけ推論。全text 2,304/cover 216 vectorを確認。別のfresh再起動でcached buildはdocument/image/queryすべて0・worker未ロード、その後の実queryだけでCUDAをロード。累計document 2,304/image 216/query 15、document/imageの重複推論なし。全source bytes/size/mtime digest不変、所有workerとvenv launcher/実Python等のprocess-instance handle全終了。
+
+| 段階 | 対象合計 | 新規文字推論 | 新規表紙推論 | 秒 |
+| --- | ---: | ---: | ---: | ---: |
+| index-64 | 64 | 64 | 6 | 22.07 |
+| index-256 | 256 | 192 | 18 | 24.27 |
+| index-1024 | 1,024 | 768 | 72 | 96.83 |
+| cancel-2304 | 1,120 | 96 | 9 | 13.61 |
+| resume-2304 | 2,304 | 1,184 | 111 | 165.46 |
+| fresh-restart-cache | 2,304 | 0 | 0 | 2.78 |
+
+2,304件時のtext/cover/combined検索は0.23〜0.44秒。生成した雨の街並みがtext/combinedのtop候補だったが、チェックは結果有無/件数/CUDA/上限であり、一般的な精度合格率の証明ではない。
+
+build中0.2秒間隔sampleのRAM peak: controller **40.1MiB**、所有worker process tree合計 **2062.2MiB**。PyTorchのCUDA max_memory_allocatedはworker lifetime peak **931.8MiB**。RAMはGUI/API込みの全アプリ使用量ではなく、sample間の瞬間peakを保証しない。CUDA値はreserved/context/他アプリ/ボード総VRAMを含まない。baseline `NVIDIA GeForce RTX 4070 Ti, 616.64, 12282 MiB, 6127 MiB, 48 %`、GPUの独占を保証しない単発測定であり、時間差・background負荷・小画像/短文に注意。初期lazy model loadを最初のbuild、再開後のlazy loadをresume、cache後のlazy loadを最初のqueryに含む。
+
+gpu-01も索引/増分/検索/中断再開/推論回数/元source不変はPASSだが、CPU workerの値はvenv起動launcherだけで実モデルprocessを含まない。**gpu-01のworker RAM値を総メモリとして使用しない。**修正版gpu-02はToolhelpでlive owned Popen配下だけを列挙し、持続handleでPID再利用と区別して終了を確認。所有外process/OS設定は変更しない。
+
+新toolのCLI guard 5 checks PASS: 範囲外output/既存output/逆順stages/重複stages/上限超を拒否。拒否先を作成せず既存result hash保持。syntax/help/diffも確認。モデル/依存/私物/個人設定/OS変更・新規取得なし。
+
+実GPU1万件、768px等の大きめ表紙/長文metadata、実ライブラリ/1TB、GUI込み総メモリ、idle release/負荷制限は未確認・未実装。CPU synthetic1万件と今回の実GPU2,304件を区別する。Layaは精度未達の既定無効実験APIのみ。
+
+再現（生成素材のみ／既存の専用Pythonとモデルが必要。新しい出力先だけ許可）:
+
+    python tools/test_index_gpu_scaling.py --output data/index-scaling/<fresh-folder>
+
+既定stagesは64 256 1024 2304。`--stages`は32..10000の厳密な昇順。重み・依存を取得せず、私物folder指定を受け付けない。実行ごとに専用catalog/生成素材を作り、result.jsonは途中の完了段階と最終結果を保存する。今回の証拠はgpu-02/result.json、gpu-02.out/err、gpu-tool-contract.json（全てignored）。途中pass=falseを最終失敗と混同せず、最終exit/resultを読む。
+
+次の3手: (1) 生成768px表紙/長めの日本語metadataでメモリ・応答を測り1万件へ段階拡張、(2) 中断/負荷設定・不要時のworker解放と上限超の対象選択を設計/実装、(3) 明示指定された小実サンプルで検索品質を評価。全1TBへ勝手に走査しない。

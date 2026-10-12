@@ -144,3 +144,6 @@ eligible上限2,000→10,000、256件metadata/vector取得と進捗16件保存�
 
 ### 後続のGUI再確認
 生成17件/editor-only+appearance+coverageのappearance-09は105 checks/17 PNG目視PASS。Light/DarkのCUDA検索・model unavailable/cover unsupported復帰・dirty/再起動まで完走。full profile chooserバッチを再実行した意味ではない。Dark cached rebuildのsnapshotは非同期で厳密な開始/終了計測ではない。詳細はui-polish.md最新節。過去FAILを保持。
+
+
+生成素材でdefault EG2文字+表紙2,304件のgpu-02（86 checks PASS）を追加。profile identity/schemaを保持し、増分/中断再開/zero-inference cache/worker tree終了を検証。モデル交換や別checkpointの新テストではない。詳細はindex-scaling.md。
