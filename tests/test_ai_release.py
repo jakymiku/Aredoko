@@ -89,14 +89,16 @@ class ReleaseTests(unittest.TestCase):
     def test_release_reload_and_vectors_unchanged(self):
         self.build()
         self.ai.search("雨")
-        before=self.ai.store.path.read_bytes()
+        with self.ai.store.connect() as db:
+            before=db.execute("SELECT item_id,revision,modality,vector FROM ai_vectors ORDER BY item_id,modality").fetchall()
         self.assertTrue(self.ai.status()["resident"])
         self.assertTrue(self.ai.release()["released"])
         self.assertFalse(self.ai.status()["resident"])
         self.assertEqual(self.ai.status()["device"],"")
         self.assertEqual(self.ai.status()["telemetry"],{})
         self.assertFalse(self.ai.release()["released"])
-        self.assertEqual(before,self.ai.store.path.read_bytes())
+        with self.ai.store.connect() as db:
+            self.assertEqual(before,db.execute("SELECT item_id,revision,modality,vector FROM ai_vectors ORDER BY item_id,modality").fetchall())
         old_documents=self.encoder.documents
         self.ai.search("雨")
         self.assertEqual(self.encoder.loads,2)
@@ -115,17 +117,18 @@ class ReleaseTests(unittest.TestCase):
         self.assertLess(time.monotonic()-start,0.5)
         self.encoder.resume.set()
         thread.join(10);self.assertFalse(thread.is_alive())
-        self.encoder.block=False
+        self.encoder.block=True
         self.encoder.enter.clear();self.encoder.resume.clear()
         # Force a fresh document to test the indexing guard.
         item=self.catalog.search()["items"][0]
         self.catalog.update([item["id"]],{"tags":["changed"]})
         self.ai.start()
-        self.assertTrue(self.encoder.enter.wait(3) is False if False else True)
+        self.assertTrue(self.encoder.enter.wait(3))
         # A live index thread is busy even in the pre-inference scheduling gap.
         start=time.monotonic()
         with self.assertRaises(AIBusy):self.ai.release()
         self.assertLess(time.monotonic()-start,0.5)
+        self.encoder.resume.set()
         self.ai.worker.join(10)
         self.assertEqual(self.ai.status()["state"],"complete")
     def test_close_never_relaunches_worker(self):
