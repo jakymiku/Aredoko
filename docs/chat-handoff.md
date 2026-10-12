@@ -3,7 +3,7 @@
 
 ## 最新：詳細のEsc・フォーカス復帰とnative keyboard（2026-10-13、一部確認）
 
-開始HEAD **e9d88f78ddd6cddbf5ad95d64dd5796565f5cc4b**。同じfeature/Draft PR #5/comparison base。今回の実装・検証・仕様commitは提出後に記録。最終HEAD/CIはGit/PR head・PR説明で確認。
+開始HEAD **e9d88f78ddd6cddbf5ad95d64dd5796565f5cc4b**。同じfeature/Draft PR #5/comparison base。今回の実装・検証・仕様commitは **d81053e36ef3420a1df0f7ab5ea95c37626acdbb**。このSHA記録は文書だけの後続commit。最終HEAD/CIはGit/PR head・PR説明で確認。
 
 - 詳細内の未処理Escを追加、close buttonと同じ既存未保存確認を使う。transition guardで直列化し、閉じた後に一覧へkeyboard focusを戻す。タグ/棚の明示NameとEsc tooltip。モデル/順位/API/source変更なし。
 - Core **35 PASS**、production Python **6 PASS / 2.161秒**、初回Release PASS / 40.27秒・最終 **PASS / 31.42秒 / errors0・既存IL2104 2warnings**。syntax/CLI/diff・手動WinUIレビュー済み。専用analyzer未実行、全Python155/AI/GPUは今回再実行なし。

@@ -42,6 +42,7 @@ python tools/test_keyboard_ui.py --output data/ai-ui/keyboard-native-new
 
 - Core **35 PASS**、production Python **6 PASS / 2.161秒**。初回x64 SelfContained Release **PASS / 40.27秒**、最終 **PASS / 31.42秒 / errors0 / 既存IL2104 2warnings（抑制なし）**。syntax/CLI guards/diff検査・手動WinUIレビュー済み。専用WinUI analyzerは未導入・未実行。全Python155/AI/GPU suitesは過去の別証拠で今回再実行なし。
 - 変更はUIイベント/フォーカス調停とaccessibility metadataのみ。MVVM移行、日本語文字列のresource化、AOT・全体UIは範囲外。既存SaveAsyncはeditorを無効化するため、保存後のfocus outlineがページボタン側に現れた。editor内のfocus保持は次の改善候補。
+
 1. owned focus/peer失効を分析し、`focus` 後の再targetを避けるなど入力経路を見直してDark未到達分を独立確認する。今回の失敗履歴を保持し、入力ガードを弱めない。
 2. 保存後のeditor focus保持、実高DPI/Contrast/Narratorと全面keyboardを別の検証として進める。OS設定は勝手に変更しない。
 3. reader/Komga/フォルダ本、または未観測の固定品質入力を次sliceとして設計。Laya既定無効を維持。
