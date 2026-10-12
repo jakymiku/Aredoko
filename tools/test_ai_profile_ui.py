@@ -177,6 +177,9 @@ def main():
         ui('wait-for','AIProfileApply','-p','IsEnabled','--value','False','-t','3000')
     def build(expect_inference=True):
         ui('wait-for','StartAIIndex','-p','IsEnabled','--value','True','-t','5000')
+        # Focus verifies the scoped window is foreground before real input;
+        # click retains the CLI's wrong-window safety check.
+        ui('focus','StartAIIndex')
         ui('click','StartAIIndex')
         for _ in range(240):
             state=status()
@@ -365,10 +368,13 @@ def main():
                 if args.coverage_checks:
                     recovery_mode('ModeSemantic','AI意味検索')
                     ui('set-value','TxtQuery','傘が必要な暗い都会の景色');time.sleep(.6);ui('invoke','BtnSearch');ready()
+                    # Do not race a direct API query against the GUI's first
+                    # lazy-load search: AISearch intentionally rejects overlap.
+                    ui('wait-for','Message','--value','最大10,000件','--contains','-t','60000')
+                    ui('wait-for','Item'+str(row['id']),'-t','5000')
+                    ui('wait-for','TxtCount','--value','17 件','-t','5000');ready()
                     result=api('/api/library/ai/search',{'query':'傘が必要な暗い都会の景色','source':'text'})
                     check(theme+' real CUDA search and coverage',status()['device']=='cuda' and result['coverage_limit']==10000 and result['total']==17 and result['items'][0]['title']=='雨の夜の街並み.wav')
-                    ui('wait-for','Item'+str(row['id']),'-t','5000')
-                    ui('wait-for','Message','--value','最大10,000件','--contains','-t','5000')
                     screenshot('19-'+theme+'-semantic-coverage')
                     recovery_mode('ModeLiteral','名前・タグ');literal()
                 ui('invoke','Item'+str(row['id']),'--action','select');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','3000')

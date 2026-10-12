@@ -140,3 +140,7 @@ eligible上限2,000→10,000、256件metadata/vector取得と進捗16件保存�
 
 ## 続行: 小画面操作と実GPUの上限表示（2026-10-12）
 通常GUIテストを許可された後、明暗AI dialogとLightのdirty/roots、17件text-only CUDA索引/日本語検索/10,000上限表示を実確認。新batch appearance-06は75 successful checks/13 PNG目視だが全体FAIL。Dark fresh cache時にもdevice=cudaを要求したテスト条件を修正、最後はnative未再実行。全17revisionをread-only diskで確認。全profile切替/独立checkpoint/実GPU大規模は再検証していない。正確な到達・cleanup warning・skill上限・次回コマンドは[ui-polish.md](ui-polish.md)末尾。現在は通常のGUIテスト許可済み、ゲーム前面制約は解除。
+
+
+### 後続のGUI再確認
+生成17件/editor-only+appearance+coverageのappearance-09は105 checks/17 PNG目視PASS。Light/DarkのCUDA検索・model unavailable/cover unsupported復帰・dirty/再起動まで完走。full profile chooserバッチを再実行した意味ではない。Dark cached rebuildのsnapshotは非同期で厳密な開始/終了計測ではない。詳細はui-polish.md最新節。過去FAILを保持。

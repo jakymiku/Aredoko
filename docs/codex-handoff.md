@@ -366,3 +366,24 @@
 - 実装/検証記録HEAD **5ac973b**（5ac973bdb9650ba1a0d0c634c17ae178397779ab）。後続は提出文書のみ。同じfeature/Draft PR #5/baseへ通常push、未マージ。最新HEADは実Gitを確認。
 - 最終Python103/C#15/WinUI Release（旧IL2104 2警告）/syntax/help/diff PASS。GUI明暗AI/上限/固定action、Light3dialogと17件CUDA検索は確認。最新appearance-06は75 recorded successful checks/13 PNG全目視だが全体FAIL、最終cache期待修正はnative未再実行。撮影状態visualと全体結果を区別。旧FAIL/cleanup warningsを消さない。
 - 所有GUI/API/GPUworker/test process終了、sourcehash不変、生成profileのみcleanup。私物/個人設定/モデル/依存/OS変更や取得なし。新規outputで最終cache条件/Dark残件確認から続行、実GPU大規模/高DPI/HC/1TBは後続。
+
+
+### GUI確認と実GPU負荷測定を再開（2026-10-12）
+- 開始HEAD a4690a1/clean、AGENTS/Issue #4/同じDraft PR #5/baseを確認。通常GUIテスト許可を保持、生成素材/専用DB/settingsのみ。
+- appearance-07はLight CUDA/検索/dirty/roots確認後、Darkの実clickでforeground安全チェックにより停止。全体FAILを保存、元source hash一致。
+- build直前に所有HWNDへscoped focus（前面/keyboard focusを検証）を追加。wrong-window click拒否を維持し、同じlocal targetで新規appearance-08へ再確認する（fix/rerun 1回目）。
+- 後続は既存EG2/生成素材だけで段階的な実GPU測定。新規取得/依存/OS/個人設定/私物走査なし。結果は後続へ記録。
+- appearance-08はDark cached rebuild/device空と実CUDA queryまで確認後、GUI結果がbusyエラーでItemなしとなりFAIL。harnessの直接API queryがGUI初回lazy推論と重なる順序を修正し、GUI成功Message/件数/項目を先に待つ。製品の競合拒否は保持。新規09へfix/rerun 2回目、これ以上のnative再実行は今回行わない。
+
+### 修正後GUI確認の結果
+開始HEAD **a4690a1**。同じfeature/Draft PR #5/baseを保持。通常GUIテスト許可は継続、専用DB/settings/生成17素材と既存EG2のみ。
+
+**appearance-09は操作 105 recorded checks PASS / 全17 PNG目視PASS。** Light/Dark双方の実CUDA日本語検索と上限表示、cover非対応の実エラー/文字検索復帰、dirty keep、roots、missing model案内、favorite/native再起動を完走。6正常終了/cleanup warningなし、source hashes全一致。full profile chooserバッチの再実行ではなくeditor/appearance/coverage sliceであり、別checkpoint・HC・高DPI・実ライブラリの証明ではない。
+
+07はDark clickのforeground安全拒否でFAIL（13 PNG全目視、4正常終了+1fallback warning）。所有HWNDへのscoped focusを追加。08は直接API queryをGUI初回lazy queryと競合させてFAIL（14 PNG全目視、5正常終了/warningなし）。GUIの成功Message/項目/件数を待ってから直接API queryするよう修正。07→08→09の2回fix/rerunで終了、過去FAILを変更しない。新規XAML/C#/依存/モデル/個人設定/OS変更なし。
+
+Darkのindex_states/coverage_gpu_statesは別時点で、短時間のcached rebuild開始とcompleteが非同期に入れ替わる（09は後者processed=0）。このsnapshotをcached jobの厳密な開始/終了時刻や推論ゼロの証明に使わない。GUI結果の表示と実CUDA queryは完了確認済み。厳密なcache再利用と処理数は後続専用GPU測定で確認する。
+
+Python103 tests PASS（81.92秒）、C#15 checks PASS、WinUI x64 SelfContained Release PASS（37.04秒/既存IL2104 2警告）。WinUI code reviewはnative Items/60 paging、async/stale/dirty、テーマ/AutomationId、DOM JSON、認証/所有worker/profile identity保持を確認。analyzer未導入。
+
+- 実GPU段階測定を開始。GPU-01のCPU worker値はvenv起動launcherだけで実モデルprocessを含まないため、全体メモリ値として使用禁止。所有子process treeのsampleとprocess-instance handle終了確認を追加し、修正後は新しいoutputで確認する。結果は後続。
