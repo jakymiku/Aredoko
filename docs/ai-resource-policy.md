@@ -4,7 +4,7 @@
 
 - 手動解放: WinUI「AI索引」→「AIをメモリから解放」、またはtoken/Origin認証済み`POST /api/library/ai/release`、本文`{}`。索引や検索が進行中は即時409 Busy（強制中断しない）。返値`released`は所有workerの停止有無。解放後はstatusの`resident=false`、`worker_state=unloaded`、`device=""`、`telemetry={}`となり、次の検索で同一profileを自動再ロードする。モデル重み・catalog・vectors・index identityを削除しない。
 - 選択式自動解放: **初期値0（無効）**。候補は無効/60/300/900秒（APIの整数許容範囲0..3600秒）。`time.monotonic()`で推論/索引完了後のアイドル時間を測り、共有inference lockを通す。処理中のworkerには触れず、アプリ終了時にtimerの停止と終了フラグを保証。処理中の再起動や高頻度timerを導入しない。
-- 索引の待機: **初期値0（無効）**。候補は0/50/200/500/1000ms（APIは0..2000ms）。1作品の処理後、次の作品まで`cancel.wait(ms/1000)`で中断可能な待機を入れる。interactive検索には入れない。これはGPU使用率やゲームFPSの上限を保証しない。
+- 索引の待機: **初期値0（無効）**。候補は0/50/200/500/1000ms（APIは0..2000ms）。新規AI推論を行った作品の処理後、次の作品まで`cancel.wait(ms/1000)`で中断可能な待機を入れる。interactive検索には入れない。これはGPU使用率やゲームFPSの上限を保証しない。
 - 設定保存: `%LOCALAPPDATA%/Aredoko/settings.json`に`resource: {"idle_release_seconds":0,"index_pause_ms":0}`を追加。既存の`{"version":1,"profile":"default"}`のような**旧profile-only形式は引き続き読み書きできる**。GUIの変更は保存直後に反映され、profile/embedding index identityは変更しない。テストは一時settingsと生成ソースのみを使用。
 - API: token認証済み`GET /api/library/ai/resource`、token+Origin認証済み`POST /api/library/ai/resource`で両設定を整数・境界チェックして保存。API外部公開をしない。`GET /api/library/ai/status`にも`resident`と`resource_policy`を追加。
 - **検証済みの範囲**: `python -m unittest discover -s tests -p test_ai_release.py -v`によるCPU専用偽encoder/workerテストがGitHub ActionsでPASS。解放→検索/worker再生成、busy中は即拒否、closeとの競合、VectorStoreを読み直した一致、token/Origin拒否、idle timer・索引待機キャンセル・終了、legacy設定互換を検査。PythonフルスイートとWinUI x64 ReleaseビルドはActionsで別途確認する。
