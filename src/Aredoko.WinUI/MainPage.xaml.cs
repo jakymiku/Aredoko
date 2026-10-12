@@ -358,7 +358,7 @@ public sealed partial class MainPage : Page
             AutomationProperties.SetAutomationId(releaseResult,"AIReleaseResult");
             var idleChoice=new ComboBox {Header="自動解放（検索・索引の終了後）",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(idleChoice,"AIIdleRelease");
-            var pauseChoice=new ComboBox {Header="索引中の待機（各作品間）",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var pauseChoice=new ComboBox {Header="索引中の待機（新規AI推論後）",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(pauseChoice,"AIIndexPause");
             var saveResource=new Button {Content="リソース設定を保存"};
             AutomationProperties.SetAutomationId(saveResource,"AISaveResource");
