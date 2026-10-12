@@ -1,4 +1,4 @@
-> **最新の状況（2026-10-12）**：WinUI 3開発プレビューで登録フォルダ閲覧・タグ/棚/お気に入り・限定プレビュー・リスト/グリッド・交換可能なオフラインAI検索/解放を実装。今回AI対象root/種類/棚をGUIで明示選択し、CPU件数を確認、atomic設定保存、同じscopeで索引/検索、再起動復元まで接続。Python142/C#19、scope native133checks/31PNG全目視と実CUDAがPASS。空/削除rootで全件へ広がらず文字検索は独立。CI自動起動は抑制を維持、Draft PR #5未マージ。検索順位品質、1TB実素材/reader/Komga/AOT/配布の完了ではない。最新の証拠と次の3手は [Codex引継ぎ](codex-handoff.md)。以下は過去の履歴として保持。
+> **最新の状況（2026-10-12）**：WinUIの閲覧/整理・グリッド・交換可能なAI検索・対象GUI/設定保存を実装済み。今回は架空26素材/日本語20文の固定評価ツールを追加し、実CUDAで130条件を測定。semantic12問の種類指定text/combinedはprimary Top1 12/12、種類なしcombined10/12、視覚4問の画像指定cover4/4・combined2/4。全Python147 tests PASS。製品順位やGUIは変更せず、品質gate未定義。1TB/私物/実本文・音声内容/reader/Komga/AOT/配布完了とは区別する。CI manual-only・Draft PR #5未マージ。最新の詳細は [検索品質ベースライン](search-quality-baseline.md) / [Codex引継ぎ](codex-handoff.md)。以下は過去の履歴。
 
 ---
 
