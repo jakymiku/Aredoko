@@ -255,7 +255,28 @@ public sealed partial class MainPage : Page
     }
     private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=tiles?"リスト表示":"グリッド表示";RenderRows();RestoreSelection();}
     private void OpenDetails_Click(object sender,RoutedEventArgs e){if(active is not null)Details.IsPaneOpen=true;}
-    private async void CloseDetails_Click(object sender,RoutedEventArgs e){if(await ConfirmDiscardAsync()){active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;Editor.IsEnabled=false;Details.IsPaneOpen=false;RestoreSelection();}}
+    private async void CloseDetails_Click(object sender,RoutedEventArgs e)=>await CloseDetailsAsync();
+    private async void Detail_KeyDown(object sender,KeyRoutedEventArgs e)
+    {
+        // Only unhandled Escape inside the editor. Popups and ContentDialogs
+        // keep their own Escape behavior; background controls are unaffected.
+        if(e.Handled || e.Key!=Windows.System.VirtualKey.Escape || dialogOpen || !Details.IsPaneOpen)return;
+        e.Handled=true;
+        await CloseDetailsAsync();
+    }
+    private async Task CloseDetailsAsync()
+    {
+        if(!ready || saving || dialogOpen || !Details.IsPaneOpen || !await transitions.WaitAsync(0))return;
+        try
+        {
+            if(!await ConfirmDiscardAsync())return;
+            active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;
+            detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
+            Editor.IsEnabled=false;RestoreSelection();
+            Items.Focus(FocusState.Keyboard);
+        }
+        finally{transitions.Release();}
+    }
     private void Page_SizeChanged(object sender,SizeChangedEventArgs e)
     {
         if(Details is null || ViewTools is null)return;

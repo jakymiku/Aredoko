@@ -38,12 +38,12 @@
    </Grid>
    <SplitView x:Name="Details" Grid.Row="3" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="320" PaneBackground="{ThemeResource CardBackgroundFillColorDefaultBrush}">
     <SplitView.Pane>
-     <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource OverlayCornerRadius}">
+     <Border KeyDown="Detail_KeyDown" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource OverlayCornerRadius}">
      <Grid RowSpacing="16" Padding="16">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
        <TextBlock Text="詳細と整理" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
-       <Button Grid.Column="1" Click="CloseDetails_Click" AutomationProperties.Name="詳細を閉じる" AutomationProperties.AutomationId="BtnCloseDetails"><SymbolIcon Symbol="Cancel"/></Button>
+       <Button Grid.Column="1" Click="CloseDetails_Click" ToolTipService.ToolTip="詳細を閉じる（Esc）" AutomationProperties.Name="詳細を閉じる" AutomationProperties.AutomationId="BtnCloseDetails"><SymbolIcon Symbol="Cancel"/></Button>
       </Grid>
       <ScrollViewer Grid.Row="1"><StackPanel Spacing="12">
       <TextBlock x:Name="ItemTitle" Text="作品を選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap"/>
@@ -51,8 +51,8 @@
       <Image x:Name="DetailPreview" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
       <TextBlock Text="読書機能は準備中" Style="{StaticResource CaptionTextBlockStyle}"/>
       <ContentControl x:Name="Editor" IsEnabled="False" HorizontalContentAlignment="Stretch"><StackPanel Spacing="12">
-       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextChanged="Editor_Changed" AutomationProperties.AutomationId="TxtTags"/>
-       <TextBox x:Name="Shelf" Header="棚" MaxLength="80" TextChanged="Editor_Changed" AutomationProperties.AutomationId="TxtShelf"/>
+       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
+       <TextBox x:Name="Shelf" Header="棚" MaxLength="80" TextChanged="Editor_Changed" AutomationProperties.Name="棚" AutomationProperties.AutomationId="TxtShelf"/>
        <CheckBox x:Name="Favorite" Content="お気に入り" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkFavorite"/>
        <CheckBox x:Name="Reviewed" Content="確認済み" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkReviewed"/>
        <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>

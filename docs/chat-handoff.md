@@ -1,6 +1,25 @@
 # Aredoko — GPTチャットへの最新引継ぎ
 
 
+## 最新：詳細のEsc・フォーカス復帰とnative keyboard（2026-10-13、一部確認）
+
+開始HEAD **e9d88f78ddd6cddbf5ad95d64dd5796565f5cc4b**。同じfeature/Draft PR #5/comparison base。今回の実装・検証・仕様commitは提出後に記録。最終HEAD/CIはGit/PR head・PR説明で確認。
+
+- 詳細内の未処理Escを追加、close buttonと同じ既存未保存確認を使う。transition guardで直列化し、閉じた後に一覧へkeyboard focusを戻す。タグ/棚の明示NameとEsc tooltip。モデル/順位/API/source変更なし。
+- Core **35 PASS**、production Python **6 PASS / 2.161秒**、初回Release PASS / 40.27秒・最終 **PASS / 31.42秒 / errors0・既存IL2104 2warnings**。syntax/CLI/diff・手動WinUIレビュー済み。専用analyzer未実行、全Python155/AI/GPUは今回再実行なし。
+- native03は**全体FAIL / 50 recorded checks / 実入力26 / skip0 / 4PNG全目視 / 正常close2 / cleanup警告0**。生成65PNG/1root・隔離DB/settings、Light/Dark DPI96/Contrast off。Lightで検索/Tab/ページ/list/grid選択/Ctrl+Sタグfavorite保存/Escフォーカス復帰/未保存cancel・discardを実キーで確認。Darkは検索/次ページまでで `send-keys --target BtnPrevious` のUIA peer失効により停止。Dark editor/保存/Esc等は未確認。
+- native01 **FAIL17checks/実入力7/skip0/1PNG全目視/正常close1**：ListView本体から子へのfocusにCLIが対応できず停止。native02 **FAIL14checks/実入力4/skip4/1PNG全目視/正常close1**：Homeが未選択行を選択しないためeditor待機停止。03でSpaceへ修正した。2 fix cyclesで停止、後続native再試行なし。Windows activation拒否のguardは維持。
+- 3runのsource bytes/mtime/hash不変、owned app正常終了。03のend-of-batch counter/settings-byte/全体PASSは未到達。全成功と報告しない。高DPI/HighContrast/読み上げ/全面keyboard未確認。保存後focus保持は改善候補。詳細：[keyboard-accessibility.md](keyboard-accessibility.md)。CPU stubのみ、私物/モデルDL/依存/OS変更/GPU/Layaなし。CI manual-only・Draft未マージ。
+
+### 次の3手
+
+1. peer失効を分析し、owned focus後の再target等の入力経路を見直してDark未到達分を独立確認。既存ガードと失敗履歴を維持。
+2. 保存後focus保持、実高DPI/Contrast/Narratorと全面keyboardを別検証。OS設定を勝手に変えない。
+3. reader/Komga/フォルダ本か未観測の固定品質入力を次sliceへ。Laya既定無効維持。
+
+---
+
+
 ## 最新：検索方法の実CUDA・文章専用profile（2026-10-13）
 
 開始HEAD **20bdc2c1bad33d8b0feadb9b132a9183e44194d2**。同じfeature/Draft PR #5/comparison baseを維持。実装・検証・仕様commitは **433e2566bde3678df5956ee30597803d96f7ea31**。このSHA記録は文書だけの後続commit。通常push後の最終HEAD/CI観測はGit/PR head・PR説明で確認。
