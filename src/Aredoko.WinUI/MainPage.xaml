@@ -31,7 +31,7 @@
     </StackPanel>
     <StackPanel x:Name="ViewTools" Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
     <Button Content="AI索引" Click="AI_Click" AutomationProperties.AutomationId="BtnAIIndex"/>
-    <Button x:Name="LayoutButton" Content="タイル表示" Click="Layout_Click" AutomationProperties.AutomationId="BtnLayout"/>
+    <Button x:Name="LayoutButton" Content="グリッド表示" Click="Layout_Click" AutomationProperties.AutomationId="BtnLayout"/>
     <Button x:Name="DetailsButton" Content="詳細" IsEnabled="False" Click="OpenDetails_Click" AutomationProperties.AutomationId="BtnDetails"/>
     </StackPanel>
    </Grid>

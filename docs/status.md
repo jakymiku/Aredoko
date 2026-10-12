@@ -1,4 +1,4 @@
-> **最新の状況（2026-10-11）**：GUI比較を終え、**WinUI 3を製品版の採用方針として決定**。Codex向け開発開始ブランチ `feat/winui3-production-mvp-20261011` を作成済み。**製品版WinUIの実装はこれから**。作業済み/未完了/次の工程は [Codex引継ぎ](codex-handoff.md)、具体的な実装要件は [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) を参照。以下は**2026-10-10時点の履歴**で、現状を上書きするものではない。
+> **最新の状況（2026-10-12）**：WinUI 3開発プレビューで登録フォルダの閲覧・タグ/棚/お気に入り保存・限定プレビュー・リスト/グリッド表示・交換可能なオフラインAI検索/解放を実装。今回グリッド実機確認、AI対象root/種類/棚のCPU/APIと実CUDAを検証。scopeのGUI選択・設定保存は次段階。Python137/C#15/native182checks（29PNG目視）/scope GPU15がPASS、CI自動起動は一時抑制。Draft PR #5は未マージ。完全な製品版/1TB実素材/reader/Komga/AOT/配布の完了ではない。最新の契約・結果・次の3手は [Codex引継ぎ](codex-handoff.md)。以下は過去の履歴として保持。
 
 ---
 

@@ -29,3 +29,13 @@
 - POST /api/library/ai/release: 本文 `{}`。所有idle workerだけ停止し、検索/索引処理中は即時409。次のAI検索は同一profileでlazy reload。vectors/sourceは変更しない。
 - GET /api/library/ai/resource: 保存済みpolicy。POSTは `{"idle_release_seconds":0,"index_pause_ms":0}`。整数0..3600秒 / 0..2000ms、両項目必須。初期は無効、保存成功後すぐ適用。設定JSON破損/保存失敗は409、動作中の設定を維持。型/範囲不正は400。
 - statusにはresident/worker_state/device/telemetry/resource_policy。解放後はresident=false、device空、telemetry空。profile/vector identityは維持。token/Origin規約は他のlibrary APIと共通。
+
+## AI対象scope（CPU/API slice、2026-10-12）
+
+index/searchは任意 `scope:{root_ids:[1,2],kind:"image",shelf:"素材"}` を受け付ける。登録rootだけ、配列最大256・正整数・重複不可、nullは全登録root、空配列はゼロ件。kindは既存TYPESまたは空文字、shelfは完全一致80文字まで、nullは指定なし・空文字は未整理。未知キー/不正型/削除済みID/明示scope:nullは400。scope省略は既存の互換経路。
+
+- POST `/api/library/ai/coverage`: `{}` または `{"scope":{...},"limit":10000}`。未知本文キーは400、limitは1..10000の整数、scan中は409。モデル推論やworker起動をしない。戻り値は `scope,candidate_total,target_total,fresh_total,remaining_total,coverage_limit:10000,index_limit,refresh_required_on_change:true`。candidateは上限前、targetはlimit後、freshは同一profile/revisionのtextレコード、remainingはtarget-fresh。表紙の成功/品質/破損検査とは別。
+- POST index: scopeで絞ってpresent/除外後のID順を選ぶ。job scopeをコピーしてai_stateに保持、restart後もstatus.scopeで取得。範囲を切り替えてもvector store/model identityは変えず、他範囲を削除しない。
+- POST search: 明示scope内の共通先頭10000件に追加kind/viewを適用し、対象枠を検索側だけ選び直さない。省略scopeは旧manual filter適用後の先頭10000互換経路。custom index limitはjob量だけで、search対象枠は10000のまま。
+
+件数と検索枠はcatalog変更後に更新が必要。jobは開始時ID/範囲を固定してpublish前に再検査。Host/token/Origin規約を維持。GUIのscope選択欄とユーザーscope preferenceの保存は未実装。詳細は [対象選択の契約](ai-coverage-selection.md)。

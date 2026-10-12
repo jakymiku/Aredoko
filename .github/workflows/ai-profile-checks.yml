@@ -1,16 +1,8 @@
 name: AI profile GUI and restart checks
+# Hosted CI is opt-in while the account allowance is blocked.
+# Local checks remain required; do not enable paid usage automatically.
 on:
-  push:
-    branches: [feat/winui3-production-mvp-20261011]
-  pull_request:
-    paths:
-      - 'app/ai_settings.py'
-      - 'app/production_server.py'
-      - 'tests/test_ai_settings.py'
-      - 'src/Aredoko.WinUI/**'
-      - 'src/Aredoko.Core/**'
-      - 'tools/start-winui.ps1'
-      - '.github/workflows/ai-profile-checks.yml'
+  workflow_dispatch:
 jobs:
   ai-profile:
     runs-on: windows-latest

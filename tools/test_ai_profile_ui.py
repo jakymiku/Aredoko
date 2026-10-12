@@ -350,7 +350,28 @@ def main():
         ui('invoke','BtnSearch');ready()
         if args.layout_checks:
             visible_controls('10-wide',{'TxtQuery','CmbKind','CmbSearchMode','BtnAIIndex','BtnLayout','BtnSearch','TxtCount'})
-            screenshot('10-wide-library');ui('invoke','BtnLayout');ready();screenshot('11-wide-tiles');ui('invoke','BtnLayout')
+            screenshot('10-wide-library');ui('invoke','BtnLayout');ready()
+            ui('wait-for','BtnLayout','--value','リスト表示','-t','3000')
+            grid_rows=api('/api/items')['items']
+            first_ids={f"Item{row['id']}" for row in grid_rows[:2]}
+            tree=json.loads(ui('inspect','--json','--depth','12'));stack=[tree];bounds={}
+            while stack:
+                node=stack.pop()
+                if isinstance(node,dict):
+                    if node.get('automationId') in first_ids:bounds[node['automationId']]=node
+                    stack.extend(node.values())
+                elif isinstance(node,list):stack.extend(node)
+            first,second=[bounds[f"Item{row['id']}"] for row in grid_rows[:2]]
+            check('Grid has two visible columns',first['height']>0 and second['height']>0
+                  and abs(first['y']-second['y'])<=1 and second['x']>first['x'])
+            ui('wait-for','PreviewStatus'+str(grid_rows[0]['id']),'--value','先頭画像','-t','10000')
+            screenshot('11-wide-grid')
+            ui('invoke','Item'+str(grid_rows[0]['id']),'--action','select');ready()
+            ui('wait-for','BtnDetails','-p','IsEnabled','--value','True','-t','5000')
+            screenshot('11-wide-grid-selection');ui('invoke','BtnCloseDetails')
+            resize(700,620);visible_controls('11-narrow-grid',{'BtnLayout','BtnSearch','TxtCount'})
+            screenshot('11-narrow-grid');ui('invoke','BtnLayout')
+            ui('wait-for','BtnLayout','--value','グリッド表示','-t','3000')
             resize(700,620);visible_controls('12-narrow',{'TxtQuery','CmbKind','CmbSearchMode','BtnAIIndex','BtnLayout','BtnSearch','TxtCount'});screenshot('12-narrow-library')
             resize(1200,820)
         if not args.editor_only:

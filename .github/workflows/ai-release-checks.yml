@@ -1,15 +1,8 @@
 name: AI owned-worker release CPU checks
+# Hosted CI is opt-in while the account allowance is blocked.
+# Local checks remain required; do not enable paid usage automatically.
 on:
-  push:
-    branches: [feat/winui3-production-mvp-20261011]
-  pull_request:
-    paths:
-      - app/ai_process.py
-      - app/ai_search.py
-      - app/production_server.py
-      - app/ai_settings.py
-      - tests/test_ai_release.py
-      - .github/workflows/ai-release-checks.yml
+  workflow_dispatch:
 jobs:
   cpu-lifecycle:
     runs-on: windows-latest

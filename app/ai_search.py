@@ -13,6 +13,7 @@ from ai_profiles import DEFAULT_PROFILE
 from ai_vectors import normalized
 from ai_ranking import POLICIES,fuse_modalities
 from library_index import TYPES, _excluded
+from ai_scope import validate_scope, scope_clause
 from previews import PreviewReader, PreviewUnavailable
 
 MAX_ITEMS=10_000
@@ -53,6 +54,15 @@ class VectorStore:
         return json.loads(row[0]) if row else {'state':'idle','processed':0,'total':0,'indexed':0,'skipped':0,'error':''}
     def save_state(self,state):
         with self.connect() as db: db.execute('INSERT OR REPLACE INTO ai_state VALUES(1,?)',(json.dumps(state,ensure_ascii=False),))
+    def fresh_ids(self,rows):
+        if not rows:return set()
+        if len(rows)>ROW_BATCH_SIZE:raise ValueError('Freshness batch exceeds limit')
+        eligible={row['id']:revision(row) for row in rows}
+        with self.connect() as db:
+            records=db.execute("SELECT item_id,revision FROM ai_vectors WHERE modality='text' AND item_id IN ("+
+                ','.join('?' for _ in eligible)+')',list(eligible)).fetchall()
+        return {item_id for item_id,rev in records if eligible.get(item_id)==rev}
+
     def fresh(self,item_id,rev):
         with self.connect() as db:
             return db.execute("SELECT 1 FROM ai_vectors WHERE item_id=? AND revision=? AND modality='text'",(item_id,rev)).fetchone() is not None
@@ -140,20 +150,32 @@ class AISearch:
                 # The next tick checks again. Never interrupt a live query/job.
                 continue
 
-    def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS):
+    def _scope(self,value):
+        if value is None:return None  # Existing unscoped API behavior.
+        scope=validate_scope(value)
+        roots=scope['root_ids']
+        if roots:
+            with self.catalog.connect() as db:
+                count=db.execute('SELECT count(*) FROM library_roots WHERE id IN ('+
+                    ','.join('?' for _ in roots)+')',roots).fetchone()[0]
+            if count!=len(roots):raise ValueError('Unknown registered root')
+        return scope
+
+    def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS,scope=None,*,all_candidates=False):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS:
             raise ValueError('Invalid candidate limit')
-        where=["l.status='present'"]
-        values=[]
+        scope=self._scope(scope)
+        scoped_where,values=scope_clause(scope)
+        where=["l.status='present'",*scoped_where]
         if kind: where.append('i.kind=?');values.append(kind)
         where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],'shelf':["i.shelf<>''"],'all':[]}[view])
         # New records cannot lengthen a running enumeration indefinitely.
         with self.catalog.connect() as db:
             upper=db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
         last=0;yielded=0
-        while last<upper and yielded<limit:
+        while last<upper and (all_candidates or yielded<limit):
             with self.catalog.connect() as db:
                 rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+self.catalog.JOIN+
                     'JOIN library_roots r ON r.id=l.root_id WHERE '+' AND '.join(where)+
@@ -165,19 +187,41 @@ class AISearch:
             for row in rows:
                 if _excluded(row['relative_path'],tuple(json.loads(row['excludes_json']))):continue
                 yield self.catalog.item(row);yielded+=1
-                if yielded>=limit:break
+                if not all_candidates and yielded>=limit:break
     def _rows(self,kind='',view='all',limit=MAX_ITEMS):
         # Search metadata/scores are bounded by MAX_ITEMS; build keeps only IDs.
         return list(self._iter_rows(kind,view,limit))
-    def _current_rows(self,ids):
+    def _current_rows(self,ids,scope=None):
         if not ids:return {}
         if len(ids)>ROW_BATCH_SIZE:raise ValueError('Metadata batch exceeds limit')
+        scoped_where,values=scope_clause(scope)
+        clause=" AND "+" AND ".join(scoped_where) if scoped_where else ''
         with self.catalog.connect() as db:
             rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+self.catalog.JOIN+
                 'JOIN library_roots r ON r.id=l.root_id WHERE i.id IN ('+
-                ','.join('?' for _ in ids)+") AND l.status='present'",ids).fetchall()
+                ','.join('?' for _ in ids)+") AND l.status='present'"+clause,ids+values).fetchall()
         return {row['id']:self.catalog.item(row) for row in rows
                 if not _excluded(row['relative_path'],tuple(json.loads(row['excludes_json'])))}
+    def coverage(self,scope=None,limit=MAX_ITEMS):
+        """CPU-only, refreshable counts. Retains at most one 256-row batch."""
+        if type(limit) is not int or not 1<=limit<=MAX_ITEMS:raise ValueError('Invalid index limit')
+        scope=self._scope(scope)
+        with self.guard:
+            if self._closed:raise AIUnavailable('AI is closing')
+        if self.catalog.scan_state()['state'] in ('running','cancelling'):
+            raise AIBusy('フォルダのスキャン完了後に確認してください。')
+        total=targeted=fresh=0;batch=[]
+        for row in self._iter_rows(limit=limit,scope=scope,all_candidates=True):
+            total+=1
+            if targeted<limit:
+                targeted+=1;batch.append(row)
+                if len(batch)==ROW_BATCH_SIZE:
+                    fresh+=len(self.store.fresh_ids(batch));batch.clear()
+        fresh+=len(self.store.fresh_ids(batch))
+        return {'scope':scope,'candidate_total':total,'target_total':targeted,
+                'fresh_total':fresh,'remaining_total':targeted-fresh,
+                'coverage_limit':MAX_ITEMS,'index_limit':limit,'refresh_required_on_change':True}
+
     def status(self):
         with self.guard: state=self.store.state()
         resident=bool(getattr(self.encoder,'resident',False))
@@ -188,27 +232,28 @@ class AISearch:
                 'modalities':list(self.profile.modalities),'dimension':self.profile.dimension,'ranking':self.ranking,
                 'telemetry':getattr(self.encoder,'telemetry',{}) if resident else {},
                 'resource_policy':self.resource_policy()}
-    def start(self,limit=MAX_ITEMS):
+    def start(self,limit=MAX_ITEMS,scope=None):
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS: raise ValueError('Invalid index limit')
+        scope=self._scope(scope)
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。setup-ai.ps1を実行してください。')
         with self.guard:
             if self._closed: raise AIUnavailable('AI is closing')
             if self.worker and self.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
             if self.catalog.scan_state()['state'] in ('running','cancelling'): raise AIBusy('フォルダのスキャン完了後に実行してください。')
-            ids=[row['id'] for row in self._iter_rows(limit=limit)]
+            ids=[row['id'] for row in self._iter_rows(limit=limit,scope=scope)]
             self.cancel.clear()
-            self.store.save_state({'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':''})
-            self.worker=threading.Thread(target=self._build,args=(ids,),daemon=True)
+            self.store.save_state({'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':'','scope':scope})
+            self.worker=threading.Thread(target=self._build,args=(ids,scope),daemon=True)
             self.worker.start()
         return self.status()
-    def _build(self,ids):
-        state={'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':''}
+    def _build(self,ids,scope=None):
+        state={'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':'','scope':scope}
         try:
             with self.inference:
                 for offset in range(0,len(ids),ROW_BATCH_SIZE):
                     if self.cancel.is_set():break
                     batch=ids[offset:offset+ROW_BATCH_SIZE]
-                    rows=self._current_rows(batch)
+                    rows=self._current_rows(batch,scope)
                     for item_id in batch:
                         if self.cancel.is_set():break
                         did_infer=False
@@ -228,7 +273,7 @@ class AISearch:
                                         if cover is not None:vectors['cover']=cover
                                     except (PreviewUnavailable,OSError):pass
                                 # Recheck presence, exclusions and revision before publishing.
-                                current=self._current_rows([item_id]).get(item_id)
+                                current=self._current_rows([item_id],scope).get(item_id)
                                 if current is None or revision(current)!=rev:
                                     state['skipped']+=1
                                 else:
@@ -258,9 +303,12 @@ class AISearch:
             state=self.store.state()
             if state['state']=='running': self.store.save_state({**state,'state':'cancelling'})
         return {'cancel_requested':True}
-    def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None):
+    def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None,scope=None):
         if not isinstance(query,str) or not 0<len(query.strip())<=300 or type(page) is not int or page<0 or not 1<=limit<=120:
             raise ValueError('Invalid semantic search')
+        scope=self._scope(scope)
+        if not isinstance(kind,str) or kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
+            raise ValueError('Invalid filter')
         ranking=self.ranking if ranking is None else ranking
         if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
         if source not in ('all','text','cover'): raise ValueError('Invalid semantic source')
@@ -270,13 +318,20 @@ class AISearch:
         if not self.inference.acquire(blocking=False): raise AIBusy('AI索引を作成中です。完了後に検索してください。')
         try:
             if self._closed: raise AIUnavailable('AI is closing')
-            rows=self._rows(kind,view)
+            if scope is None:
+                rows=self._rows(kind,view)
+            else:
+                # Apply search filters AFTER the shared scoped target cap.
+                rows=[row for row in self._iter_rows(limit=MAX_ITEMS,scope=scope)
+                      if (not kind or row['kind']==kind) and
+                      (view=='all' or view=='favorites' and row['favorite'] or
+                       view=='unreviewed' and not row['reviewed'] or view=='shelf' and row['shelf'])]
             policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
-            ranked=self.store.rank(rows,self.encoder.encode('query',query),source,policy)
+            ranked=self.store.rank(rows,self.encoder.encode('query',query),source,policy) if rows else []
             by_id={row['id']:row for row in rows}
             items=[{**by_id[item_id],'semantic_score':round(score,6)} for item_id,score in ranked[page*limit:(page+1)*limit]]
             return {'total':len(ranked),'page':page,'limit':limit,'items':items,'mode':'semantic','coverage_limit':MAX_ITEMS,'source':source,'ranking':policy,
-                    'score_kind':'reciprocal-rank' if policy=='mean-rrf' else 'cosine'}
+                    'score_kind':'reciprocal-rank' if policy=='mean-rrf' else 'cosine','scope':scope}
         finally:
             self._last_activity=time.monotonic()
             self.inference.release()

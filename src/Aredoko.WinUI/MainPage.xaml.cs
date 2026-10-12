@@ -220,7 +220,7 @@ public sealed partial class MainPage : Page
         }
         finally { transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();} }
     }
-    private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=tiles?"リスト表示":"タイル表示";RenderRows();RestoreSelection();}
+    private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=tiles?"リスト表示":"グリッド表示";RenderRows();RestoreSelection();}
     private void OpenDetails_Click(object sender,RoutedEventArgs e){if(active is not null)Details.IsPaneOpen=true;}
     private async void CloseDetails_Click(object sender,RoutedEventArgs e){if(await ConfirmDiscardAsync()){active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;Editor.IsEnabled=false;Details.IsPaneOpen=false;RestoreSelection();}}
     private void Page_SizeChanged(object sender,SizeChangedEventArgs e)

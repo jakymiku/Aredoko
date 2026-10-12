@@ -1,5 +1,8 @@
 name: Prototype checks
-on: [push, pull_request]
+# Hosted CI is opt-in while the account allowance is blocked.
+# Local checks remain required; do not enable paid usage automatically.
+on:
+  workflow_dispatch:
 jobs:
   tests:
     runs-on: windows-latest

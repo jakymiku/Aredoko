@@ -26,6 +26,9 @@ class ResourceViewportTests(unittest.TestCase):
             {'y': 181, 'height': 27}, {'y': 405},
             {**self.item, 'y': 392, 'height': 1}))
 
+    def test_observed_full_19px_feedback_line(self):
+        self.assertTrue(self.visible(height=19))
+
     def test_complete_line_inside_settings(self):
         self.assertTrue(self.visible())
 

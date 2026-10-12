@@ -15,6 +15,7 @@ from ai_search import AISearch, AIBusy, MAX_ITEMS
 from ai_profiles import load_profile
 from ai_settings import AIProfileSettings,validate_resource,RESOURCE_DEFAULT
 from ai_ranking import POLICIES
+from ai_scope import validate_scope
 from search_intent import SearchIntent
 from intent_questions import QUESTION_SETS
 from laya_process import LayaProcess
@@ -27,8 +28,9 @@ class DisabledAI:
     def status(self):
         return {'available':False,'state':'failed','processed':0,'total':0,'indexed':0,
                 'skipped':0,'error':self.error}
-    def start(self,*args): raise AIUnavailable(self.status()['error'])
+    def start(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def search(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
+    def coverage(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def cancel_build(self): return {'cancel_requested':False}
     def release(self): raise AIUnavailable(self.status()['error'])
     def close(self): pass
@@ -115,7 +117,14 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     if set(body) != {'id'} or type(body['id']) is not str:
                         raise ValueError('Only a profile identifier is accepted')
                     return self.send(200,profiles.choose(body['id']))
-                if self.path=='/api/library/ai/index': return self.send(200,ai.start(body.get('limit',MAX_ITEMS)))
+                if self.path=='/api/library/ai/coverage':
+                    if set(body)-{'scope','limit'}:raise ValueError('Invalid coverage request')
+                    scope=validate_scope(body['scope']) if 'scope' in body else None
+                    return self.send(200,ai.coverage(scope=scope,limit=body.get('limit',MAX_ITEMS)))
+                if self.path=='/api/library/ai/index':
+                    if 'scope' in body:
+                        return self.send(200,ai.start(body.get('limit',MAX_ITEMS),scope=validate_scope(body['scope'])))
+                    return self.send(200,ai.start(body.get('limit',MAX_ITEMS)))
                 if self.path=='/api/library/ai/cancel': return self.send(200,ai.cancel_build())
                 if self.path=='/api/library/ai/release':
                     if body: raise ValueError('Release takes no arguments')
@@ -133,7 +142,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                         if isinstance(ai,AISearch): ai.configure(**policy)
                     return self.send(200,{'saved':True,'policy':policy})
                 if self.path=='/api/library/ai/search':
-                    return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking')))
+                    scope_args={'scope':validate_scope(body['scope'])} if 'scope' in body else {}
+                    return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking'),**scope_args))
                 if self.path=='/api/library/roots':
                     if body.get('consent') is not True: raise ValueError('Explicit folder consent required')
                     return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'))})
