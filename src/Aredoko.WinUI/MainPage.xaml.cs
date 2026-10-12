@@ -395,6 +395,7 @@ public sealed partial class MainPage : Page
                 }catch(Exception ex){resourceResult.Text="設定を保存できません: "+ex.Message;}
                 finally{saveResource.IsEnabled=true;}
             };
+            bool polling=false;
             release.Click+=async (_,_)=>{
                 release.IsEnabled=false;
                 try {
@@ -403,7 +404,6 @@ public sealed partial class MainPage : Page
                 }catch(Exception ex){releaseResult.Text="解放できません: "+ex.Message;}
                 finally{await Refresh();}
             };
-            bool polling=false;
             int? indexLimit=null;
             async Task Refresh()
             {
