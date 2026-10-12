@@ -1,7 +1,8 @@
-"""Native local request-contract checks with generated PNGs and a CPU test encoder.
+"""Native local search-method checks with generated PNGs and contract or CUDA encoders.
 
-This is not a model-quality or GPU test. Production HTTP, AISearch, scope,
-JSON requests and the built Release GUI are exercised without loading weights.
+Default: CPU contract stub. --cuda explicitly uses existing offline project
+weights; --text-only selects a fixed capability variant. These tiny fixtures
+verify native integration, not retrieval quality. No downloads or private data.
 """
 import argparse
 import ctypes
@@ -28,6 +29,8 @@ from ai_settings import AIProfileSettings
 from production import ProductionCatalog
 from production_server import production_handler
 from create_holdout_fixture import graphic
+from test_index_gpu_scaling import MeasuredEncoder
+from test_index_gpu_api import vector_digest
 
 
 class ContractEncoder:
@@ -41,6 +44,14 @@ class ContractEncoder:
         self.calls.append(operation)
         return [1.0]+[0.0]*7
     def close(self):pass
+
+
+class NativeGPUEncoder(MeasuredEncoder):
+    def __init__(self,profile):
+        super().__init__();self.profile=profile;self.fail=False
+    def encode(self,operation,value):
+        if self.fail:raise AIUnavailable('生成テストの検索エラー')
+        return super().encode(operation,value)
 
 
 class RecordedAI(AISearch):
@@ -62,13 +73,18 @@ class RecordedAI(AISearch):
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--cuda',action='store_true',help='Use existing project runtime and offline EG2 weights')
+    parser.add_argument('--text-only',action='store_true',help='With --cuda, test the fixed text-only EG2 capability profile')
     args=parser.parse_args()
+    if args.text_only and not args.cuda:parser.error('--text-only requires --cuda')
     target=args.output.resolve()
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Evidence must stay in data/ai-ui')
     if os.name!='nt':parser.error('Native Windows only')
+    profile=replace(DEFAULT_PROFILE,modalities=('text',)) if args.text_only else DEFAULT_PROFILE
+    if args.cuda and not ((REPO/'.venv-ai/Scripts/python.exe').is_file() and profile.model_path(REPO).is_dir()):parser.error('Existing project environment/weights required; no download')
     target.mkdir(parents=True,exist_ok=False)
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-search-methods-'+uuid.uuid4().hex}
-    report={'target':'local','encoder':'CPU contract stub; no model quality/GPU claim','input_verification':'UIA only; physical keyboard not tested','pass':False,'checks':[],'screenshots':[],'requests':[]}
+    report={'target':'local','encoder':'actual offline CUDA' if args.cuda else 'CPU contract stub','actual_model':args.cuda,'retrieval_quality':'not evaluated','text_only':args.text_only,'input_verification':'UIA only; physical keyboard not tested','pass':False,'checks':[],'screenshots':[],'requests':[]}
     catalog=None;engine=None;server=None;thread=None;hwnd=None;app_pid=None;process=None
     user32=ctypes.WinDLL('user32',use_last_error=True)
     kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
@@ -88,8 +104,8 @@ def main():
         if result.returncode:raise RuntimeError('winapp '+str(args)+': '+result.stdout+result.stderr)
         return result.stdout
     def ui(*args,window=None):return cli('ui',*args,'-w',window or hwnd)
-    def wait(identifier,value):ui('wait-for',identifier,'--value',value,'-t','10000')
-    def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000');time.sleep(.4)
+    def wait(identifier,value):ui('wait-for',identifier,'--value',value,'-t','40000')
+    def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','40000');time.sleep(.4)
     def choose(combo,option,label):
         # Refresh the peer after result rendering/screenshot layout changes.
         ui('inspect',combo,'--json')
@@ -168,10 +184,21 @@ def main():
         for i,row in enumerate(rows):catalog.update([row['id']],{'tags':['テスト素材'],'favorite':i!=1,'shelf':'テスト棚'})
         scope={'root_ids':[roots[0]],'kind':'','shelf':None}
         settings=target/'settings.json';settings.write_text(json.dumps({'version':1,'profile':'default','scope':scope}),encoding='utf-8')
-        profiles=AIProfileSettings(REPO,settings)
-        encoder=ContractEncoder();engine=RecordedAI(catalog,encoder,ranking='mean-rrf')
-        engine.start(scope=scope);engine.worker.join(30)
-        check('Contract index ready',engine.status()['state']=='complete' and engine.status()['indexed']==2)
+        profile_file=None
+        if args.cuda:
+            profile_file=target/'profile.json';profile_file.write_text(json.dumps(profile.to_dict()),encoding='utf-8')
+        profiles=AIProfileSettings(REPO,settings,profile_file)
+        encoder=NativeGPUEncoder(profile) if args.cuda else ContractEncoder()
+        report['profile']=encoder.profile.identity()
+        report['profile_key']=encoder.profile.key
+        engine=RecordedAI(catalog,encoder,ranking='mean-rrf')
+        check('Counts before model load',engine.coverage(scope)['target_total']==2 and not encoder.resident)
+        engine.start(scope=scope);engine.worker.join(180)
+        check('Index ready',not engine.worker.is_alive() and engine.status()['state']=='complete' and engine.status()['indexed']==2)
+        if args.cuda:
+            check('Actual CUDA index',encoder.device=='cuda' and encoder.calls['document']==2 and encoder.calls['image']==(0 if args.text_only else 2))
+            check('Profile capability/store isolation',engine.profile.modalities==profile.modalities and engine.store.path==profile.store_path(catalog.path))
+        vector_before=vector_digest(engine)
         hashes={str(p.relative_to(target)):(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in target.glob('media-*/*.png')}
         settings_bytes=settings.read_bytes()
         base=production_handler(catalog,secrets.token_urlsafe(32),engine,profiles=profiles)
@@ -208,7 +235,14 @@ def main():
             ui('invoke','NavFavorites','--action','select');ready();wait('TxtCount','1 件');assert_request('text','image','favorites',[first])
             choose('CmbSearchMode','ModeSemantic','AI混合');assert_request('all','image','favorites',[first])
             wait('TxtSearchMethodHint','名前・タグと画像・表紙を組み合わせて探します。')
-            choose('CmbSearchMode','ModeVisual','AI画像・表紙');assert_request('cover','image','favorites',[first])
+            before_query=dict(encoder.calls) if args.cuda else None
+            choose('CmbSearchMode','ModeVisual','AI画像・表紙')
+            if args.text_only:
+                wait('TxtCount','—');wait('TxtPageNumber','—')
+                ui('wait-for','Message','--value','選択中のモデルは画像・表紙検索に対応していません。AI文章を使ってください。','-t','10000')
+                check(theme+' unsupported cover rejected before inference',dict(encoder.calls)==before_query and engine.requests[-1]['source']=='cover' and engine.requests[-1].get('failed'))
+                for identifier in ('BtnPrevious','BtnNext'):ui('wait-for',identifier,'-p','IsEnabled','--value','False','-t','10000')
+            else:assert_request('cover','image','favorites',[first])
             resize(700,620);fits(theme+'-cover-narrow');shot(theme+'-cover-narrow');resize(1200,800)
             choose('CmbSearchMode','ModeText','AI文章');assert_request('text','image','favorites',[first])
             ui('invoke','Item'+str(first),'--action','select');wait('TxtEditStatus','保存済み');ui('set-value','TxtTags','unsaved-mode-test');wait('TxtEditStatus','未保存の変更')
@@ -220,19 +254,29 @@ def main():
             check(theme+' cancelled mode restores query accessibility', 'AI検索の文章' in json.dumps(query_name,ensure_ascii=False))
             check(theme+' cancelled mode sends no AI request',len(engine.requests)==before)
             shot(theme+'-dirty-restored')
-            choose('CmbSearchMode','ModeVisual','AI画像・表紙');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready()
-            assert_request('cover','image','favorites',[first]);check(theme+' discard does not persist edit',catalog.search()['items'][0]['tags']==['テスト素材'])
+            choose('CmbSearchMode','ModeSemantic' if args.text_only else 'ModeVisual','AI混合' if args.text_only else 'AI画像・表紙');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready()
+            assert_request('all' if args.text_only else 'cover','image','favorites',[first]);check(theme+' discard does not persist edit',catalog.search()['items'][0]['tags']==['テスト素材'])
             encoder.fail=True
             choose('CmbSearchMode','ModeText','AI文章');ui('invoke','BtnSearch');ready();wait('TxtCount','—')
             ui('wait-for','TxtEmpty','--value','名前・タグ検索に切り替えるか','--contains','-t','5000')
-            check(theme+' error clears pagination',True)
+            wait('TxtPageNumber','—')
+            for identifier in ('BtnPrevious','BtnNext'):ui('wait-for',identifier,'-p','IsEnabled','--value','False','-t','5000')
+            check(theme+' error clears count/pagination and shows guidance',True)
             choose('CmbSearchMode','ModeLiteral','名前・タグ');ui('set-value','TxtQuery','generated');time.sleep(.5);ui('invoke','BtnSearch');ready();wait('TxtCount','2 件')
             check(theme+' literal recovery ignores saved AI scope',True)
             encoder.fail=False
+            if args.cuda:
+                report.setdefault('telemetry',[]).append({'theme':theme,'device':encoder.device,'peak_allocated_mib':encoder.peak_cuda_allocated_mib})
+                check(theme+' queries retain vectors',vector_digest(engine)==vector_before)
+                before_calls=dict(encoder.calls);engine.release()
+                check(theme+' owned worker released',not encoder.resident)
+                engine.start(scope=scope);engine.worker.join(30)
+                check(theme+' cached rebuild without model reload',not engine.worker.is_alive() and engine.status()['state']=='complete' and engine.status()['indexed']==2 and not encoder.resident and dict(encoder.calls)==before_calls and vector_digest(engine)==vector_before)
             close()
         check('Saved scope/settings unchanged',settings.read_bytes()==settings_bytes)
-        report['requests']=engine.requests;report['encoder_calls']=encoder.calls
-        check('No model loaded',not encoder.resident)
+        report['requests']=engine.requests;report['encoder_calls']=dict(encoder.calls) if args.cuda else encoder.calls
+        check('Vectors unchanged across native sessions',vector_digest(engine)==vector_before)
+        check('Worker not resident at end',not encoder.resident)
         report['pass']=True
     except Exception as ex:
         report['error']=str(ex)
@@ -242,22 +286,40 @@ def main():
         raise
     finally:
         try:close()
+        except Exception as cleanup_error:
+            report['pass']=False
+            report['cleanup_error']=str(cleanup_error)
+            raise
         finally:
             try:
                 if thread:server.shutdown();thread.join(5)
                 if server:server.server_close()
                 if engine:
                     report['requests']=engine.requests
-                    report['encoder_calls']=engine.encoder.calls
+                    report['encoder_calls']=dict(engine.encoder.calls) if args.cuda else engine.encoder.calls
                     engine.close()
-                if catalog:catalog.close()
-                cli('ui','yield')
+                    if args.cuda:
+                        report['owned_exits']=engine.encoder.observed_exits
+                        if not report['owned_exits'] or not all(row['stopped'] for row in report['owned_exits']):raise RuntimeError('Owned worker handle cleanup failed')
+            except Exception as cleanup_error:
+                report['pass']=False
+                report['cleanup_error']=str(cleanup_error)
+                raise
             finally:
-                actual={str(p.relative_to(target)):(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in target.glob('media-*/*.png')}
-                report['source_hashes_mtime_unchanged']=bool(hashes) and hashes==actual
-                if not report['source_hashes_mtime_unchanged']:report['pass']=False
-                (target/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+                try:
+                    if catalog:catalog.close()
+                    cli('ui','yield')
+                except Exception as cleanup_error:
+                    report['pass']=False
+                    report['cleanup_error']=str(cleanup_error)
+                    raise
+                finally:
+                    actual={str(p.relative_to(target)):(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in target.glob('media-*/*.png')}
+                    report['source_hashes_mtime_unchanged']=bool(hashes) and hashes==actual
+                    if not report['source_hashes_mtime_unchanged']:report['pass']=False
+                    (target/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps({'pass':report['pass'],'checks':len(report['checks']),'screenshots':report['screenshots']},ensure_ascii=True))
+    if not report['pass']:raise RuntimeError('Native checks failed; see result.json')
 
 
 if __name__=='__main__':main()

@@ -1,6 +1,27 @@
 # Aredoko — GPTチャットへの最新引継ぎ
 
 
+## 最新：検索方法の実CUDA・文章専用profile（2026-10-13）
+
+開始HEAD **20bdc2c1bad33d8b0feadb9b132a9183e44194d2**。同じfeature/Draft PR #5/comparison baseを維持。実装・検証・仕様commitは提出後に記録。通常push後の最終HEAD/CI観測はGit/PR head・PR説明で確認。
+
+- 画像非対応案内の旧「AI意味検索」を「AI文章」へ訂正。既存nativeハーネスへ明示 `--cuda` / `--text-only` を追加し、CPU契約と実GPUの結果を分離。モデル/順位/自動routing/WinUIコード変更なし。
+- 実CUDA **画像対応 75 checks・要求19件・document/image/query=2/2/15 / 文章専用 75 checks・要求19件・document/image/query=2/0/13**。各6PNG全目視/scoped visual PASS/正常close2/owned handles6全終了/cleanup警告0。Light/Dark wide/narrow、DPI96/Contrast off。固定生成3PNG/2rootだけでproduction HTTP/AISearch/Release GUIを確認。検索品質の評価ではない。
+- saved scope/種類/favorites/page0、空query/restart literal、dirty cancel/discard、error件数/ページ番号/前次disabled・文字検索復帰を確認。文章専用profileではcoverを推論前に拒否しGUI案内を表示、AI文章へ復帰可能。2profileのkey/store分離・vectors/元bytes/mtime/hash/設定byte不変。
+- 両themeでworker解放→保存索引再利用は追加encode/再ロードなし。実queryで必要なworkerのみ再起動、全所有process-instance handlesの停止を確認。後処理の失敗が成功JSONにならないよう補強し、最終版を文章専用runで検証。
+- Core **35 PASS**、Python profiles **10 PASS / 0.400秒**・retrieval **13 PASS / 5.003秒**、Release **PASS / 37.28秒 / errors0・既存IL2104 2warnings**。syntax/CLI/diff・手動レビュー済み、専用analyzer未実行。全Python155/scope12は前回履歴で今回未再実行。各GPU native初回PASS、失敗/再試行なし。
+- physical keyboard/高DPI/Contrast/読み上げ・検索精度は今回未検証。私物/モデルDL/依存/OS変更/Layaなし。詳細・測定境界は[実GPU検索方法](search-methods-gpu.md)。CI manual-only・Draft未マージ。
+
+### 次の3手
+
+1. 高DPI/HighContrast/読み上げ・全面keyboardの独立確認。OS設定を勝手に変えない。
+2. 未観測の固定品質入力とLaya日本語gateを別実験で準備。Laya既定無効を維持。
+3. 読書/Komga/フォルダ本の仕様から次の小さなsliceを選ぶ。
+
+---
+
+
+
 ## 最新：GUIの明示的なAI文章検索（2026-10-13）
 
 開始HEAD **f792d6a334834f1f8281509e74bfeb940b06919d**。同じfeature/Draft PR #5/comparison baseを維持。今回の実装・検証・仕様commitは **03acb7598b41507632a24a594662336cb5768b52**。このSHA記録は文書だけの後続commit。通常push後の最終HEADとread-only CI観測はGit/PR head・PR説明で確認。

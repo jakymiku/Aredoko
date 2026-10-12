@@ -1,3 +1,7 @@
+> **最新の状況（2026-10-13）**：検索方法を実CUDAで検証。画像対応 75 checks・要求19件・document/image/query=2/2/15 / 文章専用 75 checks・要求19件・document/image/query=2/0/13。各6PNG全目視・正常close2・所有handles6全終了。文章専用profileのcover非対応案内をAI文章へ訂正し、保存索引再利用も確認。Core35・Python23・Release PASS。生成3PNGでの接続検証で検索精度の評価ではない。詳細は[実GPU検索方法](search-methods-gpu.md)/[引継ぎ](codex-handoff.md)。CI manual-only・Draft未マージ。以下は履歴。
+
+---
+
 > **最新の状況（2026-10-13）**：GUIに「AI文章」単独検索を追加し混合/画像と根拠説明で選択。Core35・Python scope12/retrieval13・Release PASS。native03 65 checks/6 PNG全目視/正常close2、生成素材とCPU契約encoderで要求・条件・dirty rollbackを確認（実GPU/品質は前回v2の別証拠）。詳細は[検索方法](search-methods.md)/[引継ぎ](codex-handoff.md)。CI manual-only・Draft未マージ。以下は履歴。
 
 ---

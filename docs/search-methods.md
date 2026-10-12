@@ -33,8 +33,10 @@ python tools/test_search_methods_ui.py --output data/ai-ui/search-method-native-
 - 全画像にはowned Ctrl+F tooltip/追加HWND edgeを含むものがある。検索欄・mode・説明・ボタンにclipping/overlapなしを目視。詳細paneは独立scrollで下部editor全体の可視性はこのsliceのauditではない。
 - 私物走査・モデルDL/依存導入・OS変更・Laya起動なし。native keyboardはUIAのみでphysical keys・全面keyboard/読み上げ/高DPI/HighContrastは未検証。GPU品質は前回v2と別証拠として扱う。
 
-## 次の3手
+## 続報と次の3手
 
-1. この検索方式で実CUDAの小さな生成fixtureをnative再確認し、text-only profileの非対応cover案内を確認する。モデル変更や既定routingはしない。
+実CUDA・文章専用profileの確認は完了：[別の実GPU検証記録](search-methods-gpu.md)。上記CPU native結果はそのまま履歴として保持。
+
+1. 今回完了したGPU接続検証の範囲を保ち、次の検索品質判断には未観測の固定入力を用意する。モデル変更や既定routingはしない。
 2. 高DPI/Contrast/読み上げ・全面keyboardを独立した確認で進める。OS設定の勝手な変更はしない。
 3. 次の品質判断用の新規固定入力とLaya日本語gateを別実験として設計。Laya既定無効、reader/Komga/フォルダ本は後続slice。

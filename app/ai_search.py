@@ -318,7 +318,7 @@ class AISearch:
         if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
         if source not in ('all','text','cover'): raise ValueError('Invalid semantic source')
         if source=='cover' and 'cover' not in self.profile.modalities:
-            raise AIUnavailable('選択中のモデルは画像・表紙検索に対応していません。AI意味検索を使ってください。')
+            raise AIUnavailable('選択中のモデルは画像・表紙検索に対応していません。AI文章を使ってください。')
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。')
         if not self.inference.acquire(blocking=False): raise AIBusy('AI索引を作成中です。完了後に検索してください。')
         try:
