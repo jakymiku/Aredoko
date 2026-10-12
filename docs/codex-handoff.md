@@ -13,7 +13,7 @@
 - Layaは未変更（experimental/disabled-by-default）。main未マージ、既存Draft PR #5/base/安全なテスト素材境界を保持。
 - **残件・次の3手**: ①実GPU所有subprocessの停止/再ロードと元source/vectorのhash不変をユーザー側で確認、②新WinUI AI dialogのLight/Dark・狭幅・busy/保存設定を実機確認、③10,000超のroot/種類/棚/coverage選択と架空日本語品質セットを設計（上限の無制限解放や自動Laya適用は禁止）。
 
-最新実装コミット: **ecad513e76928b79edb442107674edd4ede8f234**。この文書更新分を含む最終HEADは`git rev-parse HEAD`で確認し、報告/PR本文に正確な値を反映する。
+最新実装コミット: **284fc5883db6edd0c0d3cf1dfd9b13c9f3baed80**。この文書更新分を含む最終HEADは`git rev-parse HEAD`で確認し、報告/PR本文に正確な値を反映する。
 
 ---
 
