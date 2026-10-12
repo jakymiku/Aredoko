@@ -3,7 +3,7 @@
 
 ## 最新：検索方法の実CUDA・文章専用profile（2026-10-13）
 
-開始HEAD **20bdc2c1bad33d8b0feadb9b132a9183e44194d2**。同じfeature/Draft PR #5/comparison baseを維持。実装・検証・仕様commitは提出後に記録。通常push後の最終HEAD/CI観測はGit/PR head・PR説明で確認。
+開始HEAD **20bdc2c1bad33d8b0feadb9b132a9183e44194d2**。同じfeature/Draft PR #5/comparison baseを維持。実装・検証・仕様commitは **433e2566bde3678df5956ee30597803d96f7ea31**。このSHA記録は文書だけの後続commit。通常push後の最終HEAD/CI観測はGit/PR head・PR説明で確認。
 
 - 画像非対応案内の旧「AI意味検索」を「AI文章」へ訂正。既存nativeハーネスへ明示 `--cuda` / `--text-only` を追加し、CPU契約と実GPUの結果を分離。モデル/順位/自動routing/WinUIコード変更なし。
 - 実CUDA **画像対応 75 checks・要求19件・document/image/query=2/2/15 / 文章専用 75 checks・要求19件・document/image/query=2/0/13**。各6PNG全目視/scoped visual PASS/正常close2/owned handles6全終了/cleanup警告0。Light/Dark wide/narrow、DPI96/Contrast off。固定生成3PNG/2rootだけでproduction HTTP/AISearch/Release GUIを確認。検索品質の評価ではない。
