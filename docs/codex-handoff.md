@@ -312,3 +312,21 @@
 - 実装/検証記録HEAD **8418d68**（8418d68f2fa6839be201df164988482c00859a6b）。後続は提出文書のみ。同じfeature/Draft PR #5/base、通常push・未マージ。
 - native appearance-03は操作68 checks PASS、9 PNGのvisual reviewはLight dialogのDark不一致でFAIL。全3dialogのRequestedTheme修正は最終Release build PASSだがnative未再実行。最大2回fix/rerunに達し、次回の最初はappearance-04等新規outputで修正後dialogを確認する。
 - Python96/C#13/最終Release（既存IL2104 2件）/py_compile/launcher構文/diff PASS。私物/個人設定/モデル/依存/OS設定無変更、生成元hash不変、所有test GUI/API/worker停止済み。高DPI/HC/1TB未確認。
+
+
+### ゲームの前面表示を維持して索引拡張を開始（2026-10-12）
+- 開始HEAD 1f77172/clean、AGENTS/Issue #4/PR #5を確認。同じfeature/Draft/baseを保持。
+- ユーザーは別窓でゲーム中で、アクティブwindowを切り替えないテストを希望。既存native harnessは起動時Activate/実入力を含むため実行しない。Light dialog修正後の目視再確認は保留し、独立した索引拡張をバックグラウンドで進める。GUIを前面化しない確実な起動経路は現時点でない。
+- 1万件上限、256件のkeyset metadata取得、build候補はIDだけ固定、保存済みvector再利用、current除外再確認、進捗16件間隔、候補ID限定vector読出しとglobal fusionを実装中。GPU/依存取得/私物走査なし、生成データ/決定論encoderで検証する。結果は後続へ記録。
+
+
+### バックグラウンド索引拡張の結果（2026-10-12）
+- 開始HEAD **1f77172**、同じfeature/Draft PR #5/base。ユーザーがゲーム中のためnative GUI起動/Activate/入力は行わず、Hidden/BelowNormalのCPU検証とbuildだけ。Windows/個人設定/モデル/依存変更、新規取得、私物走査なし。現行worker/モデルprofile/Layaを作り直していない。
+- AI eligible上限 **10,000件**。256件keyset metadata取得、候補IDのみ固定、batch取得時の現行metadata、publish前presence/revision/除外再確認。vectorのatomic per-item commitを保持し進捗16件間隔（最大15件表示遅れ）。検索は候補ID限定の256件BLOB取得、global scoreをまとめて一度fusion。検索metadata/scoreとbuild IDは最大10,000件保持で、constant memory/全数万件ではない。
+- API既定値とstatus/search coverage、GUIの上限表示を10,000へ。明示2,000指定・旧default namespace/vector schema・manual filters/60 paging・max rollback・モデル交換identityを維持。現行除外がeligible枠を消費するバグも修正。catalog全体の同一時点snapshot/新規GPU負荷制限は実装していない。
+- 生成10,010 source / 対象10,000 / synthetic 768次元text-only、**smoke-01:14 checks PASS**。2,300件cancel→再起動後残り7,700件のみ推論→全件complete、末尾top1/ページ末40件/favorite、再起動再索引document0、全source byte/size/mtime digest一致。scan3.15秒、start0.33秒、cancelまで28.50秒、resume97.40秒、検索1.23秒、cache確認9.72秒、全process peak53.34MiB。このゲーム併走/低優先度の単発測定はSQLite/catalog/ranking plumbingのみ、EG2/CUDA/画像/2modality/1TBの性能ではない。docs/index-scaling.mdに再現手順/限界。
+- 新単体テスト: 2,105件で旧2,000vector→追加105/タグ1件再生成/再起動、先頭300除外、256境界超cancel/進捗保存、推論中除外とタグ変更、270件/2modality global RRF。認証HTTP既定10,000/明示2,000/不正limit、C# coverage optional/旧literal応答を確認。
+- **最終Python103 tests PASS**（unit-02、66.35秒）。初回unit-01は102 PASS、HTTP追加後test_ai_searchだけ13 PASSも確認。C# **15 checks PASS**（core-01）。WinUI x64 SelfContained Release **PASS、既存IL2104 2警告/0error**（build-01、33.20秒）。WinUI review:新control/APIなし、既存native Items/60 paging/async stale/dirty/JSON DOM/theme/auth/index namespaceを維持。日本語stringsの既存resource未分離を拡大整理しない、analyzer未導入。syntax/help/diff結果は提出節に記録。
+- ignored証拠 data/index-scaling/{unit-01,unit-02,http-01,core-01,build-01,smoke-01} とsmoke-01.out/err。actual_model=false/gpu_used=false/native_gui_run=false、所有CPUテスト/scan/index threadsは正常終了。production API/GUI/GPUworkerは今回起動していない。生成dummy WAVは音声として未読。
+- 前回appearance-03のUIA68 PASS / visual FAILは保持。全3dialogのRequestedTheme最終修正と今回上限文はbuild/reviewのみ、native未再実行。今回保留の理由はゲーム前面維持というユーザー希望。前回skill fix/rerun上限による停止と混同しない。HC/高DPI/reader/AOT/配布/実ライブラリ/1TBは未確認。
+- **次の3手:** (1) ゲーム終了など前面操作可能な時に新規outputで --editor-only --appearance-checks、Light/Dark dialogと10,000表示を全PNG目視、(2) GPUを使ってよい時に生成素材の実EG2負荷/メモリを段階測定、(3) 10,000件超の対象選択/資源設定と明示小実サンプル品質評価。私物未指定なら生成素材、Layaは精度未達の実験APIのみ。

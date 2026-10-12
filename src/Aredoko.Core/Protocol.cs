@@ -31,6 +31,7 @@ public sealed class MediaRow
 public sealed class SearchResponse
 {
     public int Total { get; set; }
+    public int? CoverageLimit { get; set; }
     public List<MediaRow> Items { get; set; } = [];
 }
 
@@ -53,7 +54,7 @@ public static class Protocol
     {
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
-        var result = new SearchResponse { Total = root.GetProperty("total").GetInt32() };
+        var result = new SearchResponse { Total = root.GetProperty("total").GetInt32(), CoverageLimit = root.TryGetProperty("coverage_limit",out var coverage) ? coverage.GetInt32() : null };
         foreach (var element in root.GetProperty("items").EnumerateArray())
             result.Items.Add(ReadRow(element));
         return result;

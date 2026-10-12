@@ -10,7 +10,7 @@ from previews import PreviewReader, PreviewUnavailable, PreviewBusyError
 import zipfile
 import sqlite3
 from ai_process import EncoderProcess, AIUnavailable
-from ai_search import AISearch, AIBusy
+from ai_search import AISearch, AIBusy, MAX_ITEMS
 from ai_profiles import load_profile
 from ai_settings import AIProfileSettings
 from ai_ranking import POLICIES
@@ -108,7 +108,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     if set(body) != {'id'} or type(body['id']) is not str:
                         raise ValueError('Only a profile identifier is accepted')
                     return self.send(200,profiles.choose(body['id']))
-                if self.path=='/api/library/ai/index': return self.send(200,ai.start(body.get('limit',2000)))
+                if self.path=='/api/library/ai/index': return self.send(200,ai.start(body.get('limit',MAX_ITEMS)))
                 if self.path=='/api/library/ai/cancel': return self.send(200,ai.cancel_build())
                 if self.path=='/api/library/ai/search':
                     return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking')))

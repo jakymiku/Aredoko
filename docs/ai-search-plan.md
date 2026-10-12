@@ -1,6 +1,6 @@
 # AI search — implemented preview and next milestone (2026-10-12)
 
-Historical first-slice plan/results below; latest mixed-ranking and Laya updates are at the end.
+Latest: eligible AI coverage is now 10,000 items, with 256-row reads and incremental checkpoints. CPU-only generated 10,000-item plumbing verification passed; actual-model large-library performance remains unverified. See [index scaling](index-scaling.md). Historical first-slice plan/results follow; mixed-ranking and Laya updates are at the end.
 
 Status (first slice, 2026-10-12): first EmbeddingGemma 2 retrieval slice implemented and verified with actual offline CUDA inference on generated fixtures. The user explicitly authorized project-local packages/model download with a shared 6 MB/s cap. Laya remains planned. Filename/tag search stays available independently.
 

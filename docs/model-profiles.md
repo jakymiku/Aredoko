@@ -129,3 +129,10 @@ Python96/C#13/x64 SelfContained Release PASS（既存SDK IL2104 2件）。追加
 `appearance-03` のLight/Darkでtext-only profileのcover検索が実503/画像非対応文を返し、GUI中央の具体的な案内と古い件数/ページの消去、文字検索に戻した実1件と成功InfoBarを確認。missing profileの意味検索でも同じ復帰をLightで確認した。capability/availability判定は推論前なのでGPUモデルをロードしない（actual_model=false/profile_verification=not_run）。CUDA検索/全profile切替/別checkpointの追加検証ではない。
 
 UIA68項目はPASS、9 PNG目視でLight AI dialogのDark不一致が見つかり、視覚レビューはFAIL。全3dialogのRequestedTheme修正はRelease build済み、native未再実行。docs/ui-polish.md/chat-handoff.mdの最新節を参照し、次回まず新規outputで修正後dialogを確認すること。生成元hash不変、6回正常終了、所有test GUI/API/worker停止済み。重み/依存/モデルidentity/APIは無変更。
+
+
+## 索引の対象拡張とモデル互換（2026-10-12）
+
+eligible上限2,000→10,000、256件metadata/vector取得と進捗16件保存を実装。profile identity/store namespace/vector schema/worker/model weightsは変更しない。保存済みfresh vectorを再利用し追加分のみ生成する。生成2,105件の旧2,000→追加105互換、生成768次元text-only 10,000件のcancel/restart/reuseをCPUで確認。別checkpointや実GPU大規模推論の検証ではない。[index-scaling.md](index-scaling.md)参照。
+
+ゲームの前面表示を維持するユーザー指定によりnative起動は今回保留。前節のLight dialog最終修正と今回の上限表示はbuild/reviewのみ。appearance-03 visual FAILを変えず、前面操作が可能になってから新規outputで確認する。

@@ -6,13 +6,14 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from ai_search import AISearch, AIBusy, VectorStore, normalized, revision
+from ai_search import AISearch, AIBusy, VectorStore, normalized, revision, MAX_ITEMS
 from ai_process import AIUnavailable
 from production import ProductionCatalog
 from production_server import production_handler, create_ai
@@ -110,7 +111,7 @@ class AISearchTests(unittest.TestCase):
         self.encoder.available=False
         with self.assertRaises(AIUnavailable): self.ai.start()
         with self.assertRaises(AIUnavailable): self.ai.search('雨')
-        for limit in (0,2001,True):
+        for limit in (0,MAX_ITEMS+1,True):
             with self.assertRaises(ValueError): self.ai.start(limit)
         with self.assertRaises(ValueError): self.ai.search('')
     def test_visual_source_does_not_use_filename_vector(self):
@@ -134,6 +135,24 @@ class AISearchTests(unittest.TestCase):
         self.assertEqual(text['ranking'],'max');self.assertEqual(text['score_kind'],'cosine')
         self.assertEqual({r['id'] for r in default['items']},{r['id'] for r in legacy['items']})
         with self.assertRaises(ValueError):self.ai.search('雨',ranking='unknown')
+
+    def test_http_index_default_cap_and_legacy_limit(self):
+        server=ThreadingHTTPServer(('127.0.0.1',0),production_handler(self.catalog,'test-token',self.ai))
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        url=f'http://127.0.0.1:{server.server_port}'
+        headers={'X-Aredoko-Token':'test-token','Origin':url,'Content-Type':'application/json'}
+        for body,expected in (({},10000),({'limit':2000},2000)):
+            with patch.object(self.ai,'start',wraps=self.ai.start) as start:
+                with urllib.request.urlopen(urllib.request.Request(url+'/api/library/ai/index',json.dumps(body).encode(),headers)) as response:
+                    self.assertEqual(json.load(response)['limit'],10000)
+                start.assert_called_once_with(expected)
+            self.ai.worker.join(10)
+            self.assertEqual(self.ai.status()['state'],'complete')
+        for invalid in (10001,True):
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(urllib.request.Request(url+'/api/library/ai/index',json.dumps({'limit':invalid}).encode(),headers))
+            self.assertEqual(error.exception.code,400);error.exception.close()
 
     def test_http_token_origin_and_semantic_route(self):
         self.build()

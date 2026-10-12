@@ -72,7 +72,7 @@ public sealed partial class MainPage : Page
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*60<result.Total;
             Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
             Empty.Text=query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
-            Notice("読込完了",selectedMode>0 && query.Length>0 ? "AI検索の候補です。索引済みの最大2,000件から類似順に表示します。" : selectedMode>0 ? "探したい内容を文章で入力してください。AI索引の作成は「AI索引」から。" : "名前・タグの文字検索。");
+            Notice("読込完了",selectedMode>0 && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。" : selectedMode>0 ? "探したい内容を文章で入力してください。AI索引の作成は「AI索引」から。" : "名前・タグの文字検索。");
         } catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;rows=[];active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=selectedMode>0?"この条件ではAI検索を利用できません。\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。":"検索を完了できませんでした。再接続からやり直してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
@@ -353,6 +353,7 @@ public sealed partial class MainPage : Page
             var start=new Button {Content="索引を作成・更新",IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
             var cancel=new Button {Content="中断",IsEnabled=false};AutomationProperties.SetAutomationId(cancel,"CancelAIIndex");
             bool polling=false;
+            int? indexLimit=null;
             async Task Refresh()
             {
                 if(polling||disposed)return;polling=true;
@@ -362,16 +363,17 @@ public sealed partial class MainPage : Page
                     var available=data["available"]!.GetValue<bool>();
                     var state=data["state"]!.GetValue<string>();
                     var running=state is "running" or "cancelling";
+                    indexLimit=data["limit"]?.GetValue<int>();
                     var label=state switch {"idle"=>"未作成","running"=>"作成中","cancelling"=>"中断待ち","complete"=>"準備完了","cancelled"=>"中断済み","interrupted"=>"前回中断","failed"=>"失敗",_=>state};
                     var model=data["model"]?.GetValue<string>() ?? "未選択";
                     var capabilities=data["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "名前・タグ／画像・表紙" : "名前・タグ";
-                    status.Text=available ? $"{model} · {capabilities}\n{label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
+                    status.Text=available ? $"{model} · {capabilities}{(indexLimit is int cap ? $" · 最大{cap:N0}件" : "")}\n{label} · {data["processed"]}/{data["total"]} 件\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
                     start.IsEnabled=available&&!running;cancel.IsEnabled=running;
                 }
                 catch(Exception ex){status.Text=ex.Message;start.IsEnabled=false;}
                 finally{polling=false;}
             }
-            start.Click+=async(_,_)=>{start.IsEnabled=false;try{await api.PostAsync("api/library/ai/index",new JsonObject{{"limit",2000}});await Refresh();}catch(Exception ex){status.Text=ex.Message;start.IsEnabled=true;}};
+            start.Click+=async(_,_)=>{start.IsEnabled=false;try{await api.PostAsync("api/library/ai/index",new JsonObject());await Refresh();}catch(Exception ex){status.Text=ex.Message;start.IsEnabled=true;}};
             cancel.Click+=async(_,_)=>{try{await api.PostAsync("api/library/ai/cancel",new JsonObject());await Refresh();}catch(Exception ex){status.Text=ex.Message;}};
             timer.Tick+=async(_,_)=>await Refresh();
             var panel=new StackPanel {Spacing=12,MinWidth=320};

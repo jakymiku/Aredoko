@@ -14,7 +14,9 @@ from ai_ranking import POLICIES,fuse_modalities
 from library_index import TYPES, _excluded
 from previews import PreviewReader, PreviewUnavailable
 
-MAX_ITEMS=2000
+MAX_ITEMS=10_000
+ROW_BATCH_SIZE=256
+PROGRESS_INTERVAL=16
 class AIBusy(RuntimeError): pass
 
 def revision(row):
@@ -66,13 +68,19 @@ class VectorStore:
         query=normalized(query,self.dimension)
         eligible={row['id']:revision(row) for row in rows}
         scores={}
+        # Read only candidate IDs; unrelated persisted vectors need not be scanned.
+        ids=list(eligible)
         with self.connect() as db:
-            for item_id,rev,mode,data in db.execute('SELECT * FROM ai_vectors'):
-                if mode not in self.profile.modalities or eligible.get(item_id)!=rev or source!='all' and mode!=source: continue
-                vec=array('f');vec.frombytes(data)
-                if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec): continue
-                score=sum(a*b for a,b in zip(query,vec))
-                scores.setdefault(item_id,{})[mode]=score
+            for offset in range(0,len(ids),ROW_BATCH_SIZE):
+                batch=ids[offset:offset+ROW_BATCH_SIZE]
+                sql='SELECT * FROM ai_vectors WHERE item_id IN ('+','.join('?' for _ in batch)+')'
+                for item_id,rev,mode,data in db.execute(sql,batch):
+                    if mode not in self.profile.modalities or eligible.get(item_id)!=rev or source!='all' and mode!=source: continue
+                    vec=array('f');vec.frombytes(data)
+                    if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec): continue
+                    score=sum(a*b for a,b in zip(query,vec))
+                    scores.setdefault(item_id,{})[mode]=score
+        # Fusion uses global positions, never per-batch ranks.
         return fuse_modalities(scores,ranking)
 
 class AISearch:
@@ -87,18 +95,44 @@ class AISearch:
         self.cancel=threading.Event()
         self.worker=None
         self.inference=threading.Lock()
-    def _rows(self,kind='',view='all',limit=MAX_ITEMS):
+    def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
+        if type(limit) is not int or not 1<=limit<=MAX_ITEMS:
+            raise ValueError('Invalid candidate limit')
         where=["l.status='present'"]
         values=[]
         if kind: where.append('i.kind=?');values.append(kind)
         where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],'shelf':["i.shelf<>''"],'all':[]}[view])
+        # New records cannot lengthen a running enumeration indefinitely.
+        with self.catalog.connect() as db:
+            upper=db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
+        last=0;yielded=0
+        while last<upper and yielded<limit:
+            with self.catalog.connect() as db:
+                rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+self.catalog.JOIN+
+                    'JOIN library_roots r ON r.id=l.root_id WHERE '+' AND '.join(where)+
+                    ' AND i.id>? AND i.id<=? ORDER BY i.id LIMIT ?',
+                    values+[last,upper,ROW_BATCH_SIZE]).fetchall()
+            if not rows:break
+            last=rows[-1]['id']
+            # Exclusions do not consume eligible coverage, even before a rescan.
+            for row in rows:
+                if _excluded(row['relative_path'],tuple(json.loads(row['excludes_json']))):continue
+                yield self.catalog.item(row);yielded+=1
+                if yielded>=limit:break
+    def _rows(self,kind='',view='all',limit=MAX_ITEMS):
+        # Search metadata/scores are bounded by MAX_ITEMS; build keeps only IDs.
+        return list(self._iter_rows(kind,view,limit))
+    def _current_rows(self,ids):
+        if not ids:return {}
+        if len(ids)>ROW_BATCH_SIZE:raise ValueError('Metadata batch exceeds limit')
         with self.catalog.connect() as db:
             rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+self.catalog.JOIN+
-                'JOIN library_roots r ON r.id=l.root_id WHERE '+' AND '.join(where)+' ORDER BY i.id LIMIT ?',values+[limit]).fetchall()
-        # Current exclusions apply even before a filesystem rescan.
-        return [self.catalog.item(row) for row in rows if not _excluded(row['relative_path'],tuple(json.loads(row['excludes_json'])))]
+                'JOIN library_roots r ON r.id=l.root_id WHERE i.id IN ('+
+                ','.join('?' for _ in ids)+") AND l.status='present'",ids).fetchall()
+        return {row['id']:self.catalog.item(row) for row in rows
+                if not _excluded(row['relative_path'],tuple(json.loads(row['excludes_json'])))}
     def status(self):
         with self.guard: state=self.store.state()
         return {**state,'available':self.encoder.available,'device':getattr(self.encoder,'device',''),
@@ -110,43 +144,54 @@ class AISearch:
         with self.guard:
             if self.worker and self.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
             if self.catalog.scan_state()['state'] in ('running','cancelling'): raise AIBusy('フォルダのスキャン完了後に実行してください。')
-            rows=self._rows(limit=limit)
+            ids=[row['id'] for row in self._iter_rows(limit=limit)]
             self.cancel.clear()
-            self.store.save_state({'state':'running','processed':0,'total':len(rows),'indexed':0,'skipped':0,'error':''})
-            self.worker=threading.Thread(target=self._build,args=(rows,),daemon=True)
+            self.store.save_state({'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':''})
+            self.worker=threading.Thread(target=self._build,args=(ids,),daemon=True)
             self.worker.start()
         return self.status()
-    def _build(self,rows):
-        state={'state':'running','processed':0,'total':len(rows),'indexed':0,'skipped':0,'error':''}
+    def _build(self,ids):
+        state={'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':''}
         try:
             with self.inference:
-                for row in rows:
-                    if self.cancel.is_set(): state['state']='cancelled';break
-                    rev=revision(row)
-                    if not self.store.fresh(row['id'],rev):
-                        text=row['title']+'\n'+row['relative_path']+'\n'+'、'.join(row['tags'])
-                        vectors={'text':self.encoder.encode('document',text[:4096])}
-                        if 'cover' in self.profile.modalities and row['kind'] in ('image','book','archive'):
-                            try:
-                                source,_=self.previews.read(row['id'])
-                                cover=self.encoder.encode('image',source)
-                                if cover is not None: vectors['cover']=cover
-                            except (PreviewUnavailable,OSError):
-                                pass
-                        # A metadata/scan change while encoding cannot publish a stale result.
-                        current=self.catalog.get(row['id'])
-                        if revision(current)!=rev or current['availability']!='present':
+                for offset in range(0,len(ids),ROW_BATCH_SIZE):
+                    if self.cancel.is_set():break
+                    batch=ids[offset:offset+ROW_BATCH_SIZE]
+                    rows=self._current_rows(batch)
+                    for item_id in batch:
+                        if self.cancel.is_set():break
+                        row=rows.get(item_id)
+                        if row is None:
                             state['skipped']+=1
                         else:
-                            self.store.put(row['id'],rev,vectors);state['indexed']+=1
-                    else: state['indexed']+=1
-                    state['processed']+=1
-                    with self.guard: self.store.save_state(state)
-                else: state['state']='complete'
+                            rev=revision(row)
+                            if not self.store.fresh(item_id,rev):
+                                text=row['title']+'\n'+row['relative_path']+'\n'+'、'.join(row['tags'])
+                                vectors={'text':self.encoder.encode('document',text[:4096])}
+                                if 'cover' in self.profile.modalities and row['kind'] in ('image','book','archive'):
+                                    try:
+                                        source,_=self.previews.read(item_id)
+                                        cover=self.encoder.encode('image',source)
+                                        if cover is not None:vectors['cover']=cover
+                                    except (PreviewUnavailable,OSError):pass
+                                # Recheck presence, exclusions and revision before publishing.
+                                current=self._current_rows([item_id]).get(item_id)
+                                if current is None or revision(current)!=rev:
+                                    state['skipped']+=1
+                                else:
+                                    self.store.put(item_id,rev,vectors);state['indexed']+=1
+                            else:state['indexed']+=1
+                        state['processed']+=1
+                        # Vectors commit atomically per item. Progress may lag by 15;
+                        # a restart discovers saved revisions rather than re-encoding.
+                        if state['processed']%PROGRESS_INTERVAL==0:
+                            with self.guard:
+                                self.store.save_state({**state,'state':'cancelling' if self.cancel.is_set() else 'running'})
+                state['state']='cancelled' if self.cancel.is_set() else 'complete'
         except Exception as ex:
             state['state']='failed';state['error']='AI索引を作成できませんでした（'+type(ex).__name__+'）。ローカルログを確認してください。'
         finally:
-            with self.guard: self.store.save_state(state)
+            with self.guard:self.store.save_state(state)
     def cancel_build(self):
         self.cancel.set()
         with self.guard:

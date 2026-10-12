@@ -3,7 +3,23 @@
 更新: 2026-10-12。旧Web試作段階の引継ぎを置き換える。**製品GUIはWinUI 3に決定済みで、EmbeddingGemma 2検索まで実装・実GPU検証済み。最初から作り直さない。**
 
 
-## 最新の再開地点（2026-10-12・テーマとAIエラー復帰）
+## 最新の再開地点（2026-10-12・ゲーム中のバックグラウンド検証）
+
+開始HEAD **1f77172**。同じfeature/Draft PR #5/baseを維持。実装/検証記録HEADはcodex-handoff.mdの提出節に記録し、最新HEADは実Gitで確認。
+
+**ユーザーは別窓でゲーム中で、アクティブwindowを変えないテストを希望。** 今回はnative GUI起動/Activate/入力/OS設定変更を行わず、Hidden/BelowNormalのCPU検証とbuildだけを実行。GPU/新規download/私物走査はなし。この希望が続く間は前景が必要なharnessを実行しない。
+
+AI対象をeligible **10,000件**まで拡張。256件keyset metadata、build IDリスト固定、現行除外/revision再確認、16件進捗checkpoint、候補IDだけのvector取得、全batchをまとめたglobal mean-rrfを実装。GUIはAPI上限を表示し既定値を使い、明示2,000件指定/旧モデルidentity/cache/手動filter/60件pagingを保持。検索metadata/scoreは最大10,000件保持し、全数万件/1TB/constant-memory対応ではない。
+
+生成10,010ファイルのうち10,000件、768次元synthetic text vector、**14 checks PASS**。2,300件cancel後の再起動で残り7,700件だけ生成、末尾top1/paging/filter、次の再起動でdocument encode 0、全source bytes/size/mtime不変。actual_model=false/gpu_used=false/native_gui_run=false。[index-scaling.md](index-scaling.md)に単発時間/peak working setと限界を記録。
+
+**前回appearance-03はUIA68 PASS / visual FAILを保持。** 全3dialogのRequestedTheme修正、新しい1万件のGUI文はbuild/reviewまででnative未再実行。ゲーム終了等で前面操作が可能なとき、新規outputへ `--editor-only --appearance-checks` を実行し全PNGを見て確認する。実GPUの大規模評価、HC/高DPI/reader/AOT/配布/1TBも未確認。Layaは精度未達の実験APIのみ。
+
+最終Python **103 tests PASS**、C# **15 checks PASS**、WinUI x64 SelfContained Release PASS（既存IL2104 2警告）。WinUI review済み、analyzer未導入。
+
+次の3手: (1) 前面操作可能ならLight/Dark dialogと新上限表示のnative確認、(2) GPUを使ってよい時に生成素材で実EG2の段階的なメモリ/負荷測定、(3) 10,000件超の対象選択/資源設定を設計し、明示指定の小実サンプルで品質評価。未指定の私物は走査しない。
+
+## 前段階の再開地点（テーマとAIエラー復帰）
 
 開始HEAD 988d55e。同じfeature/Draft PR #5/base、チャット側f4273ffとモデル/旧索引互換を保持。実装/検証記録HEADは8418d68。後続は提出文書で、最新HEADは実際のGitを確認すること。
 
@@ -30,14 +46,14 @@ Draft PR: https://github.com/jakymiku/Aredoko/pull/5
 
 まず、このブランチのAGENTS.md、docs/chat-handoff.md、docs/codex-handoff.mdの最新節、Issue #4、PR #5を確認してください。mainや古いWeb試作の状態を現状と混同しないでください。
 WinUI 3製品MVP、EmbeddingGemma 2の曖昧検索、交換可能なモデルprofile、混合順位改善は実装済みです。Layaは精度不足のため明示実験APIだけで、GUIの自動切替や種類絞込みには使っていません。
-GUIモデルprofile選択、dirty/favorite再起動、小画面UI、実AI非対応/不足案内から文字検索への復帰は確認済みです。最新appearance-03はUIA68 checks PASSですが、Light dialogのテーマ不一致でvisual FAILです。全3dialogのRequestedTheme修正はビルド済み・native未再実行なので、まず --editor-only --appearance-checks を新しいoutputで実行し全PNGを見てください。その後2,000件超索引と明示サンプル評価へ進めてください。高DPI/HCは未確認でOS設定を勝手に変更しないでください。過去profile-picker-06全体FAILを消さず、起動時profile選択・旧索引互換を保ち、hot swap/自動ダウンロードは追加しないでください。
+AI対象は10,000件まで拡張済みで、256件取得・16件進捗保存・旧cache再利用・global fusionを保持し、生成768次元CPUデータの1万件cancel/restart/searchを確認済みです。実GPU大規模性能と全数万件/1TBは未確認です。ユーザーはゲーム中で前面windowを変えないテストを希望しているため、その状態ではGUI起動/Activate/入力を行わず非表示・低優先度のCPU検証を選んでください。前面操作可能になったら、appearance-03 UIA68 PASS/visual FAIL後の全3dialogテーマ修正と新上限表示を --editor-only --appearance-checks の新規outputで確認し全PNGを見てください。実GPUの段階的な負荷測定と10,000件超設計はその後です。高DPI/HCは未確認でOS設定を勝手に変更しないでください。過去profile-picker-06全体FAILを消さず、起動時profile選択・旧索引互換を保ち、hot swap/自動ダウンロードは追加しないでください。
 既存資産・手動検索・タグ保存を維持し、実装できる環境なら必要なテスト、コミット、同じDraft PRの更新まで進め、進捗を引継ぎへ記録してください。直接編集やWindows実行ができない場合は、実コードに対応した変更ファイルか適用可能な差分と、PCで実行する検証手順を返してください。未実行のテストを成功と報告しないでください。
 非公開リポジトリを読めない場合はアクセスできないと明記し、ユーザーが共有するこのブランチのソースを使ってください。仕様だけから実装済みコードを想像して書き直さないでください。
 ```
 
 ## 現在のGit状態
 
-- 今回の実装/検証記録HEAD: `8418d68`。開始HEADは `988d55e`。後続は提出文書のみで最新HEADは実際のGitを確認すること。
+- 今回の開始HEADは `1f77172`。実装/検証記録HEADはdocs/codex-handoff.mdの最新提出節、最新HEADは実際のGitを確認すること。前段階のテーマ修正は `8418d68`。
 - HEADブランチ: `feat/winui3-production-mvp-20261011`。
 - Draft PR [#5](https://github.com/jakymiku/Aredoko/pull/5)、base `feat/gui-framework-comparison-20261010`。未マージ。PR #1/#2/#3も保持し、mainへmerge・force-push・squashしない。
 - 引継ぎ開始時点はclean、機能作業の未コミット残りなし。テスト用API/GUI/GPU workerは停止済み。
@@ -60,7 +76,7 @@ GUIモデルprofile選択、dirty/favorite再起動、小画面UI、実AI非対�
 | プレビュー | 画像、CBZ/ZIPの先頭画像。サイズ/画素/並行処理を制限、archiveを展開しない |
 | 通常検索 | Python stdlib + SQLite APIによる名前・タグ検索。AI不足/失敗でも独立して利用可能 |
 | AI検索 | ローカルEmbeddingGemma 2/CUDA。名前/タグtextと画像/表紙coverを別vector保存。AI索引dialog、意味検索、画像・表紙検索 |
-| 索引 | prototype上限2,000件。増分fingerprint、cancel/checkpoint、除外/手動filter、旧索引再利用。数万件対応は未完 |
+| 索引 | eligible上限10,000件。256件metadata/vector取得、16件進捗保存、増分/cancel/restart、除外/manual filter/旧cache互換。CPU生成1万件PASS、実GPU大規模/全数万件は未完 |
 | モデル交換 | 検証済みJSON profile +登録adapter、起動時-AIProfile。vector-space identityごとに索引分離、旧default互換。text-only adapterは契約実装済み、別重み未検証 |
 | 混合順位 | AI意味検索の既定mean-rrf。k60、cosine同点平均順位、利用可能modality平均。maxへrollback可、明示text/coverはcosine。再索引不要 |
 | Laya | 固定0.4.2/多言語重み、owned offline worker、独立suggestion API。起動既定無効、-LayaIntentで明示有効。hybrid質問＋順序棄権。GUI採用保留 |
