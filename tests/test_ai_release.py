@@ -300,6 +300,17 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(json.load(response)["policy"],payload)
         profiles.choose("default")
         self.assertEqual(AIProfileSettings(folder,profiles.path).resource(),payload)
+        # A corrupt local preference must not terminate the HTTP handler
+        # or interfere with literal/catalog search.
+        profiles.path.write_text("{broken",encoding="utf-8")
+        with self.assertRaises(urllib.error.HTTPError) as invalid:
+            urllib.request.urlopen(request)
+        self.assertEqual(invalid.exception.code,409)
+        invalid.exception.close()
+        with urllib.request.urlopen(root+"/api/items?q=rain") as response:
+            self.assertEqual(json.load(response)["total"],1)
+        profiles.choose("default")  # GUI can repair an invalid settings file.
+        self.assertEqual(profiles.resource(),{"idle_release_seconds":0,"index_pause_ms":0})
 
     def test_encoderprocess_owned_stop_and_close(self):
         from ai_profiles import DEFAULT_PROFILE
