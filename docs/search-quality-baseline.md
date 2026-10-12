@@ -11,7 +11,7 @@ python tools/evaluate_search_quality.py --output data/ai-ui/search-quality-new
 
 Windows、既存専用venvと重みが必要。outputは新規のdata/ai-ui配下だけ。既存結果を上書きせず、ダウンロード/依存追加/私物フォルダ引数なし。結果のmanifest.json/result.jsonはignored outputだけに保存し、ソース/DB/モデル/パス/process IDはコミットしない。
 
-[固定manifest](../tests/fixtures/search-quality-v1.json)は実行前に凍結。SHA256 **94260e45459d539285d7cde257214cddc9c39263b454a15b8e3c3b1e2e15afa8**。26素材（PNG8/CBZ6/SVG8/WAV4）、20文（用途の言い換え12/見た目4/名前一致対照2/正解なし2）。種類あり/なし、literal/text/cover/allの対応する条件で**130結果行・90実query推論**。同じ文の条件違いは独立した130問ではない。
+[固定manifest](../tests/fixtures/search-quality-v1.json)は実行前に凍結。Git属性でLF改行を固定し、testでもraw-byte SHA256を検査する。SHA256 **94260e45459d539285d7cde257214cddc9c39263b454a15b8e3c3b1e2e15afa8**。26素材（PNG8/CBZ6/SVG8/WAV4）、20文（用途の言い換え12/見た目4/名前一致対照2/正解なし2）。種類あり/なし、literal/text/cover/allの対応する条件で**130結果行・90実query推論**。同じ文の条件違いは独立した130問ではない。
 
 ファイル名はv01/b01/m01/a01等の中立ID。PNG/CBZは実際の単純な幾何図形。表紙14件を画像入力に使う。SVGは同じ灰色矩形で、タグが架空の用途設定を表す。WAVは実際の0.1秒無音で、音源内容の設定はタグだけ。テキスト入力は現行製品通り名前/相対パス/タグで、物語の本文、SVG内部、音声の理解ではない。タグ未設定の画像を含め、metadataの有無を区別する。
 
@@ -25,7 +25,7 @@ primary=2、関連候補=1、その他=0の固定graded qrels。検索結果に�
 
 | 用途の言い換え12問 | 関連Top1 | primary Top1 | Recall@5 | MRR | nDCG@5 |
 | --- | --- | --- | --- | --- | --- |
-| 文字列一致・種類なし | 0/12 | 0/12 | 0.000 | 0.000 | 0.000 |
+| 文字列一致（文全体の部分文字列）・種類なし | 0/12 | 0/12 | 0.000 | 0.000 | 0.000 |
 | AI text・種類なし | 12/12 | 11/12 | 1.000 | 1.000 | 0.983 |
 | AI combined・種類なし | 10/12 | 10/12 | 0.972 | 0.917 | 0.921 |
 | AI text・種類あり | 12/12 | 12/12 | 1.000 | 1.000 | 1.000 |

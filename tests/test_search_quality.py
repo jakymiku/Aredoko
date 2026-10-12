@@ -1,4 +1,5 @@
 import json
+import hashlib
 import math
 from pathlib import Path
 import sys
@@ -33,6 +34,8 @@ class SearchQualityTests(unittest.TestCase):
         self.assertEqual(result[0]['scored_cases'],0)
         self.assertIsNone(result[0]['means'])
     def test_frozen_manifest_keys_qrels_and_sources(self):
+        self.assertEqual(hashlib.sha256((REPO/'tests/fixtures/search-quality-v1.json').read_bytes()).hexdigest(),
+                         '94260e45459d539285d7cde257214cddc9c39263b454a15b8e3c3b1e2e15afa8')
         manifest=json.loads((REPO/'tests/fixtures/search-quality-v1.json').read_text(encoding='utf-8'))
         items={item['key']:item for item in manifest['items']}
         self.assertEqual(len(items),len(manifest['items']))
