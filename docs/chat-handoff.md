@@ -5,7 +5,7 @@
 
 ## 最新の再開地点（2026-10-12・編集回帰完了とUI整理）
 
-aee9421から続行し、前回未到達だったdirty保持とfavoriteのnative再起動を別の軽量バッチで確認した。チャット側f4273ff、launcher、モデル選択、旧索引互換を保持。今回はWinUIの画面配置と案内、nativeテストを変更した。提出HEADはdocs/codex-handoff.md末尾と実際のGit HEADを確認すること。
+aee9421から続行し、前回未到達だったdirty保持とfavoriteのnative再起動を別の軽量バッチで確認した。チャット側f4273ff、launcher、モデル選択、旧索引互換を保持。今回はWinUIの画面配置と案内、nativeテストを変更した。実装/検証記録HEADは1945aa7。後続は提出文書で、最新HEADは実際のGitを確認すること。
 
 **最新の軽量nativeバッチはPASS:** `profile-editor-02` は11 checks、UI整理後の `ui-polish-02` は32 checks。保存表示とAPI反映を待ち、お気に入り保存→未保存タグを残したまま編集継続→再起動後の実checkbox onとAPI保存値を確認した。1200×820の一覧/タイル、700×620の操作欄、不足モデルdialogの警告/閉じるを実UI treeで検査し、最終6 PNGをすべて目視。4回の所有GUI終了は正常、cleanup warningなし、生成元ファイルの開始/終了hash不変。
 
@@ -35,7 +35,7 @@ GUIモデルprofile選択と不足案内、dirty保護/favorite再起動回帰�
 
 ## 現在のGit状態
 
-- 今回の開始HEAD: `aee9421`。最新実装/提出HEADはdocs/codex-handoff.md末尾と実際のブランチHEADを確認すること。
+- 今回の実装/検証記録HEAD: `1945aa7`。開始HEADは `aee9421`。後続は提出文書のみで、最新HEADは実際のGitを確認すること。
 - HEADブランチ: `feat/winui3-production-mvp-20261011`。
 - Draft PR [#5](https://github.com/jakymiku/Aredoko/pull/5)、base `feat/gui-framework-comparison-20261010`。未マージ。PR #1/#2/#3も保持し、mainへmerge・force-push・squashしない。
 - 引継ぎ開始時点はclean、機能作業の未コミット残りなし。テスト用API/GUI/GPU workerは停止済み。

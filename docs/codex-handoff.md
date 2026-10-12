@@ -284,3 +284,9 @@
 - 検証境界: editor/layoutは `actual_model=false/profile_verification=not_run`。前回06のモデル段階到達/全体FAILは歴史として保持し、今回の別バッチで未到達編集を確認。全GPU/profile通し、新AIエラー文での非対応mode操作は今回未実行。dark/通常DPIのみ、Light/HC/高DPI/reader/AOT/配布/1TB性能未確認。
 - ignored証拠: data/ai-ui/profile-editor-01（FAIL）、02（PASS）、ui-polish-01/02（PASS）。生成test17/専用DB/settingsのみ。私物/個人AppData変更、download/installなし。所有GUI/API/embedding/Laya workerなし、作成test profileのみcleanup。docs/ui-polish.mdを追加し、chat/model引継ぎの最新再開地点を更新。
 - **次の3手:** (1) Light/HighContrast/高DPIとAI非対応mode案内→文字検索復帰の実機確認、(2) 2,000件超をcheckpoint/増分/resource上限で段階拡張、(3) 明示選択の小さい実サンプルで検索品質評価。未指定時は生成素材。Layaは精度未達の明示実験APIのみ、本文/OCR/読書/Komgaは後続。
+
+
+### UI整理と編集回帰の提出
+- 実装/検証記録HEAD **1945aa7**（1945aa76410a2639851b6b5ea2420f97714b6722）。後続はこの提出文書のみ。同じfeature/Draft PR #5へ通常push、base維持・未マージ。
+- 未到達の編集/再起動は別native軽量バッチで完了。最終ui-polish-02は32 checks PASS、4回正常終了、生成元hash不変、6 PNG目視。過去の全モデルバッチFAILと今回のeditor/layout PASSを分けて記録。
+- Python96/C#13/WinUI Release（既存IL2104 2件）/py_compile/diff PASS。Light/HC/高DPIと新AIエラー案内操作は次回。私物/AppData/モデル/依存変更なし、所有test GUI/API/worker停止済み。
