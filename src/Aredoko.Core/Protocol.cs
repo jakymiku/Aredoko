@@ -25,9 +25,10 @@ public sealed class MediaRow
     public string PreviewKey => $"{RootId}:{Id}:{Modified}:{Size}";
     public string Location { get; set; } = "";
     public string Availability { get; set; } = "";
-    // "related" when the row matched only through the user's related-term dictionary.
+    // "related" when the row matched only through the user's related-term dictionary;
+    // "partial" when nothing had every word and this row lacks one of them.
     public string Match { get; set; } = "";
-    public string KindAndTags => (Match == "related" ? "関連語の候補 · " : "") + $"{Kind} · {string.Join("、", Tags)}";
+    public string KindAndTags => (Match switch { "related" => "関連語の候補 · ", "partial" => "一部の語のみ一致 · ", _ => "" }) + $"{Kind} · {string.Join("、", Tags)}";
 }
 
 public sealed record SearchExpansion(string Term, string[] Added, bool Truncated);
@@ -38,6 +39,8 @@ public sealed class SearchResponse
     public int? CoverageLimit { get; set; }
     public List<MediaRow> Items { get; set; } = [];
     public List<SearchExpansion> Expansions { get; set; } = [];
+    // Set when no item had every word and the server fell back to items with all but one.
+    public int? PartialWords { get; set; }
 }
 
 public sealed class SessionResponse
@@ -62,6 +65,8 @@ public static class Protocol
         var result = new SearchResponse { Total = root.GetProperty("total").GetInt32(), CoverageLimit = root.TryGetProperty("coverage_limit",out var coverage) ? coverage.GetInt32() : null };
         foreach (var element in root.GetProperty("items").EnumerateArray())
             result.Items.Add(ReadRow(element));
+        if (root.TryGetProperty("partial", out var partial) && partial.ValueKind == JsonValueKind.Object)
+            result.PartialWords = partial.GetProperty("words").GetInt32();
         if (root.TryGetProperty("expansions", out var expansions) && expansions.ValueKind == JsonValueKind.Array)
             foreach (var entry in expansions.EnumerateArray())
                 result.Expansions.Add(new SearchExpansion(
@@ -83,6 +88,9 @@ public static class Protocol
         if (parts.Count == 0) return "";
         return "登録した関連語も候補に含めています（" + string.Join(" / ", parts) + "）。入力した語に一致する作品を先に表示します。";
     }
+
+    public static string DescribePartial(int? words) =>
+        words is int count ? $"{count}語すべてに一致する作品はありません。{count - 1}語に一致する作品を表示しています。" : "";
 
     public static MediaRow ParseItem(string text)
     {

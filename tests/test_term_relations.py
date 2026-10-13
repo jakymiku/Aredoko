@@ -87,6 +87,21 @@ class ExpansionTests(unittest.TestCase):
         self.assertEqual(self.titles(result), ['reimu_standing.png'])
         self.assertEqual(result['items'][0]['match'], 'related')
 
+    def test_partial_fallback_only_when_no_item_has_every_word(self):
+        self.catalog.terms.upsert(REIMU)
+        result = self.catalog.search('巫女 存在しない語')
+        self.assertEqual(result['partial'], {'words': 2, 'required': 1})
+        self.assertEqual(set(self.titles(result)), {'reimu_standing.png', 'shrine_maiden.png', 'touhou_poster.png'})
+        self.assertEqual({item['match'] for item in result['items']}, {'partial'})
+        self.assertEqual(result['total'], 3)
+        # Filters still apply; a full match never falls back.
+        self.assertEqual(self.catalog.search('巫女 存在しない語', kind='book')['total'], 0)
+        self.assertNotIn('partial', self.catalog.search('東方 巫女'))
+        self.assertNotIn('partial', self.catalog.search('存在しない語'))  # one word: no fallback
+        three = self.catalog.search('東方 巫女 存在しない語')
+        self.assertEqual((three['partial'], self.titles(three)), ({'words': 3, 'required': 2},
+                         ['touhou_poster.png', 'reimu_standing.png']))
+
     def expand(self, words):
         with self.catalog.connect() as db:
             return self.catalog.terms.expand(words, db)

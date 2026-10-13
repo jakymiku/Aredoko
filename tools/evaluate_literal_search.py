@@ -78,15 +78,17 @@ def evaluate(version='v3'):
                     for entry in manifest['dictionary']:
                         catalog.terms.upsert(entry)
                 for case in manifest['cases']:
+                    partial = False
                     if condition == 'legacy':
                         titles = legacy_search(catalog, case['query'], case['kind'])
                     else:
                         result = catalog.search(case['query'], kind=case['kind'], limit=120)
                         titles = [row['title'] for row in result['items']]
+                        partial = 'partial' in result
                     ranked = [by_title[title] for title in titles]
                     rows.append({'case': case['id'], 'group': case['group'], 'query': case['query'],
                                  'source': condition, 'filter': case['kind'] or 'all-kinds',
-                                 'ranked': ranked, 'returned': len(ranked),
+                                 'ranked': ranked, 'returned': len(ranked), 'partial': partial,
                                  'metrics': metrics(ranked, case['relevance'])})
         finally:
             catalog.close()
@@ -108,7 +110,8 @@ def main():
         print(f"{entry['group']:<14} {entry['source']:<10} cases={entry['cases']} scored={entry['scored_cases']} {text}")
     for row in result['rows']:
         if row['metrics'] is None or row['metrics']['recall_at_5'] < 1 or row['metrics']['best_grade_at_1'] < 1:
-            print(f"  {row['source']:<10} {row['case']} {row['query']!r}: top={row['ranked'][:5]} returned={row['returned']}")
+            print(f"  {row['source']:<10} {row['case']} {row['query']!r}: top={row['ranked'][:5]} returned={row['returned']}"
+                  + (' (partial fallback)' if row['partial'] else ''))
     if args.output:
         output = (ROOT / args.output).resolve()
         if (ROOT / 'data').resolve() not in output.parents:

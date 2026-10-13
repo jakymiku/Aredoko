@@ -67,6 +67,23 @@ def matcher(alternatives):
     return match
 
 
+def coverage(alternatives):
+    """SQLite scalar aredoko_cover(title, tags): words matched by any option.
+
+    Used only for the partial fallback when no item has every word.
+    """
+    memo = {}
+
+    def cover(title, tags):
+        key = (title, tags)
+        if key not in memo:
+            hay = normalize(title) + '\x1f' + normalize(tags)
+            memo[key] = sum(any(option in hay for option in options) for options in alternatives)
+        return memo[key]
+    return cover
+
+
 def register(db, alternatives):
-    """Expose this search's matcher to SQLite on this connection."""
+    """Expose this search's matchers to SQLite on this connection."""
     db.create_function('aredoko_match', 2, matcher(alternatives), deterministic=True)
+    db.create_function('aredoko_cover', 2, coverage(alternatives), deterministic=True)

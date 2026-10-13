@@ -37,11 +37,17 @@ class LiteralEvalTests(unittest.TestCase):
                 cases = len(self.check_manifest(name, sha)['cases'])
                 result = evaluator.evaluate(version)
                 self.assertEqual(len(result['rows']), cases * len(evaluator.CONDITIONS))
-                by = {(row['source'], row['case']): set(row['ranked']) for row in result['rows']}
-                for (source, case), ranked in by.items():
+                by = {(row['source'], row['case']): row for row in result['rows']}
+                full = lambda source, case: (set() if by[(source, case)]['partial']
+                                             else set(by[(source, case)]['ranked']))
+                for (source, case), row in by.items():
                     if source == 'legacy':
-                        self.assertLessEqual(ranked, by[('normalized', case)], case)
-                        self.assertLessEqual(by[('normalized', case)], by[('dictionary', case)], case)
+                        # Full (all-word) matches only grow: legacy ⊆ normalized ⊆ dictionary.
+                        # A partial fallback replaces an empty full match and is checked apart.
+                        self.assertLessEqual(set(row['ranked']), full('normalized', case), case)
+                        self.assertLessEqual(full('normalized', case), full('dictionary', case), case)
+                        if by[('dictionary', case)]['partial']:
+                            self.assertTrue(by[('normalized', case)]['partial'], case)
                 self.assertTrue(all(entry['scored_cases'] == 0 for entry in result['summary']
                                     if entry['group'] == 'no-answer'))
 

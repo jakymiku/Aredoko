@@ -48,7 +48,11 @@ class CatalogTermTests(unittest.TestCase):
         self.assertEqual(self.titles('巫女\u3000東方'), ['standing_A.png'])
         self.assertEqual(self.titles('巫女'), ['shrine_B.png', 'standing_A.png'])
         self.assertEqual(self.titles('巫女 shrine'), ['shrine_B.png'])
-        self.assertEqual(self.titles('東方 存在しない'), [])
+        # No item has every word: items missing one word come back marked partial.
+        partial = self.catalog.search('東方 存在しない')
+        self.assertEqual(([i['title'] for i in partial['items']], partial['partial']),
+                         (['standing_A.png'], {'words': 2, 'required': 1}))
+        self.assertEqual(self.titles('存在しない'), [])
 
     def test_variants_and_old_substring_queries_still_match(self):
         ids = self.scan(['Reimu_Stand.PNG', 'ﾚｲﾑ_half.png', 'plain 100%_a.png'])
