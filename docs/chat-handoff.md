@@ -1,5 +1,18 @@
 # Aredoko — GPTチャットへの最新引継ぎ
 
+## 最新：エラーの日本語表示と検索エラーの具体化（2026-10-13 夜3）
+
+開始HEAD 3df8cf8。ユーザー指示「更に進めて」。**CI起動0回**。
+
+1. `d972b38` WinUIでサーバーの英語エラーを日本語表示（`src/Aredoko.Core/ErrorText.cs`）。固定文言の対応表と、関連語の検証エラー（「3件目: 別名に空白は…」等）のパターン変換。日本語・未知の文言はそのまま。HTMLや空の本文でも例外にせず状態コードで案内。`LibraryApi`のGET（検索・書き出し・一般GET）もPOSTと同じ扱いに統一（以前はGETの失敗が英語の`HttpRequestException`文言）。`tests/test_error_text_coverage.py`がサーバーの固定英語エラーすべてに日本語訳があることを静的検査。
+2. `f470804` **バグ修正**：`GET /api/items`の検証エラーが常に`Invalid request`になり、17語以上の検索などで理由が分からなかった。`Use at most 16 search words`・`Invalid paging`（負数・非数字・`²`等）・`Invalid filter`を返す。
+
+テスト（Linux、最小限）：Python **206 PASS**、C# Core **93 PASS**、WinUI C#-only compile 0 error。**未検証**：Windows Release・XAML・native GUI（エラー表示の見え方を含む）。
+
+次の3手：(1) Codex/AntigravityでWindows native確認。(2) 新しいv6で現在の関連語規則を判定。(3) 部分一致で欠けた語を作品ごとに示すか検討。
+
+---
+
 ## 最新：途中一致展開・順位バグ修正・部分一致の空表示修正（2026-10-13 夜2）
 
 開始HEAD db80c18。ユーザー指示「どんどん改善、バグがあれば直す」。**CI起動0回**。

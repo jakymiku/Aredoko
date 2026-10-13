@@ -45,8 +45,8 @@
 
 ## 検証（2026-10-13、Linux sandbox）
 
-- Python: `tests/test_search_terms.py`（6件）、`tests/test_term_relations.py`（15件）、`tests/test_literal_eval.py`（2件）を含む全**204 tests PASS**。生成一時ファイル・一時DBのみ。
-- C#: `dotnet run --project tests/Aredoko.Core.Tests -c Release` **89 checks PASS**（Linux、.NET SDK 10.0.401をsandboxにだけ導入）。
+- Python: `tests/test_search_terms.py`（6件）、`tests/test_term_relations.py`（15件）、`tests/test_literal_eval.py`（2件）を含む全**206 tests PASS**。生成一時ファイル・一時DBのみ。
+- C#: `dotnet run --project tests/Aredoko.Core.Tests -c Release` **93 checks PASS**（Linux、.NET SDK 10.0.401をsandboxにだけ導入）。
 - WinUI: `python tools/compile_check_winui.py` で **C#のみのコンパイルPASS（0 error/0 CS warning）**。XAMLはwell-formedのみ確認。
 - **未検証**: Windows x64 SelfContained Release build、XAMLコンパイル、関連語dialogと案内文のnative表示/操作、狭幅・高DPI・Narrator、Windows実機での速度。AI検索（意味/表紙）には辞書を使っていない。
 
