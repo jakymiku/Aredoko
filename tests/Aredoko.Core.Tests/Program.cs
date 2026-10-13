@@ -93,3 +93,7 @@ var partialSearch=Protocol.ParseSearch("""{"total":1,"items":[{"id":1,"title":"a
 Check(partialSearch.PartialWords==2&&partialSearch.Items[0].KindAndTags.StartsWith("一部の語のみ一致 · "),"partial fallback parsed and labelled");
 Check(Protocol.DescribePartial(2)=="2語すべてに一致する作品はありません。1語に一致する作品を表示しています。"&&Protocol.DescribePartial(null)=="","partial notice text");
 Check(RelatedTerms.CountExport("""{"format":"aredoko-related-terms","version":1,"entries":[{"term":"a"},{"term":"b"}]}""")==2,"export count read from the written document");
+Check(ErrorText.Localize("Entry 3: aliases must be a single word without spaces")=="3件目: 別名に空白は入れられません（1語ずつ「、」で区切ってください）。","nested import error localized");
+Check(ErrorText.Localize("At most 2000 related-term entries after import")=="関連語は2,000件まで登録できます（読み込み後の合計）。"&&ErrorText.Localize("Use at most 16 search words")=="検索語は16語までにしてください。","limit errors localized");
+Check(ErrorText.Localize("スキャン中です。")=="スキャン中です。"&&ErrorText.Localize("Something new")=="Something new","Japanese and unknown messages pass through");
+Check(ErrorText.FromResponse("""{"error":"Related-term entry not found"}""",404)=="その見出し語は登録されていません。"&&ErrorText.FromResponse("<html>",502)=="バックエンドでエラーが起きました（502）。"&&ErrorText.FromResponse("""{"error":""}""",400)=="要求を処理できませんでした（400）。","response bodies mapped without throwing");

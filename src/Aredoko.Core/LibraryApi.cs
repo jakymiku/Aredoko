@@ -25,18 +25,24 @@ public sealed class LibraryApi : IDisposable
             var result=await PostAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,scope));
             return Protocol.ParseSearch(result.ToJsonString());
         }
-        return Protocol.ParseSearch(await client.GetStringAsync($"api/items?q={Uri.EscapeDataString(q)}&kind={kind}&view={view}&page={page}"));
+        return Protocol.ParseSearch(await GetTextAsync($"api/items?q={Uri.EscapeDataString(q)}&kind={kind}&view={view}&page={page}"));
     }
     public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed));
-    public Task<string> ExportRelatedTermsAsync() => client.GetStringAsync("api/library/terms/export");
+    public Task<string> ExportRelatedTermsAsync() => GetTextAsync("api/library/terms/export");
     public Task<JsonNode> ImportRelatedTermsAsync(string document) => PostAsync("api/library/terms/import", document);
-    public async Task<JsonNode> GetAsync(string route) => JsonNode.Parse(await client.GetStringAsync(route))!;
+    public async Task<JsonNode> GetAsync(string route) => JsonNode.Parse(await GetTextAsync(route))!;
+    private async Task<string> GetTextAsync(string route) {
+        using var response=await client.GetAsync(route);
+        var text=await response.Content.ReadAsStringAsync();
+        if(!response.IsSuccessStatusCode) throw new InvalidOperationException(ErrorText.FromResponse(text,(int)response.StatusCode));
+        return text;
+    }
     public Task<JsonNode> PostAsync(string route,JsonObject data) => PostAsync(route,data.ToJsonString());
     private async Task<JsonNode> PostAsync(string route,string data) {
         using var content=new StringContent(data,Encoding.UTF8,"application/json");
         using var response=await client.PostAsync(route,content);
         var text=await response.Content.ReadAsStringAsync();
-        if(!response.IsSuccessStatusCode) throw new InvalidOperationException(JsonNode.Parse(text)?["error"]?.GetValue<string>() ?? response.StatusCode.ToString());
+        if(!response.IsSuccessStatusCode) throw new InvalidOperationException(ErrorText.FromResponse(text,(int)response.StatusCode));
         return JsonNode.Parse(text)!;
     }
     public async Task<byte[]?> PreviewAsync(int id, CancellationToken cancellation)
