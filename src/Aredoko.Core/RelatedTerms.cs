@@ -57,6 +57,9 @@ public static class RelatedTerms
         return null;
     }
 
+    public static int CountExport(string document) =>
+        JsonNode.Parse(document)?["entries"] is JsonArray entries ? entries.Count : 0;
+
     public static string DescribeImport(JsonNode result) =>
         $"{result["imported"]?.GetValue<int>() ?? 0:N0}件を読み込みました（追加{result["added"]?.GetValue<int>() ?? 0:N0}・置換{result["replaced"]?.GetValue<int>() ?? 0:N0}）。";
 

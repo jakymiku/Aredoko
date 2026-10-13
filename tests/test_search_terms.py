@@ -53,6 +53,8 @@ class CatalogTermTests(unittest.TestCase):
         self.assertEqual(([i['title'] for i in partial['items']], partial['partial']),
                          (['standing_A.png'], {'words': 2, 'required': 1}))
         self.assertEqual(self.titles('存在しない'), [])
+        # Nothing with even all-but-one word: a plain empty result, no partial flag.
+        self.assertNotIn('partial', self.catalog.search('存在しない 別の語'))
 
     def test_variants_and_old_substring_queries_still_match(self):
         ids = self.scan(['Reimu_Stand.PNG', 'ﾚｲﾑ_half.png', 'plain 100%_a.png'])

@@ -92,3 +92,4 @@ Check(RelatedTerms.DescribeImport(System.Text.Json.Nodes.JsonNode.Parse("""{"imp
 var partialSearch=Protocol.ParseSearch("""{"total":1,"items":[{"id":1,"title":"a.png","path":"a.png","kind":"image","tags":["巫女"],"shelf":"","favorite":false,"reviewed":false,"match":"partial"}],"partial":{"words":2,"required":1}}""");
 Check(partialSearch.PartialWords==2&&partialSearch.Items[0].KindAndTags.StartsWith("一部の語のみ一致 · "),"partial fallback parsed and labelled");
 Check(Protocol.DescribePartial(2)=="2語すべてに一致する作品はありません。1語に一致する作品を表示しています。"&&Protocol.DescribePartial(null)=="","partial notice text");
+Check(RelatedTerms.CountExport("""{"format":"aredoko-related-terms","version":1,"entries":[{"term":"a"},{"term":"b"}]}""")==2,"export count read from the written document");

@@ -49,8 +49,10 @@ public sealed class RelatedTermsEditor
             WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current));
             var file = await picker.PickSaveFileAsync();
             if (file is null) return;
-            await Windows.Storage.FileIO.WriteTextAsync(file, await api.ExportRelatedTermsAsync(), Windows.Storage.Streams.UnicodeEncoding.Utf8);
-            status.Text = $"{loaded.Count:N0}件を書き出しました。";
+            var document = await api.ExportRelatedTermsAsync();
+            await Windows.Storage.FileIO.WriteTextAsync(file, document, Windows.Storage.Streams.UnicodeEncoding.Utf8);
+            // Count what was written, not the possibly stale list in this dialog.
+            status.Text = $"{RelatedTerms.CountExport(document):N0}件を書き出しました。";
         });
         import.Click += async (_, _) => await RunAsync(async () =>
         {

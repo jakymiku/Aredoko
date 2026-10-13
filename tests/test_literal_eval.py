@@ -6,7 +6,7 @@ sys.path.insert(0, str(REPO / 'tools')); sys.path.insert(0, str(REPO / 'app'))
 import evaluate_literal_search as evaluator
 from term_relations import validate_entry
 
-GROUPS = {'exact-control', 'variant', 'multiword', 'related', 'over-expansion', 'no-answer'}
+GROUPS = {'exact-control', 'variant', 'multiword', 'related', 'over-expansion', 'partial', 'no-answer'}
 
 
 class LiteralEvalTests(unittest.TestCase):

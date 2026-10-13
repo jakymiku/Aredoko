@@ -102,9 +102,11 @@ class ProductionCatalog(Catalog):
                 where[where.index('aredoko_match(i.title,i.tags)>=0')]=f'aredoko_cover(i.title,i.tags)>={required}'
                 clause=self.JOIN+' WHERE '+' AND '.join(where)
                 total=db.execute('SELECT count(*)'+clause,values).fetchone()[0]
-                partial={'words':len(terms),'required':required}
+                # An empty fallback stays an ordinary empty result, so the UI
+                # never claims to show partial matches it does not have.
+                partial={'words':len(terms),'required':required} if total else None
                 rows=db.execute('SELECT '+self.FIELDS+clause+' ORDER BY i.id LIMIT ? OFFSET ?',
-                                values+[limit,page*limit]).fetchall()
+                                values+[limit,page*limit]).fetchall() if total else []
             elif expansions:
                 # Items matching the typed words themselves come before
                 # related-only candidates; ties keep the stable id order.

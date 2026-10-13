@@ -31,6 +31,7 @@ FIXTURES = ROOT / 'tests' / 'fixtures'
 FROZEN = {
     'v3': ('literal-related-v3.json', 'c4fa0d94c6ebf4459bf4e9d593af759b39afd8a680404b999d0596f602385091'),
     'v4': ('literal-related-v4.json', '57a816776f291c9af3865ab99efd82271a427655c1ff2e6f577f4ecc5a467964'),
+    'v5': ('literal-related-v5.json', '38f5addb7947902c2062595a4c493f8b22641d83eaa41d789ce7a2597f3788f5'),
 }
 MANIFEST = FIXTURES / FROZEN['v3'][0]
 SHA256 = FROZEN['v3'][1]
