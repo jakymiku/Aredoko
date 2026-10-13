@@ -1,0 +1,316 @@
+{
+ "version": "literal-related-v4-holdout",
+ "description": "Holdout frozen 2026-10-13 AFTER the partial-headword/spelling expansion change and BEFORE running it. Fictional names/tags only; written by the same author as the change and the dictionary, so it is development-adjacent evidence, not real-library quality. over-expansion cases check that short words do not flood results; their qrels are the direct matches only.",
+ "items": [
+  {
+   "key": "s01",
+   "file": "kaito_lineart_rough.png",
+   "kind": "image",
+   "tags": [
+    "蒼井カイト",
+    "線画"
+   ]
+  },
+  {
+   "key": "s02",
+   "file": "kaito_color_final.png",
+   "kind": "image",
+   "tags": [
+    "蒼井カイト",
+    "カラー"
+   ]
+  },
+  {
+   "key": "s03",
+   "file": "mirai_lineart.png",
+   "kind": "image",
+   "tags": [
+    "白瀬ミライ",
+    "線画"
+   ]
+  },
+  {
+   "key": "s04",
+   "file": "generic_pilot_suit_ref.png",
+   "kind": "image",
+   "tags": [
+    "パイロットスーツ",
+    "資料"
+   ]
+  },
+  {
+   "key": "s05",
+   "file": "蒼穹のアステリア_ロゴ.png",
+   "kind": "image",
+   "tags": [
+    "ロゴ"
+   ]
+  },
+  {
+   "key": "s06",
+   "file": "asteria_mecha_sheet.png",
+   "kind": "image",
+   "tags": [
+    "蒼穹のアステリア",
+    "メカ",
+    "設定画"
+   ]
+  },
+  {
+   "key": "s07",
+   "file": "ソラアス_同人誌_vol1.cbz",
+   "kind": "book",
+   "tags": [
+    "蒼穹のアステリア",
+    "漫画"
+   ]
+  },
+  {
+   "key": "s08",
+   "file": "sora_asu_vol2.cbz",
+   "kind": "book",
+   "tags": [
+    "漫画"
+   ]
+  },
+  {
+   "key": "s09",
+   "file": "蒼い海_背景.png",
+   "kind": "image",
+   "tags": [
+    "背景",
+    "海"
+   ]
+  },
+  {
+   "key": "s10",
+   "file": "aoi_umbrella_icon.png",
+   "kind": "image",
+   "tags": [
+    "アイコン"
+   ]
+  },
+  {
+   "key": "s11",
+   "file": "戦闘BGM_アステリア.wav",
+   "kind": "audio",
+   "tags": [
+    "BGM",
+    "戦闘"
+   ]
+  },
+  {
+   "key": "s12",
+   "file": "calm_piano_loop.wav",
+   "kind": "audio",
+   "tags": [
+    "BGM",
+    "ピアノ"
+   ]
+  },
+  {
+   "key": "s13",
+   "file": "しろねこ_スタンプ.png",
+   "kind": "image",
+   "tags": [
+    "白猫",
+    "スタンプ"
+   ]
+  },
+  {
+   "key": "s14",
+   "file": "shironeko_sticker_02.png",
+   "kind": "image",
+   "tags": [
+    "スタンプ"
+   ]
+  },
+  {
+   "key": "s15",
+   "file": "キャラ表_汎用.png",
+   "kind": "image",
+   "tags": [
+    "キャラ表"
+   ]
+  }
+ ],
+ "dictionary": [
+  {
+   "term": "蒼井カイト",
+   "aliases": [
+    "カイト",
+    "kaito"
+   ],
+   "related": [
+    "蒼穹のアステリア",
+    "パイロット"
+   ]
+  },
+  {
+   "term": "白瀬ミライ",
+   "aliases": [
+    "ミライ",
+    "mirai"
+   ],
+   "related": [
+    "蒼穹のアステリア",
+    "パイロット"
+   ]
+  },
+  {
+   "term": "蒼穹のアステリア",
+   "aliases": [
+    "ソラアス",
+    "sora_asu",
+    "asteria"
+   ],
+   "related": []
+  },
+  {
+   "term": "白猫",
+   "aliases": [
+    "しろねこ",
+    "shironeko"
+   ],
+   "related": []
+  }
+ ],
+ "cases": [
+  {
+   "id": "h01",
+   "group": "exact-control",
+   "query": "kaito_color",
+   "kind": "",
+   "relevance": {
+    "s02": 2
+   }
+  },
+  {
+   "id": "h02",
+   "group": "exact-control",
+   "query": "キャラ表",
+   "kind": "",
+   "relevance": {
+    "s15": 2
+   }
+  },
+  {
+   "id": "h03",
+   "group": "variant",
+   "query": "ｓｏｒａ＿ａｓｕ",
+   "kind": "",
+   "relevance": {
+    "s08": 2,
+    "s07": 1
+   }
+  },
+  {
+   "id": "h04",
+   "group": "variant",
+   "query": "シロネコ",
+   "kind": "",
+   "relevance": {
+    "s13": 2,
+    "s14": 2
+   }
+  },
+  {
+   "id": "h05",
+   "group": "multiword",
+   "query": "線画 カイト",
+   "kind": "",
+   "relevance": {
+    "s01": 2
+   }
+  },
+  {
+   "id": "h06",
+   "group": "multiword",
+   "query": "BGM 戦闘",
+   "kind": "audio",
+   "relevance": {
+    "s11": 2
+   }
+  },
+  {
+   "id": "h07",
+   "group": "related",
+   "query": "蒼穹のアステリア パイロット",
+   "kind": "",
+   "relevance": {
+    "s01": 2,
+    "s02": 2,
+    "s03": 2
+   }
+  },
+  {
+   "id": "h08",
+   "group": "related",
+   "query": "蒼穹 パイロット",
+   "kind": "",
+   "relevance": {
+    "s01": 2,
+    "s02": 2,
+    "s03": 2
+   }
+  },
+  {
+   "id": "h09",
+   "group": "related",
+   "query": "ソラアス 線画",
+   "kind": "",
+   "relevance": {
+    "s01": 2,
+    "s03": 2
+   }
+  },
+  {
+   "id": "h10",
+   "group": "related",
+   "query": "アステリア 漫画",
+   "kind": "book",
+   "relevance": {
+    "s07": 2,
+    "s08": 2
+   }
+  },
+  {
+   "id": "h11",
+   "group": "related",
+   "query": "パイロット キャラ",
+   "kind": "image",
+   "relevance": {
+    "s01": 2,
+    "s02": 2,
+    "s03": 2,
+    "s04": 1
+   }
+  },
+  {
+   "id": "h12",
+   "group": "over-expansion",
+   "query": "蒼い",
+   "kind": "",
+   "relevance": {
+    "s09": 2
+   }
+  },
+  {
+   "id": "h13",
+   "group": "over-expansion",
+   "query": "白",
+   "kind": "",
+   "relevance": {
+    "s13": 2,
+    "s03": 1
+   }
+  },
+  {
+   "id": "h14",
+   "group": "no-answer",
+   "query": "潜水艦 ソナー",
+   "kind": "",
+   "relevance": {}
+  }
+ ]
+}
