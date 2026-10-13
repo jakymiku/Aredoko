@@ -1,5 +1,19 @@
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
+## 最新：関連語の固定評価v3とJSON読み込み/書き出し（2026-10-13 後続）
+
+開始HEAD **5b88c56**（ユーザーのAGENTS.md/デザイン方針更新を取り込み済み）。AGENTS.mdの新CI方針（枠枯渇中は起動しない、後も根拠付き1回・自動再実行なし）とWindowsデザイン方針（現GUIはPoC、今は改修しない）を確認。**CI起動0回**、workflow無変更（3本ともworkflow_dispatchのみを確認）。
+
+1. `159c202` 固定評価manifest `tests/fixtures/literal-related-v3.json` を**実行前に凍結**（SHA256 c4fa0d94…5091）。
+2. `783a31a` `tools/evaluate_literal_search.py`：生成placeholder＋一時DBで旧LIKE/新・辞書なし/新・辞書ありを比較。結果と観測された失敗4件は[related-terms.md](related-terms.md#固定評価-literal-related-v32026-10-13linux)。関連語群MRRは0.000→0.400→0.800。辞書は評価者が書いたので実品質の証拠ではない。
+3. `34783ee` 関連語のJSON書き出し/読み込み：`GET /api/library/terms/export`、`POST /api/library/terms/import`（全件か0件、同じ見出し語は置換、16MiB）。Core `CheckImport`/`DescribeImport`、dialogにpickerボタン2つ。
+
+テスト（Linux）：Python **199 PASS**（`NO_PROXY=127.0.0.1,localhost`）、C# Core **86 checks PASS**、`tools/compile_check_winui.py` **0 error**。**未検証**：Windows Release・XAMLコンパイル・native GUI（関連語dialog、picker、reader）。
+
+次の3手：(1) Windowsで関連語dialog（保存・削除・書き出し・読み込み）と「東方 巫女」型検索、readerをnative確認。(2) GPU環境でv3にAI条件を追加して比較。(3) 観測された失敗（部分一致展開・2段展開・汎用語）の改善案を新しい凍結holdoutで判定。
+
+---
+
 ## 最新：文字検索の正規化・複数語AND・関連語辞書、Linux C#検証（2026-10-13）
 
 開始HEAD **dd31e6385932f439a9bf48435fa3022e0dfbdf59**（clean、同じ`feat/winui3-production-mvp-20261011`/Draft PR #5/base `feat/gui-framework-comparison-20261010`）。AGENTS→vision→agent-start→両handoff最新節→Issue #4/PR #5を確認。PR #6（ビジョン）は取り込み済みのため再取込みなし。今回の環境は**Linux sandbox**（Windows/GPUなし）。GitHub接続で直接clone・通常pushが可能になり、以前の部分snapshot方式は不要。**CI起動0回・workflow変更なし**、main/他PR無変更、force push・branch削除なし。
