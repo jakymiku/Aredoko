@@ -11,7 +11,7 @@ Conditions (same items, same queries, same graded qrels):
 The dictionary and queries were written by the same evaluator, so the
 dictionary condition shows mechanism behaviour, not real-library quality.
 
-Usage: python tools/evaluate_literal_search.py [--output data/literal-eval/result.json]
+Usage: python tools/evaluate_literal_search.py [--manifest v3|v4] [--output data/literal-eval/result.json]
 """
 import argparse
 import hashlib
@@ -26,8 +26,14 @@ sys.path.insert(0, str(ROOT / 'tools'))
 from production import ProductionCatalog  # noqa: E402
 from search_quality import metrics, summary  # noqa: E402
 
-MANIFEST = ROOT / 'tests' / 'fixtures' / 'literal-related-v3.json'
-SHA256 = 'c4fa0d94c6ebf4459bf4e9d593af759b39afd8a680404b999d0596f602385091'
+FIXTURES = ROOT / 'tests' / 'fixtures'
+# Frozen manifests: never edit one; add a new version instead.
+FROZEN = {
+    'v3': ('literal-related-v3.json', 'c4fa0d94c6ebf4459bf4e9d593af759b39afd8a680404b999d0596f602385091'),
+    'v4': ('literal-related-v4.json', '57a816776f291c9af3865ab99efd82271a427655c1ff2e6f577f4ecc5a467964'),
+}
+MANIFEST = FIXTURES / FROZEN['v3'][0]
+SHA256 = FROZEN['v3'][1]
 CONDITIONS = ('legacy', 'normalized', 'dictionary')
 
 
@@ -46,9 +52,10 @@ def legacy_search(catalog, query, kind):
     return [row['title'] for row in rows]
 
 
-def evaluate():
-    raw = MANIFEST.read_bytes()
-    if hashlib.sha256(raw).hexdigest() != SHA256:
+def evaluate(version='v3'):
+    name, sha = FROZEN[version]
+    raw = (FIXTURES / name).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != sha:
         raise SystemExit('Frozen manifest changed; create a new version instead of editing it')
     manifest = json.loads(raw)
     by_title = {item['file']: item['key'] for item in manifest['items']}
@@ -84,15 +91,16 @@ def evaluate():
         finally:
             catalog.close()
     grouped = summary([dict(row, filter='all-filters') for row in rows])
-    return {'manifest': MANIFEST.name, 'sha256': SHA256, 'conditions': list(CONDITIONS),
+    return {'manifest': name, 'sha256': sha, 'conditions': list(CONDITIONS),
             'rows': rows, 'summary': grouped}
 
 
 def main():
     parser = argparse.ArgumentParser(description='Literal search evaluation on generated fixtures')
+    parser.add_argument('--manifest', choices=sorted(FROZEN), default='v3')
     parser.add_argument('--output', help='optional JSON path inside data/')
     args = parser.parse_args()
-    result = evaluate()
+    result = evaluate(args.manifest)
     for entry in result['summary']:
         means = entry['means']
         text = ('no scored cases' if means is None else
