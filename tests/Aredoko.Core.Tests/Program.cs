@@ -27,6 +27,13 @@ Check(rejected,"image dimension multiplication cannot overflow");
 
 Check(Protocol.ParseSearch("""{"total":0,"items":[],"coverage_limit":10000}""").CoverageLimit==10000,"AI coverage from server");
 Check(Protocol.ParseSearch("""{"total":0,"items":[]}""").CoverageLimit is null,"literal/old API coverage optional");
+var expanded=Protocol.ParseSearch("""{"total":2,"items":[{"id":1,"title":"poster.png","kind":"image","tags":["東方","巫女"],"shelf":"","favorite":false,"reviewed":false,"match":"direct"},{"id":2,"title":"reimu.png","kind":"image","tags":["博麗霊夢"],"shelf":"","favorite":false,"reviewed":false,"match":"related"}],"expansions":[{"term":"東方","added":["博麗霊夢","霊夢","Reimu","霧雨魔理沙"],"truncated":true},{"term":"巫女","added":["博麗霊夢"]}]}""");
+Check(expanded.Expansions.Count==2&&expanded.Expansions[0].Truncated&&!expanded.Expansions[1].Truncated&&expanded.Expansions[0].Added.Length==4,"related-term expansions parsed");
+Check(expanded.Items[0].Match=="direct"&&expanded.Items[1].KindAndTags.StartsWith("関連語の候補 · ")&&!expanded.Items[0].KindAndTags.StartsWith("関連語"),"related-only rows are labelled");
+var notice=Protocol.DescribeExpansions(expanded.Expansions);
+Check(notice.Contains("東方→博麗霊夢、霊夢、Reimu ほか1語")&&notice.Contains("巫女→博麗霊夢）")&&!notice.Contains("霧雨魔理沙"),"expansion notice is bounded");
+Check(Protocol.DescribeExpansions(Protocol.ParseSearch("""{"total":0,"items":[]}""").Expansions)=="","no dictionary means no notice");
+Check(Protocol.DescribeExpansions(new[]{new SearchExpansion("東方",new[]{"a"},true)}).Contains("東方→a ほか）"),"truncated expansion is disclosed");
 
 var scope=System.Text.Json.Nodes.JsonNode.Parse("""{"root_ids":[2],"kind":"image","shelf":"素材"}""")!.AsObject();
 var scopedIndex=AIScopeRequests.Scoped(scope);

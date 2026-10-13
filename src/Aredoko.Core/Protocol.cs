@@ -25,14 +25,19 @@ public sealed class MediaRow
     public string PreviewKey => $"{RootId}:{Id}:{Modified}:{Size}";
     public string Location { get; set; } = "";
     public string Availability { get; set; } = "";
-    public string KindAndTags => $"{Kind} · {string.Join("、", Tags)}";
+    // "related" when the row matched only through the user's related-term dictionary.
+    public string Match { get; set; } = "";
+    public string KindAndTags => (Match == "related" ? "関連語の候補 · " : "") + $"{Kind} · {string.Join("、", Tags)}";
 }
+
+public sealed record SearchExpansion(string Term, string[] Added, bool Truncated);
 
 public sealed class SearchResponse
 {
     public int Total { get; set; }
     public int? CoverageLimit { get; set; }
     public List<MediaRow> Items { get; set; } = [];
+    public List<SearchExpansion> Expansions { get; set; } = [];
 }
 
 public sealed class SessionResponse
@@ -57,7 +62,26 @@ public static class Protocol
         var result = new SearchResponse { Total = root.GetProperty("total").GetInt32(), CoverageLimit = root.TryGetProperty("coverage_limit",out var coverage) ? coverage.GetInt32() : null };
         foreach (var element in root.GetProperty("items").EnumerateArray())
             result.Items.Add(ReadRow(element));
+        if (root.TryGetProperty("expansions", out var expansions) && expansions.ValueKind == JsonValueKind.Array)
+            foreach (var entry in expansions.EnumerateArray())
+                result.Expansions.Add(new SearchExpansion(
+                    entry.GetProperty("term").GetString() ?? "",
+                    entry.GetProperty("added").EnumerateArray().Select(word => word.GetString() ?? "").Where(word => word.Length > 0).ToArray(),
+                    entry.TryGetProperty("truncated", out var truncated) && truncated.ValueKind == JsonValueKind.True));
         return result;
+    }
+
+    // Short, bounded notice text: which related words the literal search added.
+    public static string DescribeExpansions(IReadOnlyList<SearchExpansion> expansions, int wordsPerTerm = 3)
+    {
+        var parts = expansions.Where(e => e.Added.Length > 0).Take(4).Select(e =>
+        {
+            var shown = string.Join("、", e.Added.Take(wordsPerTerm));
+            var hidden = e.Added.Length - Math.Min(wordsPerTerm, e.Added.Length);
+            return $"{e.Term}→{shown}{(hidden > 0 || e.Truncated ? $" ほか{(hidden > 0 ? $"{hidden}語" : "")}" : "")}";
+        }).ToList();
+        if (parts.Count == 0) return "";
+        return "登録した関連語も候補に含めています（" + string.Join(" / ", parts) + "）。入力した語に一致する作品を先に表示します。";
     }
 
     public static MediaRow ParseItem(string text)
@@ -78,7 +102,8 @@ public static class Protocol
         Modified = row.TryGetProperty("mtime_ns", out var modified) ? modified.GetInt64() : 0,
         Size = row.TryGetProperty("size_bytes", out var size) ? size.GetInt64() : 0,
         Location = row.TryGetProperty("relative_path", out var loc) ? loc.GetString() ?? "" : "",
-        Availability = row.TryGetProperty("availability", out var av) ? av.GetString() ?? "" : ""
+        Availability = row.TryGetProperty("availability", out var av) ? av.GetString() ?? "" : "",
+        Match = row.TryGetProperty("match", out var match) && match.ValueKind == JsonValueKind.String ? match.GetString() ?? "" : ""
     };
 
     public static string CreateUpdate(int id, IEnumerable<string> tags, string shelf, bool favorite, bool reviewed)
