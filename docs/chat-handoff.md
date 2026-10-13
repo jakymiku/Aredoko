@@ -1,5 +1,21 @@
 # Aredoko — GPTチャットへの最新引継ぎ
 
+## 最新：関連語の展開拡張と部分一致フォールバック（2026-10-13 夜）
+
+開始HEAD baac57e。ユーザー指示「テストは後でCodex/Antigravityにやらせるので、今は進められる改善を」。**CI起動0回**、workflow無変更。
+
+1. `d1c2068` 関連語展開：2文字以上の**先頭部分一致**（「星灯り」→「星灯りの社」）と、**別名経由の関連**（「ほしあかり」→「星灯りの社」→関連キャラ）。1文字は展開しない。連鎖はしない。
+2. `ad05e70` v4 holdoutを**変更後・実行前**に凍結。`1fb273f` 評価器が`--manifest v3|v4`に対応。v4関連語群MRR：変更前0.400→変更後0.800（同じ作者なのでdevelopment寄り）。
+3. `bca1496` 全語一致0件・2語以上のとき**1語欠けの作品**を`match:"partial"`/`partial:{words,required}`で返し、WinUIは「一部の語のみ一致 ·」と案内文で明示。v4結果を見た後の追加なのでv4の数字（MRR 0.900）は参考値。仕様変更：以前の「全語AND・不一致は0件」から変わった。
+
+詳細と残る失敗（見出しの途中部分「アステリア」は展開しない）は[related-terms.md](related-terms.md)。
+
+テスト（Linux、最小限）：Python **202 PASS**、C# Core **88 PASS**、WinUI C#-only compile 0 error。**未検証**：Windows Release・XAML・native GUI（関連語dialog、picker、部分一致ラベル、reader）。後でCodex/Antigravityが検証予定。
+
+次の3手：(1) Windowsでnative確認（関連語dialog・書き出し/読み込み・部分一致ラベル）。(2) 部分一致フォールバックが実利用でノイズにならないか、新しい凍結v5で判定（語の途中一致展開の是非も）。(3) GPU環境でv3/v4にAI条件を追加。
+
+---
+
 ## 最新：関連語の固定評価v3とJSON読み込み/書き出し（2026-10-13 後続）
 
 開始HEAD **5b88c56**（ユーザーのAGENTS.md/デザイン方針更新を取り込み済み）。AGENTS.mdの新CI方針（枠枯渇中は起動しない、後も根拠付き1回・自動再実行なし）とWindowsデザイン方針（現GUIはPoC、今は改修しない）を確認。**CI起動0回**、workflow無変更（3本ともworkflow_dispatchのみを確認）。

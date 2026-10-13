@@ -2,7 +2,7 @@
 
 ## 製品MVP：文字検索の正規化・複数語AND・関連語辞書（2026-10-13）
 
-`GET /api/items?q=` は語ごとのAND・NFKC/大小/かな正規化になり、ユーザー辞書の展開があった時だけ`expansions`と各item`match`を返す。辞書は`GET /api/library/terms`、`POST /api/library/terms`、`POST /api/library/terms/delete`、`GET /api/library/terms/export`、`POST /api/library/terms/import`。詳細・制限・未検証範囲は[related-terms.md](related-terms.md)。最新全Python199件PASS（Linux）。
+`GET /api/items?q=` は語ごとのAND・NFKC/大小/かな正規化になり、ユーザー辞書の展開があった時だけ`expansions`と各item`match`を返す。全語一致0件・2語以上のときは1語欠けの作品を`match:"partial"`と応答`partial:{words,required}`で返す。辞書は`GET /api/library/terms`、`POST /api/library/terms`、`POST /api/library/terms/delete`、`GET /api/library/terms/export`、`POST /api/library/terms/import`。詳細・制限・未検証範囲は[related-terms.md](related-terms.md)。最新全Python202件PASS（Linux）。
 
 
 ## 製品MVP：読み取り専用CBZ/ZIPページAPI（2026-10-13）

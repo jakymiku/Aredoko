@@ -45,17 +45,37 @@
 
 ## 検証（2026-10-13、Linux sandbox）
 
-- Python: `tests/test_search_terms.py`（6件）、`tests/test_term_relations.py`（10件）、`tests/test_literal_eval.py`（2件）を含む全**199 tests PASS**。生成一時ファイル・一時DBのみ。
-- C#: `dotnet run --project tests/Aredoko.Core.Tests -c Release` **86 checks PASS**（Linux、.NET SDK 10.0.401をsandboxにだけ導入）。
+- Python: `tests/test_search_terms.py`（6件）、`tests/test_term_relations.py`（13件）、`tests/test_literal_eval.py`（2件）を含む全**202 tests PASS**。生成一時ファイル・一時DBのみ。
+- C#: `dotnet run --project tests/Aredoko.Core.Tests -c Release` **88 checks PASS**（Linux、.NET SDK 10.0.401をsandboxにだけ導入）。
 - WinUI: `python tools/compile_check_winui.py` で **C#のみのコンパイルPASS（0 error/0 CS warning）**。XAMLはwell-formedのみ確認。
 - **未検証**: Windows x64 SelfContained Release build、XAMLコンパイル、関連語dialogと案内文のnative表示/操作、狭幅・高DPI・Narrator、Windows実機での速度。AI検索（意味/表紙）には辞書を使っていない。
+
+## 展開規則（2026-10-13 後続で拡張）
+
+1. 語が見出し語・別名と**完全一致**→その表記群を追加。
+2. 語（2文字以上）が見出し語・別名の**先頭部分**→同様に追加（「星灯り」→「星灯りの社」）。1文字は展開しない。
+3. 語・その表記群のどれかを`related`に持つ見出し→その表記群を追加（別名「ほしあかり」→見出し「星灯りの社」→関連キャラ）。関連語をさらにたどる連鎖はしない。
+4. 全語に一致する作品が0件で語が2語以上なら、**1語だけ欠ける作品**を`match:"partial"`、応答`partial:{words,required}`で返す（種類・表示フィルターは不変）。WinUIは「一部の語のみ一致 ·」と案内文で明示。
+
+## 固定評価 literal-related v4 holdout（2026-10-13）
+
+規則1–3の変更**後・実行前**に凍結（commit `ad05e70`、SHA256 `57a81677…7964`）。別の架空作品、14問（過剰展開を見る短い語2問を含む）。同じ作者が書いたのでdevelopment寄りの証拠。
+
+| 関連語群（5問） | MRR | Recall@5 |
+| --- | --- | --- |
+| 変更前の辞書展開（`baac57e`で1回だけ実行） | 0.400 | 0.300 |
+| 規則1–3 | 0.800 | 0.700 |
+| 規則1–4（**v4結果を見た後に追加**したので参考値） | 0.900 | 0.900 |
+
+過剰展開2問（「蒼い」「白」）は全条件でMRR 1.000・Recall 1.000。残る失敗：「アステリア 漫画」は見出し「蒼穹のアステリア」の**途中部分**で展開しない（別名asteriaは表記が違う）。v3は規則変更の検討に使ったためdevelopment evidence扱い（関連語群MRR 0.800→1.000）。次の改善判定には新しいv5が必要。
 
 ## 固定評価 literal-related v3（2026-10-13、Linux）
 
 [manifest](../tests/fixtures/literal-related-v3.json)は**実行前に凍結**（commit `159c202`、SHA256 `c4fa0d94c6ebf4459bf4e9d593af759b39afd8a680404b999d0596f602385091`、LF固定）。架空の作品・キャラクター名15素材、辞書4見出し、15問（完全一致対照2/表記ゆれ3/複数語4/関連語5/正解なし1）。**辞書と質問を同じ評価者が書いたため、辞書条件は仕組みの確認であり実ライブラリの品質ではない。** 結果を見て質問・qrels・辞書・実装を変更していない。
 
 ```bash
-python3 tools/evaluate_literal_search.py --output data/literal-eval/v3-result.json
+python3 tools/evaluate_literal_search.py --manifest v3 --output data/literal-eval/v3-result.json
+python3 tools/evaluate_literal_search.py --manifest v4
 ```
 
 | 群（問） | 旧LIKE MRR / Recall@5 | 新・辞書なし | 新・辞書あり |
