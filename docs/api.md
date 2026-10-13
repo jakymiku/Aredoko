@@ -11,13 +11,15 @@ WinUI読書画面への接続実装を追加（Windowsビルド/実GUIは未検�
 
 pageは0始まり、0..9999かつpage_count未満。revisionはmanifestの64文字小文字hexをそのまま送る。未知query・重複revision・任意path・負の値・不正IDは400、Host/token不正は403。対象/ページがない・未対応・破損・制限超過は404、metadata変更/古いrevisionは409（再scanとreader再open）、共通preview枠使用中は503。
 
-画像は既存previewと同じ拡張子・自然順、`__MACOSX/`を除外。同順位・同名はZIP directory順を保持しZipInfoで読む。manifestは画像を展開せず候補数だけ返すため、各ページのdecode成功や暗号化/破損なしを保証しない。非先頭ページのエラーでもページ番号を詰めたり別ページへ代替したりしない。
+画像は既存previewと同じ拡張子・自然順、`__MACOSX/`を除外。数字は整数化せず桁数と文字列で比較し、長い数字名・Unicode decimal・先頭0も扱う。同順位・同名はZIP directory順を保持しZipInfoで読む。manifestは画像を展開せず候補数だけ返すため、各ページのdecode成功や暗号化/破損なしを保証しない。非先頭ページのエラーでもページ番号を詰めたり別ページへ代替したりしない。
 
 登録root/除外/present/reparse/symlink/索引size・mtime/open handleの再確認と、既存のarchive512MiB/directory4MiB/entries10000/image8MiB/圧縮比200を共有。ZIP64/multidisk非対応。readerとpreviewで同じ2処理枠。サーバーは画像をdecodeしないため、GUI側でも既存ThumbnailCodec同等のpixel/byte/decode制限が必要。
 
 revisionはfile identity・size・mtime・ctimeから作る変更検出tokenであり、内容hash・不変snapshot・悪意ある同一metadata書換えの保証ではない。各要求で同じhandleを使って前後metadataを確認。409を受けたclientは古いpage要求の自動retryをせず、新しいmanifestを取得して明示的に開き直す。フォルダ本/Komga/見開き/読書位置保存は未実装。
 
-生成素材での再現：`python -m unittest discover -s tests -p 'test_reader.py' -v`（13件）。旧preview12件・production6件も同じ形式で実行。Windows native/GPU検証ではない。
+ZipFile構築前にZIP64 locatorを拒否し、central directoryの固定headerを走査して実件数/申告件数一致と可変長field境界を確認。entry内のZIP64 sentinel/multidiskも拒否する。件数やサイズの自己申告だけを信用してZipInfoを生成しない。
+
+生成素材での再現：`python -m unittest discover -s tests -p 'test_reader.py' -v`（16件）。ZIP preflight7件は`test_zip_limits.py`、旧preview12件・production6件も同じ形式で実行。最新全Python178件PASS。Windows native/GPU検証ではない。
 
 ## 既存のデモAPI
 

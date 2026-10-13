@@ -6,6 +6,7 @@ import re
 import stat
 import struct
 import threading
+import unicodedata
 import zipfile
 import zlib
 from pathlib import Path, PurePosixPath
@@ -37,8 +38,14 @@ def _revision(row, info):
 
 
 def natural_key(name):
-    return tuple((1, int(p)) if p.isdigit() else (0, p.casefold())
-                 for p in re.split(r'(\d+)', name))
+    def part_key(part):
+        if not part.isdecimal():
+            return (0, part.casefold())
+        # Compare numeric strings without constructing unbounded integers.
+        # Unicode decimal digits and leading zeroes keep their existing ties.
+        digits = ''.join(str(unicodedata.decimal(c)) for c in part).lstrip('0') or '0'
+        return (1, len(digits), digits)
+    return tuple(part_key(part) for part in re.split(r'(\d+)', name))
 
 def _safe_path(root, relative):
     parts = PurePosixPath(relative).parts
@@ -73,6 +80,38 @@ def _zip_directory_limit(file):
             or cd_size > MAX_DIRECTORY_BYTES or offset + cd_size > size
             or len(tail) - pos != 22 + comment):
         raise PreviewUnavailable('Archive exceeds preview limits')
+    end_offset = size - len(tail) + pos
+    # zipfile accepts a ZIP64 locator even when the legacy fields do not use
+    # sentinel values, and then replaces the size/count we just checked.
+    if end_offset >= 20:
+        file.seek(end_offset - 20)
+        if file.read(4) == b'PK\x06\x07':
+            raise PreviewUnavailable('ZIP64 archives are not supported')
+    # Match zipfile's location calculation for a prefixed (self-extracting)
+    # archive. Scan fixed headers before it allocates any ZipInfo objects;
+    # the declared entry count alone can lie about the actual directory.
+    directory_start = end_offset - cd_size
+    if directory_start < 0 or offset > directory_start:
+        raise PreviewUnavailable('Invalid archive directory')
+    file.seek(directory_start)
+    consumed = actual_count = 0
+    while consumed < cd_size:
+        header = file.read(46)
+        if len(header) != 46 or header[:4] != b'PK\x01\x02':
+            raise PreviewUnavailable('Invalid archive directory')
+        name_size, extra_size, comment_size = struct.unpack_from('<3H', header, 28)
+        packed_size, plain_size = struct.unpack_from('<2I', header, 20)
+        volume = struct.unpack_from('<H', header, 34)[0]
+        local_offset = struct.unpack_from('<I', header, 42)[0]
+        entry_size = 46 + name_size + extra_size + comment_size
+        actual_count += 1
+        if (actual_count > 10000 or consumed + entry_size > cd_size or volume
+                or 0xffffffff in (packed_size, plain_size, local_offset)):
+            raise PreviewUnavailable('Archive exceeds preview limits')
+        file.seek(entry_size - 46, os.SEEK_CUR)
+        consumed += entry_size
+    if actual_count != count:
+        raise PreviewUnavailable('Archive directory count mismatch')
     file.seek(0)
 
 class PreviewReader:

@@ -197,6 +197,23 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(self.page(item)[0], png())
         self.assertFalse((self.base / 'outside.png').exists())
 
+    def test_long_numeric_page_names_do_not_hit_python_integer_limit(self):
+        first, second = png(color=(1, 2, 3)), png(color=(4, 5, 6))
+        _, item = self.book(entries=[('page' + '9' * 5000 + '.png', second), ('page2.png', first)])
+        self.assertEqual(self.reader.read(item)[0], first)
+        self.assertEqual(self.page(item, 0)[0], first)
+        self.assertEqual(self.page(item, 1)[0], second)
+
+    def test_unicode_decimal_and_leading_zero_ties_keep_directory_order(self):
+        first, second, last = png(color=(1, 2, 3)), png(color=(4, 5, 6)), png(color=(7, 8, 9))
+        _, item = self.book(entries=[('page10.png', last), ('page٠٠٢.png', first), ('page0002.png', second)])
+        self.assertEqual([self.page(item, i)[0] for i in range(3)], [first, second, last])
+
+    def test_numeric_symbols_in_names_are_not_decimal_runs(self):
+        _, item = self.book(entries=[('²1.png', png()), ('²2.png', png(color=(2, 3, 4)))])
+        self.assertEqual(self.reader.read(item)[0], png())
+        self.assertEqual(self.page(item, 0)[0], png())
+
     def test_shared_worker_limit_and_no_leak_on_failure(self):
         _, item = self.book()
         revision = self.reader.manifest(item)['revision']

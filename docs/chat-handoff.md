@@ -1,5 +1,24 @@
 # Aredoko — GPTチャットへの最新引継ぎ
 
+## 最新：ZIP事前検査と自然順の境界修正（2026-10-13）
+
+開始remote HEAD **c38a7952fc1954e92f1e57d05da222ef83a77e7d**（読書UI候補checkpoint）。同じfeature/Draft PR #5/comparison base。使用量残率は取得できず5%到達を確認したわけではない。**CI起動0回・workflow変更なし**を継続。最新提出SHAはPR #5 headを確認する。
+
+- 実際に再現した2件を修正：5000桁の数字を含むページ名でPython整数変換上限に達する例と、`²1.png`のような非十進数字記号を整数に変換して失敗する例。十進数字を桁数＋文字列で比較し、Unicode decimal/先頭0/同順位のdirectory順を維持。Python全体の整数上限設定は変更しない。
+- ZIP64 locatorはlegacy EOCDの件数/サイズが小さくてもstdlibが採用し、先に確認した値を置き換えることを確認。locatorを明示拒否し、legacy値だけで除外したつもりになる経路を閉じた。ZIP64は従来どおり非対応。
+- ZipFile/ZipInfoの生成前に固定46byteのcentral-directory headersを走査。実件数10000上限・申告件数一致・可変長fieldのdirectory内境界・signature・entryのZIP64 sentinel/multidiskを検査。directory4MiB/総512MiB/画像8MiB/圧縮比200と共有2枠を維持。prefix付きZIP/通常commentを許容する回帰も確認。
+- 新規自然順3件（修正前2件FAILを記録）＋ZIP preflight7件。reader16/preview12/preflight7の対象テストPASS後、**全Python178 tests PASS /16.628秒/skip0**。生成10001entry fixture/hidden ZIP64 locator/破損header等だけを使い、実モデル・私物・ネットワーク取得なし。fixture期待hashは変更なし。
+- XAML/GUI/C#はこのsliceで変更なし。前checkpointで追加した読書画面とC#testsは**未ビルド・native未確認のまま**。Linux環境に.NET/Windowsなし。Python178PASSをGUI合格に流用しない。前回Windows93checks等も今回の証拠ではない。
+- docs/api・archive-reader・両handoffを更新。GitHubの元tree/parentへ変更ファイルだけをexpected head付きfast-forwardで反映し、local snapshot履歴はpushしない。Draft未マージ、モデル/順位/Laya/依存/OS/個人設定/私物・元メディア無変更。
+
+### 次の3手
+
+1. Windowsで追加C#契約テストとRelease buildを実行（[archive-reader.md](archive-reader.md)）。CIはローカルで実行できない必須gateに限り、反復dispatchしない。
+2. 生成CBZ/ZIPでreaderの明暗/狭幅/前後/破損/409/close中断/タグdraft保持をnative確認し、必要な修正のみ行う。検証まで読書UIを完成と扱わない。
+3. resize時の詳細pane閉鎖は未修正。実機で明示close/light dismissと競合しない方式を検討し、高DPI/Contrast/Narratorも独立確認。
+
+---
+
 ## 最新：WinUI読書画面の接続候補・ローカル回帰確認（2026-10-13）
 
 開始remote HEAD **2542aa701451b0f41f041944f0c2bdadf322d238**。同じfeature/Draft PR #5/comparison base。ユーザーは残り使用量5%まで継続改善し引継ぎを残すよう依頼したが、使用量残率を取得する機能がないため5%到達を判定できない。変更ごとのcheckpointを残す。**CIは必要時だけ**という追加指示を保持し、今回CI起動0回・workflow変更なし。

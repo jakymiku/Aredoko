@@ -13,6 +13,8 @@
 
 ## 今回実行した検証
 
+後続のZIP境界修正後は**全Python178件PASS /16.628秒/skip0**。長い数字名・非十進数字記号・Unicode decimalを3回帰で確認。ZIP64 locatorのlegacy値上書きと偽装件数を明示拒否し、ZipInfo生成前の固定header走査/実10000件上限/可変長境界/entry ZIP64・multidisk拒否/prefix・comment互換を7回帰で確認。C#・native検証待ちは解消していない。以下168件は直前checkpointの履歴。
+
 - Python全168件 PASS /17.242秒/skip0。既存155＋reader13。生成fixtureとfake encoder、実production HTTPを使うCPUテスト。実GPUやWindows試験ではない。
 - XAML XML構文とdiff空白チェックPASS。C#構文/type/WinUI runtimeの検証ではない。
 - C#の追加ArchiveReaderTestsはmanifest/対象拡張子/固定route/認証header/ページ範囲/エラー分類/受信長/MIME/cancelを検査するソース。未実行なので合格数を記さない。
