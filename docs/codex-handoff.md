@@ -1,5 +1,24 @@
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
+## 最新：CBZ/ZIPページ閲覧APIの最小実装（2026-10-13）
+
+開始時のremote HEAD **8fddcfae19a309ff4a9561d691ee97bbb6b85bcb**、同じ `feat/winui3-production-mvp-20261011` / Draft PR #5 / comparison base。AGENTS・Issue #4・PR・両handoff最新節・ai-resource-policyを確認。今回の環境はLinuxでWindows/.NETなし。Gitの直接clone認証は利用できず、GitHub接続から固定SHAの必要ファイルを取得した部分snapshotで検証した。ローカル検証用git履歴をupstreamへpushしない。変更する6ファイルだけを元のremote tree/parentへ適用し、expected head付きのfast-forwardで反映する。提出SHAはPRで確認。
+
+- 次のreader項目をbackendだけ小さく実装。既存PreviewReaderにmanifest/read_pageを追加し、登録item IDからCBZ/ZIPのページ数・revisionを取得して0始まりの任意ページを読む。自然順・同名時のdirectory順を固定、ZipInfoから読む。展開保存・全画像の事前decode・モデル起動はしない。既存表紙readは同じ先頭ページとbyte/MIMEを返す。
+- manifest/page/既存previewが同じ2枠を共有。root・除外・present・reparse/symlink・索引size/mtime・open handle検証、archive512MiB/directory4MiB/entries10000/image8MiB/圧縮比200を維持。ZIP64/multidiskは非対応。manifestは画像候補件数であり全ページの正常性を保証しない。暗号化/CRC破損/過大ページはそのページ取得時に拒否する。
+- `GET /api/library/reader/{id}` → `{item_id,page_count,revision}`。`GET /api/library/reader/{id}/pages/{page}?revision={revision}` → image bytes。Host/token検証・no-storeを継承。400不正要求/403認証拒否/404利用不可/409変更検出/503共通枠busy。任意path指定は受け付けない。
+- revisionはfile identity・size・mtime・ctimeのSHA256で、内容全体のhashやsnapshot保証ではない。変更された未再scanファイル・古いrevision・読取中のmetadata変更を409にする。再scan後も古いページ番号をそのまま別revisionへ使わない。新規GUIはまだ接続しておらず、読書機能完成とは扱わない。
+- **新規reader13 + 既存preview12 + production6 = 31 tests PASS / 3.085秒 / skip0**。一時生成PNG/CBZ/ZIPとDB、実production HTTPのみ。自然順/同名ページ/manifest非展開/再起動/注釈・元bytes/mtime維持/非先頭ページの暗号化・CRC・圧縮比・byte制限/除外・link・stale/同時枠/認証・要求検証・旧previewを確認。今回の部分snapshotで `python -m unittest discover -s tests -p 'test_*.py' -v` を実行。全repoスイートを31件と誤記しない。再現は各 `test_reader.py` / `test_previews.py` / `test_production.py` の3スイート。
+- WinUI/モデル/順位/CI workflowは変更なし。Windows Release・Core・native GUI・実GPU・高DPI等は今回未実行。前回editor-native-03の成績は履歴であり今回の証拠ではない。私物・個人設定・依存・OS変更なし、モデルDLなし、Laya既定無効・CI manual-only・Draft未マージを維持。前回一晩のshutdown依頼は今回へ再適用しない。
+
+### 次の3手
+
+1. WinUIのread-only reader画面を追加。明示「開く」、前/次とpage count、既存ThumbnailCodecのbyte/pixel/decode制限、古い非同期応答の破棄、409再open案内を接続し生成素材でnative確認する。
+2. Windows実機でresize時のpane自動保持を独立調査。今回コード変更なし。前回の即時open再設定/close-switch-reopenが不安定だった履歴と明示close/light dismissを尊重する。
+3. 実高DPI/Contrast/Narrator・全面keyboardを別確認。フォルダ本/Komga/見開き/読書位置同期は後続。
+
+---
+
 ## 最新：保存focus・高さを使う詳細と固定保存欄（2026-10-13）
 
 開始HEAD **d93bf21d5a88d8ae8a1ee89b63814ed0e0fa907f**。同じfeature/Draft PR #5/comparison base。今回の実装・検証・仕様commitは **93f90c7244bfa9cea497fbfdd6d11fcf850852ce**。このSHA記録は文書だけの後続commit。通常push後の最終HEAD/CI観測はGit/PR head・PR説明で確認。
@@ -822,3 +841,4 @@ preflightは768×768/30tag/128件で49 checks PASS。CLI guardはbenchmark9/API5
 ### 応答停止後の実機再開（2026-10-12）
 開始local HEAD753ae51、remote e63a5f9へcleanな状態からff-onlyで29コミット取込み。チャット側は手動解放・自動idle・新規推論だけの待機・設定互換・WinUI controlまで実装済み。初期local Python115/C#15/Release PASS（既存IL2104 2警告）。最新e63a5f9のActionsはWinUI関連workflow success、CPU lifecycle failure、Prototypeのtests job success/browser-smoke failure。失敗2jobのlog取得はBlobNotFoundで原因未確定、CI成功と断定しない。
 追加reviewで設定保存失敗時にruntime policyだけ変わる問題とprofile/resource同時保存のlost update、idle判定後の新activity/disable競合を修正しregressionを追加。実GPUと新GUI確認はこれから、過去1万件試験は再実行しない。
+

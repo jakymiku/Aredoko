@@ -1,4 +1,6 @@
 """Bounded, read-only image preview sources. No extraction or persistent cache."""
+import hashlib
+import json
 import os
 import re
 import stat
@@ -20,6 +22,18 @@ class PreviewUnavailable(ValueError):
 
 class PreviewBusyError(PreviewUnavailable):
     pass
+
+class ReaderChanged(PreviewUnavailable):
+    """The caller must rescan/reopen instead of using old page numbers."""
+    pass
+
+
+def _revision(row, info):
+    # A file-identity/metadata token, not a content digest. Recomputed under
+    # the same open handle on every request; never accepts a client path.
+    identity = [row['root_id'], row['relative_path'], info.st_dev,
+                info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+    return hashlib.sha256(json.dumps(identity).encode('utf-8')).hexdigest()
 
 
 def natural_key(name):
@@ -67,6 +81,20 @@ class PreviewReader:
         self.slots = threading.BoundedSemaphore(2)
 
     def read(self, item_id):
+        return self._read(item_id)
+
+    def manifest(self, item_id):
+        """Count naturally ordered archive pages without decompressing images."""
+        return self._read(item_id, operation='manifest')
+
+    def read_page(self, item_id, page, revision):
+        if type(page) is not int or not 0 <= page < 10000:
+            raise ValueError('Invalid page')
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}', revision) is None:
+            raise ValueError('Invalid reader revision')
+        return self._read(item_id, operation='page', page=page, revision=revision)
+
+    def _read(self, item_id, operation='preview', page=0, revision=None):
         if type(item_id) is not int or item_id < 1:
             raise PreviewUnavailable('Invalid item')
         if not self.slots.acquire(blocking=False):
@@ -78,13 +106,14 @@ class PreviewReader:
                     'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id=?', (item_id,)).fetchone()
             if row is None or row['status'] != 'present':
                 raise PreviewUnavailable('Location unavailable')
-            import json
             if _excluded(row['relative_path'], tuple(json.loads(row['excludes_json']))):
                 raise PreviewUnavailable('Location excluded')
             source = _safe_path(row['path'], row['relative_path'])
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip'):
                 raise PreviewUnavailable('Unsupported preview type')
+            if operation != 'preview' and suffix not in ('.cbz', '.zip'):
+                raise PreviewUnavailable('Reader requires a CBZ or ZIP archive')
             initial = source.stat(follow_symlinks=False)
             with source.open('rb') as file:
                 info = os.fstat(file.fileno())
@@ -93,7 +122,12 @@ class PreviewReader:
                     raise PreviewUnavailable('Location changed')
                 _safe_path(row['path'], row['relative_path'])
                 if info.st_size != row['size_bytes'] or info.st_mtime_ns != row['mtime_ns']:
+                    if operation != 'preview':
+                        raise ReaderChanged('Rescan changed files before reading')
                     raise PreviewUnavailable('Rescan changed files before previewing')
+                current_revision = _revision(row, info) if operation != 'preview' else None
+                if revision is not None and revision != current_revision:
+                    raise ReaderChanged('Archive changed; reopen the reader')
                 if suffix in IMAGE_MIME:
                     if info.st_size > MAX_IMAGE_BYTES:
                         raise PreviewUnavailable('Image exceeds preview limit')
@@ -108,20 +142,35 @@ class PreviewReader:
                                    and not e.filename.startswith('__MACOSX/')]
                         if not entries:
                             raise PreviewUnavailable('Archive has no supported image')
-                        entry = min(entries, key=lambda e: natural_key(e.filename))
-                        if (entry.flag_bits & 1 or entry.file_size > MAX_IMAGE_BYTES
-                                or entry.file_size > max(1, entry.compress_size) * 200):
-                            raise PreviewUnavailable('Archive image exceeds preview limits')
-                        with archive.open(entry) as image:
-                            data = image.read(MAX_IMAGE_BYTES + 1)
-                        mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if len(data) > MAX_IMAGE_BYTES:
+                        if operation == 'manifest':
+                            result = {'item_id':item_id, 'page_count':len(entries),
+                                      'revision':current_revision}
+                        else:
+                            if page >= len(entries):
+                                raise PreviewUnavailable('Page unavailable')
+                            # Stable sort preserves central-directory order for
+                            # duplicate names; open the ZipInfo, not its name.
+                            entry = (min(entries, key=lambda e: natural_key(e.filename))
+                                     if operation == 'preview' else
+                                     sorted(entries, key=lambda e: natural_key(e.filename))[page])
+                            if (entry.flag_bits & 1 or entry.file_size > MAX_IMAGE_BYTES
+                                    or entry.file_size > max(1, entry.compress_size) * 200):
+                                raise PreviewUnavailable('Archive image exceeds preview limits')
+                            with archive.open(entry) as image:
+                                data = image.read(MAX_IMAGE_BYTES + 1)
+                            mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
+                if operation != 'manifest' and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
-                if (after.st_size, after.st_mtime_ns) != (info.st_size, info.st_mtime_ns):
+                if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
+                    if operation != 'preview':
+                        raise ReaderChanged('Source changed while reading')
                     raise PreviewUnavailable('Source changed while reading')
+                if operation == 'manifest':
+                    return result
                 return data, mime
         except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, zlib.error) as error:
             raise PreviewUnavailable('Invalid or unsupported archive') from error
         finally:
             self.slots.release()
+

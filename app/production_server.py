@@ -5,9 +5,10 @@ import secrets
 import threading
 from pathlib import Path
 from http.server import ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
+import re
 from production import ProductionCatalog, ScanBusyError
-from previews import PreviewReader, PreviewUnavailable, PreviewBusyError
+from previews import PreviewReader, PreviewUnavailable, PreviewBusyError, ReaderChanged
 import zipfile
 import sqlite3
 from ai_process import EncoderProcess, AIUnavailable
@@ -65,6 +66,28 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
             if path.startswith('/api/library'):
                 if self.headers.get('X-Aredoko-Token')!=token:
                     return self.send(403,{'error':'Invalid session'})
+                if path.startswith('/api/library/reader/'):
+                    try:
+                        match=re.fullmatch(r'/api/library/reader/([1-9][0-9]{0,18})(?:/pages/(0|[1-9][0-9]{0,3}))?',path)
+                        if match is None: raise ValueError('Invalid reader route')
+                        item=int(match[1])
+                        if item > 9223372036854775807: raise ValueError('Invalid item')
+                        query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
+                        if match[2] is None:
+                            if query: raise ValueError('Unexpected reader query')
+                            return self.send(200,previews.manifest(item))
+                        if set(query)!={'revision'} or len(query['revision'])!=1:
+                            raise ValueError('One revision is required')
+                        data,mime=previews.read_page(item,int(match[2]),query['revision'][0])
+                        return self.send(200,data,mime)
+                    except ReaderChanged:
+                        return self.send(409,{'error':'Archive changed; rescan and reopen the reader'})
+                    except PreviewBusyError:
+                        return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,zipfile.BadZipFile,RuntimeError,NotImplementedError):
+                        return self.send(404,{'error':'Reader page unavailable'})
+                    except ValueError:
+                        return self.send(400,{'error':'Invalid reader request'})
                 if path.startswith('/api/library/preview/'):
                     try:
                         data,mime=previews.read(int(path.rsplit('/',1)[1]))
@@ -206,3 +229,4 @@ def main():
     finally: intent.close(); ai.close(); catalog.close(); server.server_close()
 
 if __name__=='__main__': main()
+

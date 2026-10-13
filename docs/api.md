@@ -1,5 +1,26 @@
 # 共通API（操作試作 v0）
 
+## 製品MVP：読み取り専用CBZ/ZIPページAPI（2026-10-13）
+
+WinUIの読書画面はまだ未接続。登録・索引済みitem IDだけを受け付け、元ファイルや展開ファイルを書き込まない。GETはHost検証とX-Aredoko-Token必須、応答はCache-Control: no-store。
+
+| GET | 応答 |
+| --- | --- |
+| `/api/library/reader/{id}` | `{item_id,page_count,revision}` |
+| `/api/library/reader/{id}/pages/{page}?revision={revision}` | 指定ページの画像bytesとContent-Type |
+
+pageは0始まり、0..9999かつpage_count未満。revisionはmanifestの64文字小文字hexをそのまま送る。未知query・重複revision・任意path・負の値・不正IDは400、Host/token不正は403。対象/ページがない・未対応・破損・制限超過は404、metadata変更/古いrevisionは409（再scanとreader再open）、共通preview枠使用中は503。
+
+画像は既存previewと同じ拡張子・自然順、`__MACOSX/`を除外。同順位・同名はZIP directory順を保持しZipInfoで読む。manifestは画像を展開せず候補数だけ返すため、各ページのdecode成功や暗号化/破損なしを保証しない。非先頭ページのエラーでもページ番号を詰めたり別ページへ代替したりしない。
+
+登録root/除外/present/reparse/symlink/索引size・mtime/open handleの再確認と、既存のarchive512MiB/directory4MiB/entries10000/image8MiB/圧縮比200を共有。ZIP64/multidisk非対応。readerとpreviewで同じ2処理枠。サーバーは画像をdecodeしないため、GUI側でも既存ThumbnailCodec同等のpixel/byte/decode制限が必要。
+
+revisionはfile identity・size・mtime・ctimeから作る変更検出tokenであり、内容hash・不変snapshot・悪意ある同一metadata書換えの保証ではない。各要求で同じhandleを使って前後metadataを確認。409を受けたclientは古いpage要求の自動retryをせず、新しいmanifestを取得して明示的に開き直す。フォルダ本/Komga/見開き/読書位置保存は未実装。
+
+生成素材での再現：`python -m unittest discover -s tests -p 'test_reader.py' -v`（13件）。旧preview12件・production6件も同じ形式で実行。Windows native/GPU検証ではない。
+
+## 既存のデモAPI
+
 127.0.0.1限定。PythonのCatalogが永続化を担当し、GUIはSQLを直接扱わない。
 
 - GET /api/session: デモ識別、全体件数、更新用セッショントークン。
@@ -42,3 +63,4 @@ index/searchは任意 `scope:{root_ids:[1,2],kind:"image",shelf:"素材"}` を�
 
 - GET `/api/library/ai/scope`: `{scope,valid,missing_root_ids,error}`。削除済みrootはIDを保持してvalid=false。設定破損は409でAI利用を止め、文字検索は独立。scope単体の不正値はPOSTで修復可能だが、JSON全体/基礎設定破損はモデル選択保存または設定ファイル修復が必要。
 - POST同route: `{"scope":{...}}` のみ。型/未登録ID/未知キーは400、scan/AI索引busyまたはatomic保存失敗は409。成功応答はGETと同じshape、valid=true。既存profile/resource保存を保持し、モデル起動・索引削除なし。認証は他のlibrary APIと共通。
+
