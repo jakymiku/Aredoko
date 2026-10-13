@@ -45,8 +45,8 @@
 
 ## 検証（2026-10-13、Linux sandbox）
 
-- Python: `tests/test_search_terms.py`（6件）、`tests/test_term_relations.py`（13件）、`tests/test_literal_eval.py`（2件）を含む全**202 tests PASS**。生成一時ファイル・一時DBのみ。
-- C#: `dotnet run --project tests/Aredoko.Core.Tests -c Release` **88 checks PASS**（Linux、.NET SDK 10.0.401をsandboxにだけ導入）。
+- Python: `tests/test_search_terms.py`（6件）、`tests/test_term_relations.py`（15件）、`tests/test_literal_eval.py`（2件）を含む全**204 tests PASS**。生成一時ファイル・一時DBのみ。
+- C#: `dotnet run --project tests/Aredoko.Core.Tests -c Release` **89 checks PASS**（Linux、.NET SDK 10.0.401をsandboxにだけ導入）。
 - WinUI: `python tools/compile_check_winui.py` で **C#のみのコンパイルPASS（0 error/0 CS warning）**。XAMLはwell-formedのみ確認。
 - **未検証**: Windows x64 SelfContained Release build、XAMLコンパイル、関連語dialogと案内文のnative表示/操作、狭幅・高DPI・Narrator、Windows実機での速度。AI検索（意味/表紙）には辞書を使っていない。
 
@@ -54,8 +54,16 @@
 
 1. 語が見出し語・別名と**完全一致**→その表記群を追加。
 2. 語（2文字以上）が見出し語・別名の**先頭部分**→同様に追加（「星灯り」→「星灯りの社」）。1文字は展開しない。
+2b. 語（3文字以上）が見出し語・別名の**途中**にある→同様に追加（「セレナーデ」→「聖夜のセレナーデ」）。2文字の途中一致は展開しない。
 3. 語・その表記群のどれかを`related`に持つ見出し→その表記群を追加（別名「ほしあかり」→見出し「星灯りの社」→関連キャラ）。関連語をさらにたどる連鎖はしない。
-4. 全語に一致する作品が0件で語が2語以上なら、**1語だけ欠ける作品**を`match:"partial"`、応答`partial:{words,required}`で返す（種類・表示フィルターは不変）。WinUIは「一部の語のみ一致 ·」と案内文で明示。
+順位：入力した語そのものに一致する作品→より長い表記で一致した作品（「朝霧ナギ」の作品が、短い別名「ナギ」が別名「ナギサ」に含まれるだけの作品より先）→ID順。部分一致フォールバックも同じ順位。
+4. 全語に一致する作品が0件で語が2語以上なら、**1語だけ欠ける作品**を`match:"partial"`、応答`partial:{words,required}`で返す（種類・表示フィルターは不変）。WinUIは「一部の語のみ一致 ·」と案内文で明示。1語欠けでも0件なら通常の0件（`partial`なし）。
+
+## 固定評価 literal-related v5 holdout（2026-10-13 夜）
+
+途中一致展開の**実装前・実行前**に凍結（SHA256 `38f5addb…88f5`）。13問。関連語群MRR：実装前**0.600** → 途中一致＋長い表記優先 **1.000**（Recall@5 0.933→1.000）。過剰展開3問・部分一致1問は前後とも1.000。実装前の実行で「聖夜のセレナーデ メイド」が別名「ナギ」を含む無関係な「ナギサ_海辺」を1位にする**順位バグ**を発見し、長い表記優先で修正した（この修正はv5結果を見た後の設計）。v3/v4/v5はすべてdevelopment evidence。次の判定はv6で。
+
+性能（Linux単発、生成5万件・辞書300見出し）：重い2語検索0.5–0.94秒。1行1回の採点にまとめて最大1.15秒から短縮。Windows実機・1TBは未測定。
 
 ## 固定評価 literal-related v4 holdout（2026-10-13）
 
@@ -76,6 +84,7 @@
 ```bash
 python3 tools/evaluate_literal_search.py --manifest v3 --output data/literal-eval/v3-result.json
 python3 tools/evaluate_literal_search.py --manifest v4
+python3 tools/evaluate_literal_search.py --manifest v5
 ```
 
 | 群（問） | 旧LIKE MRR / Recall@5 | 新・辞書なし | 新・辞書あり |
