@@ -83,7 +83,29 @@ def coverage(alternatives):
     return cover
 
 
+def specificity(alternatives):
+    """SQLite scalar aredoko_specific(title, tags): per word, a large bonus when
+    the typed word itself is present plus the longest option found. Ranks a candidate matched through a full headword
+    ("朝霧なぎ") above one matched only through a short alias inside another
+    name ("なぎ" in "なぎさ"). A ranking hint only, never a filter.
+    """
+    memo = {}
+
+    def specific(title, tags):
+        key = (title, tags)
+        if key not in memo:
+            hay = normalize(title) + '\x1f' + normalize(tags)
+            # The typed word itself outweighs any alternative (words are at
+            # most 300 characters), so direct matches always rank first.
+            memo[key] = sum((1000 if options[0] in hay else 0)
+                            + max((len(option) for option in options if option in hay), default=0)
+                            for options in alternatives)
+        return memo[key]
+    return specific
+
+
 def register(db, alternatives):
     """Expose this search's matchers to SQLite on this connection."""
+    db.create_function('aredoko_specific', 2, specificity(alternatives), deterministic=True)
     db.create_function('aredoko_match', 2, matcher(alternatives), deterministic=True)
     db.create_function('aredoko_cover', 2, coverage(alternatives), deterministic=True)

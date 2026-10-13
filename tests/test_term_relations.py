@@ -102,6 +102,22 @@ class ExpansionTests(unittest.TestCase):
         self.assertEqual((three['partial'], self.titles(three)), ({'words': 3, 'required': 2},
                          ['touhou_poster.png', 'reimu_standing.png']))
 
+    def test_inner_part_of_headword_expands_from_three_characters(self):
+        self.catalog.terms.upsert({'term': '聖夜のセレナーデ', 'aliases': [], 'related': []})
+        self.catalog.terms.upsert(dict(REIMU, related=['聖夜のセレナーデ']))
+        self.assertIn('聖夜のせれなーで', self.expand(['せれなーで'])[0][0])
+        self.assertEqual(self.expand(['なで'])[0], [['なで']])  # two characters inside: no
+        self.assertEqual(self.titles(self.catalog.search('セレナーデ 立ち絵')), ['reimu_standing.png'])
+
+    def test_full_headword_match_ranks_above_short_alias_inside_another_name(self):
+        self.catalog.terms.upsert({'term': '朝霧ナギ', 'aliases': ['ナギ'], 'related': ['メイド']})
+        ids = {name: self.ids[name] for name in ('marisa.png', 'shrine_maiden.png')}
+        self.catalog.update([ids['marisa.png']], {'tags': ['ナギサ']})        # "なぎ" inside another name
+        self.catalog.update([ids['shrine_maiden.png']], {'tags': ['朝霧ナギ']})  # the headword itself
+        result = self.catalog.search('メイド')
+        self.assertEqual(self.titles(result), ['shrine_maiden.png', 'marisa.png'])
+        self.assertEqual({i['match'] for i in result['items']}, {'related'})
+
     def expand(self, words):
         with self.catalog.connect() as db:
             return self.catalog.terms.expand(words, db)

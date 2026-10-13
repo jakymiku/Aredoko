@@ -26,6 +26,7 @@ MAX_WORD_CHARS = 60
 EXPORT_FORMAT = 'aredoko-related-terms'
 MAX_IMPORT_BYTES = 16 * 1024 * 1024  # a full 2000-entry export fits
 PREFIX_MIN_CHARS = 2
+INNER_MIN_CHARS = 3
 MAX_ALTERNATIVES = 256  # per query word, including the word itself
 
 SCHEMA = '''
@@ -183,6 +184,12 @@ class TermRelations:
             prefix = [] if len(word) < PREFIX_MIN_CHARS else [
                 group for group in groups if word not in group[0]
                 and any(key.startswith(word) for key in group[0])]
+            # 2b. Inside a headword/alias ("せれなーで" in "聖夜のせれなーで"),
+            # only from three characters, after exact and prefix matches.
+            inner = [] if len(word) < INNER_MIN_CHARS else [
+                group for group in groups if group not in exact and group not in prefix
+                and any(word in key for key in group[0])]
+            prefix = prefix + inner
             for _, _, spellings in exact + prefix:
                 take(spellings)
             # 3. Candidates related to the word or to any of its spellings, so

@@ -97,7 +97,7 @@ class ProductionCatalog(Catalog):
             if total==0 and len(terms)>=2:
                 # Nothing has every word: offer items missing exactly one word
                 # (e.g. a generic word like "キャラ"), clearly labelled partial.
-                # Filters still apply unchanged; order stays the stable id order.
+                # Filters still apply unchanged; longer matched spellings first, then id.
                 required=len(terms)-1
                 where[where.index('aredoko_match(i.title,i.tags)>=0')]=f'aredoko_cover(i.title,i.tags)>={required}'
                 clause=self.JOIN+' WHERE '+' AND '.join(where)
@@ -105,13 +105,15 @@ class ProductionCatalog(Catalog):
                 # An empty fallback stays an ordinary empty result, so the UI
                 # never claims to show partial matches it does not have.
                 partial={'words':len(terms),'required':required} if total else None
-                rows=db.execute('SELECT '+self.FIELDS+clause+' ORDER BY i.id LIMIT ? OFFSET ?',
+                rows=db.execute('SELECT '+self.FIELDS+clause+
+                                ' ORDER BY aredoko_specific(i.title,i.tags) DESC, i.id LIMIT ? OFFSET ?',
                                 values+[limit,page*limit]).fetchall() if total else []
             elif expansions:
                 # Items matching the typed words themselves come before
-                # related-only candidates; ties keep the stable id order.
+                # related-only candidates, then more specific matches (longer
+                # spellings); ties keep the stable id order.
                 rows=db.execute(f'SELECT {self.FIELDS},aredoko_match(i.title,i.tags) AS direct_hits'+clause+
-                                ' ORDER BY direct_hits DESC, i.id LIMIT ? OFFSET ?',
+                                ' ORDER BY direct_hits DESC, aredoko_specific(i.title,i.tags) DESC, i.id LIMIT ? OFFSET ?',
                                 values+[limit,page*limit]).fetchall()
             else:
                 rows=db.execute('SELECT '+self.FIELDS+clause+' ORDER BY i.id LIMIT ? OFFSET ?',
