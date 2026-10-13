@@ -61,6 +61,21 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
         def do_GET(self):
             if not self.valid_host(): return self.send(403,{'error':'Invalid host'})
             path=urlparse(self.path).path
+            if path=='/api/items':
+                args=parse_qs(urlparse(self.path).query,keep_blank_values=True)
+                def param(name,default=''):return args.get(name,[default])[0]
+                try:
+                    page=param('page','0')
+                    if not page.isascii() or not page.isdigit() or len(page)>9:
+                        raise ValueError('Invalid paging')
+                    root=None
+                    if 'root_id' in args:
+                        value=param('root_id')
+                        if len(args['root_id'])!=1 or not value.isascii() or not value.isdigit() or len(value)>19:
+                            raise ValueError('Invalid root filter')
+                        root=int(value)
+                    return self.send(200,catalog.search(param('q'),param('kind'),param('view','all'),int(page),root_id=root))
+                except ValueError as ex:return self.send(400,{'error':str(ex)})
             if path=='/api/session':
                 return self.send(200,{'mode':'production','token':token,'stats':catalog.stats()})
             # Native client supplies the session token for library-specific reads.
@@ -117,7 +132,11 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                         return self.send(409,{'error':'AI対象設定を読み込めません。対象を選び直して保存してください。文字検索は利用できます。'})
                 if path=='/api/library/terms': return self.send(200,{'items':catalog.terms.entries()})
                 if path=='/api/library/terms/export': return self.send(200,catalog.terms.export())
-                if path=='/api/library/roots': return self.send(200,{'items':catalog.index.roots()})
+                if path=='/api/library/shelves': return self.send(200,{'items':catalog.shelves()})
+                if path=='/api/library/roots':
+                    inactive=parse_qs(urlparse(self.path).query).get('include_inactive',['0'])
+                    if inactive not in (['0'],['1']):return self.send(400,{'error':'Invalid root filter'})
+                    return self.send(200,{'items':catalog.index.roots(include_inactive=inactive==['1'])})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
             return super().do_GET()
@@ -195,6 +214,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     return self.send(200,{'saved':True,'policy':policy})
                 if self.path=='/api/library/ai/search':
                     scope_args={'scope':validate_scope(body['scope'])} if 'scope' in body else {}
+                    if 'literal_only' in body:scope_args['literal_only']=body['literal_only']
+                    if 'group_threshold' in body:scope_args['group_threshold']=body['group_threshold']
+                    if 'result_group' in body:scope_args['result_group']=body['result_group']
                     return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking'),**scope_args))
                 if self.path=='/api/library/terms':
                     try: return self.send(200,{'entry':catalog.terms.upsert(body)})
@@ -205,7 +227,13 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     except KeyError: return self.send(404,{'error':'Related-term entry not found'})
                 if self.path=='/api/library/roots':
                     if body.get('consent') is not True: raise ValueError('Explicit folder consent required')
-                    return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'))})
+                    return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'),body.get('default_shelf',''))})
+                if self.path=='/api/library/roots/shelf':
+                    if set(body)-{'root_id','shelf','fill_unset'}:raise ValueError('Invalid root filter')
+                    return self.send(200,catalog.set_root_shelf(body.get('root_id'),body.get('shelf'),body.get('fill_unset',False)))
+                if self.path=='/api/library/roots/unregister':
+                    if set(body)!={'root_id'}:raise ValueError('Invalid root filter')
+                    return self.send(200,catalog.unregister_root(body['root_id']))
                 if self.path=='/api/library/excludes':
                     # Avoid racing the index transaction while scanning.
                     return self.send(200,{'excludes':catalog.set_excludes(body.get('root_id'),body.get('patterns'))})

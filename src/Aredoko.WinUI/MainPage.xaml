@@ -4,12 +4,14 @@
   <Style x:Key="MediaMetadataStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}"><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
  </Page.Resources>
  <Page.KeyboardAccelerators><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchShortcut"/><KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveShortcut"/></Page.KeyboardAccelerators>
- <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="LeftCompact" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="180" SelectionChanged="Nav_SelectionChanged" AutomationProperties.AutomationId="Nav">
+ <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Auto" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="180" SelectionChanged="Nav_SelectionChanged" AutomationProperties.AutomationId="Nav">
   <NavigationView.MenuItems>
    <NavigationViewItem Content="すべて" Tag="all" Icon="Library" IsSelected="True" AutomationProperties.AutomationId="NavAll"/>
    <NavigationViewItem Content="お気に入り" Tag="favorites" Icon="Favorite" AutomationProperties.AutomationId="NavFavorites"/>
    <NavigationViewItem Content="未確認" Tag="unreviewed" Icon="Clock" AutomationProperties.AutomationId="NavUnreviewed"/>
    <NavigationViewItem Content="棚" Tag="shelf" Icon="Folder" AutomationProperties.AutomationId="NavShelf"/>
+   <NavigationViewItemHeader x:Name="FolderNavigation" Content="登録フォルダ" AutomationProperties.AutomationId="NavFolders"/>
+   <NavigationViewItemHeader x:Name="InactiveNavigation" Content="登録解除済み" AutomationProperties.AutomationId="NavInactiveFolders"/>
   </NavigationView.MenuItems>
    <SplitView x:Name="Details" Margin="16" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="320" PaneBackground="{ThemeResource SolidBackgroundFillColorBaseBrush}">
     <SplitView.Pane>
@@ -54,7 +56,7 @@
    </Grid>
    <Grid x:Name="SearchTools" Grid.Row="2" ColumnSpacing="16">
     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <StackPanel Orientation="Horizontal" Spacing="8">
     <ComboBox x:Name="Kind" Header="種類" SelectedIndex="0" SelectionChanged="Kind_Changed" MinWidth="116" AutomationProperties.Name="種類" AutomationProperties.AutomationId="CmbKind"><ComboBoxItem Content="すべての種類"/><ComboBoxItem Content="本"/><ComboBoxItem Content="画像"/><ComboBoxItem Content="動画"/><ComboBoxItem Content="音楽"/><ComboBoxItem Content="ZIP"/><ComboBoxItem Content="素材"/></ComboBox>
     <ComboBox x:Name="SearchMode" Header="検索方法" SelectedIndex="0" SelectionChanged="SearchMode_Changed" MinWidth="116" AutomationProperties.Name="検索方法" AutomationProperties.AutomationId="CmbSearchMode"><ComboBoxItem Content="名前・タグ" AutomationProperties.AutomationId="ModeLiteral"/><ComboBoxItem Content="AI混合" AutomationProperties.AutomationId="ModeSemantic"/><ComboBoxItem Content="AI画像・表紙" AutomationProperties.AutomationId="ModeVisual"/><ComboBoxItem Content="AI文章" AutomationProperties.AutomationId="ModeText"/></ComboBox>
@@ -65,7 +67,15 @@
     <Button x:Name="LayoutButton" Content="グリッド表示" Click="Layout_Click" AutomationProperties.AutomationId="BtnLayout"/>
     <Button x:Name="DetailsButton" Content="詳細" IsEnabled="False" Click="OpenDetails_Click" AutomationProperties.AutomationId="BtnDetails"/>
     </StackPanel>
-    <TextBlock x:Name="SearchMethodHint" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,8,0,0" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtSearchMethodHint"/>
+    <Expander x:Name="SearchOptions" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,8,0,0" Header="検索フォルダ・AI候補の表示" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="ExpandSearchOptions">
+     <StackPanel Spacing="8">
+    <ComboBox x:Name="SearchRoot" Header="検索フォルダ（サブフォルダを含む）" HorizontalAlignment="Stretch" SelectionChanged="SearchRoot_Changed" AutomationProperties.Name="検索フォルダ" AutomationProperties.AutomationId="CmbSearchRoot"/>
+    <CheckBox x:Name="AIMatchedOnly" Content="名前・タグで全語一致の候補のみ" Visibility="Collapsed" Checked="AIMatchedOnly_Changed" Unchecked="AIMatchedOnly_Changed" AutomationProperties.Name="AI候補を名前・タグの全語一致で絞る" AutomationProperties.AutomationId="ChkAIMatchedOnly"/>
+    <NumberBox x:Name="SimilarityBoundary" Header="類似度の区切り（空欄＝自動）" Minimum="-1" Maximum="1" Visibility="Collapsed" ValueChanged="SimilarityBoundary_Changed" AutomationProperties.Name="類似度の区切り" AutomationProperties.AutomationId="NumSimilarityBoundary"/>
+    <ComboBox x:Name="AIResultGroup" Header="AI候補の表示" SelectedIndex="0" HorizontalAlignment="Stretch" Visibility="Collapsed" SelectionChanged="AIResultGroup_Changed" AutomationProperties.AutomationId="CmbAIResultGroup" AutomationProperties.Name="AI候補の表示"><ComboBoxItem Content="上位の類似候補"/><ComboBoxItem Content="その他の参考候補"/><ComboBoxItem Content="すべてのAI候補"/></ComboBox>
+     </StackPanel>
+    </Expander>
+    <TextBlock x:Name="SearchMethodHint" Grid.Row="3" Grid.ColumnSpan="2" Margin="0,8,0,0" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtSearchMethodHint"/>
    </Grid>
 
     <Grid Grid.Row="3" Margin="0,0,12,0">

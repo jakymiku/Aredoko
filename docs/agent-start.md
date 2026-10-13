@@ -34,6 +34,8 @@
 
 ## 今回の再開で把握すべき境界
 
+- 最新の追加はフォルダ検索/初期棚/登録解除と復元/左ナビ/AI候補表示分離。Python225/Core107/Release PASS、最終flat navと棚/解除/復元等の実GUIは未完了。[現行仕様と検証](folder-search-and-ai-candidates.md)とhandoff最新節を参照。自動区切りをconfidenceとして扱わない。
+
 - 曖昧な日本語から目的のローカルファイルへ到達することが製品の核。「東方 巫女」から保存済みの博麗霊夢の立ち絵を探すケースは**今後の評価目標**。
 - EmbeddingGemma 2を含むモデルは交換可能。文字/確定タグ/関連知識/意味/画像特徴を役割ごとに補完する。フィルターやユーザーの手動整理を勝手に覆さない。
 - 読書UI・関連語dialogはソース追加済み。Linux時点のPython205件・C# Core93件・C#のみのコンパイル検査PASSは履歴。後続WindowsではPython211/Core97/Releaseとwindowless error probeがPASS、nativeはLight辞書/検索理由までの部分確認で全体FAIL。読書/Dark/pickerは未到達（[Windows確認](windows-hark-followup.md)）。以後の変更を自動保証しない。

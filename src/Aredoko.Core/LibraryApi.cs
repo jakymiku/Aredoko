@@ -18,14 +18,14 @@ public sealed class LibraryApi : IDisposable
         client.DefaultRequestHeaders.Remove("Origin");
         client.DefaultRequestHeaders.Add("Origin", "http://127.0.0.1:8769");
     }
-    public async Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all",JsonObject? scope=null)
+    public async Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all",JsonObject? scope=null,int? rootId=null,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all")
     {
         if(semantic && !string.IsNullOrWhiteSpace(q))
         {
-            var result=await PostAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,scope));
+            var result=await PostAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAI(scope,rootId),literalOnly,groupThreshold,resultGroup));
             return Protocol.ParseSearch(result.ToJsonString());
         }
-        return Protocol.ParseSearch(await GetTextAsync($"api/items?q={Uri.EscapeDataString(q)}&kind={kind}&view={view}&page={page}"));
+        return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRoute(q,kind,view,page,rootId)));
     }
     public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed));
     public Task<string> ExportRelatedTermsAsync() => GetTextAsync("api/library/terms/export");

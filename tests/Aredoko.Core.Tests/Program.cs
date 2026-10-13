@@ -100,3 +100,18 @@ Check(ErrorText.FromResponse("""{"error":"Related-term entry not found"}""",404)
 
 foreach(var body in new[]{"[]","123","true","\"plain string\""})
     Check(ErrorText.FromResponse(body,503)=="バックエンドでエラーが起きました（503）。","non-object JSON error body: "+body);
+
+Check(FolderSearch.LiteralRoute("東方 巫女","image","favorites",2,3).EndsWith("&page=2&root_id=3"),"literal root filter and paging encoded");
+Check(!FolderSearch.LiteralRoute("x","","all",0).Contains("root_id"),"all-folder literal route remains unscoped");
+var rootScope=System.Text.Json.Nodes.JsonNode.Parse("""{"root_ids":[2,3],"kind":"image","shelf":"AI画像"}""")!.AsObject();
+var intersection=FolderSearch.RestrictAI(rootScope,3)!;
+Check(intersection["root_ids"]!.AsArray().Count==1&&intersection["shelf"]!.GetValue<string>()=="AI画像","folder intersects AI shelf/kind scope");
+Check(FolderSearch.RestrictAI(rootScope,4)!["root_ids"]!.AsArray().Count==0&&rootScope["root_ids"]!.AsArray().Count==2,"disjoint folder stays empty and saved scope is unchanged");
+Check(FolderSearch.RestrictAI(new System.Text.Json.Nodes.JsonObject {{"root_ids",new System.Text.Json.Nodes.JsonArray()}},3)!["root_ids"]!.AsArray().Count==0,"empty saved scope cannot broaden");
+Check(FolderSearch.RestrictAI(null,3)!["root_ids"]![0]!.GetValue<int>()==3,"explicit folder supported with legacy AI scope");
+var groupedRequest=AIScopeRequests.Search("ミク","image","all",0,"cover",rootScope,false,.5,"other");
+Check(groupedRequest["group_threshold"]!.GetValue<double>()==.5&&groupedRequest["result_group"]!.GetValue<string>()=="other","manual boundary and group preserved in request");
+var evidence=Protocol.ParseSearch("""{"total":1,"score_kind":"cosine","group_boundary":0.5,"leading_total":3,"other_total":3,"items":[{"id":1,"title":"image.png","kind":"image","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.8,"literal_words":1,"literal_hits":0,"similarity_group":"leading"}]}""");
+Check(evidence.GroupBoundary==.5&&evidence.OtherTotal==3&&evidence.Items[0].AIEvidence.Contains("文字一致0/1語")&&evidence.Items[0].AIEvidence.Contains("0.800"),"AI groups and relative score parsed without percentages");
+evidence.Items[0].LiteralHits=1;Check(evidence.Items[0].AIEvidence.StartsWith("名前・タグで全語一致"),"literal evidence does not claim character certainty");
+evidence.Items[0].ScoreKind="reciprocal-rank";Check(evidence.Items[0].AIEvidence.Contains("順位統合値"),"RRF uses separate score label");

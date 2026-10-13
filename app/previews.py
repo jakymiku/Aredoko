@@ -142,7 +142,7 @@ class PreviewReader:
             with self.catalog.connect() as db:
                 row = db.execute('SELECT l.*, r.path, r.excludes_json FROM item_locations m '
                     'JOIN library_locations l ON l.id=m.location_id '
-                    'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id=?', (item_id,)).fetchone()
+                    'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id=? AND r.enabled=1', (item_id,)).fetchone()
             if row is None or row['status'] != 'present':
                 raise PreviewUnavailable('Location unavailable')
             if _excluded(row['relative_path'], tuple(json.loads(row['excludes_json']))):

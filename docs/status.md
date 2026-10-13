@@ -1,3 +1,5 @@
+> **最新（2026-10-13、GUI部分確認）**：フォルダ絞り込み/初期棚・空棚への明示適用/登録解除・復元/左ナビ/AI上位・参考・全候補を追加。Python225/Core107/最終Release PASS。最後のflat navと棚/解除/復元/Dark/narrowは実機未完了。自動区切りは未校正の類似度による表示で、正解率ではありません。[使い方と検証](folder-search-and-ai-candidates.md)。
+
 > **最新（2026-10-13、Windows部分確認）**：Hark追加分を維持し、拒否POST応答/非object JSONエラー/辞書busyと狭幅/検索理由row表示/古いAppX deps再使用を修正。全Python211/Core97/Release/windowless dependency probe PASS。native03は全体FAIL26checks/5PNG全目視、Lightの辞書・理由・partialまで。読書/Dark/pickerは未確認。[Windows確認](windows-hark-followup.md)/[引継ぎ](codex-handoff.md)。CI起動0回・Draft未マージ。以下は履歴。
 
 ---

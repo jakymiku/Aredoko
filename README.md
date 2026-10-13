@@ -1,5 +1,7 @@
 # Aredoko
 
+> **最新（2026-10-13、GUI部分確認）**：フォルダ絞り込み/初期棚・空棚への明示適用/登録解除・復元/左ナビ/AI上位・参考・全候補を追加。Python225/Core107/最終Release PASS。最後のflat navと棚/解除/復元/Dark/narrowは実機未完了。自動区切りは未校正の類似度による表示で、正解率ではありません。[使い方と検証](docs/folder-search-and-ai-candidates.md)。
+
 > **Windows確認の更新（2026-10-13）**：追加reader/辞書のWindows Release・Core97・Python211は通過。実GUIはLightの辞書・関連/部分一致までで、reader/Dark/JSON pickerは未確認。起動スクリプトはpayloadのhashで配置を分離し、古いAppX dependencyの使い回しを避けます。[結果と残作業](docs/windows-hark-followup.md)。
 
 **名前を忘れても、内容や特徴を覚えていれば見つかる。** 本・同人誌・画像・動画・音楽・制作素材を、曖昧な日本語から探せるWindows向けローカルメディアライブラリを目指しています。
@@ -18,7 +20,7 @@
 
 製品GUIは**WinUI 3 + C#**、バックエンドはPython + SQLiteのloopback APIです。明示登録したフォルダの一覧・検索、リスト/グリッド、画像/CBZ/ZIPの先頭プレビュー、タグ/棚/お気に入り保存、交換可能profileでのoffline AI文章・画像・混合検索を実装しています。配布完成版ではありません。
 
-CBZ/ZIPページ閲覧APIはPythonで検証済み。読書画面の接続候補も追加しましたが、**追加C#テスト・Windows Releaseビルド・実GUI確認は未実行**です。[読書画面の確認手順](docs/archive-reader.md)を参照してください。
+CBZ/ZIPページ閲覧APIはPythonで検証済み。読書画面の接続候補も追加しましたが、**追加C#テスト・Windows Releaseビルドは確認済みで、読書画面の実GUI確認は未完了**です。[読書画面の確認手順](docs/archive-reader.md)を参照してください。
 
 全文OCR、動画/音声の内容索引、画像フォルダの論理作品化、Komga、見開き・読書位置保存、配布installerなどは後続です。Layaは実験的なopt-inで既定無効。実装状況と証拠は[開発handoff](docs/codex-handoff.md)・[チャットhandoff](docs/chat-handoff.md)・PRの最新記録を優先してください。
 

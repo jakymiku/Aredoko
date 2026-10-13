@@ -1,4 +1,4 @@
-﻿using Aredoko.Core;
+using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Automation;
@@ -25,6 +25,12 @@ public sealed partial class MainPage : Page
     private EditorState saved;
     private bool ready, populating, saving, dialogOpen, tiles, disposed;
     private int page, lastKind, lastMode;
+    private int? lastRoot;
+    private bool lastLiteralOnly;
+    private double? lastBoundary;
+    private int lastResultGroup;
+    private readonly List<NavigationViewItem> activeFolderEntries=[];
+    private readonly List<NavigationViewItem> inactiveFolderEntries=[];
     private JsonObject? aiScope;
     private string aiScopeError="AI索引の画面で対象を確認・保存してください。";
     private string view="all", lastQuery="";
@@ -36,7 +42,7 @@ public sealed partial class MainPage : Page
         searchTimer=DispatcherQueue.CreateTimer(); searchTimer.Interval=TimeSpan.FromMilliseconds(300);
         searchTimer.Tick+=async (_,_)=>{searchTimer.Stop(); if(PendingSearch) await NavigateAsync(0);};
     }
-    private bool PendingSearch => Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind||SearchMode.SelectedIndex!=lastMode;
+    private bool PendingSearch => Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind||SearchMode.SelectedIndex!=lastMode||SelectedRoot()!=lastRoot||(AIMatchedOnly.IsChecked==true)!=lastLiteralOnly||BoundaryValue()!=lastBoundary||AIResultGroup.SelectedIndex!=lastResultGroup;
     private EditorState Current()=>new(Tags.Text,Shelf.Text,Favorite.IsChecked==true,Reviewed.IsChecked==true);
     private bool Dirty=>active is not null && EditorState.IsDirty(saved,Current());
     private void Notice(string title,string message="",InfoBarSeverity severity=InfoBarSeverity.Informational) {
@@ -49,11 +55,45 @@ public sealed partial class MainPage : Page
     private async void Page_Loaded(object sender,RoutedEventArgs e) {
         if(ready)return; ready=true;
         await ConnectAsync();
+        Nav.PaneDisplayMode=NavigationViewPaneDisplayMode.Left;Nav.IsPaneOpen=true;
     }
     private async Task ConnectAsync() {
-        try { renderCancellation.Cancel(); thumbnails.Clear(); await api.ConnectAsync(); await LoadAIScopeAsync(); await LoadAsync(); }
+        try { renderCancellation.Cancel(); thumbnails.Clear(); await api.ConnectAsync(); await LoadAIScopeAsync(); await RefreshSearchRootsAsync(); await LoadAsync(); }
         catch(Exception ex) { Notice("バックエンドに接続できません", "start-winui.ps1を起動して再接続してください。"+ex.Message,InfoBarSeverity.Error); }
     }
+    private string ResultGroup()=>AIResultGroup.SelectedIndex switch {0=>"leading",1=>"other",_=>"all"};
+    private void AIResultGroup_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private double? BoundaryValue()=>SearchMode.SelectedIndex is 2 or 3 && double.IsFinite(SimilarityBoundary.Value)?SimilarityBoundary.Value:null;
+    private void SimilarityBoundary_Changed(NumberBox sender,NumberBoxValueChangedEventArgs args){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private int? SelectedRoot()=>SearchRoot.SelectedItem is ComboBoxItem item && item.Tag is int id && id>0 ? id : null;
+    private void RestoreSearchRoot(int? id)=>SearchRoot.SelectedItem=SearchRoot.Items.OfType<ComboBoxItem>().FirstOrDefault(x=>x.Tag is int value && value==(id??0));
+    private async Task RefreshSearchRootsAsync()
+    {
+        var selected=SelectedRoot();var data=await api.GetAsync("api/library/roots?include_inactive=1");
+        var before=populating;populating=true;
+        try
+        {
+            SearchRoot.Items.Clear();SearchRoot.Items.Add(new ComboBoxItem {Content="すべてのフォルダ",Tag=0});
+            activeFolderEntries.Clear();inactiveFolderEntries.Clear();
+            while(Nav.MenuItems.Count>4)Nav.MenuItems.RemoveAt(Nav.MenuItems.Count-1);
+            foreach(var row in data["items"]!.AsArray())
+            {
+                var id=row!["id"]!.GetValue<int>();var path=row["path"]!.GetValue<string>();var enabled=row["enabled"]!.GetValue<int>()==1;
+                if(enabled){var option=new ComboBoxItem {Content=path+(row["online"]!.GetValue<bool>()?"":"（未接続）"),Tag=id};AutomationProperties.SetAutomationId(option,$"SearchRoot{id}");SearchRoot.Items.Add(option);}
+                var entry=new NavigationViewItem {Content=System.IO.Path.GetFileName(path.TrimEnd('\\','/')),Tag=(enabled?"root:":"restore:")+id,Icon=new SymbolIcon(Symbol.Folder)};
+                AutomationProperties.SetAutomationId(entry,(enabled?"NavRoot":"NavRestoreRoot")+id);ToolTipService.SetToolTip(entry,path);
+                var menu=new MenuFlyout();var settings=new MenuFlyoutItem {Text=enabled?"棚・スキャン・登録解除の設定":"再登録"};
+                AutomationProperties.SetAutomationId(settings,"ManageRoot"+id);settings.Click+=async(_,_)=>await ManageRootsAsync(id,!enabled);menu.Items.Add(settings);entry.ContextFlyout=menu;
+                (enabled?activeFolderEntries:inactiveFolderEntries).Add(entry);
+            }
+            Nav.MenuItems.Add(FolderNavigation);foreach(var entry in activeFolderEntries)Nav.MenuItems.Add(entry);
+            if(inactiveFolderEntries.Count>0){Nav.MenuItems.Add(InactiveNavigation);foreach(var entry in inactiveFolderEntries)Nav.MenuItems.Add(entry);}
+            if(selected is int missingId && !SearchRoot.Items.OfType<ComboBoxItem>().Any(x=>x.Tag is int value && value==missingId))
+                SearchRoot.Items.Add(new ComboBoxItem {Content="登録が見つからないフォルダ",Tag=missingId});
+            RestoreSearchRoot(selected);
+        }finally{populating=before;}
+    }
+    private void SearchRoot_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async Task LoadAIScopeAsync()
     {
         aiScope=null;
@@ -73,22 +113,26 @@ public sealed partial class MainPage : Page
         var version=searches.Next(); Busy.Visibility=Visibility.Visible;
         // Do not allow editing an old record while a different result is loading.
         Editor.IsEnabled=false; Items.IsEnabled=false;
-        var query=Query.Text; var kind=KindValue();var selectedKind=Kind.SelectedIndex;var selectedMode=SearchMode.SelectedIndex;
+        var query=Query.Text; var kind=KindValue();var selectedKind=Kind.SelectedIndex;var selectedMode=SearchMode.SelectedIndex;var selectedRoot=SelectedRoot();var literalOnly=AIMatchedOnly.IsChecked==true;var boundary=BoundaryValue();var resultGroup=AIResultGroup.SelectedIndex;
         try {
             var method=SearchMethod.FromIndex(selectedMode);
             if(selectedMode>0&&!string.IsNullOrWhiteSpace(query)&&aiScope is null)throw new InvalidOperationException(aiScopeError);
-            var result=await api.SearchAsync(query,kind,view,page,method.IsAI,method.Source,aiScope);
+            var result=await api.SearchAsync(query,kind,view,page,method.IsAI,method.Source,aiScope,selectedRoot,literalOnly,boundary,ResultGroup());
             if(!searches.IsCurrent(version)||disposed)return;
             if(result.Items.Count==0 && page>0){page=Math.Max(0,(result.Total-1)/60);await LoadAsync();return;}
-            lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;
+            lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;lastRoot=selectedRoot;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;
+            SearchOptions.IsExpanded=false;
+            SearchOptions.Header=$"検索フォルダ: {(selectedRoot is null?"すべて":System.IO.Path.GetFileName((SearchRoot.SelectedItem as ComboBoxItem)?.Content?.ToString()??""))}"+(selectedMode>0?$" · {(resultGroup==0?"上位候補":resultGroup==1?"参考候補":"全候補")}":"");
             rows=result.Items; active=null; Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+59)/60)}";
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*60<result.Total;
             Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
             Empty.Text=query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
-            Notice("読込完了",selectedMode>0 && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。" : selectedMode>0 ? "探したい内容を文章で入力してください。AI索引の作成は「AI索引」から。" : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions));
-        } catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;rows=[];active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=selectedMode>0?"この条件ではAI検索を利用できません。\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。":"検索を完了できませんでした。再接続からやり直してください。";Failure(ex);} }
+            if(selectedMode>0&&query.Length>0&&rows.Count==0&&resultGroup==1&&result.GroupBoundary is null)Empty.Text="参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像・表紙／AI文章で区切りを指定してください。";
+            else if(selectedMode>0&&query.Length>0&&rows.Count==0&&resultGroup==0&&result.OtherTotal>0)Empty.Text="区切り以上の候補はありません。類似度の区切りを下げるか、参考候補を表示してください。";
+            Notice("読込完了",selectedMode>0 && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。画像・表紙とAI文章では区切りを手動指定できます。")}" : selectedMode>0 ? "探したい内容を文章で入力してください。AI索引の作成は「AI索引」から。" : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions));
+        } catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoot=selectedRoot;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;rows=[];active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=selectedMode>0?"この条件ではAI検索を利用できません。\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。":"検索を完了できませんでした。再接続からやり直してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
     private void RenderRows()
@@ -110,6 +154,7 @@ public sealed partial class MainPage : Page
                 var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
                 text.Children.Add(new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] });
                 text.Children.Add(new TextBlock { Text = $"{row.MatchLabel}{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
+                if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
                 var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
                 AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
                 text.Children.Add(previewStatus);
@@ -127,7 +172,7 @@ public sealed partial class MainPage : Page
                 }
                 content.Children.Add(image); content.Children.Add(text);
                 var item = new ListViewItem { Content = content, Width = tiles ? 232 : double.NaN, HorizontalContentAlignment = HorizontalAlignment.Stretch };
-                AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
+                item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
                 var renderToken = renderCancellation.Token;
                 CancellationTokenSource? visible = null;
                 item.Loaded += async (_, _) =>
@@ -167,13 +212,13 @@ public sealed partial class MainPage : Page
     private async Task NavigateAsync(int nextPage) {
         if(!ready||saving||!await transitions.WaitAsync(0))return;
         try {
-            if(!await ConfirmDiscardAsync()){populating=true;Query.Text=lastQuery;Kind.SelectedIndex=lastKind;SearchMode.SelectedIndex=lastMode;populating=false;return;}
+            if(!await ConfirmDiscardAsync()){populating=true;Query.Text=lastQuery;Kind.SelectedIndex=lastKind;SearchMode.SelectedIndex=lastMode;RestoreSearchRoot(lastRoot);AIMatchedOnly.IsChecked=lastLiteralOnly;SimilarityBoundary.Value=lastBoundary??double.NaN;AIResultGroup.SelectedIndex=lastResultGroup;UpdateSearchMethod();populating=false;return;}
             page=nextPage;await LoadAsync();
         }finally{transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
     private async void Items_Changed(object sender,SelectionChangedEventArgs e) {
         if(populating||!ready)return;
-        var index=Items.SelectedIndex;
+        var index=Items.SelectedItem is ListViewItem selected && selected.Tag is int id ? rows.FindIndex(row=>row.Id==id) : -1;
         if(index<0||index>=rows.Count)return;
         if(saving||!await transitions.WaitAsync(0)){RestoreSelection();return;}
         try {
@@ -185,7 +230,7 @@ public sealed partial class MainPage : Page
             _ = ShowDetailPreviewAsync(active);
         }finally{transitions.Release();}
     }
-    private void RestoreSelection(){populating=true;Items.SelectedIndex=active is null?-1:rows.FindIndex(r=>r.Id==active.Id);populating=false;}
+    private void RestoreSelection(){populating=true;Items.SelectedItem=active is null?null:Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==active.Id);populating=false;}
     private void UpdateDirty(){if(!ready)return;EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);}
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
@@ -239,6 +284,9 @@ public sealed partial class MainPage : Page
         if(Query is null || SearchMethodHint is null)return;
         var ai=SearchMode.SelectedIndex>0;
         AutomationProperties.SetName(Query,ai?"AI検索の文章":"名前・タグ検索");
+        SimilarityBoundary.Visibility=SearchMode.SelectedIndex is 2 or 3?Visibility.Visible:Visibility.Collapsed;
+        AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
+        AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         Query.PlaceholderText=ai?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
         SearchMethodHint.Text=SearchMode.SelectedIndex switch
         {
@@ -253,22 +301,27 @@ public sealed partial class MainPage : Page
         UpdateSearchMethod();
         if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}
     }
+    private void AIMatchedOnly_Changed(object sender,RoutedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private void Kind_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Previous_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(Math.Max(0,page-1));
     private async void Next_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(page+1);
     private void RestoreNavigation()
     {
-        populating=true; Nav.SelectedItem=Nav.MenuItems.OfType<NavigationViewItem>().First(x=>x.Tag?.ToString()==view); populating=false;
+        populating=true; Nav.SelectedItem=SelectedRoot() is int id&&view=="all"?activeFolderEntries.FirstOrDefault(x=>x.Tag?.ToString()=="root:"+id):Nav.MenuItems.OfType<NavigationViewItem>().First(x=>x.Tag?.ToString()==view); populating=false;
     }
     private async void Nav_SelectionChanged(NavigationView sender,NavigationViewSelectionChangedEventArgs args)
     {
         if(!ready||populating||args.SelectedItem is not NavigationViewItem item)return;
-        var next=item.Tag?.ToString()??"all";
+        var next=item.Tag?.ToString()??"";
+        if(next.StartsWith("restore:")&&int.TryParse(next[8..],out var restore)){RestoreNavigation();await ManageRootsAsync(restore,true);return;}
+        var rootTarget=next.StartsWith("root:")&&int.TryParse(next[5..],out var rootId)?rootId:(int?)null;
+        if(rootTarget is null&&next is not ("all" or "favorites" or "unreviewed" or "shelf"))return;
         if(saving||dialogOpen||!await transitions.WaitAsync(0)){RestoreNavigation();return;}
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
-            view=next;page=0;await LoadAsync();
+            populating=true;if(rootTarget is int id)RestoreSearchRoot(id);else if(next=="all")RestoreSearchRoot(null);populating=false;
+            view=rootTarget is null?next:"all";page=0;await LoadAsync();
         }
         finally { transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();} }
     }
@@ -325,6 +378,7 @@ public sealed partial class MainPage : Page
     private void Page_SizeChanged(object sender,SizeChangedEventArgs e)
     {
         if(Details is null || ViewTools is null)return;
+        if(ready&&e.NewSize.Width>0){Nav.PaneDisplayMode=e.NewSize.Width>=1000?NavigationViewPaneDisplayMode.Left:NavigationViewPaneDisplayMode.LeftCompact;Nav.IsPaneOpen=e.NewSize.Width>=1000;}
         Details.DisplayMode=e.NewSize.Width<1000?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
         Details.OpenPaneLength=Math.Min(320,Math.Max(240,e.NewSize.Width-64));
         if(active is null)Details.IsPaneOpen=false;
@@ -340,7 +394,8 @@ public sealed partial class MainPage : Page
         ViewTools.Margin=narrow?new Thickness(0,8,0,0):new Thickness(0);
     }
 
-    private async void Roots_Click(object sender,RoutedEventArgs e) {
+    private async void Roots_Click(object sender,RoutedEventArgs e)=>await ManageRootsAsync();
+    private async Task ManageRootsAsync(int? requestedRoot=null,bool restore=false) {
         if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
         if(!await ConfirmDiscardAsync()){transitions.Release();return;}
         dialogOpen=true;
@@ -353,29 +408,74 @@ public sealed partial class MainPage : Page
             var choose=new Button {Content="フォルダを選ぶ"};AutomationProperties.SetAutomationId(choose,"ChooseFolder");
             choose.Click+=async(_,_)=>{try{var picker=new FolderPicker();picker.FileTypeFilter.Add("*");WinRT.Interop.InitializeWithWindow.Initialize(picker,WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current));var selected=await picker.PickSingleFolderAsync();if(selected is not null)folder.Text=selected.Path;}catch(Exception ex){Failure(ex);}};
             var exclusions=new TextBox {Header="除外（カンマ区切り、例: cache, *.tmp）"};AutomationProperties.SetAutomationId(exclusions,"RootExcludes");
+            var initialShelf=new ComboBox {Header="初期棚（新規登録／選択フォルダの設定）",HorizontalAlignment=HorizontalAlignment.Stretch};
+            AutomationProperties.SetAutomationId(initialShelf,"RootInitialShelf");
+            var newShelf=new TextBox {Header="新しい棚の名前",MaxLength=80,IsEnabled=false};AutomationProperties.SetAutomationId(newShelf,"RootNewShelf");
+            initialShelf.Items.Add(new ComboBoxItem {Content="棚なし",Tag="none"});
+            initialShelf.Items.Add(new ComboBoxItem {Content="新しい棚を作成",Tag="new"});
+            var shelves=await api.GetAsync("api/library/shelves");
+            foreach(var name in shelves["items"]!.AsArray())initialShelf.Items.Add(new ComboBoxItem {Content=name!.GetValue<string>(),Tag="existing"});
+            initialShelf.SelectedIndex=0;
+            initialShelf.SelectionChanged+=(_,_)=>newShelf.IsEnabled=(initialShelf.SelectedItem as ComboBoxItem)?.Tag?.ToString()=="new";
+            string InitialShelf()
+            {
+                var choice=initialShelf.SelectedItem as ComboBoxItem;
+                if(choice?.Tag?.ToString()=="new")return string.IsNullOrWhiteSpace(newShelf.Text)?throw new InvalidOperationException("新しい棚の名前を入力してください。"):newShelf.Text.Trim();
+                return choice?.Tag?.ToString()=="existing"?choice.Content.ToString()??"":"";
+            }
+            var shelfHint=new TextBlock {Text="新しく見つかったファイルをこの棚へ入れます。個別に変更・解除した棚は再スキャンしても保持します。",TextWrapping=TextWrapping.Wrap};
+            var fillShelf=new CheckBox {Content="既存の棚未設定ファイルにも適用（個別に解除した棚を含む）"};AutomationProperties.SetAutomationId(fillShelf,"FillUnsetShelf");
+            var saveRootShelf=new Button {Content="選択フォルダの初期棚を保存"};AutomationProperties.SetAutomationId(saveRootShelf,"SaveRootShelf");
             var consent=new CheckBox {Content="このフォルダの読み取り専用登録を許可"};AutomationProperties.SetAutomationId(consent,"RootConsent");
             var add=new Button {Content="登録"};AutomationProperties.SetAutomationId(add,"AddRoot");
             var scan=new Button {Content="選択フォルダをスキャン / 再開"};AutomationProperties.SetAutomationId(scan,"ScanRoot");
             var cancel=new Button {Content="スキャンをキャンセル"};AutomationProperties.SetAutomationId(cancel,"CancelScan");
+            var remove=new Button {Content="選択フォルダの登録を解除"};AutomationProperties.SetAutomationId(remove,"UnregisterRoot");
+            var removeChoice=new CheckBox {Content="登録解除を許可（元ファイルは残り、再登録でタグ・棚を復元）"};AutomationProperties.SetAutomationId(removeChoice,"UnregisterConsent");
+            remove.IsEnabled=false;removeChoice.Checked+=(_,_)=>remove.IsEnabled=true;removeChoice.Unchecked+=(_,_)=>remove.IsEnabled=false;
             var rules=new Button {Content="選択フォルダの除外を更新"};AutomationProperties.SetAutomationId(rules,"SaveExcludes");
             var progress=new TextBlock {TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(progress,"ScanStatus");
             var rootPatterns = new Dictionary<int,string>();
-            list.SelectionChanged+=(_,_)=>{if(list.SelectedItem is ComboBoxItem selected && rootPatterns.TryGetValue((int)selected.Tag,out var patterns))exclusions.Text=patterns;};
-            async Task RefreshRoots(){var roots=await api.GetAsync("api/library/roots");list.Items.Clear();rootPatterns.Clear();foreach(var row in roots["items"]!.AsArray()){rootPatterns[row!["id"]!.GetValue<int>()]=string.Join(", ",row["excludes"]!.AsArray().Select(x=>x!.GetValue<string>()));list.Items.Add(new ComboBoxItem {Content=row!["path"]!.GetValue<string>()+(row["online"]!.GetValue<bool>()?"":"（未接続）"),Tag=row["id"]!.GetValue<int>()});}if(list.Items.Count>0)list.SelectedIndex=list.Items.Count-1;}
+            var rootShelves = new Dictionary<int,string>();
+            list.SelectionChanged+=(_,_)=>{removeChoice.IsChecked=false;if(list.SelectedItem is ComboBoxItem selected && rootPatterns.TryGetValue((int)selected.Tag,out var patterns)){exclusions.Text=patterns;var shelf=rootShelves.GetValueOrDefault((int)selected.Tag,"");initialShelf.SelectedItem=shelf.Length==0?initialShelf.Items[0]:initialShelf.Items.OfType<ComboBoxItem>().FirstOrDefault(x=>x.Content?.ToString()==shelf);if(initialShelf.SelectedItem is null){initialShelf.SelectedIndex=1;newShelf.Text=shelf;}}};
+            async Task RefreshRoots(){var roots=await api.GetAsync("api/library/roots");list.Items.Clear();rootPatterns.Clear();rootShelves.Clear();foreach(var row in roots["items"]!.AsArray()){rootShelves[row!["id"]!.GetValue<int>()]=row["default_shelf"]!.GetValue<string>();rootPatterns[row!["id"]!.GetValue<int>()]=string.Join(", ",row["excludes"]!.AsArray().Select(x=>x!.GetValue<string>()));list.Items.Add(new ComboBoxItem {Content=row!["path"]!.GetValue<string>()+(row["online"]!.GetValue<bool>()?"":"（未接続）"),Tag=row["id"]!.GetValue<int>()});}if(list.Items.Count>0)list.SelectedIndex=list.Items.Count-1;}
             JsonArray Patterns()=>new(exclusions.Text.Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Select(s=>(JsonNode?)JsonValue.Create(s)).ToArray());
             int RootId()=>list.SelectedItem is ComboBoxItem item?(int)item.Tag:throw new InvalidOperationException("登録フォルダを選んでください。");
-            add.Click+=async(_,_)=>{add.IsEnabled=false;try{if(consent.IsChecked!=true)throw new InvalidOperationException("読み取り登録の許可にチェックしてください。");await api.PostAsync("api/library/roots",new JsonObject{{"path",folder.Text},{"consent",true},{"excludes",Patterns()}});await RefreshRoots();folder.Text="";consent.IsChecked=false;progress.Text="登録しました。スキャンすると一覧に反映されます。";}catch(Exception ex){progress.Text=ex.Message;}finally{add.IsEnabled=true;}};
+            add.Click+=async(_,_)=>{add.IsEnabled=false;try{if(consent.IsChecked!=true)throw new InvalidOperationException("読み取り登録の許可にチェックしてください。");await api.PostAsync("api/library/roots",new JsonObject{{"path",folder.Text},{"consent",true},{"excludes",Patterns()},{"default_shelf",InitialShelf()}});await RefreshRoots();initialShelf.Items.Clear();initialShelf.Items.Add(new ComboBoxItem {Content="棚なし",Tag="none"});initialShelf.Items.Add(new ComboBoxItem {Content="新しい棚を作成",Tag="new"});var savedShelves=await api.GetAsync("api/library/shelves");foreach(var name in savedShelves["items"]!.AsArray())initialShelf.Items.Add(new ComboBoxItem {Content=name!.GetValue<string>(),Tag="existing"});initialShelf.SelectedIndex=0;newShelf.Text="";folder.Text="";consent.IsChecked=false;progress.Text="登録しました。スキャンすると一覧に反映されます。";}catch(Exception ex){progress.Text=ex.Message;}finally{add.IsEnabled=true;}};
             scan.Click+=async(_,_)=>{try{await api.PostAsync("api/library/scan",new JsonObject{{"root_id",RootId()}});progress.Text="スキャン開始";}catch(Exception ex){progress.Text=ex.Message;}};
             cancel.Click+=async(_,_)=>{try{await api.PostAsync("api/library/cancel",new JsonObject());progress.Text="キャンセル要求済み。前回の索引を保持します。";}catch(Exception ex){progress.Text=ex.Message;}};
             rules.Click+=async(_,_)=>{try{await api.PostAsync("api/library/excludes",new JsonObject{{"root_id",RootId()},{"patterns",Patterns()}});progress.Text="除外を更新。次回スキャンで反映します。";}catch(Exception ex){progress.Text=ex.Message;}};
+            saveRootShelf.Click+=async(_,_)=>{saveRootShelf.IsEnabled=false;try{var targetRoot=RootId();var result=await api.PostAsync("api/library/roots/shelf",new JsonObject {{"root_id",targetRoot},{"shelf",InitialShelf()},{"fill_unset",fillShelf.IsChecked==true}});rootShelves[targetRoot]=result["default_shelf"]!.GetValue<string>();progress.Text=$"初期棚を保存しました。既存の棚未設定ファイル{result["updated"]}件に適用。";}catch(Exception ex){progress.Text=ex.Message;}finally{saveRootShelf.IsEnabled=true;}};
+            remove.Click+=async(_,_)=>{
+                if(removeChoice.IsChecked!=true)return;
+                remove.IsEnabled=false;
+                try{
+                    var id=RootId();await api.PostAsync("api/library/roots/unregister",new JsonObject {{"root_id",id}});
+                    if(SelectedRoot()==id){populating=true;RestoreSearchRoot(null);populating=false;}
+                    await RefreshRoots();removeChoice.IsChecked=false;progress.Text="登録を解除しました。元ファイルと保存済みのタグ・棚は保持しています。";
+                }catch(Exception ex){progress.Text=ex.Message;remove.IsEnabled=removeChoice.IsChecked==true;}
+            };
             bool polling=false;
             timer.Tick+=async(_,_)=>{if(polling)return;polling=true;try{var state=await api.GetAsync("api/library/scan");var phase=state["state"]!.GetValue<string>();progress.Text=$"{phase} · {state["discovered"]} 件 {state["error"]}";scan.IsEnabled=phase!="running";rules.IsEnabled=phase!="running";add.IsEnabled=phase!="running";cancel.IsEnabled=phase=="running";}catch(Exception ex){progress.Text=ex.Message;}finally{polling=false;}};
-            foreach(var element in new UIElement[]{list,folder,choose,exclusions,consent,add,rules,scan,cancel,progress})panel.Children.Add(element);
-            await RefreshRoots();timer.Start();
-            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="フォルダ管理",Content=new ScrollViewer {Content=panel,MaxHeight=Math.Max(160,ActualHeight-240)},CloseButtonText="閉じる"};
+            foreach(var element in new UIElement[]{list,folder,choose,exclusions,initialShelf,newShelf,shelfHint,consent,add,fillShelf,saveRootShelf,rules,scan,cancel,removeChoice,remove,progress})panel.Children.Add(element);
+            await RefreshRoots();
+            if(requestedRoot is int selected)
+            {
+                var all=await api.GetAsync("api/library/roots?include_inactive=1");var row=all["items"]!.AsArray().FirstOrDefault(x=>x!["id"]!.GetValue<int>()==selected);
+                if(row is not null)
+                {
+                    if(restore)folder.Text=row["path"]!.GetValue<string>();
+                    else list.SelectedItem=list.Items.OfType<ComboBoxItem>().FirstOrDefault(x=>x.Tag is int id&&id==selected);
+                    var shelf=row["default_shelf"]!.GetValue<string>();
+                    initialShelf.SelectedItem=shelf.Length==0?initialShelf.Items[0]:initialShelf.Items.OfType<ComboBoxItem>().FirstOrDefault(x=>x.Content?.ToString()==shelf);
+                    if(shelf.Length>0&&initialShelf.SelectedItem is null){initialShelf.SelectedIndex=1;newShelf.Text=shelf;}
+                }
+            }
+            timer.Start();
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="フォルダ管理",Content=new ScrollViewer {Content=panel,MaxHeight=Math.Max(160,XamlRoot.Size.Height-240)},CloseButtonText="閉じる"};
             await dialog.ShowAsync();
         }catch(Exception ex){Failure(ex);}
-        finally{timer.Stop();dialogOpen=false;try{if(!disposed){renderCancellation.Cancel();thumbnails.Clear();await LoadAsync();}}finally{transitions.Release();}}
+        finally{timer.Stop();dialogOpen=false;try{if(!disposed){renderCancellation.Cancel();thumbnails.Clear();await RefreshSearchRootsAsync();await LoadAIScopeAsync();page=0;await LoadAsync();}}finally{transitions.Release();}}
     }
 
     private async void RelatedTerms_Click(object sender,RoutedEventArgs e)

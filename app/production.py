@@ -49,12 +49,13 @@ class ProductionCatalog(Catalog):
 
     def sync_index(self):
         with self.connect() as db:
-            rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id FROM library_locations l '
+            rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id,r.default_shelf FROM library_locations l '
+                              'JOIN library_roots r ON r.id=l.root_id '
                               'LEFT JOIN item_locations m ON m.location_id=l.id').fetchall()
             for row in rows:
                 if row['item_id'] is None:
-                    item_id = db.execute('INSERT INTO items(title,kind,tags) VALUES(?,?,?)',
-                                         (Path(row['relative_path']).name,row['kind'],'[]')).lastrowid
+                    item_id = db.execute('INSERT INTO items(title,kind,tags,shelf) VALUES(?,?,?,?)',
+                                         (Path(row['relative_path']).name,row['kind'],'[]',row['default_shelf'])).lastrowid
                     db.execute('INSERT INTO item_locations VALUES(?,?)',(item_id,row['id']))
                 else:
                     # Only source-derived fields; never overwrite user tags/favorites.
@@ -71,22 +72,28 @@ class ProductionCatalog(Catalog):
             'JOIN library_locations l ON l.id=m.location_id ')
     FIELDS = 'i.*,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns'
 
-    def search(self, query='', kind='', view='all', page=0, limit=60):
+    def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
         if type(page) is not int or page<0 or not 1<=limit<=120 or len(query)>300:
             raise ValueError('Invalid paging')
+        if root_id is not None and (type(root_id) is not int or not 1<=root_id<=9223372036854775807):
+            raise ValueError('Invalid root filter')
         terms=split_terms(query)
         with self.connect() as db:
+            if root_id is not None and not db.execute('SELECT 1 FROM library_roots WHERE id=? AND enabled=1',(root_id,)).fetchone():
+                raise ValueError('Unknown registered root')
             # Every normalized word must appear in the title or tags (AND), so
             # "巫女 東方", "東方　巫女", "ﾚｲﾑ" and "REIMU" variants still find a
             # file. The user's related-term dictionary may add OR alternatives
             # to a word; it never removes the word or relaxes the filters.
             alternatives,expansions=self.terms.expand(terms,db)
-            where, values = ["l.status<>'excluded'"], []
+            where, values = ["l.status<>'excluded'",'l.root_id IN (SELECT id FROM library_roots WHERE enabled=1)'], []
             if terms:
                 register_search_terms(db,alternatives)
                 where.append('aredoko_match(i.title,i.tags)>=0')
+            if root_id is not None:
+                where.append('l.root_id=?'); values.append(root_id)
             if kind:
                 where.append('i.kind=?'); values.append(kind)
             where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],
@@ -149,12 +156,36 @@ class ProductionCatalog(Catalog):
             self._require_idle()
             return super().update(ids, changes)
 
+    def set_root_shelf(self,root_id,shelf,fill_unset=False):
+        if type(root_id) is not int or not 1<=root_id<=9223372036854775807:raise ValueError('Invalid root ID')
+        if not isinstance(shelf,str) or len(shelf)>80:raise ValueError('Shelf must be 80 characters or less')
+        if type(fill_unset) is not bool:raise ValueError('Expected a boolean')
+        shelf=shelf.strip()
+        with self._guard:
+            self._require_idle()
+            with self.connect() as db:
+                if not db.execute('UPDATE library_roots SET default_shelf=? WHERE id=? AND enabled=1',(shelf,root_id)).rowcount:
+                    raise ValueError('Unknown registered root')
+                changed=0
+                if fill_unset and shelf:
+                    changed=db.execute("UPDATE items SET shelf=? WHERE shelf='' AND id IN (SELECT m.item_id FROM item_locations m JOIN library_locations l ON l.id=m.location_id WHERE l.root_id=? AND l.status='present')",(shelf,root_id)).rowcount
+        return {'default_shelf':shelf,'updated':changed}
+
+    def unregister_root(self,root_id):
+        with self._guard:
+            self._require_idle()
+            return self.index.unregister(root_id)
+
     def set_excludes(self, root_id, patterns):
         with self._guard:
             self._require_idle()
             return self.index.set_excludes(root_id, patterns)
 
-    def add_root(self,path,excludes=None):
+    def shelves(self):
+        with self.connect() as db:
+            return [row[0] for row in db.execute("SELECT shelf FROM items WHERE shelf<>'' UNION SELECT default_shelf FROM library_roots WHERE default_shelf<>'' AND enabled=1 ORDER BY 1")]
+
+    def add_root(self,path,excludes=None,default_shelf=''):
         if not isinstance(path,str) or not path or not Path(path).is_absolute():
             raise ValueError('Choose an absolute folder path')
         source=Path(path).resolve()
@@ -162,7 +193,7 @@ class ProductionCatalog(Catalog):
             raise ValueError('The library must not contain the application database')
         with self._guard:
             self._require_idle()
-            return self.index.add_root(path,excludes)
+            return self.index.add_root(path,excludes,default_shelf)
 
     def scan_state(self):
         with self.connect() as db:

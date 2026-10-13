@@ -110,6 +110,13 @@ class LibraryIndex:
                 CREATE INDEX IF NOT EXISTS library_locations_status ON library_locations(root_id,status);
             ''')
 
+            # Additive migration; existing roots keep no initial shelf.
+            if 'default_shelf' not in {r['name'] for r in db.execute('PRAGMA table_info(library_roots)')}:
+                db.execute("ALTER TABLE library_roots ADD COLUMN default_shelf TEXT NOT NULL DEFAULT ''")
+
+            if 'enabled' not in {r['name'] for r in db.execute('PRAGMA table_info(library_roots)')}:
+                db.execute("ALTER TABLE library_roots ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+
     @contextmanager
     def connect(self):
         db = sqlite3.connect(self.path, timeout=30)
@@ -121,7 +128,10 @@ class LibraryIndex:
         finally:
             db.close()
 
-    def add_root(self, path, excludes=None):
+    def add_root(self, path, excludes=None, default_shelf=''):
+        if not isinstance(default_shelf,str) or len(default_shelf)>80:
+            raise ValueError('Shelf must be 80 characters or less')
+        default_shelf=default_shelf.strip()
         requested = Path(path).expanduser()
         if requested.is_symlink():
             raise ValueError('Symlink roots are not supported')
@@ -138,15 +148,30 @@ class LibraryIndex:
             raise ValueError('Reparse-point roots are not supported')
         patterns = _validate_excludes(excludes)
         with self.connect() as db:
-            for row in db.execute('SELECT path FROM library_roots'):
-                existing = Path(row['path'])
-                if os.path.normcase(str(root)) == os.path.normcase(str(existing)):
-                    raise ValueError('This root is already registered')
+            # Validate all active overlaps before restoring an inactive root.
+            for active in db.execute('SELECT path FROM library_roots WHERE enabled=1'):
+                existing=Path(active['path'])
                 if existing in root.parents or root in existing.parents:
                     raise ValueError('Overlapping roots are not supported')
-            cursor = db.execute('INSERT INTO library_roots(path,excludes_json,created_at) VALUES(?,?,?)',
-                                (str(root), json.dumps(patterns, ensure_ascii=False), _now()))
+            for row in db.execute('SELECT id,path,enabled FROM library_roots'):
+                existing = Path(row['path'])
+                if os.path.normcase(str(root)) == os.path.normcase(str(existing)):
+                    if row['enabled']:raise ValueError('This root is already registered')
+                    db.execute('UPDATE library_roots SET enabled=1,excludes_json=?,default_shelf=? WHERE id=?',
+                        (json.dumps(patterns,ensure_ascii=False),default_shelf,row['id']))
+                    return row['id']
+                if row['enabled'] and (existing in root.parents or root in existing.parents):
+                    raise ValueError('Overlapping roots are not supported')
+            cursor = db.execute('INSERT INTO library_roots(path,excludes_json,created_at,default_shelf) VALUES(?,?,?,?)',
+                                (str(root), json.dumps(patterns, ensure_ascii=False), _now(), default_shelf))
             return cursor.lastrowid
+
+    def unregister(self,root_id):
+        if type(root_id) is not int or root_id<=0 or root_id>9223372036854775807:raise ValueError('Invalid root ID')
+        with self.connect() as db:
+            if not db.execute('UPDATE library_roots SET enabled=0 WHERE id=? AND enabled=1',(root_id,)).rowcount:
+                raise ValueError('Unknown registered root')
+        return {'unregistered':root_id}
 
     def set_excludes(self, root_id, patterns):
         """Replace user exclusions; defaults always remain. No scan is started."""
@@ -154,15 +179,15 @@ class LibraryIndex:
             raise ValueError('Invalid root ID')
         patterns = _validate_excludes(patterns)
         with self.connect() as db:
-            updated = db.execute('UPDATE library_roots SET excludes_json=? WHERE id=?',
+            updated = db.execute('UPDATE library_roots SET excludes_json=? WHERE id=? AND enabled=1',
                                  (json.dumps(patterns, ensure_ascii=False), root_id)).rowcount
             if not updated:
                 raise KeyError(root_id)
         return list(patterns)
 
-    def roots(self):
+    def roots(self,include_inactive=False):
         with self.connect() as db:
-            result = [dict(row) for row in db.execute('SELECT * FROM library_roots ORDER BY id')]
+            result = [dict(row) for row in db.execute('SELECT * FROM library_roots'+('' if include_inactive else ' WHERE enabled=1')+' ORDER BY id')]
         for row in result:
             row['excludes'] = json.loads(row.pop('excludes_json'))
             row['online'] = Path(row['path']).is_dir()
@@ -178,7 +203,7 @@ class LibraryIndex:
         where = 'root_id=?' + (' AND status=?' if status else '')
         args = [root_id] + ([status] if status else [])
         with self.connect() as db:
-            if not db.execute('SELECT 1 FROM library_roots WHERE id=?', (root_id,)).fetchone():
+            if not db.execute('SELECT 1 FROM library_roots WHERE id=? AND enabled=1', (root_id,)).fetchone():
                 raise KeyError(root_id)
             total = db.execute('SELECT count(*) FROM library_locations WHERE ' + where, args).fetchone()[0]
             rows = db.execute('SELECT * FROM library_locations WHERE ' + where +
@@ -194,7 +219,7 @@ class LibraryIndex:
         if type(root_id) is not int or root_id <= 0:
             raise ValueError('Invalid root ID')
         with self.connect() as db:
-            row = db.execute('SELECT * FROM library_roots WHERE id=?', (root_id,)).fetchone()
+            row = db.execute('SELECT * FROM library_roots WHERE id=? AND enabled=1', (root_id,)).fetchone()
             if row is None:
                 raise KeyError(root_id)
             root = Path(row['path'])

@@ -28,6 +28,15 @@ public sealed class MediaRow
     // "related" when the row matched only through the user's related-term dictionary;
     // "partial" when nothing had every word and this row lacks one of them.
     public string Match { get; set; } = "";
+    public string SimilarityGroup { get; set; } = "";
+    public double? SemanticScore { get; set; }
+    public string ScoreKind { get; set; } = "";
+    public int LiteralHits { get; set; }
+    public int LiteralWords { get; set; }
+    public string AIEvidence => SemanticScore is double score
+        ? (LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
+          + (ScoreKind=="cosine" ? $"\n類似度 {score:F3}" : ScoreKind=="reciprocal-rank" ? $"\n順位統合値 {score:F4}" : "")
+        : "";
     public string MatchLabel => Match switch { "related" => "関連語の候補 · ", "partial" => "一部の語のみ一致 · ", _ => "" };
     public string KindAndTags => MatchLabel + $"{Kind} · {string.Join("、", Tags)}";
 }
@@ -37,6 +46,10 @@ public sealed record SearchExpansion(string Term, string[] Added, bool Truncated
 public sealed class SearchResponse
 {
     public int Total { get; set; }
+    public string ScoreKind { get; set; } = "";
+    public double? GroupBoundary { get; set; }
+    public int LeadingTotal { get; set; }
+    public int OtherTotal { get; set; }
     public int? CoverageLimit { get; set; }
     public List<MediaRow> Items { get; set; } = [];
     public List<SearchExpansion> Expansions { get; set; } = [];
@@ -64,8 +77,16 @@ public static class Protocol
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
         var result = new SearchResponse { Total = root.GetProperty("total").GetInt32(), CoverageLimit = root.TryGetProperty("coverage_limit",out var coverage) ? coverage.GetInt32() : null };
+        result.ScoreKind=root.TryGetProperty("score_kind",out var kind) && kind.ValueKind==JsonValueKind.String ? kind.GetString()??"" : "";
+        result.GroupBoundary=root.TryGetProperty("group_boundary",out var boundary) && boundary.ValueKind==JsonValueKind.Number && boundary.TryGetDouble(out var cut) ? cut : null;
+        result.LeadingTotal=root.TryGetProperty("leading_total",out var leading) && leading.TryGetInt32(out var n) ? n : result.Total;
+        result.OtherTotal=root.TryGetProperty("other_total",out var other) && other.TryGetInt32(out var m) ? m : 0;
         foreach (var element in root.GetProperty("items").EnumerateArray())
-            result.Items.Add(ReadRow(element));
+        {
+            var row=ReadRow(element);
+            row.ScoreKind=root.TryGetProperty("score_kind",out var scoreKind) && scoreKind.ValueKind==JsonValueKind.String ? scoreKind.GetString()??"" : "";
+            result.Items.Add(row);
+        }
         if (root.TryGetProperty("partial", out var partial) && partial.ValueKind == JsonValueKind.Object)
             result.PartialWords = partial.GetProperty("words").GetInt32();
         if (root.TryGetProperty("expansions", out var expansions) && expansions.ValueKind == JsonValueKind.Array)
@@ -112,6 +133,10 @@ public static class Protocol
         Size = row.TryGetProperty("size_bytes", out var size) ? size.GetInt64() : 0,
         Location = row.TryGetProperty("relative_path", out var loc) ? loc.GetString() ?? "" : "",
         Availability = row.TryGetProperty("availability", out var av) ? av.GetString() ?? "" : "",
+        SimilarityGroup = row.TryGetProperty("similarity_group",out var group) && group.ValueKind==JsonValueKind.String ? group.GetString()??"" : "",
+        SemanticScore = row.TryGetProperty("semantic_score",out var score) && score.ValueKind==JsonValueKind.Number && score.TryGetDouble(out var value) && double.IsFinite(value) ? value : null,
+        LiteralHits = row.TryGetProperty("literal_hits",out var hits) && hits.TryGetInt32(out var count) ? count : 0,
+        LiteralWords = row.TryGetProperty("literal_words",out var words) && words.TryGetInt32(out var total) ? total : 0,
         Match = row.TryGetProperty("match", out var match) && match.ValueKind == JsonValueKind.String ? match.GetString() ?? "" : ""
     };
 

@@ -12,6 +12,11 @@ public static class ErrorText
     private static readonly Dictionary<string, string> Exact = new()
     {
         ["Invalid request"] = "要求が無効です。",
+        ["Invalid literal evidence filter"] = "AI候補の文字一致条件が無効です。",
+        ["Invalid similarity boundary"] = "類似度の区切りは-1から1の数値で指定してください。",
+        ["Similarity boundary requires cosine scores"] = "順位統合の検索では類似度の区切りを指定できません。画像・表紙かAI文章を選んでください。",
+        ["Invalid result group"] = "AI候補の表示範囲が無効です。",
+        ["Invalid root filter"] = "検索フォルダの指定が無効です。",
         ["Invalid filter"] = "絞り込み条件が無効です。",
         ["Invalid paging"] = "検索条件が無効です（検索語は300文字まで）。",
         ["Expected term with optional aliases and related words"] = "関連語の形式が正しくありません。",

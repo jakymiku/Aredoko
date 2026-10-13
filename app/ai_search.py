@@ -14,6 +14,8 @@ from ai_vectors import normalized
 from ai_ranking import POLICIES,fuse_modalities
 from library_index import TYPES, _excluded
 from ai_scope import validate_scope, scope_clause
+from search_terms import normalize
+from ai_result_groups import boundary
 from previews import PreviewReader, PreviewUnavailable
 
 MAX_ITEMS=10_000
@@ -156,7 +158,7 @@ class AISearch:
         roots=scope['root_ids']
         if roots:
             with self.catalog.connect() as db:
-                count=db.execute('SELECT count(*) FROM library_roots WHERE id IN ('+
+                count=db.execute('SELECT count(*) FROM library_roots WHERE enabled=1 AND id IN ('+
                     ','.join('?' for _ in roots)+')',roots).fetchone()[0]
             if count!=len(roots):raise ValueError('Unknown registered root')
         return scope
@@ -168,7 +170,7 @@ class AISearch:
             raise ValueError('Invalid candidate limit')
         scope=self._scope(scope)
         scoped_where,values=scope_clause(scope)
-        where=["l.status='present'",*scoped_where]
+        where=["l.status='present'",'r.enabled=1',*scoped_where]
         if kind: where.append('i.kind=?');values.append(kind)
         where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],'shelf':["i.shelf<>''"],'all':[]}[view])
         # New records cannot lengthen a running enumeration indefinitely.
@@ -204,7 +206,7 @@ class AISearch:
         with self.catalog.connect() as db:
             rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+self.catalog.JOIN+
                 'JOIN library_roots r ON r.id=l.root_id WHERE i.id IN ('+
-                ','.join('?' for _ in ids)+") AND l.status='present'"+clause,ids+values).fetchall()
+                ','.join('?' for _ in ids)+") AND l.status='present' AND r.enabled=1"+clause,ids+values).fetchall()
         return {row['id']:self.catalog.item(row) for row in rows
                 if not _excluded(row['relative_path'],tuple(json.loads(row['excludes_json'])))}
     def coverage(self,scope=None,limit=MAX_ITEMS):
@@ -308,9 +310,11 @@ class AISearch:
             state=self.store.state()
             if state['state']=='running': self.store.save_state({**state,'state':'cancelling'})
         return {'cancel_requested':True}
-    def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None,scope=None):
+    def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None,scope=None,literal_only=False,group_threshold=None,result_group='all'):
         if not isinstance(query,str) or not 0<len(query.strip())<=300 or type(page) is not int or page<0 or not 1<=limit<=120:
             raise ValueError('Invalid semantic search')
+        if result_group not in ('all','leading','other'):raise ValueError('Invalid result group')
+        if type(literal_only) is not bool:raise ValueError('Invalid literal evidence filter')
         scope=self._scope(scope)
         if not isinstance(kind,str) or kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
@@ -319,6 +323,8 @@ class AISearch:
         if source not in ('all','text','cover'): raise ValueError('Invalid semantic source')
         if source=='cover' and 'cover' not in self.profile.modalities:
             raise AIUnavailable('選択中のモデルは画像・表紙検索に対応していません。AI文章を使ってください。')
+        selected_policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
+        boundary([], 'reciprocal-rank' if selected_policy=='mean-rrf' else 'cosine',group_threshold)
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。')
         if not self.inference.acquire(blocking=False): raise AIBusy('AI索引を作成中です。完了後に検索してください。')
         try:
@@ -333,10 +339,23 @@ class AISearch:
                        view=='unreviewed' and not row['reviewed'] or view=='shelf' and row['shelf'])]
             policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
             ranked=self.store.rank(rows,self.encoder.encode('query',query),source,policy) if rows else []
+            words=list(dict.fromkeys(normalize(query).split()))
             by_id={row['id']:row for row in rows}
-            items=[{**by_id[item_id],'semantic_score':round(score,6)} for item_id,score in ranked[page*limit:(page+1)*limit]]
+            for row in rows:
+                hay=normalize(row['title'])+'\x1f'+normalize(json.dumps(row['tags'],ensure_ascii=False))
+                row['literal_words']=len(words)
+                row['literal_hits']=sum(word in hay for word in words)
+            if literal_only:
+                ranked=[pair for pair in ranked if by_id[pair[0]]['literal_hits']==len(words)]
+            score_kind='reciprocal-rank' if policy=='mean-rrf' else 'cosine'
+            cut=boundary(ranked,score_kind,group_threshold)
+            leading=sum(score>=cut for _,score in ranked) if cut is not None else len(ranked)
+            other_total=len(ranked)-leading
+            if result_group=='leading' and cut is not None:ranked=[pair for pair in ranked if pair[1]>=cut]
+            elif result_group=='other':ranked=[pair for pair in ranked if cut is not None and pair[1]<cut]
+            items=[{**by_id[item_id],'semantic_score':round(score,6),'similarity_group':'leading' if cut is None or score>=cut else 'other'} for item_id,score in ranked[page*limit:(page+1)*limit]]
             return {'total':len(ranked),'page':page,'limit':limit,'items':items,'mode':'semantic','coverage_limit':MAX_ITEMS,'source':source,'ranking':policy,
-                    'score_kind':'reciprocal-rank' if policy=='mean-rrf' else 'cosine','scope':scope}
+                    'score_kind':score_kind,'scope':scope,'literal_only':literal_only,'group_boundary':cut,'leading_total':leading,'other_total':other_total,'result_group':result_group}
         finally:
             self._last_activity=time.monotonic()
             self.inference.release()
