@@ -1,8 +1,8 @@
 # Aredoko
 
-> **最新（2026-10-14、追加確認は一部残る）**：新batch46checks PASS（フォルダ検索/AI候補はLight/Dark、棚/解除・再登録はLight）。初期棚の表示・再登録の除外・一括適用checkbox状態を修正。追加batchは補助HWND参照で停止し、初期棚の修正後表示まで確認。Python14/Core107/Release PASS。右クリック設定と追加復元条件は実機未完了。自動区切りは正解率ではありません。[使い方と検証](docs/folder-search-and-ai-candidates.md)。
+> **最新（2026-10-14 続き）**：フォルダGUI50checks、読書・関連語GUI105checks/キーボード14回を生成素材のLight/Darkで確認。右クリック設定・復元除外の残gateを通過、reader下部操作の切れと閉じた後の未保存詳細/focus復帰を修正。Python31/Core107/Release PASS。実JSON picker・高DPI/Contrast/Narrator等は残作業。[結果と残作業](docs/native-folder-reader-validation.md)。
 
-> **Windows確認の更新（2026-10-13）**：追加reader/辞書のWindows Release・Core97・Python211は通過。実GUIはLightの辞書・関連/部分一致までで、reader/Dark/JSON pickerは未確認。起動スクリプトはpayloadのhashで配置を分離し、古いAppX dependencyの使い回しを避けます。[結果と残作業](docs/windows-hark-followup.md)。
+> **履歴：Windows確認（2026-10-13）**：追加reader/辞書のWindows Release・Core97・Python211は通過。実GUIはLightの辞書・関連/部分一致までで、reader/Dark/JSON pickerは未確認。起動スクリプトはpayloadのhashで配置を分離し、古いAppX dependencyの使い回しを避けます。[結果と残作業](docs/windows-hark-followup.md)。
 
 **名前を忘れても、内容や特徴を覚えていれば見つかる。** 本・同人誌・画像・動画・音楽・制作素材を、曖昧な日本語から探せるWindows向けローカルメディアライブラリを目指しています。
 
@@ -16,11 +16,11 @@
 
 現在の作業先は `feat/winui3-production-mvp-20261011`、[Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。mainと比較用ブランチは過去段階の資産です。CIは必要なときだけ使います。
 
-## 開発版の状態（2026-10-13）
+## 開発版の状態（2026-10-14）
 
 製品GUIは**WinUI 3 + C#**、バックエンドはPython + SQLiteのloopback APIです。明示登録したフォルダの一覧・検索、リスト/グリッド、画像/CBZ/ZIPの先頭プレビュー、タグ/棚/お気に入り保存、交換可能profileでのoffline AI文章・画像・混合検索を実装しています。配布完成版ではありません。
 
-CBZ/ZIPページ閲覧APIはPythonで検証済み。読書画面の接続候補も追加しましたが、**追加C#テスト・Windows Releaseビルドは確認済みで、読書画面の実GUI確認は未完了**です。[読書画面の確認手順](docs/archive-reader.md)を参照してください。
+CBZ/ZIPの読書画面は、**生成本でLight/Darkのページ移動・破損/再試行・更新後の再open・キャンセル・未保存編集の保持をWindows実GUI確認済み**です。JSON picker、reader zoom等は引き続き未確認です。[読書画面の確認手順](docs/archive-reader.md)を参照してください。
 
 全文OCR、動画/音声の内容索引、画像フォルダの論理作品化、Komga、見開き・読書位置保存、配布installerなどは後続です。Layaは実験的なopt-inで既定無効。実装状況と証拠は[開発handoff](docs/codex-handoff.md)・[チャットhandoff](docs/chat-handoff.md)・PRの最新記録を優先してください。
 

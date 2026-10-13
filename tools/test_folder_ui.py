@@ -148,9 +148,13 @@ def main():
         # MenuFlyout may be on the main XAML surface or an owned PopupHost.
         # Inspect only windows from the captured test PID, never another app.
         candidates=[]
-        for window in json.loads(cli('ui','list-windows','-a',app_pid,'--json')):
+        windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+        (target/'root-menu-windows.json').write_text(json.dumps(windows,ensure_ascii=False,indent=2),encoding='utf-8')
+        # Main-window UIA trees can also contain the owned popup. Prefer the
+        # popup's own HWND so the same menu is not counted twice.
+        ordered=[w for w in windows if w.get('title')=='PopupHost']+[w for w in windows if str(w.get('hwnd'))==hwnd]
+        for window in ordered:
             handle=str(window['hwnd'])
-            if handle!=hwnd and window.get('title')!='PopupHost':continue
             try:
                 tree=json.loads(cli('ui','inspect','--json','--depth','16','-w',handle))
             except RuntimeError as error:
@@ -161,14 +165,21 @@ def main():
                     report.setdefault('expired_auxiliary_windows',[]).append(handle)
                     continue
                 raise
+            (target/('root-menu-'+handle+'.json')).write_text(json.dumps(tree,ensure_ascii=False,indent=2),encoding='utf-8')
             if any(n.get('automationId')=='ManageRoot'+str(root) for n in nodes(tree)):
                 candidates.append(handle)
+                report['root_menu_window']={'hwnd':handle,'title':window.get('title')}
+                break
         if len(candidates)!=1:raise RuntimeError('Expected one owned root settings menu')
         cli('ui','invoke','ManageRoot'+str(root),'-w',candidates[0])
         wait('RootList',str(folders['characters']))
         check('Sidebar context menu selects intended folder',True)
     def query(value,count):
-        ui('set-value','TxtQuery',value);ui('invoke','BtnSearch');ready();wait('TxtCount',count)
+        ui('set-value','TxtQuery',value)
+        # TextChanged starts a 300ms search. Let that render settle before the
+        # explicit button check, then refresh UIA's peer rather than reusing it.
+        time.sleep(.45);ready();ui('inspect','BtnSearch','--json')
+        ui('invoke','BtnSearch');ready();wait('TxtCount',count)
     def tree_names():return [str(n.get('name','')) for n in nodes(json.loads(ui('inspect','--json','--depth','18')))]
     try:
         existing=subprocess.run(['powershell','-NoProfile','-Command','if(Get-Process Aredoko.WinUI -ErrorAction SilentlyContinue){exit 1}'],capture_output=True)

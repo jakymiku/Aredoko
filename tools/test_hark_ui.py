@@ -174,7 +174,10 @@ def main():
         def prop(identifier,name,value):ui('wait-for',identifier,'-p',name,'--value',str(value),'-t','10000')
         def tree_names():return [str(n.get('name','')) for n in nodes(json.loads(ui('inspect','--json','--depth','18')))]
         def query(value,count):
-            ui('set-value','TxtQuery',value);ui('invoke','BtnSearch');ready();wait('TxtCount',count)
+            ui('set-value','TxtQuery',value)
+            # Settle TextChanged's debounce before refreshing the button peer.
+            time.sleep(.45);ready();ui('inspect','BtnSearch','--json')
+            ui('invoke','BtnSearch');ready();wait('TxtCount',count)
         def select(item):
             ui('invoke','Item'+str(item),'--action','select');wait('TxtEditStatus','保存済み')
         def open_reader():

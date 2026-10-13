@@ -34,11 +34,11 @@
 
 ## 今回の再開で把握すべき境界
 
-- 最新の追加はフォルダ検索/初期棚/登録解除と復元/左ナビ/AI候補表示分離。2026-10-14の新batch46checksでLight/Darkのflat nav/候補表示、Lightの棚/解除・復元を確認。追加の設定状態修正はPython14/Core107/Release PASS、初期棚の修正後表示まで実機確認。sidebar context設定・root変更の一括適用解除・復元除外の追加assertionは未完了。前回Python225は履歴。[現行仕様と検証](folder-search-and-ai-candidates.md)とhandoff最新節を参照。自動区切りをconfidenceとして扱わない。
+- 2026-10-14 続き：folder50/reader105 GUI checks（reader実入力14）、Python31/Core107/Release PASS。Light/Darkの候補/dirtyとLightの棚/context/解除・復元、Light/DarkのCBZ/ZIP reader・関連語を生成素材で確認。実JSON picker・zoom/直接Reopen・高DPI/Contrast/Narrator等は残る。[実機結果](native-folder-reader-validation.md)と最新handoffを参照。候補の自動区切りはconfidenceではない。
 
 - 曖昧な日本語から目的のローカルファイルへ到達することが製品の核。「東方 巫女」から保存済みの博麗霊夢の立ち絵を探すケースは**今後の評価目標**。
 - EmbeddingGemma 2を含むモデルは交換可能。文字/確定タグ/関連知識/意味/画像特徴を役割ごとに補完する。フィルターやユーザーの手動整理を勝手に覆さない。
-- 読書UI・関連語dialogはソース追加済み。Linux時点のPython205件・C# Core93件・C#のみのコンパイル検査PASSは履歴。後続WindowsではPython211/Core97/Releaseとwindowless error probeがPASS、nativeはLight辞書/検索理由までの部分確認で全体FAIL。読書/Dark/pickerは未到達（[Windows確認](windows-hark-followup.md)）。以後の変更を自動保証しない。
+- 読書UI・関連語dialogはソース追加済み。Linux時点のPython205件・C# Core93件・C#のみのコンパイル検査PASSは履歴。後続WindowsではPython211/Core97/Releaseとwindowless error probeがPASS、nativeはLight辞書/検索理由までの部分確認で全体FAIL。当時のreader/Dark/pickerは未到達（[Windows確認の履歴](windows-hark-followup.md)）。今回のreader/関連語Light/Darkは上記で確認、実JSON pickerは未完了。以後の変更を自動保証しない。
 - 文字検索は正規化＋複数語AND、ユーザー登録の関連語辞書で候補を追加できる（[related-terms.md](related-terms.md)）。辞書は同梱・自動取得しない。
 - resize時の詳細pane自動保持、高DPI/Contrast/Narrator、フォルダ本/Komga等は別の未完了項目。詳細は最新handoff。
 - 私物の無断scan/書換え、外部送信、モデル取得・依存導入・OS変更を勝手に行わない。

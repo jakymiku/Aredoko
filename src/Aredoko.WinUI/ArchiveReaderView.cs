@@ -36,7 +36,10 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
     {
         this.api = api; this.itemId = itemId; cancellation = lifetime.Token;
         RowSpacing = 12;
-        for (var i = 0; i < 4; i++) RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        // The image takes the remaining space; navigation and recovery
+        // actions keep their measured height inside the dialog's body.
+        RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        for (var i = 1; i < 4; i++) RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         viewport.Content = image;
         viewport.SizeChanged += (_, _) =>
         {
@@ -80,7 +83,9 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
     public void FitViewport(Windows.Foundation.Size size)
     {
         Width = Math.Clamp(size.Width - 120, 240, 840);
-        viewport.Height = Math.Clamp(size.Height - 320, 100, 640);
+        // Reserve space for the dialog title, footer and margins, then let
+        // the star row shrink when status/recovery controls need more room.
+        Height = Math.Clamp(size.Height - 240, 180, 800);
     }
 
     public async Task OpenAsync()

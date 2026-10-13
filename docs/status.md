@@ -1,6 +1,6 @@
-> **最新（2026-10-14、追加確認は一部残る）**：新batch46checks PASS（フォルダ検索/AI候補はLight/Dark、棚/解除・再登録はLight）。初期棚の表示・再登録の除外・一括適用checkbox状態を修正。追加batchは補助HWND参照で停止し、初期棚の修正後表示まで確認。Python14/Core107/Release PASS。右クリック設定と追加復元条件は実機未完了。自動区切りは正解率ではありません。[使い方と検証](folder-search-and-ai-candidates.md)。
+> **最新（2026-10-14 続き）**：フォルダGUI50checks、読書・関連語GUI105checks/キーボード14回を生成素材のLight/Darkで確認。右クリック設定・復元除外の残gateを通過、reader下部操作の切れと閉じた後の未保存詳細/focus復帰を修正。Python31/Core107/Release PASS。実JSON picker・高DPI/Contrast/Narrator等は残作業。[結果と残作業](native-folder-reader-validation.md)。
 
-> **最新（2026-10-13、Windows部分確認）**：Hark追加分を維持し、拒否POST応答/非object JSONエラー/辞書busyと狭幅/検索理由row表示/古いAppX deps再使用を修正。全Python211/Core97/Release/windowless dependency probe PASS。native03は全体FAIL26checks/5PNG全目視、Lightの辞書・理由・partialまで。読書/Dark/pickerは未確認。[Windows確認](windows-hark-followup.md)/[引継ぎ](codex-handoff.md)。CI起動0回・Draft未マージ。以下は履歴。
+> **履歴（2026-10-13、Windows部分確認）**：Hark追加分を維持し、拒否POST応答/非object JSONエラー/辞書busyと狭幅/検索理由row表示/古いAppX deps再使用を修正。全Python211/Core97/Release/windowless dependency probe PASS。native03は全体FAIL26checks/5PNG全目視、Lightの辞書・理由・partialまで。読書/Dark/pickerは未確認。[Windows確認](windows-hark-followup.md)/[引継ぎ](codex-handoff.md)。CI起動0回・Draft未マージ。以下は履歴。
 
 ---
 

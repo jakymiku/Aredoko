@@ -1,5 +1,7 @@
 # CBZ / ZIP 読書画面
 
+> **最新（2026-10-14 続き）**：Light/Darkのreader・辞書native105checks/実入力14、Python31/Core107/Release PASS。readerの操作領域と狭幅で閉じた後の詳細/focusを修正。実JSON picker・zoom/直接Reopen等は残る。[正確な結果と履歴](native-folder-reader-validation.md)。以下は以前の記録。
+
 > 2026-10-13 Windows後続：Core97・x64 SelfContained Release・全Python211 PASS。nativeはLight辞書/related/partialまでの部分確認、reader/Dark/pickerは未到達。旧AppX depsのRegex欠落をfresh layout＋windowless probeで修正確認し、GUI再検証は次回。[正確な結果と履歴](windows-hark-followup.md)。
 
 > 2026-10-13後続：Linux sandboxへ.NET SDK 10.0.401を導入し、reader契約を含むC# Core **81 checks PASS**（readerは今回初めて実ビルド・実行）。`tools/compile_check_winui.py`でWindows App SDK 2.5.1参照の**C#のみのコンパイルPASS**（`ArchiveReaderView.cs`/`MainPage.xaml.cs`含む、0 error）。XAMLコンパイル・Windows Release・native操作は**引き続き未検証**。以下の「未ビルド」は当時の記録。

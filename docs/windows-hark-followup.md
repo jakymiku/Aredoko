@@ -1,5 +1,7 @@
 # Hark追加実装のWindows確認
 
+> **最新（2026-10-14 続き）**：Light/Darkのreader・辞書native105checks/実入力14、Python31/Core107/Release PASS。readerの操作領域と狭幅で閉じた後の詳細/focusを修正。実JSON picker・zoom/直接Reopen等は残る。[正確な結果と履歴](native-folder-reader-validation.md)。以下は以前の記録。
+
 ## 最新：Hark更新をWindowsで確認・不具合修正（2026-10-13、一部GUI確認）
 
 開始HEAD **e406ef257d429289ed18a4f07cd9fa48676c304f**。ローカル8fddcfaから43ファイルをff-only同期。ユーザー追加のAGENTS/vision/agent-start/design-vision・両handoff最新節・Issue4/PR5を確認。今後も「曖昧な手がかり→目的のローカルファイル」、本と素材の両方、交換可能モデル、主要機能安定後のnative UI改善を維持。実装・テスト・記録commit: **dae08a967b1981cef6e56030210c242b4980d6c9**。この後の文書commitでこのSHAを記録し、最終HEADはGit/PRを正とする。

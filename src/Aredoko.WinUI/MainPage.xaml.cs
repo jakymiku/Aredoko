@@ -332,7 +332,7 @@ public sealed partial class MainPage : Page
         if(active is null||!ArchiveManifest.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
         // Opening a book neither saves nor discards the current metadata draft.
         dialogOpen=true;searchTimer.Stop();
-        var root=XamlRoot;
+        var root=XamlRoot;var readerItemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
         void Fit(XamlRoot sender,XamlRootChangedEventArgs args)=>readerView?.FitViewport(sender.Size);
         try
         {
@@ -349,7 +349,17 @@ public sealed partial class MainPage : Page
         catch(Exception ex){Failure(ex);}
         finally
         {
-            root.Changed-=Fit;readerView?.Dispose();readerView=null;dialogOpen=false;transitions.Release();
+            root.Changed-=Fit;readerView?.Dispose();readerView=null;dialogOpen=false;
+            try
+            {
+                // Switching to the narrow overlay can close the pane while
+                // reading. Restore the same item's editor and unsaved draft.
+                if(!disposed&&detailsWereOpen&&active?.Id==readerItemId)
+                {
+                    Details.IsPaneOpen=true;OpenBook.Focus(FocusState.Programmatic);
+                }
+            }
+            finally{transitions.Release();}
             if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }
     }
