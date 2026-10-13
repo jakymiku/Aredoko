@@ -1,6 +1,6 @@
 ## 最新：フォルダ設定gate通過・読書画面の修正と実機確認（2026-10-14 続き）
 
-開始HEAD **ff87f99a35f4027dc172d9d3d1e0f837a1a22038**。AGENTS/vision/design/両handoff/Issue4/既存Draft PR5を確認。同じ製品branch/baseを継続。実装commitは記録commitで追記し、最終HEADはGit/PRを正とする。
+開始HEAD **ff87f99a35f4027dc172d9d3d1e0f837a1a22038**。AGENTS/vision/design/両handoff/Issue4/既存Draft PR5を確認。同じ製品branch/baseを継続。実装commit **83851e1b7582772695786ee1376c046cb1ed1963**。続く記録commitでこのSHAを保存し、最終HEADはGit/PRを正とする。
 
 ### できるようになったことと修正
 
