@@ -34,16 +34,17 @@ The **current WinUI 3 GUI is intentionally a plain, mostly monochrome proof of c
 - Run relevant tests + Windows Release build whenever possible. **If Windows native GUI cannot actually be operated in your environment, state that explicitly.** Never report screenshot/device tests as passed without running them.
 - Keep PR #1/#2/#3 intact. Continue the existing **Draft PR #5**, based on `feat/gui-framework-comparison-20261010`, with exact validation results. Do not create a duplicate production PR or merge it on your own.
 
-## CI usage — strict quota protection
+## CI usage — agent-discretionary single-run policy
 
-**CI quota is exhausted (the user reports ~2,000 units consumed rapidly) and is unavailable until next month. Treat CI as an expensive, scarce resource, not the default validation path.**
+**GitHub Actions CI is a scarce resource. The user reports the monthly ~2,000-unit allowance is already exhausted until next month. Do not waste it.**
 
-- **Do not automatically trigger, rerun, or repeatedly poll GitHub Actions workflows.** Do not push trivial/no-op changes simply to make CI run. Never modify CI triggers, billing, spending limits, or workflow schedules as a workaround.
-- Default to **local validation**: focused Python tests, .NET/Core tests where supported, syntax/static checks, and Windows Release/native GUI tests only where a real Windows environment is available. Report platform-specific tests as unverified when they cannot run.
-- **While the quota is unavailable, do not initiate CI at all.** After quota restoration, only use CI when there is a specific indispensable check that cannot be performed locally, and **ask the user for explicit approval before any CI-triggering action**. Prefer a single scoped run; avoid automatic rerun loops.
-- Before pushing, inspect the repository's workflow triggers and whether the push/PR update would itself consume CI. If so, avoid the triggering action while quota is exhausted or obtain explicit approval after restoration; preserve commits locally or on an approved non-triggering branch as appropriate.
-- Documentation-only changes need link/content consistency checks, not builds or CI. Never describe an unrun CI check as passed.
-
+- **Default: local tests only.** Use targeted Python/.NET tests, static checks, and real Windows Release/native GUI validation when available; if Windows or another dependency is unavailable, mark the check unverified.
+- **No CI for routine commits, documentation, formatting, minor refactors, or repeated confidence checks.** Avoid push/PR events that would unintentionally trigger CI; check workflow triggers before pushing.
+- Once the quota is usable, an agent **may start exactly one deliberately scoped GitHub Actions CI run for a specific substantial change or an essential integration/platform check that cannot reasonably be completed locally**. **No separate user approval is required for that single warranted run.** First state internally/record in handoff why it is needed, what will be tested, and the anticipated workflow/cost.
+- **Never automatically rerun failed or cancelled CI, retry in a loop, launch multiple workflows, or rerun merely to obtain a green badge.** If the single run fails, investigate locally and report the failure; a *new* run must be independently justified as genuinely necessary, not an automatic retry. Prefer to defer CI and ask for guidance if unsure.
+- **While the currently exhausted quota remains unavailable, do not dispatch CI**; preserve work and record pending Windows/CI checks. No agent should change quotas, billing, workflow triggers or spending settings to circumvent the limit.
+- The desired workflow trigger policy is **manual `workflow_dispatch` only**: no automatic `push`, `pull_request`, `schedule`, or `workflow_run` triggers for resource-consuming CI. Confirm the real `.github/workflows/*.yml` / `*.yaml` files and update them safely when accessible. Writing this instruction alone does **not** disable existing GitHub Actions triggers.
+- Documentation-only changes require content/link validation, not CI. Never claim an unrun check passed.
 
 ## Where to report work
 Update `docs/codex-handoff.md` with the current HEAD, implementation progress, test commands/results, blockers, next 3 actionable steps. Keep the GitHub PR description current. Mark skipped/unverified work as such rather than presenting a planned item as completed.
