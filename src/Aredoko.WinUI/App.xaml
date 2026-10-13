@@ -10,7 +10,17 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
-            <!-- Other app resources here -->
+            <!-- Native theme resources also adapt to Windows Contrast themes. -->
+            <Style x:Key="ImageViewerOverlayStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="0" />
+                <Setter Property="Padding" Value="8" />
+            </Style>
+            <Style x:Key="ImageViewerCanvasStyle" TargetType="ScrollViewer">
+                <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

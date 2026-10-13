@@ -42,7 +42,7 @@ def main():
     target.mkdir(parents=True,exist_ok=False)
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-hark-'+uuid.uuid4().hex}
     report={'pass':False,'target':'local','actual_model':False,'checks':[],'screenshots':[],'keyboard_actions':[],'keyboard_skipped':[],'display':[],'audit_scope':'related-term dialog/search and modal archive reader; not whole-app audit'}
-    catalog=engine=server=thread=None;hwnd=app_pid=process=None;original={}
+    catalog=engine=server=thread=None;hwnd=main_hwnd=app_pid=process=None;original={}
     expected_source={}
     user32=ctypes.WinDLL('user32',use_last_error=True);kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
     user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
@@ -62,7 +62,30 @@ def main():
         r=subprocess.run(['winapp',*map(str,args)],cwd=REPO,env=env,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=60)
         if r.returncode:raise RuntimeError('winapp '+str(args)+': '+r.stdout+r.stderr)
         return r.stdout
-    def ui(*args):return cli('ui',*args,'-w',hwnd)
+    def ui(*args):
+        nonlocal hwnd
+        owner=wintypes.DWORD()
+        if hwnd:user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
+        if hwnd and owner.value!=app_pid:
+            hwnd=main_hwnd
+        if args and args[0]=='wait-for' and len(args)>1 and args[1] in ('ImageViewerDialog','ArchiveReaderDialog') and '--gone' in args:
+            title='画像ビューア' if args[1]=='ImageViewerDialog' else '読書画面'
+            for _ in range(50):
+                windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+                if not any(title in w.get('title','') for w in windows):break
+                time.sleep(.1)
+            else:raise RuntimeError('Owned viewer window did not close')
+            hwnd=main_hwnd
+        if args and args[0]=='wait-for' and len(args)>1 and args[1] in ('ImageViewerDialog','ArchiveReaderDialog') and '--gone' not in args:
+            title='画像ビューア' if args[1]=='ImageViewerDialog' else '読書画面'
+            for _ in range(50):
+                windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+                matches=[w for w in windows if title in w.get('title','')]
+                if len(matches)==1:
+                    hwnd=str(matches[0]['hwnd']);break
+                time.sleep(.1)
+            else:raise RuntimeError('Owned viewer window unavailable')
+        return cli('ui',*args,'-w',hwnd)
     def wait(identifier,value):ui('wait-for',identifier,'--value',value,'-t','10000')
     def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000');time.sleep(.4)
     def keys(sequence,identifier=None):
@@ -113,10 +136,14 @@ def main():
         report.setdefault('accessible_controls',{})[phase]=result
         (target/(phase+'-tree.json')).write_text(json.dumps(tree,ensure_ascii=False),encoding='utf-8')
     def close():
-        nonlocal process,hwnd,app_pid
+        nonlocal process,hwnd,main_hwnd,app_pid
         if not process:return
         try:
             if kernel32.WaitForSingleObject(process,0)!=0:
+                if hwnd!=main_hwnd:
+                    owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
+                    if owner.value==app_pid:user32.PostMessageW(int(hwnd),0x0010,0,0);time.sleep(.5)
+                    hwnd=main_hwnd
                 owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
                 if owner.value!=app_pid:raise RuntimeError('Owned close window changed')
                 user32.PostMessageW(int(hwnd),0x0010,0,0)
@@ -124,7 +151,7 @@ def main():
                 else:
                     report.setdefault('cleanup_warnings',[]).append('Owned test process required termination')
                     if not kernel32.TerminateProcess(process,1) or kernel32.WaitForSingleObject(process,5000)!=0:raise RuntimeError('Owned process cleanup failed')
-        finally:kernel32.CloseHandle(process);process=hwnd=app_pid=None
+        finally:kernel32.CloseHandle(process);process=hwnd=main_hwnd=app_pid=None
     def source_digest():return {p.name:(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in (target/'media').glob('*') if p.is_file()}
     try:
         existing=subprocess.run(['powershell','-NoProfile','-Command','if(Get-Process Aredoko.WinUI -ErrorAction SilentlyContinue){exit 1}'],capture_output=True)
@@ -181,10 +208,10 @@ def main():
         def select(item):
             ui('invoke','Item'+str(item),'--action','select');wait('TxtEditStatus','保存済み')
         def open_reader():
-            ui('focus','BtnOpenBook');ui('invoke','BtnOpenBook');wait('ReaderStatus','表示しました。拡大すると細部を確認できます。')
+            ui('focus','BtnOpenBook');ui('invoke','BtnOpenBook');ui('wait-for','ArchiveReaderDialog','-t','5000');keys('f10','ReaderViewport');wait('ReaderStatus','表示しました。拡大すると細部を確認できます。')
         def close_reader():
-            physical=keys('esc','CloseButton')
-            if not physical:ui('invoke','CloseButton')
+            physical=keys('esc','ReaderClose')
+            if not physical:ui('invoke','ReaderClose')
             ui('wait-for','ArchiveReaderDialog','--gone','-t','5000')
             return physical
         for theme in ('Light','Dark'):
@@ -201,7 +228,7 @@ def main():
                 if len(main)==1:break
                 time.sleep(.1)
             if len(main)!=1:raise RuntimeError('Expected one owned main window')
-            hwnd=str(main[0]['hwnd']);ready();resize(1200,820);wait('TxtCount','4 件')
+            hwnd=main_hwnd=str(main[0]['hwnd']);ready();resize(1200,820);wait('TxtCount','4 件')
             class Contrast(ctypes.Structure):_fields_=[('cbSize',wintypes.UINT),('flags',wintypes.DWORD),('scheme',wintypes.LPWSTR)]
             contrast=Contrast();contrast.cbSize=ctypes.sizeof(contrast)
             if not user32.SystemParametersInfoW(0x0042,contrast.cbSize,ctypes.byref(contrast),0):raise ctypes.WinError(ctypes.get_last_error())
@@ -234,10 +261,10 @@ def main():
             query(' '.join('w'+str(i) for i in range(17)),'—');names=tree_names();check(theme+' Japanese word-limit error',any('検索語は16語まで' in n for n in names));shot(theme+'-error-narrow')
             query('','4 件');resize(1200,820);select(ids['book.cbz']);ui('set-value','TxtTags','unsaved-reader');wait('TxtEditStatus','未保存の変更')
             before=catalog.get(ids['book.cbz'])['tags'];open_reader();wait('ReaderPageNumber','1 / 3');prop('ReaderPrevious','IsEnabled','False')
-            audit(theme+'-reader',('ReaderViewport','ReaderPrevious','ReaderNext','ReaderRetry','ReaderReopen','CloseButton'))
-            physical=keys('ctrl+s','CloseButton');check(theme+(' reader blocks background save' if physical else ' reader metadata unchanged; save input skipped'),catalog.get(ids['book.cbz'])['tags']==before)
-            if physical:focus_assert('CloseButton');check(theme+' save shortcut stays within modal',True)
-            if keys('ctrl+f','CloseButton'):focus_assert('CloseButton');check(theme+' search shortcut stays within modal',True)
+            audit(theme+'-reader',('ReaderViewport','ReaderPrevious','ReaderNext','ReaderRetry','ReaderReopen','ReaderClose'))
+            physical=keys('ctrl+s','ReaderClose');check(theme+(' reader blocks background save' if physical else ' reader metadata unchanged; save input skipped'),catalog.get(ids['book.cbz'])['tags']==before)
+            if physical:focus_assert('ReaderClose');check(theme+' save shortcut stays within modal',True)
+            if keys('ctrl+f','ReaderClose'):focus_assert('ReaderClose');check(theme+' search shortcut stays within modal',True)
             shot(theme+'-reader-first-wide')
             ui('invoke','ReaderNext');wait('ReaderPageNumber','2 / 3');wait('ReaderStatus','表示しました。拡大すると細部を確認できます。');shot(theme+'-reader-second-wide')
             resize(700,620);ui('invoke','ReaderNext');wait('ReaderPageNumber','3 / 3');wait('ReaderStatus','表示しました。拡大すると細部を確認できます。');prop('ReaderNext','IsEnabled','False');shot(theme+'-reader-last-narrow')

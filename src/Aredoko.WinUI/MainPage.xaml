@@ -27,7 +27,8 @@
        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="DetailScroll" AutomationProperties.Name="作品の詳細と編集"><StackPanel Spacing="12">
       <TextBlock x:Name="ItemTitle" Text="作品を選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap"/>
       <TextBlock x:Name="ItemPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-      <Image x:Name="DetailPreview" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
+      <Image x:Name="DetailPreview" IsDoubleTapEnabled="True" DoubleTapped="DetailPreview_DoubleTapped" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
+      <Button x:Name="OpenImage" Content="画像を大きく表示" IsEnabled="False" Click="OpenImage_Click" AutomationProperties.AutomationId="BtnOpenImage"/>
       <Button x:Name="OpenBook" Content="本を開く（CBZ / ZIP）" IsEnabled="False" Click="OpenBook_Click" AutomationProperties.AutomationId="BtnOpenBook"/>
 
        <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>

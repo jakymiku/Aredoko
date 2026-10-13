@@ -115,3 +115,26 @@ var evidence=Protocol.ParseSearch("""{"total":1,"score_kind":"cosine","group_bou
 Check(evidence.GroupBoundary==.5&&evidence.OtherTotal==3&&evidence.Items[0].AIEvidence.Contains("文字一致0/1語")&&evidence.Items[0].AIEvidence.Contains("0.800"),"AI groups and relative score parsed without percentages");
 evidence.Items[0].LiteralHits=1;Check(evidence.Items[0].AIEvidence.StartsWith("名前・タグで全語一致"),"literal evidence does not claim character certainty");
 evidence.Items[0].ScoreKind="reciprocal-rank";Check(evidence.Items[0].AIEvidence.Contains("順位統合値"),"RRF uses separate score label");
+
+await ImageViewerTests.Run(Check);
+
+Check(ReaderSpreadPolicy.Pages(2,5,ReaderDisplayMode.Single).SequenceEqual(new[]{2}),"single reader keeps exact page");
+Check(ReaderSpreadPolicy.Pages(0,5,ReaderDisplayMode.RightToLeft).SequenceEqual(new[]{0}),"spread cover stays alone");
+Check(ReaderSpreadPolicy.Pages(1,5,ReaderDisplayMode.RightToLeft).SequenceEqual(new[]{2,1}),"RTL puts later page on left");
+Check(ReaderSpreadPolicy.Pages(2,5,ReaderDisplayMode.LeftToRight).SequenceEqual(new[]{1,2}),"LTR normalizes to same pair");
+Check(ReaderSpreadPolicy.Next(0,5,ReaderDisplayMode.RightToLeft)==1,"next cover enters first spread");
+Check(ReaderSpreadPolicy.Next(1,5,ReaderDisplayMode.RightToLeft)==3,"next spread skips both visible pages");
+Check(ReaderSpreadPolicy.Previous(1,5,ReaderDisplayMode.RightToLeft)==0,"previous first spread returns cover");
+Check(ReaderSpreadPolicy.Previous(3,5,ReaderDisplayMode.LeftToRight)==1,"previous later spread uses previous pair");
+Check(ReaderSpreadPolicy.Pages(3,4,ReaderDisplayMode.RightToLeft).SequenceEqual(new[]{3}),"unpaired final page stays alone");
+Check(ReaderSpreadPolicy.Next(3,4,ReaderDisplayMode.LeftToRight)>=4,"last spread next is out of range");
+Check(ReaderSpreadPolicy.Pages(9999,10000,ReaderDisplayMode.RightToLeft).SequenceEqual(new[]{9999}),"bounded large book final page");
+try{ReaderSpreadPolicy.Pages(0,0,ReaderDisplayMode.Single);Check(false,"invalid empty book");}catch(ArgumentOutOfRangeException){Check(true,"empty spread book rejected");}
+var clicks=new ThumbnailClickTracker();
+Check(clicks.Register(5,1000,20,30,500,4,4) is null,"first thumbnail click does not open");
+Check(clicks.Register(null,1200,21,30,500,4,4)==5,"double click survives layout moving thumbnail away");
+Check(clicks.Register(5,1250,21,30,500,4,4) is null,"triple click does not open twice");
+Check(clicks.Register(6,1300,21,30,500,4,4) is null,"different thumbnail cannot activate old ID");
+Check(clicks.Register(6,1900,21,30,500,4,4) is null,"slow second click stays single");
+Check(clicks.Register(6,2000,40,30,500,4,4) is null,"far second click stays single");
+clicks.Reset();Check(clicks.Register(null,2100,40,30,500,4,4) is null,"cancel/modal reset cannot activate old image");

@@ -70,6 +70,12 @@ public sealed class ArchiveReaderClient(HttpClient client)
             PreviewPolicy.MaxSourceBytes, true, cancellation);
     }
 
+    public Task<byte[]> ImageAsync(int itemId, CancellationToken cancellation)
+    {
+        if (itemId < 1) throw new ArgumentOutOfRangeException(nameof(itemId));
+        return ReadAsync($"api/library/preview/{itemId}", PreviewPolicy.MaxSourceBytes, true, cancellation);
+    }
+
     private async Task<byte[]> ReadAsync(string route, int limit, bool image, CancellationToken cancellation)
     {
         // HttpClient's timeout ends at response headers with ResponseHeadersRead.

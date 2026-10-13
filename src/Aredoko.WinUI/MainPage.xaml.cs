@@ -20,6 +20,11 @@ public sealed partial class MainPage : Page
     private CancellationTokenSource renderCancellation = new();
     private CancellationTokenSource? detailCancellation;
     private ArchiveReaderView? readerView;
+    private ImageViewerView? imageViewer;
+    private ViewerWindow? viewerWindow;
+    private readonly ThumbnailClickTracker previewClicks=new();
+    [System.Runtime.InteropServices.DllImport("user32.dll")]private static extern uint GetDoubleClickTime();
+    [System.Runtime.InteropServices.DllImport("user32.dll")]private static extern int GetSystemMetrics(int index);
     private List<MediaRow> rows=[];
     private MediaRow? active;
     private EditorState saved;
@@ -37,6 +42,7 @@ public sealed partial class MainPage : Page
 
     public MainPage() {
         InitializeComponent();
+        AddHandler(PointerPressedEvent,new PointerEventHandler(PreviewPointerPressed),true);
         UpdateSearchMethod();
         thumbnails = new ThumbnailService(api);
         searchTimer=DispatcherQueue.CreateTimer(); searchTimer.Interval=TimeSpan.FromMilliseconds(300);
@@ -148,9 +154,12 @@ public sealed partial class MainPage : Page
             foreach (var row in rows)
             {
                 var content = new Grid { Padding = new Thickness(8), ColumnSpacing = 12, RowSpacing = 8 };
-                var image = new Image { Width = tiles ? 200 : 48, Height = tiles ? 144 : 64, Stretch = Stretch.Uniform };
+                var image = new Image { Tag = row.Id, IsDoubleTapEnabled = true, Width = tiles ? 200 : 48, Height = tiles ? 144 : 64, Stretch = Stretch.Uniform };
                 AutomationProperties.SetAutomationId(image, $"Preview{row.Id}");
                 AutomationProperties.SetName(image, row.Title + "のサムネイル");
+                image.DoubleTapped += async (_, args) => { args.Handled=true; await OpenPreviewAsync(row.Id); };
+                if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row))
+                    ToolTipService.SetToolTip(image,ImageViewerPolicy.CanOpen(row)?"ダブルクリックで画像を大きく表示":"ダブルクリックで本を開く");
                 var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
                 text.Children.Add(new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] });
                 text.Children.Add(new TextBlock { Text = $"{row.MatchLabel}{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
@@ -231,7 +240,7 @@ public sealed partial class MainPage : Page
         }finally{transitions.Release();}
     }
     private void RestoreSelection(){populating=true;Items.SelectedItem=active is null?null:Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==active.Id);populating=false;}
-    private void UpdateDirty(){if(!ready)return;EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);}
+    private void UpdateDirty(){if(!ready)return;EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);}
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
     public async Task<bool> ConfirmDiscardAsync() {
@@ -327,29 +336,72 @@ public sealed partial class MainPage : Page
     }
     private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=tiles?"リスト表示":"グリッド表示";RenderRows();RestoreSelection();}
     private void OpenDetails_Click(object sender,RoutedEventArgs e){if(active is not null)Details.IsPaneOpen=true;}
-    private async void OpenBook_Click(object sender,RoutedEventArgs e)
+    private async void PreviewPointerPressed(object sender,PointerRoutedEventArgs e)
     {
-        if(active is null||!ArchiveManifest.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
-        // Opening a book neither saves nor discards the current metadata draft.
-        dialogOpen=true;searchTimer.Stop();
-        var root=XamlRoot;var readerItemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
-        void Fit(XamlRoot sender,XamlRootChangedEventArgs args)=>readerView?.FitViewport(sender.Size);
+        if(disposed||dialogOpen||saving){previewClicks.Reset();return;}
+        var point=e.GetCurrentPoint(this);if(!point.Properties.IsLeftButtonPressed){previewClicks.Reset();return;}
+        int? sourceId=null;
+        for(var source=e.OriginalSource as DependencyObject;source is not null;source=VisualTreeHelper.GetParent(source))
+        {
+            if(source==DetailPreview){sourceId=active?.Id;break;}
+            if(source is Image {Tag:int id}){sourceId=id;break;}
+        }
+        var scale=Math.Max(.1,XamlRoot.RasterizationScale);
+        var target=previewClicks.Register(sourceId,Environment.TickCount64,point.Position.X,point.Position.Y,
+            GetDoubleClickTime(),GetSystemMetrics(36)/scale,GetSystemMetrics(37)/scale);
+        if(target is int itemId){e.Handled=true;await OpenPreviewAsync(itemId);}
+    }
+    private async void DetailPreview_DoubleTapped(object sender,DoubleTappedRoutedEventArgs e)
+    { if(active is null)return;e.Handled=true;await OpenPreviewAsync(active.Id); }
+    private async Task OpenPreviewAsync(int itemId)
+    {
+        // The first click uses the normal selection/discard guard. Never open
+        // a different or stale result if selection is pending or was cancelled.
+        if(disposed||saving||dialogOpen||active?.Id!=itemId)return;
+        if(ImageViewerPolicy.CanOpen(active))await OpenImageAsync();
+        else if(ArchiveManifest.CanOpen(active))await OpenBookAsync();
+    }
+    private async void OpenImage_Click(object sender,RoutedEventArgs e)=>await OpenImageAsync();
+    private async Task OpenImageAsync()
+    {
+        if(active is null||!ImageViewerPolicy.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        dialogOpen=true;searchTimer.Stop();var itemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
         try
         {
-            var reader=new ArchiveReaderView(api,active.Id);readerView=reader;
-            reader.FitViewport(root.Size);root.Changed+=Fit;
-            var dialog=new ContentDialog {XamlRoot=root,RequestedTheme=ActualTheme,Title=active.Title,
-                Content=reader,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
-            dialog.Resources["ContentDialogMaxWidth"]=960d;
-            AutomationProperties.SetAutomationId(dialog,"ArchiveReaderDialog");
-            dialog.Opened+=async(_,_)=>await reader.OpenAsync();
-            dialog.Closing+=(_,_)=>reader.Dispose();
-            await dialog.ShowAsync();
+            var viewer=new ImageViewerView(api,new ImageViewerSequence(rows,itemId));imageViewer=viewer;
+            var window=new ViewerWindow(viewer,"画像ビューア","ImageViewerDialog");viewerWindow=window;
+            viewer.CloseRequested+=(_,_)=>window.Close();viewer.AttachNavigation(viewer);
+            window.Closed+=(_,_)=>viewer.Dispose();
+            await window.ShowAsync(viewer.OpenAsync);
         }
         catch(Exception ex){Failure(ex);}
         finally
         {
-            root.Changed-=Fit;readerView?.Dispose();readerView=null;dialogOpen=false;
+            imageViewer?.Dispose();imageViewer=null;viewerWindow=null;dialogOpen=false;
+            try{if(!disposed&&detailsWereOpen&&active?.Id==itemId){Details.IsPaneOpen=true;OpenImage.Focus(FocusState.Programmatic);}}
+            finally{transitions.Release();}
+            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+        }
+    }
+    private async void OpenBook_Click(object sender,RoutedEventArgs e)=>await OpenBookAsync();
+    private async Task OpenBookAsync()
+    {
+        if(active is null||!ArchiveManifest.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        // Opening a book neither saves nor discards the current metadata draft.
+        dialogOpen=true;searchTimer.Stop();
+        var readerItemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
+        try
+        {
+            var reader=new ArchiveReaderView(api,active.Id,active.Title);readerView=reader;
+            var window=new ViewerWindow(reader,"読書画面","ArchiveReaderDialog");viewerWindow=window;
+            reader.CloseRequested+=(_,_)=>window.Close();reader.AttachNavigation(reader);
+            window.Closed+=(_,_)=>reader.Dispose();
+            await window.ShowAsync(reader.OpenAsync);
+        }
+        catch(Exception ex){Failure(ex);}
+        finally
+        {
+            readerView?.Dispose();readerView=null;viewerWindow=null;dialogOpen=false;
             try
             {
                 // Switching to the narrow overlay can close the pane while
@@ -719,6 +771,6 @@ public sealed partial class MainPage : Page
         finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
     }
 
-    public void Stop(){renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();disposed=true;searches.Next();searchTimer.Stop();api.Dispose();}
+    public void Stop(){disposed=true;viewerWindow?.Close();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
 }
 
