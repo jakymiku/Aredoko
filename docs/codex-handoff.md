@@ -22,9 +22,11 @@
 
 ### 次の3手
 
-1. 生成JSONのみで辞書save/open picker：export実count、importのmerge/replace/cancel/invalid/サイズ上限を実操作で確認。所有picker HWNDを検証し、私物fileを選ばない。
-2. readerの直接Reopen/zoom/Tab、検索方法/AI profileと既存keyboard回帰を小さな専用batchで確認。High DPI/Contrast/Narratorは実施条件を分け、OS設定を無断変更しない。
-3. 新しい固定入力で候補区切り・関連語の取りこぼし/過剰展開を測定。confidenceや実キャラ精度の宣言にしない。フォルダ本/OCR/VLM/Komga・将来ビジュアル刷新は別段階。
+1. **次の機能追加：単体画像ビューアの基本形**。現在はthumbnail/高さ160の詳細previewのみ。既存reader/codecを再利用し、大きな表示・zoom/scroll・Esc・タグdraftとopener focus保持を生成画像で検証。registered active root/revision/読み取り上限を維持。基本形を次の実装枠の目標にし、完了日を確約しない。
+2. **動画thumbnail**。PATH上のffmpeg/ffprobeを確認済み（起動/decodeは未検証、個人環境の絶対パスは保存しない）。明示登録videoだけから代表frameを取得し、時間/並列数/出力/cacheを制限、元videoを変更しない。新規導入や本編AI解析はこの計画の実装済み機能ではない。
+3. **動画再生の基本形**。Windows nativeの再生/pause/seek/volumeと非対応案内を実装・形式ごとに生成videoで確認する段階。実動画への無断アクセス・codec/OS設定の無断変更を行わない。
+
+継続gate：辞書の実JSON save/open picker（export count/import merge・replace/cancel・invalid・上限）、reader直接Reopen/zoom/Tab、検索方法/AI profile回帰、高DPI/Contrast/Narrator、新しい固定入力での検索境界/関連語の評価は未完了として保持。フォルダ本/OCR/VLM/Komga・将来ビジュアル刷新は別段階。
 
 ---
 

@@ -22,6 +22,8 @@
 
 CBZ/ZIPの読書画面は、**生成本でLight/Darkのページ移動・破損/再試行・更新後の再open・キャンセル・未保存編集の保持をWindows実GUI確認済み**です。JSON picker、reader zoom等は引き続き未確認です。[読書画面の確認手順](docs/archive-reader.md)を参照してください。
 
+単体画像の専用ビューア・動画thumbnail・動画再生は未実装です。次の機能追加は画像ビューア→動画thumbnail→動画再生を予定し、生成素材で段階的に検証します。
+
 全文OCR、動画/音声の内容索引、画像フォルダの論理作品化、Komga、見開き・読書位置保存、配布installerなどは後続です。Layaは実験的なopt-inで既定無効。実装状況と証拠は[開発handoff](docs/codex-handoff.md)・[チャットhandoff](docs/chat-handoff.md)・PRの最新記録を優先してください。
 
 ## WinUI開発版の起動
