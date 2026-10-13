@@ -40,72 +40,54 @@ def split_terms(query):
     return terms
 
 
+def _scorer(alternatives):
+    """One pass per row: (direct, covered, specific), memoized per search."""
+    memo = {}
+
+    def score(title, tags):
+        key = (title, tags)
+        found = memo.get(key)
+        if found is None:
+            hay = normalize(title) + '\x1f' + normalize(tags)
+            direct = covered = specific = 0
+            for options in alternatives:
+                lengths = [len(option) for option in options if option in hay]
+                if not lengths:
+                    continue
+                covered += 1
+                typed = options[0] in hay
+                direct += typed
+                # The typed word itself outweighs any alternative (queries are
+                # at most 300 characters), so direct matches rank first.
+                specific += (1000 if typed else 0) + max(lengths)
+            found = memo[key] = (direct if covered == len(alternatives) else -1, covered, specific)
+        return found
+    return score
+
+
 def matcher(alternatives):
     """SQLite scalar aredoko_match(title, tags) for one search.
 
     alternatives: per query word, a list of normalized options (the word
     itself first). Returns -1 when some word has no option in the title or
     tags, otherwise how many words matched through the typed word itself
-    (used to rank direct hits before related-term candidates). Each row's
-    text is normalized once, whatever the number of words or options.
+    (used to rank direct hits before related-term candidates).
     """
-    memo = {}
-
-    def match(title, tags):
-        key = (title, tags)
-        if key not in memo:
-            hay = normalize(title) + '\x1f' + normalize(tags)
-            direct = 0
-            for options in alternatives:
-                if options[0] in hay:
-                    direct += 1
-                elif not any(option in hay for option in options[1:]):
-                    direct = -1
-                    break
-            memo[key] = direct
-        return memo[key]
-    return match
-
-
-def coverage(alternatives):
-    """SQLite scalar aredoko_cover(title, tags): words matched by any option.
-
-    Used only for the partial fallback when no item has every word.
-    """
-    memo = {}
-
-    def cover(title, tags):
-        key = (title, tags)
-        if key not in memo:
-            hay = normalize(title) + '\x1f' + normalize(tags)
-            memo[key] = sum(any(option in hay for option in options) for options in alternatives)
-        return memo[key]
-    return cover
-
-
-def specificity(alternatives):
-    """SQLite scalar aredoko_specific(title, tags): per word, a large bonus when
-    the typed word itself is present plus the longest option found. Ranks a candidate matched through a full headword
-    ("朝霧なぎ") above one matched only through a short alias inside another
-    name ("なぎ" in "なぎさ"). A ranking hint only, never a filter.
-    """
-    memo = {}
-
-    def specific(title, tags):
-        key = (title, tags)
-        if key not in memo:
-            hay = normalize(title) + '\x1f' + normalize(tags)
-            # The typed word itself outweighs any alternative (words are at
-            # most 300 characters), so direct matches always rank first.
-            memo[key] = sum((1000 if options[0] in hay else 0)
-                            + max((len(option) for option in options if option in hay), default=0)
-                            for options in alternatives)
-        return memo[key]
-    return specific
+    score = _scorer(alternatives)
+    return lambda title, tags: score(title, tags)[0]
 
 
 def register(db, alternatives):
-    """Expose this search's matchers to SQLite on this connection."""
-    db.create_function('aredoko_specific', 2, specificity(alternatives), deterministic=True)
-    db.create_function('aredoko_match', 2, matcher(alternatives), deterministic=True)
-    db.create_function('aredoko_cover', 2, coverage(alternatives), deterministic=True)
+    """Expose this search's matchers to SQLite on this connection.
+
+    aredoko_match: -1 or direct-word count (filter + rank).
+    aredoko_cover: words matched by any option (partial fallback filter).
+    aredoko_specific: ranking hint; a candidate matched through a full
+    headword ("朝霧なぎ") ranks above one matched only through a short alias
+    inside another name ("なぎ" in "なぎさ"). Never a filter.
+    All three share one normalization and scan per row.
+    """
+    score = _scorer(alternatives)
+    db.create_function('aredoko_match', 2, lambda t, g: score(t, g)[0], deterministic=True)
+    db.create_function('aredoko_cover', 2, lambda t, g: score(t, g)[1], deterministic=True)
+    db.create_function('aredoko_specific', 2, lambda t, g: score(t, g)[2], deterministic=True)
