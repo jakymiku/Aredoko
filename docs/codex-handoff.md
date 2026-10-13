@@ -1,5 +1,24 @@
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
+## 最新：プロダクトビジョンとAI入口を作業ブランチへ統合（2026-10-13）
+
+開始remote HEAD **2ceafafa81a21e3eb8f97aa4e80678d1903d86c2**。ビジョン作成branch `docs/product-vision-20261013` の **14660b644d013be48e528743203b85bab420eceb** を固定して確認。ユーザーの「他のAIへAGENTS.mdを読ませれば目的が伝わるよう整理」の依頼で、docs/product-vision.mdを**本文変更なし**で製品作業ブランチへ選択的に取り込む。別branchのコード・過去handoffを丸ごとmergeしない。
+
+- ルートAGENTSに全AI共通の読む順序、目的と実装状態の根拠、現行branch確認、既存Draft PR #5継続、CI必要時のみを明記。
+- docs/agent-start.mdを追加し、正本/仕様/最新handoff/コード・テスト/PRの役割と優先関係を整理。mainや比較branchの古い説明で現状を判断しないことを明記。
+- READMEを現行WinUI開発版の入口へ整理し、保存済みWeb demoと比較kitの説明を区別。古い「GUI未決定」を解消。追加readerのWindows未ビルド/native未確認は維持。
+- docs/spec.mdの目的参照と決定済みWinUI/Python+SQLiteを更新。提案機能を実装済みと見せない。
+- **文書だけの変更。** リンク/参照先・正本byte一致・diffを確認。CI起動0回・コード変更/ビルド/フルテスト再実行なし。直前Python178PASSは過去sliceの成績で、追加C#/Windows/nativeは未検証のまま。
+- 同じfeature/Draft PR #5/comparison baseへ通常fast-forward。main・他PRはmergeしない。AGENTS自動発見の可否は各AI次第だが、「この作業branchのAGENTS.mdと参照先を読め」で辿れる入口をそろえる。
+
+### 次の3手
+
+1. docs/agent-start.md→vision→両handoff最新節→Issue #4/PR #5の順に読んで再開する。
+2. Windowsで追加reader C#tests/Release buildと生成fixtureのnative操作を確認する（docs/archive-reader.md）。
+3. 以後の機能選択は曖昧な日本語から目的のファイルへ到達するビジョンと実測を基準にする。「東方 巫女」ケースは今後の品質評価目標で、既存モデルの合格実績としない。
+
+---
+
 ## 最新：ZIP事前検査と自然順の境界修正（2026-10-13）
 
 開始remote HEAD **c38a7952fc1954e92f1e57d05da222ef83a77e7d**（読書UI候補checkpoint）。同じfeature/Draft PR #5/comparison base。使用量残率は取得できず5%到達を確認したわけではない。**CI起動0回・workflow変更なし**を継続。最新提出SHAはPR #5 headを確認する。

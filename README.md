@@ -1,66 +1,54 @@
 # Aredoko
 
-> **開発版（2026-10-13）**：このfeatureブランチにはWinUI 3製品版MVPの開発プレビューがあります。明示登録したフォルダの一覧・検索、リスト/グリッド、画像/CBZ/ZIPの先頭プレビュー、タグ/棚/お気に入り保存、交換可能profileでのoffline AI文章・画像・混合検索を実装済み。配布完成版ではありません。現状と未検証項目は[引継ぎ](docs/codex-handoff.md)、最新の詳細UIは[詳細とfocus](docs/editor-layout.md)、元の実装委任は[Issue #4](https://github.com/jakymiku/Aredoko/issues/4)を参照。
+**名前を忘れても、内容や特徴を覚えていれば見つかる。** 本・同人誌・画像・動画・音楽・制作素材を、曖昧な日本語から探せるWindows向けローカルメディアライブラリを目指しています。
+
+「あれ、どこだっけ？」→「東方 巫女」→ PC内の「博麗霊夢の立ち絵」が見つかる。正式名を思い出すための外部検索と、手元のファイル検索の往復を短縮することが原点です。**この例の検索精度は今後の検証目標**です。
+
+長期目的の正本は[プロダクトビジョン](docs/product-vision.md)。モデルや手法は交換可能で、目的のファイルへ到達できたか、手間が減ったかを判断基準にします。
+
+## 開発を引き継ぐAIへ
+
+入口はルートの **[AGENTS.md](AGENTS.md)**。指定された参照文書まで読み、[開始・再開ガイド](docs/agent-start.md)と両handoffの最新節を確認してください。
+
+現在の作業先は `feat/winui3-production-mvp-20261011`、[Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。mainと比較用ブランチは過去段階の資産です。CIは必要なときだけ使います。
+
+## 開発版の状態（2026-10-13）
+
+製品GUIは**WinUI 3 + C#**、バックエンドはPython + SQLiteのloopback APIです。明示登録したフォルダの一覧・検索、リスト/グリッド、画像/CBZ/ZIPの先頭プレビュー、タグ/棚/お気に入り保存、交換可能profileでのoffline AI文章・画像・混合検索を実装しています。配布完成版ではありません。
+
+CBZ/ZIPページ閲覧APIはPythonで検証済み。読書画面の接続候補も追加しましたが、**追加C#テスト・Windows Releaseビルド・実GUI確認は未実行**です。[読書画面の確認手順](docs/archive-reader.md)を参照してください。
+
+全文OCR、動画/音声の内容索引、画像フォルダの論理作品化、Komga、見開き・読書位置保存、配布installerなどは後続です。Layaは実験的なopt-inで既定無効。実装状況と証拠は[開発handoff](docs/codex-handoff.md)・[チャットhandoff](docs/chat-handoff.md)・PRの最新記録を優先してください。
 
 ## WinUI開発版の起動
 
-Windowsの既存Python/.NET/WinApp環境で、repository rootから実行します。依存の自動導入や私物フォルダの自動scanは行いません。
+Windowsの既存Python/.NET/WinApp環境で、repository rootから実行します。
 
 ```powershell
 pwsh -NoProfile -File tools/start-winui.ps1
 ```
 
-新しいフォルダは「フォルダ管理」から明示登録・scanします。AIモデル/profileの準備とGPU検証は[WinUI MVP](docs/winui-mvp.md)・[モデルprofile](docs/model-profiles.md)・引継ぎを参照。Layaは実験的なopt-inで既定無効。本文OCR・音声内容検索・本格読書ビューア・Komga連携・配布installerは未実装です。
+「フォルダ管理」からフォルダを明示登録・scanします。モデル/profileの準備は[WinUI MVP](docs/winui-mvp.md)・[モデルprofile](docs/model-profiles.md)を参照。依存やモデルの自動導入、私物の自動scanは行いません。
 
-## 既存のWeb操作試作
+## 保存済みWeb操作試作
 
-以下は保存済みWeb demoの説明です。WinUI開発版とは別の資産として保持しています。
+`web/`と`app/server.py`は、架空データを使う既存Web demoです。製品GUIの比較や過去の操作検証の資産として保持しています。
 
-画像・本・動画・音楽を、あいまいな記憶から探す。
+Python 3.12以降で `start-demo.cmd` または `python app/server.py --open` を実行すると、http://127.0.0.1:8765 が開きます。初回は5万件の架空データを生成します。Ctrl+Cで終了。ポート競合時は `--port 8766` を指定します。実ファイルのscanやAI推論はこのdemoでは行いません。
 
-Windows向けローカルライブラリ。現在は **架空データを使った操作試作** です。
+Tauri/WinUI比較用の試作・計測手順は[GUI比較キット](docs/gui-compare.md)を参照。製品GUIの採用はWinUI 3で決定済みです。
 
-## 起動
-Python 3.12以降を用意して `start-demo.cmd` をダブルクリックします。
-または `python app/server.py --open` を実行します。
-ブラウザに http://127.0.0.1:8765 が開きます。起動したコンソールで Ctrl+C を押すと終了します。
-追加のPythonパッケージは不要です。初回は5万件の架空データを自動生成します。
-ポート競合時は `python app/server.py --port 8766 --open` を使えます。
+## 検証と文書
 
-## 現在できること
-- コンパクトな検索・広い一覧・右の詳細/タグ編集パネル（狭い画面ではスライド表示）
-- 未保存変更の確認、検索の空結果・通信エラーからの復帰
-- 5万件の一覧を60件ずつ表示
-- タイトル・タグの文字検索、メディア種別で絞り込み
-- お気に入り・未確認・棚に入れたものの表示
-- 単体・一括でタグ、棚、お気に入り、確認済みを編集
-- SQLiteに保存し、再起動後も編集を保持
+Python CPUテスト：`python -m unittest discover -s tests -v`。Web構文：`node --check web/app.js`。Web UI試験：既存Node版Playwright/Edgeで `node tools/run-ui-check.cjs`（一時DBを使用）。Windows/C#のgateは機能別の確認手順へ。実施していない検証を成功扱いしません。
 
-実ファイルは読み取りません。AI検索、読書ビューア、フォルダ登録、Komga連携、Tauri/WinUI本体は未実装です。
-今回のWeb UIは操作仕様を固める土台であり、Tauri版の性能測定結果ではありません。
-一括編集は対象の値を置き換えます。棚は試作では1件のみです。
+| 文書 | 内容 |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) / [開始ガイド](docs/agent-start.md) | AIの入口・作業先・読む順序 |
+| [プロダクトビジョン](docs/product-vision.md) | 長期目的の正本 |
+| [開発handoff](docs/codex-handoff.md) / [チャットhandoff](docs/chat-handoff.md) | 最新進捗・実測・未完了項目 |
+| [仕様](docs/spec.md) | 方向と提案仕様 |
+| [API](docs/api.md) / [モデルprofile](docs/model-profiles.md) | 実装契約とモデル交換 |
+| [詳細UI](docs/editor-layout.md) / [読書画面](docs/archive-reader.md) | UIの実装・検証範囲 |
 
-## 開発と検証
-- `python -m unittest discover -s tests -v`
-- `node --check web/app.js`
-- UI操作テスト（自動で一時DBを作成・破棄）: Node版PlaywrightとMicrosoft Edgeを用意し、`node tools/run-ui-check.cjs`
-- `node tools/check-ui.cjs` は既に起動しているデモを検査する従来コマンドです。必ず検証専用DBで使ってください。
-
-UI自動テストは `--db` オプションを使用してシステム一時フォルダに5万件の架空レコードを作り、HTTPサーバーをランダムな空きポートで起動します。通常の `data/demo.sqlite` を読み書きしません。WindowsのGitHub ActionsでもEdge自動操作を実施します。手動でテスト用DBを作る場合は `python app/server.py --db data/ui-test.sqlite --port 8766` を利用できます。
-
-## 文書
-- [仕様](docs/spec.md)
-- [GUI比較計画](docs/gui-comparison.md)
-- [作業状況・次の作業](docs/status.md)
-- [UI監査・今回の改修と検証](docs/ui-audit.md)
-- [共通API](docs/api.md)
-
-## 保存先
-デモDBは `data/demo.sqlite`、画面検証画像は `cache/qa/`。
-実ファイル、購入作品、AIモデル、個人設定、検索DBはGit管理しません。
-サーバーは127.0.0.1にのみ接続待機し、外部公開する設計ではありません。
-GUI方式はTauri + ReactとWinUI 3 + C#を比較して決定し、Python側のデータ処理を共用する方針です。
-
-## ネイティブGUI比較キット（試作・未採用）
-
-Tauri + React と WinUI 3 + C# の最小操作試作、Windows環境チェックとプロセス計測を `experiments/gui-compare/` に追加しました。どちらかの採用は**まだ決定していません**。実装と実行方法、性能測定の制約は [GUI比較キット](docs/gui-compare.md) にまとめています。ローカル実データは不要です。
+元メディア、購入作品、DB、モデル、個人設定、認証情報はGit管理しません。元ファイルは移動・削除・リネーム・変換せず、整理情報はDBで管理します。APIはloopback限定です。
