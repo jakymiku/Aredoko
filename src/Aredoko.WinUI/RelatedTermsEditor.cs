@@ -17,6 +17,8 @@ public sealed class RelatedTermsEditor
     private readonly TextBox related = new() { Header = "思い出す手がかりの語（、区切り）", PlaceholderText = "例: 東方、巫女" };
     private readonly Button save = new() { Content = "保存" };
     private readonly Button delete = new() { Content = "この見出し語を削除" };
+    private readonly Button export = new() { Content = "ファイルに書き出す" };
+    private readonly Button import = new() { Content = "ファイルから読み込む" };
     private readonly ComboBox entries = new() { Header = "登録済み（選ぶと編集できます）", HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap };
     private List<RelatedTermEntry> loaded = [];
@@ -31,11 +33,40 @@ public sealed class RelatedTermsEditor
         AutomationProperties.SetAutomationId(save, "SaveRelatedTerm");
         AutomationProperties.SetAutomationId(delete, "DeleteRelatedTerm");
         AutomationProperties.SetAutomationId(entries, "RelatedTermList");
+        AutomationProperties.SetAutomationId(export, "ExportRelatedTerms");
+        AutomationProperties.SetAutomationId(import, "ImportRelatedTerms");
         AutomationProperties.SetAutomationId(status, "RelatedTermStatus");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         var help = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "名前・タグ検索で、手がかりの語から見出し語と別名も候補に含めます。例:「東方 巫女」で博麗霊夢のタグやファイル名の作品も表示します。入力した語に一致する作品が先に並びます。" };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { save, delete } };
-        foreach (var element in new UIElement[] { help, entries, term, aliases, related, actions, status }) panel.Children.Add(element);
+        var files = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { export, import } };
+        foreach (var element in new UIElement[] { help, entries, term, aliases, related, actions, files, status }) panel.Children.Add(element);
+        // Files are touched only through the pickers the user opens here.
+        export.Click += async (_, _) => await RunAsync(async () =>
+        {
+            var picker = new Windows.Storage.Pickers.FileSavePicker { SuggestedFileName = "aredoko-related-terms" };
+            picker.FileTypeChoices.Add("JSON", [".json"]);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current));
+            var file = await picker.PickSaveFileAsync();
+            if (file is null) return;
+            await Windows.Storage.FileIO.WriteTextAsync(file, await api.ExportRelatedTermsAsync(), Windows.Storage.Streams.UnicodeEncoding.Utf8);
+            status.Text = $"{loaded.Count:N0}件を書き出しました。";
+        });
+        import.Click += async (_, _) => await RunAsync(async () =>
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            picker.FileTypeFilter.Add(".json");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current));
+            var file = await picker.PickSingleFileAsync();
+            if (file is null) return;
+            if ((await file.GetBasicPropertiesAsync()).Size > (ulong)RelatedTerms.MaxImportBytes) { status.Text = "ファイルが大きすぎます（16MiBまで）。"; return; }
+            var text = await Windows.Storage.FileIO.ReadTextAsync(file, Windows.Storage.Streams.UnicodeEncoding.Utf8);
+            var error = RelatedTerms.CheckImport(text);
+            if (error is not null) { status.Text = error; return; }
+            var result = await api.ImportRelatedTermsAsync(text);
+            await RefreshAsync(null);
+            status.Text = RelatedTerms.DescribeImport(result) + "同じ見出し語は置き換え、他の登録は残します。";
+        });
         entries.SelectionChanged += (_, _) =>
         {
             if (entries.SelectedItem is ComboBoxItem { Tag: RelatedTermEntry entry })
@@ -70,10 +101,10 @@ public sealed class RelatedTermsEditor
     private async Task RunAsync(Func<Task> action)
     {
         if (busy) return;
-        busy = true; save.IsEnabled = delete.IsEnabled = entries.IsEnabled = false;
+        busy = true; save.IsEnabled = delete.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = false;
         try { await action(); }
         catch (Exception ex) { status.Text = ex.Message; }
-        finally { busy = false; save.IsEnabled = delete.IsEnabled = entries.IsEnabled = true; }
+        finally { busy = false; save.IsEnabled = delete.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = true; }
     }
 
     private async Task RefreshAsync(string? select)

@@ -8,6 +8,7 @@ from http.server import ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import re
 from production import ProductionCatalog, ScanBusyError
+from term_relations import MAX_IMPORT_BYTES
 from previews import PreviewReader, PreviewUnavailable, PreviewBusyError, ReaderChanged
 import zipfile
 import sqlite3
@@ -115,6 +116,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     except (ValueError,OSError,json.JSONDecodeError):
                         return self.send(409,{'error':'AI対象設定を読み込めません。対象を選び直して保存してください。文字検索は利用できます。'})
                 if path=='/api/library/terms': return self.send(200,{'items':catalog.terms.entries()})
+                if path=='/api/library/terms/export': return self.send(200,catalog.terms.export())
                 if path=='/api/library/roots': return self.send(200,{'items':catalog.index.roots()})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
@@ -141,9 +143,14 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                 return self.send(403,{'error':'Invalid session'})
             try:
                 length=int(self.headers.get('Content-Length','0'))
-                if not 0<length<=32768: return self.send(413,{'error':'Invalid body size'})
+                # Only an explicit dictionary import may carry a larger document.
+                limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
+                if not 0<length<=limit: return self.send(413,{'error':'Invalid body size'})
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path=='/api/library/terms/import':
+                    try: return self.send(200,catalog.terms.import_entries(body))
+                    except ValueError as ex: return self.send(400,{'error':str(ex)})
                 if self.path=='/api/library/intent/suggest':
                     return self.send(200,intent.suggest(body.get('query'),body.get('source','all'),body.get('kind','')))
                 if self.path=='/api/library/ai/profile':

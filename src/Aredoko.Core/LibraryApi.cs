@@ -28,6 +28,8 @@ public sealed class LibraryApi : IDisposable
         return Protocol.ParseSearch(await client.GetStringAsync($"api/items?q={Uri.EscapeDataString(q)}&kind={kind}&view={view}&page={page}"));
     }
     public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed));
+    public Task<string> ExportRelatedTermsAsync() => client.GetStringAsync("api/library/terms/export");
+    public Task<JsonNode> ImportRelatedTermsAsync(string document) => PostAsync("api/library/terms/import", document);
     public async Task<JsonNode> GetAsync(string route) => JsonNode.Parse(await client.GetStringAsync(route))!;
     public Task<JsonNode> PostAsync(string route,JsonObject data) => PostAsync(route,data.ToJsonString());
     private async Task<JsonNode> PostAsync(string route,string data) {

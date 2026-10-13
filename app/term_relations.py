@@ -23,6 +23,8 @@ from search_terms import normalize
 MAX_ENTRIES = 2000
 MAX_WORDS = 16          # aliases or related words per entry
 MAX_WORD_CHARS = 60
+EXPORT_FORMAT = 'aredoko-related-terms'
+MAX_IMPORT_BYTES = 16 * 1024 * 1024  # a full 2000-entry export fits
 MAX_ALTERNATIVES = 256  # per query word, including the word itself
 
 SCHEMA = '''
@@ -95,6 +97,45 @@ class TermRelations:
                        'ON CONFLICT(term_key) DO UPDATE SET term=excluded.term,aliases=excluded.aliases,'
                        'related=excluded.related', values)
         return entry
+
+    def export(self):
+        """Portable document for an explicit user export (no paths or IDs)."""
+        return {'format': EXPORT_FORMAT, 'version': 1, 'entries': self.entries()}
+
+    def import_entries(self, document):
+        """Merge a whole exported document atomically: all entries or none.
+
+        Entries replace existing ones with the same normalized term; others are
+        kept. Duplicate terms inside one document are rejected rather than
+        silently choosing one.
+        """
+        if (not isinstance(document, dict) or set(document) != {'format', 'version', 'entries'}
+                or document['format'] != EXPORT_FORMAT or document['version'] != 1
+                or not isinstance(document['entries'], list)):
+            raise ValueError('Not an Aredoko related-term export (format/version)')
+        if len(document['entries']) > MAX_ENTRIES:
+            raise ValueError(f'At most {MAX_ENTRIES} related-term entries')
+        entries, keys = [], set()
+        for index, body in enumerate(document['entries'], 1):
+            try:
+                entry = validate_entry(body)
+            except ValueError as error:
+                raise ValueError(f'Entry {index}: {error}') from None
+            key = normalize(entry['term'])
+            if key in keys:
+                raise ValueError(f'Entry {index}: duplicate term {entry["term"]}')
+            keys.add(key); entries.append((key, entry))
+        with self.connect() as db:
+            existing = {row[0] for row in db.execute('SELECT term_key FROM term_relations')}
+            if len(existing | keys) > MAX_ENTRIES:
+                raise ValueError(f'At most {MAX_ENTRIES} related-term entries after import')
+            for key, entry in entries:
+                db.execute('INSERT INTO term_relations(term,term_key,aliases,related) VALUES(?,?,?,?) '
+                           'ON CONFLICT(term_key) DO UPDATE SET term=excluded.term,aliases=excluded.aliases,'
+                           'related=excluded.related',
+                           (entry['term'], key, json.dumps(entry['aliases'], ensure_ascii=False),
+                            json.dumps(entry['related'], ensure_ascii=False)))
+        return {'imported': len(entries), 'added': len(keys - existing), 'replaced': len(keys & existing)}
 
     def delete(self, term):
         key = normalize(_word(term, 'term'))

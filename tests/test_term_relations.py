@@ -1,5 +1,6 @@
 """Related-term dictionary expansion; generated temporary files only."""
 import json, sys, tempfile, threading, unittest, urllib.error, urllib.request
+from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
@@ -94,6 +95,39 @@ class ExpansionTests(unittest.TestCase):
         self.assertEqual(len(first['added']), MAX_ALTERNATIVES - 1)
         self.assertNotIn('truncated', result['expansions'][1])
 
+    def test_export_import_round_trip_is_atomic_and_merging(self):
+        self.catalog.terms.upsert(REIMU)
+        exported = self.catalog.terms.export()
+        self.assertEqual(exported, {'format': 'aredoko-related-terms', 'version': 1, 'entries': [REIMU]})
+        other = {'term': '霧雨魔理沙', 'aliases': ['魔理沙'], 'related': ['東方']}
+        changed = dict(REIMU, related=['東方'])
+        self.assertEqual(self.catalog.terms.import_entries(dict(exported, entries=[changed, other])),
+                         {'imported': 2, 'added': 1, 'replaced': 1})
+        self.assertEqual(self.catalog.terms.entries(), [changed, other] if '博麗霊夢' < '霧雨魔理沙' else [other, changed])
+        before = self.catalog.terms.entries()
+        bad_documents = [
+            None, {'entries': []}, dict(exported, format='other'), dict(exported, version=2),
+            dict(exported, entries=[REIMU, {'term': 'a b'}]),                      # one invalid entry
+            dict(exported, entries=[REIMU, dict(REIMU, aliases=[])]),             # duplicate term
+            dict(exported, entries=[REIMU, {'term': 'ＲＥＩＭＵ兄'}, {'term': 'ｒｅｉｍｕ兄'}]),  # duplicate after normalization
+        ]
+        for document in bad_documents:
+            with self.subTest(document=document), self.assertRaises(ValueError):
+                self.catalog.terms.import_entries(document)
+        self.assertEqual(self.catalog.terms.entries(), before)
+
+    def test_import_respects_total_capacity(self):
+        from term_relations import MAX_ENTRIES
+        with patch('term_relations.MAX_ENTRIES', 2):
+            self.catalog.terms.upsert(REIMU)
+            document = {'format': 'aredoko-related-terms', 'version': 1,
+                        'entries': [{'term': 'a1', 'related': ['x']}, {'term': 'a2', 'related': ['x']}]}
+            with self.assertRaises(ValueError):
+                self.catalog.terms.import_entries(document)
+            self.assertEqual(len(self.catalog.terms.entries()), 1)
+            self.assertEqual(self.catalog.terms.import_entries(dict(document, entries=document['entries'][:1]))['added'], 1)
+        self.assertGreater(MAX_ENTRIES, 2)
+
     def test_http_routes_require_session_and_origin(self):
         server = ThreadingHTTPServer(('127.0.0.1', 0), production_handler(self.catalog, 'term-token'))
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -123,6 +157,17 @@ class ExpansionTests(unittest.TestCase):
         self.assertEqual(call('/api/library/terms/delete', {'term': '博麗霊夢', 'x': 1})[0], 400)
         self.assertEqual(call('/api/library/terms/delete', {'term': '博麗霊夢'}), (200, {'deleted': True}))
         self.assertEqual(call('/api/library/terms/delete', {'term': '博麗霊夢'})[0], 404)
+        status, exported = call('/api/library/terms/export')
+        self.assertEqual((status, exported['entries']), (200, []))
+        self.assertEqual(call('/api/library/terms/export', token='wrong')[0], 403)
+        document = dict(exported, entries=[REIMU] + [{'term': f'作品{i}', 'aliases': ['x' * 50 + str(i)], 'related': ['東方']}
+                                                   for i in range(600)])
+        self.assertGreater(len(json.dumps(document).encode()), 32768)  # larger than ordinary POST bodies
+        self.assertEqual(call('/api/library/terms/import', document), (200, {'imported': 601, 'added': 601, 'replaced': 0}))
+        self.assertEqual(call('/api/library/terms/import', document, origin_header='http://evil.invalid')[0], 403)
+        status, body = call('/api/library/terms/import', dict(document, version=9))
+        self.assertEqual(status, 400); self.assertIn('format/version', body['error'])
+        self.assertEqual(call('/api/library/terms', dict(REIMU, aliases=['x' * 40000]))[0], 413)
 
 
 if __name__ == '__main__':

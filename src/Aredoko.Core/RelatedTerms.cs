@@ -39,6 +39,27 @@ public static class RelatedTerms
         ["related"] = new JsonArray(related.Select(word => (JsonNode?)JsonValue.Create(word)).ToArray())
     };
 
+    public const string ExportFormat = "aredoko-related-terms";
+    public const int MaxImportBytes = 16 * 1024 * 1024;
+
+    // Client-side preflight before sending an explicit user-chosen file; the
+    // server validates every entry again and imports all or nothing.
+    public static string? CheckImport(string text)
+    {
+        if (System.Text.Encoding.UTF8.GetByteCount(text) > MaxImportBytes) return "ファイルが大きすぎます（16MiBまで）。";
+        JsonNode? root;
+        try { root = JsonNode.Parse(text); }
+        catch (System.Text.Json.JsonException) { return "JSONとして読み込めません。"; }
+        if (root is not JsonObject document || document["format"]?.GetValueKind() != System.Text.Json.JsonValueKind.String
+            || document["format"]!.GetValue<string>() != ExportFormat || document["version"]?.GetValueKind() != System.Text.Json.JsonValueKind.Number
+            || document["version"]!.GetValue<double>() != 1 || document["entries"] is not JsonArray)
+            return "Aredokoの関連語ファイル（format/version）ではありません。";
+        return null;
+    }
+
+    public static string DescribeImport(JsonNode result) =>
+        $"{result["imported"]?.GetValue<int>() ?? 0:N0}件を読み込みました（追加{result["added"]?.GetValue<int>() ?? 0:N0}・置換{result["replaced"]?.GetValue<int>() ?? 0:N0}）。";
+
     public static JsonObject Delete(string term) => new() { ["term"] = term.Trim() };
 
     public static List<RelatedTermEntry> ParseList(JsonNode response)

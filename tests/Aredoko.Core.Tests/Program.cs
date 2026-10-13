@@ -82,3 +82,9 @@ Check(upsert["term"]!.GetValue<string>()=="博麗霊夢"&&upsert["related"]!.AsA
 var deleteBody=RelatedTerms.Delete(" 博麗霊夢 ");Check(deleteBody.Count==1&&deleteBody["term"]!.GetValue<string>()=="博麗霊夢","related-term delete body");
 var termList=RelatedTerms.ParseList(System.Text.Json.Nodes.JsonNode.Parse("""{"items":[{"term":"博麗霊夢","aliases":["霊夢"],"related":["東方","巫女"]},{"term":"","aliases":[],"related":[]},{"term":"x"}]}""")!);
 Check(termList.Count==2&&termList[0].Summary=="博麗霊夢（別名: 霊夢） ← 東方、巫女"&&termList[1].Aliases.Length==0,"related-term list parsed defensively");
+
+Check(RelatedTerms.CheckImport("""{"format":"aredoko-related-terms","version":1,"entries":[]}""") is null,"related-term export accepted");
+Check(RelatedTerms.CheckImport("not json")!=null&&RelatedTerms.CheckImport("[]")!=null&&RelatedTerms.CheckImport("""{"format":"other","version":1,"entries":[]}""")!=null,"non-export files rejected before upload");
+Check(RelatedTerms.CheckImport("""{"format":"aredoko-related-terms","version":2,"entries":[]}""")!=null&&RelatedTerms.CheckImport("""{"format":"aredoko-related-terms","version":"1","entries":[]}""")!=null&&RelatedTerms.CheckImport("""{"format":"aredoko-related-terms","version":1,"entries":{}}""")!=null,"wrong version or entries shape rejected");
+Check(RelatedTerms.CheckImport(new string(' ',RelatedTerms.MaxImportBytes+1))!=null,"oversized import rejected");
+Check(RelatedTerms.DescribeImport(System.Text.Json.Nodes.JsonNode.Parse("""{"imported":1200,"added":1000,"replaced":200}""")!)=="1,200件を読み込みました（追加1,000・置換200）。","import summary text");
