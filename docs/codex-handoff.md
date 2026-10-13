@@ -1,3 +1,31 @@
+## 最新：フォルダGUI確認・設定状態の修正（2026-10-14、追加確認は一部残る）
+
+開始HEAD **e4a7bc98631c845862f4f60b38b90c20f3b6d688**。Issue4/既存Draft PR5・AGENTS/両vision/両handoffを確認し、同じ製品作業ブランチを継続。実装commitはこの後の記録commitで追記し、最終HEADはGit/PRを正とする。
+
+### 今回確認できたことと修正
+
+- 新batch `folder-resume-01` **46 checks PASS**。生成9 PNG/隔離DB・settings/CPU契約encoderのみ。最終flat sidebarからfolder検索、全体へ戻る、AI画像・表紙の上位3/参考3/全6とmanual境界、未保存取消/破棄、Light/Dark・list/grid・700×620狭幅、既存/新棚への登録、空棚への明示適用、解除/再登録とタグ・棚復元を通過。実モデルの精度評価ではない。
+- 目視と手動コードレビューで、登録直後に棚choicesを作り直して「棚なし」へ表示が戻る問題を発見。**棚choices更新後に登録rootを選び直す**順序へ修正。修正後の02/03は新棚「背景」の実表示まで確認。
+- 再登録prefillが別のactive rootの除外設定を使う問題を修正し、**解除root自身の保存済み除外を表示**する。root変更で**空棚一括適用checkboxを解除**し、別rootへ操作を引き継がない。これら2点はsource/Release確認、追加GUI assertionsは未到達。
+- 追加runnerはsidebar右クリック→当該root設定、初期棚表示、root変更のcheckbox解除、再登録前後の除外一致を検証する。既定の保護除外を含む全リストを期待値にする。
+
+### 検証結果と限界
+
+- `python -m unittest discover -s tests -p test_folder_search.py -v` **11 PASS /5.789秒**、`test_ai_result_groups.py` **3 PASS /0.240秒**、`dotnet run --project tests/Aredoko.Core.Tests -c Release` **107 PASS**。変更はWinUI/runnerでPython実装・model・rank未変更のため全225件は今回再実行していない（前回225 PASSは履歴）。
+- `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore` **PASS35.25秒/0error/既存IL2104 2warnings、抑制なし**。手動差分レビュー・Python構文・git diff check PASS。専用WinUI analyzer未導入/未実行。AOT/installer未確認。
+- 01 **PASS46/10PNG/正常close2**、02 **全体FAIL24/6PNG/正常close1**、03 **全体FAIL24/6PNG/正常close1**。**22PNGを全て個別目視**。01のLight/Dark、後続Lightの候補/grid/狭幅・棚状態と失敗時context menuを確認。modalの設定は意図した縦scrollでfooter Closeを保つ。名前/類似度は色以外でも区別し、raw scoreを正解率にしない。高DPI/High Contrast/Narrator/physical keyboardは未検証。
+- 02はright-click後に列挙された補助HWNDのUIA inspectで`AppNotFoundException`。main/PopupHostへ対象を絞って03でも同じ失敗（missing HWNDはmainと異なり、失敗画像には別の有効menu popupが見える）。**メニューから設定へ入る操作は未完了**。最後に当該エラーの補助HWNDだけを記録して除外するrunner修正を加えたが、これ以降のGUI再実行はしていない。mainの不達・他CLI error・menuが見つからない場合は引き続きFAILとする。
+- インストール済み`winui-ui-testing/SKILL.md`の **“Maximum two fix-and-rerun cycles”** に従って03で停止。01の成功を、追加修正の未到達assertionや全体GUIの成功へ流用しない。前回native01/02/03のfailed evidenceも保持。
+- 全3runで生成9 sourceのbytes/mtime/hash不変。01ではsettings bytes不変も終端で確認、02/03は終端assertion未到達。cleanup warning0、正常終了後に所有appなし。個人素材scan/変更/外部送信、model DL、GPU/Laya、依存追加、OS変更、CI dispatchなし。3workflow manual-only、既存Draft/base未マージ。
+
+### 次の3手
+
+1. 最終runnerで新native batch：有効context menuからroot設定へ入る、root変更の空棚適用checkbox解除、再登録時の当該root除外・棚・タグ一致を確認。FAILED補助HWND記録と既定除外の期待値を保持。
+2. Hark追加reader/関連語の残gate：17語日本語error、Light/Dark辞書・JSON picker、CBZ/ZIP readerのページ/破損/retry/revision/late-response/dirty/keyboard。今回のfolder Dark確認と辞書/reader Darkは別。
+3. 検索方法/AI profile回帰と固定の新入力で候補境界の取りこぼし評価。自動区切りをconfidence/キャラ精度として扱わず、OCR/VLM・フォルダ本・Komgaは別工程。
+
+---
+
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
 ## 最新：フォルダ検索・棚設定・登録解除・AI候補の表示分離（2026-10-13、GUI部分確認）

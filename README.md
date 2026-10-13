@@ -1,6 +1,6 @@
 # Aredoko
 
-> **最新（2026-10-13、GUI部分確認）**：フォルダ絞り込み/初期棚・空棚への明示適用/登録解除・復元/左ナビ/AI上位・参考・全候補を追加。Python225/Core107/最終Release PASS。最後のflat navと棚/解除/復元/Dark/narrowは実機未完了。自動区切りは未校正の類似度による表示で、正解率ではありません。[使い方と検証](docs/folder-search-and-ai-candidates.md)。
+> **最新（2026-10-14、追加確認は一部残る）**：フォルダ/棚/解除・再登録/AI候補のLight/Dark GUIは新batch46checks PASS。初期棚の表示・再登録の除外・一括適用checkbox状態を修正。追加batchは補助HWND参照で停止し、初期棚の修正後表示まで確認。Python14/Core107/Release PASS。右クリック設定と追加復元条件は実機未完了。自動区切りは正解率ではありません。[使い方と検証](docs/folder-search-and-ai-candidates.md)。
 
 > **Windows確認の更新（2026-10-13）**：追加reader/辞書のWindows Release・Core97・Python211は通過。実GUIはLightの辞書・関連/部分一致までで、reader/Dark/JSON pickerは未確認。起動スクリプトはpayloadのhashで配置を分離し、古いAppX dependencyの使い回しを避けます。[結果と残作業](docs/windows-hark-followup.md)。
 

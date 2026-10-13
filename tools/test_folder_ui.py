@@ -142,6 +142,31 @@ def main():
         if len(matches)!=1:raise RuntimeError('Expected exact popup option '+option)
         cli('ui','invoke',next(iter(matches)),'--action','select','-w',popup)
         time.sleep(.6)
+    def root_settings(root):
+        identifier='NavRoot'+str(root);ui('inspect',identifier,'--json')
+        ui('scroll-into-view',identifier);ui('click',identifier,'--right')
+        # MenuFlyout may be on the main XAML surface or an owned PopupHost.
+        # Inspect only windows from the captured test PID, never another app.
+        candidates=[]
+        for window in json.loads(cli('ui','list-windows','-a',app_pid,'--json')):
+            handle=str(window['hwnd'])
+            if handle!=hwnd and window.get('title')!='PopupHost':continue
+            try:
+                tree=json.loads(cli('ui','inspect','--json','--depth','16','-w',handle))
+            except RuntimeError as error:
+                # A tooltip can be listed as PopupHost, then expire before UIA
+                # inspection. Only skip that specific missing auxiliary HWND;
+                # main-window errors and every other CLI failure still fail.
+                if handle!=hwnd and 'AppNotFoundException' in str(error):
+                    report.setdefault('expired_auxiliary_windows',[]).append(handle)
+                    continue
+                raise
+            if any(n.get('automationId')=='ManageRoot'+str(root) for n in nodes(tree)):
+                candidates.append(handle)
+        if len(candidates)!=1:raise RuntimeError('Expected one owned root settings menu')
+        cli('ui','invoke','ManageRoot'+str(root),'-w',candidates[0])
+        wait('RootList',str(folders['characters']))
+        check('Sidebar context menu selects intended folder',True)
     def query(value,count):
         ui('set-value','TxtQuery',value);ui('invoke','BtnSearch');ready();wait('TxtCount',count)
     def tree_names():return [str(n.get('name','')) for n in nodes(json.loads(ui('inspect','--json','--depth','18')))]
@@ -156,7 +181,8 @@ def main():
         for i in range(6):(folders['characters']/f'neutral-{i}.png').write_bytes(png)
         for name in ('outside','existing-shelf','new-shelf'):(folders[name]/'generated.png').write_bytes(png)
         original=source_digest();expected_source=dict(original)
-        catalog=ProductionCatalog(target/'catalog.sqlite');a=catalog.add_root(str(folders['characters']));b=catalog.add_root(str(folders['outside']),default_shelf='AI画像')
+        catalog=ProductionCatalog(target/'catalog.sqlite');a=catalog.add_root(str(folders['characters']),excludes=['*.ignore-a']);b=catalog.add_root(str(folders['outside']),excludes=['*.ignore-b'],default_shelf='AI画像')
+        root_exclusions=next(root for root in catalog.index.roots() if root['id']==a)['excludes']
         for root in (a,b):catalog.start_scan(root);catalog._worker.join(20);check('Generated root scan '+str(root),catalog.scan_state()['state']=='complete')
         rows=catalog.search(root_id=a)['items'];catalog.update([rows[0]['id']],{'tags':['初音ミク']})
         rows=catalog.search(root_id=a)['items'];encoder=ContractEncoder();engine=RecordedAI(catalog,encoder)
@@ -207,10 +233,12 @@ def main():
                 for _ in range(100):
                     if catalog.scan_state()['state']=='complete' and catalog.search()['total']==9:break
                     time.sleep(.1)
-                check('GUI registration creates new shelf',catalog.search()['total']==9 and '背景' in catalog.shelves());shot('Light-root-settings-wide')
+                check('GUI registration creates new shelf',catalog.search()['total']==9 and '背景' in catalog.shelves());wait('RootInitialShelf','背景');check('Newly registered shelf matches visible settings',True);shot('Light-root-settings-wide')
                 ui('invoke','CloseButton');ready();wait('TxtCount','9 件')
                 # Use the same folder settings surface reached from the sidebar.
-                ui('invoke','NavRoot'+str(a));ready();wait('TxtCount','6 件');ui('invoke','BtnRoots');ui('wait-for','RootList','-t','5000');choose('RootList',str(folders['characters']));choose('RootInitialShelf','AI画像');ui('invoke','FillUnsetShelf');ui('scroll-into-view','SaveRootShelf');ui('invoke','SaveRootShelf')
+                ui('invoke','NavRoot'+str(a));ready();wait('TxtCount','6 件');root_settings(a)
+                ui('invoke','FillUnsetShelf');choose('RootList',str(folders['outside']));wait('FillUnsetShelf','Off');check('Folder change resets bulk-fill consent',True)
+                choose('RootList',str(folders['characters']));choose('RootInitialShelf','AI画像');ui('invoke','FillUnsetShelf');ui('scroll-into-view','SaveRootShelf');ui('invoke','SaveRootShelf')
                 for _ in range(50):
                     if all(r['shelf']=='AI画像' for r in catalog.search(root_id=a)['items']):break
                     time.sleep(.1)
@@ -221,8 +249,8 @@ def main():
                     time.sleep(.1)
                 check('GUI unregister hides root and retains annotations',not any(root['id']==a for root in catalog.index.roots()) and catalog.get(rows[0]['id'])['tags']==['初音ミク'])
                 shot('Light-unregister-wide');ui('invoke','CloseButton');ready();wait('TxtCount','3 件')
-                ui('invoke','NavRestoreRoot'+str(a));ui('wait-for','RootPath','--value',str(folders['characters']),'-t','5000');check('Sidebar restore prefills path',True)
-                ui('invoke','RootConsent');ui('scroll-into-view','AddRoot');ui('invoke','AddRoot');wait('ScanStatus','登録しました。スキャンすると一覧に反映されます。');ui('invoke','CloseButton');ready();wait('TxtCount','9 件');check('Same root restored with tags and shelf',catalog.get(rows[0]['id'])['shelf']=='AI画像' and catalog.get(rows[0]['id'])['tags']==['初音ミク'])
+                ui('invoke','NavRestoreRoot'+str(a));ui('wait-for','RootPath','--value',str(folders['characters']),'-t','5000');wait('RootExcludes',', '.join(root_exclusions));wait('RootInitialShelf','AI画像');check('Sidebar restore prefills own path, exclusions and shelf',True)
+                ui('invoke','RootConsent');ui('scroll-into-view','AddRoot');ui('invoke','AddRoot');wait('ScanStatus','登録しました。スキャンすると一覧に反映されます。');ui('invoke','CloseButton');ready();wait('TxtCount','9 件');check('Same root restored with tags and shelf',catalog.get(rows[0]['id'])['shelf']=='AI画像' and catalog.get(rows[0]['id'])['tags']==['初音ミク']);check('Restored root keeps its own exclusions',next(root for root in catalog.index.roots() if root['id']==a)['excludes']==root_exclusions)
             close()
         check('Settings bytes unchanged',settings.read_bytes()==settings_before)
         check('Generated source bytes and mtimes unchanged',source_digest()==original)
