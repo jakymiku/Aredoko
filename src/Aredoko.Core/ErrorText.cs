@@ -64,7 +64,7 @@ public static class ErrorText
     {
         try
         {
-            if (JsonNode.Parse(body)?["error"] is JsonValue value && value.TryGetValue<string>(out var error) && error.Length > 0)
+            if (JsonNode.Parse(body) is JsonObject document && document["error"] is JsonValue value && value.TryGetValue<string>(out var error) && error.Length > 0)
                 return Localize(error);
         }
         catch (JsonException) { }

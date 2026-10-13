@@ -6,6 +6,8 @@ import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import socket
+import time
 from mimetypes import guess_type
 from urllib.parse import parse_qs, urlparse
 from catalog import Catalog
@@ -29,6 +31,29 @@ def handler_for(catalog, token, benchmark_dist=None):
             self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; connect-src 'self'")
             self.end_headers()
             self.wfile.write(body)
+
+        def reject_post(self, status, body):
+            # Closing a Windows TCP socket with unread upload bytes can reset
+            # it before the client receives our 403/413. Discard bounded bytes
+            # without parsing or authorizing the rejected document. read1 plus
+            # a total deadline prevents a slow/incomplete sender holding us.
+            self.close_connection = True
+            length = self.headers.get('Content-Length', '').strip()
+            if length.isascii() and length.isdigit() and len(length) <= 8:
+                remaining = min(int(length), 16 * 1024 * 1024)
+                deadline = time.monotonic() + 1.0
+                previous_timeout = self.connection.gettimeout()
+                try:
+                    while remaining and (left := deadline - time.monotonic()) > 0:
+                        self.connection.settimeout(left)
+                        chunk = self.rfile.read1(min(remaining, 64 * 1024))
+                        if not chunk: break
+                        remaining -= len(chunk)
+                except (OSError, socket.timeout):
+                    pass  # Still attempt the original rejection; no retry.
+                finally:
+                    self.connection.settimeout(previous_timeout)
+            return self.send(status, body)
 
         def valid_host(self):
             return self.headers.get('Host') == f'127.0.0.1:{self.server.server_port}'
@@ -81,13 +106,13 @@ def handler_for(catalog, token, benchmark_dist=None):
         def do_POST(self):
             origin = f'http://127.0.0.1:{self.server.server_port}'
             if not self.valid_host() or self.headers.get('Origin') != origin or self.headers.get('X-Aredoko-Token') != token:
-                return self.send(403, {'error': 'Invalid session'})
+                return self.reject_post(403, {'error': 'Invalid session'})
             if self.path != '/api/items/update':
                 return self.send(404, {'error': 'Not found'})
             try:
                 length = int(self.headers.get('Content-Length', '0'))
                 if not 0 < length <= 32768:
-                    return self.send(413, {'error': 'Invalid body size'})
+                    return self.reject_post(413, {'error': 'Invalid body size'})
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError('Expected an object')

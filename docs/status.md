@@ -1,3 +1,7 @@
+> **最新（2026-10-13、Windows部分確認）**：Hark追加分を維持し、拒否POST応答/非object JSONエラー/辞書busyと狭幅/検索理由row表示/古いAppX deps再使用を修正。全Python211/Core97/Release/windowless dependency probe PASS。native03は全体FAIL26checks/5PNG全目視、Lightの辞書・理由・partialまで。読書/Dark/pickerは未確認。[Windows確認](windows-hark-followup.md)/[引継ぎ](codex-handoff.md)。CI起動0回・Draft未マージ。以下は履歴。
+
+---
+
 > **最新の状況（2026-10-13）**：詳細パネルを利用可能な高さへ拡張、保存/状態を固定。成功/失敗後の編集focus復帰・retryと保存中に選んだQuery focus維持を確認。editor-native-03 93 checks/実入力50/skip0/12PNG全目視・正常close2、Core35/Python6/最終Release PASS。resize時の自動open保持、高DPI/Contrast/読み上げは残作業。詳細は[詳細とfocus](editor-layout.md)/[引継ぎ](codex-handoff.md)。CI manual-only・Draft未マージ。以下は履歴。
 
 ---

@@ -28,7 +28,8 @@ public sealed class MediaRow
     // "related" when the row matched only through the user's related-term dictionary;
     // "partial" when nothing had every word and this row lacks one of them.
     public string Match { get; set; } = "";
-    public string KindAndTags => (Match switch { "related" => "関連語の候補 · ", "partial" => "一部の語のみ一致 · ", _ => "" }) + $"{Kind} · {string.Join("、", Tags)}";
+    public string MatchLabel => Match switch { "related" => "関連語の候補 · ", "partial" => "一部の語のみ一致 · ", _ => "" };
+    public string KindAndTags => MatchLabel + $"{Kind} · {string.Join("、", Tags)}";
 }
 
 public sealed record SearchExpansion(string Term, string[] Added, bool Truncated);

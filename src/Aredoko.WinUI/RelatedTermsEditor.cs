@@ -97,16 +97,29 @@ public sealed class RelatedTermsEditor
     }
 
     public UIElement Content => panel;
+    public bool IsBusy => busy;
 
     public Task LoadAsync() => RunAsync(() => RefreshAsync(null));
 
     private async Task RunAsync(Func<Task> action)
     {
         if (busy) return;
-        busy = true; save.IsEnabled = delete.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = false;
-        try { await action(); }
+        busy = true;
+        save.IsEnabled = delete.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = false;
+        term.IsEnabled = aliases.IsEnabled = related.IsEnabled = false;
+        status.Text = "処理しています…";
+        try
+        {
+            await action();
+            if(status.Text == "処理しています…")status.Text = $"{loaded.Count:N0}件の登録があります。";
+        }
         catch (Exception ex) { status.Text = ex.Message; }
-        finally { busy = false; save.IsEnabled = delete.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = true; }
+        finally
+        {
+            busy = false;
+            save.IsEnabled = delete.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = true;
+            term.IsEnabled = aliases.IsEnabled = related.IsEnabled = true;
+        }
     }
 
     private async Task RefreshAsync(string? select)

@@ -34,7 +34,11 @@ try {
         Start-Sleep -Milliseconds 200
     }
     if (-not $connected) { throw 'Backend connection timed out.' }
-    $result = & winapp run src/Aredoko.WinUI -c Release --arch x64 -p Platform=x64 -p SelfContained=true --detach --json --args ("--ui-theme "+$UITheme.ToLowerInvariant())
+    & dotnet build src/Aredoko.WinUI -c Release -p:Platform=x64 -p:SelfContained=true --no-restore
+    if ($LASTEXITCODE -ne 0) { throw 'WinUI build failed. See the setup/build steps in docs/winui-mvp.md.' }
+    $layoutDirectory = & python tools/winapp_layout.py --configuration Release --arch x64
+    if ($LASTEXITCODE -ne 0 -or -not $layoutDirectory) { throw 'Cannot identify WinUI build layout.' }
+    $result = & winapp run src/Aredoko.WinUI -c Release --arch x64 -p Platform=x64 -p SelfContained=true --no-build --output-appx-directory $layoutDirectory --detach --json --args ("--ui-theme "+$UITheme.ToLowerInvariant())
     if ($LASTEXITCODE -ne 0) { throw 'WinUI build/launch failed.' }
     $launch = ($result -join "`n") | ConvertFrom-Json
     if (-not $launch.ProcessId) { throw 'No application process returned.' }

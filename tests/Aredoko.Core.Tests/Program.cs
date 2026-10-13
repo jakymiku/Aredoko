@@ -97,3 +97,6 @@ Check(ErrorText.Localize("Entry 3: aliases must be a single word without spaces"
 Check(ErrorText.Localize("At most 2000 related-term entries after import")=="関連語は2,000件まで登録できます（読み込み後の合計）。"&&ErrorText.Localize("Use at most 16 search words")=="検索語は16語までにしてください。","limit errors localized");
 Check(ErrorText.Localize("スキャン中です。")=="スキャン中です。"&&ErrorText.Localize("Something new")=="Something new","Japanese and unknown messages pass through");
 Check(ErrorText.FromResponse("""{"error":"Related-term entry not found"}""",404)=="その見出し語は登録されていません。"&&ErrorText.FromResponse("<html>",502)=="バックエンドでエラーが起きました（502）。"&&ErrorText.FromResponse("""{"error":""}""",400)=="要求を処理できませんでした（400）。","response bodies mapped without throwing");
+
+foreach(var body in new[]{"[]","123","true","\"plain string\""})
+    Check(ErrorText.FromResponse(body,503)=="バックエンドでエラーが起きました（503）。","non-object JSON error body: "+body);

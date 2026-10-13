@@ -109,7 +109,7 @@ public sealed partial class MainPage : Page
                 AutomationProperties.SetName(image, row.Title + "のサムネイル");
                 var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
                 text.Children.Add(new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] });
-                text.Children.Add(new TextBlock { Text = $"{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
+                text.Children.Add(new TextBlock { Text = $"{row.MatchLabel}{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
                 var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
                 AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
                 text.Children.Add(previewStatus);
@@ -230,7 +230,7 @@ public sealed partial class MainPage : Page
     }
     private async void Save_Click(object sender,RoutedEventArgs e)=>await SaveAsync();
     private async void SaveShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;await SaveAsync();}
-    private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;Query.Focus(FocusState.Keyboard);}
+    private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;if(ready&&!dialogOpen)Query.Focus(FocusState.Keyboard);}
     private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0);}
     private void UpdateSearchMethod()
@@ -384,14 +384,20 @@ public sealed partial class MainPage : Page
         // in the editor because the dictionary never changes item metadata.
         if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
         dialogOpen=true;
+        var root=XamlRoot;ScrollViewer? editorScroll=null;
+        void Fit(XamlRoot sender,XamlRootChangedEventArgs args){if(editorScroll is not null)editorScroll.MaxHeight=Math.Max(160,sender.Size.Height-240);}
         try{
             var editor=new RelatedTermsEditor(api);
             await editor.LoadAsync();
-            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="関連語",Content=new ScrollViewer {Content=editor.Content,MaxHeight=Math.Max(160,ActualHeight-240)},CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
+            editorScroll=new ScrollViewer {Content=editor.Content,MaxHeight=Math.Max(160,root.Size.Height-240)};
+            root.Changed+=Fit;
+            var dialog=new ContentDialog {XamlRoot=root,RequestedTheme=ActualTheme,Title="関連語",Content=editorScroll,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
+            AutomationProperties.SetAutomationId(dialog,"RelatedTermsDialog");
+            dialog.Closing+=(_,args)=>{if(editor.IsBusy)args.Cancel=true;};
             await dialog.ShowAsync();
         }catch(Exception ex){Failure(ex);}
         finally{
-            dialogOpen=false;
+            root.Changed-=Fit;dialogOpen=false;
             // Re-run a literal search so the list reflects the saved dictionary,
             // but never while a tag draft is unsaved (reload would drop it).
             try{if(!disposed&&!Dirty&&lastMode==0&&lastQuery.Length>0)await LoadAsync();}

@@ -157,7 +157,7 @@ def main():
             def log_message(self,*args):pass
         server.RequestHandlerClass=Quiet;thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         for theme in ('Light','Dark'):
-            launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build','--detach','--json','--args','--ui-theme '+theme.lower()))
+            launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build','--output-appx-directory',str(target/('layout-'+theme.lower())),'--detach','--json','--args','--ui-theme '+theme.lower()))
             if launch.get('ProcessScope') not in (None,'local'):raise RuntimeError('Wrong target')
             app_pid=int(launch['ProcessId']);process=kernel32.OpenProcess(0x00100001,False,app_pid)
             if not process:raise RuntimeError('Owned process handle unavailable')

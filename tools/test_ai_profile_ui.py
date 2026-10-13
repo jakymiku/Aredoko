@@ -344,7 +344,7 @@ def main():
             try:
                 session=api('/api/session');headers={'X-Aredoko-Token':session['token'],'Origin':origin};break
             except urllib.error.URLError:time.sleep(.1)
-        launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build','--detach','--json','--args','--ui-theme '+ui_theme.lower()))
+        launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build','--output-appx-directory',str(target/('layout-'+ui_theme.lower())),'--detach','--json','--args','--ui-theme '+ui_theme.lower()))
         app_pid=int(launch['ProcessId'])
         for _ in range(50):
             windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))

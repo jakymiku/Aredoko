@@ -1,5 +1,7 @@
 # 文字検索の正規化・複数語AND・関連語辞書（2026-10-13）
 
+> 2026-10-13 Windows後続：Core97・x64 SelfContained Release・全Python211 PASS。nativeはLight辞書/related/partialまでの部分確認、reader/Dark/pickerは未到達。旧AppX depsのRegex欠落をfresh layout＋windowless probeで修正確認し、GUI再検証は次回。[正確な結果と履歴](windows-hark-followup.md)。
+
 製品ビジョンの「東方 巫女 → 保存済みの博麗霊夢の立ち絵」へ、AIなしの文字検索側から近づける最小実装。**ユーザーが登録した辞書だけ**を使い、知識データの同梱・外部取得・モデル利用はしない。一般的な検索精度や私物ライブラリでの合格を示すものではない。
 
 ## 文字検索（名前・タグ）の変更

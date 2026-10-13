@@ -126,10 +126,10 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
             if self.path=='/api/items/update':
                 origin=f'http://127.0.0.1:{self.server.server_port}'
                 if not self.valid_host() or self.headers.get('Origin')!=origin or self.headers.get('X-Aredoko-Token')!=token:
-                    return self.send(403,{'error':'Invalid session'})
+                    return self.reject_post(403,{'error':'Invalid session'})
                 try:
                     length=int(self.headers.get('Content-Length','0'))
-                    if not 0<length<=32768: return self.send(413,{'error':'Invalid body size'})
+                    if not 0<length<=32768: return self.reject_post(413,{'error':'Invalid body size'})
                     body=json.loads(self.rfile.read(length))
                     if not isinstance(body,dict): raise ValueError('Expected object')
                     return self.send(200,catalog.update(body.get('ids'),body.get('changes')))
@@ -140,12 +140,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                 return super().do_POST()
             origin=f'http://127.0.0.1:{self.server.server_port}'
             if not self.valid_host() or self.headers.get('Origin')!=origin or self.headers.get('X-Aredoko-Token')!=token:
-                return self.send(403,{'error':'Invalid session'})
+                return self.reject_post(403,{'error':'Invalid session'})
             try:
                 length=int(self.headers.get('Content-Length','0'))
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
-                if not 0<length<=limit: return self.send(413,{'error':'Invalid body size'})
+                if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
                 if self.path=='/api/library/terms/import':

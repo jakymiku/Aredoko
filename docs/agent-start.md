@@ -36,7 +36,7 @@
 
 - 曖昧な日本語から目的のローカルファイルへ到達することが製品の核。「東方 巫女」から保存済みの博麗霊夢の立ち絵を探すケースは**今後の評価目標**。
 - EmbeddingGemma 2を含むモデルは交換可能。文字/確定タグ/関連知識/意味/画像特徴を役割ごとに補完する。フィルターやユーザーの手動整理を勝手に覆さない。
-- 読書UI・関連語dialogはソース追加済み。LinuxでC# CoreとC#のみのコンパイル検査はPASSだが、Windows Release・XAMLコンパイル・実GUI確認はまだ必要。最新Python205件・C# Core93件PASS（2026-10-13、Linux）は以後の変更を自動保証しない。
+- 読書UI・関連語dialogはソース追加済み。Linux時点のPython205件・C# Core93件・C#のみのコンパイル検査PASSは履歴。後続WindowsではPython211/Core97/Releaseとwindowless error probeがPASS、nativeはLight辞書/検索理由までの部分確認で全体FAIL。読書/Dark/pickerは未到達（[Windows確認](windows-hark-followup.md)）。以後の変更を自動保証しない。
 - 文字検索は正規化＋複数語AND、ユーザー登録の関連語辞書で候補を追加できる（[related-terms.md](related-terms.md)）。辞書は同梱・自動取得しない。
 - resize時の詳細pane自動保持、高DPI/Contrast/Narrator、フォルダ本/Komga等は別の未完了項目。詳細は最新handoff。
 - 私物の無断scan/書換え、外部送信、モデル取得・依存導入・OS変更を勝手に行わない。
