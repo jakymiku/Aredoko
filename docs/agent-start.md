@@ -34,7 +34,7 @@
 
 ## 今回の再開で把握すべき境界
 
-- 最新の追加はフォルダ検索/初期棚/登録解除と復元/左ナビ/AI候補表示分離。2026-10-14の新batch46checksでLight/Darkのflat nav/棚/解除・復元/候補表示を確認。追加の設定状態修正はPython14/Core107/Release PASS、初期棚の修正後表示まで実機確認。sidebar context設定・root変更の一括適用解除・復元除外の追加assertionは未完了。前回Python225は履歴。[現行仕様と検証](folder-search-and-ai-candidates.md)とhandoff最新節を参照。自動区切りをconfidenceとして扱わない。
+- 最新の追加はフォルダ検索/初期棚/登録解除と復元/左ナビ/AI候補表示分離。2026-10-14の新batch46checksでLight/Darkのflat nav/候補表示、Lightの棚/解除・復元を確認。追加の設定状態修正はPython14/Core107/Release PASS、初期棚の修正後表示まで実機確認。sidebar context設定・root変更の一括適用解除・復元除外の追加assertionは未完了。前回Python225は履歴。[現行仕様と検証](folder-search-and-ai-candidates.md)とhandoff最新節を参照。自動区切りをconfidenceとして扱わない。
 
 - 曖昧な日本語から目的のローカルファイルへ到達することが製品の核。「東方 巫女」から保存済みの博麗霊夢の立ち絵を探すケースは**今後の評価目標**。
 - EmbeddingGemma 2を含むモデルは交換可能。文字/確定タグ/関連知識/意味/画像特徴を役割ごとに補完する。フィルターやユーザーの手動整理を勝手に覆さない。

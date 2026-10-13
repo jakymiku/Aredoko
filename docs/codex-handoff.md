@@ -1,10 +1,10 @@
 ## 最新：フォルダGUI確認・設定状態の修正（2026-10-14、追加確認は一部残る）
 
-開始HEAD **e4a7bc98631c845862f4f60b38b90c20f3b6d688**。Issue4/既存Draft PR5・AGENTS/両vision/両handoffを確認し、同じ製品作業ブランチを継続。実装commitはこの後の記録commitで追記し、最終HEADはGit/PRを正とする。
+開始HEAD **e4a7bc98631c845862f4f60b38b90c20f3b6d688**。Issue4/既存Draft PR5・AGENTS/両vision/両handoffを確認し、同じ製品作業ブランチを継続。実装commit **d29d3fe340cca937ae9dc3a3d7f27728482c5e14**。続く記録commitでこのSHAを保存し、最終HEADはGit/PRを正とする。
 
 ### 今回確認できたことと修正
 
-- 新batch `folder-resume-01` **46 checks PASS**。生成9 PNG/隔離DB・settings/CPU契約encoderのみ。最終flat sidebarからfolder検索、全体へ戻る、AI画像・表紙の上位3/参考3/全6とmanual境界、未保存取消/破棄、Light/Dark・list/grid・700×620狭幅、既存/新棚への登録、空棚への明示適用、解除/再登録とタグ・棚復元を通過。実モデルの精度評価ではない。
+- 新batch `folder-resume-01` **46 checks PASS**。生成9 PNG/隔離DB・settings/CPU契約encoderのみ。最終flat sidebarからfolder検索、全体へ戻る、AI画像・表紙の上位3/参考3/全6とmanual境界、未保存取消/破棄、Light/Dark・list/grid・700×620狭幅、およびLightで既存/新棚への登録、空棚への明示適用、解除/再登録とタグ・棚復元を通過。実モデルの精度評価ではない。
 - 目視と手動コードレビューで、登録直後に棚choicesを作り直して「棚なし」へ表示が戻る問題を発見。**棚choices更新後に登録rootを選び直す**順序へ修正。修正後の02/03は新棚「背景」の実表示まで確認。
 - 再登録prefillが別のactive rootの除外設定を使う問題を修正し、**解除root自身の保存済み除外を表示**する。root変更で**空棚一括適用checkboxを解除**し、別rootへ操作を引き継がない。これら2点はsource/Release確認、追加GUI assertionsは未到達。
 - 追加runnerはsidebar右クリック→当該root設定、初期棚表示、root変更のcheckbox解除、再登録前後の除外一致を検証する。既定の保護除外を含む全リストを期待値にする。
