@@ -1,6 +1,19 @@
 # CBZ / ZIP 読書画面
 
-> **最新（2026-10-14 続き）**：Light/Darkのreader・辞書native105checks/実入力14、Python31/Core107/Release PASS。readerの操作領域と狭幅で閉じた後の詳細/focusを修正。実JSON picker・zoom/直接Reopen等は残る。[正確な結果と履歴](native-folder-reader-validation.md)。以下は以前の記録。
+## 現在の操作（2026-10-14）
+
+詳細の「本を開く」で、画像ビューアと共通の暗い専用WinUIウィンドウを開きます。Windows上部タイトルバーを保持、左右・下のダイアログ外枠なし。上下操作帯はcanvas端に接し、マウス静止2.5秒で隠れます。移動で再表示、Tab/F10で操作部を保持、Escで閉じて元のタグdraft・詳細・openerへ復帰。ズーム/scroll/fit/手動retry/最初からReopenを備えます。
+
+設定アイコンまたは右クリックで「単ページ」「見開き（右→左）」「見開き（左→右）」を選びます。表紙は1枚、その後2枚ずつ、余った最後も1枚。RTLは後のページを左に置き、←で次の見開き。LTR/単ページは→で次、端で停止。向きは閲覧sessionだけで保持、再openでは単ページになります。2ページは双方をdecodeして一度に公開、片方が壊れた場合は両画像を消してエラーと前後送り/retryを残します。前後はloading中無効です。
+
+既存manifest revision/active root/認証/除外/link安全境界を維持し、要求は同時1本、最大表示bitmap2枚、元CBZ/ZIP展開・書換え・永続cacheなし。画像8MiB・16M画素・派生PNG長辺2048px/body40秒、manifest4KiB/最大10000page。原寸表示・読書位置保存・目次・page直接指定・フォルダ本・PDF・Komgaは未実装。
+
+Core147/reader Python16/最終Release PASS。Light/Darkの単ページ/両見開き/zoom/直接Reopen/エラー/cancel/draft/idleを専用windowで検証。[正確な結果と未確認項目](viewer-reader-validation.md)。409のGUI検証は注入応答であり、実source revision変更ではありません。以下は旧実装の履歴で、未実装/未ビルドという記述も当時の状態です。
+
+---
+
+
+> **履歴（2026-10-14 続き）**：Light/Darkのreader・辞書native105checks/実入力14、Python31/Core107/Release PASS。readerの操作領域と狭幅で閉じた後の詳細/focusを修正。実JSON picker・zoom/直接Reopen等は残る。[正確な結果と履歴](native-folder-reader-validation.md)。以下は以前の記録。
 
 > 2026-10-13 Windows後続：Core97・x64 SelfContained Release・全Python211 PASS。nativeはLight辞書/related/partialまでの部分確認、reader/Dark/pickerは未到達。旧AppX depsのRegex欠落をfresh layout＋windowless probeで修正確認し、GUI再検証は次回。[正確な結果と履歴](windows-hark-followup.md)。
 

@@ -34,6 +34,8 @@
 
 ## 今回の再開で把握すべき境界
 
+- 2026-10-14 共通viewer：専用Window・薄枠/端に接する上下帯・auto-hide/画像左右/reader見開きを実装。Core147・preview12/reader16・Release PASS。最終window実機は[viewer-reader-validation.md](viewer-reader-validation.md)、double-clickは実機未検証。両handoff最新節を正とする。
+
 - 2026-10-14 続き：folder50/reader105 GUI checks（reader実入力14）、Python31/Core107/Release PASS。Light/Darkの候補/dirtyとLightの棚/context/解除・復元、Light/DarkのCBZ/ZIP reader・関連語を生成素材で確認。実JSON picker・zoom/直接Reopen・高DPI/Contrast/Narrator等は残る。[実機結果](native-folder-reader-validation.md)と最新handoffを参照。候補の自動区切りはconfidenceではない。
 
 - 曖昧な日本語から目的のローカルファイルへ到達することが製品の核。「東方 巫女」から保存済みの博麗霊夢の立ち絵を探すケースは**今後の評価目標**。

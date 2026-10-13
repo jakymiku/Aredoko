@@ -1,4 +1,7 @@
-> **最新（2026-10-14 続き）**：フォルダGUI50checks、読書・関連語GUI105checks/キーボード14回を生成素材のLight/Darkで確認。右クリック設定・復元除外の残gateを通過、reader下部操作の切れと閉じた後の未保存詳細/focus復帰を修正。Python31/Core107/Release PASS。実JSON picker・高DPI/Contrast/Narrator等は残作業。[結果と残作業](native-folder-reader-validation.md)。
+
+> **最新（2026-10-14 共通ビューア）**：画像/CBZ/ZIPを専用WinUIウィンドウで閲覧。薄い左右・下枠、端に接する上下バー、idle hide/マウス再表示/F10、画像左右送り、読書single/右左・左右見開き。Core147・Python preview12/reader16・Release PASS、専用window画像/読書Light/Dark全PNGを個別目視。double-click入口はコード追加済み・実機未確認。動画は後続。[最新検証](viewer-reader-validation.md)。
+
+> **履歴（2026-10-14 続き）**：フォルダGUI50checks、読書・関連語GUI105checks/キーボード14回を生成素材のLight/Darkで確認。右クリック設定・復元除外の残gateを通過、reader下部操作の切れと閉じた後の未保存詳細/focus復帰を修正。Python31/Core107/Release PASS。実JSON picker・高DPI/Contrast/Narrator等は残作業。[結果と残作業](native-folder-reader-validation.md)。
 
 > **履歴（2026-10-13、Windows部分確認）**：Hark追加分を維持し、拒否POST応答/非object JSONエラー/辞書busyと狭幅/検索理由row表示/古いAppX deps再使用を修正。全Python211/Core97/Release/windowless dependency probe PASS。native03は全体FAIL26checks/5PNG全目視、Lightの辞書・理由・partialまで。読書/Dark/pickerは未確認。[Windows確認](windows-hark-followup.md)/[引継ぎ](codex-handoff.md)。CI起動0回・Draft未マージ。以下は履歴。
 

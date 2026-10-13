@@ -1,3 +1,69 @@
+## 最新：画像・読書ビューアの共通ウィンドウ（2026-10-14）
+
+開始HEAD `fc38394ec346f238c937f0dd7980d1c96af0d6fb`、実装commit **ed943b7703718085d05004c99dcc3393d1bf06df**。製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR5](https://github.com/jakymiku/Aredoko/pull/5)を継続。最終HEADはGit/PRを正とする。
+
+### できること
+
+- 詳細の「画像を大きく表示」「本を開く」から**共通の専用WinUIウィンドウ**を開く。Windowsの上部タイトルバーを残し、ContentDialogの太い外枠/余白を除いた。暗い画像canvasが左右・下端まで広がり、上下の不透明な操作バーは端に接する。Honeyviewの画像中心の操作感を参考にし、アプリ全体の刷新はしていない。
+- マウス静止2.5秒で操作バーが隠れ、移動で再表示。Tab/F10はkeyboard操作部を保持、失敗時も操作可能。Escは操作部が隠れた状態でも閉じる。ズーム1–4倍、fit、scroll、手動retry。
+- 画像は**現在の検索結果ページ内**だけを←/→で順に閲覧。既存root/棚/query/AI順序を保ち、端で停止。背景の選択/タグdraftを変えず閉じると元の詳細・openerへ戻る。loading中の移動/閉じるはcancelと単一load loopで古い応答を排除。
+- CBZ/ZIPも同じ外観。設定アイコン/右クリックから**単ページ・見開き右→左・左→右**。表紙は単独、以降2ページずつ、余った最後は単独。RTLは左キーが次、LTR/単ページは右キーが次。設定は閲覧session内のみ、永続化なし。2枚のdecodeを完了してからまとめて表示し、失敗時は双方を消す。
+- 閲覧中は所有libraryウィンドウを無効化し、閉じると元のenabled状態と編集draftを復帰。owner設定/resize/closeはアプリ自身のWindowだけ。既存loopback認証、active root/除外/reparse/索引stat、CBZ manifest revision、画像8MiB/16M画素/派生長辺2048px/40秒body deadlineを維持。元画像1:1表示やprivate source直接openではない。
+
+### 正確な検証結果
+
+- **Core147 PASS**（画像HTTP/policy・結果snapshot・見開き12・thumbnail click tracker7を含む）。Python preview12 PASS2.363秒、reader16 PASS8.584秒。backend未変更、全Python225/関連語15/旧folder50・reader105の全batchは今回は再実行していない。
+- **最終Windows x64 SelfContained Release PASS25.47秒**、0error、既存IL2104 2warnings（抑制なし）。`--no-restore`。app refsのWinUI API確認、手動WinUI review、Python構文/diff確認。専用WinUI analyzer未導入/未実行、AOT/MSIX配布試験ではない。日本語resource化は既存MVPと同じく未完了。
+- 専用window画像最終 **PASS 110 checks / keys 56 / skip 0 / PNG 24 / graceful close 2 / cleanup warnings 0**。Light/Dark、1200×820/700×620、上下帯の端/中央fitのUIA実寸、library無効化、左右/端/filtered singleton/破損、zoom/scroll、503retry、cancel/late response、dirtyとCtrl+S/F抑止、Esc/opener、auto-hide/mouse/F10、単ページCBZ入口。全24PNGを個別目視。
+- 専用window読書最終 **PASS 88 checks / keys 24 / skip 0 / PNG 24 / graceful close 2 / cleanup warnings 0**。Light/Darkのsingle/RTL/LTRの番号・実物理順、cover/端/unpaired、settings/実右click、zoom/scroll/reset、corrupt pair消去/skip、503retry、**注入409**によるmanifest無効化と直接Reopen、遅延close→別本、dirty/Ctrl+S/Esc/focus、auto-hide/F10、上下帯の端/library無効化。全24PNGを個別目視。このbatchでは元bookを書換える実revision/rescanをしていない（Python reader16/前回native履歴と区別）。
+- 最初の専用window画像runはFAIL30/5PNG/keys8/skip0/owned termination fallback1。閉じたviewer HWNDに対するwait-forでrunnerが停止。所有window inventoryで終了を確認してmain HWNDへ戻す修正後、画像02でPASS。全失敗PNGも目視。古いmodal overlay/readerのPASSを最終windowの証拠へ流用しない。[全run履歴と限界](viewer-reader-validation.md)。
+- 最終runで生成4/5file bytes/mtime/hash、settings bytes不変、AI推論/worker0、正常close2ずつ・warning0。ユーザー素材scan/変更/外部送信、model/dependency取得、GPU/OS設定変更、CI dispatch0。添付参考画像/PNG/DB/設定/modelはGitへ含めない。3workflowはmanual-only。
+
+専用window読書01はFAIL12/1PNG/keys1/skip0/fallback1。操作帯はIDのみでUIA peerが生成されず停止し、アクセシブル名を付けて02で検証した。手動レビューで一覧全体のdouble-tap旧選択入口を除き、thumbnail自身のIDを持つ経路だけを残した。画像02以後の変更はこの未検証入口の限定とreader帯Nameのみで、画像button/viewport実装は変更なし。専用windowの修正再実行は計2cycleで終了。
+
+### 未完了と次の3手
+
+1. **サムネイルのdouble-click実機確認が最優先**。list/grid/詳細のDoubleTappedと、OS既存interval/距離をread-only取得するPointerPressed/Core trackerを追加済み。最初の3runはFAIL2ずつ（viewer未open、foreground guard、viewer未open）。初回選択でthumbnailのlayoutが動く観測への追加fallbackはCore/buildのみ、最終GUI未検証。通常button入口は上記で確認済み。WinUI UI testing skillの最大2 fix-and-rerun cyclesに到達したため、このfeatureの実機再実行は本turnで停止。別のwindow/spread検証にdouble-clickを混ぜて回避していない。前面化auto-review拒否はユーザーがtest Aredoko限定を明示許可して解消済み。
+2. **動画thumbnailの小さな縦切り**。既存PATHのffmpeg/ffprobe（存在のみ確認、起動/decode未確認）を生成videoで検証し、時間/並列/出力/cacheを制限した代表frame取得を実装。次にWindows native playback。どちらも今は未実装。
+3. **閲覧/アクセシビリティの残gate**。500px未満の極狭幅でtoolbar overflow、高DPI/High Contrast/Narrator/全Tab順序/修飾左右、横長・透明・全codec、native titlebar X/Alt+F4によるclose、実JSON save/open picker、読書位置/設定保存、画像pageまたぎ・全画面・元解像度/大画像。現在の左右送りは当該結果pageのみ、GIFは静止、SVG/PDF対象外。
+
+`tools/test_hark_ui.py`も専用reader windowへのtarget切替/closeをソース更新・py_compile確認。ただし旧105checkの全batchを再実行したとは宣言しない。大規模1TB/数万件・実素材検索品質・confidence校正は未評価。検索model/順位は今回未変更、自動候補境界は正解率ではない。全文OCR/動画音声索引/フォルダ本/Komga/全体visual刷新/installerは後続。
+
+ユーザーの今回の依頼により、このcheckpointをGitHubへ保存した後に通常シャットダウンを実施する。将来turnにシャットダウン許可を引き継がない。強制アプリ終了は要求していない。
+
+---
+
+## 履歴：画像ビューア・検索結果内の左右送り（2026-10-14）
+
+開始HEAD **fc38394ec346f238c937f0dd7980d1c96af0d6fb**。製品branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` /既存Draft PR5を継続。実装commit **ed943b7703718085d05004c99dcc3393d1bf06df**（後続の記録commitで固定する）。最終HEADはGit/PRを正とする。
+
+### 実装と使い方
+
+- 詳細の **「画像を大きく表示」** からネイティブmodalを開く。画像中心の暗いcanvas、中央fit、ファイル名、画像位置、compact icon操作バーに整えた。Honeyviewは見た目の参考で、同機能・形式対応を再現したという意味ではない。[画像ビューア](image-viewer.md)。
+- **← / → と前後buttonで、現在表示中の検索結果ページの画像だけを検索順で送る**。本/video/非対応/未接続を除外し、root/棚/query/AI候補groupなど既存の絞り込みと順位を維持。最初/最後は止まり循環しない。別pageを自動取得しない。broken imageは表示して手動で次へ進める。
+- `ImageViewerSequence` がID/タイトル/順序をsnapshot化。MainPageの選択itemと編集draftは変更せず、閉じると元の詳細/openerへ復帰。ズーム1–4倍、縮小/拡大/fit、scroll、Esc/閉じる、手動retryを実装。100%は画面fit基準で元画像の1:1 pixel表示ではない。
+- ScrollViewerの左右キー消費に先行するmodalの `PreviewKeyDown` で未修飾左右を処理。Ctrl/Shift/Alt/Win付き左右は画像送りしない（除外条件はソース確認、実入力での修飾左右は未検証）。loading中も移動可能。先行要求をcancelし、version比較と**単一load/decode loop**で最新targetだけを表示。旧画像は移動/失敗時に消去。
+- 既存loopback session/preview安全境界を再利用。fixed numeric item ID、画像MIME、Content-Length/stream一致、8MiB、40秒body deadline、16M画素、派生PNG長辺2048px。active root/除外/reparse/索引statのbackend検査を維持。privateファイル直接open/保存/変換なし。画像previewは索引更新検査であり、CBZのfrozen manifest revision protocolを新設したわけではない。
+
+### 実測と検証範囲
+
+- **Core128 checks PASS**。新しい画像policy/認証固定route/受信上限・不正MIME・切断/取消に加え、snapshot順序、範囲外選択拒否、端の停止、戻る、欠損・非画像除外、重複除去を確認。先行画像基本形119から追加9。
+- **Python preview12 tests PASS /2.363秒**。backendは今回未変更。全Python225、reader API16/関連語15、旧folder50/reader105を今回は再実行していない。旧実測は[前回記録](native-folder-reader-validation.md)の履歴として維持。
+- **最終Windows x64 SelfContained Release PASS30.66秒 /0error/既存IL2104 2warnings（抑制なし）**。`--no-restore`。app refsのScrollViewer/KeyboardAccelerator/PreviewKeyDown/InputKeyboardSource/BitmapImage APIとGalleryを確認。構文/diff/手動WinUI review通過。専用WinUI analyzer未導入/未実行。hardcoded日本語は既存MVPに準じ、国際化は未完了。AOT/MSIX配布試験ではない。
+- **image-viewer-navigation-03 PASS88 checks /実入力30/skip0/20PNG全個別目視**。Light/Dark、1200×820/700×620、左右（viewport/Close focus）、端、破損から戻る、1件query scope、中央fitの実寸、zoom/scroll、retry/503、loading移動cancel/閉じるcancel、late response排除、dirty保持、Ctrl+S/F background抑止、Esc/opener復帰、単一page CBZ入口回帰。正常close2、cleanup warnings 0。物理キーskipはこのrunの値を正とする。
+- 失敗/中間履歴：基本形native01 **FAIL15/3PNG/実入力0/skip3**（Windows foreground拒否後、runnerのopener focus要求で停止）；基本形native02 **PASS56/12PNG/実入力14/skip0/owned termination fallback2**。追加navigation01 **FAIL17/2PNG/実入力1/skip0/fallback1**（RightがScrollViewerで消費；footer案内切れも目視）；navigation02 **PASS86/20PNG/実入力30/skip0/正常close2/warning0**（画像が左寄りなので中央fitを追加）。すべてのsaved PNGを個別目視。基本形3+12、追加2+20+20＝**57PNG**。画像送りの追加要求は別の新機能batchとして実施、最後は2度目の修正後runで終了。以後のGUI変更を自動保証しない。
+- 全runでgenerated4fileのbytes/mtime/hash不変。最終settings bytes不変、AI inference/worker0。ユーザー素材scan/変更/外部送信、model/依存取得、GPU/OS設定変更、CI dispatch0。保存PNG/DB/設定/モデルはGit対象外。
+
+### 残る境界と次の3手
+
+1. **動画thumbnail**：既存PATHのffmpeg/ffprobe利用可否を実行確認し、生成videoだけで時間/並列/出力/cacheを制限する代表frame取得を実装。元動画を変更しない。無断導入しない。
+2. **動画再生の基本形**：native play/pause/seek/volumeと非対応案内、生成videoの形式別検証。現時点では未実装。
+3. **閲覧の残gateを小分けに**：画像送りのpageまたぎ・全画面・元解像度/大画像対応の設計、画像viewer高DPI/Contrast/Narrator/Tab/修飾左右/横長・透明・各形式確認、reader zoom/直接Reopen/実JSON pickerなど。現在の左右送りは当該page内に限定。GIF等は静止表示、SVG/PDFは入口対象外。
+
+大規模1TB/数万件負荷、実素材品質、検索confidence校正は未評価。モデル/AI検索順位変更なし。自動候補境界は正解率ではない。全文OCR/動画音声内容索引/フォルダ本/Komga/全体のvisual刷新/installerは後続。
+
+---
+
 ## 最新：フォルダ設定gate通過・読書画面の修正と実機確認（2026-10-14 続き）
 
 開始HEAD **ff87f99a35f4027dc172d9d3d1e0f837a1a22038**。AGENTS/vision/design/両handoff/Issue4/既存Draft PR5を確認。同じ製品branch/baseを継続。実装commit **83851e1b7582772695786ee1376c046cb1ed1963**。続く記録commitでこのSHAを保存し、最終HEADはGit/PRを正とする。
