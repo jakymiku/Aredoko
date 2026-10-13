@@ -1,5 +1,24 @@
 # Aredoko — GPTチャットへの最新引継ぎ
 
+## 最新：WinUI読書画面の接続候補・ローカル回帰確認（2026-10-13）
+
+開始remote HEAD **2542aa701451b0f41f041944f0c2bdadf322d238**。同じfeature/Draft PR #5/comparison base。ユーザーは残り使用量5%まで継続改善し引継ぎを残すよう依頼したが、使用量残率を取得する機能がないため5%到達を判定できない。変更ごとのcheckpointを残す。**CIは必要時だけ**という追加指示を保持し、今回CI起動0回・workflow変更なし。
+
+- 詳細の「本を開く（CBZ / ZIP）」からmodal読書画面を開く実装を追加。presentかつ対応拡張子だけ有効。タグの未保存draftは保存/破棄せず保持、既存transition/dialog guardで同時操作を抑止。前/次・ページ数・再試行・明示的な開き直し・拡大scroll・閉じるを実装。
+- C#のArchiveReaderClientは既存loopback/sessionを共有。reflection-free manifest検証、item ID/revision/page範囲、JSON4KiB/画像8MiB/Content-Type/Content-Length/受信長、bodyを含む40秒deadlineを検査。409/403はreader manifestを無効化、404は壊れたページを飛ばして前後へ移動可能、503は明示retry。自動retryやprefetchなし。
+- 読書画面は1要求ずつ。閉じるとHTTP cancel・保持画像破棄、decode後もキャンセル/作品/pageを検査。既存codecを再利用し入力16M画素/8MiB・読書画像長辺2048pxに制限。旧thumbnailは既定256pxのまま。保存cache/展開なし。TextBlockの動的読み上げ名を固定しない。
+- **全Python168 tests PASS /17.242秒/skip0**（既存155＋reader13）。取得した追加53ファイルはGit blob SHAでupstream byte一致を確認。最初のfull runはsnapshot転送時にfixture末尾改行が増えてhash guard5件が失敗した。upstreamと同一byteへ直した再実行が168PASS。テスト/fixtureの期待hashを変更していない。setup系のモデル保存メッセージはmock試験出力であり実モデル取得なし。
+- **Windows Release/Core C# tests/native GUIは未実行・未合格。** このLinux環境に.NETなし。追加C#契約テストはソース作成のみ。XAML well-formedとgit diff checkはPASSだがコンパイル/WinUI動作の代替ではない。新読書画面のレイアウト/フォーカス/実decoder/高DPI等は検証待ちで、製品完成と扱わない。詳細は[archive-reader.md](archive-reader.md)。
+- 既存resize自動open保持は未変更。モデル/順位/Laya/依存/OS/個人設定/私物/CI workflow変更なし。Draft未マージ。GitHubの元tree/parentへ変更ファイルだけをfast-forward適用し、部分snapshotのローカル履歴はpushしない。
+
+### 次の3手
+
+1. WindowsでCore契約testsとx64 SelfContained Release buildを実行。新readerのLight/Dark・幅700/1200・前後/破損/409/close中断/未保存タグ保持を生成fixtureで確認。未検証コードを合格扱いしない。
+2. archive名の自然順・境界条件を追加レビューし、必要なPython回帰だけで改善する。CIはローカルで確認できない必要なgateに限る。
+3. resize/open-stateと高DPI/Contrast/Narratorは実機で独立確認。フォルダ本/Komga/見開き/読書位置保存は別段階。
+
+---
+
 ## 最新：CBZ/ZIPページ閲覧APIの最小実装（2026-10-13）
 
 開始時のremote HEAD **8fddcfae19a309ff4a9561d691ee97bbb6b85bcb**、同じ `feat/winui3-production-mvp-20261011` / Draft PR #5 / comparison base。AGENTS・Issue #4・PR・両handoff最新節・ai-resource-policyを確認。今回の環境はLinuxでWindows/.NETなし。Gitの直接clone認証は利用できず、GitHub接続から固定SHAの必要ファイルを取得した部分snapshotで検証した。ローカル検証用git履歴をupstreamへpushしない。変更する6ファイルだけを元のremote tree/parentへ適用し、expected head付きのfast-forwardで反映する。提出SHAはPRで確認。

@@ -26,7 +26,7 @@
       <TextBlock x:Name="ItemTitle" Text="作品を選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap"/>
       <TextBlock x:Name="ItemPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
       <Image x:Name="DetailPreview" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
-      <TextBlock Text="読書機能は準備中" Style="{StaticResource CaptionTextBlockStyle}"/>
+      <Button x:Name="OpenBook" Content="本を開く（CBZ / ZIP）" IsEnabled="False" Click="OpenBook_Click" AutomationProperties.AutomationId="BtnOpenBook"/>
 
        <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
        <TextBox x:Name="Shelf" Header="棚" MaxLength="80" TextChanged="Editor_Changed" AutomationProperties.Name="棚" AutomationProperties.AutomationId="TxtShelf"/>

@@ -7,8 +7,9 @@ namespace Aredoko_WinUI;
 // Uses built-in Windows codecs; all output is a derived, bounded PNG in memory.
 internal static class ThumbnailCodec
 {
-    public static async Task<byte[]> ResizeAsync(byte[] source, CancellationToken cancellation)
+    public static async Task<byte[]> ResizeAsync(byte[] source, CancellationToken cancellation, int edge = PreviewPolicy.Edge)
     {
+        if (edge < 1 || edge > PreviewPolicy.ReaderEdge) throw new ArgumentOutOfRangeException(nameof(edge));
         if (source.Length > PreviewPolicy.MaxSourceBytes) throw new InvalidDataException("Preview source too large");
         using var input = new InMemoryRandomAccessStream();
         using (var writer = new DataWriter(input))
@@ -19,7 +20,7 @@ internal static class ThumbnailCodec
         cancellation.ThrowIfCancellationRequested();
         var decoder = await BitmapDecoder.CreateAsync(input);
         PreviewPolicy.ValidateDimensions(decoder.PixelWidth, decoder.PixelHeight);
-        var scale = Math.Min(1, (double)PreviewPolicy.Edge / Math.Max(decoder.PixelWidth, decoder.PixelHeight));
+        var scale = Math.Min(1, (double)edge / Math.Max(decoder.PixelWidth, decoder.PixelHeight));
         var transform = new BitmapTransform
         {
             ScaledWidth = Math.Max(1, (uint)Math.Round(decoder.PixelWidth * scale)),
@@ -44,3 +45,4 @@ internal static class ThumbnailCodec
         return result;
     }
 }
+

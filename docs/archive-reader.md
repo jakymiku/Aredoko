@@ -1,0 +1,40 @@
+# CBZ / ZIP 読書画面
+
+2026-10-13。backend APIはPythonで検証済み。**WinUI接続コードとC#契約テストは作成済みだが、このLinux環境では.NET/Windowsがなく未ビルド・未実行。** 動作する製品版との宣言ではない。
+
+## 操作と境界
+
+- presentなCBZ/ZIPを選択し、詳細の「本を開く」から開始。未保存のタグ等はそのまま保持する。
+- 0始まりのAPI pageを1始まりで表示。前/次、再試行、最初から開き直す、拡大scroll、閉じる。目次・ページ直接指定・見開き・読書位置保存・フォルダ本・Komgaはまだない。
+- ページ変更開始時に旧画像を消す。404/codec失敗なら現在番号とエラーを残し、前後へ移動可能。409/403ならmanifestを無効化し古い番号では続行しない。409は閉じて再scan後に明示再openする。503は手動再試行。自動retryなし。
+- 1ページだけ保持。ページ要求は同時1本、終了でcancel、遅れて完了した応答/decoder結果を捨てる。thumbnailの永続cacheや展開ファイルは作らない。
+- JSON最大4KiB/画像8MiB/入力16M画素、読書表示用PNGは長辺2048px（旧thumbnailは256px）。原寸・全解像度表示ではない。decoderのメモリ/実画像品質はWindows検証待ち。
+- C#通信は既存session/tokenを使用。MIME・正のContent-Length・実受信長を検査し、bodyを含む40秒deadlineで終了。manifestのID/件数/revision/pageを検証。リフレクションserializerは使わない。
+
+## 今回実行した検証
+
+- Python全168件 PASS /17.242秒/skip0。既存155＋reader13。生成fixtureとfake encoder、実production HTTPを使うCPUテスト。実GPUやWindows試験ではない。
+- XAML XML構文とdiff空白チェックPASS。C#構文/type/WinUI runtimeの検証ではない。
+- C#の追加ArchiveReaderTestsはmanifest/対象拡張子/固定route/認証header/ページ範囲/エラー分類/受信長/MIME/cancelを検査するソース。未実行なので合格数を記さない。
+- snapshot取得時の余分な末尾改行による最初のfixture hash guard失敗を、upstream blob一致の復元で解消。期待hashは変更せず再実行。CI起動0回。
+
+## Windowsでの次のgate
+
+既存依存を使い、通常の作業branchをpullしてから:
+
+```powershell
+dotnet run --project tests/Aredoko.Core.Tests -c Release
+dotnet build src/Aredoko.WinUI -c Release -p:Platform=x64 -p:SelfContained=true
+```
+
+既存起動スクリプトと**専用DB/settings・生成CBZ/ZIPのみ**で、次の操作を確認する。私物のscanや個人設定の変更はしない。GUIを起動しただけで合格にしない。
+
+1. page2/page10を持つCBZ/ZIPで自然順、最初/最後の前後disabled、ページ番号/画像一致を確認。Light/Dark、幅1200/700、高さ620を撮影してfooterとエラーが読めるか確認。
+2. タグを未保存にしてreaderを開閉し、値とdirty状態を保持。Ctrl+S/検索/別dialogがreaderの背後で実行されないことを確認。閉じる/Esc/Tabでフォーカスが戻るか確認。
+3. 読めない2ページ目で旧画像が残らず、3ページ目へ進めることを確認。元ファイルをfixture内で変更し409、再scan/reopenで新manifestになることを確認。
+4. 応答を遅延したfixtureで閉じる→別作品を開き、古い画像が現れないことを確認。キャンセル/タイムアウト/503/認証切れを区別する。
+5. fixture元bytes/mtime/hash・注釈・settingsを比較し、所有プロセスを終了。Windowsでのdecode/メモリ/keyboard/実スクリーンショット結果を追記。
+
+AutomationIds: BtnOpenBook / ArchiveReaderDialog / ReaderViewport / ReaderImage / ReaderPageNumber / ReaderStatus / ReaderPrevious / ReaderNext / ReaderRetry / ReaderReopen。
+
+CIは必要時だけ。上記をローカルで通せる場合は不要。新workflowや反復dispatchで代替しない。

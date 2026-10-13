@@ -6,6 +6,10 @@ namespace Aredoko.Core;
 public sealed class LibraryApi : IDisposable
 {
     private readonly HttpClient client = new() { BaseAddress = new Uri("http://127.0.0.1:8769/"), Timeout = TimeSpan.FromSeconds(40) };
+    public Task<ArchiveManifest> ReaderManifestAsync(int id, CancellationToken cancellation) =>
+        new ArchiveReaderClient(client).ManifestAsync(id, cancellation);
+    public Task<byte[]> ReaderPageAsync(ArchiveManifest manifest, int page, CancellationToken cancellation) =>
+        new ArchiveReaderClient(client).PageAsync(manifest, page, cancellation);
     public async Task ConnectAsync() {
         using var doc = JsonDocument.Parse(await client.GetStringAsync("api/session"));
         if (doc.RootElement.GetProperty("mode").GetString() != "production") throw new InvalidOperationException("製品用APIではありません。start-winui.ps1から起動してください。");
@@ -53,3 +57,4 @@ public sealed class LibraryApi : IDisposable
     }
     public void Dispose()=>client.Dispose();
 }
+

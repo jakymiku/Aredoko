@@ -5,6 +5,7 @@ public static class PreviewPolicy
     public const int MaxSourceBytes = 8 * 1024 * 1024;
     public const long MaxPixels = 16_000_000;
     public const int Edge = 256;
+    public const int ReaderEdge = 2048;
     public const int CacheEntries = 64;
 
     public static void ValidateDimensions(uint width, uint height)
@@ -40,3 +41,4 @@ public sealed class BoundedLru<TKey, TValue> where TKey : notnull
     }
     public void Clear() { entries.Clear(); order.Clear(); }
 }
+

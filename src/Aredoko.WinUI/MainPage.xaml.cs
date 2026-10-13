@@ -19,6 +19,7 @@ public sealed partial class MainPage : Page
     private readonly ThumbnailService thumbnails;
     private CancellationTokenSource renderCancellation = new();
     private CancellationTokenSource? detailCancellation;
+    private ArchiveReaderView? readerView;
     private List<MediaRow> rows=[];
     private MediaRow? active;
     private EditorState saved;
@@ -185,7 +186,7 @@ public sealed partial class MainPage : Page
         }finally{transitions.Release();}
     }
     private void RestoreSelection(){populating=true;Items.SelectedIndex=active is null?-1:rows.FindIndex(r=>r.Id==active.Id);populating=false;}
-    private void UpdateDirty(){if(!ready)return;EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;}
+    private void UpdateDirty(){if(!ready)return;EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);}
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
     public async Task<bool> ConfirmDiscardAsync() {
@@ -273,6 +274,32 @@ public sealed partial class MainPage : Page
     }
     private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=tiles?"リスト表示":"グリッド表示";RenderRows();RestoreSelection();}
     private void OpenDetails_Click(object sender,RoutedEventArgs e){if(active is not null)Details.IsPaneOpen=true;}
+    private async void OpenBook_Click(object sender,RoutedEventArgs e)
+    {
+        if(active is null||!ArchiveManifest.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        // Opening a book neither saves nor discards the current metadata draft.
+        dialogOpen=true;searchTimer.Stop();
+        var root=XamlRoot;
+        void Fit(XamlRoot sender,XamlRootChangedEventArgs args)=>readerView?.FitViewport(sender.Size);
+        try
+        {
+            var reader=new ArchiveReaderView(api,active.Id);readerView=reader;
+            reader.FitViewport(root.Size);root.Changed+=Fit;
+            var dialog=new ContentDialog {XamlRoot=root,RequestedTheme=ActualTheme,Title=active.Title,
+                Content=reader,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
+            dialog.Resources["ContentDialogMaxWidth"]=960d;
+            AutomationProperties.SetAutomationId(dialog,"ArchiveReaderDialog");
+            dialog.Opened+=async(_,_)=>await reader.OpenAsync();
+            dialog.Closing+=(_,_)=>reader.Dispose();
+            await dialog.ShowAsync();
+        }
+        catch(Exception ex){Failure(ex);}
+        finally
+        {
+            root.Changed-=Fit;readerView?.Dispose();readerView=null;dialogOpen=false;transitions.Release();
+            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+        }
+    }
     private async void CloseDetails_Click(object sender,RoutedEventArgs e)=>await CloseDetailsAsync();
     private async void Detail_KeyDown(object sender,KeyRoutedEventArgs e)
     {
@@ -551,5 +578,6 @@ public sealed partial class MainPage : Page
         finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
     }
 
-    public void Stop(){renderCancellation.Cancel();detailCancellation?.Cancel();disposed=true;searches.Next();searchTimer.Stop();api.Dispose();}
+    public void Stop(){renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();disposed=true;searches.Next();searchTimer.Stop();api.Dispose();}
 }
+

@@ -2,7 +2,7 @@
 
 ## 製品MVP：読み取り専用CBZ/ZIPページAPI（2026-10-13）
 
-WinUIの読書画面はまだ未接続。登録・索引済みitem IDだけを受け付け、元ファイルや展開ファイルを書き込まない。GETはHost検証とX-Aredoko-Token必須、応答はCache-Control: no-store。
+WinUI読書画面への接続実装を追加（Windowsビルド/実GUIは未検証、[確認手順](archive-reader.md)）。登録・索引済みitem IDだけを受け付け、元ファイルや展開ファイルを書き込まない。GETはHost検証とX-Aredoko-Token必須、応答はCache-Control: no-store。
 
 | GET | 応答 |
 | --- | --- |
