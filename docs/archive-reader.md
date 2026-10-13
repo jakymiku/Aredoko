@@ -1,5 +1,7 @@
 # CBZ / ZIP 読書画面
 
+> 2026-10-13後続：Linux sandboxへ.NET SDK 10.0.401を導入し、reader契約を含むC# Core **81 checks PASS**（readerは今回初めて実ビルド・実行）。`tools/compile_check_winui.py`でWindows App SDK 2.5.1参照の**C#のみのコンパイルPASS**（`ArchiveReaderView.cs`/`MainPage.xaml.cs`含む、0 error）。XAMLコンパイル・Windows Release・native操作は**引き続き未検証**。以下の「未ビルド」は当時の記録。
+
 2026-10-13。backend APIはPythonで検証済み。**WinUI接続コードとC#契約テストは作成済みだが、このLinux環境では.NET/Windowsがなく未ビルド・未実行。** 動作する製品版との宣言ではない。
 
 ## 操作と境界

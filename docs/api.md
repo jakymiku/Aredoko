@@ -1,5 +1,10 @@
 # 共通API（操作試作 v0）
 
+## 製品MVP：文字検索の正規化・複数語AND・関連語辞書（2026-10-13）
+
+`GET /api/items?q=` は語ごとのAND・NFKC/大小/かな正規化になり、ユーザー辞書の展開があった時だけ`expansions`と各item`match`を返す。辞書は`GET /api/library/terms`、`POST /api/library/terms`、`POST /api/library/terms/delete`。詳細・制限・未検証範囲は[related-terms.md](related-terms.md)。最新全Python195件PASS（Linux）。
+
+
 ## 製品MVP：読み取り専用CBZ/ZIPページAPI（2026-10-13）
 
 WinUI読書画面への接続実装を追加（Windowsビルド/実GUIは未検証、[確認手順](archive-reader.md)）。登録・索引済みitem IDだけを受け付け、元ファイルや展開ファイルを書き込まない。GETはHost検証とX-Aredoko-Token必須、応答はCache-Control: no-store。
@@ -19,7 +24,7 @@ revisionはfile identity・size・mtime・ctimeから作る変更検出tokenで�
 
 ZipFile構築前にZIP64 locatorを拒否し、central directoryの固定headerを走査して実件数/申告件数一致と可変長field境界を確認。entry内のZIP64 sentinel/multidiskも拒否する。件数やサイズの自己申告だけを信用してZipInfoを生成しない。
 
-生成素材での再現：`python -m unittest discover -s tests -p 'test_reader.py' -v`（16件）。ZIP preflight7件は`test_zip_limits.py`、旧preview12件・production6件も同じ形式で実行。最新全Python178件PASS。Windows native/GPU検証ではない。
+生成素材での再現：`python -m unittest discover -s tests -p 'test_reader.py' -v`（16件）。ZIP preflight7件は`test_zip_limits.py`、旧preview12件・production6件も同じ形式で実行。当時の全Python178件PASS（最新は上記節）。Windows native/GPU検証ではない。
 
 ## 既存のデモAPI
 

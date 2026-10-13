@@ -1,5 +1,44 @@
 # Aredoko — Codex向け開発引継ぎ（2026-10-11）
 
+## 最新：文字検索の正規化・複数語AND・関連語辞書、Linux C#検証（2026-10-13）
+
+開始HEAD **dd31e6385932f439a9bf48435fa3022e0dfbdf59**（clean、同じ`feat/winui3-production-mvp-20261011`/Draft PR #5/base `feat/gui-framework-comparison-20261010`）。AGENTS→vision→agent-start→両handoff最新節→Issue #4/PR #5を確認。PR #6（ビジョン）は取り込み済みのため再取込みなし。今回の環境は**Linux sandbox**（Windows/GPUなし）。GitHub接続で直接clone・通常pushが可能になり、以前の部分snapshot方式は不要。**CI起動0回・workflow変更なし**、main/他PR無変更、force push・branch削除なし。
+
+### 実装したこと（コミット順）
+
+1. `0d665e2` **Linux用C#のみWinUIコンパイル検査** `tools/compile_check_winui.py`：XAMLの`x:Name`から型付きfield stubを生成し、Windows App SDK 2.5.1参照で`data/`配下（ignored）にだけbuild。XAML markup・binding・資源・event配線・packaging・実行時は**検証しない**。故意の型/名前誤りでFAILすることを確認済み。stub生成の回帰3件。
+2. `97b9b72` **文字検索の正規化と複数語AND**（`app/search_terms.py`）：NFKC＋casefold＋カタカナ→ひらがな、空白区切りの全語AND（語順不問、上限16語）。旧来のLIKE連続一致は通常そのまま一致（上位集合）。デモ`Catalog`は不変。
+3. `e942298` **ユーザー関連語辞書**（`app/term_relations.py`、DB表`term_relations`）：見出し語/別名/関連語。検索語ごとにOR候補を追加するだけで元の語・フィルターは保持。直接一致を先に並べ、関連語だけの一致は`match:"related"`、展開内容は`expansions`で返す。1語の候補256表記まで、入力語の多くに関係する見出しを優先し超過は`truncated`で開示。API `GET/POST /api/library/terms`、`POST /api/library/terms/delete`（既存token/Origin保護）。
+4. `2e4bcfa` WinUI client：Protocolに`Expansions`/`Match`を追加（reflectionなし）。一覧の「関連語の候補 ·」表示と、文字検索案内に追加語（1語3表記＋「ほか」）を表示。
+5. `3435dd9` WinUI「関連語」ボタンとdialog（`RelatedTermsEditor.cs`、C#契約`RelatedTerms.cs`）。既存の`transitions`/`dialogOpen`ガード、未保存draftがあるときは閉じた後の再検索をしない。
+6. 文書：[related-terms.md](related-terms.md)（新規）、api.md、archive-reader.md、両handoff、agent-start、PR #5説明。
+
+「東方 巫女」の評価シナリオ：辞書なしでは`東方`/`巫女`タグの作品だけ、辞書`博麗霊夢←東方、巫女`を登録すると博麗霊夢タグだけの作品が直接一致の次に出ることを生成fixtureで確認（`test_vision_case_tohou_miko_finds_reimu_after_direct_hits`）。**辞書はユーザーが登録する前提で、自動知識・AI精度の実証ではない。**
+
+### テスト結果（Linux sandbox）
+
+- `python -m unittest discover -s tests -q`：**195 tests PASS**（178＋compile stub3＋search_terms6＋term_relations8）。注意：sandboxのHTTP(S)_PROXY環境変数があると既存HTTPテスト13件が404/接続エラーで落ちるため、`NO_PROXY=127.0.0.1,localhost`で実行。製品コードの問題ではない。
+- `dotnet run --project tests/Aredoko.Core.Tests -c Release`：**81 checks PASS**（.NET SDK 10.0.401をsandbox内の作業フォルダにだけ導入。ユーザーPCには何も入れていない）。以前「未ビルド」だったreader C#契約テストも今回初めて実行・PASS。Core build 0 warning。
+- `python tools/compile_check_winui.py`：**exit 0、0 error/0 CS warning**（C#のみ）。`MainPage.xaml`はwell-formed確認のみ。
+- 生成5万件の2語検索 約0.30秒（count＋1ページ）、関連語300見出し時 約0.65秒（sandbox単発、Windows/1TB/GUI込みは未測定）。
+- **未検証**：Windows x64 SelfContained Release、XAMLコンパイル、native GUI（関連語dialog・案内文・一覧表示・再検索、既存reader UI）、高DPI/Contrast/Narrator、実GPU。過去のWindows合格記録を今回の証拠に流用しない。
+
+### 残課題
+
+- 上記Windows/native検証一式。resize時の詳細pane自動保持は未修正のまま。
+- 関連語辞書はAI混合/意味検索には未接続（文字検索のみ）。JSON import/export、作品の自動関連知識は未実装（自動DL・同梱なし）。
+- 「東方 巫女」を固定評価セットに組み込んだRecall@k/MRR比較は未実施。
+
+### 次の3手
+
+1. Windowsで`dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64`とCore tests、生成fixtureで「関連語」dialog保存→「東方 巫女」検索→「関連語の候補」表示・draft保持、reader UIのnative確認（[related-terms.md](related-terms.md)、[archive-reader.md](archive-reader.md)）。
+2. 生成素材の固定評価セットに「東方 巫女」型シナリオ（名前・タグ完全一致なし）を追加し、文字/辞書あり/AI混合のRecall@k・MRRを比較。
+3. 辞書をAI混合検索の文字側根拠として扱う設計（フィルター優先・根拠表示）と、ユーザー明示のJSON import/export。
+
+Linux環境の再現：.NETがない場合は公式`dotnet-install.sh --channel 10.0 --install-dir <作業用>`をsandbox内だけで使い、PATHを通してから上記コマンド。HTTPテストは`NO_PROXY`を設定。
+
+---
+
 ## 最新：プロダクトビジョンとAI入口を作業ブランチへ統合（2026-10-13）
 
 開始remote HEAD **2ceafafa81a21e3eb8f97aa4e80678d1903d86c2**。ビジョン作成branch `docs/product-vision-20261013` の **14660b644d013be48e528743203b85bab420eceb** を固定して確認。ユーザーの「他のAIへAGENTS.mdを読ませれば目的が伝わるよう整理」の依頼で、docs/product-vision.mdを**本文変更なし**で製品作業ブランチへ選択的に取り込む。別branchのコード・過去handoffを丸ごとmergeしない。
