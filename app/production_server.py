@@ -114,6 +114,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                             'error':'登録が見つからないフォルダがあります。対象を選び直してください。' if missing else ''})
                     except (ValueError,OSError,json.JSONDecodeError):
                         return self.send(409,{'error':'AI対象設定を読み込めません。対象を選び直して保存してください。文字検索は利用できます。'})
+                if path=='/api/library/terms': return self.send(200,{'items':catalog.terms.entries()})
                 if path=='/api/library/roots': return self.send(200,{'items':catalog.index.roots()})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
@@ -188,6 +189,13 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                 if self.path=='/api/library/ai/search':
                     scope_args={'scope':validate_scope(body['scope'])} if 'scope' in body else {}
                     return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking'),**scope_args))
+                if self.path=='/api/library/terms':
+                    try: return self.send(200,{'entry':catalog.terms.upsert(body)})
+                    except ValueError as ex: return self.send(400,{'error':str(ex)})
+                if self.path=='/api/library/terms/delete':
+                    if set(body)!={'term'}: raise ValueError('Only term is accepted')
+                    try: return self.send(200,catalog.terms.delete(body['term']))
+                    except KeyError: return self.send(404,{'error':'Related-term entry not found'})
                 if self.path=='/api/library/roots':
                     if body.get('consent') is not True: raise ValueError('Explicit folder consent required')
                     return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'))})

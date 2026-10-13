@@ -14,16 +14,22 @@ substring match is normally also an all-terms match of the normalized text
 (rare NFKC composition edge cases at a substring boundary are the exception). This module is pure
 stdlib and never reads files or models.
 """
+import functools
 import unicodedata
 
 MAX_TERMS = 16
 _KATAKANA = {code: code - 0x60 for code in range(0x30A1, 0x30F7)}  # ァ..ヶ -> ぁ..ゖ
 
 
+@functools.lru_cache(maxsize=200_000)
+def _normalize(text):
+    return unicodedata.normalize('NFKC', text).casefold().translate(_KATAKANA)
+
+
 def normalize(text):
     if not isinstance(text, str):
         return ''
-    return unicodedata.normalize('NFKC', text).casefold().translate(_KATAKANA)
+    return _normalize(text)
 
 
 def split_terms(query):
@@ -34,6 +40,33 @@ def split_terms(query):
     return terms
 
 
-def register(db):
-    """Expose normalize() to SQLite as aredoko_norm(text) on this connection."""
-    db.create_function('aredoko_norm', 1, normalize, deterministic=True)
+def matcher(alternatives):
+    """SQLite scalar aredoko_match(title, tags) for one search.
+
+    alternatives: per query word, a list of normalized options (the word
+    itself first). Returns -1 when some word has no option in the title or
+    tags, otherwise how many words matched through the typed word itself
+    (used to rank direct hits before related-term candidates). Each row's
+    text is normalized once, whatever the number of words or options.
+    """
+    memo = {}
+
+    def match(title, tags):
+        key = (title, tags)
+        if key not in memo:
+            hay = normalize(title) + '\x1f' + normalize(tags)
+            direct = 0
+            for options in alternatives:
+                if options[0] in hay:
+                    direct += 1
+                elif not any(option in hay for option in options[1:]):
+                    direct = -1
+                    break
+            memo[key] = direct
+        return memo[key]
+    return match
+
+
+def register(db, alternatives):
+    """Expose this search's matcher to SQLite on this connection."""
+    db.create_function('aredoko_match', 2, matcher(alternatives), deterministic=True)

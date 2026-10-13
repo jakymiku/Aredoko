@@ -6,6 +6,7 @@ from pathlib import Path
 from catalog import Catalog
 from library_index import LibraryIndex, TYPES
 from search_terms import register as register_search_terms, split_terms
+from term_relations import TermRelations
 
 
 class ScanBusyError(ValueError):
@@ -23,6 +24,7 @@ class ProductionCatalog(Catalog):
                     raise ValueError('Use a separate production database, not the demo database')
         super().__init__(path)
         self.index = LibraryIndex(path)
+        self.terms = TermRelations(self.connect)
         with self.connect() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS production_marker(version INTEGER);
@@ -74,23 +76,40 @@ class ProductionCatalog(Catalog):
             raise ValueError('Invalid filter')
         if type(page) is not int or page<0 or not 1<=limit<=120 or len(query)>300:
             raise ValueError('Invalid paging')
-        where, values = ["l.status<>'excluded'"], []
-        # Every normalized word must appear in the title or tags (AND), so
-        # "巫女 東方", "東方　巫女", "ﾚｲﾑ" and "REIMU" variants still find a file.
-        for term in split_terms(query):
-            where.append("(instr(aredoko_norm(i.title),?)>0 OR instr(aredoko_norm(i.tags),?)>0)")
-            values.extend([term,term])
-        if kind:
-            where.append('i.kind=?'); values.append(kind)
-        where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],
-                      'shelf':["i.shelf<>''"],'all':[]}[view])
-        clause=self.JOIN+' WHERE '+' AND '.join(where)
+        terms=split_terms(query)
         with self.connect() as db:
-            register_search_terms(db)
+            # Every normalized word must appear in the title or tags (AND), so
+            # "巫女 東方", "東方　巫女", "ﾚｲﾑ" and "REIMU" variants still find a
+            # file. The user's related-term dictionary may add OR alternatives
+            # to a word; it never removes the word or relaxes the filters.
+            alternatives,expansions=self.terms.expand(terms,db)
+            where, values = ["l.status<>'excluded'"], []
+            if terms:
+                register_search_terms(db,alternatives)
+                where.append('aredoko_match(i.title,i.tags)>=0')
+            if kind:
+                where.append('i.kind=?'); values.append(kind)
+            where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],
+                          'shelf':["i.shelf<>''"],'all':[]}[view])
+            clause=self.JOIN+' WHERE '+' AND '.join(where)
             total=db.execute('SELECT count(*)'+clause,values).fetchone()[0]
-            rows=db.execute('SELECT '+self.FIELDS+clause+' ORDER BY i.id LIMIT ? OFFSET ?',
-                            values+[limit,page*limit]).fetchall()
-        return {'total':total,'page':page,'limit':limit,'items':[self.item(r) for r in rows]}
+            if expansions:
+                # Items matching the typed words themselves come before
+                # related-only candidates; ties keep the stable id order.
+                rows=db.execute(f'SELECT {self.FIELDS},aredoko_match(i.title,i.tags) AS direct_hits'+clause+
+                                ' ORDER BY direct_hits DESC, i.id LIMIT ? OFFSET ?',
+                                values+[limit,page*limit]).fetchall()
+            else:
+                rows=db.execute('SELECT '+self.FIELDS+clause+' ORDER BY i.id LIMIT ? OFFSET ?',
+                                values+[limit,page*limit]).fetchall()
+        items=[self.item(r) for r in rows]
+        result={'total':total,'page':page,'limit':limit,'items':items}
+        if expansions:
+            for item,row in zip(items,rows):
+                item.pop('direct_hits',None)
+                item['match']='direct' if row['direct_hits']==len(terms) else 'related'
+            result['expansions']=expansions
+        return result
 
     def get(self,item_id):
         with self.connect() as db:
