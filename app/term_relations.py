@@ -25,6 +25,7 @@ MAX_WORDS = 16          # aliases or related words per entry
 MAX_WORD_CHARS = 60
 EXPORT_FORMAT = 'aredoko-related-terms'
 MAX_IMPORT_BYTES = 16 * 1024 * 1024  # a full 2000-entry export fits
+PREFIX_MIN_CHARS = 2
 MAX_ALTERNATIVES = 256  # per query word, including the word itself
 
 SCHEMA = '''
@@ -165,18 +166,33 @@ class TermRelations:
         alternatives, report = [], []
         for word in terms:
             options, added, truncated = [word], [], False
-            # Alternative spellings of the word first, then related candidates.
-            for wanted in ('spelling', 'related'):
-                for keys, related, spellings in groups:
-                    if (word in keys) if wanted == 'spelling' else (word in related and word not in keys):
-                        for spelling in spellings:
-                            key = normalize(spelling)
-                            if key in options:
-                                continue
-                            if len(options) >= MAX_ALTERNATIVES:
-                                truncated = True
-                                continue
-                            options.append(key); added.append(spelling)
+            def take(spellings):
+                nonlocal truncated
+                for spelling in spellings:
+                    key = normalize(spelling)
+                    if key in options:
+                        continue
+                    if len(options) >= MAX_ALTERNATIVES:
+                        truncated = True
+                        continue
+                    options.append(key); added.append(spelling)
+            # 1. Exact spellings, then 2. headwords/aliases the word starts
+            # ("星灯り" for "星灯りの社"; at least two characters so a single
+            # kana or kanji does not pull in half the dictionary).
+            exact = [group for group in groups if word in group[0]]
+            prefix = [] if len(word) < PREFIX_MIN_CHARS else [
+                group for group in groups if word not in group[0]
+                and any(key.startswith(word) for key in group[0])]
+            for _, _, spellings in exact + prefix:
+                take(spellings)
+            # 3. Candidates related to the word or to any of its spellings, so
+            # an alias ("ほしあかり") reaches characters related to its
+            # headword ("星灯りの社"). This is one synonym step, not a chain
+            # through related words.
+            synonyms = {word}.union(*(group[0] for group in exact + prefix))
+            for keys, related, spellings in groups:
+                if related & synonyms and not keys & synonyms:
+                    take(spellings)
             alternatives.append(options)
             if added:
                 entry = {'term': word, 'added': added}

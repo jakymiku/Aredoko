@@ -72,6 +72,32 @@ class ExpansionTests(unittest.TestCase):
         self.assertEqual(self.titles(self.catalog.search('東方 巫女', view='favorites')), ['reimu_standing.png'])
         self.assertEqual(self.catalog.search('東方 巫女 立ち絵')['total'], 1)
 
+    def test_partial_headword_and_alias_reach_related_candidates(self):
+        self.catalog.terms.upsert(REIMU)
+        self.catalog.terms.upsert({'term': '東方Project', 'aliases': ['とうほう'], 'related': []})
+        # "東方Pro" is the start of a headword: expands like the headword itself.
+        alternatives, report = self.expand(['東方pro'])
+        self.assertIn('東方project', alternatives[0])
+        # An alias reaches entries related to its headword's other spellings
+        # only when the relation names one of them; 博麗霊夢 is related to 東方,
+        # which is not a spelling of 東方Project, so it is not added.
+        self.assertNotIn('博麗霊夢', report[0]['added'])
+        self.catalog.terms.upsert({'term': '東方', 'aliases': ['とうほう2'], 'related': []})
+        result = self.catalog.search('とうほう2 立ち絵')
+        self.assertEqual(self.titles(result), ['reimu_standing.png'])
+        self.assertEqual(result['items'][0]['match'], 'related')
+
+    def expand(self, words):
+        with self.catalog.connect() as db:
+            return self.catalog.terms.expand(words, db)
+
+    def test_single_character_does_not_prefix_expand(self):
+        self.catalog.terms.upsert(REIMU)
+        alternatives, report = self.expand(['博'])
+        self.assertEqual((alternatives, report), ([['博']], []))
+        alternatives, _ = self.expand(['博麗'])
+        self.assertEqual(alternatives[0][:2], ['博麗', '博麗霊夢'])
+
     def test_persist_update_delete_and_sources_untouched(self):
         self.catalog.terms.upsert(REIMU)
         self.catalog.terms.upsert({'term': '博麗霊夢', 'aliases': ['霊夢']})  # replace: no related words
