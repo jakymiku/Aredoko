@@ -44,7 +44,15 @@ def handler_for(catalog, token, benchmark_dist=None):
                 if url.path == '/api/session':
                     return self.send(200, {'token': token, 'mode': 'demo', 'stats': catalog.stats()})
                 if url.path == '/api/items':
-                    return self.send(200, catalog.search(param('q'), param('kind'), param('view', 'all'), int(param('page', '0'))))
+                    page = param('page', '0')
+                    if not (page.isascii() and page.isdigit()) or len(page) > 9:
+                        return self.send(400, {'error': 'Invalid paging'})
+                    try:
+                        return self.send(200, catalog.search(param('q'), param('kind'), param('view', 'all'), int(page)))
+                    except ValueError as error:
+                        # Search validation messages are fixed, user-facing
+                        # strings (e.g. too many words); pass them through.
+                        return self.send(400, {'error': str(error)})
                 if url.path.startswith('/api/items/'):
                     return self.send(200, catalog.get(int(url.path.rsplit('/', 1)[1])))
                 if benchmark_dist is not None and (url.path == '/bench/' or url.path.startswith('/bench/')):

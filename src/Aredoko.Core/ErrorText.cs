@@ -11,6 +11,7 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
+        ["Invalid request"] = "要求が無効です。",
         ["Invalid filter"] = "絞り込み条件が無効です。",
         ["Invalid paging"] = "検索条件が無効です（検索語は300文字まで）。",
         ["Expected term with optional aliases and related words"] = "関連語の形式が正しくありません。",
