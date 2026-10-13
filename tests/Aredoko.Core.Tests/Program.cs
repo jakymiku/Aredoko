@@ -72,3 +72,13 @@ Check(invalidMode,"invalid search mode cannot silently broaden retrieval");
 
 await ArchiveReaderTests.Run(Check);
 
+
+Check(RelatedTerms.SplitWords(" 霊夢、reimu,霊夢，Reimu　れいむ ").SequenceEqual(new[]{"霊夢","reimu","Reimu","れいむ"}),"related words split on Japanese and ASCII separators");
+Check(RelatedTerms.Validate("",[],["東方"])!=null&&RelatedTerms.Validate("博麗 霊夢",[],["東方"])!=null&&RelatedTerms.Validate("博麗霊夢",[],[])!=null,"related-term draft requires one headword and a word");
+Check(RelatedTerms.Validate("博麗霊夢",Enumerable.Range(0,17).Select(i=>$"w{i}").ToArray(),[])!=null&&RelatedTerms.Validate("博麗霊夢",[new string('a',61)],[])!=null,"related-term limits mirror API");
+Check(RelatedTerms.Validate("博麗霊夢",["霊夢"],["東方","巫女"]) is null,"valid related-term draft");
+var upsert=RelatedTerms.Upsert(" 博麗霊夢 ",["霊夢"],["東方","巫女"]);
+Check(upsert["term"]!.GetValue<string>()=="博麗霊夢"&&upsert["related"]!.AsArray().Count==2&&upsert.Count==3,"related-term upsert body");
+var deleteBody=RelatedTerms.Delete(" 博麗霊夢 ");Check(deleteBody.Count==1&&deleteBody["term"]!.GetValue<string>()=="博麗霊夢","related-term delete body");
+var termList=RelatedTerms.ParseList(System.Text.Json.Nodes.JsonNode.Parse("""{"items":[{"term":"博麗霊夢","aliases":["霊夢"],"related":["東方","巫女"]},{"term":"","aliases":[],"related":[]},{"term":"x"}]}""")!);
+Check(termList.Count==2&&termList[0].Summary=="博麗霊夢（別名: 霊夢） ← 東方、巫女"&&termList[1].Aliases.Length==0,"related-term list parsed defensively");

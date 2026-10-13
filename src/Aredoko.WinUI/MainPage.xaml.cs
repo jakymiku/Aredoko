@@ -378,6 +378,27 @@ public sealed partial class MainPage : Page
         finally{timer.Stop();dialogOpen=false;try{if(!disposed){renderCancellation.Cancel();thumbnails.Clear();await LoadAsync();}}finally{transitions.Release();}}
     }
 
+    private async void RelatedTerms_Click(object sender,RoutedEventArgs e)
+    {
+        // Same transition guard as the other dialogs; unsaved tag drafts stay
+        // in the editor because the dictionary never changes item metadata.
+        if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
+        dialogOpen=true;
+        try{
+            var editor=new RelatedTermsEditor(api);
+            await editor.LoadAsync();
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="関連語",Content=new ScrollViewer {Content=editor.Content,MaxHeight=Math.Max(160,ActualHeight-240)},CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
+            await dialog.ShowAsync();
+        }catch(Exception ex){Failure(ex);}
+        finally{
+            dialogOpen=false;
+            // Re-run a literal search so the list reflects the saved dictionary,
+            // but never while a tag draft is unsaved (reload would drop it).
+            try{if(!disposed&&!Dirty&&lastMode==0&&lastQuery.Length>0)await LoadAsync();}
+            finally{transitions.Release();}
+        }
+    }
+
     private async void AI_Click(object sender,RoutedEventArgs e)
     {
         if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
