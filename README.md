@@ -1,6 +1,8 @@
 # Aredoko
 
-> **最新（2026-10-14 夜）**：新しい固定検索評価v6を実行前に凍結し、余分な候補/正解なしの空回答も測定。通常検索APIに作品ごとの直接一致・関連語一致・欠落語を追加。順位・展開・fallbackは維持し、v6追加前後の72結果は同一。全Python **263 PASS / skip0**。根拠のWinUI表示とWindows検証は後続。[結果とAPI](docs/literal-search-v6.md)。
+> **最新（2026-10-14 Windows続行）**：語別検索根拠（`SearchEvidence`）のCore解析とWinUI一覧表示を実装し、Windows実機で**全Python 263 PASS / Core 157 PASS / x64 Release PASS**を確認。未完了だった**サムネイルdouble-click（`viewer-doubleclick-01` 22 checks PASS）**、**語別検索根拠＋引用符/バックスラッシュ/`[`タグ検索（`search-evidence-01` 30 checks PASS）**、**動画thumbnailのLight/Dark・SAR 8:9比率・503再試行・遅延取消（`video-native-01` 50 checks PASS）**をすべて実機完走・全PNG目視確認。[実機検証](docs/viewer-reader-validation.md)・[動画](docs/video-thumbnails.md)・[検索根拠](docs/literal-search-v6.md)。
+
+> **履歴（2026-10-14 夜）**：新しい固定検索評価v6を実行前に凍結し、余分な候補/正解なしの空回答も測定。通常検索APIに作品ごとの直接一致・関連語一致・欠落語を追加。順位・展開・fallbackは維持し、v6追加前後の72結果は同一。全Python **263 PASS / skip0**。根拠のWinUI表示とWindows検証は当時後続。[結果とAPI](docs/literal-search-v6.md)。
 
 > **履歴（2026-10-14 続行）**：引用符・バックスラッシュ入りタグの検索見落としとJSON構文による誤ヒットを修正。AI検索の文字一致根拠も共通化。動画thumbnailはSARの表示比率を保持し、作品/登録rootの過大IDを事前拒否。全Python **256 PASS / skip0**。Windows/.NET/nativeは当時未検証。[検索](docs/related-terms.md)・[動画](docs/video-thumbnails.md)・[handoff](docs/codex-handoff.md)。
 
@@ -31,7 +33,7 @@
 
 CBZ/ZIPの読書画面は、**生成本でLight/Darkのページ移動・破損/再試行・更新後の再open・キャンセル・未保存編集の保持をWindows実GUI確認済み**です。JSON picker、reader zoom等は引き続き未確認です。[読書画面の確認手順](docs/archive-reader.md)を参照してください。
 
-単体画像は詳細の「画像を大きく表示」から閲覧できます。← / →で現在の検索結果ページ内の画像だけを検索順に送り、拡大・スクロール・表示リセットも可能です。未保存編集は保持されます。[操作と制限](docs/image-viewer.md)。動画thumbnailは[backend実装・native接続ソース追加済み](docs/video-thumbnails.md)、Windows確認と動画再生は後続です。
+単体画像は詳細の「画像を大きく表示」またはサムネイルのダブルクリックから閲覧できます。← / →で現在の検索結果ページ内の画像だけを検索順に送り、拡大・スクロール・表示リセットも可能です。未保存編集は保持されます。[操作と制限](docs/image-viewer.md)。動画thumbnailは[Windows実機（Light/Dark）で確認済み](docs/video-thumbnails.md)、動画再生は後続です。
 
 全文OCR、動画/音声の内容索引、画像フォルダの論理作品化、Komga、読書位置保存、配布installerなどは後続です。読書の見開きはsession内で実装・確認済みです。Layaは実験的なopt-inで既定無効。実装状況と証拠は[開発handoff](docs/codex-handoff.md)・[チャットhandoff](docs/chat-handoff.md)・PRの最新記録を優先してください。
 
