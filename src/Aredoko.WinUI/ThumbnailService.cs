@@ -12,7 +12,7 @@ internal sealed class ThumbnailService(LibraryApi api)
 
     public async Task<BitmapImage?> GetAsync(MediaRow row, CancellationToken cancellation)
     {
-        if (row.Availability != "present" || (row.Kind != "image" && row.Kind != "book" && row.Kind != "archive")) return null;
+        if (row.Availability != "present" || (row.Kind != "image" && row.Kind != "book" && row.Kind != "archive" && row.Kind != "video")) return null;
         await workers.WaitAsync(cancellation);
         try
         {

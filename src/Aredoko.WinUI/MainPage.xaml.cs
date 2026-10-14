@@ -164,7 +164,7 @@ public sealed partial class MainPage : Page
                 text.Children.Add(new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] });
                 text.Children.Add(new TextBlock { Text = $"{row.MatchLabel}{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
                 if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
-                var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
+                var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
                 AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
                 text.Children.Add(previewStatus);
                 if (tiles)
@@ -193,7 +193,7 @@ public sealed partial class MainPage : Page
                         var bitmap = await thumbnails.GetAsync(row, cancellation);
                         if (cancellation.IsCancellationRequested || disposed) return;
                         image.Source = bitmap;
-                        previewStatus.Text = bitmap is null ? "プレビューなし" : row.Kind == "image" ? "画像プレビュー" : "先頭画像";
+                        previewStatus.Text = bitmap is null ? "プレビューなし" : row.Kind == "image" ? "画像プレビュー" : row.Kind == "video" ? "動画の先頭フレーム" : "先頭画像";
                     }
                     catch (OperationCanceledException) { }
                 };
