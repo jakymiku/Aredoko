@@ -12,6 +12,8 @@ public sealed class LibraryApi : IDisposable
         new ArchiveReaderClient(client).PageAsync(manifest, page, cancellation);
     public Task<byte[]> ImageAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ImageAsync(id, cancellation);
+    public Task<(byte[] Data, string Mime)> VideoAsync(int id, CancellationToken cancellation) =>
+        new ArchiveReaderClient(client).VideoAsync(id, cancellation);
     public async Task ConnectAsync() {
         using var doc = JsonDocument.Parse(await client.GetStringAsync("api/session"));
         if (doc.RootElement.GetProperty("mode").GetString() != "production") throw new InvalidOperationException("製品用APIではありません。start-winui.ps1から起動してください。");

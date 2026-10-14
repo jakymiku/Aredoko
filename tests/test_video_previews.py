@@ -209,6 +209,34 @@ class VideoBoundaryTests(unittest.TestCase):
                 with self.assertRaises(urllib.error.HTTPError) as caught: request('fixture-token')
                 self.assertEqual(caught.exception.code, expected); caught.exception.close()
 
+    def test_video_playback_route_enforces_auth_boundaries_and_rejects_playlists_or_changes(self):
+        image_path = self.media / 'still.png'; image_path.write_bytes(png())
+        playlist_path = self.media / 'list.mp4'; playlist_path.write_bytes(b'#EXTM3U\nhttp://127.0.0.1/a.ts\n')
+        self.catalog.index.scan(self.root); self.catalog.sync_index()
+        items = {x['title']: x['id'] for x in self.catalog.search()['items']}
+        server = ThreadingHTTPServer(('127.0.0.1', 0), production_handler(self.catalog, 'fixture-token'))
+        self.addCleanup(server.server_close); self.addCleanup(server.shutdown)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        def get_video(suffix, token='fixture-token'):
+            return urllib.request.urlopen(urllib.request.Request(
+                f'http://127.0.0.1:{server.server_port}/api/library/video/{suffix}',
+                headers={'X-Aredoko-Token': token}), timeout=5)
+        with self.assertRaises(urllib.error.HTTPError) as caught: get_video(self.item, 'wrong')
+        self.assertEqual(caught.exception.code, 403); caught.exception.close()
+        for bad in ('0', '-1', str(2**63), f'{self.item}?x=1', f'{self.item}/extra'):
+            with self.assertRaises(urllib.error.HTTPError) as caught: get_video(bad)
+            self.assertEqual(caught.exception.code, 400); caught.exception.close()
+        with get_video(self.item) as response:
+            self.assertEqual(response.headers['Content-Type'], 'video/mp4')
+            self.assertEqual(response.headers['Cache-Control'], 'no-store')
+            self.assertEqual(response.read(), b'generated placeholder')
+        for denied in (items['still.png'], items['list.mp4'], 999999):
+            with self.assertRaises(urllib.error.HTTPError) as caught: get_video(denied)
+            self.assertEqual(caught.exception.code, 404); caught.exception.close()
+        self.path.write_bytes(b'modified after scan')
+        with self.assertRaises(urllib.error.HTTPError) as caught: get_video(self.item)
+        self.assertEqual(caught.exception.code, 409); caught.exception.close()
+
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'Native FFmpeg tools unavailable')
 class NativeVideoTests(unittest.TestCase):

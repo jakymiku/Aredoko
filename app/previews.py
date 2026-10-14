@@ -17,8 +17,12 @@ from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_DIRECTORY_BYTES = 4 * 1024 * 1024
+MAX_PLAYBACK_BYTES = 64 * 1024 * 1024
 IMAGE_MIME = {'.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
               '.webp':'image/webp', '.gif':'image/gif', '.bmp':'image/bmp'}
+VIDEO_MIME = {'.mp4':'video/mp4', '.m4v':'video/mp4', '.mov':'video/quicktime',
+              '.webm':'video/webm', '.mkv':'video/x-matroska', '.avi':'video/x-msvideo',
+              '.wmv':'video/x-ms-wmv', '.ts':'video/mp2t'}
 
 class PreviewUnavailable(ValueError):
     pass
@@ -125,6 +129,9 @@ class PreviewReader:
     def read(self, item_id):
         return self._read(item_id)
 
+    def read_video(self, item_id):
+        return self._read(item_id, operation='video')
+
     def manifest(self, item_id):
         """Count naturally ordered archive pages without decompressing images."""
         return self._read(item_id, operation='manifest')
@@ -154,7 +161,10 @@ class PreviewReader:
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES:
                 raise PreviewUnavailable('Unsupported preview type')
-            if operation != 'preview' and suffix not in ('.cbz', '.zip'):
+            if operation == 'video':
+                if suffix not in VIDEO_MIME:
+                    raise PreviewUnavailable('Video player requires a supported video item')
+            elif operation != 'preview' and suffix not in ('.cbz', '.zip'):
                 raise PreviewUnavailable('Reader requires a CBZ or ZIP archive')
             initial = source.stat(follow_symlinks=False)
             with source.open('rb') as file:
@@ -167,10 +177,18 @@ class PreviewReader:
                     if operation != 'preview':
                         raise ReaderChanged('Rescan changed files before reading')
                     raise PreviewUnavailable('Rescan changed files before previewing')
-                current_revision = _revision(row, info) if operation != 'preview' else None
+                current_revision = _revision(row, info) if operation not in ('preview', 'video') else None
                 if revision is not None and revision != current_revision:
                     raise ReaderChanged('Archive changed; reopen the reader')
-                if suffix in VIDEO_SUFFIXES:
+                if operation == 'video':
+                    if info.st_size < 1 or info.st_size > MAX_PLAYBACK_BYTES:
+                        raise PreviewUnavailable('Video exceeds playback limit')
+                    data, mime = file.read(MAX_PLAYBACK_BYTES + 1), VIDEO_MIME[suffix]
+                    if len(data) < 1 or len(data) > MAX_PLAYBACK_BYTES:
+                        raise PreviewUnavailable('Video exceeds playback limit')
+                    if data.lstrip()[:16].upper().startswith((b'#EXTM3U', b'[PLAYLIST]', b'<ASX')):
+                        raise PreviewUnavailable('Playlist files are not played')
+                elif suffix in VIDEO_SUFFIXES:
                     if info.st_size > MAX_VIDEO_BYTES:
                         raise PreviewUnavailable('Video exceeds preview limit')
                     data, mime = self.videos.read(file, _revision(row, info)), 'image/png'
@@ -205,7 +223,7 @@ class PreviewReader:
                             with archive.open(entry) as image:
                                 data = image.read(MAX_IMAGE_BYTES + 1)
                             mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation != 'manifest' and len(data) > MAX_IMAGE_BYTES:
+                if operation not in ('manifest', 'video') and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
                 if suffix in VIDEO_SUFFIXES:

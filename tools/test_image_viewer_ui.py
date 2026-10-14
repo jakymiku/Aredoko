@@ -36,7 +36,7 @@ def focused_property(value):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');args=parser.parse_args();target=args.output.resolve()
+    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');args=parser.parse_args();target=args.output.resolve()
     if os.name!='nt':parser.error('Native Windows required')
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Evidence must stay in data/ai-ui')
     target.mkdir(parents=True,exist_ok=False)
@@ -71,16 +71,16 @@ def main():
         if hwnd:user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
         if hwnd and owner.value!=app_pid:
             hwnd=main_hwnd
-        if args and args[0]=='wait-for' and len(args)>1 and args[1] in ('ImageViewerDialog','ArchiveReaderDialog') and '--gone' in args:
-            title='画像ビューア' if args[1]=='ImageViewerDialog' else '読書画面'
+        if args and args[0]=='wait-for' and len(args)>1 and args[1] in ('ImageViewerDialog','ArchiveReaderDialog','VideoPlayerDialog') and '--gone' in args:
+            title='画像ビューア' if args[1]=='ImageViewerDialog' else ('動画再生' if args[1]=='VideoPlayerDialog' else '読書画面')
             for _ in range(50):
                 windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
                 if not any(title in w.get('title','') for w in windows):break
                 time.sleep(.1)
             else:raise RuntimeError('Owned viewer window did not close')
             hwnd=main_hwnd
-        if args and args[0]=='wait-for' and len(args)>1 and args[1] in ('ImageViewerDialog','ArchiveReaderDialog') and '--gone' not in args:
-            title='画像ビューア' if args[1]=='ImageViewerDialog' else '読書画面'
+        if args and args[0]=='wait-for' and len(args)>1 and args[1] in ('ImageViewerDialog','ArchiveReaderDialog','VideoPlayerDialog') and '--gone' not in args:
+            title='画像ビューア' if args[1]=='ImageViewerDialog' else ('動画再生' if args[1]=='VideoPlayerDialog' else '読書画面')
             for _ in range(50):
                 windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
                 matches=[w for w in windows if title in w.get('title','')]
@@ -136,8 +136,8 @@ def main():
             matches=[n for n in all_nodes if n.get('automationId')==identifier]
             check(phase+' accessible '+identifier,len(matches)==1 and bool(matches[0].get('name')))
             result.append({'id':identifier,'name':matches[0]['name'],'type':matches[0]['type']})
-        if phase.endswith('-viewer') or phase.endswith('-reader'):
-            prefix='Image' if phase.endswith('-viewer') else 'Reader'
+        if phase.endswith('-viewer') or phase.endswith('-reader') or phase.endswith('-video'):
+            prefix='Image' if phase.endswith('-viewer') else ('Video' if phase.endswith('-video') else 'Reader')
             outer=next(n for n in all_nodes if n.get('automationId')==prefix+'Viewport')
             close_node=next(n for n in all_nodes if n.get('automationId')==prefix+'Close')
             check(phase+' header is flush to image canvas top',0<=close_node['y']-outer['y']<=12)
@@ -199,9 +199,19 @@ def main():
         if args.evidence_only:
             (media/'broken.png').unlink();(media/'book.cbz').unlink()
             (media/'c.png').write_bytes(graphic({'background':'white','objects':[{'shape':'circle','color':'green','x':90,'y':120,'sx':40,'sy':40}]}))
+        if args.video_player_only:
+            ffmpeg=shutil.which('ffmpeg')
+            if not ffmpeg or not shutil.which('ffprobe'):raise RuntimeError('Native FFmpeg tools required for video player gate')
+            (media/'b.png').unlink();(media/'broken.png').unlink();(media/'book.cbz').unlink()
+            for name,color,codec,extra in [
+                ('clip.mp4','red','libx264',['-pix_fmt','yuv420p','-movflags','+faststart']),
+                ('clip.wmv','blue','wmv2',[]),
+                ('unsupported.mkv','green','ffv1',[])]:
+                subprocess.run([ffmpeg,'-nostdin','-v','error','-f','lavfi','-i',f'color=c={color}:s=320x180:d=2.0','-threads','1','-c:v',codec,*extra,str(media/name)],check=True,timeout=15)
+            (media/'broken.mp4').write_bytes(b'not a valid video')
         original=source_digest();expected_source=dict(original)
         catalog=ProductionCatalog(target/'catalog.sqlite');root=catalog.add_root(str(media));catalog.start_scan(root);catalog._worker.join(20)
-        expected_total=3 if args.evidence_only else (7 if args.video_and_evidence_only else (5 if args.reader_spread_only else 4))
+        expected_total=5 if args.video_player_only else (3 if args.evidence_only else (7 if args.video_and_evidence_only else (5 if args.reader_spread_only else 4)))
         check('Generated scan complete',catalog.scan_state()['state']=='complete' and catalog.search()['total']==expected_total)
         ids={x['title']:x['id'] for x in catalog.search()['items']}
         if args.evidence_only:
@@ -243,6 +253,10 @@ def main():
                     if faults.get('video_delay'):
                         faults['video_delay']=False;entered.set()
                         if not released.wait(25):return self.send(503,{'error':'Generated video delay timeout'})
+                if args.video_player_only and self.headers.get('X-Aredoko-Token')==token and self.path.startswith('/api/library/video/'):
+                    report.setdefault('video_requests',[]).append(self.path)
+                    if self.path=='/api/library/video/'+str(ids['clip.mp4']) and faults.get('video_play_code'):
+                        code=faults.pop('video_play_code');return self.send(code,{'error':'Generated video playback failure'})
                 try:return super().do_GET()
                 except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):report['cancelled_response_writes']=report.get('cancelled_response_writes',0)+1
         server.RequestHandlerClass=Quiet;thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -309,6 +323,58 @@ def main():
                 time.sleep(.1)
             if len(main)!=1:raise RuntimeError('Unique owned main unavailable')
             hwnd=main_hwnd=str(main[0]['hwnd']);ready();resize(1200,820);wait('TxtCount',f'{expected_total} 件')
+            if args.video_player_only:
+                report['audit_scope']='dedicated native video player window: play/pause/seek/volume/mute, MP4/WMV playback, unsupported MKV(FFV1) and corrupt MP4 guidance, 503 retry, 409 conflict, auto-hide/F10/Escape, and unsaved draft retention across Light/Dark and wide/narrow'
+                shown_video='動画を開きました。再生ボタンまたはスペースキーで再生できます。'
+                unsupported_video='この動画はWindowsの標準機能では再生できません。未対応の形式・コーデック、破損、または容量制限（64MBまで）を確認してください。'
+                def open_video():
+                    ui('inspect','BtnOpenVideo','--json');ui('invoke','BtnOpenVideo');ui('wait-for','VideoPlayerDialog','-t','5000')
+                    if not keys('f10','VideoViewport'):raise RuntimeError('Cannot reveal video controls with owned keyboard')
+                    ui('wait-for','VideoClose','-t','5000')
+                def close_video():
+                    physical=keys('esc','VideoClose')
+                    if not physical:ui('invoke','VideoClose')
+                    ui('wait-for','VideoPlayerDialog','--gone','-t','5000')
+                    return physical
+                select('a.png');prop('BtnOpenImage','IsEnabled','True');prop('BtnOpenVideo','IsEnabled','False');prop('BtnOpenBook','IsEnabled','False')
+                select('clip.mp4');ui('wait-for','DetailPreview','-t','10000')
+                prop('BtnOpenVideo','IsEnabled','True');prop('BtnOpenImage','IsEnabled','False');prop('BtnOpenBook','IsEnabled','False')
+                ui('set-value','TxtTags','video-draft');wait('TxtEditStatus','未保存の変更')
+                open_video();wait('VideoStatus',shown_video);wait('VideoTitle','clip.mp4');wait('VideoPosition','0:00 / 0:02')
+                audit(theme+'-video',('VideoViewport','VideoPlayPause','VideoSeekBack','VideoSeekForward','VideoMute','VideoVolumeDown','VideoVolumeUp','VideoRetry','VideoClose'))
+                shot(theme+'-video-opened-wide')
+                ui('invoke','VideoPlayPause');wait('VideoStatus','再生中');wait('VideoPlayPause','一時停止');check(theme+' video play starts playback',True)
+                ui('invoke','VideoPlayPause');wait('VideoStatus','一時停止中');wait('VideoPlayPause','再生');check(theme+' video pause stops playback',True)
+                ui('invoke','VideoSeekForward');wait('VideoPosition','0:01 / 0:02');prop('VideoSeekBack','IsEnabled','True');check(theme+' video seek forward advances position',True)
+                ui('invoke','VideoSeekBack');wait('VideoPosition','0:00 / 0:02');check(theme+' video seek back returns to start',True)
+                wait('VideoVolumeStatus','音量 80%')
+                ui('invoke','VideoVolumeDown');wait('VideoVolumeStatus','音量 60%')
+                ui('invoke','VideoVolumeUp');wait('VideoVolumeStatus','音量 80%')
+                ui('invoke','VideoMute');wait('VideoVolumeStatus','消音中（80%）');wait('VideoMute','消音解除')
+                ui('invoke','VideoMute');wait('VideoVolumeStatus','音量 80%');wait('VideoMute','消音')
+                check(theme+' video volume and mute controls update state',True)
+                if keys('ctrl+s','VideoClose'):check(theme+' video player blocks background save',catalog.get(ids['clip.mp4'])['tags']==[])
+                resize(700,620);shot(theme+'-video-narrow')
+                physical=close_video();wait('TxtTags','video-draft');wait('TxtEditStatus','未保存の変更')
+                check(theme+' video player retains unsaved tags',catalog.get(ids['clip.mp4'])['tags']==[])
+                if physical:focus_assert('BtnOpenVideo');check(theme+' video Escape restores opener focus',True)
+                ui('invoke','BtnCloseDetails');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready();resize(1200,820)
+                select('clip.wmv');open_video();wait('VideoStatus',shown_video);wait('VideoTitle','clip.wmv');wait('VideoPosition','0:00 / 0:02');check(theme+' WMV format opens natively',True);close_video()
+                wait('PreviewStatus'+str(ids['unsupported.mkv']),'動画の先頭フレーム')
+                select('unsupported.mkv');open_video();wait('VideoStatus',unsupported_video);wait('VideoPosition','—');prop('VideoPlayPause','IsEnabled','False');prop('VideoRetry','IsEnabled','True');shot(theme+'-video-unsupported');check(theme+' unsupported codec shows guidance while thumbnail works',True);close_video()
+                select('broken.mp4');open_video();wait('VideoStatus',unsupported_video);prop('VideoRetry','IsEnabled','True');check(theme+' corrupt video shows guidance',True);close_video()
+                select('clip.mp4');faults['video_play_code']=503;open_video();wait('VideoStatus','ほかのメディアを読み込み中です。少し待って再試行してください。');shot(theme+'-video-busy')
+                ui('invoke','VideoRetry');wait('VideoStatus',shown_video);wait('VideoPosition','0:00 / 0:02');check(theme+' video 503 manual retry succeeds',True);close_video()
+                faults['video_play_code']=409;open_video();wait('VideoStatus','ファイルが更新されました。閉じて再スキャンしてから、開き直してください。');wait('VideoPosition','—');check(theme+' video 409 conflict guidance',True);close_video()
+                select('clip.mp4');open_video();wait('VideoStatus',shown_video)
+                tree=json.loads(ui('inspect','--json','--depth','16'));outer=next(n for n in nodes(tree) if n.get('automationId')=='VideoViewport')
+                move_owned(outer,.15,'VideoViewport');ui('wait-for','VideoClose','--gone','-t','10000');shot(theme+'-video-controls-hidden')
+                move_owned(outer,.85,'VideoViewport');ui('wait-for','VideoClose','-t','5000');shot(theme+'-video-controls-revealed');check(theme+' video chrome hides and reappears with mouse motion',True)
+                move_owned(outer,.15,'VideoViewport');ui('wait-for','VideoClose','--gone','-t','10000')
+                if keys('esc','VideoViewport'):
+                    ui('wait-for','VideoPlayerDialog','--gone','-t','5000');focus_assert('BtnOpenVideo');check(theme+' video Escape closes while chrome is hidden',True)
+                else:raise RuntimeError('Hidden video Escape unavailable')
+                close();continue
             if args.evidence_only:
                 report['audit_scope']='per-row SearchEvidence (direct/related/missing), direct-only omission, dirty rollback, and quote/backslash/[ tag search across Light/Dark and wide/narrow'
                 def run_query(value,count):

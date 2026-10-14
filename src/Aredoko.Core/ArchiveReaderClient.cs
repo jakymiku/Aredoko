@@ -54,29 +54,39 @@ public sealed class ArchiveReaderClient(HttpClient client)
 {
     private static readonly HashSet<string> ImageTypes =
         ["image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp"];
+    private static readonly HashSet<string> VideoTypes =
+        ["video/mp4", "video/webm", "video/x-matroska", "video/x-msvideo", "video/quicktime", "video/x-ms-wmv", "video/mp2t"];
 
     public async Task<ArchiveManifest> ManifestAsync(int itemId, CancellationToken cancellation)
     {
         if (itemId < 1) throw new ArgumentOutOfRangeException(nameof(itemId));
-        var data = await ReadAsync($"api/library/reader/{itemId}", 4096, false, cancellation);
+        var (data, _) = await ReadMediaAsync($"api/library/reader/{itemId}", 4096, null, cancellation);
         return ArchiveManifest.Parse(data, itemId);
     }
 
-    public Task<byte[]> PageAsync(ArchiveManifest manifest, int page, CancellationToken cancellation)
+    public async Task<byte[]> PageAsync(ArchiveManifest manifest, int page, CancellationToken cancellation)
     {
         manifest.Validate();
         if (page < 0 || page >= manifest.PageCount) throw new ArgumentOutOfRangeException(nameof(page));
-        return ReadAsync($"api/library/reader/{manifest.ItemId}/pages/{page}?revision={manifest.Revision}",
-            PreviewPolicy.MaxSourceBytes, true, cancellation);
+        var (data, _) = await ReadMediaAsync($"api/library/reader/{manifest.ItemId}/pages/{page}?revision={manifest.Revision}",
+            PreviewPolicy.MaxSourceBytes, ImageTypes, cancellation);
+        return data;
     }
 
-    public Task<byte[]> ImageAsync(int itemId, CancellationToken cancellation)
+    public async Task<byte[]> ImageAsync(int itemId, CancellationToken cancellation)
     {
         if (itemId < 1) throw new ArgumentOutOfRangeException(nameof(itemId));
-        return ReadAsync($"api/library/preview/{itemId}", PreviewPolicy.MaxSourceBytes, true, cancellation);
+        var (data, _) = await ReadMediaAsync($"api/library/preview/{itemId}", PreviewPolicy.MaxSourceBytes, ImageTypes, cancellation);
+        return data;
     }
 
-    private async Task<byte[]> ReadAsync(string route, int limit, bool image, CancellationToken cancellation)
+    public Task<(byte[] Data, string Mime)> VideoAsync(int itemId, CancellationToken cancellation)
+    {
+        if (itemId < 1) throw new ArgumentOutOfRangeException(nameof(itemId));
+        return ReadMediaAsync($"api/library/video/{itemId}", VideoPlayerPolicy.MaxSourceBytes, VideoTypes, cancellation);
+    }
+
+    private async Task<(byte[] Data, string Mime)> ReadMediaAsync(string route, int limit, HashSet<string>? allowedTypes, CancellationToken cancellation)
     {
         // HttpClient's timeout ends at response headers with ResponseHeadersRead.
         // Keep a deadline through streaming, including a stalled response body.
@@ -86,7 +96,7 @@ public sealed class ArchiveReaderClient(HttpClient client)
         using var response = await client.GetAsync(route, HttpCompletionOption.ResponseHeadersRead, token);
         if (!response.IsSuccessStatusCode) throw new ArchiveReadException(response.StatusCode);
         var mime = response.Content.Headers.ContentType?.MediaType;
-        if (image ? mime is null || !ImageTypes.Contains(mime) : mime != "application/json")
+        if (allowedTypes is not null ? mime is null || !allowedTypes.Contains(mime) : mime != "application/json")
             throw new InvalidDataException("未対応のページ形式です。");
         if (response.Content.Headers.ContentLength is not long size || size < 1 || size > limit)
             throw new InvalidDataException("ページのデータ量が制限を超えています。");
@@ -101,6 +111,6 @@ public sealed class ArchiveReaderClient(HttpClient client)
         }
         if (output.Length != size) throw new InvalidDataException("ページを最後まで受信できませんでした。");
         token.ThrowIfCancellationRequested();
-        return output.ToArray();
+        return (output.ToArray(), mime!);
     }
 }

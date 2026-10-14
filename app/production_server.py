@@ -119,6 +119,23 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                         return self.send(404,{'error':'Preview unavailable'})
                     except ValueError:
                         return self.send(400,{'error':'Invalid item'})
+                if path.startswith('/api/library/video/'):
+                    try:
+                        match=re.fullmatch(r'/api/library/video/([1-9][0-9]{0,18})',path)
+                        if match is None or urlparse(self.path).query:
+                            raise ValueError('Invalid item')
+                        item=int(match[1])
+                        if item > 9223372036854775807: raise ValueError('Invalid item')
+                        data,mime=previews.read_video(item)
+                        return self.send(200,data,mime)
+                    except ReaderChanged:
+                        return self.send(409,{'error':'Archive changed; rescan and reopen the reader'})
+                    except PreviewBusyError:
+                        return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,RuntimeError,NotImplementedError):
+                        return self.send(404,{'error':'Preview unavailable'})
+                    except ValueError:
+                        return self.send(400,{'error':'Invalid item'})
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())

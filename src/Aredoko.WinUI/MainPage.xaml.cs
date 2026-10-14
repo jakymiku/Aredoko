@@ -21,6 +21,7 @@ public sealed partial class MainPage : Page
     private CancellationTokenSource? detailCancellation;
     private ArchiveReaderView? readerView;
     private ImageViewerView? imageViewer;
+    private VideoPlayerView? videoPlayer;
     private ViewerWindow? viewerWindow;
     private readonly ThumbnailClickTracker previewClicks=new();
     [System.Runtime.InteropServices.DllImport("user32.dll")]private static extern uint GetDoubleClickTime();
@@ -241,7 +242,7 @@ public sealed partial class MainPage : Page
         }finally{transitions.Release();}
     }
     private void RestoreSelection(){populating=true;Items.SelectedItem=active is null?null:Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==active.Id);populating=false;}
-    private void UpdateDirty(){if(!ready)return;EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);}
+    private void UpdateDirty(){if(!ready)return;EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);}
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
     public async Task<bool> ConfirmDiscardAsync() {
@@ -385,6 +386,28 @@ public sealed partial class MainPage : Page
         }
     }
     private async void OpenBook_Click(object sender,RoutedEventArgs e)=>await OpenBookAsync();
+    private async void OpenVideo_Click(object sender,RoutedEventArgs e)=>await OpenVideoAsync();
+    private async Task OpenVideoAsync()
+    {
+        if(active is null||!VideoPlayerPolicy.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        dialogOpen=true;searchTimer.Stop();var itemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
+        try
+        {
+            var player=new VideoPlayerView(api,active.Id,active.Title);videoPlayer=player;
+            var window=new ViewerWindow(player,"動画再生","VideoPlayerDialog");viewerWindow=window;
+            player.CloseRequested+=(_,_)=>window.Close();player.AttachNavigation(player);
+            window.Closed+=(_,_)=>player.Dispose();
+            await window.ShowAsync(player.OpenAsync);
+        }
+        catch(Exception ex){Failure(ex);}
+        finally
+        {
+            videoPlayer?.Dispose();videoPlayer=null;viewerWindow=null;dialogOpen=false;
+            try{if(!disposed&&detailsWereOpen&&active?.Id==itemId){Details.IsPaneOpen=true;OpenVideo.Focus(FocusState.Programmatic);}}
+            finally{transitions.Release();}
+            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+        }
+    }
     private async Task OpenBookAsync()
     {
         if(active is null||!ArchiveManifest.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
@@ -772,6 +795,6 @@ public sealed partial class MainPage : Page
         finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
     }
 
-    public void Stop(){disposed=true;viewerWindow?.Close();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
+    public void Stop(){disposed=true;viewerWindow?.Close();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
 }
 
