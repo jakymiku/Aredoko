@@ -27,6 +27,9 @@ from production_server import production_handler
 from previews import PreviewReader, PreviewUnavailable, PreviewBusyError
 import video_previews as video
 
+# Write raw bytes: print() in a Windows child translates "\n" to "\r\n".
+RAW_PRINT = 'import os, sys; sys.stdout.buffer.write(%s); sys.stdout.flush()'
+
 
 class VideoToolTests(unittest.TestCase):
     def test_probe_rejects_missing_invalid_multiple_or_huge_dimensions(self):
@@ -83,14 +86,14 @@ class VideoToolTests(unittest.TestCase):
     def test_bounded_output_kills_and_reaps_child(self):
         with self.assertRaisesRegex(video.VideoPreviewUnavailable, 'output exceeds'):
             self.run_child('import sys; sys.stdout.buffer.write(b"x"*1000000); sys.stdout.flush()')
-        self.assertEqual(self.run_child('print("ok")'), b'ok\n')
+        self.assertEqual(self.run_child(RAW_PRINT % 'b"ok\\n"'), b'ok\n')
 
     def test_deadline_kills_child_and_does_not_keep_a_worker(self):
         started = time.monotonic()
         with self.assertRaisesRegex(video.VideoPreviewUnavailable, 'deadline'):
             self.run_child('import time; time.sleep(60)', seconds=0.15)
         self.assertLess(time.monotonic() - started, 3)
-        self.assertEqual(self.run_child('print("next")'), b'next\n')
+        self.assertEqual(self.run_child(RAW_PRINT % 'b"next\\n"'), b'next\n')
 
     def test_nonzero_exit_and_expired_deadline(self):
         with self.assertRaises(video.VideoPreviewUnavailable): self.run_child('raise SystemExit(7)')
@@ -98,7 +101,7 @@ class VideoToolTests(unittest.TestCase):
 
     def test_report_environment_is_not_inherited(self):
         with patch.dict(os.environ, {'FFREPORT': 'file=must-not-write.log'}):
-            self.assertEqual(self.run_child('import os; print("FFREPORT" in os.environ)'), b'False\n')
+            self.assertEqual(self.run_child(RAW_PRINT % 'str("FFREPORT" in os.environ).encode() + b"\\n"'), b'False\n')
 
 
 class VideoBoundaryTests(unittest.TestCase):
@@ -160,12 +163,22 @@ class VideoBoundaryTests(unittest.TestCase):
         self.assertTrue(self.reader.slots.acquire(blocking=False)); self.reader.slots.release()
 
     def test_handle_keeps_old_source_but_replacement_is_not_published(self):
+        blocked = []
         def replace(file, revision):
-            self.path.rename(self.media / 'old.mp4'); self.path.write_bytes(b'new source')
+            try: self.path.rename(self.media / 'old.mp4')
+            except PermissionError:
+                if os.name != 'nt': raise
+                blocked.append(True)  # Windows: the open handle denies rename, so no swap occurs.
+            else: self.path.write_bytes(b'new source')
             self.assertEqual(file.read(), b'generated placeholder')
             return png()
         with patch.object(self.reader.videos, 'read', side_effect=replace):
-            with self.assertRaises(PreviewUnavailable): self.reader.read(self.item)
+            if os.name == 'nt':
+                self.assertEqual(self.reader.read(self.item), (png(), 'image/png'))
+                self.assertEqual(blocked, [True])
+                self.assertEqual(self.path.read_bytes(), b'generated placeholder')
+            else:
+                with self.assertRaises(PreviewUnavailable): self.reader.read(self.item)
 
     def test_busy_shared_with_reader_and_video_not_a_book(self):
         self.reader.slots.acquire(); self.reader.slots.acquire()
