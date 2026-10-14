@@ -11,7 +11,7 @@ Conditions (same items, same queries, same graded qrels):
 The dictionary and queries were written by the same evaluator, so the
 dictionary condition shows mechanism behaviour, not real-library quality.
 
-Usage: python tools/evaluate_literal_search.py [--manifest v3|v4] [--output data/literal-eval/result.json]
+Usage: python tools/evaluate_literal_search.py [--manifest v3|v4|v5|v6] [--output data/literal-eval/result.json]
 """
 import argparse
 import hashlib
@@ -32,6 +32,7 @@ FROZEN = {
     'v3': ('literal-related-v3.json', 'c4fa0d94c6ebf4459bf4e9d593af759b39afd8a680404b999d0596f602385091'),
     'v4': ('literal-related-v4.json', '57a816776f291c9af3865ab99efd82271a427655c1ff2e6f577f4ecc5a467964'),
     'v5': ('literal-related-v5.json', '38f5addb7947902c2062595a4c493f8b22641d83eaa41d789ce7a2597f3788f5'),
+    'v6': ('literal-related-v6.json', '6ac38d61d0703eb9e3e5a69f9f2de78e198574313f9ebd29d9ebf73d1a30d9b3'),
 }
 MANIFEST = FIXTURES / FROZEN['v3'][0]
 SHA256 = FROZEN['v3'][1]
@@ -90,10 +91,19 @@ def evaluate(version='v3'):
                     rows.append({'case': case['id'], 'group': case['group'], 'query': case['query'],
                                  'source': condition, 'filter': case['kind'] or 'all-kinds',
                                  'ranked': ranked, 'returned': len(ranked), 'partial': partial,
+                                 'correct_empty': not ranked if not case['relevance'] else None,
                                  'metrics': metrics(ranked, case['relevance'])})
         finally:
             catalog.close()
     grouped = summary([dict(row, filter='all-filters') for row in rows])
+    # No-answer cases have no relevant target: keep them outside MRR/Recall,
+    # but measure how often search correctly returns nothing, including partials.
+    for entry in grouped:
+        negatives = [row for row in rows if row['group'] == entry['group']
+                     and row['source'] == entry['source'] and row['correct_empty'] is not None]
+        entry['no_answer_cases'] = len(negatives)
+        entry['correct_empty_rate'] = (sum(row['correct_empty'] for row in negatives) / len(negatives)
+                                       if negatives else None)
     return {'manifest': name, 'sha256': sha, 'conditions': list(CONDITIONS),
             'rows': rows, 'summary': grouped}
 
@@ -108,11 +118,16 @@ def main():
         means = entry['means']
         text = ('no scored cases' if means is None else
                 ' '.join(f"{key}={value:.3f}" for key, value in means.items()))
+        if entry['correct_empty_rate'] is not None:
+            text += f" correct_empty_rate={entry['correct_empty_rate']:.3f}"
         print(f"{entry['group']:<14} {entry['source']:<10} cases={entry['cases']} scored={entry['scored_cases']} {text}")
     for row in result['rows']:
-        if row['metrics'] is None or row['metrics']['recall_at_5'] < 1 or row['metrics']['best_grade_at_1'] < 1:
+        if (row['metrics'] is None or row['metrics']['recall_at_5'] < 1
+                or row['metrics']['best_grade_at_1'] < 1 or row['metrics']['precision_at_5'] < 1):
             print(f"  {row['source']:<10} {row['case']} {row['query']!r}: top={row['ranked'][:5]} returned={row['returned']}"
-                  + (' (partial fallback)' if row['partial'] else ''))
+                  + (' (partial fallback)' if row['partial'] else '')
+                  + (' (correct empty)' if row['correct_empty'] is True else
+                     ' (false answer)' if row['correct_empty'] is False else ''))
     if args.output:
         output = (ROOT / args.output).resolve()
         if (ROOT / 'data').resolve() not in output.parents:

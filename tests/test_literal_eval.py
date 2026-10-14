@@ -32,7 +32,10 @@ class LiteralEvalTests(unittest.TestCase):
                 self.check_manifest(name, sha)
 
     def test_current_search_is_a_superset_of_legacy(self):
-        for version, (name, sha) in evaluator.FROZEN.items():
+        # v3-v5 preserve this historical contract. v6 includes intentional
+        # removals of false hits on JSON syntax; a superset is not its goal.
+        for version in ('v3', 'v4', 'v5'):
+            name, sha = evaluator.FROZEN[version]
             with self.subTest(version=version):
                 cases = len(self.check_manifest(name, sha)['cases'])
                 result = evaluator.evaluate(version)
@@ -50,6 +53,28 @@ class LiteralEvalTests(unittest.TestCase):
                             self.assertTrue(by[('normalized', case)]['partial'], case)
                 self.assertTrue(all(entry['scored_cases'] == 0 for entry in result['summary']
                                     if entry['group'] == 'no-answer'))
+
+    def test_v6_reports_false_candidates_and_keeps_no_answer_outside_mrr(self):
+        result = evaluator.evaluate('v6')
+        self.assertEqual(len(result['rows']), 24 * len(evaluator.CONDITIONS))
+        negatives = [row for row in result['rows'] if row['group'] == 'no-answer']
+        self.assertEqual(len(negatives), 5 * len(evaluator.CONDITIONS))
+        for row in result['rows']:
+            if row['group'] == 'no-answer':
+                self.assertIsNone(row['metrics'])
+                self.assertEqual(row['correct_empty'], not row['ranked'])
+            else:
+                self.assertIsNone(row['correct_empty'])
+                self.assertIn('precision_at_5', row['metrics'])
+        for entry in result['summary']:
+            rows = [row for row in negatives if row['source'] == entry['source']]
+            if entry['group'] == 'no-answer':
+                self.assertEqual(entry['scored_cases'], 0)
+                self.assertIsNone(entry['means'])
+                self.assertEqual(entry['no_answer_cases'], len(rows))
+                self.assertEqual(entry['correct_empty_rate'], sum(row['correct_empty'] for row in rows) / len(rows))
+            else:
+                self.assertIsNone(entry['correct_empty_rate'])
 
 
 if __name__ == '__main__':
