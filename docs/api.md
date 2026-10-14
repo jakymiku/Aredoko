@@ -1,5 +1,11 @@
 # 共通API（操作試作 v0）
 
+## 製品MVP：タグ値の照合とID境界の安定化（2026-10-14 続行）
+
+名前・タグ検索とAI検索の文字一致表示/フィルターは、保存JSONのエスケープや区切り記号ではなく実際のタグ値を使う。引用符・バックスラッシュ入りのタグ、Unicode escapeで保存されたタグも検索し、保存値の書き換えはしない。[詳細](related-terms.md)。
+
+`GET /api/items/{id}`、`POST /api/items/update`の各id、登録rootの除外/スキャン等はpositive Int64のIDを事前検証する。範囲外・bool・0・負数は400、範囲内の未登録作品は404。前者が含まれる一括更新は全体を拒否し、タグ/棚/お気に入りを一部だけ更新しない。無効なrootでscan jobを作らない。認証/Origin/loopback制約は従来と同じ。全Python256 PASS、今回Windows/.NET/native未検証。
+
 ## 製品MVP：動画先頭フレームとプレビューID検証（2026-10-14）
 
 `GET /api/library/preview/{id}`は既存の画像/CBZ/ZIPに加え、任意導入済みffmpeg/ffprobeで動画の先頭frameをPNGとして返す。Hostとtoken必須、no-store。動画の10秒・512MiB入力・16M画素・256px出力・512KiB本文・共通2枠・memory LRUと制限は[video-thumbnails.md](video-thumbnails.md)。ツール不在/破損/非対応は404、枠不足は503。

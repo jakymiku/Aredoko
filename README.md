@@ -1,6 +1,8 @@
 # Aredoko
 
-> **最新（2026-10-14 Linux続行）**：既存ffmpeg/ffprobeによる動画の先頭フレームを追加。登録・索引済み動画のみ、10秒/共通2枠/256px/512KiB、memory cache限定。WinUIプレビューへ接続するソースを追加し、全Python **246 PASS / skip0**。Windows Release/native表示は今回未検証。[動作範囲と制限](docs/video-thumbnails.md)。プレビューAPIの数値ID超過・不正URLも400へ修正。
+> **最新（2026-10-14 続行）**：引用符・バックスラッシュ入りタグの検索見落としとJSON構文による誤ヒットを修正。AI検索の文字一致根拠も共通化。動画thumbnailはSARの表示比率を保持し、作品/登録rootの過大IDを事前拒否。全Python **256 PASS / skip0**。Windows/.NET/nativeは今回未検証。[検索](docs/related-terms.md)・[動画](docs/video-thumbnails.md)・[handoff](docs/codex-handoff.md)。
+
+> **履歴（2026-10-14 Linux続行）**：既存ffmpeg/ffprobeによる動画の先頭フレームを追加。登録・索引済み動画のみ、10秒/共通2枠/256px/512KiB、memory cache限定。WinUIプレビューへ接続するソースを追加し、全Python **246 PASS / skip0**。Windows Release/native表示は当時未検証。[動作範囲と制限](docs/video-thumbnails.md)。プレビューAPIの数値ID超過・不正URLも400へ修正。
 
 > **履歴（2026-10-14 共通ビューア）**：画像/CBZ/ZIPを専用WinUIウィンドウで閲覧。薄い左右・下枠、端に接する上下バー、idle hide/マウス再表示/F10、画像左右送り、読書single/右左・左右見開き。Core147・Python preview12/reader16・Release PASS、専用window画像/読書Light/Dark全PNGを個別目視。double-click入口はコード追加済み・実機未確認。[当時の検証](docs/viewer-reader-validation.md)。
 

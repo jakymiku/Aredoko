@@ -5,6 +5,7 @@
 
 ## 使い方と境界
 
+- 縦横比情報（SAR）がある動画は**表示時の比率**を保つ正方画素PNGへ変換する。720×480/SAR8:9の例は256×192。元の画素数だけで縮小してSARを消すと歪むため修正した。小さい映像・縦長・SAR不明も生成データで確認済み。
 - backendを起動する環境のPATHに**既存のffmpegとffprobe**がある場合のみ動作する。自動導入・ダウンロードはしない。Windowsの`.bat`/`.cmd`ラッパーは実行しない。
 - `GET /api/library/preview/<id>`から`image/png`を返す。登録中のroot・除外・presence・リンク/リパース・索引size/mtime検査を通したファイルだけが対象。認証・no-store・404 fallback・503 busyは従来と同じ。
 - WinUIのlist/grid/詳細プレビューに接続し、成功した行は「動画の先頭フレーム」と表示するソースを追加。**この接続はWindowsビルド/実GUI未検証**。画像/本のdouble-click入口やreader対象を動画へ広げていない。
@@ -20,7 +21,7 @@
 | 処理時間 | probe＋frame取得で合計10秒、timeoutで子processを停止・回収 |
 | 並列 | 画像・CBZ/ZIP readerと共通の2枠、満杯なら即503 |
 | decode/filter/encode | 各1 thread、FFmpegの単一allocation上限64 MiB |
-| 出力 | 長辺256px以下、拡大なし、PNG最大512 KiB |
+| 出力 | 表示比率を保つ正方画素PNG、長辺256px以下、表示寸法基準で拡大なし、最大512 KiB |
 | probe本文 | 最大16 KiB |
 | backend cache | revisionキーのLRU 32枚、PNG合計最大16 MiB、memoryのみ |
 | WinUI cache | 既存64枚LRU・取消・stale応答排除を再利用 |
@@ -32,6 +33,8 @@ cache hitもroot/path/statを再検査し、取得後にもhandleのsize/mtime/c
 これらはapplication側の出力・並列・処理時間の制限。FFmpegの総heap/CPU/読み込み帯域の厳密な上限やsecurity sandboxを保証しない。HTTPクライアントが閉じてもbackendは処理を完了またはtimeoutまで継続する。native codecの導入・更新はこの実装に含めない。
 
 ## 検証
+
+最新続行：Linux／FFmpeg6.1.1で**動画20 PASS / 3.122秒 / skip0**。SAR8:9（720×480→256×192）、SAR1:2の小画像（80×60→40×60）、SAR2:1（16×12→32×12）、縦長（360×720→128×256）、SAR不明を追加検証し、元bytes/mtime不変を確認。全Python256 PASS。前回19件の結果は以下の履歴。
 
 ```
 NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -p test_video_previews.py -v

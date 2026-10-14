@@ -1,4 +1,38 @@
-## 最新：動画thumbnailの基盤・プレビューAPIの安定化（2026-10-14、Linux続行）
+## 最新：タグ検索・動画比率・ID境界の修正（2026-10-14 続行）
+
+開始HEAD **6a4d904a49fe288daf829a4d14ccd3efedc278dc**、製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続。開始時git statusはclean、PRも同じHEAD/Draft/open/unmerged。AGENTS→製品vision→agent-start→両handoff最新節、Issue #4/PR #5を再確認。旧branch・PR #6を取り込んでいない。
+
+### 再現した不具合と実装
+
+1. **d7845966ddac1a856d745e9fc75f9e4aa7f28aee** — 動画thumbnailの表示比率。720×480/SAR8:9を旧filterで取得すると256×171に歪んだ。SARを反映した表示寸法から256px以内へ縮小し、正方画素PNGへ変換。小さな映像・縦長・SAR未指定も確認。新しい`reset_sar` optionに依存せず、既存FFmpeg6.1.1で動作。元source・10秒/共有2枠/出力/cacheの上限を維持。
+2. **10e2a0b41e4fa255babada48ab936a55f7915431** — 通常文字検索とAI検索の文字一致根拠は、実タグを使う共通`normalize_tags`へ変更。旧実装はJSON文字列を検索し、`魔法"少女`や`C:\textures`を見落とし、`[`だけでタグなし作品も一致した。JSONを復元し、値ごとに正規化/field区切りを入れる。引用符/backslash/Unicode escapeを正しく検索、保存JSON構文だけの一致を除外。SQLタグ復元はquery-local LRU4096件で再利用。関連語・partial・明示filterを維持し、AIのliteral_hits/literal_onlyも修正。保存tagsの書き換え、vector/model/順位統合方式の変更なし。
+3. **3de22438cd5cd8c136bcf624944e51af57084e11** — 作品GET・混在batch更新・root除外・scan開始にも巨大IDでSQLite **OverflowError**になる経路を実再現。Catalog/ProductionCatalog/LibraryIndexでpositive Int64を事前検証し、invalid/bool/0/負数は400、範囲内unknown itemは404。batchを全体拒否し、部分更新・除外変更・scan job作成なし。locations offsetもSQLite整数範囲へ制限。デモAPIの共通catalogも回帰確認。
+
+JSON構文による偶然のヒットを除去したため、`[`/`,`/引用符だけの検索は、**実際の名前/タグにその文字がある作品だけ**を返す。実タグ内の記号は引き続き検索可能。通常の日本語検索・NFKC/case/kana・16語AND・関連語/partial・保存metadataは保持する。[検索の詳細](related-terms.md)・[動画](video-thumbnails.md)・[API](api.md)。
+
+### このturnで実行した検証
+
+- **動画20 PASS /3.122秒/skip0**。生成MP4/MKV/WebMの既存3codec＋SAR8:9 720×480→256×192、SAR1:2 80×60→40×60、SAR2:1 16×12→32×12、縦長360×720→128×256、SAR未指定。元bytes/mtime不変、出力/dimension/deadline・pipe制約・cache・外部参照拒否の既存回帰も通過。
+- **文字検索10 PASS /0.640秒**（新4）・**AI候補4 PASS /0.027秒**（新1）。タグJSON bytesを変えずquote/backslash/escaped Unicodeを検索、JSON構文の誤ヒット除去、tag跨ぎ防止、related/direct順・partial・kind/favorites、AI文字根拠/文字filterと同一vector順位を確認。生成50,001行2語検索 **0.193秒**（Linux単発、実素材/Windowsの速度・品質ではない）。
+- **ID境界4 PASS /1.046秒**。実HTTPのproduction/demoでGET/update/excludes/scanの400、unknown最大IDの404、誤tokenの403、batch全体拒否・metadata/source/除外保全・job未作成・その後の正常updateを確認。
+- 中間全Python **252 PASS /26.441秒/skip0**（最初の2修正後）。最終全Python **256 PASS /27.328秒/skip0**（ID修正後）：`NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -v`。既存固定manifest v3/v4/v5の回帰も含む。新holdout/検索精度評価は追加していない。生成データ・CPU契約encoder/manual vectorsのみ、実model/GPUではない。
+- Python構文・diff whitespace・手動差分review PASS。追加/更新行のrelative link **15件 PASS**。今回WinUI/Core sourceは変更なし。ただし**Windows/.NET/Core compile/run・Release/XAML/native GUI・専用analyzer/AOT/installerは未検証**。前回GUI/Release成績を今回のPython変更へ流用しない。
+
+### 保存状態と未完了
+
+前回のpartial checkoutを継続（binary9 assetはlocal未materialize、元tree SHAを保全）。ユーザーPCの未コミット状態は観測していない。小分けcommitをGitHub APIで作り、expected SHA付き非force fast-forwardで同じbranchへ保存し、localもcanonical SHAへ同期。main merge、force push、branch削除、比較generated変更なし。実際の3workflowはmanual `workflow_dispatch`のみ。**CI dispatch0**、依存/model取得・私物scan/変更/外部送信・OS変更・shutdownなし。使用量%は取得不可。
+
+最終実装HEAD **3de22438cd5cd8c136bcf624944e51af57084e11**。文書込み最終HEADは本節を導入したhandoff commit（`git log -1 --format=%H -- docs/codex-handoff.md`）で、確定SHAをPR #5説明/終了報告へ記録する。
+
+### 次の3手
+
+1. **Windows最初のgate**：Core/Release buildと、未完了のlist/grid/詳細thumbnail double-clickの独立実機batch。dirty/取消/選択/open/focusを確認。前回のFAILとfix-and-rerun制限を保全する。
+2. **動画・文字検索のnative回帰**：生成3形式＋SAR付き動画の比率、Light/Dark/narrow、取消/503/fallback、元bytes/mtime不変。quote/backslash/Unicodeタグの通常検索・AI根拠/文字filterを確認。seek可能な安全入力・512MiB超対応・native playbackは後続の独立実装。
+3. **固定評価・閲覧残gate**：新しいholdoutで関連語の過剰展開/取りこぼしを測定し、今回の再現テストを実素材の品質保証へ広げない。高DPI/Contrast/Narrator/Tab・極狭幅・実JSON picker・読書位置保存は未完了。フォルダ本/OCR/VLM/Komga/動画音声索引/installer・全体visual刷新は別段階。
+
+---
+
+## 履歴：動画thumbnailの基盤・プレビューAPIの安定化（2026-10-14、Linux続行）
 
 開始HEAD **bb8b154155232448e420dc4864bf37d73d6a012d**。製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続。Issue #4、製品branchのAGENTS→product-vision→agent-start→両handoff最新節→spec/resource policyを確認。PR #6の再取り込みなし。
 

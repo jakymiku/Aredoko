@@ -34,6 +34,8 @@
 
 ## 今回の再開で把握すべき境界
 
+- 2026-10-14 続行：動画SARの比率、JSONタグ値の文字検索/AI根拠、過大IDのGET/POST/scanを修正。全Python256 PASS、Windows/.NET/nativeは未検証。動画20・文字検索10・AI候補4・ID境界4の回帰を追加/確認。[両handoffの最上段](codex-handoff.md)を正とする。
+
 - 2026-10-14 Linux続行：動画先頭frameのbackendとWinUIプレビュー接続ソースを追加。全Python246 PASS、Windows/.NET/nativeは未検証。プレビューID/URL検証も修正。[動画thumbnail](video-thumbnails.md)・両handoffの最上段を正とし、以前のRelease/Core/GUI結果を今回へ流用しない。double-click実機・動画再生は残る。
 
 - 2026-10-14 共通viewer：専用Window・薄枠/端に接する上下帯・auto-hide/画像左右/reader見開きを実装。Core147・preview12/reader16・Release PASS。最終window実機は[viewer-reader-validation.md](viewer-reader-validation.md)、double-clickは実機未検証。両handoff最新節を正とする。
