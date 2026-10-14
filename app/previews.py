@@ -11,6 +11,8 @@ import zipfile
 import zlib
 from pathlib import Path, PurePosixPath
 from library_index import _excluded, _reparse
+from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
+                            VIDEO_SUFFIXES, MAX_VIDEO_BYTES)
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
@@ -118,6 +120,7 @@ class PreviewReader:
     def __init__(self, catalog):
         self.catalog = catalog
         self.slots = threading.BoundedSemaphore(2)
+        self.videos = VideoThumbnailer()
 
     def read(self, item_id):
         return self._read(item_id)
@@ -149,7 +152,7 @@ class PreviewReader:
                 raise PreviewUnavailable('Location excluded')
             source = _safe_path(row['path'], row['relative_path'])
             suffix = source.suffix.casefold()
-            if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip'):
+            if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES:
                 raise PreviewUnavailable('Unsupported preview type')
             if operation != 'preview' and suffix not in ('.cbz', '.zip'):
                 raise PreviewUnavailable('Reader requires a CBZ or ZIP archive')
@@ -167,7 +170,11 @@ class PreviewReader:
                 current_revision = _revision(row, info) if operation != 'preview' else None
                 if revision is not None and revision != current_revision:
                     raise ReaderChanged('Archive changed; reopen the reader')
-                if suffix in IMAGE_MIME:
+                if suffix in VIDEO_SUFFIXES:
+                    if info.st_size > MAX_VIDEO_BYTES:
+                        raise PreviewUnavailable('Video exceeds preview limit')
+                    data, mime = self.videos.read(file, _revision(row, info)), 'image/png'
+                elif suffix in IMAGE_MIME:
                     if info.st_size > MAX_IMAGE_BYTES:
                         raise PreviewUnavailable('Image exceeds preview limit')
                     data, mime = file.read(MAX_IMAGE_BYTES + 1), IMAGE_MIME[suffix]
@@ -201,6 +208,12 @@ class PreviewReader:
                 if operation != 'manifest' and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
+                if suffix in VIDEO_SUFFIXES:
+                    # The native tools inherit this handle, never reopen a path.
+                    # Do not publish its old frame if the location was replaced.
+                    current = _safe_path(row['path'], row['relative_path']).stat(follow_symlinks=False)
+                    if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
+                        raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
                     if operation != 'preview':
                         raise ReaderChanged('Source changed while reading')
@@ -208,6 +221,8 @@ class PreviewReader:
                 if operation == 'manifest':
                     return result
                 return data, mime
+        except VideoPreviewUnavailable as error:
+            raise PreviewUnavailable('Video preview unavailable') from error
         except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, zlib.error) as error:
             raise PreviewUnavailable('Invalid or unsupported archive') from error
         finally:
