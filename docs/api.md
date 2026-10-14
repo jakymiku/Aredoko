@@ -1,5 +1,11 @@
 # 共通API（操作試作 v0）
 
+## 製品MVP：動画先頭フレームとプレビューID検証（2026-10-14）
+
+`GET /api/library/preview/{id}`は既存の画像/CBZ/ZIPに加え、任意導入済みffmpeg/ffprobeで動画の先頭frameをPNGとして返す。Hostとtoken必須、no-store。動画の10秒・512MiB入力・16M画素・256px出力・512KiB本文・共通2枠・memory LRUと制限は[video-thumbnails.md](video-thumbnails.md)。ツール不在/破損/非対応は404、枠不足は503。
+
+idは1..9223372036854775807のASCII十進数、先頭0・負数・余分なpath/queryは禁止。不正要求は400 `Invalid item`。従来の超過値はSQLite `OverflowError`で応答できなかったため修正した。全Python246 PASS（Linux）。Windows Release/nativeは今回未検証。
+
 ## 製品MVP：文字検索の正規化・複数語AND・関連語辞書（2026-10-13）
 
 `GET /api/items?q=` は語ごとのAND・NFKC/大小/かな正規化になり、ユーザー辞書の展開があった時だけ`expansions`と各item`match`を返す。`GET /api/items`の検証失敗は400で具体的な`error`（`Use at most 16 search words`、`Invalid paging`、`Invalid filter`）。WinUIは`ErrorText`で日本語表示。全語一致0件・2語以上のときは1語欠けの作品を`match:"partial"`と応答`partial:{words,required}`で返す。辞書は`GET /api/library/terms`、`POST /api/library/terms`、`POST /api/library/terms/delete`、`GET /api/library/terms/export`、`POST /api/library/terms/import`。詳細・制限・未検証範囲は[related-terms.md](related-terms.md)。最新全Python205件PASS（Linux）。
@@ -7,7 +13,7 @@
 
 ## 製品MVP：読み取り専用CBZ/ZIPページAPI（2026-10-13）
 
-WinUI読書画面への接続実装を追加（Windowsビルド/実GUIは未検証、[確認手順](archive-reader.md)）。登録・索引済みitem IDだけを受け付け、元ファイルや展開ファイルを書き込まない。GETはHost検証とX-Aredoko-Token必須、応答はCache-Control: no-store。
+WinUI読書画面への接続は後続Windowsの生成素材で検証済み（[専用windowの検証範囲](viewer-reader-validation.md)と最新handoffを参照、今回Linuxでは再実行していない）。登録・索引済みitem IDだけを受け付け、元ファイルや展開ファイルを書き込まない。GETはHost検証とX-Aredoko-Token必須、応答はCache-Control: no-store。
 
 | GET | 応答 |
 | --- | --- |
@@ -18,9 +24,9 @@ pageは0始まり、0..9999かつpage_count未満。revisionはmanifestの64文�
 
 画像は既存previewと同じ拡張子・自然順、`__MACOSX/`を除外。数字は整数化せず桁数と文字列で比較し、長い数字名・Unicode decimal・先頭0も扱う。同順位・同名はZIP directory順を保持しZipInfoで読む。manifestは画像を展開せず候補数だけ返すため、各ページのdecode成功や暗号化/破損なしを保証しない。非先頭ページのエラーでもページ番号を詰めたり別ページへ代替したりしない。
 
-登録root/除外/present/reparse/symlink/索引size・mtime/open handleの再確認と、既存のarchive512MiB/directory4MiB/entries10000/image8MiB/圧縮比200を共有。ZIP64/multidisk非対応。readerとpreviewで同じ2処理枠。サーバーは画像をdecodeしないため、GUI側でも既存ThumbnailCodec同等のpixel/byte/decode制限が必要。
+登録root/除外/present/reparse/symlink/索引size・mtime/open handleの再確認と、既存のarchive512MiB/directory4MiB/entries10000/image8MiB/圧縮比200を共有。ZIP64/multidisk非対応。readerとpreviewで同じ2処理枠。画像/CBZ/ZIPではサーバーは元画像をdecodeせず、GUI側でも既存ThumbnailCodec同等のpixel/byte/decode制限が必要。動画thumbnailのみサーバーで先頭frameをdecodeする。
 
-revisionはfile identity・size・mtime・ctimeから作る変更検出tokenであり、内容hash・不変snapshot・悪意ある同一metadata書換えの保証ではない。各要求で同じhandleを使って前後metadataを確認。409を受けたclientは古いpage要求の自動retryをせず、新しいmanifestを取得して明示的に開き直す。フォルダ本/Komga/見開き/読書位置保存は未実装。
+revisionはfile identity・size・mtime・ctimeから作る変更検出tokenであり、内容hash・不変snapshot・悪意ある同一metadata書換えの保証ではない。各要求で同じhandleを使って前後metadataを確認。409を受けたclientは古いpage要求の自動retryをせず、新しいmanifestを取得して明示的に開き直す。フォルダ本/Komga/読書位置保存は未実装。見開きはnative client内のsession設定として実装済みで、APIは従来通り1ページずつ返す。
 
 ZipFile構築前にZIP64 locatorを拒否し、central directoryの固定headerを走査して実件数/申告件数一致と可変長field境界を確認。entry内のZIP64 sentinel/multidiskも拒否する。件数やサイズの自己申告だけを信用してZipInfoを生成しない。
 

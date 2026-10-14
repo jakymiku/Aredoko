@@ -1,6 +1,8 @@
 # Aredoko
 
-> **最新（2026-10-14 共通ビューア）**：画像/CBZ/ZIPを専用WinUIウィンドウで閲覧。薄い左右・下枠、端に接する上下バー、idle hide/マウス再表示/F10、画像左右送り、読書single/右左・左右見開き。Core147・Python preview12/reader16・Release PASS、専用window画像/読書Light/Dark全PNGを個別目視。double-click入口はコード追加済み・実機未確認。動画は後続。[最新検証](docs/viewer-reader-validation.md)。
+> **最新（2026-10-14 Linux続行）**：既存ffmpeg/ffprobeによる動画の先頭フレームを追加。登録・索引済み動画のみ、10秒/共通2枠/256px/512KiB、memory cache限定。WinUIプレビューへ接続するソースを追加し、全Python **246 PASS / skip0**。Windows Release/native表示は今回未検証。[動作範囲と制限](docs/video-thumbnails.md)。プレビューAPIの数値ID超過・不正URLも400へ修正。
+
+> **履歴（2026-10-14 共通ビューア）**：画像/CBZ/ZIPを専用WinUIウィンドウで閲覧。薄い左右・下枠、端に接する上下バー、idle hide/マウス再表示/F10、画像左右送り、読書single/右左・左右見開き。Core147・Python preview12/reader16・Release PASS、専用window画像/読書Light/Dark全PNGを個別目視。double-click入口はコード追加済み・実機未確認。[当時の検証](docs/viewer-reader-validation.md)。
 
 
 > **履歴（2026-10-14 続き）**：フォルダGUI50checks、読書・関連語GUI105checks/キーボード14回を生成素材のLight/Darkで確認。右クリック設定・復元除外の残gateを通過、reader下部操作の切れと閉じた後の未保存詳細/focus復帰を修正。Python31/Core107/Release PASS。実JSON picker・高DPI/Contrast/Narrator等は残作業。[結果と残作業](docs/native-folder-reader-validation.md)。
@@ -25,9 +27,9 @@
 
 CBZ/ZIPの読書画面は、**生成本でLight/Darkのページ移動・破損/再試行・更新後の再open・キャンセル・未保存編集の保持をWindows実GUI確認済み**です。JSON picker、reader zoom等は引き続き未確認です。[読書画面の確認手順](docs/archive-reader.md)を参照してください。
 
-単体画像は詳細の「画像を大きく表示」から閲覧できます。← / →で現在の検索結果ページ内の画像だけを検索順に送り、拡大・スクロール・表示リセットも可能です。未保存編集は保持されます。[操作と制限](docs/image-viewer.md)。動画thumbnail・動画再生は次の実装段階です。
+単体画像は詳細の「画像を大きく表示」から閲覧できます。← / →で現在の検索結果ページ内の画像だけを検索順に送り、拡大・スクロール・表示リセットも可能です。未保存編集は保持されます。[操作と制限](docs/image-viewer.md)。動画thumbnailは[backend実装・native接続ソース追加済み](docs/video-thumbnails.md)、Windows確認と動画再生は後続です。
 
-全文OCR、動画/音声の内容索引、画像フォルダの論理作品化、Komga、見開き・読書位置保存、配布installerなどは後続です。Layaは実験的なopt-inで既定無効。実装状況と証拠は[開発handoff](docs/codex-handoff.md)・[チャットhandoff](docs/chat-handoff.md)・PRの最新記録を優先してください。
+全文OCR、動画/音声の内容索引、画像フォルダの論理作品化、Komga、読書位置保存、配布installerなどは後続です。読書の見開きはsession内で実装・確認済みです。Layaは実験的なopt-inで既定無効。実装状況と証拠は[開発handoff](docs/codex-handoff.md)・[チャットhandoff](docs/chat-handoff.md)・PRの最新記録を優先してください。
 
 ## WinUI開発版の起動
 

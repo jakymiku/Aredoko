@@ -1,6 +1,43 @@
+## 最新：動画thumbnailの基盤・プレビューAPIの安定化（2026-10-14、Linux続行）
+
+開始HEAD **bb8b154155232448e420dc4864bf37d73d6a012d**。製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続。Issue #4、製品branchのAGENTS→product-vision→agent-start→両handoff最新節→spec/resource policyを確認。PR #6の再取り込みなし。
+
+### 実装とコミット
+
+1. **5ad7a23af4facb545e8333d312c0831955413726** — 動画の先頭frameを既存preview APIへ追加。既存PATHのffmpeg/ffprobeのみ、登録/active root・除外・present・索引size/mtime・reparse/link検査後の読み取りhandleをstdinへ渡す。元pathはchild argvへ渡さずshellなし、pipe-only protocol/限定demuxer、FFREPORT除去。10秒（probe+frame）・共有2枠・512MiB入力/16M画素・各1thread・PNG256px/512KiB・probe16KiB・memory LRU32枚。cache hitもsource/rootを検査し、取得後の変更/差し替えを拒否。元動画/展開/PNG cacheのdisk保存なし。
+2. **79aa08069a3849bc886e99f726e66b384afb7ada** — WinUIの既存list/grid/詳細thumbnail serviceへvideoを追加し、成功時「動画の先頭フレーム」。既存decode/取消/LRUを再利用。画像/本のdouble-clickやviewer対象を動画へ拡張していない。**ソース接続のみ、Windows build/native未検証**。
+3. **9eb204fa7e2d250703de32167e4b3b82d2c98486** — preview routeを正規形ASCII ID・1..Int64.Max・query/path追加禁止へ統一。不正URLは400 `Invalid item`。旧sourceで`read(2**63)`のSQLite **OverflowError**を実際に再現した。内部readerにも範囲検証、HTTPの巨大値/負数/先頭0/nested/query/Unicode等の回帰追加。
+
+検索順位・関連語辞書・model/profile/vector・タグ/棚/設定schemaは変更なし。作品/画像/動画/音楽/素材の横断検索ビジョンを維持。大きな見た目の刷新は前倒ししない。詳細：[video-thumbnails.md](video-thumbnails.md)、[API](api.md)。
+
+### このturnで実行した検証
+
+- Linux/Python3.12.14／既存FFmpeg・ffprobe **6.1.1**。動画 **19 PASS / 2.333秒 / skip0**（最終focused、sentinel回帰込み）。生成MP4(MPEG-4/faststart)、MKV(FFV1)、WebM(VP8)を実decodeし、PNGの赤い先頭pixel・256×144・元bytes/mtime/ファイル一覧不変を検証。偽playlistに対するloopback sentinelのHTTP要求0。
+- previewは追加前 **12 PASS0.926秒**、ID修正後 **14 PASS1.462秒**。reader **16 PASS2.605秒**。動画境界テストはauth/no-store/404/503、解除/除外/stale/link/欠損、変更/差し替え、cache/PNG/dimension/deadline、ツール不在、FFREPORT非継承を含む。時間/出力超過は小さな実Python childを停止・回収して確認。
+- 最終全体：`NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -v` **246 PASS / 33.085秒 / skip0**。新19＋preview新2、既存225。生成fixtureのみ。Python構文・diff whitespace・手動差分reviewを確認。文書の追加・更新行に含まれるrelative link **16件 PASS**。
+- **今回.NET/Core実行、WinUI C# compile/XAML、Windows x64 Release/native GUI/GPUは未実行**。Linuxにdotnet/Windowsなし、依存を取得していない。前回Core147/Release/画像110・reader88は歴史上の証拠で、今回変更の合格へ流用しない。専用analyzer/AOT/installerも未検証。
+
+### 作業環境と保存
+
+通常cloneは認証不可だったため、接続済みGitHubから固定SHA treeと223 text blobを復元し、各blob SHAとtree/開始commitを照合。9個のbinary app assetはconnectorが取得不可でlocalにmaterializeせず、元tree SHAを保全したpartial checkout。**ユーザーPC側の未コミット変更・実環境は観測していない**。このlocal checkoutの開始/終了作業treeは変更なし（文書保存前は実装commit時点でclean）。APIから小さな3commitを作成し、expected SHA付き**非forceのfast-forward**で同じbranchへ保存、localもcanonical remote SHAへ同期した。binary assets/比較generated/古いbranchを変更・削除していない。
+
+**CI dispatch0**。実際の3workflowはすべてmanual `workflow_dispatch`のみ、trigger変更なし。私物scan/変更/外部送信、model/dependency取得、OS変更なし。以前の一時的なshutdown許可を再適用していない。使用量%はこの環境から観測できず、5%到達を宣言しない。
+
+### 限界・次の3手
+
+1. **Windowsの最初のgate**：Core/Release buildと、最優先で残っている画像/本thumbnail double-clickの独立batch。前回FAIL履歴と2 fix-and-rerun上限の記録を維持し、list/grid/詳細の選択・dirty取消・openerを確認。今回fallback実装は変更していない。
+2. **生成動画native gate**：既存Windows ffmpeg/ffprobeでMP4/MKV/WebMの取得、list/grid/詳細、Light/Dark/narrow、fallback/503、取消/別selection、元bytes/mtime不変、ツール不在を確認。512MiB超/末尾moov等は現状fallback。seek可能な安全入力・大動画対応やnative playbackは、その後の独立した小さな変更へ。
+3. **閲覧・検索品質の残gate**：高DPI/Contrast/Narrator/Tab全順序、極狭幅overflow、native X/Alt+F4、実JSON picker、読書位置/設定保存。関連語の過剰展開は新しい固定holdoutで測定。1TB/数万件・実素材の精度は未評価。フォルダ本/OCR/VLM/Komga/動画音声内容索引は後続。
+
+512MiB入力上限・seek不可stdinは今回の小さな実装の制限であり製品の長期対応目標ではない。frameは代表シーンでなく最初のdecode frame。ネイティブ総heap/CPU/帯域の厳密な上限やsandboxは保証しない。clientが閉じてもbackendは最大deadlineまで処理を続ける。
+
+**最終実装HEAD：9eb204fa7e2d250703de32167e4b3b82d2c98486**。文書込み最終HEADは本節を導入したhandoff commit（`git log -1 --format=%H -- docs/codex-handoff.md`）；その確定SHAをPR #5説明と終了報告にも記録する。Draft/base/unmergedを維持する。
+
+---
+
 # Aredoko — GPTチャットへの最新引継ぎ
 
-## 最新：画像・読書ビューアの共通ウィンドウ（2026-10-14）
+## 履歴：画像・読書ビューアの共通ウィンドウ（2026-10-14）
 
 開始HEAD `fc38394ec346f238c937f0dd7980d1c96af0d6fb`、実装commit **ed943b7703718085d05004c99dcc3393d1bf06df**。製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR5](https://github.com/jakymiku/Aredoko/pull/5)を継続。最終HEADはGit/PRを正とする。
 
