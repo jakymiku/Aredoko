@@ -1,6 +1,8 @@
 # WinUI 3 production MVP — developer preview
 
-Latest continuation (2026-10-14 follow-up, Linux): decoded tag matching in literal/AI evidence paths, correct video display aspect ratio, and item/root ID validation before SQLite. **Python256 PASS / skip0**. WinUI/Core sources were unchanged in this follow-up; Windows/.NET/native verification remains pending. See the latest [handoff](codex-handoff.md).
+Latest continuation (2026-10-14 Windows follow-up): connected per-row `SearchEvidence` in Core/WinUI (`SearchEvidence<id>` for related/missing query words while keeping direct-only rows compact), fixed Windows checkout LF/video test compatibility, and validated on Windows: **Python 263 PASS / skip0**, **Core 157 PASS**, **x64 SelfContained Release PASS**, native `viewer-doubleclick-01` **PASS (22 checks / keys 16 / PNG 8)**, native `search-evidence-01` **PASS (30 checks / PNG 6)** (covering Light/Dark related/partial per-word evidence and `魔法"少女` / `C:\textures` / `[` tag search), and native Light video thumbnails (`video-evidence-03`, MP4/MKV/WebM/SAR 8:9 4:3 aspect/corrupt fallback/double-click guard; Dark video and 503/cancel remain for next batch). See the latest [handoff](codex-handoff.md) and [viewer validation](viewer-reader-validation.md).
+
+Previous continuation (2026-10-14 follow-up, Linux): decoded tag matching in literal/AI evidence paths, correct video display aspect ratio, and item/root ID validation before SQLite. **Python256 PASS / skip0**. WinUI/Core sources were unchanged in that step.
 
 Previous continuation (2026-10-14, Linux): optional [video thumbnails](video-thumbnails.md), strict preview ID/route validation, **Python246 PASS / skip0**. Native WinUI connection was source-only in this environment: .NET/Core, Windows Release/XAML and GUI were not run. Previous viewer/reader Windows evidence is [here](viewer-reader-validation.md); the latest handoff records pending gates.
 

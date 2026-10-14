@@ -1,5 +1,7 @@
 # 文字検索の正規化・複数語AND・関連語辞書（2026-10-13）
 
+> 2026-10-14 Windows続行：語別検索根拠`search_evidence`のCore反射不要解析とWinUI一覧表示（`SearchEvidence<id>`）、および`魔法"少女`・`C:\textures`・`[`のタグ検索とサムネイルdouble-clickをWindows実機（Light/Dark、1200×820・700×620）で確認。全Python263 PASS、Core157 PASS、x64 SelfContained Release PASS、`search-evidence-01` 30 checks PASS、`viewer-doubleclick-01` 22 checks PASS。[詳細](literal-search-v6.md)・[実機検証](viewer-reader-validation.md)。
+
 > 2026-10-14 夜：通常検索に作品別の直接一致/関連語一致/欠落語を返すsearch_evidenceを追加。WinUI表示は後続。固定v6では正解を先頭に出しても余分な候補やpartialが残ることを測定し、現在の検索方式は変更していない。[結果と根拠API](literal-search-v6.md)。全Python263 PASS、Windows未検証。
 
 > 2026-10-14 Linux続行：タグは保存JSONから値を復元して照合する。`魔法"少女`や`C:\textures`の見落とし、JSON構文の`[`や`,`だけでヒットする誤判定を修正。実際のタグ/名前にある記号は検索可能。AI検索の文字一致根拠・任意の文字一致フィルターも共通処理へ変更し、ベクトル/モデル/順位統合方式は変更なし。保存済みタグは書き換えない。文字検索10・AI候補4・全Python256 PASS。Windows GUIは今回未検証。

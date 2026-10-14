@@ -34,7 +34,9 @@
 
 ## 今回の再開で把握すべき境界
 
-- 2026-10-14 夜：v6固定評価とprecision/correct-emptyを追加し、通常検索APIにitem別search_evidence（direct/related/missing）を追加。全Python263 PASS、v6全72結果はAPI追加前後同一。WinUI/Core解析・表示は未実装。Windows既存gateと[評価/根拠API](literal-search-v6.md)を次の判断材料にする。
+- 2026-10-14 Windows続行：語別`search_evidence`のCore解析・WinUI表示（`SearchEvidence<id>`）を実装し、Windows実機で全Python263・Core157・x64 Release PASSを確認。ネイティブGUIでサムネイルdouble-click（`viewer-doubleclick-01` 22 checks PASS、Light/Dark）、語別検索根拠＋引用符/バックスラッシュ/`[`検索（`search-evidence-01` 30 checks PASS、Light/Dark・wide/narrow）、動画サムネイルLight（`video-evidence-03`、MP4/MKV/WebM・SAR 8:9の4:3表示・破損fallback・double-click非起動；Dark・503/取消は次回batch）を確認。[実機検証](viewer-reader-validation.md)と[両handoff最上段](codex-handoff.md)を正とする。
+
+- 2026-10-14 夜：v6固定評価とprecision/correct-emptyを追加し、通常検索APIにitem別search_evidence（direct/related/missing）を追加。全Python263 PASS、v6全72結果はAPI追加前後同一。
 
 - 2026-10-14 続行：動画SARの比率、JSONタグ値の文字検索/AI根拠、過大IDのGET/POST/scanを修正。全Python256 PASS、Windows/.NET/nativeは未検証。動画20・文字検索10・AI候補4・ID境界4の回帰を追加/確認。[両handoffの最上段](codex-handoff.md)を正とする。
 

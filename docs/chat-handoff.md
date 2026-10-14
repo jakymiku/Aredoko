@@ -1,4 +1,33 @@
-## 最新：固定評価v6・語ごとの検索根拠API（2026-10-14 夜）
+## 最新：語別検索根拠のWinUI表示・サムネイルdouble-clickと動画/タグ検索のWindows実機検証（2026-10-14 Windows続行）
+
+開始remote HEAD **b5b65966df51720c669f081d8773df130d09504b**（ローカル `bb8b154` をfast-forward同期し、別worktreeの未コミット変更を破棄せず保護して取り込み）。製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続。AGENTS→product-vision→agent-start→両handoff最新節・Issue #4・Draft PR #5を確認。旧branch・PR #6の再取り込みなし。
+
+### 実装と保存commit
+
+1. **68f73899c1b4193c57e55038ad5924323fa4672a** — Windows checkoutで`tests/fixtures/literal-related-v6.json`がautocrlfによりSHA256変化する問題を`.gitattributes`（`eol=lf`）で修正。`tests/test_video_previews.py`の子process出力テストをraw bytes出力に統一し、Windowsの開いた読み取りhandleによるrename拒否（`PermissionError`）を検証。
+2. **836044c1a7900ba34a8ce4ff092902ce2f610cd8** — `src/Aredoko.Core/Protocol.cs`に反射不要の`SearchEvidence`（`Direct`/`Related`/`Missing`、合計最大16語・1語最大64文字、サロゲートペア境界保護、`AllDirect`は`Direct.Length > 0 && Related.Length == 0 && Missing.Length == 0`）と`DescribeEvidence`（各区分4語＋「ほかN語」）を追加。`src/Aredoko.WinUI/MainPage.xaml.cs`の一覧/グリッド行で`row.Evidence is { AllDirect: false }`のとき`SearchEvidence<id>`として「入力語で一致：… / 関連語で一致：… / 一致なし：…」を表示（全語直接一致では余分な行を出さない）。`tools/compile_check_winui.py`のWindows UTF-8出力対応、`tools/test_image_viewer_ui.py`の専用読書window（`ArchiveReaderDialog`）待機修正および`--evidence-only` / `--video-and-evidence-only`検証モードを追加。
+
+### 正確な検証結果
+
+- **全Python 263 PASS / 142.293秒 / skip 0**（`NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -q`）。Windows実機のFFmpeg/ffprobeによる`test_video_previews.py` **20 PASS / 8.914秒 / skip 0**を含む。
+- **Core 157 PASS**（`dotnet run --project tests/Aredoko.Core.Tests -c Release`、従来147＋`SearchEvidence` 9＋動画行viewer非対象1）。
+- **Windows x64 SelfContained Release PASS**（`dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore`、0 error、既存IL2104 2 warnings抑制なし）。`python tools/compile_check_winui.py` **exit 0 / diagnostics 0**。
+- **`viewer-doubleclick-01` PASS 22 checks / keys 16 / skip 0 / PNG 8全目視 / graceful close 2 / cleanup warnings 0**。Light/Darkで未選択状態の一覧サムネイルdouble-click（詳細pane展開によるレイアウト移動を含む）、グリッド、詳細プレビュー、未保存draft編集中の別作品double-clickキャンセル、CBZサムネイルからの専用読書ウィンドウ起動・Esc終了を確認。
+- **`search-evidence-01` PASS 30 checks / keys 0 / skip 0 / PNG 6全目視 / graceful close 2 / cleanup warnings 0**。Light/Dark・1200×820と700×620狭幅で、全語直接一致（`a.png`）での`SearchEvidence`非表示、直接＋関連（`入力語で一致：東方 / 関連語で一致：巫女`）、関連のみ（`関連語で一致：東方、巫女`）、直接一致が関連一致より先に並ぶ順序、partial時の`一致なし：未知`、未保存draftの検索キャンセル保持、および`魔法"少女`・`C:\textures`タグ検索と`[`検索の0件（JSON配列構文の誤ヒット除去）を実機確認。
+- **`video-evidence-02` FAIL 5 checks / PNG 2全目視 / graceful close 1**（初期一覧で画面外の`Preview6`を直接click）、**`video-evidence-03` FAIL 8 checks / PNG 3全目視 / graceful close 1**。`03`のLightで720×480 SAR 8:9動画（`anamorphic.mp4`）の`DetailPreview` 4:3表示比率、`clip.mp4`/`clip.mkv`/`clip.webm`のリスト・グリッド「動画の先頭フレーム」、破損動画（`broken.mp4`）の「プレビューなし」、動画サムネイルdouble-clickで画像/本viewerが開かないことまで実機確認。続く503確認で`run_query`が`set-value`の300ms debounce検索に加えて`BtnSearch`も押したため、1回目の要求で503を消費し2回目の要求が200で成功して「動画の先頭フレーム」となり停止。`run_query`の二重検索は修正済みだが、UIテストの最大2回修正再実行ルールに従いこのbatchの追加再実行は停止。
+- 全runで生成mediaのbytes/mtime/hash不変、settings bytes不変、AI推論/worker 0、正常close・cleanup warning 0。私物scan/変更/外部送信、model/依存取得、OS変更、**CI dispatch 0**（3 workflowすべてmanual `workflow_dispatch`のみを確認）。
+
+### 次の3手と残課題
+
+1. **動画サムネイルの残gate完走**：修正済み`tools/test_image_viewer_ui.py --video-and-evidence-only`を次turnの新batchで実行し、Lightで確認済みの動画表示に加えて503単発fallback/再試行、遅延要求のnavigation取消、Darkテーマ動画表示を完走する。
+2. **動画再生の小さな縦切り**：明示登録した生成動画に対するWindows native再生（play/pause/seek/volume）と非対応/破損時の案内を小さく実装し、生成動画で確認する。元動画の変更・外部通信・無断codec導入はしない。
+3. **検索評価の継続と閲覧/アクセシビリティ残gate**：新しい固定入力またはユーザー明示の小サンプルで短alias/partialの過剰展開を比較。500px未満toolbar overflow、高DPI/High Contrast/Narrator/Tab全順序、native titlebar X/Alt+F4、実JSON save/open picker、読書位置/設定保存、フォルダ本/OCR/VLM/Komgaは後続。
+
+最終実装HEAD **836044c1a7900ba34a8ce4ff092902ce2f610cd8**。文書込み最終HEADは本節を導入したhandoff commit（`git log -1 --format=%H -- docs/codex-handoff.md`）を正とする。
+
+---
+
+## 履歴：固定評価v6・語ごとの検索根拠API（2026-10-14 夜）
 
 開始HEAD **b59a4bc215dd8a165995a74a7b794b2c02b453a2**。製品branch `feat/winui3-production-mvp-20261011` /base `feat/gui-framework-comparison-20261010` /[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続。開始git status clean、PRも同じHEAD・Draft/open/unmerged。AGENTS/製品vision/agent-start/両handoff最上段・Issue4/PR5を確認。旧branch/PR6を取り込んでいない。
 

@@ -20,14 +20,20 @@
 | viewer-window-image-02 | PASS 110 checks / keys 56 / skip 0 / PNG 24 / graceful close 2 / cleanup warnings 0 |
 | viewer-window-reader-01 | FAIL 12 checks / keys 1 / skip 0 / PNG 1 / graceful close 0 / cleanup warnings 1 |
 | viewer-window-reader-02 | PASS 88 checks / keys 24 / skip 0 / PNG 24 / graceful close 2 / cleanup warnings 0 |
+| viewer-doubleclick-01 | PASS 22 checks / keys 16 / skip 0 / PNG 8 / graceful close 2 / cleanup warnings 0 |
+| video-evidence-02 | FAIL 5 checks / keys 0 / skip 0 / PNG 2 / graceful close 1 / cleanup warnings 0 |
+| video-evidence-03 | FAIL 8 checks / keys 0 / skip 0 / PNG 3 / graceful close 1 / cleanup warnings 0 |
+| search-evidence-01 | PASS 30 checks / keys 0 / skip 0 / PNG 6 / graceful close 2 / cleanup warnings 0 |
 
 
-全保存PNGを1枚ずつ目視。最終window画像24枚/reader24枚は余白・dock・状態/エラー/暗いcanvas/resizeを確認。以前のmodal reader01/02も各24枚目視したが、旧modalの外枠は最終windowで置換した。
+全保存PNGを1枚ずつ目視。最終window画像24枚/reader24枚、追加double-click 8枚、動画Light 5枚（失敗時含む）、検索根拠6枚は余白・dock・状態/エラー/暗いcanvas/resizeを確認。以前のmodal reader01/02も各24枚目視したが、旧modalの外枠は最終windowで置換した。
 
 ## 結果の読み方
 
 - checksは契約assert数でありテスト件数/coverage割合ではない。keysは安全guard後に送った実入力、skipは未送信。mouseは所有canvasへCLI SendInput hover/右クリック。操作ボタンのUIA invokeと物理入力を区別する。
-- doubleclick03まで失敗。最初の選択でthumbnail位置が動いた観測を踏まえ、Core click tracker/PointerPressed fallbackを後から追加した。7 Core checksとReleaseはPASSだが、実機double-click成功の証拠ではない。skill最大2修正再実行に達したため再実行なし。
+- `viewer-doubleclick-01`で一覧（未選択状態からのレイアウト移動を含む）・グリッド・詳細サムネイルのdouble-click、未保存編集の別作品選択キャンセル、CBZサムネイルからの専用読書ウィンドウ起動・Esc終了をLight/Darkで確認し**PASS（22 checks / keys 16 / skip 0 / PNG 8）**。
+- `search-evidence-01`で語別検索根拠（`SearchEvidence<id>`：直接＋関連、関連のみ、partialの直接＋欠落、関連＋欠落、全語直接一致での非表示）、未保存draft保持、`魔法"少女`・`C:\textures`タグ検索、`[`の0件をLight/Dark・wide/narrowで確認し**PASS（30 checks / keys 0 / skip 0 / PNG 6）**。
+- `video-evidence-03`はLightでSAR 8:9動画のDetailPreview 4:3比率、MP4/MKV/WebMリスト・グリッド「動画の先頭フレーム」、破損動画「プレビューなし」、動画double-clickでviewer非起動まで確認後、`set-value`のdebounce検索と`BtnSearch`二重発火で503単発待機が消費され停止（2cycle上限で終了）。`run_query`は修正済み、Dark動画・遅延取消は次回独立batchで確認する。
 - overlay01はhide gate未通過（modal pointer handler/hover transportを同時修正）。window-image01は閉じたHWNDへのwait-forで停止し所有processの終了fallback1。window-image02は所有windowの一覧でcloseを待ってmainへ復帰しPASS。実装のviewer closeは成功していた。失敗も表に残す。
 - readerの409は注入応答。元book改変/実rescanではない。Python reader16は別のbackend契約試験、古いnative105の実revision試験も当時の履歴として維持。
 - 最終image4file/reader5fileのbytes/mtime/hash・settings bytes不変。AIcalls/worker0、正常close2ずつ、cleanup warnings0。新モデル/依存/CI実行なし。data/ai-uiのevidenceはignoredでGit非公開。
