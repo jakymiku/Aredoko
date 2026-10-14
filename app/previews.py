@@ -147,6 +147,13 @@ class PreviewReader:
             raise ValueError('Invalid video revision')
         return self._read(item_id,operation='video_range',revision=revision,start=start,end=end)
 
+    def video_frame(self,item_id,at_ms,revision):
+        if type(at_ms) is not int or not 0 <= at_ms <= 86_400_000:
+            raise ValueError('Invalid video frame time')
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}',revision) is None:
+            raise ValueError('Invalid video revision')
+        return self._read(item_id,operation='video_frame',revision=revision,page=at_ms)
+
     def manifest(self, item_id):
         """Count naturally ordered archive pages without decompressing images."""
         return self._read(item_id, operation='manifest')
@@ -176,7 +183,7 @@ class PreviewReader:
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES:
                 raise PreviewUnavailable('Unsupported preview type')
-            if operation in ('video','video_manifest','video_range'):
+            if operation in ('video','video_manifest','video_range','video_frame'):
                 if suffix not in VIDEO_MIME:
                     raise PreviewUnavailable('Video player requires a supported video item')
             elif operation != 'preview' and suffix not in ('.cbz', '.zip'):
@@ -203,14 +210,16 @@ class PreviewReader:
                         raise PreviewUnavailable('Video exceeds playback limit')
                     if data.lstrip()[:16].upper().startswith((b'#EXTM3U', b'[PLAYLIST]', b'<ASX')):
                         raise PreviewUnavailable('Playlist files are not played')
-                elif operation in ('video_manifest','video_range'):
+                elif operation in ('video_manifest','video_range','video_frame'):
                     if not 1 <= info.st_size <= MAX_STREAM_VIDEO_BYTES:
                         raise PreviewUnavailable('Video exceeds stream limit')
                     prefix=file.read(512).lstrip()
                     if not prefix or prefix[:16].upper().startswith((b'#EXTM3U',b'[PLAYLIST]',b'<ASX')):
                         raise PreviewUnavailable('Playlist files are not played')
                     mime=VIDEO_MIME[suffix]
-                    if operation=='video_manifest':
+                    if operation=='video_frame':
+                        file.seek(0);data=self.videos.read(file,current_revision,at_ms=page);mime='image/png'
+                    elif operation=='video_manifest':
                         result={'item_id':item_id,'size_bytes':info.st_size,'mime':mime,'revision':current_revision}
                     else:
                         if start>=info.st_size or end>=info.st_size:raise VideoRangeUnsatisfiable(info.st_size)
@@ -259,7 +268,7 @@ class PreviewReader:
                     # Do not publish its old frame if the location was replaced.
                     current = _safe_path(row['path'], row['relative_path']).stat(follow_symlinks=False)
                     if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
-                        if operation in ('video_manifest','video_range'):raise ReaderChanged('Video location changed')
+                        if operation in ('video_manifest','video_range','video_frame'):raise ReaderChanged('Video location changed')
                         raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
                     if operation != 'preview':

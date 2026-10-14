@@ -37,6 +37,20 @@ internal static class VideoRangeTests
         }
         foreach(var json in new[]{"{}","[]","{\"item_id\":8,\"size_bytes\":0,\"mime\":\"video/mp4\",\"revision\":\""+m.Revision+"\"}"})
         {try{VideoManifest.Parse(Encoding.UTF8.GetBytes(json),8);check(false,"invalid manifest");}catch(InvalidDataException){check(true,"malformed/empty manifest rejected");}}
+        var frameCalls=0;
+        using var frameHttp=new HttpClient(new Stub((req,_)=>
+        {
+            frameCalls++;check(req.RequestUri!.PathAndQuery=="/api/library/video/8/frame?revision="+m.Revision+"&at_ms=1000","frame fixed ID revision and numeric time route");
+            var response=new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent([1,2,3])};response.Content.Headers.ContentType=new MediaTypeHeaderValue("image/png");return Task.FromResult(response);
+        })){BaseAddress=http.BaseAddress};var frameClient=new ArchiveReaderClient(frameHttp);
+        check((await frameClient.VideoFrameAsync(m,1000,CancellationToken.None)).Length==3,"bounded PNG frame received");
+        try{await frameClient.VideoFrameAsync(m,-1,CancellationToken.None);check(false,"negative frame time");}catch(ArgumentOutOfRangeException){check(frameCalls==1,"invalid frame time rejected before transport");}
+        foreach(var kind in new[]{"mime","size"})
+        {
+            using var badHttp=new HttpClient(new Stub((_,_)=>
+            {var response=new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent([1])};response.Content.Headers.ContentType=new MediaTypeHeaderValue(kind=="mime"?"video/mp4":"image/png");response.Content.Headers.ContentLength=kind=="size"?512*1024+1:1;return Task.FromResult(response); })){BaseAddress=http.BaseAddress};
+            try{await new ArchiveReaderClient(badHttp).VideoFrameAsync(m,0,CancellationToken.None);check(false,"invalid frame response");}catch(InvalidDataException){check(true,"invalid frame contract rejected "+kind);}
+        }
         using var cancel=new CancellationTokenSource();using var slowHttp=new HttpClient(new Stub(async(_,ct)=>{cancel.Cancel();await Task.Delay(Timeout.Infinite,ct);return new HttpResponseMessage();})){BaseAddress=http.BaseAddress};using var slow=new VideoRangeSource(slowHttp,m,cancel.Token);
         try{await slow.ReadAsync(0,1,CancellationToken.None);check(false,"cancel range");}catch(OperationCanceledException){check(slow.Failure is null,"closing cancels range without persistent failure");}
     }

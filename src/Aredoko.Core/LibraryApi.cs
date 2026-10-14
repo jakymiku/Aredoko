@@ -15,6 +15,7 @@ public sealed class LibraryApi : IDisposable
     public Task<byte[]> ImageAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ImageAsync(id, cancellation);
     public Task<VideoRangeSource> OpenVideoRangeAsync(int id,CancellationToken cancellation)=>new ArchiveReaderClient(client).OpenVideoRangeAsync(id,cancellation);
+    public Task<byte[]> VideoFrameAsync(VideoManifest manifest,int atMs,CancellationToken cancellation)=>new ArchiveReaderClient(client).VideoFrameAsync(manifest,atMs,cancellation);
     public Task<(byte[] Data, string Mime)> VideoAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).VideoAsync(id, cancellation);
     public async Task ConnectAsync() {

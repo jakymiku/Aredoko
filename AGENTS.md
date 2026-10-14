@@ -15,6 +15,8 @@ Product intent comes from the vision. Implementation claims come from current co
 
 **Before planning, coding, changing retrieval/ranking, selecting AI models, or changing a GUI flow, read [docs/product-vision.md](docs/product-vision.md).** It is the canonical long-term definition of what Aredoko is for: a local-first Windows media library for finding books/doujinshi **and** images, videos, audio, and creative assets through vague Japanese queries, using hybrid text/tag/semantic/visual indexing. **Do not narrow the product into an adult-book-only tagger or an EmbeddingGemma-specific app.** The model and technique are replaceable; the user-facing retrieval goal and existing non-AI features are not.
 
+For video/audio content indexing and item-origin similarity search, also read [docs/media-content-plan.md](docs/media-content-plan.md), which records the user-confirmed final goal and the current implementation boundaries.
+
 The vision defines product intent, not implementation status. The latest source, tests, [docs/codex-handoff.md](docs/codex-handoff.md), [docs/chat-handoff.md](docs/chat-handoff.md), and PR state define what actually works. If a proposed change contradicts the vision, flag it explicitly instead of silently redefining scope.
 
 **Read [docs/codex-handoff.md](docs/codex-handoff.md) and [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) before implementation.** They are the current project state and next-action checklist (2026-10-11). Some legacy READMEs/status files describe the earlier stage where the GUI framework was undecided; **the user now chose WinUI 3 for the production MVP**.

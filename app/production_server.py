@@ -128,11 +128,16 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                         return self.send(400,{'error':'Invalid item'})
                 if path.startswith('/api/library/video/'):
                     try:
-                        match=re.fullmatch(r'/api/library/video/([1-9][0-9]{0,18})(?:/(manifest|range))?',path)
+                        match=re.fullmatch(r'/api/library/video/([1-9][0-9]{0,18})(?:/(manifest|range|frame))?',path)
                         if match is None:raise ValueError('Invalid video route')
                         item=int(match[1])
                         if item>9223372036854775807:raise ValueError('Invalid item')
                         query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
+                        if match[2]=='frame':
+                            if set(query)!={'revision','at_ms'} or any(len(x)!=1 for x in query.values()) or re.fullmatch(r'0|[1-9][0-9]{0,7}',query['at_ms'][0]) is None:
+                                raise ValueError('Invalid frame query')
+                            data,mime=previews.video_frame(item,int(query['at_ms'][0]),query['revision'][0])
+                            return self.send(200,data,mime)
                         if match[2]=='range':
                             if set(query)!={'revision'} or len(query['revision'])!=1:raise ValueError('One revision is required')
                             values=self.headers.get_all('Range',[])

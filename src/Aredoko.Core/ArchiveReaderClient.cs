@@ -93,6 +93,13 @@ public sealed class ArchiveReaderClient(HttpClient client)
         return new VideoRangeSource(client,VideoManifest.Parse(data,itemId),cancellation);
     }
 
+    public async Task<byte[]> VideoFrameAsync(VideoManifest manifest,int atMs,CancellationToken cancellation)
+    {
+        manifest.Validate();if(atMs<0||atMs>86_400_000)throw new ArgumentOutOfRangeException(nameof(atMs));
+        var (data,_)=await ReadMediaAsync($"api/library/video/{manifest.ItemId}/frame?revision={manifest.Revision}&at_ms={atMs}",512*1024,["image/png"],cancellation,seconds:12);
+        return data;
+    }
+
     public async Task<ReaderProgress?> ProgressAsync(int itemId,CancellationToken cancellation)
     {
         if(itemId<1)throw new ArgumentOutOfRangeException(nameof(itemId));

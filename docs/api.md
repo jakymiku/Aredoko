@@ -1,5 +1,7 @@
 # 共通API（操作試作 v0）
 
+- `GET /api/library/video/{id}/frame?revision=<64hex>&at_ms=<integer>`：時刻付きPNG、最大24時間/512KiB、active root・現revision検査。詳細：[シークpreview](video-seek-preview.md)。
+
 ## 製品MVP：読み取り専用動画ストリームAPIと語別根拠のWinUI接続（2026-10-14 Windows続行）
 
 - `GET /api/library/video/{id}/manifest`・`/range?revision=<64hex>`：通常再生用の認証付き範囲取得。最大2TiB、単一明示Range 1MiB以下、成功206/更新409/範囲外416。詳細：[動画範囲再生](video-streaming.md)。

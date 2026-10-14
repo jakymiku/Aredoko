@@ -36,7 +36,7 @@ def focused_property(value):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--reader-progress-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');parser.add_argument('--video-range-only',action='store_true');args=parser.parse_args();args.video_player_only=args.video_player_only or args.video_range_only;target=args.output.resolve()
+    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--reader-progress-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');parser.add_argument('--video-range-only',action='store_true');parser.add_argument('--video-seek-only',action='store_true');args=parser.parse_args();args.video_player_only=args.video_player_only or args.video_range_only or args.video_seek_only;target=args.output.resolve()
     if os.name!='nt':parser.error('Native Windows required')
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Evidence must stay in data/ai-ui')
     target.mkdir(parents=True,exist_ok=False)
@@ -207,7 +207,7 @@ def main():
                 ('clip.mp4','red','libx264',['-pix_fmt','yuv420p','-movflags','+faststart']),
                 ('clip.wmv','blue','wmv2',[]),
                 ('unsupported.mkv','green','ffv1',[])]:
-                subprocess.run([ffmpeg,'-nostdin','-v','error','-f','lavfi','-i',f'color=c={color}:s=320x180:d=2.0','-threads','1','-c:v',codec,*([] if args.video_range_only and name=='clip.mp4' else extra),str(media/name)],check=True,timeout=15)
+                subprocess.run([ffmpeg,'-nostdin','-v','error','-f','lavfi','-i',('color=c=red:s=320x180:d=1[r];color=c=blue:s=320x180:d=1[b];[r][b]concat=n=2:v=1:a=0' if args.video_seek_only and name=='clip.mp4' else f'color=c={color}:s=320x180:d=2.0'),'-threads','1','-c:v',codec,*([] if args.video_range_only and name=='clip.mp4' else extra),str(media/name)],check=True,timeout=15)
             (media/'broken.mp4').write_bytes(b'not a valid video')
         if args.video_range_only:
             # Place moov after a valid free atom; mdat offsets stay unchanged.
@@ -282,6 +282,12 @@ def main():
                 if args.video_player_only and self.headers.get('X-Aredoko-Token')==token and self.path.startswith('/api/library/video/'):
                     report.setdefault('video_requests',[]).append(self.path)
                     report.setdefault('video_ranges',[]).append({'route':urlparse(self.path).path,'span':self.headers.get('Range')})
+                    if args.video_seek_only and urlparse(self.path).path=='/api/library/video/'+str(ids['clip.mp4'])+'/frame':
+                        if faults.get('frame_code'):
+                            code=faults.pop('frame_code');return self.send(code,{'error':'Generated frame failure'})
+                        if faults.get('frame_delay'):
+                            faults['frame_delay']=False;entered.set()
+                            if not released.wait(25):return self.send(503,{'error':'Generated frame delay timeout'})
                     if self.path=='/api/library/video/'+str(ids['clip.mp4'])+'/manifest' and faults.get('video_play_code'):
                         code=faults.pop('video_play_code');return self.send(code,{'error':'Generated video playback failure'})
                 try:return super().do_GET()
@@ -388,7 +394,7 @@ def main():
                     if not keys('f10','VideoViewport'):raise RuntimeError('Cannot reveal video controls with owned keyboard')
                     ui('wait-for','VideoClose','-t','5000')
                 def close_video():
-                    physical=keys('esc','VideoClose')
+                    physical=keys('esc','VideoViewport')
                     if not physical:ui('invoke','VideoClose')
                     ui('wait-for','VideoPlayerDialog','--gone','-t','5000')
                     return physical
@@ -402,6 +408,16 @@ def main():
                 shot(theme+'-video-opened-wide')
                 ui('invoke','VideoPlayPause');wait('VideoStatus','再生中');wait('VideoPlayPause','一時停止');check(theme+' video play starts playback',True)
                 ui('invoke','VideoPlayPause');wait('VideoStatus','一時停止中');wait('VideoPlayPause','再生');check(theme+' video pause stops playback',True)
+                if args.video_seek_only:
+                    prop('VideoSeek','IsEnabled','True');ui('set-value','VideoSeek','1');wait('VideoPosition','0:01 / 0:02');check(theme+' seek slider changes actual player position',True)
+                    if keys('right','VideoSeek'):wait('VideoPosition','0:02 / 0:02');check(theme+' seek slider keyboard moves position',True)
+                    ui('set-value','VideoSeek','0');wait('VideoPosition','0:00 / 0:02')
+                    ui('hover','VideoSeek','--dwell-time','0');wait('VideoSeekImage','0:01のサムネイル');wait('VideoSeekTime','0:01');wait('VideoPosition','0:00 / 0:02');shot(theme+'-seek-preview-wide');check(theme+' hover preview is independent of playback position',True)
+                    ui('hover','VideoViewport','--dwell-time','0');ui('wait-for','VideoSeekPreview','--gone','-t','5000')
+                    resize(700,620);ui('hover','VideoSeek','--dwell-time','0');wait('VideoSeekImage','0:01のサムネイル');shot(theme+'-seek-preview-narrow');ui('hover','VideoViewport','--dwell-time','0');resize(1200,820)
+                if args.video_seek_only:
+                    faults['frame_code']=503;ui('hover','VideoSeek','--dwell-time','0');wait('VideoSeekImage','サムネイルを取得できません。シークは利用できます');shot(theme+'-seek-preview-unavailable');prop('VideoPlayPause','IsEnabled','True');ui('set-value','VideoSeek','1');wait('VideoPosition','0:01 / 0:02');check(theme+' unavailable preview leaves seeking enabled',True)
+                    ui('hover','VideoViewport','--dwell-time','0');ui('set-value','VideoSeek','0');wait('VideoPosition','0:00 / 0:02')
                 ui('invoke','VideoSeekForward');wait('VideoPosition','0:01 / 0:02');prop('VideoSeekBack','IsEnabled','True');check(theme+' video seek forward advances position',True)
                 ui('invoke','VideoSeekBack');wait('VideoPosition','0:00 / 0:02');check(theme+' video seek back returns to start',True)
                 wait('VideoVolumeStatus','音量 80%')
@@ -423,6 +439,8 @@ def main():
                 select('clip.mp4');faults['video_play_code']=503;open_video();wait('VideoStatus','ほかのメディアを読み込み中です。少し待って再試行してください。');shot(theme+'-video-busy')
                 ui('invoke','VideoRetry');wait('VideoStatus',shown_video);wait('VideoPosition','0:00 / 0:02');check(theme+' video 503 manual retry succeeds',True);close_video()
                 faults['video_play_code']=409;open_video();wait('VideoStatus','ファイルが更新されました。閉じて再スキャンしてから、開き直してください。');wait('VideoPosition','—');check(theme+' video 409 conflict guidance',True);close_video()
+                if args.video_seek_only:
+                    entered.clear();released.clear();faults['frame_delay']=True;open_video();wait('VideoStatus',shown_video);ui('hover','VideoSeek','--dwell-time','0');check(theme+' delayed seek thumbnail started',entered.wait(5));close_video();select('clip.wmv');open_video();wait('VideoStatus',shown_video);released.set();time.sleep(.3);wait('VideoTitle','clip.wmv');check(theme+' late seek thumbnail cannot replace next player',True);close_video()
                 select('clip.mp4');open_video();wait('VideoStatus',shown_video)
                 tree=json.loads(ui('inspect','--json','--depth','16'));outer=next(n for n in nodes(tree) if n.get('automationId')=='VideoViewport')
                 move_owned(outer,.15,'VideoViewport');ui('wait-for','VideoClose','--gone','-t','10000');shot(theme+'-video-controls-hidden')

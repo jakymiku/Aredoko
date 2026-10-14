@@ -1,6 +1,8 @@
 # Aredoko
 
-> 2026-10-15：大容量動画の範囲取得再生を接続。Python276/Core208/Release・native73checks（全12PNG確認）PASS。[最新仕様・実測と限界](docs/video-streaming.md)。シークバー/hoverサムネイルは続行中。
+> 最新（2026-10-15）：シークバー・時刻付きサムネイル・下部帯の左右端揃えを追加。Python279/Core213/Release・native88checks（全18PNG確認）PASS。[操作と制限](docs/video-seek-preview.md)。動画/音声内容索引・アイテム起点類似検索は未実装。[最終目標と計画](docs/media-content-plan.md)。
+
+> 2026-10-15：大容量動画の範囲取得再生を接続。Python276/Core208/Release・native73checks（全12PNG確認）PASS。[最新仕様・実測と限界](docs/video-streaming.md)。シークバー/hoverサムネイルも接続済み（下記最新記録を参照）。
 
 > **最新：読書位置保存**：CBZ/ZIPを開き直すと読めたページと単ページ/見開き方向を復元。本の更新時は先頭へ、保存/取得失敗では旧位置を保持・手動retry。全Python271/Core188/Release PASS、Light/Dark実機55checks/34keys/10PNG全目視。[操作と検証](docs/reader-progress.md)。動画・検索根拠・double-clickの他AI更新も維持。
 
