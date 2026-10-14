@@ -1,3 +1,13 @@
+## 最新：検索品質・類似検索・自動シチュタグを優先する開発方針（2026-10-15・文書のみ）
+
+ユーザーの追加指示により、[development-priorities.md](development-priorities.md) を新設し、[AGENTS.md](../AGENTS.md)、[agent-start.md](agent-start.md)、[product-vision.md](product-vision.md)から必読の直近方針として参照した。**既存の長期製品ビジョンは変更せず、次の開発順を明確化**：P0 検索精度の新固定評価・根拠に基づく改善 → P1 既存画像embeddingによる選択アイテムの類似検索API/右クリックUI → P2 OCR・承認可能なAIタグ候補と複数ページのシチュ判定 → P3 フォルダ本の論理作品化 → P4 時刻付き動画/音声内容索引 → P5 WinUI操作性/完成デザイン・大規模/配布検証。既存動画/reader機能を壊さず、細部の追加より検索成功率を重視する。
+
+- **今回の変更はドキュメントのみ**。製品コード・モデル・依存・CI/workflow・元メディア・個人設定を変更していない。新しい機能/テスト合格を宣言しない。既存の最新実装/テスト証拠は直下の2026-10-15動画節を引き続き参照。
+- 変更開始時のremote HEAD/PR #5 headは `c78b978976431f76581e1576e4558b5298571f9a`。同じ `feat/winui3-production-mvp-20261011` / Draft PR #5 / base `feat/gui-framework-comparison-20261010` を維持。main/過去PR #6の重複取り込み・マージ・force push・CI dispatchを行わない。GitHub経由の書込なのでユーザーPCのlocal worktree status/未commit変更は観測していない。
+- **次の3手**：(1) 既存評価v1/v2/v6を読み、新しい20〜50問程度の小さな固定評価入力を結果観測前に確定してbaselineを記録。(2) literal/関連語/AI text/cover/combined、no-answer、検索応答/根拠を比較し、根拠のある小改善を実装・局所テスト。(3) 既存image vectorを再利用した類似検索API→生成fixture→WinUI右クリックを追加。並行して自動タグの由来/承認スキーマを小さく設計。
+
+---
+
 ## 最新：大容量動画・シークバー・時刻付きサムネイル（2026-10-15）
 
 開始HEAD `267d4820a06c541d3d71b86155727ef2fcc538da`。range実装 `65d824c`、シーク/UI・内容索引計画 **`91d59c24aa48c7d9b1e4982032613c0d4851b453`**。文書込み最終HEADは本節の記録commit（`git log -1 --format=%H -- docs/codex-handoff.md`）を正とする。既存製品branch/base/Draft PR5を維持。remoteへ他AIの新commitはなく通常fast-forwardのみ。
