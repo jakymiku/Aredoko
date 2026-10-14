@@ -6,8 +6,9 @@ The entrypoint is the repository-root **AGENTS.md** (plural, uppercase). Read li
 
 1. [docs/product-vision.md](docs/product-vision.md): canonical product purpose and principles.
 2. [docs/agent-start.md](docs/agent-start.md): current development branch, document roles and resume procedure.
-3. The latest sections of [docs/codex-handoff.md](docs/codex-handoff.md) and [docs/chat-handoff.md](docs/chat-handoff.md), then [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) and [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5): actual progress, tests, blockers and next work.
-4. [docs/spec.md](docs/spec.md) and task-specific design documents as needed.
+3. [docs/development-priorities.md](docs/development-priorities.md): **current implementation priorities, sequencing, measurable acceptance gates and the next three coding tasks**.
+4. The latest sections of [docs/codex-handoff.md](docs/codex-handoff.md) and [docs/chat-handoff.md](docs/chat-handoff.md), then [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) and [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5): actual progress, tests, blockers and next work.
+5. [docs/spec.md](docs/spec.md) and task-specific design documents as needed.
 
 Product intent comes from the vision. Implementation claims come from current code, test evidence and the latest handoffs/PR. Old proposal documents and historical handoff sections do not override those. Confirm the checked-out branch; an old main checkout is not the current production worktree.
 
@@ -20,6 +21,12 @@ For video/audio content indexing and item-origin similarity search, also read [d
 The vision defines product intent, not implementation status. The latest source, tests, [docs/codex-handoff.md](docs/codex-handoff.md), [docs/chat-handoff.md](docs/chat-handoff.md), and PR state define what actually works. If a proposed change contradicts the vision, flag it explicitly instead of silently redefining scope.
 
 **Read [docs/codex-handoff.md](docs/codex-handoff.md) and [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) before implementation.** They are the current project state and next-action checklist (2026-10-11). Some legacy READMEs/status files describe the earlier stage where the GUI framework was undecided; **the user now chose WinUI 3 for the production MVP**.
+
+## Current product-development emphasis (2026-10-15)
+
+**Read [docs/development-priorities.md](docs/development-priorities.md) before choosing the next feature or continuing implementation.** The user wants development effort redirected from generic viewer/player polish toward **finding the right local item**: (P0) search quality evaluation and evidence-led ranking improvements, (P1) image/item-origin right-click similarity search, (P2) OCR, reviewable AI tag suggestions and multi-page situation-tag understanding. After that, advance logical folder-book grouping and time-coded video/audio content indexing in small independently tested slices. These are priorities, **not completed features or an instruction to discard existing functions**.
+
+A future agent should inspect the latest code/PR/handoff first; then select the highest-priority unfinished vertical slice, implement it and run targeted local tests rather than stopping at planning. Preserve text search, manual metadata, scopes, native viewer, privacy rules and WinUI-only GUI direction. Measure retrieval success (Top1/Recall@5/MRR, no-answer behavior and time to find) and explicitly separate synthetic benchmarks from real-life quality. No private library scanning or model/dependency downloads without explicit permission. Major regressions and data-safety blockers override feature ordering.
 
 ## Long-term Windows visual direction (not a current PoC requirement)
 
