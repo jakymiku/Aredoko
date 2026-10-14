@@ -1,14 +1,14 @@
 # CBZ / ZIP 読書画面
 
-## 現在の操作（2026-10-14）
+## 現在の操作（読書位置保存対応）
 
 詳細の「本を開く」で、画像ビューアと共通の暗い専用WinUIウィンドウを開きます。Windows上部タイトルバーを保持、左右・下のダイアログ外枠なし。上下操作帯はcanvas端に接し、マウス静止2.5秒で隠れます。移動で再表示、Tab/F10で操作部を保持、Escで閉じて元のタグdraft・詳細・openerへ復帰。ズーム/scroll/fit/手動retry/最初からReopenを備えます。
 
-設定アイコンまたは右クリックで「単ページ」「見開き（右→左）」「見開き（左→右）」を選びます。表紙は1枚、その後2枚ずつ、余った最後も1枚。RTLは後のページを左に置き、←で次の見開き。LTR/単ページは→で次、端で停止。向きは閲覧sessionだけで保持、再openでは単ページになります。2ページは双方をdecodeして一度に公開、片方が壊れた場合は両画像を消してエラーと前後送り/retryを残します。前後はloading中無効です。
+設定アイコンまたは右クリックで「単ページ」「見開き（右→左）」「見開き（左→右）」を選びます。表紙は1枚、その後2枚ずつ、余った最後も1枚。RTLは後のページを左に置き、←で次の見開き。LTR/単ページは→で次、端で停止。読めたページと向きを本ごとに保存し、開き直すと復元します。[読書位置の保存・復元](reader-progress.md)。本が更新されていた場合は先頭から開き、向きは保持します。2ページは双方をdecodeして一度に公開、片方が壊れた場合は両画像を消してエラーと前後送り/retryを残します。前後はloading中無効です。
 
-既存manifest revision/active root/認証/除外/link安全境界を維持し、要求は同時1本、最大表示bitmap2枚、元CBZ/ZIP展開・書換え・永続cacheなし。画像8MiB・16M画素・派生PNG長辺2048px/body40秒、manifest4KiB/最大10000page。原寸表示・読書位置保存・目次・page直接指定・フォルダ本・PDF・Komgaは未実装。
+既存manifest revision/active root/認証/除外/link安全境界を維持し、要求は同時1本、最大表示bitmap2枚、元CBZ/ZIP展開・書換え・永続cacheなし。画像8MiB・16M画素・派生PNG長辺2048px/body40秒、manifest4KiB/最大10000page。原寸表示・目次・page直接指定・フォルダ本・PDF・Komgaは未実装。
 
-Core147/reader Python16/最終Release PASS。Light/Darkの単ページ/両見開き/zoom/直接Reopen/エラー/cancel/draft/idleを専用windowで検証。[正確な結果と未確認項目](viewer-reader-validation.md)。409のGUI検証は注入応答であり、実source revision変更ではありません。以下は旧実装の履歴で、未実装/未ビルドという記述も当時の状態です。
+最新は全Python271/Core188/Release PASS、読書位置native55checks/34keys/10PNG全目視。旧reader16/全体reader88の履歴は保持。Light/Darkの単ページ/両見開き/zoom/直接Reopen/エラー/cancel/draft/idleを専用windowで検証。[正確な結果と未確認項目](viewer-reader-validation.md)。旧reader409のGUI検証は注入応答。今回の読書位置は生成bookの実変更/rescanでresetを確認。以下は旧実装の履歴で、未実装/未ビルドという記述も当時の状態です。
 
 ---
 

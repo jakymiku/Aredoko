@@ -1,5 +1,7 @@
 # 共通画像・読書ビューアのWindows検証
 
+> 最新：読書位置保存のnative02が55checks/34keys/10PNG全目視PASS。[変更範囲と実revision fixture](reader-progress.md)・両handoff最新を正とし、以下は各時点の履歴。
+
 2026-10-14。実装commit **ed943b7703718085d05004c99dcc3393d1bf06df**。生成素材のみ・所有test appのみ。最終ソースのwindow検証と、以前のmodal段階を混同しない。
 
 | Run（data/ai-ui、Git対象外） | 結果 |
@@ -19,6 +21,8 @@
 | viewer-window-image-01 | FAIL 30 checks / keys 8 / skip 0 / PNG 5 / graceful close 0 / cleanup warnings 1 |
 | viewer-window-image-02 | PASS 110 checks / keys 56 / skip 0 / PNG 24 / graceful close 2 / cleanup warnings 0 |
 | viewer-window-reader-01 | FAIL 12 checks / keys 1 / skip 0 / PNG 1 / graceful close 0 / cleanup warnings 1 |
+| reader-progress-native-01（旧状態表示） | PASS55 /keys34 /skip0 /PNG10全目視 /close2 /warning0、目視修正後02へ |
+| reader-progress-native-02 | PASS55 /keys34 /skip0 /PNG10全目視 /close2 /warning0、[progress詳細](reader-progress.md) |
 | viewer-window-reader-02 | PASS 88 checks / keys 24 / skip 0 / PNG 24 / graceful close 2 / cleanup warnings 0 |
 | viewer-doubleclick-01 | PASS 22 checks / keys 16 / skip 0 / PNG 8 / graceful close 2 / cleanup warnings 0 |
 | video-evidence-02 | FAIL 5 checks / keys 0 / skip 0 / PNG 2 / graceful close 1 / cleanup warnings 0 |

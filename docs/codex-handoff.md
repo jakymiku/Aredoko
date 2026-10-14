@@ -1,4 +1,35 @@
-## 最新：Windowsネイティブ動画再生の実装・語別検索根拠のWinUI表示・サムネイル/動画実機検証（2026-10-14 Windows続行）
+## 最新：CBZ/ZIPの読書位置・見開き方向を保存して再開（Windows続行）
+
+開始HEAD **2c97844301bb19b84554454ffff1ba960534c550**。他AIの最新更新（動画thumbnail/再生、語別検索根拠UI、double-click実機PASS、v6評価/タグJSON照合/ID境界）とAGENTS/vision/両handoff/Issue4・PR5を確認し、clean・remote一致から続行。既存製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR5](https://github.com/jakymiku/Aredoko/pull/5)を維持。実装commit **9accf85e27dea0b3a39d3e49ceaf64161af3e59f**。文書込み最終HEADは本節の記録commit（`git log -1 --format=%H -- docs/codex-handoff.md`）を正とする。
+
+### 実装と操作
+
+- **本ごとの最後に読めたページと単ページ/RTL/LTRを自動保存・復元**。`reader_progress`をproduction SQLiteへ追加（既存DBでも初期化時に作成）。タグ・棚・お気に入りとは別tableで、元CBZ/ZIPは変更しない。保存は両表示ページのdecode成功後のみ。破損/取消/先行ページの読み込み中には新位置を書かない。
+- **revisionが変わった本/範囲外の古い位置は先頭から**。以前の向きは保持。見開きはpair anchorへ正規化。「最初から開き直す」は明示的にcoverへ戻り、読めた場合にcoverを新位置として保存する。
+- `GET/POST /api/library/reader/{id}/progress`。GETはHost/token、POSTはHost/token/Origin・既存body上限。strict revision/page/modeとpositive Int64 ID、scan guard、現manifest・active root/除外/リンク/索引stat/共通preview枠を検査して保存。stale POSTは409で新位置を上書きしない。root解除/除外中は取得・保存不可、再登録で以前の状態を保持。
+- Coreの反射不要JSON解析・固定ID経路・JSON応答4KiB/MIME/受信長/取消/5秒deadline。保存中は操作を直列化（最大5秒後に失敗案内）。位置の取得失敗では閲覧を先頭から続けるが、既存の位置を自動上書きせず、実際の移動/方向変更または明示save retryまで保持。
+- `ReaderProgressStatus`を追加。保存失敗でも読めた画像を維持し、設定/右クリックの「読書位置を保存し直す」（`ReaderSaveProgress`）からretry。読めないページでは「前に読めたページの位置を保持しています」と表示。検索選択・未保存タグ・閉じた後のopener focusを維持。[操作/API/検証](reader-progress.md)。
+
+### 今回の実測
+
+- **全Python271 PASS /158.203秒/skip0**。初回271は1failure（新しい固定API error3件の日本語mapping漏れ）。`ErrorText.cs`を修正して全271を再実行PASS。新progress7 PASS6.000秒（restart、別本分離、タグ/元bytes保全、入力/ID/Origin/token、real revision/stale write、root解除・除外、scan/worker busy、旧DB）。古い全264の数字を今回に流用していない。
+- **Core188 PASS**（従来168＋progress20）。復元revision/短縮本/spread anchor/null、厳密JSON、固定route/認証/Origin、送信JSON、範囲外page、false save ackを確認。
+- **最終Windows x64 SelfContained Release PASS28.99秒/0error/既存IL2104 2warnings（抑制なし）**。`--no-restore`。GUI02のbuildは30.20秒、以後のGUIコード変更なし。最後のbuild差分はAPI error対応表3件のみ。手動WinUI review/Python構文/diff PASS、専用WinUI analyzer未導入/未実行、AOT/installer検証なし。
+- **reader-progress-native-02 PASS55 checks /実入力34/skip0/10PNG全個別目視/正常close2/cleanup warning0**。Light/Dark、700×620のRTL spread、開閉とappプロセス再起動での位置/向き復元、RTL右キー、明示cover、503保存失敗→手動retry、503取得失敗の旧位置保全→正常再open、破損spreadの旧位置保全、loading取消、未保存tag/BtnOpenBook focus復帰。生成bookを明示的に変更して**実rescan後のrevision reset**も確認。nativeのbackend自体は同じprocess、backend DB再初期化は別のPythonテストで確認。
+- native01も構造assert55 PASS/keys34/skip0/10PNG/close2/warning0だが、目視で破損後の直前「保存しました」が紛らわしいと判断。1 fix-and-rerun cycleで上記の保存保持表示へ修正し02を確認。両runの全20PNGを個別目視。最終は02、旧01のUIを最終として扱わない。
+- 生成5file中、book.cbzのみ各themeでrevision fixture用のtext entryを追加（readerを閉じてから実rescan）。他PNG/ZIP bytes・mtime/hashは不変、bookの最終状態も許可したexpected snapshotと一致。settings bytes不変、AI推論/worker0、private scan/変更/外部送信/モデル・依存取得/OS設定変更/CI dispatch0。3workflowはmanual-only。テストで印字されるDL案内は既存mockテストの出力で実downloadではない。
+
+### 次の3手・継続境界
+
+1. **64MiB超の動画再生**：revision/範囲/Host-token/枠/取消/seekを保つRange/stream設計と小さな縦切り。現動画は64MiBまでのmemory streamのまま。
+2. **狭幅とキーボード/アクセシビリティ**：500px未満toolbar overflow、高DPI/Contrast/Narrator/全Tab、native titlebar X/Alt+F4、実JSON save/open pickerを独立batchで確認。今回55checksはこれらの合格を意味しない。
+3. **検索評価を新入力で継続**：v6短alias/partial候補について新しい固定入力を検索前に凍結し、precision/correct-emptyを比較してから辞書/fallback方針を決める。今回モデル/順位/辞書の変更なし。
+
+画像pageまたぎ/全画面/元解像度、読書zoom/scrollの保存・履歴UI/位置削除、複数同時clientの進捗競合、フォルダ本/OCR/VLM/Komga/動画音声索引、実素材1TB/数万件、実検索品質は未確認/未実装。以前の動画GUI70/thumbnail50/根拠30/double-click22は他AIの実測履歴として保全し、今回は全batch再実行していない。`test_hark_ui.py`とreader旧回帰modeは生成DBの位置だけを初期化するよう更新・構文確認（105/88の全batch再実行なし）。今回はシャットダウン依頼なし、実施しない。
+
+---
+
+## 履歴：Windowsネイティブ動画再生の実装・語別検索根拠のWinUI表示・サムネイル/動画実機検証（2026-10-14 Windows続行）
 
 開始remote HEAD **b5b65966df51720c669f081d8773df130d09504b**（ローカル `bb8b154` をfast-forward同期し、別worktreeの未コミット変更を破棄せず保護して取り込み）。製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続。AGENTS→product-vision→agent-start→両handoff最新節・Issue #4・Draft PR #5を確認。旧branch・PR #6の再取り込みなし。
 

@@ -1,6 +1,9 @@
 # Aredoko
 
-> **最新（2026-10-14 Windows続行）**：語別検索根拠（`SearchEvidence`）のWinUI表示と、専用ウィンドウによる**Windowsネイティブ動画再生（`VideoPlayerView`：再生/一時停止/1秒移動/音量・消音/非対応・破損・503・409案内/auto-hide・F10・Esc）**を実装。Windows実機で**全Python 264 PASS / Core 168 PASS / x64 Release PASS**を確認し、**サムネイルdouble-click（`viewer-doubleclick-01` 22 checks PASS）**、**語別検索根拠＋引用符/バックスラッシュ/`[`タグ検索（`search-evidence-01` 30 checks PASS）**、**動画thumbnail（`video-native-01` 50 checks PASS）**、**動画再生（`video-player-01` 70 checks PASS / keys 30）**をすべて実機完走・全PNG目視確認。[実機検証](docs/viewer-reader-validation.md)・[動画](docs/video-thumbnails.md)・[検索根拠](docs/literal-search-v6.md)。
+> **最新：読書位置保存**：CBZ/ZIPを開き直すと読めたページと単ページ/見開き方向を復元。本の更新時は先頭へ、保存/取得失敗では旧位置を保持・手動retry。全Python271/Core188/Release PASS、Light/Dark実機55checks/34keys/10PNG全目視。[操作と検証](docs/reader-progress.md)。動画・検索根拠・double-clickの他AI更新も維持。
+
+
+> **履歴（2026-10-14 Windows続行）**：語別検索根拠（`SearchEvidence`）のWinUI表示と、専用ウィンドウによる**Windowsネイティブ動画再生（`VideoPlayerView`：再生/一時停止/1秒移動/音量・消音/非対応・破損・503・409案内/auto-hide・F10・Esc）**を実装。Windows実機で**全Python 264 PASS / Core 168 PASS / x64 Release PASS**を確認し、**サムネイルdouble-click（`viewer-doubleclick-01` 22 checks PASS）**、**語別検索根拠＋引用符/バックスラッシュ/`[`タグ検索（`search-evidence-01` 30 checks PASS）**、**動画thumbnail（`video-native-01` 50 checks PASS）**、**動画再生（`video-player-01` 70 checks PASS / keys 30）**をすべて実機完走・全PNG目視確認。[実機検証](docs/viewer-reader-validation.md)・[動画](docs/video-thumbnails.md)・[検索根拠](docs/literal-search-v6.md)。
 
 > **履歴（2026-10-14 夜）**：新しい固定検索評価v6を実行前に凍結し、余分な候補/正解なしの空回答も測定。通常検索APIに作品ごとの直接一致・関連語一致・欠落語を追加。順位・展開・fallbackは維持し、v6追加前後の72結果は同一。全Python **263 PASS / skip0**。根拠のWinUI表示とWindows検証は当時後続。[結果とAPI](docs/literal-search-v6.md)。
 
