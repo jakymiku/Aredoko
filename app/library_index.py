@@ -175,7 +175,7 @@ class LibraryIndex:
 
     def set_excludes(self, root_id, patterns):
         """Replace user exclusions; defaults always remain. No scan is started."""
-        if type(root_id) is not int or root_id <= 0:
+        if type(root_id) is not int or not 1 <= root_id <= 9223372036854775807:
             raise ValueError('Invalid root ID')
         patterns = _validate_excludes(patterns)
         with self.connect() as db:
@@ -194,11 +194,12 @@ class LibraryIndex:
         return result
 
     def locations(self, root_id, status=None, limit=100, offset=0):
-        if type(root_id) is not int or root_id <= 0:
+        if type(root_id) is not int or not 1 <= root_id <= 9223372036854775807:
             raise ValueError('Invalid root ID')
         if status not in (None, 'present', 'missing', 'excluded'):
             raise ValueError('Invalid location status')
-        if type(limit) is not int or not 1 <= limit <= 500 or type(offset) is not int or offset < 0:
+        if (type(limit) is not int or not 1 <= limit <= 500
+                or type(offset) is not int or not 0 <= offset <= 9223372036854775807):
             raise ValueError('Invalid paging')
         where = 'root_id=?' + (' AND status=?' if status else '')
         args = [root_id] + ([status] if status else [])
@@ -216,7 +217,7 @@ class LibraryIndex:
         Missing files are retained, never deleted. The registered root being
         unavailable is an error, not evidence of deletions (offline-drive safety).
         """
-        if type(root_id) is not int or root_id <= 0:
+        if type(root_id) is not int or not 1 <= root_id <= 9223372036854775807:
             raise ValueError('Invalid root ID')
         with self.connect() as db:
             row = db.execute('SELECT * FROM library_roots WHERE id=? AND enabled=1', (root_id,)).fetchone()

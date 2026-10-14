@@ -88,6 +88,8 @@ class Catalog:
         return {'total': total, 'page': page, 'limit': limit, 'items': [self.item(r) for r in rows]}
 
     def get(self, item_id):
+        if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
+            raise ValueError('Invalid item')
         with self.connect() as db:
             row = db.execute('SELECT * FROM items WHERE id=?', (item_id,)).fetchone()
         if row is None:
@@ -95,7 +97,8 @@ class Catalog:
         return self.item(row)
 
     def update(self, ids, changes):
-        if not isinstance(ids, list) or not 1 <= len(ids) <= 120 or any(type(i) is not int for i in ids):
+        if (not isinstance(ids, list) or not 1 <= len(ids) <= 120
+                or any(type(i) is not int or not 1 <= i <= 9223372036854775807 for i in ids)):
             raise ValueError('Select 1 to 120 valid IDs')
         if not isinstance(changes, dict) or not changes or set(changes) - {'tags', 'shelf', 'favorite', 'reviewed'}:
             raise ValueError('Invalid changes')

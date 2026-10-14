@@ -140,6 +140,8 @@ class ProductionCatalog(Catalog):
         return result
 
     def get(self,item_id):
+        if type(item_id) is not int or not 1<=item_id<=9223372036854775807:
+            raise ValueError('Invalid item')
         with self.connect() as db:
             row=db.execute('SELECT '+self.FIELDS+self.JOIN+' WHERE i.id=?',(item_id,)).fetchone()
         if row is None: raise KeyError(item_id)
