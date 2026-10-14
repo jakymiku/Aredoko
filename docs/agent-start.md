@@ -34,6 +34,8 @@
 
 ## 今回の再開で把握すべき境界
 
+- 2026-10-14 夜：v6固定評価とprecision/correct-emptyを追加し、通常検索APIにitem別search_evidence（direct/related/missing）を追加。全Python263 PASS、v6全72結果はAPI追加前後同一。WinUI/Core解析・表示は未実装。Windows既存gateと[評価/根拠API](literal-search-v6.md)を次の判断材料にする。
+
 - 2026-10-14 続行：動画SARの比率、JSONタグ値の文字検索/AI根拠、過大IDのGET/POST/scanを修正。全Python256 PASS、Windows/.NET/nativeは未検証。動画20・文字検索10・AI候補4・ID境界4の回帰を追加/確認。[両handoffの最上段](codex-handoff.md)を正とする。
 
 - 2026-10-14 Linux続行：動画先頭frameのbackendとWinUIプレビュー接続ソースを追加。全Python246 PASS、Windows/.NET/nativeは未検証。プレビューID/URL検証も修正。[動画thumbnail](video-thumbnails.md)・両handoffの最上段を正とし、以前のRelease/Core/GUI結果を今回へ流用しない。double-click実機・動画再生は残る。

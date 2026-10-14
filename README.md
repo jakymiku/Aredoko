@@ -1,6 +1,8 @@
 # Aredoko
 
-> **最新（2026-10-14 続行）**：引用符・バックスラッシュ入りタグの検索見落としとJSON構文による誤ヒットを修正。AI検索の文字一致根拠も共通化。動画thumbnailはSARの表示比率を保持し、作品/登録rootの過大IDを事前拒否。全Python **256 PASS / skip0**。Windows/.NET/nativeは今回未検証。[検索](docs/related-terms.md)・[動画](docs/video-thumbnails.md)・[handoff](docs/codex-handoff.md)。
+> **最新（2026-10-14 夜）**：新しい固定検索評価v6を実行前に凍結し、余分な候補/正解なしの空回答も測定。通常検索APIに作品ごとの直接一致・関連語一致・欠落語を追加。順位・展開・fallbackは維持し、v6追加前後の72結果は同一。全Python **263 PASS / skip0**。根拠のWinUI表示とWindows検証は後続。[結果とAPI](docs/literal-search-v6.md)。
+
+> **履歴（2026-10-14 続行）**：引用符・バックスラッシュ入りタグの検索見落としとJSON構文による誤ヒットを修正。AI検索の文字一致根拠も共通化。動画thumbnailはSARの表示比率を保持し、作品/登録rootの過大IDを事前拒否。全Python **256 PASS / skip0**。Windows/.NET/nativeは当時未検証。[検索](docs/related-terms.md)・[動画](docs/video-thumbnails.md)・[handoff](docs/codex-handoff.md)。
 
 > **履歴（2026-10-14 Linux続行）**：既存ffmpeg/ffprobeによる動画の先頭フレームを追加。登録・索引済み動画のみ、10秒/共通2枠/256px/512KiB、memory cache限定。WinUIプレビューへ接続するソースを追加し、全Python **246 PASS / skip0**。Windows Release/native表示は当時未検証。[動作範囲と制限](docs/video-thumbnails.md)。プレビューAPIの数値ID超過・不正URLも400へ修正。
 

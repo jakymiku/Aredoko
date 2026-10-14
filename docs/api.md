@@ -1,5 +1,9 @@
 # 共通API（操作試作 v0）
 
+## 製品MVP：通常検索の語ごとの根拠（2026-10-14 夜）
+
+queryありの`GET /api/items`は各itemに`search_evidence:{direct_words,related_words,missing_words}`を追加。正規化・重複除去した各query語を、直接文字一致/辞書による一致/未一致へ分ける。最大16語。既存match/partial/expansions・順位・filter・root・pagingは保持し、queryなし一覧・個別GET・AI検索にはこの新fieldを追加しない。タグ/DB schema/model/vector変更なし。WinUI表示は未実装。[正確な意味と評価結果](literal-search-v6.md)。
+
 ## 製品MVP：タグ値の照合とID境界の安定化（2026-10-14 続行）
 
 名前・タグ検索とAI検索の文字一致表示/フィルターは、保存JSONのエスケープや区切り記号ではなく実際のタグ値を使う。引用符・バックスラッシュ入りのタグ、Unicode escapeで保存されたタグも検索し、保存値の書き換えはしない。[詳細](related-terms.md)。

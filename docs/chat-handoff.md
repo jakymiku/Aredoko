@@ -1,4 +1,41 @@
-## 最新：タグ検索・動画比率・ID境界の修正（2026-10-14 続行）
+## 最新：固定評価v6・語ごとの検索根拠API（2026-10-14 夜）
+
+開始HEAD **b59a4bc215dd8a165995a74a7b794b2c02b453a2**。製品branch `feat/winui3-production-mvp-20261011` /base `feat/gui-framework-comparison-20261010` /[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続。開始git status clean、PRも同じHEAD・Draft/open/unmerged。AGENTS/製品vision/agent-start/両handoff最上段・Issue4/PR5を確認。旧branch/PR6を取り込んでいない。
+
+### 実装と保存commit
+
+1. **313b08200ac04a141b5623926c8bae1ef3edd90c** — v6評価セットを**初回検索前**にlocal commitで凍結（後で同じtreeをGitHubへ保存）。架空metadata/placeholder16件、24query、SHA256 `6ac38d61d0703eb9e3e5a69f9f2de78e198574313f9ebd29d9ebf73d1a30d9b3`。旧v3/v4/v5は不変。
+2. **0c26633e9dbf935e2a8bbc9429c8882815430fb1** — 共有評価指標に実際のtop最大5件を分母とするPrecision@5を追加。literal evaluatorにv6と、no-answerをMRR/Recallから分離したcorrect_empty_rateを追加。CLIは過剰候補・false answerも表示。v6にはJSON構文の意図的な誤一致除去があるため、旧superset契約はv3/v4/v5に維持し、v6は新しい構造/diagnostic検証へ分離。
+3. **34a35616a506af40c13b145efc32ba894b6c8e7b** — queryあり通常検索の各itemへ `search_evidence:{direct_words,related_words,missing_words}`。SQLと同じnormalization/alternativesで検索語を分類。最大16語のpartition、返却行のみで追加計算。match/partial/expansions/順位/filter/root/pagingは維持。queryなし/個別GET/AI検索にはこの新fieldを追加しない。保存tags/schema/model/vectorは変更なし。**WinUI/Coreのfield解析・表示は未実装**。
+
+製品ビジョンの「曖昧な語から目的のローカル素材・作品に到達」「根拠を説明」を支えるAPI/評価基盤。今回は順位・辞書展開・partial fallbackを評価結果に合わせて調整していない。大きなUI刷新・実model導入・自動taggerは追加していない。[詳細と結果](literal-search-v6.md)。
+
+### 測定した結果と限界
+
+- 辞書ありv6は正解あり19queryのRecall@5/MRRが各1.000。ただし関連語4query Precision@5 **0.875**、過剰展開3query **0.833**、表記ゆれ2query **0.750**。正解なし5queryのcorrect_emptyは **3/5=0.600**。`潮騒 魔王`は1件、`雨 砂漠`は2件のpartial候補を返した。結果を保持し、100%の実素材品質やconfidenceと呼ばない。
+- 辞書なし正規化のcorrect_emptyは4/5、旧LIKE参考も4/5だが、失敗caseは異なる（旧はJSON `[`の16件、現行辞書なしはpartial）。正解なしqrelsに参考partialを出すことをfalse answerとして測るが、既存の参考候補方針を直ちに不具合と断定しない。
+- 同じ作者の辞書/query/qrelsであり開発寄り。初回実行前の凍結でも独立holdout/実素材/AI品質の証拠ではない。v6を見てretrievalを調整していない。旧評価の失敗やv3-v5を改変していない。
+
+### このturnの検証
+
+- 固定評価 **3 PASS0.132秒**、共有metrics **5 PASS0.157秒**。根拠 **6 PASS0.543秒**、文字検索 **10 PASS0.689秒**（生成50,001行2語 **0.219秒**、Linux単発）。
+- **全Python263 PASS28.142秒/skip0**：`NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -v`。新v6 diagnostic1＋根拠6を追加。HTTPのpartial/related/missing、語正規化/dedup、quote/backslash、root/kind/favorites適用、作品ごとに異なる欠落語、SQL判定との一致、source/保存metadata不変を確認。
+- API追加後のv6を再評価し、追加前baseline JSONと**全72行・指標・順位・flagsが完全一致**。説明の追加をランキング改善として扱わない。CPU/生成fixtureのみ、実model/GPUなし。
+- Python構文・diff/review PASS。追加/更新行のrelative link **9件 PASS**。**Windows/.NET/Core実行・Release/XAML/native GUI/analyzer/AOT/installerは未検証**。WinUI/Core sourceは今回は変更なし。静的に現clientのknown-field JSON解析を確認したが、実機互換確認の代用ではない。
+
+### 次の3手と保存境界
+
+1. **Windows gate**：Core/Releaseと、未完了のthumbnail double-click独立batch。動画の比率/取消/fallback/元bytes不変、quote/backslash検索、Light/Dark/narrowを確認。前回FAILとfix-and-rerun制限を保持。
+2. **根拠のWinUI接続**：Coreの反射不要・bounded解析、欠落語/関連語経由の作品別表示を小さく追加しnative確認。現画面には新fieldが表示されると宣言しない。保存draft/旧API/keyboard/読み上げを維持。
+3. **別の固定入力で検証**：v6で見えた短alias/partialの参考候補を、新入力や明示された小サンプルで比較してから変更方針を決める。高DPI/Contrast/Narrator/実JSON picker・読書位置/設定保存、フォルダ本/OCR/VLM/Komga/動画音声索引/installerは後続。
+
+前回のpartial checkoutを継続しbinary9 assetの元treeを保全。ユーザーPCの未コミット状態は観測不可。3commitをexpected SHA付き非force fast-forwardで同じbranchへ保存、localもcanonical remote SHAへ同期。**CI dispatch0**、3workflowはmanual-only。main merge/force push/branch削除/比較generated変更、依存/model取得、私物scan/変更/外部送信、OS変更/shutdownなし。使用量%は取得不可。
+
+最終実装HEAD **34a35616a506af40c13b145efc32ba894b6c8e7b**。文書込み最終HEADは本節を導入したhandoff commit（`git log -1 --format=%H -- docs/codex-handoff.md`）で、確定SHAをPR5/終了報告へ記録する。
+
+---
+
+## 履歴：タグ検索・動画比率・ID境界の修正（2026-10-14 続行）
 
 開始HEAD **6a4d904a49fe288daf829a4d14ccd3efedc278dc**、製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続。開始時git statusはclean、PRも同じHEAD/Draft/open/unmerged。AGENTS→製品vision→agent-start→両handoff最新節、Issue #4/PR #5を再確認。旧branch・PR #6を取り込んでいない。
 
