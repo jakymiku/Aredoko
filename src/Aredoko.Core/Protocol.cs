@@ -39,6 +39,16 @@ public sealed class MediaRow
         : "";
     public string MatchLabel => Match switch { "related" => "関連語の候補 · ", "partial" => "一部の語のみ一致 · ", _ => "" };
     public string KindAndTags => MatchLabel + $"{Kind} · {string.Join("、", Tags)}";
+    // Per-word reason for a literal search row; null for list/AI/old servers.
+    public SearchEvidence? Evidence { get; set; }
+}
+
+public sealed record SearchEvidence(string[] Direct, string[] Related, string[] Missing)
+{
+    // Same cap as the server's query word limit; words are display-only.
+    public const int MaxWords = 16;
+    public const int MaxWordLength = 64;
+    public bool AllDirect => Direct.Length > 0 && Related.Length == 0 && Missing.Length == 0;
 }
 
 public sealed record SearchExpansion(string Term, string[] Added, bool Truncated);
@@ -137,8 +147,51 @@ public static class Protocol
         SemanticScore = row.TryGetProperty("semantic_score",out var score) && score.ValueKind==JsonValueKind.Number && score.TryGetDouble(out var value) && double.IsFinite(value) ? value : null,
         LiteralHits = row.TryGetProperty("literal_hits",out var hits) && hits.TryGetInt32(out var count) ? count : 0,
         LiteralWords = row.TryGetProperty("literal_words",out var words) && words.TryGetInt32(out var total) ? total : 0,
-        Match = row.TryGetProperty("match", out var match) && match.ValueKind == JsonValueKind.String ? match.GetString() ?? "" : ""
+        Match = row.TryGetProperty("match", out var match) && match.ValueKind == JsonValueKind.String ? match.GetString() ?? "" : "",
+        Evidence = ReadEvidence(row)
     };
+
+    private static SearchEvidence? ReadEvidence(JsonElement row)
+    {
+        if (!row.TryGetProperty("search_evidence", out var value) || value.ValueKind != JsonValueKind.Object) return null;
+        var budget = SearchEvidence.MaxWords;
+        string[] Words(string name)
+        {
+            if (!value.TryGetProperty(name, out var list) || list.ValueKind != JsonValueKind.Array) return [];
+            var words = new List<string>();
+            foreach (var word in list.EnumerateArray())
+            {
+                if (budget <= 0) break;
+                if (word.ValueKind != JsonValueKind.String) continue;
+                var text = (word.GetString() ?? "").Trim();
+                if (text.Length == 0) continue;
+                if (text.Length > SearchEvidence.MaxWordLength)
+                {
+                    var cut = char.IsHighSurrogate(text[SearchEvidence.MaxWordLength - 1]) ? SearchEvidence.MaxWordLength - 1 : SearchEvidence.MaxWordLength;
+                    text = text[..cut] + "…";
+                }
+                words.Add(text); budget--;
+            }
+            return words.ToArray();
+        }
+        var evidence = new SearchEvidence(Words("direct_words"), Words("related_words"), Words("missing_words"));
+        return evidence.Direct.Length + evidence.Related.Length + evidence.Missing.Length == 0 ? null : evidence;
+    }
+
+    // Short per-row reason. Distinguishes typed words found as-is, words found only through
+    // the user's related-term dictionary, and words this row lacks. Not a confidence value.
+    public static string DescribeEvidence(SearchEvidence? evidence, int wordsPerPart = 4)
+    {
+        if (evidence is null) return "";
+        static string Part(string label, string[] words, int limit) =>
+            words.Length == 0 ? "" : label + string.Join("、", words.Take(limit)) + (words.Length > limit ? $" ほか{words.Length - limit}語" : "");
+        var parts = new[] {
+            Part("入力語で一致：", evidence.Direct, wordsPerPart),
+            Part("関連語で一致：", evidence.Related, wordsPerPart),
+            Part("一致なし：", evidence.Missing, wordsPerPart)
+        }.Where(part => part.Length > 0);
+        return string.Join(" / ", parts);
+    }
 
     public static string CreateUpdate(int id, IEnumerable<string> tags, string shelf, bool favorite, bool reviewed)
     {

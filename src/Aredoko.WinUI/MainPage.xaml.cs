@@ -164,6 +164,7 @@ public sealed partial class MainPage : Page
                 text.Children.Add(new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] });
                 text.Children.Add(new TextBlock { Text = $"{row.MatchLabel}{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
                 if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
+                if(row.Evidence is {AllDirect:false}){var words=new TextBlock {Text=Protocol.DescribeEvidence(row.Evidence),TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(words,$"SearchEvidence{row.Id}");text.Children.Add(words);}
                 var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
                 AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
                 text.Children.Add(previewStatus);

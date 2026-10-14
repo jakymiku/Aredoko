@@ -6,7 +6,7 @@ activation is recorded as skipped, never claimed as keyboard coverage.
 """
 import zipfile
 from urllib.parse import urlparse
-import argparse,ctypes,hashlib,json,os,secrets,subprocess,sys,threading,time,uuid
+import argparse,ctypes,hashlib,json,os,secrets,shutil,subprocess,sys,threading,time,uuid
 from ctypes import wintypes
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -36,7 +36,7 @@ def focused_property(value):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');args=parser.parse_args();target=args.output.resolve()
+    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');args=parser.parse_args();target=args.output.resolve()
     if os.name!='nt':parser.error('Native Windows required')
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Evidence must stay in data/ai-ui')
     target.mkdir(parents=True,exist_ok=False)
@@ -185,10 +185,35 @@ def main():
                 for name,data in zip(['page1.png','page2.png','page10.png','page20.png','page30.png'],contents):archive.writestr(name,data)
             with zipfile.ZipFile(media/'broken.zip','w') as archive:
                 for name,data in zip(['page1.png','page2.png','page3.png','page4.png'],[contents[0],b'broken page',contents[2],contents[3]]):archive.writestr(name,data)
+        if args.video_and_evidence_only:
+            ffmpeg=shutil.which('ffmpeg')
+            if not ffmpeg or not shutil.which('ffprobe'):raise RuntimeError('Native FFmpeg tools required for video GUI gate')
+            (media/'broken.png').unlink();(media/'book.cbz').unlink()
+            for name,size,sar,codec,extra in [
+                ('clip.mp4','320x180','1/1','mpeg4',['-movflags','+faststart']),
+                ('clip.mkv','320x180','1/1','ffv1',[]),
+                ('clip.webm','320x180','1/1','libvpx',[]),
+                ('anamorphic.mp4','720x480','8/9','mpeg4',['-movflags','+faststart'])]:
+                subprocess.run([ffmpeg,'-nostdin','-v','error','-f','lavfi','-i',f'color=c=red:s={size}:d=0.2','-vf','setsar='+sar,'-threads','1','-c:v',codec,*extra,str(media/name)],check=True,timeout=15)
+            (media/'broken.mp4').write_bytes(b'not a valid video')
+        if args.evidence_only:
+            (media/'broken.png').unlink();(media/'book.cbz').unlink()
+            (media/'c.png').write_bytes(graphic({'background':'white','objects':[{'shape':'circle','color':'green','x':90,'y':120,'sx':40,'sy':40}]}))
         original=source_digest();expected_source=dict(original)
         catalog=ProductionCatalog(target/'catalog.sqlite');root=catalog.add_root(str(media));catalog.start_scan(root);catalog._worker.join(20)
-        check('Generated scan complete',catalog.scan_state()['state']=='complete' and catalog.search()['total']==(5 if args.reader_spread_only else 4))
+        expected_total=3 if args.evidence_only else (7 if args.video_and_evidence_only else (5 if args.reader_spread_only else 4))
+        check('Generated scan complete',catalog.scan_state()['state']=='complete' and catalog.search()['total']==expected_total)
         ids={x['title']:x['id'] for x in catalog.search()['items']}
+        if args.evidence_only:
+            catalog.update([ids['a.png']],{'tags':['東方','巫女','魔法"少女']})
+            catalog.update([ids['b.png']],{'tags':['東方','博麗霊夢']})
+            catalog.update([ids['c.png']],{'tags':['博麗霊夢',r'C:\textures']})
+            catalog.terms.upsert({'term':'博麗霊夢','aliases':['霊夢'],'related':['東方','巫女']})
+        if args.video_and_evidence_only:
+            catalog.update([ids['a.png']],{'tags':['東方','巫女','魔法"少女']})
+            catalog.update([ids['clip.mp4']],{'tags':['東方','博麗霊夢']})
+            catalog.update([ids['b.png']],{'tags':['博麗霊夢',r'C:\textures']})
+            catalog.terms.upsert({'term':'博麗霊夢','aliases':['霊夢'],'related':['東方','巫女']})
         settings=target/'settings.json';settings.write_text(json.dumps({'version':1,'profile':'default','scope':{'root_ids':[root],'kind':'','shelf':None}}),encoding='utf-8');settings_before=settings.read_bytes()
         encoder=ContractEncoder();engine=RecordedAI(catalog,encoder);profiles=AIProfileSettings(REPO,settings)
         token=secrets.token_urlsafe(32);handler=production_handler(catalog,token,engine,profiles=profiles)
@@ -212,6 +237,12 @@ def main():
                     if faults['delay']:
                         faults['delay']=False;entered.set()
                         if not released.wait(25):return self.send(503,{'error':'Generated delay timeout'})
+                if args.video_and_evidence_only and self.headers.get('X-Aredoko-Token')==token and self.path=='/api/library/preview/'+str(ids['clip.mp4']):
+                    if faults.get('video_code'):
+                        code=faults.pop('video_code');return self.send(code,{'error':'Generated video failure'})
+                    if faults.get('video_delay'):
+                        faults['video_delay']=False;entered.set()
+                        if not released.wait(25):return self.send(503,{'error':'Generated video delay timeout'})
                 try:return super().do_GET()
                 except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):report['cancelled_response_writes']=report.get('cancelled_response_writes',0)+1
         server.RequestHandlerClass=Quiet;thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -257,6 +288,10 @@ def main():
             ui('wait-for','ImageViewerDialog','-t','5000')
             if not keys('f10','ImageViewport'):raise RuntimeError('Cannot reveal double-click viewer with owned keyboard')
             wait('ImageStatus',shown)
+        def revealed_reader():
+            ui('wait-for','ArchiveReaderDialog','-t','5000')
+            if not keys('f10','ReaderViewport'):raise RuntimeError('Cannot reveal double-click reader with owned keyboard')
+            ui('wait-for','ReaderClose','-t','5000')
         def close_image():
             physical=keys('esc','ImageClose')
             if not physical:ui('invoke','ImageClose')
@@ -273,7 +308,97 @@ def main():
                 if len(main)==1:break
                 time.sleep(.1)
             if len(main)!=1:raise RuntimeError('Unique owned main unavailable')
-            hwnd=main_hwnd=str(main[0]['hwnd']);ready();resize(1200,820);wait('TxtCount','5 件' if args.reader_spread_only else '4 件')
+            hwnd=main_hwnd=str(main[0]['hwnd']);ready();resize(1200,820);wait('TxtCount',f'{expected_total} 件')
+            if args.evidence_only:
+                report['audit_scope']='per-row SearchEvidence (direct/related/missing), direct-only omission, dirty rollback, and quote/backslash/[ tag search across Light/Dark and wide/narrow'
+                def run_query(value,count):
+                    ui('set-value','TxtQuery',value);time.sleep(.45);ready();wait('TxtCount',count);ready()
+                run_query('東方 巫女','3 件')
+                tree=json.loads(ui('inspect','--json','--depth','18'));all_nodes=list(nodes(tree))
+                check(theme+' direct-only hit hides redundant SearchEvidence',not any(n.get('automationId')=='SearchEvidence'+str(ids['a.png']) for n in all_nodes))
+                ev_b=next((n for n in all_nodes if n.get('automationId')=='SearchEvidence'+str(ids['b.png'])),None)
+                ev_c=next((n for n in all_nodes if n.get('automationId')=='SearchEvidence'+str(ids['c.png'])),None)
+                check(theme+' mixed direct/related SearchEvidence shown',ev_b is not None and ev_b.get('name')=='入力語で一致：東方 / 関連語で一致：巫女')
+                check(theme+' related-only SearchEvidence shown',ev_c is not None and ev_c.get('name')=='関連語で一致：東方、巫女')
+                item_a=next(n for n in all_nodes if n.get('automationId')=='Item'+str(ids['a.png']))
+                item_b=next(n for n in all_nodes if n.get('automationId')=='Item'+str(ids['b.png']))
+                item_c=next(n for n in all_nodes if n.get('automationId')=='Item'+str(ids['c.png']))
+                check(theme+' direct hits ordered before related hit',item_a['y']<item_b['y']<item_c['y'])
+                shot(theme+'-evidence-related-wide')
+                resize(700,620);run_query('東方 未知','3 件')
+                tree=json.loads(ui('inspect','--json','--depth','18'));all_nodes=list(nodes(tree))
+                ev_a_partial=next((n for n in all_nodes if n.get('automationId')=='SearchEvidence'+str(ids['a.png'])),None)
+                ev_c_partial=next((n for n in all_nodes if n.get('automationId')=='SearchEvidence'+str(ids['c.png'])),None)
+                check(theme+' partial direct+missing SearchEvidence shown',ev_a_partial is not None and ev_a_partial.get('name')=='入力語で一致：東方 / 一致なし：未知')
+                check(theme+' partial related+missing SearchEvidence shown',ev_c_partial is not None and ev_c_partial.get('name')=='関連語で一致：東方 / 一致なし：未知')
+                shot(theme+'-evidence-partial-narrow')
+                ui('invoke','Item'+str(ids['c.png']),'--action','select');wait('TxtEditStatus','保存済み');ui('set-value','TxtTags','evidence-draft');wait('TxtEditStatus','未保存の変更')
+                ui('set-value','TxtQuery','魔法"少女');ui('wait-for','CloseButton','--value','編集を続ける','-t','5000');ui('invoke','CloseButton');ready()
+                wait('TxtQuery','東方 未知');wait('TxtTags','evidence-draft');wait('TxtEditStatus','未保存の変更')
+                check(theme+' cancelling search keeps unsaved draft and SearchEvidence',catalog.get(ids['c.png'])['tags']==['博麗霊夢',r'C:\textures'])
+                ui('invoke','BtnCloseDetails');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready()
+                run_query('魔法"少女','1 件');ui('wait-for','Item'+str(ids['a.png']),'-t','5000');check(theme+' quote tag search finds decoded tag',True)
+                run_query(r'C:\textures','1 件');ui('wait-for','Item'+str(ids['c.png']),'-t','5000');check(theme+' backslash tag search finds decoded tag',True)
+                run_query('[','0 件');ui('wait-for','TxtEmpty','-t','5000');shot(theme+'-tag-syntax-narrow');check(theme+' JSON bracket syntax does not false-match tags',True)
+                close();continue
+            if args.video_and_evidence_only:
+                report['audit_scope']='native video thumbnails (MP4/MKV/WebM/SAR 8:9/corrupt/503/cancel), per-row SearchEvidence (direct/related/missing), and quote/backslash/[ tag search across Light/Dark and wide/narrow'
+                def run_query(value,count):
+                    ui('set-value','TxtQuery',value);time.sleep(.45);ready();wait('TxtCount',count);ready()
+                wait('PreviewStatus'+str(ids['anamorphic.mp4']),'動画の先頭フレーム')
+                wait('PreviewStatus'+str(ids['broken.mp4']),'プレビューなし')
+                ui('invoke','Item'+str(ids['anamorphic.mp4']),'--action','select');wait('TxtEditStatus','保存済み');ui('wait-for','DetailPreview','-t','10000')
+                prop('BtnOpenImage','IsEnabled','False');prop('BtnOpenBook','IsEnabled','False')
+                tree=json.loads(ui('inspect','--json','--depth','18'));all_nodes=list(nodes(tree))
+                dp=next(n for n in all_nodes if n.get('automationId')=='DetailPreview')
+                check(theme+' SAR 8:9 video preserves 4:3 display aspect in DetailPreview',dp['height']>0 and abs((dp['width']/dp['height'])-(4/3))<=0.06)
+                shot(theme+'-video-list-detail')
+                double_click_owned('Preview'+str(ids['anamorphic.mp4']));wait('TxtEditStatus','保存済み');ui('wait-for','ImageViewerDialog','--gone','-t','3000');ui('wait-for','ArchiveReaderDialog','--gone','-t','3000')
+                check(theme+' video thumbnail double click does not open image or book viewer',True)
+                run_query('clip','3 件')
+                for vname in ('clip.mp4','clip.mkv','clip.webm'):
+                    wait('PreviewStatus'+str(ids[vname]),'動画の先頭フレーム')
+                check(theme+' list MP4/MKV/WebM video first-frame statuses',True)
+                ui('invoke','BtnLayout');ready()
+                for vname in ('clip.mp4','clip.mkv','clip.webm'):wait('PreviewStatus'+str(ids[vname]),'動画の先頭フレーム')
+                shot(theme+'-video-grid');check(theme+' grid video thumbnails',True)
+                ui('invoke','BtnLayout');ready()
+                run_query('broken.mp4','1 件');faults['video_code']=503;ui('invoke','BtnReconnect');ready()
+                run_query('clip.mp4','1 件');wait('PreviewStatus'+str(ids['clip.mp4']),'プレビューなし');check(theme+' video 503 falls back cleanly',True)
+                ui('invoke','BtnReconnect');ready();wait('PreviewStatus'+str(ids['clip.mp4']),'動画の先頭フレーム');check(theme+' video retry after 503 succeeds',True)
+                run_query('broken.mp4','1 件');ui('invoke','BtnReconnect');ready()
+                entered.clear();released.clear();faults['video_delay']=True
+                run_query('clip','3 件')
+                check(theme+' delayed video preview started',entered.wait(5))
+                run_query('b.png','1 件');released.set();time.sleep(.4);wait('PreviewStatus'+str(ids['b.png']),'画像プレビュー')
+                check(theme+' delayed video preview cancelled on navigation',True)
+                run_query('東方 巫女','3 件')
+                tree=json.loads(ui('inspect','--json','--depth','18'));all_nodes=list(nodes(tree))
+                check(theme+' direct-only hit hides redundant SearchEvidence',not any(n.get('automationId')=='SearchEvidence'+str(ids['a.png']) for n in all_nodes))
+                ev_clip=next((n for n in all_nodes if n.get('automationId')=='SearchEvidence'+str(ids['clip.mp4'])),None)
+                ev_b=next((n for n in all_nodes if n.get('automationId')=='SearchEvidence'+str(ids['b.png'])),None)
+                check(theme+' mixed direct/related SearchEvidence shown',ev_clip is not None and ev_clip.get('name')=='入力語で一致：東方 / 関連語で一致：巫女')
+                check(theme+' related-only SearchEvidence shown',ev_b is not None and ev_b.get('name')=='関連語で一致：東方、巫女')
+                item_a=next(n for n in all_nodes if n.get('automationId')=='Item'+str(ids['a.png']))
+                item_b=next(n for n in all_nodes if n.get('automationId')=='Item'+str(ids['b.png']))
+                check(theme+' direct hit ordered before related hit',item_a['y']<item_b['y'])
+                shot(theme+'-evidence-related-wide')
+                resize(700,620);run_query('東方 未知','3 件')
+                tree=json.loads(ui('inspect','--json','--depth','18'));all_nodes=list(nodes(tree))
+                ev_a_partial=next((n for n in all_nodes if n.get('automationId')=='SearchEvidence'+str(ids['a.png'])),None)
+                ev_b_partial=next((n for n in all_nodes if n.get('automationId')=='SearchEvidence'+str(ids['b.png'])),None)
+                check(theme+' partial direct+missing SearchEvidence shown',ev_a_partial is not None and ev_a_partial.get('name')=='入力語で一致：東方 / 一致なし：未知')
+                check(theme+' partial related+missing SearchEvidence shown',ev_b_partial is not None and ev_b_partial.get('name')=='関連語で一致：東方 / 一致なし：未知')
+                shot(theme+'-evidence-partial-narrow')
+                ui('invoke','Item'+str(ids['b.png']),'--action','select');wait('TxtEditStatus','保存済み');ui('set-value','TxtTags','evidence-draft');wait('TxtEditStatus','未保存の変更')
+                ui('set-value','TxtQuery','魔法"少女');ui('invoke','BtnSearch');ui('wait-for','CloseButton','--value','編集を続ける','-t','5000');ui('invoke','CloseButton');ready()
+                wait('TxtQuery','東方 未知');wait('TxtTags','evidence-draft');wait('TxtEditStatus','未保存の変更')
+                check(theme+' cancelling search keeps unsaved draft and SearchEvidence',catalog.get(ids['b.png'])['tags']==['博麗霊夢',r'C:\textures'])
+                ui('invoke','BtnCloseDetails');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready()
+                run_query('魔法"少女','1 件');ui('wait-for','Item'+str(ids['a.png']),'-t','5000');check(theme+' quote tag search finds decoded tag',True)
+                run_query(r'C:\textures','1 件');ui('wait-for','Item'+str(ids['b.png']),'-t','5000');check(theme+' backslash tag search finds decoded tag',True)
+                run_query('[','0 件');ui('wait-for','TxtEmpty','-t','5000');shot(theme+'-tag-syntax-narrow');check(theme+' JSON bracket syntax does not false-match tags',True)
+                close();continue
             if args.reader_spread_only:
                 report['audit_scope']='reader single/RTL/LTR spreads/settings/context/overlay/zoom/errors/cancel/draft; no double-click rerun'
                 shown_book='表示しました。拡大すると細部を確認できます。'
@@ -320,7 +445,7 @@ def main():
                 double_click_owned('Preview'+str(ids['b.png']));ui('wait-for','CloseButton','--value','編集を続ける','-t','5000');ui('invoke','CloseButton');ready();wait('TxtTags','double-click-draft');wait('TxtEditStatus','未保存の変更');ui('wait-for','ImageViewerDialog','--gone','-t','3000');check(theme+' cancelling dirty selection cannot open wrong image',catalog.get(ids['a.png'])['tags']==[])
                 ui('wait-for','DetailPreview','-t','5000');double_click_owned('DetailPreview');revealed_image();wait('ImageTitle','a.png');shot(theme+'-double-detail');close_image();wait('TxtTags','double-click-draft');check(theme+' detail thumbnail keeps original image/draft',True)
                 ui('invoke','BtnCloseDetails');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready();wait('PreviewStatus'+str(ids['book.cbz']),'先頭画像')
-                double_click_owned('Preview'+str(ids['book.cbz']));ui('wait-for','ReaderPageNumber','--value','1 / 1','-t','10000');wait('ReaderStatus','表示しました。拡大すると細部を確認できます。');shot(theme+'-double-book');ui('invoke','CloseButton');check(theme+' CBZ thumbnail opens existing reader',True)
+                double_click_owned('Preview'+str(ids['book.cbz']));revealed_reader();wait('ReaderPageNumber','1 / 1');wait('ReaderStatus','表示しました。拡大すると細部を確認できます。');shot(theme+'-double-book');close_reader();check(theme+' CBZ thumbnail opens existing reader',True)
                 close();continue
             select('a.png');prop('BtnOpenImage','IsEnabled','True');prop('BtnOpenBook','IsEnabled','False')
             ui('set-value','TxtTags','image-draft');wait('TxtEditStatus','未保存の変更');open_image();wait('ImageStatus',shown)

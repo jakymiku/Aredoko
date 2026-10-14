@@ -122,7 +122,7 @@ def main() -> int:
     dotnet = os.environ.get('DOTNET', 'dotnet')
     env = dict(os.environ, DOTNET_CLI_TELEMETRY_OPTOUT='1', DOTNET_NOLOGO='1')
     result = subprocess.run([dotnet, 'build', str(output / 'CompileCheck.csproj'), '-c', 'Release', '-nologo'],
-                            cwd=output, env=env, text=True, capture_output=True)
+                            cwd=output, env=env, text=True, encoding='utf-8', errors='replace', capture_output=True)
     log = result.stdout + result.stderr
     (output / 'build.log').write_text(log, encoding='utf-8')
     diagnostics = sorted({line.strip() for line in log.splitlines() if ': error ' in line or ': warning CS' in line})
