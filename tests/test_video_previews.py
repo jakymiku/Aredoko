@@ -199,6 +199,26 @@ class VideoBoundaryTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'Native FFmpeg tools unavailable')
 class NativeVideoTests(unittest.TestCase):
+    def test_anamorphic_small_portrait_and_unknown_sar_keep_display_geometry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for index, (size, sar, expected) in enumerate([
+                    ('720x480', '8/9', (256, 192)),
+                    ('80x60', '1/2', (40, 60)),
+                    ('16x12', '2/1', (32, 12)),
+                    ('360x720', '1/1', (128, 256)),
+                    ('320x180', '0/1', (256, 144))]):
+                with self.subTest(size=size, sar=sar):
+                    path = Path(directory) / f'geometry-{index}.mp4'
+                    subprocess.run([shutil.which('ffmpeg'), '-nostdin', '-v', 'error',
+                        '-f', 'lavfi', '-i', f'color=c=red:s={size}:d=0.2',
+                        '-vf', 'setsar=' + sar, '-threads', '1', '-c:v', 'mpeg4',
+                        '-movflags', '+faststart', str(path)], check=True, timeout=10)
+                    before = (path.read_bytes(), path.stat().st_mtime_ns)
+                    with path.open('rb') as source: frame = video.VideoThumbnailer().read(source, str(index))
+                    video._validate_png(frame)
+                    self.assertEqual(struct.unpack_from('>II', frame, 16), expected)
+                    self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), before)
+
     def test_generated_mp4_mkv_and_webm_first_frames_are_readonly(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory); media = base / 'media'; media.mkdir()

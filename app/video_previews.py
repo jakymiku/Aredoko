@@ -23,6 +23,13 @@ VIDEO_EDGE = 256
 VIDEO_TIMEOUT = 10.0
 VIDEO_CACHE_ENTRIES = 32  # At most 16 MiB of derived PNG data; never disk cache.
 FORMATS = 'mov,matroska,webm,avi,asf,mpegts'
+# Convert the displayed geometry to square pixels before bounding each edge.
+# Merely setting SAR=1 after a raw-pixel resize distorts anamorphic videos.
+# Explicit expressions also work on older installed builds without reset_sar.
+_display_width = 'iw*if(gt(sar,0),sar,1)'
+_scale = f'min(1,min({VIDEO_EDGE}/({_display_width}),{VIDEO_EDGE}/ih))'
+THUMBNAIL_FILTER = (f"scale=w='max(1,trunc(({_display_width})*{_scale}))':"
+                    f"h='max(1,trunc(ih*{_scale}))',setsar=1")
 
 
 class VideoPreviewUnavailable(ValueError):
@@ -125,7 +132,7 @@ class VideoThumbnailer:
         _dimensions(probe)
         png = _run([ffmpeg, '-nostdin', *common, '-i', 'pipe:0',
                     '-map', '0:V:0', '-an', '-sn', '-dn', '-frames:v', '1',
-                    '-vf', "scale=w='min(256,iw)':h='min(256,ih)':force_original_aspect_ratio=decrease,setsar=1",
+                    '-vf', THUMBNAIL_FILTER,
                     '-filter_threads', '1', '-threads', '1', '-c:v', 'png',
                     '-f', 'image2pipe', 'pipe:1'], source, MAX_FRAME_BYTES, deadline)
         _validate_png(png)
