@@ -137,7 +137,7 @@ class PreviewReader:
         return self._read(item_id, operation='page', page=page, revision=revision)
 
     def _read(self, item_id, operation='preview', page=0, revision=None):
-        if type(item_id) is not int or item_id < 1:
+        if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
             raise PreviewUnavailable('Invalid item')
         if not self.slots.acquire(blocking=False):
             raise PreviewBusyError('Preview workers busy')

@@ -87,6 +87,20 @@ class PreviewTests(unittest.TestCase):
         try:
             with self.assertRaises(PreviewUnavailable):self.reader.read(1)
         finally:self.reader.slots.release();self.reader.slots.release()
+    def test_item_id_is_bounded_before_sqlite(self):
+        for value in (True,0,-1,2**63,10**100,'1'):
+            with self.subTest(value=value),self.assertRaises(PreviewUnavailable):self.reader.read(value)
+    def test_http_preview_route_rejects_overflow_nested_and_ambiguous_ids(self):
+        server=ThreadingHTTPServer(('127.0.0.1',0),production_handler(self.catalog,'test-token'))
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        prefix=f'http://127.0.0.1:{server.server_port}/api/library/preview/'
+        for route in ('9223372036854775808','9'*40,'0','-1','01','nested/1','1/','1?path=elsewhere','%C2%B2'):
+            request=urllib.request.Request(prefix+route,headers={'X-Aredoko-Token':'test-token'})
+            with self.subTest(route=route),self.assertRaises(urllib.error.HTTPError) as caught:
+                urllib.request.urlopen(request,timeout=5)
+            self.assertEqual(caught.exception.code,400)
+            self.assertEqual(json.loads(caught.exception.read())['error'],'Invalid item');caught.exception.close()
     def test_scan_writes_fail_promptly_and_retry_preserves_annotation(self):
         (self.media/'image.png').write_bytes(png());item=self.index()['image.png']
         started=threading.Event();release=threading.Event();original=self.catalog.index.scan

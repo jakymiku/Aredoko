@@ -106,7 +106,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                         return self.send(400,{'error':'Invalid reader request'})
                 if path.startswith('/api/library/preview/'):
                     try:
-                        data,mime=previews.read(int(path.rsplit('/',1)[1]))
+                        match=re.fullmatch(r'/api/library/preview/([1-9][0-9]{0,18})',path)
+                        if match is None or urlparse(self.path).query:
+                            raise ValueError('Invalid item')
+                        item=int(match[1])
+                        if item > 9223372036854775807: raise ValueError('Invalid item')
+                        data,mime=previews.read(item)
                         return self.send(200,data,mime)
                     except PreviewBusyError:
                         return self.send(503,{'error':'Preview workers busy'})
