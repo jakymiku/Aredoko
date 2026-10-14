@@ -8,6 +8,8 @@ public sealed class LibraryApi : IDisposable
     private readonly HttpClient client = new() { BaseAddress = new Uri("http://127.0.0.1:8769/"), Timeout = TimeSpan.FromSeconds(40) };
     public Task<ArchiveManifest> ReaderManifestAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ManifestAsync(id, cancellation);
+    public Task<ReaderProgress?> ReaderProgressAsync(int id,CancellationToken cancellation)=>new ArchiveReaderClient(client).ProgressAsync(id,cancellation);
+    public Task SaveReaderProgressAsync(ArchiveManifest manifest,int page,ReaderDisplayMode mode,CancellationToken cancellation)=>new ArchiveReaderClient(client).SaveProgressAsync(manifest,page,mode,cancellation);
     public Task<byte[]> ReaderPageAsync(ArchiveManifest manifest, int page, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).PageAsync(manifest, page, cancellation);
     public Task<byte[]> ImageAsync(int id, CancellationToken cancellation) =>

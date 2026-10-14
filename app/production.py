@@ -31,6 +31,10 @@ class ProductionCatalog(Catalog):
                 CREATE TABLE IF NOT EXISTS item_locations (
                     item_id INTEGER PRIMARY KEY REFERENCES items(id),
                     location_id INTEGER NOT NULL UNIQUE REFERENCES library_locations(id));
+                CREATE TABLE IF NOT EXISTS reader_progress (
+                    item_id INTEGER PRIMARY KEY REFERENCES items(id),
+                    revision TEXT NOT NULL, page INTEGER NOT NULL CHECK(page>=0 AND page<10000),
+                    mode TEXT NOT NULL CHECK(mode IN ('single','rtl','ltr')));
                 CREATE TABLE IF NOT EXISTS scan_jobs (
                     id INTEGER PRIMARY KEY, root_id INTEGER NOT NULL, state TEXT NOT NULL,
                     discovered INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '');
@@ -160,6 +164,43 @@ class ProductionCatalog(Catalog):
         with self._guard:
             self._require_idle()
             return super().update(ids, changes)
+
+    def reader_progress(self, item_id):
+        if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
+            raise ValueError('Invalid item')
+        with self.connect() as db:
+            row=db.execute('SELECT l.relative_path,l.status,r.enabled,r.excludes_json FROM item_locations m '
+                'JOIN library_locations l ON l.id=m.location_id JOIN library_roots r ON r.id=l.root_id '
+                'WHERE m.item_id=?',(item_id,)).fetchone()
+            if row is None or not row['enabled'] or row['status'] != 'present' or Path(row['relative_path']).suffix.lower() not in ('.cbz','.zip'):
+                raise KeyError(item_id)
+            from library_index import _excluded
+            if _excluded(row['relative_path'],tuple(json.loads(row['excludes_json']))):raise KeyError(item_id)
+            saved=db.execute('SELECT revision,page,mode FROM reader_progress WHERE item_id=?',(item_id,)).fetchone()
+            return {'progress':dict(saved) if saved is not None else None}
+
+    def save_reader_progress(self, item_id, value, previews):
+        import re
+        from previews import ReaderChanged
+        if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
+            raise ValueError('Invalid item')
+        if not isinstance(value,dict) or set(value) != {'revision','page','mode'}:
+            raise ValueError('Invalid reading progress')
+        revision,page,mode=value['revision'],value['page'],value['mode']
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}',revision) is None or type(page) is not int or not 0 <= page < 10000 or type(mode) is not str or mode not in ('single','rtl','ltr'):
+            raise ValueError('Invalid reading progress')
+        # Same guard as source-derived index publication/metadata changes.
+        # A stale reader never overwrites a newer archive's saved position.
+        with self._guard:
+            self._require_idle()
+            manifest=previews.manifest(item_id)
+            if revision != manifest['revision']:raise ReaderChanged('Archive changed')
+            if page >= manifest['page_count']:raise ValueError('Invalid reading page')
+            with self.connect() as db:
+                db.execute('INSERT INTO reader_progress(item_id,revision,page,mode) VALUES(?,?,?,?) '
+                    'ON CONFLICT(item_id) DO UPDATE SET revision=excluded.revision,page=excluded.page,mode=excluded.mode',
+                    (item_id,revision,page,mode))
+        return {'saved':True}
 
     def set_root_shelf(self,root_id,shelf,fill_unset=False):
         if type(root_id) is not int or not 1<=root_id<=9223372036854775807:raise ValueError('Invalid root ID')

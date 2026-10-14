@@ -11,6 +11,9 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
+        ["Archive changed; reopen before saving progress"] = "本が更新されました。開き直してから読書位置を保存してください。",
+        ["Book unavailable"] = "本を読み取れません。フォルダ登録・除外・接続状態を確認してください。",
+        ["Invalid reading progress request"] = "読書位置の指定が無効です。本を開き直してください。",
         ["Invalid request"] = "要求が無効です。",
         ["Invalid literal evidence filter"] = "AI候補の文字一致条件が無効です。",
         ["Invalid similarity boundary"] = "類似度の区切りは-1から1の数値で指定してください。",

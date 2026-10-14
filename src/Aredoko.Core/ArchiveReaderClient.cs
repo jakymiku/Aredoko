@@ -86,14 +86,32 @@ public sealed class ArchiveReaderClient(HttpClient client)
         return ReadMediaAsync($"api/library/video/{itemId}", VideoPlayerPolicy.MaxSourceBytes, VideoTypes, cancellation);
     }
 
-    private async Task<(byte[] Data, string Mime)> ReadMediaAsync(string route, int limit, HashSet<string>? allowedTypes, CancellationToken cancellation)
+    public async Task<ReaderProgress?> ProgressAsync(int itemId,CancellationToken cancellation)
+    {
+        if(itemId<1)throw new ArgumentOutOfRangeException(nameof(itemId));
+        var (data,_)=await ReadMediaAsync($"api/library/reader/{itemId}/progress",4096,null,cancellation,seconds:5);
+        return ReaderProgress.Parse(data);
+    }
+    public async Task SaveProgressAsync(ArchiveManifest manifest,int page,ReaderDisplayMode mode,CancellationToken cancellation)
+    {
+        manifest.Validate();if(page<0||page>=manifest.PageCount)throw new ArgumentOutOfRangeException(nameof(page));
+        var value=new ReaderProgress(manifest.Revision,page,mode).ToJson().ToJsonString();
+        var (data,_)=await ReadMediaAsync($"api/library/reader/{manifest.ItemId}/progress",4096,null,cancellation,value,5);
+        using var doc=JsonDocument.Parse(data);
+        if(!doc.RootElement.TryGetProperty("saved",out var saved)||saved.ValueKind!=JsonValueKind.True)
+            throw new InvalidDataException("読書位置の保存を確認できませんでした。");
+    }
+
+    private async Task<(byte[] Data, string Mime)> ReadMediaAsync(string route, int limit, HashSet<string>? allowedTypes, CancellationToken cancellation,string? json=null,int seconds=40)
     {
         // HttpClient's timeout ends at response headers with ResponseHeadersRead.
         // Keep a deadline through streaming, including a stalled response body.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        deadline.CancelAfter(TimeSpan.FromSeconds(40));
+        deadline.CancelAfter(TimeSpan.FromSeconds(seconds));
         var token = deadline.Token;
-        using var response = await client.GetAsync(route, HttpCompletionOption.ResponseHeadersRead, token);
+        using var outgoing=new HttpRequestMessage(json is null?HttpMethod.Get:HttpMethod.Post,route);
+        if(json is not null)outgoing.Content=new StringContent(json,System.Text.Encoding.UTF8,"application/json");
+        using var response = await client.SendAsync(outgoing, HttpCompletionOption.ResponseHeadersRead, token);
         if (!response.IsSuccessStatusCode) throw new ArchiveReadException(response.StatusCode);
         var mime = response.Content.Headers.ContentType?.MediaType;
         if (allowedTypes is not null ? mime is null || !allowedTypes.Contains(mime) : mime != "application/json")

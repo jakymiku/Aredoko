@@ -36,7 +36,7 @@ def focused_property(value):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');args=parser.parse_args();target=args.output.resolve()
+    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--reader-progress-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');args=parser.parse_args();target=args.output.resolve()
     if os.name!='nt':parser.error('Native Windows required')
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Evidence must stay in data/ai-ui')
     target.mkdir(parents=True,exist_ok=False)
@@ -178,7 +178,7 @@ def main():
             (media/name).write_bytes(graphic({'background':'white','objects':[{'shape':'circle','color':color,'x':90,'y':120,'sx':40,'sy':40}]}))
         (media/'broken.png').write_bytes(b'not an image')
         with zipfile.ZipFile(media/'book.cbz','w') as archive:archive.writestr('page1.png',(media/'a.png').read_bytes())
-        if args.reader_spread_only:
+        if args.reader_spread_only or args.reader_progress_only:
             colors=['red','blue','green','yellow','purple']
             contents=[graphic({'background':'white','objects':[{'shape':'circle','color':color,'x':90,'y':120,'sx':40,'sy':40}]}) for color in colors]
             with zipfile.ZipFile(media/'book.cbz','w') as archive:
@@ -211,7 +211,7 @@ def main():
             (media/'broken.mp4').write_bytes(b'not a valid video')
         original=source_digest();expected_source=dict(original)
         catalog=ProductionCatalog(target/'catalog.sqlite');root=catalog.add_root(str(media));catalog.start_scan(root);catalog._worker.join(20)
-        expected_total=5 if args.video_player_only else (3 if args.evidence_only else (7 if args.video_and_evidence_only else (5 if args.reader_spread_only else 4)))
+        expected_total=5 if args.video_player_only else (3 if args.evidence_only else (7 if args.video_and_evidence_only else (5 if (args.reader_spread_only or args.reader_progress_only) else 4)))
         check('Generated scan complete',catalog.scan_state()['state']=='complete' and catalog.search()['total']==expected_total)
         ids={x['title']:x['id'] for x in catalog.search()['items']}
         if args.evidence_only:
@@ -230,7 +230,15 @@ def main():
         faults={'code':None,'delay':False};entered=threading.Event();released=threading.Event()
         class Quiet(handler):
             def log_message(self,*args):pass
+            def do_POST(self):
+                if self.headers.get('X-Aredoko-Token')==token and self.headers.get('Origin')=='http://127.0.0.1:8769' and self.path.endswith('/progress'):
+                    report.setdefault('progress_posts',[]).append(self.path)
+                    if faults.get('progress_save_code'):
+                        code=faults.pop('progress_save_code');return self.reject_post(code,{'error':'Generated progress save failure'})
+                return super().do_POST()
             def do_GET(self):
+                if self.headers.get('X-Aredoko-Token')==token and self.path.endswith('/progress') and faults.get('progress_get_code'):
+                    code=faults.pop('progress_get_code');return self.send(code,{'error':'Generated progress read failure'})
                 if self.headers.get('X-Aredoko-Token')==token and self.path.startswith('/api/library/preview/'):
                     report.setdefault('image_requests',[]).append(self.path)
                 if self.headers.get('X-Aredoko-Token')==token and self.path.startswith('/api/library/reader/'):
@@ -282,6 +290,8 @@ def main():
             time.sleep(.1)
             report.setdefault('pointer_actions',[]).append({'target':viewport_id,'fraction':fraction,'dispatch':'verified point/window/process/foreground; CLI SendInput hover to owned canvas only'})
         def open_reader():
+            if not args.reader_progress_only:
+                with catalog.connect() as db:db.execute('DELETE FROM reader_progress')
             ui('invoke','BtnOpenBook');ui('wait-for','ArchiveReaderDialog','-t','5000')
             if not keys('f10','ReaderViewport'):raise RuntimeError('Cannot reveal reader controls with owned keyboard')
             ui('wait-for','ReaderClose','-t','5000')
@@ -323,6 +333,33 @@ def main():
                 time.sleep(.1)
             if len(main)!=1:raise RuntimeError('Unique owned main unavailable')
             hwnd=main_hwnd=str(main[0]['hwnd']);ready();resize(1200,820);wait('TxtCount',f'{expected_total} 件')
+            if args.reader_progress_only:
+                report['audit_scope']='reading progress: page/direction across reopen and app restart, explicit cover, save/read failure preservation, corrupt page, real generated revision/rescan, cancelled load and drafts'
+                shown_book='表示しました。拡大すると細部を確認できます。';saved_text='読書位置を保存しました'
+                def reader_saved(number):
+                    wait('ReaderPageNumber',number);wait('ReaderStatus',shown_book);wait('ReaderProgressStatus',saved_text);prop('ReaderSettings','IsEnabled','True')
+                select('book.cbz');ui('set-value','TxtTags','progress-draft');wait('TxtEditStatus','未保存の変更');open_reader()
+                if theme=='Light':
+                    reader_saved('1 / 5');reader_mode('ReaderRtl');reader_saved('1 / 5');ui('invoke','ReaderNext');reader_saved('2–3 / 5');ui('invoke','ReaderNext');reader_saved('4–5 / 5')
+                else:
+                    reader_saved('4–5 / 5');check('Dark app restart restores saved page and RTL',catalog.reader_progress(ids['book.cbz'])['progress']['mode']=='rtl');wait('ReaderImage','5ページ');wait('ReaderImageSecond','4ページ')
+                audit(theme+'-reader',('ReaderViewport','ReaderProgressStatus','ReaderSettings','ReaderClose'));resize(700,620);shot(theme+'-progress-spread')
+                close_reader();wait('TxtTags','progress-draft');wait('TxtEditStatus','未保存の変更');focus_assert('BtnOpenBook');check(theme+' progress does not save metadata draft',catalog.get(ids['book.cbz'])['tags']==[])
+                open_reader();reader_saved('4–5 / 5');wait('ReaderImage','5ページ');check(theme+' reopen restores RTL and page',True)
+                if keys('right','ReaderViewport'):reader_saved('2–3 / 5');check(theme+' restored RTL right key returns previous spread',True)
+                else:raise RuntimeError('Owned reader direction input unavailable')
+                ui('invoke','ReaderReopen');reader_saved('1 / 5');check(theme+' explicit beginning replaces bookmark with cover',catalog.reader_progress(ids['book.cbz'])['progress']['page']==0)
+                faults['progress_save_code']=503;ui('invoke','ReaderNext');wait('ReaderPageNumber','2–3 / 5');wait('ReaderStatus',shown_book);wait('ReaderProgressStatus','読書位置を保存できませんでした。設定から保存し直せます。');prop('ReaderSettings','IsEnabled','True');shot(theme+'-progress-save-error');check(theme+' failed save keeps prior bookmark and readable image',catalog.reader_progress(ids['book.cbz'])['progress']['page']==0)
+                ui('invoke','ReaderSettings');ui('wait-for','ReaderSaveProgress','-t','5000');ui('invoke','ReaderSaveProgress');reader_saved('2–3 / 5');check(theme+' manual save retry stores current position',catalog.reader_progress(ids['book.cbz'])['progress']['page']==1);close_reader()
+                faults['progress_get_code']=503;open_reader();wait('ReaderPageNumber','1 / 5');wait('ReaderStatus',shown_book);wait('ReaderProgressStatus','読書位置を取得できませんでした。先頭から表示します。保存済み位置は移動するまで保持します。');prop('ReaderSettings','IsEnabled','True');shot(theme+'-progress-read-error');check(theme+' failed progress GET cannot overwrite prior position',catalog.reader_progress(ids['book.cbz'])['progress']['page']==1);close_reader();open_reader();reader_saved('2–3 / 5');check(theme+' successful reopen recovers prior position after read failure',True)
+                ui('invoke','ReaderReopen');reader_saved('1 / 5');entered.clear();released.clear();faults['reader_delay']=True;ui('invoke','ReaderNext');check(theme+' progress delayed page started',entered.wait(5));close_reader();released.set();time.sleep(.4);check(theme+' cancelled unread page cannot overwrite cover',catalog.reader_progress(ids['book.cbz'])['progress']['page']==0)
+                ui('invoke','BtnCloseDetails');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');select('broken.zip');open_reader();reader_saved('1 / 4');reader_mode('ReaderLtr');reader_saved('1 / 4');ui('invoke','ReaderNext');wait('ReaderStatus','このページを表示できません。未対応形式・破損・画像サイズを確認してください。');wait('ReaderProgressStatus','前に読めたページの位置を保持しています');shot(theme+'-progress-corrupt');check(theme+' corrupt spread leaves previous successful bookmark',catalog.reader_progress(ids['broken.zip'])['progress']['page']==0);close_reader();open_reader();reader_saved('1 / 4');check(theme+' corrupt book reopens at last readable cover',True);close_reader()
+                select('book.cbz');open_reader();reader_saved('1 / 5');reader_mode('ReaderRtl');reader_saved('1 / 5');ui('invoke','ReaderNext');reader_saved('2–3 / 5');old_revision=catalog.reader_progress(ids['book.cbz'])['progress']['revision'];close_reader()
+                # Explicit mutation of this generated fixture ONLY, after closing its viewer.
+                with zipfile.ZipFile(media/'book.cbz','a') as archive:archive.writestr('revision-'+theme+'.txt','Generated revision reset fixture')
+                expected_source=source_digest();catalog.index.scan(root);catalog.sync_index();report.setdefault('controlled_fixture_changes',[]).append({'file':'book.cbz','purpose':'revision reset after real rescan','theme':theme})
+                open_reader();reader_saved('1 / 5');shot(theme+'-progress-revision');progress=catalog.reader_progress(ids['book.cbz'])['progress'];check(theme+' changed revision resets page and preserves RTL',progress['revision']!=old_revision and progress['page']==0 and progress['mode']=='rtl')
+                ui('invoke','ReaderNext');reader_saved('2–3 / 5');ui('invoke','ReaderNext');reader_saved('4–5 / 5');close_reader();ui('invoke','BtnCloseDetails');close();continue
             if args.video_player_only:
                 report['audit_scope']='dedicated native video player window: play/pause/seek/volume/mute, MP4/WMV playback, unsupported MKV(FFV1) and corrupt MP4 guidance, 503 retry, 409 conflict, auto-hide/F10/Escape, and unsaved draft retention across Light/Dark and wide/narrow'
                 shown_video='動画を開きました。再生ボタンまたはスペースキーで再生できます。'
@@ -577,7 +614,7 @@ def main():
             else:raise RuntimeError('Hidden Escape unavailable; keyboard readiness denied')
             close()
         check('No AI inference',not engine.encoder.calls and not engine.requests and not engine.encoder.resident)
-        check('Settings unchanged',settings.read_bytes()==settings_before);check('Source bytes and mtimes unchanged',source_digest()==original);report['pass']=True
+        check('Settings unchanged',settings.read_bytes()==settings_before);check('Only explicit generated-book revision changes' if args.reader_progress_only else 'Source bytes and mtimes unchanged',source_digest()==(expected_source if args.reader_progress_only else original));report['pass']=True
     except Exception as error:
         report['error']=str(error)
         if hwnd:

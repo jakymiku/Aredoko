@@ -208,6 +208,7 @@ def main():
         def select(item):
             ui('invoke','Item'+str(item),'--action','select');wait('TxtEditStatus','保存済み')
         def open_reader():
+            with catalog.connect() as db:db.execute('DELETE FROM reader_progress')
             ui('focus','BtnOpenBook');ui('invoke','BtnOpenBook');ui('wait-for','ArchiveReaderDialog','-t','5000');keys('f10','ReaderViewport');wait('ReaderStatus','表示しました。拡大すると細部を確認できます。')
         def close_reader():
             physical=keys('esc','ReaderClose')

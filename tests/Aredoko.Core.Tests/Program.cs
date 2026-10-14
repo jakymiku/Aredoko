@@ -155,3 +155,5 @@ Check(clicks.Register(6,1300,21,30,500,4,4) is null,"different thumbnail cannot 
 Check(clicks.Register(6,1900,21,30,500,4,4) is null,"slow second click stays single");
 Check(clicks.Register(6,2000,40,30,500,4,4) is null,"far second click stays single");
 clicks.Reset();Check(clicks.Register(null,2100,40,30,500,4,4) is null,"cancel/modal reset cannot activate old image");
+
+await ReaderProgressTests.Run(Check);

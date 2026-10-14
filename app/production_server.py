@@ -82,6 +82,13 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
             if path.startswith('/api/library'):
                 if self.headers.get('X-Aredoko-Token')!=token:
                     return self.send(403,{'error':'Invalid session'})
+                if path.endswith('/progress') and path.startswith('/api/library/reader/'):
+                    try:
+                        match=re.fullmatch(r'/api/library/reader/([1-9][0-9]{0,18})/progress',path)
+                        if match is None or urlparse(self.path).query:raise ValueError('Invalid progress route')
+                        return self.send(200,catalog.reader_progress(int(match[1])))
+                    except ValueError:return self.send(400,{'error':'Invalid reading progress request'})
+                    except KeyError:return self.send(404,{'error':'Book unavailable'})
                 if path.startswith('/api/library/reader/'):
                     try:
                         match=re.fullmatch(r'/api/library/reader/([1-9][0-9]{0,18})(?:/pages/(0|[1-9][0-9]{0,3}))?',path)
@@ -189,6 +196,14 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path.startswith('/api/library/reader/'):
+                    try:
+                        match=re.fullmatch(r'/api/library/reader/([1-9][0-9]{0,18})/progress',self.path)
+                        if match is None:raise ValueError('Invalid progress route')
+                        return self.send(200,catalog.save_reader_progress(int(match[1]),body,previews))
+                    except ReaderChanged:return self.send(409,{'error':'Archive changed; reopen before saving progress'})
+                    except PreviewBusyError:return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,zipfile.BadZipFile,RuntimeError,NotImplementedError):return self.send(404,{'error':'Book unavailable'})
                 if self.path=='/api/library/terms/import':
                     try: return self.send(200,catalog.terms.import_entries(body))
                     except ValueError as ex: return self.send(400,{'error':str(ex)})
