@@ -58,6 +58,23 @@ def normalize_tags(tags):
     return '\x1f'.join(normalize(tag) for tag in tags if isinstance(tag, str))
 
 
+def explain_matches(title, tags, alternatives):
+    """Partition normalized query words using the same options as SQL scoring.
+
+    Only returned rows are explained; this does not alter retrieval/ranking.
+    Related words describe dictionary-expanded matches, never confidence.
+    """
+    hay = normalize(title) + '\x1f' + normalize_tags(tags)
+    result = {'direct_words': [], 'related_words': [], 'missing_words': []}
+    for options in alternatives:
+        word = options[0]
+        field = ('direct_words' if word in hay else
+                 'related_words' if any(option in hay for option in options[1:]) else
+                 'missing_words')
+        result[field].append(word)
+    return result
+
+
 def _scorer(alternatives):
     """One pass per row: (direct, covered, specific), memoized per search."""
     memo = {}

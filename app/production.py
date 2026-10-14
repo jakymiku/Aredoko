@@ -5,7 +5,7 @@ from contextlib import closing
 from pathlib import Path
 from catalog import Catalog
 from library_index import LibraryIndex, TYPES
-from search_terms import register as register_search_terms, split_terms
+from search_terms import register as register_search_terms, split_terms, explain_matches
 from term_relations import TermRelations
 
 
@@ -126,6 +126,9 @@ class ProductionCatalog(Catalog):
                 rows=db.execute('SELECT '+self.FIELDS+clause+' ORDER BY i.id LIMIT ? OFFSET ?',
                                 values+[limit,page*limit]).fetchall()
         items=[self.item(r) for r in rows]
+        if terms:
+            for item in items:
+                item['search_evidence']=explain_matches(item['title'],item['tags'],alternatives)
         result={'total':total,'page':page,'limit':limit,'items':items}
         if partial:
             for item in items:
