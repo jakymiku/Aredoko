@@ -9,7 +9,7 @@ from urllib.parse import urlparse, parse_qs
 import re
 from production import ProductionCatalog, ScanBusyError
 from term_relations import MAX_IMPORT_BYTES
-from previews import PreviewReader, PreviewUnavailable, PreviewBusyError, ReaderChanged
+from previews import VideoRangeUnsatisfiable, PreviewReader, PreviewUnavailable, PreviewBusyError, ReaderChanged
 import zipfile
 import sqlite3
 from ai_process import EncoderProcess, AIUnavailable
@@ -128,13 +128,25 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                         return self.send(400,{'error':'Invalid item'})
                 if path.startswith('/api/library/video/'):
                     try:
-                        match=re.fullmatch(r'/api/library/video/([1-9][0-9]{0,18})',path)
-                        if match is None or urlparse(self.path).query:
-                            raise ValueError('Invalid item')
+                        match=re.fullmatch(r'/api/library/video/([1-9][0-9]{0,18})(?:/(manifest|range))?',path)
+                        if match is None:raise ValueError('Invalid video route')
                         item=int(match[1])
-                        if item > 9223372036854775807: raise ValueError('Invalid item')
+                        if item>9223372036854775807:raise ValueError('Invalid item')
+                        query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
+                        if match[2]=='range':
+                            if set(query)!={'revision'} or len(query['revision'])!=1:raise ValueError('One revision is required')
+                            values=self.headers.get_all('Range',[])
+                            value=re.fullmatch(r'bytes=(0|[1-9][0-9]{0,12})-(0|[1-9][0-9]{0,12})',values[0]) if len(values)==1 else None
+                            if value is None:raise ValueError('One explicit bounded range is required')
+                            start,end=map(int,value.groups())
+                            data,mime,size=previews.video_range(item,start,end,query['revision'][0])
+                            return self.send(206,data,mime,{'Content-Range':f'bytes {start}-{end}/{size}','Accept-Ranges':'bytes','ETag':'"'+query['revision'][0]+'"'})
+                        if query:raise ValueError('Unexpected video query')
+                        if match[2]=='manifest':return self.send(200,previews.video_manifest(item))
                         data,mime=previews.read_video(item)
                         return self.send(200,data,mime)
+                    except VideoRangeUnsatisfiable as error:
+                        return self.send(416,{'error':'Video range outside source'},extra_headers={'Content-Range':f'bytes */{error.size}'})
                     except ReaderChanged:
                         return self.send(409,{'error':'Archive changed; rescan and reopen the reader'})
                     except PreviewBusyError:
@@ -142,7 +154,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     except (PreviewUnavailable,OSError,RuntimeError,NotImplementedError):
                         return self.send(404,{'error':'Preview unavailable'})
                     except ValueError:
-                        return self.send(400,{'error':'Invalid item'})
+                        return self.send(400,{'error':'Invalid video range request'})
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())

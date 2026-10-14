@@ -86,6 +86,13 @@ public sealed class ArchiveReaderClient(HttpClient client)
         return ReadMediaAsync($"api/library/video/{itemId}", VideoPlayerPolicy.MaxSourceBytes, VideoTypes, cancellation);
     }
 
+    public async Task<VideoRangeSource> OpenVideoRangeAsync(int itemId,CancellationToken cancellation)
+    {
+        if(itemId<1)throw new ArgumentOutOfRangeException(nameof(itemId));
+        var (data,_)=await ReadMediaAsync($"api/library/video/{itemId}/manifest",4096,null,cancellation,seconds:5);
+        return new VideoRangeSource(client,VideoManifest.Parse(data,itemId),cancellation);
+    }
+
     public async Task<ReaderProgress?> ProgressAsync(int itemId,CancellationToken cancellation)
     {
         if(itemId<1)throw new ArgumentOutOfRangeException(nameof(itemId));

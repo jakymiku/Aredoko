@@ -1,5 +1,7 @@
 # Aredoko
 
+> 2026-10-15：大容量動画の範囲取得再生を接続。Python276/Core208/Release・native73checks（全12PNG確認）PASS。[最新仕様・実測と限界](docs/video-streaming.md)。シークバー/hoverサムネイルは続行中。
+
 > **最新：読書位置保存**：CBZ/ZIPを開き直すと読めたページと単ページ/見開き方向を復元。本の更新時は先頭へ、保存/取得失敗では旧位置を保持・手動retry。全Python271/Core188/Release PASS、Light/Dark実機55checks/34keys/10PNG全目視。[操作と検証](docs/reader-progress.md)。動画・検索根拠・double-clickの他AI更新も維持。
 
 
@@ -36,7 +38,7 @@
 
 CBZ/ZIPの読書画面は、**生成本でLight/Darkのページ移動・破損/再試行・更新後の再open・キャンセル・未保存編集の保持をWindows実GUI確認済み**です。JSON picker、reader zoom等は引き続き未確認です。[読書画面の確認手順](docs/archive-reader.md)を参照してください。
 
-単体画像は詳細の「画像を大きく表示」またはサムネイルのダブルクリックから閲覧できます。← / →で現在の検索結果ページ内の画像だけを検索順に送り、拡大・スクロール・表示リセットも可能です。未保存編集は保持されます。[操作と制限](docs/image-viewer.md)。動画は先頭フレームのサムネイル表示と、詳細の「動画を再生」からの専用ウィンドウ再生（再生/一時停止・前後1秒移動・音量/消音・非対応/破損時の案内、64MiB上限）を[Windows実機（Light/Dark）で確認済み](docs/video-thumbnails.md)です。
+単体画像は詳細の「画像を大きく表示」またはサムネイルのダブルクリックから閲覧できます。← / →で現在の検索結果ページ内の画像だけを検索順に送り、拡大・スクロール・表示リセットも可能です。未保存編集は保持されます。[操作と制限](docs/image-viewer.md)。動画は先頭フレームのサムネイル表示と、詳細の「動画を再生」からの専用ウィンドウ再生（再生/一時停止・前後1秒移動・音量/消音・非対応/破損時の案内、範囲取得・2TiB上限（生成70MiBで検証））を[Windows実機（Light/Dark）で確認済み](docs/video-thumbnails.md)です。
 
 全文OCR、動画/音声の内容索引、画像フォルダの論理作品化、Komga、読書位置保存、配布installerなどは後続です。読書の見開きはsession内で実装・確認済みです。Layaは実験的なopt-inで既定無効。実装状況と証拠は[開発handoff](docs/codex-handoff.md)・[チャットhandoff](docs/chat-handoff.md)・PRの最新記録を優先してください。
 

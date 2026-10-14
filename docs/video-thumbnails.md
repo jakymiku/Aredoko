@@ -3,6 +3,8 @@
 明示登録・索引済みの動画を、画像・本と同じ安全境界でプレビュー表示および専用ウィンドウ再生する実装。
 動画の内容検索、代表シーン選択はまだ実装していない。
 
+> 現在の通常再生は[動画の範囲取得](video-streaming.md)へ変更。64MiB全体copyは旧API互換用。以下の先頭thumbnail境界は維持。
+
 ## 使い方と境界
 
 - **専用ウィンドウでの動画再生（`VideoPlayerView`）**：詳細の **「動画を再生」**（`BtnOpenVideo`）から画像・本と共通の暗い専用WinUIウィンドウ（`VideoPlayerDialog`）を開く。認証済み`GET /api/library/video/<id>`（最大64MiB、40秒deadline、playlist偽装拒否、索引stat/open handle検査）でメモリ上の`InMemoryRandomAccessStream`へ読み込み、`MediaSource` / `MediaPlayerElement`で再生する。元ファイルのパスを直接開いたりロック・変更したりしない。再生/一時停止（Space）、1秒戻る/進む（←/→）、音量増減・消音（M）、手動再試行、マウス静止2.5秒auto-hide、F10/Tab保持、Esc終了、未保存編集draftの保持を備える。Windows標準Media Foundationが非対応のcodec（例：FFV1のMKV）や破損動画・64MiB超過時は日本語で案内を表示し、503再試行・409更新検知に対応する。

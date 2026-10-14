@@ -11,6 +11,8 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
+        ["Video range outside source"] = "動画の範囲が変わりました。開き直してください。",
+        ["Invalid video range request"] = "動画の読み取り範囲が無効です。開き直してください。",
         ["Archive changed; reopen before saving progress"] = "本が更新されました。開き直してから読書位置を保存してください。",
         ["Book unavailable"] = "本を読み取れません。フォルダ登録・除外・接続状態を確認してください。",
         ["Invalid reading progress request"] = "読書位置の指定が無効です。本を開き直してください。",

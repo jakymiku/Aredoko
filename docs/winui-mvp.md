@@ -1,5 +1,7 @@
 # WinUI 3 production MVP — developer preview
 
+> 2026-10-15：大容量動画の範囲取得再生を接続。Python276/Core208/Release・native73checks（全12PNG確認）PASS。[最新仕様・実測と限界](video-streaming.md)。シークバー/hoverサムネイルは続行中。
+
 Latest continuation (2026-10-14 Windows follow-up): connected per-row `SearchEvidence` in Core/WinUI (`SearchEvidence<id>`), added bounded read-only native video playback (`GET /api/library/video/<id>`, `VideoPlayerPolicy`, `VideoPlayerView` in dedicated `ViewerWindow`), fixed Windows checkout LF/video test compatibility, and validated on Windows: **Python 264 PASS / skip0**, **Core 168 PASS**, **x64 SelfContained Release PASS**, native `viewer-doubleclick-01` **PASS (22 checks / keys 16 / PNG 8)**, native `search-evidence-01` **PASS (30 checks / PNG 6)**, native `video-native-01` **PASS (50 checks / PNG 10)**, and native `video-player-01` **PASS (70 checks / keys 30 / PNG 12)** (Light/Dark MP4 & WMV play/pause/seek/volume/mute, unsupported FFV1 MKV & corrupt MP4 guidance, 503 retry, 409 conflict, auto-hide/F10/Esc, unsaved draft & opener focus retention). See the latest [handoff](codex-handoff.md) and [viewer validation](viewer-reader-validation.md).
 
 Previous continuation (2026-10-14 follow-up, Linux): decoded tag matching in literal/AI evidence paths, correct video display aspect ratio, and item/root ID validation before SQLite. **Python256 PASS / skip0**. WinUI/Core sources were unchanged in that step.

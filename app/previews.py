@@ -18,6 +18,8 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_DIRECTORY_BYTES = 4 * 1024 * 1024
 MAX_PLAYBACK_BYTES = 64 * 1024 * 1024
+MAX_VIDEO_RANGE_BYTES = 1024 * 1024
+MAX_STREAM_VIDEO_BYTES = 2 * 1024 ** 4
 IMAGE_MIME = {'.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
               '.webp':'image/webp', '.gif':'image/gif', '.bmp':'image/bmp'}
 VIDEO_MIME = {'.mp4':'video/mp4', '.m4v':'video/mp4', '.mov':'video/quicktime',
@@ -29,6 +31,9 @@ class PreviewUnavailable(ValueError):
 
 class PreviewBusyError(PreviewUnavailable):
     pass
+
+class VideoRangeUnsatisfiable(ValueError):
+    def __init__(self,size):self.size=size;super().__init__('Video range outside source')
 
 class ReaderChanged(PreviewUnavailable):
     """The caller must rescan/reopen instead of using old page numbers."""
@@ -132,6 +137,16 @@ class PreviewReader:
     def read_video(self, item_id):
         return self._read(item_id, operation='video')
 
+    def video_manifest(self,item_id):
+        return self._read(item_id,operation='video_manifest')
+
+    def video_range(self,item_id,start,end,revision):
+        if type(start) is not int or type(end) is not int or start<0 or end<start or end-start+1>MAX_VIDEO_RANGE_BYTES:
+            raise ValueError('Invalid bounded video range')
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}',revision) is None:
+            raise ValueError('Invalid video revision')
+        return self._read(item_id,operation='video_range',revision=revision,start=start,end=end)
+
     def manifest(self, item_id):
         """Count naturally ordered archive pages without decompressing images."""
         return self._read(item_id, operation='manifest')
@@ -143,7 +158,7 @@ class PreviewReader:
             raise ValueError('Invalid reader revision')
         return self._read(item_id, operation='page', page=page, revision=revision)
 
-    def _read(self, item_id, operation='preview', page=0, revision=None):
+    def _read(self, item_id, operation='preview', page=0, revision=None,start=None,end=None):
         if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
             raise PreviewUnavailable('Invalid item')
         if not self.slots.acquire(blocking=False):
@@ -161,7 +176,7 @@ class PreviewReader:
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES:
                 raise PreviewUnavailable('Unsupported preview type')
-            if operation == 'video':
+            if operation in ('video','video_manifest','video_range'):
                 if suffix not in VIDEO_MIME:
                     raise PreviewUnavailable('Video player requires a supported video item')
             elif operation != 'preview' and suffix not in ('.cbz', '.zip'):
@@ -188,6 +203,19 @@ class PreviewReader:
                         raise PreviewUnavailable('Video exceeds playback limit')
                     if data.lstrip()[:16].upper().startswith((b'#EXTM3U', b'[PLAYLIST]', b'<ASX')):
                         raise PreviewUnavailable('Playlist files are not played')
+                elif operation in ('video_manifest','video_range'):
+                    if not 1 <= info.st_size <= MAX_STREAM_VIDEO_BYTES:
+                        raise PreviewUnavailable('Video exceeds stream limit')
+                    prefix=file.read(512).lstrip()
+                    if not prefix or prefix[:16].upper().startswith((b'#EXTM3U',b'[PLAYLIST]',b'<ASX')):
+                        raise PreviewUnavailable('Playlist files are not played')
+                    mime=VIDEO_MIME[suffix]
+                    if operation=='video_manifest':
+                        result={'item_id':item_id,'size_bytes':info.st_size,'mime':mime,'revision':current_revision}
+                    else:
+                        if start>=info.st_size or end>=info.st_size:raise VideoRangeUnsatisfiable(info.st_size)
+                        file.seek(start);data=file.read(end-start+1)
+                        if len(data)!=end-start+1:raise ReaderChanged('Video changed during range read')
                 elif suffix in VIDEO_SUFFIXES:
                     if info.st_size > MAX_VIDEO_BYTES:
                         raise PreviewUnavailable('Video exceeds preview limit')
@@ -223,7 +251,7 @@ class PreviewReader:
                             with archive.open(entry) as image:
                                 data = image.read(MAX_IMAGE_BYTES + 1)
                             mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest', 'video') and len(data) > MAX_IMAGE_BYTES:
+                if operation not in ('manifest','video','video_manifest','video_range') and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
                 if suffix in VIDEO_SUFFIXES:
@@ -231,13 +259,15 @@ class PreviewReader:
                     # Do not publish its old frame if the location was replaced.
                     current = _safe_path(row['path'], row['relative_path']).stat(follow_symlinks=False)
                     if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
+                        if operation in ('video_manifest','video_range'):raise ReaderChanged('Video location changed')
                         raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
                     if operation != 'preview':
                         raise ReaderChanged('Source changed while reading')
                     raise PreviewUnavailable('Source changed while reading')
-                if operation == 'manifest':
+                if operation in ('manifest','video_manifest'):
                     return result
+                if operation=='video_range':return data,mime,info.st_size
                 return data, mime
         except VideoPreviewUnavailable as error:
             raise PreviewUnavailable('Video preview unavailable') from error

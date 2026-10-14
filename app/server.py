@@ -20,7 +20,7 @@ def handler_for(catalog, token, benchmark_dist=None):
         def log_message(self, *_):
             pass
 
-        def send(self, status, body, mime='application/json; charset=utf-8'):
+        def send(self, status, body, mime='application/json; charset=utf-8',extra_headers=None):
             if not isinstance(body, bytes):
                 body = json.dumps(body, ensure_ascii=False).encode('utf-8')
             self.send_response(status)
@@ -29,6 +29,7 @@ def handler_for(catalog, token, benchmark_dist=None):
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; connect-src 'self'")
+            for name,value in (extra_headers or {}).items():self.send_header(name,value)
             self.end_headers()
             self.wfile.write(body)
 

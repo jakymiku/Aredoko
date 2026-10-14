@@ -157,3 +157,5 @@ Check(clicks.Register(6,2000,40,30,500,4,4) is null,"far second click stays sing
 clicks.Reset();Check(clicks.Register(null,2100,40,30,500,4,4) is null,"cancel/modal reset cannot activate old image");
 
 await ReaderProgressTests.Run(Check);
+
+await VideoRangeTests.Run(Check);

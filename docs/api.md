@@ -2,6 +2,7 @@
 
 ## 製品MVP：読み取り専用動画ストリームAPIと語別根拠のWinUI接続（2026-10-14 Windows続行）
 
+- `GET /api/library/video/{id}/manifest`・`/range?revision=<64hex>`：通常再生用の認証付き範囲取得。最大2TiB、単一明示Range 1MiB以下、成功206/更新409/範囲外416。詳細：[動画範囲再生](video-streaming.md)。
 - `GET /api/library/video/{id}`：登録・索引済みのpresentな動画（`.mp4/.mkv/.webm/.avi/.mov/.wmv/.m4v/.ts`、最大64MiB）を、active root・除外・symlink/reparse・open handle前後のstat一致・playlist偽装拒否（`#EXTM3U`/`[playlist]`/`<asx`）を検査したうえで返す。Hostと`X-Aredoko-Token`必須、`Cache-Control: no-store`。未対応/欠損/超過/playlist偽装は404、索引後の変更は409、共通2枠使用中は503、不正ID/URLは400。
 - `search_evidence`はCoreの`Protocol.DescribeEvidence`とWinUI一覧の`SearchEvidence<id>`で表示接続・Windows実機確認済み。全Python 264 PASS、Core 168 PASS、x64 Release PASS。
 

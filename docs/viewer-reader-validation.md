@@ -1,5 +1,7 @@
 # 共通画像・読書ビューアのWindows検証
 
+> 2026-10-15：大容量動画の範囲取得再生を接続。Python276/Core208/Release・native73checks（全12PNG確認）PASS。[最新仕様・実測と限界](video-streaming.md)。シークバー/hoverサムネイルは続行中。
+
 > 最新：読書位置保存のnative02が55checks/34keys/10PNG全目視PASS。[変更範囲と実revision fixture](reader-progress.md)・両handoff最新を正とし、以下は各時点の履歴。
 
 2026-10-14。実装commit **ed943b7703718085d05004c99dcc3393d1bf06df**。生成素材のみ・所有test appのみ。最終ソースのwindow検証と、以前のmodal段階を混同しない。

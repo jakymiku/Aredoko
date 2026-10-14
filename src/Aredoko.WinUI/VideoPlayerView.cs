@@ -47,7 +47,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     private CancellationTokenSource? request;
     private MediaPlayer? mediaPlayer;
     private MediaSource? mediaSource;
-    private InMemoryRandomAccessStream? mediaStream;
+    private IRandomAccessStream? mediaStream;
+    private VideoRangeSource? mediaRange;
     private TimeSpan duration = TimeSpan.Zero;
     private TimeSpan position = TimeSpan.Zero;
     private int volume = 80;
@@ -154,18 +155,14 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         positionText.Text = "—";
         status.Text = "動画を読み込んでいます…";
         hideTimer.Stop(); UpdateControls();
-        InMemoryRandomAccessStream? stream = null;
+        IRandomAccessStream? stream = null;
+        VideoRangeSource? rangeSource = null;
         MediaSource? source = null;
         MediaPlayer? nextPlayer = null;
         try
         {
-            var (bytes, mime) = await api.VideoAsync(itemId, cancellation);
-            stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream))
-            {
-                writer.WriteBytes(bytes); await writer.StoreAsync(); writer.DetachStream();
-            }
-            stream.Seek(0);
+            rangeSource=await api.OpenVideoRangeAsync(itemId,cancellation);
+            stream=new VideoRandomAccessStream(rangeSource);var mime=rangeSource.Manifest.Mime;
             cancellation.ThrowIfCancellationRequested();
             source = MediaSource.CreateFromStream(stream, mime);
             await source.OpenAsync().AsTask(cancellation);
@@ -175,8 +172,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             nextPlayer.MediaOpened += (_, _) => opened.TrySetResult(true);
             nextPlayer.MediaFailed += (_, args) =>
             {
-                opened.TrySetException(new InvalidDataException(args.ErrorMessage));
-                DispatcherQueue.TryEnqueue(() => { if (!disposed && current == version) ReportFailure(new InvalidDataException(args.ErrorMessage)); });
+                opened.TrySetException(rangeSource?.Failure ?? mediaRange?.Failure ?? new InvalidDataException(args.ErrorMessage));
+                DispatcherQueue.TryEnqueue(() => { if (!disposed && current == version) ReportFailure(rangeSource?.Failure ?? mediaRange?.Failure ?? new InvalidDataException(args.ErrorMessage)); });
             };
             nextPlayer.MediaEnded += (_, _) => DispatcherQueue.TryEnqueue(() =>
             {
@@ -192,11 +189,11 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             await opened.Task.WaitAsync(TimeSpan.FromSeconds(8), cancellation);
             if (disposed || current != version)
             {
-                nextPlayer.Source = null; playerElement.SetMediaPlayer(null); nextPlayer.Dispose(); source.Dispose(); stream.Dispose();
+                rangeSource?.Dispose();nextPlayer.Source = null; playerElement.SetMediaPlayer(null); nextPlayer.Dispose(); source.Dispose(); stream.Dispose();
                 return;
             }
-            mediaStream = stream; mediaSource = source; mediaPlayer = nextPlayer;
-            stream = null; source = null; nextPlayer = null;
+            mediaStream = stream; mediaRange=rangeSource; mediaSource = source; mediaPlayer = nextPlayer;
+            stream = null; rangeSource=null; source = null; nextPlayer = null;
             var natural = mediaPlayer.PlaybackSession.NaturalDuration;
             duration = natural > TimeSpan.Zero && natural != TimeSpan.MaxValue
                 ? natural
@@ -207,9 +204,10 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             status.Text = "動画を開きました。再生ボタンまたはスペースキーで再生できます。";
         }
         catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && current != version) { }
-        catch (Exception ex) { if (current == version) ReportFailure(ex); }
+        catch (Exception ex) { if (current == version) ReportFailure(rangeSource?.Failure ?? ex); }
         finally
         {
+            rangeSource?.Dispose();
             if (nextPlayer is not null) { try { nextPlayer.Source = null; playerElement.SetMediaPlayer(null); nextPlayer.Dispose(); } catch { } }
             source?.Dispose();
             stream?.Dispose();
@@ -279,6 +277,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
 
     private void ClearMedia()
     {
+        mediaRange?.Dispose();mediaRange=null;
         positionTimer.Stop();
         playing = false;
         duration = position = TimeSpan.Zero;
@@ -288,7 +287,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             mediaPlayer = null;
         }
         mediaSource?.Dispose(); mediaSource = null;
-        mediaStream?.Dispose(); mediaStream = null;
+        mediaStream?.Dispose(); mediaStream = null;mediaRange?.Dispose();mediaRange=null;
     }
 
     private void ReportFailure(Exception ex)
@@ -304,7 +303,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             ArchiveReadException { Status: HttpStatusCode.Forbidden } => ex.Message,
             OperationCanceledException => "読み込みがタイムアウトしました。再試行してください。",
             HttpRequestException => "接続できません。閉じてライブラリから再接続してください。",
-            _ => "この動画はWindowsの標準機能では再生できません。未対応の形式・コーデック、破損、または容量制限（64MBまで）を確認してください。"
+            _ => "この動画はWindowsの標準機能では再生できません。未対応の形式・コーデック、破損、または容量制限（2TBまで）を確認してください。"
         };
         ShowChrome();
     }

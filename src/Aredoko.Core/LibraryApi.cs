@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 namespace Aredoko.Core;
 public sealed class LibraryApi : IDisposable
 {
-    private readonly HttpClient client = new() { BaseAddress = new Uri("http://127.0.0.1:8769/"), Timeout = TimeSpan.FromSeconds(40) };
+    private readonly HttpClient client = new(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = new Uri("http://127.0.0.1:8769/"), Timeout = TimeSpan.FromSeconds(40) };
     public Task<ArchiveManifest> ReaderManifestAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ManifestAsync(id, cancellation);
     public Task<ReaderProgress?> ReaderProgressAsync(int id,CancellationToken cancellation)=>new ArchiveReaderClient(client).ProgressAsync(id,cancellation);
@@ -14,6 +14,7 @@ public sealed class LibraryApi : IDisposable
         new ArchiveReaderClient(client).PageAsync(manifest, page, cancellation);
     public Task<byte[]> ImageAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ImageAsync(id, cancellation);
+    public Task<VideoRangeSource> OpenVideoRangeAsync(int id,CancellationToken cancellation)=>new ArchiveReaderClient(client).OpenVideoRangeAsync(id,cancellation);
     public Task<(byte[] Data, string Mime)> VideoAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).VideoAsync(id, cancellation);
     public async Task ConnectAsync() {

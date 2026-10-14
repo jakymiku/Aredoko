@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> 2026-10-15：大容量動画の範囲取得再生を接続。Python276/Core208/Release・native73checks（全12PNG確認）PASS。[最新仕様・実測と限界](video-streaming.md)。シークバー/hoverサムネイルは続行中。
+
 入口はリポジトリ直下の **AGENTS.md**。ファイル名は複数形・大文字。Codex、Antigravity、ChatGPTなどが開発を始める際は、そこに指定された文書まで読む。
 
 ## 現在の作業先

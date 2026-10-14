@@ -1,4 +1,16 @@
-## 最新：CBZ/ZIPの読書位置・見開き方向を保存して再開（Windows続行）
+## 最新：大容量動画の範囲取得再生（2026-10-15）
+
+開始HEAD `267d4820a06c541d3d71b86155727ef2fcc538da`。branch/base/Draft PR5を維持。認証付きmanifest/range API、1MiB上限・revision・response検査、取消可能なnative独立カーソルstreamへ接続し、64MiB全体copyを通常再生から除去。詳細は[動画範囲再生](video-streaming.md)。
+
+検証：Python276 PASS/138.384秒/skip0、Core208 PASS、Release32.19秒/0error/既存IL2104 2件。`video-range-native-03`73checks/30keys/skip0/12PNG全目視PASS。01はoffset証拠条件、02はthumbnail必須の誤前提で失敗、計2修正で03完走。ソース/設定不変・AI0・cleanup成功。実測70MiB/2秒、2TiB/長編/再生中の実更新/Narrator/多DPI/専用analyzerは未検証。実装SHAはこの節を追加したcommit（git log）を参照。
+
+ユーザーが途中で追加要求した**シークバー・hover時刻とサムネイル・下部帯の左右隙間修正**へ続行する。FFmpeg fdのseek可能な既存ハンドルで生成動画の1秒frame取得を実測確認、追加依存なし。この節時点ではUI未実装、次節に確定結果を残す。
+
+次の3手：1. シークバー/hoverフレームを実装・安全境界/生成色変化動画で検証、下部帯を端まで揃える。2. 狭幅・keyboard/Narrator/多DPIの未検証範囲を詰める。3. 未使用固定検索評価を追加し、検索精度と索引負荷の改善を続ける。CIはworkflow_dispatchのみ、実行0、私有素材/モデル変更0。過去のshutdown依頼は今回へ再適用しない。
+
+---
+
+## 履歴：CBZ/ZIPの読書位置・見開き方向を保存して再開（Windows続行）
 
 開始HEAD **2c97844301bb19b84554454ffff1ba960534c550**。他AIの最新更新（動画thumbnail/再生、語別検索根拠UI、double-click実機PASS、v6評価/タグJSON照合/ID境界）とAGENTS/vision/両handoff/Issue4・PR5を確認し、clean・remote一致から続行。既存製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR5](https://github.com/jakymiku/Aredoko/pull/5)を維持。実装commit **9accf85e27dea0b3a39d3e49ceaf64161af3e59f**。文書込み最終HEADは本節の記録commit（`git log -1 --format=%H -- docs/codex-handoff.md`）を正とする。
 

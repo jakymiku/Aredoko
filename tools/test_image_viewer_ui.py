@@ -4,7 +4,7 @@ Built x64 Release required. No models, downloads, OS settings or private media.
 Physical input is guarded by owned HWND/PID and verified foreground; denied
 activation is recorded as skipped, never claimed as keyboard coverage.
 """
-import zipfile
+import zipfile,struct
 from urllib.parse import urlparse
 import argparse,ctypes,hashlib,json,os,secrets,shutil,subprocess,sys,threading,time,uuid
 from ctypes import wintypes
@@ -36,7 +36,7 @@ def focused_property(value):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--reader-progress-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');args=parser.parse_args();target=args.output.resolve()
+    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--reader-progress-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');parser.add_argument('--video-range-only',action='store_true');args=parser.parse_args();args.video_player_only=args.video_player_only or args.video_range_only;target=args.output.resolve()
     if os.name!='nt':parser.error('Native Windows required')
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Evidence must stay in data/ai-ui')
     target.mkdir(parents=True,exist_ok=False)
@@ -207,8 +207,26 @@ def main():
                 ('clip.mp4','red','libx264',['-pix_fmt','yuv420p','-movflags','+faststart']),
                 ('clip.wmv','blue','wmv2',[]),
                 ('unsupported.mkv','green','ffv1',[])]:
-                subprocess.run([ffmpeg,'-nostdin','-v','error','-f','lavfi','-i',f'color=c={color}:s=320x180:d=2.0','-threads','1','-c:v',codec,*extra,str(media/name)],check=True,timeout=15)
+                subprocess.run([ffmpeg,'-nostdin','-v','error','-f','lavfi','-i',f'color=c={color}:s=320x180:d=2.0','-threads','1','-c:v',codec,*([] if args.video_range_only and name=='clip.mp4' else extra),str(media/name)],check=True,timeout=15)
             (media/'broken.mp4').write_bytes(b'not a valid video')
+        if args.video_range_only:
+            # Place moov after a valid free atom; mdat offsets stay unchanged.
+            # This requires actual native cursor seeking beyond its initial buffer.
+            clip=media/'clip.mp4';raw=clip.read_bytes();offset=0
+            while offset<len(raw):
+                size,kind=struct.unpack_from('>I4s',raw,offset)
+                if kind==b'moov':break
+                if size<8:raise RuntimeError('Invalid generated MP4 atom')
+                offset+=size
+            if offset>=len(raw):raise RuntimeError('Generated MP4 has no moov')
+            padding=70*1024*1024
+            with clip.open('wb') as out:
+                out.write(raw[:offset]);out.write(struct.pack('>I4s',padding,b'free'))
+                remaining=padding-8
+                while remaining:
+                    count=min(1024*1024,remaining);out.write(bytes(count));remaining-=count
+                out.write(raw[offset:])
+            report['large_video_size']=(media/'clip.mp4').stat().st_size
         original=source_digest();expected_source=dict(original)
         catalog=ProductionCatalog(target/'catalog.sqlite');root=catalog.add_root(str(media));catalog.start_scan(root);catalog._worker.join(20)
         expected_total=5 if args.video_player_only else (3 if args.evidence_only else (7 if args.video_and_evidence_only else (5 if (args.reader_spread_only or args.reader_progress_only) else 4)))
@@ -263,7 +281,8 @@ def main():
                         if not released.wait(25):return self.send(503,{'error':'Generated video delay timeout'})
                 if args.video_player_only and self.headers.get('X-Aredoko-Token')==token and self.path.startswith('/api/library/video/'):
                     report.setdefault('video_requests',[]).append(self.path)
-                    if self.path=='/api/library/video/'+str(ids['clip.mp4']) and faults.get('video_play_code'):
+                    report.setdefault('video_ranges',[]).append({'route':urlparse(self.path).path,'span':self.headers.get('Range')})
+                    if self.path=='/api/library/video/'+str(ids['clip.mp4'])+'/manifest' and faults.get('video_play_code'):
                         code=faults.pop('video_play_code');return self.send(code,{'error':'Generated video playback failure'})
                 try:return super().do_GET()
                 except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):report['cancelled_response_writes']=report.get('cancelled_response_writes',0)+1
@@ -363,7 +382,7 @@ def main():
             if args.video_player_only:
                 report['audit_scope']='dedicated native video player window: play/pause/seek/volume/mute, MP4/WMV playback, unsupported MKV(FFV1) and corrupt MP4 guidance, 503 retry, 409 conflict, auto-hide/F10/Escape, and unsaved draft retention across Light/Dark and wide/narrow'
                 shown_video='動画を開きました。再生ボタンまたはスペースキーで再生できます。'
-                unsupported_video='この動画はWindowsの標準機能では再生できません。未対応の形式・コーデック、破損、または容量制限（64MBまで）を確認してください。'
+                unsupported_video='この動画はWindowsの標準機能では再生できません。未対応の形式・コーデック、破損、または容量制限（2TBまで）を確認してください。'
                 def open_video():
                     ui('inspect','BtnOpenVideo','--json');ui('invoke','BtnOpenVideo');ui('wait-for','VideoPlayerDialog','-t','5000')
                     if not keys('f10','VideoViewport'):raise RuntimeError('Cannot reveal video controls with owned keyboard')
@@ -374,7 +393,8 @@ def main():
                     ui('wait-for','VideoPlayerDialog','--gone','-t','5000')
                     return physical
                 select('a.png');prop('BtnOpenImage','IsEnabled','True');prop('BtnOpenVideo','IsEnabled','False');prop('BtnOpenBook','IsEnabled','False')
-                select('clip.mp4');ui('wait-for','DetailPreview','-t','10000')
+                select('clip.mp4')
+                if not args.video_range_only:ui('wait-for','DetailPreview','-t','10000')
                 prop('BtnOpenVideo','IsEnabled','True');prop('BtnOpenImage','IsEnabled','False');prop('BtnOpenBook','IsEnabled','False')
                 ui('set-value','TxtTags','video-draft');wait('TxtEditStatus','未保存の変更')
                 open_video();wait('VideoStatus',shown_video);wait('VideoTitle','clip.mp4');wait('VideoPosition','0:00 / 0:02')
@@ -613,6 +633,14 @@ def main():
                 ui('wait-for','ImageViewerDialog','--gone','-t','5000');focus_assert('BtnOpenImage');check(theme+' Escape closes while chrome is hidden',True)
             else:raise RuntimeError('Hidden Escape unavailable; keyboard readiness denied')
             close()
+        if args.video_range_only:
+            spans=[r['span'] for r in report.get('video_ranges',[]) if r['span']]
+            widths=[int(r.split('-')[1])-int(r.split('=')[1].split('-')[0])+1 for r in spans]
+            offsets=[int(r.split('=')[1].split('-')[0]) for r in spans]
+            check('Native video exceeds legacy 64MiB limit',report['large_video_size']>64*1024*1024)
+            check('Native codec reads bounded ranges and seeks beyond first byte',bool(widths) and max(widths)<=1024*1024 and max(offsets)>0)
+            check('Native player never calls legacy full-file route',all(r['route'].endswith(('/range','/manifest')) for r in report.get('video_ranges',[])))
+            report['range_summary']={'requests':len(widths),'max_bytes':max(widths,default=0),'max_offset':max(offsets,default=0)}
         check('No AI inference',not engine.encoder.calls and not engine.requests and not engine.encoder.resident)
         check('Settings unchanged',settings.read_bytes()==settings_before);check('Only explicit generated-book revision changes' if args.reader_progress_only else 'Source bytes and mtimes unchanged',source_digest()==(expected_source if args.reader_progress_only else original));report['pass']=True
     except Exception as error:
