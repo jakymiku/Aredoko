@@ -34,7 +34,7 @@
 
 ## 今回の再開で把握すべき境界
 
-- 2026-10-14 Windows続行：語別`search_evidence`のCore解析・WinUI表示（`SearchEvidence<id>`）を実装し、Windows実機で全Python263・Core157・x64 Release PASSを確認。ネイティブGUIでサムネイルdouble-click（`viewer-doubleclick-01` 22 checks PASS、Light/Dark）、語別検索根拠＋引用符/バックスラッシュ/`[`検索（`search-evidence-01` 30 checks PASS、Light/Dark・wide/narrow）、動画サムネイル＋検索根拠（`video-native-01` 50 checks PASS、Light/Dark、MP4/MKV/WebM・SAR 8:9の4:3表示・破損fallback・503再試行・遅延取消・double-click非起動）をすべて完走確認。[実機検証](viewer-reader-validation.md)と[両handoff最上段](codex-handoff.md)を正とする。
+- 2026-10-14 Windows続行：語別`search_evidence`のCore解析・WinUI表示（`SearchEvidence<id>`）と、専用ウィンドウによるWindowsネイティブ動画再生（`GET /api/library/video/<id>`、64MiB上限、`VideoPlayerView`の再生/一時停止/1秒移動/音量・消音/非対応・破損・503・409案内/auto-hide・F10・Esc）を実装。Windows実機で全Python264・Core168・x64 Release PASSを確認し、ネイティブGUIでサムネイルdouble-click（`viewer-doubleclick-01` 22 checks PASS）、語別検索根拠＋引用符/バックスラッシュ/`[`検索（`search-evidence-01` 30 checks PASS）、動画サムネイル＋検索根拠（`video-native-01` 50 checks PASS）、動画再生（`video-player-01` 70 checks PASS / keys 30）をすべて完走確認。[実機検証](viewer-reader-validation.md)と[両handoff最上段](codex-handoff.md)を正とする。
 
 - 2026-10-14 夜：v6固定評価とprecision/correct-emptyを追加し、通常検索APIにitem別search_evidence（direct/related/missing）を追加。全Python263 PASS、v6全72結果はAPI追加前後同一。
 

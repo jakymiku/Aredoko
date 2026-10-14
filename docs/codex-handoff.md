@@ -1,4 +1,4 @@
-## 最新：語別検索根拠のWinUI表示・サムネイルdouble-clickと動画/タグ検索のWindows実機検証（2026-10-14 Windows続行）
+## 最新：Windowsネイティブ動画再生の実装・語別検索根拠のWinUI表示・サムネイル/動画実機検証（2026-10-14 Windows続行）
 
 開始remote HEAD **b5b65966df51720c669f081d8773df130d09504b**（ローカル `bb8b154` をfast-forward同期し、別worktreeの未コミット変更を破棄せず保護して取り込み）。製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続。AGENTS→product-vision→agent-start→両handoff最新節・Issue #4・Draft PR #5を確認。旧branch・PR #6の再取り込みなし。
 
@@ -6,24 +6,26 @@
 
 1. **68f73899c1b4193c57e55038ad5924323fa4672a** — Windows checkoutで`tests/fixtures/literal-related-v6.json`がautocrlfによりSHA256変化する問題を`.gitattributes`（`eol=lf`）で修正。`tests/test_video_previews.py`の子process出力テストをraw bytes出力に統一し、Windowsの開いた読み取りhandleによるrename拒否（`PermissionError`）を検証。
 2. **836044c1a7900ba34a8ce4ff092902ce2f610cd8** / **fc40e660397ceefb981e513337ef513cdf036181** — `src/Aredoko.Core/Protocol.cs`に反射不要の`SearchEvidence`（`Direct`/`Related`/`Missing`、合計最大16語・1語最大64文字、サロゲートペア境界保護、`AllDirect`は`Direct.Length > 0 && Related.Length == 0 && Missing.Length == 0`）と`DescribeEvidence`（各区分4語＋「ほかN語」）を追加。`src/Aredoko.WinUI/MainPage.xaml.cs`の一覧/グリッド行で`row.Evidence is { AllDirect: false }`のとき`SearchEvidence<id>`として「入力語で一致：… / 関連語で一致：… / 一致なし：…」を表示（全語直接一致では余分な行を出さない）。`tools/compile_check_winui.py`のWindows UTF-8出力対応、`tools/test_image_viewer_ui.py`の専用読書window（`ArchiveReaderDialog`）待機修正および`--evidence-only` / `--video-and-evidence-only`検証モードを追加。
+3. **ef1ca99a884a4093a757c949935c7110b68cfec7** — Windowsネイティブ動画再生の縦切り（`GET /api/library/video/<id>`、`VideoPlayerPolicy`、`ArchiveReaderClient.VideoAsync`、`VideoPlayerView`、`BtnOpenVideo`）を実装。active root・除外・present・symlink/reparse・open handle前後のstat一致・playlist偽装拒否（`#EXTM3U`/`[playlist]`/`<asx`）・64MiB上限・40秒deadline・共通2枠を維持し、メモリ上の`InMemoryRandomAccessStream`と`MediaSource`/`MediaPlayerElement`で再生（元動画のパス直接open・ロック・変更なし）。再生/一時停止（Space）、1秒戻る/進む（←/→）、音量増減・消音（M）、手動再試行、マウス静止2.5秒auto-hide、F10/Tab保持、Esc終了、未保存編集draftの保持、非対応codec/破損・503・409時の日本語案内を実装。
 
 ### 正確な検証結果
 
-- **全Python 263 PASS / 142.293秒 / skip 0**（`NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -q`）。Windows実機のFFmpeg/ffprobeによる`test_video_previews.py` **20 PASS / 8.914秒 / skip 0**を含む。
-- **Core 157 PASS**（`dotnet run --project tests/Aredoko.Core.Tests -c Release`、従来147＋`SearchEvidence` 9＋動画行viewer非対象1）。
+- **全Python 264 PASS / 155.322秒 / skip 0**（`NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -q`）。Windows実機のFFmpeg/ffprobeによる`test_video_previews.py` **21 PASS / 9.694秒 / skip 0**（`/api/library/video/<id>`の認証・境界・playlist拒否・変更検知409を含む）と`test_error_text_coverage.py` PASSを含む。
+- **Core 168 PASS**（`dotnet run --project tests/Aredoko.Core.Tests -c Release`、従来147＋`SearchEvidence` 9＋動画行viewer非対象1＋`VideoPlayerPolicy`/`VideoAsync` 11）。
 - **Windows x64 SelfContained Release PASS**（`dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore`、0 error、既存IL2104 2 warnings抑制なし）。`python tools/compile_check_winui.py` **exit 0 / diagnostics 0**。
 - **`viewer-doubleclick-01` PASS 22 checks / keys 16 / skip 0 / PNG 8全目視 / graceful close 2 / cleanup warnings 0**。Light/Darkで未選択状態の一覧サムネイルdouble-click（詳細pane展開によるレイアウト移動を含む）、グリッド、詳細プレビュー、未保存draft編集中の別作品double-clickキャンセル、CBZサムネイルからの専用読書ウィンドウ起動・Esc終了を確認。
 - **`search-evidence-01` PASS 30 checks / keys 0 / skip 0 / PNG 6全目視 / graceful close 2 / cleanup warnings 0**。Light/Dark・1200×820と700×620狭幅で、全語直接一致（`a.png`）での`SearchEvidence`非表示、直接＋関連（`入力語で一致：東方 / 関連語で一致：巫女`）、関連のみ（`関連語で一致：東方、巫女`）、直接一致が関連一致より先に並ぶ順序、partial時の`一致なし：未知`、未保存draftの検索キャンセル保持、および`魔法"少女`・`C:\textures`タグ検索と`[`検索の0件（JSON配列構文の誤ヒット除去）を実機確認。
 - **`video-native-01` PASS 50 checks / keys 0 / skip 0 / PNG 10全目視 / graceful close 2 / cleanup warnings 0**（中間`video-evidence-02` FAIL 5 checks / PNG 2、`03` FAIL 8 checks / PNG 3の履歴も[viewer-reader-validation.md](viewer-reader-validation.md)に保持）。Light/Dark・wide/narrowで720×480 SAR 8:9動画（`anamorphic.mp4`）の`DetailPreview` 4:3表示比率、`clip.mp4`/`clip.mkv`/`clip.webm`のリスト・グリッド「動画の先頭フレーム」、破損動画（`broken.mp4`）の「プレビューなし」、503単発fallbackと再接続後の再取得成功、検索切り替えによる遅延動画プレビューの取消、動画サムネイルdouble-clickで画像/本viewerが開かないこと、および語別検索根拠・引用符/バックスラッシュ/`[`検索まで完走確認。
+- **`video-player-01` PASS 70 checks / keys 30 / skip 0 / PNG 12全目視 / graceful close 2 / cleanup warnings 0**。Light/Dark・1200×820と700×620狭幅で専用window（`VideoPlayerDialog`）の上下帯端dock・library無効化、生成MP4（H.264）とWMV（WMV2）の再生・一時停止・前後1秒seek・音量増減/消音、FFV1 MKV（FFmpeg先頭フレームは表示しつつWindows標準再生は非対応案内）と破損MP4の案内表示、503手動retry、409更新案内、背景Ctrl+S抑止、未保存タグdraftと`BtnOpenVideo` focus復帰、auto-hide/マウス移動再表示/非表示時Esc終了を実機確認。
 - 全runで生成mediaのbytes/mtime/hash不変、settings bytes不変、AI推論/worker 0、正常close・cleanup warning 0。私物scan/変更/外部送信、model/依存取得、OS変更、**CI dispatch 0**（3 workflowすべてmanual `workflow_dispatch`のみを確認）。
 
 ### 次の3手と残課題
 
-1. **動画再生の小さな縦切り**：明示登録した生成動画に対するWindows native再生（play/pause/seek/volume）と非対応/破損時の案内を小さく実装し、生成動画で確認する。元動画の変更・外部通信・無断codec導入はしない。
-2. **検索評価の継続**：v6で見えた短alias/partialの参考候補を、新しい固定入力またはユーザー明示の小サンプルで比較してから辞書・fallbackの変更方針を決める。
-3. **閲覧/アクセシビリティ残gate**：500px未満toolbar overflow、高DPI/High Contrast/Narrator/Tab全順序、native titlebar X/Alt+F4、実JSON save/open picker、読書位置/設定保存、フォルダ本/OCR/VLM/Komgaは後続。
+1. **検索評価の継続**：v6で見えた短alias/partialの参考候補を、新しい固定入力またはユーザー明示の小サンプルで比較してから辞書・fallbackの変更方針を決める。
+2. **閲覧/動画の拡張**：64MiB超の大容量動画に対する安全なRange/stream再生設計、読書位置/設定保存、画像pageまたぎの設計検討。
+3. **アクセシビリティ・周辺残gate**：500px未満toolbar overflow、高DPI/High Contrast/Narrator/Tab全順序、native titlebar X/Alt+F4、実JSON save/open picker、フォルダ本/OCR/VLM/Komgaは後続。
 
-最終実装HEAD **fc40e660397ceefb981e513337ef513cdf036181**。文書込み最終HEADは本節を導入したhandoff commit（`git log -1 --format=%H -- docs/codex-handoff.md`）を正とする。
+最終実装HEAD **ef1ca99a884a4093a757c949935c7110b68cfec7**。文書込み最終HEADは本節を導入したhandoff commit（`git log -1 --format=%H -- docs/codex-handoff.md`）を正とする。
 
 ---
 

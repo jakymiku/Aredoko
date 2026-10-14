@@ -1,8 +1,13 @@
 # 共通API（操作試作 v0）
 
+## 製品MVP：読み取り専用動画ストリームAPIと語別根拠のWinUI接続（2026-10-14 Windows続行）
+
+- `GET /api/library/video/{id}`：登録・索引済みのpresentな動画（`.mp4/.mkv/.webm/.avi/.mov/.wmv/.m4v/.ts`、最大64MiB）を、active root・除外・symlink/reparse・open handle前後のstat一致・playlist偽装拒否（`#EXTM3U`/`[playlist]`/`<asx`）を検査したうえで返す。Hostと`X-Aredoko-Token`必須、`Cache-Control: no-store`。未対応/欠損/超過/playlist偽装は404、索引後の変更は409、共通2枠使用中は503、不正ID/URLは400。
+- `search_evidence`はCoreの`Protocol.DescribeEvidence`とWinUI一覧の`SearchEvidence<id>`で表示接続・Windows実機確認済み。全Python 264 PASS、Core 168 PASS、x64 Release PASS。
+
 ## 製品MVP：通常検索の語ごとの根拠（2026-10-14 夜）
 
-queryありの`GET /api/items`は各itemに`search_evidence:{direct_words,related_words,missing_words}`を追加。正規化・重複除去した各query語を、直接文字一致/辞書による一致/未一致へ分ける。最大16語。既存match/partial/expansions・順位・filter・root・pagingは保持し、queryなし一覧・個別GET・AI検索にはこの新fieldを追加しない。タグ/DB schema/model/vector変更なし。WinUI表示は未実装。[正確な意味と評価結果](literal-search-v6.md)。
+queryありの`GET /api/items`は各itemに`search_evidence:{direct_words,related_words,missing_words}`を追加。正規化・重複除去した各query語を、直接文字一致/辞書による一致/未一致へ分ける。最大16語。既存match/partial/expansions・順位・filter・root・pagingは保持し、queryなし一覧・個別GET・AI検索にはこの新fieldを追加しない。タグ/DB schema/model/vector変更なし。[正確な意味と評価結果](literal-search-v6.md)。
 
 ## 製品MVP：タグ値の照合とID境界の安定化（2026-10-14 続行）
 
