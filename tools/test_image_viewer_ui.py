@@ -391,7 +391,7 @@ def main():
                 check(theme+' partial related+missing SearchEvidence shown',ev_b_partial is not None and ev_b_partial.get('name')=='関連語で一致：東方 / 一致なし：未知')
                 shot(theme+'-evidence-partial-narrow')
                 ui('invoke','Item'+str(ids['b.png']),'--action','select');wait('TxtEditStatus','保存済み');ui('set-value','TxtTags','evidence-draft');wait('TxtEditStatus','未保存の変更')
-                ui('set-value','TxtQuery','魔法"少女');ui('invoke','BtnSearch');ui('wait-for','CloseButton','--value','編集を続ける','-t','5000');ui('invoke','CloseButton');ready()
+                ui('set-value','TxtQuery','魔法"少女');ui('wait-for','CloseButton','--value','編集を続ける','-t','5000');ui('invoke','CloseButton');ready()
                 wait('TxtQuery','東方 未知');wait('TxtTags','evidence-draft');wait('TxtEditStatus','未保存の変更')
                 check(theme+' cancelling search keeps unsaved draft and SearchEvidence',catalog.get(ids['b.png'])['tags']==['博麗霊夢',r'C:\textures'])
                 ui('invoke','BtnCloseDetails');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready()
