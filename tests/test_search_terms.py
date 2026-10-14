@@ -1,12 +1,22 @@
 """Literal search normalization/AND terms; generated temporary files only."""
-import sys, tempfile, time, unittest
+import json, sys, tempfile, time, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 from production import ProductionCatalog
-from search_terms import MAX_TERMS, normalize, split_terms
+from search_terms import MAX_TERMS, normalize, normalize_tags, split_terms, matcher
 
 
 class NormalizeTests(unittest.TestCase):
+    def test_tag_values_are_decoded_and_never_bridged(self):
+        values = ['魔法"少女', r'C:\textures', 'ﾚｲﾑ', 'ab', 'cd']
+        self.assertEqual(normalize_tags(values), normalize_tags(json.dumps(values)))
+        self.assertEqual(normalize_tags(values), normalize_tags(json.dumps(values, ensure_ascii=False)))
+        self.assertEqual(matcher([['bcd']])('neutral', '["ab", "cd"]'), -1)
+        for broken in (None, 'not JSON', '{}', 'null', '"literal"', '[' * 2000):
+            with self.subTest(value=str(broken)[:20]):
+                self.assertEqual(normalize_tags(broken), '')
+                self.assertEqual(matcher([['title']])('title.png', broken), 1)
+
     def test_width_case_and_kana_are_folded(self):
         self.assertEqual(normalize('ﾚｲﾑ'), normalize('れいむ'))
         self.assertEqual(normalize('レイム'), 'れいむ')
@@ -39,6 +49,42 @@ class CatalogTermTests(unittest.TestCase):
 
     def titles(self, query, **kwargs):
         return sorted(item['title'] for item in self.catalog.search(query, limit=120, **kwargs)['items'])
+
+    def test_quote_backslash_and_unicode_escaped_tags_are_searchable_without_rewriting(self):
+        ids = self.scan(['quoted.png', 'path.png', 'escaped.png', 'empty.png'])
+        self.catalog.update([ids['quoted.png']], {'tags': ['魔法"少女']})
+        self.catalog.update([ids['path.png']], {'tags': [r'C:\textures']})
+        with self.catalog.connect() as db:
+            db.execute('UPDATE items SET tags=? WHERE id=?',
+                       (json.dumps(['レイム']), ids['escaped.png']))
+            before = list(db.execute('SELECT id,tags FROM items ORDER BY id'))
+        self.assertEqual(self.titles('魔法"少女'), ['quoted.png'])
+        self.assertEqual(self.titles(r'C:\textures'), ['path.png'])
+        self.assertEqual(self.titles('れいむ'), ['escaped.png'])
+        with self.catalog.connect() as db:
+            self.assertEqual([tuple(row) for row in before],
+                             [tuple(row) for row in db.execute('SELECT id,tags FROM items ORDER BY id')])
+
+    def test_json_punctuation_is_not_a_match_but_real_punctuation_is(self):
+        ids = self.scan(['plain.png', 'punctuation.png', '[cover].png'])
+        self.catalog.update([ids['punctuation.png']], {'tags': ['comma,', '[tag]', 'quote"']})
+        self.assertEqual(self.titles('['), ['[cover].png', 'punctuation.png'])
+        self.assertEqual(self.titles('"'), ['punctuation.png'])
+        self.assertEqual(self.titles(','), ['punctuation.png'])
+        self.assertEqual(self.titles('[]'), [])
+
+    def test_decoded_tags_keep_related_partial_and_explicit_filters(self):
+        ids = self.scan(['related.png', 'direct.png', 'book.cbz'])
+        self.catalog.update([ids['related.png']], {'tags': ['魔法"少女'], 'favorite': True})
+        self.catalog.update([ids['direct.png']], {'tags': ['月の子']})
+        self.catalog.update([ids['book.cbz']], {'tags': ['魔法"少女']})
+        self.catalog.terms.upsert({'term': '魔法"少女', 'aliases': [], 'related': ['月の子']})
+        result = self.catalog.search('月の子', kind='image')
+        self.assertEqual([row['id'] for row in result['items']], [ids['direct.png'], ids['related.png']])
+        self.assertEqual([row['match'] for row in result['items']], ['direct', 'related'])
+        result = self.catalog.search('月の子 未知', kind='image', view='favorites')
+        self.assertEqual([row['id'] for row in result['items']], [ids['related.png']])
+        self.assertEqual(result['partial'], {'words': 2, 'required': 1})
 
     def test_all_words_must_match_title_or_tags_in_any_order(self):
         ids = self.scan(['standing_A.png', 'shrine_B.png', 'other.png'])

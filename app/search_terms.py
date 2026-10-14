@@ -15,6 +15,7 @@ substring match is normally also an all-terms match of the normalized text
 stdlib and never reads files or models.
 """
 import functools
+import json
 import unicodedata
 
 MAX_TERMS = 16
@@ -40,15 +41,35 @@ def split_terms(query):
     return terms
 
 
+def normalize_tags(tags):
+    """Search actual tag values, never JSON syntax or escaped storage bytes.
+
+    SQLite passes the encoded array; AI evidence already has a parsed list.
+    A field separator prevents a substring from bridging two distinct tags.
+    Malformed storage contributes no tags, while title matching still works.
+    """
+    if isinstance(tags, str):
+        try:
+            tags = json.loads(tags)
+        except (ValueError, RecursionError):
+            return ''
+    if not isinstance(tags, (list, tuple)):
+        return ''
+    return '\x1f'.join(normalize(tag) for tag in tags if isinstance(tag, str))
+
+
 def _scorer(alternatives):
     """One pass per row: (direct, covered, specific), memoized per search."""
     memo = {}
+    # Bounded and query-local: repeated tag sets need parsing only once, and
+    # the cache disappears with this SQLite connection's search functions.
+    tags_text = functools.lru_cache(maxsize=4096)(normalize_tags)
 
     def score(title, tags):
         key = (title, tags)
         found = memo.get(key)
         if found is None:
-            hay = normalize(title) + '\x1f' + normalize(tags)
+            hay = normalize(title) + '\x1f' + tags_text(tags)
             direct = covered = specific = 0
             for options in alternatives:
                 lengths = [len(option) for option in options if option in hay]

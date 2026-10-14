@@ -14,7 +14,7 @@ from ai_vectors import normalized
 from ai_ranking import POLICIES,fuse_modalities
 from library_index import TYPES, _excluded
 from ai_scope import validate_scope, scope_clause
-from search_terms import normalize
+from search_terms import normalize, normalize_tags
 from ai_result_groups import boundary
 from previews import PreviewReader, PreviewUnavailable
 
@@ -342,7 +342,7 @@ class AISearch:
             words=list(dict.fromkeys(normalize(query).split()))
             by_id={row['id']:row for row in rows}
             for row in rows:
-                hay=normalize(row['title'])+'\x1f'+normalize(json.dumps(row['tags'],ensure_ascii=False))
+                hay=normalize(row['title'])+'\x1f'+normalize_tags(row['tags'])
                 row['literal_words']=len(words)
                 row['literal_hits']=sum(word in hay for word in words)
             if literal_only:
