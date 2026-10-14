@@ -1,4 +1,36 @@
-## 最新：大容量動画の範囲取得再生（2026-10-15）
+## 最新：大容量動画・シークバー・時刻付きサムネイル（2026-10-15）
+
+開始HEAD `267d4820a06c541d3d71b86155727ef2fcc538da`。range実装 `65d824c`、シーク/UI・内容索引計画 **`91d59c24aa48c7d9b1e4982032613c0d4851b453`**。文書込み最終HEADは本節の記録commit（`git log -1 --format=%H -- docs/codex-handoff.md`）を正とする。既存製品branch/base/Draft PR5を維持。remoteへ他AIの新commitはなく通常fast-forwardのみ。
+
+### 実装
+
+- 動画全体の64MiBメモリcopyを通常再生から除去。manifest＋認証付き1MiB以下のRange、2TiB input上限、独立nativeカーソルと取消、Content-Range/ETag/MIME/長さ照合。[動画範囲再生](video-streaming.md)。互換旧API64MiB・先頭thumbnail512MiBは維持。生成70MiB末尾moovへ実native offset73,400,320を確認（range76requests、最大262,144bytes）。
+- **シークバーのクリック/ドラッグ・左右keyboard、現在位置同期、hover位置の時刻と実サムネイル**。hoverだけで再生位置を変えない。320ms debounce・1進行要求・最寄り秒・LRU/取得サイズ/期限で負荷を制限。取得不可は「サムネイルなし」、動画再生/シークを継続。遅延frameは閉じる/別viewer/version境界で排除。[シーク仕様](video-seek-preview.md)。
+- 下部帯Stretch/margin0/左右border0/corner0でコンテンツ端に揃える。auto-hide/F10/Tab/Esc、未保存draft/focusを保持。APIのframe取得はsourceの読み取りハンドルをfdで継承し、入力protocol/demuxerを制限。元データを再エンコード/変更/一時copyしない。
+- **ユーザーの最終目標を保存**：EmbeddingGemma 2中心の画像・動画・音声/音楽内容解析→DB化→曖昧検索、および右クリック「類似検索」。[内容索引計画](media-content-plan.md)・product-vision・AGENTS参照を追加。モデルの直接入力仕様確認と前処理、交換可能profile、時間区間の出典が必要。**動画/音声のmetadata登録と名前/タグ検索は既存、内容索引とアイテム起点類似検索は未実装**。
+
+### 確定したローカル検証
+
+- `python -m unittest discover -s tests -p 'test_*.py'`：**279 PASS /132.626秒/skip0**。新frame3件では実FFmpegで赤0秒→青1秒の取得/cache/source hash・mtime不変、認証/query/revision/除外/解除/busyを検証。初回Python先読みbufferと子のOS offsetずれを修正済み。
+- `dotnet run --project tests/Aredoko.Core.Tests/Aredoko.Core.Tests.csproj -c Release`：**213 PASS**。範囲/EOF/不整合/変更・busy/取消、frame時刻・固定route・PNGサイズ/MIMEも含む。
+- `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore`：**PASS27.97秒/0error/既存IL2104 2warnings抑制なし**。
+- range native03：**73checks/keys30/skip0/PNG12全目視/graceful close2**。01はprefixだけでcodecが足りるfixtureのoffset証拠条件、02は末尾moovで旧thumbnail不可なのに必須にしたテスト前提が失敗。2修正cycleで03完走。
+- seek native03：**88checks/keys40/skip0/PNG18全目視/graceful close2/cleanup失敗なし**。Light/Dark・wide/narrowでslider/keyboard・hover青1秒＋再生0秒・preview503でもseek継続・遅延frameのclose後排除、MP4/WMV/非対応/破損、503retry/409、再生/停止/音量、auto-hide/F10/Esc、draft/focusを確認。01は中心時刻の切捨て境界、02はauto-hideしたclosebuttonをfocusする旧テスト前提が失敗。最寄り秒/標準tooltip無効化と常在viewportへのEscapeへ2修正で03完走。失敗証拠全PNGも確認。
+- source bytes/mtime・test settings不変、AI/model呼出0、private libraryアクセス0。ログ/生成media/layoutはignored `data/ai-ui`内。コード/仕様/テストだけGit保存。manual code review実施、専用WinUI analyzer未導入/未実行。
+
+### 限界と次の3手
+
+実測は2秒生成動画、range側は70MiB。長編/高bitrate/2TiB実動画・高負荷同時処理・再生中の実更新/切断回復、多DPI/Narrator/Contrast/Native AOTは未検証。frame時刻は24時間まで（超過hoverは上限に留まる）、backend子はHTTP取消で即時killせず10秒deadlineで回収。codec内部RAMの固定保証はない。UI/native検証の2修正cycle上限を完了し、理由なしに同じバッチを追加rerunしない。
+
+1. 既存画像embeddingでアイテム起点類似検索API/右クリックUIを設計し、同一profile・scope・自己除外・未索引fallbackを生成fixtureで検証する。
+2. モデル入力仕様と索引形式を確認し、時間付き代表frameの動画内容索引・元itemへの集約検索を縦切りする。
+3. 音声認識/音響・音楽特徴の方式を比較して内容索引を拡張する。各段階で新固定検索評価と資源制御、狭幅/多DPI/keyboardの未検証範囲も確認する。
+
+CIは3workflowともworkflow_dispatchのみ、dispatch0。通常push後のHEAD runs/checksは読み取り確認しPRへ記録する。main merge/force push/new PR/shutdownを行わない。古いチャットのshutdown依頼は再適用しない。
+
+---
+
+## 履歴：大容量動画の範囲取得再生（2026-10-15）
 
 開始HEAD `267d4820a06c541d3d71b86155727ef2fcc538da`。branch/base/Draft PR5を維持。認証付きmanifest/range API、1MiB上限・revision・response検査、取消可能なnative独立カーソルstreamへ接続し、64MiB全体copyを通常再生から除去。詳細は[動画範囲再生](video-streaming.md)。
 
