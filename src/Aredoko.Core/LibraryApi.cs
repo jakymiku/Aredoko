@@ -7,7 +7,14 @@ public sealed class LibraryApi : IDisposable
 {
     private readonly HttpClient client;
     public LibraryApi() : this(new HttpClientHandler { AllowAutoRedirect = false }) { }
-    public LibraryApi(HttpMessageHandler handler) => client = new(handler) { BaseAddress = new Uri("http://127.0.0.1:8769/"), Timeout = TimeSpan.FromSeconds(40) };
+    private readonly HttpClient tagClient;
+    public TagReviewClient TagReviews {get;}
+    public LibraryApi(HttpMessageHandler handler)
+    {
+        client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(40)};
+        tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromSeconds(100)};
+        TagReviews=new(tagClient);
+    }
     public Task<ArchiveManifest> ReaderManifestAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ManifestAsync(id, cancellation);
     public Task<ReaderProgress?> ReaderProgressAsync(int id,CancellationToken cancellation)=>new ArchiveReaderClient(client).ProgressAsync(id,cancellation);
@@ -27,6 +34,10 @@ public sealed class LibraryApi : IDisposable
         client.DefaultRequestHeaders.Add("X-Aredoko-Token",doc.RootElement.GetProperty("token").GetString());
         client.DefaultRequestHeaders.Remove("Origin");
         client.DefaultRequestHeaders.Add("Origin", "http://127.0.0.1:8769");
+        tagClient.DefaultRequestHeaders.Remove("X-Aredoko-Token");
+        tagClient.DefaultRequestHeaders.Add("X-Aredoko-Token",doc.RootElement.GetProperty("token").GetString());
+        tagClient.DefaultRequestHeaders.Remove("Origin");
+        tagClient.DefaultRequestHeaders.Add("Origin","http://127.0.0.1:8769");
     }
     public Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all",JsonObject? scope=null,int? rootId=null,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all") =>
         SearchMultiAsync(q,kind,view,page,semantic,source,scope,rootId is int id ? new[]{id} : null,literalOnly,groupThreshold,resultGroup);
@@ -104,6 +115,6 @@ public sealed class LibraryApi : IDisposable
         }
         return output.ToArray();
     }
-    public void Dispose()=>client.Dispose();
+    public void Dispose(){tagClient.Dispose();client.Dispose();}
 }
 

@@ -1,6 +1,6 @@
 # P2：由来付きタグ候補・承認APIの最初の縦切り
 
-2026-10-16。[製品ビジョン](product-vision.md)・[開発優先順位](development-priorities.md)に沿うバックエンドの基盤。**P2全体の完成ではない。WD画像分類adapterの接続コードを追加（[導入・検証状況](wd-tagger.md)）。WinUI承認画面、OCR/複数ページ解析、候補を対象にしたライブラリ全体の検索は未接続。** EmbeddingGemmaの既存埋め込み処理をタグ生成モデルとして扱わず、固定の偽アダプタによる契約テストと実モデルの品質を区別する。
+2026-10-16。[製品ビジョン](product-vision.md)・[開発優先順位](development-priorities.md)に沿うバックエンドの基盤。**P2全体の完成ではない。WD画像分類adapterの接続コードを追加（[導入・検証状況](wd-tagger.md)）。WinUI候補/根拠・修正承認/却下・履歴・取消画面を追加し通常幅のWindows操作を確認。開いたまま縮小すると詳細が空になるvisual FAILが残るため、GUI全体の合格ではない。OCR/複数ページ解析、候補を対象にしたライブラリ全体の検索は未接続。** EmbeddingGemmaの既存埋め込み処理をタグ生成モデルとして扱わず、固定の偽アダプタによる契約テストと実モデルの品質を区別する。
 
 ## 保存と承認
 
@@ -28,6 +28,7 @@
 | Method / route | 入力 / 動作 |
 |---|---|
 | `GET /api/library/tag-suggestions/{item_id}` | 履歴/由来/状態と現在source revision、各batchのstale、生成available/reason。`limit`既定10・最大20、`before`で古いbatchを取得、`next_before`を返す。item固有の履歴であり全体検索ではない。 |
+| `GET /api/library/tag-suggestions/{item_id}/evidence?revision=<64hex>` | 同一handleで読んだ画像/自然順先頭表紙の物理revisionを照合し返す。変更409/不在404/不正400。旧版画像は表示しない。 |
 | `POST /api/library/tag-suggestions/generate` | `{item_id, request_id}`。設定済みadapterだけを実行、または既存同一batchを再利用。未接続503。 |
 | `POST /api/library/tag-suggestions/cancel` | `{request_id}`。対応する実行中要求だけを取消。 |
 | `POST /api/library/tag-suggestions/review` | `{item_id, proposal_id, version, decision}`。decisionは`accept`/`reject`、acceptだけ任意`tag`で修正。pending/version一致・現在source一致が必須。再承認/古い状態409、他itemのproposal404。 |
@@ -41,3 +42,11 @@
 これは**保存・承認・境界の契約検証**。実AIタグ精度・GPU推論・OCR・WinUI操作・実ライブラリ・大規模性能の検証ではない。C#は既存ErrorText辞書への日本語エラー追加のみ。XAML/GUI構造は未変更。Core契約テストとWindows x64 SelfContained Release buildを実施、native GUI操作/WinUIAnalyzerは今回未実行（既存projectにanalyzer参照なし、新依存は追加しない）。具体的な最終テスト結果と失敗履歴は[最新handoff](codex-handoff.md)参照。
 
 WD adapterは明示許可による導入・実CPU/API35checks確認済み（実タグ品質は未評価）。次は (1)WinUIの候補/根拠表示・修正承認/却下・draft保持とWindows実機確認、(2)候補を明示選択した検索、(3)代表素材の品質評価とOCR/複数ページ根拠への拡張。P0 baseline済み・改善累積1/2は維持する。
+
+## WinUIレビュー接続（2026-10-16）
+
+画像/CBZ/ZIPの詳細「AIタグ候補」から専用ダイアログを開く。最大10batchずつ履歴・30候補、元候補/修正確定タグ/状態、model版/前処理/根拠を表示。本文解析はなくCBZ/ZIPは先頭ページだけ。未接続は生成のみ禁止、保存済みの新しいpendingは承認可能。staleは操作禁止。既存の検索・scope・選択・詳細のdraftを維持する。
+
+未保存編集がある場合は閲覧/生成/却下のみ許可し、承認は手動保存後に再度開く。承認要求後はitem再取得で詳細を同期し、失敗時は再確認まで当該itemの手動保存を禁止する。生成95秒deadline（transport100秒）・閉じるとserverへ取消を要求して終了待ち。通常検索用clientの40秒制限とは分ける。根拠画像は最大8MiB/16Mpixel、表示時に256pxへ縮小。
+
+最新の全Python336 PASS・Core契約PASS・Release警告0/エラー0。`tools/test_tag_review_ui.py` は生成素材/一時DB/偽adapterだけで35 runtime checks PASS、PNG7枚を目視。通常幅の明暗・承認/却下・CBZ表紙は確認済みだが、開いたまま狭幅へ縮めると候補詳細が見えないvisual FAILがあり次の修正対象。上の「C#変更なし/GUI未変更」はbackend基盤導入時の履歴であり、現状はこの節と最新handoffを正とする。実WD GUI推論/実タグ品質/High Contrast/DPI拡大は今回未検証。

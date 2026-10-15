@@ -4,7 +4,7 @@
 
 - `GET /api/library/tag-suggestions/{item_id}?limit=10&before=<batch_id>`：候補/確定/却下の履歴とmodel/version・物理revision・根拠ページ・stale・生成available。通常タグ検索に候補を混ぜない。
 - `POST /api/library/tag-suggestions/generate` / `cancel` / `review`：信頼された設定済みadapterのみ、原子的な候補公開、request IDによる協調取消、現source/version一致時だけ既存タグへ追加または修正承認/却下。
-- **ローカルWD CPU分類adapterはユーザー許可による導入・実CPU/API35checks確認済み（[実測・限界](wd-tagger.md)）。未導入環境なら生成503。WinUI/OCR/候補の全体検索は未接続、タグ精度は別評価**。偽adapterでの契約検証を実AI品質と扱わない。[詳細仕様・制限](tag-suggestions.md)。
+- **ローカルWD CPU分類adapterはユーザー許可による導入・実CPU/API35checks確認済み（[実測・限界](wd-tagger.md)）。未導入環境なら生成503。WinUIレビューは通常幅を実機確認、狭幅visual FAILが残る。OCR/候補の全体検索は未接続、タグ精度は別評価**。偽adapterでの契約検証を実AI品質と扱わない。[詳細仕様・制限](tag-suggestions.md)。
 
 ## 製品MVP：複数登録フォルダの和集合検索とアイテム起点類似検索のWindows検証（2026-10-15 Windows続行）
 
@@ -115,3 +115,5 @@ GET/POST `/api/library/reader/{id}/progress` を追加。revision・0始まりpa
 ## アイテム起点の類似検索（2026-10-15）
 
 `POST /api/library/ai/similar`：同profile/current revisionの保存済み画像・表紙vectorから類似順に返す。scope・自己除外・未索引fallback・認証を含む詳細は [item-similarity.md](item-similarity.md)。動画/音声の内容類似検索は未実装。今回のWinUI導線はソース追加済み、Windows実機未検証。
+
+- P2根拠読取：`GET /api/library/tag-suggestions/{id}/evidence?revision=<64hex>`。Host/token必須、登録中sourceの同一handle画像と物理版を照合。変更409・不在404・不正400、8MiB画像の既存上限を継承。詳細は[tag候補仕様](tag-suggestions.md)。

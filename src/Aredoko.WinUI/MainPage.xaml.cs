@@ -23,6 +23,8 @@ public sealed partial class MainPage : Page
     private ImageViewerView? imageViewer;
     private VideoPlayerView? videoPlayer;
     private ViewerWindow? viewerWindow;
+    private TagSuggestionsView? tagReview;
+    private int? tagReviewSyncItem;
     private readonly ThumbnailClickTracker previewClicks=new();
     [System.Runtime.InteropServices.DllImport("user32.dll")]private static extern uint GetDoubleClickTime();
     [System.Runtime.InteropServices.DllImport("user32.dll")]private static extern int GetSystemMetrics(int index);
@@ -378,7 +380,11 @@ public sealed partial class MainPage : Page
         }finally{transitions.Release();}
     }
     private void RestoreSelection(){populating=true;Items.SelectedItem=active is null?null:Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==active.Id);populating=false;}
-    private void UpdateDirty(){if(!ready)return;EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);}
+    private void UpdateDirty(){if(!ready)return;
+        var blocked=active is not null&&tagReviewSyncItem==active.Id;
+        Tags.IsEnabled=Shelf.IsEnabled=Favorite.IsEnabled=Reviewed.IsEnabled=!blocked;
+        TagSuggestionsButton.IsEnabled=active is not null&&TagReviewProtocol.CanOpen(active)&&!saving;
+        if(blocked){EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";Save.IsEnabled=false;return;}EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);}
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
     public async Task<bool> ConfirmDiscardAsync() {
@@ -399,7 +405,7 @@ public sealed partial class MainPage : Page
         }finally{dialogOpen=false;}
     }
     private async Task SaveAsync() {
-        if(active is null||saving||dialogOpen||!Dirty)return;
+        if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id||!Dirty)return;
         var snapshot=Current();var error=snapshot.Validate();
         if(error is not null){EditStatus.Text=error;return;}
         // Disabling the editor moves WinUI focus elsewhere. Restore only an
@@ -626,8 +632,45 @@ public sealed partial class MainPage : Page
         }
         finally{transitions.Release();}
     }
+    private async void TagSuggestions_Click(object sender,RoutedEventArgs e)
+    {
+        if(active is null||!TagReviewProtocol.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        var id=active.Id;var detailsWereOpen=Details.IsPaneOpen;dialogOpen=true;searchTimer.Stop();
+        var root=XamlRoot;Windows.Foundation.TypedEventHandler<XamlRoot,XamlRootChangedEventArgs> rootChanged=(_,_)=>tagReview?.Fit(root.Size.Width,root.Size.Height);
+        root.Changed+=rootChanged;
+        try
+        {
+            if(tagReviewSyncItem==id)await SyncTagReviewAsync(id);
+            tagReview=new TagSuggestionsView(api.TagReviews,id,Dirty){RequestedTheme=ActualTheme};tagReview.Fit(root.Size.Width,root.Size.Height);
+            var dialog=new ContentDialog{RequestedTheme=ActualTheme,XamlRoot=XamlRoot,Title="AIタグ候補",Content=tagReview,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,FullSizeDesired=true};
+            dialog.Resources["ContentDialogMaxWidth"]=720d;
+            var closeStyle=new Style(typeof(Button));closeStyle.Setters.Add(new Setter(AutomationProperties.AutomationIdProperty,"TagClose"));dialog.CloseButtonStyle=closeStyle;
+            tagReview.CloseReady+=()=>dialog.Hide();
+            dialog.Closing+=(_,args)=>{if(tagReview?.Busy==true){args.Cancel=true;tagReview.RequestClose();}};
+            var shown=dialog.ShowAsync();await tagReview.LoadAsync();await shown;
+        }
+        catch(Exception ex){if(!disposed)Failure(ex);}
+        finally
+        {
+            root.Changed-=rootChanged;
+            var sync=tagReview?.ApprovalAttempted==true;
+            tagReview?.Dispose();tagReview=null;
+            try{if(sync&&!disposed){tagReviewSyncItem=id;await SyncTagReviewAsync(id);}}
+            catch(Exception ex){if(!disposed)Failure(ex);}
+            finally{dialogOpen=false;transitions.Release();if(!disposed){if(detailsWereOpen&&active?.Id==id)Details.IsPaneOpen=true;UpdateDirty();if(PendingSearch)searchTimer.Start();}}
+        }
+    }
+    private async Task SyncTagReviewAsync(int id)
+    {
+        var fresh=await api.TagReviews.ItemAsync(id,CancellationToken.None);
+        if(disposed||active?.Id!=id)return;
+        active.Tags=fresh.Tags;active.Shelf=fresh.Shelf;active.Favorite=fresh.Favorite;active.Reviewed=fresh.Reviewed;
+        Tags.Text=string.Join(", ",fresh.Tags);Shelf.Text=fresh.Shelf;Favorite.IsChecked=fresh.Favorite;Reviewed.IsChecked=fresh.Reviewed;
+        saved=Current();tagReviewSyncItem=null;RenderRows();RestoreSelection();
+    }
     private void Page_SizeChanged(object sender,SizeChangedEventArgs e)
     {
+        tagReview?.Fit(e.NewSize.Width,e.NewSize.Height);
         if(Details is null || ViewTools is null)return;
         if(ready&&e.NewSize.Width>0){Nav.PaneDisplayMode=e.NewSize.Width>=1000?NavigationViewPaneDisplayMode.Left:NavigationViewPaneDisplayMode.LeftCompact;Nav.IsPaneOpen=e.NewSize.Width>=1000;}
         Details.DisplayMode=e.NewSize.Width<1000?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
@@ -1513,6 +1556,6 @@ public sealed partial class MainPage : Page
         finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
     }
 
-    public void Stop(){disposed=true;scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
+    public void Stop(){disposed=true;tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
 }
 

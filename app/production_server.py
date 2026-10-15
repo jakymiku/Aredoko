@@ -99,6 +99,21 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(403,{'error':'Invalid session'})
                 if path.startswith('/api/library/tag-suggestions/'):
                     try:
+                        evidence=re.fullmatch(r'/api/library/tag-suggestions/([1-9][0-9]{0,18})/evidence',path)
+                        if evidence is not None:
+                            item=int(evidence[1])
+                            if item>9223372036854775807:raise ValueError('Invalid item')
+                            query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
+                            if set(query)!={'revision'} or len(query['revision'])!=1 or re.fullmatch('[0-9a-f]{64}',query['revision'][0]) is None:
+                                raise ValueError('Invalid evidence revision')
+                            try:
+                                payload=previews.tag_input(item)
+                            except (ReaderChanged,PreviewBusyError) as ex:
+                                raise AIBusy('根拠画像を確認できません。再走査して開き直してください。') from ex
+                            except PreviewUnavailable as ex:raise KeyError('Tag source unavailable') from ex
+                            if payload['source']['revision']!=query['revision'][0]:
+                                raise AIBusy('元ファイルが変更されました。候補を生成し直してください。')
+                            return self.send(200,payload['data'],payload['mime'])
                         match=re.fullmatch(r'/api/library/tag-suggestions/([1-9][0-9]{0,18})',path)
                         if match is None:raise ValueError('Invalid proposal route')
                         args=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)

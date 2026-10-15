@@ -1,4 +1,35 @@
-## 最新：WD固定版の承認済み導入・実CPU/API検証とライセンス確認（2026-10-16 JST）
+## 最新：P2 WinUIタグ候補レビューの通常幅実装・狭幅の残課題（2026-10-16 JST）
+
+**現在フェーズ：P2の候補レビューUIを実装し、通常幅の生成→根拠確認→修正承認/却下→保存までWindows実機確認。狭幅へリサイズした際の詳細領域が空になる問題が残るため、GUI縦切り全体の完了とはしない。** WD実CPU/API35 checksは前回の実測を維持。今回のnative35 checksは固定候補を返す偽adapterでのUI/API配線検証であり、モデル品質/実WDのGUI推論を測ったものではない。P1を維持し、P0 baseline済み・改善累積1/2・ランキング/閾値/routing変更0を保つ。
+
+開始HEAD `c1aa0510f2a3672438358d2675b66e39e0e48926`。clean・remote差0/0とAGENTS/両handoff/Issue4/PR5を確認して開始。branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / [Draft PR5](https://github.com/jakymiku/Aredoko/pull/5)を継続。コミット番号はこの節を追加したgit logを参照。
+
+### 実装と保護
+
+- 画像/CBZ/ZIPの詳細に「AIタグ候補」を追加。ContentDialogで最大10batchずつ履歴、最大30候補、pending/承認済み/却下済み、元タグ/修正タグ、説明、model/revision/adapter/前処理、画像/先頭ページだけの根拠を表示。未接続時も保存済み候補は閲覧・承認可能。stale候補は承認/却下/根拠画像の取得を禁止。
+- 根拠用 `GET /api/library/tag-suggestions/{id}/evidence?revision=<64hex>` を追加。既存PreviewReaderの同一handle入力と物理revisionを照合し、変更409/不在404/不正400/Host・token403。8MiB・decode16Mpixel/縮小256pxの既存制限を継承する。revisionは全内容hashではなく既存メタデータtoken。
+- 未保存の手動編集があれば閲覧・生成・却下のみ許可し、承認は保存してから再度開く。下のタグ/棚/お気に入りを捨てない。承認要求後は結果の成否にかかわらず最新itemを読み直し、再取得失敗ならそのitemの手動保存を封じて候補画面を開き直すことで再確認。古い編集値で承認タグを上書きしない。
+- 検索query/範囲/ページ/選択を変えず、ダイアログ後に詳細へ復帰。生成は普通の40秒clientと別に95秒deadline/100秒transport上限。閉じる操作はrequest IDでserver取消を要求して完了を待つ。HTTPだけを切って取消成功とは表示しない。生成失敗でも履歴/手動検索は保持。
+
+### 検証の事実と失敗
+
+- 全Python **336 PASS / 172.300秒 / skip0**。タグ候補HTTP等は **20 PASS / 6.558秒**。C# Core全契約PASS（reflection JSON無効下、Int64/版/由来/認証/編集承認/応答上限/MIME/取消を追加）。Windows x64 SelfContained Release **警告0・エラー0**。
+- Windows Sandbox機能はWin32_OptionalFeature InstallState=2で無効。OSは変更せず、既存ユーザー許可に基づき所有PID/HWNDのローカルテストAredokoのみ操作。port8769/既存Aredokoがあれば拒否するfixtureバッチ `tools/test_tag_review_ui.py` を追加。
+- ignored `data/ai-ui/tag-review-20261016-03/result.json`：**UIA runtime 35 checks PASS、PNG7枚すべてview_imageで目視、通常幅5枚は明暗・修正承認/却下・CBZ表紙表示OK、狭幅2枚はvisual FAIL**。Tab/Esc入力、古い履歴、未接続/stale、生成中の閉じる取消（部分batchなし）、通常検索と未保存編集の保持、元fixture bytes/mtime・AI設定不変、モデル推論呼出0・owned app2/2正常終了を確認。sourceは生成76件のみ、私物DB/rootを使わない。
+- 初回01はfixtureの同名画像2件を1件と想定したハーネス誤りで停止。02は通常幅機能成功後、狭幅で閉じた後の詳細pane復帰不足で停止。03でテーマ追従・詳細復帰・rootサイズ追従を修正して操作チェックは完了したが、開いたまま700x620へ縮小すると候補詳細ScrollViewer配下がUIA bounds=0となり見えない。これは完了/合格と扱わない。**次回はこの狭幅レイアウト問題を最初に修正する。**
+- `winui-ui-testing` skillの「at most two fix-and-rerun cycles」に達したため今回は再試行を打ち切り、visual FAILを残して安全にcheckpoint。次回は候補画面の新しい修正バッチとして、通常→狭幅→通常と狭幅からの新規openを検証する。High Contrast/DPI拡大・実WD GUI推論・承認後の通信断実機試験は今回未実施。
+- WinUI code reviewで認証/版固定/上限/非同期/テーマ/a11y IDs/dirty保護を確認。既存構造に合わせ画面イベントをcode-behind、検証/transportをCoreへ分離。WinUIAnalyzer未導入のため未実行、新packageなし。新規DL/OS変更/私物scan/元ファイル操作0、モデル/DB/生結果はGitへ含めない。
+- workflows3件はmanual-only、CI dispatch0。push後のHEAD Actions/checks・remote差分を読み取り確認し、PR5の最新記録へ残す。
+
+### 次の異なる3手
+
+1. **狭幅の候補詳細レイアウトを修正・Windows再確認**：動的Grid行/列移動後のScrollViewer子要素のmeasure/boundsを確認。固定レイアウトや適切な再measureなど小さい修正で、開いたまま縮小/拡大・狭幅open・スクロール/キー操作を確認。通常幅の承認/取消を退行させない。WD再導入や同じbackendを作り直さない。
+2. **未承認候補を明示選択した検索**：確定タグと混ぜず状態/model/根拠を表示し、root/棚等のscopeを共有するAPI→GUI。stale/履歴を区別し、通常検索は維持。
+3. **代表素材の品質評価とOCR/複数ページ**：合成図形のruntime成功を実タグ精度と扱わず、固定代表素材で日本語検索への寄与を評価し、本文/複数ページ根拠へ進む。新モデル/追加依存や私物scanは別途明示許可。P3動画/音声内容索引・P4作品管理・フォルダ操作backlogを保持。
+
+---
+
+## 履歴：WD固定版の承認済み導入・実CPU/API検証とライセンス確認（2026-10-16 JST）
 
 **現在フェーズ：P2のWD導入/実CPU動作gate完了。モデル/追加packageはユーザーが明示許可し、全取得合計6MB/s上限で導入済み。実ONNX CPU→候補/承認API 35 checks PASS、所有worker4/4終了。** WinUI候補/承認画面・候補の全体検索・実タグ精度・OCR/複数ページはまだ未完了。P1のWindows確認済みを維持し、**P0 baseline済み・改善累積1/2・重み/閾値/routing変更0**は変更しない。
 

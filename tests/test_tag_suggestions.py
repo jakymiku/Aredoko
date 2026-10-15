@@ -377,6 +377,26 @@ class TagSuggestionHTTPTests(TagFixture, unittest.TestCase):
         self.assertEqual(self.request(route + '/cancel', {'request_id': body['request_id']})[0], 200)
         self.assertEqual(self.request(route + '/review', {**review, 'source_revision': 'client-value'})[0], 400)
 
+    def test_revision_bound_evidence_auth_stale_and_strict_query(self):
+        revision = self.service.list(self.item)['source_revision']
+        route = f'/api/library/tag-suggestions/{self.item}/evidence'
+        def read(query, token='fiction-token'):
+            request=urllib.request.Request(self.url+route+query,headers={'X-Aredoko-Token':token})
+            try:
+                with urllib.request.urlopen(request,timeout=5) as response:return response.status,response.headers.get_content_type(),response.read()
+            except urllib.error.HTTPError as error:
+                with error:return error.code,error.headers.get_content_type(),error.read()
+        status,mime,data=read('?revision='+revision)
+        self.assertEqual((status,mime,data),(200,'image/png',self.path.read_bytes()))
+        self.assertEqual(read('?revision='+revision,'wrong')[0],403)
+        for query in ('','?revision=bad','?revision='+revision+'&revision='+revision,'?revision='+revision+'&extra=1'):
+            self.assertEqual(read(query)[0],400)
+        self.assertEqual(read('?revision='+'0'*64)[0],409)
+        self.path.write_bytes(png(color=(11,22,33)))
+        self.assertEqual(read('?revision='+revision)[0],409)
+        self.catalog.unregister_root(self.root)
+        self.assertEqual(read('?revision='+revision)[0],404)
+
     def test_http_busy_and_adapter_failure_are_explicit(self):
         route = '/api/library/tag-suggestions'
         with patch.object(PreviewReader, 'tag_source', side_effect=PreviewBusyError('fixture busy')):

@@ -192,3 +192,5 @@ await ReaderProgressTests.Run(Check);
 
 await VideoRangeTests.Run(Check);
 await SimilarityTests.Run(Check);
+
+await TagReviewTests.Run(Check);
