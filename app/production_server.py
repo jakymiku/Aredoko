@@ -24,6 +24,7 @@ from laya_process import LayaProcess
 from laya_config import model_path as laya_model_path
 from server import handler_for
 from tag_suggestions import TagSuggestions
+from wd_tagger import create_tagger
 
 class DisabledAI:
     def __init__(self,error=None):
@@ -59,7 +60,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     base=handler_for(catalog,token)
     previews=PreviewReader(catalog)
     resource_updates=threading.Lock()
-    suggestions=TagSuggestions(catalog,adapter=tagger,previews=previews)
+    suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
     class Handler(base):
         def do_GET(self):
             if not self.valid_host(): return self.send(403,{'error':'Invalid host'})
@@ -354,6 +355,7 @@ def main():
     parser.add_argument('--db',type=Path,required=True)
     parser.add_argument('--port',type=int,default=8769)
     parser.add_argument('--ai-profile',type=Path)
+    parser.add_argument('--tagger-profile',type=Path,help='Optional local WD-compatible tagger profile; never downloads')
     parser.add_argument('--ai-settings',type=Path,help='Optional local settings file for developer tests')
     parser.add_argument('--laya-intent',action='store_true',help='Experimental suggestions only; no auto-routing')
     parser.add_argument('--ai-ranking',choices=POLICIES,default='mean-rrf')
@@ -367,11 +369,12 @@ def main():
         try: ai.configure(**profiles.resource())
         except (ValueError,OSError,json.JSONDecodeError): ai.configure(**RESOURCE_DEFAULT)
     intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check)
-    server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles))
+    tagger=create_tagger(ai,args.tagger_profile)
+    server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger))
     print(f'Aredoko production: http://127.0.0.1:{server.server_port}',flush=True)
     try: server.serve_forever()
     except KeyboardInterrupt: pass
-    finally: intent.close(); ai.close(); catalog.close(); server.server_close()
+    finally: tagger.close(); intent.close(); ai.close(); catalog.close(); server.server_close()
 
 if __name__=='__main__': main()
 

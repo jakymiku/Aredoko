@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> 最新P2 WD（2026-10-16）：画像分類のCPU adapter/profile/明示的な6MB/s上限導入スクリプトを追加。実導入/実CPU推論の有無は[最新handoff](codex-handoff.md)、[仕様と境界](wd-tagger.md)で確認。mock process/画像前処理のテストを実モデル品質と扱わない。WinUI承認/OCRは未接続。
+
 > 最新P2（2026-10-16）：P2の最初の基盤として、由来付き候補の保存・承認/修正/却下・取消/再実行APIを追加。**実タグ生成adapter・WinUI承認画面・OCRは未接続**（既定生成503、契約検証は生成fixtureの偽adapter）。[実装境界とAPI](tag-suggestions.md)。P0 baseline済み・改善累積1/2は維持。
 
 > 最新：P0新固定baseline v7（24問・実GPU）を測定し、画像候補がないcover検索の無駄なquery推論を省略。改善累積1/2で一区切り、P1/フォルダハブ完了を維持して次はP2。[結果・限界](search-phase-v7-results.md)・[直近の優先順位](development-priorities.md)。

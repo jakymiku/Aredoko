@@ -1,7 +1,7 @@
 """Reviewable proposals, kept separate from user-confirmed catalog metadata.
 
-Adapters are trusted local code, not client-supplied model names or paths. This
-slice intentionally ships without a production tagger: embeddings are not a
+Adapters are trusted local code, not client-supplied model names or paths. The
+adapters remain optional and never download implicitly: embeddings are not a
 generative tagger and synthetic adapter tests are not model-quality evidence.
 """
 from dataclasses import asdict, dataclass
@@ -97,8 +97,10 @@ class TagSuggestions:
             db.executescript(SCHEMA)
 
     def status(self):
-        return {'available': self.adapter is not None,
-                'reason': '' if self.adapter else 'タグ生成モデルは未接続です。既存の検索・手動タグは利用できます。'}
+        if self.adapter is not None:
+            status=getattr(self.adapter,'status',None)
+            return status() if status else {'available':True,'reason':''}
+        return {'available':False,'reason':'タグ生成モデルは未接続です。既存の検索・手動タグは利用できます。'}
 
     def _source(self, item_id):
         try:
@@ -163,7 +165,7 @@ class TagSuggestions:
     def generate(self, item_id, request_id):
         identifier(item_id)
         self._request(request_id)
-        if self.adapter is None: raise AIUnavailable(self.status()['reason'])
+        if not self.status()['available']: raise AIUnavailable(self.status()['reason'])
         try:
             producer = self.adapter.info.record()
         except Exception as error:
