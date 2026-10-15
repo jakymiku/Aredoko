@@ -154,6 +154,7 @@
         <ComboBox x:Name="AddRootInitialShelf" Grid.Column="1" Header="初期棚（新規ファイルに設定）" HorizontalAlignment="Stretch" SelectionChanged="AddRootInitialShelf_Changed" AutomationProperties.Name="新規登録の初期棚" AutomationProperties.AutomationId="AddRootInitialShelf"/>
         <TextBox x:Name="AddRootNewShelf" Grid.Column="2" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" AutomationProperties.Name="新規登録の新しい棚の名前" AutomationProperties.AutomationId="AddRootNewShelf"/>
        </Grid>
+       <CheckBox x:Name="RootFolderBooks" Content="画像フォルダを一冊として扱う（フォルダ直下の画像をまとめて1冊にします。素材やバラの画像には使わないでください。スキャン後は変更できません）" AutomationProperties.Name="画像フォルダを一冊として扱う" AutomationProperties.AutomationId="RootFolderBooks"/>
        <StackPanel Orientation="Horizontal" Spacing="12">
         <CheckBox x:Name="RootConsent" Content="このフォルダの読み取り専用登録を許可" AutomationProperties.AutomationId="RootConsent"/>
         <Button x:Name="AddRoot" Content="登録" Style="{StaticResource AccentButtonStyle}" Click="AddRoot_Click" AutomationProperties.AutomationId="AddRoot"/>

@@ -7,7 +7,7 @@ namespace Aredoko.Core;
 public sealed record ArchiveManifest(int ItemId, int PageCount, string Revision)
 {
     public static bool CanOpen(MediaRow row) => row.Availability == "present" &&
-        (row.Location.EndsWith(".cbz", StringComparison.OrdinalIgnoreCase) ||
+        (row.IsFolderBook || row.Location.EndsWith(".cbz", StringComparison.OrdinalIgnoreCase) ||
          row.Location.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
 
     public void Validate()

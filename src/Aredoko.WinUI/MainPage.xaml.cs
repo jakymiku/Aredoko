@@ -378,7 +378,7 @@ public sealed partial class MainPage : Page
             ShowItemDetailsPane();
             active=rows[index]; saved=new(string.Join(", ",active.Tags),active.Shelf,active.Favorite,active.Reviewed);
             Tags.Text=saved.Tags;Shelf.Text=saved.Shelf;Favorite.IsChecked=saved.Favorite;Reviewed.IsChecked=saved.Reviewed;
-            ItemTitle.Text=active.Title;ItemPath.Text=active.Location;Editor.IsEnabled=true;DetailsButton.IsEnabled=true;Details.IsPaneOpen=true;
+            ItemTitle.Text=active.Title;ItemPath.Text=active.LocationLabel;Editor.IsEnabled=true;DetailsButton.IsEnabled=true;Details.IsPaneOpen=true;
             DetailPreview.ContextFlyout=SimilaritySearch.CanStart(active)?SimilarityMenu(active):null;
             UpdateDirty();
             _ = ShowDetailPreviewAsync(active);
@@ -847,9 +847,10 @@ public sealed partial class MainPage : Page
             if(RootConsent.IsChecked!=true)throw new InvalidOperationException("読み取り登録の許可にチェックしてください。");
             var shelf=ReadInitialShelf(AddRootInitialShelf,AddRootNewShelf);
             var patterns=new JsonArray(AddRootExcludes.Text.Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Select(s=>(JsonNode?)JsonValue.Create(s)).ToArray());
-            var added=await api.PostAsync("api/library/roots",new JsonObject{{"path",RootPath.Text},{"consent",true},{"excludes",patterns},{"default_shelf",shelf}});
-            var newId=added["id"]?.GetValue<int>();
-            RootPath.Text="";AddRootExcludes.Text="";AddRootNewShelf.Text="";RootConsent.IsChecked=false;AddRootInitialShelf.SelectedIndex=0;
+            var added=await api.PostAsync("api/library/roots",new JsonObject{{"path",RootPath.Text},{"consent",true},{"excludes",patterns},{"default_shelf",shelf},{"folder_books",RootFolderBooks.IsChecked==true}});
+            // The server answers {"root_id": n}; reading "id" never reopened the settings panel.
+            var newId=(added["root_id"]??added["id"])?.GetValue<int>();
+            RootPath.Text="";AddRootExcludes.Text="";AddRootNewShelf.Text="";RootConsent.IsChecked=false;RootFolderBooks.IsChecked=false;AddRootInitialShelf.SelectedIndex=0;
             await RefreshSearchRootsAsync();
             await LoadAIScopeAsync();
             if(newId is int id&&knownRoots.Any(r=>r.Enabled&&r.Id==id))OpenFolderSettingsPanel(new[]{id});
@@ -865,6 +866,7 @@ public sealed partial class MainPage : Page
         FolderAddPanel.Visibility=Visibility.Visible;
         RootPath.Text=row.Path;
         AddRootExcludes.Text=string.Join(", ",row.Exclusions);
+        RootFolderBooks.IsChecked=row.FolderBooks;
         PopulateAddFolderShelves();
         if(row.DefaultShelf.Length==0)AddRootInitialShelf.SelectedIndex=0;
         else
@@ -928,7 +930,7 @@ public sealed partial class MainPage : Page
                 info.Children.Add(titleText);
                 var metaText=new TextBlock
                 {
-                    Text=$"{row.StatusLabel} · {row.ShelfLabel}"+(row.Exclusions.Count>0?$" · 除外 {row.Exclusions.Count}件":""),
+                    Text=$"{row.StatusLabel} · {row.ShelfLabel}"+(row.FolderBooks?" · 一冊モード":"")+(row.Exclusions.Count>0?$" · 除外 {row.Exclusions.Count}件":""),
                     TextWrapping=TextWrapping.Wrap,
                     Style=(Style)Resources["MediaMetadataStyle"]
                 };

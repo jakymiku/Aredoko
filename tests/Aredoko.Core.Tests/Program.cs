@@ -194,3 +194,8 @@ await VideoRangeTests.Run(Check);
 await SimilarityTests.Run(Check);
 
 await TagReviewTests.Run(Check);
+Check(new MediaRow{Location="作品A/",Availability="present",Kind="book"} is var folderBook && folderBook.IsFolderBook && ArchiveManifest.CanOpen(folderBook) && TagReviewProtocol.CanOpen(folderBook) && !ImageViewerPolicy.CanOpen(folderBook),"folder book opens in reader and tag review");
+Check(new MediaRow{Location="Vol.1/p1.png",Availability="present",Kind="image"} is var page && !page.IsFolderBook && new MediaRow{Location="作品A/",Availability="missing"} is var gone && !ArchiveManifest.CanOpen(gone) && !TagReviewProtocol.CanOpen(gone),"files and missing folder books are not folder readers");
+Check(new MediaRow{Location="./"}.LocationLabel=="登録フォルダ直下の画像（一冊）"&&new MediaRow{Location="a.png"}.LocationLabel=="a.png","folder book location label");
+Check(RegisteredRootRow.ParseList(System.Text.Json.Nodes.JsonNode.Parse("""{"items":[{"id":1,"path":"C:/b","enabled":1,"online":true,"folder_books":true},{"id":2,"path":"C:/c","enabled":1,"online":true}]}""")!) is var roots && roots[0].FolderBooks && !roots[1].FolderBooks && roots[0].ModeLabel=="画像フォルダを一冊として扱う","root folder-book mode parsed (absent means off)");
+Check(ErrorText.Localize("Folder book mode cannot change after scanning").StartsWith("「画像フォルダを一冊として扱う」")&&ErrorText.Localize("This root is already registered")=="このフォルダはすでに登録されています。","folder registration errors localized");

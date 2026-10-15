@@ -9,15 +9,21 @@ public sealed record RegisteredRootRow(
     string DefaultShelf,
     IReadOnlyList<string> Exclusions,
     int PresentCount = 0,
-    string? LastScannedAt = null)
+    string? LastScannedAt = null,
+    bool FolderBooks = false)
 {
+    public string ModeLabel => FolderBooks ? "画像フォルダを一冊として扱う" : "画像は1枚ずつ";
+
     public string Name
     {
         get
         {
+            // Split on both separators so Core behaves the same on Linux CI/tests
+            // (System.IO.Path there does not treat "\\" as a separator).
             var trimmed = Path.TrimEnd('\\', '/');
-            var name = System.IO.Path.GetFileName(trimmed);
-            return string.IsNullOrEmpty(name) ? Path : name;
+            var cut = trimmed.LastIndexOfAny(['\\', '/']);
+            var name = cut < 0 ? trimmed : trimmed[(cut + 1)..];
+            return string.IsNullOrEmpty(name) || name.EndsWith(':') ? Path : name;
         }
     }
 
@@ -52,7 +58,8 @@ public sealed record RegisteredRootRow(
             var excludes = row["excludes"]?.AsArray().Select(x => x!.GetValue<string>()).ToArray() ?? [];
             var count = row["present_count"] is JsonNode c ? c.GetValue<int>() : 0;
             var scanned = row["last_scanned_at"]?.GetValue<string>();
-            list.Add(new RegisteredRootRow(id, path, enabled, online, shelf, excludes, count, scanned));
+            var folderBooks = row["folder_books"] is JsonNode f && f.GetValueKind() == System.Text.Json.JsonValueKind.True;
+            list.Add(new RegisteredRootRow(id, path, enabled, online, shelf, excludes, count, scanned, folderBooks));
         }
         return list;
     }

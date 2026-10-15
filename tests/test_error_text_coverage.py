@@ -24,6 +24,17 @@ class ErrorTextCoverageTests(unittest.TestCase):
         self.assertTrue(errors)
         self.assertEqual(sorted(errors - mapped), [])
 
+    def test_public_folder_errors_are_localized_and_raised(self):
+        import sys
+        sys.path.insert(0, str(REPO / 'app'))
+        from production_server import PUBLIC_FOLDER_ERRORS
+        mapped = set(re.findall(r'\["([^"]+)"\] = "', (REPO / 'src/Aredoko.Core/ErrorText.cs').read_text(encoding='utf-8')))
+        self.assertEqual(sorted(PUBLIC_FOLDER_ERRORS - mapped), [])
+        sources = ''.join((REPO / 'app' / name).read_text(encoding='utf-8')
+                          for name in ('library_index.py', 'production.py', 'production_server.py'))
+        raised = set(re.findall(r"raise ValueError\('([^']+)'\)", sources))
+        self.assertEqual(sorted(PUBLIC_FOLDER_ERRORS - raised), [])
+
 
 if __name__ == '__main__':
     unittest.main()

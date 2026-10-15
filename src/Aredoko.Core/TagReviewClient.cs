@@ -17,8 +17,8 @@ public sealed record TagHistory(int ItemId,string Revision,bool Available,string
 public static class TagReviewProtocol
 {
     public const int MaxJsonBytes=1024*1024;
-    public static bool CanOpen(MediaRow row)=>row.Availability=="present" &&
-        new[]{".png",".jpg",".jpeg",".webp",".gif",".bmp",".cbz",".zip"}.Any(x=>row.Location.EndsWith(x,StringComparison.OrdinalIgnoreCase));
+    public static bool CanOpen(MediaRow row)=>row.Availability=="present" && row.IsFolderBook ||
+        row.Availability=="present" && new[]{".png",".jpg",".jpeg",".webp",".gif",".bmp",".cbz",".zip"}.Any(x=>row.Location.EndsWith(x,StringComparison.OrdinalIgnoreCase));
     public static bool IsRevision(string? value)=>value is {Length:64} && value.All(c=>c is >= '0' and <= '9' or >= 'a' and <= 'f');
     public static void Id(long value){if(value<1)throw new ArgumentOutOfRangeException(nameof(value));}
     public static string Text(JsonElement root,string key,int max)

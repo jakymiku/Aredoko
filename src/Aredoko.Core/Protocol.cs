@@ -24,6 +24,10 @@ public sealed class MediaRow
     public long Size { get; set; }
     public string PreviewKey => $"{RootId}:{Id}:{Modified}:{Size}";
     public string Location { get; set; } = "";
+    // An image folder registered as one book: the server marks it with a
+    // trailing "/" ("./" for the registered folder itself); file paths never end so.
+    public bool IsFolderBook => Location.EndsWith('/');
+    public string LocationLabel => Location == "./" ? "登録フォルダ直下の画像（一冊）" : IsFolderBook ? Location + "（画像フォルダを一冊として表示）" : Location;
     public string Availability { get; set; } = "";
     // "related" when the row matched only through the user's related-term dictionary;
     // "partial" when nothing had every word and this row lacks one of them.
