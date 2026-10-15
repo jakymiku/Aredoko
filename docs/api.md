@@ -4,7 +4,7 @@
 
 - `GET /api/library/tag-suggestions/{item_id}?limit=10&before=<batch_id>`：候補/確定/却下の履歴とmodel/version・物理revision・根拠ページ・stale・生成available。通常タグ検索に候補を混ぜない。
 - `POST /api/library/tag-suggestions/generate` / `cancel` / `review`：信頼された設定済みadapterのみ、原子的な候補公開、request IDによる協調取消、現source/version一致時だけ既存タグへ追加または修正承認/却下。
-- **ローカルWD分類adapterの接続コードを追加（[導入・検証](wd-tagger.md)）。モデル/runtimeが未導入なら生成503。WinUI/OCR/候補の全体検索は未接続**。偽adapterでの契約検証を実AI品質と扱わない。[詳細仕様・制限](tag-suggestions.md)。
+- **ローカルWD CPU分類adapterはユーザー許可による導入・実CPU/API35checks確認済み（[実測・限界](wd-tagger.md)）。未導入環境なら生成503。WinUI/OCR/候補の全体検索は未接続、タグ精度は別評価**。偽adapterでの契約検証を実AI品質と扱わない。[詳細仕様・制限](tag-suggestions.md)。
 
 ## 製品MVP：複数登録フォルダの和集合検索とアイテム起点類似検索のWindows検証（2026-10-15 Windows続行）
 

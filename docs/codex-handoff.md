@@ -1,4 +1,46 @@
-## 最新：P2 WD分類adapter・固定profile・明示的な上限付き導入手順（2026-10-16 JST）
+## 最新：WD固定版の承認済み導入・実CPU/API検証とライセンス確認（2026-10-16 JST）
+
+**現在フェーズ：P2のWD導入/実CPU動作gate完了。モデル/追加packageはユーザーが明示許可し、全取得合計6MB/s上限で導入済み。実ONNX CPU→候補/承認API 35 checks PASS、所有worker4/4終了。** WinUI候補/承認画面・候補の全体検索・実タグ精度・OCR/複数ページはまだ未完了。P1のWindows確認済みを維持し、**P0 baseline済み・改善累積1/2・重み/閾値/routing変更0**は変更しない。
+
+開始HEAD **fb65024776698ceea666cf15cf1f2bf896390380**、branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / Draft PR5を維持。clean・remote差0/0を確認し、AGENTS/vision/両handoff/Issue4/PR5・導入スクリプトを照合して開始。今回はアプリ/C#/XAMLコード変更なし。測定済み事実とライセンス/次手を文書へ記録するcommitをgit logで参照。
+
+### 許可・導入・既存環境の保全
+
+- ユーザーから「導入してCPU検証まで進めてよい」の回答を受領。許可対象は専用venv/modelsへの固定WDモデル/CSV約468MB＋追加6package約14MB、全取得合計6MB/s以下、生成fixtureだけのCPU確認。**この同じ導入許可を聞き直さない。** 別モデル/追加依存/GPU runtime/私物scanは今回の許可へ含めない。
+- `.venv-ai/Scripts/python.exe tools/setup_wd_tagger.py --install-and-download --rate 6000000` **1回成功**。model `SmilingWolf/wd-swinv2-tagger-v3` / revision `627aef95638667ddcaa3ac8ae625e88ea5b02f51`。2artifact固定サイズ/SHA256、wheel hash、pip check前後、CPU runtime import確認済み。model markerを書いて利用可能化。
+- 共有TLS proxy上限 **6,000,000 B/s**、実TLS受信 **482,628,627 bytes / 139.813秒**（全体平均約3.45MB/s、瞬間速度計測や新たな帯域保証ではない）。Xet高速経路無効、offline/no-deps install。名目のmodel/CSV467,769,446 bytes＋wheel14,152,326 bytesをTLS overheadと区別する。
+- 実inventory比較で、**既存46packageすべて同版**（torch2.9.1+cu128等も保持）、追加はcoloredlogs15.0.1/flatbuffers25.9.23/humanfriendly10.0/onnxruntime1.23.2/protobuf6.33.5/pyreadline3==3.5.4だけ。比較前後JSONとsetup resultはignored `data/wd-setup`。システムPython/ドライバー/OS設定は変更していない。
+
+### 実CPU/API測定
+
+`python tools/check_wd_runtime.py --output data/ai-ui/wd-runtime-cpu-20261016-approved-01` **PASS / 35 checks**。このscriptが作成したPNG2枚・CBZ1冊・破損PNGだけを一時DBへ登録。既存の私物rootや個人DBを使用しない。
+
+| 生成fixture | 候補数 | HTTP所要時間（worker起動・hash・model load・CPU推論込み） |
+|---|---:|---:|
+| red-shapes.png | 6 | 2265.573ms |
+| blue-shapes.png | 6 | 2181.779ms |
+| fiction.cbz先頭画像 | 5 | 2119.390ms |
+
+- 実分類→pending候補・model/revision由来、修正承認/却下、二重承認409、最新手動タグとの和集合、保存済み棚/お気に入りの保持、同一batchの再利用で追加workerなし、タグ編集で物理revisionがstaleにならないことを確認。
+- 破損PNGは503で部分batchなし。source bytes/mtime・model hash/mtime不変。起動した**owned worker 4/4が終了しstdin/stdoutもclose**。GPU推論は行っていない。
+- profile key `921f5736f7fccb4580cbb5e0d5734781827487cb2aea9d3e7d9318332c914ab2`。出力には背景色らしい候補のほか、単なる図形にcomic/solo等も混ざった。**本測定はruntime/API確認であり、実タグ精度・キャラクター・日本語検索・関係性理解の評価ではない。** threshold/topK/ランキングを出力に合わせて変更していない。未承認のまま保持し自動確定しない。
+
+### 回帰・ライセンス・残検証
+
+- 導入後のWD契約 **9 PASS / 6.754秒**。導入後の全Python **335 PASS / 209.176秒 / skip0**。実CPUと全体回帰は同時実行せず、CPU HTTP計測に全体回帰の負荷を混ぜていない。既存source/タグ/検索/scope/reader/videoを含む。
+- ユーザーからWDのlicense質問があり、固定revisionの作者README metadataで**Apache-2.0**、ONNX Runtime v1.23.2のLICENSEで**MIT**を公式一次資料から確認。[仕様書のlicense節](wd-tagger.md)に出典と再配布時のlicense/権利表示/変更明示/NOTICE条件等を記録。個人/商用利用・改変/再配布が可能で、Apache2.0自体によるアプリ全体のsource公開義務はない。配布用全依存license/NOTICE同梱を完了したという報告ではない。
+- C#/XAML変更なし。Core/Windows Release/native GUIは今回再実行せず前回結果と区別。WinUI承認、実ライブラリ/大規模性能、一般素材/キャラクターのタグ品質、GPU版、OCR/複数ページ/動画・音声内容は未検証/未実装。
+- AGENTS/entrypoint/priorities/API/両handoffを実導入済みへ同期。文書リンク/差分確認。許可された固定取得以外のDL、私物scan/変更/送信、OS変更0。model/DB/生結果はGitへ追加しない。3 workflows manual-only確認、CI dispatch0。push後HEADのActions/checksとremote差分は読み取り確認してPR5へ記録する。
+
+### 次の異なる3手
+
+1. **WinUIの候補/根拠・承認/修正/却下**：今回までのadapter/APIを使い、pending/確定/stale・未導入/失敗を区別。draft/scope/検索/readerを保持し、生成fixtureで狭幅/取消/復帰をWindows実機確認。WD導入を再提案/再実装しない。
+2. **未承認候補を明示した検索**：通常タグへ自動混入させず、状態/モデル/根拠を明示して対象を選ぶAPIとGUIへ。root/棚等scopeを共有し、古い候補/履歴を区別する。
+3. **代表素材の品質/OCR・複数ページ**：分類・日本語検索への寄与を固定した代表素材で評価。図形のruntime PASSを意味精度と扱わず、関係性は本文索引/複数ページ根拠へ。新モデル/追加依存・私物scanは明示許可が必要。P3/P4と登録フォルダ操作backlogを保持。
+
+---
+
+## 履歴：P2 WD分類adapter・固定profile・明示的な上限付き導入手順（2026-10-16 JST）
 
 **現在フェーズ：P2の実adapter接続コードを追加。実モデル/追加packageの取得はユーザーへの確認待ちで未実行、実ONNX CPU推論/モデル品質は未検証。** WinUI候補/承認画面・OCR/複数ページ・候補の全体検索は未接続。P1 Windows確認済みを維持し、P0 v7 baseline済み・改善累積**1/2**・重み/閾値/routing変更0を維持。mock応答や前処理のPASSをモデル実行/精度のPASSとしない。
 

@@ -2,6 +2,22 @@
 
 2026-10-16。P2の[候補保存/承認API](tag-suggestions.md)へ接続する初版。実装・契約テストと実モデルの導入/動作/品質は分けて記録する。**WinUI承認画面、OCR/複数ページ、動画/音声の内容解析は本件に含まれない。**
 
+## 導入と実CPU確認済み（2026-10-16）
+
+ユーザーの明示回答「導入してCPU検証まで進めてよい」を受け、専用venv/modelsへ固定版を導入した。**モデル取得/実CPU動作gateは完了**。WinUI承認画面・実タグ精度・OCRは別の未完了gate。
+
+- 上限6,000,000 B/sの共有TLS proxyでsetupを1回実行。実TLS受信量 **482,628,627 bytes / 139.813秒**（全体平均約3.45MB/s、上限設定値と平均を区別）。model/CSVサイズ・SHA256検証、hash固定wheel、offline/no-deps install、pip check/CPU runtime import成功。
+- 導入前後inventoryの **既存46packageすべて同じ版**（torch2.9.1+cu128等を保持）、追加は許可済み6packageだけ。モデル/実測ログはignored領域で、Gitへ重みやDBを保存していない。
+- `check_wd_runtime.py --output data/ai-ui/wd-runtime-cpu-20261016-approved-01`：**35 checks PASS**。実ONNX CPUによるPNG2枚/CBZ1冊の候補作成、承認/修正/却下、重複承認409、手動タグとの和集合、同一batch再利用（新workerなし）、物理revisionと棚/お気に入り保持、破損PNGの503/部分候補なし。source bytes/mtime・model hash/mtime不変、起動worker **4/4終了・pipe close**。
+
+| 固定した生成fixture | 候補数 | HTTP一回の時間（worker起動・hash・load・推論込み） |
+|---|---:|---:|
+| red-shapes.png | 6 | 2265.573ms |
+| blue-shapes.png | 6 | 2181.779ms |
+| fiction.cbz先頭画像 | 5 | 2119.390ms |
+
+profile key `921f5736f7fccb4580cbb5e0d5734781827487cb2aea9d3e7d9318332c914ab2`。図形の出力例にはred_background/blue_background/green_backgroundがある一方、comic/solo等も混ざった。**これは精度指標ではなくruntime/API確認。図形での過信を避け、未承認候補のまま保持する。** キャラクター・日本語・写真・実ライブラリ・大規模精度/性能は未評価。threshold/topKは結果を見て変更していない。
+
 ## 役割・限界
 
 [SmilingWolfのモデルカード](https://huggingface.co/SmilingWolf/wd-swinv2-tagger-v3)による、Danbooru画像で学習したgeneral/character/rating分類器。Aredokoでは一般/キャラクターの分類出力から**未承認候補**を作る。埋め込みを生成モデルと称さず、EmbeddingGemma/Layaとは別の交換可能な役割にする。写真・風景・制作素材全般や日本語漫画の関係性/物語を理解できる保証はない。
@@ -10,6 +26,13 @@
 - category0（一般）`>0.35`、category4（キャラクター）`>0.85`、最大30件。閾値は[作者のONNXデモ](https://huggingface.co/spaces/SmilingWolf/wd-tagger/blob/main/app.py)の既定値に合わせて事前設定し、生成図形の出力を見て調整しない。category9（rating）は内容タグにしない。NSFW語を理由に一般/キャラクターラベルを除く処理はない。
 - 説明に分類出力値と「正解確率ではない」「画像/表紙のみ、本文・人物関係は未確認」を記録する。根拠は取得したimage/coverのpage0。関係性タグの正しさを表紙から断定しない。未判定0件を許す。
 - 合成図形によるAPI動作確認は、イラスト・キャラクター・実ライブラリの精度評価ではない。精度/日本語での検索貢献は別の固定した代表素材で測る必要がある。
+
+## ライセンス（2026-10-16 配布元を確認）
+
+- 今回の固定revisionのWD SwinV2 Tagger v3は、[作者のREADME metadata](https://huggingface.co/SmilingWolf/wd-swinv2-tagger-v3/blob/627aef95638667ddcaa3ac8ae625e88ea5b02f51/README.md)で **Apache License 2.0** と表示されている。
+- [Apache 2.0本文](https://www.apache.org/licenses/LICENSE-2.0)は無償の利用・改変・再配布（商用を含む）を許諾し、このライセンスによりAredoko全体のソース公開を求めるものではない。再配布時はlicense copy、関係する権利表示の保持、変更箇所の明示、NOTICEがある場合の引継ぎ等の条件に従う。
+- 今回の推論runtime **ONNX Runtime 1.23.2はMIT**（[固定版LICENSE](https://github.com/microsoft/onnxruntime/blob/v1.23.2/LICENSE)）。再配布時には著作権/許諾表示を保持する。追加packageやruntime内third-party noticesは各配布物を別途保持する。
+- 今回はユーザーPC内の専用環境での利用・動作確認。配布用インストーラーや全依存のlicense/NOTICE同梱を完成したという報告ではない。配布工程でモデルとruntime/依存それぞれのlicense表示を整備する。
 
 ## 設定・入替・起動
 

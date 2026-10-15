@@ -40,4 +40,4 @@
 
 これは**保存・承認・境界の契約検証**。実AIタグ精度・GPU推論・OCR・WinUI操作・実ライブラリ・大規模性能の検証ではない。C#は既存ErrorText辞書への日本語エラー追加のみ。XAML/GUI構造は未変更。Core契約テストとWindows x64 SelfContained Release buildを実施、native GUI操作/WinUIAnalyzerは今回未実行（既存projectにanalyzer参照なし、新依存は追加しない）。具体的な最終テスト結果と失敗履歴は[最新handoff](codex-handoff.md)参照。
 
-次は (1)WD adapterの明示的な導入許可と実CPU/API動作gate（現在地は最新handoff参照）、(2)WinUIの候補/根拠表示・修正承認/却下・draft保持とWindows実機確認、(3)候補を明示選択した検索とOCR/複数ページ根拠への拡張。P0 baseline済み・改善累積1/2は維持する。
+WD adapterは明示許可による導入・実CPU/API35checks確認済み（実タグ品質は未評価）。次は (1)WinUIの候補/根拠表示・修正承認/却下・draft保持とWindows実機確認、(2)候補を明示選択した検索、(3)代表素材の品質評価とOCR/複数ページ根拠への拡張。P0 baseline済み・改善累積1/2は維持する。

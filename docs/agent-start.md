@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> 最新P2 WD導入済み（2026-10-16）：ユーザー許可のもと合計6MB/s上限で導入、既存46package不変・追加6件だけ。実ONNX CPU/API **35 checks PASS・owned worker4/4終了**。精度評価/WinUI承認/OCRは未完了。[実測とライセンス](wd-tagger.md)・[最新handoff](codex-handoff.md)。取得許可を聞き直さず、次はWinUI承認と候補の明示検索へ。
+
 > 最新P2 WD（2026-10-16）：画像分類のCPU adapter/profile/明示的な6MB/s上限導入スクリプトを追加。実導入/実CPU推論の有無は[最新handoff](codex-handoff.md)、[仕様と境界](wd-tagger.md)で確認。mock process/画像前処理のテストを実モデル品質と扱わない。WinUI承認/OCRは未接続。
 
 > 最新P2（2026-10-16）：P2の最初の基盤として、由来付き候補の保存・承認/修正/却下・取消/再実行APIを追加。**実タグ生成adapter・WinUI承認画面・OCRは未接続**（既定生成503、契約検証は生成fixtureの偽adapter）。[実装境界とAPI](tag-suggestions.md)。P0 baseline済み・改善累積1/2は維持。
