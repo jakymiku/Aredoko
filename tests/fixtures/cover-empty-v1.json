@@ -1,0 +1,98 @@
+{
+  "description": "Fixed before P0 trial1: empty cover pools avoid query inference; positive image/combined controls retain rankings. Synthetic only, not a quality benchmark.",
+  "items": [
+    {
+      "key": "c7_i01",
+      "file": "c7_i01.png",
+      "kind": "image",
+      "tags": [],
+      "scene": {
+        "background": "black",
+        "objects": [
+          {
+            "color": "yellow",
+            "shape": "triangle",
+            "x": 90,
+            "y": 120,
+            "sx": 50,
+            "sy": 65
+          }
+        ]
+      }
+    },
+    {
+      "key": "c7_audio1",
+      "file": "c7_audio1.wav",
+      "kind": "audio",
+      "tags": [
+        "ナレーション",
+        "料理"
+      ]
+    },
+    {
+      "key": "c7_audio2",
+      "file": "c7_audio2.wav",
+      "kind": "audio",
+      "tags": [
+        "ナレーション",
+        "料理"
+      ]
+    },
+    {
+      "key": "c7_material1",
+      "file": "c7_material1.svg",
+      "kind": "material",
+      "tags": [
+        "タイル",
+        "壁用"
+      ]
+    },
+    {
+      "key": "c7_material2",
+      "file": "c7_material2.svg",
+      "kind": "material",
+      "tags": [
+        "タイル",
+        "壁用"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "c7_a",
+      "query": "午前の市場を歩く足音を探す",
+      "kind": "audio",
+      "source": "cover"
+    },
+    {
+      "id": "c7_b",
+      "query": "川辺で読書するときの音",
+      "kind": "audio",
+      "source": "cover"
+    },
+    {
+      "id": "c7_c",
+      "query": "透明なガラス模様の素材",
+      "kind": "material",
+      "source": "cover"
+    },
+    {
+      "id": "c7_d",
+      "query": "木製家具の展開図が欲しい",
+      "kind": "material",
+      "source": "cover"
+    },
+    {
+      "id": "c7_e",
+      "query": "黒い背景の黄色い三角マーク",
+      "kind": "image",
+      "source": "cover"
+    },
+    {
+      "id": "c7_f",
+      "query": "料理のナレーション",
+      "kind": "audio",
+      "source": "all"
+    }
+  ]
+}
