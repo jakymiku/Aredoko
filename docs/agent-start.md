@@ -1,6 +1,6 @@
 # AIエージェントの開始・再開ガイド
 
-> **最新P2 WinUIレビュー（2026-10-16）**：候補/根拠・修正承認/却下・履歴/取消を実装し通常幅Windows操作確認。native UIA35 checks PASSだが、開いたまま700x620へ縮小すると詳細が空になるvisual FAILあり。次はこの狭幅修正→候補の明示検索→代表素材品質/OCR。全Python336 PASS・Core PASS・Release警告0/エラー0。実WD GUI推論や実タグ精度の合格ではない。下の過去記録より[最新handoff](codex-handoff.md)を優先。
+> **最新P2レビュー（2026-10-16 狭幅修正済み）**：候補レビューUIの初回縦切り完了。通常/狭幅/live resize/狭幅open/修正承認をWindowsで59 checks PASS、Light/Dark PNG15枚全目視PASS。Release警告0/エラー0。生成素材と偽adapterによるUI確認であり実タグ精度ではない。次は候補の明示検索→代表素材品質→OCR/複数ページ。詳細は[最新handoff](codex-handoff.md)。
 
 > 最新P2 WD導入済み（2026-10-16）：ユーザー許可のもと合計6MB/s上限で導入、既存46package不変・追加6件だけ。実ONNX CPU/API **35 checks PASS・owned worker4/4終了**。精度評価/WinUI承認/OCRは未完了。[実測とライセンス](wd-tagger.md)・[最新handoff](codex-handoff.md)。取得許可を聞き直さず、次はWinUI承認と候補の明示検索へ。
 

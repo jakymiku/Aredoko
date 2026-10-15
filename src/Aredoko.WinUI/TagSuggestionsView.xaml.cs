@@ -29,12 +29,10 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     public void Fit(double width,double height)
     {
         Width=Math.Clamp(width-112,260,640);Height=Math.Clamp(height-210,280,580);
-        var narrow=Width<600;
-        Body.ColumnDefinitions[0].Width=narrow?new GridLength(1,GridUnitType.Star):new GridLength(210);
-        Body.ColumnDefinitions[1].Width=narrow?new GridLength(0):new GridLength(1,GridUnitType.Star);
-        Body.RowDefinitions[0].Height=narrow?new GridLength(100):new GridLength(1,GridUnitType.Star);
-        Body.RowDefinitions[1].Height=narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
-        Grid.SetColumn(Detail,narrow?0:1);Grid.SetRow(Detail,narrow?1:0);
+        // Keep the ScrollViewer in a continuously measured star column.
+        // Moving it through a zero-width column during a live resize can leave
+        // its presenter with zero-sized children in the ContentDialog.
+        Body.ColumnDefinitions[0].Width=new GridLength(Width<600?Math.Min(152,Width*.32):210);
     }
     private void UpdateButtons()
     {
@@ -59,7 +57,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     private async Task LoadCoreAsync(long? before)
     {
         var loaded=await api.HistoryAsync(itemId,before,lifetime.Token);if(disposed)return;
-        history=loaded;batch=null;candidate=null;Evidence.Source=null;populating=true;
+        history=loaded;batch=null;candidate=null;Evidence.Source=null;Evidence.Visibility=Visibility.Collapsed;populating=true;
         Batches.Items.Clear();Candidates.Items.Clear();
         foreach(var value in loaded.Batches)Batches.Items.Add(new ComboBoxItem{Content=$"履歴 #{value.Id} · {value.Candidates.Count}候補"+(value.Stale?" · 元ファイル変更あり":""),Tag=value});
         populating=false;Batches.SelectedIndex=loaded.Batches.Count>0?0:-1;
@@ -69,7 +67,8 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     private void Batch_Changed(object sender,SelectionChangedEventArgs e)
     {
         if(populating||disposed)return;
-        batch=(Batches.SelectedItem as ComboBoxItem)?.Tag as TagBatch;candidate=null;Candidates.Items.Clear();Evidence.Source=null;
+        batch=(Batches.SelectedItem as ComboBoxItem)?.Tag as TagBatch;candidate=null;Candidates.Items.Clear();Evidence.Source=null;Evidence.Visibility=Visibility.Collapsed;
+        Detail.ChangeView(null,0,null,true);
         if(batch is null){UpdateButtons();return;}
         Provenance.Text=$"{batch.Model}\nモデル版: {batch.ModelRevision}\n{batch.Adapter} {batch.AdapterVersion}\n前処理: {batch.Preprocessing}\n根拠: {(batch.EvidenceKind=="cover"?"本の先頭ページのみ":"画像")}"+(batch.Stale?"\n元ファイルが変わっています。生成し直してください。":"");
         foreach(var value in batch.Candidates)
@@ -90,7 +89,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
             var png=await ThumbnailCodec.ResizeAsync(bytes,cancellation);
             using var stream=new InMemoryRandomAccessStream();using var writer=new DataWriter(stream);writer.WriteBytes(png);await writer.StoreAsync();writer.DetachStream();stream.Seek(0);
             var image=new BitmapImage();await image.SetSourceAsync(stream);cancellation.ThrowIfCancellationRequested();
-            if(!disposed&&ReferenceEquals(batch,selected))Evidence.Source=image;
+            if(!disposed&&ReferenceEquals(batch,selected)){Evidence.Source=image;Evidence.Visibility=Visibility.Visible;}
         }
         catch(OperationCanceledException){}
         catch(Exception ex){if(!disposed&&!cancellation.IsCancellationRequested&&ReferenceEquals(batch,selected)){Provenance.Text+="\n根拠画像を表示できません。最新へ戻して確認してください。";AppLog.Error(ex);}}

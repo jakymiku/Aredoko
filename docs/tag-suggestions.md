@@ -1,6 +1,6 @@
 # P2：由来付きタグ候補・承認APIの最初の縦切り
 
-2026-10-16。[製品ビジョン](product-vision.md)・[開発優先順位](development-priorities.md)に沿うバックエンドの基盤。**P2全体の完成ではない。WD画像分類adapterの接続コードを追加（[導入・検証状況](wd-tagger.md)）。WinUI候補/根拠・修正承認/却下・履歴・取消画面を追加し通常幅のWindows操作を確認。開いたまま縮小すると詳細が空になるvisual FAILが残るため、GUI全体の合格ではない。OCR/複数ページ解析、候補を対象にしたライブラリ全体の検索は未接続。** EmbeddingGemmaの既存埋め込み処理をタグ生成モデルとして扱わず、固定の偽アダプタによる契約テストと実モデルの品質を区別する。
+2026-10-16。[製品ビジョン](product-vision.md)・[開発優先順位](development-priorities.md)に沿うバックエンドの基盤。**P2全体の完成ではない。WD画像分類adapterの接続コードを追加（[導入・検証状況](wd-tagger.md)）。WinUI候補/根拠・修正承認/却下・履歴・取消画面を追加し通常幅のWindows操作を確認。狭幅で詳細が空になる問題は修正し、通常/狭幅/live resizeをWindowsで再確認済み。OCR/複数ページ解析、候補を対象にしたライブラリ全体の検索は未接続。** EmbeddingGemmaの既存埋め込み処理をタグ生成モデルとして扱わず、固定の偽アダプタによる契約テストと実モデルの品質を区別する。
 
 ## 保存と承認
 
@@ -50,3 +50,9 @@ WD adapterは明示許可による導入・実CPU/API35checks確認済み（実�
 未保存編集がある場合は閲覧/生成/却下のみ許可し、承認は手動保存後に再度開く。承認要求後はitem再取得で詳細を同期し、失敗時は再確認まで当該itemの手動保存を禁止する。生成95秒deadline（transport100秒）・閉じるとserverへ取消を要求して終了待ち。通常検索用clientの40秒制限とは分ける。根拠画像は最大8MiB/16Mpixel、表示時に256pxへ縮小。
 
 最新の全Python336 PASS・Core契約PASS・Release警告0/エラー0。`tools/test_tag_review_ui.py` は生成素材/一時DB/偽adapterだけで35 runtime checks PASS、PNG7枚を目視。通常幅の明暗・承認/却下・CBZ表紙は確認済みだが、開いたまま狭幅へ縮めると候補詳細が見えないvisual FAILがあり次の修正対象。上の「C#変更なし/GUI未変更」はbackend基盤導入時の履歴であり、現状はこの節と最新handoffを正とする。実WD GUI推論/実タグ品質/High Contrast/DPI拡大は今回未検証。
+
+### 狭幅レイアウト修正と再検証
+
+2026-10-16続行で、前節の狭幅visual FAILを解消。一覧/詳細は2列を維持し狭幅の一覧幅だけを縮める。詳細の行/列を移し替えて幅/高さ0を経由させない。未取得/staleの根拠画像は空枠を畳み、履歴変更時は詳細スクロールを先頭へ戻す。
+
+`tag-review-resize-20261016-01` は59 native checks PASS・PNG15枚全目視PASS。通常→狭幅→通常、狭幅で開き直し、根拠/編集/承認ボタンが可視かつ非0bounds、狭幅修正承認のDB反映、明暗、既存取消/編集保持を確認。Release警告0/エラー0。Python/Coreは無変更のため今回再実行していない。実WD GUI推論/実タグ品質/High Contrast/DPI拡大は未検証。次は未承認候補を明示選択した検索へ進む。

@@ -1,4 +1,24 @@
-## 最新：P2 WinUIタグ候補レビューの通常幅実装・狭幅の残課題（2026-10-16 JST）
+## 最新：P2候補レビューの狭幅表示を修正・Windows再確認完了（2026-10-16 JST）
+
+**現在フェーズ：候補レビューUIの通常幅/狭幅の最初の縦切りを完了。** 前回の700x620へのlive resizeで詳細が消えるvisual FAILを解消。既存WDの実CPU/API確認と今回の偽adapter UI確認は別の証拠として扱い、実タグ品質/実WD GUI推論の確認とはしない。P0 baseline済み・改善累積1/2、P1、既存検索scopeを維持。
+
+開始HEAD `5b19a4866ba39da5d28e0152ab84b487ce916ca2`、clean・remote差0/0。既存branch/baseと[Draft PR5](https://github.com/jakymiku/Aredoko/pull/5)を継続。最新commitはこの節を追加したgit logを参照。
+
+- 候補一覧/詳細を同じ2列に保ち、狭幅では一覧列を細くする。詳細ScrollViewerを幅0の列・高さ0の行を経由して移動させる処理を除去。根拠画像が未取得/stale/失敗なら空の画像枠を畳み、履歴選択時は詳細を先頭へ戻す。候補の保存・API・索引・ランキングは変更していない。
+- Windows x64 SelfContained Release **警告0・エラー0**。`python tools/test_tag_review_ui.py --output data/ai-ui/tag-review-resize-20261016-01` **初回で59 checks PASS**。通常幅1200x820→狭幅700x620→通常幅→狭幅の開き直し、根拠/編集/ボタンの実boundsが非0で可視、狭幅で修正承認しDBへ保存、Light/Dark、既存のdraft/query保持・履歴・未接続表示・stale表示・取消・CBZ先頭表紙を確認。
+- **PNG15枚をすべてview_imageで目視しvisual PASS**。前回のFAIL証拠は上書きせず保存。新result.jsonはruntime/visualを分離して記録。所有app2/2正常終了、生成素材bytes/mtime・AI設定不変、モデル推論呼出0。Windows Sandbox無効のまま、前回と同じ所有PID/HWND限定のlocal検証を使用。
+- UI/XAML・nativeテスト・文書だけの変更。Python/Core/依存は変更していないため前回の全Python336 PASS/Core PASSを再実行したとは報告しない。WinUIコードレビューで非同期画像の世代確認・取消・テーマ・a11y・編集保持に変更がないことを確認。WinUIAnalyzer/High Contrast/DPI拡大・実WD GUI推論は今回未実施。新規DL・私物scan/変更・OS変更なし。
+- CI dispatch0、3workflows manual-onlyを維持。push後のHEAD Actions/checksとremote差分はPR5へ読み取り確認結果を記録する。
+
+### 次の異なる3手
+
+1. **未承認候補の明示検索**：確定タグと分離し、状態/model/根拠・staleを表示する検索API→WinUI。既存のroot/棚scopeを共有し、通常検索を変更しない。
+2. **代表素材のタグ品質と日本語検索寄与の測定**：固定評価で誤タグ/有用性を測る。生成fixtureの動作成功を精度としない。実WDの生成素材GUI smokeも未実施のため必要時に追加する。私物scanは明示許可の範囲内。
+3. **OCR/複数ページ根拠への拡張**：表紙から本文/関係性を断定せず、ページ由来を保存してレビューへ渡す。新モデル/追加依存取得は別許可。動画/音声内容索引と作品管理のbacklogを保持。
+
+---
+
+## 履歴：P2 WinUIタグ候補レビューの通常幅実装・狭幅の残課題（2026-10-16 JST）
 
 **現在フェーズ：P2の候補レビューUIを実装し、通常幅の生成→根拠確認→修正承認/却下→保存までWindows実機確認。狭幅へリサイズした際の詳細領域が空になる問題が残るため、GUI縦切り全体の完了とはしない。** WD実CPU/API35 checksは前回の実測を維持。今回のnative35 checksは固定候補を返す偽adapterでのUI/API配線検証であり、モデル品質/実WDのGUI推論を測ったものではない。P1を維持し、P0 baseline済み・改善累積1/2・ランキング/閾値/routing変更0を保つ。
 

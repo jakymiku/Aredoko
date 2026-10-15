@@ -126,6 +126,12 @@ def main():
     def contains(identifier,text):
         value=ui('get-value',identifier)
         check(identifier+' contains '+text,text in value)
+    def visible(identifier):
+        ui('scroll-into-view',identifier)
+        ui('wait-for',identifier,'-p','IsOffscreen','--value','False','-t','5000')
+        tree=json.loads(ui('inspect','--json','--depth','16'))
+        matches=[n for n in nodes(tree) if n.get('automationId')==identifier]
+        check(identifier+' has visible nonzero bounds',len(matches)==1 and matches[0].get('width',0)>0 and matches[0].get('height',0)>0 and not matches[0].get('isOffscreen',True))
     def open_review():
         ui('scroll-into-view','BtnTagSuggestions');ui('invoke','BtnTagSuggestions');ui('wait-for','TagStatus','-t','12000');enabled('TagRefresh',True)
     def proposal(state='pending'):
@@ -173,10 +179,18 @@ def main():
             check(theme+' older history page loaded',True);ui('invoke','TagRefresh');enabled('TagRefresh',True)
             tagger.available=False;ui('invoke','TagRefresh');enabled('TagRefresh',True);enabled('TagGenerate',False);contains('TagStatus','未接続');enabled('TagAccept',True)
             tagger.available=True
+            user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.3)
+            visible('TagProvenance');shot(theme+'-narrow-provenance')
+            visible('TagEdited');ui('set-value','TagEdited','narrow-edit');visible('TagAccept');shot(theme+'-narrow-edit')
+            ui('invoke','TagAccept');enabled('TagRefresh',True)
+            check(theme+' approval works after live resize','narrow-edit' in sandbox.catalog.get(source)['tags'])
+            user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);time.sleep(.3)
+            visible('TagProvenance');shot(theme+'-resize-restored')
             # Fault injection changes only the synthetic proposal DB, never media.
             with sandbox.catalog.connect() as db:db.execute('UPDATE tag_proposal_batches SET source_revision=? WHERE id=(SELECT max(id) FROM tag_proposal_batches WHERE item_id=?)',('0'*64,source));db.execute('UPDATE tag_proposal_batches SET evidence_json=json_set(evidence_json,\'$.revision\',?) WHERE item_id=? AND source_revision=?',('0'*64,source,'0'*64))
             ui('invoke','TagRefresh');enabled('TagRefresh',True);enabled('TagAccept',False);enabled('TagReject',False);contains('TagProvenance','元ファイルが変わっています')
-            user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.3);shot(theme+'-narrow-stale');ui('invoke','TagClose');ready()
+            user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.3);visible('TagProvenance');shot(theme+'-narrow-stale');ui('invoke','TagClose');ready()
+            open_review();visible('TagProvenance');shot(theme+'-narrow-fresh-open');visible('TagReject');enabled('TagReject',False);ui('invoke','TagClose');ready()
             tagger.info=TaggerInfo('ui-fixture','cancel-'+theme,'not-a-real-model','fixed','cover-v1');tagger.delay=True;tagger.entered.clear()
             open_review();ui('invoke','TagGenerate');check(theme+' delayed tagger entered',tagger.entered.wait(5))
             ui('invoke','TagClose');ready();ui('wait-for','BtnTagSuggestions','-p','IsEnabled','--value','True','-t','12000');tagger.delay=False
