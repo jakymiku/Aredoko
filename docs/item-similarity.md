@@ -40,15 +40,20 @@ Coreの類似検索クライアントは10秒deadline、JSON MIME、最大2MiB�
 | unindexed | 起点のcoverが未索引・古い・不正。itemsは空、明示索引/文字検索を案内 |
 | unsupported_profile | text-only profile。itemsは空、画像対応モデル/文字検索を案内 |
 
-## 検証とWindowsの残項目
+## 検証とWindows実機結果（2026-10-15 Windows続行）
 
 `python -m unittest discover -s tests -p test_similarity_search.py -v`：16件。生成PNG/CBZ＋決定的な3次元contract encoderで類似順、text/非画像混入防止、自己除外、root/kind/shelf/view、profile/revision/前処理namespace、未索引/破損、cap/paging、競合/close、Host/token/Origin、保存scope、元bytes/mtime不変と検索中encode0を確認。実モデルの精度を示す評価ではない。別途`test_similarity_sandbox.py`5件で76件の生成fixture/ページ境界/実HTTP/未索引・text-only/409・503/取消済み応答を確認。
 
-Coreには`SimilarityTests.Run`を追加し、反射不要JSON・scopeの所有/積集合・固定route/認証/取消・旧応答互換・日本語根拠を確認するコードを用意した。**未実行**。Windows環境で次を実行する：
-
-```powershell
-dotnet run --project tests/Aredoko.Core.Tests -c Release
-dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore
-```
-
-native確認は生成素材専用DB/設定で行う。Light/Dark・list/grid/詳細・wide/narrow、未選択の別行右クリック/Shift+F10、dirty取消でdraft不変と要求0、dirty破棄、root/view/kind/shelf、元ページとfocus復帰、未索引/非対応profile/409/503、遅延応答中の復帰・close、既存文字検索/根拠/画像/reader/video起動を確認し、PNGと要求記録を残す。実行せず合格扱いにしない。モデル取得・私物scan・CI dispatchは不要。
+Windows実機で `.\Check-Similarity.cmd` および個別シナリオ・回帰バッチを実行し、すべてPASS・全PNG目視確認済み：
+- **Coreテスト**：`dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore` **280 PASS**（類似検索契約51件＋複数root/フォルダ管理19件を含む）。
+- **Windows Releaseビルド**：`dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore` **PASS（0 warnings / 0 errors）**。
+- **修正事項（2修正cycle内で解決）**：
+  1. 初回`similarity-check-20261015-114301-4b31e2`で、類似検索から元ページ（2/2）へ戻った直後に`ListViewItem`のXAMLレイアウト未完了により`Item65`の`HasKeyboardFocus`が立たない問題と、Windowsの切断例外`ConnectionAbortedError`（WinError 10053）を確認。`MainPage.xaml.cs`に`FocusRowAsync`（レイアウト更新・ScrollIntoView・Loaded待機）を追加し、`SimilarityBar`を1行Grid化して狭幅700×620での一覧表示領域を確保。
+  2. 2回目`similarity-check-20261015-115519-ea9b7d`で、Windowsの`ThreadingHTTPServer`既定backlog（5）がプレビュー並行要求バースト時に溢れてTCP接続拒否となる問題、および同日Windows Updateによる.NET SDK `10.0.402`更新時の`--no-restore`キャッシュ参照を確認。`app/server.py`で`ThreadingHTTPServer.request_queue_size = 128`と`Connection: close`を設定し、`Aredoko.WinUI.csproj`にローカルキャッシュ済みruntime pack fallbackを追加。
+- **確定したWindows native結果（全PNG目視済み）**：
+  - `similarity-check-20261015-120824-dbfe63`：**PASS（diff-check / Python 300 PASS / Core 264 PASS / Release PASS / native 41 checks PASS / PNG 10枚全目視 / graceful close 2）**。Light/Darkで2ページ目起点65からの類似検索（72件）・自己除外・scope外root除外、元ページ2/2と`Item65`キーボードfocus復帰、グリッド表示、詳細プレビュー右クリックのdirty取消（要求0・draft保持）、dirty破棄承認→遅延要求→取得中戻る取消（二重確認なし・ItemList有効化復帰）、お気に入りview＋自己除外0件、未索引fallback、busy(409)/unavailable(503)からの復帰、700×620狭幅表示、元bytes/mtime・設定不変、推論0回を確認。
+  - `similarity-unindexed-01`（`--scenario unindexed`）：**PASS（9 checks / PNG 2枚全目視 / graceful close 2）**。
+  - `similarity-text-only-01`（`--scenario text-only`）：**PASS（9 checks / PNG 2枚全目視 / graceful close 2）**。
+  - `similarity-doubleclick-reg-01`（`tools/test_image_viewer_ui.py --double-click-only`）：**PASS（22 checks / keys 16 / skip 0 / PNG 8枚全目視 / graceful close 2）**。右クリックContextFlyout追加後も一覧・グリッド・詳細・CBZのダブルクリック起動と読書位置保存が退行していないことを確認。
+  - `folder-hub-native-07`（`tools/test_folder_hub_ui.py`）：**PASS（37 checks / PNG 10枚全目視 / graceful close 2）**。複数登録root（A+B）選択状態での類似検索と元の複数root選択への復帰を確認。
+- **未検証範囲**：Shift+F10等のキーボードのみでのコンテキストメニュー起動、実AIモデル/GPUを用いた視覚類似検索の主観的品質評価、高DPI/High Contrast/Narratorは別課題として残す。

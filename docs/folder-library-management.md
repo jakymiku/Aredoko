@@ -1,7 +1,8 @@
 # 登録フォルダのメインビュー管理・複数選択検索
 
-> 2026-10-15 21:10 JST、ユーザー合意の開発仕様。**今回の反映は文書のみ。新画面・複数フォルダの統一検索・一括編集を実装済みと扱わない。**
-> 長期目的は [product-vision.md](product-vision.md)、全体優先順位は [development-priorities.md](development-priorities.md)、実装状態は最新コードと両handoffを参照。
+> **2026-10-15 Windows続行で実装・実機検証済み**（コミット `a87d6b4fc31ab0cdc08ccf12134657be8c8125d6`）。
+> 左ナビの「登録フォルダ」（`NavFolders`）からメインビューのリスト／グリッド一覧（`FolderHubView`）、名前／パス絞り込み、単一フォルダ「中を見る」、複数root選択による通常／AI／類似検索の統一和集合検索、右詳細パネル（`FolderEditorPanel`）での単一／一括初期棚編集（「複数の設定値」「変更しない」「棚なし」の区別、変更項目のみの保存、棚未設定ファイルへの明示適用、部分失敗時の残りroot再試行）・除外更新・スキャン・登録解除／再登録を実装し、**全Python 301 PASS / Core 280 PASS / Windows x64 Release PASS / 実機 `folder-hub-native-07` 37 checks PASS（PNG 10枚全目視）** を確認。
+> 検索範囲の名前付き保存・ピン留め、除外ルールの一括編集、任意のサブフォルダ部分指定は後続。長期目的は [product-vision.md](product-vision.md)、全体優先順位は [development-priorities.md](development-priorities.md)、最新状態は [codex-handoff.md](codex-handoff.md) を参照。
 
 ## 1. 目的と着手タイミング
 

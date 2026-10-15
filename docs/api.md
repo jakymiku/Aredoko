@@ -1,5 +1,11 @@
 # 共通API（操作試作 v0）
 
+## 製品MVP：複数登録フォルダの和集合検索とアイテム起点類似検索のWindows検証（2026-10-15 Windows続行）
+
+- `GET /api/items?root_ids=<id1>,<id2>,...`：1〜256件の有効な登録root ID（正のInt64・重複不可）の和集合（OR）で通常文字検索・関連語展開・partial fallbackを実行。既存の単一`root_id`も互換維持（両方同時指定や空指定`root_ids=`・未登録/解除済みrootは400で拒否し、全件検索へ拡大しない）。
+- `GET /api/library/roots?include_inactive=0|1`：各rootに索引済みpresent件数`present_count`を付加（新たなファイル走査は行わない）。
+- `POST /api/library/ai/similar`・`POST /api/library/ai/search`：Coreの`FolderSearch.RestrictAIMulti`により、UIで選択した複数root集合と保存済み`aiScope`の積集合を送信（空集合を全体へ拡大しない）。詳細：[登録フォルダ管理](folder-library-management.md)・[類似検索](item-similarity.md)。全Python 301 PASS、Core 280 PASS、Windows x64 Release・native GUI確認済み。
+
 - `GET /api/library/video/{id}/frame?revision=<64hex>&at_ms=<integer>`：時刻付きPNG、最大24時間/512KiB、active root・現revision検査。詳細：[シークpreview](video-seek-preview.md)。
 
 ## 製品MVP：読み取り専用動画ストリームAPIと語別根拠のWinUI接続（2026-10-14 Windows続行）

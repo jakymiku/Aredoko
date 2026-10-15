@@ -1,4 +1,6 @@
-# 帰宅後のWindowsテストとブラッシュアップ
+# 帰宅後のWindowsテストとブラッシュアップ（実施完了記録 2026-10-15）
+
+> **2026-10-15 Windows実機で完了**：`Check-Similarity.cmd`（`similarity-check-20261015-120824-dbfe63`：**Python 300 PASS / Core 264 PASS / Release PASS / native 41 checks PASS / PNG 10枚全目視**）、`similarity-unindexed-01`（**9 checks PASS / PNG 2枚**）、`similarity-text-only-01`（**9 checks PASS / PNG 2枚**）、`similarity-doubleclick-reg-01`（**22 checks PASS / keys 16 / PNG 8枚**）まで完了し、続いて [folder-library-management.md](folder-library-management.md) の登録フォルダ管理ハブ・複数root統一検索・一括初期棚編集も実装・実機検証（`folder-hub-native-07` **37 checks PASS / PNG 10枚**、最終 **Python 301 PASS / Core 280 PASS**）済み。詳細は [codex-handoff.md](codex-handoff.md) 最上段と [item-similarity.md](item-similarity.md) を参照。
 
 作業先は `feat/winui3-production-mvp-20261011`、既存Draft PR #5。最新のAGENTS/vision/priorities/両handoffを読み、未commit変更とremote差分を確認してから同期する。mainへのmerge・force push・新PR・CI dispatchはしない。
 

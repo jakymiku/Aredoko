@@ -1,3 +1,47 @@
+## 最新：P1 類似検索のWindows実機検証完了＋登録フォルダ管理ハブ・複数root統一検索・一括初期棚の実装（2026-10-15 Windows続行）
+
+**現在フェーズ：P1（アイテム起点の画像・表紙類似検索）Windows実機検証完了＋ユーザー合意の登録フォルダ管理ハブ（単一/複数root統一検索・初期棚単一/一括編集・解除/復元）実装およびWindows実機検証完了。P0新baseline：未実施、P0改善試行累積：0/2を維持。**
+
+開始remote HEAD `4c98bafa3e2703fc6f0355873104bc8e89cbc3b2` → 途中の文書追記 `f6616b9811aeb13097922445d5cfa3c488ddcbb9` をローカル変更を破棄せず取り込み。製品branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010`、[既存Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5) を継続。
+
+### 実装と保存commit
+
+1. **bb1e6c28612f7e8a8d8e8c8c01425d58b4e38667** — P1 類似検索のWindows実機確認で判明した境界を修正：
+   - 類似検索から元の検索ページ（例：2/2）へ戻った直後、新しい `ListViewItem` のXAMLレイアウト完了を待って `ScrollIntoView` と `Focus(FocusState.Keyboard)` を行う `FocusRowAsync` を `src/Aredoko.WinUI/MainPage.xaml.cs` に追加。
+   - `src/Aredoko.WinUI/MainPage.xaml` の `SimilarityBar` を1行 `Grid` に整理し、狭幅 `700×620` でも一覧領域が潰れないよう改善。
+   - `app/server.py` で Windows のクライアント切断例外 `ConnectionAbortedError`（WinError 10053）を通常切断として扱い、`ThreadingHTTPServer.request_queue_size = 128` と `Connection: close` を設定してプレビュー並行要求バースト時のTCP backlog溢れを解消。
+   - `src/Aredoko.WinUI/Aredoko.WinUI.csproj` に、Windows Updateで .NET SDK `10.0.402`（`10.0.13`）が入った環境でも既存のローカルNuGetキャッシュ（`10.0.12`）だけで `--no-restore` ビルドが通る条件付きターゲット `UseCachedRuntimePacks` を追加。
+2. **a87d6b4fc31ab0cdc08ccf12134657be8c8125d6** — [folder-library-management.md](folder-library-management.md) に基づく登録フォルダ管理ハブ・複数root統一検索・初期棚編集を実装：
+   - **API / Python (`app/library_index.py`, `app/production.py`, `app/production_server.py`)**：`GET /api/library/roots` の各rootに索引済み `present_count` を付加（新規スキャンなし）。`GET /api/items` と `ProductionCatalog.search` に `root_ids`（1〜256件の有効な正Int64登録root IDの和集合OR、重複・空・未登録/解除済みroot・`root_id`との同時指定は400で拒否し全件へ拡大しない）を追加。単一 `root_id` は互換維持。
+   - **Core (`src/Aredoko.Core/FolderSearch.cs`, `FolderHubState.cs`, `LibraryApi.cs`, `SimilaritySearch.cs`, `ErrorText.cs`)**：複数rootの `LiteralRouteMulti` / `RestrictAIMulti` / `SimilaritySearch.RequestMulti` / `SearchMultiAsync` / `SimilarMultiAsync`、同名末尾フォルダを親ディレクトリ付きで区別する `RegisteredRootRow.ShortPath`、単一/一括初期棚ドラフト `FolderSettingsDraft`（「複数の設定値」「変更しない」「棚なし」「新規棚」の区別、変更項目のみの保存、部分失敗時の残りroot再試行管理）、および検索範囲とAI scope積集合の説明 `FolderScopeDescriber` を実装。
+   - **WinUI (`src/Aredoko.WinUI/MainPage.xaml`, `MainPage.xaml.cs`)**：左ナビの動的フォルダ列挙を廃止して単一の「登録フォルダ」（`NavFolders`）に集約。メインビューの登録フォルダ一覧 `FolderHubView`（リスト/グリッド切替、名前/パス絞り込み、登録中/解除済み状態フィルター、チェックボックス複数選択、0件選択時の検索/設定/解除ボタン無効化、単一フォルダ「中を見る」「設定」、新規追加/再登録パネル）と、右詳細パネルの `FolderEditorPanel`（単一/一括初期棚保存、`FillUnsetShelf` 明示適用、単一除外更新・スキャン・中断、単一/複数登録解除、未保存変更の破棄確認）を接続。類似検索からの復帰（`SearchBookmark`）でも複数root選択を保持。
+
+### 正確な検証結果（Windows実機、CI起動0回）
+
+- **全Python 301 PASS / 183.330秒 / skip 0**（`NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -p "test_*.py" -q`、`test_folder_search.py` 12 PASS、`test_similarity_search.py` 16 PASS、`test_similarity_sandbox.py` 5 PASS、`test_error_text_coverage.py` 1 PASS を含む）。
+- **C# Core 280 PASS**（`dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore`、類似検索51件＋複数root/フォルダ管理19件を含む）。
+- **Windows x64 SelfContained Release PASS**（`dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore`、0 warnings / 0 errors）、`test_winui_compile_stub.py` **3 PASS**。
+- **P1 類似検索 Windows一括検証 (`Check-Similarity.cmd`)**：
+  - `similarity-check-20261015-120824-dbfe63`：**PASS（diff-check / Python 300 PASS / Core 264 PASS / Release PASS / native 41 checks PASS / PNG 10枚全目視 / graceful close 2）**（先行診断 `114301-4b31e2`・`115519-ea9b7d` から2修正cycle内で解決）。
+  - `similarity-unindexed-01`（`--scenario unindexed`）：**PASS（9 checks / PNG 2枚全目視 / graceful close 2）**。
+  - `similarity-text-only-01`（`--scenario text-only`）：**PASS（9 checks / PNG 2枚全目視 / graceful close 2）**。
+  - `similarity-doubleclick-reg-01`（`--double-click-only`）：**PASS（22 checks / keys 16 / skip 0 / PNG 8枚全目視 / graceful close 2）**。
+- **登録フォルダ管理ハブ・複数root検索 Windows実機検証 (`tools/test_folder_hub_ui.py`)**：
+  - `folder-hub-native-07`：**PASS（37 checks / PNG 10枚全目視 / graceful close 2）**。Light/Dark・1200×820と700×620狭幅で、左ナビが単一 `NavFolders` のみであること、0選択時の検索無効化、同名末尾フォルダ（`branch-a/works` / `branch-b/works` / `branch-c/works`）の識別と絞り込み・リスト/グリッド切替での選択保持、単一「中を見る」とハブ復帰、A+B複数root選択での通常文字・AI・類似検索（C除外・自己除外）と類似検索からのA+B復帰、一括初期棚の「複数の設定値（変更しない）」無変更保存（既存値維持）、未保存設定の破棄確認キャンセル、部分失敗（A成功・B失敗）からのB単独再試行成功と個別手動棚の保全、登録解除と解除済み一覧からの再登録によるタグ・棚復元を実機確認。
+- 全runで生成mediaのbytes/mtime/hash不変、settings bytes不変、AIモデルロード0、私物scan/変更/外部送信0、依存/モデル取得0、**CI dispatch 0**。
+
+### 残課題・未検証と次の異なる3手
+
+- **未検証範囲**：Shift+F10等のキーボードのみでのコンテキストメニュー起動、検索範囲の名前付き保存・左ナビへのピン留め、除外ルールの一括編集、高DPI/High Contrast/Narrator/Tab全順序、実AIモデル/GPUを用いた新固定評価セット実測。
+- **次の異なる3手**：
+  1. **P0 検索品質の新固定baseline実測と小改善（最大2試行まで）**：既存v1/v2/v6を変更せず、新しい20〜50問の固定評価セットを結果観測前に確定して一度実測し、根拠のある小改善（0〜2件）でP0を一区切りにする。
+  2. **P2 由来付き視覚タグ候補と承認フローの最小縦切り**：自動タグ候補の保存スキーマ（モデル/版・対象revision・根拠ページ・候補/確定/却下）とWinUI承認・修正導線を小さな生成素材で実装し、手動確定タグと区別して検索・保全できるようにする。
+  3. **登録フォルダ管理の後続・P3準備**：検索範囲の名前付き保存・左ナビへのピン留め、除外ルールの一括追加/置換、Shift+F10キーボード導線、および画像フォルダを「一冊」として扱う論理作品化の設計・移行テストを進める。
+
+最終実装HEAD **a87d6b4fc31ab0cdc08ccf12134657be8c8125d6**。文書込み最終HEADは本節を導入したhandoff commit（`git log -1 --format=%H -- docs/codex-handoff.md`）を正とする。
+
+---
+
 ## 方針追記：登録フォルダ管理・複数選択検索・初期棚編集（2026-10-15 21:10 JST）
 
 **今回：文書のみ。製品コードの変更・新規テスト実行・Windows確認・CI起動なし。OpenCodeはユーザー側で現在開発中。** 文書作成時remote HEADは `4c98bafa3e2703fc6f0355873104bc8e89cbc3b2`、既存の製品branch／Draft PR #5／baseを確認。ローカルの未commit変更・進捗は未観測。本追記は、実装状況やP0試行回数を過去の状態へリセットするものではない。直下の実装記録と、より新しいコード／テストを照合する。

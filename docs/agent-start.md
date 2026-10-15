@@ -1,6 +1,8 @@
 # AIエージェントの開始・再開ガイド
 
-> 2026-10-15 21:10 JST ユーザー合意（文書のみ）：[登録フォルダをメインのリスト／グリッドへまとめ、複数選択検索と初期棚編集を行う仕様](folder-library-management.md)。OpenCodeが開発中。進行中の作業を安全に区切り、未commit変更・最新remoteを確認してから次のUX縦切りへ。下のテスト数・実装状況は各時点の記録であり、本追記の実行結果ではない。
+> **最新（2026-10-15 Windows続行）**：P1 画像・表紙の類似検索Windows一括検証（`Check-Similarity.cmd` → `similarity-check-20261015-120824-dbfe63` **41 checks / PNG 10枚**、`unindexed` **9 checks**、`text-only` **9 checks**、double-click回帰 **22 checks / keys 16**）を完了し、続いてユーザー合意の **[登録フォルダ管理ハブ・複数選択検索・一括初期棚編集](folder-library-management.md)** を実装・Windows実機検証（`folder-hub-native-07` **37 checks / PNG 10枚**、最終 **Python 301 PASS / Core 280 PASS / x64 Release PASS**）まで完了。P0の新固定baselineは未実施（改善試行累積0/2）。詳細は [両handoff最上段](codex-handoff.md) を参照。
+
+> 2026-10-15 21:10 JST ユーザー合意（文書）：[登録フォルダをメインのリスト／グリッドへまとめ、複数選択検索と初期棚編集を行う仕様](folder-library-management.md)。
 
 > 2026-10-15続行：類似検索の取消/復帰・破損vector・応答検査を補強。Python全300 PASS/skip0。帰宅後のWindows確認は [windows-similarity-handoff.md](windows-similarity-handoff.md) と `Check-Similarity.cmd` から開始する。Core/Release/nativeは今回の環境では未実行。
 
