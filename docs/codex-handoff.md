@@ -1,4 +1,40 @@
-## 最新：P1 類似検索のWindows実機検証完了＋登録フォルダ管理ハブ・複数root統一検索・一括初期棚の実装（2026-10-15 Windows続行）
+## 最新：P0 新固定baseline実測・空cover候補の推論省略で一区切り（2026-10-15）
+
+**現在フェーズ：P0今回の区切り完了、P1類似検索・登録フォルダハブのWindows確認済みを維持。P0新baseline済み、改善試行累積1/2（採用1件）、品質重み/閾値/routing調整0件。次はP2由来付きタグ候補/承認/OCR。** 残り1枠を埋めるためだけの追加試行はせず、新指示/実運用の失敗/新退行がない限り同じP0を再開しない。
+
+開始HEAD **25034815e45cd3de80866c0056a6e5c2bffa9cfc**、status clean・remote一致を確認。AGENTS/vision/新priorities/folder-library-management/両handoff/Issue4・Draft PR5を読み、OpenCodeのP1とフォルダハブを作り直さず次へ進めた。製品branch/base/既存Draft PR5を維持。今回の実装commit **6747d9a5b4609a8f83b9ac3ab3f75486473cdf54**、文書込み最終HEADは本節を導入する記録commit（git log）を参照。
+
+### 固定入力と実装
+
+- v7：**9dd32b0**で順位観測前に24生成素材・24問を凍結。SHA **8212da5d4c146c8ac1086e04c95a3514d3564a1171cb3f9fe66498389f7e499b**。PNG12/CBZ4/SVG4/無音WAV4、metadata/pixels/一致/意図的矛盾/架空alias/no-answer。旧v1/v2/v6のquery/filenameと非重複・旧入力不変。
+- `tools/evaluate_search_phase.py`：literal/related/text/cover/combined × A+B/root-Aの240結果、Top1/Recall@5/MRR/Precision@5/no-answer/latency。scopeで正解が除かれる場合、source非対応、真正no-answerを区別。偽encoderの契約検査には実品質と異なるラベルを付ける。fresh ignored出力だけ、任意source/モデル引数なし。
+- 実GPU `search-phase-v7-baseline-01`：**runtime PASS/273 checks/240行、document24/image16/query144、index40.889秒、torch peak allocated931.8MiB**。既存専用venv・固定EG2/auto-bf16のみ、Laya/新DLなし。source bytes/mtime/hash、vector bytes、固定入力不変、owned process-instance handle3件全終了。
+- 新しい別確認入力は**c5ca371**で観測前凍結（`cover-empty-v1.json`、5素材/6問、SHA **f7a734f3a720732dfa93e491c358d95f6157222395ce2780e728e6ab1b4aa78a**）。`tools/check_cover_empty.py`で前後各1回を比較。
+- 試行1：`app/ai_search.py`のsource=coverに限り、shared cap/明示scope・kind・view適用後の候補を現cover対応image/bookへ制限。空ならquery推論しない。非画像の紛れたcover cacheも拒否。combined/text・通常検索・scope・重み/閾値は維持。前後6件の結果ID/順序不変、query呼出 **6→2**、空4件の時間中央値 **89.591ms→11.132ms**（単発・非隔離の診断）。全source/vector不変・owned worker終了。品質点数の改善ではない。
+- AGENTS/agent-start/priorities/READMEをP0区切り→P2へ同期。media-content-planに残っていたP1 Windows未検証表記を実態へ同期。動画/音声内容索引の最終目標を維持。
+
+### 実測の読み方と残課題
+
+[結果表・失敗分析](search-phase-v7-results.md)・[測定前記録](search-phase-v7.md)。all-rootsでは視覚のみ6問でcover Top1 **6/6**、combined **0/6**（Recall@5 4/6）。metadata8問はtext **8/8**、combined **7/8**。label/pixelが矛盾する4問では欲しい根拠で適切なmodeが異なる。真正no-answer2問はliteral/related 2/2空、text/combined 0/2空、coverは有効な画像query1問で0/1空。人工の幾何図形とmetadata設定に重みを過適合させず、既知の混合順位・no-answerをbacklogとして保持。単一正解queryのPrecision@5は5件返却なら最大0.2。audioは無音、CBZは図形で、音声/本文理解ではない。
+
+検索時間は一部ローカル回帰との同時実行下の単発診断。**実ライブラリ精度、UI到達時間/操作回数、多DPI/実GPUのGUI経路、長編/大規模性能は今回未測定**（UI指標はnull）。native GUI/C#/XAMLは今回未変更、Core/Release/nativeは再実行せず前回OpenCodeの合格を今回の検証に流用しない。
+
+### ローカル回帰と失敗履歴
+
+- 新評価契約 **3 PASS**、empty cover **2 PASS**、既存AI検索 **13 PASS**。試行前の全Python **304 PASS/166.427秒**。
+- 試行後初回全306は1error：visual/textの独立性テストがaudio placeholderへcover vectorを入れていた。対応kindのPNG2件を生成するfixtureへ直し、逆向きのtext/cover vectorによる元の順位/source/不正modeの検査意図は保持。非画像stray cover拒否は新テストで別に保証。P0新仮説ではなく試行1内の契約fixture修正。
+- **最終 `NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -p 'test_*.py' -q`：306 PASS/158.807秒/skip0**。既存類似検索・複数root/フォルダ・保存・preview/reader/videoを含む。diffチェック・変更文書リンク確認PASS。
+- 私物scan/変更/外部送信0、モデル/依存追加0、OS変更0。生成データ/DB/生ログはignored `data/ai-ui`、コード/固定入力/集計文書のみGit保存。3workflow manual-only、CI dispatch0。push後HEADのActions/checksは読み取り確認してPRへ記録。
+
+### 次の異なる3手
+
+1. **P2由来付き候補/アダプタ/API**：model/version・対象revision・根拠ページ・候補/確定/却下の最小スキーマ。生成fixtureで再解析が手動確定タグを上書きしない、stale/取消/再開を検証する。
+2. **WinUI承認/修正/却下と根拠**：推定と確定を分け、未保存draft・scope・検索/readerを保って、小さいWindows実機の縦切りを完成させる。
+3. **OCR/複数ページ文脈**：既存ローカル機能とモデル仕様を確認し、ページ文字索引へ接続。新依存/モデル取得は明示許可が必要。関係性を表紙だけで断定しない。保存scope/一括除外/Shift+F10、P3論理作品とP4時間付き動画/音声内容索引はbacklogを維持する。
+
+---
+
+## 履歴：P1 類似検索のWindows実機検証完了＋登録フォルダ管理ハブ・複数root統一検索・一括初期棚の実装（2026-10-15 Windows続行）
 
 **現在フェーズ：P1（アイテム起点の画像・表紙類似検索）Windows実機検証完了＋ユーザー合意の登録フォルダ管理ハブ（単一/複数root統一検索・初期棚単一/一括編集・解除/復元）実装およびWindows実機検証完了。P0新baseline：未実施、P0改善試行累積：0/2を維持。**
 

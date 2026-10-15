@@ -43,6 +43,8 @@ EG2固定revision `914f7f89142e33e77833254d9c9b90c3cef7303b`/auto-bf16、combine
 
 metadataのcoverは8問中、画像入力対象のbook2問だけが採点対象。WAVは無音・SVGは灰色・CBZは幾何図形なので、音声理解/本の本文理解ではない。Precision@5は返された最大5件に対する厳密qrelsの比率。各visual queryは正解1件のため、全5件を返す完全Top1でも0.2になる。これは一般的な関連性判定や正解確率ではない。
 
+literal/relatedへは長い自然文をそのまま入力しており、通常検索の名前・短い単語controlの合格率を表すセットではない。旧v1/v6のcontrolと既存回帰は維持する。
+
 ## 誤りの分析と今回見送る変更
 
 - 視覚のみ6問：cover Top1 6/6、combined 0/6（Recall@5 4/6、MRR約0.302）。タグなしのtext順位と混合すると視覚の良い順位が下がる観測を、v1/v2とは別の新入力で確認した。
