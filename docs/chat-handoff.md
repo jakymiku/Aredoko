@@ -1,4 +1,37 @@
-## 最新：P0 新固定baseline実測・空cover候補の推論省略で一区切り（2026-10-15）
+## 最新：P2 由来付きタグ候補・承認/修正/却下APIの基盤（2026-10-16 JST）
+
+**現在フェーズ：P2のバックエンド最初の縦切り。保存・履歴・承認APIと交換可能なadapter契約を実装。実タグ生成モデル・WinUI候補画面・OCR/複数ページ解析・候補の全体検索は未接続。** 製品既定はtagger未設定で生成503。偽adapterの契約検証をAIの品質や製品GUI完成として扱わない。P1類似検索/フォルダハブのWindows確認済みを維持し、**P0 v7 baseline済み・改善累積1/2（採用1）・重み/閾値/routing調整0**は変更しない。
+
+開始HEAD **e7b689053f305ab56c118d44b236b99990aa0da3**、branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR5を維持。AGENTS/vision/priorities/両handoff/Issue4/PR5とremoteを確認、status clean・remote差0/0から続行。実装commit **efa74b1f7b7cbcd850ecb673dbfe8b2d844042b1**、最終HEADは本節を追加する記録commit（git log）を参照。
+
+### 実装とデータ保全
+
+- [仕様・API・未接続部分](tag-suggestions.md)。`app/tag_suggestions.py`、既存preview/source境界とproduction serverへ接続。既存DBにbatch/proposalの2tableとindexを非破壊追加。adapter/model/version/前処理、物理source revision、画像/表紙、根拠page、元の候補/修正確定タグ、pending/accepted/rejected/version/日時を保存。
+- `GET /api/library/tag-suggestions/{item_id}`：認証付きitem固有履歴、stale、available/reason、bounded pagination。`POST .../generate` / `cancel` / `review`：信頼された内部adapterだけ、request IDによる協調取消、原子的な公開/承認。公開APIで任意のpath/model/候補を投入しない。
+- 候補を通常タグ検索へ自動混入させない。承認時のみ最新の保存タグと和集合を同一transactionで保存、修正承認/却下・30タグ上限・競合/source再確認失敗時rollback。棚/お気に入り/確認済み/読書位置は変更しない。手動タグ編集はsource revisionと独立し、残り候補をstaleにしない。
+- 同じsource/producer再実行は既存batch/決定を再利用（0候補＝未判定も保存）。新source/producer版は別batch、履歴を保全。元ファイルの更新/差替え/除外/解除は古い候補の承認を拒否。revisionはfile identity/size/mtime/ctime等のメタデータtokenであり全内容hashではない。
+- adapter入力は検査済み画像/CBZ・ZIP自然順先頭画像の最大8MiB bytes、mime、revisionだけ、根拠page0/最大30候補。初版は動画/音声/PDF/複数ページを解析しない。モデル障害・取消・不正出力・source/adapter変更は部分候補を残さず再実行可。取消は協調式で、永続job queue/強制停止/timeoutはまだない。実adapterは既存AIとのGPU排他・worker timeout/解放を備えてから接続する。
+- C#は既存 `ErrorText` 辞書への日本語15文追加のみ。XAML/GUI構造・検索ランキング/AI索引profile/既存viewerは未変更。AGENTS/agent-start/priorities/APIを現在地に同期。
+
+### 今回の検証・失敗履歴・未検証
+
+- P2新規 **19 tests PASS / 6.613秒**：一時DBと生成PNG/2ページCBZ、固定の偽adapter。候補/確定分離、編集承認/却下、手動並行編集、再起動/新producer/再解析/未判定、stale/差替え/rollback/上限、取消/再試行、2service同時公開、scan/除外/解除復元、pagination/ID/HTTP認証/409/503。
+- 初回の対象15 testsは読書位置レスポンスを `page`直下と誤認して1error。既存仕様の`progress.page`にテストだけ修正。HTTPErrorを明示closeしてResourceWarningも除去。
+- 初回全Python **325実行/193.507秒・1failure**：新server固定エラー3文の日本語辞書登録漏れ。固定/実行時を含む15文を既存辞書へ追加し、新たな実行時エラーcoverageも追加。対象のlocale coverage **2 PASS**。
+- **最終全Python：326 PASS / 194.084秒 / skip0**。既存検索・保存・登録フォルダ・類似・preview/reader/videoを含む。`NO_PROXY=127.0.0.1,localhost python -m unittest discover -s tests -p 'test_*.py' -q`。
+- `dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore` **PASS**。`dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore` **PASS / 0 warnings / 0 errors / 15.73秒**。
+- winui-code-reviewスキルに沿い変更したC#辞書をレビュー：新UI/API/非同期/反射処理なし、既存辞書方式に限定しエラー網羅を検証。native GUI操作は今回未実行、WinUIAnalyzerはprojectに参照なく今回未実行/未追加。実モデルのタグ品質/GPU推論/OCR/実ライブラリ/大規模性能は未検証。前回P0 GPUや前回P1 nativeの合格を今回P2の検証に流用しない。
+- 私物scan/変更/送信、モデル/依存DL、OS変更、CI dispatchは0。3 workflowsはmanual `workflow_dispatch`のみを確認。変更文書のローカルリンク/差分を検査。push後のHEAD Actions/checksとremote差分は読み取り確認して既存PR5へ記録する。
+
+### 次の異なる3手
+
+1. **実タグ生成adapterの接続**：既存ローカル資産と正式入力仕様を確認し、GPU排他/timeout/解放/取消を持つ交換可能なadapterへ。新モデル/依存取得は明示許可が必要。固定した小規模素材で品質を別測定。既存埋め込みを生成タグモデルと称さない。
+2. **WinUIの候補/根拠と修正承認/却下**：今回APIを利用し、pending/確定・stale・未接続/失敗を区別。draft/scope/検索/readerを保持してWindows実機の小さな縦切りを確認する。未承認候補を対象にする検索は明示的な別条件で追加する。
+3. **OCR/複数ページ文脈**：利用可能なローカル機能を確認、本文索引とページ根拠へ。表紙から関係性タグを断定しない。保存scope/一括除外/キーボード、P3論理作品、P4時間付き動画/音声索引のbacklogを維持し、理由なくP0を再開しない。
+
+---
+
+## 履歴：P0 新固定baseline実測・空cover候補の推論省略で一区切り（2026-10-15）
 
 **現在フェーズ：P0今回の区切り完了、P1類似検索・登録フォルダハブのWindows確認済みを維持。P0新baseline済み、改善試行累積1/2（採用1件）、品質重み/閾値/routing調整0件。次はP2由来付きタグ候補/承認/OCR。** 残り1枠を埋めるためだけの追加試行はせず、新指示/実運用の失敗/新退行がない限り同じP0を再開しない。
 
