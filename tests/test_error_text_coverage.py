@@ -17,5 +17,13 @@ class ErrorTextCoverageTests(unittest.TestCase):
         self.assertEqual(sorted(english - mapped), [])
 
 
+    def test_tag_suggestion_runtime_errors_are_localized(self):
+        adapter = (REPO / 'app/tag_suggestions.py').read_text(encoding='utf-8')
+        mapped = set(re.findall(r'\["([^"]+)"\] = "', (REPO / 'src/Aredoko.Core/ErrorText.cs').read_text(encoding='utf-8')))
+        errors = set(re.findall(r"raise (?:AIUnavailable|AIBusy|SuggestionConflict)\('([^']+)'\)", adapter))
+        self.assertTrue(errors)
+        self.assertEqual(sorted(errors - mapped), [])
+
+
 if __name__ == '__main__':
     unittest.main()

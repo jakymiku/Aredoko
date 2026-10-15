@@ -8,6 +8,12 @@ KINDS = ('book', 'image', 'video', 'audio')
 THEMES = ('雨の街', '夜の図書館', '青い海', '森の散歩', '古い紙', '静かな部屋', '夕焼け', '星空')
 
 
+def validate_tags(tags):
+    if not isinstance(tags, list) or len(tags) > 30 or any(not isinstance(t, str) or not 1 <= len(t.strip()) <= 60 for t in tags):
+        raise ValueError('Tags must contain 1 to 60 characters, at most 30 tags')
+    return list(dict.fromkeys(t.strip() for t in tags))
+
+
 class Catalog:
     def __init__(self, path):
         self.path = Path(path)
@@ -104,10 +110,7 @@ class Catalog:
             raise ValueError('Invalid changes')
         changes = dict(changes)
         if 'tags' in changes:
-            tags = changes['tags']
-            if not isinstance(tags, list) or len(tags) > 30 or any(not isinstance(t, str) or not 1 <= len(t.strip()) <= 60 for t in tags):
-                raise ValueError('Tags must contain 1 to 60 characters, at most 30 tags')
-            changes['tags'] = json.dumps(list(dict.fromkeys(t.strip() for t in tags)), ensure_ascii=False)
+            changes['tags'] = json.dumps(validate_tags(changes['tags']), ensure_ascii=False)
         if 'shelf' in changes and (not isinstance(changes['shelf'], str) or len(changes['shelf']) > 80):
             raise ValueError('Shelf must be 80 characters or less')
         for key in ('favorite', 'reviewed'):

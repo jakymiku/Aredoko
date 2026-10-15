@@ -23,6 +23,7 @@ from intent_questions import QUESTION_SETS
 from laya_process import LayaProcess
 from laya_config import model_path as laya_model_path
 from server import handler_for
+from tag_suggestions import TagSuggestions
 
 class DisabledAI:
     def __init__(self,error=None):
@@ -51,13 +52,14 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True):
         return SearchIntent(LayaProcess(repo/'.venv-ai/Scripts/python.exe',laya_model_path(repo),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None):
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
     base=handler_for(catalog,token)
     previews=PreviewReader(catalog)
     resource_updates=threading.Lock()
+    suggestions=TagSuggestions(catalog,adapter=tagger,previews=previews)
     class Handler(base):
         def do_GET(self):
             if not self.valid_host(): return self.send(403,{'error':'Invalid host'})
@@ -94,6 +96,23 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
             if path.startswith('/api/library'):
                 if self.headers.get('X-Aredoko-Token')!=token:
                     return self.send(403,{'error':'Invalid session'})
+                if path.startswith('/api/library/tag-suggestions/'):
+                    try:
+                        match=re.fullmatch(r'/api/library/tag-suggestions/([1-9][0-9]{0,18})',path)
+                        if match is None:raise ValueError('Invalid proposal route')
+                        args=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
+                        if set(args)-{'before','limit'}:raise ValueError('Invalid history query')
+                        values={}
+                        for key,entries in args.items():
+                            value=entries[0]
+                            if len(entries)!=1 or not value.isascii() or not value.isdigit() or len(value)>19:
+                                raise ValueError('Invalid history query')
+                            values[key]=int(value)
+                        return self.send(200,suggestions.list(int(match[1]),**values))
+                    except AIBusy as ex:return self.send(409,{'error':str(ex)})
+                    except ValueError:return self.send(400,{'error':'Invalid proposal history request'})
+                    except KeyError:return self.send(404,{'error':'Tag source unavailable'})
+                    except OSError:return self.send(409,{'error':'Tag source unavailable; records preserved'})
                 if path.endswith('/progress') and path.startswith('/api/library/reader/'):
                     try:
                         match=re.fullmatch(r'/api/library/reader/([1-9][0-9]{0,18})/progress',path)
@@ -225,6 +244,16 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path=='/api/library/tag-suggestions/generate':
+                    if set(body)!={'item_id','request_id'}:raise ValueError('Invalid generation request')
+                    return self.send(200,suggestions.generate(body['item_id'],body['request_id']))
+                if self.path=='/api/library/tag-suggestions/cancel':
+                    if set(body)!={'request_id'}:raise ValueError('Invalid cancellation request')
+                    return self.send(200,suggestions.cancel(body['request_id']))
+                if self.path=='/api/library/tag-suggestions/review':
+                    if set(body)-{'item_id','proposal_id','version','decision','tag'} or not {'item_id','proposal_id','version','decision'}<=set(body):
+                        raise ValueError('Invalid review request')
+                    return self.send(200,suggestions.review(**body))
                 if self.path.startswith('/api/library/reader/'):
                     try:
                         match=re.fullmatch(r'/api/library/reader/([1-9][0-9]{0,18})/progress',self.path)

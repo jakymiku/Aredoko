@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> 最新P2（2026-10-16）：P2の最初の基盤として、由来付き候補の保存・承認/修正/却下・取消/再実行APIを追加。**実タグ生成adapter・WinUI承認画面・OCRは未接続**（既定生成503、契約検証は生成fixtureの偽adapter）。[実装境界とAPI](tag-suggestions.md)。P0 baseline済み・改善累積1/2は維持。
+
 > 最新：P0新固定baseline v7（24問・実GPU）を測定し、画像候補がないcover検索の無駄なquery推論を省略。改善累積1/2で一区切り、P1/フォルダハブ完了を維持して次はP2。[結果・限界](search-phase-v7-results.md)・[直近の優先順位](development-priorities.md)。
 
 > **最新（2026-10-15 Windows続行）**：P1 画像・表紙の類似検索Windows一括検証（`Check-Similarity.cmd` → `similarity-check-20261015-120824-dbfe63` **41 checks / PNG 10枚**、`unindexed` **9 checks**、`text-only` **9 checks**、double-click回帰 **22 checks / keys 16**）を完了し、続いてユーザー合意の **[登録フォルダ管理ハブ・複数選択検索・一括初期棚編集](folder-library-management.md)** を実装・Windows実機検証（`folder-hub-native-07` **37 checks / PNG 10枚**、最終 **Python 301 PASS / Core 280 PASS / x64 Release PASS**）まで完了。P0の新固定baselineは未実施（改善試行累積0/2）。詳細は [両handoff最上段](codex-handoff.md) を参照。

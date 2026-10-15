@@ -11,6 +11,21 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
+        ["Invalid proposal history request"] = "タグ候補の履歴指定が無効です。開き直してください。",
+        ["Tag source unavailable"] = "タグ候補の対象を読み取れません。フォルダ登録・除外・接続状態を確認してください。",
+        ["Tag source unavailable; records preserved"] = "対象にアクセスできません。タグ候補の履歴は保持しています。",
+        ["Preview workers busy; retry later"] = "プレビュー処理が混んでいます。少し待ってからやり直してください。",
+        ["Source changed; rescan before reviewing"] = "元ファイルが変わりました。再スキャンしてからタグ候補を確認してください。",
+        ["Source changed; regenerate proposals"] = "元ファイルが変わりました。タグ候補を再生成してください。",
+        ["Invalid tagger configuration; no proposals saved"] = "タグ生成モデルの設定が無効です。候補は保存していません。",
+        ["Tag generation in progress"] = "タグ候補を生成中です。完了か取消後にやり直してください。",
+        ["Source changed before analysis"] = "解析前に元ファイルが変わりました。再スキャンしてからやり直してください。",
+        ["Tagger failed; no proposals saved"] = "タグ候補の生成に失敗しました。候補は保存していません。",
+        ["Tag generation cancelled; no proposals saved"] = "タグ候補の生成を取り消しました。候補は保存していません。",
+        ["Tagger changed during analysis; retry"] = "解析中にタグ生成モデルが変わりました。やり直してください。",
+        ["Invalid tagger output; no proposals saved"] = "タグ生成モデルの応答が無効です。候補は保存していません。",
+        ["Proposal already reviewed; refresh before saving"] = "この候補は承認または却下済みです。最新の状態を読み直してください。",
+        ["Proposal source is stale; regenerate before reviewing"] = "元ファイルが変わったため古い候補は承認できません。候補を再生成してください。",
         ["Similarity source unavailable"] = "起点の作品がAI対象の範囲外か、登録解除・除外されています。AI索引の対象と検索フォルダを確認してください。",
         ["Invalid similarity source"] = "類似検索は画像・本・ZIPの表紙から利用できます。",
         ["Video range outside source"] = "動画の範囲が変わりました。開き直してください。",

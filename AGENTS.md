@@ -28,9 +28,9 @@ The vision defines product intent, not implementation status. The latest source,
 
 A future agent should inspect the latest code/PR/handoff first; then select the highest-priority unfinished vertical slice, implement it and run targeted local tests rather than stopping at planning. Preserve text search, manual metadata, scopes, native viewer, privacy rules and WinUI-only GUI direction. Measure retrieval success (Top1/Recall@5/MRR, no-answer behavior and time to find) and explicitly separate synthetic benchmarks from real-life quality. No private library scanning or model/dependency downloads without explicit permission. Major regressions and data-safety blockers override feature ordering.
 
-## Current checkpoint (2026-10-15 continuation)
+## Current checkpoint (2026-10-16 P2 foundation)
 
-P1 similarity and registered-folder hub are implemented and Windows-validated. The new P0 v7 baseline was frozen before inference and measured once on generated sources with the existing CUDA model. P0 closes with **1/2 cumulative improvement trials**, one adopted empty-cover-pool inference optimization, and no ranking/threshold/routing tuning. Read [docs/search-phase-v7-results.md](docs/search-phase-v7-results.md). Continue with P2 provenance-tag suggestions and approval; do not consume the remaining trial budget or reopen P0 without new evidence/user direction.
+P1 similarity and registered-folder hub are implemented and Windows-validated. The new P0 v7 baseline was frozen before inference and measured once on generated sources with the existing CUDA model. P0 closes with **1/2 cumulative improvement trials**, one adopted empty-cover-pool inference optimization, and no ranking/threshold/routing tuning. Read [docs/search-phase-v7-results.md](docs/search-phase-v7-results.md). P2 now has a backend provenance/review/cancel API foundation; read [docs/tag-suggestions.md](docs/tag-suggestions.md). The production tagger adapter, WinUI review flow, OCR and proposal-wide search remain unconnected; default generation returns 503, and fake-adapter fixture tests are not AI-quality validation. Next connect a real adapter using verified local assets, then the native review flow. Do not consume the remaining P0 trial budget or reopen P0 without new evidence/user direction.
 
 ## Registered-folder management — user-approved next UX slice (2026-10-15)
 

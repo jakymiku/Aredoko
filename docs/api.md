@@ -1,5 +1,11 @@
 # 共通API（操作試作 v0）
 
+## P2：由来付きタグ候補・承認APIの基盤（2026-10-16）
+
+- `GET /api/library/tag-suggestions/{item_id}?limit=10&before=<batch_id>`：候補/確定/却下の履歴とmodel/version・物理revision・根拠ページ・stale・生成available。通常タグ検索に候補を混ぜない。
+- `POST /api/library/tag-suggestions/generate` / `cancel` / `review`：信頼された設定済みadapterのみ、原子的な候補公開、request IDによる協調取消、現source/version一致時だけ既存タグへ追加または修正承認/却下。
+- **製品既定の実taggerは未接続、生成503。WinUI/OCR/候補の全体検索も未接続**。偽adapterでの契約検証を実AI品質と扱わない。[詳細仕様・制限](tag-suggestions.md)。
+
 ## 製品MVP：複数登録フォルダの和集合検索とアイテム起点類似検索のWindows検証（2026-10-15 Windows続行）
 
 - `GET /api/items?root_ids=<id1>,<id2>,...`：1〜256件の有効な登録root ID（正のInt64・重複不可）の和集合（OR）で通常文字検索・関連語展開・partial fallbackを実行。既存の単一`root_id`も互換維持（両方同時指定や空指定`root_ids=`・未登録/解除済みrootは400で拒否し、全件検索へ拡大しない）。

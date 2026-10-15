@@ -165,6 +165,14 @@ class PreviewReader:
             raise ValueError('Invalid reader revision')
         return self._read(item_id, operation='page', page=page, revision=revision)
 
+    def tag_source(self, item_id):
+        """Physical provenance, independent of editable tags/title; no pixels read."""
+        return self._read(item_id, operation='tag_source')
+
+    def tag_input(self, item_id):
+        """Bounded image/first cover bytes and provenance from the same handle."""
+        return self._read(item_id, operation='tag_input')
+
     def _read(self, item_id, operation='preview', page=0, revision=None,start=None,end=None):
         if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
             raise PreviewUnavailable('Invalid item')
@@ -186,6 +194,9 @@ class PreviewReader:
             if operation in ('video','video_manifest','video_range','video_frame'):
                 if suffix not in VIDEO_MIME:
                     raise PreviewUnavailable('Video player requires a supported video item')
+            elif operation in ('tag_source', 'tag_input'):
+                if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip'):
+                    raise PreviewUnavailable('Tagging requires an image, CBZ or ZIP')
             elif operation != 'preview' and suffix not in ('.cbz', '.zip'):
                 raise PreviewUnavailable('Reader requires a CBZ or ZIP archive')
             initial = source.stat(follow_symlinks=False)
@@ -202,6 +213,9 @@ class PreviewReader:
                 current_revision = _revision(row, info) if operation not in ('preview', 'video') else None
                 if revision is not None and revision != current_revision:
                     raise ReaderChanged('Archive changed; reopen the reader')
+                if operation in ('tag_source', 'tag_input'):
+                    result = {'item_id': item_id, 'revision': current_revision,
+                              'kind': 'image' if suffix in IMAGE_MIME else 'cover', 'page': 0}
                 if operation == 'video':
                     if info.st_size < 1 or info.st_size > MAX_PLAYBACK_BYTES:
                         raise PreviewUnavailable('Video exceeds playback limit')
@@ -232,7 +246,8 @@ class PreviewReader:
                 elif suffix in IMAGE_MIME:
                     if info.st_size > MAX_IMAGE_BYTES:
                         raise PreviewUnavailable('Image exceeds preview limit')
-                    data, mime = file.read(MAX_IMAGE_BYTES + 1), IMAGE_MIME[suffix]
+                    if operation != 'tag_source':
+                        data, mime = file.read(MAX_IMAGE_BYTES + 1), IMAGE_MIME[suffix]
                 else:
                     if info.st_size > MAX_ARCHIVE_BYTES:
                         raise PreviewUnavailable('Archive exceeds preview limit')
@@ -243,7 +258,9 @@ class PreviewReader:
                                    and not e.filename.startswith('__MACOSX/')]
                         if not entries:
                             raise PreviewUnavailable('Archive has no supported image')
-                        if operation == 'manifest':
+                        if operation == 'tag_source':
+                            pass
+                        elif operation == 'manifest':
                             result = {'item_id':item_id, 'page_count':len(entries),
                                       'revision':current_revision}
                         else:
@@ -252,7 +269,7 @@ class PreviewReader:
                             # Stable sort preserves central-directory order for
                             # duplicate names; open the ZipInfo, not its name.
                             entry = (min(entries, key=lambda e: natural_key(e.filename))
-                                     if operation == 'preview' else
+                                     if operation in ('preview', 'tag_input') else
                                      sorted(entries, key=lambda e: natural_key(e.filename))[page])
                             if (entry.flag_bits & 1 or entry.file_size > MAX_IMAGE_BYTES
                                     or entry.file_size > max(1, entry.compress_size) * 200):
@@ -260,20 +277,22 @@ class PreviewReader:
                             with archive.open(entry) as image:
                                 data = image.read(MAX_IMAGE_BYTES + 1)
                             mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest','video','video_manifest','video_range') and len(data) > MAX_IMAGE_BYTES:
+                if operation not in ('manifest','video','video_manifest','video_range','tag_source') and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
-                if suffix in VIDEO_SUFFIXES:
+                if suffix in VIDEO_SUFFIXES or operation in ('tag_source', 'tag_input'):
                     # The native tools inherit this handle, never reopen a path.
                     # Do not publish its old frame if the location was replaced.
                     current = _safe_path(row['path'], row['relative_path']).stat(follow_symlinks=False)
                     if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
-                        if operation in ('video_manifest','video_range','video_frame'):raise ReaderChanged('Video location changed')
+                        if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input'):raise ReaderChanged('Source location changed')
                         raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
                     if operation != 'preview':
                         raise ReaderChanged('Source changed while reading')
                     raise PreviewUnavailable('Source changed while reading')
+                if operation == 'tag_source': return result
+                if operation == 'tag_input': return {'source': result, 'data': data, 'mime': mime}
                 if operation in ('manifest','video_manifest'):
                     return result
                 if operation=='video_range':return data,mime,info.st_size
