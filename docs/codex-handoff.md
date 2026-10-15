@@ -1,4 +1,37 @@
-## 最新：P2 由来付きタグ候補・承認/修正/却下APIの基盤（2026-10-16 JST）
+## 最新：P2 WD分類adapter・固定profile・明示的な上限付き導入手順（2026-10-16 JST）
+
+**現在フェーズ：P2の実adapter接続コードを追加。実モデル/追加packageの取得はユーザーへの確認待ちで未実行、実ONNX CPU推論/モデル品質は未検証。** WinUI候補/承認画面・OCR/複数ページ・候補の全体検索は未接続。P1 Windows確認済みを維持し、P0 v7 baseline済み・改善累積**1/2**・重み/閾値/routing変更0を維持。mock応答や前処理のPASSをモデル実行/精度のPASSとしない。
+
+開始HEAD **6845bd72490462bd2f5c07cb0fce38183c3e7239**。branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR5を継続。AGENTS/vision/priorities/両handoff/仕様/Issue4/PR5・remoteを照合、clean・差0/0から開始。実装commit **9096aed5c4fc4aa07638f88c85c67058cc03bf8f**、この記録を含む最終HEADはgit log参照。
+
+### 実装
+
+- [WD adapter仕様・制約・導入手順](wd-tagger.md)。`app/tagger_profile.py` / `app/tagger_worker.py` / `app/wd_tagger.py`、`config/tagger-profiles/wd-swinv2-v3.json`。model/revision/2artifact SHA256/入力形状/label数/threshold/topK/timeout/threadを固定、profile hashをproducer版へ。WD互換profileを製品serverの `--tagger-profile` で交換して再起動。公開APIへ任意path/modelを渡さず、起動時の自動取得なし。
+- 既存TagSuggestionsへadapter状態を接続し、ローカルasset/runtime markerが未導入なら理由付き503。導入後は画像/CBZ・ZIP表紙のbytesから分類→**未承認候補**まで。raw英語ラベルを保持し、一般>.35/キャラクター>.85/最大30、rating除外、NSFW語による除外なし。説明に分類出力と非確率・画像/表紙のみ/本文・人物関係は未確認を記録。閾値は作者demoの既定を事前採用し、生成図形で調整しない。
+- EXIF/最初のframe/白背景alpha合成/正方形余白/bicubic/BGR NHWC float32 0..255、8MiB/16Mpixel、ONNX署名・応答・profile key/有限score境界を検査。モデルはローカル固定SHA、CPU provider4threadsのみ。CPU初版でもAISearch.inferenceを共有し、索引/検索/解放との競合409・終了時last_activity更新。
+- 1要求1private worker、90秒timeout・約50ms取消/close監視。自分のPopen instanceだけkill/wait/pipe closeし常駐を残さない。Windows親process handle監視を再利用。main shutdownでtaggerを先にclose。永続queue/複数ページresume/batch/GPU版は未実装。
+- `tools/setup_wd_tagger.py`：既定dry-run。明示許可後だけ専用Windows x64 Python3.11 `.venv-ai`で `--install-and-download --rate 6000000`。既存ThrottledProxyで合計6MB/s以下、Xet高速経路無効、wheel hash固定・`--no-deps`・offline install・前後inventory/追加6package限定・pip check/CPU runtime import。既存packageの異なる版は置き換えず停止。既存PyTorch/driver/システムPythonを変更しない。導入完了markerは成功時だけ。
+- `tools/check_wd_runtime.py`：許可/導入後だけ使う実CPU/API smoke。固定の生成PNG2枚・CBZ1冊・破損PNG、一時DB、候補/再利用/承認/却下/メタデータ保持・source/model不変・所有worker終了を検査。**スクリプトは準備のみで、今回は未実行**。図形からイラスト/キャラクター精度を主張しない。
+
+### 検証と承認待ち
+
+- 専用venv inventory：EmbeddingGemma2/Laya、torch2.9.1+cu128等は存在、onnxruntime等6packageは未導入。私物/外部model cacheは探していない。公式model card/demo・HF公開metadata・308KBラベルCSV・PyPI metadataを読み取り、revision/サイズ/hash/依存を確定。model重み/wheelは取得していない。
+- 新adapter/controller/setup契約 **9 tests PASS / 6.676秒**。模擬JSONの**実子process**で上限/不正/timeout/取消/終了と共有排他、固定profile、設定変更由来、threshold/NSFW除外なし、既定dry-run、mock導入のハッシュ/offline/保全順序を確認。ONNX推論ではない。
+- 既存venvで `tools/check_wd_preprocessing.py` **4 tests PASS / 0.299秒**：実Pillow/numpyの生成pixel、BGR/shape/dtype/白背景/EXIF/byte/pixel guard、模擬session形状/不正出力。ONNX runtimeやmodelは未使用。
+- 既存候補API **19 PASS / 4.683秒**。途中全Python **334 PASS / 160.395秒**。導入処理のCPU runtime import検査と新mock導入testを加えた後、**最終全Python 335 PASS / 159.459秒 / skip0**。今回の対象/全体テストで未解決failureなし。
+- C#/XAML変更なし、Core/Windows Release/native GUIは今回は再実行せず前回の合格と区別。実CPUのタグ出力/速度・GPU・実ライブラリ・OCR・実品質・大規模性能は未検証。文書リンク78件/差分を確認。
+- 新規取得の確認をasyncで提示済み：**モデル/CSV467,769,446 bytes + wheel14,152,326 bytes = 481,921,772 bytes（約482MB）**、全取得合計6MB/s以下、専用venv/modelsだけ、生成fixtureでCPU動作確認。追加固定6packageはonnxruntime1.23.2/flatbuffers25.9.23/protobuf6.33.5/coloredlogs15.0.1/humanfriendly10.0/pyreadline3==3.5.4。**まだユーザーの許可回答は届いていない。経過時間や「続き」の一般指示を今回の新規取得承認に置き換えない。** 許可が来たら再確認せず導入→生成smokeへ進める。
+- 私物scan/変更/送信0、モデル重み/追加package DL・インストール0、OS変更0、CI dispatch0。3 workflows manual-onlyを確認。push後HEADのActions/checks・remote差分は読み取り確認してPR5へ記録する。
+
+### 次の異なる3手
+
+1. **WD導入/実CPU gate**：今回の取得許可の回答を確認。許可があれば上限付きsetupを専用環境で1回実行し、既存inventory保全・hash・offline CPU workerと生成素材だけのruntime API smoke/全worker終了を実測。失敗は部分導入と未検証を正確に記録し、無断の別モデル/依存取得へ広げない。精度評価は別gate。
+2. **WinUIの候補/根拠と修正承認/却下**：既存APIを使いpending/確定/stale・モデル未導入/失敗を区別。draft/scope/検索/readerを保持し、狭幅/取消/復帰を生成fixtureのWindows実機で確認。未承認候補の検索は明示した別条件にする。
+3. **代表素材での品質/OCR・複数ページ**：分類ラベル/日本語検索への寄与を固定評価し、未知/誤判定を記録。関係性は表紙で断定せず、ローカルOCR/本文索引と複数ページ根拠へ。モデル/依存追加・私物scanは明示許可が必要。P3論理作品/P4時間付き動画・音声、保存scope/一括除外/キーボードbacklogを保持。
+
+---
+
+## 履歴：P2 由来付きタグ候補・承認/修正/却下APIの基盤（2026-10-16 JST）
 
 **現在フェーズ：P2のバックエンド最初の縦切り。保存・履歴・承認APIと交換可能なadapter契約を実装。実タグ生成モデル・WinUI候補画面・OCR/複数ページ解析・候補の全体検索は未接続。** 製品既定はtagger未設定で生成503。偽adapterの契約検証をAIの品質や製品GUI完成として扱わない。P1類似検索/フォルダハブのWindows確認済みを維持し、**P0 v7 baseline済み・改善累積1/2（採用1）・重み/閾値/routing調整0**は変更しない。
 
