@@ -4,7 +4,7 @@ import threading
 from contextlib import closing
 from pathlib import Path
 from catalog import Catalog
-from library_index import LibraryIndex, TYPES
+from library_index import LibraryIndex, TYPES, is_folder_book, folder_title
 from search_terms import register as register_search_terms, split_terms, explain_matches
 from term_relations import TermRelations
 
@@ -53,18 +53,20 @@ class ProductionCatalog(Catalog):
 
     def sync_index(self):
         with self.connect() as db:
-            rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id,r.default_shelf FROM library_locations l '
+            rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id,r.default_shelf,r.path FROM library_locations l '
                               'JOIN library_roots r ON r.id=l.root_id '
                               'LEFT JOIN item_locations m ON m.location_id=l.id').fetchall()
             for row in rows:
+                title = (folder_title(row['path'], row['relative_path']) if is_folder_book(row['relative_path'])
+                         else Path(row['relative_path']).name)
                 if row['item_id'] is None:
                     item_id = db.execute('INSERT INTO items(title,kind,tags,shelf) VALUES(?,?,?,?)',
-                                         (Path(row['relative_path']).name,row['kind'],'[]',row['default_shelf'])).lastrowid
+                                         (title,row['kind'],'[]',row['default_shelf'])).lastrowid
                     db.execute('INSERT INTO item_locations VALUES(?,?)',(item_id,row['id']))
                 else:
                     # Only source-derived fields; never overwrite user tags/favorites.
                     db.execute('UPDATE items SET title=?,kind=? WHERE id=?',
-                               (Path(row['relative_path']).name,row['kind'],row['item_id']))
+                               (title,row['kind'],row['item_id']))
 
     @staticmethod
     def item(row):
@@ -191,7 +193,7 @@ class ProductionCatalog(Catalog):
             row=db.execute('SELECT l.relative_path,l.status,r.enabled,r.excludes_json FROM item_locations m '
                 'JOIN library_locations l ON l.id=m.location_id JOIN library_roots r ON r.id=l.root_id '
                 'WHERE m.item_id=?',(item_id,)).fetchone()
-            if row is None or not row['enabled'] or row['status'] != 'present' or Path(row['relative_path']).suffix.lower() not in ('.cbz','.zip'):
+            if row is None or not row['enabled'] or row['status'] != 'present' or not (is_folder_book(row['relative_path']) or Path(row['relative_path']).suffix.lower() in ('.cbz','.zip')):
                 raise KeyError(item_id)
             from library_index import _excluded
             if _excluded(row['relative_path'],tuple(json.loads(row['excludes_json']))):raise KeyError(item_id)
@@ -250,7 +252,7 @@ class ProductionCatalog(Catalog):
         with self.connect() as db:
             return [row[0] for row in db.execute("SELECT shelf FROM items WHERE shelf<>'' UNION SELECT default_shelf FROM library_roots WHERE default_shelf<>'' AND enabled=1 ORDER BY 1")]
 
-    def add_root(self,path,excludes=None,default_shelf=''):
+    def add_root(self,path,excludes=None,default_shelf='',folder_books=None):
         if not isinstance(path,str) or not path or not Path(path).is_absolute():
             raise ValueError('Choose an absolute folder path')
         source=Path(path).resolve()
@@ -258,7 +260,7 @@ class ProductionCatalog(Catalog):
             raise ValueError('The library must not contain the application database')
         with self._guard:
             self._require_idle()
-            return self.index.add_root(path,excludes,default_shelf)
+            return self.index.add_root(path,excludes,default_shelf,folder_books)
 
     def scan_state(self):
         with self.connect() as db:

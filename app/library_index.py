@@ -60,6 +60,47 @@ def _validate_excludes(patterns):
     return tuple(out)
 
 
+# A folder book is one location for all images directly inside a directory.
+# Its relative_path ends with "/" (a file path never does); the registered
+# folder itself is "./". Only roots registered with folder_books=1 produce
+# them: nothing is guessed from folder names or contents.
+FOLDER_ROOT = './'
+FOLDER_IMAGES = TYPES['image']
+
+
+def is_folder_book(relative_path) -> bool:
+    return isinstance(relative_path, str) and relative_path.endswith('/')
+
+
+def folder_directory(root, relative_path) -> Path:
+    """Directory of a folder book; relative_path is validated, never a client path."""
+    if not is_folder_book(relative_path):
+        raise ValueError('Not a folder book')
+    if relative_path == FOLDER_ROOT:
+        return Path(root)
+    inner = relative_path[:-1]
+    parts = PurePosixPath(inner).parts
+    if not inner or PurePosixPath(inner).is_absolute() or '..' in parts or '.' in parts or '\\' in inner:
+        raise ValueError('Invalid folder book location')
+    return Path(root).joinpath(*parts)
+
+
+def folder_signature(pages) -> tuple[int, int]:
+    """(total bytes, 63-bit content token) over sorted (name, size, mtime_ns).
+
+    The token is stored in mtime_ns so existing revision/cache keys change
+    when a page is added, removed, renamed or rewritten.
+    """
+    import hashlib
+    ordered = sorted(pages)
+    digest = hashlib.sha256(json.dumps(ordered, ensure_ascii=False).encode('utf-8')).digest()
+    return sum(size for _, size, _ in ordered), int.from_bytes(digest[:8], 'big') >> 1
+
+
+def folder_title(root_path, relative_path) -> str:
+    return Path(root_path).name if relative_path == FOLDER_ROOT else PurePosixPath(relative_path[:-1]).name
+
+
 def _reparse(info):
     return bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0))
 
@@ -117,6 +158,10 @@ class LibraryIndex:
             if 'enabled' not in {r['name'] for r in db.execute('PRAGMA table_info(library_roots)')}:
                 db.execute("ALTER TABLE library_roots ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
 
+            # Existing roots keep one item per image file.
+            if 'folder_books' not in {r['name'] for r in db.execute('PRAGMA table_info(library_roots)')}:
+                db.execute("ALTER TABLE library_roots ADD COLUMN folder_books INTEGER NOT NULL DEFAULT 0")
+
     @contextmanager
     def connect(self):
         db = sqlite3.connect(self.path, timeout=30)
@@ -128,9 +173,14 @@ class LibraryIndex:
         finally:
             db.close()
 
-    def add_root(self, path, excludes=None, default_shelf=''):
+    def add_root(self, path, excludes=None, default_shelf='', folder_books=None):
         if not isinstance(default_shelf,str) or len(default_shelf)>80:
             raise ValueError('Shelf must be 80 characters or less')
+        # None keeps a restored root's choice (False for a new root). The
+        # choice is fixed once a root has index records: switching would turn
+        # tagged image items into missing records instead of moving metadata.
+        if folder_books is not None and type(folder_books) is not bool:
+            raise ValueError('folder_books must be true or false')
         default_shelf=default_shelf.strip()
         requested = Path(path).expanduser()
         if requested.is_symlink():
@@ -157,13 +207,19 @@ class LibraryIndex:
                 existing = Path(row['path'])
                 if os.path.normcase(str(root)) == os.path.normcase(str(existing)):
                     if row['enabled']:raise ValueError('This root is already registered')
+                    if folder_books is not None:
+                        stored = db.execute('SELECT folder_books FROM library_roots WHERE id=?', (row['id'],)).fetchone()[0]
+                        if bool(stored) != folder_books and db.execute(
+                                'SELECT 1 FROM library_locations WHERE root_id=? LIMIT 1', (row['id'],)).fetchone():
+                            raise ValueError('Folder book mode cannot change after scanning')
+                        db.execute('UPDATE library_roots SET folder_books=? WHERE id=?', (int(folder_books), row['id']))
                     db.execute('UPDATE library_roots SET enabled=1,excludes_json=?,default_shelf=? WHERE id=?',
                         (json.dumps(patterns,ensure_ascii=False),default_shelf,row['id']))
                     return row['id']
                 if row['enabled'] and (existing in root.parents or root in existing.parents):
                     raise ValueError('Overlapping roots are not supported')
-            cursor = db.execute('INSERT INTO library_roots(path,excludes_json,created_at,default_shelf) VALUES(?,?,?,?)',
-                                (str(root), json.dumps(patterns, ensure_ascii=False), _now(), default_shelf))
+            cursor = db.execute('INSERT INTO library_roots(path,excludes_json,created_at,default_shelf,folder_books) VALUES(?,?,?,?,?)',
+                                (str(root), json.dumps(patterns, ensure_ascii=False), _now(), default_shelf, int(bool(folder_books))))
             return cursor.lastrowid
 
     def unregister(self,root_id):
@@ -191,6 +247,7 @@ class LibraryIndex:
             counts = dict(db.execute("SELECT root_id, count(*) FROM library_locations WHERE status='present' GROUP BY root_id").fetchall())
         for row in result:
             row['excludes'] = json.loads(row.pop('excludes_json'))
+            row['folder_books'] = bool(row['folder_books'])
             row['online'] = Path(row['path']).is_dir()
             row['present_count'] = counts.get(row['id'], 0)
         return result
@@ -233,6 +290,8 @@ class LibraryIndex:
             if not stat.S_ISDIR(root_info.st_mode) or _reparse(root_info) or root.is_symlink():
                 raise OSError(f'Root is no longer an ordinary directory: {root}')
             patterns = tuple(json.loads(row['excludes_json']))
+            folder_books = bool(row['folder_books'])
+            groups = {}
             counts = dict(discovered=0, added=0, changed=0, unchanged=0,
                           missing=0, excluded=0, skipped_links=0, ignored_files=0)
             seen = _now()
@@ -269,25 +328,17 @@ class LibraryIndex:
                         if kind is None:
                             counts['ignored_files'] += 1
                             continue
-                        counts['discovered'] += 1
-                        if progress and counts['discovered'] % 100 == 0:
-                            progress(counts['discovered'])
-                        db.execute('INSERT INTO scan_seen(path) VALUES(?)', (rel,))
-                        old = db.execute('SELECT id,kind,size_bytes,mtime_ns,status FROM library_locations '
-                                         'WHERE root_id=? AND relative_path=?', (root_id, rel)).fetchone()
-                        if old is None:
-                            counts['added'] += 1
-                            if not dry_run:
-                                db.execute('INSERT INTO library_locations(root_id,relative_path,kind,size_bytes,'
-                                           'mtime_ns,status,discovered_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?)',
-                                           (root_id, rel, kind, info.st_size, info.st_mtime_ns, 'present', seen, seen))
-                        else:
-                            dirty = (old['kind'] != kind or old['size_bytes'] != info.st_size or
-                                     old['mtime_ns'] != info.st_mtime_ns or old['status'] != 'present')
-                            counts['changed' if dirty else 'unchanged'] += 1
-                            if not dry_run:
-                                db.execute('UPDATE library_locations SET kind=?,size_bytes=?,mtime_ns=?,status=?,last_seen_at=? '
-                                           'WHERE id=?', (kind, info.st_size, info.st_mtime_ns, 'present', seen, old['id']))
+                        if folder_books and kind == 'image':
+                            parent = rel.rpartition('/')[0]
+                            groups.setdefault(parent + '/' if parent else FOLDER_ROOT, []).append(
+                                (entry.name, info.st_size, info.st_mtime_ns))
+                            continue
+                        self._record(db, root_id, rel, kind, info.st_size, info.st_mtime_ns, seen, counts, dry_run, progress)
+            for rel, pages in groups.items():
+                if cancelled and cancelled():
+                    raise InterruptedError('Scan cancelled; previous index preserved')
+                size, token = folder_signature(pages)
+                self._record(db, root_id, rel, 'book', size, token, seen, counts, dry_run, progress)
             if cancelled and cancelled():
                 raise InterruptedError('Scan cancelled; previous index preserved')
             # No missing inference happens until a complete, error-free tree walk.
@@ -303,3 +354,25 @@ class LibraryIndex:
                 db.execute('UPDATE library_roots SET last_scanned_at=? WHERE id=?', (seen, root_id))
             # TEMP table is connection-scoped, and dry-run has no persisted writes.
         return ScanCounts(root_id, bool(dry_run), **counts).as_dict()
+
+    @staticmethod
+    def _record(db, root_id, rel, kind, size, mtime_ns, seen, counts, dry_run, progress):
+        counts['discovered'] += 1
+        if progress and counts['discovered'] % 100 == 0:
+            progress(counts['discovered'])
+        db.execute('INSERT INTO scan_seen(path) VALUES(?)', (rel,))
+        old = db.execute('SELECT id,kind,size_bytes,mtime_ns,status FROM library_locations '
+                         'WHERE root_id=? AND relative_path=?', (root_id, rel)).fetchone()
+        if old is None:
+            counts['added'] += 1
+            if not dry_run:
+                db.execute('INSERT INTO library_locations(root_id,relative_path,kind,size_bytes,'
+                           'mtime_ns,status,discovered_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?)',
+                           (root_id, rel, kind, size, mtime_ns, 'present', seen, seen))
+        else:
+            dirty = (old['kind'] != kind or old['size_bytes'] != size or
+                     old['mtime_ns'] != mtime_ns or old['status'] != 'present')
+            counts['changed' if dirty else 'unchanged'] += 1
+            if not dry_run:
+                db.execute('UPDATE library_locations SET kind=?,size_bytes=?,mtime_ns=?,status=?,last_seen_at=? '
+                           'WHERE id=?', (kind, size, mtime_ns, 'present', seen, old['id']))

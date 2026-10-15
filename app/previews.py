@@ -10,7 +10,8 @@ import unicodedata
 import zipfile
 import zlib
 from pathlib import Path, PurePosixPath
-from library_index import _excluded, _reparse
+from library_index import (_excluded, _reparse, is_folder_book, folder_signature,
+                           FOLDER_ROOT, FOLDER_IMAGES)
 from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
                             VIDEO_SUFFIXES, MAX_VIDEO_BYTES)
 
@@ -173,6 +174,15 @@ class PreviewReader:
         """Bounded image/first cover bytes and provenance from the same handle."""
         return self._read(item_id, operation='tag_input')
 
+    def _read_folder(self, row, item_id, operation, page, revision):
+        try:
+            return _folder_read(row, item_id, operation, page, revision)
+        except PreviewUnavailable:
+            raise
+        except OSError as error:
+            # A vanished/replaced page or folder is a rescan case, never a crash.
+            raise (ReaderChanged if operation != 'preview' else PreviewUnavailable)('Folder book changed') from error
+
     def _read(self, item_id, operation='preview', page=0, revision=None,start=None,end=None):
         if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
             raise PreviewUnavailable('Invalid item')
@@ -187,6 +197,8 @@ class PreviewReader:
                 raise PreviewUnavailable('Location unavailable')
             if _excluded(row['relative_path'], tuple(json.loads(row['excludes_json']))):
                 raise PreviewUnavailable('Location excluded')
+            if is_folder_book(row['relative_path']):
+                return self._read_folder(row, item_id, operation, page, revision)
             source = _safe_path(row['path'], row['relative_path'])
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES:
@@ -303,4 +315,96 @@ class PreviewReader:
             raise PreviewUnavailable('Invalid or unsupported archive') from error
         finally:
             self.slots.release()
+
+
+
+def _safe_folder(root, relative):
+    """Directory of a folder book, rechecked for links/junctions on every read."""
+    if relative == FOLDER_ROOT:
+        directory = Path(root)
+        for component in [*reversed(directory.parents), directory]:
+            info = component.stat(follow_symlinks=False)
+            if _reparse(info) or stat.S_ISLNK(info.st_mode):
+                raise PreviewUnavailable('Linked locations are not previewed')
+    else:
+        inner = relative[:-1]
+        if not inner or '.' in PurePosixPath(inner).parts:
+            raise PreviewUnavailable('Invalid location')
+        directory = _safe_path(root, inner)
+    if not stat.S_ISDIR(directory.stat(follow_symlinks=False).st_mode):
+        raise PreviewUnavailable('Folder book is no longer a folder')
+    return directory
+
+
+def folder_pages(directory, relative, patterns):
+    """Direct image children as the scan sees them: regular, unlinked, not excluded."""
+    pages = []
+    with os.scandir(directory) as entries:
+        for entry in entries:
+            info = entry.stat(follow_symlinks=False)
+            if stat.S_ISLNK(info.st_mode) or _reparse(info) or not stat.S_ISREG(info.st_mode):
+                continue
+            if Path(entry.name).suffix.casefold() not in FOLDER_IMAGES:
+                continue
+            child = entry.name if relative == FOLDER_ROOT else relative + entry.name
+            if _excluded(child, patterns):
+                continue
+            pages.append((entry.name, info.st_size, info.st_mtime_ns))
+    return pages
+
+
+def _folder_read(row, item_id, operation, page, revision):
+    """Pages of an image folder registered as one book. Read-only, bounded."""
+    if operation in ('video', 'video_manifest', 'video_range', 'video_frame'):
+        raise PreviewUnavailable('Video player requires a supported video item')
+    relative = row['relative_path']
+    try:
+        directory = _safe_folder(row['path'], relative)
+        pages = folder_pages(directory, relative, tuple(json.loads(row['excludes_json'])))
+        directory_info = directory.stat(follow_symlinks=False)
+    except FileNotFoundError as error:
+        raise PreviewUnavailable('Folder book unavailable') from error
+    size, token = folder_signature(pages)
+    if (size, token) != (row['size_bytes'], row['mtime_ns']):
+        if operation != 'preview':
+            raise ReaderChanged('Rescan changed files before reading')
+        raise PreviewUnavailable('Rescan changed files before previewing')
+    identity = [row['root_id'], relative, directory_info.st_dev, directory_info.st_ino, size, token]
+    current_revision = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode('utf-8')).hexdigest()
+    if revision is not None and revision != current_revision:
+        raise ReaderChanged('Archive changed; reopen the reader')
+    shown = sorted((p for p in pages if Path(p[0]).suffix.casefold() in IMAGE_MIME), key=lambda p: natural_key(p[0]))
+    if not shown:
+        raise PreviewUnavailable('Folder has no supported image')
+    source = {'item_id': item_id, 'revision': current_revision, 'kind': 'cover', 'page': 0}
+    if operation == 'tag_source':
+        return source
+    if operation == 'manifest':
+        if len(shown) > 10000:
+            raise PreviewUnavailable('Folder has too many pages')
+        return {'item_id': item_id, 'page_count': len(shown), 'revision': current_revision}
+    index = page if operation == 'page' else 0
+    if index >= len(shown):
+        raise PreviewUnavailable('Page unavailable')
+    name, expected_size, expected_mtime = shown[index]
+    if expected_size > MAX_IMAGE_BYTES:
+        raise PreviewUnavailable('Image exceeds preview limit')
+    path = directory / name
+    initial = path.stat(follow_symlinks=False)
+    with path.open('rb') as file:
+        info = os.fstat(file.fileno())
+        if (not stat.S_ISREG(info.st_mode) or _reparse(info) or stat.S_ISLNK(initial.st_mode)
+                or (info.st_ino, info.st_dev) != (initial.st_ino, initial.st_dev)
+                or (info.st_size, info.st_mtime_ns) != (expected_size, expected_mtime)):
+            raise ReaderChanged('Source changed while reading')
+        data = file.read(MAX_IMAGE_BYTES + 1)
+        after = os.fstat(file.fileno())
+    if len(data) > MAX_IMAGE_BYTES or len(data) != expected_size:
+        raise ReaderChanged('Source changed while reading')
+    if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
+        raise ReaderChanged('Source changed while reading')
+    mime = IMAGE_MIME[Path(name).suffix.casefold()]
+    if operation == 'tag_input':
+        return {'source': source, 'data': data, 'mime': mime}
+    return data, mime
 

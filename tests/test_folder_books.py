@@ -1,0 +1,170 @@
+"""Image folders registered as books: explicit opt-in only, read-only paging."""
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'app'))
+sys.path.insert(0, str(ROOT / 'tools'))
+from production import ProductionCatalog
+from previews import PreviewReader, PreviewUnavailable, ReaderChanged
+from create_preview_fixture import png
+
+
+class FolderBookTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name)
+        self.media = base / 'books'
+        (self.media / '作品A').mkdir(parents=True)
+        (self.media / '作品B' / 'おまけ').mkdir(parents=True)
+        for name, color in (('p10.png', (1, 2, 3)), ('p2.png', (4, 5, 6)), ('p1.jpg', (7, 8, 9))):
+            (self.media / '作品A' / name).write_bytes(png(color=color))
+        (self.media / '作品A' / 'note.txt').write_bytes(b'fiction')
+        (self.media / '作品A' / 'cover.psd').write_bytes(b'8BPS')
+        (self.media / '作品B' / '01.png').write_bytes(png())
+        (self.media / '作品B' / 'おまけ' / 'extra.webp').write_bytes(png())
+        (self.media / '作品B' / 'clip.mp4').write_bytes(b'\0' * 16)
+        self.catalog = ProductionCatalog(base / 'catalog.sqlite')
+        self.addCleanup(self.catalog.close)
+        self.reader = PreviewReader(self.catalog)
+
+    def index(self, root):
+        counts = self.catalog.index.scan(root)
+        self.catalog.sync_index()
+        return counts, {r['relative_path']: r for r in self.catalog.search(root_id=root)['items']}
+
+    def test_default_root_keeps_one_item_per_image(self):
+        root = self.catalog.add_root(str(self.media))
+        self.assertFalse(self.catalog.index.roots()[0]['folder_books'])
+        _, items = self.index(root)
+        self.assertIn('作品A/p10.png', items)
+        self.assertFalse(any(path.endswith('/') for path in items))
+
+    def test_opted_in_root_groups_direct_images_per_folder(self):
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        self.assertTrue(self.catalog.index.roots()[0]['folder_books'])
+        counts, items = self.index(root)
+        self.assertEqual(sorted(items), ['作品A/', '作品A/cover.psd', '作品B/', '作品B/clip.mp4', '作品B/おまけ/'])
+        self.assertEqual(counts['discovered'], 5)
+        book = items['作品A/']
+        self.assertEqual((book['kind'], book['title']), ('book', '作品A'))
+        self.assertEqual(items['作品B/おまけ/']['title'], 'おまけ')
+        # Natural page order over displayable images; text/PSD/video stay out.
+        manifest = self.reader.manifest(book['id'])
+        self.assertEqual(manifest['page_count'], 3)
+        pages = [self.reader.read_page(book['id'], i, manifest['revision'])[0] for i in range(3)]
+        expected = [(self.media / '作品A' / n).read_bytes() for n in ('p1.jpg', 'p2.png', 'p10.png')]
+        self.assertEqual(pages, expected)
+        self.assertEqual(self.reader.read(book['id'])[0], expected[0])
+        self.assertEqual(self.reader.tag_source(book['id'])['revision'], manifest['revision'])
+        self.assertEqual(self.reader.tag_input(book['id'])['data'], expected[0])
+        self.assertEqual(self.catalog.reader_progress(book['id']), {'progress': None})
+        with self.assertRaises(PreviewUnavailable):
+            self.reader.read_page(book['id'], 3, manifest['revision'])
+        with self.assertRaises(PreviewUnavailable):
+            self.reader.read_video(book['id'])
+
+    def test_loose_images_in_root_become_a_book_named_after_the_root(self):
+        (self.media / 'loose.png').write_bytes(png())
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        self.assertEqual(items['./']['title'], 'books')
+        self.assertEqual(self.reader.manifest(items['./']['id'])['page_count'], 1)
+
+    def test_page_changes_need_rescan_and_keep_metadata(self):
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        book = items['作品A/']
+        self.catalog.update([book['id']], {'tags': ['お気に入り作家'], 'shelf': '読む'})
+        old = self.reader.manifest(book['id'])['revision']
+        (self.media / '作品A' / 'p3.png').write_bytes(png(color=(9, 9, 9)))
+        with self.assertRaises(ReaderChanged):
+            self.reader.manifest(book['id'])
+        with self.assertRaises(PreviewUnavailable):
+            self.reader.read(book['id'])
+        counts, items = self.index(root)
+        self.assertEqual(counts['changed'], 1)
+        same = items['作品A/']
+        self.assertEqual(same['id'], book['id'])
+        self.assertEqual((same['tags'], same['shelf']), (['お気に入り作家'], '読む'))
+        manifest = self.reader.manifest(same['id'])
+        self.assertEqual(manifest['page_count'], 4)
+        self.assertNotEqual(manifest['revision'], old)
+        with self.assertRaises(ReaderChanged):
+            self.reader.read_page(same['id'], 0, old)
+        # Removing every image marks the book missing; records are kept.
+        for page in (self.media / '作品A').glob('*.*'):
+            if page.suffix in ('.png', '.jpg'):
+                page.unlink()
+        counts, _ = self.index(root)
+        self.assertEqual(counts['missing'], 1)
+
+    def test_exclusions_apply_to_pages(self):
+        root = self.catalog.add_root(str(self.media), ['作品A/p2.png', 'おまけ'], folder_books=True)
+        _, items = self.index(root)
+        self.assertNotIn('作品B/おまけ/', items)
+        self.assertEqual(self.reader.manifest(items['作品A/']['id'])['page_count'], 2)
+
+    def test_mode_is_fixed_after_scanning(self):
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        self.index(root)
+        self.catalog.index.unregister(root)
+        with self.assertRaisesRegex(ValueError, 'cannot change'):
+            self.catalog.add_root(str(self.media), folder_books=False)
+        self.assertEqual(self.catalog.add_root(str(self.media)), root)
+        self.assertTrue(self.catalog.index.roots()[0]['folder_books'])
+        with self.assertRaises(ValueError):
+            self.catalog.add_root(str(self.media / 'x'), folder_books='yes')
+
+    def test_http_registration_reader_and_specific_errors(self):
+        import json, threading, urllib.error, urllib.request
+        from http.server import ThreadingHTTPServer
+        from production_server import production_handler, DisabledAI
+        server = ThreadingHTTPServer(('127.0.0.1', 0), production_handler(self.catalog, 'tok', ai=DisabledAI()))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close); self.addCleanup(server.shutdown)
+        origin = f'http://127.0.0.1:{server.server_port}'
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+        def call(route, body=None):
+            data = None if body is None else json.dumps(body).encode()
+            request = urllib.request.Request(origin + route, data, headers={
+                'Origin': origin, 'X-Aredoko-Token': 'tok', 'Content-Type': 'application/json'})
+            try:
+                with opener.open(request) as response:
+                    return response.status, json.loads(response.read())
+            except urllib.error.HTTPError as error:
+                with error: return error.code, json.loads(error.read())
+
+        base = {'path': str(self.media), 'consent': True}
+        self.assertEqual(call('/api/library/roots', {**base, 'folder_books': 'yes'}),
+                         (400, {'error': 'folder_books must be true or false'}))
+        self.assertEqual(call('/api/library/roots', {'path': str(self.media)}),
+                         (400, {'error': 'Explicit folder consent required'}))
+        status, body = call('/api/library/roots', {**base, 'folder_books': True})
+        self.assertEqual(status, 200)
+        self.assertEqual(call('/api/library/roots', base), (400, {'error': 'This root is already registered'}))
+        self.assertEqual(call('/api/library/roots', {**base, 'path': str(self.media / '作品A')}),
+                         (400, {'error': 'Overlapping roots are not supported'}))
+        self.assertTrue(call('/api/library/roots')[1]['items'][0]['folder_books'])
+        _, items = self.index(body['root_id'])
+        book = items['作品A/']['id']
+        status, manifest = call(f'/api/library/reader/{book}')
+        self.assertEqual((status, manifest['page_count']), (200, 3))
+
+    @unittest.skipIf(os.name == 'nt', 'symlink creation needs privileges on Windows')
+    def test_linked_pages_are_not_read(self):
+        outside = Path(self.tmp.name) / 'outside.png'
+        outside.write_bytes(png())
+        os.symlink(outside, self.media / '作品A' / 'p0.png')
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        self.assertEqual(self.reader.manifest(items['作品A/']['id'])['page_count'], 3)
+
+
+if __name__ == '__main__':
+    unittest.main()

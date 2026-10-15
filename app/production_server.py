@@ -41,6 +41,27 @@ class DisabledAI:
     def release(self): raise AIUnavailable(self.status()['error'])
     def close(self): pass
 
+# Fixed, path-free folder validation messages the GUI can explain (in
+# Japanese via ErrorText); any other ValueError stays generic.
+PUBLIC_FOLDER_ERRORS = frozenset({
+    'Explicit folder consent required',
+    'Choose an absolute folder path',
+    'The library must not contain the application database',
+    'Shelf must be 80 characters or less',
+    'Symlink roots are not supported',
+    'Root must exist and be accessible',
+    'Reparse-point roots are not supported',
+    'Root must be an existing ordinary directory',
+    'Overlapping roots are not supported',
+    'This root is already registered',
+    'Exclusion patterns must be a list (max 64)',
+    'Invalid exclusion pattern',
+    'Use relative POSIX-style exclusion patterns',
+    'folder_books must be true or false',
+    'Folder book mode cannot change after scanning',
+})
+
+
 def create_ai(catalog,profile_path=None,ranking='mean-rrf'):
     repo=Path(__file__).resolve().parents[1]
     try:
@@ -349,7 +370,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except KeyError: return self.send(404,{'error':'Related-term entry not found'})
                 if self.path=='/api/library/roots':
                     if body.get('consent') is not True: raise ValueError('Explicit folder consent required')
-                    return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'),body.get('default_shelf',''))})
+                    return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'),body.get('default_shelf',''),body.get('folder_books'))})
                 if self.path=='/api/library/roots/shelf':
                     if set(body)-{'root_id','shelf','fill_unset'}:raise ValueError('Invalid root filter')
                     return self.send(200,catalog.set_root_shelf(body.get('root_id'),body.get('shelf'),body.get('fill_unset',False)))
@@ -364,7 +385,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 return self.send(404,{'error':'Not found'})
             except (ScanBusyError,AIBusy) as ex: return self.send(409,{'error':str(ex)})
             except AIUnavailable as ex: return self.send(503,{'error':str(ex)})
-            except (ValueError,TypeError): return self.send(400,{'error':'Invalid request: check folder, exclusions or scan state'})
+            except (ValueError,TypeError) as ex: return self.send(400,{'error':str(ex) if str(ex) in PUBLIC_FOLDER_ERRORS else 'Invalid request: check folder, exclusions or scan state'})
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})
     return Handler
