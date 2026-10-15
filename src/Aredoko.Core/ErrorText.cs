@@ -11,6 +11,8 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
+        ["Similarity source unavailable"] = "起点の作品がAI対象の範囲外か、登録解除・除外されています。AI索引の対象と検索フォルダを確認してください。",
+        ["Invalid similarity source"] = "類似検索は画像・本・ZIPの表紙から利用できます。",
         ["Video range outside source"] = "動画の範囲が変わりました。開き直してください。",
         ["Invalid video range request"] = "動画の読み取り範囲が無効です。開き直してください。",
         ["Archive changed; reopen before saving progress"] = "本が更新されました。開き直してから読書位置を保存してください。",

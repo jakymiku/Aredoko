@@ -32,6 +32,7 @@ class DisabledAI:
                 'skipped':0,'error':self.error}
     def start(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def search(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
+    def similar(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def coverage(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def cancel_build(self): return {'cancel_requested':False}
     def release(self): raise AIUnavailable(self.status()['error'])
@@ -266,6 +267,13 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                             return self.send(409,{'error':'AIリソース設定を保存できません。設定ファイルを確認してください。動作中の設定は保持されます。'})
                         if isinstance(ai,AISearch): ai.configure(**policy)
                     return self.send(200,{'saved':True,'policy':policy})
+                if self.path=='/api/library/ai/similar':
+                    if set(body)-{'item_id','kind','view','page','limit','scope'}:raise ValueError('Invalid similarity request')
+                    scope=validate_scope(body['scope']) if 'scope' in body else profiles.scope()
+                    try:
+                        return self.send(200,ai.similar(body.get('item_id'),body.get('kind',''),body.get('view','all'),
+                            body.get('page',0),body.get('limit',60),scope=scope))
+                    except KeyError:return self.send(404,{'error':'Similarity source unavailable'})
                 if self.path=='/api/library/ai/search':
                     scope_args={'scope':validate_scope(body['scope'])} if 'scope' in body else {}
                     if 'literal_only' in body:scope_args['literal_only']=body['literal_only']

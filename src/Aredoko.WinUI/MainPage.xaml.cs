@@ -40,6 +40,11 @@ public sealed partial class MainPage : Page
     private JsonObject? aiScope;
     private string aiScopeError="AI索引の画面で対象を確認・保存してください。";
     private string view="all", lastQuery="";
+    private MediaRow? similarityOrigin;
+    private CancellationTokenSource? similarityCancellation;
+    private bool returningFromSimilarity;
+    private SearchBookmark? similarityReturn;
+    private sealed record SearchBookmark(string Query,int Kind,int Mode,int? Root,bool LiteralOnly,double? Boundary,int Group,string View,int Page,int Selection);
 
     public MainPage() {
         InitializeComponent();
@@ -118,18 +123,22 @@ public sealed partial class MainPage : Page
     private string KindValue()=>Kind.SelectedIndex switch {1=>"book",2=>"image",3=>"video",4=>"audio",5=>"archive",6=>"material",_=>""};
     private async Task LoadAsync() {
         var version=searches.Next(); Busy.Visibility=Visibility.Visible;
+        similarityCancellation?.Cancel();similarityCancellation?.Dispose();similarityCancellation=new();
+        var cancellation=similarityCancellation.Token;var origin=similarityOrigin;
         // Do not allow editing an old record while a different result is loading.
         Editor.IsEnabled=false; Items.IsEnabled=false;
         var query=Query.Text; var kind=KindValue();var selectedKind=Kind.SelectedIndex;var selectedMode=SearchMode.SelectedIndex;var selectedRoot=SelectedRoot();var literalOnly=AIMatchedOnly.IsChecked==true;var boundary=BoundaryValue();var resultGroup=AIResultGroup.SelectedIndex;
         try {
             var method=SearchMethod.FromIndex(selectedMode);
-            if(selectedMode>0&&!string.IsNullOrWhiteSpace(query)&&aiScope is null)throw new InvalidOperationException(aiScopeError);
-            var result=await api.SearchAsync(query,kind,view,page,method.IsAI,method.Source,aiScope,selectedRoot,literalOnly,boundary,ResultGroup());
+            if((origin is not null||selectedMode>0&&!string.IsNullOrWhiteSpace(query))&&aiScope is null)throw new InvalidOperationException(aiScopeError);
+            var result=origin is not null
+                ? await api.SimilarAsync(origin.Id,kind,view,page,aiScope!,selectedRoot,cancellation)
+                : await api.SearchAsync(query,kind,view,page,method.IsAI,method.Source,aiScope,selectedRoot,literalOnly,boundary,ResultGroup());
             if(!searches.IsCurrent(version)||disposed)return;
             if(result.Items.Count==0 && page>0){page=Math.Max(0,(result.Total-1)/60);await LoadAsync();return;}
             lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;lastRoot=selectedRoot;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;
             SearchOptions.IsExpanded=false;
-            SearchOptions.Header=$"検索フォルダ: {(selectedRoot is null?"すべて":System.IO.Path.GetFileName((SearchRoot.SelectedItem as ComboBoxItem)?.Content?.ToString()??""))}"+(selectedMode>0?$" · {(resultGroup==0?"上位候補":resultGroup==1?"参考候補":"全候補")}":"");
+            SearchOptions.Header=$"検索フォルダ: {(selectedRoot is null?"すべて":System.IO.Path.GetFileName((SearchRoot.SelectedItem as ComboBoxItem)?.Content?.ToString()??""))}"+(origin is not null?" · 画像・表紙の類似検索":selectedMode>0?$" · {(resultGroup==0?"上位候補":resultGroup==1?"参考候補":"全候補")}":"");
             rows=result.Items; active=null; Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+59)/60)}";
@@ -139,7 +148,14 @@ public sealed partial class MainPage : Page
             if(selectedMode>0&&query.Length>0&&rows.Count==0&&resultGroup==1&&result.GroupBoundary is null)Empty.Text="参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像・表紙／AI文章で区切りを指定してください。";
             else if(selectedMode>0&&query.Length>0&&rows.Count==0&&resultGroup==0&&result.OtherTotal>0)Empty.Text="区切り以上の候補はありません。類似度の区切りを下げるか、参考候補を表示してください。";
             Notice("読込完了",selectedMode>0 && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。画像・表紙とAI文章では区切りを手動指定できます。")}" : selectedMode>0 ? "探したい内容を文章で入力してください。AI索引の作成は「AI索引」から。" : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions));
-        } catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoot=selectedRoot;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;rows=[];active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=selectedMode>0?"この条件ではAI検索を利用できません。\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。":"検索を完了できませんでした。再接続からやり直してください。";Failure(ex);} }
+            if(origin is not null)
+            {
+                var guidance=SimilaritySearch.Guidance(result.SimilarityStatus);
+                Empty.Text=result.SimilarityStatus=="ready"?"この範囲に索引済みの類似候補はありません。種類・フォルダ・AI対象を確認してください。":guidance;
+                Notice("画像・表紙の類似検索",guidance+$" 最大{result.CoverageLimit??10000:N0}件の対象から表示します。");
+            }
+        } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { }
+        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoot=selectedRoot;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;rows=[];active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode>0?"この条件ではAI検索を利用できません。\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。":"検索を完了できませんでした。再接続からやり直してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
     private void RenderRows()
@@ -184,6 +200,7 @@ public sealed partial class MainPage : Page
                 content.Children.Add(image); content.Children.Add(text);
                 var item = new ListViewItem { Content = content, Width = tiles ? 232 : double.NaN, HorizontalContentAlignment = HorizontalAlignment.Stretch };
                 item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
+                if(SimilaritySearch.CanStart(row))item.ContextFlyout=SimilarityMenu(row);
                 var renderToken = renderCancellation.Token;
                 CancellationTokenSource? visible = null;
                 item.Loaded += async (_, _) =>
@@ -206,6 +223,50 @@ public sealed partial class MainPage : Page
         finally { populating = false; }
     }
     private static string KindLabel(string kind) => kind switch { "book" => "本", "image" => "画像", "archive" => "ZIP", "video" => "動画", "audio" => "音楽", _ => "素材" };
+    private MenuFlyout SimilarityMenu(MediaRow row)
+    {
+        var menu=new MenuFlyout();var search=new MenuFlyoutItem {Text="似た画像・素材を探す"};
+        AutomationProperties.SetAutomationId(search,"FindSimilar"+row.Id);
+        search.Click+=async(_,_)=>await StartSimilarityAsync(row);
+        menu.Items.Add(search);return menu;
+    }
+    private void ClearSimilarity()
+    {
+        similarityOrigin=null;similarityReturn=null;UpdateSearchMethod();
+    }
+    private async Task StartSimilarityAsync(MediaRow source)
+    {
+        if(!ready||disposed||saving||dialogOpen||!SimilaritySearch.CanStart(source)||!await transitions.WaitAsync(0))return;
+        searchTimer.Stop();
+        try
+        {
+            if(!await ConfirmDiscardAsync())return;
+            // Use the context-menu row, never whichever item happens to be selected.
+            similarityReturn??=new(lastQuery,lastKind,lastMode,lastRoot,lastLiteralOnly,lastBoundary,lastResultGroup,view,page,source.Id);
+            similarityOrigin=source;page=0;UpdateSearchMethod();await LoadAsync();
+        }
+        finally{transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
+    }
+    private async void SimilarityBack_Click(object sender,RoutedEventArgs e)
+    {
+        if(returningFromSimilarity||disposed||dialogOpen||saving||similarityReturn is null)return;
+        returningFromSimilarity=true;searchTimer.Stop();
+        // Invalidate before waiting for the in-flight request's transition lock.
+        searches.Next();similarityCancellation?.Cancel();
+        await transitions.WaitAsync();
+        try
+        {
+            if(disposed||!await ConfirmDiscardAsync()||similarityReturn is not SearchBookmark bookmark)return;
+            populating=true;
+            Query.Text=bookmark.Query;Kind.SelectedIndex=bookmark.Kind;SearchMode.SelectedIndex=bookmark.Mode;
+            RestoreSearchRoot(bookmark.Root);AIMatchedOnly.IsChecked=bookmark.LiteralOnly;
+            SimilarityBoundary.Value=bookmark.Boundary??double.NaN;AIResultGroup.SelectedIndex=bookmark.Group;
+            view=bookmark.View;page=bookmark.Page;ClearSimilarity();RestoreNavigation();populating=false;
+            await LoadAsync();
+            Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==bookmark.Selection)?.Focus(FocusState.Keyboard);
+        }
+        finally{populating=false;returningFromSimilarity=false;transitions.Release();}
+    }
     private static string AvailabilityLabel(string state) => state switch { "present" => "登録済み", "missing" => "ファイル不明", _ => state };
     private async Task ShowDetailPreviewAsync(MediaRow row)
     {
@@ -220,10 +281,11 @@ public sealed partial class MainPage : Page
         }
         catch (OperationCanceledException) { }
     }
-    private async Task NavigateAsync(int nextPage) {
+    private async Task NavigateAsync(int nextPage,bool normalSearch=false) {
         if(!ready||saving||!await transitions.WaitAsync(0))return;
         try {
             if(!await ConfirmDiscardAsync()){populating=true;Query.Text=lastQuery;Kind.SelectedIndex=lastKind;SearchMode.SelectedIndex=lastMode;RestoreSearchRoot(lastRoot);AIMatchedOnly.IsChecked=lastLiteralOnly;SimilarityBoundary.Value=lastBoundary??double.NaN;AIResultGroup.SelectedIndex=lastResultGroup;UpdateSearchMethod();populating=false;return;}
+            if(normalSearch||Query.Text!=lastQuery||SearchMode.SelectedIndex!=lastMode)ClearSimilarity();
             page=nextPage;await LoadAsync();
         }finally{transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
@@ -237,6 +299,7 @@ public sealed partial class MainPage : Page
             active=rows[index]; saved=new(string.Join(", ",active.Tags),active.Shelf,active.Favorite,active.Reviewed);
             Tags.Text=saved.Tags;Shelf.Text=saved.Shelf;Favorite.IsChecked=saved.Favorite;Reviewed.IsChecked=saved.Reviewed;
             ItemTitle.Text=active.Title;ItemPath.Text=active.Location;Editor.IsEnabled=true;DetailsButton.IsEnabled=true;Details.IsPaneOpen=true;
+            DetailPreview.ContextFlyout=SimilaritySearch.CanStart(active)?SimilarityMenu(active):null;
             UpdateDirty();
             _ = ShowDetailPreviewAsync(active);
         }finally{transitions.Release();}
@@ -288,18 +351,21 @@ public sealed partial class MainPage : Page
     private async void SaveShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;await SaveAsync();}
     private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;if(ready&&!dialogOpen)Query.Focus(FocusState.Keyboard);}
     private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
-    private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0);}
+    private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0,true);}
     private void UpdateSearchMethod()
     {
         // SelectionChanged also runs during initialization and dirty-state rollback.
-        if(Query is null || SearchMethodHint is null)return;
-        var ai=SearchMode.SelectedIndex>0;
+        if(Query is null || SearchMethodHint is null || SimilarityBar is null || SimilarityTitle is null)return;
+        var similar=similarityOrigin is not null;
+        SimilarityBar.Visibility=similar?Visibility.Visible:Visibility.Collapsed;
+        SimilarityTitle.Text=similar?"類似検索の起点: "+similarityOrigin!.Title:"";
+        var ai=SearchMode.SelectedIndex>0&&!similar;
         AutomationProperties.SetName(Query,ai?"AI検索の文章":"名前・タグ検索");
-        SimilarityBoundary.Visibility=SearchMode.SelectedIndex is 2 or 3?Visibility.Visible:Visibility.Collapsed;
+        SimilarityBoundary.Visibility=!similar&&SearchMode.SelectedIndex is 2 or 3?Visibility.Visible:Visibility.Collapsed;
         AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         Query.PlaceholderText=ai?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
-        SearchMethodHint.Text=SearchMode.SelectedIndex switch
+        SearchMethodHint.Text=similar?"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":SearchMode.SelectedIndex switch
         {
             1=>"名前・タグと画像・表紙を組み合わせて探します。",
             2=>"色・形・見た目を文章で指定し、画像・表紙から探します。",
@@ -795,6 +861,6 @@ public sealed partial class MainPage : Page
         finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
     }
 
-    public void Stop(){disposed=true;viewerWindow?.Close();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
+    public void Stop(){disposed=true;viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
 }
 

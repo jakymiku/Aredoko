@@ -5,7 +5,9 @@ using System.Text.Json.Nodes;
 namespace Aredoko.Core;
 public sealed class LibraryApi : IDisposable
 {
-    private readonly HttpClient client = new(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = new Uri("http://127.0.0.1:8769/"), Timeout = TimeSpan.FromSeconds(40) };
+    private readonly HttpClient client;
+    public LibraryApi() : this(new HttpClientHandler { AllowAutoRedirect = false }) { }
+    public LibraryApi(HttpMessageHandler handler) => client = new(handler) { BaseAddress = new Uri("http://127.0.0.1:8769/"), Timeout = TimeSpan.FromSeconds(40) };
     public Task<ArchiveManifest> ReaderManifestAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ManifestAsync(id, cancellation);
     public Task<ReaderProgress?> ReaderProgressAsync(int id,CancellationToken cancellation)=>new ArchiveReaderClient(client).ProgressAsync(id,cancellation);
@@ -36,6 +38,11 @@ public sealed class LibraryApi : IDisposable
         return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRoute(q,kind,view,page,rootId)));
     }
     public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed));
+    public async Task<SearchResponse> SimilarAsync(int itemId,string kind,string view,int page,JsonObject scope,int? rootId,CancellationToken cancellation)
+    {
+        var result=await PostAsync("api/library/ai/similar",SimilaritySearch.Request(itemId,kind,view,page,scope,rootId).ToJsonString(),cancellation);
+        return Protocol.ParseSearch(result.ToJsonString());
+    }
     public Task<string> ExportRelatedTermsAsync() => GetTextAsync("api/library/terms/export");
     public Task<JsonNode> ImportRelatedTermsAsync(string document) => PostAsync("api/library/terms/import", document);
     public async Task<JsonNode> GetAsync(string route) => JsonNode.Parse(await GetTextAsync(route))!;
@@ -46,10 +53,10 @@ public sealed class LibraryApi : IDisposable
         return text;
     }
     public Task<JsonNode> PostAsync(string route,JsonObject data) => PostAsync(route,data.ToJsonString());
-    private async Task<JsonNode> PostAsync(string route,string data) {
+    private async Task<JsonNode> PostAsync(string route,string data,CancellationToken cancellation=default) {
         using var content=new StringContent(data,Encoding.UTF8,"application/json");
-        using var response=await client.PostAsync(route,content);
-        var text=await response.Content.ReadAsStringAsync();
+        using var response=await client.PostAsync(route,content,cancellation);
+        var text=await response.Content.ReadAsStringAsync(cancellation);
         if(!response.IsSuccessStatusCode) throw new InvalidOperationException(ErrorText.FromResponse(text,(int)response.StatusCode));
         return JsonNode.Parse(text)!;
     }

@@ -31,10 +31,11 @@ public sealed class MediaRow
     public string SimilarityGroup { get; set; } = "";
     public double? SemanticScore { get; set; }
     public string ScoreKind { get; set; } = "";
+    public int? SimilarityOriginId { get; set; }
     public int LiteralHits { get; set; }
     public int LiteralWords { get; set; }
     public string AIEvidence => SemanticScore is double score
-        ? (LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
+        ? (SimilarityOriginId is int ? "起点の画像・表紙に似た候補" : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
           + (ScoreKind=="cosine" ? $"\n類似度 {score:F3}" : ScoreKind=="reciprocal-rank" ? $"\n順位統合値 {score:F4}" : "")
         : "";
     public string MatchLabel => Match switch { "related" => "関連語の候補 · ", "partial" => "一部の語のみ一致 · ", _ => "" };
@@ -55,6 +56,7 @@ public sealed record SearchExpansion(string Term, string[] Added, bool Truncated
 
 public sealed class SearchResponse
 {
+    public string SimilarityStatus { get; set; } = "";
     public int Total { get; set; }
     public string ScoreKind { get; set; } = "";
     public double? GroupBoundary { get; set; }
@@ -88,6 +90,7 @@ public static class Protocol
         var root = doc.RootElement;
         var result = new SearchResponse { Total = root.GetProperty("total").GetInt32(), CoverageLimit = root.TryGetProperty("coverage_limit",out var coverage) ? coverage.GetInt32() : null };
         result.ScoreKind=root.TryGetProperty("score_kind",out var kind) && kind.ValueKind==JsonValueKind.String ? kind.GetString()??"" : "";
+        result.SimilarityStatus=root.TryGetProperty("similarity_status",out var status) && status.ValueKind==JsonValueKind.String ? status.GetString()??"" : "";
         result.GroupBoundary=root.TryGetProperty("group_boundary",out var boundary) && boundary.ValueKind==JsonValueKind.Number && boundary.TryGetDouble(out var cut) ? cut : null;
         result.LeadingTotal=root.TryGetProperty("leading_total",out var leading) && leading.TryGetInt32(out var n) ? n : result.Total;
         result.OtherTotal=root.TryGetProperty("other_total",out var other) && other.TryGetInt32(out var m) ? m : 0;
@@ -144,6 +147,7 @@ public static class Protocol
         Location = row.TryGetProperty("relative_path", out var loc) ? loc.GetString() ?? "" : "",
         Availability = row.TryGetProperty("availability", out var av) ? av.GetString() ?? "" : "",
         SimilarityGroup = row.TryGetProperty("similarity_group",out var group) && group.ValueKind==JsonValueKind.String ? group.GetString()??"" : "",
+        SimilarityOriginId = row.TryGetProperty("similarity_origin_id",out var origin) && origin.ValueKind==JsonValueKind.Number && origin.TryGetInt32(out var originId) && originId>0 ? originId : null,
         SemanticScore = row.TryGetProperty("semantic_score",out var score) && score.ValueKind==JsonValueKind.Number && score.TryGetDouble(out var value) && double.IsFinite(value) ? value : null,
         LiteralHits = row.TryGetProperty("literal_hits",out var hits) && hits.TryGetInt32(out var count) ? count : 0,
         LiteralWords = row.TryGetProperty("literal_words",out var words) && words.TryGetInt32(out var total) ? total : 0,

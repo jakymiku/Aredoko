@@ -76,6 +76,16 @@ class VectorStore:
         with self.connect() as db:
             db.execute('DELETE FROM ai_vectors WHERE item_id=?',(item_id,))
             db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',[(item_id,rev,mode,data) for mode,data in packed.items()])
+    def cover(self,row):
+        """Current-profile, current-revision origin; never infer or read media."""
+        with self.connect() as db:
+            record=db.execute("SELECT vector FROM ai_vectors WHERE item_id=? AND revision=? AND modality='cover'",
+                              (row['id'],revision(row))).fetchone()
+        if record is None:return None
+        try:
+            vec=array('f');vec.frombytes(record[0])
+            return normalized(vec,self.dimension)
+        except (ValueError,TypeError):return None
     def rank(self,rows,query,source="all",ranking="max"):
         if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
         query=normalized(query,self.dimension)
@@ -89,8 +99,10 @@ class VectorStore:
                 sql='SELECT * FROM ai_vectors WHERE item_id IN ('+','.join('?' for _ in batch)+')'
                 for item_id,rev,mode,data in db.execute(sql,batch):
                     if mode not in self.profile.modalities or eligible.get(item_id)!=rev or source!='all' and mode!=source: continue
-                    vec=array('f');vec.frombytes(data)
-                    if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec): continue
+                    try:
+                        vec=array('f');vec.frombytes(data)
+                    except (ValueError,TypeError):continue
+                    if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or sum(x*x for x in vec)<1e-24: continue
                     score=sum(a*b for a,b in zip(query,vec))
                     scores.setdefault(item_id,{})[mode]=score
         # Fusion uses global positions, never per-batch ranks.
@@ -363,6 +375,63 @@ class AISearch:
     def release(self):
         """Refuse a busy encoder; never touch the profile, catalog or vector DB."""
         return self._release()
+
+    def similar(self,item_id,kind='',view='all',page=0,limit=60,scope=None):
+        """Item-origin cover cosine search. Cached vectors work with no model installed.
+
+        The origin must be in scope, but need not satisfy result-only kind/view
+        filters. Missing/stale cover vectors return an explicit empty fallback,
+        never a text embedding masquerading as an image match.
+        """
+        if type(item_id) is not int or not 1<=item_id<=9223372036854775807:
+            raise ValueError('Invalid item')
+        if type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:
+            raise ValueError('Invalid paging')
+        if not isinstance(kind,str) or kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
+            raise ValueError('Invalid filter')
+        scope=self._scope(scope)
+        if not self.inference.acquire(blocking=False):raise AIBusy('AI索引または検索を処理中です。完了後に類似検索してください。')
+        try:
+            if self._closed:raise AIUnavailable('AI is closing')
+            if self.catalog.scan_state()['state'] in ('running','cancelling'):
+                raise AIBusy('フォルダのスキャン完了後に類似検索してください。')
+            origin=self._current_rows([item_id],scope).get(item_id)
+            if origin is None:raise KeyError(item_id)
+            if origin['kind'] not in ('image','book','archive'):
+                raise ValueError('Invalid similarity source')
+            result={'total':0,'items':[],'page':page,'limit':limit,'mode':'similar',
+                    'origin_id':item_id,'origin_revision':revision(origin),'profile':self.profile.key,
+                    'scope':scope,'source':'cover','ranking':'max','score_kind':'cosine',
+                    'coverage_limit':MAX_ITEMS,'similarity_status':'unsupported_profile'}
+            if 'cover' not in self.profile.modalities:return result
+            query=self.store.cover(origin)
+            if query is None:return {**result,'similarity_status':'unindexed'}
+            # Match scoped indexing's shared cap BEFORE result filters; never
+            # fill filtered results with vectors outside the selected target.
+            rows=[row for row in self._iter_rows(limit=MAX_ITEMS,scope=scope)
+                  if row['id']!=item_id and (not kind or row['kind']==kind) and
+                  (view=='all' or view=='favorites' and row['favorite'] or
+                   view=='unreviewed' and not row['reviewed'] or view=='shelf' and row['shelf'])]
+            ranked=self.store.rank(rows,query,'cover','max') if rows else []
+            before={row['id']:row for row in rows}
+            # Edits, exclusions and root removal during a CPU ranking must not
+            # publish an obsolete row. Check all candidates, not just this page.
+            current={}
+            for offset in range(0,len(rows),ROW_BATCH_SIZE):
+                current.update(self._current_rows([r['id'] for r in rows[offset:offset+ROW_BATCH_SIZE]],scope))
+            ranked=[(key,score) for key,score in ranked if key in current and revision(current[key])==revision(before[key])
+                    and (view=='all' or view=='favorites' and current[key]['favorite'] or
+                         view=='unreviewed' and not current[key]['reviewed'] or view=='shelf' and current[key]['shelf'])]
+            latest=self._current_rows([item_id],scope).get(item_id)
+            if latest is None:raise KeyError(item_id)
+            if revision(latest)!=revision(origin):raise AIBusy('起点の作品が更新されました。類似検索をやり直してください。')
+            if self.catalog.scan_state()['state'] in ('running','cancelling'):
+                raise AIBusy('フォルダのスキャン完了後に類似検索してください。')
+            items=[{**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
+                    'similarity_evidence':'cover'} for key,score in ranked[page*limit:(page+1)*limit]]
+            return {**result,'total':len(ranked),'items':items,'similarity_status':'ready'}
+        finally:
+            self.inference.release()
 
     def _release(self,if_idle=False):
         if not self.inference.acquire(blocking=False):

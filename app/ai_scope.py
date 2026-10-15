@@ -10,7 +10,7 @@ def validate_scope(value):
     roots = value.get('root_ids')
     if roots is not None:
         if (not isinstance(roots, list) or len(roots) > MAX_ROOTS
-                or any(type(root) is not int or root < 1 for root in roots)
+                or any(type(root) is not int or not 1<=root<=9223372036854775807 for root in roots)
                 or len(set(roots)) != len(roots)):
             raise ValueError('Invalid registered root selection')
         roots = sorted(roots)  # Copy before an asynchronous job begins.

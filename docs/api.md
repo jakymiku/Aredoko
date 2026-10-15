@@ -99,3 +99,7 @@ index/searchは任意 `scope:{root_ids:[1,2],kind:"image",shelf:"素材"}` を�
 ## 読書位置 API
 
 GET/POST `/api/library/reader/{id}/progress` を追加。revision・0始まりpage・single/rtl/ltrを本ごとに保存する。Host/token/Origin、現manifest検査・scan guard・非本/解除/除外拒否、stale write拒否を維持。[操作・契約・検証](reader-progress.md)。
+
+## アイテム起点の類似検索（2026-10-15）
+
+`POST /api/library/ai/similar`：同profile/current revisionの保存済み画像・表紙vectorから類似順に返す。scope・自己除外・未索引fallback・認証を含む詳細は [item-similarity.md](item-similarity.md)。動画/音声の内容類似検索は未実装。今回のWinUI導線はソース追加済み、Windows実機未検証。

@@ -159,3 +159,4 @@ clicks.Reset();Check(clicks.Register(null,2100,40,30,500,4,4) is null,"cancel/mo
 await ReaderProgressTests.Run(Check);
 
 await VideoRangeTests.Run(Check);
+await SimilarityTests.Run(Check);

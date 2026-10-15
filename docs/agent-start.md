@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> 最新（2026-10-15・P1）：画像/表紙のアイテム起点類似検索API・WinUI context menu・復帰/取消のソースを追加。[仕様と検証境界](item-similarity.md)。Coreテスト・Windows Release/nativeは今回未実行。P0の新baselineは未実施、累積改善試行0。今回はユーザーの明示依頼でP1を実装し、P0を完了扱いにしていない。
+
 > 最新（2026-10-15）：シークバー・時刻付きサムネイル・下部帯の左右端揃えを追加。Python279/Core213/Release・native88checks（全18PNG確認）PASS。[操作と制限](video-seek-preview.md)。動画/音声内容索引・アイテム起点類似検索は未実装。[最終目標と計画](media-content-plan.md)。
 
 > 2026-10-15：大容量動画の範囲取得再生を接続。Python276/Core208/Release・native73checks（全12PNG確認）PASS。[最新仕様・実測と限界](video-streaming.md)。シークバー/hoverサムネイルも接続済み（下記最新記録を参照）。

@@ -1,3 +1,28 @@
+## 最新：P1 画像・表紙のアイテム起点類似検索（2026-10-15）
+
+**現在フェーズ：P1 API/生成fixture/Core/WinUI導線のソース追加済み、Windows検証待ち。P0の新baseline：未実施。P0改善試行の累積：0/2。** 今回はユーザーの明示依頼が類似検索API/右クリックの実装であり、その縦切りへ進んだ。P0完了や実モデルの精度改善を宣言しない。同じ評価ループを再開しない。
+
+開始remote HEAD **73ca81afb6fe2aa0158cafcaccef41f1b874b05f**、製品branch `feat/winui3-production-mvp-20261011`、既存Draft PR #5/baseを確認。AGENTS/vision/priorities/agent-start/両handoff/Issue4を参照。環境に作業ツリーがなかったためGitHubからこのSHAのテキストソースを取得し、比較用experiment/画像assetsを除く隔離snapshotで検証した。ユーザーPCの未commit変更は観測していない。remote反映はこのSHAを親にする差分commitで行い、比較資産/assets/履歴を削除・再生成しない。記録commitは本節を追加したcommitを参照。
+
+- `POST /api/library/ai/similar`：同profile namespace/current revisionのcover vector再利用、scope・root/種類/棚/除外、自己除外、kind/view・paging、1万件shared cap、origin/candidateの処理後再確認。未索引/古い/破損origin、text-only profileは空結果＋明示status。推論/自動索引/source読取/モデル起動なし、encoder未導入でもcache検索可能。scan/index/search競合409、Host/token/Origin・body制限を維持。scope IDのInt64超過をDB到達前に拒否し、壊れたcandidate vectorをskipするよう補強。
+- WinUIのlist/grid/詳細プレビューにnative context menu「似た画像・素材を探す」。右クリックしたrowを起点とし、dirty取消なら要求/遷移なし。origin名・cover根拠・cosine表示、元の検索条件/view/pageへの復帰・起点行focus、HTTP取消/versionによる遅延応答排除。動画/音声の類似検索を有効にしない。既存文字/AI検索・根拠・画像/reader/videoコードを維持。**GUI動作は今回未検証**。
+- [仕様・API・Windows確認項目](item-similarity.md)を追加。api/agent-start/media-content-planを同期。
+
+### 今回の確認結果
+
+- 最終 `python -m unittest discover -s tests -p 'test_*.py'`：**294 PASS /34.012秒/skip0**（既存279＋新規similarity15）。生成PNG/CBZ/contract vectorで順序・自己除外・scope/profile/revision/前処理分離・未索引fallback・paging/cap・競合・HTTP認証・元bytes/mtime不変・検索時encode0。実モデル精度の証拠ではない。
+- 初回similarity14件は13 PASS/1 error（テスト側で存在しないprofileフィールド名を使用）。実profileのnamespace仕様に修正後14 PASS、全293 PASS。その後candidate破損回帰1件とscope ID境界を追加し、対象scope12/similarity15/error対応1 PASS、上記最終全294 PASS。無目的な再実行を続けない。
+- CoreにSimilarityTests（JSON/scope/route/token/Origin/取消/旧応答互換/根拠）を追加。**.NET SDKなしのため未実行**。Windows Release/native GUI・実モデル/GPU・多DPI/Narrator/Contrastも未検証。旧Core213/Release/native合格を今回に流用しない。
+- `git diff --check`、Python構文、XAMLのXML整形式を確認（XAMLコンパイルではない）。3workflowともmanual-only、**CI dispatch0**。モデル/依存/OS変更・私物scan/外部送信・main merge/force push/new PRなし。
+
+### 次の3手
+
+1. WindowsでCoreテスト→x64 SelfContained Release→生成fixtureのnative右クリック/list/grid/詳細・dirty取消・復帰/page/focus・遅延/取消/close・未索引/503/409を実行。手順はitem-similarity.md。外部環境がない場合は同じ評価再実行で停滞せず未検証のまま保留する。
+2. P0の未実施baselineは20〜50問を結果観測前に凍結し、一度記録。実モデルが使えない条件と人工contractを区別し、改善0件または累積最大2件で一区切りにする。
+3. P1の残る重大退行がなければP2の承認可能な候補タグ/由来スキーマ→OCRの小さな縦切りへ。動画/音声内容索引・フォルダ本はbacklogを維持。
+
+---
+
 ## 最新：検索品質・類似検索・自動シチュタグを優先する開発方針（2026-10-15・文書のみ）
 
 ユーザーの追加指示により、[development-priorities.md](development-priorities.md) を新設し、[AGENTS.md](../AGENTS.md)、[agent-start.md](agent-start.md)、[product-vision.md](product-vision.md)から必読の直近方針として参照した。**既存の長期製品ビジョンは変更せず、次の開発順を明確化**：P0 検索精度の新固定評価・根拠に基づく改善 → P1 既存画像embeddingによる選択アイテムの類似検索API/右クリックUI → P2 OCR・承認可能なAIタグ候補と複数ページのシチュ判定 → P3 フォルダ本の論理作品化 → P4 時刻付き動画/音声内容索引 → P5 WinUI操作性/完成デザイン・大規模/配布検証。既存動画/reader機能を壊さず、細部の追加より検索成功率を重視する。

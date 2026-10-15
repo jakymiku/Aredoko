@@ -1,0 +1,50 @@
+# 画像・表紙からの類似検索
+
+2026-10-15：P1のAPI・Core・WinUI導線を追加。Python生成fixtureで検証済み。今回の環境に.NET SDK/Windowsはなく、Coreテストの実行・Windows Release/native GUIは未検証。実モデルでの検索品質は未評価。
+
+## 操作
+
+一覧/グリッドの画像・本・ZIP、または詳細のプレビューを右クリックし「似た画像・素材を探す」を選ぶ。現在の選択とは別の行を右クリックしても、その行を起点にする。動画/音声の内容類似検索は対象外。
+
+未保存の編集があれば既存の破棄確認を使う。「編集を続ける」で中止した場合は索引要求も画面遷移もしない。結果には起点の名前と「起点の画像・表紙に似た候補」、cosine類似度を示す。数値は正解率ではない。画像・CBZ/ZIP・動画ビューアは従来どおり。
+
+「元の検索に戻る（取得中は取消）」で元の検索語・種類・方法・root・候補表示条件・view・ページを復元する。起点の行が同じページに残っていればfocusを戻す。復帰時にも未保存編集の確認を行う。取得中の復帰はクライアント要求を取り消し、request versionで遅延結果を無視する。サーバー側の既に始まったCPUランキングは最大1万件の処理を終えて解放される。
+
+種類・フォルダ・お気に入り等の切替は類似検索を絞り込む。検索語/検索方法の変更、または「検索」で従来の文字/AI検索に戻る。通常のAI候補区切り・全語一致の設定は類似検索中には適用せず非表示とし、元に戻る際に復元する。
+
+## API
+
+`POST /api/library/ai/similar`。Host・session token・Origin・既存32KiB body制限を維持。
+
+```json
+{"item_id":7,"kind":"image","view":"all","page":0,"limit":60,"scope":{"root_ids":[1],"kind":"","shelf":null}}
+```
+
+- `item_id`は正のInt64。bool/string/超過IDを拒否。`page`は0以上の整数、`limit`は1〜120（既定60）。未知のフィールドを拒否する。
+- `scope`省略時は保存済みAI scopeを使用。明示nullは拒否。UIでは保存済みscopeと選択rootの積集合を送る。空集合を全体検索へ広げない。root IDもInt64境界を検査する。
+- 起点は有効な登録root・present・非除外・scope内の画像/本/ZIPに限定。result-onlyの`kind`/`view`には起点が一致しなくてもよい。対象外の起点は404、無効な条件は400、scan/索引/検索との競合は409、AIサービス自体の初期化失敗は503。
+- 同一profileのvector DBだけを使い、起点と各候補の保存revisionを現カタログに照合する。画像/表紙の`cover` vectorのみでcosine順位を作り、同点はID順。text vectorを混ぜず、起点自身を除外する。
+- scoped索引と同じく候補上限1万件はscopeに適用し、その後にkind/view/自己除外を適用する。全scopeを無制限に探索する保証ではない。ページは全候補の順位から切り出す。
+- ranking後に候補の登録/除外/scope/revision/viewと起点を再確認する。処理中の起点更新は409で再試行を案内。索引のsource revisionは既存のカタログstat/title/tags由来。実ファイルの未スキャン変更を自動検出する機能ではない。
+- 推論・source画像読み直し・モデル起動・自動索引作成・vector書込は行わない。保存済みvectorがあればencoder未導入/未ロードでも利用可能。
+
+応答は従来の`total/items/page/limit`に`mode:similar`、`origin_id`、`origin_revision`、`profile`、`scope`、`source:cover`、`score_kind:cosine`、`coverage_limit`、`similarity_status`を追加。各候補の根拠は`similarity_origin_id`と`similarity_evidence:cover`。
+
+| similarity_status | 動作 |
+| --- | --- |
+| ready | 検索成功。候補がなければ0件。別種類/未索引を似た結果として埋めない |
+| unindexed | 起点のcoverが未索引・古い・不正。itemsは空、明示索引/文字検索を案内 |
+| unsupported_profile | text-only profile。itemsは空、画像対応モデル/文字検索を案内 |
+
+## 検証とWindowsの残項目
+
+`python -m unittest discover -s tests -p test_similarity_search.py -v`：15件。生成PNG/CBZ＋決定的な3次元contract encoderで類似順、text混入防止、自己除外、root/kind/shelf/view、profile/revision/前処理namespace、未索引/破損、cap/paging、競合/close、Host/token/Origin、保存scope、元bytes/mtime不変と検索中encode0を確認。実モデルの精度を示す評価ではない。
+
+Coreには`SimilarityTests.Run`を追加し、反射不要JSON・scopeの所有/積集合・固定route/認証/取消・旧応答互換・日本語根拠を確認するコードを用意した。**未実行**。Windows環境で次を実行する：
+
+```powershell
+dotnet run --project tests/Aredoko.Core.Tests -c Release
+dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore
+```
+
+native確認は生成素材専用DB/設定で行う。Light/Dark・list/grid/詳細・wide/narrow、未選択の別行右クリック/Shift+F10、dirty取消でdraft不変と要求0、dirty破棄、root/view/kind/shelf、元ページとfocus復帰、未索引/非対応profile/409/503、遅延応答中の復帰・close、既存文字検索/根拠/画像/reader/video起動を確認し、PNGと要求記録を残す。実行せず合格扱いにしない。モデル取得・私物scan・CI dispatchは不要。
