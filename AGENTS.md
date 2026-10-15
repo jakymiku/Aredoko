@@ -28,6 +28,10 @@ The vision defines product intent, not implementation status. The latest source,
 
 A future agent should inspect the latest code/PR/handoff first; then select the highest-priority unfinished vertical slice, implement it and run targeted local tests rather than stopping at planning. Preserve text search, manual metadata, scopes, native viewer, privacy rules and WinUI-only GUI direction. Measure retrieval success (Top1/Recall@5/MRR, no-answer behavior and time to find) and explicitly separate synthetic benchmarks from real-life quality. No private library scanning or model/dependency downloads without explicit permission. Major regressions and data-safety blockers override feature ordering.
 
+## Current checkpoint (2026-10-15 continuation)
+
+P1 similarity and registered-folder hub are implemented and Windows-validated. The new P0 v7 baseline was frozen before inference and measured once on generated sources with the existing CUDA model. P0 closes with **1/2 cumulative improvement trials**, one adopted empty-cover-pool inference optimization, and no ranking/threshold/routing tuning. Read [docs/search-phase-v7-results.md](docs/search-phase-v7-results.md). Continue with P2 provenance-tag suggestions and approval; do not consume the remaining trial budget or reopen P0 without new evidence/user direction.
+
 ## Registered-folder management — user-approved next UX slice (2026-10-15)
 
 Read [docs/folder-library-management.md](docs/folder-library-management.md) before folder navigation, search-root selection or folder settings work. The user approved one left-nav entry opening a main-view list/grid, multiple-root search shared by text/AI/similarity, and editing existing **initial shelf** / exclusions / scan / unregister settings there. Initial shelf is not a new tag feature. Preserve individual metadata; batch edits save only changed fields, and empty/stale selections must not broaden to all roots. Saved scope shortcuts/pins are later work.

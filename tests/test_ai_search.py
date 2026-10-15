@@ -115,8 +115,14 @@ class AISearchTests(unittest.TestCase):
             with self.assertRaises(ValueError): self.ai.start(limit)
         with self.assertRaises(ValueError): self.ai.search('')
     def test_visual_source_does_not_use_filename_vector(self):
+        # Real image kinds keep this a cover-vs-text contract test. Audio rows
+        # must not masquerade as image candidates through manually seeded cache.
+        from create_preview_fixture import png
+        (self.media/'rain.png').write_bytes(png());(self.media/'sun.png').write_bytes(png())
+        self.catalog.start_scan(self.root);self.catalog._worker.join(10)
         self.build()
-        rain=self.catalog.get(self.rain['id']);sun=self.catalog.get(self.sun['id'])
+        images={row['title']:row for row in self.catalog.search(kind='image')['items']}
+        rain=images['rain.png'];sun=images['sun.png']
         self.ai.store.put(rain['id'],revision(rain),{'text':vector(0),'cover':vector(1)})
         self.ai.store.put(sun['id'],revision(sun),{'text':vector(1),'cover':vector(0)})
         result=self.ai.search('雨',source='cover')

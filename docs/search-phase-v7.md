@@ -1,4 +1,6 @@
-# P0 新固定baseline v7（測定前の凍結）
+# P0 新固定baseline v7（測定前記録を保持）
+
+> 最新：事前凍結後に実GPU baselineを一度測定し、独立確認の改善試行1を採用。累積1/2でP0を一区切りにし、次はP2。[確定した結果・誤り・限界](search-phase-v7-results.md)。以下は測定前の仕様と仮説を保持した記録。
 
 開始HEAD `25034815e45cd3de80866c0056a6e5c2bffa9cfc`。P1と登録フォルダハブの実装・Windows検証済みを引き継ぐ。P0新baseline未実施、改善試行累積0/2。
 

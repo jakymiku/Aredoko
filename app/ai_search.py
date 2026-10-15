@@ -350,6 +350,10 @@ class AISearch:
                       if (not kind or row['kind']==kind) and
                       (view=='all' or view=='favorites' and row['favorite'] or
                        view=='unreviewed' and not row['reviewed'] or view=='shelf' and row['shelf'])]
+            # Cover vectors currently belong only to images/books. Keep this
+            # AFTER the shared target cap and explicit scope/view/kind filters.
+            # Empty modality pools need no GPU query and cannot use stray vectors.
+            if source=='cover':rows=[row for row in rows if row['kind'] in ('image','book')]
             policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
             ranked=self.store.rank(rows,self.encoder.encode('query',query),source,policy) if rows else []
             words=list(dict.fromkeys(normalize(query).split()))
