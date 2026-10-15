@@ -1,6 +1,8 @@
 # AIエージェントの開始・再開ガイド
 
-> **最新P2レビュー（2026-10-16 狭幅修正済み）**：候補レビューUIの初回縦切り完了。通常/狭幅/live resize/狭幅open/修正承認をWindowsで59 checks PASS、Light/Dark PNG15枚全目視PASS。Release警告0/エラー0。生成素材と偽adapterによるUI確認であり実タグ精度ではない。次は候補の明示検索→代表素材品質→OCR/複数ページ。詳細は[最新handoff](codex-handoff.md)。
+> **最新P2 未承認候補の明示検索（2026-10-16 続行）**：確定タグと分離した未承認タグ候補の検索API（`POST /api/library/tag-suggestions/search`）・Coreプロトコル・WinUI検索方法「未承認タグ候補」（`ModeTagCandidates` / `ProposalEvidence<id>`）を実装・Windows実機確認。全Python **337 PASS**、Core **305 PASS**、x64 Release **警告0/エラー0**、native `tag-candidate-search-20261016-02` **24 checks PASS・Light/Dark PNG 4枚全目視PASS**。次は代表素材でのタグ品質・日本語検索寄与の測定、およびOCR/複数ページ根拠への拡張。詳細は[最新handoff](codex-handoff.md)と[タグ候補仕様](tag-suggestions.md)。
+
+> **最新P2レビュー（2026-10-16 狭幅修正済み）**：候補レビューUIの初回縦切り完了。通常/狭幅/live resize/狭幅open/修正承認をWindowsで59 checks PASS、Light/Dark PNG15枚全目視PASS。Release警告0/エラー0。生成素材と偽adapterによるUI確認であり実タグ精度ではない。詳細は[最新handoff](codex-handoff.md)。
 
 > 最新P2 WD導入済み（2026-10-16）：ユーザー許可のもと合計6MB/s上限で導入、既存46package不変・追加6件だけ。実ONNX CPU/API **35 checks PASS・owned worker4/4終了**。精度評価/WinUI承認/OCRは未完了。[実測とライセンス](wd-tagger.md)・[最新handoff](codex-handoff.md)。取得許可を聞き直さず、次はWinUI承認と候補の明示検索へ。
 

@@ -1,6 +1,6 @@
 # P2：由来付きタグ候補・承認APIの最初の縦切り
 
-2026-10-16。[製品ビジョン](product-vision.md)・[開発優先順位](development-priorities.md)に沿うバックエンドの基盤。**P2全体の完成ではない。WD画像分類adapterの接続コードを追加（[導入・検証状況](wd-tagger.md)）。WinUI候補/根拠・修正承認/却下・履歴・取消画面を追加し通常幅のWindows操作を確認。狭幅で詳細が空になる問題は修正し、通常/狭幅/live resizeをWindowsで再確認済み。OCR/複数ページ解析、候補を対象にしたライブラリ全体の検索は未接続。** EmbeddingGemmaの既存埋め込み処理をタグ生成モデルとして扱わず、固定の偽アダプタによる契約テストと実モデルの品質を区別する。
+2026-10-16。[製品ビジョン](product-vision.md)・[開発優先順位](development-priorities.md)に沿うバックエンドとWinUIの基盤。**P2全体の完成ではない。WD画像分類adapterの接続コードを追加（[導入・検証状況](wd-tagger.md)）。WinUI候補/根拠・修正承認/却下・履歴・取消画面（通常/狭幅/live resize）と、確定タグとは分離した「未承認タグ候補」の明示検索モード（`POST /api/library/tag-suggestions/search` / `ModeTagCandidates`）までWindows実機で確認済み。OCR/複数ページ解析、および代表素材での実タグ品質評価は未実施。** EmbeddingGemmaの既存埋め込み処理をタグ生成モデルとして扱わず、固定の偽アダプタによる契約テストと実モデルの品質を区別する。
 
 ## 保存と承認
 
@@ -32,6 +32,7 @@
 | `POST /api/library/tag-suggestions/generate` | `{item_id, request_id}`。設定済みadapterだけを実行、または既存同一batchを再利用。未接続503。 |
 | `POST /api/library/tag-suggestions/cancel` | `{request_id}`。対応する実行中要求だけを取消。 |
 | `POST /api/library/tag-suggestions/review` | `{item_id, proposal_id, version, decision}`。decisionは`accept`/`reject`、acceptだけ任意`tag`で修正。pending/version一致・現在source一致が必須。再承認/古い状態409、他itemのproposal404。 |
+| `POST /api/library/tag-suggestions/search` | `{query, kind, view, page, root_ids?, shelf?, model?}`。有効な登録root（非除外）のうち、各itemの**最新batch**に`pending`候補が存在する作品を検索。`query`空欄なら全未承認候補付き作品、入力時は正規化語のAND照合。各行に`proposal_match:{batch_id, source_revision, source_state, state:'pending', tags, producer, evidence}`を付加。モデル推論は行わない。 |
 
 すべて正のInt64 ID（bool不可）、余分/重複queryや余分body keyを拒否。POSTは既存のHost/Origin/tokenと32KiB body上限を継承。GETも正しいHost/tokenが必要。busy/scan/変更競合409、source不在404、不正入力400、adapter障害503。未設定/モデル障害を候補成功として返さない。
 
@@ -55,4 +56,13 @@ WD adapterは明示許可による導入・実CPU/API35checks確認済み（実�
 
 2026-10-16続行で、前節の狭幅visual FAILを解消。一覧/詳細は2列を維持し狭幅の一覧幅だけを縮める。詳細の行/列を移し替えて幅/高さ0を経由させない。未取得/staleの根拠画像は空枠を畳み、履歴変更時は詳細スクロールを先頭へ戻す。
 
-`tag-review-resize-20261016-01` は59 native checks PASS・PNG15枚全目視PASS。通常→狭幅→通常、狭幅で開き直し、根拠/編集/承認ボタンが可視かつ非0bounds、狭幅修正承認のDB反映、明暗、既存取消/編集保持を確認。Release警告0/エラー0。Python/Coreは無変更のため今回再実行していない。実WD GUI推論/実タグ品質/High Contrast/DPI拡大は未検証。次は未承認候補を明示選択した検索へ進む。
+`tag-review-resize-20261016-01` は59 native checks PASS・PNG15枚全目視PASS。通常→狭幅→通常、狭幅で開き直し、根拠/編集/承認ボタンが可視かつ非0bounds、狭幅修正承認のDB反映、明暗、既存取消/編集保持を確認。Release警告0/エラー0。実WD GUI推論/実タグ品質/High Contrast/DPI拡大は未検証。
+
+### 未承認タグ候補の明示検索（2026-10-16 続行）
+
+- **バックエンド (`app/tag_candidate_search.py`, `app/production_server.py`)**：`POST /api/library/tag-suggestions/search` を追加。通常の文字検索（`GET /api/items`）やAI検索に未承認候補を自動混入させず、明示的に選択したときだけ各作品の**最新batchの`pending`候補**を検索する。登録フォルダ選択（`root_ids` 1〜256件の和集合、空配列や未登録rootは400で拒否）、`kind`、`view`（`all`/`favorites`/`unreviewed`/`shelf`）、`shelf`、`model` フィルターに対応し、ページ内の最大60件について物理sourceの現在revisionと照合して `source_state`（`current` / `stale` / `unverified` / `unavailable`）を返す。推論・モデル起動は一切行わない。
+- **Core / WinUI (`src/Aredoko.Core/SearchMethod.cs`, `Protocol.cs`, `TagReviewClient.cs`, `LibraryApi.cs`, `src/Aredoko.WinUI/MainPage.xaml`, `MainPage.xaml.cs`)**：検索方法コンボボックスに **「未承認タグ候補」 (`ModeTagCandidates`, index 4)** を追加。反射不要の `TagReviewProtocol.CandidateSearchRequest` / `ParseCandidateSearch` と `ProposalMatch` により、一覧/グリッドの各行に `ProposalEvidence<id>`（「未承認タグ候補: … / モデル: … · 根拠: 画像または本の先頭ページのみ · 元ファイル一致または変更あり（要再生成）」）を表示。
+- **検証**：
+  - 全Python **337 PASS / 173.064秒 / skip 0**（`test_tag_suggestions.py` **21 PASS**、`test_error_text_coverage.py` **2 PASS**）。
+  - C# Core **305 PASS**、Windows x64 SelfContained Release **PASS（警告0・エラー0）**。
+  - Windows native `python tools/test_tag_review_ui.py --candidate-search-only --output data/ai-ui/tag-candidate-search-20261016-02`：**24 checks PASS / PNG 4枚（Light/Dark・1200×820および700×620狭幅）全目視PASS / graceful close 2**。通常文字検索に未承認候補が出ないこと、「未承認タグ候補」モードに確定タグが出ないこと、モデル由来・本の先頭ページ根拠・stale表示、登録フォルダ絞り込み（`media-1`）、および全未承認候補を承認/却下した作品が未承認候補検索から消えて承認タグが通常文字検索で見つかることを確認。

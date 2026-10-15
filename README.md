@@ -1,5 +1,7 @@
 # Aredoko
 
+> **最新（2026-10-16 P2 未承認タグ候補の明示検索）**：確定タグ検索（`GET /api/items`）とは明確に分離した **未承認タグ候補の検索モード（`POST /api/library/tag-suggestions/search`・検索方法「未承認タグ候補」`ModeTagCandidates`・一覧行の由来/根拠/stale表示 `ProposalEvidence<id>`）** を実装・Windows実機検証。最新バッチの未承認（`pending`）候補のみを対象とし、既存の登録フォルダ選択（単一/複数和集合）・種類・お気に入り/未確認/棚フィルターを共有。Windows実機で**全Python 337 PASS / Core 305 PASS / x64 Release 0 warnings 0 errors / 実機 `tag-candidate-search-20261016-02` 24 checks PASS（PNG 4枚全目視）** を確認。[タグ候補と検索仕様](docs/tag-suggestions.md)・[WDアダプタ](docs/wd-tagger.md)・[最新handoff](docs/codex-handoff.md)。
+
 > 最新：P0新固定baseline v7（24問・実GPU）を測定し、画像候補がないcover検索の無駄なquery推論を省略。改善累積1/2で一区切り、P1/フォルダハブ完了を維持して次はP2。[結果・限界](docs/search-phase-v7-results.md)・[直近の優先順位](docs/development-priorities.md)。
 
 > **最新（2026-10-15 Windows続行）**：P1 **画像・表紙のアイテム起点類似検索（`POST /api/library/ai/similar`・右クリック「似た画像・素材を探す」・取消/復帰）のWindows実機検証**と、ユーザー合意の**登録フォルダ管理ハブ・複数フォルダ統一検索（通常/AI/類似）・初期棚の一括/単一編集（`FolderHubView` / `FolderEditorPanel`）**を実装・実機検証。Windows実機で**全Python 301 PASS / Core 280 PASS / x64 Release PASS**、`Check-Similarity.cmd`（`similarity-check-20261015-120824-dbfe63` **41 checks / PNG 10枚**＋`unindexed` **9 checks / PNG 2枚**＋`text-only` **9 checks / PNG 2枚**＋double-click回帰 **22 checks / keys 16 / PNG 8枚**）および登録フォルダハブ実機（`folder-hub-native-07` **37 checks / PNG 10枚**）をすべて完走・全32枚のPNGを目視確認。[類似検索](docs/item-similarity.md)・[登録フォルダ管理](docs/folder-library-management.md)・[最新handoff](docs/codex-handoff.md)。

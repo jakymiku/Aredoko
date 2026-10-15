@@ -1,10 +1,12 @@
 # 共通API（操作試作 v0）
 
-## P2：由来付きタグ候補・承認APIの基盤（2026-10-16）
+## P2：由来付きタグ候補・承認APIと未承認候補の明示検索（2026-10-16）
 
 - `GET /api/library/tag-suggestions/{item_id}?limit=10&before=<batch_id>`：候補/確定/却下の履歴とmodel/version・物理revision・根拠ページ・stale・生成available。通常タグ検索に候補を混ぜない。
+- `GET /api/library/tag-suggestions/{item_id}/evidence?revision=<64hex>`：根拠画像（単体画像またはCBZ/ZIP自然順先頭ページ）を物理revision照合付きで返却。
 - `POST /api/library/tag-suggestions/generate` / `cancel` / `review`：信頼された設定済みadapterのみ、原子的な候補公開、request IDによる協調取消、現source/version一致時だけ既存タグへ追加または修正承認/却下。
-- **ローカルWD CPU分類adapterはユーザー許可による導入・実CPU/API35checks確認済み（[実測・限界](wd-tagger.md)）。未導入環境なら生成503。WinUIレビューは通常/狭幅・live resizeを実機再確認済み。OCR/候補の全体検索は未接続、タグ精度は別評価**。偽adapterでの契約検証を実AI品質と扱わない。[詳細仕様・制限](tag-suggestions.md)。
+- `POST /api/library/tag-suggestions/search`：`{query, kind, view, page, root_ids?, shelf?, model?}`。各作品の**最新バッチにある未承認（`pending`）候補だけ**をNFKC/大小/かな正規化・複数語ANDで検索し、`proposal_match:{batch_id, source_revision, source_state, state:'pending', tags, producer, evidence}` を付加して返す（推論やモデル起動は行わない）。WinUIの検索方法「未承認タグ候補」（`ModeTagCandidates`）と一覧行 `ProposalEvidence<id>` に接続済み。
+- **ローカルWD CPU分類adapterはユーザー許可による導入・実CPU/API35checks確認済み（[実測・限界](wd-tagger.md)）。未導入環境なら生成503。WinUIレビュー（59 checks / 15 PNGs）および未承認候補の明示検索（24 checks / 4 PNGs）をWindows実機で確認済み。OCR/複数ページ解析・代表素材のタグ品質評価は後続**。[詳細仕様・制限](tag-suggestions.md)。
 
 ## 製品MVP：複数登録フォルダの和集合検索とアイテム起点類似検索のWindows検証（2026-10-15 Windows続行）
 

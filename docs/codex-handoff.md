@@ -1,4 +1,38 @@
-## 最新：P2候補レビューの狭幅表示を修正・Windows再確認完了（2026-10-16 JST）
+## 最新：P2 未承認タグ候補の明示検索API・Core・WinUI接続とWindows実機確認（2026-10-16 JST 続行）
+
+**現在フェーズ：P2 候補保存・承認API基盤、WDアダプタ導入/実CPU確認、WinUI候補レビュー画面（通常/狭幅/live resize）、および確定タグから分離した「未承認タグ候補」明示検索（`POST /api/library/tag-suggestions/search` / `ModeTagCandidates`）まで実装・Windows実機確認完了。P0 baseline済み・改善試行累積1/2、P1類似検索・登録フォルダ管理ハブ完了を維持。**
+
+開始HEAD `444f9421446898d4c256362153f34a228ffd47e0`。Codexが作業途中で残していた未コミット差分（`app/tag_candidate_search.py`, `app/production_server.py`）を破棄せず保護・検証し、Coreプロトコル・WinUI検索モード・単体/実機テストまで一気通貫で完成させた。既存branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5) を継続。実装commitは **`16c267ea2b5dbe9ce7accbd12a1062debc1a7b76`**。
+
+### 実装と保護
+
+- **バックエンド (`app/tag_candidate_search.py`, `app/production_server.py`)**：
+  - `POST /api/library/tag-suggestions/search`（`{query, kind, view, page, root_ids?, shelf?, model?}`）を追加。
+  - 通常文字検索（`GET /api/items`）やAI検索に未承認候補を混ぜず、明示的に選択したときだけ各作品の**最新バッチ（`max(id)`）にある `pending` 候補**をNFKC/大小/かな正規化・複数語ANDで検索（空queryでは最新バッチに未承認候補がある全作品を一覧）。
+  - 既存の登録フォルダ選択（`root_ids` 1〜256件の和集合、空リスト・重複・未登録/解除済みrootは400で拒否し全件へ拡大しない）、`kind`、`view`（`all`/`favorites`/`unreviewed`/`shelf`）、`shelf`、`model` フィルターを共有。
+  - 返却する最大60件について物理sourceの現在revisionと照合し、`proposal_match:{batch_id, source_revision, source_state, state:'pending', tags, producer, evidence}` を付加（モデル起動や推論は一切行わない）。
+- **Core / WinUI (`src/Aredoko.Core/SearchMethod.cs`, `Protocol.cs`, `TagReviewClient.cs`, `LibraryApi.cs`, `src/Aredoko.WinUI/MainPage.xaml`, `MainPage.xaml.cs`)**：
+  - `SearchMethod.FromIndex(4)`（`IsTagCandidates == true`, `Source == "pending-proposals"`）と、反射不要の `TagReviewProtocol.CandidateSearchRequest` / `ParseCandidateSearch` および `ProposalMatch` を追加。
+  - `MainPage` の検索方法コンボボックス（`CmbSearchMode`）に **「未承認タグ候補」 (`ModeTagCandidates`)** を追加し、一覧/グリッドの各行に `ProposalEvidence<id>`（「未承認タグ候補: … / モデル: … · 根拠: 画像または本の先頭ページのみ · 元ファイル一致または元ファイル変更あり（要再生成）」）を表示。
+
+### 検証の事実
+
+- **全Python 337 PASS / 173.064秒 / skip 0**（`test_tag_suggestions.py` **21 PASS / 6.790秒**、`test_error_text_coverage.py` **2 PASS** を含む）。確定タグとの非混入、旧バッチ/承認済み/却下済みの除外、複数語正規化AND、root/shelf/view/modelフィルター、物理source変更時の `stale` 判定、HTTP認証と不正body拒否を確認。
+- **C# Core 305 PASS**（`dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore`、`SearchMethod.FromIndex(4)`、要求正規化、不正 `root_ids` 拒否、`ProposalMatch` 由来/表紙根拠/stale解析、不正応答拒否を追加）。
+- **Windows x64 SelfContained Release PASS（警告0・エラー0）**（`dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 -p:SelfContained=true --no-restore`）。
+- **Windows native `python tools/test_tag_review_ui.py --candidate-search-only --output data/ai-ui/tag-candidate-search-20261016-02`**：**24 checks PASS / PNG 4枚（Light/Dark・1200×820および700×620狭幅）全目視PASS / graceful close 2**（初回01はDark側でLight生成item IDと異なるIDを参照したテスト指定ミス1件のみ、アプリ無修正で02完走）。通常文字検索に未承認候補が出ないこと、「未承認タグ候補」モードに確定タグが出ないこと、`ProposalEvidence` のモデル由来・CBZ先頭ページ根拠・stale表示、登録フォルダ絞り込み（`media-1`）、および全未承認候補を承認/却下した作品が未承認候補検索から消えて承認タグが通常文字検索で見つかることを確認。生成素材bytes/mtime・AI設定不変、推論0、CI dispatch 0。
+
+### 次の異なる3手
+
+1. **代表素材のタグ品質と日本語検索寄与の測定**：固定評価で誤タグ/有用性を測る。生成fixtureの動作成功を精度としない。実WDの生成素材GUI smokeも必要時に追加する。私物scanは明示許可の範囲内。
+2. **OCR/複数ページ根拠への拡張**：表紙から本文/関係性を断定せず、日本語OCRおよび複数ページ由来の根拠ページ番号を保存してレビューへ渡す。新モデル/追加依存取得は別許可。
+3. **P3 画像フォルダの論理作品化・登録フォルダ管理の後続**：画像フォルダを「一冊」として扱うか単体素材として扱うかの分離、検索範囲の名前付き保存・左ナビピン留め、動画/音声内容索引（P4）のbacklogを段階的に進める。
+
+最終実装HEAD **`16c267ea2b5dbe9ce7accbd12a1062debc1a7b76`**。文書込み最終HEADは本節を導入したhandoff commit（`git log -1 --format=%H -- docs/codex-handoff.md`）を正とする。
+
+---
+
+## 履歴：P2候補レビューの狭幅表示を修正・Windows再確認完了（2026-10-16 JST）
 
 **現在フェーズ：候補レビューUIの通常幅/狭幅の最初の縦切りを完了。** 前回の700x620へのlive resizeで詳細が消えるvisual FAILを解消。既存WDの実CPU/API確認と今回の偽adapter UI確認は別の証拠として扱い、実タグ品質/実WD GUI推論の確認とはしない。P0 baseline済み・改善累積1/2、P1、既存検索scopeを維持。
 
