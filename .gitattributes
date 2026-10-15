@@ -4,3 +4,4 @@ tests/fixtures/literal-related-v3.json text eol=lf
 tests/fixtures/literal-related-v4.json text eol=lf
 tests/fixtures/literal-related-v5.json text eol=lf
 tests/fixtures/literal-related-v6.json text eol=lf
+tests/fixtures/search-phase-v7.json text eol=lf
