@@ -79,12 +79,13 @@
     <ComboBox x:Name="AIResultGroup" Header="AI候補の表示" SelectedIndex="0" HorizontalAlignment="Stretch" Visibility="Collapsed" SelectionChanged="AIResultGroup_Changed" AutomationProperties.AutomationId="CmbAIResultGroup" AutomationProperties.Name="AI候補の表示"><ComboBoxItem Content="上位の類似候補"/><ComboBoxItem Content="その他の参考候補"/><ComboBoxItem Content="すべてのAI候補"/></ComboBox>
      </StackPanel>
     </Expander>
-    <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Margin="0,8,0,0" Spacing="8">
+    <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Margin="0,4,0,0" Spacing="4">
      <TextBlock x:Name="SearchMethodHint" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtSearchMethodHint"/>
-     <StackPanel x:Name="SimilarityBar" Spacing="8" Visibility="Collapsed">
-      <TextBlock x:Name="SimilarityTitle" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtSimilarityOrigin"/>
-      <Button Content="元の検索に戻る（取得中は取消）" Click="SimilarityBack_Click" AutomationProperties.AutomationId="BtnSimilarityBack"/>
-     </StackPanel>
+     <Grid x:Name="SimilarityBar" ColumnSpacing="12" Visibility="Collapsed">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <TextBlock x:Name="SimilarityTitle" VerticalAlignment="Center" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtSimilarityOrigin"/>
+      <Button Grid.Column="1" Content="元の検索に戻る（取得中は取消）" Click="SimilarityBack_Click" AutomationProperties.AutomationId="BtnSimilarityBack"/>
+     </Grid>
     </StackPanel>
    </Grid>
 

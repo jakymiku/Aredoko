@@ -265,7 +265,7 @@ public sealed partial class MainPage : Page
             SimilarityBoundary.Value=bookmark.Boundary??double.NaN;AIResultGroup.SelectedIndex=bookmark.Group;
             view=bookmark.View;page=bookmark.Page;ClearSimilarity();RestoreNavigation();populating=false;
             await LoadAsync();
-            Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==bookmark.Selection)?.Focus(FocusState.Keyboard);
+            await FocusRowAsync(bookmark.Selection);
         }
         finally
         {
@@ -273,6 +273,18 @@ public sealed partial class MainPage : Page
             if(!disposed){Busy.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}
             transitions.Release();
             if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+        }
+    }
+    private async Task FocusRowAsync(int itemId)
+    {
+        if(Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==itemId) is not ListViewItem target)return;
+        for(var attempt=0;attempt<10&&!disposed&&Items.IsEnabled;attempt++)
+        {
+            Items.UpdateLayout();
+            Items.ScrollIntoView(target);
+            Items.UpdateLayout();
+            if(target.IsLoaded&&target.Focus(FocusState.Keyboard)&&target.FocusState!=FocusState.Unfocused)return;
+            await Task.Delay(30);
         }
     }
     private static string AvailabilityLabel(string state) => state switch { "present" => "登録済み", "missing" => "ファイル不明", _ => state };

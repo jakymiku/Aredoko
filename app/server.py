@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from catalog import Catalog
 
 ROOT = Path(__file__).resolve().parents[1]
+ThreadingHTTPServer.request_queue_size = 128
 
 
 def handler_for(catalog, token, benchmark_dist=None):
@@ -26,6 +27,7 @@ def handler_for(catalog, token, benchmark_dist=None):
             self.send_response(status)
             self.send_header('Content-Type', mime)
             self.send_header('Content-Length', str(len(body)))
+            self.send_header('Connection', 'close')
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; connect-src 'self'")
@@ -33,7 +35,7 @@ def handler_for(catalog, token, benchmark_dist=None):
             try:
                 self.end_headers()
                 self.wfile.write(body)
-            except (BrokenPipeError,ConnectionResetError):
+            except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):
                 # Cancelling a search/preview is normal. Never retry a reply to
                 # a disconnected client or turn it into a noisy server error.
                 self.close_connection=True

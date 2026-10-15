@@ -71,5 +71,13 @@
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
   </PropertyGroup>
+  <Target Name="UseCachedRuntimePacks" BeforeTargets="ProcessFrameworkReferences"
+          Condition="!Exists('$(NuGetPackageRoot)microsoft.netcore.app.runtime.win-x64\10.0.13') and Exists('$(NuGetPackageRoot)microsoft.netcore.app.runtime.win-x64\10.0.12')">
+    <ItemGroup>
+      <KnownFrameworkReference Condition="'%(KnownFrameworkReference.LatestRuntimeFrameworkVersion)' == '10.0.13'" LatestRuntimeFrameworkVersion="10.0.12" />
+      <KnownCrossgen2Pack Condition="'%(KnownCrossgen2Pack.Crossgen2PackVersion)' == '10.0.13'" Crossgen2PackVersion="10.0.12" />
+      <KnownILLinkPack Condition="'%(KnownILLinkPack.ILLinkPackVersion)' == '10.0.13'" ILLinkPackVersion="10.0.12" />
+    </ItemGroup>
+  </Target>
   <ItemGroup><ProjectReference Include="../Aredoko.Core/Aredoko.Core.csproj" /></ItemGroup>
 </Project>

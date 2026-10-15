@@ -77,7 +77,8 @@ def main():
         tree=json.loads(ui('inspect','--json','--depth','12'))
         (target/(name+'-tree.json')).write_text(json.dumps(tree,ensure_ascii=False),encoding='utf-8')
     def context(identifier,source):
-        ui('scroll-into-view',identifier);owned(foreground=True);ui('click',identifier,'--right')
+        if identifier.startswith('Item'):ui('scroll-into-view',identifier)
+        owned(foreground=True);ui('click',identifier,'--right')
         for _ in range(20):
             windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
             ordered=[w for w in windows if w.get('title')=='PopupHost']+[w for w in windows if str(w.get('hwnd'))==hwnd]
@@ -121,7 +122,7 @@ def main():
                 if len(matches)==1:break
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
-            hwnd=str(matches[0]['hwnd']);ready();wait('TxtCount','76 件')
+            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','76 件')
             origin=sandbox.item('generated-065.png')
             ui('invoke','BtnNext');ready();wait('TxtPageNumber','2 / 2')
             context('Item'+str(origin),origin);ready();wait('TxtSimilarityOrigin','類似検索の起点: generated-065.png')
@@ -131,7 +132,7 @@ def main():
                 shot(theme+'-'+expected);ui('invoke','BtnSimilarityBack');ready();wait('TxtPageNumber','2 / 2');close();continue
             wait('TxtCount','72 件');entry=latest(origin)
             check(theme+' profile scope and self exclusion',entry.get('scope')==sandbox.scope and origin not in entry['ids'] and sandbox.item('generated-001.png',1) not in entry['ids'])
-            shot(theme+'-list');ui('invoke','BtnSimilarityBack');ready();wait('TxtPageNumber','2 / 2')
+            shot(theme+'-list');owned(foreground=True);ui('invoke','BtnSimilarityBack');ready();wait('TxtPageNumber','2 / 2')
             ui('wait-for','Item'+str(origin),'-p','HasKeyboardFocus','--value','True','-t','5000')
             check(theme+' original page and focus restored',True)
             ui('invoke','BtnPrevious');ready();ui('invoke','BtnLayout')
