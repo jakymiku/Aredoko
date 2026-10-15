@@ -76,17 +76,32 @@ class ProductionCatalog(Catalog):
             'JOIN library_locations l ON l.id=m.location_id ')
     FIELDS = 'i.*,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns'
 
-    def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None):
+    def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None, root_ids=None):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
         if type(page) is not int or page<0 or not 1<=limit<=120 or len(query)>300:
             raise ValueError('Invalid paging')
-        if root_id is not None and (type(root_id) is not int or not 1<=root_id<=9223372036854775807):
+        if root_id is not None and root_ids is not None:
             raise ValueError('Invalid root filter')
+        if root_id is not None:
+            if type(root_id) is not int or not 1<=root_id<=9223372036854775807:
+                raise ValueError('Invalid root filter')
+            selected_roots = [root_id]
+        elif root_ids is not None:
+            if (not isinstance(root_ids, (list, tuple)) or not 1<=len(root_ids)<=256
+                    or any(type(r) is not int or not 1<=r<=9223372036854775807 for r in root_ids)
+                    or len(set(root_ids)) != len(root_ids)):
+                raise ValueError('Invalid root filter')
+            selected_roots = sorted(root_ids)
+        else:
+            selected_roots = None
         terms=split_terms(query)
         with self.connect() as db:
-            if root_id is not None and not db.execute('SELECT 1 FROM library_roots WHERE id=? AND enabled=1',(root_id,)).fetchone():
-                raise ValueError('Unknown registered root')
+            if selected_roots is not None:
+                placeholders = ','.join('?' for _ in selected_roots)
+                active = {r[0] for r in db.execute(f'SELECT id FROM library_roots WHERE enabled=1 AND id IN ({placeholders})', selected_roots)}
+                if len(active) != len(selected_roots):
+                    raise ValueError('Unknown registered root')
             # Every normalized word must appear in the title or tags (AND), so
             # "巫女 東方", "東方　巫女", "ﾚｲﾑ" and "REIMU" variants still find a
             # file. The user's related-term dictionary may add OR alternatives
@@ -96,8 +111,12 @@ class ProductionCatalog(Catalog):
             if terms:
                 register_search_terms(db,alternatives)
                 where.append('aredoko_match(i.title,i.tags)>=0')
-            if root_id is not None:
-                where.append('l.root_id=?'); values.append(root_id)
+            if selected_roots is not None:
+                if len(selected_roots) == 1:
+                    where.append('l.root_id=?'); values.append(selected_roots[0])
+                else:
+                    where.append('l.root_id IN (' + ','.join('?' for _ in selected_roots) + ')')
+                    values.extend(selected_roots)
             if kind:
                 where.append('i.kind=?'); values.append(kind)
             where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],

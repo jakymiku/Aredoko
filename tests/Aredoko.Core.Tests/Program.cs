@@ -126,6 +126,38 @@ Check(intersection["root_ids"]!.AsArray().Count==1&&intersection["shelf"]!.GetVa
 Check(FolderSearch.RestrictAI(rootScope,4)!["root_ids"]!.AsArray().Count==0&&rootScope["root_ids"]!.AsArray().Count==2,"disjoint folder stays empty and saved scope is unchanged");
 Check(FolderSearch.RestrictAI(new System.Text.Json.Nodes.JsonObject {{"root_ids",new System.Text.Json.Nodes.JsonArray()}},3)!["root_ids"]!.AsArray().Count==0,"empty saved scope cannot broaden");
 Check(FolderSearch.RestrictAI(null,3)!["root_ids"]![0]!.GetValue<int>()==3,"explicit folder supported with legacy AI scope");
+Check(FolderSearch.LiteralRouteMulti("東方","image","all",0,new[]{5,2}).EndsWith("&page=0&root_ids=2,5"),"multi-root literal route sorts and encodes root_ids");
+Check(FolderSearch.LiteralRouteMulti("東方","image","all",0,new[]{4}).EndsWith("&page=0&root_id=4"),"single-element root_ids uses legacy root_id");
+var multiIntersect=FolderSearch.RestrictAIMulti(rootScope,new[]{1,2,3})!;
+Check(multiIntersect["root_ids"]!.AsArray().Select(n=>n!.GetValue<int>()).SequenceEqual(new[]{2,3}),"multi-root selection intersects saved AI scope");
+Check(FolderSearch.RestrictAIMulti(rootScope,Array.Empty<int>())!["root_ids"]!.AsArray().Count==0,"empty multi-root selection never broadens AI scope");
+var simMultiReq=SimilaritySearch.RequestMulti(7,"image","all",0,rootScope,new[]{1,3});
+Check(simMultiReq["scope"]!["root_ids"]!.AsArray().Select(n=>n!.GetValue<int>()).SequenceEqual(new[]{3}),"similarity multi-root request intersects saved AI scope");
+foreach(var badRoots in new IReadOnlyList<int>[]{Array.Empty<int>(),new[]{2,2},new[]{0},new[]{-1},Enumerable.Range(1,257).ToArray()})
+{
+    var badRejected=false;
+    try{FolderSearch.LiteralRouteMulti("q","","all",0,badRoots);}catch(ArgumentException){badRejected=true;}
+    Check(badRejected,"invalid multi-root literal selection rejected: "+badRoots.Count);
+}
+var parsedRoots=RegisteredRootRow.ParseList(System.Text.Json.Nodes.JsonNode.Parse("""
+{"items":[
+  {"id":1,"path":"C:\\lib\\media-1\\works","enabled":1,"online":true,"default_shelf":"AI画像","excludes":["*.tmp"],"present_count":12,"last_scanned_at":"2026-10-15T10:00:00Z"},
+  {"id":2,"path":"C:\\lib\\media-2\\works","enabled":1,"online":false,"default_shelf":"","excludes":[],"present_count":5,"last_scanned_at":null},
+  {"id":3,"path":"C:\\lib\\old\\works","enabled":0,"online":true,"default_shelf":"背景","excludes":[],"present_count":3,"last_scanned_at":null}
+]}
+""")!);
+Check(parsedRoots[0].Name=="works"&&parsedRoots[0].ShortPath=="media-1/works"&&parsedRoots[1].ShortPath=="media-2/works","same leaf folders have distinguishable short paths");
+Check(parsedRoots[0].StatusLabel.Contains("接続OK")&&parsedRoots[1].StatusLabel.Contains("未接続")&&parsedRoots[2].StatusLabel.Contains("登録解除済み"),"root status labels distinguish online offline and unregistered");
+var batchMixed=new FolderSettingsDraft(new[]{parsedRoots[0],parsedRoots[1]});
+Check(batchMixed.IsBatch&&batchMixed.Summary.IsMixed&&batchMixed.Summary.DisplayText=="複数の設定値"&&!batchMixed.IsDirty&&batchMixed.ResolveShelfToSave() is null,"batch draft with mixed shelves starts at KeepExisting and saves nothing until edited");
+batchMixed.ShelfMode=BatchShelfMode.ClearToNone;
+Check(batchMixed.IsDirty&&batchMixed.ResolveShelfToSave()=="","batch ClearToNone explicitly clears shelf to empty string");
+batchMixed.ShelfMode=BatchShelfMode.NewShelf;batchMixed.NewShelfName="  新棚  ";
+Check(batchMixed.ResolveShelfToSave()=="新棚","batch NewShelf trims new shelf name");
+batchMixed.RecordSucceeded(1);
+Check(batchMixed.TargetIds.SequenceEqual(new[]{2}),"partial failure keeps only remaining failed root for retry");
+var (scopeSummary,scopeWarn)=FolderScopeDescriber.DescribeSearchScope(parsedRoots,new[]{1,3},true,rootScope);
+Check(scopeSummary.Contains("media-1/works")&&scopeWarn is not null&&scopeWarn.Contains("登録解除")&&scopeWarn.Contains("1/2"),"scope describer warns on unregistered selection and AI scope narrowing");
 var groupedRequest=AIScopeRequests.Search("ミク","image","all",0,"cover",rootScope,false,.5,"other");
 Check(groupedRequest["group_threshold"]!.GetValue<double>()==.5&&groupedRequest["result_group"]!.GetValue<string>()=="other","manual boundary and group preserved in request");
 var evidence=Protocol.ParseSearch("""{"total":1,"score_kind":"cosine","group_boundary":0.5,"leading_total":3,"other_total":3,"items":[{"id":1,"title":"image.png","kind":"image","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.8,"literal_words":1,"literal_hits":0,"similarity_group":"leading"}]}""");

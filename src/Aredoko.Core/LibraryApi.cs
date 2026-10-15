@@ -28,24 +28,28 @@ public sealed class LibraryApi : IDisposable
         client.DefaultRequestHeaders.Remove("Origin");
         client.DefaultRequestHeaders.Add("Origin", "http://127.0.0.1:8769");
     }
-    public async Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all",JsonObject? scope=null,int? rootId=null,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all")
+    public Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all",JsonObject? scope=null,int? rootId=null,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all") =>
+        SearchMultiAsync(q,kind,view,page,semantic,source,scope,rootId is int id ? new[]{id} : null,literalOnly,groupThreshold,resultGroup);
+    public async Task<SearchResponse> SearchMultiAsync(string q,string kind,string view,int page,bool semantic,string source,JsonObject? scope,IReadOnlyList<int>? rootIds,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all")
     {
         if(semantic && !string.IsNullOrWhiteSpace(q))
         {
-            var result=await PostAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAI(scope,rootId),literalOnly,groupThreshold,resultGroup));
+            var result=await PostAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup));
             return Protocol.ParseSearch(result.ToJsonString());
         }
-        return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRoute(q,kind,view,page,rootId)));
+        return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
     }
     public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed));
-    public async Task<SearchResponse> SimilarAsync(int itemId,string kind,string view,int page,JsonObject scope,int? rootId,CancellationToken cancellation)
+    public Task<SearchResponse> SimilarAsync(int itemId,string kind,string view,int page,JsonObject scope,int? rootId,CancellationToken cancellation) =>
+        SimilarMultiAsync(itemId,kind,view,page,scope,rootId is int id ? new[]{id} : null,cancellation);
+    public async Task<SearchResponse> SimilarMultiAsync(int itemId,string kind,string view,int page,JsonObject scope,IReadOnlyList<int>? rootIds,CancellationToken cancellation)
     {
         using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(10));
         try
         {
             using var request=new HttpRequestMessage(HttpMethod.Post,"api/library/ai/similar") {
-                Content=new StringContent(SimilaritySearch.Request(itemId,kind,view,page,scope,rootId).ToJsonString(),Encoding.UTF8,"application/json")
+                Content=new StringContent(SimilaritySearch.RequestMulti(itemId,kind,view,page,scope,rootIds).ToJsonString(),Encoding.UTF8,"application/json")
             };
             using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,deadline.Token);
             if(response.Content.Headers.ContentType?.MediaType!="application/json"||response.Content.Headers.ContentLength is long size&&size>SimilaritySearch.MaxResponseBytes)

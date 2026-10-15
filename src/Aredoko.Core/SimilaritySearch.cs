@@ -6,11 +6,13 @@ public static class SimilaritySearch
 {
     public const int MaxResponseBytes=2*1024*1024;
     public static bool CanStart(MediaRow row) => row.Id > 0 && row.Availability == "present" && row.Kind is "image" or "book" or "archive";
-    public static JsonObject Request(int itemId,string kind,string view,int page,JsonObject scope,int? rootId=null)
+    public static JsonObject Request(int itemId,string kind,string view,int page,JsonObject scope,int? rootId=null) =>
+        RequestMulti(itemId,kind,view,page,scope,rootId is int id ? new[]{id} : null);
+    public static JsonObject RequestMulti(int itemId,string kind,string view,int page,JsonObject scope,IReadOnlyList<int>? rootIds)
     {
         if(itemId<=0 || page<0)throw new ArgumentOutOfRangeException(nameof(itemId));
         return new JsonObject {{"item_id",itemId},{"kind",kind},{"view",view},{"page",page},
-            {"scope",FolderSearch.RestrictAI(scope,rootId)}};
+            {"scope",FolderSearch.RestrictAIMulti(scope,rootIds)}};
     }
     public static string Guidance(string status) => status switch
     {

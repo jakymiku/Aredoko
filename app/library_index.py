@@ -188,9 +188,11 @@ class LibraryIndex:
     def roots(self,include_inactive=False):
         with self.connect() as db:
             result = [dict(row) for row in db.execute('SELECT * FROM library_roots'+('' if include_inactive else ' WHERE enabled=1')+' ORDER BY id')]
+            counts = dict(db.execute("SELECT root_id, count(*) FROM library_locations WHERE status='present' GROUP BY root_id").fetchall())
         for row in result:
             row['excludes'] = json.loads(row.pop('excludes_json'))
             row['online'] = Path(row['path']).is_dir()
+            row['present_count'] = counts.get(row['id'], 0)
         return result
 
     def locations(self, root_id, status=None, limit=100, offset=0):

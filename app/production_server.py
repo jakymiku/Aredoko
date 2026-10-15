@@ -70,12 +70,23 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None):
                     if not page.isascii() or not page.isdigit() or len(page)>9:
                         raise ValueError('Invalid paging')
                     root=None
+                    roots=None
+                    if 'root_id' in args and 'root_ids' in args:
+                        raise ValueError('Invalid root filter')
                     if 'root_id' in args:
                         value=param('root_id')
                         if len(args['root_id'])!=1 or not value.isascii() or not value.isdigit() or len(value)>19:
                             raise ValueError('Invalid root filter')
                         root=int(value)
-                    return self.send(200,catalog.search(param('q'),param('kind'),param('view','all'),int(page),root_id=root))
+                    if 'root_ids' in args:
+                        raw_values=args['root_ids']
+                        if len(raw_values)!=1 or not raw_values[0]:
+                            raise ValueError('Invalid root filter')
+                        parts=raw_values[0].split(',')
+                        if not 1<=len(parts)<=256 or any(not p.isascii() or not p.isdigit() or len(p)>19 for p in parts):
+                            raise ValueError('Invalid root filter')
+                        roots=[int(p) for p in parts]
+                    return self.send(200,catalog.search(param('q'),param('kind'),param('view','all'),int(page),root_id=root,root_ids=roots))
                 except ValueError as ex:return self.send(400,{'error':str(ex)})
             if path=='/api/session':
                 return self.send(200,{'mode':'production','token':token,'stats':catalog.stats()})

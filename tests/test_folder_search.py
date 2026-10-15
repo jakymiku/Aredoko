@@ -142,4 +142,31 @@ class FolderTests(unittest.TestCase):
         with urllib.request.urlopen(req) as response:self.assertEqual(json.load(response)['unregistered'],a)
         self.assertEqual(self.catalog.search()['total'],1)
 
+    def test_multi_root_union_search_and_present_counts_exclude_unselected_roots(self):
+        c=self.base/'c';c.mkdir()
+        self.file(self.a,'sub/a-only.png');self.file(self.b,'sub/b-only.png');self.file(c,'sub/c-only.png')
+        ra=self.catalog.add_root(str(self.a));rb=self.catalog.add_root(str(self.b));rc=self.catalog.add_root(str(c))
+        self.scan(ra);self.scan(rb);self.scan(rc)
+        roots_info={r['id']:r for r in self.catalog.index.roots()}
+        self.assertEqual((roots_info[ra]['present_count'],roots_info[rb]['present_count'],roots_info[rc]['present_count']),(1,1,1))
+        union_ab=self.catalog.search('only',root_ids=[rb,ra])
+        self.assertEqual(union_ab['total'],2)
+        self.assertEqual({r['root_id'] for r in union_ab['items']},{ra,rb})
+        for bad in ([], [ra,ra], [0], [-1], [999], list(range(1,258))):
+            with self.assertRaises(ValueError):self.catalog.search(root_ids=bad)
+        with self.assertRaises(ValueError):self.catalog.search(root_id=ra,root_ids=[ra,rb])
+        server=ThreadingHTTPServer(('127.0.0.1',0),production_handler(self.catalog,'test-token',ai=DisabledAI()))
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        origin=f'http://127.0.0.1:{server.server_port}'
+        with urllib.request.urlopen(origin+f'/api/items?root_ids={ra},{rb}') as response:
+            payload=json.load(response)
+            self.assertEqual(payload['total'],2)
+            self.assertEqual({r['root_id'] for r in payload['items']},{ra,rb})
+        for bad_query in ('root_ids=',f'root_id={ra}&root_ids={rb}',f'root_ids={ra},{ra}','root_ids=1,999',f'root_ids={ra}&root_ids={rb}'):
+            with self.assertRaises(urllib.error.HTTPError) as error:urllib.request.urlopen(origin+'/api/items?'+bad_query)
+            self.assertEqual(error.exception.code,400);error.exception.close()
+        self.catalog.unregister_root(rb)
+        with self.assertRaises(urllib.error.HTTPError) as error:urllib.request.urlopen(origin+f'/api/items?root_ids={ra},{rb}')
+        self.assertEqual(error.exception.code,400);error.exception.close()
+
 if __name__=='__main__':unittest.main()
