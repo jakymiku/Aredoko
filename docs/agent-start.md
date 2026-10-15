@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> 2026-10-15 21:10 JST ユーザー合意（文書のみ）：[登録フォルダをメインのリスト／グリッドへまとめ、複数選択検索と初期棚編集を行う仕様](folder-library-management.md)。OpenCodeが開発中。進行中の作業を安全に区切り、未commit変更・最新remoteを確認してから次のUX縦切りへ。下のテスト数・実装状況は各時点の記録であり、本追記の実行結果ではない。
+
 > 2026-10-15続行：類似検索の取消/復帰・破損vector・応答検査を補強。Python全300 PASS/skip0。帰宅後のWindows確認は [windows-similarity-handoff.md](windows-similarity-handoff.md) と `Check-Similarity.cmd` から開始する。Core/Release/nativeは今回の環境では未実行。
 
 > 最新（2026-10-15・P1）：画像/表紙のアイテム起点類似検索API・WinUI context menu・復帰/取消のソースを追加。[仕様と検証境界](item-similarity.md)。Coreテスト・Windows Release/nativeは今回未実行。P0の新baselineは未実施、累積改善試行0。今回はユーザーの明示依頼でP1を実装し、P0を完了扱いにしていない。
@@ -25,6 +27,7 @@
 | --- | --- |
 | AGENTS.md | 作業ルール、参照順序、許可の境界 |
 | docs/product-vision.md | 長期目的・ユーザーの検索体験・開発原則の正本 |
+| docs/folder-library-management.md | ユーザー合意の登録フォルダ一覧・複数root検索・初期棚編集の仕様と受け入れ条件 |
 | docs/development-priorities.md | **次に実装する優先順位・評価指標・合格条件（2026-10-15更新）** |
 | docs/codex-handoff.md / docs/chat-handoff.md の最新節 | 実装済み機能、実際の検証結果、未完了項目、次の作業 |
 | 最新コード・テスト・Issue #4 / PR #5 | 現在の実装と変更範囲の確認 |
