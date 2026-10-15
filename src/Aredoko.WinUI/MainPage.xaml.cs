@@ -251,12 +251,14 @@ public sealed partial class MainPage : Page
     {
         if(returningFromSimilarity||disposed||dialogOpen||saving||similarityReturn is null)return;
         returningFromSimilarity=true;searchTimer.Stop();
-        // Invalidate before waiting for the in-flight request's transition lock.
-        searches.Next();similarityCancellation?.Cancel();
+        // A loading transition already passed the discard guard and disabled
+        // editing. Do not ask about the old, already discarded draft again.
+        var wasLoading=Busy.Visibility==Visibility.Visible;
+        if(wasLoading){searches.Next();similarityCancellation?.Cancel();}
         await transitions.WaitAsync();
         try
         {
-            if(disposed||!await ConfirmDiscardAsync()||similarityReturn is not SearchBookmark bookmark)return;
+            if(disposed||(!wasLoading&&!await ConfirmDiscardAsync())||similarityReturn is not SearchBookmark bookmark)return;
             populating=true;
             Query.Text=bookmark.Query;Kind.SelectedIndex=bookmark.Kind;SearchMode.SelectedIndex=bookmark.Mode;
             RestoreSearchRoot(bookmark.Root);AIMatchedOnly.IsChecked=bookmark.LiteralOnly;
@@ -265,7 +267,13 @@ public sealed partial class MainPage : Page
             await LoadAsync();
             Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==bookmark.Selection)?.Focus(FocusState.Keyboard);
         }
-        finally{populating=false;returningFromSimilarity=false;transitions.Release();}
+        finally
+        {
+            populating=false;returningFromSimilarity=false;
+            if(!disposed){Busy.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}
+            transitions.Release();
+            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+        }
     }
     private static string AvailabilityLabel(string state) => state switch { "present" => "登録済み", "missing" => "ファイル不明", _ => state };
     private async Task ShowDetailPreviewAsync(MediaRow row)
@@ -360,11 +368,11 @@ public sealed partial class MainPage : Page
         SimilarityBar.Visibility=similar?Visibility.Visible:Visibility.Collapsed;
         SimilarityTitle.Text=similar?"類似検索の起点: "+similarityOrigin!.Title:"";
         var ai=SearchMode.SelectedIndex>0&&!similar;
-        AutomationProperties.SetName(Query,ai?"AI検索の文章":"名前・タグ検索");
+        AutomationProperties.SetName(Query,SearchMode.SelectedIndex>0?"AI検索の文章":"名前・タグ検索");
         SimilarityBoundary.Visibility=!similar&&SearchMode.SelectedIndex is 2 or 3?Visibility.Visible:Visibility.Collapsed;
         AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
-        Query.PlaceholderText=ai?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
+        Query.PlaceholderText=SearchMode.SelectedIndex>0?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
         SearchMethodHint.Text=similar?"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":SearchMode.SelectedIndex switch
         {
             1=>"名前・タグと画像・表紙を組み合わせて探します。",

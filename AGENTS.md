@@ -56,4 +56,7 @@ The **current WinUI 3 GUI is intentionally a plain, mostly monochrome proof of c
 - Documentation-only changes require content/link validation, not CI. Never claim an unrun check passed.
 
 ## Where to report work
+
+For item-origin similarity Windows validation, read [docs/windows-similarity-handoff.md](docs/windows-similarity-handoff.md). `Check-Similarity.cmd` runs existing local Python/Core/Release gates and the generated-media native batch once, without downloads or CI. Native automation code being present is not proof it has passed: inspect its result/logs and every PNG before recording GUI/visual success.
+
 Update `docs/codex-handoff.md` with the current HEAD, implementation progress, test commands/results, blockers, next 3 actionable steps. Keep the GitHub PR description current. Mark skipped/unverified work as such rather than presenting a planned item as completed.

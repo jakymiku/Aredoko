@@ -84,6 +84,7 @@ class VectorStore:
         if record is None:return None
         try:
             vec=array('f');vec.frombytes(record[0])
+            if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:return None
             return normalized(vec,self.dimension)
         except (ValueError,TypeError):return None
     def rank(self,rows,query,source="all",ranking="max"):
@@ -102,7 +103,7 @@ class VectorStore:
                     try:
                         vec=array('f');vec.frombytes(data)
                     except (ValueError,TypeError):continue
-                    if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or sum(x*x for x in vec)<1e-24: continue
+                    if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4: continue
                     score=sum(a*b for a,b in zip(query,vec))
                     scores.setdefault(item_id,{})[mode]=score
         # Fusion uses global positions, never per-batch ranks.
@@ -409,7 +410,7 @@ class AISearch:
             # Match scoped indexing's shared cap BEFORE result filters; never
             # fill filtered results with vectors outside the selected target.
             rows=[row for row in self._iter_rows(limit=MAX_ITEMS,scope=scope)
-                  if row['id']!=item_id and (not kind or row['kind']==kind) and
+                  if row['id']!=item_id and row['kind'] in ('image','book','archive') and (not kind or row['kind']==kind) and
                   (view=='all' or view=='favorites' and row['favorite'] or
                    view=='unreviewed' and not row['reviewed'] or view=='shelf' and row['shelf'])]
             ranked=self.store.rank(rows,query,'cover','max') if rows else []

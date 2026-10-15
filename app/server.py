@@ -30,8 +30,13 @@ def handler_for(catalog, token, benchmark_dist=None):
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; connect-src 'self'")
             for name,value in (extra_headers or {}).items():self.send_header(name,value)
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError,ConnectionResetError):
+                # Cancelling a search/preview is normal. Never retry a reply to
+                # a disconnected client or turn it into a noisy server error.
+                self.close_connection=True
 
         def reject_post(self, status, body):
             # Closing a Windows TCP socket with unread upload bytes can reset

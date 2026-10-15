@@ -40,8 +40,30 @@ public sealed class LibraryApi : IDisposable
     public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed));
     public async Task<SearchResponse> SimilarAsync(int itemId,string kind,string view,int page,JsonObject scope,int? rootId,CancellationToken cancellation)
     {
-        var result=await PostAsync("api/library/ai/similar",SimilaritySearch.Request(itemId,kind,view,page,scope,rootId).ToJsonString(),cancellation);
-        return Protocol.ParseSearch(result.ToJsonString());
+        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        try
+        {
+            using var request=new HttpRequestMessage(HttpMethod.Post,"api/library/ai/similar") {
+                Content=new StringContent(SimilaritySearch.Request(itemId,kind,view,page,scope,rootId).ToJsonString(),Encoding.UTF8,"application/json")
+            };
+            using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,deadline.Token);
+            if(response.Content.Headers.ContentType?.MediaType!="application/json"||response.Content.Headers.ContentLength is long size&&size>SimilaritySearch.MaxResponseBytes)
+                throw new InvalidDataException("類似検索の応答形式またはサイズが無効です。");
+            await using var input=await response.Content.ReadAsStreamAsync(deadline.Token);
+            using var output=new MemoryStream();var buffer=new byte[16384];int read;
+            while((read=await input.ReadAsync(buffer,deadline.Token))!=0)
+            {
+                if(output.Length+read>SimilaritySearch.MaxResponseBytes)throw new InvalidDataException("類似検索の応答が大きすぎます。");
+                output.Write(buffer,0,read);
+            }
+            if(response.Content.Headers.ContentLength is long expected&&expected!=output.Length)throw new InvalidDataException("類似検索の応答が途中で切れました。");
+            var text=Encoding.UTF8.GetString(output.ToArray());
+            if(!response.IsSuccessStatusCode)throw new InvalidOperationException(ErrorText.FromResponse(text,(int)response.StatusCode));
+            return SimilaritySearch.Parse(text,itemId,page);
+        }
+        catch(OperationCanceledException ex) when(!cancellation.IsCancellationRequested)
+        {throw new TimeoutException("類似検索が時間内に完了しませんでした。少し待ってやり直してください。",ex);}
     }
     public Task<string> ExportRelatedTermsAsync() => GetTextAsync("api/library/terms/export");
     public Task<JsonNode> ImportRelatedTermsAsync(string document) => PostAsync("api/library/terms/import", document);

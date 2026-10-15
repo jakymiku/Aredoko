@@ -2,6 +2,8 @@
 
 2026-10-15：P1のAPI・Core・WinUI導線を追加。Python生成fixtureで検証済み。今回の環境に.NET SDK/Windowsはなく、Coreテストの実行・Windows Release/native GUIは未検証。実モデルでの検索品質は未評価。
 
+続行で取消/復帰、破損vector、応答境界を補強し、[Windows一括テストと再開手順](windows-similarity-handoff.md)を追加。最終Python全300 PASS/34.080秒/skip0。`Check-Similarity.cmd`は既存環境でPython→Core→Release→生成nativeを一度ずつ実行する入口（Windows実行はここでは未検証）。
+
 ## 操作
 
 一覧/グリッドの画像・本・ZIP、または詳細のプレビューを右クリックし「似た画像・素材を探す」を選ぶ。現在の選択とは別の行を右クリックしても、その行を起点にする。動画/音声の内容類似検索は対象外。
@@ -28,6 +30,8 @@
 - ranking後に候補の登録/除外/scope/revision/viewと起点を再確認する。処理中の起点更新は409で再試行を案内。索引のsource revisionは既存のカタログstat/title/tags由来。実ファイルの未スキャン変更を自動検出する機能ではない。
 - 推論・source画像読み直し・モデル起動・自動索引作成・vector書込は行わない。保存済みvectorがあればencoder未導入/未ロードでも利用可能。
 
+Coreの類似検索クライアントは10秒deadline、JSON MIME、最大2MiB・受信長を検査し、起点/モード/source/ページ/件数・自己混入/重複/非画像・cosine範囲の不整合を拒否する。通常の文字/AI検索の応答方式は変更しない。破損した非unitベクトルは起点ならunindexed、候補ならskip。クライアント取消による切断には応答の再送や不要なサーバーエラーを出さない。
+
 応答は従来の`total/items/page/limit`に`mode:similar`、`origin_id`、`origin_revision`、`profile`、`scope`、`source:cover`、`score_kind:cosine`、`coverage_limit`、`similarity_status`を追加。各候補の根拠は`similarity_origin_id`と`similarity_evidence:cover`。
 
 | similarity_status | 動作 |
@@ -38,7 +42,7 @@
 
 ## 検証とWindowsの残項目
 
-`python -m unittest discover -s tests -p test_similarity_search.py -v`：15件。生成PNG/CBZ＋決定的な3次元contract encoderで類似順、text混入防止、自己除外、root/kind/shelf/view、profile/revision/前処理namespace、未索引/破損、cap/paging、競合/close、Host/token/Origin、保存scope、元bytes/mtime不変と検索中encode0を確認。実モデルの精度を示す評価ではない。
+`python -m unittest discover -s tests -p test_similarity_search.py -v`：16件。生成PNG/CBZ＋決定的な3次元contract encoderで類似順、text/非画像混入防止、自己除外、root/kind/shelf/view、profile/revision/前処理namespace、未索引/破損、cap/paging、競合/close、Host/token/Origin、保存scope、元bytes/mtime不変と検索中encode0を確認。実モデルの精度を示す評価ではない。別途`test_similarity_sandbox.py`5件で76件の生成fixture/ページ境界/実HTTP/未索引・text-only/409・503/取消済み応答を確認。
 
 Coreには`SimilarityTests.Run`を追加し、反射不要JSON・scopeの所有/積集合・固定route/認証/取消・旧応答互換・日本語根拠を確認するコードを用意した。**未実行**。Windows環境で次を実行する：
 

@@ -40,7 +40,7 @@ static class SimilarityTests
             var body=JsonNode.Parse(await message.Content!.ReadAsStringAsync(token))!;
             check(body["item_id"]!.GetValue<int>()==7&&body["view"]!.GetValue<string>()=="favorites","LibraryApi sends clicked item and filters");
             if(blocked)await Task.Delay(Timeout.Infinite,token);
-            return Json("""{"total":0,"items":[],"similarity_status":"unindexed"}""");
+            return Json(Response());
         }));
         await api.ConnectAsync();
         check((await api.SimilarAsync(7,"image","favorites",0,scope,1,CancellationToken.None)).SimilarityStatus=="unindexed","LibraryApi parses fallback");
@@ -49,6 +49,36 @@ static class SimilarityTests
         try{await pending;check(false,"cancel pending similarity");}
         catch(OperationCanceledException){check(true,"pending similarity can be cancelled");}
         check(calls==3,"similarity never requests preview or inference endpoints");
+        check(SimilaritySearch.Parse(Response(),7,0).Total==0,"strict similarity fallback contract");
+        var visual=JsonNode.Parse(Response())!.AsObject();visual["similarity_status"]="ready";visual["total"]=1;
+        visual["items"]=JsonNode.Parse("""[{"id":8,"title":"near.png","kind":"image","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.98,"similarity_origin_id":7}]""");
+        check(SimilaritySearch.Parse(visual.ToJsonString(),7,0).Items[0].Id==8,"strict visual candidate contract");
+        foreach(var change in new (string Field,JsonNode? Value)[]{("id",7),("similarity_origin_id",9),("kind","audio"),("semantic_score",2),("semantic_score",null)})
+        {
+            var broken=visual.DeepClone().AsObject();broken["items"]![0]![change.Field]=change.Value;
+            Reject(check,broken.ToJsonString(),"invalid visual candidate "+change.Field);
+        }
+        foreach(var field in new[]{"origin_id","origin_revision","profile","mode","source","score_kind","page","limit","similarity_status"})
+        {
+            var broken=JsonNode.Parse(Response())!.AsObject();broken.Remove(field);
+            Reject(check,broken.ToJsonString(),"missing similarity field "+field);
+        }
+        foreach(var change in new (string Field,JsonNode? Value)[]{("origin_id",8),("page",1),("mode","semantic"),("source","text"),("origin_revision","bad"),("profile",""),("total",1),("similarity_status","unexpected")})
+        {
+            var broken=JsonNode.Parse(Response())!.AsObject();broken[change.Field]=change.Value;
+            Reject(check,broken.ToJsonString(),"invalid similarity field "+change.Field);
+        }
+        using var oversized=new LibraryApi(new Handler((_,_)=>Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {
+            Content=new ByteArrayContent(new byte[SimilaritySearch.MaxResponseBytes+1]) {Headers={ContentType=new("application/json")}}
+        })));
+        try{await oversized.SimilarAsync(7,"","all",0,scope,null,CancellationToken.None);check(false,"oversized response");}
+        catch(InvalidDataException){check(true,"oversized response rejected before JSON parsing");}
+    }
+    private static string Response()=>"""{"total":0,"items":[],"similarity_status":"unindexed","origin_id":7,"origin_revision":"0000000000000000000000000000000000000000000000000000000000000000","profile":"test-profile","page":0,"limit":60,"mode":"similar","source":"cover","score_kind":"cosine"}""";
+    private static void Reject(Action<bool,string> check,string text,string name)
+    {
+        try{SimilaritySearch.Parse(text,7,0);check(false,name);}
+        catch(InvalidDataException){check(true,name);}
     }
     private static HttpResponseMessage Json(string text)=>new(HttpStatusCode.OK) {Content=new StringContent(text,Encoding.UTF8,"application/json")};
     private sealed class Handler(Func<HttpRequestMessage,CancellationToken,Task<HttpResponseMessage>> send):HttpMessageHandler

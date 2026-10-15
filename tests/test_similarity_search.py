@@ -162,7 +162,7 @@ class SimilarityTests(unittest.TestCase):
             self.assertEqual(result['coverage_limit'],1)
 
     def test_corrupt_origin_vectors_use_unindexed_fallback(self):
-        for data in (b'bad',array('f',[0,0,0]).tobytes(),array('f',[float('nan'),0,1]).tobytes(),array('f',[1]).tobytes()):
+        for data in (b'bad',array('f',[0,0,0]).tobytes(),array('f',[float('nan'),0,1]).tobytes(),array('f',[3e30,0,0]).tobytes(),array('f',[1]).tobytes()):
             with self.ai.store.connect() as db:db.execute("UPDATE ai_vectors SET vector=? WHERE item_id=? AND modality='cover'",(data,self.origin['id']))
             self.assertEqual(self.ai.similar(self.origin['id'])['similarity_status'],'unindexed')
 
@@ -180,8 +180,14 @@ class SimilarityTests(unittest.TestCase):
 
     def test_corrupt_candidate_vector_is_skipped_without_hiding_other_results(self):
         near=self.row('near.png')
-        with self.ai.store.connect() as db:db.execute("UPDATE ai_vectors SET vector=? WHERE item_id=? AND modality='cover'",(b'bad',near['id']))
-        self.assertEqual(self.ids(),[self.row('cover.cbz')['id'],self.row('blue.png')['id']])
+        for data in (b'bad',array('f',[3e30,0,0]).tobytes(),array('f',[0,0,0]).tobytes()):
+            with self.ai.store.connect() as db:db.execute("UPDATE ai_vectors SET vector=? WHERE item_id=? AND modality='cover'",(data,near['id']))
+            self.assertEqual(self.ids(),[self.row('cover.cbz')['id'],self.row('blue.png')['id']])
+
+    def test_cached_cover_on_unsupported_kind_is_never_a_visual_candidate(self):
+        song=self.row('song.wav');self.ai.store.put(song['id'],revision(song),{'text':[0,1,0],'cover':[1,0,0]})
+        self.assertNotIn(song['id'],self.ids())
+        self.assertEqual(self.ids(kind='audio'),[])
 
     def test_busy_close_and_strict_arguments(self):
         with self.ai.inference,self.assertRaises(AIBusy):self.ids()

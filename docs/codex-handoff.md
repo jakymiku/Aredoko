@@ -1,3 +1,31 @@
+## 最新：P1バグ取り・Windows一括検証の準備（2026-10-15 続行）
+
+**現在フェーズ：P1 API/生成fixtureとWindows検証入口まで実装、Core/Release/nativeは実機確認待ち。P0新baseline：未実施、改善試行累積0/2を維持。** ユーザーの「帰宅後Codex/OpenCode等でテスト・ブラッシュアップできる状態まで」の依頼に対応。開始remote HEAD **80e618e3e45dc4db10bbecd6bd8acb7ad8b4947b**、同じ製品branch/Draft PR5/base・cleanの隔離snapshotを確認。他AIのremote更新なし。ユーザーPCのworktree状態は未観測。
+
+### 追加実装とバグ取り
+
+- **破棄承認→類似検索取得中→戻る**で、既に破棄を承認した旧draftを再度確認しないよう修正。通常のdirty結果から戻る場合は確認を先に行う。取消後のBusy/ItemListの無効状態を回収し、戻る取得中に変更された検索語も再検索へつなぐ。検索欄の名前/placeholderも実際の通常検索モードと一致させた。native再現検証は下記の準備コードまで、今回未実行。
+- Coreの類似応答をbounded HTTPへ：10秒deadline、JSON MIME、最大2MiBと長さ、起点/モード/source/profile識別子/revision形式/ページ/件数・重複/自己/非画像混入・cosine範囲を検査。反射不要を維持。Coreに正常/不整合/過大応答の検査を追加したが.NET SDKがないため未実行。
+- 非unit/破損vectorを起点はunindexed・候補はskip。画像/本/ZIP以外に不正なcoverが保存されていても候補にしない。HTTP取消後のBrokenPipe/ConnectionResetを通常の切断として扱い、応答を再送しない。
+- `tools/similarity_sandbox.py`：新規ignored出力に76件の生成画像/CBZ等と固定3次元vector・2root・専用DB/設定を用意。model/encode0でも72類似結果を2ページで確認。indexed/unindexed/text-onlyと409/503/遅延を用意。既存の8769番やユーザーアプリへ接続しない。
+- `Check-Similarity.cmd`→`tools/check_similarity_local.py --native`でPython→Core→Release→`test_similarity_ui.py`のLight/Dark batchを一度実行し、結果/段階log/PNG/UIA treeを新規data/ai-ui以下へ保存。依存install/restore/download・CIは実行しない。所有PID/HWND以外を操作・終了しない。全PNGは目視待ちを明記し、runtime合格と混同しない。
+- **[帰宅後の手順と、そのままCodex/OpenCodeへ渡せる指示](windows-similarity-handoff.md)** を追加。AGENTS/agent-start/item-similarityから参照。
+
+### 確定した検証結果と境界
+
+- 最終 `python -m unittest discover -s tests -p 'test_*.py'`：**300 PASS /34.080秒/skip0**。類似API16、sandbox5（ページ/同scope・元bytes/mtime・設定/vector不変・実HTTP・fallback/409/503・切断応答）を含む。初回sandbox HTTPはテスト用subclassのlimit引数漏れで1error、署名をproduction APIに合わせて修正し5件PASS。モデル品質評価ではない。
+- AI scaling6 PASS、WinUI名前付きXAML stub3 PASS、Python構文/CLI help、XML整形式、diff/文書リンクを確認。過去のPython294を今回の成功に流用していない。
+- **Coreテスト実行/.NET C#コンパイル/Windows Release/native/全PNG目視・キーボード/多DPI/実GPUは未検証。** 新しいWindows runner/native harnessもPython構文とfixture/API確認まで。実機のpopup/selector/focus差は残るので、結果を読まず合格扱いにしない。
+- CI dispatch0、manual-only維持。モデル/依存/OS変更・私物scan/アップロード・main merge/force push/new PRなし。テストが印字する既存download案内はmock由来で実取得ではない。
+
+### 次の3手
+
+1. Windowsの作業ツリー/remote/未commitを確認して同期後、`Check-Similarity.cmd`を一度実行。失敗段階のlogを読み、Core/Releaseを直してからnativeへ。既存導入/復元済み環境だけを使う。手順と期待結果はwindows-similarity-handoff.md。
+2. native全PNGを目視し、list/grid/詳細・dirty取消/破棄直後取消・復帰/page/focus・scope/fallback/409/503を確認。必要ならShift+F10/既存viewer/Range/seekの回帰を別に確認。最大2修正cycleで未解決なら原因/未完了を記録し、反復で停滞しない。
+3. P1のWindows確認を区切り、未実施P0固定baselineを結果観測前に凍結して一度記録（モデル未導入ならその条件を分離）。改善0件または累積2件で区切り、P2の由来/承認付き候補タグ・OCRへ進む。現在P0累積0を勝手に完了扱いにしない。
+
+---
+
 ## 最新：P1 画像・表紙のアイテム起点類似検索（2026-10-15）
 
 **現在フェーズ：P1 API/生成fixture/Core/WinUI導線のソース追加済み、Windows検証待ち。P0の新baseline：未実施。P0改善試行の累積：0/2。** 今回はユーザーの明示依頼が類似検索API/右クリックの実装であり、その縦切りへ進んだ。P0完了や実モデルの精度改善を宣言しない。同じ評価ループを再開しない。
