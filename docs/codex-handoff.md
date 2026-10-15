@@ -1,4 +1,27 @@
-## 最新：P2 未承認タグ候補の明示検索API・Core・WinUI接続とWindows実機確認（2026-10-16 JST 続行）
+## 最新：P3 画像フォルダを「一冊」（登録時のチェックのみ・自動振り分けなし）（2026-10-16 JST 朝）
+
+開始HEAD `f3fa793`。ユーザー決定：「素材やバラの画像フォルダは今まで通り。取り込み時に『一冊として扱う』にチェックしたものだけ一冊。自動の振り分けはしない」。Hark（Linux sandbox）で実装。**CI起動0回**。仕様は[folder-books.md](folder-books.md)。
+
+### 実装
+
+1. `5157f70` バックエンド：`library_roots.folder_books`（追加migration、既存rootは0）。一冊モードのrootでは画像を直接含む各ディレクトリを1件の `book`（`relative_path` 末尾 `/`、直下は `./`）に。ページ合計サイズと(名前,サイズ,mtime)由来の63bit tokenを保存し、変更でrevision・cache key・AI revisionが変わる。読書manifest/page・プレビュー・タグ入力・読書位置はZIP/CBZと同じAPI。除外ルールとリンク拒否をページにも適用。スキャン後のモード変更は拒否（メタデータが移らないため）。登録時の固定・パスなし検証エラー（重複・入れ子・同意なし・モード変更不可など）を汎用文言でなく具体的に返す（`PUBLIC_FOLDER_ERRORS`）。
+2. `9940c51` Core/WinUI：登録パネルに `RootFolderBooks` チェック、再登録prefill、一覧に「一冊モード」、詳細パス表示、一冊は「本を開く」とAIタグ候補の対象（`MediaRow.IsFolderBook`）。`ErrorText`に登録エラー15件の日本語。**バグ修正**：登録後に設定パネルを開く処理がサーバー応答の `root_id` でなく `id` を読み、常に開かなかった。`RegisteredRootRow.Name` がLinuxで `\` 区切りを分割せずCore testが失敗していた。
+
+### 検証（Linux、最小限）
+
+- 全Python **346 PASS**（`test_folder_books.py` 8件：既定は1枚ずつ、一冊化、自然順ページ、直下`./`、再スキャンでID・タグ保持、全画像削除でmissing、除外、モード固定、HTTP登録/読書/具体エラー、リンク不読）。`test_error_text_coverage.py` 3件。
+- C# Core **320 PASS**（Linux）、WinUI C#-only compile 0 error。
+- **未検証**：Windows Release・XAML・native GUI（チェックボックス配置・一冊の読書・一覧表示）。
+
+### 次の3手
+
+1. Codex/AntigravityでWindows Release＋生成画像フォルダを一冊モードで登録→スキャン→「本を開く」→ページ送り→再スキャンでタグ保持、のnative確認。
+2. P3残り：ページ単位ID・ページへのヒット集約・移動追跡・重複候補。
+3. 代表素材のタグ品質測定／OCR（いずれもユーザー許可が必要）。
+
+---
+
+## 履歴：P2 未承認タグ候補の明示検索API・Core・WinUI接続とWindows実機確認（2026-10-16 JST 続行）
 
 **現在フェーズ：P2 候補保存・承認API基盤、WDアダプタ導入/実CPU確認、WinUI候補レビュー画面（通常/狭幅/live resize）、および確定タグから分離した「未承認タグ候補」明示検索（`POST /api/library/tag-suggestions/search` / `ModeTagCandidates`）まで実装・Windows実機確認完了。P0 baseline済み・改善試行累積1/2、P1類似検索・登録フォルダ管理ハブ完了を維持。**
 
