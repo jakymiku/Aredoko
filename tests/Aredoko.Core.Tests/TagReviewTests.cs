@@ -55,5 +55,45 @@ static class TagReviewTests
         try{await pending;check(false,"tag cancellation");}catch(OperationCanceledException){check(true,"tag read cancellation is distinct from timeout");}
         var before=calls;try{await api.TagReviews.EvidenceAsync(7,"bad",CancellationToken.None);check(false,"invalid evidence revision");}catch(ArgumentException){check(calls==before,"invalid evidence revision sends no request");}
         check(!TagReviewProtocol.CanOpen(new(){Location="video.mp4",Availability="present"})&&TagReviewProtocol.CanOpen(new(){Location="book.CBZ",Availability="present"}),"review entry only for supported present image and archive");
+        var searchMethod4=SearchMethod.FromIndex(4);
+        check(!searchMethod4.IsAI&&searchMethod4.IsTagCandidates&&searchMethod4.Source=="pending-proposals","search method 4 routes to pending tag candidates without AI embedding requirement");
+        var candidateReq=TagReviewProtocol.CandidateSearchRequest("solo","image","unreviewed",1,new[]{5,2},"棚A","wd-v3");
+        check(candidateReq["query"]!.GetValue<string>()=="solo"&&candidateReq["page"]!.GetValue<int>()==1&&
+              candidateReq["root_ids"]!.AsArray().Select(n=>n!.GetValue<int>()).SequenceEqual(new[]{2,5})&&
+              candidateReq["shelf"]!.GetValue<string>()=="棚A"&&candidateReq["model"]!.GetValue<string>()=="wd-v3",
+              "candidate search request normalizes roots and filters");
+        foreach(var badRoots in new IReadOnlyList<int>[]{Array.Empty<int>(),new[]{1,1},new[]{0}})
+        {
+            var badRejected=false;
+            try{TagReviewProtocol.CandidateSearchRequest("","image","all",0,badRoots);}catch(ArgumentException){badRejected=true;}
+            check(badRejected,"candidate search rejects invalid root_ids");
+        }
+        var searchJson=$$"""
+        {"total":1,"page":0,"limit":60,"search_mode":"pending-proposals","items":[
+          {"id":7,"title":"book.cbz","kind":"book","tags":["確定"],"shelf":"","favorite":false,"reviewed":false,
+           "root_id":2,"relative_path":"book.cbz","availability":"present","size_bytes":100,"mtime_ns":200,
+           "proposal_match":{"batch_id":4000000000,"source_revision":"{{Revision}}","source_state":"stale","state":"pending",
+             "tags":["candidate-one","candidate-two"],
+             "producer":{"model":"wd-swinv2","model_revision":"rev1","adapter":"wd","version":"1","preprocessing":"cover-v1"},
+             "evidence":{"item_id":7,"revision":"{{Revision}}","kind":"cover","page":0} } }]}
+        """;
+        var parsedSearch=TagReviewProtocol.ParseCandidateSearch(Encoding.UTF8.GetBytes(searchJson),0);
+        check(parsedSearch.Total==1&&parsedSearch.Items[0].Proposal is {BatchId:4000000000,SourceState:"stale"} prop&&
+              prop.Summary.Contains("未承認タグ候補: candidate-one、candidate-two")&&prop.Summary.Contains("本の先頭ページのみ")&&prop.Summary.Contains("元ファイル変更あり"),
+              "candidate search response parses provenance, cover evidence, and stale state");
+        foreach(var mutate in new Action<JsonObject>[]{
+            o=>o["search_mode"]="wrong",
+            o=>o["page"]=2,
+            o=>o["items"]![0]!["proposal_match"]!["state"]="accepted",
+            o=>o["items"]![0]!["proposal_match"]!["source_state"]="unknown",
+            o=>o["items"]![0]!["proposal_match"]!["tags"]=new JsonArray(),
+            o=>o["items"]![0]!["proposal_match"]!["evidence"]!["item_id"]=99
+        })
+        {
+            var broken=JsonNode.Parse(searchJson)!.AsObject();mutate(broken);
+            var rejected=false;
+            try{TagReviewProtocol.ParseCandidateSearch(Encoding.UTF8.GetBytes(broken.ToJsonString()),0);}catch(InvalidDataException){rejected=true;}
+            check(rejected,"invalid candidate search payload rejected");
+        }
     }
 }

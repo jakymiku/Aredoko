@@ -45,6 +45,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--scenario',choices=('indexed','unindexed','text-only'),default='indexed')
+    parser.add_argument('--candidate-search-only',action='store_true')
     args=parser.parse_args()
     if os.name!='nt':parser.error('Native Windows required; no test was run')
     target=args.output.resolve()
@@ -132,6 +133,17 @@ def main():
         tree=json.loads(ui('inspect','--json','--depth','16'))
         matches=[n for n in nodes(tree) if n.get('automationId')==identifier]
         check(identifier+' has visible nonzero bounds',len(matches)==1 and matches[0].get('width',0)>0 and matches[0].get('height',0)>0 and not matches[0].get('isOffscreen',True))
+    def choose_combo(combo_id,option_id_or_name):
+        ui('invoke',combo_id);time.sleep(.25)
+        windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+        ordered=[w for w in windows if w.get('title')=='PopupHost']+[w for w in windows if str(w.get('hwnd'))==hwnd]
+        for window in ordered:
+            handle=str(window['hwnd']);owned(handle)
+            tree=json.loads(ui('inspect','--json','--depth','14',window=handle))
+            for n in nodes(tree):
+                if n.get('type')=='ListItem' and (n.get('automationId')==option_id_or_name or n.get('name')==option_id_or_name):
+                    ui('invoke',n.get('automationId') or n.get('selector') or option_id_or_name,window=handle);time.sleep(.15);return
+        raise RuntimeError(f'Combo option {option_id_or_name} not found in {combo_id}')
     def open_review():
         ui('scroll-into-view','BtnTagSuggestions');ui('invoke','BtnTagSuggestions');ui('wait-for','TagStatus','-t','12000');enabled('TagRefresh',True)
     def proposal(state='pending'):
@@ -155,6 +167,55 @@ def main():
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
             hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','76 件')
+            if args.candidate_search_only:
+                service=TagSuggestions(sandbox.catalog,tagger)
+                img_item=sandbox.item('generated-003.png')
+                book_item=sandbox.item('generated-cover.cbz')
+                root2_item=sandbox.item('generated-001.png',1)
+                if theme=='Light':
+                    sandbox.catalog.update([img_item],{'tags':['confirmed-only-tag']})
+                    tagger.info=TaggerInfo('ui-fixture','cand-1','wd-fixture-model','rev1','cover-v1')
+                    service.generate(img_item,uuid.uuid4().hex)
+                    service.generate(book_item,uuid.uuid4().hex)
+                    service.generate(root2_item,uuid.uuid4().hex)
+                    # Mark book_item batch stale in synthetic DB to verify stale display in candidate search
+                    with sandbox.catalog.connect() as db:
+                        db.execute('UPDATE tag_proposal_batches SET source_revision=? WHERE item_id=?',('0'*64,book_item))
+                        db.execute("UPDATE tag_proposal_batches SET evidence_json=json_set(evidence_json,'$.revision',?) WHERE item_id=?",('0'*64,book_item))
+                # 1. Literal search does not match unapproved candidate tags
+                ui('set-value','TxtQuery','candidate-one');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','0 件')
+                check(theme+' literal search excludes unapproved candidates',True)
+                # 2. Switch to ModeTagCandidates: matches pending candidates across active roots
+                choose_combo('CmbSearchMode','ModeTagCandidates');ready();wait('TxtCount','3 件')
+                contains('ProposalEvidence'+str(img_item),'未承認タグ候補: candidate-one')
+                contains('ProposalEvidence'+str(img_item),'wd-fixture-model')
+                contains('ProposalEvidence'+str(img_item),'元ファイル一致')
+                contains('ProposalEvidence'+str(book_item),'本の先頭ページのみ')
+                contains('ProposalEvidence'+str(book_item),'元ファイル変更あり')
+                shot(theme+'-candidate-search-wide')
+                # 3. Confirmed tags do not match in ModeTagCandidates
+                ui('set-value','TxtQuery','confirmed-only-tag');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','0 件')
+                check(theme+' candidate search excludes confirmed tags',True)
+                # 4. Empty query in ModeTagCandidates lists all items with pending proposals, and shares folder scope
+                ui('set-value','TxtQuery','');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','3 件')
+                ui('invoke','NavFolders','--action','select');wait('TxtCount','2 フォルダ')
+                ui('invoke',f'OpenFolder{sandbox.roots[0]}');ready();wait('TxtCount','2 件')
+                check(theme+' candidate search honors selected folder scope',True)
+                user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.3)
+                shot(theme+'-candidate-search-narrow')
+                user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);time.sleep(.3)
+                if theme=='Dark':
+                    # Approve and reject all pending candidates on Dark img_item (generated-003.png from Light), verify it leaves pending search
+                    target_item=sandbox.item('generated-003.png')
+                    ui('invoke','Item'+str(target_item),'--action','select');wait('TxtEditStatus','保存済み')
+                    open_review();ui('set-value','TagEdited','cand-approved');ui('invoke','TagAccept');enabled('TagRefresh',True)
+                    with sandbox.catalog.connect() as db:
+                        rem=db.execute("SELECT p.id FROM tag_proposals p JOIN tag_proposal_batches b ON b.id=p.batch_id WHERE b.item_id=? AND p.state='pending'",(target_item,)).fetchone()[0]
+                    ui('invoke','TagCandidate'+str(rem),'--action','select');ui('invoke','TagReject');enabled('TagRefresh',True)
+                    ui('invoke','TagClose');ready();ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                    choose_combo('CmbSearchMode','ModeLiteral');ui('set-value','TxtQuery','cand-approved');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                    check('Dark reviewing all pending proposals removes item from candidate search and exposes approved tag in literal search',True)
+                close();continue
             name='generated-003.png' if theme=='Light' else 'generated-004.png';source=sandbox.item(name)
             ui('set-value','TxtQuery',name);time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
             ui('invoke','Item'+str(source),'--action','select');wait('TxtEditStatus','保存済み')

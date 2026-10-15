@@ -43,6 +43,8 @@ public sealed class LibraryApi : IDisposable
         SearchMultiAsync(q,kind,view,page,semantic,source,scope,rootId is int id ? new[]{id} : null,literalOnly,groupThreshold,resultGroup);
     public async Task<SearchResponse> SearchMultiAsync(string q,string kind,string view,int page,bool semantic,string source,JsonObject? scope,IReadOnlyList<int>? rootIds,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all")
     {
+        if(source=="pending-proposals")
+            return await TagReviews.SearchCandidatesAsync(q,kind,view,page,rootIds);
         if(semantic && !string.IsNullOrWhiteSpace(q))
         {
             var result=await PostAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup));

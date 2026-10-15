@@ -24,6 +24,7 @@ from laya_process import LayaProcess
 from laya_config import model_path as laya_model_path
 from server import handler_for
 from tag_suggestions import TagSuggestions
+from tag_candidate_search import search_candidates
 from wd_tagger import create_tagger
 
 class DisabledAI:
@@ -260,6 +261,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path=='/api/library/tag-suggestions/search':
+                    if set(body)-{'query','kind','view','page','root_ids','shelf','model'}:raise ValueError('Invalid candidate search fields')
+                    return self.send(200,search_candidates(suggestions,**body))
                 if self.path=='/api/library/tag-suggestions/generate':
                     if set(body)!={'item_id','request_id'}:raise ValueError('Invalid generation request')
                     return self.send(200,suggestions.generate(body['item_id'],body['request_id']))

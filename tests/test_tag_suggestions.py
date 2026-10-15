@@ -408,6 +408,75 @@ class TagSuggestionHTTPTests(TagFixture, unittest.TestCase):
         self.assertNotIn('private', result['error'])
         self.assertEqual(self.counts(), (0, 0))
 
+    def test_candidate_search_isolates_pending_latest_batch_and_honors_scopes(self):
+        from tag_candidate_search import search_candidates
+        route = '/api/library/tag-suggestions'
+        second_media = Path(self.tmp.name) / 'media-2'
+        second_media.mkdir()
+        second_path = second_media / 'second.png'
+        second_path.write_bytes(png(color=(10, 120, 200)))
+        second_root = self.catalog.add_root(str(second_media), default_shelf='背景棚')
+        self.catalog.start_scan(second_root)
+        self.catalog._worker.join(10)
+        items_by_title = {r['title']: r['id'] for r in self.catalog.search()['items']}
+        second_item = items_by_title['second.png']
+        self.catalog.update([self.item], {'tags': ['確定済みタグ'], 'shelf': '人物棚', 'favorite': True})
+
+        # Generate initial batch on item 1 with ['old-pending', 'shared-tag'], then supersede with a new adapter version
+        self.adapter.output = [TagProposal('old-pending', '旧バッチ'), TagProposal('shared-tag', '旧バッチ共有')]
+        self.service.generate(self.item, uuid.uuid4().hex)
+        self.adapter.info = TaggerInfo('fiction', '2', 'model-v2', 'rev-2', 'cover-v1')
+        self.adapter.output = [TagProposal('赤_背景', '最新バッチ1'), TagProposal('solo_girl', '最新バッチ2')]
+        latest_1 = self.service.generate(self.item, uuid.uuid4().hex)['batch']
+
+        # Generate on item 2
+        self.adapter.output = [TagProposal('青_背景', '2件目バッチ'), TagProposal('landscape', '風景候補')]
+        self.service.generate(second_item, uuid.uuid4().hex)
+
+        calls_before = self.adapter.calls
+        # 1. Confirmed tags never match in candidate search; pending candidates never match in literal search
+        self.assertEqual(search_candidates(self.service, '確定済みタグ')['total'], 0)
+        self.assertEqual(self.catalog.search('赤_背景')['total'], 0)
+        # 2. Superseded batch ('old-pending') does not match
+        self.assertEqual(search_candidates(self.service, 'old-pending')['total'], 0)
+        # 3. Empty query returns all items with pending latest-batch proposals
+        all_pending = search_candidates(self.service, '')
+        self.assertEqual(all_pending['total'], 2)
+        self.assertEqual(all_pending['search_mode'], 'pending-proposals')
+        # 4. Multi-term normalized AND over latest-batch pending tags
+        matched = search_candidates(self.service, '赤 SOLO')
+        self.assertEqual([r['id'] for r in matched['items']], [self.item])
+        pm = matched['items'][0]['proposal_match']
+        self.assertEqual((pm['batch_id'], pm['source_state'], pm['state'], pm['tags']),
+                         (latest_1['id'], 'current', 'pending', ['赤_背景', 'solo_girl']))
+        # 5. Accepting one proposal removes it from pending search; rejecting the other removes the item from pending search
+        self.service.review(self.item, latest_1['proposals'][0]['id'], 0, 'accept', '赤背景確定')
+        self.assertEqual(search_candidates(self.service, '赤_背景')['total'], 0)
+        self.assertEqual([r['id'] for r in search_candidates(self.service, 'solo')['items']], [self.item])
+        self.service.review(self.item, latest_1['proposals'][1]['id'], 0, 'reject')
+        self.assertEqual([r['id'] for r in search_candidates(self.service, '')['items']], [second_item])
+        # 6. Root, shelf, view, model filters and stale source_state detection
+        self.assertEqual(search_candidates(self.service, '', root_ids=[self.root])['total'], 0)
+        self.assertEqual(search_candidates(self.service, '', root_ids=[second_root], shelf='背景棚', model='model-v2')['total'], 1)
+        self.assertEqual(search_candidates(self.service, '', model='other-model')['total'], 0)
+        second_path.write_bytes(png(color=(99, 88, 77)))
+        stale_res = search_candidates(self.service, '青')
+        self.assertEqual(stale_res['items'][0]['proposal_match']['source_state'], 'stale')
+        self.assertEqual(self.adapter.calls, calls_before)
+        # 7. HTTP endpoint auth, valid response, and strict validation
+        self.assertEqual(self.request(route + '/search', {'query': '青'}, headers={'X-Aredoko-Token': 'bad'})[0], 403)
+        status, payload = self.request(route + '/search', {'query': '青', 'root_ids': [second_root]})
+        self.assertEqual((status, payload['total'], payload['items'][0]['id']), (200, 1, second_item))
+        for bad_body in (
+            {'query': 'x', 'unknown': 1},
+            {'query': 'x', 'root_ids': []},
+            {'query': 'x', 'root_ids': [second_root, second_root]},
+            {'query': 'x', 'root_ids': [9999]},
+            {'query': 'x', 'page': -1},
+            {'query': 'x', 'view': 'invalid'},
+        ):
+            self.assertEqual(self.request(route + '/search', bad_body)[0], 400)
+
 
 if __name__ == '__main__':
     unittest.main()

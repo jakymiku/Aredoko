@@ -42,6 +42,40 @@ public sealed class MediaRow
     public string KindAndTags => MatchLabel + $"{Kind} · {string.Join("、", Tags)}";
     // Per-word reason for a literal search row; null for list/AI/old servers.
     public SearchEvidence? Evidence { get; set; }
+    // Latest-batch pending tag proposal match when searching in ModeTagCandidates.
+    public ProposalMatch? Proposal { get; set; }
+}
+
+public sealed record ProposalMatch(
+    long BatchId,
+    string SourceRevision,
+    string SourceState,
+    string[] Tags,
+    string Model,
+    string ModelRevision,
+    string Adapter,
+    string AdapterVersion,
+    string Preprocessing,
+    string EvidenceKind,
+    int EvidencePage)
+{
+    public string SourceStateLabel => SourceState switch
+    {
+        "current" => "元ファイル一致",
+        "stale" => "元ファイル変更あり（要再生成）",
+        "unverified" => "元ファイル確認待ち",
+        _ => "元ファイル利用不可"
+    };
+    public string EvidenceLabel => EvidenceKind == "cover" ? "本の先頭ページのみ" : "画像";
+    public string Summary
+    {
+        get
+        {
+            var shown = string.Join("、", Tags.Take(5));
+            var extra = Tags.Length > 5 ? $" ほか{Tags.Length - 5}件" : "";
+            return $"未承認タグ候補: {shown}{extra}\nモデル: {Model} ({Adapter} {AdapterVersion}) · 根拠: {EvidenceLabel} · {SourceStateLabel}";
+        }
+    }
 }
 
 public sealed record SearchEvidence(string[] Direct, string[] Related, string[] Missing)

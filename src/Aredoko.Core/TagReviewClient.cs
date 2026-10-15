@@ -58,6 +58,81 @@ public static class TagReviewProtocol
         return new(id,source,Text(producer,"model",256),Text(producer,"model_revision",256),Text(producer,"adapter",256),
             Text(producer,"version",256),Text(producer,"preprocessing",256),kind,stale,candidates);
     }
+    public static JsonObject CandidateSearchRequest(string query,string kind,string view,int page,IReadOnlyList<int>? rootIds=null,string? shelf=null,string? model=null)
+    {
+        if(query is null||query.Length>300)throw new ArgumentOutOfRangeException(nameof(query));
+        if(page is <0 or >1000000)throw new ArgumentOutOfRangeException(nameof(page));
+        if(view is not ("all" or "favorites" or "unreviewed" or "shelf"))throw new ArgumentOutOfRangeException(nameof(view));
+        if(shelf is not null&&shelf.Length>80)throw new ArgumentOutOfRangeException(nameof(shelf));
+        if(model is not null&&(string.IsNullOrWhiteSpace(model)||model.Trim().Length>256))throw new ArgumentOutOfRangeException(nameof(model));
+        var body=new JsonObject{["query"]=query,["kind"]=kind??"",["view"]=view,["page"]=page};
+        if(rootIds is not null)
+        {
+            var normalized=FolderSearch.NormalizeNonEmpty(rootIds)!;
+            var array=new JsonArray();
+            foreach(var id in normalized)array.Add((JsonNode?)JsonValue.Create(id));
+            body["root_ids"]=array;
+        }
+        if(shelf is not null)body["shelf"]=shelf;
+        if(model is not null)body["model"]=model.Trim();
+        return body;
+    }
+    public static SearchResponse ParseCandidateSearch(byte[] bytes,int expectedPage)
+    {
+        try
+        {
+            if(expectedPage<0)throw new ArgumentOutOfRangeException(nameof(expectedPage));
+            var text=Encoding.UTF8.GetString(bytes);
+            using var doc=JsonDocument.Parse(text);var root=doc.RootElement;
+            if(root.GetProperty("search_mode").GetString()!="pending-proposals"||
+               root.GetProperty("page").GetInt32()!=expectedPage||
+               root.GetProperty("limit").GetInt32()!=60)
+                throw new InvalidDataException("未承認タグ候補の検索応答が要求と一致しません。");
+            var parsed=Protocol.ParseSearch(text);
+            var rawItems=root.GetProperty("items");
+            if(parsed.Total<0||parsed.Items.Count>60||parsed.Items.Count>parsed.Total||
+               rawItems.GetArrayLength()!=parsed.Items.Count||
+               parsed.Items.Select(x=>x.Id).Distinct().Count()!=parsed.Items.Count)
+                throw new InvalidDataException("未承認タグ候補の件数が無効です。");
+            var index=0;
+            foreach(var element in rawItems.EnumerateArray())
+            {
+                var row=parsed.Items[index++];
+                if(row.Id<1||!element.TryGetProperty("proposal_match",out var match)||match.ValueKind!=JsonValueKind.Object)
+                    throw new InvalidDataException("未承認タグ候補の根拠情報がありません。");
+                var batchId=Positive(match,"batch_id");
+                var revision=Text(match,"source_revision",64);
+                var sourceState=Text(match,"source_state",16);
+                var state=Text(match,"state",16);
+                if(!IsRevision(revision)||state!="pending"||sourceState is not ("current" or "stale" or "unverified" or "unavailable"))
+                    throw new InvalidDataException("未承認タグ候補の状態が無効です。");
+                var tagArray=match.GetProperty("tags");
+                if(tagArray.ValueKind!=JsonValueKind.Array||tagArray.GetArrayLength() is <1 or >30)
+                    throw new InvalidDataException("未承認タグ候補の一覧が無効です。");
+                var tags=new List<string>(tagArray.GetArrayLength());
+                foreach(var t in tagArray.EnumerateArray())
+                {
+                    var val=t.GetString();
+                    if(string.IsNullOrWhiteSpace(val)||val.Length>60)throw new InvalidDataException("未承認タグ候補の名前が無効です。");
+                    tags.Add(val);
+                }
+                var producer=match.GetProperty("producer");
+                var evidence=match.GetProperty("evidence");
+                var evKind=Text(evidence,"kind",8);
+                if(evidence.GetProperty("item_id").GetInt32()!=row.Id||Text(evidence,"revision",64)!=revision||
+                   evidence.GetProperty("page").GetInt32()!=0||evKind is not ("image" or "cover"))
+                    throw new InvalidDataException("未承認タグ候補の根拠が無効です。");
+                row.Proposal=new ProposalMatch(
+                    batchId,revision,sourceState,tags.ToArray(),
+                    Text(producer,"model",256),Text(producer,"model_revision",256),
+                    Text(producer,"adapter",256),Text(producer,"version",256),
+                    Text(producer,"preprocessing",256),evKind,0);
+            }
+            return parsed;
+        }
+        catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException or ArgumentException)
+        {throw new InvalidDataException("未承認タグ候補の検索結果を読み取れません。",ex);}
+    }
     public static TagHistory Parse(byte[] bytes,int itemId)
     {
         try
@@ -153,5 +228,11 @@ public sealed class TagReviewClient(HttpClient client)
     {
         TagReviewProtocol.Id(itemId);var row=Protocol.ParseItem(Encoding.UTF8.GetString(await ReadAsync($"api/items/{itemId}",null,TagReviewProtocol.MaxJsonBytes,cancellation)));
         if(row.Id!=itemId)throw new InvalidDataException("別の作品の整理情報です。");return row;
+    }
+    public async Task<SearchResponse> SearchCandidatesAsync(string query,string kind,string view,int page,IReadOnlyList<int>? rootIds=null,string? shelf=null,string? model=null,CancellationToken cancellation=default)
+    {
+        var body=TagReviewProtocol.CandidateSearchRequest(query,kind,view,page,rootIds,shelf,model);
+        var bytes=await ReadAsync(Route+"/search",body,TagReviewProtocol.MaxJsonBytes,cancellation,15);
+        return TagReviewProtocol.ParseCandidateSearch(bytes,page);
     }
 }
