@@ -1,5 +1,38 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-17 WD実モデルのGUI確認・OCR保留のユーザー方針を反映
+
+検証ツール実装commit：`ad426ff652054200fdfd50cde70c60d2da2bbd32`。開始HEAD/検証に使った製品sourceは`d9fc4a6eed1a9c95020c61cbbd4bf30b94fc8825`。ブランチは`feat/winui3-production-mvp-20261011`、既存Draft PR5を継続。**現在フェーズP2、P0 baseline済み/改善試行累積1/2は不変。** 今回は製品GUI/検索rankingを変更せず、既存の実WD導線を検証し次の順序をユーザーと確認した。
+
+### ユーザーが確定した優先順位
+
+「OCR専用の処理はEmbedding gemma2でも内容が引っかからないケースが多く見られた場合に実装を検討」。**OCR adapterの接続/取得/常駐化を次の既定作業にしない。** 先にEmbeddingGemma 2で画像/本の本文ページを直接索引化して到達範囲を広げる。現在の本/ZIP/CBZの通常AI画像索引は主に表紙なので、本文未索引とモデルの検索失敗を区別する。直接画像検索はembeddingであり文字起こしを返す機能ではない。既存本文API/検索と固定OCR評価素材は将来の選択肢として保持し、機能削除しない。
+
+この方針をAGENTS/vision/agent-start/development-priorities/media-content-plan/page-evidence/ocr-evaluationへ反映。**本節と新方針が、下の過去記録の「次はOCR接続」に優先する。**
+
+### WD Taggerの実装状態と今回の検証
+
+- 固定WD SwinV2 v3/ONNX CPUは導入済みで`available:true`。通常backendから使える。詳細「AIタグ候補」→「候補を生成」で画像/本の先頭ページを明示分類し、修正承認/却下/由来/履歴を扱える。確定タグへの自動投入・全登録画像への自動一括タグ付け・自動日本語訳はない。
+- `tools/test_tag_review_ui.py --wd-runtime-only`を追加。既存の許可済みモデルだけを使い、生成素材の専用DB・所有app/workerだけを起動・終了する。他のテストモードは引き続き推論なし。通常起動のmodel/profile/ranking/GUIは変更していない。
+- **実行 `python tools/test_tag_review_ui.py --wd-runtime-only --output data/ai-ui/wd-native-cpu-20261017-01`：48 checks PASS、初回バッチで完了/修正再試行0、Light/Dark PNG8枚全目視、Aredoko正常終了2、WD worker2/2終了・pipe close。** Windows Sandboxが無効の既存環境のため、許可済みのローカル専用テストウィンドウを使用。
+- PNG1枚とCBZ1冊で実CPU候補生成（6件/5件）→モデル版/根拠表示→同一batch再利用（新workerなし）→**日本語へ修正承認→「名前・タグ」で一致**→raw英語pending候補は**「未承認タグ候補」だけで検索**、を実際に操作した。元英語ラベルと修正した承認タグを別保存、既存手動タグ/棚/お気に入りを保持。
+- 元生成素材bytes/mtime・model SHA/mtime・AI設定を保持、EmbeddingGemmaの推論/ロード0。新DL/私物scan/外部送信/CI dispatchなし。画像を勝手に登録/タグ確定する挙動は追加していない。
+- **これは実接続・GUI操作の確認でありタグ精度評価ではない。** 図形にも`solo`/`1girl`等が出るため、生成成功や分類スコアを正解率にしない。代表イラスト/写真/人物/日本語の検索寄与は未評価。狭幅の編集はスクロール経由、検索shot2枚にはアプリのshortcut tooltip/capture chromeが含まれるが結果は読み取れる。High Contrast/Narrator/大規模性能は今回未検証。
+
+### その他の検証・保留物
+
+- `test_wd_tagger.py` **9 PASS / 6.619秒**、`test_tag_suggestions.py` **21 PASS / 6.682秒**、Python compileallとgit diff --check PASS。全Python/Core/Releaseを今回は再実行せず、変更なし製品の既存Releaseを利用した。直前の全体検証（Python412 PASS/3 SKIP、Core370、Release0警告/0エラー）は前回revisionの記録として維持。WinUI/XAML変更なし、WinUIAnalyzer未実行。
+- 作業途中、既存Windows日本語OCRを使うbytes-only workerの小試作を作り、生成済みpage-01の抽出と模擬worker契約9件を確認した。ユーザー方針を受け、**通常serverへの接続は戻し、新規source/testはignoredの`data/ocr-prototype-20261017`へ退避**。新依存/モデル/OS設定変更なし。製品OCR実装/精度測定の完了とはしない。必要性を再確認する前にこの試作を黙って復帰させない。
+- `docs/wd-tagger.md`の古い「WinUI未実装」を修正し、実際の使い方と英語候補→日本語修正承認の境界を追記。全体から機能を減らさずUIへ検証説明を追加していない。
+
+### 次の3手
+
+1. **本文ページ画像の直接embedding索引API→対象テスト**：既存PageIndexの安全な取得とページID/source revisionを再利用。明示scope・ページ数上限・profile DBの分離・取消/再開・同版再利用・変更/部分失敗の扱いを実装する。cover-onlyの索引/類似検索/手動整理を保持。まだ製品にこの機能があると報告しない。
+2. **作品への集約と一致ページからの読書**：ページごとの根拠を作品単位の検索結果へ集約しWinUIから開く。版違いでは誤ページへ飛ばさず、既存page-text jump policyを参考にする。新規固定の生成素材で検索到達率と処理時間/容量を測る。P0のranking/閾値を根拠なく調整しない。
+3. **代表素材のWD品質とGemma検索漏れの記録**：私物はユーザーの明示選択だけで測る。OCRは索引済み内容でも検索漏れが多く確認された場合に検討。音声/音楽内容索引・複数ページ文脈タグは引き続き未実装。
+
+---
+
 ## 2026-10-17 Open Code更新の確認・旧索引移行/完全削除/本文ジャンプ補強・OCR評価基盤
 
 修正実装commit：`69d3a52ceb07c27c8721d0000b76dcbedbdfd775`。OCR評価/文書は本節を導入した後続commitを参照。
