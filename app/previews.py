@@ -487,8 +487,12 @@ def _folder_read(row, item_id, operation, page, revision):
         data = file.read(MAX_IMAGE_BYTES + 1)
         after = os.fstat(file.fileno())
         current = _safe_path(row['path'], name if relative == FOLDER_ROOT else relative + name).stat(follow_symlinks=False)
-        if (current.st_ino, current.st_dev, current.st_size, current.st_mtime_ns, current.st_ctime_ns) != (
-                info.st_ino, info.st_dev, info.st_size, info.st_mtime_ns, info.st_ctime_ns):
+        # Path.stat and fstat may expose different creation-time values on
+        # Windows. Match identity/size/mtime across APIs, but compare ctime
+        # within each API before/after (the handle check follows below).
+        if ((current.st_ino, current.st_dev, current.st_size, current.st_mtime_ns) != (
+                info.st_ino, info.st_dev, info.st_size, info.st_mtime_ns)
+                or current.st_ctime_ns != initial.st_ctime_ns):
             raise ReaderChanged('Source changed while reading')
         _check_folder(row, directory_info, pages)
     if len(data) > MAX_IMAGE_BYTES or len(data) != expected_size:

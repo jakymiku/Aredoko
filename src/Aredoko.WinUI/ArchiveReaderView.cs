@@ -53,6 +53,8 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
         hideTimer.Tick+=(_,_)=>{if(!disposed&&!keyboardChrome&&!menuOpen&&!busy&&!failed){viewport.Focus(FocusState.Programmatic);header.Visibility=toolbar.Visibility=Visibility.Collapsed;}};
         viewport.Style=(Style)Application.Current.Resources["ImageViewerCanvasStyle"];
         header.Style=toolbar.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
+        // Edge overlays must paint the last pixel; a translucent stroke reveals the page underneath.
+        header.BorderThickness=toolbar.BorderThickness=new Thickness(0);
         pages.Children.Add(image);pages.Children.Add(second);canvas.Children.Add(pages);viewport.Content=canvas;Children.Add(viewport);
         viewport.SizeChanged+=(_,_)=>FitImages();viewport.ViewChanged+=(_,_)=>UpdateActions();
         var heading=new Grid{ColumnSpacing=12};heading.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});

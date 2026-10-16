@@ -71,6 +71,27 @@ class FolderBookTests(unittest.TestCase):
         with self.assertRaises(PreviewUnavailable):
             self.reader.read_video(book['id'])
 
+    def test_path_and_handle_creation_times_need_not_match(self):
+        # Windows path/handle APIs can expose distinct creation-time metadata.
+        # Compare each API before/after while still matching identity/size/mtime.
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        book = items['作品A/']['id']
+        revision = self.reader.manifest(book)['revision']
+        target = self.media / '作品A' / 'p1.jpg'
+        original = Path.stat
+
+        def path_stat(path, *args, **kwargs):
+            info = original(path, *args, **kwargs)
+            if path == target:
+                fields = {key: getattr(info, key) for key in dir(info) if key.startswith('st_')}
+                fields['st_ctime_ns'] -= 1000000
+                return SimpleNamespace(**fields)
+            return info
+
+        with patch.object(Path, 'stat', path_stat):
+            self.assertEqual(self.reader.read_page(book, 0, revision)[0], target.read_bytes())
+
     def test_loose_images_in_root_become_a_book_named_after_the_root(self):
         (self.media / 'loose.png').write_bytes(png())
         root = self.catalog.add_root(str(self.media), folder_books=True)

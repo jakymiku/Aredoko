@@ -1,4 +1,25 @@
-## 最新：ページ根拠索引と本文の保存・明示検索（2026-10-16、実機なしで続行）
+## 最新：別開発のバックエンドを取り込み・Windows統合確認とフォルダ本の誤変更検知を修正（2026-10-16 JST）
+
+開始local HEAD `f3fa79384f5affb3d812e1393177f65568624876`、clean。remoteが5commit先行していたため、既存featureへ `--ff-only` で **`ad850aa1fe6118725a53be1e15187c2471f6f9d2`** まで取り込んだ。AGENTS/vision/優先順位/両handoff/Issue4/PR5と実コードを照合。**候補検索・フォルダ本・ページID/根拠・本文保存/明示検索バックエンドは実装済み**として維持し、重複実装しなかった。同じDraft PR #5 / baseを継続。実装commitは本節を導入した `git log` を参照。
+
+### 修正と検証
+
+- **フォルダ本のWindows誤検知を修正**：パス `stat` と開いたhandle `fstat` の `ctime_ns` が約1ms異なる生成fixtureを観測し、未変更ページを `ReaderChanged` とする失敗を2回再現。ファイルidentity/device/size/mtimeの相互照合は維持し、ctimeはパス前後・handle前後の同じ取得方法で照合する。固定回帰テストは旧実装で失敗→修正後PASS。読込中のページ一覧変更・除外・旧token再scan・保存情報の保全も維持。
+- **Windows全Python：384件実行 / 381 PASS・3 SKIP / 215.252秒**。3 SKIPはWindowsでのsymlink権限/開いたファイル置換の既存platform条件。新ページ索引/本文の契約も含む。ログ `data/folder-windows-full-tests.log`。対象folder本は16件中13 PASS・3 SKIP。**Core 320 PASS**、最終 **Windows x64 SelfContained Release 警告0・エラー0**。
+- **native `tools/test_tag_review_ui.py --folder-books-only` を追加**。生成PNGのみ・一時DB・偽tagger・既存アプリ/portがあれば拒否・所有PID/HWND限定。`folder-books-windows-20261016-02` は **28 runtime checks PASS / 正常終了2 / PNG7枚全目視**：GUI opt-in登録→scan→3画像が1冊、p1/p2/p10自然順、読書左右キー、タグ/棚/お気に入り保存、Light→Darkのプロセス再起動で読書2/3復元、タグレビュー入口、元画像bytes/mtime・AI設定不変、推論0を確認。これは実OCR/WD品質や全P3完了ではない。
+- **visual FAILを保持**：02の狭幅readerで下端1pxから画像が透けたため、reader overlayの半透明strokeを0へ変更した。「本を開く（CBZ / ZIP）」も「本を開く」にし、登録の一冊化説明をTextBlockで折り返す。最終03の通常幅/800px登録PNGで説明の可読性は確認。
+- **最終nativeは未完了**：初回01はfolder-hub遷移待ち不足。02はruntime PASSだが前述visual FAIL。最終03は登録DB反映後、非同期settings panelの `ScanRoot` 出現前にscrollを実行して停止（runtime FAIL）。その後 `wait-for ScanRoot` を追加し構文確認だけ行った。03のPNG3枚（失敗画面含む）も全目視。**最終reader透け修正の実機再確認・旧tokenのGUI再scan・最終全経路は未検証**（旧tokenのWindows PythonテストはPASS）。結果JSONにruntimeとvisualを別記。WinUI UI testing skillの「Maximum two fix-and-rerun cycles」に達したため、この作業内で追加実機rerunはしていない。
+- コードレビュー：同一性/変更検知/リンク拒否を維持、XAMLは既存controlsのみ、a11y名とAutomationId保持、native所有プロセス正常終了を確認。WinUIAnalyzer未導入・High Contrast/DPI拡大・実ライブラリ・実モデルGUI推論は未検証。新規DL・OS変更・私物scan/変更なし。P0改善累積1/2、3workflow manual-only、CI dispatch0を維持。
+
+### 次の異なる3手
+
+1. **Windows実機の残gate**：新しい作業として修正済みwaitを使い `--folder-books-only` を一括確認。最終reader上下端の透け、旧token GUI rescan、Light/Dark restartの結果と全PNGを見て記録。以前の28 runtime PASSを最終GUI PASSへ流用しない。
+2. **本文APIのCore/WinUI接続**：ページID・revision・source状態を検証する反射不要clientと、本文検索/根拠page確認の小さな画面を接続。保存済み本文はモデル不在でも使い、既定503と抽出可能を区別する。既存表紙だけのタグ推定を本文解析済みとしない。
+3. **実OCR・品質評価**：固定日本語素材/正解本文/query/期待pageとCER・作品/page到達率の採点を準備し、許可されたbounded OCR adapterへ接続。新モデル/依存取得は別許可。代表タグ品質評価・複数ページ文脈推定・動画/音声内容索引はbacklogを保持。
+
+---
+
+## 履歴：ページ根拠索引と本文の保存・明示検索（2026-10-16、実機なしで続行）
 
 開始HEAD **`4d7792f0d6285f86672d3af9006e5f85995b8349`**。branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。ユーザーの「作業進められる所まで」に従い、前節の次手だったP2/P3ページID/根拠保存から本文検索までを実装。着手前と提出前にremote HEADを確認。実装commitは本節を導入したcommitのgit log、公開後の正確なHEADはPRを参照。
 

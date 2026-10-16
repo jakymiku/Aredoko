@@ -1,5 +1,7 @@
 # Aredoko — 直近の開発優先順位と合格条件
 
+> **Windows統合checkpoint（2026-10-16）**：remote `ad850aa`まで取り込み、Core320 PASS、最終x64 Release警告0/エラー0、全Python384件実行（381 PASS/3 platform SKIP）。フォルダ本のstat/fstat時刻差による誤変更検知を修正。生成フォルダ本の登録/読書/保存/restartは28 runtime checks PASSだが、最終UI修正後nativeはsettings-panel待機不足で停止。待機は修正済み・再実行待ち。**最終GUI完了とはしない**。[失敗・検証境界・次の3手](codex-handoff.md)を優先。本文APIバックエンドを作り直さず、実OCRと専用WinUIは未接続として進める。
+
 > **最新checkpoint（2026-10-16 続行）**：P2/P3のページID・版ごとの索引/根拠画像と、任意extractorによる本文保存・取消・再利用・本文の明示検索APIまで実装。全Python **383 PASS / 87.094秒 / skip0**。**実OCR adapter・WinUI本文画面は未接続**。通常/AI/候補検索と手動整理を維持。次はOCRの固定素材/正解/採点と許可されたadapter接続、並行してWindows担当のP3検証。[実装境界](page-evidence.md)・[最新handoff](codex-handoff.md)。P0累積1/2・CI0を維持。
 
 > **最新checkpoint（2026-10-16、実機不要の開発）**：P2候補レビュー/明示検索の実装を維持し、P3画像フォルダ本の安全性・ページ順・スキャンメモリを補強。全Python353 PASS、WindowsでのP3 Release/XAML/nativeは未検証。旧一冊モードrootは一度再スキャンが必要。P0改善累積1/2を維持。[現仕様](folder-books.md)・[次の3手](codex-handoff.md)を優先し、下の古い「候補検索が次」といったcheckpointは履歴として読む。

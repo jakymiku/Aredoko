@@ -18,6 +18,9 @@ from similarity_sandbox import SimilaritySandbox,REPO
 from production_server import production_handler
 from tag_suggestions import TagSuggestions,TaggerInfo,TagProposal
 import secrets
+import hashlib
+from create_preview_fixture import png
+from previews import PreviewReader, ReaderChanged
 
 class FixtureTagger:
     info=TaggerInfo('ui-fixture','1','not-a-real-model','fixed','cover-v1')
@@ -45,7 +48,9 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--scenario',choices=('indexed','unindexed','text-only'),default='indexed')
-    parser.add_argument('--candidate-search-only',action='store_true')
+    modes=parser.add_mutually_exclusive_group()
+    modes.add_argument('--candidate-search-only',action='store_true')
+    modes.add_argument('--folder-books-only',action='store_true')
     args=parser.parse_args()
     if os.name!='nt':parser.error('Native Windows required; no test was run')
     target=args.output.resolve()
@@ -57,7 +62,7 @@ def main():
     server=ThreadingHTTPServer(('127.0.0.1',8769),BaseHTTPRequestHandler)
     sandbox=thread=process=hwnd=app_pid=None
     report={'runtime_pass':False,'visual_review':'pending: inspect every screenshot','actual_model':False,
-        'scenario':args.scenario,'checks':[],'screenshots':[],'requests':[],'keyboard_tested':False}
+        'scenario':args.scenario,'test_mode':'folder-books' if args.folder_books_only else 'candidate-search' if args.candidate_search_only else 'tag-review','checks':[],'screenshots':[],'requests':[],'keyboard_tested':False}
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-tag-review-'+uuid.uuid4().hex}
     user32=ctypes.WinDLL('user32',use_last_error=True);kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
     user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
@@ -151,6 +156,16 @@ def main():
             return db.execute('SELECT p.id FROM tag_proposals p JOIN tag_proposal_batches b ON b.id=p.batch_id WHERE b.item_id=? AND p.state=? ORDER BY p.id LIMIT 1',(source,state)).fetchone()[0]
     try:
         sandbox=SimilaritySandbox(target/'fixture',args.scenario);target.mkdir(parents=True,exist_ok=True)
+        book_root=None;book_item=None
+        if args.folder_books_only:
+            book_media=target/'generated-folder-books'
+            (book_media/'Generated book').mkdir(parents=True)
+            (book_media/'Generated book'/'p10.png').write_bytes(png(300,400,(20,40,200)))
+            (book_media/'Generated book'/'p2.png').write_bytes(png(300,400,(20,180,40)))
+            (book_media/'Generated book'/'p1.png').write_bytes(png(300,400,(200,40,20)))
+            def book_digest():
+                return {p.relative_to(book_media).as_posix():(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in book_media.rglob('*') if p.is_file()}
+            book_before=book_digest()
         tagger=FixtureTagger()
         server.RequestHandlerClass=production_handler(sandbox.catalog,secrets.token_urlsafe(32),ai=sandbox.ai,profiles=sandbox.profiles,tagger=tagger)
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -166,7 +181,92 @@ def main():
                 if len(matches)==1:break
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
-            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','76 件')
+            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.folder_books_only and theme=='Dark' else '76 件')
+            if args.folder_books_only:
+                if theme=='Light':
+                    ui('invoke','BtnRoots');ui('wait-for','BtnToggleAddFolder','-t','12000');ui('invoke','BtnToggleAddFolder')
+                    ui('set-value','RootPath',str(book_media));visible('RootFolderBooks')
+                    ui('invoke','RootFolderBooks');ui('invoke','RootConsent')
+                    shot('Light-folder-book-registration')
+                    user32.SetWindowPos(int(hwnd),None,0,0,800,820,0x0014);time.sleep(.3)
+                    visible('RootFolderBooks');shot('Light-folder-book-registration-narrow')
+                    user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);time.sleep(.3)
+                    ui('invoke','AddRoot');enabled('AddRoot',True)
+                    roots=[r for r in sandbox.catalog.index.roots() if r['path']==str(book_media)]
+                    check('GUI opt-in root registered',len(roots)==1 and roots[0]['folder_books'])
+                    book_root=roots[0]['id'];ui('wait-for','ScanRoot','-t','12000');visible('ScanRoot');ui('invoke','ScanRoot')
+                    for _ in range(100):
+                        if sandbox.catalog.scan_state()['state']=='complete':break
+                        time.sleep(.1)
+                    check('GUI folder-book scan complete',sandbox.catalog.scan_state()['state']=='complete')
+                    time.sleep(1.2)
+                    found=sandbox.catalog.search(root_id=book_root)['items']
+                    check('folder contains one book instead of three loose pages',len(found)==1 and found[0]['kind']=='book' and found[0]['relative_path']=='Generated book/')
+                    book_item=found[0]['id']
+                    reader=PreviewReader(sandbox.catalog);manifest=reader.manifest(book_item)
+                    actual=[reader.read_page(book_item,i,manifest['revision'])[0] for i in range(3)]
+                    check('natural page order p1 p2 p10',actual==[(book_media/'Generated book'/n).read_bytes() for n in ('p1.png','p2.png','p10.png')])
+                    ui('invoke','BtnBackToLibrary');ready()
+                ui('set-value','TxtQuery','Generated book');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                ui('invoke','Item'+str(book_item),'--action','select');wait('TxtEditStatus','保存済み')
+                enabled('BtnOpenBook',True);enabled('BtnTagSuggestions',True)
+                if theme=='Light':
+                    ui('set-value','TxtTags','folder-manual');ui('set-value','TxtShelf','folder-shelf');ui('invoke','ChkFavorite')
+                    ui('invoke','BtnSave');wait('TxtEditStatus','保存しました')
+                else:
+                    wait('TxtTags','folder-manual');wait('TxtShelf','folder-shelf')
+                    check('metadata and favorite survive process restart',sandbox.catalog.get(book_item)['favorite'])
+                shot(theme+'-folder-book-details')
+                ui('scroll-into-view','BtnOpenBook');ui('invoke','BtnOpenBook')
+                viewer=None
+                for _ in range(40):
+                    windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+                    matches=[str(w['hwnd']) for w in windows if str(w.get('hwnd'))!=hwnd and 'Aredoko' in w.get('title','') and w.get('title')!='PopupHost']
+                    if len(matches)==1:viewer=matches[0];break
+                    time.sleep(.1)
+                check(theme+' owned reader window opened',viewer is not None);owned(viewer)
+                ui('wait-for','ReaderPageNumber','--value','1 / 3' if theme=='Light' else '2 / 3','-t','12000',window=viewer)
+                ui('wait-for','ReaderStatus','--value','表示しました。拡大すると細部を確認できます。','-t','12000',window=viewer)
+                check(theme+' reader loaded expected page',True)
+                # F10 pins controls for repeatable screenshots and keyboard navigation.
+                user32.SetForegroundWindow(int(viewer));time.sleep(.15)
+                check('only owned reader is foreground',user32.GetForegroundWindow()==int(viewer))
+                ui('send-keys','f10',window=viewer)
+                if theme=='Light':
+                    ui('send-keys','right',window=viewer)
+                    ui('wait-for','ReaderPageNumber','--value','2 / 3','-t','12000',window=viewer)
+                    for _ in range(80):
+                        saved=sandbox.catalog.reader_progress(book_item)['progress']
+                        if saved and saved['page']==1:break
+                        time.sleep(.1)
+                    check('right key advances and persists folder-book position',saved is not None and saved['page']==1)
+                    report['keyboard_tested']=True
+                user32.SetWindowPos(int(viewer),None,0,0,700,620,0x0014);time.sleep(.4)
+                path=target/(theme+'-folder-book-reader-narrow.png')
+                ui('screenshot','--output',path,window=viewer);check('screenshot '+path.stem,path.is_file() and path.stat().st_size>0);report['screenshots'].append(path.name)
+                ui('send-keys','escape',window=viewer);ready()
+                # Tag review uses the same folder-book first-page evidence contract.
+                open_review();contains('TagProvenance','まだ候補がありません');shot(theme+'-folder-book-tag-entry');ui('invoke','TagClose');ready()
+                if theme=='Light':
+                    # Emulate the old v1 scan token only in this generated DB.
+                    from previews import folder_pages
+                    pages=sorted(folder_pages(book_media/'Generated book','Generated book/',()))
+                    legacy=int.from_bytes(hashlib.sha256(json.dumps(pages,ensure_ascii=False).encode()).digest()[:8],'big')>>1
+                    with sandbox.catalog.index.connect() as db:
+                        db.execute('UPDATE library_locations SET mtime_ns=? WHERE root_id=? AND relative_path=?',(legacy,book_root,'Generated book/'))
+                    try:PreviewReader(sandbox.catalog).manifest(book_item)
+                    except ReaderChanged:check('old token requires rescan',True)
+                    else:raise RuntimeError('Old token was reused')
+                    ui('invoke','BtnRoots');ui('wait-for','ConfigFolder'+str(book_root),'-t','12000')
+                    ui('invoke','ConfigFolder'+str(book_root));ui('wait-for','ScanRoot','-t','12000');visible('ScanRoot');ui('invoke','ScanRoot')
+                    for _ in range(100):
+                        if sandbox.catalog.get(book_item)['mtime_ns']!=legacy and sandbox.catalog.scan_state()['state']=='complete':break
+                        time.sleep(.1)
+                    fresh=sandbox.catalog.get(book_item)
+                    check('GUI rescan upgrades old token and preserves ID metadata',fresh['mtime_ns']!=legacy and fresh['tags']==['folder-manual'] and fresh['shelf']=='folder-shelf' and fresh['favorite'])
+                    check('reader reopens after old-token rescan',PreviewReader(sandbox.catalog).manifest(book_item)['page_count']==3)
+                check(theme+' generated book source unchanged',book_before==book_digest())
+                close();continue
             if args.candidate_search_only:
                 service=TagSuggestions(sandbox.catalog,tagger)
                 img_item=sandbox.item('generated-003.png')

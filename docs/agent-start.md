@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **Windows統合checkpoint（2026-10-16）**：remote `ad850aa`まで取り込み、Core320 PASS、最終x64 Release警告0/エラー0、全Python384件実行（381 PASS/3 platform SKIP）。フォルダ本のstat/fstat時刻差による誤変更検知を修正。生成フォルダ本の登録/読書/保存/restartは28 runtime checks PASSだが、最終UI修正後nativeはsettings-panel待機不足で停止。待機は修正済み・再実行待ち。**最終GUI完了とはしない**。[失敗・検証境界・次の3手](codex-handoff.md)を優先。本文APIバックエンドを作り直さず、実OCRと専用WinUIは未接続として進める。
+
 > **最新P2/P3ページ根拠（2026-10-16、実機なしで続行）**：ページID・版ごとの索引/根拠画像、任意extractorの本文保存/取消/再利用、明示的な本文検索APIを追加。全Python **383 PASS / 87.094秒 / skip0**。**実OCR adapterとWinUI本文画面は未接続、製品の抽出は既定503**。通常/AI/候補検索と手動タグは維持。[仕様](page-evidence.md)・[最新handoff](codex-handoff.md)を参照。次は固定OCR評価素材/採点→許可されたadapter接続→native根拠表示。Windows/.NET検証なし、CI0・P0改善累積1/2を維持。
 
 > **最新P3補強（2026-10-16、実機なし）**：画像フォルダ本の同番号ページ順を固定、読込前後のパス/handle/ページ一覧確認、プレビュー・タグ入力の画像候補10000件上限、フォルダ単位のスキャン集約を追加。全Python **353 PASS / skip0**。旧一冊モードrootは`folder-book-v2`用に一度再スキャン（作品ID・手動整理は保持）。Windows Release/XAML/nativeは今回未検証。次の実機確認と独立したbackend作業は[最新handoff](codex-handoff.md)・[folder-books.md](folder-books.md)を参照。CI0回、P0改善累積1/2を維持。
