@@ -49,3 +49,10 @@
 ## コミット前コードレビュー
 
 WinUI design/code-reviewの観点で、入力のzoom/操作部優先、async eventと取消、source_id捕捉、テーマ/AutomationId、bounded thumbnail cache、reflection-free JSON、root外path/URI/ADS/リンク拒否を点検。ドライブ直下rootの包含判定と履歴の現在除外ルールを補正しテスト済み。新規MVVM/ObservableCollection移行やAOT対応を今回の達成として扱わない。未導入WinUIAnalyzerは未実行。既存日本語文字列のresw化は別作業とし、今回の機能を削って整形しない。
+
+
+## 2026-10-17 Open Code更新後の補強
+
+全22件の機能縦切りは維持し、既存ユーザーDBで旧索引が新しい画像/動画処理を飛ばす点、F21が実際のprofile別AI DBを削除しない点、大量削除のSQL変数上限、古い本文の誤ページ移動を修正。[最新handoff](codex-handoff.md)を参照。画像/動画の入力版を移行するには、選択範囲・既存対象上限内でAI索引作成を一度明示実行する。私物の自動再解析はしない。
+
+最終Python412 PASS/3 SKIP、Core370、Release0警告/0error、版照合の実機37checks/PNG8枚全目視。[OCR評価の固定素材・採点](ocr-evaluation.md)を追加したが、実OCR接続/認識精度と全場面の動画理解はまだ未達として区別する。

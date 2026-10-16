@@ -150,3 +150,12 @@ eligible上限2,000→10,000、256件metadata/vector取得と進捗16件保存�
 
 
 生成1万件/768px cover938枚/長い日本語tagの実GPU索引と製品HTTP paging/kind/favoriteまで合格。default profile/identity/既存vector schemaの変更はなく、別checkpointやGUIモデル切替の新検証ではない。正確な資源/限界/次のworker解放仕様はindex-scaling.md/ai-resource-policy.md。
+
+
+## 画像・動画の入力前処理の移行（2026-10-17）
+
+モデルのvector空間と入力前処理の版は区別する。モデルprofile/key/namespace・P0 rankingは変更せず、各profile DBの`ai_source_contracts(item_id,revision,contract)`で`representative-image:v1` / `timecoded-video:v1`を記録する。従来の文章vectorだけでは画像・動画の新処理完了と判定しない。
+
+更新後は、選択範囲・既存の対象上限内で明示的に「AI索引を作成」した分だけ画像/動画を一度更新する。既存の文章vectorは再利用し、文章専用profile・音声metadata・本の既存索引をこの変更だけで再推論しない。自動で私物を再走査/推論したりモデルを取得したりしない。
+
+取消した動画frameの途中結果は公開せず、以前のvectorを残して再開可能にする。前処理失敗でも既存の利用可能な索引を消さず、未更新として再試行できる。coverageのremainingは入力前処理版も含めてCPU/DBだけで数える。未更新の旧vectorは明示再作成まで従来どおり検索可能で、モデルの精度が向上した証拠とは扱わない。

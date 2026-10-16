@@ -1,5 +1,37 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-17 Open Code更新の確認・旧索引移行/完全削除/本文ジャンプ補強・OCR評価基盤
+
+修正実装commit：`69d3a52ceb07c27c8721d0000b76dcbedbdfd775`。OCR評価/文書は本節を導入した後続commitを参照。
+
+開始HEAD `8e90a026c96d01b5564e44902b73cec3293df369`、clean・remote差0/0。`a79f0ee`以降のOpen Code6コミット（`bd456f6`/`1f16441`/`0b65d23`/`556f9fe`/`943e45c`/`8e90a02`）を取り込み済みとして、AGENTS/vision/優先順位/両handoff/Issue4/PR5と実装を照合した。フォルダDB purge、アニメ/大APNG、動画時間付き索引、本文検索WinUIを再実装せず維持。以前の全22件完了記録は機能縦切りの到達点で、今回の更新互換性/実DB保存先の欠陥まで保証するものではない。
+
+### 実装・修正
+
+- **旧AI索引を新しい入力処理へ更新**：従来は文章vectorの同revisionだけでfreshと判定し、既存動画が時間付きframe索引へ、既存アニメが代表frame索引へ移行しなかった。各profile DBへ`ai_source_contracts`（`representative-image:v1` / `timecoded-video:v1`）を追加。coverage/buildは入力版も検査し、同じ文章vectorを再利用して画像/動画を一度だけ更新。モデルkey/namespace/rankingは変更しない。[移行手順](model-profiles.md)：**ユーザーが選択した範囲・既存上限内でAI索引作成を明示実行した分だけ更新**し、自動私物推論はしない。
+- 動画解析の取消時に部分frameを公開せず旧vectorを保持。前処理失敗でも利用可能な旧索引を消さず、remainingとして再試行可能にする。文章専用profile/音声metadata/既存本の索引はこの入力版の変更で再推論しない。
+- **F21の実保存先を修正**：実際のAI索引はcatalog本体とは別の`catalog.ai[.<profile-hash>].sqlite`だったが、以前のpurgeは本体内の`ai_vectors`しか対象にしていなかった。厳密なファイル名＋内部profile keyを照合した通常ファイルだけで、各profileのvectors/video frames/source contractsを削除。他root/無関係DB/原本を保持。catalog内のvideo frames/source contractsも削除。大量item IDをPython配列→SQL変数へ展開せず、temp table/subqueryでSQLite変数上限を回避。
+- **複数DBの失敗境界**：派生AIをprofile単位transactionで先に削除し、最後にcatalog内の手動記録をcommit。途中失敗では登録/タグ等を保持して再試行できる日本語エラー。全DBの一括atomic保証はしない。先に削除済みの派生AIは必要なら再作成。[API境界](api.md)も更新。
+- **本文の誤ページジャンプ防止**：`PageTextMatch.InitialReaderPage`で`current`かつ根拠revisionとreader manifestが一致するときだけ番号を適用。検索後に本が変わった場合/古い根拠は通常の読書復帰へ。古い本文はstale表示のまま保持。根拠page数/負数/欠損をCoreで検証。
+- **OCR評価の固定素材・採点ツール**：[ocr-evaluation.md](ocr-evaluation.md)、`tests/fixtures/ocr-eval-v1.json`、`create_ocr_fixture.py` / `ocr_quality.py` / `evaluate_ocr.py`を追加。日本語8ページ/7作品・10問（正解7/負例3）、縦横/表記揺れ/薄い文字/空白、raw/normalized CER、検索到達率、正解なし誤検出を分けて採点。backendの同一ページAND/作品集約と一致集合を照合。**実OCR未接続・実認識精度未測定**。採点controlを実モデルの成績にしない。fixture SHA `3e731b6bf17d1710b680a4c1b5b85c0c9e7997c5c6c63fc5551c23ee7f1814bd`。
+
+### 今回の検証
+
+- 新規`test_media_upgrade.py`10 PASS：修正前に旧索引スキップ/別DB残留/SQL変数超過を再現後、移行一回・文章再利用・取消/失敗再開・profile間分離・実sidecar/main動画削除・他root保全・途中失敗rollback/retry・不明DB保全を確認。
+- 新規`test_ocr_quality.py`8 PASS：perfect/empty control、欠損と空文字の区別、正規化、空白への幻の出力、固定hash/境界、実`PageTextIndex.search`との10問照合。既存AI関連75 PASS、feedback13 PASS、error translation3 PASSも確認。
+- **最終全Python415件実行：412 PASS / 3 Windows platform SKIP、188.270秒** (`data/resume-python-20261017.log`)。**Core370 PASS** (`data/resume-core-20261017.log`)、**最終x64 SelfContained Release警告0/エラー0** (`data/resume-release-20261017.log`)。
+- **native `page-jump-revision-20261017-01`：37 checks PASS / Light・Dark PNG8枚全目視 / 所有アプリ正常終了2**。本の本文一致2/3へ読書→生成CBZへ先頭page追加＋rescan→queryし直す前の旧current表示でも1/4へ通常復帰→再検索後stale根拠でも1/4、を実際に確認。改版のため変更したのは専用の生成CBZのみ。ベース生成素材bytes/mtime、AI設定不変、推論0、テストapp/backend終了。過去の全GUI batchを今回再実行したとはしない。
+- OCR生成8 PNGも全目視、既存Meiryo/Pillowだけを使用。`data/ocr-eval/ocr-v1-20261017`のreceiptへfont/image SHA保存。perfect-controlはCER0/Recall@5=1、empty-controlはCER1/Recall@5=0：**採点器の検算であり実OCR成績ではない**。
+- WinUI code reviewで版照合/読書位置保持/取消/既存Theme・AutomationId導線を点検。新しいXAML/常駐説明は追加せず、未導入WinUIAnalyzerは未実行。実GPU/WD/OCR品質やHigh Contrast/新規大規模私物検証ではない。新依存/モデル取得・私物scan・CI dispatchなし、P0試行累積1/2を維持。
+
+### 次の3手
+
+1. 固定OCR素材を使い、許可範囲内のローカルOCR adapterを選んで`PageTextIndex`へ接続。新モデル/依存取得は別途明示許可が必要。取消/timeout/画素数/worker終了とproducerを実装し、実抽出ログ＋CER/到達率を測る。既定抽出503を架空テキストで代替しない。
+2. ユーザー明示選択の代表素材でWDタグ品質・日本語検索寄与を測定。複数ページの本文/視覚根拠からの候補契約を設計し、手動確定タグを保持する。合成PNGのruntime成功と実タグ精度を混同しない。
+3. 入力版の更新操作を生成素材の大きめscopeで測り、既存対象上限/中断再開/失敗remainingを確認。将来のアニメframe総メモリ/読込遅延や音声/音楽内容索引も残課題として継続。動画は最大4frameの代表抽出であり全場面の網羅/精度保証ではない。F09外部OS起動/F22OS drag注入の過去の未自動実行境界も維持。
+
+---
+
 ## 2026-10-16 実利用フィードバック全22件完了＆ページ本文検索WinUI接続（実装 `943e45cbe35992580de7d1cd450b206ab72d5990`、parent `556f9fe`）
 
 開始HEAD `556f9fecb956e1dabcc0927e2461bcd29fd17177`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)の最後の未実装項目だった **F12（P4: 動画内容の時間付き代表フレームAI索引・作品単位の検索結果集約・該当時刻への自動シーク再生）** と、**P2/P3 ページ本文検索（`ModePageText` / `PageTextEvidence<id>`）のWinUI接続および該当ページへの読書画面ジャンプ**を実装し、単体テスト・Windowsネイティブ実機検証まで完了した。これにより **実利用フィードバック全22件（F01〜F22）のコード実装がすべて完了**した。

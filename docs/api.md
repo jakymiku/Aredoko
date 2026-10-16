@@ -132,3 +132,10 @@ GET/POST `/api/library/reader/{id}/progress` を追加。revision・0始まりpa
 - `POST /api/library/roots` の任意 `recursive: boolean`：新規/既存移行は省略時true、解除済み再登録では省略時保存値を保持。falseは直下だけを索引。`consent:true`と既存の認証は必要。再登録でfalseへ狭めると下位locationを即時excluded、再びtrueならrescanで復元。
 - `POST /api/library/history` は厳密に`{"item_id": positive int64}`のみ。既存Host/Origin/session-token/body上限を適用。presentかつenabled、現在の除外対象でないアイテムを記録し`{"recorded":id}`。不正400/認証403/対象不在404。元ファイルは読まず、`view_history(item_id,opened_ns,open_count)`のupsertだけを行う。
 - `GET /api/items?view=history`：最近開いた順、同じアイテムは一件。既存q/kind/root_idまたはroot_ids/page/limitを保持し、解除root/現在の除外を隠す。通常の文字・関連語検索が対象。GUIでは画像/本/動画の表示成功時に記録し、履歴中のAI/未承認候補検索は無効化。音声を外部アプリで開いた履歴は今回未接続。
+
+
+## 2026-10-17 DB完全削除のプロファイル別索引
+
+`POST /api/library/roots/purge`のbody/成功応答は従来どおり。解除済みrootのcatalog内依存に加え、同じcatalog由来の厳密な命名/内部profile keyを照合した`*.ai.sqlite` / `*.ai.<24hex>.sqlite`の`ai_vectors`・`ai_video_frames`・`ai_source_contracts`も削除する。無関係なDBやリンク先は削除しない。大量件数でも全item IDをSQL引数へ展開しない。
+
+複数DBは一つの完全atomic transactionにはできないため、派生AIデータをprofile DBごとのtransactionで先に削除し、その後catalog内の手動記録をcommitする。途中失敗では登録/タグ等の手動記録と解除済みrootを保持し、日本語エラーを返して再試行可能にする。先に消えた派生AI索引は、必要なら再作成する。元メディアの削除・改変は行わない。

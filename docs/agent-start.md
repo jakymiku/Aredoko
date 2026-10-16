@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新（2026-10-17 Open Code更新の統合後）**：既存索引の画像/動画入力版移行、実profile別DBの完全削除、大量削除のSQL上限、古い本文の誤ページ移動を修正。Python412 PASS/3 SKIP・Core370・Release0警告/0error・native37 checks/PNG8枚全目視。日本語OCR固定評価8ページ/10問と採点器を追加、**実OCR接続/精度測定は未完**。[最新handoff](codex-handoff.md)と[OCR評価仕様](ocr-evaluation.md)を優先。
+
 > **最新（2026-10-16 実利用feedback全22件完了・動画時刻付きAI索引＆ページ本文検索WinUI接続）**：動画内容の時間付き代表フレームAI索引・検索集約・一致時刻シーク再生（F12: `ai_video_frames` / `video_match_ms` / `VideoPlayerView`）と、ページ本文検索のWinUI接続・一致ページへの読書ジャンプ（`ModePageText` / `PageTextEvidence<id>`）を実装・Windows実機確認。これにより **[22件の実利用フィードバック対応表](user-feedback-20261016.md)の全22件（F01〜F22）の実装が完了**。全Python **397件実行（394 PASS / 3 SKIP）**、Core **361 PASS**、x64 Release **警告0/エラー0**、実機 `page-text-search-20261016-01` **29 checks PASS / PNG 5枚**・`feedback-video-ai-20261016-02` **106 checks PASS / keys 56 / PNG 24枚**。次はOCR評価/アダプタ接続と代表素材のタグ品質測定。[最新handoff](codex-handoff.md)を優先。
 
 > **履歴（2026-10-16 F07/F08/F11 アニメ再生・54.8MB APNG・代表フレームAI索引・PageEvidenceClient）**：GIF/WebP/APNGアニメーション実フレーム再生と資源解放（F07）、アニメ代表フレームAI索引（F08）、54,802KB級大容量APNGのboundedデコード/転送（F11: 元64MiB/16MP/64frame・転送8MiB上限）、およびページ根拠・本文APIの反射不要Coreクライアント（`PageEvidenceClient`）を実装・Windows実機確認。全Python **396件実行（393 PASS / 3 SKIP）**、Core **359 PASS**、x64 Release **警告0/エラー0**、実機 `feedback-animation-20261016-01` **16 checks PASS / PNG 4枚全目視PASS**。22件のフィードバック対応表のうち未実装は **F12（動画内容の時間付きAI索引）** の1件のみ。[対応表](user-feedback-20261016.md)と[最新handoff](codex-handoff.md)を優先。
