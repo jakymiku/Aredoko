@@ -264,6 +264,58 @@ class ProductionCatalog(Catalog):
             self._require_idle()
             return self.index.unregister(root_id)
 
+    def purge_inactive_root(self, root_id, consent=False):
+        """Permanently delete an unregistered root's DB records while leaving files untouched.
+
+        Active roots are rejected. Root IDs are never reused after purge so any
+        previously saved scope referencing root_id stays invalid rather than
+        silently matching a later registered folder.
+        """
+        if consent is not True:
+            raise ValueError('Explicit folder purge consent required')
+        if type(root_id) is not int or not 1 <= root_id <= 9223372036854775807:
+            raise ValueError('Invalid root ID')
+        with self._guard:
+            self._require_idle()
+            with self.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                row = db.execute('SELECT id, enabled FROM library_roots WHERE id=?', (root_id,)).fetchone()
+                if row is None:
+                    raise KeyError(root_id)
+                if row['enabled']:
+                    raise ValueError('Unregister the root before purging database records')
+                db.execute('UPDATE library_root_seq SET max_id = max(max_id, ?) WHERE id=1', (root_id,))
+                tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                item_subquery = ('SELECT m.item_id FROM item_locations m '
+                                 'JOIN library_locations l ON l.id=m.location_id WHERE l.root_id=?')
+                if 'page_text_heads' in tables and 'page_snapshots' in tables:
+                    db.execute(f'DELETE FROM page_text_heads WHERE snapshot_id IN (SELECT id FROM page_snapshots WHERE item_id IN ({item_subquery}))', (root_id,))
+                if 'page_texts' in tables and 'page_snapshots' in tables:
+                    db.execute(f'DELETE FROM page_texts WHERE snapshot_id IN (SELECT id FROM page_snapshots WHERE item_id IN ({item_subquery}))', (root_id,))
+                if 'page_heads' in tables:
+                    db.execute(f'DELETE FROM page_heads WHERE item_id IN ({item_subquery})', (root_id,))
+                if 'page_entries' in tables and 'page_snapshots' in tables:
+                    db.execute(f'DELETE FROM page_entries WHERE snapshot_id IN (SELECT id FROM page_snapshots WHERE item_id IN ({item_subquery}))', (root_id,))
+                if 'page_snapshots' in tables:
+                    db.execute(f'DELETE FROM page_snapshots WHERE item_id IN ({item_subquery})', (root_id,))
+                if 'tag_proposals' in tables and 'tag_proposal_batches' in tables:
+                    db.execute(f'DELETE FROM tag_proposals WHERE batch_id IN (SELECT id FROM tag_proposal_batches WHERE item_id IN ({item_subquery}))', (root_id,))
+                if 'tag_proposal_batches' in tables:
+                    db.execute(f'DELETE FROM tag_proposal_batches WHERE item_id IN ({item_subquery})', (root_id,))
+                if 'ai_vectors' in tables:
+                    db.execute(f'DELETE FROM ai_vectors WHERE item_id IN ({item_subquery})', (root_id,))
+                db.execute(f'DELETE FROM reader_progress WHERE item_id IN ({item_subquery})', (root_id,))
+                db.execute(f'DELETE FROM view_history WHERE item_id IN ({item_subquery})', (root_id,))
+                item_ids = [r[0] for r in db.execute(item_subquery, (root_id,)).fetchall()]
+                db.execute('DELETE FROM item_locations WHERE location_id IN (SELECT id FROM library_locations WHERE root_id=?)', (root_id,))
+                if item_ids:
+                    placeholders = ','.join('?' for _ in item_ids)
+                    db.execute(f'DELETE FROM items WHERE id IN ({placeholders})', item_ids)
+                removed_locations = db.execute('DELETE FROM library_locations WHERE root_id=?', (root_id,)).rowcount
+                db.execute('DELETE FROM scan_jobs WHERE root_id=?', (root_id,))
+                db.execute('DELETE FROM library_roots WHERE id=? AND enabled=0', (root_id,))
+        return {'purged': root_id, 'removed_items': len(item_ids), 'removed_locations': removed_locations}
+
     def set_excludes(self, root_id, patterns):
         with self._guard:
             self._require_idle()

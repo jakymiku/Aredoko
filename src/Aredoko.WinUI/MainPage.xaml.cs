@@ -905,7 +905,7 @@ public sealed partial class MainPage : Page
     }
 
     private void FolderFilter_Changed(object sender,TextChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();}
-    private void FolderStateFilter_Changed(object sender,SelectionChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();}
+    private async void FolderStateFilter_Changed(object sender,SelectionChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)await RefreshSearchRootsAsync();}
     private void FolderLayout_Click(object sender,RoutedEventArgs e)
     {
         folderTiles=!folderTiles;
@@ -985,7 +985,12 @@ public sealed partial class MainPage : Page
                     AutomationProperties.SetAutomationId(restoreBtn,$"RestoreFolder{row.Id}");
                     AutomationProperties.SetName(restoreBtn,$"{row.ShortPath}を再登録");
                     restoreBtn.Click+=async(_,_)=>await RestoreRootAsync(row);
+                    var purgeBtn=new Button {Content="記録を完全削除"};
+                    AutomationProperties.SetAutomationId(purgeBtn,$"PurgeFolder{row.Id}");
+                    AutomationProperties.SetName(purgeBtn,$"{row.ShortPath}の記録を完全削除");
+                    purgeBtn.Click+=async(_,_)=>await PurgeInactiveRootAsync(row);
                     actions.Children.Add(restoreBtn);
+                    actions.Children.Add(purgeBtn);
                 }
 
                 if(folderTiles)
@@ -1038,7 +1043,10 @@ public sealed partial class MainPage : Page
                     var restoreItem=new MenuFlyoutItem {Text="再登録"};
                     AutomationProperties.SetAutomationId(restoreItem,$"ManageRoot{row.Id}");
                     restoreItem.Click+=async(_,_)=>await RestoreRootAsync(row);
-                    menu.Items.Add(restoreItem);
+                    var purgeItem=new MenuFlyoutItem {Text="記録を完全削除"};
+                    AutomationProperties.SetAutomationId(purgeItem,$"PurgeRoot{row.Id}");
+                    purgeItem.Click+=async(_,_)=>await PurgeInactiveRootAsync(row);
+                    menu.Items.Add(restoreItem);menu.Items.Add(purgeItem);
                 }
                 item.ContextFlyout=menu;
                 FolderList.Items.Add(item);

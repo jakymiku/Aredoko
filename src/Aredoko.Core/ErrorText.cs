@@ -86,6 +86,8 @@ public static class ErrorText
         ["Page source unavailable"] = "このページの元データを読み取れません。登録状態・形式・容量を確認してください。",
         ["Invalid page index request"] = "ページ索引の指定が無効です。開き直して再試行してください。",
         ["Folder book mode cannot change after scanning"] = "「画像フォルダを一冊として扱う」はスキャン後に変更できません。登録時の設定のまま再登録してください。",
+        ["Explicit folder purge consent required"] = "記録の完全削除を続行するには、確認ダイアログで実行を選んでください。",
+        ["Unregister the root before purging database records"] = "登録中のフォルダは削除できません。先に登録を解除してください。",
         ["Choose an absolute folder path"] = "フォルダを絶対パスで選んでください。",
         ["The library must not contain the application database"] = "アプリのデータベースを含むフォルダはライブラリにできません。",
         ["A scan is already running"] = "スキャン中です。完了後にやり直してください。",

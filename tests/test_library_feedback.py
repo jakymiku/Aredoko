@@ -160,5 +160,118 @@ class LibraryFeedbackTests(unittest.TestCase):
         with urllib.request.urlopen(origin+'/api/items?view=history') as response:
             self.assertEqual(json.load(response)['items'][0]['id'], item)
 
+    def test_purge_inactive_root_removes_all_dependents_preserves_files_and_never_reuses_root_id(self):
+        import uuid
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
+        from create_preview_fixture import png
+        from page_index import PageIndex
+        from page_text import PageTextIndex
+        from tag_suggestions import TagSuggestions, TaggerInfo, TagProposal
+        from ai_search import VectorStore
+
+        media_b = self.base / 'media-b'
+        media_b.mkdir()
+        for p in (self.media / 'first.png', self.media / 'second.png', self.media / 'nested/third.png', media_b / 'keep.png'):
+            p.write_bytes(png(color=(20, 40, 60)))
+        before_files = {str(p.relative_to(self.base)): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.base.rglob('*.png')}
+
+        root_a = self.catalog.add_root(str(self.media))
+        root_b = self.catalog.add_root(str(media_b))
+        items_a = self.index(root_a)
+        items_b = self.index(root_b)
+        item_a = items_a['first.png']['id']
+        item_b = items_b['keep.png']['id']
+        self.catalog.update([item_a], {'tags': ['purge-tag'], 'shelf': 'purge-shelf', 'favorite': True})
+        self.catalog.update([item_b], {'tags': ['keep-tag'], 'shelf': 'keep-shelf', 'favorite': True})
+        self.catalog.record_view(item_a)
+        self.catalog.record_view(item_b)
+        with self.catalog.connect() as db:
+            db.execute("INSERT INTO reader_progress(item_id,revision,page,mode) VALUES(?,?,0,'single')", (item_a, 'a' * 64))
+            db.execute("INSERT INTO reader_progress(item_id,revision,page,mode) VALUES(?,?,0,'single')", (item_b, 'b' * 64))
+
+        vectors = VectorStore(self.base / 'catalog.sqlite')
+        vectors.put(item_a, 'a' * 64, {'text': [1.0] + [0.0] * (vectors.dimension - 1)})
+        vectors.put(item_b, 'b' * 64, {'text': [1.0] + [0.0] * (vectors.dimension - 1)})
+
+        class FakeTagger:
+            info = TaggerInfo('fake', '1', 'model', 'rev', 'prep')
+            def suggest(self, source, cancelled):
+                return [TagProposal('cand-tag', 'reason')]
+
+        suggestions = TagSuggestions(self.catalog, FakeTagger())
+        suggestions.generate(item_a, uuid.uuid4().hex)
+        suggestions.generate(item_b, uuid.uuid4().hex)
+
+        class FakeExtractor:
+            class info:
+                @staticmethod
+                def record():
+                    return {'adapter': 'fake', 'version': '1', 'model': 'm', 'model_revision': 'r', 'preprocessing': 'p'}
+            def extract(self, payload, cancelled):
+                return '抽出テキスト'
+
+        pages = PageIndex(self.catalog)
+        pages.refresh(item_a)
+        pages.refresh(item_b)
+        snap_a = pages.list(item_a)
+        snap_b = pages.list(item_b)
+        texts = PageTextIndex(self.catalog, pages, FakeExtractor())
+        texts.generate(item_a, [snap_a['pages'][0]['page_id']], snap_a['source_revision'], uuid.uuid4().hex)
+        texts.generate(item_b, [snap_b['pages'][0]['page_id']], snap_b['source_revision'], uuid.uuid4().hex)
+
+        # Active root cannot be purged
+        with self.assertRaisesRegex(ValueError, 'Unregister the root before purging'):
+            self.catalog.purge_inactive_root(root_a, consent=True)
+        # Missing consent rejected
+        self.catalog.unregister_root(root_a)
+        with self.assertRaisesRegex(ValueError, 'Explicit folder purge consent required'):
+            self.catalog.purge_inactive_root(root_a, consent=False)
+
+        purged = self.catalog.purge_inactive_root(root_a, consent=True)
+        self.assertEqual(purged, {'purged': root_a, 'removed_items': 3, 'removed_locations': 3})
+        with self.assertRaises(KeyError):
+            self.catalog.get(item_a)
+        # Active root B and its records remain intact
+        self.assertEqual(self.catalog.get(item_b)['tags'], ['keep-tag'])
+        self.assertEqual([r['id'] for r in self.catalog.search(view='history')['items']], [item_b])
+        self.assertEqual(texts.search('抽出テキスト')['total'], 1)
+
+        # Registering a new folder or re-adding self.media never reuses root_a's ID
+        media_c = self.base / 'media-c'
+        media_c.mkdir()
+        root_c = self.catalog.add_root(str(media_c))
+        self.assertGreater(root_c, max(root_a, root_b))
+        root_a_readded = self.catalog.add_root(str(self.media))
+        self.assertGreater(root_a_readded, root_c)
+        # Any stale scope referencing old root_a is rejected, never broadened or mapped to root_c
+        with self.assertRaisesRegex(ValueError, 'Unknown registered root'):
+            self.catalog.search(root_ids=[root_a])
+
+        after_files = {str(p.relative_to(self.base)): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.base.rglob('*.png')}
+        self.assertEqual(before_files, after_files)
+
+    def test_http_purge_inactive_root_contract(self):
+        server = ThreadingHTTPServer(('127.0.0.1', 0), production_handler(self.catalog, 'fixture-token'))
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        origin = f'http://127.0.0.1:{server.server_port}'
+        def post(path, data, token='fixture-token'):
+            request = urllib.request.Request(origin+path, json.dumps(data).encode(), headers={'Content-Type':'application/json', 'Origin':origin, 'X-Aredoko-Token':token})
+            try:
+                with urllib.request.urlopen(request) as response: return response.status, json.load(response)
+            except urllib.error.HTTPError as error:
+                with error: return error.code, json.load(error)
+        root = self.catalog.add_root(str(self.media))
+        self.index(root)
+        self.assertEqual(post('/api/library/roots/purge', {'root_id': root, 'consent': True}, token='bad')[0], 403)
+        self.assertEqual(post('/api/library/roots/purge', {'root_id': root, 'consent': True})[0], 400)
+        self.catalog.unregister_root(root)
+        self.assertEqual(post('/api/library/roots/purge', {'root_id': root, 'consent': False})[0], 400)
+        self.assertEqual(post('/api/library/roots/purge', {'root_id': root, 'consent': True, 'extra': 1})[0], 400)
+        status, payload = post('/api/library/roots/purge', {'root_id': root, 'consent': True})
+        self.assertEqual((status, payload['purged'], payload['removed_items']), (200, root, 3))
+        self.assertEqual(post('/api/library/roots/purge', {'root_id': root, 'consent': True})[0], 404)
+
 
 if __name__ == '__main__': unittest.main()

@@ -54,6 +54,33 @@ public sealed partial class MainPage
         catch(Exception ex){Failure(ex);}
         finally{transitions.Release();}
     }
+    private async Task PurgeInactiveRootAsync(RegisteredRootRow row)
+    {
+        if(disposed||dialogOpen||saving||row.Enabled||!await transitions.WaitAsync(0))return;
+        dialogOpen=true;
+        try
+        {
+            var dialog=new ContentDialog
+            {
+                RequestedTheme=ActualTheme,
+                XamlRoot=XamlRoot,
+                Title="解除済みフォルダの記録を完全削除",
+                Content=$"{row.ShortPath}（{row.Path}）の登録履歴・タグ・棚・お気に入り・閲覧履歴・読書位置・AI索引をデータベースから完全に削除します。\nPC上の元ファイルは変更・削除されません。この操作は元に戻せません。",
+                PrimaryButtonText="記録を完全削除",
+                CloseButtonText="キャンセル",
+                DefaultButton=ContentDialogButton.Close
+            };
+            var accepted=await dialog.ShowAsync()==ContentDialogResult.Primary;
+            dialogOpen=false;
+            if(!accepted||disposed)return;
+            var result=await api.PostAsync("api/library/roots/purge",new System.Text.Json.Nodes.JsonObject{{"root_id",row.Id},{"consent",true}});
+            var removed=result["removed_items"]?.GetValue<int>()??0;
+            await RefreshSearchRootsAsync();await LoadAIScopeAsync();RenderFolderHub();
+            Notice("記録を完全削除しました",$"解除済みフォルダのデータベース記録（{removed:N0}件）を削除しました。元ファイルは変更していません。");
+        }
+        catch(Exception ex){if(!disposed)Failure(ex);}
+        finally{dialogOpen=false;transitions.Release();}
+    }
     private void Folder_DragOver(object sender,DragEventArgs args)
     {
         if(args.DataView.Contains(StandardDataFormats.StorageItems))

@@ -232,7 +232,7 @@ def main():
                 owned(foreground=True);ui('send-keys','escape')
                 ui('invoke','ExpandSearchOptions');ui('wait-for','TxtSearchMethodHint','-p','IsOffscreen','--value','False','-t','12000')
                 check(theme+' search method help remains under search options',True)
-                ui('invoke','ExpandSearchOptions');ready()
+                ui('invoke','ExpandSearchOptions','--action','collapse');ui('wait-for','TxtSearchMethodHint','--gone','-t','12000')
             if args.folder_books_only:
                 if theme=='Light':
                     ui('invoke','BtnRoots');ui('wait-for','BtnToggleAddFolder','-t','12000');ui('invoke','BtnToggleAddFolder')
@@ -243,10 +243,10 @@ def main():
                     user32.SetWindowPos(int(hwnd),None,0,0,800,820,0x0014);time.sleep(.3)
                     visible('RootFolderBooks');shot('Light-folder-book-registration-narrow')
                     user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);time.sleep(.3)
-                    ui('invoke','AddRoot');enabled('AddRoot',True)
+                    ui('invoke','AddRoot');ui('wait-for','ScanRoot','-t','12000');visible('ScanRoot')
                     roots=[r for r in sandbox.catalog.index.roots() if r['path']==str(book_media)]
                     check('GUI opt-in root registered',len(roots)==1 and roots[0]['folder_books'])
-                    book_root=roots[0]['id'];ui('wait-for','ScanRoot','-t','12000');visible('ScanRoot');ui('invoke','ScanRoot')
+                    book_root=roots[0]['id'];ui('invoke','ScanRoot')
                     for _ in range(100):
                         if sandbox.catalog.scan_state()['state']=='complete':break
                         time.sleep(.1)
@@ -280,6 +280,10 @@ def main():
                 ui('wait-for','ReaderPageNumber','--value','1 / 3' if theme=='Light' else '2 / 3','-t','12000',window=viewer)
                 ui('wait-for','ReaderStatus','--value','表示しました。拡大すると細部を確認できます。','-t','12000',window=viewer)
                 check(theme+' reader loaded expected page',True)
+                # F10 pins controls before wheel/X-button and keyboard tests so ReaderPageNumber/ReaderStatus stay visible across 2.5s auto-hide.
+                user32.SetForegroundWindow(int(viewer));time.sleep(.15)
+                check('only owned reader is foreground',user32.GetForegroundWindow()==int(viewer))
+                ui('send-keys','f10',window=viewer)
                 if args.check_user_feedback:
                     user32.SetForegroundWindow(int(viewer));time.sleep(.15)
                     check('owned reader foreground for wheel',user32.GetForegroundWindow()==int(viewer))
@@ -298,15 +302,15 @@ def main():
                     user32.SetCursorPos.argtypes=[ctypes.c_int,ctypes.c_int];user32.SetCursorPos(point.x,point.y)
                     user32.mouse_event.argtypes=[wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,ctypes.c_size_t]
                     owned(viewer);check('owned reader foreground before X-button input',user32.GetForegroundWindow()==int(viewer))
+                    ui('send-keys','f10',window=viewer)
                     user32.mouse_event(0x0080,0,0,2,0);user32.mouse_event(0x0100,0,0,2,0)
                     ui('wait-for','ReaderPageNumber','--value',next_page,'-t','12000',window=viewer)
                     ui('wait-for','ReaderStatus','--value','表示しました。拡大すると細部を確認できます。','-t','12000',window=viewer)
+                    ui('send-keys','f10',window=viewer)
                     user32.mouse_event(0x0080,0,0,1,0);user32.mouse_event(0x0100,0,0,1,0)
                     ui('wait-for','ReaderPageNumber','--value',start,'-t','12000',window=viewer)
                     check(theme+' actual mouse forward/back turns viewer pages',True)
-                # F10 pins controls for repeatable screenshots and keyboard navigation.
                 user32.SetForegroundWindow(int(viewer));time.sleep(.15)
-                check('only owned reader is foreground',user32.GetForegroundWindow()==int(viewer))
                 ui('send-keys','f10',window=viewer)
                 if theme=='Light':
                     ui('send-keys','right',window=viewer)
@@ -369,7 +373,8 @@ def main():
                     check('GUI rescan upgrades old token and preserves ID metadata',fresh['mtime_ns']!=legacy and fresh['tags']==['folder-manual'] and fresh['shelf']=='folder-shelf' and fresh['favorite'])
                     check('reader reopens after old-token rescan',PreviewReader(sandbox.catalog).manifest(book_item)['page_count']==3)
                 if args.check_user_feedback and theme=='Light':
-                    ui('invoke','BtnRoots');ui('wait-for','FolderTitle'+str(book_root),'-t','12000')
+                    ui('invoke','BtnCloseDetails');ui('invoke','BtnToggleAddFolder')
+                    ui('scroll-into-view','FolderItem'+str(book_root));ui('wait-for','FolderTitle'+str(book_root),'-t','12000')
                     owned(foreground=True);ui('click','FolderTitle'+str(book_root))
                     ui('wait-for','ScanRoot','-t','12000');check('single folder click opens settings',True)
                     owned(foreground=True);ui('click','FolderTitle'+str(book_root),'--double');ready();wait('TxtCount','1 件')
@@ -380,10 +385,27 @@ def main():
                     choose_combo('CmbFolderState','FolderStateInactive')
                     ui('wait-for','RestoreFolder'+str(book_root),'-t','12000');ui('invoke','RestoreFolder'+str(book_root))
                     for _ in range(60):
-                        restored=next(x for x in sandbox.catalog.index.roots() if x['id']==book_root)
+                        restored=next(x for x in sandbox.catalog.index.roots(include_inactive=True) if x['id']==book_root)
                         if restored['enabled']:break
                         time.sleep(.1)
                     check('single restore click re-enables root with metadata',restored['enabled'] and restored['folder_books'] and sandbox.catalog.get(book_item)['tags']==['folder-manual'])
+                    # F21: Create a disposable generated root, unregister it, test cancel + confirm DB purge
+                    purge_media=target/'generated-purge-root';purge_media.mkdir(parents=True,exist_ok=True)
+                    (purge_media/'purge-sample.png').write_bytes((book_media/'Generated book'/'p1.png').read_bytes())
+                    purge_before=(purge_media/'purge-sample.png').stat().st_mtime_ns
+                    purge_root=sandbox.catalog.add_root(str(purge_media))
+                    sandbox.catalog.index.scan(purge_root);sandbox.catalog.sync_index()
+                    purge_item=sandbox.catalog.search(root_id=purge_root)['items'][0]['id']
+                    sandbox.catalog.update([purge_item],{'tags':['purge-test-tag']})
+                    sandbox.catalog.unregister_root(purge_root)
+                    choose_combo('CmbFolderState','FolderStateActive');choose_combo('CmbFolderState','FolderStateInactive')
+                    ui('wait-for','PurgeFolder'+str(purge_root),'-t','12000');visible('PurgeFolder'+str(purge_root))
+                    ui('invoke','PurgeFolder'+str(purge_root));ui('wait-for','PrimaryButton','-t','12000');shot('Light-purge-confirm-dialog')
+                    ui('invoke','CloseButton');ui('wait-for','PrimaryButton','--gone','-t','12000')
+                    check('cancelling purge preserves inactive root and metadata',any(x['id']==purge_root for x in sandbox.catalog.index.roots(include_inactive=True)) and sandbox.catalog.get(purge_item)['tags']==['purge-test-tag'])
+                    ui('invoke','PurgeFolder'+str(purge_root));ui('wait-for','PrimaryButton','-t','12000');ui('invoke','PrimaryButton')
+                    ui('wait-for','TxtFolderEmpty','-t','12000')
+                    check('confirming purge removes inactive root and DB records while preserving source file',not any(x['id']==purge_root for x in sandbox.catalog.index.roots(include_inactive=True)) and (purge_media/'purge-sample.png').is_file() and (purge_media/'purge-sample.png').stat().st_mtime_ns==purge_before)
                 check(theme+' generated book source unchanged',book_before==book_digest())
                 close();continue
             if args.candidate_search_only:

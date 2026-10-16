@@ -37,6 +37,7 @@ internal static class FeedbackTests
         check(calls.Single().Contains("view=history")&&calls[0].Contains("root_ids=1,2")&&calls[0].Contains("page=1"),"history request preserves scope/query/page");
         foreach(var mode in new[]{(true,"all"),(false,"pending-proposals")})
         {bool rejected=false;try{await api.SearchMultiAsync("豆","","history",0,mode.Item1,mode.Item2,null,null);}catch(ArgumentException){rejected=true;}check(rejected&&calls.Count==1,"history rejects unsupported mode before HTTP");}
+        check(ErrorText.Localize("Explicit folder purge consent required").Contains("確認ダイアログ")&&ErrorText.Localize("Unregister the root before purging database records").Contains("先に登録を解除"),"purge errors localized");
     }
     private sealed class Stub(Func<HttpRequestMessage,HttpResponseMessage> response):HttpMessageHandler
     {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)=>Task.FromResult(response(request));}

@@ -62,6 +62,8 @@ PUBLIC_FOLDER_ERRORS = frozenset({
     'Use relative POSIX-style exclusion patterns',
     'folder_books must be true or false',
     'Folder book mode cannot change after scanning',
+    'Explicit folder purge consent required',
+    'Unregister the root before purging database records',
 })
 
 
@@ -452,6 +454,11 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if self.path=='/api/library/roots/unregister':
                     if set(body)!={'root_id'}:raise ValueError('Invalid root filter')
                     return self.send(200,catalog.unregister_root(body['root_id']))
+                if self.path=='/api/library/roots/purge':
+                    if set(body)!={'root_id','consent'}:raise ValueError('Invalid root filter')
+                    if ai.status().get('state') in ('running','cancelling') or suggestions._active is not None or page_text._active is not None:
+                        raise AIBusy('AI処理や候補生成の完了後に削除してください。')
+                    return self.send(200,catalog.purge_inactive_root(body['root_id'],body['consent']))
                 if self.path=='/api/library/excludes':
                     # Avoid racing the index transaction while scanning.
                     return self.send(200,{'excludes':catalog.set_excludes(body.get('root_id'),body.get('patterns'))})

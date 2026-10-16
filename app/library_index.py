@@ -133,7 +133,7 @@ class LibraryIndex:
             db.executescript('''
                 PRAGMA journal_mode=WAL;
                 CREATE TABLE IF NOT EXISTS library_roots (
-                    id INTEGER PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     path TEXT NOT NULL UNIQUE,
                     excludes_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
@@ -152,7 +152,13 @@ class LibraryIndex:
                     UNIQUE(root_id, relative_path)
                 );
                 CREATE INDEX IF NOT EXISTS library_locations_status ON library_locations(root_id,status);
+                CREATE TABLE IF NOT EXISTS library_root_seq (
+                    id INTEGER PRIMARY KEY CHECK(id=1),
+                    max_id INTEGER NOT NULL DEFAULT 0
+                );
+                INSERT OR IGNORE INTO library_root_seq VALUES(1, 0);
             ''')
+            db.execute('UPDATE library_root_seq SET max_id = max(max_id, COALESCE((SELECT max(id) FROM library_roots), 0)) WHERE id=1')
 
             # Additive migration; existing roots keep no initial shelf.
             if 'default_shelf' not in {r['name'] for r in db.execute('PRAGMA table_info(library_roots)')}:
@@ -230,9 +236,14 @@ class LibraryIndex:
                     return row['id']
                 if row['enabled'] and (existing in root.parents or root in existing.parents):
                     raise ValueError('Overlapping roots are not supported')
-            cursor = db.execute('INSERT INTO library_roots(path,excludes_json,created_at,default_shelf,folder_books,recursive) VALUES(?,?,?,?,?,?)',
-                                (str(root), json.dumps(patterns, ensure_ascii=False), _now(), default_shelf, int(bool(folder_books)), int(recursive is not False)))
-            return cursor.lastrowid
+            next_id = max(
+                db.execute('SELECT max_id FROM library_root_seq WHERE id=1').fetchone()[0],
+                db.execute('SELECT COALESCE(max(id), 0) FROM library_roots').fetchone()[0],
+            ) + 1
+            db.execute('UPDATE library_root_seq SET max_id=? WHERE id=1', (next_id,))
+            db.execute('INSERT INTO library_roots(id,path,excludes_json,created_at,default_shelf,folder_books,recursive) VALUES(?,?,?,?,?,?,?)',
+                       (next_id, str(root), json.dumps(patterns, ensure_ascii=False), _now(), default_shelf, int(bool(folder_books)), int(recursive is not False)))
+            return next_id
 
     def unregister(self,root_id):
         if type(root_id) is not int or root_id<=0 or root_id>9223372036854775807:raise ValueError('Invalid root ID')

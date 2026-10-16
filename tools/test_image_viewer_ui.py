@@ -474,6 +474,33 @@ def main():
                 if keys('esc','VideoViewport'):
                     ui('wait-for','VideoPlayerDialog','--gone','-t','5000');focus_assert('BtnOpenVideo');check(theme+' video Escape closes while chrome is hidden',True)
                 else:raise RuntimeError('Hidden video Escape unavailable')
+                if args.video_seek_only:
+                    ui('invoke','BtnCloseDetails');ready()
+                    wait('PreviewStatus'+str(ids['clip.mp4']),'動画の先頭フレーム')
+                    double_click_owned('Preview'+str(ids['clip.mp4']));ui('wait-for','VideoPlayerDialog','-t','5000')
+                    if not keys('f10','VideoViewport'):raise RuntimeError('Cannot reveal double-click video controls')
+                    wait('VideoTitle','clip.mp4');wait('VideoStatus',shown_video);shot(theme+'-video-double-click')
+                    close_video();wait('TxtEditStatus','保存済み');check(theme+' video list thumbnail double click opens native video player',True)
+                    ui('set-value','TxtTags','video-dc-draft');wait('TxtEditStatus','未保存の変更')
+                    ui('wait-for','DetailPreview','-t','5000');double_click_owned('DetailPreview');ui('wait-for','VideoPlayerDialog','-t','5000')
+                    if not keys('f10','VideoViewport'):raise RuntimeError('Cannot reveal detail double-click video controls')
+                    wait('VideoTitle','clip.mp4');close_video();wait('TxtTags','video-dc-draft');wait('TxtEditStatus','未保存の変更')
+                    check(theme+' video detail thumbnail double click preserves unsaved draft',catalog.get(ids['clip.mp4'])['tags']==[])
+                    ui('invoke','BtnCloseDetails');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready()
+                    owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
+                    if owner.value!=app_pid:raise RuntimeError('Owned context target changed')
+                    if user32.GetForegroundWindow()!=int(hwnd):user32.SetForegroundWindow(int(hwnd));time.sleep(.1)
+                    ui('click','Item'+str(ids['clip.mp4']),'--right');time.sleep(.25)
+                    windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+                    popup_nodes=[]
+                    for w in [w for w in windows if w.get('title')=='PopupHost']+[w for w in windows if str(w.get('hwnd'))==hwnd]:
+                        try:popup_nodes.extend(nodes(json.loads(cli('ui','inspect','--json','--depth','14','-w',str(w['hwnd'])))))
+                        except RuntimeError:pass
+                    has_explorer=any(n.get('automationId')=='ShowInExplorer'+str(ids['clip.mp4']) for n in popup_nodes)
+                    has_default=any(n.get('automationId')=='OpenDefault'+str(ids['clip.mp4']) for n in popup_nodes)
+                    has_similar=any(n.get('automationId')=='FindSimilar'+str(ids['clip.mp4']) for n in popup_nodes)
+                    check(theme+' video context menu exposes common shell actions and omits image similarity',has_explorer and has_default and not has_similar)
+                    shot(theme+'-video-context-menu')
                 close();continue
             if args.evidence_only:
                 report['audit_scope']='per-row SearchEvidence (direct/related/missing), direct-only omission, dirty rollback, and quote/backslash/[ tag search across Light/Dark and wide/narrow'
