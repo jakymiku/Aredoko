@@ -1,6 +1,38 @@
 # Aredoko GPT Chat向け引き継ぎ
 
-## 2026-10-16 実利用フィードバック続行：統合実機検証の完走・動画入口/右クリック確認・F21 解除済みフォルダのDB完全削除（実装 `bd456f6825af834209ba4e12ac643d840e1082d8`、parent `a79f0ee`）
+## 2026-10-16 実利用フィードバック続行②：F07/F08/F11 アニメーション画像再生・54,802KB級APNG bounded処理・代表フレームAI索引・PageEvidenceClient（実装 `0b65d23df9bf07cc8544237af91301d43fe13000`、parent `1f16441`）
+
+開始HEAD `1f16441346930b9d1aeed8ddcdb78ee24cd9e652`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)の残課題だった **F07（GIF/WebP/APNGアニメーション実フレーム再生・資源解放）**、**F08（アニメ画像の代表フレームAI索引）**、**F11（54,802KB級APNGのboundedデコード/転送・取消）**、および優先課題の **`PageEvidenceClient`（ページ根拠・本文APIの反射不要Coreクライアント）** を実装し、単体テストとWindowsネイティブ実機検証まで完了した。
+
+### 1. 実装内容
+
+- **F07 / F11 アニメーション画像（GIF / WebP / APNG）と 54,802KB級大容量APNGのbounded処理 (`app/image_animations.py`, `app/library_index.py`, `app/previews.py`, `app/production_server.py`, `src/Aredoko.Core/ImageViewerPolicy.cs`, `ArchiveReaderClient.cs`, `src/Aredoko.WinUI/ImageViewerView.cs`)**：
+  - `.apng` 拡張子を `TYPES['image']`・`IMAGE_MIME`・`ImageViewerPolicy`・`TagReviewProtocol` に追加（`.png` 拡張子のAPNGも `acTL` チャンク検査で自動判別）。
+  - 一律8MiB制限を無制限に撤去するのではなく、既に同一性・リンク不在を検査したファイルハンドルに対し、**元ファイル最大64MiB・最大16,000,000画素（16MP）・最大64フレーム・長辺最大2048px・1フレーム転送最大8MiB** の厳格な境界を持つ `AnimationInspector` を実装。
+  - `GET /api/library/preview/<id>/manifest` と `GET /api/library/preview/<id>/frames/<frame>?revision=<64hex>` を追加。8MiB超〜64MiB以下の大容量画像に対する `GET /api/library/preview/<id>` も8MiB以下の正規化PNGを返すため、一覧/詳細サムネイルも安全に表示可能。
+  - `ImageViewerView` でアニメーション画像の全フレームとフレーム別遅延時間・ループ回数に従って再生し、移動・再読込・終了時（`Dispose`）に `StopAnimation()` でタイマーとフレーム配列を確実に解放。
+- **F08 アニメ画像の代表フレームAI索引 (`app/image_animations.py`, `app/previews.py`, `app/ai_search.py`)**：
+  - アニメーション画像のAI視覚索引（`PreviewReader.read_cover`）およびAIタグ候補入力（`PreviewReader.tag_input`）では、決定論的な代表フレーム `min(frame_count - 1, frame_count // 2)` を最大768pxの正規化PNGとして抽出し、既存のモデル空間を壊さずに索引化・類似検索・タグ候補生成へ接続。
+- **ページ根拠・本文APIの反射不要Coreクライアント (`src/Aredoko.Core/PageEvidenceClient.cs`, `Protocol.cs`, `LibraryApi.cs`)**：
+  - `PageEvidenceProtocol` / `PageEvidenceClient` と `MediaRow.PageText`（`PageTextMatch`）を反射不要で実装。
+
+### 2. 検証結果（Windows実機、CI起動0回）
+
+- **全Pythonテスト**：**396件実行 / 393 PASS / 3 Windows platform SKIP（183.035秒）**（`test_library_feedback.py` **12 PASS**、`test_previews.py` **14 PASS**、`test_error_text_coverage.py` **3 PASS**）。
+- **C# Coreテスト**：**359 PASS**、**Windows x64 SelfContained Release PASS（警告0・エラー0）**。
+- **アニメーション＆54,802KB APNG ネイティブGUI実機検証 (`data/ai-ui/feedback-animation-20261016-01`, `--animation-only`)**：**16 checks PASS / keys 4 / skipped 0 / PNG 4枚全目視PASS**。
+
+### 3. 残課題と次の3手
+
+- **[22件の対応表](user-feedback-20261016.md)のうち未実装は F12（動画内容の時間付き代表フレームAI索引）の1件のみ**。
+- **次の3手**：
+  1. **本文検索（`page-text`）とページ根拠確認のWinUI接続**。
+  2. **F12（P4）動画内容の時間付き代表フレームAI索引の最小縦切り**。
+  3. **OCR評価データ/採点ツールと代表素材のタグ品質測定**。
+
+---
+
+## 履歴：2026-10-16 実利用フィードバック続行：統合実機検証の完走・動画入口/右クリック確認・F21 解除済みフォルダのDB完全削除（実装 `bd456f6825af834209ba4e12ac643d840e1082d8`、parent `a79f0ee`）
 
 開始HEAD `a79f0ee`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)に基づき、前回未完了だったフォルダ／設定／読書の統合実機テストと動画double-click・共通右クリックメニューの実機検証を完走し、あわせて未実装だった **F21（解除済みフォルダのDB完全削除）** をバックエンド・Core・WinUI・単体/実機テストまで一気通貫で実装・検証した。
 

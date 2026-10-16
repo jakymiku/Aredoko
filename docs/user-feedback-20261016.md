@@ -10,11 +10,11 @@
 | F04 | サブフォルダを含める選択 | 既存rootは従来通り含む。直下のみのscan/再登録/除外/本の根拠も検証 | 完了（backend9件＋GUI `RootRecursive`表示/登録PASS） |
 | F05 | フォルダsingle/double click | 行clickで設定、doubleでAredoko内のフォルダを開く。checkbox/ボタン操作を誤解釈しない | 完了（native single/double click PASS） |
 | F06 | 閲覧履歴と未確認 | ユーザー確定：左ナビを履歴へ。未確認は検索条件へ残す。閲覧成功を記録しrestart後も保持 | 完了（backend/Core・画像/reader実履歴・未確認切替PASS） |
-| F07 | GIF/WebP/APNGアニメ表示 | 実フレーム/時間/ループを再生し、終了時に資源を解放。単一静止画をアニメ成功と呼ばない | 未実装 |
-| F08 | アニメ画像のAI索引 | 表示と別に代表フレーム入力・版/前処理を保存、生成アニメで索引と検索を確認 | 未実装 |
+| F07 | GIF/WebP/APNGアニメ表示 | 実フレーム/時間/ループを再生し、終了時に資源を解放。単一静止画をアニメ成功と呼ばない | 完了（`app/image_animations.py`・`ImageViewerView`・native `feedback-animation-20261016-01` 16 checks PASS） |
+| F08 | アニメ画像のAI索引 | 表示と別に代表フレーム入力・版/前処理を保存、生成アニメで索引と検索を確認 | 完了（`representative_frame_index`・`read_cover`/`tag_input`・PythonテストPASS） |
 | F09 | Explorer/既定アプリ | 右clickした正確な登録アイテムを開く。任意外部path/URLを実行しない | 実装・Coreパス境界＋nativeメニュー項目確認PASS（外部Explorer/既定アプリの自動起動は安全上未実行） |
 | F10 | 詳細にproperties | 種類・容量・更新日時・登録先/相対path。folder tokenを日時と誤表示しない | 完了（Core・native Light/Dark `FileProperties` PASS） |
-| F11 | 54,802KB級APNG | 一律8MiB capの単純解除を避け、bounded frame decode/転送・取消で生成大画像を確認 | 未実装 |
+| F11 | 54,802KB級APNG | 一律8MiB capの単純解除を避け、bounded frame decode/転送・取消で生成大画像を確認 | 完了（元64MiB/16MP/64frame・転送8MiB上限で54,802KB APNGのサムネイル/アニメーション再生PASS） |
 | F12 | 動画の内容AI索引 | 時刻付き代表frame→embedding→動画集約→該当時刻へ。名前/タグ検索と区別 | 未実装 |
 | F13 | 左下の設定 | ツールを「設定」へ。AI準備/関連語/ビューワー設定等をここから利用 | 完了（native Light/Dark 設定保存・AI準備・関連語遷移PASS） |
 | F14 | mouse進む/戻る | ユーザー確定：ビューワー内の画像/ページ送り。メイン画面の履歴移動ではない | 完了（画像・reader実X1/X2 Light/Dark PASS） |
@@ -41,8 +41,9 @@
 実装とnative受け入れを分けた。Python **395件実行（392 PASS / 3 platform SKIP、185.899秒）**、Core **351 PASS**、Release **0警告 / 0 error**。
 - フォルダ・読書・設定・DB完全削除の統合バッチ（`data/ai-ui/feedback-antigravity-20261016-13`）：**98 checks PASS / PNG 19枚全目視PASS / graceful close 2**（Light/Dark 設定保存・反転wheel適用・reader X1/X2・閲覧履歴記録・`FileProperties`・タグレビュー・旧token GUI rescan・フォルダsingle/double click・直接再登録・解除済みrootのDB完全削除の確認ダイアログ取消/実行を確認）。
 - 動画再生・double-click入口・共通右クリックメニューの統合バッチ（`data/ai-ui/feedback-video-20261016-04`）：**102 checks PASS / keys 52 / PNG 22枚目視PASS**（一覧/詳細サムネイルdouble-clickからの動画起動と未保存draft保持、動画右クリックの「エクスプローラーで表示」「既定のアプリで開く」表示と画像類似項目の非表示を確認）。
+- アニメーション画像（GIF/WebP/APNG）・54,802KB級APNGのネイティブ再生バッチ（`data/ai-ui/feedback-animation-20261016-01`）：**16 checks PASS / keys 4 / PNG 4枚全目視PASS**（一覧サムネイル表示、画像ビューアでの複数フレーム実再生・54,802KB APNGのbounded転送再生・Light/Dark・通常/狭幅・閉じた際のタイマー/フレーム解放を確認）。
 - 既存の検索モード63 checks、画像実wheel/X1/X2＋閲覧履歴16 checksも維持。
-- F07/F08/F11（アニメ画像再生・代表フレーム索引・54MB級APNG）およびF12（動画内容の時間付きAI索引）は未実装。F09の外部プロセス（Explorer/既定アプリ）実起動とF22のOSドラッグ＆ドロップ注入は自動テストの安全境界により未実行。コマンド・証拠と残作業は最新handoff。
+- F12（動画内容の時間付きAI索引）は未実装。F09の外部プロセス（Explorer/既定アプリ）実起動とF22のOSドラッグ＆ドロップ注入は自動テストの安全境界により未実行。コマンド・証拠と残作業は最新handoff。
 
 ## コミット前コードレビュー
 

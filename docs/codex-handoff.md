@@ -1,6 +1,42 @@
 # Aredoko 開発引き継ぎ
 
-## 2026-10-16 実利用フィードバック続行：統合実機検証の完走・動画入口/右クリック確認・F21 解除済みフォルダのDB完全削除（実装 `bd456f6825af834209ba4e12ac643d840e1082d8`、parent `a79f0ee`）
+## 2026-10-16 実利用フィードバック続行②：F07/F08/F11 アニメーション画像再生・54,802KB級APNG bounded処理・代表フレームAI索引・PageEvidenceClient（実装 `0b65d23df9bf07cc8544237af91301d43fe13000`、parent `1f16441`）
+
+開始HEAD `1f16441346930b9d1aeed8ddcdb78ee24cd9e652`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)の残課題だった **F07（GIF/WebP/APNGアニメーション実フレーム再生・資源解放）**、**F08（アニメ画像の代表フレームAI索引）**、**F11（54,802KB級APNGのboundedデコード/転送・取消）**、および優先課題の **`PageEvidenceClient`（ページ根拠・本文APIの反射不要Coreクライアント）** を実装し、単体テストとWindowsネイティブ実機検証まで完了した。
+
+### 1. 実装内容
+
+- **F07 / F11 アニメーション画像（GIF / WebP / APNG）と 54,802KB級大容量APNGのbounded処理 (`app/image_animations.py`, `app/library_index.py`, `app/previews.py`, `app/production_server.py`, `src/Aredoko.Core/ImageViewerPolicy.cs`, `ArchiveReaderClient.cs`, `src/Aredoko.WinUI/ImageViewerView.cs`)**：
+  - `.apng` 拡張子を `TYPES['image']`・`IMAGE_MIME`・`ImageViewerPolicy`・`TagReviewProtocol` に追加（`.png` 拡張子のAPNGも `acTL` チャンク検査で自動判別）。
+  - 一律8MiB制限を無制限に撤去するのではなく、既に同一性・リンク不在を検査したファイルハンドルに対し、**元ファイル最大64MiB・最大16,000,000画素（16MP）・最大64フレーム・長辺最大2048px・1フレーム転送最大8MiB** の厳格な境界を持つ `AnimationInspector` を実装。
+  - `GET /api/library/preview/<id>/manifest`（`animated`, `frame_count`, `loop_count`, `durations_ms`, `representative_frame`, `revision`）と `GET /api/library/preview/<id>/frames/<frame>?revision=<64hex>` を追加。また 8MiB超〜64MiB以下の大容量画像に対する既存の `GET /api/library/preview/<id>` も8MiB以下の正規化PNGを返すため、一覧/詳細サムネイルも安全に表示可能。
+  - `ImageViewerView` でアニメーション画像の全フレームとフレーム別遅延時間（`durations_ms`）・ループ回数（`loop_count`）に従って再生し、画像移動時・再読込時・ウィンドウ終了時（`Dispose`）に `StopAnimation()` でタイマーとフレーム配列を確実に解放。
+- **F08 アニメ画像の代表フレームAI索引 (`app/image_animations.py`, `app/previews.py`, `app/ai_search.py`)**：
+  - アニメーション画像のAI視覚索引（`PreviewReader.read_cover`）およびAIタグ候補入力（`PreviewReader.tag_input`）では、先頭フレームではなく決定論的な代表フレーム `representative_frame_index(frame_count) = min(frame_count - 1, frame_count // 2)` を最大768pxの正規化PNGとして抽出し、既存のモデル空間（`VECTOR_CONTRACT`）を壊さずに索引化・類似検索・タグ候補生成へ接続。
+- **ページ根拠・本文APIの反射不要Coreクライアント (`src/Aredoko.Core/PageEvidenceClient.cs`, `Protocol.cs`, `LibraryApi.cs`)**：
+  - `PageEvidenceProtocol` / `PageEvidenceClient`（`RefreshIndexAsync`, `ListPagesAsync`, `PageImageAsync`, `TextStatusAsync`, `GenerateTextAsync`, `CancelTextAsync`, `ListTextAsync`, `SearchTextAsync`）と `MediaRow.PageText`（`PageTextMatch`）を反射不要の `JsonDocument` / `JsonObject` で実装。
+
+### 2. 検証結果（Windows実機、CI起動0回）
+
+- **全Pythonテスト**：**396件実行 / 393 PASS / 3 Windows platform SKIP（183.035秒）**
+  - `test_library_feedback.py` **12 PASS**（GIF / WebP / PNG(APNG) / 54,802KB APNG の3フレーム色検証・8MiB以下転送境界・代表フレーム1（緑）でのAI索引作成を検証）、`test_previews.py` **14 PASS**、`test_error_text_coverage.py` **3 PASS**。
+- **C# Coreテスト**：**359 PASS**（`.apng` 判定、`ImageAnimationManifest` 解析と不正値拒否、`PageEvidenceProtocol` の `Refresh`/`IndexList`/`Search` 解析を追加）。
+- **Windows x64 SelfContained Releaseビルド**：**PASS（警告0・エラー0）**。
+- **アニメーション＆54,802KB APNG ネイティブGUI実機検証 (`data/ai-ui/feedback-animation-20261016-01`, `--animation-only`)**：
+  - **16 checks PASS / keys 4 / skipped 0 / PNG 4枚すべて目視確認PASS**。
+  - 生成した `anim.gif`・`anim.webp`・`anim.png`（APNG）・`large-54mb.apng`（56,117,260 bytes = 54,802KB）の4件すべてで一覧サムネイルが表示され、専用画像ビューアで `アニメーション再生中（3フレーム）` として実際にフレーム1→フレーム2→フレーム3と切り替わること、狭幅700×620での表示、Light/Darkテーマ、元ファイルbytes/mtime不変を確認。
+
+### 3. 残課題と次の3手
+
+- **[22件の対応表](user-feedback-20261016.md)のうち未実装は F12（動画内容の時間付き代表フレームAI索引）の1件のみ**（F01〜F11, F13〜F22 はすべて実装完了、F09の外部OSアプリ実起動とF22のOSドラッグ注入のみ自動テストの安全境界により実機未実行）。
+- **次の3手**：
+  1. **本文検索（`page-text`）とページ根拠確認のWinUI接続**：今回追加した `LibraryApi.PageEvidences` を `MainPage` の検索方法・詳細パネル/読書画面へ簡潔に接続し、保存済み本文の検索と該当ページへの導線をWindows実機で確認する。
+  2. **F12（P4）動画内容の時間付き代表フレームAI索引の最小縦切り**：既存の `VideoThumbnailer` 時刻指定フレーム抽出を再利用し、時刻付き代表フレーム→埋め込み→作品単位の検索結果集約→該当時刻での動画再生開始を実装する（[media-content-plan.md](media-content-plan.md)）。
+  3. **OCR評価データ/採点ツールと代表素材のタグ品質測定**：固定日本語ページ素材・正解本文でのCER/到達率採点ツールと、許可されたローカルOCRアダプタ接続、および代表素材でのWDタグ品質測定を進める。
+
+---
+
+## 履歴：2026-10-16 実利用フィードバック続行：統合実機検証の完走・動画入口/右クリック確認・F21 解除済みフォルダのDB完全削除（実装 `bd456f6825af834209ba4e12ac643d840e1082d8`、parent `a79f0ee`）
 
 開始HEAD `a79f0ee`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)に基づき、前回未完了だったフォルダ／設定／読書の統合実機テストと動画double-click・共通右クリックメニューの実機検証を完走し、あわせて未実装だった **F21（解除済みフォルダのDB完全削除）** をバックエンド・Core・WinUI・単体/実機テストまで一気通貫で実装・検証した。
 
