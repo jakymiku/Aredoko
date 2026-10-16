@@ -1,5 +1,36 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-17 英語タグを保持した日本語意味検索・未承認候補用索引/API/WinUI
+
+実装commit：`0026b51337539edf60f59de5adcd93e3d93b6e1d`。開始HEAD `ca942766aa2876c87c763322cafb69fe08cea2e8`（clean、既存Draft PR5/production branchを継続）。現在P2。P0 baseline済み/改善試行累積**1/2**を維持。ユーザーが「WDの英語タグをEmbeddingGemma 2で日本語から検索する」方向を承認したため実装。**英語原文を保持・日本語への逐次手動翻訳は不要、OCRは保留のまま。** 既存の本文ページ直接索引の後続目標は維持する。
+
+### 実装・使い方
+
+- 承認済み英語タグは既存の通常AI文章索引で検索可能。今回、**未承認候補を分離した意味検索**を追加。検索方法の7番目「タグ候補の意味（AI）」（`ModeTagSemantic`、index6）。従来の未承認候補の文字一致（index4）、ページ本文（index5）や他検索は保持。確定タグ・却下済み候補・翻訳結果を混ぜない。
+- **候補生成→設定「AI検索の準備」で対象範囲のAI索引作成→日本語で検索**。未承認は新モード、英語のまま承認したタグは再索引後「名前・タグの意味（AI）」を使う。自動翻訳/自動承認/生成直後の自動GPU索引化はしない。
+- 既存profile別DBの`ai_proposal_vectors`に、最新pending集合の文書vectorを通常text/coverと分離保存。`pending-raw-tags:v1`、batch/source/producer、候補ID/原文/version、物理metadataによるsignature。同一入力は再利用。承認/却下/新batch/元ファイル再scan後の古いvectorを検索から除外。sourceが変わった古い候補しかなければ不足のまま残し、候補再生成を要する。
+- 既存の**明示scoped AI build**だけで準備し、coverageへ未準備を反映。共有inference lock、推論中はcatalog lockを保持せず、公開直前の状態/版/scope照合、取消/競合では候補vector未公開、既存per-item再開。root purgeで正規profile別DBとcatalog本体の新テーブルも削除。他root/手動整理/原本を保持。
+- APIは既存`POST /api/library/tag-suggestions/search`の任意bool`semantic:true`。省略/falseは旧文字検索。意味応答は`search_mode:'pending-proposals-semantic'`、cosine、pending/indexed/remaining件数、rawタグ/由来/根拠/検索モデル。新たな閾値/順位重みは導入せず、正解なしでも近い候補が返りうる。類似度は正解率ではない。
+- GUIは索引不足の警告と根拠/類似度を表示し、通常AIの重複根拠は出さない。既存の検索root選択と保存AI scopeの意味は変えず、範囲・版・未承認を隠さない。詳しい契約とscope差は[tag-semantic-search.md](tag-semantic-search.md)。本の本文ページ/音声内容の索引を実装したとは扱わない。
+
+### 固定評価・対象/全体検証
+
+- 日本語質問18問（正解あり16/正解なし2）と英語タグ16集合を推論前に固定。`tag-language-v1.json` SHA `dc3d32e09b86c6b291807ae350c9bc8b7fade1e7dfcccf9562e29fda6a89ff17`。raw英語/underscoreを空白にした条件を事前固定し、既存offline EG2/CUDAで一度比較。両方**Hit@1/Recall@5/MRR=1.000、Precision@5=0.2125**。前処理変更は採用せず原文のまま。「初音ミク」「東方の巫女」もこの小さなfixture内でTop1。正解なしは候補を返す（raw top0.598310/0.630628）ため拒否成功と数えない。**人工metadataであり、WD画像分類/実ライブラリの品質ではない**。`data/tag-language/v1-20261017-01/report.json`、worker終了確認。
+- `.gitattributes`で新fixtureのLFを固定。作業treeとGit blobのSHA一致を確認し、Windows再checkoutでも固定hashが変わらないようにした。既存評価入力/モデル/重みを変更していない。
+- 新規`test_tag_semantics.py` **10 PASS**：未索引時推論なし、明示索引/再利用、原文/手動metadata保持、承認/却下/新batch/破損vectorの無効化、取消/レビュー競合、profile差替え、元ファイル変更、範囲/棚/favorite/model、複数profileのroot完全削除、HTTP厳密bool/空query/旧検索維持。
+- **全Python425件実行：422 PASS / 3 Windows platform SKIP、194.569秒**（`data/tag-language-python-20261017.log`）。**Core378 PASS**（意味検索のscore/モデル/不足数/改変応答検査8件追加）、**Windows x64 SelfContained Release警告0/エラー0、11.76秒**（`data/tag-language-core-20261017.log` / `data/tag-language-release-20261017.log`）。Python compileall/diff --check PASS。
+- **native `tag-language-20261017-02`：33 checks PASS / Light・Darkの7 PNG全目視 / app正常終了2 / 所有embedding worker終了**。既存EG2 CUDAと生成PNG・事前指定の英語候補（偽tagger）を使用。索引不足0結果→明示索引→日本語からblue_hair/twintails Top1、登録root絞り込み、旧英語文字一致、英語のまま承認→索引更新→通常AI日本語検索、app再起動保存、元bytes/mtime/設定不変を確認。**実WD画像分類をこのbatchで測ったとはしない**。前回の実WD CPU GUI48件は別の履歴として維持。
+- 初回native `tag-language-20261017-01`は**FAILED**：既存保存AI scopeで1件が正しい通常AI結果をテストが2件と期待し、終了処理も`RecordedSimilarity.proceed`を通常`AISearch`へ要求して例外になった。製品scopeを変えずテスト期待と所有AI終了処理を修正、1回だけ再実行して上記02で合格。初回PNG4枚も全目視しログ/FAILED resultを保持。旧runを成功扱いにしない。一部shotのown-app tooltip/capture chromeは成果物の読み取りを妨げない。
+- WinUI設計/コードレビュー：新API仮定なし、既存ComboBox/Theme/AutomationId、反射不要のJSON検証、非同期/古い応答排除/履歴mode復帰/根拠の重複抑制/既存scopeを点検。**未導入WinUIAnalyzerは未実行、High Contrast/Narrator/新規キーボード網羅/大規模pending性能/Native AOTは未検証**。新DL/依存追加・私物scan・外部送信・CI dispatchなし、テストapp/backend終了。
+
+### 次の3手
+
+1. **本文ページ画像の直接embedding索引API→対象テスト**：既存PageIndex・安全な入力取得とprofile/source revision/page IDを再利用。明示scope/ページ上限、同版再利用、取消/再開、変更/部分失敗を設計して最小実装。cover索引/手動整理/今回のタグ意味検索を保持。未実装の本文AI索引をOCRの検索失敗と誤認しない。
+2. **ページ一致の作品集約とWinUI読書**：一致ページを検索結果から開く。版違いのジャンプ抑止、生成した日本語ページで検索到達率・時間/容量を測る。OCRはGemma直接索引でも検索漏れが多い場合だけ検討する。
+3. **明示選択の代表素材でタグ品質/日英検索を測る**：人工的に分離した16集合の100%を実素材へ一般化しない。Danbooru略語/キャラクター/複合条件の失敗を記録し、必要分だけ関連語辞書を検討。数千pendingのsnapshot/coverage性能、タグ集合全体の意味一致と個別タグ根拠の違いも測る。音声/音楽内容索引・複数ページ文脈タグは後続。
+
+---
+
 ## 2026-10-17 WD実モデルのGUI確認・OCR保留のユーザー方針を反映
 
 検証ツール実装commit：`ad426ff652054200fdfd50cde70c60d2da2bbd32`。開始HEAD/検証に使った製品sourceは`d9fc4a6eed1a9c95020c61cbbd4bf30b94fc8825`。ブランチは`feat/winui3-production-mvp-20261011`、既存Draft PR5を継続。**現在フェーズP2、P0 baseline済み/改善試行累積1/2は不変。** 今回は製品GUI/検索rankingを変更せず、既存の実WD導線を検証し次の順序をユーザーと確認した。

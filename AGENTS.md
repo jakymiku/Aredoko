@@ -1,5 +1,10 @@
 # Aredoko — Codex / coding agent instructions
 
+## User-confirmed Japanese search over original WD tags (2026-10-17)
+
+Keep raw English/Danbooru-style tags; do not require per-item Japanese translation. Use the replaceable embedding model for Japanese meaning search and evaluate any dictionary fallback only from actual misses. Approved tags already use normal AI text indexing; the new **separate pending-tag semantic index/search** is documented in [docs/tag-semantic-search.md](docs/tag-semantic-search.md). Pending proposals must remain unconfirmed, revision/profile bound and separate from normal tag search. Prepare their vectors only on explicit scoped AI builds, never from startup/generation/query. Preserve the literal candidate mode, review/history, source media and existing scopes. OCR deferral below stays in effect.
+
+
 ## User-confirmed OCR deferral (2026-10-17)
 
 **Do not continue dedicated OCR development as the default next task.** The user explicitly decided to consider OCR only if **many content-search misses remain after EmbeddingGemma 2 direct image/page indexing is used and evaluated**. Prioritize the existing model's image/page search coverage and reviewable WD tagging. EmbeddingGemma 2 produces embeddings, not transcribed text or automatic tags; direct semantic retrieval does not prove verbatim text search. Books currently use their cover for ordinary AI image indexing: advance bounded internal-page embeddings with page/revision/model provenance before treating missing inner content as a model failure. Keep existing page-text APIs/search, fixed OCR evaluation assets and all non-AI features available. This supersedes older handoff/priority lines saying to connect an OCR adapter next. The uncommitted Windows OCR experiment was parked outside product source; it is **not** an installed/enabled/completed product feature. See [current priorities](docs/development-priorities.md).

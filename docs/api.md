@@ -1,5 +1,8 @@
 # 共通API（操作試作 v0）
 
+> **2026-10-17 未承認タグの意味検索**：`POST /api/library/tag-suggestions/search`の任意bool `semantic:true`で専用の意味索引を検索する。省略/falseは既存の文字一致を維持。索引不足件数とモデル/根拠/類似度を返し、検索から索引作成はしない。[完全な契約](tag-semantic-search.md)。
+
+
 ## P2/P3：ページ根拠索引と明示的な本文検索（2026-10-16 続行）
 
 - `POST /api/library/page-index`、`GET /api/library/page-index/{item_id}` と `/pages/{page_id}?revision=...`：画像・ZIP/CBZ・フォルダ本のページID/版/順序を保存し、根拠画像を変更検査付きで取得。

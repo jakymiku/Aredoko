@@ -1,5 +1,8 @@
 # Swappable embedding models
 
+> **2026-10-17 タグ候補の意味索引**：各profile DBの`ai_proposal_vectors`は通常の文章/画像vectorと分離。最新pending集合・source/producer・入力契約のsignatureで再利用し、既存の明示scoped AI buildだけで準備。承認/却下/版変更は再索引が必要で、古い候補を確定タグへ混ぜない。root purgeも対象。[仕様](tag-semantic-search.md)。
+
+
 Aredoko chooses a validated local embedding profile at startup. The default remains EmbeddingGemma 2. A compatible derivative can be selected without rewriting catalog, API, GUI or ranking code. A model with a different architecture needs a registered adapter; arbitrary models are not guaranteed to load.
 
 ## Selecting a profile
