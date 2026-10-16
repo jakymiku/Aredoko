@@ -1,6 +1,8 @@
 # AIエージェントの開始・再開ガイド
 
-> **最新（2026-10-16 実利用feedback）**：左下「設定」、閲覧履歴＋未確認検索条件、wheel/X入力、recursive指定、動画操作等を追加。Python390 PASS/3 SKIP・Core350・Release0warn/error、独立native動画92/検索63/画像入力・履歴16 PASS（PNG28枚全目視）。フォルダ統合nativeはharness待機でFAILED、修正済み未再実行。アニメ/大画像/動画内容索引/DB完全削除は未実装。[対応表](user-feedback-20261016.md)と最新handoffを優先。
+> **最新（2026-10-16 実利用feedback続行・F21実装＆統合実機確認完了）**：前回未完だったフォルダ/読書/設定の統合実機バッチ（`feedback-antigravity-20261016-13` **98 checks PASS / PNG 19枚全目視**）と動画double-click/右クリック実機バッチ（`feedback-video-20261016-04` **102 checks PASS / keys 52 / PNG 22枚全目視**）を完走し、さらに **F21 解除済みフォルダのDB完全削除（`POST /api/library/roots/purge`・`library_root_seq`によるID非再利用・WinUI確認ダイアログ取消/実行）** を実装・検証。全Python **395件実行（392 PASS / 3 SKIP）**、Core **351 PASS**、x64 Release **警告0/エラー0**。残る未実装は **F07/F08/F11（アニメ再生・代表フレーム索引・54MB級APNG）** と **F12（動画内容の時間付きAI索引）**。[対応表](user-feedback-20261016.md)と[最新handoff](codex-handoff.md)を優先。
+
+> **履歴（2026-10-16 実利用feedback）**：左下「設定」、閲覧履歴＋未確認検索条件、wheel/X入力、recursive指定、動画操作等を追加。Python390 PASS/3 SKIP・Core350・Release0warn/error、独立native動画92/検索63/画像入力・履歴16 PASS（PNG28枚全目視）。フォルダ統合nativeはharness待機でFAILED、修正済み未再実行。アニメ/大画像/動画内容索引/DB完全削除は未実装。[対応表](user-feedback-20261016.md)と最新handoffを優先。
 
 > **最新GUI方針とWindows確認（2026-10-16）**：ユーザー指示により簡潔なUIを維持し、機能は削減しない。管理操作は「ツール」、検索説明とタグのモデル詳細は任意展開へ整理。警告/根拠/未保存/検索範囲は見えるまま。Core320・Release0警告/0error、生成素材のnative64＋検索モード63 checks PASS、PNG20枚全目視PASS。前回reader透け/旧token GUI rescan/restartの残gateも確認済み。[AGENTSの恒久ルール](../AGENTS.md)と[最新handoff](codex-handoff.md)を優先。次は本文APIのCore/WinUI接続。
 

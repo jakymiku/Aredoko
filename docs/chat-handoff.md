@@ -1,6 +1,44 @@
 # Aredoko GPT Chat向け引き継ぎ
 
-## 2026-10-16 実利用フィードバック：操作改善・履歴・登録範囲（実装 `45d699562b912e82c6eb8efa41dbc77c579105b8`、parent `2b3e724`）
+## 2026-10-16 実利用フィードバック続行：統合実機検証の完走・動画入口/右クリック確認・F21 解除済みフォルダのDB完全削除（実装 `bd456f6825af834209ba4e12ac643d840e1082d8`、parent `a79f0ee`）
+
+開始HEAD `a79f0ee`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)に基づき、前回未完了だったフォルダ／設定／読書の統合実機テストと動画double-click・共通右クリックメニューの実機検証を完走し、あわせて未実装だった **F21（解除済みフォルダのDB完全削除）** をバックエンド・Core・WinUI・単体/実機テストまで一気通貫で実装・検証した。
+
+### 1. 実装と修正
+
+- **F21 解除済みフォルダのDB完全削除（`app/library_index.py`, `app/production.py`, `app/production_server.py`, `src/Aredoko.Core/ErrorText.cs`, `src/Aredoko.WinUI/MainPage.FileActions.cs`, `MainPage.xaml.cs`）**：
+  - `library_root_seq` テーブルによる単調増加root ID管理を導入し、root削除後に新規登録や再登録を行っても**削除済みroot IDが絶対に再利用されない**（古い保存済みscopeが別の新規フォルダを誤って指さない）契約を保証。
+  - `ProductionCatalog.purge_inactive_root(root_id, consent=True)` および `POST /api/library/roots/purge` を追加。登録中（`enabled=1`）のrootや `consent!=True`、スキャン中/AI処理中は拒否し、解除済み（`enabled=0`）のrootについてのみ、単一SQLiteトランザクション内で `page_text_heads` / `page_texts` / `page_heads` / `page_entries` / `page_snapshots` / `tag_proposals` / `tag_proposal_batches` / `ai_vectors` / `reader_progress` / `view_history` / `item_locations` / `items` / `library_locations` / `scan_jobs` / `library_roots` を完全削除。PC上の元ファイルは一切変更・削除しない。
+  - WinUIの登録フォルダ一覧で「登録解除済み」フォルダ行および右クリックメニューに **「記録を完全削除」 (`PurgeFolder<id>` / `PurgeRoot<id>`)** を追加。確認ダイアログ（元ファイルは残ること・元に戻せないことを明記、既定ボタンはキャンセル）を経て実行。また `FolderStateFilter_Changed` で `RefreshSearchRootsAsync()` を呼ぶようにし、一覧状態切替時に最新の解除済みroot状態を取得するよう改善。
+- **実機テストハーネスの待機・スクロール補正（`tools/test_tag_review_ui.py`, `tools/test_image_viewer_ui.py`）**：
+  - `--check-ui-cleanup` の `ExpandSearchOptions` 折りたたみで `--action collapse` と `TxtSearchMethodHint --gone` を待機し、直後の `BtnRoots` クリックが検索条件変更の非同期ロード（`CloseFolderHubCore`）で潰されないように修正。
+  - 読書ビューア（`ArchiveReaderView`）でのホイール・マウスX1/X2ページ送り検証前に `F10` でオーバーレイ表示を固定し、2.5秒のauto-hideによる `ReaderPageNumber` 非表示化を防止。
+  - 旧v1トークンGUI再スキャン後に開いている詳細ペインとフォルダ追加パネルを閉じてから `FolderItem<id>` を `scroll-into-view` し、解除済みrootの検索に `include_inactive=True` を指定。
+
+### 2. 検証結果（Windows実機、CI起動0回）
+
+- **全Pythonテスト**：`395件実行 / 392 PASS / 3 Windows platform SKIP（185.899秒）`（`test_library_feedback.py` **11 PASS**、`test_error_text_coverage.py` **3 PASS** を含む）。F21の全依存テーブル削除・他root保全・root ID非再利用・古いscope拒否・元ファイル不変・HTTP認証/400/404契約を検証。
+- **C# Coreテスト**：**351 PASS**（`dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore`）。
+- **Windows x64 SelfContained Releaseビルド**：**PASS（警告0・エラー0）**。
+- **統合実機テスト①（フォルダ・読書・UI整理・ユーザーフィードバック・F21 DB完全削除）**：
+  - `python tools/test_tag_review_ui.py --output data/ai-ui/feedback-antigravity-20261016-13 --folder-books-only --check-ui-cleanup --check-user-feedback`
+  - **98 checks PASS / PNG 19枚全目視PASS / graceful closes 2 / keyboard_tested True**（先にF21追加前の `-09` でも **94 checks PASS / PNG 18枚全目視PASS** を確認した上で、F21確認ダイアログのキャンセル保持＋実行削除を加えた `-13` を完走）。
+- **統合実機テスト②（動画再生・double-click入口・共通右クリックメニュー）**：
+  - `python tools/test_image_viewer_ui.py --video-seek-only --output data/ai-ui/feedback-video-20261016-04`
+  - **102 checks PASS / keys 52 / skipped 0 / PNG 22枚全目視PASS**（F15 動画サムネイルdouble-click起動・draft保持、F19 動画右クリックの共通メニュー表示と画像類似非表示を確認）。
+
+### 3. 未実装・未検証の境界と次の3手
+
+- **未実装（4件）**：**F07 / F08 / F11**（GIF/WebP/APNGアニメ表示、アニメ代表フレームAI索引、54MB級APNGのbounded処理）、**F12**（動画内容の時間付き代表フレームAI索引）。
+- **自動テストの安全境界により実機未実行の操作**：**F09**（外部 `explorer.exe`/既定アプリの実起動）、**F22**（OSからの実フォルダDrag & Dropイベント注入）。
+- **次の3手**：
+  1. **F07 / F11 アニメーション画像（GIF/WebP/APNG）と大容量APNG（約54MB級）のbounded表示・プレビュー**。
+  2. **F08 アニメ画像の代表フレームAI索引**。
+  3. **P2/P3 本文検索のCore/WinUI接続またはF12 動画内容の時間付き代表フレーム索引**。
+
+---
+
+## 履歴：2026-10-16 実利用フィードバック：操作改善・履歴・登録範囲（実装 `45d699562b912e82c6eb8efa41dbc77c579105b8`、parent `2b3e724`）
 
 ユーザー確定：マウス進む/戻るはviewer内の画像/ページ送り。左ナビの未確認は閲覧履歴へ置換し、未確認filterは検索条件へ保持。[22件の対応表](user-feedback-20261016.md)を正とする。**全22件の完了ではない。**
 
