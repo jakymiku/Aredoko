@@ -2,7 +2,7 @@
 
 **手動解放・選択式自動idle解放・索引処理の待機設定を実装しました。** 以下の古い「未実装」記述は元の設計の履歴として残します。実GPU30項目は合格、WinUI新設定の機能操作は確認済みですが、厳格な表示検査は未完です。最新06では155機能項目が通過、23枚目視で解放feedbackの1px clipを特定し、試験guardを修正（native未再実行）。最新の証拠と制限は [codex-handoff.md](codex-handoff.md) 冒頭を参照。
 
-- 手動解放: WinUI「AI索引」→「AIをメモリから解放」、またはtoken/Origin認証済み`POST /api/library/ai/release`、本文`{}`。索引や検索が進行中は即時409 Busy（強制中断しない）。返値`released`は所有workerの停止有無。解放後はstatusの`resident=false`、`worker_state=unloaded`、`device=""`、`telemetry={}`となり、次の検索で同一profileを自動再ロードする。モデル重み・catalog・vectors・index identityを削除しない。
+- 手動解放: WinUI「ツール」→「AI検索の準備」→「AIをメモリから解放」、またはtoken/Origin認証済み`POST /api/library/ai/release`、本文`{}`。索引や検索が進行中は即時409 Busy（強制中断しない）。返値`released`は所有workerの停止有無。解放後はstatusの`resident=false`、`worker_state=unloaded`、`device=""`、`telemetry={}`となり、次の検索で同一profileを自動再ロードする。モデル重み・catalog・vectors・index identityを削除しない。
 - 選択式自動解放: **初期値0（無効）**。候補は無効/60/300/900秒（APIの整数許容範囲0..3600秒）。`time.monotonic()`で推論/索引完了後のアイドル時間を測り、共有inference lockを通す。処理中のworkerには触れず、アプリ終了時にtimerの停止と終了フラグを保証。処理中の再起動や高頻度timerを導入しない。
 - 索引の待機: **初期値0（無効）**。候補は0/50/200/500/1000ms（APIは0..2000ms）。新規AI推論を行った作品の処理後、次の作品まで`cancel.wait(ms/1000)`で中断可能な待機を入れる。interactive検索には入れない。これはGPU使用率やゲームFPSの上限を保証しない。
 - 設定保存: `%LOCALAPPDATA%/Aredoko/settings.json`に`resource: {"idle_release_seconds":0,"index_pause_ms":0}`を追加。既存の`{"version":1,"profile":"default"}`のような**旧profile-only形式は引き続き読み書きできる**。GUIの変更は保存直後に反映され、profile/embedding index identityは変更しない。テストは一時settingsと生成ソースのみを使用。

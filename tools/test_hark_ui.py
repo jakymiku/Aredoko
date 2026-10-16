@@ -85,6 +85,9 @@ def main():
                     hwnd=str(matches[0]['hwnd']);break
                 time.sleep(.1)
             else:raise RuntimeError('Owned viewer window unavailable')
+        from native_ui_tools import TOOL_IDS, invoke_tool
+        if len(args)==2 and args[0]=='invoke' and args[1] in TOOL_IDS:
+            return invoke_tool(cli,app_pid,hwnd,args[1])
         return cli('ui',*args,'-w',hwnd)
     def wait(identifier,value):ui('wait-for',identifier,'--value',value,'-t','10000')
     def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000');time.sleep(.4)

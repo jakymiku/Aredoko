@@ -9,7 +9,7 @@
     <Button x:Name="Older" Content="古い履歴" Click="Older_Click" AutomationProperties.AutomationId="TagOlder"/>
     <Button x:Name="Cancel" Content="中止" Click="Cancel_Click" IsEnabled="False" AutomationProperties.AutomationId="TagCancel"/>
    </StackPanel>
-   <ComboBox x:Name="Batches" Header="生成履歴（最大10件ずつ）" HorizontalAlignment="Stretch" SelectionChanged="Batch_Changed" AutomationProperties.AutomationId="TagBatches"/>
+   <ComboBox x:Name="Batches" Header="生成履歴" HorizontalAlignment="Stretch" SelectionChanged="Batch_Changed" AutomationProperties.AutomationId="TagBatches"/>
   </StackPanel>
   <Grid x:Name="Body" Grid.Row="2" ColumnSpacing="12" RowSpacing="8">
    <Grid.RowDefinitions><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -25,6 +25,9 @@
       <Button x:Name="Accept" Content="承認して保存" Click="Accept_Click" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="TagAccept"/>
       <Button x:Name="Reject" Content="却下" Click="Reject_Click" AutomationProperties.AutomationId="TagReject"/>
      </StackPanel>
+     <Expander x:Name="Metadata" Header="モデルと生成条件" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Visibility="Collapsed" AutomationProperties.AutomationId="TagMetadata">
+      <TextBlock x:Name="ModelDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TagModelDetails"/>
+     </Expander>
     </StackPanel>
    </ScrollViewer>
   </Grid>

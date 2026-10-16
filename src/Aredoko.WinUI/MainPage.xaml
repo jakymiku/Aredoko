@@ -94,8 +94,12 @@
     <ComboBox x:Name="SearchMode" Header="検索方法" SelectedIndex="0" SelectionChanged="SearchMode_Changed" MinWidth="116" AutomationProperties.Name="検索方法" AutomationProperties.AutomationId="CmbSearchMode"><ComboBoxItem Content="名前・タグ" AutomationProperties.AutomationId="ModeLiteral"/><ComboBoxItem Content="AI混合" AutomationProperties.AutomationId="ModeSemantic"/><ComboBoxItem Content="AI画像・表紙" AutomationProperties.AutomationId="ModeVisual"/><ComboBoxItem Content="AI文章" AutomationProperties.AutomationId="ModeText"/><ComboBoxItem Content="未承認タグ候補" AutomationProperties.AutomationId="ModeTagCandidates"/></ComboBox>
     </StackPanel>
     <StackPanel x:Name="ViewTools" Grid.Column="1" VerticalAlignment="Bottom" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-    <Button Content="AI索引" Click="AI_Click" AutomationProperties.AutomationId="BtnAIIndex"/>
-    <Button Content="関連語" Click="RelatedTerms_Click" AutomationProperties.AutomationId="BtnRelatedTerms"/>
+    <Button Content="ツール" AutomationProperties.Name="ライブラリのツール" AutomationProperties.AutomationId="BtnTools">
+     <Button.Flyout><MenuFlyout>
+      <MenuFlyoutItem Text="AI検索の準備" Click="AI_Click" AutomationProperties.AutomationId="BtnAIIndex"/>
+      <MenuFlyoutItem Text="関連語を編集" Click="RelatedTerms_Click" AutomationProperties.AutomationId="BtnRelatedTerms"/>
+     </MenuFlyout></Button.Flyout>
+    </Button>
     <Button x:Name="LayoutButton" Content="グリッド表示" Click="Layout_Click" AutomationProperties.AutomationId="BtnLayout"/>
     <Button x:Name="DetailsButton" Content="詳細" IsEnabled="False" Click="OpenDetails_Click" AutomationProperties.AutomationId="BtnDetails"/>
     </StackPanel>
@@ -111,10 +115,10 @@
     <CheckBox x:Name="AIMatchedOnly" Content="名前・タグで全語一致の候補のみ" Visibility="Collapsed" Checked="AIMatchedOnly_Changed" Unchecked="AIMatchedOnly_Changed" AutomationProperties.Name="AI候補を名前・タグの全語一致で絞る" AutomationProperties.AutomationId="ChkAIMatchedOnly"/>
     <NumberBox x:Name="SimilarityBoundary" Header="類似度の区切り（空欄＝自動）" Minimum="-1" Maximum="1" Visibility="Collapsed" ValueChanged="SimilarityBoundary_Changed" AutomationProperties.Name="類似度の区切り" AutomationProperties.AutomationId="NumSimilarityBoundary"/>
     <ComboBox x:Name="AIResultGroup" Header="AI候補の表示" SelectedIndex="0" HorizontalAlignment="Stretch" Visibility="Collapsed" SelectionChanged="AIResultGroup_Changed" AutomationProperties.AutomationId="CmbAIResultGroup" AutomationProperties.Name="AI候補の表示"><ComboBoxItem Content="上位の類似候補"/><ComboBoxItem Content="その他の参考候補"/><ComboBoxItem Content="すべてのAI候補"/></ComboBox>
+     <TextBlock x:Name="SearchMethodHint" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtSearchMethodHint"/>
      </StackPanel>
     </Expander>
     <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Margin="0,4,0,0" Spacing="4">
-     <TextBlock x:Name="SearchMethodHint" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtSearchMethodHint"/>
      <Grid x:Name="SimilarityBar" ColumnSpacing="12" Visibility="Collapsed">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <TextBlock x:Name="SimilarityTitle" VerticalAlignment="Center" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtSimilarityOrigin"/>
@@ -179,7 +183,13 @@
    <StackPanel Grid.Row="4" Spacing="8">
     <StackPanel x:Name="ItemPagerRow" Orientation="Horizontal" Spacing="8"><Button x:Name="Previous" Content="前へ" Click="Previous_Click" AutomationProperties.AutomationId="BtnPrevious"/><TextBlock x:Name="PageNumber" AutomationProperties.AutomationId="TxtPageNumber" VerticalAlignment="Center"/><Button x:Name="Next" Content="次へ" Click="Next_Click" AutomationProperties.AutomationId="BtnNext"/><Button Content="再接続" Click="Reconnect_Click" AutomationProperties.AutomationId="BtnReconnect"/></StackPanel>
     <ProgressBar x:Name="Busy" IsIndeterminate="True" Visibility="Collapsed"/>
-    <InfoBar x:Name="Status" IsOpen="True" IsClosable="False" Title="接続準備中" AutomationProperties.AutomationId="StatusBar"/>
+    <InfoBar x:Name="Status" IsOpen="True" IsClosable="False" Title="接続準備中" AutomationProperties.AutomationId="StatusBar">
+     <InfoBar.ActionButton><Button x:Name="StatusMore" Content="説明" Visibility="Collapsed" AutomationProperties.Name="検索結果の説明を読む" AutomationProperties.AutomationId="BtnStatusDetails">
+      <Button.Flyout><Flyout>
+       <ScrollViewer MaxHeight="300" MaxWidth="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><TextBlock x:Name="StatusExplanation" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="TxtStatusDetails"/></ScrollViewer>
+      </Flyout></Button.Flyout>
+     </Button></InfoBar.ActionButton>
+    </InfoBar>
    </StackPanel>
   </Grid>
    </SplitView>

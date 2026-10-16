@@ -45,7 +45,7 @@
 
 ### WinUI
 
-- 検索ツールに「関連語」ボタン（`BtnRelatedTerms`）を追加。dialog（`RelatedTermsEditor.cs`）で見出し語・別名・関連語を「、」区切りで保存/削除。登録済みは先頭200件をComboBoxで表示。
+- 「ツール」→「関連語を編集」（`BtnRelatedTerms`）から開く。dialog（`RelatedTermsEditor.cs`）で見出し語・別名・関連語を「、」区切りで保存/削除。登録済みは先頭200件をComboBoxで表示。
 - 既存dialogと同じ`transitions`/`dialogOpen`ガード。辞書はタグを変えないため未保存draftを破棄しない。閉じた後は**未保存draftがなく**名前・タグ検索中のときだけ再検索する。
 - 文字検索の案内に追加された関連語（1語につき3表記まで＋「ほかN語」）を表示。
 - dialogの「ファイルに書き出す」「ファイルから読み込む」は、ユーザーがpickerで選んだ.jsonだけを読み書きする（16MiB上限、送信前にformat/versionを確認、結果「N件を読み込みました（追加・置換）」）。

@@ -57,6 +57,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     private async Task LoadCoreAsync(long? before)
     {
         var loaded=await api.HistoryAsync(itemId,before,lifetime.Token);if(disposed)return;
+        ModelDetails.Text="";Metadata.IsExpanded=false;Metadata.Visibility=Visibility.Collapsed;
         history=loaded;batch=null;candidate=null;Evidence.Source=null;Evidence.Visibility=Visibility.Collapsed;populating=true;
         Batches.Items.Clear();Candidates.Items.Clear();
         foreach(var value in loaded.Batches)Batches.Items.Add(new ComboBoxItem{Content=$"履歴 #{value.Id} · {value.Candidates.Count}候補"+(value.Stale?" · 元ファイル変更あり":""),Tag=value});
@@ -70,7 +71,9 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         batch=(Batches.SelectedItem as ComboBoxItem)?.Tag as TagBatch;candidate=null;Candidates.Items.Clear();Evidence.Source=null;Evidence.Visibility=Visibility.Collapsed;
         Detail.ChangeView(null,0,null,true);
         if(batch is null){UpdateButtons();return;}
-        Provenance.Text=$"{batch.Model}\nモデル版: {batch.ModelRevision}\n{batch.Adapter} {batch.AdapterVersion}\n前処理: {batch.Preprocessing}\n根拠: {(batch.EvidenceKind=="cover"?"本の先頭ページのみ":"画像")}"+(batch.Stale?"\n元ファイルが変わっています。生成し直してください。":"");
+        Provenance.Text=$"{batch.Model}\n根拠: {(batch.EvidenceKind=="cover"?"本の先頭ページのみ":"画像")}"+(batch.Stale?"\n元ファイルが変わっています。生成し直してください。":"");
+        ModelDetails.Text=$"モデル版: {batch.ModelRevision}\nアダプタ: {batch.Adapter} {batch.AdapterVersion}\n前処理: {batch.Preprocessing}";
+        Metadata.Visibility=Visibility.Visible;Metadata.IsExpanded=false;
         foreach(var value in batch.Candidates)
         {
             var row=new ListViewItem{Content=new TextBlock{Text=$"{value.Tag}\n{value.StateLabel}",TextWrapping=TextWrapping.Wrap},Tag=value};

@@ -63,7 +63,11 @@ def main():
         result=subprocess.run(['winapp',*map(str,arguments)],cwd=REPO,env=env,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=90)
         if result.returncode:raise RuntimeError('winapp '+str(arguments)+': '+result.stderr+result.stdout)
         return result.stdout
-    def ui(*arguments,window=None):return cli('ui',*arguments,'-w',window or hwnd)
+    def ui(*arguments,window=None):
+        from native_ui_tools import TOOL_IDS, invoke_tool
+        if window is None and len(arguments)==2 and arguments[0]=='invoke' and arguments[1] in TOOL_IDS:
+            return invoke_tool(cli,app_pid,hwnd,arguments[1])
+        return cli('ui',*arguments,'-w',window or hwnd)
     def picker_keys(keys,identifier):
         import ctypes
         from ctypes import wintypes
@@ -629,7 +633,7 @@ def main():
         # Refresh native catalog after API registration; actual index is started in GUI.
         ui('invoke','BtnSearch');ready()
         if args.layout_checks:
-            visible_controls('10-wide',{'TxtQuery','CmbKind','CmbSearchMode','BtnAIIndex','BtnLayout','BtnSearch','TxtCount'})
+            visible_controls('10-wide',{'TxtQuery','CmbKind','CmbSearchMode','BtnTools','BtnLayout','BtnSearch','TxtCount'})
             screenshot('10-wide-library');ui('invoke','BtnLayout');ready()
             ui('wait-for','BtnLayout','--value','リスト表示','-t','3000')
             grid_rows=api('/api/items')['items']
@@ -652,7 +656,7 @@ def main():
             resize(700,620);visible_controls('11-narrow-grid',{'BtnLayout','BtnSearch','TxtCount'})
             screenshot('11-narrow-grid');ui('invoke','BtnLayout')
             ui('wait-for','BtnLayout','--value','グリッド表示','-t','3000')
-            resize(700,620);visible_controls('12-narrow',{'TxtQuery','CmbKind','CmbSearchMode','BtnAIIndex','BtnLayout','BtnSearch','TxtCount'});screenshot('12-narrow-library')
+            resize(700,620);visible_controls('12-narrow',{'TxtQuery','CmbKind','CmbSearchMode','BtnTools','BtnLayout','BtnSearch','TxtCount'});screenshot('12-narrow-library')
             resize(1200,820)
         if not args.editor_only:
             dialog();build()

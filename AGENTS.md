@@ -22,6 +22,15 @@ The vision defines product intent, not implementation status. The latest source,
 
 **Read [docs/codex-handoff.md](docs/codex-handoff.md) and [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) before implementation.** They are the current project state and next-action checklist (2026-10-11). Some legacy READMEs/status files describe the earlier stage where the GUI framework was undecided; **the user now chose WinUI 3 for the production MVP**.
 
+## UIを複雑にしない・機能を減らさない（ユーザー指示、2026-10-16）
+
+**本番のGUIは日常の検索・閲覧・整理に集中できる簡潔な構成にする。機能削減によって簡潔に見せてはならない。** AIエージェントのテスト都合で、検証用の長文・内部ID・実装説明・注意書きを通常画面へ追加し続けない。テスト手順/検証注記は文書・ログ、操作識別はAutomationIdに置く。
+
+- 普段使う操作を前に出し、管理操作は名前付きツール、詳細条件やモデル版・前処理は説明/折りたたみへ整理する。既存機能・情報は到達可能なまま保持し、消去・恒久無効化・API撤去で代用しない。
+- エラー、未保存、取消/進捗、元ファイル変更、未承認タグ、現在の検索範囲など、判断に必要な状態は常時分かる形にする。安全や検索範囲の警告を詳細の中へ隠さない。
+- 長い技術説明より短い自然な日本語を使い、同じ説明やボタンを重複させない。必要な説明・根拠・モデル由来は任意に確認できる。新機能も既存の導線へ統合し、画面/設定を無制限に増やさない。
+- 整理した操作へのマウス/キーボード導線、Light/Dark、狭幅、未保存編集、既存の検索/登録/読書/承認を検証する。AI用テストの古い見た目の期待に合わせて製品GUIを再び散らかさず、テストを新導線へ更新する。
+
 ## Current product-development emphasis (2026-10-15)
 
 **Read [docs/development-priorities.md](docs/development-priorities.md) before choosing the next feature or continuing implementation.** The user wants development effort redirected from generic viewer/player polish toward **finding the right local item**: (P0) search quality evaluation and evidence-led ranking improvements, (P1) image/item-origin right-click similarity search, (P2) OCR, reviewable AI tag suggestions and multi-page situation-tag understanding. After that, advance logical folder-book grouping and time-coded video/audio content indexing in small independently tested slices. These are priorities, **not completed features or an instruction to discard existing functions**.
@@ -34,7 +43,7 @@ P1 similarity and registered-folder hub are implemented and Windows-validated. T
 
 ## Latest Windows integration checkpoint (2026-10-16)
 
-The remote backend through `ad850aa` is integrated, not unfinished work to recreate. Windows Core320 and final x64 Release pass; Python ran384 with381 passed/3 platform skips. Fixed folder-book path/handle ctime false positives without relaxing identity/size/mtime or before/after change checks. Generated folder-book register/read/edit/restart had28 runtime checks pass before final small UI changes; final native rerun stopped at an asynchronous settings-panel wait. Wait is fixed but not rerun under the UI skill cycle limit. **Do not call final native/visual validation complete.** Read the latest handoffs for exact evidence, failed runs and next three tasks. Real OCR and dedicated page-text WinUI remain unconnected; default extraction503, P0 trials1/2, no CI/download/private scan.
+The backend through `ad850aa` is integrated, not unfinished work to recreate. Windows Core320 and final x64 Release pass. The later user-directed UI cleanup retains all features: Tools contains AI preparation/related terms, search explanations and tag model details are available on demand, while warnings/dirty/scope/evidence remain visible. Native generated-only cleanup/folder-book checks64 and search-mode checks63 pass; all20 Light/Dark normal/narrow PNGs were visually reviewed. The previous reader bottom strip, old-token GUI rescan and restart gates are now validated. Read the latest handoffs for exact evidence and the UI simplicity rule above before adding controls or test-oriented copy. Production Python did not change in this UI slice (previous381 passed/3 skips). Real OCR and dedicated page-text WinUI remain unconnected; default extraction503, P0 trials1/2, no CI/download/private scan.
 
 ## Latest folder-book checkpoint (2026-10-16, no Windows device)
 

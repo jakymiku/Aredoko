@@ -69,8 +69,10 @@ public sealed partial class MainPage : Page
     private EditorState Current()=>new(Tags.Text,Shelf.Text,Favorite.IsChecked==true,Reviewed.IsChecked==true);
     private bool Dirty=>active is not null && EditorState.IsDirty(saved,Current());
     private bool FolderDirty=>folderSettingsActive && folderDraft is {IsDirty:true};
-    private void Notice(string title,string message="",InfoBarSeverity severity=InfoBarSeverity.Informational) {
+    private void Notice(string title,string message="",InfoBarSeverity severity=InfoBarSeverity.Informational,string? details=null) {
         Status.Title=title; Status.Message=message; Status.Severity=severity;
+        StatusExplanation.Text=details??"";
+        StatusMore.Visibility=string.IsNullOrWhiteSpace(details)?Visibility.Collapsed:Visibility.Visible;
     }
     private void Failure(Exception ex) {
         Notice("操作を完了できません",ex.Message,InfoBarSeverity.Error);
@@ -201,16 +203,20 @@ public sealed partial class MainPage : Page
             Empty.Text=method.IsTagCandidates?"この範囲に一致する未承認のAIタグ候補はありません。作品の詳細「AIタグ候補」から候補を生成・確認できます。":query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
             if(method.IsAI&&query.Length>0&&rows.Count==0&&resultGroup==1&&result.GroupBoundary is null)Empty.Text="参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像・表紙／AI文章で区切りを指定してください。";
             else if(method.IsAI&&query.Length>0&&rows.Count==0&&resultGroup==0&&result.OtherTotal>0)Empty.Text="区切り以上の候補はありません。類似度の区切りを下げるか、参考候補を表示してください。";
-            Notice(method.IsTagCandidates?"未承認タグ候補の検索":"読込完了",
-                method.IsTagCandidates ? "最新バッチに未承認（pending）の候補がある作品を表示しています。確定タグにはまだ反映されていません。詳細の「AIタグ候補」から根拠を確認して承認・却下できます。"+(scopeWarning is null?"":" "+scopeWarning)
+            var explanation=
+                method.IsTagCandidates ? "最新の生成履歴に未承認の候補がある作品を表示しています。確定タグにはまだ反映されていません。詳細の「AIタグ候補」から根拠を確認して承認・却下できます。"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。画像・表紙とAI文章では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
-                : method.IsAI ? "探したい内容を文章で入力してください。AI索引の作成は「AI索引」から。"
-                : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions)+(scopeWarning is null?"":" "+scopeWarning));
+                : method.IsAI ? "探したい内容を文章で入力してください。初回の準備は「ツール」の「AI検索の準備」から。"
+                : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions)+(scopeWarning is null?"":" "+scopeWarning);
+            var summary=method.IsTagCandidates?"未承認の候補です。詳細から確認・承認できます。"
+                :method.IsAI?(query.Length==0?"探したい内容を入力してください。":$"上位 {result.LeadingTotal:N0}件 · 参考 {result.OtherTotal:N0}件")
+                :Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions);
+            Notice(method.IsTagCandidates?"タグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),scopeWarning is null?InfoBarSeverity.Informational:InfoBarSeverity.Warning,explanation);
             if(origin is not null)
             {
                 var guidance=SimilaritySearch.Guidance(result.SimilarityStatus);
                 Empty.Text=result.SimilarityStatus=="ready"?"この範囲に索引済みの類似候補はありません。種類・フォルダ・AI対象を確認してください。":guidance;
-                Notice("画像・表紙の類似検索",guidance+$" 最大{result.CoverageLimit??10000:N0}件の対象から表示します。"+(scopeWarning is null?"":" "+scopeWarning));
+                Notice("似た画像・表紙",(result.SimilarityStatus=="ready"?$"{result.Total:N0}件の候補":guidance)+(scopeWarning is null?"":" "+scopeWarning),scopeWarning is null?InfoBarSeverity.Informational:InfoBarSeverity.Warning,guidance+$" 最大{result.CoverageLimit??10000:N0}件の対象から表示します。");
             }
         } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { }
         catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?"この条件ではAI検索を利用できません。\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。":"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }

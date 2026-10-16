@@ -104,7 +104,12 @@ def main():
         if result.returncode:raise RuntimeError('winapp '+str(args)+': '+result.stdout+result.stderr)
         return result.stdout
     def ui(*args,window=None):return cli('ui',*args,'-w',window or hwnd)
-    def wait(identifier,value):ui('wait-for',identifier,'--value',value,'-t','40000')
+    def wait(identifier,value):
+        if identifier=='TxtSearchMethodHint':
+            tree=json.loads(ui('inspect','--json','--depth','12'))
+            if not any(n.get('automationId')==identifier and not n.get('isOffscreen',True) for n in nodes(tree)):
+                ui('invoke','ExpandSearchOptions');time.sleep(.2)
+        ui('wait-for',identifier,'--value',value,'-t','40000')
     def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','40000');time.sleep(.4)
     def choose(combo,option,label):
         # Refresh the peer after result rendering/screenshot layout changes.
@@ -143,7 +148,7 @@ def main():
         tree=json.loads(ui('inspect','--json','--depth','8'))
         root=tree['windows'][0]['elements'][0]
         found=list(nodes(tree))
-        for identifier in ('TxtQuery','CmbKind','CmbSearchMode','TxtSearchMethodHint','BtnSearch','BtnAIIndex','BtnLayout'):
+        for identifier in ('TxtQuery','CmbKind','CmbSearchMode','BtnSearch','BtnTools','BtnLayout'):
             matches=[n for n in found if n.get('automationId')==identifier]
             check(phase+' '+identifier+' visible',len(matches)==1 and not matches[0].get('isOffscreen') and matches[0]['width']>0 and matches[0]['height']>0 and matches[0]['x']>=root['x'] and matches[0]['y']>=root['y'] and matches[0]['x']+matches[0]['width']<=root['x']+root['width'] and matches[0]['y']+matches[0]['height']<=root['y']+root['height'])
         (target/(phase+'-tree.json')).write_text(json.dumps(tree,ensure_ascii=False),encoding='utf-8')

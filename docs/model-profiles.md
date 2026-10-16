@@ -16,7 +16,7 @@ The backend also supports --ai-profile. Invalid settings disable optional AI whi
 
 ## WinUI 3での選択（2026-10-12追加）
 
-**「AI索引」→「次回起動で使用するAIモデル」** からモデルprofileを選べます。通常の文字検索はいつでも利用可能です。
+**「ツール」→「AI検索の準備」→「次回起動で使用するAIモデル」** からモデルprofileを選べます。通常の文字検索はいつでも利用可能です。
 
 - 選択肢は既定のEmbeddingGemma 2と、`data/ai-profiles/*.json`（ignoredのローカルJSON）のみ。既存の`config/ai-profiles/embeddinggemma-2.json`を複製したファイルをローカルフォルダへ置き、モデルの情報を編集します。**GUIはモデル自体をダウンロードしません。**
 - 対応adapter・identity等のスキーマは `app/ai_profiles.py` が一元検証します。無効なJSON・不明なadapter・逃避パス・リンク先のモデルprofileは選択禁止。重みフォルダ、`.venv-ai/Scripts/python.exe`、`aredoko-revision.txt`の不足やリビジョン不一致は、モデル選択画面に警告を表示。検出できた場合でも実モデルのロード成功までは保証しません。

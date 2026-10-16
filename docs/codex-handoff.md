@@ -1,4 +1,32 @@
-## 最新：別開発のバックエンドを取り込み・Windows統合確認とフォルダ本の誤変更検知を修正（2026-10-16 JST）
+## 最新：機能を維持してGUIの情報量を整理・前回のWindows残gateを確認（2026-10-16 JST）
+
+開始HEAD `7ddfb627deb5dfedce149bf9f4d8618df8357c91`、clean・remote差0。AGENTS/vision/優先順位/両handoff/Issue4/PR5と最新コードを確認。**ユーザー指示「UIを複雑にしない。ただし機能削減はしない」**をAGENTSと[WinUI方針](design-vision-winui.md)へ恒久ルールとして追加。テスト都合の長文・内部用語は通常画面へ常駐させず、AutomationId・ログ・文書で検証する。既存feature / base / Draft PR #5を維持。実装commitは本節を導入したgit logを参照。
+
+### 変更と機能保持
+
+- MainPageの **「ツール」→「AI検索の準備」「関連語を編集」** へ管理操作を集約。モデル選択・対象scope・索引作成/中断・メモリ解放/資源設定・関連語の編集/import/exportは既存画面のまま到達可能。再接続・一覧/グリッド・詳細・登録フォルダ・検索モードは保持。
+- 検索の常駐メッセージを短くし、AI候補数は上位/参考を表示。全文の検索説明は **「説明」** Flyoutへ、検索方法のヒントは既存の検索条件Expanderへ。警告・検索範囲の不一致・エラー・未保存・候補/stale状態は隠さない。根拠とスコアの正解率でない説明は任意に読める。検索API/ランキング/P0試行を変更していない。
+- AIタグ候補の根拠画像・モデル名・対象/変更状態・説明・修正/承認/却下を前に出し、モデル版/adapter版/前処理は **「モデルと生成条件」** へ折りたたむ。履歴・生成・中断も保持。技術情報の削除やAPI撤去は行わない。
+- nativeテストを新導線へ更新。`tools/native_ui_tools.py` は所有app PIDのメニューから既存AutomationIdを探すだけの共通helper。短命PopupHostがlist→inspect間で閉じた既知の例だけ再照会し、操作失敗を握りつぶさない。既存profile/関連語テストの移動操作も更新（本turnでその大型全scenarioを再実行したとはしない）。
+
+### 今回の検証
+
+- 最終 **Windows x64 SelfContained Release：警告0・エラー0**。**Core 320 PASS**。UI/XAML・nativeテストhelper・文書だけの変更で、本番Python/API/依存は変更なし。前回Windows Python381 PASS/3 SKIPを今回再実行したとは報告しない。
+- **`ui-cleanup-20261016-02`：64 runtime checks PASS / PNG14枚全目視PASS / 所有app正常終了2**。Light/Dark、通常/狭幅、ツールからAI準備・関連語へ到達、検索説明の任意表示、検索方法ヒント、モデル詳細の展開、フォルダ本の登録→scan→自然順読書→手動整理保存→プロセスrestartで2/3復元まで確認。
+- **前回の残gateを解消**：reader下端の画像透けが消えたことをLight/Dark狭幅PNGで確認。旧v1tokenを生成DBだけに設定→旧reader409相当→GUI再scan→同一ID/タグ/棚/お気に入り保持→再読書までPASS。元画像bytes/mtime・保存AI設定不変、model推論0。実WD/OCR品質の証拠とはしない。
+- **`ui-cleanup-search-modes-20261016-01`：63 runtime checks PASS / PNG6枚全目視PASS**。既存CPU contract encoderのみ、AI文章/画像・表紙/混合の経路、種類/お気に入り/登録scope、未保存変更での取消/破棄、AIエラー後の通常検索復帰、vector/settings不変を確認。実GPU・実検索品質は未測定。
+- 初回cleanup01は閉じたPopupHostの古いHWNDをテストが参照して停止。PNG2枚全目視、アプリの画面崩れではなかった。テストの参照待ちだけ修正して02を完走。失敗結果を上書きせず保存。今回のnative修正再実行1回、検索モードbatchは独立した既存回帰。
+- WinUI code review：既存標準control/テーマbrush/AutomationId・共有遷移ガード・async取消・dirty保存・検索scopeを維持。新binding/依存・同期blockを追加していない。WinUIAnalyzer未導入、High Contrast/DPI拡大/Narratorと実ライブラリは未検証。CI dispatch0・3workflow manual-only・DL/OS変更/私物scan0・P0改善累積1/2。
+
+### 次の異なる3手
+
+1. **ページ根拠/本文APIのCore client**：版・page ID・source状態・応答上限を検証する反射不要clientとテストを追加。既存backendを作り直さず、保存済み本文はモデル不在でも使う。
+2. **本文検索/根拠pageのWinUI縦切り**：既存検索方法・詳細/readerへの導線へ統合し、専用説明パネルや設定を乱立させない。明示scope/取消/古い応答/根拠版と未保存編集を保持する。実OCR未接続の状態を隠さない。
+3. **OCR・代表タグの品質評価準備**：固定日本語素材/正解本文/query/期待page、CER・作品/page到達率の採点から進め、許可されたbounded OCR adapterを接続。新取得は別許可。複数ページ文脈推定/動画音声索引と、GUIの残る重複表記整理は機能を保った小さい単位で継続。
+
+---
+
+## 履歴：別開発のバックエンドを取り込み・Windows統合確認とフォルダ本の誤変更検知を修正（2026-10-16 JST）
 
 開始local HEAD `f3fa79384f5affb3d812e1393177f65568624876`、clean。remoteが5commit先行していたため、既存featureへ `--ff-only` で **`ad850aa1fe6118725a53be1e15187c2471f6f9d2`** まで取り込んだ。AGENTS/vision/優先順位/両handoff/Issue4/PR5と実コードを照合。**候補検索・フォルダ本・ページID/根拠・本文保存/明示検索バックエンドは実装済み**として維持し、重複実装しなかった。同じDraft PR #5 / baseを継続。実装commitは本節を導入した `git log` を参照。
 

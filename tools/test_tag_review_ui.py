@@ -47,6 +47,7 @@ def nodes(value):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--check-ui-cleanup',action='store_true')
     parser.add_argument('--scenario',choices=('indexed','unindexed','text-only'),default='indexed')
     modes=parser.add_mutually_exclusive_group()
     modes.add_argument('--candidate-search-only',action='store_true')
@@ -182,6 +183,41 @@ def main():
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
             hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.folder_books_only and theme=='Dark' else '76 件')
+            if args.check_ui_cleanup:
+                from native_ui_tools import invoke_tool
+                visible('BtnTools');visible('BtnLayout');visible('BtnDetails')
+                tree=json.loads(ui('inspect','--json','--depth','14'))
+                check(theme+' management tools and long hints are absent from default canvas',not any(n.get('automationId') in ('BtnAIIndex','BtnRelatedTerms','TxtSearchMethodHint') and not n.get('isOffscreen',True) for n in nodes(tree)))
+                shot(theme+'-library-compact')
+                invoke_tool(cli,app_pid,hwnd,'BtnAIIndex')
+                ui('wait-for','AIProfileChoice','-t','12000');ui('invoke','CloseButton')
+                ui('wait-for','AIProfileChoice','--gone','-t','12000');ready()
+                check(theme+' AI preparation remains reachable through Tools',True)
+                invoke_tool(cli,app_pid,hwnd,'BtnRelatedTerms')
+                ui('wait-for','RelatedTermsDialog','-t','12000');ui('invoke','CloseButton')
+                ui('wait-for','RelatedTermsDialog','--gone','-t','12000');ready()
+                check(theme+' related-term editing remains reachable through Tools',True)
+                ui('invoke','BtnStatusDetails')
+                detail=None
+                for _ in range(20):
+                    windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+                    ordered=[w for w in windows if str(w.get('hwnd'))==hwnd]+[w for w in windows if w.get('title')=='PopupHost']
+                    for w in ordered:
+                        handle=str(w['hwnd'])
+                        try:tree=json.loads(ui('inspect','--json','--depth','14',window=handle))
+                        except RuntimeError as ex:
+                            # A dismissed menu host can disappear between list and inspect.
+                            if 'AppNotFoundException' in str(ex):continue
+                            raise
+                        found=[n for n in nodes(tree) if n.get('automationId')=='TxtStatusDetails' and not n.get('isOffscreen',True)]
+                        if found:detail=found[0];break
+                    if detail:break
+                    time.sleep(.1)
+                check(theme+' full search explanation is readable on demand',detail is not None and '名前・タグ' in detail.get('name',''))
+                owned(foreground=True);ui('send-keys','escape')
+                ui('invoke','ExpandSearchOptions');ui('wait-for','TxtSearchMethodHint','-p','IsOffscreen','--value','False','-t','12000')
+                check(theme+' search method help remains under search options',True)
+                ui('invoke','ExpandSearchOptions');ready()
             if args.folder_books_only:
                 if theme=='Light':
                     ui('invoke','BtnRoots');ui('wait-for','BtnToggleAddFolder','-t','12000');ui('invoke','BtnToggleAddFolder')
@@ -246,7 +282,24 @@ def main():
                 ui('screenshot','--output',path,window=viewer);check('screenshot '+path.stem,path.is_file() and path.stat().st_size>0);report['screenshots'].append(path.name)
                 ui('send-keys','escape',window=viewer);ready()
                 # Tag review uses the same folder-book first-page evidence contract.
-                open_review();contains('TagProvenance','まだ候補がありません');shot(theme+'-folder-book-tag-entry');ui('invoke','TagClose');ready()
+                open_review()
+                if args.check_ui_cleanup:
+                    if theme=='Light':
+                        ui('invoke','TagGenerate')
+                    ui('wait-for','TagProvenance','--value','not-a-real-model','--contains','-t','12000');enabled('TagRefresh',True)
+                    ui('wait-for','TagEvidence','-p','IsOffscreen','--value','False','-t','12000')
+                    shot(theme+'-tag-review-compact')
+                    ui('scroll-into-view','TagMetadata');ui('invoke','TagMetadata')
+                    ui('wait-for','TagModelDetails','-p','IsOffscreen','--value','False','-t','12000')
+                    contains('TagModelDetails','モデル版: fixed');contains('TagModelDetails','ui-fixture');contains('TagModelDetails','cover-v1')
+                    shot(theme+'-tag-review-model-details')
+                    ui('invoke','TagMetadata')
+                    user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.4)
+                    visible('TagEdited');visible('TagAccept');shot(theme+'-tag-review-compact-narrow')
+                    user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);time.sleep(.3)
+                else:
+                    contains('TagProvenance','まだ候補がありません');shot(theme+'-folder-book-tag-entry')
+                ui('invoke','TagClose');ready()
                 if theme=='Light':
                     # Emulate the old v1 scan token only in this generated DB.
                     from previews import folder_pages

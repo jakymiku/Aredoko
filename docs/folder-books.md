@@ -43,10 +43,10 @@
 
 - 既存rootを後から一冊モードへ移す移行（タグを持つ画像アイテムのメタデータ移し替え）。
 - ページ単位IDと本文検索の作品集約は[バックエンドへ実装済み](page-evidence.md)。Core/WinUI接続、移動追跡、重複候補は後続。
-- Windows Release/XAML buildとCoreはPASS。生成素材で登録/scan/自然順読書/手動整理/プロセス再起動保持は28 runtime checks PASS。最終UI修正のnative再確認は未完了。[最新handoffの失敗/境界](codex-handoff.md)を参照。
+- Windows Release/XAML buildとCoreはPASS。生成素材で登録/scan/自然順読書/手動整理/プロセス再起動保持は28 runtime checks PASS。最終UI修正・旧token GUI再scan・restartは後続のnative64 checksで確認済み（PNG14枚全目視PASS）。[最新handoffの失敗/境界](codex-handoff.md)を参照。
 
 ## Windowsでの変更検査と再現手順（2026-10-16）
 
 パスstatと開いたhandleのfstatでctimeが異なるケースを検出したため、identity/size/mtimeの相互照合に加え、ctimeをそれぞれの取得方法の前後で確認する。固定回帰テストを追加。全Windows Pythonは384件実行・381 PASS/3 platform SKIP。元ファイルの書き換えはしない。
 
-既存Releaseとwinappがあれば `python tools/test_tag_review_ui.py --folder-books-only --output data/ai-ui/<new-name>`。生成素材・一時DBのみ、既存Aredokoが起動中/port使用中なら拒否する。runtime_passだけでvisual PASSとせず、result.jsonの各PNGをすべて見る。旧token GUI rescanと最終reader overlayの修正は次回確認待ち。
+既存Releaseとwinappがあれば `python tools/test_tag_review_ui.py --folder-books-only --output data/ai-ui/<new-name>`。生成素材・一時DBのみ、既存Aredokoが起動中/port使用中なら拒否する。runtime_passだけでvisual PASSとせず、result.jsonの各PNGをすべて見る。旧token GUI rescanと最終reader overlayは `ui-cleanup-20261016-02` で確認済み。
