@@ -20,7 +20,7 @@ TYPES = {
     'book': {'.cbz', '.pdf', '.epub'},
     # A .zip may be a book OR a package of production assets; do not guess.
     'archive': {'.zip'},
-    'image': {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.avif', '.heic', '.heif'},
+    'image': {'.jpg', '.jpeg', '.png', '.apng', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.avif', '.heic', '.heif'},
     'video': {'.mp4', '.mkv', '.webm', '.avi', '.mov', '.wmv', '.m4v', '.ts'},
     'audio': {'.mp3', '.flac', '.wav', '.ogg', '.opus', '.m4a', '.aac', '.wma'},
     'material': {'.psd', '.clip', '.kra', '.ora', '.blend', '.svg', '.ase', '.aseprite'},

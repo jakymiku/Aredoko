@@ -1,6 +1,6 @@
 namespace Aredoko.Core;
 
-public sealed record ViewerImageItem(int Id, string Title);
+public sealed record ViewerImageItem(int Id, string Title, string Location = "");
 
 // Freeze the displayed result page's image order; never traverse the filesystem.
 public sealed class ImageViewerSequence
@@ -14,7 +14,7 @@ public sealed class ImageViewerSequence
     public ImageViewerSequence(IEnumerable<MediaRow> results, int selectedId)
     {
         items = results.Where(ImageViewerPolicy.CanOpen).DistinctBy(row => row.Id)
-            .Select(row => new ViewerImageItem(row.Id, row.Title)).ToArray();
+            .Select(row => new ViewerImageItem(row.Id, row.Title, row.Location)).ToArray();
         Position = Array.FindIndex(items, item => item.Id == selectedId);
         if (Position < 0) throw new ArgumentException("Selected image is not in this result page", nameof(selectedId));
     }

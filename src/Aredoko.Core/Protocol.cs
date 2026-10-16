@@ -48,6 +48,8 @@ public sealed class MediaRow
     public SearchEvidence? Evidence { get; set; }
     // Latest-batch pending tag proposal match when searching in ModeTagCandidates.
     public ProposalMatch? Proposal { get; set; }
+    // Explicit page-text search match when searching page texts.
+    public PageTextMatch? PageText { get; set; }
 }
 
 public sealed record ProposalMatch(

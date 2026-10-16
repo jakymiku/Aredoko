@@ -13,6 +13,10 @@ from pathlib import Path, PurePosixPath
 from library_index import (_excluded, _reparse, is_folder_book, folder_signature,
                            FOLDER_ROOT, FOLDER_IMAGES)
 from page_identity import describe_page
+from image_animations import (AnimationInspector, AnimationUnavailable,
+                              MAX_LARGE_IMAGE_BYTES, MAX_ANIMATION_FRAMES,
+                              THUMBNAIL_MAX_EDGE, VIEWER_MAX_EDGE,
+                              REPRESENTATIVE_MAX_EDGE, detect_animation_header)
 from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
                             VIDEO_SUFFIXES, MAX_VIDEO_BYTES)
 
@@ -23,7 +27,7 @@ MAX_PLAYBACK_BYTES = 64 * 1024 * 1024
 MAX_VIDEO_RANGE_BYTES = 1024 * 1024
 MAX_STREAM_VIDEO_BYTES = 2 * 1024 ** 4
 MAX_FOLDER_PAGES = 10000
-IMAGE_MIME = {'.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
+IMAGE_MIME = {'.png':'image/png', '.apng':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
               '.webp':'image/webp', '.gif':'image/gif', '.bmp':'image/bmp'}
 VIDEO_MIME = {'.mp4':'video/mp4', '.m4v':'video/mp4', '.mov':'video/quicktime',
               '.webm':'video/webm', '.mkv':'video/x-matroska', '.avi':'video/x-msvideo',
@@ -133,9 +137,24 @@ class PreviewReader:
         self.catalog = catalog
         self.slots = threading.BoundedSemaphore(2)
         self.videos = VideoThumbnailer()
+        self.animations = AnimationInspector()
 
     def read(self, item_id):
         return self._read(item_id)
+
+    def read_cover(self, item_id):
+        """Bounded cover/representative-frame bytes for AI visual indexing."""
+        return self._read(item_id, operation='cover_input')
+
+    def image_manifest(self, item_id):
+        return self._read(item_id, operation='image_manifest')
+
+    def image_frame(self, item_id, frame, revision):
+        if type(frame) is not int or not 0 <= frame < MAX_ANIMATION_FRAMES:
+            raise ValueError('Invalid image frame')
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}', revision) is None:
+            raise ValueError('Invalid image revision')
+        return self._read(item_id, operation='image_frame', page=frame, revision=revision)
 
     def read_video(self, item_id):
         return self._read(item_id, operation='video')
@@ -220,7 +239,10 @@ class PreviewReader:
             if operation in ('video','video_manifest','video_range','video_frame'):
                 if suffix not in VIDEO_MIME:
                     raise PreviewUnavailable('Video player requires a supported video item')
-            elif operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input'):
+            elif operation in ('image_manifest', 'image_frame'):
+                if suffix not in IMAGE_MIME:
+                    raise PreviewUnavailable('Image viewer requires a supported image item')
+            elif operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input', 'cover_input'):
                 if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip'):
                     raise PreviewUnavailable('Tagging requires an image, CBZ or ZIP')
             elif operation != 'preview' and suffix not in ('.cbz', '.zip'):
@@ -270,7 +292,7 @@ class PreviewReader:
                         raise PreviewUnavailable('Video exceeds preview limit')
                     data, mime = self.videos.read(file, _revision(row, info)), 'image/png'
                 elif suffix in IMAGE_MIME:
-                    if info.st_size > MAX_IMAGE_BYTES:
+                    if not 1 <= info.st_size <= MAX_LARGE_IMAGE_BYTES:
                         raise PreviewUnavailable('Image exceeds preview limit')
                     descriptor = describe_page(item_id, 'image', '', 0, 0, IMAGE_MIME[suffix], info.st_size)
                     if operation == 'page_catalog':
@@ -281,8 +303,27 @@ class PreviewReader:
                             raise PreviewUnavailable('Page unavailable')
                         result = {'item_id': item_id, 'revision': current_revision,
                                   'kind': 'image', 'page': 0, 'page_id': descriptor['page_id']}
-                    if operation not in ('tag_source', 'page_catalog'):
-                        data, mime = file.read(MAX_IMAGE_BYTES + 1), IMAGE_MIME[suffix]
+                    elif operation == 'image_manifest':
+                        result = self.animations.inspect(file, info.st_size, current_revision, item_id, IMAGE_MIME[suffix])
+                    elif operation == 'image_frame':
+                        data = self.animations.render_frame(file, info.st_size, current_revision, page, VIEWER_MAX_EDGE)
+                        mime = 'image/png'
+                    if operation not in ('tag_source', 'page_catalog', 'image_manifest', 'image_frame'):
+                        header = file.read(4096)
+                        file.seek(0)
+                        is_anim_header = detect_animation_header(header)
+                        if info.st_size <= MAX_IMAGE_BYTES and not (operation in ('cover_input', 'tag_input') and is_anim_header):
+                            data, mime = file.read(MAX_IMAGE_BYTES + 1), IMAGE_MIME[suffix]
+                        else:
+                            rev = current_revision or _revision(row, info)
+                            meta = self.animations.inspect(file, info.st_size, rev, item_id, IMAGE_MIME[suffix])
+                            if operation in ('cover_input', 'tag_input'):
+                                rep = meta['representative_frame']
+                                data = self.animations.render_frame(file, info.st_size, rev, rep, REPRESENTATIVE_MAX_EDGE)
+                                mime = 'image/png'
+                            else:
+                                data = self.animations.render_frame(file, info.st_size, rev, 0, VIEWER_MAX_EDGE)
+                                mime = 'image/png'
                 else:
                     if info.st_size > MAX_ARCHIVE_BYTES:
                         raise PreviewUnavailable('Archive exceeds preview limit')
@@ -332,7 +373,7 @@ class PreviewReader:
                             # Stable sort preserves central-directory order for
                             # duplicate names; open the ZipInfo, not its name.
                             entry = (min(entries, key=lambda e: natural_key(e.filename))
-                                     if operation in ('preview', 'tag_input') else
+                                     if operation in ('preview', 'tag_input', 'cover_input') else
                                      sorted(entries, key=lambda e: natural_key(e.filename))[page])
                             if (entry.flag_bits & 1 or entry.file_size > MAX_IMAGE_BYTES
                                     or entry.file_size > max(1, entry.compress_size) * 200):
@@ -340,28 +381,28 @@ class PreviewReader:
                             with archive.open(entry) as image:
                                 data = image.read(MAX_IMAGE_BYTES + 1)
                             mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest','video','video_manifest','video_range','tag_source','page_catalog') and len(data) > MAX_IMAGE_BYTES:
+                if operation not in ('manifest','video','video_manifest','video_range','tag_source','page_catalog','image_manifest') and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
-                if suffix in VIDEO_SUFFIXES or operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input'):
+                if suffix in VIDEO_SUFFIXES or operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input', 'image_manifest', 'image_frame', 'cover_input'):
                     # The native tools inherit this handle, never reopen a path.
                     # Do not publish its old frame if the location was replaced.
                     current = _safe_path(row['path'], row['relative_path']).stat(follow_symlinks=False)
                     if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
-                        if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input'):raise ReaderChanged('Source location changed')
+                        if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame'):raise ReaderChanged('Source location changed')
                         raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
-                    if operation != 'preview':
+                    if operation not in ('preview', 'cover_input'):
                         raise ReaderChanged('Source changed while reading')
                     raise PreviewUnavailable('Source changed while reading')
                 if operation == 'tag_source': return result
                 if operation in ('tag_input', 'page_input'): return {'source': result, 'data': data, 'mime': mime}
-                if operation in ('manifest','video_manifest','page_catalog'):
+                if operation in ('manifest','video_manifest','page_catalog','image_manifest'):
                     return result
                 if operation=='video_range':return data,mime,info.st_size
                 return data, mime
-        except VideoPreviewUnavailable as error:
-            raise PreviewUnavailable('Video preview unavailable') from error
+        except (VideoPreviewUnavailable, AnimationUnavailable) as error:
+            raise PreviewUnavailable('Preview unavailable') from error
         except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, zlib.error) as error:
             raise PreviewUnavailable('Invalid or unsupported archive') from error
         finally:
@@ -428,6 +469,8 @@ def _folder_read(row, item_id, operation, page, revision):
     """Pages of an image folder registered as one book. Read-only, bounded."""
     if operation in ('video', 'video_manifest', 'video_range', 'video_frame'):
         raise PreviewUnavailable('Video player requires a supported video item')
+    if operation in ('image_manifest', 'image_frame'):
+        raise PreviewUnavailable('Image viewer requires a supported image item')
     relative = row['relative_path']
     try:
         directory = _safe_folder(row['path'], relative)

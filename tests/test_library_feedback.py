@@ -273,5 +273,122 @@ class LibraryFeedbackTests(unittest.TestCase):
         self.assertEqual((status, payload['purged'], payload['removed_items']), (200, root, 3))
         self.assertEqual(post('/api/library/roots/purge', {'root_id': root, 'consent': True})[0], 404)
 
+    def test_animated_gif_webp_apng_large_54mb_and_representative_frame_ai_indexing(self):
+        import io
+        import struct
+        import zlib
+        from PIL import Image
+        from previews import PreviewReader, MAX_IMAGE_BYTES
+        from ai_search import AISearch
+
+        anim_dir = self.base / 'anim-media'
+        anim_dir.mkdir()
+        f0 = Image.new('RGBA', (64, 64), (220, 30, 30, 255))
+        f1 = Image.new('RGBA', (64, 64), (30, 190, 40, 255))
+        f2 = Image.new('RGBA', (64, 64), (30, 50, 220, 255))
+
+        for name, fmt in [('sample.gif', 'GIF'), ('sample.webp', 'WEBP'), ('sample.png', 'PNG')]:
+            f0.save(anim_dir / name, format=fmt, save_all=True, append_images=[f1, f2], duration=[120, 180, 240], loop=0)
+
+        # Build a ~54,802KB (56,117,248+ bytes) APNG with 3 real frames
+        apng_bytes = (anim_dir / 'sample.png').read_bytes()
+        iend_pos = apng_bytes.rfind(b'\x00\x00\x00\x00IEND')
+        pad_len = 54802 * 1024 - len(apng_bytes)
+        pad_payload = b'A' * pad_len
+        ancillary = struct.pack('>I4s', len(pad_payload), b'prIv') + pad_payload + struct.pack('>I', zlib.crc32(b'prIv' + pad_payload))
+        large_apng = anim_dir / 'large-54mb.apng'
+        large_apng.write_bytes(apng_bytes[:iend_pos] + ancillary + apng_bytes[iend_pos:])
+        self.assertGreaterEqual(large_apng.stat().st_size, 54802 * 1024)
+
+        before_files = {p.name: (p.stat().st_size, p.stat().st_mtime_ns) for p in anim_dir.iterdir()}
+        root = self.catalog.add_root(str(anim_dir))
+        items = self.index(root)
+        self.assertEqual(set(items), {'sample.gif', 'sample.webp', 'sample.png', 'large-54mb.apng'})
+
+        reader = PreviewReader(self.catalog)
+        for name in ('sample.gif', 'sample.webp', 'sample.png', 'large-54mb.apng'):
+            item_id = items[name]['id']
+            manifest = reader.image_manifest(item_id)
+            self.assertTrue(manifest['animated'], name)
+            self.assertEqual(manifest['frame_count'], 3, name)
+            self.assertEqual(manifest['representative_frame'], 1, name)
+            self.assertEqual(len(manifest['durations_ms']), 3, name)
+            # Verify each frame decodes to the expected distinct color (red, green, blue)
+            colors = []
+            for idx in range(3):
+                frame_png, frame_mime = reader.image_frame(item_id, idx, manifest['revision'])
+                self.assertEqual(frame_mime, 'image/png')
+                self.assertLessEqual(len(frame_png), MAX_IMAGE_BYTES)
+                with Image.open(io.BytesIO(frame_png)) as decoded:
+                    colors.append(decoded.convert('RGB').getpixel((32, 32)))
+            self.assertGreater(colors[0][0], 180)  # Frame 0 is red
+            self.assertGreater(colors[1][1], 150)  # Frame 1 (representative) is green
+            self.assertGreater(colors[2][2], 180)  # Frame 2 is blue
+
+            # Direct preview for the 54.8MB APNG stays bounded <= 8MiB
+            preview_data, _ = reader.read(item_id)
+            self.assertLessEqual(len(preview_data), MAX_IMAGE_BYTES)
+
+            # Representative frame for AI cover / tag_input is frame 1 (green), not frame 0 (red)
+            cover_bytes, cover_mime = reader.read_cover(item_id)
+            self.assertEqual(cover_mime, 'image/png')
+            with Image.open(io.BytesIO(cover_bytes)) as cov_img:
+                r_val, g_val, b_val = cov_img.convert('RGB').getpixel((32, 32))
+                self.assertGreater(g_val, max(r_val, b_val))
+
+        # Verify AI indexing uses the representative frame for animated images
+        seen_pixels = {}
+        class ColorEncoder:
+            available = True
+            resident = False
+            device = 'cpu'
+            def encode(self, kind, value):
+                dim = 768
+                if kind in ('document', 'query'):
+                    return [1.0] + [0.0] * (dim - 1)
+                with Image.open(io.BytesIO(value)) as im:
+                    px = im.convert('RGB').getpixel((32, 32))
+                seen_pixels[len(seen_pixels)] = px
+                # Vector points along axis 1 if green-dominant (representative frame 1)
+                return ([0.0, 1.0] if px[1] > max(px[0], px[2]) else [1.0, 0.0]) + [0.0] * (dim - 2)
+            def release(self):
+                return {'released': False, 'resident': False}
+            def close(self):
+                pass
+
+        ai = AISearch(self.catalog, ColorEncoder())
+        self.addCleanup(ai.close)
+        ai.start(scope={'root_ids': [root], 'kind': 'image', 'shelf': None})
+        ai.worker.join(15)
+        self.assertEqual(ai.status()['state'], 'complete')
+        self.assertEqual(ai.status()['indexed'], 4)
+        self.assertEqual(len(seen_pixels), 4)
+        for px in seen_pixels.values():
+            self.assertGreater(px[1], max(px[0], px[2]))
+
+        # Verify HTTP routes for /manifest and /frames/<n>
+        server = ThreadingHTTPServer(('127.0.0.1', 0), production_handler(self.catalog, 'fixture-token', ai=ai))
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        origin = f'http://127.0.0.1:{server.server_port}'
+        large_id = items['large-54mb.apng']['id']
+        req = urllib.request.Request(f'{origin}/api/library/preview/{large_id}/manifest', headers={'X-Aredoko-Token': 'fixture-token'})
+        with urllib.request.urlopen(req) as resp:
+            http_manifest = json.load(resp)
+        self.assertTrue(http_manifest['animated'])
+        self.assertEqual(http_manifest['frame_count'], 3)
+        frame_req = urllib.request.Request(
+            f"{origin}/api/library/preview/{large_id}/frames/2?revision={http_manifest['revision']}",
+            headers={'X-Aredoko-Token': 'fixture-token'})
+        with urllib.request.urlopen(frame_req) as resp:
+            self.assertEqual(resp.headers['Content-Type'], 'image/png')
+            frame2_bytes = resp.read()
+        with Image.open(io.BytesIO(frame2_bytes)) as f2_img:
+            self.assertGreater(f2_img.convert('RGB').getpixel((32, 32))[2], 180)
+
+        after_files = {p.name: (p.stat().st_size, p.stat().st_mtime_ns) for p in anim_dir.iterdir()}
+        self.assertEqual(before_files, after_files)
+
 
 if __name__ == '__main__': unittest.main()

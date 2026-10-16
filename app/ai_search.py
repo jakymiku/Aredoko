@@ -288,7 +288,7 @@ class AISearch:
                                 did_infer=True
                                 if 'cover' in self.profile.modalities and row['kind'] in ('image','book','archive'):
                                     try:
-                                        source,_=self.previews.read(item_id)
+                                        source,_=self.previews.read_cover(item_id) if hasattr(self.previews,'read_cover') else self.previews.read(item_id)
                                         cover=self.encoder.encode('image',source)
                                         if cover is not None:vectors['cover']=cover
                                     except (PreviewUnavailable,OSError):pass

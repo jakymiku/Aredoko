@@ -9,11 +9,13 @@ public sealed class LibraryApi : IDisposable
     public LibraryApi() : this(new HttpClientHandler { AllowAutoRedirect = false }) { }
     private readonly HttpClient tagClient;
     public TagReviewClient TagReviews {get;}
+    public PageEvidenceClient PageEvidences {get;}
     public LibraryApi(HttpMessageHandler handler)
     {
         client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(40)};
         tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromSeconds(100)};
         TagReviews=new(tagClient);
+        PageEvidences=new(tagClient);
     }
     public Task<ArchiveManifest> ReaderManifestAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ManifestAsync(id, cancellation);
@@ -23,6 +25,10 @@ public sealed class LibraryApi : IDisposable
         new ArchiveReaderClient(client).PageAsync(manifest, page, cancellation);
     public Task<byte[]> ImageAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ImageAsync(id, cancellation);
+    public Task<ImageAnimationManifest> ImageManifestAsync(int id, CancellationToken cancellation) =>
+        new ArchiveReaderClient(client).ImageManifestAsync(id, cancellation);
+    public Task<byte[]> ImageFrameAsync(ImageAnimationManifest manifest, int frame, CancellationToken cancellation) =>
+        new ArchiveReaderClient(client).ImageFrameAsync(manifest, frame, cancellation);
     public Task<VideoRangeSource> OpenVideoRangeAsync(int id,CancellationToken cancellation)=>new ArchiveReaderClient(client).OpenVideoRangeAsync(id,cancellation);
     public Task<byte[]> VideoFrameAsync(VideoManifest manifest,int atMs,CancellationToken cancellation)=>new ArchiveReaderClient(client).VideoFrameAsync(manifest,atMs,cancellation);
     public Task<(byte[] Data, string Mime)> VideoAsync(int id, CancellationToken cancellation) =>

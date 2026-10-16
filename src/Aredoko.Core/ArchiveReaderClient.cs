@@ -80,6 +80,22 @@ public sealed class ArchiveReaderClient(HttpClient client)
         return data;
     }
 
+    public async Task<ImageAnimationManifest> ImageManifestAsync(int itemId, CancellationToken cancellation)
+    {
+        if (itemId < 1) throw new ArgumentOutOfRangeException(nameof(itemId));
+        var (data, _) = await ReadMediaAsync($"api/library/preview/{itemId}/manifest", 16384, null, cancellation, seconds: 10);
+        return ImageAnimationManifest.Parse(data, itemId);
+    }
+
+    public async Task<byte[]> ImageFrameAsync(ImageAnimationManifest manifest, int frame, CancellationToken cancellation)
+    {
+        manifest.Validate();
+        if (frame < 0 || frame >= manifest.FrameCount) throw new ArgumentOutOfRangeException(nameof(frame));
+        var (data, _) = await ReadMediaAsync($"api/library/preview/{manifest.ItemId}/frames/{frame}?revision={manifest.Revision}",
+            PreviewPolicy.MaxSourceBytes, ["image/png"], cancellation, seconds: 15);
+        return data;
+    }
+
     public Task<(byte[] Data, string Mime)> VideoAsync(int itemId, CancellationToken cancellation)
     {
         if (itemId < 1) throw new ArgumentOutOfRangeException(nameof(itemId));

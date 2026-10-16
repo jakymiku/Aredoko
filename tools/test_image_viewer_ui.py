@@ -36,7 +36,7 @@ def focused_property(value):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--feedback-input-only',action='store_true');parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--reader-progress-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');parser.add_argument('--video-range-only',action='store_true');parser.add_argument('--video-seek-only',action='store_true');args=parser.parse_args();args.video_player_only=args.video_player_only or args.video_range_only or args.video_seek_only;target=args.output.resolve()
+    parser.add_argument('--animation-only',action='store_true');parser.add_argument('--feedback-input-only',action='store_true');parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--reader-progress-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');parser.add_argument('--video-range-only',action='store_true');parser.add_argument('--video-seek-only',action='store_true');args=parser.parse_args();args.video_player_only=args.video_player_only or args.video_range_only or args.video_seek_only;target=args.output.resolve()
     if os.name!='nt':parser.error('Native Windows required')
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Evidence must stay in data/ai-ui')
     target.mkdir(parents=True,exist_ok=False)
@@ -227,9 +227,25 @@ def main():
                     count=min(1024*1024,remaining);out.write(bytes(count));remaining-=count
                 out.write(raw[offset:])
             report['large_video_size']=(media/'clip.mp4').stat().st_size
+        if args.animation_only:
+            import zlib
+            from PIL import Image
+            (media/'b.png').unlink();(media/'broken.png').unlink();(media/'book.cbz').unlink()
+            f0=Image.new('RGBA',(160,120),(220,30,30,255))
+            f1=Image.new('RGBA',(160,120),(30,190,40,255))
+            f2=Image.new('RGBA',(160,120),(30,50,220,255))
+            for name,fmt in [('anim.gif','GIF'),('anim.webp','WEBP'),('anim.png','PNG')]:
+                f0.save(media/name,format=fmt,save_all=True,append_images=[f1,f2],duration=[140,140,140],loop=0)
+            apng_raw=(media/'anim.png').read_bytes()
+            iend=apng_raw.rfind(b'\x00\x00\x00\x00IEND')
+            pad_len=54802*1024-len(apng_raw)
+            pad_payload=b'A'*pad_len
+            chunk=struct.pack('>I4s',len(pad_payload),b'prIv')+pad_payload+struct.pack('>I',zlib.crc32(b'prIv'+pad_payload))
+            (media/'large-54mb.apng').write_bytes(apng_raw[:iend]+chunk+apng_raw[iend:])
+            report['large_apng_size']=(media/'large-54mb.apng').stat().st_size
         original=source_digest();expected_source=dict(original)
         catalog=ProductionCatalog(target/'catalog.sqlite');root=catalog.add_root(str(media));catalog.start_scan(root);catalog._worker.join(20)
-        expected_total=5 if args.video_player_only else (3 if args.evidence_only else (7 if args.video_and_evidence_only else (5 if (args.reader_spread_only or args.reader_progress_only) else 4)))
+        expected_total=5 if (args.video_player_only or args.animation_only) else (3 if args.evidence_only else (7 if args.video_and_evidence_only else (5 if (args.reader_spread_only or args.reader_progress_only) else 4)))
         check('Generated scan complete',catalog.scan_state()['state']=='complete' and catalog.search()['total']==expected_total)
         ids={x['title']:x['id'] for x in catalog.search()['items']}
         if args.evidence_only:
@@ -358,6 +374,29 @@ def main():
                 time.sleep(.1)
             if len(main)!=1:raise RuntimeError('Unique owned main unavailable')
             hwnd=main_hwnd=str(main[0]['hwnd']);ready();resize(1200,820);wait('TxtCount',f'{expected_total} 件')
+            if args.animation_only:
+                report['audit_scope']='F07/F08/F11 animated GIF/WebP/APNG playback, 54,802KB large APNG bounded handling, and frame cycling across Light/Dark and wide/narrow'
+                for aname in ('anim.gif','anim.webp','anim.png','large-54mb.apng'):
+                    wait('PreviewStatus'+str(ids[aname]),'画像プレビュー')
+                check(theme+' animated GIF/WebP/APNG and 54.8MB APNG list thumbnails loaded',True)
+                select('anim.gif');open_image()
+                wait('ImageTitle','anim.gif')
+                wait('ImageStatus','アニメーション再生中（3フレーム） · ← → で画像送り · 表示画像は長辺2048pxまで')
+                wait('ViewerImage','anim.gifの画像（アニメーション 1 / 3）')
+                wait('ViewerImage','anim.gifの画像（アニメーション 2 / 3）')
+                check(theme+' animated GIF advances frames in native viewer',True)
+                shot(theme+'-anim-gif-wide')
+                ui('invoke','ImageNext');wait('ImageTitle','anim.png');wait('ImageStatus','アニメーション再生中（3フレーム） · ← → で画像送り · 表示画像は長辺2048pxまで')
+                ui('invoke','ImageNext');wait('ImageTitle','anim.webp');wait('ImageStatus','アニメーション再生中（3フレーム） · ← → で画像送り · 表示画像は長辺2048pxまで')
+                wait('ViewerImage','anim.webpの画像（アニメーション 2 / 3）')
+                check(theme+' animated WebP advances frames in native viewer',True)
+                ui('invoke','ImageNext');wait('ImageTitle','large-54mb.apng')
+                wait('ImageStatus','アニメーション再生中（3フレーム） · ← → で画像送り · 表示画像は長辺2048pxまで')
+                wait('ViewerImage','large-54mb.apngの画像（アニメーション 2 / 3）')
+                check(theme+' 54,802KB APNG plays frames smoothly under bounded transfer',report.get('large_apng_size',0)>=54802*1024)
+                resize(700,620);shot(theme+'-anim-large-apng-narrow');resize(1200,820)
+                close_image()
+                close();continue
             if args.feedback_input_only:
                 report['audit_scope']='first-run image wheel and mouse X input; settings isolated; no failed folder-batch rerun'
                 select('a.png');open_image();wait('ImageTitle','a.png');wait('ImageStatus',shown)

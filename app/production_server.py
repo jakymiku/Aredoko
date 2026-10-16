@@ -232,13 +232,26 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         return self.send(400,{'error':'Invalid reader request'})
                 if path.startswith('/api/library/preview/'):
                     try:
-                        match=re.fullmatch(r'/api/library/preview/([1-9][0-9]{0,18})',path)
-                        if match is None or urlparse(self.path).query:
+                        match=re.fullmatch(r'/api/library/preview/([1-9][0-9]{0,18})(?:/(manifest|frames/(0|[1-9][0-9]?)))?',path)
+                        if match is None:
                             raise ValueError('Invalid item')
                         item=int(match[1])
                         if item > 9223372036854775807: raise ValueError('Invalid item')
+                        query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
+                        if match[2]=='manifest':
+                            if query: raise ValueError('Invalid item')
+                            return self.send(200,previews.image_manifest(item))
+                        if match[2] and match[2].startswith('frames/'):
+                            if set(query)!={'revision'} or len(query['revision'])!=1:
+                                raise ValueError('Invalid item')
+                            data,mime=previews.image_frame(item,int(match[3]),query['revision'][0])
+                            return self.send(200,data,mime)
+                        if query:
+                            raise ValueError('Invalid item')
                         data,mime=previews.read(item)
                         return self.send(200,data,mime)
+                    except ReaderChanged:
+                        return self.send(409,{'error':'Archive changed; rescan and reopen the reader'})
                     except PreviewBusyError:
                         return self.send(503,{'error':'Preview workers busy'})
                     except (PreviewUnavailable,OSError,zipfile.BadZipFile,RuntimeError,NotImplementedError):

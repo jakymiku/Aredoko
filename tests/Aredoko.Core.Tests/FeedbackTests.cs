@@ -38,6 +38,43 @@ internal static class FeedbackTests
         foreach(var mode in new[]{(true,"all"),(false,"pending-proposals")})
         {bool rejected=false;try{await api.SearchMultiAsync("豆","","history",0,mode.Item1,mode.Item2,null,null);}catch(ArgumentException){rejected=true;}check(rejected&&calls.Count==1,"history rejects unsupported mode before HTTP");}
         check(ErrorText.Localize("Explicit folder purge consent required").Contains("確認ダイアログ")&&ErrorText.Localize("Unregister the root before purging database records").Contains("先に登録を解除"),"purge errors localized");
+        var apngRow=new MediaRow{Id=42,Kind="image",Availability="present",Location="anim.APNG"};
+        check(ImageViewerPolicy.CanOpen(apngRow)&&ImageViewerPolicy.MayAnimate(apngRow.Location)&&!ImageViewerPolicy.MayAnimate("photo.jpg"),"APNG opens in image viewer and marks animation candidate");
+        var animRev=new string('b',64);
+        var animJson=System.Text.Encoding.UTF8.GetBytes($$"""
+        {"item_id":42,"revision":"{{animRev}}","mime":"image/png","size_bytes":56117260,"width":512,"height":512,"animated":true,"frame_count":3,"loop_count":0,"durations_ms":[120,180,240],"representative_frame":1}
+        """);
+        var parsedAnim=ImageAnimationManifest.Parse(animJson,42);
+        check(parsedAnim.Animated&&parsedAnim.FrameCount==3&&parsedAnim.RepresentativeFrame==1&&parsedAnim.DurationsMs.SequenceEqual(new[]{120,180,240}),"animation manifest parsed without reflection");
+        foreach(var badAnim in new[]{
+            animJson.Select(b=>b).ToArray() switch { _ => System.Text.Encoding.UTF8.GetBytes($$"""{"item_id":99,"revision":"{{animRev}}","width":512,"height":512,"animated":true,"frame_count":3,"loop_count":0,"durations_ms":[120,180,240],"representative_frame":1}""") },
+            System.Text.Encoding.UTF8.GetBytes($$"""{"item_id":42,"revision":"{{animRev}}","width":512,"height":512,"animated":true,"frame_count":65,"loop_count":0,"durations_ms":[100],"representative_frame":0}"""),
+            System.Text.Encoding.UTF8.GetBytes($$"""{"item_id":42,"revision":"{{animRev}}","width":512,"height":512,"animated":true,"frame_count":2,"loop_count":0,"durations_ms":[10,100],"representative_frame":0}""")
+        })
+        {
+            var rejected=false;
+            try{ImageAnimationManifest.Parse(badAnim,42);}catch(InvalidDataException){rejected=true;}
+            check(rejected,"invalid animation manifest rejected");
+        }
+        var pageId0=new string('c',64);
+        var refreshBytes=System.Text.Encoding.UTF8.GetBytes($$"""{"item_id":7,"source_revision":"{{animRev}}","source_kind":"archive","page_count":3,"reused":false}""");
+        var refresh=PageEvidenceProtocol.ParseRefresh(refreshBytes,7);
+        check(refresh.ItemId==7&&refresh.PageCount==3&&refresh.SourceKind=="archive"&&!refresh.Reused,"page index refresh parsed without reflection");
+        var indexBytes=System.Text.Encoding.UTF8.GetBytes($$"""
+        {"item_id":7,"source_revision":"{{animRev}}","source_kind":"archive","source_state":"current","page_count":3,"offset":0,"limit":60,
+         "pages":[{"page_id":"{{pageId0}}","page":0,"mime":"image/png","size_bytes":1024}]}
+        """);
+        var indexList=PageEvidenceProtocol.ParseIndexList(indexBytes,7,0,60);
+        check(indexList.SourceState=="current"&&indexList.Pages.Single().PageId==pageId0,"page index list parsed");
+        var textSearchBytes=System.Text.Encoding.UTF8.GetBytes($$"""
+        {"search_mode":"page-text","total":1,"page":0,"limit":20,"items":[
+          {"id":7,"title":"book.cbz","kind":"book","tags":[],"shelf":"","favorite":false,"reviewed":false,
+           "root_id":1,"relative_path":"book.cbz","availability":"present","size_bytes":1000,"mtime_ns":2000,
+           "page_text_match":{"source_revision":"{{animRev}}","source_state":"current","matching_pages":2,
+             "pages":[{"page_id":"{{pageId0}}","page":0,"excerpt":"夕焼けの教室で約束した","producer":{"adapter":"ocr","version":"1","model":"ocr-v1","model_revision":"r1","preprocessing":"p1"} }] } }]}
+        """);
+        var textSearch=PageEvidenceProtocol.ParseSearch(textSearchBytes,0);
+        check(textSearch.Total==1&&textSearch.Items[0].PageText is {MatchingPages:2,SourceState:"current"} pt&&pt.Summary.Contains("1ページ")&&pt.Summary.Contains("夕焼けの教室"),"page text search parsed with excerpt and provenance");
     }
     private sealed class Stub(Func<HttpRequestMessage,HttpResponseMessage> response):HttpMessageHandler
     {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)=>Task.FromResult(response(request));}

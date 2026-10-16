@@ -64,9 +64,13 @@ class PreviewTests(unittest.TestCase):
         self.catalog.set_excludes(self.root,[]);path.unlink()
         with self.assertRaises(OSError):self.reader.read(ids['image.png'])
     def test_oversized_direct_image_rejected_before_read(self):
+        from image_animations import MAX_LARGE_IMAGE_BYTES
         path=self.media/'big.png'
-        with path.open('wb') as file:file.truncate(MAX_IMAGE_BYTES+1)
+        with path.open('wb') as file:file.truncate(MAX_LARGE_IMAGE_BYTES+1)
         with self.assertRaises(PreviewUnavailable):self.reader.read(self.index()['big.png'])
+        corrupt=self.media/'corrupt-10mb.png'
+        with corrupt.open('wb') as file:file.truncate(MAX_IMAGE_BYTES+1)
+        with self.assertRaises(PreviewUnavailable):self.reader.read(self.index()['corrupt-10mb.png'])
     def test_archive_bomb_is_rejected(self):
         with zipfile.ZipFile(self.media/'bomb.cbz','w',compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr('page.png',b'0'*500000)

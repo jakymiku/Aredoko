@@ -19,6 +19,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     private readonly ImageViewerSequence sequence;
     private readonly CancellationTokenSource lifetime = new();
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer hideTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer animTimer;
     private readonly Border headerHost = new() { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
     private readonly Border toolbarHost = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
     private readonly Button close = IconButton(Symbol.Cancel);
@@ -26,6 +27,9 @@ internal sealed class ImageViewerView : Grid, IDisposable
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
     private CancellationTokenSource? request;
+    private BitmapImage[]? animBitmaps;
+    private int[]? animDurations;
+    private int animFrame, animLoopCount, animCompletedLoops;
     private readonly Grid canvas = new();
     private readonly Image image = new() { Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private double imageWidth = 1, imageHeight = 1;
@@ -54,6 +58,8 @@ internal sealed class ImageViewerView : Grid, IDisposable
         this.api = api; this.sequence = sequence;
         hideTimer = DispatcherQueue.CreateTimer(); hideTimer.Interval = TimeSpan.FromSeconds(2.5); hideTimer.IsRepeating = false;
         hideTimer.Tick += (_, _) => { if (!disposed && !keyboardChrome && !busy && !failed) HideChrome(); };
+        animTimer = DispatcherQueue.CreateTimer(); animTimer.IsRepeating = false;
+        animTimer.Tick += (_, _) => AdvanceAnimationFrame();
         var heading = new Grid { ColumnSpacing = 12 };
         heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -143,10 +149,52 @@ internal sealed class ImageViewerView : Grid, IDisposable
             args.Handled = true; await MoveAsync(args.Key == VirtualKey.Left ? -1 : 1);
         };
     }
-public async Task MoveAsync(int direction)
+    private void StopAnimation()
+    {
+        animTimer.Stop();
+        animBitmaps = null;
+        animDurations = null;
+        animFrame = 0;
+        animLoopCount = 0;
+        animCompletedLoops = 0;
+    }
+
+    private void AdvanceAnimationFrame()
+    {
+        if (disposed || animBitmaps is null || animDurations is null || animBitmaps.Length <= 1) return;
+        var nextFrame = animFrame + 1;
+        if (nextFrame >= animBitmaps.Length)
+        {
+            animCompletedLoops++;
+            if (animLoopCount > 0 && animCompletedLoops >= animLoopCount) return;
+            nextFrame = 0;
+        }
+        animFrame = nextFrame;
+        var currentBitmap = animBitmaps[animFrame];
+        if (currentBitmap is not null)
+        {
+            image.Source = currentBitmap;
+            AutomationProperties.SetName(image, $"{sequence.Current.Title}の画像（アニメーション {animFrame + 1} / {animBitmaps.Length}）");
+        }
+        animTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(animDurations[animFrame], 20, 60_000));
+        animTimer.Start();
+    }
+
+    private static async Task<BitmapImage> CreateBitmapAsync(byte[] png, CancellationToken cancellation)
+    {
+        using var stream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(stream)) { writer.WriteBytes(png); await writer.StoreAsync(); writer.DetachStream(); }
+        stream.Seek(0);
+        var bitmap = new BitmapImage();
+        await bitmap.SetSourceAsync(stream);
+        cancellation.ThrowIfCancellationRequested();
+        return bitmap;
+    }
+
+    public async Task MoveAsync(int direction)
     {
         if (disposed || !sequence.TryMove(direction)) return;
-        version++; loaded = false; image.Source = null; retry.IsEnabled = false;
+        version++; loaded = false; StopAnimation(); image.Source = null; retry.IsEnabled = false;
         UpdateIdentity(); status.Text = "画像を読み込んでいます…"; UpdateControls();
         if (busy) { request?.Cancel(); return; }
         await OpenAsync();
@@ -161,23 +209,60 @@ public async Task MoveAsync(int direction)
             do
             {
                 requestedVersion = version;
-                loaded = false; failed = false; retry.IsEnabled = false; image.Source = null;
+                loaded = false; failed = false; retry.IsEnabled = false; StopAnimation(); image.Source = null;
                 status.Text = "画像を読み込んでいます…"; UpdateControls();
                 using var loading = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                 request = loading; var cancellation = loading.Token; var item = sequence.Current;
                 try
                 {
-                    var source = await api.ImageAsync(item.Id, cancellation);
-                    var png = await ThumbnailCodec.ResizeAsync(source, cancellation, PreviewPolicy.ReaderEdge);
-                    using var stream = new InMemoryRandomAccessStream();
-                    using (var writer = new DataWriter(stream)) { writer.WriteBytes(png); await writer.StoreAsync(); writer.DetachStream(); }
-                    stream.Seek(0); var bitmap = new BitmapImage(); await bitmap.SetSourceAsync(stream);
-                    cancellation.ThrowIfCancellationRequested();
-                    if (disposed || requestedVersion != version) continue;
-                    imageWidth = Math.Max(1, bitmap.PixelWidth); imageHeight = Math.Max(1, bitmap.PixelHeight);
-                    FitImage(); image.Source = bitmap; loaded = true; viewport.ChangeView(0, 0, 1, true);
-                    ContentOpened?.Invoke(sequence.Current.Id);
-                    status.Text = "← → で画像送り · 表示画像は長辺2048pxまで";
+                    ImageAnimationManifest? animManifest = null;
+                    if (ImageViewerPolicy.MayAnimate(item.Location))
+                    {
+                        try
+                        {
+                            var probe = await api.ImageManifestAsync(item.Id, cancellation);
+                            if (probe.Animated && probe.FrameCount > 1) animManifest = probe;
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException && ex is not ArchiveReadException { Status: System.Net.HttpStatusCode.ServiceUnavailable })
+                        {
+                            animManifest = null;
+                        }
+                    }
+                    if (animManifest is not null)
+                    {
+                        var bitmaps = new BitmapImage[animManifest.FrameCount];
+                        for (var f = 0; f < animManifest.FrameCount; f++)
+                        {
+                            var framePng = await api.ImageFrameAsync(animManifest, f, cancellation);
+                            bitmaps[f] = await CreateBitmapAsync(framePng, cancellation);
+                        }
+                        if (disposed || requestedVersion != version) continue;
+                        imageWidth = Math.Max(1, bitmaps[0].PixelWidth); imageHeight = Math.Max(1, bitmaps[0].PixelHeight);
+                        FitImage();
+                        animBitmaps = bitmaps;
+                        animDurations = animManifest.DurationsMs;
+                        animLoopCount = animManifest.LoopCount;
+                        animFrame = 0;
+                        animCompletedLoops = 0;
+                        image.Source = bitmaps[0];
+                        AutomationProperties.SetName(image, $"{item.Title}の画像（アニメーション 1 / {bitmaps.Length}）");
+                        loaded = true; viewport.ChangeView(0, 0, 1, true);
+                        ContentOpened?.Invoke(item.Id);
+                        status.Text = $"アニメーション再生中（{bitmaps.Length}フレーム） · ← → で画像送り · 表示画像は長辺2048pxまで";
+                        animTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(animDurations[0], 20, 60_000));
+                        animTimer.Start();
+                    }
+                    else
+                    {
+                        var source = await api.ImageAsync(item.Id, cancellation);
+                        var png = await ThumbnailCodec.ResizeAsync(source, cancellation, PreviewPolicy.ReaderEdge);
+                        var bitmap = await CreateBitmapAsync(png, cancellation);
+                        if (disposed || requestedVersion != version) continue;
+                        imageWidth = Math.Max(1, bitmap.PixelWidth); imageHeight = Math.Max(1, bitmap.PixelHeight);
+                        FitImage(); image.Source = bitmap; loaded = true; viewport.ChangeView(0, 0, 1, true);
+                        ContentOpened?.Invoke(sequence.Current.Id);
+                        status.Text = "← → で画像送り · 表示画像は長辺2048pxまで";
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -198,5 +283,5 @@ public async Task MoveAsync(int direction)
         finally { busy = false; if (!disposed) { UpdateControls(); if (!keyboardChrome && !failed) hideTimer.Start(); } }
     }
     public void Dispose()
-    { if (disposed) return; disposed = true; hideTimer.Stop(); lifetime.Cancel(); image.Source = null; lifetime.Dispose(); }
+    { if (disposed) return; disposed = true; hideTimer.Stop(); StopAnimation(); lifetime.Cancel(); image.Source = null; lifetime.Dispose(); }
 }
