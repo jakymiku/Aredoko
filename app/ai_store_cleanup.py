@@ -15,7 +15,7 @@ import stat
 from ai_profiles import LEGACY_PROFILE
 
 PURGE_AI_ERROR = 'AI index cleanup failed; library records were kept'
-VECTOR_TABLES = ('ai_vectors', 'ai_video_frames', 'ai_source_contracts')
+VECTOR_TABLES = ('ai_vectors', 'ai_video_frames', 'ai_source_contracts', 'ai_proposal_vectors')
 
 
 def _ordinary(path):

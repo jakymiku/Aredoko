@@ -77,18 +77,27 @@ public static class TagReviewProtocol
         if(model is not null)body["model"]=model.Trim();
         return body;
     }
-    public static SearchResponse ParseCandidateSearch(byte[] bytes,int expectedPage)
+    public static SearchResponse ParseCandidateSearch(byte[] bytes,int expectedPage,bool semantic=false)
     {
         try
         {
             if(expectedPage<0)throw new ArgumentOutOfRangeException(nameof(expectedPage));
             var text=Encoding.UTF8.GetString(bytes);
             using var doc=JsonDocument.Parse(text);var root=doc.RootElement;
-            if(root.GetProperty("search_mode").GetString()!="pending-proposals"||
+            if(root.GetProperty("search_mode").GetString()!=(semantic?"pending-proposals-semantic":"pending-proposals")||
                root.GetProperty("page").GetInt32()!=expectedPage||
                root.GetProperty("limit").GetInt32()!=60)
                 throw new InvalidDataException("未承認タグ候補の検索応答が要求と一致しません。");
             var parsed=Protocol.ParseSearch(text);
+            if(semantic)
+            {
+                var pending=root.GetProperty("pending_total").GetInt32();
+                var indexed=root.GetProperty("indexed_total").GetInt32();
+                var remaining=root.GetProperty("index_remaining").GetInt32();
+                if(pending is <0 or >10000||indexed<0||indexed>pending||remaining!=pending-indexed||root.GetProperty("score_kind").GetString()!="cosine"||parsed.Total!=indexed)
+                    throw new InvalidDataException("タグ候補の意味索引の件数が無効です。");
+                parsed.PendingIndexRemaining=remaining;
+            }
             var rawItems=root.GetProperty("items");
             if(parsed.Total<0||parsed.Items.Count>60||parsed.Items.Count>parsed.Total||
                rawItems.GetArrayLength()!=parsed.Items.Count||
@@ -126,12 +135,19 @@ public static class TagReviewProtocol
                     batchId,revision,sourceState,tags.ToArray(),
                     Text(producer,"model",256),Text(producer,"model_revision",256),
                     Text(producer,"adapter",256),Text(producer,"version",256),
-                    Text(producer,"preprocessing",256),evKind,0);
+                    Text(producer,"preprocessing",256),evKind,0,
+                    semantic?SemanticScore(element):null,semantic?Text(match,"embedding_model",256):null);
             }
             return parsed;
         }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException or ArgumentException)
         {throw new InvalidDataException("未承認タグ候補の検索結果を読み取れません。",ex);}
+    }
+    private static double SemanticScore(JsonElement element)
+    {
+        var score=element.GetProperty("semantic_score").GetDouble();
+        if(!double.IsFinite(score)||score is <-1 or >1)throw new InvalidDataException("タグ候補の類似度が無効です。");
+        return score;
     }
     public static TagHistory Parse(byte[] bytes,int itemId)
     {
@@ -229,10 +245,11 @@ public sealed class TagReviewClient(HttpClient client)
         TagReviewProtocol.Id(itemId);var row=Protocol.ParseItem(Encoding.UTF8.GetString(await ReadAsync($"api/items/{itemId}",null,TagReviewProtocol.MaxJsonBytes,cancellation)));
         if(row.Id!=itemId)throw new InvalidDataException("別の作品の整理情報です。");return row;
     }
-    public async Task<SearchResponse> SearchCandidatesAsync(string query,string kind,string view,int page,IReadOnlyList<int>? rootIds=null,string? shelf=null,string? model=null,CancellationToken cancellation=default)
+    public async Task<SearchResponse> SearchCandidatesAsync(string query,string kind,string view,int page,IReadOnlyList<int>? rootIds=null,string? shelf=null,string? model=null,CancellationToken cancellation=default,bool semantic=false)
     {
         var body=TagReviewProtocol.CandidateSearchRequest(query,kind,view,page,rootIds,shelf,model);
-        var bytes=await ReadAsync(Route+"/search",body,TagReviewProtocol.MaxJsonBytes,cancellation,15);
-        return TagReviewProtocol.ParseCandidateSearch(bytes,page);
+        if(semantic)body["semantic"]=true;
+        var bytes=await ReadAsync(Route+"/search",body,TagReviewProtocol.MaxJsonBytes,cancellation,semantic?180:15);
+        return TagReviewProtocol.ParseCandidateSearch(bytes,page,semantic);
     }
 }

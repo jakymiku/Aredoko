@@ -67,7 +67,7 @@ foreach(var (index,ai,source) in new[]{(0,false,"all"),(1,true,"all"),(2,true,"c
 }
 var textRequest=AIScopeRequests.Search("曖昧な素材","image","favorites",2,SearchMethod.FromIndex(3).Source,scopedIndex["scope"]!.AsObject());
 Check(textRequest["source"]!.GetValue<string>()=="text"&&textRequest["kind"]!.GetValue<string>()=="image"&&textRequest["view"]!.GetValue<string>()=="favorites"&&textRequest["page"]!.GetValue<int>()==2&&textRequest["scope"]!["root_ids"]!.AsArray().Count==1,"text-only mode preserves filters/page and frozen scope");
-bool invalidMode=false;try{SearchMethod.FromIndex(6);}catch(ArgumentOutOfRangeException){invalidMode=true;}
+bool invalidMode=false;try{SearchMethod.FromIndex(7);}catch(ArgumentOutOfRangeException){invalidMode=true;}
 Check(invalidMode,"invalid search mode cannot silently broaden retrieval");
 
 await ArchiveReaderTests.Run(Check);

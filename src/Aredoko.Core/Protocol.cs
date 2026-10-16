@@ -44,7 +44,7 @@ public sealed class MediaRow
         var sec = Math.Max(0, ms / 1000);
         return $"{sec / 60}:{sec % 60:D2}";
     }
-    public string AIEvidence => SemanticScore is double score
+    public string AIEvidence => Proposal?.SemanticScore is not null ? "" : SemanticScore is double score
         ? (SimilarityOriginId is int ? "起点の画像・表紙に似た候補"
            : VideoMatchMs is int vms ? $"動画フレーム一致（{FormatVideoTimestamp(vms)}）" + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
            : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
@@ -71,7 +71,9 @@ public sealed record ProposalMatch(
     string AdapterVersion,
     string Preprocessing,
     string EvidenceKind,
-    int EvidencePage)
+    int EvidencePage,
+    double? SemanticScore = null,
+    string? EmbeddingModel = null)
 {
     public string SourceStateLabel => SourceState switch
     {
@@ -87,7 +89,8 @@ public sealed record ProposalMatch(
         {
             var shown = string.Join("、", Tags.Take(5));
             var extra = Tags.Length > 5 ? $" ほか{Tags.Length - 5}件" : "";
-            return $"未承認タグ候補: {shown}{extra}\nモデル: {Model} ({Adapter} {AdapterVersion}) · 根拠: {EvidenceLabel} · {SourceStateLabel}";
+            var meaning=SemanticScore is double score?$"タグ候補の意味一致 · 類似度 {score:F3}\n":"";
+            return meaning+$"未承認タグ候補: {shown}{extra}\nモデル: {Model} ({Adapter} {AdapterVersion}) · 根拠: {EvidenceLabel} · {SourceStateLabel}";
         }
     }
 }
@@ -106,6 +109,7 @@ public sealed class SearchResponse
 {
     public string SimilarityStatus { get; set; } = "";
     public int Total { get; set; }
+    public int? PendingIndexRemaining { get; set; }
     public string ScoreKind { get; set; } = "";
     public double? GroupBoundary { get; set; }
     public int LeadingTotal { get; set; }

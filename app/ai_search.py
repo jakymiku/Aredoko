@@ -17,6 +17,7 @@ from ai_scope import validate_scope, scope_clause
 from search_terms import normalize, normalize_tags
 from ai_result_groups import boundary
 from previews import PreviewReader, PreviewUnavailable
+from tag_semantics import PendingTagVectors
 
 MAX_ITEMS=10_000
 ROW_BATCH_SIZE=256
@@ -46,6 +47,8 @@ class VectorStore:
                 CREATE TABLE IF NOT EXISTS ai_profile(value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS ai_vectors(item_id INTEGER NOT NULL, revision TEXT NOT NULL,
                     modality TEXT NOT NULL, vector BLOB NOT NULL, PRIMARY KEY(item_id,modality));
+                CREATE TABLE IF NOT EXISTS ai_proposal_vectors(item_id INTEGER PRIMARY KEY,batch_id INTEGER NOT NULL,
+                    source_revision TEXT NOT NULL,signature TEXT NOT NULL,vector BLOB NOT NULL);
                 CREATE TABLE IF NOT EXISTS ai_video_frames(item_id INTEGER NOT NULL, revision TEXT NOT NULL,
                     at_ms INTEGER NOT NULL CHECK(at_ms>=0 AND at_ms<=86400000), vector BLOB NOT NULL,
                     PRIMARY KEY(item_id,at_ms));
@@ -172,6 +175,7 @@ class AISearch:
         self.ranking=ranking
         self.catalog,self.encoder=catalog,encoder
         self.profile=getattr(encoder,'profile',DEFAULT_PROFILE)
+        self.pending_tags=PendingTagVectors(self)
         self.store=VectorStore(store_path or self.profile.store_path(catalog.path),self.profile)
         self.previews=PreviewReader(catalog)
         self.guard=threading.Lock()
@@ -293,8 +297,12 @@ class AISearch:
             if targeted<limit:
                 targeted+=1;batch.append(row)
                 if len(batch)==ROW_BATCH_SIZE:
-                    fresh+=len(self.store.fresh_ids(batch));batch.clear()
-        fresh+=len(self.store.fresh_ids(batch))
+                    pending=self.pending_tags.snapshots([r['id'] for r in batch])
+                    regular=self.store.fresh_ids(batch)
+                    fresh+=len((regular-set(pending)) | (regular & self.pending_tags.ready_ids(pending)));batch.clear()
+        pending=self.pending_tags.snapshots([r['id'] for r in batch])
+        regular=self.store.fresh_ids(batch)
+        fresh+=len((regular-set(pending)) | (regular & self.pending_tags.ready_ids(pending)))
         return {'scope':scope,'candidate_total':total,'target_total':targeted,
                 'fresh_total':fresh,'remaining_total':targeted-fresh,
                 'coverage_limit':MAX_ITEMS,'index_limit':limit,'refresh_required_on_change':True}
@@ -331,9 +339,11 @@ class AISearch:
                     if self.cancel.is_set():break
                     batch=ids[offset:offset+ROW_BATCH_SIZE]
                     rows=self._current_rows(batch,scope)
+                    pending=self.pending_tags.snapshots(list(rows))
                     for item_id in batch:
                         if self.cancel.is_set():break
                         did_infer=False
+                        indexed_before=state['indexed']
                         row=rows.get(item_id)
                         if row is None:
                             state['skipped']+=1
@@ -380,6 +390,11 @@ class AISearch:
                                     else:
                                         self.store.put(item_id,rev,vectors,video_frames,source_contract=expected if visual_ready else None);state['indexed']+=1
                             else:state['indexed']+=1
+                        if row is not None and not self.cancel.is_set():
+                            tag_ready,tag_inferred=self.pending_tags.build(row,pending.get(item_id),scope,self.cancel.is_set)
+                            did_infer=did_infer or tag_inferred
+                            if not tag_ready and state['indexed']>indexed_before:
+                                state['indexed']-=1;state['skipped']+=1
                         state['processed']+=1
                         # Vectors commit atomically per item. Progress may lag by 15;
                         # a restart discovers saved revisions rather than re-encoding.

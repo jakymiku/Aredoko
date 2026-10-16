@@ -25,6 +25,7 @@ from laya_config import model_path as laya_model_path
 from server import handler_for
 from tag_suggestions import TagSuggestions
 from tag_candidate_search import search_candidates
+from tag_semantics import semantic_candidates
 from page_index import PageIndex
 from page_text import PageTextIndex
 from wd_tagger import create_tagger
@@ -371,8 +372,10 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except PreviewBusyError:return self.send(503,{'error':'Preview workers busy'})
                     except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
                 if self.path=='/api/library/tag-suggestions/search':
-                    if set(body)-{'query','kind','view','page','root_ids','shelf','model'}:raise ValueError('Invalid candidate search fields')
-                    return self.send(200,search_candidates(suggestions,**body))
+                    if set(body)-{'query','kind','view','page','root_ids','shelf','model','semantic'}:raise ValueError('Invalid candidate search fields')
+                    semantic=body.pop('semantic',False)
+                    if type(semantic) is not bool:raise ValueError('Invalid candidate search mode')
+                    return self.send(200,semantic_candidates(suggestions,ai,**body) if semantic else search_candidates(suggestions,**body))
                 if self.path=='/api/library/tag-suggestions/generate':
                     if set(body)!={'item_id','request_id'}:raise ValueError('Invalid generation request')
                     return self.send(200,suggestions.generate(body['item_id'],body['request_id']))

@@ -54,8 +54,11 @@ public sealed class LibraryApi : IDisposable
             if(semantic||source!="all")throw new ArgumentException("閲覧履歴は名前・タグ検索を使ってください。");
             return Protocol.ParseSearch(await client.GetStringAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
         }
-        if(source=="pending-proposals")
-            return await TagReviews.SearchCandidatesAsync(q,kind,view,page,rootIds);
+        if(source is "pending-proposals" or "pending-proposals-semantic")
+        {
+            if(source=="pending-proposals-semantic"&&string.IsNullOrWhiteSpace(q))return new SearchResponse{Total=0,Items=[]};
+            return await TagReviews.SearchCandidatesAsync(q,kind,view,page,rootIds,semantic:source=="pending-proposals-semantic");
+        }
         if(source=="page-text")
         {
             if(string.IsNullOrWhiteSpace(q))return new SearchResponse{Total=0,Items=[]};

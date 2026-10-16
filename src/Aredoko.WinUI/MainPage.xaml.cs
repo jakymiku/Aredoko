@@ -203,21 +203,24 @@ public sealed partial class MainPage : Page
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*pageSize<result.Total;
             Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
             Empty.Text=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"探したいページ内の語句を入力して検索してください。":"この範囲に一致するページ本文はありません。")
+                :method.IsTagSemantic?(string.IsNullOrWhiteSpace(query)?"未承認タグから探したい内容を入力してください。":"索引済みの未承認タグ候補がありません。設定の「AI検索の準備」で索引を作成してください。")
                 :method.IsTagCandidates?"この範囲に一致する未承認のAIタグ候補はありません。作品の詳細「AIタグ候補」から候補を生成・確認できます。"
                 :query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
             if(method.IsAI&&query.Length>0&&rows.Count==0&&resultGroup==1&&result.GroupBoundary is null)Empty.Text="参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像の見た目／名前・タグの意味で区切りを指定してください。";
             else if(method.IsAI&&query.Length>0&&rows.Count==0&&resultGroup==0&&result.OtherTotal>0)Empty.Text="区切り以上の候補はありません。類似度の区切りを下げるか、参考候補を表示してください。";
             var explanation=
                 method.IsPageText ? "抽出・保存済みのページ本文から、同一ページ内で全語一致する作品を検索しています。「本を開く」で先頭の一致ページへ移動できます。"+(scopeWarning is null?"":" "+scopeWarning)
+                : method.IsTagSemantic ? "未承認の英語タグ候補を含む索引から、言葉の意味が近い作品を表示しています。確定タグとは混ざりません。類似度は正解率ではありません。承認・却下・再生成の後はAI索引を更新してください。"
                 : method.IsTagCandidates ? "最新の生成履歴に未承認の候補がある作品を表示しています。確定タグにはまだ反映されていません。詳細の「AIタグ候補」から根拠を確認して承認・却下できます。"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。画像の見た目と名前・タグの意味では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsAI ? "探したい内容を文章で入力してください。初回の準備は左下の「設定」→「AI検索の準備」から。"
                 : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions)+(scopeWarning is null?"":" "+scopeWarning);
             var summary=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ本文に含まれる語句を入力してください。":$"ページ本文一致 {result.Total:N0}件")
+                :method.IsTagSemantic?(result.PendingIndexRemaining is >0?$"未承認タグ候補 · 索引の更新が必要: {result.PendingIndexRemaining:N0}件":"未承認タグ候補の意味で検索しています。")
                 :method.IsTagCandidates?"未承認の候補です。詳細から確認・承認できます。"
                 :method.IsAI?(query.Length==0?"探したい内容を入力してください。":$"上位 {result.LeadingTotal:N0}件 · 参考 {result.OtherTotal:N0}件")
                 :Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions);
-            Notice(method.IsPageText?"ページ本文":method.IsTagCandidates?"タグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),scopeWarning is null?InfoBarSeverity.Informational:InfoBarSeverity.Warning,explanation);
+            Notice(method.IsPageText?"ページ本文":method.IsTagCandidates?"タグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),scopeWarning is null&&result.PendingIndexRemaining is not >0?InfoBarSeverity.Informational:InfoBarSeverity.Warning,explanation);
             if(origin is not null)
             {
                 var guidance=SimilaritySearch.Guidance(result.SimilarityStatus);
@@ -470,7 +473,7 @@ public sealed partial class MainPage : Page
     {
         // SelectionChanged also runs during initialization and dirty-state rollback.
         if(Query is null || SearchMethodHint is null || SimilarityBar is null || SimilarityTitle is null)return;
-        var method=SearchMethod.FromIndex(Math.Clamp(SearchMode.SelectedIndex,0,5));
+        var method=SearchMethod.FromIndex(Math.Clamp(SearchMode.SelectedIndex,0,6));
         SearchMode.IsEnabled=view!="history";
         var similar=similarityOrigin is not null;
         SimilarityBar.Visibility=similar?Visibility.Visible:Visibility.Collapsed;
@@ -482,7 +485,7 @@ public sealed partial class MainPage : Page
         SimilarityBoundary.Visibility=!similar&&SearchMode.SelectedIndex is 2 or 3?Visibility.Visible:Visibility.Collapsed;
         AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
-        Query.PlaceholderText=pageText?"ページ本文に含まれる語句で検索":candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
+        Query.PlaceholderText=method.IsTagSemantic?"例：青髪のツインテール（未承認タグの意味）":pageText?"ページ本文に含まれる語句で検索":candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
         SearchMethodHint.Text=similar?"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":SearchMode.SelectedIndex switch
         {
             1=>"名前・タグの意味と、画像・表紙の見た目を組み合わせます。",
@@ -490,6 +493,7 @@ public sealed partial class MainPage : Page
             3=>"名前やタグの言い換えで探すときに使います。本の本文・音声の文字起こしは対象外です。",
             4=>"未承認のAIタグ候補（最新履歴）だけを検索します。確定タグとは混ざりません。",
             5=>"抽出・保存済みのページ本文（同じページ内の全語一致）を検索します。",
+            6=>"英語を含む未承認タグ候補を、日本語の意味で探します。先にAI索引を作成してください。",
             _=>"名前・タグに含まれる文字で探します。"
         };
     }

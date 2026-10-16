@@ -81,6 +81,28 @@ static class TagReviewTests
         check(parsedSearch.Total==1&&parsedSearch.Items[0].Proposal is {BatchId:4000000000,SourceState:"stale"} prop&&
               prop.Summary.Contains("未承認タグ候補: candidate-one、candidate-two")&&prop.Summary.Contains("本の先頭ページのみ")&&prop.Summary.Contains("元ファイル変更あり"),
               "candidate search response parses provenance, cover evidence, and stale state");
+        var semanticMethod=SearchMethod.FromIndex(6);
+        check(semanticMethod.IsTagCandidates&&semanticMethod.IsTagSemantic&&!semanticMethod.IsAI,"separate pending-tag semantic search mode");
+        var semanticSearch=JsonNode.Parse(searchJson)!.AsObject();
+        semanticSearch["search_mode"]="pending-proposals-semantic";semanticSearch["score_kind"]="cosine";
+        semanticSearch["pending_total"]=2;semanticSearch["indexed_total"]=1;semanticSearch["index_remaining"]=1;
+        semanticSearch["items"]![0]!["semantic_score"]=.82;
+        semanticSearch["items"]![0]!["proposal_match"]!["embedding_model"]="google/embeddinggemma-2";
+        var meaning=TagReviewProtocol.ParseCandidateSearch(Encoding.UTF8.GetBytes(semanticSearch.ToJsonString()),0,true);
+        check(meaning.PendingIndexRemaining==1&&meaning.Items[0].Proposal is {SemanticScore:.82,EmbeddingModel:"google/embeddinggemma-2"},"pending semantic score/model and remaining index are explicit");
+        check(meaning.Items[0].Proposal!.Summary.Contains("タグ候補の意味一致")&&meaning.Items[0].Proposal!.Summary.Contains("類似度")&&meaning.Items[0].AIEvidence=="","one semantic evidence explanation without duplicate generic AI label");
+        foreach(var mutateMeaning in new Action<JsonObject>[] {
+            o=>o["indexed_total"]=2,
+            o=>o["index_remaining"]=0,
+            o=>o["items"]![0]!["semantic_score"]=2,
+            o=>o["items"]![0]!["proposal_match"]!.AsObject().Remove("embedding_model"),
+            o=>o["pending_total"]=-1
+        })
+        {
+            var broken=semanticSearch.DeepClone().AsObject();mutateMeaning(broken);
+            var rejected=false;try{TagReviewProtocol.ParseCandidateSearch(Encoding.UTF8.GetBytes(broken.ToJsonString()),0,true);}catch(InvalidDataException){rejected=true;}
+            check(rejected,"invalid semantic pending-tag evidence/count rejected");
+        }
         foreach(var mutate in new Action<JsonObject>[]{
             o=>o["search_mode"]="wrong",
             o=>o["page"]=2,

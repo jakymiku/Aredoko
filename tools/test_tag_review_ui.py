@@ -2,7 +2,8 @@
 
 Requires an existing Release build and winapp CLI. No downloads.
 --wd-runtime-only explicitly uses the already approved local WD CPU model,
-on generated images only; other modes never load a model.
+on generated images only. --tag-language-only uses existing EG2 CUDA with
+predetermined English labels. Other modes never load a model.
 Screenshots need human review; runtime_pass never means visual review passed.
 """
 import argparse
@@ -55,6 +56,7 @@ def main():
     modes=parser.add_mutually_exclusive_group()
     modes.add_argument('--candidate-search-only',action='store_true')
     modes.add_argument('--wd-runtime-only',action='store_true',help='Existing approved CPU model on generated media only; no downloads')
+    modes.add_argument('--tag-language-only',action='store_true',help='Existing EG2 CUDA model with generated sources and predetermined English labels; no downloads')
     modes.add_argument('--page-jump-only',action='store_true')
     modes.add_argument('--folder-books-only',action='store_true')
     args=parser.parse_args()
@@ -67,8 +69,8 @@ def main():
     if existing.returncode:parser.error('Close the existing Aredoko app before this isolated test')
     server=ThreadingHTTPServer(('127.0.0.1',8769),BaseHTTPRequestHandler)
     sandbox=thread=process=hwnd=app_pid=None
-    tagger=None;wd_observer=None;wd_processes=[];model_before=None
-    report={'runtime_pass':False,'visual_review':'pending: inspect every screenshot','actual_model':bool(args.wd_runtime_only),'tagging_quality_measured':False,
+    tagger=None;wd_observer=None;wd_processes=[];model_before=None;language_encoder=None;language_process=None
+    report={'runtime_pass':False,'visual_review':'pending: inspect every screenshot','actual_model':bool(args.wd_runtime_only or args.tag_language_only),'tagging_quality_measured':False,
         'scenario':args.scenario,'test_mode':'folder-books' if args.folder_books_only else 'candidate-search' if args.candidate_search_only else 'tag-review','checks':[],'screenshots':[],'requests':[],'keyboard_tested':False}
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-tag-review-'+uuid.uuid4().hex}
     user32=ctypes.WinDLL('user32',use_last_error=True);kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
@@ -193,6 +195,19 @@ def main():
                 def extract(self,payload,cancelled):return '夕焼けの教室で約束した'
             page_text=PageTextIndex(sandbox.catalog,page_index,JumpExtractor())
         tagger=FixtureTagger()
+        if args.tag_language_only:
+            from ai_process import EncoderProcess
+            from ai_profiles import DEFAULT_PROFILE
+            from ai_search import AISearch
+            language_encoder=EncoderProcess(REPO/'.venv-ai/Scripts/python.exe',DEFAULT_PROFILE.model_path(REPO))
+            if not language_encoder.available:raise RuntimeError('Existing approved EG2 runtime required; never downloads')
+            sandbox.ai.close();sandbox.ai=AISearch(sandbox.catalog,language_encoder)
+            blue_item=sandbox.item('generated-003.png');red_item=sandbox.item('generated-001.png',1)
+            language_scope={'root_ids':sandbox.roots,'kind':'image','shelf':'language-fixture'}
+            sandbox.catalog.update([blue_item,red_item],{'tags':['manual-language'],'shelf':'language-fixture'})
+            report['test_mode']='Japanese-query-English-pending-tags'
+            report['actual_model_role']='EmbeddingGemma 2 CUDA; predetermined English labels, not WD image accuracy'
+            report['profile']=DEFAULT_PROFILE.identity()
         if args.wd_runtime_only:
             from wd_tagger import create_tagger
             from unittest.mock import patch
@@ -212,6 +227,11 @@ def main():
         server.RequestHandlerClass=production_handler(sandbox.catalog,secrets.token_urlsafe(32),ai=sandbox.ai,profiles=sandbox.profiles,tagger=tagger)
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         for theme in ('Light','Dark'):
+            if args.tag_language_only:
+                tagger.info=TaggerInfo('language-fixture',theme,'predetermined-English-labels','fixed','cover-v1')
+                for item,tags in ((blue_item,['blue_hair','twintails']),(red_item,['red_hair','long_hair'])):
+                    tagger.suggest=lambda source,cancelled,tags=tags:[TagProposal(tag,'Predetermined English runtime fixture; not tagging quality') for tag in tags]
+                    TagSuggestions(sandbox.catalog,tagger).generate(item,uuid.uuid4().hex)
             if args.page_jump_only:
                 write_jump_book();sandbox.catalog.index.scan(jump_root);sandbox.catalog.sync_index()
                 jump_item=sandbox.catalog.search(root_id=jump_root)['items'][0]['id']
@@ -230,6 +250,48 @@ def main():
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
             hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.page_jump_only or args.folder_books_only and theme=='Dark' else '76 件')
+            if args.tag_language_only:
+                from tag_semantics import semantic_candidates
+                choose_combo('CmbSearchMode','ModeTagSemantic');ready()
+                ui('set-value','TxtQuery','青髪のツインテール');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','0 件')
+                check(theme+' index update warning visible',any('索引の更新が必要' in n.get('name','') and not n.get('isOffscreen',True) for n in nodes(json.loads(ui('inspect','--json','--depth','14')))))
+                shot(theme+'-pending-index-needed')
+                def prepare_language_index():
+                    sandbox.ai.start(scope=language_scope);sandbox.ai.worker.join(180)
+                    check(theme+' explicit scoped AI index complete',not sandbox.ai.worker.is_alive() and sandbox.ai.status()['state']=='complete' and sandbox.ai.status()['indexed']==2)
+                prepare_language_index()
+                ui('invoke','BtnSearch');ready();wait('TxtCount','2 件')
+                actual=semantic_candidates(TagSuggestions(sandbox.catalog,tagger),sandbox.ai,'青髪のツインテール')
+                check(theme+' actual EG2 ranks English blue_hair/twintails first from Japanese query',actual['items'][0]['id']==blue_item)
+                contains('ProposalEvidence'+str(blue_item),'タグ候補の意味一致')
+                contains('ProposalEvidence'+str(blue_item),'blue_hair')
+                shot(theme+'-Japanese-pending-wide')
+                user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.3)
+                shot(theme+'-Japanese-pending-narrow')
+                user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);time.sleep(.3)
+                ui('invoke','NavFolders','--action','select');wait('TxtCount','2 フォルダ')
+                ui('invoke',f'OpenFolder{sandbox.roots[1]}');ready();wait('TxtCount','1 件')
+                check(theme+' Japanese pending semantic search honors selected root',True)
+                ui('invoke','NavAll','--action','select');ready()
+                # Reset explicit root selection through the existing scope toolbar.
+                ui('invoke','ExpandSearchOptions');visible('BtnResetAllFolders');ui('invoke','BtnResetAllFolders');ready();wait('TxtCount','2 件')
+                choose_combo('CmbSearchMode','ModeTagCandidates');ui('set-value','TxtQuery','blue_hair');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                check(theme+' original literal pending-tag mode remains available',True)
+                if theme=='Light':
+                    ui('invoke','Item'+str(blue_item),'--action','select');wait('TxtEditStatus','保存済み');open_review()
+                    contains('TagEdited','blue_hair');ui('invoke','TagAccept');enabled('TagRefresh',True)
+                    ui('invoke','TagClose');ready()
+                    check('English approval preserves raw label and manual metadata',set(sandbox.catalog.get(blue_item)['tags'])=={'manual-language','blue_hair'})
+                    choose_combo('CmbSearchMode','ModeTagSemantic');ui('set-value','TxtQuery','青髪');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                    check(theme+' index update warning visible',any('索引の更新が必要' in n.get('name','') and not n.get('isOffscreen',True) for n in nodes(json.loads(ui('inspect','--json','--depth','14')))))
+                    prepare_language_index()
+                    choose_combo('CmbSearchMode','ModeText');ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                    found=sandbox.ai.search('青髪',source='text',scope=language_scope)
+                    check('actual EG2 finds approved English blue_hair from Japanese without translating tag',found['items'][0]['id']==blue_item)
+                    shot('Light-approved-English-Japanese-search')
+                else:
+                    check('English approval persists across app restart',set(sandbox.catalog.get(blue_item)['tags'])=={'manual-language','blue_hair'})
+                close();continue
             if args.wd_runtime_only:
                 name='generated-003.png' if theme=='Light' else 'generated-cover.cbz'
                 source=sandbox.item(name)
@@ -657,7 +719,10 @@ def main():
             close()
         check('source bytes/mtime unchanged',sandbox.source_before==sandbox.source_digest())
         check('saved AI settings unchanged',sandbox.settings_before==(sandbox.target/'settings.json').read_bytes())
-        check('no embedding inference or model loaded',sandbox.encoder.calls==0 and not sandbox.encoder.resident)
+        if args.tag_language_only:
+            check('actual existing CUDA model used',language_encoder.device=='cuda')
+            language_process=language_encoder.process
+        check('fixture encoder never called',sandbox.encoder.calls==0 and not sandbox.encoder.resident)
         if args.wd_runtime_only:
             directory=tagger.profile.verify(REPO,hashes=True)
             check('WD model bytes and mtime unchanged',model_before=={name:(directory/name).stat().st_mtime_ns for name in tagger.profile.data()['artifacts']})
@@ -682,7 +747,13 @@ def main():
             if sandbox:
                 report['source_unchanged']=sandbox.source_before==sandbox.source_digest()
                 if not report['source_unchanged'] or report.get('cleanup_terminated_owned_process'):report['runtime_pass']=False
+                if args.tag_language_only and sandbox.ai is not None:
+                    language_process=language_encoder.process
+                    sandbox.ai.close();sandbox.ai=None
                 sandbox.close()
+                if language_process:
+                    report['embedding_worker_stopped']=language_process.poll() is not None
+                    if not report['embedding_worker_stopped']:report['runtime_pass']=False
             if target.exists():(target/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
             try:cli('ui','yield')
             except Exception:pass

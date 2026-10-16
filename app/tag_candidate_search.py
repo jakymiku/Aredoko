@@ -6,7 +6,7 @@ from tag_suggestions import SuggestionConflict
 from ai_search import AIBusy
 
 
-def search_candidates(service, query='', kind='', view='all', page=0, root_ids=None, shelf=None, model=None):
+def validate_candidate_search(query='', kind='', view='all', page=0, root_ids=None, shelf=None, model=None):
     if not isinstance(query,str) or len(query)>300 or kind not in ('',*TYPES) or view not in ('all','favorites','unreviewed','shelf'):
         raise ValueError('Invalid candidate search')
     if type(page) is not int or not 0<=page<=1000000:raise ValueError('Invalid page')
@@ -18,6 +18,11 @@ def search_candidates(service, query='', kind='', view='all', page=0, root_ids=N
             raise ValueError('Invalid roots')
         root_ids=sorted(root_ids)
     terms=split_terms(query)
+    return terms
+
+
+def search_candidates(service, query='', kind='', view='all', page=0, root_ids=None, shelf=None, model=None):
+    terms=validate_candidate_search(query,kind,view,page,root_ids,shelf,model)
     catalog=service.catalog
     # Snapshot the DB scope and bounded page source checks against root edits.
     # No model is called; only these <=60 sources are checked for freshness.
