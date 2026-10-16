@@ -199,3 +199,5 @@ Check(new MediaRow{Location="Vol.1/p1.png",Availability="present",Kind="image"} 
 Check(new MediaRow{Location="./"}.LocationLabel=="登録フォルダ直下の画像（一冊）"&&new MediaRow{Location="a.png"}.LocationLabel=="a.png","folder book location label");
 Check(RegisteredRootRow.ParseList(System.Text.Json.Nodes.JsonNode.Parse("""{"items":[{"id":1,"path":"C:/b","enabled":1,"online":true,"folder_books":true},{"id":2,"path":"C:/c","enabled":1,"online":true}]}""")!) is var roots && roots[0].FolderBooks && !roots[1].FolderBooks && roots[0].ModeLabel=="画像フォルダを一冊として扱う","root folder-book mode parsed (absent means off)");
 Check(ErrorText.Localize("Folder book mode cannot change after scanning").StartsWith("「画像フォルダを一冊として扱う」")&&ErrorText.Localize("This root is already registered")=="このフォルダはすでに登録されています。","folder registration errors localized");
+
+await FeedbackTests.Run(Check);

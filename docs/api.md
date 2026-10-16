@@ -126,3 +126,9 @@ GET/POST `/api/library/reader/{id}/progress` を追加。revision・0始まりpa
 `POST /api/library/ai/similar`：同profile/current revisionの保存済み画像・表紙vectorから類似順に返す。scope・自己除外・未索引fallback・認証を含む詳細は [item-similarity.md](item-similarity.md)。動画/音声の内容類似検索は未実装。今回のWinUI導線はソース追加済み、Windows実機未検証。
 
 - P2根拠読取：`GET /api/library/tag-suggestions/{id}/evidence?revision=<64hex>`。Host/token必須、登録中sourceの同一handle画像と物理版を照合。変更409・不在404・不正400、8MiB画像の既存上限を継承。詳細は[tag候補仕様](tag-suggestions.md)。
+
+## 2026-10-16 閲覧履歴・サブフォルダ指定
+
+- `POST /api/library/roots` の任意 `recursive: boolean`：新規/既存移行は省略時true、解除済み再登録では省略時保存値を保持。falseは直下だけを索引。`consent:true`と既存の認証は必要。再登録でfalseへ狭めると下位locationを即時excluded、再びtrueならrescanで復元。
+- `POST /api/library/history` は厳密に`{"item_id": positive int64}`のみ。既存Host/Origin/session-token/body上限を適用。presentかつenabled、現在の除外対象でないアイテムを記録し`{"recorded":id}`。不正400/認証403/対象不在404。元ファイルは読まず、`view_history(item_id,opened_ns,open_count)`のupsertだけを行う。
+- `GET /api/items?view=history`：最近開いた順、同じアイテムは一件。既存q/kind/root_idまたはroot_ids/page/limitを保持し、解除root/現在の除外を隠す。通常の文字・関連語検索が対象。GUIでは画像/本/動画の表示成功時に記録し、履歴中のAI/未承認候補検索は無効化。音声を外部アプリで開いた履歴は今回未接続。

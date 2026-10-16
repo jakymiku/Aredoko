@@ -1,4 +1,4 @@
-"""Open a named production tool through the owned app's native overflow menu."""
+"""Open a named production tool through the owned app's Settings dialog."""
 import json
 import time
 
@@ -16,7 +16,7 @@ def nodes(value):
 def invoke_tool(cli, app_pid, hwnd, identifier):
     if identifier not in TOOL_IDS:
         raise ValueError('Unknown production tool')
-    cli('ui', 'invoke', 'BtnTools', '-w', hwnd)
+    cli('ui', 'invoke', 'BtnSettings', '-w', hwnd)
     for _ in range(20):
         windows = json.loads(cli('ui', 'list-windows', '-a', app_pid, '--json'))
         for window in windows:

@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新（2026-10-16 実利用feedback）**：左下「設定」、閲覧履歴＋未確認検索条件、wheel/X入力、recursive指定、動画操作等を追加。Python390 PASS/3 SKIP・Core350・Release0warn/error、独立native動画92/検索63/画像入力・履歴16 PASS（PNG28枚全目視）。フォルダ統合nativeはharness待機でFAILED、修正済み未再実行。アニメ/大画像/動画内容索引/DB完全削除は未実装。[対応表](user-feedback-20261016.md)と最新handoffを優先。
+
 > **最新GUI方針とWindows確認（2026-10-16）**：ユーザー指示により簡潔なUIを維持し、機能は削減しない。管理操作は「ツール」、検索説明とタグのモデル詳細は任意展開へ整理。警告/根拠/未保存/検索範囲は見えるまま。Core320・Release0警告/0error、生成素材のnative64＋検索モード63 checks PASS、PNG20枚全目視PASS。前回reader透け/旧token GUI rescan/restartの残gateも確認済み。[AGENTSの恒久ルール](../AGENTS.md)と[最新handoff](codex-handoff.md)を優先。次は本文APIのCore/WinUI接続。
 
 > **Windows統合checkpoint（2026-10-16）**：remote `ad850aa`まで取り込み、Core320 PASS、最終x64 Release警告0/エラー0、全Python384件実行（381 PASS/3 platform SKIP）。フォルダ本のstat/fstat時刻差による誤変更検知を修正。生成フォルダ本の登録/読書/保存/restartは28 runtime checks PASSだが、最終UI修正後nativeはsettings-panel待機不足で停止。待機は修正済み・再実行待ち。**最終GUI完了とはしない**。[失敗・検証境界・次の3手](codex-handoff.md)を優先。本文APIバックエンドを作り直さず、実OCRと専用WinUIは未接続として進める。

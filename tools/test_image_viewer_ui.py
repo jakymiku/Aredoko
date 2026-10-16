@@ -36,7 +36,7 @@ def focused_property(value):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--reader-progress-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');parser.add_argument('--video-range-only',action='store_true');parser.add_argument('--video-seek-only',action='store_true');args=parser.parse_args();args.video_player_only=args.video_player_only or args.video_range_only or args.video_seek_only;target=args.output.resolve()
+    parser.add_argument('--feedback-input-only',action='store_true');parser.add_argument('--double-click-only',action='store_true');parser.add_argument('--reader-spread-only',action='store_true');parser.add_argument('--reader-progress-only',action='store_true');parser.add_argument('--video-and-evidence-only',action='store_true');parser.add_argument('--evidence-only',action='store_true');parser.add_argument('--video-player-only',action='store_true');parser.add_argument('--video-range-only',action='store_true');parser.add_argument('--video-seek-only',action='store_true');args=parser.parse_args();args.video_player_only=args.video_player_only or args.video_range_only or args.video_seek_only;target=args.output.resolve()
     if os.name!='nt':parser.error('Native Windows required')
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Evidence must stay in data/ai-ui')
     target.mkdir(parents=True,exist_ok=False)
@@ -348,7 +348,7 @@ def main():
             return physical
         shown='← → で画像送り · 表示画像は長辺2048pxまで'
         for theme in ('Light','Dark'):
-            launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build','--output-appx-directory',str(target/('layout-'+theme.lower())),'--detach','--json','--args','--ui-theme '+theme.lower()))
+            launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build','--output-appx-directory',str(target/('layout-'+theme.lower())),'--detach','--json','--args','--ui-theme '+theme.lower()+' --viewer-settings '+str(target/'viewer-settings.json')))
             if launch.get('ProcessScope') not in (None,'local'):raise RuntimeError('Wrong target')
             app_pid=int(launch['ProcessId']);process=kernel32.OpenProcess(0x00100001,False,app_pid)
             if not process:raise RuntimeError('Owned process unavailable')
@@ -358,6 +358,27 @@ def main():
                 time.sleep(.1)
             if len(main)!=1:raise RuntimeError('Unique owned main unavailable')
             hwnd=main_hwnd=str(main[0]['hwnd']);ready();resize(1200,820);wait('TxtCount',f'{expected_total} 件')
+            if args.feedback_input_only:
+                report['audit_scope']='first-run image wheel and mouse X input; settings isolated; no failed folder-batch rerun'
+                select('a.png');open_image();wait('ImageTitle','a.png');wait('ImageStatus',shown)
+                if not keys('tab','ImageViewport'):raise RuntimeError('Owned image foreground unavailable')
+                ui('scroll','ImageViewport','--wheel','-1');wait('ImageTitle','b.png');wait('ImageStatus',shown);time.sleep(.25)
+                ui('scroll','ImageViewport','--wheel','1');wait('ImageTitle','a.png');wait('ImageStatus',shown);check(theme+' image actual wheel advances and returns',True)
+                tree=json.loads(ui('inspect','--json','--depth','12'));area=next(n for n in nodes(tree) if n.get('automationId')=='ImageViewport')
+                x=int(area['x']+area['width']/2);y=int(area['y']+area['height']/2)
+                at_point=user32.WindowFromPoint(wintypes.POINT(x,y));point_owner=wintypes.DWORD();user32.GetWindowThreadProcessId(at_point,ctypes.byref(point_owner))
+                check('image pointer belongs to owned foreground',point_owner.value==app_pid and user32.GetForegroundWindow()==int(hwnd))
+                user32.SetCursorPos(x,y);user32.mouse_event.argtypes=[wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,ctypes.c_size_t]
+                user32.mouse_event(0x0080,0,0,2,0);user32.mouse_event(0x0100,0,0,2,0);wait('ImageTitle','b.png');wait('ImageStatus',shown)
+                user32.mouse_event(0x0080,0,0,1,0);user32.mouse_event(0x0100,0,0,1,0);wait('ImageTitle','a.png');wait('ImageStatus',shown);check(theme+' image actual mouse forward/back works',True)
+                resize(700,620);shot(theme+'-feedback-image-input');close_image()
+                for _ in range(40):
+                    history=catalog.search(view='history')['items']
+                    if len(history)==2:break
+                    time.sleep(.1)
+                check(theme+' real image opens persist viewing history',len(history)==2 and history[0]['id']==ids['a.png'])
+                ui('invoke','NavHistory','--action','select');ready();wait('TxtCount','2 件');prop('CmbSearchMode','IsEnabled','False');shot(theme+'-history-wide')
+                close();continue
             if args.reader_progress_only:
                 report['audit_scope']='reading progress: page/direction across reopen and app restart, explicit cover, save/read failure preservation, corrupt page, real generated revision/rescan, cancelled load and drafts'
                 shown_book='表示しました。拡大すると細部を確認できます。';saved_text='読書位置を保存しました'
@@ -416,10 +437,14 @@ def main():
                     ui('hover','VideoViewport','--dwell-time','0');ui('wait-for','VideoSeekPreview','--gone','-t','5000')
                     resize(700,620);ui('hover','VideoSeek','--dwell-time','0');wait('VideoSeekImage','0:01のサムネイル');shot(theme+'-seek-preview-narrow');ui('hover','VideoViewport','--dwell-time','0');resize(1200,820)
                 if args.video_seek_only:
-                    faults['frame_code']=503;ui('hover','VideoSeek','--dwell-time','0');wait('VideoSeekImage','サムネイルを取得できません。シークは利用できます');shot(theme+'-seek-preview-unavailable');prop('VideoPlayPause','IsEnabled','True');ui('set-value','VideoSeek','1');wait('VideoPosition','0:01 / 0:02');check(theme+' unavailable preview leaves seeking enabled',True)
+                    close_video();open_video();wait('VideoStatus',shown_video);faults['frame_code']=503;ui('hover','VideoSeek','--dwell-time','0');wait('VideoSeekImage','サムネイルを取得できません。シークは利用できます');shot(theme+'-seek-preview-unavailable');prop('VideoPlayPause','IsEnabled','True');ui('set-value','VideoSeek','1');wait('VideoPosition','0:01 / 0:02');check(theme+' unavailable preview leaves seeking enabled',True)
                     ui('hover','VideoViewport','--dwell-time','0');ui('set-value','VideoSeek','0');wait('VideoPosition','0:00 / 0:02')
                 ui('invoke','VideoSeekForward');wait('VideoPosition','0:01 / 0:02');prop('VideoSeekBack','IsEnabled','True');check(theme+' video seek forward advances position',True)
                 ui('invoke','VideoSeekBack');wait('VideoPosition','0:00 / 0:02');check(theme+' video seek back returns to start',True)
+                ui('set-value','VideoVolume','35');wait('VideoVolumeStatus','音量 35%');ui('set-value','VideoVolume','80')
+                check(theme+' volume slider synchronizes actual player and buttons',True)
+                ui('click','VideoViewport');wait('VideoPlayPause','一時停止');ui('click','VideoViewport');wait('VideoPlayPause','再生')
+                check(theme+' canvas click toggles playback and pause',True)
                 wait('VideoVolumeStatus','音量 80%')
                 ui('invoke','VideoVolumeDown');wait('VideoVolumeStatus','音量 60%')
                 ui('invoke','VideoVolumeUp');wait('VideoVolumeStatus','音量 80%')

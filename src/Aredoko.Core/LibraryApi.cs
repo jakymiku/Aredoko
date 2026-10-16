@@ -43,6 +43,11 @@ public sealed class LibraryApi : IDisposable
         SearchMultiAsync(q,kind,view,page,semantic,source,scope,rootId is int id ? new[]{id} : null,literalOnly,groupThreshold,resultGroup);
     public async Task<SearchResponse> SearchMultiAsync(string q,string kind,string view,int page,bool semantic,string source,JsonObject? scope,IReadOnlyList<int>? rootIds,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all")
     {
+        if(view=="history")
+        {
+            if(semantic||source!="all")throw new ArgumentException("閲覧履歴は名前・タグ検索を使ってください。");
+            return Protocol.ParseSearch(await client.GetStringAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
+        }
         if(source=="pending-proposals")
             return await TagReviews.SearchCandidatesAsync(q,kind,view,page,rootIds);
         if(semantic && !string.IsNullOrWhiteSpace(q))

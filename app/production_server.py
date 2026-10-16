@@ -50,6 +50,7 @@ PUBLIC_FOLDER_ERRORS = frozenset({
     'Choose an absolute folder path',
     'The library must not contain the application database',
     'Shelf must be 80 characters or less',
+    'Include subfolders must be true or false',
     'Symlink roots are not supported',
     'Root must exist and be accessible',
     'Reparse-point roots are not supported',
@@ -439,9 +440,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if set(body)!={'term'}: raise ValueError('Only term is accepted')
                     try: return self.send(200,catalog.terms.delete(body['term']))
                     except KeyError: return self.send(404,{'error':'Related-term entry not found'})
+                if self.path=='/api/library/history':
+                    if set(body)!={'item_id'}:raise ValueError('Invalid history request')
+                    return self.send(200,catalog.record_view(body['item_id']))
                 if self.path=='/api/library/roots':
                     if body.get('consent') is not True: raise ValueError('Explicit folder consent required')
-                    return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'),body.get('default_shelf',''),body.get('folder_books'))})
+                    return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'),body.get('default_shelf',''),body.get('folder_books'),body.get('recursive'))})
                 if self.path=='/api/library/roots/shelf':
                     if set(body)-{'root_id','shelf','fill_unset'}:raise ValueError('Invalid root filter')
                     return self.send(200,catalog.set_root_shelf(body.get('root_id'),body.get('shelf'),body.get('fill_unset',False)))

@@ -335,7 +335,7 @@ class AISearch:
         if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
         if source not in ('all','text','cover'): raise ValueError('Invalid semantic source')
         if source=='cover' and 'cover' not in self.profile.modalities:
-            raise AIUnavailable('選択中のモデルは画像・表紙検索に対応していません。AI文章を使ってください。')
+            raise AIUnavailable('選択中のモデルは画像の見た目の検索に対応していません。名前・タグの意味（AI）を使ってください。')
         selected_policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
         boundary([], 'reciprocal-rank' if selected_policy=='mean-rrf' else 'cosine',group_threshold)
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。')

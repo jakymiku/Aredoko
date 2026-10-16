@@ -1,3 +1,35 @@
+# Aredoko GPT Chat向け引き継ぎ
+
+## 2026-10-16 実利用フィードバック：操作改善・履歴・登録範囲（parent `2b3e724`）
+
+ユーザー確定：マウス進む/戻るはviewer内の画像/ページ送り。左ナビの未確認は閲覧履歴へ置換し、未確認filterは検索条件へ保持。[22件の対応表](user-feedback-20261016.md)を正とする。**全22件の完了ではない。**
+
+### 実装
+
+- 画像/reader共通のwheel送り（既定下=次、設定で反転）とmouse X1/X2。zoom中はscroll、修飾キー/操作部上は従来操作を優先。設定は小さなversioned JSONへatomic保存、壊れた設定は既定値。`--viewer-settings`で生成テスト専用pathを指定し、私物設定は触らない。
+- 左下「設定」にviewer方向設定・AI検索の準備・関連語編集を集約。検索方法は「名前・タグ」「両方で探す（AI）」「画像の見た目（AI）」「名前・タグの意味（AI）」。豆の例、名前/タグの言い換え、本文/映像未解析を必要時に説明。全機能保持。
+- `view_history`と認証付き`POST /api/library/history`、`GET /api/items?view=history`。画像/本/動画の表示成功通知で記録、最近開いた順/重複集約、restart保持、無効root/現在の除外を尊重。履歴内は通常の名前・タグ検索、種類/登録rootを利用（AI/候補modeをsilent fallbackせず無効）。外部アプリを開いただけの音声等の履歴は今回対象外。
+- 登録`recursive` bool追加。旧root/省略時は従来通り再帰、直下のみscanと再登録の設定保持。再登録でfalseへ狭めると既存の下位locationを即時excluded。戻す場合はrescanで同じID/手動metadataへ復帰。フォルダ本`./`は直下作品として維持。
+- 登録の重複同意checkboxを削除、明示登録ボタン/HTTP consentは保持。folder行single=settings/double=scope内を開く、共通Explorer/default-app menu、properties expander、one-click再登録（設定/metadata保持・自動scanなし）、1folder drop→登録候補を追加。これら一部のnative受け入れ確認は下記のとおり未完。
+- 動画double-click入口、canvas click play/pause、右volume slider（既存mute/±と同期）、seek preview cache最大8枚。次frame中も前frameを保ち実表示時刻を示す。late応答排除/取消/既存上限は保持。
+
+### 検証と境界
+
+- 全Python `python -m unittest discover -s tests`: **393実行/390 PASS/3 Windows platform SKIP、207.387秒** (`data/feedback-python-20261016.log`)。新規履歴/recursive/HTTP9件を含む。表示文変更後のAI profile10件もPASS。新しいモデル/依存取得なし。
+- Core **350 checks PASS** (`data/feedback-core-20261016.log`)、最終x64 self-contained Release **0警告/0error**。WinUI code review実施、未導入WinUIAnalyzerは実行せず、AOT/High Contrast実機/全私物libraryの品質は未検証。
+- 独立した生成素材native：動画 **92 checks/18 PNG** (`data/ai-ui/feedback-video-20261016-initial`)、検索mode **63 checks/6 PNG** (`feedback-methods-20261016`)、画像実wheel/X1/X2＋実閲覧履歴 **16 checks/4 PNG** (`feedback-input-20261016`) PASS。**28 PNG全て目視済み**。画像は700x620、履歴は1200x820（当初narrowだった履歴ファイル名をwideへ訂正、pixels不変）。検索/動画はLight/Dark・通常/狭幅。モデルはcontract fixture、実推論/品質評価を意味しない。
+- フォルダ/設定の統合nativeは**FAILEDのまま**。初回は未確認check後の自動collapseで次のcheckbox操作が失敗（製品修正：この操作では条件panelを開いたまま＋未確認title）。cycle1はUIA既定invoke=expandをtoggleと誤解した旧canvas期待、cycle2は閉じたchildをIsOffscreen=Trueで待ちtimeout。最終的に`--action collapse`＋`--gone`へharnessを修正したが**再実行していない**。スキルの最大2 fix/rerunに従い停止。設定保存（Light、隔離path）、履歴入口、未確認75/76件切替までは実機確認済み。失敗/部分成功を全PASSへ変更しない。6 PNG（各回2枚）も全目視。
+- readerの新wheel/Xボタン/反転設定適用、folder single/double/直接再登録、GUI recursive登録、Explorer/default menu実起動、properties表示、動画のdouble-click入口/共通context、dropのnative受け入れは**未検証**。backend/Core/Release/コードレビューは成功してもnative成功とは呼ばない。既存のreader/登録/タグreviewの過去実機結果は過去revisionの証拠。
+- 原本bytes/mtime・AI settingsを維持。テスト所有アプリを正常終了、user appをkill/attachせず、私物scanなし、CI dispatchなし、P0改善累積1/2を維持。全workflowはmanual_dispatchのみ。
+
+### 次の3手
+
+1. 修正済み`test_tag_review_ui.py --folder-books-only --check-ui-cleanup --check-user-feedback`を**次の作業回で**生成素材から実行し、上記未検証のreader/folder/反転/再登録gateを埋める。UIAで消えたchildは`--gone`。shell実起動やdropは所有テスト先だけで個別確認し、動画double-click/contextも加える。既存の92/63/16成功を失敗隠しに使わない。
+2. F07/F08/F11：生成GIF/WebP/APNG＋約54MB入力で、frame数/decoded pixels/転送上限・取消/資源解放を持つanimation読込と代表frame AI入力を実装・検証。8MiB capの単純撤去や静止画1枚表示を完了にしない。新依存/モデルが必要なら既存の明示許可範囲を確認。
+3. F21：解除済みroot限定のDB完全削除を確認UI・関連history/progress/AI/tag/page依存cleanup・ID非再利用（古い保存scopeが別rootを指さない）とともに実装。元ファイルは不変。**F12の動画内容索引は引き続き未実装**で`media-content-plan.md`の時間付きframe/embedding/集約が後続。名前/タグ検索や再生と混同しない。
+
+---
+
 ## 最新：機能を維持してGUIの情報量を整理・前回のWindows残gateを確認（2026-10-16 JST）
 
 開始HEAD `7ddfb627deb5dfedce149bf9f4d8618df8357c91`、clean・remote差0。AGENTS/vision/優先順位/両handoff/Issue4/PR5と最新コードを確認。**ユーザー指示「UIを複雑にしない。ただし機能削減はしない」**をAGENTSと[WinUI方針](design-vision-winui.md)へ恒久ルールとして追加。テスト都合の長文・内部用語は通常画面へ常駐させず、AutomationId・ログ・文書で検証する。既存feature / base / Draft PR #5を維持。実装commitは本節を導入したgit logを参照。

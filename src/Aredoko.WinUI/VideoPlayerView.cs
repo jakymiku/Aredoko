@@ -30,7 +30,10 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     private readonly TextBlock seekTime = new() { HorizontalAlignment=HorizontalAlignment.Center };
     private readonly Border seekPreview = new() { Width=272, HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Bottom, Visibility=Visibility.Collapsed, IsHitTestVisible=false, RequestedTheme=ElementTheme.Dark };
     private CancellationTokenSource? previewRequest;
-    private bool updatingSeek, seekHover, previewBusy;
+    private bool updatingSeek, seekHover, previewBusy, updatingVolume;
+    private readonly Slider volumeSlider=new(){Minimum=0,Maximum=100,StepFrequency=1,SmallChange=5,LargeChange=20,Width=112,VerticalAlignment=VerticalAlignment.Center};
+    private readonly Dictionary<int,BitmapImage> previewFrames=[];
+    private readonly Queue<int> previewFrameOrder=[];
     private int previewWanted=-1, previewDisplayed=-1;
     private readonly Grid viewport = new() { IsTabStop = true, RequestedTheme = ElementTheme.Dark };
     private readonly MediaPlayerElement playerElement = new()
@@ -64,6 +67,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     private int volume = 80;
     private int version;
     private bool busy, disposed, failed, loaded, playing, muted, keyboardChrome;
+    public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
 
     public VideoPlayerView(LibraryApi api, int itemId, string titleText)
@@ -89,8 +93,15 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         title.Style = positionText.Style = volumeText.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
         heading.Children.Add(title); SetColumn(positionText, 1); heading.Children.Add(positionText); SetColumn(close, 2); heading.Children.Add(close);
         header.Child = heading; Children.Add(header);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var control in new UIElement[] { playPause, seekBack, seekForward, mute, volumeDown, volumeUp, volumeText, retry }) actions.Children.Add(control);
+        var actions=new Grid{ColumnSpacing=8};actions.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});actions.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+        var playback=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
+        foreach(var control in new UIElement[]{playPause,seekBack,seekForward,retry})playback.Children.Add(control);
+        var audio=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Right};
+        foreach(var control in new UIElement[]{mute,volumeDown,volumeSlider,volumeUp,volumeText})audio.Children.Add(control);
+        actions.Children.Add(playback);SetColumn(audio,1);actions.Children.Add(audio);
+        Identify(volumeSlider,"VideoVolume","音量（0〜100）");
+        volumeSlider.ValueChanged+=(_,_)=>{if(updatingVolume)return;volume=VideoPlayerPolicy.ClampVolume((int)Math.Round(volumeSlider.Value));if(mediaPlayer is not null)mediaPlayer.Volume=volume/100.0;UpdateControls();ShowChrome();};
+        viewport.Tapped+=(_,args)=>{if(!busy&&loaded&&!failed){args.Handled=true;TogglePlayPause();}};
         toolbar.BorderThickness=new Thickness(0,1,0,0);toolbar.CornerRadius=new CornerRadius(0);
         toolbar.MaxWidth=double.PositiveInfinity;toolbar.Padding=new Thickness(8,4,8,4);
         var bottom = new StackPanel { Spacing = 4, HorizontalAlignment=HorizontalAlignment.Stretch }; bottom.Children.Add(seekBar);bottom.Children.Add(actions); bottom.Children.Add(status);
@@ -112,8 +123,15 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             previewWanted=(int)Math.Clamp(Math.Round(millis/1000.0)*1000,0,Math.Max(0,Math.Floor((duration.TotalMilliseconds-50)/1000)*1000));
             seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(previewWanted),duration).Split(" / ")[0];
             seekPreview.Margin=new Thickness(Math.Clamp(point.X+8-136,8,Math.Max(8,ActualWidth-280)),0,0,toolbar.ActualHeight+8);
-            if(previewDisplayed!=previewWanted){seekHint.Text="読み込み中…";seekHint.Visibility=Visibility.Visible;seekImage.Source=null;AutomationProperties.SetName(seekImage,"シーク先のサムネイルを取得中");}
-            seekPreview.Visibility=Visibility.Visible;previewTimer.Stop();previewTimer.Start();
+            if(previewFrames.TryGetValue(previewWanted,out var cached))
+            {seekImage.Source=cached;previewDisplayed=previewWanted;seekHint.Visibility=Visibility.Collapsed;AutomationProperties.SetName(seekImage,seekTime.Text+"のサムネイル");}
+            else if(previewDisplayed!=previewWanted)
+            {
+                if(seekImage.Source is null){seekHint.Text="読み込み中…";seekHint.Visibility=Visibility.Visible;}
+                else seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(previewDisplayed),duration).Split(" / ")[0]+"（次を準備中）";
+                if(!previewBusy){previewTimer.Stop();previewTimer.Start();}
+            }
+            seekPreview.Visibility=Visibility.Visible;
         }),true);
         seekBar.PointerExited+=(_,_)=>{HideSeekPreview();ShowChrome();};
         Identify(viewport, "VideoViewport", "動画表示。スペースで再生・一時停止、左右キーで移動");
@@ -236,6 +254,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             position = TimeSpan.Zero;
             positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
             loaded = true;
+            ContentOpened?.Invoke(itemId);
             status.Text = "動画を開きました。再生ボタンまたはスペースキーで再生できます。";
         }
         catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && current != version) { }
@@ -315,8 +334,13 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             var bytes=await api.VideoFrameAsync(manifest,wanted,token);
             using var stream=new InMemoryRandomAccessStream();using(var writer=new DataWriter(stream)){writer.WriteBytes(bytes);await writer.StoreAsync().AsTask(token);writer.DetachStream();}stream.Seek(0);
             var bitmap=new BitmapImage();await bitmap.SetSourceAsync(stream).AsTask(token);
-            if(!disposed&&current==version&&seekHover&&previewWanted==wanted)
-            {seekImage.Source=bitmap;seekHint.Visibility=Visibility.Collapsed;previewDisplayed=wanted;AutomationProperties.SetName(seekImage,seekTime.Text+"のサムネイル");}
+            if(!disposed&&current==version)
+            {
+                if(!previewFrames.ContainsKey(wanted)){previewFrameOrder.Enqueue(wanted);previewFrames[wanted]=bitmap;}
+                while(previewFrameOrder.Count>8)previewFrames.Remove(previewFrameOrder.Dequeue());
+                if(seekHover&&previewWanted==wanted)
+                {seekImage.Source=bitmap;seekHint.Visibility=Visibility.Collapsed;previewDisplayed=wanted;seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(wanted),duration).Split(" / ")[0];AutomationProperties.SetName(seekImage,seekTime.Text+"のサムネイル");}
+            }
         }
         catch(OperationCanceledException) { }
         catch(Exception)
@@ -347,7 +371,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
 
     private void ClearMedia()
     {
-        HideSeekPreview();previewRequest?.Cancel();
+        HideSeekPreview();previewRequest?.Cancel();previewFrames.Clear();previewFrameOrder.Clear();
         mediaRange?.Dispose();mediaRange=null;
         positionTimer.Stop();
         playing = false;
@@ -392,6 +416,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         AutomationProperties.SetName(mute, muted ? "消音解除" : "消音");
         volumeDown.IsEnabled = !busy && volume > 0;
         volumeUp.IsEnabled = !busy && volume < 100;
+        updatingVolume=true;try{volumeSlider.Value=volume;volumeSlider.IsEnabled=!busy;}finally{updatingVolume=false;}
         volumeText.Text = muted ? $"消音中（{volume}%）" : $"音量 {volume}%";
         retry.IsEnabled = !busy && failed;
         close.IsEnabled = true;

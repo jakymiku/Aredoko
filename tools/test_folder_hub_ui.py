@@ -412,9 +412,10 @@ def main():
                 wait('TxtCount', '1 フォルダ')
                 shot('Light-folder-inactive')
                 ui('invoke', f'RestoreFolder{rb}')
-                wait('RootPath', str(folders['b']))
-                ui('invoke', 'RootConsent')
-                ui('invoke', 'AddRoot')
+                for _ in range(60):
+                    if next(x for x in catalog.index.roots() if x['id']==rb)['enabled']:break
+                    time.sleep(.1)
+                check('One-click restore completes',next(x for x in catalog.index.roots() if x['id']==rb)['enabled'])
                 choose('CmbFolderState', 'FolderStateActive')
                 wait('TxtCount', '3 フォルダ')
                 check('Restored root B keeps manual tags and shelf',

@@ -48,6 +48,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--check-ui-cleanup',action='store_true')
+    parser.add_argument('--check-user-feedback',action='store_true')
     parser.add_argument('--scenario',choices=('indexed','unindexed','text-only'),default='indexed')
     modes=parser.add_mutually_exclusive_group()
     modes.add_argument('--candidate-search-only',action='store_true')
@@ -172,7 +173,7 @@ def main():
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         for theme in ('Light','Dark'):
             launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build',
-                '--output-appx-directory',target/('layout-'+theme.lower()),'--detach','--json','--args','--ui-theme '+theme.lower()))
+                '--output-appx-directory',target/('layout-'+theme.lower()),'--detach','--json','--args','--ui-theme '+theme.lower()+' --viewer-settings '+str(target/'viewer-settings.json')))
             if launch.get('ProcessScope') not in (None,'local'):raise RuntimeError('Unexpected launch scope')
             app_pid=int(launch['ProcessId']);process=kernel32.OpenProcess(0x00100001,False,app_pid)
             if not process:raise ctypes.WinError(ctypes.get_last_error())
@@ -183,9 +184,23 @@ def main():
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
             hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.folder_books_only and theme=='Dark' else '76 件')
+            if args.check_user_feedback:
+                ui('invoke','BtnSettings');ui('wait-for','SettingsWheel','-t','12000')
+                choose_combo('SettingsWheel','上に回す（下で戻る）' if theme=='Light' else '下に回す（上で戻る）')
+                ui('invoke','SettingsSave');contains('SettingsStatus','保存しました')
+                check(theme+' wheel preference persisted in isolated settings',json.loads((target/'viewer-settings.json').read_text(encoding='utf-8'))['wheel_up_advances']==(theme=='Light'))
+                shot(theme+'-viewer-settings');ui('invoke','CloseButton');ready()
+                ui('invoke','NavHistory','--action','select');ready();wait('TxtCount','0 件' if theme=='Light' else '1 件')
+                enabled('CmbSearchMode',False);check(theme+' history navigation disables unsupported AI modes',True)
+                ui('invoke','NavAll','--action','select');ready()
+                sandbox.catalog.update([sandbox.item('generated-001.png')],{'reviewed':True})
+                ui('invoke','ExpandSearchOptions');visible('ChkUnreviewedOnly');ui('invoke','ChkUnreviewedOnly');ready()
+                wait('TxtCount','75 件' if theme=='Light' else '76 件');wait('ChkUnreviewedOnly','On')
+                check(theme+' unreviewed remains a working search option',True)
+                ui('invoke','ChkUnreviewedOnly');ready();wait('TxtCount','76 件' if theme=='Light' else '77 件');ui('invoke','ExpandSearchOptions','--action','collapse');ui('wait-for','TxtSearchMethodHint','--gone','-t','12000')
             if args.check_ui_cleanup:
                 from native_ui_tools import invoke_tool
-                visible('BtnTools');visible('BtnLayout');visible('BtnDetails')
+                visible('BtnSettings');visible('BtnLayout');visible('BtnDetails')
                 tree=json.loads(ui('inspect','--json','--depth','14'))
                 check(theme+' management tools and long hints are absent from default canvas',not any(n.get('automationId') in ('BtnAIIndex','BtnRelatedTerms','TxtSearchMethodHint') and not n.get('isOffscreen',True) for n in nodes(tree)))
                 shot(theme+'-library-compact')
@@ -222,7 +237,8 @@ def main():
                 if theme=='Light':
                     ui('invoke','BtnRoots');ui('wait-for','BtnToggleAddFolder','-t','12000');ui('invoke','BtnToggleAddFolder')
                     ui('set-value','RootPath',str(book_media));visible('RootFolderBooks')
-                    ui('invoke','RootFolderBooks');ui('invoke','RootConsent')
+                    ui('invoke','RootFolderBooks')
+                    visible('RootRecursive')
                     shot('Light-folder-book-registration')
                     user32.SetWindowPos(int(hwnd),None,0,0,800,820,0x0014);time.sleep(.3)
                     visible('RootFolderBooks');shot('Light-folder-book-registration-narrow')
@@ -264,6 +280,30 @@ def main():
                 ui('wait-for','ReaderPageNumber','--value','1 / 3' if theme=='Light' else '2 / 3','-t','12000',window=viewer)
                 ui('wait-for','ReaderStatus','--value','表示しました。拡大すると細部を確認できます。','-t','12000',window=viewer)
                 check(theme+' reader loaded expected page',True)
+                if args.check_user_feedback:
+                    user32.SetForegroundWindow(int(viewer));time.sleep(.15)
+                    check('owned reader foreground for wheel',user32.GetForegroundWindow()==int(viewer))
+                    start='1 / 3' if theme=='Light' else '2 / 3'
+                    next_page='2 / 3' if theme=='Light' else '3 / 3'
+                    ui('scroll','ReaderViewport','--wheel','1' if theme=='Light' else '-1',window=viewer)
+                    ui('wait-for','ReaderPageNumber','--value',next_page,'-t','12000',window=viewer)
+                    ui('wait-for','ReaderStatus','--value','表示しました。拡大すると細部を確認できます。','-t','12000',window=viewer)
+                    time.sleep(.25)
+                    ui('scroll','ReaderViewport','--wheel','-1' if theme=='Light' else '1',window=viewer)
+                    ui('wait-for','ReaderPageNumber','--value',start,'-t','12000',window=viewer)
+                    check(theme+' actual wheel obeys saved direction and returns page',True)
+                    tree=json.loads(ui('inspect','--json','--depth','12',window=viewer))
+                    area=next(n for n in nodes(tree) if n.get('automationId')=='ReaderViewport')
+                    point=wintypes.POINT(int(area['x']+area['width']/2),int(area['y']+area['height']/2))
+                    user32.SetCursorPos.argtypes=[ctypes.c_int,ctypes.c_int];user32.SetCursorPos(point.x,point.y)
+                    user32.mouse_event.argtypes=[wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,ctypes.c_size_t]
+                    owned(viewer);check('owned reader foreground before X-button input',user32.GetForegroundWindow()==int(viewer))
+                    user32.mouse_event(0x0080,0,0,2,0);user32.mouse_event(0x0100,0,0,2,0)
+                    ui('wait-for','ReaderPageNumber','--value',next_page,'-t','12000',window=viewer)
+                    ui('wait-for','ReaderStatus','--value','表示しました。拡大すると細部を確認できます。','-t','12000',window=viewer)
+                    user32.mouse_event(0x0080,0,0,1,0);user32.mouse_event(0x0100,0,0,1,0)
+                    ui('wait-for','ReaderPageNumber','--value',start,'-t','12000',window=viewer)
+                    check(theme+' actual mouse forward/back turns viewer pages',True)
                 # F10 pins controls for repeatable screenshots and keyboard navigation.
                 user32.SetForegroundWindow(int(viewer));time.sleep(.15)
                 check('only owned reader is foreground',user32.GetForegroundWindow()==int(viewer))
@@ -281,6 +321,16 @@ def main():
                 path=target/(theme+'-folder-book-reader-narrow.png')
                 ui('screenshot','--output',path,window=viewer);check('screenshot '+path.stem,path.is_file() and path.stat().st_size>0);report['screenshots'].append(path.name)
                 ui('send-keys','escape',window=viewer);ready()
+                if args.check_user_feedback:
+                    for _ in range(60):
+                        history=sandbox.catalog.search(view='history')['items']
+                        if history and history[0]['id']==book_item:break
+                        time.sleep(.1)
+                    check(theme+' successful reader records recent item',history and history[0]['id']==book_item)
+                    ui('scroll-into-view','FileProperties');ui('invoke','FileProperties');contains('FilePropertyText','画像フォルダ（一冊）');shot(theme+'-file-properties')
+                    ui('invoke','NavHistory','--action','select');ready();wait('TxtCount','1 件');enabled('CmbSearchMode',False)
+                    ui('invoke','NavAll','--action','select');ready()
+                    ui('invoke','Item'+str(book_item),'--action','select');wait('TxtEditStatus','保存済み')
                 # Tag review uses the same folder-book first-page evidence contract.
                 open_review()
                 if args.check_ui_cleanup:
@@ -318,6 +368,22 @@ def main():
                     fresh=sandbox.catalog.get(book_item)
                     check('GUI rescan upgrades old token and preserves ID metadata',fresh['mtime_ns']!=legacy and fresh['tags']==['folder-manual'] and fresh['shelf']=='folder-shelf' and fresh['favorite'])
                     check('reader reopens after old-token rescan',PreviewReader(sandbox.catalog).manifest(book_item)['page_count']==3)
+                if args.check_user_feedback and theme=='Light':
+                    ui('invoke','BtnRoots');ui('wait-for','FolderTitle'+str(book_root),'-t','12000')
+                    owned(foreground=True);ui('click','FolderTitle'+str(book_root))
+                    ui('wait-for','ScanRoot','-t','12000');check('single folder click opens settings',True)
+                    owned(foreground=True);ui('click','FolderTitle'+str(book_root),'--double');ready();wait('TxtCount','1 件')
+                    check('double folder click opens scoped library',True)
+                    ui('invoke','BtnRoots');ui('wait-for','ConfigFolder'+str(book_root),'-t','12000');ui('invoke','ConfigFolder'+str(book_root))
+                    ui('scroll-into-view','UnregisterConsent');ui('invoke','UnregisterConsent');ui('scroll-into-view','UnregisterRoot');ui('invoke','UnregisterRoot')
+                    ui('wait-for','CmbFolderState','-t','12000')
+                    choose_combo('CmbFolderState','FolderStateInactive')
+                    ui('wait-for','RestoreFolder'+str(book_root),'-t','12000');ui('invoke','RestoreFolder'+str(book_root))
+                    for _ in range(60):
+                        restored=next(x for x in sandbox.catalog.index.roots() if x['id']==book_root)
+                        if restored['enabled']:break
+                        time.sleep(.1)
+                    check('single restore click re-enables root with metadata',restored['enabled'] and restored['folder_books'] and sandbox.catalog.get(book_item)['tags']==['folder-manual'])
                 check(theme+' generated book source unchanged',book_before==book_digest())
                 close();continue
             if args.candidate_search_only:

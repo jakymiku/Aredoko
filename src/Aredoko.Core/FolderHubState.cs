@@ -10,7 +10,8 @@ public sealed record RegisteredRootRow(
     IReadOnlyList<string> Exclusions,
     int PresentCount = 0,
     string? LastScannedAt = null,
-    bool FolderBooks = false)
+    bool FolderBooks = false,
+    bool Recursive = true)
 {
     public string ModeLabel => FolderBooks ? "画像フォルダを一冊として扱う" : "画像は1枚ずつ";
 
@@ -59,7 +60,7 @@ public sealed record RegisteredRootRow(
             var count = row["present_count"] is JsonNode c ? c.GetValue<int>() : 0;
             var scanned = row["last_scanned_at"]?.GetValue<string>();
             var folderBooks = row["folder_books"] is JsonNode f && f.GetValueKind() == System.Text.Json.JsonValueKind.True;
-            list.Add(new RegisteredRootRow(id, path, enabled, online, shelf, excludes, count, scanned, folderBooks));
+            list.Add(new RegisteredRootRow(id, path, enabled, online, shelf, excludes, count, scanned, folderBooks, row["recursive"]?.GetValue<bool>()??true));
         }
         return list;
     }

@@ -234,13 +234,13 @@ def main():
             choose('CmbSearchMode','ModeLiteral');query('','1 件');ui('invoke','NavAll');ready();wait('TxtCount','7 件' if theme=='Light' else '9 件');check(theme+' all-folder search restored',True)
             resize(700,620);shot(theme+'-literal-narrow');resize(1200,820)
             if theme=='Light':
-                ui('invoke','BtnRoots');ui('wait-for','RootPath','-t','5000');ui('set-value','RootPath',str(folders['existing-shelf']));choose('RootInitialShelf','AI画像');ui('invoke','RootConsent');ui('scroll-into-view','AddRoot');ui('invoke','AddRoot')
+                ui('invoke','BtnRoots');ui('wait-for','RootPath','-t','5000');ui('set-value','RootPath',str(folders['existing-shelf']));choose('RootInitialShelf','AI画像');ui('scroll-into-view','AddRoot');ui('invoke','AddRoot')
                 wait('ScanStatus','登録しました。スキャンすると一覧に反映されます。');ui('scroll-into-view','ScanRoot');ui('invoke','ScanRoot')
                 for _ in range(100):
                     if catalog.scan_state()['state']=='complete' and catalog.search()['total']==8:break
                     time.sleep(.1)
                 check('GUI registration to existing shelf',catalog.search()['total']==8 and next(r for r in catalog.search()['items'] if r['root_id'] not in (a,b))['shelf']=='AI画像')
-                ui('set-value','RootPath',str(folders['new-shelf']));choose('RootInitialShelf','新しい棚を作成');ui('set-value','RootNewShelf','背景');ui('invoke','RootConsent');ui('scroll-into-view','AddRoot');ui('invoke','AddRoot');wait('ScanStatus','登録しました。スキャンすると一覧に反映されます。');ui('scroll-into-view','ScanRoot');ui('invoke','ScanRoot')
+                ui('set-value','RootPath',str(folders['new-shelf']));choose('RootInitialShelf','新しい棚を作成');ui('set-value','RootNewShelf','背景');ui('scroll-into-view','AddRoot');ui('invoke','AddRoot');wait('ScanStatus','登録しました。スキャンすると一覧に反映されます。');ui('scroll-into-view','ScanRoot');ui('invoke','ScanRoot')
                 for _ in range(100):
                     if catalog.scan_state()['state']=='complete' and catalog.search()['total']==9:break
                     time.sleep(.1)
@@ -261,7 +261,7 @@ def main():
                 check('GUI unregister hides root and retains annotations',not any(root['id']==a for root in catalog.index.roots()) and catalog.get(rows[0]['id'])['tags']==['初音ミク'])
                 shot('Light-unregister-wide');ui('invoke','CloseButton');ready();wait('TxtCount','3 件')
                 ui('invoke','NavRestoreRoot'+str(a));ui('wait-for','RootPath','--value',str(folders['characters']),'-t','5000');wait('RootExcludes',', '.join(root_exclusions));wait('RootInitialShelf','AI画像');check('Sidebar restore prefills own path, exclusions and shelf',True)
-                ui('invoke','RootConsent');ui('scroll-into-view','AddRoot');ui('invoke','AddRoot');wait('ScanStatus','登録しました。スキャンすると一覧に反映されます。');ui('invoke','CloseButton');ready();wait('TxtCount','9 件');check('Same root restored with tags and shelf',catalog.get(rows[0]['id'])['shelf']=='AI画像' and catalog.get(rows[0]['id'])['tags']==['初音ミク']);check('Restored root keeps its own exclusions',next(root for root in catalog.index.roots() if root['id']==a)['excludes']==root_exclusions)
+                ui('scroll-into-view','AddRoot');ui('invoke','AddRoot');wait('ScanStatus','登録しました。スキャンすると一覧に反映されます。');ui('invoke','CloseButton');ready();wait('TxtCount','9 件');check('Same root restored with tags and shelf',catalog.get(rows[0]['id'])['shelf']=='AI画像' and catalog.get(rows[0]['id'])['tags']==['初音ミク']);check('Restored root keeps its own exclusions',next(root for root in catalog.index.roots() if root['id']==a)['excludes']==root_exclusions)
             close()
         check('Settings bytes unchanged',settings.read_bytes()==settings_before)
         check('Generated source bytes and mtimes unchanged',source_digest()==original)

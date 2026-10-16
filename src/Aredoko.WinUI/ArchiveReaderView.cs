@@ -44,6 +44,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
     private ReaderDisplayMode mode;
     private int page;
     private bool busy, disposed, failed, loaded, keyboardChrome, menuOpen;
+    public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
 
     public ArchiveReaderView(LibraryApi api, int itemId, string title)
@@ -102,6 +103,12 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
     }
 public void AttachNavigation(UIElement dialog)
     {
+        ViewerInputGestures.Attach(dialog,viewport,async direction=>
+        {
+            if(busy||disposed||manifest is null||menuOpen)return;
+            allowProgressSave=true;
+            await LoadAsync(direction>0?ReaderSpreadPolicy.Next(page,manifest.PageCount,mode):ReaderSpreadPolicy.Previous(page,manifest.PageCount,mode));
+        });
         dialog.AddHandler(PointerMovedEvent,new PointerEventHandler((_,_)=>{keyboardChrome=false;ShowChrome();}),true);
         dialog.PreviewKeyDown+=async(_,args)=>
         {
@@ -168,7 +175,7 @@ public void AttachNavigation(UIElement dialog)
             if(disposed||manifest!=book)return;
             image.Source=bitmaps[0];AutomationProperties.SetName(image,$"{indexes[0]+1}ページ");
             if(bitmaps.Count==2){second.Source=bitmaps[1];second.Visibility=Visibility.Visible;AutomationProperties.SetName(second,$"{indexes[1]+1}ページ");}
-            FitImages();loaded=true;status.Text="表示しました。拡大すると細部を確認できます。";await SaveProgressAsync(book);
+            FitImages();loaded=true;status.Text="表示しました。拡大すると細部を確認できます。";await SaveProgressAsync(book);ContentOpened?.Invoke(itemId);
         }
         catch(Exception ex){ReportFailure(ex);}finally{busy=false;if(!disposed){UpdateActions();if(!keyboardChrome&&!failed)hideTimer.Start();}}
     }

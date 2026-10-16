@@ -165,6 +165,9 @@ class LibraryIndex:
             if 'folder_books' not in {r['name'] for r in db.execute('PRAGMA table_info(library_roots)')}:
                 db.execute("ALTER TABLE library_roots ADD COLUMN folder_books INTEGER NOT NULL DEFAULT 0")
 
+            if 'recursive' not in {r['name'] for r in db.execute('PRAGMA table_info(library_roots)')}:
+                db.execute("ALTER TABLE library_roots ADD COLUMN recursive INTEGER NOT NULL DEFAULT 1")
+
     @contextmanager
     def connect(self):
         db = sqlite3.connect(self.path, timeout=30)
@@ -176,7 +179,7 @@ class LibraryIndex:
         finally:
             db.close()
 
-    def add_root(self, path, excludes=None, default_shelf='', folder_books=None):
+    def add_root(self, path, excludes=None, default_shelf='', folder_books=None, recursive=None):
         if not isinstance(default_shelf,str) or len(default_shelf)>80:
             raise ValueError('Shelf must be 80 characters or less')
         # None keeps a restored root's choice (False for a new root). The
@@ -184,6 +187,8 @@ class LibraryIndex:
         # tagged image items into missing records instead of moving metadata.
         if folder_books is not None and type(folder_books) is not bool:
             raise ValueError('folder_books must be true or false')
+        if recursive is not None and type(recursive) is not bool:
+            raise ValueError('Include subfolders must be true or false')
         default_shelf=default_shelf.strip()
         requested = Path(path).expanduser()
         if requested.is_symlink():
@@ -216,13 +221,17 @@ class LibraryIndex:
                                 'SELECT 1 FROM library_locations WHERE root_id=? LIMIT 1', (row['id'],)).fetchone():
                             raise ValueError('Folder book mode cannot change after scanning')
                         db.execute('UPDATE library_roots SET folder_books=? WHERE id=?', (int(folder_books), row['id']))
+                    if recursive is not None:
+                        db.execute('UPDATE library_roots SET recursive=? WHERE id=?',(int(recursive),row['id']))
+                        if not recursive:
+                            db.execute("UPDATE library_locations SET status='excluded' WHERE root_id=? AND relative_path<>'./' AND instr(relative_path,'/')>0",(row['id'],))
                     db.execute('UPDATE library_roots SET enabled=1,excludes_json=?,default_shelf=? WHERE id=?',
                         (json.dumps(patterns,ensure_ascii=False),default_shelf,row['id']))
                     return row['id']
                 if row['enabled'] and (existing in root.parents or root in existing.parents):
                     raise ValueError('Overlapping roots are not supported')
-            cursor = db.execute('INSERT INTO library_roots(path,excludes_json,created_at,default_shelf,folder_books) VALUES(?,?,?,?,?)',
-                                (str(root), json.dumps(patterns, ensure_ascii=False), _now(), default_shelf, int(bool(folder_books))))
+            cursor = db.execute('INSERT INTO library_roots(path,excludes_json,created_at,default_shelf,folder_books,recursive) VALUES(?,?,?,?,?,?)',
+                                (str(root), json.dumps(patterns, ensure_ascii=False), _now(), default_shelf, int(bool(folder_books)), int(recursive is not False)))
             return cursor.lastrowid
 
     def unregister(self,root_id):
@@ -251,6 +260,7 @@ class LibraryIndex:
         for row in result:
             row['excludes'] = json.loads(row.pop('excludes_json'))
             row['folder_books'] = bool(row['folder_books'])
+            row['recursive'] = bool(row['recursive'])
             row['online'] = Path(row['path']).is_dir()
             row['present_count'] = counts.get(row['id'], 0)
         return result
@@ -322,7 +332,7 @@ class LibraryIndex:
                         if _excluded(rel, patterns):
                             continue
                         if stat.S_ISDIR(info.st_mode):
-                            pending.append(Path(entry.path))
+                            if row['recursive']:pending.append(Path(entry.path))
                             continue
                         if not stat.S_ISREG(info.st_mode):
                             continue
@@ -350,7 +360,7 @@ class LibraryIndex:
             stale = db.execute('SELECT id,relative_path,status FROM library_locations WHERE root_id=? '
                                'AND relative_path NOT IN (SELECT path FROM scan_seen)', (root_id,)).fetchall()
             for item in stale:
-                new_status = 'excluded' if _excluded(item['relative_path'], patterns) else 'missing'
+                new_status = 'excluded' if _excluded(item['relative_path'], patterns) or (not row['recursive'] and item['relative_path']!='./' and '/' in item['relative_path']) else 'missing'
                 if new_status != item['status']:
                     counts[new_status] += 1
                 if not dry_run:

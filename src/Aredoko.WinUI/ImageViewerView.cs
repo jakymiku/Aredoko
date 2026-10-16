@@ -23,6 +23,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     private readonly Border toolbarHost = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
     private readonly Button close = IconButton(Symbol.Cancel);
     private bool keyboardChrome, failed;
+    public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
     private CancellationTokenSource? request;
     private readonly Grid canvas = new();
@@ -129,6 +130,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     // Tunnel before ScrollViewer consumes arrow keys; scope is this modal only.
     public void AttachNavigation(UIElement dialog)
     {
+        ViewerInputGestures.Attach(dialog,viewport,MoveAsync);
         dialog.AddHandler(PointerMovedEvent, new PointerEventHandler((_, _) => { keyboardChrome = false; ShowChrome(); }), true);
         dialog.PreviewKeyDown += async (_, args) =>
         {
@@ -174,6 +176,7 @@ public async Task MoveAsync(int direction)
                     if (disposed || requestedVersion != version) continue;
                     imageWidth = Math.Max(1, bitmap.PixelWidth); imageHeight = Math.Max(1, bitmap.PixelHeight);
                     FitImage(); image.Source = bitmap; loaded = true; viewport.ChangeView(0, 0, 1, true);
+                    ContentOpened?.Invoke(sequence.Current.Id);
                     status.Text = "← → で画像送り · 表示画像は長辺2048pxまで";
                 }
                 catch (Exception ex)

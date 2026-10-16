@@ -31,6 +31,14 @@ The vision defines product intent, not implementation status. The latest source,
 - 長い技術説明より短い自然な日本語を使い、同じ説明やボタンを重複させない。必要な説明・根拠・モデル由来は任意に確認できる。新機能も既存の導線へ統合し、画面/設定を無制限に増やさない。
 - 整理した操作へのマウス/キーボード導線、Light/Dark、狭幅、未保存編集、既存の検索/登録/読書/承認を検証する。AI用テストの古い見た目の期待に合わせて製品GUIを再び散らかさず、テストを新導線へ更新する。
 
+## Latest user-feedback checkpoint (2026-10-16)
+
+Read the latest handoff before continuing. The source now has viewing history, unreviewed in search options, footer Settings, wheel/X viewer navigation, recursive registration, common shell/properties actions and video control improvements. Python390 PASS/3 SKIP, Core350 and Release0 warnings/errors pass; independent native video92/search63/image-input+history16 pass and all28 PNGs were inspected. **The folder/settings integration native batch remains FAILED after two harness fix/rerun cycles; the final collapse/gone wait correction is saved but unrun.** Do not call its later reader/folder/restore/drop gates validated. Continue with those gates next, then bounded animation/large-image indexing and safe inactive-root purge. F07/F08/F11/F12/F21 remain unimplemented. Preserve P0 trials1/2, local-only tests and all features.
+
+## Current user-feedback work (2026-10-16)
+
+The user reported22 concrete runtime/UX issues. Read [docs/user-feedback-20261016.md](docs/user-feedback-20261016.md) before choosing the next slice; this current direction precedes the older resume list. Confirmed: mouse X buttons navigate images/pages inside viewers; left-nav Unreviewed becomes Viewing history, while the unreviewed filter remains in search options. Put app settings at the left-nav bottom, clarify search names, preserve all features and source files. Animation/large-image/video content indexing and inactive-root DB purge require their own bounded data-safe implementation/tests; do not claim them fixed through UI labels alone.
+
 ## Current product-development emphasis (2026-10-15)
 
 **Read [docs/development-priorities.md](docs/development-priorities.md) before choosing the next feature or continuing implementation.** The user wants development effort redirected from generic viewer/player polish toward **finding the right local item**: (P0) search quality evaluation and evidence-led ranking improvements, (P1) image/item-origin right-click similarity search, (P2) OCR, reviewable AI tag suggestions and multi-page situation-tag understanding. After that, advance logical folder-book grouping and time-coded video/audio content indexing in small independently tested slices. These are priorities, **not completed features or an instruction to discard existing functions**.

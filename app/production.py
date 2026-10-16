@@ -35,6 +35,10 @@ class ProductionCatalog(Catalog):
                     item_id INTEGER PRIMARY KEY REFERENCES items(id),
                     revision TEXT NOT NULL, page INTEGER NOT NULL CHECK(page>=0 AND page<10000),
                     mode TEXT NOT NULL CHECK(mode IN ('single','rtl','ltr')));
+                CREATE TABLE IF NOT EXISTS view_history (
+                    item_id INTEGER PRIMARY KEY REFERENCES items(id),
+                    opened_ns INTEGER NOT NULL, open_count INTEGER NOT NULL DEFAULT 1);
+                CREATE INDEX IF NOT EXISTS view_history_recent ON view_history(opened_ns DESC);
                 CREATE TABLE IF NOT EXISTS scan_jobs (
                     id INTEGER PRIMARY KEY, root_id INTEGER NOT NULL, state TEXT NOT NULL,
                     discovered INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '');
@@ -79,7 +83,7 @@ class ProductionCatalog(Catalog):
     FIELDS = 'i.*,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns'
 
     def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None, root_ids=None):
-        if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
+        if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf','history'):
             raise ValueError('Invalid filter')
         if type(page) is not int or page<0 or not 1<=limit<=120 or len(query)>300:
             raise ValueError('Invalid paging')
@@ -110,6 +114,11 @@ class ProductionCatalog(Catalog):
             # to a word; it never removes the word or relaxes the filters.
             alternatives,expansions=self.terms.expand(terms,db)
             where, values = ["l.status<>'excluded'",'l.root_id IN (SELECT id FROM library_roots WHERE enabled=1)'], []
+            if view=='history':
+                from library_index import _excluded
+                rules={r['id']:tuple(json.loads(r['excludes_json'])) for r in db.execute('SELECT id,excludes_json FROM library_roots WHERE enabled=1')}
+                db.create_function('aredoko_history_visible',2,lambda root,path:int(root in rules and not _excluded(path,rules[root])),deterministic=True)
+                where.append('aredoko_history_visible(l.root_id,l.relative_path)=1')
             if terms:
                 register_search_terms(db,alternatives)
                 where.append('aredoko_match(i.title,i.tags)>=0')
@@ -122,7 +131,7 @@ class ProductionCatalog(Catalog):
             if kind:
                 where.append('i.kind=?'); values.append(kind)
             where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],
-                          'shelf':["i.shelf<>''"],'all':[]}[view])
+                          'shelf':["i.shelf<>''"],'history':['EXISTS(SELECT 1 FROM view_history h WHERE h.item_id=i.id)'],'all':[]}[view])
             clause=self.JOIN+' WHERE '+' AND '.join(where)
             total=db.execute('SELECT count(*)'+clause,values).fetchone()[0]
             partial=None
@@ -138,17 +147,17 @@ class ProductionCatalog(Catalog):
                 # never claims to show partial matches it does not have.
                 partial={'words':len(terms),'required':required} if total else None
                 rows=db.execute('SELECT '+self.FIELDS+clause+
-                                ' ORDER BY aredoko_specific(i.title,i.tags) DESC, i.id LIMIT ? OFFSET ?',
+                                (' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC LIMIT ? OFFSET ?' if view=='history' else ' ORDER BY aredoko_specific(i.title,i.tags) DESC, i.id LIMIT ? OFFSET ?'),
                                 values+[limit,page*limit]).fetchall() if total else []
             elif expansions:
                 # Items matching the typed words themselves come before
                 # related-only candidates, then more specific matches (longer
                 # spellings); ties keep the stable id order.
                 rows=db.execute(f'SELECT {self.FIELDS},aredoko_match(i.title,i.tags) AS direct_hits'+clause+
-                                ' ORDER BY direct_hits DESC, aredoko_specific(i.title,i.tags) DESC, i.id LIMIT ? OFFSET ?',
+                                (' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC LIMIT ? OFFSET ?' if view=='history' else ' ORDER BY direct_hits DESC, aredoko_specific(i.title,i.tags) DESC, i.id LIMIT ? OFFSET ?'),
                                 values+[limit,page*limit]).fetchall()
             else:
-                rows=db.execute('SELECT '+self.FIELDS+clause+' ORDER BY i.id LIMIT ? OFFSET ?',
+                rows=db.execute('SELECT '+self.FIELDS+clause+(' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC LIMIT ? OFFSET ?' if view=='history' else ' ORDER BY i.id LIMIT ? OFFSET ?'),
                                 values+[limit,page*limit]).fetchall()
         items=[self.item(r) for r in rows]
         if terms:
@@ -185,6 +194,18 @@ class ProductionCatalog(Catalog):
         with self._guard:
             self._require_idle()
             return super().update(ids, changes)
+
+    def record_view(self, item_id):
+        import time
+        from library_index import _excluded
+        if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid item')
+        with self._guard:
+            with self.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                row=db.execute('SELECT l.status,l.relative_path,r.enabled,r.excludes_json FROM item_locations m JOIN library_locations l ON l.id=m.location_id JOIN library_roots r ON r.id=l.root_id WHERE m.item_id=?',(item_id,)).fetchone()
+                if row is None or not row['enabled'] or row['status']!='present' or _excluded(row['relative_path'],tuple(json.loads(row['excludes_json']))):raise KeyError(item_id)
+                db.execute('INSERT INTO view_history(item_id,opened_ns) VALUES(?,?) ON CONFLICT(item_id) DO UPDATE SET opened_ns=excluded.opened_ns,open_count=view_history.open_count+1',(item_id,time.time_ns()))
+        return {'recorded':item_id}
 
     def reader_progress(self, item_id):
         if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
@@ -252,7 +273,7 @@ class ProductionCatalog(Catalog):
         with self.connect() as db:
             return [row[0] for row in db.execute("SELECT shelf FROM items WHERE shelf<>'' UNION SELECT default_shelf FROM library_roots WHERE default_shelf<>'' AND enabled=1 ORDER BY 1")]
 
-    def add_root(self,path,excludes=None,default_shelf='',folder_books=None):
+    def add_root(self,path,excludes=None,default_shelf='',folder_books=None,recursive=None):
         if not isinstance(path,str) or not path or not Path(path).is_absolute():
             raise ValueError('Choose an absolute folder path')
         source=Path(path).resolve()
@@ -260,7 +281,7 @@ class ProductionCatalog(Catalog):
             raise ValueError('The library must not contain the application database')
         with self._guard:
             self._require_idle()
-            return self.index.add_root(path,excludes,default_shelf,folder_books)
+            return self.index.add_root(path,excludes,default_shelf,folder_books,recursive)
 
     def scan_state(self):
         with self.connect() as db:
