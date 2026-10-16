@@ -540,6 +540,38 @@ def main():
                     has_similar=any(n.get('automationId')=='FindSimilar'+str(ids['clip.mp4']) for n in popup_nodes)
                     check(theme+' video context menu exposes common shell actions and omits image similarity',has_explorer and has_default and not has_similar)
                     shot(theme+'-video-context-menu')
+                    # F12: Verify time-coded video AI indexing, visual search evidence ('動画フレーム一致（0:01）'), and opening video at the matched timestamp
+                    if theme=='Light':
+                        from ai_search import revision as ai_rev
+                        clip_row=next(r for r in catalog.search()['items'] if r['id']==ids['clip.mp4'])
+                        rev_val=ai_rev(clip_row)
+                        engine.store.put(ids['clip.mp4'],rev_val,
+                            {'text':[0.0,1.0]+[0.0]*(engine.store.dimension-2),'cover':[0.0,1.0]+[0.0]*(engine.store.dimension-2)},
+                            [(0,[0.0,1.0]+[0.0]*(engine.store.dimension-2)),(1000,[1.0,0.0]+[0.0]*(engine.store.dimension-2))])
+                    ui('click','TxtCount');time.sleep(.2)
+                    ui('invoke','CmbSearchMode');time.sleep(.25)
+                    for w in [w for w in json.loads(cli('ui','list-windows','-a',app_pid,'--json')) if w.get('title')=='PopupHost']:
+                        try:
+                            for n in nodes(json.loads(cli('ui','inspect','--json','--depth','12','-w',str(w['hwnd'])))):
+                                if n.get('automationId')=='ModeVisual':
+                                    cli('ui','invoke','ModeVisual','-w',str(w['hwnd']));break
+                        except RuntimeError:pass
+                    time.sleep(.2);ui('set-value','TxtQuery','青い場面');time.sleep(.4);ui('invoke','BtnSearch');ready()
+                    ui('wait-for','AIEvidence'+str(ids['clip.mp4']),'--value','動画フレーム一致（0:01）','--contains','-t','10000')
+                    shot(theme+'-video-ai-timecoded-match')
+                    select('clip.mp4');open_video();wait('VideoStatus',shown_video);wait('VideoPosition','0:01 / 0:02')
+                    check(theme+' opening video from time-coded AI search starts at matched timestamp 0:01',True)
+                    close_video()
+                    # Restore ModeLiteral for clean exit
+                    ui('invoke','CmbSearchMode');time.sleep(.25)
+                    for w in [w for w in json.loads(cli('ui','list-windows','-a',app_pid,'--json')) if w.get('title')=='PopupHost']:
+                        try:
+                            for n in nodes(json.loads(cli('ui','inspect','--json','--depth','12','-w',str(w['hwnd'])))):
+                                if n.get('automationId')=='ModeLiteral':
+                                    cli('ui','invoke','ModeLiteral','-w',str(w['hwnd']));break
+                        except RuntimeError:pass
+                    ui('set-value','TxtQuery','');time.sleep(.4);ui('invoke','BtnSearch');ready()
+                    encoder.calls.clear();engine.requests.clear()
                 close();continue
             if args.evidence_only:
                 report['audit_scope']='per-row SearchEvidence (direct/related/missing), direct-only omission, dirty rollback, and quote/backslash/[ tag search across Light/Dark and wide/narrow'

@@ -36,10 +36,18 @@ public sealed class MediaRow
     public double? SemanticScore { get; set; }
     public string ScoreKind { get; set; } = "";
     public int? SimilarityOriginId { get; set; }
+    public int? VideoMatchMs { get; set; }
     public int LiteralHits { get; set; }
     public int LiteralWords { get; set; }
+    private static string FormatVideoTimestamp(int ms)
+    {
+        var sec = Math.Max(0, ms / 1000);
+        return $"{sec / 60}:{sec % 60:D2}";
+    }
     public string AIEvidence => SemanticScore is double score
-        ? (SimilarityOriginId is int ? "起点の画像・表紙に似た候補" : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
+        ? (SimilarityOriginId is int ? "起点の画像・表紙に似た候補"
+           : VideoMatchMs is int vms ? $"動画フレーム一致（{FormatVideoTimestamp(vms)}）" + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
+           : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
           + (ScoreKind=="cosine" ? $"\n類似度 {score:F3}" : ScoreKind=="reciprocal-rank" ? $"\n順位統合値 {score:F4}" : "")
         : "";
     public string MatchLabel => Match switch { "related" => "関連語の候補 · ", "partial" => "一部の語のみ一致 · ", _ => "" };
@@ -188,6 +196,7 @@ public static class Protocol
         Availability = row.TryGetProperty("availability", out var av) ? av.GetString() ?? "" : "",
         SimilarityGroup = row.TryGetProperty("similarity_group",out var group) && group.ValueKind==JsonValueKind.String ? group.GetString()??"" : "",
         SimilarityOriginId = row.TryGetProperty("similarity_origin_id",out var origin) && origin.ValueKind==JsonValueKind.Number && origin.TryGetInt32(out var originId) && originId>0 ? originId : null,
+        VideoMatchMs = row.TryGetProperty("video_match_ms",out var vms) && vms.ValueKind==JsonValueKind.Number && vms.TryGetInt32(out var vmsVal) && vmsVal is >=0 and <=86400000 ? vmsVal : null,
         SemanticScore = row.TryGetProperty("semantic_score",out var score) && score.ValueKind==JsonValueKind.Number && score.TryGetDouble(out var value) && double.IsFinite(value) ? value : null,
         LiteralHits = row.TryGetProperty("literal_hits",out var hits) && hits.TryGetInt32(out var count) ? count : 0,
         LiteralWords = row.TryGetProperty("literal_words",out var words) && words.TryGetInt32(out var total) ? total : 0,

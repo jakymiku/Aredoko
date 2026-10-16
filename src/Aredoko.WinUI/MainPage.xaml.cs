@@ -188,31 +188,36 @@ public sealed partial class MainPage : Page
                 ? await api.SimilarMultiAsync(origin.Id,kind,view,page,aiScope!,selectedRoots,cancellation)
                 : await api.SearchMultiAsync(query,kind,view,page,method.IsAI,method.Source,aiScope,selectedRoots,literalOnly,boundary,ResultGroup());
             if(!searches.IsCurrent(version)||disposed)return;
-            if(result.Items.Count==0 && page>0){page=Math.Max(0,(result.Total-1)/60);await LoadAsync();return;}
+            var pageSize=method.IsPageText?20:60;
+            if(result.Items.Count==0 && page>0){page=Math.Max(0,(result.Total-1)/pageSize);await LoadAsync();return;}
             lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;
             SearchOptions.IsExpanded=false;
             var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null||(method.IsAI&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             var folderHeader=selectedRoots is null?"すべて":selectedRoots.Length==1?(knownRoots.FirstOrDefault(r=>r.Id==selectedRoots[0])?.Name??$"ID {selectedRoots[0]}"):$"{selectedRoots.Length}フォルダ";
-            SearchOptions.Header=$"検索フォルダ: {folderHeader}"+(origin is not null?" · 画像・表紙の類似検索":method.IsTagCandidates?" · 未承認タグ候補":method.IsAI?$" · {(resultGroup==0?"上位候補":resultGroup==1?"参考候補":"全候補")}":"");
+            SearchOptions.Header=$"検索フォルダ: {folderHeader}"+(origin is not null?" · 画像・表紙の類似検索":method.IsTagCandidates?" · 未承認タグ候補":method.IsPageText?" · ページ本文":method.IsAI?$" · {(resultGroup==0?"上位候補":resultGroup==1?"参考候補":"全候補")}":"");
             rows=result.Items; active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             if(!folderHubOpen)MainViewTitle.Text=view=="history"?"閲覧履歴":view=="unreviewed"?"ライブラリ（未確認）":"ライブラリ";
-            Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+59)/60)}";
-            Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*60<result.Total;
+            Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+pageSize-1)/pageSize)}";
+            Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*pageSize<result.Total;
             Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
-            Empty.Text=method.IsTagCandidates?"この範囲に一致する未承認のAIタグ候補はありません。作品の詳細「AIタグ候補」から候補を生成・確認できます。":query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
+            Empty.Text=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"探したいページ内の語句を入力して検索してください。":"この範囲に一致するページ本文はありません。")
+                :method.IsTagCandidates?"この範囲に一致する未承認のAIタグ候補はありません。作品の詳細「AIタグ候補」から候補を生成・確認できます。"
+                :query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
             if(method.IsAI&&query.Length>0&&rows.Count==0&&resultGroup==1&&result.GroupBoundary is null)Empty.Text="参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像の見た目／名前・タグの意味で区切りを指定してください。";
             else if(method.IsAI&&query.Length>0&&rows.Count==0&&resultGroup==0&&result.OtherTotal>0)Empty.Text="区切り以上の候補はありません。類似度の区切りを下げるか、参考候補を表示してください。";
             var explanation=
-                method.IsTagCandidates ? "最新の生成履歴に未承認の候補がある作品を表示しています。確定タグにはまだ反映されていません。詳細の「AIタグ候補」から根拠を確認して承認・却下できます。"+(scopeWarning is null?"":" "+scopeWarning)
+                method.IsPageText ? "抽出・保存済みのページ本文から、同一ページ内で全語一致する作品を検索しています。「本を開く」で先頭の一致ページへ移動できます。"+(scopeWarning is null?"":" "+scopeWarning)
+                : method.IsTagCandidates ? "最新の生成履歴に未承認の候補がある作品を表示しています。確定タグにはまだ反映されていません。詳細の「AIタグ候補」から根拠を確認して承認・却下できます。"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。画像の見た目と名前・タグの意味では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsAI ? "探したい内容を文章で入力してください。初回の準備は左下の「設定」→「AI検索の準備」から。"
                 : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions)+(scopeWarning is null?"":" "+scopeWarning);
-            var summary=method.IsTagCandidates?"未承認の候補です。詳細から確認・承認できます。"
+            var summary=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ本文に含まれる語句を入力してください。":$"ページ本文一致 {result.Total:N0}件")
+                :method.IsTagCandidates?"未承認の候補です。詳細から確認・承認できます。"
                 :method.IsAI?(query.Length==0?"探したい内容を入力してください。":$"上位 {result.LeadingTotal:N0}件 · 参考 {result.OtherTotal:N0}件")
                 :Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions);
-            Notice(method.IsTagCandidates?"タグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),scopeWarning is null?InfoBarSeverity.Informational:InfoBarSeverity.Warning,explanation);
+            Notice(method.IsPageText?"ページ本文":method.IsTagCandidates?"タグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),scopeWarning is null?InfoBarSeverity.Informational:InfoBarSeverity.Warning,explanation);
             if(origin is not null)
             {
                 var guidance=SimilaritySearch.Guidance(result.SimilarityStatus);
@@ -247,6 +252,7 @@ public sealed partial class MainPage : Page
                 text.Children.Add(new TextBlock { Text = $"{row.MatchLabel}{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
                 if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
                 if(row.Proposal is ProposalMatch proposal){var prop=new TextBlock {Text=proposal.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(prop,$"ProposalEvidence{row.Id}");text.Children.Add(prop);}
+                if(row.PageText is PageTextMatch pageText){var ptext=new TextBlock {Text=pageText.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(ptext,$"PageTextEvidence{row.Id}");text.Children.Add(ptext);}
                 if(row.Evidence is {AllDirect:false}){var words=new TextBlock {Text=Protocol.DescribeEvidence(row.Evidence),TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(words,$"SearchEvidence{row.Id}");text.Children.Add(words);}
                 var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
                 AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
@@ -464,24 +470,26 @@ public sealed partial class MainPage : Page
     {
         // SelectionChanged also runs during initialization and dirty-state rollback.
         if(Query is null || SearchMethodHint is null || SimilarityBar is null || SimilarityTitle is null)return;
-        var method=SearchMethod.FromIndex(Math.Clamp(SearchMode.SelectedIndex,0,4));
+        var method=SearchMethod.FromIndex(Math.Clamp(SearchMode.SelectedIndex,0,5));
         SearchMode.IsEnabled=view!="history";
         var similar=similarityOrigin is not null;
         SimilarityBar.Visibility=similar?Visibility.Visible:Visibility.Collapsed;
         SimilarityTitle.Text=similar?"類似検索の起点: "+similarityOrigin!.Title:"";
         var ai=method.IsAI&&!similar;
         var candidates=method.IsTagCandidates&&!similar;
-        AutomationProperties.SetName(Query,candidates?"未承認タグ候補の検索":method.IsAI?"AI検索の文章":"名前・タグ検索");
+        var pageText=method.IsPageText&&!similar;
+        AutomationProperties.SetName(Query,pageText?"ページ本文の検索":candidates?"未承認タグ候補の検索":method.IsAI?"AI検索の文章":"名前・タグ検索");
         SimilarityBoundary.Visibility=!similar&&SearchMode.SelectedIndex is 2 or 3?Visibility.Visible:Visibility.Collapsed;
         AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
-        Query.PlaceholderText=candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
+        Query.PlaceholderText=pageText?"ページ本文に含まれる語句で検索":candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
         SearchMethodHint.Text=similar?"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":SearchMode.SelectedIndex switch
         {
             1=>"名前・タグの意味と、画像・表紙の見た目を組み合わせます。",
             2=>"例:「豆」で豆が写った画像・表紙を探します。動画の映像はまだ対象外です。",
             3=>"名前やタグの言い換えで探すときに使います。本の本文・音声の文字起こしは対象外です。",
             4=>"未承認のAIタグ候補（最新履歴）だけを検索します。確定タグとは混ざりません。",
+            5=>"抽出・保存済みのページ本文（同じページ内の全語一致）を検索します。",
             _=>"名前・タグに含まれる文字で探します。"
         };
     }
@@ -590,7 +598,7 @@ public sealed partial class MainPage : Page
         dialogOpen=true;searchTimer.Stop();var itemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
         try
         {
-            var player=new VideoPlayerView(api,active.Id,active.Title);videoPlayer=player;
+            var player=new VideoPlayerView(api,active.Id,active.Title,active.VideoMatchMs);videoPlayer=player;
             var window=new ViewerWindow(player,"動画再生","VideoPlayerDialog");viewerWindow=window;
             player.ContentOpened+=RecordContentOpened;
             player.CloseRequested+=(_,_)=>window.Close();player.AttachNavigation(player);
@@ -614,7 +622,8 @@ public sealed partial class MainPage : Page
         var readerItemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
         try
         {
-            var reader=new ArchiveReaderView(api,active.Id,active.Title);readerView=reader;
+            var initialPage=active.PageText?.Pages.Count>0?active.PageText.Pages[0].Page:(int?)null;
+            var reader=new ArchiveReaderView(api,active.Id,active.Title,initialPage);readerView=reader;
             var window=new ViewerWindow(reader,"読書画面","ArchiveReaderDialog");viewerWindow=window;
             reader.ContentOpened+=RecordContentOpened;
             reader.CloseRequested+=(_,_)=>window.Close();reader.AttachNavigation(reader);

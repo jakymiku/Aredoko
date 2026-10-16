@@ -110,10 +110,65 @@ def _validate_png(data):
         raise VideoPreviewUnavailable('Video thumbnail exceeds dimensions')
 
 
+def _video_representative_times_ms(duration_seconds):
+    try:
+        dur = float(duration_seconds)
+    except (TypeError, ValueError):
+        return [0]
+    if not (dur > 0 and dur <= 86400):
+        return [0]
+    total_ms = int(round(dur * 1000))
+    if total_ms <= 600:
+        return [0]
+    if total_ms <= 2500:
+        candidates = [0, max(0, min(total_ms - 100, total_ms // 2)), max(0, total_ms - 250)]
+    else:
+        candidates = [
+            min(total_ms - 100, max(0, int(total_ms * 0.10))),
+            min(total_ms - 100, max(0, int(total_ms * 0.35))),
+            min(total_ms - 100, max(0, int(total_ms * 0.60))),
+            min(total_ms - 100, max(0, int(total_ms * 0.85))),
+        ]
+    out = []
+    for ms in candidates:
+        clamped = max(0, min(86_400_000, int(ms)))
+        if not out or abs(clamped - out[-1]) >= 250:
+            out.append(clamped)
+    return out or [0]
+
+
 class VideoThumbnailer:
     def __init__(self):
         self.cache = OrderedDict()
         self.lock = threading.Lock()
+
+    def representative_frames(self, source, revision):
+        """Extract up to 4 time-coded representative PNG frames for AI video content indexing."""
+        ffprobe, _ = _executable('ffprobe'), _executable('ffmpeg')
+        deadline = time.monotonic() + VIDEO_TIMEOUT
+        common = ['-v', 'error', '-max_alloc', str(64 * 1024 * 1024),
+                  '-protocol_whitelist', 'fd,pipe', '-format_whitelist', FORMATS,
+                  '-probesize', '1048576', '-analyzeduration', '1000000',
+                  '-max_streams', '16', '-max_probe_packets', '128',
+                  '-threads', '1', '-max_pixels', str(MAX_VIDEO_PIXELS)]
+        probe = _run([ffprobe, *common, '-select_streams', 'V:0',
+                      '-show_entries', 'stream=width,height,duration:format=duration', '-of', 'json',
+                      '-i', 'fd:'], source, MAX_PROBE_BYTES, deadline)
+        _dimensions(probe)
+        data = json.loads(probe)
+        dur = (data.get('streams') or [{}])[0].get('duration') or (data.get('format') or {}).get('duration')
+        times = _video_representative_times_ms(dur)
+        frames = []
+        for at_ms in times:
+            try:
+                png = self.read(source, revision, at_ms=at_ms if at_ms > 0 else None)
+                frames.append((at_ms, png))
+            except VideoPreviewUnavailable:
+                if at_ms == 0:
+                    raise
+        if not frames:
+            frames.append((0, self.read(source, revision, at_ms=None)))
+        return frames
 
     def read(self, source, revision, at_ms=None):
         if at_ms is not None and (type(at_ms) is not int or not 0 <= at_ms <= 86_400_000):

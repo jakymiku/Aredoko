@@ -56,6 +56,11 @@ public sealed class LibraryApi : IDisposable
         }
         if(source=="pending-proposals")
             return await TagReviews.SearchCandidatesAsync(q,kind,view,page,rootIds);
+        if(source=="page-text")
+        {
+            if(string.IsNullOrWhiteSpace(q))return new SearchResponse{Total=0,Items=[]};
+            return await PageEvidences.SearchTextAsync(q,kind,view,page,rootIds);
+        }
         if(semantic && !string.IsNullOrWhiteSpace(q))
         {
             var result=await PostAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup));

@@ -1,9 +1,10 @@
 namespace Aredoko.Core;
 
-// Keep the established GUI indices: literal, combined, cover, text; append pending tag candidates.
+// Keep the established GUI indices: literal, combined, cover, text, pending tag candidates; append page text.
 public readonly record struct SearchMethod(bool IsAI, string Source)
 {
     public bool IsTagCandidates => Source == "pending-proposals";
+    public bool IsPageText => Source == "page-text";
 
     public static SearchMethod FromIndex(int index) => index switch
     {
@@ -12,6 +13,7 @@ public readonly record struct SearchMethod(bool IsAI, string Source)
         2 => new(true, "cover"),
         3 => new(true, "text"),
         4 => new(false, "pending-proposals"),
+        5 => new(false, "page-text"),
         _ => throw new ArgumentOutOfRangeException(nameof(index))
     };
 }

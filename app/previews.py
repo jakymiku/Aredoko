@@ -146,6 +146,10 @@ class PreviewReader:
         """Bounded cover/representative-frame bytes for AI visual indexing."""
         return self._read(item_id, operation='cover_input')
 
+    def video_representative_frames(self, item_id):
+        """Extract up to 4 time-coded representative PNG frames (at_ms, png_bytes) for video AI indexing."""
+        return self._read(item_id, operation='video_frames_ai')
+
     def image_manifest(self, item_id):
         return self._read(item_id, operation='image_manifest')
 
@@ -236,8 +240,8 @@ class PreviewReader:
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES:
                 raise PreviewUnavailable('Unsupported preview type')
-            if operation in ('video','video_manifest','video_range','video_frame'):
-                if suffix not in VIDEO_MIME:
+            if operation in ('video','video_manifest','video_range','video_frame','video_frames_ai'):
+                if suffix not in VIDEO_MIME and (operation != 'video_frames_ai' or suffix not in VIDEO_SUFFIXES):
                     raise PreviewUnavailable('Video player requires a supported video item')
             elif operation in ('image_manifest', 'image_frame'):
                 if suffix not in IMAGE_MIME:
@@ -290,7 +294,11 @@ class PreviewReader:
                 elif suffix in VIDEO_SUFFIXES:
                     if info.st_size > MAX_VIDEO_BYTES:
                         raise PreviewUnavailable('Video exceeds preview limit')
-                    data, mime = self.videos.read(file, _revision(row, info)), 'image/png'
+                    rev = current_revision or _revision(row, info)
+                    if operation == 'video_frames_ai':
+                        result = self.videos.representative_frames(file, rev)
+                    else:
+                        data, mime = self.videos.read(file, rev), 'image/png'
                 elif suffix in IMAGE_MIME:
                     if not 1 <= info.st_size <= MAX_LARGE_IMAGE_BYTES:
                         raise PreviewUnavailable('Image exceeds preview limit')
@@ -381,7 +389,7 @@ class PreviewReader:
                             with archive.open(entry) as image:
                                 data = image.read(MAX_IMAGE_BYTES + 1)
                             mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest','video','video_manifest','video_range','tag_source','page_catalog','image_manifest') and len(data) > MAX_IMAGE_BYTES:
+                if operation not in ('manifest','video','video_manifest','video_range','tag_source','page_catalog','image_manifest','video_frames_ai') and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
                 if suffix in VIDEO_SUFFIXES or operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input', 'image_manifest', 'image_frame', 'cover_input'):
@@ -392,12 +400,12 @@ class PreviewReader:
                         if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame'):raise ReaderChanged('Source location changed')
                         raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
-                    if operation not in ('preview', 'cover_input'):
+                    if operation not in ('preview', 'cover_input', 'video_frames_ai'):
                         raise ReaderChanged('Source changed while reading')
                     raise PreviewUnavailable('Source changed while reading')
                 if operation == 'tag_source': return result
                 if operation in ('tag_input', 'page_input'): return {'source': result, 'data': data, 'mime': mime}
-                if operation in ('manifest','video_manifest','page_catalog','image_manifest'):
+                if operation in ('manifest','video_manifest','page_catalog','image_manifest','video_frames_ai'):
                     return result
                 if operation=='video_range':return data,mime,info.st_size
                 return data, mime
@@ -467,7 +475,7 @@ def _check_folder(row, directory_info, pages):
 
 def _folder_read(row, item_id, operation, page, revision):
     """Pages of an image folder registered as one book. Read-only, bounded."""
-    if operation in ('video', 'video_manifest', 'video_range', 'video_frame'):
+    if operation in ('video', 'video_manifest', 'video_range', 'video_frame', 'video_frames_ai'):
         raise PreviewUnavailable('Video player requires a supported video item')
     if operation in ('image_manifest', 'image_frame'):
         raise PreviewUnavailable('Image viewer requires a supported image item')

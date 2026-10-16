@@ -75,6 +75,8 @@ internal static class FeedbackTests
         """);
         var textSearch=PageEvidenceProtocol.ParseSearch(textSearchBytes,0);
         check(textSearch.Total==1&&textSearch.Items[0].PageText is {MatchingPages:2,SourceState:"current"} pt&&pt.Summary.Contains("1ページ")&&pt.Summary.Contains("夕焼けの教室"),"page text search parsed with excerpt and provenance");
+        var videoRowMatch=Protocol.ParseSearch("""{"total":1,"score_kind":"cosine","items":[{"id":15,"title":"clip.mp4","kind":"video","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.912,"video_match_ms":65000,"literal_words":1,"literal_hits":1}]}""").Items[0];
+        check(videoRowMatch.VideoMatchMs==65000&&videoRowMatch.AIEvidence.Contains("動画フレーム一致（1:05）")&&videoRowMatch.AIEvidence.Contains("0.912"),"video time-coded AI match parsed and formatted");
     }
     private sealed class Stub(Func<HttpRequestMessage,HttpResponseMessage> response):HttpMessageHandler
     {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)=>Task.FromResult(response(request));}

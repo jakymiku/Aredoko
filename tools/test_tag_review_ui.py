@@ -456,6 +456,27 @@ def main():
                     ui('invoke','TagClose');ready();ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
                     choose_combo('CmbSearchMode','ModeLiteral');ui('set-value','TxtQuery','cand-approved');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
                     check('Dark reviewing all pending proposals removes item from candidate search and exposes approved tag in literal search',True)
+                    # Verify ModePageText: saved page text search displays PageTextEvidence and excludes normal tags
+                    from page_index import PageIndex
+                    from page_text import PageTextIndex
+                    class UiFakeExtractor:
+                        class info:
+                            @staticmethod
+                            def record():return {'adapter':'ui-ocr','version':'1','model':'ocr-fixture','model_revision':'rev1','preprocessing':'page-v1'}
+                        def extract(self,payload,cancelled):
+                            return '夕焼けの教室で約束した'
+                    pages_idx=PageIndex(sandbox.catalog)
+                    pages_idx.refresh(book_item)
+                    snap=pages_idx.list(book_item)
+                    texts_idx=PageTextIndex(sandbox.catalog,pages_idx,UiFakeExtractor())
+                    texts_idx.generate(book_item,[snap['pages'][0]['page_id']],snap['source_revision'],uuid.uuid4().hex)
+                    choose_combo('CmbSearchMode','ModePageText');ready()
+                    ui('set-value','TxtQuery','夕焼け 約束');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                    contains('PageTextEvidence'+str(book_item),'ページ本文一致（1ページ: 1ページ）')
+                    contains('PageTextEvidence'+str(book_item),'夕焼けの教室で約束した')
+                    contains('PageTextEvidence'+str(book_item),'ocr-fixture')
+                    shot('Dark-page-text-search-wide')
+                    check('Dark ModePageText searches saved page text and displays excerpt/provenance',True)
                 close();continue
             name='generated-003.png' if theme=='Light' else 'generated-004.png';source=sandbox.item(name)
             ui('set-value','TxtQuery',name);time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')

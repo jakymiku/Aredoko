@@ -37,6 +37,9 @@ class VectorStore:
                 CREATE TABLE IF NOT EXISTS ai_profile(value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS ai_vectors(item_id INTEGER NOT NULL, revision TEXT NOT NULL,
                     modality TEXT NOT NULL, vector BLOB NOT NULL, PRIMARY KEY(item_id,modality));
+                CREATE TABLE IF NOT EXISTS ai_video_frames(item_id INTEGER NOT NULL, revision TEXT NOT NULL,
+                    at_ms INTEGER NOT NULL CHECK(at_ms>=0 AND at_ms<=86400000), vector BLOB NOT NULL,
+                    PRIMARY KEY(item_id,at_ms));
                 CREATE TABLE IF NOT EXISTS ai_state(id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
             ''')
             profile=db.execute('SELECT value FROM ai_profile').fetchone()
@@ -68,14 +71,25 @@ class VectorStore:
     def fresh(self,item_id,rev):
         with self.connect() as db:
             return db.execute("SELECT 1 FROM ai_vectors WHERE item_id=? AND revision=? AND modality='text'",(item_id,rev)).fetchone() is not None
-    def put(self,item_id,rev,vectors):
+    def put(self,item_id,rev,vectors,video_frames=None):
         # Validate every modality before replacing the previous revision atomically.
         if not vectors or any(mode not in self.profile.modalities for mode in vectors):
             raise ValueError('Unsupported vector modality')
         packed={mode:array('f',normalized(vec,self.dimension)).tobytes() for mode,vec in vectors.items()}
+        packed_frames=[]
+        if video_frames:
+            if 'cover' not in self.profile.modalities:
+                raise ValueError('Unsupported vector modality')
+            for at_ms,vec in video_frames:
+                if type(at_ms) is not int or not 0<=at_ms<=86_400_000:
+                    raise ValueError('Invalid video frame timestamp')
+                packed_frames.append((item_id,rev,at_ms,array('f',normalized(vec,self.dimension)).tobytes()))
         with self.connect() as db:
             db.execute('DELETE FROM ai_vectors WHERE item_id=?',(item_id,))
+            db.execute('DELETE FROM ai_video_frames WHERE item_id=?',(item_id,))
             db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',[(item_id,rev,mode,data) for mode,data in packed.items()])
+            if packed_frames:
+                db.executemany('INSERT INTO ai_video_frames VALUES(?,?,?,?)',packed_frames)
     def cover(self,row):
         """Current-profile, current-revision origin; never infer or read media."""
         with self.connect() as db:
@@ -87,11 +101,12 @@ class VectorStore:
             if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:return None
             return normalized(vec,self.dimension)
         except (ValueError,TypeError):return None
-    def rank(self,rows,query,source="all",ranking="max"):
+    def rank_with_evidence(self,rows,query,source="all",ranking="max"):
         if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
         query=normalized(query,self.dimension)
         eligible={row['id']:revision(row) for row in rows}
         scores={}
+        video_hits={}
         # Read only candidate IDs; unrelated persisted vectors need not be scanned.
         ids=list(eligible)
         with self.connect() as db:
@@ -106,8 +121,24 @@ class VectorStore:
                     if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4: continue
                     score=sum(a*b for a,b in zip(query,vec))
                     scores.setdefault(item_id,{})[mode]=score
+                if source in ('all','cover') and 'cover' in self.profile.modalities:
+                    vsql='SELECT item_id,revision,at_ms,vector FROM ai_video_frames WHERE item_id IN ('+','.join('?' for _ in batch)+') ORDER BY item_id,at_ms'
+                    for item_id,rev,at_ms,data in db.execute(vsql,batch):
+                        if eligible.get(item_id)!=rev:continue
+                        try:
+                            vec=array('f');vec.frombytes(data)
+                        except (ValueError,TypeError):continue
+                        if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:continue
+                        score=sum(a*b for a,b in zip(query,vec))
+                        prev=scores.get(item_id,{}).get('cover')
+                        if prev is None or score>prev or (score==prev and item_id not in video_hits):
+                            scores.setdefault(item_id,{})['cover']=score
+                            video_hits[item_id]=at_ms
         # Fusion uses global positions, never per-batch ranks.
-        return fuse_modalities(scores,ranking)
+        return fuse_modalities(scores,ranking),video_hits
+    def rank(self,rows,query,source="all",ranking="max"):
+        ranked,_=self.rank_with_evidence(rows,query,source,ranking)
+        return ranked
 
 class AISearch:
     def __init__(self,catalog,encoder,store_path=None,ranking='mean-rrf'):
@@ -286,18 +317,29 @@ class AISearch:
                                 text=row['title']+'\n'+row['relative_path']+'\n'+'、'.join(row['tags'])
                                 vectors={'text':self.encoder.encode('document',text[:4096])}
                                 did_infer=True
+                                video_frames=[]
                                 if 'cover' in self.profile.modalities and row['kind'] in ('image','book','archive'):
                                     try:
                                         source,_=self.previews.read_cover(item_id) if hasattr(self.previews,'read_cover') else self.previews.read(item_id)
                                         cover=self.encoder.encode('image',source)
                                         if cover is not None:vectors['cover']=cover
                                     except (PreviewUnavailable,OSError):pass
+                                elif 'cover' in self.profile.modalities and row['kind']=='video':
+                                    try:
+                                        extracted=self.previews.video_representative_frames(item_id) if hasattr(self.previews,'video_representative_frames') else [(0,self.previews.read(item_id)[0])]
+                                        for at_ms,frame_png in extracted:
+                                            if self.cancel.is_set():break
+                                            vec=self.encoder.encode('image',frame_png)
+                                            if vec is not None:video_frames.append((at_ms,vec))
+                                        if video_frames:
+                                            vectors['cover']=video_frames[0][1]
+                                    except (PreviewUnavailable,OSError):pass
                                 # Recheck presence, exclusions and revision before publishing.
                                 current=self._current_rows([item_id],scope).get(item_id)
                                 if current is None or revision(current)!=rev:
                                     state['skipped']+=1
                                 else:
-                                    self.store.put(item_id,rev,vectors);state['indexed']+=1
+                                    self.store.put(item_id,rev,vectors,video_frames);state['indexed']+=1
                             else:state['indexed']+=1
                         state['processed']+=1
                         # Vectors commit atomically per item. Progress may lag by 15;
@@ -350,12 +392,12 @@ class AISearch:
                       if (not kind or row['kind']==kind) and
                       (view=='all' or view=='favorites' and row['favorite'] or
                        view=='unreviewed' and not row['reviewed'] or view=='shelf' and row['shelf'])]
-            # Cover vectors currently belong only to images/books. Keep this
-            # AFTER the shared target cap and explicit scope/view/kind filters.
+            # Cover vectors belong to images, books, archives, and time-coded video frames.
+            # Keep this AFTER the shared target cap and explicit scope/view/kind filters.
             # Empty modality pools need no GPU query and cannot use stray vectors.
-            if source=='cover':rows=[row for row in rows if row['kind'] in ('image','book')]
+            if source=='cover':rows=[row for row in rows if row['kind'] in ('image','book','archive','video')]
             policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
-            ranked=self.store.rank(rows,self.encoder.encode('query',query),source,policy) if rows else []
+            ranked,video_hits=self.store.rank_with_evidence(rows,self.encoder.encode('query',query),source,policy) if rows else ([],{})
             words=list(dict.fromkeys(normalize(query).split()))
             by_id={row['id']:row for row in rows}
             for row in rows:
@@ -370,7 +412,12 @@ class AISearch:
             other_total=len(ranked)-leading
             if result_group=='leading' and cut is not None:ranked=[pair for pair in ranked if pair[1]>=cut]
             elif result_group=='other':ranked=[pair for pair in ranked if cut is not None and pair[1]<cut]
-            items=[{**by_id[item_id],'semantic_score':round(score,6),'similarity_group':'leading' if cut is None or score>=cut else 'other'} for item_id,score in ranked[page*limit:(page+1)*limit]]
+            items=[]
+            for item_id,score in ranked[page*limit:(page+1)*limit]:
+                entry={**by_id[item_id],'semantic_score':round(score,6),'similarity_group':'leading' if cut is None or score>=cut else 'other'}
+                if item_id in video_hits:
+                    entry['video_match_ms']=video_hits[item_id]
+                items.append(entry)
             return {'total':len(ranked),'page':page,'limit':limit,'items':items,'mode':'semantic','coverage_limit':MAX_ITEMS,'source':source,'ranking':policy,
                     'score_kind':score_kind,'scope':scope,'literal_only':literal_only,'group_boundary':cut,'leading_total':leading,'other_total':other_total,'result_group':result_group}
         finally:

@@ -20,6 +20,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     private readonly LibraryApi api;
     private readonly int itemId;
     private readonly string itemTitle;
+    private readonly int? initialPositionMs;
     private readonly CancellationTokenSource lifetime = new();
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer hideTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer positionTimer;
@@ -70,11 +71,12 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
 
-    public VideoPlayerView(LibraryApi api, int itemId, string titleText)
+    public VideoPlayerView(LibraryApi api, int itemId, string titleText, int? initialPositionMs = null)
     {
         this.api = api;
         this.itemId = itemId;
         itemTitle = titleText;
+        this.initialPositionMs = initialPositionMs;
         hideTimer = DispatcherQueue.CreateTimer(); hideTimer.Interval = TimeSpan.FromSeconds(2.5); hideTimer.IsRepeating = false;
         hideTimer.Tick += (_, _) => { if (!disposed && !keyboardChrome && !seekHover && !busy && !failed) HideChrome(); };
         positionTimer = DispatcherQueue.CreateTimer(); positionTimer.Interval = TimeSpan.FromMilliseconds(200);
@@ -252,6 +254,11 @@ internal sealed class VideoPlayerView : Grid, IDisposable
                 ? natural
                 : mediaSource.Duration is TimeSpan d && d > TimeSpan.Zero ? d : TimeSpan.FromSeconds(1);
             position = TimeSpan.Zero;
+            if (initialPositionMs is int startMs && startMs > 0 && duration > TimeSpan.Zero)
+            {
+                var target = TimeSpan.FromMilliseconds(Math.Min(startMs, Math.Max(0, duration.TotalMilliseconds - 50)));
+                try { mediaPlayer.PlaybackSession.Position = target; position = target; } catch { }
+            }
             positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
             loaded = true;
             ContentOpened?.Invoke(itemId);

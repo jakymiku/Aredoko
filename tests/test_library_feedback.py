@@ -390,5 +390,75 @@ class LibraryFeedbackTests(unittest.TestCase):
         after_files = {p.name: (p.stat().st_size, p.stat().st_mtime_ns) for p in anim_dir.iterdir()}
         self.assertEqual(before_files, after_files)
 
+    def test_video_content_ai_indexing_ranks_and_returns_timecoded_match(self):
+        import io
+        import shutil
+        import subprocess
+        from PIL import Image
+        from ai_search import AISearch
+
+        ffmpeg = shutil.which('ffmpeg')
+        if not ffmpeg or not shutil.which('ffprobe'):
+            self.skipTest('ffmpeg/ffprobe unavailable')
+
+        vid_dir = self.base / 'video-ai'
+        vid_dir.mkdir()
+        clip_path = vid_dir / 'red_then_blue.mp4'
+        # 0.0..1.0s is red, 1.0..2.0s is blue
+        subprocess.run([
+            ffmpeg, '-nostdin', '-v', 'error', '-f', 'lavfi',
+            '-i', 'color=c=red:s=320x180:d=1[r];color=c=blue:s=320x180:d=1[b];[r][b]concat=n=2:v=1:a=0',
+            '-threads', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+            str(clip_path)
+        ], check=True, timeout=15)
+        before_stat = (clip_path.stat().st_size, clip_path.stat().st_mtime_ns)
+
+        root = self.catalog.add_root(str(vid_dir))
+        items = self.index(root)
+        vid_id = items['red_then_blue.mp4']['id']
+
+        class VideoColorEncoder:
+            available = True
+            resident = False
+            device = 'cpu'
+            def encode(self, kind, value):
+                dim = 768
+                if kind == 'document':
+                    return [0.0, 0.0, 1.0] + [0.0] * (dim - 3)
+                if kind == 'query':
+                    if '青' in value:
+                        return [0.0, 1.0, 0.0] + [0.0] * (dim - 3)
+                    return [1.0, 0.0, 0.0] + [0.0] * (dim - 3)
+                with Image.open(io.BytesIO(value)) as im:
+                    r_val, g_val, b_val = im.convert('RGB').getpixel((160, 90))
+                if b_val > r_val:
+                    return [0.0, 1.0, 0.0] + [0.0] * (dim - 3)
+                return [1.0, 0.0, 0.0] + [0.0] * (dim - 3)
+            def release(self):
+                return {'released': False, 'resident': False}
+            def close(self):
+                pass
+
+        ai = AISearch(self.catalog, VideoColorEncoder())
+        self.addCleanup(ai.close)
+        ai.start(scope={'root_ids': [root], 'kind': 'video', 'shelf': None})
+        ai.worker.join(20)
+        self.assertEqual(ai.status()['state'], 'complete')
+        self.assertEqual(ai.status()['indexed'], 1)
+
+        # Query for red ('赤') matches the early frame (0ms)
+        red_res = ai.search('赤い場面', kind='video', source='cover', scope={'root_ids': [root], 'kind': '', 'shelf': None})
+        self.assertEqual(red_res['total'], 1)
+        self.assertEqual(red_res['items'][0]['id'], vid_id)
+        self.assertEqual(red_res['items'][0]['video_match_ms'], 0)
+
+        # Query for blue ('青') matches the later frame (>= 1000ms)
+        blue_res = ai.search('青い場面', kind='video', source='cover', scope={'root_ids': [root], 'kind': '', 'shelf': None})
+        self.assertEqual(blue_res['total'], 1)
+        self.assertEqual(blue_res['items'][0]['id'], vid_id)
+        self.assertGreaterEqual(blue_res['items'][0]['video_match_ms'], 1000)
+
+        self.assertEqual(before_stat, (clip_path.stat().st_size, clip_path.stat().st_mtime_ns))
+
 
 if __name__ == '__main__': unittest.main()
