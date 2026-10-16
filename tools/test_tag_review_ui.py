@@ -1,6 +1,8 @@
 """One native Windows tag-review batch, using only generated sandbox media.
 
-Requires an existing Release build and winapp CLI. No downloads or model.
+Requires an existing Release build and winapp CLI. No downloads.
+--wd-runtime-only explicitly uses the already approved local WD CPU model,
+on generated images only; other modes never load a model.
 Screenshots need human review; runtime_pass never means visual review passed.
 """
 import argparse
@@ -52,6 +54,7 @@ def main():
     parser.add_argument('--scenario',choices=('indexed','unindexed','text-only'),default='indexed')
     modes=parser.add_mutually_exclusive_group()
     modes.add_argument('--candidate-search-only',action='store_true')
+    modes.add_argument('--wd-runtime-only',action='store_true',help='Existing approved CPU model on generated media only; no downloads')
     modes.add_argument('--page-jump-only',action='store_true')
     modes.add_argument('--folder-books-only',action='store_true')
     args=parser.parse_args()
@@ -64,7 +67,8 @@ def main():
     if existing.returncode:parser.error('Close the existing Aredoko app before this isolated test')
     server=ThreadingHTTPServer(('127.0.0.1',8769),BaseHTTPRequestHandler)
     sandbox=thread=process=hwnd=app_pid=None
-    report={'runtime_pass':False,'visual_review':'pending: inspect every screenshot','actual_model':False,
+    tagger=None;wd_observer=None;wd_processes=[];model_before=None
+    report={'runtime_pass':False,'visual_review':'pending: inspect every screenshot','actual_model':bool(args.wd_runtime_only),'tagging_quality_measured':False,
         'scenario':args.scenario,'test_mode':'folder-books' if args.folder_books_only else 'candidate-search' if args.candidate_search_only else 'tag-review','checks':[],'screenshots':[],'requests':[],'keyboard_tested':False}
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-tag-review-'+uuid.uuid4().hex}
     user32=ctypes.WinDLL('user32',use_last_error=True);kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
@@ -189,6 +193,22 @@ def main():
                 def extract(self,payload,cancelled):return '夕焼けの教室で約束した'
             page_text=PageTextIndex(sandbox.catalog,page_index,JumpExtractor())
         tagger=FixtureTagger()
+        if args.wd_runtime_only:
+            from wd_tagger import create_tagger
+            from unittest.mock import patch
+            tagger=create_tagger(sandbox.ai)
+            if not tagger.status()['available']:raise RuntimeError('Approved local WD installation is unavailable; no download attempted')
+            directory=tagger.profile.verify(REPO,hashes=True)
+            model_before={name:(directory/name).stat().st_mtime_ns for name in tagger.profile.data()['artifacts']}
+            report['test_mode']='wd-cpu-runtime'
+            report['profile_key']=tagger.profile.key
+            report['device']='cpu'
+            real_popen=subprocess.Popen
+            def observe(args,**kwargs):
+                child=real_popen(args,**kwargs)
+                if isinstance(args,list) and any(Path(str(part)).name=='tagger_worker.py' for part in args):wd_processes.append(child)
+                return child
+            wd_observer=patch('wd_tagger.subprocess.Popen',side_effect=observe);wd_observer.start()
         server.RequestHandlerClass=production_handler(sandbox.catalog,secrets.token_urlsafe(32),ai=sandbox.ai,profiles=sandbox.profiles,tagger=tagger)
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         for theme in ('Light','Dark'):
@@ -210,6 +230,55 @@ def main():
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
             hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.page_jump_only or args.folder_books_only and theme=='Dark' else '76 件')
+            if args.wd_runtime_only:
+                name='generated-003.png' if theme=='Light' else 'generated-cover.cbz'
+                source=sandbox.item(name)
+                sandbox.catalog.update([source],{'tags':['manual-native-wd'],'favorite':True,'shelf':'WD検証'})
+                ui('set-value','TxtQuery',name);time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                ui('invoke','Item'+str(source),'--action','select');wait('TxtEditStatus','保存済み');open_review()
+                enabled('TagGenerate',True);ui('invoke','TagGenerate');enabled('TagRefresh',True)
+                history=TagSuggestions(sandbox.catalog,tagger).list(source)
+                batch=history['batches'][0];candidates=batch['proposals']
+                check(theme+' actual WD generated bounded pending candidates',0<len(candidates)<=30 and all(p['state']=='pending' for p in candidates))
+                check(theme+' model and source provenance',batch['producer']==tagger.info.record() and not batch['stale'])
+                check(theme+' inference does not write confirmed tags',sandbox.catalog.get(source)['tags']==['manual-native-wd'])
+                check(theme+' real WD owned worker launched',len(wd_processes)==(1 if theme=='Light' else 2))
+                contains('TagProvenance','本の先頭ページのみ' if theme=='Dark' else '画像')
+                contains('TagExplanation','正解確率ではありません')
+                visible('TagMetadata');ui('invoke','TagMetadata','--action','expand')
+                contains('TagModelDetails',tagger.profile.data()['revision'])
+                shot(theme+'-actual-wd-model')
+                ui('invoke','TagMetadata','--action','collapse');visible('TagProvenance')
+                ui('invoke','TagGenerate');enabled('TagRefresh',True)
+                check(theme+' regenerate reuses decisions without another worker',len(wd_processes)==(1 if theme=='Light' else 2))
+                approved='検証用日本語タグ'+theme
+                ui('set-value','TagEdited',approved);ui('invoke','TagAccept');enabled('TagRefresh',True)
+                check(theme+' Japanese approval preserves manual tags',set(sandbox.catalog.get(source)['tags'])=={'manual-native-wd',approved})
+                selected=candidates[0]
+                history=TagSuggestions(sandbox.catalog,tagger).list(source)
+                stored=next(p for p in history['batches'][0]['proposals'] if p['id']==selected['id'])
+                check(theme+' original English label and Japanese decision are both retained',stored['tag']==selected['tag'] and stored['state']=='accepted' and stored['accepted_tag']==approved)
+                current=sandbox.catalog.get(source)
+                check(theme+' shelf and favorite retained',current['shelf']=='WD検証' and current['favorite'])
+                user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.3)
+                visible('TagEdited');shot(theme+'-actual-wd-narrow-reviewed')
+                ui('invoke','TagClose');ready()
+                user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);time.sleep(.3)
+                ui('set-value','TxtQuery',approved);time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                shot(theme+'-approved-Japanese-search')
+                check(theme+' GUI literal search finds edited Japanese approval',True)
+                pending=[p for p in history['batches'][0]['proposals'] if p['state']=='pending']
+                check(theme+' raw candidates remain separately reviewable',bool(pending))
+                tag=pending[0]['tag']
+                ui('set-value','TxtQuery',tag);time.sleep(.4);ui('invoke','BtnSearch');ready()
+                wait('TxtCount',str(sandbox.catalog.search(tag)['total'])+' 件')
+                check(theme+' pending candidate excluded from confirmed tag search',all(r['id']!=source for r in sandbox.catalog.search(tag)['items']))
+                choose_combo('CmbSearchMode','ModeTagCandidates');ready()
+                from tag_candidate_search import search_candidates
+                expected=search_candidates(TagSuggestions(sandbox.catalog,tagger),tag)['total']
+                wait('TxtCount',str(expected)+' 件');contains('ProposalEvidence'+str(source),tag)
+                shot(theme+'-raw-English-candidate-search')
+                close();continue
             if args.page_jump_only:
                 report['test_mode']='page-text-revision-jump'
                 report['generated_revision_mutation']='Only generated-page-jump/jump.cbz is deliberately repacked; base media remain unchanged.'
@@ -588,7 +657,10 @@ def main():
             close()
         check('source bytes/mtime unchanged',sandbox.source_before==sandbox.source_digest())
         check('saved AI settings unchanged',sandbox.settings_before==(sandbox.target/'settings.json').read_bytes())
-        check('no inference or model loaded',sandbox.encoder.calls==0 and not sandbox.encoder.resident)
+        check('no embedding inference or model loaded',sandbox.encoder.calls==0 and not sandbox.encoder.resident)
+        if args.wd_runtime_only:
+            directory=tagger.profile.verify(REPO,hashes=True)
+            check('WD model bytes and mtime unchanged',model_before=={name:(directory/name).stat().st_mtime_ns for name in tagger.profile.data()['artifacts']})
         report['runtime_pass']=True
     except Exception as ex:
         report['error']=str(ex)
@@ -601,6 +673,12 @@ def main():
         finally:
             if thread:server.shutdown();thread.join(5)
             server.server_close()
+            if args.wd_runtime_only and tagger:
+                tagger.close()
+                report['wd_workers']=len(wd_processes)
+                report['wd_workers_stopped']=all(p.poll() is not None and p.stdin.closed and p.stdout.closed for p in wd_processes)
+                if not report['wd_workers_stopped']:report['runtime_pass']=False
+            if wd_observer:wd_observer.stop()
             if sandbox:
                 report['source_unchanged']=sandbox.source_before==sandbox.source_digest()
                 if not report['source_unchanged'] or report.get('cleanup_terminated_owned_process'):report['runtime_pass']=False
