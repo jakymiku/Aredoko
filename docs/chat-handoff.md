@@ -1,6 +1,35 @@
 # Aredoko GPT Chat向け引き継ぎ
 
-## 2026-10-16 実利用フィードバック続行②：F07/F08/F11 アニメーション画像再生・54,802KB級APNG bounded処理・代表フレームAI索引・PageEvidenceClient（実装 `0b65d23df9bf07cc8544237af91301d43fe13000`、parent `1f16441`）
+## 2026-10-16 実利用フィードバック全22件完了＆ページ本文検索WinUI接続（実装 `943e45cbe35992580de7d1cd450b206ab72d5990`、parent `556f9fe`）
+
+開始HEAD `556f9fecb956e1dabcc0927e2461bcd29fd17177`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)の最後の未実装項目だった **F12（P4: 動画内容の時間付き代表フレームAI索引・作品単位の検索結果集約・該当時刻への自動シーク再生）** と、**P2/P3 ページ本文検索（`ModePageText` / `PageTextEvidence<id>`）のWinUI接続および該当ページへの読書画面ジャンプ**を実装し、単体テスト・Windowsネイティブ実機検証まで完了した。これにより **実利用フィードバック全22件（F01〜F22）のコード実装がすべて完了**した。
+
+### 1. 実装内容
+
+- **F12（P4）動画内容の時間付き代表フレームAI索引・検索集約・該当時刻シーク (`app/video_previews.py`, `app/previews.py`, `app/ai_search.py`, `src/Aredoko.Core/Protocol.cs`, `src/Aredoko.WinUI/VideoPlayerView.cs`, `MainPage.xaml.cs`)**：
+  - `VideoThumbnailer.representative_frames` と `VectorStore` の `ai_video_frames(item_id, revision, at_ms, vector)` テーブルを追加し、動画から最大4つの時刻付き代表フレームを抽出・ベクトル索引化。
+  - 「画像の見た目（AI）」「両方で探す（AI）」検索で各動画の最高スコアフレーム時刻を作品単位に集約し、`video_match_ms` / `動画フレーム一致（0:01）` を表示。動画を開くと `VideoPlayerView` が一致時刻へ自動シークして表示。
+- **P2/P3 ページ本文検索のWinUI接続と該当ページへの読書ジャンプ (`src/Aredoko.Core/SearchMethod.cs`, `LibraryApi.cs`, `src/Aredoko.WinUI/MainPage.xaml`, `MainPage.xaml.cs`, `ArchiveReaderView.cs`)**：
+  - `SearchMethod.FromIndex(5)`（`ModePageText`「ページ本文」）と一覧行の `PageTextEvidence<id>` を追加し、結果から「本を開く」で一致した先頭根拠ページを直接開くよう接続。
+
+### 2. 検証結果（Windows実機、CI起動0回）
+
+- **全Pythonテスト**：**397件実行 / 394 PASS / 3 Windows platform SKIP（232.045秒）**（`test_library_feedback.py` **13 PASS**）。
+- **C# Coreテスト**：**361 PASS**、**Windows x64 SelfContained Release PASS（警告0・エラー0）**。
+- **ネイティブGUI実機検証① (`data/ai-ui/page-text-search-20261016-01`)**：**29 checks PASS / PNG 5枚全目視PASS**（`ModePageText` と `PageTextEvidence` の表示を確認）。
+- **ネイティブGUI実機検証② (`data/ai-ui/feedback-video-ai-20261016-02`)**：**106 checks PASS / keys 56 / skipped 0 / PNG 24枚全目視PASS**（`動画フレーム一致（0:01）` 表示と動画起動時の `0:01 / 0:02` 自動シークを確認）。
+
+### 3. 残課題と次の3手
+
+- **[22件の実利用フィードバック対応表](user-feedback-20261016.md)は全22件（F01〜F22）実装・検証完了**。
+- **次の3手**：
+  1. **OCR評価データ/採点ツールと許可されたローカルOCRアダプタの接続**。
+  2. **代表素材のタグ品質測定と複数ページ根拠のシチュエーションタグ推定**。
+  3. **登録フォルダ管理の後続・音声/音楽内容索引の検討**。
+
+---
+
+## 履歴：2026-10-16 実利用フィードバック続行②：F07/F08/F11 アニメーション画像再生・54,802KB級APNG bounded処理・代表フレームAI索引・PageEvidenceClient（実装 `0b65d23df9bf07cc8544237af91301d43fe13000`、parent `1f16441`）
 
 開始HEAD `1f16441346930b9d1aeed8ddcdb78ee24cd9e652`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)の残課題だった **F07（GIF/WebP/APNGアニメーション実フレーム再生・資源解放）**、**F08（アニメ画像の代表フレームAI索引）**、**F11（54,802KB級APNGのboundedデコード/転送・取消）**、および優先課題の **`PageEvidenceClient`（ページ根拠・本文APIの反射不要Coreクライアント）** を実装し、単体テストとWindowsネイティブ実機検証まで完了した。
 

@@ -15,7 +15,7 @@
 | F09 | Explorer/既定アプリ | 右clickした正確な登録アイテムを開く。任意外部path/URLを実行しない | 実装・Coreパス境界＋nativeメニュー項目確認PASS（外部Explorer/既定アプリの自動起動は安全上未実行） |
 | F10 | 詳細にproperties | 種類・容量・更新日時・登録先/相対path。folder tokenを日時と誤表示しない | 完了（Core・native Light/Dark `FileProperties` PASS） |
 | F11 | 54,802KB級APNG | 一律8MiB capの単純解除を避け、bounded frame decode/転送・取消で生成大画像を確認 | 完了（元64MiB/16MP/64frame・転送8MiB上限で54,802KB APNGのサムネイル/アニメーション再生PASS） |
-| F12 | 動画の内容AI索引 | 時刻付き代表frame→embedding→動画集約→該当時刻へ。名前/タグ検索と区別 | 未実装 |
+| F12 | 動画の内容AI索引 | 時刻付き代表frame→embedding→動画集約→該当時刻へ。名前/タグ検索と区別 | 完了（`ai_video_frames`・`video_match_ms`・`VideoPlayerView`該当時刻シーク・Python＋native `feedback-video-ai-20261016-02` 106 checks PASS） |
 | F13 | 左下の設定 | ツールを「設定」へ。AI準備/関連語/ビューワー設定等をここから利用 | 完了（native Light/Dark 設定保存・AI準備・関連語遷移PASS） |
 | F14 | mouse進む/戻る | ユーザー確定：ビューワー内の画像/ページ送り。メイン画面の履歴移動ではない | 完了（画像・reader実X1/X2 Light/Dark PASS） |
 | F15 | 動画double click | list/gridの動画thumbnailからnative playerへ。元の検索/編集を保持 | 完了（native list/detail double-click・未保存draft保持PASS） |
@@ -40,10 +40,11 @@
 
 実装とnative受け入れを分けた。Python **395件実行（392 PASS / 3 platform SKIP、185.899秒）**、Core **351 PASS**、Release **0警告 / 0 error**。
 - フォルダ・読書・設定・DB完全削除の統合バッチ（`data/ai-ui/feedback-antigravity-20261016-13`）：**98 checks PASS / PNG 19枚全目視PASS / graceful close 2**（Light/Dark 設定保存・反転wheel適用・reader X1/X2・閲覧履歴記録・`FileProperties`・タグレビュー・旧token GUI rescan・フォルダsingle/double click・直接再登録・解除済みrootのDB完全削除の確認ダイアログ取消/実行を確認）。
-- 動画再生・double-click入口・共通右クリックメニューの統合バッチ（`data/ai-ui/feedback-video-20261016-04`）：**102 checks PASS / keys 52 / PNG 22枚目視PASS**（一覧/詳細サムネイルdouble-clickからの動画起動と未保存draft保持、動画右クリックの「エクスプローラーで表示」「既定のアプリで開く」表示と画像類似項目の非表示を確認）。
+- 動画再生・double-click入口・共通右クリックメニュー・時刻付き動画AI検索の統合バッチ（`data/ai-ui/feedback-video-ai-20261016-02`）：**106 checks PASS / keys 56 / PNG 24枚全目視PASS**（一覧/詳細サムネイルdouble-clickからの動画起動と未保存draft保持、動画右クリックの「エクスプローラーで表示」「既定のアプリで開く」表示と画像類似項目の非表示、およびF12動画フレーム一致 `0:01` 表示と動画再生時の `0:01 / 0:02` 自動シークを確認）。
 - アニメーション画像（GIF/WebP/APNG）・54,802KB級APNGのネイティブ再生バッチ（`data/ai-ui/feedback-animation-20261016-01`）：**16 checks PASS / keys 4 / PNG 4枚全目視PASS**（一覧サムネイル表示、画像ビューアでの複数フレーム実再生・54,802KB APNGのbounded転送再生・Light/Dark・通常/狭幅・閉じた際のタイマー/フレーム解放を確認）。
+- 未承認タグ候補・ページ本文検索バッチ（`data/ai-ui/page-text-search-20261016-01`）：**29 checks PASS / PNG 5枚全目視PASS**（`ModePageText` による保存済みページ本文検索と `PageTextEvidence` のページ番号・抜粋・モデル由来表示を確認）。
 - 既存の検索モード63 checks、画像実wheel/X1/X2＋閲覧履歴16 checksも維持。
-- F12（動画内容の時間付きAI索引）は未実装。F09の外部プロセス（Explorer/既定アプリ）実起動とF22のOSドラッグ＆ドロップ注入は自動テストの安全境界により未実行。コマンド・証拠と残作業は最新handoff。
+- **全22件（F01〜F22）のコード実装を完了**。F09の外部プロセス（Explorer/既定アプリ）実起動とF22のOSドラッグ＆ドロップ注入のみ自動テストの安全境界により実機未実行。コマンド・証拠と残作業は最新handoff。
 
 ## コミット前コードレビュー
 

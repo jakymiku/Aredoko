@@ -1,6 +1,45 @@
 # Aredoko 開発引き継ぎ
 
-## 2026-10-16 実利用フィードバック続行②：F07/F08/F11 アニメーション画像再生・54,802KB級APNG bounded処理・代表フレームAI索引・PageEvidenceClient（実装 `0b65d23df9bf07cc8544237af91301d43fe13000`、parent `1f16441`）
+## 2026-10-16 実利用フィードバック全22件完了＆ページ本文検索WinUI接続（実装 `943e45cbe35992580de7d1cd450b206ab72d5990`、parent `556f9fe`）
+
+開始HEAD `556f9fecb956e1dabcc0927e2461bcd29fd17177`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)の最後の未実装項目だった **F12（P4: 動画内容の時間付き代表フレームAI索引・作品単位の検索結果集約・該当時刻への自動シーク再生）** と、**P2/P3 ページ本文検索（`ModePageText` / `PageTextEvidence<id>`）のWinUI接続および該当ページへの読書画面ジャンプ**を実装し、単体テスト・Windowsネイティブ実機検証まで完了した。これにより **実利用フィードバック全22件（F01〜F22）のコード実装がすべて完了**した。
+
+### 1. 実装内容
+
+- **F12（P4）動画内容の時間付き代表フレームAI索引・検索集約・該当時刻シーク (`app/video_previews.py`, `app/previews.py`, `app/ai_search.py`, `src/Aredoko.Core/Protocol.cs`, `src/Aredoko.WinUI/VideoPlayerView.cs`, `MainPage.xaml.cs`)**：
+  - `VideoThumbnailer.representative_frames(source, revision)` を追加。既存の同一性・リンク検査済みファイルハンドルと `ffprobe`/`ffmpeg` パイプラインを再利用し、動画長に応じて最大4つの代表時刻（`0ms` / 中間 / 10%・35%・60%・85% 等、最低250ms間隔）のフレームPNGを抽出。
+  - `VectorStore` に `ai_video_frames(item_id, revision, at_ms, vector)` テーブルを追加。AI索引作成時（`AISearch._build`）に動画の時刻付き代表フレームをエンコードして原子的に保存。
+  - 「画像の見た目（AI）」（`source='cover'`）および「両方で探す（AI）」（`source='all'`）検索時に `rank_with_evidence` が各動画の最高スコアフレーム時刻を作品単位に集約し（同一動画が複数行を占領しない）、応答行へ `video_match_ms` を付加。
+  - `MediaRow.VideoMatchMs` と `AIEvidence`（「`動画フレーム一致（0:01） · 文字一致0/1語 / 類似度 ...`」）を表示し、その動画を開くと `VideoPlayerView` が自動的に一致時刻（`initialPositionMs`）へシークして表示。
+- **P2/P3 ページ本文検索のWinUI接続と該当ページへの読書ジャンプ (`src/Aredoko.Core/SearchMethod.cs`, `LibraryApi.cs`, `src/Aredoko.WinUI/MainPage.xaml`, `MainPage.xaml.cs`, `ArchiveReaderView.cs`)**：
+  - `SearchMethod.FromIndex(5)`（`IsPageText == true`, `Source == "page-text"`）と検索方法コンボボックスの **「ページ本文」 (`ModePageText`)** を追加。
+  - 一覧/グリッドの各行に `PageTextEvidence<id>`（「`ページ本文一致（1ページ: 1ページ） · 「夕焼けの教室で約束した」 / モデル: ... · 元ファイル一致`」）を表示。
+  - ページ本文検索の結果から「本を開く」（またはサムネイルダブルクリック）を実行すると、`ArchiveReaderView` が一致した先頭根拠ページ（`initialPage`）を直接開くよう接続。
+
+### 2. 検証結果（Windows実機、CI起動0回）
+
+- **全Pythonテスト**：**397件実行 / 394 PASS / 3 Windows platform SKIP（232.045秒）**
+  - `test_library_feedback.py` **13 PASS**（前半赤・後半青の生成MP4動画に対する時間付き代表フレーム索引作成と、「赤い場面」→ `0ms`、「青い場面」→ `>=1000ms` の時刻付き検索一致を追加検証）、`test_empty_cover_search.py` **2 PASS**、`test_search_phase.py` **3 PASS**。
+- **C# Coreテスト**：**361 PASS**（`SearchMethod.FromIndex(5)`、`VideoMatchMs` 解析と `動画フレーム一致（1:05）` フォーマット検証を追加）。
+- **Windows x64 SelfContained Releaseビルド**：**PASS（警告0・エラー0）**。
+- **ネイティブGUI実機検証①（ページ本文検索＋未承認タグ候補検索 `data/ai-ui/page-text-search-20261016-01`）**：
+  - **29 checks PASS / PNG 5枚すべて目視確認PASS / graceful closes 2**。
+  - `ModePageText` 選択で保存済みページ本文を検索し、`PageTextEvidence73` に一致ページ番号・抜粋・モデル名・元ファイル一致が表示されることを確認。
+- **ネイティブGUI実機検証②（動画時刻付きAI検索・該当時刻シーク再生 `data/ai-ui/feedback-video-ai-20261016-02`）**：
+  - **106 checks PASS / keys 56 / skipped 0 / PNG 24枚すべて目視確認PASS**。
+  - Light/Darkで「画像の見た目（AI）」検索から `clip.mp4` に `動画フレーム一致（0:01）` が表示され、その動画を開くと `VideoPosition` が `0:01 / 0:02` にシークされた状態で開くことを実機確認。
+
+### 3. 残課題と次の3手
+
+- **[22件の実利用フィードバック対応表](user-feedback-20261016.md)は全22件（F01〜F22）実装・検証完了**（F09の外部OSアプリ実起動とF22のOSドラッグ注入のみ自動テストの安全境界により実機未実行）。
+- **次の3手**：
+  1. **OCR評価データ/採点ツールと許可されたローカルOCRアダプタの接続**：固定日本語ページ素材・正解本文・検索クエリでのCER/到達率採点ツールを整備し、許可されたローカルOCRアダプタを `PageTextIndex` へ接続する（新モデル/依存取得は別途明示許可が必要）。
+  2. **代表素材のタグ品質測定と複数ページ根拠のシチュエーションタグ推定**：合成図形のruntime成功と実タグ精度を区別し、代表素材でのWDタグ品質測定および複数ページOCR/視覚根拠からの候補提示契約を進める。
+  3. **登録フォルダ管理の後続・音声/音楽内容索引の検討**：検索範囲の名前付き保存・左ナビピン留め・Shift+F10キーボード導線、および音声/音楽の内容索引方式の検討を進める。
+
+---
+
+## 履歴：2026-10-16 実利用フィードバック続行②：F07/F08/F11 アニメーション画像再生・54,802KB級APNG bounded処理・代表フレームAI索引・PageEvidenceClient（実装 `0b65d23df9bf07cc8544237af91301d43fe13000`、parent `1f16441`）
 
 開始HEAD `1f16441346930b9d1aeed8ddcdb78ee24cd9e652`（clean・remote差0/0）。[22件の対応表](user-feedback-20261016.md)の残課題だった **F07（GIF/WebP/APNGアニメーション実フレーム再生・資源解放）**、**F08（アニメ画像の代表フレームAI索引）**、**F11（54,802KB級APNGのboundedデコード/転送・取消）**、および優先課題の **`PageEvidenceClient`（ページ根拠・本文APIの反射不要Coreクライアント）** を実装し、単体テストとWindowsネイティブ実機検証まで完了した。
 
