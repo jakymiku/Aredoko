@@ -1,4 +1,34 @@
-## 最新：P3 画像フォルダを「一冊」（登録時のチェックのみ・自動振り分けなし）（2026-10-16 JST 朝）
+## 最新：画像フォルダ本の安全性・ページ順・スキャンメモリを補強（2026-10-16、実機なし）
+
+開始HEAD **`c1bfbb96fc8c3209e27a2257bfc6ef8a1074069a`**、branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010` / Draft PR #5を維持。既存作業コピーのbranch/HEAD/statusを確認し、古いコピーを上書きせず最新remoteの別コピーで実装。AGENTS→vision→優先順位→両handoff→Issue4/PR5を照合した。ユーザー依頼は「実機を伴わないで出来る開発」。実装commitは本節を導入したcommitのgit logを参照。
+
+### 修正と検証範囲
+
+- **ページ順**：フォルダ本の自然順が同順位なら元ファイル名のUnicode順を使う。`p001.png / p01.png / p1.png`のような名前で、列挙順が逆転しても同revisionのページ0・表紙が変わらない。ZIP/CBZの中央directory順による既存tieは変更しない。
+- **読み取り**：ディレクトリ列挙前のIDを保持し、開く前と公開前に祖先のリンク/ジャンクション・本のdirectory ID・選択ページの現在path/開いたhandle ID・サイズ/mtime/ctime・ページ一覧を確認。列挙後にフォルダがリンクへ置き換わる場合や読込中に新表紙が追加される場合に古い結果を公開しない。完全なfilesystem snapshotや内容hashの保証ではない。
+- **上限**：フォルダ本のpreview/tag_source/tag_input/manifestに同じ画像候補10000件上限を適用。除外後の対応外画像も候補数へ含み、10001件目で収集停止する。スキャン自体は一冊として記録できる。
+- **スキャン**：全rootのページtupleを`groups`へ保持する処理を、directoryごとの集約/記録へ変更。root単位のtransactionを維持し、子directoryの読取失敗・途中キャンセル・dry-runで索引をrollback。作品ID・タグ・棚・お気に入りを保持する。
+- **互換性**：フォルダ変更検知tokenを`folder-book-v2`へ更新し、旧順序で作った表紙vector/候補/読書位置を誤再利用しない。**旧一冊モードrootは一度再スキャンが必要**（既存ID・手動整理は保持）。古い候補/読書位置はrevision不一致、AI vectorは次の明示索引で更新。単体画像/ZIP/CBZのtokenには変更なし。`docs/tag-suggestions.md`の「フォルダ本は対象外」という旧記述も現行実装へ修正。
+
+### 実行した検証
+
+- Linux / Python **3.12.14**、生成sourceと一時DBだけ。追加model/依存取得・私物scan・OS変更なし。
+- `python -m unittest discover -s tests -p test_folder_books.py -v`：**15 PASS / 8.020秒 / skip0**（既存8＋回帰7）。自然順tie、読込中のページ追加とpage置換、列挙後のfolder→link置換、10001画像候補、旧tokenからの再scan、失敗/取消/dry-runのrollback・手動整理保持を確認。新回帰の導入時には旧実装で失敗を再現してから修正した。
+- `python -m unittest discover -s tests -v`：**353 PASS / 82.108秒 / skip0**。既存の検索・類似検索・候補承認・reader・動画を含む。P0ランキング/閾値/routingと累積改善試行**1/2**は変更なし。
+- `git diff --check`：PASS。
+- **合成スキャン比較を1回だけ実施**：空のPNG名12000ファイル/100directory（各120page）、同じ生成treeで旧HEADと更新版を比較。Python `tracemalloc`のscan中peakは **1,999,628 → 884,051 bytes**（約56%減）、ともに100冊発見。elapsedは7.393/7.359秒だが単回測定なので速度向上の証拠とはしない。生成sourceの名前/size/mtime fingerprint不変。RSS・Windows実測・実ライブラリ精度ではない。
+- C#/XAML変更なし。**今回.NET SDKなしのためCore/WinUI C# compileは再実行せず、Windows Release/XAML/native GUIも未検証**。前回のCore320/C# compile成功やP2 Windows結果を本変更の実機合格へ流用しない。
+- 3workflowsが`workflow_dispatch`のみなのを確認。**CI起動0回**。PRはdraftを維持し、mainへmergeしない。
+
+### 次の3手
+
+1. **Windowsが利用できる担当**：Release build＋生成画像folderを一冊モードで登録→scan→本を開く→ページ送り→タグ/お気に入り/読書位置保存→restart。旧tokenの再scanも確認し、Light/Dark・狭幅の実画像を見て記録する。
+2. **Linuxでも進められるbackend**：P2/P3のページ単位IDと根拠pageの保存契約を、既存cover-only候補・source revision・手動整理を維持する小さな縦切りで進める。OCR/複数ページ理解を実装・精度確認済みとはしない。
+3. **品質評価の準備**：ユーザーが選んだ代表素材で固定したタグ品質・日本語検索寄与の評価を進める。新model/追加依存や私物scanの許可は既存の限定WD導入許可と区別する。P0の残り試行枠は新根拠/ユーザー方向なしに消費しない。
+
+---
+
+## 履歴：P3 画像フォルダを「一冊」（登録時のチェックのみ・自動振り分けなし）（2026-10-16 JST 朝）
 
 開始HEAD `f3fa793`。ユーザー決定：「素材やバラの画像フォルダは今まで通り。取り込み時に『一冊として扱う』にチェックしたものだけ一冊。自動の振り分けはしない」。Hark（Linux sandbox）で実装。**CI起動0回**。仕様は[folder-books.md](folder-books.md)。
 

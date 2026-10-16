@@ -93,7 +93,10 @@ def folder_signature(pages) -> tuple[int, int]:
     """
     import hashlib
     ordered = sorted(pages)
-    digest = hashlib.sha256(json.dumps(ordered, ensure_ascii=False).encode('utf-8')).digest()
+    # v2 fixes natural-name ties to an ordinal filename order. Invalidate old
+    # cover vectors/proposals/progress on rescan rather than reusing a cover
+    # chosen by the old filesystem-enumeration order.
+    digest = hashlib.sha256(json.dumps(['folder-book-v2', ordered], ensure_ascii=False).encode('utf-8')).digest()
     return sum(size for _, size, _ in ordered), int.from_bytes(digest[:8], 'big') >> 1
 
 
@@ -291,7 +294,6 @@ class LibraryIndex:
                 raise OSError(f'Root is no longer an ordinary directory: {root}')
             patterns = tuple(json.loads(row['excludes_json']))
             folder_books = bool(row['folder_books'])
-            groups = {}
             counts = dict(discovered=0, added=0, changed=0, unchanged=0,
                           missing=0, excluded=0, skipped_links=0, ignored_files=0)
             seen = _now()
@@ -305,6 +307,9 @@ class LibraryIndex:
                 directory_info = directory.stat(follow_symlinks=False)
                 if not stat.S_ISDIR(directory_info.st_mode) or _reparse(directory_info) or directory.is_symlink():
                     raise OSError(f'Directory changed during scan: {directory}')
+                # Finish each book before walking the next directory. Keep only
+                # one folder's page metadata, not every page in the entire root.
+                pages = []
                 with os.scandir(directory) as entries:
                     for entry in entries:
                         if cancelled and cancelled():
@@ -329,16 +334,16 @@ class LibraryIndex:
                             counts['ignored_files'] += 1
                             continue
                         if folder_books and kind == 'image':
-                            parent = rel.rpartition('/')[0]
-                            groups.setdefault(parent + '/' if parent else FOLDER_ROOT, []).append(
-                                (entry.name, info.st_size, info.st_mtime_ns))
+                            pages.append((entry.name, info.st_size, info.st_mtime_ns))
                             continue
                         self._record(db, root_id, rel, kind, info.st_size, info.st_mtime_ns, seen, counts, dry_run, progress)
-            for rel, pages in groups.items():
-                if cancelled and cancelled():
-                    raise InterruptedError('Scan cancelled; previous index preserved')
-                size, token = folder_signature(pages)
-                self._record(db, root_id, rel, 'book', size, token, seen, counts, dry_run, progress)
+                if pages:
+                    if cancelled and cancelled():
+                        raise InterruptedError('Scan cancelled; previous index preserved')
+                    parent = directory.relative_to(root).as_posix()
+                    rel = FOLDER_ROOT if parent == '.' else parent + '/'
+                    size, token = folder_signature(pages)
+                    self._record(db, root_id, rel, 'book', size, token, seen, counts, dry_run, progress)
             if cancelled and cancelled():
                 raise InterruptedError('Scan cancelled; previous index preserved')
             # No missing inference happens until a complete, error-free tree walk.

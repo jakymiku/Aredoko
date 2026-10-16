@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新P3補強（2026-10-16、実機なし）**：画像フォルダ本の同番号ページ順を固定、読込前後のパス/handle/ページ一覧確認、プレビュー・タグ入力の画像候補10000件上限、フォルダ単位のスキャン集約を追加。全Python **353 PASS / skip0**。旧一冊モードrootは`folder-book-v2`用に一度再スキャン（作品ID・手動整理は保持）。Windows Release/XAML/nativeは今回未検証。次の実機確認と独立したbackend作業は[最新handoff](codex-handoff.md)・[folder-books.md](folder-books.md)を参照。CI0回、P0改善累積1/2を維持。
+
 > **最新P2 未承認候補の明示検索（2026-10-16 続行）**：確定タグと分離した未承認タグ候補の検索API（`POST /api/library/tag-suggestions/search`）・Coreプロトコル・WinUI検索方法「未承認タグ候補」（`ModeTagCandidates` / `ProposalEvidence<id>`）を実装・Windows実機確認。全Python **337 PASS**、Core **305 PASS**、x64 Release **警告0/エラー0**、native `tag-candidate-search-20261016-02` **24 checks PASS・Light/Dark PNG 4枚全目視PASS**。次は代表素材でのタグ品質・日本語検索寄与の測定、およびOCR/複数ページ根拠への拡張。詳細は[最新handoff](codex-handoff.md)と[タグ候補仕様](tag-suggestions.md)。
 
 > **最新P2レビュー（2026-10-16 狭幅修正済み）**：候補レビューUIの初回縦切り完了。通常/狭幅/live resize/狭幅open/修正承認をWindowsで59 checks PASS、Light/Dark PNG15枚全目視PASS。Release警告0/エラー0。生成素材と偽adapterによるUI確認であり実タグ精度ではない。詳細は[最新handoff](codex-handoff.md)。

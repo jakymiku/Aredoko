@@ -1,4 +1,16 @@
-## 最新：P3 画像フォルダを「一冊」（登録時のチェックのみ・自動振り分けなし）（2026-10-16 JST 朝）
+## 最新：実機なしで画像フォルダ本の不具合修正・省メモリ化（2026-10-16）
+
+開始HEAD `c1bfbb96fc8c3209e27a2257bfc6ef8a1074069a`、既存branch/ Draft PR #5を継続。実装・正確な検証結果・次の3手は[Codex引き継ぎの最上段](codex-handoff.md)を正とする。
+
+- 同番号ページ名の順序固定、読込前後のfolder/path/handle/ページ一覧の再確認、preview・tag入力も10000候補上限。
+- directory単位のスキャンへ変更し、全rootのページ情報を保持しない。合成12000ファイル/100冊の単回比較でPython追跡peak 1,999,628→884,051bytes（約56%減）。RSS/Windows性能ではない。
+- **旧一冊モードrootは一度再スキャン**（`folder-book-v2`）。作品ID・タグ・棚・お気に入りを保持、古い表紙vector/候補/読書位置を誤再利用しない。
+- folder回帰 **15 PASS**、全Python **353 PASS / 82.108秒 / skip0**、diff check PASS。**C#/XAML変更なし・.NET SDKなし、Windows Release/native GUIは未検証**。CI0回、model/依存取得0、私物scan0、P0改善累積1/2を維持。
+- 次はWindows担当のfolder本実機確認、独立してLinux側のpage ID/根拠保存契約、代表素材品質評価の準備。[仕様](folder-books.md)。
+
+---
+
+## 履歴：P3 画像フォルダを「一冊」（登録時のチェックのみ・自動振り分けなし）（2026-10-16 JST 朝）
 
 開始HEAD `f3fa793`。ユーザー決定：「素材やバラの画像フォルダは今まで通り。取り込み時に『一冊として扱う』にチェックしたものだけ一冊。自動の振り分けはしない」。Hark（Linux sandbox）で実装。**CI起動0回**。仕様は[folder-books.md](folder-books.md)。
 

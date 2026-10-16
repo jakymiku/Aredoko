@@ -21,6 +21,7 @@ MAX_DIRECTORY_BYTES = 4 * 1024 * 1024
 MAX_PLAYBACK_BYTES = 64 * 1024 * 1024
 MAX_VIDEO_RANGE_BYTES = 1024 * 1024
 MAX_STREAM_VIDEO_BYTES = 2 * 1024 ** 4
+MAX_FOLDER_PAGES = 10000
 IMAGE_MIME = {'.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
               '.webp':'image/webp', '.gif':'image/gif', '.bmp':'image/bmp'}
 VIDEO_MIME = {'.mp4':'video/mp4', '.m4v':'video/mp4', '.mov':'video/quicktime',
@@ -350,7 +351,27 @@ def folder_pages(directory, relative, patterns):
             if _excluded(child, patterns):
                 continue
             pages.append((entry.name, info.st_size, info.st_mtime_ns))
+            if len(pages) > MAX_FOLDER_PAGES:
+                raise PreviewUnavailable('Folder has too many pages')
     return pages
+
+
+def _check_folder_path(row, directory_info):
+    directory = _safe_folder(row['path'], row['relative_path'])
+    current = directory.stat(follow_symlinks=False)
+    if (current.st_dev, current.st_ino) != (directory_info.st_dev, directory_info.st_ino):
+        raise ReaderChanged('Source location changed')
+    return directory
+
+
+def _check_folder(row, directory_info, pages):
+    """Revalidate the path and complete inventory before publishing a response."""
+    directory = _check_folder_path(row, directory_info)
+    now = folder_pages(directory, row['relative_path'], tuple(json.loads(row['excludes_json'])))
+    if sorted(now) != sorted(pages):
+        raise ReaderChanged('Source changed while reading')
+    # The directory may itself have been replaced during enumeration.
+    return _check_folder_path(row, directory_info)
 
 
 def _folder_read(row, item_id, operation, page, revision):
@@ -360,8 +381,8 @@ def _folder_read(row, item_id, operation, page, revision):
     relative = row['relative_path']
     try:
         directory = _safe_folder(row['path'], relative)
-        pages = folder_pages(directory, relative, tuple(json.loads(row['excludes_json'])))
         directory_info = directory.stat(follow_symlinks=False)
+        pages = folder_pages(directory, relative, tuple(json.loads(row['excludes_json'])))
     except FileNotFoundError as error:
         raise PreviewUnavailable('Folder book unavailable') from error
     size, token = folder_signature(pages)
@@ -373,15 +394,18 @@ def _folder_read(row, item_id, operation, page, revision):
     current_revision = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode('utf-8')).hexdigest()
     if revision is not None and revision != current_revision:
         raise ReaderChanged('Archive changed; reopen the reader')
-    shown = sorted((p for p in pages if Path(p[0]).suffix.casefold() in IMAGE_MIME), key=lambda p: natural_key(p[0]))
+    # scandir order is not stable. Natural ties (p1/p01, A/a) must not silently
+    # change page numbers or the tagger's cover under the same revision.
+    shown = sorted((p for p in pages if Path(p[0]).suffix.casefold() in IMAGE_MIME),
+                   key=lambda p: (natural_key(p[0]), p[0]))
     if not shown:
         raise PreviewUnavailable('Folder has no supported image')
     source = {'item_id': item_id, 'revision': current_revision, 'kind': 'cover', 'page': 0}
     if operation == 'tag_source':
+        _check_folder(row, directory_info, pages)
         return source
     if operation == 'manifest':
-        if len(shown) > 10000:
-            raise PreviewUnavailable('Folder has too many pages')
+        _check_folder(row, directory_info, pages)
         return {'item_id': item_id, 'page_count': len(shown), 'revision': current_revision}
     index = page if operation == 'page' else 0
     if index >= len(shown):
@@ -389,16 +413,28 @@ def _folder_read(row, item_id, operation, page, revision):
     name, expected_size, expected_mtime = shown[index]
     if expected_size > MAX_IMAGE_BYTES:
         raise PreviewUnavailable('Image exceeds preview limit')
-    path = directory / name
+    # Recheck ancestors before opening, then check the opened handle before
+    # reading bytes. A folder may have become a link since the first inventory.
+    path = _check_folder_path(row, directory_info) / name
     initial = path.stat(follow_symlinks=False)
+    if not stat.S_ISREG(initial.st_mode) or _reparse(initial):
+        raise ReaderChanged('Source location changed')
     with path.open('rb') as file:
         info = os.fstat(file.fileno())
         if (not stat.S_ISREG(info.st_mode) or _reparse(info) or stat.S_ISLNK(initial.st_mode)
                 or (info.st_ino, info.st_dev) != (initial.st_ino, initial.st_dev)
                 or (info.st_size, info.st_mtime_ns) != (expected_size, expected_mtime)):
             raise ReaderChanged('Source changed while reading')
+        current = _safe_path(row['path'], name if relative == FOLDER_ROOT else relative + name).stat(follow_symlinks=False)
+        if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
+            raise ReaderChanged('Source location changed')
         data = file.read(MAX_IMAGE_BYTES + 1)
         after = os.fstat(file.fileno())
+        current = _safe_path(row['path'], name if relative == FOLDER_ROOT else relative + name).stat(follow_symlinks=False)
+        if (current.st_ino, current.st_dev, current.st_size, current.st_mtime_ns, current.st_ctime_ns) != (
+                info.st_ino, info.st_dev, info.st_size, info.st_mtime_ns, info.st_ctime_ns):
+            raise ReaderChanged('Source changed while reading')
+        _check_folder(row, directory_info, pages)
     if len(data) > MAX_IMAGE_BYTES or len(data) != expected_size:
         raise ReaderChanged('Source changed while reading')
     if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):

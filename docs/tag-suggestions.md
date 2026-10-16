@@ -17,7 +17,7 @@
 
 将来の信頼されたローカルadapterは、固定の `TaggerInfo(adapter, version, model, model_revision, preprocessing)` と `suggest(payload, cancelled)` を提供する。payloadは検査済みの最大8MiB画像またはCBZ/ZIPの自然順先頭画像のbytes/mime/source tokenだけ。パスは渡さない。現在は根拠page=0のみ、最大30個の `TagProposal(tag, explanation, page=0)` を返す。未取得のページを根拠にしない。人物関係/物語タグを表紙から断定する設計ではない。
 
-登録/在席/除外/reparse・リンク/サイズ・handle identity/変更確認は既存 `PreviewReader` を再利用。ZIPは既存の512MiB archive、4MiB directory、8MiB画像、圧縮比/暗号化等の制限を継承する。画像/表紙以外（動画・音声・PDF・論理フォルダ本）はこのsliceの入力対象外。
+登録/在席/除外/reparse・リンク/サイズ・handle identity/変更確認は既存 `PreviewReader` を再利用。ZIPは既存の512MiB archive、4MiB directory、8MiB画像、圧縮比/暗号化等の制限を継承する。[明示登録した画像フォルダ本](folder-books.md)も自然順先頭ページを入力にできる（本文/複数ページ解析ではない）。フォルダ本では画像候補10000件の上限と、読み取り前後のディレクトリ/ページ差し替え・ページ一覧の再確認を適用する。動画・音声・PDFは入力対象外。
 
 サービスは一度に一生成、推論中にcatalog guardを握らず手動保存を妨げない。32桁hex request IDで取消。adapterは取消関数を定期確認する必要があり、サービス共通部分は協調取消。接続したWD adapterは90秒timeout/取消/closeで所有workerを終了する。完了時に全候補を一括検証してから原子的に公開する。失敗・取消・source/adapter変更時は部分batchを保存せず、再実行可能。完了後の取消はfalse。クラッシュ時の途中進捗や永続job queueはまだない。
 

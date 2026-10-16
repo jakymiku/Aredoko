@@ -1,5 +1,7 @@
 # Aredoko — 直近の開発優先順位と合格条件
 
+> **最新checkpoint（2026-10-16、実機不要の開発）**：P2候補レビュー/明示検索の実装を維持し、P3画像フォルダ本の安全性・ページ順・スキャンメモリを補強。全Python353 PASS、WindowsでのP3 Release/XAML/nativeは未検証。旧一冊モードrootは一度再スキャンが必要。P0改善累積1/2を維持。[現仕様](folder-books.md)・[次の3手](codex-handoff.md)を優先し、下の古い「候補検索が次」といったcheckpointは履歴として読む。
+
 > **最新P2レビュー（2026-10-16 狭幅修正済み）**：候補レビューUIの初回縦切り完了。通常/狭幅/live resize/狭幅open/修正承認をWindowsで59 checks PASS、Light/Dark PNG15枚全目視PASS。Release警告0/エラー0。生成素材と偽adapterによるUI確認であり実タグ精度ではない。次は候補の明示検索→代表素材品質→OCR/複数ページ。詳細は[最新handoff](codex-handoff.md)。
 
 > **2026-10-15 方針更新。** これは「次にどこへ実装・検証の時間を使うか」を定める開発ロードマップ。長期目的は [product-vision.md](product-vision.md) が正本、実装済みかどうかは**最新コード・テスト・両handoff・Draft PR #5**が正本。本書の未完了項目を実装済みと書かない。完了・優先変更時はこの文書とhandoffを更新する。

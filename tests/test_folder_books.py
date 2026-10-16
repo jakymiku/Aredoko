@@ -3,7 +3,10 @@ import os
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'app'))
@@ -164,6 +167,179 @@ class FolderBookTests(unittest.TestCase):
         root = self.catalog.add_root(str(self.media), folder_books=True)
         _, items = self.index(root)
         self.assertEqual(self.reader.manifest(items['作品A/']['id'])['page_count'], 3)
+
+    def test_equal_numeric_page_names_keep_order_across_directory_enumerations(self):
+        import previews
+        directory = self.media / '同番号'
+        directory.mkdir()
+        names = ['p1.png', 'p01.png', 'p001.png']
+        for i, name in enumerate(names):
+            (directory / name).write_bytes(png(color=(i + 10, 20, 30)))
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        book = items['同番号/']['id']
+        revision = self.reader.manifest(book)['revision']
+        pages = previews.folder_pages(directory, '同番号/', ())
+        with patch('previews.folder_pages', return_value=pages):
+            first = self.reader.read_page(book, 0, revision)[0]
+        with patch('previews.folder_pages', return_value=list(reversed(pages))):
+            self.assertEqual(self.reader.read_page(book, 0, revision)[0], first)
+        self.assertEqual(first, (directory / 'p001.png').read_bytes())
+
+    def test_old_folder_token_requires_rescan_without_losing_metadata(self):
+        import hashlib
+        import json
+        from previews import folder_pages
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        book = items['作品A/']['id']
+        self.catalog.update([book], {'tags': ['維持'], 'shelf': '読む', 'favorite': True})
+        pages = sorted(folder_pages(self.media / '作品A', '作品A/', ()))
+        legacy = int.from_bytes(hashlib.sha256(json.dumps(pages, ensure_ascii=False).encode()).digest()[:8], 'big') >> 1
+        with self.catalog.index.connect() as db:
+            db.execute('UPDATE library_locations SET mtime_ns=? WHERE root_id=? AND relative_path=?',
+                       (legacy, root, '作品A/'))
+        with self.assertRaises(ReaderChanged):
+            self.reader.manifest(book)
+        _, after = self.index(root)
+        self.assertEqual(after['作品A/']['id'], book)
+        self.assertEqual(after['作品A/']['tags'], ['維持'])
+        self.assertEqual(after['作品A/']['shelf'], '読む')
+        self.assertTrue(after['作品A/']['favorite'])
+        self.assertEqual(self.reader.manifest(book)['page_count'], 3)
+
+    def _after_page_read(self, target, action):
+        """Change real generated sources at the point a page has been read."""
+        original = Path.open
+
+        @contextmanager
+        def opening(path, *args, **kwargs):
+            with original(path, *args, **kwargs) as file:
+                if path == target and args == ('rb',):
+                    def read(*read_args):
+                        data = file.read(*read_args)
+                        action()
+                        return data
+                    yield SimpleNamespace(read=read, fileno=file.fileno)
+                else:
+                    yield file
+        return patch.object(Path, 'open', opening)
+
+    def test_page_list_changes_during_read_do_not_publish_old_revision(self):
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        book = items['作品A/']['id']
+        revision = self.reader.manifest(book)['revision']
+        extra = self.media / '作品A' / 'p0.png'
+        for operation in ('page', 'tag_input', 'preview'):
+            with self.subTest(operation=operation):
+                def add_cover():
+                    extra.write_bytes(png(color=(99, 88, 77)))
+                try:
+                    with self._after_page_read(self.media / '作品A' / 'p1.jpg', add_cover):
+                        with self.assertRaises(PreviewUnavailable):
+                            if operation == 'page':
+                                self.reader.read_page(book, 0, revision)
+                            elif operation == 'tag_input':
+                                self.reader.tag_input(book)
+                            else:
+                                self.reader.read(book)
+                finally:
+                    extra.unlink(missing_ok=True)
+        self.assertEqual(self.reader.manifest(book)['revision'], revision)
+
+    @unittest.skipIf(os.name == 'nt', 'open-file replacement is platform-specific')
+    def test_page_replaced_during_read_is_not_returned(self):
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        book = items['作品A/']['id']
+        revision = self.reader.manifest(book)['revision']
+        page = self.media / '作品A' / 'p1.jpg'
+        replacement = Path(self.tmp.name) / 'replacement.png'
+        replacement.write_bytes(page.read_bytes())
+        info = page.stat()
+        os.utime(replacement, ns=(info.st_atime_ns, info.st_mtime_ns))
+        with self._after_page_read(page, lambda: replacement.replace(page)):
+            with self.assertRaises(ReaderChanged):
+                self.reader.read_page(book, 0, revision)
+
+    @unittest.skipIf(os.name == 'nt', 'symlink creation needs privileges on Windows')
+    def test_folder_replaced_by_link_after_inventory_is_not_followed(self):
+        import previews
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        book = items['作品A/']['id']
+        directory = self.media / '作品A'
+        outside = Path(self.tmp.name) / 'outside'
+        outside.mkdir()
+        for page in directory.iterdir():
+            if page.is_file():
+                copy = outside / page.name
+                copy.write_bytes(page.read_bytes())
+                info = page.stat()
+                os.utime(copy, ns=(info.st_atime_ns, info.st_mtime_ns))
+        original = previews.folder_pages
+
+        def replace_folder(*args):
+            pages = original(*args)
+            directory.rename(self.media / 'saved')
+            directory.symlink_to(outside, target_is_directory=True)
+            return pages
+
+        with patch('previews.folder_pages', side_effect=replace_folder):
+            with self.assertRaises(PreviewUnavailable):
+                self.reader.tag_input(book)
+
+    def test_page_limit_applies_to_preview_and_tagging_too(self):
+        directory = self.media / '大冊'
+        directory.mkdir()
+        for i in range(10001):
+            (directory / f'{i}.png').touch()
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        book = items['大冊/']['id']
+        for read in (self.reader.manifest, self.reader.read, self.reader.tag_source, self.reader.tag_input):
+            with self.subTest(operation=read.__name__), self.assertRaises(PreviewUnavailable):
+                read(book)
+
+    def test_failed_or_cancelled_folder_scan_rolls_back_and_keeps_annotations(self):
+        (self.media / 'cover.png').write_bytes(png())
+        root = self.catalog.add_root(str(self.media), folder_books=True)
+        _, items = self.index(root)
+        book = items['./']['id']
+        self.catalog.update([book], {'tags': ['維持'], 'favorite': True})
+        with self.catalog.index.connect() as db:
+            before = [tuple(r) for r in db.execute('SELECT * FROM library_locations ORDER BY id')]
+        # The root book is recorded before a later child directory fails.
+        (self.media / 'new.png').write_bytes(png())
+        original = os.scandir
+
+        def break_child(path):
+            if Path(path) != self.media:
+                raise PermissionError('generated failure')
+            return original(path)
+
+        with patch('library_index.os.scandir', side_effect=break_child):
+            with self.assertRaises(PermissionError):
+                self.catalog.index.scan(root)
+        # Cancel after the first newly encountered book has reached _record.
+        record = self.catalog.index._record
+        cancelled = False
+
+        def record_and_cancel(*args):
+            nonlocal cancelled
+            record(*args)
+            cancelled = True
+
+        with patch.object(self.catalog.index, '_record', side_effect=record_and_cancel):
+            with self.assertRaises(InterruptedError):
+                self.catalog.index.scan(root, cancelled=lambda: cancelled)
+        self.catalog.index.scan(root, dry_run=True)
+        with self.catalog.index.connect() as db:
+            self.assertEqual([tuple(r) for r in db.execute('SELECT * FROM library_locations ORDER BY id')], before)
+        self.catalog.sync_index()
+        self.assertEqual(self.catalog.get(book)['tags'], ['維持'])
+        self.assertTrue(self.catalog.get(book)['favorite'])
 
 
 if __name__ == '__main__':
