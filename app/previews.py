@@ -12,6 +12,7 @@ import zlib
 from pathlib import Path, PurePosixPath
 from library_index import (_excluded, _reparse, is_folder_book, folder_signature,
                            FOLDER_ROOT, FOLDER_IMAGES)
+from page_identity import describe_page
 from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
                             VIDEO_SUFFIXES, MAX_VIDEO_BYTES)
 
@@ -175,6 +176,18 @@ class PreviewReader:
         """Bounded image/first cover bytes and provenance from the same handle."""
         return self._read(item_id, operation='tag_input')
 
+    def page_catalog(self, item_id):
+        """Bounded page descriptors without decoding/decompressing image pixels."""
+        return self._read(item_id, operation='page_catalog')
+
+    def page_input(self, item_id, page, revision):
+        """A selected page and its identity from the same checked source read."""
+        if type(page) is not int or not 0 <= page < 10000:
+            raise ValueError('Invalid page')
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}', revision) is None:
+            raise ValueError('Invalid reader revision')
+        return self._read(item_id, operation='page_input', page=page, revision=revision)
+
     def _read_folder(self, row, item_id, operation, page, revision):
         try:
             return _folder_read(row, item_id, operation, page, revision)
@@ -207,7 +220,7 @@ class PreviewReader:
             if operation in ('video','video_manifest','video_range','video_frame'):
                 if suffix not in VIDEO_MIME:
                     raise PreviewUnavailable('Video player requires a supported video item')
-            elif operation in ('tag_source', 'tag_input'):
+            elif operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input'):
                 if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip'):
                     raise PreviewUnavailable('Tagging requires an image, CBZ or ZIP')
             elif operation != 'preview' and suffix not in ('.cbz', '.zip'):
@@ -259,7 +272,16 @@ class PreviewReader:
                 elif suffix in IMAGE_MIME:
                     if info.st_size > MAX_IMAGE_BYTES:
                         raise PreviewUnavailable('Image exceeds preview limit')
-                    if operation != 'tag_source':
+                    descriptor = describe_page(item_id, 'image', '', 0, 0, IMAGE_MIME[suffix], info.st_size)
+                    if operation == 'page_catalog':
+                        result = {'item_id': item_id, 'revision': current_revision,
+                                  'source_kind': 'image', 'pages': [descriptor]}
+                    elif operation == 'page_input':
+                        if page != 0:
+                            raise PreviewUnavailable('Page unavailable')
+                        result = {'item_id': item_id, 'revision': current_revision,
+                                  'kind': 'image', 'page': 0, 'page_id': descriptor['page_id']}
+                    if operation not in ('tag_source', 'page_catalog'):
                         data, mime = file.read(MAX_IMAGE_BYTES + 1), IMAGE_MIME[suffix]
                 else:
                     if info.st_size > MAX_ARCHIVE_BYTES:
@@ -273,6 +295,34 @@ class PreviewReader:
                             raise PreviewUnavailable('Archive has no supported image')
                         if operation == 'tag_source':
                             pass
+                        elif operation in ('page_catalog', 'page_input'):
+                            # Exact duplicate names have separate occurrence IDs;
+                            # natural ties retain the archive's directory order.
+                            occurrences = {}
+                            described = []
+                            for entry in entries:
+                                occurrence = occurrences.get(entry.filename, 0)
+                                occurrences[entry.filename] = occurrence + 1
+                                described.append((entry, occurrence))
+                            described.sort(key=lambda pair: natural_key(pair[0].filename))
+                            descriptors = [describe_page(item_id, 'archive', entry.filename, occurrence, number,
+                                IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()], entry.file_size)
+                                for number, (entry, occurrence) in enumerate(described)]
+                            if operation == 'page_catalog':
+                                result = {'item_id': item_id, 'revision': current_revision,
+                                          'source_kind': 'archive', 'pages': descriptors}
+                            else:
+                                if page >= len(described):
+                                    raise PreviewUnavailable('Page unavailable')
+                                entry = described[page][0]
+                                if (entry.flag_bits & 1 or entry.file_size > MAX_IMAGE_BYTES
+                                        or entry.file_size > max(1, entry.compress_size) * 200):
+                                    raise PreviewUnavailable('Archive image exceeds preview limits')
+                                with archive.open(entry) as image:
+                                    data = image.read(MAX_IMAGE_BYTES + 1)
+                                mime = descriptors[page]['mime']
+                                result = {'item_id': item_id, 'revision': current_revision, 'kind': 'page',
+                                          'page': page, 'page_id': descriptors[page]['page_id']}
                         elif operation == 'manifest':
                             result = {'item_id':item_id, 'page_count':len(entries),
                                       'revision':current_revision}
@@ -290,23 +340,23 @@ class PreviewReader:
                             with archive.open(entry) as image:
                                 data = image.read(MAX_IMAGE_BYTES + 1)
                             mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest','video','video_manifest','video_range','tag_source') and len(data) > MAX_IMAGE_BYTES:
+                if operation not in ('manifest','video','video_manifest','video_range','tag_source','page_catalog') and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
-                if suffix in VIDEO_SUFFIXES or operation in ('tag_source', 'tag_input'):
+                if suffix in VIDEO_SUFFIXES or operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input'):
                     # The native tools inherit this handle, never reopen a path.
                     # Do not publish its old frame if the location was replaced.
                     current = _safe_path(row['path'], row['relative_path']).stat(follow_symlinks=False)
                     if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
-                        if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input'):raise ReaderChanged('Source location changed')
+                        if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input'):raise ReaderChanged('Source location changed')
                         raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
                     if operation != 'preview':
                         raise ReaderChanged('Source changed while reading')
                     raise PreviewUnavailable('Source changed while reading')
                 if operation == 'tag_source': return result
-                if operation == 'tag_input': return {'source': result, 'data': data, 'mime': mime}
-                if operation in ('manifest','video_manifest'):
+                if operation in ('tag_input', 'page_input'): return {'source': result, 'data': data, 'mime': mime}
+                if operation in ('manifest','video_manifest','page_catalog'):
                     return result
                 if operation=='video_range':return data,mime,info.st_size
                 return data, mime
@@ -407,7 +457,13 @@ def _folder_read(row, item_id, operation, page, revision):
     if operation == 'manifest':
         _check_folder(row, directory_info, pages)
         return {'item_id': item_id, 'page_count': len(shown), 'revision': current_revision}
-    index = page if operation == 'page' else 0
+    if operation == 'page_catalog':
+        _check_folder(row, directory_info, pages)
+        return {'item_id': item_id, 'revision': current_revision, 'source_kind': 'folder',
+                'pages': [describe_page(item_id, 'folder', name, 0, number,
+                    IMAGE_MIME[Path(name).suffix.casefold()], size)
+                    for number, (name, size, _) in enumerate(shown)]}
+    index = page if operation in ('page', 'page_input') else 0
     if index >= len(shown):
         raise PreviewUnavailable('Page unavailable')
     name, expected_size, expected_mtime = shown[index]
@@ -440,6 +496,11 @@ def _folder_read(row, item_id, operation, page, revision):
     if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
         raise ReaderChanged('Source changed while reading')
     mime = IMAGE_MIME[Path(name).suffix.casefold()]
+    if operation == 'page_input':
+        descriptor = describe_page(item_id, 'folder', name, 0, index, mime, expected_size)
+        source = {'item_id': item_id, 'revision': current_revision, 'kind': 'page',
+                  'page': index, 'page_id': descriptor['page_id']}
+        return {'source': source, 'data': data, 'mime': mime}
     if operation == 'tag_input':
         return {'source': source, 'data': data, 'mime': mime}
     return data, mime

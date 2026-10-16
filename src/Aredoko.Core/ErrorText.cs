@@ -11,6 +11,14 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
+        ["Invalid page text request"] = "ページ本文の指定が無効です。対象を選び直してください。",
+        ["Invalid page text extractor configuration"] = "文字抽出モデルの設定が無効です。本文は保存していません。",
+        ["Page text extraction in progress"] = "ページ本文を抽出中です。完了か取消後にやり直してください。",
+        ["Page text extraction cancelled; no text saved"] = "ページ本文の抽出を取り消しました。本文は保存していません。",
+        ["Page text extraction failed; no text saved"] = "ページ本文の抽出に失敗しました。本文は保存していません。",
+        ["Invalid page text output; no text saved"] = "文字抽出モデルの応答が無効です。本文は保存していません。",
+        ["Page text batch exceeds limit; no text saved"] = "抽出した本文が上限を超えました。ページ数を減らしてください。本文は保存していません。",
+        ["Page text extractor changed; retry"] = "抽出中に文字抽出モデルが変わりました。やり直してください。",
         ["Invalid proposal history request"] = "タグ候補の履歴指定が無効です。開き直してください。",
         ["Tag source unavailable"] = "タグ候補の対象を読み取れません。フォルダ登録・除外・接続状態を確認してください。",
         ["Tag source unavailable; records preserved"] = "対象にアクセスできません。タグ候補の履歴は保持しています。",
@@ -73,6 +81,9 @@ public static class ErrorText
         ["Invalid exclusion pattern"] = "除外ルールが無効です（1〜200文字）。",
         ["Use relative POSIX-style exclusion patterns"] = "除外ルールはフォルダ内の相対パスを「/」区切りで書いてください。",
         ["folder_books must be true or false"] = "「一冊として扱う」の指定が無効です。",
+        ["Page source changed; rescan and refresh page index"] = "ページ構成が変わりました。再スキャンしてページ索引を更新してください。",
+        ["Page source unavailable"] = "このページの元データを読み取れません。登録状態・形式・容量を確認してください。",
+        ["Invalid page index request"] = "ページ索引の指定が無効です。開き直して再試行してください。",
         ["Folder book mode cannot change after scanning"] = "「画像フォルダを一冊として扱う」はスキャン後に変更できません。登録時の設定のまま再登録してください。",
         ["Choose an absolute folder path"] = "フォルダを絶対パスで選んでください。",
         ["The library must not contain the application database"] = "アプリのデータベースを含むフォルダはライブラリにできません。",

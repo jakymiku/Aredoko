@@ -1,5 +1,7 @@
 # P2：由来付きタグ候補・承認APIの最初の縦切り
 
+> **2026-10-16 続行**：[ページ根拠索引・本文保存/明示検索の独立API](page-evidence.md)を追加。実OCRと複数ページタグ候補への接続は後続。本書の既存タグ候補は引き続き画像/表紙のみの由来で、本文解析済みとは扱わない。
+
 2026-10-16。[製品ビジョン](product-vision.md)・[開発優先順位](development-priorities.md)に沿うバックエンドとWinUIの基盤。**P2全体の完成ではない。WD画像分類adapterの接続コードを追加（[導入・検証状況](wd-tagger.md)）。WinUI候補/根拠・修正承認/却下・履歴・取消画面（通常/狭幅/live resize）と、確定タグとは分離した「未承認タグ候補」の明示検索モード（`POST /api/library/tag-suggestions/search` / `ModeTagCandidates`）までWindows実機で確認済み。OCR/複数ページ解析、および代表素材での実タグ品質評価は未実施。** EmbeddingGemmaの既存埋め込み処理をタグ生成モデルとして扱わず、固定の偽アダプタによる契約テストと実モデルの品質を区別する。
 
 ## 保存と承認

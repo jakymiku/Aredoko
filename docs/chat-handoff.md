@@ -1,4 +1,16 @@
-## 最新：実機なしで画像フォルダ本の不具合修正・省メモリ化（2026-10-16）
+## 最新：ページ根拠索引・本文保存/明示検索まで実装（2026-10-16、実機なし）
+
+開始HEAD `4d7792f0d6285f86672d3af9006e5f85995b8349`、同じfeature / Draft PR #5を継続。正確な実装・検証・次の3手は[Codex引き継ぎ最上段](codex-handoff.md)、契約は[page-evidence.md](page-evidence.md)。
+
+- 画像/ZIP/CBZ/folder本のopaque page ID、版別索引と変更検査付き根拠画像API。ページ追加で番号がずれても同じlocatorのIDを保持し、古い版で新しい画像を表示しない。
+- 任意extractorによる本文の版/producer別保存・再利用・取消・全体rollback、同一ページ内ANDの明示本文検索。作品単位に集約し最大20作品/3根拠、current/stale/unavailable/unverifiedを区別。除外/解除/空scopeの境界と手動整理を保全。
+- **実OCR adapter・専用WinUI画面・複数ページタグ推定は未接続**。製品の生成は既定503、保存済み本文はモデル不在でも一覧/検索可能。通常/AI/候補検索を維持。
+- 全Python **383 PASS / 87.094秒 / skip0**（新規ページ/本文30件）。実OCR精度の検証ではない。C#はエラー辞書のみ、.NET SDK/WindowsなしでCore/Release/native未検証。CI0・model/依存取得0・私物scan0・P0累積1/2を維持。
+- 次は固定OCR素材/正解/採点→許可されたOCR adapter→Core/WinUI根拠接続。Windows担当のP3実機確認と代表素材の品質評価も残る。旧folder-book-v2用の一度の再scan条件は前節どおり。
+
+---
+
+## 履歴：実機なしで画像フォルダ本の不具合修正・省メモリ化（2026-10-16）
 
 開始HEAD `c1bfbb96fc8c3209e27a2257bfc6ef8a1074069a`、既存branch/ Draft PR #5を継続。実装・正確な検証結果・次の3手は[Codex引き継ぎの最上段](codex-handoff.md)を正とする。
 

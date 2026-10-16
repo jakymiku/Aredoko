@@ -1,5 +1,11 @@
 # 共通API（操作試作 v0）
 
+## P2/P3：ページ根拠索引と明示的な本文検索（2026-10-16 続行）
+
+- `POST /api/library/page-index`、`GET /api/library/page-index/{item_id}` と `/pages/{page_id}?revision=...`：画像・ZIP/CBZ・フォルダ本のページID/版/順序を保存し、根拠画像を変更検査付きで取得。
+- `GET /api/library/page-text/status` と `/{item_id}`、`POST /api/library/page-text/generate` / `cancel` / `search`：任意extractorの原子的な本文保存/再利用/取消、作品単位・同一ページ内ANDの明示検索。通常文字/AI/未承認タグ候補検索は維持。
+- **実OCR adapter・WinUI本文画面は未接続**。既定生成503、保存済み本文はモデル不在でも検索可能。全Python383 PASS、Windows/.NET未検証。上限・認証・版・stale・adapter契約は[page-evidence.md](page-evidence.md)。
+
 ## P2：由来付きタグ候補・承認APIと未承認候補の明示検索（2026-10-16）
 
 - `GET /api/library/tag-suggestions/{item_id}?limit=10&before=<batch_id>`：候補/確定/却下の履歴とmodel/version・物理revision・根拠ページ・stale・生成available。通常タグ検索に候補を混ぜない。

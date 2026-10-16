@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新P2/P3ページ根拠（2026-10-16、実機なしで続行）**：ページID・版ごとの索引/根拠画像、任意extractorの本文保存/取消/再利用、明示的な本文検索APIを追加。全Python **383 PASS / 87.094秒 / skip0**。**実OCR adapterとWinUI本文画面は未接続、製品の抽出は既定503**。通常/AI/候補検索と手動タグは維持。[仕様](page-evidence.md)・[最新handoff](codex-handoff.md)を参照。次は固定OCR評価素材/採点→許可されたadapter接続→native根拠表示。Windows/.NET検証なし、CI0・P0改善累積1/2を維持。
+
 > **最新P3補強（2026-10-16、実機なし）**：画像フォルダ本の同番号ページ順を固定、読込前後のパス/handle/ページ一覧確認、プレビュー・タグ入力の画像候補10000件上限、フォルダ単位のスキャン集約を追加。全Python **353 PASS / skip0**。旧一冊モードrootは`folder-book-v2`用に一度再スキャン（作品ID・手動整理は保持）。Windows Release/XAML/nativeは今回未検証。次の実機確認と独立したbackend作業は[最新handoff](codex-handoff.md)・[folder-books.md](folder-books.md)を参照。CI0回、P0改善累積1/2を維持。
 
 > **最新P2 未承認候補の明示検索（2026-10-16 続行）**：確定タグと分離した未承認タグ候補の検索API（`POST /api/library/tag-suggestions/search`）・Coreプロトコル・WinUI検索方法「未承認タグ候補」（`ModeTagCandidates` / `ProposalEvidence<id>`）を実装・Windows実機確認。全Python **337 PASS**、Core **305 PASS**、x64 Release **警告0/エラー0**、native `tag-candidate-search-20261016-02` **24 checks PASS・Light/Dark PNG 4枚全目視PASS**。次は代表素材でのタグ品質・日本語検索寄与の測定、およびOCR/複数ページ根拠への拡張。詳細は[最新handoff](codex-handoff.md)と[タグ候補仕様](tag-suggestions.md)。

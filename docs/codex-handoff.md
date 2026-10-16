@@ -1,4 +1,38 @@
-## 最新：画像フォルダ本の安全性・ページ順・スキャンメモリを補強（2026-10-16、実機なし）
+## 最新：ページ根拠索引と本文の保存・明示検索（2026-10-16、実機なしで続行）
+
+開始HEAD **`4d7792f0d6285f86672d3af9006e5f85995b8349`**。branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。ユーザーの「作業進められる所まで」に従い、前節の次手だったP2/P3ページID/根拠保存から本文検索までを実装。着手前と提出前にremote HEADを確認。実装commitは本節を導入したcommitのgit log、公開後の正確なHEADはPRを参照。
+
+**現在フェーズ：P2/P3ページ根拠・本文バックエンド。完了：ページ索引/根拠画像、任意extractorの原子的保存/取消/再利用、本文の明示検索API。P0 baseline v7済み、改善累積1/2を維持。実OCR adapter・WinUI本文画面・複数ページタグ推定は未接続。** 製品の既定抽出は503。元ファイルや確定タグを編集せず、モデル/依存の追加取得・私物scan・CI起動は0。
+
+### 実装
+
+- `app/page_identity.py` / `page_index.py`：画像/ZIP/CBZ/明示したfolder本でopaque page IDと版別snapshotを保存。ページ追加による番号ずれとページの同一性を分離し、同名ZIP entryも区別。head/版/現source一致時だけ根拠画像を返す。page-index作成は画像を展開/decodeせず、bounded metadataのみ。失敗/取消時は新snapshotとheadを同時rollback。
+- `app/previews.py`：既存read-only readerへ`page_catalog/page_input`を追加。原画像bytes・revision・page IDを同じ検査済み読込から返す。読込前後のsource確認、8MiB/ZIP512MiB/中央directory4MiB/10000候補、圧縮比/リンク拒否を維持。既存cover-only候補やreader順序を変えない。
+- `app/page_text.py`：信頼された任意extractorの接続口、1要求1〜16ページ・1ページ20000文字・新規合計100000文字、producer/版別の本文履歴、現在producerのhead。同じ版/producerは空本文も再利用。モデル処理中はcatalog/DB lockを持たず、保存直前にroot/head/producer/取消/物理revisionを再検査して要求全体をcommitする。失敗/取消時は以前の本文と利用者の手動編集を保持。
+- 明示本文検索：NFKC/大小/かな・同じページ内AND、作品ごとに集約、20作品/ページ・先頭3根拠・各240文字prefix・producer/source状態。現在の除外/登録解除と厳密なroot unionを尊重し、無効な空scopeを全体へ広げない。旧版/旧producer記録は保持するがcurrent head検索へ混ぜない。source欠損/古い/確認不能は状態を明記し、画像取得で旧版を別画像へ差し替えない。
+- `production_server.py`：認証付き`page-index`と`page-text`のAPI。POST Origin/token/32KiB、厳密なID/query/body、409/404/400/503。公開APIに任意path/本文/model指定の注入口はない。`search_terms.py`は長文正規化を既存LRUに保持しない関数を共用。C#は`ErrorText`固定文言11件の追加だけ。
+- 通常/AI/未承認タグ候補の検索、確定タグ・棚・お気に入り・読書位置、P0 ranking/閾値/routingは維持。**今回追加のAPIはGUI未接続**。詳細/制限/adapter契約は[page-evidence.md](page-evidence.md)、API一覧と開始ガイド/優先順位も更新。
+
+### 実行した検証と限界
+
+- Linux / Python **3.12.14**。生成PNG・ZIP/フォルダ、一時DB、偽extractorのみ。実OCR/WDモデルは起動していない。
+- ページ識別/APIの対象テスト14件PASS。本文追加時の対象テストは29件PASS（21.557秒）。その後に作品pagination/根拠3件上限のケースを追加し、最終全体テストへ含めた。
+- `python -m unittest discover -s tests -v`：**383 PASS / 87.094秒 / skip0**（新しいページ/本文30件を含む）。再起動/改版/重複ZIP/抽出中のsource・head・producer変更/失敗・取消/並行生成・手動編集/空結果再利用/上限/除外・解除復元/20作品・3根拠・本文pagination/auth/既定503まで確認。
+- `test_error_text_coverage.py`：3件PASS（0.251秒）。固定HTTPエラーとpage_textのruntimeエラーもC#日本語辞書で網羅。
+- 初回の本文テスト1件は除外fixtureに既存のbasename契約と異なる`comic/`を指定して失敗。既存除外規則に従う`comic`へ修正し、再scan前の除外反映/復元と解除復元が通ることを確認。テスト内で他moduleのTestCaseを直接importして重複収集していた点もmodule参照へ修正し、最終件数には重複なし。
+- **.NET SDK/Windowsなし**：Core build/test・Windows Release/XAML/native GUIは今回未実行。C#文言の静的網羅だけをcompileやGUI合格にしない。既存P2/P1のWindows成功は過去revisionの履歴。
+- 大規模OCR DB性能・OCR精度・検索品質・worker runtimeは未検証。保存履歴の自動GC、全root一括本文索引、永続job queue、本文/複数ページのタグ候補統合は未実装。
+- 3workflowsは`workflow_dispatch`のみ、CI起動0回を維持。main merge/force push/新規PRなし。最終diff/link checkを通して同じfeature/Draft PRへ保存する。
+
+### 次の3手
+
+1. **実機不要の評価準備**：固定した日本語ページ素材・正解本文・本文検索query/期待pageを作り、CERと作品/page到達率を採点する小さな評価toolを作る。モデル/私物なしで採点契約を検証し、合成runtime検証と実精度を分ける。
+2. **OCR adapterの縦切り**：許可済み/許可を得たローカルOCRを、既存のpage payloadへ接続。画素数/時間/共有推論lock/worker終了/取消をboundedにし、固定素材で実CPU/OCRと費用を測る。現状の限定WD導入許可を新OCRの取得許可へ拡張解釈しない。複数ページタグ推定は別契約・別gate。
+3. **Windows担当**：残るP3 Release・生成folder本の登録/読書/保存/restart/旧token再scanを確認し、次に新本文APIのCore契約とWinUIの根拠page照合へ進む。Light/Dark・狭幅・取消/古い応答排除は実機操作/画像で確認する。
+
+---
+
+## 履歴：画像フォルダ本の安全性・ページ順・スキャンメモリを補強（2026-10-16、実機なし）
 
 開始HEAD **`c1bfbb96fc8c3209e27a2257bfc6ef8a1074069a`**、branch `feat/winui3-production-mvp-20261011`、base `feat/gui-framework-comparison-20261010` / Draft PR #5を維持。既存作業コピーのbranch/HEAD/statusを確認し、古いコピーを上書きせず最新remoteの別コピーで実装。AGENTS→vision→優先順位→両handoff→Issue4/PR5を照合した。ユーザー依頼は「実機を伴わないで出来る開発」。実装commitは本節を導入したcommitのgit logを参照。
 

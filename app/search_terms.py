@@ -24,6 +24,11 @@ _KATAKANA = {code: code - 0x60 for code in range(0x30A1, 0x30F7)}  # ァ..ヶ ->
 
 @functools.lru_cache(maxsize=200_000)
 def _normalize(text):
+    return normalize_document(text)
+
+
+def normalize_document(text):
+    """Same normalization without retaining large OCR documents in the LRU."""
     return unicodedata.normalize('NFKC', text).casefold().translate(_KATAKANA)
 
 

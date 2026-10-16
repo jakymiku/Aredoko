@@ -25,6 +25,8 @@ from laya_config import model_path as laya_model_path
 from server import handler_for
 from tag_suggestions import TagSuggestions
 from tag_candidate_search import search_candidates
+from page_index import PageIndex
+from page_text import PageTextIndex
 from wd_tagger import create_tagger
 
 class DisabledAI:
@@ -75,12 +77,14 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True):
         return SearchIntent(LayaProcess(repo/'.venv-ai/Scripts/python.exe',laya_model_path(repo),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None):
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
     base=handler_for(catalog,token)
     previews=PreviewReader(catalog)
+    page_index=PageIndex(catalog,previews)
+    page_text=PageTextIndex(catalog,page_index,text_extractor)
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
     class Handler(base):
@@ -119,6 +123,49 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             if path.startswith('/api/library'):
                 if self.headers.get('X-Aredoko-Token')!=token:
                     return self.send(403,{'error':'Invalid session'})
+                if path.startswith('/api/library/page-text/'):
+                    try:
+                        if path=='/api/library/page-text/status':
+                            if urlparse(self.path).query:raise ValueError('Unexpected status query')
+                            return self.send(200,page_text.status())
+                        match=re.fullmatch(r'/api/library/page-text/([1-9][0-9]{0,18})',path)
+                        if match is None:raise ValueError('Invalid page text route')
+                        args=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=3)
+                        if set(args)-{'offset','limit','revision'} or any(len(v)!=1 for v in args.values()):
+                            raise ValueError('Invalid text query')
+                        values={}
+                        for key in ('offset','limit'):
+                            if key in args:
+                                if re.fullmatch(r'0|[1-9][0-9]{0,4}',args[key][0]) is None:raise ValueError('Invalid paging')
+                                values[key]=int(args[key][0])
+                        if 'revision' in args:values['revision']=args['revision'][0]
+                        return self.send(200,page_text.list(int(match[1]),**values))
+                    except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
+                    except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
+                    except ValueError:return self.send(400,{'error':'Invalid page text request'})
+                if path.startswith('/api/library/page-index/'):
+                    try:
+                        match=re.fullmatch(r'/api/library/page-index/([1-9][0-9]{0,18})(?:/pages/([0-9a-f]{64}))?',path)
+                        if match is None:raise ValueError('Invalid page index route')
+                        item=int(match[1])
+                        args=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=3)
+                        if any(len(v)!=1 for v in args.values()):raise ValueError('Repeated query')
+                        if match[2] is not None:
+                            if set(args)!={'revision'}:raise ValueError('One revision is required')
+                            payload=page_index.input(item,match[2],args['revision'][0])
+                            return self.send(200,payload['data'],payload['mime'])
+                        if set(args)-{'offset','limit','revision'}:raise ValueError('Invalid page query')
+                        values={}
+                        for key in ('offset','limit'):
+                            if key in args:
+                                if re.fullmatch(r'0|[1-9][0-9]{0,4}',args[key][0]) is None:raise ValueError('Invalid paging')
+                                values[key]=int(args[key][0])
+                        if 'revision' in args:values['revision']=args['revision'][0]
+                        return self.send(200,page_index.list(item,**values))
+                    except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
+                    except PreviewBusyError:return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
+                    except ValueError:return self.send(400,{'error':'Invalid page index request'})
                 if path.startswith('/api/library/tag-suggestions/'):
                     try:
                         evidence=re.fullmatch(r'/api/library/tag-suggestions/([1-9][0-9]{0,18})/evidence',path)
@@ -282,6 +329,30 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path.startswith('/api/library/page-text/'):
+                    try:
+                        if self.path=='/api/library/page-text/generate':
+                            if set(body)!={'item_id','page_ids','revision','request_id'}:raise ValueError('Invalid extraction fields')
+                            return self.send(200,page_text.generate(**body))
+                        if self.path=='/api/library/page-text/cancel':
+                            if set(body)!={'request_id'}:raise ValueError('Invalid cancellation fields')
+                            return self.send(200,page_text.cancel(body['request_id']))
+                        if self.path=='/api/library/page-text/search':
+                            if 'query' not in body or set(body)-{'query','kind','view','page','root_ids','shelf','model'}:
+                                raise ValueError('Invalid text search fields')
+                            return self.send(200,page_text.search(**body))
+                        return self.send(404,{'error':'Not found'})
+                    except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
+                    except PreviewBusyError:return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
+                    except ScanBusyError:raise
+                    except (ValueError,TypeError):return self.send(400,{'error':'Invalid page text request'})
+                if self.path=='/api/library/page-index':
+                    if set(body)!={'item_id'}:raise ValueError('Invalid page index request')
+                    try:return self.send(200,page_index.refresh(body['item_id']))
+                    except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
+                    except PreviewBusyError:return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
                 if self.path=='/api/library/tag-suggestions/search':
                     if set(body)-{'query','kind','view','page','root_ids','shelf','model'}:raise ValueError('Invalid candidate search fields')
                     return self.send(200,search_candidates(suggestions,**body))
