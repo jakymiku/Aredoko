@@ -1,5 +1,36 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-17 本文ページ画像の直接embedding・範囲指定/検索集約/WinUI読書まで
+
+実装commit：**`5a466290b9a9169e4dac3f407aac17625159c894`**。開始HEAD `93f55b07897f93e9d5c4448b958ad896c2cdccaf`（clean、remote差0を再確認）。branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。**現在P2、完了：最初のbounded内部ページ画像索引→作品集約→一致ページ読書の縦切り。P0 baseline済み/改善試行累積1/2は維持。** 英語WD原文の日本語意味検索と既存cover/video/page-text/手動整理を保持。OCR専用処理は保留のまま。ユーザー指示に沿いUIを簡潔に保ち、機能削減なし。
+
+### 今使えるもの・保存の境界
+
+- 本の右クリック **「本のページをAI検索に追加…」** → 開始ページ/ページ数を指定（**1冊・1〜16ページ/要求**）→ 既存 **「画像の見た目（AI）」/「両方で探す（AI）」** から検索。1作品に集約し、一致ページ番号・モデル・元版・cosine根拠を返す。開くと正しい版のページから読む。CBZ/ZIP/明示folder本が対象。通常AI buildは表紙中心のまま、内部ページを勝手に一括解析しない。明示scopeを必須とし、保存AI範囲外の選択を全体に拡大しない。
+- `app/page_semantics.py`：既存PageIndex・検査済み入力・shared inference lock/worker/lifecycleを再利用。profile別`ai_page_vectors`へ物理source revision/page ID/番号/前処理`book-page-image:v1`付き正規化f32を保存。同版/同profileは再利用、手動タグ変更だけでは無効化しない。推論中はcatalog guardを解放し、保存前にroot/scope/head/page/物理版/取消を再検査して**選択範囲全体をatomic公開**。未完了範囲は保存せず、以前の範囲/手動metadataを保持。通常cover/text/video/proposal索引を維持。
+- `POST /api/library/ai/pages`（item_id/page_ids/revision/scope全field必須）、既存`ai/status`、**job ID限定**`ai/pages/cancel`。別jobを中断しない。元画像bytes/path/modelを注入できる公開APIは追加しない。既存画像/ZIP/ratio/link上限を維持。rootのDB完全削除で新tableを全profile sidecarとcatalog本体から削除。
+- 既存画像モダリティ内で、本の最良ページscoreをcoverと最大値集約。全体scope/cap/filter後の作品のみ、同じ本は1結果。stale/unverified/unavailableなページ索引は除外し、textモードには混ぜない。既存順位統合/閾値/重みは変更しない。
+- Coreの厳密JSON根拠検証、新`AIPageMatch`、reader manifestと完全同版の場合だけページ番号を適用（見開きanchor保持）。版が違えば既存の読書復帰へ。WinUIはcontext内の一操作・範囲ダイアログ・既存結果根拠だけ追加。途中のcloseは所有jobをcancelし、タグ編集は保存/破棄しない。詳細：[操作・API・仕様と限界](page-image-search.md)。
+
+### 対象/全体/実GPU/Windows検証
+
+- **Python全436件実行：433 PASS / 3 Windows platform SKIP、221.571秒**。新規`test_page_semantics.py` **11 PASS**：明示実行のみ、選択範囲の再利用/追加、作品最大ページ集約/text分離、取消/部分失敗保持、推論中source/除外変更、folder本・手動整理・profile、破損cache、共有lock、2profile purge、認証/厳密body/版409、別jobをcancelしないHTTP。
+- **Core397 PASS**（19 checks追加）、**Windows x64 SelfContained Release警告0/エラー0、9.72秒**。logs：`data/page-image-python-20261017.log` / `data/page-image-core-20261017.log` / `data/page-image-release-20261017.log`。compileall/diff --check/追加文書リンク検査PASS。
+- **既存EG2/CUDAの固定生成素材比較**：日本語8 PNGをOCRへ渡さず画像のまま読み、7冊（同一無地表紙）・事前指定8質問と診断2問で一度比較。coverのみHit@1=0.125/MRR=0.4033/Recall@5=0.75 → 内部ページ追加後はいずれも1.0、**目的作品＋ページ同時Top1=8/8**。追加索引8page=1.601秒、vector本体24,576bytes。初回cover13.627秒はloadを含み、page準備と直接速度比較しない。人工的に表紙を同じにした到達確認であり、私物/代表漫画/WD分類の精度へ一般化しない。正解なしの診断queryも候補を返す（top0.598093/0.696851）；拒否成功ではない。P0 tuning/新holdoutと扱わない。
+- `tools/evaluate_page_images.py`：既存固定素材/font/画像receiptを照合し、質問/期待作品・page/条件を**推論前**にprotocolへ保存。SHA `f46195453026c2c1a3655e0e19d9b101f7eb904c95bcde6733571f946b4f7319`。`data/page-images/v1-20261017-01/report.json`、生成本bytes/mtime不変、owned worker停止。再現コマンド：`python tools/evaluate_page_images.py --rendered data/ocr-eval/ocr-v1-20261017 --output data/page-images/<new-run>`。rendered未作成環境は既存`create_ocr_fixture.py`と導入済みPillow/日本語fontで生成する；OCR runtimeは不要。
+- **native `page-images-20261017-02`：37 checks PASS、Light/Darkの10 PNG全目視PASS、app正常終了2、embedding worker停止**。`python tools/test_tag_review_ui.py --page-image-only --output data/ai-ui/<new-run>`。生成本のGUI範囲指定→実GPU索引→日本語「教室の机」で2/3へ読書、狭幅/live resize、未保存タグ保持、app再起動後同版3ページ再利用、元bytes/mtime/設定保持を確認。所有PID/HWND/foreground検査で入力を限定。Windows Sandboxは既知の無効環境で、既存許可のlocalテストを継続。
+- 初回 **`page-images-20261017-01` FAILED**：索引完了後、狭幅で閉じた詳細paneのTxtEditStatusをテストが参照して待機失敗。未保存tagがあり所有process終了にfallbackを使用、runtime_pass=falseを維持。**製品のpane/dirty動作を変えず**、テストで「詳細」を開く手順を追加し一度だけ再実行。初回4 PNGも全目視して記録、FAILEDを成功へ変更していない。
+- WinUI設計/API確認（restored projectのNumberBox/既存control）・コードレビュー実施。反射JSON/古い応答/close前後のcancel/他job保護/Light-Dark/narrow/保存scope/由来を点検。**WinUIAnalyzerは未導入・未実行、High Contrast/Narrator/Native AOT/新規キーボード網羅/大規模page性能/代表私物品質は未検証**。今回他の既存native batchを全再実行したとはしない。
+- 新download/依存追加/私物scan/外部media送信/CI dispatchは0。3 workflowすべてmanual `workflow_dispatch`のみを再確認。main/他PRを変更しない。テストapp/backend/所有GPU worker終了。
+
+### 次の異なる3手
+
+1. **本ごとのページ索引coverage/次範囲へ進む小さいUX**：何ページ/どの範囲が同版・同profileで準備済みかをCPUだけで返し、次の未処理範囲を選べるようにする。現在は毎回開始ページ/16上限を手動指定、普通のAI coverageは内部ページ数を含まない。古い版と準備済みを混同せず、編集/範囲/取消を保つ。
+2. **総ページ上限付きの明示複数本job**：上記状態を使い、選択作品・総ページ/冊数上限・再開/変更/部分失敗を持つqueueへ段階拡張。いきなり1TBの全ページを解析しない。生成素材で多数page vectorのrank/物理版検査/DB容量/メモリ・時間を測り、1冊16ページの手作業から進める。現状のsearch item上限10000は維持。
+3. **明示選択した代表素材の内容検索/WD日英検索の実測**：漫画/縦書き/小さい字/キャラ/略語/複合条件の到達と誤候補を記録。今回の人工8/8を一般化しない。**直接索引した範囲でも漏れが多い場合だけOCRを検討**し、既存本文APIを維持。数千pending性能・複数ページ文脈タグ・音声/音楽内容索引は未完了backlogとして残す。
+
+---
+
 ## 2026-10-17 英語タグを保持した日本語意味検索・未承認候補用索引/API/WinUI
 
 実装commit：`0026b51337539edf60f59de5adcd93e3d93b6e1d`。開始HEAD `ca942766aa2876c87c763322cafb69fe08cea2e8`（clean、既存Draft PR5/production branchを継続）。現在P2。P0 baseline済み/改善試行累積**1/2**を維持。ユーザーが「WDの英語タグをEmbeddingGemma 2で日本語から検索する」方向を承認したため実装。**英語原文を保持・日本語への逐次手動翻訳は不要、OCRは保留のまま。** 既存の本文ページ直接索引の後続目標は維持する。
