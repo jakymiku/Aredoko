@@ -21,7 +21,16 @@ from previews import PreviewReader, PreviewUnavailable
 MAX_ITEMS=10_000
 ROW_BATCH_SIZE=256
 PROGRESS_INTERVAL=16
+# Input preprocessing is independent of the embedding model/vector space. Old
+# text vectors stay reusable; images/video need one explicit rebuild after the
+# representative-frame implementations change.
+IMAGE_SOURCE_CONTRACT='representative-image:v1'
+VIDEO_SOURCE_CONTRACT='timecoded-video:v1'
 class AIBusy(RuntimeError): pass
+
+def source_contract(row,profile):
+    if 'cover' not in profile.modalities:return None
+    return {'image':IMAGE_SOURCE_CONTRACT,'video':VIDEO_SOURCE_CONTRACT}.get(row.get('kind'))
 
 def revision(row):
     fields=[row['root_id'],row['relative_path'],row['size_bytes'],row['mtime_ns'],row['title'],row['tags']]
@@ -40,6 +49,8 @@ class VectorStore:
                 CREATE TABLE IF NOT EXISTS ai_video_frames(item_id INTEGER NOT NULL, revision TEXT NOT NULL,
                     at_ms INTEGER NOT NULL CHECK(at_ms>=0 AND at_ms<=86400000), vector BLOB NOT NULL,
                     PRIMARY KEY(item_id,at_ms));
+                CREATE TABLE IF NOT EXISTS ai_source_contracts(item_id INTEGER PRIMARY KEY,
+                    revision TEXT NOT NULL, contract TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS ai_state(id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
             ''')
             profile=db.execute('SELECT value FROM ai_profile').fetchone()
@@ -62,19 +73,29 @@ class VectorStore:
     def fresh_ids(self,rows):
         if not rows:return set()
         if len(rows)>ROW_BATCH_SIZE:raise ValueError('Freshness batch exceeds limit')
-        eligible={row['id']:revision(row) for row in rows}
+        eligible={row['id']:(revision(row),source_contract(row,self.profile)) for row in rows}
         with self.connect() as db:
-            records=db.execute("SELECT item_id,revision FROM ai_vectors WHERE modality='text' AND item_id IN ("+
+            records=db.execute("SELECT v.item_id,v.revision,c.revision,c.contract FROM ai_vectors v "
+                "LEFT JOIN ai_source_contracts c ON c.item_id=v.item_id WHERE v.modality='text' AND v.item_id IN ("+
                 ','.join('?' for _ in eligible)+')',list(eligible)).fetchall()
-        return {item_id for item_id,rev in records if eligible.get(item_id)==rev}
+        return {item_id for item_id,rev,source_rev,contract in records
+                if eligible[item_id][0]==rev and (eligible[item_id][1] is None or
+                   (source_rev==rev and contract==eligible[item_id][1]))}
 
-    def fresh(self,item_id,rev):
+    def fresh(self,item_id,rev,contract=None):
         with self.connect() as db:
-            return db.execute("SELECT 1 FROM ai_vectors WHERE item_id=? AND revision=? AND modality='text'",(item_id,rev)).fetchone() is not None
-    def put(self,item_id,rev,vectors,video_frames=None):
+            if not db.execute("SELECT 1 FROM ai_vectors WHERE item_id=? AND revision=? AND modality='text'",(item_id,rev)).fetchone():return False
+            return contract is None or db.execute('SELECT 1 FROM ai_source_contracts WHERE item_id=? AND revision=? AND contract=?',(item_id,rev,contract)).fetchone() is not None
+    def fresh_row(self,row):
+        return self.fresh(row['id'],revision(row),source_contract(row,self.profile))
+    def text(self,row):
+        return self._vector(row,'text')
+    def put(self,item_id,rev,vectors,video_frames=None,*,source_contract=None):
         # Validate every modality before replacing the previous revision atomically.
         if not vectors or any(mode not in self.profile.modalities for mode in vectors):
             raise ValueError('Unsupported vector modality')
+        if source_contract is not None and (source_contract not in (IMAGE_SOURCE_CONTRACT,VIDEO_SOURCE_CONTRACT) or 'cover' not in self.profile.modalities):
+            raise ValueError('Unsupported source preprocessing')
         packed={mode:array('f',normalized(vec,self.dimension)).tobytes() for mode,vec in vectors.items()}
         packed_frames=[]
         if video_frames:
@@ -87,14 +108,19 @@ class VectorStore:
         with self.connect() as db:
             db.execute('DELETE FROM ai_vectors WHERE item_id=?',(item_id,))
             db.execute('DELETE FROM ai_video_frames WHERE item_id=?',(item_id,))
+            db.execute('DELETE FROM ai_source_contracts WHERE item_id=?',(item_id,))
             db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',[(item_id,rev,mode,data) for mode,data in packed.items()])
             if packed_frames:
                 db.executemany('INSERT INTO ai_video_frames VALUES(?,?,?,?)',packed_frames)
+            if source_contract is not None:
+                db.execute('INSERT INTO ai_source_contracts VALUES(?,?,?)',(item_id,rev,source_contract))
     def cover(self,row):
         """Current-profile, current-revision origin; never infer or read media."""
+        return self._vector(row,'cover')
+    def _vector(self,row,modality):
         with self.connect() as db:
-            record=db.execute("SELECT vector FROM ai_vectors WHERE item_id=? AND revision=? AND modality='cover'",
-                              (row['id'],revision(row))).fetchone()
+            record=db.execute("SELECT vector FROM ai_vectors WHERE item_id=? AND revision=? AND modality=?",
+                              (row['id'],revision(row),modality)).fetchone()
         if record is None:return None
         try:
             vec=array('f');vec.frombytes(record[0])
@@ -313,9 +339,10 @@ class AISearch:
                             state['skipped']+=1
                         else:
                             rev=revision(row)
-                            if not self.store.fresh(item_id,rev):
+                            if not self.store.fresh_row(row):
                                 text=row['title']+'\n'+row['relative_path']+'\n'+'、'.join(row['tags'])
-                                vectors={'text':self.encoder.encode('document',text[:4096])}
+                                saved_text=self.store.text(row)
+                                vectors={'text':saved_text if saved_text is not None else self.encoder.encode('document',text[:4096])}
                                 did_infer=True
                                 video_frames=[]
                                 if 'cover' in self.profile.modalities and row['kind'] in ('image','book','archive'):
@@ -334,12 +361,24 @@ class AISearch:
                                         if video_frames:
                                             vectors['cover']=video_frames[0][1]
                                     except (PreviewUnavailable,OSError):pass
+                                # A cancelled multi-frame pass must not mark a partial video
+                                # as fresh or replace its previous complete revision.
+                                if row['kind']=='video' and self.cancel.is_set():
+                                    state['processed']+=1
+                                    break
                                 # Recheck presence, exclusions and revision before publishing.
                                 current=self._current_rows([item_id],scope).get(item_id)
                                 if current is None or revision(current)!=rev:
                                     state['skipped']+=1
                                 else:
-                                    self.store.put(item_id,rev,vectors,video_frames);state['indexed']+=1
+                                    expected=source_contract(row,self.profile)
+                                    visual_ready='cover' in vectors and (row['kind']!='video' or bool(video_frames))
+                                    if expected is not None and not visual_ready and saved_text is not None:
+                                        # A transient preview failure must not erase a usable
+                                        # legacy cover or mark missing content as refreshed.
+                                        state['skipped']+=1
+                                    else:
+                                        self.store.put(item_id,rev,vectors,video_frames,source_contract=expected if visual_ready else None);state['indexed']+=1
                             else:state['indexed']+=1
                         state['processed']+=1
                         # Vectors commit atomically per item. Progress may lag by 15;

@@ -75,6 +75,18 @@ internal static class FeedbackTests
         """);
         var textSearch=PageEvidenceProtocol.ParseSearch(textSearchBytes,0);
         check(textSearch.Total==1&&textSearch.Items[0].PageText is {MatchingPages:2,SourceState:"current"} pt&&pt.Summary.Contains("1ページ")&&pt.Summary.Contains("夕焼けの教室"),"page text search parsed with excerpt and provenance");
+        var proof=textSearch.Items[0].PageText!;
+        var proofPage=proof.Pages[0] with {Page=1};
+        proof=proof with {Pages=new[]{proofPage}};
+        var bookManifest=new ArchiveManifest(7,3,animRev);
+        check(proof.InitialReaderPage(bookManifest)==1,"matched page jump requires current matching revision");
+        check(proof.InitialReaderPage(bookManifest with {Revision=new string('f',64)}) is null,"file change after search cannot apply old page number");
+        foreach(var sourceState in new[]{"stale","unverified","unavailable"})
+            check((proof with {SourceState=sourceState}).InitialReaderPage(bookManifest) is null,"noncurrent text does not jump: "+sourceState);
+        check((proof with {Pages=Array.Empty<PageTextEvidencePage>()}).InitialReaderPage(bookManifest) is null,"missing page evidence does not jump");
+        check((proof with {Pages=new[]{proofPage with {Page=3}}}).InitialReaderPage(bookManifest) is null,"out-of-range text page does not jump");
+        check((proof with {Pages=new[]{proofPage with {Page=-1}}}).InitialReaderPage(bookManifest) is null,"negative text page does not jump");
+        check((proof with {Pages=new[]{proofPage with {Page=0}}}).InitialReaderPage(bookManifest)==0,"explicit first matched page remains valid");
         var videoRowMatch=Protocol.ParseSearch("""{"total":1,"score_kind":"cosine","items":[{"id":15,"title":"clip.mp4","kind":"video","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.912,"video_match_ms":65000,"literal_words":1,"literal_hits":1}]}""").Items[0];
         check(videoRowMatch.VideoMatchMs==65000&&videoRowMatch.AIEvidence.Contains("動画フレーム一致（1:05）")&&videoRowMatch.AIEvidence.Contains("0.912"),"video time-coded AI match parsed and formatted");
     }

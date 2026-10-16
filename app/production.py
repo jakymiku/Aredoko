@@ -284,6 +284,14 @@ class ProductionCatalog(Catalog):
                     raise KeyError(root_id)
                 if row['enabled']:
                     raise ValueError('Unregister the root before purging database records')
+                # Profile DBs are separate files, not tables in this catalog.
+                # Remove derived data first; any failure keeps manual records
+                # and the inactive root available for a safe retry.
+                from ai_store_cleanup import purge_profile_stores
+                try:
+                    purge_profile_stores(self.path, root_id)
+                except ValueError as error:
+                    raise ValueError('AI index cleanup failed; library records were kept') from error
                 db.execute('UPDATE library_root_seq SET max_id = max(max_id, ?) WHERE id=1', (root_id,))
                 tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 item_subquery = ('SELECT m.item_id FROM item_locations m '
@@ -302,19 +310,20 @@ class ProductionCatalog(Catalog):
                     db.execute(f'DELETE FROM tag_proposals WHERE batch_id IN (SELECT id FROM tag_proposal_batches WHERE item_id IN ({item_subquery}))', (root_id,))
                 if 'tag_proposal_batches' in tables:
                     db.execute(f'DELETE FROM tag_proposal_batches WHERE item_id IN ({item_subquery})', (root_id,))
-                if 'ai_vectors' in tables:
-                    db.execute(f'DELETE FROM ai_vectors WHERE item_id IN ({item_subquery})', (root_id,))
+                for table in ('ai_vectors','ai_video_frames','ai_source_contracts'):
+                    if table in tables:
+                        db.execute(f'DELETE FROM {table} WHERE item_id IN ({item_subquery})', (root_id,))
                 db.execute(f'DELETE FROM reader_progress WHERE item_id IN ({item_subquery})', (root_id,))
                 db.execute(f'DELETE FROM view_history WHERE item_id IN ({item_subquery})', (root_id,))
-                item_ids = [r[0] for r in db.execute(item_subquery, (root_id,)).fetchall()]
+                db.execute('CREATE TEMP TABLE purge_item_ids(id INTEGER PRIMARY KEY)')
+                db.execute('INSERT INTO purge_item_ids '+item_subquery,(root_id,))
+                removed_items=db.execute('SELECT count(*) FROM purge_item_ids').fetchone()[0]
                 db.execute('DELETE FROM item_locations WHERE location_id IN (SELECT id FROM library_locations WHERE root_id=?)', (root_id,))
-                if item_ids:
-                    placeholders = ','.join('?' for _ in item_ids)
-                    db.execute(f'DELETE FROM items WHERE id IN ({placeholders})', item_ids)
+                db.execute('DELETE FROM items WHERE id IN (SELECT id FROM purge_item_ids)')
                 removed_locations = db.execute('DELETE FROM library_locations WHERE root_id=?', (root_id,)).rowcount
                 db.execute('DELETE FROM scan_jobs WHERE root_id=?', (root_id,))
                 db.execute('DELETE FROM library_roots WHERE id=? AND enabled=0', (root_id,))
-        return {'purged': root_id, 'removed_items': len(item_ids), 'removed_locations': removed_locations}
+        return {'purged': root_id, 'removed_items': removed_items, 'removed_locations': removed_locations}
 
     def set_excludes(self, root_id, patterns):
         with self._guard:

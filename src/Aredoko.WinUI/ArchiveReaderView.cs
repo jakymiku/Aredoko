@@ -43,14 +43,14 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
     private ArchiveManifest? manifest;
     private ReaderDisplayMode mode;
     private int page;
-    private readonly int? initialPage;
+    private readonly PageTextMatch? initialMatch;
     private bool busy, disposed, failed, loaded, keyboardChrome, menuOpen;
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
 
-    public ArchiveReaderView(LibraryApi api, int itemId, string title, int? initialPage = null)
+    public ArchiveReaderView(LibraryApi api, int itemId, string title, PageTextMatch? initialMatch = null)
     {
-        this.api=api;this.itemId=itemId;this.initialPage=initialPage;cancellation=lifetime.Token;
+        this.api=api;this.itemId=itemId;this.initialMatch=initialMatch;cancellation=lifetime.Token;
         hideTimer=DispatcherQueue.CreateTimer();hideTimer.Interval=TimeSpan.FromSeconds(2.5);hideTimer.IsRepeating=false;
         hideTimer.Tick+=(_,_)=>{if(!disposed&&!keyboardChrome&&!menuOpen&&!busy&&!failed){viewport.Focus(FocusState.Programmatic);header.Visibility=toolbar.Visibility=Visibility.Collapsed;}};
         viewport.Style=(Style)Application.Current.Resources["ImageViewerCanvasStyle"];
@@ -138,7 +138,7 @@ public void AttachNavigation(UIElement dialog)
             }
             catch(Exception) when(!cancellation.IsCancellationRequested)
             {allowProgressSave=fromBeginning;progressStatus.Text="読書位置を取得できませんでした。先頭から表示します。保存済み位置は移動するまで保持します。";}
-            if(!fromBeginning&&initialPage is int requested&&requested>=0&&requested<result.PageCount)
+            if(!fromBeginning&&initialMatch?.InitialReaderPage(result) is int requested)
             {
                 start=ReaderSpreadPolicy.Anchor(requested,result.PageCount,mode);
             }

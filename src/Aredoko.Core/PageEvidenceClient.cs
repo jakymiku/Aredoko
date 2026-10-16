@@ -16,6 +16,13 @@ public sealed record PageTextGenerationResult(int ItemId, string SourceRevision,
 public sealed record PageTextEvidencePage(string PageId, int Page, string Excerpt, PageTextProducer Producer);
 public sealed record PageTextMatch(string SourceRevision, string SourceState, int MatchingPages, IReadOnlyList<PageTextEvidencePage> Pages)
 {
+    // A stored page number is meaningful only in its exact source revision.
+    public int? InitialReaderPage(ArchiveManifest manifest)
+    {
+        if(SourceState!="current"||SourceRevision!=manifest.Revision||Pages.Count==0)return null;
+        var page=Pages[0].Page;
+        return page>=0&&page<manifest.PageCount?page:null;
+    }
     public string SourceStateLabel => SourceState switch
     {
         "current" => "元ファイル一致",

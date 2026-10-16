@@ -622,8 +622,7 @@ public sealed partial class MainPage : Page
         var readerItemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
         try
         {
-            var initialPage=active.PageText?.Pages.Count>0?active.PageText.Pages[0].Page:(int?)null;
-            var reader=new ArchiveReaderView(api,active.Id,active.Title,initialPage);readerView=reader;
+            var reader=new ArchiveReaderView(api,active.Id,active.Title,active.PageText);readerView=reader;
             var window=new ViewerWindow(reader,"読書画面","ArchiveReaderDialog");viewerWindow=window;
             reader.ContentOpened+=RecordContentOpened;
             reader.CloseRequested+=(_,_)=>window.Close();reader.AttachNavigation(reader);

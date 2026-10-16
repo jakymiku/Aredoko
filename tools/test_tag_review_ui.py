@@ -52,6 +52,7 @@ def main():
     parser.add_argument('--scenario',choices=('indexed','unindexed','text-only'),default='indexed')
     modes=parser.add_mutually_exclusive_group()
     modes.add_argument('--candidate-search-only',action='store_true')
+    modes.add_argument('--page-jump-only',action='store_true')
     modes.add_argument('--folder-books-only',action='store_true')
     args=parser.parse_args()
     if os.name!='nt':parser.error('Native Windows required; no test was run')
@@ -168,10 +169,35 @@ def main():
             def book_digest():
                 return {p.relative_to(book_media).as_posix():(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in book_media.rglob('*') if p.is_file()}
             book_before=book_digest()
+        if args.page_jump_only:
+            import zipfile
+            from page_index import PageIndex
+            from page_text import PageTextIndex
+            jump_media=target/'generated-page-jump';jump_media.mkdir()
+            jump_file=jump_media/'jump.cbz'
+            def write_jump_book(extra=False):
+                with zipfile.ZipFile(jump_file,'w') as archive:
+                    if extra:archive.writestr('p00.png',png(300,400,(80,80,80)))
+                    for n,color in enumerate(((180,30,30),(30,180,30),(30,30,180)),1):
+                        archive.writestr(f'p{n:02}.png',png(300,400,color))
+            jump_root=sandbox.catalog.add_root(str(jump_media))
+            page_index=PageIndex(sandbox.catalog)
+            class JumpExtractor:
+                class info:
+                    @staticmethod
+                    def record():return {'adapter':'contract-fixture','version':'1','model':'not-real-ocr','model_revision':'1','preprocessing':'page-jump'}
+                def extract(self,payload,cancelled):return '夕焼けの教室で約束した'
+            page_text=PageTextIndex(sandbox.catalog,page_index,JumpExtractor())
         tagger=FixtureTagger()
         server.RequestHandlerClass=production_handler(sandbox.catalog,secrets.token_urlsafe(32),ai=sandbox.ai,profiles=sandbox.profiles,tagger=tagger)
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         for theme in ('Light','Dark'):
+            if args.page_jump_only:
+                write_jump_book();sandbox.catalog.index.scan(jump_root);sandbox.catalog.sync_index()
+                jump_item=sandbox.catalog.search(root_id=jump_root)['items'][0]['id']
+                page_index.refresh(jump_item);snapshot=page_index.list(jump_item)
+                page_text.generate(jump_item,[snapshot['pages'][1]['page_id']],snapshot['source_revision'],uuid.uuid4().hex)
+                with sandbox.catalog.connect() as db:db.execute('DELETE FROM reader_progress WHERE item_id=?',(jump_item,))
             launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build',
                 '--output-appx-directory',target/('layout-'+theme.lower()),'--detach','--json','--args','--ui-theme '+theme.lower()+' --viewer-settings '+str(target/'viewer-settings.json')))
             if launch.get('ProcessScope') not in (None,'local'):raise RuntimeError('Unexpected launch scope')
@@ -183,7 +209,42 @@ def main():
                 if len(matches)==1:break
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
-            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.folder_books_only and theme=='Dark' else '76 件')
+            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.page_jump_only or args.folder_books_only and theme=='Dark' else '76 件')
+            if args.page_jump_only:
+                report['test_mode']='page-text-revision-jump'
+                report['generated_revision_mutation']='Only generated-page-jump/jump.cbz is deliberately repacked; base media remain unchanged.'
+                def open_jump(number,label):
+                    ui('invoke','Item'+str(jump_item),'--action','select');wait('TxtEditStatus','保存済み')
+                    ui('scroll-into-view','BtnOpenBook');ui('invoke','BtnOpenBook')
+                    viewer=None
+                    for _ in range(40):
+                        windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+                        matches=[str(w['hwnd']) for w in windows if str(w.get('hwnd'))!=hwnd and '読書画面' in w.get('title','')]
+                        if len(matches)==1:viewer=matches[0];break
+                        time.sleep(.1)
+                    check(label+' owned reader',viewer is not None);owned(viewer)
+                    user32.SetForegroundWindow(int(viewer));time.sleep(.15)
+                    check(label+' owned reader foreground',user32.GetForegroundWindow()==int(viewer))
+                    ui('send-keys','f10',window=viewer)
+                    ui('wait-for','ReaderPageNumber','--value',number,'-t','12000',window=viewer)
+                    ui('wait-for','ReaderStatus','--value','表示しました。拡大すると細部を確認できます。','-t','12000',window=viewer)
+                    check(label+' page '+number,True)
+                    path=target/(theme+'-'+label+'.png');ui('screenshot','--output',path,window=viewer)
+                    check('screenshot '+path.name,path.is_file() and path.stat().st_size>0);report['screenshots'].append(path.name)
+                    ui('send-keys','escape',window=viewer);ready()
+                choose_combo('CmbSearchMode','ModePageText');ready()
+                ui('set-value','TxtQuery','夕焼け 約束');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                contains('PageTextEvidence'+str(jump_item),'2ページ');contains('PageTextEvidence'+str(jump_item),'元ファイル一致')
+                open_jump('2 / 3','current-match')
+                # The GUI still has the old 'current' hit: change only our own
+                # generated archive and rescan, without re-running the query.
+                write_jump_book(extra=True);sandbox.catalog.index.scan(jump_root);sandbox.catalog.sync_index()
+                open_jump('1 / 4','changed-after-search')
+                check(theme+' stale page number cannot override normal reader opening',True)
+                ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                contains('PageTextEvidence'+str(jump_item),'元ファイル変更あり');shot(theme+'-stale-text-evidence')
+                open_jump('1 / 4','stale-result')
+                close();continue
             if args.check_user_feedback:
                 ui('invoke','BtnSettings');ui('wait-for','SettingsWheel','-t','12000')
                 choose_combo('SettingsWheel','上に回す（下で戻る）' if theme=='Light' else '下に回す（上で戻る）')

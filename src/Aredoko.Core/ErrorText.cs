@@ -11,6 +11,7 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
+        ["AI index cleanup failed; library records were kept"] = "AI索引を削除できません。登録・タグ等の記録は残しています。AI処理の終了後に再試行してください。",
         ["Invalid page text request"] = "ページ本文の指定が無効です。対象を選び直してください。",
         ["Invalid page text extractor configuration"] = "文字抽出モデルの設定が無効です。本文は保存していません。",
         ["Page text extraction in progress"] = "ページ本文を抽出中です。完了か取消後にやり直してください。",

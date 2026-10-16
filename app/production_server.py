@@ -63,6 +63,7 @@ PUBLIC_FOLDER_ERRORS = frozenset({
     'folder_books must be true or false',
     'Folder book mode cannot change after scanning',
     'Explicit folder purge consent required',
+    'AI index cleanup failed; library records were kept',
     'Unregister the root before purging database records',
 })
 
