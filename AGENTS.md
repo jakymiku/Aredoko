@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Latest direct book-page search checkpoint (2026-10-17)
+
+The first bounded internal-page image embedding slice is now implemented: per-book context action, explicit range (maximum 16 pages/request), profile/source revision/page provenance, reuse/atomic cancellation, book aggregation in existing visual/combined search and revision-safe reader jump. Normal AI builds still use covers; they do not silently index internal pages. Read [docs/page-image-search.md](docs/page-image-search.md) and the latest handoffs for evidence/remaining limits. Do not recreate this slice or resume OCR by default. Next: per-book indexed-page coverage/next-range UX, measured bounded multi-book jobs and representative quality. English WD labels, pending-tag semantics, simple GUI/no feature removal and P0 cumulative 1/2 remain unchanged.
+
 ## User-confirmed Japanese search over original WD tags (2026-10-17)
 
 Keep raw English/Danbooru-style tags; do not require per-item Japanese translation. Use the replaceable embedding model for Japanese meaning search and evaluate any dictionary fallback only from actual misses. Approved tags already use normal AI text indexing; the new **separate pending-tag semantic index/search** is documented in [docs/tag-semantic-search.md](docs/tag-semantic-search.md). Pending proposals must remain unconfirmed, revision/profile bound and separate from normal tag search. Prepare their vectors only on explicit scoped AI builds, never from startup/generation/query. Preserve the literal candidate mode, review/history, source media and existing scopes. OCR deferral below stays in effect.

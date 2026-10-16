@@ -419,6 +419,21 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if set(body)-{'scope','limit'}:raise ValueError('Invalid coverage request')
                     scope=validate_scope(body['scope']) if 'scope' in body else None
                     return self.send(200,ai.coverage(scope=scope,limit=body.get('limit',MAX_ITEMS)))
+                if self.path=='/api/library/ai/pages/cancel':
+                    if set(body)!={'job_id'} or type(body['job_id']) is not str or not re.fullmatch(r'[0-9a-f]{32}',body['job_id']):raise ValueError('Invalid job ID')
+                    accepted=False
+                    if isinstance(ai,AISearch):
+                        with ai.guard:
+                            state=ai.store.state()
+                            if state.get('job_id')==body['job_id'] and state.get('state') in ('running','cancelling'):
+                                ai.cancel.set();ai.store.save_state({**state,'state':'cancelling'});accepted=True
+                    return self.send(200,{'cancel_requested':accepted})
+                if self.path=='/api/library/ai/pages':
+                    if set(body)!={'item_id','page_ids','revision','scope'}:raise ValueError('Invalid page index fields')
+                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
+                    try:return self.send(200,ai.pages.start(body['item_id'],body['page_ids'],body['revision'],validate_scope(body['scope'])))
+                    except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
+                    except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
                 if self.path=='/api/library/ai/index':
                     if 'scope' in body:
                         return self.send(200,ai.start(body.get('limit',MAX_ITEMS),scope=validate_scope(body['scope'])))

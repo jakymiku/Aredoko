@@ -1,5 +1,9 @@
 # 共通API（操作試作 v0）
 
+## 本の内部ページ画像のAI索引（2026-10-17）
+
+`POST /api/library/ai/pages`は既存page-indexのitem ID・page IDs（1〜16）・revision・明示scopeを受け、共有AI workerで範囲全体を原子的に保存する。`ai/status`で進捗、`POST /api/library/ai/pages/cancel {"job_id":"32hex"}`で所有jobだけ中断。既存`ai/search`のcover/allへ作品単位の最大ページscoreと`ai_page_match`を追加。通常AI buildやtext searchに内部ページを混ぜない。[正確な契約・制限](page-image-search.md)。
+
 > **2026-10-17 未承認タグの意味検索**：`POST /api/library/tag-suggestions/search`の任意bool `semantic:true`で専用の意味索引を検索する。省略/falseは既存の文字一致を維持。索引不足件数とモデル/根拠/類似度を返し、検索から索引作成はしない。[完全な契約](tag-semantic-search.md)。
 
 

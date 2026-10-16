@@ -3,7 +3,8 @@
 Requires an existing Release build and winapp CLI. No downloads.
 --wd-runtime-only explicitly uses the already approved local WD CPU model,
 on generated images only. --tag-language-only uses existing EG2 CUDA with
-predetermined English labels. Other modes never load a model.
+predetermined English labels. --page-image-only uses the same EG2 runtime
+on fixed generated Japanese page images directly. Other modes never load a model.
 Screenshots need human review; runtime_pass never means visual review passed.
 """
 import argparse
@@ -57,6 +58,7 @@ def main():
     modes.add_argument('--candidate-search-only',action='store_true')
     modes.add_argument('--wd-runtime-only',action='store_true',help='Existing approved CPU model on generated media only; no downloads')
     modes.add_argument('--tag-language-only',action='store_true',help='Existing EG2 CUDA model with generated sources and predetermined English labels; no downloads')
+    modes.add_argument('--page-image-only',action='store_true',help='Existing EG2 CUDA on generated fixed Japanese book pages; no OCR or downloads')
     modes.add_argument('--page-jump-only',action='store_true')
     modes.add_argument('--folder-books-only',action='store_true')
     args=parser.parse_args()
@@ -70,7 +72,7 @@ def main():
     server=ThreadingHTTPServer(('127.0.0.1',8769),BaseHTTPRequestHandler)
     sandbox=thread=process=hwnd=app_pid=None
     tagger=None;wd_observer=None;wd_processes=[];model_before=None;language_encoder=None;language_process=None
-    report={'runtime_pass':False,'visual_review':'pending: inspect every screenshot','actual_model':bool(args.wd_runtime_only or args.tag_language_only),'tagging_quality_measured':False,
+    report={'runtime_pass':False,'visual_review':'pending: inspect every screenshot','actual_model':bool(args.wd_runtime_only or args.tag_language_only or args.page_image_only),'tagging_quality_measured':False,
         'scenario':args.scenario,'test_mode':'folder-books' if args.folder_books_only else 'candidate-search' if args.candidate_search_only else 'tag-review','checks':[],'screenshots':[],'requests':[],'keyboard_tested':False}
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-tag-review-'+uuid.uuid4().hex}
     user32=ctypes.WinDLL('user32',use_last_error=True);kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
@@ -107,7 +109,7 @@ def main():
         check('screenshot '+name,path.is_file() and path.stat().st_size>0);report['screenshots'].append(path.name)
         tree=json.loads(ui('inspect','--json','--depth','12'))
         (target/(name+'-tree.json')).write_text(json.dumps(tree,ensure_ascii=False),encoding='utf-8')
-    def context(identifier,source):
+    def context(identifier,source,action="FindSimilar"):
         if identifier.startswith('Item'):ui('scroll-into-view',identifier)
         owned(foreground=True);ui('click',identifier,'--right')
         for _ in range(20):
@@ -116,9 +118,9 @@ def main():
             for window in ordered:
                 handle=str(window['hwnd']);owned(handle)
                 tree=json.loads(ui('inspect','--json','--depth','14',window=handle))
-                matches=[n for n in nodes(tree) if n.get('automationId')=='FindSimilar'+str(source)]
+                matches=[n for n in nodes(tree) if n.get('automationId')==action+str(source)]
                 if matches:
-                    ui('invoke','FindSimilar'+str(source),window=handle);return
+                    ui('invoke',action+str(source),window=handle);return
             time.sleep(.1)
         raise RuntimeError('No context action for clicked item '+str(source))
     def latest(source):
@@ -175,7 +177,7 @@ def main():
             def book_digest():
                 return {p.relative_to(book_media).as_posix():(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in book_media.rglob('*') if p.is_file()}
             book_before=book_digest()
-        if args.page_jump_only:
+        if args.page_jump_only or args.page_image_only:
             import zipfile
             from page_index import PageIndex
             from page_text import PageTextIndex
@@ -184,8 +186,18 @@ def main():
             def write_jump_book(extra=False):
                 with zipfile.ZipFile(jump_file,'w') as archive:
                     if extra:archive.writestr('p00.png',png(300,400,(80,80,80)))
-                    for n,color in enumerate(((180,30,30),(30,180,30),(30,30,180)),1):
-                        archive.writestr(f'p{n:02}.png',png(300,400,color))
+                    if args.page_image_only:
+                        rendered=REPO/'data/ocr-eval/ocr-v1-20261017'
+                        receipt=json.loads((rendered/'receipt.json').read_bytes())
+                        for filename in ('page-03.png','page-01.png'):
+                            entry=next(i for i in receipt['images'] if i['file']==filename)
+                            check('fixed generated page digest '+filename,hashlib.sha256((rendered/filename).read_bytes()).hexdigest()==entry['sha256'])
+                        archive.writestr('p01.png',png(600,420,(240,240,240)))
+                        archive.writestr('p02.png',(rendered/'page-03.png').read_bytes())
+                        archive.writestr('p03.png',(rendered/'page-01.png').read_bytes())
+                    else:
+                        for n,color in enumerate(((180,30,30),(30,180,30),(30,30,180)),1):
+                            archive.writestr(f'p{n:02}.png',png(300,400,color))
             jump_root=sandbox.catalog.add_root(str(jump_media))
             page_index=PageIndex(sandbox.catalog)
             class JumpExtractor:
@@ -195,19 +207,25 @@ def main():
                 def extract(self,payload,cancelled):return '夕焼けの教室で約束した'
             page_text=PageTextIndex(sandbox.catalog,page_index,JumpExtractor())
         tagger=FixtureTagger()
-        if args.tag_language_only:
+        if args.tag_language_only or args.page_image_only:
             from ai_process import EncoderProcess
             from ai_profiles import DEFAULT_PROFILE
             from ai_search import AISearch
             language_encoder=EncoderProcess(REPO/'.venv-ai/Scripts/python.exe',DEFAULT_PROFILE.model_path(REPO))
             if not language_encoder.available:raise RuntimeError('Existing approved EG2 runtime required; never downloads')
             sandbox.ai.close();sandbox.ai=AISearch(sandbox.catalog,language_encoder)
-            blue_item=sandbox.item('generated-003.png');red_item=sandbox.item('generated-001.png',1)
-            language_scope={'root_ids':sandbox.roots,'kind':'image','shelf':'language-fixture'}
-            sandbox.catalog.update([blue_item,red_item],{'tags':['manual-language'],'shelf':'language-fixture'})
-            report['test_mode']='Japanese-query-English-pending-tags'
-            report['actual_model_role']='EmbeddingGemma 2 CUDA; predetermined English labels, not WD image accuracy'
-            report['profile']=DEFAULT_PROFILE.identity()
+            if args.page_image_only:
+                sandbox.profiles.set_scope({'root_ids':[jump_root]})
+                sandbox.settings_before=(sandbox.target/'settings.json').read_bytes()
+                report['test_mode']='direct-page-images-native'
+                report['actual_model_role']='Existing EG2 CUDA; generated Japanese text images directly; no OCR'
+            else:
+                blue_item=sandbox.item('generated-003.png');red_item=sandbox.item('generated-001.png',1)
+                language_scope={'root_ids':sandbox.roots,'kind':'image','shelf':'language-fixture'}
+                sandbox.catalog.update([blue_item,red_item],{'tags':['manual-language'],'shelf':'language-fixture'})
+                report['test_mode']='Japanese-query-English-pending-tags'
+                report['actual_model_role']='EmbeddingGemma 2 CUDA; predetermined English labels, not WD image accuracy'
+                report['profile']=DEFAULT_PROFILE.identity()
         if args.wd_runtime_only:
             from wd_tagger import create_tagger
             from unittest.mock import patch
@@ -232,11 +250,13 @@ def main():
                 for item,tags in ((blue_item,['blue_hair','twintails']),(red_item,['red_hair','long_hair'])):
                     tagger.suggest=lambda source,cancelled,tags=tags:[TagProposal(tag,'Predetermined English runtime fixture; not tagging quality') for tag in tags]
                     TagSuggestions(sandbox.catalog,tagger).generate(item,uuid.uuid4().hex)
-            if args.page_jump_only:
-                write_jump_book();sandbox.catalog.index.scan(jump_root);sandbox.catalog.sync_index()
+            if args.page_jump_only or args.page_image_only:
+                if args.page_jump_only or theme=='Light':write_jump_book()
+                sandbox.catalog.index.scan(jump_root);sandbox.catalog.sync_index()
                 jump_item=sandbox.catalog.search(root_id=jump_root)['items'][0]['id']
                 page_index.refresh(jump_item);snapshot=page_index.list(jump_item)
-                page_text.generate(jump_item,[snapshot['pages'][1]['page_id']],snapshot['source_revision'],uuid.uuid4().hex)
+                if args.page_jump_only:page_text.generate(jump_item,[snapshot['pages'][1]['page_id']],snapshot['source_revision'],uuid.uuid4().hex)
+                else:sandbox.catalog.update([jump_item],{'tags':['manual-page'],'shelf':'ページ試験','favorite':True})
                 with sandbox.catalog.connect() as db:db.execute('DELETE FROM reader_progress WHERE item_id=?',(jump_item,))
             launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build',
                 '--output-appx-directory',target/('layout-'+theme.lower()),'--detach','--json','--args','--ui-theme '+theme.lower()+' --viewer-settings '+str(target/'viewer-settings.json')))
@@ -249,7 +269,7 @@ def main():
                 if len(matches)==1:break
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
-            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.page_jump_only or args.folder_books_only and theme=='Dark' else '76 件')
+            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.page_jump_only or args.page_image_only or args.folder_books_only and theme=='Dark' else '76 件')
             if args.tag_language_only:
                 from tag_semantics import semantic_candidates
                 choose_combo('CmbSearchMode','ModeTagSemantic');ready()
@@ -340,6 +360,57 @@ def main():
                 expected=search_candidates(TagSuggestions(sandbox.catalog,tagger),tag)['total']
                 wait('TxtCount',str(expected)+' 件');contains('ProposalEvidence'+str(source),tag)
                 shot(theme+'-raw-English-candidate-search')
+                close();continue
+            if args.page_image_only:
+                original=(jump_file.read_bytes(),jump_file.stat().st_mtime_ns)
+                ui('set-value','TxtQuery','jump.cbz');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                ui('invoke','Item'+str(jump_item),'--action','select');wait('TxtEditStatus','保存済み')
+                ui('set-value','TxtTags','draft-page');wait('TxtEditStatus','未保存の変更')
+                context('Item'+str(jump_item),jump_item,'IndexBookPages')
+                enabled('PageAIAdd',True);shot(theme+'-page-range-wide')
+                user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.3)
+                visible('PageAIAdd');shot(theme+'-page-range-narrow')
+                ui('invoke','PageAIAdd');enabled('PageAIAdd',True)
+                # Poll the real GPU job through the existing backend, never retry it.
+                for _ in range(180):
+                    job=sandbox.ai.status()
+                    if job['state'] not in ('running','cancelling'):break
+                    time.sleep(.25)
+                check(theme+' GUI-selected page job completes',job.get('job')=='book-pages' and job['state']=='complete' and job['indexed']==3)
+                if theme=='Dark':check('restart same source reuses selected page vectors',job['reused']==3)
+                contains('PageAIStatus','追加しました');shot(theme+'-page-index-complete')
+                ui('invoke','CloseButton');ready()
+                tree=json.loads(ui('inspect','--json','--depth','14'))
+                if not any(n.get('automationId')=='TxtEditStatus' and not n.get('isOffscreen',True) for n in nodes(tree)):ui('invoke','BtnDetails')
+                wait('TxtEditStatus','未保存の変更')
+                check(theme+' pending editor preserved', 'draft-page' in ui('get-value','TxtTags') and sandbox.catalog.get(jump_item)['tags']==['manual-page'])
+                ui('set-value','TxtTags','manual-page');wait('TxtEditStatus','保存済み')
+                user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);time.sleep(.3)
+                choose_combo('CmbSearchMode','ModeVisual');ready()
+                ui('set-value','TxtQuery','教室の机');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                result=sandbox.ai.search('教室の机',source='cover',scope={'root_ids':[jump_root]})
+                hit=result['items'][0]['ai_page_match']
+                report.setdefault('page_quality',[]).append({'theme':theme,'expected_page':1,'actual_page':hit['page'],'matched_expected':hit['page']==1})
+                contains('AIPageEvidence'+str(jump_item),str(hit['page']+1)+'ページ');contains('AIPageEvidence'+str(jump_item),'google/embeddinggemma-2')
+                shot(theme+'-page-meaning-search')
+                ui('invoke','Item'+str(jump_item),'--action','select');ui('scroll-into-view','BtnOpenBook');ui('invoke','BtnOpenBook')
+                viewer=None
+                for _ in range(40):
+                    windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+                    matches=[str(w['hwnd']) for w in windows if str(w.get('hwnd'))!=hwnd and '読書画面' in w.get('title','')]
+                    if len(matches)==1:viewer=matches[0];break
+                    time.sleep(.1)
+                check(theme+' owned reader',viewer is not None);owned(viewer)
+                user32.SetForegroundWindow(int(viewer));time.sleep(.15)
+                check(theme+' owned reader foreground',user32.GetForegroundWindow()==int(viewer))
+                ui('send-keys','f10',window=viewer)
+                ui('wait-for','ReaderPageNumber','--value',str(hit['page']+1)+' / 3','-t','12000',window=viewer)
+                ui('wait-for','ReaderStatus','--value','表示しました。拡大すると細部を確認できます。','-t','12000',window=viewer)
+                path=target/(theme+'-page-match-reader.png');ui('screenshot','--output',path,window=viewer)
+                check(theme+' exact revision AI page jump',path.is_file());report['screenshots'].append(path.name)
+                ui('send-keys','escape',window=viewer);ready()
+                check(theme+' book bytes and mtime retained',original==(jump_file.read_bytes(),jump_file.stat().st_mtime_ns))
+                check(theme+' hand metadata retained',sandbox.catalog.get(jump_item)['tags']==['manual-page'] and sandbox.catalog.get(jump_item)['favorite'])
                 close();continue
             if args.page_jump_only:
                 report['test_mode']='page-text-revision-jump'
@@ -719,7 +790,7 @@ def main():
             close()
         check('source bytes/mtime unchanged',sandbox.source_before==sandbox.source_digest())
         check('saved AI settings unchanged',sandbox.settings_before==(sandbox.target/'settings.json').read_bytes())
-        if args.tag_language_only:
+        if args.tag_language_only or args.page_image_only:
             check('actual existing CUDA model used',language_encoder.device=='cuda')
             language_process=language_encoder.process
         check('fixture encoder never called',sandbox.encoder.calls==0 and not sandbox.encoder.resident)
@@ -747,7 +818,7 @@ def main():
             if sandbox:
                 report['source_unchanged']=sandbox.source_before==sandbox.source_digest()
                 if not report['source_unchanged'] or report.get('cleanup_terminated_owned_process'):report['runtime_pass']=False
-                if args.tag_language_only and sandbox.ai is not None:
+                if (args.tag_language_only or args.page_image_only) and sandbox.ai is not None:
                     language_process=language_encoder.process
                     sandbox.ai.close();sandbox.ai=None
                 sandbox.close()

@@ -310,7 +310,7 @@ class ProductionCatalog(Catalog):
                     db.execute(f'DELETE FROM tag_proposals WHERE batch_id IN (SELECT id FROM tag_proposal_batches WHERE item_id IN ({item_subquery}))', (root_id,))
                 if 'tag_proposal_batches' in tables:
                     db.execute(f'DELETE FROM tag_proposal_batches WHERE item_id IN ({item_subquery})', (root_id,))
-                for table in ('ai_vectors','ai_video_frames','ai_source_contracts','ai_proposal_vectors'):
+                for table in ('ai_vectors','ai_video_frames','ai_source_contracts','ai_proposal_vectors','ai_page_vectors'):
                     if table in tables:
                         db.execute(f'DELETE FROM {table} WHERE item_id IN ({item_subquery})', (root_id,))
                 db.execute(f'DELETE FROM reader_progress WHERE item_id IN ({item_subquery})', (root_id,))

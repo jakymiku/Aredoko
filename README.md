@@ -1,5 +1,7 @@
 # Aredoko
 
+> **本の内部ページのAI検索（2026-10-17）**：本の右クリック →「本のページをAI検索に追加…」で1冊・最大16ページを指定。「画像の見た目（AI）」から本単位に探して一致ページを読めます。既存の表紙索引と英語タグの日本語検索を保持。[操作・実測・一括索引の残る制限](docs/page-image-search.md)。OCRは保留。
+
 > **最新（2026-10-16 実利用フィードバック全22件完了・動画時刻付きAI索引・ページ本文検索WinUI接続）**：動画内容の時間付き代表フレームAI索引・作品単位の検索結果集約・該当時刻への自動シーク再生（F12: `ai_video_frames` / `video_match_ms` / `VideoPlayerView`）、ページ本文検索モードのWinUI接続と一致ページへの読書ジャンプ（`ModePageText` / `PageTextEvidence<id>`）、GIF/WebP/APNGアニメーション再生と54,802KB級APNGのbounded処理（F07/F08/F11）、解除済みフォルダのDB完全削除（F21）まで実装・Windows実機確認。**全Python 397件実行（394 PASS / 3 SKIP）・Core 361 PASS・x64 Release 0 warnings 0 errors**、実機 **`feedback-video-ai-20261016-02`（106 checks / keys 56 / PNG 24枚）**・**`page-text-search-20261016-01`（29 checks / PNG 5枚）**・**`feedback-animation-20261016-01`（16 checks / PNG 4枚）**・**`feedback-antigravity-20261016-13`（98 checks / PNG 19枚）** PASS。[22件の対応表](docs/user-feedback-20261016.md)・[最新handoff](docs/codex-handoff.md)。
 
 > **履歴（2026-10-16 P2 未承認タグ候補の明示検索）**：確定タグ検索（`GET /api/items`）とは明確に分離した **未承認タグ候補の検索モード（`POST /api/library/tag-suggestions/search`・検索方法「未承認タグ候補」`ModeTagCandidates`・一覧行の由来/根拠/stale表示 `ProposalEvidence<id>`）** を実装・Windows実機検証。最新バッチの未承認（`pending`）候補のみを対象とし、既存の登録フォルダ選択（単一/複数和集合）・種類・お気に入り/未確認/棚フィルターを共有。Windows実機で**全Python 337 PASS / Core 305 PASS / x64 Release 0 warnings 0 errors / 実機 `tag-candidate-search-20261016-02` 24 checks PASS（PNG 4枚全目視）** を確認。[タグ候補と検索仕様](docs/tag-suggestions.md)・[WDアダプタ](docs/wd-tagger.md)・[最新handoff](docs/codex-handoff.md)。

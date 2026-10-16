@@ -18,6 +18,7 @@ from search_terms import normalize, normalize_tags
 from ai_result_groups import boundary
 from previews import PreviewReader, PreviewUnavailable
 from tag_semantics import PendingTagVectors
+from page_semantics import PageVectors, SCHEMA as PAGE_VECTOR_SCHEMA
 
 MAX_ITEMS=10_000
 ROW_BATCH_SIZE=256
@@ -56,6 +57,7 @@ class VectorStore:
                     revision TEXT NOT NULL, contract TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS ai_state(id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
             ''')
+            db.executescript(PAGE_VECTOR_SCHEMA)
             profile=db.execute('SELECT value FROM ai_profile').fetchone()
             if profile and profile[0]!=self.profile.key: raise AIUnavailable('Vector profile mismatch')
             if not profile: db.execute('INSERT INTO ai_profile VALUES(?)',(self.profile.key,))
@@ -130,7 +132,7 @@ class VectorStore:
             if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:return None
             return normalized(vec,self.dimension)
         except (ValueError,TypeError):return None
-    def rank_with_evidence(self,rows,query,source="all",ranking="max"):
+    def rank_with_content(self,rows,query,source="all",ranking="max",page_scores=None):
         if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
         query=normalized(query,self.dimension)
         eligible={row['id']:revision(row) for row in rows}
@@ -163,8 +165,18 @@ class VectorStore:
                         if prev is None or score>prev or (score==prev and item_id not in video_hits):
                             scores.setdefault(item_id,{})['cover']=score
                             video_hits[item_id]=at_ms
+        page_hits={}
+        if source in ('all','cover') and 'cover' in self.profile.modalities:
+            for item_id,(score,evidence) in (page_scores or {}).items():
+                if item_id in eligible and score>=scores.get(item_id,{}).get('cover',-2):
+                    scores.setdefault(item_id,{})['cover']=score
+                    page_hits[item_id]=evidence
+                    video_hits.pop(item_id,None)
         # Fusion uses global positions, never per-batch ranks.
-        return fuse_modalities(scores,ranking),video_hits
+        return fuse_modalities(scores,ranking),video_hits,page_hits
+    def rank_with_evidence(self,rows,query,source="all",ranking="max"):
+        ranked,video_hits,_=self.rank_with_content(rows,query,source,ranking)
+        return ranked,video_hits
     def rank(self,rows,query,source="all",ranking="max"):
         ranked,_=self.rank_with_evidence(rows,query,source,ranking)
         return ranked
@@ -178,6 +190,7 @@ class AISearch:
         self.pending_tags=PendingTagVectors(self)
         self.store=VectorStore(store_path or self.profile.store_path(catalog.path),self.profile)
         self.previews=PreviewReader(catalog)
+        self.pages=PageVectors(self)
         self.guard=threading.Lock()
         self.cancel=threading.Event()
         self.worker=None
@@ -451,7 +464,11 @@ class AISearch:
             # Empty modality pools need no GPU query and cannot use stray vectors.
             if source=='cover':rows=[row for row in rows if row['kind'] in ('image','book','archive','video')]
             policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
-            ranked,video_hits=self.store.rank_with_evidence(rows,self.encoder.encode('query',query),source,policy) if rows else ([],{})
+            if rows:
+                query_vector=normalized(self.encoder.encode('query',query),self.profile.dimension)
+                page_scores=self.pages.rank(rows,query_vector) if source in ('all','cover') else {}
+                ranked,video_hits,page_hits=self.store.rank_with_content(rows,query_vector,source,policy,page_scores)
+            else:ranked,video_hits,page_hits=[],{},{}
             words=list(dict.fromkeys(normalize(query).split()))
             by_id={row['id']:row for row in rows}
             for row in rows:
@@ -471,6 +488,7 @@ class AISearch:
                 entry={**by_id[item_id],'semantic_score':round(score,6),'similarity_group':'leading' if cut is None or score>=cut else 'other'}
                 if item_id in video_hits:
                     entry['video_match_ms']=video_hits[item_id]
+                if item_id in page_hits:entry['ai_page_match']=page_hits[item_id]
                 items.append(entry)
             return {'total':len(ranked),'page':page,'limit':limit,'items':items,'mode':'semantic','coverage_limit':MAX_ITEMS,'source':source,'ranking':policy,
                     'score_kind':score_kind,'scope':scope,'literal_only':literal_only,'group_boundary':cut,'leading_total':leading,'other_total':other_total,'result_group':result_group}

@@ -44,7 +44,7 @@ public sealed class MediaRow
         var sec = Math.Max(0, ms / 1000);
         return $"{sec / 60}:{sec % 60:D2}";
     }
-    public string AIEvidence => Proposal?.SemanticScore is not null ? "" : SemanticScore is double score
+    public string AIEvidence => AIPage is not null || Proposal?.SemanticScore is not null ? "" : SemanticScore is double score
         ? (SimilarityOriginId is int ? "起点の画像・表紙に似た候補"
            : VideoMatchMs is int vms ? $"動画フレーム一致（{FormatVideoTimestamp(vms)}）" + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
            : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
@@ -58,6 +58,7 @@ public sealed class MediaRow
     public ProposalMatch? Proposal { get; set; }
     // Explicit page-text search match when searching page texts.
     public PageTextMatch? PageText { get; set; }
+    public AIPageMatch? AIPage { get; set; }
 }
 
 public sealed record ProposalMatch(
@@ -205,6 +206,7 @@ public static class Protocol
         LiteralHits = row.TryGetProperty("literal_hits",out var hits) && hits.TryGetInt32(out var count) ? count : 0,
         LiteralWords = row.TryGetProperty("literal_words",out var words) && words.TryGetInt32(out var total) ? total : 0,
         Match = row.TryGetProperty("match", out var match) && match.ValueKind == JsonValueKind.String ? match.GetString() ?? "" : "",
+        AIPage = AIPageMatch.Read(row),
         Evidence = ReadEvidence(row)
     };
 

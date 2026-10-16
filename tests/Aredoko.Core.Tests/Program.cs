@@ -201,3 +201,4 @@ Check(RegisteredRootRow.ParseList(System.Text.Json.Nodes.JsonNode.Parse("""{"ite
 Check(ErrorText.Localize("Folder book mode cannot change after scanning").StartsWith("「画像フォルダを一冊として扱う」")&&ErrorText.Localize("This root is already registered")=="このフォルダはすでに登録されています。","folder registration errors localized");
 
 await FeedbackTests.Run(Check);
+PageImageTests.Run(Check);
