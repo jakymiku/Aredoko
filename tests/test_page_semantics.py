@@ -257,5 +257,62 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         self.assertEqual([r['id'] for r in self.ai.search('内側の青いページ',source='cover',scope=both_scope)['items']],
                          [self.item])
 
+    def test_next_gaps_calculation(self):
+        # Comic has 2 pages
+        gaps = self.ai.pages.next_gaps(self.item, self.revision, self.scope, max_pages=10, chunk_size=1)
+        self.assertEqual(gaps['total_gap_pages'], 2)
+        self.assertEqual(gaps['chunks'], [{'start': 0, 'count': 1}, {'start': 1, 'count': 1}])
+
+        # Error checks
+        with self.assertRaises(ValueError):
+            self.ai.pages.next_gaps(self.item, self.revision, self.scope, max_pages=0)
+        with self.assertRaises(ValueError):
+            self.ai.pages.next_gaps(self.item, self.revision, self.scope, chunk_size=17)
+
+    def test_bounded_multi_chunk_indexing_and_gap_continuation(self):
+        # Index comic (2 pages) with chunk_size=1 to exercise multi-chunk publishing
+        self.ai.pages.start_chunked(self.item, self.page_ids, self.revision, self.scope, chunk_size=1)
+        self.ai.worker.join(10)
+        self.assertFalse(self.ai.worker.is_alive())
+        status = self.ai.status()
+        self.assertEqual(status['state'], 'complete')
+        self.assertEqual(status['chunks_completed'], 2)
+        self.assertEqual(status['indexed'], 2)
+        self.assertEqual(len(self.records()), 2)
+
+        # Gaps should now be empty
+        gaps_after = self.ai.pages.next_gaps(self.item, self.revision, self.scope)
+        self.assertEqual(gaps_after['total_gap_pages'], 0)
+        self.assertEqual(gaps_after['chunks'], [])
+
+        # Chunked indexing with cancellation
+        other = self.ids['comic/']
+        self.pages.refresh(other)
+        folder_snap = self.pages.list(other)
+        other_rev = folder_snap['source_revision']
+        other_ids = [p['page_id'] for p in folder_snap['pages']]
+        other_scope = {'root_ids': [self.bookroot]}
+
+        # Cancel on 4th encode call (during 2nd chunk of 'other')
+        self.encoder.hook = lambda *args: self.ai.cancel.set() if len(self.encoder.calls) == 4 else None
+        self.ai.pages.start_chunked(other, other_ids, other_rev, other_scope, chunk_size=1)
+        self.ai.worker.join(10)
+        self.assertEqual(self.ai.status()['state'], 'cancelled')
+        # First chunk was published and retained
+        with self.ai.store.connect() as db:
+            folder_recs = db.execute('SELECT page FROM ai_page_vectors WHERE item_id=?', (other,)).fetchall()
+        self.assertEqual(len(folder_recs), 1)
+        self.assertEqual(folder_recs[0][0], 0)
+
+        # Resume / finish remaining chunks
+        self.encoder.hook = None
+        self.ai.pages.start_chunked(other, other_ids, other_rev, other_scope, chunk_size=1)
+        self.ai.worker.join(10)
+        self.assertEqual(self.ai.status()['state'], 'complete')
+        self.assertEqual(self.ai.status()['reused'], 1)
+        with self.ai.store.connect() as db:
+            folder_recs = db.execute('SELECT page FROM ai_page_vectors WHERE item_id=?', (other,)).fetchall()
+        self.assertEqual(len(folder_recs), 2)
+
 
 if __name__=='__main__':unittest.main()

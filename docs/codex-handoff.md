@@ -1,5 +1,27 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-17 代表的疑似同人誌・画像内文字認識（Visual-OCR）評価基盤と長い本の分割ページ追加
+
+- **代表的疑似同人誌・画像内文字認識（Visual-OCR）評価ハーネスと仕様**：
+  1. `tools/evaluate_representative_assets.py`：代表14素材（`bookA.cbz` page 0..5、`bookB` フォルダ本 page 0..3、単体アセット4点）を用いた評価ツール。`--zip <path>`、`--input-dir <path>`、および合成契約確認用`--generate-placeholder`に対応。`data/representative-eval/<run>/`配下に隔離ライブラリ（CBZ、フォルダ本 `folder_books=True`、画像アセット）を自動構築し、表紙索引・全本文ページ索引・オプションのWD未承認タグ提案および意味ベクトルを順次作成。
+  2. 4つの固定クエリカテゴリを評価：
+     - `visual_scene`（6問）：「夕焼けの教室」-> `bookA` p02、「赤い傘 雨」-> `bookA` p04、「神社 巫女」-> `bookB` p01、「魔法陣 杖 白髪」-> `bookB` p02、「白髪 赤い眼鏡 パーカー」-> `asset_01`、「サイバーパンク ネオン 路地裏」-> `asset_02`
+     - `visual_text_ja`（5問、EmbeddingGemma 2による画像内文字直接認識・非OCR）：「秘密のパスワード」-> `bookA` p05（フキダシ文字）、「水曜日のプラネタリウム」-> `bookA` p06（フキダシ文字）、「黄金の砂時計」-> `bookB` p03（章扉ゴシック文字）、「文化祭のカレーライス」-> `bookB` p04（黒板チョーク文字）、「銀河ステーション」-> `asset_03`（案内看板文字）
+     - `visual_text_en`（2問、英語プレート文字・日英クロスリンガル）：「MIDNIGHT COFFEE SHOP」-> `asset_04`、「深夜のコーヒーショップ」-> `asset_04`
+     - `wd_tag_semantic`（4問、WD tagger有効時）：英語タグ候補に対する日本語意味検索（「セーラー服」-> `bookA`、「巫女」-> `bookB`、「赤い眼鏡」-> `asset_01`、「サイバーパンク」-> `asset_02`）
+  3. Top1、Recall@3、Recall@5、MRR、Exact Page Hit @ 1を集計し、`report.json`および`frozen-protocol.json`を出力。パストラバーサル・シンボリックリンク・50MB超ファイルの安全ガードを完備。合成プレースホルダー実行を実モデル精度とは呼ばない注意書きを徹底。
+  4. 仕様・手順書として[docs/representative-asset-evaluation.md](representative-asset-evaluation.md)を追加。
+- **長い本の境界付き分割ページ索引（bounded multi-chunk page indexing / gap continuation）**：
+  1. `app/page_semantics.py` に `PageVectors.next_gaps(item_id, revision, scope, max_pages=64, chunk_size=16)` を追加。CPUのみで未準備範囲を最大16ページ単位のchunk列として算出。
+  2. `app/page_semantics.py` に `PageVectors.start_chunked(item_id, page_ids, revision, scope, chunk_size=16)` を追加。最大128ページまでのページ列を最大16ページずつの原子的トランザクション（`_publish_range`）で順次保存。中断時も完了済みchunkはSQLite内に保持され、再開時は保存済みchunkを再利用。既存の16ページ単一要求（`start`）の契約や厳格エラー、版・プロファイル束縛、bit完全一致ランキングを100%維持。
+- **検証記録**：
+  - `tests/test_representative_asset_evaluation.py`：5件全PASS（キー照合、プレースホルダー生成、ZIP/フォルダ安全性、ライブラリ構造、合成エンドツーエンド評価）。
+  - `tests/test_page_semantics.py`：14件全PASS（新規の分割chunk発行・中断時保持・再開時再利用・未処理gap算出テスト含む）。
+  - `tests/test_page_batch.py`：10件全PASS。
+  - `tests/test_page_coverage.py`：8件全PASS。
+  - 実機CLI実行：`python tools/evaluate_representative_assets.py --generate-placeholder --skip-wd` が正常終了し、`data/representative-eval/run-20261017-204418/` 配下に隔離ライブラリ・`report.json`・`frozen-protocol.json` を出力。
+- **ユーザー引き継ぎ**：ユーザーが14枚の実画像ZIPを作成中。ZIPを受領したら `python tools/evaluate_representative_assets.py --zip <path>` で直接評価を実行し、EmbeddingGemma 2の画像内文字認識精度および検索漏れを測定可能。
+
 ## 2026-10-17 多数本の検索：物理版確認・catalog guard・内積ループの同値高速化
 
 実装commit **`7ffb5a26a00ab1343371d926835905a250e55740`**、状態破棄追補commit **`1612513081292a75386ae4bf296c1811e5c6c9ea`**、正常完了時アトミック増分・直接例外マッピング追補commit **`0807a239d3916538a5c94fb69539ba66c332758a`**。開始HEAD **`ad2a599c527a960cb8d71880a2be374e0e088f27`**（前回実装commit `1978673ef1307f8dc889df5c3ebb34191bd96cdc`、clean/remote差0、他AIの新更新なし）。production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。現在P2、OCR保留、英語WD原文/未承認分離、既存全機能、GUI簡潔/24DIP gutter/16DIP pane間隔、P0累積1/2を保持。

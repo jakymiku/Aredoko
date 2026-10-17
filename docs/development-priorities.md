@@ -1,5 +1,7 @@
 # Aredoko — 直近の開発優先順位と合格条件
 
+> **2026-10-17 代表的疑似同人誌・画像内文字認識（Visual-OCR）評価基盤と長い本の分割ページ追加**：代表的な14枚素材（`bookA.cbz` 6ページ、`bookB` フォルダ本 4ページ、単体アセット4点）を用いた直接ページ検索、EmbeddingGemma 2による画像内文字認識（フキダシ・章扉・黒板・看板等の非OCR直接認識）、およびWD未承認タグ日本語意味検索の評価器（`tools/evaluate_representative_assets.py`）と仕様書（[docs/representative-asset-evaluation.md](representative-asset-evaluation.md)）を実装。`--zip`、`--input-dir`、および合成契約確認用`--generate-placeholder`に対応。併せて長い本を最大16ページ単位の原子的保存を維持しながら順次処理する境界付き分割処理（`PageVectors.next_gaps`、`PageVectors.start_chunked`）を追加。新規テスト全通過（代表素材テスト5件、ページ意味テスト14件）。実素材ZIPはユーザー作成中、受領後にそのまま評価可能。OCR保留・P0累積1/2は継続。
+
 > **2026-10-17 多数本のページ検索CPU測定・物理版確認/guard削減**：生成1024冊×64page（65536 vectors, 768D）で検索17.560→13.551→10.801秒（256冊3.938→1.446秒）、catalog guard/物理版確認の合計保持6.334→6.158→3.345秒（1冊1回保持・最大0.01125秒を維持）。raw/merged/root限定512冊のscore・根拠・即時変更/除外検出は完全一致。Python455 PASS/3 SKIP、Core449、Release0警告0エラー。[測定・同値性・限界](page-search-performance.md)。前回取消直後の静止PNG1枚は未確認のまま保持。次は長い本のbounded chunk、代表品質、さらなる大規模検索時の検討。OCR保留、P0累積1/2。
 
 > **2026-10-17 上限付き複数本ジョブ**：8冊/16pageずつ/合計128page、範囲確認・部分失敗/取消の完了分保持、最後の同scope/profile/版の明示再開をAPI/Core/WinUIへ実装。Python451 PASS/3 SKIP、Core449、Release0警告0エラー、native20操作PASS。取消直後の静止PNG1枚は未確認として残す。[仕様・検証境界](page-batch-indexing.md)。次は多数本の実測と長い本のbounded chunk、代表品質。OCR保留、P0累積1/2。

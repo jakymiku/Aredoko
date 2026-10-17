@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新：代表的疑似同人誌・画像内文字認識（Visual-OCR）評価基盤と長い本の分割ページ追加（2026-10-17）**：代表的な14枚素材（`bookA.cbz` page 0..5、`bookB` フォルダ本 page 0..3、単体アセット `asset_01`..`asset_04`）を用いた直接ページ検索、EmbeddingGemma 2による画像内文字認識（フキダシ・章扉・黒板・看板等の非OCR直接認識）、およびWD未承認タグ日本語意味検索の評価器（`tools/evaluate_representative_assets.py`）と仕様書（[docs/representative-asset-evaluation.md](representative-asset-evaluation.md)）を実装。`--zip`、`--input-dir`、および合成契約確認用`--generate-placeholder`に対応。併せて長い本を最大16ページ単位の原子的保存を維持しながら順次処理する境界付き分割処理（`PageVectors.next_gaps`、`PageVectors.start_chunked`）を追加。新規テスト全通過（代表素材テスト5件、ページ意味テスト14件）。実素材ZIPはユーザー作成中、受領後にそのまま評価可能。OCR保留・P0累積1/2は継続。
+
 > **最新：多数本のページ検索CPU測定・物理版確認/guard削減（2026-10-17）**：生成1024冊/65536ページ・768Dで17.560→13.551→10.801秒（変更前比38.49%短縮、256冊は3.938→1.446秒）、catalog guard/物理版確認の合計保持は6.334→6.158→3.345秒（1冊1回保持・最大0.01125秒を維持）。中間list省略・256冊ごとの位置SQL一括取得・`tag_source`時のZIP central directory一括読取/ZipInfo省略を追加し、raw score/根拠/通常順位/root限定512冊と即時の変更/除外検出は完全一致。実精度・全RAM・1TB・UI応答の保証ではない。[固定条件・実測・次課題](page-search-performance.md)と最新handoffを優先。前回取消1PNGの静止画確認は未完、OCR保留/P0 1/2/UI簡潔/機能維持。
 
 > **最新：上限付き複数本のページ追加（2026-10-17）**：右クリックからチェック式選択→範囲確認→開始。最大8冊/16ページずつ/合計128、完了分保持、最後のジョブの同範囲再開をAI設定へ統合。通常のAI buildでは自動処理せず、scope/profile/版を勝手に変えない。[使い方・契約](page-batch-indexing.md)。最終Windows/全体検証は両handoffを優先。
