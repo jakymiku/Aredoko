@@ -1,5 +1,35 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-17 多数本の検索：物理版確認・catalog guard・内積ループの同値高速化
+
+実装commit **`7ffb5a26a00ab1343371d926835905a250e55740`**。開始HEAD **`ad2a599c527a960cb8d71880a2be374e0e088f27`**（前回実装commit `1978673ef1307f8dc889df5c3ebb34191bd96cdc`、clean/remote差0、他AIの新更新なし）。production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。現在P2、OCR保留、英語WD原文/未承認分離、既存全機能、GUI簡潔/24DIP gutter/16DIP pane間隔、P0累積1/2を保持。
+
+- **変更内容（raw float64 score/順位/根拠・即時変更/除外検出・1冊1回guard保持を完全維持）**：
+  1. `app/page_semantics.py`：`rank()`の65,536ページ走査で中間768要素`list`の生成とgenerator frame（約1.5億回）を排し、`map(math.isfinite, ...)` / `map(operator.mul, ...)` / `map(operator.truediv, ...)`で元の`sum → sqrt → division → dot product`とbit単位で同一のIEEE-754 float64内積を直接計算する`_score_packed(data, dimension, query)`を追加（`unpack`も同様の`map`方式へ更新）。64文字hex検査の正規表現を事前コンパイルし、256冊batch間で`ai.store.connect()`を1接続共有。
+  2. `app/page_semantics.py` / `app/page_index.py`：候補本の物理版確認で1,024回個別に行っていた`catalog.connect()`＋`item_locations` / `library_locations` / `library_roots`のSELECTを、256冊chunk先頭の`catalog._guard`保持内で1回まとめて取得する構造へ変更。**`catalog._guard`のouter_holdsは1冊1回（1,024回、最大単一保持0.011250秒）を維持**し、編集や他操作を256冊分ブロックしない。併せて一括状態確認ヘルパー`PageIndex.states`と`PreviewReader.tag_sources`を追加。
+  3. `app/previews.py`：`_zip_directory_limit`で上限検査済みのZIP central directory（最大4MiB）を1エントリ2回の`seek`/`read`（64ページ×1,024冊＝131,072回のsyscall）ではなく1回の`file.read(cd_size)`バッファで走査し、有効な画像エントリ有無も同時に判定。`operation == 'tag_source'`では`zipfile.ZipFile`による64個の`ZipInfo`オブジェクト生成を省略。また`_safe_path`で256冊batch内の登録rootに対する`root_path.resolve(strict=True)`を共有しつつ、毎回の全親ディレクトリ/相対パスの`stat(follow_symlinks=False)`（junction/symlink検査）と`source.resolve(strict=True).is_relative_to(resolved_root)`は従来通り実行。
+- **同一固定fixture（`data/page-search-scale/v1-20261017-01/`、1,024冊×64ページ＝65,536 vectors・768D、推論0）での単発CPU実測**：
+  - 64冊（4,096 vectors）：変更前 `0.919427s` → 第1回 `0.684381s` → **今回 `0.390823s`**（第1回比42.89%短縮、変更前比57.49%短縮）。guard合計 `0.339549s` → `0.293672s` → **`0.110751s`**（outer_holds 64、最大単一保持 `0.005925s`）。
+  - 256冊（16,384 vectors）：変更前 `3.938155s` → 第1回 `3.222464s` → **今回 `1.445857s`**（第1回比55.13%短縮、変更前比63.29%短縮）。guard合計 `1.432088s` → `1.608299s` → **`0.369745s`**（outer_holds 256、最大単一保持 `0.006066s`）。
+  - 1,024冊（65,536 vectors）：変更前 `17.560037s` → 第1回 `13.551148s` → **今回 `10.800774s`**（第1回比20.30%短縮、変更前比38.49%短縮）。guard合計 `6.333872s` → `6.158373s` → **`3.345448s`**（第1回比45.68%短縮、outer_holds 1,024、最大単一保持 `0.011250s`）。
+  - 64/256/1024冊のraw `score.hex()`＋根拠digest、通常modality merger後の順位/根拠digest、root限定512冊digest（`ea5c2f91e98ac5339ca11ad58879bf0ddeb358b452eb9cadcf393e770f590003`）は`baseline`・`optimized`・`guard-source-opt`の間で**100%完全一致**。原本とvector DB（262.11MiB）のSHA256不変、encoder呼び出し0。別tracemalloc passのPython割当peakは `1,026,619 bytes`（約0.98MiB、256冊分のlocation行キャッシュ約88KB増）。**単発・昇順でOS/SQLite cache等未分離、実モデル精度/推論速度/HTTP/UI応答/1TB/総RAMの保証ではない**。[詳細・再現手順](page-search-performance.md)。
+
+検証：
+
+- `tests/test_page_vector_decode.py`で`unpack`と`_score_packed`の両方が1/2/8/768次元のdense vectors、raw内積の`float.hex()`と全順位、unit tolerance境界、signed zero、破損/NaN/Inf/次元違い/zeroで旧decoderと完全一致することを確認。`tests/test_page_semantics.py`に、一括位置取得と`tag_source`の`ZipInfo`省略の下でも未再スキャンのexclude変更・原本書き換えが即座に除外されることと`PageIndex.states`を検証する回帰テストを追加。
+- 最終全Python **458件：455 PASS / 3 Windows platform SKIP / 304.429秒**。Core **449 PASS**、Windows x64 SelfContained Release **警告0 / エラー0、18.32秒**。`python -m compileall -q app tools tests`・`git diff --check` PASS。
+- GUI変更/起動/追加native試行なし。**前回の`book-batch-20261017-03`取消直後1 PNGの静止画レビューは未完のまま保持**（runtime20 PASS/UIA位置確認済み、初回+修正再実行2回済みのため追加自動試行せず人手レビューへ残す）。High Contrast/Narrator/AOT/DPI・代表実素材品質・並行操作/全RAM/全冊coverageは未検証。新DL/依存/モデルload/私物scan/外部media送信/CI dispatchなし。
+
+再現：`python -m unittest discover -s tests -p "test_*.py"` / `dotnet run --project tests/Aredoko.Core.Tests -c Release` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。benchmarkは`python tools/benchmark_page_search.py measure --output data/page-search-scale/v1-20261017-01 --label guard-source-opt`および`compare`。
+
+次の3手：
+
+1. 必要性/測定をもとに長い本のbounded chunk/明示再開を設計。既存1冊16page atomic/最大8冊128page/版/profile/scope/取消を弱めず、一般queue履歴・全冊・1TB自動処理を勝手に完成扱いしない。前回取消静止画1枚は人手レビューへ残す。
+2. 明示選択の代表素材で直接ページ検索/WD日英の漏れ/誤候補を記録。直接索引済みでも漏れが多いときだけOCR。音声/音楽内容・複数ページ文脈タグ・数千pending性能は後続。
+3. さらに大規模なページ検索時の残る物理版確認（1,024冊ファイルopen/stat約3.35秒）とPython内積ループ（約7.45秒）は、上位候補絞り込みやcacheが意味/鮮度へ与える影響を整理してから検討する。
+
+---
+
 ## 2026-10-17 多数本の検索CPU測定・スコアを変えない計算省略
 
 実装commit **`1978673ef1307f8dc889df5c3ebb34191bd96cdc`**。開始HEAD `9e69da83a610f9bc13166443a4eb12786239bf4c`（clean/remote差0、他AIの新更新なし）。production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR5を継続。現在P2、OCR保留、英語WD原文/未承認分離、既存全機能、GUI簡潔/24DIP gutter/16DIP pane間隔、P0累積1/2を保持。
