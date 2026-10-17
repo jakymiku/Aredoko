@@ -1,5 +1,7 @@
 # 名前・タグと表紙の混合順位（2026-10-12）
 
+> **現行方式の更新（2026-10-17）**：`mean-rrf`は候補cosineのスコア幅をmode重みとする平均へ更新。各mode内の平均同順位、global rank、候補にあるmodeだけの正規化、max/text/coverは維持。下の等重み式と2026-10-12数値は当時の記録。新24問を変更前に固定し、22問Top1 16→20、root限定退行0、直接視覚13問7→13。[現行の式・fallback・評価・限界](combined-fusion-evaluation.md)を優先。P0累積2/2で区切り。
+
 > 新しい固定日本語ベースライン v1を追加。種類指定のsemantic12問はtext/combinedでprimary Top1 12/12、種類未指定combinedは10/12。視覚4問は画像指定cover4/4、combined2/4。製品のrank設定は変更していない。入力根拠・同一図形の同点・正解なしの限界を含む最新結果は [search-quality-baseline.md](search-quality-baseline.md)。以下のGPU結果は過去の別セット。現行対象枠は10,000件で、下の2,000件は当時の上限。
 
 WinUIの「AI意味検索」は既定で `mean-rrf` を使う。「AI画像・表紙」、明示 `source=text/cover`、text-only profileは従来のcosine順位を使う。文字検索は独立している。Layaを起動・適用する必要はない。

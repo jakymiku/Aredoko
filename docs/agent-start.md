@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新：combined/RRFの限定改善を採用、P0累積2/2で区切り（2026-10-17）**：スコア幅による重み付け1案のみ。事前固定24問の正解あり22問は16/22→20/22、root限定22条件は22/22維持、旧Top1正解の悪化0。既存直接視覚13問は7/13→13/13（WD4問を混ぜない）。明示text/cover・原本/索引・scope不変。[方式・条件・2件の残失敗](combined-fusion-evaluation.md)。旧1/2は履歴、追加の自動調整/OCR復帰なし。次はページ検索の性能内訳、既存chunk UI。
+
 > **最新：長い本の明示分割APIと再開（2026-10-17）**：CPU plan→固定128ページ以内を16ページずつatomic公開→同じjob/page/revision/scope/profileを再起動後に明示再開。旧Python分割メソッドを再利用/強化し、HTTP認証/所有cancel/保存job置換競合を検証。[契約・限界](page-chunked-indexing.md)。**GUI接続は次の段階**、旧16ページ/複数本UIは保持。専用OCR保留、14素材の実評価・bit同一ランキング・P0 1/2・簡潔GUIを維持。
 
 > **最新：代表的疑似同人誌・画像内文字認識（Visual-OCR）実機評価完了（2026-10-17）**：ユーザー提供の2つのZIP（`Aredoko_search_test_images_8.zip`＋`Aredoko_text_recognition_test_images_6.zip`、計14枚）を用い、実モデル（CUDA EmbeddingGemma 2 768D＋WD Tagger CPU `wd-swinv2-v3`）での実機評価を完了（`data/representative-eval/real-v1-20261017/`）。複数ZIP自動マージ（`--zip <path> ...`）を実装。視覚（`cover`）モードにおいて、専用OCRなしでの画像内日本語文字認識（`visual_text_ja`）はフキダシ・章扉・黒板・看板の全5問で**Top1 5/5（100%）・期待ページ完全一致5/5（100%）**、英語文字（`visual_text_en`）も**Top1 2/2（100%）**、情景（`visual_scene`）も**Top1 6/6（100%）**、未承認WDタグ日本語意味検索（`wd_tag_semantic`）は**Top1 3/4（75%）・Recall@3 4/4（100%）**を達成。視覚検索全体で**Top1 94.12%（16/17）・Recall@3 100%・MRR 0.9706**を記録（混合combinedモードはテキストRRF希釈によりTop1 58.82%となり、視覚クエリには視覚モードを使う方針と一致）。**画像内文字認識での検索漏れ（content-search misses）が0件**であったことから、**ユーザーの「専用OCR保留」方針の妥当性が決定的に実証された**。[仕様と詳細実測表](representative-asset-evaluation.md)を参照。OCR保留・P0累積1/2は継続。

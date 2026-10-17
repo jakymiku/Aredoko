@@ -7,3 +7,4 @@ tests/fixtures/literal-related-v6.json text eol=lf
 tests/fixtures/search-phase-v7.json text eol=lf
 tests/fixtures/cover-empty-v1.json text eol=lf
 tests/fixtures/tag-language-v1.json text eol=lf
+tests/fixtures/combined-fusion-v8.json text eol=lf

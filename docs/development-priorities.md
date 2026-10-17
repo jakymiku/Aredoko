@@ -1,5 +1,7 @@
 # Aredoko — 直近の開発優先順位と合格条件
 
+> **現行P0カウンター：2/2（2026-10-17）**。ユーザーのcombined改善指示で第2試行を実施し、新固定22問Top1 16→20、旧正解退行0で採用・区切り完了。[最新評価](combined-fusion-evaluation.md)。下の旧checkpointの1/2は歴史記録。
+
 > **2026-10-17 代表的疑似同人誌・画像内文字認識（Visual-OCR）実機評価完了**：ユーザー提供の2つのZIP（`Aredoko_search_test_images_8.zip`＋`Aredoko_text_recognition_test_images_6.zip`、計14枚）を用い、実モデル（CUDA EmbeddingGemma 2 768D＋WD Tagger CPU `wd-swinv2-v3`）での実機評価を完了（`data/representative-eval/real-v1-20261017/`）。複数ZIP自動マージ（`--zip <path> ...`）を実装。視覚（`cover`）モードにおいて、専用OCRなしでの画像内日本語文字認識（`visual_text_ja`）はフキダシ・章扉・黒板・看板の全5問で**Top1 5/5（100%）・期待ページ完全一致5/5（100%）**、英語文字（`visual_text_en`）も**Top1 2/2（100%）**、情景（`visual_scene`）も**Top1 6/6（100%）**、未承認WDタグ日本語意味検索（`wd_tag_semantic`）は**Top1 3/4（75%）・Recall@3 4/4（100%）**を達成。視覚検索全体で**Top1 94.12%（16/17）・Recall@3 100%・MRR 0.9706**を記録（混合combinedモードはテキストRRF希釈によりTop1 58.82%となり、視覚クエリには視覚モードを使う方針と一致）。**画像内文字認識での検索漏れ（content-search misses）が0件**であったことから、**ユーザーの「専用OCR保留」方針の妥当性が決定的に実証された**。[仕様と詳細実測表](representative-asset-evaluation.md)を参照。OCR保留・P0累積1/2は継続。
 
 > **2026-10-17 多数本のページ検索CPU測定・物理版確認/guard削減**：生成1024冊×64page（65536 vectors, 768D）で検索17.560→13.551→10.801秒（256冊3.938→1.446秒）、catalog guard/物理版確認の合計保持6.334→6.158→3.345秒（1冊1回保持・最大0.01125秒を維持）。raw/merged/root限定512冊のscore・根拠・即時変更/除外検出は完全一致。Python455 PASS/3 SKIP、Core449、Release0警告0エラー。[測定・同値性・限界](page-search-performance.md)。前回取消直後の静止PNG1枚は未確認のまま保持。次は長い本のbounded chunk、代表品質、さらなる大規模検索時の検討。OCR保留、P0累積1/2。
@@ -111,10 +113,10 @@ Aredokoの存在理由は **「名前や保存場所を忘れたファイルを�
 
 ## 再開時の推奨最初の3手
 
-代表14枚の実モデル評価、1,024冊/65,536ページ検索10.80秒までの同値高速化、および[長い本のplan/start/resume API](page-chunked-indexing.md)は実装済み。GUIの新chunk操作は未接続。前回取消直後の静止画1枚は人手レビュー未完のまま記録する。
+ユーザー明示でcombined/RRFの残るP0試行を実施し、[新固定評価](combined-fusion-evaluation.md)で採用条件を満たした。**現在の累積は2/2で区切り完了**。原本/索引/明示modeを保ち、既知の2失敗だけへ自動で重みを調整し続けない。以前の1/2は履歴。長い本のplan/start/resume APIは実装済み、GUIは未接続、前回取消静止PNG1枚は人手レビュー未完のまま保持。
 
-1. **長い本の分割追加を既存WinUIへ接続**：新画面を増やさず既存範囲確認/AI設定にplan→開始/最新同範囲再開を統合。1冊128ページ/atomic16ページと旧8冊計128ページの違いを簡潔に示す。scope/profile/版/所有cancel/未保存編集、狭幅の固定状態/操作、24DIP scroll gutter/16DIP pane間隔を維持する。
-2. **combined/RRFとWD日英の失敗を独立評価**：代表素材で確認されたファイル名だけのtext順位による視覚希釈と「赤い眼鏡」候補2位を起点に、同点/無情報の扱いを固定条件で検証する。今回の成功14素材を一般精度やOCR不要の普遍証明にせず、小字/別フォント/曖昧表現など新しい明示素材も分けて測る。ランキング調整はP0試行上限/holdoutを確認して別の小さい変更へ。専用OCRの実装は保留する。
-3. **大規模検索の残る費用を整理**：[CPU実測](page-search-performance.md)10.80秒/guard約3.35秒を維持し、guard外のdecode/内積/SQL等を計測してから上位候補選択やcacheを判断する。即時の物理変更/解除/scope/profile保護を弱めず、全体RAM/並行応答/1TBの保証へ外挿しない。音声/音楽内容・複数ページ文脈タグ・数千pending性能は後続。
+1. **ページ検索の次の性能調査を絞る**：[既存10.80秒](page-search-performance.md)の物理版/guard約3.35秒と、guard外decode/内積/SQL等を計測してから改善1件を選ぶ。今の結果はcover/max・生成1024冊での単発値。scope/即時変更検出/本ごとの短いguard/score同値を弱めず、新依存なしで実施可能な範囲から進める。
+2. **既存WinUIへ長い本のchunk APIを接続**：画面を増やさずplan→確認→開始/最新同範囲再開。1冊128ページ/atomic16ページと旧8冊128ページを簡潔に区別。未保存・scope/profile/版・所有cancel、狭幅での進捗/取消、24DIP gutter/16DIP pane間隔を維持。
+3. **残る検索失敗は新しい独立根拠で評価**：魔法使いの言い換え/献立の多義、text-onlyと視覚意図の競合、別font/小字/未知素材/他modelへの一般化をbacklogへ。新しいユーザー指示/実運用の新失敗なしにP0の3回目へ入らない。WD日英・音声/音楽内容・複数ページ文脈タグ・数千pending性能は別slice。専用OCR保留を維持。
 
 これは**計画であり、新機能の実装報告ではない**。本書の方針が最新のユーザー指示と競合したら、その新指示を優先して文書を同期する。
