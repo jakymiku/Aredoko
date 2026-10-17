@@ -1,5 +1,35 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-18 CPUページ検索：内訳を計測し、スコア同値の重複finite検査を削減
+
+実装commit **`cef90a3512634fed6aebcafe5ca2f1131790ea76`**。開始HEAD **`93c8c5895bf9567ce9d73145fdddf3a1f9f1007b`**、最初と終了前にfetchし他AIの追加commitなし、開始clean/origin差0。既存production branch / Draft PR5を継続。最新「次の3手」の最優先だったCPU性能調査から、同値な改善1件を実装した。**combined/RRFは前回の採用済み方式のまま、P0累積2/2で品質枠は閉じたまま**。新しい品質試行やOCR実装へ戻らない。
+
+### 実装・実測
+
+- `PageVectors.rank`のpacked scorerだけで、全768成分へのfinite走査を、既に必要な非負二乗和への`math.isfinite`検査へ置換。NaN/±Infはその和を非finiteにするため同様に拒否。長さ/単位長許容差・sum→sqrt→division→dot・全件stream・同点/閾値/候補・物理版/除外/登録解除/`_state_epoch`・1冊1回guardを維持。`unpack`/profile/vector namespace/schema/他の機能は未変更。**再索引不要**。
+- 同一生成fixture（1024冊×64page/768D、system Python3.14.4）の今日のtraceなし計測：64冊 **0.476502→0.426647秒**、256冊 **2.744156→2.154090秒**、1024冊 **13.481350→12.205678秒（9.46%）**。**旧10.800774秒の最速値更新ではない**。変更前の再測定自体が前回より遅く、cache/試行順/他process効果を分離していない。今回前後の単発比較であり、実私物・実モデル・API/GUI・1TBの速度保証ではない。
+- 別cProfile passでpacked scorer累積7.035375→5.806894秒、原本確認5.456360→5.269984秒、vector SQL execute約0.004秒/fetch約0.84–0.87秒を観測。累積値は重なり合算不可、計器ありを通常計時と比較しない。旧「guard外7.45秒がすべて内積」という未分離の推測を文書で訂正。原本pathは3回/冊を保持し、鮮度cacheで省略していない。
+- 新`tools/benchmark_page_search.py profile`は新labelのJSON/`.pstats`へCPU内訳・guard・SQL execute/cursor nextを記録し、通常baselineとのraw/merged digest・protocol/profile/dimension・原本/DB不変・1冊1回guardを検証。`NoModel`でモデル呼出0、製品UI/APIへの計器追加なし。新依存/モデルDLなし。[内訳/全表/再現/制限](page-search-performance.md)。
+
+### 検証と残る制約
+
+- 今回前後と旧baselineの64/256/1024冊でraw float score.hex/ページ・版/model根拠、cover/max merger後の全順位/score/根拠、root限定512冊と空集合が完全一致。full raw digest `cd3cc7170b5c11c80d4779272caf0cfebd478d0c7a063ebb6503b2f1f229ad29`維持。1,024冊guard outer_holds双方1024、合計4.805746→4.745808秒、単一最大0.012305→0.012835秒。物理確認自体の高速化とは呼ばない。
+- 新edge回帰はNaN/±Infの先頭/中間/末尾、混在Inf、最大float32/subnormal/signed zero、既存unit tolerance/全bit/順位を検証。decoder **4 PASS**をsystem3.14と専用3.11で各確認。新profile生成fixture **1 PASS**（raw/merged/hash/guard/SQL/モデル呼出0・上書き拒否・source変更拒否）。
+- 最終全Python **495件：492 PASS /3 Windows platform SKIP /394.140秒**。既存scope/途中解除/動的除外・原本書換え即時検出、ranking/chunk/全backend回帰を含む。Core **449 PASS**、Windows x64 SelfContained Release **警告0/エラー0、21.84秒**（`--no-restore`、新依存取得なし）。compileall/diff/更新Markdown link確認。今回失敗した対象/全体testはなし。
+- data `page-search-scale/v1-20261017-01/finite-before-20261018.json` / `finite-after-20261018.json` / `finite-profile-before-20261018.json` / `finite-profile-after-20261018.json`と各`.pstats`。製品source SHA **`24ff2563e8dec8fd6c2898184ec9516ff68e38da45cedc1c06ae3c5382321b83`**。旧baseline/optimized/guard-source-optや元ZIP/DB/reportを上書きしていない。生成原本bytes/mtime/hash・vector DB SHA不変、NoModel calls0、benchmark AI/catalogはfinallyでclose済み。別trace passのPython peak双方1,028,803 bytesはSQLite native/OS/全RSSを含まない。
+- logs `data/page-finite-{before,after,profile-before,profile-after,decode,decode-aihost,python,core,release}-20261018.log` / `page-profile-test-20261018.log`（すべてignored）。私物走査/元メディア変更/移動/削除/外部media送信/GPU/OCR/WD/Laya/新DL/依存/CIなし。3 workflowsはmanualのみ。既存Draftを継続しmainへmergeしない。
+- GUI/XAML/Core source未変更、新native実操作・WinUIAnalyzer/AOT/DPI/High Contrast/Narrator・実ライブラリ/並行UI応答・cold/warm別計測は未検証。以前のbook-batch取消直後1PNGは静止画レビュー未完のまま。簡潔GUI/全機能/24DIP gutter/16DIP pane間隔を維持。Python3.11→3.14の既存snapshot物理token移行は別backlog、鮮度検査を迂回しない。
+
+再現：`python -m unittest discover -s tests` / 専用venvで`test_page_vector_decode.py` / `dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。計測は[performance文書の新label手順](page-search-performance.md)を使用し既存labelへ上書きしない。
+
+次の3手：
+
+1. **既存長冊chunk APIをWinUIの既存dialog/AI設定へ接続**。plan→確認→開始/最新同範囲再開、1冊128page/atomic16pageと旧8冊計128pageを簡潔に区別。未保存・scope/profile/版・所有cancel・狭幅の常時進捗/取消・共通gutter/pane間隔を保持。画面/機能を増殖/削減しない。[既存API](page-chunked-indexing.md)。
+2. 残るCPU検索は今回profileのscorer/SQL/path内訳で次の候補を設計。原本before/after確認・即時無効化・1冊ずつ短いguard・全bit一致を先に条件化し、旧10.80秒と今回12.21秒を直接の改悪/改善判定にしない。大規模実私物の自動scanは許可なしに行わず、近似ANN/無期限cacheは今回未設計・未実装。
+3. 残る言い換え/意図競合・小字/別素材/別model一般化・Pythonホスト移行をbacklogへ。P0第3試行を自動で始めず、OCR保留。WD日英・音声/音楽内容・複数ページ文脈タグ・数千pendingは別slice。
+
+---
+
 ## 2026-10-17 ユーザー優先変更：combined/RRFの第2試行を採用、P0累積2/2で区切り
 
 実装commit **`0faf542c81e7b647c90a8a301d55c96d99b7a891`**。観測前固定commit **`9855263e39bb4c81d7e65008c1d85f878c0e2ace`**。開始HEAD `d1936ff2e3955b7eca470dc5110b22059d055dd1`（clean/origin差0）、途中fetchでも他AIの新commitなし。既存production branch / Draft PR5を継続。ユーザーがGUI接続よりcombined Top1改善を明示優先したため、既存P0の残る1枠を使用した。**現在P0 baseline済み・累積2/2、今回の有限な品質改善枠は完了**。旧1/2は履歴。追加の自動調整やOCR復帰はしない。
