@@ -204,3 +204,4 @@ await FeedbackTests.Run(Check);
 PageImageTests.Run(Check);
 await PageCoverageTests.Run(Check);
 PageBatchTests.Run(Check);
+await PageChunkTests.Run(Check);

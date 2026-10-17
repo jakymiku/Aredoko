@@ -331,6 +331,33 @@ public sealed class PageEvidenceClient(HttpClient client)
     public async Task<PageBatchStatus> BatchStatusAsync(string jobId,string profile,CancellationToken cancellation=default)=>
         PageBatchStatus.Parse(await ReadAsync("api/library/ai/status",null,PageEvidenceProtocol.MaxJsonBytes,cancellation),profile,jobId);
 
+    public async Task<PageChunkPlan> PlanChunksAsync(int item,string revision,JsonObject scope,int maximum,string profile,CancellationToken cancellation=default)
+    {
+        var bytes=await ReadAsync("api/library/ai/pages/chunked/plan",PageChunkRequests.Plan(item,revision,scope,maximum,profile),PageEvidenceProtocol.MaxJsonBytes,cancellation);
+        return PageChunkPlan.Parse(bytes,item,revision,scope,maximum,profile);
+    }
+    public async Task<PageChunkStatus> StartChunksAsync(PageChunkPlan plan,CancellationToken cancellation=default)
+    {
+        var bytes=await ReadAsync("api/library/ai/pages/chunked",PageChunkRequests.Start(plan),PageEvidenceProtocol.MaxJsonBytes,cancellation);
+        var status=PageChunkStatus.Parse(bytes,plan.Profile,item:plan.ItemId,revision:plan.Revision,scope:plan.Scope);
+        if(!status.PageIds.SequenceEqual(plan.PageIds)||status.ChunkSize!=16)throw new InvalidDataException("追加範囲が変わりました。");
+        return status;
+    }
+    public async Task<PageChunkStatus> ResumeChunksAsync(PageChunkStatus saved,JsonObject scope,CancellationToken cancellation=default)
+    {
+        var bytes=await ReadAsync("api/library/ai/pages/chunked/resume",PageChunkRequests.Resume(saved,scope),PageEvidenceProtocol.MaxJsonBytes,cancellation);
+        var status=PageChunkStatus.Parse(bytes,saved.Profile,item:saved.ItemId,revision:saved.Revision,scope:scope);
+        if(!status.PageIds.SequenceEqual(saved.PageIds)||status.ChunkSize!=saved.ChunkSize)throw new InvalidDataException("前回の選択が変わりました。");
+        return status;
+    }
+    public async Task<PageChunkStatus> ChunkStatusAsync(PageChunkStatus owned,CancellationToken cancellation=default)
+    {
+        var bytes=await ReadAsync("api/library/ai/status",null,PageEvidenceProtocol.MaxJsonBytes,cancellation);
+        var status=PageChunkStatus.Parse(bytes,owned.Profile,owned.JobId,owned.ItemId,owned.Revision,owned.Scope);
+        if(!status.PageIds.SequenceEqual(owned.PageIds)||status.ChunkSize!=owned.ChunkSize)throw new InvalidDataException("処理中のページ選択が変わりました。");
+        return status;
+    }
+
     public async Task<PageImageCoverage> ImageCoverageAsync(int itemId,string revision,JsonObject scope,string? expectedProfile=null,CancellationToken cancellation=default)
     {
         PageEvidenceProtocol.ValidateId(itemId);PageEvidenceProtocol.ValidateToken(revision,nameof(revision));

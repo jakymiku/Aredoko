@@ -60,6 +60,7 @@ def main():
     modes.add_argument('--wd-runtime-only',action='store_true',help='Existing approved CPU model on generated media only; no downloads')
     modes.add_argument('--tag-language-only',action='store_true',help='Existing EG2 CUDA model with generated sources and predetermined English labels; no downloads')
     modes.add_argument('--pane-boundary-only',action='store_true',help='No-model overlay occlusion, close and resize checks on generated images')
+    modes.add_argument('--page-chunks-only',action='store_true',help='New generated 145-page plan, cancel, service/app restart and explicit resume; no actual model')
     modes.add_argument('--book-batch-only',action='store_true',help='Generated two-book review, cancel and app-restart resume; no actual models')
     modes.add_argument('--page-coverage-only',action='store_true',help='No-model page counts, gaps, cancellation and restart on generated books')
     modes.add_argument('--page-image-only',action='store_true',help='Existing EG2 CUDA on generated fixed Japanese book pages; no OCR or downloads')
@@ -110,7 +111,7 @@ def main():
             if user32.GetForegroundWindow()!=int(hwnd):raise RuntimeError('Windows denied owned-window activation; no input sent')
     def shot(name):
         owned()
-        if args.check_scroll_gutters or args.pane_boundary_only or args.book_batch_only:time.sleep(.3) # Let the compositor present the current layout.
+        if args.check_scroll_gutters or args.pane_boundary_only or args.book_batch_only or args.page_chunks_only:time.sleep(.3) # Let the compositor present the current layout.
         path=target/(name+'.png');ui('screenshot','--output',path)
         check('screenshot '+name,path.is_file() and path.stat().st_size>0);report['screenshots'].append(path.name)
         tree=json.loads(ui('inspect','--json','--depth','12'))
@@ -189,7 +190,7 @@ def main():
             def book_digest():
                 return {p.relative_to(book_media).as_posix():(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in book_media.rglob('*') if p.is_file()}
             book_before=book_digest()
-        if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.book_batch_only:
+        if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.book_batch_only or args.page_chunks_only:
             import zipfile
             from page_index import PageIndex
             from page_text import PageTextIndex
@@ -198,8 +199,8 @@ def main():
             def write_jump_book(extra=False):
                 with zipfile.ZipFile(jump_file,'w') as archive:
                     if extra:archive.writestr('p00.png',png(300,400,(80,80,80)))
-                    if args.page_coverage_only or args.book_batch_only:
-                        for n in range(35):archive.writestr(f'p{n:03}.png',png(60,80,(n+20,40,70)))
+                    if args.page_coverage_only or args.book_batch_only or args.page_chunks_only:
+                        for n in range(145 if args.page_chunks_only else 35):archive.writestr(f'p{n:03}.png',png(60,80,(n+20,40,70)))
                     elif args.page_image_only:
                         rendered=REPO/'data/ocr-eval/ocr-v1-20261017'
                         receipt=json.loads((rendered/'receipt.json').read_bytes())
@@ -223,7 +224,7 @@ def main():
                     def record():return {'adapter':'contract-fixture','version':'1','model':'not-real-ocr','model_revision':'1','preprocessing':'page-jump'}
                 def extract(self,payload,cancelled):return '夕焼けの教室で約束した'
             page_text=PageTextIndex(sandbox.catalog,page_index,JumpExtractor())
-        if args.page_coverage_only or args.book_batch_only:
+        if args.page_coverage_only or args.book_batch_only or args.page_chunks_only:
             class CoverageEncoder:
                 available=True
                 resident=False
@@ -282,7 +283,7 @@ def main():
                 for item,tags in ((blue_item,['blue_hair','twintails']),(red_item,['red_hair','long_hair'])):
                     tagger.suggest=lambda source,cancelled,tags=tags:[TagProposal(tag,'Predetermined English runtime fixture; not tagging quality') for tag in tags]
                     TagSuggestions(sandbox.catalog,tagger).generate(item,uuid.uuid4().hex)
-            if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.book_batch_only:
+            if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.book_batch_only or args.page_chunks_only:
                 if args.page_jump_only or theme=='Light':write_jump_book()
                 sandbox.catalog.index.scan(jump_root);sandbox.catalog.sync_index()
                 jump_item=next(r['id'] for r in sandbox.catalog.search(root_id=jump_root)['items'] if r['relative_path']==jump_file.name)
@@ -293,6 +294,12 @@ def main():
                     sandbox.ai.pages.start(jump_item,[p['page_id'] for p in snapshot['pages'][16:32]],snapshot['source_revision'],{'root_ids':[jump_root]})
                     sandbox.ai.worker.join(10);check('fixture has a disjoint middle range',sandbox.ai.status()['state']=='complete')
                 with sandbox.catalog.connect() as db:db.execute('DELETE FROM reader_progress WHERE item_id=?',(jump_item,))
+            if args.page_chunks_only and theme=='Dark':
+                from similarity_sandbox import RecordedSimilarity
+                sandbox.ai.close();sandbox.ai=RecordedSimilarity(sandbox.catalog,coverage_encoder)
+                coverage_encoder=CoverageEncoder(sandbox.ai);sandbox.ai.encoder=coverage_encoder
+                server.RequestHandlerClass=production_handler(sandbox.catalog,secrets.token_urlsafe(32),ai=sandbox.ai,profiles=sandbox.profiles,tagger=tagger)
+                check('service restart restores chunk checkpoint without inference',sandbox.ai.status()['state']=='cancelled' and coverage_encoder.calls==0)
             launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build',
                 '--output-appx-directory',target/('layout-'+theme.lower()),'--detach','--json','--args','--ui-theme '+theme.lower()+' --viewer-settings '+str(target/'viewer-settings.json')))
             if launch.get('ProcessScope') not in (None,'local'):raise RuntimeError('Unexpected launch scope')
@@ -304,7 +311,71 @@ def main():
                 if len(matches)==1:break
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
-            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','78 件' if args.book_batch_only else '77 件' if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.book_batch_only or args.folder_books_only and theme=='Dark' else '76 件')
+            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','78 件' if args.book_batch_only else '77 件' if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.book_batch_only or args.page_chunks_only or args.folder_books_only and theme=='Dark' else '76 件')
+            if args.page_chunks_only:
+                report['test_mode']='long-book-chunk-gui'
+                if theme=='Light':
+                    original_chunk=(jump_file.read_bytes(),jump_file.stat().st_mtime_ns)
+                    ui('set-value','TxtQuery','jump.cbz');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                    ui('invoke','Item'+str(jump_item),'--action','select');wait('TxtEditStatus','保存済み')
+                    ui('set-value','TxtTags','draft-chunk');wait('TxtEditStatus','未保存の変更')
+                    context('Item'+str(jump_item),jump_item,'IndexBookPages');enabled('PageAIAdd',True)
+                    choose_combo('PageAIMode','PageAIChunked');enabled('PageAIAdd',False)
+                    visible('PageAIChunkLimit');ui('set-value','PageAIChunkLimit','33');ui('invoke','PageAIChunkPreview');enabled('PageAIAdd',True)
+                    contains('PageAIChunkPlan','33ページ');check('chunk preview never infers',coverage_encoder.calls==0)
+                    gutter('PageAIFieldsScroll','PageAIChunkLimit');visible('PageAIChunkPlan');shot('Light-chunk-preview')
+                    ui('set-value','PageAIChunkLimit','32');enabled('PageAIAdd',False)
+                    ui('set-value','PageAIChunkLimit','33');ui('invoke','PageAIChunkPreview');enabled('PageAIAdd',True)
+                    check('changed chunk limit requires a fresh preview without inference',coverage_encoder.calls==0)
+                    user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.5)
+                    visible('PageAIAdd');visible('PageAICancel');shot('Light-chunk-narrow')
+                    coverage_encoder.delay=True;coverage_encoder.delay_after=16
+                    ui('invoke','PageAIAdd');check('chunk pauses after first atomic publication',coverage_encoder.entered.wait(10))
+                    ui('wait-for','PageAIStatus','--value','保存済み 16/33','--contains','-t','12000')
+                    ui('invoke','PageAICancel');enabled('PageAIAdd',True);contains('PageAIStatus','中断しました');contains('PageAICoverage','16 / 145')
+                    time.sleep(.5);shot('Light-chunk-cancelled-stable')
+                    tree=json.loads(ui('inspect','--json','--depth','16'))
+                    for identifier in ('PageAIAdd','PageAICancel','PageAIStatus'):
+                        n=next(n for n in nodes(tree) if n.get('automationId')==identifier)
+                        check('narrow chunk state/control visible '+identifier,not n.get('isOffscreen',True) and n['width']>0 and n['height']>0)
+                    coverage_encoder.delay=False;sandbox.ai.worker.join(5)
+                    check('chunk cancellation retains only first 16 pages',sandbox.ai.status()['indexed']==16 and sandbox.ai.status()['state']=='cancelled')
+                    ui('invoke','CloseButton');ready()
+                    tree=json.loads(ui('inspect','--json','--depth','14'))
+                    if not any(n.get('automationId')=='TxtTags' and not n.get('isOffscreen',True) for n in nodes(tree)):ui('invoke','BtnDetails')
+                    check('chunk dialog preserves dirty manual metadata','draft-chunk' in ui('get-value','TxtTags'))
+                    ui('set-value','TxtTags','manual-page');wait('TxtEditStatus','保存済み')
+                else:
+                    from native_ui_tools import invoke_tool
+                    invoke_tool(cli,app_pid,hwnd,'BtnAIIndex');ui('wait-for','ResumeBookChunks','-t','12000')
+                    ui('invoke','AIScopeOptions','--action','expand');enabled('ResumeBookChunks',True)
+                    visible('ResumeBookChunks');shot('Dark-chunk-restored')
+                    visible('AIScopeKind');choose_combo('AIScopeKind','AIScopeKind_image');enabled('ResumeBookChunks',False)
+                    visible('AIScopeRevert');ui('invoke','AIScopeRevert');enabled('ResumeBookChunks',True)
+                    before_calls=coverage_encoder.calls;ui('invoke','ResumeBookChunks')
+                    ui('wait-for','AIStatus','--value','保存済み 33/33','--contains','-t','12000')
+                    check('restart resume reuses first 16 and infers only 17 missing pages',coverage_encoder.calls-before_calls==17)
+                    check('resume publishes all reviewed chunks',sandbox.ai.status()['state']=='complete' and sandbox.ai.status()['reused']==16)
+                    user32.SetWindowPos(int(hwnd),None,0,0,700,700,0x0014);time.sleep(.5)
+                    visible('AIStatus');visible('StartAIIndex');shot('Dark-chunk-settings-complete')
+                    ui('invoke','CloseButton');ready()
+                    ui('set-value','TxtQuery','jump.cbz');time.sleep(.4);ui('invoke','BtnSearch');ready()
+                    context('Item'+str(jump_item),jump_item,'IndexBookPages');enabled('PageAIAdd',True)
+                    choose_combo('PageAIMode','PageAIChunked');visible('PageAIChunkLimit');ui('set-value','PageAIChunkLimit','128')
+                    ui('invoke','PageAIChunkPreview');enabled('PageAIAdd',True);contains('PageAIChunkPlan','112ページ')
+                    ui('invoke','PageAIAdd');ui('wait-for','PageAICoverage','--value','145 / 145','--contains','-t','12000')
+                    enabled('PageAIChunkPreview',True);ui('invoke','PageAIChunkPreview');enabled('PageAIChunkPreview',True);enabled('PageAIAdd',False)
+                    contains('PageAIChunkPlan','未準備ページはありません');shot('Dark-chunk-all-pages-ready')
+                    check('145-page book indexed with no model or OCR',sandbox.ai.pages.coverage(jump_item,snapshot['source_revision'],{'root_ids':[jump_root]})['indexed_pages']==145)
+                    ui('invoke','CloseButton');ready()
+                    legacy=sandbox.ai.store.state();legacy.pop('page_ids');sandbox.ai.store.save_state(legacy)
+                    invoke_tool(cli,app_pid,hwnd,'BtnAIIndex');ui('wait-for','AIStatus','-t','12000')
+                    ui('invoke','AIScopeOptions','--action','expand');enabled('StartAIIndex',True)
+                    contains('AIStatus','追加範囲を開き直してください')
+                    ui('invoke','CloseButton');ready()
+                check(theme+' generated long book unchanged',original_chunk==(jump_file.read_bytes(),jump_file.stat().st_mtime_ns))
+                close();continue
+
             if args.book_batch_only:
                 report['test_mode']='bounded-book-page-batch'
                 second=next(r['id'] for r in sandbox.catalog.search(root_id=jump_root)['items'] if r['relative_path']=='batch-two.cbz')

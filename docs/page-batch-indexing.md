@@ -72,4 +72,4 @@ WinUI API/コードレビュー済み。未保存編集/async/閉じる際の所
 
 多数本のCPU検索費用は[固定測定と同値な計算省略](page-search-performance.md)を追加（生成1024冊/65536page、17.560→13.551秒、raw/merged/root限定一致）。約6秒の物理版/guard費用と実品質・全RAM・全冊応答の検証は残る。
 
-[長い本の分割plan/start/resume API](page-chunked-indexing.md)を追加。1冊最大128ページ・保存単位16ページ・固定選択の明示再開までバックエンド実装済み。GUIへの接続は後続で、既存の単範囲/複数本操作は変更しない。
+[長い本の分割plan/start/resume API](page-chunked-indexing.md)を追加。1冊最大128ページ・保存単位16ページ・固定選択の明示再開までバックエンド実装済み。2026-10-18に既存単冊dialog/AI設定へGUI接続・新規長冊実機40 checks/6 PNG目視まで確認。既存の単範囲/複数本機能と、この文書の旧取消静止PNGの未完gateは保持。

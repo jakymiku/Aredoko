@@ -1,6 +1,28 @@
 # 長い本の分割追加：明示plan/start/resume API
 
-2026-10-17。既存の `next_gaps` / `start_chunked` を、安全なローカルAPI・固定選択の永続化・再起動後の明示再開へ接続した。**今回完成したのはバックエンドAPIであり、WinUIのボタン/クライアント接続は次の段階**。既存GUIの単一範囲16ページ・複数本8冊/計128ページはそのまま利用できる。専用OCRは保留し、通常AI buildで本文全体を自動解析しない。
+2026-10-17のplan/start/resume APIを、2026-10-18に既存WinUIのページ追加dialogとAI設定へ接続した。既存の単一範囲16ページ・複数本8冊/計128ページは保持。専用OCRは保留し、通常AI buildや範囲確認だけで本文全体を自動解析しない。
+
+## WinUIから使う（2026-10-18）
+
+1. 本を右クリック→「本のページをAI検索に追加…」。既存の「ページを指定（最大16）」は従来どおり。
+2. 「追加する範囲」を**「未準備ページをまとめて（最大128）」**へ切り替える。今回の上限は1〜128（初期64）。「追加範囲を確認」でCPU planだけを取得する。source/profile/scopeと固定page IDsを検査し、1始まりのページ範囲と保存回数を表示。まだ推論しない。
+3. **「確認した範囲を追加」**でのみ開始。上限や方式を変えたらplanを破棄し再確認が必要。進捗・保存済みページ数・中断・閉じるはスクロールする入力欄の外に置き、右24DIP gutterを保持。長い範囲一覧はスクロール内、情報や機能を削除しない。
+4. 中断/失敗で完成chunkを保持。同じdialogは「同じ範囲を再開」を表示。新しい範囲確認をすれば保存jobの再開選択を明示的に解除する。dialogを閉じる要求は自分のjob IDだけを中断し、処理開始待ち中の要求も開始応答後に追跡する。
+5. app/AIサービス再起動後は「設定」→「AI検索の準備」→**「前回のページ追加を再開」**。保存済みの同scope/profile/版/page IDsへだけ再開。scope編集が未保存/未確認、別scopeや他jobでは再開を有効にしない。自動再開/自動scope復元なし。新AI jobは最新1件の再開記録を置換する。
+6. 旧jobで保存planが欠ける場合は再開を表示せず「本の追加範囲を開き直してください」。通常AI索引の作成や新しい範囲確認は利用でき、保存vectorを消して代用しない。
+
+Coreの`PageChunks.cs`と`PageEvidenceClient`がJSON件数/範囲/固定IDs・scope正規化（空rootsと全rootsを区別）・profile/版/所有job・実chunk数を検証。UIはdialogの調整に留め、モデル推論/索引公開は既存backendのみ。`chunks`（連続した欠けの範囲数）と`chunks_total`（16個ずつ平坦化して保存する回数）は混同しない。既存未保存タグはdialogで書換え/破棄しない。i18nは既存の日本語UI方式を踏襲し、全面resw化は今回行わない。
+
+### このGUI接続の検証
+
+- Core **493 PASS**（新規44 checks）。1〜128の上限、35固定IDs、飛び飛び35範囲/実3chunk、scopeの型・空roots・明示null kind、profile/版/job/選択置換、旧checkpoint、HTTP routeとJSON所有、変更plan拒否を含む。初回Core runは`JsonValue<int>`を`GetValue<long>`で直接読むと失敗。int/longを型確認し、初回ログを保持して修正後合格。
+- Python分割API対象 **16 PASS /36.414秒**。製品Python sourceは変更せず、全Python495件の再実行は今回は行っていない（前回492 PASS/3 platform SKIPは履歴）。最終Windows x64 SelfContained Release **0警告/0エラー**、時間とログは最新handoffへ。新APIやモデル/依存追加なし。
+- native **`page-chunks-20261018-02`: runtime40 checks PASS / graceful closes2 / 6 PNG全目視**。生成145ページ本、CPU模擬encoderのみ。plan推論0、上限変更で再確認、33page確認→16page保存後中断→app/AI service再作成→16再利用/残17だけ処理、scope未保存中の再開無効、残112追加→145/145、旧plan欠落でも通常操作可能、未保存タグ/原本bytes/mtime/AI設定の保持を確認。`visual-review.json`をraw resultとは別に保存。スクロール入力の端は通常どおりclipされるが、固定の状態/開始/取消/閉じるに重なりや見切れはない。
+- 初回`01`は新fixtureで77件になる待機が76件のままのため停止（failure PNG1枚目視、正常終了1）。テスト件数を修正→`02`で合格。新しい長冊featureの修正再実行1回だけ。**旧book-batchの上限消費済みtestや取消静止PNG1枚の未完gateは変更/再実行/成功扱いしていない**。
+- Sandboxは`Win32_OptionalFeature.InstallState=2`（無効）のため許可済みlocalで所有PID/HWNDだけ操作。全test appは正常終了、専用AI/catalog/serverをclose。今回実EmbeddingGemma/WD/OCR/GPU・新download・私物走査・CIなし。WinUIAnalyzer未導入/未実行、High Contrast/Narrator/AOT/DPI・キーボード網羅・実私物/1TB/実GPU大量処理は未検証。
+- ユーザーは`C:\AI\Aredoko-test`の既存2 ZIP（`Aredoko_text_recognition_test_images_6.zip` / `Aredoko_search_test_images_8.zip`）を、使う場面があればこのPCの実モデル確認へ利用してよいと再確認。原本は変更/移動/削除せず、[既存14枚の実評価](representative-asset-evaluation.md)を保持。今回の長冊ライフサイクルは生成145ページで測り、2 ZIPの再推論/新精度測定はしていない。
+
+## バックエンドAPI（2026-10-17の実装を保持）
 
 ## 操作と上限
 
@@ -41,9 +63,9 @@ plan応答はcoverage由来の `item_id`, `source_revision`, `source_state`, `pr
 - 新規 `tests/test_page_chunks.py` は生成145ページCBZだけを使用。128ページ/8chunk上限、16ページ完了→次chunk取消→再起動→残17ページだけ推論、interruptedの非自動再開、失敗chunk未公開、除外後の推論停止、別scope/profile/物理版/新job拒否、plan後の競合、HTTP認証/Origin/厳格fields/所有cancel、飛び飛びの欠けと実chunk数、呼出元/初期応答の変更耐性を確認する。実モデル精度/実GPU速度の測定ではない。
 - 既存page semantics/batch/coverage 33件PASS（30.828秒）。新規14件+エラー表示3件の対象17件PASS（32.236秒）、追加2競合/gap検査PASS（2.505秒）。最終全体/Core/Releaseは[最新handoff](codex-handoff.md)を参照。
 - 初回の対象runは新planがcoverageをAI guard内から呼んだため停止。所有テストPIDだけ停止してログを保持（`data/page-chunks-target-initial-stalled-20261017.log`）。ロック取得順を修正し、2秒の取得上限を使う回帰テストを追加した。成功runだけで初回停止を隠さない。
-- GUI接続/native操作は今回は未実装・未検証。前回の複数本取消画面1 PNGは引き続き静止画レビュー未完。既存の自動再試行上限を迂回しない。全体queue履歴・複数冊の長い範囲同時追加・私物/1TB一括実測は未完成。
+- 2026-10-17 API実装当時はGUI接続/native未実装。2026-10-18の接続と検証は上の最新節を参照。前回の複数本取消画面1 PNGは引き続き静止画レビュー未完。既存の自動再試行上限を迂回しない。全体queue履歴・複数冊の長い範囲同時追加・私物/1TB一括実測は未完成。
 - 新依存/モデルdownload・専用OCR・新たな私物scan・GitHub Actions起動なし。代表14枚の実モデル評価は再実行していない。[既存実測](representative-asset-evaluation.md)と[多数本CPU測定](page-search-performance.md)を保持。combined/RRFの順位調整も今回行わない。
 
 再現：`python -m unittest discover -s tests -p test_page_chunks.py`（app/toolsをfixtureがpathへ登録）。全体は `python -m unittest discover -s tests`。
 
-次は新画面を増やさず、[既存ページ追加/複数本UI](page-batch-indexing.md)に今回のplan/start/resumeを接続する。範囲確認と開始を分離し、進捗・取消を狭幅でも常時見せ、24DIP scroll gutter/16DIP pane間隔と未保存編集を維持する。
+上記WinUI接続まで完成。[既存複数本UI](page-batch-indexing.md)と[CPU検索の計測](page-search-performance.md)を保持し、次作業は[最新handoff](codex-handoff.md)を参照。一般queue履歴/全冊自動処理は未実装、P0品質枠2/2/OCR保留を継続。
