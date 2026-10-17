@@ -1,5 +1,37 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-17 ページ準備状況・次範囲選択と、フォームの文字切れ/スクロールバー重なり修正
+
+実装commit：**`46c5ce5e8de54935f98b30817954234f00cff4cf`**。開始HEAD `76895b74b276376c5263e81a533d57c8353923c6`（clean）。開始時と保存直前にremote差0を確認し、他AIによる新しい製品更新はなかった。branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。現在P2。**本ごとのcoverage/次の未処理範囲の小さいUXまで完了**。OCR保留、英語WD原文と未承認/確定の分離、全既存機能、P0 baseline/改善試行累積1/2を維持。複数本queue・1TB一括索引の完成とはしない。
+
+### 今使えるもの・今回の変更
+
+- 本の右クリック「本のページをAI検索に追加…」で、**同版/同profileの準備済みページ数・残り数・折りたたみ範囲**を確認。最初の未処理範囲が初期選択され、成功後は次の欠けへ進む。「次の未準備範囲を選ぶ」では推論を始めない。既存の手動範囲、**1要求1冊/最大16ページ**、再利用/取消/版/スコープ保護を保持。通常のAI buildは内部ページを自動解析しない。
+- `POST /api/library/ai/pages/coverage`のitem_id/revision/明示scopeは厳密。CPU読取のみでsnapshot refresh/画像decode/モデルload/索引/job変更なし。page ID/番号/物理版/前処理/profileと正常なvectorだけ数え、連続範囲と最初の欠け（最大16）を返す。stale/unverified/unavailableは準備済み0・nextなしで警告。未導入runtimeでは保存済み数を読めるが実行不可。Coreは件数/範囲/next/同profile/版と1MiB応答上限を検査する。手動タグ変更だけではpage索引を捨てない。
+- ユーザーの文字切れ/スクロールバー重なり指摘を受け、フォーム内側へ共通**右24DIPのバー用余白**を適用（詳細・フォルダ設定・AI設定/root一覧・関連語・タグ候補・説明flyout）。ページ入力を横並び、状態/結果/次範囲/追加/中断をスクロール外に固定し、ダイアログ幅の急変を抑制。画像/読書canvasのベゼルは増やさず、機能削減なし。AGENTSに恒久ルールを記録。
+- 青い矢印の**短い縦線は、背後の検索ボタン右端が詳細overlayの境界から漏れたもの**。長い線は本物のscrollbar。overlay中の背後contentだけをclipして漏れを止め、pane閉/inline/resizeで復元。さらに横並び時の密着に対するユーザー追加指摘へ、一覧と右詳細の間を**16DIP**空けた。閉じた後/overlayではこのinline余白を解除し、検索操作/未保存編集を保持。[仕様・全計測/失敗・検証境界](page-image-search.md)。
+
+### 検証と実測（生成素材のみ）
+
+- **全Python444件実行：441 PASS / 3 Windows platform SKIP、239.668秒**（`data/page-coverage-python-20261017.log`）。新規coverage8件：飛び飛び/全済/破損/旧版/原本変更/除外/profile/runtime/取消/共有lock中読取/HTTP認証・厳密field。**Core424 PASS**（27checks追加、`data/page-coverage-core-20261017.log`）。最終**Windows x64 SelfContained Release警告0/エラー0、9.76秒**（`data/inline-gap-release-20261017.log`）。Python/Coreは後半UI-only変更後の再実行不要と判断し上記結果を使用、compileall/diff/追加文書リンクを再確認。
+- coverage単独 **`page-coverage-20261017-03`：46 checks PASS / 8 PNG全確認 / 正常終了2**。生成35ページ、17–32準備済み→1–16追加→33–35選択→取消で32/35保持→35/35→restart/manual16ページ再利用。01はNumberBox外側の値検査でFAILED（3 PNG）、02はruntime43成功/8 PNGだが狭幅で結果が隠れる中間版、状態/操作固定後03成功。旧FAILEDを残した。
+- 追加の余白/文字切れ **`page-scroll-20261017-03`：76 checks PASS / Light・Dark16 PNG全確認 / 正常終了2**。page入力/次範囲/状態、詳細/AI設定/関連語/タグ候補の右端余白をUIA（20px以上）と目視で確認。01のdialog待機不足（7 PNG/強制cleanup）と02の再読込後の選択消失に対するテスト手順不足（9 PNG/正常終了1）はFAILEDのまま。待機/再選択を合わせ、幅固定とshot前のcompositor待機を追加して03合格。フォルダ編集/説明flyoutは共通値のsource reviewで、このbatchの操作対象外。
+- 青矢印/境界修正 **`pane-boundary-20261017-02`：39 checks PASS / Light・Dark8 PNG全確認 / 正常終了2**。700/820pxのoverlay→1200pxのinline→close→検索復帰、未保存タグ/手動metadata保持。初回01はdisplay mode変更で閉じたpaneをテストが参照してFAILED（2 PNG/強制cleanup）；既存の詳細を開く操作を補って1回だけ再実行。先の76checksはこのclip変更前の記録。
+- 最後の横並び余白指摘 **`inline-gap-20261017-01`：43 checks PASS / Light・Dark8 PNG全確認 / 正常終了2、初回成功/修正再実行0**。検索ボタン/フォルダ管理と詳細編集contentの間隔をUIAで確認し、横並びの16DIP余白・overlayの線の非漏出・閉じた後の検索復帰とdirty/metadata保持を再確認。各batchの初回/修正再試行上限を守り、過去の全nativeを今回再実行したとはしない。
+- **1冊10000ページ・768次元のCPU集計規模計測**：空0.058秒、交互5000範囲0.688秒、全10000ページ1.765秒。最大応答144861bytes、vector DB41926656bytes。別tracemalloc測定Python peak約8.0MiB（native/OS/GPU除外、traceあり10.242秒を通常時間に混ぜない）。`data/page-coverage/scale-20261017-01/report.json`。人工vector/モデル0回で、推論速度/精度や10000冊検索性能ではない。集計中catalog guardを持つため多冊拡張前に時間/分割を検討する。
+- 全PNG（失敗run含む）を確認、元生成素材bytes/mtime・設定不変、テストapp/backend終了。今回**実EmbeddingGemma/WD/OCRのload/推論なし**。前回実GPU8/8は履歴として維持し、私物品質へ一般化しない。WinUI設計/API/コードレビュー実施（scope/鮮度/壊れた応答、async/イベント解除、dirty保持、Light/Dark/narrow/clip解除）。**WinUIAnalyzer未導入/未実行、High Contrast/Narrator/Native AOT/DPI網羅/新規キーボード網羅/大規模検索/代表素材品質は未検証**。
+- 新download/依存追加/私物scan/外部media送信/CI dispatchは0。3 workflowsはmanual `workflow_dispatch`のみ。Windows Sandboxが無効の既知環境につき、既存許可のlocal専用PID/HWNDだけで検証。main/他PR/CI設定を変更しない。
+
+再現：`python -m unittest discover -s tests`、`dotnet run --project tests/Aredoko.Core.Tests -c Release`、`dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。nativeは`python tools/test_tag_review_ui.py --page-coverage-only --check-scroll-gutters --output data/ai-ui/<fresh-run>`、境界だけなら`--pane-boundary-only`。既存モデル/依存の取得は不要。規模計測は`python tools/benchmark_page_coverage.py --output data/page-coverage/<fresh-run>`。
+
+### 次の異なる3手
+
+1. **総ページ/冊数上限付き明示複数本job**：選択作品・保存scope・同版の欠けを使い、bounded queue/取消/変更/部分失敗/再開を段階実装。1冊16ページのatomic公開を維持し、全私物/1TBを勝手に解析しない。
+2. **多数本での検索/状態集計費用を生成素材で測る**：page vector候補集約、物理版確認、catalog guard、応答/DB/メモリ/時間。今回の1冊10000ページ状態計測を全体検索の性能と混同しない。必要な分割/キャッシュのみ根拠に基づき導入し、scope/鮮度を弱めない。
+3. **明示選択の代表素材で内容検索/WD日英の漏れと誤候補を記録**：漫画/縦書き/小字/キャラ/略語/複合条件。直接索引済み範囲でも漏れが多いときだけOCRを検討。raw英語/未承認分離と既存本文検索を維持。音声/音楽内容索引、複数ページ文脈タグ、数千pending性能は後続backlog。
+
+---
+
 ## 2026-10-17 本文ページ画像の直接embedding・範囲指定/検索集約/WinUI読書まで
 
 実装commit：**`5a466290b9a9169e4dac3f407aac17625159c894`**。開始HEAD `93f55b07897f93e9d5c4448b958ad896c2cdccaf`（clean、remote差0を再確認）。branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。**現在P2、完了：最初のbounded内部ページ画像索引→作品集約→一致ページ読書の縦切り。P0 baseline済み/改善試行累積1/2は維持。** 英語WD原文の日本語意味検索と既存cover/video/page-text/手動整理を保持。OCR専用処理は保留のまま。ユーザー指示に沿いUIを簡潔に保ち、機能削減なし。
