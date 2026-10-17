@@ -138,39 +138,7 @@ class PageVectors:
         ai = self.ai; item_id = state['item_id']; revision = state['source_revision']
         try:
             with ai.inference:
-                if ai.cancel.is_set(): raise InterruptedError()
-                with ai.store.connect() as db:
-                    cached = {pid: unpack(data, ai.profile.dimension) for pid, data in db.execute(
-                        'SELECT page_id,vector FROM ai_page_vectors WHERE item_id=? AND source_revision=? AND contract=? '
-                        'AND page_id IN ('+','.join('?' for _ in pages)+')',
-                        [item_id, revision, CONTRACT, *[p['page_id'] for p in pages]])}
-                packed = []
-                for p in pages:
-                    if ai.cancel.is_set(): raise InterruptedError()
-                    vector = cached.get(p['page_id'])
-                    did_infer = vector is None
-                    if did_infer:
-                        payload = self.index.input(item_id, p['page_id'], revision)
-                        vector = normalized(ai.encoder.encode('image', payload['data']), ai.profile.dimension)
-                    else:
-                        state['reused'] += 1
-                    packed.append((item_id, revision, p['page_id'], p['page'], array('f', vector).tobytes(), CONTRACT))
-                    state['processed'] += 1
-                    with ai.guard: ai.store.save_state(state)
-                    if did_infer and state['processed'] < state['total'] and ai._index_pause_ms:
-                        if ai.cancel.wait(ai._index_pause_ms/1000): raise InterruptedError()
-                # Never hold the catalog guard while running the model. Publish the
-                # entire selected range only if the root/scope/page revision survived.
-                with ai.catalog._guard:
-                    ai.catalog._require_idle()
-                    if ai._current_rows([item_id], state['scope']).get(item_id) is None:
-                        raise KeyError('Page source unavailable')
-                    self.selection(item_id, [p['page_id'] for p in pages], revision)
-                    if ai.cancel.is_set(): raise InterruptedError()
-                    with ai.store.connect() as db:
-                        db.execute('DELETE FROM ai_page_vectors WHERE item_id=? AND (source_revision<>? OR contract<>?)',
-                                   (item_id, revision, CONTRACT))
-                        db.executemany('INSERT OR REPLACE INTO ai_page_vectors VALUES(?,?,?,?,?,?)', packed)
+                self._publish_range(pages, state, item_id, revision)
                 state['indexed'] = len(pages)
                 state['state'] = 'complete'
         except InterruptedError:
@@ -181,6 +149,43 @@ class PageVectors:
         finally:
             ai._last_activity = time.monotonic()
             with ai.guard: ai.store.save_state(state)
+
+    def _publish_range(self, pages, state, item_id, revision):
+        """Caller owns shared inference lock; publish one <=16-page range atomically."""
+        ai = self.ai
+        if ai.cancel.is_set(): raise InterruptedError()
+        with ai.store.connect() as db:
+            cached = {pid: unpack(data, ai.profile.dimension) for pid, data in db.execute(
+                'SELECT page_id,vector FROM ai_page_vectors WHERE item_id=? AND source_revision=? AND contract=? '
+                'AND page_id IN ('+','.join('?' for _ in pages)+')',
+                [item_id, revision, CONTRACT, *[p['page_id'] for p in pages]])}
+        packed = []
+        for p in pages:
+            if ai.cancel.is_set(): raise InterruptedError()
+            vector = cached.get(p['page_id'])
+            did_infer = vector is None
+            if did_infer:
+                payload = self.index.input(item_id, p['page_id'], revision)
+                vector = normalized(ai.encoder.encode('image', payload['data']), ai.profile.dimension)
+            else:
+                state['reused'] += 1
+            packed.append((item_id, revision, p['page_id'], p['page'], array('f', vector).tobytes(), CONTRACT))
+            state['processed'] += 1
+            with ai.guard: ai.store.save_state(state)
+            if did_infer and state['processed'] < state['total'] and ai._index_pause_ms:
+                if ai.cancel.wait(ai._index_pause_ms/1000): raise InterruptedError()
+        # Never hold the catalog guard while running the model. Publish the
+        # entire selected range only if the root/scope/page revision survived.
+        with ai.catalog._guard:
+            ai.catalog._require_idle()
+            if ai._current_rows([item_id], state['scope']).get(item_id) is None:
+                raise KeyError('Page source unavailable')
+            self.selection(item_id, [p['page_id'] for p in pages], revision)
+            if ai.cancel.is_set(): raise InterruptedError()
+            with ai.store.connect() as db:
+                db.execute('DELETE FROM ai_page_vectors WHERE item_id=? AND (source_revision<>? OR contract<>?)',
+                           (item_id, revision, CONTRACT))
+                db.executemany('INSERT OR REPLACE INTO ai_page_vectors VALUES(?,?,?,?,?,?)', packed)
 
     def rank(self, rows, query):
         """One best page per current book. Metadata checks only; no image decode."""

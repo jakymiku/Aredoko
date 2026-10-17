@@ -203,3 +203,4 @@ Check(ErrorText.Localize("Folder book mode cannot change after scanning").Starts
 await FeedbackTests.Run(Check);
 PageImageTests.Run(Check);
 await PageCoverageTests.Run(Check);
+PageBatchTests.Run(Check);

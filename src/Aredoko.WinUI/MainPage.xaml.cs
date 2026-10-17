@@ -312,6 +312,8 @@ public sealed partial class MainPage : Page
         {
             var pages=new MenuFlyoutItem {Text="本のページをAI検索に追加…"};AutomationProperties.SetAutomationId(pages,"IndexBookPages"+row.Id);
             pages.Click+=async(_,_)=>await IndexBookPagesAsync(row);menu.Items.Add(pages);
+            var batch=new MenuFlyoutItem {Text="複数の本をAI検索に追加…"};AutomationProperties.SetAutomationId(batch,"IndexBookBatch"+row.Id);
+            batch.Click+=async(_,_)=>await IndexBookBatchAsync(row);menu.Items.Add(batch);
         }
         foreach(var (label,id,explorer) in new[]{("エクスプローラーで表示","ShowInExplorer",true),("既定のアプリで開く","OpenDefault",false)})
         {
@@ -1516,6 +1518,8 @@ public sealed partial class MainPage : Page
             var status=new TextBlock {TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(status,"AIStatus");
             var start=new Button {Content="索引を作成・更新",IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
             var cancel=new Button {Content="中断",IsEnabled=false};AutomationProperties.SetAutomationId(cancel,"CancelAIIndex");
+            var resumeBooks=new Button{Content="前回の本の追加を再開",Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(resumeBooks,"ResumeBookBatch");
+            PageBatchStatus? resumableBooks=null;
             var release=new Button {Content="AIをメモリから解放",IsEnabled=false};
             AutomationProperties.SetAutomationId(release,"AIRelease");
             var releaseResult=new TextBlock {TextWrapping=TextWrapping.Wrap};
@@ -1565,7 +1569,7 @@ public sealed partial class MainPage : Page
             };
             using var scopeEditor=new AIScopeEditor(api,value=>{aiScope=value;aiScopeError="AI索引の画面で対象を選び直して保存してください。";});
             bool availableForIndex=false,indexRunning=false,starting=false;
-            void UpdateStart()=>start.IsEnabled=availableForIndex&&!indexRunning&&!starting&&scopeEditor.Ready;
+            void UpdateStart(){start.IsEnabled=availableForIndex&&!indexRunning&&!starting&&scopeEditor.Ready;resumeBooks.IsEnabled=start.IsEnabled&&resumableBooks?.CanResume==true;}
             scopeEditor.StateChanged+=UpdateStart;
             bool polling=false;
             bool releasing=false;
@@ -1588,10 +1592,17 @@ public sealed partial class MainPage : Page
                     var state=data["state"]!.GetValue<string>();
                     var running=state is "running" or "cancelling";
                     indexLimit=data["limit"]?.GetValue<int>();
-                    var label=state switch {"idle"=>"未作成","running"=>"作成中","cancelling"=>"中断待ち","complete"=>"準備完了","cancelled"=>"中断済み","interrupted"=>"前回中断","failed"=>"失敗",_=>state};
+                    var label=state switch {"idle"=>"未作成","running"=>"作成中","cancelling"=>"中断待ち","complete"=>"準備完了","cancelled"=>"中断済み","interrupted"=>"前回中断","failed"=>"失敗","partial"=>"一部完了",_=>state};
                     var model=data["model"]?.GetValue<string>() ?? "未選択";
                     var capabilities=data["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "名前・タグ／画像・表紙" : "名前・タグ";
-                    status.Text=available ? $"{model} · {capabilities}{(indexLimit is int cap ? $" · 最大{cap:N0}件" : "")}\n索引処理（開始時の対象）: {label} · {data["processed"]}/{data["total"]} {(data["job"]?.GetValue<string>()=="book-pages"?"ページ":"件")}\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
+                    status.Text=available ? $"{model} · {capabilities}{(indexLimit is int cap ? $" · 最大{cap:N0}件" : "")}\n索引処理（開始時の対象）: {label} · {data["processed"]}/{data["total"]} {(data["job"]?.GetValue<string>() is "book-pages" or "book-page-batch"?"ページ":"件")}\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
+                    resumableBooks=null;resumeBooks.Visibility=Visibility.Collapsed;
+                    if(data["job"]?.GetValue<string>()=="book-page-batch")
+                    {
+                        var batch=PageBatchStatus.Parse(System.Text.Encoding.UTF8.GetBytes(data.ToJsonString()),data["profile"]!.GetValue<string>());
+                        status.Text+="\n"+batch.Summary;
+                        if(batch.CanResume){resumableBooks=batch;resumeBooks.Visibility=Visibility.Visible;}
+                    }
                     availableForIndex=available;indexRunning=running;scopeEditor.SetJobBusy(running);UpdateStart();cancel.IsEnabled=running;
                     var resident=data["resident"]?.GetValue<bool>()==true;
                     release.IsEnabled=available&&!running&&resident&&!releasing;
@@ -1604,6 +1615,13 @@ public sealed partial class MainPage : Page
                 if(!start.IsEnabled||aiScope is null)return;
                 starting=true;UpdateStart();
                 try{await api.PostAsync("api/library/ai/index",AIScopeRequests.Scoped(aiScope));await Refresh();}
+                catch(Exception ex){status.Text=ex.Message;}
+                finally{starting=false;UpdateStart();}
+            };
+            resumeBooks.Click+=async(_,_)=>{
+                if(!resumeBooks.IsEnabled||resumableBooks is null||aiScope is null)return;
+                starting=true;UpdateStart();
+                try{await api.PageEvidences.ResumeBatchAsync(resumableBooks.JobId,aiScope,resumableBooks.Profile);await Refresh();}
                 catch(Exception ex){status.Text=ex.Message;}
                 finally{starting=false;UpdateStart();}
             };
@@ -1625,7 +1643,7 @@ public sealed partial class MainPage : Page
             var indexInfo=new StackPanel {Spacing=8};
             AutomationProperties.SetAutomationId(indexInfo,"AIIndexSummary");
             indexInfo.Children.Add(new TextBlock {Text="現在のAI索引",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]});
-            indexInfo.Children.Add(status);Grid.SetRow(indexInfo,1);content.Children.Add(indexInfo);
+            indexInfo.Children.Add(status);indexInfo.Children.Add(resumeBooks);Grid.SetRow(indexInfo,1);content.Children.Add(indexInfo);
             var actions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
             actions.Children.Add(start);actions.Children.Add(cancel);Grid.SetRow(actions,2);content.Children.Add(actions);
             await RefreshProfiles();await RefreshResource();await Refresh();timer.Start();

@@ -28,6 +28,7 @@ from tag_candidate_search import search_candidates
 from tag_semantics import semantic_candidates
 from page_index import PageIndex
 from page_text import PageTextIndex
+from page_batch import start_batch, resume_batch
 from wd_tagger import create_tagger
 
 class DisabledAI:
@@ -425,6 +426,15 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     try:return self.send(200,ai.pages.coverage(body['item_id'],body['revision'],validate_scope(body['scope'])))
                     except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
                     except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
+                if self.path in ('/api/library/ai/pages/batch','/api/library/ai/pages/batch/resume'):
+                    resume=self.path.endswith('/resume')
+                    if set(body)!=({'job_id','scope','profile'} if resume else {'items','scope','page_limit','profile'}):raise ValueError('Invalid batch fields')
+                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
+                    try:
+                        if resume:return self.send(200,resume_batch(ai,body['job_id'],validate_scope(body['scope']),body['profile']))
+                        return self.send(200,start_batch(ai,body['items'],validate_scope(body['scope']),body['page_limit'],body['profile']))
+                    except ReaderChanged:return self.send(409,{'error':'Page source changed; review a new range'})
+                    except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source or saved batch unavailable'})
                 if self.path=='/api/library/ai/pages/cancel':
                     if set(body)!={'job_id'} or type(body['job_id']) is not str or not re.fullmatch(r'[0-9a-f]{32}',body['job_id']):raise ValueError('Invalid job ID')
                     accepted=False

@@ -1,5 +1,9 @@
 # 共通API（操作試作 v0）
 
+## 複数本のページ索引（2026-10-17）
+
+`POST /api/library/ai/pages/batch`（items/scope/page_limit/profile全必須、8冊・16page/冊・128page/要求）と、保存した最後のジョブだけの明示`batch/resume`を追加。状態は既存`ai/status`、ID一致の`ai/pages/cancel`を共有。scope/profile/revisionを固定し、1冊ごとにatomic公開・失敗した本を記録して継続。通常AI buildの対象は不変。[要求・再開・部分失敗と保持の境界](page-batch-indexing.md)。
+
 ## 本ごとのページ準備状況（2026-10-17）
 
 `POST /api/library/ai/pages/coverage`はitem_id/revision/明示scopeを受け、同profileの検査済みpage vector件数・連続範囲・最大16ページの次の欠けを返す読み取り専用CPU API。画像取得/decode・snapshot更新・model load・索引なし。古い/確認できないsourceを準備済みとしない。GUIの範囲指定と次範囲への再開へ接続済み。[正確な契約・上限・生成1万ページの計測](page-image-search.md)。

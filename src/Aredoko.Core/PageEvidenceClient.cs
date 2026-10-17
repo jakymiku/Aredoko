@@ -318,6 +318,19 @@ public sealed class PageEvidenceClient(HttpClient client)
         }
     }
 
+    public async Task<PageBatchStatus> StartBatchAsync(IReadOnlyList<BookPageSelection> books,JsonObject scope,int pageLimit,string profile,CancellationToken cancellation=default)
+    {
+        var bytes=await ReadAsync("api/library/ai/pages/batch",PageBatchRequests.Create(books,scope,pageLimit,profile),PageEvidenceProtocol.MaxJsonBytes,cancellation);
+        return PageBatchStatus.Parse(bytes,profile);
+    }
+    public async Task<PageBatchStatus> ResumeBatchAsync(string jobId,JsonObject scope,string profile,CancellationToken cancellation=default)
+    {
+        var bytes=await ReadAsync("api/library/ai/pages/batch/resume",PageBatchRequests.Resume(jobId,scope,profile),PageEvidenceProtocol.MaxJsonBytes,cancellation);
+        return PageBatchStatus.Parse(bytes,profile);
+    }
+    public async Task<PageBatchStatus> BatchStatusAsync(string jobId,string profile,CancellationToken cancellation=default)=>
+        PageBatchStatus.Parse(await ReadAsync("api/library/ai/status",null,PageEvidenceProtocol.MaxJsonBytes,cancellation),profile,jobId);
+
     public async Task<PageImageCoverage> ImageCoverageAsync(int itemId,string revision,JsonObject scope,string? expectedProfile=null,CancellationToken cancellation=default)
     {
         PageEvidenceProtocol.ValidateId(itemId);PageEvidenceProtocol.ValidateToken(revision,nameof(revision));

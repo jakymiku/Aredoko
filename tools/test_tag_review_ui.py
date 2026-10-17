@@ -60,6 +60,7 @@ def main():
     modes.add_argument('--wd-runtime-only',action='store_true',help='Existing approved CPU model on generated media only; no downloads')
     modes.add_argument('--tag-language-only',action='store_true',help='Existing EG2 CUDA model with generated sources and predetermined English labels; no downloads')
     modes.add_argument('--pane-boundary-only',action='store_true',help='No-model overlay occlusion, close and resize checks on generated images')
+    modes.add_argument('--book-batch-only',action='store_true',help='Generated two-book review, cancel and app-restart resume; no actual models')
     modes.add_argument('--page-coverage-only',action='store_true',help='No-model page counts, gaps, cancellation and restart on generated books')
     modes.add_argument('--page-image-only',action='store_true',help='Existing EG2 CUDA on generated fixed Japanese book pages; no OCR or downloads')
     modes.add_argument('--page-jump-only',action='store_true')
@@ -109,7 +110,7 @@ def main():
             if user32.GetForegroundWindow()!=int(hwnd):raise RuntimeError('Windows denied owned-window activation; no input sent')
     def shot(name):
         owned()
-        if args.check_scroll_gutters or args.pane_boundary_only:time.sleep(.3) # Let the compositor present the current layout.
+        if args.check_scroll_gutters or args.pane_boundary_only or args.book_batch_only:time.sleep(.3) # Let the compositor present the current layout.
         path=target/(name+'.png');ui('screenshot','--output',path)
         check('screenshot '+name,path.is_file() and path.stat().st_size>0);report['screenshots'].append(path.name)
         tree=json.loads(ui('inspect','--json','--depth','12'))
@@ -188,16 +189,16 @@ def main():
             def book_digest():
                 return {p.relative_to(book_media).as_posix():(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in book_media.rglob('*') if p.is_file()}
             book_before=book_digest()
-        if args.page_jump_only or args.page_image_only or args.page_coverage_only:
+        if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.book_batch_only:
             import zipfile
             from page_index import PageIndex
             from page_text import PageTextIndex
             jump_media=target/'generated-page-jump';jump_media.mkdir()
-            jump_file=jump_media/'jump.cbz'
+            jump_file=jump_media/('batch-one.cbz' if args.book_batch_only else 'jump.cbz')
             def write_jump_book(extra=False):
                 with zipfile.ZipFile(jump_file,'w') as archive:
                     if extra:archive.writestr('p00.png',png(300,400,(80,80,80)))
-                    if args.page_coverage_only:
+                    if args.page_coverage_only or args.book_batch_only:
                         for n in range(35):archive.writestr(f'p{n:03}.png',png(60,80,(n+20,40,70)))
                     elif args.page_image_only:
                         rendered=REPO/'data/ocr-eval/ocr-v1-20261017'
@@ -211,6 +212,9 @@ def main():
                     else:
                         for n,color in enumerate(((180,30,30),(30,180,30),(30,30,180)),1):
                             archive.writestr(f'p{n:02}.png',png(300,400,color))
+                if args.book_batch_only:
+                    with zipfile.ZipFile(jump_media/'batch-two.cbz','w') as other:
+                        for n in range(8):other.writestr(f'p{n:03}.png',png(60,80,(40,n+20,90)))
             jump_root=sandbox.catalog.add_root(str(jump_media))
             page_index=PageIndex(sandbox.catalog)
             class JumpExtractor:
@@ -219,20 +223,20 @@ def main():
                     def record():return {'adapter':'contract-fixture','version':'1','model':'not-real-ocr','model_revision':'1','preprocessing':'page-jump'}
                 def extract(self,payload,cancelled):return '夕焼けの教室で約束した'
             page_text=PageTextIndex(sandbox.catalog,page_index,JumpExtractor())
-        if args.page_coverage_only:
+        if args.page_coverage_only or args.book_batch_only:
             class CoverageEncoder:
                 available=True
                 resident=False
-                def __init__(self,ai):self.ai=ai;self.profile=ai.profile;self.calls=0;self.delay=False;self.entered=threading.Event()
+                def __init__(self,ai):self.ai=ai;self.profile=ai.profile;self.calls=0;self.delay=False;self.delay_after=0;self.entered=threading.Event()
                 def encode(self,operation,data):
                     self.calls+=1
-                    if self.delay:
+                    if self.delay and self.calls>self.delay_after:
                         self.entered.set()
                         if not self.ai.cancel.wait(20):raise RuntimeError('Fixture cancel timeout')
                     return [1.0]+[0.0]*(self.profile.dimension-1)
                 def close(self):pass
             coverage_encoder=CoverageEncoder(sandbox.ai);sandbox.ai.encoder=coverage_encoder
-            sandbox.profiles.set_scope({'root_ids':[jump_root]});sandbox.settings_before=(sandbox.target/'settings.json').read_bytes()
+            sandbox.profiles.set_scope({'root_ids':[jump_root,*sandbox.roots] if args.book_batch_only else [jump_root]});sandbox.settings_before=(sandbox.target/'settings.json').read_bytes()
             report['test_mode']='CPU-page-coverage-and-resume'
         tagger=FixtureTagger()
         if args.tag_language_only or args.page_image_only:
@@ -278,10 +282,10 @@ def main():
                 for item,tags in ((blue_item,['blue_hair','twintails']),(red_item,['red_hair','long_hair'])):
                     tagger.suggest=lambda source,cancelled,tags=tags:[TagProposal(tag,'Predetermined English runtime fixture; not tagging quality') for tag in tags]
                     TagSuggestions(sandbox.catalog,tagger).generate(item,uuid.uuid4().hex)
-            if args.page_jump_only or args.page_image_only or args.page_coverage_only:
+            if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.book_batch_only:
                 if args.page_jump_only or theme=='Light':write_jump_book()
                 sandbox.catalog.index.scan(jump_root);sandbox.catalog.sync_index()
-                jump_item=sandbox.catalog.search(root_id=jump_root)['items'][0]['id']
+                jump_item=next(r['id'] for r in sandbox.catalog.search(root_id=jump_root)['items'] if r['relative_path']==jump_file.name)
                 page_index.refresh(jump_item);snapshot=page_index.list(jump_item)
                 if args.page_jump_only:page_text.generate(jump_item,[snapshot['pages'][1]['page_id']],snapshot['source_revision'],uuid.uuid4().hex)
                 else:sandbox.catalog.update([jump_item],{'tags':['manual-page'],'shelf':'ページ試験','favorite':True})
@@ -300,7 +304,46 @@ def main():
                 if len(matches)==1:break
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
-            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.folder_books_only and theme=='Dark' else '76 件')
+            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','78 件' if args.book_batch_only else '77 件' if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.book_batch_only or args.folder_books_only and theme=='Dark' else '76 件')
+            if args.book_batch_only:
+                report['test_mode']='bounded-book-page-batch'
+                second=next(r['id'] for r in sandbox.catalog.search(root_id=jump_root)['items'] if r['relative_path']=='batch-two.cbz')
+                if theme=='Light':
+                    originals={p:(p.read_bytes(),p.stat().st_mtime_ns) for p in jump_media.glob('*.cbz')}
+                    ui('set-value','TxtQuery','batch');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','2 件')
+                    ui('invoke','Item'+str(jump_item),'--action','select');wait('TxtEditStatus','保存済み')
+                    ui('set-value','TxtTags','draft-batch');wait('TxtEditStatus','未保存の変更')
+                    context('Item'+str(jump_item),jump_item,'IndexBookBatch');ui('wait-for','BatchBooks','-t','12000')
+                    ui('invoke','BatchBook'+str(second),'--action','toggle-on');ui('set-value','BatchPageLimit','32')
+                    ui('invoke','BatchPreview');enabled('BatchStart',True);contains('BatchSummary','2冊・24ページ')
+                    check('preview never infers',coverage_encoder.calls==0);shot('Light-batch-preview')
+                    user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.4)
+                    visible('BatchStart');shot('Light-batch-narrow')
+                    coverage_encoder.delay=True;coverage_encoder.delay_after=16
+                    ui('invoke','BatchStart');check('second book delayed after completed first',coverage_encoder.entered.wait(10))
+                    ui('wait-for','BatchSummary','--value','完了: 1/2','--contains','-t','12000');contains('BatchSummary','完了: 1/2');ui('invoke','BatchCancel');enabled('BatchResume',True)
+                    contains('BatchSummary','保存済み 16/24');shot('Light-batch-cancelled')
+                    coverage_encoder.delay=False;sandbox.ai.worker.join(5)
+                    check('cancel keeps completed first book',sandbox.ai.status()['indexed']==16 and sandbox.ai.status()['state']=='cancelled')
+                    ui('invoke','CloseButton');ready()
+                    tree=json.loads(ui('inspect','--json','--depth','14'))
+                    if not any(n.get('automationId')=='TxtTags' and not n.get('isOffscreen',True) for n in nodes(tree)):ui('invoke','BtnDetails')
+                    check('batch preserves dirty tags','draft-batch' in ui('get-value','TxtTags'))
+                    ui('set-value','TxtTags','manual-page');wait('TxtEditStatus','保存済み')
+                else:
+                    from native_ui_tools import invoke_tool
+                    invoke_tool(cli,app_pid,hwnd,'BtnAIIndex');ui('wait-for','ResumeBookBatch','-t','12000')
+                    ui('invoke','AIScopeOptions','--action','expand');enabled('ResumeBookBatch',True)
+                    visible('ResumeBookBatch');shot('Dark-persisted-batch')
+                    before=coverage_encoder.calls;ui('invoke','ResumeBookBatch')
+                    ui('wait-for','AIStatus','--value','保存済み 24/24','--contains','-t','20000')
+                    sandbox.ai.worker.join(5);state=sandbox.ai.status()
+                    check('resumed exact selected ranges with first book reused',state['state']=='complete' and state['indexed']==24 and state['reused']==16 and coverage_encoder.calls-before==8)
+                    shot('Dark-batch-complete')
+                    user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.4);shot('Dark-batch-settings-narrow')
+                    ui('invoke','CloseButton');ready()
+                    check('generated books unchanged',originals=={p:(p.read_bytes(),p.stat().st_mtime_ns) for p in originals})
+                close();continue
             if args.pane_boundary_only:
                 report['test_mode']='detail-pane-boundary'
                 name='generated-003.png';item=sandbox.item(name)
