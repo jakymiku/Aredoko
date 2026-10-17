@@ -65,19 +65,33 @@ def natural_key(name):
         return (1, len(digits), digits)
     return tuple(part_key(part) for part in re.split(r'(\d+)', name))
 
-def _safe_path(root, relative):
+def _safe_path(root, relative, root_cache=None):
     parts = PurePosixPath(relative).parts
     if not parts or PurePosixPath(relative).is_absolute() or '..' in parts or '\\' in relative:
         raise PreviewUnavailable('Invalid location')
-    root = Path(root)
-    source = root.joinpath(*parts)
+    if root_cache is not None and root in root_cache:
+        root_path, root_chain, resolved_root = root_cache[root]
+    else:
+        root_path = Path(root)
+        root_chain = (*reversed(root_path.parents), root_path)
+        resolved_root = None
+    source = root_path.joinpath(*parts)
     # Recheck every component at read time: a previously indexed directory may
     # have been replaced by a junction/link since the scan.
-    for component in [*reversed(root.parents), root, *[root.joinpath(*parts[:i]) for i in range(1, len(parts)+1)]]:
+    for component in root_chain:
         info = component.stat(follow_symlinks=False)
         if _reparse(info) or stat.S_ISLNK(info.st_mode):
             raise PreviewUnavailable('Linked locations are not previewed')
-    if not source.resolve(strict=True).is_relative_to(root.resolve(strict=True)):
+    for i in range(1, len(parts) + 1):
+        component = root_path.joinpath(*parts[:i])
+        info = component.stat(follow_symlinks=False)
+        if _reparse(info) or stat.S_ISLNK(info.st_mode):
+            raise PreviewUnavailable('Linked locations are not previewed')
+    if resolved_root is None:
+        resolved_root = root_path.resolve(strict=True)
+        if root_cache is not None:
+            root_cache[root] = (root_path, root_chain, resolved_root)
+    if not source.resolve(strict=True).is_relative_to(resolved_root):
         raise PreviewUnavailable('Location outside root')
     return source
 
@@ -85,6 +99,7 @@ def _zip_directory_limit(file):
     """Inspect the end record before ZipFile allocates the central directory.
 
     ZIP64/multi-disk archives are intentionally unsupported in this first slice.
+    Returns True if at least one supported non-__MACOSX image entry exists.
     """
     file.seek(0, os.SEEK_END)
     size = file.tell()
@@ -112,25 +127,37 @@ def _zip_directory_limit(file):
     if directory_start < 0 or offset > directory_start:
         raise PreviewUnavailable('Invalid archive directory')
     file.seek(directory_start)
+    cd = file.read(cd_size)
+    if len(cd) != cd_size:
+        raise PreviewUnavailable('Invalid archive directory')
     consumed = actual_count = 0
+    has_supported_image = False
     while consumed < cd_size:
-        header = file.read(46)
-        if len(header) != 46 or header[:4] != b'PK\x01\x02':
+        if cd_size - consumed < 46 or cd[consumed:consumed + 4] != b'PK\x01\x02':
             raise PreviewUnavailable('Invalid archive directory')
-        name_size, extra_size, comment_size = struct.unpack_from('<3H', header, 28)
-        packed_size, plain_size = struct.unpack_from('<2I', header, 20)
-        volume = struct.unpack_from('<H', header, 34)[0]
-        local_offset = struct.unpack_from('<I', header, 42)[0]
+        flags = struct.unpack_from('<H', cd, consumed + 8)[0]
+        packed_size, plain_size = struct.unpack_from('<2I', cd, consumed + 20)
+        name_size, extra_size, comment_size = struct.unpack_from('<3H', cd, consumed + 28)
+        volume = struct.unpack_from('<H', cd, consumed + 34)[0]
+        external_attr, local_offset = struct.unpack_from('<2I', cd, consumed + 38)
         entry_size = 46 + name_size + extra_size + comment_size
         actual_count += 1
         if (actual_count > 10000 or consumed + entry_size > cd_size or volume
                 or 0xffffffff in (packed_size, plain_size, local_offset)):
             raise PreviewUnavailable('Archive exceeds preview limits')
-        file.seek(entry_size - 46, os.SEEK_CUR)
+        if not has_supported_image and name_size > 0 and not (external_attr & 0x10):
+            raw_name = cd[consumed + 46:consumed + 46 + name_size]
+            if not raw_name.endswith(b'/'):
+                encoding = 'utf-8' if (flags & 0x800) else 'cp437'
+                filename = raw_name.decode(encoding, errors='replace')
+                if (not filename.startswith('__MACOSX/')
+                        and PurePosixPath(filename).suffix.casefold() in IMAGE_MIME):
+                    has_supported_image = True
         consumed += entry_size
     if actual_count != count:
         raise PreviewUnavailable('Archive directory count mismatch')
     file.seek(0)
+    return has_supported_image
 
 class PreviewReader:
     def __init__(self, catalog):
@@ -195,6 +222,27 @@ class PreviewReader:
         """Physical provenance, independent of editable tags/title; no pixels read."""
         return self._read(item_id, operation='tag_source')
 
+    def tag_sources(self, item_ids):
+        """Batch-fetch catalog locations once, then verify each physical handle."""
+        ids = []
+        for item_id in item_ids:
+            if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
+                raise PreviewUnavailable('Invalid item')
+            ids.append(item_id)
+        if not ids:
+            return {}
+        rows = {}
+        with self.catalog.connect() as db:
+            for offset in range(0, len(ids), 256):
+                batch = ids[offset:offset + 256]
+                marks = ','.join('?' for _ in batch)
+                for row in db.execute('SELECT m.item_id, l.*, r.path, r.excludes_json FROM item_locations m '
+                        'JOIN library_locations l ON l.id=m.location_id '
+                        'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id IN (' + marks + ') AND r.enabled=1', batch):
+                    rows[row['item_id']] = row
+        return {item_id: (self._read(item_id, operation='tag_source', row=rows.get(item_id), row_loaded=True))
+                for item_id in ids}
+
     def tag_input(self, item_id):
         """Bounded image/first cover bytes and provenance from the same handle."""
         return self._read(item_id, operation='tag_input')
@@ -220,23 +268,24 @@ class PreviewReader:
             # A vanished/replaced page or folder is a rescan case, never a crash.
             raise (ReaderChanged if operation != 'preview' else PreviewUnavailable)('Folder book changed') from error
 
-    def _read(self, item_id, operation='preview', page=0, revision=None,start=None,end=None):
+    def _read(self, item_id, operation='preview', page=0, revision=None, start=None, end=None, row=None, row_loaded=False, root_cache=None):
         if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
             raise PreviewUnavailable('Invalid item')
         if not self.slots.acquire(blocking=False):
             raise PreviewBusyError('Preview workers busy')
         try:
-            with self.catalog.connect() as db:
-                row = db.execute('SELECT l.*, r.path, r.excludes_json FROM item_locations m '
-                    'JOIN library_locations l ON l.id=m.location_id '
-                    'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id=? AND r.enabled=1', (item_id,)).fetchone()
+            if not row_loaded:
+                with self.catalog.connect() as db:
+                    row = db.execute('SELECT l.*, r.path, r.excludes_json FROM item_locations m '
+                        'JOIN library_locations l ON l.id=m.location_id '
+                        'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id=? AND r.enabled=1', (item_id,)).fetchone()
             if row is None or row['status'] != 'present':
                 raise PreviewUnavailable('Location unavailable')
             if _excluded(row['relative_path'], tuple(json.loads(row['excludes_json']))):
                 raise PreviewUnavailable('Location excluded')
             if is_folder_book(row['relative_path']):
                 return self._read_folder(row, item_id, operation, page, revision)
-            source = _safe_path(row['path'], row['relative_path'])
+            source = _safe_path(row['path'], row['relative_path'], root_cache=root_cache)
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES:
                 raise PreviewUnavailable('Unsupported preview type')
@@ -257,7 +306,7 @@ class PreviewReader:
                 if (not stat.S_ISREG(info.st_mode) or _reparse(info)
                         or (info.st_ino, info.st_dev) != (initial.st_ino, initial.st_dev)):
                     raise PreviewUnavailable('Location changed')
-                _safe_path(row['path'], row['relative_path'])
+                _safe_path(row['path'], row['relative_path'], root_cache=root_cache)
                 if info.st_size != row['size_bytes'] or info.st_mtime_ns != row['mtime_ns']:
                     if operation != 'preview':
                         raise ReaderChanged('Rescan changed files before reading')
@@ -335,67 +384,69 @@ class PreviewReader:
                 else:
                     if info.st_size > MAX_ARCHIVE_BYTES:
                         raise PreviewUnavailable('Archive exceeds preview limit')
-                    _zip_directory_limit(file)
-                    with zipfile.ZipFile(file) as archive:
-                        entries = [e for e in archive.infolist() if not e.is_dir()
-                                   and PurePosixPath(e.filename).suffix.casefold() in IMAGE_MIME
-                                   and not e.filename.startswith('__MACOSX/')]
-                        if not entries:
+                    has_supported_image = _zip_directory_limit(file)
+                    if operation == 'tag_source':
+                        if not has_supported_image:
                             raise PreviewUnavailable('Archive has no supported image')
-                        if operation == 'tag_source':
-                            pass
-                        elif operation in ('page_catalog', 'page_input'):
-                            # Exact duplicate names have separate occurrence IDs;
-                            # natural ties retain the archive's directory order.
-                            occurrences = {}
-                            described = []
-                            for entry in entries:
-                                occurrence = occurrences.get(entry.filename, 0)
-                                occurrences[entry.filename] = occurrence + 1
-                                described.append((entry, occurrence))
-                            described.sort(key=lambda pair: natural_key(pair[0].filename))
-                            descriptors = [describe_page(item_id, 'archive', entry.filename, occurrence, number,
-                                IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()], entry.file_size)
-                                for number, (entry, occurrence) in enumerate(described)]
-                            if operation == 'page_catalog':
-                                result = {'item_id': item_id, 'revision': current_revision,
-                                          'source_kind': 'archive', 'pages': descriptors}
+                    else:
+                        with zipfile.ZipFile(file) as archive:
+                            entries = [e for e in archive.infolist() if not e.is_dir()
+                                       and PurePosixPath(e.filename).suffix.casefold() in IMAGE_MIME
+                                       and not e.filename.startswith('__MACOSX/')]
+                            if not entries:
+                                raise PreviewUnavailable('Archive has no supported image')
+                            if operation in ('page_catalog', 'page_input'):
+                                # Exact duplicate names have separate occurrence IDs;
+                                # natural ties retain the archive's directory order.
+                                occurrences = {}
+                                described = []
+                                for entry in entries:
+                                    occurrence = occurrences.get(entry.filename, 0)
+                                    occurrences[entry.filename] = occurrence + 1
+                                    described.append((entry, occurrence))
+                                described.sort(key=lambda pair: natural_key(pair[0].filename))
+                                descriptors = [describe_page(item_id, 'archive', entry.filename, occurrence, number,
+                                    IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()], entry.file_size)
+                                    for number, (entry, occurrence) in enumerate(described)]
+                                if operation == 'page_catalog':
+                                    result = {'item_id': item_id, 'revision': current_revision,
+                                              'source_kind': 'archive', 'pages': descriptors}
+                                else:
+                                    if page >= len(described):
+                                        raise PreviewUnavailable('Page unavailable')
+                                    entry = described[page][0]
+                                    if (entry.flag_bits & 1 or entry.file_size > MAX_IMAGE_BYTES
+                                            or entry.file_size > max(1, entry.compress_size) * 200):
+                                        raise PreviewUnavailable('Archive image exceeds preview limits')
+                                    with archive.open(entry) as image:
+                                        data = image.read(MAX_IMAGE_BYTES + 1)
+                                    mime = descriptors[page]['mime']
+                                    result = {'item_id': item_id, 'revision': current_revision, 'kind': 'page',
+                                              'page': page, 'page_id': descriptors[page]['page_id']}
+                            elif operation == 'manifest':
+                                result = {'item_id':item_id, 'page_count':len(entries),
+                                          'revision':current_revision}
                             else:
-                                if page >= len(described):
+                                if page >= len(entries):
                                     raise PreviewUnavailable('Page unavailable')
-                                entry = described[page][0]
+                                # Stable sort preserves central-directory order for
+                                # duplicate names; open the ZipInfo, not its name.
+                                entry = (min(entries, key=lambda e: natural_key(e.filename))
+                                         if operation in ('preview', 'tag_input', 'cover_input') else
+                                         sorted(entries, key=lambda e: natural_key(e.filename))[page])
                                 if (entry.flag_bits & 1 or entry.file_size > MAX_IMAGE_BYTES
                                         or entry.file_size > max(1, entry.compress_size) * 200):
                                     raise PreviewUnavailable('Archive image exceeds preview limits')
                                 with archive.open(entry) as image:
                                     data = image.read(MAX_IMAGE_BYTES + 1)
-                                mime = descriptors[page]['mime']
-                                result = {'item_id': item_id, 'revision': current_revision, 'kind': 'page',
-                                          'page': page, 'page_id': descriptors[page]['page_id']}
-                        elif operation == 'manifest':
-                            result = {'item_id':item_id, 'page_count':len(entries),
-                                      'revision':current_revision}
-                        else:
-                            if page >= len(entries):
-                                raise PreviewUnavailable('Page unavailable')
-                            # Stable sort preserves central-directory order for
-                            # duplicate names; open the ZipInfo, not its name.
-                            entry = (min(entries, key=lambda e: natural_key(e.filename))
-                                     if operation in ('preview', 'tag_input', 'cover_input') else
-                                     sorted(entries, key=lambda e: natural_key(e.filename))[page])
-                            if (entry.flag_bits & 1 or entry.file_size > MAX_IMAGE_BYTES
-                                    or entry.file_size > max(1, entry.compress_size) * 200):
-                                raise PreviewUnavailable('Archive image exceeds preview limits')
-                            with archive.open(entry) as image:
-                                data = image.read(MAX_IMAGE_BYTES + 1)
-                            mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
+                                mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
                 if operation not in ('manifest','video','video_manifest','video_range','tag_source','page_catalog','image_manifest','video_frames_ai') and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
                 if suffix in VIDEO_SUFFIXES or operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input', 'image_manifest', 'image_frame', 'cover_input'):
                     # The native tools inherit this handle, never reopen a path.
                     # Do not publish its old frame if the location was replaced.
-                    current = _safe_path(row['path'], row['relative_path']).stat(follow_symlinks=False)
+                    current = _safe_path(row['path'], row['relative_path'], root_cache=root_cache).stat(follow_symlinks=False)
                     if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
                         if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame'):raise ReaderChanged('Source location changed')
                         raise PreviewUnavailable('Location changed while previewing')

@@ -185,5 +185,30 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         self.assertEqual(call(body)[0],200);self.ai.worker.join(10)
         self.assertEqual(len(self.records()),2)
 
+    def test_rank_batch_source_check_preserves_stale_exclusion_and_no_zipinfo_on_tag_source(self):
+        import zipfile
+        self.build()
+        folder_item=self.ids['comic/']
+        self.pages.refresh(folder_item);folder_snap=self.pages.list(folder_item)
+        self.ai.pages.start(folder_item,[p['page_id'] for p in folder_snap['pages']],
+                            folder_snap['source_revision'],{'root_ids':[self.bookroot]})
+        self.ai.worker.join(10)
+        both_scope={'root_ids':[self.root,self.bookroot]}
+        with patch.object(zipfile,'ZipInfo',side_effect=AssertionError('tag_source must not allocate ZipInfo')):
+            res=self.ai.search('内側の青いページ',source='cover',scope=both_scope)
+        self.assertEqual({r['id'] for r in res['items']},{self.item,folder_item})
+        states=self.pages.states({self.item:self.revision,folder_item:folder_snap['source_revision']})
+        self.assertEqual(states,{self.item:'current',folder_item:'current'})
+        self.assertEqual(self.pages.states({self.item:'a'*64})[self.item],'stale')
+        # Exclude the archive root pattern without rescanning: immediately omitted.
+        self.catalog.set_excludes(self.root,['*.cbz'])
+        self.assertEqual([r['id'] for r in self.ai.search('内側の青いページ',source='cover',scope=both_scope)['items']],
+                         [folder_item])
+        self.catalog.set_excludes(self.root,[])
+        # Mutate the folder book on disk without rescanning: immediately omitted.
+        (self.folder/'2.png').write_bytes(png(color=(1,2,3)))
+        self.assertEqual([r['id'] for r in self.ai.search('内側の青いページ',source='cover',scope=both_scope)['items']],
+                         [self.item])
+
 
 if __name__=='__main__':unittest.main()

@@ -122,6 +122,37 @@ class PageIndex:
         except (PreviewUnavailable, OSError):
             return 'unavailable'
 
+    def states(self, expected_revisions):
+        """Batch-check source freshness for {item_id: revision} using one DB query per 256 items."""
+        if not expected_revisions:
+            return {}
+        ids = []
+        for item_id, revision in expected_revisions.items():
+            identifier(item_id)
+            token(revision)
+            ids.append(item_id)
+        rows = {}
+        with self.catalog.connect() as db:
+            for offset in range(0, len(ids), 256):
+                batch = ids[offset:offset + 256]
+                marks = ','.join('?' for _ in batch)
+                for row in db.execute('SELECT m.item_id, l.*, r.path, r.excludes_json FROM item_locations m '
+                        'JOIN library_locations l ON l.id=m.location_id '
+                        'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id IN (' + marks + ') AND r.enabled=1', batch):
+                    rows[row['item_id']] = row
+        results = {}
+        for item_id, revision in expected_revisions.items():
+            try:
+                source = self.previews._read(item_id, operation='tag_source', row=rows.get(item_id), row_loaded=True)
+                results[item_id] = 'current' if source['revision'] == revision else 'stale'
+            except ReaderChanged:
+                results[item_id] = 'stale'
+            except PreviewBusyError:
+                results[item_id] = 'unverified'
+            except (PreviewUnavailable, OSError):
+                results[item_id] = 'unavailable'
+        return results
+
     def list(self, item_id, *, offset=0, limit=60, revision=None):
         identifier(item_id)
         if type(offset) is not int or not 0 <= offset <= 10000 or type(limit) is not int or not 1 <= limit <= 100:

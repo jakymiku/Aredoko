@@ -1,6 +1,9 @@
 """Explicit, bounded book-page embeddings; no OCR or source-media writes."""
 from array import array
+import itertools
 import math
+import operator
+import re
 import secrets
 import threading
 import time
@@ -12,6 +15,7 @@ from previews import ReaderChanged
 
 CONTRACT = 'book-page-image:v1'
 MAX_PAGES = 16
+_HEX64 = re.compile(r'[0-9a-f]{64}').fullmatch
 SCHEMA = '''CREATE TABLE IF NOT EXISTS ai_page_vectors(
     item_id INTEGER NOT NULL, source_revision TEXT NOT NULL, page_id TEXT NOT NULL,
     page INTEGER NOT NULL CHECK(page>=0 AND page<10000), vector BLOB NOT NULL,
@@ -21,15 +25,30 @@ SCHEMA = '''CREATE TABLE IF NOT EXISTS ai_page_vectors(
 def unpack(data, dimension):
     try:
         value = array('f'); value.frombytes(data)
-        if len(value) != dimension or any(not math.isfinite(x) for x in value):
+        if len(value) != dimension or not all(map(math.isfinite, value)):
             return None
-        squared_norm = sum(x*x for x in value)
+        squared_norm = sum(map(operator.mul, value, value))
         if abs(squared_norm-1) > 1e-4:
             return None
         # Reuse the validated sum, retaining the original sum/sqrt/division
         # arithmetic and float64 scores (including ties), not just unit length.
         norm = math.sqrt(squared_norm)
-        return [x/norm for x in value]
+        return list(map(operator.truediv, value, itertools.repeat(norm)))
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def _score_packed(data, dimension, query):
+    """Unpack, validate and compute the exact float64 dot product without allocating a list."""
+    try:
+        value = array('f'); value.frombytes(data)
+        if len(value) != dimension or not all(map(math.isfinite, value)):
+            return None
+        squared_norm = sum(map(operator.mul, value, value))
+        if abs(squared_norm-1) > 1e-4:
+            return None
+        norm = math.sqrt(squared_norm)
+        return sum(map(operator.mul, query, map(operator.truediv, value, itertools.repeat(norm))))
     except (ValueError, TypeError, OverflowError):
         return None
 
@@ -197,28 +216,54 @@ class PageVectors:
         ai = self.ai; result = {}
         ids = [r['id'] for r in rows if r['kind'] in ('book', 'archive')]
         if not ids or 'cover' not in ai.profile.modalities: return result
-        for offset in range(0, len(ids), 256):
-            batch = ids[offset:offset+256]
-            with ai.store.connect() as db:
+        dim = ai.profile.dimension; model_id = ai.profile.model_id
+        model_rev = ai.profile.revision; profile_key = ai.profile.key
+        hex64 = _HEX64
+        with ai.store.connect() as db:
+            for offset in range(0, len(ids), 256):
+                batch = ids[offset:offset+256]
                 # Stream at most a book's best score, never retain all page blobs.
                 records = db.execute('SELECT item_id,source_revision,page_id,page,vector FROM ai_page_vectors '
                     'WHERE contract=? AND item_id IN ('+','.join('?' for _ in batch)+') ORDER BY item_id,page', [CONTRACT, *batch])
                 for item_id, rev, pid, page, data in records:
-                    if type(page) is not int or not 0<=page<10000:continue
-                    try:token(rev);token(pid)
-                    except ValueError:continue
-                    vec = unpack(data, ai.profile.dimension)
-                    if vec is None: continue
-                    score = sum(a*b for a,b in zip(query, vec))
+                    if (type(page) is not int or not 0<=page<10000
+                            or type(rev) is not str or hex64(rev) is None
+                            or type(pid) is not str or hex64(pid) is None):
+                        continue
+                    score = _score_packed(data, dim, query)
+                    if score is None: continue
                     if item_id not in result or score > result[item_id][0]:
                         result[item_id] = (score, {'source_revision':rev, 'source_state':'current',
-                            'page_id':pid, 'page':page, 'model':ai.profile.model_id,
-                            'model_revision':ai.profile.revision, 'profile':ai.profile.key,
+                            'page_id':pid, 'page':page, 'model':model_id,
+                            'model_revision':model_rev, 'profile':profile_key,
                             'preprocessing':CONTRACT, 'semantic_score':round(score, 6)})
         # A stale or unavailable source is omitted rather than presented as a
         # current page number. Reader checks the exact revision again on opening.
-        for item_id, (_, evidence) in list(result.items()):
-            with ai.catalog._guard:
-                if self.index.state(item_id, evidence['source_revision']) != 'current':
-                    del result[item_id]
+        # Keep one short catalog guard hold per candidate book while batching
+        # catalog location SQL reads into 256-book chunks.
+        candidate_ids = list(result)
+        for offset in range(0, len(candidate_ids), 256):
+            batch = candidate_ids[offset:offset+256]
+            loc_rows = None
+            root_cache = {}
+            for item_id in batch:
+                evidence = result[item_id][1]
+                with ai.catalog._guard:
+                    if loc_rows is None:
+                        with ai.catalog.connect() as db:
+                            marks = ','.join('?' for _ in batch)
+                            loc_rows = {row['item_id']: row for row in db.execute(
+                                'SELECT m.item_id, l.*, r.path, r.excludes_json FROM item_locations m '
+                                'JOIN library_locations l ON l.id=m.location_id '
+                                'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id IN (' + marks + ') AND r.enabled=1',
+                                batch)}
+                    try:
+                        source = self.index.previews._read(
+                            item_id, operation='tag_source', row=loc_rows.get(item_id),
+                            row_loaded=True, root_cache=root_cache)
+                        state = 'current' if source['revision'] == evidence['source_revision'] else 'stale'
+                    except Exception:
+                        state = self.index.state(item_id, evidence['source_revision'])
+                    if state != 'current':
+                        del result[item_id]
         return result
