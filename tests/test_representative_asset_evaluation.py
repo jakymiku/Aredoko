@@ -145,6 +145,30 @@ class RepresentativeAssetEvaluationTests(unittest.TestCase):
         loaded_zip = load_assets_from_zip(good_zip)
         self.assertEqual(set(loaded_zip.keys()), set(CANONICAL_SPECS.keys()))
 
+        # 3b. Valid split across multiple zips (8 + 6)
+        keys_list = list(CANONICAL_SPECS.keys())
+        keys_8, keys_6 = keys_list[:8], keys_list[8:]
+        zip_8 = Path(self.temp_dir) / 'split_8.zip'
+        zip_6 = Path(self.temp_dir) / 'split_6.zip'
+        with zipfile.ZipFile(zip_8, 'w') as zf:
+            for k in keys_8:
+                zf.writestr(placeholders[k]['filename'], placeholders[k]['data'])
+        with zipfile.ZipFile(zip_6, 'w') as zf:
+            for k in keys_6:
+                zf.writestr(placeholders[k]['filename'], placeholders[k]['data'])
+        loaded_multi = load_assets_from_zip([zip_8, zip_6])
+        self.assertEqual(set(loaded_multi.keys()), set(CANONICAL_SPECS.keys()))
+        self.assertTrue(loaded_multi[keys_8[0]]['origin'].startswith('split_8.zip:'))
+        self.assertTrue(loaded_multi[keys_6[0]]['origin'].startswith('split_6.zip:'))
+
+        # 3c. Duplicate across multiple zips rejected
+        dup_zip = Path(self.temp_dir) / 'dup.zip'
+        with zipfile.ZipFile(dup_zip, 'w') as zf:
+            zf.writestr(placeholders[keys_8[0]]['filename'], placeholders[keys_8[0]]['data'])
+        with self.assertRaises(ValueError) as ctx:
+            load_assets_from_zip([zip_8, dup_zip])
+        self.assertIn('Duplicate file match', str(ctx.exception))
+
         # 4. Valid dir with nested folders
         nested_dir = Path(self.temp_dir) / 'nested_dir'
         sub = nested_dir / 'subfolder'
@@ -233,17 +257,21 @@ class RepresentativeAssetEvaluationTests(unittest.TestCase):
         self.assertEqual(cat_summaries['visual_scene']['queries'], 6)
         self.assertEqual(cat_summaries['visual_text_ja']['queries'], 5)
         self.assertEqual(cat_summaries['visual_text_en']['queries'], 2)
+        self.assertIn('combined_top1_mean', cat_summaries['visual_scene'])
 
         self.assertEqual(report['overall_summary']['total_queries'], 13)
         self.assertIn('top1_mean', report['overall_summary'])
         self.assertIn('mrr_mean', report['overall_summary'])
+        self.assertIn('combined_top1_mean', report['overall_summary'])
 
-        # Verify cases count
+        # Verify cases count and combined details
         self.assertEqual(len(report['cases']), 13)
         first_case = report['cases'][0]
         self.assertIn('ranked_keys', first_case)
         self.assertIn('hit_at_1', first_case)
         self.assertIn('mrr', first_case)
+        self.assertIn('combined', first_case)
+        self.assertIn('hit_at_1', first_case['combined'])
 
     def test_evaluate_synthetic_placeholder_with_mock_wd(self):
         encoder = MockEncoder()
@@ -263,6 +291,8 @@ class RepresentativeAssetEvaluationTests(unittest.TestCase):
         self.assertEqual(report['category_summaries']['wd_tag_semantic']['queries'], 4)
         # Total queries now includes WD queries consistently
         self.assertEqual(report['overall_summary']['total_queries'], 17)
+        self.assertIn('generated_tags', report['wd_tag_evaluation'])
+        self.assertEqual(len(report['wd_tag_evaluation']['generated_tags']), 6)
 
     def test_evaluate_invalid_output_directory_rejected(self):
         bad_output = ROOT / 'data/other_unauthorized_dir'

@@ -335,37 +335,47 @@ def generate_placeholder_assets():
 
 
 def load_assets_from_zip(zip_path):
-    """Safely extract the 14 assets from a zip archive."""
-    zip_path = Path(zip_path).resolve()
-    if not zip_path.is_file():
-        raise FileNotFoundError(f'Zip archive not found: {zip_path}')
+    """Safely extract the 14 assets from one or more zip archives."""
+    if isinstance(zip_path, (str, Path)):
+        paths = [Path(zip_path)]
+    elif hasattr(zip_path, '__iter__'):
+        paths = [Path(p) for p in zip_path]
+    else:
+        paths = [Path(zip_path)]
+    if not paths:
+        raise ValueError('No zip archive specified')
+
     assets = {}
-    with zipfile.ZipFile(zip_path, 'r') as archive:
-        for info in archive.infolist():
-            if info.is_dir():
-                continue
-            name = info.filename
-            if '..' in name or name.startswith(('/', '\\')):
-                raise ValueError(f'Path traversal in zip: {name}')
-            if (info.external_attr >> 16) & 0o120000 == 0o120000:
-                raise ValueError(f'Symlinks rejected in zip: {name}')
-            if info.file_size > MAX_ASSET_FILE_BYTES:
-                raise ValueError(f'File in zip exceeds 50MB: {name}')
-            clean_name = Path(name).name
-            if name.startswith('__MACOSX/') or clean_name.startswith('.'):
-                continue
-            key = match_asset_key(name)
-            if key is not None:
-                if key in assets:
-                    raise ValueError(f'Duplicate file match for key {key}: {name} vs {assets[key]["origin"]}')
-                data = archive.read(info)
-                suffix = Path(name).suffix.casefold()
-                filename = Path(CANONICAL_SPECS[key]['file']).stem + suffix
-                assets[key] = {
-                    'data': data,
-                    'filename': filename,
-                    'origin': name,
-                }
+    for zp in paths:
+        zp = zp.resolve()
+        if not zp.is_file():
+            raise FileNotFoundError(f'Zip archive not found: {zp}')
+        with zipfile.ZipFile(zp, 'r') as archive:
+            for info in archive.infolist():
+                if info.is_dir():
+                    continue
+                name = info.filename
+                if '..' in name or name.startswith(('/', '\\')):
+                    raise ValueError(f'Path traversal in zip: {name}')
+                if (info.external_attr >> 16) & 0o120000 == 0o120000:
+                    raise ValueError(f'Symlinks rejected in zip: {name}')
+                if info.file_size > MAX_ASSET_FILE_BYTES:
+                    raise ValueError(f'File in zip exceeds 50MB: {name}')
+                clean_name = Path(name).name
+                if name.startswith('__MACOSX/') or clean_name.startswith('.'):
+                    continue
+                key = match_asset_key(name)
+                if key is not None:
+                    if key in assets:
+                        raise ValueError(f'Duplicate file match for key {key}: {name} vs {assets[key]["origin"]}')
+                    data = archive.read(info)
+                    suffix = Path(name).suffix.casefold()
+                    filename = Path(CANONICAL_SPECS[key]['file']).stem + suffix
+                    assets[key] = {
+                        'data': data,
+                        'filename': filename,
+                        'origin': f'{zp.name}:{name}' if len(paths) > 1 else name,
+                    }
     missing = set(CANONICAL_SPECS) - set(assets)
     if missing:
         raise ValueError(f'Missing required assets in zip: {sorted(missing)}')
@@ -573,8 +583,14 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
         if active_tagger and active_tagger.status()['available']:
             report['wd_tag_evaluation']['enabled'] = True
             suggestions = TagSuggestions(catalog, adapter=active_tagger)
+            generated_tags = {}
             for item in items_raw:
-                suggestions.generate(item['id'], secrets.token_hex(16))
+                gen_res = suggestions.generate(item['id'], secrets.token_hex(16))
+                k = id_to_key.get(item['id'], str(item['id']))
+                batch = gen_res.get('batch') or {}
+                proposals = batch.get('proposals', [])
+                generated_tags[k] = [p['tag'] for p in proposals]
+            report['wd_tag_evaluation']['generated_tags'] = generated_tags
             # Refresh pending tag vectors
             ai.start(scope=scope)
             ai.worker.join(240)
@@ -587,11 +603,13 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
         # 4. Evaluate main queries
         all_cases = []
         for q in EVALUATION_QUERIES:
+            target = q['target_item']
+            exp_page = q.get('expected_page')
+
+            # Cover mode
             res = ai.search(q['query'], source='cover', scope=scope)
             ranked_items = res['items']
             ranked_keys = [id_to_key.get(r['id'], str(r['id'])) for r in ranked_items]
-            target = q['target_item']
-            exp_page = q.get('expected_page')
 
             hit_1 = bool(ranked_keys and ranked_keys[0] == target)
             rec_3 = float(target in ranked_keys[:3])
@@ -605,6 +623,24 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
 
             exact_page = (actual_page == exp_page) if exp_page is not None else True
             exact_page_at_1 = bool(hit_1 and exact_page)
+
+            # Combined mode
+            res_comb = ai.search(q['query'], source='all', scope=scope)
+            ranked_items_comb = res_comb['items']
+            ranked_keys_comb = [id_to_key.get(r['id'], str(r['id'])) for r in ranked_items_comb]
+
+            hit_1_comb = bool(ranked_keys_comb and ranked_keys_comb[0] == target)
+            rec_3_comb = float(target in ranked_keys_comb[:3])
+            rec_5_comb = float(target in ranked_keys_comb[:5])
+            rank_comb = (ranked_keys_comb.index(target) + 1) if target in ranked_keys_comb else None
+            mrr_comb = (1.0 / rank_comb) if rank_comb else 0.0
+
+            target_row_comb = next((r for r in ranked_items_comb if id_to_key.get(r['id']) == target), None)
+            actual_page_comb = (target_row_comb.get('ai_page_match') or {}).get('page') if target_row_comb else None
+            target_score_comb = target_row_comb.get('semantic_score') if target_row_comb else None
+
+            exact_page_comb = (actual_page_comb == exp_page) if exp_page is not None else True
+            exact_page_at_1_comb = bool(hit_1_comb and exact_page_comb)
 
             case_result = {
                 'id': q['id'],
@@ -622,6 +658,18 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
                 'actual_page': actual_page,
                 'exact_page_hit': exact_page,
                 'exact_page_at_1': exact_page_at_1,
+                'combined': {
+                    'ranked_keys': ranked_keys_comb,
+                    'target_rank': rank_comb,
+                    'target_score': target_score_comb,
+                    'hit_at_1': hit_1_comb,
+                    'recall_at_3': rec_3_comb,
+                    'recall_at_5': rec_5_comb,
+                    'mrr': mrr_comb,
+                    'actual_page': actual_page_comb,
+                    'exact_page_hit': exact_page_comb,
+                    'exact_page_at_1': exact_page_at_1_comb,
+                }
             }
             all_cases.append(case_result)
         report['cases'] = all_cases
@@ -631,13 +679,17 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
         if report['wd_tag_evaluation']['enabled']:
             for q in WD_TAG_QUERIES:
                 c_res = semantic_candidates(suggestions, ai, query=q['query'], root_ids=scope['root_ids'])
-                ranked_keys = [id_to_key.get(r['id'], str(r['id'])) for r in c_res['items']]
+                ranked_items_wd = c_res['items']
+                ranked_keys = [id_to_key.get(r['id'], str(r['id'])) for r in ranked_items_wd]
                 target = q['target_item']
                 hit_1 = bool(ranked_keys and ranked_keys[0] == target)
                 rec_3 = float(target in ranked_keys[:3])
                 rec_5 = float(target in ranked_keys[:5])
                 rank = (ranked_keys.index(target) + 1) if target in ranked_keys else None
                 mrr = (1.0 / rank) if rank else 0.0
+
+                target_row_wd = next((r for r in ranked_items_wd if id_to_key.get(r['id']) == target), None)
+                target_score_wd = target_row_wd.get('semantic_score') if target_row_wd else None
 
                 wd_cases.append({
                     'id': q['id'],
@@ -646,6 +698,7 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
                     'target_item': target,
                     'ranked_keys': ranked_keys,
                     'target_rank': rank,
+                    'target_score': target_score_wd,
                     'hit_at_1': hit_1,
                     'recall_at_3': rec_3,
                     'recall_at_5': rec_5,
@@ -665,6 +718,11 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
                 'recall5_mean': round(statistics.mean(c['recall_at_5'] for c in cat_cases), 4),
                 'mrr_mean': round(statistics.mean(c['mrr'] for c in cat_cases), 4),
                 'exact_page_at_1_mean': round(statistics.mean(c['exact_page_at_1'] for c in cat_cases), 4),
+                'combined_top1_mean': round(statistics.mean(c['combined']['hit_at_1'] for c in cat_cases), 4),
+                'combined_recall3_mean': round(statistics.mean(c['combined']['recall_at_3'] for c in cat_cases), 4),
+                'combined_recall5_mean': round(statistics.mean(c['combined']['recall_at_5'] for c in cat_cases), 4),
+                'combined_mrr_mean': round(statistics.mean(c['combined']['mrr'] for c in cat_cases), 4),
+                'combined_exact_page_at_1_mean': round(statistics.mean(c['combined']['exact_page_at_1'] for c in cat_cases), 4),
             }
         if wd_cases:
             cat_summaries['wd_tag_semantic'] = {
@@ -683,6 +741,10 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
             'recall3_mean': round(statistics.mean(c['recall_at_3'] for c in all_eval_cases), 4),
             'recall5_mean': round(statistics.mean(c['recall_at_5'] for c in all_eval_cases), 4),
             'mrr_mean': round(statistics.mean(c['mrr'] for c in all_eval_cases), 4),
+            'combined_top1_mean': round(statistics.mean((c.get('combined') or c)['hit_at_1'] for c in all_eval_cases), 4),
+            'combined_recall3_mean': round(statistics.mean((c.get('combined') or c)['recall_at_3'] for c in all_eval_cases), 4),
+            'combined_recall5_mean': round(statistics.mean((c.get('combined') or c)['recall_at_5'] for c in all_eval_cases), 4),
+            'combined_mrr_mean': round(statistics.mean((c.get('combined') or c)['mrr'] for c in all_eval_cases), 4),
         }
         report['passed'] = True
     except Exception as ex:
@@ -710,7 +772,7 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--zip', type=Path, help='Path to 14-image zip archive')
+    group.add_argument('--zip', type=Path, action='extend', nargs='+', help='Path(s) to zip archive(s) containing evaluation images')
     group.add_argument('--input-dir', type=Path, help='Path to directory containing 14 images')
     group.add_argument('--generate-placeholder', action='store_true', help='Use synthetic placeholder images')
     parser.add_argument('--output', type=Path, help='Output directory under data/representative-eval')

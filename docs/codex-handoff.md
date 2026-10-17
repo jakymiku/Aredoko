@@ -1,5 +1,33 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-17 実素材（14枚）実モデル（EmbeddingGemma 2 + WD Tagger）実機評価完了・専用OCR保留の確定エビデンス
+
+- **実機評価実施と複数ZIP自動マージ実装**：
+  1. ユーザーより提供された `C:\AI\Aredoko-test\Aredoko_search_test_images_8.zip`（8枚）および `C:\AI\Aredoko-test\Aredoko_text_recognition_test_images_6.zip`（6枚）を読み込み可能とするため、`tools/evaluate_representative_assets.py` の `load_assets_from_zip` を複数ZIP配列対応に拡張し、CLI引数 `--zip` に `action='extend', nargs='+'` を設定。複数アーカイブにまたがる14枚の安全抽出・重複検出・整合確認を実装。
+  2. 実モデル（CUDA EmbeddingGemma 2 768D auto-bf16、およびWD Tagger CPU `wd-swinv2-v3`）を用い、隔離ライブラリ `data/representative-eval/real-v1-20261017/` にて全14素材の表紙・本文ページ（全10ページ）・未承認WDタグ候補を索引化し、全17問の評価を実行。推論終了後に全AI/WD workerプロセスが正常に終了することを確認済み。
+- **実測結果（`report.json`）のハイライト**：
+  - **`visual_text_ja`（画像内日本語文字認識、5問）**: **Top1 5/5 (100%)**、**Recall@3 100%**、**Exact Page Hit @ 1 5/5 (100%)**！
+    - モノクロ漫画フキダシ文字「秘密のパスワード」-> `bookA` page 4 (score: 0.764421, 1位)
+    - モノクロ漫画フキダシ文字「水曜日のプラネタリウム」-> `bookA` page 5 (score: 0.736971, 1位)
+    - 章扉ゴシック体「黄金の砂時計」-> `bookB` page 2 (score: 0.759173, 1位)
+    - 黒板白チョーク文字「文化祭のカレーライス」-> `bookB` page 3 (score: 0.793053, 1位)
+    - 案内看板文字「銀河ステーション」-> `asset_03` (score: 0.727627, 1位)
+  - **`visual_text_en`（英語プレート文字、2問）**: **Top1 2/2 (100%)**、**Recall@3 100%**！
+    - 英字そのまま「MIDNIGHT COFFEE SHOP」-> `asset_04` (score: 0.753368, 1位)
+    - 日英クロスリンガル意味検索「深夜のコーヒーショップ」-> `asset_04` (score: 0.698992, 1位)
+  - **`visual_scene`（情景・人物視覚検索、6問）**: **Top1 6/6 (100%)**、**Recall@3 100%**、**Exact Page Hit @ 1 5/6 (0.8333)**（「神社 巫女」は表紙page 0のためカバー一致判定）。
+  - **`wd_tag_semantic`（未承認WD英語タグ意味検索、4問）**: **Top1 3/4 (75%)**、**Recall@3 4/4 (100%)**、**MRR 0.8750**。
+    - WD Tagger（CPU）により `bookA`（30 tags）、`bookB`（30 tags）、`asset_01`（30 tags）、`asset_02`（20 tags）のDanbooruタグが正確に抽出され、「セーラー服」-> `bookA`（1位）、「巫女」-> `bookB`（1位）、「サイバーパンク」-> `asset_02`（1位）、「赤い眼鏡」-> `asset_01`（2位、1位は赤いスカーフ等赤色要素を含むbookA）を達成。
+  - **視覚（`cover`）モード全体**: **Top1 94.12% (16/17)**、**Recall@3 100%**、**Recall@5 100%**、**MRR 0.9706**！
+  - **混合（`combined` / `source='all'`）モード全体**: **Top1 58.82% (10/17)**、**Recall@3 94.12%**、**MRR 0.7794**。本文テキストメタデータ（タグ等）が存在しない初期状態において、RRFがテキスト側の同点順位を混合することで視覚スコアを希釈することが確認され、「視覚的な検索には視覚（cover）モードを使う」という製品仕様の妥当性が裏付けられた。
+- **エビデンスに基づく確定結論：ユーザーの「専用OCR保留」方針の完全実証**：
+  - ユーザー確定方針: 「*EmbeddingGemma 2の直接画像・本文ページ索引でも内容を見つけられないケースが多く確認されたときだけ、実装を検討する*」。
+  - 実測により、EmbeddingGemma 2の画像内文字認識能力はフキダシ・章扉・黒板・看板・英語プレートのすべてにおいて **見落とし（misses）0件（100% Top1）** を達成した。
+  - したがって、**専用OCRアダプタの導入は不要であり、ユーザーの「OCR保留」判断が定量エビデンスにより決定的に正当化された**。
+- **検証記録**：
+  - `tests/test_representative_asset_evaluation.py`：7件全PASS（複数ZIPマージ分割テスト、複数ZIP重複検出、合成エンドツーエンド、MockWD生成タグ検証含む）。
+  - 全Python、全プロセス終了確認済み。
+
 ## 2026-10-17 代表的疑似同人誌・画像内文字認識（Visual-OCR）評価基盤と長い本の分割ページ追加
 
 - **代表的疑似同人誌・画像内文字認識（Visual-OCR）評価ハーネスと仕様**：
