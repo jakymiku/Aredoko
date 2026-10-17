@@ -87,13 +87,6 @@ def main():
     user32.SetForegroundWindow.argtypes=[wintypes.HWND]
     user32.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
     user32.SetWindowPos.argtypes=[wintypes.HWND,wintypes.HWND,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,wintypes.UINT]
-    user32.SwitchToThisWindow.argtypes=[wintypes.HWND,wintypes.BOOL]
-    user32.OpenInputDesktop.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD]
-    user32.OpenInputDesktop.restype=wintypes.HANDLE
-    user32.SetThreadDesktop.argtypes=[wintypes.HANDLE]
-    user32.SetThreadDesktop.restype=wintypes.BOOL
-    user32.CloseDesktop.argtypes=[wintypes.HANDLE]
-    user32.CloseDesktop.restype=wintypes.BOOL
     user32.ShowWindow.argtypes=[wintypes.HWND,ctypes.c_int]
     user32.ShowWindow.restype=wintypes.BOOL
     user32.ScreenToClient.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.POINT)]
@@ -102,15 +95,6 @@ def main():
     kernel32.WaitForSingleObject.argtypes=[wintypes.HANDLE,wintypes.DWORD]
     kernel32.TerminateProcess.argtypes=[wintypes.HANDLE,wintypes.UINT]
     kernel32.CloseHandle.argtypes=[wintypes.HANDLE]
-
-    def activate(target):
-        target=int(target)
-        if user32.GetForegroundWindow()==target:return True
-        user32.ShowWindow(target,9)
-        user32.SwitchToThisWindow(target,True)
-        user32.SetForegroundWindow(target)
-        time.sleep(.1)
-        return user32.GetForegroundWindow()==target
 
     def check(name,value):
         if not value:raise RuntimeError(name)
@@ -128,8 +112,8 @@ def main():
         owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(handle),ctypes.byref(owner))
         if owner.value!=app_pid or kernel32.WaitForSingleObject(process,0)==0:raise RuntimeError('Owned window/process changed')
         if foreground:
-            user32.ShowWindow(int(hwnd),9)
-            user32.SetForegroundWindow(int(hwnd))
+            user32.ShowWindow(int(handle),9)
+            user32.SetForegroundWindow(int(handle))
             time.sleep(.1)
     def shot(name):
         owned()
@@ -141,39 +125,63 @@ def main():
     def context(identifier,source,action="FindSimilar"):
         if identifier.startswith('Item'):ui('scroll-into-view',identifier)
         owned(foreground=True)
+        def try_invoke():
+            for _ in range(8):
+                try:
+                    windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+                    ordered=[w for w in windows if w.get('title')=='PopupHost']+[w for w in windows if str(w.get('hwnd'))==hwnd]
+                    for window in ordered:
+                        handle=str(window['hwnd']);owned(handle)
+                        tree=json.loads(ui('inspect','--json','--depth','14',window=handle))
+                        matches=[n for n in nodes(tree) if n.get('automationId')==action+str(source)]
+                        if matches:
+                            ui('invoke',action+str(source),window=handle);return True
+                except Exception:
+                    pass
+                time.sleep(.1)
+            return False
+
+        # 1. Primary: standard right click
         try:
             ui('click',identifier,'--right')
+            if try_invoke():return
         except Exception:
-            try:ui('send-keys','vk=0x5D','--target',identifier)
-            except Exception:pass
-            try:ui('send-keys','shift+f10','--target',identifier)
-            except Exception:pass
-            try:
-                bridge=user32.FindWindowExW(int(hwnd),None,'Microsoft.UI.Content.DesktopChildSiteBridge',None)
-                site=user32.FindWindowExW(bridge,None,'InputSiteWindowClass',None) if bridge else None
-                target_hwnd=site or int(hwnd)
-                elem=json.loads(ui('inspect',identifier,'--json'))
-                cx=elem.get('x',0)+elem.get('width',0)//2
-                cy=elem.get('y',0)+elem.get('height',0)//2
-                pt=wintypes.POINT(cx,cy)
-                user32.ScreenToClient(target_hwnd,ctypes.byref(pt))
-                lparam=(pt.y<<16)|(pt.x&0xFFFF)
-                user32.PostMessageW(target_hwnd,0x0204,2,lparam)
-                time.sleep(.05)
-                user32.PostMessageW(target_hwnd,0x0205,0,lparam)
-                time.sleep(.05)
-                user32.PostMessageW(target_hwnd,0x007B,target_hwnd,(cy<<16)|(cx&0xFFFF))
-            except Exception:pass
-        for _ in range(20):
-            windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
-            ordered=[w for w in windows if w.get('title')=='PopupHost']+[w for w in windows if str(w.get('hwnd'))==hwnd]
-            for window in ordered:
-                handle=str(window['hwnd']);owned(handle)
-                tree=json.loads(ui('inspect','--json','--depth','14',window=handle))
-                matches=[n for n in nodes(tree) if n.get('automationId')==action+str(source)]
-                if matches:
-                    ui('invoke',action+str(source),window=handle);return
-            time.sleep(.1)
+            pass
+
+        # 2. Fallback: keyboard context menu key (vk=0x5D)
+        try:
+            ui('send-keys','vk=0x5D','--target',identifier)
+            if try_invoke():return
+        except Exception:
+            pass
+
+        # 3. Fallback: Shift+F10
+        try:
+            ui('send-keys','shift+f10','--target',identifier)
+            if try_invoke():return
+        except Exception:
+            pass
+
+        # 4. Fallback: PostMessage to InputSiteWindowClass / window bridge
+        try:
+            bridge=user32.FindWindowExW(int(hwnd),None,'Microsoft.UI.Content.DesktopChildSiteBridge',None)
+            site=user32.FindWindowExW(bridge,None,'InputSiteWindowClass',None) if bridge else None
+            target_hwnd=site or int(hwnd)
+            elem=json.loads(ui('inspect',identifier,'--json'))
+            cx=elem.get('x',0)+elem.get('width',0)//2
+            cy=elem.get('y',0)+elem.get('height',0)//2
+            pt=wintypes.POINT(cx,cy)
+            user32.ScreenToClient(target_hwnd,ctypes.byref(pt))
+            lparam=(pt.y<<16)|(pt.x&0xFFFF)
+            user32.PostMessageW(target_hwnd,0x0204,2,lparam)
+            time.sleep(.05)
+            user32.PostMessageW(target_hwnd,0x0205,0,lparam)
+            time.sleep(.05)
+            user32.PostMessageW(target_hwnd,0x007B,target_hwnd,(cy<<16)|(cx&0xFFFF))
+            if try_invoke():return
+        except Exception:
+            pass
+
         raise RuntimeError('No context action for clicked item '+str(source))
     def latest(source):
         with sandbox.ai.request_lock:entry=dict(sandbox.ai.requests[-1]) if sandbox.ai.requests else {}
