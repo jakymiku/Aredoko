@@ -1,5 +1,31 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-17 複数本の上限付きページ索引・中断/部分失敗/再開
+
+実装commit **`b00aaa081e342feddc085666ab3749398ae9b1d5`**。開始HEAD `7a5d55275860ff8e70769328090994f608449189`（clean/remote差0、新しい他AI更新なし）。production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR5を継続。現在P2、P0 baseline/改善試行累積1/2を維持。OCR保留、英語WD原文/未承認分離、全既存機能、簡潔なGUIと24DIP scroll gutter/16DIP pane間隔を保持。
+
+- **右クリック「複数の本をAI検索に追加…」→表示中の結果の本をチェック→範囲を確認→追加を開始**。最大8冊/1冊の次の欠けを16pageずつ/合計128page、初期上限64。previewでは推論しない。合計上限で除外される本も表示。通常AI buildの対象は不変、全フォルダを自動解析しない。
+- `POST ai/pages/batch`（items/scope/page_limit/profile必須）、既存statusとID一致cancel、`POST ai/pages/batch/resume`。共有worker/inference/resource管理と既存の1冊atomic publisherを再利用。推論中catalog guardを持たず、開始前と保存前にroot/scope/物理版/head/pageを再検査。失敗本を記録して次へ進み、取消の未完了本は未公開、完了済み範囲は保持。
+- 最新ジョブの固定page IDs/revision/scope/profileをprofile別ai_stateへ保存。明示的に同範囲を再開し、完了分を再利用。app再起動後はAI設定「前回の本の追加を再開」。古いID/別scope/profile/変更元ファイルでは再開を拒否し、ユーザーが範囲を確認し直す。自動再開なし。**再開先は最後のAI jobだけ**で、別job開始で記録が置換される（完成vectorは保持）。一般queue履歴/全冊/1TB一括/1冊全ページの自動chunkは未完成。
+- Coreはscope clone、冊数/ページ上限、期待job/profile、冊別状態/公開数/全体集計を厳密検査、応答上限1MiB。初期応答は起動したjob自身のsnapshotを返し、直後の他jobと取り違えない。GUIはvirtualized checklist、固定状態/操作、結果の冊別完了/失敗、dirty保持。日本語エラーを追加。[操作・API・保存/再開の制限・全検証](page-batch-indexing.md)。
+
+検証：
+
+- 新規Python batch10件PASS（11.053秒）。最終**全454件：451 PASS / 3 Windows platform SKIP、237.256秒**。Core **449 PASS**（25checks追加）、最終x64 SelfContained Release **0警告/0エラー、10.21秒**。compileall/diff/追加文書リンク確認。logs `data/page-batch-target-20261017.log` / `page-batch-python-20261017.log` / `page-batch-core-20261017.log` / `page-batch-release-20261017.log`。初回全体は新しい固定エラー2文の日本語辞書漏れ1FAIL（241.542秒）；辞書追加後対象3PASS、全体を1度再検証して成功。初回logも保存。
+- native **`book-batch-20261017-03`：20 runtime checks PASS / 正常終了2 / 6 PNG全確認**。生成35page/8pageの2冊・模擬encoderで、24page preview推論0→16page完了後取消→app再起動→AI設定から同範囲再開→16page再利用/8page追加を確認。未保存tag・生成原本bytes/mtime・AI設定不変。実EmbeddingGemma/WD/OCRのload/推論なし、実素材品質/実GPU速度ではない。
+- **6/6静止画PASSとはしない**。5 PNGは読み取り可能、Light取消直後1 PNGはdialog拡大途中のframeを捕捉。直後のUIA treeで再開(130,399,440,32)、中断(130,439,440,32)、閉じる(354,520,216,32)が700x620内にあり操作成功。静止した取消画面のPNG確認を人手レビューへ残す。初回01は行clickで選択が外れFAILED（1 PNG/強制cleanup）；独立checkboxへ変更。02はUIの次poll前に進捗判定してFAILED（3 PNG/強制cleanup）；wait-for追加後03成功。旧FAILEDを保持し、初回+修正再実行2回の上限で追加nativeは行わない。スキルの “Maximum **two** fix-and-rerun cycles; then report remaining failures.” を遵守。runtime合格と静止画未確認を混同しない。
+- WinUI API/コードレビュー実施。async/閉じる際の所有job取消/Expected job・profile/dirty/共有scope/応答検証・破損/部分失敗・Light/Dark/narrowを点検。**WinUIAnalyzer未導入/未実行、High Contrast/Narrator/Native AOT/DPI/キーボード網羅・多数本性能/代表品質は未検証**。新DL/依存/私物scan/外部media送信/CI dispatchなし、3 workflowsはmanualのみ。Sandbox無効の既知環境につき許可済みlocal所有PID/HWNDでテストし、app/backend終了。
+
+再現：`python -m unittest discover -s tests` / `dotnet run --project tests/Aredoko.Core.Tests -c Release` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。native modeは`python tools/test_tag_review_ui.py --book-batch-only --output data/ai-ui/<fresh-run>`（今回の自動再試行は上限到達）。
+
+次の3手：
+
+1. 取消直後の静止画を以後の人手レビューで確認し、多数本の検索/状態集計/物理版/catalog guard/DB/メモリ/時間を生成素材で測る。今回のruntime/少量fixtureを全ライブラリ性能へ一般化しない。
+2. 必要性/実測をもとに長い本の複数chunkと履歴queueを小さく拡張。1冊16page atomic、総ページ/冊数上限、版/profile/scope/取消を維持。1TB全体の無断処理をしない。
+3. 明示選択の代表素材で内容検索/WD日英の漏れ/誤候補を記録。直接索引済みでも漏れが多いときだけOCR。音声/音楽内容索引・複数ページ文脈タグ・数千pending性能は引き続き後続。
+
+---
+
 ## 2026-10-17 ページ準備状況・次範囲選択と、フォームの文字切れ/スクロールバー重なり修正
 
 実装commit：**`46c5ce5e8de54935f98b30817954234f00cff4cf`**。開始HEAD `76895b74b276376c5263e81a533d57c8353923c6`（clean）。開始時と保存直前にremote差0を確認し、他AIによる新しい製品更新はなかった。branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。現在P2。**本ごとのcoverage/次の未処理範囲の小さいUXまで完了**。OCR保留、英語WD原文と未承認/確定の分離、全既存機能、P0 baseline/改善試行累積1/2を維持。複数本queue・1TB一括索引の完成とはしない。
