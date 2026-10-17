@@ -1,5 +1,35 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-18 大冊coverage/planのcatalog競合を軽減
+
+実装commit **`14b42a2fc06c824b650fad6a1b0adfd2194d65e5`**、開始HEAD **`ac0130722c2674aa0186fa9b4c8cfe480170529a`**、開始/途中fetchで他AIの新commitなし（開始clean/origin差0）。既存production branch / Draft PR5を継続。今回の検証はCPU・生成データのみで実施した。
+
+### 変更・測定・整合性
+
+- `PageVectors.coverage`のvector復号/検査をcatalog guard外へ移動。最初にscope/許可/snapshot/page対応を読み、vector SQL接続を閉じてからAI終了・scope/現metadata/許可・scan・同snapshot ID/版/page countを再検査し、最後に従来の物理handle/パス前後検査を行う。棚変更も再検索し、epoch cacheだけに頼らない。変更元ファイルはreadyを消してstale、新snapshotはReaderChanged、登録解除/除外/棚scope外は利用不可。モデル/原本/索引を変更せず、全機能・範囲・元のunpack/ランキング演算・profile/namespaceを保持。**再索引不要**。
+- 固定の生成1冊10,000page・768D vector5,000本（偶数page）・欠け128page plan。coverageとplanの**全JSON SHAが変更前後で一致**、原本hash/mtime・vector DB SHA・同snapshot・モデル呼出0。新`benchmark_coverage_lock.py`は既存generatorを再利用し、新labelのみ計測、比較/receipt/source変更拒否を実施する。
+- coverage: guard合計 **0.340308→0.034238秒**、最大1回 **0.340308→0.019136秒**（1回→2回）。plan: 合計 **0.370705→0.060438秒**、最大 **0.344333→0.028039秒**（2回→3回）。**確認全体は0.346302→0.363624秒/0.380105→0.404126秒と微増**。catalogを塞ぐ区間を短くする改善で、検索そのもの/全体CPU/throughputの高速化とは呼ばない。各1回・guard計器あり、他作業/cache/順序/cold-warm効果は未分離。UI実待ち上限や実私物/1TBの速度保証なし。[設計/測定表/再現](page-coverage-concurrency.md)。
+- 通常`rank`の1冊1回guard・内積やRRF方式は未変更。旧1024冊10.80秒/同日12.21秒は別fixture/操作で今回更新しない。P0品質枠は累積2/2で閉じ、OCR保留・既存WD未承認分離・全整理/ビューア/長冊GUIを維持。
+
+### 検証・失敗履歴・未検証
+
+- 新並行回帰7件：別スレッドのお気に入り編集が復号終了を待たず完了し同じ応答、棚scope変更/除外/登録解除を拒否、元ファイル書換えをstale・新snapshotを開き直しへ、scan開始/AI終了を再検査。対象coverage **15 PASS /16.711秒**。ベンチ生成fixture回帰 **1 PASS /0.912秒**（全応答一致/source・vector/snapshot不変/モデル0/label上書き拒否/source変更でfailed）。
+- 初回対象 **14件中4FAIL /23.475秒**は、補助側が非再入catalog Lockを取ったままpublic編集APIを呼び再取得したため。補助を「取得可確認→解放→public API」へ修正。製品の最終安全検査を迂回せず、初回`data/coverage-lock-target-20261018.log`を保持。修正後`coverage-lock-target-fixed-20261018.log` / `coverage-lock-benchmark-test-20261018.log`が合格。
+- 最終全Python **503件：500 PASS /3 Windows platform SKIP /366.419秒**（`data/coverage-lock-python-20261018.log`）。子プロセスだけ`CUDA_VISIBLE_DEVICES=-1`/`HF_HUB_OFFLINE=1`/`TRANSFORMERS_OFFLINE=1`。モデル推論は模擬/NoModelのみ、GPUモデル/新DLを実行しない。システムや他アプリのGPU設定は変更しない。compileall/diff/更新Markdown links確認。
+- fixture/evidence `data/page-coverage/lock-v1-20261018/`（原本CBZ/専用DB/lock-receipt/lock-before/lock-after）。before source SHA `24ff2563e8dec8fd6c2898184ec9516ff68e38da45cedc1c06ae3c5382321b83`、after `3cc051ea79c45f89a1461863f5e42aad6cc3b3a93ca1c744057d80fe807b939f`。新ベンチのprepareは既存生成benchmarkのsource不変を確認し、比較段階はvectorも不変。GitHubへmedia/DB/log/個人dataは含めない。
+- C#/XAML/API JSON shapeを変更していないため**今回Core/Release/nativeは再実行していない**。前回Core493/Release/新長冊native40 checks・6PNGの結果は履歴、旧book-batch取消静止PNG1枚は未完。WinUIAnalyzer/AOT/DPI/High Contrast/Narrator/GUI応答・実GPU/実私物/1TB性能は今回未検証。GPU/GUI/実EmbeddingGemma/WD/OCR/Laya起動・新依存/DL/私物走査/元メディア変更/外部media送信/CIなし。
+- ユーザー許可済み2 ZIP/14枚は必要な実モデル/日本語・画像内文字の確認に利用可能だが、今回のCPUロック検証は生成データで行い再推論なし。3 workflowsは引き続きmanualのみ、既存Draftを継続しmainへmergeしない。
+
+再現：`python -m unittest discover -s tests`（上記CUDA無効/offlineを子プロセスへ設定）。計測は[専用CPU手順](page-coverage-concurrency.md)、同fixtureへ変更前/後を新labelで取得し比較、既存証拠を上書きしない。
+
+次の3手：
+
+1. 残るCPUのscorer/SQL/path/大冊coverage総所要を測って同値な改善候補を絞る。今回のcatalog競合削減を全体高速化と混同しない。原本/版/即時scope無効化/短いguard・score全bitを維持し、近似化/cacheによる鮮度省略をしない。
+2. backend/API・大規模状態/中断・pending索引の境界検証を小さく進める。モデル/全冊自動処理/一般queueを勝手に導入せず、GUI整理は既存機能/簡潔さを維持。古い「chunk GUI未接続」の行は履歴として最新実装を優先する。
+3. 必要な箇所で既知2 ZIPを用いる小さな実モデル操作確認。既存14枚評価を無意味に反復せず、P0第3試行やOCRへ自動復帰しない。音声/音楽内容・複数page文脈・Pythonホストtoken移行は別backlog。
+
+---
+
 ## 2026-10-18 長い本のWinUI接続：範囲確認・分割追加・固定選択の明示再開
 
 実装commit **`f302a050a2b9dff05b258029792b277a97aa6ccf`**。開始HEAD **`fc93efe03b12af8e0ded85d321369344cc295295`**、fetch/status/log6でclean/origin差0、終了前fetchも他AIの追加なし。最新優先作業の長冊chunk APIを既存dialog/AI設定へ接続し、既存production branch / Draft PR5を継続。[操作/型/制約](page-chunked-indexing.md)。
