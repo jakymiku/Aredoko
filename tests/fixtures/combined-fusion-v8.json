@@ -1,0 +1,294 @@
+{
+  "acceptance": [
+    "no baseline-correct answerable case becomes incorrect on the new set",
+    "new-set overall and metadata/filename Top1 do not decrease",
+    "development representative visual combined Top1 improves",
+    "text and cover order/scores, scopes, candidate membership and source/vector bytes remain unchanged"
+  ],
+  "agreed_tags": {
+    "asset_01": [
+      "白髪",
+      "赤い眼鏡",
+      "パーカー",
+      "立ち絵"
+    ],
+    "asset_02": [
+      "サイバーパンク",
+      "夜景",
+      "ネオン",
+      "路地裏"
+    ]
+  },
+  "cases": [
+    {
+      "group": "visual",
+      "id": "r8_visual_01",
+      "page": 1,
+      "query": "放課後の教室に差し込む夕日",
+      "target": "bookA"
+    },
+    {
+      "group": "visual",
+      "id": "r8_visual_02",
+      "page": 3,
+      "query": "雨の町で真っ赤な傘をさした人物",
+      "target": "bookA"
+    },
+    {
+      "group": "visual",
+      "id": "r8_visual_03",
+      "page": 0,
+      "query": "鳥居のある神社の女性神職",
+      "target": "bookB"
+    },
+    {
+      "group": "visual",
+      "id": "r8_visual_04",
+      "page": 1,
+      "query": "夜の森で杖と光る陣を使う魔法使い",
+      "target": "bookB"
+    },
+    {
+      "group": "visual",
+      "id": "r8_visual_05",
+      "page": null,
+      "query": "白いフードの服と赤縁めがねの女の子",
+      "target": "asset_01"
+    },
+    {
+      "group": "visual",
+      "id": "r8_visual_06",
+      "page": null,
+      "query": "雨上がりの近未来都市のネオン",
+      "target": "asset_02"
+    },
+    {
+      "group": "visual",
+      "id": "r8_visual_07",
+      "page": 3,
+      "query": "文化祭の献立はカレーライス",
+      "target": "bookB"
+    },
+    {
+      "group": "visual",
+      "id": "r8_visual_08",
+      "page": null,
+      "query": "夜中に開く喫茶店の英字プレート",
+      "target": "asset_04"
+    },
+    {
+      "group": "metadata",
+      "id": "r8_metadata_01",
+      "page": null,
+      "query": "住宅ローンの月々の返済を記録する家計簿",
+      "target": "meta_home"
+    },
+    {
+      "group": "metadata",
+      "id": "r8_metadata_02",
+      "page": null,
+      "query": "雨の環境音で眠りたい",
+      "target": "meta_sleep"
+    },
+    {
+      "group": "metadata",
+      "id": "r8_metadata_03",
+      "page": null,
+      "query": "シンセサイザーの音色プリセット集",
+      "target": "meta_synth"
+    },
+    {
+      "group": "metadata",
+      "id": "r8_metadata_04",
+      "page": null,
+      "query": "同人イベントの売上と在庫をまとめる帳票",
+      "target": "meta_event"
+    },
+    {
+      "group": "metadata",
+      "id": "r8_metadata_05",
+      "page": null,
+      "query": "長時間の配信に使う枠とチャット欄の素材",
+      "target": "meta_stream"
+    },
+    {
+      "group": "metadata",
+      "id": "r8_metadata_06",
+      "page": null,
+      "query": "朝のジョギングのペースと距離を記録する用紙",
+      "target": "meta_run"
+    },
+    {
+      "group": "filename",
+      "id": "r8_filename_01",
+      "page": null,
+      "query": "ライブ会場の照明の参考資料",
+      "target": "file_stage"
+    },
+    {
+      "group": "filename",
+      "id": "r8_filename_02",
+      "page": null,
+      "query": "鉄道の運行時刻表のひな形",
+      "target": "file_train"
+    },
+    {
+      "group": "filename",
+      "id": "r8_filename_03",
+      "page": null,
+      "query": "一週間の献立を計画するテンプレート",
+      "target": "file_cooking"
+    },
+    {
+      "group": "filename",
+      "id": "r8_filename_04",
+      "page": null,
+      "query": "アコースティックギターのストローク練習",
+      "target": "file_guitar"
+    },
+    {
+      "group": "agreement",
+      "id": "r8_agreement_01",
+      "page": null,
+      "query": "白髪の赤いめがね女子の立ち絵",
+      "target": "asset_01"
+    },
+    {
+      "group": "agreement",
+      "id": "r8_agreement_02",
+      "page": null,
+      "query": "パーカーを着た眼鏡キャラ",
+      "target": "asset_01"
+    },
+    {
+      "group": "agreement",
+      "id": "r8_agreement_03",
+      "page": null,
+      "query": "サイバーパンク都市の路地背景",
+      "target": "asset_02"
+    },
+    {
+      "group": "agreement",
+      "id": "r8_agreement_04",
+      "page": null,
+      "query": "雨上がりの夜景に青いネオン看板",
+      "target": "asset_02"
+    },
+    {
+      "group": "no-answer",
+      "id": "r8_no-answer_01",
+      "page": null,
+      "query": "紫色の三日月を背負った機械の鯨",
+      "target": null
+    },
+    {
+      "group": "no-answer",
+      "id": "r8_no-answer_02",
+      "page": null,
+      "query": "宇宙税関の青い回転パスポート",
+      "target": null
+    }
+  ],
+  "extra_items": [
+    {
+      "file": "r8_m01.png",
+      "key": "meta_home",
+      "kind": "image",
+      "tags": [
+        "住宅ローン",
+        "月次返済",
+        "家計簿",
+        "支出管理",
+        "表計算テンプレート"
+      ]
+    },
+    {
+      "file": "r8_a01.wav",
+      "key": "meta_sleep",
+      "kind": "audio",
+      "tags": [
+        "雨音",
+        "環境音",
+        "安眠",
+        "睡眠導入",
+        "リラックス"
+      ]
+    },
+    {
+      "file": "r8_m02.svg",
+      "key": "meta_synth",
+      "kind": "material",
+      "tags": [
+        "シンセサイザー",
+        "音色",
+        "プリセット",
+        "電子楽器",
+        "サウンドバンク"
+      ]
+    },
+    {
+      "file": "r8_m03.png",
+      "key": "meta_event",
+      "kind": "image",
+      "tags": [
+        "同人イベント",
+        "売上",
+        "在庫管理",
+        "帳票",
+        "頒布数"
+      ]
+    },
+    {
+      "file": "r8_m04.png",
+      "key": "meta_stream",
+      "kind": "image",
+      "tags": [
+        "配信画面",
+        "オーバーレイ",
+        "コメント欄",
+        "長時間配信",
+        "画面枠"
+      ]
+    },
+    {
+      "file": "r8_m05.png",
+      "key": "meta_run",
+      "kind": "image",
+      "tags": [
+        "ジョギング",
+        "朝活",
+        "ペース",
+        "走行距離",
+        "記録用紙"
+      ]
+    },
+    {
+      "file": "concert stage lighting reference.png",
+      "key": "file_stage",
+      "kind": "image",
+      "tags": []
+    },
+    {
+      "file": "鉄道の運行時刻表テンプレート.png",
+      "key": "file_train",
+      "kind": "image",
+      "tags": []
+    },
+    {
+      "file": "weekly meal planning template.svg",
+      "key": "file_cooking",
+      "kind": "material",
+      "tags": []
+    },
+    {
+      "file": "acoustic guitar strumming practice.wav",
+      "key": "file_guitar",
+      "kind": "audio",
+      "tags": []
+    }
+  ],
+  "hypothesis": "mean RRF weighted by each modality cosine score span (max-min), without fitted thresholds; equal/insufficient pools fall back safely",
+  "role": "new author-written query holdout on reused 14 images plus generated metadata/filename controls; not an independent natural corpus",
+  "trial": "P0 cumulative trial 2/2, reopened by user request; no parameter sweep or third attempt",
+  "version": "combined-fusion-v8"
+}
