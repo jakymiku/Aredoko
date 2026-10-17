@@ -218,9 +218,9 @@ class PreviewReader:
             raise ValueError('Invalid reader revision')
         return self._read(item_id, operation='page', page=page, revision=revision)
 
-    def tag_source(self, item_id):
+    def tag_source(self, item_id, *, root_cache=None):
         """Physical provenance, independent of editable tags/title; no pixels read."""
-        return self._read(item_id, operation='tag_source')
+        return self._read(item_id, operation='tag_source', root_cache=root_cache)
 
     def tag_sources(self, item_ids):
         """Batch-fetch catalog locations once, then verify each physical handle."""
@@ -240,7 +240,8 @@ class PreviewReader:
                         'JOIN library_locations l ON l.id=m.location_id '
                         'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id IN (' + marks + ') AND r.enabled=1', batch):
                     rows[row['item_id']] = row
-        return {item_id: (self._read(item_id, operation='tag_source', row=rows.get(item_id), row_loaded=True))
+        root_cache = {}
+        return {item_id: (self._read(item_id, operation='tag_source', row=rows.get(item_id), row_loaded=True, root_cache=root_cache))
                 for item_id in ids}
 
     def tag_input(self, item_id):

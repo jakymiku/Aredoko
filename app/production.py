@@ -46,6 +46,7 @@ class ProductionCatalog(Catalog):
                     WHERE state IN ('running','cancelling');
             ''')
         self._guard = threading.Lock()
+        self._state_epoch = 0
         self._cancel = threading.Event()
         self._worker = None
         self._progress = 0
@@ -56,6 +57,7 @@ class ProductionCatalog(Catalog):
         raise ValueError('Synthetic seeding is not available in production')
 
     def sync_index(self):
+        self._state_epoch += 1
         with self.connect() as db:
             rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id,r.default_shelf,r.path FROM library_locations l '
                               'JOIN library_roots r ON r.id=l.root_id '
@@ -262,6 +264,7 @@ class ProductionCatalog(Catalog):
     def unregister_root(self,root_id):
         with self._guard:
             self._require_idle()
+            self._state_epoch += 1
             return self.index.unregister(root_id)
 
     def purge_inactive_root(self, root_id, consent=False):
@@ -277,6 +280,7 @@ class ProductionCatalog(Catalog):
             raise ValueError('Invalid root ID')
         with self._guard:
             self._require_idle()
+            self._state_epoch += 1
             with self.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
                 row = db.execute('SELECT id, enabled FROM library_roots WHERE id=?', (root_id,)).fetchone()
@@ -328,6 +332,7 @@ class ProductionCatalog(Catalog):
     def set_excludes(self, root_id, patterns):
         with self._guard:
             self._require_idle()
+            self._state_epoch += 1
             return self.index.set_excludes(root_id, patterns)
 
     def shelves(self):
@@ -342,6 +347,7 @@ class ProductionCatalog(Catalog):
             raise ValueError('The library must not contain the application database')
         with self._guard:
             self._require_idle()
+            self._state_epoch += 1
             return self.index.add_root(path,excludes,default_shelf,folder_books,recursive)
 
     def scan_state(self):

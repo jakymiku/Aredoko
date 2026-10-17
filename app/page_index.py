@@ -111,10 +111,10 @@ class PageIndex:
             return {'item_id': item_id, 'source_revision': revision, 'source_kind': manifest['source_kind'],
                     'page_count': len(pages), 'reused': old is not None}
 
-    def state(self, item_id, revision):
+    def state(self, item_id, revision, *, root_cache=None):
         """Called under the catalog guard; never treats busy as freshness."""
         try:
-            return 'current' if self.previews.tag_source(item_id)['revision'] == revision else 'stale'
+            return 'current' if self.previews.tag_source(item_id, root_cache=root_cache)['revision'] == revision else 'stale'
         except ReaderChanged:
             return 'stale'
         except PreviewBusyError:
@@ -123,7 +123,7 @@ class PageIndex:
             return 'unavailable'
 
     def states(self, expected_revisions):
-        """Batch-check source freshness for {item_id: revision} using one DB query per 256 items."""
+        """Batch-check source freshness for {item_id: revision} when caller holds catalog._guard."""
         if not expected_revisions:
             return {}
         ids = []
@@ -141,9 +141,10 @@ class PageIndex:
                         'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id IN (' + marks + ') AND r.enabled=1', batch):
                     rows[row['item_id']] = row
         results = {}
+        root_cache = {}
         for item_id, revision in expected_revisions.items():
             try:
-                source = self.previews._read(item_id, operation='tag_source', row=rows.get(item_id), row_loaded=True)
+                source = self.previews._read(item_id, operation='tag_source', row=rows.get(item_id), row_loaded=True, root_cache=root_cache)
                 results[item_id] = 'current' if source['revision'] == revision else 'stale'
             except ReaderChanged:
                 results[item_id] = 'stale'

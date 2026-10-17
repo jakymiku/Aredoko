@@ -240,30 +240,36 @@ class PageVectors:
         # A stale or unavailable source is omitted rather than presented as a
         # current page number. Reader checks the exact revision again on opening.
         # Keep one short catalog guard hold per candidate book while batching
-        # catalog location SQL reads into 256-book chunks.
+        # catalog location SQL reads into 256-book chunks (invalidated immediately
+        # if any root/exclusion/scan mutation increments catalog._state_epoch).
         candidate_ids = list(result)
         for offset in range(0, len(candidate_ids), 256):
             batch = candidate_ids[offset:offset+256]
             loc_rows = None
+            cached_epoch = None
             root_cache = {}
-            for item_id in batch:
+            for pos, item_id in enumerate(batch):
                 evidence = result[item_id][1]
                 with ai.catalog._guard:
-                    if loc_rows is None:
+                    epoch = getattr(ai.catalog, '_state_epoch', 0)
+                    if loc_rows is None or epoch != cached_epoch:
+                        remaining = batch[pos:]
                         with ai.catalog.connect() as db:
-                            marks = ','.join('?' for _ in batch)
+                            marks = ','.join('?' for _ in remaining)
                             loc_rows = {row['item_id']: row for row in db.execute(
                                 'SELECT m.item_id, l.*, r.path, r.excludes_json FROM item_locations m '
                                 'JOIN library_locations l ON l.id=m.location_id '
                                 'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id IN (' + marks + ') AND r.enabled=1',
-                                batch)}
+                                remaining)}
+                        cached_epoch = epoch
+                        root_cache.clear()
                     try:
                         source = self.index.previews._read(
                             item_id, operation='tag_source', row=loc_rows.get(item_id),
                             row_loaded=True, root_cache=root_cache)
                         state = 'current' if source['revision'] == evidence['source_revision'] else 'stale'
                     except Exception:
-                        state = self.index.state(item_id, evidence['source_revision'])
+                        state = self.index.state(item_id, evidence['source_revision'], root_cache=root_cache)
                     if state != 'current':
                         del result[item_id]
         return result

@@ -1,12 +1,19 @@
 """Generated books and deterministic vectors: lifecycle, not model accuracy."""
 from dataclasses import replace
 import json
+from pathlib import Path
+import sys
 import threading
 import unittest
 import urllib.request
 import urllib.error
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'app'))
+sys.path.insert(0, str(ROOT / 'tools'))
+sys.path.insert(0, str(ROOT / 'tests'))
 
 from test_page_index import PageFixture
 from ai_profiles import DEFAULT_PROFILE
@@ -205,6 +212,30 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         self.assertEqual([r['id'] for r in self.ai.search('内側の青いページ',source='cover',scope=both_scope)['items']],
                          [folder_item])
         self.catalog.set_excludes(self.root,[])
+        # Concurrent exclusion or root unregistration between candidate books in the
+        # same rank() call must immediately omit the second book rather than serving
+        # a cached location row from the start of the 256-book batch.
+        orig_guard = self.catalog._guard
+        releases = 0
+        class InterleaveGuard:
+            def __enter__(_self):
+                orig_guard.acquire()
+                return _self
+            def __exit__(_self, *args):
+                nonlocal releases
+                orig_guard.release()
+                releases += 1
+                if releases == 1:
+                    self.catalog.set_excludes(self.bookroot, ['comic/*'])
+            def __getattr__(_self, name):
+                return getattr(orig_guard, name)
+        self.catalog._guard = InterleaveGuard()
+        try:
+            mid_res = self.ai.search('内側の青いページ', source='cover', scope=both_scope)
+        finally:
+            self.catalog._guard = orig_guard
+        self.assertEqual([r['id'] for r in mid_res['items']], [self.item])
+        self.catalog.set_excludes(self.bookroot, [])
         # Mutate the folder book on disk without rescanning: immediately omitted.
         (self.folder/'2.png').write_bytes(png(color=(1,2,3)))
         self.assertEqual([r['id'] for r in self.ai.search('内側の青いページ',source='cover',scope=both_scope)['items']],

@@ -1,8 +1,12 @@
-"""Exact compatibility of stored float32 page vectors with the original decoder."""
 from array import array
 import math
+from pathlib import Path
 import random
+import sys
 import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'app'))
 
 from ai_vectors import normalized
 from page_semantics import _score_packed, unpack
