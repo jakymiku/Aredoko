@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'app'))
 
 from ai_vectors import normalized
-from page_semantics import _score_packed, unpack
+from page_semantics import _is_valid_packed, _score_packed, unpack
 
 
 def legacy_decode(data, dimension):
@@ -30,6 +30,8 @@ class PageVectorDecodeTests(unittest.TestCase):
     def assert_legacy(self, data, dimension, query=None):
         expected = legacy_decode(data, dimension)
         actual = unpack(data, dimension)
+        self.assertEqual(unpack(data, dimension, False), expected is not None)
+        self.assertEqual(_is_valid_packed(data, dimension), expected is not None)
         probe = query if query is not None else ([1.0] + [0.0] * max(0, dimension - 1) if dimension > 0 else [])
         scored = _score_packed(data, dimension, probe)
         if expected is None:

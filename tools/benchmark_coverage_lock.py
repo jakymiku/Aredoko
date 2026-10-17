@@ -87,6 +87,7 @@ def compare(output,before,after):
     for a,b in zip(old['cases'],new['cases']):
         for key in ('operation','result_sha256','indexed_pages','response_bytes'):assert a[key]==b[key]
         results.append(dict(operation=a['operation'],exact_response=True,before_seconds=a['seconds'],after_seconds=b['seconds'],
+                            reduction_percent=round(100*(1-b['seconds']/a['seconds']),2) if a['seconds'] else 0.0,
                             before_guard=a['guard'],after_guard=b['guard']))
     return dict(passed=True,cases=results)
 

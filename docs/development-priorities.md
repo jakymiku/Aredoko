@@ -1,5 +1,7 @@
 # Aredoko — 直近の開発優先順位と合格条件
 
+> **最新（2026-10-18、CPU非確保検証）**：coverageでのvector確認から768要素リスト生成を排した非確保検証（`allocate=False` / `_is_valid_packed`）および`unpack`の重複finite走査省略を実装。生成1万pageの全応答・ハッシュ一致、coverage総所要364ms→221ms（39.18%短縮）、plan総所要404ms→251ms（37.82%短縮）、guard保持合計34msを維持。[測定/比較](page-coverage-concurrency.md)。P0 2/2/OCR保留/既存機能を維持。
+
 > **最新（2026-10-18、CPUのみ）**：coverage/planのvector復号をcatalog guard外へ移動。最後にscope/同snapshot/原本/scan/AI終了を再確認し、生成1万pageの全応答一致。guard保持340→34ms、総所要は微増で検索高速化とは別。[設計/測定/回帰](page-coverage-concurrency.md)。今回の検証はCPUのみ。P0 2/2/OCR保留/既存機能を維持。
 
 > **最新（2026-10-18、長冊GUI接続）**：既存dialogで未準備128ページ以内の確認→開始/中断/同じ範囲再開、既存AI設定から再起動後の明示再開を接続。新native40 checks/6 PNG目視・Core493・Python対象16・Release合格。[操作/制限/旧job](page-chunked-indexing.md)。旧取消PNG未完・簡潔GUI/全機能・P0 2/2/OCR保留を維持。

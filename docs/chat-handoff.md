@@ -1,5 +1,43 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-18 大冊coverage総所要の短縮：非確保vector検証とunpack重複finite検査の削減
+
+実装HEAD作業差分、開始HEAD **`6e5c41da98ba07f1031f9de364ac7156f840ac53`**、fetch/statusでclean/origin差0。既存production branch `feat/winui3-production-mvp-20261011` / Draft PR5を継続。今回の検証はCPU・生成データのみで実施（ユーザーPC利用中のためNo-GPU / No-GUI-Window-Focus厳守）。
+
+### 変更・測定・整合性
+
+- `PageVectors.coverage`で準備済みページ判定時に行っていた768要素Pythonリスト生成（`unpack(...) is not None`）を、リスト確保を伴わない高速真偽値判定（`unpack(..., allocate=False)` / `_is_valid_packed`）へ置換。
+- さらに`unpack`自身でも、`_score_packed`（`cef90a3`）と同様に768成分全件への`all(map(math.isfinite, value))`走査を非負二乗和に対する`math.isfinite(squared_norm)`確認へ置換。NaN/±Infは非負二乗和を非finiteにするためbit単位で完全に同等に棄却される。
+- 固定の生成1冊10,000page・768D vector5,000本（偶数page）・欠け128page plan fixture（`data/page-coverage/lock-v1-20261018/`）にて測定：
+  - coverage総所要: **0.363624秒 → 0.221163秒（39.18%短縮）**
+  - plan総所要: **0.404126秒 → 0.251285秒（37.82%短縮）**
+  - guard保持時間: coverage 0.034s → 0.038s、plan 0.060s → 0.072s（guard外復号・2段階guard構造を100%維持）
+  - coverageおよびplanの**全JSON応答SHAが変更前後で完全一致**（`result_sha256`完全一致、indexed_pages: 5000、response_bytes: 144861 / 12749一致）
+  - encoder呼出0回、原本・vector DB SHA不変。
+  - 同一生成1024冊ページ検索（`data/page-search-scale/v1-20261017-01`）でも全64/256/1024冊でraw score/順位/根拠/scopeが完全一致（`exact_results: true`, `exact_scope: true`）。1024冊rank: 12.205678秒 → 9.977263秒。
+- 通常`rank`の1冊1回guard・内積やRRF方式は未変更。P0品質枠は累積2/2で閉じ、OCR保留・既存WD未承認分離・全整理/ビューア/長冊GUIを維持。
+
+### 検証・失敗履歴・未検証
+
+- 新edge回帰: `tests/test_page_vector_decode.py`の`assert_legacy`にて、`unpack`、`_is_valid_packed`、`unpack(..., allocate=False)`のすべてが旧decoder（`legacy_decode`）と完全一致すること（符号付きゼロ、非finite成分混在、NaN/Inf、極小subnormal、単位長許容差境界、破損データ）を網羅検証（4 PASS）。
+- カタログ競合回帰: `tests/test_page_coverage.py`の`during_decode`によるカタログロック競合・編集中並行性・ファイル変更stale・新snapshot reopen・scan中busyの全回帰を通過（15 PASS）。
+- 分割API回帰: `tests/test_page_chunks.py`（16 PASS）、`tests/test_coverage_lock_benchmark.py`（1 PASS）。
+- 最終全Python **503件：500 PASS / 3 Windows platform SKIP / 389.555秒**（テスト失敗0）。
+- C# Core tests: **493 PASS**。
+- Windows x64 SelfContained Release: **0警告 / 0エラー、17.40秒**（`--no-restore`、新依存取得なし）。
+- compileall/diff/更新Markdown links確認。
+- **未検証・保留項目**: ユーザーPC利用中のため、GPUモデル（EmbeddingGemma 2 / CUDA）の推論およびGUIウィンドウを前面化するアクティブ操作テスト（`Aredoko.WinUI.exe`, `tools/test_tag_review_ui.py`）は実行せず保留（Pending User Permission）。旧book-batch取消静止PNG1枚は未完のまま。WinUIAnalyzer/AOT/DPI/High Contrast/Narrator/GUI応答・実GPU/実私物/1TB性能は今回未検証。
+
+再現：`python -m unittest discover -s tests` / `dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。
+
+次の3手：
+
+1. 残るCPU検索（`rank`での1冊1回guard・原本確認約3.2秒、vector SQL cursor fetch約0.84秒）の内訳を精査し、同値な改善候補を設計。原本before/after確認・即時無効化・短いguard・score全bit一致を厳守し、近似化/cacheによる鮮度省略をしない。
+2. backend/API・大規模状態/中断・pending索引の境界検証を小さく進める。モデル/全冊自動処理/一般queueを勝手に導入せず、GUI整理は既存機能/簡潔さを維持。
+3. ユーザーの許可が得られた段階で、既知2 ZIP（`Aredoko-test`）を用いた実モデル操作確認、およびWinUIネイティブGUI確認（新長冊GUI確認済み項目の維持確認）。P0第3試行やOCRへ自動復帰しない。
+
+---
+
 ## 2026-10-18 大冊coverage/planのcatalog競合を軽減
 
 実装commit **`14b42a2fc06c824b650fad6a1b0adfd2194d65e5`**、開始HEAD **`ac0130722c2674aa0186fa9b4c8cfe480170529a`**、開始/途中fetchで他AIの新commitなし（開始clean/origin差0）。既存production branch / Draft PR5を継続。今回の検証はCPU・生成データのみで実施した。

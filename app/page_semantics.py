@@ -22,20 +22,30 @@ SCHEMA = '''CREATE TABLE IF NOT EXISTS ai_page_vectors(
     contract TEXT NOT NULL, PRIMARY KEY(item_id,page_id));'''
 
 
-def unpack(data, dimension):
+def unpack(data, dimension, allocate=True):
     try:
         value = array('f'); value.frombytes(data)
-        if len(value) != dimension or not all(map(math.isfinite, value)):
-            return None
+        if len(value) != dimension:
+            return None if allocate else False
         squared_norm = sum(map(operator.mul, value, value))
-        if abs(squared_norm-1) > 1e-4:
-            return None
+        # Nonnegative squares propagate every NaN/Inf component into this sum.
+        # Check that one value instead of walking all components a second time;
+        # keep the original sum/sqrt/division arithmetic and tolerance.
+        if not math.isfinite(squared_norm) or abs(squared_norm-1) > 1e-4:
+            return None if allocate else False
+        if not allocate:
+            return True
         # Reuse the validated sum, retaining the original sum/sqrt/division
         # arithmetic and float64 scores (including ties), not just unit length.
         norm = math.sqrt(squared_norm)
         return list(map(operator.truediv, value, itertools.repeat(norm)))
     except (ValueError, TypeError, OverflowError):
-        return None
+        return None if allocate else False
+
+
+def _is_valid_packed(data, dimension):
+    """Validate stored float32 page vector without allocating a decoded list."""
+    return unpack(data, dimension, False)
 
 
 def _score_packed(data, dimension, query):
@@ -114,7 +124,7 @@ class PageVectors:
                         'SELECT page_id,page,vector FROM ai_page_vectors '
                         'WHERE item_id=? AND source_revision=? AND contract=?',
                         (item_id, revision, CONTRACT)):
-                    if entries.get(pid) == page and unpack(data, ai.profile.dimension) is not None:
+                    if entries.get(pid) == page and unpack(data, ai.profile.dimension, False):
                         ready.add(page)
         with ai.guard:
             if ai._closed: raise AIUnavailable('AI is closing')

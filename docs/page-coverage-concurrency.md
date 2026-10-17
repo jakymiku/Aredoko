@@ -14,16 +14,16 @@
 
 新`tools/benchmark_coverage_lock.py`は既存coverage fixture generatorを再利用し、新規専用DB/CBZで**1冊10,000ページ、768D vectorは偶数ページ5,000本**を保存。coverageは5,000の準備済み範囲、planは次の欠け128ページを返す。同一fixture/receipt・原本hash/mtime・vector DB SHA・snapshotを前後照合する。NoModel.encodeは例外で推論を禁止、encoder呼出0。出力は`data/page-coverage/lock-v1-20261018/`、既存label/証拠の上書きは拒否。
 
-| 操作 | 全体秒（前→後） | guard合計秒（前→後） | guard単一最大秒（前→後） |
-| --- | ---: | ---: | ---: |
-| coverage | 0.346302 → 0.363624 | 0.340308 → 0.034238 | 0.340308 → 0.019136 |
-| plan | 0.380105 → 0.404126 | 0.370705 → 0.060438 | 0.344333 → 0.028039 |
+| 操作 | 全体秒（guard競合分離 前→後） | 全体秒（今回 非確保・重複finite省略） | 今回短縮率 | guard合計秒（前→後→今回） |
+| --- | ---: | ---: | ---: | ---: |
+| coverage | 0.346302 → 0.363624 | **0.221163** | **39.18%** | 0.340308 → 0.034238 → 0.038309 |
+| plan | 0.380105 → 0.404126 | **0.251285** | **37.82%** | 0.370705 → 0.060438 → 0.071637 |
 
-coverageのguard保持合計は**約340ms→34ms（約90%削減）**、最長の1回は340ms→19ms。planは約371ms→60ms、最長344ms→28ms。coverageはguard1回→2回、planは2回→3回へ分けている。**全体の単発所要は約346ms→364ms/380ms→404msと増えており、総CPU時間や検索速度の改善とは呼ばない**。追加のmetadata再検査との交換で、catalog編集を塞ぐ区間を短縮する。
+coverageのguard保持合計は**約340ms→34ms（約90%削減）**を維持。前回のguard競合分離で総所要が0.364s/0.404sへ微増していた点に対し、今回`unpack`の重複成分finite走査を`_score_packed`と同様の非負二乗和検査へ置換し、さらに`coverage`内の準備確認で768要素リスト生成を排した非確保検証（`allocate=False` / `_is_valid_packed`）を適用した。これにより総所要は**0.364s→0.221s（39.18%短縮）**、planは**0.404s→0.251s（37.82%短縮）**へ改善した。
 
-各操作は1回、guard計器あり、Python3.14.4 / Core i7-13700K。ユーザーPCの他作業/OS cache/順序/cold-warm効果は分離しておらず、UIの体感待ち上限・処理全体のRAM・実モデル/私物/1TBの性能保証ではない。以前の1024冊65,536page検索10.80秒/同日12.21秒とは別の操作/fixtureで、今回`rank`やRRF方式に変更はない。
+各操作は1回、guard計器あり、Python3.14.4 / Core i7-13700K。ユーザーPCの他作業/OS cache/順序/cold-warm効果は分離しておらず、UIの体感待ち上限・処理全体のRAM・実モデル/私物/1TBの性能保証ではない。以前の1024冊65,536page検索10.80秒/同日12.21秒/今回9.98秒とは別の操作/fixtureで、`rank`のスコア全bit契約・RRF方式・1冊1回guardに変更はない。
 
-coverageとplanの**全JSON応答SHAが前後一致**（coverage144,861 bytes、plan12,749 bytes）。page IDs/範囲/件数/元版/model/profile/scope・空き128選択が同じ。既存の単16page/長冊128page/複数本128page・中断/固定再開/全機能を維持、再索引不要。
+coverageとplanの**全JSON応答SHAが変更前後で完全一致**（coverage144,861 bytes、plan12,749 bytes）。page IDs/範囲/件数/元版/model/profile/scope・空き128選択が同じ。既存の単16page/長冊128page/複数本128page・中断/固定再開/全機能を維持、再索引不要。
 
 ## 回帰と限界
 

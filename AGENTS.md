@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Latest CPU coverage unallocated vector validation & unpack finite optimization checkpoint (2026-10-18)
+
+Page coverage now validates stored float32 vectors without allocating 768-element lists in the verification loop (`allocate=False` / `_is_valid_packed`), and `unpack` eliminates the redundant per-component finite walk via non-negative squared-norm validation (`math.isfinite(squared_norm)`). On the frozen 10k-page benchmark fixture, coverage elapsed time dropped 364ms -> 221ms (39.18% reduction) and plan dropped 404ms -> 251ms (37.82% reduction) while keeping JSON responses, hashes, indexed pages, and guard holds 100% bit-identical. Python 503 (500 PASS / 3 platform SKIP), Core 493 PASS, and Release 0 warnings/errors verified. Read [docs/page-coverage-concurrency.md](docs/page-coverage-concurrency.md) and latest handoffs. Preserve all features, raw/ranked scores, P0 2/2 closed, OCR deferral and pending native gates. No model/GPU/GUI/download/private scan in this slice.
+
 ## Latest CPU coverage concurrency checkpoint (2026-10-18)
 
 Page coverage now decodes stored vectors outside catalog guard, then rechecks closure, idle/scope/eligibility/immutable snapshot and physical source. Generated10k-page coverage/plan responses are identical; guard hold coverage340ms->34ms, plan371ms->60ms. Overall times slightly increased; do not call this faster retrieval or new model quality. Read [docs/page-coverage-concurrency.md](docs/page-coverage-concurrency.md) and latest handoffs. Preserve all features, raw/ranked scores, P0 2/2 closed, OCR deferral and pending native gates. No model/GPU/GUI/download/private scan in this slice.
