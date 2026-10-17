@@ -65,7 +65,7 @@ def natural_key(name):
         return (1, len(digits), digits)
     return tuple(part_key(part) for part in re.split(r'(\d+)', name))
 
-def _safe_path(root, relative, root_cache=None):
+def _safe_path(root, relative, root_cache=None, return_info=False):
     parts = PurePosixPath(relative).parts
     if not parts or PurePosixPath(relative).is_absolute() or '..' in parts or '\\' in relative:
         raise PreviewUnavailable('Invalid location')
@@ -93,7 +93,7 @@ def _safe_path(root, relative, root_cache=None):
             root_cache[root] = (root_path, root_chain, resolved_root)
     if not source.resolve(strict=True).is_relative_to(resolved_root):
         raise PreviewUnavailable('Location outside root')
-    return source
+    return (source, info) if return_info else source
 
 def _zip_directory_limit(file):
     """Inspect the end record before ZipFile allocates the central directory.
@@ -286,7 +286,7 @@ class PreviewReader:
                 raise PreviewUnavailable('Location excluded')
             if is_folder_book(row['relative_path']):
                 return self._read_folder(row, item_id, operation, page, revision)
-            source = _safe_path(row['path'], row['relative_path'], root_cache=root_cache)
+            source, initial = _safe_path(row['path'], row['relative_path'], root_cache=root_cache, return_info=True)
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES:
                 raise PreviewUnavailable('Unsupported preview type')
@@ -301,13 +301,11 @@ class PreviewReader:
                     raise PreviewUnavailable('Tagging requires an image, CBZ or ZIP')
             elif operation != 'preview' and suffix not in ('.cbz', '.zip'):
                 raise PreviewUnavailable('Reader requires a CBZ or ZIP archive')
-            initial = source.stat(follow_symlinks=False)
             with source.open('rb') as file:
                 info = os.fstat(file.fileno())
                 if (not stat.S_ISREG(info.st_mode) or _reparse(info)
                         or (info.st_ino, info.st_dev) != (initial.st_ino, initial.st_dev)):
                     raise PreviewUnavailable('Location changed')
-                _safe_path(row['path'], row['relative_path'], root_cache=root_cache)
                 if info.st_size != row['size_bytes'] or info.st_mtime_ns != row['mtime_ns']:
                     if operation != 'preview':
                         raise ReaderChanged('Rescan changed files before reading')
@@ -444,13 +442,22 @@ class PreviewReader:
                 if operation not in ('manifest','video','video_manifest','video_range','tag_source','page_catalog','image_manifest','video_frames_ai') and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
-                if suffix in VIDEO_SUFFIXES or operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input', 'image_manifest', 'image_frame', 'cover_input'):
-                    # The native tools inherit this handle, never reopen a path.
-                    # Do not publish its old frame if the location was replaced.
-                    current = _safe_path(row['path'], row['relative_path'], root_cache=root_cache).stat(follow_symlinks=False)
-                    if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
-                        if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame'):raise ReaderChanged('Source location changed')
-                        raise PreviewUnavailable('Location changed while previewing')
+                # Verify the path was not replaced while reading, without repeating
+                # the redundant full Path.resolve(strict=True) filesystem round-trips.
+                current = source.stat(follow_symlinks=False)
+                if _reparse(current) or stat.S_ISLNK(current.st_mode) or (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
+                    if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame','manifest','page'):
+                        raise ReaderChanged('Source location changed')
+                    raise PreviewUnavailable('Location changed while previewing')
+                parts = PurePosixPath(row['relative_path']).parts
+                if len(parts) > 1:
+                    root_path = root_cache[row['path']][0] if (root_cache is not None and root_cache.get(row['path'])) else Path(row['path'])
+                    for i in range(1, len(parts)):
+                        p_info = root_path.joinpath(*parts[:i]).stat(follow_symlinks=False)
+                        if _reparse(p_info) or stat.S_ISLNK(p_info.st_mode):
+                            if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame','manifest','page'):
+                                raise ReaderChanged('Source location changed')
+                            raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
                     if operation not in ('preview', 'cover_input', 'video_frames_ai'):
                         raise ReaderChanged('Source changed while reading')
@@ -584,12 +591,11 @@ def _folder_read(row, item_id, operation, page, revision):
                 or (info.st_ino, info.st_dev) != (initial.st_ino, initial.st_dev)
                 or (info.st_size, info.st_mtime_ns) != (expected_size, expected_mtime)):
             raise ReaderChanged('Source changed while reading')
-        current = _safe_path(row['path'], name if relative == FOLDER_ROOT else relative + name).stat(follow_symlinks=False)
-        if (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
-            raise ReaderChanged('Source location changed')
         data = file.read(MAX_IMAGE_BYTES + 1)
         after = os.fstat(file.fileno())
-        current = _safe_path(row['path'], name if relative == FOLDER_ROOT else relative + name).stat(follow_symlinks=False)
+        current = path.stat(follow_symlinks=False)
+        if _reparse(current) or stat.S_ISLNK(current.st_mode):
+            raise ReaderChanged('Source location changed')
         # Path.stat and fstat may expose different creation-time values on
         # Windows. Match identity/size/mtime across APIs, but compare ctime
         # within each API before/after (the handle check follows below).

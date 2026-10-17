@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Latest physical source verification & _safe_path optimization checkpoint (2026-10-18)
+
+Page physical source verification (`_read` / `tag_source`) now eliminates redundant `_safe_path` (3 -> 1 per candidate book, 3,072 -> 1,024 calls) and uses unallocated `source.stat` with direct reparse/inode checks post-read instead of recursive `Path.resolve(strict=True)`. Stat calls dropped 29,696 -> 10,240 (65.52% reduction). On the frozen 1,024-book x 64-page benchmark fixture, total retrieval time dropped 11.357774s -> 8.740577s (23.04% reduction, beating historical 10.800774s record) and catalog guard hold time dropped 4.111074s -> 1.647181s (59.93% reduction, max 10.5ms). All raw/merged SHA256 hashes, scores, ranks, and 1,024 outer holds are 100% bit-identical. Python 509 (506 PASS / 3 platform SKIP), Core 493 PASS, and Release 0 warnings/errors verified. Read [docs/page-search-performance.md](docs/page-search-performance.md) and latest handoffs. P0 2/2 closed, OCR deferred, all features and simple UI preserved.
+
 ## Latest stored vector reuse & edge boundary regression checkpoint (2026-10-18)
 
 Page chunk and range publishing (`_publish_range`) now validates cached vectors via unallocated `_is_valid_packed` and reuses stored float32 blobs directly without allocating 768-element Python float lists or re-encoding, preserving exact bit/byte fidelity in SQLite. Comprehensive edge-case regressions were added covering buffer protocols (`memoryview`, `bytearray`), unaligned byte lengths (`dim*4 ± 1, 2, 3`), all permutations of mixed non-finite values (`NaN`, `±Inf`), and micro-step tolerance boundaries around `1e-4`. Python 506 (503 PASS / 3 platform SKIP), Core 493 PASS, and Release 0 warnings/errors verified. Read [docs/page-chunked-indexing.md](docs/page-chunked-indexing.md) and latest handoffs. P0 2/2 closed, OCR deferred, all features and simple UI preserved.

@@ -206,6 +206,17 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         with patch.object(zipfile,'ZipInfo',side_effect=AssertionError('tag_source must not allocate ZipInfo')):
             res=self.ai.search('内側の青いページ',source='cover',scope=both_scope)
         self.assertEqual({r['id'] for r in res['items']},{self.item,folder_item})
+        import previews
+        safe_path_calls = 0
+        orig_safe_path = previews._safe_path
+        def counted_safe_path(*args, **kwargs):
+            nonlocal safe_path_calls
+            safe_path_calls += 1
+            return orig_safe_path(*args, **kwargs)
+        with patch('previews._safe_path', side_effect=counted_safe_path):
+            single_res = self.ai.search('内側の青いページ', source='cover', scope={'root_ids': [self.root]})
+        self.assertEqual({r['id'] for r in single_res['items']}, {self.item})
+        self.assertEqual(safe_path_calls, 1)
         states=self.pages.states({self.item:self.revision,folder_item:folder_snap['source_revision']})
         self.assertEqual(states,{self.item:'current',folder_item:'current'})
         self.assertEqual(self.pages.states({self.item:'a'*64})[self.item],'stale')

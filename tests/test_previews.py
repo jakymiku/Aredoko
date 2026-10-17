@@ -17,7 +17,7 @@ from http.server import ThreadingHTTPServer
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'app'));sys.path.insert(0,str(ROOT/'tools'))
 from production import ProductionCatalog, ScanBusyError
-from previews import PreviewReader, PreviewUnavailable, MAX_IMAGE_BYTES, _zip_directory_limit
+from previews import PreviewReader, PreviewUnavailable, ReaderChanged, _safe_path, MAX_IMAGE_BYTES, _zip_directory_limit
 from production_server import production_handler
 from create_preview_fixture import png
 
@@ -132,5 +132,52 @@ class PreviewTests(unittest.TestCase):
             self.assertEqual(caught.exception.code,status);caught.exception.close()
         with request(ids['image.png'],'test-token') as response:
             self.assertEqual(response.headers['Content-Type'],'image/png');self.assertEqual(response.read(),png())
+
+    def test_safe_path_return_info_matches_stat(self):
+        path = self.media / 'image.png'; path.write_bytes(png())
+        source = _safe_path(str(self.media), 'image.png')
+        self.assertEqual(source, path)
+        source2, info = _safe_path(str(self.media), 'image.png', return_info=True)
+        self.assertEqual(source2, path)
+        expected = path.stat(follow_symlinks=False)
+        self.assertEqual((info.st_ino, info.st_dev, info.st_size, info.st_mtime_ns),
+                         (expected.st_ino, expected.st_dev, expected.st_size, expected.st_mtime_ns))
+
+    def test_tag_source_calls_safe_path_once(self):
+        path = self.media / 'book.cbz'
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('p0.png', png())
+        item = self.index()['book.cbz']
+        import previews
+        calls = 0
+        orig_safe_path = previews._safe_path
+        def counted_safe_path(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return orig_safe_path(*args, **kwargs)
+        with patch('previews._safe_path', side_effect=counted_safe_path):
+            source = self.reader.tag_source(item)
+        self.assertEqual(source['item_id'], item)
+        self.assertEqual(calls, 1)
+
+    def test_replaced_leaf_during_read_detected_as_changed(self):
+        path = self.media / 'book.cbz'
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('p0.png', png())
+        item = self.index()['book.cbz']
+        orig_stat = Path.stat
+        real = path.stat(follow_symlinks=False)
+        replaced_stat = os.stat_result((real.st_mode, 9999999, real.st_dev, real.st_nlink, real.st_uid, real.st_gid, real.st_size, int(real.st_atime), int(real.st_mtime), int(real.st_ctime)), {'st_file_attributes': 0})
+        calls = 0
+        def fake_stat(self_path, *args, **kwargs):
+            nonlocal calls
+            if self_path == path and kwargs.get('follow_symlinks') is False:
+                calls += 1
+                if calls >= 2:
+                    return replaced_stat
+            return orig_stat(self_path, *args, **kwargs)
+        with patch.object(Path, 'stat', new=fake_stat):
+            with self.assertRaises(ReaderChanged):
+                self.reader.tag_source(item)
 
 if __name__=='__main__':unittest.main()

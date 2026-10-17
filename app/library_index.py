@@ -105,7 +105,7 @@ def folder_title(root_path, relative_path) -> str:
 
 
 def _reparse(info):
-    return bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0))
+    return bool((getattr(info, 'st_file_attributes', 0) or 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0))
 
 
 @dataclass(frozen=True)

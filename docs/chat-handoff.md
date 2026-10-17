@@ -1,5 +1,53 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-18 物理原本確認の重複_safe_path・stat解消と1,024冊検索新記録（8.74秒・guard保持1.65秒）
+
+実装HEAD作業差分、開始HEAD **`da61d014457f9cbce3c2d43997e3cb7574b6aa08`**、fetch/statusでclean/origin差0。既存production branch `feat/winui3-production-mvp-20261011` / Draft PR5を継続。今回の検証はCPU・生成データのみで実施（ユーザーPC利用中のためNo-GPU / No-GUI-Window-Focus厳守）。
+
+### 変更・測定・整合性
+
+- `app/previews.py::_read`（および`_folder_read`）において、物理原本確認（`tag_source`）中に1冊あたり3回・計3,072回実行されていた重複`_safe_path`および`Path.resolve(strict=True)`を1冊1回・計1,024回へ削減。
+  - `_safe_path`に`return_info=True`を追加し、末尾コンポーネント検査で取得済みの`source.stat(follow_symlinks=False)`情報（`initial`）を返却。直後の冗長な`initial = source.stat(...)`を排除。
+  - ファイルオープン直後に実行されていた重複`_safe_path`（2回目）を削除。
+  - 読込完了後の位置改変検査（3回目）において、重い`Path.resolve(strict=True)`を再帰実行していた`_safe_path`を排し、既知の`source`に対する直接の`current = source.stat(follow_symlinks=False)`によって`st_ino` / `st_dev`の一致および`_reparse` / `S_ISLNK`を検証。階層ディレクトリ（`len(parts) > 1`）についても親コンポーネントのreparse/symlink検査のみを軽量に実施。
+  - `_folder_read`でも読込前後の二重`_safe_path`を排除し、読込後の直接`path.stat`へ統一。
+  - `app/library_index.py::_reparse`において`st_file_attributes`が`None`の場合の安全なフォールバックを追加。
+- 固定fixture `data/page-search-scale/v1-20261017-01`での通常計測（`safepath-before-20261018` vs `safepath-after-20261018`）：
+  - 64冊: 0.447054秒 → **0.360225秒（19.42%短縮）**、guard保持 0.132597秒 → **0.061100秒（53.92%短縮）**
+  - 256冊: 2.413301秒 → **1.562573秒（35.25%短縮）**、guard保持 1.006815秒 → **0.404589秒（59.81%短縮）**
+  - 1,024冊: 11.357774秒 → **8.740577秒（23.04%短縮）**、guard保持 4.111074秒 → **1.647181秒（59.93%短縮、1冊平均1.6ms）**、単一保持最大 0.014322秒 → **0.010537秒**
+  - **従来の最速記録10.800774秒を更新し、8.740577秒を達成**。
+  - `outer_holds`は1,024回を厳格に保持（1冊1回guard）。
+  - Python割当peak: 1,030,227 bytes不変。
+- cProfile計器pass（`safepath-profile-before-20261018` vs `safepath-profile-after-20261018`）：
+  - 原本`_read`累積: 4.602854秒 → **2.211782秒（51.95%短縮）**
+  - `_safe_path`累積: 3.656225秒（3,072回） → **1.329945秒（1,024回、63.63%短縮）**
+  - `stat` syscall累積: 2.321803秒（29,696回） → **0.891160秒（10,240回、65.52%回数削減）**
+  - guard保持時間: 4.647969秒 → **2.255304秒（51.48%短縮）**
+- 全64/256/1,024冊のraw score/順位/根拠/scope、root限定512冊、空集合が全件完全一致（`exact_results: true`, `exact_scope: true`）。
+- P0品質枠は累積2/2で閉じ、OCR保留・既存WD未承認分離・全整理/ビューア/長冊GUIを維持。
+
+### 検証・失敗履歴・未検証
+
+- 新回帰テスト：
+  - `tests/test_previews.py`に`test_safe_path_return_info_matches_stat`（`return_info=True`が返却するinfoと実statの完全一致）、`test_tag_source_calls_safe_path_once`（`tag_source`で`_safe_path`が1冊1回のみ実行されることの検証）、`test_replaced_leaf_during_read_detected_as_changed`（読込中のinode変更/置換を即座に`ReaderChanged`として検知することの検証）を追加（17 PASS）。初回は`os.stat_result`のconstructで`st_file_attributes`が`None`となり`_reparse`でTypeErrorが発生したため、`_reparse`をNone-safe化しstat_result引数を整えてPASS。
+  - `tests/test_page_semantics.py`の`test_search_and_batch_location_checks`に`rank()`実行時の`_safe_path`呼び出しが1冊1回のみであることの検証を追加（15 PASS）。
+- 最終全Python **509件：506 PASS / 3 Windows platform SKIP / 377.134秒**（テスト失敗0）。
+- C# Core tests: **493 PASS**（`dotnet run --project tests/Aredoko.Core.Tests`）。
+- Windows x64 SelfContained Release: **0警告 / 0エラー、25.45秒**（`dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`）。
+- compileall/diff/更新Markdown links確認。
+- **未検証・保留項目**: ユーザーPC利用中のため、GPUモデル（EmbeddingGemma 2 / CUDA）の推論およびGUIウィンドウを前面化するアクティブ操作テスト（`Aredoko.WinUI.exe`, `tools/test_tag_review_ui.py`）は実行せず保留（Pending User Permission）。旧book-batch取消静止PNG1枚は未完のまま。WinUIAnalyzer/AOT/DPI/High Contrast/Narrator/GUI応答・実GPU/実私物/1TB性能は今回未検証。
+
+再現：`python -m unittest discover -s tests` / `dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。
+
+次の3手：
+
+1. 残るCPU検索（`_score_packed`内の`builtins.sum`約4.9秒、vector SQL cursor fetch約0.80秒）の内訳を精査し、同値な改善候補を設計。原本before/after確認・即時無効化・短いguard・score全bit一致を厳守し、近似化/cacheによる鮮度省略をしない。
+2. backend/API・大規模状態/中断・pending索引の境界検証を小さく進める。モデル/全冊自動処理/一般queueを勝手に導入せず、GUI整理は既存機能/簡潔さを維持。
+3. ユーザーの許可が得られた段階で、既知2 ZIP（`Aredoko-test`）を用いた実モデル操作確認、およびWinUIネイティブGUI確認（新長冊GUI確認済み項目の維持確認）。P0第3試行やOCRへ自動復帰しない。
+
+---
+
 ## 2026-10-18 長冊chunk再開・再利用の非確保vector透過保存と境界網羅回帰
 
 実装HEAD作業差分、開始HEAD **`5fb4c32b509f6e657e2bbd8e06385501fb3ae1a9`**、fetch/statusでclean/origin差0。既存production branch `feat/winui3-production-mvp-20261011` / Draft PR5を継続。今回の検証はCPU・生成データのみで実施（ユーザーPC利用中のためNo-GPU / No-GUI-Window-Focus厳守）。
