@@ -263,11 +263,46 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         self.assertEqual(gaps['total_gap_pages'], 2)
         self.assertEqual(gaps['chunks'], [{'start': 0, 'count': 1}, {'start': 1, 'count': 1}])
 
+        # Mismatched revision raises ReaderChanged
+        with self.assertRaises(ReaderChanged):
+            self.ai.pages.next_gaps(self.item, '0' * 64, self.scope)
+
+        # Unsupported modality returns empty gaps
+        orig_modalities = self.ai.profile.modalities
+        try:
+            self.ai.profile = replace(self.ai.profile, modalities=('text',))
+            unsupported_gaps = self.ai.pages.next_gaps(self.item, self.revision, self.scope)
+            self.assertFalse(unsupported_gaps['supported'])
+            self.assertEqual(unsupported_gaps['chunks'], [])
+            self.assertEqual(unsupported_gaps['total_gap_pages'], 0)
+        finally:
+            self.ai.profile = replace(self.ai.profile, modalities=orig_modalities)
+
         # Error checks
         with self.assertRaises(ValueError):
             self.ai.pages.next_gaps(self.item, self.revision, self.scope, max_pages=0)
         with self.assertRaises(ValueError):
+            self.ai.pages.next_gaps(self.item, self.revision, self.scope, max_pages=129)
+        with self.assertRaises(ValueError):
+            self.ai.pages.next_gaps(self.item, self.revision, self.scope, chunk_size=0)
+        with self.assertRaises(ValueError):
             self.ai.pages.next_gaps(self.item, self.revision, self.scope, chunk_size=17)
+        with self.assertRaises(ValueError):
+            self.ai.pages.next_gaps(self.item, self.revision, None)
+
+    def test_start_chunked_validation_bounds(self):
+        with self.assertRaises(ValueError):
+            self.ai.pages.start_chunked(self.item, [], self.revision, self.scope)
+        with self.assertRaises(ValueError):
+            self.ai.pages.start_chunked(self.item, [self.page_ids[0], self.page_ids[0]], self.revision, self.scope)
+        with self.assertRaises(ValueError):
+            self.ai.pages.start_chunked(self.item, self.page_ids, self.revision, self.scope, chunk_size=0)
+        with self.assertRaises(ValueError):
+            self.ai.pages.start_chunked(self.item, self.page_ids, self.revision, self.scope, chunk_size=17)
+        with self.assertRaises(ValueError):
+            self.ai.pages.start_chunked(self.item, self.page_ids, 'invalid_rev', self.scope)
+        with self.assertRaises(ValueError):
+            self.ai.pages.start_chunked(self.item, self.page_ids, self.revision, None)
 
     def test_bounded_multi_chunk_indexing_and_gap_continuation(self):
         # Index comic (2 pages) with chunk_size=1 to exercise multi-chunk publishing

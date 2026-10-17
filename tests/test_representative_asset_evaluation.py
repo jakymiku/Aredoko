@@ -45,16 +45,41 @@ class MockEncoder:
         pass
 
 
+class MockTagger:
+    def __init__(self):
+        from tag_suggestions import TaggerInfo
+        self.info = TaggerInfo('mock-wd', '1.0', 'mock-wd-model', 'rev1', 'preprocessing1')
+        self._available = True
+        self.closed = False
+
+    def status(self):
+        return {'available': self._available, 'reason': '', 'profile': 'mock', 'device': 'cpu'}
+
+    def suggest(self, source, cancelled):
+        from tag_suggestions import TagProposal
+        return [
+            TagProposal('sailor_uniform', 'mock proposal'),
+            TagProposal('miko', 'mock proposal'),
+            TagProposal('glasses', 'mock proposal'),
+            TagProposal('cyberpunk', 'mock proposal'),
+        ]
+
+    def close(self):
+        self.closed = True
+
+
 class RepresentativeAssetEvaluationTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp(prefix='aredoko-test-rep-')
         self.output_base = ROOT / 'data/representative-eval'
         self.output_base.mkdir(parents=True, exist_ok=True)
         self.run_dir = self.output_base / f'test-run-{Path(self.temp_dir).name}'
+        self.run_dir_wd = self.output_base / f'test-run-wd-{Path(self.temp_dir).name}'
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         shutil.rmtree(self.run_dir, ignore_errors=True)
+        shutil.rmtree(self.run_dir_wd, ignore_errors=True)
 
     def test_asset_key_matching_exact_prefix_and_case_insensitive(self):
         self.assertEqual(match_asset_key('bookA_p01_cover.png'), 'bookA_p01')
@@ -62,6 +87,22 @@ class RepresentativeAssetEvaluationTests(unittest.TestCase):
         self.assertEqual(match_asset_key('bookB_p03_chapter.webp'), 'bookB_p03')
         self.assertEqual(match_asset_key('asset_04_anything.jpg'), 'asset_04')
         self.assertEqual(match_asset_key('asset_01.png'), 'asset_01')
+
+        # Flexible variants (bookA_p1, bookA_01, asset_1, asset01)
+        self.assertEqual(match_asset_key('bookA_p1_cover.png'), 'bookA_p01')
+        self.assertEqual(match_asset_key('bookA_01_cover.png'), 'bookA_p01')
+        self.assertEqual(match_asset_key('bookA_1_cover.png'), 'bookA_p01')
+        self.assertEqual(match_asset_key('bookA_p6.png'), 'bookA_p06')
+        self.assertEqual(match_asset_key('bookB_p1.png'), 'bookB_p01')
+        self.assertEqual(match_asset_key('bookB_4.png'), 'bookB_p04')
+        self.assertEqual(match_asset_key('asset_1.png'), 'asset_01')
+        self.assertEqual(match_asset_key('asset01.png'), 'asset_01')
+        self.assertEqual(match_asset_key('asset_4_english_sign.png'), 'asset_04')
+
+        # macOS resource forks and dotfiles rejected
+        self.assertIsNone(match_asset_key('._bookA_p01_cover.png'))
+        self.assertIsNone(match_asset_key('.DS_Store'))
+        self.assertIsNone(match_asset_key('Thumbs.db'))
 
         # Non-matching or invalid extension
         self.assertIsNone(match_asset_key('unknown.png'))
@@ -93,22 +134,46 @@ class RepresentativeAssetEvaluationTests(unittest.TestCase):
             load_assets_from_zip(partial_zip)
         self.assertIn('Missing required assets', str(ctx.exception))
 
-        # 3. Valid zip with all 14 images
+        # 3. Valid zip with all 14 images + macosx dotfiles (skipped safely)
         placeholders = generate_placeholder_assets()
         good_zip = Path(self.temp_dir) / 'valid_14.zip'
         with zipfile.ZipFile(good_zip, 'w') as zf:
+            zf.writestr('__MACOSX/._bookA_p01_cover.png', b'mac resource fork')
+            zf.writestr('.DS_Store', b'mac metadata')
             for key, p in placeholders.items():
                 zf.writestr(p['filename'], p['data'])
         loaded_zip = load_assets_from_zip(good_zip)
         self.assertEqual(set(loaded_zip.keys()), set(CANONICAL_SPECS.keys()))
 
-        # 4. Valid dir with all 14 images
-        good_dir = Path(self.temp_dir) / 'valid_dir'
-        good_dir.mkdir()
+        # 4. Valid dir with nested folders
+        nested_dir = Path(self.temp_dir) / 'nested_dir'
+        sub = nested_dir / 'subfolder'
+        sub.mkdir(parents=True)
+        (nested_dir / '.DS_Store').write_bytes(b'dummy')
         for key, p in placeholders.items():
-            (good_dir / p['filename']).write_bytes(p['data'])
-        loaded_dir = load_assets_from_dir(good_dir)
+            (sub / p['filename']).write_bytes(p['data'])
+        loaded_dir = load_assets_from_dir(nested_dir)
         self.assertEqual(set(loaded_dir.keys()), set(CANONICAL_SPECS.keys()))
+
+        # 5. Oversized file in zip rejected
+        big_file = Path(self.temp_dir) / 'big.png'
+        with open(big_file, 'wb') as f:
+            f.seek(51 * 1024 * 1024)
+            f.write(b'x')
+        oversized_zip = Path(self.temp_dir) / 'oversized.zip'
+        with zipfile.ZipFile(oversized_zip, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.write(big_file, arcname='bookA_p01_cover.png')
+        with self.assertRaises(ValueError) as ctx:
+            load_assets_from_zip(oversized_zip)
+        self.assertIn('exceeds 50MB', str(ctx.exception))
+
+        # 6. Oversized file in dir rejected
+        oversized_dir = Path(self.temp_dir) / 'oversized_dir'
+        oversized_dir.mkdir()
+        shutil.copy(big_file, oversized_dir / 'asset_01.png')
+        with self.assertRaises(ValueError) as ctx:
+            load_assets_from_dir(oversized_dir)
+        self.assertIn('File exceeds 50MB', str(ctx.exception))
 
     def test_build_evaluation_library_structure(self):
         placeholders = generate_placeholder_assets()
@@ -179,6 +244,36 @@ class RepresentativeAssetEvaluationTests(unittest.TestCase):
         self.assertIn('ranked_keys', first_case)
         self.assertIn('hit_at_1', first_case)
         self.assertIn('mrr', first_case)
+
+    def test_evaluate_synthetic_placeholder_with_mock_wd(self):
+        encoder = MockEncoder()
+        tagger = MockTagger()
+        report = evaluate(
+            output_dir=self.run_dir_wd,
+            generate_placeholder=True,
+            encoder=encoder,
+            tagger=tagger,
+            skip_wd=False,
+        )
+
+        self.assertTrue(report['passed'])
+        self.assertTrue(report['wd_tag_evaluation']['enabled'])
+        self.assertEqual(len(report['wd_cases']), 4)
+        self.assertIn('wd_tag_semantic', report['category_summaries'])
+        self.assertEqual(report['category_summaries']['wd_tag_semantic']['queries'], 4)
+        # Total queries now includes WD queries consistently
+        self.assertEqual(report['overall_summary']['total_queries'], 17)
+
+    def test_evaluate_invalid_output_directory_rejected(self):
+        bad_output = ROOT / 'data/other_unauthorized_dir'
+        with self.assertRaises(ValueError) as ctx:
+            evaluate(
+                output_dir=bad_output,
+                generate_placeholder=True,
+                encoder=MockEncoder(),
+                skip_wd=True,
+            )
+        self.assertIn('Fresh output directory must be below', str(ctx.exception))
 
 
 if __name__ == '__main__':

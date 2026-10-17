@@ -144,17 +144,18 @@ class PageVectors:
             ready.update(range(r['start'], r['start'] + r['count']))
         gaps = []
         collected = 0
-        curr = 0
-        while curr < count and collected < max_pages:
-            if curr in ready:
-                curr += 1
-                continue
-            start = curr
-            while curr < count and curr not in ready and (curr - start) < chunk_size and collected + (curr - start) < max_pages:
-                curr += 1
-            chunk_count = curr - start
-            gaps.append({'start': start, 'count': chunk_count})
-            collected += chunk_count
+        if cov['supported'] and cov['source_state'] == 'current':
+            curr = 0
+            while curr < count and collected < max_pages:
+                if curr in ready:
+                    curr += 1
+                    continue
+                start = curr
+                while curr < count and curr not in ready and (curr - start) < chunk_size and collected + (curr - start) < max_pages:
+                    curr += 1
+                chunk_count = curr - start
+                gaps.append({'start': start, 'count': chunk_count})
+                collected += chunk_count
         return {
             'item_id': item_id,
             'source_revision': revision,
@@ -221,6 +222,7 @@ class PageVectors:
                     self._publish_range(chunk, state, item_id, revision)
                     state['indexed'] += len(chunk)
                     state['chunks_completed'] += 1
+                    with ai.guard: ai.store.save_state(state)
                 state['state'] = 'complete'
         except InterruptedError:
             state['state'] = 'cancelled'

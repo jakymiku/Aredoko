@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import statistics
 import sys
@@ -269,15 +270,49 @@ WD_TAG_QUERIES = [
 def match_asset_key(filename):
     """Match a filename to one of the 14 canonical keys by exact name or prefix."""
     name_clean = Path(filename).name
+    if name_clean.startswith('.') or name_clean.casefold() in ('thumbs.db', 'desktop.ini'):
+        return None
     stem = Path(name_clean).stem.casefold()
     suffix = Path(name_clean).suffix.casefold()
     if suffix not in IMAGE_EXTENSIONS:
         return None
+    # 1. Exact match against canonical filename
     for key, spec in CANONICAL_SPECS.items():
         if name_clean.casefold() == spec['file'].casefold():
             return key
-        if stem.startswith(key.casefold()):
+    # 2. Match standard keys (e.g. booka_p01, asset_01)
+    for key in CANONICAL_SPECS:
+        k = key.casefold()
+        if stem == k or stem.startswith(k + '_') or stem.startswith(k + '-') or stem.startswith(k + '.'):
             return key
+    # 3. Flexible variants: bookA_p1, bookA_01, bookA_1, asset_1, asset01
+    for key in CANONICAL_SPECS:
+        m_book = re.fullmatch(r'(book[a-z])_p0?([1-9]\d*)', key, re.IGNORECASE)
+        if m_book:
+            b_pfx, p_num = m_book.group(1).casefold(), int(m_book.group(2))
+            patterns = [
+                f'{b_pfx}_p{p_num:02d}',
+                f'{b_pfx}_p{p_num}',
+                f'{b_pfx}_{p_num:02d}',
+                f'{b_pfx}_{p_num}',
+                f'{b_pfx}p{p_num:02d}',
+                f'{b_pfx}p{p_num}',
+            ]
+            for pat in patterns:
+                if stem == pat or stem.startswith(pat + '_') or stem.startswith(pat + '-') or stem.startswith(pat + '.'):
+                    return key
+        m_asset = re.fullmatch(r'asset_0?([1-9]\d*)', key, re.IGNORECASE)
+        if m_asset:
+            a_num = int(m_asset.group(1))
+            patterns = [
+                f'asset_{a_num:02d}',
+                f'asset_{a_num}',
+                f'asset{a_num:02d}',
+                f'asset{a_num}',
+            ]
+            for pat in patterns:
+                if stem == pat or stem.startswith(pat + '_') or stem.startswith(pat + '-') or stem.startswith(pat + '.'):
+                    return key
     return None
 
 
@@ -316,14 +351,19 @@ def load_assets_from_zip(zip_path):
                 raise ValueError(f'Symlinks rejected in zip: {name}')
             if info.file_size > MAX_ASSET_FILE_BYTES:
                 raise ValueError(f'File in zip exceeds 50MB: {name}')
+            clean_name = Path(name).name
+            if name.startswith('__MACOSX/') or clean_name.startswith('.'):
+                continue
             key = match_asset_key(name)
             if key is not None:
                 if key in assets:
-                    raise ValueError(f'Duplicate file match for key {key}: {name} vs {assets[key]["filename"]}')
+                    raise ValueError(f'Duplicate file match for key {key}: {name} vs {assets[key]["origin"]}')
                 data = archive.read(info)
+                suffix = Path(name).suffix.casefold()
+                filename = Path(CANONICAL_SPECS[key]['file']).stem + suffix
                 assets[key] = {
                     'data': data,
-                    'filename': CANONICAL_SPECS[key]['file'],
+                    'filename': filename,
                     'origin': name,
                 }
     missing = set(CANONICAL_SPECS) - set(assets)
@@ -338,21 +378,25 @@ def load_assets_from_dir(input_dir):
     if not input_dir.is_dir():
         raise FileNotFoundError(f'Input directory not found: {input_dir}')
     assets = {}
-    for entry in input_dir.iterdir():
+    for entry in input_dir.rglob('*'):
         if entry.is_symlink():
             raise ValueError(f'Symlink rejected: {entry}')
         if not entry.is_file():
+            continue
+        if entry.name.startswith('.') or entry.name.casefold() in ('thumbs.db', 'desktop.ini'):
             continue
         if entry.stat().st_size > MAX_ASSET_FILE_BYTES:
             raise ValueError(f'File exceeds 50MB: {entry.name}')
         key = match_asset_key(entry.name)
         if key is not None:
             if key in assets:
-                raise ValueError(f'Duplicate file match for key {key}: {entry.name} vs {assets[key]["filename"]}')
+                raise ValueError(f'Duplicate file match for key {key}: {entry} vs {assets[key]["origin"]}')
+            suffix = entry.suffix.casefold()
+            filename = Path(CANONICAL_SPECS[key]['file']).stem + suffix
             assets[key] = {
                 'data': entry.read_bytes(),
-                'filename': CANONICAL_SPECS[key]['file'],
-                'origin': entry.name,
+                'filename': filename,
+                'origin': str(entry),
             }
     missing = set(CANONICAL_SPECS) - set(assets)
     if missing:
@@ -375,22 +419,22 @@ def build_evaluation_library(output_dir, asset_data):
     bookA_keys = ['bookA_p01', 'bookA_p02', 'bookA_p03', 'bookA_p04', 'bookA_p05', 'bookA_p06']
     with zipfile.ZipFile(books_cbz_dir / 'bookA.cbz', 'w') as bookA_zip:
         for key in bookA_keys:
-            spec = CANONICAL_SPECS[key]
-            bookA_zip.writestr(spec['file'], asset_data[key]['data'])
+            fname = asset_data[key]['filename']
+            bookA_zip.writestr(fname, asset_data[key]['data'])
 
     # 2. books_folder/bookB/ containing bookB_p01..bookB_p04
     bookB_dir = books_folder_dir / 'bookB'
     bookB_dir.mkdir(parents=True, exist_ok=False)
     bookB_keys = ['bookB_p01', 'bookB_p02', 'bookB_p03', 'bookB_p04']
     for key in bookB_keys:
-        spec = CANONICAL_SPECS[key]
-        (bookB_dir / spec['file']).write_bytes(asset_data[key]['data'])
+        fname = asset_data[key]['filename']
+        (bookB_dir / fname).write_bytes(asset_data[key]['data'])
 
     # 3. assets/ containing asset_01..asset_04
     asset_keys = ['asset_01', 'asset_02', 'asset_03', 'asset_04']
     for key in asset_keys:
-        spec = CANONICAL_SPECS[key]
-        (assets_dir / spec['file']).write_bytes(asset_data[key]['data'])
+        fname = asset_data[key]['filename']
+        (assets_dir / fname).write_bytes(asset_data[key]['data'])
 
     return {
         'cbz_dir': books_cbz_dir,
@@ -400,11 +444,11 @@ def build_evaluation_library(output_dir, asset_data):
 
 
 def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
-             generate_placeholder=False, encoder=None, skip_wd=False):
+             generate_placeholder=False, encoder=None, tagger=None, skip_wd=False):
     """Run full evaluation suite over representative assets."""
     output_dir = Path(output_dir).resolve()
     allowed = (REPO / 'data/representative-eval').resolve()
-    if os.name == 'nt' and (not output_dir.is_relative_to(allowed) or output_dir == allowed):
+    if not output_dir.is_relative_to(allowed) or output_dir == allowed:
         raise ValueError('Fresh output directory must be below project data/representative-eval')
 
     if assets is None:
@@ -435,53 +479,63 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
     raw_proto = json.dumps(protocol, ensure_ascii=False, indent=2, sort_keys=True).encode('utf-8')
     (output_dir / 'frozen-protocol.json').write_bytes(raw_proto)
 
-    catalog = ProductionCatalog(output_dir / 'catalog.sqlite')
-    root_cbz = catalog.add_root(str(lib['cbz_dir']))
-    root_folder = catalog.add_root(str(lib['folder_dir']), folder_books=True)
-    root_assets = catalog.add_root(str(lib['assets_dir']))
-
-    catalog.index.scan(root_cbz)
-    catalog.index.scan(root_folder)
-    catalog.index.scan(root_assets)
-    catalog.sync_index()
-
-    scope = {'root_ids': [root_cbz, root_folder, root_assets]}
-
-    # Map catalog items to target keys
-    items_raw = catalog.search(limit=60)['items']
-    id_to_key = {}
-    key_to_item = {}
-    for item in items_raw:
-        title = item['title']
-        if title == 'bookA.cbz':
-            key = 'bookA'
-        elif title == 'bookB':
-            key = 'bookB'
-        else:
-            match = match_asset_key(title)
-            key = match if match else title
-        id_to_key[item['id']] = key
-        key_to_item[key] = item
-
-    actual_encoder = encoder is None
-    if encoder is None:
-        encoder = EncoderProcess(REPO / '.venv-ai/Scripts/python.exe', DEFAULT_PROFILE.model_path(REPO))
-    ai = AISearch(catalog, encoder)
-
-    report = {
-        'passed': False,
-        'synthetic_placeholder': bool(generate_placeholder),
-        'protocol_sha256': hashlib.sha256(raw_proto).hexdigest(),
-        'profile': ai.profile.identity(),
-        'device': getattr(encoder, 'device', 'cpu'),
-        'catalog_items': len(items_raw),
-        'cases': [],
-        'category_summaries': {},
-        'overall_summary': {},
-        'wd_tag_evaluation': {'enabled': False, 'reason': ''},
-    }
+    catalog = None
+    ai = None
+    tagger_to_close = None
+    report = None
 
     try:
+        catalog = ProductionCatalog(output_dir / 'catalog.sqlite')
+        root_cbz = catalog.add_root(str(lib['cbz_dir']))
+        root_folder = catalog.add_root(str(lib['folder_dir']), folder_books=True)
+        root_assets = catalog.add_root(str(lib['assets_dir']))
+
+        catalog.index.scan(root_cbz)
+        catalog.index.scan(root_folder)
+        catalog.index.scan(root_assets)
+        catalog.sync_index()
+
+        scope = {'root_ids': [root_cbz, root_folder, root_assets]}
+
+        # Map catalog items to target keys
+        items_raw = catalog.search(limit=60)['items']
+        id_to_key = {}
+        key_to_item = {}
+        for item in items_raw:
+            title = item['title']
+            if title in ('bookA.cbz', 'bookA'):
+                key = 'bookA'
+            elif title == 'bookB':
+                key = 'bookB'
+            else:
+                match = match_asset_key(title)
+                key = match if match else title
+            id_to_key[item['id']] = key
+            key_to_item[key] = item
+
+        expected_catalog_keys = {'bookA', 'bookB', 'asset_01', 'asset_02', 'asset_03', 'asset_04'}
+        missing_catalog = expected_catalog_keys - set(key_to_item)
+        if missing_catalog:
+            raise RuntimeError(f'Required items missing from catalog scan: {sorted(missing_catalog)}')
+
+        actual_encoder = encoder is None
+        if encoder is None:
+            encoder = EncoderProcess(REPO / '.venv-ai/Scripts/python.exe', DEFAULT_PROFILE.model_path(REPO))
+        ai = AISearch(catalog, encoder)
+
+        report = {
+            'passed': False,
+            'synthetic_placeholder': bool(generate_placeholder),
+            'protocol_sha256': hashlib.sha256(raw_proto).hexdigest(),
+            'profile': ai.profile.identity(),
+            'device': getattr(encoder, 'device', '') or 'cpu',
+            'catalog_items': len(items_raw),
+            'cases': [],
+            'category_summaries': {},
+            'overall_summary': {},
+            'wd_tag_evaluation': {'enabled': False, 'reason': ''},
+        }
+
         # 1. Build normal AI cover index
         start_cover = time.perf_counter()
         ai.start(scope=scope)
@@ -501,25 +555,33 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
             pindex.refresh(item_id)
             snapshot = pindex.list(item_id)
             page_ids = [p['page_id'] for p in snapshot['pages']]
-            ai.pages.start(item_id, page_ids, snapshot['source_revision'], scope)
+            if len(page_ids) <= 16:
+                ai.pages.start(item_id, page_ids, snapshot['source_revision'], scope)
+            else:
+                ai.pages.start_chunked(item_id, page_ids, snapshot['source_revision'], scope)
             ai.worker.join(240)
             if ai.worker.is_alive() or ai.status()['state'] != 'complete':
                 raise RuntimeError(f'Page index build failed for {book_key}')
         report['page_index_seconds'] = round(time.perf_counter() - start_pages, 3)
 
         # 3. Optional WD tagger proposals
-        tagger = None if skip_wd else create_tagger()
+        active_tagger = tagger
+        if active_tagger is None and not skip_wd:
+            active_tagger = create_tagger()
+            tagger_to_close = active_tagger
         suggestions = None
-        if tagger and tagger.status()['available']:
+        if active_tagger and active_tagger.status()['available']:
             report['wd_tag_evaluation']['enabled'] = True
-            suggestions = TagSuggestions(catalog, adapter=tagger)
+            suggestions = TagSuggestions(catalog, adapter=active_tagger)
             for item in items_raw:
                 suggestions.generate(item['id'], secrets.token_hex(16))
             # Refresh pending tag vectors
             ai.start(scope=scope)
             ai.worker.join(240)
+            if ai.worker.is_alive() or ai.status()['state'] != 'complete':
+                raise RuntimeError('Pending tag index build failed or timed out')
         else:
-            reason = 'WD tagger skipped via flag' if skip_wd else (tagger.status().get('reason', '') if tagger else 'WD tagger not initialized')
+            reason = 'WD tagger skipped via flag' if skip_wd else (active_tagger.status().get('reason', '') if active_tagger else 'WD tagger not initialized')
             report['wd_tag_evaluation']['reason'] = reason
 
         # 4. Evaluate main queries
@@ -538,7 +600,7 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
             mrr = (1.0 / rank) if rank else 0.0
 
             target_row = next((r for r in ranked_items if id_to_key.get(r['id']) == target), None)
-            actual_page = target_row.get('ai_page_match', {}).get('page') if target_row else None
+            actual_page = (target_row.get('ai_page_match') or {}).get('page') if target_row else None
             target_score = target_row.get('semantic_score') if target_row else None
 
             exact_page = (actual_page == exp_page) if exp_page is not None else True
@@ -614,18 +676,33 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
             }
         report['category_summaries'] = cat_summaries
 
+        all_eval_cases = all_cases + wd_cases
         report['overall_summary'] = {
-            'total_queries': len(all_cases) + len(wd_cases),
-            'top1_mean': round(statistics.mean(c['hit_at_1'] for c in all_cases), 4),
-            'recall3_mean': round(statistics.mean(c['recall_at_3'] for c in all_cases), 4),
-            'recall5_mean': round(statistics.mean(c['recall_at_5'] for c in all_cases), 4),
-            'mrr_mean': round(statistics.mean(c['mrr'] for c in all_cases), 4),
+            'total_queries': len(all_eval_cases),
+            'top1_mean': round(statistics.mean(c['hit_at_1'] for c in all_eval_cases), 4),
+            'recall3_mean': round(statistics.mean(c['recall_at_3'] for c in all_eval_cases), 4),
+            'recall5_mean': round(statistics.mean(c['recall_at_5'] for c in all_eval_cases), 4),
+            'mrr_mean': round(statistics.mean(c['mrr'] for c in all_eval_cases), 4),
         }
         report['passed'] = True
+    except Exception as ex:
+        if report is not None:
+            report['error'] = f'{type(ex).__name__}: {ex}'
+        raise
     finally:
-        ai.close()
-        catalog.close()
-        (output_dir / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+        if tagger_to_close is not None:
+            try: tagger_to_close.close()
+            except Exception: pass
+        if ai is not None:
+            try: ai.close()
+            except Exception: pass
+        if catalog is not None:
+            try: catalog.close()
+            except Exception: pass
+        if report is not None and output_dir.is_dir():
+            try:
+                (output_dir / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+            except Exception: pass
 
     return report
 

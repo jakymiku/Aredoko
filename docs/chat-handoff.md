@@ -9,14 +9,14 @@
      - `visual_text_ja`（5問、EmbeddingGemma 2による画像内文字直接認識・非OCR）：「秘密のパスワード」-> `bookA` p05（フキダシ文字）、「水曜日のプラネタリウム」-> `bookA` p06（フキダシ文字）、「黄金の砂時計」-> `bookB` p03（章扉ゴシック文字）、「文化祭のカレーライス」-> `bookB` p04（黒板チョーク文字）、「銀河ステーション」-> `asset_03`（案内看板文字）
      - `visual_text_en`（2問、英語プレート文字・日英クロスリンガル）：「MIDNIGHT COFFEE SHOP」-> `asset_04`、「深夜のコーヒーショップ」-> `asset_04`
      - `wd_tag_semantic`（4問、WD tagger有効時）：英語タグ候補に対する日本語意味検索（「セーラー服」-> `bookA`、「巫女」-> `bookB`、「赤い眼鏡」-> `asset_01`、「サイバーパンク」-> `asset_02`）
-  3. Top1、Recall@3、Recall@5、MRR、Exact Page Hit @ 1を集計し、`report.json`および`frozen-protocol.json`を出力。パストラバーサル・シンボリックリンク・50MB超ファイルの安全ガードを完備。合成プレースホルダー実行を実モデル精度とは呼ばない注意書きを徹底。
+  3. Top1、Recall@3、Recall@5、MRR、Exact Page Hit @ 1を集計し、`report.json`および`frozen-protocol.json`を出力。パストラバーサル・シンボリックリンク・50MB超ファイルの安全ガード、macOSリソースフォーク（`__MACOSX/`）や隠しファイルの安全無視、ファイル名番号ゆらぎ（`bookA_p1`, `bookA_01`, `asset_1`等）の柔軟照合、ネストされた入力サブディレクトリの再帰検出、WD有効時の全問総合サマリ整合、および安全な例外・リソース解放（`tagger.close()`, `ai.close()`, `catalog.close()`）を完備。合成プレースホルダー実行を実モデル精度とは呼ばない注意書きを徹底。
   4. 仕様・手順書として[docs/representative-asset-evaluation.md](representative-asset-evaluation.md)を追加。
 - **長い本の境界付き分割ページ索引（bounded multi-chunk page indexing / gap continuation）**：
-  1. `app/page_semantics.py` に `PageVectors.next_gaps(item_id, revision, scope, max_pages=64, chunk_size=16)` を追加。CPUのみで未準備範囲を最大16ページ単位のchunk列として算出。
-  2. `app/page_semantics.py` に `PageVectors.start_chunked(item_id, page_ids, revision, scope, chunk_size=16)` を追加。最大128ページまでのページ列を最大16ページずつの原子的トランザクション（`_publish_range`）で順次保存。中断時も完了済みchunkはSQLite内に保持され、再開時は保存済みchunkを再利用。既存の16ページ単一要求（`start`）の契約や厳格エラー、版・プロファイル束縛、bit完全一致ランキングを100%維持。
+  1. `app/page_semantics.py` に `PageVectors.next_gaps(item_id, revision, scope, max_pages=64, chunk_size=16)` を追加。CPUのみで未準備範囲を最大16ページ単位のchunk列として算出（物理変更済みstale時および非対応モデル時は空gap列を返し誤った不整合実行を防止）。
+  2. `app/page_semantics.py` に `PageVectors.start_chunked(item_id, page_ids, revision, scope, chunk_size=16)` を追加。最大128ページまでのページ列を最大16ページずつの原子的トランザクション（`_publish_range`）で順次保存し、各chunk完了を即座に状態永続化。中断時も完了済みchunkはSQLite内に保持され、再開時は保存済みchunkを再利用。既存の16ページ単一要求（`start`）の契約や厳格エラー、版・プロファイル束縛、bit完全一致ランキングを100%維持。
 - **検証記録**：
-  - `tests/test_representative_asset_evaluation.py`：5件全PASS（キー照合、プレースホルダー生成、ZIP/フォルダ安全性、ライブラリ構造、合成エンドツーエンド評価）。
-  - `tests/test_page_semantics.py`：14件全PASS（新規の分割chunk発行・中断時保持・再開時再利用・未処理gap算出テスト含む）。
+  - `tests/test_representative_asset_evaluation.py`：7件全PASS（キー・番号ゆらぎ照合、macOS/dotfile除外、プレースホルダー生成、ZIP/フォルダ安全性・50MB超拒絶、ネストディレクトリ走査、ライブラリ構造、MockWD有効時評価、合成エンドツーエンド評価）。
+  - `tests/test_page_semantics.py`：15件全PASS（stale版検出、非対応modality、境界値入力拒絶、新規の分割chunk発行・中断時保持・再開時再利用・未処理gap算出テスト含む）。
   - `tests/test_page_batch.py`：10件全PASS。
   - `tests/test_page_coverage.py`：8件全PASS。
   - 実機CLI実行：`python tools/evaluate_representative_assets.py --generate-placeholder --skip-wd` が正常終了し、`data/representative-eval/run-20261017-204418/` 配下に隔離ライブラリ・`report.json`・`frozen-protocol.json` を出力。
