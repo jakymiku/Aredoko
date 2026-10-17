@@ -32,6 +32,80 @@ class PageCoverageTests(PageFixture,unittest.TestCase):
         self.ai.pages.start(self.item,[p['page_id'] for p in pages],self.revision,self.scope)
         self.ai.worker.join(10);self.assertEqual(self.ai.status()['state'],'complete',self.ai.status())
 
+    def during_decode(self, change):
+        """An editor thread must enter the catalog guard before decoding ends."""
+        import page_semantics
+        original = page_semantics.unpack
+        entered = False
+        def decode(*args):
+            nonlocal entered
+            if not entered:
+                entered = True
+                errors = []
+                def edit():
+                    if not self.catalog._guard.acquire(timeout=1):
+                        errors.append('vector decoding blocked a catalog edit'); return
+                    # Public catalog mutations acquire this non-reentrant
+                    # lock themselves. Probe availability, then release before
+                    # calling them; the decoder waits for this editor thread.
+                    self.catalog._guard.release()
+                    try: change()
+                    except Exception as ex: errors.append(ex)
+                worker = threading.Thread(target=edit, daemon=True)
+                worker.start(); worker.join(2)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(errors, [])
+            return original(*args)
+        with patch('page_semantics.unpack', side_effect=decode):
+            return self.coverage()
+
+    def test_catalog_metadata_edit_can_finish_while_vectors_are_decoded(self):
+        self.build(0, 16); calls = list(self.encoder.calls)
+        before = self.coverage()
+        actual = self.during_decode(lambda:self.catalog.update([self.item], {'favorite':True}))
+        self.assertEqual(actual, before)
+        self.assertTrue(self.catalog.get(self.item)['favorite'])
+        self.assertEqual(self.encoder.calls, calls)
+
+    def test_mid_decode_shelf_scope_change_is_not_reported_ready(self):
+        self.catalog.update([self.item], {'shelf':'keep'})
+        self.scope = {**self.scope, 'shelf':'keep'}; self.build(0, 16)
+        with self.assertRaises(KeyError):
+            self.during_decode(lambda:self.catalog.update([self.item], {'shelf':'other'}))
+
+    def test_mid_decode_root_exclusion_and_unregister_are_rechecked(self):
+        self.build(0, 16)
+        with self.assertRaises(KeyError):
+            self.during_decode(lambda:self.catalog.set_excludes(self.root, ['*.cbz']))
+        self.catalog.set_excludes(self.root, [])
+        with self.assertRaises(KeyError):
+            self.during_decode(lambda:self.catalog.unregister_root(self.root))
+
+    def test_mid_decode_changed_file_without_rescan_clears_ready(self):
+        self.build(0, 16)
+        value = self.during_decode(lambda:self.write_archive([('new.png', self.first)]))
+        self.assertEqual(value['source_state'], 'stale')
+        self.assertEqual(value['indexed_pages'], 0)
+        self.assertIsNone(value['next_range'])
+
+    def test_mid_decode_new_page_snapshot_requires_reopen(self):
+        self.build(0, 16)
+        def replace_snapshot():
+            self.write_archive([('new.png', self.first)])
+            self.scan(); self.pages.refresh(self.item)
+        with self.assertRaises(ReaderChanged): self.during_decode(replace_snapshot)
+
+    def test_scan_started_during_decode_is_rechecked(self):
+        self.build(0, 16)
+        with patch.object(self.catalog, '_require_idle', side_effect=[None, ScanBusyError('fixture')]):
+            with self.assertRaises(ScanBusyError): self.coverage()
+
+    def test_mid_decode_ai_close_is_rechecked(self):
+        from ai_process import AIUnavailable
+        self.build(0, 16)
+        with self.assertRaises(AIUnavailable): self.during_decode(self.ai.close)
+
+
     def test_empty_coverage_is_cpu_only_and_never_creates_vectors_or_snapshots(self):
         with self.ai.store.connect() as db:before=db.execute('SELECT count(*) FROM ai_page_vectors').fetchone()[0]
         with patch.object(self.ai.pages.index,'input',side_effect=AssertionError('must not decode')):

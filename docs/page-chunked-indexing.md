@@ -1,5 +1,7 @@
 # 長い本の分割追加：明示plan/start/resume API
 
+> **最新（2026-10-18、CPUのみ）**：coverage/planのvector復号をcatalog guard外へ移動。最後にscope/同snapshot/原本/scan/AI終了を再確認し、生成1万pageの全応答一致。guard保持340→34ms、総所要は微増で検索高速化とは別。[設計/測定/回帰](page-coverage-concurrency.md)。今回の検証はCPUのみ。P0 2/2/OCR保留/既存機能を維持。
+
 2026-10-17のplan/start/resume APIを、2026-10-18に既存WinUIのページ追加dialogとAI設定へ接続した。既存の単一範囲16ページ・複数本8冊/計128ページは保持。専用OCRは保留し、通常AI buildや範囲確認だけで本文全体を自動解析しない。
 
 ## WinUIから使う（2026-10-18）

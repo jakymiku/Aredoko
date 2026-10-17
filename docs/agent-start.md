@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新（2026-10-18、CPUのみ）**：coverage/planのvector復号をcatalog guard外へ移動。最後にscope/同snapshot/原本/scan/AI終了を再確認し、生成1万pageの全応答一致。guard保持340→34ms、総所要は微増で検索高速化とは別。[設計/測定/回帰](page-coverage-concurrency.md)。今回の検証はCPUのみ。P0 2/2/OCR保留/既存機能を維持。
+
 > **最新（2026-10-18、長冊GUI接続）**：既存dialogで未準備128ページ以内の確認→開始/中断/同じ範囲再開、既存AI設定から再起動後の明示再開を接続。新native40 checks/6 PNG目視・Core493・Python対象16・Release合格。[操作/制限/旧job](page-chunked-indexing.md)。旧取消PNG未完・簡潔GUI/全機能・P0 2/2/OCR保留を維持。
 
 > **最新（2026-10-18）**：生成1024冊CPU検索のfinite重複検査を同値に省略。同日の13.481→12.206秒（9.46%）、旧10.801秒の記録更新ではない。raw/merged/scope/原本不変、専用OCR保留/P0 2/2。[計測内訳と限界](page-search-performance.md)。次は既存長冊chunk APIの簡潔なWinUI接続。

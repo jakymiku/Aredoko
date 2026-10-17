@@ -1,5 +1,7 @@
 # 本の内部ページを画像のままAI検索
 
+> **最新（2026-10-18、CPUのみ）**：coverage/planのvector復号をcatalog guard外へ移動。最後にscope/同snapshot/原本/scan/AI終了を再確認し、生成1万pageの全応答一致。guard保持340→34ms、総所要は微増で検索高速化とは別。[設計/測定/回帰](page-coverage-concurrency.md)。今回の検証はCPUのみ。P0 2/2/OCR保留/既存機能を維持。
+
 > **2026-10-18**：既存の最大16ページ指定を保持し、同じdialogへ[未準備ページ最大128の分割追加・固定再開](page-chunked-indexing.md)を接続。範囲確認のみでは推論せず、AI設定からapp再起動後に同scope/profile/版だけ明示再開できる。
 
 2026-10-17の最初の縦切り。EmbeddingGemma 2へ本文ページ画像を直接渡し、作品単位の検索と一致ページへの読書を接続した。**OCRによる文字起こし、全文の厳密一致、複数ページの物語理解・自動タグ付けは行わない。** モデルは既存profileで交換可能。

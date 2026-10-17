@@ -102,17 +102,35 @@ class PageVectors:
             count = head['page_count']
             if len(entries) != count or sorted(entries.values()) != list(range(count)):
                 raise ReaderChanged('Page index changed')
-            ready = set()
-            if supported:
-                # Stream one blob at a time. Matching IDs alone do not make a
-                # malformed, old-revision or old-preprocessing vector ready.
-                with ai.store.connect() as db:
-                    for pid, page, data in db.execute(
-                            'SELECT page_id,page,vector FROM ai_page_vectors '
-                            'WHERE item_id=? AND source_revision=? AND contract=?',
-                            (item_id, revision, CONTRACT)):
-                        if entries.get(pid) == page and unpack(data, ai.profile.dimension) is not None:
-                            ready.add(page)
+        # Page snapshots are immutable. Decode the profile's stored vectors
+        # without blocking catalog edits, then revalidate the same snapshot,
+        # current scope and physical source under a fresh short guard hold.
+        ready = set()
+        if supported:
+            # Stream one blob at a time. Matching IDs alone do not make a
+            # malformed, old-revision or old-preprocessing vector ready.
+            with ai.store.connect() as db:
+                for pid, page, data in db.execute(
+                        'SELECT page_id,page,vector FROM ai_page_vectors '
+                        'WHERE item_id=? AND source_revision=? AND contract=?',
+                        (item_id, revision, CONTRACT)):
+                    if entries.get(pid) == page and unpack(data, ai.profile.dimension) is not None:
+                        ready.add(page)
+        with ai.guard:
+            if ai._closed: raise AIUnavailable('AI is closing')
+        with ai.catalog._guard:
+            ai.catalog._require_idle()
+            current = ai._current_rows([item_id], scope).get(item_id)
+            if current is None or current['kind'] not in ('book', 'archive'):
+                raise KeyError('Page source unavailable')
+            with ai.catalog.connect() as db:
+                self.index._allowed(db, item_id)
+                latest = self.index._head(db, item_id)
+                if latest is None:
+                    raise KeyError('Page source unavailable')
+                if (latest['id'], latest['source_revision'], latest['page_count']) != (
+                        head['id'], revision, count):
+                    raise ReaderChanged('Page index changed')
             state = self.index.state(item_id, revision)
             if state != 'current': ready.clear()
         ranges = []

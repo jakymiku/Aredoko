@@ -1,5 +1,7 @@
 # Aredoko — 直近の開発優先順位と合格条件
 
+> **最新（2026-10-18、CPUのみ）**：coverage/planのvector復号をcatalog guard外へ移動。最後にscope/同snapshot/原本/scan/AI終了を再確認し、生成1万pageの全応答一致。guard保持340→34ms、総所要は微増で検索高速化とは別。[設計/測定/回帰](page-coverage-concurrency.md)。今回の検証はCPUのみ。P0 2/2/OCR保留/既存機能を維持。
+
 > **最新（2026-10-18、長冊GUI接続）**：既存dialogで未準備128ページ以内の確認→開始/中断/同じ範囲再開、既存AI設定から再起動後の明示再開を接続。新native40 checks/6 PNG目視・Core493・Python対象16・Release合格。[操作/制限/旧job](page-chunked-indexing.md)。旧取消PNG未完・簡潔GUI/全機能・P0 2/2/OCR保留を維持。
 
 > **最新（2026-10-18）**：生成1024冊CPU検索のfinite重複検査を同値に省略。同日の13.481→12.206秒（9.46%）、旧10.801秒の記録更新ではない。raw/merged/scope/原本不変、専用OCR保留/P0 2/2。[計測内訳と限界](page-search-performance.md)。次は既存長冊chunk APIの簡潔なWinUI接続。
@@ -117,7 +119,7 @@ Aredokoの存在理由は **「名前や保存場所を忘れたファイルを�
 
 ## 再開時の推奨最初の3手
 
-ユーザー明示でcombined/RRFの残るP0試行を実施し、[新固定評価](combined-fusion-evaluation.md)で採用条件を満たした。**現在の累積は2/2で区切り完了**。原本/索引/明示modeを保ち、既知の2失敗だけへ自動で重みを調整し続けない。以前の1/2は履歴。長い本のplan/start/resume APIは実装済み、GUIは未接続、前回取消静止PNG1枚は人手レビュー未完のまま保持。
+ユーザー明示でcombined/RRFの残るP0試行を実施し、[新固定評価](combined-fusion-evaluation.md)で採用条件を満たした。**現在の累積は2/2で区切り完了**。原本/索引/明示modeを保ち、既知の2失敗だけへ自動で重みを調整し続けない。以前の1/2は履歴。長い本のplan/start/resume APIと既存WinUI接続は実装済み。前回取消静止PNG1枚は人手レビュー未完のまま保持。
 
 1. **残るページ検索コストを安全性とともに評価**：[最新profiling](page-search-performance.md)のscorer/SQL/path内訳を使い、原本before/after確認・即時無効化・短いguard・全bit一致を保つ次の候補を選ぶ。旧10.80秒と同日12.21秒は直接比較しない。今回長冊GUIで新速度を主張しない。
 2. **必要な場面で代表素材を使う実操作確認**：既知の許可済み2 ZIP/14枚は実モデル・日本語/画像内文字確認へ利用可能。長冊の上限/中断は生成145pageで確認済み。既存実評価を無意味に反復せず、私物を広く走査しない。長い本の計画/coverage自体の待ち時間は別途計測し、画面や一般queueを増やさない。

@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Latest CPU coverage concurrency checkpoint (2026-10-18)
+
+Page coverage now decodes stored vectors outside catalog guard, then rechecks closure, idle/scope/eligibility/immutable snapshot and physical source. Generated10k-page coverage/plan responses are identical; guard hold coverage340ms->34ms, plan371ms->60ms. Overall times slightly increased; do not call this faster retrieval or new model quality. Read [docs/page-coverage-concurrency.md](docs/page-coverage-concurrency.md) and latest handoffs. Preserve all features, raw/ranked scores, P0 2/2 closed, OCR deferral and pending native gates. No model/GPU/GUI/download/private scan in this slice.
+
 ## Latest long-book WinUI integration (2026-10-18)
 
 Existing page-add dialog now offers manual<=16 or reviewed next-gap chunks<=128 (default64), with CPU plan separated from start. Limit/mode edits invalidate the plan. Completed chunks survive cancellation; resume uses fixed IDs/revision/scope/profile/job, in-dialog or explicitly from existing AI settings after app/service restart. Legacy missing-plan jobs disable unsafe resume without blocking ordinary AI builds. Core493 PASS / Python chunk16 PASS / Release0 warnings/errors; generated145-page native40 checks and6 PNG manually reviewed, no real model. Read [docs/page-chunked-indexing.md](docs/page-chunked-indexing.md) and latest handoffs. Preserve old batch cancellation PNG pending, P0 2/2 closed, OCR deferred, simple UI/all features/gutters, read-only originals and swappable models. The user reauthorizes the two known ZIPs in Aredoko-test for relevant local representative tests; do not scan other private media or repeat a quality trial without new evidence.
