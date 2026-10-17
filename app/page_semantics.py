@@ -21,10 +21,15 @@ SCHEMA = '''CREATE TABLE IF NOT EXISTS ai_page_vectors(
 def unpack(data, dimension):
     try:
         value = array('f'); value.frombytes(data)
-        if (len(value) != dimension or any(not math.isfinite(x) for x in value)
-                or abs(sum(x*x for x in value)-1) > 1e-4):
+        if len(value) != dimension or any(not math.isfinite(x) for x in value):
             return None
-        return normalized(value, dimension)
+        squared_norm = sum(x*x for x in value)
+        if abs(squared_norm-1) > 1e-4:
+            return None
+        # Reuse the validated sum, retaining the original sum/sqrt/division
+        # arithmetic and float64 scores (including ties), not just unit length.
+        norm = math.sqrt(squared_norm)
+        return [x/norm for x in value]
     except (ValueError, TypeError, OverflowError):
         return None
 

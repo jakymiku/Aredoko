@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Latest measured multi-book page retrieval (2026-10-17)
+
+Generated-only CPU benchmark (1024 books x 64 pages, 768 dimensions) and exact-preserving stored-vector decode optimization are implemented. One untraced pass improved 17.560037s to 13.551148s; raw scores/page provenance, normal merged ranking and 512-book root scope are identical. Do not claim real model quality, end-to-end latency, 1TB readiness or total RAM from this synthetic result. About 6s of catalog guard/source checks remains. Read [docs/page-search-performance.md](docs/page-search-performance.md) and latest handoffs. Preserve metadata freshness, all features/UI simplicity, P0 1/2 and OCR deferral. Previous batch cancellation static PNG remains pending; do not silently mark it passed or repeat the exhausted native test cycle.
+
 ## Latest bounded multi-book page jobs (2026-10-17)
 
 Explicit multi-book page jobs are implemented on top of the existing atomic per-book range publisher: at most 8 books, 16 pages/book and 128 pages/job. Native UI selects books from the displayed search page, previews next gaps and starts only on explicit confirmation. Completed book ranges survive partial failure/cancel; the latest profile-bound job can be resumed explicitly from AI settings after app restart. Never auto-resume or silently change old scope/revisions. A new AI job replaces the single saved resume record; this is not a general persistent queue/history or whole-library indexing. Read [docs/page-batch-indexing.md](docs/page-batch-indexing.md) and latest handoffs for final test/Windows evidence. Preserve single-book manual ranges, all existing features, simple forms and scroll gutters, OCR deferral and P0 cumulative 1/2. Next: measured multi-book search/state cost, bounded longer-book chunks, representative quality.
