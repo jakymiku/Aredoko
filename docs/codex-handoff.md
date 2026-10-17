@@ -1,5 +1,31 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-17 多数本の検索CPU測定・スコアを変えない計算省略
+
+実装commit **`1978673ef1307f8dc889df5c3ebb34191bd96cdc`**。開始HEAD `9e69da83a610f9bc13166443a4eb12786239bf4c`（clean/remote差0、他AIの新更新なし）。production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR5を継続。現在P2、OCR保留、英語WD原文/未承認分離、既存全機能、GUI簡潔/24DIP gutter/16DIP pane間隔、P0累積1/2を保持。
+
+- `app/page_semantics.py`の保存float32 vector検査/正規化がfinite確認と二乗和を二重実行していたため、一度の検査/二乗和を再利用。元のsum→sqrt→divisionと1e-4検査、raw score/同点/順位/一致ページ/根拠を保つ。物理版確認・scope・DB契約は変更しない。
+- 新規`tools/benchmark_page_search.py`：CPUのみ、生成1,024冊/各64ページ/768D、固定dense vector128種とquery、2 root。protocolを計測前に固定し、専用DB/原本のhash不変・推論0を確認。64/256/1024冊のraw score.hex+根拠、通常modality merger後の順位/根拠、root限定512冊と空集合を**完全一致**で比較。結果上書き拒否/比較不一致で失敗。
+- traceなし各1回：64冊 **0.919427→0.684381秒**、256冊 **3.938155→3.222464秒**、1024冊 **17.560037→13.551148秒**（今回22.83%短縮）。vector DB274,837,504 bytes（262.11MiB）。full rankの別traceでPython割当peak **938,771→938,747 bytes**（約0.90MiB）。SQLite native/OS cache/RSS/GPUは含まない。**単発・昇順でcache等未分離、実モデル精度/推論速度/HTTP/UI応答/1TB/総RAMの保証ではない**。
+- catalog guard/source確認の合計 **6.333872→6.158373秒**が残り、まだ全体13秒超。1冊ずつの最大保持0.012877→0.013034秒はUI待ちの上限ではない。coverage8冊は0.248460→0.188721秒。guard/物理版の構造は未最適化。全冊coverageや巨大ZIPの実用速度を外挿しない。[測定条件・再現・digest・限界](page-search-performance.md)。local receipt/raw/logは`data/page-search-scale/v1-20261017-01/`および`data/page-search-scale-*-20261017.*`、ignored。公開コード/文書以外をGitHubへ送らない。
+
+検証：
+
+- 新規decoder3件（dense1/2/8/768D、内積のbit/全順位、unit tolerance/signed zero、破損/NaN/Inf/次元違い/zero）。既存の変更/scope/coverage/batch取消再開を含む対象 **32 PASS /24.445秒**。
+- 最終全Python **457件：454 PASS /3 Windows platform SKIP /241.601秒**。Core **449 PASS**、Windows x64 SelfContained Release **警告0/エラー0、15.44秒**。compileall/diff/文書リンク/手動のみの3 workflowsを確認。今回テストの失敗なし。全体テスト中のargparse rate errorは既存の不正入力テストによる想定出力で、downloadではない。
+- ログ：`data/page-search-scale-target-20261017.log` / `page-search-scale-python-20261017.log` / `page-search-scale-core-20261017.log` / `page-search-scale-release-20261017.log` / `page-search-scale-baseline-20261017.log` / `page-search-scale-optimized-20261017.log` / `page-search-scale-comparison-20261017.json`。code差分とbenchmarkの境界/cleanup/元データ不変/正規化の同値性をレビュー。
+- GUI変更/起動/追加native試行なし。**前回の取消直後1 PNGの静止画レビューは未完のまま**（runtime20 PASS/UIA位置確認済み、5安定PNG+1過渡frame）。初回+修正再実行2回済み。UIテストskillの “Maximum **two** fix-and-rerun cycles; then report remaining failures.” に従って繰り返さず、このgateを合格へ変更しない。High Contrast/Narrator/AOT/DPI・代表実素材品質・並行操作/全RAM/全冊coverageは未検証。WinUIAnalyzer未導入/未実行。新DL/依存/モデルload/私物scan/外部media送信/CI dispatchなし。所有benchmark/catalog/AIはfinallyでclose済み。
+
+再現：`python -m unittest discover -s tests` / `dotnet run --project tests/Aredoko.Core.Tests -c Release` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。benchmarkのprepare/measure/compareと固定条件は[性能文書](page-search-performance.md)。変更前decoderは開始HEAD、変更後は上の実装commit。どちらも既存fixtureに同labelを上書きしない。
+
+次の3手：
+
+1. 残る物理版/SQLite/catalog guard約6秒と検索全体13秒を改善。安全な即時変更検出/解除/scope/profileを維持し、cacheや応答の並行性を小さく検証する。前回取消静止画は人手レビューへ残す。
+2. 必要性/測定をもとに長い本のbounded chunk/明示再開を設計。既存1冊16page atomic/最大8冊128page/版/profile/scope/取消を弱めず、一般queue履歴・全冊・1TB自動処理を勝手に完成扱いしない。
+3. 明示選択の代表素材で直接ページ検索/WD日英の漏れ/誤候補を記録。直接索引済みでも漏れが多いときだけOCR。音声/音楽内容・複数ページ文脈タグ・数千pending性能は後続。
+
+---
+
 ## 2026-10-17 複数本の上限付きページ索引・中断/部分失敗/再開
 
 実装commit **`b00aaa081e342feddc085666ab3749398ae9b1d5`**。開始HEAD `7a5d55275860ff8e70769328090994f608449189`（clean/remote差0、新しい他AI更新なし）。production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR5を継続。現在P2、P0 baseline/改善試行累積1/2を維持。OCR保留、英語WD原文/未承認分離、全既存機能、簡潔なGUIと24DIP scroll gutter/16DIP pane間隔を保持。
