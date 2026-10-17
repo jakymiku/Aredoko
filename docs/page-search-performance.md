@@ -27,7 +27,7 @@ python tools/benchmark_page_search.py compare --output data/page-search-scale/<f
 python tools/benchmark_page_search.py compare --output data/page-search-scale/<fresh-run> --before baseline --after guard-source-opt
 ```
 
-変更前は`9e69da83a610f9bc13166443a4eb12786239bf4c`のdecoder、第1回は`1978673ef1307f8dc889df5c3ebb34191bd96cdc`、今回は`7ffb5a26a00ab1343371d926835905a250e55740`（`_state_epoch`キャッシュ即時破棄追補は`1612513081292a75386ae4bf296c1811e5c6c9ea`）。今回fixtureは`data/page-search-scale/v1-20261017-01/`。prepareは新規dir必須・最大1024冊/64ページ、measureは同label上書き拒否。再生成時はopaque page ID/revisionが変わるため、公開digestを別fixtureの正解値として比較しない。protocol/receipt/raw JSONを残し、同一fixture内で比較する。各JSONに測定開始時のHEADと`page_semantics.py` SHA256も記録（同じ開始HEADでも作業差分はsource hashで識別）。
+変更前は`9e69da83a610f9bc13166443a4eb12786239bf4c`のdecoder、第1回は`1978673ef1307f8dc889df5c3ebb34191bd96cdc`、今回は`7ffb5a26a00ab1343371d926835905a250e55740`（`_state_epoch`キャッシュ即時破棄追補は`1612513081292a75386ae4bf296c1811e5c6c9ea`、正常完了時アトミック増分・直接例外マッピング追補は`0807a239d3916538a5c94fb69539ba66c332758a`）。今回fixtureは`data/page-search-scale/v1-20261017-01/`。prepareは新規dir必須・最大1024冊/64ページ、measureは同label上書き拒否。再生成時はopaque page ID/revisionが変わるため、公開digestを別fixtureの正解値として比較しない。protocol/receipt/raw JSONを残し、同一fixture内で比較する。各JSONに測定開始時のHEADと`page_semantics.py` SHA256も記録（同じ開始HEADでも作業差分はsource hashで識別）。
 
 ## 実測（traceなし、秒）
 
@@ -51,7 +51,7 @@ Python割当peakはfull rankの別tracemalloc passで **938,771→938,747→1,02
 
 - 64/256/1024冊の**raw float score.hex() + item/page/revision/model根拠**をhash比較し、`baseline`・`optimized`・`guard-source-opt`の間で完全一致。通常の画像modality merger後の順位/score/根拠も完全一致。1,024冊のraw digest `cd3cc7170b5c11c80d4779272caf0cfebd478d0c7a063ebb6503b2f1f229ad29`、merged digest `03e3cca9eece08f96f8d7bf122e97d9c93f9b1c6b34165b09bccaedeefab73e2`。
 - root限定512冊のdigest `ea5c2f91e98ac5339ca11ad58879bf0ddeb358b452eb9cadcf393e770f590003`も完全一致。空集合0件。scope選択処理は別途0.021252→0.026729→0.034979秒。実query生成や全API/並行登録の応答時間の測定ではない。
-- `tests/test_page_vector_decode.py`で`unpack`と`_score_packed`の両方が1/2/8/768次元のdense vectors、raw内積の`float.hex()`と全順位、unit tolerance境界、signed zero、NaN/Inf/破損/次元違い/zeroで旧decoderと完全一致することを検証。さらに`tests/test_page_semantics.py`に、一括位置取得とZIP central directory直接確認の下でも未再スキャンのexclude変更・原本書き換えが即座に検索結果から除外されること、256冊chunk内のguard解放合間に動的除外（`InterleaveGuard`）が発生しても`_state_epoch`により残余候補が即座に無効化・再取得されること、`tag_source`で`ZipInfo`を生成しないこと、`PageIndex.states`の一括状態判定を検証する回帰テストを追加。全体458件（455 PASS / 3 Windows platform SKIP）、Core 449 PASS、x64 Release 0警告/0エラーの最終結果は[最新handoff](codex-handoff.md)へ記載する。
+- `tests/test_page_vector_decode.py`で`unpack`と`_score_packed`の両方が1/2/8/768次元のdense vectors、raw内積の`float.hex()`と全順位、unit tolerance境界、signed zero、NaN/Inf/破損/次元違い/zeroで旧decoderと完全一致することを検証。さらに`tests/test_page_semantics.py`に、一括位置取得とZIP central directory直接確認の下でも未再スキャンのexclude変更・原本書き換えが即座に検索結果から除外されること、256冊chunk内のguard解放合間に動的除外（`InterleaveGuard`）や登録解除が発生しても`_state_epoch`により残余候補が即座に無効化・再取得されること、`tag_source`で`ZipInfo`を生成しないこと、`PageIndex.states`の一括状態判定、および`tests/test_production.py`で`_state_epoch`が正常変更時のみインクリメントされ失敗時には進まないことを検証する回帰テストを追加。全体459件（456 PASS / 3 Windows platform SKIP）、Core 449 PASS、x64 Release 0警告/0エラーの最終結果は[最新handoff](codex-handoff.md)へ記載する。
 - データ取得・依存追加・モデル起動・私物scan・CI dispatchなし。検索閾値/重み/ランキング方針は不変、P0品質改善試行は累積1/2のまま。このCPU fixtureを精度改善や実モデル速度の成功として数えない。
 - GUI変更/起動なし。前回複数本jobの取消直後1 PNGは静止画レビュー未完のまま保持する（runtime20項目とUIA位置は確認済み）。同じnative testは初回+修正再実行2回済みのため追加自動試行しない。[既存batchの検証と制約](page-batch-indexing.md)を参照。
 
