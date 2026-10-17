@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新：ページ準備状況・次範囲への再開（2026-10-17）**：CPUで同版/profileの準備済み数/範囲を確認し、最初の未処理範囲を選択、追加後は次範囲へ。狭幅で状態/結果/取消を固定。Python441 PASS/3 SKIP、Core424、Release0警告0エラー、coverage単独native46 checks/8 PNG確認。続くユーザー指摘のフォーム右端重なり/入力の文字切れも修正し、余白検証native76 checks/16 PNGと、パネル端修正native39 checks/8 PNGと、横並び16DIP余白の最終native43 checks/8 PNGを確認（詳細は最新handoff）。[契約・限界](page-image-search.md)と最新handoffを参照。次は総ページ/冊数上限付き明示複数本job。OCR保留、P0累積1/2。
+
 > **最新：内部ページの直接画像AI検索（2026-10-17）**：本ごとの明示範囲追加/再利用/取消、作品集約、ページ・版・model根拠、WinUI一致ページジャンプを実装。[使い方・API・人工GPU比較・残課題](page-image-search.md)と最新handoffを参照。通常AI buildで全ページを自動処理しない。次はページcoverage/次範囲と上限付き複数本job。OCR保留・P0累積1/2・UI簡潔/機能削減なし。
 
 > **最新・日英タグ（2026-10-17）**：英語のWDタグを保持し日本語の意味で探す方針。承認済みは従来のAI文章索引、未承認は専用の「タグ候補の意味（AI）」へ分離。既存の明示AI buildで準備し、承認/却下後は署名で旧索引を除外。[仕様・固定評価](tag-semantic-search.md)。OCR保留は継続、実行結果は両handoffを優先。

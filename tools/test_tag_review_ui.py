@@ -51,6 +51,7 @@ def nodes(value):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--check-scroll-gutters',action='store_true',help='User-requested form scroll lanes, compact page inputs and narrow dialog checks')
     parser.add_argument('--check-ui-cleanup',action='store_true')
     parser.add_argument('--check-user-feedback',action='store_true')
     parser.add_argument('--scenario',choices=('indexed','unindexed','text-only'),default='indexed')
@@ -58,6 +59,8 @@ def main():
     modes.add_argument('--candidate-search-only',action='store_true')
     modes.add_argument('--wd-runtime-only',action='store_true',help='Existing approved CPU model on generated media only; no downloads')
     modes.add_argument('--tag-language-only',action='store_true',help='Existing EG2 CUDA model with generated sources and predetermined English labels; no downloads')
+    modes.add_argument('--pane-boundary-only',action='store_true',help='No-model overlay occlusion, close and resize checks on generated images')
+    modes.add_argument('--page-coverage-only',action='store_true',help='No-model page counts, gaps, cancellation and restart on generated books')
     modes.add_argument('--page-image-only',action='store_true',help='Existing EG2 CUDA on generated fixed Japanese book pages; no OCR or downloads')
     modes.add_argument('--page-jump-only',action='store_true')
     modes.add_argument('--folder-books-only',action='store_true')
@@ -105,7 +108,9 @@ def main():
             if user32.GetForegroundWindow()!=int(hwnd):user32.SetForegroundWindow(int(hwnd));time.sleep(.1)
             if user32.GetForegroundWindow()!=int(hwnd):raise RuntimeError('Windows denied owned-window activation; no input sent')
     def shot(name):
-        owned();path=target/(name+'.png');ui('screenshot','--output',path)
+        owned()
+        if args.check_scroll_gutters or args.pane_boundary_only:time.sleep(.3) # Let the compositor present the current layout.
+        path=target/(name+'.png');ui('screenshot','--output',path)
         check('screenshot '+name,path.is_file() and path.stat().st_size>0);report['screenshots'].append(path.name)
         tree=json.loads(ui('inspect','--json','--depth','12'))
         (target/(name+'-tree.json')).write_text(json.dumps(tree,ensure_ascii=False),encoding='utf-8')
@@ -160,6 +165,12 @@ def main():
                 if n.get('type')=='ListItem' and (n.get('automationId')==option_id_or_name or n.get('name')==option_id_or_name):
                     ui('invoke',n.get('automationId') or n.get('selector') or option_id_or_name,window=handle);time.sleep(.15);return
         raise RuntimeError(f'Combo option {option_id_or_name} not found in {combo_id}')
+    def gutter(viewport_id,control_id):
+        tree=json.loads(ui('inspect','--json','--depth','18'))
+        viewport=next(n for n in nodes(tree) if n.get('automationId')==viewport_id)
+        control=next(n for n in nodes(viewport) if n.get('automationId')==control_id)
+        gap=viewport['x']+viewport['width']-control['x']-control['width']
+        check(viewport_id+' has scrollbar lane beyond '+control_id,gap>=20)
     def open_review():
         ui('scroll-into-view','BtnTagSuggestions');ui('invoke','BtnTagSuggestions');ui('wait-for','TagStatus','-t','12000');enabled('TagRefresh',True)
     def proposal(state='pending'):
@@ -177,7 +188,7 @@ def main():
             def book_digest():
                 return {p.relative_to(book_media).as_posix():(p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in book_media.rglob('*') if p.is_file()}
             book_before=book_digest()
-        if args.page_jump_only or args.page_image_only:
+        if args.page_jump_only or args.page_image_only or args.page_coverage_only:
             import zipfile
             from page_index import PageIndex
             from page_text import PageTextIndex
@@ -186,7 +197,9 @@ def main():
             def write_jump_book(extra=False):
                 with zipfile.ZipFile(jump_file,'w') as archive:
                     if extra:archive.writestr('p00.png',png(300,400,(80,80,80)))
-                    if args.page_image_only:
+                    if args.page_coverage_only:
+                        for n in range(35):archive.writestr(f'p{n:03}.png',png(60,80,(n+20,40,70)))
+                    elif args.page_image_only:
                         rendered=REPO/'data/ocr-eval/ocr-v1-20261017'
                         receipt=json.loads((rendered/'receipt.json').read_bytes())
                         for filename in ('page-03.png','page-01.png'):
@@ -206,6 +219,21 @@ def main():
                     def record():return {'adapter':'contract-fixture','version':'1','model':'not-real-ocr','model_revision':'1','preprocessing':'page-jump'}
                 def extract(self,payload,cancelled):return '夕焼けの教室で約束した'
             page_text=PageTextIndex(sandbox.catalog,page_index,JumpExtractor())
+        if args.page_coverage_only:
+            class CoverageEncoder:
+                available=True
+                resident=False
+                def __init__(self,ai):self.ai=ai;self.profile=ai.profile;self.calls=0;self.delay=False;self.entered=threading.Event()
+                def encode(self,operation,data):
+                    self.calls+=1
+                    if self.delay:
+                        self.entered.set()
+                        if not self.ai.cancel.wait(20):raise RuntimeError('Fixture cancel timeout')
+                    return [1.0]+[0.0]*(self.profile.dimension-1)
+                def close(self):pass
+            coverage_encoder=CoverageEncoder(sandbox.ai);sandbox.ai.encoder=coverage_encoder
+            sandbox.profiles.set_scope({'root_ids':[jump_root]});sandbox.settings_before=(sandbox.target/'settings.json').read_bytes()
+            report['test_mode']='CPU-page-coverage-and-resume'
         tagger=FixtureTagger()
         if args.tag_language_only or args.page_image_only:
             from ai_process import EncoderProcess
@@ -250,13 +278,16 @@ def main():
                 for item,tags in ((blue_item,['blue_hair','twintails']),(red_item,['red_hair','long_hair'])):
                     tagger.suggest=lambda source,cancelled,tags=tags:[TagProposal(tag,'Predetermined English runtime fixture; not tagging quality') for tag in tags]
                     TagSuggestions(sandbox.catalog,tagger).generate(item,uuid.uuid4().hex)
-            if args.page_jump_only or args.page_image_only:
+            if args.page_jump_only or args.page_image_only or args.page_coverage_only:
                 if args.page_jump_only or theme=='Light':write_jump_book()
                 sandbox.catalog.index.scan(jump_root);sandbox.catalog.sync_index()
                 jump_item=sandbox.catalog.search(root_id=jump_root)['items'][0]['id']
                 page_index.refresh(jump_item);snapshot=page_index.list(jump_item)
                 if args.page_jump_only:page_text.generate(jump_item,[snapshot['pages'][1]['page_id']],snapshot['source_revision'],uuid.uuid4().hex)
                 else:sandbox.catalog.update([jump_item],{'tags':['manual-page'],'shelf':'ページ試験','favorite':True})
+                if args.page_coverage_only and theme=='Light':
+                    sandbox.ai.pages.start(jump_item,[p['page_id'] for p in snapshot['pages'][16:32]],snapshot['source_revision'],{'root_ids':[jump_root]})
+                    sandbox.ai.worker.join(10);check('fixture has a disjoint middle range',sandbox.ai.status()['state']=='complete')
                 with sandbox.catalog.connect() as db:db.execute('DELETE FROM reader_progress WHERE item_id=?',(jump_item,))
             launch=json.loads(cli('run','src/Aredoko.WinUI','-c','Release','--arch','x64','-p','Platform=x64','-p','SelfContained=true','--no-build',
                 '--output-appx-directory',target/('layout-'+theme.lower()),'--detach','--json','--args','--ui-theme '+theme.lower()+' --viewer-settings '+str(target/'viewer-settings.json')))
@@ -269,7 +300,43 @@ def main():
                 if len(matches)==1:break
                 time.sleep(.1)
             if len(matches)!=1:raise RuntimeError('Expected one owned main window')
-            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.page_jump_only or args.page_image_only or args.folder_books_only and theme=='Dark' else '76 件')
+            hwnd=str(matches[0]['hwnd']);user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);ready();wait('TxtCount','77 件' if args.page_jump_only or args.page_image_only or args.page_coverage_only or args.folder_books_only and theme=='Dark' else '76 件')
+            if args.pane_boundary_only:
+                report['test_mode']='detail-pane-boundary'
+                name='generated-003.png';item=sandbox.item(name)
+                original_tags=sandbox.catalog.get(item)['tags']
+                ui('set-value','TxtQuery',name);time.sleep(.4);ui('invoke','BtnSearch');ready()
+                ui('invoke','Item'+str(item),'--action','select');wait('TxtEditStatus','保存済み')
+                visible('BtnSearch')
+                tree=json.loads(ui('inspect','--json','--depth','14'))
+                tags=next(n for n in nodes(tree) if n.get('automationId')=='TxtTags')
+                for identifier in ('BtnSearch','BtnRoots'):
+                    control=next(n for n in nodes(tree) if n.get('automationId')==identifier)
+                    check(theme+' inline gap separates '+identifier,tags['x']-(control['x']+control['width'])>=32)
+                shot(theme+'-inline-pane')
+                def ensure_pane():
+                    tree=json.loads(ui('inspect','--json','--depth','14'))
+                    if not any(n.get('automationId')=='BtnCloseDetails' and not n.get('isOffscreen',True) for n in nodes(tree)):
+                        ui('invoke','BtnDetails')
+                    ui('wait-for','BtnCloseDetails','-p','IsOffscreen','--value','False','-t','5000')
+                ui('set-value','TxtTags','draft-boundary');wait('TxtEditStatus','未保存の変更')
+                for width in (700,820):
+                    user32.SetWindowPos(int(hwnd),None,0,0,width,620,0x0014);time.sleep(.4)
+                    ensure_pane();visible('BtnCloseDetails');visible('TxtTags')
+                    tree=json.loads(ui('inspect','--json','--depth','14'))
+                    search=next(n for n in nodes(tree) if n.get('automationId')=='BtnSearch')
+                    check(theme+f' overlay {width} clips fully occluded Search button',search.get('isOffscreen') is True)
+                    check(theme+f' overlay {width} preserves draft','draft-boundary' in ui('get-value','TxtTags'))
+                    shot(theme+f'-overlay-{width}')
+                user32.SetWindowPos(int(hwnd),None,0,0,1200,820,0x0014);time.sleep(.4)
+                ensure_pane();visible('BtnSearch');check(theme+' inline resize preserves draft','draft-boundary' in ui('get-value','TxtTags'))
+                ui('set-value','TxtTags',', '.join(original_tags));wait('TxtEditStatus','保存済み')
+                user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.4)
+                ensure_pane();ui('invoke','BtnCloseDetails');ready();visible('BtnSearch');shot(theme+'-pane-closed')
+                ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                check(theme+' closing restores working search',True)
+                check(theme+' manual metadata unchanged',sandbox.catalog.get(item)['tags']==original_tags)
+                close();continue
             if args.tag_language_only:
                 from tag_semantics import semantic_candidates
                 choose_combo('CmbSearchMode','ModeTagSemantic');ready()
@@ -360,6 +427,63 @@ def main():
                 expected=search_candidates(TagSuggestions(sandbox.catalog,tagger),tag)['total']
                 wait('TxtCount',str(expected)+' 件');contains('ProposalEvidence'+str(source),tag)
                 shot(theme+'-raw-English-candidate-search')
+                close();continue
+            if args.page_coverage_only:
+                original=(jump_file.read_bytes(),jump_file.stat().st_mtime_ns);before_calls=coverage_encoder.calls
+                ui('set-value','TxtQuery','jump.cbz');time.sleep(.4);ui('invoke','BtnSearch');ready();wait('TxtCount','1 件')
+                ui('invoke','Item'+str(jump_item),'--action','select');wait('TxtEditStatus','保存済み')
+                ui('set-value','TxtTags','draft-coverage');wait('TxtEditStatus','未保存の変更')
+                context('Item'+str(jump_item),jump_item,'IndexBookPages');enabled('PageAIAdd',True)
+                contains('PageAICoverage','16 / 35' if theme=='Light' else '35 / 35')
+                check(theme+' opening coverage never infers',coverage_encoder.calls==before_calls)
+                visible('PageAIRanges');ui('invoke','PageAIRanges','--action','expand');contains('PageAIRangesText','17–32' if theme=='Light' else '1–35')
+                if args.check_scroll_gutters:gutter('PageAIFieldsScroll','PageAIRanges')
+                shot(theme+'-coverage-wide');ui('invoke','PageAIRanges','--action','collapse')
+                user32.SetWindowPos(int(hwnd),None,0,0,700,620,0x0014);time.sleep(.3)
+                visible('PageAIAdd')
+                if args.check_scroll_gutters:
+                    gutter('PageAIFieldsScroll','PageAICount');visible('PageAINextRange')
+                shot(theme+'-coverage-narrow')
+                if theme=='Light':
+                    visible('PageAINextRange');ui('invoke','PageAINextRange');check('selecting the next missing range never infers',coverage_encoder.calls==before_calls)
+                    ui('invoke','PageAIAdd');enabled('PageAIAdd',True);contains('PageAICoverage','32 / 35')
+                    check('only first missing 16 pages were encoded',coverage_encoder.calls-before_calls==16)
+                    tree=json.loads(ui('inspect','--json','--depth','16'))
+                    for identifier,expected in [('PageAIStart','33'),('PageAICount','3')]:
+                        control=next(n for n in nodes(tree) if n.get('automationId')==identifier)
+                        editors=[n for n in nodes(control) if n.get('type')=='Edit']
+                        check(identifier+' native edit value '+expected,len(editors)==1 and editors[0].get('value')==expected)
+                    shot('Light-next-tail-range')
+                    coverage_encoder.delay=True;coverage_encoder.entered.clear()
+                    visible('PageAIAdd');ui('invoke','PageAIAdd');check('owned delayed page fixture entered',coverage_encoder.entered.wait(5))
+                    visible('PageAICancel');ui('invoke','PageAICancel');enabled('PageAIAdd',True)
+                    contains('PageAIStatus','中断しました');contains('PageAICoverage','32 / 35')
+                    visible('PageAIStatus');shot('Light-cancel-preserves-coverage');coverage_encoder.delay=False
+                    visible('PageAIAdd');ui('invoke','PageAIAdd');enabled('PageAIAdd',True);contains('PageAICoverage','35 / 35');enabled('PageAINextRange',False)
+                    visible('PageAIStatus');shot('Light-all-pages-ready')
+                else:
+                    enabled('PageAINextRange',False);check('restart complete coverage never infers',coverage_encoder.calls==before_calls)
+                    visible('PageAIAdd');ui('invoke','PageAIAdd');enabled('PageAIAdd',True)
+                    contains('PageAIStatus','再利用 16');check('manual range recheck uses cached vectors',coverage_encoder.calls==before_calls)
+                    contains('PageAICoverage','35 / 35');shot('Dark-cached-recheck')
+                ui('invoke','CloseButton');ready()
+                tree=json.loads(ui('inspect','--json','--depth','14'))
+                if not any(n.get('automationId')=='TxtEditStatus' and not n.get('isOffscreen',True) for n in nodes(tree)):ui('invoke','BtnDetails')
+                wait('TxtEditStatus','未保存の変更');check(theme+' draft tags preserved','draft-coverage' in ui('get-value','TxtTags'))
+                ui('set-value','TxtTags','manual-page');wait('TxtEditStatus','保存済み')
+                check(theme+' metadata and source retained',sandbox.catalog.get(jump_item)['tags']==['manual-page'] and original==(jump_file.read_bytes(),jump_file.stat().st_mtime_ns))
+                if args.check_scroll_gutters:
+                    visible('TxtTags');gutter('DetailScroll','TxtTags');shot(theme+'-detail-scroll-lane')
+                    from native_ui_tools import invoke_tool
+                    invoke_tool(cli,app_pid,hwnd,'BtnAIIndex');ui('wait-for','AIProfileChoice','-t','12000');visible('AIProfileChoice');gutter('AIOptions','AIProfileChoice');shot(theme+'-ai-options-scroll-lane')
+                    ui('invoke','CloseButton');ready()
+                    invoke_tool(cli,app_pid,hwnd,'BtnRelatedTerms');ui('wait-for','RelatedTerm','-t','12000');visible('RelatedTerm');gutter('RelatedTermsScroll','RelatedTerm');shot(theme+'-related-terms-scroll-lane')
+                    ui('invoke','CloseButton');ready()
+                    ui('wait-for','Item'+str(jump_item),'-t','12000');ready()
+                    ui('invoke','Item'+str(jump_item),'--action','select');wait('TxtEditStatus','保存済み')
+                    open_review();ui('invoke','TagGenerate');enabled('TagRefresh',True)
+                    visible('TagEdited');gutter('TagDetail','TagEdited');shot(theme+'-tag-review-scroll-lane')
+                    ui('invoke','TagClose');ready()
                 close();continue
             if args.page_image_only:
                 original=(jump_file.read_bytes(),jump_file.stat().st_mtime_ns)

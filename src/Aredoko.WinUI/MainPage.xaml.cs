@@ -729,6 +729,7 @@ public sealed partial class MainPage : Page
         Details.DisplayMode=e.NewSize.Width<1000?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
         Details.OpenPaneLength=Math.Min(320,Math.Max(240,e.NewSize.Width-64));
         if(active is null&&!folderSettingsActive)Details.IsPaneOpen=false;
+        UpdateDetailLayout();
     }
     private void LibraryLayout_SizeChanged(object sender,SizeChangedEventArgs e)
     {
@@ -739,6 +740,21 @@ public sealed partial class MainPage : Page
         Grid.SetRow(ViewTools,narrow?1:0);Grid.SetColumn(ViewTools,narrow?0:1);Grid.SetColumnSpan(ViewTools,narrow?2:1);
         ViewTools.HorizontalAlignment=narrow?HorizontalAlignment.Left:HorizontalAlignment.Right;
         ViewTools.Margin=narrow?new Thickness(0,8,0,0):new Thickness(0);
+        UpdateDetailLayout();
+    }
+
+    private void Details_PaneStateChanged(object sender,object args)=>UpdateDetailLayout();
+
+    private void UpdateDetailLayout()
+    {
+        if(Details is null||LibraryLayout is null)return;
+        var gap=Details.IsPaneOpen&&Details.DisplayMode==SplitViewDisplayMode.Inline?16:0;
+        if(LibraryLayout.Margin.Right!=gap)LibraryLayout.Margin=new Thickness(0,0,gap,0);
+        // Overlay panes must also occlude the content at their outer edge;
+        // antialiasing there otherwise exposes a sliver of the Search button.
+        LibraryLayout.Clip=Details.IsPaneOpen&&Details.DisplayMode==SplitViewDisplayMode.Overlay
+            ?new RectangleGeometry{Rect=new Windows.Foundation.Rect(0,0,Math.Max(0,LibraryLayout.ActualWidth-Details.OpenPaneLength),LibraryLayout.ActualHeight)}
+            :null;
     }
 
     private void ShowItemDetailsPane()
@@ -1404,7 +1420,8 @@ public sealed partial class MainPage : Page
         try{
             var editor=new RelatedTermsEditor(api);
             await editor.LoadAsync();
-            editorScroll=new ScrollViewer {Content=editor.Content,MaxHeight=Math.Max(160,root.Size.Height-240)};
+            editorScroll=new ScrollViewer {Content=FormScrollContent.Wrap(editor.Content),MaxHeight=Math.Max(160,root.Size.Height-240),HorizontalScrollMode=ScrollMode.Disabled,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            AutomationProperties.SetAutomationId(editorScroll,"RelatedTermsScroll");
             root.Changed+=Fit;
             var dialog=new ContentDialog {XamlRoot=root,RequestedTheme=ActualTheme,Title="関連語",Content=editorScroll,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
             AutomationProperties.SetAutomationId(dialog,"RelatedTermsDialog");
@@ -1601,7 +1618,7 @@ public sealed partial class MainPage : Page
             content.RowDefinitions.Add(new RowDefinition {Height=new GridLength(1,GridUnitType.Star)});
             content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
             content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
-            var modelOptions=new ScrollViewer {Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            var modelOptions=new ScrollViewer {Content=FormScrollContent.Wrap(panel),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             AutomationProperties.SetAutomationId(modelOptions,"AIOptions");
             AutomationProperties.SetName(modelOptions,"モデル・AIリソース設定");
             content.Children.Add(modelOptions);

@@ -50,6 +50,60 @@ class PageVectors:
             raise ReaderChanged('Page source changed')
         return pages
 
+    def coverage(self, item_id, revision, scope):
+        """Read-only CPU status. Never refresh a snapshot, decode media or infer."""
+        identifier(item_id); token(revision)
+        ai = self.ai; scope = ai._scope(scope)
+        if scope is None: raise ValueError('Explicit scope required')
+        with ai.guard:
+            if ai._closed: raise AIUnavailable('AI is closing')
+        supported = 'cover' in ai.profile.modalities
+        available = bool(ai.encoder.available)
+        with ai.catalog._guard:
+            ai.catalog._require_idle()
+            row = ai._current_rows([item_id], scope).get(item_id)
+            if row is None or row['kind'] not in ('book', 'archive'):
+                raise KeyError('Page source unavailable')
+            with ai.catalog.connect() as db:
+                self.index._allowed(db, item_id)
+                head = self.index._head(db, item_id)
+                if head is None: raise KeyError('Page source unavailable')
+                if head['source_revision'] != revision:
+                    raise ReaderChanged('Page source changed')
+                entries = {p['page_id']:p['page'] for p in db.execute(
+                    'SELECT page_id,page FROM page_entries WHERE snapshot_id=?', (head['id'],))}
+            count = head['page_count']
+            if len(entries) != count or sorted(entries.values()) != list(range(count)):
+                raise ReaderChanged('Page index changed')
+            ready = set()
+            if supported:
+                # Stream one blob at a time. Matching IDs alone do not make a
+                # malformed, old-revision or old-preprocessing vector ready.
+                with ai.store.connect() as db:
+                    for pid, page, data in db.execute(
+                            'SELECT page_id,page,vector FROM ai_page_vectors '
+                            'WHERE item_id=? AND source_revision=? AND contract=?',
+                            (item_id, revision, CONTRACT)):
+                        if entries.get(pid) == page and unpack(data, ai.profile.dimension) is not None:
+                            ready.add(page)
+            state = self.index.state(item_id, revision)
+            if state != 'current': ready.clear()
+        ranges = []
+        for page in sorted(ready):
+            if ranges and ranges[-1]['start']+ranges[-1]['count'] == page:
+                ranges[-1]['count'] += 1
+            else: ranges.append({'start':page, 'count':1})
+        next_range = None
+        if supported and state == 'current' and len(ready) < count:
+            start = next(p for p in range(count) if p not in ready)
+            stop = start
+            while stop < count and stop not in ready and stop-start < MAX_PAGES: stop += 1
+            next_range = {'start':start, 'count':stop-start}
+        return {'item_id':item_id, 'source_revision':revision, 'source_state':state,
+            'profile':ai.profile.key, 'model':ai.profile.label, 'supported':supported,
+            'available':available, 'page_count':count, 'indexed_pages':len(ready),
+            'remaining_pages':count-len(ready), 'indexed_ranges':ranges, 'next_range':next_range}
+
     def start(self, item_id, page_ids, revision, scope):
         from ai_search import AIBusy
         identifier(item_id); token(revision)

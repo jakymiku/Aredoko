@@ -16,7 +16,7 @@
    <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
    <ListView x:Name="Candidates" SelectionChanged="Candidate_Changed" SelectionMode="Single" AutomationProperties.AutomationId="TagCandidates" AutomationProperties.Name="AIタグ候補と承認状態"/>
    <ScrollViewer x:Name="Detail" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="TagDetail">
-    <StackPanel Spacing="12">
+    <StackPanel Spacing="12" Margin="{StaticResource FormScrollGutter}">
      <Image x:Name="Evidence" Visibility="Collapsed" Height="110" Stretch="Uniform" AutomationProperties.Name="候補を生成した画像または本の先頭ページ" AutomationProperties.AutomationId="TagEvidence"/>
      <TextBlock x:Name="Provenance" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TagProvenance"/>
      <TextBlock x:Name="Explanation" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="TagExplanation"/>

@@ -6,7 +6,7 @@
 
 1. 設定 →「AI検索の準備」で、本の登録フォルダを含むAI対象範囲を保存する。
 2. ライブラリのCBZ/ZIPまたはフォルダ本を右クリック → **「本のページをAI検索に追加…」**。
-3. 開始ページとページ数を指定し「選んだページを追加」。**1要求1冊・最大16ページ**。別の範囲を追加すれば同じ本に蓄積でき、同版の準備済みページは再利用する。
+3. **準備済みページ数と残り数**を確認し、開始ページとページ数を指定して「選んだページを追加」。**1要求1冊・最大16ページ**。画面を開くと次の未処理範囲が初期選択され、追加成功後はさらに次の範囲へ進む。「次の未準備範囲を選ぶ」でも選び直せる。この操作だけで索引を開始しない。手動指定と同版の再利用も維持する。
 4. **「画像の見た目（AI）」**、または「両方で探す（AI）」で検索する。本を一つの結果として表示し、ページ画像が最良の根拠なら「内部ページの意味一致（nページ）」とモデル・類似度を表示する。
 5. その本を開くと、一致した版のページから読書する。検索後に本が変わった場合は古いページ番号を使わず、通常の読書位置復元へ戻る。
 
@@ -32,6 +32,49 @@
 - `POST /api/library/ai/pages/cancel {"job_id":"32hex"}`は一致する実行中のjobだけ中断。別job/完了jobでは`cancel_requested:false`。既存の管理用`ai/cancel`も保持。GUIの閉じる操作は所有jobの中断を要求し、終了後に閉じる。
 - `POST /api/library/ai/search`の`source:"cover"`/`"all"`結果に、最良の画像根拠が内部ページなら`ai_page_match`を付加。作品ごとに最大1結果・最大1ページ根拠。
 
+## ページごとの準備状況と再開（2026-10-17）
+
+- `POST /api/library/ai/pages/coverage`：`{"item_id":id,"revision":"64hex","scope":{...}}`の3field必須。未知field/bool ID/無効版/未知scopeは拒否。ページheadが指定版と異なれば409、有効scope内の本でなければ拒否。任意path/model/元画像を受け取らない。
+- 応答はitem/source revision/source state/profile/model、画像対応`supported`・実行環境`available`、`page_count/indexed_pages/remaining_pages`、`indexed_ranges:[{"start":0,"count":16},...]`、`next_range`。範囲は0始まりで、GUIでは1始まりへ表示する。全準備済みならnext=null。次範囲は**最初の欠けから、次の準備済みページの直前まで、最大16ページ**。たとえば17〜32ページが準備済みなら、先に1〜16、次に33以降を選ぶ。
+- 同版/同前処理・page IDと番号がsnapshotに一致し、現在profileの次元/有限値/単位normを満たすvectorだけ数える。破損cache/旧版/違うpage番号は未準備。sourceがstale/unavailable/unverifiedなら準備済み0・next=nullで警告する。画像非対応profileも準備済み0・next=null。実行環境が未導入でも保存済みの同profile索引の件数は読め、準備ボタンは無効になる。
+- **読み取り専用CPU処理**。ページsnapshotを自動refreshせず、画像bytesの取得/decode・GPU/model load・索引・job変更をしない。他の推論が共有lockを使用中でもstatusを読める。source/root/exclusions/headを確認し、手動タグの変更だけではpage索引を無効化しない。
+- 「準備済みの範囲」は折りたたみ表示。準備状況・進捗/結果・追加/中断操作はスクロール外に固定し、狭幅では範囲入力だけスクロールする。処理中の保存済み数と、今回処理中のページ数を区別する。完了後は状態を再取得し、取消/失敗時も以前の範囲を維持。manual再確認は全準備済みでも使える。別profile/版の応答・不整合な件数/範囲をCoreで拒否し、確認失敗時は操作を止めて開き直しを案内する。
+- この件数は**明示した内部ページvectorだけ**を数える。通常の表紙vector/AI coverageの作品件数や、未承認タグvectorとは別。全ページを自動解析したという表示にはしない。
+
+### 準備状況の規模計測
+
+`tools/benchmark_page_coverage.py`で生成した1冊10000ページ・768次元の保存済みvectorを使い、一度ずつCPUで計測（モデル実行環境は無効、推論0回）。空索引 **0.058秒**、1ページおき5000ページ/5000範囲 **0.688秒**、全10000ページ準備済み **1.765秒**。最大応答144861 bytesでCoreの1MiB上限内。tracemallocを別途有効にした全件のPython peakは8437722 bytes（約8.0MiB、SQLite native/OS/GPUのメモリは含まない）。traceありの10.242秒を通常の応答時間へ混ぜない。vector DBは41926656 bytes。生成原本bytes/mtime不変。`data/page-coverage/scale-20261017-01/report.json`。
+
+これは1冊の状態集計の計測で、10000冊の検索・全ライブラリjob性能や実素材精度ではない。多数ページでのCPU検査中はcatalog guardを持つため、複数本へ広げる前に集計/物理版検査/guard時間を測定して分割を検討する。人工的に埋めたvectorでありEmbeddingGemmaの推論速度/精度ではない。
+
+### 準備状況のWindows確認
+
+**全Python444件実行：441 PASS / 3 Windows platform SKIP（239.668秒）／Core424 PASS／Windows x64 SelfContained Release警告0・エラー0（10.78秒）**。新規Python8件とCore27checksで、飛び飛びの範囲/完成/破損/旧版/非対応profile/未導入runtime/取消/除外/原本変更/共有lock中のCPU読取・HTTP認証/厳密field・応答矛盾/byte上限を検証した。
+
+coverage単独のnative **`page-coverage-20261017-03`：46 checks PASS / Light・Darkの8 PNG全目視PASS / 正常終了2**。生成35ページと模擬vectorだけを使用。17–32のみ準備済み→1–16を追加→33–35を選択→取消で32/35保持→再開して35/35→app再起動→manual再確認は再利用、という操作をGUIで確認。未保存タグ/原本bytes・mtime/設定保持、準備状況を開く/次範囲選択では推論0回。今回実モデルの品質を再測定したわけではない。
+
+初回01はNumberBox本体のget-valueで「33」を得られずFAILED。画像/内部Editの値は正しく、テストを内部EditのUIA値検査へ修正（3 PNG全確認、FAILED/所有process cleanupを保持）。02は操作43checks成功/8 PNG確認だが、狭幅で進捗/結果がスクロール外へ隠れる点を発見した中間版。状態/結果/取消を固定する製品修正後、一度だけ03を実行して上記合格。初回＋修正再検証2回の上限内。WinUIAnalyzerは未導入/未実行、High Contrast/Narrator/Native AOT/今回の新規キーボード網羅は未検証。新download/依存/私物scan/CIなし。
+
+### フォームの文字切れ・スクロールバー余白（同日、ユーザー追加指摘）
+
+フォームの内側contentに共通`FormScrollGutter`（右24DIP）を設け、右端のoverlay scrollbarと入力/ボタンが重ならないようにした。詳細・フォルダ設定・AI設定/root選択・関連語・タグ候補・検索結果の説明へ適用。画像/読書canvasのベゼルを増やす全体style変更ではない。ページ入力は開始/枚数を横並びにし、次の未準備範囲ボタンを状態/追加/中断と同じ固定領域へ移した。ダイアログ幅を現在のwindowに合わせて固定し、長い取消結果による急な幅変更/途中frameでの文字切れも抑えた。
+
+`python tools/test_tag_review_ui.py --page-coverage-only --check-scroll-gutters --output data/ai-ui/<new-run>`：**`page-scroll-20261017-03`は76 checks PASS / Light・Darkの16 PNG全目視PASS / 正常終了2**。範囲追加/取消/再開/再起動/未保存タグ保持に加え、狭幅でpage入力・次範囲ボタン、詳細/AI設定/関連語/タグ候補の操作右端とviewport右端の20px以上の間隔をUIAで確認。元生成素材bytes/mtimeとAI設定は不変。実モデル/WD/OCRは使わない。フォルダ編集と説明flyoutは共通余白の適用をsource reviewしたが、このbatchで開く操作は再検証していない。
+
+ユーザー追加指摘に対する初回01はAI設定dialogのasync待機不足でFAILED（7 PNG全確認、所有app強制cleanupを記録）。02はAI設定を閉じた再読込で選択が消えた後にテストが無効な「詳細」を開こうとしてFAILED（9 PNG全確認、正常終了1）。dialog待機と明示再選択をテストへ追加し、02の取消shotに見られたwidth変更中のframeは製品の幅固定とshot前compositor待機で解消。追加指摘の検証は初回＋修正再実行2回で終了し、旧FAILEDを成功へ変更しない。余白修正後のReleaseは警告0/エラー0（10.18秒、`data/page-scroll-release-20261017.log`）。Python/CoreはこのUI変更では未変更で、上の全体結果を使用する。
+
+### 詳細パネル端の短い線（青い矢印の追加指摘）
+
+矢印の短い縦線はスクロールバーではなく、背後の検索ボタン右端がoverlay pane境界から見える描画不具合だった。右側の長い線は実際の縦scrollbar。`LibraryLayout.Clip`で、狭幅の詳細overlayが開いているときだけ背後のcontentをpaneの手前までclipし、pane開閉・window/layout resizeで更新する。閉じたとき/広幅inlineではclipを解除する。SplitView/control templateや検索機能を作り直さず、閲覧canvasに余白を加えない。APIはrestored WinUI projectの`UIElement.Clip`/`RectangleGeometry.Rect`/`SplitView.PaneOpened/PaneClosed`と照合した。
+
+`python tools/test_tag_review_ui.py --pane-boundary-only --output data/ai-ui/<new-run>`：**`pane-boundary-20261017-02`は39 checks PASS / Light・Darkの8 PNG全目視PASS / app正常終了2**。700/820pxのoverlayでは背後の検索ボタンがUIAでもoffscreen、閉じた後/1200pxのinlineでは表示/検索が復帰。resize中の未保存タグとcatalogの手動metadata保持、生成原本bytes/mtime/AI設定不変、推論0回を確認。初回01はdisplay mode変更で既存SplitViewがpaneを閉じた後に、テストが存在しないclose buttonを呼んでFAILED（2 PNG全確認・所有app強制cleanup）。paneが閉じた場合に既存「詳細」を明示的に開く手順へテストを合わせ、一度だけ再実行した。clip修正時点のRelease警告0/エラー0 **11.12秒**（`data/pane-boundary-release-20261017.log`）。先の76checks/16PNGはこの最後のclip修正前の検証で、最後の変更はこの対象batchで検証した。全過去GUIを再実行したという主張にはしない。
+
+### 一覧と詳細の間の余白（同日、横並び画面の追加指摘）
+
+検索ボタン/フォルダ管理/検索範囲欄が右詳細へ密着するため、inlineで詳細が開いている間だけ一覧の右に**16DIP**の余白を確保する。閉じた後とoverlay表示では解除し、一覧の幅を戻す。共通のpane開閉/layout resize処理で更新し、項目や機能を隠して空ける処理ではない。
+
+最終native **`inline-gap-20261017-01`：43 checks PASS / Light・Dark8 PNG全目視PASS / 正常終了2、初回成功・修正再実行0**。横並びの検索/フォルダ管理と詳細入力間隔、700/820pxのoverlay非漏出、1200pxへの復帰、閉じた後の検索、未保存タグ/手動metadata/原本bytes・mtime/設定保持を確認。モデル推論なし。最終Release **警告0/エラー0、9.76秒**（`data/inline-gap-release-20261017.log`）。39checksの直前の境界batchに加え、最後の余白変更をこの対象batchで確認した。
+
 ## 実測と検証境界
 
 - `tools/evaluate_page_images.py`は既存の[固定日本語ページ](ocr-evaluation.md)8枚を**画像のまま**使用。7冊に無地の表紙を付け、予告した8問＋診断用2問を実行。入力画像hash/日本語font receiptを照合し、質問・期待作品/ページ・条件を推論前に`frozen-protocol.json`へ保存した。新規P0 holdoutではなく、人工的に同一表紙にした内容索引の到達確認。OCRは起動しない。
@@ -43,4 +86,4 @@
 
 ## 続き
 
-まず索引済みページ数・未処理範囲・次の範囲への再開を本ごとに分かるようにし、複数本を明示選択した総ページ上限付きjobへ進める。現状は一度に1冊16ページの手動指定であり、1TB全体の一括内容索引は完成していない。多数ページの検索/物理版検査の費用と長い本の最大値の傾向を測定し、代表素材の内容検索漏れを記録する。OCR専用処理は直接索引済みの範囲でも漏れが多い場合に限って検討する。
+本ごとの準備済み数/範囲と次の未処理範囲への再開は実装済み。次に複数本を明示選択した総ページ/冊数上限付きjobへ進める。現状は一度に1冊16ページずつ明示追加する方式で、1TB全体の一括内容索引は完成していない。多数ページの検索/物理版検査の費用と長い本の最大値の傾向を測定し、代表素材の内容検索漏れを記録する。OCR専用処理は直接索引済みの範囲でも漏れが多い場合に限って検討する。

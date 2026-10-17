@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Latest book-page coverage and resume checkpoint (2026-10-17)
+
+Per-book indexed-page coverage and next-gap selection are now implemented on top of the existing direct page index. `POST /api/library/ai/pages/coverage` is scoped/revision/profile bound and CPU-only: no snapshot refresh, image decode, model load or indexing. It validates stored vectors and returns merged ranges plus at most 16 contiguous missing pages; stale/unverified/unavailable sources never appear ready. The existing dialog shows counts/ranges, defaults to the next gap and advances after a successful explicit build; manual range/recheck and cancellation remain available. Keep state/progress/cancel outside the scrollable fields at narrow sizes. Read [docs/page-image-search.md](docs/page-image-search.md) and the latest handoffs for final test/scale evidence. Next: explicit multi-book jobs with total page/book limits, then representative quality and measured large-scale search. Do not reimplement coverage or resume OCR by default. P0 trials remain 1/2; no UI feature removal.
+
 ## Latest direct book-page search checkpoint (2026-10-17)
 
 The first bounded internal-page image embedding slice is now implemented: per-book context action, explicit range (maximum 16 pages/request), profile/source revision/page provenance, reuse/atomic cancellation, book aggregation in existing visual/combined search and revision-safe reader jump. Normal AI builds still use covers; they do not silently index internal pages. Read [docs/page-image-search.md](docs/page-image-search.md) and the latest handoffs for evidence/remaining limits. Do not recreate this slice or resume OCR by default. Next: per-book indexed-page coverage/next-range UX, measured bounded multi-book jobs and representative quality. English WD labels, pending-tag semantics, simple GUI/no feature removal and P0 cumulative 1/2 remain unchanged.
@@ -43,6 +47,7 @@ The vision defines product intent, not implementation status. The latest source,
 - 普段使う操作を前に出し、管理操作は名前付きツール、詳細条件やモデル版・前処理は説明/折りたたみへ整理する。既存機能・情報は到達可能なまま保持し、消去・恒久無効化・API撤去で代用しない。
 - エラー、未保存、取消/進捗、元ファイル変更、未承認タグ、現在の検索範囲など、判断に必要な状態は常時分かる形にする。安全や検索範囲の警告を詳細の中へ隠さない。
 - 長い技術説明より短い自然な日本語を使い、同じ説明やボタンを重複させない。必要な説明・根拠・モデル由来は任意に確認できる。新機能も既存の導線へ統合し、画面/設定を無制限に増やさない。
+- フォームのスクロール領域は`FormScrollGutter`（右24DIP）でバー専用の余白を確保し、文字や操作に重ねない。コード生成のフォームは`FormScrollContent.Wrap`、XAMLのフォームは内側contentのMarginで共通値を使う。閲覧canvasのベゼルは増やさない。詳細overlayの背後描画はパネル端に漏らさず、閉じた後/inline表示で通常の検索領域を復元する。inlineの一覧と右詳細には16DIPの間隔を置き、詳細を閉じたときは一覧の幅を戻す。狭幅でも進捗/結果/中断を隠さず、長い説明でダイアログ幅を急変させない。
 - 整理した操作へのマウス/キーボード導線、Light/Dark、狭幅、未保存編集、既存の検索/登録/読書/承認を検証する。AI用テストの古い見た目の期待に合わせて製品GUIを再び散らかさず、テストを新導線へ更新する。
 
 ## Latest integration checkpoint (2026-10-17)

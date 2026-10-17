@@ -72,7 +72,7 @@ public sealed class AIScopeEditor : IDisposable
         all.Checked+=(_,_)=>Changed();all.Unchecked+=(_,_)=>Changed();
         kind.SelectionChanged+=(_,_)=>Changed();shelfMode.SelectionChanged+=(_,_)=>Changed();shelf.TextChanged+=(_,_)=>Changed();
         // Bound the expanding settings extent even with hundreds of roots.
-        var rootViewport=new ScrollViewer {Content=rootList,MaxHeight=160,
+        var rootViewport=new ScrollViewer {Content=FormScrollContent.Wrap(rootList),MaxHeight=160,
             HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
         AutomationProperties.SetAutomationId(rootViewport,"AIScopeRootsScroll");

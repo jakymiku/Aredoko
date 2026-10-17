@@ -13,7 +13,7 @@
    <NavigationViewItem x:Name="FolderNavigation" Content="登録フォルダ" Tag="folders" Icon="Folder" AutomationProperties.AutomationId="NavFolders"/>
   </NavigationView.MenuItems>
   <NavigationView.FooterMenuItems><NavigationViewItem Content="設定" Tag="settings" Icon="Setting" SelectsOnInvoked="False" AutomationProperties.AutomationId="BtnSettings"/></NavigationView.FooterMenuItems>
-   <SplitView x:Name="Details" Margin="16" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="320" PaneBackground="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+   <SplitView x:Name="Details" PaneOpened="Details_PaneStateChanged" PaneClosed="Details_PaneStateChanged" Margin="16" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="320" PaneBackground="{ThemeResource SolidBackgroundFillColorBaseBrush}">
     <SplitView.Pane>
      <Border KeyDown="Detail_KeyDown" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource OverlayCornerRadius}">
      <Grid RowSpacing="16" Padding="16">
@@ -24,7 +24,7 @@
       </Grid>
       <ContentControl x:Name="Editor" Grid.Row="1" IsEnabled="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
        <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-       <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="DetailScroll" AutomationProperties.Name="作品の詳細と編集"><StackPanel Spacing="12">
+       <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="DetailScroll" AutomationProperties.Name="作品の詳細と編集"><StackPanel Spacing="12" Margin="{StaticResource FormScrollGutter}">
       <TextBlock x:Name="ItemTitle" Text="作品を選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap"/>
       <TextBlock x:Name="ItemPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
       <Image x:Name="DetailPreview" IsDoubleTapEnabled="True" DoubleTapped="DetailPreview_DoubleTapped" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
@@ -48,7 +48,7 @@
        </Grid></ContentControl>
       <Grid x:Name="FolderEditorPanel" Grid.Row="1" Visibility="Collapsed" RowSpacing="12">
        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-       <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="FolderDetailScroll" AutomationProperties.Name="登録フォルダの設定"><StackPanel Spacing="12">
+       <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="FolderDetailScroll" AutomationProperties.Name="登録フォルダの設定"><StackPanel Spacing="12" Margin="{StaticResource FormScrollGutter}">
         <TextBlock x:Name="FolderTargetTitle" Text="フォルダを選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderTargetTitle"/>
         <TextBlock x:Name="FolderTargetPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TxtFolderTargetPath"/>
         <TextBlock x:Name="CurrentShelfSummary" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtCurrentShelfSummary"/>
@@ -184,7 +184,7 @@
     <InfoBar x:Name="Status" IsOpen="True" IsClosable="False" Title="接続準備中" AutomationProperties.AutomationId="StatusBar">
      <InfoBar.ActionButton><Button x:Name="StatusMore" Content="説明" Visibility="Collapsed" AutomationProperties.Name="検索結果の説明を読む" AutomationProperties.AutomationId="BtnStatusDetails">
       <Button.Flyout><Flyout>
-       <ScrollViewer MaxHeight="300" MaxWidth="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><TextBlock x:Name="StatusExplanation" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="TxtStatusDetails"/></ScrollViewer>
+       <ScrollViewer MaxHeight="300" MaxWidth="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><TextBlock x:Name="StatusExplanation" Margin="{StaticResource FormScrollGutter}" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="TxtStatusDetails"/></ScrollViewer>
       </Flyout></Button.Flyout>
      </Button></InfoBar.ActionButton>
     </InfoBar>

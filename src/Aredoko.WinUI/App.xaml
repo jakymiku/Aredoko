@@ -10,6 +10,8 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
+            <!-- Form fields leave a dedicated lane for overlay scroll bars. -->
+            <Thickness x:Key="FormScrollGutter">0,0,24,0</Thickness>
             <!-- Native theme resources also adapt to Windows Contrast themes. -->
             <Style x:Key="ImageViewerOverlayStyle" TargetType="Border">
                 <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />

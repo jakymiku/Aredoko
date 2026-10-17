@@ -419,6 +419,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if set(body)-{'scope','limit'}:raise ValueError('Invalid coverage request')
                     scope=validate_scope(body['scope']) if 'scope' in body else None
                     return self.send(200,ai.coverage(scope=scope,limit=body.get('limit',MAX_ITEMS)))
+                if self.path=='/api/library/ai/pages/coverage':
+                    if set(body)!={'item_id','revision','scope'}:raise ValueError('Invalid page coverage fields')
+                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
+                    try:return self.send(200,ai.pages.coverage(body['item_id'],body['revision'],validate_scope(body['scope'])))
+                    except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
+                    except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
                 if self.path=='/api/library/ai/pages/cancel':
                     if set(body)!={'job_id'} or type(body['job_id']) is not str or not re.fullmatch(r'[0-9a-f]{32}',body['job_id']):raise ValueError('Invalid job ID')
                     accepted=False

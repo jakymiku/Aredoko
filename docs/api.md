@@ -1,5 +1,9 @@
 # 共通API（操作試作 v0）
 
+## 本ごとのページ準備状況（2026-10-17）
+
+`POST /api/library/ai/pages/coverage`はitem_id/revision/明示scopeを受け、同profileの検査済みpage vector件数・連続範囲・最大16ページの次の欠けを返す読み取り専用CPU API。画像取得/decode・snapshot更新・model load・索引なし。古い/確認できないsourceを準備済みとしない。GUIの範囲指定と次範囲への再開へ接続済み。[正確な契約・上限・生成1万ページの計測](page-image-search.md)。
+
 ## 本の内部ページ画像のAI索引（2026-10-17）
 
 `POST /api/library/ai/pages`は既存page-indexのitem ID・page IDs（1〜16）・revision・明示scopeを受け、共有AI workerで範囲全体を原子的に保存する。`ai/status`で進捗、`POST /api/library/ai/pages/cancel {"job_id":"32hex"}`で所有jobだけ中断。既存`ai/search`のcover/allへ作品単位の最大ページscoreと`ai_page_match`を追加。通常AI buildやtext searchに内部ページを混ぜない。[正確な契約・制限](page-image-search.md)。

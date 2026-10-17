@@ -318,6 +318,14 @@ public sealed class PageEvidenceClient(HttpClient client)
         }
     }
 
+    public async Task<PageImageCoverage> ImageCoverageAsync(int itemId,string revision,JsonObject scope,string? expectedProfile=null,CancellationToken cancellation=default)
+    {
+        PageEvidenceProtocol.ValidateId(itemId);PageEvidenceProtocol.ValidateToken(revision,nameof(revision));
+        var request=AIScopeRequests.Scoped(scope);request["item_id"]=itemId;request["revision"]=revision;
+        var bytes=await ReadAsync("api/library/ai/pages/coverage",request,PageEvidenceProtocol.MaxJsonBytes,cancellation);
+        return PageImageCoverage.Parse(bytes,itemId,revision,expectedProfile);
+    }
+
     public async Task<PageIndexRefresh> RefreshIndexAsync(int itemId, CancellationToken cancellation = default)
     {
         PageEvidenceProtocol.ValidateId(itemId);
