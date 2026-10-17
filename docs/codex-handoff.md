@@ -1,5 +1,41 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-18 ユーザー許諾・GPU実機14素材再評価（combined Top1 94.1%・直接視覚100%達成）および最適化後ネイティブWinUI 3 GUI検証完了（40 PASS・6画像確認）
+
+ユーザーのPC作業終了および明示的な許諾（GPU・ネイティブGUI実行）に基づき、保留されていた2つの実機検証を完全実行・確認。
+
+### 変更・測定・整合性
+
+- **実代表14素材CUDA実機評価（`real-v2-20261018`）**:
+  - `tools/evaluate_representative_assets.py` をユーザー承認済みの読み取り専用ZIP（`C:\AI\Aredoko-test\Aredoko_search_test_images_8.zip` および `Aredoko_text_recognition_test_images_6.zip`）に対して実行。CUDA EmbeddingGemma 2（768D）+ WD Tagger CPU（`wd-swinv2-v3`）。
+  - **combinedモード（コサイン幅重み付きMean-RRF）の決定的改善**:
+    - `real-v1` では等重みRRFによるテキスト同順位希釈のため、直接視覚13問中6問がTop1から転落していた（Top1 53.8%、MRR 0.7372）。
+    - コサイン幅重み付けの適用により、直接視覚13問すべてにおいて **Top1 100.0% (13/13)**、**MRR 1.0000** を達成。転落していた全6問（`scene_03`, `scene_04`, `text_ja_03`, `text_ja_04`, `text_en_01`, `text_en_02`）がすべてTop1へ復帰。
+    - 全17問（WD 4問含む）総合 combined Top1 は 0.5882 (10/17) → **0.9412 (16/17)**、MRR は 0.7794 → **0.9706** へ大幅向上。
+  - **coverモード（直接視覚）の完全一致・0回帰**:
+    - 全17問の個別スコア・順位・Top1判定は `real-v1` と100%完全一致（Top1 0.9412 / Rec@3 1.0 / MRR 0.9706）。
+    - 画像内日本語（5/5）および英語（2/2）の Exact Page Hit @ 1 は **100% (1.0)** を維持。
+    - 画像内テキストの content-search misses は **依然として0件** であり、専用OCR保留方針を強く裏付け。
+  - **最適化による実機高速化**:
+    - 表紙索引（6点）: 23.862s → **21.908s**（-8.19%）
+    - 本文ページ索引（10ページ）: 3.680s → **2.641s**（**-28.23% 短縮**）
+- **ネイティブWinUI 3 GUI検証（`page-chunks-post-opt-20261018-01`）**:
+  - `tools/test_tag_review_ui.py --page-chunks-only --output data/ai-ui/page-chunks-post-opt-20261018-01` を実行。
+  - セッションロック時・仮想デスクトップ環境におけるマウスシミュレーション拒否（`No interactive desktop is available`）に対応し、`context()` に UIA `--target` によるキー送信（`vk=0x5D` Menuキー / `shift+f10`）および子ウィンドウ `InputSiteWindowClass` メッセージ送信のフォールバックを追加。
+  - 全40件のネイティブ検査が完全合格（`runtime_pass: true`, `checks: 40`）。
+  - 生成された6枚のスクリーンショット（`Light-chunk-preview.png`, `Light-chunk-narrow.png`, `Light-chunk-cancelled-stable.png`, `Dark-chunk-restored.png`, `Dark-chunk-settings-complete.png`, `Dark-chunk-all-pages-ready.png`）を目視確認。狭幅でのボタン下部固定・スクロールガター・ダークテーマ復帰・145ページ完了表示のレイアウト健全性を確認。
+- **プロセス・リソースの確実な終了**:
+  - `Aredoko.WinUI.exe` および Python worker プロセスはすべて正常終了（残留なし確認済み）。
+
+### 検証・失敗履歴・未検証
+
+- `data/representative-eval/real-v2-20261018/report.json`: `passed: true`, 17クエリ全件記録。
+- `data/ai-ui/page-chunks-post-opt-20261018-01/result.json`: `runtime_pass: true`, 40 checks PASS, 6 screenshots inspected.
+- `Aredoko.WinUI` 終了確認: `Get-Process Aredoko*` -> 0件。
+- 未検証: 旧book-batch取消静止PNG1枚（batch-three）は未完のまま（ユーザー指示により再試行せず現状維持）。
+
+---
+
 ## 2026-10-18 物理原本確認の重複_safe_path・stat解消とルート置換検知修正・1,024冊検索新記録（7.10秒・guard保持1.10秒）
 
 実装HEAD作業差分、開始HEAD **`da61d014457f9cbce3c2d43997e3cb7574b6aa08`**、fetch/statusでclean/origin差0。既存production branch `feat/winui3-production-mvp-20261011` / Draft PR5を継続。今回の検証はCPU・生成データのみで実施（ユーザーPC利用中のためNo-GPU / No-GUI-Window-Focus厳守）。

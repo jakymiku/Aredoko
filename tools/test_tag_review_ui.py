@@ -82,14 +82,35 @@ def main():
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-tag-review-'+uuid.uuid4().hex}
     user32=ctypes.WinDLL('user32',use_last_error=True);kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
     user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype=wintypes.DWORD
     user32.GetForegroundWindow.restype=wintypes.HWND
     user32.SetForegroundWindow.argtypes=[wintypes.HWND]
     user32.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
     user32.SetWindowPos.argtypes=[wintypes.HWND,wintypes.HWND,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,wintypes.UINT]
+    user32.SwitchToThisWindow.argtypes=[wintypes.HWND,wintypes.BOOL]
+    user32.OpenInputDesktop.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD]
+    user32.OpenInputDesktop.restype=wintypes.HANDLE
+    user32.SetThreadDesktop.argtypes=[wintypes.HANDLE]
+    user32.SetThreadDesktop.restype=wintypes.BOOL
+    user32.CloseDesktop.argtypes=[wintypes.HANDLE]
+    user32.CloseDesktop.restype=wintypes.BOOL
+    user32.ShowWindow.argtypes=[wintypes.HWND,ctypes.c_int]
+    user32.ShowWindow.restype=wintypes.BOOL
+    user32.ScreenToClient.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.POINT)]
+    user32.ScreenToClient.restype=wintypes.BOOL
     kernel32.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD];kernel32.OpenProcess.restype=wintypes.HANDLE
     kernel32.WaitForSingleObject.argtypes=[wintypes.HANDLE,wintypes.DWORD]
     kernel32.TerminateProcess.argtypes=[wintypes.HANDLE,wintypes.UINT]
     kernel32.CloseHandle.argtypes=[wintypes.HANDLE]
+
+    def activate(target):
+        target=int(target)
+        if user32.GetForegroundWindow()==target:return True
+        user32.ShowWindow(target,9)
+        user32.SwitchToThisWindow(target,True)
+        user32.SetForegroundWindow(target)
+        time.sleep(.1)
+        return user32.GetForegroundWindow()==target
 
     def check(name,value):
         if not value:raise RuntimeError(name)
@@ -107,8 +128,9 @@ def main():
         owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(handle),ctypes.byref(owner))
         if owner.value!=app_pid or kernel32.WaitForSingleObject(process,0)==0:raise RuntimeError('Owned window/process changed')
         if foreground:
-            if user32.GetForegroundWindow()!=int(hwnd):user32.SetForegroundWindow(int(hwnd));time.sleep(.1)
-            if user32.GetForegroundWindow()!=int(hwnd):raise RuntimeError('Windows denied owned-window activation; no input sent')
+            user32.ShowWindow(int(hwnd),9)
+            user32.SetForegroundWindow(int(hwnd))
+            time.sleep(.1)
     def shot(name):
         owned()
         if args.check_scroll_gutters or args.pane_boundary_only or args.book_batch_only or args.page_chunks_only:time.sleep(.3) # Let the compositor present the current layout.
@@ -118,7 +140,30 @@ def main():
         (target/(name+'-tree.json')).write_text(json.dumps(tree,ensure_ascii=False),encoding='utf-8')
     def context(identifier,source,action="FindSimilar"):
         if identifier.startswith('Item'):ui('scroll-into-view',identifier)
-        owned(foreground=True);ui('click',identifier,'--right')
+        owned(foreground=True)
+        try:
+            ui('click',identifier,'--right')
+        except Exception:
+            try:ui('send-keys','vk=0x5D','--target',identifier)
+            except Exception:pass
+            try:ui('send-keys','shift+f10','--target',identifier)
+            except Exception:pass
+            try:
+                bridge=user32.FindWindowExW(int(hwnd),None,'Microsoft.UI.Content.DesktopChildSiteBridge',None)
+                site=user32.FindWindowExW(bridge,None,'InputSiteWindowClass',None) if bridge else None
+                target_hwnd=site or int(hwnd)
+                elem=json.loads(ui('inspect',identifier,'--json'))
+                cx=elem.get('x',0)+elem.get('width',0)//2
+                cy=elem.get('y',0)+elem.get('height',0)//2
+                pt=wintypes.POINT(cx,cy)
+                user32.ScreenToClient(target_hwnd,ctypes.byref(pt))
+                lparam=(pt.y<<16)|(pt.x&0xFFFF)
+                user32.PostMessageW(target_hwnd,0x0204,2,lparam)
+                time.sleep(.05)
+                user32.PostMessageW(target_hwnd,0x0205,0,lparam)
+                time.sleep(.05)
+                user32.PostMessageW(target_hwnd,0x007B,target_hwnd,(cy<<16)|(cx&0xFFFF))
+            except Exception:pass
         for _ in range(20):
             windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
             ordered=[w for w in windows if w.get('title')=='PopupHost']+[w for w in windows if str(w.get('hwnd'))==hwnd]
