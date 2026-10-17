@@ -11,7 +11,7 @@ import time
 from ai_process import AIUnavailable
 from ai_vectors import normalized
 from page_index import PageIndex, identifier, token
-from previews import ReaderChanged
+from previews import ReaderChanged, PreviewBusyError, PreviewUnavailable
 
 CONTRACT = 'book-page-image:v1'
 MAX_PAGES = 16
@@ -268,8 +268,14 @@ class PageVectors:
                             item_id, operation='tag_source', row=loc_rows.get(item_id),
                             row_loaded=True, root_cache=root_cache)
                         state = 'current' if source['revision'] == evidence['source_revision'] else 'stale'
+                    except ReaderChanged:
+                        state = 'stale'
+                    except PreviewBusyError:
+                        state = 'unverified'
+                    except (PreviewUnavailable, OSError):
+                        state = 'unavailable'
                     except Exception:
-                        state = self.index.state(item_id, evidence['source_revision'], root_cache=root_cache)
+                        state = 'unavailable'
                     if state != 'current':
                         del result[item_id]
         return result

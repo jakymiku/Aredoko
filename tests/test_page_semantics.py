@@ -236,6 +236,22 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
             self.catalog._guard = orig_guard
         self.assertEqual([r['id'] for r in mid_res['items']], [self.item])
         self.catalog.set_excludes(self.bookroot, [])
+        # Also test concurrent root unregistration mid-batch
+        releases = 0
+        def unregister_on_release(_self, *args):
+            nonlocal releases
+            orig_guard.release()
+            releases += 1
+            if releases == 1:
+                self.catalog.unregister_root(self.bookroot)
+        InterleaveGuard.__exit__ = unregister_on_release
+        self.catalog._guard = InterleaveGuard()
+        try:
+            mid_res_unreg = self.ai.search('内側の青いページ', source='cover', scope=both_scope)
+        finally:
+            self.catalog._guard = orig_guard
+        self.assertEqual([r['id'] for r in mid_res_unreg['items']], [self.item])
+        self.catalog.add_root(str(self.books), folder_books=True)
         # Mutate the folder book on disk without rescanning: immediately omitted.
         (self.folder/'2.png').write_bytes(png(color=(1,2,3)))
         self.assertEqual([r['id'] for r in self.ai.search('内側の青いページ',source='cover',scope=both_scope)['items']],

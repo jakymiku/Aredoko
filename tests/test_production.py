@@ -73,4 +73,38 @@ class ProductionTests(unittest.TestCase):
         self.assertEqual(self.catalog.index.roots(),[])
         with post({'path':str(self.media),'consent':True}) as response:self.assertEqual(response.status,200)
 
+    def test_state_epoch_increments_only_on_successful_mutations(self):
+        epoch_before = self.catalog._state_epoch
+        # sync_index increments epoch
+        self.catalog.sync_index()
+        self.assertEqual(self.catalog._state_epoch, epoch_before + 1)
+        # Invalid add_root does not increment epoch
+        with self.assertRaises(ValueError):
+            self.catalog.add_root(str(self.base))
+        self.assertEqual(self.catalog._state_epoch, epoch_before + 1)
+        # Successful add_root increments epoch
+        root = self.catalog.add_root(str(self.media))
+        self.assertEqual(self.catalog._state_epoch, epoch_before + 2)
+        # Invalid set_excludes does not increment epoch
+        with self.assertRaises(KeyError):
+            self.catalog.set_excludes(999999, ['bad'])
+        self.assertEqual(self.catalog._state_epoch, epoch_before + 2)
+        # Successful set_excludes increments epoch
+        self.catalog.set_excludes(root, ['*.cbz'])
+        self.assertEqual(self.catalog._state_epoch, epoch_before + 3)
+        # Invalid unregister_root does not increment epoch
+        with self.assertRaises(ValueError):
+            self.catalog.unregister_root(999999)
+        self.assertEqual(self.catalog._state_epoch, epoch_before + 3)
+        # Successful unregister_root increments epoch
+        self.catalog.unregister_root(root)
+        self.assertEqual(self.catalog._state_epoch, epoch_before + 4)
+        # Invalid purge without consent does not increment epoch
+        with self.assertRaises(ValueError):
+            self.catalog.purge_inactive_root(root, consent=False)
+        self.assertEqual(self.catalog._state_epoch, epoch_before + 4)
+        # Successful purge_inactive_root increments epoch
+        self.catalog.purge_inactive_root(root, consent=True)
+        self.assertEqual(self.catalog._state_epoch, epoch_before + 5)
+
 if __name__=='__main__':unittest.main()

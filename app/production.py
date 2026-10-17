@@ -57,22 +57,23 @@ class ProductionCatalog(Catalog):
         raise ValueError('Synthetic seeding is not available in production')
 
     def sync_index(self):
-        self._state_epoch += 1
-        with self.connect() as db:
-            rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id,r.default_shelf,r.path FROM library_locations l '
-                              'JOIN library_roots r ON r.id=l.root_id '
-                              'LEFT JOIN item_locations m ON m.location_id=l.id').fetchall()
-            for row in rows:
-                title = (folder_title(row['path'], row['relative_path']) if is_folder_book(row['relative_path'])
-                         else Path(row['relative_path']).name)
-                if row['item_id'] is None:
-                    item_id = db.execute('INSERT INTO items(title,kind,tags,shelf) VALUES(?,?,?,?)',
-                                         (title,row['kind'],'[]',row['default_shelf'])).lastrowid
-                    db.execute('INSERT INTO item_locations VALUES(?,?)',(item_id,row['id']))
-                else:
-                    # Only source-derived fields; never overwrite user tags/favorites.
-                    db.execute('UPDATE items SET title=?,kind=? WHERE id=?',
-                               (title,row['kind'],row['item_id']))
+        with self._guard:
+            with self.connect() as db:
+                rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id,r.default_shelf,r.path FROM library_locations l '
+                                  'JOIN library_roots r ON r.id=l.root_id '
+                                  'LEFT JOIN item_locations m ON m.location_id=l.id').fetchall()
+                for row in rows:
+                    title = (folder_title(row['path'], row['relative_path']) if is_folder_book(row['relative_path'])
+                             else Path(row['relative_path']).name)
+                    if row['item_id'] is None:
+                        item_id = db.execute('INSERT INTO items(title,kind,tags,shelf) VALUES(?,?,?,?)',
+                                             (title,row['kind'],'[]',row['default_shelf'])).lastrowid
+                        db.execute('INSERT INTO item_locations VALUES(?,?)',(item_id,row['id']))
+                    else:
+                        # Only source-derived fields; never overwrite user tags/favorites.
+                        db.execute('UPDATE items SET title=?,kind=? WHERE id=?',
+                                   (title,row['kind'],row['item_id']))
+            self._state_epoch += 1
 
     @staticmethod
     def item(row):
@@ -264,8 +265,9 @@ class ProductionCatalog(Catalog):
     def unregister_root(self,root_id):
         with self._guard:
             self._require_idle()
+            res = self.index.unregister(root_id)
             self._state_epoch += 1
-            return self.index.unregister(root_id)
+            return res
 
     def purge_inactive_root(self, root_id, consent=False):
         """Permanently delete an unregistered root's DB records while leaving files untouched.
@@ -280,7 +282,6 @@ class ProductionCatalog(Catalog):
             raise ValueError('Invalid root ID')
         with self._guard:
             self._require_idle()
-            self._state_epoch += 1
             with self.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
                 row = db.execute('SELECT id, enabled FROM library_roots WHERE id=?', (root_id,)).fetchone()
@@ -327,13 +328,15 @@ class ProductionCatalog(Catalog):
                 removed_locations = db.execute('DELETE FROM library_locations WHERE root_id=?', (root_id,)).rowcount
                 db.execute('DELETE FROM scan_jobs WHERE root_id=?', (root_id,))
                 db.execute('DELETE FROM library_roots WHERE id=? AND enabled=0', (root_id,))
+            self._state_epoch += 1
         return {'purged': root_id, 'removed_items': removed_items, 'removed_locations': removed_locations}
 
     def set_excludes(self, root_id, patterns):
         with self._guard:
             self._require_idle()
+            res = self.index.set_excludes(root_id, patterns)
             self._state_epoch += 1
-            return self.index.set_excludes(root_id, patterns)
+            return res
 
     def shelves(self):
         with self.connect() as db:
@@ -347,8 +350,9 @@ class ProductionCatalog(Catalog):
             raise ValueError('The library must not contain the application database')
         with self._guard:
             self._require_idle()
+            res = self.index.add_root(path,excludes,default_shelf,folder_books,recursive)
             self._state_epoch += 1
-            return self.index.add_root(path,excludes,default_shelf,folder_books,recursive)
+            return res
 
     def scan_state(self):
         with self.connect() as db:

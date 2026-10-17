@@ -1,3 +1,4 @@
+"""Exact compatibility of stored float32 page vectors with the original decoder."""
 from array import array
 import math
 from pathlib import Path
