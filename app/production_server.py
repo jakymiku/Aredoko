@@ -29,6 +29,7 @@ from tag_semantics import semantic_candidates
 from page_index import PageIndex
 from page_text import PageTextIndex
 from page_batch import start_batch, resume_batch
+from page_chunks import plan_chunked, start_chunked, resume_chunked
 from wd_tagger import create_tagger
 
 class DisabledAI:
@@ -426,6 +427,21 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     try:return self.send(200,ai.pages.coverage(body['item_id'],body['revision'],validate_scope(body['scope'])))
                     except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
                     except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
+                if self.path in ('/api/library/ai/pages/chunked/plan',
+                                 '/api/library/ai/pages/chunked', '/api/library/ai/pages/chunked/resume'):
+                    plan=self.path.endswith('/plan');resume=self.path.endswith('/resume')
+                    fields=({'job_id','scope','profile'} if resume else
+                            {'item_id','revision','scope','profile','max_pages' if plan else 'page_ids'})
+                    if set(body)!=fields:return self.send(400,{'error':'Invalid chunked page request'})
+                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
+                    try:
+                        scope=validate_scope(body['scope'])
+                        if resume:return self.send(200,resume_chunked(ai,body['job_id'],scope,body['profile']))
+                        if plan:return self.send(200,plan_chunked(ai,body['item_id'],body['revision'],scope,body['max_pages'],body['profile']))
+                        return self.send(200,start_chunked(ai,body['item_id'],body['page_ids'],body['revision'],scope,body['profile']))
+                    except ReaderChanged:return self.send(409,{'error':'Page source changed; review a new range'})
+                    except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source or saved chunked job unavailable'})
+                    except (ValueError,TypeError):return self.send(400,{'error':'Invalid chunked page request'})
                 if self.path in ('/api/library/ai/pages/batch','/api/library/ai/pages/batch/resume'):
                     resume=self.path.endswith('/resume')
                     if set(body)!=({'job_id','scope','profile'} if resume else {'items','scope','page_limit','profile'}):raise ValueError('Invalid batch fields')

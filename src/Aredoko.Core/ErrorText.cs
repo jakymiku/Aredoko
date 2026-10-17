@@ -93,6 +93,8 @@ public static class ErrorText
         ["Invalid total page limit"] = "合計ページ数は1〜128を指定してください。",
         ["Total page limit exceeded"] = "合計ページ数の上限を超えています。",
         ["Invalid batch fields"] = "複数本の指定が無効です。",
+        ["Invalid chunked page request"] = "分割追加の指定が無効です。対象フォルダ・モデル・ページ範囲を確認し直してください。",
+        ["Page source or saved chunked job unavailable"] = "対象の本または前回の分割追加を利用できません。登録状態と範囲を確認してください。",
         ["Invalid book range"] = "本の範囲指定が無効です。",
         ["Invalid page IDs"] = "ページの選択が無効です。",
         ["Duplicate book"] = "同じ本が重複しています。",

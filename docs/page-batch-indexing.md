@@ -71,3 +71,5 @@ native `book-batch-20261017-03`：**20 runtime checks PASS / app正常終了2 / 
 WinUI API/コードレビュー済み。未保存編集/async/閉じる際の所有job取消・expected profile/job・固定操作/共通scroll gutter・Light/Darkを点検。**WinUIAnalyzer未導入/未実行、High Contrast/Narrator/Native AOT/DPI/キーボード網羅、全冊実GPU/代表品質・多数本性能は未検証**。新DL/依存追加/私物scan/外部media送信/CI dispatchなし。Windows Sandbox無効の既知環境につき許可済みlocal専用PID/HWNDでテストし、全app/backend終了。
 
 多数本のCPU検索費用は[固定測定と同値な計算省略](page-search-performance.md)を追加（生成1024冊/65536page、17.560→13.551秒、raw/merged/root限定一致）。約6秒の物理版/guard費用と実品質・全RAM・全冊応答の検証は残る。
+
+[長い本の分割plan/start/resume API](page-chunked-indexing.md)を追加。1冊最大128ページ・保存単位16ページ・固定選択の明示再開までバックエンド実装済み。GUIへの接続は後続で、既存の単範囲/複数本操作は変更しない。

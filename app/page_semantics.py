@@ -174,64 +174,10 @@ class PageVectors:
         }
 
     def start_chunked(self, item_id, page_ids, revision, scope, chunk_size=MAX_PAGES):
-        """Multi-chunk sequential publisher for longer books (up to 128 pages total).
-
-        Splits page_ids into bounded atomic chunks (each <= 16 pages), publishing
-        each chunk atomically under inference lock while preserving revision/scope bindings.
-        """
-        from ai_search import AIBusy
-        identifier(item_id); token(revision)
-        if type(chunk_size) is not int or not 1 <= chunk_size <= MAX_PAGES:
-            raise ValueError('Invalid chunk_size')
-        if (type(page_ids) is not list or not 1 <= len(page_ids) <= 128
-                or any(type(p) is not str for p in page_ids) or len(set(page_ids)) != len(page_ids)):
-            raise ValueError('Invalid page selection')
-        for p in page_ids: token(p)
-        ai = self.ai
-        scope = ai._scope(scope)
-        if scope is None: raise ValueError('Explicit scope required')
-        if not ai.encoder.available or 'cover' not in ai.profile.modalities:
-            raise AIUnavailable('選択中のモデルでは画像のAI検索を利用できません。')
-        with ai.guard:
-            if ai._closed: raise AIUnavailable('AI is closing')
-            if ai.worker and ai.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
-            with ai.catalog._guard:
-                ai.catalog._require_idle()
-                row = ai._current_rows([item_id], scope).get(item_id)
-                if row is None or row['kind'] not in ('book', 'archive'):
-                    raise KeyError('Page source unavailable')
-                pages = self.selection(item_id, page_ids, revision)
-            ai.cancel.clear()
-            state = {'state':'running', 'job':'book-pages-chunked', 'job_id':secrets.token_hex(16), 'item_id':item_id,
-                'source_revision':revision, 'processed':0, 'total':len(pages),
-                'indexed':0, 'reused':0, 'skipped':0, 'error':'', 'scope':scope,
-                'chunk_size':chunk_size, 'chunks_total':(len(pages)+chunk_size-1)//chunk_size,
-                'chunks_completed':0}
-            ai.store.save_state(state)
-            ai.worker = threading.Thread(target=self._build_chunked, args=(pages, state, chunk_size), daemon=True)
-            ai.worker.start()
-        return ai.status()
-
-    def _build_chunked(self, pages, state, chunk_size):
-        ai = self.ai; item_id = state['item_id']; revision = state['source_revision']
-        try:
-            with ai.inference:
-                for offset in range(0, len(pages), chunk_size):
-                    if ai.cancel.is_set(): raise InterruptedError()
-                    chunk = pages[offset:offset+chunk_size]
-                    self._publish_range(chunk, state, item_id, revision)
-                    state['indexed'] += len(chunk)
-                    state['chunks_completed'] += 1
-                    with ai.guard: ai.store.save_state(state)
-                state['state'] = 'complete'
-        except InterruptedError:
-            state['state'] = 'cancelled'
-        except Exception as ex:
-            state['state'] = 'failed'
-            state['error'] = 'ページ索引を保存できませんでした（'+type(ex).__name__+'）。元ファイル・登録範囲を確認して再実行してください。'
-        finally:
-            ai._last_activity = time.monotonic()
-            with ai.guard: ai.store.save_state(state)
+        """Compatibility entrypoint; HTTP callers must send an explicit profile."""
+        from page_chunks import start_chunked
+        return start_chunked(self.ai, item_id, page_ids, revision, scope,
+                             self.ai.profile.key, chunk_size=chunk_size)
 
     def start(self, item_id, page_ids, revision, scope):
         from ai_search import AIBusy

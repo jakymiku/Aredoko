@@ -1,5 +1,9 @@
 # 共通API（操作試作 v0）
 
+## 長い本の分割plan/start/resume（2026-10-17）
+
+`POST /api/library/ai/pages/chunked/plan`（item/revision/scope/profile/max_pages）でCPU確認し、明示`chunked`（item/revision/page_ids/scope/profile）で1冊最大128ページを16ページ以下ずつatomic公開。最新保存jobだけを`chunked/resume`（job_id/scope/profile）で固定同範囲へ再開。profile別stateに選択を保存し、解除/変更/別scope/profile/置換jobでは拒否。旧単範囲/batchとstatus/所有cancelを共有。**GUIクライアント接続は後続**。[HTTP・状態・旧jobの扱い・検証の境界](page-chunked-indexing.md)。
+
 ## 複数本のページ索引（2026-10-17）
 
 `POST /api/library/ai/pages/batch`（items/scope/page_limit/profile全必須、8冊・16page/冊・128page/要求）と、保存した最後のジョブだけの明示`batch/resume`を追加。状態は既存`ai/status`、ID一致の`ai/pages/cancel`を共有。scope/profile/revisionを固定し、1冊ごとにatomic公開・失敗した本を記録して継続。通常AI buildの対象は不変。[要求・再開・部分失敗と保持の境界](page-batch-indexing.md)。
