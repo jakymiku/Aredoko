@@ -2,11 +2,11 @@
 
 ## 2026-10-17 多数本の検索：物理版確認・catalog guard・内積ループの同値高速化
 
-実装commit **`7ffb5a26a00ab1343371d926835905a250e55740`**。開始HEAD **`ad2a599c527a960cb8d71880a2be374e0e088f27`**（前回実装commit `1978673ef1307f8dc889df5c3ebb34191bd96cdc`、clean/remote差0、他AIの新更新なし）。production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。現在P2、OCR保留、英語WD原文/未承認分離、既存全機能、GUI簡潔/24DIP gutter/16DIP pane間隔、P0累積1/2を保持。
+実装commit **`7ffb5a26a00ab1343371d926835905a250e55740`**、状態破棄追補commit **`1612513081292a75386ae4bf296c1811e5c6c9ea`**。開始HEAD **`ad2a599c527a960cb8d71880a2be374e0e088f27`**（前回実装commit `1978673ef1307f8dc889df5c3ebb34191bd96cdc`、clean/remote差0、他AIの新更新なし）。production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / 既存Draft PR #5を継続。現在P2、OCR保留、英語WD原文/未承認分離、既存全機能、GUI簡潔/24DIP gutter/16DIP pane間隔、P0累積1/2を保持。
 
 - **変更内容（raw float64 score/順位/根拠・即時変更/除外検出・1冊1回guard保持を完全維持）**：
   1. `app/page_semantics.py`：`rank()`の65,536ページ走査で中間768要素`list`の生成とgenerator frame（約1.5億回）を排し、`map(math.isfinite, ...)` / `map(operator.mul, ...)` / `map(operator.truediv, ...)`で元の`sum → sqrt → division → dot product`とbit単位で同一のIEEE-754 float64内積を直接計算する`_score_packed(data, dimension, query)`を追加（`unpack`も同様の`map`方式へ更新）。64文字hex検査の正規表現を事前コンパイルし、256冊batch間で`ai.store.connect()`を1接続共有。
-  2. `app/page_semantics.py` / `app/page_index.py`：候補本の物理版確認で1,024回個別に行っていた`catalog.connect()`＋`item_locations` / `library_locations` / `library_roots`のSELECTを、256冊chunk先頭の`catalog._guard`保持内で1回まとめて取得する構造へ変更。**`catalog._guard`のouter_holdsは1冊1回（1,024回、最大単一保持0.011250秒）を維持**し、編集や他操作を256冊分ブロックしない。併せて一括状態確認ヘルパー`PageIndex.states`と`PreviewReader.tag_sources`を追加。
+  2. `app/page_semantics.py` / `app/page_index.py` / `app/production.py`：候補本の物理版確認で1,024回個別に行っていた`catalog.connect()`＋`item_locations` / `library_locations` / `library_roots`のSELECTを、256冊chunk先頭の`catalog._guard`保持内で1回まとめて取得する構造へ変更。**`catalog._guard`のouter_holdsは1冊1回（1,024回、最大単一保持0.011250秒）を維持**し、編集や他操作を256冊分ブロックしない。chunk内のguard解放合間に`set_excludes` / `unregister_root` / `purge_inactive_root` / `add_root` / `sync_index`が発生した場合は、`ProductionCatalog._state_epoch`により位置情報キャッシュと`root_cache`を即座に破棄・再SELECTすることで除外・解除された本が誤って現行（current）判定されない安全性を保証。併せて一括状態確認ヘルパー`PageIndex.states`と`PreviewReader.tag_sources`を追加し、`tag_source`および`PageIndex.state`でも`root_cache`を再利用。
   3. `app/previews.py`：`_zip_directory_limit`で上限検査済みのZIP central directory（最大4MiB）を1エントリ2回の`seek`/`read`（64ページ×1,024冊＝131,072回のsyscall）ではなく1回の`file.read(cd_size)`バッファで走査し、有効な画像エントリ有無も同時に判定。`operation == 'tag_source'`では`zipfile.ZipFile`による64個の`ZipInfo`オブジェクト生成を省略。また`_safe_path`で256冊batch内の登録rootに対する`root_path.resolve(strict=True)`を共有しつつ、毎回の全親ディレクトリ/相対パスの`stat(follow_symlinks=False)`（junction/symlink検査）と`source.resolve(strict=True).is_relative_to(resolved_root)`は従来通り実行。
 - **同一固定fixture（`data/page-search-scale/v1-20261017-01/`、1,024冊×64ページ＝65,536 vectors・768D、推論0）での単発CPU実測**：
   - 64冊（4,096 vectors）：変更前 `0.919427s` → 第1回 `0.684381s` → **今回 `0.390823s`**（第1回比42.89%短縮、変更前比57.49%短縮）。guard合計 `0.339549s` → `0.293672s` → **`0.110751s`**（outer_holds 64、最大単一保持 `0.005925s`）。
@@ -16,7 +16,7 @@
 
 検証：
 
-- `tests/test_page_vector_decode.py`で`unpack`と`_score_packed`の両方が1/2/8/768次元のdense vectors、raw内積の`float.hex()`と全順位、unit tolerance境界、signed zero、破損/NaN/Inf/次元違い/zeroで旧decoderと完全一致することを確認。`tests/test_page_semantics.py`に、一括位置取得と`tag_source`の`ZipInfo`省略の下でも未再スキャンのexclude変更・原本書き換えが即座に除外されることと`PageIndex.states`を検証する回帰テストを追加。
+- `tests/test_page_vector_decode.py`で`unpack`と`_score_packed`の両方が1/2/8/768次元のdense vectors、raw内積の`float.hex()`と全順位、unit tolerance境界、signed zero、破損/NaN/Inf/次元違い/zeroで旧decoderと完全一致することを確認（単独実行用のsys.pathも整理）。`tests/test_page_semantics.py`に、一括位置取得と`tag_source`の`ZipInfo`省略の下でも未再スキャンのexclude変更・原本書き換えが即座に除外されること、256冊chunk内のguard解放合間に動的除外（`InterleaveGuard`）が発生しても`_state_epoch`により残余候補が即座に無効化・再取得されること、および`PageIndex.states`を検証する回帰テストを追加。
 - 最終全Python **458件：455 PASS / 3 Windows platform SKIP / 304.429秒**。Core **449 PASS**、Windows x64 SelfContained Release **警告0 / エラー0、18.32秒**。`python -m compileall -q app tools tests`・`git diff --check` PASS。
 - GUI変更/起動/追加native試行なし。**前回の`book-batch-20261017-03`取消直後1 PNGの静止画レビューは未完のまま保持**（runtime20 PASS/UIA位置確認済み、初回+修正再実行2回済みのため追加自動試行せず人手レビューへ残す）。High Contrast/Narrator/AOT/DPI・代表実素材品質・並行操作/全RAM/全冊coverageは未検証。新DL/依存/モデルload/私物scan/外部media送信/CI dispatchなし。
 
