@@ -1,5 +1,35 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-17 最新同期：長い本のplan/start/resume APIと固定選択の永続化
+
+実装commit **`9196c9ea131a4cd637e20cfc20100895fa42e0aa`**。開始時に指定どおりfetch/status/log6件を確認し、HEAD **`798713231ea6cfab25d86885fbc69a9a550a2dc5`**、未保存差分なし、origin差0。`6630823` / `a558300` / `0807a23` / `7ffb5a2`等の実装・代表14素材の実機評価・10.80秒のbit同一高速化を確認し維持。reset/上書き/mergeは行わない。既存production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / Draft PR5を継続。OCR保留・P0累積1/2・全既存機能と簡潔GUI/24DIP gutter/16DIP pane間隔を保持。
+
+今回選んだ優先作業は、最新handoffの「長い本のbounded chunk/明示再開」の実利用基盤。既存Pythonのnext_gaps/start_chunkedを作り直す代わりに、共有publisherと既存methodの互換entrypointを利用し、HTTPと固定再開情報を追加した。**今回はバックエンドまで。WinUIの新chunkクライアント/ボタンはまだ接続していない。**
+
+- 新規 `app/page_chunks.py`：CPUのみのplan、厳格なstart、最新固定jobのresumeを分離。`pages/chunked/plan`（item/revision/scope/profile/max_pages）→利用者確認→`pages/chunked`（item/revision/page_ids/scope/profile）。1冊1..128ページ、HTTPは16ページ以下ずつatomic公開。planはsnapshot更新/画像decode/モデルload/推論/state変更をせず、旧16ページ単範囲・8冊計128ページbatch・通常buildは変更しない。[API/保存/境界](page-chunked-indexing.md)。
+- profile別ai_stateへ固定page IDs・revision・scope・profile・chunk_sizeを保存。再起動後running/cancellingは既存処理でinterruptedとなり、明示 `pages/chunked/resume`（job_id/scope/profile）だけで同じ範囲へ再開。完成vectorを再利用し未完chunkは再実行。保存選択のない旧jobは新plan確認が必要。新AI jobは単一の再開記録を置換するが完成vectorは削除しない。一般queue履歴/全冊/1TB自動処理ではない。
+- resumeの読み取り後に別jobが割り込んでも、開始guard内でexpected job/終端状態/profile/scope/元選択を再検査し上書きしない。開始応答は自分の初期状態deep copyを返す。呼出元と応答の配列変更をworkerへ反映しない。共有worker/inference/所有cancelを維持し、各chunkの前/公開前にscope/版を再検査。model推論中にcatalog guardを持たない。
+- planが示す連続gap範囲（chunks）と、ID列を16個ずつ保存する実回数（chunks_total）を区別。coverage後のscope/物理版変更を再検査。処理中chunkは全公開か未公開、完了chunkは中断/失敗後も保持。Coreへ400/404の日本語エラーを2文追加。HTTPの未知field・bool/小数上限・別profile/空scope・Origin/token違反を拒否。
+
+検証：
+
+- **新規生成145ページのchunk回帰16件**。実128ページ/8chunkの公開、16ページ完了→次chunk取消→再起動→16再利用/残17推論、interruptedの自動開始なし、partial未公開/再試行、除外直後に追加推論なし、別profile/scope/原本変更/新job拒否、欠けの飛び飛びrangeと実chunk数、再開read→start間のjob置換、plan後のscope/物理変更、CPUのみ/所有cancel/厳格な認証付きHTTPを確認。
+- 既存page semantics/batch/coverage **33 PASS /30.828秒**。新規14+日本語化3件の対象 **17 PASS /32.236秒**、その後追加の2競合/gap検査 **2 PASS /2.505秒**。最終全Python **485件：482 PASS /3 Windows platform SKIP /393.915秒**。Core **449 PASS**、Windows x64 SelfContained Release **警告0/エラー0、21.66秒**。compileall/diff/追加文書リンク/新仕様の全ローカルlink確認。
+- **初回対象runは完了せず停止した記録を保持**：新planが既存の非再入AI guardを保持したままcoverageを呼び二重取得。今回起動した所有テストPID45152のcommand line一致を確認して停止、`data/page-chunks-target-initial-stalled-20261017.log`を保存。coverageをlock外で呼び、後段はAI→catalog順に再検査する構造へ修正。2秒の取得上限で将来の同じ誤りを停止せず検出する回帰を追加し、その後の対象/全体が合格。失敗記録を成功へ書き換えない。
+- logs：`data/page-chunks-existing-20261017.log` / `page-chunks-target-20261017.log` / `page-chunks-race-20261017.log` / `page-chunks-python-20261017.log` / `page-chunks-core-20261017.log` / `page-chunks-release-20261017.log`。すべてignored。fixtureは一時生成本のみ、原本bytes/mtime/手動tag・棚・お気に入り不変を検査。`C:\AI\Aredoko-test`を含めユーザー元ファイルを変更/移動/削除/追加走査していない。新download/依存/model load/専用OCR/外部media送信/CI dispatchなし。
+- winui-code-reviewに沿い今回の日本語エラー2文、入力/JSON/認証、lock順/非同期worker/cleanup/状態・範囲の境界を点検。新XAML/GUI機能は変更せず、MVVM/Binding/theme/layoutの新規差分なし。**WinUIAnalyzer未導入/未実行**。GUI新chunk操作/High Contrast/Narrator/AOT/DPI/native操作/実GPU性能/代表品質再測定は未検証。代表14素材の既存real reportを再実行したとはしない。RRF順位/閾値・WD辞書は未変更。
+- 前回のbook-batch取消直後1 PNGは静止画レビュー未完のまま保持（runtime20 PASS/UIA位置は既確認）。初回+修正2回の上限を迂回する再試行なし。既存の本/画像/動画/アニメ/タグ承認/手動整理の導線とソースを保持。
+
+再現：`python -m unittest discover -s tests -p test_page_chunks.py` / `python -m unittest discover -s tests` / `dotnet run --project tests/Aredoko.Core.Tests -c Release` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。HTTP/既存state/旧jobの仕様は[分割API文書](page-chunked-indexing.md)。
+
+次の3手：
+
+1. **既存WinUIのページ追加/AI設定へ新chunk APIを接続**。画面を増やさずplan→確認→開始、同範囲の最新job再開、常時進捗/取消を統合。旧1冊16ページ・8冊128ページとの区別、scope/profile/版/未保存/所有cancel、24DIP gutter/16DIP pane間隔を維持し、新機能のLight/Dark/narrowを独立に検証。旧取消静止画のgateは未完のまま区別する。
+2. 代表実測のcombined/RRF希釈とWD「赤い眼鏡」2位を独立に評価。文字側の無情報/同点に対する固定条件・新holdout/P0試行上限を先に確認し、今回の成功素材だけへ調整しない。小字/別font/曖昧表現など新しい明示評価で漏れを測る。OCRは保留。
+3. 10.80秒の内訳を測り、残る物理版確認/guardとguard外decode/内積/SQLの費用を整理。鮮度・scope・同値性を弱めず上位選択/cache/応答の並行性を検討。全RAM/全冊/1TBの保証に外挿しない。音声/音楽内容・複数ページ文脈タグ・数千pending性能は後続。
+
+---
+
 ## 2026-10-17 実素材（14枚）実モデル（EmbeddingGemma 2 + WD Tagger）実機評価完了・専用OCR保留の確定エビデンス
 
 - **実機評価実施と複数ZIP自動マージ実装**：
