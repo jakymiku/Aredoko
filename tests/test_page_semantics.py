@@ -64,8 +64,10 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         self.assertEqual(result['items'][0]['id'],self.item);self.assertEqual(match['page'],1)
         self.assertEqual((match['page_id'],match['source_revision'],match['model_revision']),
             (self.page_ids[1],self.revision,self.encoder.profile.revision))
+        before_vec=self.records()[0][4]
         calls=len(self.encoder.calls);self.build([self.page_ids[1]])
         self.assertEqual(len(self.encoder.calls),calls);self.assertEqual(self.ai.status()['reused'],1)
+        self.assertEqual(self.records()[0][4],before_vec)
         self.build([self.page_ids[0]]);self.assertEqual(len(self.records()),2)
         self.assertEqual(sum(r['id']==self.item for r in self.search()['items']),1)
         self.assertEqual(before,(self.archive.read_bytes(),self.archive.stat().st_mtime_ns))

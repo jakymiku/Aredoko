@@ -1,5 +1,37 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-18 長冊chunk再開・再利用の非確保vector透過保存と境界網羅回帰
+
+実装HEAD作業差分、開始HEAD **`5fb4c32b509f6e657e2bbd8e06385501fb3ae1a9`**、fetch/statusでclean/origin差0。既存production branch `feat/winui3-production-mvp-20261011` / Draft PR5を継続。今回の検証はCPU・生成データのみで実施（ユーザーPC利用中のためNo-GPU / No-GUI-Window-Focus厳守）。
+
+### 変更・測定・整合性
+
+- `PageVectors._publish_range`（長冊chunkおよび単冊ページ保存）において、既存`ai_page_vectors`からのキャッシュ再利用判定で行っていた768要素Pythonリスト復号（`unpack(data, ai.profile.dimension)`）および保存直前の再パック（`array('f', vector).tobytes()`）を排し、`_is_valid_packed(data, ai.profile.dimension)`による非確保判定＋DB内blobの直接透過再利用へ更新。16ページchunkごとに12,288個の一時floatオブジェクト生成と再正規化演算を削減し、SQLiteへ書き戻されるvector blobが100%完全なbit/byte一致を保つことを保証。
+- `tests/test_page_semantics.py`へ、再利用時のvector blobのbyte単位完全一致（`self.assertEqual(self.records()[0][4], before_vec)`）を明示検証する回帰を追加。
+- `tests/test_page_vector_decode.py`へ、Untested Edge Casesで指摘されていたbuffer protocol（`memoryview`, `bytearray`）、非整合バイト長（`dim*4 ± 1, 2, 3`）、負・0次元、NaN/±Inf混在全順序、1e-4許容差微小刻み（±2e-6ステップ）の境界回帰を追加（4→7 PASS）。
+- 通常`rank`の1冊1回guard・内積やRRF方式は未変更。P0品質枠は累積2/2で閉じ、OCR保留・既存WD未承認分離・全整理/ビューア/長冊GUIを維持。
+
+### 検証・失敗履歴・未検証
+
+- 新edge回帰: `tests/test_page_vector_decode.py`（7 PASS / 0.141秒）。
+- 再利用・セマンティクス回帰: `tests/test_page_semantics.py`（15 PASS / 12.075秒）。初回は`records()[0]['vector']`を辞書形式で参照し`TypeError: tuple indices must be integers`となったため、タプルインデックス`[4]`へ修正しPASS。
+- 分割・バッチAPI回帰: `tests/test_page_chunks.py`（16 PASS / 34.035秒）、`tests/test_page_batch.py`（10 PASS / 16.136秒）、`tests/test_page_coverage.py`（15 PASS / 18.649秒）、`tests/test_coverage_lock_benchmark.py`（1 PASS / 0.904秒）、`tests/test_page_search_profile.py`（1 PASS / 0.698秒）。
+- 最終全Python **506件：503 PASS / 3 Windows platform SKIP / 389.249秒**（テスト失敗0）。
+- C# Core tests: **493 PASS**。
+- Windows x64 SelfContained Release: **0警告 / 0エラー、18.65秒**（`--no-restore`、新依存取得なし）。
+- compileall/diff/更新Markdown links確認。
+- **未検証・保留項目**: ユーザーPC利用中のため、GPUモデル（EmbeddingGemma 2 / CUDA）の推論およびGUIウィンドウを前面化するアクティブ操作テスト（`Aredoko.WinUI.exe`, `tools/test_tag_review_ui.py`）は実行せず保留（Pending User Permission）。旧book-batch取消静止PNG1枚は未完のまま。WinUIAnalyzer/AOT/DPI/High Contrast/Narrator/GUI応答・実GPU/実私物/1TB性能は今回未検証。
+
+再現：`python -m unittest discover -s tests` / `dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。
+
+次の3手：
+
+1. 残るCPU検索（`rank`での1冊1回guard・原本確認約3.2秒、vector SQL cursor fetch約0.84秒）の内訳を精査し、同値な改善候補を設計。原本before/after確認・即時無効化・短いguard・score全bit一致を厳守し、近似化/cacheによる鮮度省略をしない。
+2. backend/API・大規模状態/中断・pending索引の境界検証を小さく進める。モデル/全冊自動処理/一般queueを勝手に導入せず、GUI整理は既存機能/簡潔さを維持。
+3. ユーザーの許可が得られた段階で、既知2 ZIP（`Aredoko-test`）を用いた実モデル操作確認、およびWinUIネイティブGUI確認（新長冊GUI確認済み項目の維持確認）。P0第3試行やOCRへ自動復帰しない。
+
+---
+
 ## 2026-10-18 大冊coverage総所要の短縮：非確保vector検証とunpack重複finite検査の削減
 
 実装HEAD作業差分、開始HEAD **`6e5c41da98ba07f1031f9de364ac7156f840ac53`**、fetch/statusでclean/origin差0。既存production branch `feat/winui3-production-mvp-20261011` / Draft PR5を継続。今回の検証はCPU・生成データのみで実施（ユーザーPC利用中のためNo-GPU / No-GUI-Window-Focus厳守）。

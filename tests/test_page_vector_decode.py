@@ -98,6 +98,60 @@ class PageVectorDecodeTests(unittest.TestCase):
                                 (array('f', [1]).tobytes(), 2), (None, 2), ('text', 2)):
             self.assertIsNone(self.assert_legacy(data, dimension))
 
+    def test_buffer_protocols_and_unaligned_byte_lengths_match_legacy(self):
+        valid_vec = [1.0, 0.0, 0.0, 0.0]
+        valid_bytes = array('f', valid_vec).tobytes()
+        # buffer protocols (memoryview, bytearray) must decode identically to bytes
+        self.assert_legacy(memoryview(valid_bytes), 4)
+        self.assert_legacy(bytearray(valid_bytes), 4)
+        self.assertIsNone(self.assert_legacy(memoryview(b'bad'), 4))
+        self.assertIsNone(self.assert_legacy(bytearray(b'bad'), 4))
+
+        # Unaligned byte lengths (e.g. 15, 17, 18, 19 bytes for dimension 4) must be rejected
+        for offset in (-3, -2, -1, 1, 2, 3):
+            corrupt = valid_bytes[:max(0, len(valid_bytes) + offset)] if offset < 0 else valid_bytes + b'\x00' * offset
+            self.assertIsNone(self.assert_legacy(corrupt, 4))
+
+        # Dimension mismatches (extra or missing float)
+        self.assertIsNone(self.assert_legacy(valid_bytes + array('f', [0.0]).tobytes(), 4))
+        self.assertIsNone(self.assert_legacy(valid_bytes[:12], 4))
+
+        # Negative and zero dimensions
+        self.assertIsNone(self.assert_legacy(valid_bytes, -1))
+        self.assertIsNone(self.assert_legacy(valid_bytes, 0))
+        self.assertIsNone(self.assert_legacy(b'', 0))
+
+    def test_mixed_nan_and_infinities_in_all_orders_are_rejected(self):
+        combinations = [
+            [float('nan'), float('inf')],
+            [float('inf'), float('nan')],
+            [-float('inf'), float('nan')],
+            [float('nan'), -float('inf')],
+            [float('nan'), float('nan')],
+            [float('inf'), float('inf')],
+            [-float('inf'), -float('inf')],
+            [1.0, float('nan'), float('inf'), -float('inf')],
+            [-1.0, -float('inf'), float('inf'), float('nan')],
+            [float('nan')] * 8,
+            [float('inf')] * 8,
+            [-float('inf')] * 8,
+        ]
+        for vals in combinations:
+            dim = len(vals)
+            data = array('f', vals).tobytes()
+            with self.subTest(vals=vals):
+                self.assertIsNone(self.assert_legacy(data, dim))
+
+    def test_tolerance_boundary_micro_steps_match_legacy(self):
+        # Scan fine-grained steps across both sides of the 1e-4 tolerance boundary
+        for base_delta in (-0.0001, 0.0001):
+            for step in (-2e-6, -1e-6, 0.0, 1e-6, 2e-6):
+                delta = base_delta + step
+                val = math.sqrt(max(0.0, 1.0 + delta))
+                data = array('f', [val, 0.0]).tobytes()
+                self.assert_legacy(data, 2)
+
 
 if __name__ == '__main__':
     unittest.main()
+

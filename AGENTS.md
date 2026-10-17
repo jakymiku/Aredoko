@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Latest stored vector reuse & edge boundary regression checkpoint (2026-10-18)
+
+Page chunk and range publishing (`_publish_range`) now validates cached vectors via unallocated `_is_valid_packed` and reuses stored float32 blobs directly without allocating 768-element Python float lists or re-encoding, preserving exact bit/byte fidelity in SQLite. Comprehensive edge-case regressions were added covering buffer protocols (`memoryview`, `bytearray`), unaligned byte lengths (`dim*4 ± 1, 2, 3`), all permutations of mixed non-finite values (`NaN`, `±Inf`), and micro-step tolerance boundaries around `1e-4`. Python 506 (503 PASS / 3 platform SKIP), Core 493 PASS, and Release 0 warnings/errors verified. Read [docs/page-chunked-indexing.md](docs/page-chunked-indexing.md) and latest handoffs. P0 2/2 closed, OCR deferred, all features and simple UI preserved.
+
 ## Latest CPU coverage unallocated vector validation & unpack finite optimization checkpoint (2026-10-18)
 
 Page coverage now validates stored float32 vectors without allocating 768-element lists in the verification loop (`allocate=False` / `_is_valid_packed`), and `unpack` eliminates the redundant per-component finite walk via non-negative squared-norm validation (`math.isfinite(squared_norm)`). On the frozen 10k-page benchmark fixture, coverage elapsed time dropped 364ms -> 221ms (39.18% reduction) and plan dropped 404ms -> 251ms (37.82% reduction) while keeping JSON responses, hashes, indexed pages, and guard holds 100% bit-identical. Python 503 (500 PASS / 3 platform SKIP), Core 493 PASS, and Release 0 warnings/errors verified. Read [docs/page-coverage-concurrency.md](docs/page-coverage-concurrency.md) and latest handoffs. Preserve all features, raw/ranked scores, P0 2/2 closed, OCR deferral and pending native gates. No model/GPU/GUI/download/private scan in this slice.

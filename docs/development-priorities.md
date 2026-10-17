@@ -1,5 +1,7 @@
 # Aredoko — 直近の開発優先順位と合格条件
 
+> **最新（2026-10-18、再開・再利用時の非確保vector透過保存・境界回帰）**：`_publish_range`においてDB内キャッシュvectorの再利用判定を`_is_valid_packed`による非確保検証へ統一し、768要素リスト生成と再正規化・再エンコードを排して保存済みバイト列をそのままSQLiteへ透過保存（bit/byte完全一致）。`test_page_vector_decode.py`にbuffer protocol（memoryview/bytearray）、非整合バイト長、非finite混在順序、1e-4許容差微小境界の網羅回帰を追加。Python 506（503 PASS / 3 platform SKIP）、Core 493 PASS、Release 0警告/0エラー。P0 2/2/OCR保留/既存機能を維持。
+
 > **最新（2026-10-18、CPU非確保検証）**：coverageでのvector確認から768要素リスト生成を排した非確保検証（`allocate=False` / `_is_valid_packed`）および`unpack`の重複finite走査省略を実装。生成1万pageの全応答・ハッシュ一致、coverage総所要364ms→221ms（39.18%短縮）、plan総所要404ms→251ms（37.82%短縮）、guard保持合計34msを維持。[測定/比較](page-coverage-concurrency.md)。P0 2/2/OCR保留/既存機能を維持。
 
 > **最新（2026-10-18、CPUのみ）**：coverage/planのvector復号をcatalog guard外へ移動。最後にscope/同snapshot/原本/scan/AI終了を再確認し、生成1万pageの全応答一致。guard保持340→34ms、総所要は微増で検索高速化とは別。[設計/測定/回帰](page-coverage-concurrency.md)。今回の検証はCPUのみ。P0 2/2/OCR保留/既存機能を維持。

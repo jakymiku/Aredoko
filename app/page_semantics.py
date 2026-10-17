@@ -261,21 +261,23 @@ class PageVectors:
         ai = self.ai
         if ai.cancel.is_set(): raise InterruptedError()
         with ai.store.connect() as db:
-            cached = {pid: unpack(data, ai.profile.dimension) for pid, data in db.execute(
+            cached = {pid: data for pid, data in db.execute(
                 'SELECT page_id,vector FROM ai_page_vectors WHERE item_id=? AND source_revision=? AND contract=? '
                 'AND page_id IN ('+','.join('?' for _ in pages)+')',
-                [item_id, revision, CONTRACT, *[p['page_id'] for p in pages]])}
+                [item_id, revision, CONTRACT, *[p['page_id'] for p in pages]])
+                if _is_valid_packed(data, ai.profile.dimension)}
         packed = []
         for p in pages:
             if ai.cancel.is_set(): raise InterruptedError()
-            vector = cached.get(p['page_id'])
-            did_infer = vector is None
+            raw_bytes = cached.get(p['page_id'])
+            did_infer = raw_bytes is None
             if did_infer:
                 payload = self.index.input(item_id, p['page_id'], revision)
                 vector = normalized(ai.encoder.encode('image', payload['data']), ai.profile.dimension)
+                raw_bytes = array('f', vector).tobytes()
             else:
                 state['reused'] += 1
-            packed.append((item_id, revision, p['page_id'], p['page'], array('f', vector).tobytes(), CONTRACT))
+            packed.append((item_id, revision, p['page_id'], p['page'], raw_bytes, CONTRACT))
             state['processed'] += 1
             with ai.guard: ai.store.save_state(state)
             if did_infer and state['processed'] < state['total'] and ai._index_pause_ms:
