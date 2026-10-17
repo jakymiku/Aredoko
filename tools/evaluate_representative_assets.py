@@ -336,12 +336,19 @@ def generate_placeholder_assets():
 
 def load_assets_from_zip(zip_path):
     """Safely extract the 14 assets from one or more zip archives."""
-    if isinstance(zip_path, (str, Path)):
-        paths = [Path(zip_path)]
-    elif hasattr(zip_path, '__iter__'):
-        paths = [Path(p) for p in zip_path]
-    else:
-        paths = [Path(zip_path)]
+    if zip_path is None:
+        raise ValueError('No zip archive specified')
+
+    def _flatten(val):
+        if isinstance(val, (str, Path)):
+            yield Path(val)
+        elif hasattr(val, '__iter__'):
+            for item in val:
+                yield from _flatten(item)
+        elif val is not None:
+            yield Path(val)
+
+    paths = list(_flatten(zip_path))
     if not paths:
         raise ValueError('No zip archive specified')
 
@@ -529,8 +536,10 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
             raise RuntimeError(f'Required items missing from catalog scan: {sorted(missing_catalog)}')
 
         actual_encoder = encoder is None
+        encoder_to_close = None
         if encoder is None:
             encoder = EncoderProcess(REPO / '.venv-ai/Scripts/python.exe', DEFAULT_PROFILE.model_path(REPO))
+            encoder_to_close = encoder
         ai = AISearch(catalog, encoder)
 
         report = {
@@ -757,6 +766,9 @@ def evaluate(output_dir, assets=None, zip_path=None, input_dir=None,
             except Exception: pass
         if ai is not None:
             try: ai.close()
+            except Exception: pass
+        elif encoder_to_close is not None:
+            try: encoder_to_close.close()
             except Exception: pass
         if catalog is not None:
             try: catalog.close()

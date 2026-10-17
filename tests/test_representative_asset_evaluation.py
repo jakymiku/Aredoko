@@ -161,6 +161,19 @@ class RepresentativeAssetEvaluationTests(unittest.TestCase):
         self.assertTrue(loaded_multi[keys_8[0]]['origin'].startswith('split_8.zip:'))
         self.assertTrue(loaded_multi[keys_6[0]]['origin'].startswith('split_6.zip:'))
 
+        # 3b-ii. Nested lists from action='append' nargs='+' or generators
+        loaded_nested = load_assets_from_zip([[zip_8], [zip_6]])
+        self.assertEqual(set(loaded_nested.keys()), set(CANONICAL_SPECS.keys()))
+        with self.assertRaises(ValueError) as ctx:
+            load_assets_from_zip(None)
+        self.assertIn('No zip archive specified', str(ctx.exception))
+        with self.assertRaises(ValueError) as ctx:
+            load_assets_from_zip([])
+        self.assertIn('No zip archive specified', str(ctx.exception))
+        with self.assertRaises(ValueError) as ctx:
+            load_assets_from_zip([[]])
+        self.assertIn('No zip archive specified', str(ctx.exception))
+
         # 3c. Duplicate across multiple zips rejected
         dup_zip = Path(self.temp_dir) / 'dup.zip'
         with zipfile.ZipFile(dup_zip, 'w') as zf:
