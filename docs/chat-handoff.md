@@ -1,5 +1,36 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-18 長い本のWinUI接続：範囲確認・分割追加・固定選択の明示再開
+
+実装commit **`f302a050a2b9dff05b258029792b277a97aa6ccf`**。開始HEAD **`fc93efe03b12af8e0ded85d321369344cc295295`**、fetch/status/log6でclean/origin差0、終了前fetchも他AIの追加なし。最新優先作業の長冊chunk APIを既存dialog/AI設定へ接続し、既存production branch / Draft PR5を継続。[操作/型/制約](page-chunked-indexing.md)。
+
+### できること
+
+- 本の右クリック「本のページをAI検索に追加…」で、旧「ページを指定（最大16）」と新**「未準備ページをまとめて（最大128）」**を選べる。新モードは初期64/上限1〜128、CPU planで固定page IDs/版/profile/scope・範囲/保存回数を確認してから「確認した範囲を追加」。planだけではモデル推論/索引作成を行わず、上限/方式を変えれば再確認が必要。既存複数本8冊/128pageも保持。
+- 保存単位は16page以下の既存atomic publisher。中断/失敗は完成chunkを保持し、同じdialogでは「同じ範囲を再開」。app/AI serviceを作り直しても既存AI設定へ「前回のページ追加を再開」を表示し、**同jobの固定IDs/版/profile/scopeだけ**明示再開。自動再開/自動scope変更はしない。別jobで最新の再開記録1件は置換される。
+- `PageChunks.cs`の型付きplan/status/requestと既存`PageEvidenceClient`が件数・範囲・IDs・scope正規化・profile/版/所有job・本当のchunk数を検査。空rootと全root、明示null kindを区別し、未保存scope編集/別scope/置換jobや選択を拒否。旧jobの保存plan欠落は再開だけを止め、通常AI作成/新規範囲確認は妨げない。設定のページjob取消もID一致APIを使う。
+- 既存dialogで進捗/保存済み件数/開始/中断/閉じるをscroll外へ維持。入力に24DIP gutter、既存16DIP pane間隔/簡潔GUI/全機能/未保存タグを保持。新画面や一般queueを追加せず、索引公開・実推論は既存backendのまま。
+
+### 検証・失敗・未検証
+
+- 最終 **Core493 PASS**（新44 checks）。plan上限/固定35 IDs・断片35範囲と3atomic chunks、scope型/空root/null kind、profile/版/job/IDs置換、旧plan欠落、HTTP route/JSON所有、変更済みplanなど。初回Coreは`JsonValue<int>`を`GetValue<long>`で読む型差で停止。int/longを型確認し、初回`data/chunk-gui-core-initial-20261018.log`も保持。最終`data/chunk-gui-core-final-20261018.log`。native02後にCoreの明示null kind/公開plan上限ガード2点を補強し、Core全件とReleaseを再確認。WinUI sourceは02から変更せず、通常入力のnativeをさらに反復していない。
+- Python分割API対象 **16 PASS /36.414秒**（`data/chunk-gui-python-target-20261018.log`）。製品Python source未変更につき全495件の再実行は今回なし。前回の492PASS/3 platform SKIPは履歴。最終Windows x64 SelfContained Release **0警告/0エラー、15.11秒**（`data/chunk-gui-release-reviewed-20261018.log`）。compileall/diff/更新Markdown links確認、新依存/restore取得なし。
+- 新規native **`page-chunks-20261018-02`: 40 runtime checks PASS / 正常終了2 /6 PNG全目視**、別`visual-review.json`へ目視結果。生成145page本・模擬CPU encoderのみ。33page plan推論0→上限変更で再確認→16page保存後中断→app/AI service再作成→16再利用/残17だけ処理、scope未保存中の再開無効、残112追加→145/145、旧plan欠落から新操作可能、dirtyタグ/生成原本bytes/mtime/AI設定不変を確認。UIA待機などの非計数assertもCLI失敗で停止する。
+- 初回native **`01`は新fixture77件を旧76件で待機して停止**（failure PNG1枚目視・正常終了1）。件数待機を直し`02`で合格。新長冊featureの修正再実行は1回。**旧book-batchの取消静止PNG1枚は未完のまま**、その上限消費済みtestを再実行/完了扱いしていない。SandboxはOptionalFeature.InstallState2で無効のため、許可済みlocalの所有PID/HWNDだけを操作。全test app/専用AI/catalog/serverを終了。
+- `winui-design`/`winui-ui-testing`でGallery/復元project API確認・実機を実施、`winui-code-review`に沿ってdialog coordination/Core validation・async/所有cancel・scope/profile・標準control/AutomationId/既存theme/gutterを点検。明示null kindや公開plan上限の検証を補強。既存日本語literal方式の全面resw化は今回対象外。**WinUIAnalyzer未導入/未実行、High Contrast/Narrator/AOT/DPI・キーボード網羅・実モデルでの今回GUI実操作・実私物/1TB/性能は未検証**。通常scroll内の端clipを除き、固定状態/操作に被りや見切れなし。
+- 作業中ユーザーは`C:\AI\Aredoko-test`の既存 **`Aredoko_text_recognition_test_images_6.zip` / `Aredoko_search_test_images_8.zip`**を、使う場面があればこのPCの確認へ使ってよいと再確認。原本変更/移動/削除をしない。今回の長冊ライフサイクルは生成145pageを使用し、2 ZIP/14枚の再推論は行わず[以前の実モデル評価](representative-asset-evaluation.md)を保持。検索/画像内文字/実モデル確認が必要な場面で活用する。
+- 実GPU/EmbeddingGemma/WD/OCR/Laya load・新DL/依存/私物走査/元メディア変更/外部media送信/CIなし。3 workflowsはmanualのみ。RRF方式・スコア・profile/vector namespace・CPU性能改善は保持、今回新速度/精度を主張しない。**P0累積2/2で閉じたまま、OCR保留**。ログ/生成DB/PNGはignored data内だけ、GitHubにはコードと文書のみ。
+
+再現：`dotnet run --project tests/Aredoko.Core.Tests -c Release --no-restore` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore` / `python -m unittest discover -s tests -p test_page_chunks.py`。nativeは`python tools/test_tag_review_ui.py --page-chunks-only --output data/ai-ui/<fresh-label>`、既存証拠を上書きしない。今回新featureは初回+修正1回済み、修正再実行の残り上限1回。旧batchとは別管理し、単に緑を増やすための再実行はしない。
+
+次の3手：
+
+1. 残るCPU検索は[既存profiling](page-search-performance.md)のscorer/SQL/pathを基に、原本before/after確認・即時無効化・1冊ずつ短いguard・全bit同値を条件化して次の改善候補を選ぶ。長冊GUIの追加を新速度改善と混同せず、旧10.80秒と同日の12.21秒を直接比較しない。
+2. 必要な場面で許可済み2 ZIP/14枚を使う小さな実モデル/検索/画像内文字の操作確認。長冊の上限/中断は生成145pageで確認済みで、既存実評価を無意味に繰り返さない。大冊plan/coverage自体の待ち時間も別途測り、私物を広く走査/一般queueを増殖しない。
+3. 既存の言い換え/意図競合・別素材/小字/別model・Pythonホスト物理token移行はbacklog。P0第3試行/OCRへ自動復帰しない。WD日英・音声/音楽内容・複数ページ文脈タグ・数千pending性能は別slice。
+
+---
+
 ## 2026-10-18 CPUページ検索：内訳を計測し、スコア同値の重複finite検査を削減
 
 実装commit **`cef90a3512634fed6aebcafe5ca2f1131790ea76`**。開始HEAD **`93c8c5895bf9567ce9d73145fdddf3a1f9f1007b`**、最初と終了前にfetchし他AIの追加commitなし、開始clean/origin差0。既存production branch / Draft PR5を継続。最新「次の3手」の最優先だったCPU性能調査から、同値な改善1件を実装した。**combined/RRFは前回の採用済み方式のまま、P0累積2/2で品質枠は閉じたまま**。新しい品質試行やOCR実装へ戻らない。
