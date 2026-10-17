@@ -1,5 +1,36 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-17 ユーザー優先変更：combined/RRFの第2試行を採用、P0累積2/2で区切り
+
+実装commit **`0faf542c81e7b647c90a8a301d55c96d99b7a891`**。観測前固定commit **`9855263e39bb4c81d7e65008c1d85f878c0e2ace`**。開始HEAD `d1936ff2e3955b7eca470dc5110b22059d055dd1`（clean/origin差0）、途中fetchでも他AIの新commitなし。既存production branch / Draft PR5を継続。ユーザーがGUI接続よりcombined Top1改善を明示優先したため、既存P0の残る1枠を使用した。**現在P0 baseline済み・累積2/2、今回の有限な品質改善枠は完了**。旧1/2は履歴。追加の自動調整やOCR復帰はしない。
+
+### 実装と採用結果
+
+- `app/ai_ranking.py`の `mean-rrf` だけを、モードごとの候補cosine幅（max-min）を重みとする平均RRFへ変更。小さな文字側の順位差で大きな視覚差が薄まる問題への仮説1件のみ。固定の視覚優先率/閾値/モデル固有調整/自動query routingは追加しない。平均同順位/global rank・item ID同点、候補にある重みだけの正規化、max/明示text/cover・profile/vector namespace・既存すべての機能を保持。再索引不要。[式/fallback/限界](combined-fusion-evaluation.md)。
+- 単一mode・全constant・比較poolが不足なら旧等重みへfallback。比較可能なconstant modeは重み0。constant-only候補はscore0でも削除しない。有限極値のoverflow防止に共通1/2係数を使う。RRFは確率ではなく、正解なし判定の閾値は加えない。明示scope・種類・お気に入り・文字一致・ページ/動画根拠は保持。
+- **新しい固定24問**（視覚8/metadata6/filename4/両方一致4/no-answer2）と採用条件を、コード変更/新予測の前にcommit。SHA `1ad69335c9d1889efb017f48028f5eb860e980b7d1b4a9fa47e31d3c7c5556ef`。既存14画像由来6作品＋生成10素材、両方一致2作品へ手動metadataを割当。新質問だが画像の一部は再利用・同じ作者の仮説/qrelsなので独立した実私物一般精度ではない。
+- 既存offline CUDA EG2 768Dのスコアを一度取得→**同じスコアをCPUで旧/新方式比較**。新22 answerable全root Top1 **16/22（72.73%）→20/22（90.91%）**、Recall@3 **20/22→21/22**、MRR **0.826190→0.940909**。metadata **5/6→6/6**、filename **2/4→4/4**、視覚 **5/8→6/8**、一致 **4/4維持**。root限定22条件も **22/22維持**。全46条件で旧Top1正解からの悪化0、事前採用gate合格。
+- 既存の直接視覚development13問はcombined Top1 **7/13（53.85%）→13/13（100%）**、Recall@3 **12/13→13/13**、MRR **0.750000→1.000000**。元の変更前全順位が旧reportと一致することを確認。従来17問の10/17=58.82%には別モードのWD4問（3/4）が混ざるため、RRF比較13問を分離。今回WD再推論はしていない。旧WD値を据え置いた換算なら16/17だが、新規全17問runとは呼ばない。
+- 残失敗：魔法使いの言い換えはbookB7位→5位、text-only雨音素材が1位。献立の言い換えはbookB5位→2位、献立テンプレートが1位。多義/意図競合は残る。no-answer2問は候補を返し、accuracy平均の分母から除外。観測後のqrels変更/重み再調整はせずbacklogへ。
+
+### 証拠・退行・未検証
+
+- 新 `tools/evaluate_combined_fusion.py`：凍結SHA照合、固定の許可済み2 ZIPと旧隔離DBだけ、fresh data/combined-fusion出力、source/vector不変、label上書き拒否。46新条件＋13developmentのraw scoreを保存し、各compareのモデル呼出0、最終ranking source SHA `4edb898f331ced4264c045785d2c8c6e5d69c73d1c94097c7c8e144f355fc23d`。明示text/coverの全raw score/順位・scope/candidate集合・元ZIP/元DB/report・生成原本hash/mtime・vector DB SHA不変。
+- 最初のdiagnosticはsystem Python3.14で旧3.11実評価のDBをコピーし、Windows stat物理token差のためbook sourceがstaleとなった。その値はbaselineへ不採用。専用Python3.11で同一queryを再生しsource current/元順位一致を検証。**鮮度checkを迂回しない**。ホストPython更新時の物理token移行は別backlog（明示再索引を検討）。最終のscore-cache融合だけはPython3.11/3.14両方で同じgate/結果を確認。これは3.14で古いpage snapshotを現行扱いした検索ではない。
+- 新CPU8回帰：文字/視覚の両方向、constant/不足/欠けmode/有限極値、固定入力SHA/旧queries非重複、正解なしの分母、scope/kind/favorite/literal/ページ根拠/API形とtext不変。既存ranking/result groups/searchと対象 **31 PASS /7.856秒**。最終全Python **493件：490 PASS /3 Windows platform SKIP /388.024秒**。Core **449 PASS**、x64 SelfContained Release **警告0/エラー0、21.19秒**。compileall/diff/文書リンク/.gitattributes LF固定を確認。
+- output `data/combined-fusion/v8-20261017-01/`（protocol/cache/baseline/candidate/validated/system-host JSON）。logs `data/combined-fusion-prepare-20261017.log` / `combined-fusion-target-20261017.log` / `combined-fusion-python-20261017.log` / `combined-fusion-core-20261017.log` / `combined-fusion-release-20261017.log`。initial診断は `data/combined-diagnostic-v1-20261017/` / `data/combined-diagnostic-20261017.log`。すべてignored。元ZIP/DB/report/素材の変更・移動・削除なし、新download/依存/私物走査/外部media送信/CIなし。今回EG2実GPUは許可済み評価素材へ使用、WD/OCR/Layaは起動していない。専用worker/AI/catalogはfinallyでclose済み。
+- GUI/XAML/Core API shapeは未変更。新native実操作、High Contrast/Narrator/AOT/DPI・WinUIAnalyzer・大規模なcombined latency/全RAM/実私物精度は未検証。旧book-batch取消直後1PNGの静止画gateは未完のまま保持し、自動再試行上限を迂回しない。簡潔GUI/24DIP gutter/16DIP pane間隔・原文WD/未承認分離・全既存viewer/整理を維持。10.80秒の旧ページ検索はcover/max測定で、今回新しい速度測定はしていない。
+
+再現：変更前`9855263`のランキングでprepare/baselineを取得し、今回の実装で同じcacheへcompareを実行。新しいモデルDLなし。`python -m unittest discover -s tests` / `dotnet run --project tests/Aredoko.Core.Tests -c Release` / `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`。[新評価/制約](combined-fusion-evaluation.md) / [現行ランキング式](ai-ranking.md)。
+
+次の3手：
+
+1. 既存10.80秒のページ検索のdecode/内積/SQL/物理版/guardを計測し、同値な性能改善1件を選ぶ。今回のRRF品質変更をページ速度改善と混同しない。scope/即時無効化/短いguardを維持、新依存は勝手に導入しない。
+2. 既存WinUIへ長い本のchunk plan→確認→開始/最新同範囲再開を接続。画面/機能を散らかさず、未保存・scope/profile/版・所有cancel、narrowの常時進捗、共通scroll gutter/pane間隔を維持。
+3. 残る2言い換え/意図競合・別素材/別model/小字の一般化・Pythonホスト移行をbacklog。ユーザーの新指示や実運用の新根拠なしにP0第3試行へ進まない。OCR保留、WD/音声音楽/複数ページ文脈タグ/数千pendingは別slice。
+
+---
+
 ## 2026-10-17 最新同期：長い本のplan/start/resume APIと固定選択の永続化
 
 実装commit **`9196c9ea131a4cd637e20cfc20100895fa42e0aa`**。開始時に指定どおりfetch/status/log6件を確認し、HEAD **`798713231ea6cfab25d86885fbc69a9a550a2dc5`**、未保存差分なし、origin差0。`6630823` / `a558300` / `0807a23` / `7ffb5a2`等の実装・代表14素材の実機評価・10.80秒のbit同一高速化を確認し維持。reset/上書き/mergeは行わない。既存production branch `feat/winui3-production-mvp-20261011` / base `feat/gui-framework-comparison-20261010` / Draft PR5を継続。OCR保留・P0累積1/2・全既存機能と簡潔GUI/24DIP gutter/16DIP pane間隔を保持。
