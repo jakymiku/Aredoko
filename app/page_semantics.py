@@ -42,10 +42,13 @@ def _score_packed(data, dimension, query):
     """Unpack, validate and compute the exact float64 dot product without allocating a list."""
     try:
         value = array('f'); value.frombytes(data)
-        if len(value) != dimension or not all(map(math.isfinite, value)):
+        if len(value) != dimension:
             return None
         squared_norm = sum(map(operator.mul, value, value))
-        if abs(squared_norm-1) > 1e-4:
+        # Nonnegative squares propagate every NaN/Inf component into this sum.
+        # Check that one value instead of walking all components a second time;
+        # keep the original sum/sqrt/division/dot arithmetic and tolerance.
+        if not math.isfinite(squared_norm) or abs(squared_norm-1) > 1e-4:
             return None
         norm = math.sqrt(squared_norm)
         return sum(map(operator.mul, query, map(operator.truediv, value, itertools.repeat(norm))))

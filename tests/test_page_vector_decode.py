@@ -73,6 +73,21 @@ class PageVectorDecodeTests(unittest.TestCase):
         self.assertIsNotNone(self.assert_legacy(array('f', [1.00004, -0.0]).tobytes(), 2, query=[0.6, -0.8]))
         self.assertIsNone(self.assert_legacy(array('f', [1.00006, 0]).tobytes(), 2, query=[0.6, -0.8]))
 
+    def test_nonfinite_anywhere_and_extreme_float32_keep_legacy_decisions(self):
+        # Norm-sum validation must reject a nonfinite component anywhere, even
+        # when a finite unit component precedes it or both infinities occur.
+        for dimension in (2, 8, 768):
+            for position in (0, dimension//2, dimension-1):
+                for bad in (float('nan'), float('inf'), -float('inf')):
+                    values = [0.0] * dimension
+                    values[0] = 1.0; values[position] = bad
+                    with self.subTest(dimension=dimension, position=position, bad=bad):
+                        self.assertIsNone(self.assert_legacy(array('f', values).tobytes(), dimension))
+        for values in ([float('inf'), -float('inf')], [float('nan'), float('inf')],
+                       [3.4028234663852886e38, 1.0], [1.401298464324817e-45, -0.0],
+                       [1.0, 1.401298464324817e-45], [-1.0, -1.401298464324817e-45]):
+            self.assert_legacy(array('f', values).tobytes(), 2, query=[-0.0, 1.0])
+
     def test_corrupt_nonfinite_wrong_dimension_and_zero_are_still_rejected(self):
         for values in ([0.0, 0.0], [float('nan'), 1.0], [float('inf'), 0.0],
                        [-float('inf'), 0.0], [3.4e38, 0.0], [0.5, 0.0]):

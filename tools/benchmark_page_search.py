@@ -199,14 +199,110 @@ def compare(output,before,after):
         'after_python_peak_bytes':optimized['traced_full']['python_peak_bytes']}
 
 
+def profile(output, label, before):
+    """Instrument one full generated rank. Diagnostic times are not speed claims."""
+    import cProfile
+    from contextlib import contextmanager
+    import platform
+    import pstats
+
+    path = output/(label+'.json'); stats_path = output/(label+'.pstats')
+    if path.exists() or stats_path.exists():
+        raise ValueError('Never overwrite a benchmark result')
+    receipt = json.loads((output/'receipt.json').read_text())
+    protocol = json.loads((output/'protocol.json').read_text())
+    baseline = json.loads((output/(before+'.json')).read_text())
+    assert baseline['passed'] and baseline['source_unchanged'] and baseline['vectors_unchanged']
+    assert baseline['encoder_calls'] == 0
+    assert baseline['protocol_sha256'] == receipt['protocol_sha256'] == sha(output/'protocol.json')
+    assert receipt['sources'] == fingerprint(output/'generated')
+    catalog, encoder, ai = opened(output)
+    original_guard = catalog._guard
+    original_connect = ai.store.connect
+    sql = dict(execute_calls=0, execute_seconds=0.0, fetch_calls=0, fetch_seconds=0.0)
+    report = dict(passed=False, instrumented=True, label=label, baseline_label=before,
+                  protocol_sha256=receipt['protocol_sha256'], python=platform.python_version(),
+                  head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
+                  page_semantics_sha256=sha(REPO/'app/page_semantics.py'),
+                  measurement='One cProfile-instrumented full rank; overlapping cumulative function times. '
+                              'AI-vector SQL execute and cursor fetch wall time measured separately. '
+                              'Do not compare these times to untraced measure results.')
+
+    class TimedRows:
+        def __init__(self, cursor): self.cursor = cursor
+        def __iter__(self): return self
+        def __next__(self):
+            start = time.perf_counter()
+            try: return next(self.cursor)
+            finally:
+                sql['fetch_calls'] += 1
+                sql['fetch_seconds'] += time.perf_counter()-start
+
+    class TimedDB:
+        def __init__(self, db): self.db = db
+        def execute(self, *args):
+            start = time.perf_counter()
+            try: return TimedRows(self.db.execute(*args))
+            finally:
+                sql['execute_calls'] += 1
+                sql['execute_seconds'] += time.perf_counter()-start
+
+    @contextmanager
+    def timed_connect():
+        with original_connect() as db: yield TimedDB(db)
+
+    profiler = cProfile.Profile()
+    try:
+        assert sha(ai.store.path) == receipt['vector_db_sha256']
+        assert ai.profile.key == baseline['profile'] and ai.profile.dimension == baseline['dimension']
+        rng = random.Random(protocol['seed'])
+        query = [rng.uniform(-1,1) for _ in range(ai.profile.dimension)]
+        norm = math.sqrt(sum(x*x for x in query)); query = [x/norm for x in query]
+        rows = ai._rows('', 'all')
+        expected = baseline['cases'][-1]
+        assert expected['books'] == len(rows) == protocol['books']
+        meter = GuardMeter(original_guard); catalog._guard = meter; ai.store.connect = timed_connect
+        start = time.perf_counter(); profiler.enable()
+        try: result = ai.pages.rank(rows, query)
+        finally:
+            profiler.disable(); elapsed = time.perf_counter()-start
+            ai.store.connect = original_connect; catalog._guard = original_guard
+        assert len(result) == len(rows) and meter.holds == len(rows)
+        digest = digest_result(result)
+        assert digest == expected['result_sha256']
+        ranked, video, hits = ai.store.rank_with_content(rows, query, 'cover', 'max', result)
+        assert len(ranked) == len(rows) and not video and len(hits) == len(rows)
+        merged = hashlib.sha256(json.dumps([ranked,hits],sort_keys=True).encode()).hexdigest()
+        assert merged == expected['merged_sha256']
+        profiler.dump_stats(str(stats_path))
+        functions = []
+        for (file, line, name), (_, calls, own, cumulative, _) in pstats.Stats(profiler).stats.items():
+            # Repository sources are relative; platform/builtin functions need only their basename.
+            source = Path(file)
+            filename = source.relative_to(REPO).as_posix() if source.is_relative_to(REPO) else source.name
+            functions.append(dict(file=filename,line=line,name=name,calls=calls,
+                                  own_seconds=own,cumulative_seconds=cumulative))
+        functions.sort(key=lambda row: (-row['cumulative_seconds'],row['file'],row['line'],row['name']))
+        report.update(rank_seconds=elapsed,guard=meter.summary(),vector_sql=sql,functions=functions[:80],
+                      result_sha256=digest,merged_sha256=merged,books=len(rows),
+                      source_unchanged=receipt['sources']==fingerprint(output/'generated'),
+                      vectors_unchanged=sha(ai.store.path)==receipt['vector_db_sha256'],encoder_calls=encoder.calls)
+        assert report['source_unchanged'] and report['vectors_unchanged'] and encoder.calls == 0
+        report['passed'] = True
+    finally:
+        profiler.disable(); catalog._guard = original_guard; ai.store.connect = original_connect
+        ai.close(); catalog.close(); path.write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+    return {key:report[key] for key in ('passed','label','instrumented','rank_seconds','guard','vector_sql','encoder_calls')}
+
+
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode',choices=('prepare','measure','compare'));parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('mode',choices=('prepare','measure','compare','profile'));parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--books',type=int,default=1024);parser.add_argument('--pages',type=int,default=64);parser.add_argument('--label',default='baseline')
     parser.add_argument('--before',default='baseline');parser.add_argument('--after',default='optimized')
     args=parser.parse_args();directory=args.output.resolve()
     if not directory.is_relative_to((REPO/'data/page-search-scale').resolve()):parser.error('Use data/page-search-scale/<fresh-run>')
     for label in (args.label,args.before,args.after):
         if not label.isascii() or not label.replace('-','').isalnum() or len(label)>40:parser.error('Use a short ASCII alphanumeric label')
-    result=prepare(directory,args.books,args.pages) if args.mode=='prepare' else (measure(directory,args.label) if args.mode=='measure' else compare(directory,args.before,args.after))
+    result=prepare(directory,args.books,args.pages) if args.mode=='prepare' else (measure(directory,args.label) if args.mode=='measure' else (profile(directory,args.label,args.before) if args.mode=='profile' else compare(directory,args.before,args.after)))
     print(json.dumps(result),flush=True)

@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新（2026-10-18）**：生成1024冊CPU検索のfinite重複検査を同値に省略。同日の13.481→12.206秒（9.46%）、旧10.801秒の記録更新ではない。raw/merged/scope/原本不変、専用OCR保留/P0 2/2。[計測内訳と限界](page-search-performance.md)。次は既存長冊chunk APIの簡潔なWinUI接続。
+
 > **最新：combined/RRFの限定改善を採用、P0累積2/2で区切り（2026-10-17）**：スコア幅による重み付け1案のみ。事前固定24問の正解あり22問は16/22→20/22、root限定22条件は22/22維持、旧Top1正解の悪化0。既存直接視覚13問は7/13→13/13（WD4問を混ぜない）。明示text/cover・原本/索引・scope不変。[方式・条件・2件の残失敗](combined-fusion-evaluation.md)。旧1/2は履歴、追加の自動調整/OCR復帰なし。次はページ検索の性能内訳、既存chunk UI。
 
 > **最新：長い本の明示分割APIと再開（2026-10-17）**：CPU plan→固定128ページ以内を16ページずつatomic公開→同じjob/page/revision/scope/profileを再起動後に明示再開。旧Python分割メソッドを再利用/強化し、HTTP認証/所有cancel/保存job置換競合を検証。[契約・限界](page-chunked-indexing.md)。**GUI接続は次の段階**、旧16ページ/複数本UIは保持。専用OCR保留、14素材の実評価・bit同一ランキング・P0 1/2・簡潔GUIを維持。
