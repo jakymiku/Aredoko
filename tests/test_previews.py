@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import stat
 import struct
 import sys
 import tempfile
@@ -179,5 +180,69 @@ class PreviewTests(unittest.TestCase):
         with patch.object(Path, 'stat', new=fake_stat):
             with self.assertRaises(ReaderChanged):
                 self.reader.tag_source(item)
+
+    def test_replaced_root_during_read_detected_as_changed(self):
+        path = self.media / 'book.cbz'
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('p0.png', png())
+        item = self.index()['book.cbz']
+        orig_stat = Path.stat
+        real_media_stat = self.media.stat(follow_symlinks=False)
+        root_stat_calls = 0
+        reparse_attr = getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400)
+        reparse_stat = os.stat_result((real_media_stat.st_mode, real_media_stat.st_ino, real_media_stat.st_dev, real_media_stat.st_nlink, real_media_stat.st_uid, real_media_stat.st_gid, real_media_stat.st_size, int(real_media_stat.st_atime), int(real_media_stat.st_mtime), int(real_media_stat.st_ctime)), {'st_file_attributes': reparse_attr})
+        def fake_stat(self_path, *args, **kwargs):
+            nonlocal root_stat_calls
+            if self_path == self.media and kwargs.get('follow_symlinks') is False:
+                root_stat_calls += 1
+                if root_stat_calls >= 2:
+                    return reparse_stat
+            return orig_stat(self_path, *args, **kwargs)
+        with patch.object(Path, 'stat', new=fake_stat):
+            with self.assertRaises(ReaderChanged):
+                self.reader.tag_source(item)
+
+    def test_replaced_intermediate_directory_during_read_detected_as_changed(self):
+        sub1 = self.media / 'sub1'
+        sub2 = sub1 / 'sub2'
+        sub2.mkdir(parents=True)
+        path = sub2 / 'book.cbz'
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('p0.png', png())
+        item = self.index()['book.cbz']
+        orig_stat = Path.stat
+        real_sub1_stat = sub1.stat(follow_symlinks=False)
+        sub1_stat_calls = 0
+        reparse_attr = getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400)
+        reparse_stat = os.stat_result((real_sub1_stat.st_mode, real_sub1_stat.st_ino, real_sub1_stat.st_dev, real_sub1_stat.st_nlink, real_sub1_stat.st_uid, real_sub1_stat.st_gid, real_sub1_stat.st_size, int(real_sub1_stat.st_atime), int(real_sub1_stat.st_mtime), int(real_sub1_stat.st_ctime)), {'st_file_attributes': reparse_attr})
+        def fake_stat(self_path, *args, **kwargs):
+            nonlocal sub1_stat_calls
+            if self_path == sub1 and kwargs.get('follow_symlinks') is False:
+                sub1_stat_calls += 1
+                if sub1_stat_calls >= 2:
+                    return reparse_stat
+            return orig_stat(self_path, *args, **kwargs)
+        with patch.object(Path, 'stat', new=fake_stat):
+            with self.assertRaises(ReaderChanged):
+                self.reader.tag_source(item)
+
+    def test_root_cache_skips_ancestor_stat_walk_for_cached_root(self):
+        path = self.media / 'image.png'
+        path.write_bytes(png())
+        root_cache = {}
+        _safe_path(str(self.media), 'image.png', root_cache=root_cache)
+        stat_paths = []
+        orig_stat = Path.stat
+        def recorded_stat(self_path, *args, **kwargs):
+            stat_paths.append(self_path)
+            return orig_stat(self_path, *args, **kwargs)
+        with patch.object(Path, 'stat', new=recorded_stat):
+            _safe_path(str(self.media), 'image.png', root_cache=root_cache)
+        # Should only stat root_path (self.media) and parts (image.png), not parents of self.media
+        parents = set(self.media.parents)
+        parent_stats = [p for p in stat_paths if p in parents]
+        self.assertEqual(parent_stats, [])
+        self.assertIn(self.media, stat_paths)
+        self.assertIn(path, stat_paths)
 
 if __name__=='__main__':unittest.main()
