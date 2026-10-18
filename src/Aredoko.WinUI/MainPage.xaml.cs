@@ -195,7 +195,7 @@ public sealed partial class MainPage : Page
             var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null||(method.IsAI&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             var folderHeader=selectedRoots is null?"すべて":selectedRoots.Length==1?(knownRoots.FirstOrDefault(r=>r.Id==selectedRoots[0])?.Name??$"ID {selectedRoots[0]}"):$"{selectedRoots.Length}フォルダ";
-            SearchOptions.Header=$"検索フォルダ: {folderHeader}"+(origin is not null?" · 画像・表紙の類似検索":method.IsTagCandidates?" · 未承認タグ候補":method.IsPageText?" · ページ本文":method.IsAI?$" · {(resultGroup==0?"上位候補":resultGroup==1?"参考候補":"全候補")}":"");
+            SearchOptions.Header=$"検索フォルダ: {folderHeader}"+(origin is not null?(origin.Kind=="video"?" · 動画の類似検索":" · 画像・表紙の類似検索"):method.IsTagCandidates?" · 未承認タグ候補":method.IsPageText?" · ページ本文":method.IsAI?$" · {(resultGroup==0?"上位候補":resultGroup==1?"参考候補":"全候補")}":"");
             rows=result.Items; active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             if(!folderHubOpen)MainViewTitle.Text=view=="history"?"閲覧履歴":view=="unreviewed"?"ライブラリ（未確認）":"ライブラリ";

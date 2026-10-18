@@ -538,7 +538,7 @@ def main():
                     has_explorer=any(n.get('automationId')=='ShowInExplorer'+str(ids['clip.mp4']) for n in popup_nodes)
                     has_default=any(n.get('automationId')=='OpenDefault'+str(ids['clip.mp4']) for n in popup_nodes)
                     has_similar=any(n.get('automationId')=='FindSimilar'+str(ids['clip.mp4']) for n in popup_nodes)
-                    check(theme+' video context menu exposes common shell actions and omits image similarity',has_explorer and has_default and not has_similar)
+                    check(theme+' video context menu exposes common shell actions and video similarity',has_explorer and has_default and has_similar)
                     shot(theme+'-video-context-menu')
                     # F12: Verify time-coded video AI indexing, visual search evidence ('動画フレーム一致（0:01）'), and opening video at the matched timestamp
                     if theme=='Light':

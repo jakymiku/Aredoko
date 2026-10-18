@@ -141,6 +141,7 @@ def run_cpu_stage(target_dir):
         im_item = next(it for it in res['items'] if it['id'] == im['id'])
         check("Candidate image has score 1.0", math.isclose(im_item['semantic_score'], 1.0, abs_tol=1e-4), report)
         check("Candidate image has origin match ms", im_item.get('origin_match_ms') == 1000, report)
+        check("Candidate image has no video match ms", 'video_match_ms' not in im_item, report)
 
         # Search similar to candidate image im
         res_im = ai.similar(im['id'], page=0, limit=10)
@@ -149,6 +150,10 @@ def run_cpu_stage(target_dir):
         check("Origin image self-excluded", all(it['id'] != im['id'] for it in res_im['items']), report)
         v2_from_im = next(it for it in res_im['items'] if it['id'] == v2['id'])
         check("Video candidate from image origin has video_match_ms", v2_from_im.get('video_match_ms') == 2000, report)
+        check("Video candidate from image origin has no origin_match_ms", 'origin_match_ms' not in v2_from_im, report)
+        v1_from_im = next(it for it in res_im['items'] if it['id'] == v1['id'])
+        check("Origin video as candidate from image origin has video_match_ms", v1_from_im.get('video_match_ms') == 1000, report)
+        check("Origin video as candidate from image origin has no origin_match_ms", 'origin_match_ms' not in v1_from_im, report)
     finally:
         ai.close()
         cat.close()

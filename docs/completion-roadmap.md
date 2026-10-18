@@ -82,7 +82,7 @@ R01に沿い、keyset/streaming・bounded top-k等を比較して採用。combin
 
 ### R05 — 動画の内容類似
 
-2026-10-19：[R05](video-similarity.md)はCPU_DONE（保存済み時間付き動画代表frame vectorの最大類似度集約・timepoint grounding・自己除外・UIシーク接続完了、Python 21 PASS [5 new VideoSimilarityTests]、Core 595 PASS、Release 0警告/0エラー、CPU受入ハーネス合格）。実機GUI/GPU受入はユーザー方針に従いR14で一括検証（`tools/test_video_similarity_acceptance.py`）。次はR06（音声/音楽の入力能力・モデル/契約/評価設計）。
+2026-10-19：[R05](video-similarity.md)はCPU_DONE（保存済み時間付き動画代表frame vectorの最大類似度集約・timepoint grounding・厳格な4通り時刻根拠契約［動画→動画双方、画像→動画候補時刻のみ、動画→画像起点時刻のみ、画像→画像時刻なし］・cover単体候補0ms安全フォールバック・自己除外・UIシーク接続完了、Python 23 PASS [7 VideoSimilarityTests]、Core 596 PASS、Release 0警告/0エラー、CPU受入ハーネス合格）。実機GUI/GPU受入はユーザー方針に従いR14で一括検証（`tools/test_video_similarity_acceptance.py`）。次はR06（音声/音楽の入力能力・モデル/契約/評価設計）。
 
 起点の保存済み時間付きframe vectorを使い、動画→動画/画像の範囲と集約を明示。最初のframeだけの比較を「動画全体」と表示しない。自己除外・profile/版/scope・不正/未索引・取消、候補の一致時刻・対応frame、既存一覧の右クリック→結果→該当時刻再生→戻るを通す。API/mock回帰→Core→既存WinUI接続の順で分割し、実品質とGUI操作はR14へ送る。APIだけでは利用シナリオ完了としない。
 

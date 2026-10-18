@@ -41,7 +41,8 @@ public static class SimilaritySearch
                root.GetProperty("score_kind").GetString()!="cosine"||root.GetProperty("limit").GetInt32()!=60||
                status is not ("ready" or "unindexed" or "unsupported_profile")||
                revision is null||revision.Length!=64||revision.Any(c=>!(c is >= '0' and <= '9' or >= 'a' and <= 'f'))||
-               string.IsNullOrWhiteSpace(profile)||profile.Length>256)
+               string.IsNullOrWhiteSpace(profile)||profile.Length>256||
+               (root.TryGetProperty("origin_kind",out var okProp)&&okProp.GetString() is not ("image" or "book" or "archive" or "video")))
                 throw new InvalidDataException("類似検索の応答が要求と一致しません。検索をやり直してください。");
             var result=Protocol.ParseSearch(text);
             if(result.Total<0||(!result.SearchComplete&&result.Total>10000)||result.Items.Count>60||result.Items.Count>result.Total||

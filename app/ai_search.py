@@ -132,6 +132,7 @@ class VectorStore:
                                (row['id'],revision(row))).fetchall()
         frames=[]
         for at_ms,data in records:
+            if not (isinstance(at_ms,int) and 0<=at_ms<=86_400_000):continue
             try:
                 vec=array('f');vec.frombytes(data)
                 if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:continue
@@ -159,12 +160,14 @@ class VectorStore:
         return fuse_modalities(scores,ranking),video_hits,page_hits
     def scores_with_content(self,rows,query,source="all",page_scores=None,*,query_frames=None,origin_hits=None):
         """Raw modality scores with exactly the existing normalization/dot order."""
-        if query_frames is not None:
+        if query_frames is not None and len(query_frames)>0:
             active_frames=[(ms,normalized(v,self.dimension)) for ms,v in query_frames]
+            is_multi=True
         else:
             active_frames=[(0,normalized(query,self.dimension))]
-        is_multi=query_frames is not None
+            is_multi=False
         eligible={row['id']:revision(row) for row in rows}
+        video_ids={row['id'] for row in rows if row.get('kind')=='video'}
         scores={}
         video_hits={}
         # Read only candidate IDs; unrelated persisted vectors need not be scanned.
@@ -195,6 +198,7 @@ class VectorStore:
                     vsql='SELECT item_id,revision,at_ms,vector FROM ai_video_frames WHERE item_id IN ('+','.join('?' for _ in batch)+') ORDER BY item_id,at_ms'
                     for item_id,rev,at_ms,data in db.execute(vsql,batch):
                         if eligible.get(item_id)!=rev:continue
+                        if not (isinstance(at_ms,int) and 0<=at_ms<=86_400_000):continue
                         try:
                             vec=array('f');vec.frombytes(data)
                         except (ValueError,TypeError):continue
@@ -214,6 +218,9 @@ class VectorStore:
                                 scores.setdefault(item_id,{})['cover']=score
                                 video_hits[item_id]=at_ms
                                 if origin_hits is not None:origin_hits[item_id]=active_frames[0][0]
+        for vid in video_ids:
+            if vid in scores and 'cover' in scores[vid] and vid not in video_hits:
+                video_hits[vid]=0
         page_hits={}
         if source in ('all','cover') and 'cover' in self.profile.modalities:
             for item_id,(score,evidence) in (page_scores or {}).items():
@@ -671,21 +678,23 @@ class AISearch:
                     origin_frames=self.store.video_frames(origin)
                     if not origin_frames:return {**result,'similarity_status':'unindexed'}
                     query=origin_frames[0][1]
+                    track_origin_hits=True
                 else:
                     query=self.store.cover(origin)
                     if query is None:return {**result,'similarity_status':'unindexed'}
-                    origin_frames=[(0,query)]
+                    origin_frames=None
+                    track_origin_hits=False
                 candidate_total=indexed_total=0
                 for rows in self._search_batches(kind,view,scope,check,('image','book','archive','video'),item_id):
                     candidate_total+=len(rows)
-                    origin_hits={}
+                    origin_hits={} if track_origin_hits else None
                     scores,video_hits,_=self.store.scores_with_content(rows,query,'cover',query_frames=origin_frames,origin_hits=origin_hits)
                     for row in rows:
                         rid=row['id']
                         if rid in scores:
                             pl={'revision':revision(row)}
                             if rid in video_hits:pl['video_match_ms']=video_hits[rid]
-                            if rid in origin_hits:pl['origin_match_ms']=origin_hits[rid]
+                            if origin_hits is not None and rid in origin_hits:pl['origin_match_ms']=origin_hits[rid]
                             spool.add(rid,scores[rid],payload=pl)
                     indexed_total+=len(scores)
                     check()

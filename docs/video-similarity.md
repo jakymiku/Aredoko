@@ -12,15 +12,19 @@
 - **マルチフレーム最大類似度集約 (`VectorStore.scores_with_content`)**:
   - 動画が起点または候補となる場合、フレーム単位のコサイン類似度 $\cos(\mathbf{v}_{orig}, \mathbf{w}_{cand})$ を比較し、最大の類似度を採用。最初の1フレームだけの比較を「動画全体」と偽らない。
   - 最大類似度を達成した候補フレームのタイムスタンプ `video_hits[cand_id] = cand_ms`、および起点フレームのタイムスタンプ `origin_hits[cand_id] = orig_ms` を正確に記録（Timepoint Grounding）。
-  - 起点と候補の組み合わせ:
+  - 起点と候補の組み合わせ（厳格な4通り契約）:
     1. **動画 → 動画**: 起点フレーム時刻 `origin_match_ms` と候補フレーム時刻 `video_match_ms` の双方を記録。
-    2. **画像/本 → 動画**: 候補フレーム時刻 `video_match_ms` を記録。
-    3. **動画 → 画像/本**: 起点フレーム時刻 `origin_match_ms` を記録。
+    2. **画像/本 → 動画**: 候補フレーム時刻 `video_match_ms` を記録（起点時刻 `origin_match_ms` は付与せず null）。
+    3. **動画 → 画像/本**: 起点フレーム時刻 `origin_match_ms` を記録（候補時刻 `video_match_ms` は付与せず null）。
+    4. **画像/本 → 画像/本**: 時刻根拠なし（双方が null、「起点の画像・表紙に似た候補」を表示）。
+  - フォールバックと堅牢性境界:
+    - 代表フレーム未作成で `cover` のみ存在する動画候補は `video_match_ms = 0`（0:00）として安全にフォールバック。
+    - タイムスタンプは `0 <= at_ms <= 86_400_000`（24時間以内）を厳格検証し、破損・負値を安全に除外。
+    - 空の `query_frames` に対する防御と `SimilaritySearch.Parse` による `origin_kind` の厳格なプロトコル検証。
 - **自己除外と範囲制御 (`AISearch.similar`)**:
   - 起点アイテム（動画・画像・本）は結果リストから確実に除外 (`exclude_id=item_id`)。
   - 起点アイテムの種別 `origin_kind` を検索レスポンスに明示的に含め、UI側で適切な説明や案内を表示可能に。
   - 候補の対象種別として `('image', 'book', 'archive', 'video')` を許可（`audio` はR06/R08まで対象外）。
-  - 各候補アイテムに `video_match_ms`、`origin_match_ms`、`similarity_origin_id` を付与。
   - 起点・候補ともにファイル原本の変更・再エンコード・モデル推論は行わず、保存済みベクトルのみを使用。
 
 ## 2. Coreプロトコルと根拠表示 (`Aredoko.Core`)

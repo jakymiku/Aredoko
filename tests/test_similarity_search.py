@@ -296,10 +296,45 @@ class VideoSimilarityTests(unittest.TestCase):
         clip_a=self.item_fn('clip_blue_near.mp4')
         res=self.ai.similar(near_img['id'],scope=self.scope)
         self.assertEqual(res['similarity_status'],'ready')
+        self.assertEqual(res['origin_kind'],'image')
         clip_a_row=next(r for r in res['items'] if r['id']==clip_a['id'])
         self.assertGreater(clip_a_row['semantic_score'],0.95)
         # near.png matches clip_a at frame 1000ms
         self.assertEqual(clip_a_row['video_match_ms'],1000)
+        # origin was an image: candidate video must NOT have origin_match_ms
+        self.assertNotIn('origin_match_ms',clip_a_row)
+        # candidate image must have neither video_match_ms nor origin_match_ms
+        origin_img=self.item_fn('origin.png')
+        origin_row=next(r for r in res['items'] if r['id']==origin_img['id'])
+        self.assertNotIn('origin_match_ms',origin_row)
+        self.assertNotIn('video_match_ms',origin_row)
+
+    def test_video_candidate_cover_only_fallback(self):
+        # clip_unindexed only has cover vector in ai_vectors (no ai_video_frames)
+        clip_c=self.item_fn('clip_unindexed.mp4')
+        self.ai.store.put(clip_c['id'],revision(clip_c),{'cover':[1.,0.,0.],'text':[0.,1.,0.]})
+        # Video candidate from image origin has video_match_ms == 0
+        origin_img=self.item_fn('origin.png')
+        res=self.ai.similar(origin_img['id'],scope=self.scope)
+        clip_c_row=next(r for r in res['items'] if r['id']==clip_c['id'])
+        self.assertEqual(clip_c_row['video_match_ms'],0)
+        self.assertNotIn('origin_match_ms',clip_c_row)
+
+    def test_invalid_video_frame_timestamp_rejected_by_store(self):
+        clip_a=self.item_fn('clip_blue_near.mp4')
+        with self.assertRaises(ValueError):
+            self.ai.store.put(clip_a['id'],revision(clip_a),{'cover':[1.,0.,0.]},[(-1,[1.,0.,0.])])
+        with self.assertRaises(ValueError):
+            self.ai.store.put(clip_a['id'],revision(clip_a),{'cover':[1.,0.,0.]},[(86_400_001,[1.,0.,0.])])
+        with self.assertRaises(ValueError):
+            self.ai.store.put(clip_a['id'],revision(clip_a),{'cover':[1.,0.,0.]},[('bad_ts',[1.,0.,0.])])
+
+    def test_corrupt_frame_vector_skipped(self):
+        clip_a=self.item_fn('clip_blue_near.mp4')
+        with self.ai.store.connect() as db:
+            db.execute("UPDATE ai_video_frames SET vector=? WHERE item_id=? AND at_ms=0",(b'corrupt_bytes',clip_a['id']))
+        frames=self.ai.store.video_frames(clip_a)
+        self.assertEqual([ms for ms,_ in frames],[1000])
 
     def test_video_kind_filters(self):
         clip_a=self.item_fn('clip_blue_near.mp4')

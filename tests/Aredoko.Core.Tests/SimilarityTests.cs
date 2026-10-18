@@ -93,7 +93,7 @@ static class SimilarityTests
             var broken=JsonNode.Parse(Response())!.AsObject();broken.Remove(field);
             Reject(check,broken.ToJsonString(),"missing similarity field "+field);
         }
-        foreach(var change in new (string Field,JsonNode? Value)[]{("origin_id",8),("page",1),("mode","semantic"),("source","text"),("origin_revision","bad"),("profile",""),("total",1),("similarity_status","unexpected")})
+        foreach(var change in new (string Field,JsonNode? Value)[]{("origin_id",8),("page",1),("mode","semantic"),("source","text"),("origin_revision","bad"),("profile",""),("total",1),("similarity_status","unexpected"),("origin_kind","audio")})
         {
             var broken=JsonNode.Parse(Response())!.AsObject();broken[change.Field]=change.Value;
             Reject(check,broken.ToJsonString(),"invalid similarity field "+change.Field);
