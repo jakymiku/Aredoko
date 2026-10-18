@@ -1,0 +1,16 @@
+{
+  "protocol": "candidate-boundary-v1",
+  "generated_only": true,
+  "counts": [10001, 50001],
+  "roots": 3,
+  "dimension": 3,
+  "checkpoints": "1, min(cap-1,count), min(cap,count), min(cap+1,count), count-1, count; unique ascending",
+  "page_only_books": "min(cap+1,count-1), count-1",
+  "vector_source": "sparse deterministic float32 controls; never real model inference",
+  "positive_control": "late persisted text/cover, late physically current book pages, literal name/tag and literal pending search",
+  "negative_control": "metadata ID 2 has no vector; page-only books are unindexed for origin-cover similarity",
+  "cases": ["all", "single-root", "multiple-roots", "shelf", "empty", "favorites", "result-kind-book", "scope-kind-book", "exclusion", "unregister", "re-register", "repeated-start-selection"],
+  "acceptance": "All indexed eligible controls participate independent of ID, with honest counts; every audit control must also pass",
+  "baseline_expectation": "Current 10k search cap causes completion gate failures; audit_passed alone never means product acceptance",
+  "limits": "Not dense-pool RRF equivalence, filesystem scan, real quality, RAM, GUI or 1TB evidence"
+}
