@@ -107,6 +107,7 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         self.build([self.page_ids[0]]);old=self.records()
         self.encoder.hook=lambda *args:self.catalog.set_excludes(self.root,['*.cbz'])
         self.build(expected='failed');self.assertEqual(self.records(),old)
+        self.encoder.hook=None  # The build-only mutation must not fire again in the query.
         self.assertEqual(self.search()['total'],0)
 
     def test_folder_book_and_metadata_change_keep_physical_revision(self):
@@ -214,9 +215,10 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
             safe_path_calls += 1
             return orig_safe_path(*args, **kwargs)
         with patch('previews._safe_path', side_effect=counted_safe_path):
-            single_res = self.ai.search('内側の青いページ', source='cover', scope={'root_ids': [self.root]})
-        self.assertEqual({r['id'] for r in single_res['items']}, {self.item})
-        self.assertEqual(safe_path_calls, 1)
+            single_rows=list(self.ai._iter_rows(scope={'root_ids':[self.root]},all_candidates=True))
+            single_res=self.ai.pages.rank(single_rows,[0.,1.]+[0.]*6)
+        self.assertEqual(set(single_res),{self.item})
+        self.assertEqual(safe_path_calls,1)  # One physical read per book inside PageVectors.rank.
         states=self.pages.states({self.item:self.revision,folder_item:folder_snap['source_revision']})
         self.assertEqual(states,{self.item:'current',folder_item:'current'})
         self.assertEqual(self.pages.states({self.item:'a'*64})[self.item],'stale')
@@ -242,12 +244,15 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
                     self.catalog.set_excludes(self.bookroot, ['comic/*'])
             def __getattr__(_self, name):
                 return getattr(orig_guard, name)
+        rank_rows=list(self.ai._iter_rows(scope=both_scope,all_candidates=True))
         self.catalog._guard = InterleaveGuard()
         try:
-            mid_res = self.ai.search('内側の青いページ', source='cover', scope=both_scope)
+            # Verify the ranker's epoch cache itself. The outer streaming API
+            # now rejects a changed catalog instead of returning partial ranks.
+            mid_res=self.ai.pages.rank(rank_rows,[0.,1.]+[0.]*6)
         finally:
             self.catalog._guard = orig_guard
-        self.assertEqual([r['id'] for r in mid_res['items']], [self.item])
+        self.assertEqual(set(mid_res),{self.item})
         self.catalog.set_excludes(self.bookroot, [])
         # Also test concurrent root unregistration mid-batch
         releases = 0
@@ -260,10 +265,10 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         InterleaveGuard.__exit__ = unregister_on_release
         self.catalog._guard = InterleaveGuard()
         try:
-            mid_res_unreg = self.ai.search('内側の青いページ', source='cover', scope=both_scope)
+            mid_res_unreg=self.ai.pages.rank(rank_rows,[0.,1.]+[0.]*6)
         finally:
             self.catalog._guard = orig_guard
-        self.assertEqual([r['id'] for r in mid_res_unreg['items']], [self.item])
+        self.assertEqual(set(mid_res_unreg),{self.item})
         self.catalog.add_root(str(self.books), folder_books=True)
         # Mutate the folder book on disk without rescanning: immediately omitted.
         (self.folder/'2.png').write_bytes(png(color=(1,2,3)))

@@ -79,7 +79,8 @@ class CombinedScopeTests(PageFixture,unittest.TestCase):
         self.encoder.encode=lambda *args:[1.]+[0.]*7
 
     def test_api_shape_explicit_modes_scope_filters_and_page_evidence_survive(self):
-        scope={'root_ids':[self.root]};evidence={'page':1,'page_id':'a'*64,'source_revision':'b'*64,'source_state':'current'}
+        scope={'root_ids':[self.root]};source_revision=self.ai.pages.index.previews.tag_source(self.book)['revision']
+        evidence={'page':1,'page_id':'a'*64,'source_revision':source_revision,'source_state':'current'}
         before=self.ai.search('manual',source='text',scope=scope)
         with patch.object(self.ai.pages,'rank',return_value={self.book:(.95,evidence)}):
             result=self.ai.search('manual',source='all',scope=scope)
