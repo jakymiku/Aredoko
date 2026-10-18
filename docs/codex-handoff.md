@@ -1,5 +1,21 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-18 完成までの実行計画を一本化（文書のみ）
+
+開始HEAD `cec19cbad7b53cc2b4b2ab57b16829cbae59a7f2`、fetch/status clean・origin同期。ユーザーの依頼は現状分析と必要タスクの整理/文書化。今回、製品コードやモデル・GPU/GUIテストは変更/実行していない。
+
+- [completion-roadmap.md](completion-roadmap.md)にR01〜R14の優先順・依存・状態・成果物・受入条件・担当難度を追加。R01のみREADY、残りTODO。計画作成は完了、製品タスクはまだ未着手。
+- 検索/類似/pendingの1万候補上限をコードで確認し、次はR01で10,001/50,001件の生成境界fixtureと契約を作る。R02の全範囲検索、R03のバックアップ/復旧へ進む。単純なMAX_ITEMS増加/原本検査省略で代用しない。
+- 既存動画代表frame索引/本ページchunk GUI/profile/idle解放を再作成せず、動画起点類似・音声/音楽内容・初回利用/復旧・UI/配布/受入を残タスクとした。M1は日常β、M2は全媒体の製品版候補。未完を隠した完成宣言をしない。
+- R01/R02（大規模候補とRRF/鮮度）、R03（複数DBの復旧）、R06/R08（音声の方式/embedding space）の設計/レビューにAstra推奨。専用モデル必須の実証ではなく、通常実装はSol可。自動切替/agent起動なし。
+- 旧development-prioritiesは同じdocs階層の[履歴](development-priorities-history-20261018.md)へ保存し、現在の入口は簡潔化。AGENTS/agent-start/README/status/media-content-planも現行順序へ誘導。P0累積2/2終了・OCR保留・全機能/簡潔GUIは維持。
+- 検証はMarkdownリンク・タスクID/依存・差分/履歴保存の整合確認のみ。製品テストを再実行していない。直前のPython511 PASS/3 SKIP、生成1,024冊8.573716秒、代表14枚combined16/17は既存証拠であり、今回の新実測ではない。
+- GPU/GUIは現在ユーザー指示で延期中。必要な実機項目をCPU_DONE/WAITとしてまとめ、実行前に確認する。独立したCPUタスクは続行可。これは今回の条件で恒久禁止ではない。新download/私物走査/元ファイル変更/CI/main mergeなし。
+
+次の3手（正本は台帳）：**R01→R02→R03**。R01は設計/生成CPU再現のみから開始し、対象コード・入力・完了条件は実行計画の専用節を読む。外部承認待ちなら独立したR03/R06のCPU設計へ進む。旧handoffの「scorer最適化が次」を自動実行しない。
+
+---
+
 ## 2026-10-18 Antigravity更新の継承・原本確認の祖先リンク回帰修正
 
 実装commit **`47dd74a6633cf83e480bc3663f5aee4eb08bc6bc`**。開始HEAD **`f33a96cd8e7169143e4b978264b94e6186f06ad8`**、fetch/status/logでclean/origin差0を確認。既存production branch / Draft PR5を継続。現在は検索・ページ索引のCPU性能/整合性を進める段階、P0改善は累積2/2で閉じ、専用OCRは保留。全機能/簡潔GUIを維持する。

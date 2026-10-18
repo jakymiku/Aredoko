@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **現在の再開手順（2026-10-18）**：[完成までの実行計画](completion-roadmap.md)を読み、R01→R02→R03から依存が揃う1件を選ぶ。全タスクの完了条件・CPU/実機境界・Astra推奨は同台帳を正とする。以下の過去checkpointの「次」は現在の順序ではない。
+
 > **最新（2026-10-18、Antigravity更新継承後）**：代表14枚の実GPU評価でcombined16/17・直接視覚13/13、新長冊native40項目の既存記録を継承。続いて原本読込前後の祖先link/reparse検査を復元し、生成1,024冊8.573716秒/全結果一致。[原本確認の修正](source-path-validation.md)と最新handoffを優先。旧7.10秒は検査省略のあった履歴、P0 2/2/OCR保留/全機能維持。
 
 > **最新（2026-10-18、CPUのみ）**：coverage/planのvector復号をcatalog guard外へ移動。最後にscope/同snapshot/原本/scan/AI終了を再確認し、生成1万pageの全応答一致。guard保持340→34ms、総所要は微増で検索高速化とは別。[設計/測定/回帰](page-coverage-concurrency.md)。今回の検証はCPUのみ。P0 2/2/OCR保留/既存機能を維持。

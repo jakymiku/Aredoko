@@ -1,5 +1,15 @@
 # Aredoko — Codex / coding agent instructions
 
+## Active completion plan (2026-10-18, user requested)
+
+Read [docs/completion-roadmap.md](docs/completion-roadmap.md) after the product vision. Its R01–R14 task ledger is the single current execution order; [docs/development-priorities.md](docs/development-priorities.md) is the concise entrypoint. **Next: R01 (10k candidate-boundary audit/design), then R02 and R03**, not another default scorer micro-optimization. Mark task ID/state/evidence/next ID in handoffs. Existing lower checkpoint instructions and old “next three” are historical when they conflict with this ledger.
+
+M1 is a daily-use image/book/video beta; M2 adds audio/music content and item-origin similarity before claiming the all-media product candidate. Preserve all features and the full product vision. Do not call plans, CPU-only mocks or unverified GUI flows complete. Astra is recommended for R01/R02 ranking-scale design/review, R03 cross-DB recovery and R06/R08 audio-space selection; normal implementation can use Sol. This is task assignment guidance, not authorization to change models or spawn agents. GPU/GUI execution follows the latest user instruction; no permanent ban is introduced. Preserve P0 2/2 closed, OCR deferral, source safety and simple GUI. No Actions or main merge.
+
+## Historical implementation checkpoints
+
+The sections below preserve implementation evidence. Current task priority comes from the R01–R14 ledger, not older checkpoint prose.
+
 ## Latest source ancestor validation correction (2026-10-18)
 
 Root caches reuse resolved paths only; never cache mutable ancestor link/reparse permission. `_safe_path` rechecks all root ancestors even on cache hits, and `_read` rechecks ancestors above the registered root after reading, retaining one safe-path call/book and leaf/handle identity checks. New mocked link/reparse boundary regressions reproduce 14 failing subcases before the fix. Frozen generated1024-book rank is now8.573716s (old7.102995s lacked these checks); full raw/merged/scope results are identical, models0/sources unchanged. Do not use old7.10s as current performance. Read [docs/source-path-validation.md](docs/source-path-validation.md) and latest handoffs. P0 2/2 closed, OCR deferred, all features/simple GUI preserved.

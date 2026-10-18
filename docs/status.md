@@ -1,6 +1,8 @@
 
 > **最新：読書位置保存**：CBZ/ZIPを開き直すと読めたページと単ページ/見開き方向を復元。本の更新時は先頭へ、保存/取得失敗では旧位置を保持・手動retry。全Python271/Core188/Release PASS、Light/Dark実機55checks/34keys/10PNG全目視。[操作と検証](reader-progress.md)。動画・検索根拠・double-clickの他AI更新も維持。
 
+> **現在の状態（2026-10-18）**：最新の実装証拠は[codex-handoff.md](codex-handoff.md)、完成に向けた未完タスク/依存/受入は[completion-roadmap.md](completion-roadmap.md)を参照。R01が次のCPU作業。以下の古いcheckpointは履歴。計画追加は新機能実装や実機検証の完了を意味しない。
+
 
 > **最新（2026-10-14 共通ビューア）**：画像/CBZ/ZIPを専用WinUIウィンドウで閲覧。薄い左右・下枠、端に接する上下バー、idle hide/マウス再表示/F10、画像左右送り、読書single/右左・左右見開き。Core147・Python preview12/reader16・Release PASS、専用window画像/読書Light/Dark全PNGを個別目視。double-click入口はコード追加済み・実機未確認。動画は後続。[最新検証](viewer-reader-validation.md)。
 
