@@ -122,6 +122,7 @@ public sealed record SearchExpansion(string Term, string[] Added, bool Truncated
 public sealed class SearchResponse
 {
     public string SimilarityStatus { get; set; } = "";
+    public string SearchStatus { get; set; } = "";
     public string OriginKind { get; set; } = "";
     public int Total { get; set; }
     public int? PendingIndexRemaining { get; set; }
@@ -176,6 +177,7 @@ public static class Protocol
         }
         result.ScoreKind=root.TryGetProperty("score_kind",out var kind) && kind.ValueKind==JsonValueKind.String ? kind.GetString()??"" : "";
         result.SimilarityStatus=root.TryGetProperty("similarity_status",out var status) && status.ValueKind==JsonValueKind.String ? status.GetString()??"" : "";
+        result.SearchStatus=root.TryGetProperty("search_status",out var searchStatus) && searchStatus.ValueKind==JsonValueKind.String ? searchStatus.GetString()??"" : "";
         result.OriginKind=root.TryGetProperty("origin_kind",out var originKind) && originKind.ValueKind==JsonValueKind.String ? originKind.GetString()??"" : "";
         result.GroupBoundary=root.TryGetProperty("group_boundary",out var boundary) && boundary.ValueKind==JsonValueKind.Number && boundary.TryGetDouble(out var cut) ? cut : null;
         result.LeadingTotal=root.TryGetProperty("leading_total",out var leading) && leading.TryGetInt32(out var n) ? n : result.Total;

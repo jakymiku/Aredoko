@@ -1,5 +1,58 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-19 R10状態明瞭化・検索所有取消・安全診断情報 / R11 UI監査チェックリスト 実装・CPU検証完了（CPU_DONE） — 次はR12数万件の性能・資源予算
+
+開始HEAD `945cb57`。**R10（初回設定・未索引/上限/失敗状態・資源管理の仕上げ）およびR11（日常導線の整理と統一したWinUI表示・アクセシビリティ監査）はCPU_DONE**。
+AI未導入（`model_missing`）/未索引（`unindexed`）/一部索引（`partially_indexed`）/対象外（`out_of_scope`）/処理失敗（`worker_failed` 等）を、通常の「検索一致 0件」と明確に区別し、ユーザーが次に取るべき操作を具体的に案内するステータス・ガイダンス基盤を導入。
+WinUI 3 全体の所有検索取消（`BtnCancelSearch`・`Escape`キー・検索モード/種類変更時の即座中断とバックエンド連携）を接続完了。
+WinUI 3 設定ダイアログに「バックアップと復旧ガイド」（`BtnBackupGuide`）によるオフライン運用案内、およびユーザー名（`C:\Users\[USER]\...`）・トークン（`[REDACTED]`）を完全伏字化した「診断情報を表示・コピー」（`BtnDiagnostics` / `BtnCopyDiagnostics`）を新設（外部自動送信ゼロ）。
+また、`docs/ui-consistency-checklist.md` を策定し、用語統一、Light/Dark/High-Contrastテーマ、800px未満の狭幅ウィンドウ・リサイズ時のペイン自動制御、100%〜200% DPI拡大耐性、キーボード・Narratorアクセシビリティを体系的に監査・固定。
+実機GPU/GUI受入はユーザー方針に従いR14へ集約（一括検証用ハーネス `tools/test_ui_status_acceptance.py --stage cpu` 14件合格）。次は台帳優先順に従い **R12 数万件の性能・資源予算の計測と局所改善**。
+
+- **R10 実装詳細（バックエンド・Core・WinUI統合）**:
+  - `app/ai_search.py`:
+    - `AISearch.status()` に `status_code`（`ready`, `model_missing`, `corrupt_profile`, `worker_failed`, `idle`, `running`, `cancelling`, `interrupted`, `failed`）を追加。
+    - `AISearch.coverage()` に `coverage_status`（`unindexed`, `partially_indexed`, `ready`）を追加。
+    - `AISearch.search(...)` に `search_status`（`ready`, `unindexed`, `partially_indexed`, `out_of_scope`）を追加。
+  - `app/production_server.py`:
+    - `DisabledAI`（AI未導入）で `status_code: 'model_missing'`、HTTP 503 `error_code: 'ai_unavailable'` を返却。
+  - `src/Aredoko.Core/AISearchStatus.cs`:
+    - 11状態の定数、ユーザー向け明瞭な日本語案内 `Guidance(...)`、状態ラベル `StatusLabel(...)` を実装。
+  - `src/Aredoko.Core/DiagnosticsReport.cs`:
+    - システム・ライブラリ・AI状態の要約診断情報生成。ユーザー名（`C:\Users\[USER]\...`）およびトークン（`[REDACTED]`）を正規表現で完全伏字化し、無断通信ゼロを明記。
+  - `src/Aredoko.Core/Protocol.cs`:
+    - `Protocol.ParseSearch` で `search_status` をリフレクションフリーで解析。
+  - `src/Aredoko.WinUI/MainPage.xaml` / `MainPage.xaml.cs`:
+    - 検索バーに `CancelSearchButton`（`BtnCancelSearch`）を追加（検索ビジー時のみ表示）。
+    - `<KeyboardAccelerator Key="Escape" Invoked="CancelSearchShortcut"/>` を配線。ビジー時は検索中断、それ以外は詳細ペイン閉じ。
+    - 検索モード（Mode）変更時および種類（Kind）変更時に進行中の検索を自動所有取消。
+    - 検索結果0件時の `Empty.Text` および情報バー（Notice）で、未索引（候補件数付き案内）・対象外・一部索引のガイダンスを表示。
+  - `src/Aredoko.WinUI/MainPage.Settings.cs`:
+    - 設定ダイアログに「バックアップと復旧ガイド」（`BtnBackupGuide`）を配置し、オフライン完全バックアップ・復元手順を案内。
+    - 「診断情報を表示・コピー」（`BtnDiagnostics` / `BtnCopyDiagnostics`）を配置し、クリップボード経由でのサポート情報共有を可能に（自動通信なし）。
+- **R11 実装詳細（UI整合性・アクセシビリティ監査）**:
+  - `docs/ui-consistency-checklist.md`:
+    - 状態明瞭化マトリクス（8パターンの状態・表示文言・案内内容）
+    - UI用語整合（「AI検索の準備」「未作成」「索引済み」「中断」など揺らぎの排除）
+    - Light / Dark / High-Contrast 各テーマの可読性と余白確保
+    - 幅800px未満の狭幅ウィンドウ・リサイズ時の詳細ペイン自動折りたたみ
+    - 100%〜200% DPI拡大時のボタン・テキスト欠損防止
+    - キーボード操作（Escapeによる検索中断/詳細閉じ、Tab順序、Ctrl+Fフォーカス）
+    - Narrator読み上げ（アクセシビリティ名・ライブ領域更新）
+    - 個人情報・トークン非送信の診断情報安全性
+- **検証記録**:
+  - **Core Tests**: **684 checks PASS**（StatusClarityTests 20件）。
+  - **Python test_ai_status_clarity**: **4 PASS**（status_code, coverage_status, search_status, DisabledAI）。
+  - **受入ハーネス**:
+    - `tools/test_ui_status_acceptance.py --stage cpu`: **14/14 PASS**。
+    - `tools/test_audio_acceptance.py --stage cpu`: **36/36 PASS**。
+  - **WinUI x64 Release**: **警告0 / エラー0**。
+- **制約・保全事項**:
+  - P0累積2/2終了・OCR保留・全機能/簡潔GUI・原本保護・私物走査/変更なし・Actionsなし・mainへのmergeなし。
+  - 次の3手（台帳優先順）：**R12 数万件の性能・資源予算の計測と局所改善 → R13 配布・起動・更新/アンインストール・利用手順 → R14 まとめて受入、完成と呼ぶ条件（GPU/GUI一括検証）**。
+
+---
+
 ## 2026-10-19 R08音響特徴索引/類似検索・R09 WinUI再生統合 実装・CPU検証完了（CPU_DONE） — 次はR10 AI状態明瞭化・資源管理
 
 開始HEAD `945cb57`。**R08（音響/音楽特徴の索引・日本語検索・類似検索）およびR09（音声/音楽の検索→再生→類似検索のGUI統合）はCPU_DONE**。

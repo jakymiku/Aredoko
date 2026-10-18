@@ -3,7 +3,7 @@
   <Style x:Key="MediaTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}"><Setter Property="FontWeight" Value="SemiBold"/></Style>
   <Style x:Key="MediaMetadataStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}"><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
  </Page.Resources>
- <Page.KeyboardAccelerators><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchShortcut"/><KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveShortcut"/></Page.KeyboardAccelerators>
+ <Page.KeyboardAccelerators><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchShortcut"/><KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveShortcut"/><KeyboardAccelerator Key="Escape" Invoked="CancelSearchShortcut"/></Page.KeyboardAccelerators>
  <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Auto" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="180" SelectionChanged="Nav_SelectionChanged" ItemInvoked="Navigation_ItemInvoked" AutomationProperties.AutomationId="Nav">
   <NavigationView.MenuItems>
    <NavigationViewItem Content="すべて" Tag="all" Icon="Library" IsSelected="True" AutomationProperties.AutomationId="NavAll"/>
@@ -85,9 +85,10 @@
     <TextBlock Grid.Column="1" x:Name="Count" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TxtCount"/>
     <Button Grid.Column="2" x:Name="RootsButton" Content="フォルダ管理" Click="Roots_Click" AutomationProperties.AutomationId="BtnRoots"/>
    </Grid>
-   <Grid x:Name="ItemSearchRow" Grid.Row="1" ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <Grid x:Name="ItemSearchRow" Grid.Row="1" ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
     <TextBox x:Name="Query" Header="探したいもの" PlaceholderText="名前・タグを検索（Ctrl+F）" MaxLength="300" TextChanged="Query_Changed" AutomationProperties.Name="名前・タグ検索" AutomationProperties.AutomationId="TxtQuery"/>
-    <Button Grid.Column="1" Content="検索" VerticalAlignment="Bottom" Style="{StaticResource AccentButtonStyle}" Click="Search_Click" AutomationProperties.AutomationId="BtnSearch"/>
+    <Button Grid.Column="1" x:Name="SearchButton" Content="検索" VerticalAlignment="Bottom" Style="{StaticResource AccentButtonStyle}" Click="Search_Click" AutomationProperties.AutomationId="BtnSearch"/>
+    <Button Grid.Column="2" x:Name="CancelSearchButton" Content="中断" VerticalAlignment="Bottom" Visibility="Collapsed" Click="CancelSearch_Click" AutomationProperties.Name="検索中断" AutomationProperties.AutomationId="BtnCancelSearch"/>
    </Grid>
    <Grid x:Name="SearchTools" Grid.Row="2" ColumnSpacing="16">
     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

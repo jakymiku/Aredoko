@@ -38,11 +38,14 @@ from wd_tagger import create_tagger
 from storage_lease import storage_lease,storage_parent
 
 class DisabledAI:
-    def __init__(self,error=None):
+    def __init__(self,error=None,status_code='model_missing'):
         self.error=error or 'モデル設定またはAI索引を開けません。文字検索は引き続き利用できます。'
+        self.status_code=status_code
     def status(self):
         return {'available':False,'state':'failed','processed':0,'total':0,'indexed':0,
-                'skipped':0,'error':self.error}
+                'skipped':0,'error':self.error,'status_code':self.status_code,
+                'model':'未導入','model_id':'none','profile':'none','modalities':[],
+                'resident':False,'worker_state':'unloaded','limit':MAX_ITEMS}
     def start(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def search(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def similar(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
@@ -619,7 +622,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             except SearchCancelled:return self.send(409,{'error':'検索を中断しました。','error_code':'search_cancelled'})
             except SearchRequestConflict:return self.send(409,{'error':'検索の受付が無効か終了しています。再検索してください。','error_code':'search_request_unavailable'})
             except (ScanBusyError,AIBusy) as ex: return self.send(409,{'error':str(ex)})
-            except AIUnavailable as ex: return self.send(503,{'error':str(ex)})
+            except AIUnavailable as ex: return self.send(503,{'error':str(ex),'error_code':'ai_unavailable'})
             except (ValueError,TypeError) as ex: return self.send(400,{'error':str(ex) if str(ex) in PUBLIC_FOLDER_ERRORS else 'Invalid request: check folder, exclusions or scan state'})
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})

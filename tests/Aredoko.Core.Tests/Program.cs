@@ -223,3 +223,4 @@ await IndexContinuationTests.Run(Check);
 
 await SearchCancellationTests.Run(Check);
 AudioSpeechTests.Run(Check);
+StatusClarityTests.Run(Check);

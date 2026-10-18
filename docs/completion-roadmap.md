@@ -31,7 +31,7 @@
 
 ## タスク台帳（優先順）
 
-状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02 CPU_DONE（A/B/C実装・CPU検証済み、必要実機はR14）、R03 CPU_DONE、R04 CPU_DONE、R05 CPU_DONE、R06 DONE（[音声・音楽方式設計凍結](audio-content-design.md)）、R07 CPU_DONE（発話区間索引/時刻根拠・Core/Python・CPU受入合格）、次はR08音響・音楽特徴索引、R14は限定実機PARTIAL、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
+状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02〜R05 CPU_DONE、R06 DONE（[音声・音楽方式設計凍結](audio-content-design.md)）、R07 CPU_DONE、R08/R09 CPU_DONE（[音響特徴検索・類似検索・WinUI再生統合](audio-content-design.md)）、R10/R11 CPU_DONE（[状態明瞭化・所有取消・診断情報・UI監査](ui-consistency-checklist.md)）、次はR12数万件の性能・資源予算、R14は限定実機PARTIAL、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
 
 | ID | 作業・出力 | 依存 | 担当難度 | 状態 |
 | --- | --- | --- | --- | --- |
@@ -44,8 +44,8 @@
 | R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | CPU_DONE：[発話区間索引/時刻根拠](audio-content-design.md)、Core/Python検証、CPU受入15件合格、実機R14 |
 | R08 | 音響/音楽特徴の索引・日本語検索・類似検索 | R06、R03/R04契約 | **Astra推奨：特徴/比較設計**、実装Sol可 | CPU_DONE：[独立512D音響特徴/日本語記述子検索/音響類似検索](audio-content-design.md)、無音WAV幻覚防止、時間根拠、実機R14 |
 | R09 | 音声/音楽の検索→再生→類似検索のGUI統合 | R07、R08 | Sol＋WinUI skills | CPU_DONE：[WinUI再生/シーク/類似検索配線](audio-content-design.md)、VideoPlayerView音声対応、HTTP範囲再生、実機R14 |
-| R10 | 初回設定・未索引/上限/失敗状態・資源管理の仕上げ | R01、既存設定 | Sol | TODO |
-| R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | TODO |
+| R10 | 初回設定・未索引/上限/失敗状態・資源管理の仕上げ | R01、既存設定 | Sol | CPU_DONE：[状態明瞭化・所有取消・診断情報](ui-consistency-checklist.md)、未索引/対象外/モデル未導入の案内、実機R14 |
+| R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | CPU_DONE：[UI整合性・アクセシビリティ監査チェックリスト](ui-consistency-checklist.md)、テーマ/DPI/Narrator整合、実機R14 |
 | R12 | 数万件の性能・資源予算を測り必要箇所だけ改善 | R02、R04 | Sol計測、設計変更時Astraレビュー | TODO |
 | R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | TODO |
 | R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | PARTIAL：[R02/R03限定実機](release-readiness.md) GPU PASS/native未完、M1/M2未確認 |
@@ -143,10 +143,33 @@ SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時�
   - WinUI x64 Releaseビルド：0警告・0エラー。
   - `tests/test_storage_backup.py`: 24件PASS（新テーブル含むバックアップ・復元整合）。
 
-### R10 / R11 — 使える状態が分かる簡潔なGUI
+### R10 / R11 — CPU_DONE：使える状態が分かる簡潔なGUIとUI整合性・アクセシビリティ監査
 
-- R10：AI未導入/未索引/古い索引/処理上限/対象外/処理失敗を0件ヒットと混同しない。既存profile選択・idle解放・待機設定を再利用。モデルを外しても通常検索・整理・閲覧が使えること、壊れたprofile/容量不足/port競合/worker失敗から復帰できることを確認。診断情報は設定配下で任意取得し、token/私物pathを無断送信しない。
-- R11：既存[WinUI方針](design-vision-winui.md)に沿って、検索/フィルター/右詳細/棚/AI候補/各viewerの言葉・余白・状態表示・キー操作を揃える。機能を削除せず、長いテスト注記を主画面に置かない。Light/Dark/狭幅/100〜200%DPI/キーボード/High Contrast/Narratorのチェックリストと対象差分を作る。全面再作成より利用手順が短くなる変更を優先する。
+2026-10-19：[R10/R11](ui-consistency-checklist.md)はCPU_DONE（AI未導入/未索引/処理上限/対象外/処理失敗の明瞭な区別と案内、GUI全体の所有検索取消配線、設定画面でのオフラインバックアップ復旧案内・個人情報/トークン完全伏字化診断情報表示とワンクリックコピー、UI一貫性・DPI・ハイコントラスト・Narratorアクセシビリティ監査チェックリスト策定）。実機GPU/GUI受入はR14で一括検証（`tools/test_ui_status_acceptance.py --stage cpu` 14件合格）。次はR12（数万件の性能・資源予算の計測と局所改善）。
+
+- **R10（状態明瞭化・所有取消・診断情報）**:
+  - `AISearch.status` に `status_code`（`ready`, `model_missing`, `corrupt_profile`, `worker_failed`, `idle`, `running`, `cancelling`, `interrupted`, `failed`）、`coverage` に `coverage_status`（`unindexed`, `partially_indexed`, `ready`）、`search` に `search_status`（`ready`, `unindexed`, `partially_indexed`, `out_of_scope`）を追加。
+  - `DisabledAI`（モデル未導入/環境欠落）で `status_code: 'model_missing'`、HTTP 503 `error_code: 'ai_unavailable'` を返却。
+  - `src/Aredoko.Core/AISearchStatus.cs`: 11状態の定数、ユーザー向け明瞭な日本語案内 `Guidance(...)`、状態ラベル `StatusLabel(...)` を実装。
+  - `src/Aredoko.Core/DiagnosticsReport.cs`: システム・ライブラリ・AI状態の要約診断情報生成。ユーザー名（`C:\Users\[USER]\...`）およびトークン（`[REDACTED]`）を正規表現で完全伏字化し、無断通信ゼロを明記。
+  - `src/Aredoko.Core/Protocol.cs`: `Protocol.ParseSearch` で `search_status` をリフレクションフリーで解析。
+  - WinUI 3 検索中断配線: `MainPage.xaml` に `CancelSearchButton`（`BtnCancelSearch`）および `Escape` キーアクセラレータを追加。検索モード変更・種類変更時にも進行中検索を即座に所有取消し、`api.SearchMultiAsync` にキャンセルトークンを伝達。
+  - WinUI 3 設定ダイアログ拡張: 「バックアップと復旧ガイド」（`BtnBackupGuide`）によるオフライン安全運用の解説、および「診断情報を表示・コピー」（`BtnDiagnostics` / `BtnCopyDiagnostics`）によるサポート用安全テキスト表示。
+- **R11（日常導線の整理と統一したWinUI表示・アクセシビリティ監査）**:
+  - `docs/ui-consistency-checklist.md` を策定し、以下の項目を監査・固定：
+    - 状態明瞭化マトリクス（8パターンの状態・表示文言・案内内容）
+    - UI用語整合（「AI検索の準備」「未作成」「索引済み」「中断」など揺らぎの排除）
+    - Light / Dark / High-Contrast 各テーマの可読性と余白確保
+    - 幅800px未満の狭幅ウィンドウ・リサイズ時の詳細ペイン自動折りたたみ
+    - 100%〜200% DPI拡大時のボタン・テキスト欠損防止
+    - キーボード操作（Escapeによる検索中断/詳細閉じ、Tab順序、Ctrl+Fフォーカス）
+    - Narrator読み上げ（アクセシビリティ名・ライブ領域更新）
+    - 個人情報・トークン非送信の診断情報安全性
+- **検証記録**:
+  - `tests/test_ai_status_clarity.py`: 4件PASS（status_code, coverage_status, search_status, DisabledAI）。
+  - `tests/Aredoko.Core.Tests`: 684件PASS（StatusClarityTests 20件）。
+  - `tools/test_ui_status_acceptance.py --stage cpu`: 14/14件PASS。
+  - WinUI x64 Releaseビルド：0警告・0エラー。
 
 ### R12 — 大規模受入と性能の終了条件
 
@@ -177,11 +200,13 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
    `.\.venv-ai\Scripts\python.exe tools/test_video_similarity_acceptance.py --stage all`
 3. **R07 音声発話区間検索・時刻根拠**:
    `.\.venv-ai\Scripts\python.exe tools/test_audio_acceptance.py --stage all`
-4. **R02 全件検索・所有取消**:
+4. **R10/R11 状態明瞭化・UI監査**:
+   `.\.venv-ai\Scripts\python.exe tools/test_ui_status_acceptance.py --stage all`
+5. **R02 全件検索・所有取消**:
    `.\.venv-ai\Scripts\python.exe tools/test_search_acceptance.py`
-5. **R03 停止時バックアップ/復元・整合性**:
+6. **R03 停止時バックアップ/復元・整合性**:
    `.\.venv-ai\Scripts\python.exe -m unittest tests/test_storage_backup.py`
-6. **Core プロトコル総合検証**:
+7. **Core プロトコル総合検証**:
    `dotnet run --project tests/Aredoko.Core.Tests -c Release`
 7. **WinUI 3 GUIネイティブフロー & 外観検証**:
    - `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`

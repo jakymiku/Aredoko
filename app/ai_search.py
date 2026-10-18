@@ -450,14 +450,20 @@ class AISearch:
         pending=self.pending_tags.snapshots([r['id'] for r in batch])
         regular=self.store.fresh_ids(batch)
         fresh+=len((regular-set(pending)) | (regular & self.pending_tags.ready_ids(pending)))
+        cov_status = 'empty_scope' if targeted == 0 else ('ready' if fresh == targeted else ('unindexed' if fresh == 0 else 'partially_indexed'))
         return {'scope':scope,'candidate_total':total,'target_total':targeted,
                 'fresh_total':fresh,'remaining_total':targeted-fresh,
-                'coverage_limit':MAX_ITEMS,'index_limit':limit,'refresh_required_on_change':True}
+                'coverage_limit':MAX_ITEMS,'index_limit':limit,'refresh_required_on_change':True,
+                'coverage_status':cov_status}
 
     def status(self):
         with self.guard: state=self.store.state()
         resident=bool(getattr(self.encoder,'resident',False))
-        return {**public_state(state),'available':self.encoder.available,
+        available=bool(self.encoder.available)
+        st=state.get('state','idle')
+        status_code = 'ready' if available and st not in ('failed','error') else ('worker_failed' if st=='failed' else 'model_missing')
+        return {**public_state(state),'available':available,
+                'status_code':status_code,
                 'resident':resident,'worker_state':'loaded' if resident else 'unloaded',
                 'device':getattr(self.encoder,'device','') if resident else '',
                 'limit':MAX_ITEMS,'model':self.profile.label,'model_id':self.profile.model_id,'profile':self.profile.key,
@@ -654,11 +660,19 @@ class AISearch:
                         for key in ('video_match_ms','ai_page_match','audio_match_ms','audio_match_snippet'):
                             if key in payload:entry[key]=payload[key]
                         items.append(entry)
-                    check()
+                if candidate_total == 0:
+                    search_status = 'out_of_scope'
+                elif indexed_total == 0:
+                    search_status = 'unindexed'
+                elif indexed_total < candidate_total:
+                    search_status = 'partially_indexed'
+                else:
+                    search_status = 'ready'
                 return {**{key:val for key,val in selected.items() if key!='ranked'},'items':items,'mode':'semantic',
                         'coverage_limit':MAX_ITEMS,'index_limit':MAX_ITEMS,'source':source,'ranking':selected_policy,
                         'score_kind':'reciprocal-rank' if selected_policy=='mean-rrf' else 'cosine',
                         'scope':scope,'literal_only':literal_only,'result_group':result_group,
+                        'search_status':search_status,
                         'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total}
         finally:
             self._last_activity=time.monotonic()
