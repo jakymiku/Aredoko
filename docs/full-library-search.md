@@ -15,7 +15,7 @@ requestが保持するcatalog/profile-store監視接続の`PRAGMA data_version`�
 
 返すpageはmetadata版を再取得し、本文page根拠は物理source版を再確認。類似起点も監視開始後に取得し、公開前に再確認。pendingは署名と表示source状態を確認。これは複数DB/全ファイルのatomic snapshotやTOCTOU完全解消の保証ではない。
 
-closeとworkspaceのSQLite progress handlerによるCPU処理中断、容量エラーの503案内と後始末は接続済み。**request ID所有の取消API・Core/UI取消接続はまだ未実装**。既存index jobのcancelを検索へ流用しない。R02-Cが残るためR02全体はDOING、必要なnative/GPU受入はR14へ積む。
+closeとworkspaceのSQLite progress handlerによるCPU処理中断、容量エラーの503案内と後始末は接続済み。**このR02-B時点ではrequest ID取消は未実装だったが、現在は[R02-C](search-cancellation.md)で専用ID/API・Coreまで実装/CPU検証済み**。既存index jobのcancelを検索へ流用せず、R02はCPU_DONE。UI全体の取消配線R10・資源/性能R12・必要native/GPU受入R14は残る。
 
 ## 検証記録
 

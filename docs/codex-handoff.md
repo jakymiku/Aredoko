@@ -1,5 +1,21 @@
 # Aredoko 開発引き継ぎ
 
+
+## 2026-10-18 R02-C実装・CPU検証完了 — 次はR03
+
+開始HEAD `3f29893`、fetch/status/logでclean/origin同期を確認。実装 **`b6731565e185101d58a56de9c2e144d7ebf6df53`**。[検索取消の契約・境界](search-cancellation.md)を参照。**R02はCPU_DONE（A/B/C実装・CPU検証済み、必要なnative/GPU受入はR14）**。R02-Cを再実装せず、次はR03の複数DBバックアップ/復旧へ進む。
+
+- サーバー発行hex32桁の一回受付（未使用60秒/最大32）、通常AI/画像類似/pending意味のrequest所有取消、古い/別ID・未開始/重複/期限切れ・認証/形式・応答echo確認。legacy ID省略HTTPも保持。索引job cancelとは分離し、metadata/保存page/SQLite融合・公開前の中断、切断EOF/reset・close後のtemp削除/inference解放を接続。途中結果は返さず、勝手な再試行も行わない。
+- Core共通clientでprepare→query→ID照合、失敗/caller取消/timeout時は別の3秒tokenで同じIDだけ取消。通常AIと類似・タグ意味へ接続、旧response parser互換と既存deadlineを保持。新XAML/画面/ボタンなし。既存類似UIのtokenは接続済み、通常検索UI全体のcancel配線はR10へ残す。
+- **全Python546件：543 PASS /3 Windows platform SKIP /428.427327秒**。専用Python3.11.9 **67 PASS /66.011661秒**、最終Core **528 checks PASS /2.3576823秒**、x64 SelfContained Release **0警告/0エラー /13.49秒**。`data/large-library/r02c-checks-20261018-01/` のfull-python/python311-targeted/core-reviewed/release-reviewed log/jsonとsource SHAを参照。初回CPU対象66/Core527、その後shutdown/pending HTTP補強とdeadline維持のレビュー後に最終検証。検証失敗を隠した合格ではない。
+- query encode/OS I/Oを強制killせず、呼び出し復帰後に破棄。取消受付はworker終了保証ではなく、完了判定直後の取消競合もあり得る。HTTP所有者のcloseに接続し、HTTPServer.shutdown単体をAI closeとは扱わない。R12のp95/資源予算、実私物1TB、GUI/実モデル品質は今回測っていない。
+- WinUI Code Review適用。C#のasync/using・認証/応答上限・例外保存・no UI依存を確認。WinUIAnalyzer未導入/未実行、独立Astraレビュー・native/High Contrast/Narrator/DPI/AOTは未確認。Astraは計画の推奨であり自動委任しない。GPU/GUIは現在の指示で延期、必要時事前確認。
+- 全機能と簡潔GUI・原本保全/モデル交換・P0累積2/2閉鎖・OCR保留・旧book-batch取消PNG未完を維持。新モデル/依存取得、私物scan/原本変更/外部media送信/Actions/main mergeなし。既存Draft PR5を継続する。
+
+次の3手：**R03複数DBバックアップ/復旧→R04明示索引継続→R05動画起点類似**。R03は実保存先/manifest/版/停止時またはSQLite backupの整合契約を先に決め、生成DBを新規復元先で検証する。実利用DBの上書き復元は自動実行しない。R06音声方式のCPU調査は独立可能。
+
+---
+
 ## 2026-10-18 R02-B実装・全件検索API/2規模監査を完了（CPU）
 
 開始HEAD `67d5158`、fetch/status/logでclean/origin同期。実装 **`ae6e982d6500d66a788922bcdeeb328c4f8495ca`**、旧テストfixture修正 **`b10e92771243612a5b2e4150d9694ab9784eb0b2`**、Core類似互換 **`a3b7781a391acf01c7afdb8e32b2f4d8ad14bc46`**。既存branch/Draft PR5を継続。**R02-A/Bは実装・CPU合格、R02全体はDOING（Cの所有取消API等が残る）**。

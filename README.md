@@ -1,6 +1,8 @@
 # Aredoko
 
-> **現状と次の開発（2026-10-18）**：登録/整理・画像/本ページ/代表動画frame検索・各viewer・WD候補レビューは実装済み。[保存済み索引の全件検索](docs/full-library-search.md)を接続し、候補の1万件打切りを解消。所有取消API・索引の継続、動画起点類似、音声/音楽内容、復旧/配布/製品受入は残作業。[完成までの実行計画](docs/completion-roadmap.md)と[最新handoff](docs/codex-handoff.md)を参照。下の古いcheckpointは履歴であり、現行機能の未実装判定には使わない。
+> 最新（2026-10-18）：全件AI検索のR02は[所有取消・切断/終了・Core接続](docs/search-cancellation.md)まで実装/CPU検証済み（CPU_DONE）。次は[完成計画R03](docs/completion-roadmap.md)のバックアップ/復旧。GPU/GUI受入・通常検索UI全体の取消配線・性能/資源受入は残る。以降の古いcheckpointは履歴。
+
+> **現状と次の開発（2026-10-18）**：登録/整理・画像/本ページ/代表動画frame検索・各viewer・WD候補レビューは実装済み。[保存済み索引の全件検索](docs/full-library-search.md)を接続し、候補の1万件打切りを解消。索引の継続、動画起点類似、音声/音楽内容、復旧/配布/製品受入は残作業。[完成までの実行計画](docs/completion-roadmap.md)と[最新handoff](docs/codex-handoff.md)を参照。下の古いcheckpointは履歴であり、現行機能の未実装判定には使わない。
 
 本を複数まとめて準備する場合は、右クリックの「複数の本をAI検索に追加…」から、表示中の検索結果の本をチェック→範囲を確認→追加。最大8冊・1冊16ページ・合計128ページで、中断した最後のジョブはAI設定から同じ範囲を再開できます。[操作と制限](docs/page-batch-indexing.md)。
 
