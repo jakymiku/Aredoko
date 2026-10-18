@@ -2,9 +2,13 @@
 
 ## Active completion plan (2026-10-18, user requested)
 
-Read [docs/completion-roadmap.md](docs/completion-roadmap.md) after the product vision. Its R01–R14 task ledger is the single current execution order; [docs/development-priorities.md](docs/development-priorities.md) is the concise entrypoint. **Next: R01 (10k candidate-boundary audit/design), then R02 and R03**, not another default scorer micro-optimization. Mark task ID/state/evidence/next ID in handoffs. Existing lower checkpoint instructions and old “next three” are historical when they conflict with this ledger.
+Read [docs/completion-roadmap.md](docs/completion-roadmap.md) after the product vision. Its R01–R14 task ledger is the single current execution order; [docs/development-priorities.md](docs/development-priorities.md) is the concise entrypoint. **R01 DONE; R02-A internal score engine CPU-tested. Next: R02-B API integration, R02-C concurrency/cancellation/contracts, then R03**, not another default scorer micro-optimization. Mark task ID/state/evidence/next ID in handoffs. Existing lower checkpoint instructions and old “next three” are historical when they conflict with this ledger.
 
 M1 is a daily-use image/book/video beta; M2 adds audio/music content and item-origin similarity before claiming the all-media product candidate. Preserve all features and the full product vision. Do not call plans, CPU-only mocks or unverified GUI flows complete. Astra is recommended for R01/R02 ranking-scale design/review, R03 cross-DB recovery and R06/R08 audio-space selection; normal implementation can use Sol. This is task assignment guidance, not authorization to change models or spawn agents. GPU/GUI execution follows the latest user instruction; no permanent ban is introduced. Preserve P0 2/2 closed, OCR deferral, source safety and simple GUI. No Actions or main merge.
+
+## Current R01/R02 checkpoint (2026-10-18)
+
+Read [large-library-contract](docs/large-library-contract.md) and [score-spool-engine](docs/score-spool-engine.md). Frozen R01 generated10001/50001 audits pass17 controls each but fail8/21 of30 completeness cases: this is a confirmed candidate-cap bug, not model quality. R02-A adds request-local SQLite fusion with global span/tied ranks/score.hex preserved, bounded buffers/capacity and cleanup.77 targeted Python pass; new15 pass on dedicated Python3.11; separate50001-item/100002-score engine oracle is exact. **The engine is NOT wired into search/similar/pending yet; product10k cap persists, R02 is DOING.** Reuse this engine; do not merely raise MAX_ITEMS. Catalog epoch alone misses normal annotation edits; follow data_version/source/profile/scope contract. GPU/GUI deferred per current user instruction; no Actions. All features/P0 2/2/OCR deferral preserved.
 
 ## Historical implementation checkpoints
 

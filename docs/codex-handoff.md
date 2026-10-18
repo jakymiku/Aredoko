@@ -1,5 +1,24 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-18 R01完了・R02-A全件順位engineのCPU実装
+
+開始HEAD `77f24f6`、fetch/status/logでclean/origin同期。固定fixture/契約commit **`30ceef635f893bc4d3a3a6c3501fe9c66553cde0`**、内部engine実装 **`c0c34c1badcccf006fb304e65ab7987ab9162b56`**。既存branch/Draft PR5を継続。**R01=DONE、R02=DOING（A内部engine CPU済み、B/C未実装）**。
+
+- **R01再現**：[large-library-contract.md](large-library-contract.md)。新規専用生成10,001/50,001 metadata・3root・3D sparse保存vector。本のcurrent pageを実物理版で検査、queryは固定配列のみ。各17対照全PASS、全30完全性条件のうち8/21条件が候補capでFAIL。正常な末尾vector/本文page、通常の名前/タグ・pending文字検索、shelf限定成功と未索引ID2を区別した。原本bytes/mtime/vector論理SHA不変。両startはworkerだけ置換して同じIDs1〜10,000を選択することを確認。実推論/継続indexの成功ではない。
+- reportは`data/large-library/r01-10001-20261018-01/report.json`と`r01-50001-20261018-01/report.json`。SHA/単発監査17.835834秒・82.679017秒は契約文書に記録。単一検索速度/全5万dense RRF/私物1TB精度ではない。`audit_passed=true`でも`completion_gate_passed=false`なので製品合格と呼ばない。
+- **R02-A実装**：[score-spool-engine.md](score-spool-engine.md)、`app/ai_score_spool.py`。256行buffer、全体mode span/同点平均順位・既存Python式/score.hexを保持したSQLite作業DB。max/mean-RRF、literal→boundary/group→paging、<=120件の根拠取得、mode/JSON/DB容量制限、cancel callback/SQLite progress handler、Windows handle close後の所有folder cleanup。DB native sort領域/RSS/モデルはPython割当量と別。
+- **検証**：Python3.14.4対象 **77 PASS /0 SKIP /55.174009秒**（新12+3とranking/scope/similarity/tag/page/scale）。専用venv Python3.11.9追加 **15 PASS /0 SKIP /10.06507秒**。別50001作品/100002scoreの全順位/hexは既存oracleと完全一致、tracemalloc peak139,587bytes・DB15,974,400bytes・traced単発4.987367秒、workspace削除。oracleは測定窓後に構築。全Pythonは未再実行。C#/XAML/HTTP未変更、Core/Release/nativeも今回未実行。
+- **未完を明示**：engineは検索APIへ未接続。アプリの1万capは今も残る。request-owned取消ID/API、data_version競合、全件候補数表示、実モデル/GPU/GUI・Astra独立レビューは未実施。R02全体をCPU_DONE/DONEにしない。R01の設計完了と欠落修正完了を混同しない。
+- AGENTS/agent-start/現優先順位/台帳/status/両handoffを更新。GPU/GUIは現在ユーザー指示で延期、必要時事前確認。P0累積2/2終了・OCR保留・旧book-batch取消PNG未完・全機能/簡潔GUIを保持。私物scan/元ファイル変更/外部media送信/実モデルload/新DL/依存/Actions/main mergeなし。生成fixture/report/DBはGitHubへ含めない。
+
+次の3手（正本は台帳）：
+
+1. **R02-B**：既存raw mode scorerを小さく切り出し、全candidateの256作品batchをspoolへ流す。search→similar→pendingへ接続、最終pageだけmetadata取得。旧cap期待テストは新契約の受入へ更新し、固定両規模を新labelで再監査。
+2. **R02-C**：epochだけで通常タグ/棚/favorite編集を検出できない点に注意。保持接続のcatalog/profile data_version、scope/source/origin再検査、request所有取消/認証/誤ID、Core strict応答と件数互換を検証。独立GPU/GUI受入はR14へ。
+3. **R03**：複数DBバックアップ/復旧の契約を生成DBで開始。R02の外部確認待ちだけで止めず独立CPU作業を進める。次の最適化/新モデル/OCRへ勝手に切り替えない。
+
+---
+
 ## 2026-10-18 完成までの実行計画を一本化（文書のみ）
 
 開始HEAD `cec19cbad7b53cc2b4b2ab57b16829cbae59a7f2`、fetch/status clean・origin同期。ユーザーの依頼は現状分析と必要タスクの整理/文書化。今回、製品コードやモデル・GPU/GUIテストは変更/実行していない。

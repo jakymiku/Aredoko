@@ -31,12 +31,12 @@
 
 ## タスク台帳（優先順）
 
-状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。初期状態はR01だけREADY、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
+状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02 DOING（Aの内部engine CPU済み、B/C未実装）、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
 
 | ID | 作業・出力 | 依存 | 担当難度 | 状態 |
 | --- | --- | --- | --- | --- |
-| R01 | 1万件上限の影響監査と大規模検索契約を凍結 | なし | **Astra推奨：設計**、調査/fixtureはSol可 | DOING：契約/fixture固定、CPU再現待ち |
-| R02 | 全登録範囲を扱う上限付きメモリの検索/候補列挙 | R01 | Sol実装、**Astra推奨：同値性/競合レビュー** | TODO |
+| R01 | 1万件上限の影響監査と大規模検索契約を凍結 | なし | **Astra推奨：設計**、調査/fixtureはSol可 | DONE：[再現/契約](large-library-contract.md)、2規模各17対照PASS |
+| R02 | 全登録範囲を扱う上限付きメモリの検索/候補列挙 | R01 | Sol実装、**Astra推奨：同値性/競合レビュー** | DOING：[A engine CPU済み](score-spool-engine.md)、次B API接続/C競合検証 |
 | R03 | バックアップ/復旧・DB/profile更新失敗からの復帰 | なし | Sol実装、**Astra推奨：整合性設計/レビュー** | TODO |
 | R04 | 大量索引の明示継続・差分・中断再開を一連で完成 | R01、R03契約 | Sol、複数保存先の競合のみAstraレビュー | TODO |
 | R05 | 動画起点の類似検索と時刻根拠/既存UI接続 | R01、既存動画索引 | Sol。集約契約が曖昧ならAstra | TODO |
@@ -52,7 +52,9 @@
 
 ## 各タスクの完了条件
 
-### R01 — 次に実行するCPU作業
+### R01 — DONE：候補境界のCPU再現・契約
+
+完了証拠：[大規模検索契約と2規模の実行記録](large-library-contract.md)。以下は固定した受入手順。次の実装はR02-B/C。
 
 読む：`app/ai_search.py`の`_iter_rows/start/coverage/search/similar`、`app/tag_semantics.py`、`app/page_semantics.py`、既存`tests/test_ai_scope.py`/`test_library_scale_fixture.py`/`test_similarity_search.py`。
 
@@ -134,6 +136,6 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 1. fetch/status/log→最新handoff→本表の最上位READY/TODOを確認。他AIの未コミット変更を上書きしない。依存が揃う最上位1件をDOINGにし、その中のAPI/CPU→Core→WinUI→必要な受入の小区切りで進める。
 2. 証拠が揃う既存実装を再作成しない。不足は「未実装」「未検証」「新しい退行」に分類。CPU_DONE/WAITには未実行テストと解除条件を具体的に付け、独立した次のタスクへ進む。
 3. 台帳の状態、最新handoffの対象ID/commit/完了条件の達否/次のIDを毎回更新。次の作業順の正本はこの表一つ。歴史文書に別の順番を追加しない。新しい要望/重大退行は優先順位を更新して理由を記録。
-4. 当面の次の3手は **R01→R02→R03**。R01設計が外部確認待ちなら独立したR03/R06のCPU調査に進める。GPU/GUI延期は現在のユーザー条件であり恒久ルールではない。新downloadは別途明示許可、CIは起動しない。
+4. 当面の次の3手は **R02-B（検索API接続）→R02-C（競合/取消/互換検証）→R03**。R01はDONE、R02-Aの内部engineはCPU検証済み。外部確認待ちなら独立したR03/R06のCPU調査に進める。GPU/GUI延期は現在のユーザー条件であり恒久ルールではない。新downloadは別途明示許可、CIは起動しない。
 
 長期台帳（削除しない）：B01 複数ページの関係/展開タグ（Astra推奨、根拠ページ/不明状態/固定評価を先に設計、専用OCRを既定にしない）、B02 Komga任意連携、B03 重複・移動追跡、B04 保存検索/ピン留め、B05 GPU/索引の高度な自動スケジューリング。新しい要望や実運用根拠が出たら順序を更新する。これらをM1前の無限な機能追加へ混ぜない。

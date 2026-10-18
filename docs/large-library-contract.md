@@ -99,4 +99,18 @@ coverageの従来prefix件数を壊さず、scope全体のfresh/remaining/対象
 
 ## 実行記録
 
-未実行。fixture/tool/test/本契約をcommitしてから新labelで2規模を実行し、その結果・誤判定の有無・既知制限を追記する。
+固定commit **`30ceef635f893bc4d3a3a6c3501fe9c66553cde0`**で実行。Python3.14.4/SQLite3.50.4、queryは固定3D配列のみ。出力は`data/large-library/r01-10001-20261018-01/`と`r01-50001-20261018-01/`。各17対照は全PASS、原本bytes/mtime・保存vector digest不変。
+
+| metadata件数 | 監査対照PASS | 検索完全性PASS | 打切りによる不合格条件 | 監査全所要 |
+| --- | --- | --- | --- | --- |
+| 10,001 | 17/17 | 22/30 | 8 | 17.835834秒 |
+| 50,001 | 17/17 | 9/30 | 21 | 82.679017秒 |
+
+所要時間はfixture生成後の複数操作を含む一連の監査で、単一検索やp95の速度ではない。10,001件では全体text/cover/combined・scope省略・明示scopeのfavorites・類似・pending・再登録後の8条件で欠落。50,001件では単/複数root内にも1万超の候補があり、21条件で欠落した。解除・除外した末尾が消えることは対照でPASSしており、同caseの不合格は別の有効な末尾候補が打切られるため。検索精度の正誤を21問測った意味ではない。
+
+両規模のcoverageはcandidate_totalが全件、target_total=10,000/fresh_total=3/remaining_total=9,997。実startのworkerを置換した2回とも同じIDs1〜10,000を選択。末尾画像のtext/coverと遅い本pageは別取得では有効、通常の名前/タグ・pending文字検索は末尾を発見し、棚で1件へ絞った意味検索も成功。未索引ID2との違いを確認した。
+
+- `r01-10001-20261018-01/report.json` SHA256 `e28996f60b56211c5bff8c625dfdac013a610783ed077a442201b550a4a2df53`。
+- `r01-50001-20261018-01/report.json` SHA256 `1df6ae97aa715f05b094c8c3a9bcf01e65da9aa040c5b073557606170d084afa`。
+
+**R01はDONE**（再現と実装可能な契約が揃った）。製品の候補打切りはまだ未修正。R02-Aの内部順位基盤は実装/CPU検証済み、[境界と測定](score-spool-engine.md)を参照。次はR02-BのAPI接続、その後R02-Cの競合/取消/互換検証。
