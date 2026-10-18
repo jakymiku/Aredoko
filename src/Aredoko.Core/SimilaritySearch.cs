@@ -38,7 +38,8 @@ public static class SimilaritySearch
                string.IsNullOrWhiteSpace(profile)||profile.Length>256)
                 throw new InvalidDataException("類似検索の応答が要求と一致しません。検索をやり直してください。");
             var result=Protocol.ParseSearch(text);
-            if(result.Total is <0 or >10000||result.Items.Count>60||result.Items.Count>result.Total||
+            if(result.Total<0||(!result.SearchComplete&&result.Total>10000)||result.Items.Count>60||result.Items.Count>result.Total||
+               (result.SearchComplete&&result.Total!=result.IndexedTotal)||
                (status!="ready"&&(result.Total!=0||result.Items.Count!=0))||
                result.Items.Count!=Math.Min(60,Math.Max(0,result.Total-(long)expectedPage*60))||
                result.Items.Select(row=>row.Id).Distinct().Count()!=result.Items.Count||

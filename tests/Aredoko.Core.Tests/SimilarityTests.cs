@@ -53,6 +53,15 @@ static class SimilarityTests
         var visual=JsonNode.Parse(Response())!.AsObject();visual["similarity_status"]="ready";visual["total"]=1;
         visual["items"]=JsonNode.Parse("""[{"id":8,"title":"near.png","kind":"image","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.98,"similarity_origin_id":7}]""");
         check(SimilaritySearch.Parse(visual.ToJsonString(),7,0).Items[0].Id==8,"strict visual candidate contract");
+        var large=visual.DeepClone().AsObject();large["total"]=50001;large["page"]=833;
+        large["search_complete"]=true;large["search_candidate_total"]=50002;large["indexed_total"]=50001;
+        large["coverage_limit"]=10000;
+        var tail=new JsonArray();
+        for(var i=0;i<21;i++){var item=visual["items"]![0]!.DeepClone();item["id"]=1000+i;tail.Add(item);}
+        large["items"]=tail;
+        var largeResult=SimilaritySearch.Parse(large.ToJsonString(),7,833);
+        check(largeResult.Total==50001&&largeResult.Items.Count==21&&largeResult.SearchComplete&&largeResult.CoverageLimit is null,
+              "complete similarity above 10k accepts its final page with honest counts");
         foreach(var change in new (string Field,JsonNode? Value)[]{("id",7),("similarity_origin_id",9),("kind","audio"),("semantic_score",2),("semantic_score",null)})
         {
             var broken=visual.DeepClone().AsObject();broken["items"]![0]![change.Field]=change.Value;
