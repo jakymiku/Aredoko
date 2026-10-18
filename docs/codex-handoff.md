@@ -1,6 +1,23 @@
 # Aredoko 開発引き継ぎ
 
 
+## 2026-10-18 R03実装・CPU検証完了 — 次はR04
+
+開始HEAD `e058377`、fetch/status/logでclean/origin同期。実装 **`896c7f52838efb47cebb028098a3f8134be188b9`**。[保存先/停止前提/復旧契約と使い方](backup-recovery.md)を追加。**R03 CPU_DONE、R04 READY**。新規先限定CLIとprofile/launcher接続はCPU確認済み、設定UIの導線はR10・native起動受入はR14へ残す。全体完成や実利用DBでの復旧実績とは扱わない。
+
+- `tools/backup_library.py`：明示catalogとモデル別sidecar、任意AI/viewer設定、embedding/WD profileをSQLite backup＋versioned manifest/SHA/schema/参照検査で保存。元メディア・モデル/venv/log/tokenは含めず、停止時の明示操作のみ。通常起動mainとCLIはOS leaseを共有。全DBのwrite予約/data_version/identityを確認して取得し、WAL分も容量見積もりに含める。完了まで新規targetもleaseで保護する。
+- restoreは**新規directoryだけ**。role固定相対名・JSON重複key/版・SHA/サイズ・schema・profile namespaceを検証してbounded copy、最後にrecovery report。既存設定/DB/原本へ上書きしない。破損/容量不足/busy/途中失敗/取消は所有出力だけをcleanup。電源断等のpartial先は再利用せず、全ファイルatomic/敵対的ABA/TOCTOU完全解消を保証しない。
+- 明示`--omit-ai`/`--without-ai`でderived別DBを省略してmanual整理・候補履歴・本文等を保持。復元後も物理source確認を省かず、runtime/ホスト変更をcurrentへ偽装しない。既存scan/AI running→interruptedと固定job再開を維持し、自動scan/推論/再開なし。restore用`--ai-profiles-dir`とlauncherのAIProfilesDirectory/ViewerSettings/TaggerProfileを追加し、元の保存先へ戻さず使える契約にした。
+- **全Python570件：567 PASS /3 Windows platform SKIP /440.775035秒**。専用Python3.11.9関連 **54 PASS /31.346266秒**。`data/recovery/r03-checks-20261018-01/`のfull-python-final/python311-final log/json（source SHA不変）。schema17catalog/7vector tables、legacyと複数profile、設定・手動タグ/候補決定/履歴/読書位置・保存本文、WAL/欠損cache/namespace/将来schema/再hash改変/出力増加・既存先保護・lock/crash/起動失敗・中断job/空き/取消/cleanupを生成データで確認。
+- 初回新fixture16件中15ERRORは公開APIにないsnapshot_id参照で、fixtureだけをSQL参照へ修正。raw全ログはtool履歴、保存JSONは要約と明記。16PASS→44PASS→専用52PASS/全体568件確認後、target leaseとWAL容量見積もりのレビュー補強2件を加えて最終回帰。各出力を上書きせず保持。生成schema取得補助の接続close漏れも修正し、専用tempだけを確認後cleanup。製品の安全検査は緩めない。
+- launcherはPowerShell AST/空白を含む生成pathで実引数組立を確認し起動0。C#/XAML未変更につき今回Core/Release再実行なし（以前528/Release合格は履歴）。native起動/実機・別ホスト実復元・停電・1TB/RSS/p95は未確認。GPU/GUIは現在の指示で延期、必要時事前確認。独立Astraレビューは未実施（推奨であり自動委任なし）。
+- 全機能/簡潔GUI・P0累積2/2終了・OCR保留・旧取消PNG未完・原本/モデルnamespaceを保持。実利用DB/私物の走査や変更、実モデルload/新DL/依存追加/外部media送信/Actions/main mergeなし。既存Draft PR5を継続。
+
+次の3手：**R04明示索引継続→R05動画起点類似→R06音声方式設計**。R04は先にCPU planで全scopeのfresh/remainingを数え、上限10000の固定未処理ID/revision/profile/upper-IDを確認→明示start/resumeへ接続。既存ai_stateへ保存するならbackup v1はJSON全体を保持できるが、table/column追加時はstorage schema/versionも同時に検討する。prefixを繰り返す旧start/coverageを壊さず、別job/原本/解除/除外変更を安全に拒否する。新しい永続queueや自動全件indexを勝手に増やさない。
+
+---
+
+
 ## 2026-10-18 R02-C実装・CPU検証完了 — 次はR03
 
 開始HEAD `3f29893`、fetch/status/logでclean/origin同期を確認。実装 **`b6731565e185101d58a56de9c2e144d7ebf6df53`**。[検索取消の契約・境界](search-cancellation.md)を参照。**R02はCPU_DONE（A/B/C実装・CPU検証済み、必要なnative/GPU受入はR14）**。R02-Cを再実装せず、次はR03の複数DBバックアップ/復旧へ進む。

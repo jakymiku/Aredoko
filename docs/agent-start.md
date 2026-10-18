@@ -1,6 +1,6 @@
 # AIエージェントの開始・再開ガイド
 
-> **現在の再開手順（2026-10-18）**：[完成までの実行計画](completion-roadmap.md)を読み、R01 DONE/R02 CPU_DONE（A/B/C実装・CPU合格）を確認し、R03復旧契約→R04明示索引継続→R05動画起点類似から依存が揃う1件を選ぶ。[全件検索](full-library-search.md)と[所有取消](search-cancellation.md)は接続済み、索引jobは最大1万件のまま。全タスクの完了条件・CPU/実機境界・Astra推奨は同台帳を正とする。以下の過去checkpointの「次」は現在の順序ではない。
+> **現在の再開手順（2026-10-18）**：[完成までの実行計画](completion-roadmap.md)を読み、R01 DONE/R02 CPU_DONE（A/B/C実装・CPU合格）を確認し、R03復旧契約のCPU完了を確認し、R04明示索引継続→R05動画起点類似→R06音声方式設計から依存が揃う1件を選ぶ。[全件検索](full-library-search.md)と[所有取消](search-cancellation.md)は接続済み、索引jobは最大1万件のまま。全タスクの完了条件・CPU/実機境界・Astra推奨は同台帳を正とする。以下の過去checkpointの「次」は現在の順序ではない。
 
 > **最新（2026-10-18、Antigravity更新継承後）**：代表14枚の実GPU評価でcombined16/17・直接視覚13/13、新長冊native40項目の既存記録を継承。続いて原本読込前後の祖先link/reparse検査を復元し、生成1,024冊8.573716秒/全結果一致。[原本確認の修正](source-path-validation.md)と最新handoffを優先。旧7.10秒は検査省略のあった履歴、P0 2/2/OCR保留/全機能維持。
 
