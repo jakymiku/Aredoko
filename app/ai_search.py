@@ -16,6 +16,7 @@ from library_index import TYPES, _excluded
 from ai_scope import validate_scope, scope_clause
 from search_terms import normalize, normalize_tags
 from ai_result_groups import boundary
+from ai_score_spool import ScoreSpool, ScoreSpoolError, SearchCancelled
 from previews import PreviewReader, PreviewUnavailable
 from tag_semantics import PendingTagVectors
 from page_semantics import PageVectors, SCHEMA as PAGE_VECTOR_SCHEMA
@@ -134,6 +135,11 @@ class VectorStore:
         except (ValueError,TypeError):return None
     def rank_with_content(self,rows,query,source="all",ranking="max",page_scores=None):
         if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
+        scores,video_hits,page_hits=self.scores_with_content(rows,query,source,page_scores)
+        # Keep the whole-pool oracle available; streaming callers fuse only once.
+        return fuse_modalities(scores,ranking),video_hits,page_hits
+    def scores_with_content(self,rows,query,source="all",page_scores=None):
+        """Raw modality scores with exactly the existing normalization/dot order."""
         query=normalized(query,self.dimension)
         eligible={row['id']:revision(row) for row in rows}
         scores={}
@@ -172,8 +178,7 @@ class VectorStore:
                     scores.setdefault(item_id,{})['cover']=score
                     page_hits[item_id]=evidence
                     video_hits.pop(item_id,None)
-        # Fusion uses global positions, never per-batch ranks.
-        return fuse_modalities(scores,ranking),video_hits,page_hits
+        return scores,video_hits,page_hits
     def rank_with_evidence(self,rows,query,source="all",ranking="max"):
         ranked,video_hits,_=self.rank_with_content(rows,query,source,ranking)
         return ranked,video_hits
@@ -250,7 +255,7 @@ class AISearch:
             if count!=len(roots):raise ValueError('Unknown registered root')
         return scope
 
-    def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS,scope=None,*,all_candidates=False):
+    def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS,scope=None,*,all_candidates=False,check=None):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS:
@@ -271,6 +276,7 @@ class AISearch:
             join=join.replace(' JOIN ',' CROSS JOIN ')
         last=0;yielded=0
         while last<upper and (all_candidates or yielded<limit):
+            if check is not None:check()
             with self.catalog.connect() as db:
                 rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+join+'WHERE '+' AND '.join(where)+
                     ' AND i.id>? AND i.id<=? ORDER BY i.id LIMIT ?',
@@ -283,7 +289,7 @@ class AISearch:
                 yield self.catalog.item(row);yielded+=1
                 if not all_candidates and yielded>=limit:break
     def _rows(self,kind='',view='all',limit=MAX_ITEMS):
-        # Search metadata/scores are bounded by MAX_ITEMS; build keeps only IDs.
+        # Legacy bounded metadata helper; full searches use _search_batches.
         return list(self._iter_rows(kind,view,limit))
     def _current_rows(self,ids,scope=None):
         if not ids:return {}
@@ -296,6 +302,65 @@ class AISearch:
                 ','.join('?' for _ in ids)+") AND l.status='present' AND r.enabled=1"+clause,ids+values).fetchall()
         return {row['id']:self.catalog.item(row) for row in rows
                 if not _excluded(row['relative_path'],tuple(json.loads(row['excludes_json'])))}
+    def _search_batches(self,kind,view,scope,check,allowed=None,exclude_id=None):
+        batch=[]
+        for row in self._iter_rows(kind,view,limit=MAX_ITEMS,scope=scope,all_candidates=True,check=check):
+            if row['id']==exclude_id or allowed is not None and row['kind'] not in allowed:continue
+            batch.append(row)
+            if len(batch)==ROW_BATCH_SIZE:
+                yield batch
+                batch=[]
+        if batch:yield batch
+
+    @contextmanager
+    def _search_workspace(self,scope):
+        """Optimistic change detection, not an atomic snapshot of several DBs.
+
+        Keep the same monitor connections: data_version is connection-relative.
+        Ordinary annotation writes do not increment catalog._state_epoch.
+        """
+        with self.catalog.connect() as catalog_db,self.store.connect() as vector_db:
+            def versions():
+                return (catalog_db.execute('PRAGMA data_version').fetchone()[0],
+                        vector_db.execute('PRAGMA data_version').fetchone()[0])
+            with self.catalog._guard:
+                version=versions();epoch=self.catalog._state_epoch;profile=self.profile.key
+            def check():
+                if self._closed:raise AIUnavailable('AI is closing')
+                self._scope(scope)
+                if self.catalog.scan_state()['state'] in ('running','cancelling'):
+                    raise AIBusy('フォルダのスキャン完了後に検索してください。')
+                if epoch!=self.catalog._state_epoch or profile!=self.profile.key or version!=versions():
+                    raise AIBusy('検索対象または索引が更新されました。もう一度検索してください。')
+            check()
+            try:
+                with ScoreSpool(cancelled=lambda:self._closed) as spool:
+                    yield spool,check
+            except SearchCancelled as error:
+                raise AIUnavailable('AI is closing') from error
+            except (ScoreSpoolError,OSError) as error:
+                raise AIUnavailable('検索用の作業領域を使用できません。空き容量を確認して再検索してください。') from error
+
+    def _search_page_rows(self,spool,selected,scope,check):
+        ids=[item for item,_ in selected['ranked']]
+        evidence=spool.evidence(ids)
+        current=self._current_rows(ids,scope)
+        if any(item not in current or revision(current[item])!=evidence[item]['revision'] for item in ids):
+            raise AIBusy('検索対象が更新されました。もう一度検索してください。')
+        # Page evidence was checked per batch; recheck returned pages against
+        # physical changes that do not write the catalog during later batches.
+        for item in ids:
+            match=evidence[item].get('ai_page_match')
+            if match is not None:
+                try:
+                    source=self.pages.index.previews.tag_source(item)
+                except (PreviewUnavailable,OSError) as error:
+                    raise AIBusy('一致ページの元ファイルを確認できません。もう一度検索してください。') from error
+                if source['revision']!=match['source_revision']:
+                    raise AIBusy('一致ページの元ファイルが更新されました。もう一度検索してください。')
+        check()
+        return current,evidence
+
     def coverage(self,scope=None,limit=MAX_ITEMS):
         """CPU-only, refreshable counts. Retains at most one 256-row batch."""
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS:raise ValueError('Invalid index limit')
@@ -433,7 +498,7 @@ class AISearch:
             if state['state']=='running': self.store.save_state({**state,'state':'cancelling'})
         return {'cancel_requested':True}
     def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None,scope=None,literal_only=False,group_threshold=None,result_group='all'):
-        if not isinstance(query,str) or not 0<len(query.strip())<=300 or type(page) is not int or page<0 or not 1<=limit<=120:
+        if not isinstance(query,str) or not 0<len(query.strip())<=300 or type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:
             raise ValueError('Invalid semantic search')
         if result_group not in ('all','leading','other'):raise ValueError('Invalid result group')
         if type(literal_only) is not bool:raise ValueError('Invalid literal evidence filter')
@@ -450,48 +515,48 @@ class AISearch:
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。')
         if not self.inference.acquire(blocking=False): raise AIBusy('AI索引を作成中です。完了後に検索してください。')
         try:
-            if self._closed: raise AIUnavailable('AI is closing')
-            if scope is None:
-                rows=self._rows(kind,view)
-            else:
-                # Apply search filters AFTER the shared scoped target cap.
-                rows=[row for row in self._iter_rows(limit=MAX_ITEMS,scope=scope)
-                      if (not kind or row['kind']==kind) and
-                      (view=='all' or view=='favorites' and row['favorite'] or
-                       view=='unreviewed' and not row['reviewed'] or view=='shelf' and row['shelf'])]
-            # Cover vectors belong to images, books, archives, and time-coded video frames.
-            # Keep this AFTER the shared target cap and explicit scope/view/kind filters.
-            # Empty modality pools need no GPU query and cannot use stray vectors.
-            if source=='cover':rows=[row for row in rows if row['kind'] in ('image','book','archive','video')]
-            policy=ranking if source=='all' and 'cover' in self.profile.modalities else 'max'
-            if rows:
-                query_vector=normalized(self.encoder.encode('query',query),self.profile.dimension)
-                page_scores=self.pages.rank(rows,query_vector) if source in ('all','cover') else {}
-                ranked,video_hits,page_hits=self.store.rank_with_content(rows,query_vector,source,policy,page_scores)
-            else:ranked,video_hits,page_hits=[],{},{}
-            words=list(dict.fromkeys(normalize(query).split()))
-            by_id={row['id']:row for row in rows}
-            for row in rows:
-                hay=normalize(row['title'])+'\x1f'+normalize_tags(row['tags'])
-                row['literal_words']=len(words)
-                row['literal_hits']=sum(word in hay for word in words)
-            if literal_only:
-                ranked=[pair for pair in ranked if by_id[pair[0]]['literal_hits']==len(words)]
-            score_kind='reciprocal-rank' if policy=='mean-rrf' else 'cosine'
-            cut=boundary(ranked,score_kind,group_threshold)
-            leading=sum(score>=cut for _,score in ranked) if cut is not None else len(ranked)
-            other_total=len(ranked)-leading
-            if result_group=='leading' and cut is not None:ranked=[pair for pair in ranked if pair[1]>=cut]
-            elif result_group=='other':ranked=[pair for pair in ranked if cut is not None and pair[1]<cut]
-            items=[]
-            for item_id,score in ranked[page*limit:(page+1)*limit]:
-                entry={**by_id[item_id],'semantic_score':round(score,6),'similarity_group':'leading' if cut is None or score>=cut else 'other'}
-                if item_id in video_hits:
-                    entry['video_match_ms']=video_hits[item_id]
-                if item_id in page_hits:entry['ai_page_match']=page_hits[item_id]
-                items.append(entry)
-            return {'total':len(ranked),'page':page,'limit':limit,'items':items,'mode':'semantic','coverage_limit':MAX_ITEMS,'source':source,'ranking':policy,
-                    'score_kind':score_kind,'scope':scope,'literal_only':literal_only,'group_boundary':cut,'leading_total':leading,'other_total':other_total,'result_group':result_group}
+            with self._search_workspace(scope) as (spool,check):
+                query_vector=None;candidate_total=indexed_total=0
+                words=list(dict.fromkeys(normalize(query).split()))
+                allowed=('image','book','archive','video') if source=='cover' else None
+                for rows in self._search_batches(kind,view,scope,check,allowed):
+                    candidate_total+=len(rows)
+                    if query_vector is None:
+                        query_vector=normalized(self.encoder.encode('query',query),self.profile.dimension)
+                    check()
+                    page_scores=self.pages.rank(rows,query_vector) if source in ('all','cover') else {}
+                    scores,video_hits,page_hits=self.store.scores_with_content(rows,query_vector,source,page_scores)
+                    for row in rows:
+                        item=row['id']
+                        if item not in scores:continue
+                        hay=normalize(row['title'])+'\x1f'+normalize_tags(row['tags'])
+                        hits=sum(word in hay for word in words)
+                        payload={'revision':revision(row),'literal_hits':hits,'literal_words':len(words)}
+                        if item in video_hits:payload['video_match_ms']=video_hits[item]
+                        if item in page_hits:payload['ai_page_match']=page_hits[item]
+                        spool.add(item,scores[item],literal_hits=hits,literal_words=len(words),payload=payload)
+                    indexed_total+=len(scores)
+                    check()
+                spool.finalize(selected_policy)
+                selected=spool.page(page,limit,literal_only=literal_only,group_threshold=group_threshold,result_group=result_group)
+                with self.catalog._guard:
+                    check()
+                    current,evidence=self._search_page_rows(spool,selected,scope,check)
+                    items=[]
+                    cut=selected['group_boundary']
+                    for item,score in selected['ranked']:
+                        payload=evidence[item]
+                        entry={**current[item],'literal_hits':payload['literal_hits'],'literal_words':payload['literal_words'],
+                               'semantic_score':round(score,6),'similarity_group':'leading' if cut is None or score>=cut else 'other'}
+                        for key in ('video_match_ms','ai_page_match'):
+                            if key in payload:entry[key]=payload[key]
+                        items.append(entry)
+                    check()
+                return {**{key:val for key,val in selected.items() if key!='ranked'},'items':items,'mode':'semantic',
+                        'coverage_limit':MAX_ITEMS,'index_limit':MAX_ITEMS,'source':source,'ranking':selected_policy,
+                        'score_kind':'reciprocal-rank' if selected_policy=='mean-rrf' else 'cosine',
+                        'scope':scope,'literal_only':literal_only,'result_group':result_group,
+                        'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total}
         finally:
             self._last_activity=time.monotonic()
             self.inference.release()
@@ -519,41 +584,38 @@ class AISearch:
             if self._closed:raise AIUnavailable('AI is closing')
             if self.catalog.scan_state()['state'] in ('running','cancelling'):
                 raise AIBusy('フォルダのスキャン完了後に類似検索してください。')
-            origin=self._current_rows([item_id],scope).get(item_id)
-            if origin is None:raise KeyError(item_id)
-            if origin['kind'] not in ('image','book','archive'):
-                raise ValueError('Invalid similarity source')
-            result={'total':0,'items':[],'page':page,'limit':limit,'mode':'similar',
-                    'origin_id':item_id,'origin_revision':revision(origin),'profile':self.profile.key,
-                    'scope':scope,'source':'cover','ranking':'max','score_kind':'cosine',
-                    'coverage_limit':MAX_ITEMS,'similarity_status':'unsupported_profile'}
-            if 'cover' not in self.profile.modalities:return result
-            query=self.store.cover(origin)
-            if query is None:return {**result,'similarity_status':'unindexed'}
-            # Match scoped indexing's shared cap BEFORE result filters; never
-            # fill filtered results with vectors outside the selected target.
-            rows=[row for row in self._iter_rows(limit=MAX_ITEMS,scope=scope)
-                  if row['id']!=item_id and row['kind'] in ('image','book','archive') and (not kind or row['kind']==kind) and
-                  (view=='all' or view=='favorites' and row['favorite'] or
-                   view=='unreviewed' and not row['reviewed'] or view=='shelf' and row['shelf'])]
-            ranked=self.store.rank(rows,query,'cover','max') if rows else []
-            before={row['id']:row for row in rows}
-            # Edits, exclusions and root removal during a CPU ranking must not
-            # publish an obsolete row. Check all candidates, not just this page.
-            current={}
-            for offset in range(0,len(rows),ROW_BATCH_SIZE):
-                current.update(self._current_rows([r['id'] for r in rows[offset:offset+ROW_BATCH_SIZE]],scope))
-            ranked=[(key,score) for key,score in ranked if key in current and revision(current[key])==revision(before[key])
-                    and (view=='all' or view=='favorites' and current[key]['favorite'] or
-                         view=='unreviewed' and not current[key]['reviewed'] or view=='shelf' and current[key]['shelf'])]
-            latest=self._current_rows([item_id],scope).get(item_id)
-            if latest is None:raise KeyError(item_id)
-            if revision(latest)!=revision(origin):raise AIBusy('起点の作品が更新されました。類似検索をやり直してください。')
-            if self.catalog.scan_state()['state'] in ('running','cancelling'):
-                raise AIBusy('フォルダのスキャン完了後に類似検索してください。')
-            items=[{**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
-                    'similarity_evidence':'cover'} for key,score in ranked[page*limit:(page+1)*limit]]
-            return {**result,'total':len(ranked),'items':items,'similarity_status':'ready'}
+            with self._search_workspace(scope) as (spool,check):
+                origin=self._current_rows([item_id],scope).get(item_id)
+                if origin is None:raise KeyError(item_id)
+                if origin['kind'] not in ('image','book','archive'):
+                    raise ValueError('Invalid similarity source')
+                result={'total':0,'items':[],'page':page,'limit':limit,'mode':'similar',
+                        'origin_id':item_id,'origin_revision':revision(origin),'profile':self.profile.key,
+                        'scope':scope,'source':'cover','ranking':'max','score_kind':'cosine',
+                        'coverage_limit':MAX_ITEMS,'similarity_status':'unsupported_profile'}
+                if 'cover' not in self.profile.modalities:return result
+                query=self.store.cover(origin)
+                if query is None:return {**result,'similarity_status':'unindexed'}
+                candidate_total=indexed_total=0
+                for rows in self._search_batches(kind,view,scope,check,('image','book','archive'),item_id):
+                    candidate_total+=len(rows)
+                    scores,_,_=self.store.scores_with_content(rows,query,'cover')
+                    for row in rows:
+                        if row['id'] in scores:spool.add(row['id'],scores[row['id']],payload={'revision':revision(row)})
+                    indexed_total+=len(scores)
+                    check()
+                spool.finalize('max');selected=spool.page(page,limit)
+                with self.catalog._guard:
+                    check()
+                    current,_=self._search_page_rows(spool,selected,scope,check)
+                    latest=self._current_rows([item_id],scope).get(item_id)
+                    if latest is None:raise KeyError(item_id)
+                    if revision(latest)!=revision(origin):raise AIBusy('起点の作品が更新されました。類似検索をやり直してください。')
+                    items=[{**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
+                            'similarity_evidence':'cover'} for key,score in selected['ranked']]
+                    check()
+                return {**result,'total':selected['total'],'items':items,'similarity_status':'ready',
+                        'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total,'index_limit':MAX_ITEMS}
         finally:
             self.inference.release()
 

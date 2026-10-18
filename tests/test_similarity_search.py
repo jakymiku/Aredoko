@@ -148,7 +148,7 @@ class SimilarityTests(unittest.TestCase):
         finally:other.close()
         with self.assertRaises(ValueError):self.ai.similar(self.row('song.wav')['id'])
 
-    def test_paging_stable_ties_and_shared_target_cap(self):
+    def test_paging_stable_ties_and_index_cap_independent_search(self):
         all_ids=self.ids()
         pages=[self.ai.similar(self.origin['id'],page=p,limit=1,scope=self.scope)['items'][0]['id'] for p in range(3)]
         self.assertEqual(all_ids,pages)
@@ -157,9 +157,11 @@ class SimilarityTests(unittest.TestCase):
         first=min(r['id'] for r in self.rows if r['root_id']==self.roots[0])
         with patch('ai_search.MAX_ITEMS',1):
             result=self.ai.similar(self.origin['id'],kind='image',scope=self.scope)
-            expected=[first] if first!=self.origin['id'] and next(r for r in self.rows if r['id']==first)['kind']=='image' else []
+            expected=[item for item in all_ids if self.catalog.get(item)['kind']=='image']
             self.assertEqual([r['id'] for r in result['items']],expected)
-            self.assertEqual(result['coverage_limit'],1)
+            self.assertEqual(result['coverage_limit'],1)  # Legacy field is the indexing cap only.
+            self.assertTrue(result['search_complete'])
+            self.assertEqual(result['search_candidate_total'],len(expected))
 
     def test_corrupt_origin_vectors_use_unindexed_fallback(self):
         for data in (b'bad',array('f',[0,0,0]).tobytes(),array('f',[float('nan'),0,1]).tobytes(),array('f',[3e30,0,0]).tobytes(),array('f',[1]).tobytes()):
@@ -167,16 +169,16 @@ class SimilarityTests(unittest.TestCase):
             self.assertEqual(self.ai.similar(self.origin['id'])['similarity_status'],'unindexed')
 
     def test_concurrent_changes_do_not_publish_stale_candidates_or_origin(self):
-        original=self.ai.store.rank
+        original=self.ai.store.scores_with_content
         def change_candidates(*args,**kwargs):
             result=original(*args,**kwargs)
             self.catalog.set_excludes(self.roots[0],['near.png','cover.cbz'])
             return result
-        with patch.object(self.ai.store,'rank',side_effect=change_candidates):
-            self.assertEqual(self.ids(),[self.row('blue.png')['id']])
+        with patch.object(self.ai.store,'scores_with_content',side_effect=change_candidates),self.assertRaises(AIBusy):
+            self.ids()  # Do not publish a ranking assembled across two catalog states.
         def change_origin(*args,**kwargs):
             result=original(*args,**kwargs);self.catalog.update([self.origin['id']],{'tags':['changed']});return result
-        with patch.object(self.ai.store,'rank',side_effect=change_origin),self.assertRaises(AIBusy):self.ids()
+        with patch.object(self.ai.store,'scores_with_content',side_effect=change_origin),self.assertRaises(AIBusy):self.ids()
 
     def test_corrupt_candidate_vector_is_skipped_without_hiding_other_results(self):
         near=self.row('near.png')

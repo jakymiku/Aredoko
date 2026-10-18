@@ -116,6 +116,9 @@ public sealed class SearchResponse
     public int LeadingTotal { get; set; }
     public int OtherTotal { get; set; }
     public int? CoverageLimit { get; set; }
+    public bool SearchComplete { get; set; }
+    public int? SearchCandidateTotal { get; set; }
+    public int? IndexedTotal { get; set; }
     public List<MediaRow> Items { get; set; } = [];
     public List<SearchExpansion> Expansions { get; set; } = [];
     // Set when no item had every word and the server fell back to items with all but one.
@@ -142,6 +145,21 @@ public static class Protocol
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
         var result = new SearchResponse { Total = root.GetProperty("total").GetInt32(), CoverageLimit = root.TryGetProperty("coverage_limit",out var coverage) ? coverage.GetInt32() : null };
+        if(root.TryGetProperty("search_complete",out var complete))
+        {
+            if(complete.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                throw new InvalidDataException("検索範囲の応答が無効です。");
+            result.SearchComplete=complete.GetBoolean();
+            if(result.SearchComplete)
+            {
+                var candidates=root.GetProperty("search_candidate_total").GetInt32();
+                var indexed=root.GetProperty("indexed_total").GetInt32();
+                if(candidates<0||indexed<0||indexed>candidates||result.Total<0||result.Total>indexed)
+                    throw new InvalidDataException("検索対象の件数が無効です。");
+                result.SearchCandidateTotal=candidates;result.IndexedTotal=indexed;
+                result.CoverageLimit=null; // Legacy coverage_limit describes index jobs, not search truncation.
+            }
+        }
         result.ScoreKind=root.TryGetProperty("score_kind",out var kind) && kind.ValueKind==JsonValueKind.String ? kind.GetString()??"" : "";
         result.SimilarityStatus=root.TryGetProperty("similarity_status",out var status) && status.ValueKind==JsonValueKind.String ? status.GetString()??"" : "";
         result.GroupBoundary=root.TryGetProperty("group_boundary",out var boundary) && boundary.ValueKind==JsonValueKind.Number && boundary.TryGetDouble(out var cut) ? cut : null;

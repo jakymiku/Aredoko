@@ -91,6 +91,12 @@ static class TagReviewTests
         var meaning=TagReviewProtocol.ParseCandidateSearch(Encoding.UTF8.GetBytes(semanticSearch.ToJsonString()),0,true);
         check(meaning.PendingIndexRemaining==1&&meaning.Items[0].Proposal is {SemanticScore:.82,EmbeddingModel:"google/embeddinggemma-2"},"pending semantic score/model and remaining index are explicit");
         check(meaning.Items[0].Proposal!.Summary.Contains("タグ候補の意味一致")&&meaning.Items[0].Proposal!.Summary.Contains("類似度")&&meaning.Items[0].AIEvidence=="","one semantic evidence explanation without duplicate generic AI label");
+        var largeMeaning=JsonNode.Parse(semanticSearch.ToJsonString())!.AsObject();
+        largeMeaning["pending_total"]=50001;largeMeaning["index_remaining"]=50000;
+        largeMeaning["search_complete"]=true;largeMeaning["search_candidate_total"]=60000;
+        largeMeaning["coverage_limit"]=10000;
+        var largeParsed=TagReviewProtocol.ParseCandidateSearch(Encoding.UTF8.GetBytes(largeMeaning.ToJsonString()),0,true);
+        check(largeParsed.PendingIndexRemaining==50000&&largeParsed.SearchComplete&&largeParsed.CoverageLimit is null,"pending semantic counts above 10k remain valid without a search cap");
         foreach(var mutateMeaning in new Action<JsonObject>[] {
             o=>o["indexed_total"]=2,
             o=>o["index_remaining"]=0,

@@ -84,7 +84,7 @@ class PendingTagVectors:
 
 
 def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=None,shelf=None,model=None):
-    from ai_search import AIBusy,MAX_ITEMS
+    from ai_search import AIBusy,MAX_ITEMS,revision
     from tag_candidate_search import validate_candidate_search
     from tag_suggestions import SuggestionConflict
     validate_candidate_search(query,kind,view,page,root_ids,shelf,model)
@@ -93,36 +93,45 @@ def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=N
     scope=ai._scope({'root_ids':root_ids,'kind':kind,'shelf':shelf})
     if not ai.inference.acquire(blocking=False):raise AIBusy('AI処理中です。完了後に検索してください。')
     try:
-        if ai._closed:raise AIUnavailable('AI is closing')
-        def eligible():
-            rows=list(ai._iter_rows(kind,view,MAX_ITEMS,scope))
-            snapshots={};vectors={}
-            for offset in range(0,len(rows),256):
-                found=ai.pending_tags.snapshots([r['id'] for r in rows[offset:offset+256]])
-                if model is not None:found={key:value for key,value in found.items() if value['producer']['model']==model}
-                snapshots.update(found);vectors.update(ai.pending_tags.vectors(found))
-            return {r['id']:r for r in rows},snapshots,vectors
-        with service.catalog._guard:rows,snapshots,vectors=eligible()
-        # A missing index must not load a GPU model or embed proposals at query time.
-        query_vector=normalized(ai.encoder.encode('query',query),ai.profile.dimension) if vectors else None
-        with service.catalog._guard:
-            ai._scope(scope)  # A removed explicit root must fail, never widen.
-            rows,snapshots,current=eligible()
-            # Newly indexed entries cannot be used if no query vector was made.
-            ranked=sorted(((item,sum(a*b for a,b in zip(query_vector,vec))) for item,vec in current.items()),key=lambda r:(-r[1],r[0])) if query_vector is not None else []
-            items=[]
-            for item,score in ranked[page*60:(page+1)*60]:
-                snapshot=snapshots[item]
-                try:state='current' if service._source(item)['revision']==snapshot['source_revision'] else 'stale'
-                except SuggestionConflict:state='stale'
-                except AIBusy:state='unverified'
-                except (KeyError,OSError):state='unavailable'
-                value={**rows[item],'semantic_score':round(max(-1,min(1,score)),6)}
-                value['proposal_match']={key:snapshot[key] for key in ('batch_id','source_revision','tags','producer','evidence')}
-                value['proposal_match'].update(state='pending',source_state=state,embedding_model=ai.profile.model_id)
-                items.append(value)
-            return {'total':len(ranked),'page':page,'limit':60,'search_mode':'pending-proposals-semantic','items':items,
-                    'score_kind':'cosine','pending_total':len(snapshots),'indexed_total':len(current),
-                    'index_remaining':len(snapshots)-len(current),'coverage_limit':MAX_ITEMS}
+        with ai._search_workspace(scope) as (spool,check):
+            query_vector=None;pending_total=indexed_total=candidate_total=0
+            for rows in ai._search_batches(kind,view,scope,check):
+                candidate_total+=len(rows)
+                snapshots=ai.pending_tags.snapshots([row['id'] for row in rows])
+                if model is not None:snapshots={key:value for key,value in snapshots.items() if value['producer']['model']==model}
+                vectors=ai.pending_tags.vectors(snapshots)
+                pending_total+=len(snapshots);indexed_total+=len(vectors)
+                if vectors and query_vector is None:
+                    query_vector=normalized(ai.encoder.encode('query',query),ai.profile.dimension)
+                check()
+                for row in rows:
+                    item=row['id']
+                    if item not in vectors:continue
+                    score=sum(a*b for a,b in zip(query_vector,vectors[item]))
+                    spool.add(item,{'text':score},payload={'revision':revision(row),'proposal':snapshots[item]})
+                check()
+            spool.finalize('max');selected=spool.page(page,60)
+            with service.catalog._guard:
+                check()
+                rows,evidence=ai._search_page_rows(spool,selected,scope,check)
+                latest=ai.pending_tags.snapshots([item for item,_ in selected['ranked']])
+                items=[]
+                for item,score in selected['ranked']:
+                    snapshot=evidence[item]['proposal']
+                    if item not in latest or latest[item]['signature']!=snapshot['signature']:
+                        raise AIBusy('タグ候補が更新されました。もう一度検索してください。')
+                    try:state='current' if service._source(item)['revision']==snapshot['source_revision'] else 'stale'
+                    except SuggestionConflict:state='stale'
+                    except AIBusy:state='unverified'
+                    except (KeyError,OSError):state='unavailable'
+                    value={**rows[item],'semantic_score':round(max(-1,min(1,score)),6)}
+                    value['proposal_match']={key:snapshot[key] for key in ('batch_id','source_revision','tags','producer','evidence')}
+                    value['proposal_match'].update(state='pending',source_state=state,embedding_model=ai.profile.model_id)
+                    items.append(value)
+                check()
+            return {'total':selected['total'],'page':page,'limit':60,'search_mode':'pending-proposals-semantic','items':items,
+                    'score_kind':'cosine','pending_total':pending_total,'indexed_total':indexed_total,
+                    'index_remaining':pending_total-indexed_total,'coverage_limit':MAX_ITEMS,'index_limit':MAX_ITEMS,
+                    'search_complete':True,'search_candidate_total':candidate_total}
     finally:
         ai._last_activity=time.monotonic();ai.inference.release()

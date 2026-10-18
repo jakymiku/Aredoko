@@ -109,15 +109,18 @@ class ScopeTests(unittest.TestCase):
         self.build(scope)
         self.assertEqual(self.ai.search('雨',scope=scope)['total'],1)
 
-    def test_cap_is_shared_before_search_filters(self):
+    def test_index_job_cap_does_not_truncate_saved_search_candidates(self):
         self.build({})  # Cache includes both roots before tightening test cap.
         late=self.rows[-1];self.catalog.update([late['id']],{'favorite':True})
         with patch('ai_search.MAX_ITEMS',3):
             self.assertEqual(self.ai.coverage({},limit=3)['candidate_total'],6)
             self.assertEqual(self.ai.coverage({},limit=3)['target_total'],3)
             self.build({},limit=3)
-            self.assertEqual(self.ai.search('雨',view='favorites',scope={})['total'],0)
-        # Omitted scope preserves legacy filtering-before-cap behavior.
+            result=self.ai.search('雨',view='favorites',scope={})
+            self.assertEqual([row['id'] for row in result['items']],[late['id']])
+            self.assertTrue(result['search_complete'])
+            self.assertEqual(result['search_candidate_total'],1)
+        # Omitted and explicit whole-library scope now share the full candidate pool.
         self.assertEqual(self.ai.search('雨',view='favorites')['items'][0]['id'],late['id'])
 
     def test_scope_snapshot_and_shelf_recheck_before_publish(self):

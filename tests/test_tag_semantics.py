@@ -145,6 +145,18 @@ class TagSemanticTests(TagFixture,unittest.TestCase):
             with ai.store.connect() as db:self.assertEqual(db.execute('SELECT count(*) FROM ai_proposal_vectors').fetchone()[0],0)
         self.assertEqual(before,(self.path.read_bytes(),self.path.stat().st_mtime_ns))
 
+    def test_pending_review_during_query_invalidates_streamed_snapshot(self):
+        self.build()
+        fired=[]
+        def review(operation,text):
+            if operation=='query' and not fired:
+                fired.append(True);self.review(self.blue['proposals'][0])
+        self.encoder.hook=review
+        with self.assertRaises(AIBusy):self.search()
+        self.assertTrue(fired)
+        self.encoder.hook=None
+        self.assertEqual(self.search()['index_remaining'],1)
+
     def test_http_semantic_flag_empty_input_and_no_silent_literal_fallback(self):
         from http.server import ThreadingHTTPServer
         from production_server import production_handler

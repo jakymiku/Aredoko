@@ -94,7 +94,7 @@ public static class TagReviewProtocol
                 var pending=root.GetProperty("pending_total").GetInt32();
                 var indexed=root.GetProperty("indexed_total").GetInt32();
                 var remaining=root.GetProperty("index_remaining").GetInt32();
-                if(pending is <0 or >10000||indexed<0||indexed>pending||remaining!=pending-indexed||root.GetProperty("score_kind").GetString()!="cosine"||parsed.Total!=indexed)
+                if(pending<0||indexed<0||indexed>pending||remaining!=pending-indexed||root.GetProperty("score_kind").GetString()!="cosine"||parsed.Total!=indexed)
                     throw new InvalidDataException("タグ候補の意味索引の件数が無効です。");
                 parsed.PendingIndexRemaining=remaining;
             }

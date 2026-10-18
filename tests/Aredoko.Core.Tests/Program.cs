@@ -27,6 +27,20 @@ Check(rejected,"image dimension multiplication cannot overflow");
 
 Check(Protocol.ParseSearch("""{"total":0,"items":[],"coverage_limit":10000}""").CoverageLimit==10000,"AI coverage from server");
 Check(Protocol.ParseSearch("""{"total":0,"items":[]}""").CoverageLimit is null,"literal/old API coverage optional");
+var completeSearch=Protocol.ParseSearch("""{"total":50001,"items":[],"coverage_limit":10000,"index_limit":10000,"search_complete":true,"search_candidate_total":50002,"indexed_total":50001}""");
+Check(completeSearch.SearchComplete&&completeSearch.CoverageLimit is null&&completeSearch.SearchCandidateTotal==50002&&completeSearch.IndexedTotal==50001,"complete scope separates search counts from index job cap");
+var incompleteSearch=Protocol.ParseSearch("""{"total":0,"items":[],"coverage_limit":10000,"search_complete":false}""");
+Check(!incompleteSearch.SearchComplete&&incompleteSearch.CoverageLimit==10000,"old incomplete response retains legacy limit");
+foreach(var invalidComplete in new[]{
+    """{"total":0,"items":[],"search_complete":"true"}""",
+    """{"total":1,"items":[],"search_complete":true,"search_candidate_total":2,"indexed_total":3}""",
+    """{"total":3,"items":[],"search_complete":true,"search_candidate_total":2,"indexed_total":2}""",
+    """{"total":0,"items":[],"search_complete":true,"search_candidate_total":-1,"indexed_total":0}"""
+})
+{
+    var invalidRejected=false;try{Protocol.ParseSearch(invalidComplete);}catch(InvalidDataException){invalidRejected=true;}
+    Check(invalidRejected,"complete search rejects inconsistent coverage contract");
+}
 var expanded=Protocol.ParseSearch("""{"total":2,"items":[{"id":1,"title":"poster.png","kind":"image","tags":["東方","巫女"],"shelf":"","favorite":false,"reviewed":false,"match":"direct"},{"id":2,"title":"reimu.png","kind":"image","tags":["博麗霊夢"],"shelf":"","favorite":false,"reviewed":false,"match":"related"}],"expansions":[{"term":"東方","added":["博麗霊夢","霊夢","Reimu","霧雨魔理沙"],"truncated":true},{"term":"巫女","added":["博麗霊夢"]}]}""");
 Check(expanded.Expansions.Count==2&&expanded.Expansions[0].Truncated&&!expanded.Expansions[1].Truncated&&expanded.Expansions[0].Added.Length==4,"related-term expansions parsed");
 Check(expanded.Items[0].Match=="direct"&&expanded.Items[1].KindAndTags.StartsWith("関連語の候補 · ")&&!expanded.Items[0].KindAndTags.StartsWith("関連語"),"related-only rows are labelled");
