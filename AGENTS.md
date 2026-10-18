@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Latest source ancestor validation correction (2026-10-18)
+
+Root caches reuse resolved paths only; never cache mutable ancestor link/reparse permission. `_safe_path` rechecks all root ancestors even on cache hits, and `_read` rechecks ancestors above the registered root after reading, retaining one safe-path call/book and leaf/handle identity checks. New mocked link/reparse boundary regressions reproduce 14 failing subcases before the fix. Frozen generated1024-book rank is now8.573716s (old7.102995s lacked these checks); full raw/merged/scope results are identical, models0/sources unchanged. Do not use old7.10s as current performance. Read [docs/source-path-validation.md](docs/source-path-validation.md) and latest handoffs. P0 2/2 closed, OCR deferred, all features/simple GUI preserved.
+
 ## Latest user-authorized real representative GPU & post-optimization native GUI checkpoint (2026-10-18)
 
 Real 14-image representative asset evaluation re-run on CUDA GPU EmbeddingGemma 2 (768D) + WD Tagger CPU (`wd-swinv2-v3`) across user-authorized read-only `Aredoko-test` ZIPs (`real-v2-20261018` in `docs/representative-asset-evaluation.md`). With cosine-span-weighted mean-RRF active, direct visual queries in combined mode jumped from 53.8% (7/13, MRR 0.7372) to **100.0% (13/13, MRR 1.0000)**, completely resolving all 6 RRF rank drops (`scene_03`, `scene_04`, `text_ja_03`, `text_ja_04`, `text_en_01`, `text_en_02`). Overall combined Top1 rose from 58.82% (10/17, MRR 0.7794) to **94.12% (16/17, MRR 0.9706)**. Direct cover mode achieved Top1 94.12% (16/17), Recall@3 100%, MRR 0.9706, and 100% Exact Page Hit @ 1 on Japanese (5/5) and English (2/2) in-image text without dedicated OCR, with 0 content-search misses, decisively reaffirming OCR deferral. Post-optimization indexing times dropped: cover 23.862s -> 21.908s (-8.19%), page 3.680s -> 2.641s (-28.23%).

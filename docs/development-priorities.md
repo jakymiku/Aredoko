@@ -1,5 +1,7 @@
 # Aredoko — 直近の開発優先順位と合格条件
 
+> **最新（2026-10-18、Antigravity更新継承・原本確認の回帰修正）**：代表14枚のcombined16/17、直接視覚13/13、native40項目の既存実行記録を継承。root cache利用中/読込後に登録rootより上のlinkを見落とす点を修正し、生成1,024冊8.573716秒・全スコア/順位/scope一致。[契約と測定](source-path-validation.md)。旧7.10秒は検査省略があった履歴。次は省略しない原本確認を前提としたCPU scorer/SQLの計測、backendの境界確認。P0 2/2/OCR保留/簡潔GUI・全機能を維持。
+
 > **最新（2026-10-18、再開・再利用時の非確保vector透過保存・境界回帰）**：`_publish_range`においてDB内キャッシュvectorの再利用判定を`_is_valid_packed`による非確保検証へ統一し、768要素リスト生成と再正規化・再エンコードを排して保存済みバイト列をそのままSQLiteへ透過保存（bit/byte完全一致）。`test_page_vector_decode.py`にbuffer protocol（memoryview/bytearray）、非整合バイト長、非finite混在順序、1e-4許容差微小境界の網羅回帰を追加。Python 506（503 PASS / 3 platform SKIP）、Core 493 PASS、Release 0警告/0エラー。P0 2/2/OCR保留/既存機能を維持。
 
 > **最新（2026-10-18、CPU非確保検証）**：coverageでのvector確認から768要素リスト生成を排した非確保検証（`allocate=False` / `_is_valid_packed`）および`unpack`の重複finite走査省略を実装。生成1万pageの全応答・ハッシュ一致、coverage総所要364ms→221ms（39.18%短縮）、plan総所要404ms→251ms（37.82%短縮）、guard保持合計34msを維持。[測定/比較](page-coverage-concurrency.md)。P0 2/2/OCR保留/既存機能を維持。

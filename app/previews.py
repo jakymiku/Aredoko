@@ -71,17 +71,16 @@ def _safe_path(root, relative, root_cache=None, return_info=False):
         raise PreviewUnavailable('Invalid location')
     if root_cache is not None and root in root_cache:
         root_path, root_chain, resolved_root = root_cache[root]
-        root_info = root_path.stat(follow_symlinks=False)
-        if _reparse(root_info) or stat.S_ISLNK(root_info.st_mode):
-            raise PreviewUnavailable('Linked locations are not previewed')
     else:
         root_path = Path(root)
         root_chain = (*reversed(root_path.parents), root_path)
         resolved_root = None
-        for component in root_chain:
-            info = component.stat(follow_symlinks=False)
-            if _reparse(info) or stat.S_ISLNK(info.st_mode):
-                raise PreviewUnavailable('Linked locations are not previewed')
+    # Cache resolution only: filesystem ancestors can change independently
+    # of catalog._state_epoch between two books in the same search batch.
+    for component in root_chain:
+        info = component.stat(follow_symlinks=False)
+        if _reparse(info) or stat.S_ISLNK(info.st_mode):
+            raise PreviewUnavailable('Linked locations are not previewed')
     source = root_path.joinpath(*parts)
     for i in range(1, len(parts) + 1):
         component = root_path.joinpath(*parts[:i])
@@ -452,8 +451,14 @@ class PreviewReader:
                     raise PreviewUnavailable('Location changed while previewing')
                 parts = PurePosixPath(row['relative_path']).parts
                 root_path = root_cache[row['path']][0] if (root_cache is not None and root_cache.get(row['path'])) else Path(row['path'])
-                for i in range(0, len(parts)):
-                    p_info = root_path.joinpath(*parts[:i]).stat(follow_symlinks=False)
+                # Recheck above the registered root as well. A moved tree
+                # reached through a new ancestor junction can retain the same
+                # leaf handle/identity, so leaf and root checks alone miss it.
+                root_chain = (root_cache[row['path']][1] if root_cache is not None and row['path'] in root_cache
+                              else (*reversed(root_path.parents), root_path))
+                parents = (*root_chain, *(root_path.joinpath(*parts[:i]) for i in range(1, len(parts))))
+                for parent in parents:
+                    p_info = parent.stat(follow_symlinks=False)
                     if _reparse(p_info) or stat.S_ISLNK(p_info.st_mode):
                         if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame','manifest','page'):
                             raise ReaderChanged('Source location changed')

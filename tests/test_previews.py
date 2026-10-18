@@ -226,7 +226,57 @@ class PreviewTests(unittest.TestCase):
             with self.assertRaises(ReaderChanged):
                 self.reader.tag_source(item)
 
-    def test_root_cache_skips_ancestor_stat_walk_for_cached_root(self):
+    def test_cached_root_rechecks_ancestor_links_before_open(self):
+        path = self.media / 'image.png'; path.write_bytes(png())
+        cache = {}; _safe_path(str(self.media), 'image.png', root_cache=cache)
+        original = Path.stat
+        real = self.base.stat(follow_symlinks=False)
+        from types import SimpleNamespace
+        for mode, attributes in ((real.st_mode, 0x400), (stat.S_IFLNK, 0)):
+            changed = SimpleNamespace(st_mode=mode, st_file_attributes=attributes)
+            def linked_ancestor(component, *args, **kwargs):
+                if component == self.base and kwargs.get('follow_symlinks') is False:
+                    return changed
+                return original(component, *args, **kwargs)
+            with self.subTest(mode=mode, attributes=attributes):
+                with patch.object(Path, 'stat', new=linked_ancestor):
+                    with self.assertRaises(PreviewUnavailable):
+                        _safe_path(str(self.media), 'image.png', root_cache=cache)
+
+    def test_ancestor_links_during_read_are_rejected_with_or_without_cache(self):
+        path = self.media / 'book.cbz'
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('p0.png', png())
+        item = self.index()['book.cbz']
+        original_stat, original_fstat = Path.stat, os.fstat
+        from types import SimpleNamespace
+        real = self.base.stat(follow_symlinks=False)
+        for use_cache in (False, True):
+            for operation in ('tag_source', 'preview', 'page_catalog'):
+                for mode, attributes in ((real.st_mode, 0x400), (stat.S_IFLNK, 0)):
+                    cache = {} if use_cache else None
+                    if use_cache:
+                        _safe_path(str(self.media), 'book.cbz', root_cache=cache)
+                    handle_checks = 0
+                    changed = SimpleNamespace(st_mode=mode, st_file_attributes=attributes)
+                    def checked_handle(*args, **kwargs):
+                        nonlocal handle_checks
+                        handle_checks += 1
+                        return original_fstat(*args, **kwargs)
+                    def linked_after_read(component, *args, **kwargs):
+                        if (component == self.base and handle_checks >= 2
+                                and kwargs.get('follow_symlinks') is False):
+                            return changed
+                        return original_stat(component, *args, **kwargs)
+                    expected = PreviewUnavailable if operation == 'preview' else ReaderChanged
+                    with self.subTest(cache=use_cache, operation=operation, attributes=attributes):
+                        with patch('previews.os.fstat', side_effect=checked_handle):
+                            with patch.object(Path, 'stat', new=linked_after_read):
+                                with self.assertRaises(expected):
+                                    self.reader._read(item, operation=operation, root_cache=cache)
+                        self.assertEqual(handle_checks, 2)
+
+    def test_cached_root_reuses_resolution_but_rechecks_ancestors(self):
         path = self.media / 'image.png'
         path.write_bytes(png())
         root_cache = {}
@@ -236,12 +286,21 @@ class PreviewTests(unittest.TestCase):
         def recorded_stat(self_path, *args, **kwargs):
             stat_paths.append(self_path)
             return orig_stat(self_path, *args, **kwargs)
+        original_resolve = Path.resolve
+        resolutions = []
+        def recorded_resolve(component, *args, **kwargs):
+            resolutions.append(component)
+            return original_resolve(component, *args, **kwargs)
+        cached = root_cache[str(self.media)]
         with patch.object(Path, 'stat', new=recorded_stat):
-            _safe_path(str(self.media), 'image.png', root_cache=root_cache)
-        # Should only stat root_path (self.media) and parts (image.png), not parents of self.media
+            with patch.object(Path, 'resolve', new=recorded_resolve):
+                _safe_path(str(self.media), 'image.png', root_cache=root_cache)
+        self.assertIs(root_cache[str(self.media)], cached)
+        self.assertEqual(resolutions, [path])
+        # Cached resolution must not cache mutable ancestor link permissions.
         parents = set(self.media.parents)
         parent_stats = [p for p in stat_paths if p in parents]
-        self.assertEqual(parent_stats, [])
+        self.assertEqual(set(parent_stats), parents)
         self.assertIn(self.media, stat_paths)
         self.assertIn(path, stat_paths)
 
