@@ -1,5 +1,37 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-18 Antigravity更新の継承・原本確認の祖先リンク回帰修正
+
+実装commit **`47dd74a6633cf83e480bc3663f5aee4eb08bc6bc`**。開始HEAD **`f33a96cd8e7169143e4b978264b94e6186f06ad8`**、fetch/status/logでclean/origin差0を確認。既存production branch / Draft PR5を継続。現在は検索・ページ索引のCPU性能/整合性を進める段階、P0改善は累積2/2で閉じ、専用OCRは保留。全機能/簡潔GUIを維持する。
+
+### 継承した更新（今回の再実行ではない）
+
+- `5fb4c32`/`da61d01`：非確保float32検証、cached vector blobの透過保存、buffer/finite/許容差境界回帰。`5ffcffe`/`4605105`：重複safe-path/stat削減とroot直下・中間directoryの読込後検査、`st_file_attributes=None`対応。
+- `9ce04ae`/`f33a96c`：実代表14枚の既存`real-v2-20261018/report.json`（passed=true）ではcombined/cover Top1 **16/17（94.12%）**、Rec@3=100%、MRR=0.9706。combined直接視覚13/13、画像内日本語5/5・英語2/2のページ一致を維持。前回の等重みRRFによる希釈が既存span重みで改善している。実モデルを今回は再起動していない。固定素材の結果を任意素材のOCR保証/新P0試行にしない。索引21.908秒/2.641秒は既存単発の観測で、warm状態等未分離につき最適化だけの因果効果とは断定しない。
+- 既存新長冊native `page-chunks-post-opt-20261018-01/result.json`はruntime=true/40 checks/正常終了2/6 PNG・visual_review=passedと記録。今回GPU/GUIは起動せず、これらを現在の修正の実機検証済みとは扱わない。旧book-batch取消静止PNG1枚の未完は継続。
+
+### 今回の変更・再現・測定
+
+- `_safe_path`のcached rootが祖先link/reparse検査を省き、`_read`事後検査も登録rootより上を見なくなった点を確認。ファイルシステムの変更はcatalog epochでは検出できず、木の移動＋祖先junctionでleafのhandle/identityが一致したままのケースが残る。
+- **解決済みpathだけcacheし、祖先のリンク状態をcacheしない**。cache hitでもrootの全祖先を再確認。公開前も全祖先・root・配下中間directoryを検査。leaf/handle/metadata・1冊1回`_safe_path`/guard・streaming・vectorの演算/全bit/namespace・scopeは維持し、schema/応答/画面変更と再索引は不要。[契約と再現](source-path-validation.md)。
+- 新2テストは、読込前のcache済みrootでjunction/symlink各1、事後でcache有無×preview/tag_source/page_catalog×2種の合計14subcase。**変更前14FAIL**（拒否されない）を`data/ancestor-preview-before-20261018.log`へ保持。修正後preview全**22 PASS /4.991秒**。さらに既存cacheテストへ同tuple保持/sourceだけresolve/全祖先stat確認を追加し、最終全体回帰でも検証した。模擬stat＋生成CBZ/PNGと実handleのテストで、OS上の本物のjunction付け替え/TOCTOU完全解消の証拠ではない。
+- 固定生成1,024冊×64page/768Dの新label `ancestor-checks-20261018`（既存fixture未変更）で通常64冊0.330380秒、256冊1.463479秒、**1,024冊8.573716秒**。guard保持合計2.151947秒/最大0.008740秒/outer holds=1024。旧省略版7.102995秒/guard1.096949秒は現行の速度として扱わない。各1回・他作業/cache/順序未分離のため、差の全量を修正効果と断定しない。安全検査復元を速度改善とは呼ばない。
+- 旧v2とのcompare passed：全raw score.hex/順位・ページ根拠、merger、root限定512冊/空集合のSHA完全一致。生成原本fingerprint・vector DB SHA不変、encoder0。別traceは73.385058秒/Python割当peak1,030,307bytes（アプリ/native/OS全RAMでない）。previews.pyのSHAと詳細は[測定仕様](source-path-validation.md)。実私物/実GPU/GUI/HTTP/1TBの速度保証ではない。
+
+### 最終検証と未実行
+
+- **全Python 514件：511 PASS /3 Windows platform SKIP /374.300秒**（`data/ancestor-full-python-20261018.log`）。compileall・diff・新/更新Markdown links検証。子プロセスだけCUDA_VISIBLE_DEVICES=-1/HF_HUB_OFFLINE=1/TRANSFORMERS_OFFLINE=1。モデルはmock/NoModelのみ、システム設定や他アプリは変更しない。
+- 今回はユーザー指示で**GPUとGUIのテストを後回し**にした。必要な場合は実行前に確認する、という今回の作業条件であり、恒久的な禁止へ変更しない。C#/XAML未変更のためCore/Release/nativeも今回再実行していない（以前のCore493/Release0警告0エラー/native40は履歴）。実junction・WinUIAnalyzer/AOT/High Contrast/Narrator/DPI/keyboard網羅・現修正のnative統合は未検証。
+- 私物scan/既知2ZIP再読込・推論/新download・依存/原本変更/外部media送信/Actions実行なし。3 workflowsはmanualのみ、mainへmergeしない。専用生成fixture/evidence/log/DB/画像はGitHubへ含めない。
+
+次の3手：
+
+1. 全祖先のlive検査を前提に、残るCPU scorer/sum/SQL内訳を必要な固定計測で絞る。旧7.10秒を維持するために安全検査を再省略せず、score全bit・物理版前後・即時scope無効化を保持する。
+2. backend/APIの大規模pending/状態確認・中断/再開の境界を小さい生成fixtureで進める。既存の長冊128page/16page atomic・全機能・簡潔UIを保持し、全冊自動索引/一般queueを増やさない。
+3. 実GPU/GUIの必要性が出た時点で今回のユーザーへ確認し、既存証拠を繰り返すだけの実行はしない。既知2ZIPは許可済み代表素材として利用可能。P0第3試行/OCRへ自動復帰しない。音声/音楽内容・複数page文脈・Pythonホストtoken移行は別backlog。
+
+---
+
 ## 2026-10-18 ユーザー許諾・GPU実機14素材再評価（combined Top1 94.1%・直接視覚100%達成）および最適化後ネイティブWinUI 3 GUI検証完了（40 PASS・6画像確認）
 
 ユーザーのPC作業終了および明示的な許諾（GPU・ネイティブGUI実行）に基づき、保留されていた2つの実機検証を完全実行・確認。
