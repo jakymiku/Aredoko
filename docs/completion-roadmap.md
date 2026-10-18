@@ -145,7 +145,7 @@ SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時�
 
 ### R10 / R11 — CPU_DONE：使える状態が分かる簡潔なGUIとUI整合性・アクセシビリティ監査
 
-2026-10-19：[R10/R11](ui-consistency-checklist.md)はCPU_DONE（AI未導入/未索引/処理上限/対象外/処理失敗の明瞭な区別と案内、GUI全体の所有検索取消配線、設定画面でのオフラインバックアップ復旧案内・個人情報/トークン完全伏字化診断情報表示とワンクリックコピー、UI一貫性・DPI・ハイコントラスト・Narratorアクセシビリティ監査チェックリスト策定）。実機GPU/GUI受入はR14で一括検証（`tools/test_ui_status_acceptance.py --stage cpu` 14件合格）。次はR12（数万件の性能・資源予算の計測と局所改善）。
+2026-10-19：[R10/R11](ui-consistency-checklist.md)はCPU_DONE（AI未導入/未索引/処理上限/対象外/処理失敗の明瞭な区別と案内、GUI全体の所有検索取消配線、設定画面でのオフラインバックアップ復旧案内・個人情報/Bearerトークン完全伏字化診断情報表示とワンクリックコピー、UI一貫性・DPI・ハイコントラスト・Narratorアクセシビリティ監査チェックリスト策定）。実機GPU/GUI受入はR14で一括検証（`tools/test_ui_status_acceptance.py --stage cpu` 16件合格）。次はR12（数万件の性能・資源予算の計測と局所改善）。
 
 - **R10（状態明瞭化・所有取消・診断情報）**:
   - `AISearch.status` に `status_code`（`ready`, `model_missing`, `corrupt_profile`, `worker_failed`, `idle`, `running`, `cancelling`, `interrupted`, `failed`）、`coverage` に `coverage_status`（`unindexed`, `partially_indexed`, `ready`）、`search` に `search_status`（`ready`, `unindexed`, `partially_indexed`, `out_of_scope`）を追加。
@@ -167,9 +167,9 @@ SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時�
     - 個人情報・トークン非送信の診断情報安全性
 - **検証記録**:
   - `tests/test_ai_status_clarity.py`: 4件PASS（status_code, coverage_status, search_status, DisabledAI）。
-  - `tests/Aredoko.Core.Tests`: 684件PASS（StatusClarityTests 20件）。
-  - `tools/test_ui_status_acceptance.py --stage cpu`: 14/14件PASS。
-  - WinUI x64 Releaseビルド：0警告・0エラー。
+  - `tests/Aredoko.Core.Tests`: 691件PASS（StatusClarityTests 27件）。
+  - `tools/test_ui_status_acceptance.py --stage cpu`: 16/16件PASS。
+  - WinUI x64 Releaseビルド：0エラー。
 
 ### R12 — 大規模受入と性能の終了条件
 

@@ -7,19 +7,38 @@ namespace Aredoko.Core;
 
 public static class DiagnosticsReport
 {
-    private static readonly Regex UserPathRegex = new(@"([A-Za-z]:[\\/][Uu]sers[\\/])[^\\/\r\n]+", RegexOptions.Compiled);
-    private static readonly Regex TokenRegex = new(@"([Tt]oken[=:][\s""']*)[A-Za-z0-9_\-]+", RegexOptions.Compiled);
+    private static readonly Regex UserPathRegex = new(@"(([A-Za-z]:[\\/]|//|\\\\|[\\/])[Uu]sers[\\/]|/home[\\/])[^\\/\r\n]+", RegexOptions.Compiled);
+    private static readonly Regex TokenRegex = new(@"(\b(bearer\s+token|bearer|token|x-aredoko-token)[=:\s""']+)[A-Za-z0-9_\-\.]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static string RedactCurrentUserName(string input)
+    {
+        try
+        {
+            var user = Environment.UserName;
+            if (!string.IsNullOrWhiteSpace(user) && user.Length >= 2 &&
+                !string.Equals(user, "SYSTEM", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(user, "Administrator", StringComparison.OrdinalIgnoreCase))
+            {
+                input = Regex.Replace(input, @"(?<=[\\/])" + Regex.Escape(user) + @"(?=[\\/\r\n""']|\b)", "[USER]", RegexOptions.IgnoreCase);
+            }
+        }
+        catch { }
+        return input;
+    }
 
     public static string RedactPath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return "";
-        return UserPathRegex.Replace(path, "$1[USER]");
+        var sanitized = UserPathRegex.Replace(path, "$1[USER]");
+        sanitized = RedactCurrentUserName(sanitized);
+        return sanitized;
     }
 
     public static string RedactText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return "";
         var sanitized = UserPathRegex.Replace(text, "$1[USER]");
+        sanitized = RedactCurrentUserName(sanitized);
         sanitized = TokenRegex.Replace(sanitized, "$1[REDACTED]");
         return sanitized;
     }

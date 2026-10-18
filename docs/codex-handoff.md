@@ -41,12 +41,12 @@ WinUI 3 設定ダイアログに「バックアップと復旧ガイド」（`Bt
     - Narrator読み上げ（アクセシビリティ名・ライブ領域更新）
     - 個人情報・トークン非送信の診断情報安全性
 - **検証記録**:
-  - **Core Tests**: **684 checks PASS**（StatusClarityTests 20件）。
+  - **Core Tests**: **691 checks PASS**（StatusClarityTests 27件）。
   - **Python test_ai_status_clarity**: **4 PASS**（status_code, coverage_status, search_status, DisabledAI）。
   - **受入ハーネス**:
-    - `tools/test_ui_status_acceptance.py --stage cpu`: **14/14 PASS**。
+    - `tools/test_ui_status_acceptance.py --stage cpu`: **16/16 PASS**。
     - `tools/test_audio_acceptance.py --stage cpu`: **36/36 PASS**。
-  - **WinUI x64 Release**: **警告0 / エラー0**。
+  - **WinUI x64 Release**: **0エラー**。
 - **制約・保全事項**:
   - P0累積2/2終了・OCR保留・全機能/簡潔GUI・原本保護・私物走査/変更なし・Actionsなし・mainへのmergeなし。
   - 次の3手（台帳優先順）：**R12 数万件の性能・資源予算の計測と局所改善 → R13 配布・起動・更新/アンインストール・利用手順 → R14 まとめて受入、完成と呼ぶ条件（GPU/GUI一括検証）**。

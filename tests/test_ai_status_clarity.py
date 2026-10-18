@@ -65,6 +65,23 @@ class AIStatusClarityTests(unittest.TestCase):
         self.assertEqual(st_missing['status_code'], 'model_missing')
         self.assertFalse(st_missing['available'])
 
+        # Store states: running, cancelling, interrupted, failed
+        with ai.guard:
+            ai.store.save_state({'state': 'running', 'processed': 1, 'total': 2, 'indexed': 1, 'skipped': 0, 'error': ''})
+        self.assertEqual(ai.status()['status_code'], 'running')
+
+        with ai.guard:
+            ai.store.save_state({'state': 'cancelling', 'processed': 1, 'total': 2, 'indexed': 1, 'skipped': 0, 'error': ''})
+        self.assertEqual(ai.status()['status_code'], 'cancelling')
+
+        with ai.guard:
+            ai.store.save_state({'state': 'interrupted', 'processed': 1, 'total': 2, 'indexed': 1, 'skipped': 0, 'error': ''})
+        self.assertEqual(ai.status()['status_code'], 'interrupted')
+
+        with ai.guard:
+            ai.store.save_state({'state': 'failed', 'processed': 1, 'total': 2, 'indexed': 1, 'skipped': 0, 'error': 'worker crashed'})
+        self.assertEqual(ai.status()['status_code'], 'worker_failed')
+
     def test_coverage_status_progression(self):
         encoder = DummyEncoder(available=True)
         ai = AISearch(self.catalog, encoder)
@@ -134,6 +151,28 @@ class AIStatusClarityTests(unittest.TestCase):
             disabled.similar(1)
         with self.assertRaises(AIUnavailable):
             disabled.coverage()
+
+        # Default DisabledAI provides actionable message containing 未導入
+        default_disabled = DisabledAI()
+        self.assertEqual(default_disabled.status()['status_code'], 'model_missing')
+        self.assertIn('未導入', default_disabled.status()['error'])
+
+        # DisabledAI with corrupt_profile
+        corrupt_disabled = DisabledAI('プロファイル破損', status_code='corrupt_profile')
+        self.assertEqual(corrupt_disabled.status()['status_code'], 'corrupt_profile')
+
+        # create_ai categorization: corrupt profile JSON -> corrupt_profile
+        from production_server import create_ai
+        corrupt_file = self.base / 'corrupt_profile.json'
+        corrupt_file.write_text('{ "invalid": syntax ', encoding='utf-8')
+        bad_profile_ai = create_ai(self.catalog, profile_path=corrupt_file)
+        self.assertIsInstance(bad_profile_ai, DisabledAI)
+        self.assertEqual(bad_profile_ai.status()['status_code'], 'corrupt_profile')
+
+        # create_ai categorization: missing profile file -> model_missing
+        missing_ai = create_ai(self.catalog, profile_path=self.base / 'missing_profile.json')
+        self.assertIsInstance(missing_ai, DisabledAI)
+        self.assertEqual(missing_ai.status()['status_code'], 'model_missing')
 
 
 if __name__ == '__main__':

@@ -66,6 +66,33 @@ static class StatusClarityTests
         check(redactedLog.Contains("[REDACTED]"), "RedactText replaces token with [REDACTED]");
         check(redactedLog.Contains("[USER]"), "RedactText replaces username with [USER]");
 
+        var bearerHeader = "Authorization: Bearer mySecretToken12345 in header";
+        var redactedHeader = DiagnosticsReport.RedactText(bearerHeader);
+        check(!redactedHeader.Contains("mySecretToken12345") && redactedHeader.Contains("Bearer [REDACTED]"), "RedactText hides standalone Bearer authorization tokens");
+
+        var xTokenHeader = "X-Aredoko-Token: sessionSecret67890 in request";
+        var redactedXToken = DiagnosticsReport.RedactText(xTokenHeader);
+        check(!redactedXToken.Contains("sessionSecret67890") && redactedXToken.Contains("X-Aredoko-Token: [REDACTED]"), "RedactText hides X-Aredoko-Token");
+
+        var posixPath = "/home/developer/workspace/app";
+        check(DiagnosticsReport.RedactPath(posixPath) == "/home/[USER]/workspace/app", "RedactPath masks /home/ user paths");
+
+        var uncPath = @"\\fileserver\Users\shareduser\docs";
+        check(DiagnosticsReport.RedactPath(uncPath) == @"\\fileserver\Users\[USER]\docs", "RedactPath masks UNC Users paths");
+
+        if (!string.IsNullOrWhiteSpace(Environment.UserName) && Environment.UserName.Length >= 2)
+        {
+            var customDrivePath = $@"D:\Media\{Environment.UserName}\library";
+            var redactedCustom = DiagnosticsReport.RedactPath(customDrivePath);
+            check(!redactedCustom.Contains(Environment.UserName) && redactedCustom.Contains("[USER]"), "RedactPath masks current username on non-standard drives");
+        }
+
+        var staleMsg = AISearchStatus.Guidance(AISearchStatus.StaleIndex);
+        check(staleMsg.Contains("索引が古くなっています"), "Guidance for StaleIndex directs user to update index");
+
+        var limitMsg = AISearchStatus.Guidance(AISearchStatus.LimitReached);
+        check(limitMsg.Contains("上限に達しました"), "Guidance for LimitReached explains limit");
+
         // 5. DiagnosticsReport.Generate
         var aiStatus = JsonNode.Parse("""
         {

@@ -79,6 +79,12 @@ def run_cpu_stage(target_dir):
     st = ai.status()
     check("AISearch status returns status_code == ready", st.get('status_code') == 'ready', report)
 
+    with ai.guard:
+        ai.store.save_state({'state': 'running', 'processed': 0, 'total': 1, 'indexed': 0, 'skipped': 0, 'error': ''})
+    check("AISearch status returns status_code == running when active", ai.status().get('status_code') == 'running', report)
+    with ai.guard:
+        ai.store.save_state({'state': 'complete', 'processed': 0, 'total': 0, 'indexed': 0, 'skipped': 0, 'error': ''})
+
     cov = ai.coverage()
     check("AISearch coverage returns coverage_status == unindexed before indexing", cov.get('coverage_status') == 'unindexed', report)
 
@@ -95,6 +101,9 @@ def run_cpu_stage(target_dir):
     dst = disabled.status()
     check("DisabledAI status available is False", dst['available'] is False, report)
     check("DisabledAI status status_code is model_missing", dst['status_code'] == 'model_missing', report)
+
+    disabled_corrupt = DisabledAI("プロファイル破損", status_code="corrupt_profile")
+    check("DisabledAI status status_code is corrupt_profile", disabled_corrupt.status()['status_code'] == 'corrupt_profile', report)
 
     # 6. Verify documentation checklist exists
     checklist = REPO / 'docs' / 'ui-consistency-checklist.md'

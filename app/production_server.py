@@ -39,7 +39,7 @@ from storage_lease import storage_lease,storage_parent
 
 class DisabledAI:
     def __init__(self,error=None,status_code='model_missing'):
-        self.error=error or 'モデル設定またはAI索引を開けません。文字検索は引き続き利用できます。'
+        self.error=error or 'AI環境（モデル・Python）が未導入です。名前・タグの文字検索、棚・整理、閲覧はそのまま利用できます。'
         self.status_code=status_code
     def status(self):
         return {'available':False,'state':'failed','processed':0,'total':0,'indexed':0,
@@ -84,7 +84,10 @@ def create_ai(catalog,profile_path=None,ranking='mean-rrf'):
     try:
         profile=load_profile(profile_path)
         return AISearch(catalog,EncoderProcess(repo/'.venv-ai/Scripts/python.exe',profile.model_path(repo),profile),ranking=ranking)
-    except (AIUnavailable,sqlite3.DatabaseError,OSError,ValueError): return DisabledAI()
+    except (ValueError, KeyError, json.JSONDecodeError):
+        return DisabledAI(error='モデル設定が無効または破損しています。「設定」からプロファイルを選び直してください。', status_code='corrupt_profile')
+    except (AIUnavailable,sqlite3.DatabaseError,OSError):
+        return DisabledAI(error='AI環境（モデル・Python）が未導入です。名前・タグの文字検索、棚・整理、閲覧はそのまま利用できます。', status_code='model_missing')
 
 def create_intent(enabled=False,question_set='v2-hybrid',check_order=True):
     repo=Path(__file__).resolve().parents[1]
@@ -648,7 +651,7 @@ def main():
 def _serve(args):
     catalog=ProductionCatalog(args.db)
     profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile,args.ai_profiles_dir)
-    ai=DisabledAI(profiles.startup_error) if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking)
+    ai=DisabledAI(profiles.startup_error, status_code='corrupt_profile') if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking)
     if isinstance(ai,AISearch):
         try: ai.configure(**profiles.resource())
         except (ValueError,OSError,json.JSONDecodeError): ai.configure(**RESOURCE_DEFAULT)

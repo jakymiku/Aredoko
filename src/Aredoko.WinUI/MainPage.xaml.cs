@@ -88,9 +88,9 @@ public sealed partial class MainPage : Page
         catch(Exception ex) { Notice("バックエンドに接続できません", "start-winui.ps1を起動して再接続してください。"+ex.Message,InfoBarSeverity.Error); }
     }
     private string ResultGroup()=>AIResultGroup.SelectedIndex switch {0=>"leading",1=>"other",_=>"all"};
-    private void AIResultGroup_Changed(object sender,SelectionChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private void AIResultGroup_Changed(object sender,SelectionChangedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private double? BoundaryValue()=>SearchMode.SelectedIndex is 2 or 3 && double.IsFinite(SimilarityBoundary.Value)?SimilarityBoundary.Value:null;
-    private void SimilarityBoundary_Changed(NumberBox sender,NumberBoxValueChangedEventArgs args){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private void SimilarityBoundary_Changed(NumberBox sender,NumberBoxValueChangedEventArgs args){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private void RestoreSearchRoots(IReadOnlyList<int>? ids)
     {
         selectedSearchRoots=ids is null?null:ids.ToArray();
@@ -206,8 +206,10 @@ public sealed partial class MainPage : Page
             Empty.Text=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"探したいページ内の語句を入力して検索してください。":"この範囲に一致するページ本文はありません。")
                 :method.IsTagSemantic?(string.IsNullOrWhiteSpace(query)?"未承認タグから探したい内容を入力してください。":"索引済みの未承認タグ候補がありません。設定の「AI検索の準備」で索引を作成してください。")
                 :method.IsTagCandidates?"この範囲に一致する未承認のAIタグ候補はありません。作品の詳細「AIタグ候補」から候補を生成・確認できます。"
-                :method.IsAI&&query.Length>0?(result.SearchStatus=="unindexed"||(result.SearchCandidateTotal>0&&result.IndexedTotal==0)?AISearchStatus.Guidance(AISearchStatus.Unindexed,result.SearchCandidateTotal??0,result.IndexedTotal??0)
-                    :result.SearchStatus=="out_of_scope"||result.SearchCandidateTotal==0?AISearchStatus.Guidance(AISearchStatus.OutOfScope)
+                :method.IsAI&&query.Length>0?(!string.IsNullOrEmpty(result.SearchStatus)&&result.SearchStatus!="ready"
+                    ?AISearchStatus.Guidance(result.SearchStatus,result.SearchCandidateTotal??0,result.IndexedTotal??0,query:query)
+                    :result.SearchCandidateTotal>0&&result.IndexedTotal==0?AISearchStatus.Guidance(AISearchStatus.Unindexed,result.SearchCandidateTotal??0,result.IndexedTotal??0)
+                    :result.SearchCandidateTotal==0?AISearchStatus.Guidance(AISearchStatus.OutOfScope)
                     :result.SearchStatus=="partially_indexed"&&result.Total==0?AISearchStatus.Guidance(AISearchStatus.PartiallyIndexed,result.SearchCandidateTotal??0,result.IndexedTotal??0)
                     :resultGroup==1&&result.GroupBoundary is null?"参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像の見た目／名前・タグの意味で区切りを指定してください。"
                     :resultGroup==0&&result.OtherTotal>0?"区切り以上の候補はありません。類似度の区切りを下げるか、参考候補を表示してください。"
@@ -223,9 +225,14 @@ public sealed partial class MainPage : Page
             var summary=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ本文に含まれる語句を入力してください。":$"ページ本文一致 {result.Total:N0}件")
                 :method.IsTagSemantic?(result.PendingIndexRemaining is >0?$"未承認タグ候補 · 索引の更新が必要: {result.PendingIndexRemaining:N0}件":"未承認タグ候補の意味で検索しています。")
                 :method.IsTagCandidates?"未承認の候補です。詳細から確認・承認できます。"
-                :method.IsAI?(query.Length==0?"探したい内容を入力してください。":$"上位 {result.LeadingTotal:N0}件 · 参考 {result.OtherTotal:N0}件")
+                :method.IsAI?(query.Length==0?"探したい内容を入力してください。"
+                    :result.SearchStatus=="unindexed"?$"未索引（対象 {result.SearchCandidateTotal??0:N0}件）"
+                    :result.SearchStatus=="out_of_scope"?"対象外（0件）"
+                    :$"上位 {result.LeadingTotal:N0}件 · 参考 {result.OtherTotal:N0}件")
                 :Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions);
-            Notice(method.IsPageText?"ページ本文":method.IsTagCandidates?"タグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),scopeWarning is null&&result.PendingIndexRemaining is not >0?InfoBarSeverity.Informational:InfoBarSeverity.Warning,explanation);
+            var noticeSeverity=scopeWarning is not null||result.PendingIndexRemaining is >0||(method.IsAI&&query.Length>0&&(result.SearchStatus is "unindexed" or "out_of_scope"||(result.SearchStatus=="partially_indexed"&&result.Total==0)))
+                ?InfoBarSeverity.Warning:InfoBarSeverity.Informational;
+            Notice(method.IsPageText?"ページ本文":method.IsTagCandidates?"タグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),noticeSeverity,explanation);
             if(origin is not null)
             {
                 var guidance=SimilaritySearch.Guidance(result.SimilarityStatus,origin.Kind);
@@ -235,10 +242,20 @@ public sealed partial class MainPage : Page
                     :"この範囲に索引済みの類似候補はありません。種類・フォルダ・AI対象を確認してください。")
                     :guidance;
                 var originTitle=origin.Kind=="video"?"似た動画・素材":origin.Kind=="audio"?"似た音声・曲":"似た画像・表紙";
-                Notice(originTitle,(result.SimilarityStatus=="ready"?$"{result.Total:N0}件の候補":guidance)+(scopeWarning is null?"":" "+scopeWarning),scopeWarning is null?InfoBarSeverity.Informational:InfoBarSeverity.Warning,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
+                var simSummary = result.SimilarityStatus != "ready"
+                    ? guidance
+                    : result.SearchCandidateTotal is int sc && sc > 0 && result.IndexedTotal == 0
+                    ? $"未索引（対象 {sc:N0}件）"
+                    : result.SearchCandidateTotal == 0
+                    ? "対象外（0件）"
+                    : $"{result.Total:N0}件の候補";
+                var simSeverity = scopeWarning is not null || result.SimilarityStatus != "ready" || (result.SearchCandidateTotal is int sc2 && (sc2 == 0 || result.IndexedTotal == 0))
+                    ? InfoBarSeverity.Warning
+                    : InfoBarSeverity.Informational;
+                Notice(originTitle,simSummary+(scopeWarning is null?"":" "+scopeWarning),simSeverity,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
             }
         } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
-        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")?"AI環境（モデル・Python）が未導入です。名前・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
+        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。名前・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
     private void RenderRows()
@@ -488,7 +505,7 @@ public sealed partial class MainPage : Page
     private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0,true);}
     private void CancelSearch_Click(object sender,RoutedEventArgs e){searchTimer.Stop();similarityCancellation?.Cancel();}
-    private void CancelSearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){if(Busy.Visibility==Visibility.Visible){e.Handled=true;searchTimer.Stop();similarityCancellation?.Cancel();}else if(Details.IsPaneOpen&&!folderSettingsActive){e.Handled=true;Details.IsPaneOpen=false;}}
+    private void CancelSearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){if(Busy.Visibility==Visibility.Visible||searchTimer.IsRunning){e.Handled=true;searchTimer.Stop();similarityCancellation?.Cancel();}else if(Details.IsPaneOpen&&!folderSettingsActive){e.Handled=true;Details.IsPaneOpen=false;}}
     private void UpdateSearchMethod()
     {
         // SelectionChanged also runs during initialization and dirty-state rollback.
@@ -523,7 +540,7 @@ public sealed partial class MainPage : Page
         similarityCancellation?.Cancel();
         if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}
     }
-    private void AIMatchedOnly_Changed(object sender,RoutedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private void AIMatchedOnly_Changed(object sender,RoutedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private void Kind_Changed(object sender,SelectionChangedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Previous_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(Math.Max(0,page-1));
     private async void Next_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(page+1);

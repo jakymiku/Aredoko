@@ -13,7 +13,7 @@ R10 distinguishes AI uninstalled (`model_missing`) / unindexed (`unindexed`) / s
 GUI-wide request-owned search cancellation is fully wired (`CancelSearchButton` `BtnCancelSearch`, `Escape` shortcut, filter/mode change cancellation passing owned cancellation to `api.SearchMultiAsync`).
 WinUI Settings dialog now provides offline backup/recovery guidance entry (`BtnBackupGuide`) and opt-in redacted diagnostics summary (`BtnDiagnostics`, `BtnCopyDiagnostics`), strictly redacting user paths (`C:\Users\[USER]\...`) and tokens (`[REDACTED]`) with zero auto-transmission.
 R11 delivers `docs/ui-consistency-checklist.md` auditing terminology alignment, Light/Dark/High-Contrast themes, <800px narrow layout, 100-200% DPI, keyboard navigation, Narrator accessibility, and diagnostics safety.
-Python unit tests (4 PASS in `test_ai_status_clarity.py`), Core tests (684 PASS including 20 `StatusClarityTests`), CPU acceptance harness (14/14 PASS in `tools/test_ui_status_acceptance.py --stage cpu`), x64 Release build 0 warnings/0 errors verified. Real GPU/GUI deferred to R14 per user guidance. Next R12 (scale & resource limits).
+Python unit tests (4 PASS in `test_ai_status_clarity.py`), Core tests (691 PASS including 27 `StatusClarityTests`), CPU acceptance harness (16/16 PASS in `tools/test_ui_status_acceptance.py --stage cpu`), x64 Release build 0 errors verified. Real GPU/GUI deferred to R14 per user guidance. Next R12 (scale & resource limits).
 
 ## Latest R08/R09 audio acoustic similarity and WinUI integration (2026-10-19)
 

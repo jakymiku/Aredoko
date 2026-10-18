@@ -461,7 +461,14 @@ class AISearch:
         resident=bool(getattr(self.encoder,'resident',False))
         available=bool(self.encoder.available)
         st=state.get('state','idle')
-        status_code = 'ready' if available and st not in ('failed','error') else ('worker_failed' if st=='failed' else 'model_missing')
+        if not available:
+            status_code = 'model_missing'
+        elif st in ('failed', 'error'):
+            status_code = 'worker_failed'
+        elif st in ('running', 'cancelling', 'interrupted', 'cancelled'):
+            status_code = st
+        else:
+            status_code = 'ready'
         return {**public_state(state),'available':available,
                 'status_code':status_code,
                 'resident':resident,'worker_state':'loaded' if resident else 'unloaded',

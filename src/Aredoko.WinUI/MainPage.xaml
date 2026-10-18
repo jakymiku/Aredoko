@@ -128,7 +128,7 @@
 
     <Grid x:Name="ItemListContainer" Grid.Row="3" Margin="0,0,12,0">
      <ListView x:Name="Items" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.AutomationId="ItemList"/>
-     <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+     <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.Name="案内メッセージ" AutomationProperties.LiveSetting="Polite" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
     </Grid>
     <Grid x:Name="FolderHubView" AllowDrop="True" DragOver="Folder_DragOver" Drop="Folder_Drop" Grid.Row="1" Grid.RowSpan="3" Margin="0,0,12,0" Visibility="Collapsed" RowSpacing="12">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -183,7 +183,7 @@
    <StackPanel Grid.Row="4" Spacing="8">
     <StackPanel x:Name="ItemPagerRow" Orientation="Horizontal" Spacing="8"><Button x:Name="Previous" Content="前へ" Click="Previous_Click" AutomationProperties.AutomationId="BtnPrevious"/><TextBlock x:Name="PageNumber" AutomationProperties.AutomationId="TxtPageNumber" VerticalAlignment="Center"/><Button x:Name="Next" Content="次へ" Click="Next_Click" AutomationProperties.AutomationId="BtnNext"/><Button Content="再接続" Click="Reconnect_Click" AutomationProperties.AutomationId="BtnReconnect"/></StackPanel>
     <ProgressBar x:Name="Busy" IsIndeterminate="True" Visibility="Collapsed"/>
-    <InfoBar x:Name="Status" IsOpen="True" IsClosable="False" Title="接続準備中" AutomationProperties.AutomationId="StatusBar">
+    <InfoBar x:Name="Status" IsOpen="True" IsClosable="False" Title="接続準備中" AutomationProperties.AutomationId="StatusBar" AutomationProperties.Name="ステータス通知">
      <InfoBar.ActionButton><Button x:Name="StatusMore" Content="説明" Visibility="Collapsed" AutomationProperties.Name="検索結果の説明を読む" AutomationProperties.AutomationId="BtnStatusDetails">
       <Button.Flyout><Flyout>
        <ScrollViewer MaxHeight="300" MaxWidth="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><TextBlock x:Name="StatusExplanation" Margin="{StaticResource FormScrollGutter}" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="TxtStatusDetails"/></ScrollViewer>
