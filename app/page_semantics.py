@@ -295,7 +295,7 @@ class PageVectors:
                            (item_id, revision, CONTRACT))
                 db.executemany('INSERT OR REPLACE INTO ai_page_vectors VALUES(?,?,?,?,?,?)', packed)
 
-    def rank(self, rows, query):
+    def rank(self, rows, query, *, check=None):
         """One best page per current book. Metadata checks only; no image decode."""
         ai = self.ai; result = {}
         ids = [r['id'] for r in rows if r['kind'] in ('book', 'archive')]
@@ -309,7 +309,8 @@ class PageVectors:
                 # Stream at most a book's best score, never retain all page blobs.
                 records = db.execute('SELECT item_id,source_revision,page_id,page,vector FROM ai_page_vectors '
                     'WHERE contract=? AND item_id IN ('+','.join('?' for _ in batch)+') ORDER BY item_id,page', [CONTRACT, *batch])
-                for item_id, rev, pid, page, data in records:
+                for ordinal, (item_id, rev, pid, page, data) in enumerate(records):
+                    if check is not None and ordinal%256==0:check()
                     if (type(page) is not int or not 0<=page<10000
                             or type(rev) is not str or hex64(rev) is None
                             or type(pid) is not str or hex64(pid) is None):
@@ -333,6 +334,7 @@ class PageVectors:
             cached_epoch = None
             root_cache = {}
             for pos, item_id in enumerate(batch):
+                if check is not None:check()
                 evidence = result[item_id][1]
                 with ai.catalog._guard:
                     epoch = getattr(ai.catalog, '_state_epoch', 0)

@@ -45,6 +45,16 @@ class TagSemanticTests(TagFixture,unittest.TestCase):
 
     def search(self,**kwargs):return semantic_candidates(self.service,self.ai,'青髪',**kwargs)
 
+    def test_semantic_query_cancellation_preserves_pending_tags(self):
+        from ai_score_spool import SearchCancelled
+        self.build();stop=threading.Event()
+        self.encoder.hook=lambda *args:stop.set()
+        before=self.ai.pending_tags.snapshots([self.item,self.other])
+        with self.assertRaises(SearchCancelled):self.search(cancelled=stop.is_set)
+        self.assertEqual(before,self.ai.pending_tags.snapshots([self.item,self.other]))
+        self.assertTrue(self.ai.inference.acquire(blocking=False));self.ai.inference.release()
+        self.assertFalse(self.ai.cancel.is_set())
+
     def test_missing_index_never_embeds_proposals_or_loads_query_model(self):
         result=self.search()
         self.assertEqual((result['total'],result['pending_total'],result['index_remaining']),(0,2,2))
@@ -168,8 +178,8 @@ class TagSemanticTests(TagFixture,unittest.TestCase):
         self.addCleanup(lambda:(server.shutdown(),thread.join(3)))
         origin=f'http://127.0.0.1:{server.server_port}'
         opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        def request(body):
-            req=urllib.request.Request(origin+'/api/library/tag-suggestions/search',data=json.dumps(body).encode(),
+        def request(body,route='/api/library/tag-suggestions/search'):
+            req=urllib.request.Request(origin+route,data=json.dumps(body).encode(),
                 headers={'Origin':origin,'X-Aredoko-Token':'tag-token'})
             try:
                 with opener.open(req,timeout=5) as response:return response.status,json.load(response)
@@ -181,6 +191,25 @@ class TagSemanticTests(TagFixture,unittest.TestCase):
         status,result=request({'query':'青髪','semantic':True})
         self.assertEqual(status,200);self.assertEqual(result['items'][0]['id'],self.item)
         self.assertEqual(request({'query':'blue_hair','semantic':False})[1]['search_mode'],'pending-proposals')
+        import concurrent.futures
+        entered=threading.Event();resume=threading.Event()
+        request_id=request({},'/api/library/ai/searches/prepare')[1]['request_id']
+        def blocked(*args):
+            entered.set()
+            if not resume.wait(5):raise AssertionError('pending query unblock timeout')
+        self.encoder.hook=blocked
+        with concurrent.futures.ThreadPoolExecutor(1) as pool:
+            future=pool.submit(request,{'query':'青髪','semantic':True,'request_id':request_id})
+            try:
+                self.assertTrue(entered.wait(5))
+                self.assertTrue(request({'request_id':request_id},'/api/library/ai/searches/cancel')[1]['cancel_requested'])
+            finally:resume.set()
+            code,cancelled=future.result(timeout=5)
+        self.encoder.hook=None
+        self.assertEqual((code,cancelled.get('error_code')),(409,'search_cancelled'))
+        self.assertTrue(self.ai.inference.acquire(blocking=False));self.ai.inference.release()
+        self.assertFalse(self.ai.cancel.is_set())
+
         for body in ({'semantic':True},{'query':'','semantic':True},{'query':'青髪','semantic':1},{'query':'青髪','semantic':'true'},{'query':'青髪','path':'private'}):
             self.assertEqual(request(body)[0],400)
 

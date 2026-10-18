@@ -219,3 +219,5 @@ PageImageTests.Run(Check);
 await PageCoverageTests.Run(Check);
 PageBatchTests.Run(Check);
 await PageChunkTests.Run(Check);
+
+await SearchCancellationTests.Run(Check);

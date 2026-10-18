@@ -7,6 +7,8 @@ from pathlib import Path
 from http.server import ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import re
+import select
+import socket
 from production import ProductionCatalog, ScanBusyError
 from term_relations import MAX_IMPORT_BYTES
 from previews import VideoRangeUnsatisfiable, PreviewReader, PreviewUnavailable, PreviewBusyError, ReaderChanged
@@ -14,6 +16,8 @@ import zipfile
 import sqlite3
 from ai_process import EncoderProcess, AIUnavailable
 from ai_search import AISearch, AIBusy, MAX_ITEMS
+from ai_score_spool import SearchCancelled
+from search_requests import SearchRequestConflict,SearchRequests
 from ai_profiles import load_profile
 from ai_settings import AIProfileSettings,validate_resource,RESOURCE_DEFAULT
 from ai_ranking import POLICIES
@@ -95,6 +99,32 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
     class Handler(base):
+        def _search_reply(self,body,operation):
+            supplied='request_id' in body
+            request_id=body.pop('request_id',None)
+            if supplied:
+                SearchRequests.validate(request_id)
+            def disconnected():
+                # No socket mode changes: HTTP body is consumed, requests close after one reply.
+                try:
+                    readable,_,_=select.select([self.connection],[],[],0)
+                    return bool(readable) and self.connection.recv(1,socket.MSG_PEEK)==b''
+                except OSError:return True
+            def execute(cancelled):
+                if cancelled():raise SearchCancelled('Search cancelled')
+                result=operation(cancelled)
+                if cancelled():raise SearchCancelled('Search cancelled')
+                return result
+            if request_id is None:
+                # Legacy callers still stop on disconnect; no global cancel operation.
+                result=execute(disconnected)
+            else:
+                if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
+                with ai.search_requests.claim(request_id) as cancelled:
+                    result=execute(lambda:cancelled() or disconnected())
+                    result={**result,'request_id':request_id}
+            return self.send(200,result)
+
         def do_GET(self):
             if not self.valid_host(): return self.send(403,{'error':'Invalid host'})
             path=urlparse(self.path).path
@@ -374,10 +404,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except PreviewBusyError:return self.send(503,{'error':'Preview workers busy'})
                     except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
                 if self.path=='/api/library/tag-suggestions/search':
-                    if set(body)-{'query','kind','view','page','root_ids','shelf','model','semantic'}:raise ValueError('Invalid candidate search fields')
+                    if set(body)-{'query','kind','view','page','root_ids','shelf','model','semantic','request_id'}:raise ValueError('Invalid candidate search fields')
                     semantic=body.pop('semantic',False)
                     if type(semantic) is not bool:raise ValueError('Invalid candidate search mode')
-                    return self.send(200,semantic_candidates(suggestions,ai,**body) if semantic else search_candidates(suggestions,**body))
+                    if semantic:return self._search_reply(body,lambda cancelled:semantic_candidates(suggestions,ai,**body,cancelled=cancelled))
+                    if 'request_id' in body:raise ValueError('Search IDs require semantic search')
+                    return self.send(200,search_candidates(suggestions,**body))
                 if self.path=='/api/library/tag-suggestions/generate':
                     if set(body)!={'item_id','request_id'}:raise ValueError('Invalid generation request')
                     return self.send(200,suggestions.generate(body['item_id'],body['request_id']))
@@ -486,19 +518,28 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                             return self.send(409,{'error':'AIリソース設定を保存できません。設定ファイルを確認してください。動作中の設定は保持されます。'})
                         if isinstance(ai,AISearch): ai.configure(**policy)
                     return self.send(200,{'saved':True,'policy':policy})
+                if self.path=='/api/library/ai/searches/prepare':
+                    if body:raise ValueError('Expected empty preparation request')
+                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
+                    return self.send(200,ai.search_requests.prepare())
+                if self.path=='/api/library/ai/searches/cancel':
+                    if set(body)!={'request_id'}:raise ValueError('Invalid search cancellation')
+                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
+                    return self.send(200,ai.search_requests.cancel(body['request_id']))
                 if self.path=='/api/library/ai/similar':
-                    if set(body)-{'item_id','kind','view','page','limit','scope'}:raise ValueError('Invalid similarity request')
+                    if set(body)-{'item_id','kind','view','page','limit','scope','request_id'}:raise ValueError('Invalid similarity request')
                     scope=validate_scope(body['scope']) if 'scope' in body else profiles.scope()
                     try:
-                        return self.send(200,ai.similar(body.get('item_id'),body.get('kind',''),body.get('view','all'),
-                            body.get('page',0),body.get('limit',60),scope=scope))
+                        return self._search_reply(body,lambda cancelled:ai.similar(body.get('item_id'),body.get('kind',''),body.get('view','all'),
+                            body.get('page',0),body.get('limit',60),scope=scope,cancelled=cancelled))
                     except KeyError:return self.send(404,{'error':'Similarity source unavailable'})
                 if self.path=='/api/library/ai/search':
+                    if set(body)-{'query','kind','view','page','source','ranking','scope','literal_only','group_threshold','result_group','request_id'}:raise ValueError('Invalid AI search request')
                     scope_args={'scope':validate_scope(body['scope'])} if 'scope' in body else {}
                     if 'literal_only' in body:scope_args['literal_only']=body['literal_only']
                     if 'group_threshold' in body:scope_args['group_threshold']=body['group_threshold']
                     if 'result_group' in body:scope_args['result_group']=body['result_group']
-                    return self.send(200,ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking'),**scope_args))
+                    return self._search_reply(body,lambda cancelled:ai.search(body.get('query'),body.get('kind',''),body.get('view','all'),body.get('page',0),source=body.get('source','all'),ranking=body.get('ranking'),cancelled=cancelled,**scope_args))
                 if self.path=='/api/library/terms':
                     try: return self.send(200,{'entry':catalog.terms.upsert(body)})
                     except ValueError as ex: return self.send(400,{'error':str(ex)})
@@ -529,6 +570,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if self.path=='/api/library/scan': return self.send(200,catalog.start_scan(body.get('root_id')))
                 if self.path=='/api/library/cancel': return self.send(200,catalog.cancel_scan())
                 return self.send(404,{'error':'Not found'})
+            except SearchCancelled:return self.send(409,{'error':'検索を中断しました。','error_code':'search_cancelled'})
+            except SearchRequestConflict:return self.send(409,{'error':'検索の受付が無効か終了しています。再検索してください。','error_code':'search_request_unavailable'})
             except (ScanBusyError,AIBusy) as ex: return self.send(409,{'error':str(ex)})
             except AIUnavailable as ex: return self.send(503,{'error':str(ex)})
             except (ValueError,TypeError) as ex: return self.send(400,{'error':str(ex) if str(ex) in PUBLIC_FOLDER_ERRORS else 'Invalid request: check folder, exclusions or scan state'})

@@ -18,6 +18,7 @@ from search_terms import normalize, normalize_tags
 from ai_result_groups import boundary
 from ai_score_spool import ScoreSpool, ScoreSpoolError, SearchCancelled
 from previews import PreviewReader, PreviewUnavailable
+from search_requests import SearchRequests
 from tag_semantics import PendingTagVectors
 from page_semantics import PageVectors, SCHEMA as PAGE_VECTOR_SCHEMA
 
@@ -201,6 +202,7 @@ class AISearch:
         self.worker=None
         self.inference=threading.Lock()
         self._closed=False
+        self.search_requests=SearchRequests()
         self._last_activity=time.monotonic()
         self._idle_seconds=0
         self._index_pause_ms=0
@@ -313,7 +315,7 @@ class AISearch:
         if batch:yield batch
 
     @contextmanager
-    def _search_workspace(self,scope):
+    def _search_workspace(self,scope,cancelled=None):
         """Optimistic change detection, not an atomic snapshot of several DBs.
 
         Keep the same monitor connections: data_version is connection-relative.
@@ -325,7 +327,9 @@ class AISearch:
                         vector_db.execute('PRAGMA data_version').fetchone()[0])
             with self.catalog._guard:
                 version=versions();epoch=self.catalog._state_epoch;profile=self.profile.key
+            def interrupted():return self._closed or cancelled is not None and cancelled()
             def check():
+                if cancelled is not None and cancelled():raise SearchCancelled('Search cancelled')
                 if self._closed:raise AIUnavailable('AI is closing')
                 self._scope(scope)
                 if self.catalog.scan_state()['state'] in ('running','cancelling'):
@@ -334,10 +338,11 @@ class AISearch:
                     raise AIBusy('検索対象または索引が更新されました。もう一度検索してください。')
             check()
             try:
-                with ScoreSpool(cancelled=lambda:self._closed) as spool:
+                with ScoreSpool(cancelled=interrupted) as spool:
                     yield spool,check
             except SearchCancelled as error:
-                raise AIUnavailable('AI is closing') from error
+                if self._closed:raise AIUnavailable('AI is closing') from error
+                raise
             except (ScoreSpoolError,OSError) as error:
                 raise AIUnavailable('検索用の作業領域を使用できません。空き容量を確認して再検索してください。') from error
 
@@ -497,7 +502,7 @@ class AISearch:
             state=self.store.state()
             if state['state']=='running': self.store.save_state({**state,'state':'cancelling'})
         return {'cancel_requested':True}
-    def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None,scope=None,literal_only=False,group_threshold=None,result_group='all'):
+    def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None,scope=None,literal_only=False,group_threshold=None,result_group='all',*,cancelled=None):
         if not isinstance(query,str) or not 0<len(query.strip())<=300 or type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:
             raise ValueError('Invalid semantic search')
         if result_group not in ('all','leading','other'):raise ValueError('Invalid result group')
@@ -515,7 +520,7 @@ class AISearch:
         if not self.encoder.available: raise AIUnavailable('AI環境が未導入です。')
         if not self.inference.acquire(blocking=False): raise AIBusy('AI索引を作成中です。完了後に検索してください。')
         try:
-            with self._search_workspace(scope) as (spool,check):
+            with self._search_workspace(scope,cancelled) as (spool,check):
                 query_vector=None;candidate_total=indexed_total=0
                 words=list(dict.fromkeys(normalize(query).split()))
                 allowed=('image','book','archive','video') if source=='cover' else None
@@ -524,7 +529,7 @@ class AISearch:
                     if query_vector is None:
                         query_vector=normalized(self.encoder.encode('query',query),self.profile.dimension)
                     check()
-                    page_scores=self.pages.rank(rows,query_vector) if source in ('all','cover') else {}
+                    page_scores=self.pages.rank(rows,query_vector,check=check) if source in ('all','cover') else {}
                     scores,video_hits,page_hits=self.store.scores_with_content(rows,query_vector,source,page_scores)
                     for row in rows:
                         item=row['id']
@@ -565,7 +570,7 @@ class AISearch:
         """Refuse a busy encoder; never touch the profile, catalog or vector DB."""
         return self._release()
 
-    def similar(self,item_id,kind='',view='all',page=0,limit=60,scope=None):
+    def similar(self,item_id,kind='',view='all',page=0,limit=60,scope=None,*,cancelled=None):
         """Item-origin cover cosine search. Cached vectors work with no model installed.
 
         The origin must be in scope, but need not satisfy result-only kind/view
@@ -584,7 +589,7 @@ class AISearch:
             if self._closed:raise AIUnavailable('AI is closing')
             if self.catalog.scan_state()['state'] in ('running','cancelling'):
                 raise AIBusy('フォルダのスキャン完了後に類似検索してください。')
-            with self._search_workspace(scope) as (spool,check):
+            with self._search_workspace(scope,cancelled) as (spool,check):
                 origin=self._current_rows([item_id],scope).get(item_id)
                 if origin is None:raise KeyError(item_id)
                 if origin['kind'] not in ('image','book','archive'):
@@ -647,6 +652,7 @@ class AISearch:
         with self.guard:
             if self._closed:return
             self._closed=True
+            self.search_requests.close()
             self.cancel.set()
             self._idle_stop.set()
             self._idle_wake.set()

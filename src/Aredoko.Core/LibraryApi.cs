@@ -45,9 +45,9 @@ public sealed class LibraryApi : IDisposable
         tagClient.DefaultRequestHeaders.Remove("Origin");
         tagClient.DefaultRequestHeaders.Add("Origin","http://127.0.0.1:8769");
     }
-    public Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all",JsonObject? scope=null,int? rootId=null,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all") =>
-        SearchMultiAsync(q,kind,view,page,semantic,source,scope,rootId is int id ? new[]{id} : null,literalOnly,groupThreshold,resultGroup);
-    public async Task<SearchResponse> SearchMultiAsync(string q,string kind,string view,int page,bool semantic,string source,JsonObject? scope,IReadOnlyList<int>? rootIds,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all")
+    public Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all",JsonObject? scope=null,int? rootId=null,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all",CancellationToken cancellation=default) =>
+        SearchMultiAsync(q,kind,view,page,semantic,source,scope,rootId is int id ? new[]{id} : null,literalOnly,groupThreshold,resultGroup,cancellation);
+    public async Task<SearchResponse> SearchMultiAsync(string q,string kind,string view,int page,bool semantic,string source,JsonObject? scope,IReadOnlyList<int>? rootIds,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all",CancellationToken cancellation=default)
     {
         if(view=="history")
         {
@@ -57,7 +57,7 @@ public sealed class LibraryApi : IDisposable
         if(source is "pending-proposals" or "pending-proposals-semantic")
         {
             if(source=="pending-proposals-semantic"&&string.IsNullOrWhiteSpace(q))return new SearchResponse{Total=0,Items=[]};
-            return await TagReviews.SearchCandidatesAsync(q,kind,view,page,rootIds,semantic:source=="pending-proposals-semantic");
+            return await TagReviews.SearchCandidatesAsync(q,kind,view,page,rootIds,cancellation:cancellation,semantic:source=="pending-proposals-semantic");
         }
         if(source=="page-text")
         {
@@ -66,8 +66,8 @@ public sealed class LibraryApi : IDisposable
         }
         if(semantic && !string.IsNullOrWhiteSpace(q))
         {
-            var result=await PostAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup));
-            return Protocol.ParseSearch(result.ToJsonString());
+            var result=await new SearchRequestClient(client).RunAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup),cancellation);
+            return Protocol.ParseSearch(Encoding.UTF8.GetString(result));
         }
         return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
     }
@@ -76,30 +76,9 @@ public sealed class LibraryApi : IDisposable
         SimilarMultiAsync(itemId,kind,view,page,scope,rootId is int id ? new[]{id} : null,cancellation);
     public async Task<SearchResponse> SimilarMultiAsync(int itemId,string kind,string view,int page,JsonObject scope,IReadOnlyList<int>? rootIds,CancellationToken cancellation)
     {
-        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        deadline.CancelAfter(TimeSpan.FromSeconds(10));
-        try
-        {
-            using var request=new HttpRequestMessage(HttpMethod.Post,"api/library/ai/similar") {
-                Content=new StringContent(SimilaritySearch.RequestMulti(itemId,kind,view,page,scope,rootIds).ToJsonString(),Encoding.UTF8,"application/json")
-            };
-            using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,deadline.Token);
-            if(response.Content.Headers.ContentType?.MediaType!="application/json"||response.Content.Headers.ContentLength is long size&&size>SimilaritySearch.MaxResponseBytes)
-                throw new InvalidDataException("類似検索の応答形式またはサイズが無効です。");
-            await using var input=await response.Content.ReadAsStreamAsync(deadline.Token);
-            using var output=new MemoryStream();var buffer=new byte[16384];int read;
-            while((read=await input.ReadAsync(buffer,deadline.Token))!=0)
-            {
-                if(output.Length+read>SimilaritySearch.MaxResponseBytes)throw new InvalidDataException("類似検索の応答が大きすぎます。");
-                output.Write(buffer,0,read);
-            }
-            if(response.Content.Headers.ContentLength is long expected&&expected!=output.Length)throw new InvalidDataException("類似検索の応答が途中で切れました。");
-            var text=Encoding.UTF8.GetString(output.ToArray());
-            if(!response.IsSuccessStatusCode)throw new InvalidOperationException(ErrorText.FromResponse(text,(int)response.StatusCode));
-            return SimilaritySearch.Parse(text,itemId,page);
-        }
-        catch(OperationCanceledException ex) when(!cancellation.IsCancellationRequested)
-        {throw new TimeoutException("類似検索が時間内に完了しませんでした。少し待ってやり直してください。",ex);}
+        var bytes=await new SearchRequestClient(client).RunAsync("api/library/ai/similar",
+            SimilaritySearch.RequestMulti(itemId,kind,view,page,scope,rootIds),cancellation,10,SimilaritySearch.MaxResponseBytes);
+        return SimilaritySearch.Parse(Encoding.UTF8.GetString(bytes),itemId,page);
     }
     public Task<string> ExportRelatedTermsAsync() => GetTextAsync("api/library/terms/export");
     public Task<JsonNode> ImportRelatedTermsAsync(string document) => PostAsync("api/library/terms/import", document);

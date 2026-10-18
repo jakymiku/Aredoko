@@ -83,7 +83,7 @@ class PendingTagVectors:
         return True,True
 
 
-def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=None,shelf=None,model=None):
+def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=None,shelf=None,model=None,*,cancelled=None):
     from ai_search import AIBusy,MAX_ITEMS,revision
     from tag_candidate_search import validate_candidate_search
     from tag_suggestions import SuggestionConflict
@@ -93,7 +93,7 @@ def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=N
     scope=ai._scope({'root_ids':root_ids,'kind':kind,'shelf':shelf})
     if not ai.inference.acquire(blocking=False):raise AIBusy('AI処理中です。完了後に検索してください。')
     try:
-        with ai._search_workspace(scope) as (spool,check):
+        with ai._search_workspace(scope,cancelled) as (spool,check):
             query_vector=None;pending_total=indexed_total=candidate_total=0
             for rows in ai._search_batches(kind,view,scope,check):
                 candidate_total+=len(rows)

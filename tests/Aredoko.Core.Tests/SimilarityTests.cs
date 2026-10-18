@@ -35,12 +35,14 @@ static class SimilarityTests
         {
             calls++;
             if(message.RequestUri!.AbsolutePath=="/api/session")return Json("""{"mode":"production","token":"test-token"}""");
+            if(message.RequestUri.AbsolutePath=="/api/library/ai/searches/prepare")return Json("""{"request_id":"0123456789abcdef0123456789abcdef","expires_in_seconds":60}""");
+            if(message.RequestUri.AbsolutePath=="/api/library/ai/searches/cancel")return Json("""{"request_id":"0123456789abcdef0123456789abcdef","cancel_requested":true}""");
             check(message.RequestUri.AbsoluteUri=="http://127.0.0.1:8769/api/library/ai/similar"&&message.Method==HttpMethod.Post,"fixed local similarity route");
             check(message.Headers.GetValues("Origin").Single()=="http://127.0.0.1:8769"&&message.Headers.GetValues("X-Aredoko-Token").Single()=="test-token","similarity retains session and origin");
             var body=JsonNode.Parse(await message.Content!.ReadAsStringAsync(token))!;
             check(body["item_id"]!.GetValue<int>()==7&&body["view"]!.GetValue<string>()=="favorites","LibraryApi sends clicked item and filters");
             if(blocked)await Task.Delay(Timeout.Infinite,token);
-            return Json(Response());
+            var result=JsonNode.Parse(Response())!.AsObject();result["request_id"]=body["request_id"]!.GetValue<string>();return Json(result.ToJsonString());
         }));
         await api.ConnectAsync();
         check((await api.SimilarAsync(7,"image","favorites",0,scope,1,CancellationToken.None)).SimilarityStatus=="unindexed","LibraryApi parses fallback");
@@ -48,7 +50,7 @@ static class SimilarityTests
         var pending=api.SimilarAsync(7,"image","favorites",0,scope,1,cancel.Token);cancel.Cancel();
         try{await pending;check(false,"cancel pending similarity");}
         catch(OperationCanceledException){check(true,"pending similarity can be cancelled");}
-        check(calls==3,"similarity never requests preview or inference endpoints");
+        check(calls==6,"similarity uses prepare/query/owned cancel only, never preview or indexing endpoints");
         check(SimilaritySearch.Parse(Response(),7,0).Total==0,"strict similarity fallback contract");
         var visual=JsonNode.Parse(Response())!.AsObject();visual["similarity_status"]="ready";visual["total"]=1;
         visual["items"]=JsonNode.Parse("""[{"id":8,"title":"near.png","kind":"image","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.98,"similarity_origin_id":7}]""");
