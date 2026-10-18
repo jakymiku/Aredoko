@@ -6,7 +6,7 @@
 
 主要な登録・整理・文字/画像/本ページ検索・WD候補・閲覧・時間付き動画索引は実装済み。次は微細なCPU最適化の反復より、索引の継続、動画/音声の未完機能、使い勝手・配布・受入を進める。
 
-**R01はDONE、R02はCPU_DONE（A/B/C実装・CPU検証済み）。R03も[復旧基盤CPU_DONE](backup-recovery.md)。次はR04明示索引継続→R05動画起点類似→R06音声方式設計。** [所有取消の証拠/限界](search-cancellation.md)を確認し、GUI全体の取消配線R10・性能受入R12・必要実機受入R14を完了と扱わない。 [全件検索の仕様/証拠](full-library-search.md)・[契約](large-library-contract.md)を読む。検索候補の1万件打切りは解消、1回の索引jobは最大1万件のまま。 設計の難しいR01/R02/R03/R06/R08にはAstra推奨を付け、通常実装はSolで進められるよう分割した。担当割当は推奨であり自動モデル切替ではない。
+**R01はDONE、R02はCPU_DONE（A/B/C実装・CPU検証済み）。R03も[復旧基盤CPU_DONE](backup-recovery.md)。R04はDOINGで[Aの継続API](index-continuation.md)がCPU_DONE。次はR04-B/Core・job所有取消→R04-C/既存WinUI接続→R05動画起点類似→R06音声方式設計。** [所有取消の証拠/限界](search-cancellation.md)を確認し、GUI全体の取消配線R10・性能受入R12・必要実機受入R14を完了と扱わない。 [全件検索の仕様/証拠](full-library-search.md)・[契約](large-library-contract.md)を読む。検索候補の1万件打切りは解消、1回の索引jobは最大1万件のまま。 設計の難しいR01/R02/R03/R06/R08にはAstra推奨を付け、通常実装はSolで進められるよう分割した。担当割当は推奨であり自動モデル切替ではない。
 
 M1は画像/本/動画の日常利用β、M2は音声/音楽内容も含む製品版候補。M1を全媒体完成版と呼ばず、既存機能を削って完成扱いにしない。詳細な依存・状態・完了条件・実機確認項目は実行計画だけを更新する。
 

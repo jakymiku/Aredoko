@@ -1,6 +1,6 @@
 """Small, resumable semantic-search slice; source media remain read-only."""
 from array import array
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import hashlib
 import json
 import math
@@ -19,6 +19,7 @@ from ai_result_groups import boundary
 from ai_score_spool import ScoreSpool, ScoreSpoolError, SearchCancelled
 from previews import PreviewReader, PreviewUnavailable
 from search_requests import SearchRequests
+from index_continuation import IndexContinuation, JOB as CONTINUATION_JOB, public_state
 from tag_semantics import PendingTagVectors
 from page_semantics import PageVectors, SCHEMA as PAGE_VECTOR_SCHEMA
 
@@ -203,6 +204,7 @@ class AISearch:
         self.inference=threading.Lock()
         self._closed=False
         self.search_requests=SearchRequests()
+        self.continuation=IndexContinuation(self,MAX_ITEMS)
         self._last_activity=time.monotonic()
         self._idle_seconds=0
         self._index_pause_ms=0
@@ -393,7 +395,7 @@ class AISearch:
     def status(self):
         with self.guard: state=self.store.state()
         resident=bool(getattr(self.encoder,'resident',False))
-        return {**state,'available':self.encoder.available,
+        return {**public_state(state),'available':self.encoder.available,
                 'resident':resident,'worker_state':'loaded' if resident else 'unloaded',
                 'device':getattr(self.encoder,'device','') if resident else '',
                 'limit':MAX_ITEMS,'model':self.profile.label,'model_id':self.profile.model_id,'profile':self.profile.key,
@@ -414,13 +416,18 @@ class AISearch:
             self.worker=threading.Thread(target=self._build,args=(ids,scope),daemon=True)
             self.worker.start()
         return self.status()
-    def _build(self,ids,scope=None):
-        state={'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':'','scope':scope}
+    def _build(self,ids,scope=None,initial_state=None):
+        state=dict(initial_state) if initial_state is not None else {'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':'','scope':scope}
+        continuing=state.get('job')==CONTINUATION_JOB
+        if continuing:state['_pins']={item:(rev,sig) for item,rev,sig in state['continuation']['entries']}
+        def saved():return {k:v for k,v in state.items() if k!='_pins'}
         try:
             with self.inference:
                 for offset in range(0,len(ids),ROW_BATCH_SIZE):
                     if self.cancel.is_set():break
                     batch=ids[offset:offset+ROW_BATCH_SIZE]
+                    if continuing:
+                        with self.catalog._guard:self.continuation.check(state,batch)
                     rows=self._current_rows(batch,scope)
                     pending=self.pending_tags.snapshots(list(rows))
                     for item_id in batch:
@@ -460,42 +467,62 @@ class AISearch:
                                     state['processed']+=1
                                     break
                                 # Recheck presence, exclusions and revision before publishing.
-                                current=self._current_rows([item_id],scope).get(item_id)
-                                if current is None or revision(current)!=rev:
-                                    state['skipped']+=1
-                                else:
-                                    expected=source_contract(row,self.profile)
-                                    visual_ready='cover' in vectors and (row['kind']!='video' or bool(video_frames))
-                                    if expected is not None and not visual_ready and saved_text is not None:
-                                        # A transient preview failure must not erase a usable
-                                        # legacy cover or mark missing content as refreshed.
+                                with self.catalog._guard if continuing else nullcontext():
+                                    if continuing:
+                                        if self.cancel.is_set():raise InterruptedError()
+                                        self.continuation.check(state,[item_id])
+                                    current=self._current_rows([item_id],scope).get(item_id)
+                                    if current is None or revision(current)!=rev:
                                         state['skipped']+=1
                                     else:
-                                        self.store.put(item_id,rev,vectors,video_frames,source_contract=expected if visual_ready else None);state['indexed']+=1
+                                        expected=source_contract(row,self.profile)
+                                        visual_ready='cover' in vectors and (row['kind']!='video' or bool(video_frames))
+                                        if expected is not None and not visual_ready and saved_text is not None:
+                                            # A transient preview failure must not erase a usable
+                                            # legacy cover or mark missing content as refreshed.
+                                            state['skipped']+=1
+                                        else:
+                                            self.store.put(item_id,rev,vectors,video_frames,source_contract=expected if visual_ready else None);state['indexed']+=1
                             else:state['indexed']+=1
                         if row is not None and not self.cancel.is_set():
                             tag_ready,tag_inferred=self.pending_tags.build(row,pending.get(item_id),scope,self.cancel.is_set)
                             did_infer=did_infer or tag_inferred
                             if not tag_ready and state['indexed']>indexed_before:
                                 state['indexed']-=1;state['skipped']+=1
+                        if continuing and not self.cancel.is_set():
+                            with self.catalog._guard:
+                                self.continuation.check(state,[item_id])
+                                current=self._current_rows([item_id],scope).get(item_id)
+                                snapshots=self.pending_tags.snapshots([item_id])
+                                if state['indexed']>indexed_before:
+                                    if item_id not in self.continuation.ready([current],snapshots):
+                                        state['indexed']-=1;state['skipped']+=1
+                                    elif not did_infer:state['reused']+=1
                         state['processed']+=1
                         # Vectors commit atomically per item. Progress may lag by 15;
                         # a restart discovers saved revisions rather than re-encoding.
                         if state['processed']%PROGRESS_INTERVAL==0:
                             with self.guard:
-                                self.store.save_state({**state,'state':'cancelling' if self.cancel.is_set() else 'running'})
+                                self.store.save_state({**saved(),'state':'cancelling' if self.cancel.is_set() else 'running'})
                         # Load-shedding is optional and cancelable. Not a GPU
                         # utilization/FPS limit. Never pace interactive search.
                         if did_infer and state['processed']<len(ids) and self._index_pause_ms:
                             if self.cancel.wait(self._index_pause_ms/1000):
                                 break
+                if continuing and not self.cancel.is_set():
+                    with self.catalog._guard:
+                        for offset in range(0,len(ids),ROW_BATCH_SIZE):
+                            self.continuation.check(state,ids[offset:offset+ROW_BATCH_SIZE])
                 state['state']='cancelled' if self.cancel.is_set() else 'complete'
+        except InterruptedError:
+            state['state']='cancelled' if self.cancel.is_set() else 'failed'
+            if not self.cancel.is_set():state['error']='索引を完了できませんでした。対象を確認してください。'
         except Exception as ex:
             state['state']='failed';state['error']='AI索引を作成できませんでした（'+type(ex).__name__+'）。ローカルログを確認してください。'
         finally:
             # Covers both actual inference and cached rebuilds.
             self._last_activity=time.monotonic()
-            with self.guard:self.store.save_state(state)
+            with self.guard:self.store.save_state(saved())
     def cancel_build(self):
         self.cancel.set()
         with self.guard:

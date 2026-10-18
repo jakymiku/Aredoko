@@ -499,6 +499,15 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     try:return self.send(200,ai.pages.start(body['item_id'],body['page_ids'],body['revision'],validate_scope(body['scope'])))
                     except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
                     except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
+                if self.path in ('/api/library/ai/index/plan','/api/library/ai/index/start','/api/library/ai/index/resume'):
+                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
+                    operation=self.path.rsplit('/',1)[-1]
+                    fields={'scope','profile'} | ({'limit','after_id'} if operation=='plan' else {'plan_id' if operation=='start' else 'job_id'})
+                    if set(body)!=fields:raise ValueError('Invalid continuation fields')
+                    scope=validate_scope(body['scope'])
+                    if operation=='plan':return self.send(200,ai.continuation.prepare(scope,body['profile'],body['limit'],body['after_id']))
+                    if operation=='start':return self.send(200,ai.continuation.start(body['plan_id'],scope,body['profile']))
+                    return self.send(200,ai.continuation.resume(body['job_id'],scope,body['profile']))
                 if self.path=='/api/library/ai/index':
                     if 'scope' in body:
                         return self.send(200,ai.start(body.get('limit',MAX_ITEMS),scope=validate_scope(body['scope'])))

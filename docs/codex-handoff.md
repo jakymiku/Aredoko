@@ -1,5 +1,20 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-19 R04-A backend/CPU完了 — 次はR04-B/C、R04全体はDOING
+
+開始HEAD `b659367`、fetch/status/logでclean/origin同期を確認。[索引継続APIの契約](index-continuation.md)を追加。**R04-A CPU_DONE、R04はDOING**。R04全体/WinUI接続/実GPU受入が完了したとは扱わない。
+
+- `app/index_continuation.py` と認証済み `/api/library/ai/index/plan`・`start`・`resume`。CPUだけのplanで全scopeのcandidate/fresh/remainingを256行batchで数え、最大10,000件の未準備ID/revision/pending signature、scope/profile/root構成/upper-IDを固定する。最新preview1件/300秒で、planだけでは既存job/再開記録を変更しない。
+- 初回範囲が準備済みなら後続を選び、10,001metadata fixtureで最初10,000 fresh→最後1件だけencode→全remaining0を確認。after_idは明示的に未準備を残して後ろへ進む選択で、前の未準備を完了扱いにしない。通常はafter_id0でfreshを飛ばす。登録解除/除外/選択metadata・pending変更、異なるscope/profile/古いjob/破損recordは開始・再開前/公開前に拒否する。
+- 既存 `_build`/inference guard/1item単位公開を再利用。旧prefix start/coverage・本page chunk/batchを維持し、新job状態は既存ai_state JSONへ保存（新table/schemaなし）。cancel/restart・R03 backup/restore後の明示resumeで固定範囲をcache再確認し、保存済みを再encodeしない。running→interrupted、自動再開なし。statusから大量固定IDを除外し、selected/unready/reused等だけを表示する。
+- **全Python589件：586 PASS /3 platform SKIP /427.943秒**、専用Python3.11.9関連 **106 PASS /121.372秒**、Core **528 checks PASS**。`data/large-library/r04a-checks-20261019-01/` のlog/json/source SHA不変。新規19件は最終単独13.229秒でもPASS。C#/XAML未変更につきRelease/GUI再実行なし。実モデル・GPU・新DL/依存/私物走査・原本変更/Actions/main mergeなし。
+- 初回14件中3FAILは編集時cancel_buildからworker内ローカルsaved()を参照した実装ミス。元のstate保存へ修正して14PASS→補強19PASS、失敗log保持。全体回帰では旧shutdown fixtureの背景threadに期待されたAIUnavailableが未捕捉で出た（tool stderr履歴）。製品動作は変更せず、fixtureをmain threadで例外型照合するよう補強し、対象 **11 PASS /10.139秒**。589全体はこのfixture補正前の1回で、補正後に全体を再実行したとは扱わない。
+- CPU planのfreshは保存metadata/input contract/pendingとの整合であり、未走査の物理変更を検出する新スキャン/専用OCRではない。原本preview/source安全検査は維持。unreadyはskipped相当で原因別failed数とは別、総RSS/p95/1TBはR12。P0累積2/2/OCR保留/全機能/簡潔GUIを保持。前回R14 PARTIALと旧book-batch取消PNGの未完/試行上限はそのまま。
+
+次の3手：**R04-B：Coreのstrict request/responseとjob所有取消→R04-C：既存AI設定の簡潔なplan/start/resume接続→R05：動画起点類似**。今回のAPIはWinUI未接続、取消は旧ai/cancel共通APIのままなので、Bで古いcancel操作が別jobを止めない契約を追加する。Cで全scope未処理/今回件数/元範囲の未処理を誤表示せず、旧prefix・単冊・複数本・chunk再開を削除しない。新GUI実機はR14へ別記し、閉じた過去の試行をresetしない。R06音声方式設計はその後の全体台帳どおり維持。
+
+---
+
 ## 2026-10-18 ユーザー承認GPU/GUI限定受入 — R14 PARTIAL、次はR04
 
 最新指示でGPU/GUI実行が許可された。以前の一時延期を現在の禁止と扱わない。[固定範囲・全結果・残gate](release-readiness.md)を参照。開始HEAD `ec2f23a`、生成2root/5items/CBZ3page、既存CUDA EG2のみ。**GPU28/28 PASS、nativeはPARTIAL（22記録assertion PASS後、Dark小窓overlayが閉じてBtnCloseDetails不在でflow停止）**。R02/R03はCPU_DONE、全体M1/M2やR14 DONEとはしない。

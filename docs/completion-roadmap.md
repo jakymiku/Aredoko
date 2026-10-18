@@ -31,14 +31,14 @@
 
 ## タスク台帳（優先順）
 
-状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02 CPU_DONE（A/B/C実装・CPU検証済み、必要実機はR14）、R03 CPU_DONE、R04 READY、R14は限定実機PARTIAL、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
+状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02 CPU_DONE（A/B/C実装・CPU検証済み、必要実機はR14）、R03 CPU_DONE、R04 DOING（A backend CPU_DONE、B/Core/所有取消・C/WinUIは次）、R14は限定実機PARTIAL、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
 
 | ID | 作業・出力 | 依存 | 担当難度 | 状態 |
 | --- | --- | --- | --- | --- |
 | R01 | 1万件上限の影響監査と大規模検索契約を凍結 | なし | **Astra推奨：設計**、調査/fixtureはSol可 | DONE：[再現/契約](large-library-contract.md)、2規模各17対照PASS |
 | R02 | 全登録範囲を扱う上限付きメモリの検索/候補列挙 | R01 | Sol実装、**Astra推奨：同値性/競合レビュー** | CPU_DONE：[A/B](full-library-search.md)・[C所有取消](search-cancellation.md)実装/CPU合格、実機R14 |
 | R03 | バックアップ/復旧・DB/profile更新失敗からの復帰 | なし | Sol実装、**Astra推奨：整合性設計/レビュー** | CPU_DONE：[停止時backup/新規復元](backup-recovery.md)・launcher引数CPU確認、UI導線R10/native R14 |
-| R04 | 大量索引の明示継続・差分・中断再開を一連で完成 | R01、R03契約 | Sol、複数保存先の競合のみAstraレビュー | READY |
+| R04 | 大量索引の明示継続・差分・中断再開を一連で完成 | R01、R03契約 | Sol、複数保存先の競合のみAstraレビュー | DOING：[A backend CPU_DONE](index-continuation.md)、次B/Core/所有取消→C/既存WinUI接続 |
 | R05 | 動画起点の類似検索と時刻根拠/既存UI接続 | R01、既存動画索引 | Sol。集約契約が曖昧ならAstra | TODO |
 | R06 | 音声/音楽の入力能力・モデル/契約/評価設計を決定 | なし | **Astra強く推奨：方式選定** | TODO |
 | R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | TODO |
@@ -75,6 +75,8 @@ R01に沿い、keyset/streaming・bounded top-k等を比較して採用。combin
 生成DBを別の新規復元先で開き、整理/読書位置が一致、再生成可能なAI cache欠損は明示再索引で復帰、破損backup/容量不足/途中失敗/旧版は元DBを壊さず失敗する。Pythonホスト変更の物理token不一致も扱い、鮮度検査を無効化せず再確認・再索引へ誘導する。実利用DBの上書き復元はこの開発タスクの自動実行対象にしない。
 
 ### R04 — 最後まで索引を進められる
+
+2026-10-19：[R04-A](index-continuation.md)はCPU_DONE（plan/start/resume、固定範囲・保存cache再利用、10,001metadata境界、589全体/106専用/528Core）。R04全体はDOING。BでCore strict protocolとjob所有取消、Cで既存AI設定への簡潔な接続を完了し、必要実機をR14へ記録する。APIだけで完了扱いにしない。
 
 既存128page/16page atomic・8冊batch・最新job再開を再利用。登録5万件でも先頭1万件だけを繰り返さず、明示したscope/profileの未処理分へ進める。計画→開始→取消→再起動→明示再開/次の範囲、追加/変更/除外/解除を生成fixtureで検証。総数/準備済み/未処理/対象外/失敗を混同しない。一般queueや自動全冊走査は目的にせず、必要なbounded継続だけを追加する。
 
@@ -136,6 +138,6 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 1. fetch/status/log→最新handoff→本表の最上位READY/TODOを確認。他AIの未コミット変更を上書きしない。依存が揃う最上位1件をDOINGにし、その中のAPI/CPU→Core→WinUI→必要な受入の小区切りで進める。
 2. 証拠が揃う既存実装を再作成しない。不足は「未実装」「未検証」「新しい退行」に分類。CPU_DONE/WAITには未実行テストと解除条件を具体的に付け、独立した次のタスクへ進む。
 3. 台帳の状態、最新handoffの対象ID/commit/完了条件の達否/次のIDを毎回更新。次の作業順の正本はこの表一つ。歴史文書に別の順番を追加しない。新しい要望/重大退行は優先順位を更新して理由を記録。
-4. 当面の次の3手は **R04（明示索引継続）→R05（動画起点類似）→R06（音声方式設計）**。R01はDONE、R02-A/Bの実装・CPU検証は[完了](full-library-search.md)。R02は[所有取消までCPU_DONE](search-cancellation.md)、GUI全体の配線はR10・資源/性能はR12・必要実機受入はR14。R03の停止時復旧契約はCPU_DONE。外部確認待ちなら独立したR06のCPU調査に進める。GPU/GUIは最新のユーザー指示で許可済み、今回限定nativeの残gate/試行上限は[受入記録](release-readiness.md)を守る。新downloadは別途明示許可、CIは起動しない。
+4. 当面の次の3手は **R04-B/C（Core/所有取消・既存WinUIへ継続索引を接続）→R05（動画起点類似）→R06（音声方式設計）**。R01はDONE、R02-A/Bの実装・CPU検証は[完了](full-library-search.md)。R02は[所有取消までCPU_DONE](search-cancellation.md)、GUI全体の配線はR10・資源/性能はR12・必要実機受入はR14。R03の停止時復旧契約はCPU_DONE。外部確認待ちなら独立したR06のCPU調査に進める。GPU/GUIは最新のユーザー指示で許可済み、今回限定nativeの残gate/試行上限は[受入記録](release-readiness.md)を守る。新downloadは別途明示許可、CIは起動しない。
 
 長期台帳（削除しない）：B01 複数ページの関係/展開タグ（Astra推奨、根拠ページ/不明状態/固定評価を先に設計、専用OCRを既定にしない）、B02 Komga任意連携、B03 重複・移動追跡、B04 保存検索/ピン留め、B05 GPU/索引の高度な自動スケジューリング。新しい要望や実運用根拠が出たら順序を更新する。これらをM1前の無限な機能追加へ混ぜない。

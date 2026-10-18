@@ -135,9 +135,10 @@ class ReleaseTests(unittest.TestCase):
     def test_close_never_relaunches_worker(self):
         self.build()
         self.encoder.block=True
-        query_done=threading.Event()
+        query_done=threading.Event();query_errors=[]
         def query():
             try:self.ai.search("雨")
+            except Exception as error:query_errors.append(error)
             finally:query_done.set()
         t=threading.Thread(target=query);t.start()
         self.assertTrue(self.encoder.enter.wait(3))
@@ -150,6 +151,10 @@ class ReleaseTests(unittest.TestCase):
         ending.join(10);t.join(10)
         self.assertFalse(ending.is_alive())
         self.assertTrue(query_done.is_set())
+        # Assert the expected close rejection in the main test thread instead
+        # of leaking a background exception that unittest would not count.
+        self.assertEqual(len(query_errors),1)
+        self.assertIsInstance(query_errors[0],AIUnavailable)
         old_loads=self.encoder.loads
         with self.assertRaises(AIUnavailable):self.ai.search("雨")
         with self.assertRaises(AIUnavailable):self.ai.start()
