@@ -31,7 +31,7 @@
 
 ## タスク台帳（優先順）
 
-状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02 CPU_DONE（A/B/C実装・CPU検証済み、必要実機はR14）、R03 CPU_DONE、R04 CPU_DONE（A/B/C実装・CPU検証済み、実機GUIはR14）、次はR05、R14は限定実機PARTIAL、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
+状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02 CPU_DONE（A/B/C実装・CPU検証済み、必要実機はR14）、R03 CPU_DONE、R04 CPU_DONE、R05 CPU_DONE、R06 DONE（[音声・音楽方式設計凍結](audio-content-design.md)）、R07 CPU_DONE（発話区間索引/時刻根拠・Core/Python・CPU受入合格）、次はR08音響・音楽特徴索引、R14は限定実機PARTIAL、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
 
 | ID | 作業・出力 | 依存 | 担当難度 | 状態 |
 | --- | --- | --- | --- | --- |
@@ -39,9 +39,9 @@
 | R02 | 全登録範囲を扱う上限付きメモリの検索/候補列挙 | R01 | Sol実装、**Astra推奨：同値性/競合レビュー** | CPU_DONE：[A/B](full-library-search.md)・[C所有取消](search-cancellation.md)実装/CPU合格、実機R14 |
 | R03 | バックアップ/復旧・DB/profile更新失敗からの復帰 | なし | Sol実装、**Astra推奨：整合性設計/レビュー** | CPU_DONE：[停止時backup/新規復元](backup-recovery.md)・launcher引数CPU確認、UI導線R10/native R14 |
 | R04 | 大量索引の明示継続・差分・中断再開を一連で完成 | R01、R03契約 | Sol、複数保存先の競合のみAstraレビュー | CPU_DONE：[A/B/C](index-continuation.md)実装/CPU合格、実機GUI/GPU受入はR14 |
-| R05 | 動画起点の類似検索と時刻根拠/既存UI接続 | R01、既存動画索引 | Sol。集約契約が曖昧ならAstra | CPU_DONE：[保存済みframe最大集約/時刻根拠](video-similarity.md)、UIシーク接続、実機R14 |
-| R06 | 音声/音楽の入力能力・モデル/契約/評価設計を決定 | なし | **Astra強く推奨：方式選定** | TODO |
-| R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | TODO |
+| R05 | 動画起点の類似検索と時刻根拠/既存UI接続 | R01、既存動画索引 | Sol。集約契約が曖昧ならAstra | CPU_DONE：[保存済みframe最大集約/時刻根拠](video-similarity.md)、4通り根拠・視覚/音響空間分離・表紙/内部頁契約、UIシーク接続、実機R14 |
+| R06 | 音声/音楽の入力能力・モデル/契約/評価設計を決定 | なし | **Astra強く推奨：方式選定** | DONE：[2案比較・分離型モジュラー凍結](audio-content-design.md)、768D発話空間/独立音響空間・決定論的正解 |
+| R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | CPU_DONE：[発話区間索引/時刻根拠](audio-content-design.md)、Core/Python検証、CPU受入15件合格、実機R14 |
 | R08 | 音響/音楽特徴の索引・日本語検索・類似検索 | R06、R03/R04契約 | **Astra推奨：特徴/比較設計**、実装Sol可 | TODO |
 | R09 | 音声/音楽の検索→再生→類似検索のGUI統合 | R07、R08 | Sol＋WinUI skills | TODO |
 | R10 | 初回設定・未索引/上限/失敗状態・資源管理の仕上げ | R01、既存設定 | Sol | TODO |
@@ -74,27 +74,55 @@ R01に沿い、keyset/streaming・bounded top-k等を比較して採用。combin
 
 生成DBを別の新規復元先で開き、整理/読書位置が一致、再生成可能なAI cache欠損は明示再索引で復帰、破損backup/容量不足/途中失敗/旧版は元DBを壊さず失敗する。Pythonホスト変更の物理token不一致も扱い、鮮度検査を無効化せず再確認・再索引へ誘導する。実利用DBの上書き復元はこの開発タスクの自動実行対象にしない。
 
+SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時バックアップ、新規ディレクトリ復元、配布作成前には必ず `PRAGMA wal_checkpoint(TRUNCATE)` を完了して単一ファイル整合性を保証する。また将来のスキーマ不整合を防ぐため `PRAGMA user_version` による前方互換性・スキーマバージョンガードを導入し、未対応の上位版DBに対してフェイルクローズ（破壊的書き込みの防止）を徹底する。
+
 ### R04 — 最後まで索引を進められる
 
 2026-10-19：[R04](index-continuation.md)はCPU_DONE（A backend継続API、B Core厳格プロトコル/job所有取消、C WinUI AI設定統合、Python 590 [587 PASS/3 SKIP]、Core 585 PASS、Release 0警告/0エラー）。実機GUI/GPU受入はユーザー方針に従いR14で一括検証（`tools/test_continuation_acceptance.py`）。次はR05（動画起点類似）。
 
 既存128page/16page atomic・8冊batch・最新job再開を再利用。登録5万件でも先頭1万件だけを繰り返さず、明示したscope/profileの未処理分へ進める。計画→開始→取消→再起動→明示再開/次の範囲、追加/変更/除外/解除を生成fixtureで検証。総数/準備済み/未処理/対象外/失敗を混同しない。一般queueや自動全冊走査は目的にせず、必要なbounded継続だけを追加する。
 
-### R05 — 動画の内容類似
+### R05 — 動画の内容類似（CPU_DONE）
 
-2026-10-19：[R05](video-similarity.md)はCPU_DONE（保存済み時間付き動画代表frame vectorの最大類似度集約・timepoint grounding・厳格な4通り時刻根拠契約［動画→動画双方、画像→動画候補時刻のみ、動画→画像起点時刻のみ、画像→画像時刻なし］・cover単体候補0ms安全フォールバック・自己除外・UIシーク接続完了、Python 23 PASS [7 VideoSimilarityTests]、Core 596 PASS、Release 0警告/0エラー、CPU受入ハーネス合格）。実機GUI/GPU受入はユーザー方針に従いR14で一括検証（`tools/test_video_similarity_acceptance.py`）。次はR06（音声/音楽の入力能力・モデル/契約/評価設計）。
+2026-10-19：[R05](video-similarity.md)はCPU_DONE（保存済み時間付き動画代表frame vectorの最大類似度集約・timepoint grounding・厳格な4通り時刻根拠契約・cover単体候補0ms安全フォールバック・自己除外・UIシーク接続完了、Python 23 PASS [7 VideoSimilarityTests]、Core 596 PASS、Release 0警告/0エラー、CPU受入ハーネス合格）。実機GUI/GPU受入はユーザー方針に従いR14で一括検証（`tools/test_video_similarity_acceptance.py`）。
 
-起点の保存済み時間付きframe vectorを使い、動画→動画/画像の範囲と集約を明示。最初のframeだけの比較を「動画全体」と表示しない。自己除外・profile/版/scope・不正/未索引・取消、候補の一致時刻・対応frame、既存一覧の右クリック→結果→該当時刻再生→戻るを通す。API/mock回帰→Core→既存WinUI接続の順で分割し、実品質とGUI操作はR14へ送る。APIだけでは利用シナリオ完了としない。
+- **4通りの時刻根拠契約（4-way Grounding Contract）**:
+  1. 動画起点 → 動画候補：候補側 `video_match_ms`（最類似フレーム時刻）および起点側 `origin_match_ms`（起点動画の照合フレーム時刻）の双方を明示。
+  2. 画像起点 → 動画候補：候補側 `video_match_ms` を付与、起点側 `origin_match_ms` は null（画像は単一時刻なし）。
+  3. 動画起点 → 画像候補：起点側 `origin_match_ms` を付与、候補側 `video_match_ms` は null（画像候補にシーク時刻なし）。
+  4. 画像起点 → 画像候補：両時刻とも null。
+- **視覚/音響空間の分離**: 視覚空間（EmbeddingGemma 768D 表紙/動画フレーム/ページ画像）と音声空間（発話意味768D / 音響特徴空間）を完全に分離し、異モダリティ間の内積計算や不正集約を契約レベルで排除。
+- **本表紙と内部ページ類似の契約**: 本の類似検索では表紙ベクトルを媒体全体の代表として扱い、内部ページベクトル（`ai_page_vectors`）はページ検索時のみ明示走査され、本全体の類似度へ無断混入・希釈させない。
+- **UI連携**: 動画候補結果のクリックで `VideoPlayerView` が該当 `video_match_ms` へ自動シークし、文脈メニュー「似た動画・素材を探す」から直ちに類似探索が可能。
 
-### R06 — 音声方式を先に決める
+### R06 — DONE：音声方式の選定と評価設計凍結
 
-対象を(1)発話/会話、(2)効果音/環境音、(3)音楽の雰囲気/楽器、(4)音声/音楽同士の類似に分け、各入力がどのモデル・前処理で扱えるか公式モデル仕様/ローカルadapterで確認する。EmbeddingGemma 2の音声直接入力を未検証のまま約束しない。発話文字列で音響/音楽を代用しない。
+2026-10-19：[R06](audio-content-design.md)はDONE（Astra推奨の方式選定を完了、2案比較の上で分離型モジュラー方式Bを採用、評価4基準・空間分離契約・時間区間仕様・決定論的評価fixtureを凍結）。
 
-最大2案を比較し、`docs/audio-content-design.md`へ選択理由、profile/次元だけでなくembedding space、時間区間、sample rate/channel、duration/サイズ上限、license/取得容量/VRAM、処理中断・差分・評価正解を凍結。日本語検索と音同士の類似が別spaceなら明確に分離する。新依存/重みの導入は見積と必要性を用意して許可を得る。許可待ちでもschema/API/mockは進められる。
+- **2案の比較と選定理由**:
+  - *Candidate A（単一巨大マルチモーダル塔）*: EmbeddingGemma 2内部の`audio_tower`（Gemma4AudioFeatureExtractor）の直接利用。モデル構造調査の結果、`model.safetensors`の1376キー中752キーを占めるが、発話Conformerであり音響/音楽特徴の直接理解能力がなく、VRAM/メモリを1.5〜2.0GB余計に消費するため棄却。
+  - *Candidate B（分離型モジュラー方式・採用）*: 768D発話意味空間（テキスト意味空間と共有）と独立した音響/音楽特徴空間の2系統に明確に分離。
+- **4評価基準**: (1) 発話/会話の自然文検索、(2) 効果音/環境音、(3) 音楽の雰囲気/テンポ/ジャンル、(4) 音声/音楽同士の類似。
+- **空間分離と境界契約**: 発話テキスト意味埋め込みは768D正規化ベクトルとして`ai_audio_segments`に格納。音響空間とは内積を混交しない。
+- **前処理と上限**: 16kHz モノラル音声、512MiB上限、24時間（86,400,000ms）上限、時間区間 `[start_ms, end_ms]`。
 
-### R07 / R08 / R09 — 音声を日常操作へ接続
+### R07 — CPU_DONE：発話内容の時間付き索引/検索adapter
 
-- R07：発話の時間区間と根拠を保存し、日本語で該当音声/時刻に到達。直接audio embeddingかASR経由かはR06の結果に従う。無音/壊れた音声/長尺/変更・取消・再利用をmockで検証する。
+2026-10-19：[R07](audio-content-design.md)はCPU_DONE（SQLite `ai_audio_segments`テーブル新設、無アロケーション有限性検証/高速内積計算、検索集約への発話区間ヒット統合、CoreリフレクションフリーJSONパーサー・時刻/スニペット根拠表示、Python/Core単体テストおよび受入ハーネス合格）。実機GPU/GUI受入はR14で一括検証（`tools/test_audio_acceptance.py`）。次はR08（音響/音楽特徴の索引・日本語検索・類似検索）。
+
+- **実装コンポーネント**:
+  - `app/audio_semantics.py`: 契約 `audio-speech-segment:v1`、スキーマ `ai_audio_segments(item_id, source_revision, segment_id, start_ms, end_ms, snippet, vector, contract, PRIMARY KEY(item_id, segment_id))`。リスト不生成の高速検証 `_is_valid_packed` / `unpack`、内積 `_score_packed`。
+  - `app/ai_search.py`: `VectorStore.__init__` でテーブル作成、`scores_with_content` に `audio_scores` を配線、`AISearch.search(...)` で発話ヒットの時刻 `audio_match_ms` とスニペット `audio_match_snippet` を結合。
+  - `app/storage_schema_v1.json` / `app/ai_store_cleanup.py` / `app/production.py`: 正式なvectorテーブルとして登録、バックアップ復元時のテーブル検証および安全クリーンアップを保証。
+  - `src/Aredoko.Core/Protocol.cs`: `AIEvidence` に `audio_match_ms` / `audio_match_snippet` の安全なリフレクションフリー構文解析とフォーマット表示（`音声発話一致（mm:ss · 「snippet」）`）を実装。
+- **検証記録**:
+  - `tests/test_audio_semantics.py`: 6件PASS（スキーマ、正常登録/取得、無音処理、時間境界0..86400000ms検査、破損ベクトル・NaN/Infの不生成拒絶、削除/鮮度整合）。
+  - `tests/Aredoko.Core.Tests/AudioSpeechTests.cs`: 20件PASS（Coreテスト合計616件PASS）。
+  - `tools/test_audio_acceptance.py --stage cpu`: 15/15件PASS。
+  - WinUI x64 Releaseビルド：0警告・0エラー。
+
+### R08 / R09 — 音響・音楽と日常操作への接続
+
 - R08：発話を含まない音楽/効果音でも特徴検索と同一space内の類似を扱う。固定の音響・音楽fixtureで無関係な結果/未索引を区別する。無音WAVの名前検索を内容理解の合格にしない。
 - R09：既存検索方法/右クリック/詳細に統合し、音声の再生・停止・音量・シーク/一致区間移動・結果へ戻るまで通す。全媒体で検索範囲/未保存編集/遅延応答を維持。高度な音楽プレイヤー作成へ広げない。
 
@@ -123,7 +151,24 @@ R01に沿い、keyset/streaming・bounded top-k等を比較して採用。combin
 
 M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時間を事前固定してユーザーへ実行確認。実行可否は最新のユーザー指示に従う。2026-10-18に実行許可を得てR02/R03限定受入を行い、[GPU PASS/native PARTIAL](release-readiness.md)を記録。以前の延期を現在の禁止とせず、試行上限/未完gateもresetしない。開発中はCPU作業を先へ進め、承認待ちは対象実機項目だけに付ける。
 
-登録→索引→全体/限定検索→根拠を開く→編集→再起動/復旧、モデル未導入/別profile、動画/音声起点類似、UIの各表示条件、配布物からの起動を対象範囲に応じ確認する。GPUメモリ解放・終了後worker残留、原本不変も確認。既知2ZIPは必要な対象だけに使い、過去の同じ精度評価を理由なく反復しない。旧book-batch取消PNGは証拠レビューか承認された限定再確認で解決し、消化済みの試行枠を勝手にリセットしない。
+#### R14一括受入実行コマンド台帳（Batch Acceptance Command Ledger）
+
+実機GPU/GUI検証許可時に実行する統合ハーネス一覧：
+1. **R04 大量索引継続**:
+   `.\.venv-ai\Scripts\python.exe tools/test_continuation_acceptance.py --stage all`
+2. **R05 動画類似検索・時刻シーク**:
+   `.\.venv-ai\Scripts\python.exe tools/test_video_similarity_acceptance.py --stage all`
+3. **R07 音声発話区間検索・時刻根拠**:
+   `.\.venv-ai\Scripts\python.exe tools/test_audio_acceptance.py --stage all`
+4. **R02 全件検索・所有取消**:
+   `.\.venv-ai\Scripts\python.exe tools/test_search_acceptance.py`
+5. **R03 停止時バックアップ/復元・整合性**:
+   `.\.venv-ai\Scripts\python.exe -m unittest tests/test_storage_backup.py`
+6. **Core プロトコル総合検証**:
+   `dotnet run --project tests/Aredoko.Core.Tests -c Release`
+7. **WinUI 3 GUIネイティブフロー & 外観検証**:
+   - `dotnet build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Release -p:Platform=x64 --no-restore`
+   - WinAppDriverによる実機GUI自動操縦テスト（Light / Darkテーマ、動画シーク、音声再生、継続設定、検索画面）
 
 成果：`docs/release-readiness.md`にM1/M2別PASS/FAIL/未確認、再現手順/証拠/残課題、既知制限、対象版を記録。必須失敗/データ損失/主要操作の未確認が残ればRC合格としない。軽微な後続事項は影響を明記し、利用者に判断可能な状態にする。merge/公開は別の明示指示で行う。
 
@@ -140,6 +185,6 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 1. fetch/status/log→最新handoff→本表の最上位READY/TODOを確認。他AIの未コミット変更を上書きしない。依存が揃う最上位1件をDOINGにし、その中のAPI/CPU→Core→WinUI→必要な受入の小区切りで進める。
 2. 証拠が揃う既存実装を再作成しない。不足は「未実装」「未検証」「新しい退行」に分類。CPU_DONE/WAITには未実行テストと解除条件を具体的に付け、独立した次のタスクへ進む。
 3. 台帳の状態、最新handoffの対象ID/commit/完了条件の達否/次のIDを毎回更新。次の作業順の正本はこの表一つ。歴史文書に別の順番を追加しない。新しい要望/重大退行は優先順位を更新して理由を記録。
-4. 当面の次の3手は **R04-B/C（Core/所有取消・既存WinUIへ継続索引を接続）→R05（動画起点類似）→R06（音声方式設計）**。R01はDONE、R02-A/Bの実装・CPU検証は[完了](full-library-search.md)。R02は[所有取消までCPU_DONE](search-cancellation.md)、GUI全体の配線はR10・資源/性能はR12・必要実機受入はR14。R03の停止時復旧契約はCPU_DONE。外部確認待ちなら独立したR06のCPU調査に進める。GPU/GUIは最新のユーザー指示で許可済み、今回限定nativeの残gate/試行上限は[受入記録](release-readiness.md)を守る。新downloadは別途明示許可、CIは起動しない。
+4. 当面の次の3手は **R08（音響・音楽特徴の索引・日本語検索・類似検索）→R09（音声/音楽の検索→再生→類似検索のGUI統合）→R10（初回設定・未索引/上限/失敗状態・資源管理の仕上げ）**。R01はDONE、R02〜R05はCPU_DONE、R06はDONE（音声方式設計凍結）、R07はCPU_DONE（発話内容の時間付き索引/検索adapter）。GUI全体の配線はR10・資源/性能はR12・必要実機受入はR14。GPU/GUIは最新のユーザー指示で許可済み、今回限定nativeの残gate/試行上限は[受入記録](release-readiness.md)を守る。新downloadは別途明示許可、CIは起動しない。
 
 長期台帳（削除しない）：B01 複数ページの関係/展開タグ（Astra推奨、根拠ページ/不明状態/固定評価を先に設計、専用OCRを既定にしない）、B02 Komga任意連携、B03 重複・移動追跡、B04 保存検索/ピン留め、B05 GPU/索引の高度な自動スケジューリング。新しい要望や実運用根拠が出たら順序を更新する。これらをM1前の無限な機能追加へ混ぜない。

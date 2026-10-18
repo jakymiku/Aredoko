@@ -22,6 +22,7 @@ from search_requests import SearchRequests
 from index_continuation import IndexContinuation, JOB as CONTINUATION_JOB, public_state
 from tag_semantics import PendingTagVectors
 from page_semantics import PageVectors, SCHEMA as PAGE_VECTOR_SCHEMA
+from audio_semantics import AudioSpeechVectors, SCHEMA as AUDIO_SEGMENT_SCHEMA
 
 MAX_ITEMS=10_000
 ROW_BATCH_SIZE=256
@@ -61,6 +62,7 @@ class VectorStore:
                 CREATE TABLE IF NOT EXISTS ai_state(id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
             ''')
             db.executescript(PAGE_VECTOR_SCHEMA)
+            db.executescript(AUDIO_SEGMENT_SCHEMA)
             profile=db.execute('SELECT value FROM ai_profile').fetchone()
             if profile and profile[0]!=self.profile.key: raise AIUnavailable('Vector profile mismatch')
             if not profile: db.execute('INSERT INTO ai_profile VALUES(?)',(self.profile.key,))
@@ -153,12 +155,12 @@ class VectorStore:
             if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:return None
             return normalized(vec,self.dimension)
         except (ValueError,TypeError):return None
-    def rank_with_content(self,rows,query,source="all",ranking="max",page_scores=None):
+    def rank_with_content(self,rows,query,source="all",ranking="max",page_scores=None,audio_scores=None):
         if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
-        scores,video_hits,page_hits=self.scores_with_content(rows,query,source,page_scores)
+        scores,video_hits,page_hits,audio_hits=self.scores_with_content(rows,query,source,page_scores,audio_scores=audio_scores)
         # Keep the whole-pool oracle available; streaming callers fuse only once.
         return fuse_modalities(scores,ranking),video_hits,page_hits
-    def scores_with_content(self,rows,query,source="all",page_scores=None,*,query_frames=None,origin_hits=None):
+    def scores_with_content(self,rows,query,source="all",page_scores=None,*,query_frames=None,origin_hits=None,audio_scores=None):
         """Raw modality scores with exactly the existing normalization/dot order."""
         if query_frames is not None and len(query_frames)>0:
             active_frames=[(ms,normalized(v,self.dimension)) for ms,v in query_frames]
@@ -228,7 +230,15 @@ class VectorStore:
                     scores.setdefault(item_id,{})['cover']=score
                     page_hits[item_id]=evidence
                     video_hits.pop(item_id,None)
-        return scores,video_hits,page_hits
+        audio_hits={}
+        if source in ('all','text') and audio_scores:
+            for item_id,(score,evidence) in audio_scores.items():
+                if item_id in eligible:
+                    prev=scores.get(item_id,{}).get('text')
+                    if prev is None or score>prev:
+                        scores.setdefault(item_id,{})['text']=score
+                        audio_hits[item_id]=evidence
+        return scores,video_hits,page_hits,audio_hits
     def rank_with_evidence(self,rows,query,source="all",ranking="max"):
         ranked,video_hits,_=self.rank_with_content(rows,query,source,ranking)
         return ranked,video_hits
@@ -246,6 +256,7 @@ class AISearch:
         self.store=VectorStore(store_path or self.profile.store_path(catalog.path),self.profile)
         self.previews=PreviewReader(catalog)
         self.pages=PageVectors(self)
+        self.audio_speech=AudioSpeechVectors(self)
         self.guard=threading.Lock()
         self.cancel=threading.Event()
         self.worker=None
@@ -605,7 +616,8 @@ class AISearch:
                         query_vector=normalized(self.encoder.encode('query',query),self.profile.dimension)
                     check()
                     page_scores=self.pages.rank(rows,query_vector,check=check) if source in ('all','cover') else {}
-                    scores,video_hits,page_hits=self.store.scores_with_content(rows,query_vector,source,page_scores)
+                    audio_scores=self.audio_speech.rank(rows,query_vector,check=check) if source in ('all','text') else {}
+                    scores,video_hits,page_hits,audio_hits=self.store.scores_with_content(rows,query_vector,source,page_scores,audio_scores=audio_scores)
                     for row in rows:
                         item=row['id']
                         if item not in scores:continue
@@ -614,6 +626,9 @@ class AISearch:
                         payload={'revision':revision(row),'literal_hits':hits,'literal_words':len(words)}
                         if item in video_hits:payload['video_match_ms']=video_hits[item]
                         if item in page_hits:payload['ai_page_match']=page_hits[item]
+                        if item in audio_hits:
+                            payload['audio_match_ms']=audio_hits[item]['start_ms']
+                            payload['audio_match_snippet']=audio_hits[item]['snippet']
                         spool.add(item,scores[item],literal_hits=hits,literal_words=len(words),payload=payload)
                     indexed_total+=len(scores)
                     check()
@@ -628,7 +643,7 @@ class AISearch:
                         payload=evidence[item]
                         entry={**current[item],'literal_hits':payload['literal_hits'],'literal_words':payload['literal_words'],
                                'semantic_score':round(score,6),'similarity_group':'leading' if cut is None or score>=cut else 'other'}
-                        for key in ('video_match_ms','ai_page_match'):
+                        for key in ('video_match_ms','ai_page_match','audio_match_ms','audio_match_snippet'):
                             if key in payload:entry[key]=payload[key]
                         items.append(entry)
                     check()
@@ -688,7 +703,7 @@ class AISearch:
                 for rows in self._search_batches(kind,view,scope,check,('image','book','archive','video'),item_id):
                     candidate_total+=len(rows)
                     origin_hits={} if track_origin_hits else None
-                    scores,video_hits,_=self.store.scores_with_content(rows,query,'cover',query_frames=origin_frames,origin_hits=origin_hits)
+                    scores,video_hits,_,_=self.store.scores_with_content(rows,query,'cover',query_frames=origin_frames,origin_hits=origin_hits)
                     for row in rows:
                         rid=row['id']
                         if rid in scores:

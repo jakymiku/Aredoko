@@ -222,3 +222,4 @@ await PageChunkTests.Run(Check);
 await IndexContinuationTests.Run(Check);
 
 await SearchCancellationTests.Run(Check);
+AudioSpeechTests.Run(Check);

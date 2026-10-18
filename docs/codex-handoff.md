@@ -1,5 +1,49 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-19 R06音声方式設計完了（DONE）・R07発話区間索引/検索adapter実装・CPU検証完了（CPU_DONE） — 次はR08音響/音楽特徴索引
+
+開始HEAD `945cb57`（R05マージ後）、fetch/status/logでclean/origin同期を確認。[音声・音楽方式設計書](audio-content-design.md)を新規作成し、**R06はDONE（方式選定・2案比較・分離型モジュラー方式凍結・4評価基準策定）**。また**R07はCPU_DONE（時間付き発話区間索引/検索adapter・SQLiteスキーマ・無アロケーション有限性検証/内積計算・検索集約への発話ヒット時刻/スニペット統合・CoreリフレクションフリーJSONパーサー/証拠表示・Python/Core単体テストおよび受入ハーネス合格）**。実機GPU/GUI受入はユーザー方針に従いR14へ集約（一括検証用ハーネス `tools/test_audio_acceptance.py` を配備）。ロードマップ台帳および優先順位文書（R03 WALチェックポイント/前方互換ガード、R05 4通り時刻根拠・視覚/音響空間分離・表紙/内部頁契約、R14一括受入コマンド台帳）を整備完了。次は台帳に従い **R08 音響/音楽特徴の索引・日本語検索・類似検索**。
+
+- **R06 方式設計（`docs/audio-content-design.md`）**:
+  - 候補A（EmbeddingGemma 2内部の`audio_tower`直接利用）vs 候補B（分離型モジュラー方式：768D発話意味空間＋専用音響特徴空間）を比較。
+  - 実モデル解析の結果、`model.safetensors`の1376キー中752キーが`audio_tower`（Conformer発話認識モデル）であり音響/音楽特徴を扱えず、VRAM/RAMを1.5〜2.0GB余計に消費するため候補Aを棄却し候補Bを採用。
+  - 4評価基準策定：(1)発話/会話の自然文検索、(2)効果音/環境音、(3)音楽の雰囲気/テンポ/ジャンル、(4)音声/音楽同士の類似。
+  - 空間分離契約、16kHzモノラル入力、時間区間上限24時間（86,400,000ms）、512MiB上限、決定論的評価fixtureを凍結。
+- **R07 実装詳細（Pythonバックエンド・Core・Acceptance）**:
+  - `app/audio_semantics.py`:
+    - 契約 `audio-speech-segment:v1`、スキーマ `ai_audio_segments(item_id, source_revision, segment_id, start_ms, end_ms, snippet, vector, contract, PRIMARY KEY(item_id, segment_id))`。
+    - 無アロケーション有限長正規化検証 `_is_valid_packed` / `unpack`、内積 `_score_packed`。
+    - `AudioSpeechVectors`: `put_segments`, `get_segments`, `rank`, `fresh`, `delete_item`。
+  - `app/ai_search.py`:
+    - `VectorStore.__init__` でテーブル作成、`scores_with_content` に `audio_scores` を配線。
+    - `AISearch.search(...)` で発話ヒットの時刻 `audio_match_ms` とスニペット `audio_match_snippet` を結合。
+  - `app/storage_schema_v1.json` / `app/ai_store_cleanup.py` / `app/production.py`:
+    - `ai_audio_segments` をvectorテーブルとして登録、バックアップ復元時のテーブル検証および安全クリーンアップを保証。
+  - `src/Aredoko.Core/Protocol.cs`:
+    - `AIEvidence` に `audio_match_ms` / `audio_match_snippet` の安全なリフレクションフリー構文解析とフォーマット表示（`音声発話一致（mm:ss · 「snippet」）`）を実装。
+  - `tests/Aredoko.Core.Tests/AudioSpeechTests.cs`:
+    - 20 checks（正常パース、時刻/スニペット表示フォーマット、スニペット省略時、120文字+ellipsis切り詰め、不正/負値タイムスタンプ拒否、非文字列スニペット拒否）。Core全体 616 checks PASS。
+  - `tests/test_audio_semantics.py`:
+    - 6 tests（スキーマ、正常登録/取得、無音処理、時間境界0..86400000ms検査、破損ベクトル・NaN/Infの不生成拒絶、削除/鮮度整合）。
+  - `tools/test_audio_acceptance.py`:
+    - CPU受入ハーネス 15/15 checks PASS（Core, Python, WinUI Release, セグメント鮮度, 無音無視, 3500ms時刻根拠, スニペット取得, 原本不変性）。
+- **検証記録**:
+  - **Core Tests**: **616 checks PASS**（0 failure）。
+  - **Python test_audio_semantics**: **6 PASS**。
+  - **Python test_index_continuation**: **20 PASS**。
+  - **Python test_storage_backup**: **24 PASS**。
+  - **Python test_similarity_search / test_ai_streaming**: **31 PASS**。
+  - **受入ハーネス**:
+    - `tools/test_audio_acceptance.py --stage cpu`: **15/15 PASS**。
+    - `tools/test_continuation_acceptance.py --stage cpu`: **PASS**。
+    - `tools/test_video_similarity_acceptance.py --stage cpu`: **20/20 PASS**。
+  - **WinUI x64 Release**: **警告0 / エラー0**。
+- **制約・保全事項**:
+  - P0累積2/2終了・OCR保留・全機能/簡潔GUI・原本保護・私物走査/変更なし・Actionsなし・mainへのmergeなし。
+  - 次の3手（台帳優先順）：**R08 音響/音楽特徴の索引・日本語検索・類似検索 → R09 音声/音楽の検索→再生→類似検索のGUI統合 → R10 初回設定・未索引/上限/失敗状態・資源管理の仕上げ**。
+
+---
+
 ## 2026-10-19 R05動画類似・時刻根拠実装・CPU検証完了（CPU_DONE） — 次はR06音声方式設計
 
 開始HEAD `945cb57`（R04-B/Cマージ後）、fetch/status/logでclean/origin同期を確認。[動画起点の類似検索と時刻根拠の設計・契約](video-similarity.md)を新規作成。**R05はCPU_DONE（保存済み時間付き動画代表frame vectorの最大類似度集約・厳格な4通り時刻根拠契約［動画→動画双方、画像→動画候補時刻のみ、動画→画像起点時刻のみ、画像→画像時刻なし］・cover単体候補0ms安全フォールバック・自己除外・UIシーク接続完了）**。実機GPU/GUI受入はユーザー方針に従い延期しR14へ集約（一括検証用ハーネス `tools/test_video_similarity_acceptance.py` を用意）。次は台帳に従い **R06 音声方式設計**。
