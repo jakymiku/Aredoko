@@ -35,6 +35,7 @@ from page_text import PageTextIndex
 from page_batch import start_batch, resume_batch
 from page_chunks import plan_chunked, start_chunked, resume_chunked
 from wd_tagger import create_tagger
+from storage_lease import storage_lease,storage_parent
 
 class DisabledAI:
     def __init__(self,error=None):
@@ -586,13 +587,19 @@ def main():
     parser.add_argument('--ai-profile',type=Path)
     parser.add_argument('--tagger-profile',type=Path,help='Optional local WD-compatible tagger profile; never downloads')
     parser.add_argument('--ai-settings',type=Path,help='Optional local settings file for developer tests')
+    parser.add_argument('--ai-profiles-dir',type=Path,help='Explicit local profile directory, including a restored bundle')
     parser.add_argument('--laya-intent',action='store_true',help='Experimental suggestions only; no auto-routing')
     parser.add_argument('--ai-ranking',choices=POLICIES,default='mean-rrf')
     parser.add_argument('--intent-questions',choices=QUESTION_SETS,default='v2-hybrid')
     parser.add_argument('--intent-no-order-check',action='store_true',help='Developer comparison only')
     args=parser.parse_args()
+    storage_parent(args.db)
+    with storage_lease(args.db):
+        _serve(args)
+
+def _serve(args):
     catalog=ProductionCatalog(args.db)
-    profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile)
+    profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile,args.ai_profiles_dir)
     ai=DisabledAI(profiles.startup_error) if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking)
     if isinstance(ai,AISearch):
         try: ai.configure(**profiles.resource())

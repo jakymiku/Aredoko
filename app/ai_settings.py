@@ -33,10 +33,10 @@ def default_settings_path(repo):
     return (Path(base) / "Aredoko" / "settings.json") if base else Path(repo) / "data" / "settings.json"
 
 class AIProfileSettings:
-    def __init__(self, repo, settings_path=None, command_line_profile=None):
+    def __init__(self, repo, settings_path=None, command_line_profile=None, profile_directory=None):
         self._write_lock = threading.RLock()
         self.repo = Path(repo).resolve()
-        self.folder = self.repo / "data" / "ai-profiles"
+        self.folder = Path(profile_directory) if profile_directory is not None else self.repo / "data" / "ai-profiles"
         self.path = Path(settings_path) if settings_path is not None else default_settings_path(self.repo)
         self.override = Path(command_line_profile).resolve() if command_line_profile is not None else None
         self.startup_error = ""

@@ -1,5 +1,5 @@
 # Development launcher: no dependency installation, no media scanning.
-param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile,[string]$AISettings,[switch]$LayaIntent,[ValidateSet('max','mean-rrf')][string]$AIRanking='mean-rrf',[ValidateSet('System','Light','Dark')][string]$UITheme='System')
+param([string]$Database = (Join-Path $env:LOCALAPPDATA 'Aredoko/catalog.sqlite'),[string]$AIProfile,[string]$AISettings,[string]$AIProfilesDirectory,[string]$ViewerSettings,[string]$TaggerProfile,[switch]$LayaIntent,[ValidateSet('max','mean-rrf')][string]$AIRanking='mean-rrf',[ValidateSet('System','Light','Dark')][string]$UITheme='System')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $logDirectory = Join-Path $env:LOCALAPPDATA 'Aredoko/logs'
@@ -25,6 +25,22 @@ try {
         if($settingsPath.Contains('"')){throw 'Invalid AI settings path'}
         $backendArguments+=@('--ai-settings',('"'+$settingsPath+'"'))
     }
+    if($AIProfilesDirectory){
+        $profilesDirectory=[IO.Path]::GetFullPath($AIProfilesDirectory)
+        if($profilesDirectory.Contains('"') -or -not (Test-Path -LiteralPath $profilesDirectory -PathType Container)){throw 'Invalid AI profile directory'}
+        $backendArguments+=@('--ai-profiles-dir',('"'+$profilesDirectory+'"'))
+    }
+    $appArguments="--ui-theme "+$UITheme.ToLowerInvariant()
+    if($ViewerSettings){
+        $viewerPath=[IO.Path]::GetFullPath($ViewerSettings)
+        if($viewerPath.Contains('"')){throw 'Invalid viewer settings path'}
+        $appArguments+=' --viewer-settings "'+$viewerPath+'"'
+    }
+    if($TaggerProfile){
+        $taggerPath=[IO.Path]::GetFullPath($TaggerProfile)
+        if($taggerPath.Contains('"') -or -not (Test-Path -LiteralPath $taggerPath -PathType Leaf)){throw 'Invalid tagger profile path'}
+        $backendArguments+=@('--tagger-profile',('"'+$taggerPath+'"'))
+    }
     if($LayaIntent){$backendArguments+='--laya-intent'}
     $backend = Start-Process python -ArgumentList $backendArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDirectory 'backend.log') -RedirectStandardError (Join-Path $logDirectory 'backend-error.log')
     $connected = $false
@@ -38,7 +54,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'WinUI build failed. See the setup/build steps in docs/winui-mvp.md.' }
     $layoutDirectory = & python tools/winapp_layout.py --configuration Release --arch x64
     if ($LASTEXITCODE -ne 0 -or -not $layoutDirectory) { throw 'Cannot identify WinUI build layout.' }
-    $result = & winapp run src/Aredoko.WinUI -c Release --arch x64 -p Platform=x64 -p SelfContained=true --no-build --output-appx-directory $layoutDirectory --detach --json --args ("--ui-theme "+$UITheme.ToLowerInvariant())
+    $result = & winapp run src/Aredoko.WinUI -c Release --arch x64 -p Platform=x64 -p SelfContained=true --no-build --output-appx-directory $layoutDirectory --detach --json --args $appArguments
     if ($LASTEXITCODE -ne 0) { throw 'WinUI build/launch failed.' }
     $launch = ($result -join "`n") | ConvertFrom-Json
     if (-not $launch.ProcessId) { throw 'No application process returned.' }
