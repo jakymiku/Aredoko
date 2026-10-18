@@ -1,5 +1,20 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-18 R02-B実装・全件検索API/2規模監査を完了（CPU）
+
+開始HEAD `67d5158`、fetch/status/logでclean/origin同期。実装 **`ae6e982d6500d66a788922bcdeeb328c4f8495ca`**、旧テストfixture修正 **`b10e92771243612a5b2e4150d9694ab9784eb0b2`**、Core類似互換 **`a3b7781a391acf01c7afdb8e32b2f4d8ad14bc46`**。既存branch/Draft PR5を継続。**R02-A/Bは実装・CPU合格、R02全体はDOING（Cの所有取消API等が残る）**。
+
+- [全件検索仕様/証拠](full-library-search.md)：search（text/cover/combined）・画像起点similar・pending意味を全candidate/256作品batch＋既存spoolへ接続。raw mode scorerを再利用し、global rank/span/同点平均順位・演算/根拠/namespaceは維持。返すpageだけmetadata取得。検索候補の1万件打切りを解消し、索引job最大1万/coverage prefixは維持。再索引不要、全自動索引やR04完走済みとは扱わない。
+- 固定R01同ツールを`--require-complete`/新labelで再監査：**10,001/50,001件とも17対照・全30完全性条件PASS**（旧8/21失敗）。source bytes/mtime・保存vector論理SHA不変。`data/large-library/r02b-10001-20261018-01/report.json` / `r02b-50001-20261018-01/report.json`、SHAは仕様文書。queryは固定3D、実モデル0。12.428147秒/58.592871秒は監査全体・他CPU回帰並行で単一検索や性能改善率ではない。
+- catalog/profile storeの保持接続data_version＋epoch/profile/scope/scanを監視し、途中のannotation/候補review/索引/登録変更を検出したら結果破棄。返すpageの物理版/metadata版・類似起点も再確認。全DB/ファイルatomic保証ではない。capacityエラーとcloseを接続、**request ID所有の取消API/誤ID/切断停止/関連Core接続はまだ未実装**。
+- 追加complete/count fieldsとCoreの整合検査、1万超pending許可、complete時の最大1万件説明を訂正。既存の未保存/復帰/非AI/読書/モデル交換を保持、機能削減なし。WinUI Code Review適用、XAML/API追加なし、WinUIAnalyzer未導入/未実行。
+- **全Python537件：534PASS/3platform SKIP/413.63211秒**。専用Python3.11.9対象 **61PASS/62.044316秒**。Core Release **501 checks PASS**、x64 SelfContained Release **警告0/エラー0、23.08秒**。類似応答にも残ったTotal≤10000ガードをcomplete/件数整合で解除し、最終Core/Releaseで再確認（旧応答の上限は維持）。初回全体1FAIL/2ERRORは架空source版・build hook残存・内部rank/API順序の混同した旧fixtureを修正し、対象23PASS後に全体を1度再実行して合格。初回ログを保持。製品の鮮度検査は緩めない。`data/large-library/r02b-checks-20261018-01/`のlog/json/source SHAを参照。
+- GPU/GUIは現在のユーザー指示で延期、必要時事前確認。実モデル品質/native/DPI/High Contrast/Narrator/全RSS/実私物1TBは今回未確認。P0累積2/2終了・OCR保留・旧book-batch取消PNG未完・全機能/簡潔GUIを保持。私物scan/元ファイル変更/外部media送信/新DL/依存/Actions/main mergeなし。
+
+次の3手（正本は台帳）：**R02-C所有取消API/残契約→R03複数DB復旧→R04明示索引継続**。Bを再作成せず、Cはrequest IDを明示し旧/別要求の取消を拒否・認証/close/切断/容量/応答をCPUで検証。既存index cancelを流用しない。GPU/GUIの承認待ちで独立CPU作業を止めず、必要実機はR14へ集約する。
+
+---
+
 ## 2026-10-18 R01完了・R02-A全件順位engineのCPU実装
 
 開始HEAD `77f24f6`、fetch/status/logでclean/origin同期。固定fixture/契約commit **`30ceef635f893bc4d3a3a6c3501fe9c66553cde0`**、内部engine実装 **`c0c34c1badcccf006fb304e65ab7987ab9162b56`**。既存branch/Draft PR5を継続。**R01=DONE、R02=DOING（A内部engine CPU済み、B/C未実装）**。

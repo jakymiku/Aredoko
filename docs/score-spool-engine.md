@@ -1,6 +1,6 @@
 # R02-A — 上限付きメモリの全体順位計算基盤
 
-2026-10-18、実装commit **`c0c34c1badcccf006fb304e65ab7987ab9162b56`**。R01の[契約](large-library-contract.md)に沿う内部engine。**現在の検索APIへはまだ接続していない。アプリの1万候補上限は残るため、R02全体はDOING。**
+2026-10-18、実装commit **`c0c34c1badcccf006fb304e65ab7987ab9162b56`**。R01の[契約](large-library-contract.md)に沿う内部engine。**R02-A単体時点の記録。現在は[R02-B](full-library-search.md)でAPI接続/両規模30条件合格済み。R02-Cの所有取消API等が残るためR02全体はDOING。** 以下の未接続/未確認はA時点の履歴。
 
 ## 実装
 

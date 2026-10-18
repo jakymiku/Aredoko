@@ -1,5 +1,7 @@
 # 英語のWDタグを日本語の意味で検索する
 
+> **2026-10-18**：[R02-B](full-library-search.md)で全scopeの最新pendingを256作品ずつ検索。`pending_total/indexed_total/index_remaining`は全対象、`coverage_limit`は索引job互換の値で検索打切りではない。検索中の承認/版変更は再検索を案内する。
+
 2026-10-17。ユーザー確認済みの方針：**原文の英語タグを保持し、日本語クエリとの橋渡しに交換可能なEmbeddingGemma 2を使う。** 日本語への手動翻訳を必須にしない。OCR専用処理は引き続き保留。
 
 ## 使い方
@@ -28,7 +30,7 @@
 - 既存の明示AI buildが、主索引の作成/再利用に加えて候補索引を準備する。同じsignatureは再利用。coverageは候補索引の不足もremainingに含める。起動・登録・候補生成・検索だけで自動推論を開始しない。
 - 共有inference lockを使い、catalog lockを保持して推論しない。公開前に候補状態・source revision・現在scopeを再確認。取消/競合ではその候補vectorを公開せず、既存のper-item再開契約を維持する。全ジョブ一括atomicは保証しない。
 - 承認/却下でpending集合が変われば旧vectorを除外。確定タグからpending結果へ戻したり、却下済みタグを使い続けたりしない。新しいbatch/モデル版でも履歴を上書きしない。元ファイルの再scan後に古い候補しかない場合は索引不足のまま保持し、架空の更新完了にしない。
-- 登録root・種類・棚・favorite/unreviewed・tagger modelで絞り込む。空/重複/不明/解除済みの明示root指定はエラーで全体へ広げない。既存AI同様、現在presentの最大10,000件が対象。検索の登録root選択と、既存「名前・タグの意味（AI）」の保存済みAI scopeはそれぞれ既存の意味を維持する。
+- 登録root・種類・棚・favorite/unreviewed・tagger modelで絞り込む。空/重複/不明/解除済みの明示root指定はエラーで全体へ広げない。現在presentの全対象をbatchで調べ、保存済み同profile/signatureの候補を検索する。1回の索引job最大10,000件とは分離する。検索の登録root選択と、既存「名前・タグの意味（AI）」の保存済みAI scopeはそれぞれ既存の意味を維持する。
 - root完全削除では、catalog本体/正規profile別DBの新テーブルも削除対象。他root/他モデル/元ファイルを保持する。既存の失敗時手動記録保全・profile単位transactionを継承する。
 
 ## 固定した日英タグ評価

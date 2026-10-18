@@ -1,5 +1,7 @@
 # 画像・表紙からの類似検索
 
+> **2026-10-18**：[R02-B](full-library-search.md)で全scopeの保存済みcoverをbatch検索し、候補上限1万件を撤廃。`search_complete/search_candidate_total/indexed_total`を追加。全体回帰/Core/Releaseは更新済み、今回native/GPUは未実行。
+
 2026-10-15：P1のAPI・Core・WinUI導線を追加。Python生成fixtureで検証済み。今回の環境に.NET SDK/Windowsはなく、Coreテストの実行・Windows Release/native GUIは未検証。実モデルでの検索品質は未評価。
 
 続行で取消/復帰、破損vector、応答境界を補強し、[Windows一括テストと再開手順](windows-similarity-handoff.md)を追加。最終Python全300 PASS/34.080秒/skip0。`Check-Similarity.cmd`は既存環境でPython→Core→Release→生成nativeを一度ずつ実行する入口（Windows実行はここでは未検証）。
@@ -10,7 +12,7 @@
 
 未保存の編集があれば既存の破棄確認を使う。「編集を続ける」で中止した場合は索引要求も画面遷移もしない。結果には起点の名前と「起点の画像・表紙に似た候補」、cosine類似度を示す。数値は正解率ではない。画像・CBZ/ZIP・動画ビューアは従来どおり。
 
-「元の検索に戻る（取得中は取消）」で元の検索語・種類・方法・root・候補表示条件・view・ページを復元する。起点の行が同じページに残っていればfocusを戻す。復帰時にも未保存編集の確認を行う。取得中の復帰はクライアント要求を取り消し、request versionで遅延結果を無視する。サーバー側の既に始まったCPUランキングは最大1万件の処理を終えて解放される。
+「元の検索に戻る（取得中は取消）」で元の検索語・種類・方法・root・候補表示条件・view・ページを復元する。起点の行が同じページに残っていればfocusを戻す。復帰時にも未保存編集の確認を行う。取得中の復帰はクライアント要求を取り消し、request versionで遅延結果を無視する。サーバー側の既に始まったCPUランキングは継続する場合がある。request-ownedサーバー取消APIはR02-Cで未実装（クライアント要求の取消とは別）。
 
 種類・フォルダ・お気に入り等の切替は類似検索を絞り込む。検索語/検索方法の変更、または「検索」で従来の文字/AI検索に戻る。通常のAI候補区切り・全語一致の設定は類似検索中には適用せず非表示とし、元に戻る際に復元する。
 
@@ -26,8 +28,8 @@
 - `scope`省略時は保存済みAI scopeを使用。明示nullは拒否。UIでは保存済みscopeと選択rootの積集合を送る。空集合を全体検索へ広げない。root IDもInt64境界を検査する。
 - 起点は有効な登録root・present・非除外・scope内の画像/本/ZIPに限定。result-onlyの`kind`/`view`には起点が一致しなくてもよい。対象外の起点は404、無効な条件は400、scan/索引/検索との競合は409、AIサービス自体の初期化失敗は503。
 - 同一profileのvector DBだけを使い、起点と各候補の保存revisionを現カタログに照合する。画像/表紙の`cover` vectorのみでcosine順位を作り、同点はID順。text vectorを混ぜず、起点自身を除外する。
-- scoped索引と同じく候補上限1万件はscopeに適用し、その後にkind/view/自己除外を適用する。全scopeを無制限に探索する保証ではない。ページは全候補の順位から切り出す。
-- ranking後に候補の登録/除外/scope/revision/viewと起点を再確認する。処理中の起点更新は409で再試行を案内。索引のsource revisionは既存のカタログstat/title/tags由来。実ファイルの未スキャン変更を自動検出する機能ではない。
+- scope・kind/view・自己除外後の全対象を256作品batchで読み、同profile/版のcoverを全体順位で比較する。索引jobの最大1万件は検索候補へ適用しない。容量不足等を部分成功にせずエラーとし、pageは全順位から切り出す。
+- 処理中はcatalog/profile DB版・epoch/scopeを監視し、公開前に返すpageと起点を再確認する。途中の登録/除外/タグ/棚/favorite/索引更新は409で再試行を案内し、異なる状態の部分順位を返さない。索引のsource revisionは既存のカタログstat/title/tags由来。実ファイルの未スキャン変更を自動検出する機能ではない。
 - 推論・source画像読み直し・モデル起動・自動索引作成・vector書込は行わない。保存済みvectorがあればencoder未導入/未ロードでも利用可能。
 
 Coreの類似検索クライアントは10秒deadline、JSON MIME、最大2MiB・受信長を検査し、起点/モード/source/ページ/件数・自己混入/重複/非画像・cosine範囲の不整合を拒否する。通常の文字/AI検索の応答方式は変更しない。破損した非unitベクトルは起点ならunindexed、候補ならskip。クライアント取消による切断には応答の再送や不要なサーバーエラーを出さない。
