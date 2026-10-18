@@ -225,7 +225,7 @@ public sealed partial class MainPage : Page
             {
                 var guidance=SimilaritySearch.Guidance(result.SimilarityStatus,origin.Kind);
                 Empty.Text=result.SimilarityStatus=="ready"?"この範囲に索引済みの類似候補はありません。種類・フォルダ・AI対象を確認してください。":guidance;
-                var originTitle=origin.Kind=="video"?"似た動画・素材":"似た画像・表紙";
+                var originTitle=origin.Kind=="video"?"似た動画・素材":origin.Kind=="audio"?"似た音声・曲":"似た画像・表紙";
                 Notice(originTitle,(result.SimilarityStatus=="ready"?$"{result.Total:N0}件の候補":guidance)+(scopeWarning is null?"":" "+scopeWarning),scopeWarning is null?InfoBarSeverity.Informational:InfoBarSeverity.Warning,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
             }
         } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { }
@@ -249,8 +249,8 @@ public sealed partial class MainPage : Page
                 AutomationProperties.SetAutomationId(image, $"Preview{row.Id}");
                 AutomationProperties.SetName(image, row.Title + "のサムネイル");
                 image.DoubleTapped += async (_, args) => { args.Handled=true; await OpenPreviewAsync(row.Id); };
-                if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row))
-                    ToolTipService.SetToolTip(image,ImageViewerPolicy.CanOpen(row)?"ダブルクリックで画像を大きく表示":VideoPlayerPolicy.CanOpen(row)?"ダブルクリックで動画を再生":"ダブルクリックで本を開く");
+                if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row)||AudioPlayerPolicy.CanOpen(row))
+                    ToolTipService.SetToolTip(image,ImageViewerPolicy.CanOpen(row)?"ダブルクリックで画像を大きく表示":VideoPlayerPolicy.CanOpen(row)?"ダブルクリックで動画を再生":AudioPlayerPolicy.CanOpen(row)?"ダブルクリックで音声を再生":"ダブルクリックで本を開く");
                 var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
                 text.Children.Add(new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] });
                 text.Children.Add(new TextBlock { Text = $"{row.MatchLabel}{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
@@ -306,7 +306,7 @@ public sealed partial class MainPage : Page
         var menu=new MenuFlyout();
         if(SimilaritySearch.CanStart(row))
         {
-            var search=new MenuFlyoutItem {Text=row.Kind=="video"?"似た動画・素材を探す":"似た画像・素材を探す"};AutomationProperties.SetAutomationId(search,"FindSimilar"+row.Id);
+            var search=new MenuFlyoutItem {Text=row.Kind=="video"?"似た動画・素材を探す":row.Kind=="audio"?"似た音声・曲を探す":"似た画像・素材を探す"};AutomationProperties.SetAutomationId(search,"FindSimilar"+row.Id);
             search.Click+=async(_,_)=>await StartSimilarityAsync(row);menu.Items.Add(search);menu.Items.Add(new MenuFlyoutSeparator());
         }
         if(ArchiveManifest.CanOpen(row))
@@ -423,7 +423,7 @@ public sealed partial class MainPage : Page
         var blocked=active is not null&&tagReviewSyncItem==active.Id;
         Tags.IsEnabled=Shelf.IsEnabled=Favorite.IsEnabled=Reviewed.IsEnabled=!blocked;
         TagSuggestionsButton.IsEnabled=active is not null&&TagReviewProtocol.CanOpen(active)&&!saving;
-        if(blocked){EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";Save.IsEnabled=false;return;}EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);}
+        if(blocked){EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";Save.IsEnabled=false;return;}EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);OpenAudio.IsEnabled=active is not null&&AudioPlayerPolicy.CanOpen(active);}
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
     public async Task<bool> ConfirmDiscardAsync() {
@@ -495,7 +495,7 @@ public sealed partial class MainPage : Page
         AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         Query.PlaceholderText=method.IsTagSemantic?"例：青髪のツインテール（未承認タグの意味）":pageText?"ページ本文に含まれる語句で検索":candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
-        SearchMethodHint.Text=similar?(similarityOrigin?.Kind=="video"?"動画の代表フレームから似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchMode.SelectedIndex switch
+        SearchMethodHint.Text=similar?(similarityOrigin?.Kind=="video"?"動画の代表フレームから似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="audio"?"音声・音楽の音響特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchMode.SelectedIndex switch
         {
             1=>"名前・タグの意味と、画像・表紙の見た目を組み合わせます。",
             2=>"例:「豆」で豆が写った画像・表紙を探します。動画の映像はまだ対象外です。",
@@ -579,6 +579,7 @@ public sealed partial class MainPage : Page
         if(ImageViewerPolicy.CanOpen(active))await OpenImageAsync();
         else if(ArchiveManifest.CanOpen(active))await OpenBookAsync();
         else if(VideoPlayerPolicy.CanOpen(active))await OpenVideoAsync();
+        else if(AudioPlayerPolicy.CanOpen(active))await OpenAudioAsync();
     }
     private async void OpenImage_Click(object sender,RoutedEventArgs e)=>await OpenImageAsync();
     private async Task OpenImageAsync()
@@ -623,6 +624,29 @@ public sealed partial class MainPage : Page
         {
             videoPlayer?.Dispose();videoPlayer=null;viewerWindow=null;dialogOpen=false;
             try{if(!disposed&&detailsWereOpen&&active?.Id==itemId){Details.IsPaneOpen=true;OpenVideo.Focus(FocusState.Programmatic);}}
+            finally{transitions.Release();}
+            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+        }
+    }
+    private async void OpenAudio_Click(object sender,RoutedEventArgs e)=>await OpenAudioAsync();
+    private async Task OpenAudioAsync()
+    {
+        if(active is null||!AudioPlayerPolicy.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        dialogOpen=true;searchTimer.Stop();var itemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
+        try
+        {
+            var player=new VideoPlayerView(api,active.Id,active.Title,active.AudioMatchMs??active.VideoMatchMs,isAudio:true);videoPlayer=player;
+            var window=new ViewerWindow(player,"音声再生","AudioPlayerDialog");viewerWindow=window;
+            player.ContentOpened+=RecordContentOpened;
+            player.CloseRequested+=(_,_)=>window.Close();player.AttachNavigation(player);
+            window.Closed+=(_,_)=>player.Dispose();
+            await window.ShowAsync(player.OpenAsync);
+        }
+        catch(Exception ex){Failure(ex);}
+        finally
+        {
+            videoPlayer?.Dispose();videoPlayer=null;viewerWindow=null;dialogOpen=false;
+            try{if(!disposed&&detailsWereOpen&&active?.Id==itemId){Details.IsPaneOpen=true;OpenAudio.Focus(FocusState.Programmatic);}}
             finally{transitions.Release();}
             if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }

@@ -167,5 +167,46 @@ static class AudioSpeechTests
         // Number snippet safely rejected to null
         var jsonNumberSnippet = """{"total":1,"items":[{"id":1,"title":"a.wav","kind":"audio","tags":[],"shelf":"","favorite":false,"reviewed":false,"audio_match_snippet":12345}]}""";
         check(Protocol.ParseSearch(jsonNumberSnippet).Items[0].AudioMatchSnippet is null, "non-string snippet rejected to null");
+
+        // 6. Acoustic descriptor match snippet
+        var jsonAcoustic = """
+        {
+            "total": 1,
+            "items": [
+                {
+                    "id": 50,
+                    "title": "rain_ambient.wav",
+                    "kind": "audio",
+                    "tags": ["効果音"],
+                    "shelf": "",
+                    "favorite": false,
+                    "reviewed": true,
+                    "semantic_score": 0.92,
+                    "score_kind": "cosine",
+                    "audio_match_ms": 30000,
+                    "audio_match_snippet": "音響特徴: 雨音"
+                }
+            ],
+            "score_kind": "cosine"
+        }
+        """;
+        var parsedAcoustic = Protocol.ParseSearch(jsonAcoustic);
+        var itemAcoustic = parsedAcoustic.Items[0];
+        check(itemAcoustic.AudioMatchSnippet == "音響特徴: 雨音", "acoustic descriptor snippet parsed");
+        check(itemAcoustic.AIEvidence.Contains("音響特徴一致（0:30 · 「音響特徴: 雨音」）"), "AIEvidence formats acoustic feature match");
+
+        // 7. AudioPlayerPolicy checks
+        var presentMp3 = new MediaRow { Id = 1, Kind = "audio", Availability = "present", Location = "music/track.mp3" };
+        var presentWav = new MediaRow { Id = 2, Kind = "audio", Availability = "present", Location = "music/sfx.WAV" };
+        var presentFlac = new MediaRow { Id = 3, Kind = "audio", Availability = "present", Location = "music/album.flac" };
+        var missingMp3 = new MediaRow { Id = 4, Kind = "audio", Availability = "missing", Location = "music/track.mp3" };
+        var videoRow = new MediaRow { Id = 5, Kind = "video", Availability = "present", Location = "video/clip.mp4" };
+        var unsupportedExt = new MediaRow { Id = 6, Kind = "audio", Availability = "present", Location = "music/track.exe" };
+        check(AudioPlayerPolicy.CanOpen(presentMp3), "AudioPlayerPolicy accepts present mp3");
+        check(AudioPlayerPolicy.CanOpen(presentWav), "AudioPlayerPolicy accepts present uppercase WAV");
+        check(AudioPlayerPolicy.CanOpen(presentFlac), "AudioPlayerPolicy accepts present flac");
+        check(!AudioPlayerPolicy.CanOpen(missingMp3), "AudioPlayerPolicy rejects missing audio");
+        check(!AudioPlayerPolicy.CanOpen(videoRow), "AudioPlayerPolicy rejects non-audio kind");
+        check(!AudioPlayerPolicy.CanOpen(unsupportedExt), "AudioPlayerPolicy rejects unsupported extension");
     }
 }

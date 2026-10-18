@@ -23,6 +23,7 @@ from index_continuation import IndexContinuation, JOB as CONTINUATION_JOB, publi
 from tag_semantics import PendingTagVectors
 from page_semantics import PageVectors, SCHEMA as PAGE_VECTOR_SCHEMA
 from audio_semantics import AudioSpeechVectors, SCHEMA as AUDIO_SEGMENT_SCHEMA
+from audio_acoustics import AudioAcousticVectors, SCHEMA as AUDIO_ACOUSTIC_SCHEMA
 
 MAX_ITEMS=10_000
 ROW_BATCH_SIZE=256
@@ -63,6 +64,7 @@ class VectorStore:
             ''')
             db.executescript(PAGE_VECTOR_SCHEMA)
             db.executescript(AUDIO_SEGMENT_SCHEMA)
+            db.executescript(AUDIO_ACOUSTIC_SCHEMA)
             profile=db.execute('SELECT value FROM ai_profile').fetchone()
             if profile and profile[0]!=self.profile.key: raise AIUnavailable('Vector profile mismatch')
             if not profile: db.execute('INSERT INTO ai_profile VALUES(?)',(self.profile.key,))
@@ -257,6 +259,7 @@ class AISearch:
         self.previews=PreviewReader(catalog)
         self.pages=PageVectors(self)
         self.audio_speech=AudioSpeechVectors(self)
+        self.audio_acoustics=AudioAcousticVectors(self)
         self.guard=threading.Lock()
         self.cancel=threading.Event()
         self.worker=None
@@ -616,7 +619,12 @@ class AISearch:
                         query_vector=normalized(self.encoder.encode('query',query),self.profile.dimension)
                     check()
                     page_scores=self.pages.rank(rows,query_vector,check=check) if source in ('all','cover') else {}
-                    audio_scores=self.audio_speech.rank(rows,query_vector,check=check) if source in ('all','text') else {}
+                    speech_scores=self.audio_speech.rank(rows,query_vector,check=check) if source in ('all','text') else {}
+                    acoustic_scores=self.audio_acoustics.rank(rows,query,query_vector,check=check) if source in ('all','text') else {}
+                    audio_scores=dict(speech_scores)
+                    for aid,(ascore,aevid) in acoustic_scores.items():
+                        if aid not in audio_scores or ascore>audio_scores[aid][0]:
+                            audio_scores[aid]=(ascore,aevid)
                     scores,video_hits,page_hits,audio_hits=self.store.scores_with_content(rows,query_vector,source,page_scores,audio_scores=audio_scores)
                     for row in rows:
                         item=row['id']
@@ -682,13 +690,48 @@ class AISearch:
             with self._search_workspace(scope,cancelled) as (spool,check):
                 origin=self._current_rows([item_id],scope).get(item_id)
                 if origin is None:raise KeyError(item_id)
-                if origin['kind'] not in ('image','book','archive','video'):
+                if origin['kind'] not in ('image','book','archive','video','audio'):
                     raise ValueError('Invalid similarity source')
+                is_audio=origin['kind']=='audio'
                 result={'total':0,'items':[],'page':page,'limit':limit,'mode':'similar',
                         'origin_id':item_id,'origin_kind':origin['kind'],'origin_revision':revision(origin),'profile':self.profile.key,
-                        'scope':scope,'source':'cover','ranking':'max','score_kind':'cosine',
+                        'scope':scope,'source':'acoustic' if is_audio else 'cover','ranking':'max','score_kind':'cosine',
                         'coverage_limit':MAX_ITEMS,'similarity_status':'unsupported_profile'}
-                if 'cover' not in self.profile.modalities:return result
+                if not is_audio and 'cover' not in self.profile.modalities:return result
+                if is_audio:
+                    origin_frames=self.audio_acoustics.acoustic_frames(origin)
+                    if not origin_frames:return {**result,'similarity_status':'unindexed'}
+                    candidate_total=indexed_total=0
+                    for rows in self._search_batches(kind,view,scope,check,('audio',),item_id):
+                        candidate_total+=len(rows)
+                        scores,audio_hits,origin_hits=self.audio_acoustics.score_candidates(rows,origin_frames,check=check)
+                        for row in rows:
+                            rid=row['id']
+                            if rid in scores:
+                                pl={'revision':revision(row)}
+                                if rid in audio_hits:pl['audio_match_ms']=audio_hits[rid]
+                                if rid in origin_hits:pl['origin_match_ms']=origin_hits[rid]
+                                spool.add(rid,{'acoustic':scores[rid]},payload=pl)
+                        indexed_total+=len(scores)
+                        check()
+                    spool.finalize('max');selected=spool.page(page,limit)
+                    with self.catalog._guard:
+                        check()
+                        current,payloads=self._search_page_rows(spool,selected,scope,check)
+                        latest=self._current_rows([item_id],scope).get(item_id)
+                        if latest is None:raise KeyError(item_id)
+                        if revision(latest)!=revision(origin):raise AIBusy('起点の作品が更新されました。類似検索をやり直してください。')
+                        items=[]
+                        for key,score in selected['ranked']:
+                            row_dict={**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
+                                      'similarity_evidence':'acoustic'}
+                            pl=payloads.get(key,{})
+                            if 'audio_match_ms' in pl:row_dict['audio_match_ms']=pl['audio_match_ms']
+                            if 'origin_match_ms' in pl:row_dict['origin_match_ms']=pl['origin_match_ms']
+                            items.append(row_dict)
+                        check()
+                    return {**result,'total':selected['total'],'items':items,'similarity_status':'ready',
+                            'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total,'index_limit':MAX_ITEMS}
                 if origin['kind']=='video':
                     origin_frames=self.store.video_frames(origin)
                     if not origin_frames:return {**result,'similarity_status':'unindexed'}

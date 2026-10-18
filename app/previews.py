@@ -32,6 +32,10 @@ IMAGE_MIME = {'.png':'image/png', '.apng':'image/png', '.jpg':'image/jpeg', '.jp
 VIDEO_MIME = {'.mp4':'video/mp4', '.m4v':'video/mp4', '.mov':'video/quicktime',
               '.webm':'video/webm', '.mkv':'video/x-matroska', '.avi':'video/x-msvideo',
               '.wmv':'video/x-ms-wmv', '.ts':'video/mp2t'}
+AUDIO_MIME = {'.mp3':'audio/mpeg', '.flac':'audio/flac', '.wav':'audio/wav',
+              '.ogg':'audio/ogg', '.opus':'audio/ogg', '.m4a':'audio/mp4',
+              '.aac':'audio/aac', '.wma':'audio/x-ms-wma'}
+AUDIO_SUFFIXES = tuple(AUDIO_MIME.keys())
 
 class PreviewUnavailable(ValueError):
     pass
@@ -193,6 +197,19 @@ class PreviewReader:
     def video_manifest(self,item_id):
         return self._read(item_id,operation='video_manifest')
 
+    def read_audio(self, item_id):
+        return self._read(item_id, operation='audio')
+
+    def audio_manifest(self, item_id):
+        return self._read(item_id, operation='audio_manifest')
+
+    def audio_range(self, item_id, start, end, revision):
+        if type(start) is not int or type(end) is not int or start < 0 or end < start or end - start + 1 > MAX_VIDEO_RANGE_BYTES:
+            raise ValueError('Invalid bounded audio range')
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}', revision) is None:
+            raise ValueError('Invalid audio revision')
+        return self._read(item_id, operation='audio_range', revision=revision, start=start, end=end)
+
     def video_range(self,item_id,start,end,revision):
         if type(start) is not int or type(end) is not int or start<0 or end<start or end-start+1>MAX_VIDEO_RANGE_BYTES:
             raise ValueError('Invalid bounded video range')
@@ -288,9 +305,12 @@ class PreviewReader:
                 return self._read_folder(row, item_id, operation, page, revision)
             source, initial = _safe_path(row['path'], row['relative_path'], root_cache=root_cache, return_info=True)
             suffix = source.suffix.casefold()
-            if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES:
+            if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES and suffix not in AUDIO_SUFFIXES:
                 raise PreviewUnavailable('Unsupported preview type')
-            if operation in ('video','video_manifest','video_range','video_frame','video_frames_ai'):
+            if operation in ('audio','audio_manifest','audio_range'):
+                if suffix not in AUDIO_MIME:
+                    raise PreviewUnavailable('Audio player requires a supported audio item')
+            elif operation in ('video','video_manifest','video_range','video_frame','video_frames_ai'):
                 if suffix not in VIDEO_MIME and (operation != 'video_frames_ai' or suffix not in VIDEO_SUFFIXES):
                     raise PreviewUnavailable('Video player requires a supported video item')
             elif operation in ('image_manifest', 'image_frame'):
@@ -310,13 +330,34 @@ class PreviewReader:
                     if operation != 'preview':
                         raise ReaderChanged('Rescan changed files before reading')
                     raise PreviewUnavailable('Rescan changed files before previewing')
-                current_revision = _revision(row, info) if operation not in ('preview', 'video') else None
+                current_revision = _revision(row, info) if operation not in ('preview', 'video', 'audio') else None
                 if revision is not None and revision != current_revision:
                     raise ReaderChanged('Archive changed; reopen the reader')
                 if operation in ('tag_source', 'tag_input'):
                     result = {'item_id': item_id, 'revision': current_revision,
                               'kind': 'image' if suffix in IMAGE_MIME else 'cover', 'page': 0}
-                if operation == 'video':
+                if operation == 'audio':
+                    if info.st_size < 1 or info.st_size > MAX_PLAYBACK_BYTES:
+                        raise PreviewUnavailable('Audio exceeds playback limit')
+                    data, mime = file.read(MAX_PLAYBACK_BYTES + 1), AUDIO_MIME[suffix]
+                    if len(data) < 1 or len(data) > MAX_PLAYBACK_BYTES:
+                        raise PreviewUnavailable('Audio exceeds playback limit')
+                    if data.lstrip()[:16].upper().startswith((b'#EXTM3U', b'[PLAYLIST]', b'<ASX')):
+                        raise PreviewUnavailable('Playlist files are not played')
+                elif operation in ('audio_manifest', 'audio_range'):
+                    if not 1 <= info.st_size <= MAX_STREAM_VIDEO_BYTES:
+                        raise PreviewUnavailable('Audio exceeds stream limit')
+                    prefix = file.read(512).lstrip()
+                    if not prefix or prefix[:16].upper().startswith((b'#EXTM3U', b'[PLAYLIST]', b'<ASX')):
+                        raise PreviewUnavailable('Playlist files are not played')
+                    mime = AUDIO_MIME[suffix]
+                    if operation == 'audio_manifest':
+                        result = {'item_id': item_id, 'size_bytes': info.st_size, 'mime': mime, 'revision': current_revision}
+                    else:
+                        if start >= info.st_size or end >= info.st_size: raise VideoRangeUnsatisfiable(info.st_size)
+                        file.seek(start); data = file.read(end - start + 1)
+                        if len(data) != end - start + 1: raise ReaderChanged('Audio changed during range read')
+                elif operation == 'video':
                     if info.st_size < 1 or info.st_size > MAX_PLAYBACK_BYTES:
                         raise PreviewUnavailable('Video exceeds playback limit')
                     data, mime = file.read(MAX_PLAYBACK_BYTES + 1), VIDEO_MIME[suffix]
@@ -439,14 +480,14 @@ class PreviewReader:
                                 with archive.open(entry) as image:
                                     data = image.read(MAX_IMAGE_BYTES + 1)
                                 mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest','video','video_manifest','video_range','tag_source','page_catalog','image_manifest','video_frames_ai') and len(data) > MAX_IMAGE_BYTES:
+                if operation not in ('manifest','video','video_manifest','video_range','audio','audio_manifest','audio_range','tag_source','page_catalog','image_manifest','video_frames_ai') and len(data) > MAX_IMAGE_BYTES:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
                 # Verify the path was not replaced while reading, without repeating
                 # the redundant full Path.resolve(strict=True) filesystem round-trips.
                 current = source.stat(follow_symlinks=False)
                 if _reparse(current) or stat.S_ISLNK(current.st_mode) or (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
-                    if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame','manifest','page'):
+                    if operation in ('video_manifest','video_range','video_frame','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame','manifest','page'):
                         raise ReaderChanged('Source location changed')
                     raise PreviewUnavailable('Location changed while previewing')
                 parts = PurePosixPath(row['relative_path']).parts
@@ -460,7 +501,7 @@ class PreviewReader:
                 for parent in parents:
                     p_info = parent.stat(follow_symlinks=False)
                     if _reparse(p_info) or stat.S_ISLNK(p_info.st_mode):
-                        if operation in ('video_manifest','video_range','video_frame','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame','manifest','page'):
+                        if operation in ('video_manifest','video_range','video_frame','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame','manifest','page'):
                             raise ReaderChanged('Source location changed')
                         raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
@@ -469,9 +510,9 @@ class PreviewReader:
                     raise PreviewUnavailable('Source changed while reading')
                 if operation == 'tag_source': return result
                 if operation in ('tag_input', 'page_input'): return {'source': result, 'data': data, 'mime': mime}
-                if operation in ('manifest','video_manifest','page_catalog','image_manifest','video_frames_ai'):
+                if operation in ('manifest','video_manifest','audio_manifest','page_catalog','image_manifest','video_frames_ai'):
                     return result
-                if operation=='video_range':return data,mime,info.st_size
+                if operation in ('video_range','audio_range'): return data, mime, info.st_size
                 return data, mime
         except (VideoPreviewUnavailable, AnimationUnavailable) as error:
             raise PreviewUnavailable('Preview unavailable') from error
@@ -541,6 +582,8 @@ def _folder_read(row, item_id, operation, page, revision):
     """Pages of an image folder registered as one book. Read-only, bounded."""
     if operation in ('video', 'video_manifest', 'video_range', 'video_frame', 'video_frames_ai'):
         raise PreviewUnavailable('Video player requires a supported video item')
+    if operation in ('audio', 'audio_manifest', 'audio_range'):
+        raise PreviewUnavailable('Audio player requires a supported audio item')
     if operation in ('image_manifest', 'image_frame'):
         raise PreviewUnavailable('Image viewer requires a supported image item')
     relative = row['relative_path']

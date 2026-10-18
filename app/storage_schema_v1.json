@@ -646,6 +646,50 @@
     ]
   },
   "vectors": {
+    "ai_audio_acoustics": [
+      [
+        "item_id",
+        "INTEGER",
+        1,
+        null,
+        1
+      ],
+      [
+        "source_revision",
+        "TEXT",
+        1,
+        null,
+        0
+      ],
+      [
+        "at_ms",
+        "INTEGER",
+        1,
+        null,
+        2
+      ],
+      [
+        "vector",
+        "BLOB",
+        1,
+        null,
+        0
+      ],
+      [
+        "descriptors",
+        "TEXT",
+        1,
+        null,
+        0
+      ],
+      [
+        "contract",
+        "TEXT",
+        1,
+        null,
+        0
+      ]
+    ],
     "ai_audio_segments": [
       [
         "item_id",

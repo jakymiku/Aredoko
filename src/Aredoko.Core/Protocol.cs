@@ -54,10 +54,12 @@ public sealed class MediaRow
     }
     public string AIEvidence => AIPage is not null || Proposal?.SemanticScore is not null ? "" : SemanticScore is double score
         ? (SimilarityOriginId is int ? (VideoMatchMs is int matchMs ? (OriginMatchMs is int v2vOms ? $"動画一致（起点 {FormatVideoTimestamp(v2vOms)} → 候補 {FormatVideoTimestamp(matchMs)}）" : $"動画フレーム一致（{FormatVideoTimestamp(matchMs)}）")
-                                       : OriginMatchMs is int v2iOms ? $"起点の動画（{FormatVideoTimestamp(v2iOms)}）に似た候補"
+                                       : AudioMatchMs is int aMatchMs ? (OriginMatchMs is int a2aOms ? $"音声・音楽一致（起点 {FormatVideoTimestamp(a2aOms)} → 候補 {FormatVideoTimestamp(aMatchMs)}）" : $"音声一致（{FormatVideoTimestamp(aMatchMs)}）")
+                                       : OriginMatchMs is int oms ? (Kind == "audio" ? $"起点の音声（{FormatVideoTimestamp(oms)}）に似た候補" : $"起点の動画（{FormatVideoTimestamp(oms)}）に似た候補")
+                                       : Kind == "audio" ? "起点の音声・曲に似た候補"
                                        : "起点の画像・表紙に似た候補")
            : VideoMatchMs is int vms ? $"動画フレーム一致（{FormatVideoTimestamp(vms)}）" + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
-           : AudioMatchMs is int ams ? $"音声発話一致（{FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · 「{AudioMatchSnippet}」")}）" + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
+           : AudioMatchMs is int ams ? (AudioMatchSnippet?.StartsWith("音響") == true ? $"音響特徴一致（{FormatVideoTimestamp(ams)} · 「{AudioMatchSnippet}」）" : $"音声発話一致（{FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · 「{AudioMatchSnippet}」")}）") + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
            : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
           + (ScoreKind=="cosine" ? $"\n類似度 {score:F3}" : ScoreKind=="reciprocal-rank" ? $"\n順位統合値 {score:F4}" : "")
         : "";

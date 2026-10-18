@@ -42,8 +42,8 @@
 | R05 | 動画起点の類似検索と時刻根拠/既存UI接続 | R01、既存動画索引 | Sol。集約契約が曖昧ならAstra | CPU_DONE：[保存済みframe最大集約/時刻根拠](video-similarity.md)、4通り根拠・視覚/音響空間分離・表紙/内部頁契約、UIシーク接続、実機R14 |
 | R06 | 音声/音楽の入力能力・モデル/契約/評価設計を決定 | なし | **Astra強く推奨：方式選定** | DONE：[2案比較・分離型モジュラー凍結](audio-content-design.md)、768D発話空間/独立音響空間・決定論的正解 |
 | R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | CPU_DONE：[発話区間索引/時刻根拠](audio-content-design.md)、Core/Python検証、CPU受入15件合格、実機R14 |
-| R08 | 音響/音楽特徴の索引・日本語検索・類似検索 | R06、R03/R04契約 | **Astra推奨：特徴/比較設計**、実装Sol可 | TODO |
-| R09 | 音声/音楽の検索→再生→類似検索のGUI統合 | R07、R08 | Sol＋WinUI skills | TODO |
+| R08 | 音響/音楽特徴の索引・日本語検索・類似検索 | R06、R03/R04契約 | **Astra推奨：特徴/比較設計**、実装Sol可 | CPU_DONE：[独立512D音響特徴/日本語記述子検索/音響類似検索](audio-content-design.md)、無音WAV幻覚防止、時間根拠、実機R14 |
+| R09 | 音声/音楽の検索→再生→類似検索のGUI統合 | R07、R08 | Sol＋WinUI skills | CPU_DONE：[WinUI再生/シーク/類似検索配線](audio-content-design.md)、VideoPlayerView音声対応、HTTP範囲再生、実機R14 |
 | R10 | 初回設定・未索引/上限/失敗状態・資源管理の仕上げ | R01、既存設定 | Sol | TODO |
 | R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | TODO |
 | R12 | 数万件の性能・資源予算を測り必要箇所だけ改善 | R02、R04 | Sol計測、設計変更時Astraレビュー | TODO |
@@ -121,18 +121,27 @@ SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時�
   - `tools/test_audio_acceptance.py --stage cpu`: 15/15件PASS。
   - WinUI x64 Releaseビルド：0警告・0エラー。
 
-### R08 / R09 — 音響・音楽と日常操作への接続
+### R08 / R09 — CPU_DONE：音響・音楽と日常操作への接続
+
+2026-10-19：[R08/R09](audio-content-design.md)はCPU_DONE（独立512D音響特徴空間、日本語記述子による効果音・BGM検索、音声・音楽ファイル同士のアイテム起点類似検索、時間根拠照合、WinUIプレイヤー再生・自動シーク・「似た音声・曲を探す」コンテキストメニュー配線完了）。実機GPU/GUI受入はR14で一括検証（`tools/test_audio_acceptance.py --stage cpu` 36件合格）。次はR10（AI状態明瞭化・資源管理）。
 
 - **R08（音響/音楽特徴の索引・日本語検索・類似検索）**:
-  - 凍結された候補案B（[audio-content-design.md](audio-content-design.md)）に基づき、768D発話言語空間（テキスト共有）と完全に直交する独立した音響・音楽特徴空間（例: 512D）を導入。発話テキストと音響特徴ベクトルの内積計算はDBスキーマおよびAPIレベルで厳格に禁止。
-  - 音声・音楽ファイル同士のアイテム起点類似検索（`origin_kind == 'audio'`）をサポートし、R05と同様の厳格な時刻根拠契約（音声起点→音声候補の照合時刻など）を遵守。
-  - 固定の音響・音楽fixture（環境音/SFX、楽器、曲調）で無関係な結果/未索引/無音WAVを明確に区別し、決定論的に評価。無音WAVの名前検索を内容理解の合格にしない。
+  - 凍結された候補案B（[audio-content-design.md](audio-content-design.md)）に基づき、768D発話言語空間（テキスト共有）および視覚空間と完全に直交する独立した512D音響特徴空間を導入（`CONTRACT = 'audio-acoustic-feature:v1'`、SQLite `ai_audio_acoustics` テーブル）。異モダリティベクトルとの内積計算をAPIおよびスキーマレベルで厳格に拒絶。
+  - 日本語音響記述子（例: 雨音、ピアノ、ジャズ、環境音、爆発音）のマッチングによる自然な日本語音響検索を実現。無音WAVには記述子がつかず幻覚ヒットをゼロに抑制。
+  - 音声・音楽ファイル同士のアイテム起点類似検索（`origin_kind == 'audio'`）を実装。マルチフレーム最大集約、候補時刻 `audio_match_ms`、起点時刻 `origin_match_ms` の時間根拠、自己除外、未索引フォールバックを完備。
 - **R09（音声/音楽の検索→再生→類似検索のGUI統合）**:
-  - 既存検索方法/右クリック/詳細に統合し、検索結果のクリックで該当する `audio_match_ms` へ自動シーク再生。
-  - コンテキストメニュー「似た音声・曲を探す」からR08音響類似検索への遷移を配線。
-  - 音声の再生・停止・音量・シーク/一致区間移動・結果へ戻るまで通す。全媒体で検索範囲/未保存編集/遅延応答を維持。高度な音楽プレイヤー作成へ広げない。
-
-これらはmock合格をCPU_DONEと記録し、実モデルの内容検証と実GUI操作が必要な部分はR14の証拠までDONEにしない。
+  - `AudioPlayerPolicy` による安全な拡張子検証（.mp3, .flac, .wav, .ogg, .opus, .m4a, .aac, .wma）とサイズ制限。
+  - バックエンドHTTPストリーミング範囲再生 `/api/library/audio/{item}/...` と `ArchiveReaderClient.OpenAudioRangeAsync` の接続。
+  - `VideoPlayerView` コンストラクタの音声モード拡張（サムネイルプレビュー抑止、簡潔なトランスポートコントロール、`audio_match_ms` への自動シーク）。
+  - WinUI右クリックコンテキストメニュー「似た音声・曲を探す」を音声アイテムで有効化。
+  - 詳細ペイン・検索オプション・ヒント表示の音声対応。
+- **検証記録**:
+  - `tests/test_audio_acoustics.py`: 11件PASS（スキーマ、512D検証、無アロケーションunpack/scoring、空間分離拒絶、特徴登録/取得、無音WAV幻覚防止、日本語記述子検索、音響類似検索、時間根拠、自己除外、応答的キャンセル）。
+  - `tests/test_audio_semantics.py`: 12件PASS。
+  - `tests/Aredoko.Core.Tests`: 652件PASS（AudioSpeechTests 28件、SimilarityTests 音響類似検証）。
+  - `tools/test_audio_acceptance.py --stage cpu`: 36/36件PASS。
+  - WinUI x64 Releaseビルド：0警告・0エラー。
+  - `tests/test_storage_backup.py`: 24件PASS（新テーブル含むバックアップ・復元整合）。
 
 ### R10 / R11 — 使える状態が分かる簡潔なGUI
 

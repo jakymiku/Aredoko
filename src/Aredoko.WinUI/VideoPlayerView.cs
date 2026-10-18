@@ -21,6 +21,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     private readonly int itemId;
     private readonly string itemTitle;
     private readonly int? initialPositionMs;
+    private readonly bool isAudio;
     private readonly CancellationTokenSource lifetime = new();
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer hideTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer positionTimer;
@@ -71,12 +72,13 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
 
-    public VideoPlayerView(LibraryApi api, int itemId, string titleText, int? initialPositionMs = null)
+    public VideoPlayerView(LibraryApi api, int itemId, string titleText, int? initialPositionMs = null, bool isAudio = false)
     {
         this.api = api;
         this.itemId = itemId;
         itemTitle = titleText;
         this.initialPositionMs = initialPositionMs;
+        this.isAudio = isAudio;
         hideTimer = DispatcherQueue.CreateTimer(); hideTimer.Interval = TimeSpan.FromSeconds(2.5); hideTimer.IsRepeating = false;
         hideTimer.Tick += (_, _) => { if (!disposed && !keyboardChrome && !seekHover && !busy && !failed) HideChrome(); };
         positionTimer = DispatcherQueue.CreateTimer(); positionTimer.Interval = TimeSpan.FromMilliseconds(200);
@@ -125,10 +127,16 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             previewWanted=(int)Math.Clamp(Math.Round(millis/1000.0)*1000,0,Math.Max(0,Math.Floor((duration.TotalMilliseconds-50)/1000)*1000));
             seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(previewWanted),duration).Split(" / ")[0];
             seekPreview.Margin=new Thickness(Math.Clamp(point.X+8-136,8,Math.Max(8,ActualWidth-280)),0,0,toolbar.ActualHeight+8);
-            if(previewFrames.TryGetValue(previewWanted,out var cached))
-            {seekImage.Source=cached;previewDisplayed=previewWanted;seekHint.Visibility=Visibility.Collapsed;AutomationProperties.SetName(seekImage,seekTime.Text+"のサムネイル");}
+            if(isAudio)
+            {
+                seekHint.Visibility=Visibility.Collapsed;
+                seekImage.Visibility=Visibility.Collapsed;
+            }
+            else if(previewFrames.TryGetValue(previewWanted,out var cached))
+            {seekImage.Visibility=Visibility.Visible;seekImage.Source=cached;previewDisplayed=previewWanted;seekHint.Visibility=Visibility.Collapsed;AutomationProperties.SetName(seekImage,seekTime.Text+"のサムネイル");}
             else if(previewDisplayed!=previewWanted)
             {
+                seekImage.Visibility=Visibility.Visible;
                 if(seekImage.Source is null){seekHint.Text="読み込み中…";seekHint.Visibility=Visibility.Visible;}
                 else seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(previewDisplayed),duration).Split(" / ")[0]+"（次を準備中）";
                 if(!previewBusy){previewTimer.Stop();previewTimer.Start();}
@@ -208,7 +216,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         busy = true; failed = loaded = playing = false;
         ClearMedia();
         positionText.Text = "—";
-        status.Text = "動画を読み込んでいます…";
+        status.Text = isAudio ? "音声を読み込んでいます…" : "動画を読み込んでいます…";
         hideTimer.Stop(); UpdateControls();
         IRandomAccessStream? stream = null;
         VideoRangeSource? rangeSource = null;
@@ -216,12 +224,12 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         MediaPlayer? nextPlayer = null;
         try
         {
-            rangeSource=await api.OpenVideoRangeAsync(itemId,cancellation);
+            rangeSource=isAudio ? await api.OpenAudioRangeAsync(itemId,cancellation) : await api.OpenVideoRangeAsync(itemId,cancellation);
             stream=new VideoRandomAccessStream(rangeSource);var mime=rangeSource.Manifest.Mime;
             cancellation.ThrowIfCancellationRequested();
             source = MediaSource.CreateFromStream(stream, mime);
             await source.OpenAsync().AsTask(cancellation);
-            if (source.State != MediaSourceState.Opened) throw new InvalidDataException("動画を開けません。");
+            if (source.State != MediaSourceState.Opened) throw new InvalidDataException(isAudio ? "音声を開けません。" : "動画を開けません。");
             var opened = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             nextPlayer = new MediaPlayer { AutoPlay = false, Volume = volume / 100.0, IsMuted = muted };
             nextPlayer.MediaOpened += (_, _) => opened.TrySetResult(true);

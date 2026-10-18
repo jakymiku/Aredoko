@@ -9,7 +9,10 @@ public sealed record VideoManifest(int ItemId,long SizeBytes,string Mime,string 
 {
     public const long MaxBytes=2L*1024*1024*1024*1024;
     public const int ChunkBytes=1024*1024;
-    private static readonly HashSet<string> Mimes=["video/mp4","video/webm","video/x-matroska","video/x-msvideo","video/quicktime","video/x-ms-wmv","video/mp2t"];
+    private static readonly HashSet<string> Mimes=[
+        "video/mp4","video/webm","video/x-matroska","video/x-msvideo","video/quicktime","video/x-ms-wmv","video/mp2t",
+        "audio/mpeg","audio/flac","audio/wav","audio/ogg","audio/mp4","audio/aac","audio/x-ms-wma"
+    ];
     public void Validate()
     {if(ItemId<1||SizeBytes<1||SizeBytes>MaxBytes||!Mimes.Contains(Mime))throw new InvalidDataException("動画情報が無効です。");new ArchiveManifest(ItemId,1,Revision).Validate();}
     public static VideoManifest Parse(byte[] bytes,int expectedId)
@@ -32,11 +35,12 @@ public sealed class VideoRangeSource : IDisposable
     private readonly CancellationTokenSource lifetime;
     private readonly CancellationToken cancellation;
     private readonly SemaphoreSlim slots=new(2);
+    private readonly string routePrefix;
     private bool disposed;
     public VideoManifest Manifest {get;}
     public Exception? Failure {get;private set;}
-    public VideoRangeSource(HttpClient client,VideoManifest manifest,CancellationToken cancellation)
-    {manifest.Validate();this.client=client;Manifest=manifest;lifetime=CancellationTokenSource.CreateLinkedTokenSource(cancellation);this.cancellation=lifetime.Token;}
+    public VideoRangeSource(HttpClient client,VideoManifest manifest,CancellationToken cancellation,string routePrefix="api/library/video")
+    {manifest.Validate();this.client=client;Manifest=manifest;this.routePrefix=routePrefix;lifetime=CancellationTokenSource.CreateLinkedTokenSource(cancellation);this.cancellation=lifetime.Token;}
     public async Task<byte[]> ReadAsync(long offset,int count,CancellationToken caller)
     {
         ObjectDisposedException.ThrowIf(disposed,this);
@@ -47,7 +51,7 @@ public sealed class VideoRangeSource : IDisposable
         await slots.WaitAsync(token).ConfigureAwait(false);
         try
         {
-            using var req=new HttpRequestMessage(HttpMethod.Get,$"api/library/video/{Manifest.ItemId}/range?revision={Manifest.Revision}");req.Headers.Range=new RangeHeaderValue(offset,end);
+            using var req=new HttpRequestMessage(HttpMethod.Get,$"{routePrefix}/{Manifest.ItemId}/range?revision={Manifest.Revision}");req.Headers.Range=new RangeHeaderValue(offset,end);
             using var response=await client.SendAsync(req,HttpCompletionOption.ResponseHeadersRead,token).ConfigureAwait(false);
             if(response.StatusCode!=HttpStatusCode.PartialContent)
             {if(!response.IsSuccessStatusCode)throw new ArchiveReadException(response.StatusCode);throw new InvalidDataException("範囲取得ではない応答を受信しました。");}

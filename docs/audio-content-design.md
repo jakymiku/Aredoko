@@ -132,4 +132,33 @@ CREATE TABLE IF NOT EXISTS ai_audio_segments(
 ## 7. 決定事項まとめ
 
 1. **R06完了**: 本設計書により、EmbeddingGemma 2の直接音声入力の限界、分離型モジュラーアーキテクチャの優位性、768D発話テキスト空間と将来の音響特徴空間の厳格な分離、および `ai_audio_segments` のデータ契約を凍結した。
-2. **R07着手**: この契約に100%準拠し、`app/audio_semantics.py`、`app/ai_search.py` への統合、Coreプロトコル拡張、およびCPU/モック決定論的単体テスト（7シナリオ）を実装して `CPU_DONE` を達成する。
+2. **R07完了 (CPU_DONE)**: 発話区間索引契約（`CONTRACT = 'audio-speech-segment:v1'`、SQLite `ai_audio_segments`）と時刻根拠検索アダプタを実装。CoreプロトコルおよびCPU受入ハーネス（17件PASS）を完了。
+3. **R08完了 (CPU_DONE)**: 独立した512D音響特徴空間（`CONTRACT = 'audio-acoustic-feature:v1'`、SQLite `ai_audio_acoustics`）を導入。日本語音響記述子マッチング（効果音・BGM検索、無音WAV幻覚防止）、音声・音楽同士のアイテム起点類似検索（マルチフレーム最大集約、候補 `audio_match_ms`・起点 `origin_match_ms` 時刻根拠、自己除外、空間分離拒絶）を実装。
+4. **R09完了 (CPU_DONE)**: WinUIへの日常操作統合。`AudioPlayerPolicy`、ストリーミング範囲再生HTTP API `/api/library/audio/{item}/...`、`VideoPlayerView` 音声対応と自動シーク、右クリックコンテキストメニュー「似た音声・曲を探す」を配線完了。
+
+---
+
+## 8. R08/R09 音響特徴・類似検索・GUI統合仕様
+
+### 8.1 SQLiteスキーマ (`ai_audio_acoustics`)
+
+```sql
+CREATE TABLE IF NOT EXISTS ai_audio_acoustics(
+    item_id INTEGER NOT NULL,
+    source_revision TEXT NOT NULL,
+    at_ms INTEGER NOT NULL CHECK(at_ms >= 0 AND at_ms <= 86400000),
+    vector BLOB NOT NULL,
+    descriptors TEXT NOT NULL,
+    contract TEXT NOT NULL,
+    PRIMARY KEY(item_id, at_ms)
+);
+```
+
+- **空間分離契約**: 512次元 float32（リトルエンディアン、2,048バイト）、$L_2$ 正規化済み。768D発話/テキストベクトルや視覚ベクトルとの照合は `score_candidates` で明示的に `ValueError` 拒絶。
+- **日本語音響記述子**: `descriptors` カラムに最大64件の音響・音楽タグ（例: 雨音、ピアノ、ジャズ、環境音、爆発音）をJSON配列で保持。無音ファイルには記述子が付与されないため、幻覚的なヒットを完全防止。
+- **音響類似検索**: `AISearch.similar(item_id)` で `origin['kind'] == 'audio'` の場合、`source='acoustic'`、`origin_kind='audio'` で512Dマルチフレーム最大類似度集約を実行。起点自身は自己除外し、最も類似度の高かった候補側時刻 `audio_match_ms` と起点側時刻 `origin_match_ms` を付与。
+- **WinUI連携**:
+  - `AudioPlayerPolicy`: 8種類の拡張子（.mp3, .flac, .wav, .ogg, .opus, .m4a, .aac, .wma）を安全に検証。
+  - `ArchiveReaderClient.OpenAudioRangeAsync`: バックエンドの `/api/library/audio/{item}/...` からバイト範囲を安全に取得。
+  - `VideoPlayerView`: `isAudio=true` モードでサムネイルホバープレビューを隠し、シークバー・再生・一時停止・音量コントロールを提供。一致時刻へ自動シーク。
+  - 文脈メニュー: 音声アイテム選択時に「似た音声・曲を探す」を表示。

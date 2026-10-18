@@ -1,5 +1,55 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-19 R08音響特徴索引/類似検索・R09 WinUI再生統合 実装・CPU検証完了（CPU_DONE） — 次はR10 AI状態明瞭化・資源管理
+
+開始HEAD `945cb57`。**R08（音響/音楽特徴の索引・日本語検索・類似検索）およびR09（音声/音楽の検索→再生→類似検索のGUI統合）はCPU_DONE**。
+凍結された候補案B（[audio-content-design.md](audio-content-design.md)）に基づき、768D発話言語空間および視覚空間と完全に直交する独立した512D音響特徴空間を導入（`CONTRACT = 'audio-acoustic-feature:v1'`、SQLite `ai_audio_acoustics` テーブル）。日本語記述子（例: 雨音、ピアノ、ジャズ）のマッチングによる自然な日本語音響検索と無音WAV幻覚防止、音声・音楽ファイル同士のアイテム起点類似検索（マルチフレーム最大集約、候補 `audio_match_ms`・起点 `origin_match_ms` 時間根拠、自己除外、異モダリティ照合の空間分離拒絶）を実装。
+WinUI連携として `AudioPlayerPolicy`、バックエンドHTTPストリーミング範囲再生 `/api/library/audio/{item}/...`、`VideoPlayerView` 音声対応と自動シーク、右クリックコンテキストメニュー「似た音声・曲を探す」を配線完了。実機GPU/GUI受入はユーザー方針に従いR14へ集約（一括検証用ハーネス `tools/test_audio_acceptance.py --stage cpu` 36件合格）。次は台帳に従い **R10 初回設定・未索引/上限/失敗状態・資源管理の仕上げ**。
+
+- **R08 実装詳細（バックエンド・音響空間分離・類似検索）**:
+  - `app/audio_acoustics.py`:
+    - 契約 `audio-acoustic-feature:v1`、スキーマ `ai_audio_acoustics(item_id, source_revision, at_ms, vector, descriptors, contract, PRIMARY KEY(item_id, at_ms))`。
+    - 512D float32 BLOBの無アロケーション有限性検証 `_is_valid_packed` / `unpack`、内積計算 `_score_packed`。
+    - `AudioAcousticVectors`: `put_features`（時間境界0..86400000ms・重複タイムスタンプ拒否・記述子正規化）, `get_features`（`include_vectors`制御によるゼロ再エンコードraw bytes再利用）, `fresh`, `delete_item`。
+    - `rank`: 日本語記述子マッチング（完全一致0.98、部分一致0.92、単語一致0.85）により効果音・BGMを検出。無音ファイルには記述子が付かず幻覚を防止。
+    - `score_candidates`: 512Dマルチフレーム最大集約。768Dなど異なる次元のベクトルが渡された場合は `ValueError` を送出し、モダリティ間の空間混交をAPIレベルで完全に拒絶。
+  - `app/ai_search.py`:
+    - `VectorStore.__init__` でテーブル作成、`self.audio_acoustics = AudioAcousticVectors(self)` を初期化。
+    - `AISearch.search(...)` で `audio_acoustics.rank` を統合（記述子ヒット時刻 `audio_match_ms` と `audio_match_snippet` を付与）。
+    - `AISearch.similar(...)` で `origin['kind'] == 'audio'` の場合、`source='acoustic'`, `origin_kind='audio'`, `('audio',)` 候補限定で音響類似検索を実行。候補時刻 `audio_match_ms` と起点時刻 `origin_match_ms` を時間根拠として記録。
+  - `app/storage_schema_v1.json` / `app/ai_store_cleanup.py` / `app/production.py`:
+    - `ai_audio_acoustics` をvectorテーブルとして登録、バックアップ復元時のテーブル検証および安全クリーンアップを保証。
+  - `app/previews.py` / `app/production_server.py`:
+    - `AUDIO_MIME`（8拡張子）、`read_audio`、`audio_manifest`、`audio_range`、HTTP `/api/library/audio/{item}/...` ルートを実装。
+- **R09 実装詳細（Core・WinUI統合）**:
+  - `src/Aredoko.Core/AudioPlayerPolicy.cs`:
+    - 安全な8拡張子（.mp3, .flac, .wav, .ogg, .opus, .m4a, .aac, .wma）とサイズ制限（64MiB）の検証。
+  - `src/Aredoko.Core/SimilaritySearch.cs`:
+    - `CanStart` で `"audio"` を許可、`Guidance` に音声用フォールバック案内を追加。
+    - `Parse` で `source="acoustic"`, `origin_kind="audio"` および候補 `kind="audio"` のモダリティ整合性を厳格に検証（`source="cover"` との相互混交を拒絶）。
+  - `src/Aredoko.Core/Protocol.cs`:
+    - `AIEvidence` で音響特徴一致（`音響特徴一致（mm:ss · 「snippet」）`）および音声間類似検索の双方向時間根拠（`音声・音楽一致（起点 mm:ss → 候補 mm:ss）`）をリフレクションフリーでフォーマット表示。
+  - `src/Aredoko.Core/ArchiveReaderClient.cs` / `LibraryApi.cs`:
+    - `OpenAudioRangeAsync` を配線。
+  - `src/Aredoko.WinUI/VideoPlayerView.cs`:
+    - コンストラクタに `isAudio` パラメータを追加。サムネイルホバープレビューを非表示にし、音声ストリーミングと時間シークを実行。
+  - `src/Aredoko.WinUI/MainPage.xaml` / `MainPage.xaml.cs`:
+    - 右クリックコンテキストメニュー「似た音声・曲を探す」を音声アイテムで有効化。
+    - 詳細ペイン・検索オプション・ヒント表示を音声対応。
+- **検証記録**:
+  - **Core Tests**: **652 checks PASS**（AudioSpeechTests 28件、SimilarityTests 音響類似検証）。
+  - **Python test_audio_acoustics**: **11 PASS**。
+  - **Python test_audio_semantics**: **12 PASS**。
+  - **Python test_storage_backup**: **24 PASS**。
+  - **受入ハーネス**:
+    - `tools/test_audio_acceptance.py --stage cpu`: **36/36 PASS**（Core, Python, WinUI Release, 発話/音響セグメント鮮度, 無音無視, 日本語SFX検索, 音響類似検索, 時間根拠, 空間分離拒絶, 範囲再生, 原本不変性）。
+  - **WinUI x64 Release**: **警告0 / エラー0**。
+- **制約・保全事項**:
+  - P0累積2/2終了・OCR保留・全機能/簡潔GUI・原本保護・私物走査/変更なし・Actionsなし・mainへのmergeなし。
+  - 次の3手（台帳優先順）：**R10 初回設定・未索引/上限/失敗状態・資源管理の仕上げ → R11 日常導線の整理と統一したWinUI表示 → R12 数万件の性能・資源予算の計測と局所改善**。
+
+---
+
 ## 2026-10-19 R06音声方式設計完了（DONE）・R07発話区間索引/検索adapter実装・CPU検証完了（CPU_DONE） — 次はR08音響/音楽特徴索引
 
 開始HEAD `945cb57`（R05マージ後）、fetch/status/logでclean/origin同期を確認。[音声・音楽方式設計書](audio-content-design.md)を新規作成し、**R06はDONE（方式選定・2案比較・分離型モジュラー方式凍結・4評価基準策定）**。また**R07はCPU_DONE（時間付き発話区間索引/検索adapter・SQLiteスキーマ・無アロケーション有限性検証/内積計算・検索集約への発話ヒット時刻/スニペット統合・CoreリフレクションフリーJSONパーサー/証拠表示・Python/Core単体テストおよび受入ハーネス合格）**。実機GPU/GUI受入はユーザー方針に従いR14へ集約（一括検証用ハーネス `tools/test_audio_acceptance.py` を配備）。ロードマップ台帳および優先順位文書（R03 WALチェックポイント/前方互換ガード、R05 4通り時刻根拠・視覚/音響空間分離・表紙/内部頁契約、R14一括受入コマンド台帳）を整備完了。次は台帳に従い **R08 音響/音楽特徴の索引・日本語検索・類似検索**。

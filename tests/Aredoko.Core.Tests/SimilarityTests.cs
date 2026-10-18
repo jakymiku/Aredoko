@@ -11,7 +11,7 @@ static class SimilarityTests
         check(SimilaritySearch.CanStart(image),"similarity image context entry");
         check(SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="book",Availability="present"}),"similarity book cover context entry");
         check(SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="video",Availability="present"}),"video similarity context entry supported");
-        check(!SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="audio",Availability="present"}),"no unsupported audio similarity entry");
+        check(SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="audio",Availability="present"}),"audio similarity context entry supported");
         check(!SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="image",Availability="missing"}),"missing image has no similarity entry");
         var scope=JsonNode.Parse("""{"root_ids":[1,2],"kind":"image","shelf":"素材"}""")!.AsObject();
         var request=SimilaritySearch.Request(7,"image","favorites",2,scope,2);
@@ -27,6 +27,7 @@ static class SimilarityTests
         {
             check(SimilaritySearch.Guidance(status).Length>0,"similarity fallback guidance "+status);
             check(SimilaritySearch.Guidance(status,"video").Length>0,"video similarity fallback guidance "+status);
+            check(SimilaritySearch.Guidance(status,"audio").Length>0,"audio similarity fallback guidance "+status);
         }
         var parsed=Protocol.ParseSearch("""{"total":1,"items":[{"id":8,"title":"near.png","kind":"image","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.98,"similarity_origin_id":7}],"score_kind":"cosine","similarity_status":"ready"}""");
         check(parsed.SimilarityStatus=="ready"&&parsed.Items[0].SimilarityOriginId==7,"reflection-free item-origin response");
@@ -74,6 +75,28 @@ static class SimilarityTests
         videoToImage["items"]![0]!["origin_match_ms"]=5000;
         var v2iRow=SimilaritySearch.Parse(videoToImage.ToJsonString(),7,0).Items[0];
         check(v2iRow.OriginMatchMs==5000&&v2iRow.AIEvidence.Contains("起点の動画（0:05）に似た候補"),"video-to-image similarity evidence shows origin timepoint");
+        var audioCand=visual.DeepClone().AsObject();
+        audioCand["origin_kind"]="audio";
+        audioCand["source"]="acoustic";
+        audioCand["items"]=JsonNode.Parse("""[{"id":9,"title":"track.mp3","kind":"audio","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.93,"similarity_origin_id":7,"audio_match_ms":45000,"origin_match_ms":12000}]""");
+        var audioRow=SimilaritySearch.Parse(audioCand.ToJsonString(),7,0).Items[0];
+        check(audioRow.Id==9&&audioRow.AudioMatchMs==45000&&audioRow.OriginMatchMs==12000&&audioRow.AIEvidence.Contains("音声・音楽一致（起点 0:12 → 候補 0:45）"),"audio similarity parses candidate and origin match ms");
+        var audioCandOnly=audioCand.DeepClone().AsObject();
+        audioCandOnly["items"]![0]!["origin_match_ms"]=null;
+        var aCandRow=SimilaritySearch.Parse(audioCandOnly.ToJsonString(),7,0).Items[0];
+        check(aCandRow.AIEvidence.Contains("音声一致（0:45）"),"audio similarity candidate-only timestamp");
+        var audioOriginOnly=audioCand.DeepClone().AsObject();
+        audioOriginOnly["items"]![0]!["audio_match_ms"]=null;
+        var aOrigRow=SimilaritySearch.Parse(audioOriginOnly.ToJsonString(),7,0).Items[0];
+        check(aOrigRow.AIEvidence.Contains("起点の音声（0:12）に似た候補"),"audio similarity origin-only timestamp");
+        var audioNoMs=audioCand.DeepClone().AsObject();
+        audioNoMs["items"]![0]!["audio_match_ms"]=null;
+        audioNoMs["items"]![0]!["origin_match_ms"]=null;
+        var aNoMsRow=SimilaritySearch.Parse(audioNoMs.ToJsonString(),7,0).Items[0];
+        check(aNoMsRow.AIEvidence.Contains("起点の音声・曲に似た候補"),"audio similarity without timestamps evidence");
+        var badVisualInAudio=audioCand.DeepClone().AsObject();
+        badVisualInAudio["items"]![0]!["kind"]="image";
+        Reject(check,badVisualInAudio.ToJsonString(),"visual candidate in audio similarity rejected");
         var large=visual.DeepClone().AsObject();large["total"]=50001;large["page"]=833;
         large["search_complete"]=true;large["search_candidate_total"]=50002;large["indexed_total"]=50001;
         large["coverage_limit"]=10000;

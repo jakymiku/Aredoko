@@ -327,6 +327,35 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         return self.send(404,{'error':'Preview unavailable'})
                     except ValueError:
                         return self.send(400,{'error':'Invalid video range request'})
+                if path.startswith('/api/library/audio/'):
+                    try:
+                        match=re.fullmatch(r'/api/library/audio/([1-9][0-9]{0,18})(?:/(manifest|range))?',path)
+                        if match is None:raise ValueError('Invalid audio route')
+                        item=int(match[1])
+                        if item>9223372036854775807:raise ValueError('Invalid item')
+                        query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
+                        if match[2]=='range':
+                            if set(query)!={'revision'} or len(query['revision'])!=1:raise ValueError('One revision is required')
+                            values=self.headers.get_all('Range',[])
+                            value=re.fullmatch(r'bytes=(0|[1-9][0-9]{0,12})-(0|[1-9][0-9]{0,12})',values[0]) if len(values)==1 else None
+                            if value is None:raise ValueError('One explicit bounded range is required')
+                            start,end=map(int,value.groups())
+                            data,mime,size=previews.audio_range(item,start,end,query['revision'][0])
+                            return self.send(206,data,mime,{'Content-Range':f'bytes {start}-{end}/{size}','Accept-Ranges':'bytes','ETag':'"'+query['revision'][0]+'"'})
+                        if query:raise ValueError('Unexpected audio query')
+                        if match[2]=='manifest':return self.send(200,previews.audio_manifest(item))
+                        data,mime=previews.read_audio(item)
+                        return self.send(200,data,mime)
+                    except VideoRangeUnsatisfiable as error:
+                        return self.send(416,{'error':'Audio range outside source'},extra_headers={'Content-Range':f'bytes */{error.size}'})
+                    except ReaderChanged:
+                        return self.send(409,{'error':'Archive changed; rescan and reopen the reader'})
+                    except PreviewBusyError:
+                        return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,RuntimeError,NotImplementedError):
+                        return self.send(404,{'error':'Preview unavailable'})
+                    except ValueError:
+                        return self.send(400,{'error':'Invalid audio range request'})
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())
