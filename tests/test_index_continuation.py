@@ -99,6 +99,28 @@ class ContinuationTests(unittest.TestCase):
         self.assertEqual(self.encoder.calls,['document']*4)
         self.assertEqual(self.ai.coverage(self.scope)['fresh_total'],6)
 
+    def test_job_owned_cancellation_semantics(self):
+        plan=self.plan(6)
+        for bad in ('bad',123,'A'*32,'0'*31,'0'*33,None):
+            with self.subTest(bad=bad),self.assertRaises(ValueError):self.ai.continuation.cancel(bad)
+        res=self.ai.continuation.cancel('0'*32)
+        self.assertEqual(res,{'cancel_requested':False,'job_id':'0'*32})
+        cancelled_calls=[]
+        def on_doc():
+            if len(self.encoder.calls)==2:
+                wrong=self.ai.continuation.cancel('f'*32)
+                cancelled_calls.append(('wrong',wrong))
+                correct=self.ai.continuation.cancel(self.ai.status()['job_id'])
+                cancelled_calls.append(('correct',correct))
+        self.encoder.on_document=on_doc
+        _,done=self.start(plan)
+        self.encoder.on_document=None
+        self.assertEqual(done['state'],'cancelled')
+        self.assertEqual(cancelled_calls,[('wrong',{'cancel_requested':False,'job_id':'f'*32}),
+                                          ('correct',{'cancel_requested':True,'job_id':done['job_id']})])
+        after=self.ai.continuation.cancel(done['job_id'])
+        self.assertEqual(after,{'cancel_requested':False,'job_id':done['job_id']})
+
     def test_fixed_upper_bound_excludes_added_items_until_new_plan(self):
         plan=self.plan(6)
         (self.media/'new.wav').write_bytes(b'new generated metadata')
@@ -210,18 +232,22 @@ class ContinuationTests(unittest.TestCase):
         fields={'scope':self.scope,'profile':self.profile}
         plan=post('plan',{**fields,'limit':2,'after_id':0})
         post('start',{**fields,'plan_id':plan['plan_id']});self.ai.worker.join(10)
-        for operation,body in (('plan',{**fields,'limit':2,'after_id':0}),('start',{**fields,'plan_id':plan['plan_id']}),('resume',{**fields,'job_id':'0'*32})):
+        for operation,body in (('plan',{**fields,'limit':2,'after_id':0}),('start',{**fields,'plan_id':plan['plan_id']}),('resume',{**fields,'job_id':'0'*32}),('cancel',{'job_id':'0'*32})):
             post(operation,body,403,False);post(operation,{**body,'path':'private'},400)
         post('resume',{**fields,'job_id':'0'*32},400)
+        cancel_unknown=post('cancel',{'job_id':'0'*32})
+        self.assertEqual(cancel_unknown,{'cancel_requested':False,'job_id':'0'*32})
         self.assertEqual(self.ai.status()['state'],'complete')
-        self.encoder.on_document=lambda:self.ai.cancel_build()
         plan=post('plan',{**fields,'limit':2,'after_id':0})
+        self.encoder.on_document=lambda:post('cancel',{'job_id':self.ai.status()['job_id']})
         started=post('start',{**fields,'plan_id':plan['plan_id']});self.ai.worker.join(10)
         self.assertEqual(self.ai.status()['state'],'cancelled')
         self.encoder.on_document=None
         resumed=post('resume',{**fields,'job_id':started['job_id']});self.ai.worker.join(10)
         self.assertEqual(resumed['resumed_from'],started['job_id'])
         self.assertEqual(self.ai.status()['state'],'complete')
+        cancel_done=post('cancel',{'job_id':resumed['job_id']})
+        self.assertEqual(cancel_done,{'cancel_requested':False,'job_id':resumed['job_id']})
 
     def test_resume_rejects_changed_selected_item_or_context_before_encoding(self):
         old,_=self.cancel();before=len(self.encoder.calls)

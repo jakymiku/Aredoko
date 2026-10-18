@@ -1522,6 +1522,18 @@ public sealed partial class MainPage : Page
             PageBatchStatus? resumableBooks=null;
             var resumeChunks=new Button{Content="前回のページ追加を再開",Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(resumeChunks,"ResumeBookChunks");
             PageChunkStatus? resumableChunks=null;string? ownedPageJob=null;
+            var resumeContinuation=new Button{Content="前回の未準備分を再開",Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(resumeContinuation,"ResumeAIContinuation");
+            IndexContinuationStatus? resumableContinuation=null;string? ownedContinuationJob=null;
+            IndexContinuationPlan? continuationPlan=null;bool planningContinuation=false;string? activeProfile=null;
+            var planContinuation=new Button{Content="未準備分を計画",IsEnabled=false};AutomationProperties.SetAutomationId(planContinuation,"PlanAIContinuation");
+            var startContinuation=new Button{Content="確認した未準備分を作成",Visibility=Visibility.Collapsed,IsEnabled=false};AutomationProperties.SetAutomationId(startContinuation,"StartAIContinuation");
+            var continuationText=new TextBlock{TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(continuationText,"AIContinuationSummary");
+            void InvalidateContinuationPlan()
+            {
+                continuationPlan=null;
+                continuationText.Visibility=Visibility.Collapsed;
+                startContinuation.Visibility=Visibility.Collapsed;
+            }
             var release=new Button {Content="AIをメモリから解放",IsEnabled=false};
             AutomationProperties.SetAutomationId(release,"AIRelease");
             var releaseResult=new TextBlock {TextWrapping=TextWrapping.Wrap};
@@ -1573,11 +1585,14 @@ public sealed partial class MainPage : Page
             bool availableForIndex=false,indexRunning=false,starting=false;
             void UpdateStart()
             {
-                start.IsEnabled=availableForIndex&&!indexRunning&&!starting&&scopeEditor.Ready;
+                start.IsEnabled=availableForIndex&&!indexRunning&&!starting&&!planningContinuation&&scopeEditor.Ready;
+                planContinuation.IsEnabled=availableForIndex&&!indexRunning&&!starting&&!planningContinuation&&scopeEditor.Ready&&aiScope is not null;
+                startContinuation.IsEnabled=availableForIndex&&!indexRunning&&!starting&&!planningContinuation&&continuationPlan?.CanStart==true&&aiScope is not null;
                 resumeBooks.IsEnabled=start.IsEnabled&&resumableBooks?.CanResume==true;
                 resumeChunks.IsEnabled=start.IsEnabled&&resumableChunks?.CanResume==true&&aiScope is not null&&resumableChunks.MatchesScope(aiScope);
+                resumeContinuation.IsEnabled=start.IsEnabled&&resumableContinuation?.CanResume==true&&aiScope is not null&&resumableContinuation.MatchesScope(aiScope);
             }
-            scopeEditor.StateChanged+=UpdateStart;
+            scopeEditor.StateChanged+=()=>{InvalidateContinuationPlan();UpdateStart();};
             bool polling=false;
             bool releasing=false;
             int? indexLimit=null;
@@ -1603,9 +1618,26 @@ public sealed partial class MainPage : Page
                     var model=data["model"]?.GetValue<string>() ?? "未選択";
                     var capabilities=data["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "名前・タグ／画像・表紙" : "名前・タグ";
                     status.Text=available ? $"{model} · {capabilities}{(indexLimit is int cap ? $" · 最大{cap:N0}件" : "")}\n索引処理（開始時の対象）: {label} · {data["processed"]}/{data["total"]} {(data["job"]?.GetValue<string>() is "book-pages" or "book-page-batch" or "book-pages-chunked"?"ページ":"件")}\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
+                    activeProfile=data["profile"]?.GetValue<string>();
                     resumableBooks=null;resumeBooks.Visibility=Visibility.Collapsed;
                     resumableChunks=null;resumeChunks.Visibility=Visibility.Collapsed;
+                    resumableContinuation=null;resumeContinuation.Visibility=Visibility.Collapsed;
                     ownedPageJob=running&&data["job"]?.GetValue<string>() is "book-pages" or "book-page-batch" or "book-pages-chunked"?data["job_id"]?.GetValue<string>():null;
+                    ownedContinuationJob=running&&data["job"]?.GetValue<string>()=="library-continuation-v1"?data["job_id"]?.GetValue<string>():null;
+                    if(data["job"]?.GetValue<string>()=="library-continuation-v1")
+                    {
+                        try
+                        {
+                            var cont=IndexContinuationStatus.Parse(System.Text.Encoding.UTF8.GetBytes(data.ToJsonString()),data["profile"]!.GetValue<string>());
+                            status.Text+="\n"+cont.Summary;
+                            if(cont.CanResume)
+                            {
+                                resumableContinuation=cont;resumeContinuation.Visibility=Visibility.Visible;
+                                if(aiScope is null||!cont.MatchesScope(aiScope))status.Text+="\n前回と同じ対象範囲を保存すると再開できます。";
+                            }
+                        }
+                        catch(System.IO.InvalidDataException){status.Text+="\n前回の継続索引の情報を復元できません。未準備分を計画し直してください。";}
+                    }
                     if(data["job"]?.GetValue<string>()=="book-pages-chunked")
                     {
                         try
@@ -1631,13 +1663,47 @@ public sealed partial class MainPage : Page
                     release.IsEnabled=available&&!running&&resident&&!releasing;
                     if(available)status.Text+=(resident?"\nAIはメモリ内で待機中。":"\nAIは待機中・次の検索でモデルを準備します。");
                 }
-                catch(Exception ex){availableForIndex=false;resumableChunks=null;ownedPageJob=null;status.Text=ex.Message;start.IsEnabled=resumeChunks.IsEnabled=cancel.IsEnabled=false;}
+                catch(Exception ex){availableForIndex=false;resumableChunks=null;resumableContinuation=null;ownedPageJob=null;ownedContinuationJob=null;status.Text=ex.Message;start.IsEnabled=resumeChunks.IsEnabled=resumeContinuation.IsEnabled=planContinuation.IsEnabled=startContinuation.IsEnabled=cancel.IsEnabled=false;}
                 finally{polling=false;}
             }
             start.Click+=async(_,_)=>{
                 if(!start.IsEnabled||aiScope is null)return;
                 starting=true;UpdateStart();
                 try{await api.PostAsync("api/library/ai/index",AIScopeRequests.Scoped(aiScope));await Refresh();}
+                catch(Exception ex){status.Text=ex.Message;}
+                finally{starting=false;UpdateStart();}
+            };
+            planContinuation.Click+=async(_,_)=>{
+                if(!planContinuation.IsEnabled||aiScope is null||activeProfile is null)return;
+                planningContinuation=true;UpdateStart();
+                try
+                {
+                    var plan=await api.Continuation.PlanAsync(aiScope,activeProfile);
+                    continuationPlan=plan;
+                    continuationText.Text=plan.DetailSummary+(plan.CanStart?"\n"+plan.Summary:"\n追加する未準備アイテムはありません。");
+                    continuationText.Visibility=Visibility.Visible;
+                    if(plan.CanStart)
+                    {
+                        startContinuation.Content=$"未準備の{plan.SelectedTotal:N0}件を作成";
+                        startContinuation.Visibility=Visibility.Visible;
+                    }
+                    else
+                    {
+                        startContinuation.Visibility=Visibility.Collapsed;
+                    }
+                }
+                catch(Exception ex){continuationText.Text="計画を作成できません: "+ex.Message;continuationText.Visibility=Visibility.Visible;InvalidateContinuationPlan();}
+                finally{planningContinuation=false;UpdateStart();}
+            };
+            startContinuation.Click+=async(_,_)=>{
+                if(!startContinuation.IsEnabled||continuationPlan is null||aiScope is null)return;
+                starting=true;UpdateStart();
+                try
+                {
+                    await api.Continuation.StartAsync(continuationPlan);
+                    InvalidateContinuationPlan();
+                    await Refresh();
+                }
                 catch(Exception ex){status.Text=ex.Message;}
                 finally{starting=false;UpdateStart();}
             };
@@ -1655,9 +1721,27 @@ public sealed partial class MainPage : Page
                 catch(Exception ex){status.Text=ex.Message;}
                 finally{starting=false;UpdateStart();}
             };
+            resumeContinuation.Click+=async(_,_)=>{
+                if(!resumeContinuation.IsEnabled||resumableContinuation is null||aiScope is null)return;
+                starting=true;UpdateStart();
+                try
+                {
+                    await api.Continuation.ResumeAsync(resumableContinuation,aiScope);
+                    InvalidateContinuationPlan();
+                    await Refresh();
+                }
+                catch(Exception ex){status.Text=ex.Message;}
+                finally{starting=false;UpdateStart();}
+            };
             cancel.Click+=async(_,_)=>{try{
                 var pageJob=ownedPageJob;
-                await api.PostAsync(pageJob is null?"api/library/ai/cancel":"api/library/ai/pages/cancel",pageJob is null?new JsonObject():new JsonObject{{"job_id",pageJob}});
+                var contJob=ownedContinuationJob;
+                if(pageJob is not null)
+                    await api.PostAsync("api/library/ai/pages/cancel",new JsonObject{{"job_id",pageJob}});
+                else if(contJob is not null)
+                    await api.Continuation.CancelAsync(contJob);
+                else
+                    await api.PostAsync("api/library/ai/cancel",new JsonObject());
                 await Refresh();}catch(Exception ex){status.Text=ex.Message;}};
             timer.Tick+=async(_,_)=>await Refresh();
             var panel=new StackPanel {Spacing=12,MinWidth=320};
@@ -1673,10 +1757,18 @@ public sealed partial class MainPage : Page
             AutomationProperties.SetAutomationId(modelOptions,"AIOptions");
             AutomationProperties.SetName(modelOptions,"モデル・AIリソース設定");
             content.Children.Add(modelOptions);
+            var continuationActions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
+            continuationActions.Children.Add(planContinuation);continuationActions.Children.Add(startContinuation);
             var indexInfo=new StackPanel {Spacing=8};
             AutomationProperties.SetAutomationId(indexInfo,"AIIndexSummary");
             indexInfo.Children.Add(new TextBlock {Text="現在のAI索引",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]});
-            indexInfo.Children.Add(status);indexInfo.Children.Add(resumeBooks);indexInfo.Children.Add(resumeChunks);Grid.SetRow(indexInfo,1);content.Children.Add(indexInfo);
+            indexInfo.Children.Add(status);
+            indexInfo.Children.Add(continuationText);
+            indexInfo.Children.Add(continuationActions);
+            indexInfo.Children.Add(resumeContinuation);
+            indexInfo.Children.Add(resumeBooks);
+            indexInfo.Children.Add(resumeChunks);
+            Grid.SetRow(indexInfo,1);content.Children.Add(indexInfo);
             var actions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
             actions.Children.Add(start);actions.Children.Add(cancel);Grid.SetRow(actions,2);content.Children.Add(actions);
             await RefreshProfiles();await RefreshResource();await Refresh();timer.Start();

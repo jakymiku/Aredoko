@@ -10,12 +10,14 @@ public sealed class LibraryApi : IDisposable
     private readonly HttpClient tagClient;
     public TagReviewClient TagReviews {get;}
     public PageEvidenceClient PageEvidences {get;}
+    public IndexContinuationClient Continuation {get;}
     public LibraryApi(HttpMessageHandler handler)
     {
         client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(40)};
         tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromSeconds(100)};
         TagReviews=new(tagClient);
         PageEvidences=new(tagClient);
+        Continuation=new(tagClient);
     }
     public Task<ArchiveManifest> ReaderManifestAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ManifestAsync(id, cancellation);

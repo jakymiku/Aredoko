@@ -204,6 +204,22 @@ class IndexContinuation:
                 raise ValueError('Saved job unavailable; review a new plan')
             return self._launch(old.get('continuation'), scope, profile, resumed_from=job_id)
 
+    def cancel(self, job_id):
+        if type(job_id) is not str or not re.fullmatch('[0-9a-f]{32}', job_id):
+            raise ValueError('Invalid job ID')
+        with self.ai.guard:
+            if self.ai._closed:
+                raise AIUnavailable('AI is closing')
+            state = self.ai.store.state()
+            accepted = False
+            if (state.get('job') == JOB and state.get('job_id') == job_id
+                    and state.get('state') in ('running', 'cancelling')):
+                self.ai.cancel.set()
+                if state.get('state') == 'running':
+                    self.ai.store.save_state({**state, 'state': 'cancelling'})
+                accepted = True
+            return {'cancel_requested': accepted, 'job_id': job_id}
+
     def _launch(self, record, scope, profile, resumed_from=None):
         if not self.ai.encoder.available:
             raise AIUnavailable('AI環境が未導入です。')

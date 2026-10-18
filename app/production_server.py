@@ -499,9 +499,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     try:return self.send(200,ai.pages.start(body['item_id'],body['page_ids'],body['revision'],validate_scope(body['scope'])))
                     except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
                     except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
-                if self.path in ('/api/library/ai/index/plan','/api/library/ai/index/start','/api/library/ai/index/resume'):
+                if self.path in ('/api/library/ai/index/plan','/api/library/ai/index/start','/api/library/ai/index/resume','/api/library/ai/index/cancel'):
                     if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
                     operation=self.path.rsplit('/',1)[-1]
+                    if operation=='cancel':
+                        if set(body)!={'job_id'}:raise ValueError('Invalid continuation fields')
+                        return self.send(200,ai.continuation.cancel(body['job_id']))
                     fields={'scope','profile'} | ({'limit','after_id'} if operation=='plan' else {'plan_id' if operation=='start' else 'job_id'})
                     if set(body)!=fields:raise ValueError('Invalid continuation fields')
                     scope=validate_scope(body['scope'])
