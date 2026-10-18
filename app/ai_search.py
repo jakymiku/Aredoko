@@ -125,6 +125,23 @@ class VectorStore:
     def cover(self,row):
         """Current-profile, current-revision origin; never infer or read media."""
         return self._vector(row,'cover')
+    def video_frames(self,row):
+        """Current-profile, current-revision video frames [(at_ms, vector), ...]."""
+        with self.connect() as db:
+            records=db.execute("SELECT at_ms,vector FROM ai_video_frames WHERE item_id=? AND revision=? ORDER BY at_ms",
+                               (row['id'],revision(row))).fetchall()
+        frames=[]
+        for at_ms,data in records:
+            try:
+                vec=array('f');vec.frombytes(data)
+                if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:continue
+                frames.append((at_ms,normalized(vec,self.dimension)))
+            except (ValueError,TypeError):continue
+        if not frames:
+            cover=self.cover(row)
+            if cover is not None:
+                frames=[(0,cover)]
+        return frames
     def _vector(self,row,modality):
         with self.connect() as db:
             record=db.execute("SELECT vector FROM ai_vectors WHERE item_id=? AND revision=? AND modality=?",
@@ -140,9 +157,13 @@ class VectorStore:
         scores,video_hits,page_hits=self.scores_with_content(rows,query,source,page_scores)
         # Keep the whole-pool oracle available; streaming callers fuse only once.
         return fuse_modalities(scores,ranking),video_hits,page_hits
-    def scores_with_content(self,rows,query,source="all",page_scores=None):
+    def scores_with_content(self,rows,query,source="all",page_scores=None,*,query_frames=None,origin_hits=None):
         """Raw modality scores with exactly the existing normalization/dot order."""
-        query=normalized(query,self.dimension)
+        if query_frames is not None:
+            active_frames=[(ms,normalized(v,self.dimension)) for ms,v in query_frames]
+        else:
+            active_frames=[(0,normalized(query,self.dimension))]
+        is_multi=query_frames is not None
         eligible={row['id']:revision(row) for row in rows}
         scores={}
         video_hits={}
@@ -158,8 +179,18 @@ class VectorStore:
                         vec=array('f');vec.frombytes(data)
                     except (ValueError,TypeError):continue
                     if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4: continue
-                    score=sum(a*b for a,b in zip(query,vec))
-                    scores.setdefault(item_id,{})[mode]=score
+                    if is_multi and mode=='cover':
+                        best_score=None;best_orig_ms=0
+                        for orig_ms,orig_vec in active_frames:
+                            s=sum(a*b for a,b in zip(orig_vec,vec))
+                            if best_score is None or s>best_score:
+                                best_score=s;best_orig_ms=orig_ms
+                        scores.setdefault(item_id,{})[mode]=best_score
+                        if origin_hits is not None:origin_hits[item_id]=best_orig_ms
+                    else:
+                        score=sum(a*b for a,b in zip(active_frames[0][1],vec))
+                        scores.setdefault(item_id,{})[mode]=score
+                        if origin_hits is not None and mode=='cover':origin_hits[item_id]=active_frames[0][0]
                 if source in ('all','cover') and 'cover' in self.profile.modalities:
                     vsql='SELECT item_id,revision,at_ms,vector FROM ai_video_frames WHERE item_id IN ('+','.join('?' for _ in batch)+') ORDER BY item_id,at_ms'
                     for item_id,rev,at_ms,data in db.execute(vsql,batch):
@@ -168,11 +199,21 @@ class VectorStore:
                             vec=array('f');vec.frombytes(data)
                         except (ValueError,TypeError):continue
                         if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:continue
-                        score=sum(a*b for a,b in zip(query,vec))
-                        prev=scores.get(item_id,{}).get('cover')
-                        if prev is None or score>prev or (score==prev and item_id not in video_hits):
-                            scores.setdefault(item_id,{})['cover']=score
-                            video_hits[item_id]=at_ms
+                        if is_multi:
+                            for orig_ms,orig_vec in active_frames:
+                                score=sum(a*b for a,b in zip(orig_vec,vec))
+                                prev=scores.get(item_id,{}).get('cover')
+                                if prev is None or score>prev or (score==prev and item_id not in video_hits):
+                                    scores.setdefault(item_id,{})['cover']=score
+                                    video_hits[item_id]=at_ms
+                                    if origin_hits is not None:origin_hits[item_id]=orig_ms
+                        else:
+                            score=sum(a*b for a,b in zip(active_frames[0][1],vec))
+                            prev=scores.get(item_id,{}).get('cover')
+                            if prev is None or score>prev or (score==prev and item_id not in video_hits):
+                                scores.setdefault(item_id,{})['cover']=score
+                                video_hits[item_id]=at_ms
+                                if origin_hits is not None:origin_hits[item_id]=active_frames[0][0]
         page_hits={}
         if source in ('all','cover') and 'cover' in self.profile.modalities:
             for item_id,(score,evidence) in (page_scores or {}).items():
@@ -619,32 +660,50 @@ class AISearch:
             with self._search_workspace(scope,cancelled) as (spool,check):
                 origin=self._current_rows([item_id],scope).get(item_id)
                 if origin is None:raise KeyError(item_id)
-                if origin['kind'] not in ('image','book','archive'):
+                if origin['kind'] not in ('image','book','archive','video'):
                     raise ValueError('Invalid similarity source')
                 result={'total':0,'items':[],'page':page,'limit':limit,'mode':'similar',
-                        'origin_id':item_id,'origin_revision':revision(origin),'profile':self.profile.key,
+                        'origin_id':item_id,'origin_kind':origin['kind'],'origin_revision':revision(origin),'profile':self.profile.key,
                         'scope':scope,'source':'cover','ranking':'max','score_kind':'cosine',
                         'coverage_limit':MAX_ITEMS,'similarity_status':'unsupported_profile'}
                 if 'cover' not in self.profile.modalities:return result
-                query=self.store.cover(origin)
-                if query is None:return {**result,'similarity_status':'unindexed'}
+                if origin['kind']=='video':
+                    origin_frames=self.store.video_frames(origin)
+                    if not origin_frames:return {**result,'similarity_status':'unindexed'}
+                    query=origin_frames[0][1]
+                else:
+                    query=self.store.cover(origin)
+                    if query is None:return {**result,'similarity_status':'unindexed'}
+                    origin_frames=[(0,query)]
                 candidate_total=indexed_total=0
-                for rows in self._search_batches(kind,view,scope,check,('image','book','archive'),item_id):
+                for rows in self._search_batches(kind,view,scope,check,('image','book','archive','video'),item_id):
                     candidate_total+=len(rows)
-                    scores,_,_=self.store.scores_with_content(rows,query,'cover')
+                    origin_hits={}
+                    scores,video_hits,_=self.store.scores_with_content(rows,query,'cover',query_frames=origin_frames,origin_hits=origin_hits)
                     for row in rows:
-                        if row['id'] in scores:spool.add(row['id'],scores[row['id']],payload={'revision':revision(row)})
+                        rid=row['id']
+                        if rid in scores:
+                            pl={'revision':revision(row)}
+                            if rid in video_hits:pl['video_match_ms']=video_hits[rid]
+                            if rid in origin_hits:pl['origin_match_ms']=origin_hits[rid]
+                            spool.add(rid,scores[rid],payload=pl)
                     indexed_total+=len(scores)
                     check()
                 spool.finalize('max');selected=spool.page(page,limit)
                 with self.catalog._guard:
                     check()
-                    current,_=self._search_page_rows(spool,selected,scope,check)
+                    current,payloads=self._search_page_rows(spool,selected,scope,check)
                     latest=self._current_rows([item_id],scope).get(item_id)
                     if latest is None:raise KeyError(item_id)
                     if revision(latest)!=revision(origin):raise AIBusy('起点の作品が更新されました。類似検索をやり直してください。')
-                    items=[{**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
-                            'similarity_evidence':'cover'} for key,score in selected['ranked']]
+                    items=[]
+                    for key,score in selected['ranked']:
+                        row_dict={**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
+                                  'similarity_evidence':'cover'}
+                        pl=payloads.get(key,{})
+                        if 'video_match_ms' in pl:row_dict['video_match_ms']=pl['video_match_ms']
+                        if 'origin_match_ms' in pl:row_dict['origin_match_ms']=pl['origin_match_ms']
+                        items.append(row_dict)
                     check()
                 return {**result,'total':selected['total'],'items':items,'similarity_status':'ready',
                         'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total,'index_limit':MAX_ITEMS}

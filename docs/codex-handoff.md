@@ -1,5 +1,35 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-19 R05動画類似・時刻根拠実装・CPU検証完了（CPU_DONE） — 次はR06音声方式設計
+
+開始HEAD `945cb57`（R04-B/Cマージ後）、fetch/status/logでclean/origin同期を確認。[動画起点の類似検索と時刻根拠の設計・契約](video-similarity.md)を新規作成。**R05はCPU_DONE（保存済み時間付き動画代表frame vectorの最大類似度集約・timepoint grounding・自己除外・UIシーク接続完了）**。実機GPU/GUI受入はユーザー方針に従い延期しR14へ集約（一括検証用ハーネス `tools/test_video_similarity_acceptance.py` を用意）。次は台帳に従い **R06 音声方式設計**。
+
+- **R05実装詳細（Pythonバックエンド・Core・WinUI 3）**:
+  - `app/ai_search.py`:
+    - `VectorStore.video_frames(self, row)`: 指定行の保存済み時間付き代表フレーム `(at_ms, vector)` を `at_ms` 昇順で取得（未索引の場合は時刻 0ms の cover にフォールバック; 破損・非有限 vector をゼロ割り当てでスキップ）。
+    - `VectorStore.scores_with_content(...)`: `query_frames` を受け取り、マルチフレーム動画に対して $\max_{orig, cand} \cos(\mathbf{v}_{orig}, \mathbf{w}_{cand})$ の最大類似度集約を実施。候補フレーム時刻 `video_hits[cand_id] = cand_ms` および起点フレーム時刻 `origin_hits[cand_id] = orig_ms` を正確に記録（Timepoint Grounding）。最初の1フレームだけの比較を「動画全体」と偽らない。
+    - `AISearch.similar(...)`: 起点種別として `video` を許可。候補種別として `video` を含め、起点アイテムは自己除外 (`exclude_id=item_id`)。候補アイテムに `video_match_ms`, `origin_match_ms`, `similarity_origin_id` を付与し、レスポンスに `origin_kind` を明示。
+  - `src/Aredoko.Core/SimilaritySearch.cs` & `Protocol.cs`:
+    - `SimilaritySearch.CanStart(row)`: `row.Kind is "image" or "book" or "archive" or "video"` を許可（`audio` はR06/R08まで安全に除外）。
+    - `SimilaritySearch.Guidance(status, originKind)`: `video` 起点の案内文（未索引、profile不一致、未知状態）を提供。
+    - `MediaRow.AIEvidence`: 起点と候補の組み合わせ（動画→動画、画像→動画、動画→画像、画像→画像）に応じた時刻根拠表示（例：`動画一致（起点 0:01 → 候補 0:02）\n類似度 0.950`）。
+    - `Protocol.ParseSearch`: `origin_kind`, `video_match_ms`, `origin_match_ms` を reflection-free で型安全にパース。
+  - `src/Aredoko.WinUI/MainPage.xaml.cs` & `VideoPlayerView.cs`:
+    - `SimilarityMenu`: 動画行のコンテキストメニューに `似た動画・素材を探す`（AutomationId: `FindSimilar{row.Id}`）を表示。
+    - `SearchAsync` & `UpdateSearchMethod`: 動画起点の類似検索時、情報バナータイトルを `似た動画・素材`、ヒントを `動画の代表フレームから似た候補を探しています。` に更新。
+    - `VideoPlayerView`: 検索結果クリックで動画を開く際、`row.VideoMatchMs` に応じて該当時刻へ自動シークし、ステータスバーに時刻移動通知を表示。
+- **検証記録**:
+  - **Python similarity tests**: 21 PASS（16 既存 + 5 新規 `VideoSimilarityTests`：マルチフレーム最大集約、画像→動画シーク時刻、種別フィルタ、未索引/破損フレームフォールバック、ゼロ推論/原本不変性）。
+  - **Core Tests**: **595 checks PASS**（0 failure）。
+  - **WinUI x64 Release**: **警告0 / エラー0**。
+  - **受入ハーネス**: `tools/test_video_similarity_acceptance.py --stage cpu`（Core / Python / WinUI Release / プログラム実証 16/16 checks）全項目 PASS。
+  - **実GUI/GPUテスト**: ユーザー指示により延期し、`--stage gui` / `--stage gpu` としてR14一括受入に備えて待機。
+- **制約・保全事項**:
+  - P0累積2/2終了・OCR保留・全機能/簡潔GUI・原本保護・私物走査/変更なし・Actionsなし・mainへのmergeなし。
+  - 次の3手（台帳優先順）：**R06 音声方式設計 → R07 発話内容索引 → R08 音響/音楽特徴索引**。
+
+---
+
 ## 2026-10-19 R04実装・CPU検証完了（A/B/C CPU_DONE） — 次はR05動画起点類似
 
 開始HEAD `945cb57`（R04-Aコミット後）、fetch/status/logでclean/origin同期を確認。[索引継続の設計・契約](index-continuation.md)を更新。**R04はCPU_DONE（A バックエンド、B Coreプロトコル/job所有取消、C WinUI AI設定統合が完了）**。実機GPU/GUI受入はユーザー方針に従い延期しR14へ集約（一括検証用ハーネス `tools/test_continuation_acceptance.py` を用意）。次は台帳に従い **R05 動画起点類似**。

@@ -39,7 +39,7 @@
 | R02 | 全登録範囲を扱う上限付きメモリの検索/候補列挙 | R01 | Sol実装、**Astra推奨：同値性/競合レビュー** | CPU_DONE：[A/B](full-library-search.md)・[C所有取消](search-cancellation.md)実装/CPU合格、実機R14 |
 | R03 | バックアップ/復旧・DB/profile更新失敗からの復帰 | なし | Sol実装、**Astra推奨：整合性設計/レビュー** | CPU_DONE：[停止時backup/新規復元](backup-recovery.md)・launcher引数CPU確認、UI導線R10/native R14 |
 | R04 | 大量索引の明示継続・差分・中断再開を一連で完成 | R01、R03契約 | Sol、複数保存先の競合のみAstraレビュー | CPU_DONE：[A/B/C](index-continuation.md)実装/CPU合格、実機GUI/GPU受入はR14 |
-| R05 | 動画起点の類似検索と時刻根拠/既存UI接続 | R01、既存動画索引 | Sol。集約契約が曖昧ならAstra | TODO |
+| R05 | 動画起点の類似検索と時刻根拠/既存UI接続 | R01、既存動画索引 | Sol。集約契約が曖昧ならAstra | CPU_DONE：[保存済みframe最大集約/時刻根拠](video-similarity.md)、UIシーク接続、実機R14 |
 | R06 | 音声/音楽の入力能力・モデル/契約/評価設計を決定 | なし | **Astra強く推奨：方式選定** | TODO |
 | R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | TODO |
 | R08 | 音響/音楽特徴の索引・日本語検索・類似検索 | R06、R03/R04契約 | **Astra推奨：特徴/比較設計**、実装Sol可 | TODO |
@@ -81,6 +81,8 @@ R01に沿い、keyset/streaming・bounded top-k等を比較して採用。combin
 既存128page/16page atomic・8冊batch・最新job再開を再利用。登録5万件でも先頭1万件だけを繰り返さず、明示したscope/profileの未処理分へ進める。計画→開始→取消→再起動→明示再開/次の範囲、追加/変更/除外/解除を生成fixtureで検証。総数/準備済み/未処理/対象外/失敗を混同しない。一般queueや自動全冊走査は目的にせず、必要なbounded継続だけを追加する。
 
 ### R05 — 動画の内容類似
+
+2026-10-19：[R05](video-similarity.md)はCPU_DONE（保存済み時間付き動画代表frame vectorの最大類似度集約・timepoint grounding・自己除外・UIシーク接続完了、Python 21 PASS [5 new VideoSimilarityTests]、Core 595 PASS、Release 0警告/0エラー、CPU受入ハーネス合格）。実機GUI/GPU受入はユーザー方針に従いR14で一括検証（`tools/test_video_similarity_acceptance.py`）。次はR06（音声/音楽の入力能力・モデル/契約/評価設計）。
 
 起点の保存済み時間付きframe vectorを使い、動画→動画/画像の範囲と集約を明示。最初のframeだけの比較を「動画全体」と表示しない。自己除外・profile/版/scope・不正/未索引・取消、候補の一致時刻・対応frame、既存一覧の右クリック→結果→該当時刻再生→戻るを通す。API/mock回帰→Core→既存WinUI接続の順で分割し、実品質とGUI操作はR14へ送る。APIだけでは利用シナリオ完了としない。
 

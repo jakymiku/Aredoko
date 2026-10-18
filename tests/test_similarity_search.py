@@ -228,4 +228,111 @@ class SimilarityTests(unittest.TestCase):
         self.assertEqual(settings.path.read_bytes(),before)
         self.assertEqual(self.encoder.calls,self.calls)
 
+class VideoSimilarityTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.base=Path(self.tmp.name)
+        self.catalog=ProductionCatalog(self.base/'catalog.sqlite');self.addCleanup(self.catalog.close)
+        self.folder=self.base/'media';self.folder.mkdir()
+        for name,data in [('origin.png',RED),('near.png',NEAR),('blue.png',BLUE)]:
+            (self.folder/name).write_bytes(data)
+        (self.folder/'clip_blue_near.mp4').write_bytes(b'video clip A bytes')
+        (self.folder/'clip_red_blue.mp4').write_bytes(b'video clip B bytes')
+        (self.folder/'clip_unindexed.mp4').write_bytes(b'video clip C bytes')
+        self.root=self.catalog.add_root(str(self.folder))
+        self.catalog.start_scan(self.root);self.catalog._worker.join(10)
+        self.assertEqual(self.catalog.scan_state()['state'],'complete')
+        self.encoder=ContractEncoder();self.ai=AISearch(self.catalog,self.encoder);self.addCleanup(self.ai.close)
+        self.scope={'root_ids':[self.root]}
+        self.rows=self.catalog.search()['items']
+        # Put synthetic vectors for testing
+        def item(name):return next(r for r in self.rows if r['title']==name)
+        # origin.png = RED [1, 0, 0]
+        self.ai.store.put(item('origin.png')['id'],revision(item('origin.png')),{'cover':[1.,0.,0.],'text':[0.,1.,0.]})
+        # near.png = NEAR [.98, .2, 0]
+        self.ai.store.put(item('near.png')['id'],revision(item('near.png')),{'cover':[.98,.2,0.],'text':[0.,1.,0.]})
+        # blue.png = BLUE [0, 0, 1]
+        self.ai.store.put(item('blue.png')['id'],revision(item('blue.png')),{'cover':[0.,0.,1.],'text':[0.,1.,0.]})
+        # clip_blue_near: frame 0 = blue [0, 0, 1], frame 1000 = near [.98, .2, 0]
+        row_a=item('clip_blue_near.mp4')
+        self.ai.store.put(row_a['id'],revision(row_a),
+                          {'cover':[0.,0.,1.],'text':[0.,1.,0.]},
+                          [(0,[0.,0.,1.]),(1000,[.98,.2,0.])])
+        # clip_red_blue: frame 500 = red [1, 0, 0], frame 2500 = blue [0, 0, 1]
+        row_b=item('clip_red_blue.mp4')
+        self.ai.store.put(row_b['id'],revision(row_b),
+                          {'cover':[1.,0.,0.],'text':[0.,1.,0.]},
+                          [(500,[1.,0.,0.]),(2500,[0.,0.,1.])])
+        self.item_fn=item
+
+    def test_video_origin_multi_frame_aggregation_and_grounding(self):
+        clip_a=self.item_fn('clip_blue_near.mp4')
+        near_img=self.item_fn('near.png')
+        blue_img=self.item_fn('blue.png')
+        clip_b=self.item_fn('clip_red_blue.mp4')
+        res=self.ai.similar(clip_a['id'],scope=self.scope)
+        self.assertEqual(res['similarity_status'],'ready')
+        self.assertEqual(res['origin_id'],clip_a['id'])
+        self.assertEqual(res['origin_kind'],'video')
+        # Self-exclusion
+        item_ids=[r['id'] for r in res['items']]
+        self.assertNotIn(clip_a['id'],item_ids)
+        # near.png matches origin frame at 1000ms (NOT frame 0 which is blue)
+        near_row=next(r for r in res['items'] if r['id']==near_img['id'])
+        self.assertGreater(near_row['semantic_score'],0.95)
+        self.assertEqual(near_row['origin_match_ms'],1000)
+        # blue.png matches origin frame at 0ms
+        blue_row=next(r for r in res['items'] if r['id']==blue_img['id'])
+        self.assertGreater(blue_row['semantic_score'],0.95)
+        self.assertEqual(blue_row['origin_match_ms'],0)
+        # clip_b matches origin: best match is blue (clip_a 0ms, clip_b 2500ms)
+        clip_b_row=next(r for r in res['items'] if r['id']==clip_b['id'])
+        self.assertGreater(clip_b_row['semantic_score'],0.95)
+        self.assertEqual(clip_b_row['video_match_ms'],2500)
+        self.assertEqual(clip_b_row['origin_match_ms'],0)
+
+    def test_image_origin_finds_video_with_frame_grounding(self):
+        near_img=self.item_fn('near.png')
+        clip_a=self.item_fn('clip_blue_near.mp4')
+        res=self.ai.similar(near_img['id'],scope=self.scope)
+        self.assertEqual(res['similarity_status'],'ready')
+        clip_a_row=next(r for r in res['items'] if r['id']==clip_a['id'])
+        self.assertGreater(clip_a_row['semantic_score'],0.95)
+        # near.png matches clip_a at frame 1000ms
+        self.assertEqual(clip_a_row['video_match_ms'],1000)
+
+    def test_video_kind_filters(self):
+        clip_a=self.item_fn('clip_blue_near.mp4')
+        res_video=self.ai.similar(clip_a['id'],kind='video',scope=self.scope)
+        self.assertTrue(all(r['kind']=='video' for r in res_video['items']))
+        self.assertEqual([r['id'] for r in res_video['items']],[self.item_fn('clip_red_blue.mp4')['id']])
+
+        res_image=self.ai.similar(clip_a['id'],kind='image',scope=self.scope)
+        self.assertTrue(all(r['kind']=='image' for r in res_image['items']))
+        self.assertIn(self.item_fn('near.png')['id'],[r['id'] for r in res_image['items']])
+
+    def test_video_unindexed_and_corrupt(self):
+        clip_c=self.item_fn('clip_unindexed.mp4')
+        res=self.ai.similar(clip_c['id'],scope=self.scope)
+        self.assertEqual(res['similarity_status'],'unindexed')
+        self.assertEqual(res['total'],0)
+        self.assertEqual(res['items'],[])
+
+        # Corrupt all frames of clip_a
+        clip_a=self.item_fn('clip_blue_near.mp4')
+        with self.ai.store.connect() as db:
+            db.execute("UPDATE ai_video_frames SET vector=? WHERE item_id=?",(b'corrupt_bytes',clip_a['id']))
+            db.execute("DELETE FROM ai_vectors WHERE item_id=?",(clip_a['id'],))
+        res_corrupt=self.ai.similar(clip_a['id'],scope=self.scope)
+        self.assertEqual(res_corrupt['similarity_status'],'unindexed')
+
+    def test_zero_inference_and_source_unchanged(self):
+        clip_a=self.item_fn('clip_blue_near.mp4')
+        calls_before=len(self.encoder.calls)
+        mtimes_before={p:p.stat().st_mtime_ns for p in self.folder.iterdir()}
+        self.ai.similar(clip_a['id'],scope=self.scope)
+        self.assertEqual(len(self.encoder.calls),calls_before)
+        mtimes_after={p:p.stat().st_mtime_ns for p in self.folder.iterdir()}
+        self.assertEqual(mtimes_before,mtimes_after)
+
 if __name__=='__main__':unittest.main()

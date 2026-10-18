@@ -262,7 +262,9 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
             loaded = true;
             ContentOpened?.Invoke(itemId);
-            status.Text = "動画を開きました。再生ボタンまたはスペースキーで再生できます。";
+            status.Text = initialPositionMs is int start && start > 0
+                ? $"該当時刻（{VideoPlayerPolicy.FormatTime(TimeSpan.FromMilliseconds(start))}）に移動しました。再生ボタンまたはスペースキーで再生できます。"
+                : "動画を開きました。再生ボタンまたはスペースキーで再生できます。";
         }
         catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && current != version) { }
         catch (Exception ex) { if (current == version) ReportFailure(rangeSource?.Failure ?? ex); }

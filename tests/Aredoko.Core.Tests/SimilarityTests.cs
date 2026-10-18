@@ -10,7 +10,8 @@ static class SimilarityTests
         var image=new MediaRow {Id=7,Kind="image",Availability="present"};
         check(SimilaritySearch.CanStart(image),"similarity image context entry");
         check(SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="book",Availability="present"}),"similarity book cover context entry");
-        check(!SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="video",Availability="present"}),"no unsupported video similarity entry");
+        check(SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="video",Availability="present"}),"video similarity context entry supported");
+        check(!SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="audio",Availability="present"}),"no unsupported audio similarity entry");
         check(!SimilaritySearch.CanStart(new MediaRow {Id=8,Kind="image",Availability="missing"}),"missing image has no similarity entry");
         var scope=JsonNode.Parse("""{"root_ids":[1,2],"kind":"image","shelf":"素材"}""")!.AsObject();
         var request=SimilaritySearch.Request(7,"image","favorites",2,scope,2);
@@ -23,10 +24,16 @@ static class SimilarityTests
         try{SimilaritySearch.Request(0,"","all",0,scope);check(false,"invalid similarity origin");}
         catch(ArgumentOutOfRangeException){check(true,"invalid similarity origin rejected");}
         foreach(var status in new[]{"unindexed","unsupported_profile","unknown"})
+        {
             check(SimilaritySearch.Guidance(status).Length>0,"similarity fallback guidance "+status);
+            check(SimilaritySearch.Guidance(status,"video").Length>0,"video similarity fallback guidance "+status);
+        }
         var parsed=Protocol.ParseSearch("""{"total":1,"items":[{"id":8,"title":"near.png","kind":"image","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.98,"similarity_origin_id":7}],"score_kind":"cosine","similarity_status":"ready"}""");
         check(parsed.SimilarityStatus=="ready"&&parsed.Items[0].SimilarityOriginId==7,"reflection-free item-origin response");
         check(parsed.Items[0].AIEvidence.Contains("起点の画像・表紙")&&parsed.Items[0].AIEvidence.Contains("0.980"),"visual origin reason and cosine shown");
+        var videoParsed=Protocol.ParseSearch("""{"total":1,"origin_id":7,"origin_kind":"video","items":[{"id":9,"title":"clip.mp4","kind":"video","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.95,"similarity_origin_id":7,"video_match_ms":2500,"origin_match_ms":1000}],"score_kind":"cosine","similarity_status":"ready"}""");
+        check(videoParsed.OriginKind=="video"&&videoParsed.Items[0].VideoMatchMs==2500&&videoParsed.Items[0].OriginMatchMs==1000,"video similarity origin and candidate match ms parsed");
+        check(videoParsed.Items[0].AIEvidence.Contains("動画一致（起点 0:01 → 候補 0:02）")&&videoParsed.Items[0].AIEvidence.Contains("0.950"),"video-to-video similarity evidence shows both timepoints");
         check(Protocol.ParseSearch("""{"total":0,"items":[],"similarity_status":"unindexed"}""").SimilarityStatus=="unindexed","unindexed response stays empty");
         check(Protocol.ParseSearch("""{"total":0,"items":[]}""").SimilarityStatus=="","old search response remains compatible");
 
@@ -55,6 +62,18 @@ static class SimilarityTests
         var visual=JsonNode.Parse(Response())!.AsObject();visual["similarity_status"]="ready";visual["total"]=1;
         visual["items"]=JsonNode.Parse("""[{"id":8,"title":"near.png","kind":"image","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.98,"similarity_origin_id":7}]""");
         check(SimilaritySearch.Parse(visual.ToJsonString(),7,0).Items[0].Id==8,"strict visual candidate contract");
+        var videoCand=visual.DeepClone().AsObject();
+        videoCand["items"]=JsonNode.Parse("""[{"id":9,"title":"clip.mp4","kind":"video","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.95,"similarity_origin_id":7,"video_match_ms":1500}]""");
+        var candRow=SimilaritySearch.Parse(videoCand.ToJsonString(),7,0).Items[0];
+        check(candRow.Id==9&&candRow.VideoMatchMs==1500&&candRow.AIEvidence.Contains("動画フレーム一致（0:01）"),"strict video candidate contract accepts video kind and formats evidence");
+        var videoToVideo=videoCand.DeepClone().AsObject();
+        videoToVideo["items"]![0]!["origin_match_ms"]=3200;
+        var v2vRow=SimilaritySearch.Parse(videoToVideo.ToJsonString(),7,0).Items[0];
+        check(v2vRow.OriginMatchMs==3200&&v2vRow.AIEvidence.Contains("動画一致（起点 0:03 → 候補 0:01）"),"video-to-video similarity evidence shows both timepoints");
+        var videoToImage=visual.DeepClone().AsObject();
+        videoToImage["items"]![0]!["origin_match_ms"]=5000;
+        var v2iRow=SimilaritySearch.Parse(videoToImage.ToJsonString(),7,0).Items[0];
+        check(v2iRow.OriginMatchMs==5000&&v2iRow.AIEvidence.Contains("起点の動画（0:05）に似た候補"),"video-to-image similarity evidence shows origin timepoint");
         var large=visual.DeepClone().AsObject();large["total"]=50001;large["page"]=833;
         large["search_complete"]=true;large["search_candidate_total"]=50002;large["indexed_total"]=50001;
         large["coverage_limit"]=10000;

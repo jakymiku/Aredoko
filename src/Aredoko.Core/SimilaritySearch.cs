@@ -5,7 +5,7 @@ namespace Aredoko.Core;
 public static class SimilaritySearch
 {
     public const int MaxResponseBytes=2*1024*1024;
-    public static bool CanStart(MediaRow row) => row.Id > 0 && row.Availability == "present" && row.Kind is "image" or "book" or "archive";
+    public static bool CanStart(MediaRow row) => row.Id > 0 && row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video";
     public static JsonObject Request(int itemId,string kind,string view,int page,JsonObject scope,int? rootId=null) =>
         RequestMulti(itemId,kind,view,page,scope,rootId is int id ? new[]{id} : null);
     public static JsonObject RequestMulti(int itemId,string kind,string view,int page,JsonObject scope,IReadOnlyList<int>? rootIds)
@@ -14,11 +14,17 @@ public static class SimilaritySearch
         return new JsonObject {{"item_id",itemId},{"kind",kind},{"view",view},{"page",page},
             {"scope",FolderSearch.RestrictAIMulti(scope,rootIds)}};
     }
-    public static string Guidance(string status) => status switch
+    public static string Guidance(string status, string originKind = "") => status switch
     {
-        "unindexed" => "この画像・表紙の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。",
-        "unsupported_profile" => "選択中のモデルは画像・表紙の類似検索に対応していません。「AI索引」で画像対応モデルを選ぶか、名前・タグ検索を利用してください。",
-        "ready" => "画像・表紙の特徴が似た候補です。起点自身は除外しています。類似度は正解率ではありません。",
+        "unindexed" => originKind == "video"
+            ? "この動画の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。"
+            : "この画像・表紙の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。",
+        "unsupported_profile" => originKind == "video"
+            ? "選択中のモデルは動画の類似検索に対応していません。「AI索引」で画像・動画対応モデルを選ぶか、名前・タグ検索を利用してください。"
+            : "選択中のモデルは画像・表紙の類似検索に対応していません。「AI索引」で画像対応モデルを選ぶか、名前・タグ検索を利用してください。",
+        "ready" => originKind == "video"
+            ? "動画の内容・シーンが似た候補です。起点自身は除外しています。類似度は正解率ではありません。"
+            : "画像・表紙の特徴が似た候補です。起点自身は除外しています。類似度は正解率ではありません。",
         _ => "類似検索を利用できません。元の検索に戻るか、AI索引の設定を確認してください。"
     };
 
@@ -44,7 +50,7 @@ public static class SimilaritySearch
                result.Items.Count!=Math.Min(60,Math.Max(0,result.Total-(long)expectedPage*60))||
                result.Items.Select(row=>row.Id).Distinct().Count()!=result.Items.Count||
                result.Items.Any(row=>row.Id<1||row.Id==expectedId||row.SimilarityOriginId!=expectedId||
-                   row.Kind is not ("image" or "book" or "archive")||row.SemanticScore is not double score||score < -1.000001||score > 1.000001))
+                   row.Kind is not ("image" or "book" or "archive" or "video")||row.SemanticScore is not double score||score < -1.000001||score > 1.000001))
                 throw new InvalidDataException("類似候補の内容が無効です。検索をやり直してください。");
             return result;
         }
