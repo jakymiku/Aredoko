@@ -209,7 +209,7 @@ class IndexContinuation:
             raise ValueError('Invalid job ID')
         with self.ai.guard:
             if self.ai._closed:
-                raise AIUnavailable('AI is closing')
+                return {'cancel_requested': False, 'job_id': job_id}
             state = self.ai.store.state()
             accepted = False
             if (state.get('job') == JOB and state.get('job_id') == job_id

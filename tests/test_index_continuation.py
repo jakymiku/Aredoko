@@ -19,7 +19,7 @@ from ai_search import AISearch, AIBusy, revision
 from ai_process import AIUnavailable
 from index_continuation import JOB, TTL
 from production import ProductionCatalog
-from production_server import production_handler
+from production_server import production_handler, DisabledAI
 from storage_backup import backup, restore
 from create_library_scale_fixture import create
 
@@ -204,6 +204,10 @@ class ContinuationTests(unittest.TestCase):
         for limit,after in ((True,0),(0,0),(10001,0),(1,True),(1,-1)):
             with self.assertRaises(ValueError):self.plan(limit,after)
         with self.assertRaises(ValueError):self.ai.continuation.prepare(None,self.profile)
+        for bad_id in (None, 123, 'short', 'Z'*32):
+            with self.assertRaises(ValueError):self.ai.continuation.cancel(bad_id)
+        with patch.object(self.ai, '_closed', True):
+            self.assertEqual(self.ai.continuation.cancel('0'*32), {'cancel_requested': False, 'job_id': '0'*32})
         with patch.object(self.catalog,'scan_state',return_value={'state':'running'}):
             with self.assertRaises(AIBusy):self.plan()
 
@@ -235,8 +239,15 @@ class ContinuationTests(unittest.TestCase):
         for operation,body in (('plan',{**fields,'limit':2,'after_id':0}),('start',{**fields,'plan_id':plan['plan_id']}),('resume',{**fields,'job_id':'0'*32}),('cancel',{'job_id':'0'*32})):
             post(operation,body,403,False);post(operation,{**body,'path':'private'},400)
         post('resume',{**fields,'job_id':'0'*32},400)
+        post('cancel',{'job_id':'bad'},400);post('cancel',{'job_id':123},400)
         cancel_unknown=post('cancel',{'job_id':'0'*32})
         self.assertEqual(cancel_unknown,{'cancel_requested':False,'job_id':'0'*32})
+        disabled_srv=ThreadingHTTPServer(('127.0.0.1',0),production_handler(self.catalog,'test-token',ai=DisabledAI()))
+        dt=threading.Thread(target=disabled_srv.serve_forever,daemon=True);dt.start()
+        try:
+            req=urllib.request.Request(f'http://127.0.0.1:{disabled_srv.server_port}/api/library/ai/index/cancel',json.dumps({'job_id':'0'*32}).encode(),{'Content-Type':'application/json','Origin':f'http://127.0.0.1:{disabled_srv.server_port}','X-Aredoko-Token':'test-token'})
+            with urllib.request.urlopen(req,timeout=10) as resp:self.assertEqual(json.load(resp),{'cancel_requested':False,'job_id':'0'*32})
+        finally:disabled_srv.shutdown();disabled_srv.server_close()
         self.assertEqual(self.ai.status()['state'],'complete')
         plan=post('plan',{**fields,'limit':2,'after_id':0})
         self.encoder.on_document=lambda:post('cancel',{'job_id':self.ai.status()['job_id']})

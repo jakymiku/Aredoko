@@ -69,26 +69,26 @@
 - `IndexContinuationPlan`: plan_id, candidate_total, fresh_total, remaining_total, remaining_after_id, selected_total, upper_id, next_after_id。
 - `IndexContinuationStatus`: job_id, state, mode, selected_total, unready_total, processed_total, indexed_total, reused_total, percent, error_message, cancel_requested, resumed_from。
 - `IndexContinuationClient`: `LibraryApi.Continuation` として公開。
-- `tests/Aredoko.Core.Tests/IndexContinuationTests.cs`: 57チェック（境界値、型不正、破損JSON、キャンセル応答照合等）。Core全体 585 PASS。
+- `tests/Aredoko.Core.Tests/IndexContinuationTests.cs`: 61チェック（境界値、型不正、破損JSON、キャンセル応答照合・破損ペイロード検査等）。Core全体 589 PASS。
 
 ## WinUI AI設定画面統合 (R04-C)
 
 `src/Aredoko.WinUI/MainPage.xaml.cs`:
 - AI設定画面の `indexInfo` パネル内に簡潔な継続操作コントロールを配置（自動生成/レイアウト崩れ防止）：
-  - `PlanAIContinuation` (`planContinuation`): 選択中scope/profileで未準備候補を計算し、`AIContinuationSummary` (`continuationText`) に「未索引: X件 / 今回選択: Y件 (全候補: Z件)」のように表示。
-  - `StartAIContinuation` (`startContinuation`): 計画済みの有効な `plan_id` がある場合のみ有効化。明示開始し、返却されたjob IDを `activeContinuationJobId` として追跡。
+  - `PlanAIContinuation` (`planContinuation`): 選択中scope/profileで未準備候補を計算し、`AIContinuationSummary` (`continuationText`) に「未索引: X件 / 今回選択: Y件 (全候補: Z件)」のように表示。ナレーター用 `AutomationProperties.SetName` を配備。
+  - `StartAIContinuation` (`startContinuation`): 計画済みの有効な `plan_id` かつ `activeProfile` が一致する場合のみ有効化。明示開始し、返却されたjob IDを即座に `ownedContinuationJob` として追跡（失敗時は計画を自動破棄）。
   - `ResumeAIContinuation` (`resumeContinuation`): 保存状態に中断/取消済みの継続jobが存在する場合に有効化。
-  - `CancelAIIndex`: 所有job ID（本ページjobまたは継続job `activeContinuationJobId`）が存在する場合は所有取消API（`CancelAsync`）を呼び出し、なければフォールバック取消を実行。
-- scopeやprofileの変更時に計画を即時無効化（誤開始を防止）。
+  - `CancelAIIndex`: 連打防止（クリック直後に無効化）。所有job ID（本ページjobまたは継続job `ownedContinuationJob`）が存在する場合は所有取消API（`CancelAsync`）を呼び出し、なければフォールバック取消を実行。
+- scopeやprofileの変更時に計画を即時無効化（誤開始を防止）。profile値のnull安全性を確保。
 - 既存の先頭1万件prefixビルドボタン（`StartAIIndex`）および本のページ追加ダイアログ・複数冊ジョブは完全保持。
 - WinUI x64 Releaseビルド: 警告0 / エラー0。
 
 ## 検証と状態
 
-- **全Python回帰**: 590 tests (587 PASS, 3 platform SKIP, 0 FAIL, 0 ERROR, 381.8s)。
-- **Python targeted (7 files, 107 tests)**: 107 PASS (102.4s)。
-- **Core Tests**: 585 checks PASS。
+- **全Python回帰**: 590 tests (587 PASS, 3 platform SKIP, 0 FAIL, 0 ERROR)。
+- **Python targeted (7 files, 105 tests)**: 105 PASS (106.0s)。
+- **Core Tests**: 589 checks PASS。
 - **WinUI x64 Release**: 警告0 / エラー0。
-- **検証ハーネス**: `tools/test_continuation_acceptance.py` (--stage cpu PASS)。実GUI/GPUテストはユーザー指示により延期し、R14で一括実施。
+- **検証ハーネス**: `tools/test_continuation_acceptance.py` (--stage cpu PASS)。実GUI/GPUテストはユーザー指示により延期し、`--stage gui` / `--stage gpu` をR14一括受入用に完全実装。
 - **状態**: **R04 CPU_DONE**。次は **R05 動画起点類似**。
 

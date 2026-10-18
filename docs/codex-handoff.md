@@ -5,21 +5,21 @@
 開始HEAD `945cb57`（R04-Aコミット後）、fetch/status/logでclean/origin同期を確認。[索引継続の設計・契約](index-continuation.md)を更新。**R04はCPU_DONE（A バックエンド、B Coreプロトコル/job所有取消、C WinUI AI設定統合が完了）**。実機GPU/GUI受入はユーザー方針に従い延期しR14へ集約（一括検証用ハーネス `tools/test_continuation_acceptance.py` を用意）。次は台帳に従い **R05 動画起点類似**。
 
 - **R04-B（Job所有取消 & Core厳格プロトコル）**:
-  - `POST /api/library/ai/index/cancel`：32桁hexのjob_idを受け付け、実行中の継続jobと照合。一致する場合のみ `cancel_requested: true` を返し、完了済み/ID不一致/別jobを誤って中断しない。旧 `/api/library/ai/cancel`（最新job一括取消）も後方互換で維持。
+  - `POST /api/library/ai/index/cancel`：32桁hexのjob_idを受け付け、実行中の継続jobと照合。一致する場合のみ `cancel_requested: true` を返し、完了済み/ID不一致/別job/AI停止・終了時を安全に `cancel_requested: false` で処理。旧 `/api/library/ai/cancel`（最新job一括取消）も後方互換で維持。
   - `src/Aredoko.Core/IndexContinuation.cs`：`System.Text.Json` のreflection完全無効方針に準拠し、手動パースによる厳格な型/境界値検証（`IndexContinuationRequests`, `IndexContinuationPlan`, `IndexContinuationStatus`）。`IndexContinuationClient` を `LibraryApi.Continuation` として公開。
-  - `tests/Aredoko.Core.Tests/IndexContinuationTests.cs`：57 checks（不正パラメータ、破損JSON、キャンセル要求照合等）。Core全体 585 checks PASS。
+  - `tests/Aredoko.Core.Tests/IndexContinuationTests.cs`：61 checks（不正パラメータ、破損JSON、キャンセル要求照合・破損応答ペイロード等）。Core全体 589 checks PASS。
 - **R04-C（WinUI AI設定画面統合）**:
-  - `src/Aredoko.WinUI/MainPage.xaml.cs`：AI設定パネル（`indexInfo`）内に `PlanAIContinuation`, `StartAIContinuation`, `ResumeAIContinuation`, `AIContinuationSummary` を配置。
-  - 計画時に未索引数/今回選択数/全候補数を要約表示し、有効な計画がある場合のみ開始ボタンを有効化。中断/取消済みの継続jobがある場合は再開ボタンを有効化。
-  - `CancelAIIndex` ボタンは所有継続job ID（または本ページjob ID）がある場合に所有取消APIを優先呼出し。
-  - scope変更やprofile切替時に計画を即時無効化。既存のprefix 1万件ビルド（`StartAIIndex`）および本のページ追加・複数冊バッチの操作/レイアウトを一切破壊せず保持。
+  - `src/Aredoko.WinUI/MainPage.xaml.cs`：AI設定パネル（`indexInfo`）内に `PlanAIContinuation`, `StartAIContinuation`, `ResumeAIContinuation`, `AIContinuationSummary` を配置。ナレーター対応（`AutomationProperties.SetName`）配備。
+  - 計画時に未索引数/今回選択数/全候補数を要約表示し、有効な計画がある場合のみ開始ボタンを有効化。開始・再開成功時に所有job ID（`ownedContinuationJob`）を即時追跡。中断/取消済みの継続jobがある場合は再開ボタンを有効化。
+  - `CancelAIIndex` ボタンは連打防止ガード付きで、所有継続job ID（または本ページjob ID）がある場合に所有取消APIを優先呼出し。
+  - scope変更やprofile切替時に計画を即時無効化。profile値のnull安全性を確保。既存のprefix 1万件ビルド（`StartAIIndex`）および本のページ追加・複数冊バッチの操作/レイアウトを一切破壊せず保持。
   - WinUI x64 Releaseビルド：**警告0 / エラー0**。
 - **検証記録**:
-  - **全Python回帰**: 590 tests（**587 PASS, 3 platform SKIP, 0 FAIL, 0 ERROR in 381.8s**）。
-  - **専用Python targeted（7 files, 107 tests）**: **107 PASS in 102.4s**。
-  - **Core Tests**: **585 checks PASS**。
+  - **全Python回帰**: 590 tests（**587 PASS, 3 platform SKIP, 0 FAIL, 0 ERROR**）。
+  - **専用Python targeted（7 files, 105 tests）**: **105 PASS in 106.0s**。
+  - **Core Tests**: **589 checks PASS**。
   - **WinUI x64 Release**: **警告0 / エラー0**。
-  - **受入ハーネス**: `tools/test_continuation_acceptance.py --stage cpu`（Core / Python / WinUI Release）全3項目PASS。実GUI/GPUテストはユーザー指示により延期し、`--stage gui` としてR14一括受入に備えて待機。
+  - **受入ハーネス**: `tools/test_continuation_acceptance.py --stage cpu`（Core / Python / WinUI Release）全3項目PASS。実GUI/GPUテストはユーザー指示により延期し、`--stage gui` / `--stage gpu` としてR14一括受入に備えて待機。
 - **制約・保全事項**:
   - P0累積2/2終了・OCR保留・全機能/簡潔GUI・原本保護・私物走査/変更なし・Actionsなし・mainへのmergeなし。
   - 次の3手（台帳優先順）：**R05 動画起点類似 → R06 音声方式設計 → R07 発話内容索引**。

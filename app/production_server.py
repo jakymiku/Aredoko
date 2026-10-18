@@ -500,11 +500,15 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except ReaderChanged:return self.send(409,{'error':'Page source changed; rescan and refresh page index'})
                     except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
                 if self.path in ('/api/library/ai/index/plan','/api/library/ai/index/start','/api/library/ai/index/resume','/api/library/ai/index/cancel'):
-                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
                     operation=self.path.rsplit('/',1)[-1]
                     if operation=='cancel':
                         if set(body)!={'job_id'}:raise ValueError('Invalid continuation fields')
+                        if not isinstance(ai,AISearch):
+                            if type(body['job_id']) is not str or not re.fullmatch(r'[0-9a-f]{32}',body['job_id']):
+                                raise ValueError('Invalid job ID')
+                            return self.send(200,{'cancel_requested':False,'job_id':body['job_id']})
                         return self.send(200,ai.continuation.cancel(body['job_id']))
+                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
                     fields={'scope','profile'} | ({'limit','after_id'} if operation=='plan' else {'plan_id' if operation=='start' else 'job_id'})
                     if set(body)!=fields:raise ValueError('Invalid continuation fields')
                     scope=validate_scope(body['scope'])

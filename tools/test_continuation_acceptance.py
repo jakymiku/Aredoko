@@ -57,10 +57,130 @@ def run_cpu_stage(target_dir):
     return report
 
 
+def run_gpu_stage(target_dir):
+    """Real CUDA EmbeddingGemma 2 acceptance for R04 continuation (deferred to R14)."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+    report = {'stage': 'gpu', 'pass': False, 'checks': [], 'timestamp': time.time()}
+    print("Running R04 GPU continuation acceptance stage (deferred to R14)...")
+    from ai_profiles import DEFAULT_PROFILE
+    from ai_search import AISearch
+    from production import ProductionCatalog
+    from create_preview_fixture import png
+    from test_index_gpu_scaling import MeasuredEncoder
+
+    gpu_dir = target_dir / 'gpu'
+    gpu_dir.mkdir(parents=True, exist_ok=True)
+    media = gpu_dir / 'media'
+    media.mkdir(exist_ok=True)
+    for i in range(6):
+        (media / f'item_{i}.png').write_bytes(png(color=(30 + i * 30, 80, 150)))
+    cat_path = gpu_dir / 'catalog.sqlite'
+    if cat_path.exists():
+        cat_path.unlink()
+    cat = ProductionCatalog(cat_path)
+    root = cat.add_root(str(media))
+    cat.start_scan(root)
+    enc = MeasuredEncoder()
+    ai = AISearch(cat, enc)
+    try:
+        plan = ai.continuation.prepare({}, ai.profile.key, limit=10)
+        check("GPU plan selects unindexed items", plan['selected_total'] == 6, report)
+        started = ai.continuation.start(plan['plan_id'], {}, ai.profile.key)
+        ai.worker.join(30)
+        status = ai.status()
+        check("GPU continuation completes all items", status['state'] == 'complete' and status['indexed'] == 6, report)
+        check("GPU continuation used real encoder", len(enc.calls['document']) == 6, report)
+        plan2 = ai.continuation.prepare({}, ai.profile.key, limit=10)
+        check("Second plan finds 0 unready", plan2['selected_total'] == 0 and plan2['remaining_total'] == 0, report)
+        report['pass'] = True
+    finally:
+        ai.close()
+        cat.close()
+    (target_dir / 'gpu-report.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+    return report
+
+
 def run_gui_stage(target_dir):
-    # Deferred stage: to be invoked when user explicitly authorizes GPU/GUI test batch.
-    print("GUI stage is prepared and deferred per user instruction. Run when permitted.")
-    return {'stage': 'gui', 'deferred': True, 'pass': None}
+    """Native WinUI UIA automation for R04 continuation (deferred to R14)."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+    report = {'stage': 'gui', 'pass': False, 'checks': [], 'screenshots': [], 'timestamp': time.time()}
+    print("Running R04 GUI continuation acceptance stage (deferred to R14)...")
+    import uuid
+    from create_preview_fixture import png
+    from production import ProductionCatalog
+
+    gui_dir = target_dir / 'gui'
+    gui_dir.mkdir(parents=True, exist_ok=True)
+
+    winapp_check = subprocess.run(['winapp', '--version'], capture_output=True, text=True)
+    check("winapp CLI tool available", winapp_check.returncode == 0, report)
+
+    media = gui_dir / 'media'
+    media.mkdir(exist_ok=True)
+    for i in range(4):
+        (media / f'asset_{i}.png').write_bytes(png(color=(40 + i * 40, 100, 180)))
+    cat_path = gui_dir / 'catalog.sqlite'
+    if cat_path.exists():
+        cat_path.unlink()
+    cat = ProductionCatalog(cat_path)
+    cat.add_root(str(media))
+    cat.start_scan()
+    cat.close()
+
+    env = {**os.environ, 'WINAPP_UI_WORKFLOW_ID': 'aredoko-continuation-' + uuid.uuid4().hex, 'PYTHONIOENCODING': 'utf-8'}
+    cmd = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(REPO / 'tools/start-winui.ps1'),
+           '-Database', str(cat_path), '-UITheme', 'Light']
+    proc = subprocess.Popen(cmd, cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    try:
+        time.sleep(5)
+        hwnd_out = subprocess.run(['winapp', 'ui', 'list-windows', '--json'], capture_output=True, text=True)
+        windows = json.loads(hwnd_out.stdout or '[]')
+        main = [w for w in windows if 'Aredoko' in w.get('title', '') and w.get('title') != 'PopupHost']
+        if not main:
+            raise RuntimeError("Aredoko window not found")
+        hwnd = str(main[0]['hwnd'])
+
+        def ui(*args):
+            res = subprocess.run(['winapp', 'ui', *args, '-w', hwnd], capture_output=True, text=True, timeout=30)
+            if res.returncode != 0:
+                raise RuntimeError(f"winapp error: {res.stderr or res.stdout}")
+            return res.stdout
+
+        ui('wait-for', 'ItemList', '-p', 'IsEnabled', '--value', 'True', '-t', '30000')
+        ui('invoke', 'BtnSettings')
+        ui('wait-for', 'AIIndexSummary', '-t', '10000')
+        check("AIIndexSummary present", True, report)
+
+        ui('wait-for', 'PlanAIContinuation', '-p', 'IsEnabled', '--value', 'True', '-t', '10000')
+        ui('invoke', 'PlanAIContinuation')
+        ui('wait-for', 'AIContinuationSummary', '-p', 'Visibility', '--value', 'Visible', '-t', '10000')
+        ui('wait-for', 'StartAIContinuation', '-p', 'Visibility', '--value', 'Visible', '-t', '10000')
+        check("Plan displays summary and shows start button", True, report)
+
+        plan_shot = gui_dir / 'continuation-plan.png'
+        ui('screenshot', '--output', str(plan_shot))
+        report['screenshots'].append(str(plan_shot))
+
+        ui('invoke', 'StartAIContinuation')
+        ui('wait-for', 'CancelAIIndex', '-p', 'IsEnabled', '--value', 'True', '-t', '5000')
+        ui('invoke', 'CancelAIIndex')
+        ui('wait-for', 'ResumeAIContinuation', '-p', 'Visibility', '--value', 'Visible', '-t', '15000')
+        check("Cancellation succeeded and revealed resume button", True, report)
+
+        cancel_shot = gui_dir / 'continuation-cancelled.png'
+        ui('screenshot', '--output', str(cancel_shot))
+        report['screenshots'].append(str(cancel_shot))
+
+        report['pass'] = True
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(5)
+        except Exception:
+            proc.kill()
+
+    (target_dir / 'gui-report.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+    return report
 
 
 def main():
@@ -72,6 +192,8 @@ def main():
     out_dir = Path(args.output)
     if args.stage in ('cpu', 'all'):
         run_cpu_stage(out_dir)
+    if args.stage in ('gpu', 'all'):
+        run_gpu_stage(out_dir)
     if args.stage in ('gui', 'all'):
         run_gui_stage(out_dir)
 

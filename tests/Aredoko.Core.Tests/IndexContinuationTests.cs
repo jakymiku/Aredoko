@@ -274,6 +274,21 @@ internal static class IndexContinuationTests
         catch (InvalidDataException) { cancelWrongIdRejected = true; }
         check(cancelWrongIdRejected, "CancelAsync rejects mismatched echo job_id");
 
+        foreach (var (name, badCancel) in new (string, JsonObject)[]
+        {
+            ("missing cancel_requested", new() { ["job_id"] = jobHex }),
+            ("non-boolean cancel_requested", new() { ["cancel_requested"] = 1, ["job_id"] = jobHex }),
+            ("missing job_id", new() { ["cancel_requested"] = true }),
+            ("malformed job_id", new() { ["cancel_requested"] = true, ["job_id"] = "bad" })
+        })
+        {
+            currentResponse = badCancel;
+            var rejected = false;
+            try { await api.Continuation.CancelAsync(jobHex); }
+            catch (InvalidDataException) { rejected = true; }
+            check(rejected, $"CancelAsync rejects {name}");
+        }
+
         // StatusAsync
         currentResponse = ValidStatusJson();
         var apiStatus = await api.Continuation.StatusAsync(profile, jobHex, scope);
