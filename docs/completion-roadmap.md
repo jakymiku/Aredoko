@@ -31,7 +31,7 @@
 
 ## タスク台帳（優先順）
 
-状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02 CPU_DONE（A/B/C実装・CPU検証済み、必要実機はR14）、R03 CPU_DONE、R04 READY、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
+状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02 CPU_DONE（A/B/C実装・CPU検証済み、必要実機はR14）、R03 CPU_DONE、R04 READY、R14は限定実機PARTIAL、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
 
 | ID | 作業・出力 | 依存 | 担当難度 | 状態 |
 | --- | --- | --- | --- | --- |
@@ -48,7 +48,7 @@
 | R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | TODO |
 | R12 | 数万件の性能・資源予算を測り必要箇所だけ改善 | R02、R04 | Sol計測、設計変更時Astraレビュー | TODO |
 | R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | TODO |
-| R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | TODO（M1未確認/M2未確認） |
+| R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | PARTIAL：[R02/R03限定実機](release-readiness.md) GPU PASS/native未完、M1/M2未確認 |
 
 ## 各タスクの完了条件
 
@@ -117,7 +117,7 @@ R01に沿い、keyset/streaming・bounded top-k等を比較して採用。combin
 
 ### R14 — まとめて受入、完成と呼ぶ条件
 
-M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時間を事前固定してユーザーへ実行確認。過去のGPU/GUI許諾を今回の延期指示より優先しない。開発中はCPU作業を先へ進め、承認待ちは対象実機項目だけに付ける。
+M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時間を事前固定してユーザーへ実行確認。実行可否は最新のユーザー指示に従う。2026-10-18に実行許可を得てR02/R03限定受入を行い、[GPU PASS/native PARTIAL](release-readiness.md)を記録。以前の延期を現在の禁止とせず、試行上限/未完gateもresetしない。開発中はCPU作業を先へ進め、承認待ちは対象実機項目だけに付ける。
 
 登録→索引→全体/限定検索→根拠を開く→編集→再起動/復旧、モデル未導入/別profile、動画/音声起点類似、UIの各表示条件、配布物からの起動を対象範囲に応じ確認する。GPUメモリ解放・終了後worker残留、原本不変も確認。既知2ZIPは必要な対象だけに使い、過去の同じ精度評価を理由なく反復しない。旧book-batch取消PNGは証拠レビューか承認された限定再確認で解決し、消化済みの試行枠を勝手にリセットしない。
 
@@ -136,6 +136,6 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 1. fetch/status/log→最新handoff→本表の最上位READY/TODOを確認。他AIの未コミット変更を上書きしない。依存が揃う最上位1件をDOINGにし、その中のAPI/CPU→Core→WinUI→必要な受入の小区切りで進める。
 2. 証拠が揃う既存実装を再作成しない。不足は「未実装」「未検証」「新しい退行」に分類。CPU_DONE/WAITには未実行テストと解除条件を具体的に付け、独立した次のタスクへ進む。
 3. 台帳の状態、最新handoffの対象ID/commit/完了条件の達否/次のIDを毎回更新。次の作業順の正本はこの表一つ。歴史文書に別の順番を追加しない。新しい要望/重大退行は優先順位を更新して理由を記録。
-4. 当面の次の3手は **R04（明示索引継続）→R05（動画起点類似）→R06（音声方式設計）**。R01はDONE、R02-A/Bの実装・CPU検証は[完了](full-library-search.md)。R02は[所有取消までCPU_DONE](search-cancellation.md)、GUI全体の配線はR10・資源/性能はR12・必要実機受入はR14。R03の停止時復旧契約はCPU_DONE。外部確認待ちなら独立したR06のCPU調査に進める。GPU/GUI延期は現在のユーザー条件であり恒久ルールではない。新downloadは別途明示許可、CIは起動しない。
+4. 当面の次の3手は **R04（明示索引継続）→R05（動画起点類似）→R06（音声方式設計）**。R01はDONE、R02-A/Bの実装・CPU検証は[完了](full-library-search.md)。R02は[所有取消までCPU_DONE](search-cancellation.md)、GUI全体の配線はR10・資源/性能はR12・必要実機受入はR14。R03の停止時復旧契約はCPU_DONE。外部確認待ちなら独立したR06のCPU調査に進める。GPU/GUIは最新のユーザー指示で許可済み、今回限定nativeの残gate/試行上限は[受入記録](release-readiness.md)を守る。新downloadは別途明示許可、CIは起動しない。
 
 長期台帳（削除しない）：B01 複数ページの関係/展開タグ（Astra推奨、根拠ページ/不明状態/固定評価を先に設計、専用OCRを既定にしない）、B02 Komga任意連携、B03 重複・移動追跡、B04 保存検索/ピン留め、B05 GPU/索引の高度な自動スケジューリング。新しい要望や実運用根拠が出たら順序を更新する。これらをM1前の無限な機能追加へ混ぜない。

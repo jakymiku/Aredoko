@@ -30,11 +30,11 @@ try {
         if($profilesDirectory.Contains('"') -or -not (Test-Path -LiteralPath $profilesDirectory -PathType Container)){throw 'Invalid AI profile directory'}
         $backendArguments+=@('--ai-profiles-dir',('"'+$profilesDirectory+'"'))
     }
-    $appArguments="--ui-theme "+$UITheme.ToLowerInvariant()
+    $appArguments=@('--ui-theme',$UITheme.ToLowerInvariant())
     if($ViewerSettings){
         $viewerPath=[IO.Path]::GetFullPath($ViewerSettings)
         if($viewerPath.Contains('"')){throw 'Invalid viewer settings path'}
-        $appArguments+=' --viewer-settings "'+$viewerPath+'"'
+        $appArguments+=@('--viewer-settings',$viewerPath)
     }
     if($TaggerProfile){
         $taggerPath=[IO.Path]::GetFullPath($TaggerProfile)
@@ -54,8 +54,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'WinUI build failed. See the setup/build steps in docs/winui-mvp.md.' }
     $layoutDirectory = & python tools/winapp_layout.py --configuration Release --arch x64
     if ($LASTEXITCODE -ne 0 -or -not $layoutDirectory) { throw 'Cannot identify WinUI build layout.' }
-    $result = & winapp run src/Aredoko.WinUI -c Release --arch x64 -p Platform=x64 -p SelfContained=true --no-build --output-appx-directory $layoutDirectory --detach --json --args $appArguments
-    if ($LASTEXITCODE -ne 0) { throw 'WinUI build/launch failed.' }
+    $result = & winapp run src/Aredoko.WinUI -c Release --arch x64 -p Platform=x64 -p SelfContained=true --no-build --output-appx-directory $layoutDirectory --detach --json -- @appArguments
+    if ($LASTEXITCODE -ne 0) { throw ('WinUI build/launch failed: '+($result -join "`n")) }
     $launch = ($result -join "`n") | ConvertFrom-Json
     if (-not $launch.ProcessId) { throw 'No application process returned.' }
     Write-Host 'Aredoko is running. Close the app to stop its backend.'

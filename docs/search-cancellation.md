@@ -1,5 +1,7 @@
 # R02-C — 検索専用の受付ID・中断
 
+> 2026-10-18追記：最新のユーザー許可で[限定GPU/native受入](release-readiness.md)を実施。GPU28 PASS、actual復元launcherのLight検索/設定とDark起動/編集保持を確認、Dark小窓詳細以降は未完。下記の「延期/未実機」記述はCPU実装時点の履歴。全R14/M1/M2の合格とは扱わない。
+
 2026-10-18。R02-Bの全件候補検索に、request所有の取消と切断検出を接続する。モデル・永続DB schema・検索順位式・索引jobの停止APIは変更しない。
 
 ## HTTP契約

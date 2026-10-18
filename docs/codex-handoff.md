@@ -1,5 +1,18 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-18 ユーザー承認GPU/GUI限定受入 — R14 PARTIAL、次はR04
+
+最新指示でGPU/GUI実行が許可された。以前の一時延期を現在の禁止と扱わない。[固定範囲・全結果・残gate](release-readiness.md)を参照。開始HEAD `ec2f23a`、生成2root/5items/CBZ3page、既存CUDA EG2のみ。**GPU28/28 PASS、nativeはPARTIAL（22記録assertion PASS後、Dark小窓overlayが閉じてBtnCloseDetails不在でflow停止）**。R02/R03はCPU_DONE、全体M1/M2やR14 DONEとはしない。
+
+- 停止時backup/新規restore後、manual整理・読書位置・profile/settingsを保持。3mode公開順位/丸めscore一致、3page fresh、復元後document/image再encode0、owned worker全停止、原本bytes/mtime不変。GPU峰931.8MiBはworker allocationで総VRAM/RSS予算ではない。
+- 実`start-winui.ps1`で空白を含む復元pathを使用。Windows PowerShellで`--args`文字列経路が失敗したためWinApp正式`--`＋引数配列へ修正し、CLI失敗詳細を表示。最終実起動で両themeと復元viewer/profile伝達を確認。Lightの編集→combined GPU検索→正常終了、Dark再起動のfavorite保持まで通過。native production leaseでlive backup拒否も確認。
+- 新規native flowは初回＋修正再試行2回で終了。初回execution policy/再試行1 launcher失敗/再試行2 Dark小窓で停止。生log/失敗JSONを保持、5PNGすべて目視、Light3画面は読めるがDarkの2枚は詳細overlayを示していない。**5枚合格としない**。harnessのresize後BtnDetails再表示は実行後に補正、構文確認のみで未再試行。旧book-batch取消PNG/試行予算は別で未完のまま。
+- 今回Core528 PASS /Release0警告0エラー（Light7.96秒/Dark7.88秒）。Python製品コード/C#/XAML未変更のため570件全体は再実行しない（前回567PASS/3SKIPは履歴）。WinUI Code Reviewはlauncher/所有process・パス/async境界を確認。Analyzer未導入/未実行、AOT/High Contrast/Narrator/実1TB/別ホスト復旧未検証。
+- 証拠`data/ai-ui/recovery-native-20261018-01/`、最終scriptと実行版の差はfinal-artifact-hashes.json/visual-review.jsonに明記。`tools/test_recovery_acceptance.py`はgpu→gui分離、元失敗を上書きしない。新DL/依存/私物scan/原本変更/Actions/main mergeなし。P0累積2/2/OCR保留/全機能/簡潔GUIを保持。
+
+次の3手：**R04→R05→R06**。R04はCPU planで全scopeのfresh/remaining、固定ID/revision/profile/upper-IDを確認して明示start/resumeへ。Dark小窓以降の受入は未完として残し、このflowの試行上限をresetして繰り返さない。現在の実行許可を恒久禁止へ書き換えない。
+
+---
 
 ## 2026-10-18 R03実装・CPU検証完了 — 次はR04
 
