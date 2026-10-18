@@ -154,6 +154,12 @@ def run_cpu_stage(target_dir):
         check("Audio hit has audio_match_ms 3500", hit.get('audio_match_ms') == 3500, report)
         check("Audio hit has snippet", hit.get('audio_match_snippet') == "進捗報告の内容です", report)
 
+    # Verify zero-allocation packed vector reuse
+    cached_segs = ai.audio_speech.get_segments(a_row['id'], rev_a, include_vectors=False)
+    check("Cached segments retrieved as raw bytes", len(cached_segs) == 2 and isinstance(cached_segs[0]['vector'], bytes), report)
+    ai.audio_speech.put_segments(a_row['id'], rev_a, cached_segs)
+    check("Cached packed vectors reused successfully", ai.audio_speech.fresh(a_row['id'], rev_a), report)
+
     # Verify original source media immutability
     check("Original source audio unmodified", audio_file.stat().st_mtime_ns == initial_mtime, report)
 

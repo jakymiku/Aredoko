@@ -13,28 +13,29 @@
   - `app/audio_semantics.py`:
     - 契約 `audio-speech-segment:v1`、スキーマ `ai_audio_segments(item_id, source_revision, segment_id, start_ms, end_ms, snippet, vector, contract, PRIMARY KEY(item_id, segment_id))`。
     - 無アロケーション有限長正規化検証 `_is_valid_packed` / `unpack`、内積 `_score_packed`。
-    - `AudioSpeechVectors`: `put_segments`, `get_segments`, `rank`, `fresh`, `delete_item`。
+    - raw `bytes` を直接受け付けるゼロ再エンコードベクトル再利用、DBコネクション再利用、256セグメントごとの応答性の高いキャンセル監視。
+    - `AudioSpeechVectors`: `put_segments`（重複ID・非文字列スニペット排除・bytes再利用）, `get_segments`（`include_vectors`制御）, `rank`, `fresh`（破損ベクトル検出）, `delete_item`。
   - `app/ai_search.py`:
-    - `VectorStore.__init__` でテーブル作成、`scores_with_content` に `audio_scores` を配線。
+    - `VectorStore.__init__` でテーブル作成、`scores_with_content` に `audio_scores` を配線（`score >= prev` で発話根拠を保持）。
     - `AISearch.search(...)` で発話ヒットの時刻 `audio_match_ms` とスニペット `audio_match_snippet` を結合。
   - `app/storage_schema_v1.json` / `app/ai_store_cleanup.py` / `app/production.py`:
     - `ai_audio_segments` をvectorテーブルとして登録、バックアップ復元時のテーブル検証および安全クリーンアップを保証。
   - `src/Aredoko.Core/Protocol.cs`:
-    - `AIEvidence` に `audio_match_ms` / `audio_match_snippet` の安全なリフレクションフリー構文解析とフォーマット表示（`音声発話一致（mm:ss · 「snippet」）`）を実装。
+    - `AIEvidence` に `audio_match_ms` / `audio_match_snippet` の安全なリフレクションフリー構文解析とフォーマット表示（1時間以上 `h:mm:ss` / 未満 `mm:ss`）を実装。
   - `tests/Aredoko.Core.Tests/AudioSpeechTests.cs`:
-    - 20 checks（正常パース、時刻/スニペット表示フォーマット、スニペット省略時、120文字+ellipsis切り詰め、不正/負値タイムスタンプ拒否、非文字列スニペット拒否）。Core全体 616 checks PASS。
+    - 22 checks（正常パース、1時間以上/未満時刻フォーマット、スニペット省略時、120文字+ellipsis切り詰め、不正/負値タイムスタンプ拒否、非文字列スニペット拒否）。Core全体 618 checks PASS。
   - `tests/test_audio_semantics.py`:
-    - 6 tests（スキーマ、正常登録/取得、無音処理、時間境界0..86400000ms検査、破損ベクトル・NaN/Infの不生成拒絶、削除/鮮度整合）。
+    - 12 tests（スキーマ、正常登録/取得、無音処理、時間境界0..86400000ms検査、破損ベクトル・NaN/Infの不生成拒絶、削除/鮮度整合、dict/5-tuple形式、重複ID拒否、raw bytesベクトル再利用、2時間120区間長尺ウィンドウ・1000区間スケール試験、DB内破損行スキップ/fresh判定、キャンセル応答性）。
   - `tools/test_audio_acceptance.py`:
-    - CPU受入ハーネス 15/15 checks PASS（Core, Python, WinUI Release, セグメント鮮度, 無音無視, 3500ms時刻根拠, スニペット取得, 原本不変性）。
+    - CPU受入ハーネス 17/17 checks PASS（Core, Python, WinUI Release, セグメント鮮度, 無音無視, 3500ms時刻根拠, スニペット取得, raw bytes再利用, 原本不変性）。
 - **検証記録**:
-  - **Core Tests**: **616 checks PASS**（0 failure）。
-  - **Python test_audio_semantics**: **6 PASS**。
+  - **Core Tests**: **618 checks PASS**（0 failure）。
+  - **Python test_audio_semantics**: **12 PASS**。
   - **Python test_index_continuation**: **20 PASS**。
-  - **Python test_storage_backup**: **24 PASS**。
+  - **Python test_storage_backup**: **24 PASS**（単体実行可能）。
   - **Python test_similarity_search / test_ai_streaming**: **31 PASS**。
   - **受入ハーネス**:
-    - `tools/test_audio_acceptance.py --stage cpu`: **15/15 PASS**。
+    - `tools/test_audio_acceptance.py --stage cpu`: **17/17 PASS**。
     - `tools/test_continuation_acceptance.py --stage cpu`: **PASS**。
     - `tools/test_video_similarity_acceptance.py --stage cpu`: **20/20 PASS**。
   - **WinUI x64 Release**: **警告0 / エラー0**。

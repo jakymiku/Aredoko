@@ -14,6 +14,8 @@ import threading
 import types
 import unittest
 from unittest.mock import patch
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 
 from test_tag_suggestions import TagFixture
 from ai_profiles import DEFAULT_PROFILE

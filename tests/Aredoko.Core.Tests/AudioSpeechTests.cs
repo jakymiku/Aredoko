@@ -63,6 +63,33 @@ static class AudioSpeechTests
         check(itemNoSnippet.AudioMatchSnippet is null, "null audio_match_snippet when omitted");
         check(itemNoSnippet.AIEvidence.Contains("音声発話一致（1:05）"), "AIEvidence formats mm:ss without snippet");
 
+        // 2b. Audio match with hours (>= 3600 seconds)
+        var jsonWithHours = """
+        {
+            "total": 1,
+            "items": [
+                {
+                    "id": 43,
+                    "title": "long_symposium.mp3",
+                    "kind": "audio",
+                    "tags": [],
+                    "shelf": "",
+                    "favorite": false,
+                    "reviewed": false,
+                    "semantic_score": 0.880,
+                    "score_kind": "cosine",
+                    "audio_match_ms": 3920000,
+                    "audio_match_snippet": "第2部のパネルディスカッションです"
+                }
+            ],
+            "score_kind": "cosine"
+        }
+        """;
+        var parsedHours = Protocol.ParseSearch(jsonWithHours);
+        var itemHours = parsedHours.Items[0];
+        check(itemHours.AudioMatchMs == 3920000, "audio_match_ms with hours");
+        check(itemHours.AIEvidence.Contains("音声発話一致（1:05:20 · 「第2部のパネルディスカッションです」）"), "AIEvidence formats h:mm:ss when duration >= 1 hour");
+
         // 3. Audio match with literal hits
         var jsonWithLiteral = """
         {

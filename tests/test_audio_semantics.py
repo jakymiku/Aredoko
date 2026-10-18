@@ -8,6 +8,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tests'))
@@ -273,6 +274,190 @@ class AudioSemanticsTests(unittest.TestCase):
         self.assertEqual(self.audio.rank([row_modified], query_vec), {})
         self.assertFalse(self.audio.fresh(audio_item['id'], rev_modified))
 
+    def test_dict_and_tuple_formats_and_duplicate_rejection(self):
+        dim = self.ai.profile.dimension
+        item_id = 99
+        rev = 'c' * 64
+
+        # Dict format with explicit segment_id
+        dict_segs = [
+            {'segment_id': 'seg_alpha', 'start_ms': 1000, 'end_ms': 4000, 'snippet': 'アルファ区間です', 'vector': _unit_vector(dim, 0)},
+            {'start_ms': 4000, 'end_ms': 9000, 'snippet': 'ベータ区間です', 'vector': _unit_vector(dim, 1)},
+        ]
+        self.audio.put_segments(item_id, rev, dict_segs)
+        saved = self.audio.get_segments(item_id, rev)
+        self.assertEqual(len(saved), 2)
+        self.assertEqual(saved[0]['segment_id'], 'seg_alpha')
+        self.assertEqual(saved[0]['snippet'], 'アルファ区間です')
+        self.assertTrue(saved[1]['segment_id'].startswith('seg_0001_'))
+
+        # 5-tuple format: (seg_id, start_ms, end_ms, snippet, vector)
+        five_tuple_segs = [
+            ('seg_five_01', 10000, 15000, '5要素タプル区間', _unit_vector(dim, 2))
+        ]
+        self.audio.put_segments(item_id, rev, five_tuple_segs)
+        saved5 = self.audio.get_segments(item_id, rev)
+        self.assertEqual(len(saved5), 1)
+        self.assertEqual(saved5[0]['segment_id'], 'seg_five_01')
+
+        # Duplicate segment_id rejected
+        dup_segs = [
+            {'segment_id': 'same_id', 'start_ms': 100, 'end_ms': 200, 'snippet': '区間1', 'vector': _unit_vector(dim, 0)},
+            {'segment_id': 'same_id', 'start_ms': 300, 'end_ms': 400, 'snippet': '区間2', 'vector': _unit_vector(dim, 0)},
+        ]
+        with self.assertRaises(ValueError):
+            self.audio.put_segments(item_id, rev, dup_segs)
+
+        # Non-string snippets rejected
+        with self.assertRaises(ValueError):
+            self.audio.put_segments(item_id, rev, [{'start_ms': 0, 'end_ms': 1000, 'snippet': None, 'vector': _unit_vector(dim, 0)}])
+        with self.assertRaises(ValueError):
+            self.audio.put_segments(item_id, rev, [(0, 1000, 12345, _unit_vector(dim, 0))])
+
+    def test_packed_vector_reuse(self):
+        dim = self.ai.profile.dimension
+        item_id = 88
+        rev = 'd' * 64
+
+        orig_segs = [
+            (0, 3000, "再利用対象の発話です", _unit_vector(dim, 0)),
+            (3000, 6000, "2つ目の発話です", _unit_vector(dim, 1)),
+        ]
+        self.audio.put_segments(item_id, rev, orig_segs)
+
+        # Retrieve with include_vectors=False to get raw bytes
+        cached_segs = self.audio.get_segments(item_id, rev, include_vectors=False)
+        self.assertEqual(len(cached_segs), 2)
+        self.assertIsInstance(cached_segs[0]['vector'], bytes)
+        self.assertEqual(len(cached_segs[0]['vector']), dim * 4)
+
+        # Put segments using the cached bytes (zero allocation vector reuse)
+        new_item_id = 89
+        self.audio.put_segments(new_item_id, rev, cached_segs)
+        reused_segs = self.audio.get_segments(new_item_id, rev, include_vectors=False)
+        self.assertEqual(cached_segs[0]['vector'], reused_segs[0]['vector'])
+        self.assertTrue(self.audio.fresh(new_item_id, rev))
+
+    def test_long_audio_windowing_and_scale(self):
+        dim = self.ai.profile.dimension
+        item_id = 77
+        rev = 'e' * 64
+
+        # Generate 120 segments spanning 2 hours (60,000ms each)
+        # Target segment at 01:45:00 (6,300,000 ms to 6,360,000 ms) matching dim 0
+        long_segments = []
+        for i in range(120):
+            start = i * 60_000
+            end = start + 60_000
+            is_target = (i == 105)  # 105 * 60,000 = 6,300,000 ms (01:45:00)
+            vec = _unit_vector(dim, 0 if is_target else 1)
+            snip = "重要な決断が行われた瞬間です" if is_target else f"通常議論の区間{i}"
+            long_segments.append((start, end, snip, vec))
+
+        self.audio.put_segments(item_id, rev, long_segments)
+        saved = self.audio.get_segments(item_id, rev)
+        self.assertEqual(len(saved), 120)
+
+        # Query targeting dim 0
+        audio_row = {'id': item_id, 'kind': 'audio', 'root_id': 1, 'relative_path': 'long.mp3',
+                     'size_bytes': 1000, 'mtime_ns': 1000, 'title': 'long.mp3', 'tags': ''}
+        from ai_search import revision as make_rev
+        with patch('ai_search.revision', return_value=rev):
+            res = self.audio.rank([audio_row], _unit_vector(dim, 0))
+            self.assertIn(item_id, res)
+            score, evid = res[item_id]
+            self.assertAlmostEqual(score, 1.0)
+            self.assertEqual(evid['start_ms'], 6_300_000)
+            self.assertEqual(evid['end_ms'], 6_360_000)
+            self.assertEqual(evid['snippet'], "重要な決断が行われた瞬間です")
+
+        # 1,000 segments scale verification (reviewer attack surface)
+        scale_segs = [
+            (i * 1000, (i + 1) * 1000, f"セグメント{i:04d}", _unit_vector(dim, 0 if i == 777 else 2))
+            for i in range(1000)
+        ]
+        scale_id = 78
+        self.audio.put_segments(scale_id, rev, scale_segs)
+        scale_row = dict(audio_row, id=scale_id)
+        with patch('ai_search.revision', return_value=rev):
+            scale_res = self.audio.rank([scale_row], _unit_vector(dim, 0))
+            self.assertIn(scale_id, scale_res)
+            score, evid = scale_res[scale_id]
+            self.assertAlmostEqual(score, 1.0)
+            self.assertEqual(evid['start_ms'], 777_000)
+            self.assertEqual(evid['snippet'], "セグメント0777")
+
+    def test_corrupt_vector_in_database_safe_skip_and_freshness(self):
+        dim = self.ai.profile.dimension
+        item_id = 66
+        rev = 'f' * 64
+
+        # Put 1 valid segment
+        self.audio.put_segments(item_id, rev, [(0, 5000, "正常発話", _unit_vector(dim, 0))])
+        self.assertTrue(self.audio.fresh(item_id, rev))
+
+        # Directly corrupt database row with invalid byte length (12 bytes instead of 3072)
+        with self.store.connect() as db:
+            db.execute(
+                "INSERT INTO ai_audio_segments VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (item_id, rev, "corrupt_seg", 5000, 10000, "破損区間", b'\x00' * 12, CONTRACT)
+            )
+
+        # fresh() must detect corruption and report False
+        self.assertFalse(self.audio.fresh(item_id, rev))
+
+        # rank() must safely skip corrupt vector without crashing and still find the valid one
+        audio_row = {'id': item_id, 'kind': 'audio', 'root_id': 1, 'relative_path': 'test.mp3',
+                     'size_bytes': 1000, 'mtime_ns': 1000, 'title': 'test.mp3', 'tags': ''}
+        with patch('ai_search.revision', return_value=rev):
+            res = self.audio.rank([audio_row], _unit_vector(dim, 0))
+            self.assertIn(item_id, res)
+            score, evid = res[item_id]
+            self.assertAlmostEqual(score, 1.0)
+            self.assertEqual(evid['segment_id'], 'seg_0000_00000000')
+
+    def test_cancellation_during_rank_and_search(self):
+        dim = self.ai.profile.dimension
+        item_id = 55
+        rev = '7' * 64
+
+        self.audio.put_segments(item_id, rev, [(0, 5000, "発話", _unit_vector(dim, 0))])
+        audio_row = {'id': item_id, 'kind': 'audio', 'root_id': 1, 'relative_path': 'test.mp3',
+                     'size_bytes': 1000, 'mtime_ns': 1000, 'title': 'test.mp3', 'tags': ''}
+
+        # check callback raising InterruptedError
+        def cancel_check():
+            raise InterruptedError("Cancelled")
+
+        with self.assertRaises(InterruptedError):
+            self.audio.rank([audio_row], _unit_vector(dim, 0), check=cancel_check)
+
+        # AISearch.search with pre-cancelled event
+        import threading
+        from ai_score_spool import SearchCancelled
+        cancelled_event = threading.Event()
+        cancelled_event.set()
+        with self.assertRaises(SearchCancelled):
+            self.ai.search("進捗報告", cancelled=cancelled_event.is_set)
+
+    def test_delete_item(self):
+        dim = self.ai.profile.dimension
+        item_id = 44
+        rev = '8' * 64
+
+        self.audio.put_segments(item_id, rev, [(0, 5000, "削除前発話", _unit_vector(dim, 0))])
+        self.assertTrue(self.audio.fresh(item_id, rev))
+
+        self.audio.delete_item(item_id)
+        self.assertFalse(self.audio.fresh(item_id, rev))
+        self.assertEqual(self.audio.get_segments(item_id, rev), [])
+
+        with self.assertRaises(ValueError):
+            self.audio.delete_item(-1)
+        with self.assertRaises(ValueError):
+            self.audio.delete_item(0)
+
 
 if __name__ == '__main__':
     unittest.main()
+

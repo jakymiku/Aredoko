@@ -235,7 +235,7 @@ class VectorStore:
             for item_id,(score,evidence) in audio_scores.items():
                 if item_id in eligible:
                     prev=scores.get(item_id,{}).get('text')
-                    if prev is None or score>prev:
+                    if prev is None or score>=prev:
                         scores.setdefault(item_id,{})['text']=score
                         audio_hits[item_id]=evidence
         return scores,video_hits,page_hits,audio_hits

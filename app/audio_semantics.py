@@ -56,6 +56,8 @@ def _is_valid_packed(data, dimension):
 def _score_packed(data, dimension, query):
     """Unpack, validate and compute exact float64 dot product without allocating a list."""
     try:
+        if len(query) != dimension:
+            return None
         value = array('f')
         value.frombytes(data)
         if len(value) != dimension:
@@ -77,11 +79,13 @@ class AudioSpeechVectors:
         """Rank audio candidate rows against query_vector using indexed speech segments.
 
         Returns:
-            scores: dict {item_id: (best_cosine_score, {'start_ms': int, 'end_ms': int, 'snippet': str})}
+            scores: dict {item_id: (best_cosine_score, {'start_ms': int, 'end_ms': int, 'snippet': str, 'segment_id': str})}
         """
-        if not rows:
+        if not rows or query_vector is None:
             return {}
         dimension = self.ai.profile.dimension
+        if len(query_vector) != dimension:
+            raise ValueError(f"Query vector dimension mismatch: expected {dimension}, got {len(query_vector)}")
         audio_candidates = [r for r in rows if r.get('kind') == 'audio']
         if not audio_candidates:
             return {}
@@ -91,33 +95,37 @@ class AudioSpeechVectors:
         scores = {}
 
         candidate_ids = list(eligible.keys())
-        for i in range(0, len(candidate_ids), ROW_BATCH_SIZE):
-            if check:
-                check()
-            batch_ids = candidate_ids[i:i + ROW_BATCH_SIZE]
-            placeholders = ','.join('?' for _ in batch_ids)
-            sql = (f"SELECT item_id, source_revision, segment_id, start_ms, end_ms, snippet, vector "
-                   f"FROM ai_audio_segments WHERE contract=? AND item_id IN ({placeholders}) "
-                   f"ORDER BY item_id, start_ms")
-            with self.ai.store.connect() as db:
+        seg_count = 0
+        with self.ai.store.connect() as db:
+            for i in range(0, len(candidate_ids), ROW_BATCH_SIZE):
+                if check:
+                    check()
+                batch_ids = candidate_ids[i:i + ROW_BATCH_SIZE]
+                placeholders = ','.join('?' for _ in batch_ids)
+                sql = (f"SELECT item_id, source_revision, segment_id, start_ms, end_ms, snippet, vector "
+                       f"FROM ai_audio_segments WHERE contract=? AND item_id IN ({placeholders}) "
+                       f"ORDER BY item_id, start_ms")
                 records = db.execute(sql, [CONTRACT, *batch_ids]).fetchall()
 
-            for item_id, src_rev, seg_id, start_ms, end_ms, snippet, data in records:
-                if eligible.get(item_id) != src_rev:
-                    continue
-                if not (isinstance(start_ms, int) and isinstance(end_ms, int) and 0 <= start_ms <= end_ms <= MAX_DURATION_MS):
-                    continue
-                dot = _score_packed(data, dimension, query_vector)
-                if dot is None:
-                    continue
-                current_best = scores.get(item_id)
-                if current_best is None or dot > current_best[0]:
-                    scores[item_id] = (dot, {
-                        'start_ms': start_ms,
-                        'end_ms': end_ms,
-                        'snippet': snippet,
-                        'segment_id': seg_id,
-                    })
+                for item_id, src_rev, seg_id, start_ms, end_ms, snippet, data in records:
+                    seg_count += 1
+                    if check and seg_count % 256 == 0:
+                        check()
+                    if eligible.get(item_id) != src_rev:
+                        continue
+                    if not (type(start_ms) is int and type(end_ms) is int and 0 <= start_ms <= end_ms <= MAX_DURATION_MS):
+                        continue
+                    dot = _score_packed(data, dimension, query_vector)
+                    if dot is None:
+                        continue
+                    current_best = scores.get(item_id)
+                    if current_best is None or dot > current_best[0]:
+                        scores[item_id] = (dot, {
+                            'start_ms': start_ms,
+                            'end_ms': end_ms,
+                            'snippet': snippet,
+                            'segment_id': seg_id,
+                        })
 
         return scores
 
@@ -130,32 +138,47 @@ class AudioSpeechVectors:
 
         dimension = self.ai.profile.dimension
         packed_records = []
+        seen_seg_ids = set()
         for idx, seg in enumerate(segments):
             if isinstance(seg, dict):
-                seg_id = str(seg.get('segment_id') or f"seg_{idx:04d}_{seg.get('start_ms', 0):08d}")
                 start_ms = seg.get('start_ms')
                 end_ms = seg.get('end_ms')
-                snippet = seg.get('snippet', '').strip()
+                raw_snippet = seg.get('snippet')
                 vec = seg.get('vector')
+                seg_id = str(seg.get('segment_id') or (f"seg_{idx:04d}_{start_ms:08d}" if type(start_ms) is int else f"seg_{idx:04d}"))
             elif isinstance(seg, (tuple, list)):
                 if len(seg) == 5:
-                    seg_id, start_ms, end_ms, snippet, vec = seg
-                    snippet = str(snippet).strip()
+                    seg_id, start_ms, end_ms, raw_snippet, vec = seg
+                    seg_id = str(seg_id)
                 elif len(seg) == 4:
-                    start_ms, end_ms, snippet, vec = seg
-                    snippet = str(snippet).strip()
-                    seg_id = f"seg_{idx:04d}_{start_ms:08d}"
+                    start_ms, end_ms, raw_snippet, vec = seg
+                    seg_id = f"seg_{idx:04d}_{start_ms:08d}" if type(start_ms) is int else f"seg_{idx:04d}"
                 else:
                     raise ValueError('Invalid segment tuple format')
             else:
                 raise ValueError('Invalid segment format')
 
+            if not seg_id:
+                raise ValueError('Invalid segment_id')
+            if seg_id in seen_seg_ids:
+                raise ValueError(f"Duplicate segment_id: {seg_id}")
+            seen_seg_ids.add(seg_id)
+
             if type(start_ms) is not int or type(end_ms) is not int or not (0 <= start_ms <= end_ms <= MAX_DURATION_MS):
                 raise ValueError(f"Invalid segment timestamp: {start_ms} - {end_ms}")
+            if not isinstance(raw_snippet, str):
+                raise ValueError("Invalid segment snippet")
+            snippet = raw_snippet.strip()
             if not snippet or len(snippet) > MAX_SNIPPET_LENGTH:
                 raise ValueError("Invalid segment snippet")
 
-            packed_vec = array('f', normalized(vec, dimension)).tobytes()
+            if isinstance(vec, (bytes, bytearray, memoryview)):
+                if not _is_valid_packed(vec, dimension):
+                    raise ValueError("Invalid packed vector blob")
+                packed_vec = bytes(vec)
+            else:
+                packed_vec = array('f', normalized(vec, dimension)).tobytes()
+
             packed_records.append((item_id, source_revision, seg_id, start_ms, end_ms, snippet, packed_vec, CONTRACT))
 
         with self.ai.store.connect() as db:
@@ -166,8 +189,12 @@ class AudioSpeechVectors:
                     packed_records
                 )
 
-    def get_segments(self, item_id, source_revision):
+    def get_segments(self, item_id, source_revision, include_vectors=True):
         """Retrieve ordered valid segments for an audio item."""
+        if type(item_id) is not int or item_id <= 0:
+            return []
+        if not isinstance(source_revision, str):
+            return []
         dimension = self.ai.profile.dimension
         with self.ai.store.connect() as db:
             rows = db.execute(
@@ -178,9 +205,14 @@ class AudioSpeechVectors:
 
         result = []
         for seg_id, start_ms, end_ms, snippet, data in rows:
-            vec = unpack(data, dimension, allocate=True)
-            if vec is None:
-                continue
+            if include_vectors:
+                vec = unpack(data, dimension, allocate=True)
+                if vec is None:
+                    continue
+            else:
+                if not _is_valid_packed(data, dimension):
+                    continue
+                vec = bytes(data)
             result.append({
                 'segment_id': seg_id,
                 'start_ms': start_ms,
@@ -192,14 +224,21 @@ class AudioSpeechVectors:
 
     def fresh(self, item_id, source_revision):
         """Check whether valid indexed speech segments exist for item_id at source_revision."""
+        if type(item_id) is not int or item_id <= 0 or not isinstance(source_revision, str):
+            return False
+        dimension = self.ai.profile.dimension
         with self.ai.store.connect() as db:
-            row = db.execute(
-                "SELECT 1 FROM ai_audio_segments WHERE item_id=? AND source_revision=? AND contract=? LIMIT 1",
+            rows = db.execute(
+                "SELECT vector FROM ai_audio_segments WHERE item_id=? AND source_revision=? AND contract=?",
                 (item_id, source_revision, CONTRACT)
-            ).fetchone()
-        return row is not None
+            ).fetchall()
+        if not rows:
+            return False
+        return all(_is_valid_packed(data, dimension) for (data,) in rows)
 
     def delete_item(self, item_id):
         """Remove all speech segments for item_id."""
+        if type(item_id) is not int or item_id <= 0:
+            raise ValueError('Invalid item_id')
         with self.ai.store.connect() as db:
             db.execute("DELETE FROM ai_audio_segments WHERE item_id=?", (item_id,))

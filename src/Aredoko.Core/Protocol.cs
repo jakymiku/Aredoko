@@ -45,7 +45,12 @@ public sealed class MediaRow
     private static string FormatVideoTimestamp(int ms)
     {
         var sec = Math.Max(0, ms / 1000);
-        return $"{sec / 60}:{sec % 60:D2}";
+        var hours = sec / 3600;
+        var minutes = (sec % 3600) / 60;
+        var seconds = sec % 60;
+        return hours > 0
+            ? $"{hours}:{minutes:D2}:{seconds:D2}"
+            : $"{minutes}:{seconds:D2}";
     }
     public string AIEvidence => AIPage is not null || Proposal?.SemanticScore is not null ? "" : SemanticScore is double score
         ? (SimilarityOriginId is int ? (VideoMatchMs is int matchMs ? (OriginMatchMs is int v2vOms ? $"動画一致（起点 {FormatVideoTimestamp(v2vOms)} → 候補 {FormatVideoTimestamp(matchMs)}）" : $"動画フレーム一致（{FormatVideoTimestamp(matchMs)}）")
