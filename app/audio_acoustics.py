@@ -228,10 +228,10 @@ class AudioAcousticVectors:
         scores = {}
 
         candidate_ids = list(eligible.keys())
-        query_norm = normalize(query)
-        query_words = [w for w in query_norm.split() if w]
-        if not query_words and not query_norm:
+        query_norm = normalize(query).strip()
+        if not query_norm:
             return {}
+        query_words = [w for w in query_norm.split() if w]
 
         rec_count = 0
         with self.ai.store.connect() as db:
@@ -264,12 +264,18 @@ class AudioAcousticVectors:
                     best_match_term = None
                     best_match_score = 0.0
                     for desc in descriptors:
-                        desc_norm = normalize(desc)
+                        desc_norm = normalize(desc).strip()
+                        if not desc_norm:
+                            continue
                         if query_norm == desc_norm:
                             score = 0.98
                         elif query_norm in desc_norm or desc_norm in query_norm:
                             score = 0.92
-                        elif any(qw in desc_norm or desc_norm in qw for qw in query_words):
+                        elif any(
+                            (qw in desc_norm or desc_norm in qw)
+                            for qw in query_words
+                            if len(qw) >= 2 or not ('\u3040' <= qw <= '\u309f')
+                        ):
                             score = 0.85
                         else:
                             continue
@@ -336,10 +342,12 @@ class AudioAcousticVectors:
                     if not (type(cand_ms) is int and 0 <= cand_ms <= MAX_DURATION_MS):
                         continue
 
+                    cand_vec = unpack(data, dimension, allocate=True)
+                    if cand_vec is None:
+                        continue
+
                     for orig_ms, orig_vec in origin_frames:
-                        dot = _score_packed(data, dimension, orig_vec)
-                        if dot is None:
-                            continue
+                        dot = sum(map(operator.mul, orig_vec, cand_vec))
                         prev = scores.get(item_id)
                         if prev is None or dot > prev:
                             scores[item_id] = dot

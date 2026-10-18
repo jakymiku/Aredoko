@@ -59,7 +59,7 @@ public sealed class MediaRow
                                        : Kind == "audio" ? "起点の音声・曲に似た候補"
                                        : "起点の画像・表紙に似た候補")
            : VideoMatchMs is int vms ? $"動画フレーム一致（{FormatVideoTimestamp(vms)}）" + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
-           : AudioMatchMs is int ams ? (AudioMatchSnippet?.StartsWith("音響") == true ? $"音響特徴一致（{FormatVideoTimestamp(ams)} · 「{AudioMatchSnippet}」）" : $"音声発話一致（{FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · 「{AudioMatchSnippet}」")}）") + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
+           : AudioMatchMs is int ams ? (AudioMatchSnippet?.StartsWith("音響特徴") == true ? $"音響特徴一致（{FormatVideoTimestamp(ams)} · 「{AudioMatchSnippet}」）" : $"音声発話一致（{FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · 「{AudioMatchSnippet}」")}）") + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
            : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
           + (ScoreKind=="cosine" ? $"\n類似度 {score:F3}" : ScoreKind=="reciprocal-rank" ? $"\n順位統合値 {score:F4}" : "")
         : "";

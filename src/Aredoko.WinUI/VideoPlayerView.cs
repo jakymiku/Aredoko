@@ -144,14 +144,14 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             seekPreview.Visibility=Visibility.Visible;
         }),true);
         seekBar.PointerExited+=(_,_)=>{HideSeekPreview();ShowChrome();};
-        Identify(viewport, "VideoViewport", "動画表示。スペースで再生・一時停止、左右キーで移動");
-        Identify(playerElement, "VideoElement", itemTitle + "の動画");
-        Identify(header, "VideoHeader", "動画の情報と閉じる"); Identify(toolbar, "VideoToolbar", "動画の操作");
+        Identify(viewport, "VideoViewport", isAudio ? "音声再生。スペースで再生・一時停止、左右キーで移動" : "動画表示。スペースで再生・一時停止、左右キーで移動");
+        Identify(playerElement, "VideoElement", itemTitle + (isAudio ? "の音声" : "の動画"));
+        Identify(header, "VideoHeader", (isAudio ? "音声" : "動画") + "の情報と閉じる"); Identify(toolbar, "VideoToolbar", (isAudio ? "音声" : "動画") + "の操作");
         Identify(playPause, "VideoPlayPause", "再生");
         Identify(seekBack, "VideoSeekBack", "1秒戻る"); Identify(seekForward, "VideoSeekForward", "1秒進む");
         Identify(mute, "VideoMute", "消音");
         Identify(volumeDown, "VideoVolumeDown", "音量を下げる"); Identify(volumeUp, "VideoVolumeUp", "音量を上げる");
-        Identify(retry, "VideoRetry", "動画を再試行"); Identify(close, "VideoClose", "動画再生を閉じる");
+        Identify(retry, "VideoRetry", (isAudio ? "音声" : "動画") + "を再試行"); Identify(close, "VideoClose", (isAudio ? "音声再生" : "動画再生") + "を閉じる");
         AutomationProperties.SetAutomationId(title, "VideoTitle");
         AutomationProperties.SetAutomationId(positionText, "VideoPosition");
         AutomationProperties.SetAutomationId(volumeText, "VideoVolumeStatus");
@@ -161,7 +161,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         ToolTipService.SetToolTip(seekBack, "1秒戻る（←）"); ToolTipService.SetToolTip(seekForward, "1秒進む（→）");
         ToolTipService.SetToolTip(mute, "消音 / 消音解除（M）");
         ToolTipService.SetToolTip(volumeDown, "音量を下げる"); ToolTipService.SetToolTip(volumeUp, "音量を上げる");
-        ToolTipService.SetToolTip(retry, "読み込みを再試行"); ToolTipService.SetToolTip(close, "閉じる（Esc）");
+        ToolTipService.SetToolTip(retry, isAudio ? "音声の読み込みを再試行" : "読み込みを再試行"); ToolTipService.SetToolTip(close, "閉じる（Esc）");
         playPause.Click += (_, _) => TogglePlayPause();
         seekBack.Click += (_, _) => Seek(-1); seekForward.Click += (_, _) => Seek(1);
         mute.Click += (_, _) => ToggleMute();
@@ -272,7 +272,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             ContentOpened?.Invoke(itemId);
             status.Text = initialPositionMs is int start && start > 0
                 ? $"該当時刻（{VideoPlayerPolicy.FormatTime(TimeSpan.FromMilliseconds(start))}）に移動しました。再生ボタンまたはスペースキーで再生できます。"
-                : "動画を開きました。再生ボタンまたはスペースキーで再生できます。";
+                : isAudio ? "音声を開きました。再生ボタンまたはスペースキーで再生できます。" : "動画を開きました。再生ボタンまたはスペースキーで再生できます。";
         }
         catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && current != version) { }
         catch (Exception ex) { if (current == version) ReportFailure(rangeSource?.Failure ?? ex); }

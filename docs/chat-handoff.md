@@ -11,8 +11,8 @@ WinUI連携として `AudioPlayerPolicy`、バックエンドHTTPストリーミ
     - 契約 `audio-acoustic-feature:v1`、スキーマ `ai_audio_acoustics(item_id, source_revision, at_ms, vector, descriptors, contract, PRIMARY KEY(item_id, at_ms))`。
     - 512D float32 BLOBの無アロケーション有限性検証 `_is_valid_packed` / `unpack`、内積計算 `_score_packed`。
     - `AudioAcousticVectors`: `put_features`（時間境界0..86400000ms・重複タイムスタンプ拒否・記述子正規化）, `get_features`（`include_vectors`制御によるゼロ再エンコードraw bytes再利用）, `fresh`, `delete_item`。
-    - `rank`: 日本語記述子マッチング（完全一致0.98、部分一致0.92、単語一致0.85）により効果音・BGMを検出。無音ファイルには記述子が付かず幻覚を防止。
-    - `score_candidates`: 512Dマルチフレーム最大集約。768Dなど異なる次元のベクトルが渡された場合は `ValueError` を送出し、モダリティ間の空間混交をAPIレベルで完全に拒絶。
+    - `rank`: 日本語記述子マッチング（完全一致0.98、部分一致0.92、単語一致0.85）により効果音・BGMを検出。無音ファイルには記述子が付かず幻覚を防止。空白除去・空文字ガード、単独助詞（「の」「と」等）による誤爆除外を強化。
+    - `score_candidates`: 512Dマルチフレーム最大集約。候補ベクトルをフレームループ外で1度だけ検証・アンパックして無駄な再デコードを排除。768Dなど異なる次元のベクトルが渡された場合は `ValueError` を送出し、モダリティ間の空間混交をAPIレベルで完全に拒絶。
   - `app/ai_search.py`:
     - `VectorStore.__init__` でテーブル作成、`self.audio_acoustics = AudioAcousticVectors(self)` を初期化。
     - `AISearch.search(...)` で `audio_acoustics.rank` を統合（記述子ヒット時刻 `audio_match_ms` と `audio_match_snippet` を付与）。
@@ -26,18 +26,18 @@ WinUI連携として `AudioPlayerPolicy`、バックエンドHTTPストリーミ
     - 安全な8拡張子（.mp3, .flac, .wav, .ogg, .opus, .m4a, .aac, .wma）とサイズ制限（64MiB）の検証。
   - `src/Aredoko.Core/SimilaritySearch.cs`:
     - `CanStart` で `"audio"` を許可、`Guidance` に音声用フォールバック案内を追加。
-    - `Parse` で `source="acoustic"`, `origin_kind="audio"` および候補 `kind="audio"` のモダリティ整合性を厳格に検証（`source="cover"` との相互混交を拒絶）。
+    - `Parse` で `source="acoustic"`, `origin_kind="audio"` および候補 `kind="audio"` のモダリティ整合性を厳格に検証（`source="cover"` との相互混交を双方向で拒絶）。
   - `src/Aredoko.Core/Protocol.cs`:
-    - `AIEvidence` で音響特徴一致（`音響特徴一致（mm:ss · 「snippet」）`）および音声間類似検索の双方向時間根拠（`音声・音楽一致（起点 mm:ss → 候補 mm:ss）`）をリフレクションフリーでフォーマット表示。
+    - `AIEvidence` で音響特徴一致（`音響特徴一致（mm:ss · 「snippet」）`）および音声間類似検索の双方向時間根拠（`音声・音楽一致（起点 mm:ss → 候補 mm:ss）`）をリフレクションフリーでフォーマット表示。「音響」から始まる発話内容（例:「音響工学の講義」）が音響特徴一致と誤認されないようプレフィックス判定を厳格化。
   - `src/Aredoko.Core/ArchiveReaderClient.cs` / `LibraryApi.cs`:
     - `OpenAudioRangeAsync` を配線。
   - `src/Aredoko.WinUI/VideoPlayerView.cs`:
-    - コンストラクタに `isAudio` パラメータを追加。サムネイルホバープレビューを非表示にし、音声ストリーミングと時間シークを実行。
+    - コンストラクタに `isAudio` パラメータを追加。サムネイルホバープレビューを非表示にし、音声ストリーミングと時間シークを実行。音声再生時のアクセシビリティ名・ステータス文言・ツールチップを動画文言から音声文言へ整合化。
   - `src/Aredoko.WinUI/MainPage.xaml` / `MainPage.xaml.cs`:
     - 右クリックコンテキストメニュー「似た音声・曲を探す」を音声アイテムで有効化。
-    - 詳細ペイン・検索オプション・ヒント表示を音声対応。
+    - 音声類似検索時のヘッダー表示を「 · 音声・曲の類似検索」に修正。詳細ペイン・検索オプション・ヒント表示を音声対応。
 - **検証記録**:
-  - **Core Tests**: **652 checks PASS**（AudioSpeechTests 28件、SimilarityTests 音響類似検証）。
+  - **Core Tests**: **654 checks PASS**（AudioSpeechTests 29件、SimilarityTests 相互モダリティ拒絶・音響類似検証）。
   - **Python test_audio_acoustics**: **11 PASS**。
   - **Python test_audio_semantics**: **12 PASS**。
   - **Python test_storage_backup**: **24 PASS**。

@@ -195,6 +195,32 @@ static class AudioSpeechTests
         check(itemAcoustic.AudioMatchSnippet == "音響特徴: 雨音", "acoustic descriptor snippet parsed");
         check(itemAcoustic.AIEvidence.Contains("音響特徴一致（0:30 · 「音響特徴: 雨音」）"), "AIEvidence formats acoustic feature match");
 
+        // Speech snippet starting with 音響 (e.g. 音響工学の概要) must format as speech match, not acoustic descriptor
+        var jsonSpeechAcousticWord = """
+        {
+            "total": 1,
+            "items": [
+                {
+                    "id": 51,
+                    "title": "lecture.mp3",
+                    "kind": "audio",
+                    "tags": ["講義"],
+                    "shelf": "",
+                    "favorite": false,
+                    "reviewed": true,
+                    "semantic_score": 0.88,
+                    "score_kind": "cosine",
+                    "audio_match_ms": 15000,
+                    "audio_match_snippet": "音響工学の概要を説明します。"
+                }
+            ],
+            "score_kind": "cosine"
+        }
+        """;
+        var parsedSpeechWord = Protocol.ParseSearch(jsonSpeechAcousticWord);
+        var itemSpeechWord = parsedSpeechWord.Items[0];
+        check(itemSpeechWord.AIEvidence.Contains("音声発話一致（0:15 · 「音響工学の概要を説明します。」）"), "speech snippet starting with 音響 formats as speech match");
+
         // 7. AudioPlayerPolicy checks
         var presentMp3 = new MediaRow { Id = 1, Kind = "audio", Availability = "present", Location = "music/track.mp3" };
         var presentWav = new MediaRow { Id = 2, Kind = "audio", Availability = "present", Location = "music/sfx.WAV" };

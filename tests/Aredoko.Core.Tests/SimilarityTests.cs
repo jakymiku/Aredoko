@@ -97,6 +97,9 @@ static class SimilarityTests
         var badVisualInAudio=audioCand.DeepClone().AsObject();
         badVisualInAudio["items"]![0]!["kind"]="image";
         Reject(check,badVisualInAudio.ToJsonString(),"visual candidate in audio similarity rejected");
+        var badAudioInVisual=visual.DeepClone().AsObject();
+        badAudioInVisual["items"]![0]!["kind"]="audio";
+        Reject(check,badAudioInVisual.ToJsonString(),"audio candidate in visual similarity rejected");
         var large=visual.DeepClone().AsObject();large["total"]=50001;large["page"]=833;
         large["search_complete"]=true;large["search_candidate_total"]=50002;large["indexed_total"]=50001;
         large["coverage_limit"]=10000;

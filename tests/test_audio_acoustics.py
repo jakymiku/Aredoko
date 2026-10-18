@@ -278,6 +278,19 @@ class AudioAcousticsTests(unittest.TestCase):
         self.assertEqual(meta_j['start_ms'], 8000)
         self.assertIn('ピアノ', meta_j['snippet'])
 
+        # Query with leading/trailing whitespace stripped to exact match
+        spaced_scores = self.acoustics.rank(candidates, '  雨音  ')
+        self.assertIn(rain['id'], spaced_scores)
+        self.assertGreaterEqual(spaced_scores[rain['id']][0], 0.95)
+
+        # Pure whitespace query cleanly returns empty
+        self.assertEqual(self.acoustics.rank(candidates, '   '), {})
+
+        # Single hiragana particle does not cause false-positive matches
+        hiragana_query_scores = self.acoustics.rank(candidates, '海 の 景色')
+        self.assertNotIn(rain['id'], hiragana_query_scores)
+        self.assertNotIn(jazz['id'], hiragana_query_scores)
+
     def test_audio_similarity_search(self):
         rain = self._find_item('rain_sound.wav')
         jazz = self._find_item('jazz_piano.mp3')
