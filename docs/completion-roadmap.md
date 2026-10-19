@@ -31,7 +31,7 @@
 
 ## タスク台帳（優先順）
 
-状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02〜R05 CPU_DONE、R06 DONE（[音声・音楽方式設計凍結](audio-content-design.md)）、R07 CPU_DONE、R08/R09 CPU_DONE（[音響特徴検索・類似検索・WinUI再生統合](audio-content-design.md)）、R10/R11 CPU_DONE（[状態明瞭化・所有取消・診断情報・UI監査](ui-consistency-checklist.md)）、R12/R13 CPU_DONE（[規模・資源予算受入](scale-resource-acceptance.md)・前方スキーマガード・WAL単一ファイル整合・配布パッケージ・[利用ガイド](user-guide.md)）、次はR14実機一括受入、R14は限定実機PARTIAL。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
+状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01〜R14すべて完了（R01〜R13 DONE / CPU_DONE、R14実機一括受入・バッチGPU/GUI検証 DONE）。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
 
 | ID | 作業・出力 | 依存 | 担当難度 | 状態 |
 | --- | --- | --- | --- | --- |
@@ -48,7 +48,7 @@
 | R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | CPU_DONE：[UI整合性・アクセシビリティ監査チェックリスト](ui-consistency-checklist.md)、テーマ/DPI/Narrator整合、実機R14 |
 | R12 | 数万件の性能・資源予算を測り必要箇所だけ改善 | R02、R04 | Sol計測、設計変更時Astraレビュー | CPU_DONE：[受入記録](scale-resource-acceptance.md)、5万件通常検索p95=0.34s・6.5万件ベクトル順位計算p95=9.57s・取消0.1ms・WAL0B・復元2.2s合格、実機R14 |
 | R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | CPU_DONE：[利用ガイド](user-guide.md)・[NOTICE](../THIRD_PARTY_NOTICES.md)・package_release/start-aredoko実装・user_version前方ガード・WAL truncate確認、実機R14 |
-| R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | PARTIAL：[R02/R03限定実機](release-readiness.md) GPU PASS/native未完、M1/M2未確認 |
+| R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | DONE：[R14一括受入](release-readiness.md) R04 GPU/GUI PASS、R05動画類似PASS、R07-R09音声PASS、R10/R11状態GUI PASS、R12規模PASS、R02/R03復旧・Native GUI PASS（Light/Dark全6画面検証完了） |
 
 ## 各タスクの完了条件
 

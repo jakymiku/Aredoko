@@ -1647,7 +1647,8 @@ public sealed partial class MainPage : Page
                 resumeChunks.IsEnabled=start.IsEnabled&&resumableChunks?.CanResume==true&&aiScope is not null&&resumableChunks.MatchesScope(aiScope);
                 resumeContinuation.IsEnabled=start.IsEnabled&&resumableContinuation?.CanResume==true&&aiScope is not null&&resumableContinuation.MatchesScope(aiScope);
             }
-            scopeEditor.StateChanged+=()=>{InvalidateContinuationPlan();UpdateStart();};
+            scopeEditor.ScopeEdited+=InvalidateContinuationPlan;
+            scopeEditor.StateChanged+=UpdateStart;
             bool polling=false;
             bool releasing=false;
             int? indexLimit=null;

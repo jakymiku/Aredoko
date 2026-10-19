@@ -1,5 +1,38 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-20 R14 実GPU/GUI一括受入・Native GUI全件合格・バッチ検証完了（DONE） — R01〜R14全工程完了
+
+開始HEAD `945cb57`（作業ブランチ `feat/winui3-production-mvp-20261011`）。ユーザーの明示許可（「裏でゲーム動いてるけど軽いゲームだから問題なくテストを行えるはずなので実行しておいてください」）に基づき、**R14（実GPU/GUI一括受入・RC判定）の全項目検証を実施し、全件PASSを確認・DONE**。
+これにより、タスク台帳 R01〜R14 の全工程が完了（R01〜R13 DONE / CPU_DONE、R14実機一括受入 DONE）。
+
+- **R14 一括受入・ハーネス検証実績**:
+  - **R04 索引継続 GPU/GUI (`tools/test_continuation_acceptance.py --stage all`)**:
+    - **GPU 4/4 PASS / GUI 4/4 PASS**。実CUDA EG2 6doc推論。UIA自動操縦による計画作成・未準備分作成・所有ジョブ中断・再開ボタン出現の一連フローを検証。
+    - 発見・修正: タイマー更新による計画破棄バグ（`AIScopeEditor` の `ScopeEdited` イベント分離と `SetJobBusy` ガード）、および非対話環境での UIA `invoke` 呼び出し・detached launcher プロセス追跡を修正。
+    - 生成画像目視確認合格: `continuation-plan.png`, `continuation-cancelled.png`。
+  - **R05 動画類似検索 (`tools/test_video_similarity_acceptance.py --stage all`)**:
+    - **19/19 PASS**。動画起点・動画候補、代表フレーム最大集約、候補時刻（`video_match_ms`）および起点時刻（`origin_match_ms`）の時間根拠、自己除外、表紙フォールバックを完全検証。
+  - **R07-R09 音声音響・類似・WinUI再生 (`tools/test_audio_acceptance.py --stage cpu`)**:
+    - **36/36 PASS**。768D発話区間索引（3500ms根拠・snippet取得・キャッシュvector直接再利用）、512D音響特徴空間分離（雨音・ジャズ記述子検索・無音WAV幻覚防止）、音響類似検索（時間根拠・自己除外）、HTTP範囲再生ストリーミングを検証。
+  - **R10/R11 状態明瞭化・所有取消・安全診断情報 (`tools/test_ui_status_acceptance.py --stage cpu`)**:
+    - **16/16 PASS**。AI状態コード（`model_missing`, `unindexed`, `ready`）と0件検索の分離、要求所有取消、伏字診断情報（ユーザー名・トークン完全置換）、UI監査チェックリスト網羅を検証。
+  - **R12 規模・資源予算受入 (`tools/test_scale_acceptance.py --stage cpu`)**:
+    - **26/26 PASS**。50,001件メタデータ登録＋65,536件768Dベクトル。通常検索 warm p95 = 0.3605s ≤ 1.0s、CPUベクトル順位計算 warm p95 = 9.110s ≤ 10.0s、取消応答 0.100ms ≤ 1.0s、WAL checkpoint truncate 0B、停止時backup (4.99s) / 新規restore (2.05s) 整合性OK。
+  - **R02/R03 復旧・Native GUI受入 (`tools/test_recovery_acceptance.py --output data/ai-ui/recovery-native-20261019-02 --stage all`)**:
+    - **GPU 28/28 PASS / GUI 24/24 PASS**。実開発launcherによる実機起動。Light (1200x820) および Dark (700x620 狭小) の両テーマ。前回未完だったDark狭小リサイズ時の詳細overlay再表示・設定確認・Core combined実CUDA検索を完全パス。
+    - 発見・修正: ゲーム実行中によるフォアグラウンド取得制限に対応し、HWND宛先安全メッセージ（`post-message`）および UIA `set-value`/`expand`+`select` へのフォールバックを追加。
+    - 全6画面PNG目視確認合格（Light-restored-detail.png, Light-restored-viewer-settings.png, Light-restored-combined-search.png, Dark-restored-detail.png, Dark-restored-viewer-settings.png, Dark-restored-combined-search.png）。
+- **テストスイート整合性**:
+  - `src/Aredoko.Core/ErrorText.cs`: 音声範囲エラー（`Audio range outside source`, `Invalid audio range request`）の日本語訳を追加。
+  - Core単体テスト: **691/691 PASS** (Release)。
+  - Python単体テスト: **629/629 PASS** (3 platform SKIP)。
+  - WinUI Release x64ビルド: **0エラー**。
+  - 残留プロセス: `Aredoko.WinUI.exe`、python worker ともに0件（完全クリーン終了）。
+- **制約・保全事項**:
+  - P0累積2/2終了・OCR保留・全機能/簡潔GUI・原本保護・私物走査/変更なし・Actionsなし・mainへのmergeなし。
+
+---
+
 ## 2026-10-19 R12規模・資源予算受入 / R13 前方スキーマガード・WAL単一ファイル整合・配布パッケージ・利用手順 実装・CPU検証完了（CPU_DONE） — 次はR14 実GPU/GUI一括受入・RC判定
 
 開始HEAD `945cb57`。**R12（数万件の性能・資源予算の計測と局所改善）およびR13（配布・起動・更新/アンインストール・利用手順）はCPU_DONE**。

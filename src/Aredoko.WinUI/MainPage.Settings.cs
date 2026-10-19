@@ -41,10 +41,14 @@ public sealed partial class MainPage
         }
         catch(Exception ex){Failure(ex);}
         finally{dialogOpen=false;transitions.Release();RestoreNavigation();}
-        if(destination=="ai")AI_Click(this,new RoutedEventArgs());
-        else if(destination=="terms")RelatedTerms_Click(this,new RoutedEventArgs());
-        else if(destination=="backup")await OpenBackupGuideDialogAsync();
-        else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync();
+        if(destination is not null)
+        {
+            await Task.Delay(300);
+            if(destination=="ai")AI_Click(this,new RoutedEventArgs());
+            else if(destination=="terms")RelatedTerms_Click(this,new RoutedEventArgs());
+            else if(destination=="backup")await OpenBackupGuideDialogAsync();
+            else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync();
+        }
     }
     private async Task OpenBackupGuideDialogAsync()
     {

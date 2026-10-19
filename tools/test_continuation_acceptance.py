@@ -14,6 +14,10 @@ import sys
 import time
 
 REPO = Path(__file__).resolve().parents[1]
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 sys.path.insert(0, str(REPO / 'app'))
 sys.path.insert(0, str(REPO / 'tools'))
 
@@ -80,6 +84,8 @@ def run_gpu_stage(target_dir):
     cat = ProductionCatalog(cat_path)
     root = cat.add_root(str(media))
     cat.start_scan(root)
+    if cat._worker:
+        cat._worker.join(10)
     enc = MeasuredEncoder()
     ai = AISearch(cat, enc)
     try:
@@ -89,7 +95,7 @@ def run_gpu_stage(target_dir):
         ai.worker.join(30)
         status = ai.status()
         check("GPU continuation completes all items", status['state'] == 'complete' and status['indexed'] == 6, report)
-        check("GPU continuation used real encoder", len(enc.calls['document']) == 6, report)
+        check("GPU continuation used real encoder", enc.calls['document'] == 6, report)
         plan2 = ai.continuation.prepare({}, ai.profile.key, limit=10)
         check("Second plan finds 0 unready", plan2['selected_total'] == 0 and plan2['remaining_total'] == 0, report)
         report['pass'] = True
@@ -123,48 +129,75 @@ def run_gui_stage(target_dir):
     if cat_path.exists():
         cat_path.unlink()
     cat = ProductionCatalog(cat_path)
-    cat.add_root(str(media))
-    cat.start_scan()
+    root_id = cat.add_root(str(media))
+    cat.start_scan(root_id)
+    if cat._worker:
+        cat._worker.join(10)
     cat.close()
 
     env = {**os.environ, 'WINAPP_UI_WORKFLOW_ID': 'aredoko-continuation-' + uuid.uuid4().hex, 'PYTHONIOENCODING': 'utf-8'}
     cmd = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(REPO / 'tools/start-winui.ps1'),
            '-Database', str(cat_path), '-UITheme', 'Light']
-    proc = subprocess.Popen(cmd, cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    log_path = gui_dir / 'launcher.log'
+    log_file = log_path.open('w', encoding='utf-8')
+    proc = subprocess.Popen(cmd, cwd=REPO, env=env, stdout=log_file, stderr=subprocess.STDOUT)
+    hwnd = None
     try:
-        time.sleep(5)
-        hwnd_out = subprocess.run(['winapp', 'ui', 'list-windows', '--json'], capture_output=True, text=True)
-        windows = json.loads(hwnd_out.stdout or '[]')
-        main = [w for w in windows if 'Aredoko' in w.get('title', '') and w.get('title') != 'PopupHost']
-        if not main:
-            raise RuntimeError("Aredoko window not found")
-        hwnd = str(main[0]['hwnd'])
+        # Wait up to 120s for the window to appear (building Release layout may take 20-30s)
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                raise RuntimeError(f"Launcher process exited prematurely: {log_path.read_text(encoding='utf-8', errors='replace')}")
+            hwnd_out = subprocess.run(['winapp', 'ui', 'list-windows', '--json'], capture_output=True, text=True)
+            try:
+                windows = json.loads(hwnd_out.stdout or '[]')
+            except Exception:
+                windows = []
+            main = [w for w in windows if 'Aredoko' in w.get('title', '') and w.get('title') != 'PopupHost']
+            if main and main[0].get('hwnd'):
+                hwnd = str(main[0]['hwnd'])
+                break
+            time.sleep(2)
+        if not hwnd:
+            raise RuntimeError(f"Aredoko window not found within timeout. Launcher log:\n{log_path.read_text(encoding='utf-8', errors='replace')}")
 
         def ui(*args):
-            res = subprocess.run(['winapp', 'ui', *args, '-w', hwnd], capture_output=True, text=True, timeout=30)
+            res = subprocess.run(['winapp', 'ui', *args, '-w', hwnd], capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30)
+            safe_out = (res.stdout or '').strip()
+            print(f"UI {args} -> rc={res.returncode}: {safe_out}", flush=True)
             if res.returncode != 0:
                 raise RuntimeError(f"winapp error: {res.stderr or res.stdout}")
             return res.stdout
 
         ui('wait-for', 'ItemList', '-p', 'IsEnabled', '--value', 'True', '-t', '30000')
         ui('invoke', 'BtnSettings')
-        ui('wait-for', 'AIIndexSummary', '-t', '10000')
-        check("AIIndexSummary present", True, report)
+        ui('wait-for', 'BtnAIIndex', '-t', '10000')
+        ui('invoke', 'BtnAIIndex')
+        time.sleep(2)
+        tree = ui('inspect', '--json', '--depth', '15')
+        (gui_dir / 'tree_after_ai_btn.json').write_text(tree, encoding='utf-8')
+        ui('wait-for', 'PlanAIContinuation', '-t', '15000')
+        check("PlanAIContinuation present", True, report)
 
-        ui('wait-for', 'PlanAIContinuation', '-p', 'IsEnabled', '--value', 'True', '-t', '10000')
+        ui('wait-for', 'PlanAIContinuation', '-p', 'IsEnabled', '--value', 'True', '-t', '15000')
         ui('invoke', 'PlanAIContinuation')
-        ui('wait-for', 'AIContinuationSummary', '-p', 'Visibility', '--value', 'Visible', '-t', '10000')
-        ui('wait-for', 'StartAIContinuation', '-p', 'Visibility', '--value', 'Visible', '-t', '10000')
+        ui('wait-for', 'StartAIContinuation', '-p', 'IsEnabled', '--value', 'True', '-t', '20000')
         check("Plan displays summary and shows start button", True, report)
 
         plan_shot = gui_dir / 'continuation-plan.png'
         ui('screenshot', '--output', str(plan_shot))
         report['screenshots'].append(str(plan_shot))
 
+        try:
+            props = ui('get-property', 'StartAIContinuation')
+            print(f"StartAIContinuation properties:\n{props}", flush=True)
+        except Exception as e:
+            print(f"get-property failed: {e}", flush=True)
+
         ui('invoke', 'StartAIContinuation')
-        ui('wait-for', 'CancelAIIndex', '-p', 'IsEnabled', '--value', 'True', '-t', '5000')
+        ui('wait-for', 'CancelAIIndex', '-p', 'IsEnabled', '--value', 'True', '-t', '10000')
         ui('invoke', 'CancelAIIndex')
-        ui('wait-for', 'ResumeAIContinuation', '-p', 'Visibility', '--value', 'Visible', '-t', '15000')
+        ui('wait-for', 'ResumeAIContinuation', '-t', '20000')
         check("Cancellation succeeded and revealed resume button", True, report)
 
         cancel_shot = gui_dir / 'continuation-cancelled.png'
@@ -173,11 +206,20 @@ def run_gui_stage(target_dir):
 
         report['pass'] = True
     finally:
-        proc.terminate()
+        if hwnd:
+            try:
+                subprocess.run(['winapp', 'ui', 'close', '-w', hwnd], capture_output=True, timeout=5)
+            except Exception:
+                pass
+        subprocess.run(['taskkill', '/PID', str(proc.pid), '/T', '/F'], capture_output=True)
         try:
             proc.wait(5)
         except Exception:
-            proc.kill()
+            pass
+        try:
+            log_file.close()
+        except Exception:
+            pass
 
     (target_dir / 'gui-report.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
     return report

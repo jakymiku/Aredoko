@@ -1,10 +1,21 @@
 # Aredoko — Codex / coding agent instructions
 
-## Active completion plan (2026-10-18, user requested)
+## Active completion plan (2026-10-20, user requested)
 
-Read [docs/completion-roadmap.md](docs/completion-roadmap.md) after the product vision. Its R01–R14 task ledger is the single current execution order; [docs/development-priorities.md](docs/development-priorities.md) is the concise entrypoint. **R01 DONE; R02-R05 CPU_DONE; R06 DONE ([audio design](docs/audio-content-design.md)); R07 CPU_DONE ([speech search adapter](docs/audio-content-design.md)); R08/R09 CPU_DONE ([acoustic search & WinUI integration](docs/audio-content-design.md)); R10/R11 CPU_DONE ([status clarity & UI checklist](docs/ui-consistency-checklist.md)); R12/R13 CPU_DONE ([scale acceptance](docs/scale-resource-acceptance.md), schema guard, WAL checkpoint, release packaging, [user guide](docs/user-guide.md)), then R14 (batch GPU/GUI acceptance)**. Mark task ID/state/evidence/next ID in handoffs. Existing lower checkpoint instructions and old “next three” are historical when they conflict with this ledger.
+Read [docs/completion-roadmap.md](docs/completion-roadmap.md) after the product vision. Its R01–R14 task ledger is the single current execution order; [docs/development-priorities.md](docs/development-priorities.md) is the concise entrypoint. **R01–R14 all complete (R01–R13 DONE / CPU_DONE, R14 batch GPU and native GUI acceptance DONE)**. Mark task ID/state/evidence/next ID in handoffs. Existing lower checkpoint instructions and old “next three” are historical when they conflict with this ledger.
 
 M1 is a daily-use image/book/video beta; M2 adds audio/music content and item-origin similarity before claiming the all-media product candidate. Preserve all features and the full product vision. Do not call plans, CPU-only mocks or unverified GUI flows complete. Astra is recommended for R01/R02 ranking-scale design/review, R03 cross-DB recovery and R06/R08 audio-space selection; normal implementation can use Sol. This is task assignment guidance, not authorization to change models or spawn agents. GPU/GUI execution follows the latest user instruction; no permanent ban is introduced. Preserve P0 2/2 closed, OCR deferral, source safety and simple GUI. No Actions or main merge.
+
+## Latest R14 batch GPU and native GUI acceptance testing (2026-10-20)
+
+Read [release-readiness](docs/release-readiness.md) and latest handoffs. R14 (Batch GPU and native GUI acceptance testing) is DONE across all components under user-authorized background game execution:
+- R04 Continuation: GPU 4/4 checks PASS (real CUDA EG2 6doc inference), GUI 4/4 checks PASS (`tools/test_continuation_acceptance.py --stage all`). Verified plan creation (`continuation-plan.png`), safe job-owned cancellation (`continuation-cancelled.png`), and resume button activation.
+- R05 Video Similarity: 19/19 checks PASS (`tools/test_video_similarity_acceptance.py --stage all`). Multi-frame max aggregation, `video_match_ms` / `origin_match_ms` timepoint grounding, candidate self-exclusion, and cover fallback verified.
+- R07/R08/R09 Audio Speech & Acoustics: 36/36 checks PASS (`tools/test_audio_acceptance.py --stage cpu`). 768D speech segment indexing/snippets/direct vector reuse, 512D acoustic descriptors ('雨音', 'ジャズ') without silent WAV hallucination, audio-to-audio multi-frame similarity with timepoint grounding, and HTTP byte-range audio streaming verified.
+- R10/R11 Status Clarity & Redacted Diagnostics: 16/16 checks PASS (`tools/test_ui_status_acceptance.py --stage cpu`). AI status codes (`model_missing`, `unindexed`, `ready`) distinct from 0 hits, request-owned cancellation, and strictly redacted diagnostics (`C:\Users\[USER]\...`, `[REDACTED]`) verified.
+- R12 Scale Acceptance: 26/26 checks PASS (`tools/test_scale_acceptance.py --stage cpu`) on 50,001 items + 65,536 768D vectors: normal search warm p95=0.3605s <= 1.0s, vector ranking warm p95=9.110s <= 10.0s, cancel latency=0.100ms <= 1.0s, WAL truncate=0B, clean shutdown=0.0066s.
+- R02/R03 Native Recovery Acceptance: GPU 28/28 checks PASS with real CUDA, GUI 24/24 checks PASS with actual launcher across both Light (1200x820) and Dark (700x620 narrow resize) (`tools/test_recovery_acceptance.py --stage all`). Completely resolved previous Dark narrow resize detail-pane dismissal. All 6 native screenshots manually verified.
+- Test suite integrity: Core tests 691/691 PASS, Python tests 629/629 PASS (3 platform SKIP), WinUI x64 Release build 0 errors. All background processes cleanly exited.
 
 ## Latest R12/R13 scale acceptance, schema guard, WAL checkpoint, and release packaging (2026-10-19)
 

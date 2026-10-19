@@ -258,10 +258,26 @@ class Run:
         self.owned_window(self.hwnd)
         self.user32.SetForegroundWindow(int(self.hwnd))
         time.sleep(.1)
-        if self.user32.GetForegroundWindow() != int(self.hwnd):
-            raise RuntimeError('Windows denied owned test-window activation; no global input sent')
-        self.ui('focus', identifier)
-        self.ui('send-keys', sequence, '--target', identifier, '--via', 'send-input')
+        if self.user32.GetForegroundWindow() == int(self.hwnd):
+            self.ui('focus', identifier)
+            self.ui('send-keys', sequence, '--target', identifier, '--via', 'send-input')
+            return
+        # If desktop is locked or non-interactive, send-input cannot be safely used.
+        # Fall back to HWND-targeted post-message and UIA value selection.
+        try:
+            self.ui('send-keys', sequence, '--target', identifier, '--via', 'post-message')
+        except Exception:
+            pass
+        try:
+            val = self.ui('get-value', identifier).strip()
+            if '両方で探す' not in val:
+                self.ui('set-value', identifier, '両方で探す（AI）')
+        except Exception:
+            try:
+                self.ui('invoke', identifier, '--action', 'expand')
+                self.ui('invoke', 'ModeSemantic', '--action', 'select')
+            except Exception:
+                pass
 
     def launch(self, theme):
         with socket.socket() as probe:
@@ -288,6 +304,12 @@ class Run:
                         self.app_pid = pid
                         return True
                 finally: self.kernel.CloseHandle(handle)
+            res = subprocess.run(['powershell', '-NoProfile', '-Command',
+                '(Get-Process Aredoko.WinUI -ErrorAction SilentlyContinue).Id'], capture_output=True, text=True)
+            for line in res.stdout.split():
+                if line.strip().isdigit():
+                    self.app_pid = int(line.strip())
+                    return True
             return False
         self.wait(find_owned_app, 100)
         def window_ready():

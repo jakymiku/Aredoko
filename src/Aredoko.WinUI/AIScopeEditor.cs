@@ -37,6 +37,7 @@ public sealed class AIScopeEditor : IDisposable
     private bool initializationStarted,initializing=true,closed,counting,saving,confirmed,jobBusy;
     private int version,target;
     public event Action? StateChanged;
+    public event Action? ScopeEdited;
     public Expander Content {get;}
     public bool Saving=>saving;
     public bool Ready=>!initializing&&!saving&&!counting&&confirmed&&!Dirty&&saved is not null&&target>0;
@@ -161,6 +162,7 @@ public sealed class AIScopeEditor : IDisposable
         version++;confirmed=false;target=0;
         foreach(var block in counts)block.Text="";
         counts[0].Text="条件を変更しました。件数を確認してください。";
+        ScopeEdited?.Invoke();
         Sync();
     }
     private void Sync()
@@ -180,7 +182,7 @@ public sealed class AIScopeEditor : IDisposable
         revert.IsEnabled=!initializing&&!saving&&!counting;
         StateChanged?.Invoke();
     }
-    public void SetJobBusy(bool busy){jobBusy=busy;Sync();}
+    public void SetJobBusy(bool busy){if(jobBusy!=busy){jobBusy=busy;Sync();}}
     public async Task RefreshCountsAsync()
     {
         if(initializing||closed||counting||saving)return;

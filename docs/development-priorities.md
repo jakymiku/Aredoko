@@ -6,7 +6,7 @@
 
 主要な登録・整理・文字/画像/本ページ検索・WD候補・閲覧・時間付き動画索引は実装済み。次は微細なCPU最適化の反復より、索引の継続、動画/音声の未完機能、使い勝手・配布・受入を進める。
 
-**R01はDONE、R02〜R05はCPU_DONE（大規模検索/所有取消、復旧基盤、継続索引、動画類似）。R06は[音声・音楽方式設計凍結DONE](audio-content-design.md)。R07は[発話区間索引/時刻根拠CPU_DONE](audio-content-design.md)。R08/R09は[音響特徴検索・類似検索・WinUI再生統合CPU_DONE](audio-content-design.md)。R10/R11は[状態明瞭化・所有検索取消・安全診断情報・UI監査チェックリストCPU_DONE](ui-consistency-checklist.md)。R12/R13は[規模・資源予算受入・前方スキーマガード・WAL単一ファイル整合・配布パッケージ・利用ガイドCPU_DONE](scale-resource-acceptance.md)。次はR14（実GPU/GUI一括受入・RC判定）。** [所有取消の証拠/限界](search-cancellation.md)を確認し、性能受入R12（完了）・配布準備R13（完了）・必要実機受入R14（GPU/GUI一括検証）を完了と扱わない。 [全件検索の仕様/証拠](full-library-search.md)・[契約](large-library-contract.md)・[受入記録](scale-resource-acceptance.md)を読む。検索候補の1万件打切りは解消、1回の索引jobは最大1万件のまま。 設計の難しいR01/R02/R03/R06/R08にはAstra推奨を付け、通常実装はSolで進められるよう分割した。担当割当は推奨であり自動モデル切替ではない。
+**R01〜R14の全台帳が完了（R01〜R13 DONE / CPU_DONE、R14実機一括受入・バッチGPU/GUI検証 DONE）。** [所有取消の証拠/限界](search-cancellation.md)、性能受入R12、配布準備R13、R14実機一括受入（GPU/GUI一括検証・Nativeフロー全6画面合格）を完了。 [全件検索の仕様/証拠](full-library-search.md)・[契約](large-library-contract.md)・[受入記録](scale-resource-acceptance.md)・[実機受入記録](release-readiness.md)を読む。検索候補の1万件打切りは解消、1回の索引jobは最大1万件のまま。 設計の難しいR01/R02/R03/R06/R08にはAstra推奨を付け、通常実装はSolで進められるよう分割した。担当割当は推奨であり自動モデル切替ではない。
 
 M1は画像/本/動画の日常利用β、M2は音声/音楽内容も含む製品版候補。M1を全媒体完成版と呼ばず、既存機能を削って完成扱いにしない。詳細な依存・状態・完了条件・実機確認項目は実行計画だけを更新する。
 
@@ -16,7 +16,7 @@ M1は画像/本/動画の日常利用β、M2は音声/音楽内容も含む製�
 - P0改善は累積2/2で終了。新しい実運用根拠なしに第3試行へ戻らず、専用OCRは直接画像/ページ索引でも漏れが多いと判明した場合に限り検討する。
 - 生成/許可済み素材で検証し、私物を無断走査・変更・送信しない。物理版/祖先リンク確認・scope/profile分離を省略しない。
 - 全機能を維持し、GUIを簡潔にする。テスト説明は通常画面でなく記録へ置く。
-- 最新のユーザー指示でGPU/GUIテストは許可済み。[限定実機受入](release-readiness.md)はGPU PASS/native PARTIAL。古い延期は現在の禁止ではない。今回のnative修正再試行2回は終了し、残gateを合格扱い/予算resetしない。独立したR04の開発を進める。
+- 最新のユーザー指示でGPU/GUIテストは許可済み。[実機受入](release-readiness.md)はR04継続GPU/GUI PASS、R05動画類似PASS、R07-R09音声PASS、R10/R11状態GUI PASS、R12規模PASS、R02/R03復旧・Native GUI PASS（Light/Dark全6画面検証完了）。
 - 新依存/モデル取得は明示許可。Actions起動なし。既存production branch / Draft PR5を継続しmainへmergeしない。
 - 実装/CPU_DONE/実機未確認を区別し、合格していないタスクをDONEにしない。対象テストと必要な確認が通れば次へ進み、同じ確認を根拠なく繰り返さない。
 
