@@ -60,29 +60,35 @@ class StorageVersionGuardTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / 'wal_catalog.sqlite'
             cat = ProductionCatalog(db_path)
-            # Add records to generate WAL activity
             media_dir = Path(tmp) / 'media'
             media_dir.mkdir()
-            root_id = cat.add_root(str(media_dir))
-            wal_path = Path(str(db_path) + '-wal')
-            # Close the catalog
-            cat.close()
-            # If WAL file exists, it must be truncated to 0 bytes
-            if wal_path.exists():
-                self.assertEqual(wal_path.stat().st_size, 0)
+            cat.add_root(str(media_dir))
+            # Hold a connection to keep WAL file active with uncheckpointed frames
+            with closing(sqlite3.connect(db_path)) as db:
+                db.execute("INSERT INTO items(id, title, kind, tags) VALUES(100, 't', 'image', '[]')")
+                db.commit()
+                wal_path = Path(str(db_path) + '-wal')
+                self.assertTrue(wal_path.exists(), "Catalog WAL must exist during active connection")
+                self.assertGreater(wal_path.stat().st_size, 0, "Catalog WAL must have active frames before checkpoint")
+                # Close catalog, which must execute PRAGMA wal_checkpoint(TRUNCATE)
+                cat.close()
+                self.assertEqual(wal_path.stat().st_size, 0, "Catalog WAL must be truncated to 0 bytes by close checkpoint")
 
     def test_wal_checkpoint_truncate_on_ai_close(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / 'ai_catalog.sqlite'
             cat = ProductionCatalog(db_path)
             ai = AISearch(cat, StubEncoder())
-            # Put state into vector store
-            ai.store.save_state({'state': 'complete', 'processed': 1, 'total': 1, 'indexed': 1, 'skipped': 0, 'error': ''})
-            wal_path = Path(str(ai.store.path) + '-wal')
-            ai.close()
+            # Hold a connection to keep vector store WAL file active with uncheckpointed frames
+            with closing(sqlite3.connect(ai.store.path)) as vdb:
+                vdb.execute("INSERT INTO ai_vectors(item_id, revision, modality, vector) VALUES(1, 'rev1', 'text', ?)", (b'dummy',))
+                vdb.commit()
+                wal_path = Path(str(ai.store.path) + '-wal')
+                self.assertTrue(wal_path.exists(), "Vector store WAL must exist during active connection")
+                self.assertGreater(wal_path.stat().st_size, 0, "Vector store WAL must have active frames before checkpoint")
+                ai.close()
+                self.assertEqual(wal_path.stat().st_size, 0, "Vector store WAL must be truncated to 0 bytes by close checkpoint")
             cat.close()
-            if wal_path.exists():
-                self.assertEqual(wal_path.stat().st_size, 0)
 
 
 if __name__ == '__main__':

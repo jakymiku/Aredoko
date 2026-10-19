@@ -57,6 +57,7 @@ class VectorStore:
                     raise AIUnavailable(f'Unsupported vector store user_version {ver} > {CURRENT_VECTOR_STORE_USER_VERSION}; please update Aredoko.')
         with self.connect() as db:
             db.executescript('''
+                PRAGMA journal_mode=WAL;
                 CREATE TABLE IF NOT EXISTS ai_profile(value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS ai_vectors(item_id INTEGER NOT NULL, revision TEXT NOT NULL,
                     modality TEXT NOT NULL, vector BLOB NOT NULL, PRIMARY KEY(item_id,modality));

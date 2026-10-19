@@ -146,7 +146,17 @@ class SimilarityTests(unittest.TestCase):
         other=AISearch(self.catalog,encoder)
         try:self.assertEqual(other.similar(self.origin['id'])['similarity_status'],'unsupported_profile')
         finally:other.close()
-        with self.assertRaises(ValueError):self.ai.similar(self.row('song.wav')['id'])
+        # Audio origin is supported since R08; unindexed audio returns unindexed status
+        self.assertEqual(self.ai.similar(self.row('song.wav')['id'])['similarity_status'],'unindexed')
+        # Non-supported similarity source kind (e.g. material) raises ValueError
+        blue_id = self.row('blue.png')['id']
+        with self.catalog.connect() as db:
+            db.execute("UPDATE items SET kind='material' WHERE id=?", (blue_id,))
+        try:
+            with self.assertRaises(ValueError):self.ai.similar(blue_id)
+        finally:
+            with self.catalog.connect() as db:
+                db.execute("UPDATE items SET kind='image' WHERE id=?", (blue_id,))
 
     def test_paging_stable_ties_and_index_cap_independent_search(self):
         all_ids=self.ids()

@@ -43,9 +43,13 @@
 - **検証記録**:
   - `tests/test_storage_version_guard.py`: **4 PASS**（catalog, production catalog, vector store, wal truncate on close）。
   - `tests/test_storage_backup.py`: **24 PASS**。
+  - `tests/test_similarity_search.py`: **24 PASS**（R08音声類似検索整合・material等非対象kindのValueError検証）。
+  - `tools/package_release.py`: dry-run `--check` および実パッケージング検証完了（538ファイル、320.37 MiB、SHA256ハッシュリスト・manifest.json生成）。
   - `tools/test_scale_acceptance.py --stage cpu`: **26/26 PASS**。
+  - `tools/test_video_similarity_acceptance.py --stage cpu`: **PASS**。
   - `tools/test_ui_status_acceptance.py --stage cpu`: **16/16 PASS**。
   - `tools/test_audio_acceptance.py --stage cpu`: **36/36 PASS**。
+  - `tools/test_continuation_acceptance.py --stage cpu`: **PASS**。
   - `tests/Aredoko.Core.Tests`: **691 checks PASS**。
   - `src/Aredoko.WinUI.csproj`: Release x64 ビルド **0エラー**。
 - **制約・保全事項**:

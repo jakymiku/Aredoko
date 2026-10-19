@@ -203,9 +203,15 @@ SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時�
   - `THIRD_PARTY_NOTICES.md`: Python, .NET, WinUI, AIモデル（EmbeddingGemma, WD Tagger）の著作権・ライセンス通知を一覧化。
   - `docs/user-guide.md`: 通常起動・フォルダ登録・AI導入・バックアップ復元・既知制限の網羅的ガイド。
 - **検証記録**:
-  - `tests/test_storage_version_guard.py`: 4件PASS（Catalog/ProductionCatalog/VectorStoreのuser_versionガード、close時WAL truncate）。
+  - `tests/test_storage_version_guard.py`: 4件PASS（Catalog/ProductionCatalog/VectorStoreのuser_versionガード、WAL作成とclose時WAL 0バイトtruncate）。
   - `tests/test_storage_backup.py`: 24件PASS。
-  - `tools/package_release.py --check`: dry-run 正常終了（前提条件・構成要素検証済み）。
+  - `tests/test_similarity_search.py`: 24件PASS（R08音声類似検索導入整合・material等非対象kindのValueError検証）。
+  - `tools/package_release.py`: dry-run `--check` および実パッケージング検証完了（538ファイル、320.37 MiB、SHA256ハッシュリスト・manifest.json生成）。
+  - `tools/test_scale_acceptance.py --stage cpu`: 26/26件PASS。
+  - `tools/test_video_similarity_acceptance.py --stage cpu`: PASS。
+  - `tools/test_ui_status_acceptance.py --stage cpu`: 16/16件PASS。
+  - `tools/test_audio_acceptance.py --stage cpu`: 36/36件PASS。
+  - `tools/test_continuation_acceptance.py --stage cpu`: PASS。
   - `tests/Aredoko.Core.Tests`: 691件PASS。
   - WinUI x64 Releaseビルド：0エラー。
 

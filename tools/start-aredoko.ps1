@@ -19,15 +19,24 @@ New-Item -ItemType Directory -Force $logDirectory | Out-Null
 $pythonCmd = $null
 if (Test-Path (Join-Path $distRoot 'venv/Scripts/python.exe')) {
     $pythonCmd = (Join-Path $distRoot 'venv/Scripts/python.exe')
+} elseif (Test-Path (Join-Path $distRoot '../.venv-ai/Scripts/python.exe')) {
+    $pythonCmd = (Resolve-Path (Join-Path $distRoot '../.venv-ai/Scripts/python.exe')).Path
 } elseif (Get-Command 'python' -ErrorAction SilentlyContinue) {
     $pythonCmd = 'python'
 } else {
     throw 'Python 3.10+ is required to run the Aredoko backend. Please install Python or set up a venv.'
 }
 
-# Verify WinUI binary
-$winuiExe = Join-Path $distRoot 'bin/Aredoko.WinUI.exe'
-if (-not (Test-Path $winuiExe)) {
+# Verify WinUI binary and backend script (supports standalone dist and repo checkout)
+$winuiExe = $null
+$serverScript = $null
+if (Test-Path (Join-Path $distRoot 'bin/Aredoko.WinUI.exe')) {
+    $winuiExe = Join-Path $distRoot 'bin/Aredoko.WinUI.exe'
+    $serverScript = Join-Path $distRoot 'backend/app/production_server.py'
+} elseif (Test-Path (Join-Path $distRoot '../src/Aredoko.WinUI/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64/Aredoko.WinUI.exe')) {
+    $winuiExe = (Resolve-Path (Join-Path $distRoot '../src/Aredoko.WinUI/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64/Aredoko.WinUI.exe')).Path
+    $serverScript = (Resolve-Path (Join-Path $distRoot '../app/production_server.py')).Path
+} else {
     throw "WinUI executable not found at: $winuiExe"
 }
 
@@ -44,27 +53,26 @@ try {
         $probe.Dispose()
     }
 
-    $databasePath = [IO.Path]::GetFullPath($Database)
-    $serverScript = Join-Path $distRoot 'backend/app/production_server.py'
+    $databasePath = [IO.Path]::GetFullPath($Database).TrimEnd('\')
     $backendArgs = @(
         $serverScript,
         '--db', ('"' + $databasePath + '"'),
         '--ai-ranking', $AIRanking
     )
     if ($AIProfile) {
-        $profilePath = [IO.Path]::GetFullPath($AIProfile)
+        $profilePath = [IO.Path]::GetFullPath($AIProfile).TrimEnd('\')
         $backendArgs += @('--ai-profile', ('"' + $profilePath + '"'))
     }
     if ($AISettings) {
-        $settingsPath = [IO.Path]::GetFullPath($AISettings)
+        $settingsPath = [IO.Path]::GetFullPath($AISettings).TrimEnd('\')
         $backendArgs += @('--ai-settings', ('"' + $settingsPath + '"'))
     }
     if ($AIProfilesDirectory) {
-        $profilesDir = [IO.Path]::GetFullPath($AIProfilesDirectory)
+        $profilesDir = [IO.Path]::GetFullPath($AIProfilesDirectory).TrimEnd('\')
         $backendArgs += @('--ai-profiles-dir', ('"' + $profilesDir + '"'))
     }
     if ($TaggerProfile) {
-        $taggerPath = [IO.Path]::GetFullPath($TaggerProfile)
+        $taggerPath = [IO.Path]::GetFullPath($TaggerProfile).TrimEnd('\')
         $backendArgs += @('--tagger-profile', ('"' + $taggerPath + '"'))
     }
 

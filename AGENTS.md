@@ -18,7 +18,7 @@ R12 verifies engineering budgets on a generated 50,001 metadata items fixture an
 - Separate boundaries: 512MiB audio read limit, 512MiB archive read limit, 24h duration limit (86,400,000ms) enforced fail-closed without claiming 1TB scan.
 - Stop-time backup (4.26s) and fresh restore (2.21s): bit-exact preservation and `PRAGMA integrity_check` == ok.
 R13 delivers forward-schema version guard (`PRAGMA user_version = 0` fail-closed in `Catalog`, `ProductionCatalog`, `VectorStore`, and `storage_backup`), `tools/package_release.py` (produces self-contained release with SHA256 checksums and manifest without requiring dotnet SDK or winapp at runtime, keeping user data in `%LOCALAPPDATA%\Aredoko`), `tools/start-aredoko.ps1`, `THIRD_PARTY_NOTICES.md`, and `docs/user-guide.md`.
-Python tests (4 PASS in `test_storage_version_guard.py`, 24 PASS in `test_storage_backup.py`), Core tests (691 PASS), WinUI x64 Release build (0 errors), R12 scale harness (26/26 PASS in `tools/test_scale_acceptance.py --stage cpu`), R10/R11 harness (16/16 PASS), R06-R09 harness (36/36 PASS). Real GPU/GUI deferred to R14 per user guidance. Next R14 batch acceptance.
+Python tests (4 PASS in `test_storage_version_guard.py`, 24 PASS in `test_storage_backup.py`, 24 PASS in `test_similarity_search.py`), Core tests (691 PASS), WinUI x64 Release build (0 errors), R12 scale harness (26/26 PASS in `tools/test_scale_acceptance.py --stage cpu`), R10/R11 harness (16/16 PASS), R06-R09 harness (36/36 PASS), R04 harness (PASS), R05 harness (PASS). Real GPU/GUI deferred to R14 per user guidance. Next R14 batch acceptance.
 
 ## Latest R10/R11 status clarity, request cancellation, diagnostics, and UI consistency audit (2026-10-19)
 
