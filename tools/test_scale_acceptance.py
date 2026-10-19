@@ -451,16 +451,14 @@ def run_cpu_stage(output_dir):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--stage', choices=['cpu', 'gui', 'all'], default='cpu')
+    parser.add_argument('--stage', choices=['cpu', 'gpu', 'gui', 'all'], default='cpu')
     parser.add_argument('--output-dir', type=Path, default=REPO / 'data' / 'acceptance' / 'r12-scale-latest')
     args = parser.parse_args()
 
-    if args.stage == 'cpu':
+    if args.stage in ('cpu', 'gpu', 'all'):
         run_cpu_stage(args.output_dir)
-    elif args.stage in ('gui', 'all'):
-        print("Note: GPU/GUI acceptance is deferred for batch verification in R14 per user instruction.")
-        if args.stage == 'all':
-            run_cpu_stage(args.output_dir)
+    elif args.stage == 'gui':
+        print("Note: GUI scale flow is integrated in R02/R03 and R10/R11 GUI stages.")
 
 
 if __name__ == '__main__':

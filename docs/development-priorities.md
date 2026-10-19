@@ -16,7 +16,7 @@ M1は画像/本/動画の日常利用β、M2は音声/音楽内容も含む製�
 - P0改善は累積2/2で終了。新しい実運用根拠なしに第3試行へ戻らず、専用OCRは直接画像/ページ索引でも漏れが多いと判明した場合に限り検討する。
 - 生成/許可済み素材で検証し、私物を無断走査・変更・送信しない。物理版/祖先リンク確認・scope/profile分離を省略しない。
 - 全機能を維持し、GUIを簡潔にする。テスト説明は通常画面でなく記録へ置く。
-- 最新のユーザー指示でGPU/GUIテストは許可済み。[実機受入](release-readiness.md)はR04継続GPU/GUI PASS、R05動画類似PASS、R07-R09音声PASS、R10/R11状態GUI PASS、R12規模PASS、R02/R03復旧・Native GUI PASS（Light/Dark全6画面検証完了）。
+- 最新のユーザー指示でGPU/GUIテストは許可済み。[実機受入](release-readiness.md)はR04継続GPU/GUI PASS、R05動画類似GPU/GUI PASS、R07-R09音声GPU/GUI PASS、R10/R11状態・診断CPU/GUI PASS、R12規模PASS、R02/R03復旧・Native GUI PASS（全13画面PNG検証完了、残留プロセス0件）。
 - 新依存/モデル取得は明示許可。Actions起動なし。既存production branch / Draft PR5を継続しmainへmergeしない。
 - 実装/CPU_DONE/実機未確認を区別し、合格していないタスクをDONEにしない。対象テストと必要な確認が通れば次へ進み、同じ確認を根拠なく繰り返さない。
 

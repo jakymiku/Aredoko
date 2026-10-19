@@ -142,6 +142,7 @@ def run_gui_stage(target_dir):
     log_file = log_path.open('w', encoding='utf-8')
     proc = subprocess.Popen(cmd, cwd=REPO, env=env, stdout=log_file, stderr=subprocess.STDOUT)
     hwnd = None
+    app_pid = None
     try:
         # Wait up to 120s for the window to appear (building Release layout may take 20-30s)
         deadline = time.monotonic() + 120
@@ -156,6 +157,7 @@ def run_gui_stage(target_dir):
             main = [w for w in windows if 'Aredoko' in w.get('title', '') and w.get('title') != 'PopupHost']
             if main and main[0].get('hwnd'):
                 hwnd = str(main[0]['hwnd'])
+                app_pid = main[0].get('processId') or main[0].get('pid')
                 break
             time.sleep(2)
         if not hwnd:
@@ -211,6 +213,8 @@ def run_gui_stage(target_dir):
                 subprocess.run(['winapp', 'ui', 'close', '-w', hwnd], capture_output=True, timeout=5)
             except Exception:
                 pass
+        if app_pid:
+            subprocess.run(['taskkill', '/PID', str(app_pid), '/T', '/F'], capture_output=True)
         subprocess.run(['taskkill', '/PID', str(proc.pid), '/T', '/F'], capture_output=True)
         try:
             proc.wait(5)

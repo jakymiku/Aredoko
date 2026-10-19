@@ -27,7 +27,8 @@ public sealed partial class MainPage
             save.Click+=(_,_)=>{try{ViewerOptions.Save(wheel.SelectedIndex==1);savedText.Text="保存しました。開いているビューワーにも適用します。";}catch(Exception ex){savedText.Text="保存できません: "+ex.Message;}};
             panel.Children.Add(wheel);panel.Children.Add(hint);panel.Children.Add(save);panel.Children.Add(savedText);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="設定",CloseButtonText="閉じる",Content=panel};
-            AutomationProperties.SetAutomationId(dialog,"SettingsDialog");
+            var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
             foreach(var (label,id,target) in new[]{
                 ("AI検索の準備","BtnAIIndex","ai"),
                 ("関連語を編集","BtnRelatedTerms","terms"),
@@ -38,12 +39,12 @@ public sealed partial class MainPage
                 button.Click+=(_,_)=>{destination=target;dialog.Hide();};panel.Children.Add(button);
             }
             await dialog.ShowAsync();
+            await Task.WhenAny(closedTcs.Task, Task.Delay(500));
         }
         catch(Exception ex){Failure(ex);}
         finally{dialogOpen=false;transitions.Release();RestoreNavigation();}
         if(destination is not null)
         {
-            await Task.Delay(300);
             if(destination=="ai")AI_Click(this,new RoutedEventArgs());
             else if(destination=="terms")RelatedTerms_Click(this,new RoutedEventArgs());
             else if(destination=="backup")await OpenBackupGuideDialogAsync();
@@ -72,7 +73,14 @@ public sealed partial class MainPage
             });
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップと復旧ガイド",CloseButtonText="閉じる",Content=panel};
             AutomationProperties.SetAutomationId(dialog,"BackupGuideDialog");
+            var closeBtn = new Button { Content = "閉じる", HorizontalAlignment = HorizontalAlignment.Right };
+            AutomationProperties.SetAutomationId(closeBtn, "BtnCloseBackupGuide");
+            closeBtn.Click += (_, _) => dialog.Hide();
+            panel.Children.Add(closeBtn);
+            var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
             await dialog.ShowAsync();
+            await Task.WhenAny(closedTcs.Task, Task.Delay(500));
         }
         catch(Exception ex){Failure(ex);}
         finally{dialogOpen=false;transitions.Release();RestoreNavigation();}
@@ -116,7 +124,14 @@ public sealed partial class MainPage
 
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="診断情報（匿名化済み）",CloseButtonText="閉じる",Content=panel};
             AutomationProperties.SetAutomationId(dialog,"DiagnosticsDialog");
+            var closeDiagBtn = new Button { Content = "閉じる", HorizontalAlignment = HorizontalAlignment.Right };
+            AutomationProperties.SetAutomationId(closeDiagBtn, "BtnCloseDiagnostics");
+            closeDiagBtn.Click += (_, _) => dialog.Hide();
+            panel.Children.Add(closeDiagBtn);
+            var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
             await dialog.ShowAsync();
+            await Task.WhenAny(closedTcs.Task, Task.Delay(500));
         }
         catch(Exception ex){Failure(ex);}
         finally{dialogOpen=false;transitions.Release();RestoreNavigation();}

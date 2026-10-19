@@ -62,17 +62,22 @@ Frozen scope above; completed results and open gates follow. This is not RC acce
 
 | ハーネス / 項目 | 実行コマンド | 結果 | 主な検証内容・証拠 |
 | --- | --- | --- | --- |
-| **R04 索引継続 GPU/GUI** | `tools/test_continuation_acceptance.py --stage all` | **GPU 4/4 PASS / GUI 4/4 PASS** | 実CUDA EG2推論（6doc）、UIA自動操縦による計画→確認した未準備分作成→中断→再開ボタン出現の一連フロー。`continuation-plan.png`、`continuation-cancelled.png` 目視確認合格 |
-| **R05 動画類似検索** | `tools/test_video_similarity_acceptance.py --stage all` | **19/19 PASS** | 動画起点/候補、フレーム最大集約、候補時刻（`video_match_ms`）・起点時刻（`origin_match_ms`）の時間根拠、自己除外、表紙フォールバック |
-| **R06-R09 音声・音響** | `tools/test_audio_acceptance.py --stage cpu` | **36/36 PASS** | 768D発話区間索引（3500ms根拠・snippet取得・キャッシュvector直接再利用）、512D音響特徴索引（雨音・ジャズ記述子検索・無音WAV幻覚防止）、音響類似検索（時間根拠・自己除外）、HTTP範囲再生ストリーミング |
-| **R10/R11 状態・UI監査** | `tools/test_ui_status_acceptance.py --stage cpu` | **16/16 PASS** | AI状態コード（`model_missing`, `unindexed`, `corrupt_profile`, `ready`）と0件検索の分離、要求所有取消、伏字診断情報（パス・トークン置換）、UI監査チェックリスト網羅 |
-| **R12 規模・資源予算** | `tools/test_scale_acceptance.py --stage cpu` | **26/26 PASS** | 50,001件メタデータ＋65,536件768Dベクトル。通常検索warm p95=0.3605s <= 1.0s、CPUベクトル順位計算warm p95=9.110s <= 10.0s、取消応答0.100ms <= 1.0s、WAL checkpoint truncate 0B、停止時backup (4.99s) / 新規restore (2.05s) 整合性ok |
+| **R04 索引継続 GPU/GUI** | `tools/test_continuation_acceptance.py --stage all` | **GPU 4/4 PASS / GUI 4/4 PASS** | 実CUDA EG2推論（6doc）、UIA自動操縦による計画作成・未準備分作成・所有ジョブ中断・再開ボタン出現の一連フロー。`continuation-plan.png`、`continuation-cancelled.png` 目視確認合格 |
+| **R05 動画類似検索 GPU/GUI** | `tools/test_video_similarity_acceptance.py --stage all` | **GPU 15/15 PASS / GUI 4/4 PASS** | 実CUDA EG2による代表フレーム推論（9000ms/4000ms時間根拠、最大集約、自己除外）。WinUI UIA自動操縦による動画選択・詳細ペイン（`BtnOpenVideo`有効）・コンテキストメニュー「似た動画・素材を探す」からの類似一覧表示検証。`video-similarity.png` 目視確認合格 |
+| **R06-R09 音声・音響 GPU/GUI** | `tools/test_audio_acceptance.py --stage all` | **GPU 13/13 PASS / GUI 5/5 PASS** | 実CUDA EG2推論（768D発話区間ベクトル・3500ms根拠・スニペット、512D音響特徴・雨音・ジャズ記述子、18000ms音響類似・自己除外）。WinUI UIA自動操縦による音声選択・`BtnOpenAudio`・`VideoViewport`内音声トランスポート再生確認（`audio-player.png`）・「似た音声・曲を探す」コンテキストメニューからの類似検索確認（`audio-similarity.png`） |
+| **R10/R11 状態・UI監査 CPU/GUI** | `tools/test_ui_status_acceptance.py --stage all` | **CPU 16/16 PASS / GUI 10/10 PASS** | AI状態コード（`model_missing`, `unindexed`, `ready`）と0件検索の分離、要求所有取消、UI監査チェックリスト網羅。WinUI UIA自動操縦による検索・設定ダイアログ・匿名化診断情報表示とクリップボードコピー確認（`diagnostics-dialog.png`）・バックアップ復旧ガイド表示確認（`backup-guide-dialog.png`） |
+| **R12 規模・資源予算** | `tools/test_scale_acceptance.py --stage cpu` | **26/26 PASS** | 50,001件メタデータ＋65,536件768Dベクトル。通常検索warm p95=0.4799s <= 1.0s、CPUベクトル順位計算warm p95=5.170s <= 10.0s（`app/ai_search.py`ベクトル内積・有限性判定高速化により11.07sから半減）、取消応答0.128ms <= 1.0s、WAL checkpoint truncate 0B、停止時backup (5.04s) / 新規restore (1.96s) 整合性ok |
 | **R02/R03 復旧・Native GUI** | `tools/test_recovery_acceptance.py --output data/ai-ui/recovery-native-20261019-02 --stage all` | **GPU 28/28 PASS / GUI 24/24 PASS** | 実開発launcherによる実機起動。Light (1200x820) および Dark (700x620 狭小) の両テーマ。前回未完だったDark狭小リサイズ時の詳細overlay再表示・設定確認・Core combined実CUDA検索を完全パス。全6画面PNG目視確認合格 |
 
 ### 2. 生成スクリーンショット目視確認結果
 
 - `data/continuation-acceptance/gui/continuation-plan.png`: 計画作成後の「未準備の4件を作成」ボタン表示・有効状態確認。
 - `data/continuation-acceptance/gui/continuation-cancelled.png`: 中断後の「前回の未準備分を再開」ボタン表示確認。
+- `data/video-similarity-acceptance/gui/video-similarity.png`: 動画選択からの「似た動画・素材を探す」実行結果・類似一覧表示確認。
+- `data/ai-acceptance/audio-gui/gui/audio-player.png`: 音声アイテム選択後のプレイヤービュー表示（シークバー・再生操作UI）確認。
+- `data/ai-acceptance/audio-gui/gui/audio-similarity.png`: 音声アイテムからの「似た音声・曲を探す」実行結果・類似一覧表示確認。
+- `data/acceptance/r10-r11-latest/gui/diagnostics-dialog.png`: 診断情報ダイアログ表示、パス/トークンの匿名化（`[USER]`, `[REDACTED]`）、コピーボタン確認。
+- `data/acceptance/r10-r11-latest/gui/backup-guide-dialog.png`: バックアップと復旧ガイドダイアログ表示・CLIコマンド例確認。
 - `data/ai-ui/recovery-native-20261019-02/native-01/Light-restored-detail.png`: Lightテーマ・1200x820での詳細ペイン、タグ・棚・お気に入り状態確認。
 - `data/ai-ui/recovery-native-20261019-02/native-01/Light-restored-viewer-settings.png`: Lightテーマでの設定ダイアログ・ビューア設定・復旧ガイド導線確認。
 - `data/ai-ui/recovery-native-20261019-02/native-01/Light-restored-combined-search.png`: Lightテーマでの「両方で探す（AI）」実CUDA検索結果（5件）、スコア・タグ・根拠表示確認。
@@ -84,5 +89,5 @@ Frozen scope above; completed results and open gates follow. This is not RC acce
 
 - Core単体テスト: **691/691 PASS** (Release)
 - Python単体テスト: **629/629 PASS** (3 platform SKIP)
-- WinUI Release x64ビルド: **0エラー**
-- 全プロセス（Aredoko.WinUI.exe、python worker）の完全終了を確認済み。
+- WinUI Release x64ビルド: **0エラー**（0警告）
+- 全プロセス（Aredoko.WinUI.exe、python worker）の完全終了を確認済み（残留0件）。

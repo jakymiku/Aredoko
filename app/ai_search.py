@@ -4,6 +4,7 @@ from contextlib import contextmanager, nullcontext, closing
 import hashlib
 import json
 import math
+import operator
 from pathlib import Path
 import sqlite3
 import threading
@@ -199,17 +200,19 @@ class VectorStore:
                     try:
                         vec=array('f');vec.frombytes(data)
                     except (ValueError,TypeError):continue
-                    if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4: continue
+                    if len(vec)!=self.dimension: continue
+                    sq=sum(map(operator.mul,vec,vec))
+                    if not math.isfinite(sq) or abs(sq-1)>1e-4: continue
                     if is_multi and mode=='cover':
                         best_score=None;best_orig_ms=0
                         for orig_ms,orig_vec in active_frames:
-                            s=sum(a*b for a,b in zip(orig_vec,vec))
+                            s=sum(map(operator.mul,orig_vec,vec))
                             if best_score is None or s>best_score:
                                 best_score=s;best_orig_ms=orig_ms
                         scores.setdefault(item_id,{})[mode]=best_score
                         if origin_hits is not None:origin_hits[item_id]=best_orig_ms
                     else:
-                        score=sum(a*b for a,b in zip(active_frames[0][1],vec))
+                        score=sum(map(operator.mul,active_frames[0][1],vec))
                         scores.setdefault(item_id,{})[mode]=score
                         if origin_hits is not None and mode=='cover':origin_hits[item_id]=active_frames[0][0]
                 if source in ('all','cover') and 'cover' in self.profile.modalities:
@@ -220,17 +223,19 @@ class VectorStore:
                         try:
                             vec=array('f');vec.frombytes(data)
                         except (ValueError,TypeError):continue
-                        if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:continue
+                        if len(vec)!=self.dimension: continue
+                        sq=sum(map(operator.mul,vec,vec))
+                        if not math.isfinite(sq) or abs(sq-1)>1e-4: continue
                         if is_multi:
                             for orig_ms,orig_vec in active_frames:
-                                score=sum(a*b for a,b in zip(orig_vec,vec))
+                                score=sum(map(operator.mul,orig_vec,vec))
                                 prev=scores.get(item_id,{}).get('cover')
                                 if prev is None or score>prev or (score==prev and item_id not in video_hits):
                                     scores.setdefault(item_id,{})['cover']=score
                                     video_hits[item_id]=at_ms
                                     if origin_hits is not None:origin_hits[item_id]=orig_ms
                         else:
-                            score=sum(a*b for a,b in zip(active_frames[0][1],vec))
+                            score=sum(map(operator.mul,active_frames[0][1],vec))
                             prev=scores.get(item_id,{}).get('cover')
                             if prev is None or score>prev or (score==prev and item_id not in video_hits):
                                 scores.setdefault(item_id,{})['cover']=score

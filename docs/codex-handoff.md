@@ -8,25 +8,31 @@
 - **R14 一括受入・ハーネス検証実績**:
   - **R04 索引継続 GPU/GUI (`tools/test_continuation_acceptance.py --stage all`)**:
     - **GPU 4/4 PASS / GUI 4/4 PASS**。実CUDA EG2 6doc推論。UIA自動操縦による計画作成・未準備分作成・所有ジョブ中断・再開ボタン出現の一連フローを検証。
-    - 発見・修正: タイマー更新による計画破棄バグ（`AIScopeEditor` の `ScopeEdited` イベント分離と `SetJobBusy` ガード）、および非対話環境での UIA `invoke` 呼び出し・detached launcher プロセス追跡を修正。
     - 生成画像目視確認合格: `continuation-plan.png`, `continuation-cancelled.png`。
-  - **R05 動画類似検索 (`tools/test_video_similarity_acceptance.py --stage all`)**:
-    - **19/19 PASS**。動画起点・動画候補、代表フレーム最大集約、候補時刻（`video_match_ms`）および起点時刻（`origin_match_ms`）の時間根拠、自己除外、表紙フォールバックを完全検証。
-  - **R07-R09 音声音響・類似・WinUI再生 (`tools/test_audio_acceptance.py --stage cpu`)**:
-    - **36/36 PASS**。768D発話区間索引（3500ms根拠・snippet取得・キャッシュvector直接再利用）、512D音響特徴空間分離（雨音・ジャズ記述子検索・無音WAV幻覚防止）、音響類似検索（時間根拠・自己除外）、HTTP範囲再生ストリーミングを検証。
-  - **R10/R11 状態明瞭化・所有取消・安全診断情報 (`tools/test_ui_status_acceptance.py --stage cpu`)**:
-    - **16/16 PASS**。AI状態コード（`model_missing`, `unindexed`, `ready`）と0件検索の分離、要求所有取消、伏字診断情報（ユーザー名・トークン完全置換）、UI監査チェックリスト網羅を検証。
+    - プロセスリーク修正: `proc.pid` だけでなく WinApp プロセス ID を捕捉し、`taskkill /PID app_pid /T /F` で確実に終了。
+  - **R05 動画類似検索 GPU/GUI (`tools/test_video_similarity_acceptance.py --stage all`)**:
+    - **GPU 15/15 PASS / GUI 4/4 PASS**。実CUDA EG2による代表フレーム推論（9000ms/4000ms時間根拠、最大集約、自己除外）。
+    - WinUI UIA自動操縦による動画選択・詳細ペイン（`BtnOpenVideo`有効）・コンテキストメニュー「似た動画・素材を探す」からの類似一覧表示検証。
+    - 生成画像目視確認合格: `video-similarity.png`。
+  - **R07-R09 音声音響・類似・WinUI再生 GPU/GUI (`tools/test_audio_acceptance.py --stage all`)**:
+    - **GPU 13/13 PASS / GUI 5/5 PASS**。実CUDA EG2推論（768D発話区間ベクトル・3500ms根拠・スニペット、512D音響特徴・雨音・ジャズ記述子、18000ms音響類似・自己除外）。
+    - WinUI UIA自動操縦による音声選択・`BtnOpenAudio`・`VideoViewport`内音声トランスポート再生確認・「似た音声・曲を探す」コンテキストメニューからの類似検索確認。
+    - 生成画像目視確認合格: `audio-player.png`, `audio-similarity.png`。
+  - **R10/R11 状態明瞭化・所有取消・安全診断情報 CPU/GUI (`tools/test_ui_status_acceptance.py --stage all`)**:
+    - **CPU 16/16 PASS / GUI 10/10 PASS**。AI状態コード（`model_missing`, `unindexed`, `ready`）と0件検索の分離、要求所有取消、UI監査チェックリスト網羅。
+    - 発見・修正: WinUI 3 のウィンドウレス ContentDialog において非対話環境での `{ESC}` 閉鎖が無視される問題に対処し、`BtnCloseDiagnostics` / `BtnCloseBackupGuide` を追加、`closedTcs` による完了待機を実装。
+    - 生成画像目視確認合格: `diagnostics-dialog.png`（パス `[USER]` / トークン `[REDACTED]` 匿名化確認）, `backup-guide-dialog.png`。
   - **R12 規模・資源予算受入 (`tools/test_scale_acceptance.py --stage cpu`)**:
-    - **26/26 PASS**。50,001件メタデータ登録＋65,536件768Dベクトル。通常検索 warm p95 = 0.3605s ≤ 1.0s、CPUベクトル順位計算 warm p95 = 9.110s ≤ 10.0s、取消応答 0.100ms ≤ 1.0s、WAL checkpoint truncate 0B、停止時backup (4.99s) / 新規restore (2.05s) 整合性OK。
+    - **26/26 PASS**。50,001件メタデータ登録＋65,536件768Dベクトル。
+    - 発見・修正: バックグラウンド並行負荷時に65,536ベクトルの順位計算が10秒予算を超過（11.07s）したため、`app/ai_search.py` の `scores_with_content` 内積ループを最適化（768要素の `any(not isfinite)` を二乗ノルムの有限性判定に集約、`zip` を `map(operator.mul)` に置換）。warm p95 が **5.170s**（50%以上高速化）に短縮し合格。通常検索 warm p95 = 0.4799s ≤ 1.0s、取消応答 0.128ms ≤ 1.0s、WAL checkpoint truncate 0B、停止時backup (5.04s) / 新規restore (1.96s) 整合性OK。
   - **R02/R03 復旧・Native GUI受入 (`tools/test_recovery_acceptance.py --output data/ai-ui/recovery-native-20261019-02 --stage all`)**:
     - **GPU 28/28 PASS / GUI 24/24 PASS**。実開発launcherによる実機起動。Light (1200x820) および Dark (700x620 狭小) の両テーマ。前回未完だったDark狭小リサイズ時の詳細overlay再表示・設定確認・Core combined実CUDA検索を完全パス。
-    - 発見・修正: ゲーム実行中によるフォアグラウンド取得制限に対応し、HWND宛先安全メッセージ（`post-message`）および UIA `set-value`/`expand`+`select` へのフォールバックを追加。
     - 全6画面PNG目視確認合格（Light-restored-detail.png, Light-restored-viewer-settings.png, Light-restored-combined-search.png, Dark-restored-detail.png, Dark-restored-viewer-settings.png, Dark-restored-combined-search.png）。
 - **テストスイート整合性**:
   - `src/Aredoko.Core/ErrorText.cs`: 音声範囲エラー（`Audio range outside source`, `Invalid audio range request`）の日本語訳を追加。
   - Core単体テスト: **691/691 PASS** (Release)。
   - Python単体テスト: **629/629 PASS** (3 platform SKIP)。
-  - WinUI Release x64ビルド: **0エラー**。
+  - WinUI Release x64ビルド: **0エラー**（0警告）。
   - 残留プロセス: `Aredoko.WinUI.exe`、python worker ともに0件（完全クリーン終了）。
 - **制約・保全事項**:
   - P0累積2/2終了・OCR保留・全機能/簡潔GUI・原本保護・私物走査/変更なし・Actionsなし・mainへのmergeなし。
