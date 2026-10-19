@@ -1,5 +1,6 @@
 """Production catalog: read-only locations + separately editable metadata."""
 import json
+import sqlite3
 import threading
 from contextlib import closing
 from pathlib import Path
@@ -16,9 +17,11 @@ class ScanBusyError(ValueError):
 class ProductionCatalog(Catalog):
     def __init__(self, path):
         # Never reinterpret an existing fictional demo database as a real library.
-        import sqlite3
-        if Path(path).exists():
+        if Path(path).exists() and Path(path).stat().st_size > 0:
             with closing(sqlite3.connect(path)) as db:
+                user_ver = db.execute("PRAGMA user_version").fetchone()[0]
+                if user_ver > 0:
+                    raise ValueError(f"Unsupported database schema user_version {user_ver} > 0; please update Aredoko.")
                 tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 if 'items' in tables and 'production_marker' not in tables:
                     raise ValueError('Use a separate production database, not the demo database')
@@ -396,3 +399,4 @@ class ProductionCatalog(Catalog):
     def close(self):
         self._cancel.set()
         if self._worker: self._worker.join(timeout=10)
+        super().close()

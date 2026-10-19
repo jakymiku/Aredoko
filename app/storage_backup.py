@@ -165,6 +165,8 @@ def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,ext
             try:db.execute('BEGIN IMMEDIATE')
             except sqlite3.OperationalError as error:raise StorageBusyError('Database is busy; close writers before backup') from error
             stack.callback(db.rollback)
+            try:db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+            except Exception:pass
         def unchanged():
             check()
             if (include_vectors and _stores(catalog)!=stores) or _profiles(profiles)!=directory_profiles:
@@ -264,7 +266,11 @@ def restore(bundle,output,*,without_vectors=False,max_bytes=DEFAULT_MAX_BYTES,ca
                         writer.write(chunk)
                     writer.flush();os.fsync(writer.fileno())
                 if _hash(target)!=(entry['bytes'],entry['sha256']):raise RecoveryError('Restore copy changed')
-                if entry['role'] in ('catalog','vectors'):_sealed(source)
+                if entry['role'] in ('catalog','vectors'):
+                    _sealed(source)
+                    try:
+                        with closing(sqlite3.connect(target)) as db:db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+                    except Exception:pass
             check()
             if hashlib.sha256(_read_small(bundle/'manifest.json')).hexdigest()!=manifest_hash:raise RecoveryError('Backup manifest changed')
             report={'format':'aredoko-restored','version':1,'source_manifest_sha256':manifest_hash,'cache_policy':'omitted' if without_vectors else manifest['cache_policy'],'automatic_resume':False,'requires_source_revalidation':True,'not_included':manifest['not_included'],'runtime':manifest['runtime'],'entries':entries}

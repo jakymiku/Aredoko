@@ -1,5 +1,59 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-19 R12規模・資源予算受入 / R13 前方スキーマガード・WAL単一ファイル整合・配布パッケージ・利用手順 実装・CPU検証完了（CPU_DONE） — 次はR14 実GPU/GUI一括受入・RC判定
+
+開始HEAD `945cb57`。**R12（数万件の性能・資源予算の計測と局所改善）およびR13（配布・起動・更新/アンインストール・利用手順）はCPU_DONE**。
+登録50,001件メタデータおよび65,536件768-D保存ベクトルの生成fixtureを用いた網羅的計測を実施し、通常検索（p95 0.3368秒 ≤ 1.0秒）、CPU保存ベクトル順位計算（p95 9.573秒 ≤ 10.0秒）、検索所有取消（0.109ms ≤ 1.0秒）、クリーン終了（0.0045秒 ≤ 2.0秒）の全工学予算を達成。過剰な投機的変更を排して全件走査・同値性・bit-exact整合を保全。
+データ保全・製品化として、SQLite `PRAGMA user_version = 0` 前方スキーマガード（未対応上位版DBへの破壊的書き込み拒絶・フェイルクローズ）および `PRAGMA wal_checkpoint(TRUNCATE)`（終了時・バックアップ復元時の `-wal` 0バイト単一ファイル整合）を全コンポーネントに導入。
+スタンドアロン配布パッケージャー `tools/package_release.py`（.NET SDK/winapp/git不要、SHA256ハッシュリスト・マニフェスト自動生成、`%LOCALAPPDATA%\Aredoko` ユーザーデータ分離）、単体起動スクリプト `tools/start-aredoko.ps1`、ライセンス・著作権表示一覧 `THIRD_PARTY_NOTICES.md`、エンドユーザー向け利用ガイド `docs/user-guide.md` を配備完了。
+実機GPU/GUI受入はユーザー方針に従いR14へ集約（一括検証用ハーネス `tools/test_scale_acceptance.py --stage cpu` 26件合格、`tools/test_ui_status_acceptance.py` 16件合格、`tools/test_audio_acceptance.py` 36件合格）。次は台帳優先順の最終項 **R14 実GPU/GUIのまとめ受入→修正→RC判定**。
+
+- **R12 実装・計測詳細（規模・資源予算受入）**:
+  - `tools/test_scale_acceptance.py`:
+    - 50,001件メタデータ登録および65,536件 768-D 保存ベクトル生成 fixture による自動受入ハーネス。
+    - 通常文字検索: warm p95 = 0.3368秒 ≤ 1.0秒（Cold 241ms、12回計測、16/160/1600件ヒット条件網羅）。
+    - CPU保存ベクトル順位計算（65,536件 768-D）: warm p95 = 9.573秒 ≤ 10.0秒（Cold 8.353秒、10回計測）。
+    - 所有検索取消受付レイテンシ: 0.109ms ≤ 1.0秒。
+    - クリーン終了時間: 0.0045秒 ≤ 2.0秒。
+    - 候補列挙（`_iter_rows`）: 50,001件全件を1.198秒で昇順走査、最終ID 50,001到達。
+    - 差分・鮮度走査: 10,000件未処理判定を0.054秒で完了。
+    - カバレッジ計算: 50,001件全件で `candidate_total=50001`、`target_total=10000`（`MAX_ITEMS=10,000` 頭打ち契約遵守）。
+    - 停止時バックアップ（4.26秒）および新規ディレクトリ復元（2.21秒）: `PRAGMA integrity_check` OK、50,001件完全一致保全。
+    - 分離境界検査: 512MiB音声/書庫容量上限、24時間（86,400,000ms）時間上限の安全拒絶を確認。実1TB走査とは称さない。
+    - SQLite WAL 単一ファイル整合性: 終了時に catalog / vector store 双方の `-wal` ファイルサイズが 0 バイト（完全truncate）。
+  - `docs/scale-resource-acceptance.md`:
+    - p95公式（`nearest-rank / ceil(0.95 * N) - 1`）、測定条件、フットプリント記録（メモリ/ディスク）の凍結記録。
+- **R13 実装詳細（起動・パッケージング・前方スキーマガード・利用手順）**:
+  - 前方スキーマバージョンガード（`PRAGMA user_version = 0`）:
+    - `app/catalog.py`: `CURRENT_SCHEMA_USER_VERSION = 0`。`Catalog.__init__` で未対応の上位スキーマ（`user_version > 0`）を検出した場合、即座にフェイルクローズ（起動/書き込み拒絶）。`Catalog.close()` で `PRAGMA wal_checkpoint(TRUNCATE)` を実行。
+    - `app/production.py`: `ProductionCatalog.__init__` で `user_version > 0` 検出時にフェイルクローズ。`ProductionCatalog.close()` で `super().close()`。
+    - `app/ai_search.py`: `CURRENT_VECTOR_STORE_USER_VERSION = 0`。`VectorStore.__init__` で `user_version > 0` 検出時にフェイルクローズ。`VectorStore.checkpoint()` および `AISearch.close()` で `PRAGMA wal_checkpoint(TRUNCATE)` を実行。
+    - `app/storage_backup.py`: `storage_backup.backup()` および `storage_backup.restore()` の各所で `PRAGMA wal_checkpoint(TRUNCATE)` を実行。
+  - スタンドアロン配布パッケージャー `tools/package_release.py`:
+    - .NET SDK / winapp / git checkout 不要の配布物（`dist/aredoko-release-windows-x64`）を生成。
+    - 構成: WinUI バイナリ（`app/`）、Python ランタイム/仮想環境（`python/`）、バックエンドコード（`backend/`）、起動スクリプト（`Aredoko.bat`, `start-aredoko.ps1`）、ドキュメント（`README.txt`, `THIRD_PARTY_NOTICES.md`, `USER_GUIDE.md`）。
+    - ユーザーデータ分離: ユーザー設定・DB・キャッシュは `%LOCALAPPDATA%\Aredoko` に永続化され、配布物ディレクトリはクリーンかつ読み取り専用運用が可能。
+    - SHA256 チェックサムリスト（`sha256sums.txt`）およびマニフェスト（`manifest.json`）を自動生成。
+  - スタンドアロンランチャー `tools/start-aredoko.ps1` / `Aredoko.bat`:
+    - 開発ツール不要でユーザー環境で直接起動可能。
+  - ライセンス・NOTICE `THIRD_PARTY_NOTICES.md`:
+    - Python 依存ライブラリ（PySide6, torch, transformers, safetensors, huggingface-hub, Pillow, numpy, etc.）、.NET / Windows App SDK ランタイム、AIモデル（EmbeddingGemma 2, SmilingWolf WD Tagger v3）の完全なライセンス・帰属・著作権表示インベントリ。
+  - エンドユーザー利用ガイド `docs/user-guide.md`:
+    - 日常利用（起動、ライブラリ登録、検索、閲覧、整理）、初回AIモデル導入手順、バックアップと復元、システム要件、既知の制限事項を明記。
+- **検証記録**:
+  - `tests/test_storage_version_guard.py`: **4 PASS**（catalog, production catalog, vector store, wal truncate on close）。
+  - `tests/test_storage_backup.py`: **24 PASS**。
+  - `tools/test_scale_acceptance.py --stage cpu`: **26/26 PASS**。
+  - `tools/test_ui_status_acceptance.py --stage cpu`: **16/16 PASS**。
+  - `tools/test_audio_acceptance.py --stage cpu`: **36/36 PASS**。
+  - `tests/Aredoko.Core.Tests`: **691 checks PASS**。
+  - `src/Aredoko.WinUI.csproj`: Release x64 ビルド **0エラー**。
+- **制約・保全事項**:
+  - P0累積2/2終了・OCR保留・全機能/簡潔GUI・原本保護・私物走査/変更なし・Actionsなし・mainへのmergeなし。
+  - 次のタスク：**R14 実GPU/GUIのまとめ受入→修正→RC判定**。
+
+---
+
 ## 2026-10-19 R10状態明瞭化・検索所有取消・安全診断情報 / R11 UI監査チェックリスト 実装・CPU検証完了（CPU_DONE） — 次はR12数万件の性能・資源予算
 
 開始HEAD `945cb57`。**R10（初回設定・未索引/上限/失敗状態・資源管理の仕上げ）およびR11（日常導線の整理と統一したWinUI表示・アクセシビリティ監査）はCPU_DONE**。

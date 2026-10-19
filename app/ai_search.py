@@ -1,6 +1,6 @@
 """Small, resumable semantic-search slice; source media remain read-only."""
 from array import array
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager, nullcontext, closing
 import hashlib
 import json
 import math
@@ -43,11 +43,18 @@ def revision(row):
     fields=[row['root_id'],row['relative_path'],row['size_bytes'],row['mtime_ns'],row['title'],row['tags']]
     return hashlib.sha256(json.dumps(fields,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
 
+CURRENT_VECTOR_STORE_USER_VERSION = 0
+
 class VectorStore:
     def __init__(self,path,profile=DEFAULT_PROFILE):
         self.path=Path(path)
         self.profile=profile
         self.dimension=profile.dimension
+        if self.path.exists() and self.path.stat().st_size > 0:
+            with closing(sqlite3.connect(self.path, timeout=5)) as check_db:
+                ver = check_db.execute('PRAGMA user_version').fetchone()[0]
+                if ver > CURRENT_VECTOR_STORE_USER_VERSION:
+                    raise AIUnavailable(f'Unsupported vector store user_version {ver} > {CURRENT_VECTOR_STORE_USER_VERSION}; please update Aredoko.')
         with self.connect() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS ai_profile(value TEXT NOT NULL);
@@ -77,6 +84,12 @@ class VectorStore:
         try:
             with db: yield db
         finally: db.close()
+    def checkpoint(self):
+        try:
+            with self.connect() as db:
+                db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        except Exception:
+            pass
     def state(self):
         with self.connect() as db: row=db.execute('SELECT json FROM ai_state WHERE id=1').fetchone()
         return json.loads(row[0]) if row else {'state':'idle','processed':0,'total':0,'indexed':0,'skipped':0,'error':''}
@@ -836,4 +849,5 @@ class AISearch:
             self.worker.join()
         with self.inference:
             self.encoder.close()
+        self.store.checkpoint()
 

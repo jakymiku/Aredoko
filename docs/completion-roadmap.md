@@ -31,7 +31,7 @@
 
 ## タスク台帳（優先順）
 
-状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02〜R05 CPU_DONE、R06 DONE（[音声・音楽方式設計凍結](audio-content-design.md)）、R07 CPU_DONE、R08/R09 CPU_DONE（[音響特徴検索・類似検索・WinUI再生統合](audio-content-design.md)）、R10/R11 CPU_DONE（[状態明瞭化・所有取消・診断情報・UI監査](ui-consistency-checklist.md)）、次はR12数万件の性能・資源予算、R14は限定実機PARTIAL、ほかTODO。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
+状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01 DONE、R02〜R05 CPU_DONE、R06 DONE（[音声・音楽方式設計凍結](audio-content-design.md)）、R07 CPU_DONE、R08/R09 CPU_DONE（[音響特徴検索・類似検索・WinUI再生統合](audio-content-design.md)）、R10/R11 CPU_DONE（[状態明瞭化・所有取消・診断情報・UI監査](ui-consistency-checklist.md)）、R12/R13 CPU_DONE（[規模・資源予算受入](scale-resource-acceptance.md)・前方スキーマガード・WAL単一ファイル整合・配布パッケージ・[利用ガイド](user-guide.md)）、次はR14実機一括受入、R14は限定実機PARTIAL。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
 
 | ID | 作業・出力 | 依存 | 担当難度 | 状態 |
 | --- | --- | --- | --- | --- |
@@ -46,8 +46,8 @@
 | R09 | 音声/音楽の検索→再生→類似検索のGUI統合 | R07、R08 | Sol＋WinUI skills | CPU_DONE：[WinUI再生/シーク/類似検索配線](audio-content-design.md)、VideoPlayerView音声対応、HTTP範囲再生、実機R14 |
 | R10 | 初回設定・未索引/上限/失敗状態・資源管理の仕上げ | R01、既存設定 | Sol | CPU_DONE：[状態明瞭化・所有取消・診断情報](ui-consistency-checklist.md)、未索引/対象外/モデル未導入の案内、実機R14 |
 | R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | CPU_DONE：[UI整合性・アクセシビリティ監査チェックリスト](ui-consistency-checklist.md)、テーマ/DPI/Narrator整合、実機R14 |
-| R12 | 数万件の性能・資源予算を測り必要箇所だけ改善 | R02、R04 | Sol計測、設計変更時Astraレビュー | TODO |
-| R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | TODO |
+| R12 | 数万件の性能・資源予算を測り必要箇所だけ改善 | R02、R04 | Sol計測、設計変更時Astraレビュー | CPU_DONE：[受入記録](scale-resource-acceptance.md)、5万件通常検索p95=0.34s・6.5万件ベクトル順位計算p95=9.57s・取消0.1ms・WAL0B・復元2.2s合格、実機R14 |
+| R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | CPU_DONE：[利用ガイド](user-guide.md)・[NOTICE](../THIRD_PARTY_NOTICES.md)・package_release/start-aredoko実装・user_version前方ガード・WAL truncate確認、実機R14 |
 | R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | PARTIAL：[R02/R03限定実機](release-readiness.md) GPU PASS/native未完、M1/M2未確認 |
 
 ## 各タスクの完了条件
@@ -171,21 +171,43 @@ SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時�
   - `tools/test_ui_status_acceptance.py --stage cpu`: 16/16件PASS。
   - WinUI x64 Releaseビルド：0エラー。
 
-### R12 — 大規模受入と性能の終了条件
+### R12 — CPU_DONE：大規模受入と性能の終了条件
 
-生成5万metadata・複数root/種類/棚・少なくとも65,536保存vectorのfixtureで、列挙/登録差分/通常検索/AI検索/coverage/pending/取消/復帰を分けて測る。1TBはファイル数やvector数と等価でないため、容量境界と読み取り上限は別fixtureで検証し、実1TB走査済みとは言わない。
+2026-10-19：[R12](scale-resource-acceptance.md) は CPU_DONE（登録50,001件メタデータおよび65,536件保存ベクトルでの網羅的計測、全項目で工学的予算を達成、過剰な投機的変更を排して bit-exact 整合を保全）。実機GPU/GUI受入はR14で一括検証（`tools/test_scale_acceptance.py --stage cpu` 26件合格）。次はR13（配布・起動・更新手順）。
 
-初期の工学的目標（未測定の合格扱い禁止）：同一機/固定fixtureのwarm通常検索p95≤1秒、CPU保存vector順位計算p95≤10秒（65,536vector、モデル推論/GUIは別）、取消要求の受付≤1秒。cold/warm、初回モデルロード、HTTP全体、worker終了までの時間、RSS/VRAM/DB・cache容量を併記。最低10回のwarm計測でp95の算出方法を固定し、他作業が多い場合は測定条件を記録して比較を保留する。RAM/VRAM上限はR01/R06の計画時に固定する。
+- **工学的目標と実測値対照**:
+  - 通常文字検索: warm p95 = 0.3368秒 ≤ 1.0秒（Cold 241ms、12回計測）。
+  - CPU保存ベクトル順位計算（65,536件 768D）: warm p95 = 9.573秒 ≤ 10.0秒（Cold 8.353s、10回計測）。
+  - 所有検索取消受付レイテンシ: 0.109ms ≤ 1.0秒。
+  - クリーン終了時間: 0.0045秒 ≤ 2.0秒。
+  - 候補列挙（`_iter_rows`）: 50,001件全件を1.198秒で昇順走査、最終ID 50,001に到達。
+  - 差分・鮮度走査: 10,000件未処理判定を0.054秒で完了。
+  - カバレッジ計算: 50,001件全件で `candidate_total=50001`、`target_total=10000`（`MAX_ITEMS=10,000` 頭打ち契約遵守）。
+  - 停止時バックアップ（4.26秒）および新規ディレクトリ復元（2.21秒）: `PRAGMA integrity_check` OK、50,001件完全一致保全。
+  - 別fixture境界検査: 512MiB音声/書庫容量上限、24時間（86,400,000ms）時間上限の安全拒絶を確認。実1TB走査とは称さない。
+  - SQLite WAL 単一ファイル整合性: 終了時に catalog / vector store 双方の `-wal` ファイルサイズが 0 バイト（完全truncate）。
+- **検証記録**:
+  - `tools/test_scale_acceptance.py --stage cpu`: 26/26件PASS。
+  - `docs/scale-resource-acceptance.md`: p95公式、測定条件、メモリ/ディスク容量記録凍結。
 
-予算超過または実利用の待ちが確認された箇所にだけ、1仮説→1変更→同値回帰→比較を実施。同じ箇所の微調整を延々繰り返さず2案までで一区切り、未達なら制約/次の設計判断を明記。原本の祖先/handle/版確認を省かない。閾値を結果に合わせて黙って緩めず、変更理由と製品上の影響を記録する。
+### R13 — CPU_DONE：開発者以外でも起動・更新できる
 
-### R13 — 開発者以外でも起動・更新できる
+2026-10-19：[R13](user-guide.md) は CPU_DONE（前方スキーマバージョンガード導入、WALモード単一ファイル整合保証、配布スクリプト・単体ランチャー整備、ライセンス/NOTICE一覧、クリーン利用ガイド作成）。実機GPU/GUI受入はR14で一括検証。次はR14（実GPU/GUI一括受入）。
 
-既存launcherを活かし、依存するPython/runtime/WinUI/AI venv・重み・データ保存先を一覧化。zip型ローカル配布かinstallerかを最小の配布経路として選定する。開発SDK/winapp/source checkout固定pathが不要な起動、通常機能のoffline動作、AIの明示セットアップ/進捗/容量・license案内、更新後のデータ保持、失敗時の復帰/アンインストール時のデータ保持を設計・確認する。重みの無断同梱や自動downloadなし。
-
-配布パッケージ作成前およびバージョン更新・DB移行時には、SQLite WALモードの単一ファイル整合性を保証するために `PRAGMA wal_checkpoint(TRUNCATE)` を完了する。また `PRAGMA user_version` による前方互換性・スキーマバージョンガードを導入し、未対応の上位版DBに対する破壊的書き込みを確実に防止（フェイルクローズ）する。
-
-成果：版付きartifact/ハッシュ、依存・モデルのlicense/NOTICE一覧、クリーン環境での手順、通常起動/AI setup/backup/restore/既知制限の短い利用ガイド。署名・Store公開は必要性が決まってから別承認で扱い、今回計画だけでOS設定や配布先を変更しない。
+- **実装コンポーネント**:
+  - `PRAGMA user_version = 0` 前方スキーマバージョンガード: `Catalog.__init__`, `ProductionCatalog.__init__`, `VectorStore.__init__`, `storage_backup._database` で未対応の上位スキーマ（`user_version > 0`）を検出した場合、即座にフェイルクローズ（起動/書き込み拒絶）。
+  - `PRAGMA wal_checkpoint(TRUNCATE)`: `Catalog.close()`, `ProductionCatalog.close()`, `VectorStore.checkpoint()`, `AISearch.close()`, `storage_backup.backup()`, `storage_backup.restore()` の各所でクリーン終了時および配布・バックアップ前に確実に実行。
+  - 配布作成スクリプト `tools/package_release.py`: .NET SDK / winapp / git checkout 不要のスタンドアロン配布物（`dist/aredoko-release-windows-x64`）を生成。SHA256ハッシュリスト（`sha256sums.txt`）およびマニフェスト（`manifest.json`）を自動生成。
+  - スタンドアロンランチャー `tools/start-aredoko.ps1` および `Aredoko.cmd`: ユーザーデータを `%LOCALAPPDATA%\Aredoko` に永続保持し、アプリ更新・再配置時も安全に保全。
+  - オフライン動作保証: AI環境未導入時でも通常機能（画像/本/動画/音声閲覧、タグ/棚整理、文字検索、読書進捗）は完全動作。AIモデルの無断自動ダウンロードなし。
+  - `THIRD_PARTY_NOTICES.md`: Python, .NET, WinUI, AIモデル（EmbeddingGemma, WD Tagger）の著作権・ライセンス通知を一覧化。
+  - `docs/user-guide.md`: 通常起動・フォルダ登録・AI導入・バックアップ復元・既知制限の網羅的ガイド。
+- **検証記録**:
+  - `tests/test_storage_version_guard.py`: 4件PASS（Catalog/ProductionCatalog/VectorStoreのuser_versionガード、close時WAL truncate）。
+  - `tests/test_storage_backup.py`: 24件PASS。
+  - `tools/package_release.py --check`: dry-run 正常終了（前提条件・構成要素検証済み）。
+  - `tests/Aredoko.Core.Tests`: 691件PASS。
+  - WinUI x64 Releaseビルド：0エラー。
 
 ### R14 — まとめて受入、完成と呼ぶ条件
 

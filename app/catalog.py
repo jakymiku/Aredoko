@@ -1,7 +1,7 @@
 """Shared catalog prototype. No media filesystem access; fictional records only."""
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from pathlib import Path
 
 KINDS = ('book', 'image', 'video', 'audio')
@@ -14,10 +14,18 @@ def validate_tags(tags):
     return list(dict.fromkeys(t.strip() for t in tags))
 
 
+CURRENT_SCHEMA_USER_VERSION = 0
+
+
 class Catalog:
     def __init__(self, path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        if self.path.exists() and self.path.stat().st_size > 0:
+            with closing(sqlite3.connect(self.path, timeout=5)) as check_db:
+                ver = check_db.execute('PRAGMA user_version').fetchone()[0]
+                if ver > CURRENT_SCHEMA_USER_VERSION:
+                    raise ValueError(f'Unsupported database schema user_version {ver} > {CURRENT_SCHEMA_USER_VERSION}; please update Aredoko.')
         with self.connect() as db:
             db.executescript('''
                 PRAGMA journal_mode=WAL;
@@ -124,3 +132,10 @@ class Catalog:
             assignments = ','.join(f'{key}=?' for key in changes)
             db.execute(f'UPDATE items SET {assignments} WHERE id IN ({marks})', list(changes.values()) + ids)
         return {'updated': count}
+
+    def close(self):
+        try:
+            with self.connect() as db:
+                db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        except Exception:
+            pass

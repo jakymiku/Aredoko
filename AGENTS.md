@@ -2,9 +2,23 @@
 
 ## Active completion plan (2026-10-18, user requested)
 
-Read [docs/completion-roadmap.md](docs/completion-roadmap.md) after the product vision. Its R01–R14 task ledger is the single current execution order; [docs/development-priorities.md](docs/development-priorities.md) is the concise entrypoint. **R01 DONE; R02-R05 CPU_DONE; R06 DONE ([audio design](docs/audio-content-design.md)); R07 CPU_DONE ([speech search adapter](docs/audio-content-design.md)); R08/R09 CPU_DONE ([acoustic search & WinUI integration](docs/audio-content-design.md)); R10/R11 CPU_DONE ([status clarity & UI checklist](docs/ui-consistency-checklist.md)), then R12 (scale & resource budget acceptance)**, not another default scorer micro-optimization. Mark task ID/state/evidence/next ID in handoffs. Existing lower checkpoint instructions and old “next three” are historical when they conflict with this ledger.
+Read [docs/completion-roadmap.md](docs/completion-roadmap.md) after the product vision. Its R01–R14 task ledger is the single current execution order; [docs/development-priorities.md](docs/development-priorities.md) is the concise entrypoint. **R01 DONE; R02-R05 CPU_DONE; R06 DONE ([audio design](docs/audio-content-design.md)); R07 CPU_DONE ([speech search adapter](docs/audio-content-design.md)); R08/R09 CPU_DONE ([acoustic search & WinUI integration](docs/audio-content-design.md)); R10/R11 CPU_DONE ([status clarity & UI checklist](docs/ui-consistency-checklist.md)); R12/R13 CPU_DONE ([scale acceptance](docs/scale-resource-acceptance.md), schema guard, WAL checkpoint, release packaging, [user guide](docs/user-guide.md)), then R14 (batch GPU/GUI acceptance)**. Mark task ID/state/evidence/next ID in handoffs. Existing lower checkpoint instructions and old “next three” are historical when they conflict with this ledger.
 
 M1 is a daily-use image/book/video beta; M2 adds audio/music content and item-origin similarity before claiming the all-media product candidate. Preserve all features and the full product vision. Do not call plans, CPU-only mocks or unverified GUI flows complete. Astra is recommended for R01/R02 ranking-scale design/review, R03 cross-DB recovery and R06/R08 audio-space selection; normal implementation can use Sol. This is task assignment guidance, not authorization to change models or spawn agents. GPU/GUI execution follows the latest user instruction; no permanent ban is introduced. Preserve P0 2/2 closed, OCR deferral, source safety and simple GUI. No Actions or main merge.
+
+## Latest R12/R13 scale acceptance, schema guard, WAL checkpoint, and release packaging (2026-10-19)
+
+Read [scale-resource-acceptance](docs/scale-resource-acceptance.md), [user-guide](docs/user-guide.md), [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md), and latest handoffs. R12 (Scale & resource budget acceptance) and R13 (Developer-free startup, packaging, forward-schema guard, WAL checkpoint, licenses/NOTICE, and user guide) are CPU_DONE.
+R12 verifies engineering budgets on a generated 50,001 metadata items fixture and 65,536 stored vectors fixture:
+- Normal search warm p95: 0.3368s <= 1.0s budget (Cold: 241ms, across 12 runs).
+- CPU stored-vector ranking (65,536 768-D vectors) warm p95: 9.573s <= 10.0s budget (Cold: 8.35s).
+- Owned search cancellation response latency: 0.109ms <= 1.0s budget.
+- Clean worker shutdown: 0.0045s <= 2.0s budget.
+- SQLite WAL checkpoint on close: catalog WAL = 0 bytes, vector store WAL = 0 bytes (`PRAGMA wal_checkpoint(TRUNCATE)` verified).
+- Separate boundaries: 512MiB audio read limit, 512MiB archive read limit, 24h duration limit (86,400,000ms) enforced fail-closed without claiming 1TB scan.
+- Stop-time backup (4.26s) and fresh restore (2.21s): bit-exact preservation and `PRAGMA integrity_check` == ok.
+R13 delivers forward-schema version guard (`PRAGMA user_version = 0` fail-closed in `Catalog`, `ProductionCatalog`, `VectorStore`, and `storage_backup`), `tools/package_release.py` (produces self-contained release with SHA256 checksums and manifest without requiring dotnet SDK or winapp at runtime, keeping user data in `%LOCALAPPDATA%\Aredoko`), `tools/start-aredoko.ps1`, `THIRD_PARTY_NOTICES.md`, and `docs/user-guide.md`.
+Python tests (4 PASS in `test_storage_version_guard.py`, 24 PASS in `test_storage_backup.py`), Core tests (691 PASS), WinUI x64 Release build (0 errors), R12 scale harness (26/26 PASS in `tools/test_scale_acceptance.py --stage cpu`), R10/R11 harness (16/16 PASS), R06-R09 harness (36/36 PASS). Real GPU/GUI deferred to R14 per user guidance. Next R14 batch acceptance.
 
 ## Latest R10/R11 status clarity, request cancellation, diagnostics, and UI consistency audit (2026-10-19)
 

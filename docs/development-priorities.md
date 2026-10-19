@@ -6,7 +6,7 @@
 
 主要な登録・整理・文字/画像/本ページ検索・WD候補・閲覧・時間付き動画索引は実装済み。次は微細なCPU最適化の反復より、索引の継続、動画/音声の未完機能、使い勝手・配布・受入を進める。
 
-**R01はDONE、R02〜R05はCPU_DONE（大規模検索/所有取消、復旧基盤、継続索引、動画類似）。R06は[音声・音楽方式設計凍結DONE](audio-content-design.md)。R07は[発話区間索引/時刻根拠CPU_DONE](audio-content-design.md)。R08/R09は[音響特徴検索・類似検索・WinUI再生統合CPU_DONE](audio-content-design.md)。R10/R11は[状態明瞭化・所有検索取消・安全診断情報・UI監査チェックリストCPU_DONE](ui-consistency-checklist.md)。次はR12数万件の性能・資源予算の計測と局所改善。** [所有取消の証拠/限界](search-cancellation.md)を確認し、GUI全体の取消配線（R10完了）・性能受入R12・必要実機受入R14（GPU/GUI一括検証）を完了と扱わない。 [全件検索の仕様/証拠](full-library-search.md)・[契約](large-library-contract.md)を読む。検索候補の1万件打切りは解消、1回の索引jobは最大1万件のまま。 設計の難しいR01/R02/R03/R06/R08にはAstra推奨を付け、通常実装はSolで進められるよう分割した。担当割当は推奨であり自動モデル切替ではない。
+**R01はDONE、R02〜R05はCPU_DONE（大規模検索/所有取消、復旧基盤、継続索引、動画類似）。R06は[音声・音楽方式設計凍結DONE](audio-content-design.md)。R07は[発話区間索引/時刻根拠CPU_DONE](audio-content-design.md)。R08/R09は[音響特徴検索・類似検索・WinUI再生統合CPU_DONE](audio-content-design.md)。R10/R11は[状態明瞭化・所有検索取消・安全診断情報・UI監査チェックリストCPU_DONE](ui-consistency-checklist.md)。R12/R13は[規模・資源予算受入・前方スキーマガード・WAL単一ファイル整合・配布パッケージ・利用ガイドCPU_DONE](scale-resource-acceptance.md)。次はR14（実GPU/GUI一括受入・RC判定）。** [所有取消の証拠/限界](search-cancellation.md)を確認し、性能受入R12（完了）・配布準備R13（完了）・必要実機受入R14（GPU/GUI一括検証）を完了と扱わない。 [全件検索の仕様/証拠](full-library-search.md)・[契約](large-library-contract.md)・[受入記録](scale-resource-acceptance.md)を読む。検索候補の1万件打切りは解消、1回の索引jobは最大1万件のまま。 設計の難しいR01/R02/R03/R06/R08にはAstra推奨を付け、通常実装はSolで進められるよう分割した。担当割当は推奨であり自動モデル切替ではない。
 
 M1は画像/本/動画の日常利用β、M2は音声/音楽内容も含む製品版候補。M1を全媒体完成版と呼ばず、既存機能を削って完成扱いにしない。詳細な依存・状態・完了条件・実機確認項目は実行計画だけを更新する。
 
