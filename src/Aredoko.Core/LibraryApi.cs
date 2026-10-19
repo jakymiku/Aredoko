@@ -25,6 +25,8 @@ public sealed class LibraryApi : IDisposable
     public Task SaveReaderProgressAsync(ArchiveManifest manifest,int page,ReaderDisplayMode mode,CancellationToken cancellation)=>new ArchiveReaderClient(client).SaveProgressAsync(manifest,page,mode,cancellation);
     public Task<byte[]> ReaderPageAsync(ArchiveManifest manifest, int page, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).PageAsync(manifest, page, cancellation);
+    public Task<byte[]> ReaderOriginalPageAsync(ArchiveManifest manifest,int page,CancellationToken cancellation)=>new ArchiveReaderClient(client).OriginalPageAsync(manifest,page,cancellation);
+    public Task<byte[]> OriginalImageAsync(int id,CancellationToken cancellation)=>new ArchiveReaderClient(client).OriginalImageAsync(id,cancellation);
     public Task<byte[]> ImageAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ImageAsync(id, cancellation);
     public Task<ImageAnimationManifest> ImageManifestAsync(int id, CancellationToken cancellation) =>

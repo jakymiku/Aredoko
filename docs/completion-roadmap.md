@@ -2,6 +2,8 @@
 
 ## 2026-10-20 現行状態の訂正
 
+[最新UI受入](ui-current-build-acceptance.md)：表示サイズ/元解像度/通常footer整理を受入済み。ユーザー指示で通常幅1200〜1600pxを優先、小窓は主要操作だけに留める。R11の同一flowを反復せず次はR13。R14はPARTIALのまま。
+
 [ブラッシュアップ監査](polish-audit-20261020.md)を優先する。下段の各タスク実装報告は履歴であり、音声の実抽出・現行GUI・clean-machine配布を受入済みにしない。現在はR11/R13の不足を修正中、R06/R07/R08実入力は未完、R14 PARTIAL。ユーザーのUI巻き戻し懸念は今回の古いAppX誤起動から生じたため、現行UIをresetせず正しい配備の検証を先に行う。
 
 2026-10-18。コード確認基準：`cec19cb`。これはユーザー依頼による計画・担当難度・完了条件の整理であり、以下の未完タスクを今回実装した報告ではない。長期目的は[product-vision.md](product-vision.md)、最新の実行結果は両handoffを正とする。
@@ -49,7 +51,7 @@
 | R08 | 音響/音楽特徴の索引・日本語検索・類似検索 | R06、R03/R04契約 | **Astra推奨：特徴/比較設計**、実装Sol可 | DOING：512D保存/類似・記述子照合は実装済み。実音声/曲からの特徴抽出・実モデル空間/品質未受入 |
 | R09 | 音声/音楽の検索→再生→類似検索のGUI統合 | R07、R08 | Sol＋WinUI skills | CPU_DONE：再生/シーク/類似UI接続は保持。自動内容索引はR07/R08待ち。実音声の検索→再生受入が残る |
 | R10 | 初回設定・未索引/上限/失敗状態・資源管理の仕上げ | R01、既存設定 | Sol | CPU_DONE：[状態明瞭化・所有取消・診断情報](ui-consistency-checklist.md)、未索引/対象外/モデル未導入の案内、実機R14 |
-| R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | DOING：詳細操作の折返し修正。今回の旧AppX画面は現行証拠に使わない。現行小窓/HC/DPI/Narratorの受入が残る |
+| R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | DOING：詳細操作の折返し修正。今回の旧AppX画面は現行証拠に使わない。現行の指定flowは受入済み。通常幅を優先し、小窓は最低限。HC/DPI/Narratorが残る |
 | R12 | 数万件の性能・資源予算を測り必要箇所だけ改善 | R02、R04 | Sol計測、設計変更時Astraレビュー | CPU_DONE：[受入記録](scale-resource-acceptance.md)、5万件通常検索p95=0.34s・6.5万件ベクトル順位計算p95=9.57s・取消0.1ms・WAL0B・復元2.2s合格、実機R14 |
 | R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | DOING：非破壊staging/argv/backup/profile同梱は検証済み。Python/AI runtime未同梱、clean-machine起動/identity/更新/削除未受入 |
 | R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | PARTIAL：既存限定GPU/GUI/規模PASSは保存。音声実入力、現行UI、配布受入が未完でM1/M2/RC全完了とはしない |

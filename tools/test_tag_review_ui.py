@@ -9,6 +9,7 @@ Screenshots need human review; runtime_pass never means visual review passed.
 """
 import argparse
 import ctypes
+from native_ui_tools import viewer_wait_args
 from ctypes import wintypes
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 import json
@@ -103,7 +104,7 @@ def main():
         result=subprocess.run(['winapp',*map(str,parts)],cwd=REPO,env=env,text=True,encoding='utf-8',errors='replace',capture_output=True,timeout=45)
         if result.returncode:raise RuntimeError('winapp '+str(parts)+': '+result.stdout+result.stderr)
         return result.stdout
-    def ui(*parts,window=None):return cli('ui',*parts,'-w',window or hwnd)
+    def ui(*parts,window=None):return cli('ui',*viewer_wait_args(parts),'-w',window or hwnd)
     def wait(identifier,value):ui('wait-for',identifier,'--value',value,'-t','12000')
     def ready():
         ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','12000');time.sleep(.2)

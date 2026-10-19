@@ -7,6 +7,7 @@ activation is recorded as skipped, never claimed as keyboard coverage.
 import zipfile,struct
 from urllib.parse import urlparse
 import argparse,ctypes,hashlib,json,os,secrets,shutil,subprocess,sys,threading,time,uuid
+from native_ui_tools import viewer_wait_args
 from ctypes import wintypes
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -44,6 +45,7 @@ def main():
     report={'pass':False,'target':'local','actual_model':False,'checks':[],'screenshots':[],'keyboard_actions':[],'keyboard_skipped':[],'display':[],'audit_scope':'image modal/auto-hide overlays/navigation/current-page scope/zoom/draft/errors and archive regression; not whole-app audit'}
     catalog=engine=server=thread=None;hwnd=main_hwnd=app_pid=process=None;original={}
     expected_source={}
+    selected_item_id=None
     user32=ctypes.WinDLL('user32',use_last_error=True);kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
     user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
     user32.GetForegroundWindow.restype=wintypes.HWND
@@ -88,7 +90,7 @@ def main():
                     hwnd=str(matches[0]['hwnd']);break
                 time.sleep(.1)
             else:raise RuntimeError('Owned viewer window unavailable')
-        return cli('ui',*args,'-w',hwnd)
+        return cli('ui',*viewer_wait_args(args),'-w',hwnd)
     def wait(identifier,value):ui('wait-for',identifier,'--value',value,'-t','10000')
     def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000');time.sleep(.4)
     def keys(sequence,identifier=None):
@@ -277,7 +279,7 @@ def main():
                     report.setdefault('image_requests',[]).append(self.path)
                 if self.headers.get('X-Aredoko-Token')==token and self.path.startswith('/api/library/reader/'):
                     report.setdefault('reader_requests',[]).append(self.path)
-                    if urlparse(self.path).path=='/api/library/reader/'+str(ids['book.cbz'])+'/pages/1':
+                    if urlparse(self.path).path=='/api/library/reader/'+str(ids['book.cbz'])+'/original/1':
                         if faults.get('reader_code'):
                             code=faults.pop('reader_code');return self.send(code,{'error':'Generated reader failure'})
                         if faults.get('reader_delay'):
@@ -311,6 +313,8 @@ def main():
         server.RequestHandlerClass=Quiet;thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         def prop(identifier,name,value):ui('wait-for',identifier,'-p',name,'--value',str(value),'-t','10000')
         def select(name):
+            nonlocal selected_item_id
+            selected_item_id=ids[name]
             ui('invoke','Item'+str(ids[name]),'--action','select');wait('TxtEditStatus','保存済み')
             if name in ('a.png','b.png'):ui('wait-for','DetailPreview','-t','10000')
         def open_image():
@@ -422,13 +426,19 @@ def main():
                 report['audit_scope']='reading progress: page/direction across reopen and app restart, explicit cover, save/read failure preservation, corrupt page, real generated revision/rescan, cancelled load and drafts'
                 shown_book='表示しました。拡大すると細部を確認できます。';saved_text='読書位置を保存しました'
                 def reader_saved(number):
-                    wait('ReaderPageNumber',number);wait('ReaderStatus',shown_book);wait('ReaderProgressStatus',saved_text);prop('ReaderSettings','IsEnabled','True')
+                    wait('ReaderPageNumber',number);wait('ReaderStatus',shown_book);prop('ReaderSettings','IsEnabled','True')
+                    expected_page=int(number.split(' / ')[0].split('–')[0])-1
+                    for _ in range(50):
+                        progress=catalog.reader_progress(selected_item_id)['progress']
+                        if progress and progress['page']==expected_page:break
+                        time.sleep(.1)
+                    check(theme+' bookmark persisted without a permanent success caption',progress is not None and progress['page']==expected_page)
                 select('book.cbz');ui('set-value','TxtTags','progress-draft');wait('TxtEditStatus','未保存の変更');open_reader()
                 if theme=='Light':
                     reader_saved('1 / 5');reader_mode('ReaderRtl');reader_saved('1 / 5');ui('invoke','ReaderNext');reader_saved('2–3 / 5');ui('invoke','ReaderNext');reader_saved('4–5 / 5')
                 else:
                     reader_saved('4–5 / 5');check('Dark app restart restores saved page and RTL',catalog.reader_progress(ids['book.cbz'])['progress']['mode']=='rtl');wait('ReaderImage','5ページ');wait('ReaderImageSecond','4ページ')
-                audit(theme+'-reader',('ReaderViewport','ReaderProgressStatus','ReaderSettings','ReaderClose'));resize(700,620);shot(theme+'-progress-spread')
+                audit(theme+'-reader',('ReaderViewport','ReaderSettings','ReaderClose'));resize(700,620);shot(theme+'-progress-spread')
                 close_reader();wait('TxtTags','progress-draft');wait('TxtEditStatus','未保存の変更');focus_assert('BtnOpenBook');check(theme+' progress does not save metadata draft',catalog.get(ids['book.cbz'])['tags']==[])
                 open_reader();reader_saved('4–5 / 5');wait('ReaderImage','5ページ');check(theme+' reopen restores RTL and page',True)
                 if keys('right','ReaderViewport'):reader_saved('2–3 / 5');check(theme+' restored RTL right key returns previous spread',True)

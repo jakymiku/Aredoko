@@ -17,6 +17,10 @@ public sealed partial class MainPage : Page
     private readonly SemaphoreSlim transitions = new(1,1);
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer searchTimer;
     private readonly ThumbnailService thumbnails;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer itemSizeSaveTimer;
+    private bool itemSizeReady;
+    private int libraryItemScale=100;
+    private int itemWheelDelta;
     private CancellationTokenSource renderCancellation = new();
     private CancellationTokenSource? detailCancellation;
     private ArchiveReaderView? readerView;
@@ -56,6 +60,11 @@ public sealed partial class MainPage : Page
     public MainPage() {
         InitializeComponent();
         AddHandler(PointerPressedEvent,new PointerEventHandler(PreviewPointerPressed),true);
+        ItemListContainer.AddHandler(PointerWheelChangedEvent,new PointerEventHandler(Library_PointerWheelChanged),true);
+        itemSizeSaveTimer=DispatcherQueue.CreateTimer();itemSizeSaveTimer.Interval=TimeSpan.FromMilliseconds(500);
+        itemSizeSaveTimer.Tick+=(_,_)=>SaveItemSize();
+        libraryItemScale=ViewerOptions.Value.LibraryItemScale;ItemSizeSlider.Value=libraryItemScale;
+        ItemSizeLabel.Text=$"{libraryItemScale}%";itemSizeReady=true;
         UpdateSearchMethod();
         thumbnails = new ThumbnailService(api);
         searchTimer=DispatcherQueue.CreateTimer(); searchTimer.Interval=TimeSpan.FromMilliseconds(300);
@@ -81,7 +90,7 @@ public sealed partial class MainPage : Page
     private async void Page_Loaded(object sender,RoutedEventArgs e) {
         if(ready)return; ready=true;
         await ConnectAsync();
-        Nav.PaneDisplayMode=NavigationViewPaneDisplayMode.Left;Nav.IsPaneOpen=true;
+        UpdateNavigationLayout(ActualWidth);
     }
     private async Task ConnectAsync() {
         try { renderCancellation.Cancel(); thumbnails.Clear(); await api.ConnectAsync(); await LoadAIScopeAsync(); await RefreshSearchRootsAsync(); await LoadAsync(); }
@@ -124,7 +133,7 @@ public sealed partial class MainPage : Page
             }
             else
             {
-                var multi=new ComboBoxItem {Content=$"選択中の複数フォルダ（{selectedSearchRoots.Length}件の和集合）",Tag=-1};
+                var multi=new ComboBoxItem {Content=$"選択したフォルダ（{selectedSearchRoots.Length}件）",Tag=-1};
                 SearchRoot.Items.Add(multi);
                 SearchRoot.SelectedItem=multi;
             }
@@ -271,14 +280,15 @@ public sealed partial class MainPage : Page
             foreach (var row in rows)
             {
                 var content = new Grid { Padding = new Thickness(8), ColumnSpacing = 12, RowSpacing = 8 };
-                var image = new Image { Tag = row.Id, IsDoubleTapEnabled = true, Width = tiles ? 200 : 48, Height = tiles ? 144 : 64, Stretch = Stretch.Uniform };
+                var image = new Image { Tag = row.Id, IsDoubleTapEnabled = true, Stretch = Stretch.Uniform };
                 AutomationProperties.SetAutomationId(image, $"Preview{row.Id}");
                 AutomationProperties.SetName(image, row.Title + "のサムネイル");
                 image.DoubleTapped += async (_, args) => { args.Handled=true; await OpenPreviewAsync(row.Id); };
                 if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row)||AudioPlayerPolicy.CanOpen(row))
                     ToolTipService.SetToolTip(image,ImageViewerPolicy.CanOpen(row)?"ダブルクリックで画像を大きく表示":VideoPlayerPolicy.CanOpen(row)?"ダブルクリックで動画を再生":AudioPlayerPolicy.CanOpen(row)?"ダブルクリックで音声を再生":"ダブルクリックで本を開く");
                 var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-                text.Children.Add(new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] });
+                var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
+                AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");text.Children.Add(title);
                 text.Children.Add(new TextBlock { Text = $"{row.MatchLabel}{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
                 if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
                 if(row.Proposal is ProposalMatch proposal){var prop=new TextBlock {Text=proposal.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(prop,$"ProposalEvidence{row.Id}");text.Children.Add(prop);}
@@ -301,7 +311,8 @@ public sealed partial class MainPage : Page
                     Grid.SetColumn(text, 1);
                 }
                 content.Children.Add(image); content.Children.Add(text);
-                var item = new ListViewItem { Content = content, Width = tiles ? 232 : double.NaN, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                var item = new ListViewItem { Content = content, Style=(Style)Resources["MediaItemCardStyle"], HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                SizeItem(item,image);
                 item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
                 item.ContextFlyout=SimilarityMenu(row);
                 item.DoubleTapped+=async(_,args)=>{args.Handled=true;await OpenPreviewAsync(row.Id);};
@@ -325,6 +336,54 @@ public sealed partial class MainPage : Page
             }
         }
         finally { populating = false; }
+    }
+    private void SizeItem(ListViewItem item,Image image)
+    {
+        var scale=libraryItemScale/100d;
+        var width=Math.Min(232*scale,Math.Max(128,ItemListContainer.ActualWidth-24));
+        item.Width=tiles?width:double.NaN;
+        image.Width=tiles?Math.Max(96,width-32):48*scale;
+        // Leave room for the filename and metadata even in a short window.
+        var height=Math.Max(48,ItemListContainer.ActualHeight-108);
+        image.Height=tiles?Math.Min(144*scale,height):64*scale;
+    }
+    private void UpdateItemSizes()
+    {
+        foreach(var item in Items.Items.OfType<ListViewItem>())
+            if(item.Content is Grid content&&content.Children.FirstOrDefault() is Image image)SizeItem(item,image);
+    }
+    private void ItemListContainer_SizeChanged(object sender,SizeChangedEventArgs args)
+    {
+        if(itemSizeReady)UpdateItemSizes();
+    }
+    private void ItemSizeSlider_ValueChanged(object sender,Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs args)
+    {
+        if(!itemSizeReady)return;
+        var scale=ViewerInputSettings.NormalizeScale((int)Math.Round(args.NewValue/20)*20);
+        if(libraryItemScale==scale)return;
+        libraryItemScale=scale;ItemSizeLabel.Text=$"{scale}%";
+        // Resize existing containers: keep selection, dirty edits and decoded thumbnails.
+        UpdateItemSizes();itemSizeSaveTimer.Stop();itemSizeSaveTimer.Start();
+    }
+    private void ResetItemSize_Click(object sender,RoutedEventArgs args)=>ItemSizeSlider.Value=100;
+    private void Library_PointerWheelChanged(object sender,PointerRoutedEventArgs args)
+    {
+        if(!itemSizeReady||dialogOpen||folderHubOpen)return;
+        var properties=args.GetCurrentPoint(ItemListContainer).Properties;
+        if(properties.IsHorizontalMouseWheel)return;
+        if((Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)&Windows.UI.Core.CoreVirtualKeyStates.Down)==0)
+        {itemWheelDelta=0;return;}
+        args.Handled=true;itemWheelDelta+=properties.MouseWheelDelta;
+        var steps=itemWheelDelta/120;itemWheelDelta%=120;
+        if(steps!=0)ItemSizeSlider.Value=Math.Clamp(libraryItemScale+steps*20,60,180);
+    }
+    private void SaveItemSize()
+    {
+        itemSizeSaveTimer.Stop();
+        if(ViewerOptions.Value.LibraryItemScale==libraryItemScale)return;
+        try{ViewerOptions.SaveLibraryItemScale(libraryItemScale);}
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
+        {if(!disposed)Notice("表示サイズを保存できません",ex.Message,InfoBarSeverity.Warning);AppLog.Error(ex);}
     }
     private static string KindLabel(string kind) => kind switch { "book" => "本", "image" => "画像", "archive" => "ZIP", "video" => "動画", "audio" => "音楽", _ => "素材" };
     private MenuFlyout SimilarityMenu(MediaRow row)
@@ -528,7 +587,7 @@ public sealed partial class MainPage : Page
         SearchMethodHint.Text=similar?(similarityOrigin?.Kind=="video"?"動画の代表フレームから似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="audio"?"音声・音楽の音響特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchMode.SelectedIndex switch
         {
             1=>"名前・タグの意味と、画像・表紙の見た目を組み合わせます。",
-            2=>"例:「豆」で豆が写った画像・表紙を探します。動画の映像はまだ対象外です。",
+            2=>"索引済みの画像・表紙・本のページや、動画の代表場面を見た目から探します。",
             3=>"名前やタグの言い換えで探すときに使います。本の本文・音声の文字起こしは対象外です。",
             4=>"未承認のAIタグ候補（最新履歴）だけを検索します。確定タグとは混ざりません。",
             5=>"抽出・保存済みのページ本文（同じページ内の全語一致）を検索します。",
@@ -779,11 +838,18 @@ public sealed partial class MainPage : Page
         Tags.Text=string.Join(", ",fresh.Tags);Shelf.Text=fresh.Shelf;Favorite.IsChecked=fresh.Favorite;Reviewed.IsChecked=fresh.Reviewed;
         saved=Current();tagReviewSyncItem=null;RenderRows();RestoreSelection();
     }
+    private void UpdateNavigationLayout(double width)
+    {
+        if(width<=0)return;
+        var expanded=width>=1000;
+        Nav.PaneDisplayMode=expanded?NavigationViewPaneDisplayMode.Left:NavigationViewPaneDisplayMode.LeftCompact;
+        Nav.IsPaneOpen=expanded;
+    }
     private void Page_SizeChanged(object sender,SizeChangedEventArgs e)
     {
         tagReview?.Fit(e.NewSize.Width,e.NewSize.Height);
         if(Details is null || ViewTools is null)return;
-        if(ready&&e.NewSize.Width>0){Nav.PaneDisplayMode=e.NewSize.Width>=1000?NavigationViewPaneDisplayMode.Left:NavigationViewPaneDisplayMode.LeftCompact;Nav.IsPaneOpen=e.NewSize.Width>=1000;}
+        UpdateNavigationLayout(e.NewSize.Width);
         Details.DisplayMode=e.NewSize.Width<1000?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
         Details.OpenPaneLength=Math.Min(320,Math.Max(240,e.NewSize.Width-64));
         if(active is null&&!folderSettingsActive)Details.IsPaneOpen=false;
@@ -798,7 +864,19 @@ public sealed partial class MainPage : Page
         Grid.SetRow(ViewTools,narrow?1:0);Grid.SetColumn(ViewTools,narrow?0:1);Grid.SetColumnSpan(ViewTools,narrow?2:1);
         ViewTools.HorizontalAlignment=narrow?HorizontalAlignment.Left:HorizontalAlignment.Right;
         ViewTools.Margin=narrow?new Thickness(0,8,0,0):new Thickness(0);
+        UpdateFolderLayout();
         UpdateDetailLayout();
+    }
+
+    private void FolderHub_SizeChanged(object sender,SizeChangedEventArgs args)=>UpdateFolderLayout();
+    private void UpdateFolderLayout()
+    {
+        if(FolderSelectionButtons is null||FolderAddScroll is null)return;
+        var narrow=LibraryLayout.ActualWidth<840;
+        for(var i=0;i<4;i++)FolderSelectionButtons.ColumnDefinitions[i].Width=i<2||!narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
+        var buttons=new[]{SearchSelectedFoldersButton,EditSelectedFoldersButton,UnregisterSelectedFoldersButton,SearchAllFoldersButton};
+        for(var i=0;i<buttons.Length;i++){Grid.SetColumn(buttons[i],narrow?i%2:i);Grid.SetRow(buttons[i],narrow?i/2:0);}
+        FolderAddScroll.MaxHeight=Math.Max(96,FolderHubView.ActualHeight-FolderHeader.ActualHeight-FolderSelectionPanel.ActualHeight-64);
     }
 
     private void Details_PaneStateChanged(object sender,object args)=>UpdateDetailLayout();
@@ -904,7 +982,7 @@ public sealed partial class MainPage : Page
                     else OpenFolderSettingsPanel(new[]{row.Id});
                 }
             }
-            Notice("登録フォルダ管理","フォルダの閲覧、複数選択での横断検索、初期棚・除外・スキャン・登録解除を行えます。");
+            Notice("登録フォルダ管理","検索するフォルダを選んだり、登録内容を変更できます。");
         }
         catch(Exception ex){Failure(ex);}
         finally{transitions.Release();}
@@ -1108,6 +1186,7 @@ public sealed partial class MainPage : Page
                 var item=new ListViewItem
                 {
                     Content=card,
+                    Style=(Style)Resources["MediaItemCardStyle"],
                     Tag=row.Id,
                     Width=folderTiles?296:double.NaN,
                     HorizontalContentAlignment=HorizontalAlignment.Stretch
@@ -1156,7 +1235,7 @@ public sealed partial class MainPage : Page
         var count=selectedRows.Length;
         if(count==0)
         {
-            FolderSelectionSummary.Text="行のチェックボックスで複数の登録フォルダを選び、和集合で横断検索や一括初期棚設定ができます。";
+            FolderSelectionSummary.Text="フォルダを選ぶと、まとめて検索や設定ができます。";
             SearchSelectedFoldersButton.Content="選択したフォルダを検索";
             SearchSelectedFoldersButton.IsEnabled=false;
             EditSelectedFoldersButton.IsEnabled=false;
@@ -1846,6 +1925,6 @@ public sealed partial class MainPage : Page
         finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
     }
 
-    public void Stop(){disposed=true;tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
+    public void Stop(){disposed=true;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
 }
 

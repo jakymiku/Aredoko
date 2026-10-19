@@ -73,6 +73,19 @@ public sealed class ArchiveReaderClient(HttpClient client)
         return data;
     }
 
+    public async Task<byte[]> OriginalPageAsync(ArchiveManifest manifest,int page,CancellationToken cancellation)
+    {
+        manifest.Validate();
+        if(page<0||page>=manifest.PageCount)throw new ArgumentOutOfRangeException(nameof(page));
+        var(data,_)=await ReadMediaAsync($"api/library/reader/{manifest.ItemId}/original/{page}?revision={manifest.Revision}",PreviewPolicy.ViewerSourceBytes,ImageTypes,cancellation);
+        return data;
+    }
+    public async Task<byte[]> OriginalImageAsync(int itemId,CancellationToken cancellation)
+    {
+        if(itemId<1)throw new ArgumentOutOfRangeException(nameof(itemId));
+        var(data,_)=await ReadMediaAsync($"api/library/preview/{itemId}/original",PreviewPolicy.ViewerSourceBytes,ImageTypes,cancellation);
+        return data;
+    }
     public async Task<byte[]> ImageAsync(int itemId, CancellationToken cancellation)
     {
         if (itemId < 1) throw new ArgumentOutOfRangeException(nameof(itemId));

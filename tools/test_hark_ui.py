@@ -7,6 +7,7 @@ activation is recorded as skipped, never claimed as keyboard coverage.
 import zipfile
 from urllib.parse import urlparse
 import argparse,ctypes,hashlib,json,os,secrets,subprocess,sys,threading,time,uuid
+from native_ui_tools import viewer_wait_args
 from ctypes import wintypes
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -88,7 +89,7 @@ def main():
         from native_ui_tools import TOOL_IDS, invoke_tool
         if len(args)==2 and args[0]=='invoke' and args[1] in TOOL_IDS:
             return invoke_tool(cli,app_pid,hwnd,args[1])
-        return cli('ui',*args,'-w',hwnd)
+        return cli('ui',*viewer_wait_args(args),'-w',hwnd)
     def wait(identifier,value):ui('wait-for',identifier,'--value',value,'-t','10000')
     def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000');time.sleep(.4)
     def keys(sequence,identifier=None):
@@ -189,7 +190,7 @@ def main():
             def do_GET(self):
                 path=urlparse(self.path).path
                 valid=self.valid_host() and self.headers.get('X-Aredoko-Token')==token
-                if valid and '/reader/' in path and '/pages/' in path:
+                if valid and '/reader/' in path and '/original/' in path:
                     report.setdefault('reader_requests',[]).append(path)
                     if faults['code']:
                         code=faults['code'];faults['code']=None

@@ -45,11 +45,12 @@ internal sealed class ImageViewerView : Grid, IDisposable
     private readonly Button zoomOut = IconButton(Symbol.ZoomOut);
     private readonly Button zoomIn = IconButton(Symbol.ZoomIn);
     private readonly Button fit = IconButton(Symbol.FullScreen);
+    private readonly Button actualSize=new(){Content="原寸",MinWidth=36,Padding=new Thickness(8)};
     private readonly Button retry = IconButton(Symbol.Refresh);
     private readonly TextBlock title = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock count = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock zoom = new() { Text = "倍率 100%", VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
     private bool busy, disposed, loaded;
     private int version;
 
@@ -72,7 +73,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
         viewport.SizeChanged += (_, _) => FitImage();
         viewport.ViewChanged += (_, _) => UpdateControls();
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var control in new UIElement[] { previous, next, zoomOut, zoomIn, fit, zoom, retry }) actions.Children.Add(control);
+        foreach (var control in new UIElement[] { previous, next, zoomOut, zoomIn, fit, actualSize, zoom, retry }) actions.Children.Add(control);
         var bottom = new StackPanel { Spacing = 4 }; bottom.Children.Add(actions); bottom.Children.Add(status);
         toolbarHost.Child = bottom; Children.Add(headerHost); Children.Add(toolbarHost);
         title.Style = count.Style = zoom.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
@@ -82,6 +83,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
         Identify(headerHost, "ImageHeader", "画像の情報と閉じる"); Identify(toolbarHost, "ImageToolbar", "画像の操作");
         Identify(previous, "ImagePrevious", "前の画像"); Identify(next, "ImageNext", "次の画像");
         Identify(zoomOut, "ImageZoomOut", "画像を縮小"); Identify(zoomIn, "ImageZoomIn", "画像を拡大");
+        Identify(actualSize,"ImageActualSize","画像を原寸で表示");ToolTipService.SetToolTip(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）");
         Identify(fit, "ImageFit", "画像の表示をリセット"); Identify(retry, "ImageRetry", "画像を再試行");
         ToolTipService.SetToolTip(close, "閉じる（Esc）");
         ToolTipService.SetToolTip(previous, "前の画像（←）"); ToolTipService.SetToolTip(next, "次の画像（→）");
@@ -93,8 +95,9 @@ internal sealed class ImageViewerView : Grid, IDisposable
         close.Click += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
         previous.Click += async (_, _) => await MoveAsync(-1); next.Click += async (_, _) => await MoveAsync(1);
         zoomOut.Click += (_, _) => viewport.ChangeView(null, null, Math.Max(1, viewport.ZoomFactor - .5f), true);
-        zoomIn.Click += (_, _) => viewport.ChangeView(null, null, Math.Min(4, viewport.ZoomFactor + .5f), true);
+        zoomIn.Click += (_, _) => viewport.ChangeView(null, null, Math.Min(viewport.MaxZoomFactor, viewport.ZoomFactor + .5f), true);
         fit.Click += (_, _) => viewport.ChangeView(0, 0, 1, true);
+        actualSize.Click+=(_,_)=>viewport.ChangeView(null,null,(float)OriginalZoom(),true);
         retry.Click += async (_, _) => await OpenAsync();
         UpdateIdentity(); UpdateControls(); ShowChrome();
     }
@@ -116,9 +119,13 @@ internal sealed class ImageViewerView : Grid, IDisposable
     private void FitImage()
     {
         canvas.Width = Math.Max(1, viewport.ActualWidth); canvas.Height = Math.Max(1, viewport.ActualHeight);
-        var scale = Math.Min(canvas.Width / imageWidth, canvas.Height / imageHeight);
+        var scale = Math.Min(1/(XamlRoot?.RasterizationScale??1),Math.Min(canvas.Width / imageWidth, canvas.Height / imageHeight));
         image.Width = imageWidth * scale; image.Height = imageHeight * scale;
+        viewport.MaxZoomFactor=(float)Math.Max(4,OriginalZoom());
+        ToolTipService.SetToolTip(image,$"{imageWidth:0} × {imageHeight:0} px");
+        AutomationProperties.SetHelpText(image,$"{imageWidth:0} x {imageHeight:0} pixels");
     }
+    private double OriginalZoom()=>double.IsFinite(image.Width)&&image.Width>0?Math.Max(1,imageWidth/image.Width/(XamlRoot?.RasterizationScale??1)):1;
     private void UpdateIdentity()
     {
         title.Text = sequence.Current.Title; ToolTipService.SetToolTip(title, title.Text);
@@ -129,9 +136,9 @@ internal sealed class ImageViewerView : Grid, IDisposable
     private void UpdateControls()
     {
         previous.IsEnabled = !disposed && sequence.HasPrevious; next.IsEnabled = !disposed && sequence.HasNext;
-        zoom.Text = $"倍率 {viewport.ZoomFactor * 100:0}%";
+        zoom.Text = loaded?$"倍率 {viewport.ZoomFactor/OriginalZoom() * 100:0}%":"倍率 —";
         zoomOut.IsEnabled = loaded && !busy && viewport.ZoomFactor > 1;
-        zoomIn.IsEnabled = loaded && !busy && viewport.ZoomFactor < 4; fit.IsEnabled = loaded && !busy;
+        zoomIn.IsEnabled = loaded && !busy && viewport.ZoomFactor < viewport.MaxZoomFactor; actualSize.IsEnabled=loaded&&!busy; fit.IsEnabled = loaded && !busy;
     }
     // Tunnel before ScrollViewer consumes arrow keys; scope is this modal only.
     public void AttachNavigation(UIElement dialog)
@@ -195,7 +202,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     {
         if (disposed || !sequence.TryMove(direction)) return;
         version++; loaded = false; StopAnimation(); image.Source = null; retry.IsEnabled = false;
-        UpdateIdentity(); status.Text = "画像を読み込んでいます…"; UpdateControls();
+        UpdateIdentity(); ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
         if (busy) { request?.Cancel(); return; }
         await OpenAsync();
     }
@@ -210,7 +217,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
             {
                 requestedVersion = version;
                 loaded = false; failed = false; retry.IsEnabled = false; StopAnimation(); image.Source = null;
-                status.Text = "画像を読み込んでいます…"; UpdateControls();
+                ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
                 using var loading = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                 request = loading; var cancellation = loading.Token; var item = sequence.Current;
                 try
@@ -248,33 +255,38 @@ internal sealed class ImageViewerView : Grid, IDisposable
                         AutomationProperties.SetName(image, $"{item.Title}の画像（アニメーション 1 / {bitmaps.Length}）");
                         loaded = true; viewport.ChangeView(0, 0, 1, true);
                         ContentOpened?.Invoke(item.Id);
-                        status.Text = $"アニメーション再生中（{bitmaps.Length}フレーム） · ← → で画像送り · 表示画像は長辺2048pxまで";
+                        ViewerNotice.Set(status);
                         animTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(animDurations[0], 20, 60_000));
                         animTimer.Start();
                     }
                     else
                     {
-                        var source = await api.ImageAsync(item.Id, cancellation);
-                        var png = await ThumbnailCodec.ResizeAsync(source, cancellation, PreviewPolicy.ReaderEdge);
-                        var bitmap = await CreateBitmapAsync(png, cancellation);
+                        var source = await api.OriginalImageAsync(item.Id, cancellation);
+                        BitmapImage bitmap;
+                        try{bitmap=await ViewerImageCodec.DecodeAsync(source,cancellation);}
+                        catch(InvalidDataException) when(ImageViewerPolicy.MayAnimate(item.Location))
+                        {
+                            var bounded=await api.ImageAsync(item.Id,cancellation);
+                            bitmap=await CreateBitmapAsync(await ThumbnailCodec.ResizeAsync(bounded,cancellation,PreviewPolicy.ReaderEdge),cancellation);
+                        }
                         if (disposed || requestedVersion != version) continue;
                         imageWidth = Math.Max(1, bitmap.PixelWidth); imageHeight = Math.Max(1, bitmap.PixelHeight);
                         FitImage(); image.Source = bitmap; loaded = true; viewport.ChangeView(0, 0, 1, true);
                         ContentOpened?.Invoke(sequence.Current.Id);
-                        status.Text = "← → で画像送り · 表示画像は長辺2048pxまで";
+                        ViewerNotice.Set(status);
                     }
                 }
                 catch (Exception ex)
                 {
                     if (disposed || requestedVersion != version) continue;
-                    status.Text = ex switch
+                    ViewerNotice.Set(status,ex switch
                     {
                         ArchiveReadException { Status: System.Net.HttpStatusCode.NotFound } => "画像を読み取れません。未接続・破損・容量制限を確認し、更新した場合は再スキャンしてください。",
                         ArchiveReadException => ex.Message,
                         OperationCanceledException => "読み込みがタイムアウトしました。再試行してください。",
                         HttpRequestException => "接続できません。閉じてライブラリから再接続してください。",
                         _ => "画像を表示できません。未対応形式・破損・画像サイズを確認してください。"
-                    };
+                    });
                     failed = true; retry.IsEnabled = true; ShowChrome();
                 }
                 finally { request = null; }

@@ -1,4 +1,4 @@
-"""Bounded, generated-only native detail-button clipping regression (no AI inference).
+"""Owned, generated-only current-payload UI checks (no AI inference).
 
 Uses the existing development WinApp activation, isolated backend and settings.
 Each invocation requires a NEW evidence directory. Never attaches to another app.
@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import secrets
 import socket
+import shutil
 import subprocess
 import sys
 import threading
@@ -41,13 +42,20 @@ def digest(folder):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--daily-only',action='store_true',help='Audit list/grid/folders/settings/viewers using this same verified activation')
+    parser.add_argument('--size-only',action='store_true',help='New user-authorized display-size feature flow')
+    parser.add_argument('--quiet-only',action='store_true',help='User-requested viewer/footer and plain-language follow-up')
+    parser.add_argument('--narrow',action='store_true',help='Explicit compact-window regression; normal desktop size is the default')
     args = parser.parse_args()
+    if sum((args.size_only,args.daily_only,args.quiet_only))>1:parser.error('Select one flow')
     target = Path(os.path.abspath(args.output))
     if not target.is_relative_to(REPO / 'data/ai-ui'):
         parser.error('Evidence must be inside data/ai-ui')
     target.mkdir(parents=True, exist_ok=False)
     report = {'target': 'local', 'actual_model': False, 'pass': False, 'checks': [],
-              'screenshots': [], 'visual_review': 'pending', 'themes': []}
+              'screenshots': [], 'visual_review': 'pending', 'themes': [],
+              'source_head': subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
+              'authorization': '2026-10-20 user explicitly requested continuing work and checking current UI'}
     env = {**os.environ, 'WINAPP_UI_WORKFLOW_ID': 'aredoko-detail-' + uuid.uuid4().hex}
     owned_pid = hwnd = cat = server = worker = None
     user32 = ctypes.WinDLL('user32', use_last_error=True)
@@ -58,6 +66,7 @@ def main():
     user32.GetDpiForWindow.argtypes = [wintypes.HWND]
     kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE,wintypes.DWORD,wintypes.LPWSTR,ctypes.POINTER(wintypes.DWORD)]
     kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
     kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
@@ -91,6 +100,14 @@ def main():
         if not owned_pid:
             return
         owned_window()
+        # The owner is disabled while a native viewer is open. On failure,
+        # close only children verified to belong to this owned test PID first.
+        for candidate in json.loads(cli('ui','list-windows','-a',owned_pid,'--json')):
+            child=int(candidate.get('hwnd',0));owner=wintypes.DWORD()
+            if not child or str(child)==str(hwnd) or candidate.get('title')=='PopupHost':continue
+            user32.GetWindowThreadProcessId(child,ctypes.byref(owner))
+            if owner.value==owned_pid:user32.PostMessageW(child,0x10,0,0)
+        time.sleep(.3)
         handle = kernel32.OpenProcess(0x100000, False, owned_pid)
         if not handle:
             raise RuntimeError('Cannot observe owned test process')
@@ -125,12 +142,22 @@ def main():
         check('no other Aredoko instance or occupied backend', existing.returncode == 0)
         media = target / 'media'
         media.mkdir()
-        (media / 'image.png').write_bytes(png(color=(45, 115, 195)))
+        (media / 'image.png').write_bytes(png(width=6144 if args.quiet_only else 180,height=4096 if args.quiet_only else 240,color=(45,115,195)))
+        if args.daily_only or args.size_only or args.quiet_only:(media/'second.png').write_bytes(png(color=(85,165,115)))
         with wave.open(str(media / 'audio.wav'), 'wb') as sound:
             sound.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
             sound.writeframes(b'\0\0' * 16000)
         with zipfile.ZipFile(media / 'book.cbz', 'w') as book:
-            book.writestr('page.png', png(color=(185, 125, 60)))
+            book.writestr('page.png',png(width=4096 if args.quiet_only else 180,height=3072 if args.quiet_only else 240,color=(185,125,60)))
+            if args.daily_only or args.size_only or args.quiet_only:
+                book.writestr('page2.png',png(width=4096 if args.quiet_only else 180,height=3072 if args.quiet_only else 240,color=(135,155,195)))
+                book.writestr('page3.png',png(color=(165,95,175)))
+        if args.quiet_only:
+            (media/'broken.jpg').write_bytes(b'not an image')
+            ffmpeg=shutil.which('ffmpeg')
+            if not ffmpeg:raise RuntimeError('Existing local FFmpeg is required; no download')
+            subprocess.run([ffmpeg,'-nostdin','-v','error','-f','lavfi','-i','color=c=blue:s=320x180:r=1:d=30',
+                '-threads','1','-c:v','libx264','-pix_fmt','yuv420p','-movflags','+faststart',str(media/'clip.mp4')],check=True,timeout=20)
         before = digest(media)
         cat = ProductionCatalog(target / 'catalog.sqlite')
         root = cat.add_root(str(media))
@@ -138,14 +165,27 @@ def main():
         if cat._worker:
             cat._worker.join(10)
         rows = {row['title']: row for row in cat.search()['items']}
-        check('only generated image/audio/book indexed', len(rows) == 3)
+        check('only generated image/audio/book indexed', len(rows) == (6 if args.quiet_only else 4 if args.daily_only or args.size_only else 3))
         profiles = AIProfileSettings(REPO, target / 'ai-settings.json', profile_directory=target / 'profiles')
         handler = production_handler(cat, secrets.token_hex(32), ai=DisabledAI(),
                                      profiles=profiles, tagger=DisabledTagger())
+        if args.quiet_only:
+            # A bounded, controllable response delay verifies loading notices.
+            # This wraps only our isolated fixture server, never real data.
+            cat._ui_test_preview_gate=threading.Event();cat._ui_test_preview_gate.set()
+            base_handler=handler
+            class QuietHandler(base_handler):
+                def do_GET(self):
+                    if self.path==f"/api/library/preview/{rows['image.png']['id']}/original":
+                        if not cat._ui_test_preview_gate.wait(20):return self.send(503,{'error':'Fixture delay timeout'})
+                    return super().do_GET()
+            handler=QuietHandler
         handler.log_message = lambda *args: None
         server = ThreadingHTTPServer(('127.0.0.1', 8769), handler)
         worker = threading.Thread(target=server.serve_forever, daemon=True)
         worker.start()
+        if args.size_only:
+            (target/'viewer-settings.json').write_text('{"version":1,"wheel_up_advances":true}',encoding='utf-8')
         for theme in ('Light', 'Dark'):
             launch = json.loads(cli('run', REPO / 'src/Aredoko.WinUI/Aredoko.WinUI.csproj',
                 '-c', 'Release', '--arch', 'x64', '-p', 'Platform=x64', '-p', 'SelfContained=true', '--no-build', '--no-restore',
@@ -163,11 +203,40 @@ def main():
             if not hwnd:
                 raise RuntimeError('No unique owned main window')
             owned_window()
-            report.setdefault('payloads', []).append(verify_deployment(layout()))
-            if not user32.SetWindowPos(int(hwnd), None, 0, 0, 700, 620, 0x2 | 0x4 | 0x10):
+            process = kernel32.OpenProcess(0x1000,False,owned_pid)
+            if not process:raise RuntimeError('Cannot verify launched process image')
+            try:
+                buffer=ctypes.create_unicode_buffer(32768);length=wintypes.DWORD(len(buffer))
+                if not kernel32.QueryFullProcessImageNameW(process,0,buffer,ctypes.byref(length)):
+                    raise ctypes.WinError(ctypes.get_last_error())
+                image=Path(buffer.value)
+            finally:kernel32.CloseHandle(process)
+            check(theme+' actual process uses expected current layout',image.parent==layout())
+            report.setdefault('payloads', []).append({'image':str(image),'files':verify_deployment(image.parent)})
+            width,height=(700,620) if args.narrow else (1200,820)
+            if not user32.SetWindowPos(int(hwnd), None, 0, 0, width, height, 0x2 | 0x4 | 0x10):
                 raise ctypes.WinError(ctypes.get_last_error())
-            report['themes'].append({'theme': theme, 'width': 700, 'height': 620,
+            report['themes'].append({'theme': theme, 'width': width, 'height': height,
                                      'dpi': user32.GetDpiForWindow(int(hwnd)), 'pid': owned_pid})
+            ui('wait-for','Item'+str(rows['image.png']['id']),'-t','15000')
+            time.sleep(.3)
+            navigation=inspect()['NavAll']
+            check(theme+' startup navigation matches width',navigation['width']<=48 if args.narrow else navigation['width']>=140)
+            if args.quiet_only:
+                from ui_quiet_viewer_audit import audit
+                audit(cli,hwnd,owned_pid,theme,rows,cat,target,report,check)
+                close()
+                continue
+            if args.size_only:
+                from ui_item_size_audit import audit
+                audit(cli,hwnd,owned_pid,theme,rows,cat,target,report,check)
+                close()
+                continue
+            if args.daily_only:
+                from ui_daily_audit import audit
+                audit(cli,hwnd,owned_pid,theme,rows,cat,target,report,check)
+                close()
+                continue
             for name, enabled in (('image.png', 'BtnOpenImage'), ('audio.wav', 'BtnOpenAudio'), ('book.cbz', 'BtnOpenBook')):
                 current = inspect()
                 if current.get('BtnCloseDetails') and not current['BtnCloseDetails'].get('isOffscreen', True):
@@ -183,16 +252,19 @@ def main():
                 ui('wait-for', 'DetailScroll', '-t', '10000')
                 ui('scroll', 'DetailScroll', '--to', 'top')
                 identifiers = ('BtnOpenImage', 'BtnOpenVideo', 'BtnOpenAudio')
+                required=tuple(dict.fromkeys((*identifiers,enabled)))
                 for _ in range(12):
                     tree = inspect()
                     visible = all(tree.get(k) and not tree[k].get('isOffscreen', True)
-                                  and tree[k]['height'] >= 32 and tree[k]['width'] >= 80 for k in identifiers)
+                                  and tree[k]['height'] >= 32 and tree[k]['width'] >= (64 if k=='BtnOpenBook' else 80)
+                                  and tree[k]['y'] >= tree['BtnCloseDetails']['y'] + tree['BtnCloseDetails']['height'] + 8
+                                  and tree[k]['y'] + tree[k]['height'] <= tree['TxtEditStatus']['y'] - 12 for k in required)
                     if visible:
                         break
                     ui('scroll', 'DetailScroll', '--direction', 'down')
                 ui('wait-for', enabled, '-p', 'IsEnabled', '--value', 'True', '-t', '10000')
                 # UIA can return a clipped rectangle even with IsOffscreen=False.
-                bounds = {key: tree.get(key) for key in identifiers}
+                bounds = {key: tree.get(key) for key in required}
                 report.setdefault('bounds', []).append({'theme': theme, 'item': name, 'buttons': bounds})
                 check(theme + '/' + name + ' all open actions have full size', visible)
                 scroll = tree['DetailScroll']
@@ -210,7 +282,7 @@ def main():
                 screenshot(theme + '-' + name.split('.')[0])
             close()
         check('generated sources unchanged in bytes and mtime', digest(media) == before)
-        report['pass'] = True
+        report['pass'] = all(check['pass'] for check in report['checks'])
     except Exception:
         report['error'] = traceback.format_exc()
         if hwnd:
@@ -229,6 +301,7 @@ def main():
         except Exception:
             report['yield_error'] = traceback.format_exc()
             report['pass'] = False
+        if args.quiet_only and cat and hasattr(cat,'_ui_test_preview_gate'):cat._ui_test_preview_gate.set()
         if server:
             server.shutdown()
             server.server_close()

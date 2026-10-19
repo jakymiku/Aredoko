@@ -200,7 +200,7 @@ public static class FolderScopeDescriber
         var names = string.Join("、", present.Take(3).Select(r => r.ShortPath)) + (present.Length > 3 ? $" ほか{present.Length - 3}件" : "");
         var label = present.Length == 1
             ? $"検索対象: {present[0].ShortPath}（1 フォルダ）"
-            : $"検索対象: {names}（{selectedRootIds.Count} フォルダの和集合）";
+            : $"検索対象: {names}（{selectedRootIds.Count} フォルダをまとめて検索）";
 
         var notes = new List<string>();
         if (missing.Length > 0)

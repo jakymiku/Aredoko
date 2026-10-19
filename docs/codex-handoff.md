@@ -1,5 +1,32 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-20 現行：表示サイズ・元解像度viewer・UI整理（R11一部受入、R14 PARTIAL）
+
+開始HEAD `08bbe63`。本節を含むcommitが今回の実装。既存Draft PR #5 / `feat/winui3-production-mvp-20261011` を継続。詳細と失敗/再試行は [ui-current-build-acceptance.md](ui-current-build-acceptance.md)。
+
+- ライブラリ/フォルダのカードにテーマ背景/1px枠/間隔。起動時ナビが小窓でも展開される実不具合を修正。フォルダfilter/actionsの配置と登録formのscroll/gutterを修正、全機能維持。
+- ライブラリlist/gridの表示サイズ（60〜180%、20刻み）をSlider/Ctrl+wheelで変更し保存。通常wheelはscroll。既存containerを更新し、選択/decoded thumbnail/タグdraftを維持。旧viewer設定v1を後方互換で読み、wheel設定を相互に保持。
+- ユーザー指示で静止画とCBZ/ZIP/folder本ページの2048px縮小を廃止。認証済みoriginal専用routeとWindows codecで元streamを読む。原寸/fit操作とsource64MiB/100Mpixelの別guard。AI/thumbnail/アニメーションframeの予算は変更しない。Lanczos指定やAI超解像は未実装。
+- viewer/playerの常設成功説明を除去。操作tooltipとページ/時刻/再生ボタンは保持、loading/破損/保存失敗は表示する。「和集合」等のUI語を自然な日本語へ訂正。loading倍率NaNも修正。
+- ユーザー最新方針：**通常幅1200〜1600pxを主受入、小窓は主要操作と致命的欠けを最低限確認。狭幅への過剰調整/テスト反復でUIを複雑にしない。** 次のnative batchは通常サイズがdefault、狭幅回帰は明示 `--narrow`。このdefault変更自体は構文確認のみで新GUI再実行なし。
+
+| 証拠 | 自動判定 | 目視 |
+|---|---|---|
+| `current-detail-20261020-02` | 35 PASS | 6 PNG目視 |
+| `current-daily-20261020-03` | 87 PASS | 24 PNG目視 |
+| `item-size-20261020-02` | 44 PASS | 14 PNG目視 |
+| `original-quiet-20261020-02` | 71 PASS | 16 PNG目視 |
+
+実exe path/配備5ファイルを照合し生成素材のみ使用。Core Release PASS、WinUI x64 self-contained Release0 errors/既存SDK trim warnings2。Python91件=88 PASS/3 platform SKIP（original6/preview22/folder16/reader16/progress7/backup24）。全PNG目視manifestは各ignored evidence dirへ保存。原本bytes/mtime不変。旧native caption待ちを新UI状態へ追従したが、旧flowは構文確認のみ（過去の上限/失敗履歴は保持）。
+
+**残る限界**：R11 HC/DPI/Narrator/EXIF/ICC、独立したphysical pixel測定は未受入（UIA boundsはclip）。WinUIAnalyzerはユーザー許可で導入済み（下記）。R06実音声能力/方式比較、R07/R08実抽出producer、R13 runtime同梱とclean-machine起動/更新/削除は未完。M1/M2/RC完了にしない。
+
+次の3手：**R13 Python/AI runtimeを含む配布条件とclean-machine起動 → R06 実入力による音声方式選定 → R07/R08 producer接続と受入**。ユーザーの新しい不具合があれば優先するが、同じ小窓テストを理由なく反復しない。通常実装Sol可、R06/R08方式/空間選定はAstra推奨（自動delegation権限ではない）。新モデルDLは別途許可、GPU/GUIは最新のユーザー許可へ従う。今回はAI推論/私物走査/AIモデル取得/Actions/main mergeなし。追加取得は許可済みの開発用Analyzer77KBだけ。
+
+
+**開発用静的解析**：[WinUIAnalyzer 0.7.1](winui-analyzer.md) をPrivateAssets=all/ビルド資産のみで導入。既存依存バージョン不変、compiler入力あり、全bin出力とruntime deps.jsonへ混入なし。導入後Release0 errors / WUI1001のpicker移行提案3件 / 従来SDK IL2104 2件。既存pickerは所有HWND初期化済みで、一括変更や警告抑制はしない。差分レビューに新たな必須修正なし。静的解析導入によるGUI/GPU再実行なし。
+
+
 ## 2026-10-20 現行：配備の取り違え訂正とブラッシュアップ（R11/R13、R14 PARTIAL）
 
 開始HEAD `07347a2`。詳細は [polish-audit-20261020.md](polish-audit-20261020.md)。以前の「R01〜R14全完了」は撤回し、最新台帳を優先する。

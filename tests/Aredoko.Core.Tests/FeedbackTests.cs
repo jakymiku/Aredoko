@@ -6,6 +6,13 @@ internal static class FeedbackTests
 {
     public static async Task Run(Action<bool,string> check)
     {
+        PreviewPolicy.ValidateViewerDimensions(7680,4320);
+        check(true,"8K viewer dimensions accepted independently of thumbnail policy");
+        foreach(var dimensions in new[]{(0u,1u),(1u,0u),(10001u,10000u),(uint.MaxValue,uint.MaxValue)})
+        {
+            var blocked=false;try{PreviewPolicy.ValidateViewerDimensions(dimensions.Item1,dimensions.Item2);}catch(InvalidDataException){blocked=true;}
+            check(blocked,"viewer guards reject invalid or unbounded decoded dimensions");
+        }
         var normal=new ViewerInputSettings();var inverted=new ViewerInputSettings(true);
         check(normal.WheelStep(-120)==1&&normal.WheelStep(120)==-1&&normal.WheelStep(0)==0,"wheel default down advances / up returns / zero ignored");
         check(inverted.WheelStep(120)==1&&inverted.WheelStep(-120)==-1,"wheel direction inversion");
@@ -16,6 +23,18 @@ internal static class FeedbackTests
             check(!ViewerInputSettings.Load(file).WheelUpAdvances,"missing viewer settings uses default");
             inverted.Save(file);check(ViewerInputSettings.Load(file).WheelUpAdvances,"viewer direction survives restart");
             normal.Save(file);check(!ViewerInputSettings.Load(file).WheelUpAdvances&&Directory.GetFiles(dir).Length==1,"atomic settings overwrite leaves no temporary files");
+            File.WriteAllText(file,"{\"version\":1,\"wheel_up_advances\":true}");
+            check(ViewerInputSettings.Load(file)==new ViewerInputSettings(true,100),"old viewer settings retain wheel direction with default item size");
+            var scaled=ViewerInputSettings.Load(file) with {LibraryItemScale=160};scaled.Save(file);
+            check(ViewerInputSettings.Load(file)==new ViewerInputSettings(true,160),"item size and wheel direction survive restart together");
+            (scaled with {WheelUpAdvances=false}).Save(file);
+            check(ViewerInputSettings.Load(file)==new ViewerInputSettings(false,160),"changing wheel preference preserves item size");
+            foreach(var bad in new[]{"0","59","181","101","2147483648","null","\"large\""})
+            {
+                File.WriteAllText(file,"{\"version\":1,\"wheel_up_advances\":true,\"library_item_scale\":"+bad+"}");
+                var restored=ViewerInputSettings.Load(file);
+                check(restored.LibraryItemScale==100,"invalid item size falls back: "+bad);
+            }
             foreach(var text in new[]{"{}","null","[]","broken","{\"version\":2,\"wheel_up_advances\":true}","{\"version\":1,\"wheel_up_advances\":\"true\"}",new string('x',2049)})
             {File.WriteAllText(file,text);check(!ViewerInputSettings.Load(file).WheelUpAdvances,"corrupt or unsupported settings fallback: "+text[..Math.Min(text.Length,40)]);}
             check(LibraryFilePath.Resolve(dir,"素材/画像 1.png")==Path.Combine(dir,"素材","画像 1.png"),"Unicode file resolves under registered root");

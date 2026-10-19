@@ -1,5 +1,15 @@
 # Aredoko — Codex / coding agent instructions
 
+## Latest desktop UI polish and user priority (2026-10-20)
+
+Read [current UI acceptance](docs/ui-current-build-acceptance.md) and latest handoffs. Current-payload detail/daily/library-size/original-resolution viewer checks passed on generated media, with all PNGs reviewed; old failures remain. Library list/grid now has themed card separation and persistent 60–180% sizing via slider/Ctrl+wheel. Static images/book pages use original-resolution Windows decoding with an actual-size action; animation frame budgets remain separate. Normal viewer success text is removed, while loading/errors/save warnings remain. Folder copy uses plain Japanese.
+
+**通常のデスクトップサイズ（幅1200〜1600px程度）の使いやすさと見栄えを優先する。** ユーザーは2026-10-20、Filesの例を示して極小ウィンドウへの過剰最適化を不要と明示した。小窓は閉じる/戻る/保存など主要操作と致命的な欠けを最低限確認し、全情報を700px幅へ詰め込むための追加UIや大量のテスト反復は行わない。既存の有用な折返し/scroll余白は維持し、狭幅対応のために機能削減もしない。通常サイズを主受入、小窓は補助確認とする。
+
+R11 remains PARTIAL for HC/DPI/Narrator, and R14/M1/M2/RC are not complete. Current next work is R13 distribution/runtime conditions, then R06 actual-audio capability and R07/R08 extraction producers. Do not repeat finished GUI batches solely for confidence or reset historical recovery/book-batch gates. Native scripts now default to normal desktop size; `--narrow` is explicit. New model/dependency downloads still need consent; no Actions/main merge.
+
+WinUIAnalyzer 0.7.1 is now installed with explicit user consent, build-only (`PrivateAssets="all"`, `IncludeAssets="analyzers;build;buildTransitive"`). Read [analyzer findings](docs/winui-analyzer.md). Release passes with 3 visible WUI1001 picker migration hints plus 2 existing SDK IL2104 warnings. No analyzer runtime assets/output DLL/deps entries; existing dependency versions unchanged. Do not suppress all warnings or blindly replace working picker APIs. This authorization is specific to this analyzer; future model/dependency downloads still require consent.
+
 ## Latest polish audit and deployment correction (2026-10-20)
 
 Read [docs/polish-audit-20261020.md](docs/polish-audit-20261020.md) before historical completion claims. **R14 is PARTIAL; M1/M2/RC are not complete.** R07/R08 store/query adapters have no production audio extraction producer. Their GPU test embeds hardcoded transcripts and injects synthetic acoustic features; it does not recognize real audio. R06 needs measured input capability/architecture validation, not assertions from config structure. R13 is staging-only; Python/AI runtimes and clean-machine activation/update/uninstall are unverified. R11 HC/DPI/Narrator/contrast are unverified.
@@ -176,6 +186,8 @@ The vision defines product intent, not implementation status. The latest source,
 **Read [docs/codex-handoff.md](docs/codex-handoff.md) and [Issue #4](https://github.com/jakymiku/Aredoko/issues/4) before implementation.** They are the current project state and next-action checklist (2026-10-11). Some legacy READMEs/status files describe the earlier stage where the GUI framework was undecided; **the user now chose WinUI 3 for the production MVP**.
 
 ## UIを複雑にしない・機能を減らさない（ユーザー指示、2026-10-16）
+
+**通常のデスクトップサイズ（幅1200〜1600px程度）の使いやすさと見栄えを優先する。** ユーザーは2026-10-20、Filesの例を示して極小ウィンドウへの過剰最適化を不要と明示した。小窓は閉じる/戻る/保存など主要操作と致命的な欠けを最低限確認し、全情報を700px幅へ詰め込むための追加UIや大量のテスト反復は行わない。既存の有用な折返し/scroll余白は維持し、狭幅対応のために機能削減もしない。通常サイズを主受入、小窓は補助確認とする。
 
 **本番のGUIは日常の検索・閲覧・整理に集中できる簡潔な構成にする。機能削減によって簡潔に見せてはならない。** AIエージェントのテスト都合で、検証用の長文・内部ID・実装説明・注意書きを通常画面へ追加し続けない。テスト手順/検証注記は文書・ログ、操作識別はAutomationIdに置く。
 

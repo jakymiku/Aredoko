@@ -18,7 +18,9 @@ internal static class ViewerOptions
         return at>=0&&at+1<args.Length?System.IO.Path.GetFullPath(args[at+1]):System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Aredoko","viewer-settings.json");
     }
     public static ViewerInputSettings Value {get;private set;}=ViewerInputSettings.Load(path);
-    public static void Save(bool wheelUpAdvances){var next=new ViewerInputSettings(wheelUpAdvances);next.Save(path);Value=next;}
+    public static void Save(bool wheelUpAdvances)=>SaveValue(Value with {WheelUpAdvances=wheelUpAdvances});
+    public static void SaveLibraryItemScale(int scale)=>SaveValue(Value with {LibraryItemScale=ViewerInputSettings.NormalizeScale(scale)});
+    private static void SaveValue(ViewerInputSettings next){next.Save(path);Value=next;}
 }
 
 internal static class ViewerInputGestures

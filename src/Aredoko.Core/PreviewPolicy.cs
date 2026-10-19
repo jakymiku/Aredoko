@@ -7,6 +7,14 @@ public static class PreviewPolicy
     public const int Edge = 256;
     public const int ReaderEdge = 2048;
     public const int CacheEntries = 64;
+    // Viewer-only source budget, independent of thumbnail/AI preprocessing.
+    public const int ViewerSourceBytes=64*1024*1024;
+    public const long ViewerPixels=100_000_000;
+    public static void ValidateViewerDimensions(uint width,uint height)
+    {
+        if(width==0||height==0||width>65535||height>65535||(ulong)width*height>(ulong)ViewerPixels)
+            throw new InvalidDataException("Image dimensions exceed viewer limits");
+    }
 
     public static void ValidateDimensions(uint width, uint height)
     {

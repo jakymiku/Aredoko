@@ -58,7 +58,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     private readonly TextBlock title = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock positionText = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock volumeText = new() { Text = "音量 80%", VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
     private CancellationTokenSource? request;
     private MediaPlayer? mediaPlayer;
     private MediaSource? mediaSource;
@@ -216,7 +216,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         busy = true; failed = loaded = playing = false;
         ClearMedia();
         positionText.Text = "—";
-        status.Text = isAudio ? "音声を読み込んでいます…" : "動画を読み込んでいます…";
+        ViewerNotice.Set(status,isAudio ? "音声を読み込んでいます…" : "動画を読み込んでいます…");
         hideTimer.Stop(); UpdateControls();
         IRandomAccessStream? stream = null;
         VideoRangeSource? rangeSource = null;
@@ -244,7 +244,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
                 playing = false; positionTimer.Stop();
                 position = duration;
                 positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
-                status.Text = "最後まで再生しました。";
+                ViewerNotice.Set(status);
                 UpdateControls(); ShowChrome();
             });
             playerElement.SetMediaPlayer(nextPlayer);
@@ -270,9 +270,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
             loaded = true;
             ContentOpened?.Invoke(itemId);
-            status.Text = initialPositionMs is int start && start > 0
-                ? $"該当時刻（{VideoPlayerPolicy.FormatTime(TimeSpan.FromMilliseconds(start))}）に移動しました。再生ボタンまたはスペースキーで再生できます。"
-                : isAudio ? "音声を開きました。再生ボタンまたはスペースキーで再生できます。" : "動画を開きました。再生ボタンまたはスペースキーで再生できます。";
+            ViewerNotice.Set(status);
         }
         catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && current != version) { }
         catch (Exception ex) { if (current == version) ReportFailure(rangeSource?.Failure ?? ex); }
@@ -308,7 +306,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             playing = true;
             mediaPlayer.Play();
             positionTimer.Start();
-            status.Text = "再生中";
+            ViewerNotice.Set(status);
         }
         else
         {
@@ -318,7 +316,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             var sessionPos = mediaPlayer.PlaybackSession.Position;
             if (sessionPos > position) position = VideoPlayerPolicy.ClampSeek(sessionPos, duration);
             positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
-            status.Text = "一時停止中";
+            ViewerNotice.Set(status);
         }
         UpdateControls(); ShowChrome();
     }
@@ -330,7 +328,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         if(!loaded||busy||failed||mediaPlayer is null)return;
         position=VideoPlayerPolicy.ClampSeek(target,duration);mediaPlayer.PlaybackSession.Position=position;
         positionText.Text=VideoPlayerPolicy.FormatPosition(position,duration);
-        status.Text=playing?"再生中":"一時停止中";UpdateControls();ShowChrome();
+        ViewerNotice.Set(status);UpdateControls();ShowChrome();
     }
     private void SyncSeekBar()
     {
@@ -408,7 +406,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         ClearMedia();
         failed = true; loaded = false;
         positionText.Text = "—";
-        status.Text = ex switch
+        ViewerNotice.Set(status,ex switch
         {
             ArchiveReadException { Status: HttpStatusCode.Conflict } => ex.Message,
             ArchiveReadException { Status: HttpStatusCode.ServiceUnavailable } => "ほかのメディアを読み込み中です。少し待って再試行してください。",
@@ -416,7 +414,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             OperationCanceledException => "読み込みがタイムアウトしました。再試行してください。",
             HttpRequestException => "接続できません。閉じてライブラリから再接続してください。",
             _ => "この動画はWindowsの標準機能では再生できません。未対応の形式・コーデック、破損、または容量制限（2TBまで）を確認してください。"
-        };
+        });
         ShowChrome();
     }
 

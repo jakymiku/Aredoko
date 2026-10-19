@@ -33,3 +33,27 @@ def invoke_tool(cli, app_pid, hwnd, identifier):
                 return cli('ui', 'invoke', identifier, '-w', handle)
         time.sleep(.1)
     raise RuntimeError('Production tool was not visible in the owned menu: ' + identifier)
+
+
+def viewer_wait_args(arguments):
+    """Legacy success captions moved off canvas; assert the real control state.
+
+    Error/warning assertions stay unchanged. Frame count is still checked through
+    the displayed image's accessible name, not through removed explanatory copy.
+    """
+    args=tuple(arguments)
+    if len(args)<4 or args[0]!='wait-for' or '--value' not in args:return args
+    target=args[1];value=str(args[args.index('--value')+1])
+    timeout=args[args.index('-t')+1] if '-t' in args else '10000'
+    if target=='ImageStatus' and value.startswith('アニメーション再生中（'):
+        count=value.split('（',1)[1].split('フレーム',1)[0]
+        return ('wait-for','ViewerImage','--value','/ '+count+'）','--contains','-t',timeout)
+    ready=(target=='ImageStatus' and value.startswith('← → で画像送り') or
+           target=='ReaderStatus' and value.startswith('表示しました。') or
+           target=='VideoStatus' and value.startswith(('動画を開きました。','音声を開きました。','該当時刻（')))
+    if ready:
+        control={'ImageStatus':'ImageZoomIn','ReaderStatus':'ReaderFit','VideoStatus':'VideoSeek'}[target]
+        return ('wait-for',control,'-p','IsEnabled','--value','True','-t',timeout)
+    if target=='VideoStatus' and value in ('再生中','一時停止中'):
+        return ('wait-for','VideoPlayPause','--value','一時停止' if value=='再生中' else '再生','-t',timeout)
+    return args
