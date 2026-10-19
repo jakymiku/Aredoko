@@ -1,5 +1,19 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-20 現行：配備の取り違え訂正とブラッシュアップ（R11/R13、R14 PARTIAL）
+
+開始HEAD `07347a2`。詳細は [polish-audit-20261020.md](polish-audit-20261020.md)。以前の「R01〜R14全完了」は撤回し、最新台帳を優先する。
+
+- 詳細の再生操作を2段へ配置、音声自動索引の未対応案内、配布の既存先削除防止・引数/backup CLI・AI profile同梱を修正。全機能は維持。
+- 今回表示した崩れた画面は、新harnessのPlatform指定漏れで起動した**10月12日の旧AppX**。ハッシュ一致で特定。最新版の退行証拠にせず、UI巻き戻しはしていない。Platformと実配備5ファイル照合を追加、正しいno-launch配備PASS/旧配備拒否を確認。
+- Python targeted **39 PASS**（配布10/復旧24/配備5）、Core Release PASS（音声案内2チェック追加）、WinUI Release **0 errors/2 SDK trim warnings**。GUIは初回＋修正2回で停止、現行UIの目視受入は未完。修正後harnessは構文確認のみ。詳細/旧復旧/book-batchの試行上限を無断resetしない。
+- R07/R08は保存/検索と人工入力の接続検証まで。実音声から特徴を作る通常索引producerは未実装。R06の能力/方式選定は実入力比較が必要。M2完成と呼ばない。
+- R13はstaging準備で、Python/AI runtime同梱・clean-machine起動/更新/削除は未受入。R11のHC/DPI/Narratorも未受入。
+- 次の3手：**R11 最新ビルドでUI受入（同一flow上限を尊重）→R13 実配布条件の確認→R06 実入力能力比較とR07/R08 producer**。通常実装Sol可、R06/R08方式/空間選定はAstra推奨。GPU/GUIは最新ユーザー許可に従い、新モデルDLは別途許可。
+- 原本/実DB変更・私物走査・新取得・今回GPU推論・Actions/main mergeなし。既存Draft PR5継続。
+
+以下は過去の報告。合格範囲の拡大や未完の完了扱いには使わない。
+
 ## 2026-10-20 R14 実GPU/GUI一括受入・Native GUI全件合格・バッチ検証完了（DONE） — R01〜R14全工程完了
 
 開始HEAD `945cb57`（作業ブランチ `feat/winui3-production-mvp-20261011`）。ユーザーの明示許可（「裏でゲーム動いてるけど軽いゲームだから問題なくテストを行えるはずなので実行しておいてください」）に基づき、**R14（実GPU/GUI一括受入・RC判定）の全項目検証を実施し、全件PASSを確認・DONE**。

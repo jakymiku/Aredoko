@@ -1,5 +1,9 @@
 # Aredoko 完成までの実行計画
 
+## 2026-10-20 現行状態の訂正
+
+[ブラッシュアップ監査](polish-audit-20261020.md)を優先する。下段の各タスク実装報告は履歴であり、音声の実抽出・現行GUI・clean-machine配布を受入済みにしない。現在はR11/R13の不足を修正中、R06/R07/R08実入力は未完、R14 PARTIAL。ユーザーのUI巻き戻し懸念は今回の古いAppX誤起動から生じたため、現行UIをresetせず正しい配備の検証を先に行う。
+
 2026-10-18。コード確認基準：`cec19cb`。これはユーザー依頼による計画・担当難度・完了条件の整理であり、以下の未完タスクを今回実装した報告ではない。長期目的は[product-vision.md](product-vision.md)、最新の実行結果は両handoffを正とする。
 
 ## 完成に近づける判断
@@ -8,7 +12,7 @@
 
 古いP0→P1→P2の順番や「次はOCR」「chunk GUI未接続」は再開指示ではない。P0は累積2/2で閉じたまま。実際に新しい検索失敗が見つかるまでRRF再調整/専用OCRへ戻らない。既存機能を減らして完成扱いにせず、未実装と未検証を分ける。
 
-## 到達点と確認した不足
+## 初期棚卸し（2026-10-18の履歴。現行状態は下の台帳）
 
 | 領域 | 現状・根拠 | 残るもの |
 | --- | --- | --- |
@@ -31,7 +35,7 @@
 
 ## タスク台帳（優先順）
 
-状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。現在はR01〜R14すべて完了（R01〜R13 DONE / CPU_DONE、R14実機一括受入・バッチGPU/GUI検証 DONE）。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
+状態：READY=次に着手可能、TODO=未着手、DOING=作業中、CPU_DONE=実装/CPU検証済み・必要な実機確認が残る、WAIT=具体的依存/承認待ち、DONE=必要な受入証拠が揃う。2026-10-20監査で全完了判定を訂正。R06/R07/R08/R11/R13は下表の不足が残り、R14はPARTIAL。以下の「依存」は実装契約/CPU部分の依存で、実機確認待ちだけを理由に独立した次の作業まで止めない。
 
 | ID | 作業・出力 | 依存 | 担当難度 | 状態 |
 | --- | --- | --- | --- | --- |
@@ -40,15 +44,15 @@
 | R03 | バックアップ/復旧・DB/profile更新失敗からの復帰 | なし | Sol実装、**Astra推奨：整合性設計/レビュー** | CPU_DONE：[停止時backup/新規復元](backup-recovery.md)・launcher引数CPU確認、UI導線R10/native R14 |
 | R04 | 大量索引の明示継続・差分・中断再開を一連で完成 | R01、R03契約 | Sol、複数保存先の競合のみAstraレビュー | CPU_DONE：[A/B/C](index-continuation.md)実装/CPU合格、実機GUI/GPU受入はR14 |
 | R05 | 動画起点の類似検索と時刻根拠/既存UI接続 | R01、既存動画索引 | Sol。集約契約が曖昧ならAstra | CPU_DONE：[保存済みframe最大集約/時刻根拠](video-similarity.md)、4通り根拠・視覚/音響空間分離・表紙/内部頁契約、UIシーク接続、実機R14 |
-| R06 | 音声/音楽の入力能力・モデル/契約/評価設計を決定 | なし | **Astra強く推奨：方式選定** | DONE：[2案比較・分離型モジュラー凍結](audio-content-design.md)、768D発話空間/独立音響空間・決定論的正解 |
-| R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | CPU_DONE：[発話区間索引/時刻根拠](audio-content-design.md)、Core/Python検証、CPU受入15件合格、実機R14 |
-| R08 | 音響/音楽特徴の索引・日本語検索・類似検索 | R06、R03/R04契約 | **Astra推奨：特徴/比較設計**、実装Sol可 | CPU_DONE：[独立512D音響特徴/日本語記述子検索/音響類似検索](audio-content-design.md)、無音WAV幻覚防止、時間根拠、実機R14 |
-| R09 | 音声/音楽の検索→再生→類似検索のGUI統合 | R07、R08 | Sol＋WinUI skills | CPU_DONE：[WinUI再生/シーク/類似検索配線](audio-content-design.md)、VideoPlayerView音声対応、HTTP範囲再生、実機R14 |
+| R06 | 音声/音楽の入力能力・モデル/契約/評価設計を決定 | なし | **Astra強く推奨：方式選定** | DOING：[現状監査](polish-audit-20261020.md)・[音声契約](audio-content-design.md)。保存空間は実装、既存EG2の直接入力と別方式の実入力比較/実測は未完 |
+| R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | DOING：発話区間の保存/検索/時刻根拠は実装・検証済み。元音声→発話抽出→通常索引へのproducer未実装 |
+| R08 | 音響/音楽特徴の索引・日本語検索・類似検索 | R06、R03/R04契約 | **Astra推奨：特徴/比較設計**、実装Sol可 | DOING：512D保存/類似・記述子照合は実装済み。実音声/曲からの特徴抽出・実モデル空間/品質未受入 |
+| R09 | 音声/音楽の検索→再生→類似検索のGUI統合 | R07、R08 | Sol＋WinUI skills | CPU_DONE：再生/シーク/類似UI接続は保持。自動内容索引はR07/R08待ち。実音声の検索→再生受入が残る |
 | R10 | 初回設定・未索引/上限/失敗状態・資源管理の仕上げ | R01、既存設定 | Sol | CPU_DONE：[状態明瞭化・所有取消・診断情報](ui-consistency-checklist.md)、未索引/対象外/モデル未導入の案内、実機R14 |
-| R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | CPU_DONE：[UI整合性・アクセシビリティ監査チェックリスト](ui-consistency-checklist.md)、テーマ/DPI/Narrator整合、実機R14 |
+| R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | DOING：詳細操作の折返し修正。今回の旧AppX画面は現行証拠に使わない。現行小窓/HC/DPI/Narratorの受入が残る |
 | R12 | 数万件の性能・資源予算を測り必要箇所だけ改善 | R02、R04 | Sol計測、設計変更時Astraレビュー | CPU_DONE：[受入記録](scale-resource-acceptance.md)、5万件通常検索p95=0.34s・6.5万件ベクトル順位計算p95=9.57s・取消0.1ms・WAL0B・復元2.2s合格、実機R14 |
-| R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | CPU_DONE：[利用ガイド](user-guide.md)・[NOTICE](../THIRD_PARTY_NOTICES.md)・package_release/start-aredoko実装・user_version前方ガード・WAL truncate確認、実機R14 |
-| R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | DONE：[R14一括受入](release-readiness.md) R04 GPU/GUI PASS、R05動画類似PASS、R07-R09音声PASS、R10/R11状態GUI PASS、R12規模PASS、R02/R03復旧・Native GUI PASS（Light/Dark全6画面検証完了） |
+| R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | DOING：非破壊staging/argv/backup/profile同梱は検証済み。Python/AI runtime未同梱、clean-machine起動/identity/更新/削除未受入 |
+| R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | PARTIAL：既存限定GPU/GUI/規模PASSは保存。音声実入力、現行UI、配布受入が未完でM1/M2/RC全完了とはしない |
 
 ## 各タスクの完了条件
 
@@ -95,18 +99,11 @@ SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時�
 - **本表紙と内部ページ類似の契約**: 本の類似検索では表紙ベクトルを媒体全体の代表として扱い、内部ページベクトル（`ai_page_vectors`）はページ検索時のみ明示走査され、本全体の類似度へ無断混入・希釈させない。
 - **UI連携**: 動画候補結果のクリックで `VideoPlayerView` が該当 `video_match_ms` へ自動シークし、文脈メニュー「似た動画・素材を探す」から直ちに類似探索が可能。
 
-### R06 — DONE：音声方式の選定と評価設計凍結
+### R06 — DOING：実音声入力の能力と方式選定
 
-2026-10-19：[R06](audio-content-design.md)はDONE（Astra推奨の方式選定を完了、2案比較の上で分離型モジュラー方式Bを採用、評価4基準・空間分離契約・時間区間仕様・決定論的評価fixtureを凍結）。
+保存/検索の2系統契約は[音声設計](audio-content-design.md)に維持する。前回の「方式B凍結」は実入力の品質/VRAM比較がなく、直接EG2に環境音/音楽能力がないとの断定は撤回した。まず既存モデル/環境で入力API・出力空間・実資源を調査する。発話・環境音・音楽・音同士の類似を生成または許可済み音声で比較し、方式を確定する。新取得は別途明示許可。Astraでの設計/空間レビューを推奨、通常実装はSol可。
 
-- **2案の比較と選定理由**:
-  - *Candidate A（単一巨大マルチモーダル塔）*: EmbeddingGemma 2内部の`audio_tower`（Gemma4AudioFeatureExtractor）の直接利用。モデル構造調査の結果、`model.safetensors`の1376キー中752キーを占めるが、発話Conformerであり音響/音楽特徴の直接理解能力がなく、VRAM/メモリを1.5〜2.0GB余計に消費するため棄却。
-  - *Candidate B（分離型モジュラー方式・採用）*: 768D発話意味空間（テキスト意味空間と共有）と独立した音響/音楽特徴空間の2系統に明確に分離。
-- **4評価基準**: (1) 発話/会話の自然文検索、(2) 効果音/環境音、(3) 音楽の雰囲気/テンポ/ジャンル、(4) 音声/音楽同士の類似。
-- **空間分離と境界契約**: 発話テキスト意味埋め込みは768D正規化ベクトルとして`ai_audio_segments`に格納。音響空間とは内積を混交しない。
-- **前処理と上限**: 16kHz モノラル音声、512MiB上限、24時間（86,400,000ms）上限、時間区間 `[start_ms, end_ms]`。
-
-### R07 — CPU_DONE：発話内容の時間付き索引/検索adapter
+### R07 — DOING：保存/検索adapter CPU_DONE、実抽出producer未実装
 
 2026-10-19：[R07](audio-content-design.md)はCPU_DONE（SQLite `ai_audio_segments`テーブル新設、無アロケーション有限性検証/高速内積計算、検索集約への発話区間ヒット統合、CoreリフレクションフリーJSONパーサー・時刻/スニペット根拠表示、Python/Core単体テストおよび受入ハーネス合格）。実機GPU/GUI受入はR14で一括検証（`tools/test_audio_acceptance.py`）。次はR08（音響/音楽特徴の索引・日本語検索・類似検索）。
 
@@ -121,7 +118,7 @@ SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時�
   - `tools/test_audio_acceptance.py --stage cpu`: 15/15件PASS。
   - WinUI x64 Releaseビルド：0警告・0エラー。
 
-### R08 / R09 — CPU_DONE：音響・音楽と日常操作への接続
+### R08 / R09 — R08 producer DOING、R09再生/保存済み特徴接続CPU_DONE
 
 2026-10-19：[R08/R09](audio-content-design.md)はCPU_DONE（独立512D音響特徴空間、日本語記述子による効果音・BGM検索、音声・音楽ファイル同士のアイテム起点類似検索、時間根拠照合、WinUIプレイヤー再生・自動シーク・「似た音声・曲を探す」コンテキストメニュー配線完了）。実機GPU/GUI受入はR14で一括検証（`tools/test_audio_acceptance.py --stage cpu` 36件合格）。次はR10（AI状態明瞭化・資源管理）。
 
@@ -190,7 +187,7 @@ SQLite WALモード（`-wal`, `-shm`）の整合性を保つため、停止時�
   - `tools/test_scale_acceptance.py --stage cpu`: 26/26件PASS。
   - `docs/scale-resource-acceptance.md`: p95公式、測定条件、メモリ/ディスク容量記録凍結。
 
-### R13 — CPU_DONE：開発者以外でも起動・更新できる
+### R13 — DOING：staging準備済み、配布/起動/更新の受入は未完
 
 2026-10-19：[R13](user-guide.md) は CPU_DONE（前方スキーマバージョンガード導入、WALモード単一ファイル整合保証、配布スクリプト・単体ランチャー整備、ライセンス/NOTICE一覧、クリーン利用ガイド作成）。実機GPU/GUI受入はR14で一括検証。次はR14（実GPU/GUI一括受入）。
 
@@ -255,6 +252,6 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 1. fetch/status/log→最新handoff→本表の最上位READY/TODOを確認。他AIの未コミット変更を上書きしない。依存が揃う最上位1件をDOINGにし、その中のAPI/CPU→Core→WinUI→必要な受入の小区切りで進める。
 2. 証拠が揃う既存実装を再作成しない。不足は「未実装」「未検証」「新しい退行」に分類。CPU_DONE/WAITには未実行テストと解除条件を具体的に付け、独立した次のタスクへ進む。
 3. 台帳の状態、最新handoffの対象ID/commit/完了条件の達否/次のIDを毎回更新。次の作業順の正本はこの表一つ。歴史文書に別の順番を追加しない。新しい要望/重大退行は優先順位を更新して理由を記録。
-4. 当面の次の3手は **R08（音響・音楽特徴の索引・日本語検索・類似検索）→R09（音声/音楽の検索→再生→類似検索のGUI統合）→R10（初回設定・未索引/上限/失敗状態・資源管理の仕上げ）**。R01はDONE、R02〜R05はCPU_DONE、R06はDONE（音声方式設計凍結）、R07はCPU_DONE（発話内容の時間付き索引/検索adapter）。GUI全体の配線はR10・資源/性能はR12・必要実機受入はR14。GPU/GUIは最新のユーザー指示で許可済み、今回限定nativeの残gate/試行上限は[受入記録](release-readiness.md)を守る。新downloadは別途明示許可、CIは起動しない。
+4. 当面の次の3手は **R11 最新ビルドのUI受入→R13 配布の実条件→R06 実音声入力能力の比較とR07/R08 producer接続**。UIの巻き戻し判断は誤起動した旧AppXに基づけない。詳細は[現状監査](polish-audit-20261020.md)。同一flowの試行上限/新DL許可/Actions禁止を保持。
 
 長期台帳（削除しない）：B01 複数ページの関係/展開タグ（Astra推奨、根拠ページ/不明状態/固定評価を先に設計、専用OCRを既定にしない）、B02 Komga任意連携、B03 重複・移動追跡、B04 保存検索/ピン留め、B05 GPU/索引の高度な自動スケジューリング。新しい要望や実運用根拠が出たら順序を更新する。これらをM1前の無限な機能追加へ混ぜない。

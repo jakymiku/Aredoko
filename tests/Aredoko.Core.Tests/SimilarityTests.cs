@@ -80,6 +80,8 @@ static class SimilarityTests
         audioCand["source"]="acoustic";
         audioCand["items"]=JsonNode.Parse("""[{"id":9,"title":"track.mp3","kind":"audio","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.93,"similarity_origin_id":7,"audio_match_ms":45000,"origin_match_ms":12000}]""");
         var audioRow=SimilaritySearch.Parse(audioCand.ToJsonString(),7,0).Items[0];
+        check(SimilaritySearch.Guidance("unindexed","audio").Contains("自動索引は未対応") && !SimilaritySearch.Guidance("unindexed","audio").Contains("索引を作成してください"),"audio missing content guidance does not prescribe a filename-only rebuild");
+        check(SimilaritySearch.Guidance("unsupported_profile","audio").Contains("名前・タグ") && !SimilaritySearch.Guidance("unsupported_profile","audio").Contains("モデルを選ぶ"),"audio guidance does not promise an unavailable audio extraction model");
         check(audioRow.Id==9&&audioRow.AudioMatchMs==45000&&audioRow.OriginMatchMs==12000&&audioRow.AIEvidence.Contains("音声・音楽一致（起点 0:12 → 候補 0:45）"),"audio similarity parses candidate and origin match ms");
         var audioCandOnly=audioCand.DeepClone().AsObject();
         audioCandOnly["items"]![0]!["origin_match_ms"]=null;

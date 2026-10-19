@@ -1,5 +1,9 @@
 # Aredoko WinUI 3 — UI整合性・アクセシビリティ検証チェックリスト (R10 / R11)
 
+## 2026-10-20 検証範囲の訂正
+
+本書は受入基準を含み、チェックリスト作成だけで全項目合格にはならない。コントラスト数値、Windows High Contrast、100〜200%DPI、Narrator全導線は未受入としてチェックを戻した。既存Dark/Lightの限定画面は保持。今回の詳細操作2段化の現行画面は未確認で、[旧AppX誤起動](polish-audit-20261020.md)のPNGを合格証拠にしない。
+
 本書は [プロダクトビジョン](product-vision.md) および [WinUI 3 デザイン方針](design-vision-winui.md) に基づき、日常利用における表示の一貫性、状態の明瞭性、キーボード操作性、アクセシビリティ、および高DPI・テーマ対応の検証基準を定義する。
 
 ---
@@ -49,9 +53,9 @@ AI未導入、未索引、対象外、処理失敗と「0件ヒット（検索�
 ## 3. テーマ・外観・狭幅レスポンシブ検証 (Theme & Layout Matrix)
 
 ### A. Light / Dark テーマ
-- [x] **Lightテーマ**: コントラスト比 4.5:1 以上を確保。テキストの視認性、選択枠（Selection Indicator）、アクセントカラーの可読性。
+- [ ] **Lightテーマ**: コントラスト比 4.5:1 以上を確保。テキストの視認性、選択枠（Selection Indicator）、アクセントカラーの可読性。
 - [x] **Darkテーマ**: チャコール〜ダークグレー背景。作品画像の邪魔をしない落ち着いた階層表示。
-- [x] **High Contrast (ハイコントラストモード)**: Windowsハイコントラストテーマ時にシステムカラー（`SystemColorWindowTextColor`, `SystemColorHighlightColor` 等）が適用され、枠線とフォーカスが明瞭。
+- [ ] **High Contrast (ハイコントラストモード)**: Windowsハイコントラストテーマ時にシステムカラー（`SystemColorWindowTextColor`, `SystemColorHighlightColor` 等）が適用され、枠線とフォーカスが明瞭。
 
 ### B. 狭幅レイアウト (< 800px)
 - [x] 詳細ペイン（SplitView）がオーバーレイ（ドロワー）表示に自動切り替え。
@@ -59,8 +63,8 @@ AI未導入、未索引、対象外、処理失敗と「0件ヒット（検索�
 - [x] スクロールガター（余白）がサムネイルやボタンの操作を妨げない。
 
 ### C. 高DPI対応 (100%〜200%)
-- [x] `app.manifest` で `PerMonitorV2` DPI認識が明示され、拡縮時にテキストやアイコンがぼやけない。
-- [x] サムネイル生成（`ThumbnailCodec`）が高DPI環境でも適切なピクセル密度で描画。
+- [ ] `app.manifest` で `PerMonitorV2` DPI認識が明示され、拡縮時にテキストやアイコンがぼやけない。
+- [ ] サムネイル生成（`ThumbnailCodec`）が高DPI環境でも適切なピクセル密度で描画。
 
 ---
 
@@ -76,8 +80,8 @@ AI未導入、未索引、対象外、処理失敗と「0件ヒット（検索�
 - `Enter / Double-Click`: 選択アイテムのビューワー起動（画像・本・動画・音声）。
 
 ### B. スクリーンリーダー (Narrator / UI Automation)
-- [x] 全主要コントロールに `AutomationProperties.AutomationId` および `AutomationProperties.Name` を付与。
-- [x] 検索結果件数（`TxtCount`）、ページ数（`TxtPageNumber`）、空状態メッセージ（`TxtEmpty`）が支援技術から正しく読み上げ可能。
+- [ ] 全主要コントロールに `AutomationProperties.AutomationId` および `AutomationProperties.Name` を付与。
+- [ ] 検索結果件数（`TxtCount`）、ページ数（`TxtPageNumber`）、空状態メッセージ（`TxtEmpty`）が支援技術から正しく読み上げ可能。
 - [x] エラーやガイダンスは `InfoBar` を通じて通知。
 
 ---

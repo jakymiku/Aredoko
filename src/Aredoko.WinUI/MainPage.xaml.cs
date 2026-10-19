@@ -449,7 +449,9 @@ public sealed partial class MainPage : Page
         var blocked=active is not null&&tagReviewSyncItem==active.Id;
         Tags.IsEnabled=Shelf.IsEnabled=Favorite.IsEnabled=Reviewed.IsEnabled=!blocked;
         TagSuggestionsButton.IsEnabled=active is not null&&TagReviewProtocol.CanOpen(active)&&!saving;
-        if(blocked){EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";Save.IsEnabled=false;return;}EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);OpenAudio.IsEnabled=active is not null&&AudioPlayerPolicy.CanOpen(active);}
+        if(blocked){EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";Save.IsEnabled=false;return;}EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);OpenAudio.IsEnabled=active is not null&&AudioPlayerPolicy.CanOpen(active);
+        AudioSearchHint.Text=SimilaritySearch.AudioIndexingGuidance;
+        AudioSearchHint.Visibility=active?.Kind=="audio"?Visibility.Visible:Visibility.Collapsed;}
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
     public async Task<bool> ConfirmDiscardAsync() {

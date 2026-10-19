@@ -1,184 +1,145 @@
-"""Distribution packaging script for Aredoko.
+"""Stage an Aredoko build in a NEW directory, with a verifiable payload manifest.
 
-Produces a standalone release directory containing:
-- Self-contained WinUI 3 application (no dotnet SDK or winapp required at runtime)
-- Python backend application package (no remote downloads, offline by default)
-- Standalone launcher scripts (start-aredoko.ps1, Aredoko.cmd)
-- Third-party license notices and user guide
-- Release manifest and SHA256 checksums
+This is not an MSIX installer or a clean-machine deployment acceptance. Python,
+AI dependencies/weights and Windows activation/runtime provisioning are separate.
 """
 import argparse
-from contextlib import closing
 import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
-import sqlite3
 import subprocess
 import sys
 import time
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / 'app'))
+from storage_lease import plain_path, storage_parent
+
+PAYLOAD = ('Aredoko.WinUI.exe', 'Aredoko.WinUI.dll', 'Aredoko.Core.dll',
+           'Aredoko.WinUI.deps.json', 'Aredoko.WinUI.runtimeconfig.json')
 
 
 def compute_sha256(path):
     digest = hashlib.sha256()
-    with open(path, 'rb') as f:
-        while chunk := f.read(1024 * 1024):
-            digest.update(chunk)
+    with path.open('rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(block)
     return digest.hexdigest()
 
 
+def copy_payload(source, destination):
+    """Do not follow junctions/symlinks into unrelated files during staging."""
+    plain_path(source, directory=source.is_dir())
+    if source.is_dir():
+        destination.mkdir()
+        for child in source.iterdir():
+            if child.suffix.lower() != '.pdb':
+                copy_payload(child, destination / child.name)
+    else:
+        shutil.copy2(source, destination)
+
+
+def validate_output(output):
+    # Validate lexical ancestors without resolve() hiding junctions. --check
+    # does not create even the parent directories.
+    current = output
+    while not current.exists() and not current.is_symlink():
+        if current.parent == current:
+            raise ValueError('Output storage is unavailable')
+        current = current.parent
+    plain_path(current, directory=True)
+    if output.exists() or output.is_symlink():
+        raise FileExistsError('Choose a new output directory; existing files are never removed')
+
+
 def package(output_dir, version='1.0.0', skip_build=False, dry_run=False):
-    output_dir = Path(output_dir).resolve()
-    print(f"=== Packaging Aredoko v{version} ===")
-    print(f"Target directory: {output_dir}")
-
-    # 1. Validate prerequisites
-    req_files = [
-        REPO / 'src' / 'Aredoko.WinUI' / 'Aredoko.WinUI.csproj',
-        REPO / 'app' / 'production_server.py',
-        REPO / 'app' / 'storage_schema_v1.json',
-        REPO / 'THIRD_PARTY_NOTICES.md',
-        REPO / 'docs' / 'user-guide.md',
-        REPO / 'tools' / 'start-aredoko.ps1',
-        REPO / 'tools' / 'backup_library.py',
-    ]
-    for rf in req_files:
-        if not rf.exists():
-            raise FileNotFoundError(f"Required source file not found: {rf}")
-
-    winui_bin = REPO / 'src' / 'Aredoko.WinUI' / 'bin' / 'x64' / 'Release' / 'net10.0-windows10.0.26100.0' / 'win-x64'
+    output_dir = Path(os.path.abspath(output_dir))
+    validate_output(output_dir)
+    if not isinstance(version, str) or not 1 <= len(version) <= 64 or any(ord(c) < 32 for c in version):
+        raise ValueError('Invalid version label')
+    required = [REPO / name for name in (
+        'app/production_server.py', 'app/storage_schema_v1.json', 'THIRD_PARTY_NOTICES.md',
+        'docs/user-guide.md', 'tools/start-aredoko.ps1', 'tools/native-arguments.ps1',
+        'tools/backup_library.py')]
+    for path in required:
+        plain_path(path)
+    binary = REPO / 'src/Aredoko.WinUI/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64'
     if not skip_build and not dry_run:
-        print("\n--- Building WinUI x64 Release (self-contained) ---")
-        cmd = ['dotnet', 'build', 'src/Aredoko.WinUI/Aredoko.WinUI.csproj', '-c', 'Release', '-p:Platform=x64', '-p:SelfContained=true', '--no-restore']
-        res = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, encoding='utf-8', errors='replace')
-        if res.returncode != 0:
-            print(res.stdout)
-            print(res.stderr)
-            raise RuntimeError("WinUI build failed during packaging")
-        print("WinUI build succeeded.")
-
+        built = subprocess.run(['dotnet', 'build', 'src/Aredoko.WinUI/Aredoko.WinUI.csproj',
+            '-c', 'Release', '-p:Platform=x64', '-p:SelfContained=true', '--no-restore'],
+            cwd=REPO, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        if built.returncode:
+            raise RuntimeError('WinUI staging build failed\n' + built.stdout + built.stderr)
+    for name in PAYLOAD:
+        plain_path(binary / name)
     if dry_run:
-        print("\n[Dry Run] Prerequisites verified. Skipping file copy.")
-        return {'version': version, 'dry_run': True, 'pass': True}
+        return {'version': version, 'dry_run': True, 'pass': True,
+                'readiness': 'staging-only', 'python_bundled': False}
 
-    # 2. Prepare output directory
-    if output_dir.exists():
-        print(f"Cleaning existing output directory: {output_dir}")
-        shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    bin_dir = output_dir / 'bin'
-    backend_app_dir = output_dir / 'backend' / 'app'
-    backend_config_dir = output_dir / 'backend' / 'config'
-    tools_dir = output_dir / 'tools'
-
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    backend_app_dir.mkdir(parents=True, exist_ok=True)
-    backend_config_dir.mkdir(parents=True, exist_ok=True)
-    tools_dir.mkdir(parents=True, exist_ok=True)
-
-    # 3. Copy WinUI binaries
-    print("\n--- Copying WinUI binaries ---")
-    if not winui_bin.exists():
-        raise FileNotFoundError(f"WinUI build output not found at: {winui_bin}")
-    for item in winui_bin.iterdir():
-        if item.suffix.lower() == '.pdb':
-            continue  # Exclude debug symbols from clean release
-        target = bin_dir / item.name
-        if item.is_dir():
-            shutil.copytree(item, target)
-        else:
-            shutil.copy2(item, target)
-    print(f"Copied {len(list(bin_dir.iterdir()))} items to bin/")
-
-    # 4. Copy backend files
-    print("\n--- Copying Backend package ---")
-    app_source = REPO / 'app'
-    for item in app_source.glob('*'):
-        if item.is_file() and (item.suffix in ('.py', '.json') or item.name == '__init__.py'):
-            shutil.copy2(item, backend_app_dir / item.name)
-
-    # Copy config profiles
-    config_source = REPO / 'config'
-    if config_source.exists():
-        for sub in ('profiles', 'tagger-profiles'):
-            s_dir = config_source / sub
-            if s_dir.exists():
-                t_dir = backend_config_dir / sub
-                shutil.copytree(s_dir, t_dir)
-
-    # 5. Copy tools & notices
-    print("\n--- Copying Launchers & Notices ---")
-    shutil.copy2(REPO / 'tools' / 'start-aredoko.ps1', output_dir / 'start-aredoko.ps1')
-    shutil.copy2(REPO / 'tools' / 'backup_library.py', tools_dir / 'backup_library.py')
-    shutil.copy2(REPO / 'THIRD_PARTY_NOTICES.md', output_dir / 'THIRD_PARTY_NOTICES.md')
-    shutil.copy2(REPO / 'docs' / 'user-guide.md', output_dir / 'USER_GUIDE.md')
-
-    # Create Aredoko.cmd helper
-    cmd_content = '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-aredoko.ps1" %*\r\n'
-    (output_dir / 'Aredoko.cmd').write_text(cmd_content, encoding='utf-8')
-
-    # 6. Checkpoint any template SQLite database
-    for db_file in output_dir.rglob('*.sqlite'):
-        try:
-            with closing(sqlite3.connect(db_file)) as db:
-                db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-        except Exception:
-            pass
-
-    # 7. Generate Manifest & SHA256 checksums
-    print("\n--- Computing SHA256 Checksums & Generating Manifest ---")
-    manifest_entries = []
-    sha256_lines = []
-    total_bytes = 0
-
+    # Exclusive creation is the reservation. Failure leaves an incomplete new
+    # staging directory, never a recursive deletion of an existing directory.
+    validate_output(output_dir)
+    storage_parent(output_dir)
+    output_dir.mkdir()
+    plain_path(output_dir, directory=True)
+    bin_dir = output_dir / 'bin'; bin_dir.mkdir()
+    backend = output_dir / 'backend'; backend.mkdir()
+    app_dir = backend / 'app'; app_dir.mkdir()
+    config_dir = backend / 'config'; config_dir.mkdir()
+    tools_dir = output_dir / 'tools'; tools_dir.mkdir()
+    for item in binary.iterdir():
+        if item.suffix.lower() != '.pdb' and item.name.lower() not in ('appx', 'publish'):
+            copy_payload(item, bin_dir / item.name)
+    for item in (REPO / 'app').iterdir():
+        if item.is_file() and item.suffix in ('.py', '.json'):
+            copy_payload(item, app_dir / item.name)
+    for sub in ('ai-profiles', 'profiles', 'tagger-profiles'):
+        source = REPO / 'config' / sub
+        if source.exists():
+            copy_payload(source, config_dir / sub)
+    for name in ('start-aredoko.ps1', 'native-arguments.ps1'):
+        copy_payload(REPO / 'tools' / name, output_dir / name)
+    copy_payload(REPO / 'tools/backup_library.py', tools_dir / 'backup_library.py')
+    copy_payload(REPO / 'THIRD_PARTY_NOTICES.md', output_dir / 'THIRD_PARTY_NOTICES.md')
+    docs_dir = output_dir / 'docs'; docs_dir.mkdir()
+    for source in (REPO / 'docs').glob('*.md'):
+        copy_payload(source, docs_dir / source.name)
+    (output_dir / 'USER_GUIDE.md').write_text(
+        '# Aredoko\n\n[利用ガイド](docs/user-guide.md)\n', encoding='utf-8')
+    (output_dir / 'Aredoko.cmd').write_text(
+        '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-aredoko.ps1" %*\r\n',
+        encoding='utf-8')
+    entries = []
     for path in sorted(output_dir.rglob('*')):
         if path.is_file():
-            rel_path = path.relative_to(output_dir).as_posix()
-            size = path.stat().st_size
-            digest = compute_sha256(path)
-            total_bytes += size
-            manifest_entries.append({
-                'path': rel_path,
-                'bytes': size,
-                'sha256': digest
-            })
-            sha256_lines.append(f"{digest}  {rel_path}\n")
-
-    manifest = {
-        'format': 'aredoko-release-manifest',
-        'version': version,
-        'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-        'platform': 'windows-x64',
-        'files_count': len(manifest_entries),
-        'total_bytes': total_bytes,
-        'entries': manifest_entries
-    }
-
-    manifest_file = output_dir / 'manifest.json'
-    manifest_file.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding='utf-8')
-
-    sha_file = output_dir / 'sha256sums.txt'
-    sha_file.write_text(''.join(sha256_lines), encoding='utf-8')
-
-    print(f"\nPackaging complete: {len(manifest_entries)} files ({total_bytes / (1024*1024):.2f} MiB)")
-    print(f"Manifest: {manifest_file}")
-    print(f"Checksums: {sha_file}")
+            plain_path(path)
+            entries.append({'path': path.relative_to(output_dir).as_posix(),
+                            'bytes': path.stat().st_size, 'sha256': compute_sha256(path)})
+    manifest = {'format': 'aredoko-release-manifest', 'version': version,
+                'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                'platform': 'windows-x64', 'files_count': len(entries),
+                'total_bytes': sum(e['bytes'] for e in entries), 'entries': entries,
+                'readiness': 'staging-only', 'python_bundled': False, 'ai_runtime_bundled': False,
+                'clean_machine_activation_verified': False}
+    (output_dir / 'sha256sums.txt').write_text(''.join(
+        f"{e['sha256']}  {e['path']}\n" for e in entries), encoding='utf-8')
+    # Publish the completion marker last. No template databases or models are
+    # collected, checkpointed or mutated by this packaging tool.
+    (output_dir / 'manifest.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding='utf-8')
+    print(json.dumps({'output': str(output_dir), 'files': len(entries), 'readiness': 'staging-only'}))
     return manifest
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output-dir', type=Path, default=REPO / 'dist' / 'aredoko-release-windows-x64')
+    parser.add_argument('--output-dir', type=Path, default=REPO / 'dist/aredoko-release-windows-x64')
     parser.add_argument('--version', default='1.0.0')
-    parser.add_argument('--skip-build', action='store_true', help='Skip dotnet build step')
-    parser.add_argument('--check', action='store_true', help='Dry-run verification of packaging prerequisites')
+    parser.add_argument('--skip-build', action='store_true')
+    parser.add_argument('--check', action='store_true', help='Validate a new destination and existing build without writing or launching')
     args = parser.parse_args()
-
-    package(args.output_dir, version=args.version, skip_build=args.skip_build, dry_run=args.check)
+    package(args.output_dir, args.version, args.skip_build, args.check)
 
 
 if __name__ == '__main__':

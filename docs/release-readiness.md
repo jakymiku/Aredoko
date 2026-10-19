@@ -1,5 +1,11 @@
 # R14 — bounded GPU/native recovery acceptance
 
+## 2026-10-20 訂正：R14 PARTIAL
+
+[ブラッシュアップ監査](polish-audit-20261020.md)が現在の受入範囲。下記Argonの「全件合格」は限定harnessの結果として保存するが、音声実抽出・HC/DPI/Narrator・clean-machine配布は未受入。音声は硬コード発話/人工特徴による接続確認、R10 GUI生reportは9チェック。
+
+今回の詳細ボタンGUI flowも未完。表示した崩れた画面はharnessのPlatform漏れで起動した10月12日の旧AppXとハッシュ一致し、現行UIの退行/合格の証拠ではない。初回＋再試行2回の失敗を保持、4回目は実行しない。正しいPlatformでのno-launch配備5ファイル一致と旧配備拒否だけを追加確認した。修正後harnessの現行GUI受入は残る。UI rollbackはしていない。
+
 2026-10-18: user explicitly permits GPU and GUI testing now. Start HEAD ec2f23a.
 This run supersedes the temporary execution deferral, not the closed P0 2/2 quality trial.
 

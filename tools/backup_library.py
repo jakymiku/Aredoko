@@ -4,7 +4,10 @@ import json
 from pathlib import Path
 import sqlite3
 import sys
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
+package_root=Path(__file__).resolve().parents[1]
+app_folder=package_root/'app'
+if not (app_folder/'storage_backup.py').is_file():app_folder=package_root/'backend/app'
+sys.path.insert(0,str(app_folder))
 from storage_backup import backup,restore,DEFAULT_MAX_BYTES
 from storage_lease import StorageBusyError
 

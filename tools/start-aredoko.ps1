@@ -12,6 +12,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $distRoot = $PSScriptRoot
+. (Join-Path $distRoot 'native-arguments.ps1')
 $logDirectory = Join-Path $env:LOCALAPPDATA 'Aredoko/logs'
 New-Item -ItemType Directory -Force $logDirectory | Out-Null
 
@@ -53,32 +54,32 @@ try {
         $probe.Dispose()
     }
 
-    $databasePath = [IO.Path]::GetFullPath($Database).TrimEnd('\')
+    $databasePath = [IO.Path]::GetFullPath($Database)
     $backendArgs = @(
         $serverScript,
-        '--db', ('"' + $databasePath + '"'),
+        '--db', $databasePath,
         '--ai-ranking', $AIRanking
     )
     if ($AIProfile) {
-        $profilePath = [IO.Path]::GetFullPath($AIProfile).TrimEnd('\')
-        $backendArgs += @('--ai-profile', ('"' + $profilePath + '"'))
+        $profilePath = [IO.Path]::GetFullPath($AIProfile)
+        $backendArgs += @('--ai-profile', $profilePath)
     }
     if ($AISettings) {
-        $settingsPath = [IO.Path]::GetFullPath($AISettings).TrimEnd('\')
-        $backendArgs += @('--ai-settings', ('"' + $settingsPath + '"'))
+        $settingsPath = [IO.Path]::GetFullPath($AISettings)
+        $backendArgs += @('--ai-settings', $settingsPath)
     }
     if ($AIProfilesDirectory) {
-        $profilesDir = [IO.Path]::GetFullPath($AIProfilesDirectory).TrimEnd('\')
-        $backendArgs += @('--ai-profiles-dir', ('"' + $profilesDir + '"'))
+        $profilesDir = [IO.Path]::GetFullPath($AIProfilesDirectory)
+        $backendArgs += @('--ai-profiles-dir', $profilesDir)
     }
     if ($TaggerProfile) {
-        $taggerPath = [IO.Path]::GetFullPath($TaggerProfile).TrimEnd('\')
-        $backendArgs += @('--tagger-profile', ('"' + $taggerPath + '"'))
+        $taggerPath = [IO.Path]::GetFullPath($TaggerProfile)
+        $backendArgs += @('--tagger-profile', $taggerPath)
     }
 
     $backendOutLog = Join-Path $logDirectory 'backend.log'
     $backendErrLog = Join-Path $logDirectory 'backend-error.log'
-    $backend = Start-Process -FilePath $pythonCmd -ArgumentList $backendArgs -WindowStyle Hidden -PassThru `
+    $backend = Start-Process -FilePath $pythonCmd -ArgumentList (Join-AredokoNativeArguments -Values $backendArgs) -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput $backendOutLog -RedirectStandardError $backendErrLog
 
     # Wait for backend session probe
@@ -107,7 +108,7 @@ try {
     }
 
     Write-Host "Starting Aredoko..."
-    $appProcess = Start-Process -FilePath $winuiExe -ArgumentList $appArgs -PassThru
+    $appProcess = Start-Process -FilePath $winuiExe -ArgumentList (Join-AredokoNativeArguments -Values $appArgs) -PassThru
     Wait-Process -Id $appProcess.Id -ErrorAction SilentlyContinue
 } finally {
     if ($backend -and -not $backend.HasExited) {

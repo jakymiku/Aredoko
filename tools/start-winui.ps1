@@ -58,6 +58,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw ('WinUI build/launch failed: '+($result -join "`n")) }
     $launch = ($result -join "`n") | ConvertFrom-Json
     if (-not $launch.ProcessId) { throw 'No application process returned.' }
+    & python tools/winapp_layout.py --configuration Release --arch x64 --verify $layoutDirectory
+    if ($LASTEXITCODE -ne 0) {
+        # Only close the PID returned by this launch, with its expected image path.
+        $ownedApp = Get-Process -Id $launch.ProcessId -ErrorAction SilentlyContinue
+        if ($ownedApp -and [IO.Path]::GetDirectoryName($ownedApp.Path) -eq $layoutDirectory) {
+            $null = $ownedApp.CloseMainWindow()
+            $null = $ownedApp.WaitForExit(5000)
+        }
+        throw 'WinUI deployment differs from the current build. UI acceptance was not started.'
+    }
     Write-Host 'Aredoko is running. Close the app to stop its backend.'
     Wait-Process -Id $launch.ProcessId -ErrorAction SilentlyContinue
 } finally {

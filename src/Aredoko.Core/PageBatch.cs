@@ -15,7 +15,7 @@ public static class PageBatchRequests
         foreach(var book in books)
         {
             var item=PageImageRequests.Create(book.ItemId,book.PageIds,book.Revision,scope);
-            item.Remove("scope");items.Add(item);
+            item.Remove("scope");items.Add((JsonNode)item);
         }
         var result=AIScopeRequests.Scoped(scope);result["items"]=items;result["page_limit"]=pageLimit;result["profile"]=Profile(profile);return result;
     }
