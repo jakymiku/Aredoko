@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Required model setup and bandwidth policy (2026-10-21 user request/correction)
+
+Read [model acquisition/manual placement](docs/model-acquisition.md). Future product UI must support app-managed download, official manual-download guidance, and explicit existing-folder selection with verification/progress/pause/resume. Reuse existing model/profile/index identities; distinguish missing models from broken bundled Python/runtime. **Product download default is unlimited; optional user-configured aggregate cap only. Do not apply this PC's historical 6MB/s development limit as the shipping default.** No silent first-launch download, pip/driver install, overwrite of existing models, or live worker hot swap. PZ3 first prioritizes existing-folder/root selection and diagnostics, then transactional download/CPU fixtures, then GUI. This is policy only, not implemented; no actual model/dependency fetch or GUI/GPU run authorized by this design request. Keep prior cap3/3/all safety/features.
+
 ## Required startup feedback (2026-10-21 user request; PZ2)
 
 Read [startup UI policy](docs/portable-distribution.md). Show a small responsive startup window immediately from Aredoko.exe, BEFORE heavy integrity/Python/WinUI initialization, on first and subsequent launches. Use truthful completed counts/bytes when known, indeterminate activity plus plain Japanese stage text otherwise; no invented %/ETA. Keep it until main/backend ready, support safe owned cancellation and visible stage/error/log access. Do not show blanket shutdown warnings or block OS shutdown for read-only checks. Keep all integrity/source guards. This is a documented requirement, not implemented/GUI-accepted; existing cap3/3 remains and no GUI/GPU authorization is added.

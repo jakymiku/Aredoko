@@ -1,5 +1,7 @@
 # Swappable embedding models
 
+> **2026-10-21 製品版の追加方針（未実装）**：[モデル導入/手動配置](model-acquisition.md)。今後はアプリ内download・公式から手動取得・既存folder選択を用意し、進捗/中断再開を表示する。配布版は既定無制限、任意帯域上限。下の「GUIはdownloadしない」は現在の実装/当時の記録で、将来の禁止ではない。既存profile/identity/次回起動反映/原本保全を維持。
+
 > **2026-10-17 タグ候補の意味索引**：各profile DBの`ai_proposal_vectors`は通常の文章/画像vectorと分離。最新pending集合・source/producer・入力契約のsignatureで再利用し、既存の明示scoped AI buildだけで準備。承認/却下/版変更は再索引が必要で、古い候補を確定タグへ混ぜない。root purgeも対象。[仕様](tag-semantic-search.md)。
 
 

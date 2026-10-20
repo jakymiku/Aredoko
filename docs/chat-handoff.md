@@ -1,5 +1,11 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 追記：モデル導入3経路・既定速度無制限
+
+ユーザー指定の[モデル導入仕様](model-acquisition.md)を追加。アプリ内download/公式から手動download/既存フォルダ選択を用意し、容量・実進捗・速度・停止再開・検証状態を表示。**配布版は既定無制限、帯域上限は任意設定**（6MB/s固定とする案をユーザーが訂正）。モデル不足とruntime/Python不足を区別する。PZ3では既存モデルroot選択/診断を先に、次にatomic導入job/CPU生成server検証、GUI取得を接続。未実装の仕様で、新download/GUI/GPUなし。
+
+現在Alphaの既定rootは%LOCALAPPDATA%/Aredoko/models。既存C:/AI/Aredoko/modelsはlaunch-settings.jsonのmodels_rootで再利用でき、個別modelの親を指定する。ユーザーへ案内し、既存folder/版markerの存在だけ確認。設定/モデルの変更・ロードはしていない。既存JSONへ項目追加する際は他の設定を保持。旧3/3上限、全機能/原本/実DB保全、Actions0を維持。
+
 ## 2026-10-21 追記：起動中UIをPZ2の必須条件に追加
 
 ユーザーは初回の無反応な待ち時間を避け、進捗/起動中の表示を要求。[起動表示の仕様](portable-distribution.md)をPZ2に追加。Aredoko.exe直後、重い全件照合/Python/WinUI初期化より先に最小起動UIを出し、実件数のprogressまたは段階とindeterminate表示、取消、失敗理由/ログを提供する。main/backend readyまで維持。架空%/ETA、読取確認中の一律shutdown禁止、OS終了block、整合性検査の省略はしない。今回は文書の方針/受入条件だけで、UI実装/実機確認を完了扱いにしない。旧3/3上限・全機能・原本/実DB保全を維持、GUI/GPUなし。
