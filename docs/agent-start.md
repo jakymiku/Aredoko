@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新方針2026-10-21（ユーザー指定）**：今後の標準は[ZIP解凍→Aredoko.exe](portable-distribution.md)。PZ1自己完結frontend publishはCPU合格、製品ZIPは未完成。現在はPZ2所有bootstrap→PZ3全runtime梱包→PZ4 ZIP/再配置CPU→PZ5明示許可後のnative/clean Windows。下のMSIX-firstの「次」は履歴で、この順序を優先。DB/原本/機能/旧登録/試行上限を保持、ALPHA後に実音声/音楽→WinUI。
+
 > **最新（2026-10-21）**：[MSIX実起動・誤通知修正と上限](alpha-packaged-activation.md)を参照。許可済みtrust/Alpha併存install完了、実shortcut/新GUI/生成画像検索・タグ保存まで確認。CPU55 PASS、停止後DB/source/全配布整合PASS。native flowは3/3上限、追加GUIは新たな明示許可まで不可。封印済み02は修正前。閲覧/正常終了・再起動/clean Windows未受入、R13 DOING/ALPHA未完/R14 PARTIAL。既存登録/実DBを保全、次はCPUのみの起動待ち/配布整備。
 
 > **現在（2026-10-21）**：[R13起動前検査の短縮](alpha-startup-performance.md)と最新handoffを参照。39 CPU PASS、全hash/guard保持でwarm73.6→41.6秒。次はALPHA activation/所有backend統合で、旧5.52GB snapshotのcodeは未更新。staged moduleを検査するhost helperも必ず`-B`を使い未知cacheを作らない。ALPHA-0は引き続き未完。

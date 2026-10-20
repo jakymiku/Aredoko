@@ -24,11 +24,23 @@
   <ItemGroup Condition="'$(AredokoPackageChannel)' == 'Alpha'">
     <AppxManifest Include="Package.Alpha.appxmanifest"><SubType>Designer</SubType></AppxManifest>
   </ItemGroup>
+  <!-- Explicit user-selected ZIP distribution. Keep normal development and
+       historical Alpha MSIX identities unchanged; never register this output. -->
+  <PropertyGroup Condition="'$(AredokoPackageChannel)' == 'Portable'">
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishAppxPackage>false</PublishAppxPackage>
+    <EnableWinAppRunSupport>false</EnableWinAppRunSupport>
+  </PropertyGroup>
   <Target Name="ValidateAredokoPackageChannel" BeforeTargets="PrepareForBuild">
-    <Error Condition="'$(AredokoPackageChannel)' != 'Development' and '$(AredokoPackageChannel)' != 'Alpha'"
-           Text="Unknown Aredoko package channel. Use Development or Alpha." />
+    <Error Condition="'$(AredokoPackageChannel)' != 'Development' and '$(AredokoPackageChannel)' != 'Alpha' and '$(AredokoPackageChannel)' != 'Portable'"
+           Text="Unknown Aredoko package channel. Use Development, Alpha or Portable." />
     <Error Condition="'$(AredokoPackageChannel)' == 'Alpha' and '$(PublishAppxPackage)' != 'true'"
            Text="The Alpha channel is for MSIX publishing. Use winapp package with -p AredokoPackageChannel=Alpha; keep development runs on the default channel." />
+    <Error Condition="'$(AredokoPackageChannel)' == 'Portable' and '$(Configuration)' != 'Portable'"
+           Text="Use -c Portable for the Portable channel to keep packaged build output separate." />
   </Target>
 
   <ItemGroup>

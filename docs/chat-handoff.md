@@ -1,5 +1,11 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 ユーザー方針変更：今後はZIP解凍型配布
+
+ユーザーは、インストール時の画面/通常起動項目が整っていない問題を指摘し、可能なら今後の配布を解凍型へ変更すると明示。[方式・実測・PZ1–PZ5](portable-distribution.md)を現在のR13順序とする。明示Portable channel/Configurationを追加し、.NET+WinAppSDK自己完結/registration-freeの実publish成功（354 files/159,999,549 bytes）。既定DevelopmentのMSIXと旧Alpha/登録/封印配布は保持、誤Release混在をguardで拒否。既知警告3+2を保持し、追加依存/model取得・GUI/GPU/OS変更なし。
+
+これはfrontend部品のCPU確認だけで完成ZIPではない。次はPZ2ルートAredoko.exeの所有bootstrap→PZ3 Python/動画runtime含むportable梱包→PZ4 ZIP/再配置CPU→PZ5具体物を用意した後に明示許可を得てnative/clean Windows。旧MSIX起動項目の恒久修正を標準ZIP完成の必須前提にしない。DB/タグ/索引/モデルは既存別置き方針、機能削減なし。旧3/3上限はresetせずGUI未実行。R13 DOING/ALPHA未完/R14 PARTIAL、ALPHA後の実音声/音楽→WinUIを継続。
+
 ## 2026-10-21 追記：インストールされた通常起動項目の不備
 
 ユーザーはインストール済みアプリを普通に起動しただけでbackend接続拒否を確認した。操作ミスではなく、MSIX側の起動項目がGUIのみを起動し、backendはrelease launcher側にある配布設計の不足。開発用start-winui.ps1を使うよう案内したのは不適切で、訂正した。即時対応は封印済み02の製品shortcut installerで、全runtime/installed照合後にDesktopへAredoko Alpha.lnkを新規作成すること。既存リンク/配布/DBは変更せず、GUI自動再起動なし。

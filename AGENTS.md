@@ -1,5 +1,11 @@
 # Aredoko — Codex / coding agent instructions
 
+## User-selected ZIP distribution (2026-10-21; supersedes MSIX-first R13 steps)
+
+The user explicitly chose future standard distribution as extract ZIP → Aredoko.exe. Read [portable distribution and PZ1–PZ5](docs/portable-distribution.md). This authorizes an explicit unpackaged/self-contained product channel, not a silent fallback for old MSIX. Keep default Development/old Alpha manifests and registrations intact. Portable channel requires Configuration=Portable; actual no-restore frontend publish PASS (354 files/159,999,549 bytes), runtime properties/independent paths/default MSIX/misuse guard/analyzer exclusion PASS. No GUI/GPU/install/cert/download changes. This is frontend only, not a complete runnable ZIP.
+
+Current R13 order: PZ2 owned root Aredoko.exe bootstrap → PZ3 explicit portable frontend/Python/media runtime staging → PZ4 ZIP/CPU relocation/persistence → PZ5 user-authorized native/clean Windows acceptance. Normal installed MSIX entrypoint repair is no longer the standard-distribution prerequisite. Do not tell users to run developer scripts. Keep DB/settings in existing separate user-data location, no silent migration/feature cuts. Prior GUI cap3/3 remains; ZIP preference is not new GUI-test permission. Preserve old sealed02/source guards/P0/OCR/Actions0/no merge. ALPHA then real audio/music and WinUI remains the plan.
+
 ## User-observed R13 entrypoint defect (2026-10-21)
 
 The user opened the installed app normally and saw backend connection refused. This is a distribution defect: the MSIX-provided Start-menu activation starts frontend only, whereas the release launcher starts both. Do not tell installed-app users to use development PowerShell/build commands as a fix. A verified desktop Aredoko Alpha shortcut to bundled pythonw/release launcher is the immediate workaround; creating/inspecting it does not launch GUI. R13 must route the normal installed entrypoint through an owned bootstrap before release completion, without relying on users choosing between a broken app entry and a working link. This is higher priority than cosmetic startup polish. Keep GUI cap3/3 and sealed02 immutable; no automated GUI rerun without new permission.

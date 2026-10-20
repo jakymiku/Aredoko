@@ -1,5 +1,7 @@
 # Aredoko — 現在の開発優先順位
 
+> **最新方針2026-10-21（ユーザー指定）**：今後の標準は[ZIP解凍→Aredoko.exe](portable-distribution.md)。PZ1自己完結frontend publishはCPU合格、製品ZIPは未完成。現在はPZ2所有bootstrap→PZ3全runtime梱包→PZ4 ZIP/再配置CPU→PZ5明示許可後のnative/clean Windows。下のMSIX-firstの「次」は履歴で、この順序を優先。DB/原本/機能/旧登録/試行上限を保持、ALPHA後に実音声/音楽→WinUI。
+
 > **最新2026-10-21**：[MSIX正式起動・実機結果と再開条件](alpha-packaged-activation.md)。許可済み証明書trustとAlpha1.0.0.1通常installは完了し、元Development登録を保持して併存。363 installed payload全件照合PASS。実shortcut→新規所有GUI/backend→生成画像検索・タグ保存まで確認したが、native flowは待機/スキャン/保存captionのテスト不備で**3/3上限**。誤った起動失敗通知とテスト期待値をsourceで修正し、追加GUIなしでCPU55 PASS、停止後DB保存/整合・source不変・封印済み02全24,325ファイル一致を確認。02は修正前artifactのまま。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。次はCPUのみ起動待ち/配布整備、追加GUIは新たな明示許可後に残るargv/閲覧/正常終了・再起動/clean Windows更新削除受入。過去のcaps/全機能/guardを維持し、ALPHA後の実音声/音楽→WinUI改善へ戻る。
 
 2026-10-18。ユーザー依頼に基づき、完成までの順序と完了条件を[completion-roadmap.md](completion-roadmap.md)のR01〜R14へ一本化した。旧P0〜P5と累積checkpointは[履歴](development-priorities-history-20261018.md)に保存し、再開時の指示として使わない。
