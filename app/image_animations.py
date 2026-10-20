@@ -101,12 +101,13 @@ class AnimationInspector:
                 is_anim = bool(getattr(img, 'is_animated', False) and raw_frames > 1)
                 if not is_anim and maybe_anim and raw_frames > 1:
                     is_anim = True
-                frame_count = min(MAX_ANIMATION_FRAMES, max(1, raw_frames)) if is_anim else 1
+                first_frame = 1 if is_anim and img.info.get('default_image', False) else 0
+                frame_count = min(MAX_ANIMATION_FRAMES, max(1, raw_frames - first_frame)) if is_anim else 1
                 durations = []
                 loop = _clamp_loop(img.info.get('loop', 0)) if is_anim else 0
                 if is_anim:
                     for idx in range(frame_count):
-                        img.seek(idx)
+                        img.seek(idx + first_frame)
                         durations.append(_clamp_duration(img.info.get('duration', 100)))
                 else:
                     durations = [100]
@@ -159,11 +160,12 @@ class AnimationInspector:
                     raise AnimationUnavailable('Image dimensions exceed limit')
                 raw_frames = int(getattr(img, 'n_frames', 1) or 1)
                 is_anim = bool(getattr(img, 'is_animated', False) and raw_frames > 1)
-                limit = min(MAX_ANIMATION_FRAMES, max(1, raw_frames)) if is_anim else 1
+                first_frame = 1 if is_anim and img.info.get('default_image', False) else 0
+                limit = min(MAX_ANIMATION_FRAMES, max(1, raw_frames - first_frame)) if is_anim else 1
                 if frame_index >= limit:
                     raise AnimationUnavailable('Frame index out of range')
                 if is_anim:
-                    img.seek(frame_index)
+                    img.seek(frame_index + first_frame)
                     frame = img.convert('RGBA')
                 else:
                     frame = ImageOps.exif_transpose(img).convert('RGBA')

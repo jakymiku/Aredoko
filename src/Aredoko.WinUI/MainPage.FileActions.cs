@@ -30,7 +30,7 @@ public sealed partial class MainPage
             }
             if(explorer&&!System.IO.Directory.Exists(path))
             {
-                var start=new ProcessStartInfo("explorer.exe"){UseShellExecute=true};start.ArgumentList.Add("/select,"+path);Process.Start(start);
+                ShellReveal.SelectFile(path);
             }
             else Process.Start(new ProcessStartInfo(path){UseShellExecute=true});
         }

@@ -15,6 +15,7 @@ namespace Aredoko_WinUI;
 // One bounded display image and one loading pipeline; never opens a source path.
 internal sealed class ImageViewerView : Grid, IDisposable
 {
+    private bool actualPixels;
     private readonly LibraryApi api;
     private readonly ImageViewerSequence sequence;
     private readonly CancellationTokenSource lifetime = new();
@@ -27,6 +28,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
     private CancellationTokenSource? request;
+    private ViewerImageCodec.NativeAnimation? nativeAnimation;
     private BitmapImage[]? animBitmaps;
     private int[]? animDurations;
     private int animFrame, animLoopCount, animCompletedLoops;
@@ -94,10 +96,10 @@ internal sealed class ImageViewerView : Grid, IDisposable
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         close.Click += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
         previous.Click += async (_, _) => await MoveAsync(-1); next.Click += async (_, _) => await MoveAsync(1);
-        zoomOut.Click += (_, _) => viewport.ChangeView(null, null, Math.Max(1, viewport.ZoomFactor - .5f), true);
+        zoomOut.Click += (_, _) => viewport.ChangeView(null, null, Math.Max(viewport.MinZoomFactor, viewport.ZoomFactor - .5f), true);
         zoomIn.Click += (_, _) => viewport.ChangeView(null, null, Math.Min(viewport.MaxZoomFactor, viewport.ZoomFactor + .5f), true);
-        fit.Click += (_, _) => viewport.ChangeView(0, 0, 1, true);
-        actualSize.Click+=(_,_)=>viewport.ChangeView(null,null,(float)OriginalZoom(),true);
+        fit.Click += (_, _) => {actualPixels=false;FitImage();viewport.ChangeView(0,0,1,true);};
+        actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImage();viewport.ChangeView(0,0,1,true);}else viewport.ChangeView(null,null,(float)OriginalZoom(),true);};
         retry.Click += async (_, _) => await OpenAsync();
         UpdateIdentity(); UpdateControls(); ShowChrome();
     }
@@ -119,13 +121,13 @@ internal sealed class ImageViewerView : Grid, IDisposable
     private void FitImage()
     {
         canvas.Width = Math.Max(1, viewport.ActualWidth); canvas.Height = Math.Max(1, viewport.ActualHeight);
-        var scale = Math.Min(1/(XamlRoot?.RasterizationScale??1),Math.Min(canvas.Width / imageWidth, canvas.Height / imageHeight));
+        var scale = actualPixels?1/(XamlRoot?.RasterizationScale??1):Math.Min(ViewerOptions.Value.EnlargeSmallImages?double.PositiveInfinity:1/(XamlRoot?.RasterizationScale??1),Math.Min(canvas.Width / imageWidth, canvas.Height / imageHeight));
         image.Width = imageWidth * scale; image.Height = imageHeight * scale;
         viewport.MaxZoomFactor=(float)Math.Max(4,OriginalZoom());
         ToolTipService.SetToolTip(image,$"{imageWidth:0} × {imageHeight:0} px");
         AutomationProperties.SetHelpText(image,$"{imageWidth:0} x {imageHeight:0} pixels");
     }
-    private double OriginalZoom()=>double.IsFinite(image.Width)&&image.Width>0?Math.Max(1,imageWidth/image.Width/(XamlRoot?.RasterizationScale??1)):1;
+    private double OriginalZoom()=>double.IsFinite(image.Width)&&image.Width>0?Math.Max(.001,imageWidth/image.Width/(XamlRoot?.RasterizationScale??1)):1;
     private void UpdateIdentity()
     {
         title.Text = sequence.Current.Title; ToolTipService.SetToolTip(title, title.Text);
@@ -137,7 +139,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     {
         previous.IsEnabled = !disposed && sequence.HasPrevious; next.IsEnabled = !disposed && sequence.HasNext;
         zoom.Text = loaded?$"倍率 {viewport.ZoomFactor/OriginalZoom() * 100:0}%":"倍率 —";
-        zoomOut.IsEnabled = loaded && !busy && viewport.ZoomFactor > 1;
+        zoomOut.IsEnabled = loaded && !busy && viewport.ZoomFactor > viewport.MinZoomFactor;
         zoomIn.IsEnabled = loaded && !busy && viewport.ZoomFactor < viewport.MaxZoomFactor; actualSize.IsEnabled=loaded&&!busy; fit.IsEnabled = loaded && !busy;
     }
     // Tunnel before ScrollViewer consumes arrow keys; scope is this modal only.
@@ -159,6 +161,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     private void StopAnimation()
     {
         animTimer.Stop();
+        image.Source=null;nativeAnimation?.Dispose();nativeAnimation=null;
         animBitmaps = null;
         animDurations = null;
         animFrame = 0;
@@ -201,7 +204,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     public async Task MoveAsync(int direction)
     {
         if (disposed || !sequence.TryMove(direction)) return;
-        version++; loaded = false; StopAnimation(); image.Source = null; retry.IsEnabled = false;
+        actualPixels=false;version++; loaded = false; StopAnimation(); image.Source = null; retry.IsEnabled = false;
         UpdateIdentity(); ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
         if (busy) { request?.Cancel(); return; }
         await OpenAsync();
@@ -222,6 +225,17 @@ internal sealed class ImageViewerView : Grid, IDisposable
                 request = loading; var cancellation = loading.Token; var item = sequence.Current;
                 try
                 {
+                    if(item.Location.EndsWith(".gif",StringComparison.OrdinalIgnoreCase))
+                    {
+                        var source=await api.OriginalImageAsync(item.Id,cancellation);
+                        var decoded=await ViewerImageCodec.DecodeGifAsync(source,cancellation);
+                        if(disposed||requestedVersion!=version){decoded.Dispose();continue;}
+                        nativeAnimation=decoded;var bitmap=decoded.Bitmap;
+                        imageWidth=Math.Max(1,bitmap.PixelWidth);imageHeight=Math.Max(1,bitmap.PixelHeight);
+                        FitImage();image.Source=bitmap;loaded=true;viewport.ChangeView(0,0,1,true);
+                        ContentOpened?.Invoke(item.Id);ViewerNotice.Set(status);
+                        continue;
+                    }
                     ImageAnimationManifest? animManifest = null;
                     if (ImageViewerPolicy.MayAnimate(item.Location))
                     {
@@ -242,6 +256,13 @@ internal sealed class ImageViewerView : Grid, IDisposable
                         {
                             var framePng = await api.ImageFrameAsync(animManifest, f, cancellation);
                             bitmaps[f] = await CreateBitmapAsync(framePng, cancellation);
+                            if(disposed||requestedVersion!=version)break;
+                            if(f==0)
+                            {
+                                imageWidth=Math.Max(1,bitmaps[0].PixelWidth);imageHeight=Math.Max(1,bitmaps[0].PixelHeight);
+                                FitImage();image.Source=bitmaps[0];
+                                ViewerNotice.Set(status,"アニメーションを準備しています…");
+                            }
                         }
                         if (disposed || requestedVersion != version) continue;
                         imageWidth = Math.Max(1, bitmaps[0].PixelWidth); imageHeight = Math.Max(1, bitmaps[0].PixelHeight);

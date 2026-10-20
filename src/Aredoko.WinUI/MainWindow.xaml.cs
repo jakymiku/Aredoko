@@ -13,8 +13,7 @@ public sealed partial class MainWindow : Window
         var launchArguments=Environment.GetCommandLineArgs();
         var themeIndex=Array.IndexOf(launchArguments,"--ui-theme");
         var theme=themeIndex>0 && themeIndex+1<launchArguments.Length?launchArguments[themeIndex+1]:"System";
-        WindowRoot.RequestedTheme=theme.ToLowerInvariant() switch
-        {"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};
+        ApplyTheme(theme.Equals("system",StringComparison.OrdinalIgnoreCase)?ViewerOptions.Value.Theme:theme);
         ExtendsContentIntoTitleBar=true;SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
         var scale=GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this))/96.0;
@@ -23,4 +22,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing+=async(_,e)=>{if(closing)return;e.Cancel=true;if(RootFrame.Content is MainPage page && await page.ConfirmDiscardAsync()){closing=true;Close();}};
         Closed+=(_,_)=>{if(RootFrame.Content is MainPage page)page.Stop();};
     }
+    internal void ApplyTheme(string theme)=>WindowRoot.RequestedTheme=theme.ToLowerInvariant() switch
+    {"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};
+
 }

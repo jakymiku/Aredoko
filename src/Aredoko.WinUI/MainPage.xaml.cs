@@ -35,6 +35,7 @@ public sealed partial class MainPage : Page
     private List<MediaRow> rows=[];
     private MediaRow? active;
     private EditorState saved;
+    private bool updatingFavorite;
     private bool ready, populating, saving, dialogOpen, tiles, disposed;
     private int page, lastKind, lastMode;
     private int[]? selectedSearchRoots;
@@ -60,6 +61,15 @@ public sealed partial class MainPage : Page
     public MainPage() {
         InitializeComponent();
         AddHandler(PointerPressedEvent,new PointerEventHandler(PreviewPointerPressed),true);
+        AddHandler(PointerPressedEvent,new PointerEventHandler(async(_,args)=>
+        {
+            var pointer=args.GetCurrentPoint(this).Properties;
+            if(!pointer.IsXButton1Pressed&&!pointer.IsXButton2Pressed)return;
+            if(dialogOpen||saving||folderHubOpen||viewerWindow is not null)return;
+            args.Handled=true;
+            if(pointer.IsXButton1Pressed&&Previous.IsEnabled)await NavigateAsync(Math.Max(0,page-1));
+            else if(pointer.IsXButton2Pressed&&Next.IsEnabled)await NavigateAsync(page+1);
+        }),true);
         ItemListContainer.AddHandler(PointerWheelChangedEvent,new PointerEventHandler(Library_PointerWheelChanged),true);
         itemSizeSaveTimer=DispatcherQueue.CreateTimer();itemSizeSaveTimer.Interval=TimeSpan.FromMilliseconds(500);
         itemSizeSaveTimer.Tick+=(_,_)=>SaveItemSize();
@@ -80,6 +90,7 @@ public sealed partial class MainPage : Page
     private bool FolderDirty=>folderSettingsActive && folderDraft is {IsDirty:true};
     private void Notice(string title,string message="",InfoBarSeverity severity=InfoBarSeverity.Informational,string? details=null) {
         Status.Title=title; Status.Message=message; Status.Severity=severity;
+        Status.IsOpen=severity is InfoBarSeverity.Warning or InfoBarSeverity.Error;
         StatusExplanation.Text=details??"";
         StatusMore.Visibility=string.IsNullOrWhiteSpace(details)?Visibility.Collapsed:Visibility.Visible;
     }
@@ -94,7 +105,7 @@ public sealed partial class MainPage : Page
     }
     private async Task ConnectAsync() {
         try { renderCancellation.Cancel(); thumbnails.Clear(); await api.ConnectAsync(); await LoadAIScopeAsync(); await RefreshSearchRootsAsync(); await LoadAsync(); }
-        catch(Exception ex) { Notice("バックエンドに接続できません", "start-winui.ps1を起動して再接続してください。"+ex.Message,InfoBarSeverity.Error); }
+        catch(Exception ex) { Notice("バックエンドに接続できません", "Aredokoを閉じ、製品用の起動アイコンから起動し直してください。"+ex.Message,InfoBarSeverity.Error); }
     }
     private string ResultGroup()=>AIResultGroup.SelectedIndex switch {0=>"leading",1=>"other",_=>"all"};
     private void AIResultGroup_Changed(object sender,SelectionChangedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
@@ -145,7 +156,8 @@ public sealed partial class MainPage : Page
         if(ActiveSearchScopeText is null||ResetAllFoldersButton is null)return;
         var isAiOrSimilar=similarityOrigin is not null||(SearchMode.SelectedIndex is >0 and <4&&!string.IsNullOrWhiteSpace(Query.Text));
         var (summary,warning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedSearchRoots,isAiOrSimilar,aiScope);
-        ActiveSearchScopeText.Text=warning is null?summary:$"{summary} — {warning}";
+        ActiveSearchScopeText.Text="検索対象フィルタがオンになっています — "+(warning is null?summary:$"{summary} — {warning}");
+        ActiveSearchScopeBar.Visibility=selectedSearchRoots is null?Visibility.Collapsed:Visibility.Visible;
         ResetAllFoldersButton.Visibility=selectedSearchRoots is null?Visibility.Collapsed:Visibility.Visible;
     }
     private async Task RefreshSearchRootsAsync()
@@ -204,8 +216,7 @@ public sealed partial class MainPage : Page
             SearchOptions.IsExpanded=false;
             var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null||(method.IsAI&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
-            var folderHeader=selectedRoots is null?"すべて":selectedRoots.Length==1?(knownRoots.FirstOrDefault(r=>r.Id==selectedRoots[0])?.Name??$"ID {selectedRoots[0]}"):$"{selectedRoots.Length}フォルダ";
-            SearchOptions.Header=$"検索フォルダ: {folderHeader}"+(origin is not null?(origin.Kind=="video"?" · 動画の類似検索":origin.Kind=="audio"?" · 音声・曲の類似検索":" · 画像・表紙の類似検索"):method.IsTagCandidates?" · 未承認タグ候補":method.IsPageText?" · ページ本文":method.IsAI?$" · {(resultGroup==0?"上位候補":resultGroup==1?"参考候補":"全候補")}":"");
+            SearchOptions.Header="AI候補の表示";
             rows=result.Items; active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             if(!folderHubOpen)MainViewTitle.Text=view=="history"?"閲覧履歴":view=="unreviewed"?"ライブラリ（未確認）":"ライブラリ";
@@ -220,7 +231,7 @@ public sealed partial class MainPage : Page
                     :result.SearchCandidateTotal>0&&result.IndexedTotal==0?AISearchStatus.Guidance(AISearchStatus.Unindexed,result.SearchCandidateTotal??0,result.IndexedTotal??0)
                     :result.SearchCandidateTotal==0?AISearchStatus.Guidance(AISearchStatus.OutOfScope)
                     :result.SearchStatus=="partially_indexed"&&result.Total==0?AISearchStatus.Guidance(AISearchStatus.PartiallyIndexed,result.SearchCandidateTotal??0,result.IndexedTotal??0)
-                    :resultGroup==1&&result.GroupBoundary is null?"参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像の見た目／名前・タグの意味で区切りを指定してください。"
+                    :resultGroup==1&&result.GroupBoundary is null?"参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像の見た目／ファイル名・タグの意味で区切りを指定してください。"
                     :resultGroup==0&&result.OtherTotal>0?"区切り以上の候補はありません。類似度の区切りを下げるか、参考候補を表示してください。"
                     :AISearchStatus.Guidance(AISearchStatus.Ready,query:query))
                 :query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
@@ -228,9 +239,9 @@ public sealed partial class MainPage : Page
                 method.IsPageText ? "抽出・保存済みのページ本文から、同一ページ内で全語一致する作品を検索しています。「本を開く」で先頭の一致ページへ移動できます。"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsTagSemantic ? "未承認の英語タグ候補を含む索引から、言葉の意味が近い作品を表示しています。確定タグとは混ざりません。類似度は正解率ではありません。承認・却下・再生成の後はAI索引を更新してください。"
                 : method.IsTagCandidates ? "最新の生成履歴に未承認の候補がある作品を表示しています。確定タグにはまだ反映されていません。詳細の「AIタグ候補」から根拠を確認して承認・却下できます。"+(scopeWarning is null?"":" "+scopeWarning)
-                : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。画像の見た目と名前・タグの意味では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
+                : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。ファイル名・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。画像の見た目とファイル名・タグの意味では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsAI ? "探したい内容を文章で入力してください。初回の準備は左下の「設定」→「AI検索の準備」から。"
-                : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions)+(scopeWarning is null?"":" "+scopeWarning);
+                : "ファイル名・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions)+(scopeWarning is null?"":" "+scopeWarning);
             var summary=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ本文に含まれる語句を入力してください。":$"ページ本文一致 {result.Total:N0}件")
                 :method.IsTagSemantic?(result.PendingIndexRemaining is >0?$"未承認タグ候補 · 索引の更新が必要: {result.PendingIndexRemaining:N0}件":"未承認タグ候補の意味で検索しています。")
                 :method.IsTagCandidates?"未承認の候補です。詳細から確認・承認できます。"
@@ -264,7 +275,7 @@ public sealed partial class MainPage : Page
                 Notice(originTitle,simSummary+(scopeWarning is null?"":" "+scopeWarning),simSeverity,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
             }
         } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
-        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。名前・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\n名前・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
+        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
     private void RenderRows()
@@ -340,7 +351,7 @@ public sealed partial class MainPage : Page
     private void SizeItem(ListViewItem item,Image image)
     {
         var scale=libraryItemScale/100d;
-        var width=Math.Min(232*scale,Math.Max(128,ItemListContainer.ActualWidth-24));
+        var width=LibraryTileLayout.Width(Math.Max(1,(Items.ActualWidth>0?Items.ActualWidth:ItemListContainer.ActualWidth)-16),libraryItemScale);
         item.Width=tiles?width:double.NaN;
         image.Width=tiles?Math.Max(96,width-32):48*scale;
         // Leave room for the filename and metadata even in a short window.
@@ -349,6 +360,8 @@ public sealed partial class MainPage : Page
     }
     private void UpdateItemSizes()
     {
+        if(Items.ItemsPanelRoot is ItemsWrapGrid wrap)
+            wrap.ItemWidth=tiles?LibraryTileLayout.Width(Math.Max(1,Items.ActualWidth-16),libraryItemScale)+8:double.NaN;
         foreach(var item in Items.Items.OfType<ListViewItem>())
             if(item.Content is Grid content&&content.Children.FirstOrDefault() is Image image)SizeItem(item,image);
     }
@@ -389,6 +402,10 @@ public sealed partial class MainPage : Page
     private MenuFlyout SimilarityMenu(MediaRow row)
     {
         var menu=new MenuFlyout();
+        var favoriteAction=new MenuFlyoutItem{Text=row.Favorite?"お気に入りを解除":"お気に入りに登録"};
+        AutomationProperties.SetAutomationId(favoriteAction,"ToggleFavorite"+row.Id);
+        favoriteAction.Click+=async(_,_)=>await SetFavoriteAsync(row,!row.Favorite);
+        menu.Items.Add(favoriteAction);menu.Items.Add(new MenuFlyoutSeparator());
         if(SimilaritySearch.CanStart(row))
         {
             var search=new MenuFlyoutItem {Text=row.Kind=="video"?"似た動画・素材を探す":row.Kind=="audio"?"似た音声・曲を探す":"似た画像・素材を探す"};AutomationProperties.SetAutomationId(search,"FindSimilar"+row.Id);
@@ -512,6 +529,38 @@ public sealed partial class MainPage : Page
         AudioSearchHint.Text=SimilaritySearch.AudioIndexingGuidance;
         AudioSearchHint.Visibility=active?.Kind=="audio"?Visibility.Visible:Visibility.Collapsed;}
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
+    private async void Favorite_Checked(object sender,RoutedEventArgs args)
+    {
+        if(!ready||populating||updatingFavorite||active is null||Favorite.IsChecked==saved.Favorite)return;
+        await SetFavoriteAsync(active,Favorite.IsChecked==true);
+    }
+    private async Task SetFavoriteAsync(MediaRow row,bool value)
+    {
+        if(saving||dialogOpen||tagReviewSyncItem==row.Id||!await transitions.WaitAsync(0))
+        {
+            if(active?.Id==row.Id){updatingFavorite=true;try{Favorite.IsChecked=saved.Favorite;}finally{updatingFavorite=false;}}
+            return;
+        }
+        saving=true;Favorite.IsEnabled=false;
+        try
+        {
+            // Save only the flag: an unsaved tag/shelf draft must not be committed.
+            await api.PostAsync("api/items/update",new JsonObject{{"ids",new JsonArray(row.Id)},{"changes",new JsonObject{{"favorite",value}}}});
+            row.Favorite=value;
+            if(active?.Id==row.Id)
+            {
+                saved=saved with {Favorite=value};active.Favorite=value;updatingFavorite=true;
+                try{Favorite.IsChecked=value;}finally{updatingFavorite=false;}
+            }
+            RenderRows();RestoreSelection();
+        }
+        catch(Exception ex)
+        {
+            if(active?.Id==row.Id){updatingFavorite=true;try{Favorite.IsChecked=saved.Favorite;}finally{updatingFavorite=false;}}
+            Failure(ex);
+        }
+        finally{saving=false;Favorite.IsEnabled=true;UpdateDirty();transitions.Release();}
+    }
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
     public async Task<bool> ConfirmDiscardAsync() {
         if(saving||dialogOpen)return false;
@@ -577,22 +626,23 @@ public sealed partial class MainPage : Page
         SimilarityBar.Visibility=similar?Visibility.Visible:Visibility.Collapsed;
         SimilarityTitle.Text=similar?"類似検索の起点: "+similarityOrigin!.Title:"";
         var ai=method.IsAI&&!similar;
+        SearchOptions.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         var candidates=method.IsTagCandidates&&!similar;
         var pageText=method.IsPageText&&!similar;
-        AutomationProperties.SetName(Query,pageText?"ページ本文の検索":candidates?"未承認タグ候補の検索":method.IsAI?"AI検索の文章":"名前・タグ検索");
+        AutomationProperties.SetName(Query,pageText?"ページ本文の検索":candidates?"未承認タグ候補の検索":method.IsAI?"AI検索の文章":"ファイル名・タグ検索");
         SimilarityBoundary.Visibility=!similar&&SearchMode.SelectedIndex is 2 or 3?Visibility.Visible:Visibility.Collapsed;
         AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
-        Query.PlaceholderText=method.IsTagSemantic?"例：青髪のツインテール（未承認タグの意味）":pageText?"ページ本文に含まれる語句で検索":candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
+        Query.PlaceholderText=method.IsTagSemantic?"例：青髪のツインテール（未承認タグの意味）":pageText?"ページ本文に含まれる語句で検索":candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"ファイル名・タグを検索（Ctrl+F）";
         SearchMethodHint.Text=similar?(similarityOrigin?.Kind=="video"?"動画の代表フレームから似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="audio"?"音声・音楽の音響特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchMode.SelectedIndex switch
         {
-            1=>"名前・タグの意味と、画像・表紙の見た目を組み合わせます。",
+            1=>"ファイル名・タグの意味と、画像・表紙の見た目を組み合わせます。",
             2=>"索引済みの画像・表紙・本のページや、動画の代表場面を見た目から探します。",
             3=>"名前やタグの言い換えで探すときに使います。本の本文・音声の文字起こしは対象外です。",
             4=>"未承認のAIタグ候補（最新履歴）だけを検索します。確定タグとは混ざりません。",
             5=>"抽出・保存済みのページ本文（同じページ内の全語一致）を検索します。",
             6=>"英語を含む未承認タグ候補を、日本語の意味で探します。先にAI索引を作成してください。",
-            _=>"名前・タグに含まれる文字で探します。"
+            _=>"ファイル名・タグに含まれる文字で探します。"
         };
     }
     private void SearchMode_Changed(object sender,SelectionChangedEventArgs e)
@@ -1289,6 +1339,7 @@ public sealed partial class MainPage : Page
             Editor.Visibility=Visibility.Collapsed;
             FolderEditorPanel.Visibility=Visibility.Visible;
             Details.IsPaneOpen=true;
+            FolderList.SelectedItem=FolderList.Items.OfType<ListViewItem>().FirstOrDefault(i=>i.Tag is int id&&targetIds.Contains(id));
             DetailsButton.IsEnabled=true;
             FolderTargetTitle.Text=folderDraft.IsBatch
                 ? $"選択した {targets.Length} フォルダ: {string.Join("、",targets.Select(r=>r.ShortPath))}"
@@ -1753,7 +1804,7 @@ public sealed partial class MainPage : Page
                     indexLimit=data["limit"]?.GetValue<int>();
                     var label=state switch {"idle"=>"未作成","running"=>"作成中","cancelling"=>"中断待ち","complete"=>"準備完了","cancelled"=>"中断済み","interrupted"=>"前回中断","failed"=>"失敗","partial"=>"一部完了",_=>state};
                     var model=data["model"]?.GetValue<string>() ?? "未選択";
-                    var capabilities=data["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "名前・タグ／画像・表紙" : "名前・タグ";
+                    var capabilities=data["modalities"] is JsonArray modes && modes.Any(x=>x?.GetValue<string>()=="cover") ? "ファイル名・タグ／画像・表紙" : "ファイル名・タグ";
                     status.Text=available ? $"{model} · {capabilities}{(indexLimit is int cap ? $" · 最大{cap:N0}件" : "")}\n索引処理（開始時の対象）: {label} · {data["processed"]}/{data["total"]} {(data["job"]?.GetValue<string>() is "book-pages" or "book-page-batch" or "book-pages-chunked"?"ページ":"件")}\n{data["error"]!.GetValue<string>()}" : "現在のAI検索を利用できません。モデル設定・重み・Python環境を確認してください。文字検索は利用できます。\n"+(data["error"]?.GetValue<string>() ?? "");
                     activeProfile=data["profile"]?.GetValue<string>();
                     if(continuationPlan is not null && continuationPlan.Profile!=activeProfile)InvalidateContinuationPlan();

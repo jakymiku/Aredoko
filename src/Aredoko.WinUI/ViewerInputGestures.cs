@@ -19,6 +19,7 @@ internal static class ViewerOptions
     }
     public static ViewerInputSettings Value {get;private set;}=ViewerInputSettings.Load(path);
     public static void Save(bool wheelUpAdvances)=>SaveValue(Value with {WheelUpAdvances=wheelUpAdvances});
+    public static void SavePreferences(bool wheel,string theme,bool enlarge)=>SaveValue(Value with {WheelUpAdvances=wheel,Theme=ViewerInputSettings.NormalizeTheme(theme),EnlargeSmallImages=enlarge});
     public static void SaveLibraryItemScale(int scale)=>SaveValue(Value with {LibraryItemScale=ViewerInputSettings.NormalizeScale(scale)});
     private static void SaveValue(ViewerInputSettings next){next.Save(path);Value=next;}
 }

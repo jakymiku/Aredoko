@@ -22,6 +22,10 @@ internal static class FeedbackTests
             var file=Path.Combine(dir,"settings.json");
             check(!ViewerInputSettings.Load(file).WheelUpAdvances,"missing viewer settings uses default");
             inverted.Save(file);check(ViewerInputSettings.Load(file).WheelUpAdvances,"viewer direction survives restart");
+            var appearance=new ViewerInputSettings(true,140,"dark",true);appearance.Save(file);
+            check(ViewerInputSettings.Load(file)==appearance,"theme and small-image fit persist with existing preferences");
+            (appearance with {LibraryItemScale=80}).Save(file);
+            check(ViewerInputSettings.Load(file).Theme=="dark"&&ViewerInputSettings.Load(file).EnlargeSmallImages,"resizing preserves appearance preferences");
             normal.Save(file);check(!ViewerInputSettings.Load(file).WheelUpAdvances&&Directory.GetFiles(dir).Length==1,"atomic settings overwrite leaves no temporary files");
             File.WriteAllText(file,"{\"version\":1,\"wheel_up_advances\":true}");
             check(ViewerInputSettings.Load(file)==new ViewerInputSettings(true,100),"old viewer settings retain wheel direction with default item size");

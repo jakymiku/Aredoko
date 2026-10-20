@@ -224,3 +224,13 @@ await IndexContinuationTests.Run(Check);
 await SearchCancellationTests.Run(Check);
 AudioSpeechTests.Run(Check);
 StatusClarityTests.Run(Check);
+
+foreach(var available in new[]{300d,700d,1200d,2400d})
+foreach(var size in new[]{60,100,180})
+{
+    var width=LibraryTileLayout.Width(available,size);
+    var columns=Math.Max(1,(int)Math.Floor(available/(232*size/100d+8)));
+    Check(width>0&&Math.Abs((width+8)*columns-available)<.001,"tile row fills available width "+available+" / "+size);
+}
+Check(LibraryTileLayout.Width(1200,60)<LibraryTileLayout.Width(1200,180),"smaller tiles increase column count");
+Check(double.IsFinite(LibraryTileLayout.Width(double.NaN,100)),"tile layout handles unavailable width");

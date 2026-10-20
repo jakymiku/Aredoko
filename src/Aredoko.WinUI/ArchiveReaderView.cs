@@ -13,6 +13,7 @@ namespace Aredoko_WinUI;
 // Same native canvas/overlay tokens as the image viewer. No extraction or prefetch.
 internal sealed class ArchiveReaderView : Grid, IDisposable
 {
+    private bool actualPixels;
     private readonly LibraryApi api;
     private readonly int itemId;
     private readonly CancellationTokenSource lifetime = new();
@@ -70,7 +71,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
         foreach(var control in new UIElement[]{previous,next,zoomOut,zoomIn,fit,actualSize,zoom,retry,reopen,settings})actions.Children.Add(control);
         var bottom=new StackPanel{Spacing=4};bottom.Children.Add(actions);bottom.Children.Add(status);bottom.Children.Add(progressStatus);toolbar.Child=bottom;Children.Add(toolbar);
         Identify(actualSize,"ReaderActualSize","本のページを原寸で表示");ToolTipService.SetToolTip(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）");
-        actualSize.Click+=(_,_)=>viewport.ChangeView(null,null,(float)OriginalZoom(),true);
+        actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImages();viewport.ChangeView(0,0,1,true);}else viewport.ChangeView(null,null,(float)OriginalZoom(),true);};
         Identify(viewport,"ReaderViewport","本の表示。左右キーでページ送り、右クリックで表示設定");Identify(image,"ReaderImage","本のページ");Identify(second,"ReaderImageSecond","見開きのもう一方のページ");
         Identify(previous,"ReaderPrevious","前のページ");Identify(next,"ReaderNext","次のページ");Identify(zoomOut,"ReaderZoomOut","本を縮小");Identify(zoomIn,"ReaderZoomIn","本を拡大");Identify(fit,"ReaderFit","本の表示をリセット");
         Identify(retry,"ReaderRetry","現在のページを再試行");Identify(reopen,"ReaderReopen","本を最初から開き直す");Identify(settings,"ReaderSettings","本の表示設定");Identify(close,"ReaderClose","読書画面を閉じる");
@@ -90,7 +91,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
         previous.Click+=async(_,_)=>{if(manifest is not null){allowProgressSave=true;await LoadAsync(ReaderSpreadPolicy.Previous(page,manifest.PageCount,mode));}};
         next.Click+=async(_,_)=>{if(manifest is not null){allowProgressSave=true;await LoadAsync(ReaderSpreadPolicy.Next(page,manifest.PageCount,mode));}};
         retry.Click+=async(_,_)=>{if(manifest is null)await OpenAsync();else await LoadAsync(page);};reopen.Click+=async(_,_)=>await OpenAsync(true);
-        zoomOut.Click+=(_,_)=>viewport.ChangeView(null,null,Math.Max(1,viewport.ZoomFactor-.5f),true);zoomIn.Click+=(_,_)=>viewport.ChangeView(null,null,Math.Min(viewport.MaxZoomFactor,viewport.ZoomFactor+.5f),true);fit.Click+=(_,_)=>viewport.ChangeView(0,0,1,true);
+        zoomOut.Click+=(_,_)=>viewport.ChangeView(null,null,Math.Max(viewport.MinZoomFactor,viewport.ZoomFactor-.5f),true);zoomIn.Click+=(_,_)=>viewport.ChangeView(null,null,Math.Min(viewport.MaxZoomFactor,viewport.ZoomFactor+.5f),true);fit.Click+=(_,_)=>{actualPixels=false;FitImages();viewport.ChangeView(0,0,1,true);};
         close.Click+=(_,_)=>CloseRequested?.Invoke(this,EventArgs.Empty);UpdateActions();ShowChrome();
     }
     private static Button IconButton(Symbol symbol)=>new(){Content=new SymbolIcon(symbol),MinWidth=36,Padding=new Thickness(8)};
@@ -103,13 +104,13 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
         if(image.Source is not BitmapImage first)return;
         var a=(double)Math.Max(1,first.PixelWidth)/Math.Max(1,first.PixelHeight);
         var b=second.Source is BitmapImage other?(double)Math.Max(1,other.PixelWidth)/Math.Max(1,other.PixelHeight):0;
-        var height=Math.Min(first.PixelHeight/(XamlRoot?.RasterizationScale??1),Math.Min(canvas.Height,canvas.Width/(a+b)));image.Width=height*a;image.Height=height;
+        var height=actualPixels?first.PixelHeight/(XamlRoot?.RasterizationScale??1):Math.Min(ViewerOptions.Value.EnlargeSmallImages?double.PositiveInfinity:first.PixelHeight/(XamlRoot?.RasterizationScale??1),Math.Min(canvas.Height,canvas.Width/(a+b)));image.Width=height*a;image.Height=height;
         second.Width=height*b;second.Height=height;
         viewport.MaxZoomFactor=(float)Math.Max(4,OriginalZoom());
         AutomationProperties.SetHelpText(image,$"{first.PixelWidth} x {first.PixelHeight} pixels");
         ToolTipService.SetToolTip(image,$"{first.PixelWidth} × {first.PixelHeight} px");
     }
-    private double OriginalZoom()=>image.Source is BitmapImage first?Math.Max(1,first.PixelWidth/Math.Max(1,image.Width)/(XamlRoot?.RasterizationScale??1)):1;
+    private double OriginalZoom()=>image.Source is BitmapImage first?Math.Max(.001,first.PixelWidth/Math.Max(1,image.Width)/(XamlRoot?.RasterizationScale??1)):1;
 public void AttachNavigation(UIElement dialog)
     {
         ViewerInputGestures.Attach(dialog,viewport,async direction=>
@@ -173,7 +174,7 @@ public void AttachNavigation(UIElement dialog)
     private async Task LoadAsync(int requestedPage)
     {
         var book=manifest;if(busy||disposed||book is null||requestedPage<0||requestedPage>=book.PageCount)return;
-        busy=true;failed=loaded=false;page=ReaderSpreadPolicy.Anchor(requestedPage,book.PageCount,mode);ClearImages();hideTimer.Stop();viewport.ChangeView(0,0,1,true);
+        actualPixels=false;busy=true;failed=loaded=false;page=ReaderSpreadPolicy.Anchor(requestedPage,book.PageCount,mode);ClearImages();hideTimer.Stop();viewport.ChangeView(0,0,1,true);
         var indexes=ReaderSpreadPolicy.Pages(page,book.PageCount,mode);
         count.Text=indexes.Length==1?$"{page+1} / {book.PageCount}":$"{page+1}–{page+2} / {book.PageCount}";ViewerNotice.Set(status,"ページを読み込んでいます…");UpdateActions();
         try
@@ -204,7 +205,7 @@ public void AttachNavigation(UIElement dialog)
         next.IsEnabled=!busy&&manifest is not null&&ReaderSpreadPolicy.Next(page,manifest.PageCount,mode)<manifest.PageCount;
         retry.IsEnabled=!busy&&failed;reopen.IsEnabled=!busy;settings.IsEnabled=!busy;
         foreach(var option in modes)option.IsEnabled=!busy;saveProgress.IsEnabled=!busy&&loaded&&manifest is not null;
-        zoom.Text=$"倍率 {viewport.ZoomFactor/OriginalZoom()*100:0}%";zoomOut.IsEnabled=loaded&&!busy&&viewport.ZoomFactor>1;zoomIn.IsEnabled=loaded&&!busy&&viewport.ZoomFactor<viewport.MaxZoomFactor;actualSize.IsEnabled=loaded&&!busy;fit.IsEnabled=loaded&&!busy;
+        zoom.Text=$"倍率 {viewport.ZoomFactor/OriginalZoom()*100:0}%";zoomOut.IsEnabled=loaded&&!busy&&viewport.ZoomFactor>viewport.MinZoomFactor;zoomIn.IsEnabled=loaded&&!busy&&viewport.ZoomFactor<viewport.MaxZoomFactor;actualSize.IsEnabled=loaded&&!busy;fit.IsEnabled=loaded&&!busy;
     }
     public void Dispose(){if(disposed)return;disposed=true;hideTimer.Stop();menu.Hide();lifetime.Cancel();ClearImages();manifest=null;lifetime.Dispose();}
 }

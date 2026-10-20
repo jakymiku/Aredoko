@@ -1,5 +1,24 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-21 就寝中の実使用改善：U01–U16台帳と部分受入
+
+開始HEAD `56d7b3c`、branch `feat/winui3-production-mvp-20261011` / 既存Draft PR #5を継続。[全16件・変更・計測・失敗・残件](usability-feedback-20261021.md)を最優先で読む。ユーザーがGUI/GPUを今回新許可し、短時間で可能な改善→GitHub引き継ぎ→PC shutdownを依頼。通常のOS shutdownを使い、他アプリの未保存内容は強制破棄しない。この終了指示は次回以降へ持ち越さない。
+
+**変更**：GIFの全frame PNG事前取得を原本1取得＋stream保持のWindows標準animationへ。APNGの非再生posterを除外し、先頭frameを準備中にも表示。小画像を画面いっぱいへ拡大する設定/原寸、system/light/dark保存・即時反映、タイル60–180%の列数/横幅再配置、folder clickの選択表示、ZIP revealのShell item API、file favorite右クリック/チェック即時単独保存（未保存tag/shelfは保全）、検索ページのmouse side buttonsを追加。通常footer・常設all-folder dropdown・確認済み/未確認UIをユーザー指示で廃止、scope中だけbadge/解除。ファイル名・タグへ用語統一。警告/エラー・AI候補/境界操作・既存DB/API値・その他機能は維持。
+
+**CPU**：Python31 PASS（animation3/preview22/original6）、Core732 PASS、x64 Release0 errors/既知5 warnings（3 WUI1001+2 IL2104、抑制なし）。WinUI差分レビュー/参照API/構文/相対リンク/diff確認。生成GIF48frameの表示用source準備0.374015→0.015847秒、64ページ59.5MB CBZのmanifest+原本1page+position保存中央値0.019942秒、source bytes/mtime不変。HTTP/Windows decode/render/HoneyViewを含まないため、体感24倍/同等速度とは主張しない。
+
+**native**：固定flow `overnight-feedback-20261021`はinitial+2修正の**3/3上限、全raw report FAILを保持**。01拡大時zoom minimumの製品crashを修正、02UIAの存在しない選択field、03共有DBの保存読書位置を無視した固定page2期待で停止。Light最終は全工程、Darkはfavorite/未保存draft、配置60%6列→180%2列、テーマ、GIF/APNG/CBZ表示まで確認。最後はCBZが正常に3ページへ進んでいた。生成専用DBのread-only integrity=ok/18件/page=2（0始まり）/favorite=false/タグ[]、DB検査によるbytes不変、port解放・所有process終了を確認。全21 PNG目視済み。03のsource開始digestはメモリ内のみで最後の比較へ未到達のため、このrunの前後SHA/mtime一致は認定しない。post-stop-review.jsonへ限界を記録。harnessは保存済みページから期待値計算/開始digest保存へ修正したが、構文のみで再GUIなし。追加GUIには新許可が必要、過去flow上限も維持。GPU0回。
+
+**未完**：HoneyView同等の実媒体表示/切替性能、APNG thumbnailのposter、Shell reveal実操作/右クリックfavorite/side button native確認、フォルダfavorite U09、棚別閲覧 U11、停止整合を保つGUI backup/restore U13、全画面navigation履歴 U14。ライブラリのページ上限可変も未変更。静止PNGによる一時点のframe表示を、すべてのループちらつき解消の証明にしない。
+
+**配布状態**：現在のinstalled Alpha1.0.0.1/封印済み02は更新なし。改善はsource/current Release buildにあり、旧Alpha shortcutには未反映。ZIP版未完成、R13 DOING / ALPHA未完 / R14 PARTIAL。元DB/原本/venv・旧登録/certに変更なし、新DL/Actions/main mergeなし。shutdownはhandoffのcommit/pushとPR更新/所有cleanup後に実行予定で、この文書は電源断完了を先取りしない。
+
+**次の3手**：
+1. U01/U02の残りをCPUで段階計測し、CBZのHTTP/Windows decode/提示待ちを切り分ける計測点を用意。source guardを削ったcache最適化や小さいfixtureだけの速度保証をしない。native再試行は新許可後。
+2. R13/PZ2所有bootstrap＋即時起動進捗→PZ3モデル既存folder/公式手動/app取得3経路（配布既定無制限、任意cap）と全runtime→PZ4 ZIP/CPU→PZ5 clean Windowsを進める。安全なGUI backup U13は停止/再起動controllerへ接続。
+3. U09 root favorite、U11 shelf exact filter、U14 full historyを別タスクとして実装/整合・backup・全query境界まで確認。ALPHA後R06–R09実音声/音楽も継続。通常Solで可能、音声方式/DB復旧の横断設計は既存計画通りAstra推奨（自動委任権限なし）。P0 2/2閉鎖・専用OCR保留・簡潔GUI/ユーザー指定以外の機能維持。
+
 ## 2026-10-21 追記：モデル導入3経路・既定速度無制限
 
 ユーザー指定の[モデル導入仕様](model-acquisition.md)を追加。アプリ内download/公式から手動download/既存フォルダ選択を用意し、容量・実進捗・速度・停止再開・検証状態を表示。**配布版は既定無制限、帯域上限は任意設定**（6MB/s固定とする案をユーザーが訂正）。モデル不足とruntime/Python不足を区別する。PZ3では既存モデルroot選択/診断を先に、次にatomic導入job/CPU生成server検証、GUI取得を接続。未実装の仕様で、新download/GUI/GPUなし。

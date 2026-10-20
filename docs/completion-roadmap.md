@@ -1,5 +1,7 @@
 # Aredoko 完成までの実行計画
 
+> **最新2026-10-21・実使用改善**：[U01–U16台帳と部分検証](usability-feedback-20261021.md)を先に読む。GIF native化/APNG poster除外/小画像拡大/テーマ/favorite即時保存/scope解除/タイル再配置を実装、Python31/Core732/Release0 errors・既知5 warnings。overnight GUIは3/3で停止、Light全工程・Dark一部を確認、raw FAILを成功へ読み替えない。全21 PNG目視。installed Alpha/封印済み02は未更新。HoneyView parity/U09 folder favorite/U11棚別/U13 GUI backup/U14全体履歴は未完。次はCPU viewer段階診断→PZ2/PZ3/PZ4/PZ5、ALPHA後実音声。今回のshutdownを将来へ再適用しない。
+
 > **最新方針2026-10-21（ユーザー指定）**：今後の標準は[ZIP解凍→Aredoko.exe](portable-distribution.md)。PZ1自己完結frontend publishはCPU合格、製品ZIPは未完成。現在はPZ2所有bootstrap→PZ3全runtime梱包→PZ4 ZIP/再配置CPU→PZ5明示許可後のnative/clean Windows。下のMSIX-firstの「次」は履歴で、この順序を優先。DB/原本/機能/旧登録/試行上限を保持、ALPHA後に実音声/音楽→WinUI。
 
 > **最新2026-10-21**：[MSIX正式起動・実機結果と再開条件](alpha-packaged-activation.md)。許可済み証明書trustとAlpha1.0.0.1通常installは完了し、元Development登録を保持して併存。363 installed payload全件照合PASS。実shortcut→新規所有GUI/backend→生成画像検索・タグ保存まで確認したが、native flowは待機/スキャン/保存captionのテスト不備で**3/3上限**。誤った起動失敗通知とテスト期待値をsourceで修正し、追加GUIなしでCPU55 PASS、停止後DB保存/整合・source不変・封印済み02全24,325ファイル一致を確認。02は修正前artifactのまま。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。次はCPUのみ起動待ち/配布整備、追加GUIは新たな明示許可後に残るargv/閲覧/正常終了・再起動/clean Windows更新削除受入。過去のcaps/全機能/guardを維持し、ALPHA後の実音声/音楽→WinUI改善へ戻る。

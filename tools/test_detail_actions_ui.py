@@ -42,12 +42,13 @@ def digest(folder):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--feedback-only',action='store_true',help='2026-10-21 newly authorized overnight usability flow')
     parser.add_argument('--daily-only',action='store_true',help='Audit list/grid/folders/settings/viewers using this same verified activation')
     parser.add_argument('--size-only',action='store_true',help='New user-authorized display-size feature flow')
     parser.add_argument('--quiet-only',action='store_true',help='User-requested viewer/footer and plain-language follow-up')
     parser.add_argument('--narrow',action='store_true',help='Explicit compact-window regression; normal desktop size is the default')
     args = parser.parse_args()
-    if sum((args.size_only,args.daily_only,args.quiet_only))>1:parser.error('Select one flow')
+    if sum((args.size_only,args.daily_only,args.quiet_only,args.feedback_only))>1:parser.error('Select one flow')
     target = Path(os.path.abspath(args.output))
     if not target.is_relative_to(REPO / 'data/ai-ui'):
         parser.error('Evidence must be inside data/ai-ui')
@@ -55,7 +56,7 @@ def main():
     report = {'target': 'local', 'actual_model': False, 'pass': False, 'checks': [],
               'screenshots': [], 'visual_review': 'pending', 'themes': [],
               'source_head': subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
-              'authorization': '2026-10-20 user explicitly requested continuing work and checking current UI'}
+              'authorization': '2026-10-21 user explicitly authorized overnight GUI/GPU tests and shutdown' if args.feedback_only else '2026-10-20 user explicitly requested continuing work and checking current UI'}
     env = {**os.environ, 'WINAPP_UI_WORKFLOW_ID': 'aredoko-detail-' + uuid.uuid4().hex}
     owned_pid = hwnd = cat = server = worker = None
     user32 = ctypes.WinDLL('user32', use_last_error=True)
@@ -143,13 +144,13 @@ def main():
         media = target / 'media'
         media.mkdir()
         (media / 'image.png').write_bytes(png(width=6144 if args.quiet_only else 180,height=4096 if args.quiet_only else 240,color=(45,115,195)))
-        if args.daily_only or args.size_only or args.quiet_only:(media/'second.png').write_bytes(png(color=(85,165,115)))
+        if args.daily_only or args.size_only or args.quiet_only or args.feedback_only:(media/'second.png').write_bytes(png(color=(85,165,115)))
         with wave.open(str(media / 'audio.wav'), 'wb') as sound:
             sound.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
             sound.writeframes(b'\0\0' * 16000)
         with zipfile.ZipFile(media / 'book.cbz', 'w') as book:
             book.writestr('page.png',png(width=4096 if args.quiet_only else 180,height=3072 if args.quiet_only else 240,color=(185,125,60)))
-            if args.daily_only or args.size_only or args.quiet_only:
+            if args.daily_only or args.size_only or args.quiet_only or args.feedback_only:
                 book.writestr('page2.png',png(width=4096 if args.quiet_only else 180,height=3072 if args.quiet_only else 240,color=(135,155,195)))
                 book.writestr('page3.png',png(color=(165,95,175)))
         if args.quiet_only:
@@ -158,14 +159,22 @@ def main():
             if not ffmpeg:raise RuntimeError('Existing local FFmpeg is required; no download')
             subprocess.run([ffmpeg,'-nostdin','-v','error','-f','lavfi','-i','color=c=blue:s=320x180:r=1:d=30',
                 '-threads','1','-c:v','libx264','-pix_fmt','yuv420p','-movflags','+faststart',str(media/'clip.mp4')],check=True,timeout=20)
+        if args.feedback_only:
+            from PIL import Image
+            frames=[Image.new('RGBA',(160,120),color) for color in ('red','blue','green','yellow')]
+            frames[0].save(media/'moving.gif',save_all=True,append_images=frames[1:],duration=120,loop=0)
+            Image.new('RGBA',(160,120),'black').save(media/'moving.apng',format='PNG',save_all=True,
+                append_images=frames,default_image=True,duration=120,loop=0)
+            for n in range(12):(media/f'tile-{n:02d}.png').write_bytes(png(color=(60+n*10,100,170)))
         before = digest(media)
+        report['generated_source_baseline'] = before
         cat = ProductionCatalog(target / 'catalog.sqlite')
         root = cat.add_root(str(media))
         cat.start_scan(root)
         if cat._worker:
             cat._worker.join(10)
         rows = {row['title']: row for row in cat.search()['items']}
-        check('only generated image/audio/book indexed', len(rows) == (6 if args.quiet_only else 4 if args.daily_only or args.size_only else 3))
+        check('only generated image/audio/book indexed', len(rows) == (18 if args.feedback_only else 6 if args.quiet_only else 4 if args.daily_only or args.size_only else 3))
         profiles = AIProfileSettings(REPO, target / 'ai-settings.json', profile_directory=target / 'profiles')
         handler = production_handler(cat, secrets.token_hex(32), ai=DisabledAI(),
                                      profiles=profiles, tagger=DisabledTagger())
@@ -222,6 +231,11 @@ def main():
             time.sleep(.3)
             navigation=inspect()['NavAll']
             check(theme+' startup navigation matches width',navigation['width']<=48 if args.narrow else navigation['width']>=140)
+            if args.feedback_only:
+                from ui_feedback_audit import audit
+                audit(cli,hwnd,owned_pid,theme,rows,cat,target,report,check)
+                close()
+                continue
             if args.quiet_only:
                 from ui_quiet_viewer_audit import audit
                 audit(cli,hwnd,owned_pid,theme,rows,cat,target,report,check)

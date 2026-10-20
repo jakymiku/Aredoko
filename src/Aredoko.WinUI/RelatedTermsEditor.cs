@@ -37,7 +37,7 @@ public sealed class RelatedTermsEditor
         AutomationProperties.SetAutomationId(import, "ImportRelatedTerms");
         AutomationProperties.SetAutomationId(status, "RelatedTermStatus");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        var help = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "名前・タグ検索で、手がかりの語から見出し語と別名も候補に含めます。例:「東方 巫女」で博麗霊夢のタグやファイル名の作品も表示します。入力した語に一致する作品が先に並びます。" };
+        var help = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "ファイル名・タグ検索で、手がかりの語から見出し語と別名も候補に含めます。例:「東方 巫女」で博麗霊夢のタグやファイル名の作品も表示します。入力した語に一致する作品が先に並びます。" };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { save, delete } };
         var files = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { export, import } };
         foreach (var element in new UIElement[] { help, entries, term, aliases, related, actions, files, status }) panel.Children.Add(element);
@@ -84,7 +84,7 @@ public sealed class RelatedTermsEditor
             if (error is not null) { status.Text = error; return; }
             await api.PostAsync("api/library/terms", RelatedTerms.Upsert(term.Text, aliasWords, relatedWords));
             await RefreshAsync(term.Text.Trim());
-            status.Text = "保存しました。次の名前・タグ検索から使われます。";
+            status.Text = "保存しました。次のファイル名・タグ検索から使われます。";
         });
         delete.Click += async (_, _) => await RunAsync(async () =>
         {
