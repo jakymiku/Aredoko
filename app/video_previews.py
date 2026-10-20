@@ -37,7 +37,15 @@ class VideoPreviewUnavailable(ValueError):
 
 
 def _executable(name):
-    value = shutil.which(name)
+    media = os.environ.get('AREDOKO_MEDIA_TOOLS')
+    if media is not None:
+        from storage_lease import plain_path
+        try:
+            value = str(plain_path(Path(media) / (name + ('.exe' if os.name == 'nt' else ''))))
+        except (ValueError, OSError) as error:
+            raise VideoPreviewUnavailable('Video preview tools unavailable') from error
+    else:
+        value = shutil.which(name)
     if not value or Path(value).suffix.casefold() in {'.bat', '.cmd'}:
         raise VideoPreviewUnavailable('Video preview tools unavailable')
     return str(Path(value).resolve())

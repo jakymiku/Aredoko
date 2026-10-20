@@ -60,7 +60,7 @@ class LayaProcess:
             env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',
                        PYTHONIOENCODING='utf-8',TOKENIZERS_PARALLELISM='false')
             self.responses=queue.Queue(maxsize=2)
-            command=[str(self.python),'-u',str(Path(__file__).with_name('laya_worker.py')),
+            command=[str(self.python),'-B','-u',str(Path(__file__).with_name('laya_worker.py')),
                 '--model',str(self.model.resolve()),'--parent-pid',str(os.getpid()),'--question-set',self.question_set]
             if self.check_order:command.append('--check-order')
             self.process=subprocess.Popen(command,

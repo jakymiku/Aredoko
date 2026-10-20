@@ -14,6 +14,7 @@ from ai_search import AIBusy
 from tag_suggestions import TaggerInfo, TagProposal, SuggestionConflict
 from tagger_profile import load_profile, RUNTIME_VERSION
 from tagger_worker import labels
+from runtime_paths import worker_python
 
 UNAVAILABLE='タグ分類モデルまたは専用ランタイムが未導入です。検索・手動タグは引き続き利用できます。'
 
@@ -24,9 +25,10 @@ class DisabledTagger:
 
 
 class WDTagger:
-    def __init__(self,repo,profile,ai=None):
+    def __init__(self,repo,profile,ai=None,*,ai_python=None,models_root=None):
         self.repo=Path(repo)
-        self.python=self.repo/'.venv-ai/Scripts/python.exe'
+        self.python=worker_python(self.repo,ai_python)
+        self.models_root=models_root
         self.profile=profile
         self.ai=ai
         self._lock=threading.Lock()
@@ -37,7 +39,7 @@ class WDTagger:
 
     def status(self):
         try:
-            directory=self.profile.verify(self.repo)
+            directory=self.profile.verify(self.repo,models_root=self.models_root)
             marker=directory/'aredoko-runtime.json'
             ready=(not self._closed.is_set() and self.python.is_file()
                    and not marker.is_symlink() and json.loads(marker.read_text(encoding='utf-8'))=={'onnxruntime':RUNTIME_VERSION})
@@ -50,8 +52,10 @@ class WDTagger:
             raise AIUnavailable('タグ分類の画像サイズが上限を超えています。')
         env={**os.environ,'HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1','HF_HUB_DISABLE_TELEMETRY':'1',
              'PYTHONIOENCODING':'utf-8','OMP_NUM_THREADS':str(self.profile.data()['cpu_threads'])}
-        process=subprocess.Popen([str(self.python),'-u',str(Path(__file__).with_name('tagger_worker.py')),
-            '--profile-json',self.profile.document,'--parent-pid',str(os.getpid())],
+        command=[str(self.python),'-B','-u',str(Path(__file__).with_name('tagger_worker.py')),
+            '--profile-json',self.profile.document,'--parent-pid',str(os.getpid())]
+        if self.models_root is not None:command+=['--models-root',str(Path(self.models_root).absolute())]
+        process=subprocess.Popen(command,
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env=env,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         responses=queue.Queue(maxsize=1)
@@ -111,7 +115,7 @@ class WDTagger:
                 raise SuggestionConflict('タグ候補の生成を取り消しました。候補は保存していません。')
             scores=self._scores(source['data'],cancelled)
             config=self.profile.data()
-            rows=labels(self.profile.directory(self.repo)/'selected_tags.csv',config['label_count'])
+            rows=labels(self.profile.directory(self.repo,models_root=self.models_root)/'selected_tags.csv',config['label_count'])
             candidates=[]
             for index,((name,category),score) in enumerate(zip(rows,scores)):
                 threshold=config['general_threshold'] if category==0 else config['character_threshold']
@@ -134,7 +138,7 @@ class WDTagger:
         with self._lock:pass
 
 
-def create_tagger(ai=None,profile_path=None,repo=None):
+def create_tagger(ai=None,profile_path=None,repo=None,*,ai_python=None,models_root=None):
     repo=Path(repo) if repo else Path(__file__).resolve().parents[1]
-    try:return WDTagger(repo,load_profile(repo,profile_path),ai)
+    try:return WDTagger(repo,load_profile(repo,profile_path),ai,ai_python=ai_python,models_root=models_root)
     except (ValueError,OSError):return DisabledTagger()

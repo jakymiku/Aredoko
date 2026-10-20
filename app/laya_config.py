@@ -2,6 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
+from runtime_paths import model_directory
 
 PACKAGE_VERSION = '0.4.2'
 MODEL_ID = 'convaiinnovations/laya-multilingual'
@@ -21,11 +22,8 @@ MODEL_BYTES = sum(size for size, _ in ARTIFACTS.values())
 CONTRACT = 'aredoko-search-intent-v2'
 IDENTITY = {'model_id':MODEL_ID, 'revision':REVISION, 'package':PACKAGE_VERSION}
 
-def model_path(repo):
-    root=(Path(repo)/'models').resolve()
-    target=(root/MODEL_DIRECTORY).resolve()
-    if not target.is_relative_to(root): raise ValueError('Model directory escapes models')
-    return target
+def model_path(repo,*,models_root=None):
+    return model_directory(repo,MODEL_DIRECTORY,models_root)
 
 def digest(path):
     result=hashlib.sha256()

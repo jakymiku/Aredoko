@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path, PurePosixPath
 import re
+from runtime_paths import model_directory
 
 DEFAULT_PATH = 'config/tagger-profiles/wd-swinv2-v3.json'
 RUNTIME_VERSION = '1.23.2'
@@ -55,25 +56,16 @@ class WDProfile:
     @property
     def key(self): return hashlib.sha256(self.document.encode()).hexdigest()
 
-    def directory(self, repo):
-        repo=Path(repo).resolve()
-        target=repo/self.data()['model_directory']
-        # Local model loading also rejects reparse/symlink ancestors.
-        current=repo
-        for part in target.relative_to(repo).parts:
-            current=current/part
-            if current.is_symlink() or (current.exists() and getattr(current.stat(),'st_file_attributes',0)&0x400):
-                raise ValueError('Linked model directory is not allowed')
-        if not target.resolve().is_relative_to(repo/'models'):
-            raise ValueError('Model directory escaped project')
-        return target
+    def directory(self, repo, *, models_root=None):
+        relative=PurePosixPath(self.data()['model_directory']).relative_to('models')
+        return model_directory(repo,relative,models_root)
 
     def identity(self):
         d=self.data()
         return {k:d[k] for k in ('model_id','revision','artifacts')}
 
-    def verify(self, repo, hashes=False):
-        target=self.directory(repo)
+    def verify(self, repo, hashes=False, *, models_root=None):
+        target=self.directory(repo,models_root=models_root)
         marker=target/'aredoko-source.json'
         if marker.is_symlink() or json.loads(marker.read_text(encoding='utf-8'))!=self.identity():
             raise ValueError('Tagger provenance mismatch')

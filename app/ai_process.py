@@ -61,7 +61,7 @@ class EncoderProcess:
         env=os.environ.copy()
         env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',PYTHONIOENCODING='utf-8')
         self.responses=queue.Queue(maxsize=2)
-        self.process=subprocess.Popen([str(self.python),'-u',str(Path(__file__).with_name('ai_worker.py')),'--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())],
+        self.process=subprocess.Popen([str(self.python),'-B','-u',str(Path(__file__).with_name('ai_worker.py')),'--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,text=True,encoding='utf-8',env=env,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         threading.Thread(target=self._read,args=(self.process,self.responses),daemon=True).start()

@@ -11,6 +11,7 @@ import tempfile
 import threading
 from ai_profiles import DEFAULT_PROFILE, load_profile
 from ai_scope import validate_scope
+from runtime_paths import worker_python
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json\Z")
 MAX_FILES = 64
@@ -33,9 +34,11 @@ def default_settings_path(repo):
     return (Path(base) / "Aredoko" / "settings.json") if base else Path(repo) / "data" / "settings.json"
 
 class AIProfileSettings:
-    def __init__(self, repo, settings_path=None, command_line_profile=None, profile_directory=None):
+    def __init__(self, repo, settings_path=None, command_line_profile=None, profile_directory=None, *, ai_python=None, models_root=None):
         self._write_lock = threading.RLock()
         self.repo = Path(repo).resolve()
+        self.python = worker_python(self.repo, ai_python)
+        self.models_root = models_root
         self.folder = Path(profile_directory) if profile_directory is not None else self.repo / "data" / "ai-profiles"
         self.path = Path(settings_path) if settings_path is not None else default_settings_path(self.repo)
         self.override = Path(command_line_profile).resolve() if command_line_profile is not None else None
@@ -140,11 +143,11 @@ class AIProfileSettings:
         try:
             path = self.path_for(profile_id)
             profile = load_profile(path)
-            model_path = profile.model_path(self.repo)
+            model_path = profile.model_path(self.repo, models_root=self.models_root)
             marker = model_path / "aredoko-revision.txt"
-            python = self.repo / ".venv-ai" / "Scripts" / "python.exe"
+            python = self.python
             if not python.is_file():
-                warning = "AI用Python環境がありません。.venv-aiを確認してください。"
+                warning = "AI用Python環境がありません。起動設定または配布ファイルを確認してください。"
             elif not model_path.is_dir():
                 warning = "モデルフォルダがありません。自動ダウンロードは行いません。"
             elif not marker.is_file():

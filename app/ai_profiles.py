@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
+from runtime_paths import model_directory
 
 LEGACY_REVISION = '914f7f89142e33e77833254d9c9b90c3cef7303b'
 REVISION = LEGACY_REVISION
@@ -99,12 +100,8 @@ class ModelProfile:
         suffix='.ai.sqlite' if self.key==LEGACY_PROFILE else '.ai.'+hashlib.sha256(self.key.encode()).hexdigest()[:24]+'.sqlite'
         return Path(str(catalog)+suffix)
 
-    def model_path(self,repo):
-        base=(Path(repo)/'models').resolve()
-        path=(base/self.directory).resolve()
-        if not path.is_relative_to(base):
-            raise ValueError('Model path escapes models')
-        return path
+    def model_path(self,repo,*,models_root=None):
+        return model_directory(repo,self.directory,models_root)
 
 DEFAULT_PROFILE=ModelProfile()
 

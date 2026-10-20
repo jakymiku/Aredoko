@@ -60,6 +60,22 @@ class WDTests(unittest.TestCase):
         self.assertTrue(self.adapter.status()['available'])
         self.profile.verify(self.repo,hashes=True)
 
+    def test_explicit_relocated_models_reach_controller_and_worker(self):
+        relocated=self.repo/'relocated models'
+        (self.repo/'models').rename(relocated)
+        adapter=WDTagger(self.repo,self.profile,ai_python=sys.executable,models_root=relocated)
+        self.addCleanup(adapter.close)
+        self.assertTrue(adapter.status()['available'])
+        self.assertEqual(adapter.info,self.adapter.info)
+        with patch('wd_tagger.subprocess.Popen',side_effect=RuntimeError('capture only')) as spawn:
+            with self.assertRaises(RuntimeError):adapter._scores(b'fixture',lambda:False)
+        command=spawn.call_args.args[0]
+        self.assertEqual(command[0],sys.executable)
+        self.assertEqual(command[command.index('--models-root')+1],str(relocated))
+        with patch.object(adapter,'_scores',return_value=[0,.9,.95,0,0]):
+            result=adapter.suggest(self.source,lambda:False)
+        self.assertTrue(result)
+
     def test_invalid_profiles_paths_limits_hashes_and_types(self):
         bads=[('model_directory','../models/a'),('model_directory','C:/elsewhere'),
               ('model_directory','models/../private'),('model_directory','models'),

@@ -73,6 +73,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--profile-json',required=True)
     parser.add_argument('--parent-pid',type=int,required=True)
+    parser.add_argument('--models-root',type=Path)
     args=parser.parse_args()
     from ai_worker import monitor_parent
     threading.Thread(target=monitor_parent,args=(args.parent_pid,),daemon=True).start()
@@ -84,7 +85,7 @@ def main():
         if type(request) is not dict or set(request)!={'image'}:raise ValueError('Invalid request')
         data=base64.b64decode(request['image'],validate=True)
         profile=WDProfile.from_dict(json.loads(args.profile_json))
-        directory=profile.verify(Path(__file__).resolve().parents[1],hashes=True)
+        directory=profile.verify(Path(__file__).resolve().parents[1],hashes=True,models_root=args.models_root)
         labels(directory/'selected_tags.csv',profile.data()['label_count'])
         import onnxruntime as ort
         if ort.__version__!=RUNTIME_VERSION:raise ValueError('Unexpected ONNX Runtime version')

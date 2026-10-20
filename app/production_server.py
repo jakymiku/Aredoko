@@ -36,6 +36,9 @@ from page_batch import start_batch, resume_batch
 from page_chunks import plan_chunked, start_chunked, resume_chunked
 from wd_tagger import create_tagger
 from storage_lease import storage_lease,storage_parent
+from runtime_paths import worker_python
+from contextlib import ExitStack
+import sys
 
 class DisabledAI:
     def __init__(self,error=None,status_code='model_missing'):
@@ -79,23 +82,23 @@ PUBLIC_FOLDER_ERRORS = frozenset({
 })
 
 
-def create_ai(catalog,profile_path=None,ranking='mean-rrf'):
+def create_ai(catalog,profile_path=None,ranking='mean-rrf',*,ai_python=None,models_root=None):
     repo=Path(__file__).resolve().parents[1]
     try:
         profile=load_profile(profile_path)
-        return AISearch(catalog,EncoderProcess(repo/'.venv-ai/Scripts/python.exe',profile.model_path(repo),profile),ranking=ranking)
+        return AISearch(catalog,EncoderProcess(worker_python(repo,ai_python),profile.model_path(repo,models_root=models_root),profile),ranking=ranking)
     except (ValueError, KeyError, json.JSONDecodeError):
         return DisabledAI(error='モデル設定が無効または破損しています。「設定」からプロファイルを選び直してください。', status_code='corrupt_profile')
     except (AIUnavailable,sqlite3.DatabaseError,OSError):
         return DisabledAI(error='AI環境（モデル・Python）が未導入です。名前・タグの文字検索、棚・整理、閲覧はそのまま利用できます。', status_code='model_missing')
 
-def create_intent(enabled=False,question_set='v2-hybrid',check_order=True):
+def create_intent(enabled=False,question_set='v2-hybrid',check_order=True,*,ai_python=None,models_root=None):
     repo=Path(__file__).resolve().parents[1]
     try:
-        return SearchIntent(LayaProcess(repo/'.venv-ai/Scripts/python.exe',laya_model_path(repo),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
+        return SearchIntent(LayaProcess(worker_python(repo,ai_python),laya_model_path(repo,models_root=models_root),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None):
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
@@ -162,7 +165,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(200,catalog.search(param('q'),param('kind'),param('view','all'),int(page),root_id=root,root_ids=roots))
                 except ValueError as ex:return self.send(400,{'error':str(ex)})
             if path=='/api/session':
-                return self.send(200,{'mode':'production','token':token,'stats':catalog.stats()})
+                session={'mode':'production','token':token,'stats':catalog.stats()}
+                if instance_id is not None:session['instance_id']=instance_id
+                return self.send(200,session)
             # Native client supplies the session token for library-specific reads.
             if path.startswith('/api/library'):
                 if self.headers.get('X-Aredoko-Token')!=token:
@@ -640,6 +645,10 @@ def main():
     parser.add_argument('--db',type=Path,required=True)
     parser.add_argument('--port',type=int,default=8769)
     parser.add_argument('--ai-profile',type=Path)
+    parser.add_argument('--ai-python',type=Path,help='Explicit local AI worker interpreter; no PATH fallback or download')
+    parser.add_argument('--models-root',type=Path,help='Explicit directory containing local model subdirectories')
+    parser.add_argument('--instance-id',help='Launcher-owned session identifier')
+    parser.add_argument('--exit-on-stdin-close',action='store_true',help='Gracefully stop when the owning launcher closes its pipe')
     parser.add_argument('--tagger-profile',type=Path,help='Optional local WD-compatible tagger profile; never downloads')
     parser.add_argument('--ai-settings',type=Path,help='Optional local settings file for developer tests')
     parser.add_argument('--ai-profiles-dir',type=Path,help='Explicit local profile directory, including a restored bundle')
@@ -648,24 +657,37 @@ def main():
     parser.add_argument('--intent-questions',choices=QUESTION_SETS,default='v2-hybrid')
     parser.add_argument('--intent-no-order-check',action='store_true',help='Developer comparison only')
     args=parser.parse_args()
+    if args.instance_id is not None and (len(args.instance_id)!=32 or any(c not in '0123456789abcdef' for c in args.instance_id)):
+        parser.error('--instance-id must be 32 lowercase hex characters')
     storage_parent(args.db)
     with storage_lease(args.db):
         _serve(args)
 
 def _serve(args):
-    catalog=ProductionCatalog(args.db)
-    profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile,args.ai_profiles_dir)
-    ai=DisabledAI(profiles.startup_error, status_code='corrupt_profile') if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking)
-    if isinstance(ai,AISearch):
-        try: ai.configure(**profiles.resource())
-        except (ValueError,OSError,json.JSONDecodeError): ai.configure(**RESOURCE_DEFAULT)
-    intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check)
-    tagger=create_tagger(ai,args.tagger_profile)
-    server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger))
-    print(f'Aredoko production: http://127.0.0.1:{server.server_port}',flush=True)
-    try: server.serve_forever()
-    except KeyboardInterrupt: pass
-    finally: tagger.close(); intent.close(); ai.close(); catalog.close(); server.server_close()
+    runtime={'ai_python':args.ai_python,'models_root':args.models_root}
+    # Register each owned resource immediately, including startup/bind failures.
+    with ExitStack() as resources:
+        catalog=ProductionCatalog(args.db);resources.callback(catalog.close)
+        profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile,args.ai_profiles_dir,**runtime)
+        ai=DisabledAI(profiles.startup_error, status_code='corrupt_profile') if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking,**runtime)
+        resources.callback(ai.close)
+        if isinstance(ai,AISearch):
+            try: ai.configure(**profiles.resource())
+            except (ValueError,OSError,json.JSONDecodeError): ai.configure(**RESOURCE_DEFAULT)
+        intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**runtime)
+        resources.callback(intent.close)
+        tagger=create_tagger(ai,args.tagger_profile,**runtime);resources.callback(tagger.close)
+        server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id))
+        resources.callback(server.server_close)
+        if args.exit_on_stdin_close:
+            def watch_owner():
+                try:
+                    while sys.stdin.buffer.read(1):pass
+                finally:server.shutdown()
+            threading.Thread(target=watch_owner,daemon=True,name='launcher-owner').start()
+        print(f'Aredoko production: http://127.0.0.1:{server.server_port}',flush=True)
+        try: server.serve_forever(poll_interval=0.1)
+        except KeyboardInterrupt: pass
 
 if __name__=='__main__': main()
 
