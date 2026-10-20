@@ -16,6 +16,7 @@ import time
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'app'))
 from storage_lease import plain_path, storage_parent
+from release_runtime import python_layout, media_layout, configure_embedded_python
 
 PAYLOAD = ('Aredoko.WinUI.exe', 'Aredoko.WinUI.dll', 'Aredoko.Core.dll',
            'Aredoko.WinUI.deps.json', 'Aredoko.WinUI.runtimeconfig.json')
@@ -54,7 +55,7 @@ def validate_output(output):
         raise FileExistsError('Choose a new output directory; existing files are never removed')
 
 
-def package(output_dir, version='1.0.0', skip_build=False, dry_run=False):
+def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False):
     output_dir = Path(os.path.abspath(output_dir))
     validate_output(output_dir)
     if not isinstance(version, str) or not 1 <= len(version) <= 64 or any(ord(c) < 32 for c in version):
@@ -62,10 +63,22 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False):
     required = [REPO / name for name in (
         'app/production_server.py', 'app/storage_schema_v1.json', 'THIRD_PARTY_NOTICES.md',
         'docs/user-guide.md', 'tools/start-aredoko.ps1', 'tools/native-arguments.ps1',
-        'tools/backup_library.py')]
+        'tools/backup_library.py', 'tools/release_runtime.py', 'tools/launch_release.py',
+        'tools/probe_release_runtime.py', 'tools/install-release-shortcut.ps1')]
     for path in required:
         plain_path(path)
     binary = REPO / 'src/Aredoko.WinUI/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64'
+    if include_ai_runtime and python_runtime is None:
+        raise ValueError('--include-ai-runtime requires --python-runtime')
+    python_runtime = Path(os.path.abspath(python_runtime)) if python_runtime is not None else None
+    media_tools = Path(os.path.abspath(media_tools)) if media_tools is not None else None
+    sources = [binary, REPO / 'app', REPO / 'config', REPO / 'docs', REPO / 'tools']
+    sources += [p for p in (python_runtime, media_tools) if p is not None]
+    for source in sources:
+        if output_dir.is_relative_to(source) or source.is_relative_to(output_dir):
+            raise ValueError('Output and payload source directories must not overlap')
+    stem = python_layout(python_runtime, include_ai_runtime) if python_runtime is not None else None
+    if media_tools is not None:media_layout(media_tools)
     if not skip_build and not dry_run:
         built = subprocess.run(['dotnet', 'build', 'src/Aredoko.WinUI/Aredoko.WinUI.csproj',
             '-c', 'Release', '-p:Platform=x64', '-p:SelfContained=true', '--no-restore'],
@@ -76,7 +89,9 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False):
         plain_path(binary / name)
     if dry_run:
         return {'version': version, 'dry_run': True, 'pass': True,
-                'readiness': 'staging-only', 'python_bundled': False}
+                'readiness': 'staging-only', 'python_bundled': python_runtime is not None,
+                'ai_runtime_bundled': include_ai_runtime, 'media_tools_bundled': media_tools is not None,
+                'runtime_imports_verified': False, 'clean_machine_activation_verified': False}
 
     # Exclusive creation is the reservation. Failure leaves an incomplete new
     # staging directory, never a recursive deletion of an existing directory.
@@ -101,7 +116,16 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False):
             copy_payload(source, config_dir / sub)
     for name in ('start-aredoko.ps1', 'native-arguments.ps1'):
         copy_payload(REPO / 'tools' / name, output_dir / name)
-    copy_payload(REPO / 'tools/backup_library.py', tools_dir / 'backup_library.py')
+    for name in ('backup_library.py', 'release_runtime.py', 'launch_release.py', 'probe_release_runtime.py'):
+        copy_payload(REPO / 'tools' / name, tools_dir / name)
+    copy_payload(REPO / 'tools/install-release-shortcut.ps1', output_dir / 'install-release-shortcut.ps1')
+    if python_runtime is not None or media_tools is not None:
+        runtime_dir = output_dir / 'runtime'; runtime_dir.mkdir()
+        if python_runtime is not None:
+            copy_payload(python_runtime, runtime_dir / 'python')
+            configure_embedded_python(runtime_dir / 'python', stem)
+        if media_tools is not None:
+            copy_payload(media_tools, runtime_dir / 'media')
     copy_payload(REPO / 'THIRD_PARTY_NOTICES.md', output_dir / 'THIRD_PARTY_NOTICES.md')
     docs_dir = output_dir / 'docs'; docs_dir.mkdir()
     for source in (REPO / 'docs').glob('*.md'):
@@ -110,6 +134,9 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False):
         '# Aredoko\n\n[利用ガイド](docs/user-guide.md)\n', encoding='utf-8')
     (output_dir / 'Aredoko.cmd').write_text(
         '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-aredoko.ps1" %*\r\n',
+        encoding='utf-8')
+    (output_dir / 'Install-Shortcut.cmd').write_text(
+        '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-release-shortcut.ps1"\r\nif errorlevel 1 pause\r\n',
         encoding='utf-8')
     entries = []
     for path in sorted(output_dir.rglob('*')):
@@ -121,7 +148,9 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False):
                 'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                 'platform': 'windows-x64', 'files_count': len(entries),
                 'total_bytes': sum(e['bytes'] for e in entries), 'entries': entries,
-                'readiness': 'staging-only', 'python_bundled': False, 'ai_runtime_bundled': False,
+                'readiness': 'staging-only', 'python_bundled': python_runtime is not None, 'ai_runtime_bundled': include_ai_runtime,
+                'media_tools_bundled': media_tools is not None, 'runtime_imports_verified': False,
+                'models_bundled': False,
                 'clean_machine_activation_verified': False}
     (output_dir / 'sha256sums.txt').write_text(''.join(
         f"{e['sha256']}  {e['path']}\n" for e in entries), encoding='utf-8')
@@ -138,8 +167,12 @@ def main():
     parser.add_argument('--version', default='1.0.0')
     parser.add_argument('--skip-build', action='store_true')
     parser.add_argument('--check', action='store_true', help='Validate a new destination and existing build without writing or launching')
+    parser.add_argument('--python-runtime', type=Path, help='Explicit prepared standalone Windows Python directory; never downloaded')
+    parser.add_argument('--media-tools', type=Path, help='Explicit FFmpeg/ffprobe directory with LICENSE.txt; never downloaded')
+    parser.add_argument('--include-ai-runtime', action='store_true', help='Require AI dependencies in the supplied Python runtime (no model copying)')
     args = parser.parse_args()
-    package(args.output_dir, args.version, args.skip_build, args.check)
+    package(args.output_dir, args.version, args.skip_build, args.check,
+            python_runtime=args.python_runtime, media_tools=args.media_tools, include_ai_runtime=args.include_ai_runtime)
 
 
 if __name__ == '__main__':

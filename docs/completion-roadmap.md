@@ -262,3 +262,7 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 
 ユーザーの最新指示により、**R13（staging-only → ダブルクリック起動可能な最初のアルファ版）を直近の最優先実行項目**とする。実装範囲、AI/Python/SQLiteの同梱・起動、クリーン環境テスト、未完成の音楽/音声内容解析の扱いとデータ保護は **[ALPHA-0 指示書](alpha-packaging-milestone.md)** に定義する。既存R01–R14台帳・M1/M2/RCの状態/完了条件を削除・改変せず、R13の進捗として区別する。現行のR11/R14 PARTIALは維持し、配布スクリプトだけでALPHA-0/M1/RC完了とはしない。**ALPHA-0後はR06→R07→R08→R09の実音声・音楽検索対応、その後にWinUIの使い勝手・最終デザイン改善、残存R11/R14/M1/M2受入へ進む。** この後続作業は中止ではなく一時的な後回しである。旧「次の3手」は記録として保持するが、作業再開時にはこのユーザー指定のALPHA-0を優先する。
 
+
+## 2026-10-20 Linux追記：R13 runtime stagingの進捗
+
+**R13はDOING、ALPHA-0未完、R14 PARTIALのまま。** [実装と検証](alpha-runtime-staging.md)：準備済みPython/FFmpegの明示梱包、manifest検査、モデル/worker保存先指定、Python launcher/所有終了、current-user shortcutスクリプトを追加。対象の重複除外139 PASS / Windows2 SKIP。上表の「Python/AI runtime未同梱」は実配布物について引き続き成立し、今回追加した同梱**機構**の検証と区別する。次IDはALPHA-0/R13のWindows runtime import・WinUI activation/identity・clean-machine受入。完成後R06–R09実入力対応、次にUI改善。旧台帳/過去成績は削除せず保持。

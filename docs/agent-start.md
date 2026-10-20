@@ -141,3 +141,7 @@
 
 古い「次の作業」記載は履歴として残す。**ユーザー最新指示**：まず [ALPHA-0 packaging milestone](alpha-packaging-milestone.md) を読み、R13の現行staging-only成果物からWindowsでダブルクリック起動できる実用アルファ版を作る。既存引継ぎ・テスト・機能を保持し、無断の依存/モデル取得・CI/Actions・main mergeを行わない。ALPHA-0後は音声・音楽の実ファイル解析と検索（R06–R09）、その後UI改善・製品ビジョンへ復帰。ALPHA-0の完成はM1/M2/RCの自動達成を意味しない。
 
+
+## 2026-10-20 Linux実装の追記：ALPHA-0 runtime staging
+
+[ランタイム梱包・所有起動・実機手順](alpha-runtime-staging.md)を追加。明示runtime梱包/起動前検査/AI保存先指定/owner pipeでの終了を実装し、対象139 PASS・Windows2 SKIP。**R13 DOING / ALPHA-0未完**。同梱Windows Python・WinUI identity・shortcut実起動は未確認なので、最新handoffとリンク先の次の3手を実行する。旧履歴を消さず、ALPHA-0後は音声・音楽実解析とUI改善へ戻る。

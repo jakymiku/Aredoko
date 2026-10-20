@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 sys.path.insert(0, str(ROOT / 'app'))
 import package_release as release
+from release_runtime import verify_release
 from production import ProductionCatalog
 from storage_lease import StoragePathError
 
@@ -37,7 +38,9 @@ class ReleaseStagingTests(unittest.TestCase):
             if source.is_file() and source.suffix in ('.py', '.json'):
                 shutil.copy2(source, self.repo / 'app' / source.name)
         for name in ('THIRD_PARTY_NOTICES.md', 'docs/user-guide.md',
-                     'tools/start-aredoko.ps1', 'tools/native-arguments.ps1', 'tools/backup_library.py'):
+                     'tools/start-aredoko.ps1', 'tools/native-arguments.ps1', 'tools/backup_library.py',
+                     'tools/release_runtime.py', 'tools/launch_release.py', 'tools/probe_release_runtime.py',
+                     'tools/install-release-shortcut.ps1'):
             target = self.repo / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, target)
@@ -152,6 +155,115 @@ class ReleaseStagingTests(unittest.TestCase):
         import sqlite3
         with closing(sqlite3.connect(restored / 'catalog.sqlite')) as db:
             self.assertEqual(db.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
+
+    def runtime(self, ai=False):
+        runtime = self.base / 'prepared Python'
+        for name in ('python.exe', 'pythonw.exe', 'python311.dll', 'python311.zip', 'LICENSE.txt',
+                     'Lib/site-packages/PIL/__init__.py'):
+            path = runtime / name;path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'layout fixture only - not a real Windows runtime')
+        (runtime / 'python311._pth').write_text('python311.zip\n.\n# import site\n')
+        if ai:
+            for name in ('torch', 'transformers', 'sentence_transformers', 'numpy', 'onnxruntime'):
+                path = runtime / 'Lib/site-packages' / name / '__init__.py'
+                path.parent.mkdir(parents=True);path.write_bytes(b'')
+        media = self.base / 'prepared media'
+        media.mkdir()
+        for name in ('ffmpeg.exe', 'ffprobe.exe', 'LICENSE.txt'):
+            (media / name).write_bytes(b'layout fixture only')
+        return runtime, media
+
+    def test_explicit_runtimes_are_staged_without_mutating_sources(self):
+        runtime, media = self.runtime(ai=True)
+        before = {p.relative_to(runtime).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns) for p in runtime.rglob('*') if p.is_file()}
+        result = release.package(self.output, skip_build=True, python_runtime=runtime, media_tools=media, include_ai_runtime=True)
+        self.assertTrue(result['python_bundled']);self.assertTrue(result['ai_runtime_bundled'])
+        self.assertTrue(result['media_tools_bundled']);self.assertFalse(result['runtime_imports_verified'])
+        self.assertFalse(result['models_bundled']);self.assertFalse(result['clean_machine_activation_verified'])
+        self.assertEqual(result, verify_release(self.output))
+        self.assertIn('../../backend/app', (self.output / 'runtime/python/python311._pth').read_text())
+        self.assertEqual(before, {p.relative_to(runtime).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns) for p in runtime.rglob('*') if p.is_file()})
+
+    def test_runtime_venv_missing_dependency_and_nested_output_refused_without_writes(self):
+        runtime, media = self.runtime()
+        with self.assertRaises(ValueError):release.package(runtime / 'release', skip_build=True, python_runtime=runtime)
+        self.assertFalse((runtime / 'release').exists())
+        with self.assertRaises((ValueError, OSError)):
+            release.package(self.output, skip_build=True, python_runtime=runtime, include_ai_runtime=True)
+        self.assertFalse(self.output.exists())
+        (runtime / 'pyvenv.cfg').write_text('home=C:/not/portable')
+        with self.assertRaises(ValueError):release.package(self.output, skip_build=True, python_runtime=runtime)
+        self.assertFalse(self.output.exists())
+        with self.assertRaises(ValueError):release.package(self.binary / 'nested', skip_build=True)
+
+    def test_runtime_check_does_not_execute_or_write(self):
+        runtime, media = self.runtime()
+        with patch.object(release.subprocess, 'run') as run:
+            result = release.package(self.output, dry_run=True, python_runtime=runtime, media_tools=media)
+        run.assert_not_called();self.assertFalse(self.output.exists());self.assertTrue(result['python_bundled'])
+
+    def test_packaged_inventory_cli_from_unrelated_working_directory(self):
+        release.package(self.output, skip_build=True)
+        result = subprocess.run([sys.executable, '-B', str(self.output / 'tools/launch_release.py'), '--verify-only'],
+                                cwd=self.base, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)['pass'])
+        verify_release(self.output)  # No __pycache__/DB/log written into the payload.
+
+    def test_inventory_rejects_changed_extra_and_traversal_entries(self):
+        manifest = release.package(self.output, skip_build=True)
+        executable = self.output / 'bin/Aredoko.WinUI.exe';original = executable.read_bytes()
+        executable.write_bytes(b'changed')
+        with self.assertRaises(ValueError):verify_release(self.output)
+        executable.write_bytes(original)
+        extra = self.output / 'extra.dll';extra.write_bytes(b'extra')
+        with self.assertRaises(ValueError):verify_release(self.output)
+        extra.unlink()
+        marker = self.output / 'manifest.json'
+        for path in ('../outside', '/absolute', 'C:/absolute', 'bin\\other', 'bin/CON', 'bin/trailing.'):
+            changed = json.loads(json.dumps(manifest));changed['entries'][0]['path'] = path
+            marker.write_text(json.dumps(changed), encoding='utf-8')
+            with self.subTest(path=path), self.assertRaises(ValueError):verify_release(self.output)
+
+    def test_runtime_link_is_rejected_before_output_creation(self):
+        runtime, media = self.runtime()
+        try:(runtime / 'linked').symlink_to(media, target_is_directory=True)
+        except OSError:self.skipTest('Creating symlinks is unavailable')
+        with self.assertRaises(ValueError):release.package(self.output, skip_build=True, python_runtime=runtime)
+        self.assertFalse(self.output.exists())
+
+    def test_packaged_backend_runs_after_relocation_and_keeps_payload_read_only(self):
+        from launch_release import run_session
+        from release_runtime import runtime_environment
+        import socket
+        release.package(self.output, skip_build=True)
+        relocated = self.base / 'relocated 日本語 release'
+        self.output.rename(relocated)
+        # Validate actual staged imports/lifecycle with host Python. This does
+        # not execute the placeholder Windows binaries or validate their ABI.
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0));port=probe.getsockname()[1]
+        logs=self.base/'logs';logs.mkdir()
+        db=self.base/'user data/catalog.sqlite'
+        env=runtime_environment();env['LOCALAPPDATA']=str(self.base/'user data')
+        instance='c'*32
+        run_session([sys.executable,'-B',str(relocated/'backend/app/production_server.py'),
+                     '--db',str(db),'--port',str(port),'--instance-id',instance,'--exit-on-stdin-close',
+                     '--models-root',str(self.base/'existing models'),'--ai-python',str(self.base/'missing python')],
+                    [sys.executable,'-c','pass'],port=port,instance=instance,logs=logs,cwd=self.base,env=env)
+        self.assertTrue(db.is_file())
+        verify_release(relocated)
+
+    def test_required_payload_cannot_be_removed_even_with_rewritten_manifest(self):
+        manifest=release.package(self.output,skip_build=True)
+        missing='bin/Aredoko.WinUI.exe'
+        (self.output/missing).unlink()
+        manifest['entries']=[e for e in manifest['entries'] if e['path']!=missing]
+        manifest['files_count']=len(manifest['entries'])
+        manifest['total_bytes']=sum(e['bytes'] for e in manifest['entries'])
+        (self.output/'manifest.json').write_text(json.dumps(manifest))
+        (self.output/'sha256sums.txt').write_text(''.join(f"{e['sha256']}  {e['path']}\n" for e in manifest['entries']))
+        with self.assertRaisesRegex(ValueError,'required application'):verify_release(self.output)
 
 
 @unittest.skipUnless(os.name == 'nt', 'Windows PowerShell native process regression')

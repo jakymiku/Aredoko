@@ -1,5 +1,18 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-20 Linux：ALPHA-0 runtime梱包・所有起動の準備（R13 DOING）
+
+開始upstream HEAD `05e0c60f7ec89de2855be77ec79850a3d261ebea`。既存production branch / Draft PR #5を継続。現在の最優先ALPHA-0に沿い、[runtime梱包・起動仕様と実機手順](alpha-runtime-staging.md)を実装。既存の引き継ぎ/機能/検証記録は全て保持。
+
+- 明示指定の準備済みPython/FFmpeg runtimeを新規配布先へコピーし、配布内のPython探索パスとmanifestを生成。外部Pythonへの暗黙fallbackを廃止。モデルの無断コピーや取得なし。runtime import/clean-machine検証は未完のまま記録。
+- EG2/Laya/WD/GUI profile診断のAI interpreter/models root指定を統一。モデルidentity・vector namespace・既存開発起動の既定値は維持。配布起動時だけ動画toolを固定し、PCのPATHで不足を隠さない。
+- Python launcher、read-only manifest検査、明示実行のcurrent-user shortcut作成スクリプトを追加。所有instance照合・多重起動lease・起動別ログ・GUI終了/起動失敗/owner pipe EOFでのbackend終了・起動途中のcleanupを実装。データは版別の配布先と分離。
+- 対象13モジュール139 tests（137 PASS / Windows2 SKIP、25.925s）。追加2件/小修正後のrelease再確認28 tests（26 PASS / Windows2 SKIP、3.924s）。重複除外で139 PASS / 2 SKIP。実backend HTTP/子process/SQLite、配布後の日本語・空白pathへの再配置、manifest不変を検証。Windows用runtime/binaryの中身はlayout fixtureで、実DLLやGUIを実行した証拠ではない。
+- ホストPythonのSQLite/Pillow/ctypes probe、Python構文・diffチェックPASS。Windows/.NET/PowerShell不在につきWinUI Release/native/shortcut/同梱Windows runtime/GPUは未検証。Actions・新規DL・私物走査・原本変更・main merge・公開配布なし。
+
+**状態**：R13 DOING、ALPHA-0未完、staging-only、R14 PARTIALを維持。次の3手は **(1) 許可済みruntimeの準備とWindows import/DLL probe、(2) WinUI identity/activationを解決した通常shortcut起動と既存機能/許可済みAIの受入、(3) clean-machineで再起動・更新/削除とデータ保持**。ALPHA-0後にR06–R09実音声/音楽の抽出と検索、その後WinUI改善へ戻る。過去のGUI試行上限は変更しない。
+
+
 ## 2026-10-20 現行：表示サイズ・元解像度viewer・UI整理（R11一部受入、R14 PARTIAL）
 
 開始HEAD `08bbe63`。本節を含むcommitが今回の実装。既存Draft PR #5 / `feat/winui3-production-mvp-20261011` を継続。詳細と失敗/再試行は [ui-current-build-acceptance.md](ui-current-build-acceptance.md)。
