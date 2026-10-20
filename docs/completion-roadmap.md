@@ -271,3 +271,8 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 ## 2026-10-20 Windows追記：同梱runtimeとfrontend MSIXの実物確認
 
 [Windows実測・生ログ・次の3手](alpha-windows-runtime-validation.md)。既存資産だけでPython/AI/動画runtimeを準備し、同梱環境のimport、EG2 CUDA固定3処理、backend2起動の保存/所有終了と対象CPU38件がPASS。5.52GB stagingの全checkは169.781秒、frontendのみの未署名自己完結MSIXは約65MB。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。Native activationと所有launcher統合・起動待ち・通常shortcut/署名/install/clean Windowsは未受入。過去のLinux/GUI記録は履歴として保持し、次はALPHAの起動経路を完成させる。成立後の実音声/音楽→WinUI改善は中止しない。
+
+
+## 2026-10-21 R13起動前検査の追記
+
+[同条件の全検査計測と安全性](alpha-startup-performance.md)：固定4 workerでwarm73.567→41.558秒、24,196 hash/80,864 guard保持、対象CPU39 PASS。既存配布を書き換えず現行checkerを比較した結果で、前日の170秒・cold/p95やnative起動完了と混同しない。前日helper由来の未知cache3件は無視せず退避/保存済み。次はALPHA-0のnative activationと所有backend連携。R13 DOING/ALPHA未完/R14 PARTIALと後続音声/音楽→WinUIの順序を保持する。

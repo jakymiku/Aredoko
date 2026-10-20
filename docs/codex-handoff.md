@@ -1,6 +1,18 @@
 # Aredoko 開発引き継ぎ
 
 
+
+## 2026-10-21 R13：全検査を保持した起動前チェックの短縮（ALPHA-0未完）
+
+開始HEAD `58165a0`、remote同期/未コミット変更なしから継続。[計測・安全性・初回拒否](alpha-startup-performance.md)を参照。旧5.52GB配布と同梱Python3.11で、warm1組のfull preflightが **73.567→41.558秒（43.5%短縮）**。前日の170秒とは条件差がある。24,196 hash/80,864 guardを両方維持し、SHA256全件/祖先・link/type/hardlink確認を固定4 workerへ分散（hash batch64）。cache省略・未知file無視・モデル/検索設定変更なし。
+
+Release34＋runtime準備5＝**39 PASS/SKIP0**。全guard/集合一致、各hash1回、同時最大4、改変・未知cache・hardlink・外向link・queue後差替え拒否を含む。初回は前日のhost検証helper由来cache3件を正しく拒否。3件だけをSHA付きquarantineへ退避しmanifest不変、以降`-B`/bytecode禁止。旧失敗証拠は保持する。
+
+**状態/限界**：R13 DOING / ALPHA-0未完 / R14 PARTIAL。現行checkerを既存immutable配布へ適用して計測し、既存配布のcode/manifestは書き換えていない。新しい5GB配布を無意味に作り直していない。今回GPU/GUI/モデル推論/新DL/私物走査/原本・実DB変更/Windows設定・証明書/install/Actions/main mergeなし。公開profiling toolの追加guardはhelp/拒否/構文確認のみ、追加の全走査なし。
+
+**次の3手**：MSIX正式activationとPython backendの所有起動統合→通常shortcut・生成媒体/clean Windowsの保存/更新/削除受入→ALPHA成立後R06–R09実音声/音楽とWinUI改善。40秒超のcheckは未だ長いので起動統合時に扱う。Source/整合性を落とす回避や同一テストの反復をしない。過去のcaps・P0 2/2・OCR保留・全機能維持。
+
+
 ## 2026-10-20 Windows：Work継承・同梱runtime実動作（R13 DOING、ALPHA-0未完）
 
 開始HEAD `b27410b`、Workの7コミットをfast-forwardで統合。他AIの未コミット変更なし。[Windows実測と次の手順](alpha-windows-runtime-validation.md)を優先し、Linux/過去UI記録は保持する。

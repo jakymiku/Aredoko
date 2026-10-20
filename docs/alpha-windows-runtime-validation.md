@@ -55,3 +55,8 @@ GPU記録は事前固定した3処理harnessで取得。後で公開した`check
 3. **ALPHA-0後**：R06–R09の実音声/音楽producer・内容検索、次にWinUI改善と残るR11/R14/M1/M2/RC。通常実装Sol可、R06/R08方式選定はAstra推奨（委任権限ではない）。
 
 新しい依存・モデルの取得0、原本/実DB/元venv変更0、私物走査0、GUI起動/証明書操作/アプリinstall0、Actions0、main merge0。既存の[ALPHA条件](alpha-packaging-milestone.md)・[Linuxの実装と境界](alpha-runtime-staging.md)・[UI受入](ui-current-build-acceptance.md)・[完成計画](completion-roadmap.md)を保持する。
+
+
+## 2026-10-21 R13起動前検査の追記
+
+[同条件の全検査計測と安全性](alpha-startup-performance.md)：固定4 workerでwarm73.567→41.558秒、24,196 hash/80,864 guard保持、対象CPU39 PASS。既存配布を書き換えず現行checkerを比較した結果で、前日の170秒・cold/p95やnative起動完了と混同しない。前日helper由来の未知cache3件は無視せず退避/保存済み。次はALPHA-0のnative activationと所有backend連携。R13 DOING/ALPHA未完/R14 PARTIALと後続音声/音楽→WinUIの順序を保持する。

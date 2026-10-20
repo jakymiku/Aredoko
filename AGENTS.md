@@ -1,6 +1,12 @@
 # Aredoko — Codex / coding agent instructions
 
 
+
+## Current R13 startup-check checkpoint (2026-10-21)
+
+Read [startup performance and guard equivalence](docs/alpha-startup-performance.md) plus latest handoffs. Full preflight on the same immutable5.52GB payload/Python3.11 improved warm73.567→41.558s with four bounded I/O workers; all24,196 hashes and80,864 plain_path calls remain. Sequential reference/count and corruption/link/queued-swap tests pass; no cache skip or guard weakening. CPU39 PASS, full before/after checks PASS; this is not cold/p95/native activation acceptance. Prior helper-generated3 pyc files were correctly rejected and quarantined with hashes, not ignored; any staged-code inspection MUST use -B / bytecode disabled. Existing staged code/manifest stays immutable; future packages include the new checker. Next ALPHA activation/owned backend integration then real shortcut/clean Windows; R13 DOING/ALPHA incomplete/R14 PARTIAL. No GPU/GUI/models/downloads/cert/install/Actions/merge this slice. Resume real audio/music and WinUI after ALPHA; retain all prior rules/budgets/features.
+
+
 ## Current Windows ALPHA-0 checkpoint (2026-10-20)
 
 Work upstream `b27410b` is integrated. Read [Windows runtime validation](docs/alpha-windows-runtime-validation.md) and latest handoffs before older UI/roadmap prose. R13/ALPHA-0 remains the immediate priority. Explicit existing assets now produce a separate CPython/AI runtime; Windows imports, 3 fixed generated EG2 CUDA operations, and copied-backend restart/lease/data integrity passed. A 5.52GB runtime staging folder and unsigned 65MB frontend-only self-contained MSIX exist locally. They are NOT a finished double-click app. Native activation/launcher integration, signing/trust/install, clean Windows and daily startup remain unaccepted. Full preflight took169.781s; do not hide this or remove integrity/source guards just to speed it up. Targeted CPU38 PASS; initial SQLite cleanup failure was test-owned and corrected. No new downloads, source/user DB/venv modifications, GUI runs, cert changes, Actions or merge. Next: ALPHA activation + startup work, then actual native/clean-machine acceptance, then resume R06–R09 real audio/music and WinUI improvement. Preserve previous budgets/results and all features. Normal work Sol; R06/R08 architecture Astra recommended, not delegation authority.

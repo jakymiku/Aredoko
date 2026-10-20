@@ -1,4 +1,6 @@
 """Offline release inventory validation. Integrity is not a publisher signature."""
+from collections import deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import hashlib
 import json
 import os
@@ -36,6 +38,48 @@ def ordinary_tree(root):
             yield entry
 
 
+# Fixed I/O concurrency, independent of core count and library/model settings.
+# Keep the sequential iterator above as a reference; do not cache path guards.
+VERIFY_WORKERS = 4
+VERIFY_BATCH = 64
+
+
+def _checked_directory(root):
+    root = plain_path(root, directory=True)
+    directories, files = [], []
+    for entry in sorted(root.iterdir()):
+        directory = entry.is_dir()
+        plain_path(entry, directory=directory)
+        (directories if directory else files).append(entry)
+    return directories, files
+
+
+def _parallel_tree(root):
+    """Same full lexical ancestor checks per edge/node, at most four tasks.
+
+    Never descend into an entry before its full guard passes. Recheck a queued
+    directory when its worker starts, including ancestors replaced meanwhile.
+    Yield order is unspecified; inventory consumers compare sets, not ranks.
+    """
+    queued = deque([root])
+    pending = set()
+    with ThreadPoolExecutor(max_workers=VERIFY_WORKERS) as executor:
+        while queued or pending:
+            while queued and len(pending) < VERIFY_WORKERS:
+                pending.add(executor.submit(_checked_directory, queued.popleft()))
+            completed, pending = wait(pending, return_when=FIRST_COMPLETED)
+            for future in completed:
+                directories, files = future.result()
+                queued.extend(directories)
+                yield from files
+
+
+def _verify_file(root, item):
+    path = plain_path(root / item['path'])
+    if path.stat().st_size != item['bytes'] or digest(path) != item['sha256']:
+        raise ValueError('Release file changed: ' + item['path'])
+
+
 def python_layout(root, include_ai=False):
     root = plain_path(root, directory=True)
     if (root / 'pyvenv.cfg').exists():
@@ -52,7 +96,7 @@ def python_layout(root, include_ai=False):
         for name in ('torch', 'transformers', 'sentence_transformers', 'numpy', 'onnxruntime'):
             plain_path(root / 'Lib/site-packages' / name / '__init__.py')
     # Walk explicitly supplied input only. Do not discover an installed runtime.
-    for _ in ordinary_tree(root):pass
+    for _ in _parallel_tree(root):pass
     return stem
 
 
@@ -60,7 +104,7 @@ def media_layout(root):
     root = plain_path(root, directory=True)
     for name in ('ffmpeg.exe', 'ffprobe.exe', 'LICENSE.txt'):
         plain_path(root / name)
-    for _ in ordinary_tree(root):pass
+    for _ in _parallel_tree(root):pass
 
 
 def configure_embedded_python(root, stem):
@@ -105,11 +149,14 @@ def verify_release(root):
         names.add(name.casefold()); expected.add(name)
         if type(item['bytes']) is not int or item['bytes'] < 0 or not isinstance(item['sha256'], str) or not re.fullmatch('[0-9a-f]{64}', item['sha256']):
             raise ValueError('Invalid release digest')
-        path = plain_path(root / name)
-        if path.stat().st_size != item['bytes'] or digest(path) != item['sha256']:
-            raise ValueError('Release file changed: ' + name)
         total += item['bytes']
-    actual = {p.relative_to(root).as_posix() for p in ordinary_tree(root)}
+    # Validate metadata serially first; hash EVERY listed file exactly once.
+    # A batch bounds queued futures on Python 3.11 as well as newer interpreters.
+    with ThreadPoolExecutor(max_workers=VERIFY_WORKERS) as executor:
+        for start in range(0, len(entries), VERIFY_BATCH):
+            for _ in executor.map(lambda item: _verify_file(root, item), entries[start:start + VERIFY_BATCH]):
+                pass
+    actual = {p.relative_to(root).as_posix() for p in _parallel_tree(root)}
     if not REQUIRED_FILES <= expected:
         raise ValueError('Release inventory is missing required application files')
     if actual != expected | {'manifest.json', 'sha256sums.txt'}:
