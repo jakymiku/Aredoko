@@ -1,5 +1,6 @@
 """Real generated-catalog HTTP/child-process tests, without Windows or AI models."""
 import json
+from contextlib import closing
 import os
 from pathlib import Path
 import socket
@@ -49,7 +50,7 @@ class ReleaseLifecycleTests(unittest.TestCase):
     def test_normal_frontend_exit_closes_database_and_backend(self):
         self.session()
         self.assert_released()
-        with sqlite3.connect(self.db) as db:
+        with closing(sqlite3.connect(self.db)) as db:
             self.assertEqual(db.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
         wal = Path(str(self.db) + '-wal')
         self.assertTrue(not wal.exists() or wal.stat().st_size == 0)

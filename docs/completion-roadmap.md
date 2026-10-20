@@ -266,3 +266,8 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 ## 2026-10-20 Linux追記：R13 runtime stagingの進捗
 
 **R13はDOING、ALPHA-0未完、R14 PARTIALのまま。** [実装と検証](alpha-runtime-staging.md)：準備済みPython/FFmpegの明示梱包、manifest検査、モデル/worker保存先指定、Python launcher/所有終了、current-user shortcutスクリプトを追加。対象の重複除外139 PASS / Windows2 SKIP。上表の「Python/AI runtime未同梱」は実配布物について引き続き成立し、今回追加した同梱**機構**の検証と区別する。次IDはALPHA-0/R13のWindows runtime import・WinUI activation/identity・clean-machine受入。完成後R06–R09実入力対応、次にUI改善。旧台帳/過去成績は削除せず保持。
+
+
+## 2026-10-20 Windows追記：同梱runtimeとfrontend MSIXの実物確認
+
+[Windows実測・生ログ・次の3手](alpha-windows-runtime-validation.md)。既存資産だけでPython/AI/動画runtimeを準備し、同梱環境のimport、EG2 CUDA固定3処理、backend2起動の保存/所有終了と対象CPU38件がPASS。5.52GB stagingの全checkは169.781秒、frontendのみの未署名自己完結MSIXは約65MB。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。Native activationと所有launcher統合・起動待ち・通常shortcut/署名/install/clean Windowsは未受入。過去のLinux/GUI記録は履歴として保持し、次はALPHAの起動経路を完成させる。成立後の実音声/音楽→WinUI改善は中止しない。

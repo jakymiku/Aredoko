@@ -1,5 +1,19 @@
 # Aredoko 開発引き継ぎ
 
+
+## 2026-10-20 Windows：Work継承・同梱runtime実動作（R13 DOING、ALPHA-0未完）
+
+開始HEAD `b27410b`、Workの7コミットをfast-forwardで統合。他AIの未コミット変更なし。[Windows実測と次の手順](alpha-windows-runtime-validation.md)を優先し、Linux/過去UI記録は保持する。
+
+- 新規DLなしで、明示した既存CPython3.11/Pillow/AI依存を新runtimeへ準備するtoolとCPUテストを追加。DLLsの探索先、ライセンス/ABI/入出力/source不変を確認。元venv/元Python/モデルは変更しない。
+- 同梱runtimeで主要import、EG2 CUDAのdocument/query/生成image 3件（768D finite/normalized、21.844秒）、コピーbackendの2回起動/保存保持/所有終了/DB整合（3.526秒）がPASS。精度/RRFの追加試行ではない。
+- `dist/alpha-0-runtime-20261020-01`：24,196ファイル/5.52GB、Python/AI依存/動画tool同梱、modelsは外部。全manifest/hash＋import/tool実行PASS。ただしcheckに169.781秒かかり、毎回起動には重い。
+- .NET/WindowsAppSDK自己完結の未署名frontend MSIX（約65MB）を作成。外部PackageDependency0、Analyzer混入0。**GUI部品だけ**で、現在の直接EXE launcherとのMSIX activation統合・証明書/信頼/install・clean-machine・通常shortcutは未完。
+- Windowsでrelease28/runtime-paths5/新準備5＝38 PASS/SKIP0。初回はテスト自身のSQLite未closeでcleanup失敗し、`closing`修正後合格。runtime probeもcloseを明示。公開GPUharnessは入口/出力ガードを追加して構文/host拒否/helpのみ確認し、GPU重複実行なし。
+
+**次の3手**：ALPHA-0/R13のnative activationと所有起動統合＋170秒checkの改善→生成媒体/clean Windowsでshortcut・保存/更新/削除受入→ALPHA成立後R06–R09実音声/音楽とWinUI改善。R13 DOING / ALPHA-0未完 / R14 PARTIALを維持。今回GUI起動・証明書/OS設定/install・新取得・Actions・main mergeなし。GPUは最新のユーザー許可に基づく互換性確認のみ。過去の試行数/評価/引き継ぎは変更しない。
+
+
 ## 2026-10-20 Linux：ALPHA-0 runtime梱包・所有起動の準備（R13 DOING）
 
 開始upstream HEAD `05e0c60f7ec89de2855be77ec79850a3d261ebea`。既存production branch / Draft PR #5を継続。現在の最優先ALPHA-0に沿い、[runtime梱包・起動仕様と実機手順](alpha-runtime-staging.md)を実装。既存の引き継ぎ/機能/検証記録は全て保持。

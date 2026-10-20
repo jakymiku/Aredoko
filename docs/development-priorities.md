@@ -26,3 +26,8 @@ M1は画像/本/動画の日常利用β、M2は音声/音楽内容も含む製�
 
 次のCodex / Antigravity / OpenCodeは、まず **[ALPHA-0 ダブルクリック起動可能版](alpha-packaging-milestone.md)** を参照し、R13配布stagingを開発環境不要の起動可能な最初のアルファへ進める。ユーザーは機能拡張や大幅なUI美化より一度使えるWindows版の完成を優先している。既存画像/ZIP/CBZ/動画/音声の機能は削らない。Python/SQLite/AI workerの同梱と実起動/データ保持の確認を省略しない。**完成後は音声・音楽の実解析/内容検索（R06–R09）とWinUI改善へ必ず戻る。** この追記は既存の台帳/製品ビジョン・以前の引継ぎを消さず、R11/R14/M1/M2/RCの未完を完了扱いにしない。
 
+
+
+## 2026-10-20 Windows追記：同梱runtimeとfrontend MSIXの実物確認
+
+[Windows実測・生ログ・次の3手](alpha-windows-runtime-validation.md)。既存資産だけでPython/AI/動画runtimeを準備し、同梱環境のimport、EG2 CUDA固定3処理、backend2起動の保存/所有終了と対象CPU38件がPASS。5.52GB stagingの全checkは169.781秒、frontendのみの未署名自己完結MSIXは約65MB。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。Native activationと所有launcher統合・起動待ち・通常shortcut/署名/install/clean Windowsは未受入。過去のLinux/GUI記録は履歴として保持し、次はALPHAの起動経路を完成させる。成立後の実音声/音楽→WinUI改善は中止しない。

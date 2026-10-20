@@ -1,5 +1,6 @@
 """Run with the packaged interpreter; import checks only, no models/downloads."""
 import argparse
+from contextlib import closing
 import io
 import json
 import struct
@@ -12,7 +13,7 @@ def probe(ai=False):
     import ctypes
     import sqlite3
     from PIL import Image
-    with sqlite3.connect(':memory:') as db:
+    with closing(sqlite3.connect(':memory:')) as db:
         assert db.execute('SELECT 1').fetchone() == (1,)
     buffer = io.BytesIO()
     Image.new('RGB', (2, 2)).save(buffer, format='PNG')

@@ -65,7 +65,7 @@ def media_layout(root):
 
 def configure_embedded_python(root, stem):
     # Only the new staged copy is changed. _pth works for both python/pythonw.
-    content = f'{stem}.zip\n.\nLib/site-packages\n../../backend/app\n../../tools\nimport site\n'
+    content = f'{stem}.zip\n.\nDLLs\nLib/site-packages\n../../backend/app\n../../tools\nimport site\n'
     for path in root.glob('*._pth'):
         plain_path(path)
         path.write_text(content, encoding='utf-8')

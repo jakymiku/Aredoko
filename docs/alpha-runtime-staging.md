@@ -66,3 +66,8 @@ dist/alpha-0-candidate/runtime/python/python.exe -B dist/alpha-0-candidate/tools
 - ホストPythonの `probe_release_runtime.py` はSQLite/Pillow/ctypes PASS。これは同梱Windows Python/AI import/モデル推論の証拠ではない。
 - `git diff --check` / Python構文確認PASS。Windows/.NET SDK/PowerShellがないためRelease build、PowerShell AST/COM shortcut、WinUI/clean-machine、実GPUは未実行。R11/R14/P0既存試行記録は不変。
 - Actions0、新依存/モデル取得0、私物scan/原本変更0、main merge0。配布物の公開なし。起動時の全ハッシュ検査の所要時間は実際の同梱サイズで測定が必要。
+
+
+## 2026-10-20 Windows追記：同梱runtimeとfrontend MSIXの実物確認
+
+[Windows実測・生ログ・次の3手](alpha-windows-runtime-validation.md)。既存資産だけでPython/AI/動画runtimeを準備し、同梱環境のimport、EG2 CUDA固定3処理、backend2起動の保存/所有終了と対象CPU38件がPASS。5.52GB stagingの全checkは169.781秒、frontendのみの未署名自己完結MSIXは約65MB。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。Native activationと所有launcher統合・起動待ち・通常shortcut/署名/install/clean Windowsは未受入。過去のLinux/GUI記録は履歴として保持し、次はALPHAの起動経路を完成させる。成立後の実音声/音楽→WinUI改善は中止しない。

@@ -1,5 +1,10 @@
 # Aredoko — Codex / coding agent instructions
 
+
+## Current Windows ALPHA-0 checkpoint (2026-10-20)
+
+Work upstream `b27410b` is integrated. Read [Windows runtime validation](docs/alpha-windows-runtime-validation.md) and latest handoffs before older UI/roadmap prose. R13/ALPHA-0 remains the immediate priority. Explicit existing assets now produce a separate CPython/AI runtime; Windows imports, 3 fixed generated EG2 CUDA operations, and copied-backend restart/lease/data integrity passed. A 5.52GB runtime staging folder and unsigned 65MB frontend-only self-contained MSIX exist locally. They are NOT a finished double-click app. Native activation/launcher integration, signing/trust/install, clean Windows and daily startup remain unaccepted. Full preflight took169.781s; do not hide this or remove integrity/source guards just to speed it up. Targeted CPU38 PASS; initial SQLite cleanup failure was test-owned and corrected. No new downloads, source/user DB/venv modifications, GUI runs, cert changes, Actions or merge. Next: ALPHA activation + startup work, then actual native/clean-machine acceptance, then resume R06–R09 real audio/music and WinUI improvement. Preserve previous budgets/results and all features. Normal work Sol; R06/R08 architecture Astra recommended, not delegation authority.
+
 ## Latest desktop UI polish and user priority (2026-10-20)
 
 Read [current UI acceptance](docs/ui-current-build-acceptance.md) and latest handoffs. Current-payload detail/daily/library-size/original-resolution viewer checks passed on generated media, with all PNGs reviewed; old failures remain. Library list/grid now has themed card separation and persistent 60–180% sizing via slider/Ctrl+wheel. Static images/book pages use original-resolution Windows decoding with an actual-size action; animation frame budgets remain separate. Normal viewer success text is removed, while loading/errors/save warnings remain. Folder copy uses plain Japanese.
