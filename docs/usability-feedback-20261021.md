@@ -58,3 +58,7 @@
 U01/U02の実素材相当の計測と残るループ/CBZボトルネック→PZ2起動入口/進捗→PZ3 model導入3経路/無制限既定/全runtime→PZ4 ZIP→PZ5 clean Windows。U09/U11/U13/U14全体履歴は別の明確な未完タスクとして保全。ALPHA後の実音声/音楽R06–R09とWinUI改善、P0 2/2閉鎖/OCR保留、原本/実DB/元venv保全/簡潔GUIを維持。新依存/model取得・私物scan・Actions/main mergeなし。
 
 今回の作業が終わったらGitHubへ結果/残件を保存し、所有testプロセスを終了してshutdownする。この一度の指示を、将来の再開時の自動shutdown指示へ転用しない。
+
+## 追加の閲覧速度改善（0c2a34b後）
+
+[実装と検証限界](viewer-performance.md)：旧画像保持、次見開き先読み、guard付き304/decoded cache、位置保存待ちの分離とclose flush、APNG poster thumbnail除外をsourceに追加。Python81 PASS。Core回帰テスト追加済みだがdotnet/Windowsなしで未実行、WinUI build/実機/同等速度は未確認。U01速度は実機比較待ち、APNG thumbnailもnative最終受入待ち。過去の3/3上限・raw FAIL・未解決全件を維持する。installed Alpha更新は後工程。

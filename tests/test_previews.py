@@ -1,4 +1,5 @@
 """Bounded previews and mutation boundaries tested with fictional temp sources."""
+from types import SimpleNamespace
 import io
 import json
 import os
@@ -190,7 +191,7 @@ class PreviewTests(unittest.TestCase):
         real_media_stat = self.media.stat(follow_symlinks=False)
         root_stat_calls = 0
         reparse_attr = getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400)
-        reparse_stat = os.stat_result((real_media_stat.st_mode, real_media_stat.st_ino, real_media_stat.st_dev, real_media_stat.st_nlink, real_media_stat.st_uid, real_media_stat.st_gid, real_media_stat.st_size, int(real_media_stat.st_atime), int(real_media_stat.st_mtime), int(real_media_stat.st_ctime)), {'st_file_attributes': reparse_attr})
+        reparse_stat = SimpleNamespace(st_mode=real_media_stat.st_mode, st_file_attributes=reparse_attr)
         def fake_stat(self_path, *args, **kwargs):
             nonlocal root_stat_calls
             if self_path == self.media and kwargs.get('follow_symlinks') is False:
@@ -214,7 +215,7 @@ class PreviewTests(unittest.TestCase):
         real_sub1_stat = sub1.stat(follow_symlinks=False)
         sub1_stat_calls = 0
         reparse_attr = getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400)
-        reparse_stat = os.stat_result((real_sub1_stat.st_mode, real_sub1_stat.st_ino, real_sub1_stat.st_dev, real_sub1_stat.st_nlink, real_sub1_stat.st_uid, real_sub1_stat.st_gid, real_sub1_stat.st_size, int(real_sub1_stat.st_atime), int(real_sub1_stat.st_mtime), int(real_sub1_stat.st_ctime)), {'st_file_attributes': reparse_attr})
+        reparse_stat = SimpleNamespace(st_mode=real_sub1_stat.st_mode, st_file_attributes=reparse_attr)
         def fake_stat(self_path, *args, **kwargs):
             nonlocal sub1_stat_calls
             if self_path == sub1 and kwargs.get('follow_symlinks') is False:

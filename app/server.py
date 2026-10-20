@@ -26,7 +26,9 @@ def handler_for(catalog, token, benchmark_dist=None):
                 body = json.dumps(body, ensure_ascii=False).encode('utf-8')
             self.send_response(status)
             self.send_header('Content-Type', mime)
-            self.send_header('Content-Length', str(len(body)))
+            # A 304 has no body. Its optional Content-Length would describe the
+            # full selected representation, so omit it rather than sending 0.
+            if status != 304:self.send_header('Content-Length', str(len(body)))
             self.send_header('Connection', 'close')
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')

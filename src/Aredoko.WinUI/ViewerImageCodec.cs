@@ -40,7 +40,7 @@ internal static class ViewerImageCodec
         catch {stream.Dispose();throw;}
     }
 
-    public static async Task<BitmapImage> DecodeAsync(byte[] source,CancellationToken cancellation)
+    public static async Task<BitmapImage> DecodeAsync(byte[] source,CancellationToken cancellation,long? preloadBudget=null)
     {
         if(source.Length==0||source.Length>PreviewPolicy.ViewerSourceBytes)throw new InvalidDataException("Viewer source too large");
         using var stream=new InMemoryRandomAccessStream();
@@ -48,6 +48,8 @@ internal static class ViewerImageCodec
         stream.Seek(0);cancellation.ThrowIfCancellationRequested();
         var decoder=await BitmapDecoder.CreateAsync(stream);
         PreviewPolicy.ValidateViewerDimensions(decoder.PixelWidth,decoder.PixelHeight);
+        if(preloadBudget is long budget&&(long)decoder.PixelWidth*decoder.PixelHeight*4>budget)
+            throw new ViewerPreloadSkippedException();
         // Reader pages and fallback views show a single frame. Explicitly decode
         // frame zero for multi-frame formats; never create an unbounded frame cache.
         if(decoder.FrameCount>1)
@@ -66,5 +68,11 @@ internal static class ViewerImageCodec
         }
         stream.Seek(0);var bitmap=new BitmapImage();await bitmap.SetSourceAsync(stream);
         cancellation.ThrowIfCancellationRequested();return bitmap;
+    }
+
+    public static async Task<DecodedViewerPage<BitmapImage>> DecodeCachedAsync(byte[] source,bool preload,CancellationToken cancellation)
+    {
+        var bitmap=await DecodeAsync(source,cancellation,preload?24L*1024*1024:null);
+        return new(bitmap,checked((long)bitmap.PixelWidth*bitmap.PixelHeight*4));
     }
 }

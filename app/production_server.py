@@ -266,7 +266,10 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                             return self.send(200,previews.manifest(item))
                         if set(query)!={'revision'} or len(query['revision'])!=1:
                             raise ValueError('One revision is required')
-                        data,mime=(previews.read_page(item,int(match[2]),query['revision'][0],original=True) if '/original/' in path else previews.read_page(item,int(match[2]),query['revision'][0]))
+                        if '/original/' in path:
+                            data,mime,etag=previews.page_source(item,int(match[2]),query['revision'][0],self.headers.get('If-None-Match'))
+                            return self.send(304 if data is None else 200,b'' if data is None else data,mime,{'ETag':etag})
+                        data,mime=previews.read_page(item,int(match[2]),query['revision'][0])
                         return self.send(200,data,mime)
                     except ReaderChanged:
                         return self.send(409,{'error':'Archive changed; rescan and reopen the reader'})
@@ -286,8 +289,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
                         if match[2]=='original':
                             if query:raise ValueError('Invalid item')
-                            data,mime=previews.read_original(item)
-                            return self.send(200,data,mime)
+                            data,mime,etag=previews.original_source(item,self.headers.get('If-None-Match'))
+                            return self.send(304 if data is None else 200,b'' if data is None else data,mime,{'ETag':etag})
                         if match[2]=='manifest':
                             if query: raise ValueError('Invalid item')
                             return self.send(200,previews.image_manifest(item))

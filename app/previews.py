@@ -59,6 +59,19 @@ def _revision(row, info):
     return hashlib.sha256(json.dumps(identity).encode('utf-8')).hexdigest()
 
 
+def _viewer_etag(revision, page, info=None):
+    # Weak metadata validator, never a content digest or a cached permission.
+    identity = [revision, page]
+    if info is not None:
+        identity += [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+    return 'W/"' + hashlib.sha256(json.dumps(identity).encode()).hexdigest() + '"'
+
+
+def _validate_viewer_etag(value):
+    if value is not None and (type(value) is not str or re.fullmatch(r'W/"[0-9a-f]{64}"', value) is None):
+        raise ValueError('Invalid viewer validator')
+
+
 def natural_key(name):
     def part_key(part):
         if not part.isdecimal():
@@ -176,6 +189,19 @@ class PreviewReader:
     def read_original(self, item_id):
         return self._read(item_id, operation='image_original', original=True)
 
+    def original_source(self, item_id, if_none_match=None):
+        _validate_viewer_etag(if_none_match)
+        return self._read(item_id, operation='image_original', original=True, conditional=True, if_none_match=if_none_match)
+
+    def page_source(self, item_id, page, revision, if_none_match=None):
+        _validate_viewer_etag(if_none_match)
+        if type(page) is not int or not 0 <= page < 10000:
+            raise ValueError('Invalid reader page')
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}', revision) is None:
+            raise ValueError('Invalid reader revision')
+        return self._read(item_id, operation='page', page=page, revision=revision, original=True,
+                          conditional=True, if_none_match=if_none_match)
+
     def read_cover(self, item_id):
         """Bounded cover/representative-frame bytes for AI visual indexing."""
         return self._read(item_id, operation='cover_input')
@@ -280,16 +306,17 @@ class PreviewReader:
             raise ValueError('Invalid reader revision')
         return self._read(item_id, operation='page_input', page=page, revision=revision)
 
-    def _read_folder(self, row, item_id, operation, page, revision, original=False):
+    def _read_folder(self, row, item_id, operation, page, revision, original=False, conditional=False, if_none_match=None):
         try:
-            return _folder_read(row, item_id, operation, page, revision, original=original)
+            return _folder_read(row, item_id, operation, page, revision, original=original,
+                                conditional=conditional, if_none_match=if_none_match)
         except PreviewUnavailable:
             raise
         except OSError as error:
             # A vanished/replaced page or folder is a rescan case, never a crash.
             raise (ReaderChanged if operation != 'preview' else PreviewUnavailable)('Folder book changed') from error
 
-    def _read(self, item_id, operation='preview', page=0, revision=None, start=None, end=None, row=None, row_loaded=False, root_cache=None, original=False):
+    def _read(self, item_id, operation='preview', page=0, revision=None, start=None, end=None, row=None, row_loaded=False, root_cache=None, original=False, conditional=False, if_none_match=None):
         image_limit=MAX_LARGE_IMAGE_BYTES if original else MAX_IMAGE_BYTES
         if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
             raise PreviewUnavailable('Invalid item')
@@ -306,7 +333,8 @@ class PreviewReader:
             if _excluded(row['relative_path'], tuple(json.loads(row['excludes_json']))):
                 raise PreviewUnavailable('Location excluded')
             if is_folder_book(row['relative_path']):
-                return self._read_folder(row, item_id, operation, page, revision, original=original)
+                return self._read_folder(row, item_id, operation, page, revision, original=original,
+                                         conditional=conditional, if_none_match=if_none_match)
             source, initial = _safe_path(row['path'], row['relative_path'], root_cache=root_cache, return_info=True)
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES and suffix not in AUDIO_SUFFIXES:
@@ -335,6 +363,8 @@ class PreviewReader:
                         raise ReaderChanged('Rescan changed files before reading')
                     raise PreviewUnavailable('Rescan changed files before previewing')
                 current_revision = _revision(row, info) if operation not in ('preview', 'video', 'audio') else None
+                etag = _viewer_etag(current_revision, page) if conditional else None
+                unchanged = conditional and if_none_match == etag
                 if revision is not None and revision != current_revision:
                     raise ReaderChanged('Archive changed; reopen the reader')
                 if operation in ('tag_source', 'tag_input'):
@@ -407,7 +437,7 @@ class PreviewReader:
                     elif operation == 'image_manifest':
                         result = self.animations.inspect(file, info.st_size, current_revision, item_id, IMAGE_MIME[suffix])
                     elif operation == 'image_original':
-                        data,mime=file.read(image_limit+1),IMAGE_MIME[suffix]
+                        data,mime=(b'' if unchanged else file.read(image_limit+1)),IMAGE_MIME[suffix]
                     elif operation == 'image_frame':
                         data = self.animations.render_frame(file, info.st_size, current_revision, page, VIEWER_MAX_EDGE)
                         mime = 'image/png'
@@ -415,7 +445,7 @@ class PreviewReader:
                         header = file.read(4096)
                         file.seek(0)
                         is_anim_header = detect_animation_header(header)
-                        if info.st_size <= MAX_IMAGE_BYTES and not (operation in ('cover_input', 'tag_input') and is_anim_header):
+                        if info.st_size <= MAX_IMAGE_BYTES and not (operation in ('preview', 'cover_input', 'tag_input') and is_anim_header):
                             data, mime = file.read(MAX_IMAGE_BYTES + 1), IMAGE_MIME[suffix]
                         else:
                             rev = current_revision or _revision(row, info)
@@ -483,8 +513,11 @@ class PreviewReader:
                                 if (entry.flag_bits & 1 or entry.file_size > image_limit
                                         or entry.file_size > max(1, entry.compress_size) * 200):
                                     raise PreviewUnavailable('Archive image exceeds preview limits')
-                                with archive.open(entry) as image:
-                                    data = image.read(image_limit + 1)
+                                if unchanged:
+                                    data = b''
+                                else:
+                                    with archive.open(entry) as image:
+                                        data = image.read(image_limit + 1)
                                 mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
                 if operation not in ('manifest','video','video_manifest','video_range','audio','audio_manifest','audio_range','tag_source','page_catalog','image_manifest','video_frames_ai') and len(data) > image_limit:
                     raise PreviewUnavailable('Image exceeds preview limit')
@@ -519,6 +552,7 @@ class PreviewReader:
                 if operation in ('manifest','video_manifest','audio_manifest','page_catalog','image_manifest','video_frames_ai'):
                     return result
                 if operation in ('video_range','audio_range'): return data, mime, info.st_size
+                if conditional:return (None if unchanged else data), mime, etag
                 return data, mime
         except (VideoPreviewUnavailable, AnimationUnavailable) as error:
             raise PreviewUnavailable('Preview unavailable') from error
@@ -584,7 +618,7 @@ def _check_folder(row, directory_info, pages):
     return _check_folder_path(row, directory_info)
 
 
-def _folder_read(row, item_id, operation, page, revision, *, original=False):
+def _folder_read(row, item_id, operation, page, revision, *, original=False, conditional=False, if_none_match=None):
     """Pages of an image folder registered as one book. Read-only, bounded."""
     if operation in ('video', 'video_manifest', 'video_range', 'video_frame', 'video_frames_ai'):
         raise PreviewUnavailable('Video player requires a supported video item')
@@ -646,7 +680,9 @@ def _folder_read(row, item_id, operation, page, revision, *, original=False):
                 or (info.st_ino, info.st_dev) != (initial.st_ino, initial.st_dev)
                 or (info.st_size, info.st_mtime_ns) != (expected_size, expected_mtime)):
             raise ReaderChanged('Source changed while reading')
-        data = file.read(image_limit + 1)
+        etag = _viewer_etag(current_revision, index, info) if conditional else None
+        unchanged = conditional and if_none_match == etag
+        data = b'' if unchanged else file.read(image_limit + 1)
         after = os.fstat(file.fileno())
         current = path.stat(follow_symlinks=False)
         if _reparse(current) or stat.S_ISLNK(current.st_mode):
@@ -659,7 +695,7 @@ def _folder_read(row, item_id, operation, page, revision, *, original=False):
                 or current.st_ctime_ns != initial.st_ctime_ns):
             raise ReaderChanged('Source changed while reading')
         _check_folder(row, directory_info, pages)
-    if len(data) > image_limit or len(data) != expected_size:
+    if len(data) > image_limit or (not unchanged and len(data) != expected_size):
         raise ReaderChanged('Source changed while reading')
     if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
         raise ReaderChanged('Source changed while reading')
@@ -671,5 +707,6 @@ def _folder_read(row, item_id, operation, page, revision, *, original=False):
         return {'source': source, 'data': data, 'mime': mime}
     if operation == 'tag_input':
         return {'source': source, 'data': data, 'mime': mime}
+    if conditional:return (None if unchanged else data), mime, etag
     return data, mime
 

@@ -801,6 +801,7 @@ public sealed partial class MainPage : Page
         {
             var reader=new ArchiveReaderView(api,active.Id,active.Title,active.PageText,active.AIPage);readerView=reader;
             var window=new ViewerWindow(reader,"読書画面","ArchiveReaderDialog");viewerWindow=window;
+            window.BeforeCloseAsync=reader.FlushProgressAsync;
             reader.ContentOpened+=RecordContentOpened;
             reader.CloseRequested+=(_,_)=>window.Close();reader.AttachNavigation(reader);
             window.Closed+=(_,_)=>reader.Dispose();
@@ -1976,6 +1977,7 @@ public sealed partial class MainPage : Page
         finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
     }
 
+    public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
     public void Stop(){disposed=true;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();api.Dispose();}
 }
 

@@ -86,6 +86,18 @@ public sealed class ArchiveReaderClient(HttpClient client)
         var(data,_)=await ReadMediaAsync($"api/library/preview/{itemId}/original",PreviewPolicy.ViewerSourceBytes,ImageTypes,cancellation);
         return data;
     }
+    public Task<ViewerSource> OriginalPageSourceAsync(ArchiveManifest manifest,int page,string? etag,CancellationToken cancellation)
+    {
+        manifest.Validate();
+        if(page<0||page>=manifest.PageCount)throw new ArgumentOutOfRangeException(nameof(page));
+        return ReadResponseAsync($"api/library/reader/{manifest.ItemId}/original/{page}?revision={manifest.Revision}",
+            PreviewPolicy.ViewerSourceBytes,ImageTypes,cancellation,etag:etag);
+    }
+    public Task<ViewerSource> OriginalImageSourceAsync(int itemId,string? etag,CancellationToken cancellation)
+    {
+        if(itemId<1)throw new ArgumentOutOfRangeException(nameof(itemId));
+        return ReadResponseAsync($"api/library/preview/{itemId}/original",PreviewPolicy.ViewerSourceBytes,ImageTypes,cancellation,etag:etag);
+    }
     public async Task<byte[]> ImageAsync(int itemId, CancellationToken cancellation)
     {
         if (itemId < 1) throw new ArgumentOutOfRangeException(nameof(itemId));
@@ -154,14 +166,37 @@ public sealed class ArchiveReaderClient(HttpClient client)
 
     private async Task<(byte[] Data, string Mime)> ReadMediaAsync(string route, int limit, HashSet<string>? allowedTypes, CancellationToken cancellation,string? json=null,int seconds=40)
     {
+        var result=await ReadResponseAsync(route,limit,allowedTypes,cancellation,json,seconds);
+        return (result.Data!,result.Mime);
+    }
+
+    private async Task<ViewerSource> ReadResponseAsync(string route,int limit,HashSet<string>? allowedTypes,CancellationToken cancellation,string? json=null,int seconds=40,string? etag=null)
+    {
         // HttpClient's timeout ends at response headers with ResponseHeadersRead.
         // Keep a deadline through streaming, including a stalled response body.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(seconds));
         var token = deadline.Token;
         using var outgoing=new HttpRequestMessage(json is null?HttpMethod.Get:HttpMethod.Post,route);
+        if(etag is not null)
+        {
+            ViewerSource.ValidateETag(etag);
+            outgoing.Headers.TryAddWithoutValidation("If-None-Match",etag);
+        }
         if(json is not null)outgoing.Content=new StringContent(json,System.Text.Encoding.UTF8,"application/json");
         using var response = await client.SendAsync(outgoing, HttpCompletionOption.ResponseHeadersRead, token);
+        var receivedTag=response.Headers.ETag?.ToString();
+        if(receivedTag is not null)ViewerSource.ValidateETag(receivedTag);
+        if(response.StatusCode==HttpStatusCode.NotModified)
+        {
+            if(etag is null||receivedTag!=etag)
+                throw new InvalidDataException("ページの再確認応答が無効です。");
+            await using var unchanged=await response.Content.ReadAsStreamAsync(token);
+            if(await unchanged.ReadAsync(new byte[1],token)!=0)
+                throw new InvalidDataException("ページの再確認応答に画像データが混入しています。");
+            token.ThrowIfCancellationRequested();
+            return new(null,receivedTag,"",true);
+        }
         if (!response.IsSuccessStatusCode) throw new ArchiveReadException(response.StatusCode);
         var mime = response.Content.Headers.ContentType?.MediaType;
         if (allowedTypes is not null ? mime is null || !allowedTypes.Contains(mime) : mime != "application/json")
@@ -179,6 +214,6 @@ public sealed class ArchiveReaderClient(HttpClient client)
         }
         if (output.Length != size) throw new InvalidDataException("ページを最後まで受信できませんでした。");
         token.ThrowIfCancellationRequested();
-        return (output.ToArray(), mime!);
+        return new(output.ToArray(),receivedTag,mime!,false);
     }
 }

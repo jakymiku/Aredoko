@@ -29,6 +29,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     public event EventHandler? CloseRequested;
     private CancellationTokenSource? request;
     private ViewerImageCodec.NativeAnimation? nativeAnimation;
+    private readonly ViewerPageCache<int,BitmapImage> staticCache=new(3,96*1024*1024);
     private BitmapImage[]? animBitmaps;
     private int[]? animDurations;
     private int animFrame, animLoopCount, animCompletedLoops;
@@ -158,10 +159,14 @@ internal sealed class ImageViewerView : Grid, IDisposable
             args.Handled = true; await MoveAsync(args.Key == VirtualKey.Left ? -1 : 1);
         };
     }
-    private void StopAnimation()
+    private void StopAnimation(bool preserveCurrent=false)
     {
         animTimer.Stop();
-        image.Source=null;nativeAnimation?.Dispose();nativeAnimation=null;
+        if(nativeAnimation is not null)
+        {
+            if(preserveCurrent){if(nativeAnimation.Bitmap.IsAnimatedBitmap)nativeAnimation.Bitmap.Stop();}
+            else{image.Source=null;nativeAnimation.Dispose();nativeAnimation=null;}
+        }
         animBitmaps = null;
         animDurations = null;
         animFrame = 0;
@@ -204,7 +209,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     public async Task MoveAsync(int direction)
     {
         if (disposed || !sequence.TryMove(direction)) return;
-        actualPixels=false;version++; loaded = false; StopAnimation(); image.Source = null; retry.IsEnabled = false;
+        actualPixels=false;version++; loaded = false; StopAnimation(true); retry.IsEnabled = false;
         UpdateIdentity(); ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
         if (busy) { request?.Cancel(); return; }
         await OpenAsync();
@@ -219,20 +224,24 @@ internal sealed class ImageViewerView : Grid, IDisposable
             do
             {
                 requestedVersion = version;
-                loaded = false; failed = false; retry.IsEnabled = false; StopAnimation(); image.Source = null;
+                loaded = false; failed = false; retry.IsEnabled = false; StopAnimation(true);
                 ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
                 using var loading = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                 request = loading; var cancellation = loading.Token; var item = sequence.Current;
+                var trace=new ViewerLoadTrace("image");
                 try
                 {
                     if(item.Location.EndsWith(".gif",StringComparison.OrdinalIgnoreCase))
                     {
                         var source=await api.OriginalImageAsync(item.Id,cancellation);
+                        trace.Mark("source-body");
                         var decoded=await ViewerImageCodec.DecodeGifAsync(source,cancellation);
+                        trace.Mark("decode-ready");
                         if(disposed||requestedVersion!=version){decoded.Dispose();continue;}
-                        nativeAnimation=decoded;var bitmap=decoded.Bitmap;
+                        StopAnimation();nativeAnimation=decoded;var bitmap=decoded.Bitmap;
                         imageWidth=Math.Max(1,bitmap.PixelWidth);imageHeight=Math.Max(1,bitmap.PixelHeight);
                         FitImage();image.Source=bitmap;loaded=true;viewport.ChangeView(0,0,1,true);
+                        trace.Mark("assigned");
                         ContentOpened?.Invoke(item.Id);ViewerNotice.Set(status);
                         continue;
                     }
@@ -259,8 +268,10 @@ internal sealed class ImageViewerView : Grid, IDisposable
                             if(disposed||requestedVersion!=version)break;
                             if(f==0)
                             {
+                                StopAnimation();
                                 imageWidth=Math.Max(1,bitmaps[0].PixelWidth);imageHeight=Math.Max(1,bitmaps[0].PixelHeight);
                                 FitImage();image.Source=bitmaps[0];
+                                trace.Mark("first-frame-assigned");
                                 ViewerNotice.Set(status,"アニメーションを準備しています…");
                             }
                         }
@@ -282,17 +293,25 @@ internal sealed class ImageViewerView : Grid, IDisposable
                     }
                     else
                     {
-                        var source = await api.OriginalImageAsync(item.Id, cancellation);
                         BitmapImage bitmap;
-                        try{bitmap=await ViewerImageCodec.DecodeAsync(source,cancellation);}
+                        try{bitmap=await staticCache.ReadAsync(item.Id,async(etag,ct)=>
+                        {
+                            var result=await api.OriginalImageSourceAsync(item.Id,etag,ct);
+                            trace.Mark(result.NotModified?"source-revalidated":"source-body");return result;
+                        },async(data,speculative,ct)=>
+                        {
+                            var result=await ViewerImageCodec.DecodeCachedAsync(data,speculative,ct);trace.Mark("decode-ready");return result;
+                        },cancellation);}
                         catch(InvalidDataException) when(ImageViewerPolicy.MayAnimate(item.Location))
                         {
                             var bounded=await api.ImageAsync(item.Id,cancellation);
                             bitmap=await CreateBitmapAsync(await ThumbnailCodec.ResizeAsync(bounded,cancellation,PreviewPolicy.ReaderEdge),cancellation);
                         }
                         if (disposed || requestedVersion != version) continue;
+                        StopAnimation();
                         imageWidth = Math.Max(1, bitmap.PixelWidth); imageHeight = Math.Max(1, bitmap.PixelHeight);
                         FitImage(); image.Source = bitmap; loaded = true; viewport.ChangeView(0, 0, 1, true);
+                        trace.Mark("assigned");
                         ContentOpened?.Invoke(sequence.Current.Id);
                         ViewerNotice.Set(status);
                     }
@@ -300,6 +319,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
                 catch (Exception ex)
                 {
                     if (disposed || requestedVersion != version) continue;
+                    StopAnimation();image.Source=null;
                     ViewerNotice.Set(status,ex switch
                     {
                         ArchiveReadException { Status: System.Net.HttpStatusCode.NotFound } => "画像を読み取れません。未接続・破損・容量制限を確認し、更新した場合は再スキャンしてください。",
@@ -316,5 +336,5 @@ internal sealed class ImageViewerView : Grid, IDisposable
         finally { busy = false; if (!disposed) { UpdateControls(); if (!keyboardChrome && !failed) hideTimer.Start(); } }
     }
     public void Dispose()
-    { if (disposed) return; disposed = true; hideTimer.Stop(); StopAnimation(); lifetime.Cancel(); image.Source = null; lifetime.Dispose(); }
+    { if (disposed) return; disposed = true; hideTimer.Stop(); StopAnimation(); lifetime.Cancel(); staticCache.Dispose();image.Source = null; lifetime.Dispose(); }
 }

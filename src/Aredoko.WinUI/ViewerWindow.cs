@@ -15,6 +15,8 @@ internal sealed class ViewerWindow : Window
     private readonly TaskCompletionSource closed=new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IntPtr owner;
     private readonly bool ownerWasEnabled;
+    private bool preparingClose,closePrepared;
+    public Func<Task>? BeforeCloseAsync {get;set;}
     public ViewerWindow(Grid content,string title,string id)
     {
         Title="Aredoko — "+title;
@@ -29,6 +31,11 @@ internal sealed class ViewerWindow : Window
         var main=MainWindow.Current.AppWindow;
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(main.Position.X,main.Position.Y,main.Size.Width,main.Size.Height));
         ownerWasEnabled=IsWindowEnabled(owner);
+        AppWindow.Closing+=async(_,args)=>
+        {
+            if(BeforeCloseAsync is null||closePrepared)return;
+            args.Cancel=true;await RequestCloseAsync();
+        };
         Closed+=(_,_)=>
         {
             if(ownerWasEnabled)EnableWindow(owner,true);
@@ -41,5 +48,19 @@ internal sealed class ViewerWindow : Window
         if(ownerWasEnabled)EnableWindow(owner,false);
         try { Activate();_ = load();await closed.Task; }
         finally { if(ownerWasEnabled)EnableWindow(owner,true); }
+    }
+    // AppWindow.Closing covers system close affordances. Buttons/Escape and
+    // owner shutdown also use this explicit path before Window.Close().
+    public new void Close()=>_=RequestCloseAsync();
+    public async Task RequestCloseAsync()
+    {
+        if(preparingClose||closePrepared)return;preparingClose=true;
+        try
+        {
+            if(BeforeCloseAsync is not null)await BeforeCloseAsync();
+            closePrepared=true;base.Close();
+        }
+        catch(Exception ex){closePrepared=false;AppLog.Error(ex);}
+        finally{preparingClose=false;}
     }
 }

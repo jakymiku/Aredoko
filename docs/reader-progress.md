@@ -34,3 +34,7 @@ python tools/test_image_viewer_ui.py --reader-progress-only --output data/ai-ui/
 native batchは所有test appと生成DBだけを使い、book.cbzのrevision変更fixtureのみ明示許可。他source/settingsは不変。既存user appがあると停止、port8769を使うため他native batchと直列実行。証拠はignored data/ai-uiに保存、Gitへ含めません。
 
 全codec/高DPI/Contrast/Narrator/全Tab/500px未満/極端に低い高さ/titlebar X・Alt+F4、遅いDB/5秒timeout/複数client競合のnative試験、zoom/scroll保存・履歴/削除UI・フォルダ本は後続。実素材の読書品質・大量負荷の保証ではありません。
+
+## 最新：表示と保存待ちの分離（0c2a34b後）
+
+[閲覧速度改善](viewer-performance.md)のキューが上記の「保存中は操作を直列化」を置き換える。保存リクエスト同士は直列、表示操作は保存完了を待たない。1件実行中＋最新表示済み位置1件のみ待機し、通常close各経路でflushする。通信失敗は警告・ログと手動再保存で扱い、自動再試行しない。強制終了や保存失敗時の永続化保証はない。新Core/WinUI実機検証は未実行。

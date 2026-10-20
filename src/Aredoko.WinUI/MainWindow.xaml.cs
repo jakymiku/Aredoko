@@ -5,6 +5,7 @@ public sealed partial class MainWindow : Window
 {
     public new static MainWindow Current { get; private set; } = null!;
     private bool closing;
+    private bool preparingClose;
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     public MainWindow() {
         Current=this;InitializeComponent();
@@ -19,7 +20,17 @@ public sealed partial class MainWindow : Window
         var scale=GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this))/96.0;
         AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1200*scale),(int)(820*scale)));
         RootFrame.Navigate(typeof(MainPage));
-        AppWindow.Closing+=async(_,e)=>{if(closing)return;e.Cancel=true;if(RootFrame.Content is MainPage page && await page.ConfirmDiscardAsync()){closing=true;Close();}};
+        AppWindow.Closing+=async(_,e)=>
+        {
+            if(closing)return;e.Cancel=true;if(preparingClose)return;preparingClose=true;
+            try
+            {
+                if(RootFrame.Content is MainPage page&&await page.ConfirmDiscardAsync())
+                {await page.FlushReaderProgressAsync();closing=true;Close();}
+            }
+            catch(Exception ex){AppLog.Error(ex);}
+            finally{preparingClose=false;}
+        };
         Closed+=(_,_)=>{if(RootFrame.Content is MainPage page)page.Stop();};
     }
     internal void ApplyTheme(string theme)=>WindowRoot.RequestedTheme=theme.ToLowerInvariant() switch

@@ -1,5 +1,14 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 閲覧速度改善の追加実装（基点0c2a34b後・今回の最新）
+
+ユーザーが実機なしで進めるHoneyView相当を目指す方針を承認。[実装・安全性・検証限界](viewer-performance.md)を先に読む。旧画像保持、次見開きのみの先読み、毎回source guardを通すweak ETag/304とデコードLRU、本6枚/96MiB・静止画3枚/96MiB、見開き並行準備、表示後の位置保存キュー（1件送信＋最新1件待機）と通常close flushを実装。先読み原本8MiB/decoded24MiB上限、前景原寸を維持。APNG一覧thumbnailはposterではなく先頭の実再生frame。開発用段階時間はopt-inで、XAML assignedは実描画完了ではない。
+
+Python関連81 PASS/SKIP0、APNG最終調整後14再確認PASS、304ヘッダー最終調整後11再確認PASS（重複合算不可）。既存Windows-only stat模擬2件をLinuxでも再現するfixtureへ修正。生成loopback12回ずつの参考中央値は画像200/304=2.652/1.270ms、ZIPページ2.259/1.364ms、原本SHA/mtime不変。HTTPのみでWindows decode/render/HoneyView同等性は未測定。新Core回帰テストも追加したが、このLinux環境はdotnet/Windowsなしのため**新Coreテスト・WinUI build/native/GPUは未実行**。過去Core732/Release成功は今回の合格証拠ではない。
+
+変更は既存branch/Draft PR #5のsourceのみ。installed Alpha/封印済み02/依存/モデルは未更新。次はWindowsで既存依存のCore/Release確認、追加GUIは従来3/3上限を維持し新たな明示許可後。同一PC/同一データで初回・先読み・逆送り・連続操作・close各経路の保存/原本不変を比較する。R13 DOING/ALPHA未完/R14 PARTIAL、PZ2→PZ3→PZ4→PZ5とALPHA後の実音声/音楽、U09/U11/U13/U14等の残件を維持。Actions0/main mergeなし/新規downloadなし/private scanなし。旧一回限りshutdownを再実行しない。以下の過去handoff本文は全て保持。
+
+
 ## 2026-10-21 就寝中の実使用改善：U01–U16台帳と部分受入
 
 開始HEAD `56d7b3c`、branch `feat/winui3-production-mvp-20261011` / 既存Draft PR #5を継続。[全16件・変更・計測・失敗・残件](usability-feedback-20261021.md)を最優先で読む。ユーザーがGUI/GPUを今回新許可し、短時間で可能な改善→GitHub引き継ぎ→PC shutdownを依頼。通常のOS shutdownを使い、他アプリの未保存内容は強制破棄しない。この終了指示は次回以降へ持ち越さない。

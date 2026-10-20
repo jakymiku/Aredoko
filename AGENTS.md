@@ -1,5 +1,12 @@
 # Aredoko — Codex / coding agent instructions
 
+## Viewer speed follow-up (base0c2a34b; latest source-only checkpoint)
+
+User approved feasible viewer improvements without the Windows PC. Read [viewer performance implementation and acceptance limits](docs/viewer-performance.md). Keep old image until replacement ready; bounded next-spread preload; original authenticated source revalidation on every decoded-cache use; weak metadata ETag/304 never bypasses root/exclusion/revision/handle/link/reparse/ZIP/folder checks. Book cache6 pages/96MiB, static3/96MiB; speculative source8MiB/decoded24MiB. Foreground original quality remains. Coalesced position writer saves only displayed pages and normal button/Esc/titlebar/owner close flushes pending writes. APNG library thumbnail now excludes poster. Timings are opt-in and XAML assignment is not presentation.
+
+Python81 PASS/SKIP0; affected14 and then11 rechecked after final APNG/HTTP adjustments (do not add duplicates). Generated loopback HTTP only: image200/304 median2.652/1.270ms; ZIP2.259/1.364ms; source unchanged. New Core tests authored, but this Linux environment has no dotnet/Windows: **current Core tests/build/native/GPU UNRUN**, HoneyView parity unverified. Earlier Core732/build success belongs to previous revision. Preserve GUI3/3 cap; no new GUI flow/reset without renewed explicit permission. Next existing-dependency Core/WinUI Windows verification, then actual approved comparable media checks, PZ2→PZ3→PZ4→PZ5; real audio/music after ALPHA. Installed Alpha/sealed02 unchanged. R13 DOING/ALPHA incomplete/R14 PARTIAL; retain U09/U11/U13/U14 and all other open items. No downloads/Actions/main merge/private scans; no replay of past one-time shutdown.
+
+
 ## User overnight usability checkpoint (2026-10-21; latest authorization)
 
 Read [full U01–U16 task/evidence ledger](docs/usability-feedback-20261021.md) and newest handoffs. User explicitly renewed overnight GUI/GPU permission and requested feasible fixes, GitHub handoff, then one-time PC shutdown. GIF now uses one guarded original fetch + retained-stream native Windows animation; APNG poster is excluded from playback. Small-image fit, saved immediate theme change, favorite-only immediate/context updates, folder selection response, scope-only badge/clear, plain search names and width-filling tiles are implemented. User explicitly retires reviewed/unreviewed UI and routine result footer; retain stored values/API, warnings/errors, AI boundary controls and unrelated functions. Preserve unsaved tag/shelf drafts when saving favorite.

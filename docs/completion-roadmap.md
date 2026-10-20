@@ -287,3 +287,7 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 ## 2026-10-21 R13 MSIX実機結果と誤通知修正
 
 [MSIX正式起動・実機結果と再開条件](alpha-packaged-activation.md)。許可済み証明書trustとAlpha1.0.0.1通常installは完了し、元Development登録を保持して併存。363 installed payload全件照合PASS。実shortcut→新規所有GUI/backend→生成画像検索・タグ保存まで確認したが、native flowは待機/スキャン/保存captionのテスト不備で**3/3上限**。誤った起動失敗通知とテスト期待値をsourceで修正し、追加GUIなしでCPU55 PASS、停止後DB保存/整合・source不変・封印済み02全24,325ファイル一致を確認。02は修正前artifactのまま。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。次はCPUのみ起動待ち/配布整備、追加GUIは新たな明示許可後に残るargv/閲覧/正常終了・再起動/clean Windows更新削除受入。過去のcaps/全機能/guardを維持し、ALPHA後の実音声/音楽→WinUI改善へ戻る。
+
+## 追加：viewer速度改善のsource checkpoint（0c2a34b後）
+
+[viewer性能記録](viewer-performance.md)に実装と残る受入条件を集約。先読み/cache/旧画像保持/保存分離/close flush/段階計測とAPNG thumbnailを追加し、Python関連81 PASS。新Coreテスト・WinUI build/native/HoneyView比較は未実行。次のviewer作業はWindowsで既存依存のビルドと許可後の実描画・保存・source guard確認。その後PZ2→PZ3→PZ4→PZ5を継続し、R13/ALPHA/R14の完了条件や残件は緩めない。
