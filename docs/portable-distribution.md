@@ -28,12 +28,27 @@ dotnet publish src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Portable -p:Platform=x6
 
 ソース監査でPackage.Current/ApplicationData.Current等への実呼出は見つからなかったが、これは全API互換性の証明ではない。現在のHWNDを渡すファイル/フォルダpicker、native window、画像/動画/音声/アニメ/本、drag-and-drop等は実unpackaged/clean Windowsで受け入れる必要がある。機能削減や別UIへの移行で回避しない。
 
+## 起動中の表示（2026-10-21 ユーザー指定、PZ2必須）
+
+初回に限らず、**Aredoko.exeを開いた直後、重い配布照合・Python/WinUIの準備より先に、小さな起動ウィンドウを表示**する。全検査が終わってからWinUIのsplashを出すだけでは、現在の無反応な待ち時間を解消できない。最小の起動UI自体が全runtimeの初期化に依存しない構成にする。クリックから表示まで通常環境で1秒程度を設計目標とし、実測するまでは保証値/受入済みにしない。
+
+- 見出しは「Aredokoを起動しています」、通常案内は「準備が終わるまでお待ちください」。アプリicon、現在の処理、進捗、取消を置く簡潔な画面とし、開発用説明や絶対ファイルpathを並べない。
+- 実際の段階を「アプリのファイルを確認しています」→「実行環境を準備しています」→「検索の準備をしています」→「画面を開いています」等で示す。初回も通常起動も対象。AIモデルの取得/読込を行っていないのに、それを待っているように表示しない。自動downloadやGPU推論を追加する要件ではない。
+- 全件数/総bytesが確定している照合は、**検査が完了した実件数/bytes**のプログレスバーと件数を表示。総量が不明な環境初期化/起動待ちはindeterminateの動く表示にする。時間に合わせた架空の%や固定の残り時間、根拠のない99%張り付きを使わない。複数段階の%を全体進捗と誤認させず、必要なら「ファイルの確認 12,300 / 24,325」のように示す。
+- UIを応答可能なまま保つ。表示のために全SHA/祖先link/type/hardlink検査を省略したり、同期処理で表示を固めたりしない。件数通知は間引き、不要な大量ログ/描画更新で遅くしない。
+- 「キャンセル」/閉じる操作では新規処理を止め、今回起動した所有processだけを安全に終了し、既存DB/原本を保持する。必要なら「終了処理中」と表示し、無断の強制終了や他instanceへの操作をしない。既に起動中のときは二重起動と分かる案内をする。
+- エラー/timeout時は画面を無言で消さず、失敗した段階と短い説明、「ログを開く」「閉じる」を表示する。進捗の停止と成功を混同させず、失敗状態を保持する。根拠のない成功扱い/自動再試行ループをしない。
+- main windowと所有backendの接続/初期表示が準備できた時点で起動画面を閉じる。process生成だけを「起動完了」としない。準備完了前の空のlibraryや接続拒否を利用者に見せない。
+- 通常の読取/確認中は「お待ちください」で十分。**「シャットダウンしないでください」を常時表示したり、OSの終了をブロックしたりしない。** 将来のDB更新等、実際に中断注意が必要な書込処理がある場合だけ、その処理の実態と復旧方針に沿って案内する。起動UIがあることを理由にデータ保全設計を省略しない。
+
+PZ2受入では、遅いpreflightを模擬したCPU検証で段階/実進捗通知/取消/異常終了/所有cleanupを確認し、許可後のnative検証で**main windowより前に起動画面が現れ続け、待ち時間中も応答し、成功時に消え、失敗時に理由が残る**ことを確認する。起動UIの初表示時刻とmain readyまでの時間を分けて記録。旧GUI上限をresetしない。**今回追加したのは方針/完了条件であり、起動UIの実装・実機受入は未完了。**
+
 ## R13の実行順（現在の正）
 
 | 順番 | 作業 | 状態と完了条件 |
 | --- | --- | --- |
 | PZ1 | 独立したWinUI portable publish | **CPU_DONE**。実publish/自己完結出力/既定MSIX保持/誤構成拒否を確認。native未確認 |
-| PZ2 | ルートAredoko.exeの所有bootstrap | TODO。別途SDK不要の入口から同梱Python launcher→backend→portable GUIを起動。絶対path/作成時刻/保持handle/子processを照合し、他のAredokoやPID再利用を終了しない。port/instance/lease/所有EOFを維持。起動中の進捗・失敗/ログを見せる |
+| PZ2 | ルートAredoko.exeの所有bootstrap | TODO。別途SDK不要の入口から同梱Python launcher→backend→portable GUIを起動。絶対path/作成時刻/保持handle/子processを照合し、他のAredokoやPID再利用を終了しない。port/instance/lease/所有EOFを維持。重い検査前の起動UI・実進捗/段階・取消・失敗/ログを必須とし、main/backend readyまで表示する |
 | PZ3 | portable frontendと全runtimeの梱包 | TODO。明示portable modeと出力manifestを結び、旧MSIXのEXEを誤流用しない。Python/AI依存/動画tool/NOTICEを含み、外部Pythonや既存MSIX登録へfallbackしない。既存の全SHA/祖先link/type/hardlink検査を保持 |
 | PZ4 | 配布ZIPと更新手順 | TODO。存在しない新規先のみ作成、相対path/全inventory照合。日本語・空白path/再配置でbackend HTTP/保存/終了をCPU確認。DBや原本/modelを配布へ収集しない。旧artifactを上書きしない |
 | PZ5 | 明示許可後のnative/clean Windows受入 | TODO。package identityなしを実確認し、解凍→Aredoko.exe→登録/検索/閲覧/終了→再起動/保存保持、更新/フォルダ削除後のデータ保持。SDK/Python/WinAppSDK事前installに助けられない環境で検証。必要なGPUは別途最新許可に従う |

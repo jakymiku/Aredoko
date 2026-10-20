@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## Required startup feedback (2026-10-21 user request; PZ2)
+
+Read [startup UI policy](docs/portable-distribution.md). Show a small responsive startup window immediately from Aredoko.exe, BEFORE heavy integrity/Python/WinUI initialization, on first and subsequent launches. Use truthful completed counts/bytes when known, indeterminate activity plus plain Japanese stage text otherwise; no invented %/ETA. Keep it until main/backend ready, support safe owned cancellation and visible stage/error/log access. Do not show blanket shutdown warnings or block OS shutdown for read-only checks. Keep all integrity/source guards. This is a documented requirement, not implemented/GUI-accepted; existing cap3/3 remains and no GUI/GPU authorization is added.
+
 ## User-selected ZIP distribution (2026-10-21; supersedes MSIX-first R13 steps)
 
 The user explicitly chose future standard distribution as extract ZIP → Aredoko.exe. Read [portable distribution and PZ1–PZ5](docs/portable-distribution.md). This authorizes an explicit unpackaged/self-contained product channel, not a silent fallback for old MSIX. Keep default Development/old Alpha manifests and registrations intact. Portable channel requires Configuration=Portable; actual no-restore frontend publish PASS (354 files/159,999,549 bytes), runtime properties/independent paths/default MSIX/misuse guard/analyzer exclusion PASS. No GUI/GPU/install/cert/download changes. This is frontend only, not a complete runnable ZIP.

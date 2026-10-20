@@ -1,5 +1,9 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-21 追記：起動中UIをPZ2の必須条件に追加
+
+ユーザーは初回の無反応な待ち時間を避け、進捗/起動中の表示を要求。[起動表示の仕様](portable-distribution.md)をPZ2に追加。Aredoko.exe直後、重い全件照合/Python/WinUI初期化より先に最小起動UIを出し、実件数のprogressまたは段階とindeterminate表示、取消、失敗理由/ログを提供する。main/backend readyまで維持。架空%/ETA、読取確認中の一律shutdown禁止、OS終了block、整合性検査の省略はしない。今回は文書の方針/受入条件だけで、UI実装/実機確認を完了扱いにしない。旧3/3上限・全機能・原本/実DB保全を維持、GUI/GPUなし。
+
 ## 2026-10-21 ユーザー方針変更：今後はZIP解凍型配布
 
 ユーザーは、インストール時の画面/通常起動項目が整っていない問題を指摘し、可能なら今後の配布を解凍型へ変更すると明示。[方式・実測・PZ1–PZ5](portable-distribution.md)を現在のR13順序とする。明示Portable channel/Configurationを追加し、.NET+WinAppSDK自己完結/registration-freeの実publish成功（354 files/159,999,549 bytes）。既定DevelopmentのMSIXと旧Alpha/登録/封印配布は保持、誤Release混在をguardで拒否。既知警告3+2を保持し、追加依存/model取得・GUI/GPU/OS変更なし。
