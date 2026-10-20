@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## User-observed R13 entrypoint defect (2026-10-21)
+
+The user opened the installed app normally and saw backend connection refused. This is a distribution defect: the MSIX-provided Start-menu activation starts frontend only, whereas the release launcher starts both. Do not tell installed-app users to use development PowerShell/build commands as a fix. A verified desktop Aredoko Alpha shortcut to bundled pythonw/release launcher is the immediate workaround; creating/inspecting it does not launch GUI. R13 must route the normal installed entrypoint through an owned bootstrap before release completion, without relying on users choosing between a broken app entry and a working link. This is higher priority than cosmetic startup polish. Keep GUI cap3/3 and sealed02 immutable; no automated GUI rerun without new permission.
+
 ## Current R13 MSIX native checkpoint (2026-10-21; partial acceptance)
 
 Read [packaged activation/evidence](docs/alpha-packaged-activation.md) and newest handoffs. Exact installed MSIX/all-payload checks and fresh creation-time/image/package-proven retained HANDLE ownership are implemented; no direct-EXE fallback/adoption of old processes. Explicit user-approved certificate trust and Alpha1.0.0.1 normal install are DONE on this PC; default Development identity/version1.0.0.0 and registration remain intact. Conditional Alpha publish uses Aredoko.Alpha, not a deletion/replacement of the sparse dev registration (0x80073CFB failure preserved). All363 installed payload SHA/guards PASS.

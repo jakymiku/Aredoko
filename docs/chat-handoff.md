@@ -1,5 +1,11 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 追記：インストールされた通常起動項目の不備
+
+ユーザーはインストール済みアプリを普通に起動しただけでbackend接続拒否を確認した。操作ミスではなく、MSIX側の起動項目がGUIのみを起動し、backendはrelease launcher側にある配布設計の不足。開発用start-winui.ps1を使うよう案内したのは不適切で、訂正した。即時対応は封印済み02の製品shortcut installerで、全runtime/installed照合後にDesktopへAredoko Alpha.lnkを新規作成すること。既存リンク/配布/DBは変更せず、GUI自動再起動なし。
+
+R13の次の最優先は**インストール後の通常起動項目そのものを所有bootstrapへ統一**すること。利用者が起動項目を選別しなければ動かない状態を完成扱いにしない。今回のショートカット作成は暫定対応であり、GUI正常終了/再起動受入や3/3上限の解除ではない。手動起動時は既存GUIを閉じ、デスクトップの製品リンクから起動する。起動前照合に1〜2分程度かかり得る。残る旧02の誤通知修正反映/実機受入/clean Windowsは引き続き未完。
+
 ## 2026-10-21 R13：Alpha併存インストール・実起動と誤通知の修正（受入は部分完了）
 
 開始HEAD `a049c87`、既存production branch / Draft PR #5を継続。詳細は[MSIX起動・証拠・再開条件](alpha-packaged-activation.md)。Windows activation managerと配布MSIX/登録先の全payload照合、作成時刻/path/package full nameを証明したHANDLEの監視/終了、所有backend cleanupを実装。直接EXE/古い開発登録へのfallbackなし。`--frontend-msix`で公開payloadを梱包し、shortcut作成は`--check-activation`後だけ。
