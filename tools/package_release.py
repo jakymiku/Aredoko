@@ -17,6 +17,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'app'))
 from storage_lease import plain_path, storage_parent
 from release_runtime import python_layout, media_layout, configure_embedded_python
+from packaged_frontend import inspect_msix, copy_msix_payload, PACKAGE_PATH
 
 PAYLOAD = ('Aredoko.WinUI.exe', 'Aredoko.WinUI.dll', 'Aredoko.Core.dll',
            'Aredoko.WinUI.deps.json', 'Aredoko.WinUI.runtimeconfig.json')
@@ -55,7 +56,7 @@ def validate_output(output):
         raise FileExistsError('Choose a new output directory; existing files are never removed')
 
 
-def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False):
+def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False, frontend_msix=None):
     output_dir = Path(os.path.abspath(output_dir))
     validate_output(output_dir)
     if not isinstance(version, str) or not 1 <= len(version) <= 64 or any(ord(c) < 32 for c in version):
@@ -64,7 +65,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         'app/production_server.py', 'app/storage_schema_v1.json', 'THIRD_PARTY_NOTICES.md',
         'docs/user-guide.md', 'tools/start-aredoko.ps1', 'tools/native-arguments.ps1',
         'tools/backup_library.py', 'tools/release_runtime.py', 'tools/launch_release.py',
-        'tools/probe_release_runtime.py', 'tools/install-release-shortcut.ps1')]
+        'tools/probe_release_runtime.py', 'tools/packaged_frontend.py', 'tools/install-release-shortcut.ps1')]
     for path in required:
         plain_path(path)
     binary = REPO / 'src/Aredoko.WinUI/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64'
@@ -72,24 +73,27 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         raise ValueError('--include-ai-runtime requires --python-runtime')
     python_runtime = Path(os.path.abspath(python_runtime)) if python_runtime is not None else None
     media_tools = Path(os.path.abspath(media_tools)) if media_tools is not None else None
+    frontend_msix = Path(os.path.abspath(frontend_msix)) if frontend_msix is not None else None
+    frontend = inspect_msix(frontend_msix) if frontend_msix is not None else None
     sources = [binary, REPO / 'app', REPO / 'config', REPO / 'docs', REPO / 'tools']
-    sources += [p for p in (python_runtime, media_tools) if p is not None]
+    sources += [p for p in (python_runtime, media_tools, frontend_msix) if p is not None]
     for source in sources:
         if output_dir.is_relative_to(source) or source.is_relative_to(output_dir):
             raise ValueError('Output and payload source directories must not overlap')
     stem = python_layout(python_runtime, include_ai_runtime) if python_runtime is not None else None
     if media_tools is not None:media_layout(media_tools)
-    if not skip_build and not dry_run:
+    if frontend is None and not skip_build and not dry_run:
         built = subprocess.run(['dotnet', 'build', 'src/Aredoko.WinUI/Aredoko.WinUI.csproj',
             '-c', 'Release', '-p:Platform=x64', '-p:SelfContained=true', '--no-restore'],
             cwd=REPO, capture_output=True, text=True, encoding='utf-8', errors='replace')
         if built.returncode:
             raise RuntimeError('WinUI staging build failed\n' + built.stdout + built.stderr)
-    for name in PAYLOAD:
-        plain_path(binary / name)
+    if frontend is None:
+        for name in PAYLOAD:
+            plain_path(binary / name)
     if dry_run:
         return {'version': version, 'dry_run': True, 'pass': True,
-                'readiness': 'staging-only', 'python_bundled': python_runtime is not None,
+                'readiness': 'staging-only', 'frontend_activation': 'msix' if frontend is not None else 'unconfigured', 'python_bundled': python_runtime is not None,
                 'ai_runtime_bundled': include_ai_runtime, 'media_tools_bundled': media_tools is not None,
                 'runtime_imports_verified': False, 'clean_machine_activation_verified': False}
 
@@ -104,9 +108,12 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
     app_dir = backend / 'app'; app_dir.mkdir()
     config_dir = backend / 'config'; config_dir.mkdir()
     tools_dir = output_dir / 'tools'; tools_dir.mkdir()
-    for item in binary.iterdir():
-        if item.suffix.lower() != '.pdb' and item.name.lower() not in ('appx', 'publish'):
-            copy_payload(item, bin_dir / item.name)
+    if frontend is not None:
+        copy_msix_payload(frontend_msix, bin_dir, frontend)
+    else:
+        for item in binary.iterdir():
+            if item.suffix.lower() != '.pdb' and item.name.lower() not in ('appx', 'publish'):
+                copy_payload(item, bin_dir / item.name)
     for item in (REPO / 'app').iterdir():
         if item.is_file() and item.suffix in ('.py', '.json'):
             copy_payload(item, app_dir / item.name)
@@ -116,9 +123,12 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             copy_payload(source, config_dir / sub)
     for name in ('start-aredoko.ps1', 'native-arguments.ps1'):
         copy_payload(REPO / 'tools' / name, output_dir / name)
-    for name in ('backup_library.py', 'release_runtime.py', 'launch_release.py', 'probe_release_runtime.py'):
+    for name in ('backup_library.py', 'release_runtime.py', 'launch_release.py', 'probe_release_runtime.py', 'packaged_frontend.py'):
         copy_payload(REPO / 'tools' / name, tools_dir / name)
     copy_payload(REPO / 'tools/install-release-shortcut.ps1', output_dir / 'install-release-shortcut.ps1')
+    if frontend_msix is not None:
+        (output_dir / 'frontend').mkdir()
+        copy_payload(frontend_msix, output_dir / PACKAGE_PATH)
     if python_runtime is not None or media_tools is not None:
         runtime_dir = output_dir / 'runtime'; runtime_dir.mkdir()
         if python_runtime is not None:
@@ -148,7 +158,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
                 'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                 'platform': 'windows-x64', 'files_count': len(entries),
                 'total_bytes': sum(e['bytes'] for e in entries), 'entries': entries,
-                'readiness': 'staging-only', 'python_bundled': python_runtime is not None, 'ai_runtime_bundled': include_ai_runtime,
+                'readiness': 'staging-only', 'frontend_activation': 'msix' if frontend is not None else 'unconfigured', 'python_bundled': python_runtime is not None, 'ai_runtime_bundled': include_ai_runtime,
                 'media_tools_bundled': media_tools is not None, 'runtime_imports_verified': False,
                 'models_bundled': False,
                 'clean_machine_activation_verified': False}
@@ -170,9 +180,10 @@ def main():
     parser.add_argument('--python-runtime', type=Path, help='Explicit prepared standalone Windows Python directory; never downloaded')
     parser.add_argument('--media-tools', type=Path, help='Explicit FFmpeg/ffprobe directory with LICENSE.txt; never downloaded')
     parser.add_argument('--include-ai-runtime', action='store_true', help='Require AI dependencies in the supplied Python runtime (no model copying)')
+    parser.add_argument('--frontend-msix', type=Path, help='Explicit self-contained frontend MSIX; its published payload supplies bin. No install/signing')
     args = parser.parse_args()
     package(args.output_dir, args.version, args.skip_build, args.check,
-            python_runtime=args.python_runtime, media_tools=args.media_tools, include_ai_runtime=args.include_ai_runtime)
+            python_runtime=args.python_runtime, media_tools=args.media_tools, include_ai_runtime=args.include_ai_runtime, frontend_msix=args.frontend_msix)
 
 
 if __name__ == '__main__':

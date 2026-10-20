@@ -16,6 +16,21 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- Normal development keeps its existing sparse identity. Explicit Alpha
+       publishing installs beside it, without unregistering development data. -->
+  <PropertyGroup>
+    <AredokoPackageChannel Condition="'$(AredokoPackageChannel)' == ''">Development</AredokoPackageChannel>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(AredokoPackageChannel)' == 'Alpha'">
+    <AppxManifest Include="Package.Alpha.appxmanifest"><SubType>Designer</SubType></AppxManifest>
+  </ItemGroup>
+  <Target Name="ValidateAredokoPackageChannel" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(AredokoPackageChannel)' != 'Development' and '$(AredokoPackageChannel)' != 'Alpha'"
+           Text="Unknown Aredoko package channel. Use Development or Alpha." />
+    <Error Condition="'$(AredokoPackageChannel)' == 'Alpha' and '$(PublishAppxPackage)' != 'true'"
+           Text="The Alpha channel is for MSIX publishing. Use winapp package with -p AredokoPackageChannel=Alpha; keep development runs on the default channel." />
+  </Target>
+
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />

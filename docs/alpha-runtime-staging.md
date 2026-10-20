@@ -1,5 +1,7 @@
 # ALPHA-0：ランタイム梱包・起動所有権の準備（2026-10-20、Windows未検証）
 
+> **最新2026-10-21**：[MSIX正式起動・実機結果と再開条件](alpha-packaged-activation.md)。許可済み証明書trustとAlpha1.0.0.1通常installは完了し、元Development登録を保持して併存。363 installed payload全件照合PASS。実shortcut→新規所有GUI/backend→生成画像検索・タグ保存まで確認したが、native flowは待機/スキャン/保存captionのテスト不備で**3/3上限**。誤った起動失敗通知とテスト期待値をsourceで修正し、追加GUIなしでCPU55 PASS、停止後DB保存/整合・source不変・封印済み02全24,325ファイル一致を確認。02は修正前artifactのまま。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。次はCPUのみ起動待ち/配布整備、追加GUIは新たな明示許可後に残るargv/閲覧/正常終了・再起動/clean Windows更新削除受入。過去のcaps/全機能/guardを維持し、ALPHA後の実音声/音楽→WinUI改善へ戻る。
+
 開始upstream HEAD `05e0c60f7ec89de2855be77ec79850a3d261ebea`。現在の状態は **R13 DOING / ALPHA-0未完 / staging-only**。Windowsバイナリ、Python配布物、FFmpeg、モデルはこのLinux作業で取得・生成・実行していない。以下の実装とCPU検証を、ダブルクリック版の完成やclean-machine受入と読み替えない。既存の[ALPHA-0条件](alpha-packaging-milestone.md)と[製品ビジョン](product-vision.md)を維持する。
 
 ## 今回の実装
@@ -71,3 +73,8 @@ dist/alpha-0-candidate/runtime/python/python.exe -B dist/alpha-0-candidate/tools
 ## 2026-10-20 Windows追記：同梱runtimeとfrontend MSIXの実物確認
 
 [Windows実測・生ログ・次の3手](alpha-windows-runtime-validation.md)。既存資産だけでPython/AI/動画runtimeを準備し、同梱環境のimport、EG2 CUDA固定3処理、backend2起動の保存/所有終了と対象CPU38件がPASS。5.52GB stagingの全checkは169.781秒、frontendのみの未署名自己完結MSIXは約65MB。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。Native activationと所有launcher統合・起動待ち・通常shortcut/署名/install/clean Windowsは未受入。過去のLinux/GUI記録は履歴として保持し、次はALPHAの起動経路を完成させる。成立後の実音声/音楽→WinUI改善は中止しない。
+
+
+## 2026-10-21 R13 MSIX実機結果と誤通知修正
+
+[MSIX正式起動・実機結果と再開条件](alpha-packaged-activation.md)。許可済み証明書trustとAlpha1.0.0.1通常installは完了し、元Development登録を保持して併存。363 installed payload全件照合PASS。実shortcut→新規所有GUI/backend→生成画像検索・タグ保存まで確認したが、native flowは待機/スキャン/保存captionのテスト不備で**3/3上限**。誤った起動失敗通知とテスト期待値をsourceで修正し、追加GUIなしでCPU55 PASS、停止後DB保存/整合・source不変・封印済み02全24,325ファイル一致を確認。02は修正前artifactのまま。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。次はCPUのみ起動待ち/配布整備、追加GUIは新たな明示許可後に残るargv/閲覧/正常終了・再起動/clean Windows更新削除受入。過去のcaps/全機能/guardを維持し、ALPHA後の実音声/音楽→WinUI改善へ戻る。

@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新（2026-10-21）**：[MSIX実起動・誤通知修正と上限](alpha-packaged-activation.md)を参照。許可済みtrust/Alpha併存install完了、実shortcut/新GUI/生成画像検索・タグ保存まで確認。CPU55 PASS、停止後DB/source/全配布整合PASS。native flowは3/3上限、追加GUIは新たな明示許可まで不可。封印済み02は修正前。閲覧/正常終了・再起動/clean Windows未受入、R13 DOING/ALPHA未完/R14 PARTIAL。既存登録/実DBを保全、次はCPUのみの起動待ち/配布整備。
+
 > **現在（2026-10-21）**：[R13起動前検査の短縮](alpha-startup-performance.md)と最新handoffを参照。39 CPU PASS、全hash/guard保持でwarm73.6→41.6秒。次はALPHA activation/所有backend統合で、旧5.52GB snapshotのcodeは未更新。staged moduleを検査するhost helperも必ず`-B`を使い未知cacheを作らない。ALPHA-0は引き続き未完。
 
 > **現在の最優先（2026-10-20 Windows）**：[ALPHA-0のWindows実測](alpha-windows-runtime-validation.md)と最新handoffを先に読む。同梱runtime/実EG2互換性/backend再起動はPASSだが、native activation・通常shortcut・clean-machineは未完。R13 DOINGを続け、旧checkpointの「次」やR01〜R14全完了を現在の指示にしない。

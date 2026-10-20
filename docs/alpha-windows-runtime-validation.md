@@ -1,5 +1,7 @@
 # ALPHA-0 Windowsランタイム受入（2026-10-20）
 
+> **最新2026-10-21**：[MSIX正式起動・実機結果と再開条件](alpha-packaged-activation.md)。許可済み証明書trustとAlpha1.0.0.1通常installは完了し、元Development登録を保持して併存。363 installed payload全件照合PASS。実shortcut→新規所有GUI/backend→生成画像検索・タグ保存まで確認したが、native flowは待機/スキャン/保存captionのテスト不備で**3/3上限**。誤った起動失敗通知とテスト期待値をsourceで修正し、追加GUIなしでCPU55 PASS、停止後DB保存/整合・source不変・封印済み02全24,325ファイル一致を確認。02は修正前artifactのまま。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。次はCPUのみ起動待ち/配布整備、追加GUIは新たな明示許可後に残るargv/閲覧/正常終了・再起動/clean Windows更新削除受入。過去のcaps/全機能/guardを維持し、ALPHA後の実音声/音楽→WinUI改善へ戻る。
+
 開始HEAD `b27410b`。Workの7コミット（`ab81b3c..b27410b`）をfetch/fast-forwardで取り込み、既存コードと引き継ぎを保持した。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。以下は同梱ランタイムとGUI部品の検証で、完成したダブルクリック版ではない。
 
 ## 今回の実装
@@ -60,3 +62,8 @@ GPU記録は事前固定した3処理harnessで取得。後で公開した`check
 ## 2026-10-21 R13起動前検査の追記
 
 [同条件の全検査計測と安全性](alpha-startup-performance.md)：固定4 workerでwarm73.567→41.558秒、24,196 hash/80,864 guard保持、対象CPU39 PASS。既存配布を書き換えず現行checkerを比較した結果で、前日の170秒・cold/p95やnative起動完了と混同しない。前日helper由来の未知cache3件は無視せず退避/保存済み。次はALPHA-0のnative activationと所有backend連携。R13 DOING/ALPHA未完/R14 PARTIALと後続音声/音楽→WinUIの順序を保持する。
+
+
+## 2026-10-21 R13 MSIX実機結果と誤通知修正
+
+[MSIX正式起動・実機結果と再開条件](alpha-packaged-activation.md)。許可済み証明書trustとAlpha1.0.0.1通常installは完了し、元Development登録を保持して併存。363 installed payload全件照合PASS。実shortcut→新規所有GUI/backend→生成画像検索・タグ保存まで確認したが、native flowは待機/スキャン/保存captionのテスト不備で**3/3上限**。誤った起動失敗通知とテスト期待値をsourceで修正し、追加GUIなしでCPU55 PASS、停止後DB保存/整合・source不変・封印済み02全24,325ファイル一致を確認。02は修正前artifactのまま。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。次はCPUのみ起動待ち/配布整備、追加GUIは新たな明示許可後に残るargv/閲覧/正常終了・再起動/clean Windows更新削除受入。過去のcaps/全機能/guardを維持し、ALPHA後の実音声/音楽→WinUI改善へ戻る。

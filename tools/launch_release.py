@@ -14,11 +14,31 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from release_runtime import verify_release, python_layout, media_layout, runtime_environment
 from storage_lease import plain_path, storage_parent, storage_lease
+from packaged_frontend import prepare_frontend
 
 CREATE_NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 PATH_OPTIONS = {'database': '--db', 'ai_python': '--ai-python', 'models_root': '--models-root',
                 'ai_profile': '--ai-profile', 'ai_settings': '--ai-settings',
                 'ai_profiles_dir': '--ai-profiles-dir', 'tagger_profile': '--tagger-profile'}
+
+
+class AppSessionError(RuntimeError):
+    """The frontend was started, but its session ended unexpectedly."""
+
+
+def report_failure(error, *, show_dialog=True):
+    heading = ('Aredoko stopped unexpectedly.' if isinstance(error, AppSessionError)
+               else 'Aredoko could not start.')
+    message = heading + '\n' + str(error)
+    if sys.stderr is not None:print(message, file=sys.stderr)
+    if show_dialog and os.name == 'nt':
+        _show_error_dialog(message)
+    return 1
+
+
+def _show_error_dialog(message):
+    import ctypes
+    ctypes.windll.user32.MessageBoxW(None, message, 'Aredoko Alpha', 0x10)
 
 
 def load_settings(data, explicit=None):
@@ -85,7 +105,7 @@ def _stop_owned(process, graceful=False, timeout=8):
             process.kill();process.wait(timeout=5)
 
 
-def run_session(backend_command, app_command, *, port, instance, logs, cwd, env, startup_timeout=20):
+def run_session(backend_command, app_command, *, port, instance, logs, cwd, env, startup_timeout=20, app_factory=None):
     """Launch only owned children, and never attach to another service on a port."""
     # This advisory check provides a clear error; the per-launch session ID is
     # the race-safe proof that the listening server is ours.
@@ -110,16 +130,20 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
                     break
                 if time.monotonic() >= deadline:raise RuntimeError('Backend startup timed out')
                 time.sleep(0.1)
-            app = subprocess.Popen(app_command, stdin=subprocess.DEVNULL, stdout=app_log, stderr=app_log,
-                                   cwd=cwd, env=env, close_fds=True)
+            app = (app_factory(app_command, app_log) if app_factory is not None else
+                   subprocess.Popen(app_command, stdin=subprocess.DEVNULL, stdout=app_log, stderr=app_log,
+                                    cwd=cwd, env=env, close_fds=True))
             while app.poll() is None:
-                if backend.poll() is not None:raise RuntimeError('Backend stopped unexpectedly; see backend-error.log')
+                if backend.poll() is not None:raise AppSessionError('Backend stopped unexpectedly; see backend-error.log')
                 time.sleep(0.1)
-            if app.returncode:raise RuntimeError('Windows app activation failed; see app.log')
+            if app.returncode:raise AppSessionError(f'Windows app exited with code {app.returncode}; see app.log')
         finally:
-            try:_stop_owned(app)
+            try:
+                try:_stop_owned(app)
+                finally:
+                    if app is not None and hasattr(app, 'close'):app.close()
             finally:_stop_owned(backend, graceful=True)
-    if backend.returncode:raise RuntimeError('Backend did not exit cleanly; see backend-error.log')
+    if backend.returncode:raise AppSessionError('Backend did not exit cleanly; see backend-error.log')
 
 
 def launch(root, data, settings):
@@ -140,21 +164,26 @@ def launch(root, data, settings):
                    '--instance-id', instance, '--exit-on-stdin-close', '--ai-ranking', values.get('ai_ranking', 'mean-rrf')]
         for key, option in PATH_OPTIONS.items():
             if key in values:backend += [option, values[key]]
-        app = [str(root / 'bin/Aredoko.WinUI.exe'), '--ui-theme', values.get('ui_theme', 'system'),
+        app = ['--ui-theme', values.get('ui_theme', 'system'),
                '--viewer-settings', values.get('viewer_settings', str(data / 'viewer-settings.json'))]
         try:
-            preflight(root)
+            manifest = preflight(root)
+            frontend = prepare_frontend(root, manifest)
             run_session(backend, app, port=8769, instance=instance, logs=logs, cwd=root,
-                        env=runtime_environment(root / 'runtime/media'))
+                        env=runtime_environment(root / 'runtime/media'), app_factory=frontend.start)
         except Exception as error:
             (logs / 'launcher.log').write_text(type(error).__name__ + ': ' + str(error) + '\n', encoding='utf-8')
-            raise RuntimeError(str(error) + '\nLogs: ' + str(logs)) from error
+            failure_type = AppSessionError if isinstance(error, AppSessionError) else RuntimeError
+            raise failure_type(str(error) + '\nLogs: ' + str(logs)) from error
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--verify-only', action='store_true', help='Hash inventory only, on any OS; no child processes or writes')
-    parser.add_argument('--check', action='store_true', help='Windows import/tool checks; no database, GUI, or model loading')
+    checks = parser.add_mutually_exclusive_group()
+    checks.add_argument('--verify-only', action='store_true', help='Hash inventory only, on any OS; no child processes or writes')
+    checks.add_argument('--check', action='store_true', help='Windows import/tool checks; no database, GUI, or model loading')
+    checks.add_argument('--check-activation', action='store_true', help='Read-only installed MSIX identity/payload check, plus runtime checks; no activation')
+    parser.add_argument('--no-error-dialog', action='store_true', help='Automation only: keep error logs and nonzero exit without a modal dialog')
     parser.add_argument('--settings', type=Path, help='Explicit launch-settings.json (otherwise in LOCALAPPDATA/Aredoko)')
     for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}:
         parser.add_argument('--' + key.replace('_', '-'))
@@ -162,8 +191,9 @@ def main():
     try:
         if args.verify_only:
             manifest = verify_release(ROOT)
-        elif args.check:
+        elif args.check or args.check_activation:
             manifest = preflight(ROOT)
+            if args.check_activation:prepare_frontend(ROOT, manifest)
         else:
             if os.name != 'nt':raise RuntimeError('Aredoko release launch requires Windows')
             base = os.environ.get('LOCALAPPDATA')
@@ -174,15 +204,12 @@ def main():
             launch(ROOT, data, validate_settings(settings))
             return 0
         print(json.dumps({'pass': True, 'version': manifest['version'], 'readiness': 'staging-only',
-                          'clean_machine_activation_verified': False}))
+                          'clean_machine_activation_verified': False,
+                          'frontend_activation': manifest.get('frontend_activation', 'unconfigured'),
+                          'installed_frontend_checked': args.check_activation}))
         return 0
     except Exception as error:
-        message = 'Aredoko could not start.\n' + str(error)
-        if sys.stderr is not None:print(message, file=sys.stderr)
-        if os.name == 'nt' and not (args.check or args.verify_only):
-            import ctypes
-            ctypes.windll.user32.MessageBoxW(None, message, 'Aredoko Alpha', 0x10)
-        return 1
+        return report_failure(error, show_dialog=not (args.no_error_dialog or args.check or args.check_activation or args.verify_only))
 
 
 if __name__ == '__main__':

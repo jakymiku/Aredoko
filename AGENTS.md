@@ -1,6 +1,12 @@
 # Aredoko — Codex / coding agent instructions
 
+## Current R13 MSIX native checkpoint (2026-10-21; partial acceptance)
 
+Read [packaged activation/evidence](docs/alpha-packaged-activation.md) and newest handoffs. Exact installed MSIX/all-payload checks and fresh creation-time/image/package-proven retained HANDLE ownership are implemented; no direct-EXE fallback/adoption of old processes. Explicit user-approved certificate trust and Alpha1.0.0.1 normal install are DONE on this PC; default Development identity/version1.0.0.0 and registration remain intact. Conditional Alpha publish uses Aredoko.Alpha, not a deletion/replacement of the sparse dev registration (0x80073CFB failure preserved). All363 installed payload SHA/guards PASS.
+
+Fixed native flow **alpha-msix-owned-lifecycle-v1 exhausted3/3**: UI wait, missing explicit scan, then wrong saved-caption expectation. Actual shortcut/new GUI/owned backend/generated scan/search/tag save worked; PNG02/03 reviewed. Post-stop read-only generated DB integrity/tag persistence and source SHA/mtime PASS, sealed02 inventory24,325 files unchanged. The user's startup-error dialog was a test-owned termination misclassified by the launcher, not failed activation. Source now distinguishes runtime exit codes and has opt-in automation-only --no-error-dialog; normal user notification/log/nonzero exit remain. Release CPU55 PASS/SKIP0. Post-cap changes are CPU/static only. **Do not rerun GUI or evade cap with another folder/flow name without new explicit user permission.** Prior trust/install approval persists; do not ask for that again.
+
+R13 DOING/ALPHA incomplete/R14 PARTIAL. Sealed dist/alpha-0-msix-20261021-02 still predates reporting fixes: never edit it in place. Real argv/viewer/normal GUI close/restart and clean Windows update/uninstall remain unaccepted. Receipt timings87.272/83.779/63.984s are not controlled startup p95. Next CPU-only startup wait/distribution guidance, then remaining native acceptance when newly authorized; after ALPHA resume real audio/music R06–R09 and WinUI. Retain all source guards/features, OCR deferral/P0 2/2/prior caps; no Actions/main merge/new downloads/private scans. Normal work Sol; R06/R08 architecture Astra recommended, not delegation authority.
 
 ## Current R13 startup-check checkpoint (2026-10-21)
 

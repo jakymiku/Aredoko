@@ -1,5 +1,7 @@
 # Aredoko 完成までの実行計画
 
+> **最新2026-10-21**：[MSIX正式起動・実機結果と再開条件](alpha-packaged-activation.md)。許可済み証明書trustとAlpha1.0.0.1通常installは完了し、元Development登録を保持して併存。363 installed payload全件照合PASS。実shortcut→新規所有GUI/backend→生成画像検索・タグ保存まで確認したが、native flowは待機/スキャン/保存captionのテスト不備で**3/3上限**。誤った起動失敗通知とテスト期待値をsourceで修正し、追加GUIなしでCPU55 PASS、停止後DB保存/整合・source不変・封印済み02全24,325ファイル一致を確認。02は修正前artifactのまま。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。次はCPUのみ起動待ち/配布整備、追加GUIは新たな明示許可後に残るargv/閲覧/正常終了・再起動/clean Windows更新削除受入。過去のcaps/全機能/guardを維持し、ALPHA後の実音声/音楽→WinUI改善へ戻る。
+
 ## 2026-10-20 現行状態の訂正
 
 [最新UI受入](ui-current-build-acceptance.md)：表示サイズ/元解像度/通常footer整理を受入済み。ユーザー指示で通常幅1200〜1600pxを優先、小窓は主要操作だけに留める。R11の同一flowを反復せず次はR13。R14はPARTIALのまま。
@@ -53,7 +55,7 @@
 | R10 | 初回設定・未索引/上限/失敗状態・資源管理の仕上げ | R01、既存設定 | Sol | CPU_DONE：[状態明瞭化・所有取消・診断情報](ui-consistency-checklist.md)、未索引/対象外/モデル未導入の案内、実機R14 |
 | R11 | 日常導線の整理と統一したWinUI表示 | R05/R10の操作契約 | Sol＋WinUI/design skills | DOING：詳細操作の折返し修正。今回の旧AppX画面は現行証拠に使わない。現行の指定flowは受入済み。通常幅を優先し、小窓は最低限。HC/DPI/Narratorが残る |
 | R12 | 数万件の性能・資源予算を測り必要箇所だけ改善 | R02、R04 | Sol計測、設計変更時Astraレビュー | CPU_DONE：[受入記録](scale-resource-acceptance.md)、5万件通常検索p95=0.34s・6.5万件ベクトル順位計算p95=9.57s・取消0.1ms・WAL0B・復元2.2s合格、実機R14 |
-| R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | DOING：非破壊staging/argv/backup/profile同梱は検証済み。Python/AI runtime未同梱、clean-machine起動/identity/更新/削除未受入 |
+| R13 | 配布・起動・更新/アンインストール・利用手順 | R03/R10の契約 | Sol＋WinUI packaging skill | DOING：Python/AI/動画runtime同梱、Alpha通常install/実shortcut/生成検索・保存は確認。GUI flow3/3上限、閲覧/正常終了・再起動/clean-machine更新削除未受入 |
 | R14 | 実GPU/GUIのまとめ受入→修正→RC判定 | M1/M2対象の前項 | Solで通常検証、重大横断不具合はAstra | PARTIAL：既存限定GPU/GUI/規模PASSは保存。音声実入力、現行UI、配布受入が未完でM1/M2/RC全完了とはしない |
 
 ## 各タスクの完了条件
@@ -276,3 +278,8 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 ## 2026-10-21 R13起動前検査の追記
 
 [同条件の全検査計測と安全性](alpha-startup-performance.md)：固定4 workerでwarm73.567→41.558秒、24,196 hash/80,864 guard保持、対象CPU39 PASS。既存配布を書き換えず現行checkerを比較した結果で、前日の170秒・cold/p95やnative起動完了と混同しない。前日helper由来の未知cache3件は無視せず退避/保存済み。次はALPHA-0のnative activationと所有backend連携。R13 DOING/ALPHA未完/R14 PARTIALと後続音声/音楽→WinUIの順序を保持する。
+
+
+## 2026-10-21 R13 MSIX実機結果と誤通知修正
+
+[MSIX正式起動・実機結果と再開条件](alpha-packaged-activation.md)。許可済み証明書trustとAlpha1.0.0.1通常installは完了し、元Development登録を保持して併存。363 installed payload全件照合PASS。実shortcut→新規所有GUI/backend→生成画像検索・タグ保存まで確認したが、native flowは待機/スキャン/保存captionのテスト不備で**3/3上限**。誤った起動失敗通知とテスト期待値をsourceで修正し、追加GUIなしでCPU55 PASS、停止後DB保存/整合・source不変・封印済み02全24,325ファイル一致を確認。02は修正前artifactのまま。**R13 DOING / ALPHA-0未完 / R14 PARTIAL**。次はCPUのみ起動待ち/配布整備、追加GUIは新たな明示許可後に残るargv/閲覧/正常終了・再起動/clean Windows更新削除受入。過去のcaps/全機能/guardを維持し、ALPHA後の実音声/音楽→WinUI改善へ戻る。

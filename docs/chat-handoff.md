@@ -1,5 +1,21 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 R13：Alpha併存インストール・実起動と誤通知の修正（受入は部分完了）
+
+開始HEAD `a049c87`、既存production branch / Draft PR #5を継続。詳細は[MSIX起動・証拠・再開条件](alpha-packaged-activation.md)。Windows activation managerと配布MSIX/登録先の全payload照合、作成時刻/path/package full nameを証明したHANDLEの監視/終了、所有backend cleanupを実装。直接EXE/古い開発登録へのfallbackなし。`--frontend-msix`で公開payloadを梱包し、shortcut作成は`--check-activation`後だけ。
+
+**ユーザーがこのPCでのtrust/install/実機確認を明示許可し、実施済み。** 試験証明書CN=AppPublisher（2026-11-20期限）をLocalMachine\TrustedPeopleへ追加。既存疎な開発登録の通常MSIXへの更新は0x80073CFBで拒否されたため、既定Developmentの元identity/1.0.0.0を完全保持し、明示Alpha publishだけ別identity `Aredoko.Alpha` / 1.0.0.1を使用。通常MSIXと既存開発登録が併存し、WindowsAppsの363 payload全件SHA/guard合格。新しい依存・model取得なし。PFX/証明書/配布/DBはGitへ入れない。
+
+固定flow **`alpha-msix-owned-lifecycle-v1` は3/3で上限到達**。attempt01はUI遷移待機不足、02は登録後の明示スキャン不足、03は保存成功表示「保存しました」に対してテストが「保存済み」を待ち失敗。各report/失敗を保持し、02/03のPNGは目視済み。03は本物のshortcut→新規所有WinUI/所有backend→生成画像1枚登録/スキャン→検索/選択/タグ保存まで確認。終了時のテスト用強制停止を旧launcherが「起動失敗」と誤表示したのがユーザー添付のダイアログであり、アプリ起動自体は成功している。
+
+上限後はGUIを再実行せず、終了code付きの起動後エラー分類と、automationだけ明示する`--no-error-dialog` / shortcut `-NoErrorDialog`、保存表示の期待値を修正。通常利用のエラー通知/ログ/非ゼロ終了は維持。**CPU release55 PASS/SKIP0（43.971秒）**。停止後に生成DBをread-onlyで検査し、タグ保存/`integrity_check=ok`、backend port解放、生成画像SHA/mtime不変、封印済み02配布24,325ファイルの全inventory一致を確認。これはGUI通常終了/再起動受入の代用ではない。
+
+**状態**：R13 DOING / ALPHA-0未完 / R14 PARTIAL。`dist/alpha-0-msix-20261021-02`は誤通知修正前のimmutable artifactで、書換/再梱包なし。初回receiptは87.272/83.779/63.984秒、cold/p95やGUI-readyではない。日本語/空白argvの実受取、viewer、GUI通常終了/再起動、clean Windows/update/uninstallは未受入。Windows Sandboxは無効（InstallState2）、有効化していない。
+
+**次の3手**：
+1. GPU/GUIを起動せず、起動待ち表示と残る配布/利用手順を整理。修正後sourceと封印済み02の差を明示し、全hash/source guardを保持する。
+2. native flowは上限到達のため、再実行にはユーザーの新たな明示許可が必要。新folder/flow名で上限をresetせず、許可後に修正版の新artifactで残る閲覧・正常終了・再起動とclean Windows受入へ。証明書trust/install済みの同一操作を再承認させない。
+3. ALPHA成立後、R06–R09実音声/音楽producer→WinUI改善を再開。P0累積2/2閉鎖、専用OCR保留、全機能/簡潔GUI、私物/原本/実DB/元venv保全、Actions0/main mergeなしを維持。通常Sol、R06/R08方式設計Astra推奨（委任権限ではない）。
 
 
 ## 2026-10-21 R13：全検査を保持した起動前チェックの短縮（ALPHA-0未完）

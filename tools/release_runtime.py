@@ -159,6 +159,11 @@ def verify_release(root):
     actual = {p.relative_to(root).as_posix() for p in _parallel_tree(root)}
     if not REQUIRED_FILES <= expected:
         raise ValueError('Release inventory is missing required application files')
+    activation = data.get('frontend_activation', 'unconfigured')
+    if activation not in ('unconfigured', 'msix'):
+        raise ValueError('Unsupported frontend activation')
+    if activation == 'msix' and not {'frontend/Aredoko.msix', 'tools/packaged_frontend.py'} <= expected:
+        raise ValueError('Release inventory is missing packaged frontend files')
     if actual != expected | {'manifest.json', 'sha256sums.txt'}:
         raise ValueError('Unlisted or missing release files')
     if type(data.get('files_count')) is not int or data['files_count'] != len(entries) or type(data.get('total_bytes')) is not int or data['total_bytes'] != total:

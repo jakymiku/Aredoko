@@ -70,8 +70,8 @@ class ReleaseLifecycleTests(unittest.TestCase):
             self.session(app, self.backend('b' * 32))
         self.assertFalse(marker.exists());self.assert_released()
 
-    def test_failed_frontend_activation_still_closes_backend(self):
-        with self.assertRaisesRegex(RuntimeError, 'activation failed'):
+    def test_frontend_nonzero_exit_still_closes_backend(self):
+        with self.assertRaisesRegex(RuntimeError, 'exited with code'):
             self.session([sys.executable, '-c', 'raise SystemExit(7)'])
         self.assert_released()
 
