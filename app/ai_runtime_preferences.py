@@ -70,17 +70,17 @@ class AIRuntimePreferences:
         models_changed=self.active_models_root is not None and models is not None and os.path.normcase(str(models))!=os.path.normcase(self.active_models_root)
         selection_changed=any(data.get(k)!=self.started.get(k) for k in ('ai_python','ai_runtime_root','ai_runtime_manifest_sha256','models_root'))
         return {'runtime':runtime,'model':model,'restart_required':selection_changed or runtime_changed or models_changed,
-                'selection_service_available':True,'selection_api_supported':False,'downloads_supported':False,
+                'selection_service_available':True,'selection_api_supported':True,'downloads_supported':False,
                 'inference_verified':False,'message':'設定の変更は次回起動時に反映します。実行環境とモデルは別々に確認します。'}
 
-    def select(self,*,runtime_root=UNSET,models_root=UNSET,consent=False,cancelled=lambda:False):
+    def select(self,*,runtime_root=UNSET,models_root=UNSET,consent=False,cancelled=lambda:False,progress=None,publish=None):
         if consent is not True:raise ValueError('Explicit runtime folder consent required')
-        # This synchronous CPU service is for the upcoming owned setup job,
+        # This synchronous CPU service runs inside the owned setup job,
         # not a blocking GUI endpoint. Never execute/import the selected runtime.
         info=None
         if runtime_root is not UNSET and runtime_root is not None:
             if not isinstance(runtime_root,str) or not Path(runtime_root).is_absolute():raise ValueError('Select an absolute runtime folder')
-            info=inspect_runtime(runtime_root,verify=True,cancelled=cancelled)
+            info=inspect_runtime(runtime_root,verify=True,cancelled=cancelled,progress=progress)
         if models_root is not UNSET and models_root is not None:
             if not isinstance(models_root,str) or not Path(models_root).is_absolute():raise ValueError('Select an absolute models folder')
             models_root=str(plain_path(models_root,directory=True))
@@ -104,7 +104,13 @@ class AIRuntimePreferences:
                     stream.write(content);stream.flush();os.fsync(stream.fileno())
                 if cancelled():raise RuntimeError('Runtime selection cancelled')
                 plain_path(temporary);plain_path(self.path,missing=True)
-                os.replace(temporary,self.path)
+                # The owned setup job serializes cancellation against this
+                # final commit. CLI callers retain the ordinary atomic replace.
+                def replace():
+                    plain_path(temporary);plain_path(self.path,missing=True)
+                    os.replace(temporary,self.path)
+                if publish is None:replace()
+                else:publish(replace)
             finally:
                 if temporary.exists():plain_path(temporary);temporary.unlink()
         return self.snapshot()

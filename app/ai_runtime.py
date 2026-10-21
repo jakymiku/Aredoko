@@ -38,7 +38,7 @@ def relative(value):
     return value
 
 
-def digest(path, cancelled=lambda: False):
+def digest(path, cancelled=lambda: False, on_bytes=None):
     if cancelled():raise RuntimeError('Runtime validation cancelled')
     result = hashlib.sha256()
     path=plain_path(path);before=path.stat()
@@ -46,6 +46,7 @@ def digest(path, cancelled=lambda: False):
         for block in iter(lambda: stream.read(1024*1024), b''):
             if cancelled():raise RuntimeError('Runtime validation cancelled')
             result.update(block)
+            if on_bytes is not None:on_bytes(len(block))
     after=plain_path(path).stat()
     identity=lambda st:(st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns,st.st_ctime_ns,st.st_nlink)
     if identity(before)!=identity(after):raise ValueError('Runtime file changed during validation')
@@ -89,7 +90,7 @@ def required_files(abi):
             *(f'Lib/site-packages/{m}/__init__.py' for m in abi['modules'])}
 
 
-def inspect_runtime(root, *, verify=False, expected=None, cancelled=lambda: False):
+def inspect_runtime(root, *, verify=False, expected=None, cancelled=lambda: False, progress=None):
     root=plain_path(root,directory=True)
     marker=plain_path(root/MARKER)
     if marker.stat().st_size>LIMIT:raise ValueError('Runtime inventory exceeds limit')
@@ -139,10 +140,17 @@ def inspect_runtime(root, *, verify=False, expected=None, cancelled=lambda: Fals
     if verify:
         if {p.relative_to(root).as_posix() for p in files(root,cancelled)}!=names|{MARKER}:
             raise ValueError('Unlisted or missing runtime files')
+        counts={'stage':'checking_runtime','files_done':0,'files_total':len(entries),'bytes_done':0,'bytes_total':total}
+        def report(amount=0):
+            counts['bytes_done']+=amount
+            if progress is not None:progress(dict(counts))
+        report()
         for entry in entries:
             path=plain_path(root/entry['path'])
-            if path.stat().st_size!=entry['bytes'] or digest(path,cancelled)!=entry['sha256']:
+            if path.stat().st_size!=entry['bytes'] or digest(path,cancelled,report)!=entry['sha256']:
                 raise ValueError('Runtime file changed')
+            counts['files_done']+=1
+            report()
     if verify and digest(marker,cancelled)!=checksum:raise ValueError('Runtime inventory changed during validation')
     return {'root':str(root),'python':str(python),'manifest_sha256':checksum,'abi':abi,
             'files':len(entries),'bytes':total,'verification':'full' if verify else 'core_only',

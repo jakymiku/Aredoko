@@ -1,5 +1,13 @@
 # Aredoko — Codex / coding agent instructions
 
+## LD4a owned existing-folder setup jobs (2026-10-22; latest)
+
+Read [LD4a API/evidence/limits](docs/ai-setup-jobs.md). Resume verified prior5d7984f already committed/pushed and PR5 head/draft/open/unmerged/Actions0 match; no lost implementation. New owned background runtime/models selection-validation job exposes authenticated202 start/GET progress/cancel. Exact hash counts, one active owner, stale-ID rejection, strict consent/fields/duplicate JSON/session/Origin/Host/body guards, atomic cancel-vs-commit ordering and shutdown close are implemented. Cancel accepted means no later publication; saved-but-diagnostic-failed never claims rollback. No running AI/index hot swap.
+
+Initial36 PASS. Runner01 had103 PASS/1 nonexistent-test_storage_lease import error; preserve failure. Corrected affected81 PASS/73.195s; final JSON/precommit-cancel42 PASS/12.074s, no duplicate totals. Generated pack/settings/DB and loopback only; no GUI/GPU/model/download/private scan/real user settings mutation. Existing GUI3/3 caps/old artifacts remain. No new package; basic03 lacks these jobs. Blocked OS I/O has no hard cancellation deadline; closed owner prevents late commit unless commit already won, and retained thread never kills unrelated processes.
+
+LD4 PARTIAL: existing-folder validation API only, not downloader/resume/product GUI. Next LD4b trusted fixed catalog + transactional acquisition/generated HTTP failure/resume/capacity/cancel tests, then LD5 simple setup GUI/repair, then LD6 clean Windows/ZIP/restart/actual AI. New external assets require concrete authorization; shipping default unlimited/optional aggregate cap. Preserve all features/OCR deferral/U09/U11/U13/U14/real audio/music, R13 DOING/ALPHA incomplete/R14 PARTIAL/Actions0/no merge/no replayed shutdown.
+
 ## Optional AI runtime/model setup: LD3 CPU foundation (2026-10-21; latest)
 
 Read [LD3 contract/evidence/limits](docs/ai-runtime-setup.md). Explicit immutable standalone pack inventory/ABI/core+full SHA, independent runtime/models preferences with consent/lease/atomic cancel/restart-only application, authenticated GET setup diagnostics and current-app standalone worker bootstrap are implemented. Basic Python without AI modules is not ready; broken selected pack disables AI, not browsing or silently choosing a different environment. Preserve unrelated settings and vector/profile identities. Product GUI/download/HTTP save job remain TODO; CLI is developer-only.

@@ -1,5 +1,15 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-22 再開確認とLD4a：既存配置の背景検査job/API
+
+前回は5d7984fまでcommit/push済みで、停止点はPR headの最終照合。今回remote branch/PR #5 head一致・Draft/open/unmerged・Actions/checks0・clean treeを確認した。[新しい実装・API・検証・限界](ai-setup-jobs.md)を読む。
+
+明示consentの既存runtime/models選択を所有threadで検査・保存する非同期APIを追加。実hash件数/bytes、進捗GET、中止、同時開始409、古いID拒否、session/Origin/Host/body制限、重複JSON拒否、終了時closeを実装。取消とatomic commitを順序付け、受理後の保存や保存後の偽rollback表示を防ぐ。設定/索引identity/原本保全。背景処理中も一覧APIに応答。静的readyと実推論は別。
+
+初期36 PASS。回帰01は103 PASS/1 runner error（存在しないtest_storage_lease）、修正後81 PASS/73.195s。最後のJSON/保存直前取消追加後42 PASS/12.074s、開始不可の案内整理後は関連2 PASS/1.157s。重複合算せずraw log保持。生成fixture/loopbackだけ、GUI/GPU/実model/新download0。旧GUI3/3/旧Alpha/basic03/個人DB/settingsは維持。新しい配布は作っておらずbasic03はこのjobを含まない。
+
+LD4 PARTIAL：配置検査jobまで。次LD4b trusted catalog＋download/stage/検証/新version公開/再開を生成HTTPでCPU検証→LD5簡潔GUI→LD6通常restart/ZIP/clean Windows。R13 DOING/ALPHA未完/R14 PARTIAL、専用OCR保留/全機能/U09/U11/U13/U14/実音声音楽を保持。Actions/main merge/過去shutdown再実行なし。
+
 ## 2026-10-21 AI追加環境とモデル配置：LD3 CPU基盤
 
 [実装・契約・検証・限界](ai-runtime-setup.md)を先に読む。独立pack manifest/ABI/通常path/SHA、明示した既存runtimeとmodels rootの独立保存・取消・next-restart適用、認証GET /api/library/ai/setup、Embedding/Laya/WD workerの現在app隔離起動を実装。基本PythonだけをAI準備済みとしない。壊れた選択では基本閲覧を維持し、他の環境へ黙ってfallbackしない。既存DB/theme/索引identityを保持。GUI選択/自動download/HTTP保存jobは未実装。

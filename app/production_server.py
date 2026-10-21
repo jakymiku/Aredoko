@@ -38,6 +38,8 @@ from wd_tagger import create_tagger
 from storage_lease import storage_lease,storage_parent
 from runtime_paths import worker_python, bind_runtime
 from ai_runtime_preferences import AIRuntimePreferences, read_preferences
+from ai_setup_jobs import AISetupJobs, SetupBusy
+from ai_runtime import object_pairs
 from contextlib import ExitStack
 import sys
 
@@ -111,6 +113,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     except (ValueError,OSError):setup_profile=None
     setup=AIRuntimePreferences(runtime_preferences if runtime_preferences is not None else catalog.path.parent/'launch-settings.json',
         profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
+    setup_jobs=AISetupJobs(setup)
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
     class Handler(base):
@@ -380,7 +383,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except ValueError:
                         return self.send(400,{'error':'Invalid audio range request'})
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
-                if path=='/api/library/ai/setup':return self.send(200,setup.snapshot())
+                if path=='/api/library/ai/setup':return self.send(200,{**setup.snapshot(),'selection_api_supported':True,'job':setup_jobs.snapshot()})
+                if path=='/api/library/ai/setup/job':return self.send(200,setup_jobs.snapshot())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())
                 if path=='/api/library/ai/resource':
@@ -431,8 +435,16 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                body=json.loads(self.rfile.read(length))
+                strict=self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel')
+                body=json.loads(self.rfile.read(length),**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path=='/api/library/ai/setup/select':
+                    try:return self.send(202,setup_jobs.start(body))
+                    except SetupBusy:return self.send(409,{'error':'AI環境の確認を開始できません。現在の状態を確認してください。','job':setup_jobs.snapshot()})
+                if self.path=='/api/library/ai/setup/cancel':
+                    if set(body)!={'job_id'}:raise ValueError('Invalid setup cancel request')
+                    try:return self.send(200,setup_jobs.cancel(body['job_id']))
+                    except KeyError:return self.send(409,{'error':'現在の確認処理と一致しません。'})
                 if self.path.startswith('/api/library/page-text/'):
                     try:
                         if self.path=='/api/library/page-text/generate':
@@ -647,6 +659,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             except (ValueError,TypeError) as ex: return self.send(400,{'error':str(ex) if str(ex) in PUBLIC_FOLDER_ERRORS else 'Invalid request: check folder, exclusions or scan state'})
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})
+    Handler.setup_jobs=setup_jobs
     return Handler
 
 def main():
@@ -695,7 +708,9 @@ def _serve(args):
         intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**runtime)
         resources.callback(intent.close)
         tagger=create_tagger(ai,args.tagger_profile,**runtime);resources.callback(tagger.close)
-        server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences))
+        handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences)
+        resources.callback(handler.setup_jobs.close)
+        server=ThreadingHTTPServer(('127.0.0.1',args.port),handler)
         resources.callback(server.server_close)
         if args.exit_on_stdin_close:
             def watch_owner():
