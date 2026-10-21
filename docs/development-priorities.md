@@ -1,5 +1,8 @@
 # Aredoko — 現在の開発優先順位
 
+## 最新実装順：2026-10-22 統合改善・完成形UI
+
+[ユーザー承認済み統合ロードマップ](polish-roadmap-20261022.md)を実装順の正本とする。P1A実形式判定→P1B逐次animation→P2連続閲覧→P3仮想化/サムネイルと本格UI→P4複数棚/整理→P5起動中backup→P6既存LD残件→P7まとめ受入。UI開始は基本操作と重大不具合解消後で、全機能/音声/配布完成を待たない。旧R/U/LD台帳・合格証拠・未完を保持し、下段の過去「次」を再開指示にしない。P0診断/共通resourceは未完、P1Aだけを全ロードマップ完了としない。
 > **最新2026-10-21**：[LD1–LD6の配布計画](lightweight-distribution.md)を優先。毎回5GB検査からfull-success receipt＋通常metadata/主要hashへ分離し、PyTorchなし基本候補656MBをCPU確認。新native/clean Windows/AI追加取得は未完。次は既存AI runtime/model選択と診断→取得job→簡潔GUI→配布受入。
 
 > **最新2026-10-21・実使用改善**：[U01–U16台帳と部分検証](usability-feedback-20261021.md)を先に読む。GIF native化/APNG poster除外/小画像拡大/テーマ/favorite即時保存/scope解除/タイル再配置を実装、Python31/Core732/Release0 errors・既知5 warnings。overnight GUIは3/3で停止、Light全工程・Dark一部を確認、raw FAILを成功へ読み替えない。全21 PNG目視。installed Alpha/封印済み02は未更新。HoneyView parity/U09 folder favorite/U11棚別/U13 GUI backup/U14全体履歴は未完。次はCPU viewer段階診断→PZ2/PZ3/PZ4/PZ5、ALPHA後実音声。今回のshutdownを将来へ再適用しない。

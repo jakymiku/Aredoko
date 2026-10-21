@@ -231,22 +231,32 @@ internal sealed class ImageViewerView : Grid, IDisposable
                 var trace=new ViewerLoadTrace("image");
                 try
                 {
-                    if(item.Location.EndsWith(".gif",StringComparison.OrdinalIgnoreCase))
+                    // Routing follows the guarded source header, including renamed
+                    // WebP/GIF/PNG files. This probe does not enumerate all frames.
+                    var sourceInfo=await api.ImageInfoAsync(item.Id,cancellation);
+                    if(disposed||requestedVersion!=version)continue;
+                    if(sourceInfo.IsNativeGif)
                     {
                         var source=await api.OriginalImageAsync(item.Id,cancellation);
                         trace.Mark("source-body");
-                        var decoded=await ViewerImageCodec.DecodeGifAsync(source,cancellation);
-                        trace.Mark("decode-ready");
-                        if(disposed||requestedVersion!=version){decoded.Dispose();continue;}
-                        StopAnimation();nativeAnimation=decoded;var bitmap=decoded.Bitmap;
-                        imageWidth=Math.Max(1,bitmap.PixelWidth);imageHeight=Math.Max(1,bitmap.PixelHeight);
-                        FitImage();image.Source=bitmap;loaded=true;viewport.ChangeView(0,0,1,true);
-                        trace.Mark("assigned");
-                        ContentOpened?.Invoke(item.Id);ViewerNotice.Set(status);
-                        continue;
+                        ViewerImageCodec.NativeAnimation? decoded=null;
+                        try {decoded=await ViewerImageCodec.DecodeGifAsync(source,cancellation);}
+                        catch(Exception ex) when(ex is System.Runtime.InteropServices.COMException or InvalidDataException or ArgumentException)
+                        {AppLog.Error(ex);} // Try the bounded existing frame decoder below.
+                        if(decoded is not null)
+                        {
+                            trace.Mark("decode-ready");
+                            if(disposed||requestedVersion!=version){decoded.Dispose();continue;}
+                            StopAnimation();nativeAnimation=decoded;var bitmap=decoded.Bitmap;
+                            imageWidth=Math.Max(1,bitmap.PixelWidth);imageHeight=Math.Max(1,bitmap.PixelHeight);
+                            FitImage();image.Source=bitmap;loaded=true;viewport.ChangeView(0,0,1,true);
+                            trace.Mark("assigned");
+                            ContentOpened?.Invoke(item.Id);ViewerNotice.Set(status);
+                            continue;
+                        }
                     }
                     ImageAnimationManifest? animManifest = null;
-                    if (ImageViewerPolicy.MayAnimate(item.Location))
+                    if (sourceInfo.AnimationCandidate)
                     {
                         try
                         {
@@ -302,7 +312,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
                         {
                             var result=await ViewerImageCodec.DecodeCachedAsync(data,speculative,ct);trace.Mark("decode-ready");return result;
                         },cancellation);}
-                        catch(InvalidDataException) when(ImageViewerPolicy.MayAnimate(item.Location))
+                        catch(InvalidDataException) when(sourceInfo.AnimationCandidate)
                         {
                             var bounded=await api.ImageAsync(item.Id,cancellation);
                             bitmap=await CreateBitmapAsync(await ThumbnailCodec.ResizeAsync(bounded,cancellation,PreviewPolicy.ReaderEdge),cancellation);

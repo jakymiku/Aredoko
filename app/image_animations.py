@@ -22,6 +22,24 @@ class AnimationUnavailable(ValueError):
     pass
 
 
+def image_mime(header: bytes) -> str:
+    """Identify supported image containers from bytes, never their filename.
+
+    This is routing, not proof that the complete image can be decoded.
+    """
+    if header.startswith((b'GIF87a', b'GIF89a')):
+        return 'image/gif'
+    if header.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'image/png'
+    if len(header) >= 12 and header[:4] == b'RIFF' and header[8:12] == b'WEBP':
+        return 'image/webp'
+    if header.startswith(b'\xff\xd8\xff'):
+        return 'image/jpeg'
+    if header.startswith(b'BM'):
+        return 'image/bmp'
+    raise AnimationUnavailable('Unrecognized image container')
+
+
 def detect_animation_header(header: bytes) -> bool:
     """Fast header check for GIF, animated WebP, or APNG."""
     if not isinstance(header, (bytes, bytearray)) or len(header) < 16:
@@ -120,7 +138,7 @@ class AnimationInspector:
         result = {
             'item_id': item_id,
             'revision': revision,
-            'mime': mime,
+            'mime': image_mime(header),
             'size_bytes': size_bytes,
             'width': width,
             'height': height,

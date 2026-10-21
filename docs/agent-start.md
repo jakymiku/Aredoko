@@ -1,5 +1,8 @@
 # AIエージェントの開始・再開ガイド
 
+## 最新実装順：2026-10-22 統合改善・完成形UI
+
+[ユーザー承認済み統合ロードマップ](polish-roadmap-20261022.md)を実装順の正本とする。P1A実形式判定→P1B逐次animation→P2連続閲覧→P3仮想化/サムネイルと本格UI→P4複数棚/整理→P5起動中backup→P6既存LD残件→P7まとめ受入。UI開始は基本操作と重大不具合解消後で、全機能/音声/配布完成を待たない。旧R/U/LD台帳・合格証拠・未完を保持し、下段の過去「次」を再開指示にしない。P0診断/共通resourceは未完、P1Aだけを全ロードマップ完了としない。
 > **Windows準備済み2026-10-21**：[実結果と起動ファイル](portable-windows-validation.md)。Work68db65bを統合しCore759/起動CPU103/Portable publish・bootstrap実Win32非GUI通信・同梱runtime検査PASS。viewer78 PASS/3 SKIP。準備済みdist/portable-wincheck-20261021-02/Aredoko/Check-Startup.cmdでユーザー手動確認へ。GUI/GPU/clean Windows/ZIPは未実行、旧Alpha未更新・旧GUI3/3維持。再準備を無用に繰り返さず、次は実起動の結果を確認。
 
 > **最新・帰宅後起動チェック準備**：[手順](../STARTUP_CHECK.md)と[実装境界](portable-startup-check.md)。起動画面/同worker所有起動/明示Portable梱包/初期画面readyのsourceとPrepare-Portable.cmdを追加。Windows build/native/実機配置は未完で、既存runtime/cacheで準備後、ユーザーがCheck-Startup.cmdを手動起動する。PZ2 PARTIAL/R13 DOING/ALPHA未完、旧自動GUI3/3/全失敗/旧配布を保持。

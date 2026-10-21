@@ -31,6 +31,7 @@ public sealed class LibraryApi : IDisposable
     public Task<ViewerSource> OriginalImageSourceAsync(int id,string? etag,CancellationToken cancellation)=>new ArchiveReaderClient(client).OriginalImageSourceAsync(id,etag,cancellation);
     public Task<byte[]> ImageAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ImageAsync(id, cancellation);
+    public Task<ImageSourceInfo> ImageInfoAsync(int id,CancellationToken cancellation)=>new ArchiveReaderClient(client).ImageInfoAsync(id,cancellation);
     public Task<ImageAnimationManifest> ImageManifestAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ImageManifestAsync(id, cancellation);
     public Task<byte[]> ImageFrameAsync(ImageAnimationManifest manifest, int frame, CancellationToken cancellation) =>

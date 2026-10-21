@@ -289,7 +289,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         return self.send(400,{'error':'Invalid reader request'})
                 if path.startswith('/api/library/preview/'):
                     try:
-                        match=re.fullmatch(r'/api/library/preview/([1-9][0-9]{0,18})(?:/(manifest|original|frames/(0|[1-9][0-9]?)))?',path)
+                        match=re.fullmatch(r'/api/library/preview/([1-9][0-9]{0,18})(?:/(info|manifest|original|frames/(0|[1-9][0-9]?)))?',path)
                         if match is None:
                             raise ValueError('Invalid item')
                         item=int(match[1])
@@ -299,6 +299,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                             if query:raise ValueError('Invalid item')
                             data,mime,etag=previews.original_source(item,self.headers.get('If-None-Match'))
                             return self.send(304 if data is None else 200,b'' if data is None else data,mime,{'ETag':etag})
+                        if match[2]=='info':
+                            if query: raise ValueError('Invalid item')
+                            return self.send(200,previews.image_info(item))
                         if match[2]=='manifest':
                             if query: raise ValueError('Invalid item')
                             return self.send(200,previews.image_manifest(item))

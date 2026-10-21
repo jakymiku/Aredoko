@@ -1,5 +1,12 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-22 User-approved integrated roadmap (current priority)
+
+Read [the integrated implementation/UI/platform roadmap](docs/polish-roadmap-20261022.md) and latest handoffs. User now explicitly authorized implementation; the copied plan-only wording is historical. P0→P1 format/streaming animation→P2 result sessions/60-boundary→P3 virtualization/thumbnails and full UI→P4 multi-shelves/history/root favorites/navigation→P5 online backup/restore→P6 LD4b–LD6/setup UI→P7 combined acceptance, then real audio/music R06–R09. P1A is the current bounded unit; P1B streaming is next. Do not call the whole plan/ALPHA/M1/M2 complete.
+
+UI development begins once basic register/search/browse/edit/restart work and major playback/scope/crash/data issues are resolved; do not wait for every feature, audio, packaging or minor bug. UI-0=P0, UI-1=P2, UI-2=P3, UI-3=P4–6. Keep WinUI 3 on Windows; isolate only touched OS-specific path/identity/lock/process/watch concerns, no new frontend/framework or WebView migration.
+
+Feature implementation then minimal affected build/tests; broad regression/performance later. Keep data integrity checks, existing features/OCR deferral/old raw failures/GUI caps/old Alpha/artifacts. Existing LD4a foundations remain; next old LD4b instruction is deferred behind this user-selected sequence. No new dependencies/models/private scan/GPU/GUI/Actions/main merge without applicable authorization. Today's shutdown instruction is one-time only: save/check/commit/handoff first, Stop-Computer without Force; never replay it tomorrow.
 ## LD4a owned existing-folder setup jobs (2026-10-22; latest)
 
 Read [LD4a API/evidence/limits](docs/ai-setup-jobs.md). Resume verified prior5d7984f already committed/pushed and PR5 head/draft/open/unmerged/Actions0 match; no lost implementation. New owned background runtime/models selection-validation job exposes authenticated202 start/GET progress/cancel. Exact hash counts, one active owner, stale-ID rejection, strict consent/fields/duplicate JSON/session/Origin/Host/body guards, atomic cancel-vs-commit ordering and shutdown close are implemented. Cancel accepted means no later publication; saved-but-diagnostic-failed never claims rollback. No running AI/index hot swap.

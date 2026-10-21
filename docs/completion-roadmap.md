@@ -1,5 +1,8 @@
 # Aredoko 完成までの実行計画
 
+## 最新実装順：2026-10-22 統合改善・完成形UI
+
+[ユーザー承認済み統合ロードマップ](polish-roadmap-20261022.md)を実装順の正本とする。P1A実形式判定→P1B逐次animation→P2連続閲覧→P3仮想化/サムネイルと本格UI→P4複数棚/整理→P5起動中backup→P6既存LD残件→P7まとめ受入。UI開始は基本操作と重大不具合解消後で、全機能/音声/配布完成を待たない。旧R/U/LD台帳・合格証拠・未完を保持し、下段の過去「次」を再開指示にしない。P0診断/共通resourceは未完、P1Aだけを全ロードマップ完了としない。
 > **最新2026-10-22・LD4 PARTIAL**：[既存配置の背景検査job/API](ai-setup-jobs.md)を実装・CPU確認。次LD4b trusted catalog/download stage・破損/切断/再開/取消/容量の生成HTTP検証→LD5簡潔GUI→LD6 clean Windows。basic03/旧GUI3/3/全機能/未完事項を保持。
 
 > **最新LD3 CPU_DONE**：[AI追加環境の契約と配置診断](ai-runtime-setup.md)。明示した既存runtime/modelsの独立保存・next-restart・GET診断・worker隔離まで。GUI/自動取得は未実装。次LD4所有job/固定catalog→LD5簡潔GUI→LD6 clean Windows。旧artifact/GUI3/3/R13 DOING/R14 PARTIAL維持。

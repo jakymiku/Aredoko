@@ -105,6 +105,13 @@ public sealed class ArchiveReaderClient(HttpClient client)
         return data;
     }
 
+    public async Task<ImageSourceInfo> ImageInfoAsync(int itemId,CancellationToken cancellation)
+    {
+        if(itemId<1)throw new ArgumentOutOfRangeException(nameof(itemId));
+        var(data,_)=await ReadMediaAsync($"api/library/preview/{itemId}/info",2048,null,cancellation,seconds:10);
+        return ImageSourceInfo.Parse(data,itemId);
+    }
+
     public async Task<ImageAnimationManifest> ImageManifestAsync(int itemId, CancellationToken cancellation)
     {
         if (itemId < 1) throw new ArgumentOutOfRangeException(nameof(itemId));

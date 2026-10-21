@@ -33,7 +33,7 @@ internal static class ViewerImageCodec
             using(var writer=new DataWriter(stream)){writer.WriteBytes(source);await writer.StoreAsync();writer.DetachStream();}
             stream.Seek(0);cancellation.ThrowIfCancellationRequested();
             var decoder=await BitmapDecoder.CreateAsync(stream);
-            PreviewPolicy.ValidateDimensions(decoder.PixelWidth,decoder.PixelHeight);
+            PreviewPolicy.ValidateViewerDimensions(decoder.PixelWidth,decoder.PixelHeight);
             stream.Seek(0);var bitmap=new BitmapImage{AutoPlay=true};await bitmap.SetSourceAsync(stream);
             cancellation.ThrowIfCancellationRequested();return new(bitmap,stream);
         }

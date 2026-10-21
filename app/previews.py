@@ -16,7 +16,7 @@ from page_identity import describe_page
 from image_animations import (AnimationInspector, AnimationUnavailable,
                               MAX_LARGE_IMAGE_BYTES, MAX_ANIMATION_FRAMES,
                               THUMBNAIL_MAX_EDGE, VIEWER_MAX_EDGE,
-                              REPRESENTATIVE_MAX_EDGE, detect_animation_header)
+                              REPRESENTATIVE_MAX_EDGE, detect_animation_header, image_mime)
 from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
                             VIDEO_SUFFIXES, MAX_VIDEO_BYTES)
 
@@ -210,6 +210,10 @@ class PreviewReader:
         """Extract up to 4 time-coded representative PNG frames (at_ms, png_bytes) for video AI indexing."""
         return self._read(item_id, operation='video_frames_ai')
 
+    def image_info(self, item_id):
+        """Cheap guarded format probe; no frame enumeration or image decoding."""
+        return self._read(item_id, operation='image_info')
+
     def image_manifest(self, item_id):
         return self._read(item_id, operation='image_manifest')
 
@@ -345,7 +349,7 @@ class PreviewReader:
             elif operation in ('video','video_manifest','video_range','video_frame','video_frames_ai'):
                 if suffix not in VIDEO_MIME and (operation != 'video_frames_ai' or suffix not in VIDEO_SUFFIXES):
                     raise PreviewUnavailable('Video player requires a supported video item')
-            elif operation in ('image_manifest', 'image_frame', 'image_original'):
+            elif operation in ('image_info', 'image_manifest', 'image_frame', 'image_original'):
                 if suffix not in IMAGE_MIME:
                     raise PreviewUnavailable('Image viewer requires a supported image item')
             elif operation in ('tag_source', 'tag_input', 'page_catalog', 'page_input', 'cover_input'):
@@ -436,17 +440,25 @@ class PreviewReader:
                                   'kind': 'image', 'page': 0, 'page_id': descriptor['page_id']}
                     elif operation == 'image_manifest':
                         result = self.animations.inspect(file, info.st_size, current_revision, item_id, IMAGE_MIME[suffix])
+                    elif operation == 'image_info':
+                        header = file.read(4096)
+                        result = {'item_id': item_id, 'revision': current_revision,
+                                  'mime': image_mime(header), 'size_bytes': info.st_size,
+                                  'animation_candidate': detect_animation_header(header)}
                     elif operation == 'image_original':
-                        data,mime=(b'' if unchanged else file.read(image_limit+1)),IMAGE_MIME[suffix]
+                        header = file.read(64)
+                        mime = image_mime(header)
+                        file.seek(0)
+                        data = b'' if unchanged else file.read(image_limit+1)
                     elif operation == 'image_frame':
                         data = self.animations.render_frame(file, info.st_size, current_revision, page, VIEWER_MAX_EDGE)
                         mime = 'image/png'
-                    if operation not in ('tag_source', 'page_catalog', 'image_manifest', 'image_frame', 'image_original'):
+                    if operation not in ('tag_source', 'page_catalog', 'image_info', 'image_manifest', 'image_frame', 'image_original'):
                         header = file.read(4096)
                         file.seek(0)
                         is_anim_header = detect_animation_header(header)
                         if info.st_size <= MAX_IMAGE_BYTES and not (operation in ('preview', 'cover_input', 'tag_input') and is_anim_header):
-                            data, mime = file.read(MAX_IMAGE_BYTES + 1), IMAGE_MIME[suffix]
+                            data, mime = file.read(MAX_IMAGE_BYTES + 1), image_mime(header)
                         else:
                             rev = current_revision or _revision(row, info)
                             meta = self.animations.inspect(file, info.st_size, rev, item_id, IMAGE_MIME[suffix])
@@ -519,14 +531,14 @@ class PreviewReader:
                                     with archive.open(entry) as image:
                                         data = image.read(image_limit + 1)
                                 mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest','video','video_manifest','video_range','audio','audio_manifest','audio_range','tag_source','page_catalog','image_manifest','video_frames_ai') and len(data) > image_limit:
+                if operation not in ('manifest','video','video_manifest','video_range','audio','audio_manifest','audio_range','tag_source','page_catalog','image_info','image_manifest','video_frames_ai') and len(data) > image_limit:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
                 # Verify the path was not replaced while reading, without repeating
                 # the redundant full Path.resolve(strict=True) filesystem round-trips.
                 current = source.stat(follow_symlinks=False)
                 if _reparse(current) or stat.S_ISLNK(current.st_mode) or (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
-                    if operation in ('video_manifest','video_range','video_frame','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame','image_original','manifest','page'):
+                    if operation in ('video_manifest','video_range','video_frame','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','image_info','image_manifest','image_frame','image_original','manifest','page'):
                         raise ReaderChanged('Source location changed')
                     raise PreviewUnavailable('Location changed while previewing')
                 parts = PurePosixPath(row['relative_path']).parts
@@ -540,7 +552,7 @@ class PreviewReader:
                 for parent in parents:
                     p_info = parent.stat(follow_symlinks=False)
                     if _reparse(p_info) or stat.S_ISLNK(p_info.st_mode):
-                        if operation in ('video_manifest','video_range','video_frame','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','image_manifest','image_frame','image_original','manifest','page'):
+                        if operation in ('video_manifest','video_range','video_frame','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','image_info','image_manifest','image_frame','image_original','manifest','page'):
                             raise ReaderChanged('Source location changed')
                         raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
@@ -549,7 +561,7 @@ class PreviewReader:
                     raise PreviewUnavailable('Source changed while reading')
                 if operation == 'tag_source': return result
                 if operation in ('tag_input', 'page_input'): return {'source': result, 'data': data, 'mime': mime}
-                if operation in ('manifest','video_manifest','audio_manifest','page_catalog','image_manifest','video_frames_ai'):
+                if operation in ('manifest','video_manifest','audio_manifest','page_catalog','image_info','image_manifest','video_frames_ai'):
                     return result
                 if operation in ('video_range','audio_range'): return data, mime, info.st_size
                 if conditional:return (None if unchanged else data), mime, etag
