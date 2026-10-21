@@ -191,7 +191,7 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
     if backend.returncode:raise AppSessionError('Backend did not exit cleanly; see backend-error.log')
 
 
-def launch(root, data, settings, *, progress=None, startup_pipe=None):
+def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full=False):
     # All writable state stays outside the versioned release. Reject accidental
     # source/payload placement before creating logs or opening a database.
     paths = [data, *(Path(settings[k]) for k in ('database', 'ai_settings', 'viewer_settings') if k in settings)]
@@ -212,7 +212,9 @@ def launch(root, data, settings, *, progress=None, startup_pipe=None):
         app = ['--ui-theme', values.get('ui_theme', 'system'),
                '--viewer-settings', values.get('viewer_settings', str(data / 'viewer-settings.json'))]
         try:
-            manifest = preflight(root, progress=progress)
+            from startup_validation import startup_preflight
+            manifest = startup_preflight(root, data / 'release-validation',
+                lambda: preflight(root, progress=progress), progress=progress, force_full=force_full)
             if progress is not None:progress.check_cancelled()
             portable = manifest.get('frontend_activation') == 'portable'
             if startup_pipe is not None and not portable:raise ValueError('The owned bootstrap requires an explicit portable release')
@@ -241,6 +243,7 @@ def main():
     checks.add_argument('--startup-preflight', action='store_true', help='Internal inherited-pipe preflight worker; no application launch')
     checks.add_argument('--startup-owned', action='store_true', help='Internal portable bootstrap worker')
     checks.add_argument('--startup-smoke', action='store_true', help='Internal portable startup check with fresh isolated data')
+    parser.add_argument('--full-check', action='store_true', help='Force full preflight on this launch, refreshing normal-startup validation')
     parser.add_argument('--no-error-dialog', action='store_true', help='Automation only: keep error logs and nonzero exit without a modal dialog')
     parser.add_argument('--settings', type=Path, help='Explicit launch-settings.json (otherwise in LOCALAPPDATA/Aredoko)')
     for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}:
@@ -250,7 +253,7 @@ def main():
         # This is a one-shot worker, not the user-facing product entrypoint.
         # Use independent raw descriptors: a blocked writer must not hold a
         # Python standard-stream buffer lock during process shutdown.
-        if args.settings is not None or any(getattr(args, key) is not None for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}):
+        if args.full_check or args.settings is not None or any(getattr(args, key) is not None for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}):
             return 2
         try:
             if not all(stat.S_ISFIFO(os.fstat(stream.fileno()).st_mode) for stream in (sys.stdin, sys.stdout)):
@@ -275,7 +278,7 @@ def main():
             data = Path(base) / 'Aredoko'
             settings = load_settings(data, args.settings)
             settings.update({key: getattr(args, key) for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} if getattr(args, key) is not None})
-            launch(ROOT, data, validate_settings(settings))
+            launch(ROOT, data, validate_settings(settings), force_full=args.full_check)
             return 0
         print(json.dumps({'pass': True, 'version': manifest['version'], 'readiness': 'staging-only',
                           'clean_machine_activation_verified': False,

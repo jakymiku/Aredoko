@@ -1,5 +1,19 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-21 通常起動とAI追加環境の分離：基本候補CPU確認
+
+ユーザーが「通常起動を軽くする→AIは後から追加→開発環境なしWindowsで確認」の方針で開発を明示承認。[最新の実装・実測・LD1–LD6](lightweight-distribution.md)を現在のR13/PZ3順序とする。以前の「通常起動も必ず毎回全SHA」は新Portable通常起動に限り本仕様が置き換える。完全検査API/原本guard/旧MSIXは維持する。
+
+**実装**：startup_validation.pyをPortable launcherへ接続し、安定した完全preflight成功の外部receipt→次回の全file metadata/増減/identityと主要code再hashへ分離。更新/変更/壊れたcache/明示--full-checkはfullへ。bulk metadataは毎回全SHAの暗号学的証明と同等ではなく、意図的なmetadata偽装や同権限cache改変に対する署名ではない。receiptはguarded path/lease/atomic保存/取消対応、実処理の進捗のみ。開発CLIのfull-checkは追加したが、製品rootの修復UIは未接続。
+
+**実物**：PyTorchなしの新規basic runtimeと **dist/portable-basic-20261021-02/Aredoko** を構成。全AI入り5,554,470,502 bytes/24,329filesから、基本候補 **656,009,829 bytes/692files** へ。これはZIP前容量でZIP未作成。既存同梱WinUI/起動EXEを使い、基本Pythonだけ新規に構成。Torch/Transformersなし、GPU/新DLなし。実同梱Pythonを-I/-B/無関係cwd/無効PYTHONHOME/PYTHONPATHで起動し、real backendの専用空DB/所有session→EOF exit0→DB整合okを確認。
+
+**基本機能の追加確認**：同じ基本同梱Pythonで、生成PNG1枚の登録→scan→ファイル名検索1件→preview686bytes→AI未導入でも基本API利用→原本SHA/mtime不変→正常EOF終了/DB整合を実確認。証拠basic-portable-cpu-20261021-02/report.json。GUI受入ではない。
+
+**検証**：基本候補full preflight+receipt **3.994672s**、次回 **1.527048s**（GUI表示までではない、単発/warmでcold/p95保証なし）。既存回帰120 PASS/127.228s、最終走査整理+境界追加後の関連25 PASS/6.405s、重複加算しない。初回runner指定ミスとfixture新module不足15 errorsを保持。旧5.55GB版のcache試作は55.8sと遅く、重複祖先走査を整理後24.045317s、full hash/inventory46.595100s；最初のreceipt151.2s。古いfull hash bytes計数はthread加算raceのため採用しない。全実測/失敗/初期artifactを保持。
+
+**未完**：新しい基本候補のnative GUI/通常データrestart/clean Windows/ZIPは未受入、AI追加runtime契約・自動/手動downloadとGUI・修復UIはまだ。現在インストール版や旧実機受入candidateを更新していない。既存GUI3/3を保持し、今回はGUI/GPU0。R13 DOING/ALPHA未完/R14 PARTIAL。次はLD3の既存AI runtime/model root選択と診断→LD4 CPU取得job→LD5簡潔GUI→LD6 clean Windows。全機能/U09/U11/U13/U14/実音声音楽計画/Actions0/mergeなしを維持。
+
 ## 2026-10-21 Portable起動タイムアウト修正・実機受入（限定範囲）
 
 最新のユーザー許可「お願いします」を受け、専用空DB/GPUなしでlocal Portable実機診断を実施。旧配布・installed Alpha・普段のDB・モデルは未変更。新しい確認先は **`dist/portable-startup-diagnostic-20261021-02/Aredoko/Check-Startup.cmd`**。旧`portable-wincheck-20261021-02`は失敗版として保持し、これを再案内しない。[修正・証拠・限界](portable-startup-console-fix.md)。

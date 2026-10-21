@@ -1,5 +1,9 @@
 # 帰宅後の起動チェック
 
+## 通常利用について
+
+普段はAredoko.exeを開きます。Check-Startup.cmdは開発確認用であり、毎回使うものではありません。[基本版/AI追加環境と起動軽量化](docs/lightweight-distribution.md)を開発中です。新しい656MB基本候補はCPU確認までで、まだ普段の利用先を切り替えていません。以下は以前の実機確認済み候補の手順です。
+
 ## このPCの最新修正版（2026-10-21）
 
 **`dist/portable-startup-diagnostic-20261021-02/Aredoko/Check-Startup.cmd`** を開いてください。専用の空ライブラリで、本体表示・通常終了・起動取消まで実機確認済みです。Prepare-Portable.cmdをやり直す必要はありません。

@@ -1,5 +1,7 @@
 # Aredoko — 現在の開発優先順位
 
+> **最新2026-10-21**：[LD1–LD6の配布計画](lightweight-distribution.md)を優先。毎回5GB検査からfull-success receipt＋通常metadata/主要hashへ分離し、PyTorchなし基本候補656MBをCPU確認。新native/clean Windows/AI追加取得は未完。次は既存AI runtime/model選択と診断→取得job→簡潔GUI→配布受入。
+
 > **最新2026-10-21・実使用改善**：[U01–U16台帳と部分検証](usability-feedback-20261021.md)を先に読む。GIF native化/APNG poster除外/小画像拡大/テーマ/favorite即時保存/scope解除/タイル再配置を実装、Python31/Core732/Release0 errors・既知5 warnings。overnight GUIは3/3で停止、Light全工程・Dark一部を確認、raw FAILを成功へ読み替えない。全21 PNG目視。installed Alpha/封印済み02は未更新。HoneyView parity/U09 folder favorite/U11棚別/U13 GUI backup/U14全体履歴は未完。次はCPU viewer段階診断→PZ2/PZ3/PZ4/PZ5、ALPHA後実音声。今回のshutdownを将来へ再適用しない。
 
 > **最新方針2026-10-21（ユーザー指定）**：今後の標準は[ZIP解凍→Aredoko.exe](portable-distribution.md)。PZ1自己完結frontend publishはCPU合格、製品ZIPは未完成。現在はPZ2所有bootstrap→PZ3全runtime梱包→PZ4 ZIP/再配置CPU→PZ5明示許可後のnative/clean Windows。下のMSIX-firstの「次」は履歴で、この順序を優先。DB/原本/機能/旧登録/試行上限を保持、ALPHA後に実音声/音楽→WinUI。

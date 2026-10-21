@@ -192,8 +192,8 @@ def verify_release(root, *, progress=None):
     return data
 
 
-def _verify_inventory(root, data, entries, expected, total, progress):
-    actual = {p.relative_to(root).as_posix() for p in _parallel_tree(root, progress=progress)}
+def _verify_inventory(root, data, entries, expected, total, progress, *, actual=None):
+    if actual is None:actual = {p.relative_to(root).as_posix() for p in _parallel_tree(root, progress=progress)}
     if not REQUIRED_FILES <= expected:
         raise ValueError('Release inventory is missing required application files')
     activation = data.get('frontend_activation', 'unconfigured')
