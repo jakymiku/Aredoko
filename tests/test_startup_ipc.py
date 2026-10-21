@@ -38,7 +38,20 @@ class StartupPipeTests(unittest.TestCase):
         parent = os.fdopen(write_fd, 'wb', buffering=0)
         self.addCleanup(incoming.close)
         self.addCleanup(parent.close)
-        parent.write(command() if frames is None else frames)
+        initial = command() if frames is None else frames
+        if len(initial) > ipc.MAX_FRAME:
+            # Windows os.pipe() has a 4KiB buffer: the deliberately oversized
+            # invalid frame must be fed while the protocol reader is running.
+            sent = []
+            producer = threading.Thread(target=lambda: sent.append(parent.write(initial)), daemon=True)
+            producer.start()
+            def joined():
+                producer.join(2)
+                self.assertFalse(producer.is_alive())
+                self.assertEqual(sent, [len(initial)])
+            self.addCleanup(joined)
+        else:
+            parent.write(initial)
         return incoming, parent, io.BytesIO()
 
     def prepared(self):

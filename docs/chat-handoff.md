@@ -1,5 +1,20 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 Windows実機：Work更新の取り込みとPortable準備完了（画面未確認）
+
+基点`68db65b`までのWork5コミットを、cleanな実機branchへfast-forwardで統合した。既存の依存/cache/封印済み02を読み取り専用で再利用し、**`dist/portable-wincheck-20261021-02/Aredoko/Check-Startup.cmd`から手動起動を確認できる新規フォルダを準備済み**。[Windows準備結果と起動手順](portable-windows-validation.md)を参照。installed Alpha/旧ショートカット/旧配布の上書きはない。
+
+Core Release **759 PASS**、WinUI x64 Portable publish成功（既知WUI1001×3/IL2104×2を保持）。391,168 bytesの.NET Framework起動EXEを標準cscでcompileし、非GUI self-test PASS。新配布は**24,325 files / 5,554,199,143 bytes**、全manifest検査と実同梱Python/import/media probe `--check` PASS。実bootstrapのprivate Win32 process/pipe ownerを`tests/BootstrapNativeCpu.cs`から呼び、保持HANDLEのpath/作成時刻確認・handle-list継承・日本語UTF8往復・正常exitを本物の合成Python childで確認（Form/GUIは作らない）。配布ZIPは未作成。
+
+**Windows修正**：標準csc.exeはWinSxSと2 hardlinksのため、初回のstorage専用guardに拒否された。Windows APIでOS directoryを取得し、inbox compilerだけ通常file/祖先reparse拒否を確認する専用処理へ分離。アプリpayload/原本/DBのsingle-hardlink guardは変更しない。初回準備失敗ログ01を保持。起動CPU初回は無応答で所有testだけ停止、診断02は`streams()`の4097-byte先書込みで60秒timeout。Windows4KiB pipeへ読取開始前に書いていたfixtureだけを並行producer/送信完了確認へ修正、製品protocol上限は維持。最終03 **103 PASS/SKIP0/106.053s**、viewer **81中78 PASS/3 Windows platform SKIP/39.744s**。過去の96/83/66や途中2件を重複加算しない。prepare-portable.ps1の既存UTF8 BOMは保持し、Windows PowerShell5.1で構文/日本語復号を確認。
+
+**状態**：PZ2 source+Windows build/非GUI ABI/配布準備まで進んだが、起動画面/本体ready/取消/終了のGUI受入、HoneyView比較、clean Windowsは未実行。新GUI/GPU/推論0、旧GUI3/3上限は保持。PZ3 model導入3経路/PZ4 ZIP再配置/PZ5は未完。R13 DOING/ALPHA未完/R14 PARTIAL。旧DB/原本/モデル/元venv/登録/cert変更なし、新download/Actions/main merge/旧shutdown再実行なし。新配布内のdocsは準備時snapshotで、最新結果はrepo handoffと出力直下preparation.json/windows-validation.jsonを正とする。
+
+**次の3手**：
+1. ユーザーが準備済みCheck-Startup.cmdを開き、専用空DBで進捗→本体→通常終了、再起動時の取消を確認。自動GUIを再開する場合は具体artifact/固定範囲を示し新許可を得る。過去の上限を新folder名でresetしない。
+2. 実結果に基づく修正後、通常データ保存/restartとZIP/再配置/clean Windowsへ。起動表示時間・cold/p95・実媒体速度は計測前に保証しない。
+3. PZ3モデル配置済みroot/手動/app取得（既定無制限・任意cap）、U09/U11/U13/U14、ALPHA後実音声/音楽を継続。P0 2/2閉鎖/OCR保留、簡潔GUI/全機能/原本guardを維持。
+
 ## 2026-10-21 Portable起動経路・帰宅後チェックの準備（Windows build未実行）
 
 開始upstream `f2eb4574a263fa2f4b09cf94193fb529cd321059`。connector由来local snapshot `4fe827c`はclean、remote PR #5/branch/baseを照合して継続。他AIの実機worktreeには触れていない。[帰宅後の手順](../STARTUP_CHECK.md)と[実装/境界](portable-startup-check.md)を先に読む。

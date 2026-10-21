@@ -103,6 +103,30 @@ class PortableStagingTests(unittest.TestCase):
         path.write_text(json.dumps(data))
         with self.assertRaisesRegex(ValueError, 'portable'):runtime.verify_release(self.output)
 
+    def test_inbox_compiler_allows_servicing_hardlink_but_payload_guard_does_not(self):
+        from storage_lease import plain_path
+        import os
+        compiler=self.base/'Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+        compiler.parent.mkdir(parents=True);compiler.write_bytes(b'generated build tool')
+        sibling=compiler.with_name('servicing-link.exe');os.link(compiler,sibling)
+        self.assertEqual(compiler.stat().st_nlink,2)
+        with patch.object(builder,'windows_directory',return_value=self.base/'Windows'):
+            self.assertEqual(builder.system_compiler(),compiler)
+        with self.assertRaisesRegex(ValueError,'Hardlinked'):plain_path(compiler)
+
+    def test_inbox_compiler_reparse_and_nonfile_are_rejected(self):
+        from types import SimpleNamespace
+        import stat
+        compiler=self.base/'Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+        compiler.parent.mkdir(parents=True);compiler.write_bytes(b'generated build tool')
+        original=Path.lstat
+        for mode,attrs in ((stat.S_IFREG|0o600,0x400),(stat.S_IFDIR|0o700,0)):
+            def info(path):
+                if path==compiler:return SimpleNamespace(st_mode=mode,st_file_attributes=attrs,st_nlink=1)
+                return original(path)
+            with patch.object(builder,'windows_directory',return_value=self.base/'Windows'),patch.object(Path,'lstat',info):
+                with self.assertRaisesRegex(ValueError,'ordinary Windows-inbox'):builder.system_compiler()
+
     def test_csc_bootstrap_structure_rejects_script_x86_and_console(self):
         target = self.base / 'bootstrap.exe'
         target.write_bytes(pe_fixture());portable.inspect_bootstrap(target)

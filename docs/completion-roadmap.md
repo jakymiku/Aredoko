@@ -1,5 +1,7 @@
 # Aredoko 完成までの実行計画
 
+> **Windows準備済み2026-10-21**：[実結果と起動ファイル](portable-windows-validation.md)。Work68db65bを統合しCore759/起動CPU103/Portable publish・bootstrap実Win32非GUI通信・同梱runtime検査PASS。viewer78 PASS/3 SKIP。準備済みdist/portable-wincheck-20261021-02/Aredoko/Check-Startup.cmdでユーザー手動確認へ。GUI/GPU/clean Windows/ZIPは未実行、旧Alpha未更新・旧GUI3/3維持。再準備を無用に繰り返さず、次は実起動の結果を確認。
+
 > **最新2026-10-21・実使用改善**：[U01–U16台帳と部分検証](usability-feedback-20261021.md)を先に読む。GIF native化/APNG poster除外/小画像拡大/テーマ/favorite即時保存/scope解除/タイル再配置を実装、Python31/Core732/Release0 errors・既知5 warnings。overnight GUIは3/3で停止、Light全工程・Dark一部を確認、raw FAILを成功へ読み替えない。全21 PNG目視。installed Alpha/封印済み02は未更新。HoneyView parity/U09 folder favorite/U11棚別/U13 GUI backup/U14全体履歴は未完。次はCPU viewer段階診断→PZ2/PZ3/PZ4/PZ5、ALPHA後実音声。今回のshutdownを将来へ再適用しない。
 
 > **最新方針2026-10-21（ユーザー指定）**：今後の標準は[ZIP解凍→Aredoko.exe](portable-distribution.md)。PZ1自己完結frontend publishはCPU合格、製品ZIPは未完成。現在はPZ2所有bootstrap→PZ3全runtime梱包→PZ4 ZIP/再配置CPU→PZ5明示許可後のnative/clean Windows。下のMSIX-firstの「次」は履歴で、この順序を優先。DB/原本/機能/旧登録/試行上限を保持、ALPHA後に実音声/音楽→WinUI。

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -17,6 +18,31 @@ from release_runtime import verify_release, ordinary_tree, digest, python_layout
 from package_release import package, validate_output
 from storage_lease import plain_path, storage_parent
 from portable_frontend import inspect_portable, RECEIPT
+
+
+def windows_directory():
+    # Use the OS location, not a user-overridable SystemRoot value.
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.GetSystemWindowsDirectoryW.argtypes = [wintypes.LPWSTR, wintypes.UINT]
+    kernel.GetSystemWindowsDirectoryW.restype = wintypes.UINT
+    buffer = ctypes.create_unicode_buffer(32768)
+    count = kernel.GetSystemWindowsDirectoryW(buffer, len(buffer))
+    if not 0 < count < len(buffer):raise OSError('Cannot locate the Windows system directory')
+    return Path(buffer.value)
+
+
+def system_compiler():
+    compiler = windows_directory() / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+    plain_path(compiler.parent, directory=True)
+    info = compiler.lstat()
+    # Windows component servicing legitimately hardlinks inbox executables to
+    # WinSxS. This narrow build-tool check does not change payload/source guards.
+    if (not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)
+            or getattr(info, 'st_file_attributes', 0) & 0x400 or info.st_nlink < 1):
+        raise ValueError('Expected an ordinary Windows-inbox compiler')
+    return compiler
 
 
 def receipt(frontend, properties):
@@ -66,8 +92,7 @@ def prepare(runtime_release, output, *, dotnet='dotnet', make_zip=True):
         raise ValueError('Select an existing release with bundled Python and media runtime')
     python = runtime_release / 'runtime/python';media = runtime_release / 'runtime/media'
     python_layout(python, manifest.get('ai_runtime_bundled') is True);media_layout(media)
-    csc = Path(os.environ['SystemRoot']) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-    plain_path(csc)
+    csc = system_compiler()
     output = Path(os.path.abspath(output));validate_output(output)
     if output.is_relative_to(runtime_release) or runtime_release.is_relative_to(output):raise ValueError('Output must be separate from existing runtime assets')
     storage_parent(output);output.mkdir();plain_path(output, directory=True)
@@ -93,6 +118,7 @@ def prepare(runtime_release, output, *, dotnet='dotnet', make_zip=True):
          '--no-restore', '-o', str(frontend)], 'frontend-build')
     receipt(frontend, properties)
     print('起動画面をビルドしています。', flush=True)
+    if system_compiler() != csc:raise ValueError('Windows compiler location changed')
     run([str(csc), '/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/utf8output', '/codepage:65001',
          '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll', '/reference:System.Web.Extensions.dll',
          '/win32icon:' + str(ROOT / 'src/Aredoko.WinUI/Assets/AppIcon.ico'),
