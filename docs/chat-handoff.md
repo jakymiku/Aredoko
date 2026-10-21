@@ -1,5 +1,17 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 Portable起動タイムアウト修正・実機受入（限定範囲）
+
+最新のユーザー許可「お願いします」を受け、専用空DB/GPUなしでlocal Portable実機診断を実施。旧配布・installed Alpha・普段のDB・モデルは未変更。新しい確認先は **`dist/portable-startup-diagnostic-20261021-02/Aredoko/Check-Startup.cmd`**。旧`portable-wincheck-20261021-02`は失敗版として保持し、これを再案内しない。[修正・証拠・限界](portable-startup-console-fix.md)。
+
+**実原因と修正**：本体は初期一覧とRenderingまで成功していたが、`System.Console.dll`が物理的に存在してもtrimmed `.deps.json`のruntime graphから欠落し、ready通知時にFileNotFoundException。Portable限定TrimmerRootAssemblyで依存を保持し、配布receipt検査でDLL+runtime graph両方を必須化。生成回帰で「DLLあり/graphなし」を拒否し、実失敗publishも拒否・実修正publishはPASS。送信済みflagはwrite/flush成功後にだけ設定する。timeout60s・full SHA・原本/identity/first-frame guardsは緩めていない。
+
+**結果**：Portable build0 errors/既知WUI1001×3+IL2104×2、CPU **30 PASS / 52.864s**。固定flow `portable-startup-gui-20261021`は**3/3消費**。01は実不具合再現（失敗画面の閉じる名も2候補でambiguous、所有bootstrapを別途通常close）。02はreadyと本体表示成功だがposted Alt+F4がWinUIに届かずraw FAIL、記録済み可視CloseボタンUIAで通常cleanup。03は**PASS：実ready/起動画面が消える/空ライブラリ表示/UIA通常close/所有backend等終了/別のfresh smoke起動を早期cancel/所有cleanup**。cancel操作後待ち0.859s。7 PNGを全部目視確認。01/02のraw FAILを成功にしない。3/3後の再試験・別名resetはしない。
+
+修正版は24329 files / 5554470502 bytes、manifest 90c47fe3b6c9c21bacf49ef05d29a1588f7ade4f37ecf9e386989a1beb2bc81d。配布/テストlog・raw reports・全PNG・最終harness snapshotとvisual-and-artifact-review.jsonはignored `data/ai-ui/portable-startup-gui-20261021`とadjacent logに保存。旧sealed manifest SHAは以前の値と一致。新配布内のdocsは準備時snapshotであり、最新状態はrepo handoffを正とする。
+
+**限界と次**：この不具合とfresh smokeのready/close/cancelは解決。初回paint/普通DBのrestart保持・clean Windows・ZIP/再配置・model3経路・viewer速度/実媒体比較は未受入。全件チェック込みの03 main確認57.948s（単発・controlled cold/p95ではない）；full SHAの待ちは引き続き課題。PZ2限定native受入済みだがR13 DOING/ALPHA未完/R14 PARTIALを維持。次はPZ3既存モデルfolder選択/明確診断→手動/app取得（既定無制限、任意cap）と通常データ/ZIP受入。U09/U11/U13/U14/ALPHA後実音声・音楽も保持。Downloads/Actions/main merge/GPU/私物scan/旧shutdown再実行なし。
+
 ## 2026-10-21 Portable manual failure: initial screen timeout; diagnosis prepared
 
 User manually ran sealed `dist/portable-wincheck-20261021-02/Aredoko/Check-Startup.cmd` and received `Initial screen timed out` at 20:41. This supersedes the earlier "not opened" checkpoint: actual native startup **FAIL**, not accepted. Backend.log contains the production listen message; app.log/backend-error.log are empty; launcher.log records timeout. Existing global winui.log has no corresponding new exception. The readiness loop starts after backend session identity is verified; this failure is later than full preflight, not proof that hashing timed out. No reliable frontend stopping stage was recorded, so the cause is still unconfirmed. Do not just raise the timeout.

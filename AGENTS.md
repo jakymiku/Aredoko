@@ -1,5 +1,13 @@
 # Aredoko — Codex / coding agent instructions
 
+## Portable startup timeout fixed: local native smoke accepted (2026-10-21; latest)
+
+Read [actual cause/fix/acceptance limits](docs/portable-startup-console-fix.md) and latest handoffs. User renewed local GUI permission. Missing System.Console **runtime graph entry**, despite a physical DLL, caused ready notification FileNotFoundException after actual first Rendering. Portable-only TrimmerRootAssembly retains dependency; receipt requires DLL+active deps entry; new generated regression and actual bad/good publishes reproduce/reject/pass. Signal sent flag follows successful write. No timeout/hash/source/nonce/instance/frame guard relaxation.
+
+CPU30 PASS/52.864s; Portable publish0 errors/known3+2 warnings. Fixed flow portable-startup-gui-20261021 exhausted3/3: 01 actual bug + ambiguous close selector; 02 actual ready/display PASS but posted Alt+F4 harness FAIL, cleaned by visible UIA Close; 03 ready/hidden splash/empty library/UIA normal close/owned cleanup/early cancel+cleanup PASS. Seven PNGs reviewed. Preserve raw failures; no extra GUI/name reset after cap. No GPU/private scan/normal DB/download/Actions/main merge/shutdown.
+
+Latest runnable diagnostic: dist/portable-startup-diagnostic-20261021-02/Aredoko/Check-Startup.cmd (fresh empty DB). Old portable-wincheck02/installed Alpha/shortcuts untouched; never direct users back to the known failed old candidate. This fixes reported startup defect, not full product acceptance: full SHA still takes tens of seconds; ordinary-data persistence/restart, clean Windows, ZIP/relocation, PZ3 model setup3 paths and viewer comparisons remain. R13 DOING/ALPHA incomplete/R14 PARTIAL. Next PZ3 existing-model root selection/diagnostics, then manual/app acquisition and remaining normal-data/ZIP gates; retain U09/U11/U13/U14/audio/music roadmap.
+
 ## Portable manual timeout and diagnostic source (2026-10-21; latest)
 
 The user manually tried sealed02 and got Initial screen timed out. Startup native acceptance is **FAIL**, superseding prior prepared/not-opened wording. Backend session stage passed; frontend sent neither ready nor failure before deadline. Root cause is unconfirmed. Read newest handoffs. Diagnostic frontend-only publish is prepared at data/ai-ui/portable-startup-diagnostic-20261021-01/frontend with validated Portable receipt; no new full package/ZIP. Opt-in stage logs + shared initial Task + explicit missing-page/launch error reporting are implemented/build verified, not proven timeout fixes. Existing timeout/hash/source/identity/frame guards stay.

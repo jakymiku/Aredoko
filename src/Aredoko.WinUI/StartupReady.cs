@@ -16,11 +16,11 @@ internal static class StartupReady
     {
         if(!Pending)return;
         AppLog.Startup(success?"ready_sending":"failure_sending");
-        sent=true;
         if(Nonce is null||Instance is null||!Regex.IsMatch(Nonce,"\\A[0-9a-f]{32}\\z")||!Regex.IsMatch(Instance,"\\A[0-9a-f]{32}\\z"))
             throw new InvalidOperationException("起動情報を確認できません。");
         var data=Encoding.UTF8.GetBytes("{\"format\":\"aredoko-frontend-ready-v1\",\"nonce\":\""+Nonce+"\",\"instance_id\":\""+Instance+"\",\"status\":\""+(success?"ready":"failed")+"\"}\n");
         await Task.Run(()=>{using var output=Console.OpenStandardOutput();output.Write(data);output.Flush();});
+        sent=true;
         AppLog.Startup(success?"ready_sent":"failure_sent");
     }
     internal static async Task FirstFrameAsync()

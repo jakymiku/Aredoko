@@ -15,7 +15,7 @@ from startup_ipc import _object
 RECEIPT = 'portable-build.json'
 READY_FORMAT = 'aredoko-frontend-ready-v1'
 PAYLOAD = {'Aredoko.WinUI.exe', 'Aredoko.WinUI.dll', 'Aredoko.Core.dll',
-           'Aredoko.WinUI.deps.json', 'Aredoko.WinUI.runtimeconfig.json'}
+           'Aredoko.WinUI.deps.json', 'Aredoko.WinUI.runtimeconfig.json', 'System.Console.dll'}
 
 
 def inspect_bootstrap(path):
@@ -62,6 +62,17 @@ def inspect_portable(root):
     included = options.get('includedFrameworks') if isinstance(options, dict) else None
     if not isinstance(options, dict) or 'framework' in options or 'frameworks' in options or not isinstance(included, list) or not included:
         raise ValueError('Portable frontend requires self-contained .NET')
+    # A GUI publish may contain a DLL that its trimmed .deps graph cannot load.
+    # Fail before launching rather than timing out after a successful first frame.
+    deps_path = plain_path(root / 'Aredoko.WinUI.deps.json')
+    if deps_path.stat().st_size > 2 * 1024**2:raise ValueError('Portable dependencies exceed limit')
+    deps = json.loads(deps_path.read_text(encoding='utf-8-sig'), object_pairs_hook=_object)
+    target = deps.get('runtimeTarget', {}).get('name') if isinstance(deps, dict) else None
+    libraries = deps.get('targets', {}).get(target, {}) if isinstance(target, str) else {}
+    if (not isinstance(libraries, dict) or not any(
+            isinstance(library, dict) and isinstance(library.get('runtime'), dict)
+            and 'System.Console.dll' in library['runtime'] for library in libraries.values())):
+        raise ValueError('Portable startup Console dependency is missing from the runtime graph')
     return value
 
 

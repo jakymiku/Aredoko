@@ -43,6 +43,9 @@ class PortableStagingTests(unittest.TestCase):
         frontend = self.base / 'Portable 日本語';frontend.mkdir()
         for name in portable.PAYLOAD:(frontend / name).write_bytes(b'generated frontend layout only')
         (frontend / 'Aredoko.WinUI.runtimeconfig.json').write_text(json.dumps({'runtimeOptions': {'includedFrameworks': [{'name': 'Microsoft.NETCore.App', 'version': '10.0.12'}]}}))
+        (frontend / 'Aredoko.WinUI.deps.json').write_text(json.dumps({
+            'runtimeTarget': {'name': 'test/win-x64'},
+            'targets': {'test/win-x64': {'runtimepack': {'runtime': {'System.Console.dll': {}}}}}}))
         builder.receipt(frontend, PROPERTIES)
         bootstrap = self.base / 'bootstrap.exe';bootstrap.write_bytes(pe_fixture())
         return frontend, bootstrap
@@ -94,6 +97,16 @@ class PortableStagingTests(unittest.TestCase):
         config = frontend / 'Aredoko.WinUI.runtimeconfig.json'
         config.write_text(json.dumps({'runtimeOptions': {'framework': {'name': 'Microsoft.NETCore.App'}}}))
         with self.assertRaises(ValueError):builder.receipt(frontend, PROPERTIES)
+
+    def test_present_console_file_without_runtime_graph_entry_is_rejected(self):
+        frontend, _ = self.source()
+        (frontend / 'portable-build.json').unlink()
+        (frontend / 'Aredoko.WinUI.deps.json').write_text(json.dumps({
+            'runtimeTarget': {'name': 'test/win-x64'},
+            'targets': {'test/win-x64': {'runtimepack': {'runtime': {}}}}}))
+        self.assertTrue((frontend / 'System.Console.dll').is_file())
+        with self.assertRaisesRegex(ValueError, 'Console dependency'):
+            builder.receipt(frontend, PROPERTIES)
 
     def test_missing_bootstrap_cannot_be_hidden_by_rewriting_manifest(self):
         self.stage();target = self.output / 'Aredoko.exe';target.unlink()

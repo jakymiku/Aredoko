@@ -34,6 +34,11 @@
     <PublishAppxPackage>false</PublishAppxPackage>
     <EnableWinAppRunSupport>false</EnableWinAppRunSupport>
   </PropertyGroup>
+  <!-- The GUI startup acknowledgement uses redirected Console stdio. Keep its
+       runtime dependency in the trimmed publish graph, not just a stray DLL. -->
+  <ItemGroup Condition="'$(AredokoPackageChannel)' == 'Portable'">
+    <TrimmerRootAssembly Include="System.Console" />
+  </ItemGroup>
   <Target Name="ValidateAredokoPackageChannel" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(AredokoPackageChannel)' != 'Development' and '$(AredokoPackageChannel)' != 'Alpha' and '$(AredokoPackageChannel)' != 'Portable'"
            Text="Unknown Aredoko package channel. Use Development, Alpha or Portable." />

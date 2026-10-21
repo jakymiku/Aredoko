@@ -1,5 +1,7 @@
 # PortableのWindows準備・検証（2026-10-21）
 
+> **起動タイムアウトは修正版で解消し、fresh smokeのready/通常close/早期cancelを実機確認済みです。** 最新入口は `dist/portable-startup-diagnostic-20261021-02/Aredoko/Check-Startup.cmd`。[修正・実測・限界](portable-startup-console-fix.md)。以下の旧準備/失敗記録は履歴です。
+
 > **後続の手動確認は起動失敗（20:41 Initial screen timed out）です。** 下記は準備時点の記録であり起動成功の証拠ではありません。最新の診断状況は[codex-handoff](codex-handoff.md)冒頭を参照。元の配布は保持し、新しい診断用frontendだけ別途build済み。原因特定・GUI再検証は未完了。
 
 Work HEAD`68db65b`を実機へ取り込み、既存runtime/cacheだけで準備した。**本体や起動画面はまだ起動していない。** インストール済みAlphaと旧配布は更新していない。

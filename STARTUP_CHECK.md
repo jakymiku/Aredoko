@@ -1,10 +1,10 @@
 # 帰宅後の起動チェック
 
-## このPCは準備済み（2026-10-21）
+## このPCの最新修正版（2026-10-21）
 
-Work更新を取り込み、WindowsでCore/Portable本体/起動EXE/同梱runtimeの確認まで完了しました。まず`dist/portable-wincheck-20261021-02/Aredoko/Check-Startup.cmd`を開いてください。Prepare-Portable.cmdを再実行する必要はありません。起動画面・本体表示・取消・通常終了はまだ未確認です。[検証結果と残件](docs/portable-windows-validation.md)。以下の準備手順は別の新規準備が必要な場合のものです。
+**`dist/portable-startup-diagnostic-20261021-02/Aredoko/Check-Startup.cmd`** を開いてください。専用の空ライブラリで、本体表示・通常終了・起動取消まで実機確認済みです。Prepare-Portable.cmdをやり直す必要はありません。
 
-今回用意したのは、新しいZIP版の起動経路とWindows側の準備手順です。**この変更はLinuxで開発しており、Windowsビルド・起動画面の実表示はまだ確認していません。ビルド済みEXEを実機へ配置した状態ではありません。** インストール済みAlphaや封印済み配布は更新していません。
+旧`dist/portable-wincheck-20261021-02`は起動通知の依存欠落でタイムアウトするため使わず、失敗記録として保持しています。[原因・修正と検証範囲](docs/portable-startup-console-fix.md)。全件チェックにはまだ数十秒かかります。通常データの再起動保持/clean Windows/ZIPは未受入です。以下は別途新規ビルドを準備するときの手順です。
 
 ## 最初に開くファイル
 
