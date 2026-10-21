@@ -23,6 +23,7 @@ internal sealed class Bootstrap : Form
     readonly Button cancel=new Button(), logs=new Button();
     readonly object inputLock=new object();
     Stream input;
+    bool helloSent;
     volatile bool cancelRequested, interactive, finished;
     bool allowClose, failed;
     string logPath;
@@ -84,7 +85,7 @@ internal sealed class Bootstrap : Form
     void Send(string command)
     {
         var bytes=Encoding.ASCII.GetBytes("{\"format\":\""+Format+"\",\"command\":\""+command+"\",\"session_id\":\""+session+"\"}\n");
-        lock(inputLock){if(input!=null){input.Write(bytes,0,bytes.Length);input.Flush();}}
+        lock(inputLock){if(input!=null){if(command=="cancel"&&!helloSent)return;input.Write(bytes,0,bytes.Length);input.Flush();if(command=="hello")helloSent=true;}}
     }
     static void Ordinary(string path,bool directory)
     {
