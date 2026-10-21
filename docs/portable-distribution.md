@@ -52,7 +52,7 @@ PZ2受入では、遅いpreflightを模擬したCPU検証で段階/実進捗通�
 | 順番 | 作業 | 状態と完了条件 |
 | --- | --- | --- |
 | PZ1 | 独立したWinUI portable publish | **CPU_DONE**。実publish/自己完結出力/既定MSIX保持/誤構成拒否を確認。native未確認 |
-| PZ2 | ルートAredoko.exeの所有bootstrap | TODO。別途SDK不要の入口から同梱Python launcher→backend→portable GUIを起動。絶対path/作成時刻/保持handle/子processを照合し、他のAredokoやPID再利用を終了しない。port/instance/lease/所有EOFを維持。重い検査前の起動UI・実進捗/段階・取消・失敗/ログを必須とし、main/backend readyまで表示する |
+| PZ2 | ルートAredoko.exeの所有bootstrap | **PARTIAL（処理基盤のみ）**。[実進捗/取消](startup-progress-control.md)はCPU検証済み。native起動UI/入口/IPC/ready handshake/portable launchはTODO。別途SDK不要の入口から同梱Python launcher→backend→portable GUIを起動。絶対path/作成時刻/保持handle/子processを照合し、他のAredokoやPID再利用を終了しない。port/instance/lease/所有EOFを維持。重い検査前の起動UI・実進捗/段階・取消・失敗/ログを必須とし、main/backend readyまで表示する |
 | PZ3 | portable frontendと全runtimeの梱包 | TODO。明示portable modeと出力manifestを結び、旧MSIXのEXEを誤流用しない。Python/AI依存/動画tool/NOTICEを含み、外部Pythonや既存MSIX登録へfallbackしない。既存の全SHA/祖先link/type/hardlink検査を保持。モデルroot指定/診断と導入3経路も含める |
 | PZ4 | 配布ZIPと更新手順 | TODO。存在しない新規先のみ作成、相対path/全inventory照合。日本語・空白path/再配置でbackend HTTP/保存/終了をCPU確認。DBや原本/modelを配布へ収集しない。旧artifactを上書きしない |
 | PZ5 | 明示許可後のnative/clean Windows受入 | TODO。package identityなしを実確認し、解凍→Aredoko.exe→登録/検索/閲覧/終了→再起動/保存保持、更新/フォルダ削除後のデータ保持。SDK/Python/WinAppSDK事前installに助けられない環境で検証。必要なGPUは別途最新許可に従う |
@@ -66,3 +66,7 @@ PZ2/PZ3は明示portable modeだけで`subprocess`によるGUI起動を許し、
 旧native flow `alpha-msix-owned-lifecycle-v1`の3/3上限は保持する。今回GUIは実行しておらず、portableという別名で試行権限をresetしない。PZ5へ入る前に、用意した具体的artifactと固定検証範囲についてユーザーの新たな明示許可を得る。既存の配布方式変更の承認は、新model取得・私物走査・OS変更・GUI上限解除の許可とは分ける。
 
 旧評価・失敗記録・試験証明書/登録・原本/実DB/元venv・機能を保全。P0累積2/2閉鎖・専用OCR保留・簡潔GUI・Actions0・main mergeなし・配布物の外部公開なしを保持する。
+
+## 2026-10-21 実装追記：起動前チェックの処理基盤
+
+[進捗/取消の実装と検証限界](startup-progress-control.md)を参照。全hash/guard維持で段階・照合件数/bytes通知、協調取消、所有runtime probe終了/reapを追加。関連66 PASS/Windows5 SKIP。上の「方針だけ」は当時の履歴。現在は処理基盤のみ実装、起動画面/root bootstrap/IPC/ready/portable起動とWindows受入は引き続き未完。

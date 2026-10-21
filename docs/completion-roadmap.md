@@ -291,3 +291,7 @@ M1/M2ごとに対象commit/artifact・対象機能・fixture・必要GPU/GUI時�
 ## 追加：viewer速度改善のsource checkpoint（0c2a34b後）
 
 [viewer性能記録](viewer-performance.md)に実装と残る受入条件を集約。先読み/cache/旧画像保持/保存分離/close flush/段階計測とAPNG thumbnailを追加し、Python関連81 PASS。新Coreテスト・WinUI build/native/HoneyView比較は未実行。次のviewer作業はWindowsで既存依存のビルドと許可後の実描画・保存・source guard確認。その後PZ2→PZ3→PZ4→PZ5を継続し、R13/ALPHA/R14の完了条件や残件は緩めない。
+
+## 2026-10-21 PZ2処理基盤の進捗
+
+[実装と境界](startup-progress-control.md)：全SHA/guardを維持した実進捗/協調取消と所有runtime probe cleanupを実装、関連66 PASS/Windows5 SKIP。PZ2は処理基盤のみPARTIALでnative bootstrap/起動UI/IPC/ready/portable launchは未実装。前回viewerの新Core/WinUI/実機速度比較も保留。次はPZ2残り→PZ3→PZ4→PZ5、R13/ALPHA/R14の未完状態は維持する。

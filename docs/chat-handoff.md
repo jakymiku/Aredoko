@@ -1,5 +1,14 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 起動前チェックの進捗・取消（PZ2処理基盤）
+
+基点`137e147`。ユーザーの開発継続依頼で、[起動進捗と取消の処理](startup-progress-control.md)を実装。配布manifest→全SHA→全inventory/祖先guard→runtime layout→Python import→media probeの実段階と、照合完了した件数/bytesをcallbackで通知する。通常10回/秒へ間引き、段階末尾/失敗/取消は即通知。総量不明はindeterminate、全体%/ETA/app-readyを捏造しない。1MiB境界/worker開始で協調取消し、runtime probeは今回の保持Popenだけを終了/reapする。source/DB/旧Alphaを変更せず、全hash/guardは通知なしと同一回数。新moduleは新規配布へ明示コピーし、旧封印済み02は無変更。
+
+最終関連71件＝66 PASS/Windows5 SKIP/失敗0（21.004秒、新規16含む）。生成payload/host Python childで実進捗・取消・別child保全・timeout/pipe解放/保全・旧梱包/再配置HTTP/DB/lease/正式activation境界を確認。Windows runtime stage分岐はstub、Windows ABI/native/GUIは未確認。新依存/モデル/Actions/merge/private scanなし。**PZ2は処理基盤のみPARTIAL。root Aredoko.exe/起動画面/IPC/ready handshake/portable launchは未実装**で、起動UI完成とは言わない。既定CLIは余分な通知を出さず、主画面にも未接続。
+
+次は最小native bootstrap/起動UI＋信頼できる進捗IPC/所有取消/ready handshake、Windowsで既存依存のbuild確認。旧GUI3/3上限は新明示許可なしにresetしない。PZ3→PZ4→PZ5、前回viewerの新Core/WinUI実機/HoneyView比較、U09/U11/U13/U14等の残件、R13 DOING/ALPHA未完/R14 PARTIALを維持。ALPHA後は実音声/音楽→WinUIへ戻る。旧一度きりshutdownを再実行しない。以下の過去handoffは全て保全。
+
+
 ## 閲覧速度改善の追加実装（基点0c2a34b後・今回の最新）
 
 ユーザーが実機なしで進めるHoneyView相当を目指す方針を承認。[実装・安全性・検証限界](viewer-performance.md)を先に読む。旧画像保持、次見開きのみの先読み、毎回source guardを通すweak ETag/304とデコードLRU、本6枚/96MiB・静止画3枚/96MiB、見開き並行準備、表示後の位置保存キュー（1件送信＋最新1件待機）と通常close flushを実装。先読み原本8MiB/decoded24MiB上限、前景原寸を維持。APNG一覧thumbnailはposterではなく先頭の実再生frame。開発用段階時間はopt-inで、XAML assignedは実描画完了ではない。

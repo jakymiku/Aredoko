@@ -1,5 +1,12 @@
 # Aredoko — Codex / coding agent instructions
 
+## PZ2 preflight progress/control (2026-10-21; latest source checkpoint)
+
+Read [startup progress/control implementation](docs/startup-progress-control.md). Preflight now provides opt-in actual stage/hash-count/byte snapshots and cooperative cancellation. All SHA/ancestor/link/type/hardlink checks stay; generated traced calls match the quiet default. Hash cancellation checks1MiB boundaries and worker start. Runtime probes poll/reap only their held Popen child, preserving other instances. New module is explicitly staged; old Alpha/sealed02 unchanged. Final71 tests:66 PASS/5 Windows SKIP/0 failures (new16). Windows runtime stages use stubs; real process cancellation uses host Python, not Windows ABI/native acceptance.
+
+**PZ2 PARTIAL for processing foundations only**: root bootstrap/native startup UI/IPC/backend+frontend ready handshake/portable launch remain unimplemented. No UI/first-paint/startup-speed acceptance claims. Default CLI stays quiet. Next implement native entry/UI and trusted progress/cancel/ownership/ready handoff; keep PZ3→PZ4→PZ5 and previous viewer Windows Core/build/parity checks pending. No extra GUI/reset beyond historic3/3 without renewed explicit permission. R13 DOING/ALPHA incomplete/R14 PARTIAL, real audio/music after ALPHA, all other open features retained. No downloads/Actions/main merge/private scans, no replay of one-time shutdown.
+
+
 ## Viewer speed follow-up (base0c2a34b; latest source-only checkpoint)
 
 User approved feasible viewer improvements without the Windows PC. Read [viewer performance implementation and acceptance limits](docs/viewer-performance.md). Keep old image until replacement ready; bounded next-spread preload; original authenticated source revalidation on every decoded-cache use; weak metadata ETag/304 never bypasses root/exclusion/revision/handle/link/reparse/ZIP/folder checks. Book cache6 pages/96MiB, static3/96MiB; speculative source8MiB/decoded24MiB. Foreground original quality remains. Coalesced position writer saves only displayed pages and normal button/Esc/titlebar/owner close flushes pending writes. APNG library thumbnail now excludes poster. Timings are opt-in and XAML assignment is not presentation.

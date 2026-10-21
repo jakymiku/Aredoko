@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / 'tools'))
 from release_runtime import verify_release, python_layout, media_layout, runtime_environment
 from storage_lease import plain_path, storage_parent, storage_lease
 from packaged_frontend import prepare_frontend
+from startup_progress import StartupCancelled, StartupProgress
 
 CREATE_NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 PATH_OPTIONS = {'database': '--db', 'ai_python': '--ai-python', 'models_root': '--models-root',
@@ -64,25 +65,50 @@ def validate_settings(settings):
     return settings
 
 
-def preflight(root, *, imports=True):
-    manifest = verify_release(root)
-    if manifest.get('python_bundled') is not True or manifest.get('media_tools_bundled') is not True:
-        raise ValueError('The staged release needs bundled Python and FFmpeg/ffprobe')
-    python_layout(root / 'runtime/python', manifest.get('ai_runtime_bundled') is True)
-    media_layout(root / 'runtime/media')
+def _runtime_check(command, *, root, timeout, progress, capture=False):
+    """Poll only this child; cancellation never searches processes by name/PID."""
+    progress.check_cancelled()
+    with subprocess.Popen(command, cwd=root, env=runtime_environment(), stdin=subprocess.DEVNULL,
+                          stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+                          stderr=subprocess.PIPE if capture else subprocess.DEVNULL,
+                          text=True, encoding='utf-8', errors='replace', creationflags=CREATE_NO_WINDOW,
+                          close_fds=True) as child:
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                progress.check_cancelled()
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:raise subprocess.TimeoutExpired(command, timeout)
+                try:
+                    stdout, stderr = child.communicate(timeout=min(0.1, remaining))
+                    progress.check_cancelled()
+                    return subprocess.CompletedProcess(command, child.returncode, stdout, stderr)
+                except subprocess.TimeoutExpired:pass
+        finally:
+            _stop_owned(child)
+
+
+def preflight(root, *, imports=True, progress=None):
+    control = progress if progress is not None else StartupProgress()
+    manifest = verify_release(root, progress=progress)
+    with control.phase('runtime_layout'):
+        if manifest.get('python_bundled') is not True or manifest.get('media_tools_bundled') is not True:
+            raise ValueError('The staged release needs bundled Python and FFmpeg/ffprobe')
+        python_layout(root / 'runtime/python', manifest.get('ai_runtime_bundled') is True, progress=progress)
+        media_layout(root / 'runtime/media', progress=progress)
     if imports:
         if os.name != 'nt':raise RuntimeError('Windows runtime checks require Windows')
         args = [str(root / 'runtime/python/python.exe'), '-B', str(root / 'tools/probe_release_runtime.py')]
         if manifest.get('ai_runtime_bundled') is True:args.append('--ai')
-        result = subprocess.run(args, cwd=root, env=runtime_environment(), capture_output=True,
-                                text=True, encoding='utf-8', errors='replace', timeout=90, creationflags=CREATE_NO_WINDOW)
-        if result.returncode or json.loads(result.stdout).get('pass') is not True:
-            raise RuntimeError('Bundled Python imports failed; check the prepared runtime')
-        for name in ('ffmpeg.exe', 'ffprobe.exe'):
-            result = subprocess.run([str(root / 'runtime/media' / name), '-version'], cwd=root,
-                                    env=runtime_environment(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                    timeout=10, creationflags=CREATE_NO_WINDOW)
-            if result.returncode:raise RuntimeError('Bundled video tool failed: ' + name)
+        with control.phase('python_imports'):
+            result = _runtime_check(args, root=root, timeout=90, progress=control, capture=True)
+            if result.returncode or json.loads(result.stdout).get('pass') is not True:
+                raise RuntimeError('Bundled Python imports failed; check the prepared runtime')
+        with control.phase('media_probe'):
+            for name in ('ffmpeg.exe', 'ffprobe.exe'):
+                result = _runtime_check([str(root / 'runtime/media' / name), '-version'],
+                                        root=root, timeout=10, progress=control)
+                if result.returncode:raise RuntimeError('Bundled video tool failed: ' + name)
     return manifest
 
 
@@ -146,7 +172,7 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
     if backend.returncode:raise AppSessionError('Backend did not exit cleanly; see backend-error.log')
 
 
-def launch(root, data, settings):
+def launch(root, data, settings, *, progress=None):
     # All writable state stays outside the versioned release. Reject accidental
     # source/payload placement before creating logs or opening a database.
     paths = [data, *(Path(settings[k]) for k in ('database', 'ai_settings', 'viewer_settings') if k in settings)]
@@ -167,13 +193,16 @@ def launch(root, data, settings):
         app = ['--ui-theme', values.get('ui_theme', 'system'),
                '--viewer-settings', values.get('viewer_settings', str(data / 'viewer-settings.json'))]
         try:
-            manifest = preflight(root)
+            manifest = preflight(root, progress=progress)
+            if progress is not None:progress.check_cancelled()
             frontend = prepare_frontend(root, manifest)
+            if progress is not None:progress.check_cancelled()
             run_session(backend, app, port=8769, instance=instance, logs=logs, cwd=root,
                         env=runtime_environment(root / 'runtime/media'), app_factory=frontend.start)
         except Exception as error:
             (logs / 'launcher.log').write_text(type(error).__name__ + ': ' + str(error) + '\n', encoding='utf-8')
-            failure_type = AppSessionError if isinstance(error, AppSessionError) else RuntimeError
+            failure_type = (StartupCancelled if isinstance(error, StartupCancelled) else
+                            AppSessionError if isinstance(error, AppSessionError) else RuntimeError)
             raise failure_type(str(error) + '\nLogs: ' + str(logs)) from error
 
 

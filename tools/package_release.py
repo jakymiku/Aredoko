@@ -65,7 +65,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         'app/production_server.py', 'app/storage_schema_v1.json', 'THIRD_PARTY_NOTICES.md',
         'docs/user-guide.md', 'tools/start-aredoko.ps1', 'tools/native-arguments.ps1',
         'tools/backup_library.py', 'tools/release_runtime.py', 'tools/launch_release.py',
-        'tools/probe_release_runtime.py', 'tools/packaged_frontend.py', 'tools/install-release-shortcut.ps1')]
+        'tools/probe_release_runtime.py', 'tools/startup_progress.py', 'tools/packaged_frontend.py', 'tools/install-release-shortcut.ps1')]
     for path in required:
         plain_path(path)
     binary = REPO / 'src/Aredoko.WinUI/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64'
@@ -123,7 +123,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             copy_payload(source, config_dir / sub)
     for name in ('start-aredoko.ps1', 'native-arguments.ps1'):
         copy_payload(REPO / 'tools' / name, output_dir / name)
-    for name in ('backup_library.py', 'release_runtime.py', 'launch_release.py', 'probe_release_runtime.py', 'packaged_frontend.py'):
+    for name in ('backup_library.py', 'release_runtime.py', 'launch_release.py', 'probe_release_runtime.py', 'startup_progress.py', 'packaged_frontend.py'):
         copy_payload(REPO / 'tools' / name, tools_dir / name)
     copy_payload(REPO / 'tools/install-release-shortcut.ps1', output_dir / 'install-release-shortcut.ps1')
     if frontend_msix is not None:
