@@ -1,5 +1,19 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-22 Work継続：P1B逐次再生とP2結果session基盤
+
+開始remote HEAD 1969ab4ccd5ed41ba870df000e60c537186148e6、既存production branch / Draft PR #5を継続。直接git認証不可のためGitHub connectorで492 text fileを取得し全blob SHA一致を確認、clean local snapshotを基点に実装。remoteの元treeへ変更fileだけ重ね、未取得binary/他branch/履歴を保持し、期待HEAD付きのfast-forwardでPushした。実機worktreeの未コミット変更はこの環境から確認できず、触れていない。不要branch/PR/merge/Actionsなし。
+
+**実装commit**:
+- 18c366e1071e7a5dd043bb0c9e3b5e8298c54113: P1B所有Pillow session、先頭優先/BGRA binary/最大4枚先読み/WriteableBitmap再利用/終了と旧応答拒否。全PNG待ち/64枚切捨て/decoder再openを現行WinUIから撤去。native GIF優先、静止画原寸、本cache/保存、AI代表frame契約は維持。[契約とWindows確認](animation-streaming.md)。
+- c37e3bfbfae6ea5d6141c1798bf26aedac9c3835: P2のdisk結果session/create/status/range/画像neighbor/close、7検索方式、同じAI score spoolの一回消費、世代/物理版/除外/期限/取消/容量の拒否。LibraryApi.Resultsと反射不要Core clientを追加。文字検索のscan前除外漏れも修正。[契約・検証・次の1件](result-sessions.md)。
+
+**検証**: P1関連48 PASS/4.693s、原本再open除去後の新規11 PASS/1.093s。P2関連83 PASS/14.745s、物理版/除外修正後24 PASS/3.688s、7方式HTTP1 PASS/1.295s。最終影響回帰141 PASS/1 runner ERROR（不存在test_tag_candidate_search指定）、26.413s。正しい候補検索1 PASS/0.738s、最後のclose marker期限回帰1 PASS/0.117s。重複加算しない。初期fixture誤期待/除外漏れ/不存在test_original_pagesを含む全失敗logを、docs/validation/20261022-work/へ保存（同じlogのignored copyも保持）。変更Python構文/diff/文書link確認済み。
+
+**状態/未検証**: P1Bはsource接続+Python確認、Core/WinUI build/native表示・実loop/速度/Honeyview比較はUNRUN。この環境に.NET SDK/Windowsがない。P2はPARTIAL、backend/API/Core clientまでで、MainPage/ImageViewerSequenceは旧page配列のまま。**GUIの60件境界はまだ直っていない**。Coreテストは追加ソースのみ、未実行。P0診断/resource、P3以降、R13/ALPHA/R14/M1/M2未完。配布/旧Alpha/basic03/shortcut/普段のDB/原本/モデルは更新なし。専用OCR保留/全機能/旧GUI caps/過去raw失敗を保持。実model/GPU/GUI/private scan/新依存・download/OS変更/旧shutdown再実行なし。
+
+**次の1件**: 既存Windows SDK/cacheで追加CoreテストとPortable buildを一回確認し、P2のnative所有session/range/非同期neighborへ接続。条件変更・古い応答・expiryの拒否、viewer close後に最後のitemの選択/scroll復帰を実装する。閲覧履歴の追加でsessionを作り直さない。Windows確認待ちだけで独立backendを止めず、P1B/P2基盤を再実装しない。この記録のcommitは上の実装commitに続くgit logで確認する。
+
 ## 2026-10-22 今日の終了点：実形式判定と統合計画
 
 - 実装commit `0f2e005364a9e6ff6d8977ccce39efe6d8c4b831`、既存branch/Draft PR #5を継続。[統合計画](polish-roadmap-20261022.md)をAGENTS/既存計画/UI方針からリンク済み。

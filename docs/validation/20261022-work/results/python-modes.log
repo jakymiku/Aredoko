@@ -1,0 +1,6 @@
+test_all_result_provider_modes_share_the_same_api_contract (test_result_sessions.ResultSessionTests.test_all_result_provider_modes_share_the_same_api_contract) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 1.295s
+
+OK

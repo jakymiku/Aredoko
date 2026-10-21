@@ -50,3 +50,5 @@ rangeは既存検索metadata＋items・offset/limit・conditions・session_idを
 ## 次の1件
 
 Windows依存のあるUI接続を始める前に、既存SDK/cacheで追加CoreテストとPortable buildを一回確認。MainPageで条件ごとにsessionを所有し、page追加取得でrangeを使う。ImageViewerSequenceを非同期neighborへ接続し、古い応答/expiryを拒否、close後に最後のitemの選択とscrollを戻す。閲覧によるhistory追加ではsessionを作り直さない。GUIを再実行できなければ未確認を残し、独立backend項目へ移る。既存GUI cap・raw失敗・全機能/OCR保留を維持。
+
+今回のraw log（失敗・途中版も保持）は [永続検証記録](validation/20261022-work/) を参照。

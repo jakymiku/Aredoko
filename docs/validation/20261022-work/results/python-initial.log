@@ -1,0 +1,38 @@
+test_60_61_reverse_and_120_121_boundaries_without_requery (test_result_sessions.ResultSessionTests.test_60_61_reverse_and_120_121_boundaries_without_requery) ... ok
+test_ai_one_encoding_one_rank_and_index_change_detection (test_result_sessions.ResultSessionTests.test_ai_one_encoding_one_rank_and_index_change_detection) ... ok
+test_capacity_never_publishes_a_truncated_result (test_result_sessions.ResultSessionTests.test_capacity_never_publishes_a_truncated_result) ... ok
+test_close_during_build_cannot_publish_late_results (test_result_sessions.ResultSessionTests.test_close_during_build_cannot_publish_late_results) ... ok
+test_existing_page_api_remains_compatible_with_optional_ai_consumer (test_result_sessions.ResultSessionTests.test_existing_page_api_remains_compatible_with_optional_ai_consumer) ... ok
+test_expiry_retains_conditions_and_removes_owned_directory (test_result_sessions.ResultSessionTests.test_expiry_retains_conditions_and_removes_owned_directory) ... ok
+test_history_order_is_frozen_after_new_view_records (test_result_sessions.ResultSessionTests.test_history_order_is_frozen_after_new_view_records) ... ok
+test_http_create_range_neighbor_status_auth_and_expired_conditions (test_result_sessions.ResultSessionTests.test_http_create_range_neighbor_status_auth_and_expired_conditions) ... ok
+test_metadata_edit_elsewhere_invalidates_instead_of_mixing_results (test_result_sessions.ResultSessionTests.test_metadata_edit_elsewhere_invalidates_instead_of_mixing_results) ... ok
+test_mixed_results_navigate_only_images_in_original_order (test_result_sessions.ResultSessionTests.test_mixed_results_navigate_only_images_in_original_order) ... ok
+test_physical_source_change_is_refresh_error_not_end_of_sequence (test_result_sessions.ResultSessionTests.test_physical_source_change_is_refresh_error_not_end_of_sequence) ... FAIL
+test_query_filter_and_conditions_are_immutable (test_result_sessions.ResultSessionTests.test_query_filter_and_conditions_are_immutable) ... FAIL
+test_root_exclusion_and_unregistration_never_broaden_scope (test_result_sessions.ResultSessionTests.test_root_exclusion_and_unregistration_never_broaden_scope) ... ok
+test_sqlite_storage_keeps_only_bounded_page_lists_in_memory (test_result_sessions.ResultSessionTests.test_sqlite_storage_keeps_only_bounded_page_lists_in_memory) ... ok
+test_three_sessions_limit_close_and_unknown_neighbor (test_result_sessions.ResultSessionTests.test_three_sessions_limit_close_and_unknown_neighbor) ... ok
+
+======================================================================
+FAIL: test_physical_source_change_is_refresh_error_not_end_of_sequence (test_result_sessions.ResultSessionTests.test_physical_source_change_is_refresh_error_not_end_of_sequence)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_result_sessions.py", line 85, in test_physical_source_change_is_refresh_error_not_end_of_sequence
+    with self.assertRaises(ResultUnavailable): self.owner.neighbor(self.sid, self.items[59]['id'], 1)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ResultUnavailable not raised
+
+======================================================================
+FAIL: test_query_filter_and_conditions_are_immutable (test_result_sessions.ResultSessionTests.test_query_filter_and_conditions_are_immutable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_result_sessions.py", line 100, in test_query_filter_and_conditions_are_immutable
+    self.assertEqual(result['conditions']['query'], '06'); self.assertEqual(result['total'], 11)
+                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 12 != 11
+
+----------------------------------------------------------------------
+Ran 15 tests in 1.771s
+
+FAILED (failures=2)

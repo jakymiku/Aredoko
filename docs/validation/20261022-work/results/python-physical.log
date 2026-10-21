@@ -1,0 +1,31 @@
+======================================================================
+ERROR: test_root_exclusion_and_unregistration_never_broaden_scope (test_result_sessions.ResultSessionTests.test_root_exclusion_and_unregistration_never_broaden_scope)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_result_sessions.py", line 80, in test_root_exclusion_and_unregistration_never_broaden_scope
+    self.create(root_ids=[self.root]); self.catalog.unregister_root(self.root)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_result_sessions.py", line 52, in create
+    def create(self, **conditions): return self.owner.create(self.sid, conditions)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/app/result_sessions.py", line 269, in create
+    session.materialize(lambda consume: self.provider(conditions, consume, session.stop.is_set))
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/app/result_sessions.py", line 124, in materialize
+    provider(consume)
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/app/result_sessions.py", line 269, in <lambda>
+    session.materialize(lambda consume: self.provider(conditions, consume, session.stop.is_set))
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_result_sessions.py", line 48, in provider
+    return consume(page)
+           ^^^^^^^^^^^^^
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/app/result_sessions.py", line 109, in consume
+    payload = json.dumps(self._current(item, capture=True), ensure_ascii=False, separators=(',', ':'))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/app/result_sessions.py", line 145, in _current
+    raise ResultUnavailable('Result scope changed; refresh results', conditions=self.conditions)
+result_sessions.ResultUnavailable: Result scope changed; refresh results
+
+----------------------------------------------------------------------
+Ran 15 tests in 2.659s
+
+FAILED (errors=1)

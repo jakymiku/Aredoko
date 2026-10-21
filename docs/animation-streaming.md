@@ -28,3 +28,5 @@ Core通信の回帰テストを追加したが、このLinux環境には.NET SDK
 Windowsでは既存依存で `dotnet run --project tests/Aredoko.Core.Tests -c Release`、続けて既存Portable build手順を1回実行。生成した70枚以上のAPNG/WebP・poster/透明画像・有限2loop・真GIF/native失敗fallbackを開き、先頭の早期表示→64枚以降→loop→高速切替/close→古い画像の混入なしを確認。追加native自動操作は過去のGUI capをresetせず別途扱う。build/API代入を実描画・速度合格としない。
 
 次はP2結果session/60件境界。Windows待ちだけで独立backend開発を止めない。R13 DOING/R14 PARTIAL/M1/M2未完、OCR保留・全機能・過去失敗を保持する。
+
+今回のraw log（失敗・途中版も保持）は [永続検証記録](validation/20261022-work/) を参照。
