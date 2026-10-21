@@ -1,0 +1,30 @@
+# P1B 所有セッションによる逐次アニメーション
+
+2026-10-22。基点 `1969ab4`。GIFは引き続きWindows標準の再生を優先し、失敗時とAPNG/WebPは新しい逐次経路を使う。旧manifest/frame API・AI代表frame規則・静止画原寸・本のcache/読書位置は維持する。
+
+## 実装
+
+- `animation_sessions.py`は検証済みhandleを一度だけPillowで開く。GIFの`n_frames`/`is_animated`を参照せず、先頭1枚を先に返す。EOFまで逐次seekし64枚で切り捨てない。
+- Pillowの合成済みRGBAをpremultiplied BGRA8へ変換。APNG posterは除外しblend/disposal/透明度/durationを維持。GIFのloopは追加反復数、APNG/WebPは総再生数として扱い、loopなしは1回、0は無限。AI用の旧64枚契約は変更しない。
+- token/Origin/Host認証付きPOST `/api/library/animation/open`（item_id/revision/session_id）、`next`（session_id/count 1–4）、`close`（session_id）。新APIは未知field・重複JSON・過大bodyを拒否する。
+- nextはlittle-endian uint32 JSON長＋UTF-8 metadata＋各frameのpixel。metadataはitem/revision/session、width/height/stride/format/alpha、sequence/index/cycle/duration/length/done。Coreは順序・同じsession/版・寸法・payload長を検査し、frame単位で読む。
+- 保持handleと現在の登録・除外・祖先・物理identity/版をpull前後に再検証。再生中に原本を開き直さない。closeはactive decoderを並行破棄せず取消flagを立て、処理のfinallyで解放。開くHTTP応答が失われてもclient側で先に決めたIDをcloseでき、close先行時の遅延openも拒否する。
+- WinUIは先頭表示後に最大4枚を先読み、1つのWriteableBitmapを再利用。全frame PNG/HTTP取得待ちとBitmapImage全配列を撤去。version/session/cancellationで古い応答を拒否し、遅延・有限loop終了・失敗時も最後の正常画像を保持する。
+
+## 資源と限界
+
+3sessionまで、idle300秒で所有reaperが解放、backend終了時close。batchは4枚/128MiB以内、表示用edge2048以内なので現状pixel payloadは最大64MiB。decode元は64MiB/16Mpixel以内。先読みとは別に、Pillowの圧縮入力・合成canvas/変換・HTTP送信buffer・描画bufferが必要で、128MiBをアプリ全体RSS上限とはしない。clientは消費済みbatch全体を保持せずframeごとの配列を解放する。
+
+OS I/O/Pillowの1回のdecodeを強制中断する期限は保証しない。close済みIDは5分/最大256程度の短命tombstoneで遅延openを拒否する。接続喪失時はidle cleanupがfallback。現時点でnative GIFの内部bufferや全体RSS/速度の実測はない。
+
+## 検証とWindows手順
+
+生成GIF/APNG/WebP70枚×2周、先頭取得時の非列挙/decoder1回/原本再openなし、poster/透過/blend/disposal/duration、有限/無限loop、中止/同時pull/close先行/idle/容量、原本不変、除外/解除/更新、実loopback HTTP/認証/JSON/binary順序をPythonで確認。
+
+初回17 PASSにはimportされた既存6件を含む（新規11件）。関連runnerは不存在`test_original_pages`指定で42 PASS/1 runner ERROR。修正した関連48 PASS/4.693s。その後の原本再open除去の新規11件は別logに記録し、合算しない。raw logはignored `data/ai-ui/animation-stream-20261022/`に保持。
+
+Core通信の回帰テストを追加したが、このLinux環境には.NET SDK/Windowsがない。**Core実行/WinUI build/native表示/実loop/速度/Honeyview比較は未実行**。P1Bはsource接続とPython確認までで、完成・実機受入済みとはしない。配布/旧Alpha/basic03/shortcutは更新していない。
+
+Windowsでは既存依存で `dotnet run --project tests/Aredoko.Core.Tests -c Release`、続けて既存Portable build手順を1回実行。生成した70枚以上のAPNG/WebP・poster/透明画像・有限2loop・真GIF/native失敗fallbackを開き、先頭の早期表示→64枚以降→loop→高速切替/close→古い画像の混入なしを確認。追加native自動操作は過去のGUI capをresetせず別途扱う。build/API代入を実描画・速度合格としない。
+
+次はP2結果session/60件境界。Windows待ちだけで独立backend開発を止めない。R13 DOING/R14 PARTIAL/M1/M2未完、OCR保留・全機能・過去失敗を保持する。

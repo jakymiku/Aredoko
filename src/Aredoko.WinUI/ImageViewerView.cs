@@ -5,8 +5,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.Storage.Streams;
 using Windows.System;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace Aredoko_WinUI;
 
@@ -30,9 +30,12 @@ internal sealed class ImageViewerView : Grid, IDisposable
     private CancellationTokenSource? request;
     private ViewerImageCodec.NativeAnimation? nativeAnimation;
     private readonly ViewerPageCache<int,BitmapImage> staticCache=new(3,96*1024*1024);
-    private BitmapImage[]? animBitmaps;
-    private int[]? animDurations;
-    private int animFrame, animLoopCount, animCompletedLoops;
+    private AnimationStream? animationStream;
+    private CancellationTokenSource? animationRequest;
+    private readonly Queue<AnimationFrame> animationFrames = new();
+    private WriteableBitmap? animationBitmap;
+    private bool animationFetching, animationWaiting, animationDone;
+    private int animationWidth, animationHeight;
     private readonly Grid canvas = new();
     private readonly Image image = new() { Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private double imageWidth = 1, imageHeight = 1;
@@ -167,43 +170,81 @@ internal sealed class ImageViewerView : Grid, IDisposable
             if(preserveCurrent){if(nativeAnimation.Bitmap.IsAnimatedBitmap)nativeAnimation.Bitmap.Stop();}
             else{image.Source=null;nativeAnimation.Dispose();nativeAnimation=null;}
         }
-        animBitmaps = null;
-        animDurations = null;
-        animFrame = 0;
-        animLoopCount = 0;
-        animCompletedLoops = 0;
+        animationRequest?.Cancel(); animationRequest?.Dispose(); animationRequest = null;
+        var oldStream = animationStream; animationStream = null;
+        if (oldStream is not null) _ = CloseAnimationAsync(oldStream);
+        animationFrames.Clear(); animationBitmap = null;
+        animationFetching = animationWaiting = animationDone = false;
+    }
+
+    private static async Task CloseAnimationAsync(AnimationStream stream)
+    {
+        try { await stream.DisposeAsync(); }
+        catch (Exception ex) { AppLog.Error(ex); }
+    }
+
+    private void DisplayAnimationFrame(AnimationFrame frame)
+    {
+        animationBitmap ??= new WriteableBitmap(animationWidth, animationHeight);
+        using (var pixels = animationBitmap.PixelBuffer.AsStream()) pixels.Write(frame.Pixels);
+        animationBitmap.Invalidate();
+        image.Source = animationBitmap;
+        AutomationProperties.SetName(image, $"{sequence.Current.Title}の画像（アニメーション {frame.Index + 1}）");
+        animTimer.Interval = TimeSpan.FromMilliseconds(frame.DurationMs);
+        animTimer.Start();
     }
 
     private void AdvanceAnimationFrame()
     {
-        if (disposed || animBitmaps is null || animDurations is null || animBitmaps.Length <= 1) return;
-        var nextFrame = animFrame + 1;
-        if (nextFrame >= animBitmaps.Length)
+        if (disposed || animationStream is null) return;
+        if (animationFrames.TryDequeue(out var frame))
         {
-            animCompletedLoops++;
-            if (animLoopCount > 0 && animCompletedLoops >= animLoopCount) return;
-            nextFrame = 0;
+            animationWaiting = false; DisplayAnimationFrame(frame);
+            _ = FillAnimationAsync();
         }
-        animFrame = nextFrame;
-        var currentBitmap = animBitmaps[animFrame];
-        if (currentBitmap is not null)
+        else if (animationDone)
         {
-            image.Source = currentBitmap;
-            AutomationProperties.SetName(image, $"{sequence.Current.Title}の画像（アニメーション {animFrame + 1} / {animBitmaps.Length}）");
+            var finished = animationStream; animationStream = null;
+            _ = CloseAnimationAsync(finished); // Retain the last successfully displayed frame.
         }
-        animTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(animDurations[animFrame], 20, 60_000));
-        animTimer.Start();
+        else
+        {
+            animationWaiting = true; _ = FillAnimationAsync();
+        }
     }
 
-    private static async Task<BitmapImage> CreateBitmapAsync(byte[] png, CancellationToken cancellation)
+    private async Task FillAnimationAsync()
     {
-        using var stream = new InMemoryRandomAccessStream();
-        using (var writer = new DataWriter(stream)) { writer.WriteBytes(png); await writer.StoreAsync(); writer.DetachStream(); }
-        stream.Seek(0);
-        var bitmap = new BitmapImage();
-        await bitmap.SetSourceAsync(stream);
-        cancellation.ThrowIfCancellationRequested();
-        return bitmap;
+        if (disposed || animationFetching || animationDone || animationStream is null || animationRequest is null || animationFrames.Count >= 4) return;
+        var stream = animationStream; var stamp = version; var ct = animationRequest.Token;
+        animationFetching = true;
+        try
+        {
+            // Existing queued + in-flight frames never exceeds four. Each frame
+            // owns its bytes, so consumed batches cannot retain old pixel arrays.
+            var batch = await stream.ReadAsync(4 - animationFrames.Count, ct);
+            if (disposed || stamp != version || stream != animationStream || ct.IsCancellationRequested) return;
+            if (batch.Width != animationWidth || batch.Height != animationHeight) throw new InvalidDataException("Animation dimensions changed");
+            foreach (var frame in batch.Frames) animationFrames.Enqueue(frame);
+            animationDone = batch.Done;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (!disposed && stamp == version && stream == animationStream)
+            {
+                StopAnimation(true); failed = true; retry.IsEnabled = true;
+                ViewerNotice.Set(status, "アニメーションを読み取れません。開き直してください。"); ShowChrome(); AppLog.Error(ex);
+            }
+        }
+        finally
+        {
+            if (!disposed && stamp == version && stream == animationStream)
+            {
+                animationFetching = false;
+                if (animationWaiting) AdvanceAnimationFrame();
+            }
+        }
     }
 
     public async Task MoveAsync(int direction)
@@ -242,7 +283,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
                         ViewerImageCodec.NativeAnimation? decoded=null;
                         try {decoded=await ViewerImageCodec.DecodeGifAsync(source,cancellation);}
                         catch(Exception ex) when(ex is System.Runtime.InteropServices.COMException or InvalidDataException or ArgumentException)
-                        {AppLog.Error(ex);} // Try the bounded existing frame decoder below.
+                        {AppLog.Error(ex);} // Try the owned streaming decoder below.
                         if(decoded is not null)
                         {
                             trace.Mark("decode-ready");
@@ -255,68 +296,36 @@ internal sealed class ImageViewerView : Grid, IDisposable
                             continue;
                         }
                     }
-                    ImageAnimationManifest? animManifest = null;
                     if (sourceInfo.AnimationCandidate)
                     {
+                        var stream = await api.Animations.OpenAsync(sourceInfo, cancellation);
                         try
                         {
-                            var probe = await api.ImageManifestAsync(item.Id, cancellation);
-                            if (probe.Animated && probe.FrameCount > 1) animManifest = probe;
+                            var first = await stream.ReadAsync(1, cancellation);
+                            if (first.Frames.Count != 1) throw new InvalidDataException("Animation has no first frame");
+                            if (disposed || requestedVersion != version) { await stream.DisposeAsync(); continue; }
+                            StopAnimation(); animationStream = stream;
+                            animationRequest = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+                            animationWidth = first.Width; animationHeight = first.Height; animationDone = first.Done;
+                            imageWidth = first.Width; imageHeight = first.Height; FitImage();
+                            DisplayAnimationFrame(first.Frames[0]);
+                            trace.Mark("first-frame-assigned");
+                            loaded = true; viewport.ChangeView(0, 0, 1, true);
+                            ContentOpened?.Invoke(item.Id); ViewerNotice.Set(status);
+                            _ = FillAnimationAsync();
                         }
-                        catch (Exception ex) when (ex is not OperationCanceledException && ex is not ArchiveReadException { Status: System.Net.HttpStatusCode.ServiceUnavailable })
-                        {
-                            animManifest = null;
-                        }
-                    }
-                    if (animManifest is not null)
-                    {
-                        var bitmaps = new BitmapImage[animManifest.FrameCount];
-                        for (var f = 0; f < animManifest.FrameCount; f++)
-                        {
-                            var framePng = await api.ImageFrameAsync(animManifest, f, cancellation);
-                            bitmaps[f] = await CreateBitmapAsync(framePng, cancellation);
-                            if(disposed||requestedVersion!=version)break;
-                            if(f==0)
-                            {
-                                StopAnimation();
-                                imageWidth=Math.Max(1,bitmaps[0].PixelWidth);imageHeight=Math.Max(1,bitmaps[0].PixelHeight);
-                                FitImage();image.Source=bitmaps[0];
-                                trace.Mark("first-frame-assigned");
-                                ViewerNotice.Set(status,"アニメーションを準備しています…");
-                            }
-                        }
-                        if (disposed || requestedVersion != version) continue;
-                        imageWidth = Math.Max(1, bitmaps[0].PixelWidth); imageHeight = Math.Max(1, bitmaps[0].PixelHeight);
-                        FitImage();
-                        animBitmaps = bitmaps;
-                        animDurations = animManifest.DurationsMs;
-                        animLoopCount = animManifest.LoopCount;
-                        animFrame = 0;
-                        animCompletedLoops = 0;
-                        image.Source = bitmaps[0];
-                        AutomationProperties.SetName(image, $"{item.Title}の画像（アニメーション 1 / {bitmaps.Length}）");
-                        loaded = true; viewport.ChangeView(0, 0, 1, true);
-                        ContentOpened?.Invoke(item.Id);
-                        ViewerNotice.Set(status);
-                        animTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(animDurations[0], 20, 60_000));
-                        animTimer.Start();
+                        catch { await stream.DisposeAsync(); throw; }
                     }
                     else
                     {
-                        BitmapImage bitmap;
-                        try{bitmap=await staticCache.ReadAsync(item.Id,async(etag,ct)=>
+                        var bitmap=await staticCache.ReadAsync(item.Id,async(etag,ct)=>
                         {
                             var result=await api.OriginalImageSourceAsync(item.Id,etag,ct);
                             trace.Mark(result.NotModified?"source-revalidated":"source-body");return result;
                         },async(data,speculative,ct)=>
                         {
                             var result=await ViewerImageCodec.DecodeCachedAsync(data,speculative,ct);trace.Mark("decode-ready");return result;
-                        },cancellation);}
-                        catch(InvalidDataException) when(sourceInfo.AnimationCandidate)
-                        {
-                            var bounded=await api.ImageAsync(item.Id,cancellation);
-                            bitmap=await CreateBitmapAsync(await ThumbnailCodec.ResizeAsync(bounded,cancellation,PreviewPolicy.ReaderEdge),cancellation);
-                        }
+                        },cancellation);
                         if (disposed || requestedVersion != version) continue;
                         StopAnimation();
                         imageWidth = Math.Max(1, bitmap.PixelWidth); imageHeight = Math.Max(1, bitmap.PixelHeight);
@@ -329,7 +338,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
                 catch (Exception ex)
                 {
                     if (disposed || requestedVersion != version) continue;
-                    StopAnimation();image.Source=null;
+                    StopAnimation(true);
                     ViewerNotice.Set(status,ex switch
                     {
                         ArchiveReadException { Status: System.Net.HttpStatusCode.NotFound } => "画像を読み取れません。未接続・破損・容量制限を確認し、更新した場合は再スキャンしてください。",

@@ -40,6 +40,8 @@ from runtime_paths import worker_python, bind_runtime
 from ai_runtime_preferences import AIRuntimePreferences, read_preferences
 from ai_setup_jobs import AISetupJobs, SetupBusy
 from ai_runtime import object_pairs
+from animation_sessions import AnimationSessions, AnimationBusy, AnimationGone, MIME as ANIMATION_MIME
+from image_animations import AnimationUnavailable
 from contextlib import ExitStack
 import sys
 
@@ -114,6 +116,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     setup=AIRuntimePreferences(runtime_preferences if runtime_preferences is not None else catalog.path.parent/'launch-settings.json',
         profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
     setup_jobs=AISetupJobs(setup)
+    animations=AnimationSessions(previews)
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
     class Handler(base):
@@ -438,9 +441,25 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel')
+                strict=self.path.startswith('/api/library/animation/') or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel')
                 body=json.loads(self.rfile.read(length),**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path.startswith('/api/library/animation/'):
+                    try:
+                        if self.path=='/api/library/animation/open':
+                            if set(body)!={'item_id','revision','session_id'}:raise ValueError('Invalid animation fields')
+                            return self.send(200,animations.open(**body))
+                        if self.path=='/api/library/animation/next':
+                            if set(body)!={'session_id','count'}:raise ValueError('Invalid animation fields')
+                            return self.send(200,animations.pull(**body),ANIMATION_MIME)
+                        if self.path=='/api/library/animation/close':
+                            if set(body)!={'session_id'}:raise ValueError('Invalid animation fields')
+                            return self.send(200,animations.cancel(**body))
+                        return self.send(404,{'error':'Not found'})
+                    except (ReaderChanged,AnimationGone):return self.send(409,{'error':'Animation source changed or session closed'})
+                    except (PreviewBusyError,AnimationBusy):return self.send(503,{'error':'Animation decoder busy'})
+                    except (PreviewUnavailable,AnimationUnavailable,OSError,EOFError):return self.send(404,{'error':'Animation unavailable'})
+                    except (ValueError,TypeError):return self.send(400,{'error':'Invalid animation request'})
                 if self.path=='/api/library/ai/setup/select':
                     try:return self.send(202,setup_jobs.start(body))
                     except SetupBusy:return self.send(409,{'error':'AI環境の確認を開始できません。現在の状態を確認してください。','job':setup_jobs.snapshot()})
@@ -662,6 +681,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             except (ValueError,TypeError) as ex: return self.send(400,{'error':str(ex) if str(ex) in PUBLIC_FOLDER_ERRORS else 'Invalid request: check folder, exclusions or scan state'})
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})
+    Handler.animations=animations
     Handler.setup_jobs=setup_jobs
     return Handler
 
@@ -713,6 +733,7 @@ def _serve(args):
         tagger=create_tagger(ai,args.tagger_profile,**runtime);resources.callback(tagger.close)
         handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences)
         resources.callback(handler.setup_jobs.close)
+        resources.callback(handler.animations.close)
         server=ThreadingHTTPServer(('127.0.0.1',args.port),handler)
         resources.callback(server.server_close)
         if args.exit_on_stdin_close:
