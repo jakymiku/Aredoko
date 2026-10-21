@@ -40,7 +40,7 @@ class ReleaseStagingTests(unittest.TestCase):
         for name in ('THIRD_PARTY_NOTICES.md', 'docs/user-guide.md',
                      'tools/start-aredoko.ps1', 'tools/native-arguments.ps1', 'tools/backup_library.py',
                      'tools/release_runtime.py', 'tools/launch_release.py', 'tools/probe_release_runtime.py',
-                     'tools/packaged_frontend.py', 'tools/startup_progress.py', 'tools/install-release-shortcut.ps1'):
+                     'tools/packaged_frontend.py', 'tools/startup_progress.py', 'tools/startup_ipc.py', 'tools/install-release-shortcut.ps1'):
             target = self.repo / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, target)
@@ -104,6 +104,7 @@ class ReleaseStagingTests(unittest.TestCase):
         self.assertIn('backend/config/ai-profiles/fixture.json', entries)
         self.assertIn('native-arguments.ps1', entries)
         self.assertIn('tools/backup_library.py', entries)
+        self.assertIn('tools/startup_ipc.py', entries)
         for name in ('user-guide.md', 'model-profiles.md', 'wd-tagger.md', 'backup-recovery.md'):
             self.assertIn('docs/' + name, entries)
         self.assertNotIn('bin/symbols.pdb', entries)

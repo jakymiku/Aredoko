@@ -1,5 +1,7 @@
 # ZIP解凍型配布への移行（2026-10-21 ユーザー指定）
 
+> **最新PZ2追記**：[継承pipeのCPU実装](startup-pipe-protocol.md)を追加。一回限りの検査workerのhello/cancel/所有EOF/有界通知までで、native入口/UI/portable launch/readyは未完。下のIPC未実装は当時の履歴で、現在も最終native統合はTODO。検査完了でsplashを閉じない。83 PASS/Windows5 SKIP、PZ2 PARTIAL/R13 DOING/ALPHA未完。
+
 ## 決定と対象
 
 今後の標準配布は **ZIPを解凍し、ルートのAredoko.exeをダブルクリック**する形式とする。インストール操作、試験証明書の信頼追加、MSIX登録、Python/.NET SDK/winapp CLI/動画runtimeの別途導入、バックエンドの手動起動を通常利用者に要求しない。起動入口はGUIとbackendを一括管理する。単一EXEへの圧縮や起動時の巨大な再展開は目的にせず、必要なDLL/runtimeをフォルダ内に同梱する。

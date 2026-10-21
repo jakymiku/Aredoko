@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import secrets
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -212,11 +213,27 @@ def main():
     checks.add_argument('--verify-only', action='store_true', help='Hash inventory only, on any OS; no child processes or writes')
     checks.add_argument('--check', action='store_true', help='Windows import/tool checks; no database, GUI, or model loading')
     checks.add_argument('--check-activation', action='store_true', help='Read-only installed MSIX identity/payload check, plus runtime checks; no activation')
+    checks.add_argument('--startup-preflight', action='store_true', help='Internal inherited-pipe preflight worker; no application launch')
     parser.add_argument('--no-error-dialog', action='store_true', help='Automation only: keep error logs and nonzero exit without a modal dialog')
     parser.add_argument('--settings', type=Path, help='Explicit launch-settings.json (otherwise in LOCALAPPDATA/Aredoko)')
     for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}:
         parser.add_argument('--' + key.replace('_', '-'))
     args = parser.parse_args()
+    if args.startup_preflight:
+        # This is a one-shot worker, not the user-facing product entrypoint.
+        # Use independent raw descriptors: a blocked writer must not hold a
+        # Python standard-stream buffer lock during process shutdown.
+        if args.settings is not None or any(getattr(args, key) is not None for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}):
+            return 2
+        try:
+            if not all(stat.S_ISFIFO(os.fstat(stream.fileno()).st_mode) for stream in (sys.stdin, sys.stdout)):
+                return 2
+            incoming = os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0)
+            outgoing = os.fdopen(os.dup(sys.stdout.fileno()), 'wb', buffering=0)
+            from startup_ipc import serve_preflight
+            return serve_preflight(ROOT, incoming, outgoing)
+        except Exception:
+            return 2
     try:
         if args.verify_only:
             manifest = verify_release(ROOT)

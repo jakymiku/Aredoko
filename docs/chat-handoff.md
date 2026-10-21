@@ -1,5 +1,21 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 PZ2：起動前検査workerの継承pipe（CPU実装）
+
+開始remote HEAD`51f877469995d2bb1e0d497a5d3a13b1fb868ac3`、既存production branch/Draft PR #5/baseを維持。[実装・protocol・検証限界](startup-pipe-protocol.md)。Git cloneは認証不可だったためconnectorで基点439fileを取得しblob SHA検証後、clean local snapshotで作業。実機側の未コミット変更にはアクセス/変更していない。remoteは元の全treeへ変更fileだけ重ね、未取得のexperiments30file/他AIの履歴を削除しない。
+
+**変更**：一回限りの`--startup-preflight`。専用継承pipe、厳密4KiB JSONL hello/cancel、相関session、所有EOF/不正control取消、非同期32frame queue、部分write/2秒終端確認。親が読まなくてもraw descriptor/daemon I/Oでworker終了を妨げない。終端enqueue前にwriterが抜ける競合をreviewで修正し回帰追加。例外path/token/原本名を通知しない。新module梱包/実梱包CLIを確認。全SHA/祖先guard・通常CLI・旧配布/旧inventoryを維持。
+
+**最終検証**：Linux/Python3.12.14、`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tests python -B -m unittest test_startup_ipc test_startup_progress test_release_parallel test_release_staging test_release_lifecycle test_release_activation test_release_reporting -q`。**88件＝83 PASS/Windows5 SKIP/失敗0、7.879秒（新規17含む）**。host実child/生成payload/梱包後CLI、guard/hash同一、payload bytes/mtime不変、取消/EOF・別child保全・probe reap・不正frame・通知飽和・部分write・終端通知競合を確認。初回14/途中87件を重複加算しない。構文/diff/文書リンクも検査。
+
+**状態**：PZ2 PARTIAL（処理/検査IPCだけ）、R13 DOING/ALPHA未完/R14 PARTIAL。root Aredoko.exe/即時native UI/所有HANDLE継承/portable起動/backend＋初期画面readyは未実装。preflight_completeは検査だけで、splash終了/別processでguard省略する根拠ではない。sessionを認証と呼ばない。Windows pipe/ABI/native/起動速度/Core/WinUI buildは未検証。旧GUI3/3/失敗履歴、installed Alpha/封印済み02、全機能、P0 2/2終了/OCR保留を保持。新依存/model/Actions/merge/private scan/OS変更/GUI/GPUなし。旧shutdown再実行なし。
+
+**次の3手**：
+
+1. 最小native入口/即時startup UIと専用pipe/handle継承list/絶対path・作成時刻・保持HANDLE所有、取消/切断/終了を接続。既存依存でWindows build。追加GUIは具体物/固定範囲を用意後、新たな明示許可を得る。
+2. 同じ所有workerへbackend/portable frontend/初期画面readyを接続。process開始/検査完了をapp-readyとせず、全guard/lease/port/instance/所有EOFを保持。PZ3全runtime・既存model導線→PZ4 ZIP/再配置→PZ5 clean Windows。
+3. viewer新Core/WinUI/実描画/HoneyView比較とU09/U11/U13/U14を保持。ALPHA後R06–R09実音声/音楽producer→WinUIへ戻る。以下の過去handoffは全て保全。
+
 ## 2026-10-21 起動前チェックの進捗・取消（PZ2処理基盤）
 
 基点`137e147`。ユーザーの開発継続依頼で、[起動進捗と取消の処理](startup-progress-control.md)を実装。配布manifest→全SHA→全inventory/祖先guard→runtime layout→Python import→media probeの実段階と、照合完了した件数/bytesをcallbackで通知する。通常10回/秒へ間引き、段階末尾/失敗/取消は即通知。総量不明はindeterminate、全体%/ETA/app-readyを捏造しない。1MiB境界/worker開始で協調取消し、runtime probeは今回の保持Popenだけを終了/reapする。source/DB/旧Alphaを変更せず、全hash/guardは通知なしと同一回数。新moduleは新規配布へ明示コピーし、旧封印済み02は無変更。

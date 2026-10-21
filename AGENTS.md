@@ -1,5 +1,11 @@
 # Aredoko — Codex / coding agent instructions
 
+## PZ2 inherited-pipe worker (2026-10-21; latest source checkpoint)
+
+Read [startup pipe protocol/limits](docs/startup-pipe-protocol.md). Opt-in `--startup-preflight` accepts inherited stdin/stdout pipes and strict bounded hello/cancel JSONL. Owner EOF/invalid control/queue saturation cancels existing preflight; only held probes are reaped. Callbacks never write pipes synchronously;32-frame limit/partial writes/bounded terminal receipt/raw shutdown are tested. All SHA/ancestor checks/default CLI remain; new module explicitly staged, old artifacts/inventory unchanged.
+
+Final88:83 PASS/Windows5 SKIP/0 failure, new17 included. Generated host child/packaged CLI/guard equivalence/source invariance pass. **One-shot preflight transport only, not native bootstrap/app lifecycle**. Session is correlation on exclusive pipes, not authentication. Windows pipe/ABI/HANDLE ownership/UI/first paint remain untested. Root Aredoko.exe/startup UI/portable launch/backend+frontend ready remain TODO; preflight_complete must not close the splash or bypass later guards. PZ2 PARTIAL/R13 DOING/ALPHA incomplete/R14 PARTIAL. Next native entry/UI/handle ownership→same-worker lifecycle/ready→PZ3/PZ4/PZ5. Preserve viewer Core/WinUI/HoneyView gates, U09/U11/U13/U14 and post-ALPHA real audio/music. No dependencies/models/Actions/merge/private scans/GUI/GPU; historic3/3/all failures kept. No replay of one-time shutdown.
+
 ## PZ2 preflight progress/control (2026-10-21; latest source checkpoint)
 
 Read [startup progress/control implementation](docs/startup-progress-control.md). Preflight now provides opt-in actual stage/hash-count/byte snapshots and cooperative cancellation. All SHA/ancestor/link/type/hardlink checks stay; generated traced calls match the quiet default. Hash cancellation checks1MiB boundaries and worker start. Runtime probes poll/reap only their held Popen child, preserving other instances. New module is explicitly staged; old Alpha/sealed02 unchanged. Final71 tests:66 PASS/5 Windows SKIP/0 failures (new16). Windows runtime stages use stubs; real process cancellation uses host Python, not Windows ABI/native acceptance.

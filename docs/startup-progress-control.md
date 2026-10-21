@@ -1,5 +1,7 @@
 # 起動前チェックの実進捗と取消（PZ2の処理基盤）
 
+> **後続実装**：[継承pipe protocol](startup-pipe-protocol.md)で、上記callbackを一回限りの検査workerへ接続した。hello/cancel/所有EOF/有界queueをCPU確認、83 PASS/Windows5 SKIP。native起動画面/所有bootstrap/portable launch/app-readyは未実装。以下は処理基盤実装時の記録を保持する。
+
 基点 `137e147c785a2f1c4e0ef77e146465b63c6c4be4`。2026-10-21の開発継続依頼で、Windows実機なしに検証できる処理を実装した。**起動画面・ルートAredoko.exe・portable frontend起動・GUI-ready通知は未実装**。PZ2は処理基盤のみPARTIAL、R13/ALPHAは未完のまま。通常利用の起動UIが完成したとは案内しない。
 
 ## 実装した範囲
