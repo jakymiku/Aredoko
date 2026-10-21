@@ -1,5 +1,13 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-22 今日の終了点：実形式判定と統合計画
+
+- 実装commit `0f2e005364a9e6ff6d8977ccce39efe6d8c4b831`、既存branch/Draft PR #5を継続。[統合計画](polish-roadmap-20261022.md)をAGENTS/既存計画/UI方針からリンク済み。
+- P1A CPU_DONE。画像headerでMIME/再生経路を選び、`.gif`名のWebPをnative GIF decoderへ送らない。新info APIも原本/祖先/除外/解除/鮮度guardを保持。native GIF失敗の既存frame fallbackあり。
+- Python37 PASS（初回5 ERROR修正/ログ保持）、Core771確認PASS、Portable build0 errors/既存3 warnings。提供sampleの一時copyでWebP55枚/frame0・54復号/原本不変。実GUI/GPU0、速度/ちらつき未受入。
+- **翌日P1B逐次animationから**。全frame待ち/64枚上限、60件境界、本格UI、複数棚、online backup、配布は未完。P0診断/resourceも未完。UIは基本操作と重大不具合解消後に機能開発と並行する。
+- Alpha/basic03/shortcut未更新・新配布なし。保存/commit/handoff確認後に今日だけStop-Computer（Forceなし）。権限等で失敗しても強行しない。次回自動shutdownしない。
+
 ## 2026-10-22 再開確認とLD4a：既存配置の背景検査job/API
 
 前回は5d7984fまでcommit/push済みで、停止点はPR headの最終照合。今回remote branch/PR #5 head一致・Draft/open/unmerged・Actions/checks0・clean treeを確認した。[新しい実装・API・検証・限界](ai-setup-jobs.md)を読む。

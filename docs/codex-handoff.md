@@ -1,5 +1,19 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-22 P1A CPU完了・統合ロードマップ保存・一晩の終了点
+
+実装コミット **`0f2e005364a9e6ff6d8977ccce39efe6d8c4b831`**。[統合ロードマップ](polish-roadmap-20261022.md)を追加し、AGENTS/完成計画/agent-start/優先順位/UI方針から参照可能。P0診断表示/共通resourceは未完、UIは基本操作/重大不具合解消後にP2–3から本格着手、全機能/音声/配布完成を待たない。WinUI 3継続・将来別native UI向けのbackend/OS境界を保持。
+
+**P1A**: authenticated GET `/api/library/preview/<id>/info`で原本handle/版/祖先/除外/解除確認後のheaderを返す。Pillow open/全frame列挙なし。original/通常preview/manifestのMIMEも実containerに合わせ、WinUIは拡張子でなくprobeでnative GIF/既存frame経路を選ぶ。native復号失敗時は既存frame decoderへ。static原寸とcancel/version/stream寿命を保持し、native GIFの寸法検証はthumbnail用でなく既存viewer用に統一。
+
+**確認**: Python関連37 PASS/7.564s。初回はmetadata応答を既存byte検査の除外へ追加し忘れ5 ERROR、修正して37 PASS。raw初回を保持。Core Release771 PASS assertion、Portable x64 build0 errors/既存WUI1001×3（18.46s）。API/型はproject参照で確認しWinUIコードレビュー済み、最終C#変更はindentのみでbuild反復なし。変更Python構文/文書相対リンク/diff確認合格。証拠はignored `data/ai-ui/image-format-20261022-01/` と `image-format-core-20261022-01.log`。
+
+提供の10.gifは実WebP367×359/55frame。**そのファイルだけ**read-onlyで一時copyし、専用DBでprobe/original/通常preview、frame0/54をCPU復号。原本SHA/mtime/identity不変。私物folder走査・原本/普段DB/settings/モデル変更なし、新依存/取得/GPU/GUIなし。
+
+**未完/未検証**: P1B逐次decodeは未実装。APNG/WebPの全frame待ちと64frame上限はまだ残る。native Windowsの実表示/ループ/速度/Honeyview比較/native fallbackは未受入。P2の60件境界、P3以降も未実装。新しい配布/ZIPは作成せずinstalled Alpha/basic03/shortcutは未更新、今回のbuildを普通の配布済みappと呼ばない。R13 DOING/R14 PARTIAL/M1/M2未完、旧raw失敗/GUIcaps/全機能/OCR保留を維持。
+
+**翌日の最初のコード作業**: P1Bの所有decode session→先頭優先/上限付き逐次frame→cancel/close→既存PNG全frame配列廃止。新しい大きな別作業へ飛ばない。今日のユーザー指示は保存/最小確認/commit/handoff後、Stop-ComputerをForceなしで一度実行。権限/未保存/data危険なら強行せず、他appを強制終了しない。翌日にshutdownを再適用しない。このdoc更新commitは実装commitに続く別commitとしてgit logで確認する。
+
 ## 2026-10-22 再開確認とLD4a：既存配置の背景検査job/API
 
 前回は5d7984fまでcommit/push済みで、停止点はPR headの最終照合。今回remote branch/PR #5 head一致・Draft/open/unmerged・Actions/checks0・clean treeを確認した。[新しい実装・API・検証・限界](ai-setup-jobs.md)を読む。
