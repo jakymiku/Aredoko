@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 
+from runtime_paths import worker_command
 from laya_config import IDENTITY, REVISION, ARTIFACTS, CONTRACT
 from search_intent import IntentUnavailable, validate_query,validate_decision
 from intent_questions import get_questions,question_key
@@ -60,8 +61,7 @@ class LayaProcess:
             env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',
                        PYTHONIOENCODING='utf-8',TOKENIZERS_PARALLELISM='false')
             self.responses=queue.Queue(maxsize=2)
-            command=[str(self.python),'-B','-u',str(Path(__file__).with_name('laya_worker.py')),
-                '--model',str(self.model.resolve()),'--parent-pid',str(os.getpid()),'--question-set',self.question_set]
+            command=worker_command(self.python,Path(__file__).with_name('laya_worker.py'),['--model',str(self.model.resolve()),'--parent-pid',str(os.getpid()),'--question-set',self.question_set])
             if self.check_order:command.append('--check-order')
             self.process=subprocess.Popen(command,
                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,text=True,encoding='utf-8',env=env,

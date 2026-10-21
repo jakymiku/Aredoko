@@ -1,5 +1,7 @@
 # 配布版のモデル導入・進捗・手動配置（2026-10-21 ユーザー指定）
 
+> **LD3実装2026-10-21**：[AI追加pack/既存配置のCPU基盤](ai-runtime-setup.md)。独立runtime/models設定サービスとGET診断、次回起動適用まで実装。配置GUI/自動downloadは未実装。以下の「仕様のみ」は以前のcheckpointであり、取得3経路の製品受入は引き続き未完。
+
 > **最新方針**：[基本版＋任意AI環境](lightweight-distribution.md)。基本Pythonは製品同梱し、PyTorch等のAI実行環境はアプリ管理の追加packとして選択/取得できる方向へ分離。ユーザーへPython/pip操作を要求しない責任は変わらない。モデル保存先とAI runtime保存先を別々に扱う。旧「全AI依存を初期ZIPに同梱」は変更。取得GUI自体は未実装。
 
 ## 決定と現在の状態

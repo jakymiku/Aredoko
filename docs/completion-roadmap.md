@@ -1,5 +1,7 @@
 # Aredoko 完成までの実行計画
 
+> **最新LD3 CPU_DONE**：[AI追加環境の契約と配置診断](ai-runtime-setup.md)。明示した既存runtime/modelsの独立保存・next-restart・GET診断・worker隔離まで。GUI/自動取得は未実装。次LD4所有job/固定catalog→LD5簡潔GUI→LD6 clean Windows。旧artifact/GUI3/3/R13 DOING/R14 PARTIAL維持。
+
 > **最新R13/PZ3の順序**：[LD1–LD6](lightweight-distribution.md)。ユーザー承認で通常起動を軽くし基本版/任意AI環境を分離。LD1/LD2 CPU_DONE（基本候補656MB、通常検査1.53s、native未受入）。次LD3 runtime/model既存root診断→LD4取得job→LD5簡潔GUI/修復→LD6 clean Windows。R13 DOING/R14 PARTIALは維持。
 
 > **Windows準備済み2026-10-21**：[実結果と起動ファイル](portable-windows-validation.md)。Work68db65bを統合しCore759/起動CPU103/Portable publish・bootstrap実Win32非GUI通信・同梱runtime検査PASS。viewer78 PASS/3 SKIP。準備済みdist/portable-wincheck-20261021-02/Aredoko/Check-Startup.cmdでユーザー手動確認へ。GUI/GPU/clean Windows/ZIPは未実行、旧Alpha未更新・旧GUI3/3維持。再準備を無用に繰り返さず、次は実起動の結果を確認。

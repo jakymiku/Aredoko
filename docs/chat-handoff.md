@@ -1,5 +1,16 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 AI追加環境とモデル配置：LD3 CPU基盤
+
+[実装・契約・検証・限界](ai-runtime-setup.md)を先に読む。独立pack manifest/ABI/通常path/SHA、明示した既存runtimeとmodels rootの独立保存・取消・next-restart適用、認証GET /api/library/ai/setup、Embedding/Laya/WD workerの現在app隔離起動を実装。基本PythonだけをAI準備済みとしない。壊れた選択では基本閲覧を維持し、他の環境へ黙ってfallbackしない。既存DB/theme/索引identityを保持。GUI選択/自動download/HTTP保存jobは未実装。
+
+広いCPU回帰493件中490 PASS/Windows固有3 SKIP、393.668s。最後の関連56件は54 PASS/2 ERROR（例外期待/Windows CLI encoding）、修正後25 PASS/4.043s。重複加算・失敗の上書きをしない。既存prepared runtime静的ABI check、実basic Pythonで生成workerの隣接module/argv/isolated確認PASS。GPU/実AI推論/driver確認ではない。pack manifestはpublisher署名ではなく、選択packはimmutable前提でfull検査はbackend初回worker時、manifest/coreは各spawn。全量の同権限session中改変保証はしない。
+
+既存Alpha/shortcut/旧candidate/普段のDB/modelsは未変更。GUI/GPU/downloadなし、旧GUI3/3 cap維持。LD3 CPU_DONE（製品設定画面は未完）。次LD4所有job＋固定catalog/生成HTTP→LD5簡潔GUI/修復→LD6通常restart/ZIP/clean Windows。R13 DOING/ALPHA未完/R14 PARTIAL、専用OCR保留/U09/U11/U13/U14/実音声音楽/全機能を維持。Actions/main merge/旧shutdownなし。
+
+
+**最終source/配布CPU確認**：API capabilityの表現整理後も関連25 PASS/4.088s。新規 `dist/portable-basic-20261021-03/Aredoko` は696 files / 656,061,210 bytes（ZIP前）。実同梱Pythonから専用DBのbackendを起動し、GET setupがai_libraries_missing/model_missingと判定、生成PNG登録/scan/ファイル名検索1件/preview686bytes、原本SHA/mtime不変、EOF exit0、DB integrity=okを確認。初回完全確認+receipt3.982480s、変更なし次回1.488302s（単発warm/GUI時間ではない）。証拠 `data/ai-ui/basic-portable-cpu-20261021-03/report.json` と adjacent log。03の同梱docsは準備時snapshotであり最新はrepo handoff。02/旧配布/installed Alpha/shortcutは更新していない。03のnative GUI/通常DB restart/ZIP/clean Windowsは未確認。
+
 ## 2026-10-21 通常起動とAI追加環境の分離：基本候補CPU確認
 
 ユーザーが「通常起動を軽くする→AIは後から追加→開発環境なしWindowsで確認」の方針で開発を明示承認。[最新の実装・実測・LD1–LD6](lightweight-distribution.md)を現在のR13/PZ3順序とする。以前の「通常起動も必ず毎回全SHA」は新Portable通常起動に限り本仕様が置き換える。完全検査API/原本guard/旧MSIXは維持する。

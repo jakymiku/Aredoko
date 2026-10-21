@@ -14,7 +14,7 @@ from ai_search import AIBusy
 from tag_suggestions import TaggerInfo, TagProposal, SuggestionConflict
 from tagger_profile import load_profile, RUNTIME_VERSION
 from tagger_worker import labels
-from runtime_paths import worker_python
+from runtime_paths import worker_python,worker_command
 
 UNAVAILABLE='タグ分類モデルまたは専用ランタイムが未導入です。検索・手動タグは引き続き利用できます。'
 
@@ -52,8 +52,8 @@ class WDTagger:
             raise AIUnavailable('タグ分類の画像サイズが上限を超えています。')
         env={**os.environ,'HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1','HF_HUB_DISABLE_TELEMETRY':'1',
              'PYTHONIOENCODING':'utf-8','OMP_NUM_THREADS':str(self.profile.data()['cpu_threads'])}
-        command=[str(self.python),'-B','-u',str(Path(__file__).with_name('tagger_worker.py')),
-            '--profile-json',self.profile.document,'--parent-pid',str(os.getpid())]
+        try:command=worker_command(self.python,Path(__file__).with_name('tagger_worker.py'),['--profile-json',self.profile.document,'--parent-pid',str(os.getpid())])
+        except (ValueError,OSError) as error:raise AIUnavailable('AI runtime validation failed') from error
         if self.models_root is not None:command+=['--models-root',str(Path(self.models_root).absolute())]
         process=subprocess.Popen(command,
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env=env,

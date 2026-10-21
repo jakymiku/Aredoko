@@ -36,7 +36,8 @@ from page_batch import start_batch, resume_batch
 from page_chunks import plan_chunked, start_chunked, resume_chunked
 from wd_tagger import create_tagger
 from storage_lease import storage_lease,storage_parent
-from runtime_paths import worker_python
+from runtime_paths import worker_python, bind_runtime
+from ai_runtime_preferences import AIRuntimePreferences, read_preferences
 from contextlib import ExitStack
 import sys
 
@@ -98,7 +99,7 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True,*,ai_p
         return SearchIntent(LayaProcess(worker_python(repo,ai_python),laya_model_path(repo,models_root=models_root),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None):
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
@@ -106,6 +107,10 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     previews=PreviewReader(catalog)
     page_index=PageIndex(catalog,previews)
     page_text=PageTextIndex(catalog,page_index,text_extractor)
+    try:setup_profile=load_profile(profiles.startup_path) if not profiles.startup_error else None
+    except (ValueError,OSError):setup_profile=None
+    setup=AIRuntimePreferences(runtime_preferences if runtime_preferences is not None else catalog.path.parent/'launch-settings.json',
+        profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
     class Handler(base):
@@ -375,6 +380,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except ValueError:
                         return self.send(400,{'error':'Invalid audio range request'})
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
+                if path=='/api/library/ai/setup':return self.send(200,setup.snapshot())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())
                 if path=='/api/library/ai/resource':
@@ -656,6 +662,7 @@ def main():
     parser.add_argument('--ai-settings',type=Path,help='Optional local settings file for developer tests')
     parser.add_argument('--ai-profiles-dir',type=Path,help='Explicit local profile directory, including a restored bundle')
     parser.add_argument('--laya-intent',action='store_true',help='Experimental suggestions only; no auto-routing')
+    parser.add_argument('--runtime-preferences',type=Path,help='Explicit restart-only launch settings for setup diagnostics')
     parser.add_argument('--ai-ranking',choices=POLICIES,default='mean-rrf')
     parser.add_argument('--intent-questions',choices=QUESTION_SETS,default='v2-hybrid')
     parser.add_argument('--intent-no-order-check',action='store_true',help='Developer comparison only')
@@ -668,6 +675,14 @@ def main():
 
 def _serve(args):
     runtime={'ai_python':args.ai_python,'models_root':args.models_root}
+    preferences=getattr(args,'runtime_preferences',None)
+    if preferences is not None:
+        try:
+            selected=read_preferences(preferences)
+            if selected.get('ai_runtime_root') and args.ai_python is not None:
+                expected=Path(selected['ai_runtime_root'])/'python.exe'
+                if expected.absolute()==Path(args.ai_python).absolute():bind_runtime(expected.parent,selected['ai_runtime_manifest_sha256'])
+        except (ValueError,OSError,KeyError):pass
     # Register each owned resource immediately, including startup/bind failures.
     with ExitStack() as resources:
         catalog=ProductionCatalog(args.db);resources.callback(catalog.close)
@@ -680,7 +695,7 @@ def _serve(args):
         intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**runtime)
         resources.callback(intent.close)
         tagger=create_tagger(ai,args.tagger_profile,**runtime);resources.callback(tagger.close)
-        server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id))
+        server=ThreadingHTTPServer(('127.0.0.1',args.port),production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences))
         resources.callback(server.server_close)
         if args.exit_on_stdin_close:
             def watch_owner():

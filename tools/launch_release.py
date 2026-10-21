@@ -20,6 +20,8 @@ from packaged_frontend import prepare_frontend
 from startup_progress import StartupCancelled, StartupProgress
 
 CREATE_NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+RUNTIME_FIELDS = {'ai_runtime_root', 'ai_runtime_manifest_sha256'}
+
 PATH_OPTIONS = {'database': '--db', 'ai_python': '--ai-python', 'models_root': '--models-root',
                 'ai_profile': '--ai-profile', 'ai_settings': '--ai-settings',
                 'ai_profiles_dir': '--ai-profiles-dir', 'tagger_profile': '--tagger-profile'}
@@ -57,11 +59,17 @@ def load_settings(data, explicit=None):
 
 
 def validate_settings(settings):
-    if not isinstance(settings, dict) or set(settings) - (set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}):
+    if not isinstance(settings, dict) or set(settings) - (set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} | RUNTIME_FIELDS):
         raise ValueError('Unknown launch setting')
-    for key in set(PATH_OPTIONS) | {'viewer_settings'}:
+    for key in set(PATH_OPTIONS) | {'viewer_settings', 'ai_runtime_root'}:
         if key in settings and (not isinstance(settings[key], str) or not Path(settings[key]).is_absolute() or any(ord(c) < 32 for c in settings[key])):
             raise ValueError('Launch paths must be absolute: ' + key)
+    if ('ai_runtime_root' in settings) != ('ai_runtime_manifest_sha256' in settings):
+        raise ValueError('AI runtime location and inventory digest must be supplied together')
+    if 'ai_runtime_manifest_sha256' in settings:
+        checksum=settings['ai_runtime_manifest_sha256']
+        if not isinstance(checksum,str) or len(checksum)!=64 or any(c not in '0123456789abcdef' for c in checksum):
+            raise ValueError('Invalid AI runtime inventory digest')
     if settings.get('ui_theme', 'system') not in ('system', 'light', 'dark') or settings.get('ai_ranking', 'mean-rrf') not in ('max', 'mean-rrf'):
         raise ValueError('Invalid launch preference')
     return settings
@@ -191,7 +199,7 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
     if backend.returncode:raise AppSessionError('Backend did not exit cleanly; see backend-error.log')
 
 
-def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full=False):
+def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full=False, preferences_path=None):
     # All writable state stays outside the versioned release. Reject accidental
     # source/payload placement before creating logs or opening a database.
     paths = [data, *(Path(settings[k]) for k in ('database', 'ai_settings', 'viewer_settings') if k in settings)]
@@ -205,10 +213,13 @@ def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full
         values = {'database': str(data / 'catalog.sqlite'), 'ai_python': str(root / 'runtime/python/python.exe'),
                   'models_root': str(data / 'models'), 'ai_settings': str(data / 'settings.json'),
                   'ai_profiles_dir': str(data / 'ai-profiles'), **settings}
+        from ai_runtime_preferences import runtime_python
+        values['ai_python']=str(runtime_python(settings, values['ai_python'], data/'unavailable-ai-runtime/python.exe'))
         backend = [str(root / 'runtime/python/python.exe'), '-B', '-u', str(root / 'backend/app/production_server.py'),
                    '--instance-id', instance, '--exit-on-stdin-close', '--ai-ranking', values.get('ai_ranking', 'mean-rrf')]
         for key, option in PATH_OPTIONS.items():
             if key in values:backend += [option, values[key]]
+        backend += ['--runtime-preferences', str(preferences_path if preferences_path is not None else data/'launch-settings.json')]
         app = ['--ui-theme', values.get('ui_theme', 'system'),
                '--viewer-settings', values.get('viewer_settings', str(data / 'viewer-settings.json'))]
         try:
@@ -246,14 +257,14 @@ def main():
     parser.add_argument('--full-check', action='store_true', help='Force full preflight on this launch, refreshing normal-startup validation')
     parser.add_argument('--no-error-dialog', action='store_true', help='Automation only: keep error logs and nonzero exit without a modal dialog')
     parser.add_argument('--settings', type=Path, help='Explicit launch-settings.json (otherwise in LOCALAPPDATA/Aredoko)')
-    for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}:
+    for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} | RUNTIME_FIELDS:
         parser.add_argument('--' + key.replace('_', '-'))
     args = parser.parse_args()
     if args.startup_preflight or args.startup_owned or args.startup_smoke:
         # This is a one-shot worker, not the user-facing product entrypoint.
         # Use independent raw descriptors: a blocked writer must not hold a
         # Python standard-stream buffer lock during process shutdown.
-        if args.full_check or args.settings is not None or any(getattr(args, key) is not None for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}):
+        if args.full_check or args.settings is not None or any(getattr(args, key) is not None for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} | RUNTIME_FIELDS):
             return 2
         try:
             if not all(stat.S_ISFIFO(os.fstat(stream.fileno()).st_mode) for stream in (sys.stdin, sys.stdout)):
@@ -277,8 +288,9 @@ def main():
             if not base or not Path(base).is_absolute():raise ValueError('LOCALAPPDATA is unavailable')
             data = Path(base) / 'Aredoko'
             settings = load_settings(data, args.settings)
-            settings.update({key: getattr(args, key) for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} if getattr(args, key) is not None})
-            launch(ROOT, data, validate_settings(settings), force_full=args.full_check)
+            settings.update({key: getattr(args, key) for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} | RUNTIME_FIELDS if getattr(args, key) is not None})
+            launch(ROOT, data, validate_settings(settings), force_full=args.full_check,
+                   preferences_path=Path(args.settings).absolute() if args.settings is not None else None)
             return 0
         print(json.dumps({'pass': True, 'version': manifest['version'], 'readiness': 'staging-only',
                           'clean_machine_activation_verified': False,

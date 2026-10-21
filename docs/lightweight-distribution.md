@@ -24,6 +24,10 @@ tools/startup_validation.pyを新規実装し、Portable launcherに接続。初
 
 full/軽量とも進捗は実際に処理する件数/bytesのみ。軽量時のhash総量を5GBと表示せず、完了していないfull検査を装わない。初回receipt作成の追加metadata走査はコストがある。起動ごとのmetadata取得もゼロにはしておらず、即時起動は保証しない。
 
+### LD3 AI追加環境とモデル配置 — CPU_DONE（製品GUI未接続）
+
+[独立契約・実装・検証・限界](ai-runtime-setup.md)。既存packの明示検証/保存、runtime不足とmodel不足の別診断、next-restart適用、現在app worker隔離起動を接続。最新sourceのbasic03候補696files/656,061,210bytesで実同梱Python/backend/診断/生成PNG登録検索preview/正常終了/DB整合をCPU確認。初回3.982480s/通常1.488302s（warm単発、GUI未確認）。02を上書きせず、新docsは準備時snapshot。GET診断と開発CLIまでであり、自動download/製品設定画面/重い検証のHTTP保存jobはLD4/LD5。任意packの推論互換性・配布元認証・clean Windowsを受入済みにしない。
+
 ### LD2 PyTorchなしの基本候補 — CPU_DONE（native未確認）
 
 既存prepare_python_runtime.pyの非AIモードを利用し、明示した既存CPython/Pillowだけを新規data/basic-runtime-20261021-01へ構成。元のPython/venv/モデルは変更しない。さらに新規dist/portable-basic-20261021-02/Aredokoへbootstrap/自己完結WinUI/基本Python/動画toolを梱包した。torch/transformersは含まない。
@@ -54,7 +58,7 @@ full/軽量とも進捗は実際に処理する件数/bytesのみ。軽量時の
 
 | ID | 次の作業 | 状態/受入 |
 | --- | --- | --- |
-| LD3 | AI追加環境の独立契約と既存folder選択 | READY。Python ABI/arch/CPU・GPU方式/依存固定版/対応adapterを記録するpack契約。既存ai_python等とmodel rootを区別し、モデルだけ有る/AI runtime不足を正確に診断。任意のユーザー環境を勝手に採用せず、source/リンクguardを維持 |
+| LD3 | AI追加環境の独立契約と既存folder選択 | CPU_DONE。[契約/サービス/診断/検証](ai-runtime-setup.md)。独立pack ABI/SHAと明示保存、next-restart適用、worker隔離。製品GUI/取得はLD4/5、実GPU互換性未確認 |
 | LD4 | 追加環境/モデルの取得job | TODO。承認された取得元/版/hashを持つcatalog、未完stage→検証→新version公開、取消/再開/破損/容量/認証/オフラインを生成HTTPでCPU検証。既存の正常pack/model/indexを上書きしない。システムpip/driver導入をしない。実downloadは別途具体物を示して許可 |
 | LD5 | 簡潔な初回/設定GUI | TODO。AI追加/既存指定/手動案内、実進捗、再試行、修復の完全検査を一つの入口に整理。基本閲覧を取得でblockしない。旧GUI capを別名でresetせず、具体buildを用意して新GUI範囲を確認 |
 | LD6 | 基本ZIP・AI追加後のclean Windows受入 | TODO。SDK/Python/開発用登録なしで解凍→通常起動→生成素材登録/検索/閲覧/終了→保存保持、AI追加/既存指定、更新/再配置、完全修復を受入。NVIDIA driver要件とアプリ同梱runtimeを区別。今回のhost isolationだけで代用しない |

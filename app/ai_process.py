@@ -10,6 +10,7 @@ import threading
 import time
 
 from ai_profiles import DEFAULT_PROFILE, REVISION
+from runtime_paths import worker_command
 from ai_vectors import normalized
 PROFILE = DEFAULT_PROFILE.key
 class AIUnavailable(RuntimeError): pass
@@ -61,7 +62,9 @@ class EncoderProcess:
         env=os.environ.copy()
         env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',PYTHONIOENCODING='utf-8')
         self.responses=queue.Queue(maxsize=2)
-        self.process=subprocess.Popen([str(self.python),'-B','-u',str(Path(__file__).with_name('ai_worker.py')),'--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())],
+        try:command=worker_command(self.python,Path(__file__).with_name('ai_worker.py'),['--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())])
+        except (ValueError,OSError) as error:raise AIUnavailable('AI runtime validation failed') from error
+        self.process=subprocess.Popen(command,
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,text=True,encoding='utf-8',env=env,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         threading.Thread(target=self._read,args=(self.process,self.responses),daemon=True).start()
