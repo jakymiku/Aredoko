@@ -2,7 +2,7 @@
 import json
 import sqlite3
 import threading
-from contextlib import closing
+from contextlib import closing, contextmanager
 from pathlib import Path
 from catalog import Catalog
 from library_index import LibraryIndex, TYPES, is_folder_book, folder_title
@@ -16,6 +16,8 @@ class ScanBusyError(ValueError):
 
 class ProductionCatalog(Catalog):
     def __init__(self, path):
+        self._result_generation = 0
+        self._result_generation_lock = threading.Lock()
         # Never reinterpret an existing fictional demo database as a real library.
         if Path(path).exists() and Path(path).stat().st_size > 0:
             with closing(sqlite3.connect(path)) as db:
@@ -55,6 +57,41 @@ class ProductionCatalog(Catalog):
         self._progress = 0
         # Recover a crash between index commit and catalog publication.
         self.sync_index()
+
+    @contextmanager
+    def connect(self):
+        # Observe query-affecting writes at the shared connection boundary.
+        # View/position writes deliberately leave frozen result order intact.
+        changed = False
+        def observe(action, table, column, database, trigger):
+            nonlocal changed
+            if action in (sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE):
+                if database == 'main' and table not in ('view_history', 'reader_progress', 'scan_jobs'):
+                    changed = True
+            return sqlite3.SQLITE_OK
+        with super().connect() as db:
+            db.set_authorizer(observe)
+            before = db.total_changes
+            try:
+                yield db
+            except BaseException:
+                # Conservatively invalidate even a rolled-back write attempt.
+                if changed and db.total_changes != before:
+                    with self._result_generation_lock:
+                        self._result_generation += 1
+                raise
+            else:
+                if changed and db.total_changes != before:
+                    # Publish generation and commit together to session readers.
+                    with self._result_generation_lock:
+                        db.commit()
+                        self._result_generation += 1
+            finally:
+                db.set_authorizer(None)
+
+    def result_generation(self):
+        with self._result_generation_lock:
+            return self._state_epoch, self._result_generation
 
     def seed(self, count=0):
         raise ValueError('Synthetic seeding is not available in production')
@@ -120,11 +157,11 @@ class ProductionCatalog(Catalog):
             # to a word; it never removes the word or relaxes the filters.
             alternatives,expansions=self.terms.expand(terms,db)
             where, values = ["l.status<>'excluded'",'l.root_id IN (SELECT id FROM library_roots WHERE enabled=1)'], []
-            if view=='history':
-                from library_index import _excluded
-                rules={r['id']:tuple(json.loads(r['excludes_json'])) for r in db.execute('SELECT id,excludes_json FROM library_roots WHERE enabled=1')}
-                db.create_function('aredoko_history_visible',2,lambda root,path:int(root in rules and not _excluded(path,rules[root])),deterministic=True)
-                where.append('aredoko_history_visible(l.root_id,l.relative_path)=1')
+            # Exclusions apply immediately, including before the next scan.
+            from library_index import _excluded
+            rules={r['id']:tuple(json.loads(r['excludes_json'])) for r in db.execute('SELECT id,excludes_json FROM library_roots WHERE enabled=1')}
+            db.create_function('aredoko_location_visible',2,lambda root,path:int(root in rules and not _excluded(path,rules[root])),deterministic=True)
+            where.append('aredoko_location_visible(l.root_id,l.relative_path)=1')
             if terms:
                 register_search_terms(db,alternatives)
                 where.append('aredoko_match(i.title,i.tags)>=0')

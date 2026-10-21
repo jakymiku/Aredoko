@@ -179,7 +179,7 @@ class AnimationSessions:
                 raise AnimationGone('Animation owner closed')
             if session_id in self.closed_ids or session_id in self.sessions:
                 raise AnimationGone('Animation session already used')
-            if len(self.closed_ids) >= 256:
+            if len(self.closed_ids) >= 4096:
                 raise AnimationBusy('Too many recently closed animation sessions')
             if len(self.sessions) >= MAX_SESSIONS:
                 raise AnimationBusy('Too many animation sessions')
@@ -224,7 +224,7 @@ class AnimationSessions:
         self.validate_id(session_id)
         with self.lock:
             self._expire()
-            if len(self.closed_ids) >= 256 and session_id not in self.closed_ids and session_id not in self.sessions:
+            if len(self.closed_ids) >= 4096 and session_id not in self.closed_ids and session_id not in self.sessions:
                 raise AnimationBusy('Too many recently closed animation sessions')
             self.closed_ids[session_id] = time.monotonic()
             decoder = self.sessions.pop(session_id, None)

@@ -83,7 +83,7 @@ class PendingTagVectors:
         return True,True
 
 
-def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=None,shelf=None,model=None,*,cancelled=None):
+def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=None,shelf=None,model=None,*,cancelled=None,result_sink=None):
     from ai_search import AIBusy,MAX_ITEMS,revision
     from tag_candidate_search import validate_candidate_search
     from tag_suggestions import SuggestionConflict
@@ -110,28 +110,31 @@ def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=N
                     score=sum(a*b for a,b in zip(query_vector,vectors[item]))
                     spool.add(item,{'text':score},payload={'revision':revision(row),'proposal':snapshots[item]})
                 check()
-            spool.finalize('max');selected=spool.page(page,60)
-            with service.catalog._guard:
-                check()
-                rows,evidence=ai._search_page_rows(spool,selected,scope,check)
-                latest=ai.pending_tags.snapshots([item for item,_ in selected['ranked']])
-                items=[]
-                for item,score in selected['ranked']:
-                    snapshot=evidence[item]['proposal']
-                    if item not in latest or latest[item]['signature']!=snapshot['signature']:
-                        raise AIBusy('タグ候補が更新されました。もう一度検索してください。')
-                    try:state='current' if service._source(item)['revision']==snapshot['source_revision'] else 'stale'
-                    except SuggestionConflict:state='stale'
-                    except AIBusy:state='unverified'
-                    except (KeyError,OSError):state='unavailable'
-                    value={**rows[item],'semantic_score':round(max(-1,min(1,score)),6)}
-                    value['proposal_match']={key:snapshot[key] for key in ('batch_id','source_revision','tags','producer','evidence')}
-                    value['proposal_match'].update(state='pending',source_state=state,embedding_model=ai.profile.model_id)
-                    items.append(value)
-                check()
-            return {'total':selected['total'],'page':page,'limit':60,'search_mode':'pending-proposals-semantic','items':items,
-                    'score_kind':'cosine','pending_total':pending_total,'indexed_total':indexed_total,
-                    'index_remaining':pending_total-indexed_total,'coverage_limit':MAX_ITEMS,'index_limit':MAX_ITEMS,
-                    'search_complete':True,'search_candidate_total':candidate_total}
+            spool.finalize('max')
+            def render_page(number):
+                selected=spool.page(number,60)
+                with service.catalog._guard:
+                    check()
+                    rows,evidence=ai._search_page_rows(spool,selected,scope,check)
+                    latest=ai.pending_tags.snapshots([item for item,_ in selected['ranked']])
+                    items=[]
+                    for item,score in selected['ranked']:
+                        snapshot=evidence[item]['proposal']
+                        if item not in latest or latest[item]['signature']!=snapshot['signature']:
+                            raise AIBusy('タグ候補が更新されました。もう一度検索してください。')
+                        try:state='current' if service._source(item)['revision']==snapshot['source_revision'] else 'stale'
+                        except SuggestionConflict:state='stale'
+                        except AIBusy:state='unverified'
+                        except (KeyError,OSError):state='unavailable'
+                        value={**rows[item],'semantic_score':round(max(-1,min(1,score)),6)}
+                        value['proposal_match']={key:snapshot[key] for key in ('batch_id','source_revision','tags','producer','evidence')}
+                        value['proposal_match'].update(state='pending',source_state=state,embedding_model=ai.profile.model_id)
+                        items.append(value)
+                    check()
+                return {'total':selected['total'],'page':number,'limit':60,'search_mode':'pending-proposals-semantic','items':items,
+                        'score_kind':'cosine','pending_total':pending_total,'indexed_total':indexed_total,
+                        'index_remaining':pending_total-indexed_total,'coverage_limit':MAX_ITEMS,'index_limit':MAX_ITEMS,
+                        'search_complete':True,'search_candidate_total':candidate_total}
+            return render_page(page) if result_sink is None else result_sink(render_page)
     finally:
         ai._last_activity=time.monotonic();ai.inference.release()

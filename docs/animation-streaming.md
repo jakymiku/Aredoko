@@ -15,13 +15,13 @@
 
 3sessionまで、idle300秒で所有reaperが解放、backend終了時close。batchは4枚/128MiB以内、表示用edge2048以内なので現状pixel payloadは最大64MiB。decode元は64MiB/16Mpixel以内。先読みとは別に、Pillowの圧縮入力・合成canvas/変換・HTTP送信buffer・描画bufferが必要で、128MiBをアプリ全体RSS上限とはしない。clientは消費済みbatch全体を保持せずframeごとの配列を解放する。
 
-OS I/O/Pillowの1回のdecodeを強制中断する期限は保証しない。close済みIDは5分/最大256程度の短命tombstoneで遅延openを拒否する。接続喪失時はidle cleanupがfallback。現時点でnative GIFの内部bufferや全体RSS/速度の実測はない。
+OS I/O/Pillowの1回のdecodeを強制中断する期限は保証しない。close済みIDは5分/最大4096程度の短命tombstoneで遅延openを拒否する。接続喪失時はidle cleanupがfallback。現時点でnative GIFの内部bufferや全体RSS/速度の実測はない。
 
 ## 検証とWindows手順
 
 生成GIF/APNG/WebP70枚×2周、先頭取得時の非列挙/decoder1回/原本再openなし、poster/透過/blend/disposal/duration、有限/無限loop、中止/同時pull/close先行/idle/容量、原本不変、除外/解除/更新、実loopback HTTP/認証/JSON/binary順序をPythonで確認。
 
-初回17 PASSにはimportされた既存6件を含む（新規11件）。関連runnerは不存在`test_original_pages`指定で42 PASS/1 runner ERROR。修正した関連48 PASS/4.693s。その後の原本再open除去の新規11件は別logに記録し、合算しない。raw logはignored `data/ai-ui/animation-stream-20261022/`に保持。
+初回17 PASSにはimportされた既存6件を含む（新規11件）。関連runnerは不存在`test_original_pages`指定で42 PASS/1 runner ERROR。修正した関連48 PASS/4.693s。その後の原本再open除去の新規11件は11 PASS/1.093s（`python-guard-final.log`）を記録し、合算しない。raw logはignored `data/ai-ui/animation-stream-20261022/`に保持。
 
 Core通信の回帰テストを追加したが、このLinux環境には.NET SDK/Windowsがない。**Core実行/WinUI build/native表示/実loop/速度/Honeyview比較は未実行**。P1Bはsource接続とPython確認までで、完成・実機受入済みとはしない。配布/旧Alpha/basic03/shortcutは更新していない。
 

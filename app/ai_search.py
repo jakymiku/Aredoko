@@ -623,7 +623,7 @@ class AISearch:
             state=self.store.state()
             if state['state']=='running': self.store.save_state({**state,'state':'cancelling'})
         return {'cancel_requested':True}
-    def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None,scope=None,literal_only=False,group_threshold=None,result_group='all',*,cancelled=None):
+    def search(self,query,kind='',view='all',page=0,limit=60,source='all',ranking=None,scope=None,literal_only=False,group_threshold=None,result_group='all',*,cancelled=None,result_sink=None):
         if not isinstance(query,str) or not 0<len(query.strip())<=300 or type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:
             raise ValueError('Invalid semantic search')
         if result_group not in ('all','leading','other'):raise ValueError('Invalid result group')
@@ -673,33 +673,35 @@ class AISearch:
                     indexed_total+=len(scores)
                     check()
                 spool.finalize(selected_policy)
-                selected=spool.page(page,limit,literal_only=literal_only,group_threshold=group_threshold,result_group=result_group)
-                with self.catalog._guard:
-                    check()
-                    current,evidence=self._search_page_rows(spool,selected,scope,check)
-                    items=[]
-                    cut=selected['group_boundary']
-                    for item,score in selected['ranked']:
-                        payload=evidence[item]
-                        entry={**current[item],'literal_hits':payload['literal_hits'],'literal_words':payload['literal_words'],
-                               'semantic_score':round(score,6),'similarity_group':'leading' if cut is None or score>=cut else 'other'}
-                        for key in ('video_match_ms','ai_page_match','audio_match_ms','audio_match_snippet'):
-                            if key in payload:entry[key]=payload[key]
-                        items.append(entry)
-                if candidate_total == 0:
-                    search_status = 'out_of_scope'
-                elif indexed_total == 0:
-                    search_status = 'unindexed'
-                elif indexed_total < candidate_total:
-                    search_status = 'partially_indexed'
-                else:
-                    search_status = 'ready'
-                return {**{key:val for key,val in selected.items() if key!='ranked'},'items':items,'mode':'semantic',
-                        'coverage_limit':MAX_ITEMS,'index_limit':MAX_ITEMS,'source':source,'ranking':selected_policy,
-                        'score_kind':'reciprocal-rank' if selected_policy=='mean-rrf' else 'cosine',
-                        'scope':scope,'literal_only':literal_only,'result_group':result_group,
-                        'search_status':search_status,
-                        'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total}
+                def render_page(number):
+                    selected=spool.page(number,limit,literal_only=literal_only,group_threshold=group_threshold,result_group=result_group)
+                    with self.catalog._guard:
+                        check()
+                        current,evidence=self._search_page_rows(spool,selected,scope,check)
+                        items=[]
+                        cut=selected['group_boundary']
+                        for item,score in selected['ranked']:
+                            payload=evidence[item]
+                            entry={**current[item],'literal_hits':payload['literal_hits'],'literal_words':payload['literal_words'],
+                                   'semantic_score':round(score,6),'similarity_group':'leading' if cut is None or score>=cut else 'other'}
+                            for key in ('video_match_ms','ai_page_match','audio_match_ms','audio_match_snippet'):
+                                if key in payload:entry[key]=payload[key]
+                            items.append(entry)
+                    if candidate_total == 0:
+                        search_status = 'out_of_scope'
+                    elif indexed_total == 0:
+                        search_status = 'unindexed'
+                    elif indexed_total < candidate_total:
+                        search_status = 'partially_indexed'
+                    else:
+                        search_status = 'ready'
+                    return {**{key:val for key,val in selected.items() if key!='ranked'},'items':items,'mode':'semantic',
+                            'coverage_limit':MAX_ITEMS,'index_limit':MAX_ITEMS,'source':source,'ranking':selected_policy,
+                            'score_kind':'reciprocal-rank' if selected_policy=='mean-rrf' else 'cosine',
+                            'scope':scope,'literal_only':literal_only,'result_group':result_group,
+                            'search_status':search_status,
+                            'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total}
+                return render_page(page) if result_sink is None else result_sink(render_page)
         finally:
             self._last_activity=time.monotonic()
             self.inference.release()
@@ -708,7 +710,7 @@ class AISearch:
         """Refuse a busy encoder; never touch the profile, catalog or vector DB."""
         return self._release()
 
-    def similar(self,item_id,kind='',view='all',page=0,limit=60,scope=None,*,cancelled=None):
+    def similar(self,item_id,kind='',view='all',page=0,limit=60,scope=None,*,cancelled=None,result_sink=None):
         """Item-origin cover cosine search. Cached vectors work with no model installed.
 
         The origin must be in scope, but need not satisfy result-only kind/view
@@ -737,10 +739,13 @@ class AISearch:
                         'origin_id':item_id,'origin_kind':origin['kind'],'origin_revision':revision(origin),'profile':self.profile.key,
                         'scope':scope,'source':'acoustic' if is_audio else 'cover','ranking':'max','score_kind':'cosine',
                         'coverage_limit':MAX_ITEMS,'similarity_status':'unsupported_profile'}
-                if not is_audio and 'cover' not in self.profile.modalities:return result
+                if not is_audio and 'cover' not in self.profile.modalities:
+                    return result if result_sink is None else result_sink(lambda number:{**result,'page':number})
                 if is_audio:
                     origin_frames=self.audio_acoustics.acoustic_frames(origin)
-                    if not origin_frames:return {**result,'similarity_status':'unindexed'}
+                    if not origin_frames:
+                        empty={**result,'similarity_status':'unindexed'}
+                        return empty if result_sink is None else result_sink(lambda number:{**empty,'page':number})
                     candidate_total=indexed_total=0
                     for rows in self._search_batches(kind,view,scope,check,('audio',),item_id):
                         candidate_total+=len(rows)
@@ -754,32 +759,39 @@ class AISearch:
                                 spool.add(rid,{'acoustic':scores[rid]},payload=pl)
                         indexed_total+=len(scores)
                         check()
-                    spool.finalize('max');selected=spool.page(page,limit)
-                    with self.catalog._guard:
-                        check()
-                        current,payloads=self._search_page_rows(spool,selected,scope,check)
-                        latest=self._current_rows([item_id],scope).get(item_id)
-                        if latest is None:raise KeyError(item_id)
-                        if revision(latest)!=revision(origin):raise AIBusy('起点の作品が更新されました。類似検索をやり直してください。')
-                        items=[]
-                        for key,score in selected['ranked']:
-                            row_dict={**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
-                                      'similarity_evidence':'acoustic'}
-                            pl=payloads.get(key,{})
-                            if 'audio_match_ms' in pl:row_dict['audio_match_ms']=pl['audio_match_ms']
-                            if 'origin_match_ms' in pl:row_dict['origin_match_ms']=pl['origin_match_ms']
-                            items.append(row_dict)
-                        check()
-                    return {**result,'total':selected['total'],'items':items,'similarity_status':'ready',
-                            'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total,'index_limit':MAX_ITEMS}
+                    spool.finalize('max')
+                    def render_page(number):
+                        selected=spool.page(number,limit)
+                        with self.catalog._guard:
+                            check()
+                            current,payloads=self._search_page_rows(spool,selected,scope,check)
+                            latest=self._current_rows([item_id],scope).get(item_id)
+                            if latest is None:raise KeyError(item_id)
+                            if revision(latest)!=revision(origin):raise AIBusy('起点の作品が更新されました。類似検索をやり直してください。')
+                            items=[]
+                            for key,score in selected['ranked']:
+                                row_dict={**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
+                                          'similarity_evidence':'acoustic'}
+                                pl=payloads.get(key,{})
+                                if 'audio_match_ms' in pl:row_dict['audio_match_ms']=pl['audio_match_ms']
+                                if 'origin_match_ms' in pl:row_dict['origin_match_ms']=pl['origin_match_ms']
+                                items.append(row_dict)
+                            check()
+                        return {**result,'total':selected['total'],'page':number,'items':items,'similarity_status':'ready',
+                                'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total,'index_limit':MAX_ITEMS}
+                    return render_page(page) if result_sink is None else result_sink(render_page)
                 if origin['kind']=='video':
                     origin_frames=self.store.video_frames(origin)
-                    if not origin_frames:return {**result,'similarity_status':'unindexed'}
+                    if not origin_frames:
+                        empty={**result,'similarity_status':'unindexed'}
+                        return empty if result_sink is None else result_sink(lambda number:{**empty,'page':number})
                     query=origin_frames[0][1]
                     track_origin_hits=True
                 else:
                     query=self.store.cover(origin)
-                    if query is None:return {**result,'similarity_status':'unindexed'}
+                    if query is None:
+                        empty={**result,'similarity_status':'unindexed'}
+                        return empty if result_sink is None else result_sink(lambda number:{**empty,'page':number})
                     origin_frames=None
                     track_origin_hits=False
                 candidate_total=indexed_total=0
@@ -796,24 +808,27 @@ class AISearch:
                             spool.add(rid,scores[rid],payload=pl)
                     indexed_total+=len(scores)
                     check()
-                spool.finalize('max');selected=spool.page(page,limit)
-                with self.catalog._guard:
-                    check()
-                    current,payloads=self._search_page_rows(spool,selected,scope,check)
-                    latest=self._current_rows([item_id],scope).get(item_id)
-                    if latest is None:raise KeyError(item_id)
-                    if revision(latest)!=revision(origin):raise AIBusy('起点の作品が更新されました。類似検索をやり直してください。')
-                    items=[]
-                    for key,score in selected['ranked']:
-                        row_dict={**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
-                                  'similarity_evidence':'cover'}
-                        pl=payloads.get(key,{})
-                        if 'video_match_ms' in pl:row_dict['video_match_ms']=pl['video_match_ms']
-                        if 'origin_match_ms' in pl:row_dict['origin_match_ms']=pl['origin_match_ms']
-                        items.append(row_dict)
-                    check()
-                return {**result,'total':selected['total'],'items':items,'similarity_status':'ready',
-                        'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total,'index_limit':MAX_ITEMS}
+                spool.finalize('max')
+                def render_page(number):
+                    selected=spool.page(number,limit)
+                    with self.catalog._guard:
+                        check()
+                        current,payloads=self._search_page_rows(spool,selected,scope,check)
+                        latest=self._current_rows([item_id],scope).get(item_id)
+                        if latest is None:raise KeyError(item_id)
+                        if revision(latest)!=revision(origin):raise AIBusy('起点の作品が更新されました。類似検索をやり直してください。')
+                        items=[]
+                        for key,score in selected['ranked']:
+                            row_dict={**current[key],'semantic_score':round(score,6),'similarity_origin_id':item_id,
+                                      'similarity_evidence':'cover'}
+                            pl=payloads.get(key,{})
+                            if 'video_match_ms' in pl:row_dict['video_match_ms']=pl['video_match_ms']
+                            if 'origin_match_ms' in pl:row_dict['origin_match_ms']=pl['origin_match_ms']
+                            items.append(row_dict)
+                        check()
+                    return {**result,'total':selected['total'],'page':number,'items':items,'similarity_status':'ready',
+                            'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total,'index_limit':MAX_ITEMS}
+                return render_page(page) if result_sink is None else result_sink(render_page)
         finally:
             self.inference.release()
 

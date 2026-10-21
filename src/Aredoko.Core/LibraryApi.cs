@@ -8,6 +8,7 @@ public sealed class LibraryApi : IDisposable
     private readonly HttpClient client;
     public LibraryApi() : this(new HttpClientHandler { AllowAutoRedirect = false }) { }
     private readonly HttpClient tagClient;
+    public ResultSessionClient Results {get;}
     public AnimationStreamClient Animations {get;}
     public TagReviewClient TagReviews {get;}
     public PageEvidenceClient PageEvidences {get;}
@@ -16,6 +17,7 @@ public sealed class LibraryApi : IDisposable
     {
         client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(40)};
         tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromSeconds(100)};
+        Results=new(client);
         Animations=new(client);
         TagReviews=new(tagClient);
         PageEvidences=new(tagClient);

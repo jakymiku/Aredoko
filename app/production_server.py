@@ -42,6 +42,7 @@ from ai_setup_jobs import AISetupJobs, SetupBusy
 from ai_runtime import object_pairs
 from animation_sessions import AnimationSessions, AnimationBusy, AnimationGone, MIME as ANIMATION_MIME
 from image_animations import AnimationUnavailable
+from result_sessions import ResultSessions, ResultUnavailable, ResultCapacity, IndexStamp
 from contextlib import ExitStack
 import sys
 
@@ -117,6 +118,30 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
     setup_jobs=AISetupJobs(setup)
     animations=AnimationSessions(previews)
+    def result_provider(conditions, consume, cancelled):
+        values = dict(conditions)
+        mode = values.pop('mode', None)
+        def require(allowed):
+            if set(values) - set(allowed):raise ValueError('Invalid result conditions')
+        if mode in ('literal','history'):
+            require(('query','kind','view','root_ids'))
+            if mode=='history':
+                if values.get('view','history')!='history':raise ValueError('Invalid history filter')
+                values['view']='history'
+            return consume(lambda page:catalog.search(page=page,limit=120,**values))
+        if mode=='semantic':
+            require(('query','kind','view','source','scope','literal_only','group_threshold','result_group'))
+            return ai.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
+        if mode=='similar':
+            require(('item_id','kind','view','scope'))
+            return ai.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
+        if mode in ('page-text','pending-proposals','pending-proposals-semantic'):
+            require(('query','kind','view','root_ids','shelf','model'))
+            if mode=='page-text':return consume(lambda page:page_text.search(page=page,**values))
+            if mode=='pending-proposals':return consume(lambda page:search_candidates(suggestions,page=page,**values))
+            return semantic_candidates(suggestions,ai,page=0,**values,cancelled=cancelled,result_sink=consume)
+        raise ValueError('Invalid result search mode')
+    results=ResultSessions(catalog,result_provider,index_stamp=IndexStamp(ai) if isinstance(ai,AISearch) else None)
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
     class Handler(base):
@@ -441,9 +466,35 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith('/api/library/animation/') or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel')
                 body=json.loads(self.rfile.read(length),**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path.startswith('/api/library/results/'):
+                    try:
+                        if self.path=='/api/library/results/create':
+                            if set(body)!={'session_id','conditions'}:raise ValueError('Invalid result fields')
+                            return self.send(200,results.create(**body))
+                        if self.path=='/api/library/results/status':
+                            if set(body)!={'session_id'}:raise ValueError('Invalid result fields')
+                            return self.send(200,results.status(**body))
+                        if self.path=='/api/library/results/range':
+                            if set(body)!={'session_id','offset','limit'}:raise ValueError('Invalid result fields')
+                            return self.send(200,results.read(**body))
+                        if self.path=='/api/library/results/neighbor':
+                            if set(body)!={'session_id','item_id','direction'}:raise ValueError('Invalid result fields')
+                            return self.send(200,results.neighbor(**body))
+                        if self.path=='/api/library/results/close':
+                            if set(body)!={'session_id'}:raise ValueError('Invalid result fields')
+                            return self.send(200,results.cancel(**body))
+                        return self.send(404,{'error':'Not found'})
+                    except ResultUnavailable as error:
+                        return self.send(410 if error.expired else 409,{'error':'Results expired or changed; refresh search',
+                            'error_code':'result_session_expired' if error.expired else 'result_session_changed',
+                            'conditions':error.conditions,'current_id':body.get('item_id')})
+                    except (PreviewUnavailable,ReaderChanged,OSError):
+                        return self.send(409,{'error':'Result source unavailable; refresh search','error_code':'result_session_changed',
+                            'conditions':body.get('conditions'),'current_id':body.get('item_id')})
+                    except ResultCapacity:return self.send(503,{'error':'Result workspace busy or full; close another search', 'error_code':'result_session_capacity'})
                 if self.path.startswith('/api/library/animation/'):
                     try:
                         if self.path=='/api/library/animation/open':
@@ -681,6 +732,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             except (ValueError,TypeError) as ex: return self.send(400,{'error':str(ex) if str(ex) in PUBLIC_FOLDER_ERRORS else 'Invalid request: check folder, exclusions or scan state'})
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})
+    Handler.results=results
     Handler.animations=animations
     Handler.setup_jobs=setup_jobs
     return Handler
@@ -734,6 +786,7 @@ def _serve(args):
         handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences)
         resources.callback(handler.setup_jobs.close)
         resources.callback(handler.animations.close)
+        resources.callback(handler.results.close)
         server=ThreadingHTTPServer(('127.0.0.1',args.port),handler)
         resources.callback(server.server_close)
         if args.exit_on_stdin_close:
