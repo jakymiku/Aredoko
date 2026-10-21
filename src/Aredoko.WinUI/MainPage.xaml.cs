@@ -99,22 +99,32 @@ public sealed partial class MainPage : Page
         AppLog.Error(ex);
     }
     private async void Page_Loaded(object sender,RoutedEventArgs e) => await InitializeFirstPageAsync();
-    internal async Task InitializeFirstPageAsync() {
-        if(ready)return; ready=true;
+    private Task? firstPageInitialization;
+    // Loaded and the portable owner must await the same in-flight operation.
+    internal Task InitializeFirstPageAsync()=>firstPageInitialization??=InitializeFirstPageCoreAsync();
+    private async Task InitializeFirstPageCoreAsync() {
+        ready=true;
+        AppLog.Startup("page_initialization_starting");
         await ConnectAsync();
         UpdateNavigationLayout(ActualWidth);
+        AppLog.Startup("page_initialization_completed");
     }
     private bool startupSearchSucceeded;
     private async Task ConnectAsync() {
         try {
-            renderCancellation.Cancel(); thumbnails.Clear(); await api.ConnectAsync(); await LoadAIScopeAsync(); await RefreshSearchRootsAsync(); await LoadAsync();
+            renderCancellation.Cancel(); thumbnails.Clear();
+            AppLog.Startup("session_connecting");await api.ConnectAsync();
+            AppLog.Startup("session_connected");await LoadAIScopeAsync();
+            AppLog.Startup("ai_scope_loaded");await RefreshSearchRootsAsync();
+            AppLog.Startup("roots_loaded");await LoadAsync();
+            AppLog.Startup(startupSearchSucceeded?"initial_search_completed":"initial_search_failed");
             if(StartupReady.Pending)
             {
                 if(!startupSearchSucceeded)await StartupReady.SignalAsync(false);
-                else{MainWindow.Current.AppWindow.Show();MainWindow.Current.Activate();await StartupReady.FirstFrameAsync();}
+                else{AppLog.Startup("window_showing");MainWindow.Current.AppWindow.Show();MainWindow.Current.Activate();await StartupReady.FirstFrameAsync();}
             }
         }
-        catch(Exception ex) { Notice("バックエンドに接続できません", "Aredokoを閉じ、製品用の起動アイコンから起動し直してください。"+ex.Message,InfoBarSeverity.Error); }
+        catch(Exception ex) { AppLog.Startup("connection_or_first_frame_failed");AppLog.Error(ex);Notice("バックエンドに接続できません", "Aredokoを閉じ、製品用の起動アイコンから起動し直してください。"+ex.Message,InfoBarSeverity.Error); }
         finally{if(StartupReady.Pending)try{await StartupReady.SignalAsync(false);}catch(Exception ex){AppLog.Error(ex);}}
     }
     private string ResultGroup()=>AIResultGroup.SelectedIndex switch {0=>"leading",1=>"other",_=>"all"};

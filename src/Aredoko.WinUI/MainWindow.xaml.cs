@@ -8,7 +8,9 @@ public sealed partial class MainWindow : Window
     private bool preparingClose;
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     public MainWindow() {
+        AppLog.Startup("window_constructing");
         Current=this;InitializeComponent();
+        AppLog.Startup("window_xaml_loaded");
         // WinUI OnLaunched.Arguments is unsupported; read the actual process args.
         // Only this bounded developer override is handled; normal startup follows Windows.
         var launchArguments=Environment.GetCommandLineArgs();
@@ -19,7 +21,9 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
         var scale=GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this))/96.0;
         AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1200*scale),(int)(820*scale)));
-        RootFrame.Navigate(typeof(MainPage));
+        AppLog.Startup("page_navigation_starting");
+        if(!RootFrame.Navigate(typeof(MainPage)))throw new InvalidOperationException("ライブラリ画面を開けませんでした。");
+        AppLog.Startup("page_navigation_completed");
         AppWindow.Closing+=async(_,e)=>
         {
             if(closing)return;e.Cancel=true;if(preparingClose)return;preparingClose=true;
@@ -35,6 +39,6 @@ public sealed partial class MainWindow : Window
     }
     internal void ApplyTheme(string theme)=>WindowRoot.RequestedTheme=theme.ToLowerInvariant() switch
     {"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};
-    internal Task InitializeOwnedStartupAsync()=>RootFrame.Content is MainPage page?page.InitializeFirstPageAsync():Task.CompletedTask;
+    internal Task InitializeOwnedStartupAsync()=>RootFrame.Content is MainPage page?page.InitializeFirstPageAsync():Task.FromException(new InvalidOperationException("ライブラリ画面がありません。"));
 
 }

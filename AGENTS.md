@@ -1,5 +1,11 @@
 # Aredoko — Codex / coding agent instructions
 
+## Portable manual timeout and diagnostic source (2026-10-21; latest)
+
+The user manually tried sealed02 and got Initial screen timed out. Startup native acceptance is **FAIL**, superseding prior prepared/not-opened wording. Backend session stage passed; frontend sent neither ready nor failure before deadline. Root cause is unconfirmed. Read newest handoffs. Diagnostic frontend-only publish is prepared at data/ai-ui/portable-startup-diagnostic-20261021-01/frontend with validated Portable receipt; no new full package/ZIP. Opt-in stage logs + shared initial Task + explicit missing-page/launch error reporting are implemented/build verified, not proven timeout fixes. Existing timeout/hash/source/identity/frame guards stay.
+
+Portable15 tests passed but the combined command failed on nonexistent test_launch_release; corrected lifecycle/reporting14 PASS. Publish0 errors/known3+2 warnings. No GUI/GPU run; renewed explicit GUI permission is required before a bounded actual Portable diagnostic. Preserve prior3/3 caps, sealed02, user's failed window and all logs. No model/private scan/download/Actions/merge/shutdown. R13/PZ2/R14 remain incomplete. Manifest5.554GB is bundled runtime (torch4.508GB, ffmpeg/ffprobe444MB), not models/user media; every-launch full SHA remains unchanged and future optimization needs integrity-preserving design.
+
 ## Windows Portable preparation checkpoint (2026-10-21; latest)
 
 Read [Windows validation/current artifact](docs/portable-windows-validation.md) and latest handoffs. Work5 commits through68db65b are integrated. Core759 PASS, WinUI x64 Portable publish with known3+2 warnings, inbox Framework bootstrap compile/self-test, actual private Native.Start retained-handle/pipe UTF8 echo/normal exit without Form PASS. Existing runtime copied into new dist/portable-wincheck-20261021-02/Aredoko: all24,325 manifest files verified; actual bundled Python/import/media --check PASS. Check-Startup.cmd is ready for user manual dedicated-empty-DB checks; old installed Alpha/sealed02 are unchanged. GUI/GPU/physical rendering/clean Windows/ZIP are NOT verified/created. PZ2 PARTIAL/R13 DOING/ALPHA incomplete/R14 PARTIAL.

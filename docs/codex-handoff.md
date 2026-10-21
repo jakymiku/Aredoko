@@ -1,5 +1,19 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-21 Portable manual failure: initial screen timeout; diagnosis prepared
+
+User manually ran sealed `dist/portable-wincheck-20261021-02/Aredoko/Check-Startup.cmd` and received `Initial screen timed out` at 20:41. This supersedes the earlier "not opened" checkpoint: actual native startup **FAIL**, not accepted. Backend.log contains the production listen message; app.log/backend-error.log are empty; launcher.log records timeout. Existing global winui.log has no corresponding new exception. The readiness loop starts after backend session identity is verified; this failure is later than full preflight, not proof that hashing timed out. No reliable frontend stopping stage was recorded, so the cause is still unconfirmed. Do not just raise the timeout.
+
+Added opt-in owned-startup stage logging to `%LOCALAPPDATA%/Aredoko/logs/frontend-startup-<nonce>.log`: App construction, window/navigation, session/scope/roots/search, show/Rendering, acknowledgement write. Fixed labels only, no queries/media paths/tokens. Ordinary launches produce no stage log. Initializer now shares its in-flight Task between Loaded and owner; missing page/owned launch exceptions fail explicitly, and Connect errors reach existing exception log. These are diagnostic/error-path corrections, **not evidence of resolving this timeout**. Existing hashes/source guards/ready nonce+instance/first-frame requirement/60s timeout remain.
+
+New frontend-only candidate: `data/ai-ui/portable-startup-diagnostic-20261021-01/frontend`, Portable self-contained publish + evaluated-property receipt verified, 0 build errors/known 3 WUI1001 + 2 IL2104 warnings retained. No complete new package/ZIP, no GUI/GPU execution. Portable startup 15 tests passed in first combined command, but that command overall FAILED because nonexistent test_launch_release was also named; do not report it as wholly passing. Correct lifecycle/reporting command subsequently **14 PASS in 15.663s**. No duplicate totals. Build/CPU logs are adjacent to the new frontend. Code review: no XAML changes, no API/model/proxy/timeout assumption added; exception reporting and task ownership checked. GUI cap remains unchanged.
+
+Next: obtain renewed explicit permission for a bounded actual Portable GUI diagnostic (fresh empty DB, no models/GPU/private scan, owned test processes only; initial attempt plus at most two corrective retries, keep all failures). Use a NEW release/test root and verified diagnostic frontend; never alter sealed02 or the user's failed bootstrap window. Identify last stage and fix the measured fault, then verify ready/cancel/normal close. PZ2/R13/R14 remain incomplete; all other roadmap items retained. No downloads/Actions/main merge/shutdown.
+
+### Why startup checked ~5GB
+
+Existing manifest totals **5,554,199,143 bytes**. `runtime/python/Lib` is 4,913,231,290 bytes, of which `site-packages/torch` is about **4,508.4 decimal MB**; ffmpeg.exe + ffprobe.exe total **444,293,120 bytes**. This is the bundled Python/PyTorch/media runtime, not model weights or user media. Startup currently rehashes the entire immutable payload on every launch. Full preflight remains expensive; any fast-path/cached verification design is a separate explicitly reviewed change preserving integrity guarantees, not implemented or silently enabled here. Models/manual/download PZ3 remains open.
+
 ## 2026-10-21 Windows実機：Work更新の取り込みとPortable準備完了（画面未確認）
 
 基点`68db65b`までのWork5コミットを、cleanな実機branchへfast-forwardで統合した。既存の依存/cache/封印済み02を読み取り専用で再利用し、**`dist/portable-wincheck-20261021-02/Aredoko/Check-Startup.cmd`から手動起動を確認できる新規フォルダを準備済み**。[Windows準備結果と起動手順](portable-windows-validation.md)を参照。installed Alpha/旧ショートカット/旧配布の上書きはない。

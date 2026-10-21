@@ -29,8 +29,10 @@ public partial class App : Application
     /// </summary>
     public App()
     {
-        InitializeComponent();
+        AppLog.Startup("app_constructing");
         UnhandledException += (_, e) => AppLog.Error(e.Exception);
+        InitializeComponent();
+        AppLog.Startup("app_constructed");
     }
 
     /// <summary>
@@ -39,12 +41,25 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        AppLog.Startup("launch_entered");
+        if(StartupReady.Pending) { _=LaunchOwnedAsync();return; }
         _window = new MainWindow();
         _window.Activate();
-        if(StartupReady.Pending)
-        {
+    }
+    private async Task LaunchOwnedAsync()
+    {
+        try {
+            _window=new MainWindow();
+            _window.Activate();
+            AppLog.Startup("window_activated");
             _window.AppWindow.Hide();
-            _=((MainWindow)_window).InitializeOwnedStartupAsync();
+            AppLog.Startup("window_hidden_for_initialization");
+            await ((MainWindow)_window).InitializeOwnedStartupAsync();
+        }
+        catch(Exception ex) {
+            AppLog.Startup("owned_launch_failed");AppLog.Error(ex);
+            try { await StartupReady.SignalAsync(false); }
+            catch(Exception signalError) { AppLog.Error(signalError); }
         }
     }
 }
