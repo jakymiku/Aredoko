@@ -1,5 +1,7 @@
 # ZIP解凍型配布への移行（2026-10-21 ユーザー指定）
 
+> **最新source追記**：[Portable所有起動/帰宅後チェック](portable-startup-check.md)を追加。小型Framework/native control起動UI・同worker lifecycle・初期画面ready・明示Portable梱包/ZIP検査を実装したが、Windows build/実artifact/受入は未完。PZ2 PARTIAL/PZ3・PZ4基盤のみ。下の未実装は各時点の履歴として保持し、最新の未検証境界は上のリンクを読む。
+
 > **最新PZ2追記**：[継承pipeのCPU実装](startup-pipe-protocol.md)を追加。一回限りの検査workerのhello/cancel/所有EOF/有界通知までで、native入口/UI/portable launch/readyは未完。下のIPC未実装は当時の履歴で、現在も最終native統合はTODO。検査完了でsplashを閉じない。83 PASS/Windows5 SKIP、PZ2 PARTIAL/R13 DOING/ALPHA未完。
 
 ## 決定と対象

@@ -1,7 +1,7 @@
-"""One-shot, inherited-pipe preflight worker for the future native bootstrap.
+"""Inherited-pipe startup worker, with explicit portable session ownership.
 
-No socket, named endpoint, files, GUI, app launch or app-ready assertion. The
-parent must retain the exclusive pipe handles and the child process handle.
+The preflight-only entry never launches an app. The owned entry keeps the same
+worker through guarded launch, initial-screen readiness and normal shutdown.
 """
 import json
 import queue
@@ -13,7 +13,7 @@ from startup_progress import StartupCancelled, StartupProgress
 FORMAT = 'aredoko-startup-pipe-v1'
 MAX_FRAME = 4096
 MAX_PENDING = 32
-STAGES = {'manifest', 'file_hashes', 'inventory', 'runtime_layout', 'python_imports', 'media_probe'}
+STAGES = {'manifest', 'file_hashes', 'inventory', 'runtime_layout', 'python_imports', 'media_probe', 'backend_start', 'frontend_start'}
 PROGRESS_KEYS = {'format', 'sequence', 'stage', 'state', 'completed_files',
                  'total_files', 'completed_bytes', 'total_bytes'}
 
@@ -30,8 +30,8 @@ class StartupPipe:
     """Bounded, fail-closed transport; callbacks never perform pipe I/O.
 
     Streams are caller-owned binary streams. Reader/writer are daemon threads:
-    an unresponsive owner cannot hold this one-shot worker open on blocking I/O.
-    Do not reuse this object, or embed it in a long-lived application process.
+    an unresponsive owner cannot hold worker shutdown open on blocking I/O.
+    One object belongs to one startup/session; never reuse it for another launch.
     """
     def __init__(self, incoming, outgoing):
         self.control = StartupProgress(self.publish)
@@ -43,6 +43,7 @@ class StartupPipe:
         self._session = None
         self._reason = None
         self._done = False
+        self._interactive = False
 
     @property
     def reason(self):
@@ -50,7 +51,7 @@ class StartupPipe:
 
     def _abort(self, reason):
         with self._lock:
-            if self._done:return
+            if self._done or self._interactive:return
             if self._reason is None:self._reason = reason
             self.control.cancel()
         self._hello.set()
@@ -133,7 +134,7 @@ class StartupPipe:
         self._send({'kind': 'progress', 'progress': dict(snapshot)})
 
     def finish(self, status, *, timeout=2):
-        if status not in {'preflight_complete', 'failed', 'cancelled'}:
+        if status not in {'preflight_complete', 'session_complete', 'failed', 'cancelled'}:
             raise ValueError('Invalid preflight result')
         with self._lock:
             reason = self._reason
@@ -142,15 +143,50 @@ class StartupPipe:
             self._stop_writer.set();return 2
         if reason is not None:
             status = 'cancelled' if reason in {'cancel_requested', 'owner_eof'} else 'failed'
-        elif status == 'failed':reason = 'verification_failed'
+        elif status == 'failed':reason = 'session_failed' if self._interactive else 'verification_failed'
         receipt = threading.Event()
         try:
             self._send({'kind': 'result', 'status': status, 'reason': reason}, receipt)
             # Verification success is not success if its result cannot reach the UI.
             if not receipt.wait(timeout):return 2
-            return 0 if status == 'preflight_complete' else 2
+            return 0 if status in {'preflight_complete', 'session_complete'} else 2
         except StartupCancelled:return 2
         finally:self._stop_writer.set()
+
+    def mark_ready(self):
+        # After the live frontend has acknowledged initial data and its first
+        # rendering callback, owner loss must not discard interactive drafts.
+        with self._lock:
+            self.control.check_cancelled()
+            self._interactive = True
+        try:self._send({'kind': 'app_ready'})
+        except StartupCancelled:pass
+
+
+def serve_owned(root, incoming, outgoing, *, smoke=False):
+    """Same verified worker owns the backend and frontend until normal exit."""
+    import os
+    from pathlib import Path
+    from launch_release import launch, load_settings
+    pipe = StartupPipe(incoming, outgoing)
+    status = 'failed'
+    try:
+        pipe.start()
+        base = os.environ.get('LOCALAPPDATA', '')
+        if not base or not Path(base).is_absolute():raise ValueError('User data is unavailable')
+        data = Path(base) / 'Aredoko'
+        if smoke:
+            data = data / 'startup-check' / pipe._session
+            settings = {}  # Never inherit real DB, model or viewer paths.
+        else:settings = load_settings(data)
+        launch(root, data, settings, progress=pipe.control, startup_pipe=pipe)
+        status = 'session_complete'
+    except StartupCancelled:status = 'cancelled'
+    except Exception as error:
+        from launch_release import report_failure
+        report_failure(error, show_dialog=False)  # Owned stderr log, never protocol stdout.
+        status = 'failed'
+    return pipe.finish(status)
 
 
 def serve_preflight(root, incoming, outgoing, *, imports=True, hello_timeout=5, drain_timeout=2):

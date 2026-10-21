@@ -42,6 +42,9 @@ public sealed class LibraryApi : IDisposable
         new ArchiveReaderClient(client).VideoAsync(id, cancellation);
     public async Task ConnectAsync() {
         using var doc = JsonDocument.Parse(await client.GetStringAsync("api/session"));
+        var startupInstance=Environment.GetEnvironmentVariable("AREDOKO_STARTUP_INSTANCE");
+        if(startupInstance is not null&&(!doc.RootElement.TryGetProperty("instance_id",out var instance)||instance.GetString()!=startupInstance))
+            throw new InvalidOperationException("今回起動したバックエンドを確認できません。");
         if (doc.RootElement.GetProperty("mode").GetString() != "production") throw new InvalidOperationException("製品用APIではありません。start-winui.ps1から起動してください。");
         client.DefaultRequestHeaders.Remove("X-Aredoko-Token");
         client.DefaultRequestHeaders.Add("X-Aredoko-Token",doc.RootElement.GetProperty("token").GetString());

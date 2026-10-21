@@ -1,5 +1,23 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-21 Portable起動経路・帰宅後チェックの準備（Windows build未実行）
+
+開始upstream `f2eb4574a263fa2f4b09cf94193fb529cd321059`。connector由来local snapshot `4fe827c`はclean、remote PR #5/branch/baseを照合して継続。他AIの実機worktreeには触れていない。[帰宅後の手順](../STARTUP_CHECK.md)と[実装/境界](portable-startup-check.md)を先に読む。
+
+**実装**：小型.NET Framework/Windows Forms bootstrap、Shown後worker起動、専用handle list/保持HANDLE＋image/作成時刻、同じPython workerの全preflight→backend→明示Portable frontend→初期一覧/Rendering ready→通常終了を接続。native構造体/Windows APIは未実行。ready前取消/EOFは所有childだけcleanup、ready後は対話中draftを強制破棄しない。初期query失敗/nonce・instance不一致/重複readyでは成功にしない。通常OS shutdownをbootstrapがblockしない。
+
+Portable receipt/全payload/.NET自己完結/PE構造とroot exeを要求し、旧MSIXを直接exeへfallbackしない。全SHA/祖先guard/port/instance/lease/所有EOF、旧Alpha/封印02/旧registrationを保持。Prepare-Portable.cmdは既存runtime/cacheだけでCore→publish→bootstrap build/非GUI selftest→新規copy/import/mediaを一回ずつ実行する**Windows用準備script**。ここでは未実行。本体を自動起動せず成功後output folderだけを開く。Check-Startup.cmdは毎回専用空DB、既存settings/DB/modelを使わず原本scan/推論なし。ZIP照合基盤は生成fixtureだけ確認。
+
+**検証**：最終101件＝96 PASS/Windows専用5 SKIP/失敗0、19.248秒（新規13含む）。Python構文/manifest XML/diff/文書link/旧handoff全文保全も確認。初回新規12件は既存ZIP拒否の例外型で1 ERROR、FileExistsErrorへ整理して修正。途中100件/17.215秒版を重複加算しない。新規13件は本物のhost Python子/製品backend/一時DB lease、ready正常/不正nonce・instance・failed・重複field/timeout/取消/ready後保全、receipt/ZIP/PE/専用DBを含む。構造fixtureを本物Windows ABI/実媒体/clean-machine成功とはしない。
+
+**状態**：PZ2 source接続済みだがWindows build/受入未了のPARTIAL。PZ3明示runtime梱包/ZIP基盤を追加しただけでmodel導入3経路/PZ4実配布/PZ5は未完。R13 DOING/ALPHA未完/R14 PARTIAL。Windows/PowerShell/csc/.NET/Core/WinUI/native/GUI/実速度/5GB実runtime準備は未実行。実機へEXEを置いた状態ではない。新DL/Actions/GUI/GPU/私物scan/OS変更/main mergeなし、旧3/3失敗履歴・P0 2/2/OCR保留・全機能を保持。旧shutdown再実行なし。
+
+**次の3手**：
+
+1. Windows最新branchでPrepare-Portable.cmdを一回実行し、Core/build/selftest/import/mediaのlogを確認。依存不足時は勝手にDL/無限再試行しない。旧artifactを上書きしない。
+2. 帰宅後ユーザーが生成Aredoko/Check-Startup.cmdで初期画面/段階/取消/通常終了を手動確認。GUI自動flowの旧3/3をresetしない。結果が出る前にnative受入済み/起動1秒/ZIP完成とは言わない。
+3. 具体artifactで実ZIP/再配置/通常DB保存・restart/clean WindowsとPZ3 model導線へ。viewer新Core/WinUI/HoneyView、U09/U11/U13/U14、ALPHA後R06–R09実音声/音楽も維持。以下の過去handoff全文は保全。
+
 ## 2026-10-21 PZ2：起動前検査workerの継承pipe（CPU実装）
 
 開始remote HEAD`51f877469995d2bb1e0d497a5d3a13b1fb868ac3`、既存production branch/Draft PR #5/baseを維持。[実装・protocol・検証限界](startup-pipe-protocol.md)。Git cloneは認証不可だったためconnectorで基点439fileを取得しblob SHA検証後、clean local snapshotで作業。実機側の未コミット変更にはアクセス/変更していない。remoteは元の全treeへ変更fileだけ重ね、未取得のexperiments30file/他AIの履歴を削除しない。

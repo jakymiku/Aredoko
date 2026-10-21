@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from contextlib import nullcontext
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
@@ -132,7 +133,7 @@ def _stop_owned(process, graceful=False, timeout=8):
             process.kill();process.wait(timeout=5)
 
 
-def run_session(backend_command, app_command, *, port, instance, logs, cwd, env, startup_timeout=20, app_factory=None):
+def run_session(backend_command, app_command, *, port, instance, logs, cwd, env, startup_timeout=20, app_factory=None, progress=None, require_ready=False, on_ready=None, frontend_timeout=60):
     """Launch only owned children, and never attach to another service on a port."""
     # This advisory check provides a clear error; the per-launch session ID is
     # the race-safe proof that the listening server is ours.
@@ -140,26 +141,43 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
         try:probe.bind(('127.0.0.1', port))
         except OSError as error:raise RuntimeError('Aredoko port is already in use') from error
     backend = app = None
+    if progress is not None:progress.check_cancelled()
     with (logs / 'backend.log').open('xb') as output, (logs / 'backend-error.log').open('xb') as errors, (logs / 'app.log').open('xb') as app_log:
         try:
-            backend = subprocess.Popen(backend_command, stdin=subprocess.PIPE, stdout=output, stderr=errors,
+            with progress.phase('backend_start') if progress is not None else nullcontext():
+                backend = subprocess.Popen(backend_command, stdin=subprocess.PIPE, stdout=output, stderr=errors,
                                        cwd=cwd, env=env, creationflags=CREATE_NO_WINDOW, close_fds=True)
-            deadline = time.monotonic() + startup_timeout
-            while True:
-                if backend.poll() is not None:raise RuntimeError('Backend exited during startup; see backend-error.log')
-                try:
-                    session = _session(port)
-                except (OSError, ValueError):
-                    session = None
-                if isinstance(session, dict):
-                    if session.get('mode') != 'production' or session.get('instance_id') != instance:
-                        raise RuntimeError('The listening backend does not belong to this launch')
-                    break
-                if time.monotonic() >= deadline:raise RuntimeError('Backend startup timed out')
-                time.sleep(0.1)
-            app = (app_factory(app_command, app_log) if app_factory is not None else
-                   subprocess.Popen(app_command, stdin=subprocess.DEVNULL, stdout=app_log, stderr=app_log,
+                deadline = time.monotonic() + startup_timeout
+                while True:
+                    if progress is not None:progress.check_cancelled()
+                    if backend.poll() is not None:raise RuntimeError('Backend exited during startup; see backend-error.log')
+                    try:session = _session(port)
+                    except (OSError, ValueError):session = None
+                    if isinstance(session, dict):
+                        if session.get('mode') != 'production' or session.get('instance_id') != instance:
+                            raise RuntimeError('The listening backend does not belong to this launch')
+                        break
+                    if time.monotonic() >= deadline:raise RuntimeError('Backend startup timed out')
+                    time.sleep(0.1)
+            with progress.phase('frontend_start') if progress is not None else nullcontext():
+                if progress is not None:progress.check_cancelled()
+                app = (app_factory(app_command, app_log) if app_factory is not None else
+                       subprocess.Popen(app_command, stdin=subprocess.DEVNULL, stdout=app_log, stderr=app_log,
                                     cwd=cwd, env=env, close_fds=True))
+                if require_ready:
+                    deadline = time.monotonic() + frontend_timeout
+                    while not app.ready.is_set():
+                        if progress is not None:progress.check_cancelled()
+                        if backend.poll() is not None or app.poll() is not None:raise RuntimeError('Application exited before ready')
+                        if app.ready_error is not None:raise RuntimeError('Initial screen failed; see app.log')
+                        if time.monotonic() >= deadline:raise RuntimeError('Initial screen timed out')
+                        time.sleep(0.05)
+                    if app.ready_error is not None or app.poll() is not None or backend.poll() is not None:
+                        raise RuntimeError('Application was not alive at ready')
+                    session = _session(port)
+                    if session.get('mode') != 'production' or session.get('instance_id') != instance:
+                        raise RuntimeError('Backend identity changed before ready')
+            if on_ready is not None:on_ready()
             while app.poll() is None:
                 if backend.poll() is not None:raise AppSessionError('Backend stopped unexpectedly; see backend-error.log')
                 time.sleep(0.1)
@@ -173,7 +191,7 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
     if backend.returncode:raise AppSessionError('Backend did not exit cleanly; see backend-error.log')
 
 
-def launch(root, data, settings, *, progress=None):
+def launch(root, data, settings, *, progress=None, startup_pipe=None):
     # All writable state stays outside the versioned release. Reject accidental
     # source/payload placement before creating logs or opening a database.
     paths = [data, *(Path(settings[k]) for k in ('database', 'ai_settings', 'viewer_settings') if k in settings)]
@@ -196,10 +214,17 @@ def launch(root, data, settings, *, progress=None):
         try:
             manifest = preflight(root, progress=progress)
             if progress is not None:progress.check_cancelled()
-            frontend = prepare_frontend(root, manifest)
+            portable = manifest.get('frontend_activation') == 'portable'
+            if startup_pipe is not None and not portable:raise ValueError('The owned bootstrap requires an explicit portable release')
+            if portable:
+                from portable_frontend import PortableFrontend
+                frontend = PortableFrontend(root, manifest, instance)
+            else:frontend = prepare_frontend(root, manifest)
             if progress is not None:progress.check_cancelled()
             run_session(backend, app, port=8769, instance=instance, logs=logs, cwd=root,
-                        env=runtime_environment(root / 'runtime/media'), app_factory=frontend.start)
+                        env=runtime_environment(root / 'runtime/media'), app_factory=frontend.start,
+                        progress=progress if portable else None, require_ready=portable,
+                        on_ready=startup_pipe.mark_ready if startup_pipe is not None else None)
         except Exception as error:
             (logs / 'launcher.log').write_text(type(error).__name__ + ': ' + str(error) + '\n', encoding='utf-8')
             failure_type = (StartupCancelled if isinstance(error, StartupCancelled) else
@@ -214,12 +239,14 @@ def main():
     checks.add_argument('--check', action='store_true', help='Windows import/tool checks; no database, GUI, or model loading')
     checks.add_argument('--check-activation', action='store_true', help='Read-only installed MSIX identity/payload check, plus runtime checks; no activation')
     checks.add_argument('--startup-preflight', action='store_true', help='Internal inherited-pipe preflight worker; no application launch')
+    checks.add_argument('--startup-owned', action='store_true', help='Internal portable bootstrap worker')
+    checks.add_argument('--startup-smoke', action='store_true', help='Internal portable startup check with fresh isolated data')
     parser.add_argument('--no-error-dialog', action='store_true', help='Automation only: keep error logs and nonzero exit without a modal dialog')
     parser.add_argument('--settings', type=Path, help='Explicit launch-settings.json (otherwise in LOCALAPPDATA/Aredoko)')
     for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'}:
         parser.add_argument('--' + key.replace('_', '-'))
     args = parser.parse_args()
-    if args.startup_preflight:
+    if args.startup_preflight or args.startup_owned or args.startup_smoke:
         # This is a one-shot worker, not the user-facing product entrypoint.
         # Use independent raw descriptors: a blocked writer must not hold a
         # Python standard-stream buffer lock during process shutdown.
@@ -230,8 +257,9 @@ def main():
                 return 2
             incoming = os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0)
             outgoing = os.fdopen(os.dup(sys.stdout.fileno()), 'wb', buffering=0)
-            from startup_ipc import serve_preflight
-            return serve_preflight(ROOT, incoming, outgoing)
+            from startup_ipc import serve_preflight, serve_owned
+            if args.startup_preflight:return serve_preflight(ROOT, incoming, outgoing)
+            return serve_owned(ROOT, incoming, outgoing, smoke=args.startup_smoke)
         except Exception:
             return 2
     try:

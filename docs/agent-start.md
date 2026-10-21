@@ -1,5 +1,7 @@
 # AIエージェントの開始・再開ガイド
 
+> **最新・帰宅後起動チェック準備**：[手順](../STARTUP_CHECK.md)と[実装境界](portable-startup-check.md)。起動画面/同worker所有起動/明示Portable梱包/初期画面readyのsourceとPrepare-Portable.cmdを追加。Windows build/native/実機配置は未完で、既存runtime/cacheで準備後、ユーザーがCheck-Startup.cmdを手動起動する。PZ2 PARTIAL/R13 DOING/ALPHA未完、旧自動GUI3/3/全失敗/旧配布を保持。
+
 > **最新2026-10-21・PZ2継承pipe**：[起動pipe実装と限界](startup-pipe-protocol.md)を先に読む。hello/cancel/所有EOF/有界queue/部分write/終端通知を実装、83 PASS/Windows5 SKIP（新規17含む）。一回限りの検査workerだけでnative入口/UI/portable launch/readyは未完。preflight_completeをapp-readyや検査省略ticketにしない。PZ2 PARTIAL/R13 DOING/ALPHA未完、旧3/3/全機能/過去記録/旧配布を保持。次はnative UI/所有handle→同worker起動/ready→PZ3/PZ4/PZ5。
 
 > **最新2026-10-21・PZ2処理基盤**：[起動進捗/取消](startup-progress-control.md)と最上段handoffを読む。実段階/照合件数/bytes・協調取消・所有probe cleanupを実装、関連66 PASS/Windows5 SKIP。native起動UI/入口/IPC/readyは未実装。前回viewer改善も新Core/WinUI/実機比較待ち。PZ2 PARTIAL/R13 DOING/ALPHA未完、旧GUI3/3上限・全機能・旧配布を保持。

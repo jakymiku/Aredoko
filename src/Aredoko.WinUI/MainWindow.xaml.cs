@@ -35,5 +35,6 @@ public sealed partial class MainWindow : Window
     }
     internal void ApplyTheme(string theme)=>WindowRoot.RequestedTheme=theme.ToLowerInvariant() switch
     {"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};
+    internal Task InitializeOwnedStartupAsync()=>RootFrame.Content is MainPage page?page.InitializeFirstPageAsync():Task.CompletedTask;
 
 }

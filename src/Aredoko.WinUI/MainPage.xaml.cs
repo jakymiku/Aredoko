@@ -98,14 +98,24 @@ public sealed partial class MainPage : Page
         Notice("操作を完了できません",ex.Message,InfoBarSeverity.Error);
         AppLog.Error(ex);
     }
-    private async void Page_Loaded(object sender,RoutedEventArgs e) {
+    private async void Page_Loaded(object sender,RoutedEventArgs e) => await InitializeFirstPageAsync();
+    internal async Task InitializeFirstPageAsync() {
         if(ready)return; ready=true;
         await ConnectAsync();
         UpdateNavigationLayout(ActualWidth);
     }
+    private bool startupSearchSucceeded;
     private async Task ConnectAsync() {
-        try { renderCancellation.Cancel(); thumbnails.Clear(); await api.ConnectAsync(); await LoadAIScopeAsync(); await RefreshSearchRootsAsync(); await LoadAsync(); }
+        try {
+            renderCancellation.Cancel(); thumbnails.Clear(); await api.ConnectAsync(); await LoadAIScopeAsync(); await RefreshSearchRootsAsync(); await LoadAsync();
+            if(StartupReady.Pending)
+            {
+                if(!startupSearchSucceeded)await StartupReady.SignalAsync(false);
+                else{MainWindow.Current.AppWindow.Show();MainWindow.Current.Activate();await StartupReady.FirstFrameAsync();}
+            }
+        }
         catch(Exception ex) { Notice("バックエンドに接続できません", "Aredokoを閉じ、製品用の起動アイコンから起動し直してください。"+ex.Message,InfoBarSeverity.Error); }
+        finally{if(StartupReady.Pending)try{await StartupReady.SignalAsync(false);}catch(Exception ex){AppLog.Error(ex);}}
     }
     private string ResultGroup()=>AIResultGroup.SelectedIndex switch {0=>"leading",1=>"other",_=>"all"};
     private void AIResultGroup_Changed(object sender,SelectionChangedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
@@ -196,6 +206,7 @@ public sealed partial class MainPage : Page
     }
     private string KindValue()=>Kind.SelectedIndex switch {1=>"book",2=>"image",3=>"video",4=>"audio",5=>"archive",6=>"material",_=>""};
     private async Task LoadAsync() {
+        startupSearchSucceeded=false;
         var version=searches.Next(); Busy.Visibility=Visibility.Visible;
         similarityCancellation?.Cancel();similarityCancellation?.Dispose();similarityCancellation=new();
         CancelSearchButton.Visibility=Visibility.Visible;
@@ -274,6 +285,7 @@ public sealed partial class MainPage : Page
                     : InfoBarSeverity.Informational;
                 Notice(originTitle,simSummary+(scopeWarning is null?"":" "+scopeWarning),simSeverity,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
             }
+            startupSearchSucceeded=true;
         } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
         catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}

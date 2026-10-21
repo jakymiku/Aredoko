@@ -1,5 +1,7 @@
 # 起動前チェックの継承pipe（PZ2・CPU実装）
 
+> **後続の明示所有起動**：[Portable起動経路](portable-startup-check.md)で同じworkerのapp_ready/session_completeまで追加した。preflight-only入口は非起動のまま。下は一回限りのpreflight実装時の記録で、旧結果/制限を保持。Windows build/native受入は現在も未実行。
+
 2026-10-21、基点`51f877469995d2bb1e0d497a5d3a13b1fb868ac3`。将来のnative起動画面と既存検査をつなぐ**一回限りの検査worker**を実装。PZ2 PARTIAL/R13 DOING/ALPHA未完/R14 PARTIAL。root Aredoko.exe/起動画面/portable launch/アプリreadyは未実装。
 
 ## 接続と信頼境界

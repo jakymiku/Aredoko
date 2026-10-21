@@ -45,7 +45,7 @@ class StartupProgress:
     @contextmanager
     def phase(self, stage, *, files=None, bytes=None):
         self.check_cancelled()
-        if stage not in {'manifest', 'file_hashes', 'inventory', 'runtime_layout', 'python_imports', 'media_probe'}:
+        if stage not in {'manifest', 'file_hashes', 'inventory', 'runtime_layout', 'python_imports', 'media_probe', 'backend_start', 'frontend_start'}:
             raise ValueError('Unknown startup stage')
         for total in (files, bytes):
             if total is not None and (type(total) is not int or total < 0):

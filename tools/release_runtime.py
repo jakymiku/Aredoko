@@ -197,10 +197,13 @@ def _verify_inventory(root, data, entries, expected, total, progress):
     if not REQUIRED_FILES <= expected:
         raise ValueError('Release inventory is missing required application files')
     activation = data.get('frontend_activation', 'unconfigured')
-    if activation not in ('unconfigured', 'msix'):
+    if activation not in ('unconfigured', 'msix', 'portable'):
         raise ValueError('Unsupported frontend activation')
     if activation == 'msix' and not {'frontend/Aredoko.msix', 'tools/packaged_frontend.py'} <= expected:
         raise ValueError('Release inventory is missing packaged frontend files')
+    if activation == 'portable' and (not {'Aredoko.exe', 'bin/portable-build.json', 'tools/portable_frontend.py', 'tools/startup_ipc.py', 'tools/startup_progress.py'} <= expected
+            or data.get('python_bundled') is not True or data.get('media_tools_bundled') is not True):
+        raise ValueError('Release inventory is missing portable runtime or bootstrap files')
     if actual != expected | {'manifest.json', 'sha256sums.txt'}:
         raise ValueError('Unlisted or missing release files')
     if type(data.get('files_count')) is not int or data['files_count'] != len(entries) or type(data.get('total_bytes')) is not int or data['total_bytes'] != total:

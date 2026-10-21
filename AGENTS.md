@@ -1,5 +1,11 @@
 # Aredoko — Codex / coding agent instructions
 
+## Portable startup source and home check preparation (2026-10-21; latest)
+
+Read [home check](STARTUP_CHECK.md) and [implementation/acceptance limits](docs/portable-startup-check.md). Small OS .NET Framework/Windows Forms bootstrap now has source for early native-control UI, exclusive handle-list pipe inheritance and retained process identity. Same worker owns full preflight→backend→explicit Portable frontend→initial data/Rendering ready→normal shutdown. Ready-before cancellation/EOF cleans only owned children; after ready never force-discard interactive drafts on owner loss. All hash/path/lease/instance guards and old MSIX activation remain. Portable receipts/self-contained config/root PE, fresh smoke data and CPU ZIP verification are implemented.
+
+Final related101 tests:96 PASS/Windows5 SKIP/0 failure,19.248s,new13 included. **Windows build/native acceptance is UNRUN.** No dotnet/csc/PowerShell/Windows here. This is source plus a concrete preparation path, not an EXE deployed to the PC or a finished ZIP. Prepare-Portable.cmd uses existing runtime/caches only, runs Core/publish/bootstrap selftest/import checks once, opens output folder but never the app. The user then opens Check-Startup.cmd (fresh dedicated DB/settings each run). Keep historic automated GUI3/3 cap; preparation is not reset authority. PZ2 PARTIAL/R13 DOING/ALPHA incomplete/R14 PARTIAL. PZ3 model acquisition/full native/clean Windows and viewer Core/WinUI/HoneyView gates remain. Preserve all U09/U11/U13/U14/audio/music/features/old failures/Alpha/sealed02. No downloads/Actions/private scan/GPU/GUI/main merge or replay of shutdown.
+
 ## PZ2 inherited-pipe worker (2026-10-21; latest source checkpoint)
 
 Read [startup pipe protocol/limits](docs/startup-pipe-protocol.md). Opt-in `--startup-preflight` accepts inherited stdin/stdout pipes and strict bounded hello/cancel JSONL. Owner EOF/invalid control/queue saturation cancels existing preflight; only held probes are reaped. Callbacks never write pipes synchronously;32-frame limit/partial writes/bounded terminal receipt/raw shutdown are tested. All SHA/ancestor checks/default CLI remain; new module explicitly staged, old artifacts/inventory unchanged.

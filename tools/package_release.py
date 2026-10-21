@@ -56,7 +56,7 @@ def validate_output(output):
         raise FileExistsError('Choose a new output directory; existing files are never removed')
 
 
-def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False, frontend_msix=None):
+def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False, frontend_msix=None, portable_frontend=None, bootstrap=None):
     output_dir = Path(os.path.abspath(output_dir))
     validate_output(output_dir)
     if not isinstance(version, str) or not 1 <= len(version) <= 64 or any(ord(c) < 32 for c in version):
@@ -65,7 +65,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         'app/production_server.py', 'app/storage_schema_v1.json', 'THIRD_PARTY_NOTICES.md',
         'docs/user-guide.md', 'tools/start-aredoko.ps1', 'tools/native-arguments.ps1',
         'tools/backup_library.py', 'tools/release_runtime.py', 'tools/launch_release.py',
-        'tools/probe_release_runtime.py', 'tools/startup_progress.py', 'tools/startup_ipc.py', 'tools/packaged_frontend.py', 'tools/install-release-shortcut.ps1')]
+        'tools/probe_release_runtime.py', 'tools/startup_progress.py', 'tools/startup_ipc.py', 'tools/portable_frontend.py', 'tools/packaged_frontend.py', 'tools/install-release-shortcut.ps1')]
     for path in required:
         plain_path(path)
     binary = REPO / 'src/Aredoko.WinUI/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64'
@@ -75,14 +75,25 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
     media_tools = Path(os.path.abspath(media_tools)) if media_tools is not None else None
     frontend_msix = Path(os.path.abspath(frontend_msix)) if frontend_msix is not None else None
     frontend = inspect_msix(frontend_msix) if frontend_msix is not None else None
+    portable_frontend = Path(os.path.abspath(portable_frontend)) if portable_frontend is not None else None
+    bootstrap = Path(os.path.abspath(bootstrap)) if bootstrap is not None else None
+    if (portable_frontend is None) != (bootstrap is None):raise ValueError('Portable publish and bootstrap must be supplied together')
+    if portable_frontend is not None:
+        if frontend_msix is not None or python_runtime is None or media_tools is None:
+            raise ValueError('Portable requires Python/media and cannot use an MSIX')
+        from portable_frontend import inspect_portable, inspect_bootstrap
+        inspect_portable(portable_frontend)
+        inspect_bootstrap(bootstrap)
+        binary = portable_frontend
+    activation = 'portable' if portable_frontend is not None else 'msix' if frontend is not None else 'unconfigured'
     sources = [binary, REPO / 'app', REPO / 'config', REPO / 'docs', REPO / 'tools']
-    sources += [p for p in (python_runtime, media_tools, frontend_msix) if p is not None]
+    sources += [p for p in (python_runtime, media_tools, frontend_msix, portable_frontend, bootstrap) if p is not None]
     for source in sources:
         if output_dir.is_relative_to(source) or source.is_relative_to(output_dir):
             raise ValueError('Output and payload source directories must not overlap')
     stem = python_layout(python_runtime, include_ai_runtime) if python_runtime is not None else None
     if media_tools is not None:media_layout(media_tools)
-    if frontend is None and not skip_build and not dry_run:
+    if frontend is None and portable_frontend is None and not skip_build and not dry_run:
         built = subprocess.run(['dotnet', 'build', 'src/Aredoko.WinUI/Aredoko.WinUI.csproj',
             '-c', 'Release', '-p:Platform=x64', '-p:SelfContained=true', '--no-restore'],
             cwd=REPO, capture_output=True, text=True, encoding='utf-8', errors='replace')
@@ -93,7 +104,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             plain_path(binary / name)
     if dry_run:
         return {'version': version, 'dry_run': True, 'pass': True,
-                'readiness': 'staging-only', 'frontend_activation': 'msix' if frontend is not None else 'unconfigured', 'python_bundled': python_runtime is not None,
+                'readiness': 'staging-only', 'frontend_activation': activation, 'python_bundled': python_runtime is not None,
                 'ai_runtime_bundled': include_ai_runtime, 'media_tools_bundled': media_tools is not None,
                 'runtime_imports_verified': False, 'clean_machine_activation_verified': False}
 
@@ -123,9 +134,10 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             copy_payload(source, config_dir / sub)
     for name in ('start-aredoko.ps1', 'native-arguments.ps1'):
         copy_payload(REPO / 'tools' / name, output_dir / name)
-    for name in ('backup_library.py', 'release_runtime.py', 'launch_release.py', 'probe_release_runtime.py', 'startup_progress.py', 'startup_ipc.py', 'packaged_frontend.py'):
+    for name in ('backup_library.py', 'release_runtime.py', 'launch_release.py', 'probe_release_runtime.py', 'startup_progress.py', 'startup_ipc.py', 'portable_frontend.py', 'packaged_frontend.py'):
         copy_payload(REPO / 'tools' / name, tools_dir / name)
-    copy_payload(REPO / 'tools/install-release-shortcut.ps1', output_dir / 'install-release-shortcut.ps1')
+    if portable_frontend is None:
+        copy_payload(REPO / 'tools/install-release-shortcut.ps1', output_dir / 'install-release-shortcut.ps1')
     if frontend_msix is not None:
         (output_dir / 'frontend').mkdir()
         copy_payload(frontend_msix, output_dir / PACKAGE_PATH)
@@ -140,14 +152,22 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
     docs_dir = output_dir / 'docs'; docs_dir.mkdir()
     for source in (REPO / 'docs').glob('*.md'):
         copy_payload(source, docs_dir / source.name)
-    (output_dir / 'USER_GUIDE.md').write_text(
-        '# Aredoko\n\n[利用ガイド](docs/user-guide.md)\n', encoding='utf-8')
-    (output_dir / 'Aredoko.cmd').write_text(
-        '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-aredoko.ps1" %*\r\n',
-        encoding='utf-8')
-    (output_dir / 'Install-Shortcut.cmd').write_text(
-        '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-release-shortcut.ps1"\r\nif errorlevel 1 pause\r\n',
-        encoding='utf-8')
+    if portable_frontend is None:
+        (output_dir / 'USER_GUIDE.md').write_text('# Aredoko\n\n[利用ガイド](docs/user-guide.md)\n', encoding='utf-8')
+        (output_dir / 'Aredoko.cmd').write_text(
+            '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-aredoko.ps1" %*\r\n', encoding='utf-8')
+        (output_dir / 'Install-Shortcut.cmd').write_text(
+            '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-release-shortcut.ps1"\r\nif errorlevel 1 pause\r\n', encoding='utf-8')
+    else:
+        (output_dir / 'USER_GUIDE.md').write_text(
+            '# Aredoko\n\nAredoko.exeを開くと通常のライブラリで起動します。\n\n'
+            'Check-Startup.cmdは毎回新しい専用の空のDBで起動を確認します。既存DBや設定は使いません。\n\n'
+            'DB/タグ/索引は従来のユーザーデータ領域に保存し、配布フォルダと分離します。\n\n'
+            '[利用ガイド](docs/user-guide.md) / [起動経路の実装と未検証事項](docs/portable-startup-check.md)\n', encoding='utf-8')
+        (output_dir / 'Aredoko.cmd').write_text('@echo off\r\nstart "" "%~dp0Aredoko.exe" %*\r\n', encoding='ascii')
+    if portable_frontend is not None:
+        copy_payload(bootstrap, output_dir / 'Aredoko.exe')
+        (output_dir / 'Check-Startup.cmd').write_text('@echo off\r\nstart "" "%~dp0Aredoko.exe" --startup-check\r\n', encoding='ascii')
     entries = []
     for path in sorted(output_dir.rglob('*')):
         if path.is_file():
@@ -158,7 +178,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
                 'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                 'platform': 'windows-x64', 'files_count': len(entries),
                 'total_bytes': sum(e['bytes'] for e in entries), 'entries': entries,
-                'readiness': 'staging-only', 'frontend_activation': 'msix' if frontend is not None else 'unconfigured', 'python_bundled': python_runtime is not None, 'ai_runtime_bundled': include_ai_runtime,
+                'readiness': 'staging-only', 'frontend_activation': activation, 'python_bundled': python_runtime is not None, 'ai_runtime_bundled': include_ai_runtime,
                 'media_tools_bundled': media_tools is not None, 'runtime_imports_verified': False,
                 'models_bundled': False,
                 'clean_machine_activation_verified': False}
@@ -181,9 +201,12 @@ def main():
     parser.add_argument('--media-tools', type=Path, help='Explicit FFmpeg/ffprobe directory with LICENSE.txt; never downloaded')
     parser.add_argument('--include-ai-runtime', action='store_true', help='Require AI dependencies in the supplied Python runtime (no model copying)')
     parser.add_argument('--frontend-msix', type=Path, help='Explicit self-contained frontend MSIX; its published payload supplies bin. No install/signing')
+    parser.add_argument('--portable-frontend', type=Path, help='Explicit Portable publish directory with build receipt')
+    parser.add_argument('--bootstrap', type=Path, help='Built root Aredoko.exe for the portable channel')
     args = parser.parse_args()
     package(args.output_dir, args.version, args.skip_build, args.check,
-            python_runtime=args.python_runtime, media_tools=args.media_tools, include_ai_runtime=args.include_ai_runtime, frontend_msix=args.frontend_msix)
+            python_runtime=args.python_runtime, media_tools=args.media_tools, include_ai_runtime=args.include_ai_runtime, frontend_msix=args.frontend_msix,
+            portable_frontend=args.portable_frontend, bootstrap=args.bootstrap)
 
 
 if __name__ == '__main__':
