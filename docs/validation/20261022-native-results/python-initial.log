@@ -1,0 +1,13 @@
+======================================================================
+FAIL: test_reconnected_item_requires_refresh_of_unavailable_snapshot (test_result_sessions.ResultSessionTests.test_reconnected_item_requires_refresh_of_unavailable_snapshot)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_result_sessions.py", line 110, in test_reconnected_item_requires_refresh_of_unavailable_snapshot
+    with self.assertRaises(ResultUnavailable): self.owner.read(self.sid, 60, 1)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ResultUnavailable not raised
+
+----------------------------------------------------------------------
+Ran 21 tests in 3.929s
+
+FAILED (failures=1)

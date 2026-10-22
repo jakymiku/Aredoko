@@ -140,7 +140,7 @@ class FrozenResult:
     def bytes(self):
         return self.path.stat().st_size
 
-    def _current(self, payload, *, capture=False):
+    def _current(self, payload, *, capture=False, for_viewer=False):
         # No access cache: registration/exclusion/ancestors/physical version are
         # checked even when the frozen metadata/rank was already read before.
         item_id = payload['id']
@@ -155,18 +155,29 @@ class FrozenResult:
                 raise ResultUnavailable('Result metadata changed; refresh results', conditions=self.conditions)
         signature = None
         if current['availability'] == 'present':
-            if is_folder_book(current['relative_path']):
-                signature = PreviewReader(self.catalog).tag_source(item_id)['revision']
-            else:
-                _, info = _safe_path(row['path'], row['relative_path'], return_info=True)
-                if not stat.S_ISREG(info.st_mode) or (info.st_size, info.st_mtime_ns) != (row['size_bytes'], row['mtime_ns']):
-                    raise ResultUnavailable('Result source changed; refresh results', conditions=self.conditions)
-                signature = [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+            try:
+                if is_folder_book(current['relative_path']):
+                    signature = PreviewReader(self.catalog).tag_source(item_id)['revision']
+                else:
+                    _, info = _safe_path(row['path'], row['relative_path'], return_info=True)
+                    if not stat.S_ISREG(info.st_mode) or (info.st_size, info.st_mtime_ns) != (row['size_bytes'], row['mtime_ns']):
+                        signature = 'unavailable'
+                    else:
+                        signature = [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+            except (OSError, PreviewUnavailable, ReaderChanged):
+                # A disconnected source must not prevent an ordinary metadata
+                # listing from being created. No source bytes are served here.
+                signature = 'unavailable'
         if capture:
             return {**payload, '_source_identity': signature}
         if signature != payload.get('_source_identity'):
             raise ResultUnavailable('Result source identity changed; refresh results', conditions=self.conditions)
-        return {key: value for key, value in payload.items() if key != '_source_identity'}
+        if for_viewer and (signature == 'unavailable' or current['availability'] != 'present'):
+            raise ResultUnavailable('Result source unavailable; refresh results', conditions=self.conditions)
+        result = {key: value for key, value in payload.items() if key != '_source_identity'}
+        if signature == 'unavailable':
+            result.update(availability='unavailable', source_state='unavailable')
+        return result
 
     def read(self, offset, limit):
         if type(offset) is not int or not 0 <= offset <= 9223372036854775807 or type(limit) is not int or not 1 <= limit <= 120:
@@ -175,7 +186,7 @@ class FrozenResult:
             self.check()
             if self.state != 'ready':
                 raise ResultUnavailable('Result session is still building', conditions=self.conditions)
-            if self.origin is not None: self._current(self.origin)
+            if self.origin is not None: self._current(self.origin, for_viewer=True)
             rows = self.db.execute('SELECT payload FROM results WHERE ordinal>=? ORDER BY ordinal LIMIT ?', (offset, limit)).fetchall()
             items = [self._current(json.loads(row[0])) for row in rows]
             self.check()
@@ -188,14 +199,14 @@ class FrozenResult:
             raise ValueError('Invalid result neighbor')
         with self.lock:
             self.check()
-            if self.origin is not None: self._current(self.origin)
+            if self.origin is not None: self._current(self.origin, for_viewer=True)
             origin = self.db.execute('SELECT ordinal,payload FROM results WHERE item_id=?', (item_id,)).fetchone()
             if origin is None:
                 raise ResultUnavailable('Current item is outside this result session', conditions=self.conditions)
-            self._current(json.loads(origin[1]))
+            self._current(json.loads(origin[1]), for_viewer=True)
             sign, order = ('>', 'ASC') if direction == 1 else ('<', 'DESC')
             row = self.db.execute(f'SELECT ordinal,payload FROM results WHERE image=1 AND ordinal{sign}? ORDER BY ordinal {order} LIMIT 1', (origin[0],)).fetchone()
-            target = None if row is None else {'ordinal': row[0], 'item': self._current(json.loads(row[1]))}
+            target = None if row is None else {'ordinal': row[0], 'item': self._current(json.loads(row[1]), for_viewer=True)}
             self.check()
             self.last_used = time.monotonic()
             return {'neighbor': target, 'current_id': item_id, 'conditions': self.conditions}

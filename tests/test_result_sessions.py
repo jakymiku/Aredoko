@@ -92,6 +92,25 @@ class ResultSessionTests(unittest.TestCase):
         os.utime(replacement, ns=(before.st_atime_ns, before.st_mtime_ns)); os.replace(replacement, target)
         with self.assertRaises(ResultUnavailable): self.owner.neighbor(self.sid, self.items[59]['id'], 1)
 
+    def test_initially_disconnected_item_does_not_break_metadata_listing(self):
+        target = self.items[60]
+        (self.media / target['relative_path']).unlink()
+        self.create()
+        result = self.owner.read(self.sid, 60, 1)
+        self.assertEqual(result['total'], 125)
+        self.assertEqual(result['items'][0]['id'], target['id'])
+        self.assertEqual(result['items'][0]['availability'], 'unavailable')
+        self.assertEqual(result['items'][0]['source_state'], 'unavailable')
+        self.assertNotIn('_source_identity', result['items'][0])
+        with self.assertRaises(ResultUnavailable): self.owner.neighbor(self.sid, self.items[59]['id'], 1)
+
+    def test_reconnected_item_requires_refresh_of_unavailable_snapshot(self):
+        import os
+        path = self.media / self.items[60]['relative_path']; data = path.read_bytes(); before = path.stat()
+        path.unlink(); self.create(); path.write_bytes(data)
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+        with self.assertRaises(ResultUnavailable): self.owner.read(self.sid, 60, 1)
+
     def test_physical_source_change_is_refresh_error_not_end_of_sequence(self):
         self.create(); (self.media / self.items[60]['relative_path']).write_bytes(b'changed')
         with self.assertRaises(ResultUnavailable): self.owner.neighbor(self.sid, self.items[59]['id'], 1)

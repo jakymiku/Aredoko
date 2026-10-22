@@ -57,7 +57,7 @@ internal sealed class ImageViewerView : Grid, IDisposable
     private readonly TextBlock count = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock zoom = new() { Text = "倍率 100%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
-    private bool busy, disposed, loaded;
+    private bool busy, disposed, loaded, navigating;
     private int version;
 
     public ImageViewerView(LibraryApi api, ImageViewerSequence sequence)
@@ -136,12 +136,12 @@ internal sealed class ImageViewerView : Grid, IDisposable
     {
         title.Text = sequence.Current.Title; ToolTipService.SetToolTip(title, title.Text);
         count.Text = $"{sequence.Position + 1} / {sequence.Count}";
-        ToolTipService.SetToolTip(count, "現在の検索結果ページに含まれる画像");
+        ToolTipService.SetToolTip(count, sequence.IsSession ? "検索結果内の位置。画像だけを検索順に移動します" : "現在の検索結果ページに含まれる画像");
         AutomationProperties.SetName(image, title.Text + "の画像");
     }
     private void UpdateControls()
     {
-        previous.IsEnabled = !disposed && sequence.HasPrevious; next.IsEnabled = !disposed && sequence.HasNext;
+        previous.IsEnabled = !disposed && !navigating && sequence.HasPrevious; next.IsEnabled = !disposed && !navigating && sequence.HasNext;
         zoom.Text = loaded?$"倍率 {viewport.ZoomFactor/OriginalZoom() * 100:0}%":"倍率 —";
         zoomOut.IsEnabled = loaded && !busy && viewport.ZoomFactor > viewport.MinZoomFactor;
         zoomIn.IsEnabled = loaded && !busy && viewport.ZoomFactor < viewport.MaxZoomFactor; actualSize.IsEnabled=loaded&&!busy; fit.IsEnabled = loaded && !busy;
@@ -249,9 +249,25 @@ internal sealed class ImageViewerView : Grid, IDisposable
 
     public async Task MoveAsync(int direction)
     {
-        if (disposed || !sequence.TryMove(direction)) return;
+        if (disposed || navigating) return;
+        var moved = false; navigating = true; UpdateControls();
+        try { moved = await sequence.TryMoveAsync(direction, lifetime.Token); }
+        catch (OperationCanceledException) when (disposed || lifetime.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (disposed) return;
+            failed = true; ShowChrome();
+            ViewerNotice.Set(status, ex is ResultSessionException
+                ? "検索結果が更新されたか、有効期限が切れました。閉じて同じ条件で再検索してください。"
+                : "次の画像を取得できません。接続を確認して、もう一度操作してください。");
+            AppLog.Error(ex);
+        }
+        finally { navigating = false; if (!disposed) UpdateControls(); }
+        if (!moved || disposed) return;
         actualPixels=false;version++; loaded = false; StopAnimation(true); retry.IsEnabled = false;
         UpdateIdentity(); ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
+        // New navigation may cancel a slow foreground image while the old
+        // pipeline drains; only neighbor lookup itself is single-flight.
         if (busy) { request?.Cancel(); return; }
         await OpenAsync();
     }

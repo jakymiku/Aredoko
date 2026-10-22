@@ -46,9 +46,11 @@ public sealed class ResultSessionClient(HttpClient client)
         await using var source = await response.Content.ReadAsStreamAsync(cancellation);
         var bytes = new byte[(int)length]; await source.ReadExactlyAsync(bytes, cancellation);
         var root = JsonNode.Parse(bytes)?.AsObject() ?? throw new InvalidDataException("Invalid result response");
-        if (response.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.Gone)
+        if (response.StatusCode == HttpStatusCode.Gone ||
+            response.StatusCode == HttpStatusCode.Conflict && root["error_code"]?.GetValue<string>() == "result_session_changed")
             throw new ResultSessionException(response.StatusCode, root["conditions"]?.ToJsonString(), root["current_id"]?.GetValue<int>());
-        if (!response.IsSuccessStatusCode) throw new ArchiveReadException(response.StatusCode);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(ErrorText.FromResponse(root.ToJsonString(), (int)response.StatusCode));
         return root;
     }
 }
@@ -78,7 +80,15 @@ public sealed class ResultSession(HttpClient client, string id, JsonObject condi
             root["total"]?.GetValue<int>() != Total || root["state"]?.GetValue<string>() != "ready" ||
             root["items"] is not JsonArray items || items.Count != Math.Min(limit, Math.Max(0, Total - offset)))
             throw new InvalidDataException("Invalid frozen result range");
-        return Protocol.ParseSearch(root.ToJsonString());
+        if (conditions["mode"]?.GetValue<string>() == "similar")
+        {
+            root["page"] = offset / limit;
+            return SimilaritySearch.Parse(root.ToJsonString(), conditions["item_id"]!.GetValue<int>(), offset / limit, limit, offset);
+        }
+        var result = Protocol.ParseSearch(root.ToJsonString());
+        if (result.Items.Any(row => row.Id < 1) || result.Items.Select(row => row.Id).Distinct().Count() != result.Items.Count)
+            throw new InvalidDataException("Invalid frozen result identities");
+        return result;
     }
 
     public async Task<ResultNeighbor?> NeighborAsync(int itemId, int direction, CancellationToken cancellation)

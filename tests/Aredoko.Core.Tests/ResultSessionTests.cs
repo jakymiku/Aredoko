@@ -54,6 +54,15 @@ internal static class ResultSessionTests
         catch (ResultSessionException error) { preserved = error.Status == HttpStatusCode.Gone && error.CurrentId == 60 && error.Conditions!.Contains("generated"); }
         check(preserved, "expiry is an explicit refresh with current ID and conditions");
         await session.DisposeAsync(); await session.DisposeAsync(); check(closes == 1, "result session owns one idempotent close");
+        using var missingHandler = new Stub(request => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/close")
+            ? Reply(new JsonObject { ["closed"] = true })
+            : Reply(new JsonObject { ["error"] = "AI環境が未導入です。", ["error_code"] = "ai_unavailable" }, HttpStatusCode.ServiceUnavailable)));
+        using var missing = new HttpClient(missingHandler) { BaseAddress = http.BaseAddress };
+        var explained = false;
+        try { await new ResultSessionClient(missing).CreateAsync(conditions, CancellationToken.None); }
+        catch (InvalidOperationException error) { explained = error.Message.Contains("未導入"); }
+        check(explained, "result creation preserves AI missing guidance rather than reporting image decoder busy");
+
     }
     private static HttpResponseMessage Reply(JsonObject body, HttpStatusCode status = HttpStatusCode.OK) => new(status)
     { Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body.ToJsonString())) };

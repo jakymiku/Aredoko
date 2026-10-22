@@ -1,6 +1,6 @@
 # P2 固定順序の結果セッション（backend/API・Core契約）
 
-2026-10-22。P1B実装 `18c366e` に続く小区分。**P2はPARTIAL**。backend/APIとCoreクライアントを実装したが、MainPage/ImageViewerSequenceはまだ旧page配列を使用する。**現在のWinUIで60件を越えて送れるようになったとは報告しない。** P3の仮想化・本格UIへ先走らず、次はこの契約へのnative接続を行う。
+2026-10-22。P1B実装 `18c366e` に続く小区分。**P2はPARTIAL**。backend/API・Core clientに続き、[native所有session/range/非同期neighbor/選択復帰をsource接続](result-session-native-connection.md)した。Core/WinUI build/native受入は未確認で、現在の配布で60件を越えて送れると報告しない。
 
 ## API
 
@@ -47,7 +47,7 @@ rangeは既存検索metadata＋items・offset/limit・conditions・session_idを
 
 生logはignored `data/ai-ui/result-sessions-20261022/`。実model/GPU/private scan/GUI/Windows/.NET/Actionsは実行せず、旧Alpha/basic03/shortcut/DB/schema/元ファイルは変更していない。P1B/P2をnative受入済み、M1/M2完成としない。
 
-## 次の1件
+## 次の1件（下記はbackend実装時の履歴、最新はnative接続文書）
 
 Windows依存のあるUI接続を始める前に、既存SDK/cacheで追加CoreテストとPortable buildを一回確認。MainPageで条件ごとにsessionを所有し、page追加取得でrangeを使う。ImageViewerSequenceを非同期neighborへ接続し、古い応答/expiryを拒否、close後に最後のitemの選択とscrollを戻す。閲覧によるhistory追加ではsessionを作り直さない。GUIを再実行できなければ未確認を残し、独立backend項目へ移る。既存GUI cap・raw失敗・全機能/OCR保留を維持。
 

@@ -111,6 +111,15 @@ static class SimilarityTests
         var largeResult=SimilaritySearch.Parse(large.ToJsonString(),7,833);
         check(largeResult.Total==50001&&largeResult.Items.Count==21&&largeResult.SearchComplete&&largeResult.CoverageLimit is null,
               "complete similarity above 10k accepts its final page with honest counts");
+        var block=visual.DeepClone().AsObject();block["total"]=125;block["limit"]=120;block["page"]=0;
+        var blockItems=new JsonArray();
+        for(var i=0;i<120;i++){var candidate=visual["items"]![0]!.DeepClone();candidate["id"]=1000+i;blockItems.Add(candidate);}
+        block["items"]=blockItems;
+        check(SimilaritySearch.Parse(block.ToJsonString(),7,0,120,0).Items.Count==120,"session similarity accepts bounded 120-item range with strict origin validation");
+        block["items"]![0]!["similarity_origin_id"]=9;
+        var blockRejected=false;
+        try{SimilaritySearch.Parse(block.ToJsonString(),7,0,120,0);}catch(InvalidDataException){blockRejected=true;}
+        check(blockRejected,"session similarity keeps origin validation across range adaptation");
         foreach(var change in new (string Field,JsonNode? Value)[]{("id",7),("similarity_origin_id",9),("kind","audio"),("semantic_score",2),("semantic_score",null)})
         {
             var broken=visual.DeepClone().AsObject();broken["items"]![0]![change.Field]=change.Value;

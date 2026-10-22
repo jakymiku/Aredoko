@@ -35,8 +35,9 @@ public static class SimilaritySearch
         _ => "類似検索を利用できません。元の検索に戻るか、AI索引の設定を確認してください。"
     };
 
-    public static SearchResponse Parse(string text,int expectedId,int expectedPage)
+    public static SearchResponse Parse(string text,int expectedId,int expectedPage,int expectedLimit=60,int? expectedOffset=null)
     {
+        if(expectedLimit is <1 or >120 || expectedOffset is <0)throw new ArgumentOutOfRangeException(nameof(expectedLimit));
         try
         {
             using var doc=JsonDocument.Parse(text);var root=doc.RootElement;
@@ -47,7 +48,7 @@ public static class SimilaritySearch
             var originKind=root.TryGetProperty("origin_kind",out var okProp)?okProp.GetString():null;
             if(root.GetProperty("origin_id").GetInt32()!=expectedId||root.GetProperty("page").GetInt32()!=expectedPage||
                root.GetProperty("mode").GetString()!="similar"||source is not ("cover" or "acoustic")||
-               root.GetProperty("score_kind").GetString()!="cosine"||root.GetProperty("limit").GetInt32()!=60||
+               root.GetProperty("score_kind").GetString()!="cosine"||root.GetProperty("limit").GetInt32()!=expectedLimit||
                status is not ("ready" or "unindexed" or "unsupported_profile")||
                revision is null||revision.Length!=64||revision.Any(c=>!(c is >= '0' and <= '9' or >= 'a' and <= 'f'))||
                string.IsNullOrWhiteSpace(profile)||profile.Length>256||
@@ -55,10 +56,10 @@ public static class SimilaritySearch
                (source == "acoustic" && originKind != "audio"))
                 throw new InvalidDataException("類似検索の応答が要求と一致しません。検索をやり直してください。");
             var result=Protocol.ParseSearch(text);
-            if(result.Total<0||(!result.SearchComplete&&result.Total>10000)||result.Items.Count>60||result.Items.Count>result.Total||
+            if(result.Total<0||(!result.SearchComplete&&result.Total>10000)||result.Items.Count>expectedLimit||result.Items.Count>result.Total||
                (result.SearchComplete&&result.Total!=result.IndexedTotal)||
                (status!="ready"&&(result.Total!=0||result.Items.Count!=0))||
-               result.Items.Count!=Math.Min(60,Math.Max(0,result.Total-(long)expectedPage*60))||
+               result.Items.Count!=Math.Min(expectedLimit,Math.Max(0,result.Total-(expectedOffset is int offset ? offset : (long)expectedPage*expectedLimit)))||
                result.Items.Select(row=>row.Id).Distinct().Count()!=result.Items.Count||
                result.Items.Any(row=>row.Id<1||row.Id==expectedId||row.SimilarityOriginId!=expectedId||
                    (source == "cover" ? row.Kind is not ("image" or "book" or "archive" or "video") : row.Kind != "audio")||

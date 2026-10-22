@@ -9,7 +9,7 @@
 | P0 基準整理・UI-0 | 計画反映済み。アプリ版/commit/channel/実行場所の診断表示、共通リソース整備は未完 | 小さな縦切りとして継続する。P0全完了とはしない |
 | P1A 画像の実形式判定 | CPU_DONE `0f2e005`。Python37/Core771/Portable build合格、最新handoff参照 | 実機表示未受入と配布未更新を明記 |
 | P1B 逐次アニメーション再生 | source/API/WinUI接続・Python確認済み。[証拠/限界](animation-streaming.md) | Core/WinUI build/native未検証を残しP2へ。全PNG待ち/64枚切捨て/decoder再openを撤去 |
-| P2 結果セッション・連続閲覧 | PARTIAL。backend/API・Core契約あり。[証拠/限界](result-sessions.md) | native MainPage/非同期sequenceへ接続。現在のGUI60件境界は未解消 |
+| P2 結果セッション・連続閲覧 | PARTIAL。native接続sourceあり。[証拠/限界](result-session-native-connection.md) | Core/Portable buildと実機60/120境界・選択復帰は未検証 |
 | P3 一覧・サムネイル・UI-2 | 未実装 | 仮想化と完成形主画面を一体で実装 |
 | P4 複数棚・整理導線 | 未実装 | U09/U11/U14等を統合 |
 | P5 起動中backup/restore | 未実装 | U13と設定形式不整合を解消 |
