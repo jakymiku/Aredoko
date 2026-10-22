@@ -1,0 +1,40 @@
+======================================================================
+FAIL: test_cancelled_visible_waiter_demotes_without_cancelling_nearby (test_thumbnail_priority.PriorityTests.test_cancelled_visible_waiter_demotes_without_cancelling_nearby)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_thumbnail_priority.py", line 61, in test_cancelled_visible_waiter_demotes_without_cancelling_nearby
+    def test_cancelled_visible_waiter_demotes_without_cancelling_nearby(self): self.exercise_queue(promote=True, demote=True)
+                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_thumbnail_priority.py", line 56, in exercise_queue
+    else: self.assertIsInstance(value, bytes, (name, value))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: PreviewBusyError('Preview workers busy') is not an instance of <class 'bytes'> : ('visible', PreviewBusyError('Preview workers busy'))
+
+======================================================================
+FAIL: test_visible_overtakes_older_nearby (test_thumbnail_priority.PriorityTests.test_visible_overtakes_older_nearby)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_thumbnail_priority.py", line 59, in test_visible_overtakes_older_nearby
+    def test_visible_overtakes_older_nearby(self): self.exercise_queue()
+                                                   ^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_thumbnail_priority.py", line 56, in exercise_queue
+    else: self.assertIsInstance(value, bytes, (name, value))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: PreviewBusyError('Preview workers busy') is not an instance of <class 'bytes'> : ('visible', PreviewBusyError('Preview workers busy'))
+
+======================================================================
+FAIL: test_visible_waiter_promotes_shared_queued_work (test_thumbnail_priority.PriorityTests.test_visible_waiter_promotes_shared_queued_work)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_thumbnail_priority.py", line 60, in test_visible_waiter_promotes_shared_queued_work
+    def test_visible_waiter_promotes_shared_queued_work(self): self.exercise_queue(promote=True)
+                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/8ba3c9ba85b2/Aredoko/tests/test_thumbnail_priority.py", line 56, in exercise_queue
+    else: self.assertIsInstance(value, bytes, (name, value))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: PreviewBusyError('Preview workers busy') is not an instance of <class 'bytes'> : ('nearby', PreviewBusyError('Preview workers busy'))
+
+----------------------------------------------------------------------
+Ran 46 tests in 2.651s
+
+FAILED (failures=3)

@@ -321,15 +321,17 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     try:
                         match=re.fullmatch(r'/api/library/thumbnail/([1-9][0-9]{0,18})',path)
                         if match is None or int(match[1])>9223372036854775807:raise ValueError('Invalid item')
-                        query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=1)
-                        if set(query)!={'edge'} or len(query['edge'])!=1 or query['edge'][0] not in ('128','256','512','1024'):
+                        query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
+                        if 'edge' not in query or set(query)-{'edge','priority'} or len(query['edge'])!=1 or query['edge'][0] not in ('128','256','512','1024'):
                             raise ValueError('Invalid thumbnail size')
+                        priority=query.get('priority',['visible'])
+                        if len(priority)!=1 or priority[0] not in ('visible','nearby'):raise ValueError('Invalid thumbnail priority')
                         def disconnected():
                             try:
                                 readable,_,_=select.select([self.connection],[],[],0)
                                 return bool(readable) and self.connection.recv(1,socket.MSG_PEEK)==b''
                             except OSError:return True
-                        data=thumbnails.read(int(match[1]),int(query['edge'][0]),cancelled=disconnected)
+                        data=thumbnails.read(int(match[1]),int(query['edge'][0]),priority=priority[0],cancelled=disconnected)
                         return self.send(200,data,'image/png')
                     except ThumbnailCancelled:
                         return self.send(409,{'error':'Thumbnail cancelled'})

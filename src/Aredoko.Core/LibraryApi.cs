@@ -115,11 +115,12 @@ public sealed class LibraryApi : IDisposable
     public async Task<byte[]?> PreviewAsync(int id, CancellationToken cancellation)
         => await ReadPreviewAsync($"api/library/preview/{id}", cancellation);
 
-    public Task<byte[]?> ThumbnailAsync(int id, int edge, CancellationToken cancellation)
+    public Task<byte[]?> ThumbnailAsync(int id, int edge, CancellationToken cancellation, bool nearby = false)
     {
         if (id < 1) throw new ArgumentOutOfRangeException(nameof(id));
         if (edge is not (128 or 256 or 512 or 1024)) throw new ArgumentOutOfRangeException(nameof(edge));
-        return ReadPreviewAsync($"api/library/thumbnail/{id}?edge={edge}", cancellation, requirePng: true);
+        var priority = nearby ? "&priority=nearby" : "";
+        return ReadPreviewAsync($"api/library/thumbnail/{id}?edge={edge}{priority}", cancellation, requirePng: true);
     }
 
     private async Task<byte[]?> ReadPreviewAsync(string route, CancellationToken cancellation, bool requirePng = false)

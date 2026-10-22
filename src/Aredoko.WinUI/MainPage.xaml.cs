@@ -327,7 +327,12 @@ public sealed partial class MainPage : Page
                 var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
                 var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
                 AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");text.Children.Add(title);
-                text.Children.Add(new TextBlock { Text = $"{row.MatchLabel}{KindLabel(row.Kind)} · {AvailabilityLabel(row.Availability)} · {string.Join("、", row.Tags)}", TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
+                ToolTipService.SetToolTip(title, row.Title);
+                var availability = row.Availability == "present" ? "" : AvailabilityLabel(row.Availability);
+                var metadata = tiles ? row.MatchLabel + availability
+                    : $"{row.MatchLabel}{KindLabel(row.Kind)}{(availability.Length > 0 ? " · " + availability : "")} · {string.Join("、", row.Tags)}";
+                if (!string.IsNullOrWhiteSpace(metadata))
+                    text.Children.Add(new TextBlock { Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
                 if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
                 if(row.Proposal is ProposalMatch proposal){var prop=new TextBlock {Text=proposal.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(prop,$"ProposalEvidence{row.Id}");text.Children.Add(prop);}
                 if(row.AIPage is AIPageMatch aiPage){var pimage=new TextBlock {Text=aiPage.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(pimage,$"AIPageEvidence{row.Id}");text.Children.Add(pimage);}
@@ -356,20 +361,33 @@ public sealed partial class MainPage : Page
                 item.DoubleTapped+=async(_,args)=>{args.Handled=true;await OpenPreviewAsync(row.Id);};
                 var renderToken = renderCancellation.Token;
                 CancellationTokenSource? visible = null;
-                item.Loaded += async (_, _) =>
+                var requestedEdge = 0;
+                long thumbnailVersion = 0;
+                async Task RefreshThumbnailAsync(bool force = false)
                 {
+                    if (!item.IsLoaded || renderToken.IsCancellationRequested || disposed) return;
+                    var edge = ThumbnailPolicy.EdgeFor(image.Width, image.Height, XamlRoot?.RasterizationScale ?? 1);
+                    if (!force && requestedEdge == edge) return;
+                    requestedEdge = edge;
+                    var version = ++thumbnailVersion;
                     visible?.Cancel(); visible?.Dispose(); visible = CancellationTokenSource.CreateLinkedTokenSource(renderToken);
                     var cancellation = visible.Token;
                     try
                     {
-                        var bitmap = await thumbnails.GetAsync(row, cancellation);
-                        if (cancellation.IsCancellationRequested || disposed) return;
+                        // Coalesce resize/slider events; keep the last image while a
+                        // larger derivative is prepared, and reject recycled replies.
+                        if (!force) await Task.Delay(80, cancellation);
+                        var bitmap = await thumbnails.GetAsync(row, cancellation, edge);
+                        if (cancellation.IsCancellationRequested || disposed || version != thumbnailVersion) return;
                         image.Source = bitmap;
-                        previewStatus.Text = bitmap is null ? "プレビューなし" : row.Kind == "image" ? "画像プレビュー" : row.Kind == "video" ? "動画の先頭フレーム" : "先頭画像";
+                        previewStatus.Text = bitmap is null ? "プレビューなし" : "";
+                        previewStatus.Visibility = bitmap is null ? Visibility.Visible : Visibility.Collapsed;
                     }
                     catch (OperationCanceledException) { }
-                };
-                item.Unloaded += (_, _) => { visible?.Cancel();visible?.Dispose();visible=null;image.Source = null; };
+                }
+                item.Loaded += async (_, _) => await RefreshThumbnailAsync(force: true);
+                image.SizeChanged += async (_, _) => await RefreshThumbnailAsync();
+                item.Unloaded += (_, _) => { ++thumbnailVersion; requestedEdge=0; visible?.Cancel();visible?.Dispose();visible=null;image.Source = null; };
                 Items.Items.Add(item);
             }
         }
@@ -517,7 +535,8 @@ public sealed partial class MainPage : Page
         DetailPreview.Source = null; DetailPreview.Visibility = Visibility.Collapsed;
         try
         {
-            var image = await thumbnails.GetAsync(row, cancellation);
+            var edge = ThumbnailPolicy.EdgeFor(Math.Max(160, Math.Max(DetailPreview.ActualWidth, Editor.ActualWidth)), Math.Max(160, DetailPreview.ActualHeight), XamlRoot?.RasterizationScale ?? 1);
+            var image = await thumbnails.GetAsync(row, cancellation, edge);
             if (cancellation.IsCancellationRequested || active?.Id != row.Id || disposed) return;
             DetailPreview.Source = image; DetailPreview.Visibility = image is null ? Visibility.Collapsed : Visibility.Visible;
         }
@@ -2026,6 +2045,6 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){disposed=true;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){disposed=true;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

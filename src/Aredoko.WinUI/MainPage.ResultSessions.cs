@@ -8,6 +8,7 @@ namespace Aredoko_WinUI;
 public sealed partial class MainPage
 {
     private ResultSession? resultSession;
+    private ResultWindow? resultWindow;
     private int resultPageSize = 60;
 
     private static async Task CloseResultSessionAsync(ResultSession? session)
@@ -31,6 +32,7 @@ public sealed partial class MainPage
             }
             else
             {
+                resultWindow?.Dispose(); resultWindow = null;
                 var previous = resultSession; resultSession = null;
                 await CloseResultSessionAsync(previous);
                 cancellation.ThrowIfCancellationRequested();
@@ -43,9 +45,12 @@ public sealed partial class MainPage
                     throw new OperationCanceledException(cancellation);
                 }
                 resultSession = session;
+                resultWindow = new ResultWindow(session.Total, session.RangeAsync);
             }
-            var result = await session.RangeAsync(checked(requestedPage * pageSize), pageSize, cancellation);
+            var window = resultWindow ?? throw new InvalidOperationException("Result window is unavailable");
+            var result = await window.ReadAsync(checked(requestedPage * pageSize), pageSize, cancellation);
             cancellation.ThrowIfCancellationRequested();
+            _ = WarmResultWindowAsync(window, cancellation);
             return result;
         }
         catch
@@ -53,10 +58,19 @@ public sealed partial class MainPage
             // An old cancelled read must not close a session a newer request uses.
             if (searches.IsCurrent(version) && ReferenceEquals(resultSession, session))
             {
+                resultWindow?.Dispose(); resultWindow = null;
                 resultSession = null; await CloseResultSessionAsync(session);
             }
             throw;
         }
+    }
+
+    private static async Task WarmResultWindowAsync(ResultWindow window, CancellationToken cancellation)
+    {
+        try { await window.PrefetchAsync(cancellation); }
+        catch (OperationCanceledException) { }
+        catch (ObjectDisposedException) { }
+        catch (Exception ex) { AppLog.Error(ex); } // foreground range revalidates and explains expiry
     }
 
     private async Task RestoreViewerSelectionAsync(int itemId, int ordinal, ResultSession session, bool detailsWereOpen)

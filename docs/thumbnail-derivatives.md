@@ -1,5 +1,7 @@
 # P3 派生サムネイル基盤（PARTIAL）
 
+> 続き: [120×5結果window・可視優先・DPI/復号予約](p3-result-window.md)。以下の未完欄は前の段階の記録で、最新状態はリンク先とhandoffを優先。
+
 2026-10-22。P2 native source接続 `9fd565c01d269450c538fa8a47a0f3210575364a` の後に追加。既存原本・AI代表frame・DB schema・旧preview APIは維持する。完成形UI/仮想化全体の完了ではない。
 
 ## 実装

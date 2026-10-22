@@ -173,9 +173,9 @@ class ThumbnailTests(unittest.TestCase):
         with patch.object(self.owner, '_decode', side_effect=decode):
             a = threading.Thread(target=run, args=(128,)); b = threading.Thread(target=run, args=(256,))
             a.start(); b.start(); entered.wait(3)
-            queued = threading.Event(); acquire = self.owner.slots.acquire
+            queued = threading.Event(); acquire = self.owner._acquire
             def acquiring(*args, **kwargs): queued.set(); return acquire(*args, **kwargs)
-            with patch.object(self.owner.slots, 'acquire', side_effect=acquiring):
+            with patch.object(self.owner, '_acquire', side_effect=acquiring):
                 c = threading.Thread(target=run, args=(512, cancel.is_set)); c.start()
                 self.assertTrue(queued.wait(3)); cancel.set(); c.join(3)
             release.set(); a.join(3); b.join(3)
@@ -270,6 +270,7 @@ class ThumbnailHTTPTests(unittest.TestCase):
         self.assertEqual(status, 200); self.assertTrue(data.startswith(b'\x89PNG'))
         self.assertEqual(headers['Content-Type'], 'image/png'); self.assertEqual(headers['Cache-Control'], 'no-store')
         self.assertEqual(request('?edge=128', 'bad-token')[0], 403)
-        for suffix in ('', '?edge=129', '?edge=128&edge=256', '?edge=128&extra=1', '?edge=0128', '/extra?edge=128'):
+        for suffix in ('', '?edge=129', '?edge=128&edge=256', '?edge=128&extra=1', '?edge=0128', '?edge=128&priority=urgent', '?edge=128&priority=visible&priority=nearby', '/extra?edge=128'):
             self.assertEqual(request(suffix)[0], 400)
-        self.catalog.set_excludes(self.root, ['*.png']); self.assertEqual(request('?edge=128')[0], 404)
+        self.assertEqual(request('?edge=128&priority=nearby')[0], 200)
+        self.catalog.set_excludes(self.root, ['*.png']); self.assertEqual(request('?edge=128&priority=visible')[0], 404)

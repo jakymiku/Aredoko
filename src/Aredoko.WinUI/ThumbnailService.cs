@@ -8,7 +8,7 @@ internal sealed class ThumbnailService(LibraryApi api)
 {
     private readonly SemaphoreSlim workers = new(2, 2);
 
-    public async Task<BitmapImage?> GetAsync(MediaRow row, CancellationToken cancellation)
+    public async Task<BitmapImage?> GetAsync(MediaRow row, CancellationToken cancellation, int edge = PreviewPolicy.Edge)
     {
         if (row.Availability != "present" || (row.Kind != "image" && row.Kind != "book" && row.Kind != "archive" && row.Kind != "video")) return null;
         await workers.WaitAsync(cancellation);
@@ -20,7 +20,7 @@ internal sealed class ThumbnailService(LibraryApi api)
             // Video's existing preview endpoint also emits a bounded 256px PNG.
             var png = row.Kind == "video"
                 ? await api.PreviewAsync(row.Id, cancellation)
-                : await api.ThumbnailAsync(row.Id, PreviewPolicy.Edge, cancellation);
+                : await api.ThumbnailAsync(row.Id, edge, cancellation);
             if (png is null) return null;
             using var stream = new InMemoryRandomAccessStream();
             using (var writer = new DataWriter(stream))

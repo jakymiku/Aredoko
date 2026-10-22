@@ -10,7 +10,7 @@
 | P1A 画像の実形式判定 | CPU_DONE `0f2e005`。Python37/Core771/Portable build合格、最新handoff参照 | 実機表示未受入と配布未更新を明記 |
 | P1B 逐次アニメーション再生 | source/API/WinUI接続・Python確認済み。[証拠/限界](animation-streaming.md) | Core/WinUI build/native未検証を残しP2へ。全PNG待ち/64枚切捨て/decoder再openを撤去 |
 | P2 結果セッション・連続閲覧 | PARTIAL。native接続sourceあり。[証拠/限界](result-session-native-connection.md) | Core/Portable buildと実機60/120境界・選択復帰は未検証 |
-| P3 一覧・サムネイル・UI-2 | PARTIAL。[派生thumbnail/共有/RAM・一時disk cache](thumbnail-derivatives.md) sourceあり | 可視優先/DPI/decoded budget・仮想化と完成形主画面、Windows確認は未完 |
+| P3 一覧・サムネイル・UI-2 | PARTIAL。[120×5共通window/可視優先/DPI接続](p3-result-window.md) source追加 | 標準container/連続scroll/完成形UI、実decoded RAM・Core/Windows確認は未完 |
 | P4 複数棚・整理導線 | 未実装 | U09/U11/U14等を統合 |
 | P5 起動中backup/restore | 未実装 | U13と設定形式不整合を解消 |
 | P6 配布・UI-3 | LD1–3/LD4a基盤あり、残り未完 | LD4b→LD5→LD6を既存実装から継続 |

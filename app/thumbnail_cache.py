@@ -4,9 +4,11 @@ The request which creates a job does its work; other requests share its result.
 Disconnecting that request only abandons work when no other waiter needs it.
 """
 from collections import OrderedDict
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import io
 import threading
+import time
 
 from previews import PreviewUnavailable, PreviewBusyError, ReaderChanged
 from image_animations import MAX_IMAGE_PIXELS, MAX_RENDERED_PNG_BYTES
@@ -23,11 +25,55 @@ class ThumbnailCancelled(Exception):
     pass
 
 
+class DecodeBudget:
+    """64 MiB estimated decoded-work admission; one oversize image runs alone.
+
+    Pillow/native codec heap and compressed inputs are not hard RSS bounded.
+    Rejecting previously supported large originals just to meet an estimate
+    would break browsing, so oversize work takes the entire reservation.
+    """
+    def __init__(self, capacity=64 * 1024 * 1024):
+        self.capacity = capacity
+        self.used = 0
+        self.changed = threading.Condition()
+        self.closed = False
+
+    @contextmanager
+    def reserve(self, estimate, stopped):
+        charge = min(self.capacity, max(1, estimate))
+        while True:
+            if stopped():
+                raise ThumbnailCancelled()
+            with self.changed:
+                if self.closed:
+                    raise ThumbnailCancelled()
+                if self.used + charge <= self.capacity:
+                    self.used += charge
+                    break
+                self.changed.wait(.05)
+        try:
+            if stopped():
+                raise ThumbnailCancelled()
+            yield
+        finally:
+            with self.changed:
+                self.used -= charge
+                self.changed.notify_all()
+
+    def close(self):
+        with self.changed:
+            self.closed = True
+            self.changed.notify_all()
+
+
 @dataclass
 class _Job:
     ready: threading.Event = field(default_factory=threading.Event)
     stop: threading.Event = field(default_factory=threading.Event)
     waiters: int = 0
+    visible_waiters: int = 0
+    order: int = 0
+    running: bool = False
     result: tuple | None = None
     error: Exception | None = None
 
@@ -38,12 +84,15 @@ class ThumbnailCache:
         self.max_bytes = max_bytes
         self.max_entries = max_entries
         self.lock = threading.Lock()
-        self.slots = threading.BoundedSemaphore(2)
+        self.changed = threading.Condition(self.lock)
+        self.active = 0
+        self.order = 0
         self.cache = OrderedDict()
         self.bytes = 0
         self.jobs = {}
         self.closed = False
         self.disk = ThumbnailDisk()
+        self.decode_budget = DecodeBudget()
 
     def close(self):
         with self.lock:
@@ -51,8 +100,50 @@ class ThumbnailCache:
             self.cache.clear()
             self.bytes = 0
             self.disk.close()
+            self.decode_budget.close()
             for job in self.jobs.values():
                 job.stop.set()
+            self.changed.notify_all()
+
+    def _acquire(self, job, stopped):
+        while True:
+            if stopped():
+                raise ThumbnailCancelled()
+            with self.changed:
+                if job.stop.is_set():
+                    raise ThumbnailCancelled()
+                pending = [value for value in self.jobs.values()
+                           if not value.running and not value.ready.is_set() and not value.stop.is_set()]
+                first = min(pending, key=lambda value: (not bool(value.visible_waiters), value.order), default=None)
+                if self.active < 2 and first is job:
+                    job.running = True
+                    self.active += 1
+                    self.changed.notify_all()
+                    return
+                self.changed.wait(.05)
+
+    def _release(self, job):
+        with self.changed:
+            job.running = False
+            self.active -= 1
+            # Mark done before selecting the next pending job.
+            job.ready.set()
+            self.changed.notify_all()
+
+    @staticmethod
+    def _source_call(operation, stopped):
+        # PreviewReader also has two slots. Completed shared callers must not
+        # race active builders into a spurious 503 during post-validation.
+        deadline = time.monotonic() + 10
+        while True:
+            if stopped():
+                raise ThumbnailCancelled()
+            try:
+                return operation()
+            except PreviewBusyError:
+                if time.monotonic() >= deadline:
+                    raise
+                threading.Event().wait(.02)
 
     def _probe(self, item_id):
         kind = self.previews.catalog.get(item_id)['kind']
@@ -88,12 +179,14 @@ class ThumbnailCache:
             _, removed = self.cache.popitem(last=False)
             self.bytes -= len(removed[0])
 
-    def read(self, item_id, edge=256, *, cancelled=lambda: False):
+    def read(self, item_id, edge=256, *, priority='visible', cancelled=lambda: False):
+        if type(priority) is not str or priority not in ('visible', 'nearby'):
+            raise ValueError('Invalid thumbnail priority')
         if type(edge) is not int or edge not in EDGES:
             raise ValueError('Invalid thumbnail size')
         if cancelled():
             raise ThumbnailCancelled()
-        kind, revision = self._probe(item_id)
+        kind, revision = self._source_call(lambda: self._probe(item_id), cancelled)
         key = (METHOD, kind, item_id, revision, 0, edge)
         with self.lock:
             if self.closed:
@@ -111,11 +204,14 @@ class ThumbnailCache:
                 if leader:
                     if len(self.jobs) >= MAX_JOBS:
                         raise PreviewBusyError('Thumbnail workers busy')
-                    job = _Job()
+                    self.order += 1
+                    job = _Job(order=self.order)
                     self.jobs[key] = job
                 job.waiters += 1
+                job.visible_waiters += priority == 'visible'
+                self.changed.notify_all()
         if result is not None:
-            self._validate(item_id, kind, revision, result)
+            self._source_call(lambda: self._validate(item_id, kind, revision, result), cancelled)
             with self.lock:
                 if self.closed or cancelled():
                     raise ThumbnailCancelled()
@@ -128,6 +224,8 @@ class ThumbnailCache:
                 if attached:
                     attached = False
                     job.waiters -= 1
+                    job.visible_waiters -= priority == 'visible'
+                    self.changed.notify_all()
                     if not job.waiters:
                         job.stop.set()
                         if job.ready.is_set() and self.jobs.get(key) is job:
@@ -143,10 +241,8 @@ class ThumbnailCache:
             if leader:
                 acquired = False
                 try:
-                    while not acquired:
-                        if stopped():
-                            raise ThumbnailCancelled()
-                        acquired = self.slots.acquire(timeout=.05)
+                    self._acquire(job, stopped)
+                    acquired = True
                     if stopped():
                         raise ThumbnailCancelled()
                     result = self._build(item_id, kind, revision, edge, stopped)
@@ -160,7 +256,7 @@ class ThumbnailCache:
                     job.error = error
                 finally:
                     if acquired:
-                        self.slots.release()
+                        self._release(job)
                     with self.lock:
                         job.ready.set()
                         if not job.waiters and self.jobs.get(key) is job:
@@ -173,7 +269,7 @@ class ThumbnailCache:
                 raise ThumbnailCancelled()
             if job.error is not None:
                 raise job.error
-            self._validate(item_id, kind, revision, job.result)
+            self._source_call(lambda: self._validate(item_id, kind, revision, job.result), cancelled)
             if cancelled() or job.stop.is_set():
                 raise ThumbnailCancelled()
             return job.result[0]
@@ -182,19 +278,18 @@ class ThumbnailCache:
 
     def _build(self, item_id, kind, revision, edge, stopped):
         if kind == 'image':
-            source, _ = self.previews.animation_source(item_id, revision)
+            source, _ = self._source_call(lambda: self.previews.animation_source(item_id, revision), stopped)
             with source:
                 png = self._decode(source, edge, stopped)
                 self.previews.validate_animation(item_id, revision, source)
             return png, None
-        data, _, tag = self.previews.page_source(item_id, 0, revision)
+        data, _, tag = self._source_call(lambda: self.previews.page_source(item_id, 0, revision), stopped)
         with io.BytesIO(data) as source:
             png = self._decode(source, edge, stopped)
-        self._validate(item_id, kind, revision, (png, tag))
+        self._source_call(lambda: self._validate(item_id, kind, revision, (png, tag)), stopped)
         return png, tag
 
-    @staticmethod
-    def _decode(source, edge, stopped):
+    def _decode(self, source, edge, stopped):
         # Import lazily: missing optional codecs must not prevent library startup.
         from PIL import Image, ImageOps
         if stopped():
@@ -203,20 +298,24 @@ class ThumbnailCache:
             with Image.open(source) as image:
                 if image.width < 1 or image.height < 1 or image.width * image.height > MAX_IMAGE_PIXELS:
                     raise PreviewUnavailable('Thumbnail image too large')
-                # APNG's default image is a poster, not the first animation frame.
-                # Never ask n_frames/is_animated: GIF would scan the whole file.
-                if image.format == 'PNG' and image.info.get('default_image'):
-                    image.seek(1)
-                with ImageOps.exif_transpose(image) as oriented:
-                    with oriented.convert('RGBA') as pixels:
-                        if stopped():
-                            raise ThumbnailCancelled()
-                        pixels.thumbnail((edge, edge), Image.Resampling.LANCZOS)
-                        with io.BytesIO() as output:
-                            pixels.save(output, format='PNG')
-                            if output.tell() > MAX_RENDERED_PNG_BYTES:
-                                raise PreviewUnavailable('Thumbnail output too large')
-                            return output.getvalue()
+                # Conservative estimate for original/orientation/RGBA copies and
+                # derived resize/encode buffers. Oversize work is serialized.
+                estimate = image.width * image.height * 12 + edge * edge * 16
+                with self.decode_budget.reserve(estimate, stopped):
+                    # APNG's default image is a poster, not the first animation frame.
+                    # Never ask n_frames/is_animated: GIF would scan the whole file.
+                    if image.format == 'PNG' and image.info.get('default_image'):
+                        image.seek(1)
+                    with ImageOps.exif_transpose(image) as oriented:
+                        with oriented.convert('RGBA') as pixels:
+                            if stopped():
+                                raise ThumbnailCancelled()
+                            pixels.thumbnail((edge, edge), Image.Resampling.LANCZOS)
+                            with io.BytesIO() as output:
+                                pixels.save(output, format='PNG')
+                                if output.tell() > MAX_RENDERED_PNG_BYTES:
+                                    raise PreviewUnavailable('Thumbnail output too large')
+                                return output.getvalue()
         except (ThumbnailCancelled, PreviewUnavailable):
             raise
         except Exception as error:
