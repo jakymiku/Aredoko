@@ -14,7 +14,7 @@ from native_ui_tools import nodes
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
-    args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
+    parser.add_argument("--continuous",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not front.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-23 renewed overnight GUI/GPU permission','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
@@ -46,10 +46,10 @@ def main():
     def sources():return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
     try:
         media=target/'media';media.mkdir()
-        for i in range(145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        for i in range(745 if args.continuous else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
         before=sources();cat=ProductionCatalog(target/'catalog.sqlite');root=cat.add_root(str(media));cat.start_scan(root)
         if cat._worker:cat._worker.join(15)
-        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==145)
+        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(745 if args.continuous else 145))
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles')
         handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger());handler.log_message=lambda *args:None
         server=ThreadingHTTPServer(('127.0.0.1',8769),handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -65,19 +65,34 @@ def main():
         key='Item'+str(first['id']);ready();ui('wait-for',key,'-t','10000');shot('list-initial')
         visible=tree();count=sum(k.startswith('PreviewStatus') for k in visible)
         check('panel realizes fewer cards than sixty-result page',0<count<60)
-        ui('invoke',key,'--action','select');ui('wait-for','TxtTags','-t','5000');ui('set-value','TxtTags','p3-generated-draft')
-        ui('invoke','BtnLayout');ui('wait-for','TxtTags','--value','p3-generated-draft','-t','5000');shot('grid-draft')
-        ui('invoke','BtnSave');ui('wait-for','BtnSave','-p','IsEnabled','--value','False','-t','5000')
-        ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','15000')
-        check('tag saved to generated catalog',cat.search(query='p3-generated-draft')['total']==1)
-        ui('invoke','BtnCloseDetails');ui('scroll','ItemList','--to','bottom');time.sleep(.3);shot('grid-bottom')
-        ui('invoke','BtnNext');ready();shot('page-two');ui('wait-for','TxtPageNumber','--value','2 / 3','-t','5000')
-        ui('invoke','BtnPrevious');ready();ui('scroll','ItemList','--to','top');ui('wait-for',key,'-t','5000')
-        check('previous page restores keyed card',True);check('generated sources unchanged',before==sources());report['pass']=True
+        if args.continuous:
+            from ui_continuous_browse_audit import audit
+            audit(ui,cli,tree,shot,report,check,proc.pid,hwnd,cat)
+            check('generated sources unchanged',before==sources());report['pass']=True
+        else:
+            ui('invoke',key,'--action','select');ui('wait-for','TxtTags','-t','5000');ui('set-value','TxtTags','p3-generated-draft')
+            ui('invoke','BtnLayout');ui('wait-for','TxtTags','--value','p3-generated-draft','-t','5000');shot('grid-draft')
+            ui('invoke','BtnSave');ui('wait-for','BtnSave','-p','IsEnabled','--value','False','-t','5000')
+            ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','15000')
+            check('tag saved to generated catalog',cat.search(query='p3-generated-draft')['total']==1)
+            ui('invoke','BtnCloseDetails');ui('scroll','ItemList','--to','bottom');time.sleep(.3);shot('grid-bottom')
+            ui('invoke','BtnNext');ready();shot('page-two');ui('wait-for','TxtPageNumber','--value','2 / 3','-t','5000')
+            ui('invoke','BtnPrevious');ready();ui('scroll','ItemList','--to','top');ui('wait-for',key,'-t','5000')
+            check('previous page restores keyed card',True);check('generated sources unchanged',before==sources());report['pass']=True
     except Exception:
         report['error']=traceback.format_exc();print(report['error'],flush=True)
+        if hwnd and proc is not None and proc.poll() is None:
+            try:shot('failure')
+            except Exception:report['capture_error']=traceback.format_exc()
     finally:
         if proc is not None and proc.poll() is None and hwnd:
+            try:
+                for child in json.loads(cli('list-windows','-a',proc.pid,'--json')):
+                    if child.get('title')=='Aredoko — 画像ビューア':
+                        child_owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(child['hwnd']),ctypes.byref(child_owner))
+                        if child_owner.value!=proc.pid:raise RuntimeError('Child owner changed')
+                        cli('invoke','ImageClose','-w',child['hwnd'])
+            except Exception:report['child_cleanup_error']=traceback.format_exc()
             try:
                 owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
                 if owner.value!=proc.pid:raise RuntimeError('Cleanup HWND changed')
