@@ -113,10 +113,21 @@ public sealed class LibraryApi : IDisposable
         return JsonNode.Parse(text)!;
     }
     public async Task<byte[]?> PreviewAsync(int id, CancellationToken cancellation)
+        => await ReadPreviewAsync($"api/library/preview/{id}", cancellation);
+
+    public Task<byte[]?> ThumbnailAsync(int id, int edge, CancellationToken cancellation)
     {
-        using var response = await client.GetAsync($"api/library/preview/{id}", HttpCompletionOption.ResponseHeadersRead, cancellation);
+        if (id < 1) throw new ArgumentOutOfRangeException(nameof(id));
+        if (edge is not (128 or 256 or 512 or 1024)) throw new ArgumentOutOfRangeException(nameof(edge));
+        return ReadPreviewAsync($"api/library/thumbnail/{id}?edge={edge}", cancellation, requirePng: true);
+    }
+
+    private async Task<byte[]?> ReadPreviewAsync(string route, CancellationToken cancellation, bool requirePng = false)
+    {
+        using var response = await client.GetAsync(route, HttpCompletionOption.ResponseHeadersRead, cancellation);
         if ((int)response.StatusCode >= 500) response.EnsureSuccessStatusCode();
         if (!response.IsSuccessStatusCode) return null;
+        if (requirePng && response.Content.Headers.ContentType?.MediaType != "image/png") return null;
         if (response.Content.Headers.ContentLength is not long size || size < 1 || size > PreviewPolicy.MaxSourceBytes)
             return null;
         await using var source = await response.Content.ReadAsStreamAsync(cancellation);
@@ -128,7 +139,10 @@ public sealed class LibraryApi : IDisposable
             if (output.Length + read > PreviewPolicy.MaxSourceBytes) return null;
             output.Write(buffer, 0, read);
         }
-        return output.ToArray();
+        if (output.Length != size) return null;
+        var data = output.ToArray();
+        if (requirePng && (data.Length < 8 || !data.AsSpan(0, 8).SequenceEqual(new byte[] {137,80,78,71,13,10,26,10}))) return null;
+        return data;
     }
     public void Dispose(){tagClient.Dispose();client.Dispose();}
 }

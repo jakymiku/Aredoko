@@ -112,7 +112,7 @@ public sealed partial class MainPage : Page
     private bool startupSearchSucceeded;
     private async Task ConnectAsync() {
         try {
-            renderCancellation.Cancel(); thumbnails.Clear();
+            renderCancellation.Cancel();
             AppLog.Startup("session_connecting");await api.ConnectAsync();
             AppLog.Startup("session_connected");await LoadAIScopeAsync();
             AppLog.Startup("ai_scope_loaded");await RefreshSearchRootsAsync();

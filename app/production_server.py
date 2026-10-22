@@ -43,6 +43,7 @@ from ai_runtime import object_pairs
 from animation_sessions import AnimationSessions, AnimationBusy, AnimationGone, MIME as ANIMATION_MIME
 from image_animations import AnimationUnavailable
 from result_sessions import ResultSessions, ResultUnavailable, ResultCapacity, IndexStamp
+from thumbnail_cache import ThumbnailCache, ThumbnailCancelled
 from contextlib import ExitStack
 import sys
 
@@ -118,6 +119,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
     setup_jobs=AISetupJobs(setup)
     animations=AnimationSessions(previews)
+    thumbnails=ThumbnailCache(previews)
     def result_provider(conditions, consume, cancelled):
         values = dict(conditions)
         mode = values.pop('mode', None)
@@ -315,6 +317,30 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         return self.send(404,{'error':'Reader page unavailable'})
                     except ValueError:
                         return self.send(400,{'error':'Invalid reader request'})
+                if path.startswith('/api/library/thumbnail/'):
+                    try:
+                        match=re.fullmatch(r'/api/library/thumbnail/([1-9][0-9]{0,18})',path)
+                        if match is None or int(match[1])>9223372036854775807:raise ValueError('Invalid item')
+                        query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=1)
+                        if set(query)!={'edge'} or len(query['edge'])!=1 or query['edge'][0] not in ('128','256','512','1024'):
+                            raise ValueError('Invalid thumbnail size')
+                        def disconnected():
+                            try:
+                                readable,_,_=select.select([self.connection],[],[],0)
+                                return bool(readable) and self.connection.recv(1,socket.MSG_PEEK)==b''
+                            except OSError:return True
+                        data=thumbnails.read(int(match[1]),int(query['edge'][0]),cancelled=disconnected)
+                        return self.send(200,data,'image/png')
+                    except ThumbnailCancelled:
+                        return self.send(409,{'error':'Thumbnail cancelled'})
+                    except ReaderChanged:
+                        return self.send(409,{'error':'Thumbnail source changed; rescan'})
+                    except PreviewBusyError:
+                        return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,KeyError,zipfile.BadZipFile,RuntimeError,NotImplementedError,ImportError):
+                        return self.send(404,{'error':'Thumbnail unavailable'})
+                    except ValueError:
+                        return self.send(400,{'error':'Invalid thumbnail request'})
                 if path.startswith('/api/library/preview/'):
                     try:
                         match=re.fullmatch(r'/api/library/preview/([1-9][0-9]{0,18})(?:/(info|manifest|original|frames/(0|[1-9][0-9]?)))?',path)
@@ -732,6 +758,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             except (ValueError,TypeError) as ex: return self.send(400,{'error':str(ex) if str(ex) in PUBLIC_FOLDER_ERRORS else 'Invalid request: check folder, exclusions or scan state'})
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})
+    Handler.thumbnails=thumbnails
     Handler.results=results
     Handler.animations=animations
     Handler.setup_jobs=setup_jobs
@@ -787,6 +814,7 @@ def _serve(args):
         resources.callback(handler.setup_jobs.close)
         resources.callback(handler.animations.close)
         resources.callback(handler.results.close)
+        resources.callback(handler.thumbnails.close)
         server=ThreadingHTTPServer(('127.0.0.1',args.port),handler)
         resources.callback(server.server_close)
         if args.exit_on_stdin_close:

@@ -7,8 +7,6 @@ namespace Aredoko_WinUI;
 internal sealed class ThumbnailService(LibraryApi api)
 {
     private readonly SemaphoreSlim workers = new(2, 2);
-    private readonly BoundedLru<string, byte[]?> cache = new(PreviewPolicy.CacheEntries);
-    public void Clear() => cache.Clear();
 
     public async Task<BitmapImage?> GetAsync(MediaRow row, CancellationToken cancellation)
     {
@@ -17,13 +15,12 @@ internal sealed class ThumbnailService(LibraryApi api)
         try
         {
             cancellation.ThrowIfCancellationRequested();
-            if (!cache.TryGet(row.PreviewKey, out var png))
-            {
-                var source = await api.PreviewAsync(row.Id, cancellation);
-                png = source is null ? null : await ThumbnailCodec.ResizeAsync(source, cancellation);
-                cancellation.ThrowIfCancellationRequested();
-                cache.Set(row.PreviewKey, png);
-            }
+            // Each realization reaches a guarded backend cache. A row-key-only
+            // local hit cannot authorize current scope or physical source.
+            // Video's existing preview endpoint also emits a bounded 256px PNG.
+            var png = row.Kind == "video"
+                ? await api.PreviewAsync(row.Id, cancellation)
+                : await api.ThumbnailAsync(row.Id, PreviewPolicy.Edge, cancellation);
             if (png is null) return null;
             using var stream = new InMemoryRandomAccessStream();
             using (var writer = new DataWriter(stream))
@@ -44,8 +41,7 @@ internal sealed class ThumbnailService(LibraryApi api)
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or ArgumentException or InvalidDataException)
         {
             // Unsupported codecs, corrupt sources, and offline media use a label.
-            // Cache failures for this source revision so scrolling cannot retry forever.
-            cancellation.ThrowIfCancellationRequested(); cache.Set(row.PreviewKey, null); return null;
+            cancellation.ThrowIfCancellationRequested(); return null;
         }
         finally { workers.Release(); }
     }
