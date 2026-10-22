@@ -24,7 +24,7 @@
 - 提供された `10.gif` は実際には367×359/55frameのanimated WebP。既存Pillowで先頭を復号可能。`.gif`名によるnative GIF選択が拒否原因。他のGIFの全原因を断定しない。
 - P1Bが逐次アニメーションを実装し全PNG待ち/64frame切捨てを撤去。Core/Portable build確認済み、実再生/loop/速度は未受入。
 - P2が非同期neighborで60/120境界を越えるsourceへ接続。Core跨ぎテストはWindowsで合格、native操作は未受入。
-- 一覧はまだ全行UIを先に作る。P2結果sessionは順位spoolを一回消費し、P3 ResultWindowが120×5で保持する。標準container/連続scrollは残る。
+- 一覧は標準containerの要求に応じてcardを生成する（[実機の範囲と残課題](p3-native-containers-20261023.md)）。P2結果sessionは順位spoolを一回消費し、P3 ResultWindowが120×5で保持する。連続scrollは残る。
 - P3 thumbnailは派生/shared/可視優先/DPI edge/所有RAM・一時disk cacheまで実装。再起動跨ぎ永続cache/実decoded全体RAMは未受入。
 - 棚は単一文字列で、独立した空棚と複数所属がない。
 - backupは停止時CLI。viewer設定theme/scale等と旧validatorの不一致は2026-10-22に修正済み。P4/P5のschema移行・起動中snapshot/設定整合は別途未完。

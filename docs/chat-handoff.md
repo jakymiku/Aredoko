@@ -1,5 +1,9 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-23 native cards / own-edit result refresh (latest)
+
+Initial container commit `1cd7dc3`; [native evidence and remaining work](p3-native-containers-20261023.md). Native generated145-item flow3/3 consumed: first exposed stale session after metadata save plus runner selector/close faults; second runner save-await race; third targeted PASS, source SHA+mtime invariant and normal exit0. All12 screenshots reviewed, raw failures preserved. Own saves now recreate exact-condition session and range without weakening backend guards or losing unrelated drafts. Blank/late thumbnails remain visible; no thumbnail speed/full P3 acceptance. Next diagnose these then bounded continuous scrolling. Today's GUI/GPU and quota-threshold safe shutdown instruction remains active; old Alpha unchanged.
+
 ## 2026-10-23 P3 standard container realization (current)
 
 Read [implementation, checks and next native/continuous-scroll work](p3-native-containers-20261023.md). Standard containers now realize library cards on demand and cancel/release recycled thumbnails. Portable build0 errors/existing3 warnings; Core867 assertions PASS. P3 remains PARTIAL: current 60/20 page UI remains, native acceptance pending. User renewed GUI/GPU permission today and requested development until ~10% five-hour allowance remains, then safe save/commit/push/handoff and Stop-Computer without Force. Do not replay older caps as a permanent ban or declare the roadmap complete.

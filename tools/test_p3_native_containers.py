@@ -20,6 +20,8 @@ def main():
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-23 renewed overnight GUI/GPU permission','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
     report['app_assembly_sha256']=hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()
     report['source_worktree_diff_sha256']=hashlib.sha256(subprocess.check_output(['git','diff','--','src'],cwd=REPO)).hexdigest()
+    report['app_assembly_sha256']=hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()
+    report['source_worktree_diff_sha256']=hashlib.sha256(subprocess.check_output(['git','diff','--','src'],cwd=REPO)).hexdigest()
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-p3-native-20261023'}
     cat=server=thread=proc=None;hwnd=None
     user=ctypes.WinDLL('user32',use_last_error=True)
