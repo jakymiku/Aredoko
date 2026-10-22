@@ -1,5 +1,24 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-22 Work続行：P2 native接続・P3 thumbnail/cache基盤
+
+開始remote HEAD `8073866fc7bec9cc7f6c8b76f15db17877064da0`、実装後HEAD **`172585e8a9ad1d83237697ca5819e94bfed4da0a`**。既存 `feat/winui3-production-mvp-20261011` / open Draft PR #5を継続し、P1B/P2 backendの完了分は再実装していない。作業前と各Push前にremoteを確認、expected HEAD付きfast-forwardで反映。GitHub元treeへ変更fileだけ重ね、未取得binary/既存履歴を保持した。実機側worktreeの未コミット分は見えず、触れていない。ローカルsnapshotのcommit IDは再構築用でremote IDとは異なる。この引継ぎ自体のcommitは実装HEADに続くgit logを参照。
+
+**完了commit**:
+- `9fd565c01d269450c538fa8a47a0f3210575364a`: P2 native所有session/条件固定/range paging、非同期画像neighbor、close後に最後の表示成功itemの選択・scroll復帰、未保存draft/取消/旧応答/expiry処理。類似rangeも旧profile/起点/score検証を維持。最初から未接続の原本1件でmetadata一覧全体を失敗させず、対象の状態表示とviewerの明確な拒否へ。[仕様・Windows手順](result-session-native-connection.md)。実境界送り受入は未検証。
+- `e8d4bda4503adb0d2f5edbd9a15cae3aef930432`: P3 画像/ZIP/フォルダ本の派生PNG 4size、EXIF/APNG poster/GIF先頭のみ、同一要求共有/片側取消分離/生成2・待機込32、PNG RAM64MiB/256entry・所有一時disk512MiB、cache hitの現在scope/原本版再検証。WinUIはbackend PNGを再PNG変換せず表示するsourceへ。動画も既存guard付き256px PNGへ毎回到達し、row-key-onlyのローカルcacheを撤去。[仕様・限界・残りP3](thumbnail-derivatives.md)。
+- `172585e8a9ad1d83237697ca5819e94bfed4da0a`: Pillowのbomb/codec例外を未処理HTTP障害にせずunavailableへ正規化。本cacheの壊れたETagはmissとして再生成。
+
+**検証**: P2初回21は20 PASS/1 FAIL（復帰fixtureのmtime忘れ）、修正後関連41 PASS/6.722s。P3初回25 PASS/1.439sは12件重複実行を含み、unique件数として加算しない。重複fixtureを解消後RAM関連41 PASS/4.446s、disk/動画/folder追加後関連56 PASS/9.627s、最後のcodec/cache境界3 PASS/0.122s。全て生成媒体/一時DB/loopbackで、原本SHA/mtime不変・共有取消・2生成上限・SQLITE_FULL/破損fallback・owned cleanup/認証を含む。重複した群を合算しない。rawは `docs/validation/20261022-native-results/` と `docs/validation/20261022-thumbnails/`、過去の失敗も削除していない。変更Python AST/diffと新規文書link確認。XAML stub生成成功はC# compileではない。
+
+**未検証・状態**: .NET SDK/Windowsがなく、新Coreテスト・Core/WinUI/Portable build/native描画/60・120境界/scroll/実速度はUNRUN。P2/P3ともPARTIAL。P3の連続scroll/120件×最大5block/data virtualization/標準container/完成形UI・可視優先/DPI edge/decoded RAM budgetは未完。実装RAM64MiBはPNG bytesで、decoder・変換copy・Windows heapの合計64MiB達成ではない。diskはbackend寿命内の一時tier、再起動跨ぎ永続cacheではない。blocked decoderにhard cancel期限なし。P0診断/style、P4–7、ALPHA/R13/R14/M1/M2は未完。旧Alpha/basic03/shortcut/普段DB/settings/モデル/原本は更新なし。新依存/取得/GUI/GPU/private scan/Actions/merge/branch整理/過去shutdown再実行なし。旧GUI caps・全機能・OCR保留を保持。
+
+**次の3作業**:
+1. P3の120件block/最大5blockと遅延・取消・古い応答・選択保持を共通logicで実装し、全件metadataをRAMへ持たずに新result rangeを使う。native表示を待たず検証可能な層から進める。
+2. 可視優先/近傍のthumbnail要求・画面外取消とDPI/実tile sizeのedge選択、decoded作業領域budgetを接続し、標準container再利用＋完成形主画面へ段階移行。既存dirty/keyboard/root/AI/読書機能を維持する。
+3. Windowsが使える時に既存依存で追加Core→Portable buildを各1回、125件以上/混在/7方式/60↔61/120→121/close復帰/未保存取消とthumbnail再利用/Light/Dark/狭幅をまとめ確認。capsをresetしない。実機だけのgateに達したら手順を残し、独立したP4 schema移行/複数棚等へ進み、確認待ちだけで停止しない。
+
+
 ## 2026-10-22 Work継続：P1B逐次再生とP2結果session基盤
 
 開始remote HEAD 1969ab4ccd5ed41ba870df000e60c537186148e6、既存production branch / Draft PR #5を継続。直接git認証不可のためGitHub connectorで492 text fileを取得し全blob SHA一致を確認、clean local snapshotを基点に実装。remoteの元treeへ変更fileだけ重ね、未取得binary/他branch/履歴を保持し、期待HEAD付きのfast-forwardでPushした。実機worktreeの未コミット変更はこの環境から確認できず、触れていない。不要branch/PR/merge/Actionsなし。
