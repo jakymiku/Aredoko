@@ -1,5 +1,16 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-23 GitHub最新取り込み・Windows修正・設定UI
+
+開始1969ab4/clean→fetchで他AIの10commit→6bb267fへfast-forward。P1B/P2/P3と設定backup修正は取り込み済み、繰返し実装なし。[今回の変更・証拠・限界](windows-sync-20261023.md)。
+
+- 実装 `76d8004b4dbf3111b579442990cb4545cdd89df0`: 反射無効時のroot条件JsonArray生成crashを明示JsonValueで修正。
+- 実装 `70b5b31de2bf6e570409ebbb1da3691974d2da01`: 実assembly版/commit/channel/config/location診断、settings下部save/close、folder操作の余白削減、theme共通surface。旧SettingsSave ID/入力保持/theme適用維持。
+- Core初回NotSupportedException→修正862→診断追加後867 PASS assertion。Portable build0 errors/既存3 warnings。Python86中85 PASS/1旧basic03埋込childが新moduleを発見できないrunner失敗→既存venvで失敗1件だけ1 PASS。rawをローカルignored windows-sync-20261023-01へ保持、件数合算なし。
+- Core/Windows build待ちは解消、GUI/loop/速度/60・120境界/Light/Dark/HC/DPI未受入。P0診断sourceはあるが新配布receipt照合なし。新配布/ZIP/Alpha/basic03/shortcut更新なし。GPU/GUI/私物/普段DB/settings/モデル変更/取得/Actions/mergeなし。
+
+**次**: P3のResultWindow→標準container/連続scroll/型情報x:Bindと完成形主画面へ。既存selection/dirty/ordinalを維持。GUIはcapsをresetせず具体候補と範囲で許可、GUI待ちだけで独立P4を止めない。P0–7/ALPHA/M1/M2未完、実音声音楽/OCR保留を保持。今回はshutdownしない。この文書commitは上記実装の後のgit logで確認。
+
 ## 2026-10-22 Work再開：P3 window/優先制御・viewer設定backup互換
 
 開始remote `996814119b3a83a588c9b8824874a99c49c68ec8`、実装後HEAD **`a68f0257225aecf6f6fe7e6bfc167e743a866b36`**。既存production branch/Draft PR #5を継続、開始時local clean・remote/PR一致、各Push前にremoteを確認しexpected HEAD付きfast-forward。未取得binary/過去historyを元treeに保持。実機側worktreeの未コミット分はこの環境から見えず、触れていない。不要branch/PR/merge/Actionsなし。local snapshotのcommit IDはremoteと異なるため、そのhistoryを直接pushしない。

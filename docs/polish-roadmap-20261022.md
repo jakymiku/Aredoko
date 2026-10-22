@@ -6,11 +6,11 @@
 
 | 作業 | 現在の状態 | 次に行うこと |
 | --- | --- | --- |
-| P0 基準整理・UI-0 | 計画反映済み。アプリ版/commit/channel/実行場所の診断表示、共通リソース整備は未完 | 小さな縦切りとして継続する。P0全完了とはしない |
+| P0 基準整理・UI-0 | PARTIAL。[診断・共通surface・下部保存](windows-sync-20261023.md)を実装/build確認。配布照合/nativeは未受入 | 小さな縦切りとして継続する。P0全完了とはしない |
 | P1A 画像の実形式判定 | CPU_DONE `0f2e005`。Python37/Core771/Portable build合格、最新handoff参照 | 実機表示未受入と配布未更新を明記 |
-| P1B 逐次アニメーション再生 | source/API/WinUI接続・Python確認済み。[証拠/限界](animation-streaming.md) | Core/WinUI build/native未検証を残しP2へ。全PNG待ち/64枚切捨て/decoder再openを撤去 |
-| P2 結果セッション・連続閲覧 | PARTIAL。native接続sourceあり。[証拠/限界](result-session-native-connection.md) | Core/Portable buildと実機60/120境界・選択復帰は未検証 |
-| P3 一覧・サムネイル・UI-2 | PARTIAL。[120×5共通window/可視優先/DPI接続](p3-result-window.md) source追加 | 標準container/連続scroll/完成形UI、実decoded RAM・Core/Windows確認は未完 |
+| P1B 逐次アニメーション再生 | source/API/WinUI接続・Python確認済み。[証拠/限界](animation-streaming.md) | Core/Portable buildをWindows確認済み、native未受入。全PNG待ち/64枚切捨て/decoder再openを撤去 |
+| P2 結果セッション・連続閲覧 | PARTIAL。native接続sourceあり。[証拠/限界](result-session-native-connection.md) | Core/Portable buildをWindows確認済み。実機60/120境界・選択復帰は未検証 |
+| P3 一覧・サムネイル・UI-2 | PARTIAL。[120×5共通window/可視優先/DPI接続](p3-result-window.md) source追加 | Core/Portable build確認済み。標準container/連続scroll/完成形UIと実decoded RAM/native確認は未完 |
 | P4 複数棚・整理導線 | 未実装 | U09/U11/U14等を統合 |
 | P5 起動中backup/restore | 未実装。前提となる[現行viewer設定のbackup互換](backup-recovery.md)は修正済み | U13の所有job/整合snapshot/GUI/安全な切替を実装 |
 | P6 配布・UI-3 | LD1–3/LD4a基盤あり、残り未完 | LD4b→LD5→LD6を既存実装から継続 |
@@ -22,10 +22,10 @@
 
 - 登録・文字/AI/WD/類似/本文検索、ページ・時刻根拠、閲覧/タグ等の整理基盤は存在する。原本guard、モデル/profile空間、従来の順位を維持する。
 - 提供された `10.gif` は実際には367×359/55frameのanimated WebP。既存Pillowで先頭を復号可能。`.gif`名によるnative GIF選択が拒否原因。他のGIFの全原因を断定しない。
-- APNG/WebPは全frameのHTTP取得・PNG変換・復号を待って再生し、64frameで切り詰める。P1Bで置き換える。
-- ImageViewerSequenceは現在の結果pageの配列だけ。60→61へ移動できない。
-- 一覧は全行UIを先に作る。AI順位spoolはrequest-localで、追加取得ごとに再計算する。
-- サムネイルには並列制限・取消・メモリcacheがあるが、変換重複/同一要求共有/可視優先/disk cacheが不足する。
+- P1Bが逐次アニメーションを実装し全PNG待ち/64frame切捨てを撤去。Core/Portable build確認済み、実再生/loop/速度は未受入。
+- P2が非同期neighborで60/120境界を越えるsourceへ接続。Core跨ぎテストはWindowsで合格、native操作は未受入。
+- 一覧はまだ全行UIを先に作る。P2結果sessionは順位spoolを一回消費し、P3 ResultWindowが120×5で保持する。標準container/連続scrollは残る。
+- P3 thumbnailは派生/shared/可視優先/DPI edge/所有RAM・一時disk cacheまで実装。再起動跨ぎ永続cache/実decoded全体RAMは未受入。
 - 棚は単一文字列で、独立した空棚と複数所属がない。
 - backupは停止時CLI。viewer設定theme/scale等と旧validatorの不一致は2026-10-22に修正済み。P4/P5のschema移行・起動中snapshot/設定整合は別途未完。
 

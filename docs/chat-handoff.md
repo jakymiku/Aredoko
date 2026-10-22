@@ -1,5 +1,11 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-23 Windows最新同期・小さなUI整理
+
+remote6bb267fの10commitをcleanな実機へff統合。P1B/P2/P3基盤を再実装せず確認。[詳細](windows-sync-20261023.md)。`76d8004`は反射無効root条件crash修正、`70b5b31`は実行版/場所診断・下部保存・compact folder操作・theme共通surface。Core867 PASS assertion/Portable0 errors・既存3 warnings。Python85 PASS+1旧埋込runtime child import失敗、正しい既存venvで失敗1件だけPASS。raw保持・合算なし。
+
+GUI/GPU/新配布なし、Alpha/basic03/shortcut未更新。次はP3標準container/連続scrollと完成形主画面。P0–7/ALPHA/M1/M2未完、旧caps/OCR保留/全機能を維持。今回はshutdown指示なし。
+
 ## 2026-10-22 Work再開：P3 window/優先制御・viewer設定backup互換
 
 開始remote `996814119b3a83a588c9b8824874a99c49c68ec8`、実装後HEAD **`a68f0257225aecf6f6fe7e6bfc167e743a866b36`**。既存production branch/Draft PR #5を継続、開始時local clean・remote/PR一致、各Push前にremoteを確認しexpected HEAD付きfast-forward。未取得binary/過去historyを元treeに保持。実機側worktreeの未コミット分はこの環境から見えず、触れていない。不要branch/PR/merge/Actionsなし。local snapshotのcommit IDはremoteと異なるため、そのhistoryを直接pushしない。
