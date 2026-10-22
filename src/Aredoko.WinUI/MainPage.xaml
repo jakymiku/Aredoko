@@ -170,7 +170,7 @@
        <Button x:Name="BackToLibraryButton" Content="作品一覧へ戻る" Click="BackToLibrary_Click" AutomationProperties.AutomationId="BtnBackToLibrary"/>
       </StackPanel>
      </Grid>
-     <Border x:Name="FolderAddPanel" Grid.Row="1" Visibility="Collapsed" Padding="12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource ControlCornerRadius}">
+     <Border x:Name="FolderAddPanel" Grid.Row="1" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
       <ScrollViewer x:Name="FolderAddScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="フォルダ登録の入力項目" AutomationProperties.AutomationId="FolderAddScroll">
       <StackPanel Spacing="8" Margin="{StaticResource FormScrollGutter}">
        <Grid ColumnSpacing="8">
@@ -192,16 +192,16 @@
        </StackPanel>
       </StackPanel></ScrollViewer>
      </Border>
-     <Border x:Name="FolderSelectionPanel" Grid.Row="2" Padding="8" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource ControlCornerRadius}">
+     <Border x:Name="FolderSelectionPanel" Grid.Row="2" Style="{StaticResource AredokoSurfaceStyle}">
       <StackPanel Spacing="8">
        <TextBlock x:Name="FolderSelectionSummary" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderSelectionSummary"/>
        <Grid x:Name="FolderSelectionButtons" ColumnSpacing="8" RowSpacing="8">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
        <Button x:Name="SearchSelectedFoldersButton" Grid.Column="0" Content="選択したフォルダを検索" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="SearchSelectedFolders_Click" AutomationProperties.AutomationId="BtnSearchSelectedFolders"/>
        <Button x:Name="EditSelectedFoldersButton" Grid.Column="1" Content="設定" IsEnabled="False" Click="EditSelectedFolders_Click" AutomationProperties.AutomationId="BtnEditSelectedFolders"/>
        <Button x:Name="UnregisterSelectedFoldersButton" Grid.Column="2" Content="登録解除" IsEnabled="False" Click="UnregisterSelectedFolders_Click" AutomationProperties.AutomationId="BtnUnregisterSelectedFolders"/>
-       <Button x:Name="SearchAllFoldersButton" Grid.Column="3" Content="全登録フォルダを検索" Click="ResetAllFolders_Click" AutomationProperties.AutomationId="BtnSearchAllFolders"/>
+       <Button x:Name="SearchAllFoldersButton" Grid.Column="3" Margin="16,0,0,0" Content="全登録フォルダを検索" Click="ResetAllFolders_Click" AutomationProperties.AutomationId="BtnSearchAllFolders"/>
        </Grid>
       </StackPanel>
      </Border>

@@ -118,7 +118,7 @@ public static class DiagnosticsReport
         sb.AppendLine();
 
         sb.AppendLine("--- 機密保護・プライバシー注記 ---");
-        sb.AppendLine("※ 認証トークン (Bearer / X-Aredoko-Token) および個人フォルダパスは厳格に除外・匿名化されています。");
+        sb.AppendLine("※ 認証トークンとユーザー名は伏字にしています。実行場所やAI状態など、共有前に内容を確認してください。");
         sb.AppendLine("※ この診断情報は外部サーバーへ自動送信されません。クリップボードへのコピーまたは保存のみ可能です。");
         sb.AppendLine("====================================================");
 

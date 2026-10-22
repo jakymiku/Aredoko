@@ -991,7 +991,7 @@ public sealed partial class MainPage : Page
     {
         if(FolderSelectionButtons is null||FolderAddScroll is null)return;
         var narrow=LibraryLayout.ActualWidth<840;
-        for(var i=0;i<4;i++)FolderSelectionButtons.ColumnDefinitions[i].Width=i<2||!narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
+        for(var i=0;i<4;i++)FolderSelectionButtons.ColumnDefinitions[i].Width=i<2||!narrow?GridLength.Auto:new GridLength(0);
         var buttons=new[]{SearchSelectedFoldersButton,EditSelectedFoldersButton,UnregisterSelectedFoldersButton,SearchAllFoldersButton};
         for(var i=0;i<buttons.Length;i++){Grid.SetColumn(buttons[i],narrow?i%2:i);Grid.SetRow(buttons[i],narrow?i/2:0);}
         FolderAddScroll.MaxHeight=Math.Max(96,FolderHubView.ActualHeight-FolderHeader.ActualHeight-FolderSelectionPanel.ActualHeight-64);

@@ -12,6 +12,15 @@
             </ResourceDictionary.MergedDictionaries>
             <!-- Form fields leave a dedicated lane for overlay scroll bars. -->
             <Thickness x:Key="FormScrollGutter">0,0,24,0</Thickness>
+            <!-- Shared native surfaces adapt to Light/Dark/Contrast without custom palettes. -->
+            <Thickness x:Key="AredokoSectionPadding">12</Thickness>
+            <Style x:Key="AredokoSurfaceStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+                <Setter Property="Padding" Value="{StaticResource AredokoSectionPadding}" />
+            </Style>
             <!-- Native theme resources also adapt to Windows Contrast themes. -->
             <Style x:Key="ImageViewerOverlayStyle" TargetType="Border">
                 <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />

@@ -30,10 +30,15 @@ public sealed partial class MainPage
             AutomationProperties.SetAutomationId(wheel,"SettingsWheel");
             var hint=new TextBlock{Text="拡大中は画像のスクロールを優先します。マウスの進む・戻るも使えます。",TextWrapping=TextWrapping.Wrap};
             var savedText=new TextBlock{TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(savedText,"SettingsStatus");
-            var save=new Button{Content="設定を保存"};AutomationProperties.SetAutomationId(save,"SettingsSave");
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="設定",CloseButtonText="閉じる",Content=panel};
-            save.Click+=(_,_)=>{try{var selectedTheme=theme.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};ViewerOptions.SavePreferences(wheel.SelectedIndex==1,selectedTheme,enlarge.IsOn);MainWindow.Current.ApplyTheme(selectedTheme);dialog.RequestedTheme=selectedTheme switch{"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};savedText.Text="保存しました。テーマはすぐ反映し、画像の拡大は次に開くときに適用します。";}catch(Exception ex){savedText.Text="保存できません: "+ex.Message;}};
-            panel.Children.Add(wheel);panel.Children.Add(hint);panel.Children.Add(save);panel.Children.Add(savedText);
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="設定",PrimaryButtonText="保存",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=panel};
+            AutomationProperties.SetAutomationId(dialog,"SettingsDialog");
+            // Preserve the existing UI Automation identifier on the native footer button.
+            var saveStyle=new Style{TargetType=typeof(Button),BasedOn=(Style)Application.Current.Resources["AccentButtonStyle"]};
+            saveStyle.Setters.Add(new Setter(AutomationProperties.AutomationIdProperty,"SettingsSave"));
+            dialog.PrimaryButtonStyle=saveStyle;
+            dialog.PrimaryButtonClick+=(_,args)=>{args.Cancel=true;SavePreferences();};
+            void SavePreferences(){try{var selectedTheme=theme.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};ViewerOptions.SavePreferences(wheel.SelectedIndex==1,selectedTheme,enlarge.IsOn);MainWindow.Current.ApplyTheme(selectedTheme);dialog.RequestedTheme=selectedTheme switch{"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};savedText.Text="保存しました。テーマはすぐ反映し、画像の拡大は次に開くときに適用します。";}catch(Exception ex){savedText.Text="保存できません: "+ex.Message;}}
+            panel.Children.Add(wheel);panel.Children.Add(hint);panel.Children.Add(savedText);
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
             foreach(var (label,id,target) in new[]{
@@ -100,7 +105,9 @@ public sealed partial class MainPage
         {
             System.Text.Json.Nodes.JsonNode? aiStatus = null;
             try { aiStatus = await api.GetAsync("api/library/ai/status"); } catch { }
-            var report = DiagnosticsReport.Generate(aiStatus, aiScope, knownRoots, knownShelves?.Count ?? 0, 0, ActualTheme.ToString());
+            var build=AppBuildIdentity.FromAssembly(typeof(App).Assembly,AppContext.BaseDirectory);
+            var report=DiagnosticsReport.Generate(aiStatus,aiScope,knownRoots,knownShelves?.Count??0,0,ActualTheme.ToString(),appVersion:build.Version)
+                +"\n"+build.ToDiagnosticText();
 
             var panel=new StackPanel{Spacing=12};
             var txt = new TextBox

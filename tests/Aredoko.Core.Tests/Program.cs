@@ -2,6 +2,7 @@ using Aredoko.Core;
 using System.Text.Json;
 void Check(bool result,string name){if(!result)throw new Exception(name);Console.WriteLine("PASS "+name);}
 Check(!JsonSerializer.IsReflectionEnabledByDefault,"reflection disabled");
+AppBuildIdentityTests.Run(Check);
 await ImageSourceInfoTests.Run(Check);
 await ThumbnailTests.Run(Check);
 await AnimationStreamTests.Run(Check);

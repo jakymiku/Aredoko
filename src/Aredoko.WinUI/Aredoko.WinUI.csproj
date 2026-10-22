@@ -113,5 +113,8 @@
       <KnownILLinkPack Condition="'%(KnownILLinkPack.ILLinkPackVersion)' == '10.0.13'" ILLinkPackVersion="10.0.12" />
     </ItemGroup>
   </Target>
-  <ItemGroup><ProjectReference Include="../Aredoko.Core/Aredoko.Core.csproj" /></ItemGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="AredokoChannel" Value="$(AredokoPackageChannel)" />
+    <ProjectReference Include="../Aredoko.Core/Aredoko.Core.csproj" />
+  </ItemGroup>
 </Project>
