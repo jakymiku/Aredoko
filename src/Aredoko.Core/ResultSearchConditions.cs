@@ -40,7 +40,7 @@ public static class ResultSearchConditions
         var roots = FolderSearch.NormalizeNonEmpty(rootIds);
         if (roots is not null)
         {
-            var values = new JsonArray(); foreach (var id in roots) values.Add(id);
+            var values = new JsonArray(); foreach (var id in roots) values.Add((JsonNode?)JsonValue.Create(id));
             result["root_ids"] = values;
         }
         return result;
