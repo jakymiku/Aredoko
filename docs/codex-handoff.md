@@ -1,5 +1,9 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-23 P4 multi-shelf storage foundation (latest)
+
+[Atomic legacy migration, memberships and backup evidence](multi-shelf-storage.md) implemented but NOT product-activated: no normal DB migration/new API/UI yet. Version1 prevents old version0 app writes; adapters must be completed before raising production support. New7+backup28=35 run,34 PASS/1 new fixture SQLite cleanup error; closing fixed and only failed1 rerun PASS/0.217s. Prior raw failure kept. Next connect query/scan/scalar/root/purge adapters under owner guard, then API/Core/UI; do not expose half-synchronized membership. History deletion is `b1cf0b6`; P3 native3/3 gates and today's quota handoff/shutdown remain.
+
 ## 2026-10-23 P4 history deletion (latest)
 
 [Individual/all deletion, stale-write protection and evidence](history-deletion.md) source complete: same-schema transaction preserves reader position/metadata/media, generation gate rejects late pre-delete recordings and invalidates frozen history. Settings all-delete + history context individual-delete use confirmation and dirty guard. Python20 PASS/9.841s, Portable build0 errors/known3 warnings11.98s; GUI UNRUN. Old tokenless POST works only before first delete; afterward generation is required. P4 multi-shelf/root favorites/navigation and P3 native gates remain; continue current roadmap, no CI/merge/old Alpha changes. Today's quota-threshold safe handoff/shutdown remains active.

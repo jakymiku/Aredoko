@@ -643,6 +643,54 @@
         "1",
         0
       ]
+    ],
+    "item_shelves": [
+      [
+        "item_id",
+        "INTEGER",
+        1,
+        null,
+        1
+      ],
+      [
+        "shelf_id",
+        "INTEGER",
+        1,
+        null,
+        2
+      ]
+    ],
+    "root_shelves": [
+      [
+        "root_id",
+        "INTEGER",
+        1,
+        null,
+        1
+      ],
+      [
+        "shelf_id",
+        "INTEGER",
+        1,
+        null,
+        2
+      ]
+    ],
+    "shelves": [
+      [
+        "id",
+        "INTEGER",
+        0,
+        null,
+        1
+      ],
+      [
+        "name",
+        "TEXT",
+        1,
+        null,
+        0
+      ]
     ]
   },
   "vectors": {
