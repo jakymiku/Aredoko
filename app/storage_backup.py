@@ -89,7 +89,23 @@ def _configuration(role,data):
         if 'resource' in value:validate_resource(value['resource'])
         if 'scope' in value:validate_scope(value['scope'])
     elif role=='viewer_settings':
-        if not isinstance(value,dict) or set(value)!={'version','wheel_up_advances'} or type(value['version']) is not int or value['version']!=1 or type(value['wheel_up_advances']) is not bool:raise RecoveryError('Unsupported viewer settings')
+        # Version 1 was extended by the native viewer without changing its
+        # version number. Accept legacy subsets and the exact current writer's
+        # values; preserve original bytes rather than silently normalizing them.
+        required={'version','wheel_up_advances'}
+        allowed=required|{'library_item_scale','theme','enlarge_small_images'}
+        if (len(data)>2048 or not isinstance(value,dict) or not required<=set(value)
+                or set(value)-allowed or type(value['version']) is not int or value['version']!=1
+                or type(value['wheel_up_advances']) is not bool):
+            raise RecoveryError('Unsupported viewer settings')
+        if 'library_item_scale' in value:
+            scale=value['library_item_scale']
+            if type(scale) is not int or not 60<=scale<=180 or scale%20:
+                raise RecoveryError('Invalid viewer item scale')
+        if 'theme' in value and value['theme'] not in ('system','light','dark'):
+            raise RecoveryError('Invalid viewer theme')
+        if 'enlarge_small_images' in value and type(value['enlarge_small_images']) is not bool:
+            raise RecoveryError('Invalid viewer enlargement policy')
     else:raise RecoveryError('Invalid configuration role')
 
 def _stores(catalog):

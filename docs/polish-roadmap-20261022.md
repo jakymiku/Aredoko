@@ -12,7 +12,7 @@
 | P2 結果セッション・連続閲覧 | PARTIAL。native接続sourceあり。[証拠/限界](result-session-native-connection.md) | Core/Portable buildと実機60/120境界・選択復帰は未検証 |
 | P3 一覧・サムネイル・UI-2 | PARTIAL。[120×5共通window/可視優先/DPI接続](p3-result-window.md) source追加 | 標準container/連続scroll/完成形UI、実decoded RAM・Core/Windows確認は未完 |
 | P4 複数棚・整理導線 | 未実装 | U09/U11/U14等を統合 |
-| P5 起動中backup/restore | 未実装 | U13と設定形式不整合を解消 |
+| P5 起動中backup/restore | 未実装。前提となる[現行viewer設定のbackup互換](backup-recovery.md)は修正済み | U13の所有job/整合snapshot/GUI/安全な切替を実装 |
 | P6 配布・UI-3 | LD1–3/LD4a基盤あり、残り未完 | LD4b→LD5→LD6を既存実装から継続 |
 | P7 総合検証 | 未実施 | 主要機能を揃えてまとめ確認、M1判定後R06–R09へ |
 
@@ -27,7 +27,7 @@
 - 一覧は全行UIを先に作る。AI順位spoolはrequest-localで、追加取得ごとに再計算する。
 - サムネイルには並列制限・取消・メモリcacheがあるが、変換重複/同一要求共有/可視優先/disk cacheが不足する。
 - 棚は単一文字列で、独立した空棚と複数所属がない。
-- backupは停止時CLI。現在のviewer設定にあるtheme/scale等と旧validatorが不一致。P4/P5でschemaと設定形式を一緒に更新する。
+- backupは停止時CLI。viewer設定theme/scale等と旧validatorの不一致は2026-10-22に修正済み。P4/P5のschema移行・起動中snapshot/設定整合は別途未完。
 
 ## 実装順と完了条件
 

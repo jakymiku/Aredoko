@@ -1,5 +1,7 @@
 # R03 — ローカルDBのバックアップと新規復元
 
+> 2026-10-22 viewer設定互換修正: 現行version1 writerの `library_item_scale`（60–180/20刻み）、`theme`（system/light/dark）、`enlarge_small_images` を既存wheel方向とともに検証・保存・復元できる。旧2field/途中拡張版も受け入れ、bytesを正規化せず保持。未知field/上位version/不正型・値/重複key/2048byte超は拒否。生成bundleの現行設定往復・再hashした不正設定の復元拒否・旧形式を含む関連28 PASS/5.493s（raw `validation/20261022-p3-window/python-backup-settings.log`）。停止前提の既存backup修正であり、P5起動中job/GUI/restore切替は未実装。
+
 > 2026-10-18追記：最新のユーザー許可で[限定GPU/native受入](release-readiness.md)を実施。GPU28 PASS、actual復元launcherのLight検索/設定とDark起動/編集保持を確認、Dark小窓詳細以降は未完。下記の「延期/未実機」記述はCPU実装時点の履歴。全R14/M1/M2の合格とは扱わない。
 
 2026-10-18。版付きの復旧bundle、停止中のDB一式取得、既存先へ上書きしないCLIを実装する。R03は実装・CPU検証済み（CPU_DONE）。GUIの設定画面への導線はR10、復元先からのnative起動受入はR14とする。モデル/索引方式・元ファイル・既存機能を変更しない。
@@ -12,7 +14,7 @@
 | ページsnapshot/ID・保存本文、候補/承認/却下履歴・根拠 | 同じcatalog内の対応table | 同じcatalog | 既存の本文を保持するだけで、専用OCRの導入ではない |
 | モデル別のtext/cover、動画frame、本文page、未承認候補vector、索引job/再開情報 | catalog名に続く `.ai.sqlite` / `.ai.<24hex>.sqlite` | 新catalog名に対応したsidecar | filenameと保存profile keyを照合。最大64profile。明示省略可能 |
 | AI選択/profile ID・scope・resource方針 | 指定settings JSON（通常LocalAppData/Aredoko） | `settings/ai-settings.json` | 明示指定のみ。未指定はmanifestに記録 |
-| viewerのwheel方向 | 指定viewer-settings JSON | `settings/viewer-settings.json` | 明示指定のみ |
+| viewerのwheel方向・一覧倍率・theme・小画像拡大 | 指定viewer-settings JSON | `settings/viewer-settings.json` | 明示指定のみ |
 | ユーザーembedding profile | 指定profile directory内JSON＋明示追加file | `profiles/<name>.json` | 最大64件。ModelProfileとして検証 |
 | 任意のWD profile/設定値 | 明示指定JSON | `tagger-profiles/<name>.json` | 最大16件。WDProfileとして検証 |
 | 元画像/動画/本/音声、モデル重み・venv、logs・一時score DB、session token/検索取消ID | 対象外 | 含めない | 無断走査・download・外部送信なし |
