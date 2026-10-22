@@ -1,5 +1,25 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-22 Work再開：P3 window/優先制御・viewer設定backup互換
+
+開始remote `996814119b3a83a588c9b8824874a99c49c68ec8`、実装後HEAD **`a68f0257225aecf6f6fe7e6bfc167e743a866b36`**。既存production branch/Draft PR #5を継続、開始時local clean・remote/PR一致、各Push前にremoteを確認しexpected HEAD付きfast-forward。未取得binary/過去historyを元treeに保持。実機側worktreeの未コミット分はこの環境から見えず、触れていない。不要branch/PR/merge/Actionsなし。local snapshotのcommit IDはremoteと異なるため、そのhistoryを直接pushしない。
+
+**実装**:
+- `e74d6181642e95a6110f2f530c80fe00923d24a6`: P3共通ResultWindow（120件×最大5block、近傍metadata先読み、可視rangeは再検証、世代/取消/重複ID拒否/終了時解放）を既存page UIへ接続。thumbnailの可視優先FIFO/共有waiter昇格・降格/片側取消、原本guard busyの取消可能待機、64MiB見積り復号予約（単体超過は単独実行）を実装。tile/list/detailは表示サイズ×DPIから4sizeを選択、resize集約/旧応答拒否、通常preview/登録済みlabelを整理し長名tooltipを追加。[仕様・証拠・Windows手順](p3-result-window.md)。
+- `a68f0257225aecf6f6fe7e6bfc167e743a866b36`: 独立して直せるP5前提bugを修正。停止時backupが現行ViewerInputSettingsのtheme/scale/enlargeを拒否していたため、旧2field/途中拡張/現行version1の正しい値を検証してbytesのまま往復。未知field/上位version/不正型値/重複key/2048byte超は拒否。[既存backup契約](backup-recovery.md)。起動中backup/GUI/restore切替の実装完了ではない。
+
+**確認**: priority初回46実行は43 PASS/3 FAIL（生成後guard枠競合、うち20件はfixture importによる重複実行）。busy待機/重複fixture修正後thumbnail関連26 PASS/1.840s。result API/stub生成関連24 PASS/4.216s。backup/restore関連28 PASS/5.493s。重複加算しない。raw失敗含め `docs/validation/20261022-p3-window/`、AST/diff/新規文書link確認。生成媒体・専用一時DBだけで検証。Coreに50k結果window/跨ぎ/遠い移動/遅延応答/expiry/終了/DPIのtest sourceを追加したが未実行。stub生成はC# compileではない。
+
+**未検証/残件**: .NET SDK/Windowsなし。Core/WinUI/Portable build、実機60/120境界・5万件scroll/メモリ・描画・DPI切替はUNRUN。windowの保持metadata最大600件はコード上の制限で、native実測ではない。P3は既存60件/本文20件page UIのままで、標準container再利用/連続scroll/型情報x:Bind/完成形nav・detail等は未完。64MiB予約は実RSS上限ではなく、Pillow内部/入力/Windows heapと単体超過を含む総decoded RAM目標は未受入。未開始queueだけが可視優先、開始済codecは非preempt。サイズ変更のないmonitor移動だけの画像更新も未接続。
+
+P0/P2–7/ALPHA/R13/R14/M1/M2を完了としない。旧Alpha/basic03/普段DB/settings/原本/モデルは更新なし。新依存/取得/CI/GUI/GPU/private scan/旧shutdown再実行なし。全機能/専用OCR保留/旧GUI caps/既存handoffを保持。この引継ぎcommit自体は実装HEADの次のgit logを参照。
+
+**次の3作業**:
+1. Windowsの既存依存で追加Core→Portable buildを各1回。共通windowから標準container/連続scrollへ接続し、過去のWinRT binding crashを避けて型情報/x:Bindを確認。50k生成metadata・選択/dirty/60–120境界・再利用cell混入・Light/Dark/size/DPIをまとめ確認、旧capsをresetしない。
+2. Windows gateだけが残る環境では独立P4 backendへ。複数棚の安定ID/空棚/所属とroot初期棚をtransaction移行し、旧scalarで複数所属を失う要求の拒否・旧app書込拒否・backup schema互換を同時に扱う。現在のP1/P2/P3基盤を再実装しない。
+3. P4履歴削除・世代管理/root favorite/navigationの共通処理、その後P5の所有online snapshot/job/安全な復元先切替を進める。今回の設定互換だけでP5完了とはしない。
+
+
 ## 2026-10-22 Work続行：P2 native接続・P3 thumbnail/cache基盤
 
 開始remote HEAD `8073866fc7bec9cc7f6c8b76f15db17877064da0`、実装後HEAD **`172585e8a9ad1d83237697ca5819e94bfed4da0a`**。既存 `feat/winui3-production-mvp-20261011` / open Draft PR #5を継続し、P1B/P2 backendの完了分は再実装していない。作業前と各Push前にremoteを確認、expected HEAD付きfast-forwardで反映。GitHub元treeへ変更fileだけ重ね、未取得binary/既存履歴を保持した。実機側worktreeの未コミット分は見えず、触れていない。ローカルsnapshotのcommit IDは再構築用でremote IDとは異なる。この引継ぎ自体のcommitは実装HEADに続くgit logを参照。
