@@ -199,20 +199,27 @@ class ThumbnailCache:
         from PIL import Image, ImageOps
         if stopped():
             raise ThumbnailCancelled()
-        with Image.open(source) as image:
-            if image.width < 1 or image.height < 1 or image.width * image.height > MAX_IMAGE_PIXELS:
-                raise PreviewUnavailable('Thumbnail image too large')
-            # APNG's default image is a poster, not the first animation frame.
-            # Never ask n_frames/is_animated: GIF would scan the whole file.
-            if image.format == 'PNG' and image.info.get('default_image'):
-                image.seek(1)
-            with ImageOps.exif_transpose(image) as oriented:
-                with oriented.convert('RGBA') as pixels:
-                    if stopped():
-                        raise ThumbnailCancelled()
-                    pixels.thumbnail((edge, edge), Image.Resampling.LANCZOS)
-                    with io.BytesIO() as output:
-                        pixels.save(output, format='PNG')
-                        if output.tell() > MAX_RENDERED_PNG_BYTES:
-                            raise PreviewUnavailable('Thumbnail output too large')
-                        return output.getvalue()
+        try:
+            with Image.open(source) as image:
+                if image.width < 1 or image.height < 1 or image.width * image.height > MAX_IMAGE_PIXELS:
+                    raise PreviewUnavailable('Thumbnail image too large')
+                # APNG's default image is a poster, not the first animation frame.
+                # Never ask n_frames/is_animated: GIF would scan the whole file.
+                if image.format == 'PNG' and image.info.get('default_image'):
+                    image.seek(1)
+                with ImageOps.exif_transpose(image) as oriented:
+                    with oriented.convert('RGBA') as pixels:
+                        if stopped():
+                            raise ThumbnailCancelled()
+                        pixels.thumbnail((edge, edge), Image.Resampling.LANCZOS)
+                        with io.BytesIO() as output:
+                            pixels.save(output, format='PNG')
+                            if output.tell() > MAX_RENDERED_PNG_BYTES:
+                                raise PreviewUnavailable('Thumbnail output too large')
+                            return output.getvalue()
+        except (ThumbnailCancelled, PreviewUnavailable):
+            raise
+        except Exception as error:
+            # Pillow's bomb/codec/EOF errors are unavailable media, not a bad
+            # request or an unhandled handler failure. Other waiters see it too.
+            raise PreviewUnavailable('Invalid or unsupported thumbnail image') from error

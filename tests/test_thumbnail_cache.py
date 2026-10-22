@@ -212,6 +212,18 @@ class ThumbnailTests(unittest.TestCase):
         self.assertTrue(self.owner.disk.disabled)
         self.assertTrue(self.read(item).startswith(b'\x89PNG'))
 
+    def test_corrupt_book_cache_validator_is_miss_not_broken_listing(self):
+        first = self.read(self.ids['book.cbz']); self.owner.cache.clear(); self.owner.bytes = 0
+        self.owner.disk.db.execute("UPDATE thumbs SET tag='bad'"); self.owner.disk.db.commit()
+        with patch.object(self.owner, '_decode', wraps=self.owner._decode) as decode:
+            self.assertEqual(self.read(self.ids['book.cbz']), first); self.assertEqual(decode.call_count, 1)
+
+    def test_pillow_rejection_is_unavailable_not_unhandled_http_error(self):
+        with patch('PIL.Image.open', side_effect=Image.DecompressionBombError('generated header')):
+            with self.assertRaises(PreviewUnavailable): self.read()
+        self.assertEqual(self.owner.jobs, {})
+        self.assertTrue(self.read().startswith(b'\x89PNG'))
+
     def test_disk_capacity_and_owned_cleanup(self):
         from thumbnail_disk import ThumbnailDisk
         self.owner.disk.close(); self.owner.disk = ThumbnailDisk(max_bytes=32768, parent=self.base)

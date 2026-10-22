@@ -19,6 +19,7 @@ Linuxで生成PNG/JPEG/GIF/APNG/CBZ/folderだけ使用。原本SHA/mtime不変�
 - 初期25 PASS/1.439sはHTTP subclassが同じ12 testを再実行していた。失敗はないが重複を修正し、25件をunique coverageとして数えない。
 - RAM段階の関連41 PASS/4.446s（画像形式/原本/guard/stub生成含む）。
 - ディスク/動画/folder追加後の関連**56 PASS/9.627s**。raw: `docs/validation/20261022-thumbnails/`。重複したtest群の件数を加算しない。
+- 最後のcodec/cache境界修正3 PASS/0.122s。Pillowのbomb/codec例外を404相当へ正規化し、壊れた本cache ETagは再生成へ戻す。APNG/GIF経路も局所確認。上の56件を再加算しない。
 - Core ThumbnailTests追加はsourceのみ。**.NET SDKなし、Core実行/WinUI・Portable build/native PNG表示/速度/メモリ測定はUNRUN**。stub生成の合格はC# compileではない。既存Alpha/basic03等を更新した結果ではない。
 
 ## 次の作業
