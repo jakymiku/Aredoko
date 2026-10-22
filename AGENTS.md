@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-23 trimmed collection ABI / native P3 gate (latest)
+
+`6c29048` fixes actual published ItemsSource WinRT crash using explicit external generic vtables plus unsafe generated code; generator output confirms collection lookup, no new dependency/guard weakening. [Evidence and limits](docs/p3-continuous-browse.md): continuous flow3/3 consumed; final745-item run displayed/extended1–180 and viewer60↔61 positions, but failed return assertion after closing before final decode readiness. Corrected wait is source-only/UNRUN; tail/reverse/draft/invariance not reached, no full P3 acceptance. All3 processes exited0, three delivered PNGs reviewed. Do not repeat same flow under another name; proceed independent P4 backend. Today's quota threshold handoff/shutdown and GUI/GPU authorization remain, old Alpha untouched.
+
 ## 2026-10-23 P3 continuous-browse source (latest)
 
 Read [bounded bidirectional scrolling and next native gate](docs/p3-continuous-browse.md). Source connects standard recycled ListView to authenticated120-row extension, max600 UI rows/keys, head/tail eviction and anchor correction. Core873 PASS/Portable build0 errors+known3 warnings; continuous native/thumbnail latency/RSS acceptance pending. Prior card flow3/3 remains exhausted; next material scope is continuous boundaries/reverse/eviction/viewer return, at most3 attempts. No backend guard relaxation, old Alpha update or CI. Continue roadmap; quota-triggered safe handoff/shutdown remains active today.
