@@ -30,7 +30,7 @@ public sealed partial class MainPage
                 var result=await window.ReadAsync(checked(targetPage*resultPageSize),resultPageSize,CancellationToken.None);
                 if(disposed){window.Dispose();await CloseResultSessionAsync(replacement);return;}
                 resultSession=replacement;resultWindow=window;resultsNeedRefresh=false;
-                page=targetPage;rows=result.Items;
+                page=targetPage;ResetBrowse(checked(page*resultPageSize),result);rows=result.Items;
                 Count.Text=$"{result.Total:N0} 件";
                 PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+resultPageSize-1)/resultPageSize)}";
                 Previous.IsEnabled=page>0;Next.IsEnabled=(page+1)*resultPageSize<result.Total;
@@ -124,7 +124,7 @@ public sealed partial class MainPage
         }
         if (Dirty && !await ConfirmDiscardAsync()) return;
         var targetPage = ordinal / resultPageSize;
-        if (page != targetPage)
+        if (ordinal<browseStart||ordinal>=browseStart+rows.Count)
         {
             page = targetPage; await LoadAsync(reuseSession: true);
             if (disposed || PendingSearch || !ReferenceEquals(resultSession, session)) return;

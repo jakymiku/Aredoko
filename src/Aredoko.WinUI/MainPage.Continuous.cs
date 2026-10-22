@@ -1,0 +1,98 @@
+using Aredoko.Core;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using System.Collections.ObjectModel;
+using Windows.Foundation;
+
+namespace Aredoko_WinUI;
+public sealed partial class MainPage
+{
+    private readonly ObservableCollection<string> resultKeys=new();
+    private ResultBuffer? browseBuffer;
+    private int browseStart;
+    private bool browseFailed,extending;
+    private ScrollViewer? resultScroll;
+
+    private int PreviousBrowsePage()=>Math.Max(0,(browseStart-1)/resultPageSize);
+    private int NextBrowsePage()=>browseBuffer?.End/resultPageSize??page+1;
+    private void ResetBrowse(int start,SearchResponse result)
+    {
+        browseBuffer=new ResultBuffer(start,result);browseStart=start;browseFailed=false;
+    }
+    private static T? Descendant<T>(DependencyObject parent) where T:DependencyObject
+    {
+        for(var i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++)
+        {
+            var child=VisualTreeHelper.GetChild(parent,i);
+            if(child is T match)return match;
+            if(Descendant<T>(child) is T nested)return nested;
+        }
+        return null;
+    }
+    private void Items_Loaded(object sender,RoutedEventArgs args)
+    {
+        var scroll=Descendant<ScrollViewer>(Items);
+        if(ReferenceEquals(resultScroll,scroll))return;
+        if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;
+        resultScroll=scroll;
+        if(scroll is not null)scroll.ViewChanged+=ResultScroll_Changed;
+    }
+    private async void ResultScroll_Changed(object? sender,ScrollViewerViewChangedEventArgs args)
+    {
+        if(!ready||!Items.IsEnabled||args.IsIntermediate||disposed||extending||browseFailed||saving||dialogOpen||PendingSearch||folderHubOpen)return;
+        if(resultScroll is not ScrollViewer scroll||browseBuffer is not ResultBuffer buffer||resultWindow is not ResultWindow window)return;
+        var forward=scroll.VerticalOffset+scroll.ViewportHeight*2>=scroll.ExtentHeight&&buffer.End<buffer.Total;
+        var backward=!forward&&scroll.VerticalOffset<scroll.ViewportHeight&&buffer.Start>0;
+        if(!forward&&!backward||!await transitions.WaitAsync(0))return;
+        extending=true;var session=resultSession;var token=renderCancellation.Token;
+        try
+        {
+            var offset=forward?buffer.End:Math.Max(0,buffer.Start-ResultWindow.BlockSize);
+            var count=forward?Math.Min(ResultWindow.BlockSize,buffer.Total-offset):buffer.Start-offset;
+            var result=await window.ReadAsync(offset,count,token);
+            if(disposed||token.IsCancellationRequested||!ReferenceEquals(session,resultSession)||!ReferenceEquals(buffer,browseBuffer))return;
+            var anchor=CaptureBrowseAnchor();
+            buffer.Extend(offset,result);browseStart=buffer.Start;rows=buffer.Items.ToList();
+            var wanted=rows.Select(row=>RowKey(row.Id)).ToArray();var keep=wanted.ToHashSet();
+            var wasPopulating=populating;populating=true;
+            try
+            {
+                for(var i=resultKeys.Count-1;i>=0;i--)if(!keep.Contains(resultKeys[i]))resultKeys.RemoveAt(i);
+                for(var i=0;i<wanted.Length;i++)if(i>=resultKeys.Count||resultKeys[i]!=wanted[i])resultKeys.Insert(i,wanted[i]);
+                RestoreSelection();
+            }
+            finally{populating=wasPopulating;}
+            Items.UpdateLayout();RestoreBrowseAnchor(anchor);
+            PageNumber.Text=$"{browseStart+1:N0}–{buffer.End:N0} / {buffer.Total:N0}";
+            Previous.IsEnabled=browseStart>0;Next.IsEnabled=buffer.End<buffer.Total;
+        }
+        catch(OperationCanceledException){}
+        catch(Exception ex){if(!disposed){browseFailed=true;Failure(ex);}}
+        finally
+        {
+            extending=false;transitions.Release();
+            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+        }
+    }
+    private (string Key,double Y)? CaptureBrowseAnchor()
+    {
+        foreach(var container in containerCleanup.Keys)
+        {
+            if(!container.IsLoaded||container.Tag is not int id)continue;
+            var y=container.TransformToVisual(Items).TransformPoint(new Point()).Y;
+            if(y+container.ActualHeight>0&&y<Items.ActualHeight)return(RowKey(id),y);
+        }
+        return null;
+    }
+    private void RestoreBrowseAnchor((string Key,double Y)? anchor)
+    {
+        if(anchor is not {} value||resultScroll is null)return;
+        Items.ScrollIntoView(value.Key,ScrollIntoViewAlignment.Leading);Items.UpdateLayout();
+        if(Items.ContainerFromItem(value.Key) is ListViewItem container)
+        {
+            var y=container.TransformToVisual(Items).TransformPoint(new Point()).Y;
+            resultScroll.ChangeView(null,resultScroll.VerticalOffset+y-value.Y,null,true);
+        }
+    }
+}

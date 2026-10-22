@@ -1,4 +1,4 @@
-using Aredoko.Core;
+﻿using Aredoko.Core;
 using System.Text.Json;
 void Check(bool result,string name){if(!result)throw new Exception(name);Console.WriteLine("PASS "+name);}
 Check(!JsonSerializer.IsReflectionEnabledByDefault,"reflection disabled");
@@ -8,6 +8,7 @@ await ThumbnailTests.Run(Check);
 await AnimationStreamTests.Run(Check);
 await ResultSessionTests.Run(Check);
 await ResultNavigationTests.Run(Check);
+ResultBufferTests.Run(Check);
 await ResultWindowTests.Run(Check);
 var state=new EditorState("雨、青い夜,雨", "本棚",true,false);
 Check(state.ParsedTags.SequenceEqual(new[]{"雨","青い夜"}),"tag normalization");

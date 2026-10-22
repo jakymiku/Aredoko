@@ -67,8 +67,8 @@ public sealed partial class MainPage : Page
             if(!pointer.IsXButton1Pressed&&!pointer.IsXButton2Pressed)return;
             if(dialogOpen||saving||folderHubOpen||viewerWindow is not null)return;
             args.Handled=true;
-            if(pointer.IsXButton1Pressed&&Previous.IsEnabled)await NavigateAsync(Math.Max(0,page-1));
-            else if(pointer.IsXButton2Pressed&&Next.IsEnabled)await NavigateAsync(page+1);
+            if(pointer.IsXButton1Pressed&&Previous.IsEnabled)await NavigateAsync(PreviousBrowsePage());
+            else if(pointer.IsXButton2Pressed&&Next.IsEnabled)await NavigateAsync(NextBrowsePage());
         }),true);
         ItemListContainer.AddHandler(PointerWheelChangedEvent,new PointerEventHandler(Library_PointerWheelChanged),true);
         itemSizeSaveTimer=DispatcherQueue.CreateTimer();itemSizeSaveTimer.Interval=TimeSpan.FromMilliseconds(500);
@@ -243,7 +243,7 @@ public sealed partial class MainPage : Page
             var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null||(method.IsAI&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             SearchOptions.Header="AI候補の表示";
-            rows=result.Items; active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
+            ResetBrowse(checked(page*pageSize),result);rows=result.Items; active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             if(!folderHubOpen)MainViewTitle.Text=view=="history"?"閲覧履歴":view=="unreviewed"?"ライブラリ（未確認）":"ライブラリ";
             Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+pageSize-1)/pageSize)}";
@@ -330,11 +330,12 @@ public sealed partial class MainPage : Page
             foreach (var item in containerCleanup.Keys.ToArray()) ReleaseContainer(item);
             Items.ItemsSource=null;
             Items.ItemsPanel = (ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(tiles
-                ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\"/></ItemsPanelTemplate>"
-                : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel/></ItemsPanelTemplate>");
+                ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1\"/></ItemsPanelTemplate>"
+                : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"1\"/></ItemsPanelTemplate>");
             // Only native strings cross the WinRT collection boundary. MediaRow stays
             // owned by C#; no reflection-based property binding or custom COM model.
-            Items.ItemsSource=rows.Select(row => RowKey(row.Id)).ToArray();
+            resultKeys.Clear();foreach(var row in rows)resultKeys.Add(RowKey(row.Id));
+            Items.ItemsSource=resultKeys;
         }
         finally { populating = false; }
     }
@@ -383,7 +384,6 @@ public sealed partial class MainPage : Page
             Grid.SetColumn(text, 1);
         }
         content.Children.Add(image); content.Children.Add(text);
-        host.Child = content;
         SizeItem(item,image);
         item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
         item.ContextFlyout=SimilarityMenu(row);
@@ -424,6 +424,8 @@ public sealed partial class MainPage : Page
             visible?.Cancel(); visible?.Dispose(); visible=null;
             image.Source=null;
         };
+        // Wire loading/cancellation before the live template receives this image.
+        host.Child=content;
     }
     private void SizeItem(ListViewItem item,Image image)
     {
@@ -742,8 +744,8 @@ public sealed partial class MainPage : Page
     }
     private void AIMatchedOnly_Changed(object sender,RoutedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private void Kind_Changed(object sender,SelectionChangedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
-    private async void Previous_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(Math.Max(0,page-1));
-    private async void Next_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(page+1);
+    private async void Previous_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(PreviousBrowsePage());
+    private async void Next_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(NextBrowsePage());
     private void RestoreNavigation()
     {
         populating=true;
@@ -822,7 +824,7 @@ public sealed partial class MainPage : Page
             if(session is null)throw new InvalidOperationException("同じ条件で検索し直してから画像を開いてください。");
             var selectedIndex=rows.FindIndex(row=>row.Id==itemId);
             if(resultsNeedRefresh||selectedIndex<0)throw new InvalidOperationException("検索結果が変わりました。一覧から作品を選び直してください。");
-            var ordinal=checked(page*resultPageSize+selectedIndex);
+            var ordinal=checked(browseStart+selectedIndex);
             var sequence=new ImageViewerSequence(active,ordinal,session.Total,session.NeighborAsync);
             var viewer=new ImageViewerView(api,sequence);imageViewer=viewer;
             var window=new ViewerWindow(viewer,"画像ビューア","ImageViewerDialog");viewerWindow=window;
@@ -1255,8 +1257,8 @@ public sealed partial class MainPage : Page
             Count.Text=$"{visible.Count:N0} フォルダ";
             FolderList.Items.Clear();
             FolderList.ItemsPanel=(ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(folderTiles
-                ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\"/></ItemsPanelTemplate>"
-                : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel/></ItemsPanelTemplate>");
+                ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1\"/></ItemsPanelTemplate>"
+                : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"1\"/></ItemsPanelTemplate>");
             foreach(var row in visible)
             {
                 var card=new Grid {Padding=new Thickness(10),ColumnSpacing=12,RowSpacing=8};
@@ -2080,6 +2082,6 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){disposed=true;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){disposed=true;if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

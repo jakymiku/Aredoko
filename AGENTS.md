@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-23 P3 continuous-browse source (latest)
+
+Read [bounded bidirectional scrolling and next native gate](docs/p3-continuous-browse.md). Source connects standard recycled ListView to authenticated120-row extension, max600 UI rows/keys, head/tail eviction and anchor correction. Core873 PASS/Portable build0 errors+known3 warnings; continuous native/thumbnail latency/RSS acceptance pending. Prior card flow3/3 remains exhausted; next material scope is continuous boundaries/reverse/eviction/viewer return, at most3 attempts. No backend guard relaxation, old Alpha update or CI. Continue roadmap; quota-triggered safe handoff/shutdown remains active today.
+
 ## 2026-10-23 native cards / own-edit result refresh (latest)
 
 Initial container commit `1cd7dc3`; [native evidence and remaining work](docs/p3-native-containers-20261023.md). Native generated145-item flow3/3 consumed: first exposed stale session after metadata save plus runner selector/close faults; second runner save-await race; third targeted PASS, source SHA+mtime invariant and normal exit0. All12 screenshots reviewed, raw failures preserved. Own saves now recreate exact-condition session and range without weakening backend guards or losing unrelated drafts. Blank/late thumbnails remain visible; no thumbnail speed/full P3 acceptance. Next diagnose these then bounded continuous scrolling. Today's GUI/GPU and quota-threshold safe shutdown instruction remains active; old Alpha unchanged.
