@@ -86,6 +86,23 @@ class ShelfStore:
                 db.execute(f'DELETE FROM {relation} WHERE {key}=?',(oid,))
                 db.executemany(f'INSERT INTO {relation} VALUES(?,?)',[(oid,sid) for sid in shelf_ids])
             self._sync(db,entity,object_ids)
+    @staticmethod
+    def scalar_in_transaction(db,entity,object_ids,value):
+        table,key,relation=('items','item_id','item_shelves') if entity=='item' else ('library_roots','root_id','root_shelves')
+        if not isinstance(value,str) or len(value)>80:raise ValueError('Invalid shelf name')
+        for oid in object_ids:
+            if db.execute(f'SELECT id FROM {table} WHERE id=?',(oid,)).fetchone() is None:raise KeyError(oid)
+            count=db.execute(f'SELECT count(*) FROM {relation} WHERE {key}=?',(oid,)).fetchone()[0]
+            if count>1:raise ValueError('Legacy scalar update would lose multiple shelves')
+        sid=None
+        if value:
+            db.execute('INSERT OR IGNORE INTO shelves(name) VALUES(?)',(value,))
+            sid=db.execute('SELECT id FROM shelves WHERE name=?',(value,)).fetchone()[0]
+        for oid in object_ids:
+            db.execute(f'DELETE FROM {relation} WHERE {key}=?',(oid,))
+            if sid is not None:db.execute(f'INSERT INTO {relation} VALUES(?,?)',(oid,sid))
+        ShelfStore._sync(db,entity,object_ids)
+
     def legacy_replace(self,item_ids,value):
         value='' if value=='' else name(value)
         if not isinstance(item_ids,list) or not 1<=len(item_ids)<=256 or len(set(map(identity,item_ids)))!=len(item_ids):raise ValueError('Invalid shelf objects')
@@ -108,3 +125,16 @@ class ShelfStore:
             roots=[r[0] for r in db.execute('SELECT root_id FROM root_shelves WHERE shelf_id=?',(sid,))]
             db.execute('DELETE FROM shelves WHERE id=?',(sid,))
             self._sync(db,'item',items);self._sync(db,'root',roots)
+
+
+def shelf_clause(shelf=None,shelf_ids=None):
+    """OR within shelf IDs, AND with other backend conditions; no row fanout."""
+    if shelf is not None and shelf_ids is not None:raise ValueError('Choose shelf names or IDs, not both')
+    if shelf_ids is not None:
+        if not isinstance(shelf_ids,list) or len(shelf_ids)>64 or len(set(map(identity,shelf_ids)))!=len(shelf_ids):raise ValueError('Invalid shelf selection')
+        if not shelf_ids:return ['0=1'],[]
+        return ['EXISTS(SELECT 1 FROM item_shelves sm WHERE sm.item_id=i.id AND sm.shelf_id IN ('+','.join('?' for _ in shelf_ids)+'))'],list(shelf_ids)
+    if shelf is None:return [],[]
+    if not isinstance(shelf,str) or len(shelf)>80:raise ValueError('Invalid shelf name')
+    if shelf=='':return ["i.shelf=''"],[]
+    return ['EXISTS(SELECT 1 FROM item_shelves sm JOIN shelves ss ON ss.id=sm.shelf_id WHERE sm.item_id=i.id AND ss.name=?)'],[shelf]

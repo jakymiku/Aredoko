@@ -126,7 +126,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         def require(allowed):
             if set(values) - set(allowed):raise ValueError('Invalid result conditions')
         if mode in ('literal','history'):
-            require(('query','kind','view','root_ids'))
+            require(('query','kind','view','root_ids','shelf','shelf_ids'))
             if mode=='history':
                 if values.get('view','history')!='history':raise ValueError('Invalid history filter')
                 values['view']='history'
@@ -138,7 +138,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             require(('item_id','kind','view','scope'))
             return ai.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode in ('page-text','pending-proposals','pending-proposals-semantic'):
-            require(('query','kind','view','root_ids','shelf','model'))
+            require(('query','kind','view','root_ids','shelf','shelf_ids','model'))
             if mode=='page-text':return consume(lambda page:page_text.search(page=page,**values))
             if mode=='pending-proposals':return consume(lambda page:search_candidates(suggestions,page=page,**values))
             return semantic_candidates(suggestions,ai,page=0,**values,cancelled=cancelled,result_sink=consume)
@@ -200,7 +200,14 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         if not 1<=len(parts)<=256 or any(not p.isascii() or not p.isdigit() or len(p)>19 for p in parts):
                             raise ValueError('Invalid root filter')
                         roots=[int(p) for p in parts]
-                    return self.send(200,catalog.search(param('q'),param('kind'),param('view','all'),int(page),root_id=root,root_ids=roots))
+                    shelf_ids=None
+                    if 'shelf_ids' in args:
+                        if len(args['shelf_ids'])!=1:raise ValueError('Invalid shelf selection')
+                        parts=args['shelf_ids'][0].split(',') if args['shelf_ids'][0] else []
+                        if len(parts)>64 or any(not part.isascii() or not part.isdigit() or len(part)>19 for part in parts):raise ValueError('Invalid shelf selection')
+                        shelf_ids=[int(part) for part in parts]
+                    if 'shelf' in args and len(args['shelf'])!=1:raise ValueError('Invalid shelf selection')
+                    return self.send(200,catalog.search(param('q'),param('kind'),param('view','all'),int(page),root_id=root,root_ids=roots,shelf=param('shelf',None),shelf_ids=shelf_ids))
                 except ValueError as ex:return self.send(400,{'error':str(ex)})
             if path=='/api/session':
                 session={'mode':'production','token':token,'stats':catalog.stats()}
@@ -210,6 +217,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             if path.startswith('/api/library'):
                 if self.headers.get('X-Aredoko-Token')!=token:
                     return self.send(403,{'error':'Invalid session'})
+                if path=='/api/library/shelves':
+                    if urlparse(self.path).query:return self.send(400,{'error':'Invalid shelf query'})
+                    return self.send(200,{'shelves':catalog.shelf_store.list()})
                 if path=='/api/library/history':
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid history query'})
                     return self.send(200,catalog.history_status())
@@ -497,7 +507,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/history/delete')
                 body=json.loads(self.rfile.read(length),**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
                 if self.path.startswith('/api/library/results/'):
@@ -558,7 +568,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                             if set(body)!={'request_id'}:raise ValueError('Invalid cancellation fields')
                             return self.send(200,page_text.cancel(body['request_id']))
                         if self.path=='/api/library/page-text/search':
-                            if 'query' not in body or set(body)-{'query','kind','view','page','root_ids','shelf','model'}:
+                            if 'query' not in body or set(body)-{'query','kind','view','page','root_ids','shelf','shelf_ids','model'}:
                                 raise ValueError('Invalid text search fields')
                             return self.send(200,page_text.search(**body))
                         return self.send(404,{'error':'Not found'})
@@ -574,7 +584,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except PreviewBusyError:return self.send(503,{'error':'Preview workers busy'})
                     except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
                 if self.path=='/api/library/tag-suggestions/search':
-                    if set(body)-{'query','kind','view','page','root_ids','shelf','model','semantic','request_id'}:raise ValueError('Invalid candidate search fields')
+                    if set(body)-{'query','kind','view','page','root_ids','shelf','shelf_ids','model','semantic','request_id'}:raise ValueError('Invalid candidate search fields')
                     semantic=body.pop('semantic',False)
                     if type(semantic) is not bool:raise ValueError('Invalid candidate search mode')
                     if semantic:return self._search_reply(body,lambda cancelled:semantic_candidates(suggestions,ai,**body,cancelled=cancelled))
@@ -733,6 +743,17 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if set(body)!={'term'}: raise ValueError('Only term is accepted')
                     try: return self.send(200,catalog.terms.delete(body['term']))
                     except KeyError: return self.send(404,{'error':'Related-term entry not found'})
+                if self.path.startswith('/api/library/shelves/'):
+                    operation=self.path.rsplit('/',1)[-1]
+                    fields={'create':{'name'},'rename':{'shelf_id','name'},'delete':{'shelf_id','consent'},'assign':{'entity','object_ids','shelf_ids'}}
+                    if operation not in fields or set(body)!=fields[operation]:raise ValueError('Invalid shelf request')
+                    if operation=='delete':
+                        if body.pop('consent') is not True:raise ValueError('Explicit shelf deletion consent required')
+                    try:return self.send(200,catalog.change_shelf(operation,**body))
+                    except ScanBusyError:raise
+                    except sqlite3.IntegrityError:return self.send(409,{'error':'Shelf name already exists'})
+                    except KeyError:return self.send(404,{'error':'Shelf or item not found'})
+                    except ValueError:return self.send(400,{'error':'Invalid shelf request'})
                 if self.path=='/api/library/history':
                     if set(body) not in ({'item_id'},{'item_id','generation'}):raise ValueError('Invalid history request')
                     if 'generation' in body and type(body['generation']) is not str:raise ValueError('Invalid history request')

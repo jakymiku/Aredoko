@@ -1,5 +1,27 @@
 # P4 複数棚の保存・移行基盤（2026-10-23）
 
+## 製品backend接続（最新、2026-10-23）
+
+以下の保存基盤限定の記述は初期段階。**現在のProductionCatalogはversion1まで明示対応し、起動時に旧scalarをtransaction移行する。** Prototype Catalogは既定version0までのまま、旧binaryも新versionを拒否。実行・移行の確認は生成DBのみで、普段のDB/旧Alphaを起動・更新していない。
+
+- 起動、scan新規itemの全root初期棚継承、通常metadata更新、旧scalar更新の全batch拒否、root設定・登録hook、purge所属掃除を接続。root登録hookはLibraryIndexの同じDB transactionに参加し、半分だけ保存しない。
+- Shelf CRUD/assignをCatalog owner guard下へ接続し、認証API GET shelves とPOST create/rename/delete/assignを追加。deleteはconsent:true、shape/duplicate JSONチェック。名前衝突409、未知ID404、不正要求400。通常metadataの他field保存は複数棚を変えない。
+- item応答に安定shelf_idsを追加。literal/history結果sessionとGET items、AI共通scope、本文、未承認タグ・タグ意味検索にOR shelf_idsをbackendで適用。他条件はAND、EXISTSなので所属数で件数を増やさない。旧shelf名filterも副所属に一致。空IDsは0件、Noneは無指定、名前とIDs両方は拒否。既存scope JSONの省略形は変更しない。
+- standalone vector DBはversion0を維持。歴史的にcatalog内へ置かれたvector tablesだけ、production/shelf schemaを持つcatalog version1を認識する（新規に混在させる推奨ではない）。将来版は拒否。
+
+### 実行した確認
+
+初回関連66:64 PASS/2 ERROR、30.371s。1件はrollback試験が移行前DBを新しいFIELDSで読んだfixture不備、もう1件は古い同居VectorStoreがcatalog version1を拒否した互換不具合。fixtureを直接legacy SQL読みにし、認識済みcatalogの場合だけVectorStoreを対応。
+
+その2件＋新Catalog5＋既存scope/page-text/tag-semanticsのfocused47:46 PASS/1新testのpurgeメソッド名誤り、33.310s。正しいpurge_inactive_rootへ直し、失敗1＋追加HTTP契約1の**2 PASS/0.997s**。原始ログを残し、重複実行を合算しない。さらにResultSessions21 PASS/22.971s、Prototype Catalog6 PASS/1.181s。
+
+新確認:副所属検索、OR/AND・重複なし、空選択、shelf_ids応答、AI候補の副所属、旧scalar batchに含むtagsの原子拒否、全root棚のscan継承/再起動、purge FK、HTTP auth/CRUD/衝突/明示同意/duplicate JSON/結果session scope。raw ignored data/ai-ui/shelf-{activation-tests,activation-focused,activation-corrected,result-sessions,base-catalog}-20261023.log。Python backendのみ変更、既存WinUIを再ビルド/GUI/GPU/CI反復していない。
+
+### 残り
+
+**棚UIはまだ旧単一TextBox。Coreの複数棚契約・棚一覧→共通library・複数選択詳細は未接続。** 新APIで複数所属を作ったアイテムへ旧GUIのscalar含み保存をすると安全に拒否する。これを完成形と扱わず、次のCore/UIでshelf_ids保存へ移す。現在の検索scope/APIと同じIDを使い、frontend独自filterを作らない。P3 native gate/thumbnail/RSS、P4 root favorite/navigation、P5–7/実音声は未完。
+
+
 **保存基盤のみ。製品での自動移行・新API・複数棚UIは未接続。** app/shelves.pyのShelfStoreは明示的に呼ぶtransaction module。通常ProductionCatalog起動/普段DBを変更していない。現行ProductionCatalog/Catalogはversion0まで対応し、移行済みversion1を旧アプリとして拒否する。新しい起動・検索・scan・update adaptersを揃えてから製品側の許容版を上げること。
 
 ## 実装

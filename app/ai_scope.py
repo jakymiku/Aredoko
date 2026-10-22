@@ -1,11 +1,12 @@
 """Explicit registered-library scope; no paths, SQL, or model-space changes."""
 from library_index import TYPES
+from shelves import shelf_clause
 
 MAX_ROOTS = 256
 
 
 def validate_scope(value):
-    if not isinstance(value, dict) or set(value) - {'root_ids', 'kind', 'shelf'}:
+    if not isinstance(value, dict) or set(value) - {'root_ids', 'kind', 'shelf', 'shelf_ids'}:
         raise ValueError('Invalid AI scope')
     roots = value.get('root_ids')
     if roots is not None:
@@ -20,7 +21,10 @@ def validate_scope(value):
         raise ValueError('Invalid scope kind')
     if shelf is not None and (not isinstance(shelf, str) or len(shelf) > 80):
         raise ValueError('Invalid scope shelf')
-    return {'root_ids': roots, 'kind': kind, 'shelf': shelf}
+    shelf_clause(shelf,value.get('shelf_ids'))
+    result={'root_ids': roots, 'kind': kind, 'shelf': shelf}
+    if 'shelf_ids' in value:result['shelf_ids']=None if value['shelf_ids'] is None else sorted(value['shelf_ids'])
+    return result
 
 
 def scope_clause(scope):
@@ -37,6 +41,6 @@ def scope_clause(scope):
             where.append('0=1')
     if scope['kind']:
         where.append('i.kind=?'); values.append(scope['kind'])
-    if scope['shelf'] is not None:
-        where.append('i.shelf=?'); values.append(scope['shelf'])
+    clauses,parameters=shelf_clause(scope['shelf'],scope.get('shelf_ids'))
+    where.extend(clauses);values.extend(parameters)
     return where, values

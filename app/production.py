@@ -5,6 +5,7 @@ import threading
 from contextlib import closing, contextmanager
 from pathlib import Path
 from catalog import Catalog
+from shelves import ShelfStore, shelf_clause
 from library_index import LibraryIndex, TYPES, is_folder_book, folder_title
 from search_terms import register as register_search_terms, split_terms, explain_matches
 from term_relations import TermRelations
@@ -26,12 +27,12 @@ class ProductionCatalog(Catalog):
         if Path(path).exists() and Path(path).stat().st_size > 0:
             with closing(sqlite3.connect(path)) as db:
                 user_ver = db.execute("PRAGMA user_version").fetchone()[0]
-                if user_ver > 0:
-                    raise ValueError(f"Unsupported database schema user_version {user_ver} > 0; please update Aredoko.")
+                if user_ver > 1:
+                    raise ValueError(f"Unsupported database schema user_version {user_ver} > 1; please update Aredoko.")
                 tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 if 'items' in tables and 'production_marker' not in tables:
                     raise ValueError('Use a separate production database, not the demo database')
-        super().__init__(path)
+        super().__init__(path,supported_schema=1)
         self.index = LibraryIndex(path)
         self.terms = TermRelations(self.connect)
         with self.connect() as db:
@@ -62,6 +63,8 @@ class ProductionCatalog(Catalog):
         self._cancel = threading.Event()
         self._worker = None
         self._progress = 0
+        self.shelf_store=ShelfStore(self.connect)
+        self.shelf_store.migrate()
         # Recover a crash between index commit and catalog publication.
         self.sync_index()
 
@@ -116,6 +119,10 @@ class ProductionCatalog(Catalog):
                         item_id = db.execute('INSERT INTO items(title,kind,tags,shelf) VALUES(?,?,?,?)',
                                              (title,row['kind'],'[]',row['default_shelf'])).lastrowid
                         db.execute('INSERT INTO item_locations VALUES(?,?)',(item_id,row['id']))
+                        if row['default_shelf']:
+                            db.execute('INSERT OR IGNORE INTO shelves(name) VALUES(?)',(row['default_shelf'],))
+                            db.execute('INSERT OR IGNORE INTO root_shelves SELECT l.root_id,s.id FROM library_locations l JOIN shelves s ON s.name=? WHERE l.id=? AND NOT EXISTS(SELECT 1 FROM root_shelves rs WHERE rs.root_id=l.root_id)',(row['default_shelf'],row['id']))
+                        db.execute('INSERT INTO item_shelves SELECT ?,shelf_id FROM root_shelves WHERE root_id=(SELECT root_id FROM library_locations WHERE id=?)',(item_id,row['id']))
                     else:
                         # Only source-derived fields; never overwrite user tags/favorites.
                         db.execute('UPDATE items SET title=?,kind=? WHERE id=?',
@@ -126,13 +133,14 @@ class ProductionCatalog(Catalog):
     def item(row):
         result = Catalog.item(row)
         result['synthetic'] = False
+        if isinstance(result.get('shelf_ids'),str):result['shelf_ids']=json.loads(result['shelf_ids'])
         return result
 
     JOIN = (' FROM items i JOIN item_locations m ON m.item_id=i.id '
             'JOIN library_locations l ON l.id=m.location_id ')
-    FIELDS = 'i.*,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns'
+    FIELDS = 'i.*,(SELECT json_group_array(shelf_id) FROM (SELECT shelf_id FROM item_shelves WHERE item_id=i.id ORDER BY shelf_id)) shelf_ids,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns'
 
-    def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None, root_ids=None):
+    def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None, root_ids=None, shelf=None, shelf_ids=None):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf','history'):
             raise ValueError('Invalid filter')
         if type(page) is not int or page<0 or not 1<=limit<=120 or len(query)>300:
@@ -180,6 +188,8 @@ class ProductionCatalog(Catalog):
                     values.extend(selected_roots)
             if kind:
                 where.append('i.kind=?'); values.append(kind)
+            shelf_where,shelf_values=shelf_clause(shelf,shelf_ids)
+            where.extend(shelf_where);values.extend(shelf_values)
             where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],
                           'shelf':["i.shelf<>''"],'history':['EXISTS(SELECT 1 FROM view_history h WHERE h.item_id=i.id)'],'all':[]}[view])
             clause=self.JOIN+' WHERE '+' AND '.join(where)
@@ -243,7 +253,16 @@ class ProductionCatalog(Catalog):
         # metadata commit. Fail promptly rather than waiting on SQLite's writer.
         with self._guard:
             self._require_idle()
-            return super().update(ids, changes)
+            changes=Catalog.prepare_update(ids,changes)
+            with self.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                marks=','.join('?' for _ in ids)
+                count=db.execute(f'SELECT count(*) FROM items WHERE id IN ({marks})',ids).fetchone()[0]
+                if count!=len(set(ids)):raise KeyError('Some items no longer exist')
+                if 'shelf' in changes:ShelfStore.scalar_in_transaction(db,'item',ids,changes['shelf'])
+                assignments=','.join(f'{key}=?' for key in changes)
+                db.execute(f'UPDATE items SET {assignments} WHERE id IN ({marks})',list(changes.values())+ids)
+            return {'updated':count}
 
     def history_status(self):
         with self._guard:
@@ -332,11 +351,15 @@ class ProductionCatalog(Catalog):
         with self._guard:
             self._require_idle()
             with self.connect() as db:
+                ShelfStore.scalar_in_transaction(db,'root',[root_id],shelf)
                 if not db.execute('UPDATE library_roots SET default_shelf=? WHERE id=? AND enabled=1',(shelf,root_id)).rowcount:
                     raise ValueError('Unknown registered root')
                 changed=0
                 if fill_unset and shelf:
-                    changed=db.execute("UPDATE items SET shelf=? WHERE shelf='' AND id IN (SELECT m.item_id FROM item_locations m JOIN library_locations l ON l.id=m.location_id WHERE l.root_id=? AND l.status='present')",(shelf,root_id)).rowcount
+                    targets=[r[0] for r in db.execute("SELECT m.item_id FROM item_locations m JOIN library_locations l ON l.id=m.location_id JOIN items i ON i.id=m.item_id WHERE l.root_id=? AND l.status='present' AND i.shelf=''",(root_id,))]
+                    if targets:ShelfStore.scalar_in_transaction(db,'item',targets,shelf)
+                    changed=len(targets)
+                    db.execute("UPDATE items SET shelf=? WHERE shelf='' AND id IN (SELECT m.item_id FROM item_locations m JOIN library_locations l ON l.id=m.location_id WHERE l.root_id=? AND l.status='present')",(shelf,root_id)).rowcount
         return {'default_shelf':shelf,'updated':changed}
 
     def unregister_root(self,root_id):
@@ -401,6 +424,8 @@ class ProductionCatalog(Catalog):
                 db.execute('INSERT INTO purge_item_ids '+item_subquery,(root_id,))
                 removed_items=db.execute('SELECT count(*) FROM purge_item_ids').fetchone()[0]
                 db.execute('DELETE FROM item_locations WHERE location_id IN (SELECT id FROM library_locations WHERE root_id=?)', (root_id,))
+                db.execute('DELETE FROM item_shelves WHERE item_id IN (SELECT id FROM purge_item_ids)')
+                db.execute('DELETE FROM root_shelves WHERE root_id=?',(root_id,))
                 db.execute('DELETE FROM items WHERE id IN (SELECT id FROM purge_item_ids)')
                 removed_locations = db.execute('DELETE FROM library_locations WHERE root_id=?', (root_id,)).rowcount
                 db.execute('DELETE FROM scan_jobs WHERE root_id=?', (root_id,))
@@ -415,9 +440,18 @@ class ProductionCatalog(Catalog):
             self._state_epoch += 1
             return res
 
+    def change_shelf(self,operation,**values):
+        with self._guard:
+            self._require_idle()
+            if operation=='create':return {'id':self.shelf_store.create(values['name'])}
+            if operation=='rename':self.shelf_store.rename(values['shelf_id'],values['name']);return {'renamed':values['shelf_id']}
+            if operation=='delete':self.shelf_store.delete(values['shelf_id']);return {'deleted':values['shelf_id']}
+            if operation=='assign':self.shelf_store.replace(values['entity'],values['object_ids'],values['shelf_ids']);return {'updated':len(values['object_ids'])}
+            raise ValueError('Invalid shelf operation')
+
     def shelves(self):
         with self.connect() as db:
-            return [row[0] for row in db.execute("SELECT shelf FROM items WHERE shelf<>'' UNION SELECT default_shelf FROM library_roots WHERE default_shelf<>'' AND enabled=1 ORDER BY 1")]
+            return [row[0] for row in db.execute('SELECT name FROM shelves ORDER BY name,id')]
 
     def add_root(self,path,excludes=None,default_shelf='',folder_books=None,recursive=None):
         if not isinstance(path,str) or not path or not Path(path).is_absolute():
@@ -427,7 +461,7 @@ class ProductionCatalog(Catalog):
             raise ValueError('The library must not contain the application database')
         with self._guard:
             self._require_idle()
-            res = self.index.add_root(path,excludes,default_shelf,folder_books,recursive)
+            res = self.index.add_root(path,excludes,default_shelf,folder_books,recursive,metadata_hook=lambda db,rid: ShelfStore.scalar_in_transaction(db,'root',[rid],default_shelf.strip()))
             self._state_epoch += 1
             return res
 

@@ -54,8 +54,14 @@ class VectorStore:
         if self.path.exists() and self.path.stat().st_size > 0:
             with closing(sqlite3.connect(self.path, timeout=5)) as check_db:
                 ver = check_db.execute('PRAGMA user_version').fetchone()[0]
-                if ver > CURRENT_VECTOR_STORE_USER_VERSION:
-                    raise AIUnavailable(f'Unsupported vector store user_version {ver} > {CURRENT_VECTOR_STORE_USER_VERSION}; please update Aredoko.')
+                supported=CURRENT_VECTOR_STORE_USER_VERSION
+                # Historical in-catalog vector tables share the catalog's version;
+                # standalone vector databases still use version0 only.
+                if ver==1:
+                    tables={row[0] for row in check_db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                    if {'production_marker','items','item_locations','library_roots','shelves','item_shelves','root_shelves'}<=tables:supported=1
+                if ver > supported:
+                    raise AIUnavailable(f'Unsupported vector store user_version {ver} > {supported}; please update Aredoko.')
         with self.connect() as db:
             db.executescript('''
                 PRAGMA journal_mode=WAL;

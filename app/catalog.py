@@ -18,14 +18,14 @@ CURRENT_SCHEMA_USER_VERSION = 0
 
 
 class Catalog:
-    def __init__(self, path):
+    def __init__(self, path, *, supported_schema=CURRENT_SCHEMA_USER_VERSION):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists() and self.path.stat().st_size > 0:
             with closing(sqlite3.connect(self.path, timeout=5)) as check_db:
                 ver = check_db.execute('PRAGMA user_version').fetchone()[0]
-                if ver > CURRENT_SCHEMA_USER_VERSION:
-                    raise ValueError(f'Unsupported database schema user_version {ver} > {CURRENT_SCHEMA_USER_VERSION}; please update Aredoko.')
+                if ver > supported_schema:
+                    raise ValueError(f'Unsupported database schema user_version {ver} > {supported_schema}; please update Aredoko.')
         with self.connect() as db:
             db.executescript('''
                 PRAGMA journal_mode=WAL;
@@ -110,7 +110,8 @@ class Catalog:
             raise KeyError(item_id)
         return self.item(row)
 
-    def update(self, ids, changes):
+    @staticmethod
+    def prepare_update(ids,changes):
         if (not isinstance(ids, list) or not 1 <= len(ids) <= 120
                 or any(type(i) is not int or not 1 <= i <= 9223372036854775807 for i in ids)):
             raise ValueError('Select 1 to 120 valid IDs')
@@ -124,6 +125,10 @@ class Catalog:
         for key in ('favorite', 'reviewed'):
             if key in changes and type(changes[key]) is not bool:
                 raise ValueError('Expected a boolean')
+        return changes
+
+    def update(self, ids, changes):
+        changes=self.prepare_update(ids,changes)
         marks = ','.join('?' for _ in ids)
         with self.connect() as db:
             count = db.execute(f'SELECT count(*) FROM items WHERE id IN ({marks})', ids).fetchone()[0]

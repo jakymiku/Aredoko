@@ -4,6 +4,7 @@ The default extractor is absent. Trusted local adapters provide .info.record()
 and .extract(payload, cancelled) -> str; they must own/release their runtime and
 honor cancellation. No public path/model/text injection and no implicit downloads.
 """
+from shelves import shelf_clause
 import json
 import hashlib
 import re
@@ -206,7 +207,7 @@ class PageTextIndex:
                     'source_state': self.pages.state(item_id, head['source_revision']),
                     'total': total, 'offset': offset, 'limit': limit, 'pages': pages}
 
-    def search(self, query, *, kind='', view='all', page=0, root_ids=None, shelf=None, model=None):
+    def search(self, query, *, kind='', view='all', page=0, root_ids=None, shelf=None, model=None, shelf_ids=None):
         if type(query) is not str or not 1 <= len(query) <= 300:
             raise ValueError('Invalid text query')
         terms = split_terms(query)
@@ -246,8 +247,8 @@ class PageTextIndex:
                 if kind:
                     where.append('i.kind=?'); values.append(kind)
                 where.extend({'all': [], 'favorites': ['i.favorite=1'], 'unreviewed': ['i.reviewed=0'], 'shelf': ["i.shelf<>''"]}[view])
-                if shelf is not None:
-                    where.append('i.shelf=?'); values.append(shelf)
+                shelf_where,shelf_values=shelf_clause(shelf,shelf_ids)
+                where.extend(shelf_where);values.extend(shelf_values)
                 if model is not None:
                     where.append("json_extract(t.producer_json,'$.model')=?"); values.append(model)
                 for term in terms:

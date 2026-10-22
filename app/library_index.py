@@ -185,7 +185,7 @@ class LibraryIndex:
         finally:
             db.close()
 
-    def add_root(self, path, excludes=None, default_shelf='', folder_books=None, recursive=None):
+    def add_root(self, path, excludes=None, default_shelf='', folder_books=None, recursive=None, *, metadata_hook=None):
         if not isinstance(default_shelf,str) or len(default_shelf)>80:
             raise ValueError('Shelf must be 80 characters or less')
         # None keeps a restored root's choice (False for a new root). The
@@ -233,6 +233,7 @@ class LibraryIndex:
                             db.execute("UPDATE library_locations SET status='excluded' WHERE root_id=? AND relative_path<>'./' AND instr(relative_path,'/')>0",(row['id'],))
                     db.execute('UPDATE library_roots SET enabled=1,excludes_json=?,default_shelf=? WHERE id=?',
                         (json.dumps(patterns,ensure_ascii=False),default_shelf,row['id']))
+                    if metadata_hook is not None:metadata_hook(db,row['id'])
                     return row['id']
                 if row['enabled'] and (existing in root.parents or root in existing.parents):
                     raise ValueError('Overlapping roots are not supported')
@@ -243,6 +244,7 @@ class LibraryIndex:
             db.execute('UPDATE library_root_seq SET max_id=? WHERE id=1', (next_id,))
             db.execute('INSERT INTO library_roots(id,path,excludes_json,created_at,default_shelf,folder_books,recursive) VALUES(?,?,?,?,?,?,?)',
                        (next_id, str(root), json.dumps(patterns, ensure_ascii=False), _now(), default_shelf, int(bool(folder_books)), int(recursive is not False)))
+            if metadata_hook is not None:metadata_hook(db,next_id)
             return next_id
 
     def unregister(self,root_id):

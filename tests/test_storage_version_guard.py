@@ -33,16 +33,16 @@ class StorageVersionGuardTests(unittest.TestCase):
             db_path = Path(tmp) / 'future_catalog.sqlite'
             with closing(sqlite3.connect(db_path)) as db:
                 db.execute('CREATE TABLE dummy(id INTEGER)')
-                db.execute('PRAGMA user_version = 1')
+                db.execute('PRAGMA user_version = 2')
                 db.commit()
 
             with self.assertRaises(ValueError) as ctx:
                 Catalog(db_path)
-            self.assertIn('Unsupported database schema user_version 1', str(ctx.exception))
+            self.assertIn('Unsupported database schema user_version 2', str(ctx.exception))
 
             with self.assertRaises(ValueError) as ctx2:
                 ProductionCatalog(db_path)
-            self.assertIn('Unsupported database schema user_version 1', str(ctx2.exception))
+            self.assertIn('Unsupported database schema user_version 2', str(ctx2.exception))
 
     def test_vector_store_rejects_future_user_version(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
 from production import ProductionCatalog
+from catalog import Catalog
 from shelves import ShelfStore,TABLES
 from storage_backup import backup,restore,_database,RecoveryError
 
@@ -16,6 +17,9 @@ class ShelfStorageTests(unittest.TestCase):
         self.root=self.catalog.add_root(str(media),default_shelf='初期棚');self.catalog.index.scan(self.root);self.catalog.sync_index()
         self.ids=[row['id'] for row in self.catalog.search()['items']]
         self.catalog.update([self.ids[0]],{'shelf':'手動棚','tags':['keep'],'favorite':True})
+        with self.catalog.connect() as db:
+            for table in ('item_shelves','root_shelves','shelves'):db.execute('DROP TABLE '+table)
+            db.execute('PRAGMA user_version=0')
         self.store=ShelfStore(self.catalog.connect)
     def migrate(self):self.store.migrate();return {r['name']:r['id'] for r in self.store.list()}
     def memberships(self,item):
@@ -33,7 +37,7 @@ class ShelfStorageTests(unittest.TestCase):
         with self.catalog.connect() as db:
             self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],0)
             self.assertFalse(TABLES&{r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")})
-        self.assertEqual(self.catalog.get(self.ids[0])['shelf'],'手動棚')
+        with self.catalog.connect() as db:self.assertEqual(db.execute('SELECT shelf FROM items WHERE id=?',(self.ids[0],)).fetchone()[0],'手動棚')
     def test_multiple_memberships_partial_removal_and_scalar_rejection(self):
         names=self.migrate();selected=list(names.values());self.store.replace('item',[self.ids[0]],selected)
         with self.assertRaisesRegex(ValueError,'lose multiple'):self.store.legacy_replace([self.ids[0],self.ids[1]],'replacement')
@@ -56,7 +60,9 @@ class ShelfStorageTests(unittest.TestCase):
             with self.assertRaises(ValueError):self.store.replace('item',[self.ids[0]],ids)
     def test_version_rejects_old_app_and_future_or_incomplete_schema(self):
         self.migrate()
-        with self.assertRaisesRegex(ValueError,'Unsupported database'):ProductionCatalog(self.catalog.path)
+        with self.assertRaisesRegex(ValueError,'Unsupported database'):Catalog(self.catalog.path)
+        reopened=ProductionCatalog(self.catalog.path);self.addCleanup(reopened.close)
+        self.assertEqual(len(reopened.shelf_store.list()),2)
         with self.catalog.connect() as db:db.execute('PRAGMA user_version=2')
         with self.assertRaises(ValueError):self.store.migrate()
     def test_backup_roundtrip_preserves_version1_and_all_memberships(self):

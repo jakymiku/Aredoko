@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-23 P4 production shelf adapters (latest)
+
+[Catalog1 migration/scan/update/root/purge/API and all search adapters](docs/multi-shelf-storage.md) now connected; supersedes prior NOT product-activated note. Generated DBs only, no normal DB/Alpha launch. Initial66 had64 PASS/2 ERROR; corrected focused47 had46 PASS/1 new fixture typo; only failed1+newHTTP1 rerun2 PASS. Sessions21/Prototype6 PASS separately. Raw failures kept. Next Core shelf IDs + shelf list/common library/multiple selection details: current GUI scalar save intentionally rejects multi-membership rather than losing data. Backend foundation is not full shelf UI completion. No CI/merge/models/GUI replay. Today's quota-threshold safe commit/push/handoff/shutdown remains active; near threshold, finish this unit before another large task.
+
 ## 2026-10-23 P4 multi-shelf storage foundation (latest)
 
 [Atomic legacy migration, memberships and backup evidence](docs/multi-shelf-storage.md) implemented but NOT product-activated: no normal DB migration/new API/UI yet. Version1 prevents old version0 app writes; adapters must be completed before raising production support. New7+backup28=35 run,34 PASS/1 new fixture SQLite cleanup error; closing fixed and only failed1 rerun PASS/0.217s. Prior raw failure kept. Next connect query/scan/scalar/root/purge adapters under owner guard, then API/Core/UI; do not expose half-synchronized membership. History deletion is `b1cf0b6`; P3 native3/3 gates and today's quota handoff/shutdown remain.
