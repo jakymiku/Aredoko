@@ -1,4 +1,4 @@
-using Aredoko.Core;
+﻿using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using System.Net;
 using System.Text.Json.Nodes;
@@ -10,6 +10,45 @@ public sealed partial class MainPage
     private ResultSession? resultSession;
     private ResultWindow? resultWindow;
     private int resultPageSize = 60;
+    private bool resultsNeedRefresh;
+
+    private async Task RefreshResultRowsAfterEditAsync()
+    {
+        resultsNeedRefresh=true;
+        var previous=resultSession;
+        if(previous is null)return;
+        ResultSession? replacement=null;
+        try
+        {
+            resultWindow?.Dispose();resultWindow=null;resultSession=null;
+            await CloseResultSessionAsync(previous);
+            replacement=await api.Results.CreateAsync(previous.Conditions, CancellationToken.None);
+            var targetPage=Math.Min(page,Math.Max(0,(replacement.Total-1)/resultPageSize));
+            var window=new ResultWindow(replacement.Total,replacement.RangeAsync);
+            try
+            {
+                var result=await window.ReadAsync(checked(targetPage*resultPageSize),resultPageSize,CancellationToken.None);
+                if(disposed){window.Dispose();await CloseResultSessionAsync(replacement);return;}
+                resultSession=replacement;resultWindow=window;resultsNeedRefresh=false;
+                page=targetPage;rows=result.Items;
+                Count.Text=$"{result.Total:N0} 件";
+                PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+resultPageSize-1)/resultPageSize)}";
+                Previous.IsEnabled=page>0;Next.IsEnabled=(page+1)*resultPageSize<result.Total;
+                Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
+                RenderRows();RestoreSelection();
+            }
+            catch{window.Dispose();throw;}
+        }
+        catch(Exception ex)
+        {
+            if(replacement is not null)await CloseResultSessionAsync(replacement);
+            AppLog.Error(ex);
+            // The edit already committed. Never report this as a failed save or
+            // discard an unrelated tag/shelf draft (favorite saves only its flag).
+            if(!disposed)Notice("保存しました","検索結果を更新できませんでした。同じ条件で検索し直してください。",Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning);
+        }
+    }
+
 
     private static async Task CloseResultSessionAsync(ResultSession? session)
     {
@@ -21,6 +60,7 @@ public sealed partial class MainPage
     private async Task<SearchResponse> ReadResultPageAsync(JsonObject? conditions, bool reuse, long version,
         int requestedPage, int pageSize, CancellationToken cancellation)
     {
+        reuse = reuse && !resultsNeedRefresh;
         ResultSession? session = null;
         try
         {
@@ -45,6 +85,7 @@ public sealed partial class MainPage
                     throw new OperationCanceledException(cancellation);
                 }
                 resultSession = session;
+                resultsNeedRefresh=false;
                 resultWindow = new ResultWindow(session.Total, session.RangeAsync);
             }
             var window = resultWindow ?? throw new InvalidOperationException("Result window is unavailable");

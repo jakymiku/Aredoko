@@ -641,7 +641,7 @@ public sealed partial class MainPage : Page
                 saved=saved with {Favorite=value};active.Favorite=value;updatingFavorite=true;
                 try{Favorite.IsChecked=value;}finally{updatingFavorite=false;}
             }
-            RenderRows();RestoreSelection();
+            await RefreshResultRowsAfterEditAsync();
         }
         catch(Exception ex)
         {
@@ -683,7 +683,7 @@ public sealed partial class MainPage : Page
         try {
             await api.SaveAsync(id,snapshot);
             saved=snapshot;active.Tags=snapshot.ParsedTags;active.Shelf=snapshot.Shelf;active.Favorite=snapshot.Favorite;active.Reviewed=snapshot.Reviewed;
-            RenderRows();RestoreSelection();EditStatus.Text="保存しました";Notice("保存しました");
+            EditStatus.Text="保存しました";Notice("保存しました");await RefreshResultRowsAfterEditAsync();
         }catch(Exception ex){Failure(ex);EditStatus.Text="保存できませんでした。変更内容は残っています。";}
         finally
         {
@@ -820,7 +820,9 @@ public sealed partial class MainPage : Page
         try
         {
             if(session is null)throw new InvalidOperationException("同じ条件で検索し直してから画像を開いてください。");
-            var ordinal=checked(page*resultPageSize+rows.FindIndex(row=>row.Id==itemId));
+            var selectedIndex=rows.FindIndex(row=>row.Id==itemId);
+            if(resultsNeedRefresh||selectedIndex<0)throw new InvalidOperationException("検索結果が変わりました。一覧から作品を選び直してください。");
+            var ordinal=checked(page*resultPageSize+selectedIndex);
             var sequence=new ImageViewerSequence(active,ordinal,session.Total,session.NeighborAsync);
             var viewer=new ImageViewerView(api,sequence);imageViewer=viewer;
             var window=new ViewerWindow(viewer,"画像ビューア","ImageViewerDialog");viewerWindow=window;
@@ -987,7 +989,7 @@ public sealed partial class MainPage : Page
         if(disposed||active?.Id!=id)return;
         active.Tags=fresh.Tags;active.Shelf=fresh.Shelf;active.Favorite=fresh.Favorite;active.Reviewed=fresh.Reviewed;
         Tags.Text=string.Join(", ",fresh.Tags);Shelf.Text=fresh.Shelf;Favorite.IsChecked=fresh.Favorite;Reviewed.IsChecked=fresh.Reviewed;
-        saved=Current();tagReviewSyncItem=null;RenderRows();RestoreSelection();
+        saved=Current();tagReviewSyncItem=null;await RefreshResultRowsAfterEditAsync();
     }
     private void UpdateNavigationLayout(double width)
     {
