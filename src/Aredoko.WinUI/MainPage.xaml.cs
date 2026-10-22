@@ -113,7 +113,7 @@ public sealed partial class MainPage : Page
     private async Task ConnectAsync() {
         try {
             renderCancellation.Cancel();
-            AppLog.Startup("session_connecting");await api.ConnectAsync();
+            AppLog.Startup("session_connecting");await api.ConnectAsync();await RefreshHistoryGenerationAsync();
             AppLog.Startup("session_connected");await LoadAIScopeAsync();
             AppLog.Startup("ai_scope_loaded");await RefreshSearchRootsAsync();
             AppLog.Startup("roots_loaded");await LoadAsync();
@@ -485,6 +485,11 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetAutomationId(favoriteAction,"ToggleFavorite"+row.Id);
         favoriteAction.Click+=async(_,_)=>await SetFavoriteAsync(row,!row.Favorite);
         menu.Items.Add(favoriteAction);menu.Items.Add(new MenuFlyoutSeparator());
+        if(view=="history")
+        {
+            var remove=new MenuFlyoutItem{Text="閲覧履歴から削除"};AutomationProperties.SetAutomationId(remove,"RemoveHistory"+row.Id);
+            remove.Click+=async(_,_)=>await DeleteHistoryAsync(row.Id);menu.Items.Add(remove);
+        }
         if(SimilaritySearch.CanStart(row))
         {
             var search=new MenuFlyoutItem {Text=row.Kind=="video"?"似た動画・素材を探す":row.Kind=="audio"?"似た音声・曲を探す":"似た画像・素材を探す"};AutomationProperties.SetAutomationId(search,"FindSimilar"+row.Id);

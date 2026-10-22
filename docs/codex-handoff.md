@@ -1,5 +1,9 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-23 P4 history deletion (latest)
+
+[Individual/all deletion, stale-write protection and evidence](history-deletion.md) source complete: same-schema transaction preserves reader position/metadata/media, generation gate rejects late pre-delete recordings and invalidates frozen history. Settings all-delete + history context individual-delete use confirmation and dirty guard. Python20 PASS/9.841s, Portable build0 errors/known3 warnings11.98s; GUI UNRUN. Old tokenless POST works only before first delete; afterward generation is required. P4 multi-shelf/root favorites/navigation and P3 native gates remain; continue current roadmap, no CI/merge/old Alpha changes. Today's quota-threshold safe handoff/shutdown remains active.
+
 ## 2026-10-23 trimmed collection ABI / native P3 gate (latest)
 
 `6c29048` fixes actual published ItemsSource WinRT crash using explicit external generic vtables plus unsafe generated code; generator output confirms collection lookup, no new dependency/guard weakening. [Evidence and limits](p3-continuous-browse.md): continuous flow3/3 consumed; final745-item run displayed/extended1–180 and viewer60↔61 positions, but failed return assertion after closing before final decode readiness. Corrected wait is source-only/UNRUN; tail/reverse/draft/invariance not reached, no full P3 acceptance. All3 processes exited0, three delivered PNGs reviewed. Do not repeat same flow under another name; proceed independent P4 backend. Today's quota threshold handoff/shutdown and GUI/GPU authorization remain, old Alpha untouched.

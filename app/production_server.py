@@ -9,7 +9,7 @@ from urllib.parse import urlparse, parse_qs
 import re
 import select
 import socket
-from production import ProductionCatalog, ScanBusyError
+from production import ProductionCatalog, ScanBusyError, HistoryChanged
 from term_relations import MAX_IMPORT_BYTES
 from previews import VideoRangeUnsatisfiable, PreviewReader, PreviewUnavailable, PreviewBusyError, ReaderChanged
 import zipfile
@@ -210,6 +210,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             if path.startswith('/api/library'):
                 if self.headers.get('X-Aredoko-Token')!=token:
                     return self.send(403,{'error':'Invalid session'})
+                if path=='/api/library/history':
+                    if urlparse(self.path).query:return self.send(400,{'error':'Invalid history query'})
+                    return self.send(200,catalog.history_status())
                 if path.startswith('/api/library/page-text/'):
                     try:
                         if path=='/api/library/page-text/status':
@@ -731,8 +734,15 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     try: return self.send(200,catalog.terms.delete(body['term']))
                     except KeyError: return self.send(404,{'error':'Related-term entry not found'})
                 if self.path=='/api/library/history':
-                    if set(body)!={'item_id'}:raise ValueError('Invalid history request')
-                    return self.send(200,catalog.record_view(body['item_id']))
+                    if set(body) not in ({'item_id'},{'item_id','generation'}):raise ValueError('Invalid history request')
+                    if 'generation' in body and type(body['generation']) is not str:raise ValueError('Invalid history request')
+                    try:return self.send(200,catalog.record_view(body['item_id'],body.get('generation')))
+                    except HistoryChanged:return self.send(409,{'error':'History generation changed','error_code':'history_changed'})
+                if self.path=='/api/library/history/delete':
+                    if set(body) not in ({'generation','consent'},{'generation','consent','item_ids'}):raise ValueError('Invalid history request')
+                    if 'item_ids' in body and body['item_ids'] is None:raise ValueError('Invalid history item IDs')
+                    try:return self.send(200,catalog.delete_history(generation=body['generation'],consent=body['consent'],**({'item_ids':body['item_ids']} if 'item_ids' in body else {})))
+                    except HistoryChanged:return self.send(409,{'error':'History generation changed','error_code':'history_changed'})
                 if self.path=='/api/library/roots':
                     if body.get('consent') is not True: raise ValueError('Explicit folder consent required')
                     return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'),body.get('default_shelf',''),body.get('folder_books'),body.get('recursive'))})

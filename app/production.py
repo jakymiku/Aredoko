@@ -10,6 +10,10 @@ from search_terms import register as register_search_terms, split_terms, explain
 from term_relations import TermRelations
 
 
+class HistoryChanged(ValueError):
+    """A delayed history operation belongs to an obsolete clear generation."""
+
+
 class ScanBusyError(ValueError):
     """A mutation should be retried after the atomic scan completes."""
 
@@ -51,6 +55,9 @@ class ProductionCatalog(Catalog):
                     WHERE state IN ('running','cancelling');
             ''')
         self._guard = threading.Lock()
+        import secrets
+        self._history_generation = secrets.token_hex(16)
+        self._history_requires_generation = False
         self._state_epoch = 0
         self._cancel = threading.Event()
         self._worker = None
@@ -238,11 +245,41 @@ class ProductionCatalog(Catalog):
             self._require_idle()
             return super().update(ids, changes)
 
-    def record_view(self, item_id):
+    def history_status(self):
+        with self._guard:
+            with self.connect() as db:
+                count = db.execute('SELECT count(*) FROM view_history').fetchone()[0]
+            return {'generation': self._history_generation, 'count': count}
+
+    def delete_history(self, *, generation, item_ids=None, consent=False):
+        import secrets
+        if consent is not True:
+            raise ValueError('Explicit history deletion consent required')
+        if item_ids is not None and (not isinstance(item_ids, list) or not 1 <= len(item_ids) <= 256 or
+                any(type(value) is not int or not 1 <= value <= 9223372036854775807 for value in item_ids) or len(set(item_ids)) != len(item_ids)):
+            raise ValueError('Invalid history item IDs')
+        with self._guard, self._result_generation_lock:
+            if type(generation) is not str or generation != self._history_generation:
+                raise HistoryChanged('History generation changed')
+            with self.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                if item_ids is None:
+                    removed = db.execute('DELETE FROM view_history').rowcount
+                else:
+                    removed = db.execute('DELETE FROM view_history WHERE item_id IN (' + ','.join('?' for _ in item_ids) + ')', item_ids).rowcount
+            # Keep commit + invalidation indivisible to frozen history readers.
+            self._result_generation += 1
+            self._history_generation = secrets.token_hex(16)
+            self._history_requires_generation = True
+            return {'removed': removed, 'generation': self._history_generation}
+
+    def record_view(self, item_id, generation=None):
         import time
         from library_index import _excluded
         if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid item')
         with self._guard:
+            if generation is None and self._history_requires_generation or generation is not None and (type(generation) is not str or generation != self._history_generation):
+                raise HistoryChanged('History generation changed')
             with self.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
                 row=db.execute('SELECT l.status,l.relative_path,r.enabled,r.excludes_json FROM item_locations m JOIN library_locations l ON l.id=m.location_id JOIN library_roots r ON r.id=l.root_id WHERE m.item_id=?',(item_id,)).fetchone()

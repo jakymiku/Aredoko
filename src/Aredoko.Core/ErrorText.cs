@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
@@ -11,6 +11,7 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
+        ["History generation changed"] = "閲覧履歴が更新されました。もう一度操作してください。",
         ["Result workspace busy or full; close another search"] = "検索用の領域が使用中か、空き容量が不足しています。別の検索を閉じて再試行してください。",
         ["AI index cleanup failed; library records were kept"] = "AI索引を削除できません。登録・タグ等の記録は残しています。AI処理の終了後に再試行してください。",
         ["Invalid page text request"] = "ページ本文の指定が無効です。対象を選び直してください。",

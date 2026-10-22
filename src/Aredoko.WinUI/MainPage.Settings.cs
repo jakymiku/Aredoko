@@ -1,4 +1,4 @@
-using Aredoko.Core;
+﻿using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -44,6 +44,7 @@ public sealed partial class MainPage
             foreach(var (label,id,target) in new[]{
                 ("AI検索の準備","BtnAIIndex","ai"),
                 ("関連語を編集","BtnRelatedTerms","terms"),
+                ("閲覧履歴を削除","BtnClearHistory","history"),
                 ("バックアップと復旧ガイド","BtnBackupGuide","backup"),
                 ("診断情報を表示・コピー","BtnDiagnostics","diagnostics")})
             {
@@ -59,6 +60,7 @@ public sealed partial class MainPage
         {
             if(destination=="ai")AI_Click(this,new RoutedEventArgs());
             else if(destination=="terms")RelatedTerms_Click(this,new RoutedEventArgs());
+            else if(destination=="history")await DeleteHistoryAsync();
             else if(destination=="backup")await OpenBackupGuideDialogAsync();
             else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync();
         }
