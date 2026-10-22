@@ -1,4 +1,4 @@
-using Aredoko.Core;
+﻿using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Automation;
@@ -305,93 +305,125 @@ public sealed partial class MainPage : Page
         catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
+    private readonly Dictionary<ListViewItem, Action> containerCleanup = new();
+
+    private static string RowKey(int id) => id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private MediaRow? RowForKey(object? key) => key is string value &&
+        int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id)
+        ? rows.FirstOrDefault(row => row.Id == id) : null;
+
+    private void ReleaseContainer(ListViewItem item)
+    {
+        if (containerCleanup.Remove(item, out var release)) release();
+        if (item.ContentTemplateRoot is Border host) host.Child=null;
+        item.ContextFlyout=null; item.Tag=null;
+        AutomationProperties.SetAutomationId(item, "");
+        AutomationProperties.SetName(item, "");
+    }
+
     private void RenderRows()
     {
         renderCancellation.Cancel(); renderCancellation.Dispose(); renderCancellation = new();
         populating = true;
         try
         {
-            Items.Items.Clear();
+            foreach (var item in containerCleanup.Keys.ToArray()) ReleaseContainer(item);
+            Items.ItemsSource=null;
             Items.ItemsPanel = (ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(tiles
                 ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\"/></ItemsPanelTemplate>"
                 : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel/></ItemsPanelTemplate>");
-            foreach (var row in rows)
-            {
-                var content = new Grid { Padding = new Thickness(8), ColumnSpacing = 12, RowSpacing = 8 };
-                var image = new Image { Tag = row.Id, IsDoubleTapEnabled = true, Stretch = Stretch.Uniform };
-                AutomationProperties.SetAutomationId(image, $"Preview{row.Id}");
-                AutomationProperties.SetName(image, row.Title + "のサムネイル");
-                image.DoubleTapped += async (_, args) => { args.Handled=true; await OpenPreviewAsync(row.Id); };
-                if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row)||AudioPlayerPolicy.CanOpen(row))
-                    ToolTipService.SetToolTip(image,ImageViewerPolicy.CanOpen(row)?"ダブルクリックで画像を大きく表示":VideoPlayerPolicy.CanOpen(row)?"ダブルクリックで動画を再生":AudioPlayerPolicy.CanOpen(row)?"ダブルクリックで音声を再生":"ダブルクリックで本を開く");
-                var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-                var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
-                AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");text.Children.Add(title);
-                ToolTipService.SetToolTip(title, row.Title);
-                var availability = row.Availability == "present" ? "" : AvailabilityLabel(row.Availability);
-                var metadata = tiles ? row.MatchLabel + availability
-                    : $"{row.MatchLabel}{KindLabel(row.Kind)}{(availability.Length > 0 ? " · " + availability : "")} · {string.Join("、", row.Tags)}";
-                if (!string.IsNullOrWhiteSpace(metadata))
-                    text.Children.Add(new TextBlock { Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
-                if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
-                if(row.Proposal is ProposalMatch proposal){var prop=new TextBlock {Text=proposal.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(prop,$"ProposalEvidence{row.Id}");text.Children.Add(prop);}
-                if(row.AIPage is AIPageMatch aiPage){var pimage=new TextBlock {Text=aiPage.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(pimage,$"AIPageEvidence{row.Id}");text.Children.Add(pimage);}
-                if(row.PageText is PageTextMatch pageText){var ptext=new TextBlock {Text=pageText.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(ptext,$"PageTextEvidence{row.Id}");text.Children.Add(ptext);}
-                if(row.Evidence is {AllDirect:false}){var words=new TextBlock {Text=Protocol.DescribeEvidence(row.Evidence),TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(words,$"SearchEvidence{row.Id}");text.Children.Add(words);}
-                var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
-                AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
-                text.Children.Add(previewStatus);
-                if (tiles)
-                {
-                    content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                    content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                    Grid.SetRow(text, 1);
-                }
-                else
-                {
-                    content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    Grid.SetColumn(text, 1);
-                }
-                content.Children.Add(image); content.Children.Add(text);
-                var item = new ListViewItem { Content = content, Style=(Style)Resources["MediaItemCardStyle"], HorizontalContentAlignment = HorizontalAlignment.Stretch };
-                SizeItem(item,image);
-                item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
-                item.ContextFlyout=SimilarityMenu(row);
-                item.DoubleTapped+=async(_,args)=>{args.Handled=true;await OpenPreviewAsync(row.Id);};
-                var renderToken = renderCancellation.Token;
-                CancellationTokenSource? visible = null;
-                var requestedEdge = 0;
-                long thumbnailVersion = 0;
-                async Task RefreshThumbnailAsync(bool force = false)
-                {
-                    if (!item.IsLoaded || renderToken.IsCancellationRequested || disposed) return;
-                    var edge = ThumbnailPolicy.EdgeFor(image.Width, image.Height, XamlRoot?.RasterizationScale ?? 1);
-                    if (!force && requestedEdge == edge) return;
-                    requestedEdge = edge;
-                    var version = ++thumbnailVersion;
-                    visible?.Cancel(); visible?.Dispose(); visible = CancellationTokenSource.CreateLinkedTokenSource(renderToken);
-                    var cancellation = visible.Token;
-                    try
-                    {
-                        // Coalesce resize/slider events; keep the last image while a
-                        // larger derivative is prepared, and reject recycled replies.
-                        if (!force) await Task.Delay(80, cancellation);
-                        var bitmap = await thumbnails.GetAsync(row, cancellation, edge);
-                        if (cancellation.IsCancellationRequested || disposed || version != thumbnailVersion) return;
-                        image.Source = bitmap;
-                        previewStatus.Text = bitmap is null ? "プレビューなし" : "";
-                        previewStatus.Visibility = bitmap is null ? Visibility.Visible : Visibility.Collapsed;
-                    }
-                    catch (OperationCanceledException) { }
-                }
-                item.Loaded += async (_, _) => await RefreshThumbnailAsync(force: true);
-                image.SizeChanged += async (_, _) => await RefreshThumbnailAsync();
-                item.Unloaded += (_, _) => { ++thumbnailVersion; requestedEdge=0; visible?.Cancel();visible?.Dispose();visible=null;image.Source = null; };
-                Items.Items.Add(item);
-            }
+            // Only native strings cross the WinRT collection boundary. MediaRow stays
+            // owned by C#; no reflection-based property binding or custom COM model.
+            Items.ItemsSource=rows.Select(row => RowKey(row.Id)).ToArray();
         }
         finally { populating = false; }
+    }
+
+    private void Items_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.ItemContainer is not ListViewItem item) return;
+        ReleaseContainer(item);
+        if (args.InRecycleQueue || disposed || RowForKey(args.Item) is not MediaRow row) return;
+        if (item.ContentTemplateRoot is not Border host) return;
+        args.Handled=true;
+        var content = new Grid { Padding = new Thickness(8), ColumnSpacing = 12, RowSpacing = 8 };
+        var image = new Image { Tag = row.Id, IsDoubleTapEnabled = true, Stretch = Stretch.Uniform };
+        AutomationProperties.SetAutomationId(image, $"Preview{row.Id}");
+        AutomationProperties.SetName(image, row.Title + "のサムネイル");
+        image.DoubleTapped += async (_, args) => { args.Handled=true; await OpenPreviewAsync(row.Id); };
+        if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row)||AudioPlayerPolicy.CanOpen(row))
+            ToolTipService.SetToolTip(image,ImageViewerPolicy.CanOpen(row)?"ダブルクリックで画像を大きく表示":VideoPlayerPolicy.CanOpen(row)?"ダブルクリックで動画を再生":AudioPlayerPolicy.CanOpen(row)?"ダブルクリックで音声を再生":"ダブルクリックで本を開く");
+        var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
+        AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");text.Children.Add(title);
+        ToolTipService.SetToolTip(title, row.Title);
+        var availability = row.Availability == "present" ? "" : AvailabilityLabel(row.Availability);
+        var metadata = tiles ? row.MatchLabel + availability
+            : $"{row.MatchLabel}{KindLabel(row.Kind)}{(availability.Length > 0 ? " · " + availability : "")} · {string.Join("、", row.Tags)}";
+        if (!string.IsNullOrWhiteSpace(metadata))
+            text.Children.Add(new TextBlock { Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
+        if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
+        if(row.Proposal is ProposalMatch proposal){var prop=new TextBlock {Text=proposal.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(prop,$"ProposalEvidence{row.Id}");text.Children.Add(prop);}
+        if(row.AIPage is AIPageMatch aiPage){var pimage=new TextBlock {Text=aiPage.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(pimage,$"AIPageEvidence{row.Id}");text.Children.Add(pimage);}
+        if(row.PageText is PageTextMatch pageText){var ptext=new TextBlock {Text=pageText.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(ptext,$"PageTextEvidence{row.Id}");text.Children.Add(ptext);}
+        if(row.Evidence is {AllDirect:false}){var words=new TextBlock {Text=Protocol.DescribeEvidence(row.Evidence),TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(words,$"SearchEvidence{row.Id}");text.Children.Add(words);}
+        var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
+        AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
+        text.Children.Add(previewStatus);
+        if (tiles)
+        {
+            content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(text, 1);
+        }
+        else
+        {
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(text, 1);
+        }
+        content.Children.Add(image); content.Children.Add(text);
+        host.Child = content;
+        SizeItem(item,image);
+        item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
+        item.ContextFlyout=SimilarityMenu(row);
+        content.DoubleTapped+=async(_,args)=>{args.Handled=true;await OpenPreviewAsync(row.Id);};
+        var renderToken = renderCancellation.Token;
+        CancellationTokenSource? visible = null;
+        var requestedEdge = 0;
+        long thumbnailVersion = 0;
+        async Task RefreshThumbnailAsync(bool force = false)
+        {
+            if (!image.IsLoaded || renderToken.IsCancellationRequested || disposed) return;
+            var edge = ThumbnailPolicy.EdgeFor(image.Width, image.Height, XamlRoot?.RasterizationScale ?? 1);
+            if (!force && requestedEdge == edge) return;
+            requestedEdge = edge;
+            var version = ++thumbnailVersion;
+            visible?.Cancel(); visible?.Dispose(); visible = CancellationTokenSource.CreateLinkedTokenSource(renderToken);
+            var cancellation = visible.Token;
+            try
+            {
+                // Coalesce resize/slider events; keep the last image while a
+                // larger derivative is prepared, and reject recycled replies.
+                if (!force) await Task.Delay(80, cancellation);
+                var bitmap = await thumbnails.GetAsync(row, cancellation, edge);
+                if (cancellation.IsCancellationRequested || disposed || version != thumbnailVersion) return;
+                image.Source = bitmap;
+                previewStatus.Text = bitmap is null ? "プレビューなし" : "";
+                previewStatus.Visibility = bitmap is null ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch (OperationCanceledException) { }
+        }
+        image.Loaded += async (_, _) => await RefreshThumbnailAsync(force: true);
+        image.SizeChanged += async (_, _) => await RefreshThumbnailAsync();
+        image.Unloaded += (_, _) => { ++thumbnailVersion; requestedEdge=0; visible?.Cancel();visible?.Dispose();visible=null;image.Source = null; };
+        // Recycled containers must release requests before receiving another row.
+        containerCleanup[item] = () =>
+        {
+            ++thumbnailVersion; requestedEdge=0;
+            visible?.Cancel(); visible?.Dispose(); visible=null;
+            image.Source=null;
+        };
     }
     private void SizeItem(ListViewItem item,Image image)
     {
@@ -407,8 +439,8 @@ public sealed partial class MainPage : Page
     {
         if(Items.ItemsPanelRoot is ItemsWrapGrid wrap)
             wrap.ItemWidth=tiles?LibraryTileLayout.Width(Math.Max(1,Items.ActualWidth-16),libraryItemScale)+8:double.NaN;
-        foreach(var item in Items.Items.OfType<ListViewItem>())
-            if(item.Content is Grid content&&content.Children.FirstOrDefault() is Image image)SizeItem(item,image);
+        foreach(var item in containerCleanup.Keys.ToArray())
+            if(item.ContentTemplateRoot is Border { Child: Grid content }&&content.Children.FirstOrDefault() is Image image)SizeItem(item,image);
     }
     private void ItemListContainer_SizeChanged(object sender,SizeChangedEventArgs args)
     {
@@ -517,13 +549,14 @@ public sealed partial class MainPage : Page
     }
     private async Task FocusRowAsync(int itemId)
     {
-        if(Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==itemId) is not ListViewItem target)return;
+        var key=Items.Items.OfType<string>().FirstOrDefault(value=>value==RowKey(itemId));
+        if(key is null)return;
         for(var attempt=0;attempt<10&&!disposed&&Items.IsEnabled;attempt++)
         {
             Items.UpdateLayout();
-            Items.ScrollIntoView(target);
+            Items.ScrollIntoView(key);
             Items.UpdateLayout();
-            if(target.IsLoaded&&target.Focus(FocusState.Keyboard)&&target.FocusState!=FocusState.Unfocused)return;
+            if(Items.ContainerFromItem(key) is ListViewItem target&&target.IsLoaded&&target.Focus(FocusState.Keyboard)&&target.FocusState!=FocusState.Unfocused)return;
             await Task.Delay(30);
         }
     }
@@ -553,7 +586,7 @@ public sealed partial class MainPage : Page
     }
     private async void Items_Changed(object sender,SelectionChangedEventArgs e) {
         if(populating||!ready)return;
-        var index=Items.SelectedItem is ListViewItem selected && selected.Tag is int id ? rows.FindIndex(row=>row.Id==id) : -1;
+        var index=RowForKey(Items.SelectedItem) is MediaRow selected ? rows.FindIndex(row=>row.Id==selected.Id) : -1;
         if(index<0||index>=rows.Count)return;
         if(saving||!await transitions.WaitAsync(0)){RestoreSelection();return;}
         try {
@@ -576,7 +609,7 @@ public sealed partial class MainPage : Page
         }
         finally{populating=previous;}
     }
-    private void RestoreSelection(){populating=true;Items.SelectedItem=active is null?null:Items.Items.OfType<ListViewItem>().FirstOrDefault(item=>item.Tag is int id&&id==active.Id);populating=false;}
+    private void RestoreSelection(){populating=true;Items.SelectedItem=active is null?null:Items.Items.OfType<string>().FirstOrDefault(key=>key==RowKey(active.Id));populating=false;}
     private void UpdateDirty(){if(!ready)return;
         var blocked=active is not null&&tagReviewSyncItem==active.Id;
         Tags.IsEnabled=Shelf.IsEnabled=Favorite.IsEnabled=Reviewed.IsEnabled=!blocked;
@@ -2045,6 +2078,6 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){disposed=true;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){disposed=true;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

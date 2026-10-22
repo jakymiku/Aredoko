@@ -1,5 +1,10 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-23 P3 standard container realization (current)
+
+Read [implementation, checks and next native/continuous-scroll work](p3-native-containers-20261023.md). Standard containers now realize library cards on demand and cancel/release recycled thumbnails. Portable build0 errors/existing3 warnings; Core867 assertions PASS. P3 remains PARTIAL: current 60/20 page UI remains, native acceptance pending. User renewed GUI/GPU permission today and requested development until ~10% five-hour allowance remains, then safe save/commit/push/handoff and Stop-Computer without Force. Do not replay older caps as a permanent ban or declare the roadmap complete.
+
+
 ## 2026-10-23 GitHub最新取り込み・Windows修正・設定UI
 
 開始1969ab4/clean→fetchで他AIの10commit→6bb267fへfast-forward。P1B/P2/P3と設定backup修正は取り込み済み、繰返し実装なし。[今回の変更・証拠・限界](windows-sync-20261023.md)。

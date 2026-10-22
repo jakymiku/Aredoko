@@ -1,5 +1,10 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-23 P3 standard container realization (current)
+
+Read [implementation, checks and next native/continuous-scroll work](docs/p3-native-containers-20261023.md). Standard containers now realize library cards on demand and cancel/release recycled thumbnails. Portable build0 errors/existing3 warnings; Core867 assertions PASS. P3 remains PARTIAL: current 60/20 page UI remains, native acceptance pending. User renewed GUI/GPU permission today and requested development until ~10% five-hour allowance remains, then safe save/commit/push/handoff and Stop-Computer without Force. Do not replay older caps as a permanent ban or declare the roadmap complete.
+
+
 ## 2026-10-23 Windows integration and small native UI slice (latest)
 
 Read [current Windows evidence and remaining work](docs/windows-sync-20261023.md). Clean local1969ab4 fast-forwarded10 remote commits to6bb267f; PR5 matching/Draft/open/unmerged. Do not recreate P1B/P2/P3/backend foundations. Windows Core first exposed root JSON Add<int> reflection-disabled crash, fixed in `76d8004`; final Core867 assertions/Portable build0 errors+existing3 warnings. Python86 had85 PASS/1 embedded-old-runtime child import failure; only failed case rerun in existing venv:1 PASS. Raw failures kept, no duplicate totals.

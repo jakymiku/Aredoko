@@ -1,5 +1,10 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-23 P3 standard container realization (current)
+
+Read [implementation, checks and next native/continuous-scroll work](p3-native-containers-20261023.md). Standard containers now realize library cards on demand and cancel/release recycled thumbnails. Portable build0 errors/existing3 warnings; Core867 assertions PASS. P3 remains PARTIAL: current 60/20 page UI remains, native acceptance pending. User renewed GUI/GPU permission today and requested development until ~10% five-hour allowance remains, then safe save/commit/push/handoff and Stop-Computer without Force. Do not replay older caps as a permanent ban or declare the roadmap complete.
+
+
 ## 2026-10-23 Windows最新同期・小さなUI整理
 
 remote6bb267fの10commitをcleanな実機へff統合。P1B/P2/P3基盤を再実装せず確認。[詳細](windows-sync-20261023.md)。`76d8004`は反射無効root条件crash修正、`70b5b31`は実行版/場所診断・下部保存・compact folder操作・theme共通surface。Core867 PASS assertion/Portable0 errors・既存3 warnings。Python85 PASS+1旧埋込runtime child import失敗、正しい既存venvで失敗1件だけPASS。raw保持・合算なし。
