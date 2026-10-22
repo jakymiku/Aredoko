@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-23 overnight stopping checkpoint (latest entry)
+
+Read [exact commits, checks, unresolved native gates and tomorrow's first task](docs/overnight-handoff-20261023.md). Implementation HEAD `3e740a685c292e472085f4f918206978eabee7de`, followed only by stopping docs. Next Core shelf IDs/CRUD/assign→shelf list/common library/multiple-selection details. Production backend now migrates catalog1; do not send old Alpha to a newly migrated DB. Normal user DB/Alpha untouched. P3/P4 and full roadmap remain incomplete. User requested non-forced shutdown after save/push/handoff near quota threshold; this is one-time today, not a command for tomorrow. This document is saved before shutdown, not proof shutdown succeeded.
+
 ## 2026-10-23 P4 production shelf adapters (latest)
 
 [Catalog1 migration/scan/update/root/purge/API and all search adapters](docs/multi-shelf-storage.md) now connected; supersedes prior NOT product-activated note. Generated DBs only, no normal DB/Alpha launch. Initial66 had64 PASS/2 ERROR; corrected focused47 had46 PASS/1 new fixture typo; only failed1+newHTTP1 rerun2 PASS. Sessions21/Prototype6 PASS separately. Raw failures kept. Next Core shelf IDs + shelf list/common library/multiple selection details: current GUI scalar save intentionally rejects multi-membership rather than losing data. Backend foundation is not full shelf UI completion. No CI/merge/models/GUI replay. Today's quota-threshold safe commit/push/handoff/shutdown remains active; near threshold, finish this unit before another large task.
