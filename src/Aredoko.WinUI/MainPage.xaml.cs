@@ -65,10 +65,9 @@ public sealed partial class MainPage : Page
         {
             var pointer=args.GetCurrentPoint(this).Properties;
             if(!pointer.IsXButton1Pressed&&!pointer.IsXButton2Pressed)return;
-            if(dialogOpen||saving||folderHubOpen||viewerWindow is not null)return;
+            if(dialogOpen||saving||viewerWindow is not null)return;
             args.Handled=true;
-            if(pointer.IsXButton1Pressed&&Previous.IsEnabled)await NavigateAsync(PreviousBrowsePage());
-            else if(pointer.IsXButton2Pressed&&Next.IsEnabled)await NavigateAsync(NextBrowsePage());
+            await NavigateHistoryAsync(pointer.IsXButton2Pressed);
         }),true);
         ItemListContainer.AddHandler(PointerWheelChangedEvent,new PointerEventHandler(Library_PointerWheelChanged),true);
         itemSizeSaveTimer=DispatcherQueue.CreateTimer();itemSizeSaveTimer.Interval=TimeSpan.FromMilliseconds(500);
@@ -299,7 +298,7 @@ public sealed partial class MainPage : Page
                     : InfoBarSeverity.Informational;
                 Notice(originTitle,simSummary+(scopeWarning is null?"":" "+scopeWarning),simSeverity,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
             }
-            startupSearchSucceeded=true;
+            startupSearchSucceeded=true;RecordNavigationLocation();
         } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
         catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
@@ -659,12 +658,24 @@ public sealed partial class MainPage : Page
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
     public async Task<bool> ConfirmDiscardAsync() {
         if(saving||dialogOpen)return false;
+        RememberCurrentLocation();
         if(!Dirty&&!FolderDirty)return true;
         dialogOpen=true;
         try {
             var content=Dirty?active?.Title:FolderTargetTitle.Text;
             var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="変更を破棄しますか？",Content=content,PrimaryButtonText="変更を破棄",CloseButtonText="編集を続ける",DefaultButton=ContentDialogButton.Close};
             var accepted=await dialog.ShowAsync()==ContentDialogResult.Primary;
+            if(accepted&&Dirty)
+            {
+                var previous=populating;populating=true;
+                try
+                {
+                    Tags.Text=saved.Tags;editingShelfIds=saved.ShelfIds?.ToArray()??[];UpdateShelfEditorLabel();
+                    Favorite.IsChecked=saved.Favorite;Reviewed.IsChecked=saved.Reviewed;
+                }
+                finally{populating=previous;}
+                UpdateDirty();
+            }
             if(accepted&&FolderDirty&&folderDraft is not null)
             {
                 var ids=folderDraft.TargetIds.ToArray();
@@ -1148,6 +1159,7 @@ public sealed partial class MainPage : Page
                 }
             }
             Notice("登録フォルダ管理","検索するフォルダを選んだり、登録内容を変更できます。");
+            RecordNavigationLocation();
         }
         catch(Exception ex){Failure(ex);}
         finally{transitions.Release();}

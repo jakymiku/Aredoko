@@ -60,7 +60,7 @@ public sealed partial class MainPage
             ItemSearchRow.Visibility=SearchTools.Visibility=ItemListContainer.Visibility=ItemPagerRow.Visibility=Visibility.Collapsed;
             ShelfHubView.Visibility=Visibility.Visible;ShelfList.ItemsSource=shelfKeys;
             Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;
-            RestoreNavigation();await ReloadShelfHubAsync();
+            RestoreNavigation();await ReloadShelfHubAsync();RecordNavigationLocation();
         }
         catch(Exception ex){Failure(ex);ShelfHubMessage.Text="棚を取得できませんでした。「更新」で再試行できます。";}
         finally{transitions.Release();}

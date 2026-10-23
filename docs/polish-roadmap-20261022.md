@@ -11,7 +11,7 @@
 | P1B 逐次アニメーション再生 | source/API/WinUI接続・Python確認済み。[証拠/限界](animation-streaming.md) | Core/Portable buildをWindows確認済み、native未受入。全PNG待ち/64枚切捨て/decoder再openを撤去 |
 | P2 結果セッション・連続閲覧 | PARTIAL。native接続sourceあり。[証拠/限界](result-session-native-connection.md) | Core/Portable buildをWindows確認済み。native60↔61位置を確認、実表示後の選択復帰/120境界は未受入 |
 | P3 一覧・サムネイル・UI-2 | PARTIAL。[標準container/双方向600件window/trimmed ABI修正](p3-continuous-browse.md) | Core873/Portable build確認済み。native3/3の残件・thumbnail/実RSS/完成形UIは未受入 |
-| P4 複数棚・整理導線 | PARTIAL。[履歴削除](history-deletion.md)と[複数棚の移行/検索/API](multi-shelf-storage.md)を実装 | [Core/棚一覧/複数選択](shelf-ui-20261023.md) source接続・893 Core確認、nativeはロックで未受入。次root favorite・画面履歴/root複数初期棚 |
+| P4 複数棚・整理導線 | PARTIAL。[履歴削除](history-deletion.md)と[複数棚の移行/検索/API](multi-shelf-storage.md)を実装 | [Core/棚一覧/複数選択](shelf-ui-20261023.md) source接続・893 Core確認、nativeはロックで未受入。[画面履歴](navigation-history-20261023.md) source接続。次root favorite/root複数初期棚 |
 | P5 起動中backup/restore | 未実装。前提となる[現行viewer設定のbackup互換](backup-recovery.md)は修正済み | U13の所有job/整合snapshot/GUI/安全な切替を実装 |
 | P6 配布・UI-3 | LD1–3/LD4a基盤あり、残り未完 | LD4b→LD5→LD6を既存実装から継続 |
 | P7 総合検証 | 未実施 | 主要機能を揃えてまとめ確認、M1判定後R06–R09へ |

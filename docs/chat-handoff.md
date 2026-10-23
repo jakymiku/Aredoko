@@ -1,5 +1,10 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-23 P4 bounded navigation history (latest)
+
+[Session-only back/forward locations and native input hooks](navigation-history-20261023.md) source connected; Core901 PASS/Portable build0 errors/known3 warnings. Mouse/Alt/visual acceptance UNRUN while Windows locked. Shelf implementation b0a00c4 is pushed. Next root favorites and root multi-initial-shelf UI, then P5. Preserve stale/failure/dirty guards and native caps. Current quota-threshold instruction remains save/commit/push/handoff with **no shutdown**.
+
+
 ## 2026-10-23 P4 shelf UI continuation (latest)
 
 [Core shelf IDs/atomic metadata save/shelf hub/multiple selection and evidence](shelf-ui-20261023.md) source connected. Core893 PASS; final Portable build0 errors/known3 warnings. Shelf native run01 reached selector but click rejected by locked desktop; no visual/complete GUI acceptance. Original cleanup timeout kept; generated modal/draft closed normally later, no live test process. Remaining2 attempts only, no P3 cap reset. Next root favorites/navigation and root multi-shelf controls; P3/P5–7 remain incomplete. **Current user says no shutdown**; near quota10% safe commit/push/handoff only, overriding yesterday's one-time instruction. Old Alpha/user DB/source media untouched.

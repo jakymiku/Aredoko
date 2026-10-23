@@ -12,7 +12,7 @@
   <Style x:Key="MediaTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}"><Setter Property="FontWeight" Value="SemiBold"/></Style>
   <Style x:Key="MediaMetadataStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}"><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
  </Page.Resources>
- <Page.KeyboardAccelerators><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchShortcut"/><KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveShortcut"/><KeyboardAccelerator Key="Escape" Invoked="CancelSearchShortcut"/></Page.KeyboardAccelerators>
+ <Page.KeyboardAccelerators><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchShortcut"/><KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveShortcut"/><KeyboardAccelerator Key="Escape" Invoked="CancelSearchShortcut"/><KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="HistoryBackShortcut"/><KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="HistoryForwardShortcut"/></Page.KeyboardAccelerators>
  <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Auto" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="180" SelectionChanged="Nav_SelectionChanged" ItemInvoked="Navigation_ItemInvoked" AutomationProperties.AutomationId="Nav">
   <NavigationView.MenuItems>
    <NavigationViewItem Content="すべて" Tag="all" Icon="Library" IsSelected="True" AutomationProperties.AutomationId="NavAll"/>
@@ -96,7 +96,11 @@
   <Grid x:Name="LibraryLayout" SizeChanged="LibraryLayout_SizeChanged" RowSpacing="12">
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
    <Grid ColumnSpacing="16"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-    <TextBlock x:Name="MainViewTitle" Text="ライブラリ" Style="{StaticResource TitleTextBlockStyle}"/>
+    <StackPanel Orientation="Horizontal" Spacing="8">
+     <Button x:Name="NavigationBackButton" IsEnabled="False" Click="HistoryBack_Click" ToolTipService.ToolTip="戻る（Alt+←）" AutomationProperties.Name="前の画面に戻る" AutomationProperties.AutomationId="BtnNavigationBack"><SymbolIcon Symbol="Back"/></Button>
+     <Button x:Name="NavigationForwardButton" IsEnabled="False" Click="HistoryForward_Click" ToolTipService.ToolTip="進む（Alt+→）" AutomationProperties.Name="次の画面に進む" AutomationProperties.AutomationId="BtnNavigationForward"><SymbolIcon Symbol="Forward"/></Button>
+     <TextBlock x:Name="MainViewTitle" Text="ライブラリ" VerticalAlignment="Center" Style="{StaticResource TitleTextBlockStyle}"/>
+    </StackPanel>
     <TextBlock Grid.Column="1" x:Name="Count" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TxtCount"/>
     <Button Grid.Column="2" x:Name="RootsButton" Content="フォルダ管理" Click="Roots_Click" AutomationProperties.AutomationId="BtnRoots"/>
    </Grid>
