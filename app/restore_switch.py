@@ -10,9 +10,11 @@ from pathlib import Path
 import re
 import secrets
 import shutil
+import threading
+from functools import wraps
 
-from storage_lease import plain_path, storage_parent
-from storage_backup import CATALOG
+from storage_lease import plain_path, storage_parent, storage_lease
+from storage_backup import CATALOG, validate_restored
 
 PENDING_FILE = 'restore-pending.json'
 ROLLBACK_FILE = 'launch-settings.rollback.json'
@@ -25,6 +27,27 @@ RESTORE_ID_PATTERN = re.compile(r'^[0-9a-fA-F_-]{8,64}\Z')
 
 class RestoreSwitchError(RuntimeError):
     """Raised when restore switch or rollback cannot proceed safely."""
+
+
+_switch_lock = threading.RLock()
+_switch_owner = threading.local()
+
+
+def _serialized(operation):
+    @wraps(operation)
+    def invoke(data_dir, *args, **kwargs):
+        data_path = plain_path(data_dir, directory=True)
+        with _switch_lock:
+            held = getattr(_switch_owner, 'paths', set())
+            if data_path in held:
+                return operation(data_path, *args, **kwargs)
+            with storage_lease(data_path / 'restore-switch'):
+                _switch_owner.paths = held | {data_path}
+                try:
+                    return operation(data_path, *args, **kwargs)
+                finally:
+                    _switch_owner.paths = held
+    return invoke
 
 
 def is_restore_pending(data_dir):
@@ -87,6 +110,7 @@ def _record_history(data_path, entry):
     plain_path(history_path)
 
 
+@_serialized
 def apply_restore_switch(data_dir, staging_path, restore_id=None):
     """Move/place verified staging into data_dir / 'restores' / <restore_id> and switch settings.
 
@@ -105,7 +129,7 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
     plain_path(data_path, directory=True)
     plain_path(staging, directory=True)
 
-    if (data_path / PENDING_FILE).is_file():
+    if (data_path / PENDING_FILE).exists() or (data_path / ROLLBACK_FILE).exists():
         raise RestoreSwitchError("A restore switch is already pending")
 
     staging_catalog = staging / CATALOG
@@ -115,6 +139,11 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
 
     if any(Path(str(staging_catalog) + s).exists() for s in ('-wal', '-shm', '-journal')):
         raise RestoreSwitchError("Staging catalog has live SQLite companion files")
+
+    try:
+        validate_restored(staging)
+    except (ValueError, RuntimeError, OSError) as error:
+        raise RestoreSwitchError('Staging verification failed; current library preserved') from error
 
     if restore_id is None:
         restore_id = secrets.token_hex(16)
@@ -132,14 +161,6 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
     if staging.resolve() == target_restore_dir.resolve() or staging.resolve() in data_path.resolve().parents:
         raise RestoreSwitchError("Invalid staging path overlap")
 
-    try:
-        shutil.move(str(staging), str(target_restore_dir))
-    except Exception as e:
-        raise RestoreSwitchError(f"Failed to place staging directory into target: {e}") from e
-
-    plain_path(target_restore_dir, directory=True)
-    plain_path(target_restore_dir / CATALOG)
-
     launch_settings_path = data_path / LAUNCH_SETTINGS_FILE
     rollback_path = data_path / ROLLBACK_FILE
     previous_settings_existed = launch_settings_path.is_file()
@@ -150,10 +171,19 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
         try:
             previous_settings = json.loads(launch_settings_path.read_text(encoding='utf-8-sig'))
             if not isinstance(previous_settings, dict):
-                previous_settings = {}
+                raise RestoreSwitchError('Existing launch settings are not an object')
         except Exception as e:
             raise RestoreSwitchError(f"Failed to read existing launch settings: {e}") from e
 
+    try:
+        shutil.move(str(staging), str(target_restore_dir))
+    except Exception as e:
+        raise RestoreSwitchError(f"Failed to place staging directory into target: {e}") from e
+
+    plain_path(target_restore_dir, directory=True)
+    plain_path(target_restore_dir / CATALOG)
+
+    if previous_settings_existed:
         tmp_rollback = data_path / f".{ROLLBACK_FILE}.tmp.{secrets.token_hex(8)}"
         tmp_rollback.write_text(json.dumps(previous_settings, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
         tmp_rollback.replace(rollback_path)
@@ -165,6 +195,9 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
     restored_ai_settings = target_restore_dir / 'settings' / 'ai-settings.json'
     if restored_ai_settings.is_file():
         new_settings['ai_settings'] = str(restored_ai_settings.resolve())
+        # The selected profile in the restored settings must not be overridden
+        # by a command-line profile retained from the old library.
+        new_settings.pop('ai_profile', None)
 
     restored_viewer_settings = target_restore_dir / 'settings' / 'viewer-settings.json'
     if restored_viewer_settings.is_file():
@@ -207,6 +240,7 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
     }
 
 
+@_serialized
 def commit_restore_switch(data_dir):
     """Commit the pending restore switch upon reaching ready state.
 
@@ -253,6 +287,7 @@ def commit_restore_switch(data_dir):
     return receipt
 
 
+@_serialized
 def rollback_restore_switch(data_dir, error=None):
     """Roll back launch-settings.json from launch-settings.rollback.json on startup failure.
 
@@ -321,6 +356,7 @@ def rollback_restore_switch(data_dir, error=None):
     return receipt
 
 
+@_serialized
 def check_pending_restore(data_dir):
     """Check if a previous restore attempt was left pending and handle auto-rollback if needed.
 

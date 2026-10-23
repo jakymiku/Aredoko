@@ -69,35 +69,60 @@ class RestoreSwitchTests(unittest.TestCase):
 
     def _create_staging(self, name='staging', restored_title='リストアデータアイテム', extra_settings=True):
         staging = self.base / name
-        staging.mkdir(mode=0o700)
-        self._init_catalog(staging / 'catalog.sqlite', item_title=restored_title)
-        (staging / 'recovery.json').write_text(json.dumps({
-            'format': 'aredoko-restored',
-            'version': 1,
-            'source_manifest_sha256': '0' * 64,
-            'cache_policy': 'omitted',
-        }), encoding='utf-8')
-
+        source = self.base / (name + '_source')
+        source.mkdir()
+        self._init_catalog(source / 'catalog.sqlite', item_title=restored_title)
+        options = {}
         if extra_settings:
-            settings_dir = staging / 'settings'
-            settings_dir.mkdir(mode=0o700)
-            (settings_dir / 'ai-settings.json').write_text(json.dumps({
-                'version': 1,
-                'profile': 'default',
-            }), encoding='utf-8')
-            (settings_dir / 'viewer-settings.json').write_text(json.dumps({
-                'version': 1,
-                'page_mode': 'single',
-            }), encoding='utf-8')
-
-            profiles_dir = staging / 'profiles'
-            profiles_dir.mkdir(mode=0o700)
-            (profiles_dir / 'custom.json').write_text(json.dumps({
-                'version': 1,
-                'name': 'custom',
-            }), encoding='utf-8')
+            settings = source / 'ai-settings.json'
+            settings.write_text('{"version":1,"profile":"default"}', encoding='utf-8')
+            viewer = source / 'viewer-settings.json'
+            viewer.write_text('{"version":1,"wheel_up_advances":false}', encoding='utf-8')
+            profiles = source / 'profiles'
+            profiles.mkdir()
+            shutil.copyfile(Path(__file__).resolve().parents[1] / 'config/ai-profiles/embeddinggemma-2.json', profiles / 'custom.json')
+            options = {'settings': settings, 'viewer_settings': viewer, 'profiles': profiles}
+        bundle = self.base / (name + '_bundle')
+        storage_backup.backup(source / 'catalog.sqlite', bundle, include_vectors=False, **options)
+        storage_backup.restore(bundle, staging)
 
         return staging
+
+    def test_invalid_current_settings_do_not_move_staging(self):
+        staging = self._create_staging('invalid_current')
+        (self.data_dir / LAUNCH_SETTINGS_FILE).write_text('[]', encoding='utf-8')
+        with self.assertRaises(RestoreSwitchError):
+            apply_restore_switch(self.data_dir, staging)
+        self.assertTrue(staging.exists())
+        self.assertFalse(is_restore_pending(self.data_dir))
+
+    def test_restored_selection_is_not_overridden_by_old_command_line_profile(self):
+        staging = self._create_staging('profile_override')
+        old = {**self.orig_settings, 'ai_profile': str(self.base / 'old_profile.json')}
+        (self.data_dir / LAUNCH_SETTINGS_FILE).write_text(json.dumps(old), encoding='utf-8')
+        apply_restore_switch(self.data_dir, staging)
+        self.assertNotIn('ai_profile', load_settings(self.data_dir))
+        rollback_restore_switch(self.data_dir)
+        self.assertEqual(load_settings(self.data_dir), old)
+
+    def test_external_switch_owner_prevents_pointer_mutation(self):
+        from storage_lease import storage_lease, StorageBusyError
+        staging = self._create_staging('busy_switch')
+        with storage_lease(self.data_dir / 'restore-switch'):
+            with self.assertRaises(StorageBusyError):
+                apply_restore_switch(self.data_dir, staging)
+        self.assertTrue(staging.exists())
+        self.assertEqual(load_settings(self.data_dir), self.orig_settings)
+
+    def test_modified_staging_payload_cannot_switch_current_library(self):
+        staging = self._create_staging('modified')
+        (staging / 'settings/viewer-settings.json').write_text('{"version":1,"wheel_up_advances":true}', encoding='utf-8')
+        before = (self.data_dir / LAUNCH_SETTINGS_FILE).read_bytes()
+        with self.assertRaises(RestoreSwitchError):
+            apply_restore_switch(self.data_dir, staging)
+        self.assertTrue(staging.exists())
+        self.assertEqual((self.data_dir / LAUNCH_SETTINGS_FILE).read_bytes(), before)
+        self.assertFalse(is_restore_pending(self.data_dir))
 
     def test_apply_restore_switch_creates_target_and_sentinel(self):
         staging = self._create_staging('staging_1')

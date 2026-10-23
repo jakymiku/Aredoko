@@ -240,6 +240,10 @@ def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,ext
 
 def _manifest(folder,max_bytes):
     folder=plain_path(folder,directory=True);raw=_read_small(folder/'manifest.json');manifest=_json(raw)
+    total=_validate_manifest(manifest,max_bytes)
+    return manifest,hashlib.sha256(raw).hexdigest(),total
+
+def _validate_manifest(manifest,max_bytes):
     if not isinstance(manifest,dict) or set(manifest)!={'format','version','created_at','runtime','cache_policy','not_included','entries'} or manifest['format']!=FORMAT or type(manifest['version']) is not int or manifest['version']!=VERSION:raise RecoveryError('Unsupported backup format/version')
     if manifest['cache_policy'] not in ('included','omitted') or not isinstance(manifest['created_at'],str) or len(manifest['created_at'])>64:raise RecoveryError('Invalid manifest metadata')
     if not isinstance(manifest['runtime'],dict) or set(manifest['runtime'])!={'python','platform'} or any(not isinstance(v,str) or len(v)>64 for v in manifest['runtime'].values()):raise RecoveryError('Invalid runtime metadata')
@@ -262,7 +266,7 @@ def _manifest(folder,max_bytes):
     if counts.get('catalog')!=1 or counts.get('vectors',0)>64 or counts.get('profile',0)>64 or counts.get('tagger_profile',0)>16 or any(counts.get(role,0)>1 for role in ('ai_settings','viewer_settings')):raise RecoveryError('Invalid role counts')
     if any((role in missing)!=(counts.get(role,0)==0) for role in ('ai_settings','viewer_settings')):raise RecoveryError('Missing settings declaration')
     if manifest['cache_policy']=='omitted' and counts.get('vectors',0) or any(role in missing and counts.get({'profiles':'profile','tagger_profiles':'tagger_profile'}.get(role,role),0) for role in missing):raise RecoveryError('Conflicting cache/settings policy')
-    return manifest,hashlib.sha256(raw).hexdigest(),total
+    return total
 
 def _sealed(path):
     if any(Path(str(path)+suffix).exists() or Path(str(path)+suffix).is_symlink() for suffix in ('-wal','-shm','-journal')):
@@ -338,3 +342,24 @@ def create_backup(catalog,output,*,as_zip=None,**kwargs):
             if stage.exists():shutil.rmtree(stage,ignore_errors=True)
     else:
         return backup(catalog,output,**kwargs)
+
+
+def validate_restored(folder, *, max_bytes=DEFAULT_MAX_BYTES):
+    """Read-only verification of a staging receipt and every listed payload."""
+    folder=plain_path(folder,directory=True)
+    report=_json(_read_small(folder/'recovery.json'))
+    fields={'format','version','source_manifest_sha256','cache_policy','automatic_resume','requires_source_revalidation','not_included','runtime','entries'}
+    if not isinstance(report,dict) or set(report)!=fields or report['format']!='aredoko-restored' or type(report['version']) is not int or report['version']!=1:
+        raise RecoveryError('Invalid restored receipt')
+    if report['automatic_resume'] is not False or report['requires_source_revalidation'] is not True or not isinstance(report['source_manifest_sha256'],str) or re.fullmatch('[0-9a-f]{64}',report['source_manifest_sha256']) is None:
+        raise RecoveryError('Invalid restored policy')
+    manifest={'format':FORMAT,'version':VERSION,'created_at':'restored',**{key:report[key] for key in ('runtime','cache_policy','not_included','entries')}}
+    _validate_manifest(manifest,_budget(max_bytes))
+    for entry in report['entries']:
+        path=plain_path(folder/entry['path'])
+        if _hash(path)!=(entry['bytes'],entry['sha256']):raise RecoveryError('Restored payload changed')
+        if entry['role'] in ('catalog','vectors'):
+            _sealed(path)
+            if _database(path,entry['role'])!=(entry['schema'],entry.get('profile')):raise RecoveryError('Restored schema/profile changed')
+        else:_configuration(entry['role'],_read_small(path,16384))
+    return report
