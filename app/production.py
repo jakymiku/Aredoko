@@ -6,6 +6,7 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 from catalog import Catalog
 from shelves import ShelfStore, shelf_clause
+from root_preferences import RootPreferences
 from library_index import LibraryIndex, TYPES, is_folder_book, folder_title
 from search_terms import register as register_search_terms, split_terms, explain_matches
 from term_relations import TermRelations
@@ -27,12 +28,12 @@ class ProductionCatalog(Catalog):
         if Path(path).exists() and Path(path).stat().st_size > 0:
             with closing(sqlite3.connect(path)) as db:
                 user_ver = db.execute("PRAGMA user_version").fetchone()[0]
-                if user_ver > 1:
-                    raise ValueError(f"Unsupported database schema user_version {user_ver} > 1; please update Aredoko.")
+                if user_ver > 2:
+                    raise ValueError(f"Unsupported database schema user_version {user_ver} > 2; please update Aredoko.")
                 tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 if 'items' in tables and 'production_marker' not in tables:
                     raise ValueError('Use a separate production database, not the demo database')
-        super().__init__(path,supported_schema=1)
+        super().__init__(path,supported_schema=2)
         self.index = LibraryIndex(path)
         self.terms = TermRelations(self.connect)
         with self.connect() as db:
@@ -65,6 +66,8 @@ class ProductionCatalog(Catalog):
         self._progress = 0
         self.shelf_store=ShelfStore(self.connect)
         self.shelf_store.migrate()
+        self.root_preferences=RootPreferences(self.connect)
+        self.root_preferences.migrate()
         # Recover a crash between index commit and catalog publication.
         self.sync_index()
 
@@ -439,6 +442,7 @@ class ProductionCatalog(Catalog):
                 db.execute('DELETE FROM item_locations WHERE location_id IN (SELECT id FROM library_locations WHERE root_id=?)', (root_id,))
                 db.execute('DELETE FROM item_shelves WHERE item_id IN (SELECT id FROM purge_item_ids)')
                 db.execute('DELETE FROM root_shelves WHERE root_id=?',(root_id,))
+                db.execute('DELETE FROM registered_root_preferences WHERE root_id=?',(root_id,))
                 db.execute('DELETE FROM items WHERE id IN (SELECT id FROM purge_item_ids)')
                 removed_locations = db.execute('DELETE FROM library_locations WHERE root_id=?', (root_id,)).rowcount
                 db.execute('DELETE FROM scan_jobs WHERE root_id=?', (root_id,))
@@ -461,6 +465,21 @@ class ProductionCatalog(Catalog):
             if operation=='delete':self.shelf_store.delete(values['shelf_id']);return {'deleted':values['shelf_id']}
             if operation=='assign':self.shelf_store.replace(values['entity'],values['object_ids'],values['shelf_ids']);return {'updated':len(values['object_ids'])}
             raise ValueError('Invalid shelf operation')
+
+    def registered_roots(self,include_inactive=False):
+        rows=self.index.roots(include_inactive=include_inactive)
+        with self.connect() as db:
+            favorites={row[0]:bool(row[1]) for row in db.execute('SELECT root_id,favorite FROM registered_root_preferences')}
+            memberships={}
+            for row in db.execute('SELECT root_id,shelf_id FROM root_shelves ORDER BY root_id,shelf_id'):memberships.setdefault(row[0],[]).append(row[1])
+        for row in rows:
+            row['favorite']=favorites.get(row['id'],False);row['shelf_ids']=memberships.get(row['id'],[])
+        return rows
+
+    def set_root_favorite(self,root_id,favorite):
+        with self._guard:
+            self._require_idle()
+            return self.root_preferences.set_favorite(root_id,favorite)
 
     def shelf_descriptors(self):
         # Same registered-root/exclusion visibility as library search; no source I/O.

@@ -477,7 +477,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if path=='/api/library/roots':
                     inactive=parse_qs(urlparse(self.path).query).get('include_inactive',['0'])
                     if inactive not in (['0'],['1']):return self.send(400,{'error':'Invalid root filter'})
-                    return self.send(200,{'items':catalog.index.roots(include_inactive=inactive==['1'])})
+                    return self.send(200,{'items':catalog.registered_roots(include_inactive=inactive==['1'])})
                 if path=='/api/library/scan': return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
             return super().do_GET()
@@ -506,7 +506,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/history/delete')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/history/delete','/api/library/roots/favorite')
                 body=json.loads(self.rfile.read(length),**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
                 if self.path.startswith('/api/library/results/'):
@@ -766,6 +766,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if self.path=='/api/library/roots':
                     if body.get('consent') is not True: raise ValueError('Explicit folder consent required')
                     return self.send(200,{'root_id':catalog.add_root(body.get('path'),body.get('excludes'),body.get('default_shelf',''),body.get('folder_books'),body.get('recursive'))})
+                if self.path=='/api/library/roots/favorite':
+                    if set(body)!={'root_id','favorite'}:raise ValueError('Invalid root favorite request')
+                    return self.send(200,catalog.set_root_favorite(body['root_id'],body['favorite']))
                 if self.path=='/api/library/roots/shelf':
                     if set(body)-{'root_id','shelf','fill_unset'}:raise ValueError('Invalid root filter')
                     return self.send(200,catalog.set_root_shelf(body.get('root_id'),body.get('shelf'),body.get('fill_unset',False)))

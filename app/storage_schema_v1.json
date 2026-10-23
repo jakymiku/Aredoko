@@ -691,6 +691,22 @@
         null,
         0
       ]
+    ],
+    "registered_root_preferences": [
+      [
+        "root_id",
+        "INTEGER",
+        0,
+        null,
+        1
+      ],
+      [
+        "favorite",
+        "INTEGER",
+        1,
+        "0",
+        0
+      ]
     ]
   },
   "vectors": {

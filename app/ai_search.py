@@ -57,9 +57,9 @@ class VectorStore:
                 supported=CURRENT_VECTOR_STORE_USER_VERSION
                 # Historical in-catalog vector tables share the catalog's version;
                 # standalone vector databases still use version0 only.
-                if ver==1:
+                if ver in (1,2):
                     tables={row[0] for row in check_db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                    if {'production_marker','items','item_locations','library_roots','shelves','item_shelves','root_shelves'}<=tables:supported=1
+                    if {'production_marker','items','item_locations','library_roots','shelves','item_shelves','root_shelves'}<=tables and (ver==1 or 'registered_root_preferences' in tables):supported=ver
                 if ver > supported:
                     raise AIUnavailable(f'Unsupported vector store user_version {ver} > {supported}; please update Aredoko.')
         with self.connect() as db:

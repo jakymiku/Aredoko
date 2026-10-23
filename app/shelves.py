@@ -30,13 +30,13 @@ class ShelfStore:
         with self.connect() as db:
             db.execute('PRAGMA foreign_keys=ON')
             db.execute('BEGIN IMMEDIATE')
-            if require and db.execute('PRAGMA user_version').fetchone()[0]!=VERSION:raise ValueError('Shelf migration required')
+            if require and db.execute('PRAGMA user_version').fetchone()[0]not in (1,2):raise ValueError('Shelf migration required')
             yield db
     def migrate(self):
         with self.transaction(False) as db:
             version=db.execute('PRAGMA user_version').fetchone()[0]
             tables={row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            if version==VERSION:
+            if version in (1,2):
                 if not TABLES<=tables:raise ValueError('Incomplete shelf schema')
                 return
             if version!=0 or not {'production_marker','items','library_roots'}<=tables or TABLES&tables:raise ValueError('Unsupported shelf migration source')

@@ -164,8 +164,12 @@
    </Grid>
 
     <Grid x:Name="ItemListContainer" SizeChanged="ItemListContainer_SizeChanged" Grid.Row="3" Margin="0,0,12,0">
-     <ListView x:Name="Items" Loaded="Items_Loaded" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.AutomationId="ItemList"/>
-     <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.Name="案内メッセージ" AutomationProperties.LiveSetting="Polite" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+     <Expander x:Name="FavoriteRootArea" Header="お気に入りのフォルダ" IsExpanded="True" Visibility="Collapsed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,0,0,8" AutomationProperties.AutomationId="FavoriteRootArea">
+      <ListView x:Name="FavoriteRootList" MaxHeight="144" SelectionMode="None" IsItemClickEnabled="True" ItemClick="FavoriteRoot_ItemClick" ContainerContentChanging="FavoriteRoot_ContainerContentChanging" ItemTemplate="{StaticResource MediaContainerTemplate}" HorizontalContentAlignment="Stretch" AutomationProperties.Name="お気に入りの登録フォルダ" AutomationProperties.AutomationId="FavoriteRootList"/>
+     </Expander>
+     <ListView x:Name="Items" Grid.Row="1" Loaded="Items_Loaded" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.AutomationId="ItemList"/>
+     <TextBlock x:Name="Empty" Grid.Row="1" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.Name="案内メッセージ" AutomationProperties.LiveSetting="Polite" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
     </Grid>
     <Grid x:Name="ShelfHubView" Grid.Row="1" Grid.RowSpan="3" Visibility="Collapsed" RowSpacing="12">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -186,6 +190,7 @@
        <ComboBoxItem Content="登録中のみ" AutomationProperties.AutomationId="FolderStateActive"/>
        <ComboBoxItem Content="すべて（解除済み含む）" AutomationProperties.AutomationId="FolderStateAll"/>
        <ComboBoxItem Content="登録解除済みのみ" AutomationProperties.AutomationId="FolderStateInactive"/>
+       <ComboBoxItem Content="お気に入り（登録中）" AutomationProperties.AutomationId="FolderStateFavorite"/>
       </ComboBox>
       <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8">
        <Button x:Name="FolderLayoutButton" Content="グリッド表示" Click="FolderLayout_Click" AutomationProperties.AutomationId="BtnFolderLayout"/>

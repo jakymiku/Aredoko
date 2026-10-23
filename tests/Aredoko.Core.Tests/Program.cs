@@ -8,6 +8,7 @@ await ThumbnailTests.Run(Check);
 await AnimationStreamTests.Run(Check);
 await ResultSessionTests.Run(Check);
 await ShelfTests.Run(Check);
+await RootFavoritesTests.Run(Check);
 await ResultNavigationTests.Run(Check);
 ResultBufferTests.Run(Check);
 NavigationHistoryTests.Run(Check);

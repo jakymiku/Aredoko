@@ -88,6 +88,11 @@ public sealed class LibraryApi : IDisposable
         }
         return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
     }
+    public Task<JsonNode> SetRootFavoriteAsync(int rootId,bool favorite)
+    {
+        if(rootId<1)throw new ArgumentOutOfRangeException(nameof(rootId));
+        return PostAsync("api/library/roots/favorite",new JsonObject{["root_id"]=rootId,["favorite"]=favorite});
+    }
     public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed,state.ShelfIds));
     public Task<SearchResponse> SimilarAsync(int itemId,string kind,string view,int page,JsonObject scope,int? rootId,CancellationToken cancellation) =>
         SimilarMultiAsync(itemId,kind,view,page,scope,rootId is int id ? new[]{id} : null,cancellation);

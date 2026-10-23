@@ -1,5 +1,10 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-23 P4 registered-root favorites (latest)
+
+[Independent root favorite storage/API/UI and catalog2 recovery](root-favorites-20261023.md) implemented; migration/auth/restore tests PASS, Core904/Portable build0 errors+known3 warnings. Favorite GUI UNRUN; source is not installed Alpha/finished ZIP. Catalog now migrates1→2 atomically; old binaries must not reopen it. Next root multiple-initial-shelf editor/atomic fill-unset, then P5. Preserve native cap evidence and current no-shutdown instruction.
+
+
 ## 2026-10-23 P4 shelf native correction (latest)
 
 [Shelf native evidence and corrected desktop diagnosis](shelf-ui-20261023.md): actual desktop now accessible, run02 exposed empty card host and source fixed; run03 shows cards/representatives and passes atomic membership/tags, create and rename. Final Open happened before async refresh idle; remaining steps UNRUN. Source disables list during mutation and runner waits idle, not replayed. Shelf flow3/3 consumed, all3 delivered PNGs reviewed, both later test processes normal exit0. Do not claim PC remains locked or full GUI acceptance. Continue independent root favorites, preserve no-shutdown instruction.

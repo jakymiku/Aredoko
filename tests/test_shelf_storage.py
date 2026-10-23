@@ -18,7 +18,7 @@ class ShelfStorageTests(unittest.TestCase):
         self.ids=[row['id'] for row in self.catalog.search()['items']]
         self.catalog.update([self.ids[0]],{'shelf':'手動棚','tags':['keep'],'favorite':True})
         with self.catalog.connect() as db:
-            for table in ('item_shelves','root_shelves','shelves'):db.execute('DROP TABLE '+table)
+            for table in ('registered_root_preferences','item_shelves','root_shelves','shelves'):db.execute('DROP TABLE '+table)
             db.execute('PRAGMA user_version=0')
         self.store=ShelfStore(self.catalog.connect)
     def migrate(self):self.store.migrate();return {r['name']:r['id'] for r in self.store.list()}
@@ -63,7 +63,7 @@ class ShelfStorageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Unsupported database'):Catalog(self.catalog.path)
         reopened=ProductionCatalog(self.catalog.path);self.addCleanup(reopened.close)
         self.assertEqual(len(reopened.shelf_store.list()),2)
-        with self.catalog.connect() as db:db.execute('PRAGMA user_version=2')
+        with self.catalog.connect() as db:db.execute('PRAGMA user_version=3')
         with self.assertRaises(ValueError):self.store.migrate()
     def test_backup_roundtrip_preserves_version1_and_all_memberships(self):
         names=self.migrate();self.store.replace('item',self.ids,list(names.values()));self.store.create('empty')

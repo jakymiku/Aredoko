@@ -11,7 +11,9 @@ public sealed record RegisteredRootRow(
     int PresentCount = 0,
     string? LastScannedAt = null,
     bool FolderBooks = false,
-    bool Recursive = true)
+    bool Recursive = true,
+    bool Favorite = false,
+    IReadOnlyList<long>? ShelfIds = null)
 {
     public string ModeLabel => FolderBooks ? "画像フォルダを一冊として扱う" : "画像は1枚ずつ";
 
@@ -42,7 +44,7 @@ public sealed record RegisteredRootRow(
         ? "登録解除済み（再登録でタグ・棚を復元）"
         : (Online ? "登録中 · 接続OK" : "登録中 · 未接続") + $" · {PresentCount:N0} 件";
 
-    public string ShelfLabel => string.IsNullOrEmpty(DefaultShelf) ? "初期棚: 棚なし" : $"初期棚: {DefaultShelf}";
+    public string ShelfLabel => string.IsNullOrEmpty(DefaultShelf) ? "初期棚: 棚なし" : $"初期棚: {DefaultShelf}"+(ShelfIds is {Count:>1}?$" ほか{ShelfIds.Count-1}棚":"");
 
     public static IReadOnlyList<RegisteredRootRow> ParseList(JsonNode data)
     {
@@ -60,7 +62,8 @@ public sealed record RegisteredRootRow(
             var count = row["present_count"] is JsonNode c ? c.GetValue<int>() : 0;
             var scanned = row["last_scanned_at"]?.GetValue<string>();
             var folderBooks = row["folder_books"] is JsonNode f && f.GetValueKind() == System.Text.Json.JsonValueKind.True;
-            list.Add(new RegisteredRootRow(id, path, enabled, online, shelf, excludes, count, scanned, folderBooks, row["recursive"]?.GetValue<bool>()??true));
+            var memberships=row["shelf_ids"]?.AsArray().Select(x=>x!.GetValue<long>()).ToArray()??[];ShelfProtocol.ValidateIds(memberships);
+            list.Add(new RegisteredRootRow(id, path, enabled, online, shelf, excludes, count, scanned, folderBooks, row["recursive"]?.GetValue<bool>()??true,row["favorite"]?.GetValue<bool>()??false,memberships));
         }
         return list;
     }
