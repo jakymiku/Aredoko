@@ -1,5 +1,10 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-24 restore preparation + safety checkpoint (latest)
+
+Implementation `1ca11d4`; [five commits, checks and next owned restart task](restore-review-20261024.md). Directory/ZIP preparation API/Core/discard connected; cutover verifies payloads and serializes operations; real frontend ready required. P5 PARTIAL: GUI and owned shutdown/restart integration remain. Last quota reading88% used, finish handoff/push; no shutdown. Preserve old Alpha, user DB/media and existing native caps.
+
+
 ## 2026-10-24 launcher restore guard
 
 Rollback settings are revalidated before child startup; restore16/lifecycle10 PASS. See [current review and next task](restore-review-20261024.md). P5 API/GUI/restart incomplete; no shutdown.

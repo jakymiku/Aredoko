@@ -1,5 +1,22 @@
 # Restore review follow-up
 
+## 2026-10-24 継続作業の終了チェックポイント
+
+実装HEAD `1ca11d4`。開始 `2e416eb` から5単位を継続実装。利用枠used88%で大きな作業を止め、保存・確認・引き継ぎへ移行。シャットダウンなし。
+
+- `1630047`: 取消と完了の競合、ワーカー動作中の削除、既存展開先の削除を修正。ZIP上限を復号前に検査し、CRCは取消可能な展開で確認。
+- `13afabc`: 起動中backupのフォルダ形式とZIPを共通復元へ接続。認証付き GET `/api/library/restore`、POST `/start`・`/cancel` とCore `LibraryApi.Restores`。公開APIからステージング先やDB切替は指定不可。
+- `b4363c8`: 切替直前の復元receipt/全payload hash/schema/config検証、プロセス間排他、壊れた既存設定の保全、旧ai_profileによる復元設定の上書きを修正。
+- `7072578`: 明示同意付き `/discard` とCore操作。終了済みの所有ステージングだけを破棄し、選び直せる。動作中・別job・所有同一性不一致は拒否。
+- `1ca11d4`: 実frontend ready handshakeなしの復元確定を拒否してrollback。commit時にも現在DBとpending対象の一致を検証。
+
+確認: jobs25 PASS/3.610s（初回の新規directoryテストは親未作成で失敗→修正）、HTTP3 PASS/2.432s（discard追加後）、switch22 PASS/8.387s（途中のmock poll回数不足1件は修正）、storage_backup28 PASS/23.428s、最終lifecycle10 PASS/15.935s。Core全runner exit0（新規4assert）、最終Core build0errors/0warnings。Portable build0errors/既知WUI1001×3、23.12s（discard追加前、追加後Coreのみ再build）。生成データのみ。GUI/GPU/全体性能/新配布版は未検証。旧Alpha/通常DB/元メディア未変更。
+
+**次の1件**: 所有ランチャーの復元再起動プロトコルを接続する。ユーザーの未保存編集→所有ジョブの正常停止→backendのDB閉鎖確認→検証済みステージングの切替→同じlauncher所有下で再起動→readyで確定/失敗rollback。通常DBを開いたままapplyしない。実装済みAPIは準備だけで `switch_supported=False`、backup側`restore_supported=False`のまま。WinUIの選択/準備進捗/中止/破棄と明示再起動ボタンはこの所有境界が確定後に接続する。P5未完、P6へ飛ばさない。
+
+残点: 起動を跨ぐ準備済みjobの再接続/不要stage掃除、tagger/profile選択の完全な復元意味、切替の電源断耐性・全異常系、native受入。既存GUI試行上限は別名でリセットしない。準備API/Coreがあることを「GUIから復元可能」と報告しない。今回の変更でロードマップ全体を完了扱いにしない。
+
+
 ## 2026-10-24 restore review correction
 
 Reviewed a821c07 against current source. P5 is PARTIAL, not ready to skip to P6: production_server still reports restore_supported=False; RestoreJobManager/apply_restore_switch have no production GUI/API caller. Owned job shutdown, unsaved edits, restart and packaged launch integration still need implementation/acceptance.

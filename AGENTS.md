@@ -1,5 +1,10 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-24 restore preparation + safety checkpoint (latest)
+
+Implementation `1ca11d4`; [five commits, checks and next owned restart task](docs/restore-review-20261024.md). Directory/ZIP preparation API/Core/discard connected; cutover verifies payloads and serializes operations; real frontend ready required. P5 PARTIAL: GUI and owned shutdown/restart integration remain. Last quota reading88% used, finish handoff/push; no shutdown. Preserve old Alpha, user DB/media and existing native caps.
+
+
 ## 2026-10-24 latest restore review
 
 [Correction, checks and next work](docs/restore-review-20261024.md): P5 remains PARTIAL; restore GUI/API/restart are not connected. Fixed corrupt-record rollback data preservation; related15 tests PASS. Review a821c07 further before P6. No shutdown.
