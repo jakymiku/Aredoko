@@ -40,6 +40,7 @@ from runtime_paths import worker_python, bind_runtime
 from ai_runtime_preferences import AIRuntimePreferences, read_preferences
 from ai_setup_jobs import AISetupJobs, SetupBusy
 from backup_jobs import BackupJobs,BackupBusy
+from restore_jobs import RestoreStagingJobs,RestoreBusy
 from ai_runtime import object_pairs
 from animation_sessions import AnimationSessions, AnimationBusy, AnimationGone, MIME as ANIMATION_MIME
 from image_animations import AnimationUnavailable
@@ -129,6 +130,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         return {'settings':profiles.path if profiles.path.exists() else None,'profiles':folder,
                 'extra_profiles':extra,'tagger_profiles':tagger_profile_paths}
     backup_jobs=BackupJobs(catalog,quiesce=catalog.writer_fence.pause,configuration=backup_configuration)
+    restore_jobs=RestoreStagingJobs(catalog.path.parent/'restore-staging')
     animations=AnimationSessions(previews)
     thumbnails=ThumbnailCache(previews)
     def result_provider(conditions, consume, cancelled):
@@ -465,6 +467,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         return self.send(404,{'error':'Preview unavailable'})
                     except ValueError:
                         return self.send(400,{'error':'Invalid audio range request'})
+                if path=='/api/library/restore':
+                    if urlparse(self.path).query:return self.send(400,{'error':'Invalid restore query'})
+                    return self.send(200,restore_jobs.snapshot())
                 if path=='/api/library/backup':
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid backup query'})
                     return self.send(200,{**backup_jobs.snapshot(),'backup_supported':True,'restore_supported':False,
@@ -566,6 +571,13 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except (PreviewBusyError,AnimationBusy):return self.send(503,{'error':'Animation decoder busy'})
                     except (PreviewUnavailable,AnimationUnavailable,OSError,EOFError):return self.send(404,{'error':'Animation unavailable'})
                     except (ValueError,TypeError):return self.send(400,{'error':'Invalid animation request'})
+                if self.path.startswith('/api/library/restore/'):
+                    try:
+                        if self.path=='/api/library/restore/start':return self.send(202,restore_jobs.start(body))
+                        if self.path=='/api/library/restore/cancel':return self.send(200,restore_jobs.cancel(body))
+                        return self.send(404,{'error':'Not found'})
+                    except (RestoreBusy,KeyError):return self.send(409,{'error':'復元準備の状態が変わりました。状態を確認してください。'})
+                    except (ValueError,TypeError):return self.send(400,{'error':'復元元と選択内容を確認してください。'})
                 if self.path.startswith('/api/library/backup/'):
                     try:
                         if self.path=='/api/library/backup/start':return self.send(202,backup_jobs.start(body))
@@ -825,6 +837,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     Handler.results=results
     Handler.animations=animations
     Handler.backup_jobs=backup_jobs
+    Handler.restore_jobs=restore_jobs
     Handler.setup_jobs=setup_jobs
     return Handler
 
@@ -880,6 +893,7 @@ def _serve(args):
         resources.callback(handler.results.close)
         resources.callback(handler.thumbnails.close)
         resources.callback(handler.backup_jobs.close)
+        resources.callback(handler.restore_jobs.close)
         server=ThreadingHTTPServer(('127.0.0.1',args.port),handler)
         resources.callback(server.server_close)
         if args.exit_on_stdin_close:

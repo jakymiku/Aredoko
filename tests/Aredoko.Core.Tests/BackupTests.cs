@@ -45,6 +45,19 @@ internal static class BackupTests
             snapshot["state"]="capturing";snapshot["bytes_done"]=300;rejected=false;try{BackupJob.Parse(snapshot.ToJsonString());}catch(InvalidDataException){rejected=true;}
             check(rejected,"backup rejects impossible progress");
             rejected=false;try{await client.CancelAsync("0");}catch(ArgumentException){rejected=true;}check(rejected&&calls.Count==3,"invalid backup cancellation never reaches server");
+            var restoreJson=new JsonObject{["job_id"]=id,["state"]="completed",["progress_ratio"]=1,["message"]="準備完了",["staging_supported"]=true,["switch_supported"]=false};
+            var restored=RestoreJob.Parse(restoreJson.ToJsonString());check(!restored.Active&&!restored.SwitchSupported,"restore preparation completion does not authorize a database switch");
+            restoreJson["progress_ratio"]=0.5;rejected=false;try{RestoreJob.Parse(restoreJson.ToJsonString());}catch(InvalidDataException){rejected=true;}check(rejected,"restore rejects premature completion");
+            restoreJson["progress_ratio"]=1;
+            using var restoreHandler=new Stub(async request=>
+            {
+                var body=JsonNode.Parse(await request.Content!.ReadAsStringAsync())!;
+                check(request.RequestUri!.AbsolutePath=="/api/library/restore/start"&&body["consent"]!.GetValue<bool>()&&body["without_vectors"]!.GetValue<bool>(),"restore start carries explicit consent and cache omission");
+                check(body.AsObject().Count==3&&!body.AsObject().ContainsKey("staging_path"),"restore caller cannot choose the owned staging path");
+                return new HttpResponseMessage(HttpStatusCode.Accepted){Content=new StringContent(restoreJson.ToJsonString())};
+            });
+            using var restoreHttp=new HttpClient(restoreHandler){BaseAddress=new Uri("http://127.0.0.1:8769/")};
+            await new RestoreClient(restoreHttp).StartAsync(folder);
             snapshot["bytes_done"]=128;var viewer=new ViewerInputSettings(true,80,"dark",true);await client.StartAsync(folder,new BackupSelection(),viewer);check(viewer.ToJson()["wheel_up_advances"]!.GetValue<bool>()&&viewer.ToJson()["theme"]!.GetValue<string>()=="dark","backup and normal viewer persistence share the exact JSON contract");
         }
         finally{Directory.Delete(folder,true);}

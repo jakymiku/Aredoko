@@ -372,6 +372,27 @@ class RestoreJobsTests(unittest.TestCase):
         self.assertIn('too many files', job.error.lower())
         self.assertFalse(staging_dir.exists())
 
+    def test_native_directory_bundle_restores_without_modifying_source(self):
+        bundle = self.base / 'live_bundle'
+        backup(self.catalog_path, bundle)
+        before = {p.relative_to(bundle): p.read_bytes() for p in bundle.rglob('*') if p.is_file()}
+        job = self.manager.start_job(bundle)
+        self.manager.wait(job)
+        self.assertEqual(job.state, 'completed', job.error)
+        self.assertTrue((job.staging_path / 'catalog.sqlite').is_file())
+        after = {p.relative_to(bundle): p.read_bytes() for p in bundle.rglob('*') if p.is_file()}
+        self.assertEqual(before, after)
+
+    def test_invalid_directory_bundle_is_preserved(self):
+        bundle = self.base / 'invalid_bundle'
+        bundle.mkdir()
+        canary = bundle / 'keep.txt'
+        canary.write_text('keep', encoding='utf-8')
+        job = self.manager.start_job(bundle)
+        self.manager.wait(job)
+        self.assertEqual(job.state, 'failed')
+        self.assertEqual(canary.read_text(encoding='utf-8'), 'keep')
+
     def test_existing_extraction_directory_is_preserved(self):
         zip_path = self._create_valid_zip()
         job_id = 'b' * 32
