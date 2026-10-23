@@ -82,10 +82,8 @@ public sealed partial class MainPage
                     string? path=null;
                     if(!reset)
                     {
-                        var picker=new FolderPicker(MainWindow.Current.AppWindow.Id){Title=forRuntime?"AI実行環境のフォルダ":"モデルをまとめた親フォルダ",CommitButtonText="このフォルダを確認"};
-                        var picked=await picker.PickSingleFolderAsync();
-                        if(picked is null||!open||disposed)return;
-                        path=picked.Path;
+                        path=await PickAIEnvironmentFolderAsync(forRuntime);
+                        if(path is null||!open||disposed)return;
                     }
                     current=forRuntime?await api.AIEnvironment.SelectRuntimeAsync(path,lifetime.Token):await api.AIEnvironment.SelectModelsAsync(path,lifetime.Token);
                 }
@@ -113,4 +111,12 @@ public sealed partial class MainPage
         catch(Exception ex){Failure(ex);}
         finally{open=false;timer.Stop();lifetime.Cancel();if(polling is not null)await polling;dialogOpen=false;transitions.Release();RestoreNavigation();}
     }
+    // Keep picker type resolution inside the caller's protected operation;
+    // resetting preferences itself never needs to load a picker projection.
+    private static async Task<string?> PickAIEnvironmentFolderAsync(bool forRuntime)
+    {
+        var picker=new FolderPicker(MainWindow.Current.AppWindow.Id){Title=forRuntime?"AI実行環境のフォルダ":"モデルをまとめた親フォルダ",CommitButtonText="このフォルダを確認"};
+        return (await picker.PickSingleFolderAsync())?.Path;
+    }
+
 }

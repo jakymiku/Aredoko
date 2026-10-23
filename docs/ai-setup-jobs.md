@@ -1,5 +1,13 @@
 # 配置済みAI環境のバックグラウンド検査（LD4a）
 
+## 2026-10-24 native AI environment check and picker deployment correction (latest)
+
+Implementation base `7883a01`. User explicitly approved generated-only max2 attempts; now **2/2 exhausted**, do not replay/reset. run01 waited on Grid AISettingsLayout without a UIA peer although settings displayed; captured PNG reviewed, owned PID12972/path verified and dialog then main window closed normally in later cleanup (raw timeout retained). run02 passed idle/no settings change, authenticated synthetic validation start, native refresh/close/reopen reattach and native cancel with unchanged preferences (8 checks including owned HWND). Native reset then crashed: frontend log FileNotFoundException for Microsoft.Windows.Storage.Pickers.Projection. All3 delivered run02 PNGs reviewed; no failure PNG delivered because process had exited. No residual frontend, fake Python was never executed, no GPU/model/download/ordinary DB.
+
+Root cause: loose picker DLL existed but was absent from trimmed deps.json. Portable now roots that specific SDK projection (no global trim disable); picker helper isolated so reset does not resolve picker types outside the protected operation. Published fresh frontend02 (0errors, known WUI1001x3/SDK IL2104x2). Windowless tools/check_picker_runtime.py probe03: fresh deps loads FolderPicker/FileOpenPicker type metadata exit0; old frontend01 reproduces exact missing projection. No window or picker constructed. Probe01/02 harness-only trimmed System.Runtime forwarder failures retained; final harness uses already rooted Console, no extra product roots for probe. This does NOT accept native reset/picker/Start, and frontend02 is not installed Alpha/full ZIP.
+
+Evidence: ignored data/ai-ui/ai-environment-20261024/run01,run02,picker-probe01..03; frontend01 remains baseline, frontend02 corrected source candidate. Runner saves exit code/final setup snapshot for future authorized checks; not reexecuted. Next independent CPU work: acquisition Core/client/UI and actual trusted catalog provenance; real acquisition registry remains empty. P5/LD5/P6 still partial, goal active/no shutdown.
+
 ## 2026-10-24 Core・配置済み環境のGUI接続（最新）
 
 既存の「AI検索の準備」→「AI環境を追加・配置する」から、runtime/modelsのフォルダ選択、標準設定への復帰、背景検査、実進捗、中止、再表示をsource接続。`AIEnvironmentClient`は未指定と明示nullを区別し、保存済みと推論準備完了を混同しない。保存先をGET診断へ追加し、GUIの非同期応答はrevision/lifetimeで保護。操作エラーは最終Render後も保持する。画面を閉じても背景検査は続く。正常モデル・索引をhot swapしない。

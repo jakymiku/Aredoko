@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-24 AI environment GUI evidence and deploy fix (latest)
+
+[Exact max2 GUI results, picker dependency correction and windowless proof](docs/ai-setup-jobs.md). Reattach/cancel passed; native reset exposed missing managed dependency. Specific projection rooted and fresh frontend02 loads its metadata with actual deps/runtimeconfig; no new GUI trial. AI-environment2/2 and restore3/3 remain exhausted, full picker/reset acceptance pending. All4 delivered PNGs reviewed, no residual owned frontend, real models/GPU/download0. Goal active/no shutdown.
+
 ## 2026-10-24 existing AI environment UI (latest)
 
 [Core947/Portable/source connection and exact pending GUI scope](docs/ai-setup-jobs.md). Runtime/models selection/reset, progress/cancel/reattach now source-connected. Generated-data GUI max2 permission asked, do not run before response. Acquisition catalog remains empty; no real download/GPU/inference. Old restore3/3 cap stays. Goal active, no shutdown.

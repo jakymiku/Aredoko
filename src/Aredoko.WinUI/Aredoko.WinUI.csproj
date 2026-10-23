@@ -40,6 +40,9 @@
        runtime dependency in the trimmed publish graph, not just a stray DLL. -->
   <ItemGroup Condition="'$(AredokoPackageChannel)' == 'Portable'">
     <TrimmerRootAssembly Include="System.Console" />
+    <!-- Modern picker projections must remain in the managed dependency graph.
+         A loose DLL alone does not make it loadable in the trimmed app. -->
+    <TrimmerRootAssembly Include="Microsoft.Windows.Storage.Pickers.Projection" />
   </ItemGroup>
   <Target Name="ValidateAredokoPackageChannel" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(AredokoPackageChannel)' != 'Development' and '$(AredokoPackageChannel)' != 'Alpha' and '$(AredokoPackageChannel)' != 'Portable'"
