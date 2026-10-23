@@ -153,9 +153,9 @@ def _entry(folder,relative,role,*,schema=None,profile=None):
     if profile is not None:result['profile']=profile
     return result
 
-def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,extra_profiles=(),tagger_profiles=(),include_vectors=True,max_bytes=DEFAULT_MAX_BYTES,cancelled=None):
+def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,extra_profiles=(),tagger_profiles=(),include_vectors=True,max_bytes=DEFAULT_MAX_BYTES,cancelled=None,include_history=True,include_reader_progress=True,publish=None):
     max_bytes=_budget(max_bytes);catalog=plain_path(catalog);output=Path(os.path.abspath(output))
-    if type(include_vectors) is not bool:raise RecoveryError('Invalid cache policy')
+    if any(type(value) is not bool for value in (include_vectors,include_history,include_reader_progress)):raise RecoveryError('Invalid backup selection')
     def check():
         if cancelled is not None and cancelled():raise InterruptedError('Backup cancelled')
     with storage_lease(catalog),ExitStack() as stack:
@@ -165,6 +165,8 @@ def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,ext
         if len(profile_paths)>64 or len({p.name.casefold() for p in profile_paths})!=len(profile_paths) or any(NAME.fullmatch(p.name) is None for p in profile_paths):raise RecoveryError('Duplicate/invalid profiles')
         paths=[catalog,*stores];identities={p:identity(p) for p in paths}
         configurations=[];missing=[]
+        if not include_history:missing.append('view_history')
+        if not include_reader_progress:missing.append('reader_progress')
         for role,path,relative in [('ai_settings',settings,'settings/ai-settings.json'),('viewer_settings',viewer_settings,'settings/viewer-settings.json')]:
             if path is None:missing.append(role);continue
             data=_read_small(path,16384 if role=='ai_settings' else 2048);_configuration(role,data);configurations.append((plain_path(path),relative,role,data))
@@ -218,6 +220,10 @@ def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,ext
                             if time.monotonic()-started>600:raise RecoveryError('Backup time limit exceeded')
                         source.backup(target,pages=256,progress=progress,sleep=.01)
                         target.execute('PRAGMA journal_mode=DELETE')
+                        if number==0:
+                            if not include_history:target.execute('DELETE FROM view_history')
+                            if not include_reader_progress:target.execute('DELETE FROM reader_progress')
+                            target.commit()
                     if _database(folder/relative,role)!=(schema,profile):raise RecoveryError('Snapshot schema mismatch')
                     entry=_entry(folder,relative,role,schema=schema,profile=profile);used+=entry['bytes'];entries.append(entry)
                 for _,relative,role,data in configurations:
@@ -225,7 +231,9 @@ def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,ext
                 if used>max_bytes:raise RecoveryError('Backup exceeds byte limit')
                 unchanged()
                 manifest={'format':FORMAT,'version':VERSION,'created_at':datetime.now(timezone.utc).isoformat(),'runtime':{'python':platform.python_version(),'platform':platform.system()},'cache_policy':'included' if include_vectors else 'omitted','not_included':missing,'entries':entries}
-                _write(folder/'manifest.json',(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n').encode())
+                def commit_manifest():_write(folder/'manifest.json',(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n').encode())
+                if publish is None:check();commit_manifest()
+                else:publish(commit_manifest)
         return {'directory':str(output),'files':len(entries),'bytes':used,'cache_policy':manifest['cache_policy']}
 
 def _manifest(folder,max_bytes):
@@ -234,7 +242,7 @@ def _manifest(folder,max_bytes):
     if manifest['cache_policy'] not in ('included','omitted') or not isinstance(manifest['created_at'],str) or len(manifest['created_at'])>64:raise RecoveryError('Invalid manifest metadata')
     if not isinstance(manifest['runtime'],dict) or set(manifest['runtime'])!={'python','platform'} or any(not isinstance(v,str) or len(v)>64 for v in manifest['runtime'].values()):raise RecoveryError('Invalid runtime metadata')
     missing=manifest['not_included']
-    if not isinstance(missing,list) or any(v not in ('ai_settings','viewer_settings','profiles','tagger_profiles') for v in missing) or len(set(missing))!=len(missing):raise RecoveryError('Invalid omitted settings')
+    if not isinstance(missing,list) or any(v not in ('ai_settings','viewer_settings','profiles','tagger_profiles','view_history','reader_progress') for v in missing) or len(set(missing))!=len(missing):raise RecoveryError('Invalid omitted settings')
     entries=manifest['entries']
     if not isinstance(entries,list) or not 1<=len(entries)<=MAX_FILES:raise RecoveryError('Invalid file count')
     seen=set();counts={};total=0
@@ -275,6 +283,10 @@ def restore(bundle,output,*,without_vectors=False,max_bytes=DEFAULT_MAX_BYTES,ca
         if entry['role'] in ('catalog','vectors'):
             _sealed(path)
             if _database(path,entry['role'])!=(entry['schema'],entry.get('profile')):raise RecoveryError('Backup schema/profile mismatch')
+            if entry['role']=='catalog':
+                with closing(_connect(path)) as db:
+                    for table in ('view_history','reader_progress'):
+                        if table in manifest['not_included'] and db.execute('SELECT count(*) FROM '+table).fetchone()[0]:raise RecoveryError('Conflicting omitted history/position policy')
         else:_configuration(entry['role'],_read_small(path,16384))
     with _output(output,total) as folder:
         with storage_lease(folder/CATALOG):

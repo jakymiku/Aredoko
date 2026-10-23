@@ -1,5 +1,10 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-23 P5 live capture/owned backup foundation (latest)
+
+[Explicitly coordinated multi-DB snapshot, selectable backup and owned job races](live-backup-20261023.md) implemented; final live7/jobs5/existing recovery28 PASS. **Not yet exposed to production HTTP/GUI**: all writer/index/config quiescence fence, persistent choices, UI and restart-safe restore remain. No fake nullcontext production integration. P4 implementation is8e6c3dd, GUI/native residuals remain. Quota-threshold stop is commit/push/handoff only, no shutdown.
+
+
 ## 2026-10-23 P4 root multiple initial shelves (latest)
 
 [Atomic root IDs/fill-unset plus shared native picker](root-shelves-20261023.md) implemented. Catalog11/HTTP6 PASS, Core911 PASS; corrected Portable build0 errors/known3 warnings. Original Grid.IsEnabled build failure preserved; standard ContentControl fixes it. Root GUI UNRUN; prior shelf/native caps unchanged. Next P5 online snapshot/owned jobs/safe restore, preserving catalog2/recovery and existing features. Current stop instruction is safe commit/push/handoff near quota10%, **no shutdown**.
