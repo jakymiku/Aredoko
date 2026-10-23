@@ -1,5 +1,12 @@
 # Restore review follow-up
 
+## 2026-10-24 committed cleanup recovery
+
+Successful restore confirmation now writes/fsyncs an atomic committed sentinel after history publication, then removes rollback copy before sentinel cleanup. Cleanup failure returns cleanup_pending without undoing the ready library; next startup completes cleanup rather than interpreting it as a failed attempt. Explicit rollback refuses committed state. Pre-commit history failure leaves rollback available. This is process-interruption/atomic-publication handling, not proof of hardware power-loss durability on every filesystem.
+
+Checks: switch26 PASS/10.300s plus newly added final-sentinel-deletion case1 PASS/0.407s separately (do not call it a rerun of27). New case first failed to be added due to tests-relative path mistake; no app mutation from that failed command, corrected then focused case passed. No additional GUI/GPU, no native cap reset. Next continue current P5 remaining settings/active-profile contract and packaged restart acceptance planning; require fresh approval before any new GUI scope. Active goal continues; last usage29% used, no shutdown.
+
+
 ## 2026-10-24 final native attempt and WD profile correction
 
 User-authorized native restore run03 used the last of3 attempts. It failed before picker open: winapp invoke reported no invoke pattern for RestoreChooseZip, while captured tree reports enabled/invokable and both PNGs show enabled ZIP/folder buttons. Do not assert an app defect or picker/Start acceptance from this. Both PNGs viewed; restore cap3/3 EXHAUSTED, no renamed retries. Native cancel and picker→Start remain unaccepted. Cleanup initially posted main close before dialog teardown and raw report recorded frontend still running. Later verified PID37616 executable path/HWND ownership and no open dialog, sent ordinary WM_CLOSE, WaitForExit succeeded, old catalog lease reacquired. Reopened process exit code unavailable; raw report retained with post_cleanup addendum. No forced process exit/PC shutdown. Runner now waits dialog-gone before main close, source-only/not replayed.

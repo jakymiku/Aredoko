@@ -294,12 +294,28 @@ def commit_restore_switch(data_dir):
             except Exception:
                 pass
 
-    _record_history(data_path, receipt)
+    if pending_data.get('status')!='committed':
+        _record_history(data_path, receipt)
+        pending_data['status']='committed'
+        pending_data['committed_at']=receipt['committed_at']
+        temporary=data_path/f'.restore-commit-{secrets.token_hex(8)}'
+        try:
+            with temporary.open('x',encoding='utf-8') as stream:
+                json.dump(pending_data,stream,ensure_ascii=False)
+                stream.flush();os.fsync(stream.fileno())
+            temporary.replace(pending_path)
+        finally:
+            if temporary.exists():temporary.unlink()
+    else:
+        receipt['committed_at']=pending_data.get('committed_at')
 
-    pending_path.unlink(missing_ok=True)
-    rollback_path = data_path / ROLLBACK_FILE
-    rollback_path.unlink(missing_ok=True)
-
+    # Once marked committed, cleanup failures must never undo a ready library.
+    # Delete the rollback copy first so the committed sentinel remains as proof.
+    try:
+        (data_path/ROLLBACK_FILE).unlink(missing_ok=True)
+        pending_path.unlink(missing_ok=True)
+    except OSError:
+        receipt['cleanup_pending']=True
     return receipt
 
 
@@ -332,6 +348,8 @@ def rollback_restore_switch(data_dir, error=None):
 
     if not isinstance(pending_data, dict):
         pending_data = {}
+    if pending_data.get('status')=='committed':
+        raise RestoreSwitchError('Restore already committed; rollback refused')
     previous_existed = pending_data.get('previous_settings_existed')
 
     if rollback_path.is_file():
@@ -402,6 +420,10 @@ def check_pending_restore(data_dir):
         if not isinstance(pending_data, dict):
             rollback_restore_switch(data_path, error="Invalid restore-pending sentinel format")
             return True
+
+        if pending_data.get('status')=='committed':
+            commit_restore_switch(data_path)
+            return False
 
         if pending_data.get('attempted', True):
             rollback_restore_switch(data_path, error="Previous restore attempt did not reach ready state")

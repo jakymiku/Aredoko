@@ -1,5 +1,9 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-24 committed restore cleanup (latest)
+
+[Interrupted cleanup semantics and focused evidence](restore-review-20261024.md). Committed sentinel prevents erroneous next-start rollback; pre-commit failures remain recoverable. Switch26 plus new1 pass separately. Native cap3/3 exhausted; no repeat without fresh scope. Goal active, no shutdown.
+
 ## 2026-10-24 native restore cap and profile correction (latest)
 
 [Exact run03 failure, later ordinary cleanup and WD profile rebasing](restore-review-20261024.md). Restore GUI3/3 exhausted; picker/Start/native cancel unaccepted. Do not reset/replay flow. Single tagger setting rebased, switch24 pass; no model inference. Goal active; continue independent CPU work; no shutdown.

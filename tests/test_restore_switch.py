@@ -147,6 +147,50 @@ class RestoreSwitchTests(unittest.TestCase):
         apply_restore_switch(self.data_dir,staging)
         self.assertEqual(load_settings(self.data_dir)['tagger_profile'],old['tagger_profile'])
 
+    def test_committed_cleanup_failure_does_not_roll_back_next_launch(self):
+        staging=self._create_staging('commit_cleanup')
+        apply_restore_switch(self.data_dir,staging)
+        check_pending_restore(self.data_dir)
+        expected=load_settings(self.data_dir)
+        original_unlink=Path.unlink
+        def blocked(path,*args,**kwargs):
+            if path==self.data_dir/ROLLBACK_FILE:raise PermissionError('Injected cleanup failure')
+            return original_unlink(path,*args,**kwargs)
+        with patch.object(Path,'unlink',blocked):
+            receipt=commit_restore_switch(self.data_dir)
+        self.assertTrue(receipt['cleanup_pending'])
+        self.assertEqual(get_restore_pending_info(self.data_dir)['status'],'committed')
+        with self.assertRaises(RestoreSwitchError):rollback_restore_switch(self.data_dir)
+        self.assertFalse(check_pending_restore(self.data_dir))
+        self.assertEqual(load_settings(self.data_dir),expected)
+        self.assertFalse(is_restore_pending(self.data_dir))
+        self.assertEqual(len(get_restore_history(self.data_dir)),1)
+
+    def test_interrupted_final_sentinel_cleanup_keeps_committed_target(self):
+        staging=self._create_staging('pending_cleanup')
+        apply_restore_switch(self.data_dir,staging)
+        check_pending_restore(self.data_dir)
+        expected=load_settings(self.data_dir)
+        original_unlink=Path.unlink
+        def blocked(path,*args,**kwargs):
+            if path==self.data_dir/PENDING_FILE:raise PermissionError('Injected pending cleanup failure')
+            return original_unlink(path,*args,**kwargs)
+        with patch.object(Path,'unlink',blocked):
+            self.assertTrue(commit_restore_switch(self.data_dir)['cleanup_pending'])
+        self.assertFalse((self.data_dir/ROLLBACK_FILE).exists())
+        self.assertFalse(check_pending_restore(self.data_dir))
+        self.assertEqual(load_settings(self.data_dir),expected)
+        self.assertEqual(len(get_restore_history(self.data_dir)),1)
+
+    def test_history_failure_before_commit_keeps_rollback_possible(self):
+        staging=self._create_staging('history_failure')
+        apply_restore_switch(self.data_dir,staging)
+        with patch('restore_switch._record_history',side_effect=PermissionError('Injected history failure')):
+            with self.assertRaises(PermissionError):commit_restore_switch(self.data_dir)
+        self.assertNotEqual(get_restore_pending_info(self.data_dir)['status'],'committed')
+        rollback_restore_switch(self.data_dir)
+        self.assertEqual(load_settings(self.data_dir),self.orig_settings)
+
     def test_modified_staging_payload_cannot_switch_current_library(self):
         staging = self._create_staging('modified')
         (staging / 'settings/viewer-settings.json').write_text('{"version":1,"wheel_up_advances":true}', encoding='utf-8')
