@@ -90,6 +90,25 @@ class SetupJobTests(unittest.TestCase):
         self.assertEqual(result['state'],'cancelled');self.assertFalse(result['saved'])
         self.assertEqual(self.path.read_bytes(),self.before);self.assertEqual(list(self.base.glob('*.tmp')),[])
 
+    def test_cancel_remains_responsive_while_snapshot_pauses_settings_publication(self):
+        from writer_fence import WriterFence
+        fence=WriterFence();self.preferences.writer_fence=fence
+        entered=threading.Event();original=fence.write
+        from contextlib import contextmanager
+        @contextmanager
+        def waiting(**kwargs):
+            entered.set()
+            with original(**kwargs):yield
+        with patch.object(fence,'write',side_effect=waiting),fence.pause():
+            first=self.start();self.assertTrue(entered.wait(3))
+            answers=[];cancel=threading.Thread(target=lambda:answers.append(self.jobs.cancel(first['job_id'])))
+            cancel.start();cancel.join(1)
+            self.assertFalse(cancel.is_alive(),'Cancel must not wait for the snapshot owner')
+            self.assertTrue(answers[0]['cancel_accepted'])
+            result=self.finish()
+            self.assertEqual(result['state'],'cancelled');self.assertFalse(result['saved'])
+        self.assertEqual(self.path.read_bytes(),self.before);self.assertEqual(list(self.base.glob('*.tmp')),[])
+
     def test_cancel_cannot_claim_rollback_after_atomic_commit(self):
         entered=threading.Event();release=threading.Event();started=threading.Event();answers=[]
         replace=os.replace

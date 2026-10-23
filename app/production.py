@@ -7,6 +7,7 @@ from pathlib import Path
 from catalog import Catalog
 from shelves import ShelfStore, shelf_clause
 from root_preferences import RootPreferences
+from writer_fence import WriterFence,ConnectionWriteFence
 from library_index import LibraryIndex, TYPES, is_folder_book, folder_title
 from search_terms import register as register_search_terms, split_terms, explain_matches
 from term_relations import TermRelations
@@ -22,6 +23,7 @@ class ScanBusyError(ValueError):
 
 class ProductionCatalog(Catalog):
     def __init__(self, path):
+        self.writer_fence=WriterFence()
         self._result_generation = 0
         self._result_generation_lock = threading.Lock()
         # Never reinterpret an existing fictional demo database as a real library.
@@ -82,25 +84,28 @@ class ProductionCatalog(Catalog):
                 if database == 'main' and table not in ('view_history', 'reader_progress', 'scan_jobs'):
                     changed = True
             return sqlite3.SQLITE_OK
-        with super().connect() as db:
-            db.set_authorizer(observe)
-            before = db.total_changes
-            try:
-                yield db
-            except BaseException:
-                # Conservatively invalidate even a rolled-back write attempt.
-                if changed and db.total_changes != before:
-                    with self._result_generation_lock:
-                        self._result_generation += 1
-                raise
-            else:
-                if changed and db.total_changes != before:
-                    # Publish generation and commit together to session readers.
-                    with self._result_generation_lock:
-                        db.commit()
-                        self._result_generation += 1
-            finally:
-                db.set_authorizer(None)
+        fenced=ConnectionWriteFence(self.writer_fence,observe)
+        try:
+            with super().connect() as db:
+                db.set_authorizer(fenced.authorize)
+                before = db.total_changes
+                try:
+                    yield db
+                except BaseException:
+                    # Conservatively invalidate even a rolled-back write attempt.
+                    if changed and db.total_changes != before:
+                        with self._result_generation_lock:
+                            self._result_generation += 1
+                    raise
+                else:
+                    if changed and db.total_changes != before:
+                        # Publish generation and commit together to session readers.
+                        with self._result_generation_lock:
+                            db.commit()
+                            self._result_generation += 1
+                finally:
+                    db.set_authorizer(None)
+        finally:fenced.close()
 
     def result_generation(self):
         with self._result_generation_lock:

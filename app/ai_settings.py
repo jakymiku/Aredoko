@@ -3,6 +3,7 @@
 A GUI selection is a validated file *identifier*, not an arbitrary path or
 Python import. The running encoder/SQLite vector-space identity stay unchanged.
 """
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -100,6 +101,10 @@ class AIProfileSettings:
             return self.scope()
 
     def _save_settings(self,payload):
+        fence=getattr(self,'writer_fence',None)
+        with fence.write() if fence is not None else nullcontext():self._write_settings(payload)
+
+    def _write_settings(self,payload):
         serialized=json.dumps(payload,ensure_ascii=False)
         if len(serialized.encode("utf-8"))>16384:raise ValueError("Settings exceed size limit")
         self.path.parent.mkdir(parents=True,exist_ok=True)

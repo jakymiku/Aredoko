@@ -15,6 +15,7 @@ from ai_vectors import normalized
 from ai_ranking import POLICIES,fuse_modalities
 from library_index import TYPES, _excluded
 from ai_scope import validate_scope, scope_clause
+from writer_fence import ConnectionWriteFence
 from search_terms import normalize, normalize_tags
 from ai_result_groups import boundary
 from ai_score_spool import ScoreSpool, ScoreSpoolError, SearchCancelled
@@ -47,10 +48,11 @@ def revision(row):
 CURRENT_VECTOR_STORE_USER_VERSION = 0
 
 class VectorStore:
-    def __init__(self,path,profile=DEFAULT_PROFILE):
+    def __init__(self,path,profile=DEFAULT_PROFILE,*,writer_fence=None):
         self.path=Path(path)
         self.profile=profile
         self.dimension=profile.dimension
+        self.writer_fence=writer_fence
         if self.path.exists() and self.path.stat().st_size > 0:
             with closing(sqlite3.connect(self.path, timeout=5)) as check_db:
                 ver = check_db.execute('PRAGMA user_version').fetchone()[0]
@@ -89,9 +91,14 @@ class VectorStore:
     @contextmanager
     def connect(self):
         db=sqlite3.connect(self.path,timeout=2)
+        fenced=ConnectionWriteFence(self.writer_fence) if self.writer_fence is not None else None
+        if fenced is not None:db.set_authorizer(fenced.authorize)
         try:
-            with db: yield db
-        finally: db.close()
+            with db:yield db
+        finally:
+            try:db.close()
+            finally:
+                if fenced is not None:fenced.close()
     def checkpoint(self):
         try:
             with self.connect() as db:
@@ -280,7 +287,7 @@ class AISearch:
         self.catalog,self.encoder=catalog,encoder
         self.profile=getattr(encoder,'profile',DEFAULT_PROFILE)
         self.pending_tags=PendingTagVectors(self)
-        self.store=VectorStore(store_path or self.profile.store_path(catalog.path),self.profile)
+        self.store=VectorStore(store_path or self.profile.store_path(catalog.path),self.profile,writer_fence=getattr(catalog,'writer_fence',None))
         self.previews=PreviewReader(catalog)
         self.pages=PageVectors(self)
         self.audio_speech=AudioSpeechVectors(self)

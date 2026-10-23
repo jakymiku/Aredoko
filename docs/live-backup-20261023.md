@@ -1,3 +1,13 @@
+# P5B shared writer fence（2026-10-23・最新）
+
+Catalog・VectorStore・AI設定・runtime設定の公開を共有WriterFenceへ接続。captureはcatalog guard→pauseの順で取得し、既存writer終了を待ち、新規writerをsnapshot解放まで待機させる。読み取りは拒否しない。設定とprofile一覧はcopy後にも再確認し、外部変更時は完成bundleを公開しない。SQLite commit/close後にwriter tokenを解放する。runtime設定はfenceを先に取得してから所有jobのpublish lockへ入るため、snapshot待ちでも取消/closeを妨げない。
+
+確認：writer fence5 PASS/0.936s、setup jobs15 PASS/2.334s（新規のpause待機中取消を含む）、AI設定13 PASS/2.640s、AI scope12 PASS/18.263s、result sessions21 PASS/33.836s、live7 PASS/1.829s。生成DB・設定のみ、追加Core/WinUI/GPU/GUIなし。古い実績へ重複加算しない。
+
+この時点ではHTTP/UI未接続。次は認証付きbackup start/status/cancelへ本番fenceを使用して接続する。前回選択の永続化、設定UI、復元新規先→正常終了→起動先切替/失敗rollback、実容量/性能受入は未完了。P5全体やロードマップ完了を意味しない。現在の指示はquota残り約10%で安全なcommit/push/handoff、シャットダウンなし。
+
+---
+
 # P5A 起動中capture・所有backup job基盤（2026-10-23）
 
 ## 到達点

@@ -1,4 +1,5 @@
 """Explicit restart-only runtime/model locations; no discovery/download/hot swap."""
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -109,8 +110,12 @@ class AIRuntimePreferences:
                 def replace():
                     plain_path(temporary);plain_path(self.path,missing=True)
                     os.replace(temporary,self.path)
-                if publish is None:replace()
-                else:publish(replace)
+                fence=getattr(self,'writer_fence',None)
+                # Enter the pause boundary before the owned job's publish lock,
+                # keeping its cancel/close responsive while backup is paused.
+                with fence.write(cancelled=cancelled) if fence is not None else nullcontext():
+                    if publish is None:replace()
+                    else:publish(replace)
             finally:
                 if temporary.exists():plain_path(temporary);temporary.unlink()
         return self.snapshot()

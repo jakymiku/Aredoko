@@ -37,18 +37,19 @@ def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=N
     try:
         report('waiting')
         # Safe operation boundaries, not a raw file copy of a live SQLite DB.
-        with quiesce(cancelled=cancelled),catalog._guard,ExitStack() as stack:
+        with catalog._guard,quiesce(cancelled=cancelled),ExitStack() as stack:
             catalog._require_idle();check();report('capturing')
             stores=_stores(source) if selection.vectors else []
-            paths=[source,*stores];sources=[];reserved=[];configs=[]
+            paths=[source,*stores];sources=[];reserved=[];configs=[];config_sources=[];directory_profiles=[]
             if selection.settings:
                 for role,path,relative,budget in [('ai_settings',settings,'settings/ai-settings.json',16384),('viewer_settings',viewer_settings,'settings/viewer-settings.json',2048)]:
                     if path is not None:
-                        data=_read_small(path,budget);_configuration(role,data);configs.append((relative,data,role))
-                for path in [*_profiles(profiles),*map(plain_path,extra_profiles)]:
-                    data=_read_small(path,16384);_configuration('profile',data);configs.append(('profiles/'+path.name,data,'profile'))
+                        data=_read_small(path,budget);_configuration(role,data);configs.append((relative,data,role));config_sources.append((path,data,budget))
+                directory_profiles=_profiles(profiles)
+                for path in [*directory_profiles,*map(plain_path,extra_profiles)]:
+                    data=_read_small(path,16384);_configuration('profile',data);configs.append(('profiles/'+path.name,data,'profile'));config_sources.append((path,data,16384))
                 for path in map(plain_path,tagger_profiles):
-                    data=_read_small(path,16384);_configuration('tagger_profile',data);configs.append(('tagger-profiles/'+path.name,data,'tagger_profile'))
+                    data=_read_small(path,16384);_configuration('tagger_profile',data);configs.append(('tagger-profiles/'+path.name,data,'tagger_profile'));config_sources.append((path,data,16384))
             names=[relative.casefold() for relative,_,_ in configs]
             if len(set(names))!=len(names) or sum(role=='profile' for _,_,role in configs)>64 or sum(role=='tagger_profile' for _,_,role in configs)>16:raise RecoveryError('Duplicate or excessive profiles')
             if any(role in ('profile','tagger_profile') and NAME.fullmatch(Path(relative).name) is None for relative,_,role in configs):raise RecoveryError('Invalid profile filename')
@@ -87,6 +88,10 @@ def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=N
                 if identity(path)!=expected:raise RecoveryError('Database identity changed during capture')
                 check();_database(stage/relative,role)
             for relative,data,_ in configs:_write(stage/relative,data)
+            if selection.settings:
+                if _profiles(profiles)!=directory_profiles:raise RecoveryError('Profile membership changed during capture')
+                for path,data,budget in config_sources:
+                    if _read_small(path,budget)!=data:raise RecoveryError('Settings changed during capture')
             # Source reader transactions close here; no long-lived WAL snapshot
             # remains while the sealed staging databases are packaged/hashed.
         report('packing')

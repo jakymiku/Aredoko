@@ -109,6 +109,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
+    profiles.writer_fence=catalog.writer_fence
     base=handler_for(catalog,token)
     previews=PreviewReader(catalog)
     page_index=PageIndex(catalog,previews)
@@ -117,6 +118,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     except (ValueError,OSError):setup_profile=None
     setup=AIRuntimePreferences(runtime_preferences if runtime_preferences is not None else catalog.path.parent/'launch-settings.json',
         profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
+    setup.writer_fence=catalog.writer_fence
     setup_jobs=AISetupJobs(setup)
     animations=AnimationSessions(previews)
     thumbnails=ThumbnailCache(previews)

@@ -1,5 +1,10 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-23 P5 coordinated writer fence (latest)
+
+[Catalog/vector/settings publication fence and cancellation evidence](docs/live-backup-20261023.md) now connected; catalog guard precedes pause, read paths retained, runtime cancel remains responsive while publication waits. Writer5/setup15/settings13/scope12/results21/live7 PASS separately. HTTP/UI/persistent choices and restart-safe restore still TODO; no production nullcontext. P5A implementation8aa687d, this unit follows it. Preserve native3/3 caps/old Alpha/source-media boundaries; current quota stopping instruction is commit/push/handoff with **no shutdown**.
+
+
 ## 2026-10-23 P5 live capture/owned backup foundation (latest)
 
 [Explicitly coordinated multi-DB snapshot, selectable backup and owned job races](docs/live-backup-20261023.md) implemented; final live7/jobs5/existing recovery28 PASS. **Not yet exposed to production HTTP/GUI**: all writer/index/config quiescence fence, persistent choices, UI and restart-safe restore remain. No fake nullcontext production integration. P4 implementation is8e6c3dd, GUI/native residuals remain. Quota-threshold stop is commit/push/handoff only, no shutdown.
