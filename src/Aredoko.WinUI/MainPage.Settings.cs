@@ -1,4 +1,4 @@
-﻿using Aredoko.Core;
+using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -45,7 +45,7 @@ public sealed partial class MainPage
                 ("AI検索の準備","BtnAIIndex","ai"),
                 ("関連語を編集","BtnRelatedTerms","terms"),
                 ("閲覧履歴を削除","BtnClearHistory","history"),
-                ("バックアップと復旧ガイド","BtnBackupGuide","backup"),
+                ("バックアップと復元","BtnBackupGuide","backup"),
                 ("診断情報を表示・コピー","BtnDiagnostics","diagnostics")})
             {
                 var button=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(button,id);
@@ -61,11 +61,11 @@ public sealed partial class MainPage
             if(destination=="ai")AI_Click(this,new RoutedEventArgs());
             else if(destination=="terms")RelatedTerms_Click(this,new RoutedEventArgs());
             else if(destination=="history")await DeleteHistoryAsync();
-            else if(destination=="backup")await OpenBackupGuideDialogAsync();
+            else if(destination=="backup")await OpenBackupDialogAsync();
             else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync();
         }
     }
-    private async Task OpenBackupGuideDialogAsync()
+    private async Task OpenRecoveryGuideDialogAsync()
     {
         if(!ready||disposed||dialogOpen||!await transitions.WaitAsync(0))return;
         dialogOpen=true;
@@ -74,9 +74,9 @@ public sealed partial class MainPage
             var panel=new StackPanel{Spacing=12};
             panel.Children.Add(new TextBlock
             {
-                Text="【安全な停止時バックアップと復旧の手順】\n" +
+                Text="【現在の復元方法】\n" +
                      "Aredokoのデータベースは動作中、排他的ロック（.owner.lock）により破損から保護されています。\n" +
-                     "データの整合性を100%保つため、バックアップおよび復旧はアプリを終了した状態でCLIツールを実行します。\n\n" +
+                     "バックアップはアプリ内で作成できます。復元先への安全な自動切替は準備中です。現在の復元ツールは、アプリを終了してから新しい復元先を指定して使用します。\n\n" +
                      "■ バックアップコマンド例:\n" +
                      "python tools/backup_library.py backup --catalog <catalog.sqlite> --output <新バックアップ先>\n\n" +
                      "■ 復元コマンド例:\n" +

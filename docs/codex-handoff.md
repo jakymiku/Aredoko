@@ -1,5 +1,10 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-23 P5 native backup settings (latest)
+
+[Selection/progress/reattach/cancel UI and exact evidence](live-backup-20261023.md) source connected; Core925 PASS/final Portable0 errors+existing3 warnings. Native backup Dark01/Light03 targeted9 checks pass, Light02 selector failure preserved;7 PNG reviewed/3 processes exit0. Backup flow3/3 exhausted, do not replay or reset older P3/shelf caps. Picker→native Start success/GUI preference restart/full acceptance UNRUN. Actual writer-guard wait cancellation checked. Next safe new-directory restore/launch switch/rollback; P5/roadmap incomplete. Old Alpha/normal DB unchanged. Stop with commit/push/handoff near quota10%, **no shutdown**.
+
+
 ## 2026-10-23 P5 authenticated live backup (latest)
 
 [Owned start/status/cancel API and evidence](live-backup-20261023.md) uses real writer fence4ecb28b. HTTP4/jobs5/live8 PASS separately. Strict auth/duplicate JSON, immutable viewer snapshot data, configured profiles only, responsive read/status/cancel and shutdown ownership. Restore API explicitly unavailable. Core/UI, previous-choice persistence, restart-safe restore and performance/native acceptance remain; no claim P5 complete. Current quota stop: safe commit/push/handoff, **no shutdown**.

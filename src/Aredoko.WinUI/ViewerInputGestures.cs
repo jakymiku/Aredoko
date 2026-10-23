@@ -17,6 +17,7 @@ internal static class ViewerOptions
         var at=Array.IndexOf(args,"--viewer-settings");
         return at>=0&&at+1<args.Length?System.IO.Path.GetFullPath(args[at+1]):System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Aredoko","viewer-settings.json");
     }
+    public static string BackupChoicesPath=>path+".backup.json";
     public static ViewerInputSettings Value {get;private set;}=ViewerInputSettings.Load(path);
     public static void Save(bool wheelUpAdvances)=>SaveValue(Value with {WheelUpAdvances=wheelUpAdvances});
     public static void SavePreferences(bool wheel,string theme,bool enlarge)=>SaveValue(Value with {WheelUpAdvances=wheel,Theme=ViewerInputSettings.NormalizeTheme(theme),EnlargeSmallImages=enlarge});

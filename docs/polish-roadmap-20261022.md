@@ -11,8 +11,8 @@
 | P1B 逐次アニメーション再生 | source/API/WinUI接続・Python確認済み。[証拠/限界](animation-streaming.md) | Core/Portable buildをWindows確認済み、native未受入。全PNG待ち/64枚切捨て/decoder再openを撤去 |
 | P2 結果セッション・連続閲覧 | PARTIAL。native接続sourceあり。[証拠/限界](result-session-native-connection.md) | Core/Portable buildをWindows確認済み。native60↔61位置を確認、実表示後の選択復帰/120境界は未受入 |
 | P3 一覧・サムネイル・UI-2 | PARTIAL。[標準container/双方向600件window/trimmed ABI修正](p3-continuous-browse.md) | Core873/Portable build確認済み。native3/3の残件・thumbnail/実RSS/完成形UIは未受入 |
-| P4 複数棚・整理導線 | PARTIAL。[履歴削除](history-deletion.md)と[複数棚の移行/検索/API](multi-shelf-storage.md)を実装 | [Core/棚一覧/複数選択](shelf-ui-20261023.md) source接続・893 Core確認、nativeはロックで未受入。[画面履歴](navigation-history-20261023.md) source接続。[root favorite](root-favorites-20261023.md) source/904 Core接続。[root複数初期棚](root-shelves-20261023.md) source/911 Core接続。次P5（native残件は未受入） |
-| P5 起動中backup/restore | PARTIAL。[snapshot/owned job](live-backup-20261023.md)基盤まで、製品接続前。前提となる[現行viewer設定のbackup互換](backup-recovery.md)は修正済み | 全writer fence→HTTP/選択・進捗UI→安全な復元切替を接続 |
+| P4 複数棚・整理導線 | PARTIAL。[履歴削除](history-deletion.md)と[複数棚の移行/検索/API](multi-shelf-storage.md)を実装 | [Core/棚一覧/複数選択](shelf-ui-20261023.md) source接続・893 Core確認、native3/3でcard/atomic save/create/renameを確認、Open以降の残件は未受入。[画面履歴](navigation-history-20261023.md) source接続。[root favorite](root-favorites-20261023.md) source/904 Core接続。[root複数初期棚](root-shelves-20261023.md) source/911 Core接続。次P5（native残件は未受入） |
+| P5 起動中backup/restore | PARTIAL。[共有writer fence・認証job API・選択/進捗/中止UI](live-backup-20261023.md)接続、Core925/native限定確認。現行viewer設定互換も維持 | 次は新規復元先→安全な起動先切替/rollback。Picker→GUI作成成功、大容量/性能/HC等は未受入 |
 | P6 配布・UI-3 | LD1–3/LD4a基盤あり、残り未完 | LD4b→LD5→LD6を既存実装から継続 |
 | P7 総合検証 | 未実施 | 主要機能を揃えてまとめ確認、M1判定後R06–R09へ |
 
@@ -26,8 +26,8 @@
 - P2が非同期neighborで60/120境界を越えるsourceへ接続。Core跨ぎテストはWindowsで合格、native操作は未受入。
 - 一覧は標準containerの要求に応じてcardを生成する（[実機の範囲と残課題](p3-native-containers-20261023.md)）。P2結果sessionは順位spoolを一回消費し、P3 ResultWindowが120×5で保持する。連続scrollは[双方向追加読み込みsource](p3-continuous-browse.md)まで実装し、実機確認が残る。
 - P3 thumbnailは派生/shared/可視優先/DPI edge/所有RAM・一時disk cacheまで実装。再起動跨ぎ永続cache/実decoded全体RAMは未受入。
-- 棚は単一文字列で、独立した空棚と複数所属がない。
-- backupは停止時CLI。viewer設定theme/scale等と旧validatorの不一致は2026-10-22に修正済み。P4/P5のschema移行・起動中snapshot/設定整合は別途未完。
+- 棚は独立ID/空棚/複数所属・atomic移行/全検索条件/API/Core/native編集へ接続済み。棚nativeの未到達工程とroot管理GUIの受入は残る。旧単一値は互換用で、情報を失う更新を拒否する。
+- backupは起動中job/API/設定UIまで実装済み。復元の自動起動先切替/rollbackと大容量受入は未完。viewer設定theme/scale等と旧validatorの不一致は2026-10-22に修正済み。P4/P5のschema移行・起動中snapshot/設定整合は別途未完。
 
 ## 実装順と完了条件
 

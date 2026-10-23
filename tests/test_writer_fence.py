@@ -57,6 +57,20 @@ class WriterFenceTests(unittest.TestCase):
         jobs=BackupJobs(self.cat,quiesce=self.cat.writer_fence.pause);self.addCleanup(jobs.close)
         job=jobs.start({'consent':True,'output':str(self.base/'bundle'),'selection':{'settings':False,'history':True,'reader_progress':True,'vectors':False}});jobs.thread.join(5)
         self.assertEqual(jobs.snapshot(job['job_id'])['state'],'complete');self.assertFalse(self.cat.writer_fence.paused)
+    def test_backup_cancel_does_not_wait_for_a_busy_catalog_guard(self):
+        jobs=BackupJobs(self.cat,quiesce=self.cat.writer_fence.pause);self.addCleanup(jobs.close)
+        waiting=threading.Event();original=jobs._progress
+        def report(value):
+            original(value)
+            if value['stage']=='waiting':waiting.set()
+        jobs._progress=report
+        with self.cat._guard:
+            job=jobs.start({'consent':True,'output':str(self.base/'cancelled-bundle'),'selection':{'settings':False,'history':True,'reader_progress':True,'vectors':False}})
+            self.assertTrue(waiting.wait(2));self.assertTrue(jobs.cancel(job['job_id'])['cancel_accepted']);jobs.thread.join(2)
+            self.assertFalse(jobs.thread.is_alive(),'Cancellation must finish while the catalog guard is still held')
+            self.assertEqual(jobs.snapshot()['state'],'cancelled')
+        self.assertFalse((self.base/'cancelled-bundle').exists());self.assertFalse(self.cat.writer_fence.paused)
+
     def test_runtime_rejects_pause_inside_a_writer(self):
         fence=WriterFence()
         with fence.write():

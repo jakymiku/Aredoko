@@ -1,5 +1,10 @@
 # Aredoko 完成までの実行計画
 
+## 最新2026-10-23：P4実装・P5 backup接続
+
+[統合ロードマップ](polish-roadmap-20261022.md)と[実装/証拠/残件](live-backup-20261023.md)を優先する。複数棚Core/UI、画面履歴、登録フォルダfavorite/複数初期棚を接続し、P5は共有writer fence・認証job API・設定からの対象選択/進捗/再接続/中止まで進んだ。Core925/Portable build、限定nativeの進捗/中止は確認済み。Picker→GUI作成成功・safe restore切替/rollback・性能/配布完成は未受入。次はP5の安全な復元切替。旧履歴/実音声等を削除せず、全ロードマップ完了とはしない。現在はquota区切りでcommit/push/handoffし、シャットダウンしない。
+
+
 ## 最新実装順：2026-10-22 統合改善・完成形UI
 
 [ユーザー承認済み統合ロードマップ](polish-roadmap-20261022.md)を実装順の正本とする。P1A実形式判定→P1B逐次animation→P2連続閲覧→P3仮想化/サムネイルと本格UI→P4複数棚/整理→P5起動中backup→P6既存LD残件→P7まとめ受入。UI開始は基本操作と重大不具合解消後で、全機能/音声/配布完成を待たない。旧R/U/LD台帳・合格証拠・未完を保持し、下段の過去「次」を再開指示にしない。P0診断/共通resourceは未完、P1Aだけを全ロードマップ完了としない。

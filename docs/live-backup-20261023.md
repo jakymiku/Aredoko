@@ -1,3 +1,23 @@
+# P5D native backup settings（2026-10-23・最新）
+
+設定「バックアップと復元」から、必須のライブラリ情報、設定/profile・履歴・読書位置（既定ON）、AI索引（既定OFF）を選択して作成するCore/WinUI接続を追加した。Windows App SDKのFolderPickerで選んだ親の下に一意な新規保存先を使う。前回の対象はviewer設定と別の小さなsidecarへ保存する。viewer設定は共通ToJsonの値をAPIに渡し、任意パスを読み取らせない。
+
+進捗・中止・状態再取得を備え、画面を閉じても所有jobは継続し、再度開くと同じjobへ接続する。非同期応答世代/close取消を扱い、未確認の開始・中止は再取得を案内する。復元の旧ガイドは残し、「100%」保証を撤去して自動起動先切替が未完成と明記した。標準Fluent footerを維持し、テストは実際のPrimaryButton/SecondaryButton/CloseButton IDを使う。
+
+Catalog guard待機も取消可能にし、guard→fence pauseの順序を保ったまま、長いCatalog操作の終了を待たず中止できる。
+
+## 確認と限界
+
+- Core初期923 PASS。追加caseでfixtureの異常bytes_doneを戻し忘れ103 PASS後にERROR、raw保持。fixture訂正後925 PASS。関連Portable最終build0 errors/既存WUI1001×3（10.29s）、最終publishも成功/既存SDK IL2104×2。新Pickerの警告は解消済みで抑制なし。
+- Writer fence6 PASS/0.983s。guard到達を明示した新規1件だけ再確認PASS/0.168s。P5C HTTP4/jobs5/live8等の結果は下段を参照し重複合算しない。
+- `tools/test_native_backup.py`、ignored `data/ai-ui/p5-backup-20261023`。run01 Dark：9 checks PASS/3 PNG。run02 Light：標準footerへ戻した後に旧custom IDを期待してFAIL、1 PNG。run03 Light：標準IDへ訂正して9 checks PASS/3 PNG。全7 PNGを目視、全3 process正常exit0/残存なし。scopeは待機/進捗/close後reattach/UI中止/原本SHA+mtime不変。**backup専用flow3/3消費、4回目や改名再試行は禁止。** 過去P3/shelf capsも別途保持する。
+- Native startは本物の認証APIからテストが開始し、GUI側は再接続/中止を実操作した。**システムFolderPicker→GUI作成ボタン→成功完了、前回対象のGUI再起動保持、DPI/HC/大容量性能は未受入**。これを全GUI合格としない。harnessのPNG signature/寸法guard追加はsourceのみで再試行なし。
+- frontend03はこの小区分の実フロントエンド試験候補。head/diffに加え追跡/未追跡source全体のSHAとfrontend DLL SHAをreportに保存。フルZIP/installed Alpha/basic03/shortcutは未更新。普段DB/元メディア/models/Python/driverは未変更、GPU/CI/mergeなし。
+
+**次の1件：P5復元の新規先検証→所有job/draft終了→起動先切替→ready失敗rollback。** 現行APIはrestore_supported=false。既存bundle/旧schemaを保ち、元ライブラリ/元メディアを上書きしない。P5/主画面全体/ロードマップは未完。大きな復元実装は今回開始せず、安全なcommit/push/handoff後に終了する。シャットダウンしない。
+
+---
+
 # P5C authenticated backup API（2026-10-23・最新）
 
 P5B `4ecb28b`の実fenceを使用してGET `/api/library/backup`、POST `/api/library/backup/start`・`cancel`を接続した。session/Host/Origin/body上限/重複JSON/厳密fieldsを保持。startは202、同時実行と古い取消は409。進捗・結果・初期選択を返す。既存出力は変更せず失敗する。production終了はbackup ownerをDB/AIより先にcloseし、受理した取消やclose後の公開を禁止する。

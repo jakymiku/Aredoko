@@ -22,13 +22,14 @@ public sealed record ViewerInputSettings(bool WheelUpAdvances=false,int LibraryI
     }
     public static string NormalizeTheme(string? theme)=>theme is "light" or "dark"?theme:"system";
     public static int NormalizeScale(int value)=>value is >=60 and <=180&&value%20==0?value:100;
+    public JsonObject ToJson()=>new(){["version"]=1,["wheel_up_advances"]=WheelUpAdvances,["library_item_scale"]=NormalizeScale(LibraryItemScale),["theme"]=NormalizeTheme(Theme),["enlarge_small_images"]=EnlargeSmallImages};
     public void Save(string path)
     {
         var absolute=Path.GetFullPath(path);Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
         var temporary=absolute+"."+Guid.NewGuid().ToString("N")+".tmp";
         try
         {
-            File.WriteAllText(temporary,new JsonObject{{"version",1},{"wheel_up_advances",WheelUpAdvances},{"library_item_scale",NormalizeScale(LibraryItemScale)},{"theme",NormalizeTheme(Theme)},{"enlarge_small_images",EnlargeSmallImages}}.ToJsonString());
+            File.WriteAllText(temporary,ToJson().ToJsonString());
             File.Move(temporary,absolute,true);
         }
         finally{if(File.Exists(temporary))File.Delete(temporary);}

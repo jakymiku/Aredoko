@@ -3,7 +3,7 @@
 Production callers use the shared writer fence. Media/runtime/model/thumbnail
 files are never read; frontend settings may be supplied as validated bytes.
 """
-from contextlib import ExitStack,closing
+from contextlib import ExitStack,closing,contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 import os,secrets,shutil,sqlite3,time
@@ -19,6 +19,16 @@ class BackupSelection:
     vectors:bool=False
     def __post_init__(self):
         if any(type(value) is not bool for value in (self.settings,self.history,self.reader_progress,self.vectors)):raise RecoveryError('Invalid backup selection')
+
+
+@contextmanager
+def _catalog_boundary(catalog,check):
+    # Keep guard-before-pause ordering, but never make an owned cancellation
+    # wait for an unrelated long catalog operation to release its guard.
+    while not catalog._guard.acquire(timeout=.05):check()
+    try:
+        check();yield
+    finally:catalog._guard.release()
 
 
 def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=None,viewer_settings=None,
@@ -40,7 +50,7 @@ def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=N
     try:
         report('waiting')
         # Safe operation boundaries, not a raw file copy of a live SQLite DB.
-        with catalog._guard,quiesce(cancelled=cancelled),ExitStack() as stack:
+        with _catalog_boundary(catalog,check),quiesce(cancelled=cancelled),ExitStack() as stack:
             catalog._require_idle();check();report('capturing')
             stores=_stores(source) if selection.vectors else []
             paths=[source,*stores];sources=[];reserved=[];configs=[];config_sources=[];directory_profiles=[]
