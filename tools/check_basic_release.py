@@ -1,0 +1,73 @@
+"""CPU-only smoke of an explicitly staged basic release, generated DB/media only.
+
+Does not launch WinUI, bootstrap GUI, models, GPU, installers or normal user DB.
+Full payload/ZIP verification belongs to the preparation step.
+"""
+import argparse,hashlib,json,os,queue,secrets,sqlite3,subprocess,sys,threading,time,traceback,urllib.request
+from pathlib import Path
+REPO=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(REPO/'tools'))
+from create_preview_fixture import png
+from release_runtime import runtime_environment
+from storage_lease import plain_path,storage_parent
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--release',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
+    release=plain_path(args.release,directory=True);output=Path(os.path.abspath(args.output))
+    if not (release.is_relative_to(REPO/'dist') or release.is_relative_to(REPO/'data/ai-ui')) or not output.is_relative_to(REPO/'data/ai-ui') or output.exists():parser.error('Explicit staged repository release and new dedicated evidence required')
+    manifest=json.loads((release/'manifest.json').read_text(encoding='utf-8'))
+    if manifest.get('ai_runtime_bundled') is not False or manifest.get('models_bundled') is not False:parser.error('Basic release only; never run an AI-bundled interpreter here')
+    storage_parent(output);output.mkdir();report={'pass':False,'gui':False,'gpu':False,'normal_db_used':False,'checks':[]};proc=None
+    def check(name,value):
+        report['checks'].append({'name':name,'pass':bool(value)})
+        if not value:raise AssertionError(name)
+    env=runtime_environment(release/'runtime/media');env['LOCALAPPDATA']=str(output/'user');env['APPDATA']=str(output/'user')
+    try:
+        python=plain_path(release/'runtime/python/python.exe');server=plain_path(release/'backend/app/production_server.py')
+        probe=subprocess.run([str(python),'-I','-B','-c',"import importlib.util,json,sys;print(json.dumps({'torch':importlib.util.find_spec('torch') is not None,'prefix':sys.prefix}))"],env=env,cwd=output,capture_output=True,text=True,encoding='utf-8',timeout=15,check=True)
+        check('bundled isolated Python has no torch',json.loads(probe.stdout)['torch'] is False)
+        media=output/'generated';media.mkdir();source=media/'generated.png';source.write_bytes(png(width=160,height=180,color=(45,130,160)))
+        before=hashlib.sha256(source.read_bytes()).hexdigest(),source.stat().st_mtime_ns
+        models=output/'models';models.mkdir();instance=secrets.token_hex(16)
+        command=[str(python),'-I','-B','-c','import sys,runpy;sys.path.insert(0,sys.argv.pop(1));runpy.run_path(sys.argv.pop(1),run_name="__main__")',str(server.parent),str(server),'--db',str(output/'catalog.sqlite'),'--port','0','--instance-id',instance,'--exit-on-stdin-close','--ai-python',str(python),'--models-root',str(models),'--ai-settings',str(output/'ai-settings.json'),'--runtime-preferences',str(output/'launch-settings.json')]
+        with (output/'backend.log').open('w',encoding='utf-8') as log:
+            proc=subprocess.Popen(command,cwd=output,env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=log,text=True,encoding='utf-8');report['owned_pid']=proc.pid
+            lines=queue.Queue()
+            def read():
+                for line in proc.stdout:lines.put(line)
+            reader=threading.Thread(target=read,daemon=True);reader.start();line=lines.get(timeout=20)
+            if not line.startswith('Aredoko production: http://127.0.0.1:'):raise RuntimeError('Unexpected owned startup')
+            origin=line.split('production: ',1)[1].strip();opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));token=None
+            def request(path,body=None,binary=False):
+                headers={'Origin':origin,'Content-Type':'application/json'}
+                if token:headers['X-Aredoko-Token']=token
+                req=urllib.request.Request(origin+path,data=None if body is None else json.dumps(body).encode(),headers=headers)
+                with opener.open(req,timeout=5) as response:return response.read() if binary else json.load(response)
+            session=request('/api/session');token=session['token'];check('actual bundled backend production instance',session['mode']=='production' and session['instance_id']==instance)
+            setup=request('/api/library/ai/setup');check('AI missing stays distinct from inference',not setup['inference_verified'] and not setup['downloads_supported'])
+            catalogs=request('/api/library/ai/setup/download/catalog');check('real production catalog remains unavailable',catalogs=={'download_supported':False,'catalogs':[]})
+            check('setup and acquisition owners idle',request('/api/library/ai/setup/job')['state']=='idle' and request('/api/library/ai/setup/download/job')['state']=='idle')
+            root=request('/api/library/roots',{'consent':True,'path':str(media),'recursive':True})['root_id'];request('/api/library/scan',{'root_id':root})
+            deadline=time.monotonic()+12
+            while request('/api/library/scan')['state']=='running' and time.monotonic()<deadline:time.sleep(.05)
+            check('generated-only scan completes',request('/api/library/scan')['state']=='complete')
+            items=request('/api/items?q=generated.png')['items'];check('filename search returns generated image',len(items)==1)
+            preview=request('/api/library/preview/'+str(items[0]['id']),binary=True);check('actual bundled preview produces PNG',preview.startswith(b'\x89PNG\r\n\x1a\n'))
+            check('generated source SHA and mtime preserved',before==(hashlib.sha256(source.read_bytes()).hexdigest(),source.stat().st_mtime_ns))
+            proc.stdin.close();proc.wait(timeout=15);reader.join(3);check('owned EOF shutdown exits zero',proc.returncode==0)
+        with sqlite3.connect(output/'catalog.sqlite') as db:check('generated DB integrity',db.execute('PRAGMA integrity_check').fetchone()[0]=='ok')
+        report['pass']=True
+    except Exception:report['error']=traceback.format_exc()
+    finally:
+        if proc is not None and proc.poll() is None:
+            if proc.stdin and not proc.stdin.closed:proc.stdin.close()
+            try:proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:report['cleanup_pending']=True
+        if proc is not None:
+            report['exit_code']=proc.poll()
+            if proc.stdout:proc.stdout.close()
+        (output/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+    print(json.dumps(report,ensure_ascii=False));return 0 if report['pass'] and not report.get('cleanup_pending') else 1
+
+if __name__=='__main__':raise SystemExit(main())
