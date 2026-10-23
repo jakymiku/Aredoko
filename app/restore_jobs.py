@@ -19,7 +19,7 @@ from storage_backup import (
     RecoveryError,
     CATALOG,
 )
-from storage_lease import plain_path, identity, StorageBusyError, StoragePathError
+from storage_lease import plain_path, identity, StorageBusyError, StoragePathError, storage_parent
 
 ID_PATTERN = re.compile(r'^[0-9a-f]{32}\Z')
 ACTIVE_STATES = {'queued', 'running'}
@@ -42,6 +42,7 @@ class RestoreJob:
         self.error = None
         self.result = None
         self._created_staging = False
+        self._staging_identity = None
         self._cancelled = threading.Event()
         self._thread = None
         self._lock = threading.RLock()
@@ -161,13 +162,6 @@ class RestoreJobManager:
                 job.message = 'リストアを中止しています。'
         if wait and accepted and job._thread and job._thread.is_alive() and job._thread != threading.current_thread():
             job._thread.join(timeout=timeout)
-        if job._cancelled.is_set():
-            with job._lock:
-                if job.state != 'cancelled':
-                    job.state = 'cancelled'
-                    job.message = 'リストアを中止しました。'
-            if job._created_staging and job.staging_path and job.staging_path.exists():
-                shutil.rmtree(job.staging_path, ignore_errors=True)
         return accepted
 
     def wait(self, job_id, timeout=30.0):
@@ -181,7 +175,9 @@ class RestoreJobManager:
             self._closed = True
             active = [job for job in self._jobs.values() if job.state in ACTIVE_STATES]
         for job in active:
-            job._cancelled.set()
+            with job._lock:
+                if job.state in ACTIVE_STATES:
+                    job._cancelled.set()
         for job in active:
             if job._thread and job._thread.is_alive() and job._thread != threading.current_thread():
                 job._thread.join(timeout=timeout)
@@ -199,6 +195,7 @@ class RestoreJobManager:
 
         staging_path = job.staging_path
         extract_dir = None
+        extract_identity = None
         try:
             # 1. Ensure staging directory is new and does not exist
             if staging_path.exists():
@@ -222,18 +219,21 @@ class RestoreJobManager:
 
             # 3. Inspect ZIP structure, test integrity and check for disallowed patterns
             with zipfile.ZipFile(source_zip, 'r') as zf:
-                bad_entry = zf.testzip()
-                if bad_entry:
-                    raise RecoveryError(f"Corrupted entry in backup archive: {bad_entry}")
-
                 infolist = zf.infolist()
                 if len(infolist) > MAX_FILES:
                     raise RecoveryError(f"Backup archive contains too many files ({len(infolist)} > {MAX_FILES})")
 
                 filenames = set()
+                names_seen = set()
                 total_uncompressed = 0
                 for info in infolist:
+                    if job._cancelled.is_set():
+                        raise InterruptedError('Restore cancelled')
                     name = info.filename
+                    normalized = name.rstrip('/').casefold()
+                    if normalized in names_seen or '\\' in name or ':' in name:
+                        raise RecoveryError('Duplicate or ambiguous archive path')
+                    names_seen.add(normalized)
                     total_uncompressed += info.file_size
                     if total_uncompressed > job.max_bytes:
                         raise RecoveryError("Decompressed archive size exceeds limit")
@@ -267,11 +267,10 @@ class RestoreJobManager:
 
             # 4. Prepare intermediate extraction directory
             parent_dir = staging_path.parent
-            parent_dir.mkdir(parents=True, exist_ok=True)
+            storage_parent(staging_path)
             extract_dir = parent_dir / (f".extract-{job.job_id}")
-            if extract_dir.exists():
-                shutil.rmtree(extract_dir, ignore_errors=True)
             extract_dir.mkdir(mode=0o700)
+            extract_identity = identity(extract_dir)
 
             with job._lock:
                 job.progress_ratio = 0.15
@@ -297,7 +296,7 @@ class RestoreJobManager:
                     # Check parent path does not contain links/reparse points
                     plain_path(dest_path.parent, directory=True)
 
-                    with zf.open(info) as src, dest_path.open('wb') as dst:
+                    with zf.open(info) as src, dest_path.open('xb') as dst:
                         written = 0
                         while chunk := src.read(65536):
                             if job._cancelled.is_set():
@@ -333,6 +332,7 @@ class RestoreJobManager:
                 cancelled=job._cancelled.is_set,
             )
             job._created_staging = staging_path.exists()
+            job._staging_identity = identity(plain_path(staging_path, directory=True))
 
             if job._cancelled.is_set():
                 raise InterruptedError("Restore cancelled")
@@ -349,6 +349,8 @@ class RestoreJobManager:
                     manifest_data = report
 
             with job._lock:
+                if job._cancelled.is_set():
+                    raise InterruptedError('Restore cancelled')
                 job.state = 'completed'
                 job.progress_ratio = 1.0
                 job.message = 'リストア準備が完了しました。'
@@ -360,8 +362,7 @@ class RestoreJobManager:
                 job.state = 'cancelled'
                 job.message = 'リストアを中止しました。'
                 job.error = None
-            if job._created_staging and staging_path and staging_path.exists():
-                shutil.rmtree(staging_path, ignore_errors=True)
+            _remove_owned(staging_path, job._staging_identity)
         except Exception as error:
             with job._lock:
                 if job._cancelled.is_set():
@@ -372,8 +373,19 @@ class RestoreJobManager:
                     job.state = 'failed'
                     job.message = 'リストアに失敗しました。'
                     job.error = str(error)
-            if job._created_staging and staging_path and staging_path.exists():
-                shutil.rmtree(staging_path, ignore_errors=True)
+            _remove_owned(staging_path, job._staging_identity)
         finally:
-            if extract_dir and extract_dir.exists():
-                shutil.rmtree(extract_dir, ignore_errors=True)
+            _remove_owned(extract_dir, extract_identity)
+
+
+def _remove_owned(path, owned_identity):
+    """Only the worker removes directories whose creation it observed."""
+    if path is None or owned_identity is None:
+        return
+    try:
+        checked = plain_path(path, directory=True)
+        if identity(checked) == owned_identity:
+            shutil.rmtree(checked)
+    except (OSError, StoragePathError):
+        # Preserve questionable leftovers instead of touching a replacement.
+        pass

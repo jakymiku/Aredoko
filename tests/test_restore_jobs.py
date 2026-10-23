@@ -13,6 +13,8 @@ import struct
 import sys
 import tempfile
 import time
+import threading
+from unittest.mock import patch
 import unittest
 import zipfile
 
@@ -369,6 +371,56 @@ class RestoreJobsTests(unittest.TestCase):
         self.assertEqual(job.state, 'failed')
         self.assertIn('too many files', job.error.lower())
         self.assertFalse(staging_dir.exists())
+
+    def test_existing_extraction_directory_is_preserved(self):
+        zip_path = self._create_valid_zip()
+        job_id = 'b' * 32
+        parent = self.base / 'staging'
+        parent.mkdir()
+        extract = parent / ('.extract-' + job_id)
+        extract.mkdir()
+        canary = extract / 'keep.txt'
+        canary.write_text('original', encoding='utf-8')
+        with patch('restore_jobs.secrets.token_hex', return_value=job_id):
+            job = self.manager.start_job(zip_path)
+            self.manager.wait(job)
+        self.assertEqual(job.state, 'failed')
+        self.assertEqual(canary.read_text(encoding='utf-8'), 'original')
+
+    def test_cancel_does_not_remove_directory_while_worker_runs(self):
+        zip_path = self._create_valid_zip()
+        entered, release = threading.Event(), threading.Event()
+        target = self.base / 'cancel_owned'
+        real_restore = restore
+        def blocked_restore(*args, **kwargs):
+            result = real_restore(*args, **kwargs)
+            entered.set()
+            if not release.wait(5):
+                raise RuntimeError('Test worker wait expired')
+            return result
+        with patch('restore_jobs.restore', side_effect=blocked_restore):
+            job = self.manager.start_job(zip_path, staging_dir=target)
+            try:
+                self.assertTrue(entered.wait(5))
+                self.assertTrue(self.manager.cancel(job, wait=False))
+                self.assertEqual(job.state, 'running')
+                self.assertTrue((target / 'catalog.sqlite').exists())
+            finally:
+                release.set()
+                self.manager.wait(job)
+        self.assertEqual(job.state, 'cancelled')
+        self.assertFalse(target.exists())
+
+    def test_rejects_oversized_archive_before_reading_payload(self):
+        archive = self.base / 'compressed.zip'
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr('manifest.json', b'{}')
+            zf.writestr('catalog.sqlite', b'0' * 100000)
+        with patch.object(zipfile.ZipFile, 'testzip', side_effect=AssertionError('Unbounded CRC pass')), patch.object(zipfile.ZipFile, 'open', side_effect=AssertionError('Premature decode')):
+            job = self.manager.start_job(archive, max_bytes=10000)
+            self.manager.wait(job)
+        self.assertEqual(job.state, 'failed')
+        self.assertIn('Decompressed archive size', job.error)
 
     def test_manager_close_cancels_active_jobs(self):
         zip_path = self._create_valid_zip()
