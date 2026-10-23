@@ -63,4 +63,7 @@ class RestoreHandoff:
         with storage_lease(self.catalog):
             if list(identity(self.catalog))!=value['catalog_identity']:raise ValueError('Source catalog was replaced')
             receipt=apply_restore_switch(data,staging,restore_id=value['job_id'])
+        from restore_prepared import forget
+        try:forget(staging.parent,value['job_id'])
+        except (ValueError,OSError):pass  # Successful cutover remains authoritative.
         return {'restart':True,'receipt':receipt}

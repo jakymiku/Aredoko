@@ -1,5 +1,9 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-24 prepared restore persistence (latest)
+
+[Bounded durable receipt and real backend reattach evidence](restore-review-20261024.md). Prepared5/handoff7/Core935 pass; no auto-cutover or startup DB hashing. Native2/3 remains; picker→Start not yet accepted. P5 partial, goal active, no shutdown.
+
 ## 2026-10-24 native restore UI connection (latest)
 
 [Native UI, exact two-run evidence and remaining P5 tasks](restore-review-20261024.md). Core934/Portable build pass; restore2/3 native attempts consumed, both consent/relaunch pass,8 PNG viewed, old DB/media retained and no residual process. Picker→Start/native cancel and full ZIP/bootstrap unverified. Prepared job persistence still missing. P5 partial; goal continues; no shutdown.

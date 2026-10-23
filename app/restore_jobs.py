@@ -84,9 +84,10 @@ class RestoreJob:
 class RestoreJobManager:
     """Manages isolated staging and validation of backup ZIP bundles before pointer switch."""
 
-    def __init__(self, staging_base_dir=None, *, max_bytes=DEFAULT_MAX_BYTES):
+    def __init__(self, staging_base_dir=None, *, max_bytes=DEFAULT_MAX_BYTES, prepared=None):
         self.staging_base_dir = Path(os.path.abspath(staging_base_dir)) if staging_base_dir else None
         self.max_bytes = max_bytes
+        self.prepared = prepared
         self._jobs = {}
         self._lock = threading.RLock()
         self._closed = False
@@ -357,6 +358,7 @@ class RestoreJobManager:
             with job._lock:
                 if job._cancelled.is_set():
                     raise InterruptedError('Restore cancelled')
+                if self.prepared is not None:self.prepared(job)
                 job.state = 'completed'
                 job.progress_ratio = 1.0
                 job.message = 'リストア準備が完了しました。'
@@ -404,12 +406,27 @@ class RestoreBusy(RuntimeError):
 class RestoreStagingJobs:
     """One owned preparation, with no HTTP ability to choose staging or switch DBs."""
     def __init__(self, base, *, handoff=None):
-        self.manager = RestoreJobManager(base)
+        from restore_prepared import save
+        self.manager = RestoreJobManager(base,prepared=lambda job:save(base,job))
         self.lock = threading.RLock()
         self.current = None
         self.handoff = handoff
         self.restart_requested = False
         self.closed = False
+        self.recovery_error = None
+        try:
+            from restore_prepared import load
+            loaded=load(base)
+            if loaded is not None:
+                value,stage=loaded
+                job=RestoreJob(value['job_id'],value['source'],stage,without_vectors=value['without_vectors'])
+                job.state='completed';job.progress_ratio=1.0;job.message='復元の準備が完了しています。内容を確認して再起動できます。'
+                job._created_staging=True;job._staging_identity=identity(stage)
+                job._thread=threading.Thread(target=lambda:None)
+                self.current=job;self.manager._jobs[job.job_id]=job
+        except (ValueError,OSError,KeyError,TypeError):
+            # Keep app startup usable; only restoration is blocked, evidence retained.
+            self.recovery_error='準備済みの復元データを確認できません。復旧ガイドを確認してください。'
 
     def snapshot(self):
         with self.lock:
@@ -417,9 +434,10 @@ class RestoreStagingJobs:
             # Filesystem details and manifests are internal, not public error text.
             value.pop('staging_path', None)
             value.pop('manifest', None)
+            if self.recovery_error is not None:value['message']=self.recovery_error
             if value.get('error'):
                 value['error'] = 'restore_validation_failed'
-            return {**value, 'staging_supported': True, 'switch_supported': self.handoff is not None, 'restart_requested': self.restart_requested,
+            return {**value, 'staging_supported': self.recovery_error is None, 'switch_supported': self.handoff is not None, 'restart_requested': self.restart_requested,
                     'source':str(self.current.zip_path) if self.current else None,
                     'without_vectors':self.current.without_vectors if self.current else None}
 
@@ -430,7 +448,7 @@ class RestoreStagingJobs:
         if not isinstance(source, str) or not 1 <= len(source) <= 4096 or not Path(source).is_absolute() or any(ord(c) < 32 for c in source):
             raise ValueError('Select an absolute backup path')
         with self.lock:
-            if self.closed or self.restart_requested or self.current and (self.current._thread.is_alive() or self.current.state == 'completed'):
+            if self.closed or self.recovery_error is not None or self.restart_requested or self.current and (self.current._thread.is_alive() or self.current.state == 'completed'):
                 raise RestoreBusy('A restore preparation already exists')
             # A failed/cancelled worker has stopped before its record is released.
             self.manager._jobs.clear()
@@ -461,6 +479,8 @@ class RestoreStagingJobs:
                 _remove_owned(job.staging_path, job._staging_identity)
                 if job.staging_path.exists() or job.staging_path.is_symlink():
                     raise RestoreBusy('Staging cleanup was not safe or could not finish')
+            from restore_prepared import forget
+            forget(self.manager.staging_base_dir,job.job_id)
             self.current = None
             self.manager._jobs.clear()
             return self.snapshot()

@@ -72,6 +72,8 @@ internal static class BackupTests
             });
             using var restartHttp=new HttpClient(restartHandler){BaseAddress=new Uri("http://127.0.0.1:8769/")};
             check((await new RestoreClient(restartHttp).RestartAsync(id)).RestartRequested,"restart response is parsed before the frontend closes");
+            restoreJson["staging_supported"]=false;restoreJson["message"]="復旧ガイドを確認してください。";
+            rejected=false;try{RestoreJob.Parse(restoreJson.ToJsonString());}catch(InvalidOperationException error){rejected=error.Message.Contains("復旧ガイド");}check(rejected,"blocked durable restore gives actionable native guidance");
             snapshot["bytes_done"]=128;var viewer=new ViewerInputSettings(true,80,"dark",true);await client.StartAsync(folder,new BackupSelection(),viewer);check(viewer.ToJson()["wheel_up_advances"]!.GetValue<bool>()&&viewer.ToJson()["theme"]!.GetValue<string>()=="dark","backup and normal viewer persistence share the exact JSON contract");
         }
         finally{Directory.Delete(folder,true);}

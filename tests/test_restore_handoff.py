@@ -91,7 +91,9 @@ class HandoffTests(unittest.TestCase):
                     data=None if body is None else json.dumps(body).encode()
                     req=urllib.request.Request(origin+path,data=data,headers={'X-Aredoko-Token':token,'Origin':origin,'Content-Type':'application/json'})
                     with opener.open(req,timeout=2) as response:return json.load(response)
-                value=request('/api/library/restore/start',{'consent':True,'source':str(self.base/'bundle'),'without_vectors':True})
+                value=request('/api/library/restore')
+                self.assertEqual(value['job_id'],self.body['job_id'])
+                self.assertEqual(value['state'],'completed')
                 deadline=time.monotonic()+5
                 while value['state'] in ('queued','running'):
                     if time.monotonic()>deadline:self.fail('Restore preparation timed out')

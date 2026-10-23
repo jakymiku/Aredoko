@@ -1,5 +1,12 @@
 # Restore review follow-up
 
+## 2026-10-24 durable prepared-job continuation
+
+Prepared stages now publish one bounded `restore-staging/prepared.json` under the same cancel/completion lock. Backend restart reattaches the exact job/source/vector choice using ordinary-path, directory identity and recovery-receipt SHA checks; no directory scan, payload DB open or automatic cutover at startup. Explicit discard removes the owned stage and its receipt; successful cutover retires the old receipt. Invalid receipt blocks only restore and preserves evidence. Native client presents the recovery guidance from status. Prior prepared metadata does not authorize a new launch's restart request.
+
+Evidence: new prepared5 PASS/0.918s; handoff initial integration failed409 because the real backend correctly reattached the setup's existing prepared job; fixture changed to assert that ID/state rather than start a duplicate. Final handoff7 PASS/2.199s includes real process restart/reattach and closure/cutover. HTTP3 PASS/2.376s after persistence connection. Core935 assertions PASS. No additional GUI run for this unit; prior restore native2/3 remains (1 attempt left). Next prepare final native picker→Start check and independent settings/profile restoration review. Goal active; quota20% used at last check, not a stopping checkpoint. No shutdown.
+
+
 ## 2026-10-24 native restore UI continuation
 
 Core `RestoreClient.RestartAsync` and typed capability/acknowledgment/source/cache-policy fields connected. Native backup settings now lead to a restore dialog with folder/ZIP selection, preparation, progress, cancel, discard, refresh and consent-gated restart. Existing dirty guard runs before opening, polling is lifetime/revision guarded and in-flight operations block dismissal. Explicit restart flushes reading progress and closes only the owned main window after acknowledgment. Restore source/cache choices reattach from backend status; operation errors survive final render. Capability `backup.restore_supported` now follows actual owned handoff availability, not a blanket false.

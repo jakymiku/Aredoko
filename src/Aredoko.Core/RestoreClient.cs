@@ -17,7 +17,7 @@ public sealed record RestoreJob(string? Id,string State,double Progress,string M
         if(state!="idle")BackupClient.ValidateId(id);
         var progress=root.GetProperty("progress_ratio").GetDouble();
         if(!double.IsFinite(progress)||progress<0||progress>1||state=="completed"&&progress!=1)throw new InvalidDataException("Invalid restore progress");
-        if(!root.GetProperty("staging_supported").GetBoolean())throw new InvalidDataException("Restore preparation unavailable");
+        if(!root.GetProperty("staging_supported").GetBoolean())throw new InvalidOperationException(root.GetProperty("message").GetString()??"復元データを確認できません。復旧ガイドを確認してください。");
         var supported=root.GetProperty("switch_supported").GetBoolean();
         var restarting=root.TryGetProperty("restart_requested",out var requested)&&requested.GetBoolean();
         if(restarting&&(!supported||state!="completed"))throw new InvalidDataException("Invalid restore restart acknowledgment");
