@@ -10,6 +10,7 @@ public sealed class LibraryApi : IDisposable
     private readonly HttpClient tagClient;
     public BackupClient Backups {get;}
     public AIEnvironmentClient AIEnvironment {get;}
+    public AIDownloadClient AIDownloads {get;}
     public RestoreClient Restores {get;}
     public ShelfClient Shelves {get;}
     public ResultSessionClient Results {get;}
@@ -23,6 +24,7 @@ public sealed class LibraryApi : IDisposable
         tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromSeconds(100)};
         Backups=new(client);
         AIEnvironment=new(client);
+        AIDownloads=new(client);
         Restores=new(client);
         Shelves=new(client);
         Results=new(client);

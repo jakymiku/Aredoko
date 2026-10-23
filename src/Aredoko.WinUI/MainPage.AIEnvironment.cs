@@ -11,7 +11,7 @@ public sealed partial class MainPage
     private async Task OpenAIEnvironmentDialogAsync()
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        bool open=true,busy=false;long revision=0;AIEnvironmentJob? current=null;Task? polling=null;string? operationError=null;string? savedJob=null;
+        bool open=true,busy=false,openDownload=false;long revision=0;AIEnvironmentJob? current=null;Task? polling=null;string? operationError=null;string? savedJob=null;
         using var lifetime=new CancellationTokenSource();
         var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(700)};
         try
@@ -34,7 +34,7 @@ public sealed partial class MainPage
             var modelActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};modelActions.Children.Add(chooseModels);modelActions.Children.Add(resetModels);panel.Children.Add(modelActions);
             panel.Children.Add(new TextBlock{Text="モデル別のフォルダをまとめた親フォルダを指定します。例：models の中に embeddinggemma-2 がある場合は models を選びます。",TextWrapping=TextWrapping.Wrap});
             foreach(var control in new UIElement[]{diagnostic,progress,status,refresh})panel.Children.Add(control);
-            panel.Children.Add(new TextBlock{Text="アプリから取得できるAI環境は公開準備中です。配置済みの環境を指定して利用できます。",TextWrapping=TextWrapping.Wrap});
+            var download=new Button{Content="アプリで取得・取得状況"};AutomationProperties.SetAutomationId(download,"AIEnvironmentDownload");panel.Children.Add(download);
             var guide=new HyperlinkButton{Content="AI環境の配置ガイド",NavigateUri=new Uri("https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/ai-environment-guide.md")};AutomationProperties.SetAutomationId(guide,"AIEnvironmentGuide");panel.Children.Add(guide);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI環境の追加と配置",SecondaryButtonText="検査を中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=FormScrollContent.Wrap(panel),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}};
@@ -103,6 +103,7 @@ public sealed partial class MainPage
                 catch(Exception ex){operationError="中止を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
                 finally{busy=false;deferral.Complete();if(current is not null)Render(current);}
             };
+            download.Click+=(_,_)=>{if(busy)return;openDownload=true;dialog.Hide();};
             dialog.Closing+=(_,args)=>{if(busy)args.Cancel=true;};
             timer.Tick+=(_,_)=>{if(!busy&&current?.Active==true&&(polling is null||polling.IsCompleted))polling=RefreshAsync();};
             dialog.Opened+=(_,_)=>{polling=RefreshAsync(true);timer.Start();};
@@ -110,6 +111,7 @@ public sealed partial class MainPage
         }
         catch(Exception ex){Failure(ex);}
         finally{open=false;timer.Stop();lifetime.Cancel();if(polling is not null)await polling;dialogOpen=false;transitions.Release();RestoreNavigation();}
+        if(openDownload&&!disposed)await OpenAIDownloadDialogAsync();
     }
     // Keep picker type resolution inside the caller's protected operation;
     // resetting preferences itself never needs to load a picker projection.

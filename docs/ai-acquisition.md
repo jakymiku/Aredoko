@@ -1,5 +1,13 @@
 # LD4b：任意AI環境の取得基盤（2026-10-24）
 
+## 2026-10-24 typed acquisition client and native download UI (latest)
+
+Source connects AI environment → app acquisition: trusted catalog metadata/capacity/license, explicit consent, default unlimited or optional MB/s cap, separate received/verified bytes, current-job cancel, retry/resume, dialog close/reopen and published root. Selected settings/active model do not change automatically. Published version can be selected explicitly through the existing-folder entry. Native catalog uses direct ComboBoxItem controls, not reflection-bound generic ItemsSource; lifetime/revision/busy protect stale replies and in-flight close. Same published catalog cannot be reacquired from the current UI state.
+
+Core acquisition parsing rejects invalid identities/unsafe license links/duplicate catalogs/impossible progress/false completion and preserves cancel acknowledgement; Start sends only consent/catalog ID/rate, never URL/root. Core973 assertion lines PASS (including new acquisition checks); Portable build0errors/known WUI1001x3,16.42s. Final source published to data/ai-ui/ai-acquisition-20261024/frontend01 with existing SDK IL2104x2. GUI not yet run at this checkpoint: user explicitly approved generated loopback-only max2 acquisition attempts; existing environment2/2 and restore3/3 caps remain exhausted.
+
+Production specifications STILL EMPTY: no external model/package transfer or inference, no normal DB/Alpha/GPU. Actual catalog publisher/notice/provenance work remains and download readiness is not claimed. Next native owned acquisition scope, then publisher/actual catalog and final distribution acceptance. P6/LD5/roadmap incomplete; goal active/no shutdown.
+
 ## 現在の到達点
 
 固定カタログからの取得、同一カタログの途中再開、全artifact SHA/構成検証後の新version公開、所有jobと認証APIを実装。**製品用の取得カタログはまだ登録していない**。通常起動ではネットワーク取得せず、`download_supported=false`、catalog一覧は空。実モデル/依存の取得・推論・GPU/GUI確認なし。P5の未受入項目も保持し、P6完了とはしない。

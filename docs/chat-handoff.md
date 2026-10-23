@@ -1,5 +1,11 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-24 acquisition Core and native settings (latest)
+
+[Typed catalog/job contract and source-connected download UI](ai-acquisition.md). Core973 PASS/Portable0errors/known warnings, published acquisition/frontend01. Generated local-only GUI max2 explicitly approved, not yet executed at this checkpoint. Real catalog remains empty; environment2/2 and restore3/3 stay exhausted. Goal active/no shutdown.
+
+Previous implementation1f9ce12; next owned native acquisition check with generated data.
+
 ## 2026-10-24 AI environment GUI evidence and deploy fix (latest)
 
 [Exact max2 GUI results, picker dependency correction and windowless proof](ai-setup-jobs.md). Reattach/cancel passed; native reset exposed missing managed dependency. Specific projection rooted and fresh frontend02 loads its metadata with actual deps/runtimeconfig; no new GUI trial. AI-environment2/2 and restore3/3 remain exhausted, full picker/reset acceptance pending. All4 delivered PNGs reviewed, no residual owned frontend, real models/GPU/download0. Goal active/no shutdown.
