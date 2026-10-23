@@ -1,5 +1,13 @@
 # 2026-10-24 終了前チェックポイント
 
+## 2026-10-24 final P5 continuation checkpoint
+
+Implementation **30480f8**: [explicit AI profile with absent saved preferences](restore-review-20261024.md). Live11 PASS; final restore-switch/rollback + jobs/HTTP10 PASS separately. Source preferences remain absent/unchanged; saved pending choices keep exact bytes. Full dual active/pending metadata and multi-tagger selection remain TODO. ZIP remains source875f94a; this backend follow-up is source-only. Native caps unchanged, no GUI/GPU/new model/normal DB. Goal incomplete/active; near quota save/push/handoff, **no shutdown**.
+
+Next1: explicit backup active-selection metadata preserving BOTH existing pending preferences and startup override, with older-bundle compatibility; do not solve it by replacing saved choice or guessing from profile filenames. Continue from30480f8 after fetch/status/log.
+
+Previous stopping docs9ec50b1 and implementation606b403 remain below as history. Latest product source is30480f8; no rebuilt ZIP for this follow-up.
+
 最新の実装・検証コミットは **606b403f510c5c5075fc7ee24a815dce5ad40e7c**。本引き継ぎの後続文書commitはこのファイルのgit logを参照する。ブランチ `feat/winui3-production-mvp-20261011`、既存Draft PR #5、open/unmergedを保持。直前fetchでahead/behind0/0、作業tree clean、PR head一致を確認し本文も最新化。Actionsは全workflowが手動起動のみで、実行・main merge・新branch/PRなし。
 
 ## 今回の実装単位

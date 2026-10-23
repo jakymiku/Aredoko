@@ -1,5 +1,11 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-24 final P5 continuation checkpoint
+
+Implementation **30480f8**: [explicit AI profile with absent saved preferences](docs/restore-review-20261024.md). Live11 PASS; final restore-switch/rollback + jobs/HTTP10 PASS separately. Source preferences remain absent/unchanged; saved pending choices keep exact bytes. Full dual active/pending metadata and multi-tagger selection remain TODO. ZIP remains source875f94a; this backend follow-up is source-only. Native caps unchanged, no GUI/GPU/new model/normal DB. Goal incomplete/active; near quota save/push/handoff, **no shutdown**.
+
+Next1: explicit backup active-selection metadata preserving BOTH existing pending preferences and startup override, with older-bundle compatibility; do not solve it by replacing saved choice or guessing from profile filenames. Continue from30480f8 after fetch/status/log.
+
 ## 2026-10-24 stopping checkpoint (latest)
 
 [Exact seven commits, native caps/evidence, new basic ZIP and next P5 active-profile contract](docs/development-checkpoint-20261024.md). Implementation606b403, packaged source875f94a. Remote/PR matched clean before this docs-only checkpoint; Draft/open/unmerged/manual Actions only. Preserve environment2/2, restore3/3, acquisition1/2. Near quota finish handoff; do not start big work or claim roadmap complete. **No PC shutdown; goal remains active.**
