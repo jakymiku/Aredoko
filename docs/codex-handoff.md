@@ -1,5 +1,10 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-23 P4 root multiple initial shelves (latest)
+
+[Atomic root IDs/fill-unset plus shared native picker](root-shelves-20261023.md) implemented. Catalog11/HTTP6 PASS, Core911 PASS; corrected Portable build0 errors/known3 warnings. Original Grid.IsEnabled build failure preserved; standard ContentControl fixes it. Root GUI UNRUN; prior shelf/native caps unchanged. Next P5 online snapshot/owned jobs/safe restore, preserving catalog2/recovery and existing features. Current stop instruction is safe commit/push/handoff near quota10%, **no shutdown**.
+
+
 ## 2026-10-23 P4 registered-root favorites (latest)
 
 [Independent root favorite storage/API/UI and catalog2 recovery](root-favorites-20261023.md) implemented; migration/auth/restore tests PASS, Core904/Portable build0 errors+known3 warnings. Favorite GUI UNRUN; source is not installed Alpha/finished ZIP. Catalog now migrates1→2 atomically; old binaries must not reopen it. Next root multiple-initial-shelf editor/atomic fill-unset, then P5. Preserve native cap evidence and current no-shutdown instruction.

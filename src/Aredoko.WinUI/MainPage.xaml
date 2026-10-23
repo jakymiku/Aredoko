@@ -62,12 +62,13 @@
        <Button x:Name="Save" Content="保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.AutomationId="BtnSave"/>
       </StackPanel>
        </Grid></ContentControl>
-      <Grid x:Name="FolderEditorPanel" Grid.Row="1" Visibility="Collapsed" RowSpacing="12">
+      <ContentControl x:Name="FolderEditorPanel" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"><Grid RowSpacing="12">
        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="FolderDetailScroll" AutomationProperties.Name="登録フォルダの設定"><StackPanel Spacing="12" Margin="{StaticResource FormScrollGutter}">
         <TextBlock x:Name="FolderTargetTitle" Text="フォルダを選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderTargetTitle"/>
         <TextBlock x:Name="FolderTargetPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TxtFolderTargetPath"/>
         <TextBlock x:Name="CurrentShelfSummary" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtCurrentShelfSummary"/>
+        <Button Content="棚を選択（複数可）" Click="ChooseRootShelves_Click" AutomationProperties.AutomationId="BtnChooseRootShelves"/>
         <ComboBox x:Name="RootInitialShelf" Header="初期棚（新規登録／選択フォルダの設定）" HorizontalAlignment="Stretch" SelectionChanged="RootInitialShelf_Changed" AutomationProperties.Name="初期棚" AutomationProperties.AutomationId="RootInitialShelf"/>
         <TextBox x:Name="RootNewShelf" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" TextChanged="FolderEditor_Changed" AutomationProperties.Name="新しい棚の名前" AutomationProperties.AutomationId="RootNewShelf"/>
         <TextBlock Text="新しく見つかったファイルをこの棚へ入れます。個別に変更・解除した棚は再スキャンしても保持します。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
@@ -89,7 +90,7 @@
         <TextBlock x:Name="FolderEditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderEditStatus"/>
         <TextBlock x:Name="ScanStatus" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="ScanStatus"/>
        </StackPanel>
-      </Grid>
+      </Grid></ContentControl>
      </Grid>
      </Border>
     </SplitView.Pane>

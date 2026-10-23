@@ -68,9 +68,9 @@ class RootPreferencesTests(unittest.TestCase):
             server.shutdown();server.server_close();thread.join(5)
             for resource in (handler.results,handler.animations,handler.thumbnails,handler.setup_jobs):resource.close()
         self.addCleanup(close);origin=f'http://127.0.0.1:{server.server_port}'
-        def request(body,token='fixture'):
+        def request(body,token='fixture',route='/api/library/roots/favorite'):
             payload=body if isinstance(body,str) else json.dumps(body)
-            req=urllib.request.Request(origin+'/api/library/roots/favorite',data=payload.encode(),headers={'Origin':origin,'X-Aredoko-Token':token,'Content-Type':'application/json'})
+            req=urllib.request.Request(origin+route,data=payload.encode(),headers={'Origin':origin,'X-Aredoko-Token':token,'Content-Type':'application/json'})
             try:
                 with urllib.request.urlopen(req,timeout=5) as response:return response.status,json.load(response)
             except urllib.error.HTTPError as ex:return ex.code,json.load(ex)
@@ -79,3 +79,7 @@ class RootPreferencesTests(unittest.TestCase):
         self.assertEqual(request('{"root_id":'+str(self.root)+',"favorite":false,"favorite":true}')[0],400)
         self.assertEqual(request({'root_id':self.root,'favorite':True})[0],200)
         self.assertTrue(self.cat.registered_roots()[0]['favorite'])
+        shelf=self.cat.change_shelf('create',name='初期棚')['id']
+        self.assertEqual(request({'root_ids':[self.root],'shelf_ids':[shelf],'fill_unset':True},route='/api/library/roots/shelves')[0],200)
+        self.assertEqual(self.cat.get(self.item)['shelf_ids'],[shelf])
+        self.assertEqual(request('{"root_ids":['+str(self.root)+'],"shelf_ids":[],"fill_unset":false,"fill_unset":true}',route='/api/library/roots/shelves')[0],400)

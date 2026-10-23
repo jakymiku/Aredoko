@@ -1505,6 +1505,7 @@ public sealed partial class MainPage : Page
                     else{RootInitialShelf.SelectedIndex=1;RootNewShelf.Text=current;RootNewShelf.IsEnabled=true;}
                 }
             }
+            if(folderDraft.ShelfIdsToSave is {} selectedShelves)ShowRootShelfSelection(selectedShelves);
             FillUnsetShelf.IsChecked=false;
             SingleRootSection.Visibility=folderDraft.IsBatch?Visibility.Collapsed:Visibility.Visible;
             RootExcludes.Text=folderDraft.ExclusionsText;
@@ -1526,7 +1527,7 @@ public sealed partial class MainPage : Page
         var tag=choice?.Tag?.ToString()??"none";
         folderDraft.ShelfMode=tag switch
         {
-            "keep"=>BatchShelfMode.KeepExisting,
+            "keep" or "multiple"=>BatchShelfMode.KeepExisting,
             "new"=>BatchShelfMode.NewShelf,
             "existing"=>BatchShelfMode.ExistingShelf,
             _=>BatchShelfMode.ClearToNone
@@ -1549,6 +1550,7 @@ public sealed partial class MainPage : Page
         if(RootNewShelf is null)return;
         var tag=(RootInitialShelf.SelectedItem as ComboBoxItem)?.Tag?.ToString();
         RootNewShelf.IsEnabled=tag=="new";
+        if(!folderPopulating&&folderDraft is not null&&tag!="multiple")folderDraft.ClearShelfIdSelection();
         UpdateFolderDraftState();
     }
 
@@ -1561,59 +1563,42 @@ public sealed partial class MainPage : Page
 
     private async void SaveRootShelf_Click(object sender,RoutedEventArgs e)
     {
-        if(folderDraft is null||saving)return;
-        SyncFolderDraftFromControls();
-        SaveRootShelf.IsEnabled=false;saving=true;
+        if(folderDraft is null||saving||dialogOpen)return;
+        SyncFolderDraftFromControls();var draft=folderDraft;
+        if(!draft.IsShelfChanged){FolderEditStatus.Text="初期棚の変更はありません。";return;}
+        SaveRootShelf.IsEnabled=false;FolderEditorPanel.IsEnabled=false;saving=true;FolderEditStatus.Text="初期棚を保存しています…";
         try
         {
-            var shelfToSave=folderDraft.ResolveShelfToSave();
-            if(shelfToSave is null)
+            var ids=draft.ShelfIdsToSave?.ToArray();
+            if(ids is null)
             {
-                FolderEditStatus.Text="変更された初期棚項目はありません（現在の設定を維持しました）。";
-                ScanStatus.Text=FolderEditStatus.Text;
-                return;
-            }
-            var targets=folderDraft.TargetIds.ToArray();
-            var fillUnset=folderDraft.FillUnset;
-            var totalUpdated=0;
-            var succeeded=0;
-            var failures=new List<string>();
-            foreach(var rootId in targets)
-            {
-                try
+                var name=draft.ResolveShelfToSave();if(name is null)return;
+                if(name.Length==0)ids=[];
+                else
                 {
-                    var result=await api.PostAsync("api/library/roots/shelf",new JsonObject {{"root_id",rootId},{"shelf",shelfToSave},{"fill_unset",fillUnset}});
-                    totalUpdated+=result["updated"]?.GetValue<int>()??0;
-                    succeeded++;
-                    folderDraft.RecordSucceeded(rootId);
+                    var shelf=shelfDescriptors.FirstOrDefault(s=>s.Name==name);
+                    if(shelf is null)
+                    {
+                        var id=await api.Shelves.CreateAsync(name);shelf=new ShelfDescriptor(id,name,0);
+                        shelfDescriptors=shelfDescriptors.Append(shelf).ToArray();knownShelves=shelfDescriptors.Select(s=>s.Name).ToArray();
+                    }
+                    ids=new[]{shelf.Id};
                 }
-                catch(Exception ex)
-                {
-                    var label=knownRoots.FirstOrDefault(r=>r.Id==rootId)?.ShortPath??$"ID {rootId}";
-                    failures.Add($"{label}: {ex.Message}");
-                }
+                draft.SelectShelfIds(ids);ShowRootShelfSelection(ids);
             }
-            await RefreshSearchRootsAsync();
-            if(failures.Count==0)
-            {
-                OpenFolderSettingsPanel(targets);
-                var msg=$"初期棚を保存しました。既存の棚未設定ファイル{totalUpdated}件に適用。";
-                FolderEditStatus.Text=msg;
-                ScanStatus.Text=msg;
-            }
-            else
-            {
-                checkedFolderIds.Clear();
-                foreach(var remaining in folderDraft.TargetIds)checkedFolderIds.Add(remaining);
-                RenderFolderHub();
-                FolderTargetTitle.Text=$"未完了の {folderDraft.TargetIds.Count} フォルダ（再試行対象）";
-                var msg=$"{succeeded}件保存、{failures.Count}件失敗（{string.Join(" / ",failures)}）。未保存の入力は保持されています。再試行すると失敗したフォルダにだけ適用します。";
-                FolderEditStatus.Text=msg;
-                ScanStatus.Text=msg;
-            }
+            var targets=draft.TargetIds.ToArray();var pendingExcludes=draft.IsExclusionsChanged?draft.ExclusionsText:null;
+            var result=await api.SetRootShelvesAsync(targets,ids,draft.FillUnset);
+            var primary=ids.Length==0?"":ShelfName(ids.Min());
+            knownRoots=knownRoots.Select(root=>targets.Contains(root.Id)?root with{DefaultShelf=primary,ShelfIds=ids.ToArray()}:root).ToArray();
+            resultsNeedRefresh=true;OpenFolderSettingsPanel(targets);
+            if(pendingExcludes is not null){RootExcludes.Text=pendingExcludes;UpdateFolderDraftState();}
+            FolderEditStatus.Text=$"初期棚を保存しました。棚未設定の作品 {result["updated"]?.GetValue<int>()??0:N0} 件に適用しました。"+(pendingExcludes is null?"":"除外ルールは未保存です。");
+            ScanStatus.Text=FolderEditStatus.Text;
+            try{await RefreshSearchRootsAsync();}
+            catch(Exception ex){AppLog.Error(ex);FolderEditStatus.Text="初期棚は保存済みです。一覧を更新できなかったため、再接続してください。";}
         }
-        catch(Exception ex){FolderEditStatus.Text=ex.Message;ScanStatus.Text=ex.Message;}
-        finally{saving=false;SaveRootShelf.IsEnabled=true;}
+        catch(Exception ex){Failure(ex);FolderEditStatus.Text="初期棚を保存できませんでした。選択内容は残っています。";}
+        finally{saving=false;SaveRootShelf.IsEnabled=true;FolderEditorPanel.IsEnabled=true;}
     }
 
     private async void SaveExcludes_Click(object sender,RoutedEventArgs e)

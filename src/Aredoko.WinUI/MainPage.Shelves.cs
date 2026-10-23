@@ -145,23 +145,8 @@ public sealed partial class MainPage
         {
             var itemId=active.Id;await RefreshShelfDescriptorsAsync();
             if(disposed||saving||dialogOpen||active?.Id!=itemId)return;
-            var options=shelfDescriptors.ToList();
-            foreach(var id in editingShelfIds.Where(id=>options.All(s=>s.Id!=id)))options.Add(new(id,"見つからない棚（所属を維持）",0));
-            var list=new ListView{SelectionMode=ListViewSelectionMode.Multiple,MaxHeight=320,MinHeight=96,HorizontalContentAlignment=HorizontalAlignment.Stretch};
-            AutomationProperties.SetAutomationId(list,"ChooseShelfList");AutomationProperties.SetName(list,"所属する棚を複数選択");
-            foreach(var shelf in options)
-            {
-                var choice=new ListViewItem{Content=shelf.Name,Tag=shelf.Id};AutomationProperties.SetAutomationId(choice,$"ChooseShelf{shelf.Id}");list.Items.Add(choice);
-                if(editingShelfIds.Contains(shelf.Id))list.SelectedItems.Add(choice);
-            }
-            var panel=new StackPanel{Spacing=8};panel.Children.Add(new TextBlock{Text=options.Count==0?"棚がありません。左側の「棚」から作成できます。":"所属する棚を選択してください。選択を外すと、その棚から解除します。",TextWrapping=TextWrapping.Wrap});panel.Children.Add(list);
-            dialogOpen=true;
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="棚を選択",Content=panel,PrimaryButtonText="適用",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Close};
-            if(await dialog.ShowAsync()==ContentDialogResult.Primary&&active?.Id==itemId)
-            {
-                var ids=list.SelectedItems.OfType<ListViewItem>().Select(x=>(long)x.Tag).Order().ToArray();
-                ShelfProtocol.ValidateIds(ids);editingShelfIds=ids;UpdateShelfEditorLabel();UpdateDirty();
-            }
+            var ids=await PickShelfIdsAsync("棚を選択",editingShelfIds,"所属する棚を選択してください。選択を外すと、その棚から解除します。");
+            if(ids is not null&&active?.Id==itemId){editingShelfIds=ids;UpdateShelfEditorLabel();UpdateDirty();}
         }
         catch(Exception ex){Failure(ex);}
         finally{dialogOpen=false;transitions.Release();}

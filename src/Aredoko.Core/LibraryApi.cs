@@ -88,6 +88,12 @@ public sealed class LibraryApi : IDisposable
         }
         return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
     }
+    public Task<JsonNode> SetRootShelvesAsync(IReadOnlyList<int> rootIds,IReadOnlyList<long> shelfIds,bool fillUnset)
+    {
+        if(rootIds.Count is <1 or >256||rootIds.Any(id=>id<1)||rootIds.Distinct().Count()!=rootIds.Count)throw new ArgumentException("Invalid root selection");
+        var roots=new JsonArray();foreach(var id in rootIds)roots.Add((JsonNode?)JsonValue.Create(id));
+        return PostAsync("api/library/roots/shelves",new JsonObject{["root_ids"]=roots,["shelf_ids"]=ShelfProtocol.Ids(shelfIds),["fill_unset"]=fillUnset});
+    }
     public Task<JsonNode> SetRootFavoriteAsync(int rootId,bool favorite)
     {
         if(rootId<1)throw new ArgumentOutOfRangeException(nameof(rootId));

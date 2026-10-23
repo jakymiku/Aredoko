@@ -359,6 +359,26 @@ class ProductionCatalog(Catalog):
                     (item_id,revision,page,mode))
         return {'saved':True}
 
+    def set_root_shelves(self,root_ids,shelf_ids,fill_unset=False):
+        from shelves import identity
+        from library_index import _excluded
+        if not isinstance(root_ids,list) or not 1<=len(root_ids)<=256 or len(set(map(identity,root_ids)))!=len(root_ids):raise ValueError('Invalid root filter')
+        if type(fill_unset) is not bool:raise ValueError('Expected a boolean')
+        with self._guard:
+            self._require_idle()
+            with self.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                marks=','.join('?' for _ in root_ids)
+                rules={r['id']:tuple(json.loads(r['excludes_json'])) for r in db.execute('SELECT id,excludes_json FROM library_roots WHERE enabled=1 AND id IN ('+marks+')',root_ids)}
+                if len(rules)!=len(root_ids):raise ValueError('Unknown registered root')
+                ShelfStore.replace_in_transaction(db,'root',root_ids,shelf_ids)
+                targets=[]
+                if fill_unset and shelf_ids:
+                    for row in db.execute("SELECT i.id,l.root_id,l.relative_path FROM items i JOIN item_locations m ON m.item_id=i.id JOIN library_locations l ON l.id=m.location_id WHERE l.status='present' AND l.root_id IN ("+marks+") AND NOT EXISTS(SELECT 1 FROM item_shelves sm WHERE sm.item_id=i.id)",root_ids):
+                        if not _excluded(row['relative_path'],rules[row['root_id']]):targets.append(row['id'])
+                    for start in range(0,len(targets),256):ShelfStore.replace_in_transaction(db,'item',targets[start:start+256],shelf_ids)
+        return {'root_ids':sorted(root_ids),'shelf_ids':sorted(shelf_ids),'updated':len(targets)}
+
     def set_root_shelf(self,root_id,shelf,fill_unset=False):
         if type(root_id) is not int or not 1<=root_id<=9223372036854775807:raise ValueError('Invalid root ID')
         if not isinstance(shelf,str) or len(shelf)>80:raise ValueError('Shelf must be 80 characters or less')

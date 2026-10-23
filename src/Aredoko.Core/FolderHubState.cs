@@ -62,7 +62,7 @@ public sealed record RegisteredRootRow(
             var count = row["present_count"] is JsonNode c ? c.GetValue<int>() : 0;
             var scanned = row["last_scanned_at"]?.GetValue<string>();
             var folderBooks = row["folder_books"] is JsonNode f && f.GetValueKind() == System.Text.Json.JsonValueKind.True;
-            var memberships=row["shelf_ids"]?.AsArray().Select(x=>x!.GetValue<long>()).ToArray()??[];ShelfProtocol.ValidateIds(memberships);
+            var memberships=row["shelf_ids"]?.AsArray().Select(x=>x!.GetValue<long>()).ToArray();if(memberships is not null)ShelfProtocol.ValidateIds(memberships);
             list.Add(new RegisteredRootRow(id, path, enabled, online, shelf, excludes, count, scanned, folderBooks, row["recursive"]?.GetValue<bool>()??true,row["favorite"]?.GetValue<bool>()??false,memberships));
         }
         return list;
@@ -90,6 +90,10 @@ public sealed class FolderSettingsDraft
     public BatchShelfMode ShelfMode { get; set; }
     public string SelectedExistingShelf { get; set; } = "";
     public string NewShelfName { get; set; } = "";
+    private long[]? selectedShelfIds;
+    public IReadOnlyList<long>? ShelfIdsToSave => selectedShelfIds?.ToArray();
+    public void SelectShelfIds(IReadOnlyList<long> ids){ShelfProtocol.ValidateIds(ids);selectedShelfIds=ids.Order().ToArray();}
+    public void ClearShelfIdSelection()=>selectedShelfIds=null;
     public bool FillUnset { get; set; }
     public string ExclusionsText { get; set; }
 
@@ -100,6 +104,7 @@ public sealed class FolderSettingsDraft
         targets = selectedTargets.ToArray();
         remainingIds = targets.Select(r => r.Id).ToList();
         Summary = SummarizeDefaultShelf(targets);
+        if(targets[0].ShelfIds is {} memberships && targets.All(root=>root.ShelfIds is {} ids&&ids.Order().SequenceEqual(memberships.Order())))SelectShelfIds(memberships);
         if (IsBatch)
         {
             ShelfMode = BatchShelfMode.KeepExisting;
@@ -119,8 +124,8 @@ public sealed class FolderSettingsDraft
     {
         if (roots.Count == 0) return new(false, "", "棚なし");
         var first = roots[0].DefaultShelf;
-        if (roots.All(r => r.DefaultShelf == first))
-            return new(false, first, first.Length == 0 ? "棚なし" : first);
+        if (roots.All(r => r.DefaultShelf == first && (r.ShelfIds is null || roots[0].ShelfIds is null || r.ShelfIds.Order().SequenceEqual(roots[0].ShelfIds!.Order()))))
+            return new(false, first, first.Length == 0 ? "棚なし" : first+(roots[0].ShelfIds is {Count:>1} ids?$" ほか{ids.Count-1}棚":""));
         return new(true, null, "複数の設定値");
     }
 
@@ -128,13 +133,14 @@ public sealed class FolderSettingsDraft
     {
         get
         {
+            if(selectedShelfIds is not null)return FillUnset&&selectedShelfIds.Length>0 || targets.Any(root=>root.ShelfIds is null || !root.ShelfIds.Order().SequenceEqual(selectedShelfIds));
             if (IsBatch) return ShelfMode != BatchShelfMode.KeepExisting;
             var current = targets[0].DefaultShelf;
             return ShelfMode switch
             {
                 BatchShelfMode.KeepExisting => false,
-                BatchShelfMode.ClearToNone => current.Length != 0,
-                BatchShelfMode.ExistingShelf => SelectedExistingShelf != current || FillUnset,
+                BatchShelfMode.ClearToNone => current.Length != 0 || targets[0].ShelfIds is {Count:>0},
+                BatchShelfMode.ExistingShelf => SelectedExistingShelf != current || FillUnset || targets[0].ShelfIds is {Count:>1},
                 BatchShelfMode.NewShelf => true,
                 _ => false
             };
@@ -148,7 +154,7 @@ public sealed class FolderSettingsDraft
     // Returns null when the shelf must NOT be modified (KeepExisting or unchanged single root without FillUnset).
     public string? ResolveShelfToSave()
     {
-        if (!IsShelfChanged) return null;
+        if (selectedShelfIds is not null || !IsShelfChanged) return null;
         return ShelfMode switch
         {
             BatchShelfMode.KeepExisting => null,

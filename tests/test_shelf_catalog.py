@@ -80,6 +80,34 @@ class ShelfCatalogTests(unittest.TestCase):
         self.catalog.unregister_root(self.root)
         self.assertTrue(all(row['item_count']==0 and row['representative'] is None for row in self.catalog.shelf_descriptors()))
 
+    def test_root_multi_shelf_fill_only_unassigned_visible_items(self):
+        for name in ('c.png','d.png'):(self.media/name).write_bytes(b'generated-only')
+        self.catalog.index.scan(self.root);self.catalog.sync_index();self.catalog.set_excludes(self.root,['d.png'])
+        result=self.catalog.set_root_shelves([self.root],[self.a,self.b],True)
+        self.assertEqual(result['updated'],1)
+        rows={row['title']:row for row in self.catalog.search()['items']}
+        self.assertEqual(rows['c.png']['shelf_ids'],[self.a,self.b])
+        self.assertEqual(self.catalog.get(self.ids[1])['shelf_ids'],[self.b])
+        with self.catalog.connect() as db:
+            hidden=db.execute("SELECT id FROM items WHERE title='d.png'").fetchone()[0]
+        self.assertEqual(self.catalog.get(hidden)['shelf_ids'],[])
+        self.assertEqual(self.catalog.registered_roots()[0]['shelf_ids'],[self.a,self.b])
+        (self.media/'e.png').write_bytes(b'generated-only');self.catalog.index.scan(self.root);self.catalog.sync_index()
+        self.assertEqual(next(row for row in self.catalog.search()['items'] if row['title']=='e.png')['shelf_ids'],[self.a,self.b])
+    def test_root_fill_failure_rolls_back_defaults_and_existing_metadata(self):
+        from unittest.mock import patch
+        from shelves import ShelfStore
+        (self.media/'c.png').write_bytes(b'generated-only');self.catalog.index.scan(self.root);self.catalog.sync_index()
+        original=ShelfStore.replace_in_transaction
+        def fail(db,entity,objects,shelves):
+            original(db,entity,objects,shelves)
+            if entity=='item':raise RuntimeError('injected fill failure')
+        with patch.object(ShelfStore,'replace_in_transaction',side_effect=fail),self.assertRaises(RuntimeError):self.catalog.set_root_shelves([self.root],[self.a],True)
+        self.assertEqual(self.catalog.registered_roots()[0]['shelf_ids'],[])
+        self.assertEqual(next(row for row in self.catalog.search()['items'] if row['title']=='c.png')['shelf_ids'],[])
+        with self.assertRaises(ValueError):self.catalog.set_root_shelves([self.root,99999],[self.a])
+        self.assertEqual(self.catalog.registered_roots()[0]['shelf_ids'],[])
+
     def test_scan_inherits_all_root_shelves_and_restart_preserves(self):
         self.catalog.change_shelf('assign',entity='root',object_ids=[self.root],shelf_ids=[self.a,self.b])
         (self.media/'c.png').write_bytes(b'generated-only fixture');self.catalog.index.scan(self.root);self.catalog.sync_index()

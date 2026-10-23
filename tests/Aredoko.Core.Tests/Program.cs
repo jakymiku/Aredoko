@@ -12,6 +12,7 @@ await RootFavoritesTests.Run(Check);
 await ResultNavigationTests.Run(Check);
 ResultBufferTests.Run(Check);
 NavigationHistoryTests.Run(Check);
+RootShelvesTests.Run(Check);
 await ResultWindowTests.Run(Check);
 var state=new EditorState("雨、青い夜,雨", "本棚",true,false);
 Check(state.ParsedTags.SequenceEqual(new[]{"雨","青い夜"}),"tag normalization");
