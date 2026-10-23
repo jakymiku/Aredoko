@@ -1,5 +1,10 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-24 latest restore review
+
+[Correction, checks and next work](restore-review-20261024.md): P5 remains PARTIAL; restore GUI/API/restart are not connected. Fixed corrupt-record rollback data preservation; related15 tests PASS. Review a821c07 further before P6. No shutdown.
+
+
 ## 2026-10-23 shelf/library display parity (latest small request)
 
 [Shared grid/list, size Flyout, realized-cell resize and shelf artwork](shelf-ui-20261023.md) implemented for the user’s follow-up. Rename/delete remain in the shelf action menu. Portable build0 errors/known3 warnings; native display UNRUN, no replay of shelf/backup/P3 exhausted caps. Installed Alpha/latest earlier frontend candidate remain unchanged. This is a bounded addition after the quota checkpoint, not a restart of broad development. Next roadmap work remains P5 safe restore switch; **no shutdown**.

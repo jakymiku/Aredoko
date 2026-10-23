@@ -420,6 +420,35 @@ class RestoreSwitchTests(unittest.TestCase):
         current_settings = json.loads((self.data_dir / LAUNCH_SETTINGS_FILE).read_text(encoding='utf-8'))
         self.assertEqual(current_settings, self.orig_settings)
 
+    def test_non_object_pending_rolls_back_from_valid_copy(self):
+        for raw in ('[]', 'null', '42', '"broken"'):
+            with self.subTest(raw=raw):
+                (self.data_dir / ROLLBACK_FILE).write_text(json.dumps(self.orig_settings), encoding='utf-8')
+                (self.data_dir / PENDING_FILE).write_text(raw, encoding='utf-8')
+                self.assertTrue(check_pending_restore(self.data_dir))
+                self.assertEqual(load_settings(self.data_dir), self.orig_settings)
+
+    def test_missing_recovery_information_preserves_evidence(self):
+        pending = self.data_dir / PENDING_FILE
+        pending.write_text('[]', encoding='utf-8')
+        before = (self.data_dir / LAUNCH_SETTINGS_FILE).read_bytes()
+        with self.assertRaises(RestoreSwitchError):
+            check_pending_restore(self.data_dir)
+        self.assertEqual(pending.read_text(encoding='utf-8'), '[]')
+        self.assertEqual((self.data_dir / LAUNCH_SETTINGS_FILE).read_bytes(), before)
+
+    def test_corrupt_rollback_does_not_replace_current_settings(self):
+        pending = self.data_dir / PENDING_FILE
+        pending.write_text('{"attempted": true}', encoding='utf-8')
+        rollback = self.data_dir / ROLLBACK_FILE
+        rollback.write_text('[]', encoding='utf-8')
+        before = (self.data_dir / LAUNCH_SETTINGS_FILE).read_bytes()
+        with self.assertRaises(RestoreSwitchError):
+            check_pending_restore(self.data_dir)
+        self.assertTrue(pending.exists())
+        self.assertTrue(rollback.exists())
+        self.assertEqual((self.data_dir / LAUNCH_SETTINGS_FILE).read_bytes(), before)
+
     def test_launch_exception_triggers_rollback(self):
         """Verify launch() exception handler triggers rollback if startup preflight fails."""
         staging = self._create_staging('staging_launch_exc')

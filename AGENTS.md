@@ -1,5 +1,10 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-24 latest restore review
+
+[Correction, checks and next work](docs/restore-review-20261024.md): P5 remains PARTIAL; restore GUI/API/restart are not connected. Fixed corrupt-record rollback data preservation; related15 tests PASS. Review a821c07 further before P6. No shutdown.
+
+
 ## 2026-10-23 P5 safe restore switch & failure rollback (latest)
 
 [Staging validation, atomic settings switch, and startup ready failure rollback](docs/restore-switch-20261023.md) implemented. `app/restore_jobs.py` validates/extracts backup ZIP into isolated staging; `app/restore_switch.py` moves verified staging into `restores/<id>`, updates `launch-settings.json` with rollback sentinel, and launcher `tools/launch_release.py` auto-commits on `ready` or rolls back on crash/failure. Restore-jobs20 PASS, switch12 PASS, storage-backup28 PASS, Core925 PASS, Portable build0 errors/known5 warnings (WUI1001×3, IL2104×2). Preserve backup/shelf/P3 caps, user data/Alpha unchanged. Next P6 optional runtime download / LD4b–LD6; **no shutdown**.

@@ -279,11 +279,21 @@ def rollback_restore_switch(data_dir, error=None):
         except Exception:
             pass
 
+    if not isinstance(pending_data, dict):
+        pending_data = {}
     previous_existed = pending_data.get('previous_settings_existed')
 
     if rollback_path.is_file():
+        plain_path(rollback_path)
+        rollback_text = rollback_path.read_text(encoding='utf-8-sig')
+        try:
+            rollback_settings = json.loads(rollback_text)
+        except (ValueError, UnicodeError) as error:
+            raise RestoreSwitchError('Invalid rollback settings; recovery evidence preserved') from error
+        if not isinstance(rollback_settings, dict):
+            raise RestoreSwitchError('Invalid rollback settings; recovery evidence preserved')
         tmp = data_path / f".{LAUNCH_SETTINGS_FILE}.tmp.{secrets.token_hex(8)}"
-        tmp.write_text(rollback_path.read_text(encoding='utf-8-sig'), encoding='utf-8')
+        tmp.write_text(rollback_text, encoding='utf-8')
         tmp.replace(launch_settings_path)
         rollback_path.unlink(missing_ok=True)
     elif previous_existed is False:
@@ -292,6 +302,9 @@ def rollback_restore_switch(data_dir, error=None):
         tmp = data_path / f".{LAUNCH_SETTINGS_FILE}.tmp.{secrets.token_hex(8)}"
         tmp.write_text(json.dumps(pending_data['previous_settings'], indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
         tmp.replace(launch_settings_path)
+
+    else:
+        raise RestoreSwitchError('No valid previous settings; recovery evidence preserved')
 
     receipt = {
         'restore_id': pending_data.get('restore_id'),
