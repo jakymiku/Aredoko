@@ -1,5 +1,9 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-24 sealed runtime catalog builder (latest)
+
+[Reproducible inventory-based draft catalog preparation](ai-acquisition.md): generated5 PASS, no source/runtime execution or network. Explicit publisher/revision/license/hosts required; no guessed production catalog and no automatic registry activation. Previous reuse implementationb47ec66. Next actual publisher/NOTICE/model-layout registration or remaining CPU distribution acceptance. Goal active/no shutdown, caps unchanged.
+
 ## 2026-10-24 repeat acquisition preserves existing versions (latest)
 
 [Verify/reuse exact published catalog without network or replacement](ai-acquisition.md): generated20 PASS; final capability HTTP1 PASS separately. Corrupt/extra/linked version remains untouched; explicit-only hash check and cancellation ordering retained. Next runtime-catalog preparation from verified pack; product registry empty. Native acquisition1/2, environment2/2, restore3/3; goal active/no shutdown.

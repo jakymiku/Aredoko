@@ -1,5 +1,15 @@
 # LD4b：任意AI環境の取得基盤（2026-10-24）
 
+## 2026-10-24 reproducible runtime catalog preparation (latest)
+
+Developer-only tools/build_ai_runtime_catalog.py prepares a draft catalog from one explicitly selected sealed pack. Full existing LD3 validation is reused; entries and hashes come from the verified inventory, including its marker, rather than hashing all PyTorch files again. Explicit HTTPS base/immutable revision/license/NOTICE link/allowed hosts are required, paths URL-escaped, exact inventory and normal-path rules retained. New output only, outside source pack, exclusive creation; no download/upload/selected interpreter execution/source edit/automatic product registry insertion. A failed output may remain as evidence and is not registered.
+
+Generated pack tests5 PASS/0.888s: all files/marker/checksums/source SHA+mtime, corrupt/unlisted rejection, URL escaping/host boundary, existing-output preservation/pack overlap and cancellation. No actual5GB pack read or licensing approval claimed. Source configuration and distribution provenance still require operator review; checksum inventory does not authenticate publisher or establish rights to all bundled dependencies. Runtime catalog can be hosted only after actual pack/NOTICE/public URL are ready, then its fingerprint plus app-owned validate_runtime must be registered in source.
+
+Preparation syntax (developer build, not user setup UI):
+`python tools/build_ai_runtime_catalog.py --runtime-root <sealed-pack> --output <new-catalog.json> --id <pack-id> --revision <40-or-64-hex> --base-url <fixed-HTTPS-directory> --license <audited-license-summary> --license-url <official-NOTICE-URL> --allow-host <publisher-host>`
+Additional redirect/CDN hosts must be explicitly listed with repeated --allow-host. Do not add guessed endpoints or bypass source checks to make a transfer pass. Model catalogs need their own model-layout validator/marker/NOTICE contract; this tool intentionally does not infer one.
+
 ## 2026-10-24 explicit repeat acquisition reuses verified version (latest)
 
 An explicit same-catalog acquisition after a previous backend session verifies the exact existing version's inventory, sizes, all SHA and owned validator in place, then acknowledges through the same cancel/publication gate. Returns reused=true/root without network or replacement. Corrupt/unlisted/linked versions fail and remain untouched; there is no silent repair. Cancellation before acknowledgement cannot turn into later success, and the old existing directory is retained. This full verification occurs only on explicit acquisition, not startup/status/catalog GET. Received/verified counts include available reused bytes, not a claim of newly transferred network bytes.
