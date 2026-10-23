@@ -21,7 +21,7 @@ class DownloadTests(unittest.TestCase):
         self.jobs.thread.join(5);self.assertFalse(self.jobs.thread.is_alive());return self.jobs.snapshot()
     def test_trusted_summary_and_exact_completion(self):
         summary=self.jobs.catalogs()['catalogs'][0]
-        self.assertEqual(summary['bytes'],len(self.content));self.assertEqual(summary['license'],'MIT');self.assertNotIn('url',summary)
+        self.assertEqual(summary['bytes'],len(self.content));self.assertEqual(summary['license'],'MIT');self.assertNotIn('url',summary);self.assertEqual(summary['source_hosts'],['127.0.0.1'])
         first=self.jobs.start(self.body);value=self.finish()
         self.assertEqual(value['state'],'complete');self.assertTrue(value['published'])
         self.assertEqual(value['bytes_verified'],len(self.content))

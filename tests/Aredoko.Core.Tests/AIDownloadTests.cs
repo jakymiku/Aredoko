@@ -6,7 +6,7 @@ internal static class AIDownloadTests
     public static async Task Run(Action<bool,string> check)
     {
         var id=new string('a',32);var digest=new string('b',64);var count=0;var rates=new List<long?>();
-        var catalog=new JsonObject{["catalog_id"]=digest,["name"]="generated-runtime",["kind"]="runtime",["revision"]=new string('c',40),["bytes"]=128,["license"]="MIT",["license_url"]="https://example.org/LICENSE"};
+        var catalog=new JsonObject{["catalog_id"]=digest,["name"]="generated-runtime",["kind"]="runtime",["revision"]=new string('c',40),["bytes"]=128,["license"]="MIT",["license_url"]="https://example.org/LICENSE",["source_hosts"]=new JsonArray("example.org")};
         var catalogs=new JsonObject{["download_supported"]=true,["catalogs"]=new JsonArray(catalog)};
         var job=new JsonObject{["job_id"]=id,["catalog_id"]=digest,["state"]="downloading",["bytes_received"]=64,["bytes_verified"]=32,["bytes_total"]=128,["published"]=false,["result"]=null,["message"]="取得中"};
         using var handler=new Stub(async request=>
@@ -25,7 +25,7 @@ internal static class AIDownloadTests
             return new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(route.EndsWith("catalog")?catalogs.ToJsonString():job.ToJsonString())};
         });
         using var http=new HttpClient(handler){BaseAddress=new Uri("http://127.0.0.1:8769/")};var client=new AIDownloadClient(http);
-        var available=await client.CatalogsAsync();check(available.Count==1&&available[0].Bytes==128&&available[0].License=="MIT","catalog retains capacity and license before consent");
+        var available=await client.CatalogsAsync();check(available.Count==1&&available[0].Bytes==128&&available[0].License=="MIT"&&available[0].SourceHosts.SequenceEqual(new[]{"example.org"}),"catalog retains capacity and license before consent");
         var progress=await client.JobAsync();check(progress.Active&&!progress.Published&&progress.BytesReceived==64&&progress.BytesVerified==32,"received and verified bytes are distinct before publication");
         await client.StartAsync(digest);await client.StartAsync(digest,6000000);await client.CancelAsync(id);
         check(rates.Count==2&&rates[0] is null&&rates[1]==6000000,"download defaults unlimited; optional rate is explicit");
@@ -43,6 +43,9 @@ internal static class AIDownloadTests
         job["state"]="downloading";job["published"]=false;job["cancel_accepted"]=false;check(AIDownloadJob.Parse(job.ToJsonString()).CancelAccepted==false,"cancel refusal preserved as explicit acknowledgement");
         catalog["license_url"]="file:///local/license";Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"catalog cannot expose local license link");catalog["license_url"]="https://example.org/LICENSE";
         catalogs["catalogs"]!.AsArray().Add(catalog.DeepClone());Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"duplicate trusted catalog rejected");catalogs["catalogs"]!.AsArray().RemoveAt(1);
+        catalog["source_hosts"]=new JsonArray("example.org","example.org");Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"duplicate acquisition source host rejected");
+        catalog["source_hosts"]=new JsonArray("https://example.org/private");Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"source display accepts hosts only, never secret URLs");
+        catalog["source_hosts"]=new JsonArray("example.org");
         catalog["bytes"]=-1;Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"negative catalog size rejected");catalog["bytes"]=128;
         catalogs["catalogs"]=new JsonArray();catalogs["download_supported"]=false;check(AIDownloadCatalog.ParseList(catalogs.ToJsonString()).Count==0,"empty production registry offers no invented download");
     }

@@ -80,10 +80,12 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
     if bytes_per_second is not None and (type(bytes_per_second) is not int or bytes_per_second<=0):raise ValueError('Invalid download speed limit')
     root=Path(os.path.abspath(root));storage_parent(root/'marker');plain_path(root,directory=True)
     stage=root/('.acquire-'+catalog.fingerprint);target=root/(catalog.key+'-'+catalog.fingerprint[:24])
+    # The catalog is immutable: do not rescan every entry for each 64KiB report.
+    total_bytes=sum(item.size for item in catalog.entries)
     def check():
         if cancelled():raise InterruptedError('Acquisition cancelled')
     def report(stage_name,done,verified):
-        if progress:progress({'stage':stage_name,'bytes_received':done,'bytes_verified':verified,'bytes_total':sum(a.size for a in catalog.entries)})
+        if progress:progress({'stage':stage_name,'bytes_received':done,'bytes_verified':verified,'bytes_total':total_bytes})
     with storage_lease(root/('acquire-'+catalog.fingerprint)):
         check()
         if target.exists() or target.is_symlink():raise FileExistsError('Published version already exists')

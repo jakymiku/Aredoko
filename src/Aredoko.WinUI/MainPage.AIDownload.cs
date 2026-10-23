@@ -70,7 +70,7 @@ public sealed partial class MainPage
                 consent.IsChecked=false;
                 if(Selected() is {} selected)
                 {
-                    information.Text=$"容量 {selected.Bytes/1000000d:N1} MB\n{selected.License}\nバージョン {selected.Revision}";
+                    information.Text=$"容量 {selected.Bytes/1000000d:N1} MB\n取得元 {string.Join(", ",selected.SourceHosts)}\n{selected.License}\nバージョン {selected.Revision}";
                     license.NavigateUri=selected.LicenseUri;license.Visibility=Visibility.Visible;
                 }
                 else license.Visibility=Visibility.Collapsed;

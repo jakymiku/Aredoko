@@ -1,5 +1,9 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-24 acquisition sources and scaling (latest)
+
+[Source-host disclosure and constant-cost progress totals](ai-acquisition.md): Python16/Core974 PASS/Portable0errors. Earlier acquisition Core973 count corrected to972 (output line count was used); native12 checks/4 PNG/exit0 evidence unchanged. No GUI replay; next verify/reuse existing published version without replacement. Catalog empty, caps unchanged, goal active/no shutdown.
+
 ## 2026-10-24 native acquisition evidence (latest)
 
 [Generated native Start/cancel/HTTP Range resume/publication and limits](ai-acquisition.md):12 checks PASS/4 PNG viewed/owned exit0, source/settings/media preserved. Implementation7705e53. Acquisition1/2 consumed (no need repeat); environment2/2 and restore3/3 stay exhausted. Product catalog empty/real download not enabled, goal active/no shutdown. Next trusted source provenance and transfer scaling.

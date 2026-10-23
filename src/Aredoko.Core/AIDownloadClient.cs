@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 
 namespace Aredoko.Core;
 
-public sealed record AIDownloadCatalog(string Id,string Name,string Kind,string Revision,long Bytes,string License,Uri LicenseUri)
+public sealed record AIDownloadCatalog(string Id,string Name,string Kind,string Revision,long Bytes,string License,Uri LicenseUri,IReadOnlyList<string> SourceHosts)
 {
     internal static string Digest(string? value,int length=64)
     {
@@ -30,7 +30,15 @@ public sealed record AIDownloadCatalog(string Id,string Name,string Kind,string 
             var size=row.GetProperty("bytes").GetInt64();if(size<0||size>64L*1024*1024*1024)throw new InvalidDataException("Invalid acquisition size");
             var link=Text(row,"license_url",8192);
             if(!Uri.TryCreate(link,UriKind.Absolute,out var uri)||uri.Scheme!="https"||string.IsNullOrEmpty(uri.Host)||!string.IsNullOrEmpty(uri.UserInfo)||!string.IsNullOrEmpty(uri.Fragment))throw new InvalidDataException("Invalid acquisition license link");
-            result.Add(new(id,name,kind,revision,size,Text(row,"license",128),uri));
+            var hosts=new List<string>();
+            foreach(var value in row.GetProperty("source_hosts").EnumerateArray())
+            {
+                var host=value.GetString();
+                if(host is null||host.Length is <1 or >253||host.Any(c=>c is not (>= 'a' and <= 'z') and not (>= '0' and <= '9') and not '.' and not '-')||hosts.Contains(host)||hosts.Count>=16)throw new InvalidDataException("Invalid acquisition source hosts");
+                hosts.Add(host);
+            }
+            if(hosts.Count==0)throw new InvalidDataException("Missing acquisition source hosts");
+            result.Add(new(id,name,kind,revision,size,Text(row,"license",128),uri,hosts.AsReadOnly()));
         }
         if(root.GetProperty("download_supported").GetBoolean()!=(result.Count>0))throw new InvalidDataException("Inconsistent acquisition availability");
         return result.AsReadOnly();

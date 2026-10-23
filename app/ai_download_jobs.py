@@ -16,7 +16,7 @@ class AIDownloadJobs:
         self.lock=threading.RLock();self.closed=False;self.thread=None;self.committed=False;self.cancelled=threading.Event()
         self.value={'job_id':None,'state':'idle','catalog_id':None,'bytes_received':0,'bytes_verified':0,'bytes_total':None,'published':False,'result':None,'error_code':None,'message':''}
     def catalogs(self):
-        return {'download_supported':bool(self.specs),'catalogs':[{'catalog_id':c.fingerprint,'name':c.key,'kind':c.kind,'revision':c.revision,'bytes':sum(a.size for a in c.entries),'license':c.license,'license_url':c.license_url} for c,_ in self.specs.values()]}
+        return {'download_supported':bool(self.specs),'catalogs':[{'catalog_id':c.fingerprint,'name':c.key,'kind':c.kind,'revision':c.revision,'bytes':sum(a.size for a in c.entries),'license':c.license,'license_url':c.license_url,'source_hosts':list(c.hosts)} for c,_ in self.specs.values()]}
     def snapshot(self):
         with self.lock:return deepcopy(self.value)
     def start(self,body):
