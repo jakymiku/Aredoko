@@ -1,5 +1,10 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-23 P5 authenticated live backup (latest)
+
+[Owned start/status/cancel API and evidence](live-backup-20261023.md) uses real writer fence4ecb28b. HTTP4/jobs5/live8 PASS separately. Strict auth/duplicate JSON, immutable viewer snapshot data, configured profiles only, responsive read/status/cancel and shutdown ownership. Restore API explicitly unavailable. Core/UI, previous-choice persistence, restart-safe restore and performance/native acceptance remain; no claim P5 complete. Current quota stop: safe commit/push/handoff, **no shutdown**.
+
+
 ## 2026-10-23 P5 coordinated writer fence (latest)
 
 [Catalog/vector/settings publication fence and cancellation evidence](live-backup-20261023.md) now connected; catalog guard precedes pause, read paths retained, runtime cancel remains responsive while publication waits. Writer5/setup15/settings13/scope12/results21/live7 PASS separately. HTTP/UI/persistent choices and restart-safe restore still TODO; no production nullcontext. P5A implementation8aa687d, this unit follows it. Preserve native3/3 caps/old Alpha/source-media boundaries; current quota stopping instruction is commit/push/handoff with **no shutdown**.

@@ -1,7 +1,7 @@
 """Online capture primitive. Caller MUST quiesce every logical writer owner.
 
-No HTTP activation yet: the production job/config/index admission fence is a
-separate integration gate. Media/runtime/model/thumbnail files are never read.
+Production callers use the shared writer fence. Media/runtime/model/thumbnail
+files are never read; frontend settings may be supplied as validated bytes.
 """
 from contextlib import ExitStack,closing
 from dataclasses import dataclass
@@ -22,9 +22,12 @@ class BackupSelection:
 
 
 def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=None,viewer_settings=None,
-                 profiles=None,extra_profiles=(),tagger_profiles=(),max_bytes=DEFAULT_MAX_BYTES,
+                 profiles=None,extra_profiles=(),tagger_profiles=(),viewer_data=None,max_bytes=DEFAULT_MAX_BYTES,
                  cancelled=None,progress=None,publish=None):
     if not isinstance(selection,BackupSelection) or not callable(quiesce):raise RecoveryError('Explicit writer coordination required')
+    if viewer_data is not None:
+        if viewer_settings is not None or not isinstance(viewer_data,bytes):raise RecoveryError('Invalid viewer snapshot')
+        _configuration('viewer_settings',viewer_data)
     limit=_budget(max_bytes);source=plain_path(catalog.path);output=plain_path(Path(os.path.abspath(output)),missing=True,directory=True)
     if output.exists():raise RecoveryError('Output must be a new directory')
     parent=plain_path(output.parent,directory=True)
@@ -45,6 +48,7 @@ def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=N
                 for role,path,relative,budget in [('ai_settings',settings,'settings/ai-settings.json',16384),('viewer_settings',viewer_settings,'settings/viewer-settings.json',2048)]:
                     if path is not None:
                         data=_read_small(path,budget);_configuration(role,data);configs.append((relative,data,role));config_sources.append((path,data,budget))
+                if viewer_data is not None:configs.append(('settings/viewer-settings.json',viewer_data,'viewer_settings'))
                 directory_profiles=_profiles(profiles)
                 for path in [*directory_profiles,*map(plain_path,extra_profiles)]:
                     data=_read_small(path,16384);_configuration('profile',data);configs.append(('profiles/'+path.name,data,'profile'));config_sources.append((path,data,16384))

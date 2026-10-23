@@ -5,9 +5,10 @@ or live path switch is performed here.
 """
 from copy import deepcopy
 from pathlib import Path
-import re,secrets,threading
+import json,re,secrets,threading
 from live_backup import capture_live,BackupSelection
 from storage_lease import StorageBusyError
+from storage_backup import _configuration
 
 ACTIVE={'waiting','capturing','packing','publishing','cancelling'}
 ID=re.compile(r'[0-9a-f]{32}\Z')
@@ -31,18 +32,23 @@ class BackupJobs:
                 if job_id!=self.value['job_id']:raise KeyError('Backup job is no longer current')
             return deepcopy(self.value)
     def start(self,body):
-        if not isinstance(body,dict) or set(body)!={'consent','output','selection'} or body['consent'] is not True:raise ValueError('Explicit backup consent and destination required')
+        if not isinstance(body,dict) or not {'consent','output','selection'}<=set(body) or set(body)-{'consent','output','selection','viewer_settings'} or body['consent'] is not True:raise ValueError('Explicit backup consent and destination required')
         destination=body['output'];selected=body['selection']
         if not isinstance(destination,str) or not 1<=len(destination)<=4096 or not Path(destination).is_absolute() or any(ord(char)<32 for char in destination):raise ValueError('Select an absolute backup directory')
         if not isinstance(selected,dict) or set(selected)!={'settings','history','reader_progress','vectors'}:raise ValueError('Invalid backup selection')
         selection=BackupSelection(**selected)
+        viewer_data=None
+        if 'viewer_settings' in body:
+            if not selection.settings or not isinstance(body['viewer_settings'],dict):raise ValueError('Invalid viewer snapshot')
+            viewer_data=json.dumps(body['viewer_settings'],ensure_ascii=False,allow_nan=False).encode('utf-8')
+            _configuration('viewer_settings',viewer_data)
         with self.lock:
             if self.closed:raise BackupBusy('Backup owner is closing')
             if self.thread is not None and self.thread.is_alive():raise BackupBusy('Backup is already running')
             self.cancelled=threading.Event();self.committed=False
             self.value.update(job_id=secrets.token_hex(16),state='waiting',stage='waiting',published=False,cancel_requested=False,
                               bytes_done=0,bytes_total=None,output=destination,selection=dict(selected),result=None,error_code=None,message='バックアップの開始を待っています。')
-            self.thread=threading.Thread(target=self._run,args=(Path(destination),selection),name='aredoko-backup',daemon=True)
+            self.thread=threading.Thread(target=self._run,args=(Path(destination),selection,viewer_data),name='aredoko-backup',daemon=True)
             try:self.thread.start()
             except Exception as error:
                 self.value.update(state='failed',stage='failed',error_code='worker_start_failed',message='バックアップを開始できませんでした。')
@@ -59,10 +65,11 @@ class BackupJobs:
             if self.closed or self.cancelled.is_set():raise InterruptedError('Backup cancelled before publication')
             self.value.update(state='publishing',stage='publishing',message='バックアップを確定しています。')
             operation();self.committed=True;self.value['published']=True
-    def _run(self,destination,selection):
+    def _run(self,destination,selection,viewer_data):
         try:
             result=self.capture(self.catalog,destination,quiesce=self.quiesce,selection=selection,
-                                cancelled=self.cancelled.is_set,progress=self._progress,publish=self._publish,**self.configuration())
+                                cancelled=self.cancelled.is_set,progress=self._progress,publish=self._publish,
+                                **self.configuration(),**({'viewer_data':viewer_data} if viewer_data is not None else {}))
             with self.lock:self.value.update(state='complete',stage='complete',result=result,message='バックアップを作成しました。')
         except Exception as error:
             with self.lock:

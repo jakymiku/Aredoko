@@ -1,3 +1,13 @@
+# P5C authenticated backup API（2026-10-23・最新）
+
+P5B `4ecb28b`の実fenceを使用してGET `/api/library/backup`、POST `/api/library/backup/start`・`cancel`を接続した。session/Host/Origin/body上限/重複JSON/厳密fieldsを保持。startは202、同時実行と古い取消は409。進捗・結果・初期選択を返す。既存出力は変更せず失敗する。production終了はbackup ownerをDB/AIより先にcloseし、受理した取消やclose後の公開を禁止する。
+
+APIの設定入力は最大2048bytesの検証済みviewer JSONのみで、HTTPから任意の設定パスを読み取らせない。バックエンドの設定/profileは実際に設定された場所だけを取得する。手動指定tagger profileは同梱対象。viewer JSONを渡さなかった場合はmanifestでviewer設定の欠落を明記する。runtime/Python/model配置はbackup対象外。復元APIは未公開（restore_supported=false）。
+
+確認：新規HTTP4 PASS/3.081s（実capture→restore、設定snapshot、認証・Origin・duplicate/size/field拒否、検索/status/取消の応答、既存先保全/設定省略）、owned jobs5 PASS/0.473s、live capture8 PASS/1.792s（外部設定変更で公開拒否を追加）。生成DB/loopbackのみ。Core/WinUI/UI選択永続化/復元切替は次の小単位、P5全体はPARTIAL。以前の「HTTP未接続」はこの節で更新される。通常DB/Alpha/元メディアは未変更。シャットダウンなし。
+
+---
+
 # P5B shared writer fence（2026-10-23・最新）
 
 Catalog・VectorStore・AI設定・runtime設定の公開を共有WriterFenceへ接続。captureはcatalog guard→pauseの順で取得し、既存writer終了を待ち、新規writerをsnapshot解放まで待機させる。読み取りは拒否しない。設定とprofile一覧はcopy後にも再確認し、外部変更時は完成bundleを公開しない。SQLite commit/close後にwriter tokenを解放する。runtime設定はfenceを先に取得してから所有jobのpublish lockへ入るため、snapshot待ちでも取消/closeを妨げない。

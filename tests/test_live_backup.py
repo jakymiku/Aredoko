@@ -71,6 +71,17 @@ class LiveBackupTests(unittest.TestCase):
         self.assertEqual((self.base/'with-settings/settings/viewer-settings.json').read_bytes(),raw)
         capture_live(self.cat,self.base/'without-settings',quiesce=self.quiesce,viewer_settings=settings,selection=BackupSelection(settings=False))
         self.assertFalse((self.base/'without-settings/settings').exists())
+    def test_external_settings_change_during_capture_rejects_publication(self):
+        settings=self.base/'viewer.json';settings.write_bytes(b'{"version":1,"wheel_up_advances":false}')
+        changed=[]
+        def progress(value):
+            if value['stage']=='capturing' and value['bytes_total'] is not None and not changed:
+                changed.append(True);settings.write_bytes(b'{"version":1,"wheel_up_advances":true}')
+        with self.assertRaisesRegex(RecoveryError,'Settings changed'):
+            capture_live(self.cat,self.base/'changed',quiesce=self.quiesce,viewer_settings=settings,progress=progress)
+        self.assertFalse((self.base/'changed').exists());self.assertEqual(list(self.base.glob('.aredoko-capture-*')),[])
+        self.assertEqual(self.cat.get(self.item)['tags'],['before'])
+
     def test_existing_output_missing_coordination_and_invalid_selection_are_rejected(self):
         with self.assertRaises(RecoveryError):BackupSelection(history=1)
         with self.assertRaises(RecoveryError):capture_live(self.cat,self.base/'bad',quiesce=None)

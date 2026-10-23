@@ -39,6 +39,7 @@ from storage_lease import storage_lease,storage_parent
 from runtime_paths import worker_python, bind_runtime
 from ai_runtime_preferences import AIRuntimePreferences, read_preferences
 from ai_setup_jobs import AISetupJobs, SetupBusy
+from backup_jobs import BackupJobs,BackupBusy
 from ai_runtime import object_pairs
 from animation_sessions import AnimationSessions, AnimationBusy, AnimationGone, MIME as ANIMATION_MIME
 from image_animations import AnimationUnavailable
@@ -105,7 +106,7 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True,*,ai_p
         return SearchIntent(LayaProcess(worker_python(repo,ai_python),laya_model_path(repo,models_root=models_root),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=()):
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
@@ -120,6 +121,14 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
     setup.writer_fence=catalog.writer_fence
     setup_jobs=AISetupJobs(setup)
+    def backup_configuration():
+        # Only explicitly configured app-owned profile/settings paths. No media
+        # discovery and no arbitrary path supplied by the HTTP caller.
+        folder=profiles.folder if profiles.folder.exists() else None
+        extra=() if profiles.startup_path is None or folder is not None and profiles.startup_path.parent==folder else (profiles.startup_path,)
+        return {'settings':profiles.path if profiles.path.exists() else None,'profiles':folder,
+                'extra_profiles':extra,'tagger_profiles':tagger_profile_paths}
+    backup_jobs=BackupJobs(catalog,quiesce=catalog.writer_fence.pause,configuration=backup_configuration)
     animations=AnimationSessions(previews)
     thumbnails=ThumbnailCache(previews)
     def result_provider(conditions, consume, cancelled):
@@ -456,6 +465,10 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         return self.send(404,{'error':'Preview unavailable'})
                     except ValueError:
                         return self.send(400,{'error':'Invalid audio range request'})
+                if path=='/api/library/backup':
+                    if urlparse(self.path).query:return self.send(400,{'error':'Invalid backup query'})
+                    return self.send(200,{**backup_jobs.snapshot(),'backup_supported':True,'restore_supported':False,
+                        'default_selection':{'settings':True,'history':True,'reader_progress':True,'vectors':False}})
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
                 if path=='/api/library/ai/setup':return self.send(200,{**setup.snapshot(),'selection_api_supported':True,'job':setup_jobs.snapshot()})
                 if path=='/api/library/ai/setup/job':return self.send(200,setup_jobs.snapshot())
@@ -508,7 +521,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves')
                 body=json.loads(self.rfile.read(length),**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
                 if self.path.startswith('/api/library/results/'):
@@ -553,6 +566,16 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except (PreviewBusyError,AnimationBusy):return self.send(503,{'error':'Animation decoder busy'})
                     except (PreviewUnavailable,AnimationUnavailable,OSError,EOFError):return self.send(404,{'error':'Animation unavailable'})
                     except (ValueError,TypeError):return self.send(400,{'error':'Invalid animation request'})
+                if self.path.startswith('/api/library/backup/'):
+                    try:
+                        if self.path=='/api/library/backup/start':return self.send(202,backup_jobs.start(body))
+                        if self.path=='/api/library/backup/cancel':
+                            if set(body)!={'job_id'}:raise ValueError('Invalid backup cancel fields')
+                            return self.send(200,backup_jobs.cancel(body['job_id']))
+                        return self.send(404,{'error':'Not found'})
+                    except BackupBusy:return self.send(409,{'error':'バックアップを開始できません。現在の処理を確認してください。','job':backup_jobs.snapshot()})
+                    except KeyError:return self.send(409,{'error':'現在のバックアップと一致しません。'})
+                    except (ValueError,TypeError):return self.send(400,{'error':'バックアップの保存先と選択内容を確認してください。'})
                 if self.path=='/api/library/ai/setup/select':
                     try:return self.send(202,setup_jobs.start(body))
                     except SetupBusy:return self.send(409,{'error':'AI環境の確認を開始できません。現在の状態を確認してください。','job':setup_jobs.snapshot()})
@@ -801,6 +824,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     Handler.thumbnails=thumbnails
     Handler.results=results
     Handler.animations=animations
+    Handler.backup_jobs=backup_jobs
     Handler.setup_jobs=setup_jobs
     return Handler
 
@@ -850,11 +874,12 @@ def _serve(args):
         intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**runtime)
         resources.callback(intent.close)
         tagger=create_tagger(ai,args.tagger_profile,**runtime);resources.callback(tagger.close)
-        handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences)
+        handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else ())
         resources.callback(handler.setup_jobs.close)
         resources.callback(handler.animations.close)
         resources.callback(handler.results.close)
         resources.callback(handler.thumbnails.close)
+        resources.callback(handler.backup_jobs.close)
         server=ThreadingHTTPServer(('127.0.0.1',args.port),handler)
         resources.callback(server.server_close)
         if args.exit_on_stdin_close:
