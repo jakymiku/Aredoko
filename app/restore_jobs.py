@@ -403,10 +403,12 @@ class RestoreBusy(RuntimeError):
 
 class RestoreStagingJobs:
     """One owned preparation, with no HTTP ability to choose staging or switch DBs."""
-    def __init__(self, base):
+    def __init__(self, base, *, handoff=None):
         self.manager = RestoreJobManager(base)
         self.lock = threading.RLock()
         self.current = None
+        self.handoff = handoff
+        self.restart_requested = False
         self.closed = False
 
     def snapshot(self):
@@ -417,7 +419,7 @@ class RestoreStagingJobs:
             value.pop('manifest', None)
             if value.get('error'):
                 value['error'] = 'restore_validation_failed'
-            return {**value, 'staging_supported': True, 'switch_supported': False}
+            return {**value, 'staging_supported': True, 'switch_supported': self.handoff is not None, 'restart_requested': self.restart_requested}
 
     def start(self, body):
         if not isinstance(body, dict) or set(body) != {'consent', 'source', 'without_vectors'} or body['consent'] is not True or type(body['without_vectors']) is not bool:
@@ -426,7 +428,7 @@ class RestoreStagingJobs:
         if not isinstance(source, str) or not 1 <= len(source) <= 4096 or not Path(source).is_absolute() or any(ord(c) < 32 for c in source):
             raise ValueError('Select an absolute backup path')
         with self.lock:
-            if self.closed or self.current and (self.current._thread.is_alive() or self.current.state == 'completed'):
+            if self.closed or self.restart_requested or self.current and (self.current._thread.is_alive() or self.current.state == 'completed'):
                 raise RestoreBusy('A restore preparation already exists')
             # A failed/cancelled worker has stopped before its record is released.
             self.manager._jobs.clear()
@@ -451,7 +453,7 @@ class RestoreStagingJobs:
             job = self.current
             if job is None or job.job_id != body['job_id']:
                 raise KeyError('Restore job changed')
-            if job._thread.is_alive() or job.state in ACTIVE_STATES:
+            if self.restart_requested or job._thread.is_alive() or job.state in ACTIVE_STATES:
                 raise RestoreBusy('Wait for the restore worker to stop')
             if job._staging_identity is not None:
                 _remove_owned(job.staging_path, job._staging_identity)
@@ -459,6 +461,18 @@ class RestoreStagingJobs:
                     raise RestoreBusy('Staging cleanup was not safe or could not finish')
             self.current = None
             self.manager._jobs.clear()
+            return self.snapshot()
+
+    def request_restart(self, body):
+        if not isinstance(body,dict) or set(body)!={'job_id','consent'} or body['consent'] is not True:
+            raise ValueError('Explicit restore restart consent required')
+        self.manager.validate_id(body['job_id'])
+        with self.lock:
+            if self.closed or self.handoff is None or self.restart_requested:raise RestoreBusy('Owned restore restart unavailable')
+            if self.current is None or body['job_id']!=self.current.job_id:raise KeyError('Restore job changed')
+            try:self.handoff.publish(self.current)
+            except (ValueError,OSError,RuntimeError) as error:raise RestoreBusy('Restore handoff could not be published') from error
+            self.restart_requested=True
             return self.snapshot()
 
     def close(self, timeout=10):

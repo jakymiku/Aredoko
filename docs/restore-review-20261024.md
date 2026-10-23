@@ -1,5 +1,14 @@
 # Restore review follow-up
 
+## 2026-10-24 owned restore handoff continuation
+
+Added per-launch restore request/closure receipts in `app/restore_handoff.py`. Authenticated `/api/library/restore/restart` requires explicit consent/current completed owned job, freezes discard/replacement, and publishes only an owned staging reference. Enabled only when Portable launcher supplied session directory (default launch-settings path). Backend emits closure proof only after its resource ExitStack succeeds; job close timeout prevents proof. Launcher requires both owned child exit codes0 plus proof and old catalog kernel lease before switching, then rereads settings and relaunches under the same launcher lease. Only the first launch emits the original bootstrap ready signal. No GUI hookup yet; backup.restore_supported remains false. Existing startup rollback remains.
+
+Evidence: restore HTTP3 PASS/2.510s; switch22 PASS/8.461s; lifecycle10 PASS/16.016s. Handoff first6 had5PASS/1 wrong exception expectation (StoragePathError, not FileNotFoundError); corrected6 PASS then added real generated backend test: final7 PASS/2.238s. This covers authenticated staging/restart request, actual stdin-owned backend normal exit, closure proof, released catalog lock and cutover, plus simulated frontend exit and owner-loop reuse. Does NOT prove native frontend closure/relaunch/ready, GUI dirty handling or packaged acceptance. No GUI/GPU test performed, no installed Alpha or normal user DB changed.
+
+Next: Core RestoreClient restart capability/request + WinUI settings selection/progress/cancel/discard/explicit restart using existing dirty-transition guard. GUI/GPU tests require notifying/asking user first per current goal. P5 partial, do not skip to P6 or mark goal complete. No shutdown. Active goal continues; commit boundary is a resumable checkpoint, not quota exhaustion.
+
+
 ## 2026-10-24 継続作業の終了チェックポイント
 
 実装HEAD `1ca11d4`。開始 `2e416eb` から5単位を継続実装。利用枠used88%で大きな作業を止め、保存・確認・引き継ぎへ移行。シャットダウンなし。

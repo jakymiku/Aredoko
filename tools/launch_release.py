@@ -148,7 +148,7 @@ def _stop_owned(process, graceful=False, timeout=8):
             process.kill();process.wait(timeout=5)
 
 
-def run_session(backend_command, app_command, *, port, instance, logs, cwd, env, startup_timeout=20, app_factory=None, progress=None, require_ready=False, on_ready=None, frontend_timeout=60, data=None):
+def run_session(backend_command, app_command, *, port, instance, logs, cwd, env, startup_timeout=20, app_factory=None, progress=None, require_ready=False, on_ready=None, frontend_timeout=60, data=None, restore_handoff=None):
     """Launch only owned children, and never attach to another service on a port."""
     # This advisory check provides a clear error; the per-launch session ID is
     # the race-safe proof that the listening server is ours.
@@ -218,6 +218,7 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
                     if app is not None and hasattr(app, 'close'):app.close()
             finally:_stop_owned(backend, graceful=True)
     if backend.returncode:raise AppSessionError('Backend did not exit cleanly; see backend-error.log')
+    if restore_handoff is not None:return restore_handoff.finish(effective_data,backend,app)
 
 
 def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full=False, preferences_path=None):
@@ -235,47 +236,62 @@ def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full
         if check_pending_restore(data):
             settings = load_settings(data, preferences_path)
             validate_writable_locations(settings)
-        instance = secrets.token_hex(16)
-        logs = data / 'logs' / (time.strftime('%Y%m%d-%H%M%S') + '-' + instance)
-        storage_parent(logs / 'launcher.log');plain_path(logs, directory=True)
-        values = {'database': str(data / 'catalog.sqlite'), 'ai_python': str(root / 'runtime/python/python.exe'),
-                  'models_root': str(data / 'models'), 'ai_settings': str(data / 'settings.json'),
-                  'ai_profiles_dir': str(data / 'ai-profiles'), **settings}
-        from ai_runtime_preferences import runtime_python
-        values['ai_python']=str(runtime_python(settings, values['ai_python'], data/'unavailable-ai-runtime/python.exe'))
-        backend = [str(root / 'runtime/python/python.exe'), '-B', '-u', str(root / 'backend/app/production_server.py'),
-                   '--instance-id', instance, '--exit-on-stdin-close', '--ai-ranking', values.get('ai_ranking', 'mean-rrf')]
-        for key, option in PATH_OPTIONS.items():
-            if key in values:backend += [option, values[key]]
-        backend += ['--runtime-preferences', str(preferences_path if preferences_path is not None else data/'launch-settings.json')]
-        app = ['--ui-theme', values.get('ui_theme', 'system'),
-               '--viewer-settings', values.get('viewer_settings', str(data / 'viewer-settings.json'))]
-        try:
-            from startup_validation import startup_preflight
-            manifest = startup_preflight(root, data / 'release-validation',
-                lambda: preflight(root, progress=progress), progress=progress, force_full=force_full)
-            if progress is not None:progress.check_cancelled()
-            portable = manifest.get('frontend_activation') == 'portable'
-            if startup_pipe is not None and not portable:raise ValueError('The owned bootstrap requires an explicit portable release')
-            if portable:
-                from portable_frontend import PortableFrontend
-                frontend = PortableFrontend(root, manifest, instance)
-            else:frontend = prepare_frontend(root, manifest)
-            if progress is not None:progress.check_cancelled()
-            run_session(backend, app, port=8769, instance=instance, logs=logs, cwd=root,
-                        env=runtime_environment(root / 'runtime/media'), app_factory=frontend.start,
-                        progress=progress if portable else None, require_ready=portable,
-                        on_ready=startup_pipe.mark_ready if startup_pipe is not None else None, data=data)
-        except Exception as error:
-            if is_restore_pending(data):
-                try:
-                    rollback_restore_switch(data, error=str(error))
-                except Exception:
-                    pass
-            (logs / 'launcher.log').write_text(type(error).__name__ + ': ' + str(error) + '\n', encoding='utf-8')
-            failure_type = (StartupCancelled if isinstance(error, StartupCancelled) else
-                            AppSessionError if isinstance(error, AppSessionError) else RuntimeError)
-            raise failure_type(str(error) + '\nLogs: ' + str(logs)) from error
+        for attempt in range(8):
+            result=_launch_once(root,data,settings,progress=progress,startup_pipe=startup_pipe if attempt==0 else None,force_full=force_full,preferences_path=preferences_path)
+            if not isinstance(result,dict) or result.get('restart') is not True:return result
+            settings=load_settings(data,preferences_path)
+            validate_writable_locations(settings)
+            check_pending_restore(data)
+        raise RuntimeError('Too many restore restarts in one launcher session')
+
+
+def _launch_once(root,data,settings,*,progress=None,startup_pipe=None,force_full=False,preferences_path=None):
+    instance = secrets.token_hex(16)
+    logs = data / 'logs' / (time.strftime('%Y%m%d-%H%M%S') + '-' + instance)
+    storage_parent(logs / 'launcher.log');plain_path(logs, directory=True)
+    values = {'database': str(data / 'catalog.sqlite'), 'ai_python': str(root / 'runtime/python/python.exe'),
+              'models_root': str(data / 'models'), 'ai_settings': str(data / 'settings.json'),
+              'ai_profiles_dir': str(data / 'ai-profiles'), **settings}
+    from ai_runtime_preferences import runtime_python
+    values['ai_python']=str(runtime_python(settings, values['ai_python'], data/'unavailable-ai-runtime/python.exe'))
+    backend = [str(root / 'runtime/python/python.exe'), '-B', '-u', str(root / 'backend/app/production_server.py'),
+               '--instance-id', instance, '--exit-on-stdin-close', '--ai-ranking', values.get('ai_ranking', 'mean-rrf')]
+    for key, option in PATH_OPTIONS.items():
+        if key in values:backend += [option, values[key]]
+    backend += ['--runtime-preferences', str(preferences_path if preferences_path is not None else data/'launch-settings.json')]
+    app = ['--ui-theme', values.get('ui_theme', 'system'),
+           '--viewer-settings', values.get('viewer_settings', str(data / 'viewer-settings.json'))]
+    try:
+        from startup_validation import startup_preflight
+        manifest = startup_preflight(root, data / 'release-validation',
+            lambda: preflight(root, progress=progress), progress=progress, force_full=force_full)
+        if progress is not None:progress.check_cancelled()
+        portable = manifest.get('frontend_activation') == 'portable'
+        if startup_pipe is not None and not portable:raise ValueError('The owned bootstrap requires an explicit portable release')
+        if portable:
+            from portable_frontend import PortableFrontend
+            frontend = PortableFrontend(root, manifest, instance)
+        else:frontend = prepare_frontend(root, manifest)
+        if progress is not None:progress.check_cancelled()
+        handoff=None
+        if portable and preferences_path is None:
+            from restore_handoff import RestoreHandoff
+            handoff=RestoreHandoff(logs,instance,Path(values['database']))
+            backend += ['--restore-session-dir',str(logs)]
+        return run_session(backend, app, port=8769, instance=instance, logs=logs, cwd=root,
+                    env=runtime_environment(root / 'runtime/media'), app_factory=frontend.start,
+                    progress=progress if portable else None, require_ready=portable,
+                    on_ready=startup_pipe.mark_ready if startup_pipe is not None else None, data=data, restore_handoff=handoff)
+    except Exception as error:
+        if is_restore_pending(data):
+            try:
+                rollback_restore_switch(data, error=str(error))
+            except Exception:
+                pass
+        (logs / 'launcher.log').write_text(type(error).__name__ + ': ' + str(error) + '\n', encoding='utf-8')
+        failure_type = (StartupCancelled if isinstance(error, StartupCancelled) else
+                        AppSessionError if isinstance(error, AppSessionError) else RuntimeError)
+        raise failure_type(str(error) + '\nLogs: ' + str(logs)) from error
 
 
 def main():

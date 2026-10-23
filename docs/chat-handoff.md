@@ -1,5 +1,9 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-24 owned restart continuation (latest)
+
+[Owned handoff, real CPU backend evidence and next Core/UI task](restore-review-20261024.md). Restart request→resource closure proof→child exit/old DB lease→cutover→same-owner relaunch source connected. Handoff7/lifecycle10 PASS; native GUI/relaunch not verified. P5 partial; active goal continues. Notify/ask before GUI/GPU tests; no shutdown.
+
 ## 2026-10-24 restore preparation + safety checkpoint (latest)
 
 Implementation `1ca11d4`; [five commits, checks and next owned restart task](restore-review-20261024.md). Directory/ZIP preparation API/Core/discard connected; cutover verifies payloads and serializes operations; real frontend ready required. P5 PARTIAL: GUI and owned shutdown/restart integration remain. Last quota reading88% used, finish handoff/push; no shutdown. Preserve old Alpha, user DB/media and existing native caps.

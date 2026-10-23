@@ -107,7 +107,7 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True,*,ai_p
         return SearchIntent(LayaProcess(worker_python(repo,ai_python),laya_model_path(repo,models_root=models_root),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=()):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),restore_handoff=None):
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
@@ -130,7 +130,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         return {'settings':profiles.path if profiles.path.exists() else None,'profiles':folder,
                 'extra_profiles':extra,'tagger_profiles':tagger_profile_paths}
     backup_jobs=BackupJobs(catalog,quiesce=catalog.writer_fence.pause,configuration=backup_configuration)
-    restore_jobs=RestoreStagingJobs(catalog.path.parent/'restore-staging')
+    restore_jobs=RestoreStagingJobs(catalog.path.parent/'restore-staging',handoff=restore_handoff)
     animations=AnimationSessions(previews)
     thumbnails=ThumbnailCache(previews)
     def result_provider(conditions, consume, cancelled):
@@ -575,6 +575,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     try:
                         if self.path=='/api/library/restore/start':return self.send(202,restore_jobs.start(body))
                         if self.path=='/api/library/restore/cancel':return self.send(200,restore_jobs.cancel(body))
+                        if self.path=='/api/library/restore/restart':return self.send(202,restore_jobs.request_restart(body))
                         if self.path=='/api/library/restore/discard':return self.send(200,restore_jobs.discard(body))
                         return self.send(404,{'error':'Not found'})
                     except (RestoreBusy,KeyError):return self.send(409,{'error':'復元準備の状態が変わりました。状態を確認してください。'})
@@ -850,6 +851,7 @@ def main():
     parser.add_argument('--ai-python',type=Path,help='Explicit local AI worker interpreter; no PATH fallback or download')
     parser.add_argument('--models-root',type=Path,help='Explicit directory containing local model subdirectories')
     parser.add_argument('--instance-id',help='Launcher-owned session identifier')
+    parser.add_argument('--restore-session-dir',type=Path,help='Owned launcher restore handoff directory')
     parser.add_argument('--exit-on-stdin-close',action='store_true',help='Gracefully stop when the owning launcher closes its pipe')
     parser.add_argument('--tagger-profile',type=Path,help='Optional local WD-compatible tagger profile; never downloads')
     parser.add_argument('--ai-settings',type=Path,help='Optional local settings file for developer tests')
@@ -862,6 +864,7 @@ def main():
     args=parser.parse_args()
     if args.instance_id is not None and (len(args.instance_id)!=32 or any(c not in '0123456789abcdef' for c in args.instance_id)):
         parser.error('--instance-id must be 32 lowercase hex characters')
+    if args.restore_session_dir is not None and (not args.exit_on_stdin_close or args.instance_id is None):parser.error('Restore handoff requires an owned instance')
     storage_parent(args.db)
     with storage_lease(args.db):
         _serve(args)
@@ -876,6 +879,10 @@ def _serve(args):
                 expected=Path(selected['ai_runtime_root'])/'python.exe'
                 if expected.absolute()==Path(args.ai_python).absolute():bind_runtime(expected.parent,selected['ai_runtime_manifest_sha256'])
         except (ValueError,OSError,KeyError):pass
+    from restore_handoff import RestoreHandoff
+    handoff=RestoreHandoff(args.restore_session_dir,args.instance_id,args.db) if args.restore_session_dir is not None else None
+    def close_job(job):
+        if job.close() is False:raise RuntimeError('Owned job did not stop; restore cannot proceed')
     # Register each owned resource immediately, including startup/bind failures.
     with ExitStack() as resources:
         catalog=ProductionCatalog(args.db);resources.callback(catalog.close)
@@ -888,13 +895,13 @@ def _serve(args):
         intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**runtime)
         resources.callback(intent.close)
         tagger=create_tagger(ai,args.tagger_profile,**runtime);resources.callback(tagger.close)
-        handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else ())
-        resources.callback(handler.setup_jobs.close)
+        handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff)
+        resources.callback(close_job,handler.setup_jobs)
         resources.callback(handler.animations.close)
         resources.callback(handler.results.close)
         resources.callback(handler.thumbnails.close)
-        resources.callback(handler.backup_jobs.close)
-        resources.callback(handler.restore_jobs.close)
+        resources.callback(close_job,handler.backup_jobs)
+        resources.callback(close_job,handler.restore_jobs)
         server=ThreadingHTTPServer(('127.0.0.1',args.port),handler)
         resources.callback(server.server_close)
         if args.exit_on_stdin_close:
@@ -906,6 +913,7 @@ def _serve(args):
         print(f'Aredoko production: http://127.0.0.1:{server.server_port}',flush=True)
         try: server.serve_forever(poll_interval=0.1)
         except KeyboardInterrupt: pass
+    if handoff is not None:handoff.mark_closed()
 
 if __name__=='__main__': main()
 
