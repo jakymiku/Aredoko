@@ -1,5 +1,9 @@
 # Restore review follow-up
 
+## 2026-10-24 final cancellation check
+
+Implementation stays30480f8. New focused generated-only test rejects publication after derived profile settings were staged: no completed bundle, no new source settings.json, profile SHA/mtime unchanged, writer pause released and owned capture directory removed. **1 PASS/0.305s**, separate from prior live11 and switch/jobs/HTTP10; full suite not repeated. This is the capture publication boundary, not a new native cancel/API race claim. Evidence: ignored portable-refresh-20261024/active-profile-cancel.log. Source-only follow-up; ZIP still875f94a. Next dual active/pending metadata remains unchanged; no GUI/GPU/shutdown.
+
 ## 2026-10-24 explicit profile without saved settings
 
 P5 first bounded case: production backup passes the explicit startup profile filename to live capture. If settings are selected and NO saved ai_settings exists, the backup COPY creates version1 local:<filename> settings pointing to the included validated profile. Source preferences remain absent, original profile unchanged, no new bundle format/guess by file order. The derived settings survives ordinary restored-path rebasing and rollback. Missing included profile prevents publication; metadata-only/settings-off backup remains available.

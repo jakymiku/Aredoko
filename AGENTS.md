@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-24 quota closing verification
+
+Latest product implementation30480f8; [focused derived-settings cancellation check](docs/restore-review-20261024.md)1 PASS/0.305s. No late source settings creation, source profile unchanged, no completed cancelled bundle/owned staging/writer pause. Prior d380411 handoff retained; next dual active/pending selection metadata. Last quota check96% used, stop new implementation and preserve saved handoff. ZIP875f94a/caps unchanged. Goal incomplete/active, **no shutdown**.
+
 ## 2026-10-24 final P5 continuation checkpoint
 
 Implementation **30480f8**: [explicit AI profile with absent saved preferences](docs/restore-review-20261024.md). Live11 PASS; final restore-switch/rollback + jobs/HTTP10 PASS separately. Source preferences remain absent/unchanged; saved pending choices keep exact bytes. Full dual active/pending metadata and multi-tagger selection remain TODO. ZIP remains source875f94a; this backend follow-up is source-only. Native caps unchanged, no GUI/GPU/new model/normal DB. Goal incomplete/active; near quota save/push/handoff, **no shutdown**.

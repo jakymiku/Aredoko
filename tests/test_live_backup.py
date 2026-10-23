@@ -71,6 +71,17 @@ class LiveBackupTests(unittest.TestCase):
         self.assertEqual(active.selected(),'local:explicit.json');self.assertEqual(active.startup_path.read_bytes(),profile.read_bytes())
         rollback_restore_switch(data);self.assertEqual(json.loads((data/'launch-settings.json').read_text()),previous)
 
+    def test_cancel_before_publication_does_not_save_derived_profile_preferences(self):
+        import hashlib,shutil
+        profile=self.base/'explicit.json';shutil.copyfile(Path(__file__).resolve().parents[1]/'config/ai-profiles/embeddinggemma-2.json',profile)
+        before=hashlib.sha256(profile.read_bytes()).hexdigest(),profile.stat().st_mtime_ns
+        def reject(operation):raise InterruptedError('cancelled before publication')
+        with self.assertRaises(InterruptedError):
+            capture_live(self.cat,self.base/'cancelled-profile',quiesce=self.quiesce,extra_profiles=(profile,),active_profile=profile.name,publish=reject)
+        self.assertFalse((self.base/'cancelled-profile').exists());self.assertFalse((self.base/'settings.json').exists())
+        self.assertEqual((hashlib.sha256(profile.read_bytes()).hexdigest(),profile.stat().st_mtime_ns),before)
+        self.assertFalse(self.paused);self.assertEqual(list(self.base.glob('.aredoko-capture-*')),[])
+
     def test_existing_saved_choice_is_not_replaced_by_startup_override(self):
         import shutil
         profile=self.base/'explicit.json';shutil.copyfile(Path(__file__).resolve().parents[1]/'config/ai-profiles/embeddinggemma-2.json',profile)
