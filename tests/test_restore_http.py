@@ -59,6 +59,16 @@ class RestoreHttpTests(unittest.TestCase):
         self.denied(409,'/api/library/restore/start',self.body)
         self.denied(409,'/api/library/restore/cancel',{'job_id':'0'*32})
         self.assertFalse(self.request('/api/library/restore/cancel',{'job_id':first['job_id']})[1]['cancel_accepted'])
+        staging=owner.current.staging_path
+        self.denied(400,'/api/library/restore/discard',{'job_id':first['job_id'],'consent':False})
+        self.assertTrue(staging.exists())
+        self.assertEqual(self.request('/api/library/restore/discard',{'job_id':first['job_id'],'consent':True})[1]['state'],'idle')
+        self.assertFalse(staging.exists())
+        self.assertEqual((self.base/'bundle/catalog.sqlite').read_bytes(),before)
+        _,second=self.request('/api/library/restore/start',self.body)
+        owner.manager.wait(second['job_id'],5)
+        self.assertEqual(self.request('/api/library/restore')[1]['state'],'completed')
+
 
     def test_cancel_is_responsive_and_prevents_completion(self):
         backup(self.catalog.path,self.base/'bundle')
@@ -73,6 +83,7 @@ class RestoreHttpTests(unittest.TestCase):
             _,first=self.request('/api/library/restore/start',self.body)
             try:
                 self.assertTrue(entered.wait(3))
+                self.denied(409,'/api/library/restore/discard',{'job_id':first['job_id'],'consent':True})
                 self.assertTrue(self.request('/api/library/restore/cancel',{'job_id':first['job_id']})[1]['cancel_accepted'])
                 self.assertEqual(self.request('/api/items')[1]['total'],0)
             finally:

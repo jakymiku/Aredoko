@@ -575,6 +575,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     try:
                         if self.path=='/api/library/restore/start':return self.send(202,restore_jobs.start(body))
                         if self.path=='/api/library/restore/cancel':return self.send(200,restore_jobs.cancel(body))
+                        if self.path=='/api/library/restore/discard':return self.send(200,restore_jobs.discard(body))
                         return self.send(404,{'error':'Not found'})
                     except (RestoreBusy,KeyError):return self.send(409,{'error':'復元準備の状態が変わりました。状態を確認してください。'})
                     except (ValueError,TypeError):return self.send(400,{'error':'復元元と選択内容を確認してください。'})

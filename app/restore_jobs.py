@@ -443,6 +443,24 @@ class RestoreStagingJobs:
             accepted = self.manager.cancel(self.current, wait=False)
             return {**self.snapshot(), 'cancel_accepted': accepted}
 
+    def discard(self, body):
+        if not isinstance(body, dict) or set(body) != {'job_id', 'consent'} or body['consent'] is not True:
+            raise ValueError('Explicit discard consent required')
+        self.manager.validate_id(body['job_id'])
+        with self.lock:
+            job = self.current
+            if job is None or job.job_id != body['job_id']:
+                raise KeyError('Restore job changed')
+            if job._thread.is_alive() or job.state in ACTIVE_STATES:
+                raise RestoreBusy('Wait for the restore worker to stop')
+            if job._staging_identity is not None:
+                _remove_owned(job.staging_path, job._staging_identity)
+                if job.staging_path.exists() or job.staging_path.is_symlink():
+                    raise RestoreBusy('Staging cleanup was not safe or could not finish')
+            self.current = None
+            self.manager._jobs.clear()
+            return self.snapshot()
+
     def close(self, timeout=10):
         with self.lock:
             self.closed = True

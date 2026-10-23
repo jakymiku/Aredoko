@@ -33,6 +33,8 @@ public sealed class RestoreClient(HttpClient client)
     }
     public Task<RestoreJob> CancelAsync(string id,CancellationToken cancellation=default)
     {BackupClient.ValidateId(id);return PostAsync("cancel",new(){["job_id"]=id},cancellation);}
+    public Task<RestoreJob> DiscardAsync(string id,CancellationToken cancellation=default)
+    {BackupClient.ValidateId(id);return PostAsync("discard",new(){["job_id"]=id,["consent"]=true},cancellation);}
     private async Task<RestoreJob> PostAsync(string operation,JsonObject body,CancellationToken cancellation)
     {
         using var content=new StringContent(body.ToJsonString(),Encoding.UTF8,"application/json");
