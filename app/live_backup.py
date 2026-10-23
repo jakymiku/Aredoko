@@ -6,7 +6,7 @@ files are never read; frontend settings may be supplied as validated bytes.
 from contextlib import ExitStack,closing,contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-import os,secrets,shutil,sqlite3,time
+import json,os,secrets,shutil,sqlite3,time
 from storage_backup import (backup,_budget,_stores,_profiles,_read_small,_configuration,
                             _write,_profile_suffix,_database,DEFAULT_MAX_BYTES,RecoveryError,CATALOG,NAME)
 from storage_lease import plain_path,identity,StorageBusyError
@@ -32,7 +32,7 @@ def _catalog_boundary(catalog,check):
 
 
 def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=None,viewer_settings=None,
-                 profiles=None,extra_profiles=(),tagger_profiles=(),viewer_data=None,max_bytes=DEFAULT_MAX_BYTES,
+                 profiles=None,extra_profiles=(),tagger_profiles=(),viewer_data=None,active_profile=None,max_bytes=DEFAULT_MAX_BYTES,
                  cancelled=None,progress=None,publish=None):
     if not isinstance(selection,BackupSelection) or not callable(quiesce):raise RecoveryError('Explicit writer coordination required')
     if viewer_data is not None:
@@ -67,6 +67,16 @@ def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=N
             names=[relative.casefold() for relative,_,_ in configs]
             if len(set(names))!=len(names) or sum(role=='profile' for _,_,role in configs)>64 or sum(role=='tagger_profile' for _,_,role in configs)>16:raise RecoveryError('Duplicate or excessive profiles')
             if any(role in ('profile','tagger_profile') and NAME.fullmatch(Path(relative).name) is None for relative,_,role in configs):raise RecoveryError('Invalid profile filename')
+            if selection.settings and active_profile is not None and not any(role=='ai_settings' for _,_,role in configs):
+                # No saved preference exists to preserve. Capture explicit
+                # startup selection in the COPY using a version1 local ID.
+                # Existing saved/pending choices must never be overwritten.
+                if not isinstance(active_profile,str) or NAME.fullmatch(active_profile) is None or ('profiles/'+active_profile) not in [name for name,_,role in configs if role=='profile']:
+                    raise RecoveryError('Active profile is not included in backup')
+                value={'version':1,'profile':'default'}
+                value['profile']='local:'+active_profile
+                data=json.dumps(value,ensure_ascii=False).encode('utf-8');_configuration('ai_settings',data)
+                configs.append(('settings/ai-settings.json',data,'ai_settings'))
             for path in paths:
                 expected=identity(path);guard=stack.enter_context(closing(sqlite3.connect(path.as_uri()+'?mode=rw',uri=True,timeout=1)))
                 try:guard.execute('BEGIN IMMEDIATE')

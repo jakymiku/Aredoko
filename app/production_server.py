@@ -130,7 +130,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         folder=profiles.folder if profiles.folder.exists() else None
         extra=() if profiles.startup_path is None or folder is not None and profiles.startup_path.parent==folder else (profiles.startup_path,)
         return {'settings':profiles.path if profiles.path.exists() else None,'profiles':folder,
-                'extra_profiles':extra,'tagger_profiles':tagger_profile_paths}
+                'extra_profiles':extra,'tagger_profiles':tagger_profile_paths,
+                'active_profile':profiles.override.name if profiles.override is not None else None}
     backup_jobs=BackupJobs(catalog,quiesce=catalog.writer_fence.pause,configuration=backup_configuration)
     restore_jobs=RestoreStagingJobs(catalog.path.parent/'restore-staging',handoff=restore_handoff)
     animations=AnimationSessions(previews)

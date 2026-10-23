@@ -1,5 +1,13 @@
 # Restore review follow-up
 
+## 2026-10-24 explicit profile without saved settings
+
+P5 first bounded case: production backup passes the explicit startup profile filename to live capture. If settings are selected and NO saved ai_settings exists, the backup COPY creates version1 local:<filename> settings pointing to the included validated profile. Source preferences remain absent, original profile unchanged, no new bundle format/guess by file order. The derived settings survives ordinary restored-path rebasing and rollback. Missing included profile prevents publication; metadata-only/settings-off backup remains available.
+
+If saved/pending settings exist, their exact bytes are retained. Do not overwrite a pending choice with the startup override: preserving BOTH requires an explicit active-selection metadata contract, still TODO together with multiple tagger profiles. The initial broader overlay prototype was not adopted; its10-pass log is not final-policy evidence. Final live11 PASS/2.806s; final switch/rollback case plus backup jobs/HTTP10 PASS/4.081s separately, not21 independent tests. No C#/GUI/GPU/model/normal DB change and no full build repetition. Logs: ignored portable-refresh-20261024/active-profile-backup{,02}.log and active-profile-boundaries.log.
+
+New source follows9ec50b1. Existing ZIP stays source875f94a and does not contain this follow-up. Next explicit metadata contract for saved pending choice + actual startup override, then multiple tagger active selection, with old bundle compatibility/cancel/rollback checks. Goal remains active; near quota handoff, no shutdown.
+
 ## 2026-10-24 committed cleanup recovery
 
 Successful restore confirmation now writes/fsyncs an atomic committed sentinel after history publication, then removes rollback copy before sentinel cleanup. Cleanup failure returns cleanup_pending without undoing the ready library; next startup completes cleanup rather than interpreting it as a failed attempt. Explicit rollback refuses committed state. Pre-commit history failure leaves rollback available. This is process-interruption/atomic-publication handling, not proof of hardware power-loss durability on every filesystem.

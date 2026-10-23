@@ -46,6 +46,48 @@ class LiveBackupTests(unittest.TestCase):
         self.assertEqual(json.loads(self.read(restored/'catalog.sqlite','SELECT tags FROM items')[0][0]),['before'])
         self.assertTrue(result['selection']['history']);self.assertIn('packing',observed)
         self.assertEqual(list(self.base.glob('.aredoko-capture-*')),[])
+    def test_explicit_profile_without_saved_preferences_survives_backup_restore(self):
+        import shutil
+        from ai_settings import AIProfileSettings
+        from production_server import production_handler,DisabledAI
+        profile=self.base/'explicit.json';shutil.copyfile(Path(__file__).resolve().parents[1]/'config/ai-profiles/embeddinggemma-2.json',profile)
+        saved=self.base/'settings.json';self.assertFalse(saved.exists())
+        profiles=AIProfileSettings(self.base,saved,profile,profile_directory=self.base/'profiles')
+        handler=production_handler(self.cat,'token',DisabledAI(),profiles=profiles)
+        for job in (handler.setup_jobs,handler.download_jobs,handler.restore_jobs,handler.backup_jobs,handler.thumbnails,handler.animations,handler.results):self.addCleanup(job.close)
+        configuration=handler.backup_jobs.configuration()
+        self.assertEqual(configuration['active_profile'],'explicit.json')
+        capture_live(self.cat,self.base/'bundle',quiesce=self.quiesce,**configuration)
+        restore(self.base/'bundle',self.base/'restored')
+        resumed=AIProfileSettings(self.base,self.base/'restored/settings/ai-settings.json',profile_directory=self.base/'restored/profiles')
+        self.assertEqual(resumed.selected(),'local:explicit.json');self.assertEqual(resumed.startup_path.read_bytes(),profile.read_bytes())
+        self.assertFalse(saved.exists())
+        from restore_switch import apply_restore_switch,rollback_restore_switch
+        data=self.base/'switch-user';data.mkdir();previous={'database':str(self.cat.path),'ui_theme':'dark'}
+        (data/'launch-settings.json').write_text(json.dumps(previous),encoding='utf-8')
+        switched=apply_restore_switch(data,self.base/'restored')
+        launch=json.loads((data/'launch-settings.json').read_text())
+        active=AIProfileSettings(self.base,launch['ai_settings'],profile_directory=launch['ai_profiles_dir'])
+        self.assertEqual(active.selected(),'local:explicit.json');self.assertEqual(active.startup_path.read_bytes(),profile.read_bytes())
+        rollback_restore_switch(data);self.assertEqual(json.loads((data/'launch-settings.json').read_text()),previous)
+
+    def test_existing_saved_choice_is_not_replaced_by_startup_override(self):
+        import shutil
+        profile=self.base/'explicit.json';shutil.copyfile(Path(__file__).resolve().parents[1]/'config/ai-profiles/embeddinggemma-2.json',profile)
+        saved=self.base/'settings.json';original=b'{"version":1,"profile":"default"}';saved.write_bytes(original)
+        capture_live(self.cat,self.base/'saved-choice',quiesce=self.quiesce,settings=saved,extra_profiles=(profile,),active_profile=profile.name)
+        restore(self.base/'saved-choice',self.base/'saved-restored')
+        self.assertEqual((self.base/'saved-restored/settings/ai-settings.json').read_bytes(),original)
+        self.assertEqual(saved.read_bytes(),original)
+
+    def test_missing_active_profile_never_publishes_but_metadata_only_backup_still_works(self):
+        with self.assertRaisesRegex(RecoveryError,'Active profile'):
+            capture_live(self.cat,self.base/'invalid',quiesce=self.quiesce,active_profile='missing.json')
+        self.assertFalse((self.base/'invalid').exists())
+        capture_live(self.cat,self.base/'metadata',quiesce=self.quiesce,selection=BackupSelection(settings=False),active_profile='missing.json')
+        manifest=json.loads((self.base/'metadata/manifest.json').read_text())
+        self.assertIn('ai_settings',manifest['not_included'])
+
     def test_excluding_history_position_changes_only_the_copy(self):
         capture_live(self.cat,self.base/'bundle',quiesce=self.quiesce,selection=BackupSelection(settings=False,history=False,reader_progress=False))
         restore(self.base/'bundle',self.base/'restored');destination=self.base/'restored/catalog.sqlite'
