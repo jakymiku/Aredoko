@@ -13,4 +13,20 @@
 
 既存の [最終チェックポイント](development-checkpoint-20261024.md)、[復元の根拠](restore-review-20261024.md)、[取得の根拠](ai-acquisition.md)、[配布候補](portable-refresh-20261024.md) 等の技術証拠は削除・上書きしていない。
 
+## 2026-10-24 第2回整理：過去の案内・時点別handoff
+
+次の7ファイルは**当時の内容を同じblob SHAで保全**。以前のURLにアクセスした場合は、現在の入口と原文を案内する互換ページへ移動する。過去時点の条件・「次」の記述を現行命令として再実行しない。
+
+| 旧入口（現在は案内） | 当時の原文 |
+| --- | --- |
+| [README.md](../README.md) | [README.history-20261024.md](../README.history-20261024.md) |
+| [docs/status.md](../docs/status.md) | [docs/status.history-20261024.md](../docs/status.history-20261024.md) |
+| [docs/gui-comparison.md](../docs/gui-comparison.md) | [docs/gui-comparison.history-20261024.md](../docs/gui-comparison.history-20261024.md) |
+| [docs/gui-compare.md](../docs/gui-compare.md) | [docs/gui-compare.history-20261024.md](../docs/gui-compare.history-20261024.md) |
+| [docs/development-skills.md](../docs/development-skills.md) | [docs/development-skills.history-20261024.md](../docs/development-skills.history-20261024.md) |
+| [docs/daytime-handoff-20261023.md](../docs/daytime-handoff-20261023.md) | [docs/daytime-handoff-20261023.history.md](../docs/daytime-handoff-20261023.history.md) |
+| [docs/overnight-handoff-20261023.md](../docs/overnight-handoff-20261023.md) | [docs/overnight-handoff-20261023.history.md](../docs/overnight-handoff-20261023.history.md) |
+
+特に旧GUI比較は現在のWinUI採用決定前の資料、時点別handoffには期限付き作業や過去の試行回数が含まれる。詳細の証拠はそのまま保存し、起動入口は [current-handoff](current-handoff.md) を優先する。
+
 今後の記録は `current-handoff.md` の短い更新＋該当の既存技術文書＋Git履歴。大きいappend-onlyの引き継ぎは作らない。
