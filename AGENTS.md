@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-24 LD4b acquisition foundation (latest)
+
+[Trusted catalog/resume/verification/publication and owned authenticated job](docs/ai-acquisition.md) source connected; generated transfer11/jobHTTP5 pass. Production registry EMPTY, download_supported false; no real artifacts/model/driver/GUI/GPU. P5 residual acceptance remains, native restore3/3 exhausted. Next actual catalog provenance + Core/LD5 existing-folder UI; goal active, no shutdown.
+
 ## 2026-10-24 committed restore cleanup (latest)
 
 [Interrupted cleanup semantics and focused evidence](docs/restore-review-20261024.md). Committed sentinel prevents erroneous next-start rollback; pre-commit failures remain recoverable. Switch26 plus new1 pass separately. Native cap3/3 exhausted; no repeat without fresh scope. Goal active, no shutdown.

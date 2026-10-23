@@ -40,6 +40,7 @@ from runtime_paths import worker_python, bind_runtime
 from ai_runtime_preferences import AIRuntimePreferences, read_preferences
 from ai_setup_jobs import AISetupJobs, SetupBusy
 from backup_jobs import BackupJobs,BackupBusy
+from ai_download_jobs import AIDownloadJobs,DownloadBusy
 from restore_jobs import RestoreStagingJobs,RestoreBusy
 from ai_runtime import object_pairs
 from animation_sessions import AnimationSessions, AnimationBusy, AnimationGone, MIME as ANIMATION_MIME
@@ -107,7 +108,7 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True,*,ai_p
         return SearchIntent(LayaProcess(worker_python(repo,ai_python),laya_model_path(repo,models_root=models_root),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),restore_handoff=None):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),restore_handoff=None,acquisition_specs=()):
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
@@ -122,6 +123,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
     setup.writer_fence=catalog.writer_fence
     setup_jobs=AISetupJobs(setup)
+    download_jobs=AIDownloadJobs(setup.path.parent/'ai-downloads',specifications=acquisition_specs)
     def backup_configuration():
         # Only explicitly configured app-owned profile/settings paths. No media
         # discovery and no arbitrary path supplied by the HTTP caller.
@@ -476,6 +478,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         'default_selection':{'settings':True,'history':True,'reader_progress':True,'vectors':False}})
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
                 if path=='/api/library/ai/setup':return self.send(200,{**setup.snapshot(),'selection_api_supported':True,'job':setup_jobs.snapshot()})
+                if path in ('/api/library/ai/setup/download/catalog','/api/library/ai/setup/download/job'):
+                    if urlparse(self.path).query:return self.send(400,{'error':'Invalid acquisition query'})
+                    return self.send(200,download_jobs.catalogs() if path.endswith('/catalog') else download_jobs.snapshot())
                 if path=='/api/library/ai/setup/job':return self.send(200,setup_jobs.snapshot())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())
@@ -590,6 +595,15 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except BackupBusy:return self.send(409,{'error':'バックアップを開始できません。現在の処理を確認してください。','job':backup_jobs.snapshot()})
                     except KeyError:return self.send(409,{'error':'現在のバックアップと一致しません。'})
                     except (ValueError,TypeError):return self.send(400,{'error':'バックアップの保存先と選択内容を確認してください。'})
+                if self.path.startswith('/api/library/ai/setup/download/'):
+                    try:
+                        if self.path=='/api/library/ai/setup/download/start':return self.send(202,download_jobs.start(body))
+                        if self.path=='/api/library/ai/setup/download/cancel':
+                            if set(body)!={'job_id'}:raise ValueError('Invalid acquisition cancel fields')
+                            return self.send(200,download_jobs.cancel(body['job_id']))
+                        return self.send(404,{'error':'Not found'})
+                    except (DownloadBusy,KeyError):return self.send(409,{'error':'AI環境取得の状態が変わりました。状態を確認してください。'})
+                    except (ValueError,TypeError):return self.send(400,{'error':'取得するAI環境と速度設定を確認してください。'})
                 if self.path=='/api/library/ai/setup/select':
                     try:return self.send(202,setup_jobs.start(body))
                     except SetupBusy:return self.send(409,{'error':'AI環境の確認を開始できません。現在の状態を確認してください。','job':setup_jobs.snapshot()})
@@ -841,6 +855,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     Handler.backup_jobs=backup_jobs
     Handler.restore_jobs=restore_jobs
     Handler.setup_jobs=setup_jobs
+    Handler.download_jobs=download_jobs
     return Handler
 
 def main():
@@ -897,6 +912,7 @@ def _serve(args):
         tagger=create_tagger(ai,args.tagger_profile,**runtime);resources.callback(tagger.close)
         handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff)
         resources.callback(close_job,handler.setup_jobs)
+        resources.callback(close_job,handler.download_jobs)
         resources.callback(handler.animations.close)
         resources.callback(handler.results.close)
         resources.callback(handler.thumbnails.close)

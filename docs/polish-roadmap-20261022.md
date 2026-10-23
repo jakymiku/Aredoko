@@ -6,6 +6,10 @@
 
 実装 `1ca11d4`。[最新チェックポイント](restore-review-20261024.md)を優先する。復元準備のdirectory/ZIP・認証API・Core・明示破棄、切替のpayload検証/排他/ready条件まで実装済み。次は所有ランチャーの正常停止・再起動とWinUI接続。P5未完でありP6へはまだ進まない。
 
+## 2026-10-24 独立P6基盤更新
+
+[LD4b取得基盤](ai-acquisition.md)：固定catalog/Range再開/検証後新version/認証所有jobまで接続。製品catalogは未登録、実取得/GUI/Core/選択保存/clean Windows未完。P5のGUI picker受入等を完了とせず、独立したCPU実装を進めた。
+
 ## 到達点と再開位置
 
 | 作業 | 現在の状態 | 次に行うこと |
