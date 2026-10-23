@@ -18,7 +18,7 @@ from release_runtime import verify_release, python_layout, media_layout, runtime
 from storage_lease import plain_path, storage_parent, storage_lease
 from packaged_frontend import prepare_frontend
 from startup_progress import StartupCancelled, StartupProgress
-sys.path.insert(0, str(ROOT / 'app'))
+sys.path.insert(0, str(ROOT / ('backend/app' if (ROOT / 'backend/app').is_dir() else 'app')))
 from restore_switch import (
     check_pending_restore,
     is_restore_pending,
@@ -221,13 +221,18 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
 def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full=False, preferences_path=None):
     # All writable state stays outside the versioned release. Reject accidental
     # source/payload placement before creating logs or opening a database.
-    paths = [data, *(Path(settings[k]) for k in ('database', 'ai_settings', 'viewer_settings') if k in settings)]
-    if any(p.resolve().is_relative_to(root.resolve()) for p in paths):
-        raise ValueError('User data must be outside the release directory')
+    def validate_writable_locations(current):
+        validate_settings(current)
+        paths = [data, *(Path(current[k]) for k in ('database', 'ai_settings', 'viewer_settings', 'ai_profiles_dir') if k in current)]
+        if any(p.resolve().is_relative_to(root.resolve()) for p in paths):
+            raise ValueError('User data must be outside the release directory')
+
+    validate_writable_locations(settings)
     storage_parent(data / 'launcher')
     with storage_lease(data / 'launcher'):
         if check_pending_restore(data):
             settings = load_settings(data, preferences_path)
+            validate_writable_locations(settings)
         instance = secrets.token_hex(16)
         logs = data / 'logs' / (time.strftime('%Y%m%d-%H%M%S') + '-' + instance)
         storage_parent(logs / 'launcher.log');plain_path(logs, directory=True)

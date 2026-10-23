@@ -449,6 +449,21 @@ class RestoreSwitchTests(unittest.TestCase):
         self.assertTrue(rollback.exists())
         self.assertEqual((self.data_dir / LAUNCH_SETTINGS_FILE).read_bytes(), before)
 
+    def test_rollback_revalidates_writable_payload_paths_before_start(self):
+        root = self.base / 'release_guard'
+        root.mkdir()
+        for key in ('database', 'ai_settings', 'viewer_settings', 'ai_profiles_dir'):
+            with self.subTest(key=key):
+                prior = dict(self.orig_settings)
+                prior[key] = str(root / 'forbidden')
+                (self.data_dir / ROLLBACK_FILE).write_text(json.dumps(prior), encoding='utf-8')
+                (self.data_dir / PENDING_FILE).write_text('{"attempted": true}', encoding='utf-8')
+                with patch('launch_release.run_session') as run:
+                    with self.assertRaisesRegex(ValueError, 'outside the release'):
+                        launch(root, self.data_dir, self.orig_settings)
+                    run.assert_not_called()
+                self.assertFalse((root / 'forbidden').exists())
+
     def test_launch_exception_triggers_rollback(self):
         """Verify launch() exception handler triggers rollback if startup preflight fails."""
         staging = self._create_staging('staging_launch_exc')

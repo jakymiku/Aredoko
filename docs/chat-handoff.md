@@ -1,5 +1,9 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-24 launcher restore guard
+
+Rollback settings are revalidated before child startup; restore16/lifecycle10 PASS. See [current review and next task](restore-review-20261024.md). P5 API/GUI/restart incomplete; no shutdown.
+
 ## 2026-10-24 latest restore review
 
 [Correction, checks and next work](restore-review-20261024.md): P5 remains PARTIAL; restore GUI/API/restart are not connected. Fixed corrupt-record rollback data preservation; related15 tests PASS. Review a821c07 further before P6. No shutdown.
