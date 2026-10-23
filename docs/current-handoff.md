@@ -32,6 +32,12 @@
 - [メディア内容索引](media-content-plan.md)、[WinUIデザイン](design-vision-winui.md)、[軽量配布](lightweight-distribution.md)、[開発優先順位](development-priorities.md)は関連工程で必要部分だけ読む。旧文書の過去の「次」は現在の優先順位より上に置かない。
 - 上記はすべて参照リンクで、各ロードマップ原文に変更はない。毎回すべてを再読せず、担当する作業の部分を読む。
 
+## mainと旧資料の整理（2026-10-24）
+- [main README](https://github.com/jakymiku/Aredoko/blob/main/README.md) は旧Webデモであることを明示し、最新の本ブランチ・ロードマップへ誘導。mainの**製品コードそのものはまだ旧版**。実機/配布の未受入が残るため正式なコード統合を保留した。
+- mainの旧Push/PR自動CIを `workflow_dispatch` 専用へ変更（GitHub Actionsの枠を節約）。過去の初期READMEは原文保全。現行コードへの正式統合時は [整理・統合手順](repository-maintenance.md) を確認する。
+- 旧README・初期状況・GUI比較・PC Skills・2026-10-23昼夜handoffは同一blob内容のまま履歴へ退避し、元のパスから案内できる。[文書案内](README.md) / [原文履歴](history-index.md)。
+- 本整理でプログラム・モデル・ユーザーDB・配布物は変更せず、UI/GPU/Windows受入やCIを実行していない。**次の開発1件はP5 active/pending profile保全のまま**。
+
 ## 強い制約と報告
 - 原本・ユーザーDB/保存設定、登録ルート/検索scope/認証/モデル選択/backup schemaの情報損失を避ける。明示許可のないファイル変更、私物スキャン、モデル/外部依存取得は禁止。
 - CIなし、main mergeなし、別PRなし。実機/実GPU/自動取得は根拠なければ未検証。過去の試行上限を再利用しない。
