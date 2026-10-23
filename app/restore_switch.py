@@ -256,12 +256,22 @@ def commit_restore_switch(data_dir):
         return None
 
     try:
-        pending_data = json.loads(pending_path.read_text(encoding='utf-8-sig'))
-    except Exception:
-        pending_data = {}
+        pending_data = json.loads(plain_path(pending_path).read_text(encoding='utf-8-sig'))
+        if not isinstance(pending_data, dict):
+            raise ValueError('Pending record must be an object')
+        restore_id = pending_data.get('restore_id')
+        if not isinstance(restore_id, str) or RESTORE_ID_PATTERN.fullmatch(restore_id) is None:
+            raise ValueError('Invalid restore identity')
+        target = plain_path(data_path / RESTORES_DIR / restore_id, directory=True)
+        target_dir = pending_data.get('target_restore_dir')
+        if not isinstance(target_dir, str) or Path(target_dir) != target:
+            raise ValueError('Restore target changed')
+        current = json.loads(plain_path(data_path / LAUNCH_SETTINGS_FILE).read_text(encoding='utf-8-sig'))
+        if not isinstance(current, dict) or current.get('database') != str(target / CATALOG):
+            raise ValueError('Current launch target does not match pending restore')
+    except (ValueError, OSError) as error:
+        raise RestoreSwitchError('Cannot confirm restore; recovery evidence preserved') from error
 
-    restore_id = pending_data.get('restore_id')
-    target_dir = pending_data.get('target_restore_dir')
     receipt = {
         'restore_id': restore_id,
         'target_restore_dir': target_dir,

@@ -5,6 +5,7 @@ and safe atomic pointers to restored databases.
 """
 from datetime import datetime, timezone
 import json
+import itertools
 import os
 from pathlib import Path
 import shutil
@@ -113,6 +114,16 @@ class RestoreSwitchTests(unittest.TestCase):
                 apply_restore_switch(self.data_dir, staging)
         self.assertTrue(staging.exists())
         self.assertEqual(load_settings(self.data_dir), self.orig_settings)
+
+    def test_commit_rejects_unrelated_current_database(self):
+        staging = self._create_staging('wrong_commit')
+        apply_restore_switch(self.data_dir, staging)
+        (self.data_dir / LAUNCH_SETTINGS_FILE).write_text(json.dumps(self.orig_settings), encoding='utf-8')
+        with self.assertRaises(RestoreSwitchError):
+            commit_restore_switch(self.data_dir)
+        self.assertTrue(is_restore_pending(self.data_dir))
+        self.assertTrue((self.data_dir / ROLLBACK_FILE).exists())
+        self.assertEqual(get_restore_history(self.data_dir), [])
 
     def test_modified_staging_payload_cannot_switch_current_library(self):
         staging = self._create_staging('modified')
@@ -346,7 +357,9 @@ class RestoreSwitchTests(unittest.TestCase):
 
         app_proc = MagicMock()
         app_proc.returncode = 0
-        app_proc.poll.return_value = 0
+        app_proc.poll.side_effect = itertools.chain([None], itertools.repeat(0))
+        app_proc.ready_error = None
+        app_proc.ready.is_set.return_value = True
         app_proc.stdin = None
         app_proc.wait.return_value = 0
 
@@ -367,7 +380,7 @@ class RestoreSwitchTests(unittest.TestCase):
                 logs=logs_dir,
                 cwd=self.base,
                 env={},
-                require_ready=False,
+                require_ready=True,
                 on_ready=on_ready,
                 data=self.data_dir,
             )
@@ -378,6 +391,23 @@ class RestoreSwitchTests(unittest.TestCase):
         history = get_restore_history(self.data_dir)
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]['status'], 'committed')
+
+    def test_no_ready_handshake_rolls_back_instead_of_committing(self):
+        staging = self._create_staging('no_handshake')
+        apply_restore_switch(self.data_dir, staging)
+        logs = self.data_dir / 'logs' / 'no_handshake'
+        logs.mkdir(parents=True)
+        backend = MagicMock()
+        backend.poll.return_value = None
+        backend.returncode = 0
+        app = MagicMock()
+        app.poll.return_value = 0
+        app.returncode = 0
+        with patch('launch_release._session', return_value={'mode':'production','instance_id':'test'}), patch('launch_release.subprocess.Popen', side_effect=[backend, app]):
+            with self.assertRaisesRegex(RuntimeError, 'ready handshake'):
+                run_session(['backend'],['frontend'],port=8769,instance='test',logs=logs,cwd=self.base,env={},data=self.data_dir)
+        self.assertEqual(load_settings(self.data_dir), self.orig_settings)
+        self.assertEqual(get_restore_history(self.data_dir)[0]['status'], 'rolled_back')
 
     def test_run_session_rolls_back_on_failure_before_ready(self):
         """Verify run_session rolls back pending restore if backend fails before ready."""

@@ -194,6 +194,8 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
                     session = _session(port)
                     if session.get('mode') != 'production' or session.get('instance_id') != instance:
                         raise RuntimeError('Backend identity changed before ready')
+            if effective_data is not None and is_restore_pending(effective_data) and not require_ready:
+                raise RuntimeError('Restore requires a verified frontend ready handshake')
             ready_reached = True
             if effective_data is not None and is_restore_pending(effective_data):
                 commit_restore_switch(effective_data)
