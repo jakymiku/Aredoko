@@ -1,5 +1,10 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-23 shelf/library display parity (latest small request)
+
+[Shared grid/list, size Flyout, realized-cell resize and shelf artwork](shelf-ui-20261023.md) implemented for the user’s follow-up. Rename/delete remain in the shelf action menu. Portable build0 errors/known3 warnings; native display UNRUN, no replay of shelf/backup/P3 exhausted caps. Installed Alpha/latest earlier frontend candidate remain unchanged. This is a bounded addition after the quota checkpoint, not a restart of broad development. Next roadmap work remains P5 safe restore switch; **no shutdown**.
+
+
 ## 2026-10-23 quota stopping checkpoint (latest)
 
 Read [exact commits, native evidence/limits and next restore task](daytime-handoff-20261023.md). Implementation HEAD efc5032; next P5 new-directory restore/owned shutdown/atomic launch switch/ready failure rollback. Core925 PASS, limited backup native pass; full GUI/restore/distribution/roadmap incomplete. Preserve backup/shelf/P3 3/3 caps, user data/Alpha and old evidence. Current instruction: safe commit/push/handoff near quota10%, **NO PC SHUTDOWN**.

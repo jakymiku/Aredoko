@@ -120,7 +120,7 @@
     <StackPanel x:Name="ViewTools" Grid.Column="1" VerticalAlignment="Bottom" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
     <Button x:Name="LayoutButton" Content="グリッド表示" Click="Layout_Click" AutomationProperties.AutomationId="BtnLayout"/>
     <Button Content="表示サイズ" ToolTipService.ToolTip="Ctrl＋ホイールでも変更できます" AutomationProperties.AutomationId="BtnItemSize">
-     <Button.Flyout><Flyout Placement="Bottom">
+     <Button.Flyout><Flyout x:Name="ItemSizeFlyout" Placement="Bottom">
       <StackPanel Width="240" Spacing="8">
        <TextBlock Text="アイテムの表示サイズ" Style="{StaticResource BodyStrongTextBlockStyle}"/>
        <Slider x:Name="ItemSizeSlider" Minimum="60" Maximum="180" Value="100" StepFrequency="20" SnapsTo="StepValues" IsThumbToolTipEnabled="False" ValueChanged="ItemSizeSlider_ValueChanged" AutomationProperties.Name="アイテムの表示サイズ（パーセント）" AutomationProperties.AutomationId="ItemSizeSlider"/>
@@ -177,9 +177,11 @@
      <StackPanel Orientation="Horizontal" Spacing="8">
       <Button Content="棚を作成" Click="CreateShelf_Click" AutomationProperties.AutomationId="BtnCreateShelf"/>
       <Button Content="更新" Click="RefreshShelves_Click" AutomationProperties.AutomationId="BtnRefreshShelves"/>
+      <Button x:Name="ShelfLayoutButton" Content="グリッド表示" Click="Layout_Click" AutomationProperties.AutomationId="BtnShelfLayout"/>
+      <Button Content="表示サイズ" Click="ShelfSize_Click" AutomationProperties.AutomationId="BtnShelfSize"/>
      </StackPanel>
      <TextBlock x:Name="ShelfHubMessage" Grid.Row="1" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="TxtShelfHubMessage"/>
-     <ListView x:Name="ShelfList" ItemTemplate="{StaticResource MediaContainerTemplate}" ItemContainerStyle="{StaticResource MediaItemCardStyle}" Grid.Row="2" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ShelfList_ItemClick" ContainerContentChanging="ShelfList_ContainerContentChanging" HorizontalContentAlignment="Stretch" AutomationProperties.Name="棚一覧" AutomationProperties.AutomationId="ShelfList"/>
+     <ListView x:Name="ShelfList" SizeChanged="ShelfList_SizeChanged" PointerWheelChanged="Library_PointerWheelChanged" ItemTemplate="{StaticResource MediaContainerTemplate}" ItemContainerStyle="{StaticResource MediaItemCardStyle}" Grid.Row="2" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ShelfList_ItemClick" ContainerContentChanging="ShelfList_ContainerContentChanging" HorizontalContentAlignment="Stretch" AutomationProperties.Name="棚一覧" AutomationProperties.AutomationId="ShelfList"/>
     </Grid>
     <Grid x:Name="FolderHubView" SizeChanged="FolderHub_SizeChanged" AllowDrop="True" DragOver="Folder_DragOver" Drop="Folder_Drop" Grid.Row="1" Grid.RowSpan="3" Margin="0,0,12,0" Visibility="Collapsed" RowSpacing="12">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>

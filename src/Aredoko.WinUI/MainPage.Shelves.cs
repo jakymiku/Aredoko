@@ -15,6 +15,7 @@ public sealed partial class MainPage
     private bool shelfHubOpen;
     private readonly ObservableCollection<string> shelfKeys=new();
     private readonly Dictionary<ListViewItem,CancellationTokenSource> shelfLoads=new();
+    private readonly HashSet<ListViewItem> shelfRealized=new();
 
     private async Task RefreshShelfDescriptorsAsync()
     {
@@ -41,7 +42,7 @@ public sealed partial class MainPage
     }
     private void CloseShelfHubCore()
     {
-        shelfHubOpen=false;ShelfHubView.Visibility=Visibility.Collapsed;
+        shelfHubOpen=false;ShelfHubView.Visibility=Visibility.Collapsed;shelfRealized.Clear();
         foreach(var load in shelfLoads.Values){load.Cancel();load.Dispose();}shelfLoads.Clear();
     }
     private async Task OpenShelfHubAsync()
@@ -60,7 +61,7 @@ public sealed partial class MainPage
             ItemSearchRow.Visibility=SearchTools.Visibility=ItemListContainer.Visibility=ItemPagerRow.Visibility=Visibility.Collapsed;
             ShelfHubView.Visibility=Visibility.Visible;ShelfList.ItemsSource=shelfKeys;
             Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;
-            RestoreNavigation();await ReloadShelfHubAsync();RecordNavigationLocation();
+            RenderShelfLayout();RestoreNavigation();await ReloadShelfHubAsync();RecordNavigationLocation();
         }
         catch(Exception ex){Failure(ex);ShelfHubMessage.Text="棚を取得できませんでした。「更新」で再試行できます。";}
         finally{transitions.Release();}
@@ -93,51 +94,94 @@ public sealed partial class MainPage
     private void ShelfList_ContainerContentChanging(ListViewBase sender,ContainerContentChangingEventArgs args)
     {
         if(args.ItemContainer is not ListViewItem item)return;
+        shelfRealized.Remove(item);
         if(shelfLoads.Remove(item,out var previous)){previous.Cancel();previous.Dispose();}
         if(item.ContentTemplateRoot is Border oldHost)oldHost.Child=null;
         if(args.InRecycleQueue||args.Item is not string key||!long.TryParse(key,out var id))return;
         var shelf=shelfDescriptors.FirstOrDefault(x=>x.Id==id);if(shelf is null||item.ContentTemplateRoot is not Border host)return;
-        var row=new Grid{ColumnSpacing=12,Padding=new Thickness(8)};
-        row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-        row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-        row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-        var artwork=new Grid{Width=64,Height=64};
-        var icon=new SymbolIcon(Symbol.Folder);artwork.Children.Add(icon);
+        shelfRealized.Add(item);item.Width=double.NaN;item.ContextFlyout=null;
+        var row=new Grid{ColumnSpacing=12,RowSpacing=8,Padding=new Thickness(8)};
+        var artwork=new Grid();var icon=new SymbolIcon(Symbol.Folder);artwork.Children.Add(icon);
         var image=new Image{Stretch=Stretch.Uniform};artwork.Children.Add(image);row.Children.Add(artwork);
-        var text=new StackPanel{Spacing=4,VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(text,1);
-        var name=new TextBlock{Text=shelf.Name,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]};
+        var text=new StackPanel{Spacing=4,VerticalAlignment=VerticalAlignment.Center};
+        var name=new TextBlock{Text=shelf.Name,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaTitleStyle"]};
         ToolTipService.SetToolTip(name,shelf.Name);text.Children.Add(name);
-        text.Children.Add(new TextBlock{Text=$"{shelf.ItemCount:N0} 件",Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"]});row.Children.Add(text);
-        var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(actions,2);
+        text.Children.Add(new TextBlock{Text=$"{shelf.ItemCount:N0} 件",Style=(Style)Resources["MediaMetadataStyle"]});row.Children.Add(text);
+        var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
+        var open=new Button{Content="開く"};AutomationProperties.SetAutomationId(open,$"ShelfOpen{id}");AutomationProperties.SetName(open,$"{shelf.Name}を開く");
+        open.Click+=async(_,_)=>await OpenShelfItemsAsync(id);actions.Children.Add(open);
+        var menu=new MenuFlyout();
         void Action(string label,string suffix,Func<Task> run)
         {
-            var button=new Button{Content=label};AutomationProperties.SetAutomationId(button,$"Shelf{suffix}{id}");AutomationProperties.SetName(button,$"{shelf.Name}：{label}");
-            button.Click+=async(_,_)=>await run();actions.Children.Add(button);
+            var action=new MenuFlyoutItem{Text=label};AutomationProperties.SetAutomationId(action,$"Shelf{suffix}{id}");
+            action.Click+=async(_,_)=>await run();menu.Items.Add(action);
         }
-        Action("開く","Open",()=>OpenShelfItemsAsync(id));
-        Action("名前変更","Rename",()=>EditShelfNameAsync(shelf));
-        Action("削除","Delete",()=>DeleteShelfAsync(shelf));row.Children.Add(actions);
-        AutomationProperties.SetAutomationId(item,$"ShelfRow{id}");AutomationProperties.SetName(item,$"{shelf.Name}、{shelf.ItemCount:N0}件");
-        args.Handled=true;
-        if(shelf.Representative is not null)
+        Action("名前変更","Rename",()=>EditShelfNameAsync(shelf));Action("削除","Delete",()=>DeleteShelfAsync(shelf));
+        var more=new Button{Content="…",Flyout=menu};AutomationProperties.SetAutomationId(more,$"ShelfMore{id}");AutomationProperties.SetName(more,$"{shelf.Name}の操作");actions.Children.Add(more);
+        if(tiles)
         {
-            var cancel=new CancellationTokenSource();shelfLoads[item]=cancel;
-            image.Loaded+=async(_,_)=>await LoadShelfArtworkAsync(item,image,icon,shelf.Representative,cancel.Token);
-            image.Unloaded+=(_,_)=>{if(shelfLoads.TryGetValue(item,out var current)&&ReferenceEquals(current,cancel))current.Cancel();};
+            for(var i=0;i<3;i++)row.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+            Grid.SetRow(text,1);Grid.SetRow(actions,2);
+        }
+        else
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+            Grid.SetColumn(text,1);Grid.SetColumn(actions,2);actions.VerticalAlignment=VerticalAlignment.Center;
+        }
+        row.Children.Add(actions);SizeShelfItem(item,artwork);
+        AutomationProperties.SetAutomationId(item,$"ShelfRow{id}");AutomationProperties.SetName(item,$"{shelf.Name}、{shelf.ItemCount:N0}件");args.Handled=true;
+        if(shelf.Representative is {} representative)
+        {
+            CancellationTokenSource? request=null;long version=0;int requestedEdge=0;
+            async Task RefreshAsync(bool force=false)
+            {
+                if(!image.IsLoaded||disposed||!shelfHubOpen||!ReferenceEquals(host.Child,row)||!shelfKeys.Contains(key))return;
+                var edge=ThumbnailPolicy.EdgeFor(artwork.Width,artwork.Height,XamlRoot?.RasterizationScale??1);
+                if(!force&&requestedEdge==edge)return;requestedEdge=edge;var ownVersion=++version;
+                if(shelfLoads.Remove(item,out var old)){old.Cancel();old.Dispose();}
+                request=new();shelfLoads[item]=request;var cancellation=request.Token;
+                try
+                {
+                    if(!force)await Task.Delay(80,cancellation);
+                    var bitmap=await thumbnails.GetAsync(representative,cancellation,edge);
+                    if(cancellation.IsCancellationRequested||disposed||!shelfHubOpen||ownVersion!=version)return;
+                    image.Source=bitmap;icon.Visibility=bitmap is null?Visibility.Visible:Visibility.Collapsed;
+                }
+                catch(OperationCanceledException){}
+                catch(Exception ex){AppLog.Error(ex);}
+            }
+            image.Loaded+=async(_,_)=>await RefreshAsync(true);artwork.SizeChanged+=async(_,_)=>await RefreshAsync();
+            image.Unloaded+=(_,_)=>{++version;requestedEdge=0;if(shelfLoads.TryGetValue(item,out var active)&&ReferenceEquals(active,request))active.Cancel();image.Source=null;};
         }
         host.Child=row;
     }
-    private async Task LoadShelfArtworkAsync(ListViewItem owner,Image image,SymbolIcon fallback,MediaRow row,CancellationToken cancellation)
+    private ItemsPanelTemplate MediaItemsPanel()=>(ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(tiles
+        ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1\"/></ItemsPanelTemplate>"
+        : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"1\"/></ItemsPanelTemplate>");
+    private void RenderShelfLayout()
     {
-        try
-        {
-            var bitmap=await thumbnails.GetAsync(row,cancellation,128);
-            if(cancellation.IsCancellationRequested||disposed||!shelfHubOpen||!owner.IsLoaded)return;
-            image.Source=bitmap;fallback.Visibility=bitmap is null?Visibility.Visible:Visibility.Collapsed;
-        }
-        catch(OperationCanceledException){}
-        catch(Exception ex){AppLog.Error(ex);}
+        ShelfList.ItemsSource=null;
+        foreach(var request in shelfLoads.Values){request.Cancel();request.Dispose();}shelfLoads.Clear();shelfRealized.Clear();
+        ShelfList.ItemsPanel=MediaItemsPanel();ShelfList.ItemsSource=shelfKeys;
+        ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
     }
+    private void SizeShelfItem(ListViewItem item,Grid artwork)
+    {
+        var scale=libraryItemScale/100d;
+        var width=LibraryTileLayout.Width(Math.Max(1,ShelfList.ActualWidth-16),libraryItemScale);
+        item.Width=tiles?width:double.NaN;
+        artwork.Width=tiles?Math.Max(96,width-32):48*scale;
+        artwork.Height=tiles?Math.Min(144*scale,Math.Max(48,ShelfList.ActualHeight-108)):64*scale;
+        if(ShelfList.ItemsPanelRoot is ItemsWrapGrid wrap)wrap.ItemWidth=width+8;
+    }
+    private void UpdateShelfItemSizes()
+    {
+        if(!shelfHubOpen)return;
+        foreach(var item in shelfRealized.ToArray())
+            if(item.ContentTemplateRoot is Border {Child:Grid row}&&row.Children.FirstOrDefault() is Grid artwork)SizeShelfItem(item,artwork);
+    }
+    private void ShelfList_SizeChanged(object sender,SizeChangedEventArgs args)=>UpdateShelfItemSizes();
+    private void ShelfSize_Click(object sender,RoutedEventArgs args)=>ItemSizeFlyout.ShowAt((Button)sender);
     private async void ChooseShelves_Click(object sender,RoutedEventArgs args)
     {
         if(active is null||saving||dialogOpen||!await transitions.WaitAsync(0))return;

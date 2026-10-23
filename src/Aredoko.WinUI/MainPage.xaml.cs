@@ -327,9 +327,7 @@ public sealed partial class MainPage : Page
         {
             foreach (var item in containerCleanup.Keys.ToArray()) ReleaseContainer(item);
             Items.ItemsSource=null;
-            Items.ItemsPanel = (ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(tiles
-                ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1\"/></ItemsPanelTemplate>"
-                : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"1\"/></ItemsPanelTemplate>");
+            Items.ItemsPanel = MediaItemsPanel();
             // Only native strings cross the WinRT collection boundary. MediaRow stays
             // owned by C#; no reflection-based property binding or custom COM model.
             resultKeys.Clear();foreach(var row in rows)resultKeys.Add(RowKey(row.Id));
@@ -437,6 +435,7 @@ public sealed partial class MainPage : Page
     }
     private void UpdateItemSizes()
     {
+        UpdateShelfItemSizes();
         if(Items.ItemsPanelRoot is ItemsWrapGrid wrap)
             wrap.ItemWidth=tiles?LibraryTileLayout.Width(Math.Max(1,Items.ActualWidth-16),libraryItemScale)+8:double.NaN;
         foreach(var item in containerCleanup.Keys.ToArray())
@@ -459,7 +458,7 @@ public sealed partial class MainPage : Page
     private void Library_PointerWheelChanged(object sender,PointerRoutedEventArgs args)
     {
         if(!itemSizeReady||dialogOpen||folderHubOpen)return;
-        var properties=args.GetCurrentPoint(ItemListContainer).Properties;
+        var properties=args.GetCurrentPoint(shelfHubOpen?ShelfList:ItemListContainer).Properties;
         if(properties.IsHorizontalMouseWheel)return;
         if((Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)&Windows.UI.Core.CoreVirtualKeyStates.Down)==0)
         {itemWheelDelta=0;return;}
@@ -794,7 +793,7 @@ public sealed partial class MainPage : Page
         }
         finally { transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();} }
     }
-    private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=tiles?"リスト表示":"グリッド表示";RenderRows();RestoreSelection();}
+    private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";if(shelfHubOpen)RenderShelfLayout();else{RenderRows();RestoreSelection();}}
     private void OpenDetails_Click(object sender,RoutedEventArgs e)
     {
         if(folderHubOpen)
