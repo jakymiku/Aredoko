@@ -1,5 +1,9 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-24 native acquisition evidence (latest)
+
+[Generated native Start/cancel/HTTP Range resume/publication and limits](ai-acquisition.md):12 checks PASS/4 PNG viewed/owned exit0, source/settings/media preserved. Implementation7705e53. Acquisition1/2 consumed (no need repeat); environment2/2 and restore3/3 stay exhausted. Product catalog empty/real download not enabled, goal active/no shutdown. Next trusted source provenance and transfer scaling.
+
 ## 2026-10-24 acquisition Core and native settings (latest)
 
 [Typed catalog/job contract and source-connected download UI](ai-acquisition.md). Core973 PASS/Portable0errors/known warnings, published acquisition/frontend01. Generated local-only GUI max2 explicitly approved, not yet executed at this checkpoint. Real catalog remains empty; environment2/2 and restore3/3 stay exhausted. Goal active/no shutdown.

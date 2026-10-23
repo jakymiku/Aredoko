@@ -1,5 +1,11 @@
 # LD4b：任意AI環境の取得基盤（2026-10-24）
 
+## 2026-10-24 generated native acquisition accepted (latest)
+
+Implementation `7705e53`, candidate data/ai-ui/ai-acquisition-20261024/frontend01, native run01: **12 checks PASS**, all4 delivered PNGs reviewed, owned PID37176 normal exit0/no residual. Source/app SHA stable during flow. Real native consent→Start invokes authenticated production acquisition job; generated1,500,000 bytes from owned loopback only. Close/reopen attaches same job; native cancel before publish retains partial/settings; native resume issues actual Range bytes=65536-, validates exact bytes and exposes new root. Final received=verified=total1,500,000/published=true; original fixture/media SHA+mtime and launch preferences unchanged. No AI activation or selected Python execution.
+
+Acquisition GUI1/2 consumed; do not repeat passing flow just to use remaining attempt. Actual empty production registry/native license external navigation/optional speed edit/light/high DPI/real pack/clean Windows remain unaccepted. Idle shows consent required and default0=unlimited; active PNG was captured before next periodic progress refresh, cancelled/completed counts visible, not a throughput benchmark. Previous environment2/2 and restore3/3 remain exhausted. No external artifact/GPU/userDB/Alpha changes; P5/P6/roadmap incomplete.
+
 ## 2026-10-24 typed acquisition client and native download UI (latest)
 
 Source connects AI environment → app acquisition: trusted catalog metadata/capacity/license, explicit consent, default unlimited or optional MB/s cap, separate received/verified bytes, current-job cancel, retry/resume, dialog close/reopen and published root. Selected settings/active model do not change automatically. Published version can be selected explicitly through the existing-folder entry. Native catalog uses direct ComboBoxItem controls, not reflection-bound generic ItemsSource; lifetime/revision/busy protect stale replies and in-flight close. Same published catalog cannot be reacquired from the current UI state.

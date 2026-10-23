@@ -1,5 +1,9 @@
 # Aredoko 完成までの実行計画
 
+## 2026-10-24 native acquisition evidence (latest)
+
+[Generated native Start/cancel/HTTP Range resume/publication and limits](ai-acquisition.md):12 checks PASS/4 PNG viewed/owned exit0, source/settings/media preserved. Implementation7705e53. Acquisition1/2 consumed (no need repeat); environment2/2 and restore3/3 stay exhausted. Product catalog empty/real download not enabled, goal active/no shutdown. Next trusted source provenance and transfer scaling.
+
 ## 最新2026-10-23：P4実装・P5 backup接続
 
 [統合ロードマップ](polish-roadmap-20261022.md)と[実装/証拠/残件](live-backup-20261023.md)を優先する。複数棚Core/UI、画面履歴、登録フォルダfavorite/複数初期棚を接続し、P5は共有writer fence・認証job API・設定からの対象選択/進捗/再接続/中止まで進んだ。Core925/Portable build、限定nativeの進捗/中止は確認済み。Picker→GUI作成成功・safe restore切替/rollback・性能/配布完成は未受入。次はP5の安全な復元切替。旧履歴/実音声等を削除せず、全ロードマップ完了とはしない。現在はquota区切りでcommit/push/handoffし、シャットダウンしない。
