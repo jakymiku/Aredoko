@@ -253,15 +253,28 @@ class ProductionCatalog(Catalog):
         # metadata commit. Fail promptly rather than waiting on SQLite's writer.
         with self._guard:
             self._require_idle()
-            changes=Catalog.prepare_update(ids,changes)
+            shelf_ids=None
+            if isinstance(changes,dict) and 'shelf_ids' in changes:
+                if 'shelf' in changes:raise ValueError('Choose shelf names or IDs, not both')
+                changes=dict(changes);shelf_ids=changes.pop('shelf_ids')
+                from shelves import identity
+                if not isinstance(shelf_ids,list) or len(shelf_ids)>64 or len(set(map(identity,shelf_ids)))!=len(shelf_ids):raise ValueError('Invalid shelf selection')
+                # Validate IDs and optional metadata with the established contract.
+                if changes:changes=Catalog.prepare_update(ids,changes)
+                else:
+                    Catalog.prepare_update(ids,{'favorite':False});changes={}
+            else:
+                changes=Catalog.prepare_update(ids,changes)
             with self.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
                 marks=','.join('?' for _ in ids)
                 count=db.execute(f'SELECT count(*) FROM items WHERE id IN ({marks})',ids).fetchone()[0]
                 if count!=len(set(ids)):raise KeyError('Some items no longer exist')
+                if shelf_ids is not None:ShelfStore.replace_in_transaction(db,'item',ids,shelf_ids)
                 if 'shelf' in changes:ShelfStore.scalar_in_transaction(db,'item',ids,changes['shelf'])
-                assignments=','.join(f'{key}=?' for key in changes)
-                db.execute(f'UPDATE items SET {assignments} WHERE id IN ({marks})',list(changes.values())+ids)
+                if changes:
+                    assignments=','.join(f'{key}=?' for key in changes)
+                    db.execute(f'UPDATE items SET {assignments} WHERE id IN ({marks})',list(changes.values())+ids)
             return {'updated':count}
 
     def history_status(self):
@@ -448,6 +461,21 @@ class ProductionCatalog(Catalog):
             if operation=='delete':self.shelf_store.delete(values['shelf_id']);return {'deleted':values['shelf_id']}
             if operation=='assign':self.shelf_store.replace(values['entity'],values['object_ids'],values['shelf_ids']);return {'updated':len(values['object_ids'])}
             raise ValueError('Invalid shelf operation')
+
+    def shelf_descriptors(self):
+        # Same registered-root/exclusion visibility as library search; no source I/O.
+        from library_index import _excluded
+        with self._guard, self.connect() as db:
+            rules={r['id']:tuple(json.loads(r['excludes_json'])) for r in db.execute('SELECT id,excludes_json FROM library_roots WHERE enabled=1')}
+            db.create_function('aredoko_shelf_visible',2,lambda root,path:int(root in rules and not _excluded(path,rules[root])),deterministic=True)
+            rows=db.execute("WITH visible AS (SELECT sm.shelf_id,i.id,i.kind,l.status FROM item_shelves sm JOIN items i ON i.id=sm.item_id JOIN item_locations m ON m.item_id=i.id JOIN library_locations l ON l.id=m.location_id WHERE l.status<>'excluded' AND aredoko_shelf_visible(l.root_id,l.relative_path)=1) SELECT s.id,s.name,count(v.id) item_count,min(CASE WHEN v.status='present' AND v.kind IN ('image','book','archive','video') THEN v.id END) representative_id FROM shelves s LEFT JOIN visible v ON v.shelf_id=s.id GROUP BY s.id ORDER BY s.name,s.id").fetchall()
+            result=[]
+            for row in rows:
+                entry=dict(row);representative=entry.pop('representative_id')
+                sample=db.execute('SELECT '+self.FIELDS+self.JOIN+'WHERE i.id=?',(representative,)).fetchone() if representative is not None else None
+                entry['representative']=self.item(sample) if sample is not None else None
+                result.append(entry)
+            return result
 
     def shelves(self):
         with self.connect() as db:

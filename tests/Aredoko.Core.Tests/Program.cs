@@ -1,4 +1,4 @@
-﻿using Aredoko.Core;
+using Aredoko.Core;
 using System.Text.Json;
 void Check(bool result,string name){if(!result)throw new Exception(name);Console.WriteLine("PASS "+name);}
 Check(!JsonSerializer.IsReflectionEnabledByDefault,"reflection disabled");
@@ -7,6 +7,7 @@ await ImageSourceInfoTests.Run(Check);
 await ThumbnailTests.Run(Check);
 await AnimationStreamTests.Run(Check);
 await ResultSessionTests.Run(Check);
+await ShelfTests.Run(Check);
 await ResultNavigationTests.Run(Check);
 ResultBufferTests.Run(Check);
 await ResultWindowTests.Run(Check);

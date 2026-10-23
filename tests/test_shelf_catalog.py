@@ -33,12 +33,53 @@ class ShelfCatalogTests(unittest.TestCase):
         rows=list(ai._iter_rows(scope={'root_ids':[self.root],'shelf_ids':[self.b]}))
         self.assertEqual({row['id'] for row in rows},set(self.ids))
         self.assertEqual({row['id'] for row in ai._iter_rows(scope={'shelf':'B'})},set(self.ids))
+    def test_ui_shelf_narrows_saved_ai_scope_without_losing_multiple_membership(self):
+        ai=AISearch(self.catalog,Encoder());self.addCleanup(ai.close)
+        self.assertEqual([r['id'] for r in ai._iter_rows(scope={'shelf':'A','shelf_filter_ids':[self.b]})],[self.ids[0]])
+        self.assertEqual([r['id'] for r in ai._iter_rows(scope={'shelf_ids':[self.a],'shelf_filter_ids':[self.b]})],[self.ids[0]])
+        self.assertEqual(list(ai._iter_rows(scope={'shelf':'A','shelf_filter_ids':[]})),[])
+        with self.assertRaises(ValueError):list(ai._iter_rows(scope={'shelf_filter_ids':[True]}))
+
     def test_legacy_batch_cannot_drop_membership_or_commit_tags(self):
         with self.assertRaisesRegex(ValueError,'lose multiple'):self.catalog.update(self.ids,{'shelf':'C','tags':['must-not-save']})
         self.assertEqual(self.catalog.get(self.ids[0])['tags'],[])
         self.assertEqual(self.catalog.get(self.ids[1])['shelf'],'B')
         self.catalog.update([self.ids[1]],{'shelf':'C'});self.assertIn('C',self.catalog.shelves())
         self.assertEqual(self.catalog.search(shelf='C')['total'],1)
+    def test_id_update_is_atomic_and_preserves_secondary_memberships(self):
+        first,second=self.ids
+        self.catalog.update([first],{'tags':['edited'],'shelf_ids':[self.b,self.a]})
+        self.assertEqual(self.catalog.get(first)['tags'],['edited'])
+        self.assertEqual(self.catalog.get(first)['shelf_ids'],[self.a,self.b])
+        self.catalog.update([first],{'shelf_ids':[self.b]})
+        self.assertEqual(self.catalog.get(first)['shelf_ids'],[self.b])
+        self.assertEqual(self.catalog.get(first)['tags'],['edited'])
+        for bad in (None,[self.a,self.a],[True],[-1],[999999999]):
+            with self.assertRaises((ValueError,KeyError)):
+                self.catalog.update(self.ids,{'tags':['must-rollback'],'shelf_ids':bad})
+            self.assertEqual(self.catalog.get(first)['tags'],['edited'])
+            self.assertEqual(self.catalog.get(second)['tags'],[])
+            self.assertEqual(self.catalog.get(first)['shelf_ids'],[self.b])
+        with self.assertRaises(ValueError):self.catalog.update([first],{'shelf':'A','shelf_ids':[self.a]})
+        self.catalog.update([first],{'shelf_ids':[]})
+        self.assertEqual(self.catalog.get(first)['shelf_ids'],[])
+        self.assertFalse(self.catalog.get(first)['favorite'])
+
+    def test_descriptors_include_empty_shelves_and_only_visible_representatives(self):
+        empty=self.catalog.change_shelf('create',name='empty')['id']
+        listed={row['id']:row for row in self.catalog.shelf_descriptors()}
+        self.assertEqual(listed[self.a]['item_count'],1)
+        self.assertEqual(listed[self.a]['representative']['shelf_ids'],[self.a,self.b])
+        self.assertEqual(listed[empty]['item_count'],0)
+        self.assertIsNone(listed[empty]['representative'])
+        title=self.catalog.get(self.ids[0])['title']
+        self.catalog.set_excludes(self.root,[title])
+        listed={row['id']:row for row in self.catalog.shelf_descriptors()}
+        self.assertEqual(listed[self.a]['item_count'],0)
+        self.assertIsNone(listed[self.a]['representative'])
+        self.catalog.unregister_root(self.root)
+        self.assertTrue(all(row['item_count']==0 and row['representative'] is None for row in self.catalog.shelf_descriptors()))
+
     def test_scan_inherits_all_root_shelves_and_restart_preserves(self):
         self.catalog.change_shelf('assign',entity='root',object_ids=[self.root],shelf_ids=[self.a,self.b])
         (self.media/'c.png').write_bytes(b'generated-only fixture');self.catalog.index.scan(self.root);self.catalog.sync_index()
@@ -70,6 +111,12 @@ class ShelfCatalogTests(unittest.TestCase):
             except urllib.error.HTTPError as ex:return ex.code,json.load(ex)
         route='/api/library/shelves'
         self.assertEqual(request(route,token='wrong')[0],403)
+        listed=request(route)[1]
+        self.assertEqual(set(listed['items']),{'A','B'})
+        self.assertEqual({s['id'] for s in listed['shelves']},{self.a,self.b})
+        updated=request('/api/items/update',{'ids':[self.ids[0]],'changes':{'tags':['atomic'],'shelf_ids':[self.a,self.b]}})
+        self.assertEqual(updated[0],200)
+        self.assertEqual(self.catalog.get(self.ids[0])['tags'],['atomic'])
         self.assertEqual(request('/api/items?shelf_ids='+str(self.b))[1]['total'],2)
         self.assertEqual(request('/api/items?shelf_ids=')[1]['total'],0)
         sid=secrets.token_hex(16)

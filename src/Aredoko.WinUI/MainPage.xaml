@@ -1,4 +1,4 @@
-﻿<Page x:Class="Aredoko_WinUI.MainPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Loaded="Page_Loaded" SizeChanged="Page_SizeChanged">
+<Page x:Class="Aredoko_WinUI.MainPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Loaded="Page_Loaded" SizeChanged="Page_SizeChanged">
  <Page.Resources>
   <DataTemplate x:Key="MediaContainerTemplate"><Border HorizontalAlignment="Stretch"/></DataTemplate>
   <Style x:Key="MediaItemCardStyle" TargetType="ListViewItem">
@@ -49,7 +49,10 @@
       <Button x:Name="OpenBook" Content="本を開く" IsEnabled="False" Click="OpenBook_Click" AutomationProperties.AutomationId="BtnOpenBook"/>
 
        <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
-       <TextBox x:Name="Shelf" Header="棚" MaxLength="80" TextChanged="Editor_Changed" AutomationProperties.Name="棚" AutomationProperties.AutomationId="TxtShelf"/>
+       <StackPanel Spacing="4">
+        <TextBox x:Name="Shelf" Header="棚" IsReadOnly="True" TextWrapping="Wrap" AutomationProperties.Name="所属する棚" AutomationProperties.AutomationId="TxtShelf"/>
+        <Button x:Name="ChooseShelvesButton" Content="棚を選択" Click="ChooseShelves_Click" AutomationProperties.AutomationId="BtnChooseShelves"/>
+       </StackPanel>
        <CheckBox x:Name="Favorite" Content="お気に入り" Checked="Favorite_Checked" Unchecked="Favorite_Checked" AutomationProperties.AutomationId="ChkFavorite"/>
        <CheckBox x:Name="Reviewed" Visibility="Collapsed" Content="確認済み" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkReviewed"/>
        <Expander x:Name="FileProperties" Header="ファイルのプロパティ" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="FileProperties"><TextBlock x:Name="FilePropertyText" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="FilePropertyText"/></Expander>
@@ -143,6 +146,11 @@
      </StackPanel>
     </Expander>
     <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Margin="0,4,0,0" Spacing="4">
+     <StackPanel x:Name="ShelfScopeBar" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+      <Button Content="棚一覧" Click="ShelfList_Click" AutomationProperties.AutomationId="BtnShelfList"/>
+      <TextBlock x:Name="ShelfScopeText" VerticalAlignment="Center" MaxWidth="360" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtShelfScope"/>
+      <Button Content="解除" Click="ClearShelfScope_Click" AutomationProperties.Name="棚の検索条件を解除" AutomationProperties.AutomationId="BtnClearShelfScope"/>
+     </StackPanel>
      <Grid x:Name="SimilarityBar" ColumnSpacing="12" Visibility="Collapsed">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <TextBlock x:Name="SimilarityTitle" VerticalAlignment="Center" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtSimilarityOrigin"/>
@@ -154,6 +162,15 @@
     <Grid x:Name="ItemListContainer" SizeChanged="ItemListContainer_SizeChanged" Grid.Row="3" Margin="0,0,12,0">
      <ListView x:Name="Items" Loaded="Items_Loaded" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.AutomationId="ItemList"/>
      <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.Name="案内メッセージ" AutomationProperties.LiveSetting="Polite" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Grid>
+    <Grid x:Name="ShelfHubView" Grid.Row="1" Grid.RowSpan="3" Visibility="Collapsed" RowSpacing="12">
+     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+     <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button Content="棚を作成" Click="CreateShelf_Click" AutomationProperties.AutomationId="BtnCreateShelf"/>
+      <Button Content="更新" Click="RefreshShelves_Click" AutomationProperties.AutomationId="BtnRefreshShelves"/>
+     </StackPanel>
+     <TextBlock x:Name="ShelfHubMessage" Grid.Row="1" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="TxtShelfHubMessage"/>
+     <ListView x:Name="ShelfList" Grid.Row="2" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ShelfList_ItemClick" ContainerContentChanging="ShelfList_ContainerContentChanging" HorizontalContentAlignment="Stretch" AutomationProperties.Name="棚一覧" AutomationProperties.AutomationId="ShelfList"/>
     </Grid>
     <Grid x:Name="FolderHubView" SizeChanged="FolderHub_SizeChanged" AllowDrop="True" DragOver="Folder_DragOver" Drop="Folder_Drop" Grid.Row="1" Grid.RowSpan="3" Margin="0,0,12,0" Visibility="Collapsed" RowSpacing="12">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>

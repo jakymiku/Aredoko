@@ -1,5 +1,10 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-23 P4 shelf UI continuation (latest)
+
+[Core shelf IDs/atomic metadata save/shelf hub/multiple selection and evidence](docs/shelf-ui-20261023.md) source connected. Core893 PASS; final Portable build0 errors/known3 warnings. Shelf native run01 reached selector but click rejected by locked desktop; no visual/complete GUI acceptance. Original cleanup timeout kept; generated modal/draft closed normally later, no live test process. Remaining2 attempts only, no P3 cap reset. Next root favorites/navigation and root multi-shelf controls; P3/P5–7 remain incomplete. **Current user says no shutdown**; near quota10% safe commit/push/handoff only, overriding yesterday's one-time instruction. Old Alpha/user DB/source media untouched.
+
+
 ## 2026-10-23 overnight stopping checkpoint (latest entry)
 
 Read [exact commits, checks, unresolved native gates and tomorrow's first task](docs/overnight-handoff-20261023.md). Implementation HEAD `3e740a685c292e472085f4f918206978eabee7de`, followed only by stopping docs. Next Core shelf IDs/CRUD/assign→shelf list/common library/multiple-selection details. Production backend now migrates catalog1; do not send old Alpha to a newly migrated DB. Normal user DB/Alpha untouched. P3/P4 and full roadmap remain incomplete. User requested non-forced shutdown after save/push/handoff near quota threshold; this is one-time today, not a command for tomorrow. This document is saved before shutdown, not proof shutdown succeeded.

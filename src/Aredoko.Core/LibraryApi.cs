@@ -8,6 +8,7 @@ public sealed class LibraryApi : IDisposable
     private readonly HttpClient client;
     public LibraryApi() : this(new HttpClientHandler { AllowAutoRedirect = false }) { }
     private readonly HttpClient tagClient;
+    public ShelfClient Shelves {get;}
     public ResultSessionClient Results {get;}
     public AnimationStreamClient Animations {get;}
     public TagReviewClient TagReviews {get;}
@@ -17,6 +18,7 @@ public sealed class LibraryApi : IDisposable
     {
         client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(40)};
         tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromSeconds(100)};
+        Shelves=new(client);
         Results=new(client);
         Animations=new(client);
         TagReviews=new(tagClient);
@@ -86,7 +88,7 @@ public sealed class LibraryApi : IDisposable
         }
         return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
     }
-    public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed));
+    public async Task SaveAsync(int id,EditorState state) => await PostAsync("api/items/update",Protocol.CreateUpdate(id,state.ParsedTags,state.Shelf,state.Favorite,state.Reviewed,state.ShelfIds));
     public Task<SearchResponse> SimilarAsync(int itemId,string kind,string view,int page,JsonObject scope,int? rootId,CancellationToken cancellation) =>
         SimilarMultiAsync(itemId,kind,view,page,scope,rootId is int id ? new[]{id} : null,cancellation);
     public async Task<SearchResponse> SimilarMultiAsync(int itemId,string kind,string view,int page,JsonObject scope,IReadOnlyList<int>? rootIds,CancellationToken cancellation)

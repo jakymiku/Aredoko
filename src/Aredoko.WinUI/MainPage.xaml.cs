@@ -1,4 +1,4 @@
-﻿using Aredoko.Core;
+using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Automation;
@@ -56,7 +56,7 @@ public sealed partial class MainPage : Page
     private CancellationTokenSource? similarityCancellation;
     private bool returningFromSimilarity;
     private SearchBookmark? similarityReturn;
-    private sealed record SearchBookmark(string Query,int Kind,int Mode,int[]? Roots,bool LiteralOnly,double? Boundary,int Group,string View,int Page,int Selection);
+    private sealed record SearchBookmark(string Query,int Kind,int Mode,int[]? Roots,bool LiteralOnly,double? Boundary,int Group,string View,int Page,int Selection,long[]? Shelves);
 
     public MainPage() {
         InitializeComponent();
@@ -84,8 +84,8 @@ public sealed partial class MainPage : Page
     }
     private static bool SameRoots(IReadOnlyList<int>? a,IReadOnlyList<int>? b)=>
         ReferenceEquals(a,b)||(a is not null&&b is not null&&a.SequenceEqual(b));
-    private bool PendingSearch => !folderHubOpen&&(Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind||SearchMode.SelectedIndex!=lastMode||!SameRoots(selectedSearchRoots,lastRoots)||(AIMatchedOnly.IsChecked==true)!=lastLiteralOnly||BoundaryValue()!=lastBoundary||AIResultGroup.SelectedIndex!=lastResultGroup);
-    private EditorState Current()=>new(Tags.Text,Shelf.Text,Favorite.IsChecked==true,Reviewed.IsChecked==true);
+    private bool PendingSearch => !folderHubOpen&&!shelfHubOpen&&(Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind||SearchMode.SelectedIndex!=lastMode||!SameRoots(selectedSearchRoots,lastRoots)||(AIMatchedOnly.IsChecked==true)!=lastLiteralOnly||BoundaryValue()!=lastBoundary||AIResultGroup.SelectedIndex!=lastResultGroup);
+    private EditorState Current()=>new(Tags.Text,editingShelfIds.Length==0?"":ShelfName(editingShelfIds.Min()),Favorite.IsChecked==true,Reviewed.IsChecked==true){ShelfIds=editingShelfIds.ToArray()};
     private bool Dirty=>active is not null && EditorState.IsDirty(saved,Current());
     private bool FolderDirty=>folderSettingsActive && folderDraft is {IsDirty:true};
     private void Notice(string title,string message="",InfoBarSeverity severity=InfoBarSeverity.Informational,string? details=null) {
@@ -184,8 +184,7 @@ public sealed partial class MainPage : Page
     {
         var data=await api.GetAsync("api/library/roots?include_inactive=1");
         knownRoots=RegisteredRootRow.ParseList(data);
-        var shelves=await api.GetAsync("api/library/shelves");
-        knownShelves=shelves["items"]?.AsArray().Select(x=>x!.GetValue<string>()).ToArray()??[];
+        await RefreshShelfDescriptorsAsync();
         var activeIds=knownRoots.Where(r=>r.Enabled).Select(r=>r.Id).ToHashSet();
         checkedFolderIds.RemoveWhere(id=>!activeIds.Contains(id));
         PopulateAddFolderShelves();
@@ -229,7 +228,7 @@ public sealed partial class MainPage : Page
             if((origin is not null||method.IsAI&&!string.IsNullOrWhiteSpace(query))&&aiScope is null)throw new InvalidOperationException(aiScopeError);
             var pageSize=method.IsPageText?20:60;
             var conditions=ResultSearchConditions.Create(query,kind,view,method,aiScope,selectedRoots,
-                origin?.Id,literalOnly,boundary,ResultGroup());
+                origin?.Id,literalOnly,boundary,ResultGroup(),selectedShelfIds);
             var result=await ReadResultPageAsync(conditions,reuseSession,version,page,pageSize,cancellation);
             if(!searches.IsCurrent(version)||disposed)return;
             resultPageSize=pageSize;
@@ -245,7 +244,7 @@ public sealed partial class MainPage : Page
             SearchOptions.Header="AI候補の表示";
             ResetBrowse(checked(page*pageSize),result);rows=result.Items; active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
-            if(!folderHubOpen)MainViewTitle.Text=view=="history"?"閲覧履歴":view=="unreviewed"?"ライブラリ（未確認）":"ライブラリ";
+            if(!folderHubOpen&&!shelfHubOpen)MainViewTitle.Text=selectedShelfIds is not null?ShelfScopeName():view=="history"?"閲覧履歴":view=="unreviewed"?"ライブラリ（未確認）":"ライブラリ";
             Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+pageSize-1)/pageSize)}";
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*pageSize<result.Total;
             Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
@@ -521,7 +520,7 @@ public sealed partial class MainPage : Page
         {
             if(!await ConfirmDiscardAsync())return;
             // Use the context-menu row, never whichever item happens to be selected.
-            similarityReturn??=new(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,page,source.Id);
+            similarityReturn??=new(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,page,source.Id,selectedShelfIds?.ToArray());
             similarityOrigin=source;if(view=="history")view="all";page=0;UpdateSearchMethod();await LoadAsync();
         }
         finally{transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
@@ -542,7 +541,7 @@ public sealed partial class MainPage : Page
             Query.Text=bookmark.Query;Kind.SelectedIndex=bookmark.Kind;SearchMode.SelectedIndex=bookmark.Mode;
             RestoreSearchRoots(bookmark.Roots);AIMatchedOnly.IsChecked=bookmark.LiteralOnly;
             SimilarityBoundary.Value=bookmark.Boundary??double.NaN;AIResultGroup.SelectedIndex=bookmark.Group;
-            view=bookmark.View;page=bookmark.Page;ClearSimilarity();RestoreNavigation();populating=false;
+            SetShelfScope(bookmark.Shelves);view=bookmark.View;page=bookmark.Page;ClearSimilarity();RestoreNavigation();populating=false;
             await LoadAsync();
             await FocusRowAsync(bookmark.Selection);
         }
@@ -607,8 +606,8 @@ public sealed partial class MainPage : Page
         var previous=populating;populating=true;
         try
         {
-            active=row; saved=new(string.Join(", ",active.Tags),active.Shelf,active.Favorite,active.Reviewed);
-            Tags.Text=saved.Tags;Shelf.Text=saved.Shelf;Favorite.IsChecked=saved.Favorite;Reviewed.IsChecked=saved.Reviewed;
+            active=row; editingShelfIds=active.ShelfIds.ToArray();saved=new(string.Join(", ",active.Tags),active.Shelf,active.Favorite,active.Reviewed){ShelfIds=editingShelfIds.ToArray()};
+            Tags.Text=saved.Tags;UpdateShelfEditorLabel();Favorite.IsChecked=saved.Favorite;Reviewed.IsChecked=saved.Reviewed;
             ItemTitle.Text=active.Title;ItemPath.Text=active.LocationLabel;UpdateFileProperties();Editor.IsEnabled=true;DetailsButton.IsEnabled=true;Details.IsPaneOpen=true;
             DetailPreview.ContextFlyout=SimilarityMenu(active);
             UpdateDirty();
@@ -619,7 +618,7 @@ public sealed partial class MainPage : Page
     private void RestoreSelection(){populating=true;Items.SelectedItem=active is null?null:Items.Items.OfType<string>().FirstOrDefault(key=>key==RowKey(active.Id));populating=false;}
     private void UpdateDirty(){if(!ready)return;
         var blocked=active is not null&&tagReviewSyncItem==active.Id;
-        Tags.IsEnabled=Shelf.IsEnabled=Favorite.IsEnabled=Reviewed.IsEnabled=!blocked;
+        Tags.IsEnabled=Shelf.IsEnabled=ChooseShelvesButton.IsEnabled=Favorite.IsEnabled=Reviewed.IsEnabled=!blocked;
         TagSuggestionsButton.IsEnabled=active is not null&&TagReviewProtocol.CanOpen(active)&&!saving;
         if(blocked){EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";Save.IsEnabled=false;return;}EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);OpenAudio.IsEnabled=active is not null&&AudioPlayerPolicy.CanOpen(active);
         AudioSearchHint.Text=SimilaritySearch.AudioIndexingGuidance;
@@ -683,13 +682,13 @@ public sealed partial class MainPage : Page
         // editor control, and only if the user has not chosen another control
         // while the request was pending. Never take focus from another window.
         var focused=FocusManager.GetFocusedElement(XamlRoot) as Control;
-        var restore=focused==Tags||focused==Shelf||focused==Favorite||focused==Reviewed||focused==Save;
+        var restore=focused==Tags||focused==Shelf||focused==ChooseShelvesButton||focused==Favorite||focused==Reviewed||focused==Save;
         var focusState=focused?.FocusState==FocusState.Keyboard?FocusState.Keyboard:FocusState.Programmatic;
         saving=true;Editor.IsEnabled=false;var id=active.Id;
         var displacedFocus=FocusManager.GetFocusedElement(XamlRoot);
         try {
             await api.SaveAsync(id,snapshot);
-            saved=snapshot;active.Tags=snapshot.ParsedTags;active.Shelf=snapshot.Shelf;active.Favorite=snapshot.Favorite;active.Reviewed=snapshot.Reviewed;
+            saved=snapshot;active.Tags=snapshot.ParsedTags;active.Shelf=snapshot.Shelf;active.ShelfIds=snapshot.ShelfIds?.ToArray()??[];active.Favorite=snapshot.Favorite;active.Reviewed=snapshot.Reviewed;
             EditStatus.Text="保存しました";Notice("保存しました");await RefreshResultRowsAfterEditAsync();
         }catch(Exception ex){Failure(ex);EditStatus.Text="保存できませんでした。変更内容は残っています。";}
         finally
@@ -756,6 +755,8 @@ public sealed partial class MainPage : Page
         populating=true;
         Nav.SelectedItem=folderHubOpen
             ? FolderNavigation
+            : shelfHubOpen||selectedShelfIds is not null
+            ? Nav.MenuItems.OfType<NavigationViewItem>().First(x=>x.Tag?.ToString()=="shelf")
             : Nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(x=>x.Tag?.ToString()==view) ?? Nav.MenuItems.OfType<NavigationViewItem>().First();
         UnreviewedOnly.IsChecked=view=="unreviewed";
         UnreviewedOnly.IsEnabled=view is "all" or "unreviewed";
@@ -766,11 +767,13 @@ public sealed partial class MainPage : Page
         if(!ready||populating||args.SelectedItem is not NavigationViewItem item)return;
         var next=item.Tag?.ToString()??"";
         if(next=="folders"){await OpenFolderHubAsync();return;}
+        if(next=="shelf"){await OpenShelfHubAsync();return;}
         if(next is not ("all" or "favorites" or "unreviewed" or "shelf" or "history"))return;
         if(saving||dialogOpen||!await transitions.WaitAsync(0)){RestoreNavigation();return;}
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
+            CloseShelfHubCore();SetShelfScope(null);
             CloseFolderHubCore();
             populating=true;
             if(next=="history"){historyReturnMode=SearchMode.SelectedIndex;SearchMode.SelectedIndex=0;}
@@ -994,8 +997,8 @@ public sealed partial class MainPage : Page
     {
         var fresh=await api.TagReviews.ItemAsync(id,CancellationToken.None);
         if(disposed||active?.Id!=id)return;
-        active.Tags=fresh.Tags;active.Shelf=fresh.Shelf;active.Favorite=fresh.Favorite;active.Reviewed=fresh.Reviewed;
-        Tags.Text=string.Join(", ",fresh.Tags);Shelf.Text=fresh.Shelf;Favorite.IsChecked=fresh.Favorite;Reviewed.IsChecked=fresh.Reviewed;
+        active.Tags=fresh.Tags;active.Shelf=fresh.Shelf;active.ShelfIds=fresh.ShelfIds.ToArray();active.Favorite=fresh.Favorite;active.Reviewed=fresh.Reviewed;
+        editingShelfIds=fresh.ShelfIds.ToArray();Tags.Text=string.Join(", ",fresh.Tags);UpdateShelfEditorLabel();Favorite.IsChecked=fresh.Favorite;Reviewed.IsChecked=fresh.Reviewed;
         saved=Current();tagReviewSyncItem=null;await RefreshResultRowsAfterEditAsync();
     }
     private void UpdateNavigationLayout(double width)
@@ -1100,7 +1103,8 @@ public sealed partial class MainPage : Page
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
-            var changed=!SameRoots(selectedSearchRoots,targetRoots);
+            var changed=!SameRoots(selectedSearchRoots,targetRoots)||selectedShelfIds is not null;
+            SetShelfScope(null);
             RestoreSearchRoots(targetRoots);
             CloseFolderHubCore();
             RestoreNavigation();
@@ -1117,6 +1121,7 @@ public sealed partial class MainPage : Page
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
+            CloseShelfHubCore();
             await RefreshSearchRootsAsync();
             if(checkedFolderIds.Count==0&&selectedSearchRoots is not null)
                 foreach(var id in selectedSearchRoots.Where(id=>knownRoots.Any(r=>r.Enabled&&r.Id==id)))
@@ -2087,6 +2092,6 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){disposed=true;if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){disposed=true;CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

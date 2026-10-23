@@ -78,14 +78,21 @@ class ShelfStore:
         if not isinstance(shelf_ids,list) or len(shelf_ids)>64 or len(set(map(identity,shelf_ids)))!=len(shelf_ids):raise ValueError('Invalid shelf selection')
         table,key,relation=('items','item_id','item_shelves') if entity=='item' else ('library_roots','root_id','root_shelves')
         with self.transaction() as db:
-            for sid in shelf_ids:
-                if db.execute('SELECT 1 FROM shelves WHERE id=?',(sid,)).fetchone() is None:raise KeyError(sid)
-            for oid in object_ids:
-                if db.execute(f'SELECT id FROM {table} WHERE id=?',(oid,)).fetchone() is None:raise KeyError(oid)
-            for oid in object_ids:
-                db.execute(f'DELETE FROM {relation} WHERE {key}=?',(oid,))
-                db.executemany(f'INSERT INTO {relation} VALUES(?,?)',[(oid,sid) for sid in shelf_ids])
-            self._sync(db,entity,object_ids)
+            self.replace_in_transaction(db,entity,object_ids,shelf_ids)
+    @staticmethod
+    def replace_in_transaction(db,entity,object_ids,shelf_ids):
+        if entity not in ('item','root'):raise ValueError('Invalid shelf entity')
+        if not isinstance(object_ids,list) or not 1<=len(object_ids)<=256 or len(set(map(identity,object_ids)))!=len(object_ids):raise ValueError('Invalid shelf objects')
+        if not isinstance(shelf_ids,list) or len(shelf_ids)>64 or len(set(map(identity,shelf_ids)))!=len(shelf_ids):raise ValueError('Invalid shelf selection')
+        table,key,relation=('items','item_id','item_shelves') if entity=='item' else ('library_roots','root_id','root_shelves')
+        for sid in shelf_ids:
+            if db.execute('SELECT 1 FROM shelves WHERE id=?',(sid,)).fetchone() is None:raise KeyError(sid)
+        for oid in object_ids:
+            if db.execute(f'SELECT id FROM {table} WHERE id=?',(oid,)).fetchone() is None:raise KeyError(oid)
+        for oid in object_ids:
+            db.execute(f'DELETE FROM {relation} WHERE {key}=?',(oid,))
+            db.executemany(f'INSERT INTO {relation} VALUES(?,?)',[(oid,sid) for sid in shelf_ids])
+        ShelfStore._sync(db,entity,object_ids)
     @staticmethod
     def scalar_in_transaction(db,entity,object_ids,value):
         table,key,relation=('items','item_id','item_shelves') if entity=='item' else ('library_roots','root_id','root_shelves')

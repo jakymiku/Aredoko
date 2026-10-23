@@ -8,7 +8,7 @@ public static class ResultSearchConditions
 {
     public static JsonObject? Create(string query, string kind, string view, SearchMethod method,
         JsonObject? scope, IReadOnlyList<int>? rootIds, int? originId = null,
-        bool literalOnly = false, double? groupThreshold = null, string resultGroup = "all")
+        bool literalOnly = false, double? groupThreshold = null, string resultGroup = "all", IReadOnlyList<long>? shelfIds = null)
     {
         JsonObject result;
         if (originId is int origin)
@@ -16,7 +16,7 @@ public static class ResultSearchConditions
             if (scope is null) throw new ArgumentException("AI scope is required", nameof(scope));
             result = SimilaritySearch.RequestMulti(origin, kind, view, 0, scope, rootIds);
             result.Remove("page"); result["mode"] = "similar";
-            return result;
+            return ShelfProtocol.Restrict(result,shelfIds);
         }
         if (view == "history")
         {
@@ -34,7 +34,7 @@ public static class ResultSearchConditions
             result = AIScopeRequests.Search(query, kind, view, 0, method.Source,
                 FolderSearch.RestrictAIMulti(scope, rootIds), literalOnly, groupThreshold, resultGroup);
             result.Remove("page"); result["mode"] = "semantic";
-            return result;
+            return ShelfProtocol.Restrict(result,shelfIds);
         }
         else result = new JsonObject { ["mode"] = "literal", ["query"] = query, ["kind"] = kind, ["view"] = view };
         var roots = FolderSearch.NormalizeNonEmpty(rootIds);
@@ -43,6 +43,6 @@ public static class ResultSearchConditions
             var values = new JsonArray(); foreach (var id in roots) values.Add((JsonNode?)JsonValue.Create(id));
             result["root_ids"] = values;
         }
-        return result;
+        return ShelfProtocol.Restrict(result,shelfIds);
     }
 }

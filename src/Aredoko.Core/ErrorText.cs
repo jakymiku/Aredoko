@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
@@ -75,6 +75,10 @@ public static class ErrorText
         ["Invalid reader request"] = "読書画面の要求が無効です。開き直してください。",
         ["Invalid request: check folder, exclusions or scan state"] = "フォルダ・除外設定・スキャン状態を確認してください。",
         ["Explicit folder consent required"] = "登録するフォルダを選択して、登録操作をやり直してください。",
+        ["Shelf name already exists"] = "同じ名前の棚があります。別の名前を入力してください。",
+        ["Shelf or item not found"] = "棚または作品が見つかりません。最新の一覧を取得してください。",
+        ["Invalid shelf request"] = "棚の名前や選択内容を確認してください。",
+        ["Legacy scalar update would lose multiple shelves"] = "この操作では複数の棚所属を保持できません。棚の選択から変更してください。",
         ["Shelf must be 80 characters or less"] = "棚の名前は80文字までです。",
         ["Include subfolders must be true or false"] = "サブフォルダの設定が無効です。",
         ["Symlink roots are not supported"] = "シンボリックリンクのフォルダは登録できません。",

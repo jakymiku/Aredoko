@@ -6,7 +6,7 @@ MAX_ROOTS = 256
 
 
 def validate_scope(value):
-    if not isinstance(value, dict) or set(value) - {'root_ids', 'kind', 'shelf', 'shelf_ids'}:
+    if not isinstance(value, dict) or set(value) - {'root_ids', 'kind', 'shelf', 'shelf_ids', 'shelf_filter_ids'}:
         raise ValueError('Invalid AI scope')
     roots = value.get('root_ids')
     if roots is not None:
@@ -22,8 +22,10 @@ def validate_scope(value):
     if shelf is not None and (not isinstance(shelf, str) or len(shelf) > 80):
         raise ValueError('Invalid scope shelf')
     shelf_clause(shelf,value.get('shelf_ids'))
+    shelf_clause(shelf_ids=value.get('shelf_filter_ids'))
     result={'root_ids': roots, 'kind': kind, 'shelf': shelf}
     if 'shelf_ids' in value:result['shelf_ids']=None if value['shelf_ids'] is None else sorted(value['shelf_ids'])
+    if 'shelf_filter_ids' in value:result['shelf_filter_ids']=None if value['shelf_filter_ids'] is None else sorted(value['shelf_filter_ids'])
     return result
 
 
@@ -42,5 +44,8 @@ def scope_clause(scope):
     if scope['kind']:
         where.append('i.kind=?'); values.append(scope['kind'])
     clauses,parameters=shelf_clause(scope['shelf'],scope.get('shelf_ids'))
+    where.extend(clauses);values.extend(parameters)
+    # UI shelf browsing narrows, rather than overwrites, the saved AI shelf.
+    clauses,parameters=shelf_clause(shelf_ids=scope.get('shelf_filter_ids'))
     where.extend(clauses);values.extend(parameters)
     return where, values

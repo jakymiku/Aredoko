@@ -219,7 +219,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(403,{'error':'Invalid session'})
                 if path=='/api/library/shelves':
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid shelf query'})
-                    return self.send(200,{'shelves':catalog.shelf_store.list()})
+                    return self.send(200,{'shelves':catalog.shelf_descriptors(),'items':catalog.shelves()})
                 if path=='/api/library/history':
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid history query'})
                     return self.send(200,catalog.history_status())
@@ -474,7 +474,6 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         return self.send(409,{'error':'AI対象設定を読み込めません。対象を選び直して保存してください。文字検索は利用できます。'})
                 if path=='/api/library/terms': return self.send(200,{'items':catalog.terms.entries()})
                 if path=='/api/library/terms/export': return self.send(200,catalog.terms.export())
-                if path=='/api/library/shelves': return self.send(200,{'items':catalog.shelves()})
                 if path=='/api/library/roots':
                     inactive=parse_qs(urlparse(self.path).query).get('include_inactive',['0'])
                     if inactive not in (['0'],['1']):return self.send(400,{'error':'Invalid root filter'})

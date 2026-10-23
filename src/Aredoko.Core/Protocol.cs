@@ -17,6 +17,7 @@ public sealed class MediaRow
     public string Kind { get; set; } = "";
     public string[] Tags { get; set; } = [];
     public string Shelf { get; set; } = "";
+    public long[] ShelfIds { get; set; } = [];
     public bool Favorite { get; set; }
     public bool Reviewed { get; set; }
     public int RootId { get; set; }
@@ -227,6 +228,7 @@ public static class Protocol
         Kind = row.GetProperty("kind").GetString() ?? "",
         Tags = row.GetProperty("tags").EnumerateArray().Select(t => t.GetString() ?? "").ToArray(),
         Shelf = row.GetProperty("shelf").GetString() ?? "",
+        ShelfIds = row.TryGetProperty("shelf_ids", out var memberships) ? ShelfProtocol.ReadIds(memberships) : [],
         Favorite = row.GetProperty("favorite").GetBoolean(),
         Reviewed = row.GetProperty("reviewed").GetBoolean(),
         RootId = row.TryGetProperty("root_id", out var rootId) ? rootId.GetInt32() : 0,
@@ -290,7 +292,7 @@ public static class Protocol
         return string.Join(" / ", parts);
     }
 
-    public static string CreateUpdate(int id, IEnumerable<string> tags, string shelf, bool favorite, bool reviewed)
+    public static string CreateUpdate(int id, IEnumerable<string> tags, string shelf, bool favorite, bool reviewed, IReadOnlyList<long>? shelfIds = null)
     {
         using var stream = new MemoryStream();
         using (var json = new Utf8JsonWriter(stream)) {
@@ -305,7 +307,13 @@ public static class Protocol
             json.WriteStartArray();
             foreach (var tag in tags) json.WriteStringValue(tag);
             json.WriteEndArray();
-            json.WriteString("shelf", shelf);
+            if(shelfIds is null) json.WriteString("shelf", shelf);
+            else {
+                ShelfProtocol.ValidateIds(shelfIds);
+                json.WritePropertyName("shelf_ids");json.WriteStartArray();
+                foreach(var sid in shelfIds.Order()) json.WriteNumberValue(sid);
+                json.WriteEndArray();
+            }
             json.WriteBoolean("favorite", favorite);
             json.WriteBoolean("reviewed", reviewed);
             json.WriteEndObject();
