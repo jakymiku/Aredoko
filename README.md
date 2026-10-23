@@ -1,41 +1,17 @@
 # Aredoko
-画像・本・動画・音楽を、あいまいな記憶から探す。
 
-Windows向けローカルライブラリ。現在は **架空データを使った操作試作** です。
+> **mainは旧プロトタイプの保存地点（2026-10-24時点）。現在の製品コード・起動方法・開発状況はここではない。**
 
-## 起動
-Python 3.12以降を用意して `start-demo.cmd` をダブルクリックします。
-または `python app/server.py --open` を実行します。
-ブラウザに http://127.0.0.1:8765 が開きます。起動したコンソールで Ctrl+C を押すと終了します。
-追加のPythonパッケージは不要です。初回は5万件の架空データを自動生成します。
-ポート競合時は `python app/server.py --port 8766 --open` を使えます。
+## 最新の開発先
+- [Windows製品版の開発ブランチ](https://github.com/jakymiku/Aredoko/tree/feat/winui3-production-mvp-20261011) — WinUI 3 + Python/SQLite、まだ正式安定版ではない
+- [現在の引き継ぎ](https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/current-handoff.md) — 次の実装1件と未検証
+- [開発ロードマップ](https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/polish-roadmap-20261022.md) — P0–P7
+- [長期完成台帳](https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/completion-roadmap.md) — R01–R14、M1/M2
+- [開発中のDraft PR #5](https://github.com/jakymiku/Aredoko/pull/5) — 未マージ・未完成
 
-## 現在できること
-- 5万件の一覧を60件ずつ表示
-- タイトル・タグの文字検索、メディア種別で絞り込み
-- お気に入り・未確認・棚に入れたものの表示
-- 単体・一括でタグ、棚、お気に入り、確認済みを編集
-- SQLiteに保存し、再起動後も編集を保持
+## mainにあるもの
+このブランチは2026年10月9日時点の小規模なWebデモを残している。起動するなら `start-demo.cmd`、または `python app/server.py --open`。これは**生成データ中心の旧試作**であり、現在のWinUI 3製品版ではない。古い操作・当時の機能については[初期README原文](README.history-initial-20261024.md)を参照してね。
 
-実ファイルは読み取りません。AI検索、読書ビューア、フォルダ登録、Komga連携、Tauri/WinUI本体は未実装です。
-今回のWeb UIは操作仕様を固める土台であり、Tauri版の性能測定結果ではありません。
-一括編集は対象の値を置き換えます。棚は試作では1件のみです。
+**mainに最新製品実装を取り込むのは、配布版の起動・データ保全・主要機能を受入確認してから。** 現行開発ブランチは476コミット以上進んでいるが、未確認機能を正式安定版として扱わず、Draft PRや他の比較用PRを勝手に統合しない。次回の正式統合時にはPR依存関係・保護ルール・競合・Actionsを再確認する。
 
-## 開発と検証
-- `python -m unittest discover -s tests -v`
-- `node --check web/app.js`
-- UI操作テスト: PlaywrightとEdgeを用意し、デモ起動中に `node tools/check-ui.cjs`
-
-UIテストは専用デモDBで使用してください。架空レコードを編集して元に戻します。
-
-## 文書
-- [仕様](docs/spec.md)
-- [GUI比較計画](docs/gui-comparison.md)
-- [作業状況・次の作業](docs/status.md)
-- [共通API](docs/api.md)
-
-## 保存先
-デモDBは `data/demo.sqlite`、画面検証画像は `cache/qa/`。
-実ファイル、購入作品、AIモデル、個人設定、検索DBはGit管理しません。
-サーバーは127.0.0.1にのみ接続待機し、外部公開する設計ではありません。
-GUI方式はTauri + ReactとWinUI 3 + C#を比較して決定し、Python側のデータ処理を共用する方針です。
+GitHub Actionsはクォータ保護のため手動起動（`workflow_dispatch`）に限定。通常のPush/PRでは自動実行しない。

@@ -1,5 +1,7 @@
 name: Prototype checks
-on: [push, pull_request]
+# Hosted CI is deliberately opt-in; do not trigger for documentation/ordinary commits.
+on:
+  workflow_dispatch:
 jobs:
   tests:
     runs-on: windows-latest
