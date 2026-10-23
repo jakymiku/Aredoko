@@ -18,6 +18,13 @@ from release_runtime import verify_release, python_layout, media_layout, runtime
 from storage_lease import plain_path, storage_parent, storage_lease
 from packaged_frontend import prepare_frontend
 from startup_progress import StartupCancelled, StartupProgress
+sys.path.insert(0, str(ROOT / 'app'))
+from restore_switch import (
+    check_pending_restore,
+    is_restore_pending,
+    commit_restore_switch,
+    rollback_restore_switch,
+)
 
 CREATE_NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 RUNTIME_FIELDS = {'ai_runtime_root', 'ai_runtime_manifest_sha256'}
@@ -141,7 +148,7 @@ def _stop_owned(process, graceful=False, timeout=8):
             process.kill();process.wait(timeout=5)
 
 
-def run_session(backend_command, app_command, *, port, instance, logs, cwd, env, startup_timeout=20, app_factory=None, progress=None, require_ready=False, on_ready=None, frontend_timeout=60):
+def run_session(backend_command, app_command, *, port, instance, logs, cwd, env, startup_timeout=20, app_factory=None, progress=None, require_ready=False, on_ready=None, frontend_timeout=60, data=None):
     """Launch only owned children, and never attach to another service on a port."""
     # This advisory check provides a clear error; the per-launch session ID is
     # the race-safe proof that the listening server is ours.
@@ -149,6 +156,8 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
         try:probe.bind(('127.0.0.1', port))
         except OSError as error:raise RuntimeError('Aredoko port is already in use') from error
     backend = app = None
+    ready_reached = False
+    effective_data = data if data is not None else (logs.parent.parent if logs is not None and getattr(logs, 'parent', None) and logs.parent.name == 'logs' else None)
     if progress is not None:progress.check_cancelled()
     with (logs / 'backend.log').open('xb') as output, (logs / 'backend-error.log').open('xb') as errors, (logs / 'app.log').open('xb') as app_log:
         try:
@@ -185,11 +194,21 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
                     session = _session(port)
                     if session.get('mode') != 'production' or session.get('instance_id') != instance:
                         raise RuntimeError('Backend identity changed before ready')
+            ready_reached = True
+            if effective_data is not None and is_restore_pending(effective_data):
+                commit_restore_switch(effective_data)
             if on_ready is not None:on_ready()
             while app.poll() is None:
                 if backend.poll() is not None:raise AppSessionError('Backend stopped unexpectedly; see backend-error.log')
                 time.sleep(0.1)
             if app.returncode:raise AppSessionError(f'Windows app exited with code {app.returncode}; see app.log')
+        except Exception as error:
+            if not ready_reached and effective_data is not None and is_restore_pending(effective_data):
+                try:
+                    rollback_restore_switch(effective_data, error=str(error))
+                except Exception:
+                    pass
+            raise
         finally:
             try:
                 try:_stop_owned(app)
@@ -207,6 +226,8 @@ def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full
         raise ValueError('User data must be outside the release directory')
     storage_parent(data / 'launcher')
     with storage_lease(data / 'launcher'):
+        if check_pending_restore(data):
+            settings = load_settings(data, preferences_path)
         instance = secrets.token_hex(16)
         logs = data / 'logs' / (time.strftime('%Y%m%d-%H%M%S') + '-' + instance)
         storage_parent(logs / 'launcher.log');plain_path(logs, directory=True)
@@ -237,8 +258,13 @@ def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full
             run_session(backend, app, port=8769, instance=instance, logs=logs, cwd=root,
                         env=runtime_environment(root / 'runtime/media'), app_factory=frontend.start,
                         progress=progress if portable else None, require_ready=portable,
-                        on_ready=startup_pipe.mark_ready if startup_pipe is not None else None)
+                        on_ready=startup_pipe.mark_ready if startup_pipe is not None else None, data=data)
         except Exception as error:
+            if is_restore_pending(data):
+                try:
+                    rollback_restore_switch(data, error=str(error))
+                except Exception:
+                    pass
             (logs / 'launcher.log').write_text(type(error).__name__ + ': ' + str(error) + '\n', encoding='utf-8')
             failure_type = (StartupCancelled if isinstance(error, StartupCancelled) else
                             AppSessionError if isinstance(error, AppSessionError) else RuntimeError)

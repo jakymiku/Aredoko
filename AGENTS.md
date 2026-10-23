@@ -1,5 +1,10 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-23 P5 safe restore switch & failure rollback (latest)
+
+[Staging validation, atomic settings switch, and startup ready failure rollback](docs/restore-switch-20261023.md) implemented. `app/restore_jobs.py` validates/extracts backup ZIP into isolated staging; `app/restore_switch.py` moves verified staging into `restores/<id>`, updates `launch-settings.json` with rollback sentinel, and launcher `tools/launch_release.py` auto-commits on `ready` or rolls back on crash/failure. Restore-jobs20 PASS, switch12 PASS, storage-backup28 PASS, Core925 PASS, Portable build0 errors/known5 warnings (WUI1001×3, IL2104×2). Preserve backup/shelf/P3 caps, user data/Alpha unchanged. Next P6 optional runtime download / LD4b–LD6; **no shutdown**.
+
+
 ## 2026-10-23 shelf/library display parity (latest small request)
 
 [Shared grid/list, size Flyout, realized-cell resize and shelf artwork](docs/shelf-ui-20261023.md) implemented for the user’s follow-up. Rename/delete remain in the shelf action menu. Portable build0 errors/known3 warnings; native display UNRUN, no replay of shelf/backup/P3 exhausted caps. Installed Alpha/latest earlier frontend candidate remain unchanged. This is a bounded addition after the quota checkpoint, not a restart of broad development. Next roadmap work remains P5 safe restore switch; **no shutdown**.

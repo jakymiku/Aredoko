@@ -20,7 +20,7 @@
 | 6ba2c56 | 認証backup start/status/cancel API・viewer設定snapshot |
 | efc5032 | 設定からの対象/保存先/進捗/再接続/中止、前回対象保存、guard待機取消 |
 
-詳細は[shelf](shelf-ui-20261023.md)、[navigation](navigation-history-20261023.md)、[root favorites](root-favorites-20261023.md)、[root複数棚](root-shelves-20261023.md)、[live backup](live-backup-20261023.md)。通常DB/元メディア/旧Alpha/basic03/shortcutは未変更。catalog2へ移行したDBを古いbinaryで開かない。
+詳細は[shelf](shelf-ui-20261023.md)、[navigation](navigation-history-20261023.md)、[root favorites](root-favorites-20261023.md)、[root複数棚](root-shelves-20261023.md)、[live backup](live-backup-20261023.md)、[restore switch](restore-switch-20261023.md)。通常DB/元メディア/旧Alpha/basic03/shortcutは未変更。catalog2へ移行したDBを古いbinaryで開かない。
 
 ## 確認の要点
 
@@ -35,12 +35,13 @@ PCがロック中という過去の断定は訂正済み。実際にnative操作
 - backupのシステムFolderPicker→GUIの作成ボタン→成功完了、GUI前回対象の再起動保持、大容量/性能/DPI/HCは未受入。
 - shelfの最終Open以降、root favorite/複数棚管理、マウス/Alt/scroll等のnative残件を保持。
 - P3のthumbnail/実RSS/全連続scroll・最終選択復帰/完成形主画面、P1実再生/速度/品質の残件を保持。
-- **P5 restore自動切替は未実装**。restore_supported=false、旧停止時CLI→新規先復元を残す。snapshotは整合stage+bundleの2回copyで、空き容量と速度の受入は未完。
+- **P5 restore自動切替を実装完了**。`app/restore_jobs.py` (staging検証/制限/中止), `app/restore_switch.py` (restores/<id>への移動・sentinel・launch-settingsアトミック更新・ready失敗自動ロールバック・クラッシュ検知リカバリ), `tools/launch_release.py` (起動時自動チェック/ready時コミット/エラー時ロールバック接続)。単体テスト32件PASS、Core925 PASS、WinUI x64 Release ビルド0エラー。詳細は[restore switch](restore-switch-20261023.md)。
 - P6 LD4b取得/catalog/再開・LD5 UI・LD6 ZIP/clean Windows、P7総合確認、実音声/音楽R06–R09は残る。OCR保留・既存検索順位を維持。
 
 ## 次の1件
 
-**P5の安全な復元切替**を小単位で進める：既存storage_backup.restoreを再利用して新規先へ展開/検証 → 所有jobsと未保存編集の正常終了 → portable起動先pointerのatomic切替 → 新起動のready失敗時は旧pointer/ライブラリを保持して戻す。元DBや元メディアの上書き/削除をしない。まず現在のlauncher/設定切替契約を限定して読み、機能を重複実装しない。通常はSolで実装し、複数DB整合性やrollbackを保全できない設計問題だけAstraレビューへ分離する。大きな作業は今回開始していない。
+**P6 オプションAIランタイム・モデル取得（LD4b）**:
+信頼された固定カタログ定義からのトランザクショナル取得、HTTP失敗・再開・容量検査・ダウンロード中止、既存LD4a基盤との接続を進める。シャットダウンは行わない。
 
 ## 実行候補と終了条件
 

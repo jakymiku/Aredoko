@@ -7,9 +7,11 @@ import os
 from pathlib import Path
 import platform
 import re
+import secrets
 import shutil
 import sqlite3
 import time
+import zipfile
 
 from ai_profiles import LEGACY_PROFILE,ModelProfile
 from ai_scope import validate_scope
@@ -310,3 +312,29 @@ def restore(bundle,output,*,without_vectors=False,max_bytes=DEFAULT_MAX_BYTES,ca
             report={'format':'aredoko-restored','version':1,'source_manifest_sha256':manifest_hash,'cache_policy':'omitted' if without_vectors else manifest['cache_policy'],'automatic_resume':False,'requires_source_revalidation':True,'not_included':manifest['not_included'],'runtime':manifest['runtime'],'entries':entries}
             _write(folder/'recovery.json',(json.dumps(report,ensure_ascii=False,indent=2)+'\n').encode())
     return {'directory':str(output),'catalog':str(output/CATALOG),'files':len(entries),'cache_policy':report['cache_policy'],'requires_source_revalidation':True,'automatic_resume':False}
+
+def create_backup(catalog,output,*,as_zip=None,**kwargs):
+    output_path=Path(os.path.abspath(output))
+    make_zip=as_zip if as_zip is not None else (output_path.suffix.lower()=='.zip')
+    if make_zip:
+        if output_path.exists():raise RecoveryError('Output must be a new file')
+        parent=output_path.parent
+        stage=parent/('.aredoko-zip-stage-'+secrets.token_hex(16))
+        stage.mkdir(mode=0o700)
+        try:
+            bundle_dir=stage/'bundle'
+            result=backup(catalog,bundle_dir,**kwargs)
+            tmp_zip=parent/('.aredoko-tmp-'+secrets.token_hex(16)+'.zip')
+            with zipfile.ZipFile(tmp_zip,'w',compression=zipfile.ZIP_DEFLATED) as zf:
+                for root,_,files in os.walk(bundle_dir):
+                    for file in sorted(files):
+                        p=Path(root)/file
+                        arcname=p.relative_to(bundle_dir).as_posix()
+                        zf.write(p,arcname)
+            tmp_zip.replace(output_path)
+            result['archive']=str(output_path)
+            return result
+        finally:
+            if stage.exists():shutil.rmtree(stage,ignore_errors=True)
+    else:
+        return backup(catalog,output,**kwargs)
