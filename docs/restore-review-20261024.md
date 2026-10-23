@@ -1,5 +1,14 @@
 # Restore review follow-up
 
+## 2026-10-24 final native attempt and WD profile correction
+
+User-authorized native restore run03 used the last of3 attempts. It failed before picker open: winapp invoke reported no invoke pattern for RestoreChooseZip, while captured tree reports enabled/invokable and both PNGs show enabled ZIP/folder buttons. Do not assert an app defect or picker/Start acceptance from this. Both PNGs viewed; restore cap3/3 EXHAUSTED, no renamed retries. Native cancel and picker→Start remain unaccepted. Cleanup initially posted main close before dialog teardown and raw report recorded frontend still running. Later verified PID37616 executable path/HWND ownership and no open dialog, sent ordinary WM_CLOSE, WaitForExit succeeded, old catalog lease reacquired. Reopened process exit code unavailable; raw report retained with post_cleanup addendum. No forced process exit/PC shutdown. Runner now waits dialog-gone before main close, source-only/not replayed.
+
+Single restored tagger_profile now rebases launch setting to verified restored file. Previously backup copied that profile but launcher retained the old path. Omitted tagger settings preserve existing runtime selection; rollback restores previous path. Multiple tagger profiles/explicit AI command-line selection need a future explicit active-selection backup contract, not inferred selection. Latest switch24 PASS; no model loading required.
+
+Next CPU work: strengthen interrupted cutover/recovery failure handling and document true P5 completion limits before moving P6. No new GUI/GPU runs without fresh scope/approval. Existing source and installed candidate are distinct; frontend03 belongs to GUI trial, not a released ZIP. Goal active, usage stopping threshold not reached.
+
+
 ## 2026-10-24 durable prepared-job continuation
 
 Prepared stages now publish one bounded `restore-staging/prepared.json` under the same cancel/completion lock. Backend restart reattaches the exact job/source/vector choice using ordinary-path, directory identity and recovery-receipt SHA checks; no directory scan, payload DB open or automatic cutover at startup. Explicit discard removes the owned stage and its receipt; successful cutover retires the old receipt. Invalid receipt blocks only restore and preserves evidence. Native client presents the recovery guidance from status. Prior prepared metadata does not authorize a new launch's restart request.

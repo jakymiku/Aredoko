@@ -68,7 +68,7 @@ class RestoreSwitchTests(unittest.TestCase):
             db.commit()
         cat.close()
 
-    def _create_staging(self, name='staging', restored_title='リストアデータアイテム', extra_settings=True):
+    def _create_staging(self, name='staging', restored_title='リストアデータアイテム', extra_settings=True, tagger=False):
         staging = self.base / name
         source = self.base / (name + '_source')
         source.mkdir()
@@ -83,6 +83,10 @@ class RestoreSwitchTests(unittest.TestCase):
             profiles.mkdir()
             shutil.copyfile(Path(__file__).resolve().parents[1] / 'config/ai-profiles/embeddinggemma-2.json', profiles / 'custom.json')
             options = {'settings': settings, 'viewer_settings': viewer, 'profiles': profiles}
+        if tagger:
+            profile=source/'custom-wd.json'
+            shutil.copyfile(Path(__file__).resolve().parents[1]/'config/tagger-profiles/wd-swinv2-v3.json',profile)
+            options['tagger_profiles']=(profile,)
         bundle = self.base / (name + '_bundle')
         storage_backup.backup(source / 'catalog.sqlite', bundle, include_vectors=False, **options)
         storage_backup.restore(bundle, staging)
@@ -124,6 +128,24 @@ class RestoreSwitchTests(unittest.TestCase):
         self.assertTrue(is_restore_pending(self.data_dir))
         self.assertTrue((self.data_dir / ROLLBACK_FILE).exists())
         self.assertEqual(get_restore_history(self.data_dir), [])
+
+    def test_active_tagger_profile_rebased_and_rollback_preserves_previous(self):
+        staging=self._create_staging('tagger_settings',tagger=True)
+        old={**self.orig_settings,'tagger_profile':str(self.base/'old-wd.json')}
+        (self.data_dir/LAUNCH_SETTINGS_FILE).write_text(json.dumps(old),encoding='utf-8')
+        result=apply_restore_switch(self.data_dir,staging)
+        expected=Path(result['target_restore_dir'])/'tagger-profiles/custom-wd.json'
+        self.assertEqual(load_settings(self.data_dir)['tagger_profile'],str(expected))
+        self.assertTrue(expected.is_file())
+        rollback_restore_switch(self.data_dir)
+        self.assertEqual(load_settings(self.data_dir),old)
+
+    def test_backup_without_tagger_keeps_existing_runtime_selection(self):
+        staging=self._create_staging('no_tagger_settings',extra_settings=False)
+        old={**self.orig_settings,'tagger_profile':str(self.base/'existing-wd.json')}
+        (self.data_dir/LAUNCH_SETTINGS_FILE).write_text(json.dumps(old),encoding='utf-8')
+        apply_restore_switch(self.data_dir,staging)
+        self.assertEqual(load_settings(self.data_dir)['tagger_profile'],old['tagger_profile'])
 
     def test_modified_staging_payload_cannot_switch_current_library(self):
         staging = self._create_staging('modified')

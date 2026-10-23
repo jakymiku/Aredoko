@@ -141,7 +141,7 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
         raise RestoreSwitchError("Staging catalog has live SQLite companion files")
 
     try:
-        validate_restored(staging)
+        restored_report=validate_restored(staging)
     except (ValueError, RuntimeError, OSError) as error:
         raise RestoreSwitchError('Staging verification failed; current library preserved') from error
 
@@ -202,6 +202,12 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
     restored_viewer_settings = target_restore_dir / 'settings' / 'viewer-settings.json'
     if restored_viewer_settings.is_file():
         new_settings['viewer_settings'] = str(restored_viewer_settings.resolve())
+
+    # Online backup captures the explicitly configured active tagger profile.
+    # Rebase the sole restored profile instead of retaining a path to the old DB.
+    tagger_entries=[entry for entry in restored_report['entries'] if entry['role']=='tagger_profile']
+    if len(tagger_entries)==1:
+        new_settings['tagger_profile']=str((target_restore_dir/tagger_entries[0]['path']).resolve())
 
     restored_profiles = target_restore_dir / 'profiles'
     if restored_profiles.is_dir():

@@ -6,12 +6,13 @@ from urllib.request import ProxyHandler,Request,build_opener
 REPO=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(REPO/'app'),str(REPO/'tools')]
 from production import ProductionCatalog
-from storage_backup import backup
+from storage_backup import backup,create_backup
 from restore_handoff import RestoreHandoff
 from restore_switch import check_pending_restore
 from launch_release import run_session
 from portable_frontend import ReadyProcess
 from create_preview_fixture import png
+from native_ui_tools import nodes
 
 
 def main():
@@ -25,6 +26,7 @@ def main():
     if cat._worker:cat._worker.join(10)
     with cat.connect() as db:db.execute("UPDATE items SET tags='[\"restored-fixture\"]'");db.commit()
     cat.close();backup(data/'catalog.sqlite',target/'bundle',include_vectors=False)
+    if args.attempt==3:create_backup(data/'catalog.sqlite',target/'bundle.zip',include_vectors=False)
     cat=ProductionCatalog(data/'catalog.sqlite')
     with cat.connect() as db:db.execute("UPDATE items SET tags='[\"current-fixture\"]'");db.commit()
     cat.close()
@@ -68,7 +70,7 @@ def main():
             if done.is_set():raise RuntimeError(report.get('owner_error','Owner stopped early'))
             time.sleep(.1)
         raise AssertionError(name)
-    hwnd=None;pid=None
+    hwnd=None;pid=None;picker_hwnd=None
     def select(phase):
         nonlocal hwnd,pid
         wait('phase ready '+str(phase),lambda:state.get('phase')==phase and state.get('owned') is not None and state['owned'].ready.is_set())
@@ -91,11 +93,31 @@ def main():
     try:
         select(0)
         ui('invoke','BtnSettings');ui('wait-for','BtnBackupGuide','-t','5000');ui('invoke','BtnBackupGuide');ui('wait-for','BackupDialog','-t','5000');ui('invoke','BackupRestoreGuide');ui('wait-for','RestoreDialog','-t','5000');shot('restore-idle')
-        # Source system pickers/native Start are intentionally not claimed here.
-        value=request('/api/library/restore/start',{'consent':True,'source':str(target/'bundle'),'without_vectors':True})
+        if args.attempt==3:
+            ui('invoke','RestoreChooseZip')
+            def find_picker():
+                nonlocal picker_hwnd
+                windows=json.loads(cli('list-windows','-a',pid,'--json'))
+                matches=[w for w in windows if str(w.get('hwnd'))!=hwnd and (str(w.get('ownerHwnd'))==hwnd or w.get('className')=='#32770')]
+                if len(matches)==1:picker_hwnd=str(matches[0]['hwnd']);return True
+                return False
+            wait('owned ZIP picker',find_picker)
+            tree=json.loads(cli('inspect','--depth','20','--json','-w',picker_hwnd));all_nodes=list(nodes(tree))
+            names=[n for n in all_nodes if n.get('automationId')=='FileNameControlHost' and not n.get('isOffscreen',True)]
+            if len(names)!=1:raise AssertionError('File name control not found in actual picker tree')
+            cli('set-value',names[0].get('selector','FileNameControlHost'),str(target/'bundle.zip'),'-w',picker_hwnd)
+            buttons=[n for n in all_nodes if n.get('type')=='Button' and n.get('isEnabled') and not n.get('isOffscreen',True) and (n.get('automationId')=='1' or n.get('name','').startswith(('開く','Open')))]
+            if len(buttons)!=1:raise AssertionError('Open button not uniquely identified in actual picker tree')
+            cli('invoke',buttons[0]['selector'],'-w',picker_hwnd);picker_hwnd=None
+            ui('wait-for','RestoreSource','--value',str(target/'bundle.zip'),'-t','5000');shot('restore-selected')
+            ui('wait-for','PrimaryButton','-p','IsEnabled','--value','True','-t','3000');ui('invoke','PrimaryButton')
+            report['checks'].append('native ZIP picker and preparation start')
+        else:
+            # Earlier scopes start through API; not claimed as native picker coverage.
+            request('/api/library/restore/start',{'consent':True,'source':str(target/'bundle'),'without_vectors':True})
         wait('prepared owned bundle',lambda:request('/api/library/restore')['state']=='completed')
         ui('invoke','RestoreRefresh');ui('wait-for','RestoreConsent','-t','5000')
-        if args.attempt>=2:
+        if args.attempt==2:
             ui('wait-for','RestoreSource','--value',str(target/'bundle'),'-t','5000')
             ui('invoke','CloseButton');ui('wait-for','RestoreDialog','--gone','-t','5000')
             ui('invoke','BtnSettings');ui('wait-for','BtnBackupGuide','-t','5000');ui('invoke','BtnBackupGuide');ui('wait-for','BackupDialog','-t','5000');ui('invoke','BackupRestoreGuide');ui('wait-for','RestoreDialog','-t','5000')
@@ -129,9 +151,13 @@ def main():
     finally:
         if state.get('process') and state['process'].poll() is None:
             try:
+                if picker_hwnd:user.PostMessageW(int(picker_hwnd),0x10,0,0)
                 if hwnd:
                     # Only owned generated dialogs; no forced process exit.
-                    try:ui('invoke','CloseButton')
+                    try:
+                        ui('invoke','CloseButton')
+                        ui('wait-for','RestoreDialog','--gone','-t','5000')
+                        ui('wait-for','BackupDialog','--gone','-t','5000')
                     except Exception:pass
                     user.PostMessageW(int(hwnd),0x10,0,0)
                 worker.join(18)
