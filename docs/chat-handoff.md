@@ -1,5 +1,10 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-23 quota stopping checkpoint (latest)
+
+Read [exact commits, native evidence/limits and next restore task](daytime-handoff-20261023.md). Implementation HEAD efc5032; next P5 new-directory restore/owned shutdown/atomic launch switch/ready failure rollback. Core925 PASS, limited backup native pass; full GUI/restore/distribution/roadmap incomplete. Preserve backup/shelf/P3 3/3 caps, user data/Alpha and old evidence. Current instruction: safe commit/push/handoff near quota10%, **NO PC SHUTDOWN**.
+
+
 ## 2026-10-23 P5 native backup settings (latest)
 
 [Selection/progress/reattach/cancel UI and exact evidence](live-backup-20261023.md) source connected; Core925 PASS/final Portable0 errors+existing3 warnings. Native backup Dark01/Light03 targeted9 checks pass, Light02 selector failure preserved;7 PNG reviewed/3 processes exit0. Backup flow3/3 exhausted, do not replay or reset older P3/shelf caps. Picker→native Start success/GUI preference restart/full acceptance UNRUN. Actual writer-guard wait cancellation checked. Next safe new-directory restore/launch switch/rollback; P5/roadmap incomplete. Old Alpha/normal DB unchanged. Stop with commit/push/handoff near quota10%, **no shutdown**.
