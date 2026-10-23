@@ -37,6 +37,11 @@ public sealed partial class MainWindow : Window
         };
         Closed+=(_,_)=>{if(RootFrame.Content is MainPage page)page.Stop();};
     }
+    internal void CompleteRestoreRestart()
+    {
+        // Caller already passed the dirty guard and published an owned restart.
+        closing=true;Close();
+    }
     internal void ApplyTheme(string theme)=>WindowRoot.RequestedTheme=theme.ToLowerInvariant() switch
     {"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};
     internal Task InitializeOwnedStartupAsync()=>RootFrame.Content is MainPage page?page.InitializeFirstPageAsync():Task.FromException(new InvalidOperationException("ライブラリ画面がありません。"));

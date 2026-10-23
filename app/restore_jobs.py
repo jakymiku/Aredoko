@@ -419,7 +419,9 @@ class RestoreStagingJobs:
             value.pop('manifest', None)
             if value.get('error'):
                 value['error'] = 'restore_validation_failed'
-            return {**value, 'staging_supported': True, 'switch_supported': self.handoff is not None, 'restart_requested': self.restart_requested}
+            return {**value, 'staging_supported': True, 'switch_supported': self.handoff is not None, 'restart_requested': self.restart_requested,
+                    'source':str(self.current.zip_path) if self.current else None,
+                    'without_vectors':self.current.without_vectors if self.current else None}
 
     def start(self, body):
         if not isinstance(body, dict) or set(body) != {'consent', 'source', 'without_vectors'} or body['consent'] is not True or type(body['without_vectors']) is not bool:

@@ -54,6 +54,8 @@ class RestoreHttpTests(unittest.TestCase):
         self.assertEqual(value['state'],'completed',value)
         self.assertFalse(value['switch_supported'])
         self.assertNotIn('staging_path',value)
+        self.assertEqual(value['source'],str(self.base/'bundle'))
+        self.assertTrue(value['without_vectors'])
         self.assertEqual((self.base/'bundle/catalog.sqlite').read_bytes(),before)
         self.assertEqual(self.request('/api/items')[1]['total'],0)
         self.denied(409,'/api/library/restore/start',self.body)

@@ -1,5 +1,16 @@
 # Restore review follow-up
 
+## 2026-10-24 native restore UI continuation
+
+Core `RestoreClient.RestartAsync` and typed capability/acknowledgment/source/cache-policy fields connected. Native backup settings now lead to a restore dialog with folder/ZIP selection, preparation, progress, cancel, discard, refresh and consent-gated restart. Existing dirty guard runs before opening, polling is lifetime/revision guarded and in-flight operations block dismissal. Explicit restart flushes reading progress and closes only the owned main window after acknowledgment. Restore source/cache choices reattach from backend status; operation errors survive final render. Capability `backup.restore_supported` now follows actual owned handoff availability, not a blanket false.
+
+User explicitly authorized up to3 native restore attempts with generated assets/DB only; no GPU. Dedicated `frontend01`/`frontend02` candidates and `tools/test_native_restore.py`. run01 PASS6checks, exposed blank reattached source; source/cache roundtrip fixed. run02 PASS9checks including reattach, native discard/reprepare, consent-gated restart, two real ready handshakes, retained old catalog. Both runs each2 frontend exits0, owner finished, no residual process; source media hashes/mtimes unchanged. run02 source files unchanged during run. All8 PNGs viewed and readable. Test starts preparation via authenticated API: native Windows picker→Start, GUI cancel, dirty-dialog scenarios, Light/HC/DPI, complete packaged launcher/bootstrap remain UNVERIFIED. Uses real `run_session` and handoff but test driver loop, not a shipped ZIP. Native restore cap2/3 used; preserve older backup/shelf/P3 caps.
+
+Checks: Core934 assertions PASS; HTTP3 PASS/2.357s after source/cache status addition; Portable build0errors/knownWUI1001×3 (25.97s), independent frontend02 publish succeeds with existing SDK IL2104×2. Candidate does not update installed Alpha. Last capability-only server edit after native run is CPU checked, not included in native source fingerprint.
+
+Next independent P5 work: persist prepared-job ownership across backend restarts (safe explicit reattach/discard, no automatic cutover), confirm remaining tagger/profile restoration choices, then remaining focused native picker/cancel acceptance within1 remaining attempt only when prepared. P5 remains partial; no P6/full-roadmap completion claim. Notify/ask before new GUI/GPU scope. No shutdown.
+
+
 ## 2026-10-24 owned restore handoff continuation
 
 Added per-launch restore request/closure receipts in `app/restore_handoff.py`. Authenticated `/api/library/restore/restart` requires explicit consent/current completed owned job, freezes discard/replacement, and publishes only an owned staging reference. Enabled only when Portable launcher supplied session directory (default launch-settings path). Backend emits closure proof only after its resource ExitStack succeeds; job close timeout prevents proof. Launcher requires both owned child exit codes0 plus proof and old catalog kernel lease before switching, then rereads settings and relaunches under the same launcher lease. Only the first launch emits the original bootstrap ready signal. No GUI hookup yet; backup.restore_supported remains false. Existing startup rollback remains.

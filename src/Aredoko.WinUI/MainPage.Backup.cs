@@ -11,7 +11,7 @@ public sealed partial class MainPage
     private async Task OpenBackupDialogAsync()
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        dialogOpen=true;bool showGuide=false,open=true,submitting=false;long revision=0;
+        dialogOpen=true;bool showGuide=false,showRestore=false,open=true,submitting=false;long revision=0;
         using var lifetime=new CancellationTokenSource();BackupJob? current=null;Task? polling=null;string? lastError=null;
         var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(650)};
         try
@@ -28,8 +28,10 @@ public sealed partial class MainPage
             var status=new TextBlock{Text="バックアップの状態を確認しています。",TextWrapping=TextWrapping.Wrap};
             var progress=new ProgressBar{IsIndeterminate=false,Minimum=0,Maximum=100,Value=0};
             var reconnect=new Button{Content="状態を更新"};
-            var guide=new Button{Content="復元について"};
-            var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};actions.Children.Add(reconnect);actions.Children.Add(guide);
+            var guide=new Button{Content="バックアップから復元"};
+            var help=new Button{Content="復旧ガイド"};
+            AutomationProperties.SetAutomationId(help,"BackupRecoveryHelp");
+            var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};actions.Children.Add(reconnect);actions.Children.Add(guide);actions.Children.Add(help);
             foreach(var (control,id) in new (DependencyObject,string)[]{(basic,"BackupBasic"),(settings,"BackupSettings"),(history,"BackupHistory"),(position,"BackupReaderPosition"),(vectors,"BackupVectors"),(destination,"BackupDestination"),(choose,"BackupChoose"),(status,"BackupStatus"),(progress,"BackupProgress"),(reconnect,"BackupRefresh"),(guide,"BackupRestoreGuide")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(progress,"バックアップの進捗");
             panel.Children.Add(new TextBlock{Text="元の画像・動画、AIモデル、Python環境、サムネイルは含みません。この画面を閉じても作成は続き、再び開くと進捗を確認できます。",TextWrapping=TextWrapping.Wrap});
@@ -72,7 +74,8 @@ public sealed partial class MainPage
                 catch(Exception ex){if(open&&!disposed)status.Text="保存先を選べませんでした。\n"+ex.Message;}
             };
             reconnect.Click+=async(_,_)=>{if(!submitting&&(polling is null||polling.IsCompleted)){polling=RefreshAsync();await polling;}};
-            guide.Click+=(_,_)=>{showGuide=true;dialog.Hide();};
+            guide.Click+=(_,_)=>{showRestore=true;dialog.Hide();};
+            help.Click+=(_,_)=>{showGuide=true;dialog.Hide();};
             dialog.PrimaryButtonClick+=async(_,args)=>
             {
                 args.Cancel=true;if(submitting||current is null||current.Active)return;
@@ -110,6 +113,7 @@ public sealed partial class MainPage
             open=false;timer.Stop();lifetime.Cancel();if(polling is not null)await polling;
             dialogOpen=false;transitions.Release();RestoreNavigation();
         }
+        if(showRestore&&!disposed)await OpenRestoreDialogAsync();
         if(showGuide&&!disposed)await OpenRecoveryGuideDialogAsync();
     }
 }

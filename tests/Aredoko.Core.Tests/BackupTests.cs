@@ -58,6 +58,20 @@ internal static class BackupTests
             });
             using var restoreHttp=new HttpClient(restoreHandler){BaseAddress=new Uri("http://127.0.0.1:8769/")};
             await new RestoreClient(restoreHttp).StartAsync(folder);
+            restoreJson["source"]=folder;restoreJson["without_vectors"]=true;
+            check(RestoreJob.Parse(restoreJson.ToJsonString()).Source==folder&&RestoreJob.Parse(restoreJson.ToJsonString()).WithoutVectors==true,"restore reattach identifies the selected backup and vector policy");
+            restoreJson["switch_supported"]=true;restoreJson["restart_requested"]=true;
+            check(RestoreJob.Parse(restoreJson.ToJsonString()).RestartRequested,"restore accepts a completed owned restart acknowledgment");
+            restoreJson["switch_supported"]=false;rejected=false;try{RestoreJob.Parse(restoreJson.ToJsonString());}catch(InvalidDataException){rejected=true;}check(rejected,"restore rejects restart without owned launcher capability");
+            restoreJson["switch_supported"]=true;
+            using var restartHandler=new Stub(async request=>
+            {
+                var body=JsonNode.Parse(await request.Content!.ReadAsStringAsync())!;
+                check(request.RequestUri!.AbsolutePath=="/api/library/restore/restart"&&body["consent"]!.GetValue<bool>()&&body["job_id"]!.GetValue<string>()==id&&body.AsObject().Count==2,"restore restart targets exact job with explicit consent");
+                return new HttpResponseMessage(HttpStatusCode.Accepted){Content=new StringContent(restoreJson.ToJsonString())};
+            });
+            using var restartHttp=new HttpClient(restartHandler){BaseAddress=new Uri("http://127.0.0.1:8769/")};
+            check((await new RestoreClient(restartHttp).RestartAsync(id)).RestartRequested,"restart response is parsed before the frontend closes");
             snapshot["bytes_done"]=128;var viewer=new ViewerInputSettings(true,80,"dark",true);await client.StartAsync(folder,new BackupSelection(),viewer);check(viewer.ToJson()["wheel_up_advances"]!.GetValue<bool>()&&viewer.ToJson()["theme"]!.GetValue<string>()=="dark","backup and normal viewer persistence share the exact JSON contract");
         }
         finally{Directory.Delete(folder,true);}

@@ -1,5 +1,9 @@
 # Aredoko 開発引き継ぎ
 
+## 2026-10-24 native restore UI connection (latest)
+
+[Native UI, exact two-run evidence and remaining P5 tasks](restore-review-20261024.md). Core934/Portable build pass; restore2/3 native attempts consumed, both consent/relaunch pass,8 PNG viewed, old DB/media retained and no residual process. Picker→Start/native cancel and full ZIP/bootstrap unverified. Prepared job persistence still missing. P5 partial; goal continues; no shutdown.
+
 ## 2026-10-24 owned restart continuation (latest)
 
 [Owned handoff, real CPU backend evidence and next Core/UI task](restore-review-20261024.md). Restart request→resource closure proof→child exit/old DB lease→cutover→same-owner relaunch source connected. Handoff7/lifecycle10 PASS; native GUI/relaunch not verified. P5 partial; active goal continues. Notify/ask before GUI/GPU tests; no shutdown.
