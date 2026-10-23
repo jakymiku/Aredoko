@@ -94,9 +94,9 @@ public sealed partial class MainPage
     {
         if(args.ItemContainer is not ListViewItem item)return;
         if(shelfLoads.Remove(item,out var previous)){previous.Cancel();previous.Dispose();}
-        item.Content=null;
+        if(item.ContentTemplateRoot is Border oldHost)oldHost.Child=null;
         if(args.InRecycleQueue||args.Item is not string key||!long.TryParse(key,out var id))return;
-        var shelf=shelfDescriptors.FirstOrDefault(x=>x.Id==id);if(shelf is null)return;
+        var shelf=shelfDescriptors.FirstOrDefault(x=>x.Id==id);if(shelf is null||item.ContentTemplateRoot is not Border host)return;
         var row=new Grid{ColumnSpacing=12,Padding=new Thickness(8)};
         row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
         row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
@@ -118,12 +118,14 @@ public sealed partial class MainPage
         Action("名前変更","Rename",()=>EditShelfNameAsync(shelf));
         Action("削除","Delete",()=>DeleteShelfAsync(shelf));row.Children.Add(actions);
         AutomationProperties.SetAutomationId(item,$"ShelfRow{id}");AutomationProperties.SetName(item,$"{shelf.Name}、{shelf.ItemCount:N0}件");
-        item.Content=row;args.Handled=true;
+        args.Handled=true;
         if(shelf.Representative is not null)
         {
             var cancel=new CancellationTokenSource();shelfLoads[item]=cancel;
-            _=LoadShelfArtworkAsync(item,image,icon,shelf.Representative,cancel.Token);
+            image.Loaded+=async(_,_)=>await LoadShelfArtworkAsync(item,image,icon,shelf.Representative,cancel.Token);
+            image.Unloaded+=(_,_)=>{if(shelfLoads.TryGetValue(item,out var current)&&ReferenceEquals(current,cancel))current.Cancel();};
         }
+        host.Child=row;
     }
     private async Task LoadShelfArtworkAsync(ListViewItem owner,Image image,SymbolIcon fallback,MediaRow row,CancellationToken cancellation)
     {
@@ -167,6 +169,7 @@ public sealed partial class MainPage
     private async Task EditShelfNameAsync(ShelfDescriptor? shelf=null)
     {
         if(saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        ShelfList.IsEnabled=false;
         try
         {
             if(!await ConfirmDiscardAsync())return;
@@ -191,11 +194,12 @@ public sealed partial class MainPage
             if(await dialog.ShowAsync()==ContentDialogResult.Primary){resultsNeedRefresh=true;await ReloadShelfHubAsync();}
         }
         catch(Exception ex){Failure(ex);}
-        finally{dialogOpen=false;transitions.Release();}
+        finally{ShelfList.IsEnabled=true;dialogOpen=false;transitions.Release();}
     }
     private async Task DeleteShelfAsync(ShelfDescriptor shelf)
     {
         if(saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        ShelfList.IsEnabled=false;
         try
         {
             if(!await ConfirmDiscardAsync())return;dialogOpen=true;
@@ -206,7 +210,7 @@ public sealed partial class MainPage
             await ReloadShelfHubAsync();
         }
         catch(Exception ex){Failure(ex);}
-        finally{dialogOpen=false;transitions.Release();}
+        finally{ShelfList.IsEnabled=true;dialogOpen=false;transitions.Release();}
     }
     private async void CreateShelf_Click(object sender,RoutedEventArgs args)=>await EditShelfNameAsync();
     private async void ShelfList_Click(object sender,RoutedEventArgs args)=>await OpenShelfHubAsync();

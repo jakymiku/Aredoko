@@ -1,5 +1,10 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-23 P4 shelf native correction (latest)
+
+[Shelf native evidence and corrected desktop diagnosis](shelf-ui-20261023.md): actual desktop now accessible, run02 exposed empty card host and source fixed; run03 shows cards/representatives and passes atomic membership/tags, create and rename. Final Open happened before async refresh idle; remaining steps UNRUN. Source disables list during mutation and runner waits idle, not replayed. Shelf flow3/3 consumed, all3 delivered PNGs reviewed, both later test processes normal exit0. Do not claim PC remains locked or full GUI acceptance. Continue independent root favorites, preserve no-shutdown instruction.
+
+
 ## 2026-10-23 P4 bounded navigation history (latest)
 
 [Session-only back/forward locations and native input hooks](navigation-history-20261023.md) source connected; Core901 PASS/Portable build0 errors/known3 warnings. Mouse/Alt/visual acceptance UNRUN while Windows locked. Shelf implementation b0a00c4 is pushed. Next root favorites and root multi-initial-shelf UI, then P5. Preserve stale/failure/dirty guards and native caps. Current quota-threshold instruction remains save/commit/push/handoff with **no shutdown**.

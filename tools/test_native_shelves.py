@@ -72,7 +72,7 @@ def main():
         wait('create empty named shelf',lambda:'追加棚' in cat.shelves());created=next(r['id'] for r in cat.shelf_descriptors() if r['name']=='追加棚')
         ui('wait-for','ShelfRename'+str(created),'-t','5000');ui('invoke','ShelfRename'+str(created));ui('wait-for','TxtShelfName','-t','5000');ui('set-value','TxtShelfName','変更した棚');ui('invoke','PrimaryButton')
         wait('rename keeps shelf identity',lambda:any(r['id']==created and r['name']=='変更した棚' for r in cat.shelf_descriptors()))
-        ui('wait-for','ShelfOpen'+str(a),'-t','5000');ui('invoke','ShelfOpen'+str(a));ui('wait-for','Item'+str(first),'-t','10000');ui('invoke','Item'+str(first),'--action','select');ui('wait-for','BtnChooseShelves','-t','5000');ui('invoke','BtnChooseShelves');ui('wait-for','ChooseShelf'+str(a),'-t','5000')
+        ui('wait-for','ShelfList','-p','IsEnabled','--value','True','-t','10000');ui('wait-for','ShelfOpen'+str(a),'-t','5000');ui('invoke','ShelfOpen'+str(a));ui('wait-for','Item'+str(first),'-t','10000');ui('invoke','Item'+str(first),'--action','select');ui('wait-for','BtnChooseShelves','-t','5000');ui('invoke','BtnChooseShelves');ui('wait-for','ChooseShelf'+str(a),'-t','5000')
         ui('click','ChooseShelf'+str(a));ui('invoke','PrimaryButton');ui('wait-for','ChooseShelfList','--gone','-t','5000');ui('invoke','BtnSave')
         wait('remove only one membership',lambda:cat.get(first)['shelf_ids']==[b]);ui('wait-for','TxtCount','--value','0 件','-t','12000');shot('empty-shelf-scope')
         ui('invoke','BtnShelfList');ui('wait-for','ShelfDelete'+str(b),'-t','10000');ui('invoke','ShelfDelete'+str(b));ui('wait-for','CloseButton','-t','5000');ui('invoke','CloseButton')

@@ -174,7 +174,7 @@
       <Button Content="更新" Click="RefreshShelves_Click" AutomationProperties.AutomationId="BtnRefreshShelves"/>
      </StackPanel>
      <TextBlock x:Name="ShelfHubMessage" Grid.Row="1" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="TxtShelfHubMessage"/>
-     <ListView x:Name="ShelfList" Grid.Row="2" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ShelfList_ItemClick" ContainerContentChanging="ShelfList_ContainerContentChanging" HorizontalContentAlignment="Stretch" AutomationProperties.Name="棚一覧" AutomationProperties.AutomationId="ShelfList"/>
+     <ListView x:Name="ShelfList" ItemTemplate="{StaticResource MediaContainerTemplate}" ItemContainerStyle="{StaticResource MediaItemCardStyle}" Grid.Row="2" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ShelfList_ItemClick" ContainerContentChanging="ShelfList_ContainerContentChanging" HorizontalContentAlignment="Stretch" AutomationProperties.Name="棚一覧" AutomationProperties.AutomationId="ShelfList"/>
     </Grid>
     <Grid x:Name="FolderHubView" SizeChanged="FolderHub_SizeChanged" AllowDrop="True" DragOver="Folder_DragOver" Drop="Folder_Drop" Grid.Row="1" Grid.RowSpan="3" Margin="0,0,12,0" Visibility="Collapsed" RowSpacing="12">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
