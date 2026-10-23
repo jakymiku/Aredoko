@@ -4,7 +4,7 @@ import hashlib,json,os,re,shutil,time,urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 from ai_runtime import relative,object_pairs,digest,inspect_runtime,files
-from storage_lease import plain_path,storage_parent,storage_lease
+from storage_lease import plain_path,storage_parent,storage_lease,identity
 
 @dataclass(frozen=True)
 class Artifact:
@@ -88,7 +88,25 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
         if progress:progress({'stage':stage_name,'bytes_received':done,'bytes_verified':verified,'bytes_total':total_bytes})
     with storage_lease(root/('acquire-'+catalog.fingerprint)):
         check()
-        if target.exists() or target.is_symlink():raise FileExistsError('Published version already exists')
+        if target.exists() or target.is_symlink():
+            # Explicit retry after a previous session: verify this exact version
+            # in place. Never overwrite or silently repair an existing version.
+            plain_path(target,directory=True);owned_identity=identity(target)
+            actual={p.relative_to(target).as_posix() for p in files(target,cancelled)}
+            if actual!={item.path for item in catalog.entries}:raise ValueError('Published acquisition inventory mismatch')
+            verified=0
+            for item in catalog.entries:
+                check();path=plain_path(target/item.path)
+                if path.stat().st_size!=item.size or digest(path,cancelled=cancelled)!=item.sha256:raise ValueError('Published acquisition checksum mismatch')
+                verified+=item.size;report('verifying',verified,verified)
+            validate(target,cancelled);check();report('publishing',verified,verified)
+            def acknowledge():
+                check();plain_path(target,directory=True)
+                if identity(target)!=owned_identity:raise ValueError('Published acquisition directory changed')
+            # Same owner gate as a new publication. Accepted cancellation cannot
+            # later be reported as success, even though no files are changed.
+            publish(acknowledge)
+            return {'root':str(target),'catalog_sha256':catalog.fingerprint,'revision':catalog.revision,'kind':catalog.kind,'bytes':verified,'reused':True}
         storage_parent(stage/'payload/marker');plain_path(stage,directory=True)
         payload=plain_path(stage/'payload',directory=True);parts=storage_parent(stage/'parts/marker')
         opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),_Redirect(catalog))
@@ -145,7 +163,7 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
             if target.exists() or target.is_symlink():raise FileExistsError('Published version already exists')
             payload.rename(target)
         publish(commit)
-        return {'root':str(target),'catalog_sha256':catalog.fingerprint,'revision':catalog.revision,'kind':catalog.kind,'bytes':done}
+        return {'root':str(target),'catalog_sha256':catalog.fingerprint,'revision':catalog.revision,'kind':catalog.kind,'bytes':done,'reused':False}
 
 
 def validate_runtime(root,cancelled):

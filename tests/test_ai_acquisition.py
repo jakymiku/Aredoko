@@ -35,7 +35,26 @@ class AcquisitionTests(unittest.TestCase):
         self.assertEqual((Path(result['root'])/'runtime/generated.bin').read_bytes(),self.content)
         self.assertEqual(progress[-1]['bytes_verified'],len(self.content))
         self.assertEqual(self.requests,[None]);self.assertFalse((self.base/'launch-settings.json').exists())
-        with self.assertRaises(FileExistsError):self.fetch()
+        file=Path(result['root'])/'runtime/generated.bin';before=(file.read_bytes(),file.stat().st_mtime_ns)
+        reused=self.fetch();self.assertTrue(reused['reused']);self.assertEqual(reused['root'],result['root'])
+        self.assertEqual(self.requests,[None]);self.assertEqual((file.read_bytes(),file.stat().st_mtime_ns),before)
+    def test_existing_version_corruption_is_preserved_and_never_redownloaded(self):
+        result=self.fetch();file=Path(result['root'])/'runtime/generated.bin';bad=b'x'*len(self.content);file.write_bytes(bad)
+        with self.assertRaisesRegex(ValueError,'checksum'):self.fetch()
+        self.assertEqual(file.read_bytes(),bad);self.assertEqual(self.requests,[None])
+
+    def test_existing_version_extra_file_is_preserved_and_rejected(self):
+        result=self.fetch();extra=Path(result['root'])/'unlisted.py';extra.write_bytes(b'untrusted')
+        with self.assertRaisesRegex(ValueError,'inventory'):self.fetch()
+        self.assertEqual(extra.read_bytes(),b'untrusted');self.assertEqual(self.requests,[None])
+
+    def test_existing_version_cancellation_before_acknowledgement_keeps_files(self):
+        result=self.fetch();target=Path(result['root']);cancel=threading.Event()
+        def progress(value):
+            if value['stage']=='publishing':cancel.set()
+        with self.assertRaises(InterruptedError):self.fetch(cancelled=cancel.is_set,progress=progress)
+        self.assertEqual((target/'runtime/generated.bin').read_bytes(),self.content);self.assertEqual(self.requests,[None])
+
     def test_truncated_download_resumes_exact_range(self):
         self.cut=True
         with self.assertRaises(OSError):self.fetch()

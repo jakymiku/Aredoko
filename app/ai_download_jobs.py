@@ -15,8 +15,10 @@ class AIDownloadJobs:
             self.specs[catalog.fingerprint]=(catalog,validator)
         self.lock=threading.RLock();self.closed=False;self.thread=None;self.committed=False;self.cancelled=threading.Event()
         self.value={'job_id':None,'state':'idle','catalog_id':None,'bytes_received':0,'bytes_verified':0,'bytes_total':None,'published':False,'result':None,'error_code':None,'message':''}
+    @property
+    def supported(self):return bool(self.specs)
     def catalogs(self):
-        return {'download_supported':bool(self.specs),'catalogs':[{'catalog_id':c.fingerprint,'name':c.key,'kind':c.kind,'revision':c.revision,'bytes':sum(a.size for a in c.entries),'license':c.license,'license_url':c.license_url,'source_hosts':list(c.hosts)} for c,_ in self.specs.values()]}
+        return {'download_supported':self.supported,'catalogs':[{'catalog_id':c.fingerprint,'name':c.key,'kind':c.kind,'revision':c.revision,'bytes':sum(a.size for a in c.entries),'license':c.license,'license_url':c.license_url,'source_hosts':list(c.hosts)} for c,_ in self.specs.values()]}
     def snapshot(self):
         with self.lock:return deepcopy(self.value)
     def start(self,body):
@@ -47,7 +49,7 @@ class AIDownloadJobs:
     def _run(self,catalog,validator,rate):
         try:
             result=self.download(catalog,self.root,validate=validator,publish=self._publish,cancelled=self.cancelled.is_set,progress=self._progress,bytes_per_second=rate)
-            with self.lock:self.value.update(state='complete',result=result,message='AI環境を取得しました。利用するには設定から選択してください。')
+            with self.lock:self.value.update(state='complete',result=result,message=('取得済みのAI環境を確認しました。利用するには設定から選択してください。' if result.get('reused') else 'AI環境を取得しました。利用するには設定から選択してください。'))
         except Exception as error:
             with self.lock:
                 if self.committed:self.value.update(state='complete',error_code='post_publish_failed',message='AI環境は保存済みです。状態を確認してください。')

@@ -27,6 +27,14 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(value['bytes_verified'],len(self.content))
         self.assertFalse(self.jobs.cancel(first['job_id'])['cancel_accepted'])
         self.assertFalse((self.base/'launch-settings.json').exists())
+    def test_new_owner_reuses_completed_catalog_without_network_or_settings_change(self):
+        self.jobs.start(self.body);first=self.finish();self.assertTrue(first['published'])
+        self.jobs.close();jobs=AIDownloadJobs(self.base/'downloads',specifications=((self.catalog,self.validate),));self.addCleanup(jobs.close)
+        value=jobs.start(self.body);jobs.thread.join(5);finished=jobs.snapshot()
+        self.assertEqual(finished['state'],'complete');self.assertTrue(finished['published']);self.assertTrue(finished['result']['reused'])
+        self.assertEqual(finished['result']['root'],first['result']['root']);self.assertEqual(self.requests,[None])
+        self.assertFalse((self.base/'launch-settings.json').exists());self.assertNotEqual(value['job_id'],first['job_id'])
+
     def test_cancel_before_publication_never_exposes_version(self):
         entered,release=threading.Event(),threading.Event();original=self.jobs._publish
         def waiting(operation):
@@ -69,6 +77,8 @@ class DownloadTests(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError) as caught:request(path,body,headers,raw)
             self.assertEqual(caught.exception.code,code);caught.exception.close()
         self.assertEqual(request('catalog')[1]['catalogs'][0]['catalog_id'],self.catalog.fingerprint)
+        setup_request=urllib.request.Request(origin+'/api/library/ai/setup',headers={'Origin':origin,'X-Aredoko-Token':'token'})
+        with opener.open(setup_request,timeout=2) as response:self.assertTrue(json.load(response)['downloads_supported'])
         status,_=request('start',self.body);self.assertEqual(status,202)
         handler.download_jobs.thread.join(4)
         self.assertEqual(request('job')[1]['state'],'complete')

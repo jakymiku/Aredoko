@@ -477,7 +477,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(200,{**backup_jobs.snapshot(),'backup_supported':True,'restore_supported':restore_handoff is not None,
                         'default_selection':{'settings':True,'history':True,'reader_progress':True,'vectors':False}})
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
-                if path=='/api/library/ai/setup':return self.send(200,{**setup.snapshot(),'selection_api_supported':True,'job':setup_jobs.snapshot()})
+                if path=='/api/library/ai/setup':return self.send(200,{**setup.snapshot(),'selection_api_supported':True,'downloads_supported':download_jobs.supported,'job':setup_jobs.snapshot()})
                 if path in ('/api/library/ai/setup/download/catalog','/api/library/ai/setup/download/job'):
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid acquisition query'})
                     return self.send(200,download_jobs.catalogs() if path.endswith('/catalog') else download_jobs.snapshot())

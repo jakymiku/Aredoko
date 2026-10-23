@@ -1,5 +1,9 @@
 # Aredoko — Codex / coding agent instructions
 
+## 2026-10-24 repeat acquisition preserves existing versions (latest)
+
+[Verify/reuse exact published catalog without network or replacement](docs/ai-acquisition.md): generated20 PASS; final capability HTTP1 PASS separately. Corrupt/extra/linked version remains untouched; explicit-only hash check and cancellation ordering retained. Next runtime-catalog preparation from verified pack; product registry empty. Native acquisition1/2, environment2/2, restore3/3; goal active/no shutdown.
+
 ## 2026-10-24 acquisition sources and scaling (latest)
 
 [Source-host disclosure and constant-cost progress totals](docs/ai-acquisition.md): Python16/Core974 PASS/Portable0errors. Earlier acquisition Core973 count corrected to972 (output line count was used); native12 checks/4 PNG/exit0 evidence unchanged. No GUI replay; next verify/reuse existing published version without replacement. Catalog empty, caps unchanged, goal active/no shutdown.

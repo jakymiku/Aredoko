@@ -1,5 +1,11 @@
 # LD4b：任意AI環境の取得基盤（2026-10-24）
 
+## 2026-10-24 explicit repeat acquisition reuses verified version (latest)
+
+An explicit same-catalog acquisition after a previous backend session verifies the exact existing version's inventory, sizes, all SHA and owned validator in place, then acknowledges through the same cancel/publication gate. Returns reused=true/root without network or replacement. Corrupt/unlisted/linked versions fail and remain untouched; there is no silent repair. Cancellation before acknowledgement cannot turn into later success, and the old existing directory is retained. This full verification occurs only on explicit acquisition, not startup/status/catalog GET. Received/verified counts include available reused bytes, not a claim of newly transferred network bytes.
+
+Generated acquisition/jobHTTP20 PASS/13.894s, includes new-owner reuse, corrupt/extra-file preservation and cancel before acknowledgement. Setup capability now matches nonempty trusted registry; focused authenticated HTTP1 PASS/1.310s after that final change (not21 distinct tests). No additional GUI/GPU/real artifact retrieval. Source-host build/Core evidence is previous unit; no C# change here. Next reproducible catalog build from an explicitly selected verified runtime pack; registry remains empty until real publisher/licensing review.
+
 ## 2026-10-24 source disclosure and progress scaling (latest)
 
 Trusted catalog summaries now expose allowed source hosts (not signed/private artifact URLs). Core validates bounded host-only metadata; native consent screen shows sources beside capacity/license. Acquisition computes immutable total bytes once rather than scanning every catalog entry on each64KiB progress report; full per-artifact hash/cancellation/publication checks are unchanged. This removes catalog-size times chunk-count bookkeeping, not a measured throughput claim.
