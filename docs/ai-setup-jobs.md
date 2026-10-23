@@ -1,5 +1,15 @@
 # 配置済みAI環境のバックグラウンド検査（LD4a）
 
+## 2026-10-24 Core・配置済み環境のGUI接続（最新）
+
+既存の「AI検索の準備」→「AI環境を追加・配置する」から、runtime/modelsのフォルダ選択、標準設定への復帰、背景検査、実進捗、中止、再表示をsource接続。`AIEnvironmentClient`は未指定と明示nullを区別し、保存済みと推論準備完了を混同しない。保存先をGET診断へ追加し、GUIの非同期応答はrevision/lifetimeで保護。操作エラーは最終Render後も保持する。画面を閉じても背景検査は続く。正常モデル・索引をhot swapしない。
+
+Core947 assertions PASS、既存setup jobs15 PASS/3.067s。Portable build0errors/既知WUI1001×3 (28.77s)、候補 `data/ai-ui/ai-environment-20261024/frontend01` publish成功/既存SDK IL2104×2。GUI受入はこの時点で未実施。新しい具体範囲で生成データのみ最大2回の許可を質問済み、回答前には起動しない。復元3/3等の既存capとは別の実体の作業だが、旧flowを再試行しない。実モデル・GPU・新規取得0。
+
+利用者向け配置ガイドは[AI環境の追加と配置](ai-environment-guide.md)。アプリ取得は[LD4b](ai-acquisition.md)の製品catalog未登録のため利用可能と表示しない。手動選択は一般のvenv任意実行ではなく、既存LD3の検証済みAredoko pack契約を使用する。旧CLI復旧手順は通常説明から折りたたみへ整理し、アプリ内復元の案内を最新化した。
+
+次：許可があれば上記候補の独立GUIフローを確認し、製品catalogのprovenance/配布元準備と取得Core/UIを続ける。P5/LD4b/LD5/LD6の全完了とはしない。Goal active、no shutdown。
+
 2026-10-22。前回のLD3は5d7984fでcommit/push/文書/PR本文更新まで完了していた。停止点はPR head確認中のusageによる自動承認review不能であり、実装の未保存ではない。再開時にfetch/status/log、remote branch/refs/pull/5/head/APIのhead一致、Draft/open/unmerged、Actions/checks0を確認した。作業treeもcleanで、他AIの未取得変更はなかった。
 
 ## 今回の実装

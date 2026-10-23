@@ -1749,12 +1749,13 @@ public sealed partial class MainPage : Page
     {
         if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
         var timer=DispatcherQueue.CreateTimer();timer.Interval=TimeSpan.FromSeconds(1);
-        bool reload=false;
+        bool reload=false,openEnvironment=false;
         try
         {
             if(!await ConfirmDiscardAsync())return;
             dialogOpen=true;reload=true;
-            var explanation=new TextBlock {Text="現在動いているモデルは変更しません。モデル選択は次回起動で反映します。新しいモデルではAI索引を作成してください。自動ダウンロードはしません。",TextWrapping=TextWrapping.Wrap};
+            var explanation=new TextBlock {Text="モデルの選択は次回起動で反映します。新しいモデルには対応するAI索引が必要です。環境の配置は「AI環境を追加・配置する」で確認できます。",TextWrapping=TextWrapping.Wrap};
+            var environmentButton=new Button{Content="AI環境を追加・配置する"};AutomationProperties.SetAutomationId(environmentButton,"AIEnvironmentOpen");
             var modelChoice=new ComboBox {Header="次回起動で使用するAIモデル",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(modelChoice,"AIProfileChoice");
             var modelWarning=new TextBlock {TextWrapping=TextWrapping.Wrap};
@@ -1804,8 +1805,8 @@ public sealed partial class MainPage : Page
                     var active=data["active"]?.GetValue<string>() ?? "default";
                     var overridden=data["command_line_override"]?.GetValue<bool>()==true;
                     var restart=data["restart_required"]?.GetValue<bool>()==true;
-                    modelFeedback.Text=(overridden?"起動引数 -AIProfile が優先。GUI選択は引数なしの次回起動で有効です。":
-                        restart?"保存済み。Aredokoを閉じ、同じ起動スクリプトで起動し直してください。":"変更する場合は次回起動に設定を押してください。")
+                    modelFeedback.Text=(overridden?"起動時に指定したモデルが優先されています。その指定を外して再起動すると、ここで選択したモデルを使用します。":
+                        restart?"保存済みです。Aredokoを閉じ、いつもの入口から起動し直してください。":"変更する場合は次回起動に設定を押してください。")
                         +"\n現在起動中: "+(active=="command-line"?"起動引数で指定したモデル":profileLabels.GetValueOrDefault(active,"設定を確認してください"))
                         +(data["error"]?.GetValue<string>() is string err && err.Length>0?"\n"+err:"");
                 }
@@ -2061,7 +2062,7 @@ public sealed partial class MainPage : Page
                 finally{UpdateStart();}};
             timer.Tick+=async(_,_)=>await Refresh();
             var panel=new StackPanel {Spacing=12,MinWidth=320};
-            foreach(var element in new UIElement[]{explanation,modelChoice,modelWarning,modelApply,modelFeedback,scopeEditor.Content,
+            foreach(var element in new UIElement[]{environmentButton,explanation,modelChoice,modelWarning,modelApply,modelFeedback,scopeEditor.Content,
                 new TextBlock {Text="AIのメモリ・索引負荷",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},
                 release,releaseResult,idleChoice,pauseChoice,saveResource,resourceResult})panel.Children.Add(element);
             var content=new Grid {RowSpacing=12,MaxHeight=Math.Max(160,ActualHeight-240)};
@@ -2089,11 +2090,13 @@ public sealed partial class MainPage : Page
             actions.Children.Add(start);actions.Children.Add(cancel);Grid.SetRow(actions,2);content.Children.Add(actions);
             await RefreshProfiles();await RefreshResource();await Refresh();timer.Start();
             var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI検索の準備",Content=content,CloseButtonText="閉じる"};
+            environmentButton.Click+=(_,_)=>{if(scopeEditor.Saving)return;openEnvironment=true;dialog.Hide();};
             dialog.Closing+=(_,args)=>{if(scopeEditor.Saving)args.Cancel=true;};
             await dialog.ShowAsync();
         }
         catch(Exception ex){Failure(ex);}
         finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
+        if(openEnvironment&&!disposed)await OpenAIEnvironmentDialogAsync();
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;

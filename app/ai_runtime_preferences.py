@@ -70,7 +70,7 @@ class AIRuntimePreferences:
         runtime_changed=selected is not None and self.active_python is not None and os.path.normcase(str(selected))!=os.path.normcase(self.active_python)
         models_changed=self.active_models_root is not None and models is not None and os.path.normcase(str(models))!=os.path.normcase(self.active_models_root)
         selection_changed=any(data.get(k)!=self.started.get(k) for k in ('ai_python','ai_runtime_root','ai_runtime_manifest_sha256','models_root'))
-        return {'runtime':runtime,'model':model,'restart_required':selection_changed or runtime_changed or models_changed,
+        return {'runtime':runtime,'model':model,'runtime_root':data.get('ai_runtime_root'),'models_root':models,'restart_required':selection_changed or runtime_changed or models_changed,
                 'selection_service_available':True,'selection_api_supported':True,'downloads_supported':False,
                 'inference_verified':False,'message':'設定の変更は次回起動時に反映します。実行環境とモデルは別々に確認します。'}
 

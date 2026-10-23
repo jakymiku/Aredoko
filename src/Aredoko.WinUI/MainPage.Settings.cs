@@ -74,17 +74,20 @@ public sealed partial class MainPage
             var panel=new StackPanel{Spacing=12};
             panel.Children.Add(new TextBlock
             {
-                Text="【現在の復元方法】\n" +
-                     "Aredokoのデータベースは動作中、排他的ロック（.owner.lock）により破損から保護されています。\n" +
-                     "バックアップはアプリ内で作成できます。復元先への安全な自動切替は準備中です。現在の復元ツールは、アプリを終了してから新しい復元先を指定して使用します。\n\n" +
-                     "■ バックアップコマンド例:\n" +
-                     "python tools/backup_library.py backup --catalog <catalog.sqlite> --output <新バックアップ先>\n\n" +
-                     "■ 復元コマンド例:\n" +
-                     "python tools/backup_library.py restore --bundle <バックアップ先> --output <新復元先>\n\n" +
-                     "※ バックアップには手動タグ・棚・履歴・読書位置・ページ本文・AIプロファイルが含まれます。\n" +
-                     "※ AIベクトルは同梱または明示省略（--omit-ai / --without-ai）が可能です。",
+                Text="バックアップは「設定」→「バックアップと復元」から作成できます。復元は同じ画面の「バックアップから復元」で行います。\n\n"+
+                     "復元内容は新しい保存先で検証します。同意して再起動すると切り替わり、元のライブラリも残ります。自動再起動は、対応した配布版の Aredoko.exe から起動した場合に利用できます。\n\n"+
+                     "バックアップにはライブラリ情報と、選択した設定・履歴・読書位置・AI索引が含まれます。元の画像・動画、モデル、Python環境、サムネイルキャッシュは含みません。",
                 TextWrapping=TextWrapping.Wrap
             });
+            var offline=new Expander{Header="起動できない場合の復旧手順",HorizontalAlignment=HorizontalAlignment.Stretch,Content=new TextBlock
+            {
+                Text="アプリを終了してから、復旧ツールで新しい復元先を指定してください。既存のDBや元のメディアへ上書きしないでください。\n\n"+
+                     "バックアップ例：\npython tools/backup_library.py backup --catalog <catalog.sqlite> --output <新バックアップ先>\n\n"+
+                     "復元例：\npython tools/backup_library.py restore --bundle <バックアップ先> --output <新復元先>\n\n"+
+                     "破損したAI索引を除いて復元する場合は --without-ai を指定します。CLIを使用できる環境が必要です。",
+                TextWrapping=TextWrapping.Wrap
+            }};
+            AutomationProperties.SetAutomationId(offline,"BackupRecoveryAdvanced");panel.Children.Add(offline);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップと復旧ガイド",CloseButtonText="閉じる",Content=panel};
             AutomationProperties.SetAutomationId(dialog,"BackupGuideDialog");
             var closeBtn = new Button { Content = "閉じる", HorizontalAlignment = HorizontalAlignment.Right };

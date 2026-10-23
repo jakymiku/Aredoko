@@ -9,6 +9,7 @@ await AnimationStreamTests.Run(Check);
 await ResultSessionTests.Run(Check);
 await ShelfTests.Run(Check);
 await BackupTests.Run(Check);
+await AIEnvironmentTests.Run(Check);
 await RootFavoritesTests.Run(Check);
 await ResultNavigationTests.Run(Check);
 ResultBufferTests.Run(Check);

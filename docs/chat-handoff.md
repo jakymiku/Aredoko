@@ -1,5 +1,9 @@
 # Aredoko GPT Chat向け引き継ぎ
 
+## 2026-10-24 existing AI environment UI (latest)
+
+[Core947/Portable/source connection and exact pending GUI scope](ai-setup-jobs.md). Runtime/models selection/reset, progress/cancel/reattach now source-connected. Generated-data GUI max2 permission asked, do not run before response. Acquisition catalog remains empty; no real download/GPU/inference. Old restore3/3 cap stays. Goal active, no shutdown.
+
 ## 2026-10-24 LD4b acquisition foundation (latest)
 
 [Trusted catalog/resume/verification/publication and owned authenticated job](ai-acquisition.md) source connected; generated transfer11/jobHTTP5 pass. Production registry EMPTY, download_supported false; no real artifacts/model/driver/GUI/GPU. P5 residual acceptance remains, native restore3/3 exhausted. Next actual catalog provenance + Core/LD5 existing-folder UI; goal active, no shutdown.
