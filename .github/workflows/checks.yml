@@ -1,67 +1,28 @@
-name: Prototype checks
-# Hosted CI is opt-in while the account allowance is blocked.
-# Local checks remain required; do not enable paid usage automatically.
+name: Aredoko production contracts (manual)
+# Opt-in only. No push/pull_request/schedule triggers. Never run just for docs.
+# Legacy browser/Tauri/GUI-comparison benchmarks were removed from this
+# product workflow; their source and manual local launchers are preserved.
 on:
   workflow_dispatch:
 jobs:
-  tests:
+  production-contracts:
     runs-on: windows-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: python -m unittest discover -s tests -v
-      - run: node --check web/app.js
-      - run: python -m unittest discover -s experiments/gui-compare/tests -v
+      - name: Production integration (generated temporary data)
+        run: python -m unittest discover -s tests -p 'test_production.py' -v
+      - name: Restore and rollback contracts (generated data)
+        run: python -m unittest discover -s tests -p 'test_restore_switch.py' -v
+      - name: Source scope/cancellation contracts
+        run: python -m unittest discover -s tests -p 'test_search_cancellation.py' -v
+      - name: Acquisition contracts (no actual model download)
+        run: python -m unittest discover -s tests -p 'test_ai_acquisition.py' -v
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Test WinUI JSON protocol without reflection
-        run: dotnet run --project experiments/gui-compare/winui3/json-smoke/JsonSmoke.csproj -c Release
-      - name: Compile Windows GUI Automation driver
-        run: dotnet build experiments/gui-compare/ui-automation/GuiDriver.csproj -c Release --nologo
-      - name: Exercise GUI Automation driver CLI self-check
-        run: dotnet run --project experiments/gui-compare/ui-automation/GuiDriver.csproj -c Release --no-build -- --self-test true
-      - run: node --check experiments/gui-compare/tauri-react/vite.config.js
-      - name: Validate comparison PowerShell syntax
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Get-ChildItem experiments/gui-compare -Recurse -Filter *.ps1 | ForEach-Object {
-            $tokens = $null; $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
-            if ($errors.Count) { throw "PowerShell parsing failed for $($_.FullName): $($errors -join ', ')" }
-          }
-  browser-smoke:
-    runs-on: windows-latest
-    timeout-minutes: 12
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install Playwright Node driver
-        run: npm install --no-save --no-package-lock playwright@1.55.0
-      - name: Test real HTTP + Edge on an isolated fixture
-        run: node tools/run-ui-check.cjs
-      - name: Build React comparison fixture
-        working-directory: experiments/gui-compare/tauri-react
-        run: |
-          npm install --no-package-lock --no-audit --no-fund
-          npm run build
-      - name: Test React virtual paging in Edge
-        run: node tools/check-gui-bench.cjs
-      - name: Upload UI screenshots (even if the test fails)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: edge-ui-smoke
-          path: cache/qa/*.png
-          if-no-files-found: ignore
+      - name: Core contract assertions (no native WinUI acceptance implied)
+        run: dotnet run --project tests/Aredoko.Core.Tests/Aredoko.Core.Tests.csproj -c Release

@@ -19,3 +19,8 @@
 
 ## CI
 初期mainの `.github/workflows/checks.yml` はもともと `push, pull_request` だったが2026-10-24に `workflow_dispatch` 専用へ切り替えた。開発ブランチの3 workflowも手動のみ。残枠が使えない間はActions 0回。通常のdocs整頓のためにCIを起動しない。
+
+## 2026-10-24 実コードの参照調査と軽量化
+- [旧実験コードの依存監査](legacy-dependency-audit-20261024.md)を追加。製品のCatalog/HTTPが旧デモ由来の共有クラスを参照するため、一括削除や移動は不可と確認。
+- 製品用の手動checks workflowからブラウザ/Web/Tauri/GUI比較ジョブを切り離した。旧素材はPR #3とGit履歴に残し、常時テストには含めない。CI実行0・コード削除0。
+- 主体は引き続きP5/P6/P7の製品完成。mainへ実コードを昇格する受入条件は未達成で、強制統合しない。

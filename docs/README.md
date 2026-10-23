@@ -14,6 +14,8 @@
 - バックアップ/配布: [P5復元](restore-review-20261024.md)、[取得](ai-acquisition.md)、[P6軽量配布](lightweight-distribution.md)、[Portable ZIP候補](portable-refresh-20261024.md)、[基本の復旧](backup-recovery.md)
 - 安全/データ: [原本パス検証](source-path-validation.md)、[大規模契約](large-library-contract.md)、[検索取消](search-cancellation.md)
 
+- [旧実験コードの依存関係・CI軽量化](legacy-dependency-audit-20261024.md) — 削除できない共有依存、退避/凍結したテストとmainの受入条件
+
 ## 過去の比較・実験・セッション記録
 - [過去の原文と互換リンク一覧](history-index.md)
 - [旧GUI比較の案内](gui-comparison.md)、[旧比較キット案内](gui-compare.md)、[初期状況記録](status.md)、[以前のスキル記録](development-skills.md)

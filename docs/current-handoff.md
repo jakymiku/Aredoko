@@ -38,6 +38,9 @@
 - 旧README・初期状況・GUI比較・PC Skills・2026-10-23昼夜handoffは同一blob内容のまま履歴へ退避し、元のパスから案内できる。[文書案内](README.md) / [原文履歴](history-index.md)。
 - 本整理でプログラム・モデル・ユーザーDB・配布物は変更せず、UI/GPU/Windows受入やCIを実行していない。**次の開発1件はP5 active/pending profile保全のまま**。
 
+## 旧実験コード監査の結果（2026-10-24）
+- [依存監査とCI軽量化](legacy-dependency-audit-20261024.md)：製品コードが旧 `Catalog` と `server.handler_for` を使っていることを確認し、破壊的削除を保留。通常のmanual-only製品checksからTauri/Web/Edgeベンチマークを分離した。CIは未実行、実機受入・main昇格も未実施。**次の実装1件は上記P5のまま**。
+
 ## 強い制約と報告
 - 原本・ユーザーDB/保存設定、登録ルート/検索scope/認証/モデル選択/backup schemaの情報損失を避ける。明示許可のないファイル変更、私物スキャン、モデル/外部依存取得は禁止。
 - CIなし、main mergeなし、別PRなし。実機/実GPU/自動取得は根拠なければ未検証。過去の試行上限を再利用しない。
