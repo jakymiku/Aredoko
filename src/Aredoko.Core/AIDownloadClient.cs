@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 
 namespace Aredoko.Core;
 
-public sealed record AIDownloadCatalog(string Id,string Name,string Kind,string Revision,long Bytes,string License,Uri LicenseUri,IReadOnlyList<string> SourceHosts)
+public sealed record AIDownloadCatalog(string Id,string Name,string Kind,string Revision,long Bytes,string License,Uri LicenseUri,IReadOnlyList<string> SourceHosts,AIModelTarget? ModelTarget=null,string? DefinitionSha256=null)
 {
     internal static string Digest(string? value,int length=64)
     {
@@ -38,13 +38,20 @@ public sealed record AIDownloadCatalog(string Id,string Name,string Kind,string 
                 hosts.Add(host);
             }
             if(hosts.Count==0)throw new InvalidDataException("Missing acquisition source hosts");
-            result.Add(new(id,name,kind,revision,size,Text(row,"license",128),uri,hosts.AsReadOnly()));
+            AIModelTarget? target=null;string? definition=null;
+            if(row.TryGetProperty("model_target",out var identity))
+            {
+                target=AIModelTarget.Parse(identity);definition=Digest(row.GetProperty("definition_sha256").GetString());
+                if(kind!="model"||target.Revision!=revision)throw new InvalidDataException("Catalog model binding mismatch");
+            }
+            else if(row.TryGetProperty("definition_sha256",out _))throw new InvalidDataException("Missing catalog model target");
+            result.Add(new(id,name,kind,revision,size,Text(row,"license",128),uri,hosts.AsReadOnly(),target,definition));
         }
         if(root.GetProperty("download_supported").GetBoolean()!=(result.Count>0))throw new InvalidDataException("Inconsistent acquisition availability");
         return result.AsReadOnly();
     }
 }
-public sealed record AIDownloadSelection(string CatalogId,string Kind,string Root)
+public sealed record AIDownloadSelection(string CatalogId,string Kind,string Root,AIModelTarget? ModelTarget=null)
 {
     public static AIDownloadSelection? FromPublished(AIDownloadJob? job,IReadOnlyList<AIDownloadCatalog> catalogs)
     {
@@ -52,8 +59,12 @@ public sealed record AIDownloadSelection(string CatalogId,string Kind,string Roo
            job.BytesVerified!=job.BytesTotal||job.BytesReceived!=job.BytesTotal||
            !Path.IsPathFullyQualified(job.Root)||job.Root.Any(char.IsControl))return null;
         var source=catalogs.SingleOrDefault(item=>item.Id==job.CatalogId);
-        return source is {Kind:"runtime" or "model"}&&source.Bytes==job.BytesTotal
-            ?new(source.Id,source.Kind,job.Root):null;
+        if(source is null||source.Bytes!=job.BytesTotal)return null;
+        if(source.Kind=="runtime")return new(source.Id,source.Kind,job.Root);
+        if(source.Kind!="model"||source.ModelTarget is null||source.DefinitionSha256 is null)return null;
+        source.ModelTarget.Validate();AIDownloadCatalog.Digest(source.DefinitionSha256);
+        if(source.ModelTarget.Revision!=source.Revision)return null;
+        return new(source.Id,source.Kind,job.Root,source.ModelTarget);
     }
 }
 public sealed record AIDownloadJob(string? Id,string State,string? CatalogId,long BytesReceived,long BytesVerified,long? BytesTotal,bool Published,string? Root,string Message,bool? CancelAccepted)

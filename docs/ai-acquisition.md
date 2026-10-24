@@ -139,3 +139,12 @@ WDの既存固定hash/サイズはconfig/tagger-profilesに存在し、[固定re
 - 所有setup APIへ `model_target`（固定4項目）または `model_role`＋`models_root` を明示送信する。完全一致指定/resetはそのモデルだけ、役割指定/resetは当該役割内の個別指定だけ、従来の共通指定/resetは全個別・役割指定を解除する。取消/失敗は旧設定を保全。
 - catalog summaryはsource所有の`ModelPackValidator`からのみ`model_target`/正規化定義SHA256を返す。kind/nameから役割を推測しない。validatorと別catalogの組合せは拒否。raw profile SHAのregistry pinと定義SHAは用途が異なる。製品registryは引き続き0件、実取得なし。
 - CPU証拠：`data/ai-ui/active-selection-20261024-01/model-placements-initial.log` 34件PASS、`model-binding-related.log` 38件PASS（別実行）。生成fixtureのみ、非実行dispatcher spy、P5復元ready後の一時override解除でもmodel_locationsを保全。Core/native接続は別の後続単位で記録する。
+
+
+### Core／nativeの役割・モデル選択（同日）
+- Coreはmodel_target/定義SHA/役割/revision/安全な相対directoryを検証する。旧unbound model catalogは取得表示を維持するが適用shortcutを出さず、役割を推測しない。runtime経路は従来通り。
+- 配置画面は手動選択の対象（共通・検索・WD・意図）を明示し、共通/resetの影響を説明する。取得完了ボタンはsource-boundの完全一致モデルだけへ適用。開いただけ・対象変更だけでは保存しない。現在のprofile/namespaceを勝手に切り替えない。
+- Core `1003` assertions PASS、Portable build errors0（既知WUI1001×3）/publish成功（既知SDK IL2104×2）。`model-binding-core.log`/`model-roles-winui-build.log`/`model-roles-publish.log`（同じactive-selection証拠directory）。
+- native候補 `data/ai-ui/ai-model-selection-20261024/frontend01`。source `8db7c2f`＋reportの正確なdiff SHA、frontend SHA/source一覧を保存。生成WD422 bytesのみloopback配信、実モデル/GPU/新依存0。旧Alpha/通常DB/shortcut変更0。
+- `data/ai-ui/ai-model-selection-tagger-20261024/run01/report.json` はFAILのまま保全。モデル保存・他役割保全は成功したが、画面再表示ハーネスがライブラリへ戻った後に存在しないBtnAIIndexを直接探した。6 PNG目視・所有app正常終了0。Settingsを開き直す実修正後run02は全チェックPASS、5 PNG全目視、app0/所有process残存なし・検査用runtime実行0。対象dropdownのpopupをEscで閉じる観測手順も明示。
+- 手動role/common resetと取消の保存保全はCPU/Coreで確認。nativeはWDの明示適用・モデル2個を含む他設定保全・対象切替・再表示に限定。実推論/完全配布受入は未実施。

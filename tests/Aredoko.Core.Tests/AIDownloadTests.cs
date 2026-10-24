@@ -48,10 +48,22 @@ internal static class AIDownloadTests
         catalog["source_hosts"]=new JsonArray("example.org");
         var runtimeCatalog=new AIDownloadCatalog(digest,"runtime","runtime",new string('c',40),128,"MIT",new Uri("https://example.org/LICENSE"),new[]{"example.org"});
         var modelCatalog=runtimeCatalog with{Id=new string('d',64),Kind="model",Name="model"};
+        var target=new AIModelTarget("tagger","example/wd",new string('c',40),"wd");
+        var boundModel=modelCatalog with{ModelTarget=target,DefinitionSha256=new string('e',64)};
         var completed=new AIDownloadJob(id,"complete",digest,128,128,128,true,Path.GetTempPath(),"保存済み",null);
         var selection=AIDownloadSelection.FromPublished(completed,new[]{modelCatalog,runtimeCatalog});
         check(selection is {Kind:"runtime"}&&selection.Root==Path.GetTempPath(),"selection uses the completed job catalog, not the current picker choice");
-        check(AIDownloadSelection.FromPublished(completed with{CatalogId=modelCatalog.Id},new[]{runtimeCatalog,modelCatalog})?.Kind=="model","model selection retains its parent models folder");
+        check(AIDownloadSelection.FromPublished(completed with{CatalogId=modelCatalog.Id},new[]{runtimeCatalog,modelCatalog}) is null,"unbound model never guesses its role or offers use shortcut");
+        check(AIDownloadSelection.FromPublished(completed with{CatalogId=boundModel.Id},new[]{runtimeCatalog,boundModel})?.ModelTarget==target,"model selection retains exact pinned role and physical identity");
+        var identity=new JsonObject{["role"]="tagger",["model_id"]="example/wd",["revision"]=new string('c',40),["directory"]="wd"};
+        catalog["model_target"]=identity;catalog["definition_sha256"]=new string('e',64);
+        Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"runtime cannot claim model binding");
+        catalog["kind"]="model";
+        check(AIDownloadCatalog.ParseList(catalogs.ToJsonString())[0].ModelTarget==target,"source model binding survives manual Core parsing");
+        identity["revision"]=new string('f',40);Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"model revision must match bound catalog");identity["revision"]=new string('c',40);
+        foreach(var path in new[]{"../escape","CON","nested/LPT1.dat","/absolute","a\\b"})
+        {identity["directory"]=path;Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"unsafe bound model directory rejected");}
+        identity["directory"]="wd";catalog.Remove("model_target");Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"definition digest alone cannot imply a model role");catalog.Remove("definition_sha256");
         foreach(var invalid in new[]{completed with{State="failed"},completed with{Published=false},completed with{Root=null},completed with{Root="relative"},completed with{BytesVerified=127},completed with{BytesReceived=127},completed with{BytesTotal=null}})
             check(AIDownloadSelection.FromPublished(invalid,new[]{runtimeCatalog}) is null,"incomplete or unverified job offers no selection shortcut");
         check(AIDownloadSelection.FromPublished(completed,Array.Empty<AIDownloadCatalog>()) is null,"removed catalog cannot provide a selection shortcut");

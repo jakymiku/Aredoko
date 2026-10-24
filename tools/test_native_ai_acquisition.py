@@ -15,8 +15,10 @@ from ai_acquisition import Catalog
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8',errors='replace');sys.stderr.reconfigure(encoding='utf-8',errors='replace')
-    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2),required=True);parser.add_argument('--theme',choices=('light','dark'),default='dark');parser.add_argument('--published-selection',action='store_true',help='New feature: apply a generated valid published runtime without executing it');args=parser.parse_args()
-    front=args.frontend.resolve();base=REPO/('data/ai-ui/ai-acquired-selection-20261024' if args.published_selection else 'data/ai-ui/ai-acquisition-20261024');target=base/f'run{args.attempt:02}'
+    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2),required=True);parser.add_argument('--theme',choices=('light','dark'),default='dark');parser.add_argument('--published-selection',action='store_true',help='New feature: apply a generated valid published runtime without executing it');parser.add_argument('--published-model',choices=('embedding','tagger'),help='Apply a generated model to its exact source-bound identity');args=parser.parse_args()
+    if args.published_selection and args.published_model:parser.error('Choose one published feature')
+    published=args.published_selection or args.published_model is not None
+    front=args.frontend.resolve();base=REPO/('data/ai-ui/ai-model-selection-'+args.published_model+'-20261024' if args.published_model else 'data/ai-ui/ai-acquired-selection-20261024' if args.published_selection else 'data/ai-ui/ai-acquisition-20261024');target=base/f'run{args.attempt:02}'
     if os.name!='nt' or not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file() or target.exists():parser.error('New bounded output and dedicated frontend required')
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
     report['frontend_sha256']=hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()
@@ -24,7 +26,7 @@ def main():
     tracked=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','--','src','app'],cwd=REPO,text=True).splitlines()
     report['source_files']={name:hashlib.sha256((REPO/name).read_bytes()).hexdigest() for name in tracked}
     report['frontend_sha256']=hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()
-    env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-ai-acquired-selection-20261024' if args.published_selection else 'aredoko-ai-acquisition-20261024','LOCALAPPDATA':str(target/'user'),'APPDATA':str(target/'user')}
+    env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-ai-model-selection-'+args.published_model+'-20261024' if args.published_model else 'aredoko-ai-acquired-selection-20261024' if args.published_selection else 'aredoko-ai-acquisition-20261024','LOCALAPPDATA':str(target/'user'),'APPDATA':str(target/'user')}
     user=ctypes.WinDLL('user32',use_last_error=True);user.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)];user.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
     cat=server=thread=proc=artifact_server=artifact_thread=None;hwnd=None;original_popen=None;release=threading.Event();reached=threading.Event()
     def cli(*arguments):
@@ -68,14 +70,43 @@ def main():
                 self.end_headers()
                 try:self.wfile.write(payload[offset:])
                 except (BrokenPipeError,ConnectionResetError):pass
-        if args.published_selection:
+        if published:
             from test_ai_runtime import fixture
             from build_ai_runtime_catalog import build_catalog
             from ai_acquisition import validate_runtime
             from urllib.parse import quote,unquote
-            pack=fixture(generated/'runtime')
-            document,_=build_catalog(pack,key='generated-runtime-selection',revision='e'*40,base_url='https://example.org/immutable/'+('e'*40),license='MIT',license_url='https://example.org/NOTICE',allowed_hosts=['example.org'])
-            payloads={'/artifact/'+p.relative_to(pack).as_posix():p.read_bytes() for p in pack.rglob('*') if p.is_file()}
+            if args.published_model:
+                from ai_profiles import ModelProfile
+                from tagger_profile import WDProfile
+                from ai_model_pack import model_validator
+                from model_locations import ModelTarget
+                from build_ai_model_catalog import build_catalog as build_model
+                pack=generated/'model';pack.mkdir()
+                (pack/'NOTICE').write_text('Generated fixture only, not a production model or license',encoding='utf-8')
+                if args.published_model=='tagger':
+                    data=json.loads((REPO/'config/tagger-profiles/wd-swinv2-v3.json').read_text(encoding='utf-8'))
+                    data.update(model_id='generated/wd',model_directory='models/generated-wd',revision='e'*40)
+                    for name,content in {'model.onnx':b'generated not executable','selected_tags.csv':b'name,category\nfixture,0'}.items():
+                        (pack/name).write_bytes(content);data['artifacts'][name]={'size':len(content),'sha256':hashlib.sha256(content).hexdigest()}
+                    definition=WDProfile.from_dict(data)
+                    (pack/'aredoko-source.json').write_text(json.dumps(definition.identity()),encoding='utf-8')
+                else:
+                    definition=ModelProfile(model_id='generated/embedding',revision='e'*40,directory='generated-embedding')
+                    for name,content in {'aredoko-revision.txt':definition.revision.encode(),'config.json':b'{}','tokenizer.json':b'{}','model.safetensors':b'generated not executable'}.items():(pack/name).write_bytes(content)
+                document,_=build_model(pack,definition,key='generated-model-selection',base_url='https://example.org/immutable/'+('e'*40),license='MIT',license_url='https://example.org/NOTICE',allowed_hosts=['example.org'])
+                model_target=ModelTarget.for_profile(args.published_model,definition)
+                initial_values=json.loads(settings.read_text(encoding='utf-8'))
+                for role in ('embedding','tagger','intent'):
+                    folder=target/('existing-'+role);folder.mkdir();initial_values[role+'_models_root']=str(folder)
+                initial_values['model_locations']=[]
+                for role,name in (('embedding','first'),('embedding','second'),('tagger','other-wd')):
+                    identity=ModelTarget.from_dict({'role':role,'model_id':'generated/'+name,'revision':'a'*40,'directory':name})
+                    folder=target/('existing-'+name);folder.mkdir();initial_values['model_locations'].append(identity.to_dict()|{'root':str(folder)})
+                settings.write_text(json.dumps(initial_values),encoding='utf-8');initial=settings.read_bytes()
+            else:
+                pack=fixture(generated/'runtime')
+                document,_=build_catalog(pack,key='generated-runtime-selection',revision='e'*40,base_url='https://example.org/immutable/'+('e'*40),license='MIT',license_url='https://example.org/NOTICE',allowed_hosts=['example.org'])
+            payloads={'/artifact/'+(model_target.directory+'/' if args.published_model else '')+p.relative_to(pack).as_posix():p.read_bytes() for p in pack.rglob('*') if p.is_file()}
             class ExactArtifacts(BaseHTTPRequestHandler):
                 def log_message(self,*args):pass
                 def do_GET(self):
@@ -92,16 +123,16 @@ def main():
         def validate(directory,cancel):
             if cancel():raise InterruptedError('cancelled')
             if (directory/'generated.bin').read_bytes()!=payload:raise ValueError('Generated content mismatch')
-        if args.published_selection:
+        if published:
             value=json.loads(document);value['allowed_hosts']=['127.0.0.1']
             for entry in value['entries']:entry['url']=f'http://127.0.0.1:{artifact_server.server_port}/artifact/'+quote(entry['path'],safe='/')
-            catalog=Catalog.parse(json.dumps(value).encode(),test_loopback=True);validate=validate_runtime
+            catalog=Catalog.parse(json.dumps(value).encode(),test_loopback=True);validate=model_validator(definition,catalog) if args.published_model else validate_runtime
         token=secrets.token_hex(32);profiles=AIProfileSettings(target,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'no-interpreter.exe'),models_root=str(models))
-        instance=secrets.token_hex(16) if args.published_selection else None
+        instance=secrets.token_hex(16) if published else None
         if instance is not None:env.update(AREDOKO_STARTUP_NONCE=secrets.token_hex(16),AREDOKO_STARTUP_INSTANCE=instance)
         handler=production_handler(cat,token,ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger(),instance_id=instance,runtime_preferences=settings,acquisition_specs=((catalog,validate),));handler.log_message=lambda *args:None
         server=ThreadingHTTPServer(('127.0.0.1',8769),handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
-        if args.published_selection:
+        if published:
             original_popen=subprocess.Popen
             report['unexpected_process_attempts']=[]
             def guarded_popen(command,*position,**options):
@@ -127,9 +158,9 @@ def main():
         ui('wait-for','AIDownloadInformation','--value','MIT','--contains','-t','5000')
         ui('wait-for','PrimaryButton','-p','IsEnabled','--value','False','-t','3000');shot('acquisition-idle')
         check('idle makes no artifact request',requested==[] and settings.read_bytes()==initial)
-        if args.published_selection:
+        if published:
             ui('invoke','AIDownloadConsent');ui('wait-for','PrimaryButton','-p','IsEnabled','--value','True','-t','3000');ui('invoke','PrimaryButton')
-            wait('generated valid runtime is published',lambda:handler.download_jobs.snapshot()['state']=='complete' and handler.download_jobs.snapshot()['published'])
+            wait('generated valid AI pack is published',lambda:handler.download_jobs.snapshot()['state']=='complete' and handler.download_jobs.snapshot()['published'])
             ui('wait-for','AIDownloadSelect','-p','IsEnabled','--value','True','-t','7000');shot('published-selection')
             result=handler.download_jobs.snapshot()['result'];check('publication alone preserves preferences',settings.read_bytes()==initial)
             ui('invoke','AIDownloadSelect');ui('wait-for','AIEnvironmentAcquiredLocation','--value',result['root'],'-t','7000')
@@ -140,12 +171,27 @@ def main():
             ui('wait-for','AIEnvironmentUseAcquired','--value','次回起動に設定済み','-t','7000')
             ui('wait-for','AIEnvironmentUseAcquired','-p','IsEnabled','--value','False','-t','3000');shot('selection-saved')
             selected=json.loads(settings.read_text(encoding='utf-8'))
-            check('exact acquired runtime root is saved',selected['ai_runtime_root']==result['root'])
-            check('model root and unrelated theme are preserved',selected['models_root']==str(models) and selected['ui_theme']=='dark')
-            check('selected runtime inventory is pinned',len(selected['ai_runtime_manifest_sha256'])==64)
+            if args.published_model:
+                saved=selected.pop('model_locations');expected=json.loads(initial)['model_locations']
+                check('only exact acquired model placement is added',saved==expected+[model_target.to_dict()|{'root':result['root']}])
+                check('all other roles runtime common root and theme remain unchanged',selected=={k:v for k,v in json.loads(initial).items() if k!='model_locations'})
+                selected['model_locations']=saved
+                check('source-bound identity is visible',model_target.model_id in ui('get-property','AIEnvironmentAcquiredLocation','-p','Name'))
+                saved_bytes=settings.read_bytes()
+                ui('focus','AIEnvironmentModelScope');ui('send-keys','home down down enter','--via','send-input')
+                ui('wait-for','AIEnvironmentModels','--value',initial_values['tagger_models_root'],'-t','5000')
+                check('changing scope alone preserves every preference',settings.read_bytes()==saved_bytes)
+                ui('send-keys','esc','--via','send-input');shot('role-selection')
+                ui('invoke','CloseButton');ui('wait-for','AIEnvironmentDialog','--gone','-t','5000')
+                ui('invoke','BtnSettings');ui('wait-for','BtnAIIndex','-t','5000');ui('invoke','BtnAIIndex');ui('wait-for','AIEnvironmentOpen','-t','5000');ui('invoke','AIEnvironmentOpen');ui('wait-for','AIEnvironmentModelScope','-t','5000')
+                check('reopening preserves exact model placements',json.loads(settings.read_text(encoding='utf-8'))==selected)
+            else:
+                check('exact acquired runtime root is saved',selected['ai_runtime_root']==result['root'])
+                check('model root and unrelated theme are preserved',selected['models_root']==str(models) and selected['ui_theme']=='dark')
+                check('selected runtime inventory is pinned',len(selected['ai_runtime_manifest_sha256'])==64)
             check('generated source and media unchanged',sources()==before)
             check('frontend startup log is isolated',(target/'user/Aredoko/logs'/('frontend-startup-'+env['AREDOKO_STARTUP_NONCE']+'.log')).is_file())
-            report.update(feature='published runtime explicit use',selected_runtime_executed=False,settings=selected,artifact_requests=requested)
+            report.update(feature=('published '+args.published_model+' model explicit use' if args.published_model else 'published runtime explicit use'),selected_runtime_executed=False,settings=selected,artifact_requests=requested)
             ui('invoke','CloseButton');ui('wait-for','AIEnvironmentDialog','--gone','-t','5000');report['pass']=True
         else:
             progress=handler.download_jobs._progress

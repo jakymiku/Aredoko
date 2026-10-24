@@ -11,13 +11,22 @@ public sealed partial class MainPage
     private async Task OpenAIEnvironmentDialogAsync(AIDownloadSelection? acquired=null)
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        bool open=true,busy=false,openDownload=false;long revision=0;AIEnvironmentJob? current=null;Task? polling=null;string? operationError=null;string? savedJob=null;string? acquiredJob=null;
+        bool open=true,busy=false,openDownload=false;long revision=0;AIEnvironmentJob? current=null;Task? polling=null;string? operationError=null;string? savedJob=null;string? acquiredJob=null;AIEnvironmentStatus? locations=null;
         using var lifetime=new CancellationTokenSource();
         var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(700)};
         try
         {
             dialogOpen=true;
             var panel=new StackPanel{Spacing=12};
+            var modelScope=new ComboBox{Header="モデル保存先の対象",HorizontalAlignment=HorizontalAlignment.Stretch};
+            foreach(var (label,role) in new (string,string?)[]{("すべてのモデル（共通）",null),("画像・文字検索","embedding"),("画像のタグ付け（WD Tagger）","tagger"),("検索意図の解析","intent")})
+                modelScope.Items.Add(new ComboBoxItem{Content=label,Tag=role});
+            modelScope.SelectedIndex=1;
+            AutomationProperties.SetAutomationId(modelScope,"AIEnvironmentModelScope");
+            var scopeNote=new TextBlock{TextWrapping=TextWrapping.Wrap};
+            AutomationProperties.SetAutomationId(scopeNote,"AIEnvironmentModelScopeNote");
+            string? SelectedRole()=>(modelScope.SelectedItem as ComboBoxItem)?.Tag as string;
+            static string ModelLabel(AIModelTarget? target)=>target?.Role=="tagger"?"タグ付けモデル":"検索モデル";
             var runtime=new TextBox{Header="AI実行環境",IsReadOnly=true,TextWrapping=TextWrapping.Wrap};
             var models=new TextBox{Header="モデルの保存先",IsReadOnly=true,TextWrapping=TextWrapping.Wrap};
             var chooseRuntime=new Button{Content="実行環境を選ぶ"};var resetRuntime=new Button{Content="標準に戻す"};
@@ -27,14 +36,14 @@ public sealed partial class MainPage
             foreach(var (control,id) in new (DependencyObject,string)[]{(runtime,"AIEnvironmentRuntime"),(models,"AIEnvironmentModels"),(chooseRuntime,"AIEnvironmentChooseRuntime"),(resetRuntime,"AIEnvironmentResetRuntime"),(chooseModels,"AIEnvironmentChooseModels"),(resetModels,"AIEnvironmentResetModels"),(diagnostic,"AIEnvironmentDiagnostic"),(status,"AIEnvironmentStatus"),(progress,"AIEnvironmentProgress"),(refresh,"AIEnvironmentRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(resetRuntime,"AI実行環境を標準に戻す");AutomationProperties.SetName(resetModels,"モデル保存先を標準に戻す");AutomationProperties.SetName(progress,"AI環境の検査進捗");
             panel.Children.Add(new TextBlock{Text="配置済みのフォルダを選ぶと内容を確認し、次回起動の設定として保存します。検査中も通常の閲覧・文字検索を利用できます。",TextWrapping=TextWrapping.Wrap});
-            var acquiredLocation=new TextBox{Header=acquired?.Kind=="runtime"?"取得した実行環境":"取得したモデルの保存先",Text=acquired?.Root??"",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed};
+            var acquiredLocation=new TextBox{Header=acquired?.Kind=="runtime"?"取得した実行環境":$"取得した{ModelLabel(acquired?.ModelTarget)}（{acquired?.ModelTarget?.ModelId}）",Text=acquired?.Root??"",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed};
             var useAcquired=new Button{Content=acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う",Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed,IsEnabled=false};
             AutomationProperties.SetAutomationId(acquiredLocation,"AIEnvironmentAcquiredLocation");AutomationProperties.SetAutomationId(useAcquired,"AIEnvironmentUseAcquired");
             panel.Children.Add(acquiredLocation);panel.Children.Add(useAcquired);
             panel.Children.Add(runtime);
             var runtimeActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};runtimeActions.Children.Add(chooseRuntime);runtimeActions.Children.Add(resetRuntime);panel.Children.Add(runtimeActions);
             panel.Children.Add(new TextBlock{Text="Aredoko用のAI実行環境一式（aredoko-ai-runtime.jsonがあるフォルダ）を指定します。モデルとは別に用意します。",TextWrapping=TextWrapping.Wrap});
-            panel.Children.Add(models);
+            panel.Children.Add(modelScope);panel.Children.Add(models);panel.Children.Add(scopeNote);
             var modelActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};modelActions.Children.Add(chooseModels);modelActions.Children.Add(resetModels);panel.Children.Add(modelActions);
             panel.Children.Add(new TextBlock{Text="モデル別のフォルダをまとめた親フォルダを指定します。例：models の中に embeddinggemma-2 がある場合は models を選びます。",TextWrapping=TextWrapping.Wrap});
             foreach(var control in new UIElement[]{diagnostic,progress,status,refresh})panel.Children.Add(control);
@@ -47,8 +56,8 @@ public sealed partial class MainPage
             {
                 if(!open||disposed)return;
                 current=job;var active=busy||job.Active;
-                foreach(var control in new Control[]{chooseRuntime,chooseModels,resetRuntime,resetModels})control.IsEnabled=!active;
-                useAcquired.IsEnabled=!active&&acquired is not null&&!(job.Saved&&job.Id==acquiredJob);
+                foreach(var control in new Control[]{chooseRuntime,chooseModels,resetRuntime,resetModels,modelScope})control.IsEnabled=!active;
+                useAcquired.IsEnabled=!active&&acquired is not null&&(acquired.Kind=="runtime"||acquired.ModelTarget is not null)&&!(job.Saved&&job.Id==acquiredJob);
                 useAcquired.Content=job.Saved&&job.Id==acquiredJob?"次回起動に設定済み":acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う";
                 dialog.IsSecondaryButtonEnabled=job.Active&&!busy&&job.State is not ("cancelling" or "saving");
                 progress.Visibility=job.Active||job.Saved?Visibility.Visible:Visibility.Collapsed;
@@ -58,13 +67,21 @@ public sealed partial class MainPage
                 if(job.Active&&job.BytesTotal is >0)status.Text+=$"\n{job.BytesDone/1048576d:N1} / {job.BytesTotal.Value/1048576d:N1} MB";
                 if(operationError is not null)status.Text+="\n"+operationError;
             }
+            void RenderModelLocation()
+            {
+                models.Text=locations?.ModelLocation(SelectedRole())??"標準の場所";
+                resetModels.Content=SelectedRole() is null?"すべて標準に戻す":"この対象を標準に戻す";
+                scopeNote.Text=SelectedRole() is null?"共通の場所を変更すると、すべてのモデルの個別指定も解除します。モデルファイルは移動しません。":"この対象だけを変更します。同じ対象のモデル別指定は解除します。他の対象の保存先は保持します。";
+            }
+            modelScope.SelectionChanged+=(_,_)=>RenderModelLocation();
+            RenderModelLocation();
             async Task LocationsAsync()
             {
                 var requested=revision;
                 var value=await api.AIEnvironment.StatusAsync(lifetime.Token);
                 if(!open||disposed||requested!=revision||busy)return;
-                runtime.Text=value.RuntimeRoot??"標準の場所（または起動時に指定した環境）";models.Text=value.ModelsRoot??"標準の場所";
-                diagnostic.Text="実行環境："+(value.RuntimeFilesPresent?"ファイルあり":"未導入または要確認")+"　モデル："+(value.ModelFilesPresent?"ファイルあり":"未導入または要確認");
+                locations=value;runtime.Text=value.RuntimeRoot??"標準の場所（または起動時に指定した環境）";RenderModelLocation();
+                diagnostic.Text="実行環境："+(value.RuntimeFilesPresent?"ファイルあり":"未導入または要確認")+"　検索モデル："+(value.ModelFilesPresent?"ファイルあり":"未導入または要確認");
                 diagnostic.Text+=value.RestartRequired?"\n保存した設定は、Aredokoを再起動すると反映されます。":"\n設定変更は次回起動時に反映します。AIの動作確認とは別です。";
             }
             async Task RefreshAsync(bool locations=false)
@@ -80,7 +97,7 @@ public sealed partial class MainPage
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
                 catch(Exception ex){if(open&&!disposed)status.Text="状態を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
             }
-            async Task SelectAsync(bool forRuntime,bool reset,string? acquiredPath=null)
+            async Task SelectAsync(bool forRuntime,bool reset,string? acquiredPath=null,AIModelTarget? target=null)
             {
                 if(busy||current?.Active==true)return;
                 busy=true;operationError=null;++revision;if(current is not null)Render(current);
@@ -92,14 +109,17 @@ public sealed partial class MainPage
                         path=await PickAIEnvironmentFolderAsync(forRuntime);
                         if(path is null||!open||disposed)return;
                     }
-                    current=forRuntime?await api.AIEnvironment.SelectRuntimeAsync(path,lifetime.Token):await api.AIEnvironment.SelectModelsAsync(path,lifetime.Token);
+                    current=forRuntime?await api.AIEnvironment.SelectRuntimeAsync(path,lifetime.Token)
+                        :target is not null?await api.AIEnvironment.SelectModelAsync(target,path,lifetime.Token)
+                        :SelectedRole() is {} role?await api.AIEnvironment.SelectModelRoleAsync(role,path,lifetime.Token)
+                        :await api.AIEnvironment.SelectModelsAsync(path,lifetime.Token);
                     if(acquiredPath is not null)acquiredJob=current.Id;
                 }
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
                 catch(Exception ex){operationError="開始を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
                 finally{busy=false;if(current is not null)Render(current);}
             }
-            useAcquired.Click+=async(_,_)=>{if(acquired is not null)await SelectAsync(acquired.Kind=="runtime",false,acquired.Root);};
+            useAcquired.Click+=async(_,_)=>{if(acquired is not null)await SelectAsync(acquired.Kind=="runtime",false,acquired.Root,acquired.ModelTarget);};
             chooseRuntime.Click+=async(_,_)=>await SelectAsync(true,false);resetRuntime.Click+=async(_,_)=>await SelectAsync(true,true);
             chooseModels.Click+=async(_,_)=>await SelectAsync(false,false);resetModels.Click+=async(_,_)=>await SelectAsync(false,true);
             refresh.Click+=async(_,_)=>{if(!busy&&(polling is null||polling.IsCompleted)){polling=RefreshAsync(true);await polling;}};
