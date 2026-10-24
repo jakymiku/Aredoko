@@ -18,9 +18,13 @@ public sealed partial class MainPage : Page
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer searchTimer;
     private readonly ThumbnailService thumbnails;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer itemSizeSaveTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer itemSizeTimer;
     private bool itemSizeReady;
     private int libraryItemScale=100;
     private int itemWheelDelta;
+    private XamlRoot? trackedXamlRoot;
+    private double lastObservedRasterizationScale = 1.0;
+    private readonly Dictionary<ListViewItem, Action> containerRefresh = new();
     private CancellationTokenSource renderCancellation = new();
     private CancellationTokenSource? detailCancellation;
     private ArchiveReaderView? readerView;
@@ -72,6 +76,14 @@ public sealed partial class MainPage : Page
         ItemListContainer.AddHandler(PointerWheelChangedEvent,new PointerEventHandler(Library_PointerWheelChanged),true);
         itemSizeSaveTimer=DispatcherQueue.CreateTimer();itemSizeSaveTimer.Interval=TimeSpan.FromMilliseconds(500);
         itemSizeSaveTimer.Tick+=(_,_)=>SaveItemSize();
+        itemSizeTimer=DispatcherQueue.CreateTimer();itemSizeTimer.Interval=TimeSpan.FromMilliseconds(80);
+        itemSizeTimer.Tick+=(_,_)=>
+        {
+            itemSizeTimer.Stop();
+            if(disposed)return;
+            ApplyItemSizeToCards();
+        };
+        Unloaded+=OnPageUnloaded;
         libraryItemScale=ViewerOptions.Value.LibraryItemScale;ItemSizeSlider.Value=libraryItemScale;
         ItemSizeLabel.Text=$"{libraryItemScale}%";itemSizeReady=true;
         UpdateSearchMethod();
@@ -97,12 +109,17 @@ public sealed partial class MainPage : Page
         Notice("操作を完了できません",ex.Message,InfoBarSeverity.Error);
         AppLog.Error(ex);
     }
-    private async void Page_Loaded(object sender,RoutedEventArgs e) => await InitializeFirstPageAsync();
+    private async void Page_Loaded(object sender,RoutedEventArgs e)
+    {
+        AttachXamlRoot();
+        await InitializeFirstPageAsync();
+    }
     private Task? firstPageInitialization;
     // Loaded and the portable owner must await the same in-flight operation.
     internal Task InitializeFirstPageAsync()=>firstPageInitialization??=InitializeFirstPageCoreAsync();
     private async Task InitializeFirstPageCoreAsync() {
         ready=true;
+        AttachXamlRoot();
         AppLog.Startup("page_initialization_starting");
         await ConnectAsync();
         UpdateNavigationLayout(ActualWidth);
@@ -312,6 +329,7 @@ public sealed partial class MainPage : Page
 
     private void ReleaseContainer(ListViewItem item)
     {
+        containerRefresh.Remove(item);
         if (containerCleanup.Remove(item, out var release)) release();
         if (item.ContentTemplateRoot is Border host) host.Child=null;
         item.ContextFlyout=null; item.Tag=null;
@@ -421,6 +439,7 @@ public sealed partial class MainPage : Page
             visible?.Cancel(); visible?.Dispose(); visible=null;
             image.Source=null;
         };
+        containerRefresh[item] = () => _ = RefreshThumbnailAsync();
         // Wire loading/cancellation before the live template receives this image.
         host.Child=content;
     }
@@ -433,6 +452,44 @@ public sealed partial class MainPage : Page
         // Leave room for the filename and metadata even in a short window.
         var height=Math.Max(48,ItemListContainer.ActualHeight-108);
         image.Height=tiles?Math.Min(144*scale,height):64*scale;
+    }
+    private void AttachXamlRoot()
+    {
+        if(XamlRoot is null||ReferenceEquals(trackedXamlRoot,XamlRoot))return;
+        DetachXamlRoot();
+        trackedXamlRoot=XamlRoot;
+        lastObservedRasterizationScale=XamlRoot.RasterizationScale;
+        trackedXamlRoot.Changed+=OnXamlRootChanged;
+    }
+    private void DetachXamlRoot()
+    {
+        if(trackedXamlRoot is not null)
+        {
+            trackedXamlRoot.Changed-=OnXamlRootChanged;
+            trackedXamlRoot=null;
+        }
+    }
+    private void OnXamlRootChanged(XamlRoot sender,XamlRootChangedEventArgs args)
+    {
+        if(disposed)return;
+        var scale=sender.RasterizationScale;
+        if(Math.Abs(scale-lastObservedRasterizationScale)>0.001)
+        {
+            lastObservedRasterizationScale=scale;
+            itemSizeTimer.Stop();itemSizeTimer.Start();
+        }
+    }
+    private void OnPageUnloaded(object sender,RoutedEventArgs e)
+    {
+        DetachXamlRoot();
+        itemSizeTimer.Stop();
+    }
+    private void ApplyItemSizeToCards()
+    {
+        UpdateItemSizes();
+        foreach(var refresh in containerRefresh.Values.ToArray())refresh();
+        if(active is not null&&Details.IsPaneOpen&&DetailPreview.Visibility==Visibility.Visible)
+            _ = ShowDetailPreviewAsync(active);
     }
     private void UpdateItemSizes()
     {
@@ -2094,6 +2151,6 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){disposed=true;CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){disposed=true;DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

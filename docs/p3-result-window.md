@@ -20,7 +20,7 @@ MainPageの現在の60件/本文20件page UIをこのwindowへ接続し、次の
 
 ## WinUI接続
 
-CoreのThumbnailPolicyが表示幅・高さ×RasterizationScaleを128/256/512/1024へ切上げ、要求サイズを制限。現在のtile/list/detailの取得へ接続。tileのsize変更は80ms集約し、古いbitmapを保持して新しい派生画像を待つ。Unloaded/再表示で取消と世代確認、遅延応答による画像混入を拒否する。DPI値は取得時に読むが、サイズ変更を伴わないmonitor移動だけの自動再取得は未接続。
+CoreのThumbnailPolicyが表示幅・高さ×RasterizationScaleを128/256/512/1024へ切上げ、要求サイズを制限。現在のtile/list/detailの取得へ接続。tileのsize変更は80ms集約し、古いbitmapを保持して新しい派生画像を待つ。Unloaded/再表示で取消と世代確認、遅延応答による画像混入を拒否する。2026-10-24追加：MainPage.xaml.cs で XamlRoot.Changed を購読し、DIPサイズ変更を伴わないモニター間移動で RasterizationScale が変化した際にも80ms集約タイマー（itemSizeTimer）から実現済みライブラリカード（containerRefresh）・棚カード（shelfRefresh）・詳細プレビューの派生edgeを再評価し、既存bitmapを保持したまま必要時のみ新しいDPIバケット（128/256/512/1024）を再取得する。
 
 成功時の「画像プレビュー/先頭画像」常設labelを撤去。gridの通常「画像・登録済み・tags」行を省き、媒体と名前を優先。未接続/未準備/検索由来・AI根拠は維持、listの種別/tagsと詳細編集は維持。省略した長名はtooltip/読み上げへ。完成形のicon/nav/detail drawer/全theme仕上げは未完。
 

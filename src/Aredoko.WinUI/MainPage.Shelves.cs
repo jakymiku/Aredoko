@@ -15,6 +15,7 @@ public sealed partial class MainPage
     private bool shelfHubOpen;
     private readonly ObservableCollection<string> shelfKeys=new();
     private readonly Dictionary<ListViewItem,CancellationTokenSource> shelfLoads=new();
+    private readonly Dictionary<ListViewItem,Action> shelfRefresh=new();
     private readonly HashSet<ListViewItem> shelfRealized=new();
 
     private async Task RefreshShelfDescriptorsAsync()
@@ -42,7 +43,7 @@ public sealed partial class MainPage
     }
     private void CloseShelfHubCore()
     {
-        shelfHubOpen=false;ShelfHubView.Visibility=Visibility.Collapsed;shelfRealized.Clear();
+        shelfHubOpen=false;ShelfHubView.Visibility=Visibility.Collapsed;shelfRealized.Clear();shelfRefresh.Clear();
         foreach(var load in shelfLoads.Values){load.Cancel();load.Dispose();}shelfLoads.Clear();
     }
     private async Task OpenShelfHubAsync()
@@ -71,6 +72,7 @@ public sealed partial class MainPage
         ShelfHubMessage.Text="読み込み中…";
         await RefreshShelfDescriptorsAsync();
         if(disposed||!shelfHubOpen)return;
+        shelfRefresh.Clear();
         foreach(var load in shelfLoads.Values){load.Cancel();load.Dispose();}shelfLoads.Clear();
         shelfKeys.Clear();foreach(var shelf in shelfDescriptors)shelfKeys.Add(shelf.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Count.Text=$"{shelfDescriptors.Count:N0} 棚";
@@ -94,7 +96,7 @@ public sealed partial class MainPage
     private void ShelfList_ContainerContentChanging(ListViewBase sender,ContainerContentChangingEventArgs args)
     {
         if(args.ItemContainer is not ListViewItem item)return;
-        shelfRealized.Remove(item);
+        shelfRealized.Remove(item);shelfRefresh.Remove(item);
         if(shelfLoads.Remove(item,out var previous)){previous.Cancel();previous.Dispose();}
         if(item.ContentTemplateRoot is Border oldHost)oldHost.Child=null;
         if(args.InRecycleQueue||args.Item is not string key||!long.TryParse(key,out var id))return;
@@ -151,7 +153,8 @@ public sealed partial class MainPage
                 catch(Exception ex){AppLog.Error(ex);}
             }
             image.Loaded+=async(_,_)=>await RefreshAsync(true);artwork.SizeChanged+=async(_,_)=>await RefreshAsync();
-            image.Unloaded+=(_,_)=>{++version;requestedEdge=0;if(shelfLoads.TryGetValue(item,out var active)&&ReferenceEquals(active,request))active.Cancel();image.Source=null;};
+            image.Unloaded+=(_,_)=>{++version;requestedEdge=0;shelfRefresh.Remove(item);if(shelfLoads.TryGetValue(item,out var active)&&ReferenceEquals(active,request))active.Cancel();image.Source=null;};
+            shelfRefresh[item]=()=>_=RefreshAsync();
         }
         host.Child=row;
     }
@@ -161,7 +164,7 @@ public sealed partial class MainPage
     private void RenderShelfLayout()
     {
         ShelfList.ItemsSource=null;
-        foreach(var request in shelfLoads.Values){request.Cancel();request.Dispose();}shelfLoads.Clear();shelfRealized.Clear();
+        foreach(var request in shelfLoads.Values){request.Cancel();request.Dispose();}shelfLoads.Clear();shelfRealized.Clear();shelfRefresh.Clear();
         ShelfList.ItemsPanel=MediaItemsPanel();ShelfList.ItemsSource=shelfKeys;
         ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
     }
@@ -179,6 +182,7 @@ public sealed partial class MainPage
         if(!shelfHubOpen)return;
         foreach(var item in shelfRealized.ToArray())
             if(item.ContentTemplateRoot is Border {Child:Grid row}&&row.Children.FirstOrDefault() is Grid artwork)SizeShelfItem(item,artwork);
+        foreach(var refresh in shelfRefresh.Values.ToArray())refresh();
     }
     private void ShelfList_SizeChanged(object sender,SizeChangedEventArgs args)=>UpdateShelfItemSizes();
     private void ShelfSize_Click(object sender,RoutedEventArgs args)=>ItemSizeFlyout.ShowAt((Button)sender);

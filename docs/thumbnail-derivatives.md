@@ -31,7 +31,13 @@ Linuxで生成PNG/JPEG/GIF/APNG/CBZ/folderだけ使用。原本SHA/mtime不変�
 - 接続前に残存 `-wal` / `-shm` / `-journal` を `plain_path` 検査のうえ掃除し、`PRAGMA trusted_schema=OFF`、`PRAGMA quick_check`、`PRAGMA user_version`（`0` または `1`）、`sqlite_master` の厳密構成（`thumbs` テーブルのみ、trigger/view/未知objectなし）を検証。不一致や破損時はキャッシュファイルを張り直して fail-open で復旧し、起動を止めない。
 - 再起動後のLRU順序維持のため `COALESCE(MAX(touched), 0)` で `tick` を初期化し、起動時にも件数/容量上限の `_evict()` を適用。永続モードの `close()` はDB接続とleaseのみを閉じ、`<db>.thumbs.sqlite` を保持する。
 - `app/storage_backup.py` の対象store正規表現（`<catalog>.ai...`）および `live_backup.py` は `<db>.thumbs.sqlite` と `.owner.lock` をバックアップに含めない。
-- 確認：`CUDA_VISIBLE_DEVICES=-1 python -m unittest tests/test_thumbnail_cache.py tests/test_thumbnail_priority.py tests/test_storage_backup.py tests/test_live_backup.py` **73 PASS / 43.510s**（再起動をまたぐ永続hit、原本変更時の失効、破損/不正schema/未知user_versionからの自動再初期化、lease競合時のfail-open、バックアップ非収録、`production_handler` 配線を含む）。実機での大量画像スクロール時の体感速度・decoded RAM budgetは引き続き別検証。
+- 確認：`CUDA_VISIBLE_DEVICES=-1 python -m unittest tests/test_thumbnail_cache.py tests/test_thumbnail_priority.py tests/test_storage_backup.py tests/test_live_backup.py` **73 PASS / 43.510s**（再起動をまたぐ永続hit、原本変更時の失効、破損/不正schema/未知user_versionからの自動再初期化、lease競合時のfail-open、バックアップ非収録、`production_handler` 配線を含む）。
+- **実機 `Aredoko.exe` 再起動横断ヒット・メモリ境界確認（2026-10-24）**：`tools/test_native_persistent_thumbnails.py` を追加し、生成24 PNG＋2 CBZ（計26件）・独立 `LOCALAPPDATA`・ステージング `data/ai-ui/p3-persistent-thumbs-20261024/staged-release/Aredoko` で検証。
+  - `run01`（FAIL、生ログ・PNG1枚保全）：Phase 0 のグリッド表示と終了コード `0`・`<db>.thumbs.sqlite` 作成までPASS後、ハーネス側が `.owner.lock` のファイル非存在を検査して失敗（`storage_lease` はinode競合防止のため `.owner.lock` ファイルを残しカーネルロックのみ解放する契約）。ハーネスを `with storage_lease(thumbs_db_path):` によるロック解放検査へ修正。
+  - `run02`（**PASS**、25 checks PASS、2 PNG全目視）：
+    - Phase 0：List表示（`edge=128`）→Grid表示（`edge=256`）で全可視サムネイル読込完了（`01-phase0-grid-thumbs.png`、`WorkingSet64=188,125,184 B` / `PrivateMemorySize64=139,767,808 B`）、通常終了（WinUI PID `48024` / bootstrap PID `45732` とも exit `0`）。終了後 `catalog.sqlite.thumbs.sqlite` に `rows=30`・`max_touched=30`・`bytes=18,779`・`user_version=1`・`quick_check=ok`、残存 `-wal`/`-shm`/`-journal` なし、`storage_lease` 解放を確認。
+    - Phase 1（再起動）：同一 `LOCALAPPDATA` / `catalog.sqlite` で `Aredoko.exe` を再起動し、List表示→Grid表示で全可視サムネイル読込完了（`02-phase1-restarted-thumbs.png`、`WorkingSet64=187,600,896 B` / `PrivateMemorySize64=139,165,696 B`）、通常終了（WinUI PID `44068` / bootstrap PID `47664` とも exit `0`、残存プロセス `0`）。終了後 `rows=30`・`bytes=18,779` 不変のまま `max_touched=60` へ進行し、再起動後の全30要求が永続ディスクキャッシュから100%ヒットして提供されたこと・生成26原本のSHA256/mtime完全不変を実証。
+- 実機での数万件スクロール時の体感速度・decoded RAM全体目標は引き続き別検証。
 
 ## 次の作業
 
