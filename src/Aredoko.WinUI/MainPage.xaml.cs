@@ -233,6 +233,8 @@ public sealed partial class MainPage : Page
     private async Task LoadAsync(bool reuseSession=false) {
         startupSearchSucceeded=false;UpdateFavoriteRootList();
         var version=searches.Next(); Busy.Visibility=Visibility.Visible;
+        GettingStarted.Visibility=Visibility.Collapsed;
+        if(rows.Count==0){Empty.Visibility=Visibility.Visible;Empty.Text="検索結果を準備しています…";}
         similarityCancellation?.Cancel();similarityCancellation?.Dispose();similarityCancellation=new();
         CancelSearchButton.Visibility=Visibility.Visible;
         var cancellation=similarityCancellation.Token;var origin=similarityOrigin;
@@ -275,7 +277,7 @@ public sealed partial class MainPage : Page
                     :resultGroup==1&&result.GroupBoundary is null?"参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像の見た目／ファイル名・タグの意味で区切りを指定してください。"
                     :resultGroup==0&&result.OtherTotal>0?"区切り以上の候補はありません。類似度の区切りを下げるか、参考候補を表示してください。"
                     :AISearchStatus.Guidance(AISearchStatus.Ready,query:query))
-                :query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
+                :query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":EmptyScopeGuidance();
             var explanation=
                 method.IsPageText ? "抽出・保存済みのページ本文から、同一ページ内で全語一致する作品を検索しています。「本を開く」で先頭の一致ページへ移動できます。"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsTagSemantic ? "未承認の英語タグ候補を含む索引から、言葉の意味が近い作品を表示しています。確定タグとは混ざりません。類似度は正解率ではありません。承認・却下・再生成の後はAI索引を更新してください。"
@@ -316,9 +318,18 @@ public sealed partial class MainPage : Page
                 Notice(originTitle,simSummary+(scopeWarning is null?"":" "+scopeWarning),simSeverity,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
             }
             UpdateFavoriteRootList();startupSearchSucceeded=true;RecordNavigationLocation();UpdateGettingStarted();
-        } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
+        } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { if(searches.IsCurrent(version)&&rows.Count==0){GettingStarted.Visibility=Visibility.Collapsed;Empty.Visibility=Visibility.Visible;Empty.Text="検索を中断しました。もう一度「検索」を押してください。";} Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
         catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();GettingStarted.Visibility=Visibility.Collapsed;Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
+    }
+    private string EmptyScopeGuidance()
+    {
+        if(Kind.SelectedIndex>0)return "現在の検索範囲・種類に一致する作品はありません。条件を変更してください。";
+        if(selectedShelfIds is not null)return "この棚には作品がありません。作品の詳細で所属する棚を選択できます。";
+        if(selectedSearchRoots is not null)return "選択したフォルダに表示できる作品がありません。スキャンや接続状態を確認するか、検索範囲を解除してください。";
+        if(view=="history")return "閲覧履歴はありません。作品を開くと、ここに表示されます。";
+        if(view=="favorites")return "お気に入りはまだありません。作品の右クリックメニューや詳細から登録できます。";
+        return knownRoots.Count>0?"作品がありません。登録フォルダのスキャンや接続状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
     }
     private readonly Dictionary<ListViewItem, Action> containerCleanup = new();
 

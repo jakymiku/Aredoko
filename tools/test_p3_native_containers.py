@@ -14,7 +14,7 @@ from native_ui_tools import nodes
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
+    parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
@@ -67,8 +67,21 @@ def main():
         if args.detail_actions:
             shelf=cat.change_shelf('create',name='確認用の棚')['id']
             cat.change_shelf('assign',entity='item',object_ids=[row['id'] for row in cat.search()['items']],shelf_ids=[shelf])
+        if args.shelf_management:
+            a=cat.change_shelf('create',name='素材')['id'];b=cat.change_shelf('create',name='資料')['id'];cat.change_shelf('create',name='空の棚')
+            cat.change_shelf('assign',entity='item',object_ids=[first['id']],shelf_ids=[a,b])
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger());handler.log_message=lambda *args:None
+        if args.initial_loading:
+            empty_shelf=cat.change_shelf('create',name='案内確認用の空棚')['id']
+            gate=threading.Event();original_provider=handler.results.provider
+            def held(conditions,consume,cancelled):
+                deadline=time.monotonic()+40
+                while not gate.wait(.05):
+                    if cancelled():raise InterruptedError('Generated test cancellation')
+                    if time.monotonic()>deadline:raise TimeoutError('Generated test hold exceeded')
+                return original_provider(conditions,consume,cancelled)
+            handler.results.provider=held
         server=ThreadingHTTPServer(('127.0.0.1',8769),handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         with (target/'app.log').open('w',encoding='utf-8') as log:
             proc=subprocess.Popen([str(front/'Aredoko.WinUI.exe'),'--ui-theme',args.theme,'--viewer-settings',str(target/'viewer-settings.json')],cwd=front,env=env,stdout=log,stderr=subprocess.STDOUT)
@@ -79,10 +92,24 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
+        if args.initial_loading:
+            ui('wait-for','TxtEmpty','--value','検索結果を準備しています…','-t','10000');shot('loading')
+            ui('invoke','BtnCancelSearch');ui('wait-for','TxtEmpty','--value','検索を中断しました。もう一度「検索」を押してください。','-t','10000');shot('cancelled')
+            gate.set();ui('invoke','BtnSearch')
         key='Item'+str(first['id']);ready();ui('wait-for',key,'-t','60000' if args.global_edge else '10000');shot('list-initial')
         visible=tree();count=sum(re.fullmatch(r'Item\d+',k) is not None for k in visible)
         check('panel realizes fewer cards than sixty-result page',0<count<60)
-        if args.detail_actions:
+        if args.initial_loading:
+            for nav,expected,name in (("NavHistory","閲覧履歴はありません。作品を開くと、ここに表示されます。","empty-history"),("NavFavorites","お気に入りはまだありません。作品の右クリックメニューや詳細から登録できます。","empty-favorites")):
+                ui("invoke",nav);ui("wait-for","TxtEmpty","--value",expected,"-t","10000");shot(name);check(name+" context guidance",True)
+            ui("invoke","NavShelf");ui("wait-for","ShelfOpen"+str(empty_shelf),"-t","10000");ui("invoke","ShelfOpen"+str(empty_shelf))
+            ui("wait-for","TxtEmpty","--value","この棚には作品がありません。作品の詳細で所属する棚を選択できます。","-t","10000");shot("empty-shelf");check("empty shelf context guidance",True)
+            check("generated sources unchanged",before==sources());report["pass"]=True
+        elif args.shelf_management:
+            from ui_shelf_management_audit import audit
+            audit(ui,tree,shot,check,cat,first["id"],a,b)
+            check("generated sources unchanged",before==sources());report["pass"]=True
+        elif args.detail_actions:
             from ui_detail_actions_audit import audit
             audit(ui,tree,shot,check,cat,navigation_only=args.detail_navigation_only)
             check('generated sources unchanged',before==sources());report['pass']=True
@@ -118,12 +145,18 @@ def main():
             try:shot('failure')
             except Exception:report['capture_error']=traceback.format_exc()
     finally:
+        if args.initial_loading and "gate" in locals():gate.set()
         if proc is not None and proc.poll() is None and not hwnd:
             try:
                 owned=[w for w in json.loads(cli('list-windows','-a',proc.pid,'--json')) if w.get('title')=='Aredoko — あれどこ']
                 if len(owned)==1:hwnd=str(owned[0]['hwnd'])
             except Exception:report['cleanup_discovery_error']=traceback.format_exc()
         if proc is not None and proc.poll() is None and hwnd:
+            try:
+                visible=tree()
+                if visible.get('CloseButton',{}).get('name')=='キャンセル':
+                    ui('invoke','CloseButton');ui('wait-for','CloseButton','--gone','-t','5000')
+            except Exception:report['dialog_cleanup_error']=traceback.format_exc()
             try:
                 for child in json.loads(cli('list-windows','-a',proc.pid,'--json')):
                     if child.get('title')=='Aredoko — 画像ビューア':

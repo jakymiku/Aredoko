@@ -56,3 +56,6 @@ native `data/ai-ui/p3-global-edge-20261025/run04/report.json`、frontend05で14 
 途中失敗は保存：run01は初回検索準備中の10秒待機切れ、run02は試験CLIのargs変数shadowing（対象appを後から通常WM_CLOSE、exit0のsupplement）、run03はIsEnabledが初期値trueのため準備終了を誤判定。いずれもキー操作前。run04は実測と一致する有限60秒の最初のcard待機へ修正した。failure03 PNGも目視。無変更反復や既存原本の利用はしていない。
 
 結果の生成処理で見つけたCOUNT/OFFSET反復と検証接続の改善は[result-sessions](result-sessions.md)へ記録。初回全件snapshotの待ち時間自体は残り、瞬時表示の達成とはしない。
+
+
+2026-10-25 UI-2追加：検索準備中は初回登録案内を隠し、「検索結果を準備しています…」を表示。空状態で中断したら再検索を案内し、前の結果がある場合は保持する。空棚/履歴/お気に入り/絞り込みを未登録ライブラリと区別。専用GUIの新規一連と証拠は[棚UI](shelf-ui-20261023.md)の最新節を参照。既知警告のみでfrontend06 publish成功。
