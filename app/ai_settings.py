@@ -162,7 +162,7 @@ class AIProfileSettings:
             if not python.is_file():
                 warning = "AI用Python環境がありません。起動設定または配布ファイルを確認してください。"
             elif not model_path.is_dir():
-                warning = "モデルフォルダがありません。自動ダウンロードは行いません。"
+                warning = "モデルが未配置です。モデルをダウンロードするか、配置済みの保存先を指定してください。"
             elif not marker.is_file():
                 warning = "重みのリビジョン確認ファイルがありません。aredoko-revision.txtを確認してください。"
             elif marker.read_text(encoding="utf-8").strip() != profile.revision:

@@ -31,6 +31,10 @@
 - 局所修正後の `resume-report-03.json` はWDの保持済み188MBから206再開→ **467,783,838 bytes/6 filesを全検証・公開完了**、owner close成功。downloader SHA256 `20c4493f40951fe4ee009baaf0487f61f3a5a4ced79670394e4a0503f2420f31`。この最終runには新たなtimeoutがなく、内部自動retryの発火は生成CPUテストで確認した。EG2/WDの成功範囲はそれぞれ別runで、全体の無故障1回完走や推論品質と同一視しない。
 - 新retry CPU5、従来取得14、owned job6 PASS（各別実行）。実HTTPのRange/206・最終hostだけを記録し、signed query URL/認証情報は保存しない。通常DB/旧Alpha/shortcutは未変更。
 
+### 初回導線の短縮
+
+「AI検索の準備」に `AIModelDownloadOpen`（モデルをダウンロード）と既存 `AIEnvironmentOpen`（配置済みを指定）を並べる。取得だけのために配置画面を経由する操作を減らす。旧配置経由の取得導線は維持し、scope保存中は両方の画面遷移を止める。未配置時の「自動ダウンロードは行いません」という旧説明も、取得/既存配置を選べる案内へ更新した。関連ai_settings13 PASS/Portable publish成功。新しい直接入口のnativeはまだ未実施（GUIは今回のユーザー指定で確認後に行う）。
+
 ## 2026-10-24 role-root backend contract (latest)
 
 Source backend/owned launcher now accept optional absolute `embedding_models_root`, `tagger_models_root`, `intent_models_root` (matching hyphenated CLI flags). Each role uses its specific root before shared `models_root`, retaining shared/repository fallback when unspecified. Embedding settings/worker, WD and optional intent factories receive their own roots; model profile and vector namespace identity are unchanged. No file movement/copy, model execution or hot swap is added.

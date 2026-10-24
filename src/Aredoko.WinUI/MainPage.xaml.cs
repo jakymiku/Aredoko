@@ -1831,13 +1831,15 @@ public sealed partial class MainPage : Page
     {
         if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
         var timer=DispatcherQueue.CreateTimer();timer.Interval=TimeSpan.FromSeconds(1);
-        bool reload=false,openEnvironment=false;
+        bool reload=false,openEnvironment=false,openDownload=false;
         try
         {
             if(!await ConfirmDiscardAsync())return;
             dialogOpen=true;reload=true;
-            var explanation=new TextBlock {Text="モデルの選択は次回起動で反映します。新しいモデルには対応するAI索引が必要です。環境の配置は「AI環境を追加・配置する」で確認できます。",TextWrapping=TextWrapping.Wrap};
-            var environmentButton=new Button{Content="AI環境を追加・配置する"};AutomationProperties.SetAutomationId(environmentButton,"AIEnvironmentOpen");
+            var explanation=new TextBlock {Text="AI検索にはモデルと対応する実行環境が必要です。取得・保存先・モデル選択の変更は次回起動で反映します。新しいモデルには対応するAI索引が必要です。",TextWrapping=TextWrapping.Wrap};
+            var environmentButton=new Button{Content="配置済みを指定"};AutomationProperties.SetAutomationId(environmentButton,"AIEnvironmentOpen");
+            var downloadButton=new Button{Content="モデルをダウンロード",Style=(Style)Resources["AccentButtonStyle"]};AutomationProperties.SetAutomationId(downloadButton,"AIModelDownloadOpen");
+            var setupActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};setupActions.Children.Add(downloadButton);setupActions.Children.Add(environmentButton);
             var modelChoice=new ComboBox {Header="次回起動で使用するAIモデル",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(modelChoice,"AIProfileChoice");
             var modelWarning=new TextBlock {TextWrapping=TextWrapping.Wrap};
@@ -2144,7 +2146,7 @@ public sealed partial class MainPage : Page
                 finally{UpdateStart();}};
             timer.Tick+=async(_,_)=>await Refresh();
             var panel=new StackPanel {Spacing=12,MinWidth=320};
-            foreach(var element in new UIElement[]{environmentButton,explanation,modelChoice,modelWarning,modelApply,modelFeedback,scopeEditor.Content,
+            foreach(var element in new UIElement[]{setupActions,explanation,modelChoice,modelWarning,modelApply,modelFeedback,scopeEditor.Content,
                 new TextBlock {Text="AIのメモリ・索引負荷",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},
                 release,releaseResult,idleChoice,pauseChoice,saveResource,resourceResult})panel.Children.Add(element);
             var content=new Grid {RowSpacing=12,MaxHeight=Math.Max(160,ActualHeight-240)};
@@ -2173,12 +2175,14 @@ public sealed partial class MainPage : Page
             await RefreshProfiles();await RefreshResource();await Refresh();timer.Start();
             var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI検索の準備",Content=content,CloseButtonText="閉じる"};
             environmentButton.Click+=(_,_)=>{if(scopeEditor.Saving)return;openEnvironment=true;dialog.Hide();};
+            downloadButton.Click+=(_,_)=>{if(scopeEditor.Saving)return;openDownload=true;dialog.Hide();};
             dialog.Closing+=(_,args)=>{if(scopeEditor.Saving)args.Cancel=true;};
             await dialog.ShowAsync();
         }
         catch(Exception ex){Failure(ex);}
         finally{timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
-        if(openEnvironment&&!disposed)await OpenAIEnvironmentDialogAsync();
+        if(openDownload&&!disposed)await OpenAIDownloadDialogAsync();
+        else if(openEnvironment&&!disposed)await OpenAIEnvironmentDialogAsync();
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
