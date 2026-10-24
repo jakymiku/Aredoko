@@ -1,7 +1,7 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
 ## 現在地と読む順
-- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **c6ba386**（初回案内4ac518b＋設定scroll）。基本ZIP04はsource630cc55で後続WD/初回案内を未収録。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **c6ba386**（初回案内4ac518b＋設定scroll）。現行基本ZIP05はsource0b21b3eで製品コードc6ba386を収録。CPU確認済み・新案内のnative未確認。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
 - 本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧記録は[履歴索引](history-index.md)。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らず簡潔なUIを維持。
 - 開始時の未コミットP5案4ファイルはignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch`/starting-state.jsonへ退避して継続。c30bc34へff後に仕上げた。途中のリモート文書更新ed81d33/07c3f44も4a96d81で統合し、他作業を上書きしていない。main merge/reset/stash/force pushなし。
 
@@ -69,7 +69,7 @@
 - モデル/packはignored専用先にありGitへ含めない。旧Alpha・shortcut・通常DB・通常設定は未更新。GPU/GUIの一般許可へ拡大せず、次の実機確認は改めて具体的対象を提示する。Actions0、シャットダウンしない。
 
 ## 次の実装1件
-**P6/UI-3：初回案内と最終WD修正入りの新しい基本ZIP候補を作り、案内の限定GUIを確認する。** `data/ai-ui/getting-started-20261025/frontend02` が最終publish出力（sourceの設定scroll修正含む）。旧Alpha/既存候補を上書きせず新規先へ。通常EXE＋空の専用DBでwelcome→使い方→folder追加導線/AI準備、登録済み生成DBで案内が一覧を覆わないことを一つのflowにまとめ、GUIはユーザーへ事前確認する。runtime公開監査/輸送単位/公開先は独立残件で、配布完成を装わない。既存の転送・通知・生成GPU smokeを無変更反復しない。P3/UIの残受入とR06–R09も未完のまま維持。
+**P6/UI-3：作成済み基本ZIP05の初回案内を限定GUIで確認する。** 対象 `dist/portable-basic-20261025-05/Aredoko/Aredoko.exe`（source0b21b3e/製品c6ba386、[SHAとCPU11 PASS](portable-refresh-20261024.md)）。候補作成を反復しない。旧Alpha/既存候補は未更新。通常EXE＋空の専用DBでwelcome→使い方→folder追加導線/AI準備、登録済み生成DBで案内が一覧を覆わないことを一つのflowにまとめ、GUIはユーザーへ事前確認する。runtime公開監査/輸送単位/公開先は独立残件で、配布完成を装わない。既存の転送・通知・生成GPU smokeを無変更反復しない。P3/UIの残受入とR06–R09も未完のまま維持。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
 **P6：役割別保存先のAPI・Core・native UIを接続する。** `c7db80d`のbackend解決を再実装せず、以下へ進む。

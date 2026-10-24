@@ -87,3 +87,10 @@ source **5ddd97a**。入口 `dist/portable-basic-20261025-03/Aredoko/Aredoko.exe
 ## 2026-10-25 基本ZIP04（中間候補）
 
 source **630cc55**。`dist/portable-basic-20261025-04/Aredoko/Aredoko.exe`。ZIP344,008,147 bytes / 展開657,908,397 bytes・767 payload。SHA `0d502f1c6016477cf43c73b0ec0cbc33f724b1a19b372cd89269a0dfc51ca7da`。03からGUI/Core/Bootstrapのsource変更がないことを確認し、合格済みfront/Bootstrapを再利用、backend/config/toolsを新規stageした。全manifest/ZIP/同梱 `--check` と生成専用CPU11項目PASS。04自体のGUIは未反復、03の結果を04実機合格へ読み替えない。後続のWD準備判定・初回案内は未収録。[最新sourceの引き継ぎ](current-handoff.md)を優先。
+
+
+## 2026-10-25 基本ZIP05：初回案内・使い方と最終WD接続
+
+**現行試用候補** `dist/portable-basic-20261025-05/Aredoko/Aredoko.exe`。source **0b21b3e**（製品コードc6ba386）、最終WinUI `getting-started-20261025/frontend02`。ZIP **344,023,726 bytes**、展開 **657,940,894 bytes / 768 payload**、SHA `23c5e4aa74cc4aa24e7c81ec484087aa97b94516932e74db411ff95156db05f5`。初回の空ライブラリ案内、設定の使い方・scroll、封印runtimeに基づくWD準備判定、全通信修正を収録。モデル/PyTorchなし・取得カタログ2件。旧候補/Alpha/shortcut未変更。
+
+全payload/ZIP/同梱 `--check` PASS。同梱CPU11項目PASS（専用生成DB/検索/preview/2catalog/EOF exit0/integrity）。新しい案内のGUIは**未確認**。03の直接取得入口GUI、別途のモデル転送・GPU/CPU smokeを05のnative受入とはしない。次回はこの新候補と空/登録済み生成DBで初回案内→使い方→登録/AI準備・既存一覧保全をユーザー許可後に限定確認する。
