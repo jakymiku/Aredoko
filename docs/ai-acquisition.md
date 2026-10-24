@@ -132,3 +132,10 @@ productionはcatalog registry空で開始。HTTP入力や取得した文書をca
 3. 新しい具体候補で許可されたGUI/実取得/clean Windows確認へ進む。既存capを別名で再実行しない。外部artifact実取得は対象/容量/取得元を示して許可が必要。
 
 WDの既存固定hash/サイズはconfig/tagger-profilesに存在し、[固定revisionのモデルカード](https://huggingface.co/SmilingWolf/wd-swinv2-tagger-v3/blob/627aef95638667ddcaa3ac8ae625e88ea5b02f51/README.md)のApache-2.0 metadataを読み取り再確認した。これは取得を実行した証拠でも、全依存の配布notice整備済みという意味でもない。
+
+
+## モデル別保存先・固定catalogとの接続（2026-10-24、P6）
+- `model_locations` は最大32個の `(role, model_id, revision, directory, root)`。物理配置をベクトルnamespaceから分離し、同じ重みのprompt違いで索引を混同しない。解決順は完全一致→役割root→共通root→従来default。現在workerを変更せず次回起動で反映。
+- 所有setup APIへ `model_target`（固定4項目）または `model_role`＋`models_root` を明示送信する。完全一致指定/resetはそのモデルだけ、役割指定/resetは当該役割内の個別指定だけ、従来の共通指定/resetは全個別・役割指定を解除する。取消/失敗は旧設定を保全。
+- catalog summaryはsource所有の`ModelPackValidator`からのみ`model_target`/正規化定義SHA256を返す。kind/nameから役割を推測しない。validatorと別catalogの組合せは拒否。raw profile SHAのregistry pinと定義SHAは用途が異なる。製品registryは引き続き0件、実取得なし。
+- CPU証拠：`data/ai-ui/active-selection-20261024-01/model-placements-initial.log` 34件PASS、`model-binding-related.log` 38件PASS（別実行）。生成fixtureのみ、非実行dispatcher spy、P5復元ready後の一時override解除でもmodel_locationsを保全。Core/native接続は別の後続単位で記録する。

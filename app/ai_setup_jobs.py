@@ -4,7 +4,8 @@ from pathlib import Path
 import re
 import secrets
 import threading
-from ai_runtime_preferences import UNSET
+from ai_runtime_preferences import UNSET, MODEL_ROOT_FIELDS
+from model_locations import ModelTarget
 from storage_lease import StorageBusyError
 
 ACTIVE={'validating','cancelling','saving'}
@@ -33,7 +34,7 @@ class AISetupJobs:
 
     def start(self,body):
         if (not isinstance(body,dict) or body.get('consent') is not True
-                or set(body)-{'consent','runtime_root','models_root'}
+                or set(body)-{'consent','runtime_root','models_root','model_role','model_target'}
                 or not {'runtime_root','models_root'}&set(body)):
             raise ValueError('Explicit location selection and consent are required')
         for key in ('runtime_root','models_root'):
@@ -42,6 +43,14 @@ class AISetupJobs:
                     or not Path(value).is_absolute() or any(ord(c)<32 for c in value)):
                 raise ValueError('Select an absolute folder')
         selection={key:body.get(key,UNSET) for key in ('runtime_root','models_root')}
+        if 'model_role' in body:
+            role=body['model_role']
+            if not isinstance(role,str) or role not in MODEL_ROOT_FIELDS or 'models_root' not in body:raise ValueError('Explicit model role and folder required')
+            selection['model_role']=role
+        if 'model_target' in body:
+            if 'model_role' in body or 'models_root' not in body:raise ValueError('Select one explicit model target')
+            selection['model_target']=ModelTarget.from_dict(body['model_target']).to_dict()
+
         with self.lock:
             if self.closed:raise SetupBusy('Setup is closing')
             if self.thread is not None and self.thread.is_alive():raise SetupBusy('Setup is already running')

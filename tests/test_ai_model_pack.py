@@ -108,6 +108,29 @@ class ModelCatalogTests(unittest.TestCase):
         with patch('build_ai_model_catalog.digest', side_effect=changing):
             with self.assertRaisesRegex(ValueError, 'changed'): self.build()
 
+    def test_summary_exposes_only_profile_bound_model_identity(self):
+        from ai_download_jobs import AIDownloadJobs
+        from model_locations import ModelTarget
+        from unittest.mock import Mock
+        _, catalog = self.build()
+        validator = model_validator(self.profile, catalog)
+        jobs = AIDownloadJobs(self.base / 'downloads', specifications=((catalog, validator),))
+        self.addCleanup(jobs.close)
+        row = jobs.catalogs()['catalogs'][0]
+        self.assertEqual(row['model_target'], ModelTarget.for_profile('embedding', self.profile).to_dict())
+        self.assertEqual(len(row['definition_sha256']), 64)
+        changed = replace(self.profile, query_prompt_name=None, query_prefix='another:')
+        other = model_validator(changed, catalog)
+        self.assertEqual(other.target, validator.target)
+        self.assertNotEqual(other.definition_sha256, validator.definition_sha256)
+        arbitrary = Mock(model_target=validator.target, definition_sha256=validator.definition_sha256)
+        legacy = AIDownloadJobs(self.base / 'legacy', specifications=((catalog, arbitrary),))
+        self.addCleanup(legacy.close)
+        self.assertNotIn('model_target', legacy.catalogs()['catalogs'][0])
+        mismatched = replace(catalog, fingerprint='0' * 64)
+        with self.assertRaisesRegex(ValueError, 'binding mismatch'):
+            AIDownloadJobs(self.base / 'bad', specifications=((mismatched, validator),))
+
     def test_source_hardlinks_and_cancellation_are_rejected(self):
         os.link(self.source / 'config.json', self.base / 'alias.json')
         with self.assertRaisesRegex(ValueError, 'Hardlinked'): self.build()

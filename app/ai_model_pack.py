@@ -4,12 +4,15 @@ Acquisition verifies every catalog byte first. This module then validates the
 profile-specific layout and provenance before that version becomes visible.
 """
 import json
+import hashlib
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 from ai_profiles import ModelProfile
 from tagger_profile import WDProfile
 from ai_acquisition import Catalog
 from ai_runtime import object_pairs, relative
 from storage_lease import plain_path
+from model_locations import ModelTarget
 
 
 def model_prefix(profile):
@@ -85,23 +88,45 @@ def inspect_model(directory, profile, *, entries=None, cancelled=lambda: False):
             'model_loaded': False, 'inference_verified': False}
 
 
-def model_validator(profile, catalog):
-    """Bind the app-owned profile to a catalog; downloaded JSON is never code."""
-    prefix = model_prefix(profile) + '/'
-    revision = profile.revision if isinstance(profile, ModelProfile) else profile.data()['revision']
-    if not isinstance(catalog, Catalog) or catalog.kind != 'model' or catalog.revision != revision:
-        raise ValueError('Model catalog/profile revision mismatch')
-    if any(not entry.path.startswith(prefix) for entry in catalog.entries):
-        raise ValueError('Model catalog escapes its profile directory')
-    entries = {entry.path[len(prefix):]: entry for entry in catalog.entries}
-    if not any(entry.role == 'license' and entry.size > 0 for entry in entries.values()):
-        raise ValueError('The model pack must include license/NOTICE files')
-    if isinstance(profile, WDProfile):
-        for name, expected in profile.data()['artifacts'].items():
-            entry = entries.get(name)
-            if entry is None or (entry.size, entry.sha256) != (expected['size'], expected['sha256']):
-                raise ValueError('Tagger catalog differs from its fixed profile')
-    def validate(root, cancelled):
-        inspect_model(plain_path(root, directory=True) / model_prefix(profile), profile,
+@dataclass(frozen=True)
+class ModelPackValidator:
+    profile: ModelProfile | WDProfile
+    catalog: Catalog
+
+    def __post_init__(self):
+        profile, catalog = self.profile, self.catalog
+        self.target  # Reject unrepresentable placements before exposing the catalog.
+        prefix = model_prefix(profile) + '/'
+        revision = profile.revision if isinstance(profile, ModelProfile) else profile.data()['revision']
+        if not isinstance(catalog, Catalog) or catalog.kind != 'model' or catalog.revision != revision:
+            raise ValueError('Model catalog/profile revision mismatch')
+        if any(not entry.path.startswith(prefix) for entry in catalog.entries):
+            raise ValueError('Model catalog escapes its profile directory')
+        entries = {entry.path[len(prefix):]: entry for entry in catalog.entries}
+        if not any(entry.role == 'license' and entry.size > 0 for entry in entries.values()):
+            raise ValueError('The model pack must include license/NOTICE files')
+        if isinstance(profile, WDProfile):
+            for name, expected in profile.data()['artifacts'].items():
+                entry = entries.get(name)
+                if entry is None or (entry.size, entry.sha256) != (expected['size'], expected['sha256']):
+                    raise ValueError('Tagger catalog differs from its fixed profile')
+
+    @property
+    def target(self):
+        return ModelTarget.for_profile('embedding' if isinstance(self.profile, ModelProfile) else 'tagger', self.profile)
+
+    @property
+    def definition_sha256(self):
+        value = self.profile.to_dict() if isinstance(self.profile, ModelProfile) else self.profile.data()
+        return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')).hexdigest()
+
+    def __call__(self, root, cancelled):
+        prefix = model_prefix(self.profile) + '/'
+        entries = {entry.path[len(prefix):]: entry for entry in self.catalog.entries}
+        inspect_model(plain_path(root, directory=True) / model_prefix(self.profile), self.profile,
                       entries=entries, cancelled=cancelled)
-    return validate
+
+
+def model_validator(profile, catalog):
+    """Bind immutable app-owned model metadata to exactly one catalog."""
+    return ModelPackValidator(profile, catalog)

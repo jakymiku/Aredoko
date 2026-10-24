@@ -3,6 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 import secrets,threading
 from ai_acquisition import Catalog,acquire
+from ai_model_pack import ModelPackValidator
 
 ACTIVE={'waiting','downloading','verifying','publishing','cancelling'}
 class DownloadBusy(RuntimeError):pass
@@ -12,13 +13,22 @@ class AIDownloadJobs:
         self.root=Path(root);self.download=download;self.specs={}
         for catalog,validator in specifications:
             if not isinstance(catalog,Catalog) or not callable(validator) or catalog.fingerprint in self.specs:raise ValueError('Trusted catalog and validator required')
+            if isinstance(validator,ModelPackValidator) and validator.catalog.fingerprint!=catalog.fingerprint:raise ValueError('Model validator/catalog binding mismatch')
             self.specs[catalog.fingerprint]=(catalog,validator)
         self.lock=threading.RLock();self.closed=False;self.thread=None;self.committed=False;self.cancelled=threading.Event()
         self.value={'job_id':None,'state':'idle','catalog_id':None,'bytes_received':0,'bytes_verified':0,'bytes_total':None,'published':False,'result':None,'error_code':None,'message':''}
     @property
     def supported(self):return bool(self.specs)
     def catalogs(self):
-        return {'download_supported':self.supported,'catalogs':[{'catalog_id':c.fingerprint,'name':c.key,'kind':c.kind,'revision':c.revision,'bytes':sum(a.size for a in c.entries),'license':c.license,'license_url':c.license_url,'source_hosts':list(c.hosts)} for c,_ in self.specs.values()]}
+        rows=[]
+        for c,validator in self.specs.values():
+            row={'catalog_id':c.fingerprint,'name':c.key,'kind':c.kind,'revision':c.revision,'bytes':sum(a.size for a in c.entries),'license':c.license,'license_url':c.license_url,'source_hosts':list(c.hosts)}
+            # Metadata comes only from the pinned source profile, never from a
+            # catalog name, downloaded content, or an arbitrary callable attribute.
+            if isinstance(validator,ModelPackValidator):
+                row.update(model_target=validator.target.to_dict(),definition_sha256=validator.definition_sha256)
+            rows.append(row)
+        return {'download_supported':self.supported,'catalogs':rows}
     def snapshot(self):
         with self.lock:return deepcopy(self.value)
     def start(self,body):

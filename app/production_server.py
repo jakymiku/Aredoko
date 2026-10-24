@@ -19,7 +19,7 @@ from ai_process import EncoderProcess, AIUnavailable
 from ai_search import AISearch, AIBusy, MAX_ITEMS
 from ai_score_spool import SearchCancelled
 from search_requests import SearchRequestConflict,SearchRequests
-from ai_profiles import load_profile
+from ai_profiles import load_profile, ModelProfile
 from ai_settings import AIProfileSettings,validate_resource,RESOURCE_DEFAULT
 from ai_ranking import POLICIES
 from ai_scope import validate_scope
@@ -36,6 +36,8 @@ from page_text import PageTextIndex
 from page_batch import start_batch, resume_batch
 from page_chunks import plan_chunked, start_chunked, resume_chunked
 from wd_tagger import create_tagger
+from tagger_profile import load_profile as load_tagger_profile
+from model_locations import FIELD as LOCATIONS, ModelTarget
 from storage_lease import storage_lease,storage_parent
 from runtime_paths import worker_python, bind_runtime
 from ai_runtime_preferences import AIRuntimePreferences, read_preferences, model_root, MODEL_ROOT_FIELDS
@@ -94,10 +96,11 @@ PUBLIC_FOLDER_ERRORS = frozenset({
 })
 
 
-def create_ai(catalog,profile_path=None,ranking='mean-rrf',*,ai_python=None,models_root=None):
+def create_ai(catalog,profile_path=None,ranking='mean-rrf',*,ai_python=None,models_root=None,profile_definition=None):
     repo=Path(__file__).resolve().parents[1]
     try:
-        profile=load_profile(profile_path)
+        profile=load_profile(profile_path) if profile_definition is None else profile_definition
+        if not isinstance(profile,ModelProfile):raise ValueError('Invalid model definition')
         return AISearch(catalog,EncoderProcess(worker_python(repo,ai_python),profile.model_path(repo,models_root=models_root),profile),ranking=ranking)
     except (ValueError, KeyError, json.JSONDecodeError):
         return DisabledAI(error='モデル設定が無効または破損しています。「設定」からプロファイルを選び直してください。', status_code='corrupt_profile')
@@ -119,7 +122,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     previews=PreviewReader(catalog)
     page_index=PageIndex(catalog,previews)
     page_text=PageTextIndex(catalog,page_index,text_extractor)
-    try:setup_profile=load_profile(profiles.startup_path) if not profiles.startup_error else None
+    try:setup_profile=(ModelProfile.from_dict(json.loads(profiles.active_definition)) if profiles.active_definition is not None else load_profile(profiles.startup_path)) if not profiles.startup_error else None
     except (ValueError,OSError):setup_profile=None
     setup=AIRuntimePreferences(runtime_preferences if runtime_preferences is not None else catalog.path.parent/'launch-settings.json',
         profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
@@ -902,6 +905,7 @@ def _serve(args):
     overrides={field:getattr(args,field) for field in MODEL_ROOT_FIELDS.values() if getattr(args,field,None) is not None}
     runtime={'ai_python':args.ai_python,'models_root':model_root(overrides,'embedding',args.models_root)}
     preferences=getattr(args,'runtime_preferences',None)
+    selected={}
     if preferences is not None:
         try:
             selected=read_preferences(preferences)
@@ -917,14 +921,26 @@ def _serve(args):
     with ExitStack() as resources:
         catalog=ProductionCatalog(args.db);resources.callback(catalog.close)
         profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile,args.ai_profiles_dir,transient_override=getattr(args,'ai_profile_transient',False),**runtime)
-        ai=DisabledAI(profiles.startup_error, status_code='corrupt_profile') if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking,**runtime)
+        definition=ModelProfile.from_dict(json.loads(profiles.active_definition)) if profiles.active_definition is not None else None
+        placements={LOCATIONS:selected.get(LOCATIONS,[])}
+        if definition is not None:
+            try:runtime['models_root']=model_root(placements,'embedding',runtime['models_root'],target=ModelTarget.for_profile('embedding',definition))
+            except ValueError:pass  # Invalid optional model layout stays AI-unavailable.
+            profiles.models_root=runtime['models_root']
+        ai=DisabledAI(profiles.startup_error, status_code='corrupt_profile') if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking,profile_definition=definition,**runtime)
         resources.callback(ai.close)
         if isinstance(ai,AISearch):
             try: ai.configure(**profiles.resource())
             except (ValueError,OSError,json.JSONDecodeError): ai.configure(**RESOURCE_DEFAULT)
         intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**{**runtime,'models_root':model_root(overrides,'intent',args.models_root)})
         resources.callback(intent.close)
-        tagger=create_tagger(ai,args.tagger_profile,**{**runtime,'models_root':model_root(overrides,'tagger',args.models_root)});resources.callback(tagger.close)
+        try:tag_definition=load_tagger_profile(Path(__file__).resolve().parents[1],args.tagger_profile)
+        except (ValueError,OSError):tag_definition=None
+        tag_root=model_root(overrides,'tagger',args.models_root)
+        if tag_definition is not None:
+            try:tag_root=model_root(placements,'tagger',tag_root,target=ModelTarget.for_profile('tagger',tag_definition))
+            except ValueError:pass
+        tagger=create_tagger(ai,args.tagger_profile,profile_definition=tag_definition,**{**runtime,'models_root':tag_root});resources.callback(tagger.close)
         try:
             acquisition_specs=load_trusted_specs(Path(__file__).resolve().parents[1])
         except (OSError,ValueError,UnicodeError) as error:

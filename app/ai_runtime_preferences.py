@@ -6,14 +6,19 @@ from pathlib import Path
 import secrets
 from ai_runtime import inspect_runtime, model_state, object_pairs, legacy_runtime_state
 from storage_lease import plain_path, storage_parent, storage_lease
+from model_locations import FIELD as LOCATIONS, ModelTarget, parse_locations, serialize_locations
 
 MAX_SETTINGS = 16384
 UNSET = object()
 MODEL_ROOT_FIELDS = {'embedding':'embedding_models_root','tagger':'tagger_models_root','intent':'intent_models_root'}
 
 
-def model_root(settings, role, default=None):
+def model_root(settings, role, default=None, *, target=None):
     if role not in MODEL_ROOT_FIELDS:raise ValueError('Unknown model role')
+    if target is not None:
+        if not isinstance(target,ModelTarget) or target.role!=role:raise ValueError('Model placement role mismatch')
+        for identity,root in parse_locations(settings.get(LOCATIONS,[])):
+            if identity==target:return root
     return settings.get(MODEL_ROOT_FIELDS[role],settings.get('models_root',default))
 
 
@@ -32,6 +37,7 @@ def read_preferences(path):
         checksum=value['ai_runtime_manifest_sha256']
         if not isinstance(checksum,str) or len(checksum)!=64 or any(c not in '0123456789abcdef' for c in checksum):
             raise ValueError('Invalid AI runtime digest')
+    parse_locations(value.get(LOCATIONS,[]))
     return value
 
 
@@ -72,17 +78,22 @@ class AIRuntimePreferences:
             runtime={'state':legacy_runtime_state(selected),'ready':False,
                      'verification':'not_checked','model_loaded':False,'driver_tested':False}
         common=data.get('models_root',str(self.path.parent/'models'))
-        models=model_root(data,'embedding',common)
+        try:target=ModelTarget.for_profile('embedding',self.profile) if self.profile is not None else None
+        except ValueError:target=None
+        models=model_root(data,'embedding',common,target=target)
         model=model_state(self.profile,self.repo,models)
         runtime_changed=selected is not None and self.active_python is not None and os.path.normcase(str(selected))!=os.path.normcase(self.active_python)
         models_changed=self.active_models_root is not None and models is not None and os.path.normcase(str(models))!=os.path.normcase(self.active_models_root)
-        selection_changed=any(data.get(k)!=self.started.get(k) for k in ('ai_python','ai_runtime_root','ai_runtime_manifest_sha256','models_root',*MODEL_ROOT_FIELDS.values()))
-        return {'runtime':runtime,'model':model,'runtime_root':data.get('ai_runtime_root'),'models_root':models,'model_roots':{role:model_root(data,role,common) for role in MODEL_ROOT_FIELDS},'restart_required':selection_changed or runtime_changed or models_changed,
+        selection_changed=any(data.get(k)!=self.started.get(k) for k in ('ai_python','ai_runtime_root','ai_runtime_manifest_sha256','models_root',LOCATIONS,*MODEL_ROOT_FIELDS.values()))
+        return {'runtime':runtime,'model':model,'runtime_root':data.get('ai_runtime_root'),'models_root':models,'shared_models_root':common,'model_roots':{role:model_root(data,role,common) for role in MODEL_ROOT_FIELDS},'model_locations':data.get(LOCATIONS,[]),'restart_required':selection_changed or runtime_changed or models_changed,
                 'selection_service_available':True,'selection_api_supported':True,'downloads_supported':False,
                 'inference_verified':False,'message':'設定の変更は次回起動時に反映します。実行環境とモデルは別々に確認します。'}
 
-    def select(self,*,runtime_root=UNSET,models_root=UNSET,consent=False,cancelled=lambda:False,progress=None,publish=None):
+    def select(self,*,runtime_root=UNSET,models_root=UNSET,model_role=None,model_target=None,consent=False,cancelled=lambda:False,progress=None,publish=None):
         if consent is not True:raise ValueError('Explicit runtime folder consent required')
+        if model_role is not None and (not isinstance(model_role,str) or model_role not in MODEL_ROOT_FIELDS or models_root is UNSET):raise ValueError('Explicit model role and folder required')
+        target=ModelTarget.from_dict(model_target) if model_target is not None else None
+        if target is not None and (model_role is not None or models_root is UNSET):raise ValueError('Select one explicit model target')
         # This synchronous CPU service runs inside the owned setup job,
         # not a blocking GUI endpoint. Never execute/import the selected runtime.
         info=None
@@ -101,11 +112,25 @@ class AIRuntimePreferences:
                     value.pop('ai_python',None)
                     value.update(ai_runtime_root=info['root'],ai_runtime_manifest_sha256=info['manifest_sha256'])
             if models_root is not UNSET:
-                # The legacy picker selects a shared folder for all roles. A
-                # deliberate common selection/reset replaces per-role choices.
-                for field in MODEL_ROOT_FIELDS.values():value.pop(field,None)
-                if models_root is None:value.pop('models_root',None)
-                else:value['models_root']=models_root
+                placements=list(parse_locations(value.get(LOCATIONS,[])))
+                if target is not None:
+                    placements=[entry for entry in placements if entry[0]!=target]
+                    if models_root is not None:placements.append((target,models_root))
+                elif model_role is not None:
+                    field=MODEL_ROOT_FIELDS[model_role]
+                    if models_root is None:value.pop(field,None)
+                    else:value[field]=models_root
+                    placements=[entry for entry in placements if entry[0].role!=model_role]
+                else:
+                    # The legacy common picker/reset deliberately replaces all
+                    # role/model overrides, without touching any model files.
+                    for field in MODEL_ROOT_FIELDS.values():value.pop(field,None)
+                    if models_root is None:value.pop('models_root',None)
+                    else:value['models_root']=models_root
+                    placements=[]
+                if placements:value[LOCATIONS]=serialize_locations(placements)
+                else:value.pop(LOCATIONS,None)
+                parse_locations(value.get(LOCATIONS,[]))
             content=json.dumps(value,ensure_ascii=False,indent=2).encode('utf-8')
             if len(content)>MAX_SETTINGS:raise ValueError('Launch preferences exceed limit')
             temporary=self.path.with_name(self.path.name+'.'+secrets.token_hex(8)+'.tmp')

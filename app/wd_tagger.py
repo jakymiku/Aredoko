@@ -12,7 +12,7 @@ import time
 from ai_process import AIUnavailable
 from ai_search import AIBusy
 from tag_suggestions import TaggerInfo, TagProposal, SuggestionConflict
-from tagger_profile import load_profile, RUNTIME_VERSION
+from tagger_profile import load_profile, RUNTIME_VERSION, WDProfile
 from tagger_worker import labels
 from runtime_paths import worker_python,worker_command
 
@@ -138,7 +138,10 @@ class WDTagger:
         with self._lock:pass
 
 
-def create_tagger(ai=None,profile_path=None,repo=None,*,ai_python=None,models_root=None):
+def create_tagger(ai=None,profile_path=None,repo=None,*,ai_python=None,models_root=None,profile_definition=None):
     repo=Path(repo) if repo else Path(__file__).resolve().parents[1]
-    try:return WDTagger(repo,load_profile(repo,profile_path),ai,ai_python=ai_python,models_root=models_root)
+    try:
+        definition=load_profile(repo,profile_path) if profile_definition is None else profile_definition
+        if not isinstance(definition,WDProfile):raise ValueError('Invalid tagger definition')
+        return WDTagger(repo,definition,ai,ai_python=ai_python,models_root=models_root)
     except (ValueError,OSError):return DisabledTagger()

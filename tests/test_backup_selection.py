@@ -84,10 +84,13 @@ class ActiveSelectionTests(unittest.TestCase):
         # Preferences edited by an independent setup job are preserved.
         changed={**values,'models_root':str(self.base/'new-models'),'ui_theme':'light'}
         changed.update(embedding_models_root=str(self.base/'embedding'),tagger_models_root=str(self.base/'tagger'),intent_models_root=str(self.base/'intent'))
+        from model_locations import ModelTarget
+        changed['model_locations']=[ModelTarget.for_profile('embedding',DEFAULT_PROFILE).to_dict()|{'root':str(self.base/'version-model')}]
         (user/'launch-settings.json').write_text(json.dumps(changed))
         commit_restore_switch(user);fresh=json.loads((user/'launch-settings.json').read_text())
         self.assertNotIn('ai_profile',fresh);self.assertEqual(fresh['models_root'],changed['models_root']);self.assertEqual(fresh['ui_theme'],'light')
         for field in ('embedding_models_root','tagger_models_root','intent_models_root'):self.assertEqual(fresh[field],changed[field])
+        self.assertEqual(fresh['model_locations'],changed['model_locations'])
         later=AIProfileSettings(self.base,fresh['ai_settings'],profile_directory=fresh['ai_profiles_dir'])
         self.assertEqual(load_profile(later.startup_path),self.pending)
         self.assertEqual(json.loads(running.active_definition),DEFAULT_PROFILE.to_dict())

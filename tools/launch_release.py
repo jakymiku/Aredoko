@@ -29,6 +29,7 @@ from restore_switch import (
 
 CREATE_NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 RUNTIME_FIELDS = {'ai_runtime_root', 'ai_runtime_manifest_sha256'}
+PERSISTED_FIELDS={'model_locations'}
 
 PATH_OPTIONS = {'database': '--db', 'ai_python': '--ai-python', 'models_root': '--models-root',
                 'ai_profile': '--ai-profile', 'ai_settings': '--ai-settings',
@@ -69,7 +70,7 @@ def load_settings(data, explicit=None):
 
 
 def validate_settings(settings):
-    if not isinstance(settings, dict) or set(settings) - (set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} | RUNTIME_FIELDS):
+    if not isinstance(settings, dict) or set(settings) - (set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} | RUNTIME_FIELDS | PERSISTED_FIELDS):
         raise ValueError('Unknown launch setting')
     for key in set(PATH_OPTIONS) | {'viewer_settings', 'ai_runtime_root'}:
         if key in settings and (not isinstance(settings[key], str) or not Path(settings[key]).is_absolute() or any(ord(c) < 32 for c in settings[key])):
@@ -82,6 +83,8 @@ def validate_settings(settings):
             raise ValueError('Invalid AI runtime inventory digest')
     if settings.get('ui_theme', 'system') not in ('system', 'light', 'dark') or settings.get('ai_ranking', 'mean-rrf') not in ('max', 'mean-rrf'):
         raise ValueError('Invalid launch preference')
+    from model_locations import parse_locations
+    parse_locations(settings.get('model_locations',[]))
     return settings
 
 
