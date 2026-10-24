@@ -3,6 +3,16 @@
 
 旧2/2・3/3等は当時の履歴。新機能/有意味な修正の通常検証は[現行テスト方針](local-test-policy.md)に従う。現在の次の1件は[current-handoff](current-handoff.md)を優先する。
 
+## 現行：最初の実モデルカタログ（2026-10-25）
+
+製品registryは**WDモデル1件、runtime0件**へ更新。以下の古い「empty/0件」は当時の履歴。`config/acquisition/wd-swinv2-v3.json` は既存 `wd-swinv2-v3` profileとraw SHAを固定し、上流revision `627aef95638667ddcaa3ac8ae625e88ea5b02f51` の `model.onnx`/`selected_tags.csv` を変更せず取得する。ネットワーク対象467,769,446 bytes、inline出所/NOTICE込み467,783,838 bytes・6 files。カタログfingerprint `a03b0332560b8e852354b31bf39465d9f068ae7b93099a2be8141ca7ff597b13`。
+
+- 公式固定[モデルカード](https://huggingface.co/SmilingWolf/wd-swinv2-tagger-v3/blob/627aef95638667ddcaa3ac8ae625e88ea5b02f51/README.md)のApache-2.0宣言、固定treeのONNX LFS SHA、HEAD-onlyの両artifact容量/最終host（huggingface.co/us.aws.cdn.hf.co）を確認。CSVは既存ローカル308,468 bytesを読み取り、SHA256のprofile一致と固定tree Git blob SHA1の一致を確認した。重み・CSVの外部取得や実行はしていない。
+- [Apache公式ライセンス全文](https://www.apache.org/licenses/LICENSE-2.0.txt)、上流カード全文、著者/固定出所/未変更artifact/独立runtimeのNOTICE、Aredoko出所sidecarをbounded inlineで同梱。上流treeに独立NOTICE/LICENSEはないことも確認。モデルpackにPython/ONNX Runtime/PyTorch等は含めず、それらのruntime packの完全NOTICE・公開先は依然未完。
+- 登録自体は通信・実行・設定保存を開始しない。明示consent後だけ既存の再開/容量/hash/validator/検証後公開を使い、取得完了後も対象モデルrootの明示保存と次回起動が必要。既定帯域は無制限、任意cap。画面ではモデルの用途と「対応する実行環境が必要」を表示する。
+- CPU：registry7/model-pack10/owned-download6/inline7 PASS（各別実行）。公式metadata/HEAD証拠はignored `data/ai-ui/wd-catalog-review-20261025`。認証カタログ表示と新基本ZIPの確認は次工程。実467MB転送/推論/clean Windowsは未検証。新しい実取得やGUI/GPUは今回のユーザー指示どおり確認後に実行する。
+- 基本版checkerは「常にcatalog0」を合格条件にせず、同梱Pythonで読み取った**その候補の固定registry**とAPIの完全一致を検査する。旧候補のempty registryも正確に検査でき、未導入AIと取得可能モデルを混同しない。
+
 ## 2026-10-24 role-root backend contract (latest)
 
 Source backend/owned launcher now accept optional absolute `embedding_models_root`, `tagger_models_root`, `intent_models_root` (matching hyphenated CLI flags). Each role uses its specific root before shared `models_root`, retaining shared/repository fallback when unspecified. Embedding settings/worker, WD and optional intent factories receive their own roots; model profile and vector namespace identity are unchanged. No file movement/copy, model execution or hot swap is added.

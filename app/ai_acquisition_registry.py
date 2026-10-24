@@ -1,7 +1,7 @@
 """Source-owned acquisition registrations. Never discover user/downloaded catalogs.
 
 Only reviewed immutable catalogs and their exact profile definitions belong in
-TRUSTED_CATALOGS. Empty is intentional until publisher/NOTICE/artifacts exist.
+TRUSTED_CATALOGS. Model metadata never implies that a runtime is installed.
 """
 from dataclasses import dataclass
 import hashlib
@@ -22,7 +22,14 @@ class Registration:
     profile_sha256: str | None = None
     profile_kind: str | None = None
 
-TRUSTED_CATALOGS: tuple[Registration, ...] = ()
+# Pinned upstream WD assets; only explicit user consent starts acquisition.
+# Runtime packs are separate and not registered until their publisher is ready.
+TRUSTED_CATALOGS: tuple[Registration, ...] = (
+    Registration('config/acquisition/wd-swinv2-v3.json',
+                 'a03b0332560b8e852354b31bf39465d9f068ae7b93099a2be8141ca7ff597b13',
+                 'config/tagger-profiles/wd-swinv2-v3.json',
+                 '3d63503ccc163ab761a93fd4e363dad35ae6ec8839168607cf72cf04b6eba6c5', 'wd'),
+)
 
 
 def _read(root, name, limit):

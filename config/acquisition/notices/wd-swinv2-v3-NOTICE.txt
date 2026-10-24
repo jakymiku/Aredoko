@@ -1,0 +1,12 @@
+WD SwinV2 Tagger v3 — Aredoko model acquisition pack
+Upstream author/publisher: SmilingWolf
+Model: SmilingWolf/wd-swinv2-tagger-v3
+Revision: 627aef95638667ddcaa3ac8ae625e88ea5b02f51
+Source and license declaration: https://huggingface.co/SmilingWolf/wd-swinv2-tagger-v3/blob/627aef95638667ddcaa3ac8ae625e88ea5b02f51/README.md
+The upstream model card declares Apache-2.0. Its unmodified text is retained
+in NOTICE-upstream-model-card.txt; the complete license is in LICENSE.txt.
+Upstream publishes no separate NOTICE or LICENSE file at this revision.
+model.onnx and selected_tags.csv are downloaded unchanged from this revision.
+aredoko-source.json and this NOTICE are Aredoko-generated management metadata.
+Training images, Python, ONNX Runtime, PyTorch, timm and other runtimes are
+not included in this model pack; runtime notices belong to their own packs.

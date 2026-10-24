@@ -43,9 +43,35 @@ class AcquisitionRegistryTests(unittest.TestCase):
         self.assertIsNone(specs[0][1](installed.parent, lambda: False))
 
     def test_production_empty_registry_never_reads_arbitrary_config(self):
-        self.assertEqual(TRUSTED_CATALOGS, ())
         with patch('ai_acquisition_registry._read', side_effect=AssertionError('No catalog discovery')):
-            self.assertEqual(load_trusted_specs(self.root), ())
+            self.assertEqual(load_trusted_specs(self.root, ()), ())
+
+    def test_registered_wd_uses_fixed_artifacts_and_complete_model_notices(self):
+        from ai_download_jobs import AIDownloadJobs
+        with patch('urllib.request.urlopen', side_effect=AssertionError('No network')):
+            with patch('subprocess.Popen', side_effect=AssertionError('No model execution')):
+                specs = load_trusted_specs(Path(__file__).resolve().parents[1])
+        self.assertEqual(len(specs), 1)
+        catalog, validator = specs[0]
+        self.assertEqual(validator.target.role, 'tagger')
+        self.assertEqual(validator.target.model_id, 'SmilingWolf/wd-swinv2-tagger-v3')
+        source = [entry for entry in catalog.entries if entry.url is not None]
+        self.assertEqual(len(source), 2)
+        for entry in source:
+            expected = validator.profile.data()['artifacts'][Path(entry.path).name]
+            self.assertEqual((entry.size, entry.sha256), (expected['size'], expected['sha256']))
+            self.assertTrue(entry.url.startswith('https://huggingface.co/SmilingWolf/wd-swinv2-tagger-v3/resolve/' + catalog.revision + '/'))
+        inline = {Path(entry.path).name: entry.inline_data for entry in catalog.entries if entry.inline_data is not None}
+        self.assertEqual(hashlib.sha256(inline['LICENSE.txt']).hexdigest(),
+                         'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30')
+        self.assertIn(b'license: apache-2.0', inline['NOTICE-upstream-model-card.txt'])
+        self.assertIn(b'SmilingWolf', inline['NOTICE.txt'])
+        self.assertEqual(json.loads(inline['aredoko-source.json']), validator.profile.identity())
+        jobs = AIDownloadJobs(self.root / 'uncreated-downloads', specifications=specs)
+        self.addCleanup(jobs.close)
+        self.assertTrue(jobs.catalogs()['download_supported'])
+        self.assertEqual(jobs.snapshot()['state'], 'idle')
+        self.assertFalse(jobs.root.exists())
 
     def test_changed_catalog_and_changed_profile_are_rejected(self):
         original = self.catalog_path.read_bytes(); value = json.loads(original); value['license'] = 'changed'

@@ -7,6 +7,15 @@ namespace Aredoko_WinUI;
 
 public sealed partial class MainPage
 {
+    private static string DownloadCatalogLabel(AIDownloadCatalog item)=>item.Kind=="runtime"
+        ?item.Name+"（実行環境）"
+        :item.ModelTarget?.Role switch
+        {
+            "tagger"=>"画像タグ付けモデル（"+item.Name+"）",
+            "embedding"=>"画像・文章検索モデル（"+item.Name+"）",
+            _=>item.Name+"（モデル）"
+        };
+
     private async Task OpenAIDownloadDialogAsync()
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
@@ -60,7 +69,7 @@ public sealed partial class MainPage
                     if(items is not null)
                     {
                         var selected=Selected()?.Id;knownCatalogs=items;choice.Items.Clear();
-                        foreach(var item in items)choice.Items.Add(new ComboBoxItem{Content=item.Name+(item.Kind=="runtime"?"（実行環境）":"（モデル）"),Tag=item});
+                        foreach(var item in items)choice.Items.Add(new ComboBoxItem{Content=DownloadCatalogLabel(item),Tag=item});
                         var index=items.ToList().FindIndex(item=>item.Id==(job.Active?job.CatalogId:selected??job.CatalogId));choice.SelectedIndex=index>=0?index:items.Count>0?0:-1;
                         if(items.Count==0)information.Text="アプリから取得できるAI環境は公開準備中です。配置済みの環境は前の画面から指定できます。";
                     }
@@ -74,7 +83,8 @@ public sealed partial class MainPage
                 consent.IsChecked=false;
                 if(Selected() is {} selected)
                 {
-                    information.Text=$"容量 {selected.Bytes/1000000d:N1} MB\n取得元 {string.Join(", ",selected.SourceHosts)}\n{selected.License}\nバージョン {selected.Revision}";
+                    var scope=selected.Kind=="model"?"モデルファイルのみです。利用には対応する実行環境が必要です。\n":"";
+                    information.Text=scope+$"容量 {selected.Bytes/1000000d:N1} MB\n取得元 {string.Join(", ",selected.SourceHosts)}\n{selected.License}\nバージョン {selected.Revision}";
                     license.NavigateUri=selected.LicenseUri;license.Visibility=Visibility.Visible;
                 }
                 else license.Visibility=Visibility.Collapsed;

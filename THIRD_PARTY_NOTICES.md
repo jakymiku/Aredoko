@@ -32,8 +32,9 @@ This document contains licensing notices and acknowledgements for third-party so
 - **Repository**: `SmilingWolf/wd-swinv2-tagger-v3`
 - **License**: Apache License, Version 2.0
 - **Notice**:
-  Copyright 2023 SmilingWolf. Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at:
-  http://www.apache.org/licenses/LICENSE-2.0
+  The [fixed upstream model card](https://huggingface.co/SmilingWolf/wd-swinv2-tagger-v3/blob/627aef95638667ddcaa3ac8ae625e88ea5b02f51/README.md) declares Apache-2.0. Aredoko's optional acquisition pack downloads the unmodified ONNX model and selected tag list from that revision, only after explicit consent.
+  The complete [Apache 2.0 license](config/acquisition/notices/wd-swinv2-v3-LICENSE.txt), [model attribution](config/acquisition/notices/wd-swinv2-v3-NOTICE.txt), and [unmodified model card](config/acquisition/notices/wd-swinv2-v3-NOTICE-upstream-model-card.txt) are included as bounded, hash-verified metadata in the pack.
+  Python and AI runtimes are separate; this model pack does not contain their dependencies or authorize their redistribution by itself.
 
 ---
 

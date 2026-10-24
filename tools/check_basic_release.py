@@ -45,8 +45,17 @@ def main():
                 req=urllib.request.Request(origin+path,data=None if body is None else json.dumps(body).encode(),headers=headers)
                 with opener.open(req,timeout=5) as response:return response.read() if binary else json.load(response)
             session=request('/api/session');token=session['token'];check('actual bundled backend production instance',session['mode']=='production' and session['instance_id']==instance)
-            setup=request('/api/library/ai/setup');check('AI missing stays distinct from inference',not setup['inference_verified'] and not setup['downloads_supported'])
-            catalogs=request('/api/library/ai/setup/download/catalog');check('real production catalog remains unavailable',catalogs=={'download_supported':False,'catalogs':[]})
+            setup=request('/api/library/ai/setup');check('AI missing stays distinct from inference',not setup['inference_verified'])
+            # Read only the staged source-owned registry with the sealed basic
+            # interpreter. Listing metadata never starts acquisition/inference.
+            registry_code = "import json,sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);from ai_acquisition_registry import load_trusted_specs;from ai_download_jobs import AIDownloadJobs;j=AIDownloadJobs(Path(sys.argv[3]),specifications=load_trusted_specs(Path(sys.argv[2])));print(json.dumps(j.catalogs()));j.close()"
+            registry=subprocess.run([str(python),'-I','-B','-c',registry_code,str(server.parent),str(server.parent.parent),str(output/'unused-acquisition')],
+                                    env=env,cwd=output,capture_output=True,text=True,encoding='utf-8',timeout=15,check=True)
+            expected_catalogs=json.loads(registry.stdout)
+            catalogs=request('/api/library/ai/setup/download/catalog')
+            check('production catalog matches staged pinned registry',catalogs==expected_catalogs and setup['downloads_supported']==expected_catalogs['download_supported'])
+            report['catalog_count']=len(catalogs['catalogs'])
+            report['catalog_fingerprints']=[entry['catalog_id'] for entry in catalogs['catalogs']]
             check('setup and acquisition owners idle',request('/api/library/ai/setup/job')['state']=='idle' and request('/api/library/ai/setup/download/job')['state']=='idle')
             root=request('/api/library/roots',{'consent':True,'path':str(media),'recursive':True})['root_id'];request('/api/library/scan',{'root_id':root})
             deadline=time.monotonic()+12
