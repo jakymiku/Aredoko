@@ -1,11 +1,21 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## 終了checkpoint（2026-10-25、最優先）
+- 製品code **e197723**、今回の受入記録 **ef0a5bd**。最終handoffのcommitは `git log -1 -- docs/current-handoff.md`。ブランチ/既存Draft PR #5を継続、main merge/Actions/新PRなし。
+- **最新試用候補は基本ZIP07**：`C:/AI/Aredoko/dist/portable-basic-20261025-07/Aredoko/Aredoko.exe`。source e197723、ZIP344,057,243 bytes・SHA `e8e82d354c70768949caba388e2cf88872a99b5b4cbb1cc916549764fd2f5ddf`。同梱CPU11/通常EXE復元28checks/4所有exit0、770payload/設定/生成原本不変。[候補正本](portable-refresh-20261024.md)。06は再選択バグ未収録修正のため旧候補、Alpha/shortcut未更新。
+- 今回は初回案内/使い方の受入と明示scan説明、最終行layout/scale保持、5万metadataの端移動、COUNT/OFFSET反復削減、runtime ZIP輸送/再開/取消、棚管理の残操作、状況別空表示を仕上げた。**復元の別ZIP/AI方針の入力上書きも修正し、無効→無効→有効backupの再選択・未同意block・破棄・元DB再起動を確認**。
+- 明示添付の10.gifだけを専用mediaへコピーし実機再生、実体WebP367×359/55frames・2cycle到達、first-frame-assigned453ms、原本SHA/mtime不変、decoder0/app exit0。[証拠と途中ハーネス失敗](animation-streaming.md)。全ちらつき/FPS/高解像度/速度同等の保証ではない。
+- **未完**：5万実メディアの初回snapshot待ち/長時間RSS・HC/物理DPI、大きいAPNG/CBZの性能、clean Windows、runtimeの公開権利/native依存reviewと不変host、R06–R09実音声/音楽。5万metadata24.5sは開発Python3.14＋cProfile/実PNG80の限定値。Sandboxは無効（有効化していない）。runtime registry0、モデル2のまま。M1/ロードマップ全完了とはしない。
+- **次の1件**：P1/P7の生成高解像度APNG・CBZで初frame/ページ切替/終了後RSSを一つの小規模caseへまとめ、再現した遅い処理だけ局所修正する。既に通った初回案内・取得・棚CRUD・復元切替・10.gifを無変更反復しない。その後、残るHC/DPI/clean Windows受入とM1日常β判定を進め、R06–R09へ戻る。
+- 今回の新規モデル/依存取得・GPU推論0。添付の明示1ファイル以外は生成fixture/専用DB。通常DB/私物フォルダ/元メディア/旧Alphaは変更していない。
+- **このランのみ、ユーザーが終了後のシャットダウンを明示指示**。保存・Push・後処理を確認後にPowerShell `Stop-Computer` を `-Force` なしで実行する予定。未保存疑い/権限エラー時は強行しない。結果はignored `data/ai-ui/continuation-20261025/shutdown.log`。この一回の指示を次回へ再適用しない。
+
 ## 今回の継続ラン（2026-10-25、以下の旧checkpointより優先）
 - 開始cfb82e6、remote/PR #5一致・clean。確認できる範囲に他AIの更新/同repo処理なし。**今回のユーザーは生成fixture/独立DBでのGUI/GPUを自動実行することを許可し、終了後のシャットダウンを新たに指示した。** 下記の前回「事前確認」「shutdownしない」は前回の制約で、今回へ再適用しない。通常DB/原本/新download/OS変更の許可へ広げない。
 - ZIP05の初回案内→help→AI取得表示→生成folder登録/スキャン→1再起動を限定native確認、15 checks・4所有exit0、6 PNG目視。[正本](getting-started.md)。原文に欠けていた明示scan説明を追加して継続中。
 
 ## 現在地と読む順
-- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品source **b54de9d**（直前5f738f3）。既存ZIP05/source0b21b3eは今回より古い。現在新しい基本ZIP06を準備する段階で、旧Alpha/shortcutは変更しない。この文書自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品source **e197723**。最新基本ZIP07/source e197723は上記で限定受入済み、旧06/05/Alpha/shortcutを上書きしていない。この文書自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
 - **d199379**：既存ZIP05の初回案内/使い方/AI取得表示/生成folder登録・scan/予定内1再起動をnative確認15 checks・4所有exit0。ガイドへ不足していた明示scanを追加。
 - **af95bdb**：最終行でlist/grid/表示サイズを変えると位置が先頭方向へ飛ぶ不具合を修正。745件生成caseで最終行・180/60/100%・逆方向・draft保持を確認。
 - **eda972f**：runtime単一ZIPのcatalog v3、逐次展開・再開・取消・全hash/容量検証・検証後公開、Core/nativeの容量と進捗を実装。生成native17checks/exit0。[正本](runtime-archive-transport.md)。実ローカルpackを1回圧縮/展開し23,903payload・4.95GB完全一致。ZIP約3.03GB。**公開NOTICE権利/native依存reviewと不変hostは未完、製品runtime registryは0件のまま**。架空URLで埋めない。
@@ -80,8 +90,8 @@
 - **4ac518b**：初回の未登録空ライブラリに登録/AI取得/使い方をinline表示、設定から使い方を再表示。[使い方](getting-started.md)。勝手なscan/取得や強制wizardなし。関連Portable publish成功。追加した設定scrollを含む最終publishも0 errors（既知WUI1001×3/SDK IL2104×2）。build02 log参照。**新しい案内のnative GUIは未確認**。
 - モデル/packはignored専用先にありGitへ含めない。旧Alpha・shortcut・通常DB・通常設定は未更新。GPU/GUIの一般許可へ拡大せず、次の実機確認は改めて具体的対象を提示する。Actions0、シャットダウンしない。
 
-## 次の実装1件
-**まず今回の新規基本ZIP06作成・最小CPU/通常EXE確認を安全な区切りまで仕上げる。** 検証済みfrontend06と基本runtimeを新規出力先へまとめ、旧Alpha/shortcutは触らない。完了したらP7の復元失敗時保全/物理DPI・HC/clean Windowsなど、まだ未確認の対象を一つ選ぶ。既存の初回案内・取得・棚CRUD・60/120境界の成功を無変更反復しない。runtime公開監査/hostは外部情報待ちで独立、P3の全件初回待ちと実媒体負荷は未解消。M1日常β判定後は既存R06–R09実音声/音楽へ戻る。
+## 次の実装1件（冒頭checkpointが正本）
+P1/P7の生成高解像度APNG・CBZで初frame/ページ切替/RSSを一つの限定caseへまとめる。初回案内/通常EXE/棚管理/再選択復元の今回済み範囲は反復しない。runtime公開監査/hostは外部情報待ちで独立、R06–R09の実入力はM1後へ維持する。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
 **P6：役割別保存先のAPI・Core・native UIを接続する。** `c7db80d`のbackend解決を再実装せず、以下へ進む。

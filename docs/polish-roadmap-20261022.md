@@ -21,9 +21,10 @@
 状態は「実装」「確認済み範囲」「残る実装」「残る受入」を分ける。ロードマップ全体は未完。報告には今回の利用者向け変化と次の1件を記し、古いテスト数の列挙を主目的にしない。
 
 ## 2026-10-25 継続checkpoint（現行）
+- P1/P7：添付10.gifのread-onlyコピーで55frames/2cycleのWebP再生、frame割当453msと正常解放を確認。次は生成高解像度APNG/CBZの初frame・切替・RSSを一つのcaseにまとめる。小素材の単回値をHoneyview同等・全ちらつき解消の証拠にしない。
 - P3/UI-2：最終行のlayout/scale anchorを修正、現検索のCtrl+Home/End、空棚/履歴/お気に入り・準備/中断案内を改善。5万metadata（実PNG80）で端への移動とbounded cardを限定native確認。全件初回snapshotはプロファイラー付き約24.5秒で待ち時間が残る。全5万実媒体・長時間RSS/HC/物理DPIは未受入。
 - P4：共通list/grid棚一覧→中身→片方の所属解除→削除取消/確定→検索条件解除を生成native確認。棚/原本を再実装・作り直す必要はない。登録フォルダお気に入り等の未確認分は別。
-- P6：初回案内/使い方はZIP05で限定native済み。runtimeは単一ZIP輸送と安全な展開/再開/取消を実装、実ローカルpackの全hash roundtrip済み。公開権利/native依存reviewとhostは残り、registry0。新しい基本ZIP06を今回のsourceへ揃える。正確な候補/次の1件は[current-handoff](current-handoff.md)を優先。
+- P6：初回案内/使い方はZIP05で限定native済み。runtimeは単一ZIP輸送と安全な展開/再開/取消を実装、実ローカルpackの全hash roundtrip済み。公開権利/native依存reviewとhostは残り、registry0。復元再選択修正e197723を基本ZIP07へ収録、基本CPU11/通常EXEの失敗→有効backup再選択→未同意block→破棄→元DB再起動を28checks/4所有exit0で限定確認した。正確な候補/次の1件は[current-handoff](current-handoff.md)を優先。
 
 ## 日時付きcheckpoint（以下2節は当時の記録）
 
