@@ -1,6 +1,6 @@
 """Trusted, resumable artifact acquisition; no model execution or settings writes."""
 from dataclasses import dataclass
-import hashlib,json,os,re,shutil,time,urllib.request
+import hashlib,http.client,json,os,re,shutil,time,urllib.error,urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 from ai_runtime import relative,object_pairs,digest,inspect_runtime,files
@@ -87,6 +87,14 @@ class _Redirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req,fp,code,msg,headers,newurl)
 
 
+def _transient_transfer(error):
+    # Never retry authorization, unsafe metadata, hash errors, or disk failures.
+    if isinstance(error,urllib.error.HTTPError):return False
+    if isinstance(error,urllib.error.URLError):error=error.reason
+    return isinstance(error,(TimeoutError,ConnectionResetError,ConnectionAbortedError,
+                             http.client.RemoteDisconnected,http.client.IncompleteRead))
+
+
 def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None,bytes_per_second=None):
     """Only call with an application-owned catalog and cancellation/publication gate."""
     if not isinstance(catalog,Catalog) or not callable(validate) or not callable(publish):raise ValueError('Trusted catalog, validator and publication owner required')
@@ -143,31 +151,49 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
                     stream.write(item.inline_data);stream.flush();os.fsync(stream.fileno())
                 offset=item.size
             if offset<item.size:
-                headers={'Accept-Encoding':'identity'}
-                if offset:headers['Range']='bytes='+str(offset)+'-'
-                request=urllib.request.Request(item.url,headers=headers)
-                with opener.open(request,timeout=10) as response:
-                    _source(response.geturl(),catalog.hosts,catalog.test_loopback)
-                    if response.status==206:
-                        expected=f'bytes {offset}-{item.size-1}/{item.size}'
-                        if response.headers.get('Content-Range')!=expected:raise ValueError('Unexpected resumed range')
-                    elif response.status==200:offset=0
-                    else:raise ValueError('Unexpected artifact response')
-                    if response.headers.get('Content-Encoding','identity')!='identity':raise ValueError('Encoded artifact response')
-                    length=response.headers.get('Content-Length')
-                    if length is not None and (not length.isdigit() or int(length)!=item.size-offset):raise ValueError('Artifact length mismatch')
-                    with partial.open('ab' if offset else 'wb') as stream:
-                        done=base_done+offset;report('downloading',done,verified)
-                        while offset<item.size:
-                            check();chunk=response.read(min(65536,item.size-offset))
-                            if not chunk:raise OSError('Artifact connection ended early')
-                            stream.write(chunk);offset+=len(chunk);network_bytes+=len(chunk);done=base_done+offset
-                            if bytes_per_second:
-                                while network_bytes/bytes_per_second>time.monotonic()-started:
-                                    check();time.sleep(max(0,min(.05,network_bytes/bytes_per_second-(time.monotonic()-started))))
-                            report('downloading',done,verified)
-                        if response.read(1):raise ValueError('Artifact exceeded declared length')
-                        stream.flush();os.fsync(stream.fileno())
+                retries=0
+                while offset<item.size:
+                    check()
+                    try:
+                        headers={'Accept-Encoding':'identity'}
+                        if offset:headers['Range']='bytes='+str(offset)+'-'
+                        request=urllib.request.Request(item.url,headers=headers)
+                        with opener.open(request,timeout=10) as response:
+                            _source(response.geturl(),catalog.hosts,catalog.test_loopback)
+                            if response.status==206:
+                                expected=f'bytes {offset}-{item.size-1}/{item.size}'
+                                if response.headers.get('Content-Range')!=expected:raise ValueError('Unexpected resumed range')
+                            elif response.status==200:offset=0
+                            else:raise ValueError('Unexpected artifact response')
+                            if response.headers.get('Content-Encoding','identity')!='identity':raise ValueError('Encoded artifact response')
+                            length=response.headers.get('Content-Length')
+                            if length is not None and (not length.isdigit() or int(length)!=item.size-offset):raise ValueError('Artifact length mismatch')
+                            with partial.open('ab' if offset else 'wb') as stream:
+                                done=base_done+offset;report('downloading',done,verified)
+                                while offset<item.size:
+                                    check();chunk=response.read(min(65536,item.size-offset))
+                                    if not chunk:raise OSError('Artifact connection ended early')
+                                    stream.write(chunk);offset+=len(chunk);network_bytes+=len(chunk);done=base_done+offset
+                                    if bytes_per_second:
+                                        while network_bytes/bytes_per_second>time.monotonic()-started:
+                                            check();time.sleep(max(0,min(.05,network_bytes/bytes_per_second-(time.monotonic()-started))))
+                                    report('downloading',done,verified)
+                                if response.read(1):raise ValueError('Artifact exceeded declared length')
+                                stream.flush();os.fsync(stream.fileno())
+                        break
+                    except Exception as error:
+                        if not _transient_transfer(error):raise
+                        check()
+                        if retries>=2:
+                            raise OSError('Artifact transfer interrupted; resume the saved partial file') from None
+                        retries+=1
+                        # Closing the failed stream flushes Python's buffered
+                        # writes. The next request starts at the actual file size.
+                        offset=plain_path(partial).stat().st_size if partial.exists() else 0
+                        if offset>item.size:raise ValueError('Partial artifact exceeds declared size')
+                        deadline=time.monotonic()+.25*retries
+                        while time.monotonic()<deadline:
+                            check();time.sleep(min(.05,max(0,deadline-time.monotonic())))
             elif not partial.exists():
                 with partial.open('xb'):pass
             check();report('verifying',base_done+item.size,verified)

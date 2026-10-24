@@ -22,6 +22,15 @@
 - 実行時のprofile/768D/namespace・既存索引は変更しない。配布取得の固定profile SHAをcheckoutの改行変換で壊さないよう、該当profileとカタログ/NOTICEは `.gitattributes` でLF固定。
 - 登録2件のCPU8 tests PASS。新基本ZIP02/source13778adの同梱Python11項目でregistry/API完全一致を確認。許可済みの表示のみnative＋1再起動もPASS（[候補記録](portable-refresh-20261024.md)）。既存runtimeの明示配置は利用可能だが、**実行環境の自動取得はまだ公開していない**。モデル取得だけで未導入runtimeまで揃ったとは表示しない。
 
+### 実モデル転送とタイムアウト回復（2026-10-25）
+
+ユーザー明示許可（合計約2GB・専用先・CPUのみ）で両モデルの実転送を実施。`data/ai-ui/real-model-download-20261025-01` 内のみへ保存し、既存models/設定を適用・変更していない。推論/GUI/GPU/依存取得は0。
+
+- 最初の `report.json` はEG2の8MiB取消→206再開後、612,237,312 bytesで通信停止（failed/非公開）。旧ログ/partialを保全。`resume-report-02.json` では同partialから再開しEG2 **1,525,821,059 bytes/17 filesを全検証・公開完了**。同runのWDは8MiB取消→206再開後、188,219,392 bytesでread TimeoutErrorとなり非公開。このrun全体をPASSへ書き換えない。
+- 実TimeoutErrorに対して、一時的なread timeout/reset/disconnectに限る**最大2回のRange再接続**を追加。閉じたpartialの実サイズから再開し、取消は即中止。認証/host/range/size/hash/容量/保存の失敗を再試行で覆さない。上限時はpartialを残して通常の「取得・再開」へ。既定速度無制限・任意の合計capと全SHA/validator/所有公開gateを維持。
+- 局所修正後の `resume-report-03.json` はWDの保持済み188MBから206再開→ **467,783,838 bytes/6 filesを全検証・公開完了**、owner close成功。downloader SHA256 `20c4493f40951fe4ee009baaf0487f61f3a5a4ced79670394e4a0503f2420f31`。この最終runには新たなtimeoutがなく、内部自動retryの発火は生成CPUテストで確認した。EG2/WDの成功範囲はそれぞれ別runで、全体の無故障1回完走や推論品質と同一視しない。
+- 新retry CPU5、従来取得14、owned job6 PASS（各別実行）。実HTTPのRange/206・最終hostだけを記録し、signed query URL/認証情報は保存しない。通常DB/旧Alpha/shortcutは未変更。
+
 ## 2026-10-24 role-root backend contract (latest)
 
 Source backend/owned launcher now accept optional absolute `embedding_models_root`, `tagger_models_root`, `intent_models_root` (matching hyphenated CLI flags). Each role uses its specific root before shared `models_root`, retaining shared/repository fallback when unspecified. Embedding settings/worker, WD and optional intent factories receive their own roots; model profile and vector namespace identity are unchanged. No file movement/copy, model execution or hot swap is added.
