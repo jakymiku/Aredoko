@@ -576,6 +576,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except ResultCapacity:return self.send(503,{'error':'Result workspace busy or full; close another search', 'error_code':'result_session_capacity'})
                 if self.path.startswith('/api/library/animation/'):
                     try:
+                        if self.path=='/api/library/animation/open-first':
+                            if set(body)!={'item_id','revision','session_id'}:raise ValueError('Invalid animation fields')
+                            return self.send(200,animations.open_first(**body),ANIMATION_MIME)
                         if self.path=='/api/library/animation/open':
                             if set(body)!={'item_id','revision','session_id'}:raise ValueError('Invalid animation fields')
                             return self.send(200,animations.open(**body))

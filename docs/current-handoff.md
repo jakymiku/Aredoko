@@ -1,7 +1,7 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-24）
 
 ## 現在地と読む順
-- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **54feb46**。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **451290e**。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
 - 本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧記録は[履歴索引](history-index.md)。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らず簡潔なUIを維持。
 - 開始時の未コミットP5案4ファイルはignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch`/starting-state.jsonへ退避して継続。c30bc34へff後に仕上げた。途中のリモート文書更新ed81d33/07c3f44も4a96d81で統合し、他作業を上書きしていない。main merge/reset/stash/force pushなし。
 
@@ -28,8 +28,11 @@
 - 関連34・38・44 Python、Core1003 assertions、Portable build/publishは各PASS。生成WDのDark/embeddingのLightで個別適用・他設定保持・再表示・正常終了を確認。追加pickerの途中FAIL/仮説不成立/修正/最終native PASSは[AI取得正本](ai-acquisition.md)に記録。モデル本体/外部取得/新依存/GPU0。
 - 取得registry0件は維持。実artifact/完全NOTICE/runtime公開先が未確定なので、その部分を架空値で有効化せず独立したP1B実機残件へ進む。
 
+## 追加のP1B到達点
+- `451290e`で生成APNG70枚/有限2loop・native GIF・GIF名WebPの限定native確認と計測ログ隔離を完了。その後のopen-first局所高速化も関連Python12＋認証HTTP1/Core1019/publish/native19チェックがPASS。単回のXAML割当はAPNG657→443ms、WebP649→443ms。物理FPS・大画像/RSS等は未受入。[正本](animation-streaming.md)とsource SHA付きreport参照。
+
 ## 次の実装1件
-**P1B：アニメーション先頭の所有open＋first-frameを1要求へ統合する局所高速化。** 生成APNG70枚/2loop、GIF、GIF名WebPのnativeは限定PASS（[正本](animation-streaming.md)）。現在はinfo→open→nextの通信待ちがあるため、旧API/原本guard/先に決めた取消ID/有限loop/4枚先読みを維持して1往復減らす。新legacy互換テストと同じ生成素材の限定nativeだけを行い、P7全体受入と混同しない。ViewerLoadTraceのLOCALAPPDATA統一とnativeハーネスをこの単位の前提として追加。
+**P2/P3：既知ハーネスのContentOpened待ち修正後に、連続一覧・viewer復帰・draft保全を確認する。** 旧continuous run03は画像割当前に閉じたため返却位置が旧itemになった。sourceにはImageFitのready待ち修正があるが未実行。現行テスト方針に基づき独立LOCALAPPDATA/DBへ隔離して一度確認し、失敗があれば記録・診断・局所修正する。旧無変更反復/単なるcap改名は行わず、成功を先に書かない。P6実catalog/NOTICE/公開先の残件も維持。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
 **P6：役割別保存先のAPI・Core・native UIを接続する。** `c7db80d`のbackend解決を再実装せず、以下へ進む。

@@ -314,10 +314,11 @@ internal sealed class ImageViewerView : Grid, IDisposable
                     }
                     if (sourceInfo.AnimationCandidate)
                     {
-                        var stream = await api.Animations.OpenAsync(sourceInfo, cancellation);
+                        var opened = await api.Animations.OpenFirstAsync(sourceInfo, cancellation);
+                        var stream = opened.Stream;
                         try
                         {
-                            var first = await stream.ReadAsync(1, cancellation);
+                            var first = opened.First;
                             if (first.Frames.Count != 1) throw new InvalidDataException("Animation has no first frame");
                             if (disposed || requestedVersion != version) { await stream.DisposeAsync(); continue; }
                             StopAnimation(); animationStream = stream;

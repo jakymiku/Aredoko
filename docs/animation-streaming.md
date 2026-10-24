@@ -39,3 +39,11 @@ Windowsでは既存依存で `dotnet run --project tests/Aredoko.Core.Tests -c R
 - ViewerLoadTraceだけに残っていたGetFolderPathをAppLogと同じ明示LOCALAPPDATAへ揃え、専用directoryに実ログを確認。情報は固定stage/経過msのみ。Portable publish成功、既知WUI1001/SDK IL2104を抑制していない。
 - 独立診断 `transport-baseline.json`（生成warm image/CBZ、各3sample）はHTTP本体/304中央値約11–30ms。別の小さいinfo測定では約217ms、直接preview profileは約4ms。TCP_NODELAYや一括writeの仮説は改善せず、アプリへのその変更は行わない。環境/ハーネス差のある測定を同一条件の性能改善値として扱わない。詳細はignored `tiny-info-*`/`http-profile.txt`/`constant-http-diagnostic.json`。
 - 次の局所改善は逐次開始時の`open`→`next(1)`を一つの所有APIへまとめること。既存API互換・取消ID・原本guardを維持し、同じ素材の限定nativeで初回割当と正常終了を比較する。全回帰やHoneyView反復には戻らない。
+
+
+## 先頭取得を1要求へ統合
+- 新規owned `POST /api/library/animation/open-first` は既存open＋pull(1)を同じ応答へまとめる。clientで先に決めたsession ID、close先行tombstone、重複IDで既存sessionを破棄しない動作、原本の前後guard、失敗時解放を共有する。旧open/next APIはそのまま互換維持。
+- Core/WinUIは先頭1枚を同じbinary検証で受け、次のsequence1から最大4枚を先読みする。未知source/stride/順序/サイズは拒否し、壊れた先頭応答でも既知IDをcloseする。現在の有限loop・最終frame保持・native GIFは変更しない。
+- 関連Python12件/3.504s、追加認証HTTP1件/0.783s、Core1019 assertions、Portable publishは各PASS。新しい大規模回帰は実施していない。
+- frontend02＋run02はnative全19チェックPASS、4 PNG目視、app0、session残存0、原本不変。先頭応答のaction=open-first、APNG70frame×2cycleの順序、native GIFと偽拡張子WebPを確認。provenanceと正確なfront/source/test SHAはreport。
+- 同じ生成条件の限定単回比較：APNG割当656.54→442.89ms、WebP648.73→442.76ms。未変更GIFは460.92→468.80ms。1通信の削減に対応する改善であり、平均/p95/物理表示/FPS/HoneyView同等速度の宣言ではない。大画像/RSS/高速切替・全P7受入は未完。

@@ -23,6 +23,8 @@ internal static class AnimationStreamTests
                 return Json(new JsonObject { ["item_id"] = 7, ["revision"] = source.Revision, ["session_id"] = id,
                     ["max_batch_frames"] = 4, ["max_batch_bytes"] = AnimationStreamClient.MaxBytes });
             }
+            var first=request.RequestUri!.AbsolutePath.EndsWith("/open-first");
+            if(first){sessionId=id;frameRequests=0;check(body.Count==3&&!body.ContainsKey("count"),"combined open has exact source identity and client-owned ID");}
             check(id == sessionId, "animation close/pull stays with same session");
             if (request.RequestUri.AbsolutePath.EndsWith("/close")) { closes++; return Json(new JsonObject { ["closed"] = true }); }
             frameRequests++;
@@ -31,7 +33,7 @@ internal static class AnimationStreamTests
             {
                 ["session_id"] = id, ["item_id"] = 7, ["revision"] = source.Revision, ["width"] = 1, ["height"] = 1,
                 ["stride"] = malformed ? 8 : 4, ["pixel_format"] = "bgra8", ["alpha"] = "premultiplied", ["done"] = false,
-                ["frames"] = new JsonArray(new JsonObject { ["sequence"] = frameRequests - 1, ["index"] = 69,
+                ["frames"] = new JsonArray(new JsonObject { ["sequence"] = frameRequests - 1, ["index"] = first?0:69,
                     ["cycle"] = 0, ["duration_ms"] = 80, ["byte_length"] = 4 })
             };
             var json = Encoding.UTF8.GetBytes(header.ToJsonString());
@@ -55,6 +57,14 @@ internal static class AnimationStreamTests
         rejected = false;
         try { await stream.ReadAsync(1, CancellationToken.None); } catch (ObjectDisposedException) { rejected = true; }
         check(rejected && frameRequests == 2, "closed stream never requests another frame");
+        malformed=false;var opened=await new AnimationStreamClient(http).OpenFirstAsync(source,CancellationToken.None);
+        check(frameRequests==1&&opened.First.Frames.Count==1&&opened.First.Frames[0].Sequence==0,"combined open delivers first frame in one request");
+        var next=await opened.Stream.ReadAsync(2,CancellationToken.None);
+        check(next.Frames[0].Sequence==1&&frameRequests==2,"combined open continues without repeating or skipping first frame");
+        await opened.Stream.DisposeAsync();check(closes==2,"combined first frame retains ordinary close ownership");
+        malformed=true;rejected=false;
+        try{await new AnimationStreamClient(http).OpenFirstAsync(source,CancellationToken.None);}catch(InvalidDataException){rejected=true;}
+        check(rejected&&closes==3,"malformed combined first response closes its preallocated session ID");
     }
     private static HttpResponseMessage Json(JsonObject body) => new(HttpStatusCode.OK) { Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body.ToJsonString())) };
     private sealed class Stub(Func<HttpRequestMessage, Task<HttpResponseMessage>> handle) : HttpMessageHandler

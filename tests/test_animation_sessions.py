@@ -63,6 +63,21 @@ class AnimationSessionTests(unittest.TestCase):
         self.owner.open(self.item, self.info['revision'], self.sid)
         return self.owner.sessions[self.sid]
 
+    def test_combined_open_first_retains_ownership_and_sequential_cursor(self):
+        self.start(generated('PNG',count=70,loop=2,poster=True))
+        first,frames=unpack(self.owner.open_first(self.item,self.info['revision'],'b'*32))
+        self.assertEqual([(m['sequence'],m['index'],m['cycle']) for m,_ in frames],[(0,0,0)])
+        _,following=unpack(self.owner.pull('b'*32,2))
+        self.assertEqual([m['sequence'] for m,_ in following],[1,2])
+        with self.assertRaises(AnimationGone):self.owner.open_first(self.item,self.info['revision'],'b'*32)
+        self.assertIn('b'*32,self.owner.sessions)  # Duplicate must not destroy old owner.
+        self.owner.cancel('c'*32)
+        with self.assertRaises(AnimationGone):self.owner.open_first(self.item,self.info['revision'],'c'*32)
+        self.assertNotIn('c'*32,self.owner.sessions)
+        with patch.object(self.reader,'validate_animation',side_effect=ReaderChanged('generated change')):
+            with self.assertRaises(ReaderChanged):self.owner.open_first(self.item,self.info['revision'],'d'*32)
+        self.assertNotIn('d'*32,self.owner.sessions)
+
     def test_first_pull_does_not_enumerate_or_reopen_decoder(self):
         data = generated('GIF', count=70, loop=1)
         with patch.object(GifImagePlugin.GifImageFile, 'n_frames', new_callable=PropertyMock, side_effect=AssertionError('whole animation scan')):
@@ -211,6 +226,15 @@ class AnimationSessionTests(unittest.TestCase):
                     post('next', {'session_id': sid, 'count': 1}, token, raw)
                 self.assertEqual(error.exception.code, expected); error.exception.close()
             with post('close', {'session_id': sid}) as response: self.assertTrue(json.load(response)['closed'])
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                post('open-first',{'item_id':self.item,'revision':self.info['revision'],'session_id':'e'*32},token='bad')
+            self.assertEqual(error.exception.code,403);error.exception.close()
+            self.assertNotIn('e'*32,handler.animations.sessions)
+            with post('open-first',{'item_id':self.item,'revision':self.info['revision'],'session_id':'e'*32}) as response:
+                header,frames=unpack(response.read());self.assertEqual(len(frames),1);self.assertEqual(frames[0][0]['sequence'],0)
+                self.assertEqual(response.headers.get_content_type(),'application/vnd.aredoko.animation-frame-batch')
+            with post('next',{'session_id':'e'*32,'count':1}) as response:self.assertEqual(unpack(response.read())[1][0][0]['sequence'],1)
+            with post('close',{'session_id':'e'*32}) as response:self.assertTrue(json.load(response)['closed'])
             with self.assertRaises(urllib.error.HTTPError) as error: post('next', {'session_id': sid, 'count': 1})
             self.assertEqual(error.exception.code, 409); error.exception.close()
         finally:

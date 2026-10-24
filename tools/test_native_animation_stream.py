@@ -78,7 +78,7 @@ def main():
             def send(self,status,body,mime='application/json; charset=utf-8',extra_headers=None):
                 if mime==MIME and status==200:
                     size=struct.unpack_from('<I',body)[0];metadata=json.loads(body[4:4+size])
-                    observed.append({'item_id':metadata['item_id'],'frames':metadata['frames'],'done':metadata['done']})
+                    observed.append({'action':self.path.rsplit('/',1)[-1],'item_id':metadata['item_id'],'frames':metadata['frames'],'done':metadata['done']})
                 elif self.path=='/api/library/animation/close' and status==200:closes.append(True)
                 return super().send(status,body,mime,extra_headers)
         server=ThreadingHTTPServer(('127.0.0.1',8769),Recorded);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -102,6 +102,7 @@ def main():
         ui(viewer_hwnd,'wait-for','ViewerImage','--value','a-long.pngの画像（アニメーション 70）','-t','3000');shot('apng-final-retained')
         batches=[x for x in observed if x['item_id']==ids['a-long.png']]
         check('first APNG batch contains only its first frame',len(batches[0]['frames'])==1 and batches[0]['frames'][0]['index']==0)
+        check('open and first frame share one request',batches[0]['action']=='open-first')
         delivered=[f for x in batches for f in x['frames']]
         check('all70 frames and both cycles delivered without poster',[(f['index'],f['cycle']) for f in delivered]==[(i,c) for c in range(2) for i in range(70)])
         ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ImageTitle','--value','b-native.gif','-t','7000');ui(viewer_hwnd,'wait-for','ImageZoomIn','-p','IsEnabled','--value','True','-t','10000');shot('native-gif')

@@ -198,6 +198,12 @@ class AnimationSessions:
             return {**info, 'session_id': session_id, 'max_batch_frames': MAX_BATCH_FRAMES,
                     'max_batch_bytes': MAX_BATCH_BYTES}
 
+    def open_first(self, item_id, revision, session_id):
+        # The client chooses the ID before sending, retaining close-before-open
+        # protection when this combined response is cancelled or lost.
+        self.open(item_id, revision, session_id)
+        return self.pull(session_id, 1)
+
     @staticmethod
     def validate_id(session_id):
         if type(session_id) is not str or re.fullmatch('[0-9a-f]{32}', session_id) is None:

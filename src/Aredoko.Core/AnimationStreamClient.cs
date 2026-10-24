@@ -40,6 +40,18 @@ public sealed class AnimationStreamClient(HttpClient client)
         }
     }
 
+    public async Task<(AnimationStream Stream,AnimationBatch First)> OpenFirstAsync(ImageSourceInfo source,CancellationToken cancellation)
+    {
+        var stream=new AnimationStream(client,source,Guid.NewGuid().ToString("N"));
+        try
+        {
+            var first=await stream.ReadFirstAsync(cancellation);
+            if(first.Frames.Count!=1||first.Frames[0] is not {Sequence:0,Index:0,Cycle:0})throw new InvalidDataException("Invalid first animation frame");
+            return (stream,first);
+        }
+        catch {await stream.DisposeAsync();throw;}
+    }
+
     internal static async Task<HttpResponseMessage> SendAsync(HttpClient client, string action, JsonObject body, CancellationToken cancellation)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "api/library/animation/" + action)
@@ -69,15 +81,18 @@ public sealed class AnimationStream(HttpClient client, ImageSourceInfo source, s
 {
     private long nextSequence;
     private int width, height, disposed, reading;
-    public async Task<AnimationBatch> ReadAsync(int count, CancellationToken cancellation)
+    public Task<AnimationBatch> ReadAsync(int count,CancellationToken cancellation)=>ReadCoreAsync(count,false,cancellation);
+    internal Task<AnimationBatch> ReadFirstAsync(CancellationToken cancellation)=>ReadCoreAsync(1,true,cancellation);
+    private async Task<AnimationBatch> ReadCoreAsync(int count,bool first,CancellationToken cancellation)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
         if (count is < 1 or > AnimationStreamClient.MaxFrames) throw new ArgumentOutOfRangeException(nameof(count));
         if (Interlocked.Exchange(ref reading, 1) != 0) throw new InvalidOperationException("Animation pull already active");
         try
         {
-            using var response = await AnimationStreamClient.SendAsync(client, "next",
-                new JsonObject { ["session_id"] = id, ["count"] = count }, cancellation);
+            using var response = await AnimationStreamClient.SendAsync(client, first?"open-first":"next",
+                first?new JsonObject { ["item_id"]=source.ItemId,["revision"]=source.Revision,["session_id"]=id }
+                    :new JsonObject { ["session_id"] = id, ["count"] = count }, cancellation);
             if (response.Content.Headers.ContentType?.MediaType != "application/vnd.aredoko.animation-frame-batch" ||
                 response.Content.Headers.ContentLength is not long length || length < 4 || length > AnimationStreamClient.MaxBytes + 8196)
                 throw new InvalidDataException("Invalid animation frame response");
