@@ -9,10 +9,12 @@
 
 - P6 `2449c62`：モデルpack用の固定profile/layout validatorとdraft catalog生成を追加。生成9 PASS、既存取得/job/runtime builder25 PASS（別実行）。取得→検証→公開→明示models-root選択が生成HTTPで通る。製品catalogは空のままで実取得を有効化していない。正本は[AI取得](ai-acquisition.md)。
 
-- 取得完了rootを配置画面へ引き継ぎ、明示ボタンで既存の背景検査/保存を開始できるようにした。Core985 PASS、Portable0 errors/既知WUI1001×3。GUI未実行/cap変更なし。
+- P6 `2973de7`：取得完了rootを配置画面へ引き継ぎ、明示ボタンで既存の背景検査/保存を開始できるようにした。Core985 PASS、Portable0 errors/既知WUI1001×3。GUI未実行/cap変更なし。
+
+- P6固定registry境界をproduction/配布へ接続。source登録fingerprintとmodel定義SHAを検証し、壊れた任意取得設定で通常起動を止めない。実catalog登録は0のまま。生成registry6/所有backend1/staging1はPASS、途中fixture ERRORは正本で区別。
 
 ## 次の実装1件
-**P6：製品catalogをsource所有の固定registryへ登録する境界を実装する。** runtime/modelのdraft生成と配置画面接続は揃った。固定fingerprint・profile定義をapp側で結び、未確認catalogは有効化しない。実際の公開URL/NOTICE/packは未確定のため登録一覧は空を維持する。外部download/GUI/GPUは事前確認。
+**P6：今回のP5/P6変更を含む新規基本ZIP候補を準備する。** `875f94a`の旧候補を上書きせず、新規出力先へ最新frontend/backendを配置し、明示した既存基本runtime領域だけをhash検証して再利用する。同梱Pythonで生成データのCPU起動/取得診断/復元設定契約を確認する。GUI/実モデル/通常DB/旧Alphaは変更せず、必要なら具体候補で別許可。実catalog公開元/NOTICEは未確定のまま残す。
 
 ## 継続する残件と制約
 - P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。

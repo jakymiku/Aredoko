@@ -94,6 +94,15 @@ class ReleaseStagingTests(unittest.TestCase):
             release.package(self.output, skip_build=True, dry_run=True)
         self.assertFalse(self.output.exists())
 
+    def test_explicit_catalog_configuration_is_bundled_with_release_hash(self):
+        folder=self.repo/'config/acquisition';folder.mkdir(parents=True)
+        source=folder/'generated.json';source.write_bytes(b'{"generated":true}')
+        release.package(self.output,skip_build=True)
+        target=self.output/'backend/config/acquisition/generated.json'
+        self.assertEqual(target.read_bytes(),source.read_bytes())
+        manifest=json.loads((self.output/'manifest.json').read_text(encoding='utf-8'))
+        self.assertTrue(any(entry['path']=='backend/config/acquisition/generated.json' and entry['sha256']==hashlib.sha256(source.read_bytes()).hexdigest() for entry in manifest['entries']))
+
     def test_manifest_profiles_tools_and_no_private_data(self):
         result = release.package(self.output, skip_build=True)
         self.assertEqual(result['readiness'], 'staging-only')

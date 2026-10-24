@@ -1,5 +1,6 @@
 """Production-only loopback endpoint. No demo data or source-media writes."""
 import argparse
+import sys
 import json
 import secrets
 import threading
@@ -41,6 +42,7 @@ from ai_runtime_preferences import AIRuntimePreferences, read_preferences
 from ai_setup_jobs import AISetupJobs, SetupBusy
 from backup_jobs import BackupJobs,BackupBusy
 from ai_download_jobs import AIDownloadJobs,DownloadBusy
+from ai_acquisition_registry import load_trusted_specs
 from restore_jobs import RestoreStagingJobs,RestoreBusy
 from ai_runtime import object_pairs
 from animation_sessions import AnimationSessions, AnimationBusy, AnimationGone, MIME as ANIMATION_MIME
@@ -920,7 +922,13 @@ def _serve(args):
         intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**runtime)
         resources.callback(intent.close)
         tagger=create_tagger(ai,args.tagger_profile,**runtime);resources.callback(tagger.close)
-        handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff)
+        try:
+            acquisition_specs=load_trusted_specs(Path(__file__).resolve().parents[1])
+        except (OSError,ValueError,UnicodeError) as error:
+            # Broken optional acquisition metadata must not disable the library.
+            print('AI acquisition registry unavailable ('+type(error).__name__+')',file=sys.stderr,flush=True)
+            acquisition_specs=()
+        handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff,acquisition_specs=acquisition_specs)
         resources.callback(close_job,handler.setup_jobs)
         resources.callback(close_job,handler.download_jobs)
         resources.callback(handler.animations.close)

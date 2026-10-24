@@ -1,5 +1,13 @@
 # LD4b：任意AI環境の取得基盤（2026-10-24）
 
+## 2026-10-24 application-owned registry boundary (latest)
+
+Production now obtains acquisition specifications from `ai_acquisition_registry.TRUSTED_CATALOGS`, a source-owned tuple of reviewed registrations. Each registration pins a catalog path below `config/acquisition` and its canonical fingerprint; model registrations additionally pin the exact profile path/SHA/kind. Runtime uses the existing full runtime validator, model uses its bound layout validator. No runtime HTTP path, preferences/environment override, directory scan or downloaded document can add a registration. Missing/changed/unsupported metadata disables optional downloads and records a sanitized error class in the backend log; basic library startup continues. `config/acquisition` is copied into release inventory when present.
+
+The tuple intentionally remains empty. To publish a real environment: audit publisher/artifacts/complete NOTICE, build a fixed draft with the appropriate builder, review the exact files/URLs/hosts/license/bytes and profile, place the reviewed JSON below config/acquisition, then add a source registration with that exact fingerprint/profile SHA. A catalog's fingerprint is integrity binding, not independent publisher authentication. No made-up product URLs/hashes or automatic registration from builder output.
+
+Generated registry6 PASS and real owned-backend startup/EOF1 PASS in the initial8-test run; that run had1 staging-fixture ERROR (wrong expected manifest filename, raw retained). Corrected staging assertion1 PASS/0.779s confirms the config is copied and SHA-covered. Registry tests cover empty/no discovery, unlisted files, catalog/profile changes, validators, duplicate/unsafe path/HTTP refusal. No external transfer, GUI/GPU, installed Alpha or normal DB changes.
+
 ## 2026-10-24 published version → explicit setup (latest)
 
 The download dialog now carries the completed version's root and catalog kind into the existing environment dialog. A read-only acquired location and explicit use button avoid copying the path or opening a folder picker again. No setting is saved on navigation; the use button starts the same owned setup validation/save job and applies only at next restart. Runtime packs and parent models folders stay separate. The shortcut is offered only for complete/published/all-bytes-verified jobs whose ID/capacity still match the catalog, independent of the current ComboBox choice. Failed/cancelled/unverified jobs and removed catalogs provide no shortcut. Existing manual pick/reset/cancel paths remain.
