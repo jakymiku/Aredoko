@@ -82,3 +82,8 @@ source **5ddd97a**。入口 `dist/portable-basic-20261025-03/Aredoko/Aredoko.exe
 生成DBだけを使う同梱backend CPU11項目PASS（2カタログ、AI未導入でも検索/preview/正常EOF終了/DB integrity、原本不変）。ユーザーの追加許可で新しい直接入口だけを確認：通常EXE→設定→AI検索の準備→モデルをダウンロード→EG2容量/ライセンス/runtime別途の表示→正常終了→予定内1再起動、全11 checks PASS。取得開始・同意操作なし、job idle、設定bytes/生成原本SHA・mtime/全767 payload保全、所有WinUI/Bootstrap計4 exit0、残存なし。2 PNGを目視。WD切替は02で確認済みのため反復していない。
 
 証拠 `data/ai-ui/embedding-catalog-review-20261025/basic03-cpu/report.json` / `native-direct03/report.json`、準備記録 `dist/portable-basic-20261025-03/preparation.json`。GUI/GPU推論・実runtime導入・clean Windows受入は別。実モデル転送の成功は[取得正本](ai-acquisition.md)に記録した専用先でのCPU転送確認で、このGUI実行での転送ではない。
+
+
+## 2026-10-25 基本ZIP04（中間候補）
+
+source **630cc55**。`dist/portable-basic-20261025-04/Aredoko/Aredoko.exe`。ZIP344,008,147 bytes / 展開657,908,397 bytes・767 payload。SHA `0d502f1c6016477cf43c73b0ec0cbc33f724b1a19b372cd89269a0dfc51ca7da`。03からGUI/Core/Bootstrapのsource変更がないことを確認し、合格済みfront/Bootstrapを再利用、backend/config/toolsを新規stageした。全manifest/ZIP/同梱 `--check` と生成専用CPU11項目PASS。04自体のGUIは未反復、03の結果を04実機合格へ読み替えない。後続のWD準備判定・初回案内は未収録。[最新sourceの引き継ぎ](current-handoff.md)を優先。

@@ -209,3 +209,8 @@ peerが例外なしで短いbodyを閉じた場合も `IncompleteRead` として
 ### WDの取得モデルと封印runtimeの接続補強（2026-10-25）
 
 旧venv導入はモデルfolder内 `aredoko-runtime.json` を使用していたが、モデルだけを取得する製品catalogにはmachine-runtime宣言を含めないため、取得したWDが準備済みにならない不整合があった。封印runtimeを明示選択した場合は、そのABIのonnxruntime moduleと固定版1.23.2のdist-info metadataを確認する。legacy方式は維持し、workerの全pack検証・実import版の一致・CPU provider限定も維持。取得モデルやprofile/namespaceを書き換えない。関連WD11 tests PASS。実推論確認の結果は次の追記を参照。
+
+
+### 取得物と新規runtimeの実動作
+
+許可された専用生成2画像で、今回実取得したEG2のCUDA 768D・WDのCPUタグ候補がPASS。通常DB/設定、GUI、追加外部取得なし。[正確な時間・worker終了・限界](runtime-notice-inventory.md)。WDの準備判定は `09f72dd`。初回の登録/モデル取得/使い方案内は `4ac518b`、[利用手順](getting-started.md)。モデルの取得だけでAIが使えるという表示にはしていない。初回案内のnative確認は次回の許可後。

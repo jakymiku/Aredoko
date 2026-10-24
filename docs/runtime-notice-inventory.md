@@ -44,3 +44,12 @@ python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --su
 ```
 
 新bundle `data/ai-ui/runtime-notices-20261025-04` は **52 distributions / 91 entries / 1,123,366 bytes**、配布metadataについての不足0件。seal時にも元metadata/元通知/補完原文を照合し、pack内へ補完provenanceと原文を保全する。生成16 tests PASS（従来10＋補完6、2配布物を含む封印確認）。これはdistribution通知の収録完了であり、CUDA/Rust等の全native依存の公開監査や再配布承認ではない。`redistribution_approved=False` を維持し、runtime公開URL/取得registryは未登録のまま。
+
+
+## ローカル実pack・取得モデルの限定動作（2026-10-25）
+
+`data/ai-ui/local-runtime-pack-20261025-01` を既知の準備済みruntimeから新規作成。**23,903 files / 4,947,898,990 payload bytes**、manifest SHA `52406ef10fa4f131a0ed81396621c2126afc2c84e42a245c5c34b142f6077b64`、全inventory/hash封印PASS。Python3.11/x64/PyTorch2.9.1+cu128/CUDA12.8/onnxruntime1.23.2。通知bundleを同梱、元環境は変更せず、インストール/追加依存取得0。通常起動時にこのpack作成検査を反復する仕様ではない。
+
+別途ユーザーのGPU/CPU許可により、今回取得したEG2/WDとこのpackを使って生成2画像・専用DBで各モデル1回の動作確認を行った。`data/ai-ui/acquired-runtime-smoke-20261025-01/report.json` PASS：EG2 CUDA・有限正規化768D（worker推論1,138ms/peak931.8MiB、初回pack全検査/起動込み172.447s）、WD CPU・候補6（4.511s）。これは精度や冷起動時間のベンチマークではない。入力size/mtime、生成画像SHA/mtime保全・DB integrity=ok。所有workerは既存adapterの終了処理で停止（exit1、正常exit0とは記さない）、残存なし。GUI/追加ネットワーク/通常設定変更なし。
+
+公開向けruntime監査・不変の公開先・実runtime取得catalogは引き続き未完。23,903 fileごとのHTTPS取得は要求回数が大きいため、正式公開前にruntimeの輸送単位も検討する。架空URLでregistryを有効化しない。配布物04には最終WD準備判定修正と初回案内は含まれず、最新sourceを候補へ更新する必要がある。

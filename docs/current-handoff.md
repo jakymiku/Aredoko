@@ -1,7 +1,7 @@
-# Aredoko — 現行の単一引き継ぎ（2026-10-24）
+# Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
 ## 現在地と読む順
-- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **13778ad**（基本ZIP03時点は `47acf2f`）。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **c6ba386**（初回案内4ac518b＋設定scroll）。基本ZIP04はsource630cc55で後続WD/初回案内を未収録。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
 - 本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧記録は[履歴索引](history-index.md)。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らず簡潔なUIを維持。
 - 開始時の未コミットP5案4ファイルはignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch`/starting-state.jsonへ退避して継続。c30bc34へff後に仕上げた。途中のリモート文書更新ed81d33/07c3f44も4a96d81で統合し、他作業を上書きしていない。main merge/reset/stash/force pushなし。
 
@@ -55,12 +55,21 @@
 - `33c8938` P6：WD固定版の実カタログとモデルNOTICEを用意（WD＋EmbeddingGemma 2のregistry2件、runtime0件）。公式metadata/HEAD＋既存CSVの固定Git blob/SHA確認のみで、モデル本体の外部取得・推論なし。[正本](ai-acquisition.md)。**今回のGUI許可は上記detail候補のみ**。新しいAI取得画面/通常EXE候補を試す場合は改めて具体的範囲を確認する。
 
 ## 最新の実行候補と確認（2026-10-25）
-- **基本ZIP02/source13778ad**：`dist/portable-basic-20261025-02/Aredoko/Aredoko.exe`。EmbeddingGemma 2/WDの実カタログを同梱、モデル/PyTorchなし。[SHA・正確な範囲](portable-refresh-20261024.md)。旧Alpha/shortcut未更新。新しい試用先はこちら。
+- **基本ZIP02/source13778ad**：`dist/portable-basic-20261025-02/Aredoko/Aredoko.exe`。EmbeddingGemma 2/WDの実カタログを同梱、モデル/PyTorchなし。[SHA・正確な範囲](portable-refresh-20261024.md)。旧Alpha/shortcut未更新。この時点の試用先。後続04とsource-only更新は下の最新追加を参照。
 - 同梱Python11 PASS。ユーザー許可の表示のみGUI＋1再起動は全チェックPASS、4所有exit0/残存なし、全766payload/設定/生成元保全、3 PNG目視。実転送・推論・clean Windowsは未実施。モデル取得は約1.53GB/468MBで、runtimeは別途必要。
 - QA終了処理もレビューし、旧P3ハーネスの全体focus helper/launcher強制終了を廃止して、所有HWND検査＋通常終了＋失敗exit codeへ変更。旧合格flowの反復はしていない。今回の通常入口testは所有プロセスhandleを保持して正常終了を観測する。
 
+## 最新追加（2026-10-25、今回の正確な到達点）
+- **e46d9f8 / 630cc55**：転送timeout/reset/途中EOFを最大2回だけ再接続し、実partial sizeからRange再開。CPU通信6/既存取得14 PASS。実EG2約1.53GB/WD約468MBはユーザー許可済み専用先で中断・再開・全hash検証後の公開まで完了。途中FAILは `data/ai-ui/real-model-download-20261025-01/report.json` / `resume-report-02.json` に保存、EG2成功は02、WD最終成功は `resume-report-03.json`。失敗記録を成功へ上書きしていない。[取得正本](ai-acquisition.md)。
+- **d0eb214 / adb701e**：AI準備からモデル取得へ直接移るボタン。新規基本ZIP03/source5ddd97aはユーザー許可の限定GUI11 checks/4所有exit0/2 PNG目視PASS。旧WD切替/詳細の同一受入は反復していない。最終EOF補強のZIP04/source630cc55はCPU11 PASS、GUI自体は未実施。[候補/SHA](portable-refresh-20261024.md)。
+- **5ddd97a / 4217636**：runtime通知収集・source binding・固定上流補完・封印pack同梱。52配布物/91通知を収録し、新しいローカルpackを全hash検証して作成。生成16関連tests PASS。公開の権利/native依存reviewと不変の配布先は未完、runtime取得registry0件。[正本](runtime-notice-inventory.md)。
+- **09f72dd**：取得WDが旧venv用model markerを要求して準備済みにならない不整合を修正。封印runtimeの固定onnxruntime metadataを使い、workerの全pack検証・版/CPU provider検査は維持。関連11 PASS。
+- ユーザーの追加GPU/CPU許可で、新pack＋今回取得した2モデルを生成2画像/専用DBだけで各1回確認：EG2 CUDA正規化768D・WD CPU候補6、DB integrity/input metadata/生成原本保全・所有worker停止PASS。adapter終了はexit1で、正常exit0とはしない。`data/ai-ui/acquired-runtime-smoke-20261025-01/report.json`。実精度/全媒体/GUI導入受入ではない。
+- **4ac518b**：初回の未登録空ライブラリに登録/AI取得/使い方をinline表示、設定から使い方を再表示。[使い方](getting-started.md)。勝手なscan/取得や強制wizardなし。関連Portable publish成功。追加した設定scrollを含む最終publishも0 errors（既知WUI1001×3/SDK IL2104×2）。build02 log参照。**新しい案内のnative GUIは未確認**。
+- モデル/packはignored専用先にありGitへ含めない。旧Alpha・shortcut・通常DB・通常設定は未更新。GPU/GUIの一般許可へ拡大せず、次の実機確認は改めて具体的対象を提示する。Actions0、シャットダウンしない。
+
 ## 次の実装1件
-**P6：両モデルの実取得受入と、AI実行環境packの配布を仕上げる。** 取得基盤/モデル別保存先/カタログ表示は再実装しない。実転送する場合は固定公式取得元・約1.53GB/468MB・専用出力を示して許可を伺う。GPU/GUIも今回のユーザー指定で事前確認する。runtimeの固定配布物・完全NOTICE・公開先は未完で、モデル取得だけでAI環境完成とはしない。許可/外部情報待ちにはP3大量scroll/最終row/RSSや独立したUI改善を進める。
+**P6/UI-3：初回案内と最終WD修正入りの新しい基本ZIP候補を作り、案内の限定GUIを確認する。** `data/ai-ui/getting-started-20261025/frontend02` が最終publish出力（sourceの設定scroll修正含む）。旧Alpha/既存候補を上書きせず新規先へ。通常EXE＋空の専用DBでwelcome→使い方→folder追加導線/AI準備、登録済み生成DBで案内が一覧を覆わないことを一つのflowにまとめ、GUIはユーザーへ事前確認する。runtime公開監査/輸送単位/公開先は独立残件で、配布完成を装わない。既存の転送・通知・生成GPU smokeを無変更反復しない。P3/UIの残受入とR06–R09も未完のまま維持。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
 **P6：役割別保存先のAPI・Core・native UIを接続する。** `c7db80d`のbackend解決を再実装せず、以下へ進む。
@@ -71,7 +80,7 @@
 その後、レビュー済み実artifact・完全なNOTICE・runtime pack公開先を確定してsource registry登録へ。WDの公開元とmanaged sidecar方式は確認済みだが、推測URL/架空hash/未監査NOTICEで有効化しない。新モデル/依存の実取得は対象/容量/取得元を示して別許可。
 
 ## 未完・運用
-- P0/P1B実機/P2/P3性能・完成形UI/P4/P5復元/P6配布/P7総合受入のPARTIALは維持。[完成台帳](completion-roadmap.md)と[実音声等の内容索引](media-content-plan.md)の未完も保持。全音声/音楽、実catalog取得/推論、clean Windowsは未受入。
+- P0/P1B実機/P2/P3性能・完成形UI/P4/P5復元/P6配布/P7総合受入のPARTIALは維持。[完成台帳](completion-roadmap.md)と[実音声等の内容索引](media-content-plan.md)の未完も保持。全音声/音楽、clean Windows、実素材精度の総合受入は未完。実catalogの取得と限定生成GPU/CPU確認は上記で完了。
 - 最新[ローカルGUI/GPUテスト方針](local-test-policy.md)に従う。生成fixture/独立DB・設定/既存モデルの通常関連検証は事前許可不要。旧環境2/2、復元3/3、取得1/2、P3等は履歴であり永久禁止ではない。同じ失敗の無変更反復は止め、診断→有意味な修正→対象確認。今回の基本ZIP限定1試行は終了済みで、新機能確認と混同・再命名しない。raw失敗を成功へ読み替えない。
 - 私物scan/原本変更/通常DB/旧Alpha/shortcut/新モデル・依存取得/OS・driver変更/外部送信は無断実行しない。Actions0、既存Draft PR継続、main merge/新branch/新PR/force pushなし。**シャットダウンしない**。
 - [文書/legacy整理](repository-maintenance.md)、[旧依存監査](legacy-dependency-audit-20261024.md)、[文書案内](README.md)を保全。旧Catalog/server等は製品依存のため削除しない。
