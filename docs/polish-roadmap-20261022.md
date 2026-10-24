@@ -16,12 +16,12 @@
 | --- | --- | --- |
 | P0 基準整理・UI-0 | PARTIAL。[診断・共通surface・下部保存](windows-sync-20261023.md)を実装/build確認。配布照合/nativeは未受入 | 小さな縦切りとして継続する。P0全完了とはしない |
 | P1A 画像の実形式判定 | CPU_DONE `0f2e005`。Python37/Core771/Portable build合格、最新handoff参照 | 実機表示未受入と配布未更新を明記 |
-| P1B 逐次アニメーション再生 | source/API/WinUI接続・Python確認済み。[証拠/限界](animation-streaming.md) | Core/Portable buildをWindows確認済み、native未受入。全PNG待ち/64枚切捨て/decoder再openを撤去 |
-| P2 結果セッション・連続閲覧 | PARTIAL。native接続sourceあり。[証拠/限界](result-session-native-connection.md) | Core/Portable buildをWindows確認済み。native60↔61位置を確認、実表示後の選択復帰/120境界は未受入 |
-| P3 一覧・サムネイル・UI-2 | PARTIAL。[標準container/双方向600件window/trimmed ABI修正](p3-continuous-browse.md) | Core873/Portable build確認済み。native3/3の残件・thumbnail/実RSS/完成形UIは未受入 |
+| P1B 逐次アニメーション再生 | source/関連Python/Core/native生成限定PASS。[証拠/限界](animation-streaming.md) | 70frame APNG/2loop、GIF、GIF名WebP、open-firstで1要求削減。大画像/RSS/全FPSは未受入 |
+| P2 結果セッション・連続閲覧 | PARTIAL。[native接続](result-session-native-connection.md) | 60↔61/120↔121・復号完了後のdetail復帰を生成素材で確認。全検索/ソート/条件のnative受入は残る |
+| P3 一覧・サムネイル・UI-2 | PARTIAL。[双方向600件・隠したdraft保全](p3-continuous-browse.md) | 745生成itemで追加/eviction/逆方向/draft明示保存を確認。全thumbnail速度/RSS/HC/DPI/最終row表示は残る |
 | P4 複数棚・整理導線 | PARTIAL。[履歴削除](history-deletion.md)と[複数棚の移行/検索/API](multi-shelf-storage.md)を実装 | [Core/棚一覧/複数選択](shelf-ui-20261023.md) source接続・893 Core確認、native3/3でcard/atomic save/create/renameを確認、Open以降の残件は未受入。[画面履歴](navigation-history-20261023.md) source接続。[root favorite](root-favorites-20261023.md) source/904 Core接続。[root複数初期棚](root-shelves-20261023.md) source/911 Core接続。次P5（native残件は未受入） |
 | P5 起動中backup/restore | PARTIAL。[共有writer fence・認証job API・選択/進捗/中止UI](live-backup-20261023.md)接続、Core925/native限定確認。現行viewer設定互換も維持 | 次は新規復元先→安全な起動先切替/rollback。Picker→GUI作成成功、大容量/性能/HC等は未受入 |
-| P6 配布・UI-3 | LD1–3/LD4a基盤あり、残り未完 | LD4b→LD5→LD6を既存実装から継続 |
+| P6 配布・UI-3 | [基本ZIP03](portable-refresh-20261024.md)・モデル別配置UIを用意 | 通常入口/再起動と同梱Python限定PASS。実catalog/完全NOTICE/公開先/clean Windowsは未完 |
 | P7 総合検証 | 未実施 | 主要機能を揃えてまとめ確認、M1判定後R06–R09へ |
 
 実装は小単位で進める。P1A完了をP1全体/ロードマップ全体の完了と扱わない。旧Alpha、basic03等の配布候補と現在source/buildは別物で、明示的な新候補作成まで配布済みとはしない。
@@ -30,12 +30,12 @@
 
 - 登録・文字/AI/WD/類似/本文検索、ページ・時刻根拠、閲覧/タグ等の整理基盤は存在する。原本guard、モデル/profile空間、従来の順位を維持する。
 - 提供された `10.gif` は実際には367×359/55frameのanimated WebP。既存Pillowで先頭を復号可能。`.gif`名によるnative GIF選択が拒否原因。他のGIFの全原因を断定しない。
-- P1Bが逐次アニメーションを実装し全PNG待ち/64frame切捨てを撤去。Core/Portable build確認済み、実再生/loop/速度は未受入。
-- P2が非同期neighborで60/120境界を越えるsourceへ接続。Core跨ぎテストはWindowsで合格、native操作は未受入。
-- 一覧は標準containerの要求に応じてcardを生成する（[実機の範囲と残課題](p3-native-containers-20261023.md)）。P2結果sessionは順位spoolを一回消費し、P3 ResultWindowが120×5で保持する。連続scrollは[双方向追加読み込みsource](p3-continuous-browse.md)まで実装し、実機確認が残る。
+- P1Bが逐次アニメーションを実装し全PNG待ち/64frame切捨てを撤去。Core/Portable build確認済み、生成70frame/2loopの限定nativeと先頭割当の単回比較は確認済み。全形式/大画像/RSS/FPSは未受入。
+- P2が非同期neighborで60/120境界を越えるsourceへ接続。Core跨ぎテストはWindowsで合格、通常生成素材の60/120境界とdetail復帰は限定native確認済み。全検索条件は未受入。
+- 一覧は標準containerの要求に応じてcardを生成する（[実機の範囲と残課題](p3-native-containers-20261023.md)）。P2結果sessionは順位spoolを一回消費し、P3 ResultWindowが120×5で保持する。連続scrollは[双方向追加読み込みsource](p3-continuous-browse.md)まで実装し、実機は745生成itemの追加/600保持/逆方向/draft保全まで確認し、全thumbnail/RSS等の受入が残る。
 - P3 thumbnailは派生/shared/可視優先/DPI edge/所有RAM・一時disk cacheまで実装。再起動跨ぎ永続cache/実decoded全体RAMは未受入。
 - 棚は独立ID/空棚/複数所属・atomic移行/全検索条件/API/Core/native編集へ接続済み。棚nativeの未到達工程とroot管理GUIの受入は残る。旧単一値は互換用で、情報を失う更新を拒否する。
-- backupは起動中job/API/設定UIまで実装済み。復元の自動起動先切替/rollbackと大容量受入は未完。viewer設定theme/scale等と旧validatorの不一致は2026-10-22に修正済み。P4/P5のschema移行・起動中snapshot/設定整合は別途未完。
+- backupは起動中job/API/設定UIまで実装済み。復元の起動先切替/rollbackのsource・CPU契約は実装済み。形式2 active/pendingのnative完全一連と大容量受入は未完。viewer設定theme/scale等と旧validatorの不一致は2026-10-22に修正済み。P4/P5のschema移行・起動中snapshot/設定整合の全実機受入は残る。
 
 ## 実装順と完了条件
 

@@ -1,5 +1,18 @@
 # 基本版ZIP候補（2026-10-24）
 
+## 最新候補03（source47acf2f、今回の試用入口）
+
+- 通常入口：`C:/AI/Aredoko/dist/portable-basic-20261024-03/Aredoko/Aredoko.exe`
+- ZIP：`C:/AI/Aredoko/dist/portable-basic-20261024-03/Aredoko-windows-x64.zip`
+- source `47acf2f4222acc6efdb6d073e75ec66e50200223`。758 files /657,735,418 bytes、ZIP343,915,299 bytes。
+- ZIP SHA256 `d3fc4b4702ece8f89b089a0a6de3fcfbf4009a640a725e29121fb732e935d5e9`。
+- モデル別保存先/API/Core/native、profileごとの準備判定、アニメーションopen-first、ログのLOCALAPPDATA統一、詳細を隠したdraft保持、連続scrollのanchor修正を収録。PyTorch/モデルは含めず、製品取得catalog0件。旧01/02/Alpha/shortcutは上書き・更新しない。後続のQA/handoff commitと封印sourceを区別する。
+- clean treeから新規Portable publish/実評価receipt/bootstrap self-test/同梱runtime check/全ZIP内容照合がPASS。02の固定runtime/python・mediaだけを一覧/SHA/サイズ検証して再利用、旧app/bin/configはコピーしない。
+- 実同梱Pythonの基本11項目PASS（専用DB/生成PNG、AIなし・取得catalogなしでも起動・登録・検索・preview・正常EOF終了・DB integrity）。
+- **通常EXEからのnative1 flow（起動＋予定内1再起動）PASS**：生成ライブラリ→設定→AI検索準備→配置/役割選択画面→正常close→登録保持で再起動。4 PNG全目視。観測handleを最初に保持し、WinUI2回/bootstrap2回すべてexit0、専用startup logs2本・元PNG SHA/mtime・設定不変・DB integrity=okを確認。正常GUI後の全758 payload SHA/inventoryも再確認し、余計なbytecode等なし。
+- 同じ実binの125生成PNGで120↔121とclose後detail復帰も限定PASS（[P2正本](result-session-native-connection.md)）。これは通常入口の2起動とは別の専用backend/GUI case。
+- 証拠：ignored `data/ai-ui/portable-refresh-20261024-03/` prepare.py/preparation.json/各log/backend01/report.json/native01/report.json/4 PNG/post-check.json/post-gui-inventory.json。実モデル/GPU/外部取得/通常DB/私物media/旧Alpha/OS/Actions0。正式公開/clean Windows/全AI・復元/P7受入は未完。ZIPをGitHub Releaseへ公開していない。
+
 ## 新候補02（source f508b82）
 
 今回の形式2バックアップ・一時AI指定解除・取得モデル検証・固定registry・取得済みroot引継ぎを含む別候補。旧01/Alpha/shortcutは上書きしない。

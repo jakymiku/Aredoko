@@ -14,14 +14,15 @@ from native_ui_tools import nodes
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument("--continuous",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
+    parser.add_argument("--continuous",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
-    if not front.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
+    if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
     report['app_assembly_sha256']=hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()
     report['source_worktree_diff_sha256']=hashlib.sha256(subprocess.check_output(['git','diff','--','src'],cwd=REPO)).hexdigest()
     tracked=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','--','app','src'],cwd=REPO,text=True).splitlines()
     report['source_files']={name:hashlib.sha256((REPO/name).read_bytes()).hexdigest() for name in tracked}
+    report['audit_script_sha256']=hashlib.sha256((REPO/'tools/ui_continuous_browse_audit.py').read_bytes()).hexdigest()
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-p3-native-content-ready-20261024','LOCALAPPDATA':str(target/'user'),'APPDATA':str(target/'user')}
     cat=server=thread=proc=None;hwnd=None
     user=ctypes.WinDLL('user32',use_last_error=True)
@@ -46,10 +47,10 @@ def main():
     def sources():return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
     try:
         media=target/'media';media.mkdir()
-        for i in range(745 if args.continuous else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        for i in range(745 if args.continuous else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
         before=sources();cat=ProductionCatalog(target/'catalog.sqlite');root=cat.add_root(str(media));cat.start_scan(root)
         if cat._worker:cat._worker.join(15)
-        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(745 if args.continuous else 145))
+        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(745 if args.continuous else 125 if args.viewer_boundary120 else 145))
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger());handler.log_message=lambda *args:None
         server=ThreadingHTTPServer(('127.0.0.1',8769),handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -65,7 +66,11 @@ def main():
         key='Item'+str(first['id']);ready();ui('wait-for',key,'-t','10000');shot('list-initial')
         visible=tree();count=sum(k.startswith('PreviewStatus') for k in visible)
         check('panel realizes fewer cards than sixty-result page',0<count<60)
-        if args.continuous:
+        if args.viewer_boundary120:
+            from ui_continuous_browse_audit import audit_boundary120
+            audit_boundary120(ui,cli,tree,shot,report,check,proc.pid,hwnd,cat)
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.continuous:
             from ui_continuous_browse_audit import audit
             audit(ui,cli,tree,shot,report,check,proc.pid,hwnd,cat)
             check('generated sources unchanged',before==sources());report['pass']=True

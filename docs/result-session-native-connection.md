@@ -29,3 +29,9 @@ source pinを全件作成する際、1件の未接続原本で通常一覧全体
 既存依存でCoreテスト→Portable buildを各1回。新失敗が出たら局所修正し、全検証を反復しない。実機では125件以上の生成画像＋混在結果で60→61/逆方向/120→121、全検索方式、root/scope/filter、close後の選択とscroll、未保存draftの保持/破棄取消、expiry→明示再検索、遅い画像の連打/closeをまとめ確認する。既存GUI capsを新名称でresetしない。
 
 P3では120件block/最大5blockの仮想化とthumbnail/cache・完成形主画面を進める。現在はpage UIを維持したP2接続で、連続scroll/完成形UI/M1/M2/ALPHAを完了としない。
+
+
+## 2026-10-24 120境界の限定native確認
+- source/基本ZIP候補03 `47acf2f` の実bin、125枚の生成PNG・独立DB/LOCALAPPDATA。`tools/test_p3_native_containers.py --viewer-boundary120` に固有caseを追加。P3全flowは再実行しない。
+- `data/ai-ui/p2-boundary120-20261024/run01`は親ListViewのHasKeyboardFocusを要求したハーネスFAIL。ListViewは実現itemへfocusを渡すため、見えている所有rowをclickしてnative End/Upで120番を選択するよう修正。入力先/実表示位置を検証し、期待ordinalを緩めていない。raw/2 PNG保全。
+- run02は**120番の復号完了→121番の復号完了→120番へ戻る→close後の120番detail復帰**がPASS。3 PNG全目視、owned app exit0、元PNGのSHA/mtime不変。reportに実app DLL/source一覧/audit-script SHAを記録。60↔61は別のP3 run05で確認済み。検索・ソート・複数条件での全方式native受入はまだ未完。
