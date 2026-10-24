@@ -1,5 +1,13 @@
 # LD4b：任意AI環境の取得基盤（2026-10-24）
 
+## 2026-10-24 explicit-use native acceptance (latest)
+
+The new published-root handoff (not a repeat of the old cancel/resume workflow) was exercised on Windows with a generated valid runtime inventory and loopback artifacts. `tools/test_native_ai_acquisition.py --published-selection --theme light` publishes the fixture, passes its exact root into setup, verifies that navigation alone does not save, then invokes the explicit use button and checks the pinned next-restart settings. Unrelated model-root/theme fields and generated sources/media remain unchanged. A Popen allowlist blocks selected/generated Python or other unexpected process execution; attempted unexpected launches0. The test intentionally does not restart into the generated non-executable runtime.
+
+11 checks PASS, owned frontend exit0/no live process,4 PNGs all viewed, no external transfer/GPU/normal DB/installed Alpha. Publish succeeded with known WUI1001×3/SDK IL2104×2. AppLog now uses the same explicit LOCALAPPDATA as owner/Python; the real frontend startup stages were written inside the dedicated user directory. Evidence: ignored `data/ai-ui/ai-acquired-selection-20261024/run01/{report.json,visual-review.json,commands.log}` and PNGs. Frontend/source/diff/test-script SHA are recorded because the candidate was built with the pending AppLog change on94c9816. The product registry remains empty, and this is not real-runtime inference/clean Windows/model-kind native acceptance.
+
+The current [local test policy](local-test-policy.md) supersedes inherited lifetime caps: retain old raw failures/attempt records, diagnose before rerunning, and test meaningful fixes/features in isolated fixtures. The separately user-scoped basic02 first launch+one restart has ended; it is not relabelled as this feature test. No old raw FAIL was overwritten.
+
 ## 2026-10-24 application-owned registry boundary (latest)
 
 Production now obtains acquisition specifications from `ai_acquisition_registry.TRUSTED_CATALOGS`, a source-owned tuple of reviewed registrations. Each registration pins a catalog path below `config/acquisition` and its canonical fingerprint; model registrations additionally pin the exact profile path/SHA/kind. Runtime uses the existing full runtime validator, model uses its bound layout validator. No runtime HTTP path, preferences/environment override, directory scan or downloaded document can add a registration. Missing/changed/unsupported metadata disables optional downloads and records a sanitized error class in the backend log; basic library startup continues. `config/acquisition` is copied into release inventory when present.

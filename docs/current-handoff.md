@@ -17,8 +17,10 @@
 
 - bootstrapのログ先をPythonと同じ明示LOCALAPPDATAへ統一。相対/drive-relative拒否を含む純粋self-testとWindows標準compilerがexit0。新候補02の封印ファイルは未変更、関連ログはstartup-data-root-20261024-01。
 
+- P6公開root→明示適用をLight nativeで11項目確認、4 PNG全目視、exit0。検査用Python実行0/旧通常DBなし。WinUI AppLogも明示LOCALAPPDATAへ統一し、専用ログで実証。正確なsource/diff/実候補SHAと限界は[AI取得](ai-acquisition.md)。
+
 ## 次の実装1件
-**P6：取得済みversionの明示適用ボタンを生成fixtureで実機確認する。** `2973de7`のパス引継ぎはCore/ビルドのみだった。既存の取得flowの繰返しではなく、公開root→配置画面→明示適用→next-restart設定保存だけを確認し、生成の検査用Python/モデルは実行しない。最新テスト方針に沿い専用DB/設定で診断する。実catalog公開元/NOTICEは引き続き未確定。
+**P6：実catalog公開に必要なprovenance/NOTICEと取得元の差分を整理し、実装可能な取得残件へ進む。** runtime/modelのbuilder・registry・検証・native明示適用は揃ったが実登録0。公開先を推測して有効化しない。モデル取得でアプリ所有provenanceをどう配布するか、公式artifactだけで完結できるかを既存契約に沿って確認する。新モデル/依存を取得せずに進め、GUI/GPUは最新テスト方針に従う。
 
 ## 継続する残件と制約
 - P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。
