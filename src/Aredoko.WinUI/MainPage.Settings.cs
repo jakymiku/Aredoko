@@ -42,6 +42,7 @@ public sealed partial class MainPage
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
             foreach(var (label,id,target) in new[]{
+                ("使い方・初回設定","BtnGettingStarted","help"),
                 ("AI検索の準備","BtnAIIndex","ai"),
                 ("関連語を編集","BtnRelatedTerms","terms"),
                 ("閲覧履歴を削除","BtnClearHistory","history"),
@@ -59,6 +60,7 @@ public sealed partial class MainPage
         if(destination is not null)
         {
             if(destination=="ai")AI_Click(this,new RoutedEventArgs());
+            else if(destination=="help")await OpenGettingStartedGuideAsync();
             else if(destination=="terms")RelatedTerms_Click(this,new RoutedEventArgs());
             else if(destination=="history")await DeleteHistoryAsync();
             else if(destination=="backup")await OpenBackupDialogAsync();
