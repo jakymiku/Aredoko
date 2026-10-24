@@ -35,7 +35,9 @@ def default_settings_path(repo):
     return (Path(base) / "Aredoko" / "settings.json") if base else Path(repo) / "data" / "settings.json"
 
 class AIProfileSettings:
-    def __init__(self, repo, settings_path=None, command_line_profile=None, profile_directory=None, *, ai_python=None, models_root=None):
+    def __init__(self, repo, settings_path=None, command_line_profile=None, profile_directory=None, *, ai_python=None, models_root=None, transient_override=False):
+        if type(transient_override) is not bool or transient_override and command_line_profile is None:raise ValueError('Transient override requires an explicit profile')
+        self.transient_override=transient_override
         self._write_lock = threading.RLock()
         self.repo = Path(repo).resolve()
         self.python = worker_python(self.repo, ai_python)
@@ -63,7 +65,7 @@ class AIProfileSettings:
         except (ValueError, OSError, json.JSONDecodeError) as ex:
             self.startup_path = None
             self.startup_error = "モデル設定が無効です（" + type(ex).__name__ + "）。設定を確認してください。文字検索は利用できます。"
-        self.active = "command-line" if self.override is not None else self.started
+        self.active = "restored" if self.transient_override else "command-line" if self.override is not None else self.started
 
     def _read_settings(self):
         if not self.path.exists():
@@ -191,10 +193,11 @@ class AIProfileSettings:
         except (ValueError,OSError,json.JSONDecodeError): resource=dict(RESOURCE_DEFAULT)
         return {"profiles": candidates, "selected": pending, "active": self.active,
                 "resource":resource,
-                "command_line_override": self.override is not None,
-                "restart_required": self.override is None and pending != self.started,
+                "command_line_override": self.override is not None and not self.transient_override,
+                "restored_active": self.transient_override,
+                "restart_required": self.transient_override or self.override is None and pending != self.started,
                 "error": error,
-                "message": "起動時の -AIProfile が優先です。GUI設定は -AIProfile を外した次回起動から適用します。" if self.override else
+                "message": "復元時に使っていたモデルで開いています。保存した選択は次回起動時に適用します。" if self.transient_override else "起動時の -AIProfile が優先です。GUI設定は -AIProfile を外した次回起動から適用します。" if self.override else
                            "モデルの変更は次回起動時に適用されます。現在の検索・索引処理は切り替わりません。"}
 
     def choose(self, profile_id):

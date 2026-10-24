@@ -13,7 +13,7 @@ import shutil
 import threading
 from functools import wraps
 
-from storage_lease import plain_path, storage_parent, storage_lease
+from storage_lease import plain_path, storage_parent, storage_lease, StorageBusyError
 from storage_backup import CATALOG, validate_restored
 
 PENDING_FILE = 'restore-pending.json'
@@ -238,6 +238,8 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
         'attempted': False,
         'status': 'pending',
     }
+    if active_ai is not None and active_selection.get('ai_override') is False:
+        pending_data['transient_ai_profile']=new_settings['ai_profile']
     tmp_pending = data_path / f".{PENDING_FILE}.tmp.{secrets.token_hex(8)}"
     tmp_pending.write_text(json.dumps(pending_data, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     tmp_pending.replace(pending_path)
@@ -256,6 +258,32 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
         'pending_file': str(pending_path.resolve()),
         'status': 'pending',
     }
+
+
+def _release_transient_profile(data_path,pending_data,target):
+    expected=pending_data.get('transient_ai_profile')
+    if expected is None:return
+    if not isinstance(expected,str):raise ValueError('Invalid transient profile')
+    expected_path=Path(expected)
+    # New snapshot and explicitly included ordinary-profile references only.
+    if not expected_path.is_absolute() or '..' in expected_path.parts or not expected_path.is_relative_to(target):raise ValueError('Invalid transient profile')
+    settings_path=data_path/LAUNCH_SETTINGS_FILE
+    # Coordinate with runtime/model setup jobs and reread their latest fields.
+    with storage_lease(settings_path):
+        path=plain_path(settings_path)
+        if path.stat().st_size>16384:raise ValueError('Launch settings exceed limit')
+        current=json.loads(path.read_text(encoding='utf-8-sig'))
+        if not isinstance(current,dict) or current.get('database')!=str(target/CATALOG):raise ValueError('Launch target changed')
+        if current.get('ai_profile')!=expected:return  # A later explicit choice wins.
+        current.pop('ai_profile')
+        temporary=data_path/f'.restore-profile-{secrets.token_hex(8)}'
+        try:
+            with temporary.open('x',encoding='utf-8') as stream:
+                json.dump(current,stream,ensure_ascii=False)
+                stream.flush();os.fsync(stream.fileno())
+            temporary.replace(path)
+        finally:
+            if temporary.exists():temporary.unlink()
 
 
 @_serialized
@@ -324,9 +352,10 @@ def commit_restore_switch(data_dir):
     # Once marked committed, cleanup failures must never undo a ready library.
     # Delete the rollback copy first so the committed sentinel remains as proof.
     try:
+        _release_transient_profile(data_path,pending_data,target)
         (data_path/ROLLBACK_FILE).unlink(missing_ok=True)
         pending_path.unlink(missing_ok=True)
-    except OSError:
+    except (OSError,StorageBusyError,ValueError):
         receipt['cleanup_pending']=True
     return receipt
 

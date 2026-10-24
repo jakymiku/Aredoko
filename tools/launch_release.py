@@ -21,6 +21,7 @@ from startup_progress import StartupCancelled, StartupProgress
 sys.path.insert(0, str(ROOT / ('backend/app' if (ROOT / 'backend/app').is_dir() else 'app')))
 from restore_switch import (
     check_pending_restore,
+    get_restore_pending_info,
     is_restore_pending,
     commit_restore_switch,
     rollback_restore_switch,
@@ -221,7 +222,7 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
     if restore_handoff is not None:return restore_handoff.finish(effective_data,backend,app)
 
 
-def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full=False, preferences_path=None):
+def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full=False, preferences_path=None, startup_overrides=None):
     # All writable state stays outside the versioned release. Reject accidental
     # source/payload placement before creating logs or opening a database.
     def validate_writable_locations(current):
@@ -233,19 +234,22 @@ def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full
     validate_writable_locations(settings)
     storage_parent(data / 'launcher')
     with storage_lease(data / 'launcher'):
-        if check_pending_restore(data):
+        previous=get_restore_pending_info(data)
+        rolled_back=check_pending_restore(data)
+        if rolled_back or isinstance(previous,dict) and previous.get('status')=='committed':
             settings = load_settings(data, preferences_path)
+            if not rolled_back and startup_overrides:settings.update(startup_overrides)
             validate_writable_locations(settings)
         for attempt in range(8):
-            result=_launch_once(root,data,settings,progress=progress,startup_pipe=startup_pipe if attempt==0 else None,force_full=force_full,preferences_path=preferences_path)
+            result=_launch_once(root,data,settings,progress=progress,startup_pipe=startup_pipe if attempt==0 else None,force_full=force_full,preferences_path=preferences_path,explicit_profile=attempt==0 and bool(startup_overrides and startup_overrides.get('ai_profile')))
             if not isinstance(result,dict) or result.get('restart') is not True:return result
+            check_pending_restore(data)
             settings=load_settings(data,preferences_path)
             validate_writable_locations(settings)
-            check_pending_restore(data)
         raise RuntimeError('Too many restore restarts in one launcher session')
 
 
-def _launch_once(root,data,settings,*,progress=None,startup_pipe=None,force_full=False,preferences_path=None):
+def _launch_once(root,data,settings,*,progress=None,startup_pipe=None,force_full=False,preferences_path=None,explicit_profile=False):
     instance = secrets.token_hex(16)
     logs = data / 'logs' / (time.strftime('%Y%m%d-%H%M%S') + '-' + instance)
     storage_parent(logs / 'launcher.log');plain_path(logs, directory=True)
@@ -258,6 +262,9 @@ def _launch_once(root,data,settings,*,progress=None,startup_pipe=None,force_full
                '--instance-id', instance, '--exit-on-stdin-close', '--ai-ranking', values.get('ai_ranking', 'mean-rrf')]
     for key, option in PATH_OPTIONS.items():
         if key in values:backend += [option, values[key]]
+    pending=get_restore_pending_info(data)
+    if not explicit_profile and isinstance(pending,dict) and pending.get('transient_ai_profile')==values.get('ai_profile') and values.get('ai_profile') is not None:
+        backend.append('--ai-profile-transient')
     backend += ['--runtime-preferences', str(preferences_path if preferences_path is not None else data/'launch-settings.json')]
     app = ['--ui-theme', values.get('ui_theme', 'system'),
            '--viewer-settings', values.get('viewer_settings', str(data / 'viewer-settings.json'))]
@@ -337,9 +344,10 @@ def main():
             if not base or not Path(base).is_absolute():raise ValueError('LOCALAPPDATA is unavailable')
             data = Path(base) / 'Aredoko'
             settings = load_settings(data, args.settings)
-            settings.update({key: getattr(args, key) for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} | RUNTIME_FIELDS if getattr(args, key) is not None})
+            overrides={key: getattr(args, key) for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} | RUNTIME_FIELDS if getattr(args, key) is not None}
+            settings.update(overrides)
             launch(ROOT, data, validate_settings(settings), force_full=args.full_check,
-                   preferences_path=Path(args.settings).absolute() if args.settings is not None else None)
+                   preferences_path=Path(args.settings).absolute() if args.settings is not None else None,startup_overrides=overrides)
             return 0
         print(json.dumps({'pass': True, 'version': manifest['version'], 'readiness': 'staging-only',
                           'clean_machine_activation_verified': False,

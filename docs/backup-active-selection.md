@@ -24,6 +24,10 @@
 
 明示overrideとpending両保全、既定→pending変更、local→pending変更、起動後の外部定義変更に影響されないactive、複数WDの非順序選択、64/16件保存枠、再バックアップの衝突/増殖なし、取消、設定省略、legacy1、metadata/上位版/path改変、切替/rollback・元設定保全を確認した。C#/GUI/GPU/実モデル/私物DBは変更・実行していない。
 
-## 次の1件
+## 復元後の一時指定解除（実装済み）
 
-元が通常起動（ai_override=false）の場合、復元初回は当時のactiveで開き、そのready確認後に一時的なai_profile指定を解除し、次の通常再起動ではpendingを適用する。元が明示override=trueなら固定指定を保持する。解除失敗/中断時もコミット済みsentinelを残して次回安全に後処理し、旧libraryへ誤rollbackしない。現段階ではactive/pendingの保存と切替までで、この一時解除は未実装。P5全体/実機受入は未完。
+元が通常起動（ai_override=false）の場合、復元初回は当時のactiveで開き、そのready確認後に一時的なai_profile指定を解除し、次の通常再起動ではpendingを適用する。元が明示override=trueなら固定指定を保持する。解除失敗/中断時もコミット済みsentinelを残して次回安全に後処理し、旧libraryへ誤rollbackしない。この動作を実装した。初回backendには所有launcherだけが`--ai-profile-transient`を渡し、GUIの次回選択を許可する。ready後に現在のlaunch設定をlease下で読み直し、同じ一時指定だけをatomic更新で外す。後から保存されたruntime/theme/別の明示モデル指定は保持する。launcherはcommitted cleanup後に設定を再読し、古い一時指定を使わない。新しい明示CLI指定は再読後も保持する。
+
+生成CPU確認：一時指定/cleanup関連19 PASS/8.174s、所有launcher引数と実所有backend HTTPの新規2 PASS/1.072s、破損sentinel形状1 PASS/0.392s。既存settings/switch40 PASS/11.881s、release lifecycle/portable startup26 PASS/47.129s。各実行は別の確認であり合算しない。実所有backendは存在しないAI interpreter/modelsを指定して推論しない。busy lease、設定replace失敗、sentinel削除失敗はいずれもcommitted証拠を保持し、再試行しても二重履歴や誤rollbackをしない。
+
+P5実機受入・clean Windows・実モデルは未完。次はP6の製品モデル取得に必要な固定レイアウト検証を整え、生成データで取得から既存配置選択への接続を進める。配布元/NOTICE/実artifact未確定のcatalogを有効化しない。

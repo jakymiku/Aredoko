@@ -135,7 +135,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         return {'settings':profiles.path if profiles.path.exists() else None,'profiles':folder,
                 'extra_profiles':extra,'tagger_profiles':tagger_paths,
                 'active_profile':profiles.startup_path.name if profiles.active_definition is None and profiles.startup_path is not None else None,
-                'active_profile_override':profiles.override is not None,
+                'active_profile_override':profiles.override is not None and not profiles.transient_override,
                 'active_tagger_profile':active_tagger,
                 'active_profile_data':profiles.active_definition,
                 'active_tagger_data':definition.encode('utf-8') if isinstance(definition,str) else None}
@@ -879,6 +879,7 @@ def main():
     parser.add_argument('--tagger-profile',type=Path,help='Optional local WD-compatible tagger profile; never downloads')
     parser.add_argument('--ai-settings',type=Path,help='Optional local settings file for developer tests')
     parser.add_argument('--ai-profiles-dir',type=Path,help='Explicit local profile directory, including a restored bundle')
+    parser.add_argument('--ai-profile-transient',action='store_true',help='Owned restore session: use frozen active profile until next restart')
     parser.add_argument('--laya-intent',action='store_true',help='Experimental suggestions only; no auto-routing')
     parser.add_argument('--runtime-preferences',type=Path,help='Explicit restart-only launch settings for setup diagnostics')
     parser.add_argument('--ai-ranking',choices=POLICIES,default='mean-rrf')
@@ -888,6 +889,7 @@ def main():
     if args.instance_id is not None and (len(args.instance_id)!=32 or any(c not in '0123456789abcdef' for c in args.instance_id)):
         parser.error('--instance-id must be 32 lowercase hex characters')
     if args.restore_session_dir is not None and (not args.exit_on_stdin_close or args.instance_id is None):parser.error('Restore handoff requires an owned instance')
+    if args.ai_profile_transient and args.ai_profile is None:parser.error('Transient AI selection requires --ai-profile')
     storage_parent(args.db)
     with storage_lease(args.db):
         _serve(args)
@@ -909,7 +911,7 @@ def _serve(args):
     # Register each owned resource immediately, including startup/bind failures.
     with ExitStack() as resources:
         catalog=ProductionCatalog(args.db);resources.callback(catalog.close)
-        profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile,args.ai_profiles_dir,**runtime)
+        profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile,args.ai_profiles_dir,transient_override=getattr(args,'ai_profile_transient',False),**runtime)
         ai=DisabledAI(profiles.startup_error, status_code='corrupt_profile') if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking,**runtime)
         resources.callback(ai.close)
         if isinstance(ai,AISearch):
