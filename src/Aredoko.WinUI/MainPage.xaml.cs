@@ -378,10 +378,10 @@ public sealed partial class MainPage : Page
             : $"{row.MatchLabel}{KindLabel(row.Kind)}{(availability.Length > 0 ? " · " + availability : "")}{(tagSummary.Length > 0 ? " · " + tagSummary : "")}";
         if (!string.IsNullOrWhiteSpace(metadata))
             text.Children.Add(new TextBlock { Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
-        if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
-        if(row.Proposal is ProposalMatch proposal){var prop=new TextBlock {Text=proposal.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(prop,$"ProposalEvidence{row.Id}");text.Children.Add(prop);}
-        if(row.AIPage is AIPageMatch aiPage){var pimage=new TextBlock {Text=aiPage.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(pimage,$"AIPageEvidence{row.Id}");text.Children.Add(pimage);}
-        if(row.PageText is PageTextMatch pageText){var ptext=new TextBlock {Text=pageText.Summary,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(ptext,$"PageTextEvidence{row.Id}");text.Children.Add(ptext);}
+        if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");ToolTipService.SetToolTip(evidence,row.AIEvidence);text.Children.Add(evidence);}
+        if(row.Proposal is ProposalMatch proposal){var prop=new TextBlock {Text=proposal.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(prop,$"ProposalEvidence{row.Id}");ToolTipService.SetToolTip(prop,proposal.Summary);text.Children.Add(prop);}
+        if(row.AIPage is AIPageMatch aiPage){var pimage=new TextBlock {Text=aiPage.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(pimage,$"AIPageEvidence{row.Id}");ToolTipService.SetToolTip(pimage,aiPage.Summary);text.Children.Add(pimage);}
+        if(row.PageText is PageTextMatch pageText){var ptext=new TextBlock {Text=pageText.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(ptext,$"PageTextEvidence{row.Id}");ToolTipService.SetToolTip(ptext,pageText.Summary);text.Children.Add(ptext);}
         if(row.Evidence is {AllDirect:false}){var words=new TextBlock {Text=Protocol.DescribeEvidence(row.Evidence),TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(words,$"SearchEvidence{row.Id}");text.Children.Add(words);}
         var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
         AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
@@ -677,13 +677,39 @@ public sealed partial class MainPage : Page
         finally{populating=previous;}
     }
     private void RestoreSelection(){populating=true;Items.SelectedItem=active is null?null:Items.Items.OfType<string>().FirstOrDefault(key=>key==RowKey(active.Id));populating=false;}
-    private void UpdateDirty(){if(!ready)return;
+    private void UpdateDirty()
+    {
+        if(!ready)return;
         var blocked=active is not null&&tagReviewSyncItem==active.Id;
         Tags.IsEnabled=Shelf.IsEnabled=ChooseShelvesButton.IsEnabled=Favorite.IsEnabled=Reviewed.IsEnabled=!blocked;
-        TagSuggestionsButton.IsEnabled=active is not null&&TagReviewProtocol.CanOpen(active)&&!saving;
-        if(blocked){EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";Save.IsEnabled=false;return;}EditStatus.Text=Dirty?"未保存の変更":"保存済み";Save.IsEnabled=active is not null&&Dirty&&!saving;OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);OpenAudio.IsEnabled=active is not null&&AudioPlayerPolicy.CanOpen(active);
+        UpdateDetailActions();
+        if(blocked)
+        {
+            EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";
+            Save.IsEnabled=false;
+            return;
+        }
+        EditStatus.Text=Dirty?"未保存の変更":"保存済み";
+        Save.IsEnabled=active is not null&&Dirty&&!saving;
+    }
+    private void UpdateDetailActions()
+    {
+        // Keep unavailable-media actions visible but disabled. Other media's
+        // commands do not occupy space or keyboard stops in this editor.
+        OpenImage.Visibility=active?.Kind=="image"?Visibility.Visible:Visibility.Collapsed;
+        OpenBook.Visibility=active is {Kind: "book" or "archive"}?Visibility.Visible:Visibility.Collapsed;
+        OpenVideo.Visibility=active?.Kind=="video"?Visibility.Visible:Visibility.Collapsed;
+        OpenAudio.Visibility=active?.Kind=="audio"?Visibility.Visible:Visibility.Collapsed;
+        OpenImage.IsEnabled=active is not null&&ImageViewerPolicy.CanOpen(active);
+        OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);
+        OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);
+        OpenAudio.IsEnabled=active is not null&&AudioPlayerPolicy.CanOpen(active);
+        var canReview=active is not null&&TagReviewProtocol.CanOpen(active);
+        TagSuggestionsButton.Visibility=canReview?Visibility.Visible:Visibility.Collapsed;
+        TagSuggestionsButton.IsEnabled=canReview&&!saving;
         AudioSearchHint.Text=SimilaritySearch.AudioIndexingGuidance;
-        AudioSearchHint.Visibility=active?.Kind=="audio"?Visibility.Visible:Visibility.Collapsed;}
+        AudioSearchHint.Visibility=active?.Kind=="audio"?Visibility.Visible:Visibility.Collapsed;
+    }
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private async void Favorite_Checked(object sender,RoutedEventArgs args)
     {

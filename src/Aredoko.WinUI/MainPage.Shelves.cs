@@ -152,7 +152,13 @@ public sealed partial class MainPage
                 catch(OperationCanceledException){}
                 catch(Exception ex){AppLog.Error(ex);}
             }
-            image.Loaded+=async(_,_)=>await RefreshAsync(true);artwork.SizeChanged+=async(_,_)=>await RefreshAsync();
+            image.Loaded+=async(_,_)=>
+            {
+                // Unloaded may be temporary, without a recycled container.
+                if(ReferenceEquals(host.Child,row))shelfRefresh[item]=()=>_=RefreshAsync();
+                await RefreshAsync(true);
+            };
+            artwork.SizeChanged+=async(_,_)=>await RefreshAsync();
             image.Unloaded+=(_,_)=>{++version;requestedEdge=0;shelfRefresh.Remove(item);if(shelfLoads.TryGetValue(item,out var active)&&ReferenceEquals(active,request))active.Cancel();image.Source=null;};
             shelfRefresh[item]=()=>_=RefreshAsync();
         }

@@ -1,5 +1,14 @@
 # P3 結果ウィンドウ・可視サムネイル優先
 
+## 現行追記：媒体に合わせた詳細操作（2026-10-24）
+
+詳細の画像/本/動画/音声コマンドは、選択した種類に対応する主操作だけを表示する。未接続ファイルは対応操作をdisabledで残し、AIタグ候補も対応媒体のみ表示する。通常一覧と棚の共通ライブラリを維持し、保存/未保存/ダブルクリック/閲覧後のfocus導線は変えない。検索根拠は一覧で2行に収め、全文はtooltip/アクセシビリティと既存詳細から参照可能。棚画像が一時Unloaded→Loadedとなった場合の倍率再取得delegateも再登録する。
+
+候補 `data/ai-ui/ui-polish-review-20261024/frontend01` はPortable publish成功（既知WUI1001×3/SDK IL2104×2）。ユーザーの今回の明示許可で、生成2 PNG/CBZ/ZIP/1秒動画/無音WAV・独立DB/設定を使いDark一連とLightの関連操作を確認した。`dark01` は媒体5種類の主操作/AI候補表示、hidden draft、明示保存、棚一覧→同じライブラリ、原本不変、exit0がPASS。Lightは `light01` の媒体別表示と `light04-navigation` の保存/棚往復/原本不変/exit0がPASS。全PNGを目視。実動画/音声の再生やGPU推論・HC/物理DPIはこの試験に含めない。
+
+先行LightのFAILは保持：`light01` 保存完了前の遷移、`light02` テストが「保存しました」を「保存済み」と誤期待、`light03` 画面レイアウト変更時のUIA peer失効。実際のEditor再有効化を待ち、idempotentな選択だけ失効時にtree再取得・1回再試行する。媒体別matrixを無変更反復せず、最後は未到達のLight保存/棚往復だけに縮小。全所有app exit0/残存0。以下の旧「次」は作成当時の履歴で、現行順は統合ロードマップを参照。
+
+
 2026-10-22。開始remote `996814119b3a83a588c9b8824874a99c49c68ec8`。既存P2 result sessionとP3派生cacheを継続。**P3 PARTIAL**、Windows/Core実行環境なし。全件表示のdata virtualization/標準containerへの移行は未完で、以下を実機合格と扱わない。
 
 ## 結果ウィンドウ
