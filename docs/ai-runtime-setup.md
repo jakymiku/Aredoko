@@ -1,5 +1,8 @@
 # AI追加環境とモデル保存先：LD3実装
 
+> **2026-10-25 現在**：既存配置のnative画面、モデル別保存先、モデル2件の取得は[AI取得正本](ai-acquisition.md)まで接続済み。以下の「GUI/取得未実装」はLD3当時の履歴。runtime自動取得はまだ公開していない。[通知収集と同梱](runtime-notice-inventory.md)で実配布の不足を整理し、必要な権利review/公開先が揃ってから登録する。
+
+
 > **2026-10-22 LD4a追記**：[既存folderの背景検査job/API](ai-setup-jobs.md)を実装。下の「GETだけ/HTTP保存未実装」はLD3時点の履歴。現在は非同期start/status/cancelまで対応し、製品GUIとdownloadは引き続き未実装。
 
 2026-10-21。[配布計画LD1–LD6](lightweight-distribution.md)のLD3。基本Pythonと、ユーザーが明示的に選ぶAI実行環境を分離するCPU基盤。**製品GUIでの選択・自動ダウンロードはまだ利用できない**。旧installed Alpha、旧配布、普段のDB/設定/モデルは変更していない。

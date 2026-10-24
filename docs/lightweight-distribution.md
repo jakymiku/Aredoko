@@ -1,5 +1,8 @@
 # 通常起動とAI追加環境を分ける配布計画
 
+> **2026-10-25 現在**：基本ZIP、背景検査/配置保存GUI、EmbeddingGemma 2/WDの実取得が進んだ。現行の次作業は[current-handoff](current-handoff.md)、モデルは[AI取得](ai-acquisition.md)、runtime配布の通知不足は[収集結果](runtime-notice-inventory.md)。以下のLD4/LD5 TODOは当時の計画で、再実装指示ではない。runtimeの実公開物/完全NOTICE/clean Windowsは依然未完。
+
+
 > **最新2026-10-22**：[LD4a既存folderの背景検査job](ai-setup-jobs.md)。非同期開始/実hash進捗/中止/atomic保存/終了cleanupまで。LD4はPARTIAL、次trusted catalogとtransactional取得の生成HTTP検証。basic03は前段snapshotのまま、GUI/download/clean Windowsは未受入。
 
 2026-10-21。ユーザーが「ZIP解凍→本体を開く、AIを使う場合だけ画面から追加」「初回/更新時の完全検査、普段は軽い確認」の方針で開発を明示承認した。新しいPortableの通常起動に関して、以前の「毎回全SHA必須」を本書で置き換える。原本/DB/source guardの緩和や既存配布の書換えは許可しない。

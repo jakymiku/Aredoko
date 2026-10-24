@@ -34,21 +34,30 @@ def source_abi(source):
     return validate_abi(abi),stem
 
 
-def prepare(source,output,*,check=False):
+def prepare(source,output,*,check=False,notices=None):
     source=plain_path(source,directory=True);output=Path(os.path.abspath(output))
     validate_output(output)
     if output.is_relative_to(source) or source.is_relative_to(output):raise ValueError('AI pack output overlaps input')
     if (source/MARKER).exists():raise ValueError('Select a prepared runtime, not an existing sealed pack')
     abi,stem=source_abi(source)
+    if notices is not None:
+        from collect_ai_runtime_notices import validate_for_source
+        notices=plain_path(notices,directory=True)
+        if output.is_relative_to(notices) or notices.is_relative_to(output):raise ValueError('Notice output overlaps pack')
+        if (source/'THIRD_PARTY_LICENSES').exists():raise ValueError('Source already contains a notice bundle')
+        validate_for_source(notices,source)
     if check:return {'abi':abi,'prepared':False,'inference_verified':False,'downloads':False}
     storage_parent(output);copy_payload(source,output)
+    if notices is not None:
+        validate_for_source(notices,output)
+        copy_payload(notices,output/'THIRD_PARTY_LICENSES')
     # Isolate packages from the source application's old backend/tools paths.
     (output/(stem+'._pth')).write_text(stem+'.zip\n.\nDLLs\nLib/site-packages\nimport site\n',encoding='utf-8')
     entries=[{'path':p.relative_to(output).as_posix(),'bytes':p.stat().st_size,'sha256':digest(p)} for p in files(output)]
     manifest={'format':FORMAT,'abi':abi,'entries':entries,'files_count':len(entries),'total_bytes':sum(e['bytes'] for e in entries)}
     with (output/MARKER).open('x',encoding='utf-8') as stream:json.dump(manifest,stream,ensure_ascii=False,indent=2)
     info=inspect_runtime(output,verify=True)
-    return {**info,'prepared':True,'inference_verified':False,'downloads':False}
+    return {**info,'prepared':True,'inference_verified':False,'downloads':False,'notices_included':notices is not None}
 
 
 def main():
@@ -56,7 +65,8 @@ def main():
     parser.add_argument('--source',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--check',action='store_true')
+    parser.add_argument('--notices',type=Path,help='Complete, source-bound distribution notice inventory')
     args=parser.parse_args()
-    print(json.dumps(prepare(args.source,args.output,check=args.check),ensure_ascii=True))
+    print(json.dumps(prepare(args.source,args.output,check=args.check,notices=args.notices),ensure_ascii=True))
 
 if __name__=='__main__':main()
