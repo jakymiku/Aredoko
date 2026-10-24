@@ -1,39 +1,35 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-24）
 
-## 現在地
-- `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。base c30bc34へff済み、元の未コミットP5案4ファイルは退避してから継続した。製品コード以外の変更を巻き戻していない。
-- 読む順：本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧大量記録は[履歴索引](history-index.md)から必要時のみ。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らない方針を維持。
-- P5 active/pending保全を実装。[形式2・正確な契約・関連テスト・次の1件](backup-active-selection.md)を参照。起動時のAI/WD定義と保存済み次回選択を分離し、旧version1も復元できる。通常profile枠を減らさず、元設定を上書きしない。
-- 形式2の基盤`02f087b`、ready後の一時指定解除`f1bb3cb`をPush済み。一時指定解除はCPU実装済み：初回は保存active、ready後に一時指定解除、次回はpending。元の明示overrideは保持。設定busy/atomic失敗時はcommitted証拠で後処理を再試行する。
-- 今回の関連確認：一時指定19、新規owned2、破損記録1、settings/switch40、lifecycle/startup26は各PASS（別実行、合算しない）。C#/GUI/GPU/実モデル/通常DBは未変更。途中失敗や旧検証は技術正本へ。現行作業commitはこのファイルのgit logで確認する。
+## 現在地と読む順
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **be60039**。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- 本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧記録は[履歴索引](history-index.md)。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らず簡潔なUIを維持。
+- 開始時の未コミットP5案4ファイルはignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch`/starting-state.jsonへ退避して継続。c30bc34へff後に仕上げた。途中のリモート文書更新ed81d33/07c3f44も4a96d81で統合し、他作業を上書きしていない。main merge/reset/stash/force pushなし。
 
-- P6 `2449c62`：モデルpack用の固定profile/layout validatorとdraft catalog生成を追加。生成9 PASS、既存取得/job/runtime builder25 PASS（別実行）。取得→検証→公開→明示models-root選択が生成HTTPで通る。製品catalogは空のままで実取得を有効化していない。正本は[AI取得](ai-acquisition.md)。
+## 今回完了した実装
+- **P5 02f087b / f1bb3cb**：[active/pending保全・形式2](backup-active-selection.md)。AI/WDの実際の起動定義と保存済み次回選択を別保存、旧version1も復元。通常起動由来は復元初回active→ready後に一時指定解除→次回pending。明示overrideは保持。設定busy/atomic失敗はcommitted証拠から後処理し、誤rollback・通常profile枠の消費・元設定上書きを防ぐ。
+- **P6 2449c62 / f508b82 / be60039**：[モデル配置検証・catalog builder・固定registry・bounded inline metadata](ai-acquisition.md)。source所有のfingerprint/profile SHAとレイアウトを結び、壊れた任意取得設定で通常起動を止めない。小さいprovenance/NOTICEはv2に同封可能、weightsは従来通り固定HTTPS/サイズ/SHA。製品registryは **0件**のまま。
+- **P6 2973de7 / 82a6bda**：公開rootを配置画面へ渡し、明示ボタンで既存背景検査/次回設定保存。開くだけでは保存せず、runtimeとmodel親rootを区別する。正常終了/取消/未検証rootの扱いは維持。
+- **UI/起動 d02e2e8 / 94c9816 / 82a6bda**：空タグ時の末尾区切り、idle時の空progressバーを整理。bootstrap/WinUIログをPythonと同じ明示LOCALAPPDATAへ統一。bootstrapは相対・drive-relative保存先を拒否する純粋self-testで確認。
 
-- P6 `2973de7`：取得完了rootを配置画面へ引き継ぎ、明示ボタンで既存の背景検査/保存を開始できるようにした。Core985 PASS、Portable0 errors/既知WUI1001×3。GUI未実行/cap変更なし。
-
-- P6固定registry境界をproduction/配布へ接続。source登録fingerprintとmodel定義SHAを検証し、壊れた任意取得設定で通常起動を止めない。実catalog登録は0のまま。生成registry6/所有backend1/staging1はPASS、途中fixture ERRORは正本で区別。
-
-- 新候補02の同梱CPU基本11、復元契約8、日本語/空白再配置11は各PASS。nativeで見つけた末尾の空区切りとidle progress表示をsourceで整理し、Portable build0 errors/既知3 warnings。微修正はnative未再確認。
-
-- bootstrapのログ先をPythonと同じ明示LOCALAPPDATAへ統一。相対/drive-relative拒否を含む純粋self-testとWindows標準compilerがexit0。新候補02の封印ファイルは未変更、関連ログはstartup-data-root-20261024-01。
-
-- P6公開root→明示適用をLight nativeで11項目確認、4 PNG全目視、exit0。検査用Python実行0/旧通常DBなし。WinUI AppLogも明示LOCALAPPDATAへ統一し、専用ログで実証。正確なsource/diff/実候補SHAと限界は[AI取得](ai-acquisition.md)。
-
-- P6 v2カタログでアプリ所有の小さいprovenance/NOTICEを同封可能にした。生成7/関連41/最終URL拒否1は各PASS。公式WDのtree/HEADだけ確認（weights/deps取得0、CSV SHA再検証なし）。正本[AI取得](ai-acquisition.md)。
+## 実証済みと実候補（範囲を混同しない）
+- P5関連の最終79、settings/API22、restore pipeline40、一時解除19、新owned2、破損記録1、settings/switch40、lifecycle/startup26は各PASS。別実行を合算せず、途中FAIL/fixture修正は技術正本に保存。
+- P6モデル9、既存取得/job/runtime builder25、registry6/所有backend1/staging1、inline7/関連41/URL拒否1は各PASS。Core **985 assertions PASS**、Portable build0 errors/既知WUI1001×3、publish既知SDK IL2104×2。毎回全回帰は実行していない。
+- [基本ZIP候補02](portable-refresh-20261024.md)：**source f508b82**、ZIP343,869,819 bytes/展開657,657,654 bytes・756 files。通常入口 `C:/AI/Aredoko/dist/portable-basic-20261024-02/Aredoko/Aredoko.exe`。SHA等は正本参照。後続のUI/log/inline修正は未収録。旧01/Alpha/shortcutは未更新。
+- ZIP02同梱Pythonの基本11、復元契約8、日本語/空白再配置11は各PASS。ユーザーの当該追加1試行で通常EXE→専用生成DB→AI設定→終了→予定内1回再起動を確認、4 PNG目視。初回ExitCode=nullはGet-Process観測handleの欠測（誤FAIL、raw保全）で、初回終了code自体は未確認。予定内再起動はapp/bootstrapともexit0。DB integrity/元PNG SHA・mtime/設定保全と所有PID終了を確認。
+- **新機能の別実機確認**：取得済みruntime→明示適用をLight nativeで11項目確認、4 PNG全目視、exit0。検査用Python実行0、選択後の再起動なし。idle progress非表示/空区切り修正も同候補に反映。正確なfrontend/source/diff/test-script SHAと限界は[AI取得](ai-acquisition.md)。専用ログが明示LOCALAPPDATA内にあることも実証。
+- WD公式固定tree/HEADのみを読み取り、既存profileの容量・ONNX LFS SHA一致を確認。CSV SHA256は公式treeにないため再検証していない。モデル本体/依存の取得・実モデル/GPU推論・通常DB操作は今回0。
 
 ## 次の実装1件
-**P6：複数モデルの配置を壊さない選択契約を実装する。** runtime選択とモデル取得validator/inline sidecarは揃った。現在はembedding/WD等が共通models_rootを使うため、単一モデルpackのrootへ切り替えるだけでは他モデルが見えなくなる。既存common root互換を維持し、役割/モデルごとの取得済みrootを明示して次回起動へ保存・解決する最小単位を設計/実装する。profile/namespace/バックアップ・復元のactive/pendingを壊さない。公開先/NOTICEを推測して製品catalogを有効化しない。
+**P6：複数モデルの配置を壊さない選択契約。** 現在embedding/WD等は共通 `models_root` を使う。単一モデルpackのrootへ切り替えるだけでは他モデルが見えなくなるため、実catalog有効化の前に次を最小単位で進める。
+1. 既存common root互換を残し、役割/モデル別の取得済みrootを明示・次回起動へ保存/解決する。現在起動中のmodel/workerを切り替えない。
+2. 登録catalogのprofile役割とUIの保存先を結び、embedding取得でWD設定を消さず、WD取得でembedding設定を消さない。manual共通root/標準へ戻す時の優先順位も明示する。
+3. profile/namespaceとP5のactive/pending・復元整合を保全し、生成fixture/API/関連Core→必要なnativeだけ確認する。通常はSolで可。既存の選択/復元安全性に収まらない設計変更が必要な場合だけAstraレビュー。
 
-## 継続する残件と制約
-- P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。
-- [P6 AI取得](ai-acquisition.md)の製品catalogは空。本物の自動取得・実推論・clean Windowsは未受入。既存配置/取得のCore/UIと生成HTTP基盤はある。
-- [新基本ZIP候補02](portable-refresh-20261024.md)は344MB/展開658MB、sourcef508b82で今回の形式2/P6を含む。専用DBの通常起動/設定/1回再起動を追加許可1/1で確認（初回終了code欠測の誤FAILはraw保全、再起動時app/bootstrap0）。4 PNG目視済み。旧01/Alpha/shortcut未更新。通常DB/実AI/clean Windowsは未受入。後続UI微修正はZIP未収録。
-- 今回の基本ZIP許可範囲1/1（初回＋予定内再起動の2起動）は終了。旧環境2/2、復元3/3、取得1/2、P3等は当時の生ログとして保持するが、新規機能/有意味な修正後のローカル検証を止める永久禁止ではない。生成fixture・独立DB/設定・既存モデルの通常GUI/GPU検証は[最新方針](local-test-policy.md)に従う。私物scan・原本変更・通常DB操作・新モデル/依存取得は無断実行しない。
-- Actions起動0、main merge/新branch/新PR/force pushなし。3本のworkflowはmanual-only。**シャットダウンしない**。前回同様、利用枠終盤には安全な単位でcommit/push/本書更新を完了する。
-- 追加のGUI/GPUテスト方針整理07c3f44/ed81d33を上書きせず統合。文書/legacy整理はc30bc34で同期済み。[main/旧コード整理方針](repository-maintenance.md)、[旧依存監査](legacy-dependency-audit-20261024.md)、[文書案内](README.md)を保全。旧Catalog/server等は製品依存のため削除しない。
+その後、レビュー済み実artifact・完全なNOTICE・runtime pack公開先を確定してsource registry登録へ。WDの公開元とmanaged sidecar方式は確認済みだが、推測URL/架空hash/未監査NOTICEで有効化しない。新モデル/依存の実取得は対象/容量/取得元を示して別許可。
 
-## 現行のGUI・GPUテストルール
-- [ローカルテストと失敗診断の正本](local-test-policy.md)：関連するGUI/GPUの通常テストは許可不要。旧2/2・3/3等の記録は履歴であり、同じ失敗を別名で繰り返す理由にも新タスクを永久に止める理由にもならない。2回ほどの有意味な修正後も失敗が続く場合はログと再現条件を絞って原因調査、修正後に対象を再テスト。なお未解決の安全上重大なFAILは受入/配布不可。
-
-## 記録のルール
-本書だけを短く更新し、AGENTSや互換handoffへ過去全文を追記しない。詳細証拠は対応する技術文書へ。引き継ぎ時に完了commit・利用可能になった機能・実証/未検証・次の1件を明示し、既存Draft PRとremote一致を確認する。
+## 未完・運用
+- P0/P1B実機/P2/P3性能・完成形UI/P4/P5復元/P6配布/P7総合受入のPARTIALは維持。[完成台帳](completion-roadmap.md)と[実音声等の内容索引](media-content-plan.md)の未完も保持。新形式2のnative復元一連、全音声/音楽、実catalog取得/推論、clean Windowsは未受入。
+- 最新[ローカルGUI/GPUテスト方針](local-test-policy.md)に従う。生成fixture/独立DB・設定/既存モデルの通常関連検証は事前許可不要。旧環境2/2、復元3/3、取得1/2、P3等は履歴であり永久禁止ではない。同じ失敗の無変更反復は止め、診断→有意味な修正→対象確認。今回の基本ZIP限定1試行は終了済みで、新機能確認と混同・再命名しない。raw失敗を成功へ読み替えない。
+- 私物scan/原本変更/通常DB/旧Alpha/shortcut/新モデル・依存取得/OS・driver変更/外部送信は無断実行しない。Actions0、既存Draft PR継続、main merge/新branch/新PR/force pushなし。**シャットダウンしない**。
+- [文書/legacy整理](repository-maintenance.md)、[旧依存監査](legacy-dependency-audit-20261024.md)、[文書案内](README.md)を保全。旧Catalog/server等は製品依存のため削除しない。
+- 再開時はfetch/status/HEAD/PR確認後、上記「次の1件」へ。本書だけを短く更新し、AGENTS/互換handoffへ大量追記しない。詳細証拠は対応する技術文書、履歴はGit/履歴索引へ残す。

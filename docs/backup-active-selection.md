@@ -30,4 +30,4 @@
 
 生成CPU確認：一時指定/cleanup関連19 PASS/8.174s、所有launcher引数と実所有backend HTTPの新規2 PASS/1.072s、破損sentinel形状1 PASS/0.392s。既存settings/switch40 PASS/11.881s、release lifecycle/portable startup26 PASS/47.129s。各実行は別の確認であり合算しない。実所有backendは存在しないAI interpreter/modelsを指定して推論しない。busy lease、設定replace失敗、sentinel削除失敗はいずれもcommitted証拠を保持し、再試行しても二重履歴や誤rollbackをしない。
 
-P5実機受入・clean Windows・実モデルは未完。次はP6の製品モデル取得に必要な固定レイアウト検証を整え、生成データで取得から既存配置選択への接続を進める。配布元/NOTICE/実artifact未確定のcatalogを有効化しない。
+P5実機受入・clean Windows・実モデルは未完。その後のP6モデルvalidator/registry/取得済みroot接続の実装と実機結果は[AI取得](ai-acquisition.md)へ進んだ。再開時の次の1件は[current-handoff](current-handoff.md)を優先する。配布元/NOTICE/実artifact未確定のcatalogを有効化しない。

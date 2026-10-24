@@ -1,5 +1,8 @@
 # LD4b：任意AI環境の取得基盤（2026-10-24）
 
+
+旧2/2・3/3等は当時の履歴。新機能/有意味な修正の通常検証は[現行テスト方針](local-test-policy.md)に従う。現在の次の1件は[current-handoff](current-handoff.md)を優先する。
+
 ## 2026-10-24 bounded app-owned metadata (latest)
 
 Acquisition catalog version2 allows an entry to carry `inline_utf8` instead of `url`. Its exact UTF-8 bytes/size/SHA and text are covered by the catalog fingerprint; no URL/body ambiguity or executable/weights role is allowed. Only configuration/inventory JSON/TXT and license/NOTICE text:64KiB per entry,256KiB total. The ordinary partial-file/hash/inventory/validator/cancellation/publication checks are shared with remote files. Sidecars are not executed or interpreted as a new catalog. Progress includes available payload bytes; bandwidth accounting still covers actual network bytes only. Version1 remains supported and rejects inline fields; older applications reject version2.
@@ -112,7 +115,7 @@ productionはcatalog registry空で開始。HTTP入力や取得した文書をca
 
 生成HTTPのみ。取得11 PASS/6.592s、所有job/HTTP5 PASS/3.498s（先行8/10件の実行は加算しない）。切断/Range再開/Range無視/破損/中止/全ファイル速度cap/容量不足/未掲載file/パス衝突、公開直前cancel/close、認証/Origin/重複JSON/未知catalog・URL注入を確認。証拠はツール出力とtracked tests。新規モデル・pip・環境/ドライバー操作なし。
 
-## 次の実装
+## 当初の残件（履歴：現在の再開位置はcurrent-handoff）
 
 1. 配布元・固定artifact・license/NOTICEを確認した製品catalogを作成。runtime packの公開先は未用意、推測URL/架空ハッシュで有効化しない。
 2. Core/既存「AI検索の準備」へcatalog一覧・容量/ライセンス確認・実進捗・中止・再開を接続。既存配置選択LD4aも同じ入口へ。公開versionを明示選択して次回起動設定へ保存する。
