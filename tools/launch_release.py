@@ -32,7 +32,9 @@ RUNTIME_FIELDS = {'ai_runtime_root', 'ai_runtime_manifest_sha256'}
 
 PATH_OPTIONS = {'database': '--db', 'ai_python': '--ai-python', 'models_root': '--models-root',
                 'ai_profile': '--ai-profile', 'ai_settings': '--ai-settings',
-                'ai_profiles_dir': '--ai-profiles-dir', 'tagger_profile': '--tagger-profile'}
+                'ai_profiles_dir': '--ai-profiles-dir', 'tagger_profile': '--tagger-profile',
+                'embedding_models_root':'--embedding-models-root','tagger_models_root':'--tagger-models-root',
+                'intent_models_root':'--intent-models-root'}
 
 
 class AppSessionError(RuntimeError):

@@ -9,6 +9,12 @@ from storage_lease import plain_path, storage_parent, storage_lease
 
 MAX_SETTINGS = 16384
 UNSET = object()
+MODEL_ROOT_FIELDS = {'embedding':'embedding_models_root','tagger':'tagger_models_root','intent':'intent_models_root'}
+
+
+def model_root(settings, role, default=None):
+    if role not in MODEL_ROOT_FIELDS:raise ValueError('Unknown model role')
+    return settings.get(MODEL_ROOT_FIELDS[role],settings.get('models_root',default))
 
 
 def read_preferences(path):
@@ -17,7 +23,7 @@ def read_preferences(path):
     if path.stat().st_size>MAX_SETTINGS:raise ValueError('Launch preferences exceed limit')
     value=json.loads(path.read_text(encoding='utf-8-sig'),object_pairs_hook=object_pairs)
     if not isinstance(value,dict):raise ValueError('Invalid launch preferences')
-    for name in ('ai_python','ai_runtime_root','models_root'):
+    for name in ('ai_python','ai_runtime_root','models_root',*MODEL_ROOT_FIELDS.values()):
         if name in value and (not isinstance(value[name],str) or len(value[name])>4096
                 or not Path(value[name]).is_absolute() or any(ord(c)<32 for c in value[name])):
             raise ValueError('Invalid AI location')
@@ -65,12 +71,13 @@ class AIRuntimePreferences:
             selected=data.get('ai_python',self.active_python)
             runtime={'state':legacy_runtime_state(selected),'ready':False,
                      'verification':'not_checked','model_loaded':False,'driver_tested':False}
-        models=data.get('models_root',str(self.path.parent/'models'))
+        common=data.get('models_root',str(self.path.parent/'models'))
+        models=model_root(data,'embedding',common)
         model=model_state(self.profile,self.repo,models)
         runtime_changed=selected is not None and self.active_python is not None and os.path.normcase(str(selected))!=os.path.normcase(self.active_python)
         models_changed=self.active_models_root is not None and models is not None and os.path.normcase(str(models))!=os.path.normcase(self.active_models_root)
-        selection_changed=any(data.get(k)!=self.started.get(k) for k in ('ai_python','ai_runtime_root','ai_runtime_manifest_sha256','models_root'))
-        return {'runtime':runtime,'model':model,'runtime_root':data.get('ai_runtime_root'),'models_root':models,'restart_required':selection_changed or runtime_changed or models_changed,
+        selection_changed=any(data.get(k)!=self.started.get(k) for k in ('ai_python','ai_runtime_root','ai_runtime_manifest_sha256','models_root',*MODEL_ROOT_FIELDS.values()))
+        return {'runtime':runtime,'model':model,'runtime_root':data.get('ai_runtime_root'),'models_root':models,'model_roots':{role:model_root(data,role,common) for role in MODEL_ROOT_FIELDS},'restart_required':selection_changed or runtime_changed or models_changed,
                 'selection_service_available':True,'selection_api_supported':True,'downloads_supported':False,
                 'inference_verified':False,'message':'設定の変更は次回起動時に反映します。実行環境とモデルは別々に確認します。'}
 
@@ -94,6 +101,9 @@ class AIRuntimePreferences:
                     value.pop('ai_python',None)
                     value.update(ai_runtime_root=info['root'],ai_runtime_manifest_sha256=info['manifest_sha256'])
             if models_root is not UNSET:
+                # The legacy picker selects a shared folder for all roles. A
+                # deliberate common selection/reset replaces per-role choices.
+                for field in MODEL_ROOT_FIELDS.values():value.pop(field,None)
                 if models_root is None:value.pop('models_root',None)
                 else:value['models_root']=models_root
             content=json.dumps(value,ensure_ascii=False,indent=2).encode('utf-8')

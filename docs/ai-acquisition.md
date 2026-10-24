@@ -3,6 +3,16 @@
 
 旧2/2・3/3等は当時の履歴。新機能/有意味な修正の通常検証は[現行テスト方針](local-test-policy.md)に従う。現在の次の1件は[current-handoff](current-handoff.md)を優先する。
 
+## 2026-10-24 role-root backend contract (latest)
+
+Source backend/owned launcher now accept optional absolute `embedding_models_root`, `tagger_models_root`, `intent_models_root` (matching hyphenated CLI flags). Each role uses its specific root before shared `models_root`, retaining shared/repository fallback when unspecified. Embedding settings/worker, WD and optional intent factories receive their own roots; model profile and vector namespace identity are unchanged. No file movement/copy, model execution or hot swap is added.
+
+Preferences validate these paths and report pending effective `model_roots` plus the effective embedding `models_root`. Any role change requires restart. The existing shared-folder picker/select/reset is deliberately a common selection: on successful atomic save it clears all per-role overrides. Cancellation preserves every old field. Explicit role-specific CLI choices remain more specific than a generic fallback root. P5 ready cleanup preserves these machine-local preferences without incorporating foreign runtime paths from a backup.
+
+Generated role/launcher/dispatcher/validation/cancel/P5-preservation9 PASS/0.887s; existing setup jobs/HTTP plus normal real owned-backend lifecycle16 PASS/5.141s; existing runtime preference11 PASS/1.238s separately. Dispatcher paths are checked with non-executing factory spies; normal lifecycle is a real missing-AI backend. No GUI/GPU/model inference. Evidence `role-roots-*.log` under the current active-selection evidence directory.
+
+This is the backend/advanced launch-settings unit, **not finished model acquisition selection UI**. Next: expose the registry profile role to Core/catalog summaries, save one selected role through the owned setup job without clearing the others, and show that role's current/pending location in native setup. The common reset behavior above stays explicit. Basic ZIP02/sourcef508b82 does not contain these fields: do not add them to its settings or treat this as installed Alpha support. Actual product catalog stays empty.
+
 ## 2026-10-24 bounded app-owned metadata (latest)
 
 Acquisition catalog version2 allows an entry to carry `inline_utf8` instead of `url`. Its exact UTF-8 bytes/size/SHA and text are covered by the catalog fingerprint; no URL/body ambiguity or executable/weights role is allowed. Only configuration/inventory JSON/TXT and license/NOTICE text:64KiB per entry,256KiB total. The ordinary partial-file/hash/inventory/validator/cancellation/publication checks are shared with remote files. Sidecars are not executed or interpreted as a new catalog. Progress includes available payload bytes; bandwidth accounting still covers actual network bytes only. Version1 remains supported and rejects inline fields; older applications reject version2.

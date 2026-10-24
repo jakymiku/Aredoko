@@ -38,7 +38,7 @@ from page_chunks import plan_chunked, start_chunked, resume_chunked
 from wd_tagger import create_tagger
 from storage_lease import storage_lease,storage_parent
 from runtime_paths import worker_python, bind_runtime
-from ai_runtime_preferences import AIRuntimePreferences, read_preferences
+from ai_runtime_preferences import AIRuntimePreferences, read_preferences, model_root, MODEL_ROOT_FIELDS
 from ai_setup_jobs import AISetupJobs, SetupBusy
 from backup_jobs import BackupJobs,BackupBusy
 from ai_download_jobs import AIDownloadJobs,DownloadBusy
@@ -875,6 +875,7 @@ def main():
     parser.add_argument('--ai-profile',type=Path)
     parser.add_argument('--ai-python',type=Path,help='Explicit local AI worker interpreter; no PATH fallback or download')
     parser.add_argument('--models-root',type=Path,help='Explicit directory containing local model subdirectories')
+    for field in MODEL_ROOT_FIELDS.values():parser.add_argument('--'+field.replace('_','-'),type=Path,help='Restart-only explicit model folder for this role')
     parser.add_argument('--instance-id',help='Launcher-owned session identifier')
     parser.add_argument('--restore-session-dir',type=Path,help='Owned launcher restore handoff directory')
     parser.add_argument('--exit-on-stdin-close',action='store_true',help='Gracefully stop when the owning launcher closes its pipe')
@@ -892,12 +893,14 @@ def main():
         parser.error('--instance-id must be 32 lowercase hex characters')
     if args.restore_session_dir is not None and (not args.exit_on_stdin_close or args.instance_id is None):parser.error('Restore handoff requires an owned instance')
     if args.ai_profile_transient and args.ai_profile is None:parser.error('Transient AI selection requires --ai-profile')
+    if any(getattr(args,field) is not None and not getattr(args,field).is_absolute() for field in MODEL_ROOT_FIELDS.values()):parser.error('Role-specific model roots must be absolute')
     storage_parent(args.db)
     with storage_lease(args.db):
         _serve(args)
 
 def _serve(args):
-    runtime={'ai_python':args.ai_python,'models_root':args.models_root}
+    overrides={field:getattr(args,field) for field in MODEL_ROOT_FIELDS.values() if getattr(args,field,None) is not None}
+    runtime={'ai_python':args.ai_python,'models_root':model_root(overrides,'embedding',args.models_root)}
     preferences=getattr(args,'runtime_preferences',None)
     if preferences is not None:
         try:
@@ -919,9 +922,9 @@ def _serve(args):
         if isinstance(ai,AISearch):
             try: ai.configure(**profiles.resource())
             except (ValueError,OSError,json.JSONDecodeError): ai.configure(**RESOURCE_DEFAULT)
-        intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**runtime)
+        intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**{**runtime,'models_root':model_root(overrides,'intent',args.models_root)})
         resources.callback(intent.close)
-        tagger=create_tagger(ai,args.tagger_profile,**runtime);resources.callback(tagger.close)
+        tagger=create_tagger(ai,args.tagger_profile,**{**runtime,'models_root':model_root(overrides,'tagger',args.models_root)});resources.callback(tagger.close)
         try:
             acquisition_specs=load_trusted_specs(Path(__file__).resolve().parents[1])
         except (OSError,ValueError,UnicodeError) as error:
