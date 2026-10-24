@@ -96,3 +96,40 @@ class PersistentRecoveryTests(unittest.TestCase):
             db.rollback()
         again = self.reopen()
         self.assertEqual(again.get(self.key), (self.png, None))
+
+    def test_hits_batch_disk_writes_and_flush_on_graceful_close(self):
+        disk = self.reopen()
+        disk._open()
+        trace = []
+        disk.db.set_trace_callback(trace.append)
+        for _ in range(10):
+            self.assertEqual(disk.get(self.key), (self.png, None))
+        self.assertFalse(any(sql.startswith(('UPDATE', 'COMMIT', 'BEGIN')) for sql in trace))
+        tick = disk.tick
+        disk.close()
+        with closing(sqlite3.connect(self.path)) as db:
+            self.assertEqual(db.execute('SELECT touched FROM thumbs').fetchone()[0], tick)
+        self.assertEqual(sum(sql.startswith('COMMIT') for sql in trace), 1)
+
+    def test_buffered_hit_is_used_by_eviction(self):
+        disk = self.reopen()
+        other = (*self.key[:-1], 256)
+        last = (*self.key[:-1], 512)
+        disk.put(other, (self.png, None))
+        self.assertEqual(disk.get(self.key), (self.png, None))
+        with patch('thumbnail_disk.MAX_ENTRIES', 2):
+            disk.put(last, (self.png, None))
+        self.assertIsNone(disk.get(other))
+        self.assertEqual(disk.get(self.key), (self.png, None))
+        self.assertEqual(disk.get(last), (self.png, None))
+
+    def test_many_hits_bound_pending_writes_even_for_one_repeated_key(self):
+        disk = self.reopen()
+        disk._open()
+        trace = []
+        disk.db.set_trace_callback(trace.append)
+        for _ in range(128):
+            self.assertEqual(disk.get(self.key), (self.png, None))
+        self.assertEqual(sum(sql.startswith('COMMIT') for sql in trace), 2)
+        with closing(sqlite3.connect(self.path)) as db:
+            self.assertEqual(db.execute('SELECT touched FROM thumbs').fetchone()[0], disk.tick)

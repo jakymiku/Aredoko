@@ -30,6 +30,7 @@ TABLE_COLUMNS = (
     ('touched', 'INTEGER', 1, None, 0),
 )
 MAX_TICK = 2**63 - 1
+TOUCH_BATCH = 64
 
 
 class ThumbnailDisk:
@@ -42,6 +43,8 @@ class ThumbnailDisk:
         self.db = None
         self.disabled = False
         self.tick = 0
+        self._touches = {}
+        self._touch_count = 0
         self._lease = None
         if path is not None:
             try:
@@ -151,16 +154,27 @@ class ThumbnailDisk:
                 else:
                     self._open_persistent()
             except (StoragePathError, StorageBusyError, sqlite3.Error, OSError, ValueError):
-                self.close()
+                self.close(flush=False)
         return self.db
+
+    def _flush_touches(self, db):
+        if not self._touches:
+            return
+        db.executemany('UPDATE thumbs SET touched=? WHERE key=?',
+                       ((tick, key) for key, tick in self._touches.items()))
+        db.commit()
+        self._touches.clear()
+        self._touch_count = 0
 
     def _next_tick(self, db):
         if self.tick >= MAX_TICK:
+            self._flush_touches(db)
             # At most MAX_ENTRIES rows survive opening/eviction. Preserve their
             # relative LRU order while making room within SQLite's signed int.
             rows = db.execute('SELECT key FROM thumbs ORDER BY touched,key').fetchall()
             db.executemany('UPDATE thumbs SET touched=? WHERE key=?',
                            ((i, row[0]) for i, row in enumerate(rows, 1)))
+            db.commit()
             self.tick = len(rows)
         self.tick += 1
         return self.tick
@@ -185,10 +199,13 @@ class ThumbnailDisk:
                 db.execute('DELETE FROM thumbs WHERE key=?', (self.key(key),)); db.commit()
                 return None
             tick = self._next_tick(db)
-            db.execute('UPDATE thumbs SET touched=? WHERE key=?', (tick, self.key(key))); db.commit()
+            self._touches[self.key(key)] = tick
+            self._touch_count += 1
+            if self._touch_count >= TOUCH_BATCH:
+                self._flush_touches(db)
             return data, tag
         except (sqlite3.Error, OSError, TypeError, ValueError, OverflowError):
-            self.close()
+            self.close(flush=False)
             return None
 
     def put(self, key, result):
@@ -201,6 +218,8 @@ class ThumbnailDisk:
         if len(data) > budget:
             return
         try:
+            # Eviction must observe reads which have not reached the disk yet.
+            self._flush_touches(db)
             db.execute('DELETE FROM thumbs WHERE key=?', (self.key(key),))
             size, count = db.execute('SELECT COALESCE(SUM(length(png)),0),COUNT(*) FROM thumbs').fetchone()
             while size + len(data) > budget or count >= MAX_ENTRIES:
@@ -213,16 +232,23 @@ class ThumbnailDisk:
                        (self.key(key), data, hashlib.sha256(data).hexdigest(), tag, tick))
             db.commit()
         except (sqlite3.Error, OSError, TypeError, ValueError, OverflowError):
-            self.close()
+            self.close(flush=False)
 
-    def close(self):
+    def close(self, *, flush=True):
         self.disabled = True
         if self.db is not None:
+            try:
+                if flush and not self.db.in_transaction:
+                    self._flush_touches(self.db)
+            except (sqlite3.Error, OSError, TypeError, ValueError, OverflowError):
+                pass
             try:
                 self.db.close()
             except sqlite3.Error:
                 pass
             self.db = None
+        self._touches.clear()
+        self._touch_count = 0
         if self.directory is not None:
             try:
                 self.directory.cleanup()

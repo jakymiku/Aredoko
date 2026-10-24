@@ -52,3 +52,9 @@ P3 PARTIAL。可視優先scheduler/近傍先読み/画面外取消の一覧接�
 Antigravity到達点 `fc4ff5f` をレビューし、再生成可能なキャッシュの異常を原本閲覧へ波及させない境界を補強した。`touched` の文字列/実数/負数は不正行として除去し、SQLite最大整数は有効行の相対LRU順を保って振り直す。同じ列名でも型・NOT NULL・主キーが異なるschemaは張り直す。初期化直後から接続を所有して例外時に確実に閉じ、leaseを解放する。元catalog・メディアには書き込まない。
 
 生成CPU確認：新規回復4 tests PASS、既存thumbnail28 tests PASS（各別実行）。`data/ai-ui/cache-review-20261024/{before,after,related}.log`。初回の低page上限による接続失敗fixtureは既存pageの再利用により失敗を起こさなかったため、接続後PRAGMA失敗の明示注入へ修正。元のFAILも保持。GUI/GPUは今回未実行、通常破損なしの実機速度改善をこの修正の実績とはしない。
+
+### cacheヒットの書込集約
+
+ディスクhitは画像のdigest・scope/原本版検証を維持し、LRUの順序値だけRAMへ最大64アクセス分集約する。64アクセス、新規派生保存（eviction前）、正常終了で反映する。異常終了で失い得るのは直近最大63アクセスのcache順序だけで、画像・catalog・タグ等の保存には使わない。SQLite traceの生成CPU確認で128回hitのCOMMITが128回から2回へ減ること、10回hitは終了時の1回だけ、flush前のhitもevictionへ反映することを確認。体感速度の測定値ではない。
+
+関連回復7 tests・既存thumbnail28 tests PASS（各別実行）。raw `cache-review-20261024/batching{,-related}.log`。LRU継続の既存testは、即時内部DB値ではなく正常close後の永続値を検査するよう更新。

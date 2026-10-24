@@ -308,11 +308,14 @@ class ThumbnailTests(unittest.TestCase):
         res_a = d2.get(key_a)
         self.assertIsNotNone(res_a)
         self.assertEqual(d2.tick, 3)
-        row_a = d2.db.execute('SELECT touched FROM thumbs WHERE key=?', (d2.key(key_a),)).fetchone()
-        row_b = d2.db.execute('SELECT touched FROM thumbs WHERE key=?', (d2.key(key_b),)).fetchone()
-        self.assertEqual(row_a[0], 3)
-        self.assertEqual(row_b[0], 2)
         d2.close()
+        # Recency is durable on normal shutdown, without a commit per hit.
+        import sqlite3
+        with closing(sqlite3.connect(cache_file)) as db:
+            row_a = db.execute('SELECT touched FROM thumbs WHERE key=?', (d2.key(key_a),)).fetchone()
+            row_b = db.execute('SELECT touched FROM thumbs WHERE key=?', (d2.key(key_b),)).fetchone()
+            self.assertEqual(row_a[0], 3)
+            self.assertEqual(row_b[0], 2)
 
         # Session 3: eviction when max entries is reached evicts oldest (itemB touched=2)
         d3 = ThumbnailDisk(path=cache_file)
