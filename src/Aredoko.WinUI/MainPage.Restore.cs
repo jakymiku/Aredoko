@@ -36,9 +36,12 @@ public sealed partial class MainPage
             void Render(RestoreJob value)
             {
                 if(!open||disposed)return;
-                current=value;
-                if(value.Source is not null)source.Text=value.Source;
-                if(value.WithoutVectors is {} policy)omit.IsChecked=policy;
+                var first=current is null;current=value;
+                // Failed/cancelled jobs retain their own evidence; a new picker
+                // selection and AI policy are the inputs for the next attempt.
+                var syncInputs=value.Active||value.State=="completed"||value.RestartRequested;
+                if(value.Source is not null&&(syncInputs||string.IsNullOrEmpty(source.Text)))source.Text=value.Source;
+                if(value.WithoutVectors is {} policy&&(syncInputs||first))omit.IsChecked=policy;
                 var frozen=busy||value.Active||value.State=="completed"||value.RestartRequested;
                 folder.IsEnabled=zip.IsEnabled=omit.IsEnabled=!frozen;
                 consent.Visibility=value.State=="completed"?Visibility.Visible:Visibility.Collapsed;

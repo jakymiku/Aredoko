@@ -19,8 +19,10 @@ def main():
     parser.add_argument('--release',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--direct-entry',action='store_true',help='Only verify the new direct AI download entry, then one planned restart')
     parser.add_argument('--getting-started',action='store_true',help='Empty library guidance, real generated folder registration, then restart')
+    parser.add_argument('--library-smoke',action='store_true',help='Only confirm new library shortcuts/help and empty history on this candidate, then one restart')
+    parser.add_argument('--restore-rejection',action='store_true',help='Reject two generated invalid backups, keep the current library, then one planned restart')
     args=parser.parse_args();release=args.release.resolve();target=args.output.resolve()
-    if args.getting_started and args.direct_entry:parser.error('Select one acceptance flow')
+    if sum((args.getting_started,args.direct_entry,args.library_smoke,args.restore_rejection))>1:parser.error('Select one acceptance flow')
     if os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui'):
         parser.error('New dedicated Windows output required')
     if not release.is_relative_to(REPO/'dist'):parser.error('Explicit repository candidate required')
@@ -43,7 +45,7 @@ def main():
     env={**os.environ,'LOCALAPPDATA':str(local),'APPDATA':str(local),'WINAPP_UI_WORKFLOW_ID':'aredoko-model-catalog-display-20261025'}
     report={'pass':False,'checks':[],'screenshots':[],'owned_pids':[],'exits':[],
             'authorization':'2026-10-25 human authorization: automatic GUI tests with dedicated generated data',
-            'direct_entry':args.direct_entry,'getting_started':args.getting_started,
+            'direct_entry':args.direct_entry,'getting_started':args.getting_started,'library_smoke':args.library_smoke,'restore_rejection':args.restore_rejection,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
             'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'app_sha256':hashlib.sha256((release/'bin/Aredoko.WinUI.dll').read_bytes()).hexdigest()}
@@ -132,7 +134,28 @@ def main():
             catalogs=request('/api/library/ai/setup/download/catalog')
             check(f'phase {phase}: both production models visible',catalogs['download_supported'] and {x['model_target']['role'] for x in catalogs['catalogs']}=={'embedding','tagger'})
             check(f'phase {phase}: no acquisition started',request('/api/library/ai/setup/download/job')['state']=='idle')
-            if args.getting_started and phase==0:
+            if args.restore_rejection:
+                if phase==0:
+                    from ui_restore_rejection_audit import audit
+                    audit(ui,cli,tree,shot,check,request,pid,hwnd,target)
+                else:
+                    check('restart keeps original catalog item',request('/api/items')['items'][0]['id']==item)
+                    check('rejected backup creates no pending switch',not (data/'restore-pending.json').exists())
+                    shot('restarted-original-library')
+            elif args.library_smoke:
+                if phase==0:
+                    ui('focus','BtnLayout');ui('send-keys','ctrl+end','--via','send-input')
+                    ui('wait-for','TxtPageNumber','--value','1–1 / 1','-t','10000');shot('library-edge')
+                    ui('invoke','BtnSettings');ui('wait-for','BtnGettingStarted','-t','5000');ui('invoke','BtnGettingStarted')
+                    ui('wait-for','GettingStartedGuide','-t','5000')
+                    ui('scroll','GettingStartedGuide','--wheel','-6')
+                    check('updated guide describes global edge shortcuts',any('Ctrl+Home' in n.get('name','') for n in nodes(json.loads(ui('inspect','--depth','22','--json')))))
+                    shot('updated-guide')
+                    ui('invoke','CloseButton');ui('wait-for','GettingStartedGuide','--gone','-t','5000')
+                else:
+                    ui('invoke','NavHistory');ui('wait-for','TxtEmpty','--value','閲覧履歴はありません。作品を開くと、ここに表示されます。','-t','10000');shot('restarted-empty-history')
+                    check('restarted history has contextual guidance',True)
+            elif args.getting_started and phase==0:
                 check('empty first library shows welcome',not tree()['GettingStartedFolders']['isOffscreen']);shot('welcome')
                 ui('invoke','GettingStartedHelp');ui('wait-for','GettingStartedGuide','-t','5000');shot('guide-top')
                 ui('scroll','GettingStartedGuide','--wheel','-6');shot('guide-bottom')

@@ -94,3 +94,9 @@ source **630cc55**。`dist/portable-basic-20261025-04/Aredoko/Aredoko.exe`。ZIP
 **現行試用候補** `dist/portable-basic-20261025-05/Aredoko/Aredoko.exe`。source **0b21b3e**（製品コードc6ba386）、最終WinUI `getting-started-20261025/frontend02`。ZIP **344,023,726 bytes**、展開 **657,940,894 bytes / 768 payload**、SHA `23c5e4aa74cc4aa24e7c81ec484087aa97b94516932e74db411ff95156db05f5`。初回の空ライブラリ案内、設定の使い方・scroll、封印runtimeに基づくWD準備判定、全通信修正を収録。モデル/PyTorchなし・取得カタログ2件。旧候補/Alpha/shortcut未変更。
 
 全payload/ZIP/同梱 `--check` PASS。同梱CPU11項目PASS（専用生成DB/検索/preview/2catalog/EOF exit0/integrity）。新しい案内のGUIは**未確認**。03の直接取得入口GUI、別途のモデル転送・GPU/CPU smokeを05のnative受入とはしない。次回はこの新候補と空/登録済み生成DBで初回案内→使い方→登録/AI準備・既存一覧保全をユーザー許可後に限定確認する。
+
+
+## 2026-10-25 基本ZIP06（途中候補、後続復元修正を未収録）
+source cb89799 /製品b54de9d、frontend06。入口 `dist/portable-basic-20261025-06/Aredoko/Aredoko.exe`、ZIP344,056,202 bytes、展開657,995,371 bytes/770payload、SHA256 `43cc88c63ed5c2e3fdce70259166313c141eceec29f4b68503bb7e79f035e3d5`。実runtime/PyTorch/モデルなし。基本CPU11 PASS。通常EXEで新しい一覧Ctrl+End/更新help・1回の再起動・空履歴案内を11checks、4所有exit0、770payload/設定/生成原本不変、3PNG目視（native02）。先行nativeはkeyなしTextBlock/JSON文字列の未decodeの試験誤りでhelp判定FAIL、2PNG目視・所有2exit0、生ログ保持。
+
+追加の復元失敗caseで再選択バグを発見したため、06を最終候補としない。[復元の最新節](restore-review-20261024.md)を参照。旧Alpha/shortcutは変更していない。

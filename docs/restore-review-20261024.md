@@ -98,3 +98,9 @@ Native directory bundles and ZIPs share existing restore validation; original ba
 ## Switch preflight and serialization
 
 Cutover now validates the recovery receipt using shared manifest rules and checks listed hashes, schema/profile identities and config before moving staging. Tests now use real backup→restore bundles, replacing invalid hand-written fixtures. Existing invalid launch settings are rejected before moving data; an old ai_profile override is removed only when restored AI settings are present (rollback restores it). Apply/commit/rollback/pending checks share an interprocess lease with nested-call support; orphan rollback files block new cutovers. Final switch20 PASS/7.575s; shared backup28 PASS/23.428s after manifest validator extraction. These do not replace owned launcher shutdown/restart integration or native acceptance.
+
+
+## 2026-10-25 失敗後の再選択バグ
+基本ZIP06の通常Aredoko.exe＋生成1PNG/専用DBで、破損した生成ZIPをnative picker→準備→failedへ到達。別の生成ZIPを選び直すと、Renderが前のjob.Sourceを無条件で書き戻し、表示/次回入力が元ZIPに戻る不具合を確認。`data/ai-ui/restore-rejection-20261025/run01` のrejected-0/failure PNGを目視、所有app/bootstrap exit0。元DBの切替や再起動同意はしていない。
+
+修正は入力同期をactive/completed/restart状態へ限定し、初回表示だけは前jobの方針を復元する。failed/cancelled状態で利用者が選んだ次のsourceとAI索引の含め方を、Refresh/Primary直前Renderで上書きしない。準備中・準備完了時の凍結と再起動同意は維持。修正のnative確認は次の専用ZIP07で実施する（この節の初稿時点では未確認）。
