@@ -44,6 +44,18 @@ public sealed record AIDownloadCatalog(string Id,string Name,string Kind,string 
         return result.AsReadOnly();
     }
 }
+public sealed record AIDownloadSelection(string CatalogId,string Kind,string Root)
+{
+    public static AIDownloadSelection? FromPublished(AIDownloadJob? job,IReadOnlyList<AIDownloadCatalog> catalogs)
+    {
+        if(job is not {State:"complete",Published:true,Root:not null,BytesTotal:not null}||
+           job.BytesVerified!=job.BytesTotal||job.BytesReceived!=job.BytesTotal||
+           !Path.IsPathFullyQualified(job.Root)||job.Root.Any(char.IsControl))return null;
+        var source=catalogs.SingleOrDefault(item=>item.Id==job.CatalogId);
+        return source is {Kind:"runtime" or "model"}&&source.Bytes==job.BytesTotal
+            ?new(source.Id,source.Kind,job.Root):null;
+    }
+}
 public sealed record AIDownloadJob(string? Id,string State,string? CatalogId,long BytesReceived,long BytesVerified,long? BytesTotal,bool Published,string? Root,string Message,bool? CancelAccepted)
 {
     public bool Active=>State is "waiting" or "downloading" or "verifying" or "publishing" or "cancelling";

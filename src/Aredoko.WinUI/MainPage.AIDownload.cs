@@ -10,7 +10,7 @@ public sealed partial class MainPage
     private async Task OpenAIDownloadDialogAsync()
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        bool open=true,busy=false,openEnvironment=false;long revision=0;AIDownloadJob? current=null;Task? polling=null;string? operationError=null;
+        bool open=true,busy=false;AIDownloadSelection? applySelection=null;IReadOnlyList<AIDownloadCatalog> knownCatalogs=Array.Empty<AIDownloadCatalog>();long revision=0;AIDownloadJob? current=null;Task? polling=null;string? operationError=null;
         using var lifetime=new CancellationTokenSource();var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(700)};
         try
         {
@@ -43,7 +43,10 @@ public sealed partial class MainPage
                 status.Text=current?.State is null or "idle"?"取得する環境を選んでください。":current.Message;
                 if(current is {State:not "idle"} job)status.Text+=$"\n取得 {job.BytesReceived/1000000d:N1} MB / "+(job.BytesTotal is {} total?$"{total/1000000d:N1} MB":"確認中")+$"　検証済み {job.BytesVerified/1000000d:N1} MB";
                 if(operationError is not null)status.Text+="\n"+operationError;
-                destination.Text=current?.Root??"";destination.Visibility=select.Visibility=current?.Published==true&&current.Root is not null?Visibility.Visible:Visibility.Collapsed;
+                destination.Text=current?.Root??"";destination.Visibility=current?.Published==true&&current.Root is not null?Visibility.Visible:Visibility.Collapsed;
+                var candidate=AIDownloadSelection.FromPublished(current,knownCatalogs);
+                select.Visibility=candidate is not null?Visibility.Visible:Visibility.Collapsed;select.IsEnabled=!busy;
+                select.Content=candidate?.Kind=="runtime"?"この実行環境を設定する":"このモデルの保存先を設定する";
             }
             async Task RefreshAsync(bool catalogs=false)
             {
@@ -55,7 +58,7 @@ public sealed partial class MainPage
                     if(!open||disposed||busy||requested!=revision)return;
                     if(items is not null)
                     {
-                        var selected=Selected()?.Id;choice.Items.Clear();
+                        var selected=Selected()?.Id;knownCatalogs=items;choice.Items.Clear();
                         foreach(var item in items)choice.Items.Add(new ComboBoxItem{Content=item.Name+(item.Kind=="runtime"?"（実行環境）":"（モデル）"),Tag=item});
                         var index=items.ToList().FindIndex(item=>item.Id==(job.Active?job.CatalogId:selected??job.CatalogId));choice.SelectedIndex=index>=0?index:items.Count>0?0:-1;
                         if(items.Count==0)information.Text="アプリから取得できるAI環境は公開準備中です。配置済みの環境は前の画面から指定できます。";
@@ -101,7 +104,11 @@ public sealed partial class MainPage
                 catch(Exception ex){operationError="中止を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
                 finally{busy=false;deferral.Complete();Render();}
             };
-            select.Click+=(_,_)=>{if(busy)return;openEnvironment=true;dialog.Hide();};
+            select.Click+=(_,_)=>
+            {
+                if(busy||AIDownloadSelection.FromPublished(current,knownCatalogs) is not {} candidate)return;
+                applySelection=candidate;dialog.Hide();
+            };
             dialog.Closing+=(_,args)=>{if(busy)args.Cancel=true;};
             timer.Tick+=(_,_)=>{if(!busy&&current?.Active==true&&(polling is null||polling.IsCompleted))polling=RefreshAsync();};
             dialog.Opened+=(_,_)=>{polling=RefreshAsync(true);timer.Start();};
@@ -109,6 +116,6 @@ public sealed partial class MainPage
         }
         catch(Exception ex){Failure(ex);}
         finally{open=false;timer.Stop();lifetime.Cancel();if(polling is not null)await polling;dialogOpen=false;transitions.Release();RestoreNavigation();}
-        if(openEnvironment&&!disposed)await OpenAIEnvironmentDialogAsync();
+        if(applySelection is not null&&!disposed)await OpenAIEnvironmentDialogAsync(applySelection);
     }
 }

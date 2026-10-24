@@ -1,5 +1,11 @@
 # LD4b：任意AI環境の取得基盤（2026-10-24）
 
+## 2026-10-24 published version → explicit setup (latest)
+
+The download dialog now carries the completed version's root and catalog kind into the existing environment dialog. A read-only acquired location and explicit use button avoid copying the path or opening a folder picker again. No setting is saved on navigation; the use button starts the same owned setup validation/save job and applies only at next restart. Runtime packs and parent models folders stay separate. The shortcut is offered only for complete/published/all-bytes-verified jobs whose ID/capacity still match the catalog, independent of the current ComboBox choice. Failed/cancelled/unverified jobs and removed catalogs provide no shortcut. Existing manual pick/reset/cancel paths remain.
+
+Core985 assertions PASS; Portable build0 errors/3 existing WUI1001 warnings,23.82s. WinUI code review: existing standard controls/theme/spacing, named automation targets, lifetime/revision cancellation and background owner job retained; no model loading/CPU hashing on UI thread and no new reflection bindings. Existing Japanese string convention retained; app-wide resource localization is not added. No native GUI invocation/acceptance and no cap consumed. Raw logs: `acquired-selection-core.log` / `acquired-selection-build.log` under the current generated evidence folder.
+
 ## 2026-10-24 model catalog/layout preparation (latest)
 
 `tools/build_ai_model_catalog.py` now prepares a draft from one explicitly selected model directory and an app-owned embedding/WD profile. It preserves the directory below the published models root, so the existing-folder setup can select the returned root without moving/renaming files. It hashes files once, checks source identities/inventory again, requires included license/NOTICE payloads and explicit HTTPS source/hosts/license metadata, and creates a new output only. It never changes source profiles/models/settings, runs a selected interpreter, downloads, or registers a product catalog.
@@ -43,7 +49,7 @@ Acquisition GUI1/2 consumed; do not repeat passing flow just to use remaining at
 
 ## 2026-10-24 typed acquisition client and native download UI (latest)
 
-Source connects AI environment → app acquisition: trusted catalog metadata/capacity/license, explicit consent, default unlimited or optional MB/s cap, separate received/verified bytes, current-job cancel, retry/resume, dialog close/reopen and published root. Selected settings/active model do not change automatically. Published version can be selected explicitly through the existing-folder entry. Native catalog uses direct ComboBoxItem controls, not reflection-bound generic ItemsSource; lifetime/revision/busy protect stale replies and in-flight close. Same published catalog cannot be reacquired from the current UI state.
+Source connects AI environment → app acquisition: trusted catalog metadata/capacity/license, explicit consent, default unlimited or optional MB/s cap, separate received/verified bytes, current-job cancel, retry/resume, dialog close/reopen and published root. Selected settings/active model do not change automatically. Published version can now be passed explicitly to the existing-folder entry as described above. Native catalog uses direct ComboBoxItem controls, not reflection-bound generic ItemsSource; lifetime/revision/busy protect stale replies and in-flight close. Same published catalog cannot be reacquired from the current UI state.
 
 Core acquisition parsing rejects invalid identities/unsafe license links/duplicate catalogs/impossible progress/false completion and preserves cancel acknowledgement; Start sends only consent/catalog ID/rate, never URL/root. Core972 assertions PASS (corrected from output-line count973) (including new acquisition checks); Portable build0errors/known WUI1001x3,16.42s. Final source published to data/ai-ui/ai-acquisition-20261024/frontend01 with existing SDK IL2104x2. GUI not yet run at this checkpoint: user explicitly approved generated loopback-only max2 acquisition attempts; existing environment2/2 and restore3/3 caps remain exhausted.
 

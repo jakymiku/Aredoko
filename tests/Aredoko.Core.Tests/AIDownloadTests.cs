@@ -46,6 +46,16 @@ internal static class AIDownloadTests
         catalog["source_hosts"]=new JsonArray("example.org","example.org");Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"duplicate acquisition source host rejected");
         catalog["source_hosts"]=new JsonArray("https://example.org/private");Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"source display accepts hosts only, never secret URLs");
         catalog["source_hosts"]=new JsonArray("example.org");
+        var runtimeCatalog=new AIDownloadCatalog(digest,"runtime","runtime",new string('c',40),128,"MIT",new Uri("https://example.org/LICENSE"),new[]{"example.org"});
+        var modelCatalog=runtimeCatalog with{Id=new string('d',64),Kind="model",Name="model"};
+        var completed=new AIDownloadJob(id,"complete",digest,128,128,128,true,Path.GetTempPath(),"保存済み",null);
+        var selection=AIDownloadSelection.FromPublished(completed,new[]{modelCatalog,runtimeCatalog});
+        check(selection is {Kind:"runtime"}&&selection.Root==Path.GetTempPath(),"selection uses the completed job catalog, not the current picker choice");
+        check(AIDownloadSelection.FromPublished(completed with{CatalogId=modelCatalog.Id},new[]{runtimeCatalog,modelCatalog})?.Kind=="model","model selection retains its parent models folder");
+        foreach(var invalid in new[]{completed with{State="failed"},completed with{Published=false},completed with{Root=null},completed with{Root="relative"},completed with{BytesVerified=127},completed with{BytesReceived=127},completed with{BytesTotal=null}})
+            check(AIDownloadSelection.FromPublished(invalid,new[]{runtimeCatalog}) is null,"incomplete or unverified job offers no selection shortcut");
+        check(AIDownloadSelection.FromPublished(completed,Array.Empty<AIDownloadCatalog>()) is null,"removed catalog cannot provide a selection shortcut");
+        check(AIDownloadSelection.FromPublished(completed,new[]{runtimeCatalog with{Bytes=129}}) is null,"selection capacity must match the completed catalog");
         catalog["bytes"]=-1;Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"negative catalog size rejected");catalog["bytes"]=128;
         catalogs["catalogs"]=new JsonArray();catalogs["download_supported"]=false;check(AIDownloadCatalog.ParseList(catalogs.ToJsonString()).Count==0,"empty production registry offers no invented download");
     }

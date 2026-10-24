@@ -7,10 +7,12 @@
 - 形式2の基盤`02f087b`、ready後の一時指定解除`f1bb3cb`をPush済み。一時指定解除はCPU実装済み：初回は保存active、ready後に一時指定解除、次回はpending。元の明示overrideは保持。設定busy/atomic失敗時はcommitted証拠で後処理を再試行する。
 - 今回の関連確認：一時指定19、新規owned2、破損記録1、settings/switch40、lifecycle/startup26は各PASS（別実行、合算しない）。C#/GUI/GPU/実モデル/通常DBは未変更。途中失敗や旧検証は技術正本へ。現行作業commitはこのファイルのgit logで確認する。
 
-- P6モデルpack用の固定profile/layout validatorとdraft catalog生成を追加。生成9 PASS、既存取得/job/runtime builder25 PASS（別実行）。取得→検証→公開→明示models-root選択が生成HTTPで通る。製品catalogは空のままで実取得を有効化していない。正本は[AI取得](ai-acquisition.md)。
+- P6 `2449c62`：モデルpack用の固定profile/layout validatorとdraft catalog生成を追加。生成9 PASS、既存取得/job/runtime builder25 PASS（別実行）。取得→検証→公開→明示models-root選択が生成HTTPで通る。製品catalogは空のままで実取得を有効化していない。正本は[AI取得](ai-acquisition.md)。
+
+- 取得完了rootを配置画面へ引き継ぎ、明示ボタンで既存の背景検査/保存を開始できるようにした。Core985 PASS、Portable0 errors/既知WUI1001×3。GUI未実行/cap変更なし。
 
 ## 次の実装1件
-**P6：製品catalogの登録境界と検証済みversion選択の接続を確認する。** runtime/modelのdraft生成基盤は揃った。公開前の配布元・NOTICE・固定artifact reviewと、アプリ所有registryの登録方法を明確にし、未確認catalogは有効化しない。既存取得画面から公開rootの選択を使いやすくする独立部分を進める。外部download/GUI/GPUは事前確認。
+**P6：製品catalogをsource所有の固定registryへ登録する境界を実装する。** runtime/modelのdraft生成と配置画面接続は揃った。固定fingerprint・profile定義をapp側で結び、未確認catalogは有効化しない。実際の公開URL/NOTICE/packは未確定のため登録一覧は空を維持する。外部download/GUI/GPUは事前確認。
 
 ## 継続する残件と制約
 - P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。

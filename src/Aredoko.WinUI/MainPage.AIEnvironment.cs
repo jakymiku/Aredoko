@@ -8,10 +8,10 @@ namespace Aredoko_WinUI;
 
 public sealed partial class MainPage
 {
-    private async Task OpenAIEnvironmentDialogAsync()
+    private async Task OpenAIEnvironmentDialogAsync(AIDownloadSelection? acquired=null)
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        bool open=true,busy=false,openDownload=false;long revision=0;AIEnvironmentJob? current=null;Task? polling=null;string? operationError=null;string? savedJob=null;
+        bool open=true,busy=false,openDownload=false;long revision=0;AIEnvironmentJob? current=null;Task? polling=null;string? operationError=null;string? savedJob=null;string? acquiredJob=null;
         using var lifetime=new CancellationTokenSource();
         var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(700)};
         try
@@ -27,6 +27,10 @@ public sealed partial class MainPage
             foreach(var (control,id) in new (DependencyObject,string)[]{(runtime,"AIEnvironmentRuntime"),(models,"AIEnvironmentModels"),(chooseRuntime,"AIEnvironmentChooseRuntime"),(resetRuntime,"AIEnvironmentResetRuntime"),(chooseModels,"AIEnvironmentChooseModels"),(resetModels,"AIEnvironmentResetModels"),(diagnostic,"AIEnvironmentDiagnostic"),(status,"AIEnvironmentStatus"),(progress,"AIEnvironmentProgress"),(refresh,"AIEnvironmentRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(resetRuntime,"AI実行環境を標準に戻す");AutomationProperties.SetName(resetModels,"モデル保存先を標準に戻す");AutomationProperties.SetName(progress,"AI環境の検査進捗");
             panel.Children.Add(new TextBlock{Text="配置済みのフォルダを選ぶと内容を確認し、次回起動の設定として保存します。検査中も通常の閲覧・文字検索を利用できます。",TextWrapping=TextWrapping.Wrap});
+            var acquiredLocation=new TextBox{Header=acquired?.Kind=="runtime"?"取得した実行環境":"取得したモデルの保存先",Text=acquired?.Root??"",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed};
+            var useAcquired=new Button{Content=acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う",Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed,IsEnabled=false};
+            AutomationProperties.SetAutomationId(acquiredLocation,"AIEnvironmentAcquiredLocation");AutomationProperties.SetAutomationId(useAcquired,"AIEnvironmentUseAcquired");
+            panel.Children.Add(acquiredLocation);panel.Children.Add(useAcquired);
             panel.Children.Add(runtime);
             var runtimeActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};runtimeActions.Children.Add(chooseRuntime);runtimeActions.Children.Add(resetRuntime);panel.Children.Add(runtimeActions);
             panel.Children.Add(new TextBlock{Text="Aredoko用のAI実行環境一式（aredoko-ai-runtime.jsonがあるフォルダ）を指定します。モデルとは別に用意します。",TextWrapping=TextWrapping.Wrap});
@@ -44,6 +48,8 @@ public sealed partial class MainPage
                 if(!open||disposed)return;
                 current=job;var active=busy||job.Active;
                 foreach(var control in new Control[]{chooseRuntime,chooseModels,resetRuntime,resetModels})control.IsEnabled=!active;
+                useAcquired.IsEnabled=!active&&acquired is not null&&!(job.Saved&&job.Id==acquiredJob);
+                useAcquired.Content=job.Saved&&job.Id==acquiredJob?"次回起動に設定済み":acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う";
                 dialog.IsSecondaryButtonEnabled=job.Active&&!busy&&job.State is not ("cancelling" or "saving");
                 progress.IsIndeterminate=job.Active&&job.BytesTotal is not >0;
                 progress.Value=job.BytesTotal is >0?Math.Clamp(100d*job.BytesDone/job.BytesTotal.Value,0,100):job.Saved?100:0;
@@ -73,24 +79,26 @@ public sealed partial class MainPage
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
                 catch(Exception ex){if(open&&!disposed)status.Text="状態を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
             }
-            async Task SelectAsync(bool forRuntime,bool reset)
+            async Task SelectAsync(bool forRuntime,bool reset,string? acquiredPath=null)
             {
                 if(busy||current?.Active==true)return;
                 busy=true;operationError=null;++revision;if(current is not null)Render(current);
                 try
                 {
-                    string? path=null;
-                    if(!reset)
+                    string? path=acquiredPath;
+                    if(!reset&&path is null)
                     {
                         path=await PickAIEnvironmentFolderAsync(forRuntime);
                         if(path is null||!open||disposed)return;
                     }
                     current=forRuntime?await api.AIEnvironment.SelectRuntimeAsync(path,lifetime.Token):await api.AIEnvironment.SelectModelsAsync(path,lifetime.Token);
+                    if(acquiredPath is not null)acquiredJob=current.Id;
                 }
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
                 catch(Exception ex){operationError="開始を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
                 finally{busy=false;if(current is not null)Render(current);}
             }
+            useAcquired.Click+=async(_,_)=>{if(acquired is not null)await SelectAsync(acquired.Kind=="runtime",false,acquired.Root);};
             chooseRuntime.Click+=async(_,_)=>await SelectAsync(true,false);resetRuntime.Click+=async(_,_)=>await SelectAsync(true,true);
             chooseModels.Click+=async(_,_)=>await SelectAsync(false,false);resetModels.Click+=async(_,_)=>await SelectAsync(false,true);
             refresh.Click+=async(_,_)=>{if(!busy&&(polling is null||polling.IsCompleted)){polling=RefreshAsync(true);await polling;}};
