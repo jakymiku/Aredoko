@@ -1,7 +1,7 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-24）
 
 ## 現在地と読む順
-- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **56e3c8e**（基本ZIP03時点は `47acf2f`）。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **33c8938**（基本ZIP03時点は `47acf2f`）。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
 - 本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧記録は[履歴索引](history-index.md)。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らず簡潔なUIを維持。
 - 開始時の未コミットP5案4ファイルはignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch`/starting-state.jsonへ退避して継続。c30bc34へff後に仕上げた。途中のリモート文書更新ed81d33/07c3f44も4a96d81で統合し、他作業を上書きしていない。main merge/reset/stash/force pushなし。
 
@@ -49,9 +49,13 @@
 - 開始 `fc4ff5f`、リモート/PR #5と一致・clean。AntigravityのP5形式2 nativeとP3永続cache/DPI接続を維持。永続cacheの不正LRU/整数overflow/schema制約/接続解放を局所補強。新規CPU4・関連thumbnail28 PASS。[詳細と再現](thumbnail-derivatives.md)。GUI/GPUは未実行。
 - **今回のユーザー指定：GUI/GPUテストは実行前に確認する。** 通常のローカルテスト方針に対する今回の例外で、許可済みとみなさない。CPU/静的/buildを先行できる。
 
+## この継続で完了した単位（2026-10-24〜25）
+- `c4de705`：Antigravityの永続cacheをレビューし、破損LRU/SQLite整数上限/schema制約/失敗時接続解放を補強。`3666a55`：ヒット順序の書込を最大64アクセス単位へ集約（128hitのCOMMITは2回）。回復7・既存thumbnail28 CPU PASS。体感/RSS実測ではない。[正本](thumbnail-derivatives.md)。
+- `bb79ad6`：詳細の媒体別主操作、AI候補の対象表示、一覧根拠2行＋全文tooltip、棚画像の再Loaded時refresh保持。Portable publish成功。**今回のユーザー許可済み**生成6媒体/独立DBでDark一連PASS、Lightの媒体別表示と保存/棚往復PASS、全所有app exit0/残存0。先行Lightのハーネス待機/期待値/失効FAILと修正は[P3正本](p3-result-window.md)に保持。実媒体再生やGPU推論は未実行。
+- `33c8938` P6：WD固定版の実カタログとモデルNOTICEを用意（registry1件、runtime0件）。公式metadata/HEAD＋既存CSVの固定Git blob/SHA確認のみで、モデル本体の外部取得・推論なし。[正本](ai-acquisition.md)。**今回のGUI許可は上記detail候補のみ**。新しいAI取得画面/通常EXE候補を試す場合は改めて具体的範囲を確認する。
+
 ## 次の実装1件
-**P3/P7 大量画像スクロール時の体感速度・High Contrast/Light/狭幅UI監査、または P6 実catalog/完全NOTICE/公開先の確定。**
-- P3/P7側：永続 `<db>.thumbs.sqlite` が有効な状態での再起動後サムネイル再表示と実RSS/decoded RAM境界、または未受入のHigh Contrast/DPI/Light・狭幅のUI監査を生成fixture＋独立LOCALAPPDATAで進める。P6側はレビュー済み実artifact・完全なNOTICE・runtime pack公開先が確定し次第source registryへ登録する（推測URL/架空hashで有効化しない。新モデル/依存取得は別許可）。完了済みのP5形式2復元・P6モデル配置・P1B生成再生・P2境界・P3同じflowを毎回再テストしない。
+**P6：実WDカタログ入りの新しい基本ZIP候補を作り、同梱Python/APIのCPU確認を終える。** 旧ZIP03/Alpha/shortcutは上書きせず、モデル/PyTorchを含めない。新しい取得画面は用途・容量・ライセンスとruntime別途必要を示す。GUIの起動/表示確認と実467MB転送は別に許可を伺う。次にP3大量scroll/最終row/RSSとP7残受入へ進み、runtime packの公開先が未決の間もUI/独立実装を止めない。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
 **P6：役割別保存先のAPI・Core・native UIを接続する。** `c7db80d`のbackend解決を再実装せず、以下へ進む。

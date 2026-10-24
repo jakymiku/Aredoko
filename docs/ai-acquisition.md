@@ -10,7 +10,7 @@
 - 公式固定[モデルカード](https://huggingface.co/SmilingWolf/wd-swinv2-tagger-v3/blob/627aef95638667ddcaa3ac8ae625e88ea5b02f51/README.md)のApache-2.0宣言、固定treeのONNX LFS SHA、HEAD-onlyの両artifact容量/最終host（huggingface.co/us.aws.cdn.hf.co）を確認。CSVは既存ローカル308,468 bytesを読み取り、SHA256のprofile一致と固定tree Git blob SHA1の一致を確認した。重み・CSVの外部取得や実行はしていない。
 - [Apache公式ライセンス全文](https://www.apache.org/licenses/LICENSE-2.0.txt)、上流カード全文、著者/固定出所/未変更artifact/独立runtimeのNOTICE、Aredoko出所sidecarをbounded inlineで同梱。上流treeに独立NOTICE/LICENSEはないことも確認。モデルpackにPython/ONNX Runtime/PyTorch等は含めず、それらのruntime packの完全NOTICE・公開先は依然未完。
 - 登録自体は通信・実行・設定保存を開始しない。明示consent後だけ既存の再開/容量/hash/validator/検証後公開を使い、取得完了後も対象モデルrootの明示保存と次回起動が必要。既定帯域は無制限、任意cap。画面ではモデルの用途と「対応する実行環境が必要」を表示する。
-- CPU：registry7/model-pack10/owned-download6/inline7 PASS（各別実行）。公式metadata/HEAD証拠はignored `data/ai-ui/wd-catalog-review-20261025`。認証カタログ表示と新基本ZIPの確認は次工程。実467MB転送/推論/clean Windowsは未検証。新しい実取得やGUI/GPUは今回のユーザー指示どおり確認後に実行する。
+- CPU：registry7/model-pack10/owned-download6/inline7/staging19 PASS（各別実行）。公式metadata/HEAD証拠はignored `data/ai-ui/wd-catalog-review-20261025`。認証カタログ表示と新基本ZIPの確認は次工程。実467MB転送/推論/clean Windowsは未検証。新しい実取得やGUI/GPUは今回のユーザー指示どおり確認後に実行する。
 - 基本版checkerは「常にcatalog0」を合格条件にせず、同梱Pythonで読み取った**その候補の固定registry**とAPIの完全一致を検査する。旧候補のempty registryも正確に検査でき、未導入AIと取得可能モデルを混同しない。
 
 ## 2026-10-24 role-root backend contract (latest)

@@ -2,9 +2,27 @@
 
 2026-10-22。ユーザー承認済みのAstra統合計画を実装用に収録する。**過去のGUI試行上限や事前許可記述より、[現行テスト方針](local-test-policy.md)を優先する。**旧文書・既存機能は保持し、本書の順序を古い「次の作業」より優先する。基点は `8c0a63e` / `feat/winui3-production-mvp-20261011` / Draft PR #5。R13 DOING / R14 PARTIAL / M1・M2未完。WindowsはWinUI 3を維持する。
 
+## 現行実行キュー（2026-10-24、Antigravity `fc4ff5f` 引き継ぎ後）
+
+元のP0–P7と製品ビジョンは維持する。以下が現在の作業順で、下の日時付きcheckpointにある古い「次」より優先する。実装済みと限定確認済みは区別し、未検証を発生中の致命的不具合と呼ばない。
+
+| 順 | 仕上げる単位 | 完了条件・次への移行 |
+| --- | --- | --- |
+| 1 | Antigravity差分の関連レビュー・永続cache回復 | 破損LRU/整数上限/schema/接続解放を生成CPUテストで確認。既存P5形式2とDPIの成功flowを無変更反復しない |
+| 2 | P3/UI-2：日常の主画面を完成形へ | 媒体に適した詳細操作、検索根拠の表示密度、棚との統一。選択・draft・検索条件を維持し、変更画面のbuildと限定確認後に次へ。全配布完成を待たない |
+| 3 | P3：大量表示で残る具体的な負荷の削減 | cacheヒット時の書込を集約。保持600件の両方向scroll・最終行・サイズ変更の残受入を一つの生成caseにまとめる。5万件metadata/全体RSS/物理DPI移動は別項目、未計測を達成扱いにしない |
+| 4 | P6：実配布でAIを取得できる状態 | WD固定版1件は登録済み。検索モデル/runtimeは固定URL/容量/hash・完全NOTICE・公開先の揃ったpackから追加登録。外部情報が欠ける項目は明示して保留し、架空値で埋めず独立実装へ進む。新規取得は具体的な許可後 |
+| 5 | P7：残受入をまとめM1日常β判定 | 条件付き連続閲覧、棚管理、復元失敗保全、HC/DPI、clean Windowsを未確認表から一度ずつ確認。再現した欠陥だけ局所修正。M1後はR06–R09の実音声・音楽へ戻る |
+
+**現在の到達点**：P5形式2は `2f4de23` で通常EXEから復元active→次回pendingの限定native一連を確認済み。P3永続cacheは同commit、カード/詳細/棚の再取得接続は `e46c53d`、表示サイズ100→180%と再起動cacheは `56e3c8e` で限定native確認済み。**表示サイズの倍率変更は、実モニター間DPI移動の確認と同一ではない。** 基本ZIP03はsource `47acf2f` のままで、これら後続修正を収録していない。
+
+状態は「実装」「確認済み範囲」「残る実装」「残る受入」を分ける。ロードマップ全体は未完。報告には今回の利用者向け変化と次の1件を記し、古いテスト数の列挙を主目的にしない。
+
+## 日時付きcheckpoint（以下2節は当時の記録）
+
 ## 2026-10-24 P5更新
 
-実装 `1ca11d4`。[最新チェックポイント](restore-review-20261024.md)を優先する。復元準備のdirectory/ZIP・認証API・Core・明示破棄、切替のpayload検証/排他/ready条件まで実装済み。次は所有ランチャーの正常停止・再起動とWinUI接続。P5未完でありP6へはまだ進まない。
+実装 `1ca11d4`。[最新チェックポイント](restore-review-20261024.md)を優先する。復元準備のdirectory/ZIP・認証API・Core・明示破棄、切替のpayload検証/排他/ready条件まで実装済み。当時の次は所有ランチャーの正常停止・再起動とWinUI接続だった。この工程と形式2の限定native一連は後続で完了し、現行キューではP3/UIとP6を進められる。
 
 ## 2026-10-24 独立P6基盤更新
 
@@ -20,8 +38,8 @@
 | P2 結果セッション・連続閲覧 | PARTIAL。[native接続](result-session-native-connection.md) | 60↔61/120↔121・復号完了後のdetail復帰を生成素材で確認。全検索/ソート/条件のnative受入は残る |
 | P3 一覧・サムネイル・UI-2 | PARTIAL。[双方向600件・隠したdraft保全](p3-continuous-browse.md) | 745生成itemで追加/eviction/逆方向/draft明示保存を確認。全thumbnail速度/RSS/HC/DPI/最終row表示は残る |
 | P4 複数棚・整理導線 | PARTIAL。[履歴削除](history-deletion.md)と[複数棚の移行/検索/API](multi-shelf-storage.md)を実装 | [Core/棚一覧/複数選択](shelf-ui-20261023.md) source接続・893 Core確認、native3/3でcard/atomic save/create/renameを確認、Open以降の残件は未受入。[画面履歴](navigation-history-20261023.md) source接続。[root favorite](root-favorites-20261023.md) source/904 Core接続。[root複数初期棚](root-shelves-20261023.md) source/911 Core接続。次P5（native残件は未受入） |
-| P5 起動中backup/restore | PARTIAL。[共有writer fence・認証job API・選択/進捗/中止UI](live-backup-20261023.md)接続、Core925/native限定確認。現行viewer設定互換も維持 | 次は新規復元先→安全な起動先切替/rollback。Picker→GUI作成成功、大容量/性能/HC等は未受入 |
-| P6 配布・UI-3 | [基本ZIP03](portable-refresh-20261024.md)・モデル別配置UIを用意 | 通常入口/再起動と同梱Python限定PASS。実catalog/完全NOTICE/公開先/clean Windowsは未完 |
+| P5 起動中backup/restore | 実装済み・限定確認済み。[形式2 active/pending](backup-active-selection.md)と通常EXEの再起動まで接続 | 大容量・失敗時保全・HC等の残受入はP7へ。形式2の成功flowは再実装しない |
+| P6 配布・UI-3 | [基本ZIP03](portable-refresh-20261024.md)・モデル別配置UI、WD実catalog1件を接続 | WDモデルNOTICE付き。新候補のCPU/画面確認、検索モデル/runtimeの公開先と完全NOTICE、clean Windowsは残る |
 | P7 総合検証 | 未実施 | 主要機能を揃えてまとめ確認、M1判定後R06–R09へ |
 
 実装は小単位で進める。P1A完了をP1全体/ロードマップ全体の完了と扱わない。旧Alpha、basic03等の配布候補と現在source/buildは別物で、明示的な新候補作成まで配布済みとはしない。
@@ -33,9 +51,9 @@
 - P1Bが逐次アニメーションを実装し全PNG待ち/64frame切捨てを撤去。Core/Portable build確認済み、生成70frame/2loopの限定nativeと先頭割当の単回比較は確認済み。全形式/大画像/RSS/FPSは未受入。
 - P2が非同期neighborで60/120境界を越えるsourceへ接続。Core跨ぎテストはWindowsで合格、通常生成素材の60/120境界とdetail復帰は限定native確認済み。全検索条件は未受入。
 - 一覧は標準containerの要求に応じてcardを生成する（[実機の範囲と残課題](p3-native-containers-20261023.md)）。P2結果sessionは順位spoolを一回消費し、P3 ResultWindowが120×5で保持する。連続scrollは[双方向追加読み込みsource](p3-continuous-browse.md)まで実装し、実機は745生成itemの追加/600保持/逆方向/draft保全まで確認し、全thumbnail/RSS等の受入が残る。
-- P3 thumbnailは派生/shared/可視優先/DPI edge/所有RAM・一時disk cacheまで実装。再起動跨ぎ永続cache/実decoded全体RAMは未受入。
+- P3 thumbnailは派生/shared/可視優先/DPI edge/所有RAM・永続disk cacheまで実装。生成26媒体の再起動hitを限定確認済み。大量画像/実decoded全体RAM・物理DPI移動は未受入。
 - 棚は独立ID/空棚/複数所属・atomic移行/全検索条件/API/Core/native編集へ接続済み。棚nativeの未到達工程とroot管理GUIの受入は残る。旧単一値は互換用で、情報を失う更新を拒否する。
-- backupは起動中job/API/設定UIまで実装済み。復元の起動先切替/rollbackのsource・CPU契約は実装済み。形式2 active/pendingのnative完全一連と大容量受入は未完。viewer設定theme/scale等と旧validatorの不一致は2026-10-22に修正済み。P4/P5のschema移行・起動中snapshot/設定整合の全実機受入は残る。
+- backupは起動中job/API/設定UIまで実装済み。復元の起動先切替/rollbackのsource・CPU契約は実装済み。形式2 active/pendingのnative一連は限定確認済み、大容量・失敗条件の残受入は未完。viewer設定theme/scale等と旧validatorの不一致は2026-10-22に修正済み。P4/P5のschema移行・起動中snapshot/設定整合の全実機受入は残る。
 
 ## 実装順と完了条件
 
