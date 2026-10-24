@@ -30,3 +30,12 @@ Windowsでは既存依存で `dotnet run --project tests/Aredoko.Core.Tests -c R
 次はP2結果session/60件境界。Windows待ちだけで独立backend開発を止めない。R13 DOING/R14 PARTIAL/M1/M2未完、OCR保留・全機能・過去失敗を保持する。
 
 今回のraw log（失敗・途中版も保持）は [永続検証記録](validation/20261022-work/) を参照。
+
+
+## 2026-10-24 Windows限定native確認
+- source `54feb46`＋reportの差分SHA、候補 `data/ai-ui/animation-stream-native-20261024/frontend01`。専用DB・生成素材のみ、70frame APNG＋poster/有限2loop、真GIF、`.gif`名のWebPを確認。新ハーネス `tools/test_native_animation_stream.py`、run01はPASS/owned app exit0/残存PID0。4 PNG全目視。
+- APNGは最初のbatch1枚、posterを除く70枚×2cycleが正順に配信され、UIAで70枚目を確認。有限終了後も最後の正常画像を保持。真GIFはnative経路、偽拡張子WebPは逐次経路で表示・終了。2所有sessionとも解放し、元PNG/GIFのSHA・mtimeは不変。実モデル/GPU/私物scan0。
+- XAML source割当までの単回stage値：APNG656.54ms、真GIF460.92ms（復号ready458.46ms）、偽拡張子WebP648.73ms。物理表示時刻・FPS・HoneyView同等速度・全RSS・大画像・高速取消の受入ではない。
+- ViewerLoadTraceだけに残っていたGetFolderPathをAppLogと同じ明示LOCALAPPDATAへ揃え、専用directoryに実ログを確認。情報は固定stage/経過msのみ。Portable publish成功、既知WUI1001/SDK IL2104を抑制していない。
+- 独立診断 `transport-baseline.json`（生成warm image/CBZ、各3sample）はHTTP本体/304中央値約11–30ms。別の小さいinfo測定では約217ms、直接preview profileは約4ms。TCP_NODELAYや一括writeの仮説は改善せず、アプリへのその変更は行わない。環境/ハーネス差のある測定を同一条件の性能改善値として扱わない。詳細はignored `tiny-info-*`/`http-profile.txt`/`constant-http-diagnostic.json`。
+- 次の局所改善は逐次開始時の`open`→`next(1)`を一つの所有APIへまとめること。既存API互換・取消ID・原本guardを維持し、同じ素材の限定nativeで初回割当と正常終了を比較する。全回帰やHoneyView反復には戻らない。

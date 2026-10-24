@@ -2,7 +2,7 @@ using System.IO;
 namespace Aredoko_WinUI;
 internal static class AppLog {
     private static readonly object StartupLock = new();
-    private static string? DirectoryForSession() =>
+    internal static string? DirectoryForSession() =>
         Environment.GetEnvironmentVariable("LOCALAPPDATA") is {} root && Path.IsPathFullyQualified(root)
             ? Path.Combine(root,"Aredoko","logs") : null;
     // Fixed stage labels only: no media paths, queries, session tokens or DB contents.

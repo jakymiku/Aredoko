@@ -24,7 +24,7 @@ internal sealed class ViewerLoadTrace
         var elapsed=clock.Elapsed.TotalMilliseconds;
         try
         {
-            var directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Aredoko","logs");
+            var directory=AppLog.DirectoryForSession();if(directory is null)return;
             lock(sync)
             {
                 Directory.CreateDirectory(directory);var path=Path.Combine(directory,"viewer-load.jsonl");
@@ -35,5 +35,6 @@ internal sealed class ViewerLoadTrace
         }
         catch(IOException) { }
         catch(UnauthorizedAccessException) { }
+        catch(ArgumentException) { }
     }
 }
