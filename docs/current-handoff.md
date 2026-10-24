@@ -1,7 +1,7 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-24）
 
 ## 現在地と読む順
-- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **2f4de23**（基本ZIP03時点は `47acf2f`）。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **56e3c8e**（基本ZIP03時点は `47acf2f`）。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
 - 本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧記録は[履歴索引](history-index.md)。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らず簡潔なUIを維持。
 - 開始時の未コミットP5案4ファイルはignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch`/starting-state.jsonへ退避して継続。c30bc34へff後に仕上げた。途中のリモート文書更新ed81d33/07c3f44も4a96d81で統合し、他作業を上書きしていない。main merge/reset/stash/force pushなし。
 
@@ -40,16 +40,10 @@
 - 同梱Python11項目、通常EXEの起動/設定/正常終了/予定内1再起動（WinUI/bootstrap計4 exitすべて0）、専用DB/設定/元PNG保全、GUI後全758payload inventoryがPASS。4 PNG全目視。
 - 実binの125生成PNGで120→121→120と完全復号後のdetail復帰もPASS（[P2正本](result-session-native-connection.md)）。親ListView focusの初回ハーネスFAILを保持し、所有rowへのfocus操作へ実修正。全AI/検索条件/clean Windows/P7は未受入。
 
-## 次の実装1件
-## 最新ラン（2026-10-24）で完了した追加単位（`2f4de23`）
+## 最新ラン（2026-10-24）で完了した追加単位（`2f4de23` / `e46c53d` / `56e3c8e`）
 - **P5 形式2 `active`/`pending`・`model_locations` ネイティブ復元一連と `Aredoko.exe` 再起動IPC修正（`2f4de23`）**：`tools/test_native_restore.py --format2 --release` を実装し、通常の `Aredoko.exe` 入口で形式2 ZIPのネイティブ選択→準備→同意再起動（Phase 1：復元active profile一時適用・`launch-settings.json` からの一時 `ai_profile` 解放・`model_locations` 3件と役割別root保全・WD `0.65` 定義復元）→通常終了→次回 `Aredoko.exe` 起動（Phase 2：`local:pending.json` への切替とpending用 `model_locations` 解決、元 `catalog.sqlite`/原本不変）を実証。途中で `launch_release.py` の復元2周目（`attempt == 1`）が `app_ready` 後（`Bootstrap.cs` の `interactive == true`）にも `progress` フレームを送出して `Bootstrap.cs` がプロトコルエラーとなる製品バグを特定し、`tools/launch_release.py` と `tools/startup_ipc.py` を修正。単体テスト25 PASS（`test_restore_handoff.py`・`test_startup_ipc.py`）および修正ステージングでの実機 `run05` 完全PASS（6 PNG全目視、全所有 `Aredoko.exe`/`Aredoko.WinUI.exe` 終了0、残存0）。先行 `run01..04` の生ログも保持。詳細は[P5 active/pending正本](backup-active-selection.md)。
 - **P3 永続サムネイルディスクキャッシュ `<db>.thumbs.sqlite`（`2f4de23`）**：`app/thumbnail_disk.py` の `ThumbnailDisk(path=...)` に永続モードを実装し、`app/production_server.py` から `<catalog>.thumbs.sqlite` を接続。`plain_path`/`storage_parent`/`storage_lease` による単一プロセス所有、接続前の残存 `-wal`/`-shm`/`-journal` 掃除、`trusted_schema=OFF`・`quick_check`・`user_version`・厳密 `sqlite_master` 検査（`thumbs` のみ）、再起動をまたぐ `touched` LRU順序の継続と起動時 `_evict()`、ロック競合/破損時の fail-open 再初期化・無効化、およびバックアップ/復元からの除外（`storage_backup.py`/`live_backup.py`）を実装。関連単体テスト **73 PASS**（`test_thumbnail_cache.py`・`test_thumbnail_priority.py`・`test_storage_backup.py`・`test_live_backup.py`）。詳細は[サムネイル正本](thumbnail-derivatives.md)。
-
-- **P3 モニター間DPI（RasterizationScale）自動再取得接続と永続 <db>.thumbs.sqlite 再起動横断実機確認（e46c53d）**：src/Aredoko.WinUI/MainPage.xaml.cs で XamlRoot.Changed を購読し、DIPサイズ変更を伴わないモニター移動時の RasterizationScale 変化でも80ms集約タイマー（itemSizeTimer）から実現済みライブラリカード（containerRefresh）・棚カード（MainPage.Shelves.cs の shelfRefresh）・詳細プレビューの派生edgeを再評価するよう接続（既存bitmapを保持したまま必要時のみ新DPIバケットを再取得、Coreテスト・Portable build/publish 0 errors）。あわせて 	ools/test_native_persistent_thumbnails.py を追加し、最新ステージング data/ai-ui/p3-persistent-thumbs-20261024/staged-release/Aredoko（758 files）＋生成24 PNG/2 CBZ＋独立LOCALAPPDATAで実機検証。初回 
-un01（ハーネス側の .owner.lock ファイル非存在検査ミス、生ログ/PNG保全）を with storage_lease(thumbs_db_path): によるロック解放検査へ修正し、
-un02 で **25 checks PASS**（Phase 0 で 
-ows=30・max_touched=30・ytes=18,779・WorkingSet64=188.1MB、再起動後 Phase 1 で 
-ows=30・ytes=18,779 不変のまま max_touched=60 へ進行し全30要求の100%永続ディスクキャッシュヒット・WorkingSet64=187.6MB・生成26原本SHA/mtime完全不変・全所有 Aredoko.exe/Aredoko.WinUI.exe 終了0・残存0、2 PNG全目視）。詳細は[サムネイル正本](thumbnail-derivatives.md)および[結果ウィンドウ正本](p3-result-window.md)。
+- **P3 モニター間DPI（`RasterizationScale`）/サイズ変更の自動再取得接続と永続 `<db>.thumbs.sqlite` 再起動横断実機確認（`e46c53d` / `56e3c8e`）**：`src/Aredoko.WinUI/MainPage.xaml.cs` で `XamlRoot.Changed` を購読し、`UpdateItemSizes()` から実現済みライブラリカード（`containerRefresh`）・棚カード（`MainPage.Shelves.cs` の `shelfRefresh`）・詳細プレビュー（既存画像を保持したままバケット変更時のみ再取得する `ShowDetailPreviewAsync(preserveExisting: true)`）の派生edgeを一括再評価するよう統合（Coreテスト・Portable build/publish 0 errors）。`tools/test_native_persistent_thumbnails.py` でステージング `staged-release{,-02}/Aredoko`（758 files）＋生成24 PNG/2 CBZ（540〜640px）＋初期棚 `テスト棚`＋独立LOCALAPPDATAを用いて実機検証し、100%固定の `run02`（25 checks PASS、2 PNG目視）に加え、実機で詳細プレビュー表示＋100%→180%サイズ変更（`128/256/512/1024[元寸560..640]` 全バケット生成）＋棚一覧140%→180%変更（`shelfRefresh` 実行）＋再起動後の180%グリッド/詳細/棚キャッシュヒットを通す `run06` で **28 checks PASS**（Phase 0 で `rows=49`・`max_touched=49`・`bytes=102,469`・`WorkingSet64=218.1MB`、再起動後 Phase 1 で `rows=49`・`bytes=102,469` 不変のまま `max_touched=75` へ進行し全表示要求の100%永続キャッシュヒット・`WorkingSet64=205.2MB`・生成26原本SHA/mtime完全不変・全所有 `Aredoko.exe`/`Aredoko.WinUI.exe` 終了0・残存0、4 PNG全目視。先行 `run01/03/04/05` の生ログ/PNGも保持）。詳細は[サムネイル正本](thumbnail-derivatives.md)および[結果ウィンドウ正本](p3-result-window.md)。
 
 ## 次の実装1件
 **P3/P7 大量画像スクロール時の体感速度・High Contrast/Light/狭幅UI監査、または P6 実catalog/完全NOTICE/公開先の確定。**
