@@ -1,7 +1,7 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-24）
 
 ## 現在地と読む順
-- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **33c8938**（基本ZIP03時点は `47acf2f`）。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **13778ad**（基本ZIP03時点は `47acf2f`）。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
 - 本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧記録は[履歴索引](history-index.md)。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らず簡潔なUIを維持。
 - 開始時の未コミットP5案4ファイルはignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch`/starting-state.jsonへ退避して継続。c30bc34へff後に仕上げた。途中のリモート文書更新ed81d33/07c3f44も4a96d81で統合し、他作業を上書きしていない。main merge/reset/stash/force pushなし。
 
@@ -54,8 +54,13 @@
 - `bb79ad6`：詳細の媒体別主操作、AI候補の対象表示、一覧根拠2行＋全文tooltip、棚画像の再Loaded時refresh保持。Portable publish成功。**今回のユーザー許可済み**生成6媒体/独立DBでDark一連PASS、Lightの媒体別表示と保存/棚往復PASS、全所有app exit0/残存0。先行Lightのハーネス待機/期待値/失効FAILと修正は[P3正本](p3-result-window.md)に保持。実媒体再生やGPU推論は未実行。
 - `33c8938` P6：WD固定版の実カタログとモデルNOTICEを用意（WD＋EmbeddingGemma 2のregistry2件、runtime0件）。公式metadata/HEAD＋既存CSVの固定Git blob/SHA確認のみで、モデル本体の外部取得・推論なし。[正本](ai-acquisition.md)。**今回のGUI許可は上記detail候補のみ**。新しいAI取得画面/通常EXE候補を試す場合は改めて具体的範囲を確認する。
 
+## 最新の実行候補と確認（2026-10-25）
+- **基本ZIP02/source13778ad**：`dist/portable-basic-20261025-02/Aredoko/Aredoko.exe`。EmbeddingGemma 2/WDの実カタログを同梱、モデル/PyTorchなし。[SHA・正確な範囲](portable-refresh-20261024.md)。旧Alpha/shortcut未更新。新しい試用先はこちら。
+- 同梱Python11 PASS。ユーザー許可の表示のみGUI＋1再起動は全チェックPASS、4所有exit0/残存なし、全766payload/設定/生成元保全、3 PNG目視。実転送・推論・clean Windowsは未実施。モデル取得は約1.53GB/468MBで、runtimeは別途必要。
+- QA終了処理もレビューし、旧P3ハーネスの全体focus helper/launcher強制終了を廃止して、所有HWND検査＋通常終了＋失敗exit codeへ変更。旧合格flowの反復はしていない。今回の通常入口testは所有プロセスhandleを保持して正常終了を観測する。
+
 ## 次の実装1件
-**P6：実モデル2件のカタログ入り基本ZIP候補を作り、同梱Python/APIのCPU確認を終える。** 旧ZIP03/Alpha/shortcutは上書きせず、モデル/PyTorchを含めない。新しい取得画面は用途・容量・ライセンスとruntime別途必要を示す。GUIの起動/表示確認と実467MB/1.53GB転送は別に許可を伺う。次にP3大量scroll/最終row/RSSとP7残受入へ進み、runtime packの公開先が未決の間もUI/独立実装を止めない。
+**P6：両モデルの実取得受入と、AI実行環境packの配布を仕上げる。** 取得基盤/モデル別保存先/カタログ表示は再実装しない。実転送する場合は固定公式取得元・約1.53GB/468MB・専用出力を示して許可を伺う。GPU/GUIも今回のユーザー指定で事前確認する。runtimeの固定配布物・完全NOTICE・公開先は未完で、モデル取得だけでAI環境完成とはしない。許可/外部情報待ちにはP3大量scroll/最終row/RSSや独立したUI改善を進める。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
 **P6：役割別保存先のAPI・Core・native UIを接続する。** `c7db80d`のbackend解決を再実装せず、以下へ進む。

@@ -328,20 +328,12 @@ def main():
         return mem
 
     def close_main_window(target_hwnd):
-        input_script = REPO / 'tools/winui_Input.ps1'
-        closed_via_script = False
-        if input_script.is_file():
-            try:
-                res = subprocess.run(
-                    ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(input_script), 'close'],
-                    cwd=REPO, capture_output=True, text=True, timeout=10
-                )
-                if res.returncode == 0:
-                    closed_via_script = True
-            except Exception:
-                pass
-        if not closed_via_script:
-            user.PostMessageW(int(target_hwnd), 0x10, 0, 0)
+        owner = wintypes.DWORD()
+        user.GetWindowThreadProcessId(int(target_hwnd), ctypes.byref(owner))
+        if not pid or owner.value != pid:
+            raise RuntimeError('Owned window changed before close')
+        if not user.PostMessageW(int(target_hwnd), 0x10, 0, 0):
+            raise ctypes.WinError(ctypes.get_last_error())
 
     def wait_for_thumbnails_ready(label):
         deadline = time.monotonic() + 20
@@ -552,26 +544,31 @@ def main():
             except Exception:
                 report['failure_capture_error'] = traceback.format_exc()
     finally:
-        # Cleanup any lingering process handles
-        if hwnd and user:
+        # Normal close of this fixture's verified window only; never close the
+        # foreground app through a global helper or kill its launcher.
+        if hwnd and pid:
             try:
-                user.PostMessageW(int(hwnd), 0x10, 0, 0)
+                visible = tree()
+                if 'CloseButton' in visible:
+                    ui('invoke', 'CloseButton')
+                close_main_window(hwnd)
+                wait_app_exit('cleanup')
             except Exception:
-                pass
+                report['cleanup_error'] = traceback.format_exc()
+                report['pass'] = False
         if proc_handle:
-            try:
-                kernel.CloseHandle(proc_handle)
-            except Exception:
-                pass
+            kernel.CloseHandle(proc_handle)
         if bootstrap is not None and bootstrap.poll() is None:
             try:
-                bootstrap.terminate()
-                bootstrap.wait(timeout=10)
-            except Exception:
-                pass
-
+                code = bootstrap.wait(timeout=20)
+                report['exits'].append({'phase': 'cleanup', 'bootstrap_exit': code})
+                if code != 0:report['pass'] = False
+            except subprocess.TimeoutExpired:
+                report['cleanup_pending'] = True
+                report['pass'] = False
         (target / 'report.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+    return 0 if report['pass'] else 1
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

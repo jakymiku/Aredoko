@@ -20,7 +20,7 @@
 - 13個の未変更upstreamファイル（safetensors、両tokenizer、processor/config、chat template、pooling/normalize等）＋4個のinline LICENSE/NOTICE/上流カード/固定revision marker。ネットワーク1,525,787,092 bytes、全pack1,525,821,059 bytes。fingerprint `8ee756badd8a85a24d1dbf80103be005b2b9c21b3e91d009a8568704d634406e`。
 - 大きい3artifactは固定treeのLFS SHA256とHEAD容量/hostを確認。小さい設定ファイルは既存ローカルのbytes/SHA256と上流Git blobを照合。重み・tokenizer本体の外部取得、依存取得、推論は0。公式metadata/HEADのrawはignored `data/ai-ui/embedding-catalog-review-20261025`。
 - 実行時のprofile/768D/namespace・既存索引は変更しない。配布取得の固定profile SHAをcheckoutの改行変換で壊さないよう、該当profileとカタログ/NOTICEは `.gitattributes` でLF固定。
-- 登録2件のCPU8 tests PASS。新候補では同梱registryとAPIの完全一致を確認する。既存runtimeの明示配置は利用可能だが、**実行環境の自動取得はまだ公開していない**。モデル取得だけで未導入runtimeまで揃ったとは表示しない。
+- 登録2件のCPU8 tests PASS。新基本ZIP02/source13778adの同梱Python11項目でregistry/API完全一致を確認。許可済みの表示のみnative＋1再起動もPASS（[候補記録](portable-refresh-20261024.md)）。既存runtimeの明示配置は利用可能だが、**実行環境の自動取得はまだ公開していない**。モデル取得だけで未導入runtimeまで揃ったとは表示しない。
 
 ## 2026-10-24 role-root backend contract (latest)
 

@@ -63,3 +63,11 @@ ignored `data/ai-ui/portable-refresh-20261024/` の prepare.py、publish/bootstr
 新ZIPからのWinUI/起動画面のGUI・通常DB再起動・全GPU/モデル推論・開発環境のないWindows受入は未実施。今回のCPU結果をLD6/P6/完成版の合格とはしない。取得画面の先行native証拠は[別の専用候補](ai-acquisition.md)であり、新ZIPのGUI受入ではない。旧capsと全raw失敗を維持する。
 
 次は実際に配布するruntime pack/全依存NOTICE/固定公開先を決め、builderの実物catalogとvalidatorを製品へ登録する。推測URLや架空hashで有効化しない。実取得/GPU/新GUIが必要なら具体範囲を提示して許可を得る。P5の復元picker/Start/所有bootstrap完全受入、P3性能/高DPI等の残件も保持する。
+
+## 2026-10-25 基本ZIP：実モデル2件を列挙する候補02
+
+- source **13778ad**、入口 `dist/portable-basic-20261025-02/Aredoko/Aredoko.exe`。ZIP `Aredoko-windows-x64.zip` **343,996,521 bytes**、SHA256 `7405a231679a81194741ab3f92d8cb65a4919d30adec26cd07399526c48a7b02`。展開 **657,889,599 bytes / 766 payload files**。モデル/PyTorchを同梱しない。旧Alpha/shortcutは更新しない。
+- 直前の候補01/source4c45636でCoreテストとPortable publish/Bootstrap self-testを確認。その後のCore/tests/Bootstrapソース差分がないことを検査して、02はFrontendだけ現HEADで再publishし、01のmanifest検証済みPython/media/bootstrapを再利用。新backend/config/tools/NOTICEを新規出力先へ収録し、実同梱runtime検査とZIP全entry照合を実行。01はWDのみの途中候補で、試用の案内は02を優先する。
+- 同梱Python11項目 PASS、catalog2件とその候補の固定registryの完全一致、AI未導入の区別・idle・生成画像登録/検索/preview・原本不変・EOF exit0・DB integrityを確認。raw `data/ai-ui/embedding-catalog-review-20261025/basic-cpu`。01のCPU11も別実行でPASS。
+- ユーザー明示許可の**表示のみ**native1flow＋予定内1再起動：通常Aredoko.exe→専用DB→取得画面のEmbeddingGemma 2/WD・容量/ライセンス/runtime別途必要・consent前disabled→正常終了→再起動・生成画像保持がPASS。全所有WinUI/bootstrap計4 exit0、元PNG SHA/mtime・設定bytes・GUI後の全766payload inventory不変。3 PNG全目視。`data/ai-ui/embedding-catalog-review-20261025/native-display01/report.json`。
+- WD PNGは選択popupが開いた状態を含み、閉じた後の表示の最終評価とは区別する。取得開始は一度も押さず、各観測でjob idle。**実1.53GB/468MB転送・推論・clean Windows・runtime pack自動取得は未検証/未完**。この候補を全媒体完成版や正式公開版とは呼ばない。
