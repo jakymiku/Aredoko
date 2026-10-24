@@ -592,7 +592,7 @@ public sealed partial class MainPage : Page
     private async void Items_Changed(object sender,SelectionChangedEventArgs e) {
         if(populating||!ready)return;
         var index=RowForKey(Items.SelectedItem) is MediaRow selected ? rows.FindIndex(row=>row.Id==selected.Id) : -1;
-        if(index<0||index>=rows.Count)return;
+        if(index<0||index>=rows.Count||active?.Id==rows[index].Id)return;
         if(saving||!await transitions.WaitAsync(0)){RestoreSelection();return;}
         try {
             if(!await ConfirmDiscardAsync()){RestoreSelection();return;}
@@ -961,18 +961,11 @@ public sealed partial class MainPage : Page
         if(!ready || saving || dialogOpen || !Details.IsPaneOpen || !await transitions.WaitAsync(0))return;
         try
         {
-            if(!await ConfirmDiscardAsync())return;
-            if(folderSettingsActive)
-            {
-                folderSettingsActive=false;folderDraft=null;Details.IsPaneOpen=false;
-                ShowItemDetailsPane();
-                FolderList.Focus(FocusState.Keyboard);
-                return;
-            }
-            active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;
-            detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
-            Editor.IsEnabled=false;RestoreSelection();
-            Items.Focus(FocusState.Keyboard);
+            // Hiding the editor is a layout action. Keep its selected item,
+            // draft and saved baseline; navigation/exit retain discard guards.
+            Details.IsPaneOpen=false;
+            if(folderSettingsActive)FolderList.Focus(FocusState.Keyboard);
+            else Items.Focus(FocusState.Keyboard);
         }
         finally{transitions.Release();}
     }

@@ -63,7 +63,8 @@ public sealed partial class MainPage
                 RestoreSelection();
             }
             finally{populating=wasPopulating;}
-            Items.UpdateLayout();RestoreBrowseAnchor(anchor);
+            Items.UpdateLayout();await RestoreBrowseAnchorAsync(anchor);
+            if(disposed||token.IsCancellationRequested)return;
             PageNumber.Text=$"{browseStart+1:N0}–{buffer.End:N0} / {buffer.Total:N0}";
             Previous.IsEnabled=browseStart>0;Next.IsEnabled=buffer.End<buffer.Total;
         }
@@ -85,14 +86,25 @@ public sealed partial class MainPage
         }
         return null;
     }
-    private void RestoreBrowseAnchor((string Key,double Y)? anchor)
+    private Task YieldBrowseLayoutAsync()
+    {
+        var completion=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if(!DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,()=>completion.TrySetResult()))completion.TrySetResult();
+        return completion.Task;
+    }
+    private async Task RestoreBrowseAnchorAsync((string Key,double Y)? anchor)
     {
         if(anchor is not {} value||resultScroll is null)return;
-        Items.ScrollIntoView(value.Key,ScrollIntoViewAlignment.Leading);Items.UpdateLayout();
+        // ScrollIntoView and native collection anchoring can finish after this
+        // callback. Keep extending=true through layout so those transient offsets
+        // cannot start a reverse fetch and immediately restore evicted rows.
+        Items.ScrollIntoView(value.Key,ScrollIntoViewAlignment.Leading);
+        await YieldBrowseLayoutAsync();if(disposed)return;Items.UpdateLayout();
         if(Items.ContainerFromItem(value.Key) is ListViewItem container)
         {
             var y=container.TransformToVisual(Items).TransformPoint(new Point()).Y;
             resultScroll.ChangeView(null,resultScroll.VerticalOffset+y-value.Y,null,true);
         }
+        await YieldBrowseLayoutAsync();
     }
 }

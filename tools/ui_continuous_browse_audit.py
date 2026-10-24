@@ -5,18 +5,24 @@ from native_ui_tools import nodes
 
 def audit(ui,cli,tree,shot,report,check,pid,hwnd,cat):
     def extent():
-        text=tree()['TxtPageNumber']['name'].replace(',','')
+        node=tree().get('TxtPageNumber')
+        text=(node or {}).get('name','').replace(',','')
         match=re.fullmatch(r'(\d+)–(\d+) / (\d+)',text)
-        return tuple(map(int,match.groups())) if match else (1,60,745)
+        # Before the first extension the legacy page label is still visible.
+        # A missing/recycling peer is also not evidence of any numeric range.
+        return tuple(map(int,match.groups())) if match else None
     def wait_range(predicate):
+        last=None
         for _ in range(25):
             current=extent()
-            if predicate(current):
-                report.setdefault('result_ranges',[]).append(current)
-                check('native metadata window bounded',current[1]-current[0]+1<=600)
-                return current
+            if current is not None:
+                last=current
+                if predicate(current):
+                    report.setdefault('result_ranges',[]).append(current)
+                    check('native metadata window bounded',current[1]-current[0]+1<=600)
+                    return current
             time.sleep(.15)
-        raise AssertionError('Incremental viewport did not advance: '+str(extent()))
+        raise AssertionError('Incremental viewport did not advance; last stable range: '+str(last))
     ui('scroll','ItemList','--to','bottom')
     wait_range(lambda value:value[1]>=180)
     # Original60th item remains in the viewport after appending the next block.
@@ -46,7 +52,7 @@ def audit(ui,cli,tree,shot,report,check,pid,hwnd,cat):
     check('returned item is shown in right detail pane',any(n.get('name')=='generated-060.png' and n.get('type')=='Text' and n.get('x',0)>800 for n in nodes(returned)))
     check('viewer crosses60/61 both directions and returns selected item',True)
     ui('set-value','TxtTags','continuous-unsaved-draft');ui('invoke','BtnCloseDetails')
-    current=extent()
+    current=wait_range(lambda value:True)
     for _ in range(9):
         if current[1]>=745:break
         previous=current;ui('scroll','ItemList','--to','bottom')

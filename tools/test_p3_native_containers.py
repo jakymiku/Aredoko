@@ -17,12 +17,12 @@ def main():
     parser.add_argument("--continuous",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not front.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
-    target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-23 renewed overnight GUI/GPU permission','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
+    target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
     report['app_assembly_sha256']=hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()
     report['source_worktree_diff_sha256']=hashlib.sha256(subprocess.check_output(['git','diff','--','src'],cwd=REPO)).hexdigest()
-    report['app_assembly_sha256']=hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()
-    report['source_worktree_diff_sha256']=hashlib.sha256(subprocess.check_output(['git','diff','--','src'],cwd=REPO)).hexdigest()
-    env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-p3-native-20261023'}
+    tracked=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','--','app','src'],cwd=REPO,text=True).splitlines()
+    report['source_files']={name:hashlib.sha256((REPO/name).read_bytes()).hexdigest() for name in tracked}
+    env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-p3-native-content-ready-20261024','LOCALAPPDATA':str(target/'user'),'APPDATA':str(target/'user')}
     cat=server=thread=proc=None;hwnd=None
     user=ctypes.WinDLL('user32',use_last_error=True)
     user.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
@@ -50,7 +50,7 @@ def main():
         before=sources();cat=ProductionCatalog(target/'catalog.sqlite');root=cat.add_root(str(media));cat.start_scan(root)
         if cat._worker:cat._worker.join(15)
         first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(745 if args.continuous else 145))
-        profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles')
+        profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger());handler.log_message=lambda *args:None
         server=ThreadingHTTPServer(('127.0.0.1',8769),handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         with (target/'app.log').open('w',encoding='utf-8') as log:
@@ -96,15 +96,32 @@ def main():
             try:
                 owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
                 if owner.value!=proc.pid:raise RuntimeError('Cleanup HWND changed')
-                if not user.PostMessageW(int(hwnd),0x10,0,0):raise ctypes.WinError(ctypes.get_last_error())
-                proc.wait(timeout=12);report['graceful_exit']=proc.returncode
+                # Only discard this flow's generated draft, never force-close.
+                for _ in range(2):
+                    if proc.poll() is not None:break
+                    visible=tree();primary=visible.get('PrimaryButton',{})
+                    if primary.get('name')=='変更を破棄':
+                        ui('invoke','PrimaryButton')
+                        if proc.poll() is not None:break
+                        try:ui('wait-for','PrimaryButton','--gone','-t','5000')
+                        except RuntimeError:
+                            # Window destruction can precede process-handle signaling.
+                            try:proc.wait(timeout=8);break
+                            except subprocess.TimeoutExpired:raise
+                    if not user.PostMessageW(int(hwnd),0x10,0,0):raise ctypes.WinError(ctypes.get_last_error())
+                    try:proc.wait(timeout=5);break
+                    except subprocess.TimeoutExpired:pass
+                if proc.poll() is None:raise RuntimeError('Owned app did not close normally')
+                report['graceful_exit']=proc.returncode
             except Exception:report['cleanup_error']=traceback.format_exc()
         if server:server.shutdown();server.server_close()
         if thread:thread.join(5)
         if server:
-            for resource in (handler.thumbnails,handler.results,handler.animations,handler.setup_jobs):resource.close()
+            for resource in (handler.thumbnails,handler.results,handler.animations,handler.setup_jobs,handler.download_jobs,handler.backup_jobs,handler.restore_jobs):resource.close()
         if cat:cat.close()
         report['process_still_running']=proc is not None and proc.poll() is None
+        report['test_script_sha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        if report.get('source_files')!={name:hashlib.sha256((REPO/name).read_bytes()).hexdigest() for name in tracked}:report['pass']=False;report['source_changed']=True
         (target/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     return 0 if report['pass'] and not report.get('process_still_running') else 1
 if __name__=='__main__':raise SystemExit(main())

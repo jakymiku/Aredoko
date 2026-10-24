@@ -25,3 +25,13 @@ Continuous flow **3/3 consumed**, no fourth run or renamed replay. All test proc
 Fix: explicit `[assembly: GeneratedWinRTExposedExternalType(typeof(ObservableCollection<string>))]` and AllowUnsafeBlocks=true enable existing CsWinRT generator; no dependency/optimizer-disable/trim suppression. Generated CPU output `data/ai-ui/p3-abi-generated-20261023` contains actual ObservableCollection<string> IList_string/IEnumerable_string vtable lookup and VideoRandomAccessStream vtables; build0 errors/known3 warnings11.67s. All3 Portable publishes succeeded (known SDK trim warnings). This is generated ABI code, not arbitrary runtime code generation. Official rationale: https://github.com/microsoft/CsWinRT/blob/master/docs/aot-trimming.md (external generic types and AllowUnsafeBlocks).
 
 Harness now captures failure tree/PNG, hashes actual app DLL plus worktree diff for provenance, closes owned child/parent windows normally and disposes backend result/animation/thumbnail/setup owners. Final runner AST2 PASS; no extra GUI. Current source remains P3 PARTIAL, thumbnail latency/HC/DPI/memory/main-UI and fully loaded viewer return unaccepted. Do not spend another same-flow attempt under a new name. Continue independent P4 backend while preserving the native gate for renewed scope/permission.
+
+
+## 2026-10-24 実修正後の継続確認（最新）
+現在の[テスト方針](local-test-policy.md)に従い、旧3回の失敗を保持して、既知のContentOpened待ち修正と独立LOCALAPPDATA/DBを使った関連確認を行った。旧成功の再演や無変更でのcap復活ではない。
+- `data/ai-ui/p3-content-ready-20261024/run01`：完全に画像表示を待った60→61→60→61とdetailへの61番復帰はPASS。未保存editorの×を閉じるだけで破棄dialogを出す製品バグに到達、全体FAIL。cleanupも既存dialog中のcloseで失敗したためrawを保持。専用生成draftを明示破棄→通常WM_CLOSEで所有PID47472終了を確認（元runnerのexit codeは欠測）。
+- 修正：メディア/登録フォルダの詳細を隠すだけなら選択/編集baseline/draftを保持する。別アイテム選択・画面移動・終了時の破棄確認は維持。仮想化で同じ論理IDが再選択されてもdraftを再読込しない。
+- run02：追加取得/隠したdraftは進んだが、600件超でheadを外す際の遅延native scroll補正が逆方向読込を呼び、61–660から1–600へ戻った。修正はanchorのScrollIntoViewとChangeViewを低優先queueで順にsettleし、extending/transition所有を完了まで維持する。画面履歴の同じanchor呼出しもawaitへ更新。
+- 初回publishは旧呼出し1箇所の更新漏れCS0103→WMC cascadeでFAIL、修正後publish成功。run03/04はUIA peerの一時不在と初回legacy page labelに対するハーネスの早すぎる厳密lookupでFAIL。PNGにfooterが存在する証拠を保存し、25回のbounded predicate内で有効なrangeを待つよう修正。範囲を架空60へ置換するfallbackを撤去。cleanupはwindow消滅とprocess exitの時間差も扱い、強制終了しない。
+- **run05 / frontend02 PASS**。source `28d5e7b`＋reportのsource一覧/差分SHA、app DLL SHA。range1–180→1–540→61–660→146–745（保持600以内）→26–625→1–600。元61番のhidden draftを保持し、明示Saveだけで専用DBへ反映、元745 PNGのSHA/mtime不変。3 PNG全目視、app正常終了0、所有process残存なし。Coreは変更しておらず直前1019を反復せず、Portable関連publishだけを行った。
+- ここでの末尾到達は「末尾を含むrangeの取得」。実画面の最終745番row表示、120↔121のnative操作、全検索方式/条件、grid/HC/DPI、RSS、全thumbnail速度は引き続き未受入。先頭/失敗PNGの遅いthumbnailを速度合格とはしない。

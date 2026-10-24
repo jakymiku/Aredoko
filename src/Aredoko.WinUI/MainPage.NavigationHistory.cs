@@ -97,7 +97,7 @@ public sealed partial class MainPage
                     if(!startupSearchSucceeded)return;
                     if(bookmark.Selection>0&&rows.FirstOrDefault(row=>row.Id==bookmark.Selection) is {} selected)
                     {ApplySelectedRow(selected);RestoreSelection();}
-                    Items.UpdateLayout();RestoreBrowseAnchor(target.Anchor);Details.IsPaneOpen=target.DetailsOpen&&active is not null;
+                    Items.UpdateLayout();await RestoreBrowseAnchorAsync(target.Anchor);Details.IsPaneOpen=target.DetailsOpen&&active is not null;
                     moved=true;
                 }
                 finally{transitions.Release();}

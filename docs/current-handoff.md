@@ -1,7 +1,7 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-24）
 
 ## 現在地と読む順
-- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **451290e**。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **28d5e7b**。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
 - 本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧記録は[履歴索引](history-index.md)。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らず簡潔なUIを維持。
 - 開始時の未コミットP5案4ファイルはignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch`/starting-state.jsonへ退避して継続。c30bc34へff後に仕上げた。途中のリモート文書更新ed81d33/07c3f44も4a96d81で統合し、他作業を上書きしていない。main merge/reset/stash/force pushなし。
 
@@ -31,8 +31,12 @@
 ## 追加のP1B到達点
 - `451290e`で生成APNG70枚/有限2loop・native GIF・GIF名WebPの限定native確認と計測ログ隔離を完了。その後のopen-first局所高速化も関連Python12＋認証HTTP1/Core1019/publish/native19チェックがPASS。単回のXAML割当はAPNG657→443ms、WebP649→443ms。物理FPS・大画像/RSS等は未受入。[正本](animation-streaming.md)とsource SHA付きreport参照。
 
+## 追加のP2/P3到達点
+- 詳細×/Escapeを表示切替に変更し、選択と未保存編集を保持。同一論理IDの再選択でdraftを再読込しない。600件のhead evictionで自分のscroll補正が逆方向追加を起こす点を、layout settle中の所有保持で修正。画面履歴も共通awaitを使う。
+- [P3正本](p3-continuous-browse.md)の新run05は745生成PNG・最大600保持・逆方向取得・61番への完全表示後復帰・hidden draftの明示保存・原本不変・終了0がPASS。先行run01〜04の製品/ハーネスFAILと初回build失敗を保全。全P3/P7受入ではない。
+
 ## 次の実装1件
-**P2/P3：既知ハーネスのContentOpened待ち修正後に、連続一覧・viewer復帰・draft保全を確認する。** 旧continuous run03は画像割当前に閉じたため返却位置が旧itemになった。sourceにはImageFitのready待ち修正があるが未実行。現行テスト方針に基づき独立LOCALAPPDATA/DBへ隔離して一度確認し、失敗があれば記録・診断・局所修正する。旧無変更反復/単なるcap改名は行わず、成功を先に書かない。P6実catalog/NOTICE/公開先の残件も維持。
+**P6：今回のsourceを新しい基本ZIP候補03へ封印し、実同梱Pythonで基本起動を確認する。** ignored `data/ai-ui/portable-refresh-20261024-03/prepare.py`を準備済み・未実行。clean commit後に実行する。旧02の固定runtime subtreeだけをhash検証して再利用し、最新app/bin/configを新規作成。旧Alpha/shortcut/通常DBは変更しない。取得registry0/実artifact・NOTICE・公開先未確定は維持。次のnative残件は120↔121/最終row/P5形式2完全復元等で、既存passを繰り返さない。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
 **P6：役割別保存先のAPI・Core・native UIを接続する。** `c7db80d`のbackend解決を再実装せず、以下へ進む。
