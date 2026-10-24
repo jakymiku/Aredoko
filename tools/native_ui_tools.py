@@ -57,3 +57,21 @@ def viewer_wait_args(arguments):
     if target=='VideoStatus' and value in ('再生中','一時停止中'):
         return ('wait-for','VideoPlayPause','--value','一時停止' if value=='再生中' else '再生','-t',timeout)
     return args
+
+
+def process_memory(pid):
+    """Read working/private bytes of one explicit Windows process; no enumeration."""
+    import ctypes
+    from ctypes import wintypes
+    class Counters(ctypes.Structure):
+        _fields_=[('cb',wintypes.DWORD),('PageFaultCount',wintypes.DWORD),*[(name,ctypes.c_size_t) for name in ('PeakWorkingSetSize','WorkingSetSize','QuotaPeakPagedPoolUsage','QuotaPagedPoolUsage','QuotaPeakNonPagedPoolUsage','QuotaNonPagedPoolUsage','PagefileUsage','PeakPagefileUsage','PrivateUsage')]]
+    kernel=ctypes.WinDLL('kernel32',use_last_error=True);api=ctypes.WinDLL('psapi',use_last_error=True)
+    kernel.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD];kernel.OpenProcess.restype=wintypes.HANDLE
+    kernel.CloseHandle.argtypes=[wintypes.HANDLE];api.GetProcessMemoryInfo.argtypes=[wintypes.HANDLE,ctypes.POINTER(Counters),wintypes.DWORD]
+    handle=kernel.OpenProcess(0x410,False,pid)
+    if not handle:raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        value=Counters();value.cb=ctypes.sizeof(value)
+        if not api.GetProcessMemoryInfo(handle,ctypes.byref(value),value.cb):raise ctypes.WinError(ctypes.get_last_error())
+        return {'working_set_bytes':value.WorkingSetSize,'private_bytes':value.PrivateUsage}
+    finally:kernel.CloseHandle(handle)

@@ -148,7 +148,7 @@ class ProductionCatalog(Catalog):
             'JOIN library_locations l ON l.id=m.location_id ')
     FIELDS = 'i.*,(SELECT json_group_array(shelf_id) FROM (SELECT shelf_id FROM item_shelves WHERE item_id=i.id ORDER BY shelf_id)) shelf_ids,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns'
 
-    def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None, root_ids=None, shelf=None, shelf_ids=None):
+    def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None, root_ids=None, shelf=None, shelf_ids=None, *, result_sink=None, cancelled=None):
         if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf','history'):
             raise ValueError('Invalid filter')
         if type(page) is not int or page<0 or not 1<=limit<=120 or len(query)>300:
@@ -167,8 +167,14 @@ class ProductionCatalog(Catalog):
             selected_roots = sorted(root_ids)
         else:
             selected_roots = None
+        if result_sink is not None and (not callable(result_sink) or page!=0):
+            raise ValueError('Sequential result sink requires page zero')
+        def check_cancelled():
+            if cancelled is not None and cancelled():raise InterruptedError('Search cancelled')
+        check_cancelled()
         terms=split_terms(query)
         with self.connect() as db:
+            if cancelled is not None:db.set_progress_handler(lambda:int(cancelled()),1000)
             if selected_roots is not None:
                 placeholders = ','.join('?' for _ in selected_roots)
                 active = {r[0] for r in db.execute(f'SELECT id FROM library_roots WHERE enabled=1 AND id IN ({placeholders})', selected_roots)}
@@ -214,35 +220,46 @@ class ProductionCatalog(Catalog):
                 # An empty fallback stays an ordinary empty result, so the UI
                 # never claims to show partial matches it does not have.
                 partial={'words':len(terms),'required':required} if total else None
-                rows=db.execute('SELECT '+self.FIELDS+clause+
-                                (' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC LIMIT ? OFFSET ?' if view=='history' else ' ORDER BY aredoko_specific(i.title,i.tags) DESC, i.id LIMIT ? OFFSET ?'),
-                                values+[limit,page*limit]).fetchall() if total else []
+                select='SELECT '+self.FIELDS+clause
+                order=(' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC' if view=='history' else ' ORDER BY aredoko_specific(i.title,i.tags) DESC, i.id')
             elif expansions:
-                # Items matching the typed words themselves come before
-                # related-only candidates, then more specific matches (longer
-                # spellings); ties keep the stable id order.
-                rows=db.execute(f'SELECT {self.FIELDS},aredoko_match(i.title,i.tags) AS direct_hits'+clause+
-                                (' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC LIMIT ? OFFSET ?' if view=='history' else ' ORDER BY direct_hits DESC, aredoko_specific(i.title,i.tags) DESC, i.id LIMIT ? OFFSET ?'),
-                                values+[limit,page*limit]).fetchall()
+                select=f'SELECT {self.FIELDS},aredoko_match(i.title,i.tags) AS direct_hits'+clause
+                order=(' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC' if view=='history' else ' ORDER BY direct_hits DESC, aredoko_specific(i.title,i.tags) DESC, i.id')
             else:
-                rows=db.execute('SELECT '+self.FIELDS+clause+(' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC LIMIT ? OFFSET ?' if view=='history' else ' ORDER BY i.id LIMIT ? OFFSET ?'),
-                                values+[limit,page*limit]).fetchall()
-        items=[self.item(r) for r in rows]
-        if terms:
-            for item in items:
-                item['search_evidence']=explain_matches(item['title'],item['tags'],alternatives)
-        result={'total':total,'page':page,'limit':limit,'items':items}
-        if partial:
-            for item in items:
-                item['match']='partial'
-            result['partial']=partial
-            if expansions: result['expansions']=expansions
-        elif expansions:
-            for item,row in zip(items,rows):
-                item.pop('direct_hits',None)
-                item['match']='direct' if row['direct_hits']==len(terms) else 'related'
-            result['expansions']=expansions
-        return result
+                select='SELECT '+self.FIELDS+clause
+                order=(' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC' if view=='history' else ' ORDER BY i.id')
+            def reply(rows,number):
+                items=[self.item(r) for r in rows]
+                if terms:
+                    for item in items:item['search_evidence']=explain_matches(item['title'],item['tags'],alternatives)
+                result={'total':total,'page':number,'limit':limit,'items':items}
+                if partial:
+                    for item in items:item['match']='partial'
+                    result['partial']=partial
+                    if expansions:result['expansions']=expansions
+                elif expansions:
+                    for item,row in zip(items,rows):
+                        item.pop('direct_hits',None)
+                        item['match']='direct' if row['direct_hits']==len(terms) else 'related'
+                    result['expansions']=expansions
+                return result
+            if result_sink is None:
+                rows=db.execute(select+order+' LIMIT ? OFFSET ?',values+[limit,page*limit]).fetchall() if total else []
+                check_cancelled()
+                return reply(rows,page)
+            # Only a bounded page escapes this cursor. Count/filter/order are
+            # evaluated once, without repeating COUNT and increasing OFFSET.
+            cursor=db.execute(select+order,values) if total else None
+            next_page=0
+            def render_page(number):
+                nonlocal next_page
+                check_cancelled()
+                if type(number) is not int or number!=next_page:raise ValueError('Result cursor must be consumed sequentially')
+                next_page+=1
+                return reply(cursor.fetchmany(limit) if cursor is not None else [],number)
+            try:return result_sink(render_page)
+            finally:
+                if cursor is not None:cursor.close()
 
     def get(self,item_id):
         if type(item_id) is not int or not 1<=item_id<=9223372036854775807:

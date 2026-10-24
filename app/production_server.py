@@ -159,7 +159,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             if mode=='history':
                 if values.get('view','history')!='history':raise ValueError('Invalid history filter')
                 values['view']='history'
-            return consume(lambda page:catalog.search(page=page,limit=120,**values))
+            return catalog.search(limit=120,**values,result_sink=consume,cancelled=cancelled)
         if mode=='semantic':
             require(('query','kind','view','source','scope','literal_only','group_threshold','result_group'))
             return ai.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)

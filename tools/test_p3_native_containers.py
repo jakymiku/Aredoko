@@ -14,7 +14,7 @@ from native_ui_tools import nodes
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
+    parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
@@ -34,8 +34,9 @@ def main():
     def check(name,value):
         report['checks'].append({'name':name,'pass':bool(value)});print(name, bool(value),flush=True)
         if not value:raise AssertionError(name)
+    command_timeout=70 if args.global_edge else 35
     def cli(*args):
-        result=subprocess.run(['winapp','ui',*map(str,args)],cwd=REPO,env=env,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=35)
+        result=subprocess.run(['winapp','ui',*map(str,args)],cwd=REPO,env=env,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=command_timeout)
         with (target/'commands.log').open('a',encoding='utf-8') as log:log.write(json.dumps({'args':list(map(str,args)),'exit':result.returncode,'stdout':result.stdout,'stderr':result.stderr},ensure_ascii=False)+'\n')
         if result.returncode:raise RuntimeError(result.stdout+result.stderr)
         return result.stdout
@@ -46,17 +47,23 @@ def main():
     def tree():return {n['automationId']:n for n in nodes(json.loads(ui('inspect','--depth','18','--json'))) if n.get('automationId')}
     def shot(name):
         path=target/(name+'.png');ui('screenshot','--output',path);report['screenshots'].append(str(path));path.with_suffix('.json').write_text(json.dumps(tree(),ensure_ascii=False,indent=2),encoding='utf-8')
-    def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+    def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','60000' if args.global_edge else '10000')
     def sources():return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
     try:
         media=target/'media';media.mkdir()
-        for i in range(0 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        for i in range(0 if args.detail_actions or args.global_edge else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
         if args.detail_actions:
             from ui_detail_actions_audit import create_media
             create_media(media)
-        before=sources();cat=ProductionCatalog(target/'catalog.sqlite');root=cat.add_root(str(media));cat.start_scan(root)
-        if cat._worker:cat._worker.join(15)
-        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
+        cat=ProductionCatalog(target/'catalog.sqlite')
+        if args.global_edge:
+            from ui_global_edge_audit import create_metadata
+            create_metadata(cat,media)
+        else:
+            root=cat.add_root(str(media));cat.start_scan(root)
+            if cat._worker:cat._worker.join(15)
+        before=sources()
+        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(50000 if args.global_edge else 6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
         if args.detail_actions:
             shelf=cat.change_shelf('create',name='確認用の棚')['id']
             cat.change_shelf('assign',entity='item',object_ids=[row['id'] for row in cat.search()['items']],shelf_ids=[shelf])
@@ -72,7 +79,7 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
-        key='Item'+str(first['id']);ready();ui('wait-for',key,'-t','10000');shot('list-initial')
+        key='Item'+str(first['id']);ready();ui('wait-for',key,'-t','60000' if args.global_edge else '10000');shot('list-initial')
         visible=tree();count=sum(re.fullmatch(r'Item\d+',k) is not None for k in visible)
         check('panel realizes fewer cards than sixty-result page',0<count<60)
         if args.detail_actions:
@@ -82,6 +89,10 @@ def main():
         elif args.viewer_boundary120:
             from ui_continuous_browse_audit import audit_boundary120
             audit_boundary120(ui,cli,tree,shot,report,check,proc.pid,hwnd,cat)
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.global_edge:
+            from ui_global_edge_audit import audit
+            audit(ui,tree,shot,report,check,proc.pid,cat)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.library_tail:
             from ui_continuous_browse_audit import audit_tail
@@ -107,6 +118,11 @@ def main():
             try:shot('failure')
             except Exception:report['capture_error']=traceback.format_exc()
     finally:
+        if proc is not None and proc.poll() is None and not hwnd:
+            try:
+                owned=[w for w in json.loads(cli('list-windows','-a',proc.pid,'--json')) if w.get('title')=='Aredoko — あれどこ']
+                if len(owned)==1:hwnd=str(owned[0]['hwnd'])
+            except Exception:report['cleanup_discovery_error']=traceback.format_exc()
         if proc is not None and proc.poll() is None and hwnd:
             try:
                 for child in json.loads(cli('list-windows','-a',proc.pid,'--json')):

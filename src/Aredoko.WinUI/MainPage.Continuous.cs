@@ -1,6 +1,7 @@
 using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System.Collections.ObjectModel;
 using Windows.Foundation;
@@ -76,6 +77,39 @@ public sealed partial class MainPage
             if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }
     }
+    private async void BrowseEdgeShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if(!ready||disposed||dialogOpen||saving||viewerWindow is not null||folderHubOpen||shelfHubOpen)return;
+        // Preserve Ctrl+Home/End for caret movement and native editor selection.
+        for(var node=FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;node is not null&&node!=this;node=VisualTreeHelper.GetParent(node))
+            if(node is TextBox or RichEditBox or PasswordBox or ComboBox or NumberBox or Slider)return;
+        args.Handled=true;await JumpBrowseEdgeAsync(sender.Key==Windows.System.VirtualKey.End);
+    }
+    private async Task JumpBrowseEdgeAsync(bool last)
+    {
+        if(extending||browseReflowing||PendingSearch||resultSession is not {} session||resultWindow is not {} window||session.Total==0||!await transitions.WaitAsync(0))return;
+        extending=true;var token=renderCancellation.Token;
+        try
+        {
+            var start=last?Math.Max(0,session.Total-ResultWindow.BlockSize):0;
+            var result=await window.ReadAsync(start,Math.Min(ResultWindow.BlockSize,session.Total-start),token);
+            if(disposed||token.IsCancellationRequested||PendingSearch||!ReferenceEquals(session,resultSession))return;
+            ResetBrowse(start,result);rows=browseBuffer!.Items.ToList();page=start/resultPageSize;
+            RenderRows();RestoreSelection();Items.UpdateLayout();await YieldBrowseLayoutAsync();
+            if(disposed||!ReferenceEquals(session,resultSession))return;
+            resultScroll?.ChangeView(null,last?resultScroll.ScrollableHeight:0,null,true);
+            await YieldBrowseLayoutAsync();
+            PageNumber.Text=$"{start+1:N0}–{browseBuffer.End:N0} / {browseBuffer.Total:N0}";
+            Previous.IsEnabled=start>0;Next.IsEnabled=browseBuffer.End<browseBuffer.Total;
+        }
+        catch(OperationCanceledException){}
+        catch(Exception error){if(!disposed)Failure(error);}
+        finally
+        {
+            extending=false;transitions.Release();
+            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+        }
+    }
     private (string Key,double Y)? CaptureBrowseAnchor()
     {
         foreach(var container in containerCleanup.Keys)
@@ -88,7 +122,7 @@ public sealed partial class MainPage
     }
     private void ReflowBrowse(Action change)
     {
-        if(browseReflowing||!ready||disposed||folderHubOpen||shelfHubOpen||Items.Visibility!=Visibility.Visible)
+        if(browseReflowing||extending||!ready||disposed||folderHubOpen||shelfHubOpen||Items.Visibility!=Visibility.Visible)
         {change();return;}
         var anchor=CaptureBrowseAnchor();
         var atEnd=resultScroll is not null&&browseBuffer is not null&&browseBuffer.End==browseBuffer.Total

@@ -52,3 +52,13 @@ rangeは既存検索metadata＋items・offset/limit・conditions・session_idを
 Windows依存のあるUI接続を始める前に、既存SDK/cacheで追加CoreテストとPortable buildを一回確認。MainPageで条件ごとにsessionを所有し、page追加取得でrangeを使う。ImageViewerSequenceを非同期neighborへ接続し、古い応答/expiryを拒否、close後に最後のitemの選択とscrollを戻す。閲覧によるhistory追加ではsessionを作り直さない。GUIを再実行できなければ未確認を残し、独立backend項目へ移る。既存GUI cap・raw失敗・全機能/OCR保留を維持。
 
 今回のraw log（失敗・途中版も保持）は [永続検証記録](validation/20261022-work/) を参照。
+
+
+## 2026-10-25 bounded cursorと検証の接続共有
+通常/履歴の結果作成はcatalog.searchの任意result_sinkへ接続する。COUNT/フィルタ/順位SQLを一度だけ評価し、同じcursorから最大120件ずつ消費する。従来の単ページAPIのOFFSET・返却形式は維持。部分一致、関連語のdirect/related順位、検索根拠、棚/登録フォルダ/履歴条件は共通の返却整形を使用する。AI側の既存順位spoolは変更しない。
+
+FrozenResultは1ページにつき1接続で最新metadataを取得するが、各原本の祖先・物理identityを引き続き検査する。前後のgenerationと各itemの取消を検証し、恒久的なアクセスcacheは作らない。停止時はbuilderを最大5秒待ち、生成中workspaceを早く削除しない。上限・全件順序確定・部分結果を公開しない規則は維持。
+
+生成関連：result_session27、production7、文字/関連語/棚/履歴43 testsをそれぞれPASS。120件の旧検証/バッチ検証の全payload一致、接続1回・原本guard120回、途中の編集/登録解除で失効、取消後のwriter利用を確認。計測 `data/ai-ui/p3-global-edge-20261025/cursor50k-report.json`：同じ120件を0.363005s→0.048205s、5万metadataの全snapshotはcProfile有効で24.498863s、末尾range/owner close成功。50k実ファイルscanやcold/warm統計ではない。
+
+旧COUNT反復を残した最初の全件測定は長時間化して9,720件時点で中断（正確な全件比較時間なし）。所有一時結果DBだけの排他lockによるtimeoutを使い、解除時の一時directory cleanup PermissionErrorもrawに残す。元catalog/原本/他アプリは変更せず、当該試験process終了済み。旧baselineを全件完走や速度倍率の根拠にしない。初回snapshotを全件完成してから公開する設計の待ち時間は今後の残件。

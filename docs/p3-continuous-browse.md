@@ -46,3 +46,13 @@ Harness now captures failure tree/PNG, hashes actual app DLL plus worktree diff 
 `data/ai-ui/p3-tail-20261025/run03` / `continuation-20261025/frontend02` PASS。物理745番list→grid→180/60/100%で表示を保持、draft未保存を保全し自動保存0、逆方向1番を物理表示、range保持600以内、生成745原本SHA/mtime不変、app exit0/残存なし。4 PNGを目視。最初のthumbnail未完了PNGは速度合格に使わない。倍率180/60はUIA座標・draft確認で、各倍率ごとのPNG目視は未実施。
 
 所有WinUIの単回WorkingSet bytesは初期178,749,440、list末尾202,395,648、grid倍率変更後237,703,168、先頭復帰246,673,408（Private bytesはreport参照）。UIA keyを持つカード12/12/10/18。これはwarmingとlayout変更を含む4点で、実現全オブジェクト数やリークなしの証明ではない。5万件・長時間RSS・HC/実モニターDPIの受入は残る。関連Portable publish成功/既知warnings、Coreは無変更なので全Core反復なし。
+
+
+## 2026-10-25 先頭・末尾移動と5万件metadata
+Ctrl+Home/Endで、現在の結果セッションの先頭/末尾120件へ直接移動する。ファイル名検索・棚/登録フォルダ等の条件を作り直さず、既存range契約を使う。タグeditor内の同キーは通常のカーソル移動を優先し、draftを勝手に保存/破棄しない。サイズ変更中のanchor復元と範囲取得を競合させない。
+
+native `data/ai-ui/p3-global-edge-20261025/run04/report.json`、frontend05で14 checks PASS、4 PNG全目視、所有app exit0/残存なし。生成metadata50,000件・実PNG80枚（残りは未接続相当）で、1→50,000→1、editor Ctrl+Home無干渉、10件に検索後の末尾と範囲維持を確認。全5万実メディアの走査/thumbnail負荷ではない。UIA card 12/11/11、frontend WorkingSet 190,132,224→196,595,712→201,859,072 bytes、private 144,150,528→149,917,696→150,151,168 bytes。backendを含む専用host WorkingSet 52,887,552→54,272,000 bytes。少数のwarm-up点でありメモリ漏れ不存在の証明ではない。80原本SHA/mtime不変。
+
+途中失敗は保存：run01は初回検索準備中の10秒待機切れ、run02は試験CLIのargs変数shadowing（対象appを後から通常WM_CLOSE、exit0のsupplement）、run03はIsEnabledが初期値trueのため準備終了を誤判定。いずれもキー操作前。run04は実測と一致する有限60秒の最初のcard待機へ修正した。failure03 PNGも目視。無変更反復や既存原本の利用はしていない。
+
+結果の生成処理で見つけたCOUNT/OFFSET反復と検証接続の改善は[result-sessions](result-sessions.md)へ記録。初回全件snapshotの待ち時間自体は残り、瞬時表示の達成とはしない。

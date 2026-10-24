@@ -61,6 +61,89 @@ class ResultSessionTests(unittest.TestCase):
         self.assertEqual(self.pages, calls)
         self.assertEqual([i['id'] for i in self.owner.read(self.sid, 60, 60)['items']], [i['id'] for i in self.items[60:120]])
 
+    def test_literal_cursor_preserves_paged_order_evidence_partial_and_scope(self):
+        self.catalog.update([self.items[2]['id']],{'tags':['星空'],'favorite':True})
+        self.catalog.update([self.items[3]['id']],{'tags':['宇宙']})
+        self.catalog.terms.upsert({'term':'星空','related':['宇宙']})
+        self.catalog.record_view(self.items[4]['id']);self.catalog.record_view(self.items[2]['id'])
+        shelf=self.catalog.change_shelf('create',name='生成棚')['id']
+        self.catalog.change_shelf('assign',entity='item',object_ids=[self.items[2]['id']],shelf_ids=[shelf])
+        for conditions in ({},{'query':'星空'},{'query':'星空 無一致'},{'query':'無一致'},
+                {'query':'宇宙'},{'view':'history'},{'view':'favorites'},{'kind':'video'},
+                {'root_ids':[self.root]},{'shelf_ids':[shelf]}):
+            with self.subTest(conditions=conditions):
+                reference=[];number=0
+                while True:
+                    page=self.catalog.search(page=number,limit=17,**conditions);reference.append(page)
+                    if (number+1)*17>=page['total']:break
+                    number+=1
+                def consume(render):return [render(i) for i in range(len(reference))]
+                self.assertEqual(self.catalog.search(limit=17,**conditions,result_sink=consume),reference)
+
+    def test_literal_cursor_counts_once_and_cancellation_closes_cursor(self):
+        from contextlib import contextmanager
+        original=self.catalog.connect;sql=[];pages=[]
+        @contextmanager
+        def traced():
+            with original() as db:
+                db.set_trace_callback(sql.append)
+                yield db
+        def consume(render):
+            for number in range(3):pages.append(render(number))
+        with patch.object(self.catalog,'connect',side_effect=traced):
+            self.catalog.search(limit=60,result_sink=consume)
+        self.assertEqual([len(p['items']) for p in pages],[60,60,5])
+        self.assertEqual(sum(q.startswith('SELECT count(*)') for q in sql),1)
+        self.assertEqual(sum(' OFFSET ' in q for q in sql),0)
+        cancelled=[False]
+        def cancel(render):
+            render(0);cancelled[0]=True;render(1)
+        with self.assertRaises(InterruptedError):self.catalog.search(limit=60,result_sink=cancel,cancelled=lambda:cancelled[0])
+        self.catalog.update([self.items[0]['id']],{'favorite':True})
+        self.assertTrue(self.catalog.get(self.items[0]['id'])['favorite'])
+        with self.assertRaises(ValueError):self.catalog.search(page=1,result_sink=lambda render:render(0))
+        with self.assertRaises(ValueError):self.catalog.search(result_sink=lambda render:render(1))
+
+    def test_page_validation_shares_one_connection_but_checks_every_physical_source(self):
+        import result_sessions
+        self.create();session=self.owner.sessions[self.sid];items=self.items[:60]
+        reference=[session._current(item,capture=True) for item in items]
+        with patch.object(self.catalog,'connect',wraps=self.catalog.connect) as connection,patch('result_sessions._safe_path',wraps=result_sessions._safe_path) as physical:
+            actual=list(session._currents(items,capture=True))
+        self.assertEqual(actual,reference);self.assertEqual(connection.call_count,1);self.assertEqual(physical.call_count,len(items))
+
+    def test_metadata_write_during_page_validation_never_returns_mixed_rows(self):
+        import result_sessions
+        self.create();original=result_sessions._safe_path;changed=[False]
+        def mutate(*args,**kwargs):
+            if not changed[0]:
+                changed[0]=True;self.catalog.update([self.items[-1]['id']],{'favorite':True})
+            return original(*args,**kwargs)
+        with patch('result_sessions._safe_path',side_effect=mutate),self.assertRaises(ResultUnavailable):self.owner.read(self.sid,0,60)
+        self.assertTrue(changed[0])
+
+    def test_unregister_during_page_validation_never_leaks_stale_scope(self):
+        import result_sessions
+        self.create();original=result_sessions._safe_path;changed=[False]
+        def mutate(*args,**kwargs):
+            if not changed[0]:changed[0]=True;self.catalog.unregister_root(self.root)
+            return original(*args,**kwargs)
+        with patch('result_sessions._safe_path',side_effect=mutate),self.assertRaises(ResultUnavailable):self.owner.read(self.sid,0,60)
+
+    def test_owner_close_waits_for_cancelled_builder_to_release_workspace(self):
+        import result_sessions
+        entered=threading.Event();release=threading.Event();errors=[];closed=[];original=result_sessions._safe_path
+        def held(*args,**kwargs):entered.set();release.wait(3);return original(*args,**kwargs)
+        def build():
+            try:self.create()
+            except Exception as error:errors.append(error)
+        with patch('result_sessions._safe_path',side_effect=held):
+            worker=threading.Thread(target=build);worker.start();self.assertTrue(entered.wait(2))
+            closer=threading.Thread(target=lambda:closed.append(self.owner.close(timeout=3)));closer.start()
+            self.assertTrue(self.owner.stopped.wait(2));release.set();worker.join(4);closer.join(4)
+        self.assertFalse(worker.is_alive());self.assertFalse(closer.is_alive());self.assertTrue(errors);self.assertEqual(closed,[True])
+        self.assertFalse(list(self.base.glob('aredoko-results-*')))
+
     def test_history_order_is_frozen_after_new_view_records(self):
         self.catalog.record_view(self.items[1]['id']); self.catalog.record_view(self.items[0]['id'])
         self.create(view='history')

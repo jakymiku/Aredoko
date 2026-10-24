@@ -20,6 +20,7 @@ from previews import _safe_path, IMAGE_MIME, PreviewReader, PreviewUnavailable, 
 MAX_SESSIONS = 3
 MAX_BYTES = 512 * 1024 * 1024
 IDLE_SECONDS = 15 * 60
+_MISSING = object()
 
 
 class ResultUnavailable(ValueError):
@@ -111,8 +112,8 @@ class FrozenResult:
                     items = result['items']
                     if len(items) > 120 or (not items and self.total != expected):
                         raise ResultUnavailable('Incomplete search results', conditions=self.conditions)
-                    for item in items:
-                        payload = json.dumps(self._current(item, capture=True), ensure_ascii=False, separators=(',', ':'))
+                    for item in self._currents(items,capture=True):
+                        payload = json.dumps(item, ensure_ascii=False, separators=(',', ':'))
                         if len(payload.encode('utf-8')) > 512 * 1024:
                             raise ResultCapacity('Result evidence exceeds workspace limit')
                         image = (item.get('kind') == 'image' and item.get('availability') == 'present'
@@ -140,13 +141,37 @@ class FrozenResult:
     def bytes(self):
         return self.path.stat().st_size
 
-    def _current(self, payload, *, capture=False, for_viewer=False):
+    def _currents(self,items,*,capture=False):
+        # One bounded page connection/query, no persistent access cache. The
+        # generation is checked before/after and every physical source is probed.
+        self.check()
+        if not items:return
+        with self.catalog.connect() as db:
+            ids=[item['id'] for item in items]
+            rows=db.execute('SELECT '+self.catalog.FIELDS+',r.path,r.excludes_json,r.enabled'+self.catalog.JOIN+
+                'JOIN library_roots r ON r.id=l.root_id WHERE i.id IN ('+','.join('?' for _ in ids)+')',ids).fetchall()
+            grouped={}
+            for row in rows:grouped.setdefault(row['id'],[]).append(row)
+            for item in items:
+                choices=grouped.get(item['id'],[])
+                if len(choices)>1:
+                    # Preserve the exact legacy representative-location query
+                    # for the uncommon multiple-location case.
+                    row=db.execute('SELECT '+self.catalog.FIELDS+',r.path,r.excludes_json,r.enabled'+self.catalog.JOIN+
+                        'JOIN library_roots r ON r.id=l.root_id WHERE i.id=?',(item['id'],)).fetchone()
+                else:row=choices[0] if choices else None
+                yield self._current(item,capture=capture,row=row)
+        self.check()
+
+    def _current(self, payload, *, capture=False, for_viewer=False, row=_MISSING):
         # No access cache: registration/exclusion/ancestors/physical version are
         # checked even when the frozen metadata/rank was already read before.
+        if self.stop.is_set():raise ResultUnavailable(conditions=self.conditions)
         item_id = payload['id']
-        with self.catalog.connect() as db:
-            row = db.execute('SELECT ' + self.catalog.FIELDS + ',r.path,r.excludes_json,r.enabled' + self.catalog.JOIN +
-                'JOIN library_roots r ON r.id=l.root_id WHERE i.id=?', (item_id,)).fetchone()
+        if row is _MISSING:
+            with self.catalog.connect() as db:
+                row = db.execute('SELECT ' + self.catalog.FIELDS + ',r.path,r.excludes_json,r.enabled' + self.catalog.JOIN +
+                    'JOIN library_roots r ON r.id=l.root_id WHERE i.id=?', (item_id,)).fetchone()
         if row is None or not row['enabled'] or row['availability'] == 'excluded' or _excluded(row['relative_path'], tuple(json.loads(row['excludes_json']))):
             raise ResultUnavailable('Result scope changed; refresh results', conditions=self.conditions)
         current = self.catalog.item(row)
@@ -188,7 +213,7 @@ class FrozenResult:
                 raise ResultUnavailable('Result session is still building', conditions=self.conditions)
             if self.origin is not None: self._current(self.origin, for_viewer=True)
             rows = self.db.execute('SELECT payload FROM results WHERE ordinal>=? ORDER BY ordinal LIMIT ?', (offset, limit)).fetchall()
-            items = [self._current(json.loads(row[0])) for row in rows]
+            items = list(self._currents([json.loads(row[0]) for row in rows]))
             self.check()
             self.last_used = time.monotonic()
             return {**self.metadata, 'offset': offset, 'limit': limit, 'items': items,
@@ -230,6 +255,7 @@ class ResultSessions:
         self.parent, self.max_bytes = parent, max_bytes
         self.sessions, self.retired = {}, {}
         self.lock, self.build_lock = threading.Lock(), threading.Lock()
+        self.builder=None
         self.stopped = threading.Event()
         self.reaper = None
 
@@ -267,6 +293,7 @@ class ResultSessions:
         conditions = json.loads(json.dumps(conditions))
         if not self.build_lock.acquire(blocking=False):
             raise ResultCapacity('A result session is already building')
+        self.builder=threading.get_ident()
         session = None
         try:
             with self.lock:
@@ -299,6 +326,7 @@ class ResultSessions:
                 session.close()
             raise
         finally:
+            self.builder=None
             self.build_lock.release()
 
     def _get(self, session_id):
@@ -345,11 +373,18 @@ class ResultSessions:
         if session is not None: session.close()
         return {'closed': True}
 
-    def close(self):
+    def close(self,timeout=5):
         self.stopped.set()
         with self.lock:
             sessions = list(self.sessions.values())
             self.sessions.clear()
         for session in sessions: session.close()
+        finished=True
+        if self.builder!=threading.get_ident():
+            finished=self.build_lock.acquire(timeout=timeout)
+            if finished:self.build_lock.release()
+        for session in sessions:finished=session.close() and finished
+        if self.reaper is not None and self.reaper is not threading.current_thread():self.reaper.join(timeout=timeout)
         close_index = getattr(self.index_stamp, 'close', None)
         if close_index is not None: close_index()
+        return finished
