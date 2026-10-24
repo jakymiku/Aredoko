@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from ai_runtime import relative,object_pairs,digest,inspect_runtime,files
 from storage_lease import plain_path,storage_parent,storage_lease,identity
+from runtime_archive import RuntimeArchive,unpack_runtime
 
 @dataclass(frozen=True)
 class Artifact:
@@ -26,12 +27,16 @@ class Catalog:
     entries:tuple
     fingerprint:str
     test_loopback:bool=False
+    runtime_archive:RuntimeArchive|None=None
 
     @classmethod
     def parse(cls,raw,*,test_loopback=False):
         if not isinstance(raw,bytes) or len(raw)>32*1024**2:raise ValueError('Catalog exceeds limit')
         value=json.loads(raw,object_pairs_hook=object_pairs)
-        if not isinstance(value,dict) or set(value)!={'format','id','revision','kind','license','license_url','allowed_hosts','entries'} or value['format'] not in ('aredoko-acquisition-v1','aredoko-acquisition-v2'):raise ValueError('Unsupported acquisition catalog')
+        fields={'format','id','revision','kind','license','license_url','allowed_hosts','entries'}
+        if isinstance(value,dict) and value.get('format')=='aredoko-acquisition-v3':fields.add('runtime_archive')
+        if not isinstance(value,dict) or set(value)!=fields or value['format'] not in ('aredoko-acquisition-v1','aredoko-acquisition-v2','aredoko-acquisition-v3'):raise ValueError('Unsupported acquisition catalog')
+        archive=RuntimeArchive.parse(value['runtime_archive']) if value['format']=='aredoko-acquisition-v3' else None
         if not isinstance(value['id'],str) or re.fullmatch('[a-z0-9][a-z0-9_-]{0,63}',value['id']) is None:raise ValueError('Invalid catalog ID')
         if not isinstance(value['revision'],str) or re.fullmatch('[0-9a-f]{40}|[0-9a-f]{64}',value['revision']) is None or value['kind'] not in ('runtime','model'):raise ValueError('Immutable catalog revision required')
         if not isinstance(value['license'],str) or not 1<=len(value['license'])<=128 or any(ord(c)<32 for c in value['license']):raise ValueError('License declaration required')
@@ -52,7 +57,7 @@ class Catalog:
             seen.add(name.casefold())
             size=item['bytes'];checksum=item['sha256'];role=item['role']
             if type(size) is not int or size<0 or not isinstance(checksum,str) or re.fullmatch('[0-9a-f]{64}',checksum) is None:raise ValueError('Invalid artifact identity')
-            if role not in ('runtime','weights','configuration','tokenizer','labels','license','inventory'):raise ValueError('Invalid artifact role')
+            if role not in ('runtime','weights','configuration','tokenizer','labels','license','inventory') and not (archive is not None and role=='archive'):raise ValueError('Invalid artifact role')
             content=None
             if inline:
                 leaf=Path(name).name.lower()
@@ -66,10 +71,11 @@ class Catalog:
             total+=size
             if total>64*1024**3:raise ValueError('Acquisition exceeds limit')
             items.append(Artifact(name,None if inline else item['url'],size,checksum,role,content))
+        if archive is not None and (value['kind']!='runtime' or len(items)!=1 or items[0].role!='archive' or items[0].inline_data is not None or items[0].size<=0 or not items[0].path.lower().endswith('.zip')):raise ValueError('One fixed runtime ZIP is required')
         ordered=sorted(seen,key=lambda name:name.split('/'))
         if any(right.startswith(left+'/') for left,right in zip(ordered,ordered[1:])):raise ValueError('Artifact path collision')
         canonical=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
-        return cls(value['id'],value['kind'],value['revision'],value['license'],value['license_url'],tuple(hosts),tuple(items),hashlib.sha256(canonical).hexdigest(),test_loopback)
+        return cls(value['id'],value['kind'],value['revision'],value['license'],value['license_url'],tuple(hosts),tuple(items),hashlib.sha256(canonical).hexdigest(),test_loopback,archive)
 
 
 def _source(url,hosts,test_loopback):
@@ -113,14 +119,21 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
             # Explicit retry after a previous session: verify this exact version
             # in place. Never overwrite or silently repair an existing version.
             plain_path(target,directory=True);owned_identity=identity(target)
-            actual={p.relative_to(target).as_posix() for p in files(target,cancelled)}
-            if actual!={item.path for item in catalog.entries}:raise ValueError('Published acquisition inventory mismatch')
-            verified=0
-            for item in catalog.entries:
-                check();path=plain_path(target/item.path)
-                if path.stat().st_size!=item.size or digest(path,cancelled=cancelled)!=item.sha256:raise ValueError('Published acquisition checksum mismatch')
-                verified+=item.size;report('verifying',verified,verified)
-            validate(target,cancelled);check();report('publishing',verified,verified)
+            if catalog.runtime_archive is not None:
+                binding=catalog.runtime_archive
+                info=inspect_runtime(target,verify=True,expected=binding.manifest_sha256,cancelled=cancelled)
+                if info['bytes']!=binding.unpacked_bytes or info['files']!=binding.unpacked_files:raise ValueError('Published archive runtime binding mismatch')
+                if validate is not validate_runtime:validate(target,cancelled)
+                verified=total_bytes;check();report('publishing',verified,verified)
+            else:
+                actual={p.relative_to(target).as_posix() for p in files(target,cancelled)}
+                if actual!={item.path for item in catalog.entries}:raise ValueError('Published acquisition inventory mismatch')
+                verified=0
+                for item in catalog.entries:
+                    check();path=plain_path(target/item.path)
+                    if path.stat().st_size!=item.size or digest(path,cancelled=cancelled)!=item.sha256:raise ValueError('Published acquisition checksum mismatch')
+                    verified+=item.size;report('verifying',verified,verified)
+                validate(target,cancelled);check();report('publishing',verified,verified)
             def acknowledge():
                 check();plain_path(target,directory=True)
                 if identity(target)!=owned_identity:raise ValueError('Published acquisition directory changed')
@@ -130,10 +143,11 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
             return {'root':str(target),'catalog_sha256':catalog.fingerprint,'revision':catalog.revision,'kind':catalog.kind,'bytes':verified,'reused':True}
         storage_parent(stage/'payload/marker');plain_path(stage,directory=True)
         payload=plain_path(stage/'payload',directory=True);parts=storage_parent(stage/'parts/marker')
+        download_payload=plain_path(storage_parent(stage/'transport/marker'),directory=True) if catalog.runtime_archive is not None else payload
         opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),_Redirect(catalog))
         done=verified=network_bytes=0;started=time.monotonic()
         for index,item in enumerate(catalog.entries):
-            check();destination=payload/item.path;storage_parent(destination)
+            check();destination=download_payload/item.path;storage_parent(destination)
             destination=plain_path(destination,missing=True)
             if destination.exists() and destination.stat().st_size==item.size and digest(destination,cancelled=cancelled)==item.sha256:
                 done+=item.size;verified+=item.size;report('downloading',done,verified);continue
@@ -141,7 +155,8 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
             partial=plain_path(parts/(str(index)+'.part'),missing=True)
             offset=partial.stat().st_size if partial.exists() else 0
             if offset>item.size:partial.unlink();offset=0
-            if shutil.disk_usage(root).free<item.size-offset+16*1024**2:raise OSError('Insufficient acquisition space')
+            expansion=catalog.runtime_archive.unpacked_bytes+32*1024**2 if catalog.runtime_archive is not None else 0
+            if shutil.disk_usage(root).free<item.size-offset+expansion+16*1024**2:raise OSError('Insufficient acquisition space')
             base_done=done
             if item.inline_data is not None:
                 # This small app-owned payload is part of the catalog fingerprint;
@@ -201,9 +216,15 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
                 partial.unlink();raise ValueError('Artifact checksum mismatch')
             partial.replace(destination);done=base_done+item.size;verified+=item.size
         check()
-        actual={p.relative_to(payload).as_posix() for p in files(payload,cancelled)}
+        actual={p.relative_to(download_payload).as_posix() for p in files(download_payload,cancelled)}
         if actual!={item.path for item in catalog.entries}:raise ValueError('Acquisition inventory mismatch')
-        validate(payload,cancelled);check();report('publishing',done,verified)
+        if catalog.runtime_archive is not None:
+            report('extracting',done,verified)
+            unpack_runtime(download_payload/catalog.entries[0].path,payload,catalog.runtime_archive,resume=True,cancelled=cancelled,
+                           progress=lambda value:report('extracting',done,verified))
+            if validate is not validate_runtime:validate(payload,cancelled)
+        else:validate(payload,cancelled)
+        check();report('publishing',done,verified)
         def commit():
             check();plain_path(payload,directory=True)
             if target.exists() or target.is_symlink():raise FileExistsError('Published version already exists')

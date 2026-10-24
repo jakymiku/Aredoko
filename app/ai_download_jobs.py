@@ -5,7 +5,7 @@ import secrets,threading
 from ai_acquisition import Catalog,acquire
 from ai_model_pack import ModelPackValidator
 
-ACTIVE={'waiting','downloading','verifying','publishing','cancelling'}
+ACTIVE={'waiting','downloading','verifying','extracting','publishing','cancelling'}
 class DownloadBusy(RuntimeError):pass
 
 class AIDownloadJobs:
@@ -25,6 +25,7 @@ class AIDownloadJobs:
             row={'catalog_id':c.fingerprint,'name':c.key,'kind':c.kind,'revision':c.revision,'bytes':sum(a.size for a in c.entries),'license':c.license,'license_url':c.license_url,'source_hosts':list(c.hosts)}
             # Metadata comes only from the pinned source profile, never from a
             # catalog name, downloaded content, or an arbitrary callable attribute.
+            if c.runtime_archive is not None:row.update(unpacked_bytes=c.runtime_archive.unpacked_bytes,unpacked_files=c.runtime_archive.unpacked_files)
             if isinstance(validator,ModelPackValidator):
                 row.update(model_target=validator.target.to_dict(),definition_sha256=validator.definition_sha256)
             rows.append(row)
@@ -51,7 +52,7 @@ class AIDownloadJobs:
         with self.lock:
             self.value.update({k:value[k] for k in ('bytes_received','bytes_verified','bytes_total')})
             if self.value['state']!='cancelling':self.value['state']=value['stage']
-            self.value['message']={'downloading':'AI環境をダウンロードしています。','verifying':'取得内容を確認しています。','publishing':'検証済みのAI環境を保存しています。'}.get(value['stage'],'取得を準備しています。')
+            self.value['message']={'downloading':'AI環境をダウンロードしています。','verifying':'取得内容を確認しています。','extracting':'取得した実行環境を展開・検証しています。','publishing':'検証済みのAI環境を保存しています。'}.get(value['stage'],'取得を準備しています。')
     def _publish(self,operation):
         with self.lock:
             if self.closed or self.cancelled.is_set():raise InterruptedError('Acquisition owner cancelled')

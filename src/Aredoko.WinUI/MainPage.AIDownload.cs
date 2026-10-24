@@ -48,7 +48,7 @@ public sealed partial class MainPage
                 dialog.IsPrimaryButtonEnabled=!active&&Selected() is {} selectedCatalog&&consent.IsChecked==true&&!(current?.Published==true&&current.CatalogId==selectedCatalog.Id);
                 dialog.IsSecondaryButtonEnabled=!busy&&current?.Active==true&&current.State is not ("publishing" or "cancelling");
                 progress.Visibility=current?.Active==true||current?.Published==true?Visibility.Visible:Visibility.Collapsed;
-                progress.IsIndeterminate=current?.Active==true&&current.BytesTotal is not >0;
+                progress.IsIndeterminate=current?.State=="extracting"||current?.Active==true&&current.BytesTotal is not >0;
                 progress.Value=current?.BytesTotal is >0?Math.Clamp(100d*current.BytesReceived/current.BytesTotal.Value,0,100):current?.Published==true?100:0;
                 status.Text=current?.State is null or "idle"?"取得する環境を選んでください。":current.Message;
                 if(current is {State:not "idle"} job)status.Text+=$"\n取得 {job.BytesReceived/1000000d:N1} MB / "+(job.BytesTotal is {} total?$"{total/1000000d:N1} MB":"確認中")+$"　検証済み {job.BytesVerified/1000000d:N1} MB";
@@ -84,7 +84,8 @@ public sealed partial class MainPage
                 if(Selected() is {} selected)
                 {
                     var scope=selected.Kind=="model"?"モデルファイルのみです。利用には対応する実行環境が必要です。\n":"";
-                    information.Text=scope+$"容量 {selected.Bytes/1000000d:N1} MB\n取得元 {string.Join(", ",selected.SourceHosts)}\n{selected.License}\nバージョン {selected.Revision}";
+                    var capacity=selected.UnpackedBytes is {} expanded?$"取得 {selected.Bytes/1000000d:N1} MB・展開後 {expanded/1000000d:N1} MB（{selected.UnpackedFiles:N0} ファイル）\n取得先に両方の容量の空きが必要です。":$"容量 {selected.Bytes/1000000d:N1} MB";
+                    information.Text=scope+capacity+$"\n取得元 {string.Join(", ",selected.SourceHosts)}\n{selected.License}\nバージョン {selected.Revision}";
                     license.NavigateUri=selected.LicenseUri;license.Visibility=Visibility.Visible;
                 }
                 else license.Visibility=Visibility.Collapsed;

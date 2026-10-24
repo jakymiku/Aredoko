@@ -90,12 +90,9 @@ def required_files(abi):
             *(f'Lib/site-packages/{m}/__init__.py' for m in abi['modules'])}
 
 
-def inspect_runtime(root, *, verify=False, expected=None, cancelled=lambda: False, progress=None):
-    root=plain_path(root,directory=True)
-    marker=plain_path(root/MARKER)
-    if marker.stat().st_size>LIMIT:raise ValueError('Runtime inventory exceeds limit')
-    with marker.open('rb') as stream:raw=stream.read(LIMIT+1)
-    if len(raw)>LIMIT:raise ValueError('Runtime inventory exceeds limit')
+def parse_inventory(raw, *, expected=None, cancelled=lambda: False):
+    """Validate only bounded inventory data; no filesystem or selected code I/O."""
+    if not isinstance(raw,bytes) or len(raw)>LIMIT:raise ValueError('Runtime inventory exceeds limit')
     checksum=hashlib.sha256(raw).hexdigest()
     if expected is not None and checksum!=expected:raise ValueError('Selected runtime inventory changed')
     value=json.loads(raw.decode('utf-8'),object_pairs_hook=object_pairs)
@@ -118,6 +115,17 @@ def inspect_runtime(root, *, verify=False, expected=None, cancelled=lambda: Fals
     if (not required_files(abi)<=names or type(value['files_count']) is not int or value['files_count']!=len(entries)
             or type(value['total_bytes']) is not int or value['total_bytes']!=total):
         raise ValueError('Runtime inventory is incomplete')
+    return value,abi,by_name,checksum
+
+
+def inspect_runtime(root, *, verify=False, expected=None, cancelled=lambda: False, progress=None):
+    root=plain_path(root,directory=True)
+    marker=plain_path(root/MARKER)
+    if marker.stat().st_size>LIMIT:raise ValueError('Runtime inventory exceeds limit')
+    with marker.open('rb') as stream:raw=stream.read(LIMIT+1)
+    if len(raw)>LIMIT:raise ValueError('Runtime inventory exceeds limit')
+    value,abi,by_name,checksum=parse_inventory(raw,expected=expected,cancelled=cancelled)
+    entries=value['entries'];names=set(by_name);total=value['total_bytes']
     # A small ordinary-startup inspection checks executable/core paths only.
     # Full byte/inventory validation occurs on selection and before worker launch.
     for name in required_files(abi):plain_path(root/name)

@@ -214,3 +214,8 @@ peerが例外なしで短いbodyを閉じた場合も `IncompleteRead` として
 ### 取得物と新規runtimeの実動作
 
 許可された専用生成2画像で、今回実取得したEG2のCUDA 768D・WDのCPUタグ候補がPASS。通常DB/設定、GUI、追加外部取得なし。[正確な時間・worker終了・限界](runtime-notice-inventory.md)。WDの準備判定は `09f72dd`。初回の登録/モデル取得/使い方案内は `4ac518b`、[利用手順](getting-started.md)。モデルの取得だけでAIが使えるという表示にはしていない。初回案内のnative確認は次回の許可後。
+
+
+## 2026-10-25 runtimeの圧縮輸送
+
+[単一ZIPのv3契約・安全性・証拠](runtime-archive-transport.md)。モデル2カタログは不変。runtimeは単一取得→所有stageで展開→検証後公開へ接続、Core/WinUIは取得容量と展開後容量・展開中取消を扱う。生成HTTP/nativeと実ローカルpack往復は確認済みだが、公開監査/不変公開先/製品registrationは引き続き未完。仮URLで有効化しない。

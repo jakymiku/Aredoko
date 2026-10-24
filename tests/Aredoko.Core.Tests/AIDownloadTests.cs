@@ -41,6 +41,15 @@ internal static class AIDownloadTests
         job["result"]!["root"]="relative";Invalid(()=>AIDownloadJob.Parse(job.ToJsonString()),"published relative path rejected");job["result"]=null;
         job["state"]="cancelled";Invalid(()=>AIDownloadJob.Parse(job.ToJsonString()),"published acquisition cannot claim cancelled");
         job["state"]="downloading";job["published"]=false;job["cancel_accepted"]=false;check(AIDownloadJob.Parse(job.ToJsonString()).CancelAccepted==false,"cancel refusal preserved as explicit acknowledgement");
+        job["state"]="extracting";check(AIDownloadJob.Parse(job.ToJsonString()).Active,"archive expansion stays cancellable and active");job["state"]="downloading";
+        catalog["unpacked_bytes"]=4096;catalog["unpacked_files"]=12;
+        var archiveCatalog=AIDownloadCatalog.ParseList(catalogs.ToJsonString())[0];
+        check(archiveCatalog.Bytes==128&&archiveCatalog.UnpackedBytes==4096&&archiveCatalog.UnpackedFiles==12,"compressed and installed runtime capacity remain distinct");
+        catalog.Remove("unpacked_files");Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"partial runtime expansion metadata rejected");catalog["unpacked_files"]=12;
+        catalog["unpacked_bytes"]=true;Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"boolean runtime capacity rejected");catalog["unpacked_bytes"]=4096;
+        catalog["kind"]="model";Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"model cannot claim runtime archive capacity");catalog["kind"]="runtime";
+        catalog["unpacked_files"]=100001;Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"unbounded expanded file count rejected");
+        catalog.Remove("unpacked_bytes");catalog.Remove("unpacked_files");
         catalog["license_url"]="file:///local/license";Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"catalog cannot expose local license link");catalog["license_url"]="https://example.org/LICENSE";
         catalogs["catalogs"]!.AsArray().Add(catalog.DeepClone());Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"duplicate trusted catalog rejected");catalogs["catalogs"]!.AsArray().RemoveAt(1);
         catalog["source_hosts"]=new JsonArray("example.org","example.org");Invalid(()=>AIDownloadCatalog.ParseList(catalogs.ToJsonString()),"duplicate acquisition source host rejected");

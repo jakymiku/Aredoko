@@ -15,10 +15,15 @@ from ai_acquisition import Catalog
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8',errors='replace');sys.stderr.reconfigure(encoding='utf-8',errors='replace')
-    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2,3,4),required=True);parser.add_argument('--theme',choices=('light','dark'),default='dark');parser.add_argument('--published-selection',action='store_true',help='New feature: apply a generated valid published runtime without executing it');parser.add_argument('--published-model',choices=('embedding','tagger'),help='Apply a generated model to its exact source-bound identity');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2,3,4),required=True);parser.add_argument('--theme',choices=('light','dark'),default='dark');parser.add_argument('--published-selection',action='store_true',help='New feature: apply a generated valid published runtime without executing it');parser.add_argument('--published-model',choices=('embedding','tagger'),help='Apply a generated model to its exact source-bound identity');parser.add_argument('--runtime-archive',action='store_true');parser.add_argument('--output',type=Path);args=parser.parse_args();
+    if args.runtime_archive:args.published_selection=True
     if args.published_selection and args.published_model:parser.error('Choose one published feature')
     published=args.published_selection or args.published_model is not None
     front=args.frontend.resolve();base=REPO/('data/ai-ui/ai-model-selection-'+args.published_model+'-20261024' if args.published_model else 'data/ai-ui/ai-acquired-selection-20261024' if args.published_selection else 'data/ai-ui/ai-acquisition-20261024');target=base/f'run{args.attempt:02}'
+    if args.runtime_archive:
+        if args.output is None:parser.error('New explicit output required for runtime ZIP flow')
+        target=args.output.resolve()
+        if not target.is_relative_to(REPO/'data/ai-ui'):parser.error('Dedicated generated output required')
     if os.name!='nt' or not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file() or target.exists():parser.error('New bounded output and dedicated frontend required')
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
     report['frontend_sha256']=hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()
@@ -105,8 +110,14 @@ def main():
                 settings.write_text(json.dumps(initial_values),encoding='utf-8');initial=settings.read_bytes()
             else:
                 pack=fixture(generated/'runtime')
-                document,_=build_catalog(pack,key='generated-runtime-selection',revision='e'*40,base_url='https://example.org/immutable/'+('e'*40),license='MIT',license_url='https://example.org/NOTICE',allowed_hosts=['example.org'])
+                if args.runtime_archive:
+                    from prepare_ai_runtime_archive import prepare_archive
+                    from build_ai_runtime_catalog import build_archive_catalog
+                    runtime_zip=generated/'runtime.zip';prepare_archive(pack,runtime_zip)
+                    document,_=build_archive_catalog(runtime_zip,key='generated-runtime-archive',revision='e'*40,base_url='https://example.org/immutable/'+('e'*40),license='MIT',license_url='https://example.org/NOTICE',allowed_hosts=['example.org'])
+                else:document,_=build_catalog(pack,key='generated-runtime-selection',revision='e'*40,base_url='https://example.org/immutable/'+('e'*40),license='MIT',license_url='https://example.org/NOTICE',allowed_hosts=['example.org'])
             payloads={'/artifact/'+(model_target.directory+'/' if args.published_model else '')+p.relative_to(pack).as_posix():p.read_bytes() for p in pack.rglob('*') if p.is_file()}
+            if args.runtime_archive:payloads={'/artifact/runtime.zip':runtime_zip.read_bytes()}
             class ExactArtifacts(BaseHTTPRequestHandler):
                 def log_message(self,*args):pass
                 def do_GET(self):
@@ -159,7 +170,23 @@ def main():
         ui('wait-for','PrimaryButton','-p','IsEnabled','--value','False','-t','3000');shot('acquisition-idle')
         check('idle makes no artifact request',requested==[] and settings.read_bytes()==initial)
         if published:
+            if args.runtime_archive:
+                original_progress=handler.download_jobs._progress
+                def hold_expansion(value):
+                    original_progress(value)
+                    if value['stage']=='extracting' and not reached.is_set():reached.set();release.wait(45)
+                handler.download_jobs._progress=hold_expansion
+                ui('wait-for','AIDownloadInformation','--value','展開後','--contains','-t','5000')
+                check('capacity includes download and installed bytes','両方の容量' in ui('get-property','AIDownloadInformation','-p','Name'))
             ui('invoke','AIDownloadConsent');ui('wait-for','PrimaryButton','-p','IsEnabled','--value','True','-t','3000');ui('invoke','PrimaryButton')
+            if args.runtime_archive:
+                check('native start reaches archive expansion',reached.wait(5))
+                ui('wait-for','SecondaryButton','-p','IsEnabled','--value','True','-t','7000')
+                ui('wait-for','AIDownloadStatus','--value','展開','--contains','-t','7000');shot('archive-expanding')
+                ui('invoke','SecondaryButton');wait('archive cancellation accepted',lambda:handler.download_jobs.snapshot()['state']=='cancelling')
+                release.set();wait('archive stops before publication',lambda:handler.download_jobs.snapshot()['state']=='cancelled')
+                check('archive cancellation preserves settings',settings.read_bytes()==initial)
+                ui('invoke','AIDownloadConsent','--action','toggle-on');ui('wait-for','PrimaryButton','-p','IsEnabled','--value','True','-t','7000');ui('invoke','PrimaryButton')
             wait('generated valid AI pack is published',lambda:handler.download_jobs.snapshot()['state']=='complete' and handler.download_jobs.snapshot()['published'])
             ui('wait-for','AIDownloadSelect','-p','IsEnabled','--value','True','-t','7000');shot('published-selection')
             result=handler.download_jobs.snapshot()['result'];check('publication alone preserves preferences',settings.read_bytes()==initial)
@@ -190,6 +217,7 @@ def main():
                 check('exact acquired runtime root is saved',selected['ai_runtime_root']==result['root'])
                 check('model root and unrelated theme are preserved',selected['models_root']==str(models) and selected['ui_theme']=='dark')
                 check('selected runtime inventory is pinned',len(selected['ai_runtime_manifest_sha256'])==64)
+            if args.runtime_archive:check('runtime ZIP fetched only once despite expansion cancel resume',requested==['/artifact/runtime.zip'])
             check('generated source and media unchanged',sources()==before)
             check('frontend startup log is isolated',(target/'user/Aredoko/logs'/('frontend-startup-'+env['AREDOKO_STARTUP_NONCE']+'.log')).is_file())
             report.update(feature=('published '+args.published_model+' model explicit use' if args.published_model else 'published runtime explicit use'),selected_runtime_executed=False,settings=selected,artifact_requests=requested)

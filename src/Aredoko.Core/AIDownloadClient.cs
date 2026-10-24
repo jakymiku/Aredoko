@@ -7,6 +7,8 @@ namespace Aredoko.Core;
 
 public sealed record AIDownloadCatalog(string Id,string Name,string Kind,string Revision,long Bytes,string License,Uri LicenseUri,IReadOnlyList<string> SourceHosts,AIModelTarget? ModelTarget=null,string? DefinitionSha256=null)
 {
+    public long? UnpackedBytes {get;init;}
+    public int? UnpackedFiles {get;init;}
     internal static string Digest(string? value,int length=64)
     {
         if(value is null||value.Length!=length||value.Any(c=>c is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')))throw new InvalidDataException("Invalid acquisition identity");
@@ -45,7 +47,15 @@ public sealed record AIDownloadCatalog(string Id,string Name,string Kind,string 
                 if(kind!="model"||target.Revision!=revision)throw new InvalidDataException("Catalog model binding mismatch");
             }
             else if(row.TryGetProperty("definition_sha256",out _))throw new InvalidDataException("Missing catalog model target");
-            result.Add(new(id,name,kind,revision,size,Text(row,"license",128),uri,hosts.AsReadOnly(),target,definition));
+            long? unpacked=null;int? unpackedFiles=null;
+            var hasSize=row.TryGetProperty("unpacked_bytes",out var expanded);var hasFiles=row.TryGetProperty("unpacked_files",out var files);
+            if(hasSize||hasFiles)
+            {
+                if(kind!="runtime"||!hasSize||!hasFiles||expanded.ValueKind!=JsonValueKind.Number||!expanded.TryGetInt64(out var total)||total is <1 or >68719476736L||
+                   files.ValueKind!=JsonValueKind.Number||!files.TryGetInt32(out var count)||count is <1 or >100000)throw new InvalidDataException("Invalid expanded runtime capacity");
+                unpacked=total;unpackedFiles=count;
+            }
+            result.Add(new(id,name,kind,revision,size,Text(row,"license",128),uri,hosts.AsReadOnly(),target,definition){UnpackedBytes=unpacked,UnpackedFiles=unpackedFiles});
         }
         if(root.GetProperty("download_supported").GetBoolean()!=(result.Count>0))throw new InvalidDataException("Inconsistent acquisition availability");
         return result.AsReadOnly();
@@ -69,11 +79,11 @@ public sealed record AIDownloadSelection(string CatalogId,string Kind,string Roo
 }
 public sealed record AIDownloadJob(string? Id,string State,string? CatalogId,long BytesReceived,long BytesVerified,long? BytesTotal,bool Published,string? Root,string Message,bool? CancelAccepted)
 {
-    public bool Active=>State is "waiting" or "downloading" or "verifying" or "publishing" or "cancelling";
+    public bool Active=>State is "waiting" or "downloading" or "verifying" or "extracting" or "publishing" or "cancelling";
     public static AIDownloadJob Parse(string json)
     {
         using var document=JsonDocument.Parse(json);var root=document.RootElement;
-        var state=root.GetProperty("state").GetString()??"";if(state is not ("idle" or "waiting" or "downloading" or "verifying" or "publishing" or "cancelling" or "complete" or "cancelled" or "failed"))throw new InvalidDataException("Unknown acquisition job state");
+        var state=root.GetProperty("state").GetString()??"";if(state is not ("idle" or "waiting" or "downloading" or "verifying" or "extracting" or "publishing" or "cancelling" or "complete" or "cancelled" or "failed"))throw new InvalidDataException("Unknown acquisition job state");
         var id=root.GetProperty("job_id").GetString();var catalog=root.GetProperty("catalog_id").GetString();
         if(state!="idle"){BackupClient.ValidateId(id);AIDownloadCatalog.Digest(catalog);}
         var received=root.GetProperty("bytes_received").GetInt64();var verified=root.GetProperty("bytes_verified").GetInt64();var totalValue=root.GetProperty("bytes_total");long? total=totalValue.ValueKind==JsonValueKind.Null?null:totalValue.GetInt64();
