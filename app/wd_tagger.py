@@ -1,5 +1,6 @@
 """Replaceable, explicitly local WD adapter with owned worker cleanup."""
 import base64
+import email.parser
 import json
 import math
 import os
@@ -15,6 +16,8 @@ from tag_suggestions import TaggerInfo, TagProposal, SuggestionConflict
 from tagger_profile import load_profile, RUNTIME_VERSION, WDProfile
 from tagger_worker import labels
 from runtime_paths import worker_python,worker_command
+from ai_runtime import MARKER,inspect_runtime
+from storage_lease import plain_path
 
 UNAVAILABLE='タグ分類モデルまたは専用ランタイムが未導入です。検索・手動タグは引き続き利用できます。'
 
@@ -41,8 +44,22 @@ class WDTagger:
         try:
             directory=self.profile.verify(self.repo,models_root=self.models_root)
             marker=directory/'aredoko-runtime.json'
-            ready=(not self._closed.is_set() and self.python.is_file()
-                   and not marker.is_symlink() and json.loads(marker.read_text(encoding='utf-8'))=={'onnxruntime':RUNTIME_VERSION})
+            runtime_marker=self.python.parent/MARKER
+            if runtime_marker.exists() or runtime_marker.is_symlink():
+                # Downloaded model packs do not contain machine-runtime claims.
+                # The selected sealed runtime declares its own installed version;
+                # worker_command still verifies the full pack before execution.
+                info=inspect_runtime(self.python.parent)
+                metadata=plain_path(self.python.parent/f'Lib/site-packages/onnxruntime-{RUNTIME_VERSION}.dist-info/METADATA')
+                if metadata.stat().st_size>1024**2:raise ValueError('Runtime metadata exceeds limit')
+                with metadata.open('rb') as stream:raw=stream.read(1024**2+1)
+                if len(raw)>1024**2:raise ValueError('Runtime metadata exceeds limit')
+                declared=email.parser.BytesParser().parsebytes(raw,headersonly=True)
+                runtime_ready=('onnxruntime' in info['abi']['modules'] and declared.get_all('Name')==['onnxruntime']
+                               and declared.get_all('Version')==[RUNTIME_VERSION])
+            else:
+                runtime_ready=(not marker.is_symlink() and json.loads(marker.read_text(encoding='utf-8'))=={'onnxruntime':RUNTIME_VERSION})
+            ready=not self._closed.is_set() and self.python.is_file() and runtime_ready
         except (ValueError,OSError):ready=False
         return {'available':ready,'reason':'' if ready else UNAVAILABLE,
                 'profile':self.profile.data()['id'],'device':'cpu'}

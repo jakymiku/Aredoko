@@ -101,6 +101,19 @@ class WDTests(unittest.TestCase):
         with patch.object(Path,'is_symlink',return_value=True):
             with self.assertRaises(ValueError):self.profile.directory(self.repo)
 
+    def test_sealed_runtime_owns_onnx_version_without_legacy_model_marker(self):
+        (self.directory/'aredoko-runtime.json').unlink()
+        runtime=self.repo/'runtime';runtime.mkdir();self.adapter.python=runtime/'python.exe';self.adapter.python.write_bytes(b'fixture')
+        (runtime/'aredoko-ai-runtime.json').write_text('{}')
+        folder=runtime/f'Lib/site-packages/onnxruntime-{RUNTIME_VERSION}.dist-info';folder.mkdir(parents=True)
+        metadata=folder/'METADATA';metadata.write_text('Name: onnxruntime\nVersion: '+RUNTIME_VERSION+'\n')
+        with patch('wd_tagger.inspect_runtime',return_value={'abi':{'modules':['onnxruntime']}}):
+            self.assertTrue(self.adapter.status()['available'])
+            metadata.write_text('Name: onnxruntime\nVersion: wrong\n');self.assertFalse(self.adapter.status()['available'])
+        with patch('wd_tagger.inspect_runtime',side_effect=ValueError('invalid pack')):
+            self.assertFalse(self.adapter.status()['available'])
+        self.assertFalse((self.directory/'aredoko-runtime.json').exists())
+
     def test_threshold_category_topk_and_no_nsfw_word_filter(self):
         with patch.object(self.adapter,'_scores',return_value=[.99,.7,.9,.6,.35]):
             proposals=self.adapter.suggest(self.source,lambda:False)

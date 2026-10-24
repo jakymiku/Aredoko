@@ -204,3 +204,8 @@ WDの既存固定hash/サイズはconfig/tagger-profilesに存在し、[固定re
 ### 宣言サイズ前のEOFも限定再接続（2026-10-25）
 
 peerが例外なしで短いbodyを閉じた場合も `IncompleteRead` として既存の最大2回再接続へ接続する。ディスク等の一般OSErrorは対象に広げない。実loopback HTTPの70,000 bytesでの切断→Range `bytes=70000-`→全hash一致を新規確認。継続切断は上限後に未公開の部分を保持、次の明示再開/Range無視の再取得も保持する。通信関連6・既存取得14 tests PASS（別実行）。実2GB転送の反復はしていない。基本ZIP03/source5ddd97aにはこの最終EOF補強は未収録。
+
+
+### WDの取得モデルと封印runtimeの接続補強（2026-10-25）
+
+旧venv導入はモデルfolder内 `aredoko-runtime.json` を使用していたが、モデルだけを取得する製品catalogにはmachine-runtime宣言を含めないため、取得したWDが準備済みにならない不整合があった。封印runtimeを明示選択した場合は、そのABIのonnxruntime moduleと固定版1.23.2のdist-info metadataを確認する。legacy方式は維持し、workerの全pack検証・実import版の一致・CPU provider限定も維持。取得モデルやprofile/namespaceを書き換えない。関連WD11 tests PASS。実推論確認の結果は次の追記を参照。
