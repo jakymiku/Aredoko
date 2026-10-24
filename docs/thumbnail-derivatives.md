@@ -24,6 +24,15 @@ Linuxで生成PNG/JPEG/GIF/APNG/CBZ/folderだけ使用。原本SHA/mtime不変�
 - 最後のcodec/cache境界修正3 PASS/0.122s。Pillowのbomb/codec例外を404相当へ正規化し、壊れた本cache ETagは再生成へ戻す。APNG/GIF経路も局所確認。上の56件を再加算しない。
 - Core ThumbnailTests追加はsourceのみ。**.NET SDKなし、Core実行/WinUI・Portable build/native PNG表示/速度/メモリ測定はUNRUN**。stub生成の合格はC# compileではない。既存Alpha/basic03等を更新した結果ではない。
 
+## 2026-10-24 永続サムネイルディスクキャッシュ（`<db>.thumbs.sqlite`）
+
+- `app/thumbnail_disk.py` の `ThumbnailDisk` に明示 `path`（永続モード）を追加し、`app/production_server.py`（`_serve` および `production_handler`）から `catalog.path.parent / (catalog.path.name + '.thumbs.sqlite')` を渡して再起動をまたぐ派生サムネイルキャッシュを有効化した。省略時（`path=None`）は従来通り一時ディレクトリを作成し `close()` で削除する。
+- 永続ファイルは `plain_path` / `storage_parent` で検証し、`storage_lease(path)` により単一プロセス所有を強制（ロック競合時はキャッシュ層のみ fail-open で無効化し、原本から通常生成を継続）。
+- 接続前に残存 `-wal` / `-shm` / `-journal` を `plain_path` 検査のうえ掃除し、`PRAGMA trusted_schema=OFF`、`PRAGMA quick_check`、`PRAGMA user_version`（`0` または `1`）、`sqlite_master` の厳密構成（`thumbs` テーブルのみ、trigger/view/未知objectなし）を検証。不一致や破損時はキャッシュファイルを張り直して fail-open で復旧し、起動を止めない。
+- 再起動後のLRU順序維持のため `COALESCE(MAX(touched), 0)` で `tick` を初期化し、起動時にも件数/容量上限の `_evict()` を適用。永続モードの `close()` はDB接続とleaseのみを閉じ、`<db>.thumbs.sqlite` を保持する。
+- `app/storage_backup.py` の対象store正規表現（`<catalog>.ai...`）および `live_backup.py` は `<db>.thumbs.sqlite` と `.owner.lock` をバックアップに含めない。
+- 確認：`CUDA_VISIBLE_DEVICES=-1 python -m unittest tests/test_thumbnail_cache.py tests/test_thumbnail_priority.py tests/test_storage_backup.py tests/test_live_backup.py` **73 PASS / 43.510s**（再起動をまたぐ永続hit、原本変更時の失効、破損/不正schema/未知user_versionからの自動再初期化、lease競合時のfail-open、バックアップ非収録、`production_handler` 配線を含む）。実機での大量画像スクロール時の体感速度・decoded RAM budgetは引き続き別検証。
+
 ## 次の作業
 
 P3 PARTIAL。可視優先scheduler/近傍先読み/画面外取消の一覧接続、DPI/tile実寸に合わせたedge選択、decoded全体のRAM budgetは未完。現在の一覧は従来page UIのままで、120件block/最大5blockのdata virtualization/標準container再利用と完成形主画面を実装する。Windowsでは既存依存のみでCore→Portable buildを各1回、生成媒体で全size・再利用cell・画像混入・除外/解除後のcache・取消/close・Light/Dark/狭幅を確認する。既存GUI回数capを新名称でresetしない。

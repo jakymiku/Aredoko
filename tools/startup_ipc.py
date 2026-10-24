@@ -131,6 +131,8 @@ class StartupPipe:
             if (type(completed) is not int or completed < 0 or completed > 2**63 - 1
                     or (total is not None and (type(total) is not int or not completed <= total <= 2**63 - 1))):
                 raise ValueError('Invalid progress count')
+        with self._lock:
+            if self._done or self._interactive:return
         self._send({'kind': 'progress', 'progress': dict(snapshot)})
 
     def finish(self, status, *, timeout=2):

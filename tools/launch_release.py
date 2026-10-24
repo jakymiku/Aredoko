@@ -246,7 +246,7 @@ def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full
             if not rolled_back and startup_overrides:settings.update(startup_overrides)
             validate_writable_locations(settings)
         for attempt in range(8):
-            result=_launch_once(root,data,settings,progress=progress,startup_pipe=startup_pipe if attempt==0 else None,force_full=force_full,preferences_path=preferences_path,explicit_profile=attempt==0 and bool(startup_overrides and startup_overrides.get('ai_profile')))
+            result=_launch_once(root,data,settings,progress=progress if attempt==0 else None,startup_pipe=startup_pipe if attempt==0 else None,force_full=force_full,preferences_path=preferences_path,explicit_profile=attempt==0 and bool(startup_overrides and startup_overrides.get('ai_profile')))
             if not isinstance(result,dict) or result.get('restart') is not True:return result
             check_pending_restore(data)
             settings=load_settings(data,preferences_path)

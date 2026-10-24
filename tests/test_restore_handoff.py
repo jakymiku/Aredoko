@@ -111,9 +111,10 @@ class HandoffTests(unittest.TestCase):
         root=self.base/'release';root.mkdir()
         pipe=object()
         with patch('launch_release._launch_once',side_effect=[{'restart':True},None]) as run:
-            launch(root,self.data,{},startup_pipe=pipe)
+            launch(root,self.data,{},progress=object(),startup_pipe=pipe)
         self.assertEqual(run.call_count,2)
         self.assertIs(run.call_args_list[0].kwargs['startup_pipe'],pipe)
         self.assertIsNone(run.call_args_list[1].kwargs['startup_pipe'])
+        self.assertIsNone(run.call_args_list[1].kwargs['progress'])
 
 if __name__=='__main__':unittest.main()

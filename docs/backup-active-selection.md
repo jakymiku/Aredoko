@@ -30,4 +30,13 @@
 
 生成CPU確認：一時指定/cleanup関連19 PASS/8.174s、所有launcher引数と実所有backend HTTPの新規2 PASS/1.072s、破損sentinel形状1 PASS/0.392s。既存settings/switch40 PASS/11.881s、release lifecycle/portable startup26 PASS/47.129s。各実行は別の確認であり合算しない。実所有backendは存在しないAI interpreter/modelsを指定して推論しない。busy lease、設定replace失敗、sentinel削除失敗はいずれもcommitted証拠を保持し、再試行しても二重履歴や誤rollbackをしない。
 
-P5実機受入・clean Windows・実モデルは未完。その後のP6モデルvalidator/registry/取得済みroot接続の実装と実機結果は[AI取得](ai-acquisition.md)へ進んだ。再開時の次の1件は[current-handoff](current-handoff.md)を優先する。配布元/NOTICE/実artifact未確定のcatalogを有効化しない。
+## 2026-10-24 形式2 active/pending・model_locations のネイティブ復元検証（PASS）
+
+`tools/test_native_restore.py` に `--format2 --release` モードを追加し、通常の `Aredoko.exe`（`Bootstrap.cs` + `StartupPipe` + `launch_release.py`）経由で形式2バンドルのネイティブ復元→自動再起動（Phase 1）→通常終了→次回起動（Phase 2）を一貫検証した。出力は `data/ai-ui/restore-v2-native-20261024/run01..05`（全試行のraw・PNG・commands.logを保持）。`dist/portable-basic-20261024-03` は変更していない。
+
+- `run01..03`（ハーネス診断・修正）：Windows 11 `#32770` ファイル選択ダイアログ（`復元元のZIPバックアップ`）で `--depth 20` がExplorerの `ProperTreeHost` で256要素上限に達していた点を `--depth 3` に修正し、ComboBox `1148`/`1136` 内の `DropDown` ボタン（`name="開く"`）と区別して `automationId=="1"`（`type="SplitButton"`, `name="開く(O)"`）を一意選択するようハーネスを修正。
+- `run04`（製品バグ特定）：Phase 0 のネイティブZIP選択・形式2検証・同意再起動・Phase 1 での復元active profile（`Restored Active V2`）一時適用・`launch-settings.json` からの一時 `ai_profile` 解放・`model_locations`（active/pending/WD 3件）および役割別rootの保持・WD `0.65` 定義の復元まで全項目PASS。一方、Phase 1 終了時に `Aredoko.exe` ランチャーが待機タイムアウトした原因を診断し、`launch_release.py` の復元2周目起動（`attempt == 1`）で `startup_pipe` は `None` にする一方 `progress`（`pipe.control`）を引き続き渡していたため、`app_ready` 後（`Bootstrap.cs` 側で `interactive == true`）に `progress` フレームが送出されて `Bootstrap.cs` がプロトコルエラー（`"起動通知を確認できません。"`）となる製品バグを特定。
+- 製品修正と単体テスト：`tools/launch_release.py` で `progress=progress if attempt==0 else None` とし、`tools/startup_ipc.py` の `StartupPipe.publish()` でも `_interactive` 到達後の `progress` 送出を抑止。`tests/test_restore_handoff.py` と `tests/test_startup_ipc.py` に回帰テストを追加し **25 PASS / 10.524s**。
+- `run05`（修正ステージング `data/ai-ui/restore-v2-native-20261024/staged-release/Aredoko` で完全PASS）：Phase 0（`pid=50216`）で `bundle.zip` 選択・準備・同意再起動 → Phase 1（`pid=18308`）で `active="restored"` / `selected="local:pending.json"` / `models_root=placed-running-v2` / 一時 `ai_profile` 解放 / `model_locations` 保全を確認し通常終了（`bootstrap 1 exit=0`）→ Phase 2（`pid=43148`）の次回 `Aredoko.exe` 起動で `active="local:pending.json"`（`Restored Pending V2`, dim 16）と `models_root=placed-pending-v2` への解決、元 `catalog.sqlite`（`current-fixture`）と生成メディアの不変、全所有プロセスの正常終了（`exit=0`, 残存0）を確認。6 PNG全目視。
+
+clean Windows・実モデル推論を伴う受入は引き続き別範囲。その後のP6モデルvalidator/registry/取得済みroot接続の実装と実機結果は[AI取得](ai-acquisition.md)へ進んだ。再開時の次の1件は[current-handoff](current-handoff.md)を優先する。配布元/NOTICE/実artifact未確定のcatalogを有効化しない。

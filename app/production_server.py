@@ -113,7 +113,7 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True,*,ai_p
         return SearchIntent(LayaProcess(worker_python(repo,ai_python),laya_model_path(repo,models_root=models_root),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),active_tagger_profile=None,restore_handoff=None,acquisition_specs=()):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),active_tagger_profile=None,restore_handoff=None,acquisition_specs=(),thumbnail_disk_path=None):
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
@@ -148,7 +148,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     backup_jobs=BackupJobs(catalog,quiesce=catalog.writer_fence.pause,configuration=backup_configuration)
     restore_jobs=RestoreStagingJobs(catalog.path.parent/'restore-staging',handoff=restore_handoff)
     animations=AnimationSessions(previews)
-    thumbnails=ThumbnailCache(previews)
+    thumbnails=ThumbnailCache(previews,disk_path=thumbnail_disk_path)
     def result_provider(conditions, consume, cancelled):
         values = dict(conditions)
         mode = values.pop('mode', None)
@@ -951,7 +951,7 @@ def _serve(args):
             # Broken optional acquisition metadata must not disable the library.
             print('AI acquisition registry unavailable ('+type(error).__name__+')',file=sys.stderr,flush=True)
             acquisition_specs=()
-        handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff,acquisition_specs=acquisition_specs)
+        handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff,acquisition_specs=acquisition_specs,thumbnail_disk_path=catalog.path.parent/(catalog.path.name+'.thumbs.sqlite'))
         resources.callback(close_job,handler.setup_jobs)
         resources.callback(close_job,handler.download_jobs)
         resources.callback(handler.animations.close)

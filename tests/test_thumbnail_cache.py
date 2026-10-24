@@ -1,4 +1,5 @@
 """Generated derived thumbnails, source authorization and shared ownership."""
+from contextlib import closing
 import hashlib
 import io
 import os
@@ -14,6 +15,7 @@ from http.server import ThreadingHTTPServer
 from unittest.mock import patch, PropertyMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from PIL import Image, GifImagePlugin
 from production import ProductionCatalog
 from production_server import production_handler, DisabledAI
@@ -248,6 +250,187 @@ class ThumbnailTests(unittest.TestCase):
                 with self.assertRaises(ValueError): self.read(edge=edge)
             with self.assertRaises(ThumbnailCancelled): self.read(cancelled=lambda: True)
 
+    def test_persistent_disk_tier_across_restart_and_revalidation(self):
+        cache_file = self.base / 'persistent_cache.sqlite'
+        c1 = ThumbnailCache(self.previews, disk_path=cache_file)
+        img_thumb = c1.read(self.ids['image.png'], edge=128)
+        book_thumb = c1.read(self.ids['book.cbz'], edge=128)
+        self.assertTrue(img_thumb.startswith(b'\x89PNG'))
+        self.assertTrue(book_thumb.startswith(b'\x89PNG'))
+        c1.close()
+        self.assertTrue(cache_file.exists())
+
+        c2 = ThumbnailCache(self.previews, disk_path=cache_file)
+        with patch.object(c2, '_decode', side_effect=AssertionError('unexpected decode on persistent hit')) as decode:
+            self.assertEqual(c2.read(self.ids['image.png'], edge=128), img_thumb)
+            self.assertEqual(c2.read(self.ids['book.cbz'], edge=128), book_thumb)
+            self.assertEqual(decode.call_count, 0)
+
+        # Exclusion revalidation still enforced
+        self.catalog.set_excludes(self.root, ['*.cbz'])
+        with self.assertRaises(PreviewUnavailable):
+            c2.read(self.ids['book.cbz'], edge=128)
+        self.catalog.set_excludes(self.root, [])
+
+        self.catalog.set_excludes(self.root, ['*.png'])
+        with self.assertRaises(PreviewUnavailable):
+            c2.read(self.ids['image.png'], edge=128)
+        self.catalog.set_excludes(self.root, [])
+
+        # Source revision update invalidates old cached thumbnail key
+        (self.media / 'image.png').write_bytes(png('green'))
+        self.scan()
+        with patch.object(c2, '_decode', wraps=c2._decode) as decode:
+            new_thumb = c2.read(self.ids['image.png'], edge=128)
+            self.assertNotEqual(new_thumb, img_thumb)
+            self.assertEqual(decode.call_count, 1)
+        c2.close()
+
+    def test_persistent_disk_cross_restart_lru_tick_continuity(self):
+        from thumbnail_disk import ThumbnailDisk
+        import thumbnail_disk
+        cache_file = self.base / 'lru_cache.sqlite'
+        key_a = ('first-visible-exif-rgba-lanczos-v1', 'image', 'itemA', 1, 0, 128)
+        key_b = ('first-visible-exif-rgba-lanczos-v1', 'image', 'itemB', 1, 0, 128)
+        key_c = ('first-visible-exif-rgba-lanczos-v1', 'image', 'itemC', 1, 0, 128)
+        raw_png = png('red', (10, 10))
+
+        # Session 1: insert itemA then itemB
+        d1 = ThumbnailDisk(path=cache_file)
+        d1.put(key_a, (raw_png, None))  # tick = 1
+        d1.put(key_b, (raw_png, None))  # tick = 2
+        d1.close()
+
+        # Session 2: tick initializes to 2; touching key_a brings it to 3
+        d2 = ThumbnailDisk(path=cache_file)
+        d2._open()
+        self.assertEqual(d2.tick, 2)
+        res_a = d2.get(key_a)
+        self.assertIsNotNone(res_a)
+        self.assertEqual(d2.tick, 3)
+        row_a = d2.db.execute('SELECT touched FROM thumbs WHERE key=?', (d2.key(key_a),)).fetchone()
+        row_b = d2.db.execute('SELECT touched FROM thumbs WHERE key=?', (d2.key(key_b),)).fetchone()
+        self.assertEqual(row_a[0], 3)
+        self.assertEqual(row_b[0], 2)
+        d2.close()
+
+        # Session 3: eviction when max entries is reached evicts oldest (itemB touched=2)
+        d3 = ThumbnailDisk(path=cache_file)
+        d3._open()
+        self.assertEqual(d3.tick, 3)
+        with patch.object(thumbnail_disk, 'MAX_ENTRIES', 2):
+            d3.put(key_c, (raw_png, None))
+            self.assertIsNone(d3.get(key_b))  # itemB was evicted
+            self.assertIsNotNone(d3.get(key_a))  # itemA was retained
+            self.assertIsNotNone(d3.get(key_c))  # itemC was inserted
+        d3.close()
+
+        # Session 4: test open-time eviction when reopened with small max_bytes
+        d4 = ThumbnailDisk(path=cache_file, max_bytes=int(len(raw_png) * 1.5))
+        d4._open()
+        count = d4.db.execute('SELECT COUNT(*) FROM thumbs').fetchone()[0]
+        self.assertEqual(count, 1)
+        d4.close()
+
+    def test_persistent_disk_corrupt_and_incompatible_version_recovery(self):
+        import sqlite3
+        cache_file = self.base / 'corrupt_cache.sqlite'
+
+        # Garbage bytes
+        cache_file.write_bytes(b'NON_SQLITE_HEADER_CORRUPTED_BYTES' * 40)
+        c1 = ThumbnailCache(self.previews, disk_path=cache_file)
+        thumb1 = c1.read(self.ids['image.png'], edge=128)
+        self.assertTrue(thumb1.startswith(b'\x89PNG'))
+        c1.close()
+        with closing(sqlite3.connect(cache_file)) as db:
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 1)
+            self.assertEqual(db.execute('PRAGMA quick_check').fetchall(), [('ok',)])
+
+        # Unsupported user_version = 99
+        with closing(sqlite3.connect(cache_file)) as db:
+            db.execute('PRAGMA user_version = 99')
+            db.execute('CREATE TABLE IF NOT EXISTS thumbs(key TEXT PRIMARY KEY, png BLOB NOT NULL, digest TEXT NOT NULL, tag TEXT, touched INTEGER NOT NULL)')
+            db.commit()
+        c2 = ThumbnailCache(self.previews, disk_path=cache_file)
+        thumb2 = c2.read(self.ids['image.png'], edge=128)
+        self.assertTrue(thumb2.startswith(b'\x89PNG'))
+        c2.close()
+        with closing(sqlite3.connect(cache_file)) as db:
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 1)
+
+        # Invalid schema (wrong columns)
+        with closing(sqlite3.connect(cache_file)) as db:
+            db.execute('DROP TABLE IF EXISTS thumbs')
+            db.execute('CREATE TABLE thumbs(key TEXT PRIMARY KEY, wrong_column TEXT)')
+            db.commit()
+        c3 = ThumbnailCache(self.previews, disk_path=cache_file)
+        thumb3 = c3.read(self.ids['image.png'], edge=128)
+        self.assertTrue(thumb3.startswith(b'\x89PNG'))
+        c3.close()
+        with closing(sqlite3.connect(cache_file)) as db:
+            cols = [row[1] for row in db.execute('PRAGMA table_info(thumbs)')]
+            self.assertEqual(cols, ['key', 'png', 'digest', 'tag', 'touched'])
+
+    def test_persistent_disk_backup_isolation(self):
+        import json
+        import storage_backup
+        cache_file = self.catalog.path.parent / 'catalog_thumbs.sqlite'
+        c = ThumbnailCache(self.previews, disk_path=cache_file)
+        thumb = c.read(self.ids['image.png'], edge=128)
+        self.assertTrue(thumb.startswith(b'\x89PNG'))
+
+        backup_dir = self.base / 'test_backup_out'
+        report = storage_backup.backup(self.catalog.path, backup_dir)
+        self.assertTrue(Path(report['directory']).exists())
+
+        manifest = json.loads((backup_dir / 'manifest.json').read_text(encoding='utf-8'))
+        entry_paths = [e['path'] for e in manifest['entries']]
+        self.assertIn('catalog.sqlite', entry_paths)
+        self.assertNotIn('catalog_thumbs.sqlite', entry_paths)
+        self.assertFalse(any('thumb' in p.lower() for p in entry_paths))
+        self.assertFalse((backup_dir / 'catalog_thumbs.sqlite').exists())
+        self.assertFalse((backup_dir / 'catalog_thumbs.sqlite.owner.lock').exists())
+
+        # Cache still functions after backup
+        self.assertEqual(c.read(self.ids['image.png'], edge=128), thumb)
+        c.close()
+
+    def test_persistent_disk_concurrent_lease_and_symlink_security(self):
+        from thumbnail_disk import ThumbnailDisk
+        cache_file = self.base / 'locked_cache.sqlite'
+        d1 = ThumbnailDisk(path=cache_file)
+        self.assertFalse(d1.disabled)
+        self.assertIsNotNone(d1._open())
+
+        # Concurrent instance on same path fails open (busy)
+        d2 = ThumbnailDisk(path=cache_file)
+        self.assertTrue(d2.disabled)
+        self.assertIsNone(d2._open())
+        self.assertIsNone(d2.get(('key',)))
+        d2.close()
+
+        # After d1 closes, lease is released and d3 succeeds
+        d1.close()
+        d3 = ThumbnailDisk(path=cache_file)
+        self.assertFalse(d3.disabled)
+        self.assertIsNotNone(d3._open())
+        d3.close()
+
+    def test_persistent_disk_companion_file_cleanup(self):
+        cache_file = self.base / 'companion_test.sqlite'
+        # Create stray companion files before opening
+        (self.base / 'companion_test.sqlite-wal').write_bytes(b'stray-wal')
+        (self.base / 'companion_test.sqlite-shm').write_bytes(b'stray-shm')
+        (self.base / 'companion_test.sqlite-journal').write_bytes(b'stray-journal')
+
+        c = ThumbnailCache(self.previews, disk_path=cache_file)
+        thumb = c.read(self.ids['image.png'], edge=128)
+        self.assertTrue(thumb.startswith(b'\x89PNG'))
+        c.close()
+
+        for suffix in ('-wal', '-shm', '-journal'):
+            self.assertFalse((self.base / f'companion_test.sqlite{suffix}').exists())
+
 
 class ThumbnailHTTPTests(unittest.TestCase):
     setUp = ThumbnailTests.setUp
@@ -274,3 +457,28 @@ class ThumbnailHTTPTests(unittest.TestCase):
             self.assertEqual(request(suffix)[0], 400)
         self.assertEqual(request('?edge=128&priority=nearby')[0], 200)
         self.catalog.set_excludes(self.root, ['*.png']); self.assertEqual(request('?edge=128&priority=visible')[0], 404)
+
+    def test_production_handler_persistent_thumbnail_disk_path(self):
+        disk_path = self.base / 'library.sqlite.thumbs.sqlite'
+        h1 = production_handler(self.catalog, 'test-token', ai=DisabledAI(), thumbnail_disk_path=disk_path)
+        s1 = ThreadingHTTPServer(('127.0.0.1', 0), h1)
+        t1 = threading.Thread(target=s1.serve_forever); t1.start()
+        base1 = f'http://127.0.0.1:{s1.server_port}/api/library/thumbnail/{self.ids["image.png"]}?edge=128'
+        with urllib.request.urlopen(urllib.request.Request(base1, headers={'X-Aredoko-Token': 'test-token'})) as resp:
+            first_bytes = resp.read()
+        self.assertTrue(first_bytes.startswith(b'\x89PNG'))
+        s1.shutdown(); t1.join(); s1.server_close()
+        h1.results.close(); h1.animations.close(); h1.setup_jobs.close(); h1.thumbnails.close()
+        self.assertTrue(disk_path.exists())
+
+        h2 = production_handler(self.catalog, 'test-token', ai=DisabledAI(), thumbnail_disk_path=disk_path)
+        self.addCleanup(h2.results.close); self.addCleanup(h2.animations.close)
+        self.addCleanup(h2.setup_jobs.close); self.addCleanup(h2.thumbnails.close)
+        s2 = ThreadingHTTPServer(('127.0.0.1', 0), h2)
+        t2 = threading.Thread(target=s2.serve_forever); t2.start()
+        self.addCleanup(lambda: (s2.shutdown(), t2.join(), s2.server_close()))
+        base2 = f'http://127.0.0.1:{s2.server_port}/api/library/thumbnail/{self.ids["image.png"]}?edge=128'
+        with patch.object(h2.thumbnails, '_decode', side_effect=AssertionError('persistent HTTP hit decoded')):
+            with urllib.request.urlopen(urllib.request.Request(base2, headers={'X-Aredoko-Token': 'test-token'})) as resp:
+                second_bytes = resp.read()
+        self.assertEqual(second_bytes, first_bytes)

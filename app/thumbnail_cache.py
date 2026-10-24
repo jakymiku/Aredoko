@@ -79,7 +79,7 @@ class _Job:
 
 
 class ThumbnailCache:
-    def __init__(self, previews, *, max_bytes=CACHE_BYTES, max_entries=CACHE_ENTRIES):
+    def __init__(self, previews, *, max_bytes=CACHE_BYTES, max_entries=CACHE_ENTRIES, disk_path=None, disk_max_bytes=None):
         self.previews = previews
         self.max_bytes = max_bytes
         self.max_entries = max_entries
@@ -91,7 +91,8 @@ class ThumbnailCache:
         self.bytes = 0
         self.jobs = {}
         self.closed = False
-        self.disk = ThumbnailDisk()
+        disk_kwargs = {} if disk_max_bytes is None else {'max_bytes': disk_max_bytes}
+        self.disk = ThumbnailDisk(path=disk_path, **disk_kwargs)
         self.decode_budget = DecodeBudget()
 
     def close(self):

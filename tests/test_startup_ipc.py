@@ -231,6 +231,16 @@ class StartupPipeTests(unittest.TestCase):
         self.assertEqual(self.events(output)[-1]['status'], 'failed')
         self.assertNotIn(b'preflight_complete', output.getvalue())
 
+    def test_progress_after_app_ready_is_suppressed_for_bootstrap_protocol(self):
+        incoming, parent, output = self.streams();pipe = ipc.StartupPipe(incoming, output)
+        pipe.start()
+        with pipe.control.phase('manifest'):pass
+        pipe.mark_ready()
+        with pipe.control.phase('backend_start'):pass
+        self.assertEqual(pipe.finish('session_complete'), 0)
+        kinds = [e['kind'] for e in self.events(output)]
+        self.assertEqual(kinds, ['hello', 'progress', 'progress', 'app_ready', 'result'])
+
     def test_progress_schema_rejects_paths_invalid_counts_and_forged_states(self):
         incoming, parent, output = self.streams();pipe = ipc.StartupPipe(incoming, output)
         pipe.start()
