@@ -16,7 +16,7 @@ CPU：同梱Pythonの実所有backendで生成DB/PNGの基本11項目PASS、形�
 
 ユーザーの追加1試行許可で、通常EXE→生成ライブラリ→設定→AI検索の準備→配置画面→閉じる→当初許可された1回の再起動を確認。新基本候補cap **1/1**、起動総数2。4 PNGを全枚目視し、今回の通常Dark/1200px相当では重なり/切れを認めない。初回終了時はGet-Processの観測handleが保持されずExitCode=nullで誤FAIL（非ゼロではない）。GUIなしのCPU再現でnull対owned0を確認し、raw report.jsonを保全。初回の終了code自体は欠測。予定内の再起動ではhandle保持でWinUI/通常bootstrapともexit0、生成登録保持を確認。追加launch/fix-rerunなし。post-checkは専用DB integrity=ok/items1、原本SHA/mtimeと起動設定不変、lease解放/対象4PID消滅。実モデル/GPU/通常DB/旧Alphaなし。
 
-bootstrapはOS KnownFolderをログ先に使うため、試験時のLOCALAPPDATA差替えと異なり、通常アプリのログ領域へ今回の空startupログを作成した（削除しない）。backend/DB/settingsは専用領域。次にこの保存先不一致をsourceで揃える。clean Windows/実取得/取得済みrootボタンnative/全復元の受入は未完。旧caps（環境2/2、復元3/3、取得1/2等）は維持。
+bootstrapはOS KnownFolderをログ先に使うため、試験時のLOCALAPPDATA差替えと異なり、通常アプリのログ領域へ今回の空startupログを作成した（削除しない）。backend/DB/settingsは専用領域。後続sourceでbootstrapも明示LOCALAPPDATAを使用するよう修正済み（純粋self-testのみ、新ZIP/GUI未再確認）。clean Windows/実取得/取得済みrootボタンnative/全復元の受入は未完。旧caps（環境2/2、復元3/3、取得1/2等）は維持。
 
 証拠：ignored `data/ai-ui/portable-refresh-20261024-02/` preparation.json、各CPU report/log、native01のraw report/restart-report/post-check/4 PNG。P5/P6/P7全完了とはしない。後続の末尾区切り/idle progressバー修正はsource buildのみで、この封印ZIPを更新していない。
 

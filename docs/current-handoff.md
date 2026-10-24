@@ -15,8 +15,10 @@
 
 - 新候補02の同梱CPU基本11、復元契約8、日本語/空白再配置11は各PASS。nativeで見つけた末尾の空区切りとidle progress表示をsourceで整理し、Portable build0 errors/既知3 warnings。微修正はnative未再確認。
 
+- bootstrapのログ先をPythonと同じ明示LOCALAPPDATAへ統一。相対/drive-relative拒否を含む純粋self-testとWindows標準compilerがexit0。新候補02の封印ファイルは未変更、関連ログはstartup-data-root-20261024-01。
+
 ## 次の実装1件
-**P6：bootstrapとPythonのLOCALAPPDATA保存先を一致させる。** 新基本候補GUIで、bootstrapだけOS KnownFolderにログを作り、backendは環境変数の専用先を使う不一致を確認した。原本/通常DBは無変更。sourceを揃えて純粋bootstrap self-test/関連CPUだけ確認する。追加GUIは実行しない。
+**P6：取得済みversionの明示適用ボタンを生成fixtureで実機確認する。** `2973de7`のパス引継ぎはCore/ビルドのみだった。既存の取得flowの繰返しではなく、公開root→配置画面→明示適用→next-restart設定保存だけを確認し、生成の検査用Python/モデルは実行しない。最新テスト方針に沿い専用DB/設定で診断する。実catalog公開元/NOTICEは引き続き未確定。
 
 ## 継続する残件と制約
 - P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。

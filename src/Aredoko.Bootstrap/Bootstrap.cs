@@ -41,6 +41,9 @@ internal sealed class Bootstrap : Form
                 if(ProgressText(p).Item3!=50)return 2;
                 try{Number(true);return 2;}catch(IOException){}
                 try{ValidateKeys("{\"kind\":1,\"kind\":2}");return 2;}catch(IOException){}
+                foreach(var invalid in new[]{null,"","relative","C:relative",@"\root-relative"})
+                {try{LocalDataRoot(invalid);return 2;}catch(IOException){}}
+                if(LocalDataRoot(Path.GetTempPath())!=Path.GetFullPath(Path.GetTempPath()))return 2;
                 return 0;
             }catch{return 2;}
         }
@@ -87,6 +90,14 @@ internal sealed class Bootstrap : Form
         var bytes=Encoding.ASCII.GetBytes("{\"format\":\""+Format+"\",\"command\":\""+command+"\",\"session_id\":\""+session+"\"}\n");
         lock(inputLock){if(input!=null){if(command=="cancel"&&!helloSent)return;input.Write(bytes,0,bytes.Length);input.Flush();if(command=="hello")helloSent=true;}}
     }
+    static string LocalDataRoot(string candidate)
+    {
+        // Match the Python owner. KnownFolder ignores a process-local override,
+        // which otherwise scatters bootstrap logs outside that session's data.
+        if(String.IsNullOrEmpty(candidate)||!Path.IsPathRooted(candidate)||Path.GetPathRoot(candidate).Length<3)
+            throw new IOException("保存先を確認できません。");
+        return Path.GetFullPath(candidate);
+    }
     static void Ordinary(string path,bool directory)
     {
         path=Path.GetFullPath(path);var current=path;
@@ -115,8 +126,7 @@ internal sealed class Bootstrap : Form
             var python=Path.Combine(root,"runtime","python","python.exe");
             var script=Path.Combine(root,"tools","launch_release.py");
             Ordinary(python,false);Ordinary(script,false);
-            var local=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if(String.IsNullOrEmpty(local)||!Path.IsPathRooted(local))throw new IOException("保存先を確認できません。");
+            var local=LocalDataRoot(Environment.GetEnvironmentVariable("LOCALAPPDATA"));
             Ordinary(local,true);
             var logDirectory=Path.Combine(local,"Aredoko","logs");
             // Validate each ancestor before creating a child. Never follow a junction.
