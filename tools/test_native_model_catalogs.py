@@ -17,6 +17,7 @@ from native_ui_tools import nodes
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--release',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--direct-entry',action='store_true',help='Only verify the new direct AI download entry, then one planned restart')
     args=parser.parse_args();release=args.release.resolve();target=args.output.resolve()
     if os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui'):
         parser.error('New dedicated Windows output required')
@@ -36,7 +37,8 @@ def main():
     initial_settings=settings.read_bytes()
     env={**os.environ,'LOCALAPPDATA':str(local),'APPDATA':str(local),'WINAPP_UI_WORKFLOW_ID':'aredoko-model-catalog-display-20261025'}
     report={'pass':False,'checks':[],'screenshots':[],'owned_pids':[],'exits':[],
-            'authorization':'2026-10-25 explicit human approval: new basic ZIP display only, one restart',
+            'authorization':'2026-10-25 explicit human approval: new basic ZIP direct entry display only, one restart' if args.direct_entry else '2026-10-25 explicit human approval: new basic ZIP display only, one restart',
+            'direct_entry':args.direct_entry,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
             'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'app_sha256':hashlib.sha256((release/'bin/Aredoko.WinUI.dll').read_bytes()).hexdigest()}
@@ -127,16 +129,20 @@ def main():
             check(f'phase {phase}: no acquisition started',request('/api/library/ai/setup/download/job')['state']=='idle')
             if phase==0:
                 ui('invoke','BtnSettings');ui('wait-for','BtnAIIndex','-t','5000');ui('invoke','BtnAIIndex')
-                ui('wait-for','AIEnvironmentOpen','-t','10000');ui('invoke','AIEnvironmentOpen')
-                ui('wait-for','AIEnvironmentDownload','-t','10000');ui('invoke','AIEnvironmentDownload')
+                if args.direct_entry:
+                    ui('wait-for','AIModelDownloadOpen','-t','10000');ui('invoke','AIModelDownloadOpen')
+                else:
+                    ui('wait-for','AIEnvironmentOpen','-t','10000');ui('invoke','AIEnvironmentOpen')
+                    ui('wait-for','AIEnvironmentDownload','-t','10000');ui('invoke','AIEnvironmentDownload')
                 ui('wait-for','AIDownloadInformation','--value','EmbeddingGemma 2','--contains','-t','10000')
                 info=tree()['AIDownloadInformation']['name']
                 check('model-only runtime requirement is visible','対応する実行環境が必要' in info)
                 ui('wait-for','PrimaryButton','-p','IsEnabled','--value','False','-t','5000');shot('embedding-catalog')
-                ui('focus','AIDownloadCatalog');ui('send-keys','home down enter','--via','send-input')
-                ui('wait-for','AIDownloadInformation','--value','627aef95638667ddcaa3ac8ae625e88ea5b02f51','--contains','-t','10000')
-                ui('wait-for','PrimaryButton','-p','IsEnabled','--value','False','-t','5000');shot('wd-catalog')
-                check('viewing two models does not start transfer',request('/api/library/ai/setup/download/job')['state']=='idle')
+                if not args.direct_entry:
+                    ui('focus','AIDownloadCatalog');ui('send-keys','home down enter','--via','send-input')
+                    ui('wait-for','AIDownloadInformation','--value','627aef95638667ddcaa3ac8ae625e88ea5b02f51','--contains','-t','10000')
+                    ui('wait-for','PrimaryButton','-p','IsEnabled','--value','False','-t','5000');shot('wd-catalog')
+                check('viewing catalogs does not start transfer',request('/api/library/ai/setup/download/job')['state']=='idle')
             else:shot('restarted-library')
             close_phase();check(f'phase {phase}: settings unchanged',settings.read_bytes()==initial_settings)
         check('generated media unchanged',before==(hashlib.sha256(source.read_bytes()).hexdigest(),source.stat().st_mtime_ns))

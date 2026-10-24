@@ -192,3 +192,10 @@ WDの既存固定hash/サイズはconfig/tagger-profilesに存在し、[固定re
 - 配置先対象に保存済みの個別モデルと取得対象も追加し、そのモデルだけの指定/解除が可能。acquiredの保存後は同じモデルのpending rootを表示し、共通rootと混同しない。選択肢は設定の最大32件＋取得対象まで、ファイル走査なし。Tagへはstring keyだけを渡し、Core定義はmanaged dictionaryで保持。
 - frontend02/embedding run02は追加UIのrefreshで選択中項目をremove/recreateし共通選択へ戻るFAIL。初期のTag ABI仮説だけを直したfrontend03/run03でも同FAILであり、確定原因と混同しない。両raw/reportを保全（run03 failure PNGは小さく視覚証拠にならず、他4 PNGとUIAを使用）。モデル保存自体は両方成功。
 - 診断後はnative項目を置換せず、足りないbounded選択肢だけ追加する方式へ修正。frontend04/embedding run04で全チェックPASS、5 PNG全目視、保存後の正確なroot表示/他役割保持/再表示/終了0を確認。手順上限を無変更で抜け直した再実行ではなく、追加した選択UIの回帰・実修正の履歴としてrun01〜04を保持する。既存WD役割UIのrun02 PASSは別時点の結果。
+
+
+### 直接取得入口の限定native受入（2026-10-25）
+
+基本ZIP03/source5ddd97aの通常EXEから、新しい `AIModelDownloadOpen` を明示操作して取得画面へ直接遷移できた。生成DB/画像だけで容量・ライセンス・runtime別途必要表示、未同意では開始不可、転送owner idle、正常終了/予定内1再起動、設定と全payload保全を確認。11 checks PASS / 4所有exit0 / 2 PNG目視。旧環境配置経由とWD切替の反復ではない。新しい実転送/モデル実行/GPUはなし。[候補と証拠](portable-refresh-20261024.md)。
+
+任意runtimeの通知原文収集・source binding・pack同梱は `5ddd97a`。[不足と確認範囲](runtime-notice-inventory.md)を参照。runtimeを自動取得できる状態にはまだしていない。

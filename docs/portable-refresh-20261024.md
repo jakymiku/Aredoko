@@ -71,3 +71,14 @@ ignored `data/ai-ui/portable-refresh-20261024/` の prepare.py、publish/bootstr
 - 同梱Python11項目 PASS、catalog2件とその候補の固定registryの完全一致、AI未導入の区別・idle・生成画像登録/検索/preview・原本不変・EOF exit0・DB integrityを確認。raw `data/ai-ui/embedding-catalog-review-20261025/basic-cpu`。01のCPU11も別実行でPASS。
 - ユーザー明示許可の**表示のみ**native1flow＋予定内1再起動：通常Aredoko.exe→専用DB→取得画面のEmbeddingGemma 2/WD・容量/ライセンス/runtime別途必要・consent前disabled→正常終了→再起動・生成画像保持がPASS。全所有WinUI/bootstrap計4 exit0、元PNG SHA/mtime・設定bytes・GUI後の全766payload inventory不変。3 PNG全目視。`data/ai-ui/embedding-catalog-review-20261025/native-display01/report.json`。
 - WD PNGは選択popupが開いた状態を含み、閉じた後の表示の最終評価とは区別する。取得開始は一度も押さず、各観測でjob idle。**実1.53GB/468MB転送・推論・clean Windows・runtime pack自動取得は未検証/未完**。この候補を全媒体完成版や正式公開版とは呼ばない。
+
+
+## 2026-10-25 基本ZIP03：直接取得入口と通信再試行
+
+source **5ddd97a**。入口 `dist/portable-basic-20261025-03/Aredoko/Aredoko.exe`、ZIP `Aredoko-windows-x64.zip` **344,005,307 bytes**、展開 **657,902,853 bytes / 767 payload files**。ZIP SHA256 `f89b84306778d5b397edd1462d8ae469208d8b08affef734448aef5a487cc2c4`。旧02/Alpha/shortcutを上書きしていない。
+
+`e46d9f8` の通信切断時の限定再接続、`d0eb214` のAI設定から「モデルをダウンロード」へ直接移動する入口、`5ddd97a` の開発用通知収集を収録。モデル2カタログ、モデル/PyTorch本体なし。Core/Bootstrapは4c45636以降のsource差分がないため合格結果と検証済み02のBootstrapを再利用し、WinUIを新規publish（既知WUI1001×3/SDK IL2104×2、0 errors）。全payload/ZIP検証・同梱Python `--check` 成功。
+
+生成DBだけを使う同梱backend CPU11項目PASS（2カタログ、AI未導入でも検索/preview/正常EOF終了/DB integrity、原本不変）。ユーザーの追加許可で新しい直接入口だけを確認：通常EXE→設定→AI検索の準備→モデルをダウンロード→EG2容量/ライセンス/runtime別途の表示→正常終了→予定内1再起動、全11 checks PASS。取得開始・同意操作なし、job idle、設定bytes/生成原本SHA・mtime/全767 payload保全、所有WinUI/Bootstrap計4 exit0、残存なし。2 PNGを目視。WD切替は02で確認済みのため反復していない。
+
+証拠 `data/ai-ui/embedding-catalog-review-20261025/basic03-cpu/report.json` / `native-direct03/report.json`、準備記録 `dist/portable-basic-20261025-03/preparation.json`。GUI/GPU推論・実runtime導入・clean Windows受入は別。実モデル転送の成功は[取得正本](ai-acquisition.md)に記録した専用先でのCPU転送確認で、このGUI実行での転送ではない。
