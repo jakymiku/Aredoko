@@ -45,8 +45,14 @@
 - **P5 形式2 `active`/`pending`・`model_locations` ネイティブ復元一連と `Aredoko.exe` 再起動IPC修正（`2f4de23`）**：`tools/test_native_restore.py --format2 --release` を実装し、通常の `Aredoko.exe` 入口で形式2 ZIPのネイティブ選択→準備→同意再起動（Phase 1：復元active profile一時適用・`launch-settings.json` からの一時 `ai_profile` 解放・`model_locations` 3件と役割別root保全・WD `0.65` 定義復元）→通常終了→次回 `Aredoko.exe` 起動（Phase 2：`local:pending.json` への切替とpending用 `model_locations` 解決、元 `catalog.sqlite`/原本不変）を実証。途中で `launch_release.py` の復元2周目（`attempt == 1`）が `app_ready` 後（`Bootstrap.cs` の `interactive == true`）にも `progress` フレームを送出して `Bootstrap.cs` がプロトコルエラーとなる製品バグを特定し、`tools/launch_release.py` と `tools/startup_ipc.py` を修正。単体テスト25 PASS（`test_restore_handoff.py`・`test_startup_ipc.py`）および修正ステージングでの実機 `run05` 完全PASS（6 PNG全目視、全所有 `Aredoko.exe`/`Aredoko.WinUI.exe` 終了0、残存0）。先行 `run01..04` の生ログも保持。詳細は[P5 active/pending正本](backup-active-selection.md)。
 - **P3 永続サムネイルディスクキャッシュ `<db>.thumbs.sqlite`（`2f4de23`）**：`app/thumbnail_disk.py` の `ThumbnailDisk(path=...)` に永続モードを実装し、`app/production_server.py` から `<catalog>.thumbs.sqlite` を接続。`plain_path`/`storage_parent`/`storage_lease` による単一プロセス所有、接続前の残存 `-wal`/`-shm`/`-journal` 掃除、`trusted_schema=OFF`・`quick_check`・`user_version`・厳密 `sqlite_master` 検査（`thumbs` のみ）、再起動をまたぐ `touched` LRU順序の継続と起動時 `_evict()`、ロック競合/破損時の fail-open 再初期化・無効化、およびバックアップ/復元からの除外（`storage_backup.py`/`live_backup.py`）を実装。関連単体テスト **73 PASS**（`test_thumbnail_cache.py`・`test_thumbnail_priority.py`・`test_storage_backup.py`・`test_live_backup.py`）。詳細は[サムネイル正本](thumbnail-derivatives.md)。
 
+- **P3 モニター間DPI（RasterizationScale）自動再取得接続と永続 <db>.thumbs.sqlite 再起動横断実機確認（e46c53d）**：src/Aredoko.WinUI/MainPage.xaml.cs で XamlRoot.Changed を購読し、DIPサイズ変更を伴わないモニター移動時の RasterizationScale 変化でも80ms集約タイマー（itemSizeTimer）から実現済みライブラリカード（containerRefresh）・棚カード（MainPage.Shelves.cs の shelfRefresh）・詳細プレビューの派生edgeを再評価するよう接続（既存bitmapを保持したまま必要時のみ新DPIバケットを再取得、Coreテスト・Portable build/publish 0 errors）。あわせて 	ools/test_native_persistent_thumbnails.py を追加し、最新ステージング data/ai-ui/p3-persistent-thumbs-20261024/staged-release/Aredoko（758 files）＋生成24 PNG/2 CBZ＋独立LOCALAPPDATAで実機検証。初回 
+un01（ハーネス側の .owner.lock ファイル非存在検査ミス、生ログ/PNG保全）を with storage_lease(thumbs_db_path): によるロック解放検査へ修正し、
+un02 で **25 checks PASS**（Phase 0 で 
+ows=30・max_touched=30・ytes=18,779・WorkingSet64=188.1MB、再起動後 Phase 1 で 
+ows=30・ytes=18,779 不変のまま max_touched=60 へ進行し全30要求の100%永続ディスクキャッシュヒット・WorkingSet64=187.6MB・生成26原本SHA/mtime完全不変・全所有 Aredoko.exe/Aredoko.WinUI.exe 終了0・残存0、2 PNG全目視）。詳細は[サムネイル正本](thumbnail-derivatives.md)および[結果ウィンドウ正本](p3-result-window.md)。
+
 ## 次の実装1件
-**P3/P7 永続サムネイルキャッシュを含む実機スクロール・メモリ境界確認、または P6 実catalog/完全NOTICE/公開先の確定。**
+**P3/P7 大量画像スクロール時の体感速度・High Contrast/Light/狭幅UI監査、または P6 実catalog/完全NOTICE/公開先の確定。**
 - P3/P7側：永続 `<db>.thumbs.sqlite` が有効な状態での再起動後サムネイル再表示と実RSS/decoded RAM境界、または未受入のHigh Contrast/DPI/Light・狭幅のUI監査を生成fixture＋独立LOCALAPPDATAで進める。P6側はレビュー済み実artifact・完全なNOTICE・runtime pack公開先が確定し次第source registryへ登録する（推測URL/架空hashで有効化しない。新モデル/依存取得は別許可）。完了済みのP5形式2復元・P6モデル配置・P1B生成再生・P2境界・P3同じflowを毎回再テストしない。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
