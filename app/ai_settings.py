@@ -46,6 +46,7 @@ class AIProfileSettings:
         self.startup_error = ""
         self.started = "default"
         self.startup_path = None
+        self.active_definition = None
         try:
             if self.override is not None:
                 # An explicit -AIProfile must override a damaged saved preference.
@@ -57,8 +58,8 @@ class AIProfileSettings:
             else:
                 self.started = self.selected()
                 self.startup_path = self.path_for(self.started)
-            if self.startup_path is not None:
-                load_profile(self.startup_path)
+            active_profile = load_profile(self.startup_path)
+            self.active_definition = json.dumps(active_profile.to_dict(),ensure_ascii=False,sort_keys=True).encode("utf-8")
         except (ValueError, OSError, json.JSONDecodeError) as ex:
             self.startup_path = None
             self.startup_error = "モデル設定が無効です（" + type(ex).__name__ + "）。設定を確認してください。文字検索は利用できます。"

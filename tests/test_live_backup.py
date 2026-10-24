@@ -56,19 +56,21 @@ class LiveBackupTests(unittest.TestCase):
         handler=production_handler(self.cat,'token',DisabledAI(),profiles=profiles)
         for job in (handler.setup_jobs,handler.download_jobs,handler.restore_jobs,handler.backup_jobs,handler.thumbnails,handler.animations,handler.results):self.addCleanup(job.close)
         configuration=handler.backup_jobs.configuration()
-        self.assertEqual(configuration['active_profile'],'explicit.json')
+        self.assertIsNone(configuration['active_profile']);self.assertTrue(configuration['active_profile_override'])
         capture_live(self.cat,self.base/'bundle',quiesce=self.quiesce,**configuration)
         restore(self.base/'bundle',self.base/'restored')
         resumed=AIProfileSettings(self.base,self.base/'restored/settings/ai-settings.json',profile_directory=self.base/'restored/profiles')
-        self.assertEqual(resumed.selected(),'local:explicit.json');self.assertEqual(resumed.startup_path.read_bytes(),profile.read_bytes())
+        self.assertEqual(resumed.selected(),'default')
+        report=json.loads((self.base/'restored/recovery.json').read_text());active_file=self.base/'restored'/report['active_selection']['ai_profile']
+        self.assertEqual(json.loads(active_file.read_text()),json.loads(profile.read_text()))
         self.assertFalse(saved.exists())
         from restore_switch import apply_restore_switch,rollback_restore_switch
         data=self.base/'switch-user';data.mkdir();previous={'database':str(self.cat.path),'ui_theme':'dark'}
         (data/'launch-settings.json').write_text(json.dumps(previous),encoding='utf-8')
         switched=apply_restore_switch(data,self.base/'restored')
         launch=json.loads((data/'launch-settings.json').read_text())
-        active=AIProfileSettings(self.base,launch['ai_settings'],profile_directory=launch['ai_profiles_dir'])
-        self.assertEqual(active.selected(),'local:explicit.json');self.assertEqual(active.startup_path.read_bytes(),profile.read_bytes())
+        active=AIProfileSettings(self.base,launch['ai_settings'],command_line_profile=launch['ai_profile'],profile_directory=launch.get('ai_profiles_dir',self.base/'restored/profiles'))
+        self.assertEqual(active.selected(),'default');self.assertEqual(json.loads(active.startup_path.read_text()),json.loads(profile.read_text()))
         rollback_restore_switch(data);self.assertEqual(json.loads((data/'launch-settings.json').read_text()),previous)
 
     def test_cancel_before_publication_does_not_save_derived_profile_preferences(self):

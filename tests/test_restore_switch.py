@@ -87,6 +87,7 @@ class RestoreSwitchTests(unittest.TestCase):
             profile=source/'custom-wd.json'
             shutil.copyfile(Path(__file__).resolve().parents[1]/'config/tagger-profiles/wd-swinv2-v3.json',profile)
             options['tagger_profiles']=(profile,)
+            options['active_tagger_profile']=profile.name
         bundle = self.base / (name + '_bundle')
         storage_backup.backup(source / 'catalog.sqlite', bundle, include_vectors=False, **options)
         storage_backup.restore(bundle, staging)

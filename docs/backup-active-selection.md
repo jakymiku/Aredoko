@@ -1,0 +1,29 @@
+# P5：使用中モデルと次回用設定の保全
+
+## 到達点（2026-10-24）
+
+既存の未コミット4ファイル案を退避・確認し、`c30bc34`へfast-forwardした後、その案を土台に実装した。退避はignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch` とstarting-state.json。reset/stash/他の変更の上書きなし。
+
+バックアップには「いま使っている定義」と「保存済みの次回用選択」を分離して残す。保存済みsettingsの元bytesを上書きしない。AIProfileSettingsは起動時に検証したModelProfile定義を小さいimmutable bytesとして保持する。既定モデル、local選択、明示overrideを同じ仕組みで扱う。Taggerは実際のadapterが保持するWDProfile定義を使い、候補ファイルの順序から選ばない。モデル・Pythonの実行/コピー/取得をしない。
+
+## 形式2
+
+`aredoko-recovery` version2（復元receiptもversion2）を新規出力する。既存のversion1は読み取り・復元可能。旧アプリはversion2を拒否するため、新しいmetadataを無視して異なるモデルで起動することはない。上位version・未知fieldは拒否。
+
+- `active_selection`は必須。`ai_profile` / `tagger_profile`は検証済みpayloadへの相対pathまたはnull（未収録）、`ai_override`は元の明示overrideの有無を表すbool。`true`ならAI定義への参照が必須。
+- 起動時のAI定義は `active/ai-profile.json`（role `active_profile`）、WD定義は `active/tagger-profile.json`（role `active_tagger_profile`）。各1件・8KiB上限、設定型を検証し、通常のサイズ/SHA/構成・取消・原本guardを適用する。
+- `profiles/`最大64件、`tagger-profiles/`最大16件の元の保存枠を消費しない。snapshotを普通のprofile一覧へ追加しないため、再バックアップで増殖せず、同名の利用者profileを上書きしない。全payload上限はversion1の148件、version2は150件。
+- 保存済み `ai-settings.json` は元bytesのまま収録。存在しなければ、設定を選択したCOPYにだけ暗黙のpending `default` を記録する。元の設定ファイルを新規作成しない。
+- 設定を含めない選択では、profile/snapshot/選択metadataを取り込まない。manifestのnullable選択は未収録を示し、既存の起動設定を勝手に削除しない。
+- 復元先は参照・payload全体を検証してから切り替え、AIとTaggerを正確な復元ファイルへrebaseする。旧version1の単独taggerは従来通り。旧複数taggerはactive不明のため順序から推測せず、既存の明示指定を保持する。
+- offline CLIも `--active-profile <含めたprofileのfilename>` / `--active-tagger-profile <含めたtaggerのfilename>` で明示可能。HTTP callerから任意の定義/設定pathを渡す口は追加していない。
+
+## 確認
+
+生成CPUのみ。最終関連79 PASS/31.611s（新selection12＋既存storage/live/switch）。AI settings/job/backup HTTP22 PASS/6.016s、restore jobs/prepared/HTTP/実所有backend handoff40 PASS/7.665sは別の関連確認。初回67件の2 FAILは旧期待（pendingをactiveへ上書き、taggerを未選択で推定）で、rawを保持。途中fixture/設計整理の実行を最終件数へ合算しない。
+
+明示overrideとpending両保全、既定→pending変更、local→pending変更、起動後の外部定義変更に影響されないactive、複数WDの非順序選択、64/16件保存枠、再バックアップの衝突/増殖なし、取消、設定省略、legacy1、metadata/上位版/path改変、切替/rollback・元設定保全を確認した。C#/GUI/GPU/実モデル/私物DBは変更・実行していない。
+
+## 次の1件
+
+元が通常起動（ai_override=false）の場合、復元初回は当時のactiveで開き、そのready確認後に一時的なai_profile指定を解除し、次の通常再起動ではpendingを適用する。元が明示override=trueなら固定指定を保持する。解除失敗/中断時もコミット済みsentinelを残して次回安全に後処理し、旧libraryへ誤rollbackしない。現段階ではactive/pendingの保存と切替までで、この一時解除は未実装。P5全体/実機受入は未完。

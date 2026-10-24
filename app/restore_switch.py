@@ -192,12 +192,17 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
     new_settings = dict(previous_settings)
     new_settings['database'] = str((target_restore_dir / CATALOG).resolve())
 
+    active_selection = restored_report.get('active_selection')
+    active_ai = active_selection.get('ai_profile') if isinstance(active_selection, dict) else None
     restored_ai_settings = target_restore_dir / 'settings' / 'ai-settings.json'
     if restored_ai_settings.is_file():
         new_settings['ai_settings'] = str(restored_ai_settings.resolve())
         # The selected profile in the restored settings must not be overridden
         # by a command-line profile retained from the old library.
-        new_settings.pop('ai_profile', None)
+        if active_ai is None:
+            new_settings.pop('ai_profile', None)
+    if active_ai is not None:
+        new_settings['ai_profile'] = str((target_restore_dir / active_ai).resolve())
 
     restored_viewer_settings = target_restore_dir / 'settings' / 'viewer-settings.json'
     if restored_viewer_settings.is_file():
@@ -206,7 +211,14 @@ def apply_restore_switch(data_dir, staging_path, restore_id=None):
     # Online backup captures the explicitly configured active tagger profile.
     # Rebase the sole restored profile instead of retaining a path to the old DB.
     tagger_entries=[entry for entry in restored_report['entries'] if entry['role']=='tagger_profile']
-    if len(tagger_entries)==1:
+
+    if isinstance(active_selection, dict):
+        active_tagger = active_selection.get('tagger_profile')
+        if active_tagger is not None:
+            new_settings['tagger_profile'] = str((target_restore_dir / active_tagger).resolve())
+    elif len(tagger_entries)==1:
+        # Legacy bundles did not record selection; retain their historical
+        # single-profile behavior only. Multiple profiles never imply an order.
         new_settings['tagger_profile']=str((target_restore_dir/tagger_entries[0]['path']).resolve())
 
     restored_profiles = target_restore_dir / 'profiles'

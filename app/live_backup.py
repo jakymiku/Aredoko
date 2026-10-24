@@ -32,7 +32,7 @@ def _catalog_boundary(catalog,check):
 
 
 def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=None,viewer_settings=None,
-                 profiles=None,extra_profiles=(),tagger_profiles=(),viewer_data=None,active_profile=None,max_bytes=DEFAULT_MAX_BYTES,
+                 profiles=None,extra_profiles=(),tagger_profiles=(),viewer_data=None,active_profile=None,active_tagger_profile=None,active_profile_data=None,active_tagger_data=None,active_profile_override=None,max_bytes=DEFAULT_MAX_BYTES,
                  cancelled=None,progress=None,publish=None):
     if not isinstance(selection,BackupSelection) or not callable(quiesce):raise RecoveryError('Explicit writer coordination required')
     if viewer_data is not None:
@@ -67,16 +67,20 @@ def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=N
             names=[relative.casefold() for relative,_,_ in configs]
             if len(set(names))!=len(names) or sum(role=='profile' for _,_,role in configs)>64 or sum(role=='tagger_profile' for _,_,role in configs)>16:raise RecoveryError('Duplicate or excessive profiles')
             if any(role in ('profile','tagger_profile') and NAME.fullmatch(Path(relative).name) is None for relative,_,role in configs):raise RecoveryError('Invalid profile filename')
-            if selection.settings and active_profile is not None and not any(role=='ai_settings' for _,_,role in configs):
-                # No saved preference exists to preserve. Capture explicit
-                # startup selection in the COPY using a version1 local ID.
-                # Existing saved/pending choices must never be overwritten.
-                if not isinstance(active_profile,str) or NAME.fullmatch(active_profile) is None or ('profiles/'+active_profile) not in [name for name,_,role in configs if role=='profile']:
-                    raise RecoveryError('Active profile is not included in backup')
-                value={'version':1,'profile':'default'}
-                value['profile']='local:'+active_profile
-                data=json.dumps(value,ensure_ascii=False).encode('utf-8');_configuration('ai_settings',data)
-                configs.append(('settings/ai-settings.json',data,'ai_settings'))
+            if selection.settings:
+                if active_profile_override is not None and type(active_profile_override) is not bool:raise RecoveryError('Invalid active profile mode')
+                for role,data,relative in [('active_profile',active_profile_data,'active/ai-profile.json'),('active_tagger_profile',active_tagger_data,'active/tagger-profile.json')]:
+                    if data is not None:
+                        if not isinstance(data,bytes) or len(data)>8192:raise RecoveryError('Invalid active profile snapshot')
+                        _configuration(role,data);configs.append((relative,data,role))
+                for name,role,prefix in [(active_profile,'profile','profiles/'),(active_tagger_profile,'tagger_profile','tagger-profiles/')]:
+                    if name is not None and (not isinstance(name,str) or NAME.fullmatch(name) is None or not any(path==prefix+name and kind==role for path,_,kind in configs)):
+                        raise RecoveryError('Active profile is not included in backup')
+                if (active_profile_data is not None or active_profile is not None) and not any(role=='ai_settings' for _,_,role in configs):
+                    # Preserve the implicit default pending choice independently
+                    # of the active override. Never change source preferences.
+                    data=b'{"version":1,"profile":"default"}';_configuration('ai_settings',data)
+                    configs.append(('settings/ai-settings.json',data,'ai_settings'))
             for path in paths:
                 expected=identity(path);guard=stack.enter_context(closing(sqlite3.connect(path.as_uri()+'?mode=rw',uri=True,timeout=1)))
                 try:guard.execute('BEGIN IMMEDIATE')
@@ -123,7 +127,12 @@ def capture_live(catalog,output,*,quiesce,selection=BackupSelection(),settings=N
             settings=stage/'settings/ai-settings.json' if any(role=='ai_settings' for _,_,role in configs) else None,
             viewer_settings=stage/'settings/viewer-settings.json' if any(role=='viewer_settings' for _,_,role in configs) else None,
             profiles=stage/'profiles' if (stage/'profiles').is_dir() else None,
-            tagger_profiles=list((stage/'tagger-profiles').glob('*.json')) if (stage/'tagger-profiles').is_dir() else (),
+            tagger_profiles=sorted((stage/'tagger-profiles').glob('*.json')) if (stage/'tagger-profiles').is_dir() else (),
+            active_profile=active_profile if selection.settings else None,
+            active_tagger_profile=active_tagger_profile if selection.settings else None,
+            active_profile_data=active_profile_data if selection.settings else None,
+            active_tagger_data=active_tagger_data if selection.settings else None,
+            active_profile_override=active_profile_override if selection.settings else None,
             include_vectors=selection.vectors,include_history=selection.history,include_reader_progress=selection.reader_progress,
             max_bytes=limit,cancelled=cancelled,publish=publish)
         return {**result,'selection':{'settings':selection.settings,'history':selection.history,'reader_progress':selection.reader_progress,'vectors':selection.vectors}}

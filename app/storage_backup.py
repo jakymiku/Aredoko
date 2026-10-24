@@ -19,8 +19,8 @@ from ai_settings import NAME,validate_resource
 from tagger_profile import WDProfile
 from storage_lease import plain_path,identity,storage_lease,StorageBusyError
 
-FORMAT='aredoko-recovery';VERSION=1
-MAX_JSON=256*1024;MAX_FILES=148;DEFAULT_MAX_BYTES=32*1024**3
+FORMAT='aredoko-recovery';VERSION=2
+MAX_JSON=256*1024;MAX_FILES=150;DEFAULT_MAX_BYTES=32*1024**3
 CATALOG='catalog.sqlite'
 SCHEMA=json.loads(Path(__file__).with_name('storage_schema_v1.json').read_text(encoding='utf-8'))
 REQUIRED={'catalog':{'items','item_locations','library_locations','library_roots','library_root_seq','production_marker','reader_progress','view_history','scan_jobs','term_relations'},'vectors':{'ai_profile','ai_vectors','ai_state'}}
@@ -87,9 +87,10 @@ def _database(path,role):
     return digest,profile
 
 def _configuration(role,data):
+    if role in ('active_profile','active_tagger_profile') and len(data)>8192:raise RecoveryError('Active profile snapshot exceeds limit')
     value=_json(data)
-    if role=='profile':ModelProfile.from_dict(value)
-    elif role=='tagger_profile':WDProfile.from_dict(value)
+    if role in ('profile','active_profile'):ModelProfile.from_dict(value)
+    elif role in ('tagger_profile','active_tagger_profile'):WDProfile.from_dict(value)
     elif role=='ai_settings':
         if not isinstance(value,dict) or not {'version','profile'}<=set(value) or set(value)-{'version','profile','resource','scope'} or type(value['version']) is not int or value['version']!=1:raise RecoveryError('Unsupported AI settings')
         selected=value['profile']
@@ -155,8 +156,9 @@ def _entry(folder,relative,role,*,schema=None,profile=None):
     if profile is not None:result['profile']=profile
     return result
 
-def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,extra_profiles=(),tagger_profiles=(),include_vectors=True,max_bytes=DEFAULT_MAX_BYTES,cancelled=None,include_history=True,include_reader_progress=True,publish=None):
+def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,extra_profiles=(),tagger_profiles=(),active_profile=None,active_tagger_profile=None,active_profile_data=None,active_tagger_data=None,active_profile_override=None,include_vectors=True,max_bytes=DEFAULT_MAX_BYTES,cancelled=None,include_history=True,include_reader_progress=True,publish=None):
     max_bytes=_budget(max_bytes);catalog=plain_path(catalog);output=Path(os.path.abspath(output))
+    if active_profile_override is not None and type(active_profile_override) is not bool:raise RecoveryError('Invalid active profile mode')
     if any(type(value) is not bool for value in (include_vectors,include_history,include_reader_progress)):raise RecoveryError('Invalid backup selection')
     def check():
         if cancelled is not None and cancelled():raise InterruptedError('Backup cancelled')
@@ -180,7 +182,15 @@ def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,ext
         for path in tagger_paths:
             data=_read_small(path,16384);_configuration('tagger_profile',data);configurations.append((path,'tagger-profiles/'+path.name,'tagger_profile',data))
         if not tagger_paths:missing.append('tagger_profiles')
-        if any(output==p or output in p.parents for p in [*paths,*(v[0] for v in configurations)]):raise RecoveryError('Output contains a source')
+        if active_profile is not None and (not isinstance(active_profile,str) or NAME.fullmatch(active_profile) is None or not any(p.name==active_profile for p in profile_paths)):
+            raise RecoveryError('Active profile is not included in backup')
+        if active_tagger_profile is not None and (not isinstance(active_tagger_profile,str) or NAME.fullmatch(active_tagger_profile) is None or not any(p.name==active_tagger_profile for p in tagger_paths)):
+            raise RecoveryError('Active tagger profile is not included in backup')
+        for role,data,relative in [('active_profile',active_profile_data,'active/ai-profile.json'),('active_tagger_profile',active_tagger_data,'active/tagger-profile.json')]:
+            if data is not None:
+                if not isinstance(data,bytes) or len(data)>8192:raise RecoveryError('Invalid active profile snapshot')
+                _configuration(role,data);configurations.append((None,relative,role,data))
+        if any(output==p or output in p.parents for p in [*paths,*(v[0] for v in configurations if v[0] is not None)]):raise RecoveryError('Output contains a source')
         estimate=sum(path.stat().st_size for path in paths)+sum(len(v[3]) for v in configurations)
         if estimate>max_bytes:raise RecoveryError('Backup exceeds byte limit')
         # Additional DB locks protect against non-host SQLite writers as well.
@@ -201,7 +211,7 @@ def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,ext
                 plain_path(path)
                 if identity(path)!=identities[path] or db.execute('PRAGMA data_version').fetchone()[0]!=version:raise RecoveryError('Storage changed during capture')
             for path,_,_,data in configurations:
-                if _read_small(path,16384)!=data:raise RecoveryError('Settings changed during capture')
+                if path is not None and _read_small(path,16384)!=data:raise RecoveryError('Settings changed during capture')
         unchanged()
         estimate=sum(db.execute('PRAGMA page_count').fetchone()[0]*db.execute('PRAGMA page_size').fetchone()[0] for _,db,_ in guards)+sum(len(v[3]) for v in configurations)
         if estimate>max_bytes:raise RecoveryError('Backup exceeds byte limit')
@@ -233,6 +243,7 @@ def backup(catalog,output,*,settings=None,viewer_settings=None,profiles=None,ext
                 if used>max_bytes:raise RecoveryError('Backup exceeds byte limit')
                 unchanged()
                 manifest={'format':FORMAT,'version':VERSION,'created_at':datetime.now(timezone.utc).isoformat(),'runtime':{'python':platform.python_version(),'platform':platform.system()},'cache_policy':'included' if include_vectors else 'omitted','not_included':missing,'entries':entries}
+                manifest['active_selection']={'ai_profile':'active/ai-profile.json' if active_profile_data is not None else 'profiles/'+active_profile if active_profile is not None else None,'tagger_profile':'active/tagger-profile.json' if active_tagger_data is not None else 'tagger-profiles/'+active_tagger_profile if active_tagger_profile is not None else None,'ai_override':(active_profile is not None) if active_profile_override is None else active_profile_override}
                 def commit_manifest():_write(folder/'manifest.json',(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n').encode())
                 if publish is None:check();commit_manifest()
                 else:publish(commit_manifest)
@@ -244,13 +255,16 @@ def _manifest(folder,max_bytes):
     return manifest,hashlib.sha256(raw).hexdigest(),total
 
 def _validate_manifest(manifest,max_bytes):
-    if not isinstance(manifest,dict) or set(manifest)!={'format','version','created_at','runtime','cache_policy','not_included','entries'} or manifest['format']!=FORMAT or type(manifest['version']) is not int or manifest['version']!=VERSION:raise RecoveryError('Unsupported backup format/version')
+    required={'format','version','created_at','runtime','cache_policy','not_included','entries'}
+    if not isinstance(manifest,dict) or not required<=set(manifest) or manifest['format']!=FORMAT or type(manifest['version']) is not int or manifest['version'] not in (1,VERSION):raise RecoveryError('Unsupported backup format/version')
+    expected=required|({'active_selection'} if manifest['version']==2 else set())
+    if set(manifest)!=expected:raise RecoveryError('Unsupported backup fields for version')
     if manifest['cache_policy'] not in ('included','omitted') or not isinstance(manifest['created_at'],str) or len(manifest['created_at'])>64:raise RecoveryError('Invalid manifest metadata')
     if not isinstance(manifest['runtime'],dict) or set(manifest['runtime'])!={'python','platform'} or any(not isinstance(v,str) or len(v)>64 for v in manifest['runtime'].values()):raise RecoveryError('Invalid runtime metadata')
     missing=manifest['not_included']
     if not isinstance(missing,list) or any(v not in ('ai_settings','viewer_settings','profiles','tagger_profiles','view_history','reader_progress') for v in missing) or len(set(missing))!=len(missing):raise RecoveryError('Invalid omitted settings')
     entries=manifest['entries']
-    if not isinstance(entries,list) or not 1<=len(entries)<=MAX_FILES:raise RecoveryError('Invalid file count')
+    if not isinstance(entries,list) or not 1<=len(entries)<=(MAX_FILES if manifest['version']==2 else 148):raise RecoveryError('Invalid file count')
     seen=set();counts={};total=0
     for entry in entries:
         if not isinstance(entry,dict):raise RecoveryError('Invalid file entry')
@@ -258,14 +272,23 @@ def _validate_manifest(manifest,max_bytes):
         if set(entry)!=expected:raise RecoveryError('Invalid file entry fields')
         name=entry['path'];size=entry['bytes'];digest=entry['sha256']
         if not isinstance(name,str) or not isinstance(digest,str) or re.fullmatch('[0-9a-f]{64}',digest) is None or type(size) is not int or size<0:raise RecoveryError('Invalid file identity')
-        relative=CATALOG if role=='catalog' else CATALOG+_profile_suffix(entry['profile']) if role=='vectors' else 'settings/ai-settings.json' if role=='ai_settings' else 'settings/viewer-settings.json' if role=='viewer_settings' else name if role=='profile' and re.fullmatch(r'profiles/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json',name) else name if role=='tagger_profile' and re.fullmatch(r'tagger-profiles/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json',name) else None
+        relative=CATALOG if role=='catalog' else CATALOG+_profile_suffix(entry['profile']) if role=='vectors' else 'settings/ai-settings.json' if role=='ai_settings' else 'settings/viewer-settings.json' if role=='viewer_settings' else name if role=='profile' and re.fullmatch(r'profiles/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json',name) else name if role=='tagger_profile' and re.fullmatch(r'tagger-profiles/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json',name) else 'active/ai-profile.json' if role=='active_profile' and manifest['version']==2 else 'active/tagger-profile.json' if role=='active_tagger_profile' and manifest['version']==2 else None
         if name!=relative or name.casefold() in seen:raise RecoveryError('Unsafe or duplicate backup path')
         if role in ('catalog','vectors') and (not isinstance(entry['schema'],str) or re.fullmatch('[0-9a-f]{64}',entry['schema']) is None):raise RecoveryError('Invalid schema identity')
         seen.add(name.casefold());counts[role]=counts.get(role,0)+1;total+=size
         if total>max_bytes:raise RecoveryError('Backup exceeds byte limit')
-    if counts.get('catalog')!=1 or counts.get('vectors',0)>64 or counts.get('profile',0)>64 or counts.get('tagger_profile',0)>16 or any(counts.get(role,0)>1 for role in ('ai_settings','viewer_settings')):raise RecoveryError('Invalid role counts')
+    if counts.get('catalog')!=1 or counts.get('vectors',0)>64 or counts.get('profile',0)>64 or counts.get('tagger_profile',0)>16 or counts.get('active_profile',0)>1 or counts.get('active_tagger_profile',0)>1 or any(counts.get(role,0)>1 for role in ('ai_settings','viewer_settings')):raise RecoveryError('Invalid role counts')
     if any((role in missing)!=(counts.get(role,0)==0) for role in ('ai_settings','viewer_settings')):raise RecoveryError('Missing settings declaration')
     if manifest['cache_policy']=='omitted' and counts.get('vectors',0) or any(role in missing and counts.get({'profiles':'profile','tagger_profiles':'tagger_profile'}.get(role,role),0) for role in missing):raise RecoveryError('Conflicting cache/settings policy')
+    if 'active_selection' in manifest:
+        selection=manifest['active_selection']
+        if not isinstance(selection,dict) or set(selection)!={'ai_profile','tagger_profile','ai_override'}:raise RecoveryError('Invalid active selection metadata')
+        if type(selection['ai_override']) is not bool or selection['ai_override'] and selection['ai_profile'] is None:raise RecoveryError('Invalid active profile mode')
+        for key,roles in [('ai_profile',('profile','active_profile')),('tagger_profile',('tagger_profile','active_tagger_profile'))]:
+            active=selection[key]
+            if active is not None and (not isinstance(active,str) or not any(e['role'] in roles and e['path']==active for e in entries)):
+                raise RecoveryError('Active selection is not included in backup')
+            if any(e['role']==roles[1] and e['path']!=active for e in entries):raise RecoveryError('Unreferenced active snapshot')
     return total
 
 def _sealed(path):
@@ -313,7 +336,8 @@ def restore(bundle,output,*,without_vectors=False,max_bytes=DEFAULT_MAX_BYTES,ca
                     except Exception:pass
             check()
             if hashlib.sha256(_read_small(bundle/'manifest.json')).hexdigest()!=manifest_hash:raise RecoveryError('Backup manifest changed')
-            report={'format':'aredoko-restored','version':1,'source_manifest_sha256':manifest_hash,'cache_policy':'omitted' if without_vectors else manifest['cache_policy'],'automatic_resume':False,'requires_source_revalidation':True,'not_included':manifest['not_included'],'runtime':manifest['runtime'],'entries':entries}
+            report={'format':'aredoko-restored','version':manifest['version'],'source_manifest_sha256':manifest_hash,'cache_policy':'omitted' if without_vectors else manifest['cache_policy'],'automatic_resume':False,'requires_source_revalidation':True,'not_included':manifest['not_included'],'runtime':manifest['runtime'],'entries':entries}
+            if 'active_selection' in manifest:report['active_selection']=manifest['active_selection']
             _write(folder/'recovery.json',(json.dumps(report,ensure_ascii=False,indent=2)+'\n').encode())
     return {'directory':str(output),'catalog':str(output/CATALOG),'files':len(entries),'cache_policy':report['cache_policy'],'requires_source_revalidation':True,'automatic_resume':False}
 
@@ -349,11 +373,11 @@ def validate_restored(folder, *, max_bytes=DEFAULT_MAX_BYTES):
     folder=plain_path(folder,directory=True)
     report=_json(_read_small(folder/'recovery.json'))
     fields={'format','version','source_manifest_sha256','cache_policy','automatic_resume','requires_source_revalidation','not_included','runtime','entries'}
-    if not isinstance(report,dict) or set(report)!=fields or report['format']!='aredoko-restored' or type(report['version']) is not int or report['version']!=1:
+    if not isinstance(report,dict) or not fields<=set(report) or set(report)-(fields|{'active_selection'}) or report['format']!='aredoko-restored' or type(report['version']) is not int or report['version'] not in (1,2):
         raise RecoveryError('Invalid restored receipt')
     if report['automatic_resume'] is not False or report['requires_source_revalidation'] is not True or not isinstance(report['source_manifest_sha256'],str) or re.fullmatch('[0-9a-f]{64}',report['source_manifest_sha256']) is None:
         raise RecoveryError('Invalid restored policy')
-    manifest={'format':FORMAT,'version':VERSION,'created_at':'restored',**{key:report[key] for key in ('runtime','cache_policy','not_included','entries')}}
+    manifest={'format':FORMAT,'version':report['version'],'created_at':'restored',**{key:report[key] for key in ('runtime','cache_policy','not_included','entries')},**({'active_selection':report['active_selection']} if 'active_selection' in report else {})}
     _validate_manifest(manifest,_budget(max_bytes))
     for entry in report['entries']:
         path=plain_path(folder/entry['path'])

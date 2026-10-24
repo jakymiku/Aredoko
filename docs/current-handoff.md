@@ -1,47 +1,21 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-24）
 
-> **更新ルール**：この1ファイルは毎回「置換/更新」して簡潔に保つ。古い全文の追記は禁止。下記は `33d2715c351e` 時点のGitHub記録を基に作成した整理スナップショットであり、再開時には実HEAD/PR/差分を確認する。文書整理では製品コード・テスト・配布物を変更していない。
-
-## 開始時
-- 作業先: `feat/winui3-production-mvp-20261011`; [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)（base `feat/gui-framework-comparison-20261010`）。**新規ブランチ/PR不要**。ローカルの未コミット差分と他AIの更新をまず確認。
-- 目的: [ビジョン](product-vision.md)（曖昧な日本語からローカルの本/素材/映像/音声を再発見）、[実装順序](polish-roadmap-20261022.md)（P0–P7）を維持。WindowsはWinUI 3、Python/SQLite backend。AIモデル交換可能、専用OCR保留。
-- 最終的な製品実装コミット: `30480f8`（P5の明示AI profile保全）。文書整理直前のPR HEAD: `33d2715c351eaa0301717f376e22e1c700972c96`。新基本ZIPの元ソースは `875f94a`。現状は全体完成ではない。
-
-## すでに実装しているものと境界
-- 登録、通常/AI/WD/類似/本文・ページ/動画時刻検索、画像/CBZ/画像フォルダ本・動画閲覧、タグ/お気に入り、棚、編集・保存、バックアップ関連API/UI等の基盤がある。**すべての配布版/実機で受入済みとは限らない**。
-- 現行ロードマップ: P0 UI基準整理 PARTIAL、P1A形式判定 CPU_DONE、P1B逐次アニメ source/build、P2連続閲覧 PARTIAL、P3仮想化/サムネイル/UI PARTIAL、P4複数棚 PARTIAL、P5起動中backup/restore PARTIAL、P6配布/AI取得 PARTIAL、P7まとめ受入 **未実施**。[根拠と完了条件](polish-roadmap-20261022.md)。
-- P5: 明示起動profileがあって保存済みpreferencesがないケースの保全を実装。取消後に元設定/書込状態を壊さないCPU検証あり。**activeとpending両方の正式metadata、および複数tagger profileの保持が未完**。[P5根拠・未受入](restore-review-20261024.md)。
-- P6: existing runtime/model選択とカタログ取得用のUI・API・中断/Range再開/検証公開の基盤あり。**製品用catalogは空**、実モデルの自動取得は利用可能ではない。実モデル/GPU/clean Windowsは未受入。[AI取得の仕様と証拠](ai-acquisition.md)。
-- 新基本ZIP候補（ローカルのみ）：`C:/AI/Aredoko/dist/portable-basic-20261024-01/Aredoko-windows-x64.zip`、約344MB/展開約658MB、`875f94a`ソース。生成データで同梱backendの基本CPU確認済み。**GitHub未添付、最新実装を反映した製品版ではなく、GUI・通常DB再起動・clean Windows・実GPU/AIは未受入**。[ZIP詳細](portable-refresh-20261024.md)。
-- GUI試行上限：AI環境 **2/2**、復元 **3/3**、AI取得 **1/2** 消費。勝手に再設定/再実行しない。今までの部分成功を未受入の成功に書き換えない。[終了前チェックポイント](development-checkpoint-20261024.md)。
-- GitHub Actions 3本は `workflow_dispatch` のみ。CIは実行しない。**PC shutdown禁止**。
+## 現在地
+- `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。base c30bc34へff済み、元の未コミットP5案4ファイルは退避してから継続した。製品コード以外の変更を巻き戻していない。
+- 読む順：本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧大量記録は[履歴索引](history-index.md)から必要時のみ。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らない方針を維持。
+- P5 active/pending保全を実装。[形式2・正確な契約・関連テスト・次の1件](backup-active-selection.md)を参照。起動時のAI/WD定義と保存済み次回選択を分離し、旧version1も復元できる。通常profile枠を減らさず、元設定を上書きしない。
+- 関連79 PASS、settings/backup API22 PASS、restore pipeline40 PASS。C#/GUI/GPU/実モデル/通常DBは未変更。途中失敗は正本に区別して保存。現行作業commitはこのファイルのgit logで確認する。
 
 ## 次の実装1件
-**P5: active/pending AI-profileのbackup/restore契約を完成させる。**
-1. `production_server.backup_configuration`, `live_backup/storage_backup`, `restore_switch` と [restore-review](restore-review-20261024.md) の該当部分のみ確認。前回実装 `30480f8` を重複しない。
-2. 起動overrideで実際に選択されたactive profileと保存済みの次回用pending choiceを、**両方保全**する正式metadataを設計・実装。複数tagger選択・旧bundle互換/設定省略も扱い、ファイル名・ファイル順から推測しない。
-3. 生成CPUデータで保存・復元・取消・失敗rollback・元設定非上書きを関連範囲だけ検証してcommit/push。大きなスキーマ変更の情報損失リスクが解けない時のみ設計レビュー。GUI試行回数は増やさない。
+**P5：復元初回だけのAI指定をready後に解除する。** `ai_override=false`なら初回は復元active、正常ready後に一時overrideだけを外し、次回通常再起動はpendingへ。元の明示override=trueは保持。committed sentinel・設定lease・取消/失敗/cleanup再試行を壊さない。技術正本の「次の1件」から進める。GUI上限は増やさない。
 
-## P5後に優先すること
-[P0–P7ロードマップ](polish-roadmap-20261022.md)の残機能を**縦切りで実装優先**。P6の安全な実体catalog登録/配布導線、既存GUIの受入と仕上げ、P7の一括受入。旧ロジック/資料の全面再調査や毎回の回帰は避ける。UIは主要機能が使える段階から小単位で磨き、全機能完成まで開始を延期しない。音声/音楽実内容索引は長期目標から消さない。
+## 継続する残件と制約
+- P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。
+- [P6 AI取得](ai-acquisition.md)の製品catalogは空。本物の自動取得・実推論・clean Windowsは未受入。既存配置/取得のCore/UIと生成HTTP基盤はある。
+- [新基本ZIP候補](portable-refresh-20261024.md)はローカル344MB/展開658MB、source875f94a。今回の形式2を含まない。旧Alpha/shortcut未更新、新ZIP GUI/通常DBrestart/実AIは未受入。新旧候補とGit HEADを混同しない。
+- GUI cap：環境2/2、復元3/3、取得1/2。旧P3/shelf/backup等も保持。GUI/GPUは具体範囲を示し事前確認する。私物scan・原本変更・通常DB操作・モデル/依存取得は無断実行しない。
+- Actions起動0、main merge/新branch/新PR/force pushなし。3本のworkflowはmanual-only。**シャットダウンしない**。前回同様、利用枠終盤には安全な単位でcommit/push/本書更新を完了する。
+- 文書/legacy整理はc30bc34で同期済み。[main/旧コード整理方針](repository-maintenance.md)、[旧依存監査](legacy-dependency-audit-20261024.md)、[文書案内](README.md)を保全。旧Catalog/server等は製品依存のため削除しない。
 
-
-## 関連ロードマップ（未完項目を保全）
-- [統合ロードマップ P0–P7](polish-roadmap-20261022.md)が現在の実装順序と完了条件の正本。
-- [完成台帳 R01–R14・M1/M2](completion-roadmap.md)も保全。音声・音楽の実内容解析、配布・起動・更新、総合受入の未完タスクを削除しない。P7はM1の日常β判定であり、製品全体の完成ではない。
-- [メディア内容索引](media-content-plan.md)、[WinUIデザイン](design-vision-winui.md)、[軽量配布](lightweight-distribution.md)、[開発優先順位](development-priorities.md)は関連工程で必要部分だけ読む。旧文書の過去の「次」は現在の優先順位より上に置かない。
-- 上記はすべて参照リンクで、各ロードマップ原文に変更はない。毎回すべてを再読せず、担当する作業の部分を読む。
-
-## mainと旧資料の整理（2026-10-24）
-- [main README](https://github.com/jakymiku/Aredoko/blob/main/README.md) は旧Webデモであることを明示し、最新の本ブランチ・ロードマップへ誘導。mainの**製品コードそのものはまだ旧版**。実機/配布の未受入が残るため正式なコード統合を保留した。
-- mainの旧Push/PR自動CIを `workflow_dispatch` 専用へ変更（GitHub Actionsの枠を節約）。過去の初期READMEは原文保全。現行コードへの正式統合時は [整理・統合手順](repository-maintenance.md) を確認する。
-- 旧README・初期状況・GUI比較・PC Skills・2026-10-23昼夜handoffは同一blob内容のまま履歴へ退避し、元のパスから案内できる。[文書案内](README.md) / [原文履歴](history-index.md)。
-- 本整理でプログラム・モデル・ユーザーDB・配布物は変更せず、UI/GPU/Windows受入やCIを実行していない。**次の開発1件はP5 active/pending profile保全のまま**。
-
-## 旧実験コード監査の結果（2026-10-24）
-- [依存監査とCI軽量化](legacy-dependency-audit-20261024.md)：製品コードが旧 `Catalog` と `server.handler_for` を使っていることを確認し、破壊的削除を保留。通常のmanual-only製品checksからTauri/Web/Edgeベンチマークを分離した。CIは未実行、実機受入・main昇格も未実施。**次の実装1件は上記P5のまま**。
-
-## 強い制約と報告
-- 原本・ユーザーDB/保存設定、登録ルート/検索scope/認証/モデル選択/backup schemaの情報損失を避ける。明示許可のないファイル変更、私物スキャン、モデル/外部依存取得は禁止。
-- CIなし、main mergeなし、別PRなし。実機/実GPU/自動取得は根拠なければ未検証。過去の試行上限を再利用しない。
-- 作業終了時はこのファイルを**簡潔に上書き**し、次の1件、コミット、操作可能になった新機能、必要な確認、残るblockerを記載。詳細証拠は専用文書へ。古い大量handoff/AGENTSへ報告を追記しない。[履歴索引](history-index.md)を参照。
+## 記録のルール
+本書だけを短く更新し、AGENTSや互換handoffへ過去全文を追記しない。詳細証拠は対応する技術文書へ。引き継ぎ時に完了commit・利用可能になった機能・実証/未検証・次の1件を明示し、既存Draft PRとremote一致を確認する。

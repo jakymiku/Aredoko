@@ -1,5 +1,7 @@
 # R03 — ローカルDBのバックアップと新規復元
 
+> 現行の新規バックアップは[形式2：active/pending分離](backup-active-selection.md)。version1は復元互換を維持する。下の初期実装報告は当時の記録として残す。
+
 > 2026-10-22 viewer設定互換修正: 現行version1 writerの `library_item_scale`（60–180/20刻み）、`theme`（system/light/dark）、`enlarge_small_images` を既存wheel方向とともに検証・保存・復元できる。旧2field/途中拡張版も受け入れ、bytesを正規化せず保持。未知field/上位version/不正型・値/重複key/2048byte超は拒否。生成bundleの現行設定往復・再hashした不正設定の復元拒否・旧形式を含む関連28 PASS/5.493s（raw `validation/20261022-p3-window/python-backup-settings.log`）。停止前提の既存backup修正であり、P5起動中job/GUI/restore切替は未実装。
 
 > 2026-10-18追記：最新のユーザー許可で[限定GPU/native受入](release-readiness.md)を実施。GPU28 PASS、actual復元launcherのLight検索/設定とDark起動/編集保持を確認、Dark小窓詳細以降は未完。下記の「延期/未実機」記述はCPU実装時点の履歴。全R14/M1/M2の合格とは扱わない。

@@ -108,7 +108,7 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True,*,ai_p
         return SearchIntent(LayaProcess(worker_python(repo,ai_python),laya_model_path(repo,models_root=models_root),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),restore_handoff=None,acquisition_specs=()):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),active_tagger_profile=None,restore_handoff=None,acquisition_specs=()):
     ai=ai or create_ai(catalog)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
@@ -128,10 +128,17 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         # Only explicitly configured app-owned profile/settings paths. No media
         # discovery and no arbitrary path supplied by the HTTP caller.
         folder=profiles.folder if profiles.folder.exists() else None
-        extra=() if profiles.startup_path is None or folder is not None and profiles.startup_path.parent==folder else (profiles.startup_path,)
+        extra=() if profiles.active_definition is not None or profiles.startup_path is None or folder is not None and profiles.startup_path.parent.resolve()==folder.resolve() else (profiles.startup_path,)
+        tagger_paths=tuple(Path(p) for p in tagger_profile_paths)
+        active_tagger=active_tagger_profile.name if isinstance(active_tagger_profile,Path) else active_tagger_profile
+        definition=getattr(getattr(tagger,'profile',None),'document',None)
         return {'settings':profiles.path if profiles.path.exists() else None,'profiles':folder,
-                'extra_profiles':extra,'tagger_profiles':tagger_profile_paths,
-                'active_profile':profiles.override.name if profiles.override is not None else None}
+                'extra_profiles':extra,'tagger_profiles':tagger_paths,
+                'active_profile':profiles.startup_path.name if profiles.active_definition is None and profiles.startup_path is not None else None,
+                'active_profile_override':profiles.override is not None,
+                'active_tagger_profile':active_tagger,
+                'active_profile_data':profiles.active_definition,
+                'active_tagger_data':definition.encode('utf-8') if isinstance(definition,str) else None}
     backup_jobs=BackupJobs(catalog,quiesce=catalog.writer_fence.pause,configuration=backup_configuration)
     restore_jobs=RestoreStagingJobs(catalog.path.parent/'restore-staging',handoff=restore_handoff)
     animations=AnimationSessions(previews)
