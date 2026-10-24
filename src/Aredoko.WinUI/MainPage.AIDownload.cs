@@ -21,7 +21,7 @@ public sealed partial class MainPage
             var license=new HyperlinkButton{Content="ライセンスを確認",Visibility=Visibility.Collapsed};
             var speed=new NumberBox{Header="速度上限（MB/秒、0で無制限）",Value=0,Minimum=0,Maximum=1000000,SmallChange=1};
             var consent=new CheckBox{Content="容量とライセンスを確認し、この環境を取得する"};
-            var status=new TextBlock{TextWrapping=TextWrapping.Wrap};var progress=new ProgressBar{Minimum=0,Maximum=100};
+            var status=new TextBlock{TextWrapping=TextWrapping.Wrap};var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};
             var destination=new TextBox{Header="取得した環境",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};
             var select=new Button{Content="配置済みの環境を指定",Visibility=Visibility.Collapsed};var refresh=new Button{Content="状態を更新"};
             foreach(var (control,id) in new (DependencyObject,string)[]{(choice,"AIDownloadCatalog"),(information,"AIDownloadInformation"),(license,"AIDownloadLicense"),(speed,"AIDownloadSpeed"),(consent,"AIDownloadConsent"),(status,"AIDownloadStatus"),(progress,"AIDownloadProgress"),(destination,"AIDownloadDestination"),(select,"AIDownloadSelect"),(refresh,"AIDownloadRefresh")})AutomationProperties.SetAutomationId(control,id);
@@ -38,6 +38,7 @@ public sealed partial class MainPage
                 var active=busy||current?.Active==true;choice.IsEnabled=!active;speed.IsEnabled=!active;consent.IsEnabled=!active;
                 dialog.IsPrimaryButtonEnabled=!active&&Selected() is {} selectedCatalog&&consent.IsChecked==true&&!(current?.Published==true&&current.CatalogId==selectedCatalog.Id);
                 dialog.IsSecondaryButtonEnabled=!busy&&current?.Active==true&&current.State is not ("publishing" or "cancelling");
+                progress.Visibility=current?.Active==true||current?.Published==true?Visibility.Visible:Visibility.Collapsed;
                 progress.IsIndeterminate=current?.Active==true&&current.BytesTotal is not >0;
                 progress.Value=current?.BytesTotal is >0?Math.Clamp(100d*current.BytesReceived/current.BytesTotal.Value,0,100):current?.Published==true?100:0;
                 status.Text=current?.State is null or "idle"?"取得する環境を選んでください。":current.Message;

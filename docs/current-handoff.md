@@ -13,14 +13,16 @@
 
 - P6固定registry境界をproduction/配布へ接続。source登録fingerprintとmodel定義SHAを検証し、壊れた任意取得設定で通常起動を止めない。実catalog登録は0のまま。生成registry6/所有backend1/staging1はPASS、途中fixture ERRORは正本で区別。
 
+- 新候補02の同梱CPU基本11、復元契約8、日本語/空白再配置11は各PASS。nativeで見つけた末尾の空区切りとidle progress表示をsourceで整理し、Portable build0 errors/既知3 warnings。微修正はnative未再確認。
+
 ## 次の実装1件
-**P6：今回のP5/P6変更を含む新規基本ZIP候補を準備する。** `875f94a`の旧候補を上書きせず、新規出力先へ最新frontend/backendを配置し、明示した既存基本runtime領域だけをhash検証して再利用する。同梱Pythonで生成データのCPU起動/取得診断/復元設定契約を確認する。GUI/実モデル/通常DB/旧Alphaは変更せず、必要なら具体候補で別許可。実catalog公開元/NOTICEは未確定のまま残す。
+**P6：bootstrapとPythonのLOCALAPPDATA保存先を一致させる。** 新基本候補GUIで、bootstrapだけOS KnownFolderにログを作り、backendは環境変数の専用先を使う不一致を確認した。原本/通常DBは無変更。sourceを揃えて純粋bootstrap self-test/関連CPUだけ確認する。追加GUIは実行しない。
 
 ## 継続する残件と制約
 - P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。
 - [P6 AI取得](ai-acquisition.md)の製品catalogは空。本物の自動取得・実推論・clean Windowsは未受入。既存配置/取得のCore/UIと生成HTTP基盤はある。
-- [新基本ZIP候補](portable-refresh-20261024.md)はローカル344MB/展開658MB、source875f94a。今回の形式2を含まない。旧Alpha/shortcut未更新、新ZIP GUI/通常DBrestart/実AIは未受入。新旧候補とGit HEADを混同しない。
-- GUI cap：環境2/2、復元3/3、取得1/2。旧P3/shelf/backup等も保持。GUI/GPUは具体範囲を示し事前確認する。私物scan・原本変更・通常DB操作・モデル/依存取得は無断実行しない。
+- [新基本ZIP候補02](portable-refresh-20261024.md)は344MB/展開658MB、sourcef508b82で今回の形式2/P6を含む。専用DBの通常起動/設定/1回再起動を追加許可1/1で確認（初回終了code欠測の誤FAILはraw保全、再起動時app/bootstrap0）。4 PNG目視済み。旧01/Alpha/shortcut未更新。通常DB/実AI/clean Windowsは未受入。後続UI微修正はZIP未収録。
+- GUI cap：新基本ZIP1/1（予定内の初回＋再起動の2起動）、環境2/2、復元3/3、取得1/2。旧P3/shelf/backup等も保持。GUI/GPUは具体範囲を示し事前確認する。私物scan・原本変更・通常DB操作・モデル/依存取得は無断実行しない。
 - Actions起動0、main merge/新branch/新PR/force pushなし。3本のworkflowはmanual-only。**シャットダウンしない**。前回同様、利用枠終盤には安全な単位でcommit/push/本書更新を完了する。
 - 文書/legacy整理はc30bc34で同期済み。[main/旧コード整理方針](repository-maintenance.md)、[旧依存監査](legacy-dependency-audit-20261024.md)、[文書案内](README.md)を保全。旧Catalog/server等は製品依存のため削除しない。
 

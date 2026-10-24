@@ -23,7 +23,7 @@ public sealed partial class MainPage
             var chooseRuntime=new Button{Content="実行環境を選ぶ"};var resetRuntime=new Button{Content="標準に戻す"};
             var chooseModels=new Button{Content="モデルのフォルダを選ぶ"};var resetModels=new Button{Content="標準に戻す"};
             var diagnostic=new TextBlock{TextWrapping=TextWrapping.Wrap};var status=new TextBlock{Text="状態を確認しています。",TextWrapping=TextWrapping.Wrap};
-            var progress=new ProgressBar{Minimum=0,Maximum=100};var refresh=new Button{Content="状態を更新"};
+            var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};var refresh=new Button{Content="状態を更新"};
             foreach(var (control,id) in new (DependencyObject,string)[]{(runtime,"AIEnvironmentRuntime"),(models,"AIEnvironmentModels"),(chooseRuntime,"AIEnvironmentChooseRuntime"),(resetRuntime,"AIEnvironmentResetRuntime"),(chooseModels,"AIEnvironmentChooseModels"),(resetModels,"AIEnvironmentResetModels"),(diagnostic,"AIEnvironmentDiagnostic"),(status,"AIEnvironmentStatus"),(progress,"AIEnvironmentProgress"),(refresh,"AIEnvironmentRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(resetRuntime,"AI実行環境を標準に戻す");AutomationProperties.SetName(resetModels,"モデル保存先を標準に戻す");AutomationProperties.SetName(progress,"AI環境の検査進捗");
             panel.Children.Add(new TextBlock{Text="配置済みのフォルダを選ぶと内容を確認し、次回起動の設定として保存します。検査中も通常の閲覧・文字検索を利用できます。",TextWrapping=TextWrapping.Wrap});
@@ -51,6 +51,7 @@ public sealed partial class MainPage
                 useAcquired.IsEnabled=!active&&acquired is not null&&!(job.Saved&&job.Id==acquiredJob);
                 useAcquired.Content=job.Saved&&job.Id==acquiredJob?"次回起動に設定済み":acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う";
                 dialog.IsSecondaryButtonEnabled=job.Active&&!busy&&job.State is not ("cancelling" or "saving");
+                progress.Visibility=job.Active||job.Saved?Visibility.Visible:Visibility.Collapsed;
                 progress.IsIndeterminate=job.Active&&job.BytesTotal is not >0;
                 progress.Value=job.BytesTotal is >0?Math.Clamp(100d*job.BytesDone/job.BytesTotal.Value,0,100):job.Saved?100:0;
                 status.Text=job.State=="idle"?"使用するフォルダを選んでください。":job.Message;

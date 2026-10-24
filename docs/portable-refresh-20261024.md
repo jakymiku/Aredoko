@@ -1,6 +1,27 @@
-# 最新基本版ZIP候補（2026-10-24）
+# 基本版ZIP候補（2026-10-24）
 
-## 実物と版
+## 新候補02（source f508b82）
+
+今回の形式2バックアップ・一時AI指定解除・取得モデル検証・固定registry・取得済みroot引継ぎを含む別候補。旧01/Alpha/shortcutは上書きしない。
+
+- 通常入口：`C:/AI/Aredoko/dist/portable-basic-20261024-02/Aredoko/Aredoko.exe`
+- ZIP：`C:/AI/Aredoko/dist/portable-basic-20261024-02/Aredoko-windows-x64.zip`
+- 展開756 files /657,657,654 bytes、ZIP343,869,819 bytes。
+- SHA256 `dbf54d3d000f7b5f9430f48bb10711666c0b8dbbaea15efc8b12d669fbfdbe7b`。
+- source `f508b82d176de208305c0c4b7441953bb14356a9`。後続の表示微修正は未収録。モデル/PyTorchなし、実catalog登録0。
+
+新規publish/実評価receipt/純粋bootstrap self-test/同梱runtime check/全ZIP照合PASS。旧01の明示runtime領域176 filesだけをSHA/サイズ/一覧照合して再利用し、旧app/bin/configはコピーしない。Core985とPortable buildの直前結果を無用に再実行しない。
+
+CPU：同梱Pythonの実所有backendで生成DB/PNGの基本11項目PASS、形式2/復元active/pending/一時解除の8項目PASS（native ready判定の代用ではない）。日本語/空白の再配置先でも基本11項目PASS。初回の再配置probeはZIPの親を指すfixtureミスで起動前に失敗し、正しい`再配置 test02/Aredoko`で成功。raw失敗も保持。
+
+ユーザーの追加1試行許可で、通常EXE→生成ライブラリ→設定→AI検索の準備→配置画面→閉じる→当初許可された1回の再起動を確認。新基本候補cap **1/1**、起動総数2。4 PNGを全枚目視し、今回の通常Dark/1200px相当では重なり/切れを認めない。初回終了時はGet-Processの観測handleが保持されずExitCode=nullで誤FAIL（非ゼロではない）。GUIなしのCPU再現でnull対owned0を確認し、raw report.jsonを保全。初回の終了code自体は欠測。予定内の再起動ではhandle保持でWinUI/通常bootstrapともexit0、生成登録保持を確認。追加launch/fix-rerunなし。post-checkは専用DB integrity=ok/items1、原本SHA/mtimeと起動設定不変、lease解放/対象4PID消滅。実モデル/GPU/通常DB/旧Alphaなし。
+
+bootstrapはOS KnownFolderをログ先に使うため、試験時のLOCALAPPDATA差替えと異なり、通常アプリのログ領域へ今回の空startupログを作成した（削除しない）。backend/DB/settingsは専用領域。次にこの保存先不一致をsourceで揃える。clean Windows/実取得/取得済みrootボタンnative/全復元の受入は未完。旧caps（環境2/2、復元3/3、取得1/2等）は維持。
+
+証拠：ignored `data/ai-ui/portable-refresh-20261024-02/` preparation.json、各CPU report/log、native01のraw report/restart-report/post-check/4 PNG。P5/P6/P7全完了とはしない。後続の末尾区切り/idle progressバー修正はsource buildのみで、この封印ZIPを更新していない。
+
+## 旧候補01（source875f94a）の実物と版
+
 
 ソース `875f94a6746e8b1631b854d1aca5678f8406a2a1` / 既存開発ブランチ・Draft PR #5。
 

@@ -355,8 +355,9 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");text.Children.Add(title);
         ToolTipService.SetToolTip(title, row.Title);
         var availability = row.Availability == "present" ? "" : AvailabilityLabel(row.Availability);
+        var tagSummary = string.Join("、", row.Tags);
         var metadata = tiles ? row.MatchLabel + availability
-            : $"{row.MatchLabel}{KindLabel(row.Kind)}{(availability.Length > 0 ? " · " + availability : "")} · {string.Join("、", row.Tags)}";
+            : $"{row.MatchLabel}{KindLabel(row.Kind)}{(availability.Length > 0 ? " · " + availability : "")}{(tagSummary.Length > 0 ? " · " + tagSummary : "")}";
         if (!string.IsNullOrWhiteSpace(metadata))
             text.Children.Add(new TextBlock { Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
         if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");text.Children.Add(evidence);}
