@@ -172,7 +172,7 @@
      <ScrollViewer x:Name="GettingStarted" Grid.Row="1" Visibility="Collapsed" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="GettingStarted">
       <StackPanel Margin="24" Spacing="16">
        <TextBlock Text="Aredokoへようこそ" Style="{StaticResource TitleTextBlockStyle}" TextWrapping="Wrap"/>
-       <TextBlock Text="まずは検索したいフォルダを登録しましょう。元の画像や動画は、その場所のまま管理します。" TextWrapping="Wrap"/>
+       <TextBlock Text="まずは検索したいフォルダを登録し、スキャンして一覧に読み込みましょう。元の画像や動画は、その場所のまま管理します。" TextWrapping="Wrap"/>
        <Button Content="フォルダを登録する" Style="{StaticResource AccentButtonStyle}" Click="GettingStartedFolders_Click" AutomationProperties.AutomationId="GettingStartedFolders"/>
        <TextBlock Text="AI検索は任意です。ファイル名・タグ検索と閲覧は、モデルがなくても使えます。AIを使う場合はモデルと実行環境を準備し、検索用の索引を作成します。" TextWrapping="Wrap"/>
        <Button Content="AI検索の準備・モデルの取得" Click="AI_Click" AutomationProperties.AutomationId="GettingStartedAI"/>

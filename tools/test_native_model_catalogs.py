@@ -18,7 +18,9 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--release',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--direct-entry',action='store_true',help='Only verify the new direct AI download entry, then one planned restart')
+    parser.add_argument('--getting-started',action='store_true',help='Empty library guidance, real generated folder registration, then restart')
     args=parser.parse_args();release=args.release.resolve();target=args.output.resolve()
+    if args.getting_started and args.direct_entry:parser.error('Select one acceptance flow')
     if os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui'):
         parser.error('New dedicated Windows output required')
     if not release.is_relative_to(REPO/'dist'):parser.error('Explicit repository candidate required')
@@ -29,16 +31,19 @@ def main():
     target.mkdir(parents=True);local=target/'local';data=local/'Aredoko';data.mkdir(parents=True)
     media=target/'media';media.mkdir();source=media/'catalog-display-fixture.png';source.write_bytes(png())
     before=(hashlib.sha256(source.read_bytes()).hexdigest(),source.stat().st_mtime_ns)
-    cat=ProductionCatalog(data/'catalog.sqlite');root=cat.add_root(str(media));cat.start_scan(root)
-    if cat._worker:cat._worker.join(15)
-    item=cat.search()['items'][0]['id'];cat.close()
+    cat=ProductionCatalog(data/'catalog.sqlite');item=None
+    if not args.getting_started:
+        root=cat.add_root(str(media));cat.start_scan(root)
+        if cat._worker:cat._worker.join(15)
+        item=cat.search()['items'][0]['id']
+    cat.close()
     empty_models=target/'empty-models';empty_models.mkdir()
     settings=data/'launch-settings.json';settings.write_text(json.dumps({'database':str(data/'catalog.sqlite'),'models_root':str(empty_models),'ui_theme':'dark'}),encoding='utf-8')
     initial_settings=settings.read_bytes()
     env={**os.environ,'LOCALAPPDATA':str(local),'APPDATA':str(local),'WINAPP_UI_WORKFLOW_ID':'aredoko-model-catalog-display-20261025'}
     report={'pass':False,'checks':[],'screenshots':[],'owned_pids':[],'exits':[],
-            'authorization':'2026-10-25 explicit human approval: new basic ZIP direct entry display only, one restart' if args.direct_entry else '2026-10-25 explicit human approval: new basic ZIP display only, one restart',
-            'direct_entry':args.direct_entry,
+            'authorization':'2026-10-25 human authorization: automatic GUI tests with dedicated generated data',
+            'direct_entry':args.direct_entry,'getting_started':args.getting_started,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
             'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'app_sha256':hashlib.sha256((release/'bin/Aredoko.WinUI.dll').read_bytes()).hexdigest()}
@@ -123,11 +128,33 @@ def main():
     try:
         for phase in range(2):
             bootstrap=subprocess.Popen([str(release/'Aredoko.exe')],cwd=release,env=env)
-            attach();ui('wait-for','Item'+str(item),'-t','20000')
+            attach();ui('wait-for','GettingStartedFolders' if args.getting_started and phase==0 else 'Item'+str(item),'-t','20000')
             catalogs=request('/api/library/ai/setup/download/catalog')
             check(f'phase {phase}: both production models visible',catalogs['download_supported'] and {x['model_target']['role'] for x in catalogs['catalogs']}=={'embedding','tagger'})
             check(f'phase {phase}: no acquisition started',request('/api/library/ai/setup/download/job')['state']=='idle')
-            if phase==0:
+            if args.getting_started and phase==0:
+                check('empty first library shows welcome',not tree()['GettingStartedFolders']['isOffscreen']);shot('welcome')
+                ui('invoke','GettingStartedHelp');ui('wait-for','GettingStartedGuide','-t','5000');shot('guide-top')
+                ui('scroll','GettingStartedGuide','--wheel','-6');shot('guide-bottom')
+                ui('invoke','CloseButton');ui('wait-for','GettingStartedGuide','--gone','-t','5000')
+                ui('invoke','GettingStartedAI');ui('wait-for','AIModelDownloadOpen','-t','10000');ui('invoke','AIModelDownloadOpen')
+                ui('wait-for','AIDownloadInformation','--value','EmbeddingGemma 2','--contains','-t','10000')
+                check('welcome reaches model acquisition without transfer',request('/api/library/ai/setup/download/job')['state']=='idle')
+                ui('invoke','CloseButton');ui('wait-for','GettingStartedFolders','-p','IsOffscreen','--value','False','-t','5000')
+                ui('invoke','GettingStartedFolders');ui('wait-for','RootPath','-t','10000');shot('folder-entry')
+                ui('set-value','RootPath',media);ui('invoke','AddRoot')
+                ui('wait-for','ScanRoot','-p','IsEnabled','--value','True','-t','10000');ui('invoke','ScanRoot')
+                deadline=time.monotonic()+20
+                while request('/api/library/scan')['state']!='complete' and time.monotonic()<deadline:time.sleep(.1)
+                check('generated folder scanned through UI',request('/api/library/scan')['state']=='complete')
+                found=request('/api/items?q=catalog-display-fixture.png')['items'];check('one generated file found',len(found)==1);item=found[0]['id']
+                ui('invoke','BtnRoots');ui('wait-for','Item'+str(item),'-t','10000')
+                check('registered item is not covered by welcome',tree().get('GettingStartedFolders',{}).get('isOffscreen',True));shot('registered-library')
+            elif args.getting_started:
+                check('restart keeps normal library',tree().get('GettingStartedFolders',{}).get('isOffscreen',True))
+                ui('invoke','BtnSettings');ui('wait-for','BtnGettingStarted','-t','5000');ui('invoke','BtnGettingStarted')
+                ui('wait-for','GettingStartedGuide','-t','5000');shot('settings-guide')
+            elif phase==0:
                 ui('invoke','BtnSettings');ui('wait-for','BtnAIIndex','-t','5000');ui('invoke','BtnAIIndex')
                 if args.direct_entry:
                     ui('wait-for','AIModelDownloadOpen','-t','10000');ui('invoke','AIModelDownloadOpen')
