@@ -71,6 +71,26 @@ class ModelPlacementsTests(unittest.TestCase):
     def test_invalid_optional_model_layout_remains_diagnostic_not_api_crash(self):
         service=AIRuntimePreferences(self.path,self.base,replace(DEFAULT_PROFILE,directory='CON'))
         self.assertFalse(service.snapshot()['model']['ready'])
+    def test_pending_profile_presence_resolves_its_own_placement_without_mutating_active(self):
+        import sys
+        from ai_settings import AIProfileSettings
+        folder=self.base/'profiles';folder.mkdir()
+        for profile,name,root in ((self.first,'first',self.root_a),(self.second,'second',self.root_b)):
+            (folder/(name+'.json')).write_text(json.dumps(profile.to_dict()),encoding='utf-8')
+            model=root/profile.directory;model.mkdir();(model/'aredoko-revision.txt').write_text(profile.revision,encoding='utf-8')
+        profiles=AIProfileSettings(self.base,self.base/'ai-settings.json',profile_directory=folder,ai_python=sys.executable,models_root=self.common,model_preferences=self.path)
+        active=profiles.active_definition
+        self.save(self.a,self.root_a)
+        candidates={row['id']:row for row in profiles.snapshot()['profiles']}
+        self.assertTrue(candidates['local:first.json']['ready']);self.assertFalse(candidates['local:second.json']['ready'])
+        self.save(self.b,self.root_b)
+        candidates={row['id']:row for row in profiles.snapshot()['profiles']}
+        self.assertTrue(candidates['local:first.json']['ready']);self.assertTrue(candidates['local:second.json']['ready'])
+        self.save(self.a,None)
+        candidates={row['id']:row for row in profiles.snapshot()['profiles']}
+        self.assertFalse(candidates['local:first.json']['ready']);self.assertTrue(candidates['local:second.json']['ready'])
+        self.assertEqual(profiles.active_definition,active);self.assertEqual(profiles.models_root,self.common)
+
     def test_dispatcher_uses_model_identity_and_passes_frozen_definition(self):
         default=ModelTarget.for_profile('embedding',DEFAULT_PROFILE)
         self.save(default,self.root_a);self.save(self.tag,self.root_tag)

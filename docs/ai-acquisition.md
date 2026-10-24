@@ -148,3 +148,9 @@ WDの既存固定hash/サイズはconfig/tagger-profilesに存在し、[固定re
 - native候補 `data/ai-ui/ai-model-selection-20261024/frontend01`。source `8db7c2f`＋reportの正確なdiff SHA、frontend SHA/source一覧を保存。生成WD422 bytesのみloopback配信、実モデル/GPU/新依存0。旧Alpha/通常DB/shortcut変更0。
 - `data/ai-ui/ai-model-selection-tagger-20261024/run01/report.json` はFAILのまま保全。モデル保存・他役割保全は成功したが、画面再表示ハーネスがライブラリへ戻った後に存在しないBtnAIIndexを直接探した。6 PNG目視・所有app正常終了0。Settingsを開き直す実修正後run02は全チェックPASS、5 PNG全目視、app0/所有process残存なし・検査用runtime実行0。対象dropdownのpopupをEscで閉じる観測手順も明示。
 - 手動role/common resetと取消の保存保全はCPU/Coreで確認。nativeはWDの明示適用・モデル2個を含む他設定保全・対象切替・再表示に限定。実推論/完全配布受入は未実施。
+
+
+### 次回モデル候補の配置判定
+- AIProfileSettingsは次回候補ごとに`model_locations`を解決する。起動中の実保存先と候補のfallback rootを混同せず、保存先追加後にプロフィール一覧を開き直しても別モデルの準備状態を正しく表示する。起動時active定義・namespaceは不変。
+- `pending-model-locations.log`44件PASS（モデル配置・profile設定・P5 active/pending復元）。2種類の検索モデルを別rootへ置き、片方をresetしてももう片方の準備状態を保全。通常起動dispatcherと復元readyの既存関連確認を含む。全回帰ではない。
+- 同じnative候補frontend01＋backendは後続差分の状態で、生成embeddingモデルのLight経路も`ai-model-selection-embedding-20261024/run01`で全チェック・終了0。他の2モデルとWD等の設定保全、個別適用・scope切替・再表示を確認。source一覧/差分SHAはreportに記録し、WD時点と混同しない。実推論/起動後workerへの反映はこのGUIテスト範囲外。

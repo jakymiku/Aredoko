@@ -125,7 +125,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     try:setup_profile=(ModelProfile.from_dict(json.loads(profiles.active_definition)) if profiles.active_definition is not None else load_profile(profiles.startup_path)) if not profiles.startup_error else None
     except (ValueError,OSError):setup_profile=None
     setup=AIRuntimePreferences(runtime_preferences if runtime_preferences is not None else catalog.path.parent/'launch-settings.json',
-        profiles.repo,setup_profile,active_python=profiles.python,active_models_root=profiles.models_root)
+        profiles.repo,setup_profile,active_python=profiles.python,active_models_root=getattr(profiles,'active_models_root',profiles.models_root))
+    if profiles.model_preferences is None:profiles.model_preferences=setup.path
     setup.writer_fence=catalog.writer_fence
     setup_jobs=AISetupJobs(setup)
     download_jobs=AIDownloadJobs(setup.path.parent/'ai-downloads',specifications=acquisition_specs)
@@ -920,13 +921,13 @@ def _serve(args):
     # Register each owned resource immediately, including startup/bind failures.
     with ExitStack() as resources:
         catalog=ProductionCatalog(args.db);resources.callback(catalog.close)
-        profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile,args.ai_profiles_dir,transient_override=getattr(args,'ai_profile_transient',False),**runtime)
+        profiles=AIProfileSettings(Path(__file__).resolve().parents[1],args.ai_settings,args.ai_profile,args.ai_profiles_dir,transient_override=getattr(args,'ai_profile_transient',False),model_preferences=getattr(args,'runtime_preferences',None),**runtime)
         definition=ModelProfile.from_dict(json.loads(profiles.active_definition)) if profiles.active_definition is not None else None
         placements={LOCATIONS:selected.get(LOCATIONS,[])}
         if definition is not None:
             try:runtime['models_root']=model_root(placements,'embedding',runtime['models_root'],target=ModelTarget.for_profile('embedding',definition))
             except ValueError:pass  # Invalid optional model layout stays AI-unavailable.
-            profiles.models_root=runtime['models_root']
+            profiles.active_models_root=runtime['models_root']
         ai=DisabledAI(profiles.startup_error, status_code='corrupt_profile') if profiles.startup_error else create_ai(catalog,profiles.startup_path,args.ai_ranking,profile_definition=definition,**runtime)
         resources.callback(ai.close)
         if isinstance(ai,AISearch):

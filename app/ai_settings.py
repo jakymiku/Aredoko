@@ -13,6 +13,8 @@ import threading
 from ai_profiles import DEFAULT_PROFILE, load_profile
 from ai_scope import validate_scope
 from runtime_paths import worker_python
+from ai_runtime_preferences import read_preferences,model_root
+from model_locations import ModelTarget
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json\Z")
 MAX_FILES = 64
@@ -35,13 +37,14 @@ def default_settings_path(repo):
     return (Path(base) / "Aredoko" / "settings.json") if base else Path(repo) / "data" / "settings.json"
 
 class AIProfileSettings:
-    def __init__(self, repo, settings_path=None, command_line_profile=None, profile_directory=None, *, ai_python=None, models_root=None, transient_override=False):
+    def __init__(self, repo, settings_path=None, command_line_profile=None, profile_directory=None, *, ai_python=None, models_root=None, transient_override=False, model_preferences=None):
         if type(transient_override) is not bool or transient_override and command_line_profile is None:raise ValueError('Transient override requires an explicit profile')
         self.transient_override=transient_override
         self._write_lock = threading.RLock()
         self.repo = Path(repo).resolve()
         self.python = worker_python(self.repo, ai_python)
         self.models_root = models_root
+        self.model_preferences = Path(model_preferences) if model_preferences is not None else None
         self.folder = Path(profile_directory) if profile_directory is not None else self.repo / "data" / "ai-profiles"
         self.path = Path(settings_path) if settings_path is not None else default_settings_path(self.repo)
         self.override = Path(command_line_profile).resolve() if command_line_profile is not None else None
@@ -151,7 +154,9 @@ class AIProfileSettings:
         try:
             path = self.path_for(profile_id)
             profile = load_profile(path)
-            model_path = profile.model_path(self.repo, models_root=self.models_root)
+            saved=read_preferences(self.model_preferences) if self.model_preferences is not None else {}
+            root=model_root(saved,'embedding',self.models_root,target=ModelTarget.for_profile('embedding',profile))
+            model_path = profile.model_path(self.repo, models_root=root)
             marker = model_path / "aredoko-revision.txt"
             python = self.python
             if not python.is_file():
