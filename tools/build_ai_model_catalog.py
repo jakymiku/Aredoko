@@ -36,7 +36,7 @@ def _identity(path):
     return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_nlink
 
 
-def build_catalog(root, profile, *, key, base_url, license, license_url, allowed_hosts, cancelled=lambda: False):
+def build_catalog(root, profile, *, key, base_url, license, license_url, allowed_hosts, embed_metadata=False, cancelled=lambda: False):
     root = plain_path(root, directory=True)
     location = urlsplit(base_url)
     if (any(c.isspace() for c in base_url) or location.scheme != 'https' or not location.hostname
@@ -45,7 +45,7 @@ def build_catalog(root, profile, *, key, base_url, license, license_url, allowed
     inspect_model(root, profile, cancelled=cancelled)
     prefix = model_prefix(profile)
     revision = profile.revision if isinstance(profile, ModelProfile) else profile.data()['revision']
-    document = {'format': 'aredoko-acquisition-v1', 'id': key, 'revision': revision, 'kind': 'model',
+    document = {'format': 'aredoko-acquisition-v2' if embed_metadata else 'aredoko-acquisition-v1', 'id': key, 'revision': revision, 'kind': 'model',
                 'license': license, 'license_url': license_url, 'allowed_hosts': list(allowed_hosts), 'entries': []}
     identities = {}
     total_bytes = 0
@@ -59,8 +59,14 @@ def build_catalog(root, profile, *, key, base_url, license, license_url, allowed
             raise ValueError('Model pack exceeds limit')
         checksum = digest(path, cancelled=cancelled)
         identities[name] = before
-        document['entries'].append({'path': prefix + '/' + name, 'url': base_url.rstrip('/') + '/' + quote(name, safe='/'),
-                                    'bytes': before[2], 'sha256': checksum, 'role': role(name)})
+        entry = {'path': prefix + '/' + name, 'bytes': before[2], 'sha256': checksum, 'role': role(name)}
+        if embed_metadata and (name in ('aredoko-revision.txt', 'aredoko-source.json') or entry['role'] == 'license'):
+            if before[2] > 65536:
+                raise ValueError('Inline model metadata exceeds limit')
+            entry['inline_utf8'] = path.read_bytes().decode('utf-8')
+        else:
+            entry['url'] = base_url.rstrip('/') + '/' + quote(name, safe='/')
+        document['entries'].append(entry)
     raw = json.dumps(document, ensure_ascii=False, indent=2).encode('utf-8')
     catalog = Catalog.parse(raw)
     model_validator(profile, catalog)
@@ -80,6 +86,7 @@ def main():
     for name in ('id', 'base-url', 'license', 'license-url'):
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--allow-host', action='append', required=True)
+    parser.add_argument('--embed-metadata', action='store_true', help='Include bounded provenance and license text in a version2 catalog')
     args = parser.parse_args()
     path = plain_path(args.profile)
     if path.stat().st_size > 8192:
@@ -87,7 +94,7 @@ def main():
     value = json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=object_pairs)
     profile = ModelProfile.from_dict(value) if args.profile_kind == 'embedding' else WDProfile.from_dict(value)
     raw, catalog = build_catalog(args.model_directory, profile, key=args.id, base_url=args.base_url,
-        license=args.license, license_url=args.license_url, allowed_hosts=args.allow_host)
+        license=args.license, license_url=args.license_url, allowed_hosts=args.allow_host, embed_metadata=args.embed_metadata)
     write_new(raw, args.output, args.model_directory)
     print(json.dumps({'catalog_id': catalog.fingerprint, 'kind': catalog.kind, 'files': len(catalog.entries),
         'bytes': sum(entry.size for entry in catalog.entries), 'registered': False, 'downloaded': False, 'inference_verified': False}))

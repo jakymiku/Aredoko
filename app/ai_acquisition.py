@@ -9,10 +9,11 @@ from storage_lease import plain_path,storage_parent,storage_lease,identity
 @dataclass(frozen=True)
 class Artifact:
     path:str
-    url:str
+    url:str|None
     size:int
     sha256:str
     role:str
+    inline_data:bytes|None=None
 
 @dataclass(frozen=True)
 class Catalog:
@@ -30,29 +31,41 @@ class Catalog:
     def parse(cls,raw,*,test_loopback=False):
         if not isinstance(raw,bytes) or len(raw)>32*1024**2:raise ValueError('Catalog exceeds limit')
         value=json.loads(raw,object_pairs_hook=object_pairs)
-        if not isinstance(value,dict) or set(value)!={'format','id','revision','kind','license','license_url','allowed_hosts','entries'} or value['format']!='aredoko-acquisition-v1':raise ValueError('Unsupported acquisition catalog')
+        if not isinstance(value,dict) or set(value)!={'format','id','revision','kind','license','license_url','allowed_hosts','entries'} or value['format'] not in ('aredoko-acquisition-v1','aredoko-acquisition-v2'):raise ValueError('Unsupported acquisition catalog')
         if not isinstance(value['id'],str) or re.fullmatch('[a-z0-9][a-z0-9_-]{0,63}',value['id']) is None:raise ValueError('Invalid catalog ID')
         if not isinstance(value['revision'],str) or re.fullmatch('[0-9a-f]{40}|[0-9a-f]{64}',value['revision']) is None or value['kind'] not in ('runtime','model'):raise ValueError('Immutable catalog revision required')
         if not isinstance(value['license'],str) or not 1<=len(value['license'])<=128 or any(ord(c)<32 for c in value['license']):raise ValueError('License declaration required')
-        if not isinstance(value['license_url'],str) or len(value['license_url'])>8192:raise ValueError('Invalid license link')
+        if not isinstance(value['license_url'],str) or len(value['license_url'])>8192 or any(ord(c)<32 for c in value['license_url']):raise ValueError('Invalid license link')
         license_url=urlsplit(value['license_url'])
-        if license_url.scheme!='https' or not license_url.hostname or license_url.username or license_url.fragment:raise ValueError('Official license link required')
+        if license_url.scheme!='https' or not license_url.hostname or license_url.username or license_url.password or license_url.fragment:raise ValueError('Official license link required')
         hosts=value['allowed_hosts']
         if not isinstance(hosts,list) or not 1<=len(hosts)<=16 or any(not isinstance(h,str) or re.fullmatch('[a-z0-9.-]{1,253}',h) is None for h in hosts) or len(set(hosts))!=len(hosts):raise ValueError('Invalid source hosts')
-        entries=value['entries'];seen=set();items=[];total=0
+        entries=value['entries'];seen=set();items=[];total=0;inline_total=0
         if not isinstance(entries,list) or not 1<=len(entries)<=100000:raise ValueError('Invalid catalog files')
         for item in entries:
-            if not isinstance(item,dict) or set(item)!={'path','url','bytes','sha256','role'}:raise ValueError('Invalid artifact fields')
+            if not isinstance(item,dict):raise ValueError('Invalid artifact fields')
+            inline='inline_utf8' in item
+            source_field='inline_utf8' if inline else 'url'
+            if set(item)!={'path',source_field,'bytes','sha256','role'} or inline and value['format']!='aredoko-acquisition-v2':raise ValueError('Invalid artifact fields')
             name=relative(item['path'])
             if name.casefold() in seen:raise ValueError('Duplicate catalog path')
             seen.add(name.casefold())
             size=item['bytes'];checksum=item['sha256'];role=item['role']
             if type(size) is not int or size<0 or not isinstance(checksum,str) or re.fullmatch('[0-9a-f]{64}',checksum) is None:raise ValueError('Invalid artifact identity')
             if role not in ('runtime','weights','configuration','tokenizer','labels','license','inventory'):raise ValueError('Invalid artifact role')
-            _source(item['url'],hosts,test_loopback)
+            content=None
+            if inline:
+                leaf=Path(name).name.lower()
+                if (role not in ('configuration','inventory','license') or not isinstance(item['inline_utf8'],str)
+                        or len(item['inline_utf8'])>65536
+                        or role!='license' and not leaf.endswith(('.json','.txt'))
+                        or role=='license' and not leaf.startswith(('license','notice','copying'))):raise ValueError('Only bounded metadata may be inline')
+                content=item['inline_utf8'].encode('utf-8');inline_total+=len(content)
+                if len(content)>65536 or inline_total>262144 or len(content)!=size or hashlib.sha256(content).hexdigest()!=checksum:raise ValueError('Invalid inline metadata identity or size')
+            else:_source(item['url'],hosts,test_loopback)
             total+=size
             if total>64*1024**3:raise ValueError('Acquisition exceeds limit')
-            items.append(Artifact(name,item['url'],size,checksum,role))
+            items.append(Artifact(name,None if inline else item['url'],size,checksum,role,content))
         ordered=sorted(seen,key=lambda name:name.split('/'))
         if any(right.startswith(left+'/') for left,right in zip(ordered,ordered[1:])):raise ValueError('Artifact path collision')
         canonical=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
@@ -122,6 +135,13 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
             if offset>item.size:partial.unlink();offset=0
             if shutil.disk_usage(root).free<item.size-offset+16*1024**2:raise OSError('Insufficient acquisition space')
             base_done=done
+            if item.inline_data is not None:
+                # This small app-owned payload is part of the catalog fingerprint;
+                # it is never interpreted as code, a URL or another catalog.
+                check()
+                with partial.open('wb') as stream:
+                    stream.write(item.inline_data);stream.flush();os.fsync(stream.fileno())
+                offset=item.size
             if offset<item.size:
                 headers={'Accept-Encoding':'identity'}
                 if offset:headers['Range']='bytes='+str(offset)+'-'

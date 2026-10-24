@@ -19,8 +19,10 @@
 
 - P6公開root→明示適用をLight nativeで11項目確認、4 PNG全目視、exit0。検査用Python実行0/旧通常DBなし。WinUI AppLogも明示LOCALAPPDATAへ統一し、専用ログで実証。正確なsource/diff/実候補SHAと限界は[AI取得](ai-acquisition.md)。
 
+- P6 v2カタログでアプリ所有の小さいprovenance/NOTICEを同封可能にした。生成7/関連41/最終URL拒否1は各PASS。公式WDのtree/HEADだけ確認（weights/deps取得0、CSV SHA再検証なし）。正本[AI取得](ai-acquisition.md)。
+
 ## 次の実装1件
-**P6：実catalog公開に必要なprovenance/NOTICEと取得元の差分を整理し、実装可能な取得残件へ進む。** runtime/modelのbuilder・registry・検証・native明示適用は揃ったが実登録0。公開先を推測して有効化しない。モデル取得でアプリ所有provenanceをどう配布するか、公式artifactだけで完結できるかを既存契約に沿って確認する。新モデル/依存を取得せずに進め、GUI/GPUは最新テスト方針に従う。
+**P6：複数モデルの配置を壊さない選択契約を実装する。** runtime選択とモデル取得validator/inline sidecarは揃った。現在はembedding/WD等が共通models_rootを使うため、単一モデルpackのrootへ切り替えるだけでは他モデルが見えなくなる。既存common root互換を維持し、役割/モデルごとの取得済みrootを明示して次回起動へ保存・解決する最小単位を設計/実装する。profile/namespace/バックアップ・復元のactive/pendingを壊さない。公開先/NOTICEを推測して製品catalogを有効化しない。
 
 ## 継続する残件と制約
 - P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。
