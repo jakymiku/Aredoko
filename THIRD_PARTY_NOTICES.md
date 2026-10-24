@@ -19,13 +19,13 @@ This document contains licensing notices and acknowledgements for third-party so
 
 ## 2. Machine Learning Models & Weights
 
-### EmbeddingGemma 2 (2B)
-- **Author**: Google LLC
-- **Repository**: `google/embeddinggemma-2-2b`
-- **License**: Gemma Terms of Use
-- **Notice**:
-  Gemma is provided by Google under the Gemma Terms of Use. Use of Gemma is subject to the Gemma Prohibited Use Policy.
-  See: https://ai.google.dev/gemma/terms
+### EmbeddingGemma 2 (the application-pinned revision)
+- **Author**: Google
+- **Repository**: `google/embeddinggemma-2`
+- **Revision**: `914f7f89142e33e77833254d9c9b90c3cef7303b`
+- **License**: Apache License, Version 2.0, as declared by the [fixed upstream model card](https://huggingface.co/google/embeddinggemma-2/blob/914f7f89142e33e77833254d9c9b90c3cef7303b/README.md).
+- **Notice**: The optional model pack downloads unchanged model/tokenizer/configuration files only after explicit consent. It includes the complete [license](config/acquisition/notices/embeddinggemma-2-LICENSE.txt), [attribution](config/acquisition/notices/embeddinggemma-2-NOTICE.txt), and [unmodified model card](config/acquisition/notices/embeddinggemma-2-NOTICE-upstream-model-card.txt). Runtime packages are separate.
+- This exact source declaration replaces the older generic Gemma-terms/template entry here; it is not a license claim about other Gemma models or revisions.
 
 ### SmilingWolf WD Tagger (SwinV2 v3)
 - **Author**: SmilingWolf

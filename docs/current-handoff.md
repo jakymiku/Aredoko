@@ -52,10 +52,10 @@
 ## この継続で完了した単位（2026-10-24〜25）
 - `c4de705`：Antigravityの永続cacheをレビューし、破損LRU/SQLite整数上限/schema制約/失敗時接続解放を補強。`3666a55`：ヒット順序の書込を最大64アクセス単位へ集約（128hitのCOMMITは2回）。回復7・既存thumbnail28 CPU PASS。体感/RSS実測ではない。[正本](thumbnail-derivatives.md)。
 - `bb79ad6`：詳細の媒体別主操作、AI候補の対象表示、一覧根拠2行＋全文tooltip、棚画像の再Loaded時refresh保持。Portable publish成功。**今回のユーザー許可済み**生成6媒体/独立DBでDark一連PASS、Lightの媒体別表示と保存/棚往復PASS、全所有app exit0/残存0。先行Lightのハーネス待機/期待値/失効FAILと修正は[P3正本](p3-result-window.md)に保持。実媒体再生やGPU推論は未実行。
-- `33c8938` P6：WD固定版の実カタログとモデルNOTICEを用意（registry1件、runtime0件）。公式metadata/HEAD＋既存CSVの固定Git blob/SHA確認のみで、モデル本体の外部取得・推論なし。[正本](ai-acquisition.md)。**今回のGUI許可は上記detail候補のみ**。新しいAI取得画面/通常EXE候補を試す場合は改めて具体的範囲を確認する。
+- `33c8938` P6：WD固定版の実カタログとモデルNOTICEを用意（WD＋EmbeddingGemma 2のregistry2件、runtime0件）。公式metadata/HEAD＋既存CSVの固定Git blob/SHA確認のみで、モデル本体の外部取得・推論なし。[正本](ai-acquisition.md)。**今回のGUI許可は上記detail候補のみ**。新しいAI取得画面/通常EXE候補を試す場合は改めて具体的範囲を確認する。
 
 ## 次の実装1件
-**P6：実WDカタログ入りの新しい基本ZIP候補を作り、同梱Python/APIのCPU確認を終える。** 旧ZIP03/Alpha/shortcutは上書きせず、モデル/PyTorchを含めない。新しい取得画面は用途・容量・ライセンスとruntime別途必要を示す。GUIの起動/表示確認と実467MB転送は別に許可を伺う。次にP3大量scroll/最終row/RSSとP7残受入へ進み、runtime packの公開先が未決の間もUI/独立実装を止めない。
+**P6：実モデル2件のカタログ入り基本ZIP候補を作り、同梱Python/APIのCPU確認を終える。** 旧ZIP03/Alpha/shortcutは上書きせず、モデル/PyTorchを含めない。新しい取得画面は用途・容量・ライセンスとruntime別途必要を示す。GUIの起動/表示確認と実467MB/1.53GB転送は別に許可を伺う。次にP3大量scroll/最終row/RSSとP7残受入へ進み、runtime packの公開先が未決の間もUI/独立実装を止めない。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
 **P6：役割別保存先のAPI・Core・native UIを接続する。** `c7db80d`のbackend解決を再実装せず、以下へ進む。

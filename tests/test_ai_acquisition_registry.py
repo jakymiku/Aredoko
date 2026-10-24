@@ -51,8 +51,8 @@ class AcquisitionRegistryTests(unittest.TestCase):
         with patch('urllib.request.urlopen', side_effect=AssertionError('No network')):
             with patch('subprocess.Popen', side_effect=AssertionError('No model execution')):
                 specs = load_trusted_specs(Path(__file__).resolve().parents[1])
-        self.assertEqual(len(specs), 1)
-        catalog, validator = specs[0]
+        self.assertEqual(len(specs), 2)
+        catalog, validator = next(pair for pair in specs if pair[1].target.role == 'tagger')
         self.assertEqual(validator.target.role, 'tagger')
         self.assertEqual(validator.target.model_id, 'SmilingWolf/wd-swinv2-tagger-v3')
         source = [entry for entry in catalog.entries if entry.url is not None]
@@ -72,6 +72,31 @@ class AcquisitionRegistryTests(unittest.TestCase):
         self.assertTrue(jobs.catalogs()['download_supported'])
         self.assertEqual(jobs.snapshot()['state'], 'idle')
         self.assertFalse(jobs.root.exists())
+
+    def test_registered_embedding_model_matches_existing_namespace_and_fixed_layout(self):
+        from ai_profiles import DEFAULT_PROFILE
+        with patch('urllib.request.urlopen', side_effect=AssertionError('No network')):
+            with patch('subprocess.Popen', side_effect=AssertionError('No model execution')):
+                specs = load_trusted_specs(Path(__file__).resolve().parents[1])
+        catalog, validator = next(pair for pair in specs if pair[1].target.role == 'embedding')
+        self.assertEqual(validator.profile.key, DEFAULT_PROFILE.key)
+        self.assertEqual(validator.target.model_id, 'google/embeddinggemma-2')
+        self.assertEqual(validator.profile.dimension, 768)
+        files = {Path(entry.path).relative_to('embeddinggemma-2').as_posix(): entry for entry in catalog.entries}
+        self.assertEqual(len(files), 17)
+        self.assertEqual(files['model.safetensors'].sha256, '197a32965d4b1105faf060417baa899e193fb73cd401f42ec9295234d5553d79')
+        self.assertEqual(files['model.safetensors'].size, 1488915288)
+        self.assertEqual(sum(entry.size for entry in files.values() if entry.url is not None), 1525787092)
+        self.assertEqual(files['aredoko-revision.txt'].inline_data.decode().strip(), catalog.revision)
+        self.assertEqual(hashlib.sha256(files['LICENSE.txt'].inline_data).hexdigest(),
+                         'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30')
+        self.assertIn(b'license: apache-2.0', files['NOTICE-upstream-model-card.txt'].inline_data)
+        for entry in files.values():
+            if entry.url is not None:
+                self.assertTrue(entry.url.startswith('https://huggingface.co/google/embeddinggemma-2/resolve/' + catalog.revision + '/'))
+        self.assertIn('1_Pooling/config.json', files)
+        self.assertIn('2_Normalize/config.json', files)
+        self.assertIn('chat_template.jinja', files)
 
     def test_changed_catalog_and_changed_profile_are_rejected(self):
         original = self.catalog_path.read_bytes(); value = json.loads(original); value['license'] = 'changed'

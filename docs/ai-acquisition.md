@@ -5,13 +5,22 @@
 
 ## 現行：最初の実モデルカタログ（2026-10-25）
 
-製品registryは**WDモデル1件、runtime0件**へ更新。以下の古い「empty/0件」は当時の履歴。`config/acquisition/wd-swinv2-v3.json` は既存 `wd-swinv2-v3` profileとraw SHAを固定し、上流revision `627aef95638667ddcaa3ac8ae625e88ea5b02f51` の `model.onnx`/`selected_tags.csv` を変更せず取得する。ネットワーク対象467,769,446 bytes、inline出所/NOTICE込み467,783,838 bytes・6 files。カタログfingerprint `a03b0332560b8e852354b31bf39465d9f068ae7b93099a2be8141ca7ff597b13`。
+製品registryは**EmbeddingGemma 2＋WDのモデル2件、runtime0件**へ更新。以下の古い「empty/0件」は当時の履歴。`config/acquisition/wd-swinv2-v3.json` は既存 `wd-swinv2-v3` profileとraw SHAを固定し、上流revision `627aef95638667ddcaa3ac8ae625e88ea5b02f51` の `model.onnx`/`selected_tags.csv` を変更せず取得する。ネットワーク対象467,769,446 bytes、inline出所/NOTICE込み467,783,838 bytes・6 files。カタログfingerprint `a03b0332560b8e852354b31bf39465d9f068ae7b93099a2be8141ca7ff597b13`。
 
 - 公式固定[モデルカード](https://huggingface.co/SmilingWolf/wd-swinv2-tagger-v3/blob/627aef95638667ddcaa3ac8ae625e88ea5b02f51/README.md)のApache-2.0宣言、固定treeのONNX LFS SHA、HEAD-onlyの両artifact容量/最終host（huggingface.co/us.aws.cdn.hf.co）を確認。CSVは既存ローカル308,468 bytesを読み取り、SHA256のprofile一致と固定tree Git blob SHA1の一致を確認した。重み・CSVの外部取得や実行はしていない。
 - [Apache公式ライセンス全文](https://www.apache.org/licenses/LICENSE-2.0.txt)、上流カード全文、著者/固定出所/未変更artifact/独立runtimeのNOTICE、Aredoko出所sidecarをbounded inlineで同梱。上流treeに独立NOTICE/LICENSEはないことも確認。モデルpackにPython/ONNX Runtime/PyTorch等は含めず、それらのruntime packの完全NOTICE・公開先は依然未完。
 - 登録自体は通信・実行・設定保存を開始しない。明示consent後だけ既存の再開/容量/hash/validator/検証後公開を使い、取得完了後も対象モデルrootの明示保存と次回起動が必要。既定帯域は無制限、任意cap。画面ではモデルの用途と「対応する実行環境が必要」を表示する。
 - CPU：registry7/model-pack10/owned-download6/inline7/staging19 PASS（各別実行）。公式metadata/HEAD証拠はignored `data/ai-ui/wd-catalog-review-20261025`。認証カタログ表示と新基本ZIPの確認は次工程。実467MB転送/推論/clean Windowsは未検証。新しい実取得やGUI/GPUは今回のユーザー指示どおり確認後に実行する。
 - 基本版checkerは「常にcatalog0」を合格条件にせず、同梱Pythonで読み取った**その候補の固定registry**とAPIの完全一致を検査する。旧候補のempty registryも正確に検査でき、未導入AIと取得可能モデルを混同しない。
+
+### EmbeddingGemma 2も登録（2026-10-25）
+
+現在使用中の `google/embeddinggemma-2` / revision `914f7f89142e33e77833254d9c9b90c3cef7303b` を最初の選択肢として登録。公式固定モデルカードとAPIはApache-2.0・gated=false。旧THIRD_PARTY_NOTICESの `google/embeddinggemma-2-2b` / 汎用Gemma利用条件という記載は、実profileの出所に合わせて訂正した。他モデル/他revisionのライセンスへ一般化しない。
+
+- 13個の未変更upstreamファイル（safetensors、両tokenizer、processor/config、chat template、pooling/normalize等）＋4個のinline LICENSE/NOTICE/上流カード/固定revision marker。ネットワーク1,525,787,092 bytes、全pack1,525,821,059 bytes。fingerprint `8ee756badd8a85a24d1dbf80103be005b2b9c21b3e91d009a8568704d634406e`。
+- 大きい3artifactは固定treeのLFS SHA256とHEAD容量/hostを確認。小さい設定ファイルは既存ローカルのbytes/SHA256と上流Git blobを照合。重み・tokenizer本体の外部取得、依存取得、推論は0。公式metadata/HEADのrawはignored `data/ai-ui/embedding-catalog-review-20261025`。
+- 実行時のprofile/768D/namespace・既存索引は変更しない。配布取得の固定profile SHAをcheckoutの改行変換で壊さないよう、該当profileとカタログ/NOTICEは `.gitattributes` でLF固定。
+- 登録2件のCPU8 tests PASS。新候補では同梱registryとAPIの完全一致を確認する。既存runtimeの明示配置は利用可能だが、**実行環境の自動取得はまだ公開していない**。モデル取得だけで未導入runtimeまで揃ったとは表示しない。
 
 ## 2026-10-24 role-root backend contract (latest)
 

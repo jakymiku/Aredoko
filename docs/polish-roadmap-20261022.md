@@ -11,7 +11,7 @@
 | 1 | Antigravity差分の関連レビュー・永続cache回復 | 破損LRU/整数上限/schema/接続解放を生成CPUテストで確認。既存P5形式2とDPIの成功flowを無変更反復しない |
 | 2 | P3/UI-2：日常の主画面を完成形へ | 媒体に適した詳細操作、検索根拠の表示密度、棚との統一。選択・draft・検索条件を維持し、変更画面のbuildと限定確認後に次へ。全配布完成を待たない |
 | 3 | P3：大量表示で残る具体的な負荷の削減 | cacheヒット時の書込を集約。保持600件の両方向scroll・最終行・サイズ変更の残受入を一つの生成caseにまとめる。5万件metadata/全体RSS/物理DPI移動は別項目、未計測を達成扱いにしない |
-| 4 | P6：実配布でAIを取得できる状態 | WD固定版1件は登録済み。検索モデル/runtimeは固定URL/容量/hash・完全NOTICE・公開先の揃ったpackから追加登録。外部情報が欠ける項目は明示して保留し、架空値で埋めず独立実装へ進む。新規取得は具体的な許可後 |
+| 4 | P6：実配布でAIを取得できる状態 | WDと現行EmbeddingGemma 2は登録済み。追加検索モデル/runtimeは固定URL/容量/hash・完全NOTICE・公開先の揃ったpackから追加登録。外部情報が欠ける項目は明示して保留し、架空値で埋めず独立実装へ進む。新規取得は具体的な許可後 |
 | 5 | P7：残受入をまとめM1日常β判定 | 条件付き連続閲覧、棚管理、復元失敗保全、HC/DPI、clean Windowsを未確認表から一度ずつ確認。再現した欠陥だけ局所修正。M1後はR06–R09の実音声・音楽へ戻る |
 
 **現在の到達点**：P5形式2は `2f4de23` で通常EXEから復元active→次回pendingの限定native一連を確認済み。P3永続cacheは同commit、カード/詳細/棚の再取得接続は `e46c53d`、表示サイズ100→180%と再起動cacheは `56e3c8e` で限定native確認済み。**表示サイズの倍率変更は、実モニター間DPI移動の確認と同一ではない。** 基本ZIP03はsource `47acf2f` のままで、これら後続修正を収録していない。
@@ -39,7 +39,7 @@
 | P3 一覧・サムネイル・UI-2 | PARTIAL。[双方向600件・隠したdraft保全](p3-continuous-browse.md) | 745生成itemで追加/eviction/逆方向/draft明示保存を確認。全thumbnail速度/RSS/HC/DPI/最終row表示は残る |
 | P4 複数棚・整理導線 | PARTIAL。[履歴削除](history-deletion.md)と[複数棚の移行/検索/API](multi-shelf-storage.md)を実装 | [Core/棚一覧/複数選択](shelf-ui-20261023.md) source接続・893 Core確認、native3/3でcard/atomic save/create/renameを確認、Open以降の残件は未受入。[画面履歴](navigation-history-20261023.md) source接続。[root favorite](root-favorites-20261023.md) source/904 Core接続。[root複数初期棚](root-shelves-20261023.md) source/911 Core接続。次P5（native残件は未受入） |
 | P5 起動中backup/restore | 実装済み・限定確認済み。[形式2 active/pending](backup-active-selection.md)と通常EXEの再起動まで接続 | 大容量・失敗時保全・HC等の残受入はP7へ。形式2の成功flowは再実装しない |
-| P6 配布・UI-3 | [基本ZIP03](portable-refresh-20261024.md)・モデル別配置UI、WD実catalog1件を接続 | WDモデルNOTICE付き。新候補のCPU/画面確認、検索モデル/runtimeの公開先と完全NOTICE、clean Windowsは残る |
+| P6 配布・UI-3 | [基本ZIP03](portable-refresh-20261024.md)・モデル別配置UI、WD/EmbeddingGemma 2の実catalog2件を接続 | 両モデルNOTICE付き。新候補のCPU/画面確認、runtimeの公開先と完全NOTICE、clean Windowsは残る |
 | P7 総合検証 | 未実施 | 主要機能を揃えてまとめ確認、M1判定後R06–R09へ |
 
 実装は小単位で進める。P1A完了をP1全体/ロードマップ全体の完了と扱わない。旧Alpha、basic03等の配布候補と現在source/buildは別物で、明示的な新候補作成まで配布済みとはしない。

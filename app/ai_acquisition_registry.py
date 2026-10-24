@@ -22,9 +22,13 @@ class Registration:
     profile_sha256: str | None = None
     profile_kind: str | None = None
 
-# Pinned upstream WD assets; only explicit user consent starts acquisition.
+# Pinned upstream model assets; only explicit user consent starts acquisition.
 # Runtime packs are separate and not registered until their publisher is ready.
 TRUSTED_CATALOGS: tuple[Registration, ...] = (
+    Registration('config/acquisition/embeddinggemma-2.json',
+                 '8ee756badd8a85a24d1dbf80103be005b2b9c21b3e91d009a8568704d634406e',
+                 'config/ai-profiles/embeddinggemma-2.json',
+                 'c451ac93432261aa291924c2b328915bdfc8669ed3018a85ce9cb361102f7b42', 'embedding'),
     Registration('config/acquisition/wd-swinv2-v3.json',
                  'a03b0332560b8e852354b31bf39465d9f068ae7b93099a2be8141ca7ff597b13',
                  'config/tagger-profiles/wd-swinv2-v3.json',
