@@ -34,7 +34,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="P3 persistent thumbnail cache across restart test.")
     parser.add_argument('--release', type=Path, required=True, help='Path to release directory containing Aredoko.exe')
-    parser.add_argument('--attempt', type=int, default=1, choices=(1, 2, 3), help='Attempt number (1-3)')
+    parser.add_argument('--attempt', type=int, default=1, choices=(1, 2, 3, 4, 5, 6), help='Attempt number (1-6)')
     args = parser.parse_args()
 
     release = args.release.resolve()
@@ -56,20 +56,20 @@ def main():
     media_dir.mkdir()
 
     print('Generating synthetic media fixtures (24 PNGs + 2 CBZ archives)...', flush=True)
-    # 24 synthetic PNG images with distinct dimensions and palettes
+    # 24 synthetic PNG images >= 540px so 128, 256, and 512 derivative buckets are distinct in PNG IHDR
     for i in range(24):
-        w = 140 + (i % 6) * 20
-        h = 160 + (i % 4) * 20
+        w = 540 + (i % 6) * 20
+        h = 560 + (i % 4) * 20
         color = (30 + (i * 17) % 200, 40 + (i * 23) % 190, 60 + (i * 29) % 180)
         (media_dir / f'image_{i:02d}.png').write_bytes(png(width=w, height=h, color=color))
 
-    # 2 synthetic CBZ archives, each containing 4 pages
+    # 2 synthetic CBZ archives, each containing 4 pages >= 540px
     for b in range(2):
         cbz_path = media_dir / f'book_{b:02d}.cbz'
         with zipfile.ZipFile(cbz_path, 'w') as zf:
             for p in range(4):
-                pw = 150 + p * 10
-                ph = 200 + p * 10
+                pw = 550 + p * 10
+                ph = 600 + p * 10
                 pcolor = (50 + b * 50 + p * 20, 80 + b * 30 + p * 15, 120 + b * 20 + p * 10)
                 zf.writestr(f'{p+1:03d}.png', png(width=pw, height=ph, color=pcolor))
 
@@ -85,19 +85,21 @@ def main():
 
     print('Scanning synthetic fixtures into isolated catalog.sqlite...', flush=True)
     cat = ProductionCatalog(catalog_path)
-    root_id = cat.add_root(str(media_dir))
+    root_id = cat.add_root(str(media_dir), default_shelf='テスト棚')
     cat.start_scan(root_id)
     if cat._worker:
         cat._worker.join(25)
     scan_search = cat.search()
     scan_total = scan_search.get('total', 0)
     items = scan_search.get('items', [])
+    shelves = cat.shelf_descriptors()
     cat.close()
 
-    if scan_total != 26 or len(items) == 0:
-        raise SystemExit(f'Expected 26 indexed items in catalog, found {scan_total}')
+    if scan_total != 26 or len(items) == 0 or len(shelves) != 1:
+        raise SystemExit(f'Expected 26 indexed items and 1 shelf in catalog, found {scan_total} items and {len(shelves)} shelves')
 
     first_id = items[0]['id']
+    shelf_id = shelves[0]['id']
 
     # Initial launch settings
     initial_launch_settings = {
@@ -261,7 +263,14 @@ def main():
         return cli(*parts, '-w', hwnd)
 
     def tree():
-        return {n['automationId']: n for n in nodes(json.loads(ui('inspect', '--depth', '22', '--json'))) if n.get('automationId')}
+        for attempt in range(6):
+            try:
+                return {n['automationId']: n for n in nodes(json.loads(ui('inspect', '--depth', '22', '--json'))) if n.get('automationId')}
+            except Exception as err:
+                if 'stale_element' in str(err) and attempt < 5:
+                    time.sleep(0.15)
+                    continue
+                raise
 
     def shot(name):
         path = target / (name + '.png')
@@ -369,11 +378,42 @@ def main():
             ui('invoke', 'BtnLayout')
             time.sleep(0.4)
 
-        # Wait for Grid view thumbnails to be realized and loaded
+        # Wait for Grid view thumbnails to be realized and loaded (100% scale -> edge=256)
         ui('wait-for', f'Preview{first_id}', '-t', '15000')
-        wait_for_thumbnails_ready('phase 0 grid')
+        wait_for_thumbnails_ready('phase 0 grid 100%')
 
-        shot('01-phase0-grid-thumbs')
+        # Select first item to open DetailPreview, then scale cards to 180% (edge=512)
+        # This exercises UpdateItemSizes -> containerRefresh + ShowDetailPreviewAsync(preserveExisting: true)
+        ui('invoke', f'Item{first_id}', '--action', 'select')
+        ui('wait-for', 'DetailPreview', '-t', '10000')
+        ui('invoke', 'BtnItemSize')
+        ui('wait-for', 'ItemSizeSlider', '-t', '5000')
+        ui('set-value', 'ItemSizeSlider', '180')
+        ui('wait-for', 'ItemSizeLabel', '--value', '180%', '-t', '5000')
+        time.sleep(0.4)
+        wait_for_thumbnails_ready('phase 0 grid 180%')
+        check('DetailPreview still visible after 180% resize refresh', 'DetailPreview' in tree())
+
+        # Open ShelfHubView (automatically closes ItemSizeFlyout) and exercise UpdateShelfItemSizes -> shelfRefresh
+        ui('invoke', 'NavShelf')
+        ui('wait-for', f'ShelfRow{shelf_id}', '-t', '10000')
+        ui('invoke', 'BtnShelfSize')
+        ui('wait-for', 'ItemSizeSlider', '-t', '5000')
+        ui('set-value', 'ItemSizeSlider', '140')
+        ui('wait-for', 'ItemSizeLabel', '--value', '140%', '-t', '5000')
+        ui('set-value', 'ItemSizeSlider', '180')
+        ui('wait-for', 'ItemSizeLabel', '--value', '180%', '-t', '5000')
+        time.sleep(0.8)  # Allow shelf thumbnail derivative and SaveItemSize timer (500ms) to settle
+        shot('01-phase0-shelf-180pct')
+
+        # Return to NavAll so the flyout is closed and verify 180% Grid + DetailPreview
+        ui('invoke', 'NavAll')
+        ui('wait-for', f'Item{first_id}', '-t', '15000')
+        wait_for_thumbnails_ready('phase 0 grid return 180%')
+        ui('invoke', f'Item{first_id}', '--action', 'select')
+        ui('wait-for', 'DetailPreview', '-t', '10000')
+        time.sleep(0.4)
+        shot('02-phase0-grid-180pct')
         phase0_memory = get_process_memory(pid)
         report['phase0_memory'] = phase0_memory
         print(f'Phase 0 WinUI memory: {phase0_memory}', flush=True)
@@ -409,11 +449,16 @@ def main():
             check('phase0_max_touched > 0', phase0_max_touched > 0)
             phase0_bytes = db.execute('SELECT COALESCE(SUM(length(png)), 0) FROM thumbs').fetchone()[0]
             check('phase0_bytes > 0', phase0_bytes > 0)
+            png_blobs = [r[0] for r in db.execute('SELECT png FROM thumbs').fetchall()]
+            phase0_edges = sorted({max(struct.unpack('>II', b[16:24])) for b in png_blobs})
+            check('phase 0 populated 128, 256, and 512+ DPI/scale derivative buckets',
+                  {128, 256, 512}.issubset(phase0_edges))
 
         report['phase0_rows'] = phase0_rows
         report['phase0_max_touched'] = phase0_max_touched
         report['phase0_bytes'] = phase0_bytes
-        print(f'Phase 0 cache metrics: rows={phase0_rows}, max_touched={phase0_max_touched}, bytes={phase0_bytes}', flush=True)
+        report['phase0_edges'] = phase0_edges
+        print(f'Phase 0 cache metrics: rows={phase0_rows}, max_touched={phase0_max_touched}, bytes={phase0_bytes}, edges={phase0_edges}', flush=True)
 
         # =========================================================================
         # PHASE 1: Restart, persistent cache hits, and clean exit
@@ -436,7 +481,14 @@ def main():
         ui('wait-for', f'Preview{first_id}', '-t', '15000')
         wait_for_thumbnails_ready('phase 1 grid')
 
-        shot('02-phase1-restarted-thumbs')
+        ui('invoke', f'Item{first_id}', '--action', 'select')
+        ui('wait-for', 'DetailPreview', '-t', '10000')
+        shot('03-phase1-restarted-thumbs')
+
+        ui('invoke', 'NavShelf')
+        ui('wait-for', f'ShelfRow{shelf_id}', '-t', '10000')
+        time.sleep(0.5)
+        shot('04-phase1-restarted-shelf')
         phase1_memory = get_process_memory(pid)
         report['phase1_memory'] = phase1_memory
         print(f'Phase 1 WinUI memory: {phase1_memory}', flush=True)

@@ -81,7 +81,7 @@ public sealed partial class MainPage : Page
         {
             itemSizeTimer.Stop();
             if(disposed)return;
-            ApplyItemSizeToCards();
+            UpdateItemSizes();
         };
         Unloaded+=OnPageUnloaded;
         libraryItemScale=ViewerOptions.Value.LibraryItemScale;ItemSizeSlider.Value=libraryItemScale;
@@ -484,13 +484,6 @@ public sealed partial class MainPage : Page
         DetachXamlRoot();
         itemSizeTimer.Stop();
     }
-    private void ApplyItemSizeToCards()
-    {
-        UpdateItemSizes();
-        foreach(var refresh in containerRefresh.Values.ToArray())refresh();
-        if(active is not null&&Details.IsPaneOpen&&DetailPreview.Visibility==Visibility.Visible)
-            _ = ShowDetailPreviewAsync(active);
-    }
     private void UpdateItemSizes()
     {
         UpdateShelfItemSizes();
@@ -498,6 +491,9 @@ public sealed partial class MainPage : Page
             wrap.ItemWidth=tiles?LibraryTileLayout.Width(Math.Max(1,Items.ActualWidth-16),libraryItemScale)+8:double.NaN;
         foreach(var item in containerCleanup.Keys.ToArray())
             if(item.ContentTemplateRoot is Border { Child: Grid content }&&content.Children.FirstOrDefault() is Image image)SizeItem(item,image);
+        foreach(var refresh in containerRefresh.Values.ToArray())refresh();
+        if(active is not null&&Details.IsPaneOpen&&DetailPreview.Visibility==Visibility.Visible)
+            _ = ShowDetailPreviewAsync(active, preserveExisting: true);
     }
     private void ItemListContainer_SizeChanged(object sender,SizeChangedEventArgs args)
     {
@@ -623,14 +619,23 @@ public sealed partial class MainPage : Page
         }
     }
     private static string AvailabilityLabel(string state) => state switch { "present" => "登録済み", "missing" => "ファイル不明", "unavailable" => "接続・更新を確認", _ => state };
-    private async Task ShowDetailPreviewAsync(MediaRow row)
+    private int detailPreviewId;
+    private int detailRequestedEdge;
+    private async Task ShowDetailPreviewAsync(MediaRow row, bool preserveExisting = false)
     {
+        var edge = ThumbnailPolicy.EdgeFor(Math.Max(160, Math.Max(DetailPreview.ActualWidth, Editor.ActualWidth)), Math.Max(160, DetailPreview.ActualHeight), XamlRoot?.RasterizationScale ?? 1);
+        if (preserveExisting && detailPreviewId == row.Id && detailRequestedEdge == edge && DetailPreview.Source is not null)
+            return;
         detailCancellation?.Cancel(); detailCancellation?.Dispose();
         detailCancellation = new CancellationTokenSource(); var cancellation = detailCancellation.Token;
-        DetailPreview.Source = null; DetailPreview.Visibility = Visibility.Collapsed;
+        detailPreviewId = row.Id;
+        detailRequestedEdge = edge;
+        if (!preserveExisting)
+        {
+            DetailPreview.Source = null; DetailPreview.Visibility = Visibility.Collapsed;
+        }
         try
         {
-            var edge = ThumbnailPolicy.EdgeFor(Math.Max(160, Math.Max(DetailPreview.ActualWidth, Editor.ActualWidth)), Math.Max(160, DetailPreview.ActualHeight), XamlRoot?.RasterizationScale ?? 1);
             var image = await thumbnails.GetAsync(row, cancellation, edge);
             if (cancellation.IsCancellationRequested || active?.Id != row.Id || disposed) return;
             DetailPreview.Source = image; DetailPreview.Visibility = image is null ? Visibility.Collapsed : Visibility.Visible;
