@@ -199,3 +199,8 @@ WDの既存固定hash/サイズはconfig/tagger-profilesに存在し、[固定re
 基本ZIP03/source5ddd97aの通常EXEから、新しい `AIModelDownloadOpen` を明示操作して取得画面へ直接遷移できた。生成DB/画像だけで容量・ライセンス・runtime別途必要表示、未同意では開始不可、転送owner idle、正常終了/予定内1再起動、設定と全payload保全を確認。11 checks PASS / 4所有exit0 / 2 PNG目視。旧環境配置経由とWD切替の反復ではない。新しい実転送/モデル実行/GPUはなし。[候補と証拠](portable-refresh-20261024.md)。
 
 任意runtimeの通知原文収集・source binding・pack同梱は `5ddd97a`。[不足と確認範囲](runtime-notice-inventory.md)を参照。runtimeを自動取得できる状態にはまだしていない。
+
+
+### 宣言サイズ前のEOFも限定再接続（2026-10-25）
+
+peerが例外なしで短いbodyを閉じた場合も `IncompleteRead` として既存の最大2回再接続へ接続する。ディスク等の一般OSErrorは対象に広げない。実loopback HTTPの70,000 bytesでの切断→Range `bytes=70000-`→全hash一致を新規確認。継続切断は上限後に未公開の部分を保持、次の明示再開/Range無視の再取得も保持する。通信関連6・既存取得14 tests PASS（別実行）。実2GB転送の反復はしていない。基本ZIP03/source5ddd97aにはこの最終EOF補強は未収録。

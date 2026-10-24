@@ -63,3 +63,12 @@ class TransientTransferTests(unittest.TestCase):
         with patch.object(urllib.request.OpenerDirector,'open',side_effect=error) as opened:
             with self.assertRaises(urllib.error.HTTPError):self.fetch()
         self.assertEqual(opened.call_count,1)
+
+    def test_clean_early_eof_reconnects_without_waiting_for_manual_restart(self):
+        # Real HTTP peer closes a declared-length response after 70,000 bytes.
+        self.cut=True
+        def progress(value):
+            if value['stage']=='downloading' and value['bytes_received']>=65536:self.cut=False
+        result=self.fetch(progress=progress)
+        self.assertEqual(self.requests,[None,'bytes=70000-'])
+        self.assertEqual((Path(result['root'])/'runtime/generated.bin').read_bytes(),self.content)

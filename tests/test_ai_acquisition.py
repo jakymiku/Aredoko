@@ -56,12 +56,16 @@ class AcquisitionTests(unittest.TestCase):
         self.assertEqual((target/'runtime/generated.bin').read_bytes(),self.content);self.assertEqual(self.requests,[None])
 
     def test_truncated_download_resumes_exact_range(self):
+        # Remain incomplete after the two automatic reconnects.
+        self.content*=10;self.value['entries'][0].update(bytes=len(self.content),sha256=hashlib.sha256(self.content).hexdigest())
         self.cut=True
         with self.assertRaises(OSError):self.fetch()
         self.cut=False;result=self.fetch()
         self.assertTrue(self.requests[-1].startswith('bytes='))
         self.assertEqual((Path(result['root'])/'runtime/generated.bin').read_bytes(),self.content)
     def test_server_ignoring_range_restarts_instead_of_appending(self):
+        # Remain incomplete after the two automatic reconnects.
+        self.content*=10;self.value['entries'][0].update(bytes=len(self.content),sha256=hashlib.sha256(self.content).hexdigest())
         self.cut=True
         with self.assertRaises(OSError):self.fetch()
         self.cut=False;self.ignore_range=True;self.fetch()

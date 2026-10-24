@@ -172,7 +172,7 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
                                 done=base_done+offset;report('downloading',done,verified)
                                 while offset<item.size:
                                     check();chunk=response.read(min(65536,item.size-offset))
-                                    if not chunk:raise OSError('Artifact connection ended early')
+                                    if not chunk:raise http.client.IncompleteRead(b'',item.size-offset)
                                     stream.write(chunk);offset+=len(chunk);network_bytes+=len(chunk);done=base_done+offset
                                     if bytes_per_second:
                                         while network_bytes/bytes_per_second>time.monotonic()-started:
