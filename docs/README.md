@@ -7,6 +7,9 @@
 - [現行P0–P7統合ロードマップ](polish-roadmap-20261022.md) / [R01–R14・M1/M2完成台帳](completion-roadmap.md)
 - [開発優先順位](development-priorities.md) / [開始ガイド](agent-start.md) / [仕様の方向性](spec.md)
 
+## 開発・テスト方針
+- [ローカルGUI/GPUテストと再試行ループを防ぐ診断ルール](local-test-policy.md) — 新規機能/バグ修正のローカル実機試験は許可不要。旧回数制限は履歴として保持し、原因不明の反復FAILは診断/BLOCKEDへ
+
 ## 機能別の現行仕様と根拠（対象のときのみ）
 - 検索/AI: [AI検索](ai-search-plan.md)、[モデルprofile](model-profiles.md)、[検索品質](search-quality-baseline.md)、[ページ画像](page-image-search.md)、[媒体内容索引](media-content-plan.md)、[タグ候補](tag-suggestions.md)
 - 登録/整理: [フォルダ管理](folder-library-management.md)、[複数棚](multi-shelf-storage.md)、[棚UI](shelf-ui-20261023.md)

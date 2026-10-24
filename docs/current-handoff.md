@@ -14,15 +14,18 @@
 - P6固定registry境界をproduction/配布へ接続。source登録fingerprintとmodel定義SHAを検証し、壊れた任意取得設定で通常起動を止めない。実catalog登録は0のまま。生成registry6/所有backend1/staging1はPASS、途中fixture ERRORは正本で区別。
 
 ## 次の実装1件
-**P6：今回のP5/P6変更を含む新規基本ZIP候補を準備する。** `875f94a`の旧候補を上書きせず、新規出力先へ最新frontend/backendを配置し、明示した既存基本runtime領域だけをhash検証して再利用する。同梱Pythonで生成データのCPU起動/取得診断/復元設定契約を確認する。GUI/実モデル/通常DB/旧Alphaは変更せず、必要なら具体候補で別許可。実catalog公開元/NOTICEは未確定のまま残す。
+**P6：今回のP5/P6変更を含む新規基本ZIP候補を準備する。** `875f94a`の旧候補を上書きせず、新規出力先へ最新frontend/backendを配置し、明示した既存基本runtime領域だけをhash検証して再利用する。同梱Pythonで生成データのCPU起動/取得診断/復元設定契約を確認する。GUI/実モデル/通常DB/旧Alphaは本タスクでは変更せず、**生成fixtureでのローカルGUI/GPUの必要な検証は許可不要**。実モデルの新規取得や通常DB・既存配布の変更は別許可。実catalog公開元/NOTICEは未確定のまま残す。
 
 ## 継続する残件と制約
 - P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。
 - [P6 AI取得](ai-acquisition.md)の製品catalogは空。本物の自動取得・実推論・clean Windowsは未受入。既存配置/取得のCore/UIと生成HTTP基盤はある。
 - [新基本ZIP候補](portable-refresh-20261024.md)はローカル344MB/展開658MB、source875f94a。今回の形式2を含まない。旧Alpha/shortcut未更新、新ZIP GUI/通常DBrestart/実AIは未受入。新旧候補とGit HEADを混同しない。
-- GUI cap：環境2/2、復元3/3、取得1/2。旧P3/shelf/backup等も保持。GUI/GPUは具体範囲を示し事前確認する。私物scan・原本変更・通常DB操作・モデル/依存取得は無断実行しない。
+- 以前のGUI環境2/2、復元3/3、取得1/2、P3・棚などの上限は**当時の検証履歴**。最新の修正や別機能に継承する永久禁止ではない。生成fixture・独立DB/設定・既存モデルならローカルGUI/GPUテストは事前許可不要。[再試行ループを防ぐ診断ルール](local-test-policy.md)に従い、同じ不具合の無意味な再実行を避ける。私物scan・原本変更・通常DB操作・新モデル/依存取得は無断実行しない。
 - Actions起動0、main merge/新branch/新PR/force pushなし。3本のworkflowはmanual-only。**シャットダウンしない**。前回同様、利用枠終盤には安全な単位でcommit/push/本書更新を完了する。
 - 文書/legacy整理はc30bc34で同期済み。[main/旧コード整理方針](repository-maintenance.md)、[旧依存監査](legacy-dependency-audit-20261024.md)、[文書案内](README.md)を保全。旧Catalog/server等は製品依存のため削除しない。
+
+## 現行のGUI・GPUテストルール
+- [ローカルテストと失敗診断の正本](local-test-policy.md)：関連するGUI/GPUの通常テストは許可不要。旧2/2・3/3等の記録は履歴であり、同じ失敗を別名で繰り返す理由にも新タスクを永久に止める理由にもならない。2回ほどの有意味な修正後も失敗が続く場合はログと再現条件を絞って原因調査、修正後に対象を再テスト。なお未解決の安全上重大なFAILは受入/配布不可。
 
 ## 記録のルール
 本書だけを短く更新し、AGENTSや互換handoffへ過去全文を追記しない。詳細証拠は対応する技術文書へ。引き継ぎ時に完了commit・利用可能になった機能・実証/未検証・次の1件を明示し、既存Draft PRとremote一致を確認する。
