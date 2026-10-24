@@ -111,3 +111,68 @@ def audit_boundary120(ui,cli,tree,shot,report,check,pid,hwnd,cat):
     ui('wait-for','generated-119.png','-t','5000')
     check('closing120th restores its right detail title',any(n.get('name')=='generated-119.png' and n.get('type')=='Text' and n.get('x',0)>800 for n in nodes(json.loads(ui('inspect','--depth','18','--json')))))
     shot('boundary120-return')
+
+
+def audit_tail(ui,cli,tree,shot,report,check,pid,hwnd,cat):
+    """Outstanding P3 case: physical final row, resizing and bounded native cards."""
+    def extent():
+        text=tree().get('TxtPageNumber',{}).get('name','').replace(',','')
+        match=re.fullmatch(r'(\d+)–(\d+) / (\d+)',text)
+        return tuple(map(int,match.groups())) if match else None
+    def wait_range(predicate):
+        last=None
+        for _ in range(40):
+            current=extent()
+            if current is not None:
+                last=current
+                if predicate(current):
+                    report.setdefault('tail_ranges',[]).append(current)
+                    check('tail case metadata retention at most600',current[1]-current[0]+1<=600)
+                    return current
+            time.sleep(.1)
+        raise AssertionError('Tail range did not settle: '+str(last))
+    def sample(label):
+        class Counters(ctypes.Structure):
+            _fields_=[('cb',wintypes.DWORD),('PageFaultCount',wintypes.DWORD),*[(name,ctypes.c_size_t) for name in ('PeakWorkingSetSize','WorkingSetSize','QuotaPeakPagedPoolUsage','QuotaPagedPoolUsage','QuotaPeakNonPagedPoolUsage','QuotaNonPagedPoolUsage','PagefileUsage','PeakPagefileUsage','PrivateUsage')]]
+        kernel=ctypes.WinDLL('kernel32',use_last_error=True);api=ctypes.WinDLL('psapi',use_last_error=True)
+        kernel.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD];kernel.OpenProcess.restype=wintypes.HANDLE
+        kernel.CloseHandle.argtypes=[wintypes.HANDLE]
+        api.GetProcessMemoryInfo.argtypes=[wintypes.HANDLE,ctypes.POINTER(Counters),wintypes.DWORD]
+        h=kernel.OpenProcess(0x410,False,pid)
+        if not h:raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            values=Counters();values.cb=ctypes.sizeof(values)
+            if not api.GetProcessMemoryInfo(h,ctypes.byref(values),values.cb):raise ctypes.WinError(ctypes.get_last_error())
+            visible=tree();realized=sum(re.fullmatch(r'Item\d+',name) is not None for name in visible)
+            report.setdefault('memory_samples',[]).append({'label':label,'working_set_bytes':values.WorkingSetSize,'private_bytes':values.PrivateUsage,'native_keyed_cards':realized})
+            check(label+' native keyed cards bounded',0<realized<100)
+        finally:kernel.CloseHandle(h)
+    def shown(key,label):
+        ui('wait-for',key,'-p','IsOffscreen','--value','False','-t','10000')
+        visible=tree();row=visible[key];viewport=visible['ItemList']
+        check(label+' physical row intersects library viewport',row['y']<viewport['y']+viewport['height'] and row['y']+row['height']>viewport['y'])
+    sample('initial')
+    current=None
+    for _ in range(12):
+        previous=current;ui('scroll','ItemList','--to','bottom')
+        current=wait_range(lambda value:value[1]==745 or previous is None or value[1]>previous[1])
+        if current[1]==745:break
+    check('final range available with head eviction',current is not None and current[1]==745 and current[0]>1)
+    last=cat.search(query='generated-744.png')['items'][0];key='Item'+str(last['id'])
+    ui('scroll','ItemList','--to','bottom');shown(key,'list final')
+    ui('invoke',key,'--action','select');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000')
+    ui('set-value','TxtTags','tail-unsaved-draft');shot('physical-last-list');sample('list-tail')
+    ui('invoke','BtnLayout');shown(key,'grid final');ui('wait-for','TxtTags','--value','tail-unsaved-draft','-t','5000')
+    for size in (180,60,100):
+        ui('invoke','BtnItemSize');ui('set-value','ItemSizeSlider',str(size));ui('wait-for','ItemSizeLabel','--value',str(size)+'%','-t','5000')
+        ui('send-keys','escape','--via','send-input');shown(key,'grid '+str(size)+' final')
+        ui('wait-for','TxtTags','--value','tail-unsaved-draft','-t','5000')
+    shot('physical-last-grid');sample('grid-resized-tail')
+    check('tail draft has not autosaved',cat.get(last['id'])['tags']==[])
+    ui('set-value','TxtTags','');ui('invoke','BtnCloseDetails')
+    for _ in range(12):
+        if current[0]==1:break
+        previous=current;ui('scroll','ItemList','--to','top')
+        current=wait_range(lambda value:value[0]<previous[0])
+    ui('scroll','ItemList','--to','top');first=cat.search(limit=1)['items'][0]
+    shown('Item'+str(first['id']),'reverse first');sample('returned-first');shot('tail-returned-first')

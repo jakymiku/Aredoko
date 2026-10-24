@@ -11,7 +11,7 @@ public sealed partial class MainPage
     private readonly ObservableCollection<string> resultKeys=new();
     private ResultBuffer? browseBuffer;
     private int browseStart;
-    private bool browseFailed,extending;
+    private bool browseFailed,extending,browseReflowing;
     private ScrollViewer? resultScroll;
 
     private int PreviousBrowsePage()=>Math.Max(0,(browseStart-1)/resultPageSize);
@@ -40,7 +40,7 @@ public sealed partial class MainPage
     }
     private async void ResultScroll_Changed(object? sender,ScrollViewerViewChangedEventArgs args)
     {
-        if(!ready||!Items.IsEnabled||args.IsIntermediate||disposed||extending||browseFailed||saving||dialogOpen||PendingSearch||folderHubOpen)return;
+        if(!ready||!Items.IsEnabled||args.IsIntermediate||disposed||extending||browseReflowing||browseFailed||saving||dialogOpen||PendingSearch||folderHubOpen)return;
         if(resultScroll is not ScrollViewer scroll||browseBuffer is not ResultBuffer buffer||resultWindow is not ResultWindow window)return;
         var forward=scroll.VerticalOffset+scroll.ViewportHeight*2>=scroll.ExtentHeight&&buffer.End<buffer.Total;
         var backward=!forward&&scroll.VerticalOffset<scroll.ViewportHeight&&buffer.Start>0;
@@ -85,6 +85,36 @@ public sealed partial class MainPage
             if(y+container.ActualHeight>0&&y<Items.ActualHeight)return(RowKey(id),y);
         }
         return null;
+    }
+    private void ReflowBrowse(Action change)
+    {
+        if(browseReflowing||!ready||disposed||folderHubOpen||shelfHubOpen||Items.Visibility!=Visibility.Visible)
+        {change();return;}
+        var anchor=CaptureBrowseAnchor();
+        var atEnd=resultScroll is not null&&browseBuffer is not null&&browseBuffer.End==browseBuffer.Total
+            &&Math.Abs(resultScroll.ScrollableHeight-resultScroll.VerticalOffset)<2;
+        if(anchor is null&&!atEnd){change();return;}
+        var session=resultSession;var buffer=browseBuffer;var start=buffer?.Start;var end=buffer?.End;
+        browseReflowing=true;
+        try{change();Items.UpdateLayout();_ = FinishBrowseReflowAsync(anchor,atEnd,session,buffer,start,end);}
+        catch{browseReflowing=false;throw;}
+    }
+    private async Task FinishBrowseReflowAsync((string Key,double Y)? anchor,bool atEnd,object? session,ResultBuffer? buffer,int? start,int? end)
+    {
+        try
+        {
+            await YieldBrowseLayoutAsync();
+            if(disposed||!ReferenceEquals(session,resultSession)||!ReferenceEquals(buffer,browseBuffer)||buffer?.Start!=start||buffer?.End!=end)return;
+            Items.UpdateLayout();
+            if(atEnd&&resultScroll is not null)
+            {
+                resultScroll.ChangeView(null,resultScroll.ScrollableHeight,null,true);
+                await YieldBrowseLayoutAsync();
+            }
+            else await RestoreBrowseAnchorAsync(anchor);
+        }
+        catch(Exception error){if(!disposed)Failure(error);}
+        finally{browseReflowing=false;}
     }
     private Task YieldBrowseLayoutAsync()
     {

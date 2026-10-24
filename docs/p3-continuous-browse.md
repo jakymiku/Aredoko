@@ -35,3 +35,14 @@ Harness now captures failure tree/PNG, hashes actual app DLL plus worktree diff 
 - 初回publishは旧呼出し1箇所の更新漏れCS0103→WMC cascadeでFAIL、修正後publish成功。run03/04はUIA peerの一時不在と初回legacy page labelに対するハーネスの早すぎる厳密lookupでFAIL。PNGにfooterが存在する証拠を保存し、25回のbounded predicate内で有効なrangeを待つよう修正。範囲を架空60へ置換するfallbackを撤去。cleanupはwindow消滅とprocess exitの時間差も扱い、強制終了しない。
 - **run05 / frontend02 PASS**。source `28d5e7b`＋reportのsource一覧/差分SHA、app DLL SHA。range1–180→1–540→61–660→146–745（保持600以内）→26–625→1–600。元61番のhidden draftを保持し、明示Saveだけで専用DBへ反映、元745 PNGのSHA/mtime不変。3 PNG全目視、app正常終了0、所有process残存なし。Coreは変更しておらず直前1019を反復せず、Portable関連publishだけを行った。
 - ここでの末尾到達は「末尾を含むrangeの取得」。実画面の最終745番row表示、120↔121のnative操作、全検索方式/条件、grid/HC/DPI、RSS、全thumbnail速度は引き続き未受入。先頭/失敗PNGの遅いthumbnailを速度合格とはしない。
+
+
+## 2026-10-25 物理末尾行・サイズ変更の限定確認
+
+745生成画像/独立DB・Light・専用Portableで、range取得だけでなく745番の実カード表示を確認する新しい残件caseを実施。run01は読込完了で非表示になるPreviewStatusをカード数と数えたハーネス誤りでFAIL。実カード `Item<id>` のUIA keyを数える修正後、run02で末尾list→grid切替がrange146–745から26–625へ逆方向fetchし、157番付近へ戻る**製品バグ**を再現。どちらも元log/PNGを保持、所有app通常exit0。
+
+修正はlayout/size変更中を `browseReflowing` で追加読込から隔離し、変更前のanchor・末尾位置・session/buffer範囲を保持する。変更後のlayoutをawaitして、同一session/範囲の場合だけanchorを復元する。末尾にいた場合は末尾へ合わせ、再帰したsize通知は同じreflowへまとめる。別検索へ古い位置を適用しない。選択/未保存draft/既存原本guardは維持。
+
+`data/ai-ui/p3-tail-20261025/run03` / `continuation-20261025/frontend02` PASS。物理745番list→grid→180/60/100%で表示を保持、draft未保存を保全し自動保存0、逆方向1番を物理表示、range保持600以内、生成745原本SHA/mtime不変、app exit0/残存なし。4 PNGを目視。最初のthumbnail未完了PNGは速度合格に使わない。倍率180/60はUIA座標・draft確認で、各倍率ごとのPNG目視は未実施。
+
+所有WinUIの単回WorkingSet bytesは初期178,749,440、list末尾202,395,648、grid倍率変更後237,703,168、先頭復帰246,673,408（Private bytesはreport参照）。UIA keyを持つカード12/12/10/18。これはwarmingとlayout変更を含む4点で、実現全オブジェクト数やリークなしの証明ではない。5万件・長時間RSS・HC/実モニターDPIの受入は残る。関連Portable publish成功/既知warnings、Coreは無変更なので全Core反復なし。

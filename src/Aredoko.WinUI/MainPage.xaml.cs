@@ -484,7 +484,8 @@ public sealed partial class MainPage : Page
         DetachXamlRoot();
         itemSizeTimer.Stop();
     }
-    private void UpdateItemSizes()
+    private void UpdateItemSizes()=>ReflowBrowse(UpdateItemSizesCore);
+    private void UpdateItemSizesCore()
     {
         UpdateShelfItemSizes();
         if(Items.ItemsPanelRoot is ItemsWrapGrid wrap)
@@ -882,7 +883,7 @@ public sealed partial class MainPage : Page
         }
         finally { transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();} }
     }
-    private void Layout_Click(object sender,RoutedEventArgs e){tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";if(shelfHubOpen)RenderShelfLayout();else{RenderRows();RestoreSelection();}}
+    private void Layout_Click(object sender,RoutedEventArgs e){if(extending||saving||dialogOpen)return;tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";if(shelfHubOpen)RenderShelfLayout();else ReflowBrowse(()=>{RenderRows();RestoreSelection();});}
     private void OpenDetails_Click(object sender,RoutedEventArgs e)
     {
         if(folderHubOpen)

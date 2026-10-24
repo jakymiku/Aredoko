@@ -1,5 +1,5 @@
 """Generated-only Portable native card recycling acceptance. No model or private data."""
-import argparse, ctypes, hashlib, json, os, secrets, subprocess, sys, threading, time, traceback
+import argparse, ctypes, hashlib, json, os, secrets, subprocess, sys,re, threading, time, traceback
 from ctypes import wintypes
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -14,7 +14,7 @@ from native_ui_tools import nodes
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
+    parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
@@ -50,13 +50,13 @@ def main():
     def sources():return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
     try:
         media=target/'media';media.mkdir()
-        for i in range(0 if args.detail_actions else 745 if args.continuous else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        for i in range(0 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
         if args.detail_actions:
             from ui_detail_actions_audit import create_media
             create_media(media)
         before=sources();cat=ProductionCatalog(target/'catalog.sqlite');root=cat.add_root(str(media));cat.start_scan(root)
         if cat._worker:cat._worker.join(15)
-        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(6 if args.detail_actions else 745 if args.continuous else 125 if args.viewer_boundary120 else 145))
+        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
         if args.detail_actions:
             shelf=cat.change_shelf('create',name='確認用の棚')['id']
             cat.change_shelf('assign',entity='item',object_ids=[row['id'] for row in cat.search()['items']],shelf_ids=[shelf])
@@ -73,7 +73,7 @@ def main():
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
         key='Item'+str(first['id']);ready();ui('wait-for',key,'-t','10000');shot('list-initial')
-        visible=tree();count=sum(k.startswith('PreviewStatus') for k in visible)
+        visible=tree();count=sum(re.fullmatch(r'Item\d+',k) is not None for k in visible)
         check('panel realizes fewer cards than sixty-result page',0<count<60)
         if args.detail_actions:
             from ui_detail_actions_audit import audit
@@ -82,6 +82,10 @@ def main():
         elif args.viewer_boundary120:
             from ui_continuous_browse_audit import audit_boundary120
             audit_boundary120(ui,cli,tree,shot,report,check,proc.pid,hwnd,cat)
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.library_tail:
+            from ui_continuous_browse_audit import audit_tail
+            audit_tail(ui,cli,tree,shot,report,check,proc.pid,hwnd,cat)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.continuous:
             from ui_continuous_browse_audit import audit
