@@ -1,5 +1,18 @@
 # LD4b：任意AI環境の取得基盤（2026-10-24）
 
+## 2026-10-24 model catalog/layout preparation (latest)
+
+`tools/build_ai_model_catalog.py` now prepares a draft from one explicitly selected model directory and an app-owned embedding/WD profile. It preserves the directory below the published models root, so the existing-folder setup can select the returned root without moving/renaming files. It hashes files once, checks source identities/inventory again, requires included license/NOTICE payloads and explicit HTTPS source/hosts/license metadata, and creates a new output only. It never changes source profiles/models/settings, runs a selected interpreter, downloads, or registers a product catalog.
+
+`app/ai_model_pack.py:model_validator(profile,catalog)` binds a fixed profile/revision/layout to an app-owned acquisition specification. Existing acquisition verifies all file sizes/SHA/inventory first; the validator checks bounded metadata, provenance/revision marker, configuration/tokenizer and single/sharded weights before publication. WD's two artifact sizes/SHA must match its existing fixed profile; a catalog cannot silently replace them. No remote code or pickle/ONNX/model execution. Structural validity is not inference quality, publisher authentication or license approval. A supplied LICENSE file is required but does not by itself prove redistribution rights.
+
+Developer syntax:
+`python tools/build_ai_model_catalog.py --model-directory <one-model-folder> --profile <reviewed-profile.json> --profile-kind <embedding|wd> --output <new-catalog.json> --id <model-pack-id> --base-url <immutable-HTTPS-model-directory> --license <reviewed-license-summary> --license-url <official-NOTICE-URL> --allow-host <publisher-host>`
+
+The source folder must already contain the exact existing provenance marker (`aredoko-revision.txt` or WD `aredoko-source.json`) and LICENSE/NOTICE; the tool does not invent missing provenance or fetch it. Profile revision supplies catalog revision. Publisher URLs/NOTICE and complete adapter-specific assets still require operator review before source registry registration. The production registry remains empty: no real model or runtime download is enabled by this change.
+
+Generated CPU9 PASS/1.066s: single/sharded layout, WD exact definition/provenance, metadata duplicates/unsafe shard/missing tokenizer/revision/license, source hardlink/change/cancel, host boundaries, non-overwriting output, loopback acquisition → validation/publication → explicit models-root selection while preserving settings/source. Repeat acquisition rejects corrupted published weights without network/replacement. Existing acquisition/job/runtime-catalog25 PASS/13.708s separately; no GUI/GPU/model execution. Evidence: ignored `data/ai-ui/active-selection-20261024-01/model-pack-*.log` and tracked tests.
+
 ## 2026-10-24 reproducible runtime catalog preparation (latest)
 
 Developer-only tools/build_ai_runtime_catalog.py prepares a draft catalog from one explicitly selected sealed pack. Full existing LD3 validation is reused; entries and hashes come from the verified inventory, including its marker, rather than hashing all PyTorch files again. Explicit HTTPS base/immutable revision/license/NOTICE link/allowed hosts are required, paths URL-escaped, exact inventory and normal-path rules retained. New output only, outside source pack, exclusive creation; no download/upload/selected interpreter execution/source edit/automatic product registry insertion. A failed output may remain as evidence and is not registered.
@@ -8,7 +21,7 @@ Generated pack tests5 PASS/0.888s: all files/marker/checksums/source SHA+mtime, 
 
 Preparation syntax (developer build, not user setup UI):
 `python tools/build_ai_runtime_catalog.py --runtime-root <sealed-pack> --output <new-catalog.json> --id <pack-id> --revision <40-or-64-hex> --base-url <fixed-HTTPS-directory> --license <audited-license-summary> --license-url <official-NOTICE-URL> --allow-host <publisher-host>`
-Additional redirect/CDN hosts must be explicitly listed with repeated --allow-host. Do not add guessed endpoints or bypass source checks to make a transfer pass. Model catalogs need their own model-layout validator/marker/NOTICE contract; this tool intentionally does not infer one.
+Additional redirect/CDN hosts must be explicitly listed with repeated --allow-host. Do not add guessed endpoints or bypass source checks to make a transfer pass. Model catalogs use the separate model-layout tool above; the runtime tool intentionally does not infer one.
 
 ## 2026-10-24 explicit repeat acquisition reuses verified version (latest)
 

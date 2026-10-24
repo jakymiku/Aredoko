@@ -4,11 +4,13 @@
 - `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。base c30bc34へff済み、元の未コミットP5案4ファイルは退避してから継続した。製品コード以外の変更を巻き戻していない。
 - 読む順：本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧大量記録は[履歴索引](history-index.md)から必要時のみ。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らない方針を維持。
 - P5 active/pending保全を実装。[形式2・正確な契約・関連テスト・次の1件](backup-active-selection.md)を参照。起動時のAI/WD定義と保存済み次回選択を分離し、旧version1も復元できる。通常profile枠を減らさず、元設定を上書きしない。
-- 形式2の基盤`02f087b`をPush済み。続く一時指定解除もCPU実装済み：初回は保存active、ready後に一時指定解除、次回はpending。元の明示overrideは保持。設定busy/atomic失敗時はcommitted証拠で後処理を再試行する。
+- 形式2の基盤`02f087b`、ready後の一時指定解除`f1bb3cb`をPush済み。一時指定解除はCPU実装済み：初回は保存active、ready後に一時指定解除、次回はpending。元の明示overrideは保持。設定busy/atomic失敗時はcommitted証拠で後処理を再試行する。
 - 今回の関連確認：一時指定19、新規owned2、破損記録1、settings/switch40、lifecycle/startup26は各PASS（別実行、合算しない）。C#/GUI/GPU/実モデル/通常DBは未変更。途中失敗や旧検証は技術正本へ。現行作業commitはこのファイルのgit logで確認する。
 
+- P6モデルpack用の固定profile/layout validatorとdraft catalog生成を追加。生成9 PASS、既存取得/job/runtime builder25 PASS（別実行）。取得→検証→公開→明示models-root選択が生成HTTPで通る。製品catalogは空のままで実取得を有効化していない。正本は[AI取得](ai-acquisition.md)。
+
 ## 次の実装1件
-**P6：モデル取得の固定レイアウト検証。** runtime用validator/catalog生成基盤はあるがmodel用は未整備。WD既存profileと整合する検証を生成データで実装し、取得→検証→既存配置選択を繋ぐ。架空URL/未確認NOTICEで製品catalogを有効化しない。外部download/GUI/GPUは今回実行しない。
+**P6：製品catalogの登録境界と検証済みversion選択の接続を確認する。** runtime/modelのdraft生成基盤は揃った。公開前の配布元・NOTICE・固定artifact reviewと、アプリ所有registryの登録方法を明確にし、未確認catalogは有効化しない。既存取得画面から公開rootの選択を使いやすくする独立部分を進める。外部download/GUI/GPUは事前確認。
 
 ## 継続する残件と制約
 - P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。
