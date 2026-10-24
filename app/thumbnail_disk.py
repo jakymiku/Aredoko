@@ -5,7 +5,6 @@ or one guarded persistent SQLite file (persistent mode).
 The caller serializes access and validates the original source even on hits.
 """
 import hashlib
-import os
 import re
 import sqlite3
 import tempfile
@@ -23,7 +22,14 @@ from storage_lease import (
 MAX_BYTES = 512 * 1024 * 1024
 MAX_ENTRIES = 4096
 SCHEMA_VERSION = 1
-TABLE_COLUMNS = ('key', 'png', 'digest', 'tag', 'touched')
+TABLE_COLUMNS = (
+    ('key', 'TEXT', 0, None, 1),
+    ('png', 'BLOB', 1, None, 0),
+    ('digest', 'TEXT', 1, None, 0),
+    ('tag', 'TEXT', 0, None, 0),
+    ('touched', 'INTEGER', 1, None, 0),
+)
+MAX_TICK = 2**63 - 1
 
 
 class ThumbnailDisk:
@@ -58,7 +64,7 @@ class ThumbnailDisk:
         db = None
         if self.path.exists() and self.path.stat().st_size > 0:
             try:
-                db = sqlite3.connect(self.path, check_same_thread=False)
+                db = self.db = sqlite3.connect(self.path, check_same_thread=False)
                 db.execute('PRAGMA trusted_schema=OFF')
                 user_version = db.execute('PRAGMA user_version').fetchone()[0]
                 quick = db.execute('PRAGMA quick_check').fetchall()
@@ -78,7 +84,7 @@ class ThumbnailDisk:
                             if tables != {'thumbs'} or user_version != SCHEMA_VERSION:
                                 needs_recreate = True
                             else:
-                                cols = tuple(row[1] for row in db.execute('PRAGMA table_info(thumbs)'))
+                                cols = tuple(tuple(row[1:]) for row in db.execute('PRAGMA table_info(thumbs)'))
                                 if cols != TABLE_COLUMNS:
                                     needs_recreate = True
             except (sqlite3.Error, OSError, ValueError):
@@ -90,7 +96,7 @@ class ThumbnailDisk:
                     db.close()
                 except sqlite3.Error:
                     pass
-                db = None
+                db = self.db = None
             if self.path.exists() or self.path.is_symlink():
                 plain_path(self.path).unlink()
             for suffix in ('-wal', '-shm', '-journal'):
@@ -99,7 +105,7 @@ class ThumbnailDisk:
                     plain_path(companion).unlink()
 
         if db is None:
-            db = sqlite3.connect(self.path, check_same_thread=False)
+            db = self.db = sqlite3.connect(self.path, check_same_thread=False)
             db.execute('PRAGMA trusted_schema=OFF')
 
         db.execute('PRAGMA journal_mode=DELETE')
@@ -110,6 +116,13 @@ class ThumbnailDisk:
         db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
         db.commit()
 
+        # SQLite affinity is not a type guarantee. A damaged, otherwise valid
+        # cache must not poison Python arithmetic or prevent fresh derivatives.
+        db.execute("DELETE FROM thumbs WHERE typeof(touched) != 'integer' OR touched < 0 "
+                   "OR typeof(key) != 'text' OR length(key) != 64 "
+                   "OR typeof(png) != 'blob' OR length(png) < 8 "
+                   "OR typeof(digest) != 'text' OR length(digest) != 64")
+        db.commit()
         self.tick = db.execute('SELECT COALESCE(MAX(touched), 0) FROM thumbs').fetchone()[0]
         budget = max(0, self.max_bytes - min(1024 * 1024, self.max_bytes // 4))
         size, count = db.execute('SELECT COALESCE(SUM(length(png)),0),COUNT(*) FROM thumbs').fetchone()
@@ -141,6 +154,17 @@ class ThumbnailDisk:
                 self.close()
         return self.db
 
+    def _next_tick(self, db):
+        if self.tick >= MAX_TICK:
+            # At most MAX_ENTRIES rows survive opening/eviction. Preserve their
+            # relative LRU order while making room within SQLite's signed int.
+            rows = db.execute('SELECT key FROM thumbs ORDER BY touched,key').fetchall()
+            db.executemany('UPDATE thumbs SET touched=? WHERE key=?',
+                           ((i, row[0]) for i, row in enumerate(rows, 1)))
+            self.tick = len(rows)
+        self.tick += 1
+        return self.tick
+
     @staticmethod
     def key(value):
         return hashlib.sha256(repr(value).encode('utf-8')).hexdigest()
@@ -160,10 +184,10 @@ class ThumbnailDisk:
                     or (key[1] != 'image' and (not isinstance(tag, str) or re.fullmatch(r'W/"[0-9a-f]{64}"', tag) is None))):
                 db.execute('DELETE FROM thumbs WHERE key=?', (self.key(key),)); db.commit()
                 return None
-            self.tick += 1
-            db.execute('UPDATE thumbs SET touched=? WHERE key=?', (self.tick, self.key(key))); db.commit()
+            tick = self._next_tick(db)
+            db.execute('UPDATE thumbs SET touched=? WHERE key=?', (tick, self.key(key))); db.commit()
             return data, tag
-        except (sqlite3.Error, OSError, TypeError, ValueError):
+        except (sqlite3.Error, OSError, TypeError, ValueError, OverflowError):
             self.close()
             return None
 
@@ -184,11 +208,11 @@ class ThumbnailDisk:
                 if old is None:
                     break
                 db.execute('DELETE FROM thumbs WHERE key=?', (old[0],)); size -= old[1]; count -= 1
-            self.tick += 1
+            tick = self._next_tick(db)
             db.execute('INSERT INTO thumbs VALUES(?,?,?,?,?)',
-                       (self.key(key), data, hashlib.sha256(data).hexdigest(), tag, self.tick))
+                       (self.key(key), data, hashlib.sha256(data).hexdigest(), tag, tick))
             db.commit()
-        except (sqlite3.Error, OSError, TypeError, ValueError):
+        except (sqlite3.Error, OSError, TypeError, ValueError, OverflowError):
             self.close()
 
     def close(self):

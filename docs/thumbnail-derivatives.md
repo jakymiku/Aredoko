@@ -46,3 +46,9 @@ Linuxで生成PNG/JPEG/GIF/APNG/CBZ/folderだけ使用。原本SHA/mtime不変�
 P3 PARTIAL。可視優先scheduler/近傍先読み/画面外取消の一覧接続、DPI/tile実寸に合わせたedge選択、decoded全体のRAM budgetは未完。現在の一覧は従来page UIのままで、120件block/最大5blockのdata virtualization/標準container再利用と完成形主画面を実装する。Windowsでは既存依存のみでCore→Portable buildを各1回、生成媒体で全size・再利用cell・画像混入・除外/解除後のcache・取消/close・Light/Dark/狭幅を確認する。既存GUI回数capを新名称でresetしない。
 
 大規模UI/実機待ちで独立backendを停止しない。P4複数棚/履歴/root favorites、P5起動中backup/restore、P6 setup/配布、P7は引き続き未完。
+
+## 2026-10-24 引き継ぎレビュー：破損した永続LRUからの回復
+
+Antigravity到達点 `fc4ff5f` をレビューし、再生成可能なキャッシュの異常を原本閲覧へ波及させない境界を補強した。`touched` の文字列/実数/負数は不正行として除去し、SQLite最大整数は有効行の相対LRU順を保って振り直す。同じ列名でも型・NOT NULL・主キーが異なるschemaは張り直す。初期化直後から接続を所有して例外時に確実に閉じ、leaseを解放する。元catalog・メディアには書き込まない。
+
+生成CPU確認：新規回復4 tests PASS、既存thumbnail28 tests PASS（各別実行）。`data/ai-ui/cache-review-20261024/{before,after,related}.log`。初回の低page上限による接続失敗fixtureは既存pageの再利用により失敗を起こさなかったため、接続後PRAGMA失敗の明示注入へ修正。元のFAILも保持。GUI/GPUは今回未実行、通常破損なしの実機速度改善をこの修正の実績とはしない。
