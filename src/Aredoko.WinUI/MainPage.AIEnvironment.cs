@@ -21,11 +21,21 @@ public sealed partial class MainPage
             var modelScope=new ComboBox{Header="モデル保存先の対象",HorizontalAlignment=HorizontalAlignment.Stretch};
             foreach(var (label,role) in new (string,string?)[]{("すべてのモデル（共通）",null),("画像・文字検索","embedding"),("画像のタグ付け（WD Tagger）","tagger"),("検索意図の解析","intent")})
                 modelScope.Items.Add(new ComboBoxItem{Content=label,Tag=role});
-            modelScope.SelectedIndex=1;
+            var modelTargets=new Dictionary<string,AIModelTarget>();
+            void AddModel(AIModelTarget target)
+            {
+                var key="model:"+modelTargets.Count;modelTargets.Add(key,target);
+                // Only strings cross ComboBoxItem.Tag's WinRT ABI. Keep Core
+                // records managed, including in trimmed Portable publication.
+                modelScope.Items.Add(new ComboBoxItem{Content=$"{ModelLabel(target)}：{target.ModelId} ({target.Revision[..7]})",Tag=key});
+            }
+            if(acquired?.ModelTarget is {} acquiredTarget)AddModel(acquiredTarget);
+            modelScope.SelectedIndex=acquired?.ModelTarget is not null?4:1;
             AutomationProperties.SetAutomationId(modelScope,"AIEnvironmentModelScope");
             var scopeNote=new TextBlock{TextWrapping=TextWrapping.Wrap};
             AutomationProperties.SetAutomationId(scopeNote,"AIEnvironmentModelScopeNote");
-            string? SelectedRole()=>(modelScope.SelectedItem as ComboBoxItem)?.Tag as string;
+            AIModelTarget? SelectedTarget()=>(modelScope.SelectedItem as ComboBoxItem)?.Tag is string key&&modelTargets.TryGetValue(key,out var target)?target:null;
+            string? SelectedRole()=>SelectedTarget()?.Role??(modelScope.SelectedItem as ComboBoxItem)?.Tag as string;
             static string ModelLabel(AIModelTarget? target)=>target?.Role=="tagger"?"タグ付けモデル":"検索モデル";
             var runtime=new TextBox{Header="AI実行環境",IsReadOnly=true,TextWrapping=TextWrapping.Wrap};
             var models=new TextBox{Header="モデルの保存先",IsReadOnly=true,TextWrapping=TextWrapping.Wrap};
@@ -69,9 +79,9 @@ public sealed partial class MainPage
             }
             void RenderModelLocation()
             {
-                models.Text=locations?.ModelLocation(SelectedRole())??"標準の場所";
-                resetModels.Content=SelectedRole() is null?"すべて標準に戻す":"この対象を標準に戻す";
-                scopeNote.Text=SelectedRole() is null?"共通の場所を変更すると、すべてのモデルの個別指定も解除します。モデルファイルは移動しません。":"この対象だけを変更します。同じ対象のモデル別指定は解除します。他の対象の保存先は保持します。";
+                models.Text=locations?.ModelLocation(SelectedRole(),SelectedTarget())??"標準の場所";
+                resetModels.Content=SelectedTarget() is not null?"このモデルの指定を解除":SelectedRole() is null?"すべて標準に戻す":"この対象を標準に戻す";
+                scopeNote.Text=SelectedTarget() is not null?"このモデルだけの保存先です。他のモデルと役割の保存先は保持します。":SelectedRole() is null?"共通の場所を変更すると、すべてのモデルの個別指定も解除します。モデルファイルは移動しません。":"この対象だけを変更します。同じ対象のモデル別指定は解除します。他の対象の保存先は保持します。";
             }
             modelScope.SelectionChanged+=(_,_)=>RenderModelLocation();
             RenderModelLocation();
@@ -80,7 +90,13 @@ public sealed partial class MainPage
                 var requested=revision;
                 var value=await api.AIEnvironment.StatusAsync(lifetime.Token);
                 if(!open||disposed||requested!=revision||busy)return;
-                locations=value;runtime.Text=value.RuntimeRoot??"標準の場所（または起動時に指定した環境）";RenderModelLocation();
+                locations=value;runtime.Text=value.RuntimeRoot??"標準の場所（または起動時に指定した環境）";
+                // Keep existing native items/selection stable. Replacing the
+                // selected item during refresh can reset ComboBox to common.
+                // Only add bounded saved choices; reopening refreshes the set.
+                foreach(var entry in value.ModelLocations??Array.Empty<AIModelLocation>())
+                    if(!modelTargets.Values.Contains(entry.Target)&&modelTargets.Count<33)AddModel(entry.Target);
+                RenderModelLocation();
                 diagnostic.Text="実行環境："+(value.RuntimeFilesPresent?"ファイルあり":"未導入または要確認")+"　検索モデル："+(value.ModelFilesPresent?"ファイルあり":"未導入または要確認");
                 diagnostic.Text+=value.RestartRequired?"\n保存した設定は、Aredokoを再起動すると反映されます。":"\n設定変更は次回起動時に反映します。AIの動作確認とは別です。";
             }
@@ -109,6 +125,7 @@ public sealed partial class MainPage
                         path=await PickAIEnvironmentFolderAsync(forRuntime);
                         if(path is null||!open||disposed)return;
                     }
+                    target??=SelectedTarget();
                     current=forRuntime?await api.AIEnvironment.SelectRuntimeAsync(path,lifetime.Token)
                         :target is not null?await api.AIEnvironment.SelectModelAsync(target,path,lifetime.Token)
                         :SelectedRole() is {} role?await api.AIEnvironment.SelectModelRoleAsync(role,path,lifetime.Token)

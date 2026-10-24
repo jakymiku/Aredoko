@@ -15,7 +15,7 @@ from ai_acquisition import Catalog
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8',errors='replace');sys.stderr.reconfigure(encoding='utf-8',errors='replace')
-    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2),required=True);parser.add_argument('--theme',choices=('light','dark'),default='dark');parser.add_argument('--published-selection',action='store_true',help='New feature: apply a generated valid published runtime without executing it');parser.add_argument('--published-model',choices=('embedding','tagger'),help='Apply a generated model to its exact source-bound identity');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2,3,4),required=True);parser.add_argument('--theme',choices=('light','dark'),default='dark');parser.add_argument('--published-selection',action='store_true',help='New feature: apply a generated valid published runtime without executing it');parser.add_argument('--published-model',choices=('embedding','tagger'),help='Apply a generated model to its exact source-bound identity');args=parser.parse_args()
     if args.published_selection and args.published_model:parser.error('Choose one published feature')
     published=args.published_selection or args.published_model is not None
     front=args.frontend.resolve();base=REPO/('data/ai-ui/ai-model-selection-'+args.published_model+'-20261024' if args.published_model else 'data/ai-ui/ai-acquired-selection-20261024' if args.published_selection else 'data/ai-ui/ai-acquisition-20261024');target=base/f'run{args.attempt:02}'
@@ -172,6 +172,7 @@ def main():
             ui('wait-for','AIEnvironmentUseAcquired','-p','IsEnabled','--value','False','-t','3000');shot('selection-saved')
             selected=json.loads(settings.read_text(encoding='utf-8'))
             if args.published_model:
+                ui('wait-for','AIEnvironmentModels','--value',result['root'],'-t','5000')
                 saved=selected.pop('model_locations');expected=json.loads(initial)['model_locations']
                 check('only exact acquired model placement is added',saved==expected+[model_target.to_dict()|{'root':result['root']}])
                 check('all other roles runtime common root and theme remain unchanged',selected=={k:v for k,v in json.loads(initial).items() if k!='model_locations'})

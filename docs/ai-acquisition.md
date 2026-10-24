@@ -154,3 +154,9 @@ WDの既存固定hash/サイズはconfig/tagger-profilesに存在し、[固定re
 - AIProfileSettingsは次回候補ごとに`model_locations`を解決する。起動中の実保存先と候補のfallback rootを混同せず、保存先追加後にプロフィール一覧を開き直しても別モデルの準備状態を正しく表示する。起動時active定義・namespaceは不変。
 - `pending-model-locations.log`44件PASS（モデル配置・profile設定・P5 active/pending復元）。2種類の検索モデルを別rootへ置き、片方をresetしてももう片方の準備状態を保全。通常起動dispatcherと復元readyの既存関連確認を含む。全回帰ではない。
 - 同じnative候補frontend01＋backendは後続差分の状態で、生成embeddingモデルのLight経路も`ai-model-selection-embedding-20261024/run01`で全チェック・終了0。他の2モデルとWD等の設定保全、個別適用・scope切替・再表示を確認。source一覧/差分SHAはreportに記録し、WD時点と混同しない。実推論/起動後workerへの反映はこのGUIテスト範囲外。
+
+
+### 個別モデルの配置選択（2026-10-24）
+- 配置先対象に保存済みの個別モデルと取得対象も追加し、そのモデルだけの指定/解除が可能。acquiredの保存後は同じモデルのpending rootを表示し、共通rootと混同しない。選択肢は設定の最大32件＋取得対象まで、ファイル走査なし。Tagへはstring keyだけを渡し、Core定義はmanaged dictionaryで保持。
+- frontend02/embedding run02は追加UIのrefreshで選択中項目をremove/recreateし共通選択へ戻るFAIL。初期のTag ABI仮説だけを直したfrontend03/run03でも同FAILであり、確定原因と混同しない。両raw/reportを保全（run03 failure PNGは小さく視覚証拠にならず、他4 PNGとUIAを使用）。モデル保存自体は両方成功。
+- 診断後はnative項目を置換せず、足りないbounded選択肢だけ追加する方式へ修正。frontend04/embedding run04で全チェックPASS、5 PNG全目視、保存後の正確なroot表示/他役割保持/再表示/終了0を確認。手順上限を無変更で抜け直した再実行ではなく、追加した選択UIの回帰・実修正の履歴としてrun01〜04を保持する。既存WD役割UIのrun02 PASSは別時点の結果。
