@@ -1,6 +1,6 @@
 # Aredoko 総合改善・完成形UI移行ロードマップ
 
-2026-10-22。ユーザー承認済みのAstra統合計画を実装用に収録する。旧文書・既存機能は保持し、本書の順序を古い「次の作業」より優先する。基点は `8c0a63e` / `feat/winui3-production-mvp-20261011` / Draft PR #5。R13 DOING / R14 PARTIAL / M1・M2未完。WindowsはWinUI 3を維持する。
+2026-10-22。ユーザー承認済みのAstra統合計画を実装用に収録する。**過去のGUI試行上限や事前許可記述より、[現行テスト方針](local-test-policy.md)を優先する。**旧文書・既存機能は保持し、本書の順序を古い「次の作業」より優先する。基点は `8c0a63e` / `feat/winui3-production-mvp-20261011` / Draft PR #5。R13 DOING / R14 PARTIAL / M1・M2未完。WindowsはWinUI 3を維持する。
 
 ## 2026-10-24 P5更新
 
@@ -121,7 +121,7 @@ Windows標準/WICは維持、Pillowは逐次decode/派生画像へ。Win2D（MIT
 
 ## 自律開発・記録
 
-実装→関連build/test→次機能→主要機能後の総合確認。毎回の全回帰/benchmark/再調査は禁止。重大data移行/復元/検索範囲/取消後saveは必要安全確認。GUI待ちだけで独立作業を止めない。過去GUI capsは維持、追加GUIは具体artifact/まとめ範囲を示して新許可。CI既定なし、main mergeなし、private scan/原本/普段DBの無断変更なし、専用OCR保留。
+実装→関連build/test→次機能→主要機能後の総合確認。毎回の全回帰/benchmark/再調査は禁止。重大data移行/復元/検索範囲/取消後saveは必要安全確認。GUI待ちだけで独立作業を止めない。過去GUI capsは履歴として保存するが、**新しい差分や原因に基づく修正のテストは禁止しない**。[ローカルGUI/GPU・失敗診断方針](local-test-policy.md)を優先し、生成fixture/独立DB/既存モデルでの関連GUI/GPU試験は許可不要。同じ不具合を別名で繰り返し上限回避しない。CI既定なし、main mergeなし、private scan/原本/普段DBの無断変更なし、専用OCR保留。
 
 commit/実候補/完了小区分/未検証/未完/次の1件だけhandoffへ。AGENTSは入口、完成台帳は状態、本書は実装計画、design文書はUI正本と役割分担し重複checkpointを増やさない。Astra再相談はrank/scope同値性、複数棚移行の情報損失、複数DB/settings整合、全面render構造変更、OS分離と安全/性能衝突の場合だけ。通常実装はSolで継続する。
 

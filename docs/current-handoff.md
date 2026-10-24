@@ -22,9 +22,12 @@
 - P0 UI基準/P1B実機/P2連続閲覧/P3性能・完成形UI/P4整理/P5復元/P6配布/P7総合受入はPARTIALまたは未受入。[完成台帳](completion-roadmap.md)と[音声等の内容索引](media-content-plan.md)の未完も保持。全ロードマップ完成ではない。
 - [P6 AI取得](ai-acquisition.md)の製品catalogは空。本物の自動取得・実推論・clean Windowsは未受入。既存配置/取得のCore/UIと生成HTTP基盤はある。
 - [新基本ZIP候補02](portable-refresh-20261024.md)は344MB/展開658MB、sourcef508b82で今回の形式2/P6を含む。専用DBの通常起動/設定/1回再起動を追加許可1/1で確認（初回終了code欠測の誤FAILはraw保全、再起動時app/bootstrap0）。4 PNG目視済み。旧01/Alpha/shortcut未更新。通常DB/実AI/clean Windowsは未受入。後続UI微修正はZIP未収録。
-- GUI cap：新基本ZIP1/1（予定内の初回＋再起動の2起動）、環境2/2、復元3/3、取得1/2。旧P3/shelf/backup等も保持。GUI/GPUは具体範囲を示し事前確認する。私物scan・原本変更・通常DB操作・モデル/依存取得は無断実行しない。
+- 今回の基本ZIP許可範囲1/1（初回＋予定内再起動の2起動）は終了。旧環境2/2、復元3/3、取得1/2、P3等は当時の生ログとして保持するが、新規機能/有意味な修正後のローカル検証を止める永久禁止ではない。生成fixture・独立DB/設定・既存モデルの通常GUI/GPU検証は[最新方針](local-test-policy.md)に従う。私物scan・原本変更・通常DB操作・新モデル/依存取得は無断実行しない。
 - Actions起動0、main merge/新branch/新PR/force pushなし。3本のworkflowはmanual-only。**シャットダウンしない**。前回同様、利用枠終盤には安全な単位でcommit/push/本書更新を完了する。
-- 文書/legacy整理はc30bc34で同期済み。[main/旧コード整理方針](repository-maintenance.md)、[旧依存監査](legacy-dependency-audit-20261024.md)、[文書案内](README.md)を保全。旧Catalog/server等は製品依存のため削除しない。
+- 追加のGUI/GPUテスト方針整理07c3f44/ed81d33を上書きせず統合。文書/legacy整理はc30bc34で同期済み。[main/旧コード整理方針](repository-maintenance.md)、[旧依存監査](legacy-dependency-audit-20261024.md)、[文書案内](README.md)を保全。旧Catalog/server等は製品依存のため削除しない。
+
+## 現行のGUI・GPUテストルール
+- [ローカルテストと失敗診断の正本](local-test-policy.md)：関連するGUI/GPUの通常テストは許可不要。旧2/2・3/3等の記録は履歴であり、同じ失敗を別名で繰り返す理由にも新タスクを永久に止める理由にもならない。2回ほどの有意味な修正後も失敗が続く場合はログと再現条件を絞って原因調査、修正後に対象を再テスト。なお未解決の安全上重大なFAILは受入/配布不可。
 
 ## 記録のルール
 本書だけを短く更新し、AGENTSや互換handoffへ過去全文を追記しない。詳細証拠は対応する技術文書へ。引き継ぎ時に完了commit・利用可能になった機能・実証/未検証・次の1件を明示し、既存Draft PRとremote一致を確認する。
