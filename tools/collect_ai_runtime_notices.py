@@ -3,6 +3,7 @@
 This inventories distribution notices, not legal permission or all native deps.
 """
 import argparse,csv,email.parser,hashlib,io,json,os,re,sys
+from urllib.parse import urlsplit
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
 from ai_runtime import relative,files,object_pairs
@@ -95,11 +96,79 @@ def collect(source):
     return summary,payload
 
 
-def write_bundle(source,output):
+
+def _review_rows(value):
+    if not isinstance(value,list) or not 1<=len(value)<=64:raise ValueError('Invalid supplemental notice reviews')
+    names=set()
+    for row in value:
+        if not isinstance(row,dict) or set(row)!={'name','version','metadata_sha256','clears_declared','files'}:
+            raise ValueError('Invalid supplemental distribution identity')
+        if not isinstance(row['name'],str) or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}',row['name']) is None:
+            raise ValueError('Invalid supplemental name')
+        normalized=re.sub(r'[-_.]+','-',row['name']).lower()
+        if normalized in names:raise ValueError('Duplicate supplemental distribution')
+        names.add(normalized)
+        if (not isinstance(row['version'],str) or not 1<=len(row['version'])<=128 or
+                not isinstance(row['metadata_sha256'],str) or re.fullmatch('[0-9a-f]{64}',row['metadata_sha256']) is None or
+                not isinstance(row['clears_declared'],list) or not all(isinstance(x,str) for x in row['clears_declared']) or
+                not isinstance(row['files'],list) or not 1<=len(row['files'])<=32):
+            raise ValueError('Invalid supplemental binding')
+        seen=set()
+        for entry in row['files']:
+            if not isinstance(entry,dict) or set(entry)!={'path','bytes','sha256','source'}:raise ValueError('Invalid supplemental file')
+            key=relative(entry['path'])
+            if key.casefold() in seen:raise ValueError('Duplicate supplemental path')
+            seen.add(key.casefold())
+            if (type(entry['bytes']) is not int or not 1<=entry['bytes']<=MAX_FILE or not isinstance(entry['sha256'],str) or
+                    re.fullmatch('[0-9a-f]{64}',entry['sha256']) is None or not isinstance(entry['source'],str)):
+                raise ValueError('Invalid supplemental checksum')
+            url=urlsplit(entry['source'])
+            if (url.scheme!='https' or url.netloc!='raw.githubusercontent.com' or url.query or url.fragment or
+                    re.fullmatch(r'/[^/]+/[^/]+/[0-9a-f]{40}/[^?#]+',url.path) is None):
+                raise ValueError('Fixed upstream commit URL required')
+    return value
+
+
+def _supplement(summary,payload,source,reviews,read):
+    _review_rows(reviews)
+    site=plain_path(source/'Lib/site-packages',directory=True)
+    # Bind reviews to exact installed METADATA, not merely a version label.
+    metadata={}
+    for directory in site.iterdir():
+        if not directory.name.endswith('.dist-info'):continue
+        data=_read(directory/'METADATA',1024**2)
+        parsed=email.parser.BytesParser().parsebytes(data,headersonly=True)
+        metadata[(str(parsed['Name']),str(parsed['Version']))]=hashlib.sha256(data).hexdigest()
+    for row in reviews:
+        match=next((d for d in summary['distributions'] if (d['name'],d['version'])==(row['name'],row['version'])),None)
+        if (match is None or metadata.get((row['name'],row['version']))!=row['metadata_sha256'] or
+                match['missing_declared']!=row['clears_declared'] or
+                (match['notice_files'] and not match['missing_declared'])):
+            raise ValueError('Supplement review does not match unresolved source metadata')
+        normalized=re.sub(r'[-_.]+','-',row['name']).lower()
+        for entry in row['files']:
+            data=read(entry['path'])
+            if len(data)!=entry['bytes'] or hashlib.sha256(data).hexdigest()!=entry['sha256']:
+                raise ValueError('Supplement notice checksum mismatch')
+            key='supplements/'+normalized+'/'+relative(entry['path'])
+            if key in payload:raise ValueError('Supplement notice collision')
+            payload[key]=data;match['notice_files'].append('files/'+key)
+        match['notice_files'].sort();match['missing_declared']=[]
+    if len(payload)>MAX_FILES or sum(len(d) for d in payload.values())>MAX_TOTAL:raise ValueError('Supplement notice budget exceeded')
+    summary['supplements']=reviews
+    summary['missing_distribution_notices']=[d['name'] for d in summary['distributions'] if not d['notice_files'] or d['missing_declared']]
+    summary['complete_distribution_notices']=not summary['missing_distribution_notices']
+
+
+def write_bundle(source,output,*,supplements=None):
     source=plain_path(source,directory=True);output=Path(os.path.abspath(output))
     if output.is_relative_to(source) or source.is_relative_to(output):raise ValueError('Notice output overlaps source')
     if output.exists() or output.is_symlink():raise FileExistsError('New notice output required')
     summary,payload=collect(source)
+    if supplements is not None:
+        supplements=plain_path(supplements)
+        reviews=json.loads(_read(supplements,1024**2),object_pairs_hook=object_pairs)
+        _supplement(summary,payload,source,reviews,lambda key:_read(supplements.parent/relative(key)))
     text='AI runtime distribution notice inventory\n\n'
     text+='Package license text is preserved under files/. This index is for review;\nit does not approve redistribution or certify native dependency coverage.\n\n'
     for d in summary['distributions']:
@@ -123,6 +192,7 @@ def validate_bundle(root,*,require_complete=False):
     if (not isinstance(value,dict) or value.get('format')!=FORMAT or value.get('redistribution_approved') is not False
             or value.get('source_executed') is not False or type(value.get('complete_distribution_notices')) is not bool):
         raise ValueError('Unsupported notice inventory')
+    if 'supplements' in value:_review_rows(value['supplements'])
     distributions=value.get('distributions')
     if not isinstance(distributions,list) or type(value.get('distribution_count')) is not int or value['distribution_count']!=len(distributions):
         raise ValueError('Invalid distribution notice list')
@@ -156,8 +226,19 @@ def validate_bundle(root,*,require_complete=False):
 
 
 def validate_for_source(root,source):
+    root=plain_path(root,directory=True)
     value=validate_bundle(root,require_complete=True)
+    source=plain_path(source,directory=True)
     expected,payload=collect(source)
+    if 'supplements' in value:
+        # Only read already sealed supplemental texts. Never fetch provenance URLs.
+        current={}
+        def read_review(key):return _read(current['path']/relative(key))
+        # Each row has an independent base, so identical LICENSE names are safe.
+        for row in value['supplements']:
+            normalized=re.sub(r'[-_.]+','-',row['name']).lower()
+            current['path']=root/('files/supplements/'+normalized)
+            _supplement(expected,payload,source,[row],read_review)
     if value['distributions']!=expected['distributions']:
         raise ValueError('Notice source changed')
     declared={e['path']:(e['bytes'],e['sha256']) for e in value['entries']}
@@ -170,9 +251,11 @@ def validate_for_source(root,source):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source',type=Path,required=True);parser.add_argument('--output',type=Path);parser.add_argument('--check',action='store_true')
+    parser.add_argument('--supplements',type=Path,help='Explicit fixed-source, METADATA-bound reviewed notice mapping')
     args=parser.parse_args()
     if not args.check and args.output is None:parser.error('New output required unless --check')
-    summary=collect(args.source)[0] if args.check else write_bundle(args.source,args.output)
+    if args.check and args.supplements is not None:parser.error('Supplement review requires a new bundle output')
+    summary=collect(args.source)[0] if args.check else write_bundle(args.source,args.output,supplements=args.supplements)
     print(json.dumps({k:summary[k] for k in ('distribution_count','complete_distribution_notices','missing_distribution_notices','redistribution_approved','source_executed')},ensure_ascii=False))
     return 0 if summary['complete_distribution_notices'] else 2
 

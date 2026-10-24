@@ -13,3 +13,6 @@ tests/fixtures/combined-fusion-v8.json text eol=lf
 config/tagger-profiles/wd-swinv2-v3.json text eol=lf
 config/acquisition/** text eol=lf
 config/ai-profiles/embeddinggemma-2.json text eol=lf
+
+# Supplemental license hashes preserve the original upstream bytes.
+config/runtime-notices/** -text

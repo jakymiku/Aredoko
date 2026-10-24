@@ -31,3 +31,16 @@ CUDA等のnative依存を含む公開reviewと、不変の実artifact公開先�
 生成CPU10 tests PASS、従来runtime pack/保存の25 tests PASS（別実行）。PEP 639/legacy RECORD/原文保持/出力衝突/改変/不足/親参照/Windows構文/重複Name/hardlink/対象runtimeとの一致・同梱を確認。
 
 rawは `data/ai-ui/embedding-catalog-review-20261025/runtime-notices-*`。初回はWindowsでcase違いのfixture directoryが衝突、次に実flatbuffersの親参照、torchvision RECORDのWindows区切りを診断して修正。途中の未完収集を成功へ書き換えていない。GUI/GPU/外部取得0。
+
+
+## 固定上流の補完を明示して封印する（2026-10-25）
+
+`--supplements <reviews.json>` をcollectorに追加。任意の不足を自動承認せず、配布物Name/Version/**METADATA全SHA**・未解決License-File宣言の完全一致・通知bytes/SHA・40桁commit固定の公式raw URLを明示する。branch URL/親path/重複/改変/別metadataは新規出力作成前に拒否。外部URLはprovenanceとして保存するだけで、ツール自身は取得しない。元runtimeのファイルを追加・改変しない。
+
+`config/runtime-notices/legacy-cuda128-20261021/reviews.json` はこの準備済み環境専用。tokenizers v0.23.3のtagをcommit `301277072263fb3830eb66eec7e47adadf76f1dc` へ解決した[LICENSE](https://github.com/huggingface/tokenizers/blob/301277072263fb3830eb66eec7e47adadf76f1dc/LICENSE)（11,357 bytes）、flatbuffers v25.9.23のcommit `187240970746d00bbd26b0f5873ed54d2477f9f3` の[LICENSE](https://github.com/google/flatbuffers/blob/187240970746d00bbd26b0f5873ed54d2477f9f3/LICENSE)（11,358 bytes）を原文で保存。後者は実dist-info内LICENSEと全bytes一致も確認した。Gitの改行変換を無効化して原文hashを保持。公式PyPIの当該版metadata/公式GitHub tag/固定treeを読み、LICENSEだけを取得した。依存コード取得・実行なし。
+
+```powershell
+python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --supplements config/runtime-notices/legacy-cuda128-20261021/reviews.json --output <new-notice-directory>
+```
+
+新bundle `data/ai-ui/runtime-notices-20261025-04` は **52 distributions / 91 entries / 1,123,366 bytes**、配布metadataについての不足0件。seal時にも元metadata/元通知/補完原文を照合し、pack内へ補完provenanceと原文を保全する。生成16 tests PASS（従来10＋補完6、2配布物を含む封印確認）。これはdistribution通知の収録完了であり、CUDA/Rust等の全native依存の公開監査や再配布承認ではない。`redistribution_approved=False` を維持し、runtime公開URL/取得registryは未登録のまま。
