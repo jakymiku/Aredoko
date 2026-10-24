@@ -100,3 +100,11 @@ source **630cc55**。`dist/portable-basic-20261025-04/Aredoko/Aredoko.exe`。ZIP
 source cb89799 /製品b54de9d、frontend06。入口 `dist/portable-basic-20261025-06/Aredoko/Aredoko.exe`、ZIP344,056,202 bytes、展開657,995,371 bytes/770payload、SHA256 `43cc88c63ed5c2e3fdce70259166313c141eceec29f4b68503bb7e79f035e3d5`。実runtime/PyTorch/モデルなし。基本CPU11 PASS。通常EXEで新しい一覧Ctrl+End/更新help・1回の再起動・空履歴案内を11checks、4所有exit0、770payload/設定/生成原本不変、3PNG目視（native02）。先行nativeはkeyなしTextBlock/JSON文字列の未decodeの試験誤りでhelp判定FAIL、2PNG目視・所有2exit0、生ログ保持。
 
 追加の復元失敗caseで再選択バグを発見したため、06を最終候補としない。[復元の最新節](restore-review-20261024.md)を参照。旧Alpha/shortcutは変更していない。
+
+
+## 2026-10-25 基本ZIP07（今回の最新試用候補）
+source/製品 **e197723**、frontend07。通常入口 `dist/portable-basic-20261025-07/Aredoko/Aredoko.exe`。ZIP **344,057,243 bytes**、展開 **657,997,203 bytes / 770payload**、SHA256 `e8e82d354c70768949caba388e2cf88872a99b5b4cbb1cc916549764fd2f5ddf`。新規出力だけを作成、旧06/05/Alpha/shortcutは未更新。06で見つけた復元再選択/AI方針上書きを修正したため07を作成し、無変更の候補反復ではない。
+
+基本CPU11 PASS、manifest/全ZIP内容/hash照合PASS、全Coreの無変更反復はせず前回1025 assertionsの結果を保持。通常Aredoko.exeの復元失敗/別ZIP選択/有効backup準備/未同意block/破棄/予定内通常1再起動は28checks PASS、4所有exit0、5PNG目視、設定/生成原本/770payload不変。[復元の詳細と途中失敗](restore-review-20261024.md)。基本07で新たに全GUI/AI取得や推論/clean Windowsを再受入したものではない。
+
+Windows Sandboxのread-only snapshotは停止状態。Win32_OptionalFeatureのContainers-DisposableClientVMはInstallState2（無効）。OS機能を有効化せず、clean Windows確認は未実施のまま。AIモデル2catalogを収録し、runtimeの製品registryは0件。PyTorch/モデルなしの基本版であり、別途AI実行環境とモデルの配置/取得が必要。

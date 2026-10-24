@@ -1,9 +1,9 @@
-"""Native streaming acceptance on generated GIF/APNG/disguised WebP only.
+"""Native streaming acceptance on generated fixtures or the explicitly attached sample.
 
-No real models, downloads, registration, original media or system settings.
-Every command targets an exact owned PID/HWND; screenshots need visual review.
+The provided sample is read/copied to isolated media; its parent is never scanned.
+No models, downloads, OS registration or system settings. Exact owned PID/HWND.
 """
-import argparse,ctypes,hashlib,json,os,secrets,struct,subprocess,sys,threading,time,traceback
+import argparse,ctypes,hashlib,json,os,secrets,shutil,struct,subprocess,sys,threading,time,traceback
 from ctypes import wintypes
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -18,7 +18,7 @@ from animation_sessions import MIME
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--provided-sample',type=Path,help='Only the explicitly attached E:/picture/!gif/10.gif, read/copy only');args=parser.parse_args()
     front=args.frontend.resolve();target=args.output.resolve()
     if os.name!='nt' or not front.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file() or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('Dedicated frontend and new isolated output required')
     target.mkdir(parents=True);media=target/'media';media.mkdir()
@@ -58,19 +58,28 @@ def main():
         raw=path.read_bytes();check('nonempty screenshot '+name,raw[:8]==b'\x89PNG\r\n\x1a\n' and min(struct.unpack('>II',raw[16:24]))>=100)
         report['screenshots'].append(str(path));(target/(name+'.json')).write_text(ui(viewer_hwnd,'inspect','--depth','18','--json'),encoding='utf-8')
     try:
-        frames=[Image.new('RGBA',(180,160),(40+(i*7)%190,70+(i*3)%170,100+(i*11)%150,255)) for i in range(70)]
-        poster=Image.new('RGBA',(180,160),(210,210,210,255))
-        durations=[30]*70;durations[0]=700;durations[64]=500;durations[-1]=800
-        poster.save(media/'a-long.png',format='PNG',save_all=True,append_images=frames,default_image=True,duration=durations,loop=2,disposal=[0]*70,blend=[0]*70)
-        frames[0].save(media/'b-native.gif',format='GIF',save_all=True,append_images=frames[1:4],duration=180,loop=1)
-        frames[0].save(media/'c-disguised.gif',format='WEBP',save_all=True,append_images=frames[1:8],duration=140,loop=2,lossless=True)
-        poster.close()
-        for frame in frames:frame.close()
+        supplied_before=None
+        if args.provided_sample:
+            sample=args.provided_sample.resolve()
+            if sample!=Path('E:/picture/!gif/10.gif').resolve():raise ValueError('Only the explicitly attached sample is authorized')
+            supplied_before=(hashlib.sha256(sample.read_bytes()).hexdigest(),sample.stat().st_mtime_ns)
+            shutil.copyfile(sample,media/'provided-10.gif')
+            with Image.open(media/'provided-10.gif') as image:
+                report['provided_sample']={'format':image.format,'size':list(image.size),'frames':image.n_frames,'copied_to_isolated_media':True,'original_modified':False}
+        else:
+            frames=[Image.new('RGBA',(180,160),(40+(i*7)%190,70+(i*3)%170,100+(i*11)%150,255)) for i in range(70)]
+            poster=Image.new('RGBA',(180,160),(210,210,210,255))
+            durations=[30]*70;durations[0]=700;durations[64]=500;durations[-1]=800
+            poster.save(media/'a-long.png',format='PNG',save_all=True,append_images=frames,default_image=True,duration=durations,loop=2,disposal=[0]*70,blend=[0]*70)
+            frames[0].save(media/'b-native.gif',format='GIF',save_all=True,append_images=frames[1:4],duration=180,loop=1)
+            frames[0].save(media/'c-disguised.gif',format='WEBP',save_all=True,append_images=frames[1:8],duration=140,loop=2,lossless=True)
+            poster.close()
+            for frame in frames:frame.close()
         sources={p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
         cat=ProductionCatalog(target/'catalog.sqlite');root=cat.add_root(str(media));cat.start_scan(root)
         if cat._worker:cat._worker.join(10)
         ids={row['title']:row['id'] for row in cat.search()['items']}
-        check('all generated images registered',all(name in ids for name in sources))
+        check('all isolated test images registered',all(name in ids for name in sources))
         profiles=AIProfileSettings(target,target/'settings.json',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         handler=production_handler(cat,secrets.token_hex(32),DisabledAI(),profiles=profiles,tagger=DisabledTagger(),runtime_preferences=target/'launch-settings.json')
         class Recorded(handler):
@@ -91,31 +100,43 @@ def main():
             if proc.poll() is not None:raise RuntimeError('Frontend exited before window')
             time.sleep(.2)
         check('owned main window',main_hwnd is not None)
-        ui(main_hwnd,'wait-for','Item'+str(ids['a-long.png']),'-t','10000');ui(main_hwnd,'invoke','Item'+str(ids['a-long.png']),'--action','select')
+        first_name='provided-10.gif' if args.provided_sample else 'a-long.png'
+        ui(main_hwnd,'wait-for','Item'+str(ids[first_name]),'-t','10000');ui(main_hwnd,'invoke','Item'+str(ids[first_name]),'--action','select')
         ui(main_hwnd,'wait-for','BtnOpenImage','-p','IsEnabled','--value','True','-t','7000');ui(main_hwnd,'invoke','BtnOpenImage')
         wait('owned viewer window',find_viewer)
-        ui(viewer_hwnd,'wait-for','ViewerImage','--value','a-long.pngの画像（アニメーション','--contains','-t','10000')
-        ui(viewer_hwnd,'focus','ImageViewport');ui(viewer_hwnd,'send-keys','f10','--via','send-input')
-        shot('apng-playing')
-        ui(viewer_hwnd,'wait-for','ViewerImage','--value','a-long.pngの画像（アニメーション 70）','-t','15000')
-        wait('finite APNG completes and releases its session',lambda:bool(closes))
-        ui(viewer_hwnd,'wait-for','ViewerImage','--value','a-long.pngの画像（アニメーション 70）','-t','3000');shot('apng-final-retained')
-        batches=[x for x in observed if x['item_id']==ids['a-long.png']]
-        check('first APNG batch contains only its first frame',len(batches[0]['frames'])==1 and batches[0]['frames'][0]['index']==0)
-        check('open and first frame share one request',batches[0]['action']=='open-first')
-        delivered=[f for x in batches for f in x['frames']]
-        check('all70 frames and both cycles delivered without poster',[(f['index'],f['cycle']) for f in delivered]==[(i,c) for c in range(2) for i in range(70)])
-        ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ImageTitle','--value','b-native.gif','-t','7000');ui(viewer_hwnd,'wait-for','ImageZoomIn','-p','IsEnabled','--value','True','-t','10000');shot('native-gif')
-        check('true GIF uses native path without a streaming decode session',not any(x['item_id']==ids['b-native.gif'] for x in observed))
-        ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ImageTitle','--value','c-disguised.gif','-t','7000');ui(viewer_hwnd,'wait-for','ViewerImage','--value','c-disguised.gifの画像（アニメーション 8）','-t','10000')
-        wait('disguised WebP completes and releases session',lambda:len(closes)>=2);shot('disguised-webp-final')
-        check('WebP with gif extension streams actual decoded frames',any(x['item_id']==ids['c-disguised.gif'] for x in observed))
+        if args.provided_sample:
+            ui(viewer_hwnd,'focus','ImageViewport');ui(viewer_hwnd,'send-keys','f10','--via','send-input')
+            ui(viewer_hwnd,'wait-for','ViewerImage','--value','provided-10.gifの画像（アニメーション','--contains','-t','10000');shot('provided-sample-playing')
+            wait('provided sample reaches its second decode cycle',lambda:any(f['cycle']>=1 for batch in observed for f in batch['frames']),seconds=35)
+            shot('provided-sample-second-cycle')
+            delivered=[f for batch in observed for f in batch['frames']]
+            check('all 55 first-cycle frames decoded',[(f['index'],f['cycle']) for f in delivered[:55]]==[(i,0) for i in range(55)])
+            check('actual WebP container used despite gif extension',report['provided_sample']['format']=='WEBP' and len(observed)>0)
+        else:
+            ui(viewer_hwnd,'wait-for','ViewerImage','--value','a-long.pngの画像（アニメーション','--contains','-t','10000')
+            ui(viewer_hwnd,'focus','ImageViewport');ui(viewer_hwnd,'send-keys','f10','--via','send-input')
+            shot('apng-playing')
+            ui(viewer_hwnd,'wait-for','ViewerImage','--value','a-long.pngの画像（アニメーション 70）','-t','15000')
+            wait('finite APNG completes and releases its session',lambda:bool(closes))
+            ui(viewer_hwnd,'wait-for','ViewerImage','--value','a-long.pngの画像（アニメーション 70）','-t','3000');shot('apng-final-retained')
+            batches=[x for x in observed if x['item_id']==ids['a-long.png']]
+            check('first APNG batch contains only its first frame',len(batches[0]['frames'])==1 and batches[0]['frames'][0]['index']==0)
+            check('open and first frame share one request',batches[0]['action']=='open-first')
+            delivered=[f for x in batches for f in x['frames']]
+            check('all70 frames and both cycles delivered without poster',[(f['index'],f['cycle']) for f in delivered]==[(i,c) for c in range(2) for i in range(70)])
+            ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ImageTitle','--value','b-native.gif','-t','7000');ui(viewer_hwnd,'wait-for','ImageZoomIn','-p','IsEnabled','--value','True','-t','10000');shot('native-gif')
+            check('true GIF uses native path without a streaming decode session',not any(x['item_id']==ids['b-native.gif'] for x in observed))
+            ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ImageTitle','--value','c-disguised.gif','-t','7000');ui(viewer_hwnd,'wait-for','ViewerImage','--value','c-disguised.gifの画像（アニメーション 8）','-t','10000')
+            wait('disguised WebP completes and releases session',lambda:len(closes)>=2);shot('disguised-webp-final')
+            check('WebP with gif extension streams actual decoded frames',any(x['item_id']==ids['c-disguised.gif'] for x in observed))
         ui(viewer_hwnd,'invoke','ImageClose');wait('viewer closes normally',lambda:not any(str(w['hwnd'])==viewer_hwnd for w in windows()))
+        if args.provided_sample:wait('async decoder close acknowledged',lambda:bool(closes),seconds=7)
         with handler.animations.lock:check('no owned decoder sessions remain',not handler.animations.sessions)
         traces=target/'user/Aredoko/logs/viewer-load.jsonl';check('viewer trace stays in dedicated LOCALAPPDATA',traces.is_file())
         report['timings']=[json.loads(line) for line in traces.read_text(encoding='utf-8').splitlines()]
-        check('APNG first-frame assignment was measured',any(x['stage']=='first-frame-assigned' for x in report['timings']))
+        check('first animation-frame assignment was measured',any(x['stage']=='first-frame-assigned' for x in report['timings']))
         check('generated source hashes and mtimes unchanged',sources=={p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()})
+        if args.provided_sample:check('attached original SHA and mtime unchanged',supplied_before==(hashlib.sha256(sample.read_bytes()).hexdigest(),sample.stat().st_mtime_ns))
         report['pass']=True
     except Exception:
         report['error']=traceback.format_exc();print(report['error'],flush=True)
@@ -125,7 +146,10 @@ def main():
     finally:
         if proc is not None and proc.poll() is None:
             try:
-                if viewer_hwnd and any(str(w['hwnd'])==viewer_hwnd for w in windows()):ui(viewer_hwnd,'invoke','ImageClose');time.sleep(.2)
+                if viewer_hwnd and any(str(w['hwnd'])==viewer_hwnd for w in windows()):
+                    owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(viewer_hwnd),ctypes.byref(owner))
+                    if owner.value!=proc.pid:raise RuntimeError('Cleanup viewer owner changed')
+                    user.PostMessageW(int(viewer_hwnd),0x10,0,0);time.sleep(.2)
                 if main_hwnd:user.PostMessageW(int(main_hwnd),0x10,0,0)
                 proc.wait(timeout=12)
             except Exception:report['cleanup_error']=traceback.format_exc()

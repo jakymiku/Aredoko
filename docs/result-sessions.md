@@ -62,3 +62,5 @@ FrozenResultは1ページにつき1接続で最新metadataを取得するが、�
 生成関連：result_session27、production7、文字/関連語/棚/履歴43 testsをそれぞれPASS。120件の旧検証/バッチ検証の全payload一致、接続1回・原本guard120回、途中の編集/登録解除で失効、取消後のwriter利用を確認。計測 `data/ai-ui/p3-global-edge-20261025/cursor50k-report.json`：同じ120件を0.363005s→0.048205s、5万metadataの全snapshotはcProfile有効で24.498863s、末尾range/owner close成功。50k実ファイルscanやcold/warm統計ではない。
 
 旧COUNT反復を残した最初の全件測定は長時間化して9,720件時点で中断（正確な全件比較時間なし）。所有一時結果DBだけの排他lockによるtimeoutを使い、解除時の一時directory cleanup PermissionErrorもrawに残す。元catalog/原本/他アプリは変更せず、当該試験process終了済み。旧baselineを全件完走や速度倍率の根拠にしない。初回snapshotを全件完成してから公開する設計の待ち時間は今後の残件。
+
+上記の5万metadata計測とnative hostは開発用Python3.14。基本ZIPの同梱Python3.11による5万件の性能受入ではなく、同梱環境では基本CPU/通常EXEの限定確認を別途行った。

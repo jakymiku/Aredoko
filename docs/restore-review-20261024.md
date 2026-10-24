@@ -104,3 +104,8 @@ Cutover now validates the recovery receipt using shared manifest rules and check
 基本ZIP06の通常Aredoko.exe＋生成1PNG/専用DBで、破損した生成ZIPをnative picker→準備→failedへ到達。別の生成ZIPを選び直すと、Renderが前のjob.Sourceを無条件で書き戻し、表示/次回入力が元ZIPに戻る不具合を確認。`data/ai-ui/restore-rejection-20261025/run01` のrejected-0/failure PNGを目視、所有app/bootstrap exit0。元DBの切替や再起動同意はしていない。
 
 修正は入力同期をactive/completed/restart状態へ限定し、初回表示だけは前jobの方針を復元する。failed/cancelled状態で利用者が選んだ次のsourceとAI索引の含め方を、Refresh/Primary直前Renderで上書きしない。準備中・準備完了時の凍結と再起動同意は維持。修正のnative確認は次の専用ZIP07で実施する（この節の初稿時点では未確認）。
+
+
+修正 **e197723** の限定実機結果：基本ZIP07/source e197723の通常入口、`data/ai-ui/restore-rejection-20261025/run03/report.json` で **28 checks PASS / 4所有exit0 / 残存0 / 5PNG目視**。無効ZIP1（AI除外true）→無効ZIP2へnative picker再選択（false）→有効な生成backupを再選択（false）→準備完了だが同意なしで再起動不可→準備を破棄→元のDBのまま通常1再起動。3入力ZIPのSHA/mtime、現DBの全返却metadata、launch設定、生成PNG、全770payload不変。pending switchなし。破棄したstageの破損/容量不足/全復元失敗を網羅した試験ではない。
+
+run02は新しいStartの応答前に直前のfailed jobを新結果と誤認したハーネス失敗。failure PNGで新source/新AI方針のrunning表示も確認した。新job_idを待つよう訂正し、各jobのsource/policy/stateを保存してrun03で確認。run02の2PNG・raw/所有2exit0も保持。変更なしの復元成功→切替flowは反復していない。

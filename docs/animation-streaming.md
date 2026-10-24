@@ -47,3 +47,9 @@ Windowsでは既存依存で `dotnet run --project tests/Aredoko.Core.Tests -c R
 - 関連Python12件/3.504s、追加認証HTTP1件/0.783s、Core1019 assertions、Portable publishは各PASS。新しい大規模回帰は実施していない。
 - frontend02＋run02はnative全19チェックPASS、4 PNG目視、app0、session残存0、原本不変。先頭応答のaction=open-first、APNG70frame×2cycleの順序、native GIFと偽拡張子WebPを確認。provenanceと正確なfront/source/test SHAはreport。
 - 同じ生成条件の限定単回比較：APNG割当656.54→442.89ms、WebP648.73→442.76ms。未変更GIFは460.92→468.80ms。1通信の削減に対応する改善であり、平均/p95/物理表示/FPS/HoneyView同等速度の宣言ではない。大画像/RSS/高速切替・全P7受入は未完。
+
+
+## 2026-10-25 添付10.gifの限定実機確認
+ユーザーが明示添付した `E:/picture/!gif/10.gif`（1,618,900 bytes）だけを専用mediaへコピーし、親folderはscanせず、コピーだけを独立DBへ登録。原本のSHA/mtime不変を検証。実体WEBP 367×359/55framesを改名せず再生できる。source/backendとfrontend07の専用起動で `data/ai-ui/provided-animation-20261025/run03/report.json` **15checks PASS / app exit0 / decoder session0 / 2PNG目視**。最初の55framesと次cycleの復号、native画像の異なる姿勢、終了close応答を確認。最初のframe-assignedは **453.4363ms**（単回・小さいこの素材、実compositor表示完了/Honeyview同等/大画像の証明ではない）。実モデル/GPUは使用していない。
+
+run01は自動で隠れるImageCloseへ試験が操作した失敗。sample caseでもF10でchromeを保持するよう訂正、cleanupは所有windowへの通常WM_CLOSEへ。残った所有PID14996は通常終了しexit0 supplementを保存、3PNG目視。run02はCloseRequested直後に非同期decoder解放を即断したハーネス失敗（最終reportにclose応答1件、所有exit0、2PNG目視）。既存5秒DisposeAsync契約のclose応答を有限7秒内で待つよう訂正し、run03で確認。失敗を成功へ書き換えず保持。長時間の黒ちらつき不存在・全FPS・RSSの測定は残る。

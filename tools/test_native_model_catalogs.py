@@ -1,6 +1,7 @@
-"""Display-only acquisition acceptance of an explicitly selected basic ZIP.
+"""Limited native acceptance of an explicitly selected basic ZIP.
 
-Never starts downloads, consent, inference, installers, or a user's library.
+Model catalog display, generated library, or generated recovery cases only.
+Never starts external acquisition, inference, installers, or a user's library.
 """
 import argparse,ctypes,hashlib,json,os,socket,subprocess,sys,time,traceback
 from ctypes import wintypes
@@ -39,6 +40,9 @@ def main():
         if cat._worker:cat._worker.join(15)
         item=cat.search()['items'][0]['id']
     cat.close()
+    if args.restore_rejection:
+        from storage_backup import create_backup
+        create_backup(data/'catalog.sqlite',target/'valid.zip',as_zip=True)
     empty_models=target/'empty-models';empty_models.mkdir()
     settings=data/'launch-settings.json';settings.write_text(json.dumps({'database':str(data/'catalog.sqlite'),'models_root':str(empty_models),'ui_theme':'dark'}),encoding='utf-8')
     initial_settings=settings.read_bytes()
