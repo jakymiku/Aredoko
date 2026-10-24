@@ -1,9 +1,21 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## 今回の継続ラン（2026-10-25、以下の旧checkpointより優先）
+- 開始cfb82e6、remote/PR #5一致・clean。確認できる範囲に他AIの更新/同repo処理なし。**今回のユーザーは生成fixture/独立DBでのGUI/GPUを自動実行することを許可し、終了後のシャットダウンを新たに指示した。** 下記の前回「事前確認」「shutdownしない」は前回の制約で、今回へ再適用しない。通常DB/原本/新download/OS変更の許可へ広げない。
+- ZIP05の初回案内→help→AI取得表示→生成folder登録/スキャン→1再起動を限定native確認、15 checks・4所有exit0、6 PNG目視。[正本](getting-started.md)。原文に欠けていた明示scan説明を追加して継続中。
+
 ## 現在地と読む順
-- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品コード到達点 **c6ba386**（初回案内4ac518b＋設定scroll）。現行基本ZIP05はsource0b21b3eで製品コードc6ba386を収録。CPU確認済み・新案内のnative未確認。この引き継ぎ自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- ブランチ `feat/winui3-production-mvp-20261011` / [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)。製品source **b54de9d**（直前5f738f3）。既存ZIP05/source0b21b3eは今回より古い。現在新しい基本ZIP06を準備する段階で、旧Alpha/shortcutは変更しない。この文書自体のcommitは `git log -1 -- docs/current-handoff.md` で確認する。ロードマップ全体の完了ではない。
+- **d199379**：既存ZIP05の初回案内/使い方/AI取得表示/生成folder登録・scan/予定内1再起動をnative確認15 checks・4所有exit0。ガイドへ不足していた明示scanを追加。
+- **af95bdb**：最終行でlist/grid/表示サイズを変えると位置が先頭方向へ飛ぶ不具合を修正。745件生成caseで最終行・180/60/100%・逆方向・draft保持を確認。
+- **eda972f**：runtime単一ZIPのcatalog v3、逐次展開・再開・取消・全hash/容量検証・検証後公開、Core/nativeの容量と進捗を実装。生成native17checks/exit0。[正本](runtime-archive-transport.md)。実ローカルpackを1回圧縮/展開し23,903payload・4.95GB完全一致。ZIP約3.03GB。**公開NOTICE権利/native依存reviewと不変hostは未完、製品runtime registryは0件のまま**。架空URLで埋めない。
+- **5f738f3**：Ctrl+Home/Endで現検索の先頭/末尾120件へ移動、入力欄のキーとdraftは保全。5万metadata/実PNG80のnative14checks/4PNG/exit0。普通検索はCOUNT/増加OFFSET反復を撤去しbounded cursor、原本検証はpage単位1接続+全itemのguard維持。関連27/7/43各PASS。120件0.363→0.048s同値、5万snapshotはcProfile付き24.5s、**初回全件待ち・全5万実媒体負荷は残件**。[正本](result-sessions.md)、[一覧](p3-continuous-browse.md)。
+- **b54de9d**：棚grid→開く→片方だけ所属解除→削除取消/確定→条件解除を限定native確認（145生成原本保持）。空棚への誤った登録案内を修正し、準備中→取消→再検索、空履歴/お気に入り/棚を新規native flowで確認、6PNG/exit0。初回ハーネスの失敗と後処理の欠測は[棚UI](shelf-ui-20261023.md)に保存。全HC/DPI/clean Windowsの合格とはしない。
+
 - 本書 → [製品ビジョン](product-vision.md) → [統合P0–P7ロードマップ](polish-roadmap-20261022.md)の対象節。旧記録は[履歴索引](history-index.md)。WinUI 3/共通Python SQLite/交換可能AI、専用OCR保留、機能を削らず簡潔なUIを維持。
 - 開始時の未コミットP5案4ファイルはignored `data/ai-ui/active-selection-20261024-01/starting-diff.patch`/starting-state.jsonへ退避して継続。c30bc34へff後に仕上げた。途中のリモート文書更新ed81d33/07c3f44も4a96d81で統合し、他作業を上書きしていない。main merge/reset/stash/force pushなし。
+
+## 以下は以前のcheckpoint（時点別の履歴。現在の次作業/許可/候補へ再適用しない）
 
 ## 前回までの完了内容（当時の到達点）
 - **P5 02f087b / f1bb3cb**：[active/pending保全・形式2](backup-active-selection.md)。AI/WDの実際の起動定義と保存済み次回選択を別保存、旧version1も復元。通常起動由来は復元初回active→ready後に一時指定解除→次回pending。明示overrideは保持。設定busy/atomic失敗はcommitted証拠から後処理し、誤rollback・通常profile枠の消費・元設定上書きを防ぐ。
@@ -69,7 +81,7 @@
 - モデル/packはignored専用先にありGitへ含めない。旧Alpha・shortcut・通常DB・通常設定は未更新。GPU/GUIの一般許可へ拡大せず、次の実機確認は改めて具体的対象を提示する。Actions0、シャットダウンしない。
 
 ## 次の実装1件
-**P6/UI-3：作成済み基本ZIP05の初回案内を限定GUIで確認する。** 対象 `dist/portable-basic-20261025-05/Aredoko/Aredoko.exe`（source0b21b3e/製品c6ba386、[SHAとCPU11 PASS](portable-refresh-20261024.md)）。候補作成を反復しない。旧Alpha/既存候補は未更新。通常EXE＋空の専用DBでwelcome→使い方→folder追加導線/AI準備、登録済み生成DBで案内が一覧を覆わないことを一つのflowにまとめ、GUIはユーザーへ事前確認する。runtime公開監査/輸送単位/公開先は独立残件で、配布完成を装わない。既存の転送・通知・生成GPU smokeを無変更反復しない。P3/UIの残受入とR06–R09も未完のまま維持。
+**まず今回の新規基本ZIP06作成・最小CPU/通常EXE確認を安全な区切りまで仕上げる。** 検証済みfrontend06と基本runtimeを新規出力先へまとめ、旧Alpha/shortcutは触らない。完了したらP7の復元失敗時保全/物理DPI・HC/clean Windowsなど、まだ未確認の対象を一つ選ぶ。既存の初回案内・取得・棚CRUD・60/120境界の成功を無変更反復しない。runtime公開監査/hostは外部情報待ちで独立、P3の全件初回待ちと実媒体負荷は未解消。M1日常β判定後は既存R06–R09実音声/音楽へ戻る。
 
 ## 直前の実装手順（上記P6で完了済み、再実装しない）
 **P6：役割別保存先のAPI・Core・native UIを接続する。** `c7db80d`のbackend解決を再実装せず、以下へ進む。
