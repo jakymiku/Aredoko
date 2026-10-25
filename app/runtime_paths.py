@@ -256,10 +256,12 @@ def start_runtime_verification(python):
     return job
 
 
-def worker_command(python,script,arguments):
+def worker_command(python,script,arguments,*,cancelled=lambda:False):
     from storage_lease import plain_path
+    if cancelled():raise RuntimeError('Runtime validation cancelled')
     python=Path(python);script=plain_path(script)
-    verify_runtime_pack(python)
+    verify_runtime_pack(python,cancelled=cancelled)
+    if cancelled():raise RuntimeError('Runtime validation cancelled')
     # Legacy venvs retain their existing script invocation. Standalone Python's
     # _pth ignores the script directory, so explicitly add this app's worker
     # directory rather than accidentally importing an older app from the pack.

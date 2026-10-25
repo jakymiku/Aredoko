@@ -274,6 +274,30 @@ class RuntimeContractTests(unittest.TestCase):
         (self.pack/'python.exe').write_bytes(b'broken')
         with self.assertRaises(ValueError):verify_runtime_pack(py)
 
+    def test_encoder_close_interrupts_prelaunch_validation_without_starting_python(self):
+        import ai_runtime
+        from ai_process import EncoderProcess,AIUnavailable
+        model=self.base/'model';model.mkdir();(model/'aredoko-revision.txt').write_text(DEFAULT_PROFILE.revision)
+        encoder=EncoderProcess(self.pack/'python.exe',model)
+        entered=threading.Event();errors=[];original=ai_runtime.inspect_runtime
+        def held(root,**options):
+            if options.get('verify'):
+                entered.set()
+                while not options['cancelled']():threading.Event().wait(.01)
+            return original(root,**options)
+        def encode():
+            try:encoder.encode('text','生成テスト')
+            except Exception as error:errors.append(error)
+        with patch('ai_runtime.inspect_runtime',side_effect=held),patch('ai_process.subprocess.Popen') as spawn:
+            thread=threading.Thread(target=encode,daemon=True);thread.start()
+            self.assertTrue(entered.wait(3))
+            closer=threading.Thread(target=encoder.close,daemon=True);closer.start();closer.join(3);thread.join(3)
+            self.assertFalse(closer.is_alive());self.assertFalse(thread.is_alive())
+            spawn.assert_not_called()
+        self.assertEqual(len(errors),1);self.assertIsInstance(errors[0],AIUnavailable)
+        self.assertEqual(_verified_packs,set())
+        with self.assertRaises(AIUnavailable):encoder.encode('text','閉じた後')
+
 
 class RuntimePreferencesTests(unittest.TestCase):
     def setUp(self):

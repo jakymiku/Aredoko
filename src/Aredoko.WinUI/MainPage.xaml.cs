@@ -63,6 +63,7 @@ public sealed partial class MainPage : Page
     private string view="all", lastQuery="";
     private MediaRow? similarityOrigin;
     private CancellationTokenSource? similarityCancellation;
+    private CancellationToken? explicitlyCancelledSearch;
     private bool returningFromSimilarity;
     private SearchBookmark? similarityReturn;
     private sealed record SearchBookmark(string Query,int Kind,int Mode,int[]? Roots,bool LiteralOnly,double? Boundary,int Group,string View,int Page,int Selection,long[]? Shelves);
@@ -420,7 +421,7 @@ public sealed partial class MainPage : Page
         var version=searches.Next(); Busy.Visibility=Visibility.Visible;
         GettingStarted.Visibility=Visibility.Collapsed;
         if(rows.Count==0){VisualAssets.State(EmptyArt,"searching");Empty.Visibility=Visibility.Visible;Empty.Text="検索結果を準備しています…";}
-        similarityCancellation?.Cancel();similarityCancellation?.Dispose();similarityCancellation=new();
+        similarityCancellation?.Cancel();similarityCancellation?.Dispose();similarityCancellation=new();explicitlyCancelledSearch=null;
         CancelSearchButton.Visibility=Visibility.Visible;
         var cancellation=similarityCancellation.Token;var origin=similarityOrigin;
         // Do not allow editing an old record while a different result is loading.
@@ -504,7 +505,44 @@ public sealed partial class MainPage : Page
             }
             RestoreSelection();ApplyLibrarySelection();
             UpdateFavoriteRootList();startupSearchSucceeded=true;RecordNavigationLocation();UpdateGettingStarted();
-        } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { if(searches.IsCurrent(version)&&rows.Count==0){GettingStarted.Visibility=Visibility.Collapsed;Empty.Visibility=Visibility.Visible;VisualAssets.State(EmptyArt,"no_results");Empty.Text="検索を中断しました。もう一度「検索」を押してください。";} Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
+        }
+        catch(OperationCanceledException) when(cancellation.IsCancellationRequested)
+        {
+            if(searches.IsCurrent(version)&&!disposed)
+            {
+                // Treat the cancelled inputs as attempted. Otherwise PendingSearch
+                // immediately schedules the identical request again. Later input
+                // changes still differ from these captured values and can search.
+                if(explicitlyCancelledSearch!=cancellation)
+                {
+                    lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;
+                    lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;
+                }
+                if(resultSession is null)
+                {
+                    resultWindow?.Dispose();resultWindow=null;rows=[];active=null;BindLibrarySelection();
+                    if(!folderSettingsActive)Details.IsPaneOpen=false;
+                    detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
+                    ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";
+                    RenderRows();Count.Text="中断しました";PageNumber.Text="—";Previous.IsEnabled=Next.IsEnabled=false;
+                }
+                else
+                {
+                    // A cancelled range read may retain the same valid frozen
+                    // result. Restore paging to the rows that remain on screen.
+                    page=Math.Max(0,browseStart/resultPageSize);
+                    Count.Text=$"{resultSession.Total:N0} 件（移動を中断）";
+                    PageNumber.Text=rows.Count==0?"0 件":$"{browseStart+1:N0}–{browseStart+rows.Count:N0} / {resultSession.Total:N0}";
+                    Previous.IsEnabled=browseStart>0;Next.IsEnabled=browseStart+rows.Count<resultSession.Total;
+                }
+                if(rows.Count==0)
+                {
+                    GettingStarted.Visibility=Visibility.Collapsed;Empty.Visibility=Visibility.Visible;
+                    VisualAssets.State(EmptyArt,"no_results");Empty.Text="検索を中断しました。もう一度「検索」を押してください。";
+                }
+                Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。");
+            }
+        }
         catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,"error");Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
@@ -1037,7 +1075,18 @@ public sealed partial class MainPage : Page
     private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;if(ready&&!dialogOpen)Query.Focus(FocusState.Keyboard);}
     private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0,true);}
-    private void CancelSearch_Click(object sender,RoutedEventArgs e){searchTimer.Stop();similarityCancellation?.Cancel();}
+    private void CancelSearch_Click(object sender,RoutedEventArgs e)
+    {
+        searchTimer.Stop();
+        if(similarityCancellation is null)return;
+        // Stop both the running request and any input already queued before
+        // this click. Input changed after the click remains a new search.
+        explicitlyCancelledSearch=similarityCancellation.Token;
+        lastQuery=Query.Text;lastKind=Kind.SelectedIndex;lastMode=SearchMode.SelectedIndex;
+        lastRoots=selectedSearchRoots?.ToArray();lastLiteralOnly=AIMatchedOnly.IsChecked==true;
+        lastBoundary=BoundaryValue();lastResultGroup=AIResultGroup.SelectedIndex;
+        similarityCancellation.Cancel();
+    }
     private void CancelSearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){if(Busy.Visibility==Visibility.Visible||searchTimer.IsRunning){e.Handled=true;searchTimer.Stop();similarityCancellation?.Cancel();}else if(Details.IsPaneOpen&&!folderSettingsActive){e.Handled=true;Details.IsPaneOpen=false;}}
     private void UpdateSearchMethod()
     {

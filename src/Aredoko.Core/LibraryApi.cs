@@ -6,7 +6,9 @@ namespace Aredoko.Core;
 public sealed class LibraryApi : IDisposable
 {
     private readonly HttpClient client;
-    public LibraryApi() : this(new HttpClientHandler { AllowAutoRedirect = false }) { }
+    // This authenticated API is always loopback. Never send its token/media to
+    // a machine-configured proxy or spend startup time on proxy discovery.
+    public LibraryApi() : this(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false }) { }
     private readonly HttpClient tagClient;
     private readonly HttpClient aiClient;
     public BackupClient Backups {get;}

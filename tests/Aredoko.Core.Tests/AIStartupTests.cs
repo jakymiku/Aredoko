@@ -41,6 +41,15 @@ static class AIStartupTests
         check(ai==3&&normal==3,"only AI result creation uses the long inference transport; close remains responsive");
         await using(var literal=await results.CreateAsync(new(){["mode"]="literal"},CancellationToken.None)){}
         check(ai==3&&normal==5,"literal creation and session lifecycle use ordinary transport");
+        var generation=0;var controls=0;
+        var generationEntered=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var control=new HttpClient(new Handler((_,_)=>{controls++;return Task.FromResult(Reply(new(){["cancel_requested"]=true}));})){BaseAddress=ordinary.BaseAddress};
+        using var loader=new HttpClient(new Handler(async(_,ct)=>{generation++;generationEntered.TrySetResult();await Task.Delay(Timeout.Infinite,ct);return Reply(new());})){BaseAddress=ordinary.BaseAddress};
+        var tags=new TagReviewClient(control,loader);using var cancel=new CancellationTokenSource();var requestId=Guid.NewGuid().ToString("N");
+        var generating=tags.GenerateAsync(7,requestId,cancel.Token);await generationEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));cancel.Cancel();
+        try{await generating;check(false,"generation cancellation");}
+        catch(OperationCanceledException){check(generation==1&&controls==0,"cold WD generation uses inference transport and caller cancellation");}
+        check(await tags.CancelAsync(requestId,CancellationToken.None)&&controls==1,"generation cancellation control uses ordinary transport");
     }
     sealed class Handler(Func<HttpRequestMessage,CancellationToken,Task<HttpResponseMessage>> send):HttpMessageHandler
     {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellationToken)=>send(request,cancellationToken);}

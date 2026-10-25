@@ -69,8 +69,10 @@ class WDTagger:
             raise AIUnavailable('タグ分類の画像サイズが上限を超えています。')
         env={**os.environ,'HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1','HF_HUB_DISABLE_TELEMETRY':'1',
              'PYTHONIOENCODING':'utf-8','PYTHONDONTWRITEBYTECODE':'1','OMP_NUM_THREADS':str(self.profile.data()['cpu_threads'])}
-        try:command=worker_command(self.python,Path(__file__).with_name('tagger_worker.py'),['--profile-json',self.profile.document,'--parent-pid',str(os.getpid())])
-        except (ValueError,OSError) as error:raise AIUnavailable('AI runtime validation failed') from error
+        try:command=worker_command(self.python,Path(__file__).with_name('tagger_worker.py'),['--profile-json',self.profile.document,'--parent-pid',str(os.getpid())],cancelled=lambda:cancelled() or self._closed.is_set())
+        except (ValueError,OSError,RuntimeError) as error:
+            if cancelled() or self._closed.is_set():raise SuggestionConflict('タグ候補の生成を取り消しました。候補は保存していません。') from error
+            raise AIUnavailable('AI runtime validation failed') from error
         if self.models_root is not None:command+=['--models-root',str(Path(self.models_root).absolute())]
         process=subprocess.Popen(command,
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env=env,

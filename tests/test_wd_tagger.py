@@ -188,11 +188,15 @@ class WDTests(unittest.TestCase):
         with self.worker('hang'):
             with self.assertRaisesRegex(AIUnavailable,'制限時間'):self.adapter._scores(png(),lambda:False)
         self.assert_stopped()
-        checks=[]
-        def cancel():checks.append(1);return len(checks)>1
+        # The runtime verifier now observes cancellation before process launch.
+        # Keep this case about an actual spawned worker, not callback call count.
+        def cancel():return self.spawned.is_set()
         with self.worker('hang'):
             with self.assertRaises(SuggestionConflict):self.adapter._scores(png(),cancel)
         self.assert_stopped()
+        with self.worker('hang'):
+            with self.assertRaises(SuggestionConflict):self.adapter._scores(png(),lambda:True)
+            self.assertEqual(self.processes,[])
         errors=[]
         with self.worker('hang'):
             def run():

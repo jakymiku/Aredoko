@@ -62,8 +62,9 @@ class EncoderProcess:
         env=os.environ.copy()
         env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',PYTHONIOENCODING='utf-8',PYTHONDONTWRITEBYTECODE='1')
         self.responses=queue.Queue(maxsize=2)
-        try:command=worker_command(self.python,Path(__file__).with_name('ai_worker.py'),['--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())])
-        except (ValueError,OSError) as error:raise AIUnavailable('AI runtime validation failed') from error
+        try:command=worker_command(self.python,Path(__file__).with_name('ai_worker.py'),['--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())],cancelled=lambda:self._closed)
+        except (ValueError,OSError,RuntimeError) as error:raise AIUnavailable('AI runtime validation failed') from error
+        if self._closed:raise AIUnavailable('AI worker is closed')
         self.process=subprocess.Popen(command,
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,text=True,encoding='utf-8',env=env,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
@@ -118,7 +119,7 @@ class EncoderProcess:
 
     def close(self):
         """Permanent shutdown: no in-flight encode can relaunch after return."""
+        self._closed = True  # Also interrupt an in-flight pre-launch hash pass.
         with self.lock:
-            self._closed = True
             self._stop()
 

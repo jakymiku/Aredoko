@@ -65,6 +65,9 @@ def main():
             preview=request('/api/library/preview/'+str(items[0]['id']),binary=True);check('actual bundled preview produces PNG',preview.startswith(b'\x89PNG\r\n\x1a\n'))
             if args.polish:
                 report['polish']=True
+                check('runtime verification defaults on without AI assets',setup['verify_ai_runtime'] is True)
+                saved=request('/api/library/ai/runtime-verification',{'enabled':False})
+                check('bundled advanced preference saves for next startup',saved['verify_ai_runtime'] is False and saved['active_verify_ai_runtime'] is True and saved['restart_required'])
                 request('/api/library/roots/startup-scan',{'root_ids':[root],'mode':'list'})
                 check('startup preference saves without implicit scanning',request('/api/library/roots')['items'][0]['startup_scan']=='list' and request('/api/library/startup-scan')['state']=='idle')
                 for name in ('generated.zip','generated.CBZ'):

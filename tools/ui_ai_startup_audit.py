@@ -35,7 +35,10 @@ def audit(phase,ui,tree,shot,check,request,settings,report):
     else:
         check('opt-out skips only full runtime hashes',status['runtime_verification']['state']=='skipped')
         check('opt-out starts without a resident model',not status['resident'])
-    ui('invoke','CmbSearchMode');ui('invoke','ModeVisual','--action','select')
+    ui('invoke','CmbSearchMode')
+    # WinUI exposes a popup option through both the combo and PopupHost. The
+    # stable element slug avoids the CLI's duplicate AutomationId matches.
+    ui('invoke',tree()['ModeVisual']['selector'],'--action','select')
     ui('set-value','TxtQuery','雨の日の青い画像')
     if phase==0:
         ui('wait-for','TxtCount','--value','AI環境を照合中','--contains','-t','10000')

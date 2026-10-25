@@ -174,19 +174,19 @@ public static class TagReviewProtocol
     }
 }
 
-// Shares the authenticated loopback session, but generation has a 95s deadline
-// independent of the ordinary search client's 40s HttpClient timeout.
+// Metadata uses the ordinary deadline. Cold generation/search may first verify
+// and load an AI runtime, using the independently cancellable inference client.
 public sealed class TagReviewClient(HttpClient client,HttpClient? aiClient=null)
 {
     private const string Route="api/library/tag-suggestions";
-    private async Task<byte[]> ReadAsync(string route,JsonObject? body,int limit,CancellationToken cancellation,int seconds=10,bool image=false)
+    private async Task<byte[]> ReadAsync(string route,JsonObject? body,int limit,CancellationToken cancellation,int seconds=10,bool image=false,HttpClient? transport=null)
     {
         using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellation);deadline.CancelAfter(TimeSpan.FromSeconds(seconds));
         try
         {
             using var request=new HttpRequestMessage(body is null?HttpMethod.Get:HttpMethod.Post,route);
             if(body is not null)request.Content=new StringContent(body.ToJsonString(),Encoding.UTF8,"application/json");
-            using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,deadline.Token);
+            using var response=await (transport??client).SendAsync(request,HttpCompletionOption.ResponseHeadersRead,deadline.Token);
             var cap=response.IsSuccessStatusCode?limit:32768;
             if(response.Content.Headers.ContentLength is long size&&(size<0||size>cap))throw new InvalidDataException("タグ候補の応答が大きすぎます。");
             await using var input=await response.Content.ReadAsStreamAsync(deadline.Token);
@@ -212,7 +212,7 @@ public sealed class TagReviewClient(HttpClient client,HttpClient? aiClient=null)
     public async Task GenerateAsync(int itemId,string requestId,CancellationToken cancellation)
     {
         TagReviewProtocol.Id(itemId);RequestId(requestId);
-        var bytes=await ReadAsync(Route+"/generate",new(){["item_id"]=itemId,["request_id"]=requestId},TagReviewProtocol.MaxJsonBytes,cancellation,95);
+        var bytes=await ReadAsync(Route+"/generate",new(){["item_id"]=itemId,["request_id"]=requestId},TagReviewProtocol.MaxJsonBytes,cancellation,900,transport:aiClient);
         using var doc=JsonDocument.Parse(bytes);var root=doc.RootElement;_=root.GetProperty("reused").GetBoolean();
         var batch=root.GetProperty("batch");_=TagReviewProtocol.Batch(batch,itemId,TagReviewProtocol.Text(batch,"source_revision",64));
     }
