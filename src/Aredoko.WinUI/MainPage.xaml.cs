@@ -777,12 +777,14 @@ public sealed partial class MainPage : Page
             // Save only the flag: an unsaved tag/shelf draft must not be committed.
             await api.PostAsync("api/items/update",new JsonObject{{"ids",new JsonArray(row.Id)},{"changes",new JsonObject{{"favorite",value}}}});
             row.Favorite=value;
+            if(rows.FirstOrDefault(item=>item.Id==row.Id) is {} visibleRow)visibleRow.Favorite=value;
             if(active?.Id==row.Id)
             {
                 saved=saved with {Favorite=value};active.Favorite=value;updatingFavorite=true;
                 try{Favorite.IsChecked=value;}finally{updatingFavorite=false;}
             }
-            await RefreshResultRowsAfterEditAsync();
+            RefreshFavoriteCard(row);
+            await RefreshResultRowsAfterEditAsync(favoriteOnly:true);
         }
         catch(Exception ex)
         {
@@ -790,6 +792,17 @@ public sealed partial class MainPage : Page
             Failure(ex);
         }
         finally{saving=false;Favorite.IsEnabled=true;UpdateDirty();transitions.Release();}
+    }
+    private void RefreshFavoriteCard(MediaRow row)
+    {
+        foreach(var item in containerCleanup.Keys.Where(item=>item.Tag is int id&&id==row.Id).ToArray())
+        {
+            if(item.ContentTemplateRoot is Border{Child:Grid content}&&content.Children.OfType<StackPanel>().FirstOrDefault() is {} captions
+                &&captions.Children.OfType<TextBlock>().FirstOrDefault() is {} title)
+                title.Text=(row.Favorite?"★ ":"")+row.Title;
+            item.ContextFlyout=SimilarityMenu(row);
+        }
+        if(active?.Id==row.Id)DetailPreview.ContextFlyout=SimilarityMenu(active);
     }
     private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
     public async Task<bool> ConfirmDiscardAsync() {

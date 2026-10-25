@@ -12,7 +12,7 @@ public sealed partial class MainPage
     private int resultPageSize = 60;
     private bool resultsNeedRefresh;
 
-    private async Task RefreshResultRowsAfterEditAsync()
+    private async Task RefreshResultRowsAfterEditAsync(bool favoriteOnly=false)
     {
         resultsNeedRefresh=true;
         var previous=resultSession;
@@ -29,13 +29,19 @@ public sealed partial class MainPage
             {
                 var result=await window.ReadAsync(checked(targetPage*resultPageSize),resultPageSize,CancellationToken.None);
                 if(disposed){window.Dispose();await CloseResultSessionAsync(replacement);return;}
+                // Preserve native cells only for the plain library when the
+                // server confirms the exact same ordered rows and metadata.
+                // Still replace the expired result session and keep its guards.
+                var keepCards=favoriteOnly&&view=="all"&&SearchMode.SelectedIndex==0&&string.IsNullOrWhiteSpace(Query.Text)
+                    &&browseStart==targetPage*resultPageSize&&rows.Count==result.Items.Count
+                    &&rows.Zip(result.Items).All(pair=>SameFavoriteCard(pair.First,pair.Second));
                 resultSession=replacement;resultWindow=window;resultsNeedRefresh=false;
                 page=targetPage;ResetBrowse(checked(page*resultPageSize),result);rows=result.Items;
                 Count.Text=$"{result.Total:N0} 件";
                 PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+resultPageSize-1)/resultPageSize)}";
                 Previous.IsEnabled=page>0;Next.IsEnabled=(page+1)*resultPageSize<result.Total;
                 Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
-                RenderRows();RestoreSelection();
+                if(!keepCards){RenderRows();RestoreSelection();}
             }
             catch{window.Dispose();throw;}
         }
@@ -48,6 +54,10 @@ public sealed partial class MainPage
             if(!disposed)Notice("保存しました","検索結果を更新できませんでした。同じ条件で検索し直してください。",Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning);
         }
     }
+    private static bool SameFavoriteCard(MediaRow a,MediaRow b)=>
+        a.Id==b.Id&&a.Title==b.Title&&a.Kind==b.Kind&&a.Location==b.Location&&a.Availability==b.Availability
+        &&a.PreviewKey==b.PreviewKey&&a.Favorite==b.Favorite&&a.Reviewed==b.Reviewed&&a.Shelf==b.Shelf
+        &&a.Tags.SequenceEqual(b.Tags)&&a.ShelfIds.SequenceEqual(b.ShelfIds)&&a.MatchLabel==b.MatchLabel;
 
 
     private static async Task CloseResultSessionAsync(ResultSession? session)

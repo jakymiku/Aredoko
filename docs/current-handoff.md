@@ -1,5 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## 今回の終了・次の1件（2026-10-25、以下の過去checkpointより優先）
+- 開始c18c5ef・remote一致/clean。既存branch/Draft PR #5を継続。**U1=64034ba、U2=389ad76、U3局所改善=f2fd7eb**。U5aのお気に入りcard保持は本checkpointと同じcommit（`git log -1 -- docs/current-handoff.md`）。[U1–U6進捗・正確な残件](usability-followup-20261025.md)。ロードマップ全完了ではない。
+- **利用者向け変化**：単クリックは選択だけ、明示詳細とdraft保持、長名省略/選択枠/ナビ名/検索hint。viewerはOSタイトルに名前/位置、独自headerなし、固定toolbar/独立notice、下端表示/1秒hide、viewer内小画像拡大/常時bar/本の循環、中心zoom/左drag。animation clockの累積遅れ削減、64MiB超GIFを所有streamへ。通常ライブラリのお気に入りは同一結果のcardを保持。
+- **確認**：最新専用frontend `data/ai-ui/usability-20261025/frontend08`、Portable publish成功（既知WUI1001×3/SDK IL2104×2）。Core対象97、animation13/image-format6、backup28＋不正boolean1 PASS。U1 Dark/Light各9、U2 10、U3 6、favorite10の生成native UIAは各exit0/残存0、変更状態PNGを目視。source・assembly・script SHA等は各report。通常DB/私物/旧Alpha/shortcut/モデル/GPU/Actionsは変更・使用していない。
+- **候補を混同しない**：frontend08は専用試験frontendで、通常EXE入り新ZIPは今回未作成。ZIP07/source e197723と旧Alphaは新素材/U1–U3/U5aを含まない。配布候補を更新する際は最新sourceから新出力へ作り、bootstrapの新ICOと設定互換も反映する。
+- **残る受入**：Windowsの前面化拒否によりphysical hover/hotzone/drag/wheel/keyboard/context-menuは未確認（u1-dark01..04 raw保持、回避操作なし）。High Contrast/DPI/clean Windows、元報告APNGの黒化、実大容量素材のFPS/RSS、CBZ cold/warmは未確認。73MiB GIFはcomment padding/小画素の生成testで容量経路だけを確認。これを速度同等/全ちらつき修正の証拠にしない。
+- **次の1件はU4a**：folder登録直後の「一覧のみ／一覧＋AI索引／後で」、一覧取得とAI jobの明示的分離、初回3段階案内。現在の基本scanに直接AI呼出しはないので、ユーザー報告と実候補のjob連携を区別する。`MainPage.GettingStarted.cs`の小画像拡大設定案内もviewer内へ直す。U3の原本再現待ちで独立U4開発を止めない。
+- U4b=folder別起動scan/成功走査後の欠落除外、U5残=複数選択/一括棚・favorite/filtered差分/600件保持、U6=ZIP+CBZ種類filterは未着手。旧viewer入力試験のheader/Close/page label参照、単クリックdetail前提は新導線へ更新する。runtime公開監査/hostとR06–R09も既存残件。**shutdownしない**。
+
 ## U2ビューア改善（2026-10-25、現在の再開位置）
 - U1 **64034ba**をPush後、U2a/bを実装。OSタイトルへ名前/位置、独自header撤去、固定toolbar/独立notice、下端32DIP/約1秒hide、viewer内の小画像拡大/常時bar/本循環、中心zoomと左dragを追加。[進捗と限界](usability-followup-20261025.md)。この節のcommitは `git log -1 -- docs/current-handoff.md`。
 - 専用候補 `data/ai-ui/usability-20261025/frontend06`、publish成功。Core対象79 / backup28+1 PASS、U2生成native UIA10checks/exit0/残存0。144生成PNG/CBZ不変、OSタイトル・固定bar・設定保存・単ページ/奇数RTL双方向循環・bar消去を確認。既知WUI1001/SDK IL2104は維持。

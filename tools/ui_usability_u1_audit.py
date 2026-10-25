@@ -4,7 +4,7 @@ import time
 from native_ui_tools import nodes
 
 
-def audit(ui, tree, shot, check, first_id, gate, cat, interactive=True):
+def audit(ui, tree, shot, check, first_id, gate, cat, interactive=True,favorite=False):
     key='Item'+str(first_id)
     ui('wait-for','LibraryHeading','--value','ライブラリ','-t','10000')
     if interactive:
@@ -13,7 +13,7 @@ def audit(ui, tree, shot, check, first_id, gate, cat, interactive=True):
         raw=json.loads(ui('inspect','--depth','18','--json'))
         check('page hover does not expose a global Ctrl Home tooltip',not any(
             str(n.get('type','')).lower()=='tooltip' and 'Home' in str(n.get('name','')) for n in nodes(raw)))
-    for nav,title in [('NavFavorites','お気に入り'),('NavHistory','閲覧履歴'),('NavAll','ライブラリ')]:
+    for nav,title in ([] if favorite else [('NavFavorites','お気に入り'),('NavHistory','閲覧履歴'),('NavAll','ライブラリ')]):
         gate.clear()
         try:
             ui('invoke',nav)
@@ -39,6 +39,15 @@ def audit(ui, tree, shot, check, first_id, gate, cat, interactive=True):
     ui('invoke','BtnCloseDetails');ui('invoke',key,'--action','select')
     ui('invoke','BtnDetails');ui('wait-for','TxtTags','--value','u1-unsaved-draft','-t','5000')
     check('explicit detail reopening preserves unsaved edits',cat.get(first_id)['tags']==[])
+    if favorite:
+        for action,value in [('toggle-on',True),('toggle-off',False)]:
+            ui('invoke','ChkFavorite','--action',action)
+            ui('wait-for','ChkFavorite','-p','IsEnabled','--value','True','-t','10000')
+            ui('wait-for','TxtTags','--value','u1-unsaved-draft','-t','5000')
+            check('favorite '+str(value)+' saved without saving draft',cat.get(first_id)['favorite']==value and cat.get(first_id)['tags']==[])
+            title=tree()['ItemTitle'+str(first_id)]['name']
+            check('target caption reflects favorite '+str(value),title.startswith('★ ')==value)
+            if value:shot('favorite-updated')
     shot('explicit-details')
     ui('set-value','TxtTags','');ui('invoke','BtnCloseDetails')
     if interactive:

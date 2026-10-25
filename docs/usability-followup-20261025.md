@@ -12,6 +12,7 @@ Codex GPT-6.1 Sol / Antigravity共通の実装手順。既存P0–P7を置き換
 - **U3 部分実装**：再生clockを処理時間の累積しない絶対deadlineへ変更。starvation/長い停止では再同期し、無条件frame skipをしない。同じWriteableBitmapのSourceを毎frame再設定しない。APNG黒化の原因確定/修正とは扱わない。
 - U3bの容量経路：metadata/所有handleのstreamのみ256MiBまで、丸ごと原寸取得は64MiB、AI/旧APIの制限は維持。大容量GIFはnative全量転送を避けstreamへ。既存の画素数/4frame/128MiB制約・登録/版guardを保持。73MiBの生成GIFで、全frame数を走査せずprobe/先頭thumbnail/先頭stream成功、元mtime不変、原寸byte-array拒否、256MiB超拒否を確認。コメントpaddingで容量を増やした小画像fixtureであり、実72MB高解像度GIFのFPS/RSS受入ではない。
 - U3候補 `frontend07` publish成功、Core対象97・Python animation13/format6 PASS。`u3-uia02`は6checks/exit0/残存0、生成WebP12frame/APNG72frameの連続割当とloopを確認、3PNG目視。先行u3-uia01は同件数検索の待ち条件が古い結果を通したハーネスFAILで、対象ID待ちへ修正して再確認。**報告原本APNGの黒化、物理FPS/Honeyview同等、大画像/RSS、CBZのcold/warm性能は残件。**
+- **U5aの小区分**：空query/通常文字方式のライブラリで、お気に入り保存後にサーバーが同一順序/metadataを確認したときだけnative cardを保持し、対象の星とmenuを更新。結果session自体は作り直して世代/guardを保全。AI・順位/範囲変更・異なる行は既存再描画へfallback。`frontend08` publishと `favorite-uia01` 10checks/exit0/4PNG目視、登録→解除/タグdraft非保存を確認。複数選択、一括棚、favorites絞込からの部分削除、600件window保持は未実装でU5全体の完了ではない。
 - U2候補 `frontend06` Portable publish成功、新規CS8602は初期化順を直して解消（既知WUI1001×3/SDK IL2104×2は残存）。Core対象79 checks、backup既存28＋不正boolean拒否1 PASS。生成144PNG/5ページCBZの `u2-uia01` は10checks/exit0/残存0、4PNG（主画面含む）を確認対象とした。OSタイトル更新、header非表示、toolbar位置固定、表示設定、単ページ/奇数RTLの双方向循環、bar非表示と設定ファイル保持を確認。ホイール/物理drag/hotzone/tooltip/HC/DPIは未受入。旧viewer試験のImageClose/ReaderClose/ReaderPageNumber等はOSタイトル/正常WM_CLOSEへ移行する必要がある。
 
 ## 1. 基準と確認範囲

@@ -15,6 +15,7 @@ from native_ui_tools import nodes
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--usability-u1',action='store_true')
+    parser.add_argument('--favorite-only',action='store_true')
     parser.add_argument('--usability-u2',action='store_true')
     parser.add_argument('--usability-u3',action='store_true')
     parser.add_argument('--uia-only',action='store_true',help='Record input/hover checks as unverified; use UIA only')
@@ -131,7 +132,7 @@ def main():
         check('panel realizes fewer cards than sixty-result page',0<count<60)
         if args.usability_u1:
             from ui_usability_u1_audit import audit
-            audit(ui,tree,shot,check,first['id'],gate,cat,interactive=not args.uia_only)
+            audit(ui,tree,shot,check,first['id'],gate,cat,interactive=not args.uia_only,favorite=args.favorite_only)
             if args.uia_only:report['unverified']=['pointer hover/tooltip','small-size slider and name ellipsis','context-menu invocation','Ctrl Home/End physical input']
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.usability_u2 or args.usability_u3:
