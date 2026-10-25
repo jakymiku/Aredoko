@@ -15,6 +15,9 @@ from search_intent import validate_query, validate_decision
 from intent_questions import QUESTION_SETS,get_questions,question_key,reversed_questions
 
 def main():
+    if hasattr(sys.stdin, 'reconfigure'): sys.stdin.reconfigure(encoding='utf-8')
+    if hasattr(sys.stdout, 'reconfigure'): sys.stdout.reconfigure(encoding='utf-8')
+    if hasattr(sys.stderr, 'reconfigure'): sys.stderr.reconfigure(encoding='utf-8')
     parser=argparse.ArgumentParser()
     parser.add_argument('--model',required=True,type=Path)
     parser.add_argument('--parent-pid',type=int,default=os.getppid())

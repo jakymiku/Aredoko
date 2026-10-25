@@ -59,7 +59,7 @@ class LayaProcess:
             if not self.available:raise IntentUnavailable('Local decision model unavailable')
             env=os.environ.copy()
             env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',
-                       PYTHONIOENCODING='utf-8',TOKENIZERS_PARALLELISM='false')
+                       PYTHONIOENCODING='utf-8',TOKENIZERS_PARALLELISM='false',PYTHONDONTWRITEBYTECODE='1')
             self.responses=queue.Queue(maxsize=2)
             command=worker_command(self.python,Path(__file__).with_name('laya_worker.py'),['--model',str(self.model.resolve()),'--parent-pid',str(os.getpid()),'--question-set',self.question_set])
             if self.check_order:command.append('--check-order')

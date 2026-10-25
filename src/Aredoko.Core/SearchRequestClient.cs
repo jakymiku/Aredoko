@@ -37,7 +37,7 @@ public sealed class SearchRequestClient(HttpClient client)
             throw new InvalidDataException("検索中断の応答が要求と一致しません。");
         return accepted.GetBoolean();
     }
-    public async Task<byte[]> RunAsync(string route,JsonObject body,CancellationToken cancellation=default,int seconds=40,int cap=2*1024*1024)
+    public async Task<byte[]> RunAsync(string route,JsonObject body,CancellationToken cancellation=default,int seconds=120,int cap=2*1024*1024)
     {
         if(route is not ("api/library/ai/search" or "api/library/ai/similar" or "api/library/tag-suggestions/search"))throw new ArgumentException("Invalid search route");
         using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellation);deadline.CancelAfter(TimeSpan.FromSeconds(seconds));
