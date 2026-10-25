@@ -985,7 +985,7 @@ def _serve(args):
             print('AI acquisition registry unavailable ('+type(error).__name__+')',file=sys.stderr,flush=True)
             acquisition_specs=()
         handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff,acquisition_specs=acquisition_specs,thumbnail_disk_path=catalog.path.parent/(catalog.path.name+'.thumbs.sqlite'))
-        resources.callback(handler.startup_scans.close)
+        resources.callback(close_job,handler.startup_scans)
         resources.callback(close_job,handler.setup_jobs)
         resources.callback(close_job,handler.download_jobs)
         resources.callback(handler.animations.close)

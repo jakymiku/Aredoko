@@ -49,6 +49,18 @@ class StartupScanTests(unittest.TestCase):
             self.queue.start();self.queue.cancel();release.set();self.cat._worker.join(3);self.finish()
         self.assertEqual(self.cat.scan_state(manual['job_id'])['state'],'complete')
         self.assertEqual(self.queue.state()['state'],'cancelled')
+    def test_close_reports_unfinished_owner_instead_of_allowing_restore_proof(self):
+        self.cat.set_root_startup_scan(self.roots[:1],'list');reached=threading.Event();release=threading.Event()
+        original=self.cat.index.scan
+        def held(*args,**kwargs):reached.set();release.wait(3);return original(*args,**kwargs)
+        with patch.object(self.cat.index,'scan',side_effect=held):
+            try:
+                self.queue.start();self.assertTrue(reached.wait(1))
+                self.assertFalse(self.queue.close(timeout=.01))
+                with self.assertRaises(ValueError):self.queue.start()
+            finally:release.set()
+            self.cat._worker.join(3);self.assertTrue(self.queue.close(timeout=3))
+        self.assertEqual(self.queue.state()['state'],'cancelled')
     def test_ai_unavailable_keeps_successful_list(self):
         def unavailable(*args):raise RuntimeError('model missing')
         self.cat.ai_scan_hook=unavailable;self.cat.set_root_startup_scan(self.roots[:1],'list_and_ai')

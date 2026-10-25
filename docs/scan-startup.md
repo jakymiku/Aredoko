@@ -31,3 +31,7 @@
 - ユーザーは当初2試行、ハーネス修正後の追加1試行を明示許可。native-startup02は同名UIA選択子の曖昧さで停止。03は一意selectorへ修正後、SelectionItemPatternがCOMエラーを返した。専用DBのroot1=`list`、failure.pngの保存済み表示から**設定の実保存は確認**。選択callback中の同期disableを撤去し、saving/transition guardで直列化する修正を入れた。
 - raw失敗を保持し、02/03のPNG目視済み。再起動queue/中止/タグdraft保持までのGUIは**未完**、成功扱いしない。追加起動はしていない。GPU0、通常DB/元メディア/旧Alpha変更0。次のGUIでは修正版候補と物理入力または修正済みUIAを明示し、再度ユーザーの回答を得る。
 - 今回frontend01–03の「publish成功」は起動可能の証拠ではない。GUI確認可能候補はfrontend04。以後の新候補でも必ず `-c Portable -p:Platform=x64 -p:AredokoPackageChannel=Portable` と実評価receiptを使う。
+
+### 終了時の所有確認
+- 起動queueのcloseは所有workerが残る場合Falseを返す。backendの他所有jobと同じclose判定へ接続し、停止時間切れならrestoreの正常終了proofを発行しない。backend/sourceで成功終了を装って復元先へ切替えない。
+- CPU startup16 PASS：取消を一時無視する生成workerで、close時間切れ=False/再start拒否/停止完了後=Trueを確認。U4b/U5の後続native確認は[library-selection.md](library-selection.md)を優先する。

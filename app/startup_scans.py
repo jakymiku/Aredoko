@@ -59,7 +59,8 @@ class StartupScans:
         with self.guard:job=self.current_job
         if job is not None:self.catalog.cancel_scan(expected_job_id=job)
         return self.state()
-    def close(self):
+    def close(self,timeout=10):
         with self.guard:self.closed=True
         self.cancel()
-        if self.worker is not None:self.worker.join(10)
+        if self.worker is not None and self.worker is not threading.current_thread():self.worker.join(timeout)
+        return self.worker is None or not self.worker.is_alive()

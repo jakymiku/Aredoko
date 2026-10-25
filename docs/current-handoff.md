@@ -1,5 +1,10 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## 配布候補更新・終了所有確認（2026-10-25、以下より優先）
+- U6 **1adb694** を新規基本ZIP08へ封印。prepare/runtime/ZIP全照合PASS、同梱Pythonの基本＋U4–U6 CPU21項目PASS。旧07/Alpha/shortcutは未変更。08に未収録だった終了所有の補強を次の単位へ入れたため、**次は補強を含む新規ZIP09の作成/CPU確認**。
+- 起動queue.closeの時間切れを成功とみなさず、既存owned job closerを使ってrestore正常終了proofをブロック。生成workerの停止境界を含むstartup16 PASS。[根拠](scan-startup.md)。`check_basic_release.py --polish`で同梱Pythonのstartup設定・ZIP/CBZ・一括favorite/棚・欠落metadata保全をCPU確認可能。GUI/実モデル/GPUを起動しない。
+- GUIの最新実測はfrontend06/native-selection03（18項目PASS、最終refresh待機失敗を保持）。07/08/09のGUI受入へ流用しない。新GUI/GPUはユーザーへ質問し回答を得る。追加大機能へは進まず、候補/commit/未受入を引継いで終了する。
+
 ## U6 filter・現在の再開位置（2026-10-25、以下より優先）
 - 今日のsource：引継ぎ補強 **8972be3**、U4b **51491a6**/GUI callback改善 **428af7f**、U5基盤 **454dba0**/WinUI **d97c780**。U6 filterは `git log -1 -- app/media_filters.py`。[U4](scan-startup.md) / [U5とGUI受入](library-selection.md) / [U6](compressed-filter.md)。
 - U6の種類を「圧縮ファイル（ZIP・CBZ）」へ統合（hint含む）。保存済みbook/archive・旧query・reader導線を維持し、通常/AI/scope/本文/候補/結果sessionで共通predicateを使用。本文/未承認候補に残っていたmissing混入も修正。DB/vectors移行不要。
