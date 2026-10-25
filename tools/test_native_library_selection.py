@@ -152,7 +152,8 @@ def main():
             ui('wait-for','BulkShelfChoice'+str(shelf),'-t','10000');ui('invoke','BulkShelfChoice'+str(shelf),'--action','select');ui('invoke','PrimaryButton')
             wait('right-click shelf edits exactly the selected pair',lambda:cat.get(1)['shelf_ids']==[shelf] and cat.get(3)['shelf_ids']==[shelf] and cat.get(2)['shelf_ids']==[])
             ui('wait-for','PrimaryButton','--gone','-t','10000');ui('wait-for','SelectionInlineStatus','--value','保存しました','--contains','-t','20000');shot('02-grid-context-saved')
-            ui('invoke','BtnLayout');ui('wait-for','SelectionCountText','--value','2 件選択','--contains','-t','10000');shot('03-list-keeps-grid-selection')
+            ui('invoke','BtnLayout');ui('wait-for','SelectionCountText','--value','2 件選択','--contains','-t','10000')
+            ui('wait-for','Item1','-p','IsOffscreen','--value','False','-t','10000');check('leading tile stays visible after list reflow',True);shot('03-list-keeps-grid-selection')
             ui('invoke','ClearLibrarySelection');ui('wait-for','SelectionCountText','--gone','-t','10000')
             check('generated originals unchanged',all(hashlib.sha256(Path(name).read_bytes()).hexdigest()==value[0] for name,value in before.items()))
             stop();report['pass']=True;return 0

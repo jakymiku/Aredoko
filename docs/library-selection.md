@@ -25,3 +25,7 @@
 - `grid02` はDarkで実Ctrl＋マウスの非隣接2件、右クリックfavorite/棚の対象一致、grid→listの選択保持、明示解除を確認。3PNG目視、元生成画像不変、所有frontend正常終了。`grid01` はfavoriteのDB反映をUI完了と誤解した待機不足と、閉じた詳細では進行が見えない製品の改善点を分離してFAIL保持。
 - `selection01` は通常版が開いていて既存backendへ接続し、生成Item1が見つからず保存操作前に停止。試験serverへWindows排他bindと起動ID/接続時の照合を追加した。別のAredokoが稼働中なら試験はbind時に停止し、通常版を閉じたり接続先として流用しない。
 - 未確認はHC/物理DPI移動、長時間の実媒体RSS、範囲選択の入力中取消など。上の限定PASSを全製品/配布/clean Windowsの受入へ流用しない。
+
+### 表示切替の先頭アンカー
+- リサイクルされたcontainer辞書の先頭が画面の先頭とは限らず、grid→listで先頭/選択画像を画面外へ送る原因になっていた。アンカーは可視Y座標→結果順で選び、表示範囲外・既に消えたcontainerを除外する。partial rowの位置と既存の末尾固定は維持。
+- `startup-review-20261026/grid03` の新候補でCtrl/right-click一括操作に加え、切替後のItem1可視を確認。03 PNGで先頭と選択枠が残る。全3PNGの目視は最終引継ぎ時に記録する。

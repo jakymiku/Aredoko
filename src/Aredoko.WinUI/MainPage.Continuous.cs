@@ -112,13 +112,19 @@ public sealed partial class MainPage
     }
     private (string Key,double Y)? CaptureBrowseAnchor()
     {
+        (string Key,double Y,int Index)? first=null;
         foreach(var container in containerCleanup.Keys)
         {
             if(!container.IsLoaded||container.Tag is not int id)continue;
             var y=container.TransformToVisual(Items).TransformPoint(new Point()).Y;
-            if(y+container.ActualHeight>0&&y<Items.ActualHeight)return(RowKey(id),y);
+            if(!double.IsFinite(y)||y+container.ActualHeight<=0||y>=Items.ActualHeight)continue;
+            var index=rows.FindIndex(row=>row.Id==id);if(index<0)continue;
+            // Recycled container insertion order is not visual order. Preserve
+            // the leading visible row, and the first result within a tile row.
+            if(first is null||y<first.Value.Y||y==first.Value.Y&&index<first.Value.Index)
+                first=(RowKey(id),y,index);
         }
-        return null;
+        return first is {} value?(value.Key,value.Y):null;
     }
     private void ReflowBrowse(Action change)
     {
