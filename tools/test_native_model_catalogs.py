@@ -1,7 +1,8 @@
 """Limited native acceptance of an explicitly selected basic ZIP.
 
 Model catalog display, generated library, or generated recovery cases only.
-Never starts external acquisition, inference, installers, or a user's library.
+Never starts external acquisition, installers, or a user's library. Optional
+--ai-startup-fixture runs explicitly authorized inference on generated data.
 """
 import argparse,ctypes,hashlib,json,os,socket,subprocess,sys,time,traceback
 from ctypes import wintypes
@@ -22,15 +23,19 @@ def main():
     parser.add_argument('--getting-started',action='store_true',help='Empty library guidance, real generated folder registration, then restart')
     parser.add_argument('--library-smoke',action='store_true',help='Only confirm new library shortcuts/help and empty history on this candidate, then one restart')
     parser.add_argument('--restore-rejection',action='store_true',help='Reject two generated invalid backups, keep the current library, then one planned restart')
+    parser.add_argument('--ai-startup-fixture',type=Path,help='Passing generated fixture from test_ai_startup_pack; actual GPU audit')
+    parser.add_argument('--runtime',type=Path);parser.add_argument('--models',type=Path)
     args=parser.parse_args();release=args.release.resolve();target=args.output.resolve()
-    if sum((args.getting_started,args.direct_entry,args.library_smoke,args.restore_rejection))>1:parser.error('Select one acceptance flow')
+    if sum((args.getting_started,args.direct_entry,args.library_smoke,args.restore_rejection,args.ai_startup_fixture is not None))>1:parser.error('Select one acceptance flow')
+    if args.ai_startup_fixture and (args.runtime is None or args.models is None):parser.error('Explicit existing runtime/models required')
     if os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui'):
         parser.error('New dedicated Windows output required')
     if not release.is_relative_to(REPO/'dist'):parser.error('Explicit repository candidate required')
     manifest=verify_release(release)
     if manifest.get('models_bundled') is not False or manifest.get('ai_runtime_bundled') is not False:
         parser.error('Basic ZIP only')
-    with socket.socket() as probe:probe.bind(('127.0.0.1',8769))  # Never reuse someone else's server.
+    with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET,socket.SO_EXCLUSIVEADDRUSE,1);probe.bind(('127.0.0.1',8769))
     target.mkdir(parents=True);local=target/'local';data=local/'Aredoko';data.mkdir(parents=True)
     media=target/'media';media.mkdir();source=media/'catalog-display-fixture.png';source.write_bytes(png())
     before=(hashlib.sha256(source.read_bytes()).hexdigest(),source.stat().st_mtime_ns)
@@ -45,10 +50,15 @@ def main():
         create_backup(data/'catalog.sqlite',target/'valid.zip',as_zip=True)
     empty_models=target/'empty-models';empty_models.mkdir()
     settings=data/'launch-settings.json';settings.write_text(json.dumps({'database':str(data/'catalog.sqlite'),'models_root':str(empty_models),'ui_theme':'dark'}),encoding='utf-8')
+    fixture_hashes={}
+    if args.ai_startup_fixture:
+        from ui_ai_startup_audit import prepare
+        values=json.loads(settings.read_text());values.update(prepare(data,args.ai_startup_fixture,args.runtime,args.models,REPO));settings.write_text(json.dumps(values),encoding='utf-8')
+        fixture_hashes={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in (args.ai_startup_fixture/'media').iterdir()}
     initial_settings=settings.read_bytes()
     env={**os.environ,'LOCALAPPDATA':str(local),'APPDATA':str(local),'WINAPP_UI_WORKFLOW_ID':'aredoko-model-catalog-display-20261025'}
     report={'pass':False,'checks':[],'screenshots':[],'owned_pids':[],'exits':[],
-            'authorization':'2026-10-25 human authorization: automatic GUI tests with dedicated generated data',
+            'authorization':'Current user permits generated-data GUI tests and GPU inference; no acquisition or normal user DB',
             'direct_entry':args.direct_entry,'getting_started':args.getting_started,'library_smoke':args.library_smoke,'restore_rejection':args.restore_rejection,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
             'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -138,7 +148,10 @@ def main():
             catalogs=request('/api/library/ai/setup/download/catalog')
             check(f'phase {phase}: both production models visible',catalogs['download_supported'] and {x['model_target']['role'] for x in catalogs['catalogs']}=={'embedding','tagger'})
             check(f'phase {phase}: no acquisition started',request('/api/library/ai/setup/download/job')['state']=='idle')
-            if args.restore_rejection:
+            if args.ai_startup_fixture:
+                from ui_ai_startup_audit import audit
+                audit(phase,ui,tree,shot,check,request,settings,report)
+            elif args.restore_rejection:
                 if phase==0:
                     from ui_restore_rejection_audit import audit
                     audit(ui,cli,tree,shot,check,request,pid,hwnd,target)
@@ -198,7 +211,11 @@ def main():
                     ui('wait-for','PrimaryButton','-p','IsEnabled','--value','False','-t','5000');shot('wd-catalog')
                 check('viewing catalogs does not start transfer',request('/api/library/ai/setup/download/job')['state']=='idle')
             else:shot('restarted-library')
-            close_phase();check(f'phase {phase}: settings unchanged',settings.read_bytes()==initial_settings)
+            close_phase()
+            if args.ai_startup_fixture:
+                current=json.loads(settings.read_text());check(f'phase {phase}: only explicit opt-out changes launch settings',current.pop('verify_ai_runtime') is False and current==json.loads(initial_settings))
+            else:check(f'phase {phase}: settings unchanged',settings.read_bytes()==initial_settings)
+        if args.ai_startup_fixture:check('source GPU fixture media unchanged',all(hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest for name,digest in fixture_hashes.items()))
         check('generated media unchanged',before==(hashlib.sha256(source.read_bytes()).hexdigest(),source.stat().st_mtime_ns))
         check('all owned exits zero',len(report['exits'])==4 and all(x['code']==0 for x in report['exits']))
         verify_release(release);check('complete packaged inventory unchanged',True)

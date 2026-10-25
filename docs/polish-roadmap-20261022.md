@@ -4,7 +4,7 @@
 
 ## 現行実行キュー（2026-10-25、実機フィードバック計画）
 
-[改善計画 U1–U6](usability-followup-20261025.md)を直近の実装キューへ統合する。**U1/U2/U4a/U4b/U5とU6 filterはsource実装済み、U3はpalette APNG黒化修正を含む局所改善済み**。U4b/U5は生成nativeで18項目を確認したが、最終refreshの待機不足をFAIL保持し、未受入を分離する。**次は最新sourceの基本ZIP候補/CPU確認、その後許可を得て短い統合受入**。物理入力の残り、Light/HC/DPI、大画像FPS/RSS/CBZ cold-warm、公開runtime権利/host、R06–R09は維持。元のP0–P7/製品ビジョンを置き換えず、完了機能を繰り返さない。
+[改善計画 U1–U6](usability-followup-20261025.md)を直近の実装キューへ統合する。**U1/U2/U4a/U4b/U5とU6 filterはsource実装済み、U3はpalette APNG黒化修正を含む局所改善済み**。2026-10-26の生成nativeでU4b/U5の最終refresh（Light）、実Ctrl＋クリック/グリッド右クリック一括整理（Dark）、表示切替の先頭保持まで確認済み。旧FAILは履歴として保持する。起動時照合は所有停止と任意オフの高度な設定も追加済み。**次はU3bの生成大容量GIF/APNG/CBZの限定受入、その後新しい基本ZIP候補へ反映**。HC/物理DPI、大画像FPS/長時間RSS、公開runtime権利/host、R06–R09は維持。元のP0–P7/製品ビジョンを置き換えず、完了機能を繰り返さない。
 
 1. **U1/P3/UI**：Ctrl+Homeの吹き出し、ナビ見出し、長名、明示詳細、検索方式のヒント。
 2. **U2/P1/UI**：動かない操作バー、下端表示、OSタイトル、ビューア内設定、中心zoom/drag、本の双方向循環。

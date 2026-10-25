@@ -1,5 +1,11 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-26）
 
+## Sol継続checkpoint（2026-10-26、以下より優先）
+- Antigravity `49ca8c8` までをclean/remote/PR #5一致で引継ぎ。UTF-8/Portable初期化は採用。**38c63f6**：背景照合の所有停止・取消/待機、通常通信の応答上限を分離、設定→高度な設定からAI runtime全照合を既定オン/任意オフ（次回起動）にした。[仕様/CPU/生成GPU](ai-runtime-setup.md)。
+- **a216fd0**：詳細を閉じた一括操作にも保存/一覧更新/完了を表示、処理中のメニュー等を無効化。**cca0984**：grid/list切替のアンカーを可視位置順へ修正。[U5受入と残件](library-selection.md)。生成nativeでLightの最終refresh含む一括整理/起動queue/draft保持、Darkの実Ctrl＋クリック/right-click一括整理/先頭保持まで確認。
+- 証拠 `data/ai-ui/startup-review-20261026/`。runtime32/設定job15/Core/Portable PASS、生成画像2枚のCUDA索引・日本語cold/warm検索・再読込もPASS（追加取得なし）。高度な設定はDarkで既定/オフ保存/再起動保持を確認。現在のinstalled Alpha/shortcut/普段の設定は更新していない。
+- **現在の次の1件：生成大容量GIF・高解像度APNG/CBZの限定nativeケース**。コード再実装ではなく既存U3b経路の受入をまとめる。試験ハーネスの古いUI契約は現在の明示詳細/動的window title/通常window closeに合わせる。UI/GPUは今回ユーザー許可済み。今回のみ、終了前の保存/commit/push/引継ぎ後に `Stop-Computer`（Forceなし）を依頼されている。旧shutdown指示の再利用ではない。
+
 ## バックグラウンドAI整合性検証・プログレスバーUI・タイムアウト抑止（2026-10-26、以下より優先）
 - **利用者にできるようになったこと**:
   1. **起動直後の自動バックグラウンド検証**: AIモデルおよび実行環境（ランタイムパック ~8.5GB/23,903ファイル）が導入されているAredoko環境において、初回AI検索を待つことなく、起動直後に裏で整合性チェック（SHA-256照合）を自動開始。
