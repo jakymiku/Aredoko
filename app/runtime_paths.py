@@ -49,6 +49,6 @@ def worker_command(python,script,arguments):
     # _pth ignores the script directory, so explicitly add this app's worker
     # directory rather than accidentally importing an older app from the pack.
     isolated=any(python.parent.glob('python3*._pth'))
-    if not isolated:return [str(python),'-B','-u',str(script),*arguments]
+    if not isolated:return [str(python),'-X','utf8','-B','-u',str(script),*arguments]
     bootstrap="import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; sys.path.insert(0,os.path.dirname(p)); runpy.run_path(p,run_name='__main__')"
-    return [str(python),'-I','-B','-u','-c',bootstrap,str(script),*arguments]
+    return [str(python),'-X','utf8','-I','-B','-u','-c',bootstrap,str(script),*arguments]

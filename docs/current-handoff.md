@@ -1,4 +1,24 @@
-# Aredoko — 現行の単一引き継ぎ（2026-10-25）
+# Aredoko — 現行の単一引き継ぎ（2026-10-26）
+
+## AI推論パイプライン・初回検証タイムアウト・UTF-8文字化け修正完了（2026-10-26、以下より優先）
+- **確認された事象と根本原因**:
+  1. **初回40秒タイムアウト**: 起動後初回AI推論時、8.5GB・23,903ファイルのSHA-256整合性チェック（約30秒）＋EmbeddingGemma 2重みロード（約15秒）が重なり、フロントエンド LibraryApi.cs の HttpClient.Timeout（従来40秒）を超過してキャンセルされていた。
+  2. **Worker Stopped (TypeError)**: Windows環境でisolated mode (-I) 起動されたPython子プロセスは環境変数 PYTHONIOENCODING を無視してWindows ANSI (CP932) にフォールバックするため、標準入力に渡された「りんご」等のUTF-8日本語文字列が文字化けし、SentenceTransformers tokenizerが TypeError: TextEncodeInput must be Union[...] を送出していた。
+  3. **整合性検証の設計仕様**: 実行時検証 (erify=True) はバックエンドプロセスの生存期間中、初回worker起動時の1回のみインメモリで実行される（_verified_packs）。常駐したworkerプロセスにより、**2回目以降の検索はファイル検証もモデル再ロードも一切走らず、約100msで完了する**（実測 104.5ms を確認）。
+- **実施した修正**:
+  - src/Aredoko.Core/LibraryApi.cs: HttpClient のタイムアウトを40秒から120秒（TimeSpan.FromSeconds(120)）へ延長。
+  - pp/runtime_paths.py: worker起動引数に -X utf8 を追加し、-I 下でも標準入出力を強制的にUTF-8モード化。
+  - pp/ai_worker.py: sys.stdin/sys.stdout/sys.stderr の 
+econfigure(encoding='utf-8') を明示。
+  - pp/ai_runtime.py: Pythonが自動生成する __pycache__ を整合性検査から除外。
+  - pp/ai_process.py / pp/wd_tagger.py: PYTHONDONTWRITEBYTECODE='1' を設定。
+- **実機リリース適用・検証結果**:
+  - dotnet build src/Aredoko.WinUI -c Release 成功。
+  - デスクトップ版実行先 %LOCALAPPDATA%/Programs/Aredoko/releases/20261025-2811863/ の ackend/app/ および in/ を最新成果物で更新。
+  - manifest.json および sha256sums.txt を再計算し、erify_release による全794ファイルの暗号学的整合性チェック合格を確認 (VERIFICATION SUCCESSFUL)。
+- **次の1件**:
+  - デスクトップの「Aredoko Alpha」ショートカットからアプリを起動し、検索バーで「両方で探す（AI）」または「画像の見た目（AI）」を実行して、初回ロード成功（約40秒）および2回目以降の高速応答（約0.1秒）を確認する。
+
 
 ## 最終終了・Alpha更新結果（2026-10-25、以下より優先）
 - 実装source **2811863**、事前引継ぎ **ebe3122** までPush後、ユーザーの追加依頼により**デスクトップ「Aredoko Alpha」の実用起動先を最新Portableへ更新済み**。実配置は `%LOCALAPPDATA%/Programs/Aredoko/releases/20261025-2811863/Aredoko.exe`。旧MSIX登録は削除・更新しておらず、Startメニューの旧MSIX入口とは別。ユーザーへデスクトップ入口を案内する。

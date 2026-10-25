@@ -20,7 +20,7 @@ public sealed class LibraryApi : IDisposable
     public IndexContinuationClient Continuation {get;}
     public LibraryApi(HttpMessageHandler handler)
     {
-        client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(40)};
+        client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(120)};
         tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromSeconds(100)};
         Backups=new(client);
         AIEnvironment=new(client);

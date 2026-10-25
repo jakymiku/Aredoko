@@ -24,6 +24,9 @@ def monitor_parent(pid):
     os._exit(0)
 
 def main():
+    if hasattr(sys.stdin, 'reconfigure'): sys.stdin.reconfigure(encoding='utf-8')
+    if hasattr(sys.stdout, 'reconfigure'): sys.stdout.reconfigure(encoding='utf-8')
+    if hasattr(sys.stderr, 'reconfigure'): sys.stderr.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser()
     parser.add_argument('--model',required=True)
     parser.add_argument('--parent-pid',type=int,default=os.getppid())
@@ -71,7 +74,9 @@ def main():
             response = {'vector':vector.tolist(),'elapsed_ms':round((time.perf_counter()-started)*1000,1),
                         'peak_memory_mib':round(torch.cuda.max_memory_allocated()/1024**2,1) if device=='cuda' else 0}
         except Exception as ex:
-            response = {'error':type(ex).__name__}
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            response = {'error': f'{type(ex).__name__}: {ex}'}
         print(json.dumps(response,allow_nan=False),file=wire,flush=True)
 
 if __name__ == '__main__': main()
