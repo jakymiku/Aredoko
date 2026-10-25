@@ -1,7 +1,7 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
 ## ビジュアル素材v1導入（2026-10-25、直近の変更）
-- 開始b8147fa、remote/既存Draft PR #5一致・clean、確認できる他の進行中repo作業なし。ユーザー指定ZIPを導入。[適用素材・変更ファイル・保留理由・証拠](visual-assets-v1.md)。
+- 実装 **787614a**。開始b8147fa、remote/既存Draft PR #5一致・clean、確認できる他の進行中repo作業なし。ユーザー指定ZIPを導入。[適用素材・変更ファイル・保留理由・証拠](visual-assets-v1.md)。
 - 採用ICOとMSIXロゴサイズを既存参照へ適用。空状態/索引/AI設定/初回案内/使い方へ小型イラストを追加。Portableの既存画像未収録設定を修正し、アイコンpathもcwd非依存へ。Fluent操作アイコン・広い一覧・右詳細を維持。
 - source原本はdesign/visual-assets/v1、配布対象はAssetsの使用分のみ。PREVIEW/reference/promptは配布しない。`tools/sync_visual_assets.py --check`で15出力一致・両manifest解決・ICOサイズ確認。Portable publish成功、Dark/Light各7checks/exit0、12PNG目視。設定の全状態GUI/MSIXインストール/HC/DPIは未検証。
 - **既存ZIP07/インストール済みAlphaはこの変更を含まない。** 現在の試験frontendは `data/ai-ui/visual-assets-review-20261025/frontend02`。新規候補作成時に新ICOでbootstrapをビルドすること。

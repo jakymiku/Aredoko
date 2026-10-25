@@ -37,3 +37,15 @@ C#で作る状態画像のデコードは表示寸法に合わせ256px以下。�
 - 証拠：ignored `data/ai-ui/visual-assets-review-20261025/`。indexing/completed/error、初回guideの全状態GUI切替、High Contrast/DPI、MSIX署名/インストールは今回未実施（配線/収録/build確認）。通常DB・旧Alpha・既存配布ZIP・shortcutは未更新。CI/GPU/モデル取得0。
 
 原本一式は.gitattributesで改行変換を無効にし、manifestの容量を異なるcheckoutでも保つ。
+
+
+## 変更ファイル
+実装commit `787614a`。
+- `src/Aredoko.WinUI/Assets/`：ICO・既存MSIX名8PNG・Visualの6PNG。
+- `src/Aredoko.WinUI/Aredoko.WinUI.csproj`：素材のContent登録と出力/publishコピー。
+- `src/Aredoko.WinUI/VisualAssets.cs`：状態画像の小型表示と重複再生成の抑制。
+- `src/Aredoko.WinUI/MainPage.xaml`、`MainPage.xaml.cs`：空状態と初回案内。
+- `src/Aredoko.WinUI/MainPage.AIEnvironment.cs`、`MainPage.GettingStarted.cs`：AI設定と使い方。
+- `src/Aredoko.WinUI/MainWindow.xaml.cs`、`ViewerWindow.cs`：アイコンの絶対path参照。
+- `design/visual-assets/v1/`、`.gitattributes`：元素材保管と改行変換防止。
+- `tools/sync_visual_assets.py`、本書、`docs/README.md`、`docs/current-handoff.md`：再生成・検証・引き継ぎ。
