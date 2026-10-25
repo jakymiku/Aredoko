@@ -1,6 +1,17 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-26）
 
-## Sol継続checkpoint（2026-10-26、以下より優先）
+## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
+- **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。
+- **今回の利用者向け変更**：`38c63f6`で所有背景照合の取消/終了と通信上限を整理し、**設定→高度な設定→AI実行環境の全ファイルを照合する**を追加（既定オン、オフ保存は次回起動から）。基本ZIP・取得時検証まで一括で無効にする設定ではない。[仕様・結果](ai-runtime-setup.md)。`a216fd0`で詳細を閉じた一括保存にも進捗/完了を表示し、保存中の競合操作を抑止。`cca0984`でgrid/list切替の可視アンカーを修正。`22e481c`でviewerの読み上げ名を更新。`42c0743`で中断したAI待機が自動再実行される不具合、`e52c8ec`でページ移動取消時に有効sessionを破棄/詳細を無効化する不具合を修正。
+- **確認済み**：runtime33/WD11/設定job15、関連CoreとPortable build。生成nativeでLightの一括整理/600件外選択/起動時更新中止/draft保持/最終refresh、Darkの実Ctrl複数選択/right-click一括保存/表示切替アンカー、高度設定の保存/再起動保持を確認。[選択と取消](library-selection.md)。大容量実フレームGIF約82.55MiB、高解像度APNG/CBZと304 bitmap再利用・正常session解放を限定確認。[測定範囲・限界](viewer-performance.md)。失敗試行も証拠として保持し、製品不具合とharness問題を区別した。
+- **AIの実機確認**：既存pack/モデル＋生成2枚だけでCUDA索引/日本語検索/再読込、通常`Aredoko.exe`から照合待ち取消→高度設定オフ保存→照合中正常終了→再起動→モデル読込表示→日本語CUDA検索2件までPASS（`basic-native-ai03`、所有4exit0、4PNG目視）。全照合対象は23,903 files / **4,947,898,990 bytes**であり、旧記録の約8.5GBとは区別する。詳細の単回時間は一般性能保証ではない。
+- **最終候補・installed Alpha更新済み**：`dist/portable-basic-20261026-03/Aredoko`、source `e52c8ec`、795 files / 660,950,883 bytes。準備時Core/build/自己検査/全payload/ZIP照合、同梱Pythonで基本CPU23 PASS。デスクトップ「Aredoko Alpha」は新しい`%LOCALAPPDATA%/Programs/Aredoko/releases/20261026-e52c8ec/Aredoko.exe`へ更新。旧releaseと旧shortcutは`updates/20261026-e52c8ec/`等に保持。通常DBのsize/mtimeとlaunch設定SHA不変、通常DBでの起動は行っていない。旧MSIX/Startメニュー登録は別物で更新していない。
+- **installedコピーの受入**：`installed-native01`で新releaseの通常入口から専用LOCALAPPDATA/生成DBの起動→正常終了→1回再起動を確認。frontend/launcher計4exit0、2PNG目視、release全inventory不変。証拠は`data/ai-ui/startup-review-20261026/`（Git対象外）、`alpha-update-final.json`を参照。同じGPU試験を最終のrange-only修正後に繰り返してはいない。
+- **未完/未検証**：長時間RSS/FPS、複雑な透過/disposalの追加実素材、streamアニメーションの原寸（現行2048px縮小を維持）、HC/物理マルチモニターDPI、clean Windows、全検索条件のnative受入、runtime公開権利/native依存review/host（registry 0）、M1判定後のR06–R09実音声/音楽。これらを今回完了扱いにしない。
+- **翌日の次の1件**：P3の既知の**5万件metadata初回snapshot待ち**（既存単回約24.5s）の局所削減。既存の結果session/順位/guard/600件windowを維持し、不要な全件処理の削減を一つ実装→関連CPU/buildまで。上記の今回PASS済みflowを無変更で再試行しない。runtime公開情報待ちで独立開発を止めず、P7残受入/M1→R06–R09の順序も維持する。
+- **終了条件**：保存・commit/push・clean/remote一致・所有試験終了を最終確認してから、今回ユーザーが明示した`Stop-Computer`（**Forceなし**）を実行する。通常AGENTSのshutdown禁止を恒久変更しない。他アプリの強制終了や権限回避は禁止。起動しっぱなしだった通常版はユーザーが閉じたと回答済み。
+
+## Sol中間checkpoint（2026-10-26、当時の記録）
 - Antigravity `49ca8c8` までをclean/remote/PR #5一致で引継ぎ。UTF-8/Portable初期化は採用。**38c63f6**：背景照合の所有停止・取消/待機、通常通信の応答上限を分離、設定→高度な設定からAI runtime全照合を既定オン/任意オフ（次回起動）にした。[仕様/CPU/生成GPU](ai-runtime-setup.md)。
 - **a216fd0**：詳細を閉じた一括操作にも保存/一覧更新/完了を表示、処理中のメニュー等を無効化。**cca0984**：grid/list切替のアンカーを可視位置順へ修正。[U5受入と残件](library-selection.md)。生成nativeでLightの最終refresh含む一括整理/起動queue/draft保持、Darkの実Ctrl＋クリック/right-click一括整理/先頭保持まで確認。
 - 証拠 `data/ai-ui/startup-review-20261026/`。runtime32/設定job15/Core/Portable PASS、生成画像2枚のCUDA索引・日本語cold/warm検索・再読込もPASS（追加取得なし）。高度な設定はDarkで既定/オフ保存/再起動保持を確認。現在のinstalled Alpha/shortcut/普段の設定は更新していない。
