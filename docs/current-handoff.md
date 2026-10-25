@@ -1,5 +1,13 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## 終了引継ぎ（2026-10-25、以下より優先）
+- 今日の実装はPush済み：**8972be3** 引継ぎ補強 → **51491a6/428af7f** U4b → **454dba0/d97c780** U5 → **1adb694** U6 → **2811863** 起動queue停止確認/復元proof保護。[U4](scan-startup.md)/[U5](library-selection.md)/[U6](compressed-filter.md)。U1–U6の完成実装を繰り返さない。
+- **最新実物は基本ZIP09/source2811863**。[入口・SHA・正確な受入](portable-polish-20261025.md)。Portable/bootstrap/runtime/ZIP全照合と、実同梱PythonのCPU21項目/正常EOF/DB integrity/原本保全/実行後inventory確認PASS。794 files、ZIP約348MB。モデル/PyTorchを同梱しない。通常起動のGUI・clean Windowsは未受入。
+- GUIは許可された範囲だけ実行：旧U4 2回＋追加1回、新U5 2回＋追加1回の生ログを保持。frontend06/native-selection03は18項目PASS/全体FAIL（最後のrefreshはタグ保存後の再検索完了待ち不足）。設定保存/再起動queue/所有取消/draft保持、複数選択/一括棚・favorite/600件外保持/filtered除去と2frontend通常終了、6PNG目視済み。harnessの待機/進捗を修正後の再GUIはしていない。
+- **次の1件**：ユーザーから09候補の通常入口GUI確認の回答を得て、修正済み待機で最終refreshとCtrl+マウス/右クリック/gridを一つの短い受入へまとめる。許可待ちなら独立したR06–R09またはruntime公開権利/hostの残件へ進む。Light/HC/DPI/clean Windows、大画像FPS/RSS/CBZ cold-warmは残す。ロードマップ全体完了ではない。
+- 追加指示：**この引継ぎ保存後、デスクトップ「Aredoko Alpha」を最新版へ更新**。旧起動先は旧MSIXを呼ぶPythonw launcher。新規ユーザー用アプリ領域へ09を配置し、DB・モデル保存先と旧AI interpreterの継承を確認して既存shortcutを更新する。元設定/shortcutをバックアップ、旧MSIX登録は削除せず、GUIは新しい回答なしに起動しない。実施結果を後続で記録する。
+- PR #5 open/Draft/未merge、既存branchを継続。GPU/新モデル取得/私物走査/Actions/main mergeなし。shutdownしない。
+
 ## 配布候補更新・終了所有確認（2026-10-25、以下より優先）
 - U6 **1adb694** を新規基本ZIP08へ封印。prepare/runtime/ZIP全照合PASS、同梱Pythonの基本＋U4–U6 CPU21項目PASS。旧07/Alpha/shortcutは未変更。08に未収録だった終了所有の補強を次の単位へ入れたため、**次は補強を含む新規ZIP09の作成/CPU確認**。
 - 起動queue.closeの時間切れを成功とみなさず、既存owned job closerを使ってrestore正常終了proofをブロック。生成workerの停止境界を含むstartup16 PASS。[根拠](scan-startup.md)。`check_basic_release.py --polish`で同梱Pythonのstartup設定・ZIP/CBZ・一括favorite/棚・欠落metadata保全をCPU確認可能。GUI/実モデル/GPUを起動しない。
