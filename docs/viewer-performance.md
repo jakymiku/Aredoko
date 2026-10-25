@@ -44,3 +44,11 @@ PYTHONPATH=tests python -m unittest test_viewer_revalidation test_original_viewe
 開発用`AREDOKO_VIEWER_TIMINGS=1`で`%LOCALAPPDATA%/Aredoko/logs/viewer-load.jsonl`へ段階時間を出す（通常OFF）。匿名load番号、kind、stage、経過msのみ。ファイル名/path/query/token/原本内容を記録せず、8MiB到達後の追記を止める。ログ自身のI/Oの影響を考慮し、対照測定はOFFで行う。`source-body`/`source-revalidated`、`decode-ready`、見開き`preload-drained`/`assigned`を分ける。**assignedはXAMLへのsource設定で、画面への描画完了ではない。** APNGは`first-frame-assigned`を持つ。
 
 R13 DOING / ALPHA未完 / R14 PARTIALを維持。viewer実機確認後もPZ2→PZ3→PZ4→PZ5、ALPHA後に実音声/音楽を進める。未解決U09/U11/U13/U14等をこの改善で完了扱いにしない。Actions/main merge/新依存・モデル取得/私有メディア走査は行わない。以前の一度きりのshutdown指示を再実行しない。
+
+## 2026-10-26 U3b：実フレーム大容量GIF・高解像度APNG/CBZの限定native
+
+- 正しいPortable frontend06（起動照合/一括操作/アンカー修正と、静止画/native GIF切替時の読み上げ名更新）を生成専用DBで検証。`data/ai-ui/startup-review-20261026/large-viewer02/report.json`、所有frontend exit0、decoder session解放、元生成媒体SHA/mtime不変、7PNG目視。
+- GIFはpaddingでなく1024×768の実ノイズ80framesを持つ86,558,428bytes（82.55MiB）。先頭thumbnail/stream再生が成功し、64MiBのnative全量取得へ戻していない。APNGは2560×1920・poster付き18frames×2周、native GIF、GIF拡張子のWebPも確認。streamの現行2048px縮小は維持しており、原解像度APNGの受入とは区別する。
+- 3072×2048・8ページCBZで1→2→3→2→1を確認。traceのXAML source割当まで、APNG 811ms/native GIF 498ms/WebP 813ms/大GIF 502ms/CBZ初回249ms・後続232–237ms（各1回）。UI Automation/診断log中、OS cache条件非固定であり、画面present/Honeyview比較/中央値/p95ではない。CBZの再取得は304でbitmap復号を再利用していた。
+- native private bytesはAPNG再生時224MiB→終了frame468MiB、GIF/WebP後487–511MiB、CBZ後545MiB。inline backendは58–96MiB。単回系列であり、長時間RSS一定・メモリリークなしの証明ではない。FPS、長時間・複雑な透過/disposal・実72MB級の別素材・物理DPI等は残る。
+- 01は無限GIFを閉じた直後に非同期close完了を即断するharness誤りでFAIL。独立closeを最大8秒待つよう修正し、02ではlive session解放→CBZまで成功。旧FAILを消さず、未到達だった後段と区別した。

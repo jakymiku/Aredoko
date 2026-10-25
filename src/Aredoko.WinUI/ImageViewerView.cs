@@ -298,6 +298,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
                             StopAnimation();nativeAnimation=decoded;var bitmap=decoded.Bitmap;
                             imageWidth=Math.Max(1,bitmap.PixelWidth);imageHeight=Math.Max(1,bitmap.PixelHeight);
                             FitImage();image.Source=bitmap;loaded=true;viewport.ChangeView(0,0,1,true);
+                            AutomationProperties.SetName(image,item.Title+"の画像");
                             trace.Mark("assigned");
                             ContentOpened?.Invoke(item.Id);ViewerNotice.Set(status);
                             continue;
@@ -338,6 +339,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
                         StopAnimation();
                         imageWidth = Math.Max(1, bitmap.PixelWidth); imageHeight = Math.Max(1, bitmap.PixelHeight);
                         FitImage(); image.Source = bitmap; loaded = true; viewport.ChangeView(0, 0, 1, true);
+                        AutomationProperties.SetName(image,item.Title+"の画像");
                         trace.Mark("assigned");
                         ContentOpened?.Invoke(sequence.Current.Id);
                         ViewerNotice.Set(status);
