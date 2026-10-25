@@ -177,27 +177,10 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
     def ai_scan_hook(target_roots, discovered, cancelled):
-        if cancelled():
-            catalog._scan_ai_state = 'cancelled'
-            catalog._scan_stage = 'complete'
-            return
-        if profiles is not None:
-            scope = profiles.scope()
-            registered = {r['id'] for r in catalog.index.roots()}
-            if any(r not in registered for r in scope.get('root_ids') or []):
-                raise AIUnavailable('登録が見つからないフォルダがあります。AI索引の対象を選び直してください。')
-            if scope.get('root_ids') is not None:
-                if not any(r in scope['root_ids'] for r in target_roots):
-                    catalog._scan_ai_state = 'skipped'
-                    catalog._scan_ai_error = 'このフォルダは現在のAI索引の対象範囲外です。'
-                    catalog._scan_stage = 'complete'
-                    return
-        else:
-            scope = None
-        if scope is not None:
-            ai.start(scope=scope)
-        else:
-            ai.start()
+        from scan_ai_followup import run_scan_ai
+        if not ai.status().get('available',False):
+            raise AIUnavailable('AI環境が未準備です。AI検索の準備を確認してください。')
+        return run_scan_ai(ai,profiles,catalog,target_roots,cancelled,catalog._scan_ai_progress)
     catalog.ai_scan_hook = ai_scan_hook
     class Handler(base):
         def _search_reply(self,body,operation):
@@ -542,20 +525,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if inactive not in (['0'],['1']):return self.send(400,{'error':'Invalid root filter'})
                     return self.send(200,{'items':catalog.registered_roots(include_inactive=inactive==['1'])})
                 if path=='/api/library/scan':
-                    state = catalog.scan_state()
-                    if state.get('mode') == 'list_and_ai' and state.get('ai_state') not in ('none', 'pending', 'failed', 'skipped', 'cancelled'):
-                        ai_info = ai.status()
-                        ai_st = ai_info.get('state', 'idle')
-                        state['ai_state'] = ai_st
-                        state['ai_processed'] = ai_info.get('processed', 0)
-                        state['ai_total'] = ai_info.get('total', 0)
-                        if not state.get('ai_error') and ai_info.get('error'):
-                            state['ai_error'] = ai_info['error']
-                        state['stage'] = 'ai' if ai_st in ('running', 'cancelling') else 'complete'
-                    else:
-                        state.setdefault('ai_processed', 0)
-                        state.setdefault('ai_total', 0)
-                    return self.send(200, state)
+                    return self.send(200,catalog.scan_state())
                 return self.send(404,{'error':'Not found'})
             return super().do_GET()
 
@@ -900,10 +870,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(200, catalog.start_scan(body.get('root_id'), mode=body.get('mode', 'list'), root_ids=body.get('root_ids')))
                 if self.path=='/api/library/cancel':
                     res = catalog.cancel_scan()
-                    if catalog._scan_mode == 'list_and_ai' and catalog._scan_stage == 'ai':
-                        ai.cancel_build()
-                        catalog._scan_ai_state = 'cancelling'
-                        res['ai_cancel_requested'] = True
+                    if catalog._scan_mode == 'list_and_ai' and catalog._scan_stage == 'ai':res['ai_cancel_requested']=True
                     return self.send(200, res)
                 return self.send(404,{'error':'Not found'})
             except SearchCancelled:return self.send(409,{'error':'検索を中断しました。','error_code':'search_cancelled'})

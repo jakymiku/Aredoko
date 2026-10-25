@@ -292,7 +292,9 @@ class AISearch:
         self.pages=PageVectors(self)
         self.audio_speech=AudioSpeechVectors(self)
         self.audio_acoustics=AudioAcousticVectors(self)
-        self.guard=threading.Lock()
+        # A scan follow-up captures/observes its exact worker under this guard
+        # while calling start/status/cancel, which share the same lock.
+        self.guard=threading.RLock()
         self.cancel=threading.Event()
         self.worker=None
         self.inference=threading.Lock()

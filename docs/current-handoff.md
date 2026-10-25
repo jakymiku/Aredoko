@@ -1,5 +1,10 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## Codex引き継ぎレビュー（2026-10-25、上の優先度）
+- 開始51b4302、remote/既存Draft PR #5一致・clean。AntigravityのAPNG修正とU4aを維持し、AIの選択root範囲・所有worker/取消・複数rootの部分成功公開・AI設定dialog遷移を補強。[正本](scan-startup.md)。この節のcommitは `git log -1 -- docs/scan-startup.md`。
+- CPU follow-up9/production8/AI search13/animation14 PASS、専用frontend01 publish成功。**今回のユーザーはGUI/GPUテストを事前回答後に限定**。まだGUI/GPUは実行しておらず、過去の自動許可を今回へ適用しない。通常DB/元メディア/旧Alpha/Actionsは未変更、shutdownしない。
+- 次はU4b：folder別の起動時更新・成功再走査後のmissing除外。U4aの完了分を再実装しない。
+
 ## 今回の完了・次の1件（2026-10-25、以下の過去checkpointより優先）
 - **開始 d448b1e（remote/Draft PR #5一致）から2単位を実装・実機検証完了**：
   1. **指定パレットAPNGのループ2周目黒化修正（cdf7a35）**：pp/animation_sessions.py の Decoder.pull で EOFError 到達時に、既に検証・保持済みのオープンストリーム self.file を seek(0) して Image.open(self.file) を再構築する _reopen_loop を実装（パスの再オープンなし、既存 source_guard 保全）。単体テスト 	ests/test_animation_sessions.py（20 PASS）および実機 data/ai-ui/attached-apng-20261025/native02（5 checks PASS・exit0・所有残存0、nimation_samples: [1, 4, 7, 10, 13, 16, 1]）の5 PNG直接目視で2周目以降も有色・透過を維持することを確認。証拠は[animation-streaming.md](animation-streaming.md)。

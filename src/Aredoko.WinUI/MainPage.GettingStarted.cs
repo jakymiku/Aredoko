@@ -212,7 +212,6 @@ public sealed partial class MainPage
             {
                 ScanStatus.Text = "登録しました。AIの準備後にスキャンを実行してください。";
                 Notice("フォルダを登録しました", ScanStatus.Text);
-                AI_Click(this, new RoutedEventArgs());
                 return;
             }
 
@@ -249,7 +248,11 @@ public sealed partial class MainPage
             }
         }
         catch (Exception error) { Failure(error); }
-        finally { dialogOpen = false; transitions.Release(); }
+        finally
+        {
+            dialogOpen=false;transitions.Release();
+            if(openAiSetupRequested&&!disposed)AI_Click(this,new RoutedEventArgs());
+        }
     }
 
     private async void GettingStartedHelp_Click(object sender, RoutedEventArgs args) => await OpenGettingStartedGuideAsync();

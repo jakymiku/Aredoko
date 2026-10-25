@@ -130,13 +130,22 @@ class ProductionTests(unittest.TestCase):
             def __init__(self):
                 self.calls = []
                 self.cancelled = False
+                self.guard=threading.RLock();self.worker=None
+                self.started=threading.Event();self.finished=threading.Event();self.state='idle'
             def status(self):
-                return {'available': True, 'state': 'running' if self.calls else 'idle',
+                return {'available': True, 'state': self.state,
                         'processed': 5, 'total': 10, 'error': ''}
             def start(self, *args, **kwargs):
                 self.calls.append((args, kwargs))
+                self.state='running'
+                def work():
+                    self.started.set();self.finished.wait(5)
+                    with self.guard:self.state='cancelled' if self.cancelled else 'complete'
+                self.worker=threading.Thread(target=work);self.worker.start()
+                return self.status()
             def cancel_build(self):
                 self.cancelled = True
+                self.finished.set()
                 return {'cancel_requested': True}
 
         spy = SpyAI()
@@ -191,9 +200,10 @@ class ProductionTests(unittest.TestCase):
             data = json.load(resp)
             self.assertEqual(data['mode'], 'list_and_ai')
             self.assertEqual(data['stage'], 'list')
-        self.catalog._worker.join(10)
-        self.assertFalse(self.catalog._worker.is_alive())
+        self.assertTrue(spy.started.wait(2))
+        self.assertTrue(self.catalog._worker.is_alive())
         self.assertEqual(len(spy.calls), 1)  # Invoked ai.start
+        self.assertEqual(spy.calls[0][1]['scope']['root_ids'],[root1])
         st = self.catalog.scan_state()
         self.assertEqual(st['mode'], 'list_and_ai')
         self.assertEqual(st['stage'], 'ai')
@@ -218,7 +228,8 @@ class ProductionTests(unittest.TestCase):
             cancel_data = json.load(resp)
             self.assertTrue(cancel_data['cancel_requested'])
             self.assertTrue(cancel_data.get('ai_cancel_requested', False))
-            self.assertTrue(spy.cancelled)
+        self.catalog._worker.join(5)
+        self.assertTrue(spy.cancelled)
 
         # 4. mode='list_and_ai' when AI is unavailable / fails: keeps list items
         from production_server import DisabledAI

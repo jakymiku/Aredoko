@@ -73,6 +73,8 @@ class ProductionCatalog(Catalog):
         self._scan_ai_state = 'none'
         self._scan_ai_error = ''
         self._scan_roots = ()
+        self._scan_completed_roots=()
+        self._scan_ai_counts=(0,0)
         self.ai_scan_hook = None
         self.shelf_store=ShelfStore(self.connect)
         self.shelf_store.migrate()
@@ -122,12 +124,12 @@ class ProductionCatalog(Catalog):
     def seed(self, count=0):
         raise ValueError('Synthetic seeding is not available in production')
 
-    def sync_index(self):
+    def sync_index(self, root_id=None):
         with self._guard:
             with self.connect() as db:
                 rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id,r.default_shelf,r.path FROM library_locations l '
                                   'JOIN library_roots r ON r.id=l.root_id '
-                                  'LEFT JOIN item_locations m ON m.location_id=l.id').fetchall()
+                                  'LEFT JOIN item_locations m ON m.location_id=l.id'+(' WHERE l.root_id=?' if root_id is not None else ''),() if root_id is None else (root_id,)).fetchall()
                 for row in rows:
                     title = (folder_title(row['path'], row['relative_path']) if is_folder_book(row['relative_path'])
                              else Path(row['relative_path']).name)
@@ -278,7 +280,7 @@ class ProductionCatalog(Catalog):
         return self.item(row)
 
     def _require_idle(self):
-        if self._worker and self._worker.is_alive():
+        if self._worker and self._worker.is_alive() and self._scan_stage!='ai':
             raise ScanBusyError('Scan in progress; retry after it completes')
 
     def update(self, ids, changes):
@@ -573,7 +575,14 @@ class ProductionCatalog(Catalog):
         result['ai_state']=self._scan_ai_state
         result['ai_error']=self._scan_ai_error
         result['root_ids']=list(self._scan_roots) if self._scan_roots else ([result['root_id']] if result.get('root_id') else [])
+        result['completed_root_ids']=list(self._scan_completed_roots)
+        result['ai_processed'],result['ai_total']=self._scan_ai_counts
         return result
+
+    def _scan_ai_progress(self,state):
+        self._scan_ai_state=state.get('state','failed')
+        self._scan_ai_error=state.get('error','')
+        self._scan_ai_counts=(state.get('processed',0),state.get('total',0))
 
     def start_scan(self, root_id=None, mode='list', *, root_ids=None, after_scan=None):
         if mode not in SCAN_MODES:
@@ -587,11 +596,10 @@ class ProductionCatalog(Catalog):
         else:
             if not isinstance(root_ids,(list,tuple)) or not 1<=len(root_ids)<=256:
                 raise ValueError('Invalid root')
-            if len(set(root_ids))!=len(root_ids):
-                raise ValueError('Invalid root')
             for r in root_ids:
                 if type(r) is not int or not 1<=r<=9223372036854775807:
                     raise ValueError('Invalid root')
+            if len(set(root_ids))!=len(root_ids):raise ValueError('Invalid root')
             target_roots=list(root_ids)
         with self._guard:
             if self._worker and self._worker.is_alive():
@@ -604,6 +612,8 @@ class ProductionCatalog(Catalog):
             self._scan_ai_state='pending' if mode=='list_and_ai' else 'none'
             self._scan_ai_error=''
             self._scan_roots=tuple(target_roots)
+            self._scan_completed_roots=()
+            self._scan_ai_counts=(0,0)
             with self.connect() as db:
                 job=db.execute("INSERT INTO scan_jobs(root_id,state) VALUES(?,'running')",(target_roots[0],)).lastrowid
             self._worker=threading.Thread(target=self._scan,args=(job,tuple(target_roots),mode,after_scan or self.ai_scan_hook),daemon=True)
@@ -623,7 +633,8 @@ class ProductionCatalog(Catalog):
                                     progress=lambda n,base=total_discovered:setattr(self,'_progress',base+n))
                 total_discovered+=res['discovered']
                 self._progress=total_discovered
-            self.sync_index()
+                self.sync_index(root_id=rid)
+                self._scan_completed_roots+= (rid,)
         except InterruptedError: state='cancelled'
         except Exception as ex:
             # Store a concise local diagnostic, never returned with filesystem paths.
@@ -647,11 +658,12 @@ class ProductionCatalog(Catalog):
                 self._scan_stage='ai'
                 self._scan_ai_state='running'
                 try:
-                    after_scan(target_roots,total_discovered,self._cancel.is_set)
+                    final=after_scan(target_roots,total_discovered,self._cancel.is_set)
+                    self._scan_ai_progress(final or {'state':'complete'})
                 except Exception as ex:
                     self._scan_ai_state='failed'
-                    self._scan_ai_error=str(ex)
-                    self._scan_stage='complete' 
+                    self._scan_ai_error='AI索引を完了できませんでした。AI検索の準備と実行状態を確認してください。'
+                finally:self._scan_stage='complete'
 
     def cancel_scan(self):
         self._cancel.set()
