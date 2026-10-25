@@ -1,5 +1,11 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## 指定APNG黒化の再現・診断のみ（2026-10-25、最優先）
+- ユーザーは添付APNGの再現/原因調査だけを指示し、**修正は次回**と指定。アプリコード/依存/通常DBは変更していない。専用コピー原本SHA/mtime不変。診断のcommitは本節と同じ（git log -1 -- docs/current-handoff.md）。
+- **現象再現、原因切分け済み**：palette APNG 320×320/17frames/1.7秒loop。1周目は有色、保持Pillowオブジェクトを先頭へseekすると2周目からRGB全0・alpha保持。Image.openし直すと正常。実backend40framesと最新frontend08の4PNGで確認。GUI入力/FPSの問題とは別の、decoder巻き戻し/パレット状態の問題へ絞った。[診断正本](animation-streaming.md)。UIA進行チェックPASSでもvisualはFAILとしてsidecarに明記、exit0/所有残存0。
+- **次回の1件をU4aより優先**：AnimationSessionsのpalette APNG loop再初期化/パレット復元を限定修正し、2〜3周のpixel一致と既存形式・取消/原本guardを確認。その後U4aへ戻る。今回その修正へ着手しない。元画像や私物の絶対pathはGitへ含めず、証拠はignored data/ai-ui/attached-apng-20261025に保管。shutdownしない。
+
+
 ## 今回の終了・次の1件（2026-10-25、以下の過去checkpointより優先）
 - 開始c18c5ef・remote一致/clean。既存branch/Draft PR #5を継続。**U1=64034ba、U2=389ad76、U3局所改善=f2fd7eb**。U5aのお気に入りcard保持は本checkpointと同じcommit（`git log -1 -- docs/current-handoff.md`）。[U1–U6進捗・正確な残件](usability-followup-20261025.md)。ロードマップ全完了ではない。
 - **利用者向け変化**：単クリックは選択だけ、明示詳細とdraft保持、長名省略/選択枠/ナビ名/検索hint。viewerはOSタイトルに名前/位置、独自headerなし、固定toolbar/独立notice、下端表示/1秒hide、viewer内小画像拡大/常時bar/本の循環、中心zoom/左drag。animation clockの累積遅れ削減、64MiB超GIFを所有streamへ。通常ライブラリのお気に入りは同一結果のcardを保持。

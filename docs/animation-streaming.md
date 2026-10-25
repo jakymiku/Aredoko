@@ -1,5 +1,14 @@
 # P1B 所有セッションによる逐次アニメーション
 
+## 2026-10-25 指定APNG黒化の診断（修正は次回）
+- ユーザーが明示提供した `ezgif-2-fec5498fcad4.png` だけを専用コピーで検査。320×320、17frame、各100ms、無限loop、palette PNG/Pモード・透明index0、465,863 bytes。原本SHA/mtime不変、画像や私物パスはGitへ収録しない。
+- source 22898bd相当の試験frontend08で**黒いシルエットを再現**。UIAではframe番号が進みloopも通るが、4枚の画面は黒化している。UIA成功をvisual成功とは扱わない。アプリexit0/所有残存0。
+- 実際のAnimationSessionsで40frameをpullすると1周目17frameは有色、以降23frameのRGBが全0（alphaは保持）。GUIへ送る前から黒いので、WinUI側の描画だけが原因ではない。
+- Pillow単体でも、全17frameを読んで同じオブジェクトをseek(0)すると先頭の平均RGBAが約[161.28,131.61,122.51,193.02]→[0,0,0,193.02]。EOFへのseek有無に関係なく再現。新たにImage.openすると元の色へ戻る。**palette APNGの保持decoder巻き戻し/パレット状態の扱い**に絞れた。全APNG共通と断定しない。
+- 証拠：ignored `data/ai-ui/attached-apng-20261025/` のinspection.json、decoded-frames.json、backend-colors.json、rewind-isolation.json、native01/report.json・4PNG、visual-review.json。診断scriptは同ignored先。最初のCPU補助は相対rootのfixture失敗で、絶対path/既存専用catalogへ修正した。アプリ・依存・設定コードの変更/再buildなし。
+- **次回最優先**：app/animation_sessions.pyのloop境界で安全なdecoder再初期化、またはpalette復元の限定修正を比較。検証済み同一handle/原本版/取消/close所有を保持し、palette APNGの2〜3周のpixel一致・黒化解消、RGBA APNG/poster/disposal/GIF/WebPの関連caseを確認。専用コピーを使い、元ファイルを変換・改名して回避しない。この診断では修正しない。
+
+
 2026-10-22。基点 `1969ab4`。GIFは引き続きWindows標準の再生を優先し、失敗時とAPNG/WebPは新しい逐次経路を使う。旧manifest/frame API・AI代表frame規則・静止画原寸・本のcache/読書位置は維持する。
 
 ## 実装
