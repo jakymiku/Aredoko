@@ -1,5 +1,11 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## U1実装（2026-10-25、実装再開済み）
+- 開始c18c5ef・origin一致/clean。ユーザーが枠の残りまで継続を指示。U1のtooltip/ナビ見出し/長名/選択枠/明示詳細/検索方式hintを実装。[計画と証拠](usability-followup-20261025.md)。この文書のcommitは `git log -1 -- docs/current-handoff.md`。
+- 候補 `data/ai-ui/usability-20261025/frontend04`、Portable publish成功。Dark `u1-uia02`・Light `u1-light01`各9checks/exit0/残存0、各3PNG目視。145生成PNG不変、応答前の見出し更新・旧一覧操作停止、選択時pane閉、draft保持を限定確認。選択枠と長名省略を両テーマで確認。
+- **物理hover/keyboard/context-menu/60%サイズの受入は未検証**。前面化拒否で失敗したu1-dark01..04のrawを保持し、UIAで可能な範囲へ切替。OS制限回避はしていない。High Contrast/物理DPIも未確認。旧GUI試験が単クリックで詳細表示を前提にする箇所は、新しい明示詳細導線へ更新すること。
+- **次：U2a（ビューワーの固定toolbar・下端表示・OSタイトル・ビューア内設定）**。U1の残入力受入は入力可能時に対象だけ実施。旧Alpha/ZIP07/shortcutは更新していない。通常DB/私物/モデル/GPU/Actions操作なし、shutdownしない。
+
 ## 実機フィードバックの計画化（2026-10-25、現在の再開位置）
 - **今回は計画のみ。コード・依存・設定・DBは変更せず、build/GUI/GPU/scanは実行していない。** ユーザーの次の実装開始指示を待つ。起動中の試験GUIには触れていない。
 - 基点 **9c69ea1**、origin一致・開始clean、既存PR #5 open/Draft/同HEADを確認。[改善計画 U1–U6](usability-followup-20261025.md)に今回の全指摘、ソース根拠、優先順、変更候補、完了条件、Sol/Antigravity共通の再開指示を収録。文書コミットは `git log -1 -- docs/usability-followup-20261025.md` で取得する。

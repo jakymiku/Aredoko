@@ -14,6 +14,8 @@ from native_ui_tools import nodes
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--usability-u1',action='store_true')
+    parser.add_argument('--uia-only',action='store_true',help='Record input/hover checks as unverified; use UIA only')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
@@ -31,6 +33,8 @@ def main():
     user=ctypes.WinDLL('user32',use_last_error=True)
     user.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
     user.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
+    user.SetForegroundWindow.argtypes=[wintypes.HWND];user.SetForegroundWindow.restype=wintypes.BOOL
+    user.GetForegroundWindow.restype=wintypes.HWND
     def check(name,value):
         report['checks'].append({'name':name,'pass':bool(value)});print(name, bool(value),flush=True)
         if not value:raise AssertionError(name)
@@ -46,12 +50,14 @@ def main():
         return cli(*args,'-w',hwnd)
     def tree():return {n['automationId']:n for n in nodes(json.loads(ui('inspect','--depth','18','--json'))) if n.get('automationId')}
     def shot(name):
-        path=target/(name+'.png');ui('screenshot','--output',path);report['screenshots'].append(str(path));path.with_suffix('.json').write_text(json.dumps(tree(),ensure_ascii=False,indent=2),encoding='utf-8')
+        path=target/(name+'.png');ui('screenshot','--focus','--output',path);report['screenshots'].append(str(path));path.with_suffix('.json').write_text(json.dumps(tree(),ensure_ascii=False,indent=2),encoding='utf-8')
     def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','60000' if args.global_edge else '10000')
     def sources():return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
     try:
         media=target/'media';media.mkdir()
         for i in range(0 if args.detail_actions or args.global_edge else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        if args.usability_u1:
+            (media/'generated-000.png').rename(media/('generated-000-Test1145141919810364364-'+('LongName'*10)+'.png'))
         if args.detail_actions:
             from ui_detail_actions_audit import create_media
             create_media(media)
@@ -72,7 +78,7 @@ def main():
             cat.change_shelf('assign',entity='item',object_ids=[first['id']],shelf_ids=[a,b])
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger());handler.log_message=lambda *args:None
-        if args.initial_loading:
+        if args.initial_loading or args.usability_u1:
             empty_shelf=cat.change_shelf('create',name='案内確認用の空棚')['id']
             gate=threading.Event();original_provider=handler.results.provider
             def held(conditions,consume,cancelled):
@@ -82,6 +88,7 @@ def main():
                     if time.monotonic()>deadline:raise TimeoutError('Generated test hold exceeded')
                 return original_provider(conditions,consume,cancelled)
             handler.results.provider=held
+            if args.usability_u1:gate.set()
         server=ThreadingHTTPServer(('127.0.0.1',8769),handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         with (target/'app.log').open('w',encoding='utf-8') as log:
             proc=subprocess.Popen([str(front/'Aredoko.WinUI.exe'),'--ui-theme',args.theme,'--viewer-settings',str(target/'viewer-settings.json')],cwd=front,env=env,stdout=log,stderr=subprocess.STDOUT)
@@ -92,6 +99,12 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
+        if args.usability_u1 and not args.uia_only:
+            # The owner launches this one test process; use normal Windows
+            # activation, never input attachment, security bypass or other apps.
+            report['foreground_activation_requested']=bool(user.SetForegroundWindow(int(hwnd)))
+            report['foreground_confirmed']=user.GetForegroundWindow()==int(hwnd)
+            check('owned test window foreground confirmed',report['foreground_confirmed'])
         if args.initial_loading:
             ui('wait-for','TxtEmpty','--value','検索結果を準備しています…','-t','10000');shot('loading')
             ui('invoke','BtnCancelSearch');ui('wait-for','TxtEmpty','--value','検索を中断しました。もう一度「検索」を押してください。','-t','10000');shot('cancelled')
@@ -99,7 +112,12 @@ def main():
         key='Item'+str(first['id']);ready();ui('wait-for',key,'-t','60000' if args.global_edge else '10000');shot('list-initial')
         visible=tree();count=sum(re.fullmatch(r'Item\d+',k) is not None for k in visible)
         check('panel realizes fewer cards than sixty-result page',0<count<60)
-        if args.initial_loading:
+        if args.usability_u1:
+            from ui_usability_u1_audit import audit
+            audit(ui,tree,shot,check,first['id'],gate,cat,interactive=not args.uia_only)
+            if args.uia_only:report['unverified']=['pointer hover/tooltip','small-size slider and name ellipsis','context-menu invocation','Ctrl Home/End physical input']
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.initial_loading:
             for nav,expected,name in (("NavHistory","閲覧履歴はありません。作品を開くと、ここに表示されます。","empty-history"),("NavFavorites","お気に入りはまだありません。作品の右クリックメニューや詳細から登録できます。","empty-favorites")):
                 ui("invoke",nav);ui("wait-for","TxtEmpty","--value",expected,"-t","10000");shot(name);check(name+" context guidance",True)
             ui("invoke","NavShelf");ui("wait-for","ShelfOpen"+str(empty_shelf),"-t","10000");ui("invoke","ShelfOpen"+str(empty_shelf))
@@ -145,7 +163,7 @@ def main():
             try:shot('failure')
             except Exception:report['capture_error']=traceback.format_exc()
     finally:
-        if args.initial_loading and "gate" in locals():gate.set()
+        if (args.initial_loading or args.usability_u1) and "gate" in locals():gate.set()
         if proc is not None and proc.poll() is None and not hwnd:
             try:
                 owned=[w for w in json.loads(cli('list-windows','-a',proc.pid,'--json')) if w.get('title')=='Aredoko — あれどこ']

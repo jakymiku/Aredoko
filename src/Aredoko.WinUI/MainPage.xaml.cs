@@ -64,6 +64,13 @@ public sealed partial class MainPage : Page
 
     public MainPage() {
         InitializeComponent();
+        for(var index=0;index<SearchMode.Items.Count;index++)
+            if(SearchMode.Items[index] is ComboBoxItem option)
+            {
+                var hint=SearchModeDescription(index);
+                ToolTipService.SetToolTip(option,hint);
+                AutomationProperties.SetHelpText(option,hint);
+            }
         AddHandler(PointerPressedEvent,new PointerEventHandler(PreviewPointerPressed),true);
         AddHandler(PointerPressedEvent,new PointerEventHandler(async(_,args)=>
         {
@@ -230,7 +237,21 @@ public sealed partial class MainPage : Page
         try{if(await ConfirmDiscardAsync())await ConnectAsync();}finally{transitions.Release();}
     }
     private string KindValue()=>Kind.SelectedIndex switch {1=>"book",2=>"image",3=>"video",4=>"audio",5=>"archive",6=>"material",_=>""};
+    private void UpdateLibraryHeading()
+    {
+        if(folderHubOpen||shelfHubOpen)return;
+        MainViewTitle.Text=selectedShelfIds is not null?ShelfScopeName():view switch
+        {
+            "favorites"=>"お気に入り",
+            "history"=>"閲覧履歴",
+            "unreviewed"=>"ライブラリ（未確認）",
+            _=>"ライブラリ"
+        };
+    }
     private async Task LoadAsync(bool reuseSession=false) {
+        // The accepted destination owns the heading even while its request is
+        // pending or fails. Never label old, disabled rows as the new results.
+        UpdateLibraryHeading();Count.Text="検索中…";
         startupSearchSucceeded=false;UpdateFavoriteRootList();
         var version=searches.Next(); Busy.Visibility=Visibility.Visible;
         GettingStarted.Visibility=Visibility.Collapsed;
@@ -262,7 +283,7 @@ public sealed partial class MainPage : Page
             SearchOptions.Header="AI候補の表示";
             ResetBrowse(checked(page*pageSize),result);rows=result.Items; active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
-            if(!folderHubOpen&&!shelfHubOpen)MainViewTitle.Text=selectedShelfIds is not null?ShelfScopeName():view=="history"?"閲覧履歴":view=="unreviewed"?"ライブラリ（未確認）":"ライブラリ";
+            UpdateLibraryHeading();
             Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+pageSize-1)/pageSize)}";
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*pageSize<result.Total;
             VisualAssets.State(EmptyArt,"no_results");Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
@@ -380,7 +401,7 @@ public sealed partial class MainPage : Page
         if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row)||AudioPlayerPolicy.CanOpen(row))
             ToolTipService.SetToolTip(image,ImageViewerPolicy.CanOpen(row)?"ダブルクリックで画像を大きく表示":VideoPlayerPolicy.CanOpen(row)?"ダブルクリックで動画を再生":AudioPlayerPolicy.CanOpen(row)?"ダブルクリックで音声を再生":"ダブルクリックで本を開く");
         var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-        var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
+        var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextWrapping=TextWrapping.NoWrap,MaxLines=1,TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
         AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");text.Children.Add(title);
         ToolTipService.SetToolTip(title, row.Title);
         var availability = row.Availability == "present" ? "" : AvailabilityLabel(row.Availability);
@@ -410,9 +431,9 @@ public sealed partial class MainPage : Page
             Grid.SetColumn(text, 1);
         }
         content.Children.Add(image); content.Children.Add(text);
-        SizeItem(item,image);
         item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
         item.ContextFlyout=SimilarityMenu(row);
+        UpdateSelectionFrame(item);
         content.DoubleTapped+=async(_,args)=>{args.Handled=true;await OpenPreviewAsync(row.Id);};
         var renderToken = renderCancellation.Token;
         CancellationTokenSource? visible = null;
@@ -452,7 +473,7 @@ public sealed partial class MainPage : Page
         };
         containerRefresh[item] = () => _ = RefreshThumbnailAsync();
         // Wire loading/cancellation before the live template receives this image.
-        host.Child=content;
+        host.Child=content;SizeItem(item,image);
     }
     private void SizeItem(ListViewItem item,Image image)
     {
@@ -460,6 +481,15 @@ public sealed partial class MainPage : Page
         var width=LibraryTileLayout.Width(Math.Max(1,(Items.ActualWidth>0?Items.ActualWidth:ItemListContainer.ActualWidth)-16),libraryItemScale);
         item.Width=tiles?width:double.NaN;
         image.Width=tiles?Math.Max(96,width-32):48*scale;
+        // A StackPanel's unconstrained desired width otherwise clips the title
+        // before TextTrimming can apply. Constrain text to the actual card slot.
+        if(item.ContentTemplateRoot is Border {Child:Grid content}&&content.Children.OfType<StackPanel>().FirstOrDefault() is {} text)
+        {
+            text.Width=Math.Max(1,tiles?width-32:Items.ActualWidth-60-image.Width);
+            // Reserve the same caption space before/after thumbnail completion;
+            // the first decoded tile must not set a shorter uniform row height.
+            text.MinHeight=tiles?44:0;
+        }
         // Leave room for the filename and metadata even in a short window.
         var height=Math.Max(48,ItemListContainer.ActualHeight-108);
         image.Height=tiles?Math.Min(144*scale,height):64*scale;
@@ -544,6 +574,10 @@ public sealed partial class MainPage : Page
     private MenuFlyout SimilarityMenu(MediaRow row)
     {
         var menu=new MenuFlyout();
+        var detailsAction=new MenuFlyoutItem{Text="詳細"};
+        AutomationProperties.SetAutomationId(detailsAction,"OpenDetails"+row.Id);
+        detailsAction.Click+=async(_,_)=>await OpenRowDetailsAsync(row);
+        menu.Items.Add(detailsAction);
         var favoriteAction=new MenuFlyoutItem{Text=row.Favorite?"お気に入りを解除":"お気に入りに登録"};
         AutomationProperties.SetAutomationId(favoriteAction,"ToggleFavorite"+row.Id);
         favoriteAction.Click+=async(_,_)=>await SetFavoriteAsync(row,!row.Favorite);
@@ -664,6 +698,7 @@ public sealed partial class MainPage : Page
         }finally{transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
     private async void Items_Changed(object sender,SelectionChangedEventArgs e) {
+        foreach(var item in containerCleanup.Keys.ToArray())UpdateSelectionFrame(item);
         if(populating||!ready)return;
         var index=RowForKey(Items.SelectedItem) is MediaRow selected ? rows.FindIndex(row=>row.Id==selected.Id) : -1;
         if(index<0||index>=rows.Count||active?.Id==rows[index].Id)return;
@@ -674,6 +709,7 @@ public sealed partial class MainPage : Page
             ApplySelectedRow(rows[index]);
         }finally{transitions.Release();}
     }
+    private void UpdateSelectionFrame(ListViewItem item)=>item.Style=(Style)Resources[item.IsSelected?"MediaItemSelectedCardStyle":"MediaItemCardStyle"];
     private void ApplySelectedRow(MediaRow row)
     {
         var previous=populating;populating=true;
@@ -681,10 +717,10 @@ public sealed partial class MainPage : Page
         {
             active=row; editingShelfIds=active.ShelfIds.ToArray();saved=new(string.Join(", ",active.Tags),active.Shelf,active.Favorite,active.Reviewed){ShelfIds=editingShelfIds.ToArray()};
             Tags.Text=saved.Tags;UpdateShelfEditorLabel();Favorite.IsChecked=saved.Favorite;Reviewed.IsChecked=saved.Reviewed;
-            ItemTitle.Text=active.Title;ItemPath.Text=active.LocationLabel;UpdateFileProperties();Editor.IsEnabled=true;DetailsButton.IsEnabled=true;Details.IsPaneOpen=true;
+            ItemTitle.Text=active.Title;ItemPath.Text=active.LocationLabel;UpdateFileProperties();Editor.IsEnabled=true;DetailsButton.IsEnabled=true;
             DetailPreview.ContextFlyout=SimilarityMenu(active);
             UpdateDirty();
-            _ = ShowDetailPreviewAsync(active);
+            if(Details.IsPaneOpen)_ = ShowDetailPreviewAsync(active);
         }
         finally{populating=previous;}
     }
@@ -840,7 +876,11 @@ public sealed partial class MainPage : Page
         AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         Query.PlaceholderText=method.IsTagSemantic?"例：青髪のツインテール（未承認タグの意味）":pageText?"ページ本文に含まれる語句で検索":candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"ファイル名・タグを検索（Ctrl+F）";
-        SearchMethodHint.Text=similar?(similarityOrigin?.Kind=="video"?"動画の代表フレームから似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="audio"?"音声・音楽の音響特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchMode.SelectedIndex switch
+        SearchMethodHint.Text=similar?(similarityOrigin?.Kind=="video"?"動画の代表フレームから似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="audio"?"音声・音楽の音響特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchModeDescription(SearchMode.SelectedIndex);
+        ToolTipService.SetToolTip(SearchMode,SearchMethodHint.Text);
+        AutomationProperties.SetHelpText(SearchMode,SearchMethodHint.Text);
+    }
+    private static string SearchModeDescription(int index)=>index switch
         {
             1=>"ファイル名・タグの意味と、画像・表紙の見た目を組み合わせます。",
             2=>"索引済みの画像・表紙・本のページや、動画の代表場面を見た目から探します。",
@@ -850,7 +890,6 @@ public sealed partial class MainPage : Page
             6=>"英語を含む未承認タグ候補を、日本語の意味で探します。先にAI索引を作成してください。",
             _=>"ファイル名・タグに含まれる文字で探します。"
         };
-    }
     private void SearchMode_Changed(object sender,SelectionChangedEventArgs e)
     {
         UpdateSearchMethod();
@@ -902,7 +941,22 @@ public sealed partial class MainPage : Page
             if(folderSettingsActive)Details.IsPaneOpen=true;
             return;
         }
-        if(active is not null){ShowItemDetailsPane();Details.IsPaneOpen=true;}
+        if(active is not null){ShowItemDetailsPane();Details.IsPaneOpen=true;_ = ShowDetailPreviewAsync(active);}
+    }
+    private async Task OpenRowDetailsAsync(MediaRow row)
+    {
+        if(disposed||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        try
+        {
+            if(active?.Id!=row.Id)
+            {
+                if(!await ConfirmDiscardAsync())return;
+                ShowItemDetailsPane();ApplySelectedRow(row);RestoreSelection();
+            }
+            ShowItemDetailsPane();Details.IsPaneOpen=true;
+            await ShowDetailPreviewAsync(row);
+        }
+        finally{transitions.Release();}
     }
     private async void PreviewPointerPressed(object sender,PointerRoutedEventArgs e)
     {
@@ -1180,7 +1234,6 @@ public sealed partial class MainPage : Page
         ItemListContainer.Visibility=Visibility.Visible;
         ItemPagerRow.Visibility=Visibility.Visible;
         ShowItemDetailsPane();
-        Details.IsPaneOpen=active is not null;
     }
 
     private async void Roots_Click(object sender,RoutedEventArgs e)
