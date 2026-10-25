@@ -18,7 +18,7 @@ public sealed partial class MainWindow : Window
         var theme=themeIndex>0 && themeIndex+1<launchArguments.Length?launchArguments[themeIndex+1]:"System";
         ApplyTheme(theme.Equals("system",StringComparison.OrdinalIgnoreCase)?ViewerOptions.Value.Theme:theme);
         ExtendsContentIntoTitleBar=true;SetTitleBar(AppTitleBar);
-        AppWindow.SetIcon("Assets/AppIcon.ico");
+        AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory,"Assets","AppIcon.ico"));
         var scale=GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this))/96.0;
         AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1200*scale),(int)(820*scale)));
         AppLog.Startup("page_navigation_starting");

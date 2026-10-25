@@ -1,5 +1,12 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## ビジュアル素材v1導入（2026-10-25、直近の変更）
+- 開始b8147fa、remote/既存Draft PR #5一致・clean、確認できる他の進行中repo作業なし。ユーザー指定ZIPを導入。[適用素材・変更ファイル・保留理由・証拠](visual-assets-v1.md)。
+- 採用ICOとMSIXロゴサイズを既存参照へ適用。空状態/索引/AI設定/初回案内/使い方へ小型イラストを追加。Portableの既存画像未収録設定を修正し、アイコンpathもcwd非依存へ。Fluent操作アイコン・広い一覧・右詳細を維持。
+- source原本はdesign/visual-assets/v1、配布対象はAssetsの使用分のみ。PREVIEW/reference/promptは配布しない。`tools/sync_visual_assets.py --check`で15出力一致・両manifest解決・ICOサイズ確認。Portable publish成功、Dark/Light各7checks/exit0、12PNG目視。設定の全状態GUI/MSIXインストール/HC/DPIは未検証。
+- **既存ZIP07/インストール済みAlphaはこの変更を含まない。** 現在の試験frontendは `data/ai-ui/visual-assets-review-20261025/frontend02`。新規候補作成時に新ICOでbootstrapをビルドすること。
+- 今回は素材導入で一区切り。次は既存ロードマップの高解像度APNG/CBZ性能確認へ戻る。以前の一回限りshutdown指示はこの素材導入へ再適用しない。
+
 ## 終了checkpoint（2026-10-25、最優先）
 - 製品code **e197723**、今回の受入記録 **ef0a5bd**。最終handoffのcommitは `git log -1 -- docs/current-handoff.md`。ブランチ/既存Draft PR #5を継続、main merge/Actions/新PRなし。
 - **最新試用候補は基本ZIP07**：`C:/AI/Aredoko/dist/portable-basic-20261025-07/Aredoko/Aredoko.exe`。source e197723、ZIP344,057,243 bytes・SHA `e8e82d354c70768949caba388e2cf88872a99b5b4cbb1cc916549764fd2f5ddf`。同梱CPU11/通常EXE復元28checks/4所有exit0、770payload/設定/生成原本不変。[候補正本](portable-refresh-20261024.md)。06は再選択バグ未収録修正のため旧候補、Alpha/shortcut未更新。

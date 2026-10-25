@@ -27,7 +27,7 @@ internal sealed class ViewerWindow : Window
         if(previous==IntPtr.Zero && Marshal.GetLastPInvokeError()!=0)
         {var error=Marshal.GetLastPInvokeError();Close();throw new Win32Exception(error);}
         AutomationProperties.SetAutomationId(content,id);AutomationProperties.SetName(content,title);
-        Content=content;AppWindow.SetIcon("Assets/AppIcon.ico");
+        Content=content;AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory,"Assets","AppIcon.ico"));
         var main=MainWindow.Current.AppWindow;
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(main.Position.X,main.Position.Y,main.Size.Width,main.Size.Height));
         ownerWasEnabled=IsWindowEnabled(owner);

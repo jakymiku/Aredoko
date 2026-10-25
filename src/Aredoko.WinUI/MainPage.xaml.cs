@@ -234,7 +234,7 @@ public sealed partial class MainPage : Page
         startupSearchSucceeded=false;UpdateFavoriteRootList();
         var version=searches.Next(); Busy.Visibility=Visibility.Visible;
         GettingStarted.Visibility=Visibility.Collapsed;
-        if(rows.Count==0){Empty.Visibility=Visibility.Visible;Empty.Text="検索結果を準備しています…";}
+        if(rows.Count==0){VisualAssets.State(EmptyArt,"searching");Empty.Visibility=Visibility.Visible;Empty.Text="検索結果を準備しています…";}
         similarityCancellation?.Cancel();similarityCancellation?.Dispose();similarityCancellation=new();
         CancelSearchButton.Visibility=Visibility.Visible;
         var cancellation=similarityCancellation.Token;var origin=similarityOrigin;
@@ -265,7 +265,7 @@ public sealed partial class MainPage : Page
             if(!folderHubOpen&&!shelfHubOpen)MainViewTitle.Text=selectedShelfIds is not null?ShelfScopeName():view=="history"?"閲覧履歴":view=="unreviewed"?"ライブラリ（未確認）":"ライブラリ";
             Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+pageSize-1)/pageSize)}";
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*pageSize<result.Total;
-            Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
+            VisualAssets.State(EmptyArt,"no_results");Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
             Empty.Text=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"探したいページ内の語句を入力して検索してください。":"この範囲に一致するページ本文はありません。")
                 :method.IsTagSemantic?(string.IsNullOrWhiteSpace(query)?"未承認タグから探したい内容を入力してください。":"索引済みの未承認タグ候補がありません。設定の「AI検索の準備」で索引を作成してください。")
                 :method.IsTagCandidates?"この範囲に一致する未承認のAIタグ候補はありません。作品の詳細「AIタグ候補」から候補を生成・確認できます。"
@@ -318,8 +318,8 @@ public sealed partial class MainPage : Page
                 Notice(originTitle,simSummary+(scopeWarning is null?"":" "+scopeWarning),simSeverity,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
             }
             UpdateFavoriteRootList();startupSearchSucceeded=true;RecordNavigationLocation();UpdateGettingStarted();
-        } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { if(searches.IsCurrent(version)&&rows.Count==0){GettingStarted.Visibility=Visibility.Collapsed;Empty.Visibility=Visibility.Visible;Empty.Text="検索を中断しました。もう一度「検索」を押してください。";} Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
-        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();GettingStarted.Visibility=Visibility.Collapsed;Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
+        } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { if(searches.IsCurrent(version)&&rows.Count==0){GettingStarted.Visibility=Visibility.Collapsed;Empty.Visibility=Visibility.Visible;VisualAssets.State(EmptyArt,"no_results");Empty.Text="検索を中断しました。もう一度「検索」を押してください。";} Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
+        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,"error");Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
     private string EmptyScopeGuidance()
@@ -1918,6 +1918,7 @@ public sealed partial class MainPage : Page
                 } catch(Exception ex) {modelFeedback.Text="設定を保存できません: "+ex.Message;}
                 finally {savingProfile=false;modelChoice.IsEnabled=true;UpdateProfileWarning();}
             };
+            var indexArt=VisualAssets.Sticker();
             var status=new TextBlock {TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(status,"AIStatus");
             var start=new Button {Content="索引を作成・更新",IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
             var cancel=new Button {Content="中断",IsEnabled=false};AutomationProperties.SetAutomationId(cancel,"CancelAIIndex");
@@ -2018,6 +2019,7 @@ public sealed partial class MainPage : Page
                     var available=data["available"]!.GetValue<bool>();
                     var state=data["state"]!.GetValue<string>();
                     var running=state is "running" or "cancelling";
+                    VisualAssets.State(indexArt,running?"indexing":state=="complete"?"completed":state=="failed"?"error":null);
                     indexLimit=data["limit"]?.GetValue<int>();
                     var label=state switch {"idle"=>"未作成","running"=>"作成中","cancelling"=>"中断待ち","complete"=>"準備完了","cancelled"=>"中断済み","interrupted"=>"前回中断","failed"=>"失敗","partial"=>"一部完了",_=>state};
                     var model=data["model"]?.GetValue<string>() ?? "未選択";
@@ -2158,6 +2160,7 @@ public sealed partial class MainPage : Page
                 finally{UpdateStart();}};
             timer.Tick+=async(_,_)=>await Refresh();
             var panel=new StackPanel {Spacing=12,MinWidth=320};
+            panel.Children.Add(indexArt);
             foreach(var element in new UIElement[]{setupActions,explanation,modelChoice,modelWarning,modelApply,modelFeedback,scopeEditor.Content,
                 new TextBlock {Text="AIのメモリ・索引負荷",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},
                 release,releaseResult,idleChoice,pauseChoice,saveResource,resourceResult})panel.Children.Add(element);

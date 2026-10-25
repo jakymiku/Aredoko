@@ -26,6 +26,7 @@ public sealed partial class MainPage
         try
         {
             var panel=new StackPanel{Spacing=16};
+            var greeting=VisualAssets.Sticker();greeting.Source=new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri("ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png")){DecodePixelWidth=192};greeting.Visibility=Visibility.Visible;panel.Children.Add(greeting);
             foreach(var (title,text) in new[]{
                 ("1. フォルダを登録する","「登録フォルダ」→「フォルダを追加」から検索したい場所を選びます。サブフォルダを含めるかも選べます。登録後、詳細パネルの「選択フォルダをスキャン / 再開」を押すと一覧に読み込みます。元ファイルは移動・変換しません。"),
                 ("2. 検索して開く","検索欄にファイル名やタグを入力します。画像・本・動画はダブルクリックで開けます。右クリックから既定のソフトやエクスプローラーでも開けます。"),

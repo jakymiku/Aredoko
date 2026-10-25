@@ -42,6 +42,7 @@ public sealed partial class MainPage
             var chooseRuntime=new Button{Content="実行環境を選ぶ"};var resetRuntime=new Button{Content="標準に戻す"};
             var chooseModels=new Button{Content="モデルのフォルダを選ぶ"};var resetModels=new Button{Content="標準に戻す"};
             var diagnostic=new TextBlock{TextWrapping=TextWrapping.Wrap};var status=new TextBlock{Text="状態を確認しています。",TextWrapping=TextWrapping.Wrap};
+            var setupArt=VisualAssets.Sticker();
             var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};var refresh=new Button{Content="状態を更新"};
             foreach(var (control,id) in new (DependencyObject,string)[]{(runtime,"AIEnvironmentRuntime"),(models,"AIEnvironmentModels"),(chooseRuntime,"AIEnvironmentChooseRuntime"),(resetRuntime,"AIEnvironmentResetRuntime"),(chooseModels,"AIEnvironmentChooseModels"),(resetModels,"AIEnvironmentResetModels"),(diagnostic,"AIEnvironmentDiagnostic"),(status,"AIEnvironmentStatus"),(progress,"AIEnvironmentProgress"),(refresh,"AIEnvironmentRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(resetRuntime,"AI実行環境を標準に戻す");AutomationProperties.SetName(resetModels,"モデル保存先を標準に戻す");AutomationProperties.SetName(progress,"AI環境の検査進捗");
@@ -56,7 +57,7 @@ public sealed partial class MainPage
             panel.Children.Add(modelScope);panel.Children.Add(models);panel.Children.Add(scopeNote);
             var modelActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};modelActions.Children.Add(chooseModels);modelActions.Children.Add(resetModels);panel.Children.Add(modelActions);
             panel.Children.Add(new TextBlock{Text="モデル別のフォルダをまとめた親フォルダを指定します。例：models の中に embeddinggemma-2 がある場合は models を選びます。",TextWrapping=TextWrapping.Wrap});
-            foreach(var control in new UIElement[]{diagnostic,progress,status,refresh})panel.Children.Add(control);
+            foreach(var control in new UIElement[]{diagnostic,setupArt,progress,status,refresh})panel.Children.Add(control);
             var download=new Button{Content="アプリで取得・取得状況"};AutomationProperties.SetAutomationId(download,"AIEnvironmentDownload");panel.Children.Add(download);
             var guide=new HyperlinkButton{Content="AI環境の配置ガイド",NavigateUri=new Uri("https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/ai-environment-guide.md")};AutomationProperties.SetAutomationId(guide,"AIEnvironmentGuide");panel.Children.Add(guide);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI環境の追加と配置",SecondaryButtonText="検査を中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
@@ -66,6 +67,7 @@ public sealed partial class MainPage
             {
                 if(!open||disposed)return;
                 current=job;var active=busy||job.Active;
+                VisualAssets.State(setupArt,job.Active?"indexing":job.Saved?"completed":job.State=="failed"?"error":null);
                 foreach(var control in new Control[]{chooseRuntime,chooseModels,resetRuntime,resetModels,modelScope})control.IsEnabled=!active;
                 useAcquired.IsEnabled=!active&&acquired is not null&&(acquired.Kind=="runtime"||acquired.ModelTarget is not null)&&!(job.Saved&&job.Id==acquiredJob);
                 useAcquired.Content=job.Saved&&job.Id==acquiredJob?"次回起動に設定済み":acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う";

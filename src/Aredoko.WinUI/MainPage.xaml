@@ -168,9 +168,13 @@
       <ListView x:Name="FavoriteRootList" MaxHeight="144" SelectionMode="None" IsItemClickEnabled="True" ItemClick="FavoriteRoot_ItemClick" ContainerContentChanging="FavoriteRoot_ContainerContentChanging" ItemTemplate="{StaticResource MediaContainerTemplate}" HorizontalContentAlignment="Stretch" AutomationProperties.Name="お気に入りの登録フォルダ" AutomationProperties.AutomationId="FavoriteRootList"/>
      </Expander>
      <ListView x:Name="Items" Grid.Row="1" Loaded="Items_Loaded" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.HelpText="Ctrl+Homeで検索結果の先頭、Ctrl+Endで末尾へ移動" AutomationProperties.AutomationId="ItemList"/>
-     <TextBlock x:Name="Empty" Grid.Row="1" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.Name="案内メッセージ" AutomationProperties.LiveSetting="Polite" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+     <StackPanel Grid.Row="1" Spacing="12" Margin="24" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Visibility, ElementName=Empty}">
+      <Image x:Name="EmptyArt" Width="128" Height="112" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_state_no_results_512.png" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
+      <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.Name="案内メッセージ" AutomationProperties.LiveSetting="Polite" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" TextAlignment="Center"/>
+     </StackPanel>
      <ScrollViewer x:Name="GettingStarted" Grid.Row="1" Visibility="Collapsed" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="GettingStarted">
       <StackPanel Margin="24" Spacing="16">
+        <Image Source="ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png" Width="112" Height="96" Stretch="Uniform" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
        <TextBlock Text="Aredokoへようこそ" Style="{StaticResource TitleTextBlockStyle}" TextWrapping="Wrap"/>
        <TextBlock Text="まずは検索したいフォルダを登録し、スキャンして一覧に読み込みましょう。元の画像や動画は、その場所のまま管理します。" TextWrapping="Wrap"/>
        <Button Content="フォルダを登録する" Style="{StaticResource AccentButtonStyle}" Click="GettingStartedFolders_Click" AutomationProperties.AutomationId="GettingStartedFolders"/>

@@ -16,3 +16,6 @@ config/ai-profiles/embeddinggemma-2.json text eol=lf
 
 # Supplemental license hashes preserve the original upstream bytes.
 config/runtime-notices/** -text
+
+# Preserve the supplied visual-asset bytes and manifest sizes across checkouts.
+design/visual-assets/v1/** -text
