@@ -25,3 +25,9 @@
 - 専用InfoBarで更新中/中止/部分失敗を表示。完了時は既存の選択・タグdraftを勝手に置換せず「一覧を更新」で反映。既存結果sessionはcatalog世代の変化で無効化される。
 - 成功scan後のmissingは通常・favorite・history・棚一覧の件数/代表から除外。IDとmetadataは残し、再出現時に復帰。原本の削除や私物走査は行わない。
 - CPU: startup15（認証/重複JSON/一度限り/owned取消/backup fence/移行rollback/復旧/metadata回復）、root preferences6、live backup12、storage backup29、missing結果session1 PASS。Core契約・Portable build確認済み。GUI/GPUは現ユーザーの事前回答が必要で、未実施。証拠はignored `data/ai-ui/continuation-20261025b/`。
+
+### U4b GUIの限定結果・次の確認
+- 実装commit **51491a6**。初回のfrontend03はbuild指定から `AredokoPackageChannel=Portable` が漏れていたため起動前に失敗。製品不具合と混同しない。frontend04は正しい自己完結Portable指定と実評価receiptを作成し、正常起動/通常終了を確認。
+- ユーザーは当初2試行、ハーネス修正後の追加1試行を明示許可。native-startup02は同名UIA選択子の曖昧さで停止。03は一意selectorへ修正後、SelectionItemPatternがCOMエラーを返した。専用DBのroot1=`list`、failure.pngの保存済み表示から**設定の実保存は確認**。選択callback中の同期disableを撤去し、saving/transition guardで直列化する修正を入れた。
+- raw失敗を保持し、02/03のPNG目視済み。再起動queue/中止/タグdraft保持までのGUIは**未完**、成功扱いしない。追加起動はしていない。GPU0、通常DB/元メディア/旧Alpha変更0。次のGUIでは修正版候補と物理入力または修正済みUIAを明示し、再度ユーザーの回答を得る。
+- 今回frontend01–03の「publish成功」は起動可能の証拠ではない。GUI確認可能候補はfrontend04。以後の新候補でも必ず `-c Portable -p:Platform=x64 -p:AredokoPackageChannel=Portable` と実評価receiptを使う。

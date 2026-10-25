@@ -4,7 +4,7 @@
 - Antigravity開始51b4302から、引継ぎ補強 **8972be3** はPush済み。続いて **U4b** を実装：フォルダごとの起動時更新OFF/一覧/一覧＋AI、初画面後のbackend所有queue、進捗/中止、欠落原本の通常一覧除外と再出現時metadata復帰。[仕様・証拠](scan-startup.md)。U4bのcommitは `git log -1 -- app/startup_scans.py`。
 - catalog v3へ移行（既存rootの自動更新はOFF）、v0–v3のバックアップ復元・同居vector互換を保持。設定の保存は即時/次回起動適用、未保存の棚・タグ・除外draftは維持。
 - CPU startup15/root prefs6/live backup12/storage backup29/missing結果session1、Core契約・専用Portable publish PASS。実物モデル/GPUなし。`data/ai-ui/continuation-20261025b/` にログ。frontend01は補強のみ、frontend03はU4b候補。通常DB/元メディア/旧Alpha/Actionsは未変更。
-- **GUI/GPUは今回のユーザー回答後のみ**。この時点で未実施。起動時設定保存/再起動queue/中止/タグdraft保全の実機受入は残す。
+- **GUI/GPUは今回のユーザー回答後のみ**。U4bは2回＋追加1回の明示許可で実行。frontend03はビルドチャネル漏れで起動失敗、正しいfrontend04は正常起動/終了。native-startup02はUIA selector曖昧、03は同期disableによるSelectionItem COMエラー（設定の実保存はDB/PNGで確認）。callback中のdisable撤去を修正、再GUIはしていない。再起動queue/中止/タグdraft保全の実機受入は残す。[失敗・診断](scan-startup.md)。GPUなし。新しいGUIは回答を得る。
 - **次の1件：U5残**（Ctrl/Shift複数選択・一括お気に入り/棚、絞込時の差分、600件window保持）。U4a/U4bの完成分を再実装しない。続いてU6圧縮ファイルfilter。未検証GUIを全完成と扱わず、独立したCPU/実装を進める。shutdownしない。
 
 ## Codex引き継ぎレビュー（2026-10-25、上の優先度）

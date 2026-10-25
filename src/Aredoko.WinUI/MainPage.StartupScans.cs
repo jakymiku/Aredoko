@@ -128,19 +128,22 @@ public sealed partial class MainPage
         if(saving||dialogOpen||!await transitions.WaitAsync(0)){RestoreStartupScanChoice();return;}
         var targets=folderDraft.TargetIds.ToArray();
         var mode=RootStartupScan.SelectedIndex switch{1=>"list",2=>"list_and_ai",_=>"none"};
-        saving=true;RootStartupScan.IsEnabled=false;
+        // Do not disable a ComboBox synchronously inside SelectionChanged:
+        // its native SelectionItem provider may still be completing the action.
+        // The saving/transition guard serializes requests and restores rapid input.
+        saving=true;FolderEditStatus.Text="起動時の設定を保存しています…";
         try
         {
             await api.PostAsync("api/library/roots/startup-scan",new JsonObject
                 {["root_ids"]=new JsonArray(targets.Select(id=>JsonValue.Create(id)).ToArray()),["mode"]=mode});
             knownRoots=knownRoots.Select(root=>targets.Contains(root.Id)?root with{StartupScan=mode}:root).ToArray();
+            if(!disposed)RestoreStartupScanChoice();
             if(!disposed)FolderEditStatus.Text="起動時の設定を保存しました。次回起動から適用します。"+(FolderDirty?"ほかに未保存の変更があります。":"");
         }
         catch(Exception ex){if(!disposed){RestoreStartupScanChoice();Failure(ex);}}
         finally
         {
             saving=false;transitions.Release();
-            if(!disposed)RootStartupScan.IsEnabled=true;
             if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }
     }
