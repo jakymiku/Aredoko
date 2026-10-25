@@ -32,7 +32,8 @@ public sealed partial class MainPage
         SelectionTools.Visibility=preparingSelection||librarySelection.Count>1||outside>0?Visibility.Visible:Visibility.Collapsed;
         CancelSelectionPreparation.Visibility=preparingSelection?Visibility.Visible:Visibility.Collapsed;
         SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件を選択しています。";
-        DetailsButton.IsEnabled=librarySelection.Count>0||active is not null;
+        DetailsButton.IsEnabled=!saving&&!preparingSelection&&(librarySelection.Count>0||active is not null);
+        ClearSelectionButton.IsEnabled=!saving&&!preparingSelection&&!dialogOpen;
         foreach(var container in containerCleanup.Keys.ToArray())
         {
             UpdateSelectionFrame(container);
@@ -41,7 +42,7 @@ public sealed partial class MainPage
     }
     private void ApplyLibrarySelection()
     {
-        if(!saving)SelectionEditStatus.Visibility=Visibility.Collapsed;
+        if(!saving)SetSelectionSaveStatus("");
         var row=librarySelection.Count==1?rows.FirstOrDefault(item=>librarySelection.Contains(item.Id)):null;
         if(row is not null){ShowItemDetailsPane();ApplySelectedRow(row);}
         else
@@ -103,11 +104,12 @@ public sealed partial class MainPage
     private MenuFlyout SelectionMenu()
     {
         var menu=new MenuFlyout();var expected=librarySelection.Ids.ToArray();var session=resultSession?.Id;
-        var summary=new MenuFlyoutItem{Text=$"{expected.Length:N0} 件の詳細"};AutomationProperties.SetAutomationId(summary,"BulkDetails");
+        var enabled=!saving&&!dialogOpen&&!preparingSelection;
+        var summary=new MenuFlyoutItem{Text=$"{expected.Length:N0} 件の詳細",IsEnabled=enabled};AutomationProperties.SetAutomationId(summary,"BulkDetails");
         summary.Click+=(_,_)=>{ShowSelectionSummary();Details.IsPaneOpen=true;};menu.Items.Add(summary);
         foreach(var (label,id,operation) in new[]{("お気に入りに登録","BulkFavoriteAdd",SelectionOperation.FavoriteAdd),("お気に入りを解除","BulkFavoriteRemove",SelectionOperation.FavoriteRemove),("棚に追加…","BulkShelfAdd",SelectionOperation.ShelvesAdd),("棚から外す…","BulkShelfRemove",SelectionOperation.ShelvesRemove)})
         {
-            var action=new MenuFlyoutItem{Text=label};AutomationProperties.SetAutomationId(action,id);
+            var action=new MenuFlyoutItem{Text=label,IsEnabled=enabled};AutomationProperties.SetAutomationId(action,id);
             action.Click+=async(_,_)=>{if(session==resultSession?.Id&&expected.SequenceEqual(librarySelection.Ids))await EditLibrarySelectionAsync(operation);};menu.Items.Add(action);
         }
         return menu;
@@ -116,15 +118,21 @@ public sealed partial class MainPage
     private async void SelectionFavoriteRemove_Click(object sender,RoutedEventArgs e)=>await EditLibrarySelectionAsync(SelectionOperation.FavoriteRemove);
     private async void SelectionShelfAdd_Click(object sender,RoutedEventArgs e)=>await EditLibrarySelectionAsync(SelectionOperation.ShelvesAdd);
     private async void SelectionShelfRemove_Click(object sender,RoutedEventArgs e)=>await EditLibrarySelectionAsync(SelectionOperation.ShelvesRemove);
+    private void SetSelectionSaveStatus(string text)
+    {
+        SelectionEditStatus.Text=SelectionInlineStatus.Text=text;
+        SelectionEditStatus.Visibility=SelectionInlineStatus.Visibility=string.IsNullOrEmpty(text)?Visibility.Collapsed:Visibility.Visible;
+    }
     private async Task EditLibrarySelectionAsync(SelectionOperation operation)
     {
         if(disposed||saving||dialogOpen||preparingSelection||librarySelection.Count==0||resultSession is not {} session||librarySelection.SessionId!=session.Id||!await transitions.WaitAsync(0))return;
         saving=true;searchTimer.Stop();var ids=librarySelection.Ids.ToArray();var favorite=operation is SelectionOperation.FavoriteAdd or SelectionOperation.FavoriteRemove;var committed=false;
-        SelectionEditStatus.Text="保存しています…";SelectionEditStatus.Visibility=Visibility.Visible;
+        SetSelectionSaveStatus("保存しています…");
         try
         {
             // Let the invoking native provider finish before disabling its parent.
             await Task.Yield();if(disposed)return;
+            UpdateLibrarySelectionTools();
             foreach(var button in SelectionSummaryPanel.Children.OfType<Button>())button.IsEnabled=false;
             long[] shelves=[];
             if(!favorite)
@@ -136,6 +144,7 @@ public sealed partial class MainPage
             }
             await session.EditSelectionAsync(ids,operation,shelves,CancellationToken.None);
             committed=true;
+            SetSelectionSaveStatus("保存済み・一覧を更新しています…");
             if(favorite)foreach(var row in rows.Where(row=>ids.Contains(row.Id))){row.Favorite=operation==SelectionOperation.FavoriteAdd;RefreshFavoriteCard(row);}
             await RefreshResultRowsAfterEditAsync(favoriteOnly:favorite);
             UpdateLibrarySelectionTools();if(!resultsNeedRefresh)Notice("保存しました",$"{ids.Length:N0} 件の整理を保存しました。");
@@ -147,8 +156,8 @@ public sealed partial class MainPage
             if(!disposed)
             {
                 foreach(var button in SelectionSummaryPanel.Children.OfType<Button>())button.IsEnabled=true;
-                SelectionEditStatus.Text=committed?(resultsNeedRefresh?"保存済みです。一覧を検索し直してください。":$"{ids.Length:N0} 件を保存しました。") : "";
-                SelectionEditStatus.Visibility=committed?Visibility.Visible:Visibility.Collapsed;
+                SetSelectionSaveStatus(committed?(resultsNeedRefresh?"保存済みです。一覧を検索し直してください。":$"{ids.Length:N0} 件を保存しました。") : "");
+                UpdateLibrarySelectionTools();
                 UpdateDirty();
                 if(PendingSearch){searchTimer.Stop();searchTimer.Start();}
             }

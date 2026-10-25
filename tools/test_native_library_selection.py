@@ -1,5 +1,5 @@
 """Generated native U5 multi-selection plus U4b corrected callback acceptance."""
-import argparse,ctypes,hashlib,json,os,secrets,subprocess,sys,threading,time,traceback
+import argparse,ctypes,hashlib,json,os,secrets,socket,subprocess,sys,threading,time,traceback
 from ctypes import wintypes
 from pathlib import Path
 from http.server import ThreadingHTTPServer
@@ -15,12 +15,15 @@ from portable_frontend import inspect_portable
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8',errors='replace')
-    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2,3),required=True);args=parser.parse_args()
-    front=args.frontend.resolve();target=REPO/'data/ai-ui/continuation-20261025b'/f'native-selection{args.attempt:02}'
-    if os.name!='nt' or not front.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file() or target.exists():parser.error('Dedicated frontend and new bounded output required')
+    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2,3),required=True)
+    parser.add_argument('--output',type=Path);parser.add_argument('--theme',choices=('dark','light'),default='dark')
+    parser.add_argument('--verification-settings-only',action='store_true');parser.add_argument('--grid-pointer-only',action='store_true');args=parser.parse_args()
+    front=args.frontend.resolve();target=args.output.resolve() if args.output else REPO/'data/ai-ui/continuation-20261025b'/f'native-selection{args.attempt:02}'
+    if os.name!='nt' or not front.is_relative_to(REPO/'data/ai-ui') or not target.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file() or target.exists():parser.error('Dedicated frontend and new bounded output required')
     inspect_portable(front)  # Reject an incorrectly packaged build before launching.
     target.mkdir(parents=True)
-    report={'pass':False,'checks':[],'screenshots':[],'visual_review':'pending','authorization':'User approved selection GUI 2 attempts plus 1 explicit additional frontend06 attempt; previous U4 3 attempts preserved; no GPU',
+    report={'pass':False,'checks':[],'screenshots':[],'visual_review':'pending','authorization':'Current user permits dedicated generated-data native tests; previous attempt reports are preserved; no GPU',
+            'theme':args.theme,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
             'frontend_sha256':hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()}
     env={**os.environ,'WINAPP_UI_WORKFLOW_ID':'aredoko-selection-20261025b','LOCALAPPDATA':str(target/'user'),'APPDATA':str(target/'user')}
@@ -55,10 +58,15 @@ def main():
         nonlocal cat,handler,server,thread,proc,hwnd
         cat=ProductionCatalog(target/'catalog.sqlite')
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'not-installed'),models_root=target/'no-models')
-        handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),tagger=DisabledTagger(),profiles=profiles);handler.log_message=lambda *a:None
-        server=ThreadingHTTPServer(('127.0.0.1',8769),handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
+        handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),tagger=DisabledTagger(),profiles=profiles,instance_id=instance);handler.log_message=lambda *a:None
+        server=ThreadingHTTPServer(('127.0.0.1',8769),handler,bind_and_activate=False)
+        server.allow_reuse_address=False
+        server.socket.setsockopt(socket.SOL_SOCKET,socket.SO_EXCLUSIVEADDRUSE,1)
+        server.server_bind();server.server_activate()
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         with (target/f'app{len(owned)+1}.log').open('w',encoding='utf-8') as log:
-            proc=subprocess.Popen([str(front/'Aredoko.WinUI.exe'),'--ui-theme','dark','--viewer-settings',str(target/'viewer-settings.json')],cwd=front,env=env,stdout=log,stderr=subprocess.STDOUT)
+            proc=subprocess.Popen([str(front/'Aredoko.WinUI.exe'),'--ui-theme',args.theme,'--viewer-settings',str(target/'viewer-settings.json')],cwd=front,env=env,stdout=log,stderr=subprocess.STDOUT)
         owned.append(proc.pid);hwnd=None
         def find():
             nonlocal hwnd
@@ -73,6 +81,8 @@ def main():
         if handler:handler.startup_scans.cancel()
         if cat and cat._worker:cat._worker.join(8)
         if proc is not None and proc.poll() is None and hwnd:
+            if 'CloseButton' in tree():
+                ui('invoke','CloseButton');ui('wait-for','CloseButton','--gone','-t','10000')
             owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
             if owner.value!=proc.pid:raise RuntimeError('Refusing to close another window')
             user.PostMessageW(int(hwnd),0x10,0,0);proc.wait(15)
@@ -100,6 +110,52 @@ def main():
         shelf=cat.change_shelf('create',name='生成テスト棚')['id'];cat.close();cat=None
         before={str(p):[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for f in folders for p in f.iterdir()}
         start();check('existing folders do not start an automatic scan',not handler.startup_scans.requested)
+        if args.verification_settings_only:
+            def settings(expected):
+                ui('invoke','BtnSettings');ui('wait-for','SettingsAdvanced','-t','10000');ui('invoke','SettingsAdvanced')
+                ui('wait-for','SettingsVerifyAIRuntime','-t','10000')
+                check('verification checkbox state '+str(expected),tree()['SettingsVerifyAIRuntime'].get('toggleState')==('on' if expected else 'off'))
+            settings(True);shot('01-advanced-default')
+            ui('invoke','SettingsVerifyAIRuntime');ui('invoke','SettingsSave')
+            ui('wait-for','SettingsStatus','--value','保存しました','--contains','-t','10000')
+            path=target/'launch-settings.json'
+            check('disabled preference saved',json.loads(path.read_text())['verify_ai_runtime'] is False)
+            shot('02-advanced-saved');ui('invoke','CloseButton');ui('wait-for','SettingsDialog','--gone','-t','10000');stop()
+            start();settings(False);shot('03-advanced-restarted')
+            ui('invoke','CloseButton');ui('wait-for','SettingsDialog','--gone','-t','10000')
+            stop();report['pass']=True;return 0
+        if args.grid_pointer_only:
+            ui('invoke','BtnLayout');ui('wait-for','Item1','-t','10000');ui('click','Item1')
+            # Hold Control only while the exact owned window is foreground;
+            # always release it, including CLI/provider failures.
+            class Mouse(ctypes.Structure):
+                _fields_=[('dx',wintypes.LONG),('dy',wintypes.LONG),('data',wintypes.DWORD),('flags',wintypes.DWORD),('time',wintypes.DWORD),('extra',ctypes.c_size_t)]
+            class Key(ctypes.Structure):
+                _fields_=[('vk',wintypes.WORD),('scan',wintypes.WORD),('flags',wintypes.DWORD),('time',wintypes.DWORD),('extra',ctypes.c_size_t)]
+            class Union(ctypes.Union):_fields_=[('mouse',Mouse),('key',Key)]
+            class Input(ctypes.Structure):_fields_=[('type',wintypes.DWORD),('value',Union)]
+            user.GetForegroundWindow.restype=wintypes.HWND
+            user.SendInput.argtypes=[wintypes.UINT,ctypes.POINTER(Input),ctypes.c_int]
+            check('owned grid window is foreground',user.GetForegroundWindow()==int(hwnd))
+            check('human Control key is not held',not user.GetAsyncKeyState(0x11)&0x8000)
+            def control(flags):
+                event=Input(type=1,value=Union(key=Key(vk=0x11,flags=flags)))
+                if user.SendInput(1,ctypes.byref(event),ctypes.sizeof(event))!=1:raise OSError('Input rejected')
+            try:
+                control(0);ui('click','Item3')
+            finally:control(2)
+            ui('wait-for','SelectionCountText','--value','2 件選択','--contains','-t','10000')
+            check('grid selection leaves details closed','SelectionSummaryText' not in tree());shot('01-grid-control-selection')
+            ui('click','Item3','--right');ui('wait-for','BulkFavoriteAdd','-t','10000');ui('invoke','BulkFavoriteAdd')
+            wait('right-click favorite edits exactly the Control-selected pair',lambda:cat.get(1)['favorite'] and cat.get(3)['favorite'] and not cat.get(2)['favorite'])
+            ui('wait-for','SelectionInlineStatus','--value','保存しました','--contains','-t','20000');ui('click','Item3','--right');ui('wait-for','BulkShelfAdd','-t','10000');ui('invoke','BulkShelfAdd')
+            ui('wait-for','BulkShelfChoice'+str(shelf),'-t','10000');ui('invoke','BulkShelfChoice'+str(shelf),'--action','select');ui('invoke','PrimaryButton')
+            wait('right-click shelf edits exactly the selected pair',lambda:cat.get(1)['shelf_ids']==[shelf] and cat.get(3)['shelf_ids']==[shelf] and cat.get(2)['shelf_ids']==[])
+            ui('wait-for','PrimaryButton','--gone','-t','10000');ui('wait-for','SelectionInlineStatus','--value','保存しました','--contains','-t','20000');shot('02-grid-context-saved')
+            ui('invoke','BtnLayout');ui('wait-for','SelectionCountText','--value','2 件選択','--contains','-t','10000');shot('03-list-keeps-grid-selection')
+            ui('invoke','ClearLibrarySelection');ui('wait-for','SelectionCountText','--gone','-t','10000')
+            check('generated originals unchanged',all(hashlib.sha256(Path(name).read_bytes()).hexdigest()==value[0] for name,value in before.items()))
+            stop();report['pass']=True;return 0
         select([1,2]);ui('wait-for','SelectionCountText','--value','2 件選択','--contains','-t','10000')
         check('single click selection does not open details','SelectionSummaryText' not in tree())
         ui('invoke','BtnDetails');ui('wait-for','SelectionSummaryText','--value','2 件','--contains','-t','10000');shot('01-multiple-selection')

@@ -17,3 +17,11 @@
 - **native-selection03：18項目PASS、全体はFAILのまま保持**。Shiftキーによる2件選択、明示summary、一括favorite/棚、600件を越えた一覧外2件保持、favorite限定結果の対象除去、修正した起動時設定保存/再起動/初画面後queue/所有中止/タグdraft維持/明示保存、所有frontend2プロセスの通常終了を確認。6枚PNG全目視、Dark通常幅で重なりなし。
 - 最終の「一覧を更新」だけタグ保存後の再検索完了前に押され、未実施。harnessを `TxtTags.IsEnabled=true` 待ちへ修正し、タグ保存の進捗文言も改善。**追加GUIは行っていない**。旧U4の3試行と生ログも維持。新しいGUIには今回ユーザーの回答を得る。
 - 未確認：Ctrl+マウス/右クリック・grid・逆方向Shift/範囲取消・Light/HC/DPI、最終refreshボタン。source実装済みと実機未受入を分ける。GPU/実モデル0、通常DB/私物/旧Alpha/Actions変更0。次はU6のZIP/CBZ統合種類filter。
+
+## 2026-10-26：閉じた詳細パネルでの一括操作と再受入
+
+- グリッドでCtrl＋クリック→右クリックfavorite保存の直後、一覧の置換中に次の棚操作を押せて無反応に見える隙間を確認。詳細を閉じていても選択欄へ保存/一覧更新/完了を表示し、一括メニュー・詳細・選択解除は処理中に無効化。完了後に同じ選択のメニューを作り直す。providerを同期disableしない既存のyieldは維持。
+- 新しい生成native `data/ai-ui/startup-review-20261026/selection02` はLightでShift複数選択、一括favorite/棚、600行外保持、favorite限定解除、起動時設定保存/再起動/所有中止/draft保持/明示保存/最終refreshまでPASS。所有frontend2回通常終了、6PNG目視。従来のFAIL記録は書き換えない。
+- `grid02` はDarkで実Ctrl＋マウスの非隣接2件、右クリックfavorite/棚の対象一致、grid→listの選択保持、明示解除を確認。3PNG目視、元生成画像不変、所有frontend正常終了。`grid01` はfavoriteのDB反映をUI完了と誤解した待機不足と、閉じた詳細では進行が見えない製品の改善点を分離してFAIL保持。
+- `selection01` は通常版が開いていて既存backendへ接続し、生成Item1が見つからず保存操作前に停止。試験serverへWindows排他bindと起動ID/接続時の照合を追加した。別のAredokoが稼働中なら試験はbind時に停止し、通常版を閉じたり接続先として流用しない。
+- 未確認はHC/物理DPI移動、長時間の実媒体RSS、範囲選択の入力中取消など。上の限定PASSを全製品/配布/clean Windowsの受入へ流用しない。
