@@ -77,7 +77,11 @@
         <CheckBox x:Name="FillUnsetShelf" Content="既存の棚未設定ファイルにも適用（個別に解除した棚を含む）" Checked="FolderEditor_Checked" Unchecked="FolderEditor_Checked" AutomationProperties.AutomationId="FillUnsetShelf"/>
         <Button x:Name="SaveRootShelf" Content="選択フォルダの初期棚を保存" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="SaveRootShelf_Click" AutomationProperties.AutomationId="SaveRootShelf"/>
         <StackPanel x:Name="SingleRootSection" Spacing="12">
-         <TextBox x:Name="RootExcludes" Header="索引対象から除外（除外ルール・カンマ区切り、例: cache, *.tmp）" TextChanged="FolderEditor_Changed" AutomationProperties.Name="除外ルール" AutomationProperties.AutomationId="RootExcludes"/>
+         <ComboBox x:Name="ScanModeChoice" Header="スキャン方法" SelectedIndex="0" HorizontalAlignment="Stretch" AutomationProperties.Name="スキャン方法" AutomationProperties.AutomationId="ScanModeChoice">
+          <ComboBoxItem Content="アイテム一覧だけ取得" Tag="list" AutomationProperties.AutomationId="ScanModeList"/>
+          <ComboBoxItem Content="一覧取得＋AI索引を作成" Tag="list_and_ai" AutomationProperties.AutomationId="ScanModeListAndAI"/>
+         </ComboBox>
+         <TextBox x:Name="RootExcludes" Header="スキャン対象から除外（例: cache, *.tmp）" TextChanged="FolderEditor_Changed" AutomationProperties.Name="除外ルール" AutomationProperties.AutomationId="RootExcludes"/>
          <Button x:Name="SaveExcludes" Content="選択フォルダの除外を更新" HorizontalAlignment="Stretch" Click="SaveExcludes_Click" AutomationProperties.AutomationId="SaveExcludes"/>
          <Button x:Name="ScanRoot" Content="選択フォルダをスキャン / 再開" HorizontalAlignment="Stretch" Click="ScanRoot_Click" AutomationProperties.AutomationId="ScanRoot"/>
          <Button x:Name="CancelScan" Content="スキャンをキャンセル" HorizontalAlignment="Stretch" Click="CancelScan_Click" AutomationProperties.AutomationId="CancelScan"/>
@@ -176,15 +180,26 @@
       <Image x:Name="EmptyArt" Width="128" Height="112" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_state_no_results_512.png" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
       <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.Name="案内メッセージ" AutomationProperties.LiveSetting="Polite" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" TextAlignment="Center"/>
      </StackPanel>
-     <ScrollViewer x:Name="GettingStarted" Grid.Row="1" Visibility="Collapsed" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="GettingStarted">
-      <StackPanel Margin="24" Spacing="16">
-        <Image Source="ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png" Width="112" Height="96" Stretch="Uniform" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
+     <ScrollViewer x:Name="GettingStarted" Grid.Row="1" Visibility="Collapsed" MaxWidth="580" HorizontalAlignment="Center" VerticalAlignment="Top" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="GettingStarted">
+      <StackPanel Margin="24,8,24,12" Spacing="8">
+        <Image Source="ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png" Width="72" Height="64" Stretch="Uniform" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
        <TextBlock Text="Aredokoへようこそ" Style="{StaticResource TitleTextBlockStyle}" TextWrapping="Wrap"/>
-       <TextBlock Text="まずは検索したいフォルダを登録し、スキャンして一覧に読み込みましょう。元の画像や動画は、その場所のまま管理します。" TextWrapping="Wrap"/>
-       <Button Content="フォルダを登録する" Style="{StaticResource AccentButtonStyle}" Click="GettingStartedFolders_Click" AutomationProperties.AutomationId="GettingStartedFolders"/>
+       <TextBlock x:Name="GettingStartedSummaryText" Text="まずは検索したいフォルダを登録し、スキャンして一覧に読み込みましょう。元の画像や動画は、その場所のまま管理します。" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedSummaryText"/>
+       <Border Style="{StaticResource AredokoSurfaceStyle}">
+        <StackPanel Spacing="4">
+         <TextBlock Text="はじめる手順（3ステップ）" Style="{StaticResource SubtitleTextBlockStyle}" FontSize="15"/>
+         <TextBlock x:Name="GettingStartedStep1Text" Text="1. フォルダを追加: 未登録（次の手順）" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep1Text"/>
+         <TextBlock x:Name="GettingStartedStep2Text" Text="2. 一覧を読み込む: 未スキャン" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep2Text"/>
+         <TextBlock x:Name="GettingStartedStep3Text" Text="3. 必要ならAIを準備（任意）: 任意 — ファイル名・タグ検索と閲覧はAIなしで使えます" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep3Text"/>
+        </StackPanel>
+       </Border>
+       <Button x:Name="GettingStartedFolders" Content="フォルダを登録する" Style="{StaticResource AccentButtonStyle}" Click="GettingStartedFolders_Click" AutomationProperties.AutomationId="GettingStartedFolders"/>
        <TextBlock Text="AI検索は任意です。ファイル名・タグ検索と閲覧は、モデルがなくても使えます。AIを使う場合はモデルと実行環境を準備し、検索用の索引を作成します。" TextWrapping="Wrap"/>
-       <Button Content="AI検索の準備・モデルの取得" Click="AI_Click" AutomationProperties.AutomationId="GettingStartedAI"/>
-       <Button Content="基本的な使い方を見る" Click="GettingStartedHelp_Click" AutomationProperties.AutomationId="GettingStartedHelp"/>
+       <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button x:Name="GettingStartedAI" Content="AI検索の準備・モデルの取得" Click="AI_Click" AutomationProperties.AutomationId="GettingStartedAI"/>
+        <Button x:Name="GettingStartedHelp" Content="基本的な使い方を見る" Click="GettingStartedHelp_Click" AutomationProperties.AutomationId="GettingStartedGuide"/>
+        <Button x:Name="GettingStartedDismiss" Content="あとで閉じる" Click="GettingStartedDismiss_Click" AutomationProperties.AutomationId="GettingStartedDismiss"/>
+       </StackPanel>
       </StackPanel>
      </ScrollViewer>
     </Grid>

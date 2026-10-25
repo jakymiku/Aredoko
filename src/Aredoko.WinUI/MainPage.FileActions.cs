@@ -93,8 +93,9 @@ public sealed partial class MainPage
         try
         {
             var items=await args.DataView.GetStorageItemsAsync();
-            if(items.Count!=1||items[0] is not StorageFolder folder)throw new InvalidOperationException("登録するフォルダを1つドロップしてください。");
-            FolderAddPanel.Visibility=Visibility.Visible;RootPath.Text=folder.Path;RootFolderBooks.IsChecked=false;RootRecursive.IsChecked=true;RootPath.Focus(FocusState.Programmatic);
+            var folders=items.OfType<StorageFolder>().Select(f=>f.Path).Where(p=>!string.IsNullOrWhiteSpace(p)).ToArray();
+            if(folders.Length==0)throw new InvalidOperationException("登録するフォルダをドロップしてください。");
+            FolderAddPanel.Visibility=Visibility.Visible;RootPath.Text=string.Join("; ",folders);RootFolderBooks.IsChecked=false;RootRecursive.IsChecked=true;RootPath.Focus(FocusState.Programmatic);
             Notice("フォルダを受け取りました","設定を確認して「登録」を押してください。");
         }
         catch(Exception ex){Failure(ex);}

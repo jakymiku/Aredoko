@@ -51,7 +51,7 @@ public sealed partial class MainPage : Page
     private IReadOnlyList<string> knownShelves=[];
     private readonly HashSet<int> checkedFolderIds=[];
     private FolderSettingsDraft? folderDraft;
-    private bool folderHubOpen, folderTiles, folderPopulating, folderSettingsActive, pollingScan;
+    private bool folderHubOpen, folderTiles, folderPopulating, folderSettingsActive, pollingScan, gettingStartedDismissed, aiIndexReady, scanRootsRefreshed;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer scanPollTimer;
     private JsonObject? aiScope;
     private string aiScopeError="AI索引の画面で対象を確認・保存してください。";
@@ -1378,17 +1378,53 @@ public sealed partial class MainPage : Page
         AddRoot.IsEnabled=false;
         try
         {
+            var rawPaths = RootPath.Text.Split(new[]{';','\r','\n'}, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                       .Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToArray();
+            if(rawPaths.Length == 0)
+                throw new InvalidOperationException("追加するフォルダを選択するか、パスを入力してください。");
+
             var shelf=ReadInitialShelf(AddRootInitialShelf,AddRootNewShelf);
             var patterns=new JsonArray(AddRootExcludes.Text.Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Select(s=>(JsonNode?)JsonValue.Create(s)).ToArray());
-            var added=await api.PostAsync("api/library/roots",new JsonObject{{"path",RootPath.Text},{"consent",true},{"excludes",patterns},{"default_shelf",shelf},{"folder_books",RootFolderBooks.IsChecked==true},{"recursive",RootRecursive.IsChecked==true}});
-            // The server answers {"root_id": n}; reading "id" never reopened the settings panel.
-            var newId=(added["root_id"]??added["id"])?.GetValue<int>();
-            RootPath.Text="";AddRootExcludes.Text="";AddRootNewShelf.Text="";RootFolderBooks.IsChecked=false;RootRecursive.IsChecked=true;AddRootInitialShelf.SelectedIndex=0;
+            var recursive = RootRecursive.IsChecked == true;
+            var folderBooks = RootFolderBooks.IsChecked == true;
+
+            var addedIds = new List<int>();
+            var errors = new List<string>();
+
+            foreach(var path in rawPaths)
+            {
+                try
+                {
+                    var added = await api.PostAsync("api/library/roots", new JsonObject
+                    {
+                        {"path", path},
+                        {"consent", true},
+                        {"excludes", patterns},
+                        {"default_shelf", shelf},
+                        {"folder_books", folderBooks},
+                        {"recursive", recursive}
+                    });
+                    var newId = (added["root_id"] ?? added["id"])?.GetValue<int>();
+                    if(newId is int id) addedIds.Add(id);
+                }
+                catch(Exception ex)
+                {
+                    errors.Add($"{path}: {ex.Message}");
+                }
+            }
+
+            if(addedIds.Count == 0)
+            {
+                var msg = errors.Count > 0 ? string.Join(" / ", errors) : "フォルダを登録できませんでした。";
+                throw new InvalidOperationException(msg);
+            }
+
+            RootPath.Text=""; AddRootExcludes.Text=""; AddRootNewShelf.Text=""; RootFolderBooks.IsChecked=false; RootRecursive.IsChecked=true; AddRootInitialShelf.SelectedIndex=0;
             await RefreshSearchRootsAsync();
             await LoadAIScopeAsync();
-            if(newId is int id&&knownRoots.Any(r=>r.Enabled&&r.Id==id))OpenFolderSettingsPanel(new[]{id});
-            ScanStatus.Text="登録しました。スキャンすると一覧に反映されます。";
-            Notice("フォルダを登録しました","登録しました。スキャンすると一覧に反映されます。");
+
+            OpenFolderSettingsPanel(addedIds);
+            await PromptPostRegistrationScanAsync(addedIds);
         }
         catch(Exception ex){ScanStatus.Text=ex.Message;Failure(ex);}
         finally{AddRoot.IsEnabled=true;}
@@ -1779,17 +1815,29 @@ public sealed partial class MainPage : Page
         finally{saving=false;SaveExcludes.IsEnabled=true;}
     }
 
-    private async void ScanRoot_Click(object sender,RoutedEventArgs e)
+    private async Task StartScanWithModeAsync(IReadOnlyList<int> targetIds, string mode)
     {
-        if(folderDraft is null||folderDraft.IsBatch||folderDraft.TargetIds.Count!=1)return;
+        if(targetIds.Count==0)return;
         try
         {
-            var rootId=folderDraft.TargetIds[0];
-            await api.PostAsync("api/library/scan",new JsonObject{{"root_id",rootId}});
-            ScanStatus.Text="スキャン開始";
+            var body=new JsonObject{{"mode",mode}};
+            if(targetIds.Count==1)
+                body["root_id"]=targetIds[0];
+            else
+                body["root_ids"]=new JsonArray(targetIds.Select(id=>(JsonNode?)JsonValue.Create(id)).ToArray());
+            await api.PostAsync("api/library/scan",body);
+            scanRootsRefreshed=false;
+            ScanStatus.Text=mode=="list_and_ai"?"スキャン開始（一覧＋AI索引）":"スキャン開始（一覧のみ）";
             await PollScanStateAsync();
         }
-        catch(Exception ex){ScanStatus.Text=ex.Message;}
+        catch(Exception ex){ScanStatus.Text=ex.Message;Failure(ex);}
+    }
+
+    private async void ScanRoot_Click(object sender,RoutedEventArgs e)
+    {
+        if(folderDraft is null||folderDraft.TargetIds.Count==0)return;
+        var mode=(ScanModeChoice?.SelectedIndex==1)?"list_and_ai":"list";
+        await StartScanWithModeAsync(folderDraft.TargetIds,mode);
     }
 
     private async void CancelScan_Click(object sender,RoutedEventArgs e)
@@ -1861,16 +1909,73 @@ public sealed partial class MainPage : Page
         try
         {
             var state=await api.GetAsync("api/library/scan");
-            var phase=state["state"]!.GetValue<string>();
-            var running=phase is "running" or "cancelling";
-            if(ScanRoot is not null)ScanRoot.IsEnabled=!running;
-            if(SaveExcludes is not null)SaveExcludes.IsEnabled=!running;
-            if(AddRoot is not null)AddRoot.IsEnabled=!running;
-            if(CancelScan is not null)CancelScan.IsEnabled=running;
-            if(running||ScanStatus.Text.StartsWith("running")||ScanStatus.Text.StartsWith("スキャン開始"))
+            var phase=state["state"]?.GetValue<string>() ?? "idle";
+            var mode=state["mode"]?.GetValue<string>() ?? "list";
+            var stage=state["stage"]?.GetValue<string>() ?? phase;
+            var aiState=state["ai_state"]?.GetValue<string>() ?? "none";
+            var aiError=state["ai_error"]?.GetValue<string>() ?? "";
+            var aiProcessed=state["ai_processed"]?.GetValue<int>() ?? 0;
+            var aiTotal=state["ai_total"]?.GetValue<int>() ?? 0;
+            var discovered=state["discovered"]?.GetValue<int>() ?? 0;
+            var scanError=state["error"]?.GetValue<string>() ?? "";
+
+            bool listRunning = phase is "running" or "cancelling";
+            bool aiRunning = mode == "list_and_ai" && (stage == "ai" || aiState is "running" or "cancelling");
+            bool anyRunning = listRunning || aiRunning;
+
+            if(ScanRoot is not null)ScanRoot.IsEnabled=!anyRunning;
+            if(SaveExcludes is not null)SaveExcludes.IsEnabled=!anyRunning;
+            if(AddRoot is not null)AddRoot.IsEnabled=!anyRunning;
+            if(CancelScan is not null)CancelScan.IsEnabled=anyRunning;
+
+            if(!listRunning && !scanRootsRefreshed)
             {
-                ScanStatus.Text=$"{phase} · {state["discovered"]} 件 {state["error"]}";
-                if(!running)await RefreshSearchRootsAsync();
+                scanRootsRefreshed = true;
+                await RefreshSearchRootsAsync();
+                UpdateGettingStarted();
+            }
+            if(listRunning)
+            {
+                scanRootsRefreshed = false;
+            }
+
+            if(listRunning)
+            {
+                var prefix = phase == "cancelling" ? "一覧の登録をキャンセル中" : "一覧の登録中";
+                ScanStatus.Text = $"{prefix} · {discovered} 件";
+            }
+            else if(aiRunning)
+            {
+                var prefix = aiState == "cancelling" ? "AI索引をキャンセル中" : "AI索引の作成中";
+                ScanStatus.Text = $"{prefix} · {aiProcessed}/{aiTotal} 件";
+            }
+            else if(phase == "failed")
+            {
+                ScanStatus.Text = $"スキャン失敗 · {scanError}";
+            }
+            else if(!string.IsNullOrEmpty(aiError) || aiState == "failed")
+            {
+                ScanStatus.Text = $"一覧完了 · AI未完了: {aiError}";
+            }
+            else if(phase == "complete")
+            {
+                if(mode == "list_and_ai")
+                {
+                    if(aiState == "skipped")
+                        ScanStatus.Text = $"一覧完了 ({discovered} 件) · AIスキップ ({aiError})";
+                    else if(aiState == "cancelled")
+                        ScanStatus.Text = $"一覧完了 ({discovered} 件) · AIキャンセル";
+                    else
+                        ScanStatus.Text = $"一覧・AI索引完了 ({discovered} 件)";
+                }
+                else
+                {
+                    ScanStatus.Text = $"一覧完了 · {discovered} 件";
+                }
+            }
+            else if(!string.IsNullOrEmpty(scanError))
+            {
+                ScanStatus.Text = scanError;
             }
         }
         catch(Exception ex){if(ScanStatus is not null)ScanStatus.Text=ex.Message;}

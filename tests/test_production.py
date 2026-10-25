@@ -107,4 +107,160 @@ class ProductionTests(unittest.TestCase):
         self.catalog.purge_inactive_root(root, consent=True)
         self.assertEqual(self.catalog._state_epoch, epoch_before + 5)
 
+    def test_scan_modes_separation_and_ai_hook(self):
+        root1 = self.catalog.add_root(str(self.media))
+        media2 = self.base / 'media2'; media2.mkdir()
+        (media2 / 'item2.png').write_bytes(b'media2 item')
+        root2 = self.catalog.add_root(str(media2))
+        self.fixture('item1.png')
+
+        # 1. Invalid mode is rejected
+        with self.assertRaises(ValueError) as ctx:
+            self.catalog.start_scan(root1, mode='bad_mode')
+        self.assertIn('Invalid scan mode', str(ctx.exception))
+
+        # Invalid root combinations (both or neither)
+        with self.assertRaises(ValueError):
+            self.catalog.start_scan()
+        with self.assertRaises(ValueError):
+            self.catalog.start_scan(root1, root_ids=[root1])
+
+        # 2. Legacy start_scan(root) defaults to mode='list' and makes 0 calls to spy on ai
+        class SpyAI:
+            def __init__(self):
+                self.calls = []
+                self.cancelled = False
+            def status(self):
+                return {'available': True, 'state': 'running' if self.calls else 'idle',
+                        'processed': 5, 'total': 10, 'error': ''}
+            def start(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+            def cancel_build(self):
+                self.cancelled = True
+                return {'cancel_requested': True}
+
+        spy = SpyAI()
+        server = ThreadingHTTPServer(('127.0.0.1', 0), production_handler(self.catalog, 'token', ai=spy))
+        worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
+        self.addCleanup(server.server_close); self.addCleanup(server.shutdown)
+        origin = f'http://127.0.0.1:{server.server_port}'
+
+        def post_scan(body, token='token'):
+            req = urllib.request.Request(
+                origin + '/api/library/scan',
+                json.dumps(body).encode(),
+                headers={'Origin': origin, 'X-Aredoko-Token': token, 'Content-Type': 'application/json'}
+            )
+            return urllib.request.urlopen(req)
+
+        def get_scan(token='token'):
+            req = urllib.request.Request(
+                origin + '/api/library/scan',
+                headers={'Origin': origin, 'X-Aredoko-Token': token}
+            )
+            return urllib.request.urlopen(req)
+
+        # HTTP: invalid mode is rejected with 400
+        with self.assertRaises(urllib.error.HTTPError) as err:
+            post_scan({'root_id': root1, 'mode': 'invalid'})
+        self.assertEqual(err.exception.code, 400)
+        self.assertEqual(json.loads(err.exception.read())['error'], 'Invalid scan mode')
+
+        # HTTP: unknown fields rejected
+        with self.assertRaises(urllib.error.HTTPError) as err:
+            post_scan({'root_id': root1, 'extra': 123})
+        self.assertEqual(err.exception.code, 400)
+
+        # HTTP: POST without mode defaults to 'list'
+        with post_scan({'root_id': root1}) as resp:
+            data = json.load(resp)
+            self.assertEqual(data['mode'], 'list')
+            self.assertEqual(data['root_ids'], [root1])
+
+        self.catalog._worker.join(10)
+        self.assertFalse(self.catalog._worker.is_alive())
+        self.assertEqual(len(spy.calls), 0)  # 0 calls to AI
+        st = self.catalog.scan_state()
+        self.assertEqual(st['mode'], 'list')
+        self.assertEqual(st['stage'], 'complete')
+        self.assertEqual(st['ai_state'], 'none')
+        self.assertEqual(self.catalog.search()['total'], 1)
+
+        # 3. mode='list_and_ai' invokes ai.start after list scan succeeds
+        with post_scan({'root_id': root1, 'mode': 'list_and_ai'}) as resp:
+            data = json.load(resp)
+            self.assertEqual(data['mode'], 'list_and_ai')
+            self.assertEqual(data['stage'], 'list')
+        self.catalog._worker.join(10)
+        self.assertFalse(self.catalog._worker.is_alive())
+        self.assertEqual(len(spy.calls), 1)  # Invoked ai.start
+        st = self.catalog.scan_state()
+        self.assertEqual(st['mode'], 'list_and_ai')
+        self.assertEqual(st['stage'], 'ai')
+        self.assertEqual(st['ai_state'], 'running')
+
+        with get_scan() as resp:
+            http_st = json.load(resp)
+            self.assertEqual(http_st['stage'], 'ai')
+            self.assertEqual(http_st['ai_processed'], 5)
+            self.assertEqual(http_st['ai_total'], 10)
+
+        # Cancel while in stage 'ai' cancels build
+        def post_cancel():
+            req = urllib.request.Request(
+                origin + '/api/library/cancel',
+                b'{}',
+                headers={'Origin': origin, 'X-Aredoko-Token': 'token', 'Content-Type': 'application/json'}
+            )
+            return urllib.request.urlopen(req)
+
+        with post_cancel() as resp:
+            cancel_data = json.load(resp)
+            self.assertTrue(cancel_data['cancel_requested'])
+            self.assertTrue(cancel_data.get('ai_cancel_requested', False))
+            self.assertTrue(spy.cancelled)
+
+        # 4. mode='list_and_ai' when AI is unavailable / fails: keeps list items
+        from production_server import DisabledAI
+        server2 = ThreadingHTTPServer(('127.0.0.1', 0), production_handler(self.catalog, 'token', ai=DisabledAI()))
+        worker2 = threading.Thread(target=server2.serve_forever, daemon=True); worker2.start()
+        self.addCleanup(server2.server_close); self.addCleanup(server2.shutdown)
+        origin2 = f'http://127.0.0.1:{server2.server_port}'
+
+        req2 = urllib.request.Request(
+            origin2 + '/api/library/scan',
+            json.dumps({'root_id': root1, 'mode': 'list_and_ai'}).encode(),
+            headers={'Origin': origin2, 'X-Aredoko-Token': 'token', 'Content-Type': 'application/json'}
+        )
+        with urllib.request.urlopen(req2) as resp:
+            data = json.load(resp)
+            self.assertEqual(data['mode'], 'list_and_ai')
+        self.catalog._worker.join(10)
+        st = self.catalog.scan_state()
+        self.assertEqual(st['state'], 'complete')  # list items committed!
+        self.assertEqual(st['ai_state'], 'failed')
+        self.assertTrue(st['ai_error'])
+        self.assertEqual(self.catalog.search()['total'], 1)  # list items not rolled back
+
+        # 5. Multi-root scanning [root1, root2]
+        with post_scan({'root_ids': [root1, root2], 'mode': 'list'}) as resp:
+            data = json.load(resp)
+            self.assertEqual(data['root_ids'], [root1, root2])
+        self.catalog._worker.join(10)
+        self.assertEqual(self.catalog.search()['total'], 2)
+        st = self.catalog.scan_state()
+        self.assertEqual(st['root_ids'], [root1, root2])
+
+        # 6. Cancelling during list scan rolls back partial scan and never calls AI
+        for i in range(110):
+            (self.media / f'extra_{i}.png').write_bytes(b'extra')
+        spy.calls.clear()
+        self.catalog.start_scan(root_ids=[root1], mode='list_and_ai')
+        self.catalog._cancel.set()
+        self.catalog._worker.join(10)
+        st = self.catalog.scan_state()
+        self.assertEqual(st['state'], 'cancelled')
+        self.assertEqual(st['ai_state'], 'cancelled')
+        self.assertEqual(len(spy.calls), 0)  # Never called AI!
+
 if __name__=='__main__':unittest.main()

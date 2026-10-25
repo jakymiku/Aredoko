@@ -17,6 +17,8 @@ class HistoryChanged(ValueError):
     """A delayed history operation belongs to an obsolete clear generation."""
 
 
+SCAN_MODES = ('list', 'list_and_ai')
+
 class ScanBusyError(ValueError):
     """A mutation should be retried after the atomic scan completes."""
 
@@ -66,6 +68,12 @@ class ProductionCatalog(Catalog):
         self._cancel = threading.Event()
         self._worker = None
         self._progress = 0
+        self._scan_mode = 'list'
+        self._scan_stage = 'idle'
+        self._scan_ai_state = 'none'
+        self._scan_ai_error = ''
+        self._scan_roots = ()
+        self.ai_scan_hook = None
         self.shelf_store=ShelfStore(self.connect)
         self.shelf_store.migrate()
         self.root_preferences=RootPreferences(self.connect)
@@ -560,27 +568,62 @@ class ProductionCatalog(Catalog):
         result=dict(row) if row else {'id':0,'state':'idle','discovered':0,'error':''}
         if result['state'] in ('running','cancelling'):
             result['discovered']=self._progress
+        result['mode']=self._scan_mode
+        result['stage']='list' if result['state'] in ('running','cancelling') else (self._scan_stage if self._scan_stage!='idle' else result['state'])
+        result['ai_state']=self._scan_ai_state
+        result['ai_error']=self._scan_ai_error
+        result['root_ids']=list(self._scan_roots) if self._scan_roots else ([result['root_id']] if result.get('root_id') else [])
         return result
 
-    def start_scan(self, root_id):
-        if type(root_id) is not int or root_id<1: raise ValueError('Invalid root')
+    def start_scan(self, root_id=None, mode='list', *, root_ids=None, after_scan=None):
+        if mode not in SCAN_MODES:
+            raise ValueError('Invalid scan mode')
+        if (root_id is None) == (root_ids is None):
+            raise ValueError('Invalid root')
+        if root_id is not None:
+            if type(root_id) is not int or not 1<=root_id<=9223372036854775807:
+                raise ValueError('Invalid root')
+            target_roots=[root_id]
+        else:
+            if not isinstance(root_ids,(list,tuple)) or not 1<=len(root_ids)<=256:
+                raise ValueError('Invalid root')
+            if len(set(root_ids))!=len(root_ids):
+                raise ValueError('Invalid root')
+            for r in root_ids:
+                if type(r) is not int or not 1<=r<=9223372036854775807:
+                    raise ValueError('Invalid root')
+            target_roots=list(root_ids)
         with self._guard:
-            if self._worker and self._worker.is_alive(): raise ValueError('A scan is already running')
-            self.index.locations(root_id,limit=1)  # Validate before creating a job.
+            if self._worker and self._worker.is_alive():
+                raise ValueError('A scan is already running')
+            for rid in target_roots:
+                self.index.locations(rid,limit=1)  # Validate before creating a job.
             self._cancel.clear(); self._progress=0
+            self._scan_mode=mode
+            self._scan_stage='list'
+            self._scan_ai_state='pending' if mode=='list_and_ai' else 'none'
+            self._scan_ai_error=''
+            self._scan_roots=tuple(target_roots)
             with self.connect() as db:
-                job=db.execute("INSERT INTO scan_jobs(root_id,state) VALUES(?,'running')",(root_id,)).lastrowid
-            self._worker=threading.Thread(target=self._scan,args=(job,root_id),daemon=True)
+                job=db.execute("INSERT INTO scan_jobs(root_id,state) VALUES(?,'running')",(target_roots[0],)).lastrowid
+            self._worker=threading.Thread(target=self._scan,args=(job,tuple(target_roots),mode,after_scan or self.ai_scan_hook),daemon=True)
             self._worker.start()
-            return {'job_id':job}
+            return {'job_id':job,'mode':mode,'stage':'list','root_ids':list(target_roots)}
 
-    def _scan(self,job,root_id):
+    def _scan(self,job,target_roots,mode='list',after_scan=None):
+        if isinstance(target_roots,int):
+            target_roots=(target_roots,)
         state,error='complete',''
+        total_discovered=0
         try:
-            result=self.index.scan(root_id,cancelled=self._cancel.is_set,
-                                   progress=lambda n:setattr(self,'_progress',n))
+            for rid in target_roots:
+                if self._cancel.is_set():
+                    raise InterruptedError()
+                res=self.index.scan(rid,cancelled=self._cancel.is_set,
+                                    progress=lambda n,base=total_discovered:setattr(self,'_progress',base+n))
+                total_discovered+=res['discovered']
+                self._progress=total_discovered
             self.sync_index()
-            self._progress=result['discovered']
         except InterruptedError: state='cancelled'
         except Exception as ex:
             # Store a concise local diagnostic, never returned with filesystem paths.
@@ -588,6 +631,27 @@ class ProductionCatalog(Catalog):
         with self.connect() as db:
             db.execute('UPDATE scan_jobs SET state=?,discovered=?,error=? WHERE id=?',
                        (state,self._progress,error,job))
+        if state!='complete':
+            self._scan_stage=state
+            if mode=='list_and_ai':
+                self._scan_ai_state='cancelled' if state=='cancelled' else 'skipped'
+            return
+        if mode=='list' or after_scan is None:
+            self._scan_stage='complete'
+            self._scan_ai_state='none'
+        else:
+            if self._cancel.is_set():
+                self._scan_stage='complete'
+                self._scan_ai_state='cancelled'
+            else:
+                self._scan_stage='ai'
+                self._scan_ai_state='running'
+                try:
+                    after_scan(target_roots,total_discovered,self._cancel.is_set)
+                except Exception as ex:
+                    self._scan_ai_state='failed'
+                    self._scan_ai_error=str(ex)
+                    self._scan_stage='complete' 
 
     def cancel_scan(self):
         self._cancel.set()

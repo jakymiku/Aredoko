@@ -1,6 +1,23 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
-## 指定APNG黒化の再現・診断のみ（2026-10-25、最優先）
+## 今回の完了・次の1件（2026-10-25、以下の過去checkpointより優先）
+- **開始 d448b1e（remote/Draft PR #5一致）から2単位を実装・実機検証完了**：
+  1. **指定パレットAPNGのループ2周目黒化修正（cdf7a35）**：pp/animation_sessions.py の Decoder.pull で EOFError 到達時に、既に検証・保持済みのオープンストリーム self.file を seek(0) して Image.open(self.file) を再構築する _reopen_loop を実装（パスの再オープンなし、既存 source_guard 保全）。単体テスト 	ests/test_animation_sessions.py（20 PASS）および実機 data/ai-ui/attached-apng-20261025/native02（5 checks PASS・exit0・所有残存0、nimation_samples: [1, 4, 7, 10, 13, 16, 1]）の5 PNG直接目視で2周目以降も有色・透過を維持することを確認。証拠は[animation-streaming.md](animation-streaming.md)。
+  2. **U4a：登録後のスキャン選択・一覧とAI索引の分離・3段階初回ガイド（本commit）**：
+     - バックエンド（pp/production.py / pp/production_server.py）：POST /api/library/scan に明示的 mode（'list' 既定 / 'list_and_ai'）と複数 
+oot_ids 対応を追加。catalog.sqlite の scan_jobs スキーマ（storage_schema_v1.json）を変更せず、一覧走査の完了（state='complete' コミット＋sync_index()）後にのみ i_scan_hook を起動することで、AI未準備・失敗・取消でも取得済みアイテム一覧を絶対に巻き戻さない構造を実装。POST /api/library/cancel は stage=='ai' 時に i.cancel_build() も呼ぶ。
+     - フロントエンド（MainPage.GettingStarted.cs / MainPage.xaml / MainPage.xaml.cs / MainPage.FileActions.cs）：フォルダ登録成功直後に1回だけ「登録したフォルダをスキャンしますか？」ダイアログ（PostRegistrationScanDialog：「アイテム一覧だけ取得（推奨）」「一覧取得＋AI索引を作成」「後で」、AI未準備時の理由と「AI検索の準備を開く」導線）を表示。初回ライブラリ画面（GettingStarted）を3ステップ（1. フォルダを追加 → 2. 一覧を読み込む → 3. 必要ならAIを準備（任意））の進捗カード＋次の主ボタン1つ＋「あとで閉じる」に整理し、800px高ウィンドウでもスクロールなしで下部ボタンまで完全表示されるよう余白とマスコット高を調整。使い方ダイアログ内の小画像拡大設定の案内もビューア内設定メニューへ更新。右ペインのフォルダ設定に ScanModeChoice と1行ヘッダーの RootExcludes（「スキャン対象から除外（例: cache, *.tmp）」）および段階別 ScanStatus を追加。
+     - 検証：	ests/test_production.py（12 PASS）、Aredoko.Core.Tests（全PASS）、専用Portable data/ai-ui/usability-u4a-20261025/frontend02 による実機 
+un02（**35 checks PASS・exit0・残存0**、spyで一覧のみスキャンのAI呼出し0回、7 PNG全目視＋UIA座標検証）を確認。先行 
+un01 で見つけた GettingStarted 下部見切れと RootExcludes 2行ヘッダー重なりを修正して 
+un02 で解消を確認済み（詳細は[usability-followup-20261025.md](usability-followup-20261025.md)）。
+- **次の1件はU4b（[usability-followup-20261025.md](usability-followup-20261025.md)）**：
+  - 登録フォルダ設定へ「起動時：しない（既定）／一覧のみ更新／一覧＋AI索引」を追加（既存rootはOFF移行、選択rootだけ初画面表示後の所有queueで処理、手動scanと二重実行しない、backup/restoreにも含める）。
+  - 成功した全走査で missing と確定したitemを通常一覧/検索/棚/お気に入りの表示対象および開いている結果セッション・AI検索scopeから除外（元ファイル削除やタグ・棚・履歴の物理消去ではなく、再出現で復帰、切断/権限拒否/途中取消は missing 確定しない）。
+  - 続いて **U5残（複数選択・一括棚/お気に入り・favorites絞込からの部分削除・600件保持）→ U6（圧縮ファイル ZIP・CBZ 種類フィルター）**。
+- **守るべき制約**：通常DB/私物/旧Alpha/ZIP07は未変更。data/ai-ui/ は .gitignore のままコミットしない。GitHub Actionsは起動しない（[skip ci]）。**shutdownしない**。
+
+## 指定APNG黒化の再現・診断のみ（2026-10-25、上記 cdf7a35 で修正完了）
 - ユーザーは添付APNGの再現/原因調査だけを指示し、**修正は次回**と指定。アプリコード/依存/通常DBは変更していない。専用コピー原本SHA/mtime不変。診断のcommitは本節と同じ（git log -1 -- docs/current-handoff.md）。
 - **現象再現、原因切分け済み**：palette APNG 320×320/17frames/1.7秒loop。1周目は有色、保持Pillowオブジェクトを先頭へseekすると2周目からRGB全0・alpha保持。Image.openし直すと正常。実backend40framesと最新frontend08の4PNGで確認。GUI入力/FPSの問題とは別の、decoder巻き戻し/パレット状態の問題へ絞った。[診断正本](animation-streaming.md)。UIA進行チェックPASSでもvisualはFAILとしてsidecarに明記、exit0/所有残存0。
 - **次回の1件をU4aより優先**：AnimationSessionsのpalette APNG loop再初期化/パレット復元を限定修正し、2〜3周のpixel一致と既存形式・取消/原本guardを確認。その後U4aへ戻る。今回その修正へ着手しない。元画像や私物の絶対pathはGitへ含めず、証拠はignored data/ai-ui/attached-apng-20261025に保管。shutdownしない。
