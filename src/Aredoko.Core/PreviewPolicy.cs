@@ -9,6 +9,7 @@ public static class PreviewPolicy
     public const int CacheEntries = 64;
     // Viewer-only source budget, independent of thumbnail/AI preprocessing.
     public const int ViewerSourceBytes=64*1024*1024;
+    public const int StreamImageBytes=256*1024*1024;
     public const long ViewerPixels=100_000_000;
     public static void ValidateViewerDimensions(uint width,uint height)
     {

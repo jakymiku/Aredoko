@@ -37,6 +37,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Queue<AnimationFrame> animationFrames = new();
     private WriteableBitmap? animationBitmap;
     private bool animationFetching, animationWaiting, animationDone;
+    private readonly AnimationPlaybackClock animationClock=new();
     private int animationWidth, animationHeight;
     private readonly Grid canvas = new();
     private readonly Image image = new() { Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -161,6 +162,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         var oldStream = animationStream; animationStream = null;
         if (oldStream is not null) _ = CloseAnimationAsync(oldStream);
         animationFrames.Clear(); animationBitmap = null;
+        animationClock.Reset();
         animationFetching = animationWaiting = animationDone = false;
     }
 
@@ -175,9 +177,10 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         animationBitmap ??= new WriteableBitmap(animationWidth, animationHeight);
         using (var pixels = animationBitmap.PixelBuffer.AsStream()) pixels.Write(frame.Pixels);
         animationBitmap.Invalidate();
-        image.Source = animationBitmap;
+        if(!ReferenceEquals(image.Source,animationBitmap))image.Source = animationBitmap;
         AutomationProperties.SetName(image, $"{sequence.Current.Title}の画像（アニメーション {frame.Index + 1}）");
-        animTimer.Interval = TimeSpan.FromMilliseconds(frame.DurationMs);
+        var now=System.Diagnostics.Stopwatch.GetTimestamp()*1000d/System.Diagnostics.Stopwatch.Frequency;
+        animTimer.Interval = TimeSpan.FromMilliseconds(animationClock.NextDelay(now,frame.DurationMs));
         animTimer.Start();
     }
 
@@ -186,6 +189,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         if (disposed || animationStream is null) return;
         if (animationFrames.TryDequeue(out var frame))
         {
+            if(animationWaiting)animationClock.Reset();
             animationWaiting = false; DisplayAnimationFrame(frame);
             _ = FillAnimationAsync();
         }

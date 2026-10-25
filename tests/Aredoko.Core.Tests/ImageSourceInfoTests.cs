@@ -18,7 +18,7 @@ internal static class ImageSourceInfoTests
         value["mime"]="image/png";value["animation_candidate"]=false;
         check(!ImageSourceInfo.Parse(Data(),7).AnimationCandidate,"static renamed image avoids frame preparation");
         foreach(var(key,bad) in new (string,JsonNode?)[]{("item_id",8),("revision","broken"),("mime","text/html"),
-            ("size_bytes",0),("size_bytes",PreviewPolicy.ViewerSourceBytes+1),("animation_candidate","true")})
+            ("size_bytes",0),("size_bytes",PreviewPolicy.StreamImageBytes+1),("animation_candidate","true")})
         {
             var before=value[key]?.DeepClone();value[key]=bad?.DeepClone();var rejected=false;
             try{ImageSourceInfo.Parse(Data(),7);}catch(InvalidDataException){rejected=true;}

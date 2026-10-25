@@ -6,7 +6,7 @@ from ctypes import wintypes
 from native_ui_tools import nodes
 
 
-def audit(ui,cli,tree,shot,check,report,pid,main_hwnd,first_id,cat,user):
+def audit(ui,cli,tree,shot,check,report,pid,main_hwnd,first_id,cat,user,animations=False):
     owned=None
     def windows():return json.loads(cli('list-windows','-a',pid,'--json'))
     def control(*args):return cli(*args,'-w',owned)
@@ -37,6 +37,30 @@ def audit(ui,cli,tree,shot,check,report,pid,main_hwnd,first_id,cat,user):
             time.sleep(.1)
         raise AssertionError('owned viewer did not close normally')
     report['unverified']=['physical pointer hot zone/tooltip','left-drag pan','physical DPI and High Contrast']
+    if animations:
+        import re
+        report['unverified']+=['physical FPS/Honeyview equivalence','reported original APNG black frame','real high-resolution animation RSS']
+        for name in ['zz-clock.webp','zz-clock.png']:
+            ui('set-value','TxtQuery',name);ui('wait-for','TxtCount','--value','1 件','-t','10000')
+            item=cat.search(query=name)['items'][0]
+            # Both queries have one result. Count=1 alone can still be the old
+            # response during the search debounce; wait for the new stable ID.
+            ui('wait-for','Item'+str(item['id']),'-t','10000')
+            ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','5000')
+            ui('invoke','Item'+str(item['id']),'--action','select');ui('invoke','BtnDetails');ui('invoke','BtnOpenImage');viewer()
+            control('wait-for','ImageZoomIn','-p','IsEnabled','--value','True','-t','10000')
+            seen=[];wrapped=False;deadline=time.monotonic()+12
+            while time.monotonic()<deadline:
+                label=vtree().get('ViewerImage',{}).get('name','')
+                match=re.search(r'アニメーション (\d+)',label)
+                if match:
+                    value=int(match.group(1));wrapped=wrapped or bool(seen and value<seen[-1]);seen.append(value)
+                    if len(set(seen))>=3 and wrapped:break
+                time.sleep(.08)
+            report.setdefault('animation_samples',{})[name]=seen
+            check(name+' presents successive frames and loops',len(set(seen))>=3 and wrapped)
+            capture('animation-'+name.rsplit('.',1)[1]);close()
+        return
     ui('invoke','Item'+str(first_id),'--action','select');ui('invoke','BtnDetails');ui('invoke','BtnOpenImage');viewer()
     control('wait-for','ImageZoomIn','-p','IsEnabled','--value','True','-t','10000')
     title('[1/145]');check('image title includes file and scoped ordinal',True)

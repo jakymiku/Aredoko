@@ -63,6 +63,36 @@ class AnimationSessionTests(unittest.TestCase):
         self.owner.open(self.item, self.info['revision'], self.sid)
         return self.owner.sessions[self.sid]
 
+    def test_large_gif_probe_thumbnail_and_stream_do_not_require_original_byte_array(self):
+        from thumbnail_cache import ThumbnailCache
+        from image_animations import MAX_STREAM_IMAGE_BYTES
+        source,item=self.add('large.gif',generated('GIF'))
+        # Valid GIF comment sub-blocks make a real >72MiB source while retaining
+        # tiny decoded frames. This proves source routing, not high-res FPS.
+        with source.open('r+b') as file:
+            file.seek(-1,os.SEEK_END);file.write(b'\x21\xfe')
+            block=(b'\xff'+b'x'*255)*4096
+            for _ in range(73):file.write(block)
+            file.write(b'\x00;')
+        self.catalog.index.scan(self.root);self.catalog.sync_index()
+        before=source.stat()
+        with patch.object(GifImagePlugin.GifImageFile,'n_frames',new_callable=PropertyMock,side_effect=AssertionError('whole animation scan')):
+            info=self.reader.image_info(item)
+            self.assertGreater(info['size_bytes'],72*1024*1024)
+            with self.assertRaises(PreviewUnavailable):self.reader.read_original(item)
+            thumbnails=ThumbnailCache(self.reader)
+            try:self.assertTrue(thumbnails.read(item,128).startswith(b'\x89PNG'))
+            finally:thumbnails.close()
+            self.owner=AnimationSessions(self.reader)
+            header,frames=unpack(self.owner.open_first(item,info['revision'],'c'*32))
+            self.assertEqual(len(frames),1);self.assertEqual(frames[0][0]['index'],0)
+            self.assertEqual(header['width'],12);self.assertEqual(header['height'],8)
+        self.assertEqual(source.stat().st_mtime_ns,before.st_mtime_ns)
+        self.owner.close()
+        with source.open('r+b') as file:file.truncate(MAX_STREAM_IMAGE_BYTES+1)
+        self.catalog.index.scan(self.root);self.catalog.sync_index()
+        with self.assertRaises(PreviewUnavailable):self.reader.image_info(item)
+
     def test_combined_open_first_retains_ownership_and_sequential_cursor(self):
         self.start(generated('PNG',count=70,loop=2,poster=True))
         first,frames=unpack(self.owner.open_first(self.item,self.info['revision'],'b'*32))

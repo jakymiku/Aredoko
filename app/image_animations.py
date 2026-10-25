@@ -9,6 +9,8 @@ import struct
 import threading
 
 MAX_LARGE_IMAGE_BYTES = 64 * 1024 * 1024
+# Handle-based probes/decoders retain separate compressed-file and pixel budgets.
+MAX_STREAM_IMAGE_BYTES = 256 * 1024 * 1024
 MAX_ANIMATION_FRAMES = 64
 MAX_IMAGE_PIXELS = 16_000_000
 MAX_RENDERED_PNG_BYTES = 8 * 1024 * 1024

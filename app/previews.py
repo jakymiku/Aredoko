@@ -14,7 +14,7 @@ from library_index import (_excluded, _reparse, is_folder_book, folder_signature
                            FOLDER_ROOT, FOLDER_IMAGES)
 from page_identity import describe_page
 from image_animations import (AnimationInspector, AnimationUnavailable,
-                              MAX_LARGE_IMAGE_BYTES, MAX_ANIMATION_FRAMES,
+                              MAX_LARGE_IMAGE_BYTES, MAX_STREAM_IMAGE_BYTES, MAX_ANIMATION_FRAMES,
                               THUMBNAIL_MAX_EDGE, VIEWER_MAX_EDGE,
                               REPRESENTATIVE_MAX_EDGE, detect_animation_header, image_mime)
 from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
@@ -451,7 +451,8 @@ class PreviewReader:
                     else:
                         data, mime = self.videos.read(file, rev), 'image/png'
                 elif suffix in IMAGE_MIME:
-                    if not 1 <= info.st_size <= MAX_LARGE_IMAGE_BYTES:
+                    source_limit=MAX_STREAM_IMAGE_BYTES if operation in ('image_info','animation_source') else MAX_LARGE_IMAGE_BYTES
+                    if not 1 <= info.st_size <= source_limit:
                         raise PreviewUnavailable('Image exceeds preview limit')
                     descriptor = describe_page(item_id, 'image', '', 0, 0, IMAGE_MIME[suffix], info.st_size)
                     if operation == 'page_catalog':

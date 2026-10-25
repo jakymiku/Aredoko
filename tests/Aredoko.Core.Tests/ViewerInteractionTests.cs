@@ -4,6 +4,14 @@ static class ViewerInteractionTests
 {
     public static void Run(Action<bool,string> check)
     {
+        var clock=new AnimationPlaybackClock();
+        check(clock.NextDelay(100,40)==40,"first animation frame gets full duration");
+        check(clock.NextDelay(145,40)==35,"dispatch delay is not added to every animation frame");
+        check(clock.NextDelay(183,80)==77,"variable frame durations retain absolute deadlines");
+        check(clock.NextDelay(1000,40)==40,"long animation stall rebases without skipping frames");
+        clock.Reset();check(clock.NextDelay(1100,40)==40,"starved stream resumes with a full frame duration");
+        var largeGif=new ImageSourceInfo(1,new string('a',64),"image/gif",72*1024*1024,true);
+        check(!largeGif.IsNativeGif&&largeGif.AnimationCandidate,"large GIF uses bounded streaming instead of original byte-array transfer");
         foreach(var mode in Enum.GetValues<ReaderDisplayMode>())
         foreach(var count in new[]{1,2,3,4,5,10000})
         {

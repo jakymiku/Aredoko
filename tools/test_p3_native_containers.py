@@ -16,6 +16,7 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--usability-u1',action='store_true')
     parser.add_argument('--usability-u2',action='store_true')
+    parser.add_argument('--usability-u3',action='store_true')
     parser.add_argument('--uia-only',action='store_true',help='Record input/hover checks as unverified; use UIA only')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
@@ -64,6 +65,15 @@ def main():
             (media/'generated-144.png').unlink()
             with zipfile.ZipFile(media/'zz-usability.cbz','w') as book:
                 for page in range(5):book.writestr(f'{page}.png',png(width=300,height=500,color=(40+page*30,80,160)))
+            (target/'viewer-settings.json').write_text(json.dumps({'version':1,'wheel_up_advances':False,'always_show_controls':True}),encoding='utf-8')
+        if args.usability_u3:
+            from PIL import Image
+            for old,name,kind,count in [('generated-144.png','zz-clock.webp','WEBP',12),('generated-143.png','zz-clock.png','PNG',72)]:
+                (media/old).unlink()
+                frames=[Image.new('RGBA',(64,48),(50+i%150,80,150,128 if kind=='PNG' else 255)) for i in range(count)]
+                try:frames[0].save(media/name,format=kind,save_all=True,append_images=frames[1:],duration=[40+i%3*20 for i in range(count)],loop=0)
+                finally:
+                    for frame in frames:frame.close()
             (target/'viewer-settings.json').write_text(json.dumps({'version':1,'wheel_up_advances':False,'always_show_controls':True}),encoding='utf-8')
         if args.detail_actions:
             from ui_detail_actions_audit import create_media
@@ -124,9 +134,9 @@ def main():
             audit(ui,tree,shot,check,first['id'],gate,cat,interactive=not args.uia_only)
             if args.uia_only:report['unverified']=['pointer hover/tooltip','small-size slider and name ellipsis','context-menu invocation','Ctrl Home/End physical input']
             check('generated sources unchanged',before==sources());report['pass']=True
-        elif args.usability_u2:
+        elif args.usability_u2 or args.usability_u3:
             from ui_usability_u2_audit import audit
-            audit(ui,cli,tree,shot,check,report,proc.pid,hwnd,first['id'],cat,user)
+            audit(ui,cli,tree,shot,check,report,proc.pid,hwnd,first['id'],cat,user,animations=args.usability_u3)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.initial_loading:
             for nav,expected,name in (("NavHistory","閲覧履歴はありません。作品を開くと、ここに表示されます。","empty-history"),("NavFavorites","お気に入りはまだありません。作品の右クリックメニューや詳細から登録できます。","empty-favorites")):

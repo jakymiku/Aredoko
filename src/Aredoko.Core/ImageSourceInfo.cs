@@ -5,7 +5,7 @@ namespace Aredoko.Core;
 // UI-neutral container information. A signature is not a decoding guarantee.
 public sealed record ImageSourceInfo(int ItemId,string Revision,string Mime,long SizeBytes,bool AnimationCandidate)
 {
-    public bool IsNativeGif => Mime=="image/gif";
+    public bool IsNativeGif => Mime=="image/gif"&&SizeBytes<=PreviewPolicy.ViewerSourceBytes;
 
     public static ImageSourceInfo Parse(byte[] json,int expectedItemId)
     {
@@ -21,7 +21,7 @@ public sealed record ImageSourceInfo(int ItemId,string Revision,string Mime,long
             if(item<1||item!=expectedItemId||revision is null||revision.Length!=64||
                 revision.Any(c=>!(c is >= '0' and <= '9' or >= 'a' and <= 'f'))||
                 mime is not ("image/png" or "image/jpeg" or "image/webp" or "image/gif" or "image/bmp")||
-                size<1||size>PreviewPolicy.ViewerSourceBytes||
+                size<1||size>PreviewPolicy.StreamImageBytes||
                 (animation&&mime is not ("image/png" or "image/webp" or "image/gif"))||
                 (mime=="image/gif"&&!animation))
                 throw new InvalidDataException("画像形式の情報が無効です。");

@@ -9,6 +9,9 @@ Codex GPT-6.1 Sol / Antigravity共通の実装手順。既存P0–P7を置き換
 - `u1-dark01..04`は前面化/入力ハーネス・環境失敗としてrawを保持。screenshot --focus、focusコマンド、所有HWNDへの通常SetForegroundWindowも前面確認を満たさなかった。別アプリ入力やOS制限回避は行っていない。`--uia-only`でpointer/keyboard/context menu/小サイズsliderを**未検証として明示**する。これらをPASSへ数えず、入力可能時に対象だけ受け入れる。
 - 先行 `u1-uia01`の画面レビューで選択枠の弱さとuniform tileのcaption領域不足を見つけ、選択styleとcaption最小高を修正。UIA PASSだけで見た目の合格にはしない。次の実装はU2a。
 - **U2a/b**：画像/本の独自header/×を撤去しOSタイトルへ名前・位置を反映。noticeをtoolbarから独立overlayへ、下端32DIP/約1秒hideの共通制御、keyboard/menu/hover中の保持と常時表示設定。小画像拡大をviewer設定へ移動し、中心zoom/左drag、設定OFF既定の本の双方向循環を追加。保存/backup契約は旧形式を読み新boolean2値を保全。
+- **U3 部分実装**：再生clockを処理時間の累積しない絶対deadlineへ変更。starvation/長い停止では再同期し、無条件frame skipをしない。同じWriteableBitmapのSourceを毎frame再設定しない。APNG黒化の原因確定/修正とは扱わない。
+- U3bの容量経路：metadata/所有handleのstreamのみ256MiBまで、丸ごと原寸取得は64MiB、AI/旧APIの制限は維持。大容量GIFはnative全量転送を避けstreamへ。既存の画素数/4frame/128MiB制約・登録/版guardを保持。73MiBの生成GIFで、全frame数を走査せずprobe/先頭thumbnail/先頭stream成功、元mtime不変、原寸byte-array拒否、256MiB超拒否を確認。コメントpaddingで容量を増やした小画像fixtureであり、実72MB高解像度GIFのFPS/RSS受入ではない。
+- U3候補 `frontend07` publish成功、Core対象97・Python animation13/format6 PASS。`u3-uia02`は6checks/exit0/残存0、生成WebP12frame/APNG72frameの連続割当とloopを確認、3PNG目視。先行u3-uia01は同件数検索の待ち条件が古い結果を通したハーネスFAILで、対象ID待ちへ修正して再確認。**報告原本APNGの黒化、物理FPS/Honeyview同等、大画像/RSS、CBZのcold/warm性能は残件。**
 - U2候補 `frontend06` Portable publish成功、新規CS8602は初期化順を直して解消（既知WUI1001×3/SDK IL2104×2は残存）。Core対象79 checks、backup既存28＋不正boolean拒否1 PASS。生成144PNG/5ページCBZの `u2-uia01` は10checks/exit0/残存0、4PNG（主画面含む）を確認対象とした。OSタイトル更新、header非表示、toolbar位置固定、表示設定、単ページ/奇数RTLの双方向循環、bar非表示と設定ファイル保持を確認。ホイール/物理drag/hotzone/tooltip/HC/DPIは未受入。旧viewer試験のImageClose/ReaderClose/ReaderPageNumber等はOSタイトル/正常WM_CLOSEへ移行する必要がある。
 
 ## 1. 基準と確認範囲
