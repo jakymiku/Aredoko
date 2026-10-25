@@ -134,7 +134,7 @@ public sealed partial class MainPage
                 }
                 if (usesAI && !aiModelResident)
                 {
-                    SetAiSearchModelLoading(true);
+                    SetAiSearchModelLoading(true,version);
                 }
                 try
                 {
@@ -142,7 +142,7 @@ public sealed partial class MainPage
                 }
                 finally
                 {
-                    if (usesAI) SetAiSearchModelLoading(false);
+                    if (usesAI) SetAiSearchModelLoading(false,version);
                 }
                 if (!searches.IsCurrent(version) || disposed || cancellation.IsCancellationRequested)
                 {

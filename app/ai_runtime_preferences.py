@@ -28,6 +28,7 @@ def read_preferences(path):
     if path.stat().st_size>MAX_SETTINGS:raise ValueError('Launch preferences exceed limit')
     value=json.loads(path.read_text(encoding='utf-8-sig'),object_pairs_hook=object_pairs)
     if not isinstance(value,dict):raise ValueError('Invalid launch preferences')
+    if 'verify_ai_runtime' in value and type(value['verify_ai_runtime']) is not bool:raise ValueError('Invalid runtime verification preference')
     for name in ('ai_python','ai_runtime_root','models_root',*MODEL_ROOT_FIELDS.values()):
         if name in value and (not isinstance(value[name],str) or len(value[name])>4096
                 or not Path(value[name]).is_absolute() or any(ord(c)<32 for c in value[name])):
@@ -84,13 +85,16 @@ class AIRuntimePreferences:
         model=model_state(self.profile,self.repo,models)
         runtime_changed=selected is not None and self.active_python is not None and os.path.normcase(str(selected))!=os.path.normcase(self.active_python)
         models_changed=self.active_models_root is not None and models is not None and os.path.normcase(str(models))!=os.path.normcase(self.active_models_root)
-        selection_changed=any(data.get(k)!=self.started.get(k) for k in ('ai_python','ai_runtime_root','ai_runtime_manifest_sha256','models_root',LOCATIONS,*MODEL_ROOT_FIELDS.values()))
+        verify=data.get('verify_ai_runtime',True);active_verify=self.started.get('verify_ai_runtime',True)
+        selection_changed=verify!=active_verify or any(data.get(k)!=self.started.get(k) for k in ('ai_python','ai_runtime_root','ai_runtime_manifest_sha256','models_root',LOCATIONS,*MODEL_ROOT_FIELDS.values()))
         return {'runtime':runtime,'model':model,'runtime_root':data.get('ai_runtime_root'),'models_root':models,'shared_models_root':common,'model_roots':{role:model_root(data,role,common) for role in MODEL_ROOT_FIELDS},'model_locations':data.get(LOCATIONS,[]),'restart_required':selection_changed or runtime_changed or models_changed,
+                'verify_ai_runtime':verify,'active_verify_ai_runtime':active_verify,
                 'selection_service_available':True,'selection_api_supported':True,'downloads_supported':False,
                 'inference_verified':False,'message':'設定の変更は次回起動時に反映します。実行環境とモデルは別々に確認します。'}
 
-    def select(self,*,runtime_root=UNSET,models_root=UNSET,model_role=None,model_target=None,consent=False,cancelled=lambda:False,progress=None,publish=None):
+    def select(self,*,runtime_root=UNSET,models_root=UNSET,model_role=None,model_target=None,verify_ai_runtime=UNSET,consent=False,cancelled=lambda:False,progress=None,publish=None):
         if consent is not True:raise ValueError('Explicit runtime folder consent required')
+        if verify_ai_runtime is not UNSET and type(verify_ai_runtime) is not bool:raise ValueError('Invalid runtime verification preference')
         if model_role is not None and (not isinstance(model_role,str) or model_role not in MODEL_ROOT_FIELDS or models_root is UNSET):raise ValueError('Explicit model role and folder required')
         target=ModelTarget.from_dict(model_target) if model_target is not None else None
         if target is not None and (model_role is not None or models_root is UNSET):raise ValueError('Select one explicit model target')
@@ -106,6 +110,7 @@ class AIRuntimePreferences:
         storage_parent(self.path)
         with storage_lease(self.path):
             value=read_preferences(self.path)
+            if verify_ai_runtime is not UNSET:value['verify_ai_runtime']=verify_ai_runtime
             if runtime_root is not UNSET:
                 value.pop('ai_runtime_root',None);value.pop('ai_runtime_manifest_sha256',None);value.pop('ai_python',None)
                 if info is not None:

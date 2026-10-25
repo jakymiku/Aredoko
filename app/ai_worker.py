@@ -76,7 +76,7 @@ def main():
         except Exception as ex:
             import traceback
             traceback.print_exc(file=sys.stderr)
-            response = {'error': f'{type(ex).__name__}: {ex}'}
+            response = {'error': type(ex).__name__}
         print(json.dumps(response,allow_nan=False),file=wire,flush=True)
 
 if __name__ == '__main__': main()

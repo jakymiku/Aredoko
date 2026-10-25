@@ -17,7 +17,7 @@ public sealed record ResultNeighbor(int Ordinal, MediaRow Item);
 
 // Shared contracts only: rendering, selection, drafts and scrolling belong to
 // the native frontend. All range/neighbor reads use the same owned search ID.
-public sealed class ResultSessionClient(HttpClient client)
+public sealed class ResultSessionClient(HttpClient client,HttpClient? aiClient=null)
 {
     public async Task<ResultSession> CreateAsync(JsonObject conditions, CancellationToken cancellation)
     {
@@ -25,7 +25,8 @@ public sealed class ResultSessionClient(HttpClient client)
         var session = new ResultSession(client, id, frozen);
         try
         {
-            var root = await SendAsync(client, "create", new JsonObject { ["session_id"] = id, ["conditions"] = frozen.DeepClone() }, cancellation);
+            var usesAI=frozen["mode"]?.GetValue<string>() is "semantic" or "similar" or "pending-proposals-semantic";
+            var root = await SendAsync(usesAI?aiClient??client:client, "create", new JsonObject { ["session_id"] = id, ["conditions"] = frozen.DeepClone() }, cancellation);
             if (root["session_id"]?.GetValue<string>() != id || root["state"]?.GetValue<string>() != "ready" ||
                 !JsonNode.DeepEquals(root["conditions"], frozen) || root["range_limit"]?.GetValue<int>() != 120 ||
                 root["idle_seconds"]?.GetValue<int>() != 900 || root["total"]?.GetValue<int>() is not int total || total < 0)

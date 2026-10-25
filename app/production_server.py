@@ -39,7 +39,7 @@ from wd_tagger import create_tagger
 from tagger_profile import load_profile as load_tagger_profile
 from model_locations import FIELD as LOCATIONS, ModelTarget
 from storage_lease import storage_lease,storage_parent
-from runtime_paths import worker_python, bind_runtime, start_runtime_verification
+from runtime_paths import worker_python, bind_runtime, start_runtime_verification, configure_runtime_verification
 from ai_runtime_preferences import AIRuntimePreferences, read_preferences, model_root, MODEL_ROOT_FIELDS
 from ai_setup_jobs import AISetupJobs, SetupBusy
 from backup_jobs import BackupJobs,BackupBusy
@@ -557,7 +557,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
                 body=json.loads(self.rfile.read(length),**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
                 if self.path.startswith('/api/library/results/'):
@@ -642,6 +642,11 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if self.path=='/api/library/ai/setup/select':
                     try:return self.send(202,setup_jobs.start(body))
                     except SetupBusy:return self.send(409,{'error':'AI環境の確認を開始できません。現在の状態を確認してください。','job':setup_jobs.snapshot()})
+                if self.path=='/api/library/ai/runtime-verification':
+                    if set(body)!={'enabled'} or type(body['enabled']) is not bool:raise ValueError('Invalid runtime verification preference')
+                    if setup_jobs.snapshot()['state'] in ('validating','saving','cancelling'):
+                        return self.send(409,{'error':'AI環境の確認完了後に設定してください。'})
+                    return self.send(200,setup.select(verify_ai_runtime=body['enabled'],consent=True))
                 if self.path=='/api/library/ai/setup/cancel':
                     if set(body)!={'job_id'}:raise ValueError('Invalid setup cancel request')
                     try:return self.send(200,setup_jobs.cancel(body['job_id']))
@@ -951,6 +956,7 @@ def _serve(args):
                 expected=Path(selected['ai_runtime_root'])/'python.exe'
                 if expected.absolute()==Path(args.ai_python).absolute():bind_runtime(expected.parent,selected['ai_runtime_manifest_sha256'])
         except (ValueError,OSError,KeyError):pass
+    configure_runtime_verification(selected.get('verify_ai_runtime',True))
     from restore_handoff import RestoreHandoff
     handoff=RestoreHandoff(args.restore_session_dir,args.instance_id,args.db) if args.restore_session_dir is not None else None
     def close_job(job):
@@ -971,7 +977,8 @@ def _serve(args):
             try: ai.configure(**profiles.resource())
             except (ValueError,OSError,json.JSONDecodeError): ai.configure(**RESOURCE_DEFAULT)
             if ai.encoder.available:
-                start_runtime_verification(ai.encoder.python)
+                verification=start_runtime_verification(ai.encoder.python)
+                if verification:resources.callback(close_job,verification)
         intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**{**runtime,'models_root':model_root(overrides,'intent',args.models_root)})
         resources.callback(intent.close)
         try:tag_definition=load_tagger_profile(Path(__file__).resolve().parents[1],args.tagger_profile)

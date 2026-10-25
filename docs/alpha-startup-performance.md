@@ -23,7 +23,7 @@
 | SHA256ファイル数 | 24,196 | 24,196 |
 | plain_path呼出し | 80,864 | 80,864 |
 
-全体は32.009秒、約43.5%短縮。`plain_path`/`digest`の累計秒数は並行callの重なりを含むため、wall timeへ足し合わせない。計測は既存配布を読み取って現行checkerを適用したもので、**既存5.52GB snapshotのcode/manifestを更新したわけではない**。新配布を作る際に現行checkerが同梱される。source layoutは生成staging/CLI回帰でも検証済み。40秒以上のcheckは依然長く、native起動統合時の待ち表示/工程分離等は別途設計する。整合性検査を無効化して済ませない。
+全体は32.009秒、約43.5%短縮。`plain_path`/`digest`の累計秒数は並行callの重なりを含むため、wall timeへ足し合わせない。計測は既存配布を読み取って現行checkerを適用したもので、**既存5.52GB snapshotのcode/manifestを更新したわけではない**。新配布を作る際に現行checkerが同梱される。source layoutは生成staging/CLI回帰でも検証済み。40秒以上のcheckは依然長く、native起動統合時の待ち表示/工程分離等は別途設計する。既定の整合性検査を維持する。2026-10-26の利用者指示により、AI実行環境の全照合だけは[高度な設定](ai-runtime-setup.md)で明示的に省略可能。基本検査と取得時検証は残す。
 
 ## 初回の拒否と検証harnessの訂正
 

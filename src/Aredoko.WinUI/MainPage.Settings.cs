@@ -28,6 +28,15 @@ public sealed partial class MainPage
             wheel.Items.Add("下に回す（上で戻る）");wheel.Items.Add("上に回す（下で戻る）");wheel.SelectedIndex=ViewerOptions.Value.WheelUpAdvances?1:0;
             AutomationProperties.SetAutomationId(wheel,"SettingsWheel");
             var hint=new TextBlock{Text="拡大中は画像のスクロールを優先します。マウスの進む・戻るも使えます。",TextWrapping=TextWrapping.Wrap};
+            var verification=new CheckBox{Content="AI実行環境の全ファイルを照合する",IsEnabled=false};
+            AutomationProperties.SetAutomationId(verification,"SettingsVerifyAIRuntime");
+            var verificationHint=new TextBlock{Text="既定はオンです。オフにすると破損や変更を検出しにくくなります。次回起動から反映します。基本確認と、新しく取得するファイルの検証は省略しません。",TextWrapping=TextWrapping.Wrap};
+            var advancedContent=new StackPanel{Spacing=8};advancedContent.Children.Add(verification);advancedContent.Children.Add(verificationHint);
+            var advanced=new Expander{Header="高度な設定",Content=advancedContent,HorizontalAlignment=HorizontalAlignment.Stretch};
+            AutomationProperties.SetAutomationId(advanced,"SettingsAdvanced");
+            bool? savedVerification=null;
+            try{var setup=await api.GetAsync("api/library/ai/setup");savedVerification=setup["verify_ai_runtime"]?.GetValue<bool>()??true;verification.IsChecked=savedVerification;verification.IsEnabled=true;}
+            catch{verificationHint.Text="バックエンドに接続できません。整合性チェックの設定は変更できません。";}
             var savedText=new TextBlock{TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(savedText,"SettingsStatus");
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="設定",PrimaryButtonText="保存",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)}};
             AutomationProperties.SetAutomationId(dialog,"SettingsDialog");
@@ -35,9 +44,28 @@ public sealed partial class MainPage
             var saveStyle=new Style{TargetType=typeof(Button),BasedOn=(Style)Application.Current.Resources["AccentButtonStyle"]};
             saveStyle.Setters.Add(new Setter(AutomationProperties.AutomationIdProperty,"SettingsSave"));
             dialog.PrimaryButtonStyle=saveStyle;
-            dialog.PrimaryButtonClick+=(_,args)=>{args.Cancel=true;SavePreferences();};
-            void SavePreferences(){try{var selectedTheme=theme.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};ViewerOptions.SavePreferences(wheel.SelectedIndex==1,selectedTheme,ViewerOptions.Value.EnlargeSmallImages);MainWindow.Current.ApplyTheme(selectedTheme);dialog.RequestedTheme=selectedTheme switch{"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};savedText.Text="保存しました。テーマはすぐ反映します。";}catch(Exception ex){savedText.Text="保存できません: "+ex.Message;}}
-            panel.Children.Add(wheel);panel.Children.Add(hint);panel.Children.Add(savedText);
+            dialog.PrimaryButtonClick+=async (_,args)=>
+            {
+                args.Cancel=true;var deferral=args.GetDeferral();
+                await Task.Yield();dialog.IsPrimaryButtonEnabled=false;
+                try
+                {
+                    var enabled=verification.IsChecked==true;
+                    if(savedVerification is bool previous&&enabled!=previous)
+                    {
+                        await api.PostAsync("api/library/ai/runtime-verification",new System.Text.Json.Nodes.JsonObject{["enabled"]=enabled});
+                        savedVerification=enabled;
+                    }
+                    var selectedTheme=theme.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};
+                    ViewerOptions.SavePreferences(wheel.SelectedIndex==1,selectedTheme,ViewerOptions.Value.EnlargeSmallImages);
+                    MainWindow.Current.ApplyTheme(selectedTheme);
+                    dialog.RequestedTheme=selectedTheme switch{"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};
+                    savedText.Text="保存しました。テーマはすぐに、整合性チェックは次回起動から反映します。";
+                }
+                catch(Exception ex){savedText.Text="保存できません: "+ex.Message;}
+                finally{dialog.IsPrimaryButtonEnabled=true;deferral.Complete();}
+            };
+            panel.Children.Add(wheel);panel.Children.Add(hint);panel.Children.Add(advanced);panel.Children.Add(savedText);
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
             foreach(var (label,id,target) in new[]{

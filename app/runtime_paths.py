@@ -29,7 +29,16 @@ import time
 _pack_lock=threading.Lock()
 _state_lock=threading.Lock()
 _verify_state={}
+_verify_jobs={}
 _SLOW_VERIFY_SECONDS=300.0
+_verify_enabled=True
+
+
+def configure_runtime_verification(enabled=True):
+    """Restart-only preference. Acquisition and explicit repair always verify."""
+    if type(enabled) is not bool:raise ValueError('Invalid runtime verification preference')
+    global _verify_enabled
+    _verify_enabled=enabled
 
 
 def _root_key(root):
@@ -84,8 +93,7 @@ def runtime_verification_status(python):
         }
 
 
-def verify_runtime_pack(python):
-    from storage_lease import plain_path
+def verify_runtime_pack(python, *, cancelled=lambda: False):
     python=Path(python)
     root_key=_root_key(python.parent)
     marker=python.parent/'aredoko-ai-runtime.json'
@@ -93,9 +101,14 @@ def verify_runtime_pack(python):
     if expected is None and not (marker.exists() or marker.is_symlink()):
         return None
     from ai_runtime import inspect_runtime
-    with _pack_lock:
+    # A queued verification must also be cancellable while another pack owns
+    # the hash lock. Never leave a background reader alive after restore proof.
+    while not _pack_lock.acquire(timeout=0.05):
+        if cancelled():raise RuntimeError('Runtime validation cancelled')
+    try:
+        if cancelled():raise RuntimeError('Runtime validation cancelled')
         try:
-            info=inspect_runtime(python.parent,expected=expected)
+            info=inspect_runtime(python.parent,expected=expected,cancelled=cancelled)
         except Exception as error:
             with _state_lock:
                 prev=_verify_state.get(root_key) or {}
@@ -111,6 +124,9 @@ def verify_runtime_pack(python):
                 }
             raise
         key=(info['root'],info['manifest_sha256'])
+        if not _verify_enabled:
+            with _state_lock:_verify_state[root_key]=_idle_status('skipped')
+            return info
         if key in _verified_packs:
             with _state_lock:
                 prev=_verify_state.get(root_key)
@@ -149,10 +165,11 @@ def verify_runtime_pack(python):
                     cur['bytes_total']=int(counts.get('bytes_total',cur['bytes_total']))
                     cur['elapsed_seconds']=max(0.0,now-started_at)
         try:
-            full_info=inspect_runtime(python.parent,verify=True,expected=expected,progress=_on_progress)
-            _verified_packs.add(key)
+            full_info=inspect_runtime(python.parent,verify=True,expected=expected,cancelled=cancelled,progress=_on_progress)
+            if cancelled():raise RuntimeError('Runtime validation cancelled')
             elapsed=max(0.0,time.monotonic()-started_at)
             with _state_lock:
+                _verified_packs.add(key)
                 _verify_state[root_key]={
                     'state':'verified',
                     'files_done':int(full_info.get('files',0)),
@@ -169,7 +186,7 @@ def verify_runtime_pack(python):
             with _state_lock:
                 cur=_verify_state.get(root_key) or {}
                 _verify_state[root_key]={
-                    'state':'failed',
+                    'state':'cancelled' if cancelled() else 'failed',
                     'files_done':int(cur.get('files_done',0)),
                     'files_total':int(cur.get('files_total',info.get('files',0))),
                     'bytes_done':int(cur.get('bytes_done',0)),
@@ -179,6 +196,34 @@ def verify_runtime_pack(python):
                     'error':str(error),
                 }
             raise
+    finally:
+        _pack_lock.release()
+
+
+class RuntimeVerificationJob:
+    """One backend-owned reader; close must succeed before restore can switch."""
+    def __init__(self,python):
+        self.python=python
+        self.cancelled=threading.Event()
+        self.thread=threading.Thread(target=self._run,daemon=True,name='ai-runtime-verify')
+
+    def _run(self):
+        key=_root_key(self.python.parent)
+        try:
+            verify_runtime_pack(self.python,cancelled=self.cancelled.is_set)
+        except Exception:
+            with _state_lock:
+                entry=_verify_state.get(key)
+                if entry is not None and entry['state']=='verifying':
+                    entry.update(state='cancelled' if self.cancelled.is_set() else 'failed',started_at=None)
+        finally:
+            with _state_lock:
+                if _verify_jobs.get(key) is self:_verify_jobs.pop(key)
+
+    def close(self,timeout=10):
+        self.cancelled.set()
+        self.thread.join(timeout)
+        return not self.thread.is_alive()
 
 
 def start_runtime_verification(python):
@@ -186,22 +231,29 @@ def start_runtime_verification(python):
         return False
     python=Path(python)
     root_key=_root_key(python.parent)
+    if not _verify_enabled:
+        with _state_lock:_verify_state[root_key]=_idle_status('skipped')
+        return None
     marker=python.parent/'aredoko-ai-runtime.json'
     expected=_pack_bindings.get(root_key)
     if expected is None and not (marker.exists() or marker.is_symlink()):
         return False
     with _state_lock:
+        if root_key in _verify_jobs:return None
         cur=_verify_state.get(root_key)
         if cur is not None and cur.get('state') in ('verifying','verified'):
             if cur.get('state')=='verifying' or any(_root_key(r)==root_key for r,_ in _verified_packs):
-                return False
-    def _run():
-        try:
-            verify_runtime_pack(python)
+                return None
+        job=RuntimeVerificationJob(python)
+        _verify_jobs[root_key]=job
+        # Publish before thread start, including time spent waiting for the lock.
+        _verify_state[root_key]={**_idle_status('verifying'),'started_at':time.monotonic()}
+        try:job.thread.start()
         except Exception:
-            pass
-    threading.Thread(target=_run,daemon=True,name='ai-runtime-verify').start()
-    return True
+            _verify_jobs.pop(root_key,None)
+            _verify_state.pop(root_key,None)
+            raise
+    return job
 
 
 def worker_command(python,script,arguments):

@@ -241,6 +241,7 @@ await PageChunkTests.Run(Check);
 await IndexContinuationTests.Run(Check);
 
 await SearchCancellationTests.Run(Check);
+await AIStartupTests.Run(Check);
 AudioSpeechTests.Run(Check);
 StatusClarityTests.Run(Check);
 

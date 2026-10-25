@@ -215,6 +215,18 @@ class SetupHttpTests(unittest.TestCase):
         select='/api/library/ai/setup/select';cancel='/api/library/ai/setup/cancel';job='/api/library/ai/setup/job'
         body={'runtime_root':str(self.pack),'consent':True}
         try:
+            policy='/api/library/ai/runtime-verification'
+            self.assertTrue(request('/api/library/ai/setup')[1]['verify_ai_runtime'])
+            changed=request(policy,{'enabled':False})[1]
+            self.assertFalse(changed['verify_ai_runtime']);self.assertTrue(changed['active_verify_ai_runtime'])
+            self.assertTrue(changed['restart_required'])
+            for invalid in ({'enabled':1},{'enabled':'false'},{'enabled':False,'extra':True}):
+                with self.assertRaises(urllib.error.HTTPError) as rejected:request(policy,invalid)
+                self.assertEqual(rejected.exception.code,400);rejected.exception.close()
+            with self.assertRaises(urllib.error.HTTPError) as denied:request(policy,{'enabled':True},token=False)
+            self.assertEqual(denied.exception.code,403);denied.exception.close()
+            self.assertFalse(request('/api/library/ai/setup')[1]['verify_ai_runtime'])
+            self.before=self.path.read_bytes()  # Cancellation must retain the explicit preference just saved.
             raw=urllib.request.Request(origin+select,data=b'{"consent":false,"consent":true,"runtime_root":null}',
                 headers={'Origin':origin,'X-Aredoko-Token':'generated-token','Content-Type':'application/json'})
             with self.assertRaises(urllib.error.HTTPError) as duplicate:opener.open(raw,timeout=2)

@@ -3,6 +3,17 @@
 > **2026-10-25 現在**：既存配置のnative画面、モデル別保存先、モデル2件の取得は[AI取得正本](ai-acquisition.md)まで接続済み。以下の「GUI/取得未実装」はLD3当時の履歴。runtime自動取得はまだ公開していない。[通知収集と同梱](runtime-notice-inventory.md)で実配布の不足を整理し、必要な権利review/公開先が揃ってから登録する。
 
 
+## 2026-10-26：起動照合・高度な設定
+
+- 設定→「高度な設定」→「AI実行環境の全ファイルを照合する」を追加。`verify_ai_runtime` は省略時/既定オン、厳密なbool。利用者がオフで保存した場合のみ、**次回バックエンド起動から**大きなruntime packの全ファイルSHA-256照合を省略する。実行中の方針/モデル/索引namespaceは変えない。
+- オフでもmanifest binding、Python実体/ABI、moduleパス、coreファイルと通常パスの確認を残す。取得時・配置選択時の完全検証は常に行う。基本ZIPの検査やモデル取得検証を一括で無効にする設定ではない。
+- `POST /api/library/ai/runtime-verification {enabled: bool}` は既存token/Origin/JSON重複拒否と設定writer fence/atomic replaceを使う。他のlaunch設定を保全。setup GETに保存値/起動時の値を返す。AI環境の選択ジョブ中は409、未知field/整数/文字列は400。
+- 起動時の背景照合は終了・復元前に取消/待機する所有jobへ変更。待機時間切れを成功扱いにせず、取消途中のhashを検証済みcacheへ登録しない。待ち行列も進捗対象にし、同じpackの二重起動を抑止。
+- HTTPの15分上限はAI検索作成だけに限定。通常通信40秒/タグ管理100秒へ戻し、照合状態の確認は5秒上限＋検索取消/画面終了tokenを渡す。結果のrange/closeは短い通常transportを使う。旧検索のfinallyが新しいモデル読込表示を消さない。
+- UTF-8固定/Portable初期化修正はAntigravity差分を採用。worker stdoutの失敗応答は例外型に限定し、詳細traceはローカルstderrへ。無視する`__pycache__`自体のリンク/reparseは拒否する。選択済みpackを実行中に同じユーザーが改変しないという既存前提は残る。
+- CPU：runtime32/設定job15・Core関連・Portable publish PASS（既知のWUI1001/SDK IL2104を抑制していない）。生成nativeでは高度な設定の既定オン→オフ保存→再起動保持をDark通常幅で確認。中止・終了の所有テストも追加。証拠 `data/ai-ui/startup-review-20261026/`（Git対象外）。
+- 既存pack/既存モデル＋生成PNG2枚の実GPU：全照合1回、CUDA索引2件、日本語cover検索2件、モデル解放→再読込を確認。packは23,903 files / 4,947,898,990 bytes、照合87.324s、解放後検索15.386s、warm検索0.162s（各1回、一般性能保証ではない）。原本不変、所有job終了。公開runtimeの権利/hostとclean Windows受入は未完。
+
 > **2026-10-22 LD4a追記**：[既存folderの背景検査job/API](ai-setup-jobs.md)を実装。下の「GETだけ/HTTP保存未実装」はLD3時点の履歴。現在は非同期start/status/cancelまで対応し、製品GUIとdownloadは引き続き未実装。
 
 2026-10-21。[配布計画LD1–LD6](lightweight-distribution.md)のLD3。基本Pythonと、ユーザーが明示的に選ぶAI実行環境を分離するCPU基盤。**製品GUIでの選択・自動ダウンロードはまだ利用できない**。旧installed Alpha、旧配布、普段のDB/設定/モデルは変更していない。

@@ -8,6 +8,7 @@ public sealed class LibraryApi : IDisposable
     private readonly HttpClient client;
     public LibraryApi() : this(new HttpClientHandler { AllowAutoRedirect = false }) { }
     private readonly HttpClient tagClient;
+    private readonly HttpClient aiClient;
     public BackupClient Backups {get;}
     public AIEnvironmentClient AIEnvironment {get;}
     public AIDownloadClient AIDownloads {get;}
@@ -20,16 +21,17 @@ public sealed class LibraryApi : IDisposable
     public IndexContinuationClient Continuation {get;}
     public LibraryApi(HttpMessageHandler handler)
     {
-        client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromMinutes(15)};
-        tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromMinutes(15)};
+        client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(40)};
+        tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromSeconds(100)};
+        aiClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromMinutes(15)};
         Backups=new(client);
         AIEnvironment=new(client);
         AIDownloads=new(client);
         Restores=new(client);
         Shelves=new(client);
-        Results=new(client);
+        Results=new(client,aiClient);
         Animations=new(client);
-        TagReviews=new(tagClient);
+        TagReviews=new(tagClient,aiClient);
         PageEvidences=new(tagClient);
         Continuation=new(tagClient);
     }
@@ -69,6 +71,10 @@ public sealed class LibraryApi : IDisposable
         tagClient.DefaultRequestHeaders.Add("X-Aredoko-Token",doc.RootElement.GetProperty("token").GetString());
         tagClient.DefaultRequestHeaders.Remove("Origin");
         tagClient.DefaultRequestHeaders.Add("Origin","http://127.0.0.1:8769");
+        aiClient.DefaultRequestHeaders.Remove("X-Aredoko-Token");
+        aiClient.DefaultRequestHeaders.Add("X-Aredoko-Token",doc.RootElement.GetProperty("token").GetString());
+        aiClient.DefaultRequestHeaders.Remove("Origin");
+        aiClient.DefaultRequestHeaders.Add("Origin","http://127.0.0.1:8769");
     }
     public Task<SearchResponse> SearchAsync(string q,string kind,string view,int page,bool semantic=false,string source="all",JsonObject? scope=null,int? rootId=null,bool literalOnly=false,double? groupThreshold=null,string resultGroup="all",CancellationToken cancellation=default) =>
         SearchMultiAsync(q,kind,view,page,semantic,source,scope,rootId is int id ? new[]{id} : null,literalOnly,groupThreshold,resultGroup,cancellation);
@@ -91,7 +97,7 @@ public sealed class LibraryApi : IDisposable
         }
         if(semantic && !string.IsNullOrWhiteSpace(q))
         {
-            var result=await new SearchRequestClient(client).RunAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup),cancellation,seconds:900);
+            var result=await new SearchRequestClient(aiClient).RunAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup),cancellation,seconds:900);
             return Protocol.ParseSearch(Encoding.UTF8.GetString(result));
         }
         return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
@@ -112,16 +118,16 @@ public sealed class LibraryApi : IDisposable
         SimilarMultiAsync(itemId,kind,view,page,scope,rootId is int id ? new[]{id} : null,cancellation);
     public async Task<SearchResponse> SimilarMultiAsync(int itemId,string kind,string view,int page,JsonObject scope,IReadOnlyList<int>? rootIds,CancellationToken cancellation)
     {
-        var bytes=await new SearchRequestClient(client).RunAsync("api/library/ai/similar",
+        var bytes=await new SearchRequestClient(aiClient).RunAsync("api/library/ai/similar",
             SimilaritySearch.RequestMulti(itemId,kind,view,page,scope,rootIds),cancellation,900,SimilaritySearch.MaxResponseBytes);
         return SimilaritySearch.Parse(Encoding.UTF8.GetString(bytes),itemId,page);
     }
     public Task<string> ExportRelatedTermsAsync() => GetTextAsync("api/library/terms/export");
     public Task<JsonNode> ImportRelatedTermsAsync(string document) => PostAsync("api/library/terms/import", document);
-    public async Task<JsonNode> GetAsync(string route) => JsonNode.Parse(await GetTextAsync(route))!;
-    private async Task<string> GetTextAsync(string route) {
-        using var response=await client.GetAsync(route);
-        var text=await response.Content.ReadAsStringAsync();
+    public async Task<JsonNode> GetAsync(string route,CancellationToken cancellation=default) => JsonNode.Parse(await GetTextAsync(route,cancellation))!;
+    private async Task<string> GetTextAsync(string route,CancellationToken cancellation=default) {
+        using var response=await client.GetAsync(route,cancellation);
+        var text=await response.Content.ReadAsStringAsync(cancellation);
         if(!response.IsSuccessStatusCode) throw new InvalidOperationException(ErrorText.FromResponse(text,(int)response.StatusCode));
         return text;
     }
@@ -166,6 +172,6 @@ public sealed class LibraryApi : IDisposable
         if (requirePng && (data.Length < 8 || !data.AsSpan(0, 8).SequenceEqual(new byte[] {137,80,78,71,13,10,26,10}))) return null;
         return data;
     }
-    public void Dispose(){tagClient.Dispose();client.Dispose();}
+    public void Dispose(){aiClient.Dispose();tagClient.Dispose();client.Dispose();}
 }
 

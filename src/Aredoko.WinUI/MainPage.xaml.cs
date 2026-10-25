@@ -54,7 +54,9 @@ public sealed partial class MainPage : Page
     private bool folderHubOpen, folderTiles, folderPopulating, folderSettingsActive, pollingScan, gettingStartedDismissed, aiIndexReady, scanRootsRefreshed;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer scanPollTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer runtimeVerifyTimer;
-    private bool pollingRuntimeVerify, aiModelResident, aiSearchLoadingModel;
+    private readonly CancellationTokenSource runtimeVerifyLifetime=new();
+    private bool pollingRuntimeVerify, aiModelResident;
+    private long? aiModelLoadingVersion;
     private long? runtimeVerifyClientStartedTick;
     private JsonObject? aiScope;
     private string aiScopeError="AI索引の画面で対象を確認・保存してください。";
@@ -243,10 +245,11 @@ public sealed partial class MainPage : Page
         runtimeVerifyTimer.Start();
         await PollRuntimeVerificationAsync();
     }
-    private void SetAiSearchModelLoading(bool loading)
+    private void SetAiSearchModelLoading(bool loading,long version)
     {
         if(disposed)return;
-        aiSearchLoadingModel=loading;
+        if(!loading&&aiModelLoadingVersion!=version)return;
+        aiModelLoadingVersion=loading?version:null;
         if(loading)
         {
             if(!aiModelResident&&RuntimeVerifyCard.Visibility==Visibility.Collapsed)
@@ -307,7 +310,7 @@ public sealed partial class MainPage : Page
             return true;
         }
         runtimeVerifyClientStartedTick=null;
-        if(available&&aiSearchLoadingModel&&!resident)
+        if(available&&aiModelLoadingVersion is not null&&!resident)
         {
             RuntimeVerifyTitle.Text="AIモデルを読み込み中…";
             RuntimeVerifyProgress.IsIndeterminate=true;
@@ -326,7 +329,9 @@ public sealed partial class MainPage : Page
         pollingRuntimeVerify=true;
         try
         {
-            var data=await api.GetAsync("api/library/ai/status");
+            using var deadline=CancellationTokenSource.CreateLinkedTokenSource(runtimeVerifyLifetime.Token);
+            deadline.CancelAfter(TimeSpan.FromSeconds(5));
+            var data=await api.GetAsync("api/library/ai/status",deadline.Token);
             if(disposed)return;
             ApplyRuntimeVerificationSnapshot(data);
         }
@@ -345,8 +350,11 @@ public sealed partial class MainPage : Page
             JsonNode data;
             try
             {
-                data=await api.GetAsync("api/library/ai/status");
+                using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellation,runtimeVerifyLifetime.Token);
+                deadline.CancelAfter(TimeSpan.FromSeconds(5));
+                data=await api.GetAsync("api/library/ai/status",deadline.Token);
             }
+            catch(OperationCanceledException) when(cancellation.IsCancellationRequested||disposed){throw;}
             catch
             {
                 return;
@@ -2541,6 +2549,6 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){disposed=true;selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){if(disposed)return;disposed=true;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

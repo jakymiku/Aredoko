@@ -176,7 +176,7 @@ public static class TagReviewProtocol
 
 // Shares the authenticated loopback session, but generation has a 95s deadline
 // independent of the ordinary search client's 40s HttpClient timeout.
-public sealed class TagReviewClient(HttpClient client)
+public sealed class TagReviewClient(HttpClient client,HttpClient? aiClient=null)
 {
     private const string Route="api/library/tag-suggestions";
     private async Task<byte[]> ReadAsync(string route,JsonObject? body,int limit,CancellationToken cancellation,int seconds=10,bool image=false)
@@ -250,7 +250,7 @@ public sealed class TagReviewClient(HttpClient client)
         var body=TagReviewProtocol.CandidateSearchRequest(query,kind,view,page,rootIds,shelf,model);
         if(semantic)body["semantic"]=true;
         var bytes=semantic
-            ?await new SearchRequestClient(client).RunAsync(Route+"/search",body,cancellation,900,TagReviewProtocol.MaxJsonBytes)
+            ?await new SearchRequestClient(aiClient??client).RunAsync(Route+"/search",body,cancellation,900,TagReviewProtocol.MaxJsonBytes)
             :await ReadAsync(Route+"/search",body,TagReviewProtocol.MaxJsonBytes,cancellation,15);
         return TagReviewProtocol.ParseCandidateSearch(bytes,page,semantic);
     }

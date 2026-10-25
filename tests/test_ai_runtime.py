@@ -19,7 +19,7 @@ sys.path[:0]=[str(ROOT/'app'),str(ROOT/'tools')]
 from ai_profiles import DEFAULT_PROFILE
 from ai_runtime import FORMAT,MARKER,REQUIRED_MODULES,inspect_runtime,model_state,legacy_runtime_state
 from ai_runtime_preferences import AIRuntimePreferences,read_preferences,runtime_python
-from runtime_paths import worker_command,bind_runtime,runtime_verification_status,start_runtime_verification,verify_runtime_pack,_verified_packs,_pack_bindings,_verify_state
+from runtime_paths import worker_command,bind_runtime,runtime_verification_status,start_runtime_verification,verify_runtime_pack,configure_runtime_verification,_verified_packs,_pack_bindings,_verify_state
 from prepare_ai_runtime_pack import prepare
 from launch_release import validate_settings
 
@@ -56,6 +56,8 @@ class RuntimeContractTests(unittest.TestCase):
         temp=tempfile.TemporaryDirectory(prefix='aredoko-ai-pack-');self.addCleanup(temp.cleanup)
         self.base=Path(temp.name);self.pack=fixture(self.base/'pack')
         _verified_packs.clear();_pack_bindings.clear();_verify_state.clear()
+        configure_runtime_verification(True)
+        self.addCleanup(configure_runtime_verification,True)
 
     def change(self,operation):
         path=self.pack/MARKER;value=json.loads(path.read_text());operation(value);path.write_text(json.dumps(value))
@@ -201,6 +203,77 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertFalse(final['slow'])
         self.assertFalse(start_runtime_verification(py))
 
+    def test_background_owner_cancels_reader_and_never_caches_partial_hash(self):
+        import ai_runtime
+        import runtime_paths
+        entered=threading.Event()
+        original=ai_runtime.inspect_runtime
+        def held(root,*,verify=False,expected=None,cancelled=lambda:False,progress=None):
+            if verify:
+                entered.set()
+                while not cancelled():threading.Event().wait(.01)
+            return original(root,verify=verify,expected=expected,cancelled=cancelled,progress=progress)
+        py=self.pack/'python.exe'
+        with patch('ai_runtime.inspect_runtime',side_effect=held):
+            job=start_runtime_verification(py)
+            self.assertIsNotNone(job)
+            self.assertTrue(entered.wait(3))
+            self.assertFalse(start_runtime_verification(py))
+            self.assertTrue(job.close())
+            self.assertFalse(job.thread.is_alive())
+            self.assertEqual(runtime_verification_status(py)['state'],'cancelled')
+            self.assertEqual(_verified_packs,set())
+            self.assertEqual(runtime_paths._verify_jobs,{})
+        self.assertEqual(verify_runtime_pack(py)['verification'],'full')
+
+    def test_queued_owner_is_visible_unique_and_cancellable(self):
+        import runtime_paths
+        runtime_paths._pack_lock.acquire()
+        try:
+            py=self.pack/'python.exe'
+            job=start_runtime_verification(py)
+            self.assertEqual(runtime_verification_status(py)['state'],'verifying')
+            self.assertFalse(start_runtime_verification(py))
+            self.assertTrue(job.close())
+            self.assertEqual(runtime_verification_status(py)['state'],'cancelled')
+            self.assertEqual(_verified_packs,set())
+        finally:runtime_paths._pack_lock.release()
+
+    def test_close_timeout_does_not_claim_a_blocked_reader_stopped(self):
+        import ai_runtime
+        entered=threading.Event();release=threading.Event()
+        original=ai_runtime.inspect_runtime
+        def blocked(root,**options):
+            if options.get('verify'):
+                entered.set();release.wait(3)
+            return original(root,**options)
+        with patch('ai_runtime.inspect_runtime',side_effect=blocked):
+            job=start_runtime_verification(self.pack/'python.exe')
+            try:
+                self.assertTrue(entered.wait(3))
+                self.assertFalse(job.close(timeout=.01))
+            finally:
+                release.set();self.assertTrue(job.close())
+
+    def test_ignored_bytecode_directory_cannot_hide_a_link(self):
+        outside=self.base/'outside';outside.mkdir()
+        link=self.pack/'__pycache__'
+        try:link.symlink_to(outside,target_is_directory=True)
+        except OSError:self.skipTest('Symlink unavailable')
+        with self.assertRaises(ValueError):inspect_runtime(self.pack,verify=True)
+
+    def test_optional_full_hash_preserves_core_and_explicit_validation(self):
+        py=self.pack/'python.exe'
+        configure_runtime_verification(False)
+        self.assertFalse(start_runtime_verification(py))
+        self.assertEqual(runtime_verification_status(py)['state'],'skipped')
+        (self.pack/'Lib/site-packages/torch/version.py').write_bytes(b'changed')
+        self.assertEqual(verify_runtime_pack(py)['verification'],'core_only')
+        self.assertEqual(_verified_packs,set())
+        with self.assertRaises(ValueError):inspect_runtime(self.pack,verify=True)
+        (self.pack/'python.exe').write_bytes(b'broken')
+        with self.assertRaises(ValueError):verify_runtime_pack(py)
+
 
 class RuntimePreferencesTests(unittest.TestCase):
     def setUp(self):
@@ -233,6 +306,24 @@ class RuntimePreferencesTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'consent'):self.controller.select(runtime_root=str(self.pack))
         with self.assertRaisesRegex(ValueError,'absolute'):self.controller.select(models_root='relative',consent=True)
         self.assertFalse(self.path.exists())
+
+    def test_verification_preference_defaults_on_and_changes_only_next_start(self):
+        self.path.parent.mkdir()
+        self.assertTrue(self.controller.snapshot()['verify_ai_runtime'])
+        self.path.write_text(json.dumps({'ui_theme':'light','database':str(self.base/'catalog.sqlite')}))
+        changed=self.controller.select(verify_ai_runtime=False,consent=True)
+        self.assertFalse(changed['verify_ai_runtime']);self.assertTrue(changed['active_verify_ai_runtime'])
+        self.assertTrue(changed['restart_required'])
+        saved=read_preferences(self.path);validate_settings(saved)
+        self.assertEqual(saved['ui_theme'],'light');self.assertEqual(saved['database'],str(self.base/'catalog.sqlite'))
+        next_start=AIRuntimePreferences(self.path,self.base,DEFAULT_PROFILE,active_python=sys.executable)
+        self.assertFalse(next_start.snapshot()['active_verify_ai_runtime'])
+        before=self.path.read_bytes()
+        for invalid in (0,1,'false',None):
+            with self.assertRaises(ValueError):self.controller.select(verify_ai_runtime=invalid,consent=True)
+            with self.assertRaises(ValueError):validate_settings({'verify_ai_runtime':invalid})
+        self.assertEqual(self.path.read_bytes(),before)
+        with self.assertRaises(ValueError):self.controller.select(verify_ai_runtime=True)
 
     def test_models_and_runtime_can_be_selected_independently_and_reset(self):
         self.controller.select(models_root=str(self.models),consent=True)
