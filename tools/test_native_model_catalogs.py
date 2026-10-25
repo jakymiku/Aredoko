@@ -25,12 +25,16 @@ def main():
     parser.add_argument('--restore-rejection',action='store_true',help='Reject two generated invalid backups, keep the current library, then one planned restart')
     parser.add_argument('--ai-startup-fixture',type=Path,help='Passing generated fixture from test_ai_startup_pack; actual GPU audit')
     parser.add_argument('--runtime',type=Path);parser.add_argument('--models',type=Path)
+    parser.add_argument('--startup-only',action='store_true',help='Normal entry and one restart, generated data only')
+    parser.add_argument('--installed-copy',action='store_true',help='Allow an explicitly selected versioned Aredoko copy in user Programs')
     args=parser.parse_args();release=args.release.resolve();target=args.output.resolve()
-    if sum((args.getting_started,args.direct_entry,args.library_smoke,args.restore_rejection,args.ai_startup_fixture is not None))>1:parser.error('Select one acceptance flow')
+    if sum((args.getting_started,args.direct_entry,args.library_smoke,args.restore_rejection,args.ai_startup_fixture is not None,args.startup_only))>1:parser.error('Select one acceptance flow')
     if args.ai_startup_fixture and (args.runtime is None or args.models is None):parser.error('Explicit existing runtime/models required')
     if os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui'):
         parser.error('New dedicated Windows output required')
-    if not release.is_relative_to(REPO/'dist'):parser.error('Explicit repository candidate required')
+    if args.installed_copy:
+        if not release.is_relative_to(Path.home()/'AppData/Local/Programs/Aredoko/releases'):parser.error('Explicit versioned Aredoko installation only')
+    elif not release.is_relative_to(REPO/'dist'):parser.error('Explicit repository candidate required')
     manifest=verify_release(release)
     if manifest.get('models_bundled') is not False or manifest.get('ai_runtime_bundled') is not False:
         parser.error('Basic ZIP only')
@@ -148,7 +152,10 @@ def main():
             catalogs=request('/api/library/ai/setup/download/catalog')
             check(f'phase {phase}: both production models visible',catalogs['download_supported'] and {x['model_target']['role'] for x in catalogs['catalogs']}=={'embedding','tagger'})
             check(f'phase {phase}: no acquisition started',request('/api/library/ai/setup/download/job')['state']=='idle')
-            if args.ai_startup_fixture:
+            if args.startup_only:
+                check(f'phase {phase}: dedicated single-item library available',request('/api/items')['total']==1)
+                shot(f'normal-startup-{phase+1}')
+            elif args.ai_startup_fixture:
                 from ui_ai_startup_audit import audit
                 audit(phase,ui,tree,shot,check,request,settings,report)
             elif args.restore_rejection:

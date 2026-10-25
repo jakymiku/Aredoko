@@ -17,7 +17,9 @@ def main():
     sys.stdout.reconfigure(encoding='utf-8',errors='replace')
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2,3),required=True)
     parser.add_argument('--output',type=Path);parser.add_argument('--theme',choices=('dark','light'),default='dark')
-    parser.add_argument('--verification-settings-only',action='store_true');parser.add_argument('--grid-pointer-only',action='store_true');args=parser.parse_args()
+    parser.add_argument('--verification-settings-only',action='store_true');parser.add_argument('--grid-pointer-only',action='store_true')
+    parser.add_argument('--cancel-range-only',action='store_true');args=parser.parse_args()
+    if sum((args.verification_settings_only,args.grid_pointer_only,args.cancel_range_only))>1:parser.error('Select one bounded scenario')
     front=args.frontend.resolve();target=args.output.resolve() if args.output else REPO/'data/ai-ui/continuation-20261025b'/f'native-selection{args.attempt:02}'
     if os.name!='nt' or not front.is_relative_to(REPO/'data/ai-ui') or not target.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file() or target.exists():parser.error('Dedicated frontend and new bounded output required')
     inspect_portable(front)  # Reject an incorrectly packaged build before launching.
@@ -110,6 +112,25 @@ def main():
         shelf=cat.change_shelf('create',name='生成テスト棚')['id'];cat.close();cat=None
         before={str(p):[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for f in folders for p in f.iterdir()}
         start();check('existing folders do not start an automatic scan',not handler.startup_scans.requested)
+        if args.cancel_range_only:
+            ui('invoke','BtnNext');ui('wait-for','Item61','-t','10000')
+            ui('invoke','Item61','--action','select');ui('invoke','BtnDetails');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000')
+            original_read=handler.results.read;held_once=threading.Event();release.clear()
+            def held_range(session_id,offset=0,limit=120):
+                if offset==120 and not held_once.is_set():
+                    held_once.set();reached.set()
+                    if not release.wait(20):raise RuntimeError('Bounded test range gate timed out')
+                return original_read(session_id,offset,limit)
+            handler.results.read=held_range
+            ui('invoke','BtnNext');wait('next uncached result range is in progress',reached.is_set)
+            ui('invoke','BtnCancelSearch');ui('wait-for','BtnCancelSearch','--gone','-t','10000')
+            ui('wait-for','Item61','-t','10000');ui('wait-for','TxtPageNumber','--value','61–120','--contains','-t','10000')
+            ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000');shot('01-cancelled-range-retained')
+            ui('set-value','TxtTags','unsaved-cancel-draft');check('cancelled range leaves selected item editable','unsaved-cancel-draft' in ui('get-value','TxtTags'))
+            ui('set-value','TxtTags','');check('no draft is written implicitly',cat.get(61)['tags']==[])
+            release.set();ui('invoke','BtnNext');ui('wait-for','Item121','-t','10000');shot('02-cancelled-range-retried')
+            ui('set-value','TxtQuery','generated-0003');ui('wait-for','TxtCount','--value','1 件','-t','15000');ui('wait-for','Item4','-t','10000');shot('03-new-input-after-cancel')
+            check('later input can start a new search','Item61' not in tree());stop();report['pass']=True;return 0
         if args.verification_settings_only:
             def settings(expected):
                 ui('invoke','BtnSettings');ui('wait-for','SettingsAdvanced','-t','10000');ui('invoke','SettingsAdvanced')

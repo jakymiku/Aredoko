@@ -531,6 +531,7 @@ public sealed partial class MainPage : Page
                     // A cancelled range read may retain the same valid frozen
                     // result. Restore paging to the rows that remain on screen.
                     page=Math.Max(0,browseStart/resultPageSize);
+                    Editor.IsEnabled=active is not null;UpdateDirty();
                     Count.Text=$"{resultSession.Total:N0} 件（移動を中断）";
                     PageNumber.Text=rows.Count==0?"0 件":$"{browseStart+1:N0}–{browseStart+rows.Count:N0} / {resultSession.Total:N0}";
                     Previous.IsEnabled=browseStart>0;Next.IsEnabled=browseStart+rows.Count<resultSession.Total;

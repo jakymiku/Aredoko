@@ -159,6 +159,13 @@ public sealed partial class MainPage
             _ = WarmResultWindowAsync(window, cancellation);
             return result;
         }
+        catch(OperationCanceledException) when(reuse&&cancellation.IsCancellationRequested&&
+            searches.IsCurrent(version)&&ReferenceEquals(resultSession,session))
+        {
+            // Cancelling navigation cancels that read, not the frozen search.
+            // Keep the previous valid rows and let the user retry the range.
+            throw;
+        }
         catch
         {
             // An old cancelled read must not close a session a newer request uses.

@@ -1,5 +1,6 @@
 """Optional real-runtime GUI audit; accepts only our generated two-item fixture."""
 import hashlib
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -14,14 +15,14 @@ def prepare(data,fixture,runtime,models,repo):
         raise ValueError('Existing repository fixture/runtime/models only')
     proof=json.loads((fixture/'report.json').read_text(encoding='utf-8'))
     if proof.get('pass') is not True or proof.get('generated_only') is not True:raise ValueError('A passing generated GPU fixture is required')
-    with sqlite3.connect((fixture/'catalog.sqlite').as_uri()+'?mode=ro',uri=True) as old:
+    with closing(sqlite3.connect((fixture/'catalog.sqlite').as_uri()+'?mode=ro',uri=True)) as old:
         roots=old.execute('SELECT path FROM library_roots').fetchall()
         if not roots or any(not Path(row[0]).resolve().is_relative_to(fixture/'media') for row in roots):
             raise ValueError('Generated media roots only')
     files=[plain_path(p) for p in fixture.glob('catalog.sqlite*') if p.name=='catalog.sqlite' or p.name.startswith('catalog.sqlite.ai.') and not p.name.endswith(('-wal','-shm'))]
     if len(files)<2:raise ValueError('Generated catalog and vectors required')
     for source in files:
-        with sqlite3.connect(source.as_uri()+'?mode=ro',uri=True) as old,sqlite3.connect(data/source.name) as new:old.backup(new)
+        with closing(sqlite3.connect(source.as_uri()+'?mode=ro',uri=True)) as old,closing(sqlite3.connect(data/source.name)) as new:old.backup(new)
     info=inspect_runtime(runtime)
     return {'ai_runtime_root':str(runtime),'ai_runtime_manifest_sha256':info['manifest_sha256'],'models_root':str(models.resolve())}
 
