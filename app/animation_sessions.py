@@ -73,6 +73,24 @@ class Decoder:
         if _identity(self.file) != self.identity:
             raise AnimationGone('Animation source changed')
 
+    def _reopen_loop(self):
+        from PIL import Image
+        self.check()
+        if self.image is not None:
+            self.image.fp = None
+            if hasattr(self.image, '_fp'):
+                self.image._fp = None
+            self.image.close()
+            self.image = None
+        self.file.seek(0)
+        self.image = Image.open(self.file)
+        width, height = self.image.size
+        scale = min(1.0, VIEWER_MAX_EDGE / max(width, height))
+        if max(1, round(width * scale)) != self.width or max(1, round(height * scale)) != self.height:
+            raise AnimationGone('Animation source changed')
+        self.image.seek(self.first)
+        self.index = 0
+
     def pull(self, count):
         from PIL import Image
         if not self.lock.acquire(blocking=False):
@@ -96,9 +114,7 @@ class Decoder:
                         if self.plays and self.cycle >= self.plays:
                             self.done = True
                             break
-                        self.image.seek(0)
-                        self.image.seek(self.first)
-                        self.index = 0
+                        self._reopen_loop()
                 rgba = self.image.convert('RGBA')
                 try:
                     if rgba.size != (self.width, self.height):

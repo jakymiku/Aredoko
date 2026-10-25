@@ -13,6 +13,7 @@ from http.server import ThreadingHTTPServer
 from unittest.mock import patch, PropertyMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from animation_sessions import AnimationSessions, AnimationGone, AnimationBusy, IDLE_SECONDS
 from previews import PreviewUnavailable, ReaderChanged
 from production_server import production_handler, DisabledAI
@@ -168,6 +169,49 @@ class AnimationSessionTests(unittest.TestCase):
             for index, (_, pixels) in enumerate(actual):
                 expected.seek(index)
                 self.assertEqual(pixels, expected.convert('RGBA').convert('RGBa').tobytes('raw', 'BGRa'))
+
+    def test_paletted_apng_loop_rewind_preserves_colors_across_cycles(self):
+        def paletted_apng(count=3, loop=0, poster=False):
+            frames = [Image.new('RGBA', (12, 8), (40 + i * 50, 60 + i * 40, 80 + i * 30, 200))
+                      for i in range(count)]
+            p_frames = [f.quantize(colors=16) for f in frames]
+            out = io.BytesIO()
+            options = dict(format='PNG', save_all=True, append_images=p_frames[1:],
+                           duration=[40 + i * 20 for i in range(count)], loop=loop)
+            if poster:
+                poster_frame = Image.new('RGBA', (12, 8), (255, 255, 255, 255)).quantize(colors=16)
+                options['default_image'] = True
+                options['append_images'] = p_frames
+                poster_frame.save(out, **options)
+            else:
+                p_frames[0].save(out, **options)
+            return out.getvalue()
+
+        for poster in (False, True):
+            for loop in (0, 3):
+                with self.subTest(poster=poster, loop=loop):
+                    data = paletted_apng(count=3, loop=loop, poster=poster)
+                    self.start(data, f'paletted_poster_{poster}_loop_{loop}.png')
+                    frames = []
+                    with patch('pathlib.Path.open', side_effect=AssertionError('source file reopened on loop rewind')):
+                        for _ in range(3):
+                            header, batch = unpack(self.owner.pull(self.sid, 3))
+                            frames.extend(batch)
+                    c0 = [p for m, p in frames if m['cycle'] == 0]
+                    c1 = [p for m, p in frames if m['cycle'] == 1]
+                    c2 = [p for m, p in frames if m['cycle'] == 2]
+                    self.assertEqual(len(c0), 3)
+                    self.assertEqual(len(c1), 3)
+                    self.assertEqual(len(c2), 3)
+                    self.assertEqual(c0, c1)
+                    self.assertEqual(c0, c2)
+                    for cycle_idx, cycle_frames in enumerate((c1, c2), start=1):
+                        for frame_idx, pixels in enumerate(cycle_frames):
+                            b = pixels[0::4]; g = pixels[1::4]; r = pixels[2::4]
+                            self.assertGreater(max(r), 0, f'Cycle {cycle_idx} frame {frame_idx} R is zero')
+                            self.assertGreater(max(g), 0, f'Cycle {cycle_idx} frame {frame_idx} G is zero')
+                            self.assertGreater(max(b), 0, f'Cycle {cycle_idx} frame {frame_idx} B is zero')
+                    self.owner.close()
 
     def test_missing_loop_plays_once_and_infinite_loop_stays_bounded(self):
         self.start(generated('GIF', 3, None), 'sample.gif')
