@@ -7,6 +7,8 @@
 1. [現在の引き継ぎ・次の1件](docs/current-handoff.md) — 最新の作業内容、正確な未完・未検証・制約。**古い「次の作業」より優先**。
 2. [製品ビジョン](docs/product-vision.md) — 製品目的と不変の原則。関連節を優先して読み、必要がなければ歴史部分を再読しない。
 3. [統合ロードマップ](docs/polish-roadmap-20261022.md) — 現行の実装順序と完了条件。作業対象の節だけ詳細を読む。
+
+**2026-10-25 実機フィードバック**：[改善計画 U1–U6](docs/usability-followup-20261025.md)を次回実装キューとする。今回は計画のみでコード未変更。実装再開の指示後はU1a（Ctrl+Homeの吹き出し・ナビ見出し）から。従来P0–P7の完了済み機能を再実装しない。
 資料の入口は [文書総合案内](docs/README.md)。旧デモと main の扱いは [リポジトリ整理方針](docs/repository-maintenance.md) を参照。必要時のみ [開発優先順位](docs/development-priorities.md)、[開始補助](docs/agent-start.md)、[詳細仕様](docs/spec.md)、該当する技術ドキュメントを参照する。
 
 **過去の大型記録をデフォルトで読まない。** [履歴目録](docs/history-index.md)に原文と当時の記録への入口を残してある。[codex-handoff](docs/codex-handoff.md)・[chat-handoff](docs/chat-handoff.md)は互換入口に縮約済み。毎回全量読み直さない。

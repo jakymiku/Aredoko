@@ -5,6 +5,7 @@
 ## まず読む
 - [ルートAGENTS](../AGENTS.md) / [現行引き継ぎ](current-handoff.md) / [製品ビジョン](product-vision.md)
 - [現行P0–P7統合ロードマップ](polish-roadmap-20261022.md) / [R01–R14・M1/M2完成台帳](completion-roadmap.md)
+- [実機フィードバック改善計画 U1–U6（2026-10-25）](usability-followup-20261025.md) — 計画のみ。次回実装はU1aから、Sol/Antigravity共通。
 - [開発優先順位](development-priorities.md) / [開始ガイド](agent-start.md) / [仕様の方向性](spec.md)
 
 ## 開発・テスト方針
