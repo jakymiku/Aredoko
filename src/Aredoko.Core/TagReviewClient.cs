@@ -250,7 +250,7 @@ public sealed class TagReviewClient(HttpClient client)
         var body=TagReviewProtocol.CandidateSearchRequest(query,kind,view,page,rootIds,shelf,model);
         if(semantic)body["semantic"]=true;
         var bytes=semantic
-            ?await new SearchRequestClient(client).RunAsync(Route+"/search",body,cancellation,180,TagReviewProtocol.MaxJsonBytes)
+            ?await new SearchRequestClient(client).RunAsync(Route+"/search",body,cancellation,900,TagReviewProtocol.MaxJsonBytes)
             :await ReadAsync(Route+"/search",body,TagReviewProtocol.MaxJsonBytes,cancellation,15);
         return TagReviewProtocol.ParseCandidateSearch(bytes,page,semantic);
     }

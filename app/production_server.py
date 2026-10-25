@@ -39,7 +39,7 @@ from wd_tagger import create_tagger
 from tagger_profile import load_profile as load_tagger_profile
 from model_locations import FIELD as LOCATIONS, ModelTarget
 from storage_lease import storage_lease,storage_parent
-from runtime_paths import worker_python, bind_runtime
+from runtime_paths import worker_python, bind_runtime, start_runtime_verification
 from ai_runtime_preferences import AIRuntimePreferences, read_preferences, model_root, MODEL_ROOT_FIELDS
 from ai_setup_jobs import AISetupJobs, SetupBusy
 from backup_jobs import BackupJobs,BackupBusy
@@ -62,7 +62,8 @@ class DisabledAI:
         return {'available':False,'state':'failed','processed':0,'total':0,'indexed':0,
                 'skipped':0,'error':self.error,'status_code':self.status_code,
                 'model':'未導入','model_id':'none','profile':'none','modalities':[],
-                'resident':False,'worker_state':'unloaded','limit':MAX_ITEMS}
+                'resident':False,'worker_state':'unloaded','limit':MAX_ITEMS,
+                'runtime_verification':{'state':'idle','files_done':0,'files_total':0,'bytes_done':0,'bytes_total':0,'elapsed_seconds':0.0,'slow':False,'error':''}}
     def start(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def search(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
     def similar(self,*args,**kwargs): raise AIUnavailable(self.status()['error'])
@@ -969,6 +970,8 @@ def _serve(args):
         if isinstance(ai,AISearch):
             try: ai.configure(**profiles.resource())
             except (ValueError,OSError,json.JSONDecodeError): ai.configure(**RESOURCE_DEFAULT)
+            if ai.encoder.available:
+                start_runtime_verification(ai.encoder.python)
         intent=create_intent(args.laya_intent,args.intent_questions,not args.intent_no_order_check,**{**runtime,'models_root':model_root(overrides,'intent',args.models_root)})
         resources.callback(intent.close)
         try:tag_definition=load_tagger_profile(Path(__file__).resolve().parents[1],args.tagger_profile)

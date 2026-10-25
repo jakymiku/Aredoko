@@ -304,6 +304,13 @@
      </Button></InfoBar.ActionButton>
     </InfoBar>
    </StackPanel>
+   <Border x:Name="RuntimeVerifyCard" Grid.RowSpan="5" Canvas.ZIndex="20" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,16" Padding="14,10" CornerRadius="{ThemeResource ControlCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" MaxWidth="360" Visibility="Collapsed" AutomationProperties.AutomationId="RuntimeVerifyCard" AutomationProperties.Name="AI環境の準備状況">
+    <StackPanel Spacing="6">
+     <TextBlock x:Name="RuntimeVerifyTitle" Text="AI環境の整合性を検証中…" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="RuntimeVerifyTitle"/>
+     <ProgressBar x:Name="RuntimeVerifyProgress" Minimum="0" Maximum="100" Width="280" IsIndeterminate="True" AutomationProperties.AutomationId="RuntimeVerifyProgress"/>
+     <TextBlock x:Name="RuntimeVerifyDetail" Text="ファイルを走査しています…" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="RuntimeVerifyDetail"/>
+    </StackPanel>
+   </Border>
   </Grid>
    </SplitView>
  </NavigationView>

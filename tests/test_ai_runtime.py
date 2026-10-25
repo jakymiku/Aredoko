@@ -19,7 +19,7 @@ sys.path[:0]=[str(ROOT/'app'),str(ROOT/'tools')]
 from ai_profiles import DEFAULT_PROFILE
 from ai_runtime import FORMAT,MARKER,REQUIRED_MODULES,inspect_runtime,model_state,legacy_runtime_state
 from ai_runtime_preferences import AIRuntimePreferences,read_preferences,runtime_python
-from runtime_paths import worker_command,bind_runtime,_verified_packs,_pack_bindings
+from runtime_paths import worker_command,bind_runtime,runtime_verification_status,start_runtime_verification,verify_runtime_pack,_verified_packs,_pack_bindings,_verify_state
 from prepare_ai_runtime_pack import prepare
 from launch_release import validate_settings
 
@@ -55,7 +55,7 @@ class RuntimeContractTests(unittest.TestCase):
     def setUp(self):
         temp=tempfile.TemporaryDirectory(prefix='aredoko-ai-pack-');self.addCleanup(temp.cleanup)
         self.base=Path(temp.name);self.pack=fixture(self.base/'pack')
-        _verified_packs.clear();_pack_bindings.clear()
+        _verified_packs.clear();_pack_bindings.clear();_verify_state.clear()
 
     def change(self,operation):
         path=self.pack/MARKER;value=json.loads(path.read_text());operation(value);path.write_text(json.dumps(value))
@@ -129,7 +129,7 @@ class RuntimeContractTests(unittest.TestCase):
     def test_legacy_venv_command_is_unchanged(self):
         script=self.base/'worker.py';script.write_bytes(b'fixture')
         command=worker_command(sys.executable,script,['--model','fixture'])
-        self.assertEqual(command,[sys.executable,'-B','-u',str(script),'--model','fixture'])
+        self.assertEqual(command,[sys.executable,'-X','utf8','-B','-u',str(script),'--model','fixture'])
 
     def test_prepare_new_pack_never_changes_source_or_downloads(self):
         source=fixture(self.base/'source',source=True)
@@ -146,6 +146,60 @@ class RuntimeContractTests(unittest.TestCase):
     def test_duplicate_json_fields_are_rejected(self):
         path=self.pack/MARKER;path.write_text('{"format":"x","format":"y"}')
         with self.assertRaisesRegex(ValueError,'Duplicate'):inspect_runtime(self.pack)
+
+    def test_runtime_verification_status_progress_and_slow_flag(self):
+        import ai_runtime
+        import runtime_paths
+        py=self.pack/'python.exe'
+        initial=runtime_verification_status(py)
+        self.assertEqual(initial['state'],'idle')
+        self.assertFalse(initial['slow'])
+        entered=threading.Event()
+        release=threading.Event()
+        observed=[]
+        orig_inspect=ai_runtime.inspect_runtime
+        def slow_inspect(root,*,verify=False,expected=None,cancelled=lambda:False,progress=None):
+            if verify:
+                def wrapped_progress(counts):
+                    if progress is not None:progress(counts)
+                    if counts.get('files_done',0)==1 and not entered.is_set():
+                        entered.set()
+                        release.wait(timeout=5)
+                    observed.append(runtime_verification_status(py))
+                return orig_inspect(root,verify=True,expected=expected,cancelled=cancelled,progress=wrapped_progress)
+            return orig_inspect(root,verify=False,expected=expected,cancelled=cancelled,progress=progress)
+        with patch('ai_runtime.inspect_runtime',side_effect=slow_inspect):
+            self.assertTrue(start_runtime_verification(py))
+            self.assertTrue(entered.wait(timeout=5))
+            mid=runtime_verification_status(py)
+            self.assertEqual(mid['state'],'verifying')
+            self.assertGreater(mid['files_total'],0)
+            self.assertGreater(mid['bytes_total'],0)
+            self.assertGreater(mid['bytes_done'],0)
+            self.assertFalse(mid['slow'])
+            root_key=runtime_paths._root_key(self.pack)
+            with runtime_paths._state_lock:
+                runtime_paths._verify_state[root_key]['started_at']-=305.0
+            slow_snap=runtime_verification_status(py)
+            self.assertEqual(slow_snap['state'],'verifying')
+            self.assertTrue(slow_snap['slow'])
+            self.assertGreaterEqual(slow_snap['elapsed_seconds'],300.0)
+            # A concurrent worker_command waits for in-progress verification instead of running a second full pass.
+            script=self.base/'worker.py';script.write_bytes(b'fixture')
+            cmd_done=threading.Event()
+            def call_worker():
+                worker_command(py,script,[])
+                cmd_done.set()
+            t=threading.Thread(target=call_worker,daemon=True)
+            t.start()
+            release.set()
+            self.assertTrue(cmd_done.wait(timeout=5))
+        final=runtime_verification_status(py)
+        self.assertEqual(final['state'],'verified')
+        self.assertEqual(final['files_done'],final['files_total'])
+        self.assertEqual(final['bytes_done'],final['bytes_total'])
+        self.assertFalse(final['slow'])
+        self.assertFalse(start_runtime_verification(py))
 
 
 class RuntimePreferencesTests(unittest.TestCase):

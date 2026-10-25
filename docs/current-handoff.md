@@ -1,5 +1,26 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-26）
 
+## バックグラウンドAI整合性検証・プログレスバーUI・タイムアウト抑止（2026-10-26、以下より優先）
+- **利用者にできるようになったこと**:
+  1. **起動直後の自動バックグラウンド検証**: AIモデルおよび実行環境（ランタイムパック ~8.5GB/23,903ファイル）が導入されているAredoko環境において、初回AI検索を待つことなく、起動直後に裏で整合性チェック（SHA-256照合）を自動開始。
+  2. **右下の常駐プログレスバーと進捗表示**: メイン画面右下に非侵入型のカード（`RuntimeVerifyCard`）を新設。検証中はプログレスバーとともにパーセントおよび進捗バイト数（例: `45% (3.8 / 8.5 GB)`）をリアルタイムに表示。
+  3. **照合中のタイムアウト抑止**: 検証完了前にユーザーがAI検索を実行した場合、従来のタイムアウトエラー（40秒/120秒）を出さずに照合完了を待機し、完了次第自動で検索を開始（検索中断ボタンはいつでも利用可能）。
+  4. **5分経過時の長時間照合案内**: 照合開始から5分（300秒）以上経過した場合は、右下カードとステータスに **「照合に時間がかかっています」** と明確に表示。
+  5. **初回AIモデル読み込み中の表示**: 照合完了後の初回コールドモデルロード（EmbeddingGemma 2の重み読み込み約15秒）中も右下に「AIモデルを読み込み中…」を継続表示。
+- **実装内容**:
+  - `app/runtime_paths.py`: 軽量な `_state_lock` を用いたスレッドセーフな進捗追跡（`files_done`, `files_total`, `bytes_done`, `bytes_total`, `elapsed_seconds`, `slow`）、バックグラウンド起動 `start_runtime_verification`、ワーカー起動時の照合重複抑止 `verify_runtime_pack`。
+  - `app/ai_search.py` / `app/production_server.py`: `AISearch.status()` / `DisabledAI.status()` に `runtime_verification` を追加し、`_serve` 起動時に自動でバックグラウンド照合をキック。
+  - `src/Aredoko.WinUI/MainPage.xaml` / `MainPage.xaml.cs`: 右下オーバーレイ `RuntimeVerifyCard`、1秒間隔のステータスポーリング、5分超過検出、進捗反映。
+  - `src/Aredoko.WinUI/MainPage.ResultSessions.cs`: AI検索開始前の照合完了待機 `WaitForRuntimeVerificationBeforeSearchAsync`、初回ロード表示 `SetAiSearchModelLoading`。
+  - `src/Aredoko.Core/LibraryApi.cs` / `TagReviewClient.cs`: `HttpClient.Timeout` を15分（900秒）へ拡大。
+- **実証済み・検証結果**:
+  - Python単体テスト: `tests/test_ai_runtime.py`, `tests/test_runtime_paths.py`, `tests/test_ai_status_clarity.py`, `tests/test_winui_compile_stub.py`（全38件 PASS）。
+  - C#単体テスト: `dotnet run --project tests/Aredoko.Core.Tests -c Release`（全PASS）。
+  - WinUI ポータブルビルド: `dotnet publish src/Aredoko.WinUI -c Portable -p:Platform=x64 -p:AredokoPackageChannel=Portable`（0 errors, 正常完了）。
+  - インストール済み Alpha リリース同期: `%LOCALAPPDATA%/Programs/Aredoko/releases/20261025-2811863/` の `bin/`（373項目）および `backend/app/` を完全同期。`bin/portable-build.json`（373項目）、`manifest.json`（794項目）、`sha256sums.txt`（794項目）を更新し、`inspect_portable` PASS、`verify_release` PASS（`794 files, 660,908,161 bytes`）。
+- **次の1件**:
+  - デスクトップの「Aredoko Alpha」ショートカットからアプリを起動し、起動直後に右下に「AI環境の整合性を検証中…」プログレスバーが表示されること、およびAI検索（両方で探す／画像の見た目）を実行してタイムアウトエラーにならず正常に候補が表示されることを確認する。
+
 ## AI推論パイプライン・初回検証タイムアウト・WinUI起動クラッシュ修正完了（2026-10-26、以下より優先）
 - **確認された事象と根本原因**:
   1. **初回40秒タイムアウト**: 起動後初回AI推論時、8.5GB・23,903ファイルのSHA-256整合性チェック（約30秒）＋EmbeddingGemma 2重みロード（約15秒）が重なり、フロントエンド `LibraryApi.cs` の `HttpClient.Timeout` および `SearchRequestClient.RunAsync` の deadline（従来40秒）を超過してキャンセルされていた。

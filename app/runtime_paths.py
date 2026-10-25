@@ -25,26 +25,189 @@ def model_directory(repo, relative, models_root=None):
 _verified_packs=set()
 _pack_bindings={}
 import threading
+import time
 _pack_lock=threading.Lock()
+_state_lock=threading.Lock()
+_verify_state={}
+_SLOW_VERIFY_SECONDS=300.0
+
+
+def _root_key(root):
+    return os.path.normcase(os.path.abspath(root))
+
+
+def _idle_status(state='idle'):
+    return {
+        'state': state,
+        'files_done': 0,
+        'files_total': 0,
+        'bytes_done': 0,
+        'bytes_total': 0,
+        'elapsed_seconds': 0.0,
+        'slow': False,
+        'error': '',
+    }
 
 
 def bind_runtime(root,expected):
-    _pack_bindings[os.path.normcase(os.path.abspath(root))]=expected
+    _pack_bindings[_root_key(root)]=expected
+
+
+def runtime_verification_status(python):
+    if python is None:
+        return _idle_status('idle')
+    python=Path(python)
+    root_key=_root_key(python.parent)
+    marker=python.parent/'aredoko-ai-runtime.json'
+    expected=_pack_bindings.get(root_key)
+    with _state_lock:
+        entry=_verify_state.get(root_key)
+        if entry is None:
+            if expected is None and not (marker.exists() or marker.is_symlink()):
+                return _idle_status('idle')
+            return _idle_status('idle')
+        state=entry['state']
+        started_at=entry.get('started_at')
+        if state=='verifying' and started_at is not None:
+            elapsed=round(max(0.0,time.monotonic()-started_at),2)
+        else:
+            elapsed=round(float(entry.get('elapsed_seconds',0.0)),2)
+        return {
+            'state': state,
+            'files_done': int(entry.get('files_done',0)),
+            'files_total': int(entry.get('files_total',0)),
+            'bytes_done': int(entry.get('bytes_done',0)),
+            'bytes_total': int(entry.get('bytes_total',0)),
+            'elapsed_seconds': elapsed,
+            'slow': bool(state=='verifying' and elapsed>=_SLOW_VERIFY_SECONDS),
+            'error': str(entry.get('error','')),
+        }
+
+
+def verify_runtime_pack(python):
+    from storage_lease import plain_path
+    python=Path(python)
+    root_key=_root_key(python.parent)
+    marker=python.parent/'aredoko-ai-runtime.json'
+    expected=_pack_bindings.get(root_key)
+    if expected is None and not (marker.exists() or marker.is_symlink()):
+        return None
+    from ai_runtime import inspect_runtime
+    with _pack_lock:
+        try:
+            info=inspect_runtime(python.parent,expected=expected)
+        except Exception as error:
+            with _state_lock:
+                prev=_verify_state.get(root_key) or {}
+                _verify_state[root_key]={
+                    'state':'failed',
+                    'files_done':int(prev.get('files_done',0)),
+                    'files_total':int(prev.get('files_total',0)),
+                    'bytes_done':int(prev.get('bytes_done',0)),
+                    'bytes_total':int(prev.get('bytes_total',0)),
+                    'elapsed_seconds':float(prev.get('elapsed_seconds',0.0)),
+                    'started_at':None,
+                    'error':str(error),
+                }
+            raise
+        key=(info['root'],info['manifest_sha256'])
+        if key in _verified_packs:
+            with _state_lock:
+                prev=_verify_state.get(root_key)
+                if prev is None or prev.get('state')!='verified':
+                    _verify_state[root_key]={
+                        'state':'verified',
+                        'files_done':int(info.get('files',0)),
+                        'files_total':int(info.get('files',0)),
+                        'bytes_done':int(info.get('bytes',0)),
+                        'bytes_total':int(info.get('bytes',0)),
+                        'elapsed_seconds':float(prev.get('elapsed_seconds',0.0)) if prev else 0.0,
+                        'started_at':None,
+                        'error':'',
+                    }
+            return info
+        started_at=time.monotonic()
+        with _state_lock:
+            _verify_state[root_key]={
+                'state':'verifying',
+                'files_done':0,
+                'files_total':int(info.get('files',0)),
+                'bytes_done':0,
+                'bytes_total':int(info.get('bytes',0)),
+                'elapsed_seconds':0.0,
+                'started_at':started_at,
+                'error':'',
+            }
+        def _on_progress(counts):
+            now=time.monotonic()
+            with _state_lock:
+                cur=_verify_state.get(root_key)
+                if cur is not None and cur.get('state')=='verifying':
+                    cur['files_done']=int(counts.get('files_done',cur['files_done']))
+                    cur['files_total']=int(counts.get('files_total',cur['files_total']))
+                    cur['bytes_done']=int(counts.get('bytes_done',cur['bytes_done']))
+                    cur['bytes_total']=int(counts.get('bytes_total',cur['bytes_total']))
+                    cur['elapsed_seconds']=max(0.0,now-started_at)
+        try:
+            full_info=inspect_runtime(python.parent,verify=True,expected=expected,progress=_on_progress)
+            _verified_packs.add(key)
+            elapsed=max(0.0,time.monotonic()-started_at)
+            with _state_lock:
+                _verify_state[root_key]={
+                    'state':'verified',
+                    'files_done':int(full_info.get('files',0)),
+                    'files_total':int(full_info.get('files',0)),
+                    'bytes_done':int(full_info.get('bytes',0)),
+                    'bytes_total':int(full_info.get('bytes',0)),
+                    'elapsed_seconds':elapsed,
+                    'started_at':None,
+                    'error':'',
+                }
+            return full_info
+        except Exception as error:
+            elapsed=max(0.0,time.monotonic()-started_at)
+            with _state_lock:
+                cur=_verify_state.get(root_key) or {}
+                _verify_state[root_key]={
+                    'state':'failed',
+                    'files_done':int(cur.get('files_done',0)),
+                    'files_total':int(cur.get('files_total',info.get('files',0))),
+                    'bytes_done':int(cur.get('bytes_done',0)),
+                    'bytes_total':int(cur.get('bytes_total',info.get('bytes',0))),
+                    'elapsed_seconds':elapsed,
+                    'started_at':None,
+                    'error':str(error),
+                }
+            raise
+
+
+def start_runtime_verification(python):
+    if python is None:
+        return False
+    python=Path(python)
+    root_key=_root_key(python.parent)
+    marker=python.parent/'aredoko-ai-runtime.json'
+    expected=_pack_bindings.get(root_key)
+    if expected is None and not (marker.exists() or marker.is_symlink()):
+        return False
+    with _state_lock:
+        cur=_verify_state.get(root_key)
+        if cur is not None and cur.get('state') in ('verifying','verified'):
+            if cur.get('state')=='verifying' or any(_root_key(r)==root_key for r,_ in _verified_packs):
+                return False
+    def _run():
+        try:
+            verify_runtime_pack(python)
+        except Exception:
+            pass
+    threading.Thread(target=_run,daemon=True,name='ai-runtime-verify').start()
+    return True
 
 
 def worker_command(python,script,arguments):
     from storage_lease import plain_path
     python=Path(python);script=plain_path(script)
-    marker=python.parent/'aredoko-ai-runtime.json'
-    expected=_pack_bindings.get(os.path.normcase(os.path.abspath(python.parent)))
-    if expected is not None or marker.exists() or marker.is_symlink():
-        from ai_runtime import inspect_runtime
-        with _pack_lock:
-            info=inspect_runtime(python.parent,expected=expected)
-            key=(info['root'],info['manifest_sha256'])
-            if key not in _verified_packs:
-                inspect_runtime(python.parent,verify=True,expected=expected)
-                _verified_packs.add(key)
+    verify_runtime_pack(python)
     # Legacy venvs retain their existing script invocation. Standalone Python's
     # _pth ignores the script directory, so explicitly add this app's worker
     # directory rather than accidentally importing an older app from the pack.

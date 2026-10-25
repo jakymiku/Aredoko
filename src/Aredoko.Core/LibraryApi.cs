@@ -20,8 +20,8 @@ public sealed class LibraryApi : IDisposable
     public IndexContinuationClient Continuation {get;}
     public LibraryApi(HttpMessageHandler handler)
     {
-        client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(120)};
-        tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromSeconds(100)};
+        client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromMinutes(15)};
+        tagClient=new(handler,disposeHandler:false){BaseAddress=client.BaseAddress,Timeout=TimeSpan.FromMinutes(15)};
         Backups=new(client);
         AIEnvironment=new(client);
         AIDownloads=new(client);
@@ -91,7 +91,7 @@ public sealed class LibraryApi : IDisposable
         }
         if(semantic && !string.IsNullOrWhiteSpace(q))
         {
-            var result=await new SearchRequestClient(client).RunAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup),cancellation);
+            var result=await new SearchRequestClient(client).RunAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup),cancellation,seconds:900);
             return Protocol.ParseSearch(Encoding.UTF8.GetString(result));
         }
         return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
@@ -113,7 +113,7 @@ public sealed class LibraryApi : IDisposable
     public async Task<SearchResponse> SimilarMultiAsync(int itemId,string kind,string view,int page,JsonObject scope,IReadOnlyList<int>? rootIds,CancellationToken cancellation)
     {
         var bytes=await new SearchRequestClient(client).RunAsync("api/library/ai/similar",
-            SimilaritySearch.RequestMulti(itemId,kind,view,page,scope,rootIds),cancellation,10,SimilaritySearch.MaxResponseBytes);
+            SimilaritySearch.RequestMulti(itemId,kind,view,page,scope,rootIds),cancellation,900,SimilaritySearch.MaxResponseBytes);
         return SimilaritySearch.Parse(Encoding.UTF8.GetString(bytes),itemId,page);
     }
     public Task<string> ExportRelatedTermsAsync() => GetTextAsync("api/library/terms/export");

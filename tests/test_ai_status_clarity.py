@@ -56,6 +56,9 @@ class AIStatusClarityTests(unittest.TestCase):
         st = ai.status()
         self.assertEqual(st['status_code'], 'ready')
         self.assertTrue(st['available'])
+        self.assertIn('runtime_verification', st)
+        self.assertEqual(st['runtime_verification']['state'], 'idle')
+        self.assertFalse(st['runtime_verification']['slow'])
 
         # Unavailable encoder -> model_missing
         encoder_missing = DummyEncoder(available=False)
@@ -142,6 +145,8 @@ class AIStatusClarityTests(unittest.TestCase):
         self.assertEqual(st['state'], 'failed')
         self.assertEqual(st['status_code'], 'model_missing')
         self.assertIn('未導入', st['model'])
+        self.assertIn('runtime_verification', st)
+        self.assertEqual(st['runtime_verification']['state'], 'idle')
 
         with self.assertRaises(AIUnavailable):
             disabled.search('テスト')

@@ -1,4 +1,4 @@
-﻿using Aredoko.Core;
+using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using System.Net;
 using System.Text.Json.Nodes;
@@ -126,7 +126,24 @@ public sealed partial class MainPage
                 cancellation.ThrowIfCancellationRequested();
                 if (!searches.IsCurrent(version) || disposed) throw new OperationCanceledException(cancellation);
                 if (conditions is null) return new SearchResponse { Total = 0, Items = [] };
-                session = await api.Results.CreateAsync(conditions, cancellation);
+                var mode = conditions["mode"]?.GetValue<string>();
+                var usesAI = mode is "semantic" or "similar" or "pending-proposals-semantic";
+                if (usesAI)
+                {
+                    await WaitForRuntimeVerificationBeforeSearchAsync(version, cancellation);
+                }
+                if (usesAI && !aiModelResident)
+                {
+                    SetAiSearchModelLoading(true);
+                }
+                try
+                {
+                    session = await api.Results.CreateAsync(conditions, cancellation);
+                }
+                finally
+                {
+                    if (usesAI) SetAiSearchModelLoading(false);
+                }
                 if (!searches.IsCurrent(version) || disposed || cancellation.IsCancellationRequested)
                 {
                     await CloseResultSessionAsync(session); session = null;

@@ -53,6 +53,9 @@ public sealed partial class MainPage : Page
     private FolderSettingsDraft? folderDraft;
     private bool folderHubOpen, folderTiles, folderPopulating, folderSettingsActive, pollingScan, gettingStartedDismissed, aiIndexReady, scanRootsRefreshed;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer scanPollTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer runtimeVerifyTimer;
+    private bool pollingRuntimeVerify, aiModelResident, aiSearchLoadingModel;
+    private long? runtimeVerifyClientStartedTick;
     private JsonObject? aiScope;
     private string aiScopeError="AI索引の画面で対象を確認・保存してください。";
     private string view="all", lastQuery="";
@@ -100,6 +103,8 @@ public sealed partial class MainPage : Page
         searchTimer.Tick+=async (_,_)=>{searchTimer.Stop(); if(PendingSearch) await NavigateAsync(0);};
         scanPollTimer=DispatcherQueue.CreateTimer(); scanPollTimer.Interval=TimeSpan.FromSeconds(1);
         scanPollTimer.Tick+=async (_,_)=>await PollScanStateAsync();
+        runtimeVerifyTimer=DispatcherQueue.CreateTimer(); runtimeVerifyTimer.Interval=TimeSpan.FromSeconds(1);
+        runtimeVerifyTimer.Tick+=async (_,_)=>await PollRuntimeVerificationAsync();
     }
     private static bool SameRoots(IReadOnlyList<int>? a,IReadOnlyList<int>? b)=>
         ReferenceEquals(a,b)||(a is not null&&b is not null&&a.SequenceEqual(b));
@@ -140,6 +145,7 @@ public sealed partial class MainPage : Page
             renderCancellation.Cancel();
             AppLog.Startup("session_connecting");await api.ConnectAsync();await RefreshHistoryGenerationAsync();
             AppLog.Startup("session_connected");await LoadAIScopeAsync();
+            _ = StartRuntimeVerifyPollingAsync();
             AppLog.Startup("ai_scope_loaded");await RefreshSearchRootsAsync();
             AppLog.Startup("roots_loaded");await LoadAsync();
             AppLog.Startup(startupSearchSucceeded?"initial_search_completed":"initial_search_failed");
@@ -230,6 +236,147 @@ public sealed partial class MainPage : Page
         selectedSearchRoots=tag==0?null:new[]{tag};
         UpdateActiveSearchScopeBar();
         searchTimer.Stop();searchTimer.Start();
+    }
+    private async Task StartRuntimeVerifyPollingAsync()
+    {
+        if(disposed)return;
+        runtimeVerifyTimer.Start();
+        await PollRuntimeVerificationAsync();
+    }
+    private void SetAiSearchModelLoading(bool loading)
+    {
+        if(disposed)return;
+        aiSearchLoadingModel=loading;
+        if(loading)
+        {
+            if(!aiModelResident&&RuntimeVerifyCard.Visibility==Visibility.Collapsed)
+            {
+                RuntimeVerifyTitle.Text="AIモデルを読み込み中…";
+                RuntimeVerifyProgress.IsIndeterminate=true;
+                RuntimeVerifyDetail.Text="初回検索のためAIモデルをメモリに準備しています…";
+                RuntimeVerifyCard.Visibility=Visibility.Visible;
+            }
+            if(!runtimeVerifyTimer.IsRunning)runtimeVerifyTimer.Start();
+        }
+        else
+        {
+            _ = PollRuntimeVerificationAsync();
+        }
+    }
+    private bool ApplyRuntimeVerificationSnapshot(JsonNode data)
+    {
+        var available=data["available"]?.GetValue<bool>()==true;
+        var resident=data["resident"]?.GetValue<bool>()==true;
+        aiModelResident=resident;
+        var rv=data["runtime_verification"];
+        var state=rv?["state"]?.GetValue<string>()??"idle";
+        if(available&&state=="verifying")
+        {
+            runtimeVerifyClientStartedTick??=Environment.TickCount64;
+            var clientElapsed=Math.Max(0.0,(Environment.TickCount64-runtimeVerifyClientStartedTick.Value)/1000.0);
+            var serverElapsed=rv?["elapsed_seconds"]?.GetValue<double>()??0.0;
+            var elapsed=Math.Max(serverElapsed,clientElapsed);
+            var slow=rv?["slow"]?.GetValue<bool>()==true||elapsed>=300.0;
+            var bytesDone=rv?["bytes_done"]?.GetValue<long>()??0L;
+            var bytesTotal=rv?["bytes_total"]?.GetValue<long>()??0L;
+            var filesDone=rv?["files_done"]?.GetValue<int>()??0;
+            var filesTotal=rv?["files_total"]?.GetValue<int>()??0;
+            var percent=bytesTotal>0?Math.Clamp(bytesDone*100.0/bytesTotal,0.0,100.0)
+                :filesTotal>0?Math.Clamp(filesDone*100.0/filesTotal,0.0,100.0):0.0;
+            var bytesDoneGb=bytesDone/(1024.0*1024.0*1024.0);
+            var bytesTotalGb=bytesTotal/(1024.0*1024.0*1024.0);
+            RuntimeVerifyProgress.IsIndeterminate=bytesTotal<=0&&filesTotal<=0;
+            RuntimeVerifyProgress.Value=percent;
+            if(slow)
+            {
+                RuntimeVerifyTitle.Text="照合に時間がかかっています";
+                RuntimeVerifyDetail.Text=bytesTotal>0
+                    ?$"AI環境の整合性を検証中… {percent:F0}% ({bytesDoneGb:F1} / {bytesTotalGb:F1} GB) — 5分以上経過しています。完了までそのままお待ちください。"
+                    :"照合に時間がかかっています（5分以上経過）。完了までそのままお待ちください。";
+            }
+            else
+            {
+                RuntimeVerifyTitle.Text="AI環境の整合性を検証中…";
+                RuntimeVerifyDetail.Text=bytesTotal>0
+                    ?$"{percent:F0}% ({bytesDoneGb:F1} / {bytesTotalGb:F1} GB)"
+                    :filesTotal>0?$"{percent:F0}% ({filesDone:N0} / {filesTotal:N0} ファイル)"
+                    :"ファイルを走査しています…";
+            }
+            RuntimeVerifyCard.Visibility=Visibility.Visible;
+            if(!runtimeVerifyTimer.IsRunning)runtimeVerifyTimer.Start();
+            return true;
+        }
+        runtimeVerifyClientStartedTick=null;
+        if(available&&aiSearchLoadingModel&&!resident)
+        {
+            RuntimeVerifyTitle.Text="AIモデルを読み込み中…";
+            RuntimeVerifyProgress.IsIndeterminate=true;
+            RuntimeVerifyDetail.Text="初回検索のためAIモデルをメモリに準備しています…";
+            RuntimeVerifyCard.Visibility=Visibility.Visible;
+            if(!runtimeVerifyTimer.IsRunning)runtimeVerifyTimer.Start();
+            return false;
+        }
+        RuntimeVerifyCard.Visibility=Visibility.Collapsed;
+        runtimeVerifyTimer.Stop();
+        return false;
+    }
+    private async Task PollRuntimeVerificationAsync()
+    {
+        if(pollingRuntimeVerify||disposed)return;
+        pollingRuntimeVerify=true;
+        try
+        {
+            var data=await api.GetAsync("api/library/ai/status");
+            if(disposed)return;
+            ApplyRuntimeVerificationSnapshot(data);
+        }
+        catch
+        {
+            // Best-effort background status check; do not interrupt foreground work.
+        }
+        finally{pollingRuntimeVerify=false;}
+    }
+    private async Task WaitForRuntimeVerificationBeforeSearchAsync(long version,CancellationToken cancellation)
+    {
+        var waitStartedTick=Environment.TickCount64;
+        while(!disposed&&searches.IsCurrent(version))
+        {
+            cancellation.ThrowIfCancellationRequested();
+            JsonNode data;
+            try
+            {
+                data=await api.GetAsync("api/library/ai/status");
+            }
+            catch
+            {
+                return;
+            }
+            cancellation.ThrowIfCancellationRequested();
+            if(!searches.IsCurrent(version)||disposed)throw new OperationCanceledException(cancellation);
+            var isVerifying=ApplyRuntimeVerificationSnapshot(data);
+            if(!isVerifying)return;
+            var rv=data["runtime_verification"];
+            var serverElapsed=rv?["elapsed_seconds"]?.GetValue<double>()??0.0;
+            var clientElapsed=Math.Max(0.0,(Environment.TickCount64-(runtimeVerifyClientStartedTick??waitStartedTick))/1000.0);
+            var elapsed=Math.Max(serverElapsed,clientElapsed);
+            var slow=rv?["slow"]?.GetValue<bool>()==true||elapsed>=300.0;
+            var bytesDone=rv?["bytes_done"]?.GetValue<long>()??0L;
+            var bytesTotal=rv?["bytes_total"]?.GetValue<long>()??0L;
+            var percent=bytesTotal>0?Math.Clamp(bytesDone*100.0/bytesTotal,0.0,100.0):0.0;
+            Count.Text=slow?"照合に時間がかかっています":bytesTotal>0?$"AI環境を照合中 {percent:F0}%":"AI環境を照合中…";
+            if(rows.Count==0)
+            {
+                Empty.Visibility=Visibility.Visible;
+                Empty.Text=slow
+                    ?"照合に時間がかかっています（5分以上経過）。AI環境の整合性チェック完了後に検索を開始します。"
+                    :$"AI環境の整合性を検証しています（{percent:F0}%）。完了後に自動で検索を開始します…";
+            }
+            if(slow)
+            {
+                Notice("照合に時間がかかっています","AI環境の整合性チェックに5分以上かかっています。完了後に自動で検索を開始します。",InfoBarSeverity.Warning);
+            }
+            await Task.Delay(500,cancellation);
+        }
     }
     private async Task LoadAIScopeAsync()
     {
@@ -2099,6 +2246,7 @@ public sealed partial class MainPage : Page
                 }
                 catch(Exception ex) {modelFeedback.Text="モデル一覧を取得できません: "+ex.Message;}
                 finally {fetchingProfiles=false;UpdateProfileWarning();}
+                _ = StartRuntimeVerifyPollingAsync();
             }
             modelApply.Click+=async(_,_)=>{
                 if(savingProfile || modelChoice.SelectedItem is not ComboBoxItem item || item.Tag is not string id)return;
@@ -2261,6 +2409,7 @@ public sealed partial class MainPage : Page
                     var resident=data["resident"]?.GetValue<bool>()==true;
                     release.IsEnabled=available&&!running&&resident&&!releasing;
                     if(available)status.Text+=(resident?"\nAIはメモリ内で待機中。":"\nAIは待機中・次の検索でモデルを準備します。");
+                    ApplyRuntimeVerificationSnapshot(data);
                 }
                 catch(Exception ex){availableForIndex=false;resumableChunks=null;resumableContinuation=null;ownedPageJob=null;ownedContinuationJob=null;status.Text=ex.Message;start.IsEnabled=resumeChunks.IsEnabled=resumeContinuation.IsEnabled=planContinuation.IsEnabled=startContinuation.IsEnabled=cancel.IsEnabled=false;}
                 finally{polling=false;}
@@ -2392,6 +2541,6 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){disposed=true;selectionPreparation?.Cancel();startupUpdateTimer?.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){disposed=true;selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

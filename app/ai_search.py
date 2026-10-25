@@ -11,6 +11,7 @@ import threading
 import time
 from ai_process import AIUnavailable
 from ai_profiles import DEFAULT_PROFILE
+from runtime_paths import runtime_verification_status
 from ai_vectors import normalized
 from ai_ranking import POLICIES,fuse_modalities
 from library_index import TYPES, _excluded
@@ -511,7 +512,8 @@ class AISearch:
                 'limit':MAX_ITEMS,'model':self.profile.label,'model_id':self.profile.model_id,'profile':self.profile.key,
                 'modalities':list(self.profile.modalities),'dimension':self.profile.dimension,'ranking':self.ranking,
                 'telemetry':getattr(self.encoder,'telemetry',{}) if resident else {},
-                'resource_policy':self.resource_policy()}
+                'resource_policy':self.resource_policy(),
+                'runtime_verification':runtime_verification_status(getattr(self.encoder,'python',None)) if available else {'state':'idle','files_done':0,'files_total':0,'bytes_done':0,'bytes_total':0,'elapsed_seconds':0.0,'slow':False,'error':''}}
     def start(self,limit=MAX_ITEMS,scope=None):
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS: raise ValueError('Invalid index limit')
         scope=self._scope(scope)
