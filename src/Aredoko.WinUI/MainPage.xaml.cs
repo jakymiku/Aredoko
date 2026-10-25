@@ -245,7 +245,7 @@ public sealed partial class MainPage : Page
         if(!await transitions.WaitAsync(0))return;
         try{if(await ConfirmDiscardAsync())await ConnectAsync();}finally{transitions.Release();}
     }
-    private string KindValue()=>Kind.SelectedIndex switch {1=>"book",2=>"image",3=>"video",4=>"audio",5=>"archive",6=>"material",_=>""};
+    private string KindValue()=>MediaKindFilter.FromIndex(Kind.SelectedIndex);
     private void UpdateLibraryHeading()
     {
         if(folderHubOpen||shelfHubOpen)return;
@@ -418,7 +418,7 @@ public sealed partial class MainPage : Page
         var availability = row.Availability == "present" ? "" : AvailabilityLabel(row.Availability);
         var tagSummary = string.Join("、", row.Tags);
         var metadata = tiles ? row.MatchLabel + availability
-            : $"{row.MatchLabel}{KindLabel(row.Kind)}{(availability.Length > 0 ? " · " + availability : "")}{(tagSummary.Length > 0 ? " · " + tagSummary : "")}";
+            : $"{row.MatchLabel}{MediaKindFilter.DisplayName(row)}{(availability.Length > 0 ? " · " + availability : "")}{(tagSummary.Length > 0 ? " · " + tagSummary : "")}";
         if (!string.IsNullOrWhiteSpace(metadata))
             text.Children.Add(new TextBlock { Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
         if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");ToolTipService.SetToolTip(evidence,row.AIEvidence);text.Children.Add(evidence);}
@@ -581,7 +581,6 @@ public sealed partial class MainPage : Page
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
         {if(!disposed)Notice("表示サイズを保存できません",ex.Message,InfoBarSeverity.Warning);AppLog.Error(ex);}
     }
-    private static string KindLabel(string kind) => kind switch { "book" => "本", "image" => "画像", "archive" => "ZIP", "video" => "動画", "audio" => "音楽", _ => "素材" };
     private MenuFlyout SimilarityMenu(MediaRow row)
     {
         if(librarySelection.Count>1&&librarySelection.Contains(row.Id))return SelectionMenu();

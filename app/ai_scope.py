@@ -1,5 +1,6 @@
 """Explicit registered-library scope; no paths, SQL, or model-space changes."""
 from library_index import TYPES
+from media_filters import QUERY_KINDS,kind_clause
 from shelves import shelf_clause
 
 MAX_ROOTS = 256
@@ -17,7 +18,7 @@ def validate_scope(value):
         roots = sorted(roots)  # Copy before an asynchronous job begins.
     kind = value.get('kind', '')
     shelf = value.get('shelf')
-    if not isinstance(kind, str) or kind and kind not in TYPES:
+    if not isinstance(kind, str) or kind and kind not in QUERY_KINDS:
         raise ValueError('Invalid scope kind')
     if shelf is not None and (not isinstance(shelf, str) or len(shelf) > 80):
         raise ValueError('Invalid scope shelf')
@@ -42,7 +43,7 @@ def scope_clause(scope):
         else:
             where.append('0=1')
     if scope['kind']:
-        where.append('i.kind=?'); values.append(scope['kind'])
+        clauses,parameters=kind_clause(scope['kind']);where.extend(clauses);values.extend(parameters)
     clauses,parameters=shelf_clause(scope['shelf'],scope.get('shelf_ids'))
     where.extend(clauses);values.extend(parameters)
     # UI shelf browsing narrows, rather than overwrites, the saved AI shelf.

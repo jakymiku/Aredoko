@@ -2,13 +2,14 @@
 import json
 from shelves import shelf_clause
 from library_index import TYPES
+from media_filters import QUERY_KINDS,kind_clause
 from search_terms import normalize, split_terms
 from tag_suggestions import SuggestionConflict
 from ai_search import AIBusy
 
 
 def validate_candidate_search(query='', kind='', view='all', page=0, root_ids=None, shelf=None, model=None, shelf_ids=None):
-    if not isinstance(query,str) or len(query)>300 or kind not in ('',*TYPES) or view not in ('all','favorites','unreviewed','shelf'):
+    if not isinstance(query,str) or len(query)>300 or kind not in ('',*QUERY_KINDS) or view not in ('all','favorites','unreviewed','shelf'):
         raise ValueError('Invalid candidate search')
     if type(page) is not int or not 0<=page<=1000000:raise ValueError('Invalid page')
     if shelf is not None and (not isinstance(shelf,str) or len(shelf)>80):raise ValueError('Invalid shelf')
@@ -31,7 +32,7 @@ def search_candidates(service, query='', kind='', view='all', page=0, root_ids=N
     with catalog._guard:
         with catalog.connect() as db:
             db.create_function('candidate_normalize',1,normalize,deterministic=True)
-            where=["l.status<>'excluded'",'l.root_id IN (SELECT id FROM library_roots WHERE enabled=1)',
+            where=["l.status='present'",'l.root_id IN (SELECT id FROM library_roots WHERE enabled=1)',
                    'b.id=(SELECT max(latest.id) FROM tag_proposal_batches latest WHERE latest.item_id=i.id)',
                    "EXISTS(SELECT 1 FROM tag_proposals p WHERE p.batch_id=b.id AND p.state='pending')"]
             values=[]
@@ -40,7 +41,7 @@ def search_candidates(service, query='', kind='', view='all', page=0, root_ids=N
                 active=db.execute(f'SELECT count(*) FROM library_roots WHERE enabled=1 AND id IN ({placeholders})',root_ids).fetchone()[0]
                 if active!=len(root_ids):raise ValueError('Unknown registered root')
                 where.append(f'l.root_id IN ({placeholders})');values.extend(root_ids)
-            if kind:where.append('i.kind=?');values.append(kind)
+            clauses,parameters=kind_clause(kind);where.extend(clauses);values.extend(parameters)
             where.extend({'all':[],'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],'shelf':["i.shelf<>''"]}[view])
             shelf_where,shelf_values=shelf_clause(shelf,shelf_ids)
             where.extend(shelf_where);values.extend(shelf_values)

@@ -7,6 +7,7 @@ from pathlib import Path
 from catalog import Catalog
 from shelves import ShelfStore, shelf_clause
 from root_preferences import RootPreferences
+from media_filters import QUERY_KINDS,kind_clause
 from writer_fence import WriterFence,ConnectionWriteFence
 from library_index import LibraryIndex, TYPES, is_folder_book, folder_title
 from search_terms import register as register_search_terms, split_terms, explain_matches
@@ -161,7 +162,7 @@ class ProductionCatalog(Catalog):
     FIELDS = 'i.*,(SELECT json_group_array(shelf_id) FROM (SELECT shelf_id FROM item_shelves WHERE item_id=i.id ORDER BY shelf_id)) shelf_ids,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns'
 
     def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None, root_ids=None, shelf=None, shelf_ids=None, *, result_sink=None, cancelled=None):
-        if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf','history'):
+        if not isinstance(kind,str) or kind and kind not in QUERY_KINDS or view not in ('all','favorites','unreviewed','shelf','history'):
             raise ValueError('Invalid filter')
         if type(page) is not int or page<0 or not 1<=limit<=120 or len(query)>300:
             raise ValueError('Invalid paging')
@@ -212,8 +213,7 @@ class ProductionCatalog(Catalog):
                 else:
                     where.append('l.root_id IN (' + ','.join('?' for _ in selected_roots) + ')')
                     values.extend(selected_roots)
-            if kind:
-                where.append('i.kind=?'); values.append(kind)
+            clauses,parameters=kind_clause(kind);where.extend(clauses);values.extend(parameters)
             shelf_where,shelf_values=shelf_clause(shelf,shelf_ids)
             where.extend(shelf_where);values.extend(shelf_values)
             where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],

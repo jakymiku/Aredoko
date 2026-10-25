@@ -14,6 +14,7 @@ from ai_profiles import DEFAULT_PROFILE
 from ai_vectors import normalized
 from ai_ranking import POLICIES,fuse_modalities
 from library_index import TYPES, _excluded
+from media_filters import QUERY_KINDS,kind_clause
 from ai_scope import validate_scope, scope_clause
 from writer_fence import ConnectionWriteFence
 from search_terms import normalize, normalize_tags
@@ -356,14 +357,14 @@ class AISearch:
         return scope
 
     def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS,scope=None,*,all_candidates=False,check=None):
-        if kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
+        if not isinstance(kind,str) or kind and kind not in QUERY_KINDS or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS:
             raise ValueError('Invalid candidate limit')
         scope=self._scope(scope)
         scoped_where,values=scope_clause(scope)
         where=["l.status='present'",'r.enabled=1',*scoped_where]
-        if kind: where.append('i.kind=?');values.append(kind)
+        clauses,parameters=kind_clause(kind);where.extend(clauses);values.extend(parameters)
         where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],'shelf':["i.shelf<>''"],'all':[]}[view])
         # New records cannot lengthen a running enumeration indefinitely.
         with self.catalog.connect() as db:
@@ -644,7 +645,7 @@ class AISearch:
         if result_group not in ('all','leading','other'):raise ValueError('Invalid result group')
         if type(literal_only) is not bool:raise ValueError('Invalid literal evidence filter')
         scope=self._scope(scope)
-        if not isinstance(kind,str) or kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
+        if not isinstance(kind,str) or kind and kind not in QUERY_KINDS or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
         ranking=self.ranking if ranking is None else ranking
         if ranking not in POLICIES:raise ValueError('Unknown ranking policy')
@@ -736,7 +737,7 @@ class AISearch:
             raise ValueError('Invalid item')
         if type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:
             raise ValueError('Invalid paging')
-        if not isinstance(kind,str) or kind and kind not in TYPES or view not in ('all','favorites','unreviewed','shelf'):
+        if not isinstance(kind,str) or kind and kind not in QUERY_KINDS or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
         scope=self._scope(scope)
         if not self.inference.acquire(blocking=False):raise AIBusy('AI索引または検索を処理中です。完了後に類似検索してください。')

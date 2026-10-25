@@ -32,7 +32,7 @@ public sealed class AIScopeEditor : IDisposable
     private readonly TextBlock feedback=new() {TextWrapping=TextWrapping.Wrap};
     private readonly TextBlock[] counts=Enumerable.Range(0,4).Select(_=>new TextBlock {TextWrapping=TextWrapping.Wrap}).ToArray();
     private readonly Dictionary<int,CheckBox> roots=new();
-    private readonly string[] kinds=["","book","image","video","audio","archive","material"];
+    private readonly string[] kinds=["","book","image","video","audio","archive","material","compressed"];
     private JsonObject? saved;
     private bool initializationStarted,initializing=true,closed,counting,saving,confirmed,jobBusy;
     private int version,target;
@@ -60,7 +60,7 @@ public sealed class AIScopeEditor : IDisposable
         AutomationProperties.SetAutomationId(save,"AIScopeSave");
         AutomationProperties.SetAutomationId(revert,"AIScopeRevert");
         AutomationProperties.SetAutomationId(feedback,"AIScopeFeedback");
-        var labels=new[]{"すべての種類","本","画像","動画","音楽","ZIP","素材"};
+        var labels=new[]{"すべての種類","本","画像","動画","音楽","ZIP","素材","圧縮ファイル（ZIP・CBZ）"};
         for(int i=0;i<kinds.Length;i++) {
             var item=new ComboBoxItem {Content=labels[i],Tag=kinds[i]};
             AutomationProperties.SetAutomationId(item,"AIScopeKind_"+(kinds[i].Length==0?"all":kinds[i]));kind.Items.Add(item);

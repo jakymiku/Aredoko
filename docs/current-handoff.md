@@ -1,5 +1,11 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## U6 filter・現在の再開位置（2026-10-25、以下より優先）
+- 今日のsource：引継ぎ補強 **8972be3**、U4b **51491a6**/GUI callback改善 **428af7f**、U5基盤 **454dba0**/WinUI **d97c780**。U6 filterは `git log -1 -- app/media_filters.py`。[U4](scan-startup.md) / [U5とGUI受入](library-selection.md) / [U6](compressed-filter.md)。
+- U6の種類を「圧縮ファイル（ZIP・CBZ）」へ統合（hint含む）。保存済みbook/archive・旧query・reader導線を維持し、通常/AI/scope/本文/候補/結果sessionで共通predicateを使用。本文/未承認候補に残っていたmissing混入も修正。DB/vectors移行不要。
+- CPU compressed7/AI scope12/production8/Core1132 PASS、正しいPortable frontend07 publish成功。U6 GUIは未実施。U4b/U5のfrontend06/native-selection03は18項目PASS/全体FAIL保持（最後のrefresh待機だけ未完）、所有frontend2回通常終了・6PNG目視済み。GPUなし。
+- **次の1件：最新基本ZIP候補を別出力へ作りCPU確認**。旧ZIP07/Alpha/shortcutは上書きしない。新候補でもGUI/GPUはユーザーへ質問し回答後に行う。Ctrl+マウス/右クリック/grid/範囲取消/Light/HC/DPI、最終refresh、大画像FPS/RSSとCBZ、runtime公開権利/host、R06–R09を残す。source完成をロードマップ全完了と扱わない。shutdownしない。
+
 ## U5 WinUI接続・現在の次（2026-10-25、以下の過去checkpointより優先）
 - 基盤 **454dba0** の上にExtended複数選択/明示summary/一括favorite・棚追加解除、600件外stable選択、編集後のwindow/可視anchor保持、literal favoriteのcard差分更新を接続。[正本・未受入](library-selection.md)。この単位commitは `git log -1 -- src/Aredoko.WinUI/MainPage.Selection.cs`。
 - CPU基盤9/Core1124 PASSに続き、Portable publish成功（既知警告維持）。ユーザー許可のU5 GUI 2回＋追加1回、frontend06/native-selection03は**18項目PASS・全体FAIL**。複数選択/一括棚/favorite/600件外保持/filtered除去、U4b設定保存/再起動/所有取消/draft保持/明示保存/通常終了を確認。6PNG目視。[各失敗と修正](library-selection.md)。

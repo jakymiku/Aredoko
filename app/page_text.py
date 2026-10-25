@@ -14,6 +14,7 @@ import time
 from ai_process import AIUnavailable
 from ai_search import AIBusy
 from library_index import TYPES, _excluded
+from media_filters import QUERY_KINDS,kind_clause
 from page_index import identifier, token
 from previews import ReaderChanged
 from search_terms import normalize_document, split_terms
@@ -211,7 +212,7 @@ class PageTextIndex:
         if type(query) is not str or not 1 <= len(query) <= 300:
             raise ValueError('Invalid text query')
         terms = split_terms(query)
-        if not terms or kind not in ('', *TYPES) or view not in ('all','favorites','unreviewed','shelf'):
+        if not terms or kind not in ('', *QUERY_KINDS) or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid text filter')
         if type(page) is not int or not 0 <= page <= 1000000:
             raise ValueError('Invalid text paging')
@@ -235,7 +236,7 @@ class PageTextIndex:
                 db.create_function('aredoko_page_visible', 2,
                     lambda root, relative: root in rules and not _excluded(relative, rules[root]),
                     deterministic=True)
-                where = ["l.status<>'excluded'", 'aredoko_page_visible(l.root_id,l.relative_path)']
+                where = ["l.status='present'", 'aredoko_page_visible(l.root_id,l.relative_path)']
                 values = []
                 if root_ids is not None:
                     placeholders = ','.join('?' for _ in root_ids)
@@ -244,8 +245,7 @@ class PageTextIndex:
                         raise ValueError('Unknown registered root')
                     where.append(f'l.root_id IN ({placeholders})')
                     values.extend(root_ids)
-                if kind:
-                    where.append('i.kind=?'); values.append(kind)
+                clauses,parameters=kind_clause(kind);where.extend(clauses);values.extend(parameters)
                 where.extend({'all': [], 'favorites': ['i.favorite=1'], 'unreviewed': ['i.reviewed=0'], 'shelf': ["i.shelf<>''"]}[view])
                 shelf_where,shelf_values=shelf_clause(shelf,shelf_ids)
                 where.extend(shelf_where);values.extend(shelf_values)

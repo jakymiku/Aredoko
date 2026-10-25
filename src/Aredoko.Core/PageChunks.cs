@@ -28,7 +28,7 @@ public static class PageChunkRequests
         }
         if(scope.ContainsKey("kind")&&scope["kind"] is null)throw new ArgumentException("対象の種類が無効です。");
         var kind=scope["kind"]?.GetValue<string>()??"";var shelf=scope["shelf"]?.GetValue<string>();
-        if(kind is not ("" or "book" or "archive" or "image" or "video" or "audio" or "material")||shelf?.Length>80)throw new ArgumentException("対象条件が無効です。");
+        if(kind is not ("" or "book" or "archive" or "compressed" or "image" or "video" or "audio" or "material")||shelf?.Length>80)throw new ArgumentException("対象条件が無効です。");
         return new(){{"root_ids",roots},{"kind",kind},{"shelf",shelf}};
     }
     public static JsonObject Plan(int item,string revision,JsonObject scope,int maximum,string profile)

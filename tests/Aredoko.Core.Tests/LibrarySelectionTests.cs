@@ -6,6 +6,13 @@ internal static class LibrarySelectionTests
 {
     public static async Task Run(Action<bool,string> check)
     {
+        check(MediaKindFilter.FromIndex(5)=="compressed"&&MediaKindFilter.FromIndex(1)=="book","compressed filter keeps existing UI indices and book contract");
+        foreach(var (kind,path,expected) in new[]{("book","comic.CBZ",true),("archive","comic.zip",true),("book","comic.pdf",false),("book","comic/",false),("image","comic.cbz.png",false)})
+        {
+            var row=new MediaRow{Id=1,Kind=kind,Location=path,Availability="present"};
+            check(MediaKindFilter.IsCompressed(row)==expected&&(expected?MediaKindFilter.DisplayName(row)=="圧縮ファイル":true),"derived compressed category: "+path);
+            if(expected)check(ArchiveManifest.CanOpen(row),"compressed label preserves the book viewer route: "+path);
+        }
         var selection=new LibrarySelection();selection.Bind("first",1000);selection.Single(new(1,0));
         selection.Visible([new(601,600),new(602,601)],[601],601);
         check(selection.Ids.SequenceEqual(new[]{1,601}),"selected IDs survive eviction from the 600-row window");
