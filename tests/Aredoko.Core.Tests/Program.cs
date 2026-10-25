@@ -14,6 +14,7 @@ await BackupTests.Run(Check);
 await AIEnvironmentTests.Run(Check);
 await AIDownloadTests.Run(Check);
 await RootFavoritesTests.Run(Check);
+await LibrarySelectionTests.Run(Check);
 await ResultNavigationTests.Run(Check);
 ResultBufferTests.Run(Check);
 NavigationHistoryTests.Run(Check);

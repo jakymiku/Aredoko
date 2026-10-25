@@ -204,6 +204,38 @@ class FrozenResult:
             result.update(availability='unavailable', source_state='unavailable')
         return result
 
+    def locate(self,item_ids):
+        from selection_edits import selection_ids
+        ids=selection_ids(item_ids)
+        with self.lock:
+            self.check()
+            if self.state!='ready':raise ResultUnavailable(conditions=self.conditions)
+            # Only IDs/ordinals are returned; source bytes and editing rights
+            # still require the full guard at read/edit time.
+            rows=self.db.execute('SELECT item_id,ordinal FROM results WHERE item_id IN ('+','.join('?' for _ in ids)+') ORDER BY ordinal',ids).fetchall()
+            self.check();self.last_used=time.monotonic()
+            return {'positions':[{'id':row[0],'ordinal':row[1]} for row in rows], 'conditions':self.conditions}
+
+    def edit(self,item_ids,operation,shelf_ids):
+        from selection_edits import validate_edit
+        ids=validate_edit(item_ids,operation,shelf_ids)
+        with self.lock:
+            self.check()
+            if self.state!='ready':raise ResultUnavailable(conditions=self.conditions)
+            def validate():
+                self.check()
+                if self.origin is not None:self._current(self.origin,for_viewer=True)
+                for offset in range(0,len(ids),120):
+                    group=ids[offset:offset+120]
+                    rows=self.db.execute('SELECT payload FROM results WHERE item_id IN ('+','.join('?' for _ in group)+')',group).fetchall()
+                    if len(rows)!=len(group):raise ResultUnavailable('Selection left the search scope',conditions=self.conditions)
+                    for item in self._currents([json.loads(row[0]) for row in rows]):
+                        if item.get('availability')!='present':raise ResultUnavailable('Selection source unavailable',conditions=self.conditions)
+                self.check()
+            result=self.catalog.edit_result_selection(ids,operation,shelf_ids,validate,self.check)
+            self.last_used=time.monotonic()
+            return result
+
     def read(self, offset, limit):
         if type(offset) is not int or not 0 <= offset <= 9223372036854775807 or type(limit) is not int or not 1 <= limit <= 120:
             raise ValueError('Invalid result range')
@@ -363,6 +395,18 @@ class ResultSessions:
             raise ResultUnavailable('Result source unavailable; refresh results', conditions=session.conditions) from error
         finally:
             if session.stop.is_set(): session.close()
+
+    def locate(self,session_id,item_ids):
+        session=self._get(session_id)
+        return {'session_id':session_id,**session.locate(item_ids)}
+
+    def edit(self,session_id,item_ids,operation,shelf_ids):
+        session=self._get(session_id)
+        try:return {'session_id':session_id,**session.edit(item_ids,operation,shelf_ids)}
+        except (OSError,PreviewUnavailable,ReaderChanged) as error:
+            raise ResultUnavailable('Selection source unavailable; refresh search',conditions=session.conditions) from error
+        finally:
+            if session.stop.is_set():session.close()
 
     def cancel(self, session_id):
         self.identifier(session_id)

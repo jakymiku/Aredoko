@@ -1,5 +1,10 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## U5基盤・現在の再開位置（2026-10-25、以下より優先）
+- U4b本体 **51491a6**、選択callback改善/GUI診断 **428af7f** はPush済み。U4b再起動/中止/draftのGUI受入は未完。[正確な経緯](scan-startup.md)。許可試行2回＋追加1回は終了、以後GUI/GPUを行う場合は新たな回答を得る。frontend04は修正前候補、同期disable撤去はbuildのみ。
+- **U5のAPI/Core基盤**を追加：[仕様](library-selection.md)。検索sessionに束縛した256件までのatomic favorite/棚追加・解除、全件scope/原本検証、locateによる選択再配置。Coreはstable ID/ordinalで600件外保持、120件ずつの範囲選択、取消/世代/上限を扱う。利用者向けUIはまだ未接続。
+- CPU selection API9、Core既存＋新規選択契約PASS。通常DB/元メディア/モデル/GPU/Actions/旧Alphaは未使用・未変更。**次の1件はU5 UI接続**（Extended選択/一括右クリック/summary）、その後600件windowと絞込結果の差分更新。U4の完成実装を繰り返さない。
+
 ## U4b実装・次の1件（2026-10-25、以下の過去checkpointより優先）
 - Antigravity開始51b4302から、引継ぎ補強 **8972be3** はPush済み。続いて **U4b** を実装：フォルダごとの起動時更新OFF/一覧/一覧＋AI、初画面後のbackend所有queue、進捗/中止、欠落原本の通常一覧除外と再出現時metadata復帰。[仕様・証拠](scan-startup.md)。U4bのcommitは `git log -1 -- app/startup_scans.py`。
 - catalog v3へ移行（既存rootの自動更新はOFF）、v0–v3のバックアップ復元・同居vector互換を保持。設定の保存は即時/次回起動適用、未保存の棚・タグ・除外draftは維持。

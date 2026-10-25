@@ -573,6 +573,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         if self.path=='/api/library/results/neighbor':
                             if set(body)!={'session_id','item_id','direction'}:raise ValueError('Invalid result fields')
                             return self.send(200,results.neighbor(**body))
+                        if self.path=='/api/library/results/locate':
+                            if set(body)!={'session_id','item_ids'}:raise ValueError('Invalid result fields')
+                            return self.send(200,results.locate(**body))
+                        if self.path=='/api/library/results/edit':
+                            if set(body)!={'session_id','item_ids','operation','shelf_ids'}:raise ValueError('Invalid result fields')
+                            return self.send(200,results.edit(**body))
                         if self.path=='/api/library/results/close':
                             if set(body)!={'session_id'}:raise ValueError('Invalid result fields')
                             return self.send(200,results.cancel(**body))

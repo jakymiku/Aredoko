@@ -314,6 +314,20 @@ class ProductionCatalog(Catalog):
                     db.execute(f'UPDATE items SET {assignments} WHERE id IN ({marks})',list(changes.values())+ids)
             return {'updated':count}
 
+    def edit_result_selection(self,ids,operation,shelf_ids,validate,check):
+        from selection_edits import apply,validate_edit
+        ids=validate_edit(ids,operation,shelf_ids)
+        with self._guard:
+            self._require_idle()
+            with self.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                # The result owner takes its own lock before this catalog guard.
+                # Validate every source/scope before writing any annotation.
+                validate()
+                apply(db,ids,operation,shelf_ids)
+                check()  # Cancellation/index changes before commit roll back all.
+        return {'updated':len(ids),'item_ids':ids,'operation':operation}
+
     def history_status(self):
         with self._guard:
             with self.connect() as db:

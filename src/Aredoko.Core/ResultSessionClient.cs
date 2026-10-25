@@ -91,6 +91,38 @@ public sealed class ResultSession(HttpClient client, string id, JsonObject condi
         return result;
     }
 
+    public async Task<IReadOnlyList<ResultPosition>> LocateAsync(IReadOnlyList<int> itemIds,CancellationToken cancellation)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed)!=0,this);
+        ValidateSelectionIds(itemIds);
+        var response=await ResultSessionClient.SendAsync(client,"locate",new JsonObject
+            {["session_id"]=id,["item_ids"]=new JsonArray(itemIds.Select(value=>JsonValue.Create(value)).ToArray())},cancellation);
+        if(response["session_id"]?.GetValue<string>()!=id||!JsonNode.DeepEquals(response["conditions"],conditions))throw new InvalidDataException("Invalid selection scope");
+        var positions=response["positions"]?.AsArray().Select(row=>new ResultPosition(row!["id"]!.GetValue<int>(),row["ordinal"]!.GetValue<int>())).ToArray()
+            ??throw new InvalidDataException("Invalid selection positions");
+        if(positions.Any(row=>!itemIds.Contains(row.Id)||row.Ordinal<0||row.Ordinal>=Total)
+            ||positions.Select(row=>row.Id).Distinct().Count()!=positions.Length||positions.Select(row=>row.Ordinal).Distinct().Count()!=positions.Length
+            ||!positions.Select(row=>row.Ordinal).SequenceEqual(positions.Select(row=>row.Ordinal).Order()))throw new InvalidDataException("Invalid selection order");
+        return positions;
+    }
+    private static void ValidateSelectionIds(IReadOnlyList<int> itemIds)
+    {
+        if(itemIds.Count is <1 or >LibrarySelection.Maximum||itemIds.Any(id=>id<1)||itemIds.Distinct().Count()!=itemIds.Count)
+            throw new ArgumentException("Select 1 to 256 distinct item IDs",nameof(itemIds));
+    }
+    public async Task EditSelectionAsync(IReadOnlyList<int> itemIds,SelectionOperation operation,IReadOnlyList<long> shelfIds,CancellationToken cancellation)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed)!=0,this);ValidateSelectionIds(itemIds);ShelfProtocol.ValidateIds(shelfIds);
+        var wire=operation switch{SelectionOperation.FavoriteAdd=>"favorite_add",SelectionOperation.FavoriteRemove=>"favorite_remove",SelectionOperation.ShelvesAdd=>"shelves_add",SelectionOperation.ShelvesRemove=>"shelves_remove",_=>throw new ArgumentOutOfRangeException(nameof(operation))};
+        if((operation is SelectionOperation.FavoriteAdd or SelectionOperation.FavoriteRemove)&&shelfIds.Count!=0
+            ||(operation is SelectionOperation.ShelvesAdd or SelectionOperation.ShelvesRemove)&&shelfIds.Count==0)throw new ArgumentException("Invalid shelves for operation");
+        var response=await ResultSessionClient.SendAsync(client,"edit",new JsonObject
+            {["session_id"]=id,["item_ids"]=new JsonArray(itemIds.Select(value=>JsonValue.Create(value)).ToArray()),
+             ["operation"]=wire,["shelf_ids"]=new JsonArray(shelfIds.Select(value=>JsonValue.Create(value)).ToArray())},cancellation);
+        if(response["session_id"]?.GetValue<string>()!=id||response["operation"]?.GetValue<string>()!=wire||response["updated"]?.GetValue<int>()!=itemIds.Count
+            ||response["item_ids"]?.AsArray().Select(node=>node!.GetValue<int>()).SequenceEqual(itemIds)!=true)throw new InvalidDataException("Invalid selection edit acknowledgment");
+    }
+
     public async Task<ResultNeighbor?> NeighborAsync(int itemId, int direction, CancellationToken cancellation)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
