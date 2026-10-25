@@ -1,5 +1,11 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## 最終終了・Alpha更新結果（2026-10-25、以下より優先）
+- 実装source **2811863**、事前引継ぎ **ebe3122** までPush後、ユーザーの追加依頼により**デスクトップ「Aredoko Alpha」の実用起動先を最新Portableへ更新済み**。実配置は `%LOCALAPPDATA%/Programs/Aredoko/releases/20261025-2811863/Aredoko.exe`。旧MSIX登録は削除・更新しておらず、Startメニューの旧MSIX入口とは別。ユーザーへデスクトップ入口を案内する。
+- 最新基本ZIP09のCPU21項目・全payload/ZIP照合PASS、配置後も同一payloadを確認。通常DBは開かず、size/mtime不変。モデル保存先は保持し、以前のAlphaが暗黙に使っていた旧同梱AI interpreterを `launch-settings.json` の明示 `ai_python` として継承（新しい基本版へPyTorchをコピーしない）。設定/旧shortcutを `%LOCALAPPDATA%/Programs/Aredoko/updates/20261025-2811863/` へバックアップ。ignored証拠は `data/ai-ui/continuation-20261025b/alpha-update.json`。
+- 更新時にGUI/GPUは起動していない。実推論と更新版の通常起動は未検証。U4b/U5限定GUI18項目と最後のrefresh待機FAILの記録は前節を維持し、09/実配置のGUI PASSにしない。残存Aredokoプロセスなし。**新しいGUI/GPUはユーザーの回答後のみ**。
+- 残り枠約3%で終了。新機能へ着手しない。**次の1件は最新実配置またはZIP09の通常入口について許可を得て、最終refresh＋Ctrl/右クリック/gridを短く確認すること**。許可待ちには独立したR06–R09/runtime公開権利・hostを進めてよい。source完成分を再実装せず、M1/ロードマップ全完了とはしない。shutdownなし。
+
 ## 終了引継ぎ（2026-10-25、以下より優先）
 - 今日の実装はPush済み：**8972be3** 引継ぎ補強 → **51491a6/428af7f** U4b → **454dba0/d97c780** U5 → **1adb694** U6 → **2811863** 起動queue停止確認/復元proof保護。[U4](scan-startup.md)/[U5](library-selection.md)/[U6](compressed-filter.md)。U1–U6の完成実装を繰り返さない。
 - **最新実物は基本ZIP09/source2811863**。[入口・SHA・正確な受入](portable-polish-20261025.md)。Portable/bootstrap/runtime/ZIP全照合と、実同梱PythonのCPU21項目/正常EOF/DB integrity/原本保全/実行後inventory確認PASS。794 files、ZIP約348MB。モデル/PyTorchを同梱しない。通常起動のGUI・clean Windowsは未受入。
