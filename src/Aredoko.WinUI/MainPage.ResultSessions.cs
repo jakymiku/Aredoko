@@ -20,34 +20,70 @@ public sealed partial class MainPage
         ResultSession? replacement=null;
         try
         {
+            var selected=librarySelection.Ids.ToArray();var anchor=CaptureBrowseAnchor();
+            var anchorId=anchor is {} point?RowForKey(point.Key)?.Id:null;
+            var oldRows=rows.ToDictionary(row=>row.Id);var oldStart=browseStart;var oldCount=rows.Count;
             resultWindow?.Dispose();resultWindow=null;resultSession=null;
             await CloseResultSessionAsync(previous);
             replacement=await api.Results.CreateAsync(previous.Conditions, CancellationToken.None);
-            var targetPage=Math.Min(page,Math.Max(0,(replacement.Total-1)/resultPageSize));
+            var positions=selected.Length>0?await replacement.LocateAsync(selected,CancellationToken.None):[];
+            ResultPosition? anchorPosition=positions.FirstOrDefault(row=>row.Id==anchorId);
+            if(anchorPosition is null&&anchorId is int known)anchorPosition=(await replacement.LocateAsync([known],CancellationToken.None)).FirstOrDefault();
+            var desired=anchorPosition is not null&&anchorId is int oldAnchor&&oldRows.ContainsKey(oldAnchor)
+                ?anchorPosition.Ordinal-rows.FindIndex(row=>row.Id==oldAnchor):oldStart;
+            var length=Math.Min(ResultBuffer.Capacity,Math.Max(resultPageSize,oldCount));
+            var start=Math.Clamp(desired,0,Math.Max(0,replacement.Total-length));
+            var count=Math.Min(length,replacement.Total-start);
             var window=new ResultWindow(replacement.Total,replacement.RangeAsync);
             try
             {
-                var result=await window.ReadAsync(checked(targetPage*resultPageSize),resultPageSize,CancellationToken.None);
+                var items=new List<MediaRow>();
+                for(var offset=start;offset<start+Math.Max(1,count);)
+                {
+                    var chunk=await window.ReadAsync(offset,Math.Min(120,Math.Max(1,start+count-offset)),CancellationToken.None);
+                    items.AddRange(chunk.Items);if(chunk.Items.Count==0)break;offset+=chunk.Items.Count;
+                }
+                var result=new SearchResponse{Total=replacement.Total,Items=items};
                 if(disposed){window.Dispose();await CloseResultSessionAsync(replacement);return;}
-                // Preserve native cells only for the plain library when the
-                // server confirms the exact same ordered rows and metadata.
-                // Still replace the expired result session and keep its guards.
-                var keepCards=favoriteOnly&&view=="all"&&SearchMode.SelectedIndex==0&&string.IsNullOrWhiteSpace(Query.Text)
-                    &&browseStart==targetPage*resultPageSize&&rows.Count==result.Items.Count
-                    &&rows.Zip(result.Items).All(pair=>SameFavoriteCard(pair.First,pair.Second));
+                // Literal favorite edits cannot change visual evidence. Reuse
+                // surviving native cells only when all displayed metadata agrees.
+                var keepCards=favoriteOnly&&SearchMode.SelectedIndex==0
+                    &&items.All(row=>!oldRows.TryGetValue(row.Id,out var old)||SameFavoriteCard(old,row));
+                if(keepCards)result.Items=items.Select(row=>oldRows.GetValueOrDefault(row.Id,row)).ToList();
                 resultSession=replacement;resultWindow=window;resultsNeedRefresh=false;
-                page=targetPage;ResetBrowse(checked(page*resultPageSize),result);rows=result.Items;
+                librarySelection.Bind(replacement.Id,replacement.Total,positions);
+                page=start/resultPageSize;ResetBrowse(start,result);rows=result.Items;
                 Count.Text=$"{result.Total:N0} 件";
-                PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+resultPageSize-1)/resultPageSize)}";
-                Previous.IsEnabled=page>0;Next.IsEnabled=(page+1)*resultPageSize<result.Total;
+                PageNumber.Text=result.Total==0?"0 件":$"{start+1:N0}–{start+rows.Count:N0} / {result.Total:N0}";
+                Previous.IsEnabled=start>0;Next.IsEnabled=start+rows.Count<result.Total;
                 Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
-                if(!keepCards){RenderRows();RestoreSelection();}
+                if(!keepCards)RenderRows();
+                else
+                {
+                    var before=populating;populating=true;
+                    try
+                    {
+                        var wanted=rows.Select(row=>RowKey(row.Id)).ToArray();var set=wanted.ToHashSet();
+                        for(var i=resultKeys.Count-1;i>=0;i--)if(!set.Contains(resultKeys[i]))resultKeys.RemoveAt(i);
+                        for(var i=0;i<wanted.Length;i++)
+                        {
+                            if(i<resultKeys.Count&&resultKeys[i]==wanted[i])continue;
+                            var existing=resultKeys.IndexOf(wanted[i]);
+                            if(existing>=0)resultKeys.Move(existing,i);else resultKeys.Insert(i,wanted[i]);
+                        }
+                    }
+                    finally{populating=before;}
+                }
+                RestoreSelection();if(active is null)ApplyLibrarySelection();
+                if(anchor is {} retained&&rows.Any(row=>RowKey(row.Id)==retained.Key))await RestoreBrowseAnchorAsync(anchor);
             }
             catch{window.Dispose();throw;}
         }
         catch(Exception ex)
         {
             if(replacement is not null)await CloseResultSessionAsync(replacement);
+            if(ReferenceEquals(resultSession,replacement)){resultWindow?.Dispose();resultWindow=null;resultSession=null;}
+            resultsNeedRefresh=true;
             AppLog.Error(ex);
             // The edit already committed. Never report this as a failed save or
             // discard an unrelated tag/shelf draft (favorite saves only its flag).
@@ -57,7 +93,9 @@ public sealed partial class MainPage
     private static bool SameFavoriteCard(MediaRow a,MediaRow b)=>
         a.Id==b.Id&&a.Title==b.Title&&a.Kind==b.Kind&&a.Location==b.Location&&a.Availability==b.Availability
         &&a.PreviewKey==b.PreviewKey&&a.Favorite==b.Favorite&&a.Reviewed==b.Reviewed&&a.Shelf==b.Shelf
-        &&a.Tags.SequenceEqual(b.Tags)&&a.ShelfIds.SequenceEqual(b.ShelfIds)&&a.MatchLabel==b.MatchLabel;
+        &&a.Tags.SequenceEqual(b.Tags)&&a.ShelfIds.SequenceEqual(b.ShelfIds)&&a.MatchLabel==b.MatchLabel
+        &&a.AIEvidence==b.AIEvidence&&a.Proposal?.Summary==b.Proposal?.Summary&&a.AIPage?.Summary==b.AIPage?.Summary
+        &&a.PageText?.Summary==b.PageText?.Summary&&Protocol.DescribeEvidence(a.Evidence)==Protocol.DescribeEvidence(b.Evidence);
 
 
     private static async Task CloseResultSessionAsync(ResultSession? session)

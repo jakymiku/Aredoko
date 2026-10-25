@@ -81,6 +81,7 @@ public sealed partial class MainPage : Page
             await NavigateHistoryAsync(pointer.IsXButton2Pressed);
         }),true);
         ItemListContainer.AddHandler(PointerWheelChangedEvent,new PointerEventHandler(Library_PointerWheelChanged),true);
+        Items.AddHandler(PointerPressedEvent,new PointerEventHandler(LibrarySelectionPointerPressed),true);
         itemSizeSaveTimer=DispatcherQueue.CreateTimer();itemSizeSaveTimer.Interval=TimeSpan.FromMilliseconds(500);
         itemSizeSaveTimer.Tick+=(_,_)=>SaveItemSize();
         itemSizeTimer=DispatcherQueue.CreateTimer();itemSizeTimer.Interval=TimeSpan.FromMilliseconds(80);
@@ -289,7 +290,7 @@ public sealed partial class MainPage : Page
             var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null||(method.IsAI&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             SearchOptions.Header="AI候補の表示";
-            ResetBrowse(checked(page*pageSize),result);rows=result.Items; active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
+            ResetBrowse(checked(page*pageSize),result);rows=result.Items;BindLibrarySelection();active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             UpdateLibraryHeading();
             Count.Text=$"{result.Total:N0} 件"; PageNumber.Text=$"{page+1} / {Math.Max(1,(result.Total+pageSize-1)/pageSize)}";
@@ -346,6 +347,7 @@ public sealed partial class MainPage : Page
                     : InfoBarSeverity.Informational;
                 Notice(originTitle,simSummary+(scopeWarning is null?"":" "+scopeWarning),simSeverity,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
             }
+            RestoreSelection();ApplyLibrarySelection();
             UpdateFavoriteRootList();startupSearchSucceeded=true;RecordNavigationLocation();UpdateGettingStarted();
         } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { if(searches.IsCurrent(version)&&rows.Count==0){GettingStarted.Visibility=Visibility.Collapsed;Empty.Visibility=Visibility.Visible;VisualAssets.State(EmptyArt,"no_results");Empty.Text="検索を中断しました。もう一度「検索」を押してください。";} Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。"); }
         catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,"error");Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
@@ -402,6 +404,7 @@ public sealed partial class MainPage : Page
         if (item.ContentTemplateRoot is not Border host) return;
         args.Handled=true;
         var content = new Grid { Padding = new Thickness(8), ColumnSpacing = 12, RowSpacing = 8 };
+        content.AddHandler(PointerPressedEvent,new PointerEventHandler(LibrarySelectionPointerPressed),true);
         var image = new Image { Tag = row.Id, IsDoubleTapEnabled = true, Stretch = Stretch.Uniform };
         AutomationProperties.SetAutomationId(image, $"Preview{row.Id}");
         AutomationProperties.SetName(image, row.Title + "のサムネイル");
@@ -581,6 +584,7 @@ public sealed partial class MainPage : Page
     private static string KindLabel(string kind) => kind switch { "book" => "本", "image" => "画像", "archive" => "ZIP", "video" => "動画", "audio" => "音楽", _ => "素材" };
     private MenuFlyout SimilarityMenu(MediaRow row)
     {
+        if(librarySelection.Count>1&&librarySelection.Contains(row.Id))return SelectionMenu();
         var menu=new MenuFlyout();
         var detailsAction=new MenuFlyoutItem{Text="詳細"};
         AutomationProperties.SetAutomationId(detailsAction,"OpenDetails"+row.Id);
@@ -705,18 +709,7 @@ public sealed partial class MainPage : Page
             page=nextPage;await LoadAsync(reuseSession: reuse);
         }finally{transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
-    private async void Items_Changed(object sender,SelectionChangedEventArgs e) {
-        foreach(var item in containerCleanup.Keys.ToArray())UpdateSelectionFrame(item);
-        if(populating||!ready)return;
-        var index=RowForKey(Items.SelectedItem) is MediaRow selected ? rows.FindIndex(row=>row.Id==selected.Id) : -1;
-        if(index<0||index>=rows.Count||active?.Id==rows[index].Id)return;
-        if(saving||!await transitions.WaitAsync(0)){RestoreSelection();return;}
-        try {
-            if(!await ConfirmDiscardAsync()){RestoreSelection();return;}
-            ShowItemDetailsPane();
-            ApplySelectedRow(rows[index]);
-        }finally{transitions.Release();}
-    }
+    private async void Items_Changed(object sender,SelectionChangedEventArgs e)=>await ChangeLibrarySelectionAsync();
     private void UpdateSelectionFrame(ListViewItem item)=>item.Style=(Style)Resources[item.IsSelected?"MediaItemSelectedCardStyle":"MediaItemCardStyle"];
     private void ApplySelectedRow(MediaRow row)
     {
@@ -732,7 +725,18 @@ public sealed partial class MainPage : Page
         }
         finally{populating=previous;}
     }
-    private void RestoreSelection(){populating=true;Items.SelectedItem=active is null?null:Items.Items.OfType<string>().FirstOrDefault(key=>key==RowKey(active.Id));populating=false;}
+    private void RestoreSelection()
+    {
+        var previous=populating;populating=true;
+        try
+        {
+            if(librarySelection.Count==0&&active is not null&&SelectionPosition(active.Id) is {} position)librarySelection.Single(position);
+            Items.SelectedItems.Clear();
+            foreach(var key in Items.Items.OfType<string>())if(RowForKey(key) is {} row&&librarySelection.Contains(row.Id))Items.SelectedItems.Add(key);
+        }
+        finally{populating=previous;}
+        UpdateLibrarySelectionTools();
+    }
     private void UpdateDirty()
     {
         if(!ready)return;
@@ -857,7 +861,9 @@ public sealed partial class MainPage : Page
         try {
             await api.SaveAsync(id,snapshot);
             saved=snapshot;active.Tags=snapshot.ParsedTags;active.Shelf=snapshot.Shelf;active.ShelfIds=snapshot.ShelfIds?.ToArray()??[];active.Favorite=snapshot.Favorite;active.Reviewed=snapshot.Reviewed;
-            EditStatus.Text="保存しました";Notice("保存しました");await RefreshResultRowsAfterEditAsync();
+            EditStatus.Text="保存済み・一覧を更新しています…";await RefreshResultRowsAfterEditAsync();
+            EditStatus.Text=resultsNeedRefresh?"保存済みです。一覧を検索し直してください。":"保存しました";
+            if(!resultsNeedRefresh)Notice("保存しました");
         }catch(Exception ex){Failure(ex);EditStatus.Text="保存できませんでした。変更内容は残っています。";}
         finally
         {
@@ -962,7 +968,8 @@ public sealed partial class MainPage : Page
             if(folderSettingsActive)Details.IsPaneOpen=true;
             return;
         }
-        if(active is not null){ShowItemDetailsPane();Details.IsPaneOpen=true;_ = ShowDetailPreviewAsync(active);}
+        if(librarySelection.Count>1||librarySelection.Count==1&&active is null){ShowSelectionSummary();Details.IsPaneOpen=true;}
+        else if(active is not null){ShowItemDetailsPane();Details.IsPaneOpen=true;_ = ShowDetailPreviewAsync(active);}
     }
     private async Task OpenRowDetailsAsync(MediaRow row)
     {
@@ -972,6 +979,7 @@ public sealed partial class MainPage : Page
             if(active?.Id!=row.Id)
             {
                 if(!await ConfirmDiscardAsync())return;
+                if(SelectionPosition(row.Id) is {} position)librarySelection.Single(position);
                 ShowItemDetailsPane();ApplySelectedRow(row);RestoreSelection();
             }
             ShowItemDetailsPane();Details.IsPaneOpen=true;
@@ -981,7 +989,7 @@ public sealed partial class MainPage : Page
     }
     private async void PreviewPointerPressed(object sender,PointerRoutedEventArgs e)
     {
-        if(disposed||dialogOpen||saving){previewClicks.Reset();return;}
+        if(e.Handled||disposed||dialogOpen||saving||SelectionKey(Windows.System.VirtualKey.Control)||SelectionKey(Windows.System.VirtualKey.Shift)){previewClicks.Reset();return;}
         var point=e.GetCurrentPoint(this);if(!point.Properties.IsLeftButtonPressed){previewClicks.Reset();return;}
         int? sourceId=null;
         for(var source=e.OriginalSource as DependencyObject;source is not null;source=VisualTreeHelper.GetParent(source))
@@ -998,6 +1006,7 @@ public sealed partial class MainPage : Page
     { if(active is null)return;e.Handled=true;await OpenPreviewAsync(active.Id); }
     private async Task OpenPreviewAsync(int itemId)
     {
+        if(librarySelection.Count!=1||SelectionKey(Windows.System.VirtualKey.Control)||SelectionKey(Windows.System.VirtualKey.Shift))return;
         // The first click uses the normal selection/discard guard. Never open
         // a different or stale result if selection is pending or was cancelled.
         if(disposed||saving||dialogOpen||active?.Id!=itemId)return;
@@ -1237,6 +1246,7 @@ public sealed partial class MainPage : Page
 
     private void ShowItemDetailsPane()
     {
+        SelectionSummaryPanel.Visibility=Visibility.Collapsed;
         folderSettingsActive=false;folderDraft=null;
         DetailPaneTitle.Text="詳細と整理";
         FolderEditorPanel.Visibility=Visibility.Collapsed;
@@ -1675,6 +1685,7 @@ public sealed partial class MainPage : Page
         try
         {
             DetailPaneTitle.Text=folderDraft.IsBatch?$"一括設定（{targets.Length}件）":"フォルダの設定";
+            SelectionSummaryPanel.Visibility=Visibility.Collapsed;
             Editor.Visibility=Visibility.Collapsed;
             FolderEditorPanel.Visibility=Visibility.Visible;
             Details.IsPaneOpen=true;
@@ -2382,6 +2393,6 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){disposed=true;startupUpdateTimer?.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){disposed=true;selectionPreparation?.Cancel();startupUpdateTimer?.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

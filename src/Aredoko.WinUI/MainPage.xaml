@@ -35,6 +35,15 @@
        <TextBlock x:Name="DetailPaneTitle" Text="詳細と整理" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
        <Button Grid.Column="1" Click="CloseDetails_Click" ToolTipService.ToolTip="詳細を閉じる（Esc）" AutomationProperties.Name="詳細を閉じる" AutomationProperties.AutomationId="BtnCloseDetails"><SymbolIcon Symbol="Cancel"/></Button>
       </Grid>
+      <StackPanel x:Name="SelectionSummaryPanel" Grid.Row="1" Visibility="Collapsed" Spacing="12">
+       <TextBlock x:Name="SelectionSummaryText" TextWrapping="Wrap" Style="{StaticResource BodyStrongTextBlockStyle}" AutomationProperties.AutomationId="SelectionSummaryText"/>
+       <TextBlock x:Name="SelectionEditStatus" Visibility="Collapsed" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="SelectionEditStatus"/>
+       <TextBlock Text="選択した作品をまとめて整理できます。個別のタグやプレビューは1件だけ選択すると表示します。" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}"/>
+       <Button Content="お気に入りに登録" Click="SelectionFavoriteAdd_Click" AutomationProperties.AutomationId="SelectionFavoriteAdd"/>
+       <Button Content="お気に入りを解除" Click="SelectionFavoriteRemove_Click" AutomationProperties.AutomationId="SelectionFavoriteRemove"/>
+       <Button Content="棚に追加…" Click="SelectionShelfAdd_Click" AutomationProperties.AutomationId="SelectionShelfAdd"/>
+       <Button Content="棚から外す…" Click="SelectionShelfRemove_Click" AutomationProperties.AutomationId="SelectionShelfRemove"/>
+      </StackPanel>
       <ContentControl x:Name="Editor" Grid.Row="1" IsEnabled="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
        <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="DetailScroll" AutomationProperties.Name="作品の詳細と編集"><StackPanel Spacing="12" Margin="{StaticResource FormScrollGutter}">
@@ -178,12 +187,17 @@
    </Grid>
 
     <Grid x:Name="ItemListContainer" SizeChanged="ItemListContainer_SizeChanged" Grid.Row="3" Margin="0,0,12,0">
-     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
      <Expander x:Name="FavoriteRootArea" Header="お気に入りのフォルダ" IsExpanded="True" Visibility="Collapsed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,0,0,8" AutomationProperties.AutomationId="FavoriteRootArea">
       <ListView x:Name="FavoriteRootList" MaxHeight="144" SelectionMode="None" IsItemClickEnabled="True" ItemClick="FavoriteRoot_ItemClick" ContainerContentChanging="FavoriteRoot_ContainerContentChanging" ItemTemplate="{StaticResource MediaContainerTemplate}" HorizontalContentAlignment="Stretch" AutomationProperties.Name="お気に入りの登録フォルダ" AutomationProperties.AutomationId="FavoriteRootList"/>
      </Expander>
-     <ListView x:Name="Items" Grid.Row="1" Loaded="Items_Loaded" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.HelpText="Ctrl+Homeで検索結果の先頭、Ctrl+Endで末尾へ移動" AutomationProperties.AutomationId="ItemList"/>
-     <StackPanel Grid.Row="1" Spacing="12" Margin="24" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Visibility, ElementName=Empty}">
+     <StackPanel x:Name="SelectionTools" Grid.Row="1" Visibility="Collapsed" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+      <TextBlock x:Name="SelectionCountText" VerticalAlignment="Center" AutomationProperties.AutomationId="SelectionCountText"/>
+      <Button Content="選択を解除" Click="ClearLibrarySelection_Click" AutomationProperties.AutomationId="ClearLibrarySelection"/>
+      <Button x:Name="CancelSelectionPreparation" Content="選択の準備を中止" Click="CancelSelectionPreparation_Click" Visibility="Collapsed" AutomationProperties.AutomationId="CancelSelectionPreparation"/>
+     </StackPanel>
+     <ListView x:Name="Items" Grid.Row="2" SelectionMode="Extended" Loaded="Items_Loaded" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.HelpText="Ctrl/Shiftで複数選択（最大256件）、Ctrl+Homeで先頭、Ctrl+Endで末尾へ移動" AutomationProperties.AutomationId="ItemList"/>
+     <StackPanel Grid.Row="2" Spacing="12" Margin="24" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Visibility, ElementName=Empty}">
       <Image x:Name="EmptyArt" Width="128" Height="112" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_state_no_results_512.png" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
       <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.Name="案内メッセージ" AutomationProperties.LiveSetting="Polite" Text="フォルダを登録すると、ここに作品が並びます。" TextWrapping="Wrap" TextAlignment="Center"/>
      </StackPanel>

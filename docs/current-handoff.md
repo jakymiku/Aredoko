@@ -1,5 +1,11 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## U5 WinUI接続・現在の次（2026-10-25、以下の過去checkpointより優先）
+- 基盤 **454dba0** の上にExtended複数選択/明示summary/一括favorite・棚追加解除、600件外stable選択、編集後のwindow/可視anchor保持、literal favoriteのcard差分更新を接続。[正本・未受入](library-selection.md)。この単位commitは `git log -1 -- src/Aredoko.WinUI/MainPage.Selection.cs`。
+- CPU基盤9/Core1124 PASSに続き、Portable publish成功（既知警告維持）。ユーザー許可のU5 GUI 2回＋追加1回、frontend06/native-selection03は**18項目PASS・全体FAIL**。複数選択/一括棚/favorite/600件外保持/filtered除去、U4b設定保存/再起動/所有取消/draft保持/明示保存/通常終了を確認。6PNG目視。[各失敗と修正](library-selection.md)。
+- 最終refreshはタグ保存の再検索完了前に押されたため未確認。harnessの待機条件と保存中表示を修正し、追加GUIなし。Ctrl+マウス/右クリック/grid/範囲取消/Light/HC/DPIも未受入。GPUなし。**新しいGUI/GPUはユーザー回答後のみ**、今はCPU/buildの独立作業を続ける。通常DB/元メディア/旧Alpha/Actionsを触らずshutdownしない。
+- **次の1件：U6** ZIP/CBZをまとめる圧縮ファイルfilter（保存済み分類・旧APIは維持）。U4b/U5のsource完了分を繰り返さない。
+
 ## U5基盤・現在の再開位置（2026-10-25、以下より優先）
 - U4b本体 **51491a6**、選択callback改善/GUI診断 **428af7f** はPush済み。U4b再起動/中止/draftのGUI受入は未完。[正確な経緯](scan-startup.md)。許可試行2回＋追加1回は終了、以後GUI/GPUを行う場合は新たな回答を得る。frontend04は修正前候補、同期disable撤去はbuildのみ。
 - **U5のAPI/Core基盤**を追加：[仕様](library-selection.md)。検索sessionに束縛した256件までのatomic favorite/棚追加・解除、全件scope/原本検証、locateによる選択再配置。Coreはstable ID/ordinalで600件外保持、120件ずつの範囲選択、取消/世代/上限を扱う。利用者向けUIはまだ未接続。

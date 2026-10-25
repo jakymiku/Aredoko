@@ -4,6 +4,7 @@
 Codex GPT-6.1 Sol / Antigravity共通の実装手順。既存P0–P7を置き換えず、P1/P3/UI/P4/P6の具体的な改善キューとして統合する。2026-10-25にユーザーが実装再開を指示した。
 
 ## 実装進捗（2026-10-25）
+- **U5 WinUI接続済み・実機は限定**：複数選択/一括整理/600件window・選択保持/literal favorite差分を接続。frontend06/native-selection03で18項目確認、全体は最後のrefresh待機不足でFAIL保持。[正確な未受入](library-selection.md)。次の実装はU6。
 - **U5基盤（UI未接続）**：検索sessionのscope/原本版を全件検証する一括favorite/棚追加・解除API、locate、Coreのstable ID選択/range/取消/上限を実装。[仕様・残件](library-selection.md)。次はU5のnative UI接続。
 - **U4b source実装・CPU確認済み、GUI受入待ち**：folder別起動時更新（旧root OFF）・一覧/AIの選択・初画面後queue・所有取消・進捗と明示一覧更新、成功scan後のmissing除外/metadata復帰を追加。catalog v3移行とv0–v3復旧互換。[仕様/確認](scan-startup.md)。次の実装はU5残、GUI/GPUは今回ユーザーの事前回答後に限る。
 - **U1**：Page acceleratorの自動tooltipをHidden（キー自体は維持）、検索開始時の正しいナビ見出し、1行の長名省略と全文tooltip、テーマ対応の選択枠、単クリックでは詳細を開かずボタン/右クリックから明示表示、未保存draft保持、検索方式のtooltip/HelpTextを実装。
