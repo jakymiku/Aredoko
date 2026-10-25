@@ -1,11 +1,15 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-26）
 
-## AI推論パイプライン・初回検証タイムアウト・UTF-8文字化け修正完了（2026-10-26、以下より優先）
+## AI推論パイプライン・初回検証タイムアウト・WinUI起動クラッシュ修正完了（2026-10-26、以下より優先）
 - **確認された事象と根本原因**:
   1. **初回40秒タイムアウト**: 起動後初回AI推論時、8.5GB・23,903ファイルのSHA-256整合性チェック（約30秒）＋EmbeddingGemma 2重みロード（約15秒）が重なり、フロントエンド `LibraryApi.cs` の `HttpClient.Timeout` および `SearchRequestClient.RunAsync` の deadline（従来40秒）を超過してキャンセルされていた。
   2. **Worker Stopped (TypeError)**: Windows環境でisolated mode (`-I`) 起動されたPython子プロセスは環境変数 `PYTHONIOENCODING` を無視してWindows ANSI (CP932) にフォールバックするため、標準入力に渡された「りんご」等のUTF-8日本語文字列が文字化けし、SentenceTransformers tokenizerが `TypeError: TextEncodeInput must be Union[...]` を送出していた。
   3. **整合性検証の設計仕様**: 実行時検証 (`verify=True`) はバックエンドプロセスの生存期間中、初回worker起動時の1回のみインメモリで実行される（`_verified_packs`）。常駐したworkerプロセスにより、**2回目以降の検索はファイル検証もモデル再ロードも一切走らず、約100msで完了する**（実測 `104.5ms` を確認）。
+  4. **WinUI起動クラッシュ (`Application exited before ready` / `FileNotFoundException: Microsoft.Windows.ApplicationModel.WindowsAppRuntime.Projection`)**:
+     - ポータブル自己完結配備（`WindowsPackageType=None`, `WindowsAppSDKSelfContained=true`）において、Windows App SDK Build Tools がデフォルトでフレームワーク配布用デプロイ初期化子 (`DeploymentManagerAutoInitializer`) を挿入していた。
+     - 自己完結配備では Projection DLL がトリミング・除外されるため、モジュール初期化子（`.cctor()`）で `FileNotFoundException` が発生し、ウィンドウ生成前に即座に落ちていた。
 - **実施した修正**:
+  - `src/Aredoko.WinUI/Aredoko.WinUI.csproj`: Portableプロファイルに `<WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>` を追加し、自己完結不要なデプロイメントマネージャーの自動初期化を無効化。
   - `src/Aredoko.Core/LibraryApi.cs`: `HttpClient` のタイムアウトを40秒から120秒（`TimeSpan.FromSeconds(120)`）へ延長。
   - `src/Aredoko.Core/SearchRequestClient.cs`: `RunAsync` の既定タイムアウト引数を40秒から120秒（`int seconds=120`）へ統一。
   - `app/runtime_paths.py`: worker起動引数に `-X utf8` を追加し、`-I` 下でも全ワーカー（`ai_worker`, `laya_worker`, `tagger_worker`）の標準入出力を強制的にUTF-8モード化。
@@ -13,9 +17,12 @@
   - `app/ai_runtime.py`: Pythonが自動生成する `__pycache__` を整合性検査から除外。
   - `app/ai_process.py` / `app/laya_process.py` / `app/wd_tagger.py`: `PYTHONDONTWRITEBYTECODE='1'` を設定。
 - **実機リリース適用・検証結果**:
-  - `dotnet build src/Aredoko.WinUI -c Release` 成功。全1,124項目のCore単体テスト全件PASS。
-  - デスクトップ版実行先 `%LOCALAPPDATA%/Programs/Aredoko/releases/20261025-2811863/` の `backend/app/` および `bin/` を最新成果物で同期。
-  - `manifest.json` および `sha256sums.txt` を再計算し、`verify_release` による全794ファイルの暗号学的整合性チェック合格を確認 (`VERIFICATION SUCCESSFUL`)。
+  - `dotnet publish src/Aredoko.WinUI -c Portable -p:Platform=x64 -p:AredokoPackageChannel=Portable` を実行し、完全な自己完結ポータブルフロントエンドバイナリを生成。
+  - デスクトップ版実行先 `%LOCALAPPDATA%/Programs/Aredoko/releases/20261025-2811863/` の `bin/` および `backend/app/` を同期。
+  - `bin/portable-build.json`（全373項目）を再生成し、`inspect_portable` PASS。
+  - `manifest.json` および `sha256sums.txt`（全794項目）を更新し、`verify_release` PASS。
+  - `Aredoko.exe --self-test` PASS、`launch_release.py --check` PASS。
+  - `Aredoko.WinUI.exe` 単体直接起動テストにより、クラッシュせず正常にイベントループへ突入することを確認。
 - **次の1件**:
   - デスクトップの「Aredoko Alpha」ショートカットからアプリを起動し、検索バーで「両方で探す（AI）」または「画像の見た目（AI）」を実行して、初回ロード成功（約40秒）および2回目以降の高速応答（約0.1秒）を確認する。
 
