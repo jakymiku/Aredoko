@@ -11,7 +11,7 @@ using Windows.System;
 namespace Aredoko_WinUI;
 
 // Original-resolution pages with per-use revalidation and bounded next-spread preload.
-internal sealed class ArchiveReaderView : Grid, IDisposable
+internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
 {
     private bool actualPixels;
     private readonly LibraryApi api;
@@ -23,7 +23,10 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
     private readonly int itemId;
     private readonly CancellationTokenSource lifetime = new();
     private readonly CancellationToken cancellation;
-    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer hideTimer;
+    private readonly ViewerChromeController hideTimer;
+    private readonly string bookTitle;
+    public string WindowTitle=>$"Aredoko — 本ビューア　{bookTitle} [{count.Text}]";
+    public event Action<string>? TitleChanged;
     private readonly Grid canvas = new();
     private readonly StackPanel pages = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly Image image = new() { Stretch = Stretch.Uniform };
@@ -34,10 +37,9 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
         HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, RequestedTheme = ElementTheme.Dark
     };
-    private readonly Border header = new() { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
     private readonly Border toolbar = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
     private readonly Button previous = IconButton(Symbol.Back), next = IconButton(Symbol.Forward), zoomOut = IconButton(Symbol.ZoomOut), zoomIn = IconButton(Symbol.ZoomIn);
-    private readonly Button fit = IconButton(Symbol.FullScreen), retry = IconButton(Symbol.Refresh), reopen = IconButton(Symbol.RepeatAll), settings = IconButton(Symbol.Setting), close = IconButton(Symbol.Cancel);
+    private readonly Button fit = IconButton(Symbol.FullScreen), retry = IconButton(Symbol.Refresh), reopen = IconButton(Symbol.RepeatAll), settings = IconButton(Symbol.Setting);
     private readonly Button actualSize=new(){Content="原寸",MinWidth=36,Padding=new Thickness(8)};
     private readonly TextBlock count = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock zoom = new() { Text = "倍率 100%", VerticalAlignment = VerticalAlignment.Center };
@@ -45,7 +47,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
     private readonly TextBlock progressStatus=new(){Visibility=Visibility.Collapsed,TextWrapping=TextWrapping.Wrap,HorizontalAlignment=HorizontalAlignment.Center};
     private readonly MenuFlyoutItem saveProgress=new(){Text="読書位置を保存し直す"};
     private bool allowProgressSave=true;
-    private readonly MenuFlyout menu = new();
+    private readonly MenuFlyout menu;
     private readonly List<RadioMenuFlyoutItem> modes = [];
     private ArchiveManifest? manifest;
     private ReaderDisplayMode mode;
@@ -59,7 +61,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
 
     public ArchiveReaderView(LibraryApi api, int itemId, string title, PageTextMatch? initialMatch=null,AIPageMatch? initialPageMatch=null)
     {
-        this.api=api;this.itemId=itemId;this.initialMatch=initialMatch;this.initialPageMatch=initialPageMatch;cancellation=lifetime.Token;
+        this.api=api;this.itemId=itemId;bookTitle=title;this.initialMatch=initialMatch;this.initialPageMatch=initialPageMatch;cancellation=lifetime.Token;
         progressWriter=new((book,position)=>api.SaveReaderProgressAsync(book,position.Page,position.Mode,CancellationToken.None));
         progressWriter.StateChanged+=error=>
         {
@@ -68,32 +70,29 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
             if(error is not null){keyboardChrome=true;ShowChrome();}
             if(error is not null)AppLog.Error(error);
         };
-        hideTimer=DispatcherQueue.CreateTimer();hideTimer.Interval=TimeSpan.FromSeconds(2.5);hideTimer.IsRepeating=false;
-        hideTimer.Tick+=(_,_)=>{if(!disposed&&!keyboardChrome&&!menuOpen&&!busy&&!failed){viewport.Focus(FocusState.Programmatic);header.Visibility=toolbar.Visibility=Visibility.Collapsed;}};
+        hideTimer=new(this,toolbar,viewport,()=>keyboardChrome||menuOpen);
+        menu=ViewerChromeController.Settings(true,()=>{FitImages();UpdateActions();hideTimer.Start();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
         viewport.Style=(Style)Application.Current.Resources["ImageViewerCanvasStyle"];
-        header.Style=toolbar.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
+        toolbar.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
         // Edge overlays must paint the last pixel; a translucent stroke reveals the page underneath.
-        header.BorderThickness=toolbar.BorderThickness=new Thickness(0);
+        toolbar.BorderThickness=new Thickness(0);
         pages.Children.Add(image);pages.Children.Add(second);canvas.Children.Add(pages);viewport.Content=canvas;Children.Add(viewport);
         viewport.SizeChanged+=(_,_)=>FitImages();viewport.ViewChanged+=(_,_)=>UpdateActions();
-        var heading=new Grid{ColumnSpacing=12};heading.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-        heading.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});heading.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-        var name=new TextBlock{Text=title,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center};
-        name.Style=count.Style=zoom.Style=status.Style=progressStatus.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
-        ToolTipService.SetToolTip(name,title);heading.Children.Add(name);SetColumn(count,1);heading.Children.Add(count);SetColumn(close,2);heading.Children.Add(close);header.Child=heading;Children.Add(header);
+        count.Style=zoom.Style=status.Style=progressStatus.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
+        ViewerInputGestures.AttachPan(viewport);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,HorizontalAlignment=HorizontalAlignment.Center};
         foreach(var control in new UIElement[]{previous,next,zoomOut,zoomIn,fit,actualSize,zoom,retry,reopen,settings})actions.Children.Add(control);
-        var bottom=new StackPanel{Spacing=4};bottom.Children.Add(actions);bottom.Children.Add(status);bottom.Children.Add(progressStatus);toolbar.Child=bottom;Children.Add(toolbar);
+        toolbar.Child=actions;Children.Add(toolbar);ViewerChromeController.AttachNotices(this,status,progressStatus);
         Identify(actualSize,"ReaderActualSize","本のページを原寸で表示");ToolTipService.SetToolTip(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）");
-        actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImages();viewport.ChangeView(0,0,1,true);}else viewport.ChangeView(null,null,(float)OriginalZoom(),true);};
+        actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImages();viewport.ChangeView(0,0,1,true);}else ViewerInputGestures.ZoomCentered(viewport,(float)OriginalZoom());};
         Identify(viewport,"ReaderViewport","本の表示。左右キーでページ送り、右クリックで表示設定");Identify(image,"ReaderImage","本のページ");Identify(second,"ReaderImageSecond","見開きのもう一方のページ");
         Identify(previous,"ReaderPrevious","前のページ");Identify(next,"ReaderNext","次のページ");Identify(zoomOut,"ReaderZoomOut","本を縮小");Identify(zoomIn,"ReaderZoomIn","本を拡大");Identify(fit,"ReaderFit","本の表示をリセット");
-        Identify(retry,"ReaderRetry","現在のページを再試行");Identify(reopen,"ReaderReopen","本を最初から開き直す");Identify(settings,"ReaderSettings","本の表示設定");Identify(close,"ReaderClose","読書画面を閉じる");
-        Identify(header,"ReaderHeader","本の情報と閉じる");Identify(toolbar,"ReaderToolbar","本の操作");AutomationProperties.SetAutomationId(count,"ReaderPageNumber");AutomationProperties.SetAutomationId(status,"ReaderStatus");AutomationProperties.SetAutomationId(zoom,"ReaderZoomStatus");
+        Identify(retry,"ReaderRetry","現在のページを再試行");Identify(reopen,"ReaderReopen","本を最初から開き直す");Identify(settings,"ReaderSettings","本の表示設定");
+        Identify(toolbar,"ReaderToolbar","本の操作");AutomationProperties.SetAutomationId(count,"ReaderPageNumber");AutomationProperties.SetAutomationId(status,"ReaderStatus");AutomationProperties.SetAutomationId(zoom,"ReaderZoomStatus");
         Identify(progressStatus,"ReaderProgressStatus","読書位置の保存状態");Identify(saveProgress,"ReaderSaveProgress","読書位置を保存し直す");
         AutomationProperties.SetLiveSetting(progressStatus,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         AutomationProperties.SetLiveSetting(status,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        foreach(var (button,text) in new[]{(previous,"前へ"),(next,"次へ"),(zoomOut,"縮小"),(zoomIn,"拡大"),(fit,"画面に合わせる"),(retry,"再試行"),(reopen,"最初から開き直す"),(settings,"単ページ・見開きの設定"),(close,"閉じる（Esc）")})ToolTipService.SetToolTip(button,text);
+        foreach(var (button,text) in new[]{(previous,"前へ"),(next,"次へ"),(zoomOut,"縮小"),(zoomIn,"拡大"),(fit,"画面に合わせる"),(retry,"再試行"),(reopen,"最初から開き直す"),(settings,"単ページ・見開きの設定")})ToolTipService.SetToolTip(button,text);
         foreach(var (value,label,id) in new[]{(ReaderDisplayMode.Single,"単ページ","ReaderSingle"),(ReaderDisplayMode.RightToLeft,"見開き（右→左）","ReaderRtl"),(ReaderDisplayMode.LeftToRight,"見開き（左→右）","ReaderLtr")})
         {
             var option=new RadioMenuFlyoutItem{Text=label,GroupName="ReaderDisplay",IsChecked=value==ReaderDisplayMode.Single};Identify(option,id,label);modes.Add(option);menu.Items.Add(option);
@@ -102,16 +101,15 @@ internal sealed class ArchiveReaderView : Grid, IDisposable
         menu.Items.Add(new MenuFlyoutSeparator());menu.Items.Add(saveProgress);
         saveProgress.Click+=async(_,_)=>{if(busy||disposed||!loaded||manifest is null)return;allowProgressSave=true;busy=true;UpdateActions();try{await SaveProgressAsync(manifest);}finally{busy=false;if(!disposed)UpdateActions();}};
         menu.Opened+=(_,_)=>{menuOpen=true;ShowChrome();};menu.Closed+=(_,_)=>{menuOpen=false;ShowChrome();};settings.Flyout=menu;viewport.ContextFlyout=menu;
-        previous.Click+=async(_,_)=>{if(manifest is not null){allowProgressSave=true;await LoadAsync(ReaderSpreadPolicy.Previous(page,manifest.PageCount,mode));}};
-        next.Click+=async(_,_)=>{if(manifest is not null){allowProgressSave=true;await LoadAsync(ReaderSpreadPolicy.Next(page,manifest.PageCount,mode));}};
+        previous.Click+=async(_,_)=>{if(manifest is not null){allowProgressSave=true;await LoadAsync(ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,-1,ViewerOptions.Value.LoopBookPages));}};
+        next.Click+=async(_,_)=>{if(manifest is not null){allowProgressSave=true;await LoadAsync(ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,1,ViewerOptions.Value.LoopBookPages));}};
         retry.Click+=async(_,_)=>{if(manifest is null)await OpenAsync();else await LoadAsync(targetPage);};reopen.Click+=async(_,_)=>await OpenAsync(true);
-        zoomOut.Click+=(_,_)=>viewport.ChangeView(null,null,Math.Max(viewport.MinZoomFactor,viewport.ZoomFactor-.5f),true);zoomIn.Click+=(_,_)=>viewport.ChangeView(null,null,Math.Min(viewport.MaxZoomFactor,viewport.ZoomFactor+.5f),true);fit.Click+=(_,_)=>{actualPixels=false;FitImages();viewport.ChangeView(0,0,1,true);};
-        close.Click+=(_,_)=>CloseRequested?.Invoke(this,EventArgs.Empty);UpdateActions();ShowChrome();
+        zoomOut.Click+=(_,_)=>ViewerInputGestures.ZoomCentered(viewport,Math.Max(viewport.MinZoomFactor,viewport.ZoomFactor-.5f));zoomIn.Click+=(_,_)=>ViewerInputGestures.ZoomCentered(viewport,Math.Min(viewport.MaxZoomFactor,viewport.ZoomFactor+.5f));fit.Click+=(_,_)=>{actualPixels=false;FitImages();viewport.ChangeView(0,0,1,true);};
+        UpdateActions();
     }
     private static Button IconButton(Symbol symbol)=>new(){Content=new SymbolIcon(symbol),MinWidth=36,Padding=new Thickness(8)};
     private static void Identify(DependencyObject control,string id,string name){AutomationProperties.SetAutomationId(control,id);AutomationProperties.SetName(control,name);}
-    private void ShowChrome()
-    {if(disposed)return;header.Visibility=toolbar.Visibility=Visibility.Visible;hideTimer.Stop();if(!keyboardChrome&&!menuOpen&&!busy&&!failed)hideTimer.Start();}
+    private void ShowChrome()=>hideTimer.Show();
     private void FitImages()
     {
         canvas.Width=Math.Max(1,viewport.ActualWidth);canvas.Height=Math.Max(1,viewport.ActualHeight);
@@ -131,9 +129,9 @@ public void AttachNavigation(UIElement dialog)
         {
             if(busy||disposed||manifest is null||menuOpen)return;
             allowProgressSave=true;
-            await LoadAsync(direction>0?ReaderSpreadPolicy.Next(page,manifest.PageCount,mode):ReaderSpreadPolicy.Previous(page,manifest.PageCount,mode));
+            await LoadAsync(direction>0?ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,1,ViewerOptions.Value.LoopBookPages):ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,-1,ViewerOptions.Value.LoopBookPages));
         });
-        dialog.AddHandler(PointerMovedEvent,new PointerEventHandler((_,_)=>{keyboardChrome=false;ShowChrome();}),true);
+        dialog.AddHandler(PointerMovedEvent,new PointerEventHandler((_,_)=>{keyboardChrome=false;}),true);
         dialog.PreviewKeyDown+=async(_,args)=>
         {
             if(args.Key==VirtualKey.Escape){if(menuOpen)return;args.Handled=true;CloseRequested?.Invoke(this,EventArgs.Empty);return;}
@@ -143,7 +141,7 @@ public void AttachNavigation(UIElement dialog)
             if(args.Key==VirtualKey.F10){keyboardChrome=true;ShowChrome();args.Handled=true;return;}
             if(args.Key is not(VirtualKey.Left or VirtualKey.Right)||manifest is null||menuOpen)return;
             args.Handled=true;var forward=mode==ReaderDisplayMode.RightToLeft?args.Key==VirtualKey.Left:args.Key==VirtualKey.Right;
-            allowProgressSave=true;await LoadAsync(forward?ReaderSpreadPolicy.Next(page,manifest.PageCount,mode):ReaderSpreadPolicy.Previous(page,manifest.PageCount,mode));
+            allowProgressSave=true;await LoadAsync(forward?ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,1,ViewerOptions.Value.LoopBookPages):ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,-1,ViewerOptions.Value.LoopBookPages));
         };
     }
     public Task OpenAsync()=>OpenAsync(false);
@@ -247,11 +245,12 @@ public void AttachNavigation(UIElement dialog)
     }
     private void UpdateActions()
     {
-        previous.IsEnabled=!busy&&!closing&&manifest is not null&&page>0;
-        next.IsEnabled=!busy&&!closing&&manifest is not null&&ReaderSpreadPolicy.Next(page,manifest.PageCount,mode)<manifest.PageCount;
+        TitleChanged?.Invoke(WindowTitle);
+        previous.IsEnabled=!busy&&!closing&&manifest is not null&&(page>0||ViewerOptions.Value.LoopBookPages);
+        next.IsEnabled=!busy&&!closing&&manifest is not null&&ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,1,ViewerOptions.Value.LoopBookPages)<manifest.PageCount;
         retry.IsEnabled=!busy&&!closing&&failed;reopen.IsEnabled=!busy&&!closing;settings.IsEnabled=!busy&&!closing;
         foreach(var option in modes)option.IsEnabled=!busy&&!closing;saveProgress.IsEnabled=!busy&&!closing&&loaded&&manifest is not null;
         zoom.Text=$"倍率 {viewport.ZoomFactor/OriginalZoom()*100:0}%";zoomOut.IsEnabled=loaded&&!busy&&viewport.ZoomFactor>viewport.MinZoomFactor;zoomIn.IsEnabled=loaded&&!busy&&viewport.ZoomFactor<viewport.MaxZoomFactor;actualSize.IsEnabled=loaded&&!busy;fit.IsEnabled=loaded&&!busy;
     }
-    public void Dispose(){if(disposed)return;disposed=true;hideTimer.Stop();menu.Hide();preload?.Cancel();lifetime.Cancel();pageCache.Dispose();ClearImages();manifest=null;lifetime.Dispose();}
+    public void Dispose(){if(disposed)return;disposed=true;hideTimer.Dispose();menu.Hide();preload?.Cancel();lifetime.Cancel();pageCache.Dispose();ClearImages();manifest=null;lifetime.Dispose();}
 }

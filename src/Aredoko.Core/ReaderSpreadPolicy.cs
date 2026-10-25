@@ -20,4 +20,11 @@ public static class ReaderSpreadPolicy
     {var start=Anchor(page,count,mode);return start+(mode==ReaderDisplayMode.Single||start==0?1:2);}
     public static int Previous(int page,int count,ReaderDisplayMode mode)
     {var start=Anchor(page,count,mode);return mode==ReaderDisplayMode.Single?start-1:start<=1?0:start-2;}
+    public static int Move(int page,int count,ReaderDisplayMode mode,int direction,bool loop)
+    {
+        if(direction is not (-1 or 1))throw new ArgumentOutOfRangeException(nameof(direction));
+        var target=direction>0?Next(page,count,mode):page==0?-1:Previous(page,count,mode);
+        if(!loop)return target;
+        return target>=count?0:target<0?Anchor(count-1,count,mode):target;
+    }
 }

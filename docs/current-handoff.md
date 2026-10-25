@@ -1,5 +1,11 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## U2ビューア改善（2026-10-25、現在の再開位置）
+- U1 **64034ba**をPush後、U2a/bを実装。OSタイトルへ名前/位置、独自header撤去、固定toolbar/独立notice、下端32DIP/約1秒hide、viewer内の小画像拡大/常時bar/本循環、中心zoomと左dragを追加。[進捗と限界](usability-followup-20261025.md)。この節のcommitは `git log -1 -- docs/current-handoff.md`。
+- 専用候補 `data/ai-ui/usability-20261025/frontend06`、publish成功。Core対象79 / backup28+1 PASS、U2生成native UIA10checks/exit0/残存0。144生成PNG/CBZ不変、OSタイトル・固定bar・設定保存・単ページ/奇数RTL双方向循環・bar消去を確認。既知WUI1001/SDK IL2104は維持。
+- **未検証**：物理hover/hotzone/左drag/wheel/tooltip、HC/DPI。前面化拒否はU1のrawを参照し、制限回避や同じ試行の反復はしない。旧入力依存viewerテストは新しいOSタイトル/closeへ更新が必要。通常DB/旧Alpha/ZIP07/shortcutは未変更。
+- **次の1件：U3aのWebP/APNG再生clock・frame合成の局所改善**。原本がない報告は生成fixtureで対象を絞り、未再現を解消済みにしない。独立したU3b/U4aへ進めてよい。全ロードマップ完了とはしない。
+
 ## U1実装（2026-10-25、実装再開済み）
 - 開始c18c5ef・origin一致/clean。ユーザーが枠の残りまで継続を指示。U1のtooltip/ナビ見出し/長名/選択枠/明示詳細/検索方式hintを実装。[計画と証拠](usability-followup-20261025.md)。この文書のcommitは `git log -1 -- docs/current-handoff.md`。
 - 候補 `data/ai-ui/usability-20261025/frontend04`、Portable publish成功。Dark `u1-uia02`・Light `u1-light01`各9checks/exit0/残存0、各3PNG目視。145生成PNG不変、応答前の見出し更新・旧一覧操作停止、選択時pane閉、draft保持を限定確認。選択枠と長名省略を両テーマで確認。

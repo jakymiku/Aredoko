@@ -1,6 +1,6 @@
 # 実機フィードバック改善計画（2026-10-25）
 
-**状態：実装進行中。U1のsource実装・Portable build・限定UIA確認済み。物理入力の受入は未完。U2以降は下記進捗を参照。**
+**状態：実装進行中。U1/U2のsource実装・Portable build・限定UIA確認済み。物理入力の受入は未完。U3以降は下記進捗を参照。**
 Codex GPT-6.1 Sol / Antigravity共通の実装手順。既存P0–P7を置き換えず、P1/P3/UI/P4/P6の具体的な改善キューとして統合する。2026-10-25にユーザーが実装再開を指示した。
 
 ## 実装進捗（2026-10-25）
@@ -8,6 +8,8 @@ Codex GPT-6.1 Sol / Antigravity共通の実装手順。既存P0–P7を置き換
 - 専用候補 `data/ai-ui/usability-20261025/frontend04`。Portable publish成功、既知WUI1001×3/SDK IL2104×2は残存。生成145PNG/専用DBのUIAで、結果providerを停止したままの3ナビ見出し更新・旧結果操作禁止、選択でpane非表示、明示詳細のdraft保持・原本不変を確認。証拠は `u1-uia02/report.json`。Light側/最終visual reviewの結果はcurrent-handoffを参照。
 - `u1-dark01..04`は前面化/入力ハーネス・環境失敗としてrawを保持。screenshot --focus、focusコマンド、所有HWNDへの通常SetForegroundWindowも前面確認を満たさなかった。別アプリ入力やOS制限回避は行っていない。`--uia-only`でpointer/keyboard/context menu/小サイズsliderを**未検証として明示**する。これらをPASSへ数えず、入力可能時に対象だけ受け入れる。
 - 先行 `u1-uia01`の画面レビューで選択枠の弱さとuniform tileのcaption領域不足を見つけ、選択styleとcaption最小高を修正。UIA PASSだけで見た目の合格にはしない。次の実装はU2a。
+- **U2a/b**：画像/本の独自header/×を撤去しOSタイトルへ名前・位置を反映。noticeをtoolbarから独立overlayへ、下端32DIP/約1秒hideの共通制御、keyboard/menu/hover中の保持と常時表示設定。小画像拡大をviewer設定へ移動し、中心zoom/左drag、設定OFF既定の本の双方向循環を追加。保存/backup契約は旧形式を読み新boolean2値を保全。
+- U2候補 `frontend06` Portable publish成功、新規CS8602は初期化順を直して解消（既知WUI1001×3/SDK IL2104×2は残存）。Core対象79 checks、backup既存28＋不正boolean拒否1 PASS。生成144PNG/5ページCBZの `u2-uia01` は10checks/exit0/残存0、4PNG（主画面含む）を確認対象とした。OSタイトル更新、header非表示、toolbar位置固定、表示設定、単ページ/奇数RTLの双方向循環、bar非表示と設定ファイル保持を確認。ホイール/物理drag/hotzone/tooltip/HC/DPIは未受入。旧viewer試験のImageClose/ReaderClose/ReaderPageNumber等はOSタイトル/正常WM_CLOSEへ移行する必要がある。
 
 ## 1. 基準と確認範囲
 

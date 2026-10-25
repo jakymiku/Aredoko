@@ -97,7 +97,7 @@ class StorageBackupTests(TagFixture,unittest.TestCase):
         self.unchanged()
 
     def test_current_viewer_settings_roundtrip_preserves_all_fields_and_bytes(self):
-        value={'version':1,'wheel_up_advances':True,'library_item_scale':180,'theme':'dark','enlarge_small_images':True}
+        value={'version':1,'wheel_up_advances':True,'library_item_scale':180,'theme':'dark','enlarge_small_images':True,'always_show_controls':True,'loop_book_pages':True}
         raw=json.dumps(value,indent=2).encode('utf-8');self.viewer.write_bytes(raw)
         self.create();restore(self.bundle,self.output)
         self.assertEqual((self.output/'settings/viewer-settings.json').read_bytes(),raw)
@@ -110,6 +110,12 @@ class StorageBackupTests(TagFixture,unittest.TestCase):
         entry['bytes'],entry['sha256']=recovery._hash(payload);self.write_manifest(manifest)
         with self.assertRaises(RecoveryError):restore(self.bundle,self.output)
         self.assertFalse(self.output.exists());self.unchanged()
+
+    def test_viewer_control_policies_require_boolean_values(self):
+        for option in ('always_show_controls','loop_book_pages'):
+            for value in (1,'true',None):
+                with self.subTest(option=option,value=value),self.assertRaises(RecoveryError):
+                    recovery._configuration('viewer_settings',json.dumps({'version':1,'wheel_up_advances':False,option:value}).encode())
 
     def test_omitted_cache_needs_explicit_rebuild_without_losing_metadata(self):
         self.create(include_vectors=False);restore(self.bundle,self.output)

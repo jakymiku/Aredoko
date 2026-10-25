@@ -102,7 +102,7 @@ def _configuration(role,data):
         # version number. Accept legacy subsets and the exact current writer's
         # values; preserve original bytes rather than silently normalizing them.
         required={'version','wheel_up_advances'}
-        allowed=required|{'library_item_scale','theme','enlarge_small_images'}
+        allowed=required|{'library_item_scale','theme','enlarge_small_images','always_show_controls','loop_book_pages'}
         if (len(data)>2048 or not isinstance(value,dict) or not required<=set(value)
                 or set(value)-allowed or type(value['version']) is not int or value['version']!=1
                 or type(value['wheel_up_advances']) is not bool):
@@ -115,6 +115,9 @@ def _configuration(role,data):
             raise RecoveryError('Invalid viewer theme')
         if 'enlarge_small_images' in value and type(value['enlarge_small_images']) is not bool:
             raise RecoveryError('Invalid viewer enlargement policy')
+        for option in ('always_show_controls','loop_book_pages'):
+            if option in value and type(value[option]) is not bool:
+                raise RecoveryError('Invalid viewer control policy')
     else:raise RecoveryError('Invalid configuration role')
 
 def _stores(catalog):

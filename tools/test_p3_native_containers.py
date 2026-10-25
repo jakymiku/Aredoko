@@ -15,6 +15,7 @@ from native_ui_tools import nodes
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--usability-u1',action='store_true')
+    parser.add_argument('--usability-u2',action='store_true')
     parser.add_argument('--uia-only',action='store_true',help='Record input/hover checks as unverified; use UIA only')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
@@ -58,6 +59,12 @@ def main():
         for i in range(0 if args.detail_actions or args.global_edge else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
         if args.usability_u1:
             (media/'generated-000.png').rename(media/('generated-000-Test1145141919810364364-'+('LongName'*10)+'.png'))
+        if args.usability_u2:
+            import zipfile
+            (media/'generated-144.png').unlink()
+            with zipfile.ZipFile(media/'zz-usability.cbz','w') as book:
+                for page in range(5):book.writestr(f'{page}.png',png(width=300,height=500,color=(40+page*30,80,160)))
+            (target/'viewer-settings.json').write_text(json.dumps({'version':1,'wheel_up_advances':False,'always_show_controls':True}),encoding='utf-8')
         if args.detail_actions:
             from ui_detail_actions_audit import create_media
             create_media(media)
@@ -116,6 +123,10 @@ def main():
             from ui_usability_u1_audit import audit
             audit(ui,tree,shot,check,first['id'],gate,cat,interactive=not args.uia_only)
             if args.uia_only:report['unverified']=['pointer hover/tooltip','small-size slider and name ellipsis','context-menu invocation','Ctrl Home/End physical input']
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.usability_u2:
+            from ui_usability_u2_audit import audit
+            audit(ui,cli,tree,shot,check,report,proc.pid,hwnd,first['id'],cat,user)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.initial_loading:
             for nav,expected,name in (("NavHistory","閲覧履歴はありません。作品を開くと、ここに表示されます。","empty-history"),("NavFavorites","お気に入りはまだありません。作品の右クリックメニューや詳細から登録できます。","empty-favorites")):
@@ -177,10 +188,10 @@ def main():
             except Exception:report['dialog_cleanup_error']=traceback.format_exc()
             try:
                 for child in json.loads(cli('list-windows','-a',proc.pid,'--json')):
-                    if child.get('title')=='Aredoko — 画像ビューア':
+                    if str(child.get('hwnd'))!=hwnd and 'ビューア' in child.get('title',''):
                         child_owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(child['hwnd']),ctypes.byref(child_owner))
                         if child_owner.value!=proc.pid:raise RuntimeError('Child owner changed')
-                        cli('invoke','ImageClose','-w',child['hwnd'])
+                        if not user.PostMessageW(int(child['hwnd']),0x10,0,0):raise ctypes.WinError(ctypes.get_last_error())
             except Exception:report['child_cleanup_error']=traceback.format_exc()
             try:
                 owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))

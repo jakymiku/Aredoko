@@ -20,6 +20,9 @@ internal sealed class ViewerWindow : Window
     public ViewerWindow(Grid content,string title,string id)
     {
         Title="Aredoko — "+title;
+        var titleSource=content as IViewerWindowTitle;
+        void UpdateTitle(string value)=>Title=value;
+        if(titleSource is not null){Title=titleSource.WindowTitle;titleSource.TitleChanged+=UpdateTitle;}
         owner=WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current);
         var handle=WinRT.Interop.WindowNative.GetWindowHandle(this);
         Marshal.SetLastPInvokeError(0);
@@ -38,6 +41,7 @@ internal sealed class ViewerWindow : Window
         };
         Closed+=(_,_)=>
         {
+            if(titleSource is not null)titleSource.TitleChanged-=UpdateTitle;
             if(ownerWasEnabled)EnableWindow(owner,true);
             closed.TrySetResult();
             Content=null;

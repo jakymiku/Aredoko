@@ -22,9 +22,8 @@ public sealed partial class MainPage
             theme.Items.Add("Windowsの設定に合わせる");theme.Items.Add("ライト");theme.Items.Add("ダーク");
             theme.SelectedIndex=ViewerOptions.Value.Theme switch{"light"=>1,"dark"=>2,_=>0};
             AutomationProperties.SetAutomationId(theme,"SettingsTheme");
-            var enlarge=new ToggleSwitch{Header="小さい画像も画面いっぱいに拡大",IsOn=ViewerOptions.Value.EnlargeSmallImages};
-            AutomationProperties.SetAutomationId(enlarge,"SettingsEnlargeImages");
-            panel.Children.Add(theme);panel.Children.Add(enlarge);
+            panel.Children.Add(theme);
+            panel.Children.Add(new TextBlock{Text="画像の拡大・操作バー・本の循環は、ビューア右クリックまたは下部の設定ボタンで変更できます。",TextWrapping=TextWrapping.Wrap});
             var wheel=new ComboBox{Header="ホイールで次の画像・ページへ",HorizontalAlignment=HorizontalAlignment.Stretch};
             wheel.Items.Add("下に回す（上で戻る）");wheel.Items.Add("上に回す（下で戻る）");wheel.SelectedIndex=ViewerOptions.Value.WheelUpAdvances?1:0;
             AutomationProperties.SetAutomationId(wheel,"SettingsWheel");
@@ -37,7 +36,7 @@ public sealed partial class MainPage
             saveStyle.Setters.Add(new Setter(AutomationProperties.AutomationIdProperty,"SettingsSave"));
             dialog.PrimaryButtonStyle=saveStyle;
             dialog.PrimaryButtonClick+=(_,args)=>{args.Cancel=true;SavePreferences();};
-            void SavePreferences(){try{var selectedTheme=theme.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};ViewerOptions.SavePreferences(wheel.SelectedIndex==1,selectedTheme,enlarge.IsOn);MainWindow.Current.ApplyTheme(selectedTheme);dialog.RequestedTheme=selectedTheme switch{"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};savedText.Text="保存しました。テーマはすぐ反映し、画像の拡大は次に開くときに適用します。";}catch(Exception ex){savedText.Text="保存できません: "+ex.Message;}}
+            void SavePreferences(){try{var selectedTheme=theme.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};ViewerOptions.SavePreferences(wheel.SelectedIndex==1,selectedTheme,ViewerOptions.Value.EnlargeSmallImages);MainWindow.Current.ApplyTheme(selectedTheme);dialog.RequestedTheme=selectedTheme switch{"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};savedText.Text="保存しました。テーマはすぐ反映します。";}catch(Exception ex){savedText.Text="保存できません: "+ex.Message;}}
             panel.Children.Add(wheel);panel.Children.Add(hint);panel.Children.Add(savedText);
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
