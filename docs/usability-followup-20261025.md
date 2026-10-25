@@ -4,6 +4,7 @@
 Codex GPT-6.1 Sol / Antigravity共通の実装手順。既存P0–P7を置き換えず、P1/P3/UI/P4/P6の具体的な改善キューとして統合する。2026-10-25にユーザーが実装再開を指示した。
 
 ## 実装進捗（2026-10-25）
+- **U4b source実装・CPU確認済み、GUI受入待ち**：folder別起動時更新（旧root OFF）・一覧/AIの選択・初画面後queue・所有取消・進捗と明示一覧更新、成功scan後のmissing除外/metadata復帰を追加。catalog v3移行とv0–v3復旧互換。[仕様/確認](scan-startup.md)。次の実装はU5残、GUI/GPUは今回ユーザーの事前回答後に限る。
 - **U1**：Page acceleratorの自動tooltipをHidden（キー自体は維持）、検索開始時の正しいナビ見出し、1行の長名省略と全文tooltip、テーマ対応の選択枠、単クリックでは詳細を開かずボタン/右クリックから明示表示、未保存draft保持、検索方式のtooltip/HelpTextを実装。
 - 専用候補 `data/ai-ui/usability-20261025/frontend04`。Portable publish成功、既知WUI1001×3/SDK IL2104×2は残存。生成145PNG/専用DBのUIAで、結果providerを停止したままの3ナビ見出し更新・旧結果操作禁止、選択でpane非表示、明示詳細のdraft保持・原本不変を確認。証拠は `u1-uia02/report.json`。Light側/最終visual reviewの結果はcurrent-handoffを参照。
 - `u1-dark01..04`は前面化/入力ハーネス・環境失敗としてrawを保持。screenshot --focus、focusコマンド、所有HWNDへの通常SetForegroundWindowも前面確認を満たさなかった。別アプリ入力やOS制限回避は行っていない。`--uia-only`でpointer/keyboard/context menu/小サイズsliderを**未検証として明示**する。これらをPASSへ数えず、入力可能時に対象だけ受け入れる。

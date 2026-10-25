@@ -135,6 +135,7 @@ public sealed partial class MainPage : Page
     private bool startupSearchSucceeded;
     private async Task ConnectAsync() {
         try {
+            var firstFrameConfirmed=false;
             renderCancellation.Cancel();
             AppLog.Startup("session_connecting");await api.ConnectAsync();await RefreshHistoryGenerationAsync();
             AppLog.Startup("session_connected");await LoadAIScopeAsync();
@@ -144,7 +145,14 @@ public sealed partial class MainPage : Page
             if(StartupReady.Pending)
             {
                 if(!startupSearchSucceeded)await StartupReady.SignalAsync(false);
-                else{AppLog.Startup("window_showing");MainWindow.Current.AppWindow.Show();MainWindow.Current.Activate();await StartupReady.FirstFrameAsync();}
+                else{AppLog.Startup("window_showing");MainWindow.Current.AppWindow.Show();MainWindow.Current.Activate();await StartupReady.FirstFrameAsync();firstFrameConfirmed=true;}
+            }
+            if(startupSearchSucceeded&&!startupUpdatesRequested&&knownRoots.Any(root=>root.Enabled&&root.StartupScan!="none"))
+            {
+                // This handshake follows a rendered screen, including direct
+                // frontend launches without a portable readiness nonce.
+                if(!firstFrameConfirmed)await StartupReady.FirstFrameAsync();
+                _=BeginStartupUpdatesAsync();
             }
         }
         catch(Exception ex) { AppLog.Startup("connection_or_first_frame_failed");AppLog.Error(ex);Notice("バックエンドに接続できません", "Aredokoを閉じ、製品用の起動アイコンから起動し直してください。"+ex.Message,InfoBarSeverity.Error); }
@@ -1704,6 +1712,8 @@ public sealed partial class MainPage : Page
             FillUnsetShelf.IsChecked=false;
             SingleRootSection.Visibility=folderDraft.IsBatch?Visibility.Collapsed:Visibility.Visible;
             RootExcludes.Text=folderDraft.ExclusionsText;
+            RootStartupScan.SelectedIndex=targets.All(root=>root.StartupScan==targets[0].StartupScan)
+                ? targets[0].StartupScan switch{"list"=>1,"list_and_ai"=>2,_=>0} : -1;
             SaveRootShelf.Content=folderDraft.IsBatch?$"選択した {targets.Length} フォルダの初期棚を保存":"選択フォルダの初期棚を保存";
             UnregisterTargetText.Text=$"登録解除の対象: {string.Join("、",targets.Select(r=>r.ShortPath))}（{targets.Length} フォルダ）";
             UnregisterConsent.IsChecked=false;
@@ -2372,6 +2382,6 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){disposed=true;DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){disposed=true;startupUpdateTimer?.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

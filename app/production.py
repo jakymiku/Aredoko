@@ -32,12 +32,12 @@ class ProductionCatalog(Catalog):
         if Path(path).exists() and Path(path).stat().st_size > 0:
             with closing(sqlite3.connect(path)) as db:
                 user_ver = db.execute("PRAGMA user_version").fetchone()[0]
-                if user_ver > 2:
-                    raise ValueError(f"Unsupported database schema user_version {user_ver} > 2; please update Aredoko.")
+                if user_ver > 3:
+                    raise ValueError(f"Unsupported database schema user_version {user_ver} > 3; please update Aredoko.")
                 tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 if 'items' in tables and 'production_marker' not in tables:
                     raise ValueError('Use a separate production database, not the demo database')
-        super().__init__(path,supported_schema=2)
+        super().__init__(path,supported_schema=3)
         self.index = LibraryIndex(path)
         self.terms = TermRelations(self.connect)
         with self.connect() as db:
@@ -75,6 +75,8 @@ class ProductionCatalog(Catalog):
         self._scan_roots = ()
         self._scan_completed_roots=()
         self._scan_ai_counts=(0,0)
+        self._scan_job_id=0
+        self._scan_finished={}
         self.ai_scan_hook = None
         self.shelf_store=ShelfStore(self.connect)
         self.shelf_store.migrate()
@@ -195,7 +197,7 @@ class ProductionCatalog(Catalog):
             # file. The user's related-term dictionary may add OR alternatives
             # to a word; it never removes the word or relaxes the filters.
             alternatives,expansions=self.terms.expand(terms,db)
-            where, values = ["l.status<>'excluded'",'l.root_id IN (SELECT id FROM library_roots WHERE enabled=1)'], []
+            where, values = ["l.status='present'",'l.root_id IN (SELECT id FROM library_roots WHERE enabled=1)'], []
             # Exclusions apply immediately, including before the next scan.
             from library_index import _excluded
             rules={r['id']:tuple(json.loads(r['excludes_json'])) for r in db.execute('SELECT id,excludes_json FROM library_roots WHERE enabled=1')}
@@ -521,11 +523,11 @@ class ProductionCatalog(Catalog):
     def registered_roots(self,include_inactive=False):
         rows=self.index.roots(include_inactive=include_inactive)
         with self.connect() as db:
-            favorites={row[0]:bool(row[1]) for row in db.execute('SELECT root_id,favorite FROM registered_root_preferences')}
+            preferences={row[0]:(bool(row[1]),row[2]) for row in db.execute('SELECT root_id,favorite,startup_scan FROM registered_root_preferences')}
             memberships={}
             for row in db.execute('SELECT root_id,shelf_id FROM root_shelves ORDER BY root_id,shelf_id'):memberships.setdefault(row[0],[]).append(row[1])
         for row in rows:
-            row['favorite']=favorites.get(row['id'],False);row['shelf_ids']=memberships.get(row['id'],[])
+            row['favorite'],row['startup_scan']=preferences.get(row['id'],(False,'none'));row['shelf_ids']=memberships.get(row['id'],[])
         return rows
 
     def set_root_favorite(self,root_id,favorite):
@@ -533,13 +535,18 @@ class ProductionCatalog(Catalog):
             self._require_idle()
             return self.root_preferences.set_favorite(root_id,favorite)
 
+    def set_root_startup_scan(self,root_ids,mode):
+        with self._guard:
+            self._require_idle()
+            return self.root_preferences.set_startup_scan(root_ids,mode)
+
     def shelf_descriptors(self):
         # Same registered-root/exclusion visibility as library search; no source I/O.
         from library_index import _excluded
         with self._guard, self.connect() as db:
             rules={r['id']:tuple(json.loads(r['excludes_json'])) for r in db.execute('SELECT id,excludes_json FROM library_roots WHERE enabled=1')}
             db.create_function('aredoko_shelf_visible',2,lambda root,path:int(root in rules and not _excluded(path,rules[root])),deterministic=True)
-            rows=db.execute("WITH visible AS (SELECT sm.shelf_id,i.id,i.kind,l.status FROM item_shelves sm JOIN items i ON i.id=sm.item_id JOIN item_locations m ON m.item_id=i.id JOIN library_locations l ON l.id=m.location_id WHERE l.status<>'excluded' AND aredoko_shelf_visible(l.root_id,l.relative_path)=1) SELECT s.id,s.name,count(v.id) item_count,min(CASE WHEN v.status='present' AND v.kind IN ('image','book','archive','video') THEN v.id END) representative_id FROM shelves s LEFT JOIN visible v ON v.shelf_id=s.id GROUP BY s.id ORDER BY s.name,s.id").fetchall()
+            rows=db.execute("WITH visible AS (SELECT sm.shelf_id,i.id,i.kind,l.status FROM item_shelves sm JOIN items i ON i.id=sm.item_id JOIN item_locations m ON m.item_id=i.id JOIN library_locations l ON l.id=m.location_id WHERE l.status='present' AND aredoko_shelf_visible(l.root_id,l.relative_path)=1) SELECT s.id,s.name,count(v.id) item_count,min(CASE WHEN v.status='present' AND v.kind IN ('image','book','archive','video') THEN v.id END) representative_id FROM shelves s LEFT JOIN visible v ON v.shelf_id=s.id GROUP BY s.id ORDER BY s.name,s.id").fetchall()
             result=[]
             for row in rows:
                 entry=dict(row);representative=entry.pop('representative_id')
@@ -564,10 +571,14 @@ class ProductionCatalog(Catalog):
             self._state_epoch += 1
             return res
 
-    def scan_state(self):
+    def scan_state(self,job_id=None):
+        if job_id is not None and job_id!=self._scan_job_id and job_id in self._scan_finished:
+            return dict(self._scan_finished[job_id])
         with self.connect() as db:
-            row=db.execute('SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 1').fetchone()
+            row=db.execute('SELECT * FROM scan_jobs'+(' ORDER BY id DESC LIMIT 1' if job_id is None else ' WHERE id=?'),() if job_id is None else (job_id,)).fetchone()
         result=dict(row) if row else {'id':0,'state':'idle','discovered':0,'error':''}
+        if job_id is not None and job_id!=self._scan_job_id:
+            return {**result,'stage':result['state'],'ai_state':'unknown','mode':'unknown'}
         if result['state'] in ('running','cancelling'):
             result['discovered']=self._progress
         result['mode']=self._scan_mode
@@ -578,6 +589,10 @@ class ProductionCatalog(Catalog):
         result['completed_root_ids']=list(self._scan_completed_roots)
         result['ai_processed'],result['ai_total']=self._scan_ai_counts
         return result
+
+    def _remember_scan(self,job):
+        self._scan_finished[job]=self.scan_state()
+        while len(self._scan_finished)>16:self._scan_finished.pop(next(iter(self._scan_finished)))
 
     def _scan_ai_progress(self,state):
         self._scan_ai_state=state.get('state','failed')
@@ -616,6 +631,7 @@ class ProductionCatalog(Catalog):
             self._scan_ai_counts=(0,0)
             with self.connect() as db:
                 job=db.execute("INSERT INTO scan_jobs(root_id,state) VALUES(?,'running')",(target_roots[0],)).lastrowid
+            self._scan_job_id=job
             self._worker=threading.Thread(target=self._scan,args=(job,tuple(target_roots),mode,after_scan or self.ai_scan_hook),daemon=True)
             self._worker.start()
             return {'job_id':job,'mode':mode,'stage':'list','root_ids':list(target_roots)}
@@ -646,6 +662,7 @@ class ProductionCatalog(Catalog):
             self._scan_stage=state
             if mode=='list_and_ai':
                 self._scan_ai_state='cancelled' if state=='cancelled' else 'skipped'
+            self._remember_scan(job)
             return
         if mode=='list' or after_scan is None:
             self._scan_stage='complete'
@@ -664,10 +681,13 @@ class ProductionCatalog(Catalog):
                     self._scan_ai_state='failed'
                     self._scan_ai_error='AI索引を完了できませんでした。AI検索の準備と実行状態を確認してください。'
                 finally:self._scan_stage='complete'
+        self._remember_scan(job)
 
-    def cancel_scan(self):
-        self._cancel.set()
-        return {'cancel_requested':True}
+    def cancel_scan(self,expected_job_id=None):
+        with self._guard:
+            if expected_job_id is not None and expected_job_id!=self._scan_job_id:return {'cancel_requested':False}
+            self._cancel.set()
+            return {'cancel_requested':True}
 
     def close(self):
         self._cancel.set()

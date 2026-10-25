@@ -182,6 +182,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             raise AIUnavailable('AI環境が未準備です。AI検索の準備を確認してください。')
         return run_scan_ai(ai,profiles,catalog,target_roots,cancelled,catalog._scan_ai_progress)
     catalog.ai_scan_hook = ai_scan_hook
+    from startup_scans import StartupScans
+    startup_scans=StartupScans(catalog)
     class Handler(base):
         def _search_reply(self,body,operation):
             supplied='request_id' in body
@@ -526,6 +528,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(200,{'items':catalog.registered_roots(include_inactive=inactive==['1'])})
                 if path=='/api/library/scan':
                     return self.send(200,catalog.scan_state())
+                if path=='/api/library/startup-scan':return self.send(200,startup_scans.state())
                 return self.send(404,{'error':'Not found'})
             return super().do_GET()
 
@@ -553,7 +556,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
                 body=json.loads(self.rfile.read(length),**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
                 if self.path.startswith('/api/library/results/'):
@@ -847,6 +850,15 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if self.path=='/api/library/roots/favorite':
                     if set(body)!={'root_id','favorite'}:raise ValueError('Invalid root favorite request')
                     return self.send(200,catalog.set_root_favorite(body['root_id'],body['favorite']))
+                if self.path=='/api/library/roots/startup-scan':
+                    if set(body)!={'root_ids','mode'}:raise ValueError('Invalid startup scan request')
+                    return self.send(200,catalog.set_root_startup_scan(body['root_ids'],body['mode']))
+                if self.path=='/api/library/startup-scan/start':
+                    if body!={'frontend_ready':True} or type(body['frontend_ready']) is not bool:raise ValueError('Frontend readiness required')
+                    return self.send(200,startup_scans.start())
+                if self.path=='/api/library/startup-scan/cancel':
+                    if body:raise ValueError('Invalid startup scan cancellation')
+                    return self.send(200,startup_scans.cancel())
                 if self.path=='/api/library/roots/shelves':
                     if set(body)!={'root_ids','shelf_ids','fill_unset'}:raise ValueError('Invalid root shelf request')
                     return self.send(200,catalog.set_root_shelves(body['root_ids'],body['shelf_ids'],body['fill_unset']))
@@ -886,6 +898,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     Handler.backup_jobs=backup_jobs
     Handler.restore_jobs=restore_jobs
     Handler.setup_jobs=setup_jobs
+    Handler.startup_scans=startup_scans
     Handler.download_jobs=download_jobs
     return Handler
 
@@ -966,6 +979,7 @@ def _serve(args):
             print('AI acquisition registry unavailable ('+type(error).__name__+')',file=sys.stderr,flush=True)
             acquisition_specs=()
         handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff,acquisition_specs=acquisition_specs,thumbnail_disk_path=catalog.path.parent/(catalog.path.name+'.thumbs.sqlite'))
+        resources.callback(handler.startup_scans.close)
         resources.callback(close_job,handler.setup_jobs)
         resources.callback(close_job,handler.download_jobs)
         resources.callback(handler.animations.close)

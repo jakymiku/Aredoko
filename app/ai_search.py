@@ -59,7 +59,7 @@ class VectorStore:
                 supported=CURRENT_VECTOR_STORE_USER_VERSION
                 # Historical in-catalog vector tables share the catalog's version;
                 # standalone vector databases still use version0 only.
-                if ver in (1,2):
+                if ver in (1,2,3):
                     tables={row[0] for row in check_db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                     if {'production_marker','items','item_locations','library_roots','shelves','item_shelves','root_shelves'}<=tables and (ver==1 or 'registered_root_preferences' in tables):supported=ver
                 if ver > supported:

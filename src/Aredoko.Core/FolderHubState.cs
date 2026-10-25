@@ -13,7 +13,8 @@ public sealed record RegisteredRootRow(
     bool FolderBooks = false,
     bool Recursive = true,
     bool Favorite = false,
-    IReadOnlyList<long>? ShelfIds = null)
+    IReadOnlyList<long>? ShelfIds = null,
+    string StartupScan = "none")
 {
     public string ModeLabel => FolderBooks ? "画像フォルダを一冊として扱う" : "画像は1枚ずつ";
 
@@ -63,7 +64,9 @@ public sealed record RegisteredRootRow(
             var scanned = row["last_scanned_at"]?.GetValue<string>();
             var folderBooks = row["folder_books"] is JsonNode f && f.GetValueKind() == System.Text.Json.JsonValueKind.True;
             var memberships=row["shelf_ids"]?.AsArray().Select(x=>x!.GetValue<long>()).ToArray();if(memberships is not null)ShelfProtocol.ValidateIds(memberships);
-            list.Add(new RegisteredRootRow(id, path, enabled, online, shelf, excludes, count, scanned, folderBooks, row["recursive"]?.GetValue<bool>()??true,row["favorite"]?.GetValue<bool>()??false,memberships));
+            var startup=row["startup_scan"]?.GetValue<string>()??"none";
+            if(startup is not ("none" or "list" or "list_and_ai"))throw new InvalidDataException("Invalid startup scan preference");
+            list.Add(new RegisteredRootRow(id, path, enabled, online, shelf, excludes, count, scanned, folderBooks, row["recursive"]?.GetValue<bool>()??true,row["favorite"]?.GetValue<bool>()??false,memberships,startup));
         }
         return list;
     }

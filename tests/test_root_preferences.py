@@ -50,7 +50,7 @@ class RootPreferencesTests(unittest.TestCase):
         self.assertTrue(recovered.registered_roots()[0]['favorite'])
         with self.cat.connect() as db:db.execute('PRAGMA user_version=1')
         with self.assertRaises(RecoveryError):_database(self.cat.path,'catalog')
-        with self.cat.connect() as db:db.execute('PRAGMA user_version=3')
+        with self.cat.connect() as db:db.execute('PRAGMA user_version=4')
         with self.assertRaises(RecoveryError):_database(self.cat.path,'catalog')
         with self.assertRaisesRegex(ValueError,'user_version'):ProductionCatalog(self.cat.path)
 

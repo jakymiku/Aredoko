@@ -7,9 +7,18 @@ internal static class RootFavoritesTests
     public static async Task Run(Action<bool,string> check)
     {
         var old=RegisteredRootRow.ParseList(JsonNode.Parse("""{"items":[{"id":1,"path":"fixture","enabled":1,"online":true,"default_shelf":"","excludes":[]}]}""")!)[0];
-        check(!old.Favorite&&old.ShelfIds is null,"old root metadata defaults to not favorite without losing compatibility");
+        check(!old.Favorite&&old.ShelfIds is null&&old.StartupScan=="none","old root metadata defaults to not favorite and startup scan off without losing compatibility");
         var current=RegisteredRootRow.ParseList(JsonNode.Parse("""{"items":[{"id":1,"path":"fixture","enabled":1,"online":true,"default_shelf":"A","excludes":[],"favorite":true,"shelf_ids":[1,4294967297]}]}""")!)[0];
         check(current.Favorite&&current.ShelfIds!.Count==2&&current.ShelfLabel.Contains("ほか1棚"),"registered root carries independent favorite and all initial shelves");
+        foreach(var mode in new[]{"none","list","list_and_ai"})
+        {
+            var root=JsonNode.Parse("""{"items":[{"id":1,"path":"fixture","enabled":1,"online":true}]}""")!;
+            root["items"]![0]!["startup_scan"]=mode;
+            check(RegisteredRootRow.ParseList(root)[0].StartupScan==mode,"startup scan mode retained: "+mode);
+        }
+        var invalid=JsonNode.Parse("""{"items":[{"id":1,"path":"fixture","enabled":1,"online":true,"startup_scan":"all"}]}""")!;
+        bool rejected=false;try{RegisteredRootRow.ParseList(invalid);}catch(InvalidDataException){rejected=true;}
+        check(rejected,"unknown startup mode rejected rather than enabling an implicit scan");
         using var handler=new Stub(async request=>
         {
             var body=JsonNode.Parse(await request.Content!.ReadAsStringAsync())!;

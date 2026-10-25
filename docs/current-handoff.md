@@ -1,5 +1,12 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-25）
 
+## U4b実装・次の1件（2026-10-25、以下の過去checkpointより優先）
+- Antigravity開始51b4302から、引継ぎ補強 **8972be3** はPush済み。続いて **U4b** を実装：フォルダごとの起動時更新OFF/一覧/一覧＋AI、初画面後のbackend所有queue、進捗/中止、欠落原本の通常一覧除外と再出現時metadata復帰。[仕様・証拠](scan-startup.md)。U4bのcommitは `git log -1 -- app/startup_scans.py`。
+- catalog v3へ移行（既存rootの自動更新はOFF）、v0–v3のバックアップ復元・同居vector互換を保持。設定の保存は即時/次回起動適用、未保存の棚・タグ・除外draftは維持。
+- CPU startup15/root prefs6/live backup12/storage backup29/missing結果session1、Core契約・専用Portable publish PASS。実物モデル/GPUなし。`data/ai-ui/continuation-20261025b/` にログ。frontend01は補強のみ、frontend03はU4b候補。通常DB/元メディア/旧Alpha/Actionsは未変更。
+- **GUI/GPUは今回のユーザー回答後のみ**。この時点で未実施。起動時設定保存/再起動queue/中止/タグdraft保全の実機受入は残す。
+- **次の1件：U5残**（Ctrl/Shift複数選択・一括お気に入り/棚、絞込時の差分、600件window保持）。U4a/U4bの完成分を再実装しない。続いてU6圧縮ファイルfilter。未検証GUIを全完成と扱わず、独立したCPU/実装を進める。shutdownしない。
+
 ## Codex引き継ぎレビュー（2026-10-25、上の優先度）
 - 開始51b4302、remote/既存Draft PR #5一致・clean。AntigravityのAPNG修正とU4aを維持し、AIの選択root範囲・所有worker/取消・複数rootの部分成功公開・AI設定dialog遷移を補強。[正本](scan-startup.md)。この節のcommitは `git log -1 -- docs/scan-startup.md`。
 - CPU follow-up9/production8/AI search13/animation14 PASS、専用frontend01 publish成功。**今回のユーザーはGUI/GPUテストを事前回答後に限定**。まだGUI/GPUは実行しておらず、過去の自動許可を今回へ適用しない。通常DB/元メディア/旧Alpha/Actionsは未変更、shutdownしない。
@@ -7,15 +14,11 @@
 
 ## 今回の完了・次の1件（2026-10-25、以下の過去checkpointより優先）
 - **開始 d448b1e（remote/Draft PR #5一致）から2単位を実装・実機検証完了**：
-  1. **指定パレットAPNGのループ2周目黒化修正（cdf7a35）**：pp/animation_sessions.py の Decoder.pull で EOFError 到達時に、既に検証・保持済みのオープンストリーム self.file を seek(0) して Image.open(self.file) を再構築する _reopen_loop を実装（パスの再オープンなし、既存 source_guard 保全）。単体テスト 	ests/test_animation_sessions.py（20 PASS）および実機 data/ai-ui/attached-apng-20261025/native02（5 checks PASS・exit0・所有残存0、nimation_samples: [1, 4, 7, 10, 13, 16, 1]）の5 PNG直接目視で2周目以降も有色・透過を維持することを確認。証拠は[animation-streaming.md](animation-streaming.md)。
+  1. **指定パレットAPNGのループ2周目黒化修正（cdf7a35）**：app/animation_sessions.py の Decoder.pull で EOFError 到達時に、既に検証・保持済みのオープンストリーム self.file を seek(0) して Image.open(self.file) を再構築する _reopen_loop を実装（パスの再オープンなし、既存 source_guard 保全）。単体テスト tests/test_animation_sessions.py（20 PASS）および実機 data/ai-ui/attached-apng-20261025/native02（5 checks PASS・exit0・所有残存0、animation_samples: [1, 4, 7, 10, 13, 16, 1]）の5 PNG直接目視で2周目以降も有色・透過を維持することを確認。証拠は[animation-streaming.md](animation-streaming.md)。
   2. **U4a：登録後のスキャン選択・一覧とAI索引の分離・3段階初回ガイド（本commit）**：
-     - バックエンド（pp/production.py / pp/production_server.py）：POST /api/library/scan に明示的 mode（'list' 既定 / 'list_and_ai'）と複数 
-oot_ids 対応を追加。catalog.sqlite の scan_jobs スキーマ（storage_schema_v1.json）を変更せず、一覧走査の完了（state='complete' コミット＋sync_index()）後にのみ i_scan_hook を起動することで、AI未準備・失敗・取消でも取得済みアイテム一覧を絶対に巻き戻さない構造を実装。POST /api/library/cancel は stage=='ai' 時に i.cancel_build() も呼ぶ。
+     - バックエンド（app/production.py / app/production_server.py）：POST /api/library/scan に明示的 mode（'list' 既定 / 'list_and_ai'）と複数 root_ids 対応を追加。catalog.sqlite の scan_jobs スキーマ（storage_schema_v1.json）を変更せず、一覧走査の完了（state='complete' コミット＋sync_index()）後にのみ ai_scan_hook を起動することで、AI未準備・失敗・取消でも取得済みアイテム一覧を絶対に巻き戻さない構造を実装。POST /api/library/cancel は stage=='ai' 時に ai.cancel_build() も呼ぶ。
      - フロントエンド（MainPage.GettingStarted.cs / MainPage.xaml / MainPage.xaml.cs / MainPage.FileActions.cs）：フォルダ登録成功直後に1回だけ「登録したフォルダをスキャンしますか？」ダイアログ（PostRegistrationScanDialog：「アイテム一覧だけ取得（推奨）」「一覧取得＋AI索引を作成」「後で」、AI未準備時の理由と「AI検索の準備を開く」導線）を表示。初回ライブラリ画面（GettingStarted）を3ステップ（1. フォルダを追加 → 2. 一覧を読み込む → 3. 必要ならAIを準備（任意））の進捗カード＋次の主ボタン1つ＋「あとで閉じる」に整理し、800px高ウィンドウでもスクロールなしで下部ボタンまで完全表示されるよう余白とマスコット高を調整。使い方ダイアログ内の小画像拡大設定の案内もビューア内設定メニューへ更新。右ペインのフォルダ設定に ScanModeChoice と1行ヘッダーの RootExcludes（「スキャン対象から除外（例: cache, *.tmp）」）および段階別 ScanStatus を追加。
-     - 検証：	ests/test_production.py（12 PASS）、Aredoko.Core.Tests（全PASS）、専用Portable data/ai-ui/usability-u4a-20261025/frontend02 による実機 
-un02（**35 checks PASS・exit0・残存0**、spyで一覧のみスキャンのAI呼出し0回、7 PNG全目視＋UIA座標検証）を確認。先行 
-un01 で見つけた GettingStarted 下部見切れと RootExcludes 2行ヘッダー重なりを修正して 
-un02 で解消を確認済み（詳細は[usability-followup-20261025.md](usability-followup-20261025.md)）。
+     - 検証：tests/test_production.py（12 PASS）、Aredoko.Core.Tests（全PASS）、専用Portable data/ai-ui/usability-u4a-20261025/frontend02 による実機 run02（**35 checks PASS・exit0・残存0**、spyで一覧のみスキャンのAI呼出し0回、7 PNG全目視＋UIA座標検証）を確認。先行 run01 で見つけた GettingStarted 下部見切れと RootExcludes 2行ヘッダー重なりを修正して run02 で解消を確認済み（詳細は[usability-followup-20261025.md](usability-followup-20261025.md)）。
 - **次の1件はU4b（[usability-followup-20261025.md](usability-followup-20261025.md)）**：
   - 登録フォルダ設定へ「起動時：しない（既定）／一覧のみ更新／一覧＋AI索引」を追加（既存rootはOFF移行、選択rootだけ初画面表示後の所有queueで処理、手動scanと二重実行しない、backup/restoreにも含める）。
   - 成功した全走査で missing と確定したitemを通常一覧/検索/棚/お気に入りの表示対象および開いている結果セッション・AI検索scopeから除外（元ファイル削除やタグ・棚・履歴の物理消去ではなく、再出現で復帰、切断/権限拒否/途中取消は missing 確定しない）。

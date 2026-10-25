@@ -194,6 +194,16 @@ class ResultSessionTests(unittest.TestCase):
         os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
         with self.assertRaises(ResultUnavailable): self.owner.read(self.sid, 60, 1)
 
+    def test_successful_rescan_invalidates_old_results_and_hides_missing(self):
+        self.create();target=self.items[60]
+        (self.media/target['relative_path']).unlink()
+        self.catalog.start_scan(self.root);self.catalog._worker.join(5)
+        with self.assertRaises(ResultUnavailable):self.owner.read(self.sid,60,1)
+        self.owner.cancel(self.sid);self.sid='b'*32
+        self.create()
+        self.assertEqual(self.owner.read(self.sid,0,1)['total'],124)
+        self.assertFalse(any(row['id']==target['id'] for row in self.catalog.search(page=1)['items']))
+
     def test_physical_source_change_is_refresh_error_not_end_of_sequence(self):
         self.create(); (self.media / self.items[60]['relative_path']).write_bytes(b'changed')
         with self.assertRaises(ResultUnavailable): self.owner.neighbor(self.sid, self.items[59]['id'], 1)
