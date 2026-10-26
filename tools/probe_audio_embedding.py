@@ -10,6 +10,7 @@ sys.path.insert(0,str(REPO/'app'))
 from ai_profiles import DEFAULT_PROFILE
 from runtime_paths import model_directory
 from audio_input import read_window
+from storage_lease import plain_path
 
 
 def main():
@@ -35,7 +36,8 @@ def main():
         # Allocator cap for this process; driver/context allocations are separate.
         torch.cuda.set_per_process_memory_fraction(min(.9,3*1024**3/total));torch.set_num_threads(2)
         torch.cuda.reset_peak_memory_stats()
-        source=fixture/'media/generated-001.wav'
+        source=plain_path(fixture/'media/generated-001.wav')
+        if not 1<=source.stat().st_size<=2*1024*1024:raise ValueError('Small generated WAV required')
         original=(hashlib.sha256(source.read_bytes()).hexdigest(),source.stat().st_mtime_ns)
         with source.open('rb') as handle:pcm=read_window(handle,250,1000)
         samples=np.frombuffer(pcm.data,dtype='<f4')
