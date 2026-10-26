@@ -15,7 +15,9 @@ from collections import OrderedDict
 from pathlib import Path
 
 VIDEO_SUFFIXES = frozenset({'.mp4', '.mkv', '.webm', '.avi', '.mov', '.wmv', '.m4v', '.ts'})
-MAX_VIDEO_BYTES = 512 * 1024 * 1024
+# Input is a seekable handle, never a whole-file bytes allocation. Keep native
+# time/pixel/probe/output budgets while allowing ordinary multi-GB local videos.
+MAX_VIDEO_BYTES = 32 * 1024 ** 3
 MAX_VIDEO_PIXELS = 16_000_000
 MAX_FRAME_BYTES = 512 * 1024
 MAX_PROBE_BYTES = 16 * 1024

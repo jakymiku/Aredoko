@@ -121,9 +121,10 @@ class VideoBoundaryTests(unittest.TestCase):
         self.catalog.index.scan(self.root); self.catalog.sync_index()
 
     def test_oversized_video_rejected_before_native_tools(self):
-        with self.path.open('wb') as file: file.truncate(video.MAX_VIDEO_BYTES + 1)
+        # Exercise the boundary without allocating a real 32 GiB fixture.
+        with self.path.open('wb') as file: file.truncate(1025)
         self.scan()
-        with patch.object(self.reader.videos, 'read') as read:
+        with patch('previews.MAX_VIDEO_BYTES',1024),patch.object(self.reader.videos, 'read') as read:
             with self.assertRaises(PreviewUnavailable): self.reader.read(self.item)
             read.assert_not_called()
 

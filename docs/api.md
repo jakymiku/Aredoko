@@ -60,7 +60,7 @@ queryありの`GET /api/items`は各itemに`search_evidence:{direct_words,relate
 
 ## 製品MVP：動画先頭フレームとプレビューID検証（2026-10-14）
 
-`GET /api/library/preview/{id}`は既存の画像/CBZ/ZIPに加え、任意導入済みffmpeg/ffprobeで動画の先頭frameをPNGとして返す。Hostとtoken必須、no-store。動画の10秒・512MiB入力・16M画素・256px出力・512KiB本文・共通2枠・memory LRUと制限は[video-thumbnails.md](video-thumbnails.md)。ツール不在/破損/非対応は404、枠不足は503。
+`GET /api/library/preview/{id}`は既存の画像/CBZ/ZIPに加え、任意導入済みffmpeg/ffprobeで動画の先頭frameをPNGとして返す。Hostとtoken必須、no-store。動画の10秒・32GiB入力・16M画素・256px出力・512KiB本文・共通2枠・memory LRUと制限は[video-thumbnails.md](video-thumbnails.md)。ツール不在/破損/非対応は404、枠不足は503。
 
 idは1..9223372036854775807のASCII十進数、先頭0・負数・余分なpath/queryは禁止。不正要求は400 `Invalid item`。従来の超過値はSQLite `OverflowError`で応答できなかったため修正した。全Python246 PASS（Linux）。Windows Release/nativeは今回未検証。
 
