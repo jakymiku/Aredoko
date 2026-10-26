@@ -5,7 +5,8 @@
 - **`87fbf51`**：一覧の初回表記も表示範囲に統一。Portable/frontend06 build成功（既存warnings維持）、後続の原寸nativeで初回`1–3 / 3`も確認。[キャッシュ済みSDKビルドの一時指定と失敗ログ](p3-continuous-browse.md)。installed Alpha/基本ZIP03は前日の`e52c8ec`のままで、今回のsourceはまだ反映していない。
 - **P1原寸streamも実装/限定確認済み**：任意boolの明示要求で原寸APNG/WebP、旧APIの2048互換/16MP入力/4frame・128MiBを維持。Python17（開発/基本Python）/Core/Portable frontend07 PASS、許可済みnative23 checks/4PNG目視/exit0。[契約と限界](animation-streaming.md)。この変更のcommitは`git log -1 -- app/animation_sessions.py`。
 - **今回の制約**：ユーザーはPC使用中。GUI/GPUは都度回答後。5万件の限定native1回と原寸アニメーションnative1回は別々の回答を得て実施済みで、他のテストへ拡張しない。GPU推論0、新規取得0、通常DB/私物/installed Alpha変更0、shutdownしない。利用枠が少なくなったらcommit/push/最新handoffを完了して終了する。
-- **現在の次の1件**：P3の大量結果snapshot作成で通常40秒の通信制限へ達する経路を整理。作成だけ長い専用transportとし、range/neighbor/closeは短い通常transport・明示取消を維持する。関連Coreで取消と終了の独立を確認する。P7/M1・公開runtime・R06–R09の残件は削除しない。
+- P3の全件結果作成は文字検索でも専用15分transportへ分離。range/neighbor/close等は通常transport・明示取消を維持。Coreでliteral作成/通常range・close/取消ID cleanupを確認、WinUI最小build PASS（GUI再実施なし）。commitは`git log -1 -- src/Aredoko.Core/ResultSessionClient.cs`。
+- **現在の次の1件**：P3の全件結果作成中に確認済み件数/総数を表示する。状態APIのbuildingを許可してもrangeは完成前に公開せず、Coreの任意observerとUI versionで旧応答を抑止する。P7/M1・公開runtime・R06–R09の残件は削除しない。
 
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。

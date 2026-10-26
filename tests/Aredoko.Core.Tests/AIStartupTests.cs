@@ -24,10 +24,14 @@ static class AIStartupTests
             try{await pending;check(false,"runtime status cancellation");}
             catch(OperationCanceledException){check(true,"runtime wait cancels in-flight status request");}
         }
-        var normal=0;var ai=0;
+        var normal=0;var ai=0;JsonNode? latestConditions=null;
         async Task<HttpResponseMessage> Response(HttpRequestMessage request)
         {
             var body=JsonNode.Parse(await request.Content!.ReadAsStringAsync())!;
+            if(request.RequestUri!.AbsolutePath.EndsWith("/range"))return Reply(new()
+                {["session_id"]=body["session_id"]!.DeepClone(),["conditions"]=latestConditions!.DeepClone(),
+                 ["state"]="ready",["total"]=0,["offset"]=0,["limit"]=120,["items"]=new JsonArray()});
+            if(body["conditions"] is JsonNode conditions)latestConditions=conditions.DeepClone();
             return Reply(request.RequestUri!.AbsolutePath.EndsWith("/close")
                 ?new(){["closed"]=true}
                 :new(){["session_id"]=body["session_id"]!.DeepClone(),["conditions"]=body["conditions"]!.DeepClone(),
@@ -38,9 +42,33 @@ static class AIStartupTests
         var results=new ResultSessionClient(ordinary,inference);
         foreach(var mode in new[]{"semantic","similar","pending-proposals-semantic"})
         {await using var session=await results.CreateAsync(new(){["mode"]=mode},CancellationToken.None);}
-        check(ai==3&&normal==3,"only AI result creation uses the long inference transport; close remains responsive");
-        await using(var literal=await results.CreateAsync(new(){["mode"]="literal"},CancellationToken.None)){}
-        check(ai==3&&normal==5,"literal creation and session lifecycle use ordinary transport");
+        check(ai==3&&normal==3,"AI result creation uses the build transport; close remains responsive");
+        await using(var literal=await results.CreateAsync(new(){["mode"]="literal"},CancellationToken.None))
+        {
+            await literal.RangeAsync(0,120,CancellationToken.None);
+            check(ai==4&&normal==4,"literal snapshot creation uses build transport but range reads stay ordinary");
+        }
+        check(ai==4&&normal==5,"literal session close stays on ordinary transport");
+        var snapshotEntered=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var snapshotCloses=0;string? snapshotId=null;
+        using var snapshotControl=new HttpClient(new Handler(async(request,_)=>
+        {
+            var body=JsonNode.Parse(await request.Content!.ReadAsStringAsync())!;
+            check(request.RequestUri!.AbsolutePath.EndsWith("/close")&&body["session_id"]!.GetValue<string>()==snapshotId,"cancelled literal build closes its preallocated ID on ordinary transport");
+            snapshotCloses++;return Reply(new(){["closed"]=true});
+        })){BaseAddress=ordinary.BaseAddress};
+        using var snapshotBuild=new HttpClient(new Handler(async(request,ct)=>
+        {
+            var body=JsonNode.Parse(await request.Content!.ReadAsStringAsync())!;snapshotId=body["session_id"]!.GetValue<string>();
+            snapshotEntered.TrySetResult();await Task.Delay(Timeout.Infinite,ct);return Reply(new());
+        })){BaseAddress=ordinary.BaseAddress};
+        using(var snapshotStop=new CancellationTokenSource())
+        {
+            var pending=new ResultSessionClient(snapshotControl,snapshotBuild).CreateAsync(new(){["mode"]="literal"},snapshotStop.Token);
+            await snapshotEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));snapshotStop.Cancel();
+            try{await pending;check(false,"literal snapshot build cancellation");}
+            catch(OperationCanceledException){check(snapshotCloses==1,"literal build remains cancellable and owns cleanup");}
+        }
         var generation=0;var controls=0;
         var generationEntered=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var control=new HttpClient(new Handler((_,_)=>{controls++;return Task.FromResult(Reply(new(){["cancel_requested"]=true}));})){BaseAddress=ordinary.BaseAddress};

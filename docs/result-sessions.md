@@ -74,3 +74,6 @@ snapshot作成中だけ4 workerで既存の`_current`を実行する。最大120
 関連CPU31 PASS（4 worker上限、順序、失敗非公開、取消時join/cleanupを追加）。既存`measure_library_scale.py --snapshot-only --count 120 --output <新規data/ai-ui配下>`に再利用可能な1回測定を追加し、小fixtureで正常終了/原本不変を確認。通常の反復coverage測定とは分離する。
 
 人の許可を得た限定native1試行`native01`は15 checks PASS、4PNG目視、所有exit0。基本ZIP03の既存UI＋新backendで先頭/末尾、フィルタ、draft保全を確認。通常DB/installed Alpha/GPUは使っていない。画像の初回読込未完了PNGをthumbnail速度の合格根拠にしない。画面上の初回ページ数表記と移動後の範囲表記の統一は次の小単位で扱う。
+
+### 結果作成だけの通信上限
+全件の原本検査は文字検索でも通常40秒を超えうるため、ResultSessionClientのcreateは検索方式に依存せず専用15分transportを使用する。range/neighbor/locate/edit/closeは従来の通常transportで、全APIの上限を延ばさない。明示取消は作成を止め、事前発行IDを通常transportでcloseする。Coreでliteral作成/通常range・closeの分離と作成中の取消cleanupを確認、WinUI最小buildもPASS。GUIの変更はなく、この差分だけの追加GUIは行っていない。
