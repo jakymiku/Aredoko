@@ -23,10 +23,12 @@ def main():
     parser.add_argument('--audio-content',action='store_true',help='Generated WAV + supplied CPU encoder; no playback or GPU')
     parser.add_argument('--audio-search-only',action='store_true',help='Prepare generated audio via CPU; native scenario only switches mode and checks result time')
     parser.add_argument('--audio-similarity-only',action='store_true',help='Cached audio origin similarity and navigation only, supplied CPU vectors')
+    parser.add_argument('--compact-toolbar',action='store_true',help='Generated mixed media, toolbar geometry and explicit detail draft preservation')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     if args.real_fixture and not args.global_edge:parser.error('Real fixture requires the bounded global-edge case')
+    if args.compact_toolbar:args.detail_actions=True
     if args.audio_similarity_only:args.audio_search_only=True
     if args.audio_search_only:args.audio_content=True
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
@@ -149,7 +151,7 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
-        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content:
+        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or args.compact_toolbar:
             # The owner launches this one test process; use normal Windows
             # activation, never input attachment, security bypass or other apps.
             report['foreground_activation_requested']=bool(user.SetForegroundWindow(int(hwnd)))
@@ -184,6 +186,10 @@ def main():
             from ui_shelf_management_audit import audit
             audit(ui,tree,shot,check,cat,first["id"],a,b)
             check("generated sources unchanged",before==sources());report["pass"]=True
+        elif args.compact_toolbar:
+            from ui_compact_toolbar_audit import audit
+            audit(ui,tree,shot,report,check,cat,first['id'],input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.detail_actions:
             from ui_detail_actions_audit import audit
             audit(ui,tree,shot,check,cat,navigation_only=args.detail_navigation_only)

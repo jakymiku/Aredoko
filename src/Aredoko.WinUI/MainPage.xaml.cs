@@ -1428,15 +1428,23 @@ public sealed partial class MainPage : Page
     }
     private void LibraryLayout_SizeChanged(object sender,SizeChangedEventArgs e)
     {
-        if(ViewTools is null)return;
+        UpdateSearchToolbarLayout();
+        UpdateFolderLayout();
+        UpdateDetailLayout();
+    }
+    private void SearchToolbarPart_SizeChanged(object sender,SizeChangedEventArgs e)=>UpdateSearchToolbarLayout();
+    private void UpdateSearchToolbarLayout()
+    {
+        if(ViewTools is null||SearchFilterTools is null||LibraryLayout is null||SearchTools is null)return;
         // Inline details reduce the actual toolbar width independently of the
-        // window width; choose wrapping from the content's measured space.
-        var narrow=e.NewSize.Width<840;
+        // window width. Long selected search labels also change the needed
+        // width; measure both groups rather than reserving a fixed 840px.
+        var filters=SearchFilterTools.DesiredSize.Width;var actions=ViewTools.DesiredSize.Width;
+        var required=filters>0&&actions>0?filters+actions+SearchTools.ColumnSpacing:840;
+        var narrow=LibraryLayout.ActualWidth<required;
         Grid.SetRow(ViewTools,narrow?1:0);Grid.SetColumn(ViewTools,narrow?0:1);Grid.SetColumnSpan(ViewTools,narrow?2:1);
         ViewTools.HorizontalAlignment=narrow?HorizontalAlignment.Left:HorizontalAlignment.Right;
         ViewTools.Margin=narrow?new Thickness(0,8,0,0):new Thickness(0);
-        UpdateFolderLayout();
-        UpdateDetailLayout();
     }
 
     private void FolderHub_SizeChanged(object sender,SizeChangedEventArgs args)=>UpdateFolderLayout();
