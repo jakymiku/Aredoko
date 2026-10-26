@@ -96,3 +96,12 @@ harnessはpopupを開く前にfocusを与えるよう修正。`--audio-search-on
 `EncoderProcess`へ任意の明示GPU allocator予算を追加。未指定の通常動作は維持し、設定された音声ownerへ継承する。workerはmodel load前に空き容量とbudgetを確認し、CUDAがない/空き不足ではloadしない。driver/native allocationまでの絶対VRAM上限ではない。CPU契約14件は開発/基本Python双方PASS、既存HTTP5もPASS。
 
 個別回答後、既存生成001/002の2音声だけで `check_direct_audio_pipeline.py --gpu --owned-worker` を1回実行。実production owner→検証済み原本decode→実private audio worker→atomic保存→日本語2問が全Top1。index全体16.156s、child PyTorch peak1121.5MiB、allocator上限3072MiB、画像workerは起動せず。owner.closeでworker停止を確認（既存の所有kill終了方式なのでexit1、graceful終了とは呼ばない）。原生成SHA/mtime不変、追加取得/GUI/再生/通常DB変更0。証拠`data/ai-ui/continuation-20261027/audio-owned-gpu01`。実録音/実曲/音声類似の一般品質や配布先Windowsを証明しない。
+
+
+## 直接音声ベクトル同士の類似検索backend（2026-10-27）
+
+`AudioDirectSimilarity`は別namespaceの768D direct-audio windowだけを比較し、起点自身を除外、全window pairの最大cosineと起点/候補双方の開始・終了時刻を返す。512D音響/画像/文字vectorを混ぜず、推論やPCM再decodeを行わない。起点はroot/棚/除外を守り、候補だけfavorite viewを適用する。保持は2itemのframe集合各32MiB以内＋120metadataと既存score spool。超過時は結果を黙って切らずエラー。全pair比較なので長音声の処理時間改善は今後の課題。
+
+所有audio jobへcached queryを接続。モデル未配置でも既知profileの保存済みvectorから比較可能。`POST audio-ai/similar`と`mode=audio-similar`のfrozen result sessionへ認証/厳密field確認/独自stampを適用。原本・登録/除外・namespace更新・取消を検証し、起点変更後もsessionを失効させる。GUI入口はこの段階では未接続。
+
+新規CPU7（開発/基本Python）＋追加stamp1、HTTP6 PASS。既存spoolの取消済みcontext入場時の解放漏れを検出し、`__enter__`失敗時もcloseするよう修正・focused1 PASS。初回ログは保持。供給vectorによる契約確認であり、実音楽の類似品質評価ではない。

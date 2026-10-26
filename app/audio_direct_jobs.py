@@ -137,6 +137,19 @@ class AudioDirectJobs:
             if idle_release_seconds and self.idle_thread is None:
                 self.idle_thread=threading.Thread(target=self._idle,name='direct-audio-idle',daemon=True);self.idle_thread.start()
 
+    def similar(self,item_id,**options):
+        from audio_direct_similarity import AudioDirectSimilarity
+        cancelled=options.get('cancelled')
+        if cancelled is not None and not callable(cancelled):raise ValueError('Invalid cancellation')
+        options['cancelled']=lambda:self.closed or cancelled is not None and cancelled()
+        with self.guard:
+            if self.closed:raise AIUnavailable('Audio owner is closing')
+            if self.searching or self.thread is not None and self.thread.is_alive():raise AIBusy('Audio owner is busy')
+            self.searching=True
+        try:return AudioDirectSimilarity(self.index).similar(item_id,**options)
+        finally:
+            with self.guard:self.searching=False;self.last_used=time.monotonic()
+
     def release(self):
         with self.guard:
             if self.closed:raise AIUnavailable('Audio owner is closing')

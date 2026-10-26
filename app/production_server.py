@@ -175,6 +175,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         if mode=='audio-direct':
             require(('query','view','root_ids','shelf','shelf_ids'))
             return audio.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
+        if mode=='audio-similar':
+            require(('item_id','view','root_ids','shelf','shelf_ids'))
+            return audio.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode in ('page-text','pending-proposals','pending-proposals-semantic'):
             require(('query','kind','view','root_ids','shelf','shelf_ids','model'))
             if mode=='page-text':return consume(lambda page:page_text.search(page=page,**values))
@@ -183,7 +186,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         raise ValueError('Invalid result search mode')
     image_stamp=IndexStamp(ai) if isinstance(ai,AISearch) else None
     def result_stamp(conditions):
-        return audio.stamp() if conditions.get('mode')=='audio-direct' else image_stamp() if image_stamp is not None else None
+        return audio.stamp() if conditions.get('mode') in ('audio-direct','audio-similar') else image_stamp() if image_stamp is not None else None
     results=ResultSessions(catalog,result_provider,index_stamp=image_stamp,index_stamp_for=result_stamp)
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
@@ -625,6 +628,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if self.path=='/api/library/audio-ai/search':
                         if set(body)-{'query','page','limit','view','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid audio search fields')
                         return self.send(200,audio.search(**body))
+                    if self.path=='/api/library/audio-ai/similar':
+                        if set(body)-{'item_id','page','limit','view','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid audio similarity fields')
+                        return self.send(200,audio.similar(**body))
                     return self.send(404,{'error':'Not found'})
                 if self.path.startswith('/api/library/results/'):
                     try:

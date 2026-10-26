@@ -29,9 +29,9 @@ class AudioDirectFeature:
                 'initialized':False,'candidate_total':0,'target':0,'processed':0,'indexed':0,
                 'reused':0,'unavailable':0,'remaining_candidates':0,'job_id':None,'error_code':None}
 
-    def _ensure(self):
+    def _ensure(self,*,require_model=True):
         if self.closed or self.encoder is None:raise AIUnavailable('音声の内容検索に対応するAI環境がありません。')
-        if not bool(getattr(self.encoder,'available',True)):raise AIUnavailable('音声検索のモデルが未準備です。')
+        if require_model and not bool(getattr(self.encoder,'available',True)):raise AIUnavailable('音声検索のモデルが未準備です。')
         with self.init_lock:
             if self.closed:raise AIUnavailable('Audio feature is closing')
             if self.owner is None:
@@ -64,9 +64,10 @@ class AudioDirectFeature:
     def cancel(self):
         result=self.owner.cancel() if self.owner is not None else {'cancel_requested':False}
         return {**self.status(),'cancel_requested':result['cancel_requested']}
+    def similar(self,item_id,**options):return self._ensure(require_model=False).similar(item_id,**options)
     def release(self):return self.owner.release() if self.owner is not None else {'released':False,'resident':False}
     def stamp(self):
-        self._ensure()
+        self._ensure(require_model=False)
         return self.monitor()
 
     def configure(self,*,idle_release_seconds=0):

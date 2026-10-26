@@ -108,5 +108,24 @@ class AudioHTTPTests(unittest.TestCase):
             self.assertFalse(unsupported.status()['supported']);self.assertFalse(unsupported.status()['available'])
         finally:unsupported.close()
 
+    def test_direct_similarity_uses_cached_audio_without_an_encoder_or_legacy_vectors(self):
+        (self.media/'second.wav').write_bytes(self.path.read_bytes())
+        self.catalog.index.scan(self.root);self.catalog.sync_index();self.prepare()
+        origin=self.item;before=self.feature.encoder.calls
+        self.feature.encoder.available=False
+        code,result=self.request('/api/library/audio-ai/similar',{'item_id':origin})
+        self.assertEqual(code,200);self.assertEqual(result['source'],'audio-direct')
+        self.assertEqual(result['origin_id'],origin);self.assertEqual(result['total'],1)
+        self.assertEqual(result['items'][0]['origin_match_ms'],0)
+        self.assertNotEqual(result['items'][0]['id'],origin)
+        self.assertEqual(self.feature.encoder.calls,before)
+        self.assertEqual(self.request('/api/library/audio-ai/similar',{'item_id':origin},authorized=False)[0],403)
+        self.assertEqual(self.request('/api/library/audio-ai/similar',{'item_id':origin,'kind':'video'})[0],400)
+        code,_=self.request('/api/library/results/create',{'session_id':'c'*32,'conditions':{'mode':'audio-similar','item_id':origin}})
+        self.assertEqual(code,200)
+        code,result=self.request('/api/library/results/range',{'session_id':'c'*32,'offset':0,'limit':1})
+        self.assertEqual(code,200);self.assertEqual(result['mode'],'audio-similar')
+        self.assertEqual(self.feature.encoder.calls,before)
+
 
 if __name__=='__main__':unittest.main()
