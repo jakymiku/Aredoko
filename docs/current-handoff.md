@@ -1,5 +1,11 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-26）
 
+## Sol再開checkpoint（2026-10-26、以下より優先）
+- `cc6f7e8`からclean/remote/PR #5 ref一致で再開。**`7aa2162`**：snapshotの既存原本guardを最大4件で並行化、120件以内/順位/世代/取消を保全。生成5万metadata＋実PNG80枚の旧44.590s→20.772s（各1回、他PC負荷非固定）、全payload SHA一致。CPU31 PASS、許可済みnative1試行15 checks/4PNG目視/exit0。[証拠](result-sessions.md)。属性API試作は効果がなく撤去済み。API/GUIの全性能合格ではない。
+- 一覧の初回表記も表示範囲に統一。Portable/frontend06 build成功（既存warnings維持）、この小修正後GUIは未実施。[キャッシュ済みSDKビルドの一時指定と失敗ログ](p3-continuous-browse.md)。installed Alpha/基本ZIP03は前日の`e52c8ec`のままで、今回のsourceはまだ反映していない。
+- **今回の制約**：ユーザーはPC使用中。GUI/GPUは都度回答後。5万件の限定nativeへの1回許可は実施済みで、他のテストへ拡張しない。GPU0、新規取得0、通常DB/私物/installed Alpha変更0、shutdownしない。利用枠が少なくなったらcommit/push/最新handoffを完了して終了する。
+- **現在の次の1件**：P1/P7のstreamアニメーション原寸表示。旧API/クライアントの2048px互換を保ち、新しいviewerだけ明示的に原寸を要求する。16MP入力・4frame/128MiB batch上限・取消/loop/disposalを維持する。完成後は関連CPU/Core/build、GUIが必要なら候補を用意してユーザーへ問い、回答待ちに独立作業を進める。P7/M1・公開runtime・R06–R09の残件は削除しない。
+
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。
 - **今回の利用者向け変更**：`38c63f6`で所有背景照合の取消/終了と通信上限を整理し、**設定→高度な設定→AI実行環境の全ファイルを照合する**を追加（既定オン、オフ保存は次回起動から）。基本ZIP・取得時検証まで一括で無効にする設定ではない。[仕様・結果](ai-runtime-setup.md)。`a216fd0`で詳細を閉じた一括保存にも進捗/完了を表示し、保存中の競合操作を抑止。`cca0984`でgrid/list切替の可視アンカーを修正。`22e481c`でviewerの読み上げ名を更新。`42c0743`で中断したAI待機が自動再実行される不具合、`e52c8ec`でページ移動取消時に有効sessionを破棄/詳細を無効化する不具合を修正。

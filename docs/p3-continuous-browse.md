@@ -1,5 +1,10 @@
 # P3 bidirectional incremental browsing (2026-10-23)
 
+## 2026-10-26 現行追記
+snapshotの原本guardを最大4件で並行化し、生成5万metadata/実80PNGの全payload一致と限定native15 checksを確認（`7aa2162`、[正本・測定範囲](result-sessions.md)）。初回/手動range移動時も「ページ番号/総ページ」から「保持中の先頭–末尾 / 総件数」へ表示を統一。追加読込/端移動/取消の既存表記と揃え、空結果は0件とする。後者はPortable build/コードレビュー済みで、変更後のGUIは未実施。
+
+このPCのSDKは10.0.403へ変わり、キャッシュはruntime/Crossgen2 10.0.13。既定publishは未取得10.0.14で失敗。一律`RuntimeFrameworkVersion`はWindows SDK参照まで誤上書きするため使わない。ローカルの`data/ai-ui/snapshot-review-20261026/cached-frameworks.targets`でFrameworkReference/NET10 KnownCrossgen2Packだけ13へ指定し、`-p:CustomAfterMicrosoftCommonTargets=<当該絶対path>`・`--no-restore`でfrontend06の通常Portable/ReadyToRun publish成功。MSIXが使うBefore hookを上書きしない。追加取得/製品設定変更/警告抑制なし。失敗build01–05も保持する。この一時指定は製品依存を旧版へ恒久固定する方針ではない。
+
 Source implementation follows the integrated roadmap; **native acceptance remains pending**. This is not a full-list scrollbar backed by all metadata: the standard ListView continuously extends near either edge and evicts distant metadata. At most600 rows/keys in its UI buffer; ResultWindow separately retains at most5×120 backend-derived rows. These are two bounded stores, not a combined600-object/RSS guarantee. No all-result UI or metadata array.
 
 ResultBuffer accepts only adjacent, same-total, unique-ID ordered ranges; invalid ranges leave its state unchanged. Forward overflow evicts the head; backward overflow evicts the tail. Native source connects the internal ListView ScrollViewer, fetches up to120 through the existing authenticated ResultWindow, updates observable native-string keys without replacing all containers, and compensates a retained visual anchor when trimming/prepending. It does not rank/filter on the frontend. Cancellation, session identity, buffer identity and source guards are retained. Fetch failure stops automatic retries and keeps the error visible. Dirty editor fields are not saved/discarded by scrolling; existing transitions own search/navigation.
