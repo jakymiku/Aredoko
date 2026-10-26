@@ -15,6 +15,7 @@
 - 検索/AI: [AI検索](ai-search-plan.md)、[モデルprofile](model-profiles.md)、[検索品質](search-quality-baseline.md)、[ページ画像](page-image-search.md)、[媒体内容索引](media-content-plan.md)、[タグ候補](tag-suggestions.md)
 - 登録/整理: [フォルダ管理](folder-library-management.md)、[複数棚](multi-shelf-storage.md)、[棚UI](shelf-ui-20261023.md)
 - UI/閲覧: [WinUIデザイン](design-vision-winui.md)、[連続閲覧](result-session-native-connection.md)、[サムネイル](thumbnail-derivatives.md)、[読書位置](reader-progress.md)、[利用ガイド](user-guide.md)
+- P6予約仕様: [初回セットアップ・任意AI環境・初心者ガイド・復旧](p6-first-run-setup-spec.md) — P6着手条件が整った時に使用。現行キューはcurrent-handoff優先。
 - バックアップ/配布: [P5復元](restore-review-20261024.md)、[取得](ai-acquisition.md)、[P6軽量配布](lightweight-distribution.md)、[Portable ZIP候補](portable-refresh-20261024.md)、[基本の復旧](backup-recovery.md)
 - 安全/データ: [原本パス検証](source-path-validation.md)、[大規模契約](large-library-contract.md)、[検索取消](search-cancellation.md)
 
