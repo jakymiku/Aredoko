@@ -16,7 +16,8 @@
 - **R06生成8本の予備評価**：個別回答後GPU1バッチ。4日本語合成発話は日本語query4/英語query4ともTop1=4/4、合成音3問と相互類似2問も全Top1。入力は数字名の波形のみ、正解文/名前を埋め込みへ入れていない。元SHA不変/process exit0。実録音/実曲/ASR比較・長時間は未評価でR06/M2未完。[条件・生証拠・限界](audio-input-evaluation.md)。fixture01のPowerShell policy失敗は保持し、既存Python COMへ変更して生成。OS設定変更なし。
 - **R06/R07音声worker契約もsource実装**：明示text/audio profile・別contract/key、型付きPCM private IPC、両側strict検証、default audio無効/legacy key保全。新worker/関連profile/release/PCMのCPU45 PASS、基本Pythonのworker9 PASS。[仕様](audio-content-design.md)。実モデルAPIの前記GPU評価とは区別し、新private IPCの実GPUは未実施。通常索引/UIや512D空間へは未接続、基本ZIP04/Alpha未収録。
 - **P6既知NOTICE漏れを修正**：ONNX Runtime付属`ThirdPartyNotices.txt`約333KBをcollectorが認識せず旧束へ未収録だった。名前判定を補強、CPU19 PASS。新規NOTICE束`runtime-notices05`（証拠root内）は52 distributions/92 entries/1,456,448bytes、不足distribution0。[詳細](runtime-notice-inventory.md)。旧sealed pack/約3GB archiveは変更せず、新封印待ち。公開承認や全native reviewを完了扱いにしない。
-- **現在の次の1件**：既存sealed runtimeのnative325 filesを、宣言inventory・RECORD owner・通知束・PE architectureへ読み取り専用で対応付ける。巨大payload全hash/実行/再packを繰り返さず、nativeの未対応付けとreview先を具体化する。R07長時間producer/atomic保存・範囲検索は設計レビュー推奨として保留（新worker自体は完了）。GPU/GUIの直前許可は全て実施済み、新範囲には新回答が必要。M1残受入・runtime公開承認/host・R06最終方式選定/M2は未完、shutdownなし。
+- **P6 native対応表も作成**：`inspect_runtime_native.py`と生成CPU7 PASS。`runtime-native-review02.json` はdeclared native325（RECORD owner対応285/未対応40/重複0/不明PE0）、METADATA/RECORD SHA照合済み。未対応はCPython標準拡張/本体/同梱DLL等。[範囲・残review](runtime-notice-inventory.md)。payload全hash/依存graph/公開承認とは区別し、旧pack/archive不変。ctimeのpath/handle差による初回停止と修正も記録。
+- **現在の次の1件**：R07のデジタル無音を音声workerへ送らない小さな保護を追加する。完全ゼロPCMだけを明確にskipし、環境音/低音量音声をVAD相当と誤判定しない。producer/atomic保存・検索の統合は設計レビュー推奨として別単位。GPU/GUIの許可は全て実施済み、新範囲には新回答が必要。M1残受入・native公開review/host・R06最終方式選定/M2は未完、shutdownなし。
 
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。

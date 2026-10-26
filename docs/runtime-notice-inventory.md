@@ -61,3 +61,15 @@ python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --su
 生成19 tests PASS：原文保持、表記違い、dist-info直下、旧判定bundleの新封印時拒否、既存補完/封印/危険pathの関連確認。既知の同じ準備済みsourceと固定supplementsから、新規`data/ai-ui/snapshot-review-20261026/runtime-notices05`を作成。**52 distributions / 92 entries / 1,456,448bytes**、不足distribution0、追加本文SHA`e00f828e0a33de591a355ae6606d2625f5758da7d2c844db7821c9dd3e3647b6`。sourceは実行/変更せず、約5GBの再複製/再hashもしていない。
 
 旧sealed pack/archiveはそのまま保持する。次のpack封印では新NOTICE束を使用し、旧束の不足を許容しない。CUDA/cuDNN等のnative依存の対応付けと公開review、不変host/registry、clean Windowsは引き続き未完。`redistribution_approved=False`を維持する。
+
+## 宣言native・RECORD・NOTICEの対応付け（2026-10-26）
+
+`tools/inspect_runtime_native.py --source <sealed-pack> --notices <bound-notice-bundle> --output <new-report.json>` を追加。manifest、dist-info METADATA/RECORDを宣言SHAに照合し、nativeのサイズとPE architecture headerだけを読む。選択環境/ライブラリのimport・実行、巨大DLL全hash、再packはしない。出力はpackの外へ新規作成する。
+
+既存packと新NOTICE束05で `runtime-native-review02.json` を作成。manifest SHA`52406ef…`：**325 native files、285が16 distributionsのRECORDへ対応、40が未対応、重複owner0/不明PE0**。PEはamd64 315/x86 6/arm64 4。異なるarchitectureの一部はpip/setuptoolsに含まれるlauncher stubで、x64アプリの誤配布と即断・自動削除しない。主要ownerはtorch40、scipy110、scikit-learn71、numpy21、torchvision11、pillow8、onnxruntime3等。
+
+未対応40は`DLLs/`のCPython標準拡張・libcrypto/libssl/libffi/sqlite/tcl/tk、本体python exe/dll、vcruntime等。RECORDにないことはライセンス不存在の証明ではない。rootのPython通知と、各同梱nativeの原文/公式配布条件を個別に対応付ける必要がある。torchのRECORDにはCUDA/cuDNN/cuBLAS/CUPTI/Intel OpenMP等も含まれるため、torchというownerだけで独立nativeの公開reviewを済ませない。
+
+生成CPU7 PASS。初回はWindows/Python3.14でpath.statのctime（creation）とfstatのctime（change）が異なることを検知して停止した。各clockをそれぞれ前後比較し、path/handle間はidentity/size/mtimeを照合するよう修正、clock差の許容とhandle内変更拒否を回帰確認した。失敗ログを保持する。
+
+報告は宣言済みinventoryの対応付けであり、全payload SHA・extra-tree全体・PE import/delay-import/dynamic依存グラフ・静的link由来・法的承認の検証ではない。これらの未実施flagと`redistribution_approved=False`を明示する。生証拠は`data/ai-ui/snapshot-review-20261026/`。基本ZIP/installed Alpha/旧runtimeを変更せず、外部取得0。
