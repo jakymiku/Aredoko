@@ -11,6 +11,17 @@ import time
 
 from ai_profiles import DEFAULT_PROFILE, ModelProfile
 
+def configure_gpu_budget(torch,device,budget_mib):
+    """Optional owner-supplied CUDA allocator limit, applied before model load."""
+    if budget_mib is None:return
+    if type(budget_mib) is not int or not 256<=budget_mib<=65536:
+        raise ValueError('Invalid worker GPU budget')
+    if device!='cuda':raise RuntimeError('Budgeted GPU worker requires CUDA')
+    budget=budget_mib*1024**2
+    free,total=torch.cuda.mem_get_info()
+    if free<budget:raise RuntimeError('Insufficient free GPU memory; defer worker load')
+    torch.cuda.set_per_process_memory_fraction(min(1.,budget/total))
+
 def monitor_parent(pid):
     if os.name != 'nt': return
     import ctypes
@@ -31,6 +42,7 @@ def main():
     parser.add_argument('--model',required=True)
     parser.add_argument('--parent-pid',type=int,default=os.getppid())
     parser.add_argument('--profile-json')
+    parser.add_argument('--gpu-budget-mib',type=int)
     args = parser.parse_args()
     profile=ModelProfile.from_dict(json.loads(args.profile_json)) if args.profile_json else DEFAULT_PROFILE
     threading.Thread(target=monitor_parent,args=(args.parent_pid,),daemon=True).start()
@@ -42,6 +54,7 @@ def main():
         from PIL import Image
         from ai_adapters import load_adapter
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        configure_gpu_budget(torch,device,args.gpu_budget_mib)
         dtype = torch.bfloat16 if profile.precision=='auto-bf16' and device == 'cuda' and torch.cuda.is_bf16_supported() else torch.float32
         model=load_adapter(profile,args.model,device,dtype)
         actual_dimension=model.dimension

@@ -15,9 +15,12 @@ from ai_vectors import normalized
 PROFILE = DEFAULT_PROFILE.key
 class AIUnavailable(RuntimeError): pass
 class EncoderProcess:
-    def __init__(self, python, model, profile=DEFAULT_PROFILE):
+    def __init__(self, python, model, profile=DEFAULT_PROFILE, *, gpu_budget_mib=None):
+        if gpu_budget_mib is not None and (type(gpu_budget_mib) is not int or not 256<=gpu_budget_mib<=65536):
+            raise ValueError('Invalid worker GPU budget')
         self.python,self.model = Path(python),Path(model)
         self.profile=profile
+        self.gpu_budget_mib=gpu_budget_mib
         self.process = None
         self.lock = threading.Lock()
         self.responses = queue.Queue(maxsize=2)
@@ -62,7 +65,9 @@ class EncoderProcess:
         env=os.environ.copy()
         env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',PYTHONIOENCODING='utf-8',PYTHONDONTWRITEBYTECODE='1')
         self.responses=queue.Queue(maxsize=2)
-        try:command=worker_command(self.python,Path(__file__).with_name('ai_worker.py'),['--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())],cancelled=lambda:self._closed)
+        arguments=['--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())]
+        if self.gpu_budget_mib is not None:arguments.extend(['--gpu-budget-mib',str(self.gpu_budget_mib)])
+        try:command=worker_command(self.python,Path(__file__).with_name('ai_worker.py'),arguments,cancelled=lambda:self._closed)
         except (ValueError,OSError,RuntimeError) as error:raise AIUnavailable('AI runtime validation failed') from error
         if self._closed:raise AIUnavailable('AI worker is closed')
         self.process=subprocess.Popen(command,

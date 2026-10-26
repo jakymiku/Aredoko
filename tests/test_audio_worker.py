@@ -16,6 +16,40 @@ def window():return PCMWindow(250,1,struct.pack('<f',.25)*16)
 
 
 class AudioWorkerTests(unittest.TestCase):
+    def test_optional_gpu_budget_is_checked_before_model_allocation(self):
+        cuda=types.SimpleNamespace(mem_get_info=MagicMock(return_value=(4*1024**3,8*1024**3)),
+                                   set_per_process_memory_fraction=MagicMock())
+        torch=types.SimpleNamespace(cuda=cuda)
+        ai_worker.configure_gpu_budget(torch,'cuda',3072)
+        cuda.set_per_process_memory_fraction.assert_called_once_with(.375)
+        cuda.set_per_process_memory_fraction.reset_mock()
+        cuda.mem_get_info.return_value=(2*1024**3,8*1024**3)
+        with self.assertRaisesRegex(RuntimeError,'Insufficient'):ai_worker.configure_gpu_budget(torch,'cuda',3072)
+        with self.assertRaisesRegex(RuntimeError,'requires CUDA'):ai_worker.configure_gpu_budget(torch,'cpu',3072)
+        for value in (True,0,65537):
+            with self.assertRaises(ValueError):EncoderProcess('unused','unused',gpu_budget_mib=value)
+        cuda.set_per_process_memory_fraction.assert_not_called()
+        ai_worker.configure_gpu_budget(torch,'cpu',None)
+
+    def test_budget_reaches_the_private_worker_and_audio_owner(self):
+        from audio_direct_feature import AudioDirectFeature
+        from inference_ownership import InferenceOwnership
+        image=EncoderProcess('unused-python','unused-model',gpu_budget_mib=3072)
+        group=InferenceOwnership();group.for_encoder(image)
+        feature=AudioDirectFeature(None,types.SimpleNamespace(profile=image.profile,encoder=image,inference_group=group))
+        self.assertEqual(feature.encoder.gpu_budget_mib,3072)
+        self.assertIsNone(image.process);self.assertIsNone(feature.encoder.process)
+        ready={'dimension':768,'profile':image.profile.key,'device':'cuda'}
+        with patch.object(EncoderProcess,'available',new_callable=unittest.mock.PropertyMock,return_value=True),\
+             patch('ai_process.worker_command',return_value=['generated-command']) as command,\
+             patch('ai_process.subprocess.Popen') as launch,patch('ai_process.threading.Thread'),\
+             patch.object(image,'_response',return_value=ready):
+            image._start()
+            self.assertEqual(command.call_args.args[2][-2:],['--gpu-budget-mib','3072'])
+            self.assertEqual(launch.call_args.args[0],['generated-command'])
+        # The observed process is a mock, not an owned operating system child.
+        image.process=None;feature.close();image.close()
+
     def test_explicit_audio_profile_preserves_the_default_and_gets_its_own_contract(self):
         audio=audio_profile_for()
         self.assertEqual(DEFAULT_PROFILE.modalities,('text','cover'));self.assertEqual(DEFAULT_PROFILE.key,LEGACY_PROFILE)
