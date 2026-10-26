@@ -52,3 +52,11 @@ R13 DOING / ALPHA未完 / R14 PARTIALを維持。viewer実機確認後もPZ2→P
 - 3072×2048・8ページCBZで1→2→3→2→1を確認。traceのXAML source割当まで、APNG 811ms/native GIF 498ms/WebP 813ms/大GIF 502ms/CBZ初回249ms・後続232–237ms（各1回）。UI Automation/診断log中、OS cache条件非固定であり、画面present/Honeyview比較/中央値/p95ではない。CBZの再取得は304でbitmap復号を再利用していた。
 - native private bytesはAPNG再生時224MiB→終了frame468MiB、GIF/WebP後487–511MiB、CBZ後545MiB。inline backendは58–96MiB。単回系列であり、長時間RSS一定・メモリリークなしの証明ではない。FPS、長時間・複雑な透過/disposal・実72MB級の別素材・物理DPI等は残る。
 - 01は無限GIFを閉じた直後に非同期close完了を即断するharness誤りでFAIL。独立closeを最大8秒待つよう修正し、02ではlive session解放→CBZまで成功。旧FAILを消さず、未到達だった後段と区別した。
+
+## 2026-10-26：.NET経路の接続待ちを削減
+
+- 生成専用・ランダムloopback port・instance nonce照合付きの `tools/measure_dotnet_transport.py` とCoreの開発用probeで確認。通常8769番・GUI・GPU・モデルは使わない。旧close経路では小さなinfoも約214–230ms、1,181,811bytesのPNG原本は約240–250ms。TCP_NODELAY単独と明示IPv4接続には有効な差がなく、IPv4接続callbackは製品へ導入していない。
+- productionはHTTP/1.1へ変更し、認証済みGETと、全bodyを消費した結果range/status/neighbor/locate・アニメーションopen/next・読書位置保存だけ接続再利用する。認証・原本guardは各要求で実施。session取得、作成/取消等の制御、通常の変更処理、失敗、曖昧なframingはclose。prototypeは従来HTTP/1.0/closeを維持する。
+- 1接続は512応答・応答時点300秒・socket I/O待機10秒でclose判定。全要求の実行時間上限やプロセス全体の資源上限を意味しない。所有serverは受け付けたsocketを追跡し、backend資源終了前に閉じる。OS設定の変更なし。
+- 実policyのCPU単回測定 `dotnet-http05/report.json`：info初回226.7ms、再利用後10.2/7.7ms、原本30.0/29.8/29.0ms。`dotnet-http06`では実Core binary streamの生成512×256・10framesを取得し、先頭35.9ms・後続27.5/34.8/15.4ms、正常close。証拠は `data/ai-ui/snapshot-review-20261026/`（Git対象外）。冷間接続の遅延は残る。少数の生成素材・非固定PC負荷であり、画面present/FPS/Honeyview比較の結果ではない。06以前のprobeのPOST側server timestampは補正前のため、段階間の証拠に使わない。クライアント取得時間は有効。
+- 関連HTTP8、接続7、アニメーション17、結果session33 PASS。接続試験には不正認証、登録解除、重複Content-Length、Transfer-Encoding、client close、予算/idle、binary再利用と終了時切断を含む。最終ZIPと変更後GUIはこの節の追記時点では未確認。次の結果はcurrent-handoffを参照する。

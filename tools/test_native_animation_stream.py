@@ -5,7 +5,6 @@ No models, downloads, OS registration or system settings. Exact owned PID/HWND.
 """
 import argparse,ctypes,hashlib,json,os,secrets,shutil,socket,struct,subprocess,sys,threading,time,traceback
 from ctypes import wintypes
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 REPO=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(REPO/'app'),str(REPO/'tools')]
@@ -15,16 +14,21 @@ from production_server import production_handler,DisabledAI
 from ai_settings import AIProfileSettings
 from wd_tagger import DisabledTagger
 from animation_sessions import MIME
+from owned_http_server import OwnedHTTPServer
+from portable_frontend import inspect_portable
 from native_ui_tools import process_memory
 
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--provided-sample',type=Path,help='Only the explicitly attached E:/picture/!gif/10.gif, read/copy only');parser.add_argument('--large-generated',action='store_true')
     parser.add_argument('--original-generated',action='store_true',help='Three 2560x1440 frames; verify original-size viewer transport')
+    parser.add_argument('--transport-generated',action='store_true',help='Original animations plus three small CBZ pages for connection/cache review')
     args=parser.parse_args()
-    if sum((args.large_generated,args.original_generated,bool(args.provided_sample)))>1:parser.error('Choose one generated or explicitly provided media flow')
+    if sum((args.large_generated,args.original_generated,args.transport_generated,bool(args.provided_sample)))>1:parser.error('Choose one generated or explicitly provided media flow')
+    args.original_generated=args.original_generated or args.transport_generated
     front=args.frontend.resolve();target=args.output.resolve()
-    if os.name!='nt' or not front.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file() or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('Dedicated frontend and new isolated output required')
+    if os.name!='nt' or not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file() or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('Dedicated frontend and new isolated output required')
+    if args.transport_generated:inspect_portable(front)
     target.mkdir(parents=True);media=target/'media';media.mkdir()
     report={'pass':False,'checks':[],'screenshots':[],'visual_review':'pending','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),'frontend_sha256':hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()}
     tracked=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','--','app','src'],cwd=REPO,text=True).splitlines()
@@ -100,6 +104,12 @@ def main():
                         with Image.new('RGB',(3072,2048),(40+page*20,80,160)) as image,io.BytesIO() as buffer:
                             image.save(buffer,format='PNG');book.writestr(f'{page:02}.png',buffer.getvalue())
                 report['large_generated']={'apng_source_dimensions':list(dimensions),'apng_frames':frame_count,'gif_bytes':(media/'d-large.gif').stat().st_size,'cbz_pages':8,'cbz_page_dimensions':[3072,2048]}
+            if args.transport_generated:
+                import zipfile,io
+                with zipfile.ZipFile(media/'z-transport.cbz','w',compression=zipfile.ZIP_STORED) as book:
+                    for page in range(3):
+                        with Image.new('RGB',(1000,700),(40+page*40,80,160)) as image,io.BytesIO() as buffer:
+                            image.save(buffer,format='PNG');book.writestr(f'{page:02}.png',buffer.getvalue())
         sources={p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
         cat=ProductionCatalog(target/'catalog.sqlite');root=cat.add_root(str(media));cat.start_scan(root)
         if cat._worker:cat._worker.join(10)
@@ -113,10 +123,11 @@ def main():
             def send(self,status,body,mime='application/json; charset=utf-8',extra_headers=None):
                 if mime==MIME and status==200:
                     size=struct.unpack_from('<I',body)[0];metadata=json.loads(body[4:4+size])
-                    observed.append({'action':self.path.rsplit('/',1)[-1],'item_id':metadata['item_id'],'width':metadata['width'],'height':metadata['height'],'frames':metadata['frames'],'done':metadata['done']})
+                    observed.append({'action':self.path.rsplit('/',1)[-1],'item_id':metadata['item_id'],'width':metadata['width'],'height':metadata['height'],'peer_port':self.client_address[1],'frames':metadata['frames'],'done':metadata['done']})
                 elif self.path=='/api/library/animation/close' and status==200:closes.append(True)
+                if status==304:report.setdefault('source_revalidated',[]).append(self.path.split('?')[0])
                 return super().send(status,body,mime,extra_headers)
-        server=ThreadingHTTPServer(('127.0.0.1',8769),Recorded,bind_and_activate=False);server.allow_reuse_address=False
+        server=OwnedHTTPServer(('127.0.0.1',8769),Recorded,bind_and_activate=False);server.allow_reuse_address=False
         server.socket.setsockopt(socket.SOL_SOCKET,socket.SO_EXCLUSIVEADDRUSE,1);server.server_bind();server.server_activate()
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         with (target/'app.log').open('w',encoding='utf-8') as log:proc=subprocess.Popen([str(front/'Aredoko.WinUI.exe'),'--ui-theme','dark','--viewer-settings',str(target/'viewer-settings.json')],cwd=front,env=env,stdout=log,stderr=subprocess.STDOUT)
@@ -130,7 +141,8 @@ def main():
         check('owned main window',main_hwnd is not None)
         first_name='provided-10.gif' if args.provided_sample else 'a-long.png'
         if args.original_generated:
-            ui(main_hwnd,'wait-for','TxtPageNumber','--value','1–3 / 3','-t','10000')
+            total=4 if args.transport_generated else 3
+            ui(main_hwnd,'wait-for','TxtPageNumber','--value',f'1–{total} / {total}','-t','10000')
             check('initial library range uses the same notation as navigation',True)
         ui(main_hwnd,'wait-for','Item'+str(ids[first_name]),'-t','10000');ui(main_hwnd,'invoke','Item'+str(ids[first_name]),'--action','select')
         ui(main_hwnd,'invoke','BtnDetails');ui(main_hwnd,'wait-for','BtnOpenImage','-p','IsEnabled','--value','True','-t','7000');ui(main_hwnd,'invoke','BtnOpenImage')
@@ -158,6 +170,7 @@ def main():
             if args.original_generated:
                 check('APNG viewer receives original pixels beyond the old edge cap',all((x['width'],x['height'])==(2560,1440) for x in batches))
                 check('APNG batches remain within the byte budget',all(sum(f['byte_length'] for f in x['frames'])<=128*1024*1024 for x in batches))
+                if args.transport_generated:check('binary animation batches reuse connections',len({x['peer_port'] for x in batches})<len(batches))
             ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ViewerImage','--value','b-native.gifの画像','-t','10000');ui(viewer_hwnd,'wait-for','ImageZoomIn','-p','IsEnabled','--value','True','-t','10000');shot('native-gif')
             check('true GIF uses native path without a streaming decode session',not any(x['item_id']==ids['b-native.gif'] for x in observed))
             ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ViewerImage','--value',f'c-disguised.gifの画像（アニメーション {min(8,frame_count)}）','-t','30000')
@@ -176,13 +189,15 @@ def main():
         # Window close schedules an independently owned HTTP decoder close.
         # An infinite large GIF is still active here, unlike the finite cases.
         wait('no owned decoder sessions remain',decoders_closed,seconds=8)
-        if args.large_generated:
-            ui(main_hwnd,'invoke','Item'+str(ids['z-large.cbz']),'--action','select');ui(main_hwnd,'invoke','BtnDetails');ui(main_hwnd,'wait-for','BtnOpenBook','-p','IsEnabled','--value','True','-t','10000');ui(main_hwnd,'invoke','BtnOpenBook')
+        if args.large_generated or args.transport_generated:
+            book_name='z-transport.cbz' if args.transport_generated else 'z-large.cbz'
+            ui(main_hwnd,'invoke','Item'+str(ids[book_name]),'--action','select');ui(main_hwnd,'invoke','BtnDetails');ui(main_hwnd,'wait-for','BtnOpenBook','-p','IsEnabled','--value','True','-t','10000');ui(main_hwnd,'invoke','BtnOpenBook')
             viewer_prefix='Aredoko — 本ビューア';wait('owned book viewer opens',find_viewer)
             ui(viewer_hwnd,'wait-for','ReaderImage','--value','1ページ','-t','15000');show_chrome('ReaderViewport');shot('cbz-first')
             for action,page in [('ReaderNext',2),('ReaderNext',3),('ReaderPrevious',2),('ReaderPrevious',1)]:
                 ui(viewer_hwnd,'invoke',action);ui(viewer_hwnd,'wait-for','ReaderImage','--value',f'{page}ページ','-t','15000');ui(viewer_hwnd,'wait-for','ReaderFit','-p','IsEnabled','--value','True','-t','10000')
             shot('cbz-cached-return');user.PostMessageW(int(viewer_hwnd),0x10,0,0);wait('book viewer closes normally',lambda:not any(str(w['hwnd'])==viewer_hwnd for w in windows()))
+            if args.transport_generated:check('cached book pages revalidate instead of retransferring',len(report.get('source_revalidated',[]))>=2)
         traces=target/'user/Aredoko/logs/viewer-load.jsonl';check('viewer trace stays in dedicated LOCALAPPDATA',traces.is_file())
         report['timings']=[json.loads(line) for line in traces.read_text(encoding='utf-8').splitlines()]
         check('first animation-frame assignment was measured',any(x['stage']=='first-frame-assigned' for x in report['timings']))

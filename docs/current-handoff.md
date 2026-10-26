@@ -7,7 +7,8 @@
 - **今回の制約**：ユーザーはPC使用中。GUI/GPUは都度回答後。5万件の限定native1回と原寸アニメーションnative1回は別々の回答を得て実施済みで、他のテストへ拡張しない。GPU推論0、新規取得0、通常DB/私物/installed Alpha変更0、shutdownしない。利用枠が少なくなったらcommit/push/最新handoffを完了して終了する。
 - P3の全件結果作成は文字検索でも専用15分transportへ分離。range/neighbor/close等は通常transport・明示取消を維持。Coreでliteral作成/通常range・close/取消ID cleanupを確認、WinUI最小build PASS（GUI再実施なし）。commitは`git log -1 -- src/Aredoko.Core/ResultSessionClient.cs`。
 - P3の作成中件数表示も実装/限定確認済み。building statusはcommit済み件数だけでpartial rowsを公開せず、Coreの任意observer/終了joinとUI versionで旧応答を抑止。Python33/Core/Portable frontend08 PASS、許可済み生成1,201件native1試行5 checks/4PNG目視/exit0。[仕様](result-sessions.md)。このunitのcommitは`git log -1 -- src/Aredoko.Core/ResultBuildProgress.cs`。前記2許可に加え進捗GUI1回も回答を得て実施済み。
-- **現在の次の1件**：P1/P3の残るHTTP待ちを、生成専用・nonce照合付きの.NET loopback probeで切り分ける。GUI/GPUなし、通常の8769番へは接続しない。意味のある差がない通信仮説を製品へ無条件に追加しない。P7/M1・公開runtime・R06–R09の残件は削除しない。
+- **P1/P3 HTTP待ちの局所改善**：認証と原本guardを毎回維持したまま、boundedな画像/結果取得と読書位置保存へ接続再利用を導入。所有socket終了、framing/解除/認証を含む接続7・既存HTTP8・animation17・結果33 PASS。実.NET生成CPUでwarm info約10/8ms・1.18MB原本約30ms（旧約200ms台）、冷間接続は残る。[範囲と証拠](viewer-performance.md)。commitは`git log -1 -- app/owned_http_server.py`。
+- **現在の次の1件**：上記sourceを新規基本ZIP04へまとめる。ローカルSDK更新後の既存キャッシュ指定は開発用targetsだけに限定し、ZIPへ同梱しない。CPU/receipt確認後、生成アニメーション＋小CBZの新GUI範囲を問い合わせる。新GUIは未許可/未実施、installed Alphaは更新しない。P7/M1・公開runtime・R06–R09の残件は削除しない。
 
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。

@@ -4,8 +4,9 @@ import sys
 import json
 import secrets
 import threading
+import time
 from pathlib import Path
-from http.server import ThreadingHTTPServer
+from owned_http_server import OwnedHTTPServer
 from urllib.parse import urlparse, parse_qs
 import re
 import select
@@ -186,6 +187,49 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     from startup_scans import StartupScans
     startup_scans=StartupScans(catalog)
     class Handler(base):
+        protocol_version='HTTP/1.1'
+        disable_nagle_algorithm=True
+        timeout=10
+        max_api_responses=512
+        max_connection_seconds=300
+
+        def setup(self):
+            super().setup();self.connection_started=time.monotonic();self.api_responses=0
+
+        def handle_one_request(self):
+            self.request_body_consumed=False
+            try:return super().handle_one_request()
+            except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):
+                self.close_connection=True
+            except OSError:
+                if getattr(self.server,'_closing_connections',False):self.close_connection=True
+                else:raise
+
+        def response_connection(self,status,extra_headers):
+            self.api_responses+=1
+            lengths=self.headers.get_all('Content-Length',[])
+            connections=','.join(self.headers.get_all('Connection',[])).casefold().split(',')
+            origin=f'http://127.0.0.1:{self.server.server_port}'
+            if (status not in (200,206,304) or self.protocol_version!='HTTP/1.1' or self.request_version!='HTTP/1.1' or
+                not self.valid_host() or len(self.headers.get_all('Host',[]))!=1 or
+                self.headers.get_all('Origin',[])!=[origin] or self.headers.get_all('X-Aredoko-Token',[])!=[token] or
+                'close' in (value.strip() for value in connections) or self.headers.get_all('Transfer-Encoding') or
+                len(lengths)>1 or any(not value.strip().isascii() or not value.strip().isdigit() for value in lengths) or
+                self.api_responses>=self.max_api_responses or time.monotonic()-self.connection_started>=self.max_connection_seconds or
+                any(name.casefold() in ('connection','content-length','transfer-encoding') for name in (extra_headers or {}))):
+                return 'close'
+            if self.command=='GET' and self.path.startswith('/api/') and not self.path.startswith('/api/session') and (not lengths or lengths[0].strip()=='0'):
+                return 'keep-alive'
+            # Only bounded, fully consumed media/result reads and idempotent
+            # reader-position saves reuse a POST connection. Jobs/mutations and
+            # cancellation/control replies retain the close-after-reply path.
+            if self.command=='POST' and lengths and self.request_body_consumed and (self.path in (
+                '/api/library/results/range','/api/library/results/neighbor','/api/library/results/status','/api/library/results/locate',
+                '/api/library/animation/open','/api/library/animation/open-first','/api/library/animation/next') or
+                re.fullmatch(r'/api/library/reader/[1-9][0-9]{0,18}/progress',self.path)):
+                return 'keep-alive'
+            return 'close'
+
         def _search_reply(self,body,operation):
             supplied='request_id' in body
             request_id=body.pop('request_id',None)
@@ -558,7 +602,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
                 strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
-                body=json.loads(self.rfile.read(length),**({'object_pairs_hook':object_pairs} if strict else {}))
+                raw=self.rfile.read(length);self.request_body_consumed=len(raw)==length
+                body=json.loads(raw,**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
                 if self.path.startswith('/api/library/results/'):
                     try:
@@ -1003,7 +1048,7 @@ def _serve(args):
         resources.callback(handler.thumbnails.close)
         resources.callback(close_job,handler.backup_jobs)
         resources.callback(close_job,handler.restore_jobs)
-        server=ThreadingHTTPServer(('127.0.0.1',args.port),handler)
+        server=OwnedHTTPServer(('127.0.0.1',args.port),handler)
         resources.callback(server.server_close)
         if args.exit_on_stdin_close:
             def watch_owner():

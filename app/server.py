@@ -21,6 +21,9 @@ def handler_for(catalog, token, benchmark_dist=None):
         def log_message(self, *_):
             pass
 
+        def response_connection(self, status, extra_headers):
+            return 'close'
+
         def send(self, status, body, mime='application/json; charset=utf-8',extra_headers=None):
             if not isinstance(body, bytes):
                 body = json.dumps(body, ensure_ascii=False).encode('utf-8')
@@ -29,7 +32,7 @@ def handler_for(catalog, token, benchmark_dist=None):
             # A 304 has no body. Its optional Content-Length would describe the
             # full selected representation, so omit it rather than sending 0.
             if status != 304:self.send_header('Content-Length', str(len(body)))
-            self.send_header('Connection', 'close')
+            self.send_header('Connection', self.response_connection(status, extra_headers))
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; connect-src 'self'")

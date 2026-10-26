@@ -1,6 +1,7 @@
 using Aredoko.Core;
 using System.Text.Json;
 void Check(bool result,string name){if(!result)throw new Exception(name);Console.WriteLine("PASS "+name);}
+if(args.Length>0&&args[0]=="--viewer-transport-probe"){await ViewerTransportProbe.Run(args);return;}
 ViewerInteractionTests.Run(Check);
 if(args.Contains("--viewer-interaction")){await ImageSourceInfoTests.Run(Check);return;}
 Check(!JsonSerializer.IsReflectionEnabledByDefault,"reflection disabled");

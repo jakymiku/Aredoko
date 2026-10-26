@@ -84,8 +84,15 @@ def zip_release(release, destination):
         raise
 
 
-def prepare(runtime_release, output, *, dotnet='dotnet', make_zip=True):
+def prepare(runtime_release, output, *, dotnet='dotnet', make_zip=True, msbuild_targets=None):
     if os.name != 'nt':raise RuntimeError('Portable build preparation requires Windows; no downloads are attempted')
+    build_extra=[];override_hash=None
+    if msbuild_targets is not None:
+        targets=plain_path(msbuild_targets)
+        if not targets.is_file() or targets.suffix.casefold()!='.targets':raise ValueError('Explicit existing developer .targets file required')
+        if any(value in str(targets) for value in (';',',','%','\r','\n')):raise ValueError('Unsupported MSBuild override path')
+        override_hash=digest(targets)
+        build_extra=['-p:CustomAfterMicrosoftCommonTargets='+str(targets)]
     runtime_release = plain_path(runtime_release, directory=True)
     manifest = verify_release(runtime_release)
     if manifest.get('python_bundled') is not True or manifest.get('media_tools_bundled') is not True:
@@ -106,16 +113,17 @@ def prepare(runtime_release, output, *, dotnet='dotnet', make_zip=True):
             result = subprocess.run(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=timeout)
         if result.returncode:raise RuntimeError(label + ' failed; see ' + str(output / (label + '.log')))
     print('既存キャッシュで本体をビルドしています。', flush=True)
-    query = subprocess.run([dotnet, 'msbuild', project, *common,
+    query = subprocess.run([dotnet, 'msbuild', project, *common, *build_extra,
         '-getProperty:WindowsPackageType,SelfContained,WindowsAppSDKSelfContained,Configuration,AredokoPackageChannel'],
         cwd=ROOT, env=env, capture_output=True, text=True, encoding='utf-8-sig', timeout=60)
     (output / 'project-properties.log').write_text(query.stdout + '\n' + query.stderr, encoding='utf-8')
     if query.returncode:raise RuntimeError('Cannot evaluate cached Portable project properties')
     properties = json.loads(query.stdout)['Properties']
     run([dotnet, 'run', '--project', str(ROOT / 'tests/Aredoko.Core.Tests/Aredoko.Core.Tests.csproj'),
-         '-c', 'Release', '--no-restore'], 'core-tests')
+         '-c', 'Release', '--no-restore', *build_extra], 'core-tests')
     run([dotnet, 'publish', project, '-c', 'Portable', '-p:Platform=x64', '-p:AredokoPackageChannel=Portable',
-         '--no-restore', '-o', str(frontend)], 'frontend-build')
+         '--no-restore', *build_extra, '-o', str(frontend)], 'frontend-build')
+    if msbuild_targets is not None and digest(targets)!=override_hash:raise ValueError('Developer build override changed during publish')
     receipt(frontend, properties)
     print('起動画面をビルドしています。', flush=True)
     if system_compiler() != csc:raise ValueError('Windows compiler location changed')
@@ -137,7 +145,7 @@ def prepare(runtime_release, output, *, dotnet='dotnet', make_zip=True):
         zip_release(release, output / 'Aredoko-windows-x64.zip')
     summary = {'format': 'aredoko-portable-preparation-v1', 'release': str(release),
                'bootstrap_cpu_pass': True, 'runtime_check_pass': True, 'native_gui_verified': False,
-               'clean_windows_verified': False, 'zip_created': make_zip}
+               'clean_windows_verified': False, 'zip_created': make_zip, 'build_override_sha256': override_hash}
     with (output / 'preparation.json').open('x', encoding='utf-8') as stream:json.dump(summary, stream, indent=2)
     print('準備完了。起動チェック: ' + str(release / 'Check-Startup.cmd'), flush=True)
     return summary
@@ -148,8 +156,9 @@ def main():
     parser.add_argument('--runtime-release', required=True, type=Path)
     parser.add_argument('--output', type=Path, default=ROOT / 'dist' / ('portable-' + time.strftime('%Y%m%d-%H%M%S') + '-' + secrets.token_hex(3)))
     parser.add_argument('--no-zip', action='store_true', help='Prepare an unpacked startup check first, skipping large archive creation')
+    parser.add_argument('--msbuild-targets',type=Path,help='Explicit developer-only cached-build override; never copied into the release')
     args = parser.parse_args()
-    try:prepare(args.runtime_release, args.output, make_zip=not args.no_zip)
+    try:prepare(args.runtime_release, args.output, make_zip=not args.no_zip,msbuild_targets=args.msbuild_targets)
     except Exception as error:
         print('準備を完了できません: ' + str(error), file=sys.stderr);return 2
     return 0
