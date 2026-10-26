@@ -1,6 +1,14 @@
 # 基本版ZIP候補（2026-10-24）
 
-## 最新候補03（source47acf2f、今回の試用入口）
+## 最新候補08（2026-10-27、sourcebb7e77f）
+
+- 通常入口：`C:/AI/Aredoko/dist/portable-basic-20261027-08/Aredoko/Aredoko.exe`。ZIPは同じ親の`Aredoko-windows-x64.zip`。810files /661,232,667bytes。source`bb7e77f`、WinUI source`21d60e8`、変更のないbootstrapと検証済み基本runtimeを再利用。旧候補/installed Alpha（07/sourcecaee977）は変更しない。
+- 直接音声内容検索・cached音声類似の入口、compact検索toolbarとgrid先頭保持修正、大きい動画の32GiB preview入力を収録。native動画primitive/区間decoderも同梱するが、通常索引はまだ従来の4代表frame方式。AI環境/モデルは別途必要で、runtimeの公開配布審査を完了したという意味ではない。
+- 全inventory/hash/ZIP照合と、実同梱Pythonによる基本CPU23項目/所有backend正常EOF/生成データ保全PASS。個別回答後の**通常EXE起動→正常close→予定内1再起動**も11checks/2PNG目視、WinUI/bootstrap計4exit0、設定/元PNG/全payload不変でPASS。2PNGは1186×813・同一SHA256で、同じ生成1itemライブラリを再起動後も表示した。
+- 生証拠：`data/ai-ui/continuation-20261027/basic08-preparation.json`、`basic-cpu08/`、`basic-native08/report.json`と`review.json`。raw authorizationの旧汎用文は新たなGPU許可を意味しない。実際は通常起動限定で、GPU/モデル取得/再生/通常DB/Alphaは使用していない。harness記録文を修正、試験結果は上書きしない。
+- clean Windows・新規実環境導入・全媒体品質は未受入。08をGitHub Releaseへ公開していない。ZIP同梱docsはbuild時snapshot、再開位置はリポジトリのcurrent-handoffを優先する。
+
+## 旧候補03（source47acf2f、2026-10-24当時の試用入口）
 
 - 通常入口：`C:/AI/Aredoko/dist/portable-basic-20261024-03/Aredoko/Aredoko.exe`
 - ZIP：`C:/AI/Aredoko/dist/portable-basic-20261024-03/Aredoko-windows-x64.zip`

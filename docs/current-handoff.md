@@ -1,4 +1,19 @@
-# Aredoko — 現行の単一引き継ぎ（2026-10-26）
+# Aredoko — 現行の単一引き継ぎ（2026-10-27）
+
+## 継続開発checkpoint（2026-10-27、以下の過去記録より優先）
+
+- **アプリsource `bb7e77f`**。起点`6b2448d`、既存`feat/winui3-production-mvp-20261011` / Draft PR #5を継続。最終文書commitは `git log -1 -- docs/current-handoff.md`。リモートbranch/PR head refを照合し、他エージェント差分なし。新branch/PR/main merge/Actionsなし。
+- **音声内容検索のGUI残件は限定PASS**：frontend02/sourcecaee977、`audio-search02`で検索方式・2候補・一致時刻・明示詳細を確認。初回はdebounce中の旧UIA行を操作したharness失敗で、製品検索失敗ではない。古い「未対応」案内を`6ec1fdf`で実際の準備入口へ修正。[根拠](audio-producer-review.md)。
+- **実private audio worker一連も限定PASS**：`0c1cc3a`の任意CUDA allocator予算を使い、生成WAV2本の原本decode→production owner→private worker→atomic保存→日本語2問がTop1。index16.156s、child peak1121.5MiB、予算3072MiB。画像workerは起動せず、所有closeで回収（既存kill方式exit1でありgracefulとは呼ばない）。実録音/実曲の一般品質は未受入。
+- **保存済み直接音声の類似検索を製品接続**：`6e1531e` backend / `c8703fd` WinUI。右クリック「内容が似た音声・曲を探す」で起点除外・両一致時刻・root/棚/favorite範囲・画面履歴を保持。旧512D音響類似も維持。モデル利用不可でもcached768Dを比較し、再推論しない。CPU/HTTP/Core/buildと`audio-similarity-native02`の限定GUI PASS。長音声の全window pair比較性能・実音楽品質は未受入。`fd34129`で取消済みScoreSpool入場時の資源漏れも修正。
+- **完成形主画面を前進**：`6209c6a`で重複ラベルと縦余白を減らし、検索filter/actionを実寸で折返し、種類を「音声・音楽」に統一。Light/Dark機能確認後、fit一覧を末尾と誤認してgrid先頭を切る既存不具合を発見し`21d60e8`で修正。`toolbar-reflow03`で先頭144px全表示・未保存タグ保持・保存まで限定PASS。[UI証拠と旧PARTIAL](p3-continuous-browse.md)。HC/物理DPI/長時間RSSは未受入。
+- **動画の直接入力は基盤まで完成、通常索引は未接続**：`75ee70c`で最大16秒/16RGB framesの別text/video namespace・private wire/adapter、`87cd800`で原本guard付き1fps区間decoderを追加。生成3frameの実private worker GPUで768D出力/解放を確認（peak965.7MiB）。decoder/source CPUと赤→青/3.3秒tailを確認。通常のtext→動画/動画類似は従来の最大4代表frame方式を維持し、動画内音声は統合していない。[現状・公式仕様・証拠](video-similarity.md)。
+- **大きい通常動画のpreview/AI入力制限を改善**：`bb7e77f`で512MiB→32GiB、seek可能な検証済みfd・時間/画素/出力上限は保持。生成528MiB sparse MP4を実decodeして代表4frameと原本不変を確認。全fileをRAMへ読まず、通常再生rangeの2TiB上限とは別。[証拠](video-thumbnails.md)。私物動画/一般形式性能の受入ではない。
+- **最新試用候補は基本ZIP08/sourcebb7e77f**：`dist/portable-basic-20261027-08/Aredoko`と隣のZIP。810files /661,232,667bytes、全inventory/ZIP照合・同梱Pythonの基本CPU23/正常EOF PASS。通常`Aredoko.exe`から生成1PNG/専用DBで起動→正常終了→予定内1再起動も11checks/2PNG目視/所有4exit0 PASS。**installed AlphaはZIP07/sourcecaee977のまま**、今回更新指示なし。clean Windows未受入、モデル/PyTorchは別途必要。[候補の正確な範囲](portable-refresh-20261024.md)。
+- 生証拠は`data/ai-ui/continuation-20261027/`（Git対象外）。途中のUIA/枠判定/末尾frame試験失敗を保持。ZIP08のraw reportに残る旧汎用authorization文は許可根拠ではなく、`basic-native08/review.json`に実際の通常起動限定許可を補記した。harnessも誤って一律GPU許可を記録しないよう修正、構文確認済み。再GUIはしていない。
+- **次の1件**：同じ原本guardで動画durationを取得して全区間coverage planを作る。known durationを呼出元の推測で埋めず、上記区間decoderへ接続する。その後、全区間成功時だけatomic保存・新namespaceの検索/時刻根拠へ接続する。現行`InferenceOwnership`はimage/audioの2owner制限なので、第三worker同時常駐を許すだけの変更は禁止。必要な一点レビューは所有統合/atomic範囲だけに限定し、全計画を作り直さない。
+- **再開時の制約**：ユーザーはPC使用中。新しいGUI/GPUは具体的な質問への回答後のみ。今回の限定許可は全て実施済みで、次回へ自動拡張しない。外部取得0/通常DB・設定・Alpha変更0/私物scan0。shutdownしない。クォータを確認して終了前にhandoff/commit/pushする。
+- **残る製品作業**：native動画の通常producer/長動画coverage、動画内音声連携、実録音・音楽/動画場面の品質、媒体横断の検索→再生、runtime公開NOTICE/native依存review・host・registry、clean Windows/HC/物理DPI/長時間FPS-RSS。全媒体配布完成やM1/M2全完了とは宣言しない。UI段階移行はこれら全受入を待たず並行継続する。
 
 ## Alpha更新完了（2026-10-26、起動対象の最新情報）
 

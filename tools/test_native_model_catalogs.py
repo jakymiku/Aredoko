@@ -62,7 +62,8 @@ def main():
     initial_settings=settings.read_bytes()
     env={**os.environ,'LOCALAPPDATA':str(local),'APPDATA':str(local),'WINAPP_UI_WORKFLOW_ID':'aredoko-model-catalog-display-20261025'}
     report={'pass':False,'checks':[],'screenshots':[],'owned_pids':[],'exits':[],
-            'authorization':'Current user permits generated-data GUI tests and GPU inference; no acquisition or normal user DB',
+            'authorization':'Per-run user permission is required; scope and approval are recorded in the conversation, not granted by this harness',
+            'startup_only':args.startup_only,'gpu_requested':args.ai_startup_fixture is not None,
             'direct_entry':args.direct_entry,'getting_started':args.getting_started,'library_smoke':args.library_smoke,'restore_rejection':args.restore_rejection,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
             'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
