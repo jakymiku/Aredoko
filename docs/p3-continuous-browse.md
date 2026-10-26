@@ -73,3 +73,6 @@ source6209c6aで重複headerを除き、共通余白8へ。種類/検索方法�
 個別許可後のDark初回はComboBoxのUIA枠がButtonより4px上下へ広いことをharnessが重なりと誤判定。矩形の垂直交差で同一行を認識する修正後、Light01/Dark02は操作非重複・詳細・grid・未保存draft保持・保存の機能確認PASS、正常exit0。query高さ32、query下からlistまで60px、詳細ありでも操作同列、list高さ560px（この生成fixture/通常window）。機能を減らさず一覧領域を広げた。
 
 ただしPNG目視で、fitしているlistをgridへ変えると先頭thumbnailが42px（他144px）に欠ける旧reflow不具合を発見。両報告のvisual_reviewはPARTIALへ訂正。ScrollableHeight=0/offset=0を「末尾」と解釈し、新gridの末尾へ移動していた。末尾保持は元のscrollable heightが2px超の場合だけに限定する修正を追加し、frontend03へpublish済み。専用fixtureで先頭が欠けないことを追加確認する。旧試行/ログは残す。
+
+
+修正source21d60e8/frontend03は個別許可後 `toolbar-reflow03` でDarkの先頭全表示・操作列・詳細・grid・draft・保存を確認。23checks/4PNG目視、元生成SHA/mtime不変、正常exit0。旧42pxだった先頭画像が他rowと同じ144px全表示へ戻った。Light/Darkのtoolbar機能確認と、この境界修正のDark実機確認を区別する。通常DB/Alpha/GPU/再生変更0。新しい全面UIの完了ではなく、主画面の一単位の改善である。
