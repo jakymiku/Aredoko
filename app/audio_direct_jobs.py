@@ -137,6 +137,15 @@ class AudioDirectJobs:
             if idle_release_seconds and self.idle_thread is None:
                 self.idle_thread=threading.Thread(target=self._idle,name='direct-audio-idle',daemon=True);self.idle_thread.start()
 
+    def release(self):
+        with self.guard:
+            if self.closed:raise AIUnavailable('Audio owner is closing')
+            if self.searching or self.thread is not None and self.thread.is_alive():raise AIBusy('Audio owner is busy')
+            if not bool(getattr(self.encoder,'resident',False)):return {'released':False,'resident':False}
+            if not self.inference.acquire(blocking=False):raise AIBusy('Another AI owner is busy')
+            try:return self.encoder.release()
+            finally:self.inference.release()
+
     def _idle(self):
         while not self.idle_stop.wait(.2):
             with self.guard:
@@ -155,6 +164,9 @@ class AudioDirectJobs:
             if self.closed:return
             self.closed=True;self.cancelled.set();self.idle_stop.set()
         if self.idle_thread:self.idle_thread.join()
+        # Closing only our encoder must not wait behind the other owner's whole
+        # index batch. EncoderProcess.close also cancels its pre-launch checks.
+        # Its own lock serializes any in-flight encode; no peer is touched here.
+        self.encoder.close()
         if self.thread:self.thread.join()
-        with self.inference:self.encoder.close()
         self.index.store.checkpoint()

@@ -51,6 +51,8 @@ from ai_runtime import object_pairs
 from animation_sessions import AnimationSessions, AnimationBusy, AnimationGone, MIME as ANIMATION_MIME
 from image_animations import AnimationUnavailable
 from result_sessions import ResultSessions, ResultUnavailable, ResultCapacity, IndexStamp
+from audio_direct_feature import AudioDirectFeature
+from audio_direct_search import AudioSearchChanged
 from thumbnail_cache import ThumbnailCache, ThumbnailCancelled
 from contextlib import ExitStack
 import sys
@@ -116,8 +118,9 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True,*,ai_p
         return SearchIntent(LayaProcess(worker_python(repo,ai_python),laya_model_path(repo,models_root=models_root),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),active_tagger_profile=None,restore_handoff=None,acquisition_specs=(),thumbnail_disk_path=None):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),active_tagger_profile=None,restore_handoff=None,acquisition_specs=(),thumbnail_disk_path=None,audio_feature=None):
     ai=ai or create_ai(catalog)
+    audio=audio_feature if audio_feature is not None else AudioDirectFeature(catalog,ai)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
     profiles.writer_fence=catalog.writer_fence
@@ -169,13 +172,19 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         if mode=='similar':
             require(('item_id','kind','view','scope'))
             return ai.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
+        if mode=='audio-direct':
+            require(('query','view','root_ids','shelf','shelf_ids'))
+            return audio.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode in ('page-text','pending-proposals','pending-proposals-semantic'):
             require(('query','kind','view','root_ids','shelf','shelf_ids','model'))
             if mode=='page-text':return consume(lambda page:page_text.search(page=page,**values))
             if mode=='pending-proposals':return consume(lambda page:search_candidates(suggestions,page=page,**values))
             return semantic_candidates(suggestions,ai,page=0,**values,cancelled=cancelled,result_sink=consume)
         raise ValueError('Invalid result search mode')
-    results=ResultSessions(catalog,result_provider,index_stamp=IndexStamp(ai) if isinstance(ai,AISearch) else None)
+    image_stamp=IndexStamp(ai) if isinstance(ai,AISearch) else None
+    def result_stamp(conditions):
+        return audio.stamp() if conditions.get('mode')=='audio-direct' else image_stamp() if image_stamp is not None else None
+    results=ResultSessions(catalog,result_provider,index_stamp=image_stamp,index_stamp_for=result_stamp)
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
     def ai_scan_hook(target_roots, discovered, cancelled):
@@ -551,6 +560,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(200,download_jobs.catalogs() if path.endswith('/catalog') else download_jobs.snapshot())
                 if path=='/api/library/ai/setup/job':return self.send(200,setup_jobs.snapshot())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
+                if path=='/api/library/audio-ai/status':
+                    if urlparse(self.path).query:return self.send(400,{'error':'Invalid audio status query'})
+                    return self.send(200,audio.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())
                 if path=='/api/library/ai/resource':
                     try: return self.send(200,{'policy':profiles.resource()})
@@ -601,10 +613,19 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/','/api/library/audio-ai/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
                 raw=self.rfile.read(length);self.request_body_consumed=len(raw)==length
                 body=json.loads(raw,**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path.startswith('/api/library/audio-ai/'):
+                    if self.path=='/api/library/audio-ai/start':return self.send(200,audio.start(body))
+                    if self.path in ('/api/library/audio-ai/cancel','/api/library/audio-ai/release'):
+                        if body:raise ValueError('Expected empty audio request')
+                        return self.send(200,audio.cancel() if self.path.endswith('/cancel') else audio.release())
+                    if self.path=='/api/library/audio-ai/search':
+                        if set(body)-{'query','page','limit','view','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid audio search fields')
+                        return self.send(200,audio.search(**body))
+                    return self.send(404,{'error':'Not found'})
                 if self.path.startswith('/api/library/results/'):
                     try:
                         if self.path=='/api/library/results/create':
@@ -850,6 +871,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         except (ValueError,OSError,json.JSONDecodeError):
                             return self.send(409,{'error':'AIリソース設定を保存できません。設定ファイルを確認してください。動作中の設定は保持されます。'})
                         if isinstance(ai,AISearch): ai.configure(**policy)
+                        audio.configure(idle_release_seconds=policy['idle_release_seconds'])
                     return self.send(200,{'saved':True,'policy':policy})
                 if self.path=='/api/library/ai/searches/prepare':
                     if body:raise ValueError('Expected empty preparation request')
@@ -942,6 +964,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if catalog._scan_mode == 'list_and_ai' and catalog._scan_stage == 'ai':res['ai_cancel_requested']=True
                     return self.send(200, res)
                 return self.send(404,{'error':'Not found'})
+            except AudioSearchChanged:return self.send(409,{'error':'音声の検索対象が変わりました。もう一度検索してください。','error_code':'audio_scope_changed'})
             except SearchCancelled:return self.send(409,{'error':'検索を中断しました。','error_code':'search_cancelled'})
             except SearchRequestConflict:return self.send(409,{'error':'検索の受付が無効か終了しています。再検索してください。','error_code':'search_request_unavailable'})
             except (ScanBusyError,AIBusy) as ex: return self.send(409,{'error':str(ex)})
@@ -950,6 +973,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})
     Handler.thumbnails=thumbnails
+    Handler.audio_content=audio
     Handler.results=results
     Handler.animations=animations
     Handler.backup_jobs=backup_jobs
@@ -1040,6 +1064,7 @@ def _serve(args):
             print('AI acquisition registry unavailable ('+type(error).__name__+')',file=sys.stderr,flush=True)
             acquisition_specs=()
         handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff,acquisition_specs=acquisition_specs,thumbnail_disk_path=catalog.path.parent/(catalog.path.name+'.thumbs.sqlite'))
+        resources.callback(handler.audio_content.close)
         resources.callback(close_job,handler.startup_scans)
         resources.callback(close_job,handler.setup_jobs)
         resources.callback(close_job,handler.download_jobs)

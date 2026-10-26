@@ -55,3 +55,13 @@ CPU8（開発は既存7＋追加1、基本Pythonは8）PASS。範囲の継承、
 `InferenceOwnership`はimage/audioの2所有者に限定したlock。明示的に両方へ接続した場合、別ownerのresident workerを解放した後にだけ次を許可する。busy/解放失敗時に同時loadを許可しない。idle release/正常closeも所有範囲で行う。**この段階では通常のproduction handler/WinUIへ未接続**であり、通常アプリが音声用workerを勝手に起動する変更ではない。
 
 所有ジョブ8・所有切替7は開発/基本PythonともPASS。scopeの最終publication validatorも追加1 PASS。待機取消、fresh skip/次batch、未完item保持、scope変更、query busy、切替、idle release、所有closeを人工encoderで確認した。既存実GPU評価の許可は再利用せず、今回の新しい生成2音声pipeline試験は個別回答待ち。
+
+## production APIと実pipelineの限定確認（2026-10-26）
+
+`AudioDirectFeature`をlazyな入口としてhandlerへ接続。status取得だけではaudio DB/workerを作らない。認証済みの`GET audio-ai/status`、明示consent付き`POST audio-ai/start`、cancel/release/searchを追加し、未知field/重複JSONを拒否する。既存AISearchとaudio ownerは同じ所有lockを使う。音声を使わなければ通常のprofile/索引動作を維持する。音声ownerのcloseは画像jobの全batch終了を待たず、音声用の所有encoderだけを停止する。
+
+共通結果sessionの`mode=audio-direct`を追加。条件別のindex stampで音声索引の更新は音声sessionだけを失効させ、文字一覧を無関係に失効させない。score spoolの256MiB予約も行う。resource設定のidle秒をaudio ownerへ継承する。**この時点のWinUI入口は未接続**。
+
+HTTP5（開発4＋修正後対象1、基本Python5）、既存result34/release11/production8 PASS。HTTPの1 FAILはrangeの必須offset/limitをfixtureが省略して400になったものを修正。終了時の画像owner待ちを避ける修正は対象1 PASS。証拠は既存audio-indexディレクトリ。
+
+個別許可後、`check_direct_audio_pipeline.py --gpu`を生成001/002の2音声・日本語2問で1回実施。既存固定EG2のaudio-only adapter→逐次PCM→専用DB atomic保存→時刻付き検索が通り、2問ともTop1。load32.718s、index1.875/0.485s、PyTorch peak allocated1,175,973,888/reserved1,199,570,944bytes（driver/native除く）。3GiB空き条件・allocator約3GiB上限、元生成SHA/mtime不変、終了exit0、追加取得/GUI/通常DB/Alpha変更0。証拠`data/ai-ui/continuation-20261026b/audio-pipeline-gpu01`。実worker processでのGPU一連・長時間・録音/曲・一般品質を証明するものではなく、許可は消費済み。

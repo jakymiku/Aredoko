@@ -18,6 +18,7 @@ from library_index import TYPES, _excluded
 from media_filters import QUERY_KINDS,kind_clause
 from ai_scope import validate_scope, scope_clause
 from writer_fence import ConnectionWriteFence
+from inference_ownership import InferenceOwnership
 from search_terms import normalize, normalize_tags
 from ai_result_groups import boundary
 from ai_score_spool import ScoreSpool, ScoreSpoolError, SearchCancelled
@@ -299,7 +300,8 @@ class AISearch:
         self.guard=threading.RLock()
         self.cancel=threading.Event()
         self.worker=None
-        self.inference=threading.Lock()
+        self.inference_group=InferenceOwnership() if callable(getattr(encoder,'release',None)) else None
+        self.inference=self.inference_group.for_encoder(encoder) if self.inference_group is not None else threading.Lock()
         self._closed=False
         self.search_requests=SearchRequests()
         self.continuation=IndexContinuation(self,MAX_ITEMS)

@@ -97,8 +97,11 @@ class DirectAudioJobTests(unittest.TestCase):
     def test_close_cancels_waiting_job_and_permanently_closes_own_encoder(self):
         with self.vision_lock,self.supplied():
             self.jobs.start();self.wait('waiting')
-            self.jobs.cancel();self.wait()
-        self.jobs.close();self.assertTrue(self.encoder.closed);self.assertTrue(self.jobs.status()['closed'])
+            closing=threading.Thread(target=self.jobs.close);closing.start();closing.join(2)
+            closed_without_waiting_for_image=not closing.is_alive()
+        closing.join(3)
+        self.assertTrue(closed_without_waiting_for_image)
+        self.assertTrue(self.encoder.closed);self.assertTrue(self.jobs.status()['closed'])
 
     def test_idle_release_stops_only_its_resident_worker(self):
         self.encoder.resident=True;self.jobs.last_used=time.monotonic()-3;self.jobs.configure(idle_release_seconds=1)

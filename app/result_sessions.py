@@ -314,10 +314,12 @@ class FrozenResult:
 
 
 class ResultSessions:
-    def __init__(self, catalog, provider, *, index_stamp=None, parent=None, max_bytes=MAX_BYTES):
+    def __init__(self, catalog, provider, *, index_stamp=None, index_stamp_for=None, parent=None, max_bytes=MAX_BYTES):
         if type(max_bytes) is not int or not 65536 <= max_bytes <= MAX_BYTES:
             raise ValueError('Invalid result workspace limit')
         self.catalog, self.provider, self.index_stamp = catalog, provider, index_stamp
+        if index_stamp_for is not None and not callable(index_stamp_for):raise ValueError('Invalid result namespace stamp')
+        self.index_stamp_for=index_stamp_for
         self.parent, self.max_bytes = parent, max_bytes
         self.sessions, self.retired = {}, {}
         self.lock, self.build_lock = threading.Lock(), threading.Lock()
@@ -368,13 +370,14 @@ class ResultSessions:
                     raise ResultUnavailable(conditions=conditions)
                 if len(self.sessions) >= MAX_SESSIONS or len(self.retired) >= 4096:
                     raise ResultCapacity('Close a result session before creating another')
-                reserve = 256 * 1024 * 1024 if conditions.get('mode') in ('semantic', 'similar', 'pending-proposals-semantic') else 0
+                reserve = 256 * 1024 * 1024 if conditions.get('mode') in ('semantic', 'similar', 'pending-proposals-semantic','audio-direct') else 0
                 budget = self.max_bytes - reserve - sum(s.bytes() for s in self.sessions.values())
                 if budget < 65536:
                     raise ResultCapacity('Result workspace is full')
                 def stamp():
                     base = self.catalog.result_generation()
-                    return base, self.index_stamp() if self.index_stamp is not None else None
+                    return base, (self.index_stamp_for(conditions) if self.index_stamp_for is not None else
+                                  self.index_stamp() if self.index_stamp is not None else None)
                 session = FrozenResult(self.catalog, conditions, stamp, budget, parent=self.parent)
                 self.sessions[session_id] = session
                 if self.reaper is None:
