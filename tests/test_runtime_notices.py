@@ -92,6 +92,34 @@ class RuntimeNoticeTests(unittest.TestCase):
         result,_=collect(self.source)
         self.assertTrue(result['complete_distribution_notices'])
 
+    def test_third_party_notice_text_variants_are_preserved_from_record(self):
+        directory=self.distribution();package=self.site/'demo';package.mkdir();record=[]
+        names=['ThirdPartyNotices.txt','THIRD_PARTY_NOTICES.txt','third-party-licenses.md','Third Party Notices.rst']
+        for name in names:
+            (package/name).write_bytes(b'generated bundled dependency notice\r\n');record.append('demo/'+name+',,')
+        (package/'ThirdPartyNotices.dll').write_bytes(b'not a notice');record.append('demo/ThirdPartyNotices.dll,,')
+        (directory/'RECORD').write_text('\n'.join(record)+'\n',encoding='utf-8')
+        report=write_bundle(self.source,self.base/'third-party')
+        files=report['distributions'][0]['notice_files']
+        for name in names:
+            path='files/Lib/site-packages/demo/'+name
+            self.assertIn(path,files);self.assertEqual((self.base/'third-party'/path).read_bytes(),b'generated bundled dependency notice\r\n')
+        self.assertFalse(any(name.endswith('.dll') for name in files));self.assertFalse(report['redistribution_approved'])
+
+    def test_dist_info_third_party_notice_is_included_without_record(self):
+        directory=self.distribution();(directory/'ThirdPartyNotices.txt').write_bytes(b'generated native dependency text')
+        report,payload=collect(self.source)
+        self.assertEqual(len(report['distributions'][0]['notice_files']),2)
+        self.assertIn('Lib/site-packages/'+directory.name+'/ThirdPartyNotices.txt',payload)
+
+    def test_bundle_from_old_prefix_rule_is_rejected_for_new_sealing(self):
+        directory=self.distribution();package=self.site/'demo';package.mkdir()
+        (package/'ThirdPartyNotices.txt').write_bytes(b'generated native dependency text')
+        (directory/'RECORD').write_text('demo/ThirdPartyNotices.txt,,\n',encoding='utf-8')
+        with patch('collect_ai_runtime_notices._notice_name',side_effect=lambda name:name.upper().startswith(('LICENSE','LICENCE','NOTICE','COPYING','COPYRIGHT','AUTHORS'))):
+            write_bundle(self.source,self.base/'old-rule')
+        with self.assertRaisesRegex(ValueError,'source changed'):validate_for_source(self.base/'old-rule',self.source)
+
 
 class SupplementalNoticeTests(unittest.TestCase):
     setUp=RuntimeNoticeTests.setUp

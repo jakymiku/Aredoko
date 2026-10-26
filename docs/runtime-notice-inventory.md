@@ -53,3 +53,11 @@ python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --su
 別途ユーザーのGPU/CPU許可により、今回取得したEG2/WDとこのpackを使って生成2画像・専用DBで各モデル1回の動作確認を行った。`data/ai-ui/acquired-runtime-smoke-20261025-01/report.json` PASS：EG2 CUDA・有限正規化768D（worker推論1,138ms/peak931.8MiB、初回pack全検査/起動込み172.447s）、WD CPU・候補6（4.511s）。これは精度や冷起動時間のベンチマークではない。入力size/mtime、生成画像SHA/mtime保全・DB integrity=ok。所有workerは既存adapterの終了処理で停止（exit1、正常exit0とは記さない）、残存なし。GUI/追加ネットワーク/通常設定変更なし。
 
 公開向けruntime監査・不変の公開先・実runtime取得catalogは引き続き未完。23,903 fileごとのHTTPS取得は要求回数が大きいため、正式公開前にruntimeの輸送単位も検討する。架空URLでregistryを有効化しない。配布物04には最終WD準備判定修正と初回案内は含まれず、最新sourceを候補へ更新する必要がある。
+
+## 2026-10-26：native通知の既知の収集漏れを修正
+
+既存packのmanifest棚卸しで、ONNX Runtime 1.23.2の`onnxruntime/ThirdPartyNotices.txt`（333,022bytes）が旧collectorの先頭語判定から漏れていたことを確認。`ThirdPartyNotices`/`THIRD_PARTY_NOTICES`/`third-party-licenses`等のtext名をdist-infoとRECORDから認識するよう修正した。既存path/通常file/byte上限は維持し、`.dll`等を通知本文として取り込まない。単にdistributionのLICENSEが揃った状態をnative通知の完全性と混同しない。
+
+生成19 tests PASS：原文保持、表記違い、dist-info直下、旧判定bundleの新封印時拒否、既存補完/封印/危険pathの関連確認。既知の同じ準備済みsourceと固定supplementsから、新規`data/ai-ui/snapshot-review-20261026/runtime-notices05`を作成。**52 distributions / 92 entries / 1,456,448bytes**、不足distribution0、追加本文SHA`e00f828e0a33de591a355ae6606d2625f5758da7d2c844db7821c9dd3e3647b6`。sourceは実行/変更せず、約5GBの再複製/再hashもしていない。
+
+旧sealed pack/archiveはそのまま保持する。次のpack封印では新NOTICE束を使用し、旧束の不足を許容しない。CUDA/cuDNN等のnative依存の対応付けと公開review、不変host/registry、clean Windowsは引き続き未完。`redistribution_approved=False`を維持する。

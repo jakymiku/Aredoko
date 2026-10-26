@@ -16,6 +16,13 @@ MAX_FILES=2048
 PREFIXES=('LICENSE','LICENCE','NOTICE','COPYING','COPYRIGHT','AUTHORS')
 
 
+def _notice_name(name):
+    if name.upper().startswith(PREFIXES):return True
+    compact=re.sub(r'[-_. ]','',name.upper())
+    return (compact.startswith(('THIRDPARTYNOTICE','THIRDPARTYLICENSE')) and
+            Path(name).suffix.casefold() in ('','.txt','.md','.rst','.html','.htm'))
+
+
 def _read(path,limit=MAX_FILE):
     path=plain_path(path);before=path.stat()
     with path.open('rb') as stream:data=stream.read(limit+1)
@@ -56,7 +63,7 @@ def collect(source):
         if normalized in names:raise ValueError('Duplicate distribution identity')
         names.add(normalized);notices=set();missing=[]
         for child in directory.iterdir():
-            if child.name.upper().startswith(PREFIXES) and not child.is_dir():notices.add(add(child))
+            if _notice_name(child.name) and not child.is_dir():notices.add(add(child))
         license_dir=directory/'licenses'
         if license_dir.exists() or license_dir.is_symlink():
             for path in files(plain_path(license_dir,directory=True)):notices.add(add(path))
@@ -80,7 +87,7 @@ def collect(source):
             for row in csv.reader(io.StringIO(_read(record).decode('utf-8'))):
                 if not row:continue
                 candidate=row[0]
-                if not Path(candidate).name.upper().startswith(PREFIXES):continue
+                if not _notice_name(Path(candidate).name):continue
                 # RECORD uses the installing OS path syntax (including native
                 # Windows separators); then enforce a safe relative identity.
                 candidate=site/relative(Path(candidate).as_posix())
