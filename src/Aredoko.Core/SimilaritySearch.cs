@@ -15,7 +15,10 @@ public static class SimilaritySearch
         return new JsonObject {{"item_id",itemId},{"kind",kind},{"view",view},{"page",page},
             {"scope",FolderSearch.RestrictAIMulti(scope,rootIds)}};
     }
-    public static string Guidance(string status, string originKind = "") => status switch
+    public static string Guidance(string status, string originKind = "",bool directAudio=false) => directAudio
+        ? status=="ready"?"音声の内容・特徴が似た候補です。起点自身は除外しています。一致時刻から再生できます。類似度は正解率ではありません。"
+            :"この音声の内容索引がないか古くなっています。"+AudioIndexingGuidance
+        :status switch
     {
         "unindexed" => originKind == "video"
             ? "この動画の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。"
@@ -35,7 +38,7 @@ public static class SimilaritySearch
         _ => "類似検索を利用できません。元の検索に戻るか、AI索引の設定を確認してください。"
     };
 
-    public static SearchResponse Parse(string text,int expectedId,int expectedPage,int expectedLimit=60,int? expectedOffset=null)
+    public static SearchResponse Parse(string text,int expectedId,int expectedPage,int expectedLimit=60,int? expectedOffset=null,bool directAudio=false)
     {
         if(expectedLimit is <1 or >120 || expectedOffset is <0)throw new ArgumentOutOfRangeException(nameof(expectedLimit));
         try
@@ -47,13 +50,14 @@ public static class SimilaritySearch
             var source=root.GetProperty("source").GetString();
             var originKind=root.TryGetProperty("origin_kind",out var okProp)?okProp.GetString():null;
             if(root.GetProperty("origin_id").GetInt32()!=expectedId||root.GetProperty("page").GetInt32()!=expectedPage||
-               root.GetProperty("mode").GetString()!="similar"||source is not ("cover" or "acoustic")||
+               root.GetProperty("mode").GetString()!=(directAudio?"audio-similar":"similar")||
+               (directAudio?source!="audio-direct":source is not ("cover" or "acoustic"))||
                root.GetProperty("score_kind").GetString()!="cosine"||root.GetProperty("limit").GetInt32()!=expectedLimit||
                status is not ("ready" or "unindexed" or "unsupported_profile")||
                revision is null||revision.Length!=64||revision.Any(c=>!(c is >= '0' and <= '9' or >= 'a' and <= 'f'))||
                string.IsNullOrWhiteSpace(profile)||profile.Length>256||
                (source == "cover" && originKind is not (null or "image" or "book" or "archive" or "video"))||
-               (source == "acoustic" && originKind != "audio"))
+               (source is "acoustic" or "audio-direct" && originKind != "audio"))
                 throw new InvalidDataException("類似検索の応答が要求と一致しません。検索をやり直してください。");
             var result=Protocol.ParseSearch(text);
             if(result.Total<0||(!result.SearchComplete&&result.Total>10000)||result.Items.Count>expectedLimit||result.Items.Count>result.Total||
@@ -63,6 +67,7 @@ public static class SimilaritySearch
                result.Items.Select(row=>row.Id).Distinct().Count()!=result.Items.Count||
                result.Items.Any(row=>row.Id<1||row.Id==expectedId||row.SimilarityOriginId!=expectedId||
                    (source == "cover" ? row.Kind is not ("image" or "book" or "archive" or "video") : row.Kind != "audio")||
+                   (directAudio&&(row.AudioMatchSource!="direct-audio"||row.AudioMatchMs is not >=0||row.OriginMatchMs is not >=0))||
                    row.SemanticScore is not double score||score < -1.000001||score > 1.000001))
                 throw new InvalidDataException("類似候補の内容が無効です。検索をやり直してください。");
             return result;

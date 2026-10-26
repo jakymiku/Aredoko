@@ -22,10 +22,12 @@ def main():
     parser.add_argument('--real-fixture',type=Path,help='Global-edge case only: reuse generated real-file fixture with a copied catalog')
     parser.add_argument('--audio-content',action='store_true',help='Generated WAV + supplied CPU encoder; no playback or GPU')
     parser.add_argument('--audio-search-only',action='store_true',help='Prepare generated audio via CPU; native scenario only switches mode and checks result time')
+    parser.add_argument('--audio-similarity-only',action='store_true',help='Cached audio origin similarity and navigation only, supplied CPU vectors')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     if args.real_fixture and not args.global_edge:parser.error('Real fixture requires the bounded global-edge case')
+    if args.audio_similarity_only:args.audio_search_only=True
     if args.audio_search_only:args.audio_content=True
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
     if args.detail_actions:report['authorization']='2026-10-24 explicit human approval: contextual detail GUI on dedicated fixtures, Light/Dark; no AI/GPU inference'
@@ -195,12 +197,14 @@ def main():
             audit(ui,tree,shot,report,check,proc.pid,cat,handler.thumbnails,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.audio_content:
-            from ui_audio_content_audit import audit
+            from ui_audio_content_audit import audit,audit_similarity
             def input_owned():
                 foreground=user.GetForegroundWindow();owner=wintypes.DWORD()
                 user.GetWindowThreadProcessId(foreground,ctypes.byref(owner))
                 return owner.value==proc.pid
-            audit(ui,tree,shot,report,check,cat,audio_feature,audio_gate,audio_reached,input_guard=input_owned,search_only=args.audio_search_only)
+            if args.audio_similarity_only:
+                audit_similarity(ui,tree,shot,report,check,cat,audio_feature,input_guard=input_owned)
+            else:audit(ui,tree,shot,report,check,cat,audio_feature,audio_gate,audio_reached,input_guard=input_owned,search_only=args.audio_search_only)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.global_edge:
             from ui_global_edge_audit import audit

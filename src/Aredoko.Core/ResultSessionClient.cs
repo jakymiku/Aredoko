@@ -114,10 +114,11 @@ public sealed class ResultSession(HttpClient client, string id, JsonObject condi
             root["total"]?.GetValue<int>() != Total || root["state"]?.GetValue<string>() != "ready" ||
             root["items"] is not JsonArray items || items.Count != Math.Min(limit, Math.Max(0, Total - offset)))
             throw new InvalidDataException("Invalid frozen result range");
-        if (conditions["mode"]?.GetValue<string>() == "similar")
+        if (conditions["mode"]?.GetValue<string>() is "similar" or "audio-similar")
         {
             root["page"] = offset / limit;
-            return SimilaritySearch.Parse(root.ToJsonString(), conditions["item_id"]!.GetValue<int>(), offset / limit, limit, offset);
+            return SimilaritySearch.Parse(root.ToJsonString(), conditions["item_id"]!.GetValue<int>(), offset / limit, limit, offset,
+                directAudio:conditions["mode"]!.GetValue<string>()=="audio-similar");
         }
         var result = Protocol.ParseSearch(root.ToJsonString());
         if (result.Items.Any(row => row.Id < 1) || result.Items.Select(row => row.Id).Distinct().Count() != result.Items.Count)

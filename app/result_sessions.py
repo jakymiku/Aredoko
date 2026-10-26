@@ -370,7 +370,7 @@ class ResultSessions:
                     raise ResultUnavailable(conditions=conditions)
                 if len(self.sessions) >= MAX_SESSIONS or len(self.retired) >= 4096:
                     raise ResultCapacity('Close a result session before creating another')
-                reserve = 256 * 1024 * 1024 if conditions.get('mode') in ('semantic', 'similar', 'pending-proposals-semantic','audio-direct') else 0
+                reserve = 256 * 1024 * 1024 if conditions.get('mode') in ('semantic', 'similar', 'pending-proposals-semantic','audio-direct','audio-similar') else 0
                 budget = self.max_bytes - reserve - sum(s.bytes() for s in self.sessions.values())
                 if budget < 65536:
                     raise ResultCapacity('Result workspace is full')

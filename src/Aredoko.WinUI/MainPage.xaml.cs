@@ -62,6 +62,7 @@ public sealed partial class MainPage : Page
     private string aiScopeError="AI索引の画面で対象を確認・保存してください。";
     private string view="all", lastQuery="";
     private MediaRow? similarityOrigin;
+    private bool directAudioSimilarity;
     private CancellationTokenSource? similarityCancellation;
     private CancellationToken? explicitlyCancelledSearch;
     private bool returningFromSimilarity;
@@ -215,7 +216,7 @@ public sealed partial class MainPage : Page
     private void UpdateActiveSearchScopeBar()
     {
         if(ActiveSearchScopeText is null||ResetAllFoldersButton is null)return;
-        var isAiOrSimilar=similarityOrigin is not null||(SearchMode.SelectedIndex is >0 and <4&&!string.IsNullOrWhiteSpace(Query.Text));
+        var isAiOrSimilar=similarityOrigin is not null&&!directAudioSimilarity||(similarityOrigin is null&&SearchMode.SelectedIndex is >0 and <4&&!string.IsNullOrWhiteSpace(Query.Text));
         var (summary,warning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedSearchRoots,isAiOrSimilar,aiScope);
         ActiveSearchScopeText.Text="検索対象フィルタがオンになっています — "+(warning is null?summary:$"{summary} — {warning}");
         ActiveSearchScopeBar.Visibility=selectedSearchRoots is null?Visibility.Collapsed:Visibility.Visible;
@@ -429,10 +430,10 @@ public sealed partial class MainPage : Page
         var query=Query.Text; var kind=KindValue();var selectedKind=Kind.SelectedIndex;var selectedMode=SearchMode.SelectedIndex;var selectedRoots=selectedSearchRoots?.ToArray();var literalOnly=AIMatchedOnly.IsChecked==true;var boundary=BoundaryValue();var resultGroup=AIResultGroup.SelectedIndex;
         try {
             var method=SearchMethod.FromIndex(selectedMode);
-            if((origin is not null||method.IsAI&&!method.IsAudioContent&&!string.IsNullOrWhiteSpace(query))&&aiScope is null)throw new InvalidOperationException(aiScopeError);
+            if((origin is not null&&!directAudioSimilarity||origin is null&&method.IsAI&&!method.IsAudioContent&&!string.IsNullOrWhiteSpace(query))&&aiScope is null)throw new InvalidOperationException(aiScopeError);
             var pageSize=method.IsPageText?20:60;
             var conditions=ResultSearchConditions.Create(query,kind,view,method,aiScope,selectedRoots,
-                origin?.Id,literalOnly,boundary,ResultGroup(),selectedShelfIds);
+                origin?.Id,literalOnly,boundary,ResultGroup(),selectedShelfIds,directAudioSimilarity);
             var result=await ReadResultPageAsync(conditions,reuseSession,version,page,pageSize,cancellation);
             if(!searches.IsCurrent(version)||disposed)return;
             resultPageSize=pageSize;
@@ -443,7 +444,7 @@ public sealed partial class MainPage : Page
             }
             lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;
             SearchOptions.IsExpanded=false;
-            var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null||(method.IsAI&&!method.IsAudioContent&&query.Length>0),aiScope);
+            var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null&&!directAudioSimilarity||(origin is null&&method.IsAI&&!method.IsAudioContent&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             SearchOptions.Header="AI候補の表示";
             ResetBrowse(checked(page*pageSize),result);rows=result.Items;BindLibrarySelection();active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
@@ -486,7 +487,7 @@ public sealed partial class MainPage : Page
             Notice(method.IsPageText?"ページ本文":method.IsTagCandidates?"タグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),noticeSeverity,explanation);
             if(origin is not null)
             {
-                var guidance=SimilaritySearch.Guidance(result.SimilarityStatus,origin.Kind);
+                var guidance=SimilaritySearch.Guidance(result.SimilarityStatus,origin.Kind,directAudioSimilarity);
                 Empty.Text=result.SimilarityStatus=="ready"
                     ?(result.SearchCandidateTotal is int cand&&cand>0&&result.IndexedTotal==0?$"この範囲の作品はまだAI索引が作成されていません（対象 {cand:N0}件・未索引）。設定の「AI検索の準備」から索引を作成してください。"
                     :result.SearchCandidateTotal==0?"この範囲（フォルダ・種類）に対象作品がありません。"
@@ -796,6 +797,11 @@ public sealed partial class MainPage : Page
         }
         if(SimilaritySearch.CanStart(row))
         {
+            if(row.Kind=="audio")
+            {
+                var content=new MenuFlyoutItem{Text="内容が似た音声・曲を探す"};AutomationProperties.SetAutomationId(content,"FindSimilarAudioContent"+row.Id);
+                content.Click+=async(_,_)=>await StartSimilarityAsync(row,true);menu.Items.Add(content);
+            }
             var search=new MenuFlyoutItem {Text=row.Kind=="video"?"似た動画・素材を探す":row.Kind=="audio"?"似た音声・曲を探す":"似た画像・素材を探す"};AutomationProperties.SetAutomationId(search,"FindSimilar"+row.Id);
             search.Click+=async(_,_)=>await StartSimilarityAsync(row);menu.Items.Add(search);menu.Items.Add(new MenuFlyoutSeparator());
         }
@@ -815,9 +821,9 @@ public sealed partial class MainPage : Page
     }
     private void ClearSimilarity()
     {
-        similarityOrigin=null;similarityReturn=null;UpdateSearchMethod();
+        similarityOrigin=null;directAudioSimilarity=false;similarityReturn=null;UpdateSearchMethod();
     }
-    private async Task StartSimilarityAsync(MediaRow source)
+    private async Task StartSimilarityAsync(MediaRow source,bool directAudio=false)
     {
         if(!ready||disposed||saving||dialogOpen||!SimilaritySearch.CanStart(source)||!await transitions.WaitAsync(0))return;
         searchTimer.Stop();
@@ -826,7 +832,9 @@ public sealed partial class MainPage : Page
             if(!await ConfirmDiscardAsync())return;
             // Use the context-menu row, never whichever item happens to be selected.
             similarityReturn??=new(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,page,source.Id,selectedShelfIds?.ToArray());
-            similarityOrigin=source;if(view=="history")view="all";page=0;UpdateSearchMethod();await LoadAsync();
+            similarityOrigin=source;directAudioSimilarity=directAudio&&source.Kind=="audio";
+            if(directAudioSimilarity){populating=true;try{Kind.SelectedIndex=4;}finally{populating=false;}}
+            if(view=="history")view="all";page=0;UpdateSearchMethod();await LoadAsync();
         }
         finally{transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
@@ -1101,7 +1109,7 @@ public sealed partial class MainPage : Page
         SimilarityBar.Visibility=similar?Visibility.Visible:Visibility.Collapsed;
         SimilarityTitle.Text=similar?"類似検索の起点: "+similarityOrigin!.Title:"";
         var ai=method.IsAI&&!method.IsAudioContent&&!similar;
-        Kind.IsEnabled=!method.IsAudioContent;
+        Kind.IsEnabled=!method.IsAudioContent&&!directAudioSimilarity;
         SearchOptions.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         var candidates=method.IsTagCandidates&&!similar;
         var pageText=method.IsPageText&&!similar;
@@ -1110,7 +1118,7 @@ public sealed partial class MainPage : Page
         AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         Query.PlaceholderText=method.IsTagSemantic?"例：青髪のツインテール（未承認タグの意味）":pageText?"ページ本文に含まれる語句で検索":candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"ファイル名・タグを検索（Ctrl+F）";
-        SearchMethodHint.Text=similar?(similarityOrigin?.Kind=="video"?"動画の代表フレームから似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="audio"?"音声・音楽の音響特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchModeDescription(SearchMode.SelectedIndex);
+        SearchMethodHint.Text=similar?(directAudioSimilarity?"作成済みの音声の内容・特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="video"?"動画の代表フレームから似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="audio"?"音声・音楽の音響特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchModeDescription(SearchMode.SelectedIndex);
         ToolTipService.SetToolTip(SearchMode,SearchMethodHint.Text);
         AutomationProperties.SetHelpText(SearchMode,SearchMethodHint.Text);
     }

@@ -83,6 +83,16 @@ static class SimilarityTests
         check(SimilaritySearch.Guidance("unindexed","audio").Contains("音響特徴") && SimilaritySearch.Guidance("unindexed","audio").Contains("文章から探すための索引とは別") && SimilaritySearch.Guidance("unindexed","audio").Contains("音声の内容検索"),"audio similarity guidance distinguishes acoustic features from the direct content index");
         check(SimilaritySearch.Guidance("unsupported_profile","audio").Contains("ファイル名・タグ") && !SimilaritySearch.Guidance("unsupported_profile","audio").Contains("モデルを選ぶ"),"audio guidance does not promise an unavailable audio extraction model");
         check(audioRow.Id==9&&audioRow.AudioMatchMs==45000&&audioRow.OriginMatchMs==12000&&audioRow.AIEvidence.Contains("音声・音楽一致（起点 0:12 → 候補 0:45）"),"audio similarity parses candidate and origin match ms");
+        var directAudio=audioCand.DeepClone().AsObject();directAudio["mode"]="audio-similar";directAudio["source"]="audio-direct";
+        directAudio["items"]![0]!["audio_match_source"]="direct-audio";
+        check(SimilaritySearch.Parse(directAudio.ToJsonString(),7,0,directAudio:true).Items[0].OriginMatchMs==12000,"direct audio similarity preserves both time anchors");
+        check(SimilaritySearch.Guidance("unindexed","audio",true).Contains("音声の内容検索"),"direct audio missing-index guidance reaches preparation");
+        var rejectedDirect=false;
+        try{SimilaritySearch.Parse(directAudio.ToJsonString(),7,0);}catch(InvalidDataException){rejectedDirect=true;}
+        check(rejectedDirect,"legacy similarity does not accept a direct-audio namespace");
+        directAudio["items"]![0]!["origin_match_ms"]=null;rejectedDirect=false;
+        try{SimilaritySearch.Parse(directAudio.ToJsonString(),7,0,directAudio:true);}catch(InvalidDataException){rejectedDirect=true;}
+        check(rejectedDirect,"direct audio similarity requires both time anchors");
         var audioCandOnly=audioCand.DeepClone().AsObject();
         audioCandOnly["items"]![0]!["origin_match_ms"]=null;
         var aCandRow=SimilaritySearch.Parse(audioCandOnly.ToJsonString(),7,0).Items[0];

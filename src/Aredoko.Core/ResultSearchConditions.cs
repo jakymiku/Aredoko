@@ -8,11 +8,23 @@ public static class ResultSearchConditions
 {
     public static JsonObject? Create(string query, string kind, string view, SearchMethod method,
         JsonObject? scope, IReadOnlyList<int>? rootIds, int? originId = null,
-        bool literalOnly = false, double? groupThreshold = null, string resultGroup = "all", IReadOnlyList<long>? shelfIds = null)
+        bool literalOnly = false, double? groupThreshold = null, string resultGroup = "all", IReadOnlyList<long>? shelfIds = null,
+        bool directAudioSimilarity = false)
     {
         JsonObject result;
         if (originId is int origin)
         {
+            if(directAudioSimilarity)
+            {
+                if(origin<=0)throw new ArgumentOutOfRangeException(nameof(originId));
+                result=new JsonObject{["mode"]="audio-similar",["item_id"]=origin,["view"]=view};
+                if(FolderSearch.NormalizeNonEmpty(rootIds) is {} audioRoots)
+                {
+                    var values=new JsonArray();foreach(var id in audioRoots)values.Add((JsonNode?)JsonValue.Create(id));
+                    result["root_ids"]=values;
+                }
+                return ShelfProtocol.Restrict(result,shelfIds);
+            }
             if (scope is null) throw new ArgumentException("AI scope is required", nameof(scope));
             result = SimilaritySearch.RequestMulti(origin, kind, view, 0, scope, rootIds);
             result.Remove("page"); result["mode"] = "similar";

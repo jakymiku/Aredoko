@@ -40,6 +40,9 @@ internal static class AudioContentTests
         }
         var method=SearchMethod.FromIndex(7);
         check(method.IsAI&&method.IsAudioContent,"audio search appends without changing old mode indices");
+        var similar=ResultSearchConditions.Create("ignored","audio","favorites",SearchMethod.FromIndex(0),null,[7],originId:9,shelfIds:[11],directAudioSimilarity:true)!;
+        check(similar["mode"]!.GetValue<string>()=="audio-similar"&&similar["item_id"]!.GetValue<int>()==9,"direct audio similarity uses its own result mode");
+        check(similar["root_ids"]![0]!.GetValue<int>()==7&&similar["shelf_ids"]![0]!.GetValue<long>()==11&&!similar.ContainsKey("scope"),"direct audio similarity retains library filters without a visual AI scope");
         var conditions=ResultSearchConditions.Create("雨の音","audio","favorites",method,null,[7],shelfIds:[9]);
         check(conditions!["mode"]!.GetValue<string>()=="audio-direct"&&!conditions.ContainsKey("scope"),"audio search uses its own namespace rather than image index scope");
         check(conditions["root_ids"]![0]!.GetValue<int>()==7&&conditions["shelf_ids"]![0]!.GetValue<long>()==9,"audio search retains root and shelf filters");

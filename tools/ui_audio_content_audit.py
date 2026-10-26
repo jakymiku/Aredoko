@@ -80,3 +80,27 @@ def prepare(ui,tree,shot,report,check,catalog,feature,release,reached):
     ui('wait-for','AudioContentStatus','--value','準備完了','--contains','-t','15000');shot('audio-completed')
     check('both generated audio items are atomically ready',feature.status()['indexed']==2)
     ui('invoke','CloseButton');ui('wait-for','CloseButton','--gone','-t','10000')
+
+
+def audit_similarity(ui,tree,shot,report,check,catalog,feature,*,input_guard):
+    report['authorization']='Explicit user approval required: cached generated WAV similarity, no GPU/playback'
+    # Search from cached vectors even with the prepared model now unavailable.
+    feature.encoder.available=False
+    feature.encoder.resident=False
+    before=feature.encoder.resident
+    if not input_guard():raise RuntimeError('Owned audio test lost foreground; no pointer input sent')
+    ui('click','Item1','--right')
+    ui('wait-for','FindSimilarAudioContent1','-t','5000');shot('audio-context')
+    ui('invoke','FindSimilarAudioContent1')
+    ui('wait-for','AIEvidence2','--value','起点 0:00 → 候補 0:00','--contains','-t','15000')
+    ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000');shot('audio-similar')
+    check('origin excluded from direct audio candidates','Item1' not in tree())
+    check('cached similarity did not load a model',feature.encoder.resident==before)
+    if not input_guard():raise RuntimeError('Owned audio test lost foreground; no pointer input sent')
+    ui('click','ItemTitle2');ui('wait-for','BtnDetails','-p','IsEnabled','--value','True','-t','10000');ui('invoke','BtnDetails')
+    ui('wait-for','BtnOpenAudio','-p','IsEnabled','--value','True','-t','10000');shot('audio-similar-detail')
+    ui('invoke','NavFavorites');ui('wait-for','TxtEmpty','--value','お気に入りはまだありません','--contains','-t','10000')
+    ui('invoke','BtnNavigationBack')
+    ui('wait-for','AIEvidence2','--value','起点 0:00 → 候補 0:00','--contains','-t','15000')
+    check('screen history restores direct audio similarity','Item1' not in tree())
+    check('generated tags remain unchanged',all(row['tags']==[] for row in catalog.search()['items']))

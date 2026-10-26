@@ -105,3 +105,10 @@ harnessはpopupを開く前にfocusを与えるよう修正。`--audio-search-on
 所有audio jobへcached queryを接続。モデル未配置でも既知profileの保存済みvectorから比較可能。`POST audio-ai/similar`と`mode=audio-similar`のfrozen result sessionへ認証/厳密field確認/独自stampを適用。原本・登録/除外・namespace更新・取消を検証し、起点変更後もsessionを失効させる。GUI入口はこの段階では未接続。
 
 新規CPU7（開発/基本Python）＋追加stamp1、HTTP6 PASS。既存spoolの取消済みcontext入場時の解放漏れを検出し、`__enter__`失敗時もcloseするよう修正・focused1 PASS。初回ログは保持。供給vectorによる契約確認であり、実音楽の類似品質評価ではない。
+
+
+## WinUIの直接音声類似入口（2026-10-27）
+
+音声の右クリックへ「内容が似た音声・曲を探す」を追加。既存の音響特徴ルートは維持。新入口は`audio-similar`として通常のroot/棚/favorite条件を保持し、視覚AI scope・runtime整合性確認・モデルloadを要求しない。起点と候補の両時刻をstrict Core parserで検証し、sourceがlegacyと混ざる応答を拒否する。画面履歴にdirect/legacyの別を保持して戻る/進むを復元する。
+
+Core runner/Portable publish PASS。Coreにはroots変数のshadowによる初回compile失敗を保持しaudioRootsへ修正済み。既存WUI1001 picker3とSDK由来IL2104を維持。result sessionの256MiB ranking予約も追加、focused capacity1 PASS。新候補`data/ai-ui/continuation-20261027/frontend01`へreceipt作成済み。GUIは個別質問への回答後、専用生成WAV/CPU供給vector・モデル利用不可の条件で右クリック/両時刻/詳細/画面履歴だけ確認する。音楽の意味品質はこの接続では評価しない。

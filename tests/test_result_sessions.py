@@ -259,6 +259,11 @@ class ResultSessionTests(unittest.TestCase):
         self.assertNotIn(self.sid, self.owner.sessions)
         self.assertFalse(list(self.base.glob('aredoko-results-*')))
 
+    def test_audio_similarity_reserves_ranking_workspace_before_starting_provider(self):
+        self.owner.max_bytes=128*1024*1024
+        with self.assertRaises(ResultCapacity):self.owner.create(self.sid,{'mode':'audio-similar','item_id':1})
+        self.assertNotIn(self.sid,self.owner.sessions)
+
     def test_closed_marker_expires_without_another_close_request(self):
         self.owner.cancel(self.sid)
         stamp, conditions = self.owner.retired[self.sid]
