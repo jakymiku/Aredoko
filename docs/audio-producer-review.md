@@ -23,3 +23,11 @@
 4. 通常設定/GUIへ明示的な導線を追加する。実録音/曲や比較モデルの取得は別の許可・評価とする。
 
 M1の残受入（HC/物理DPI/clean Windows等）とruntime公開review/hostは独立の残件。R07実装開始をM1/M2/全媒体の完成宣言にはしない。P3の全件snapshot待ちの残改善も[current-handoff](current-handoff.md)から継続する。
+
+## 最初の実装単位：逐次PCM producer（2026-10-26）
+
+長時間decodeの部分だけ先行実装。`audio_stream.PCMStream`は検証済みhandleから1所有FFmpeg/1 readerで30秒以下を逐次出力し、queueは1窓、readerの作業1窓、consumerの受取窓でbackpressureをかける。512MiB原本/24時間decoded上限、入力protocol/format制限、10秒のdecoder待ち/30分session、取消・early break・所有回収を維持。全音声のPCMは保持しない。
+
+`aresample=async=1:first_pts=0`でpresentation時刻のgapを無音として維持する。無音/短い窓をEOFと推測せず、全stdout・float整合性・正常exit・最終source guardまで通った場合だけ`complete=True`。窓は暫定であり、consumerはこれより前に既存索引へ公開してはいけない。`PreviewReader.audio_pcm_stream`は原本版・登録・除外を各yield/EOFに再確認し、audio専用slot1つを所有。HTTPへは追加していない。
+
+生成60/65秒、timestamp gapを持つfragmented MP4、非finite/破損/上限、deadline/取消、戻り値ありの非zero終了、入力変更/登録解除/除外、slot解放をCPUで確認。stream12・source18は開発Python3.14/基本Python3.11の両方PASS、既存preview22 PASS。GPU/モデル/通常DB使用0。**worker配置・新namespaceでのatomic保存/backup fence・検索/GUI接続は未実装で、上記レビューの残りを維持する。**

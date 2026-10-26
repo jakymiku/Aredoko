@@ -9,6 +9,7 @@ import threading
 import unicodedata
 import zipfile
 import zlib
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from library_index import (_excluded, _reparse, is_folder_book, folder_signature,
                            FOLDER_ROOT, FOLDER_IMAGES)
@@ -20,6 +21,7 @@ from image_animations import (AnimationInspector, AnimationUnavailable,
 from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
                             VIDEO_SUFFIXES, MAX_VIDEO_BYTES)
 import audio_input
+from audio_stream import PCMStream
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
@@ -181,6 +183,7 @@ class PreviewReader:
     def __init__(self, catalog):
         self.catalog = catalog
         self.slots = threading.BoundedSemaphore(2)
+        self.audio_stream_slot = threading.BoundedSemaphore(1)
         self.videos = VideoThumbnailer()
         self.animations = AnimationInspector()
 
@@ -268,6 +271,25 @@ class PreviewReader:
             raise ValueError('Invalid audio revision')
         if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Media decode cancelled')
         return self._read(item_id,operation='audio_pcm',revision=revision,pcm=(start_ms,duration_ms),cancel=cancel)
+
+    @contextmanager
+    def audio_pcm_stream(self,item_id,revision,cancel=None):
+        """Internal single-pass producer; successful exhaustion precedes save.
+
+        Every yielded window and successful EOF rechecks live registration and
+        the original revision. No HTTP route, model or persistent write here.
+        """
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}',revision) is None:
+            raise ValueError('Invalid audio revision')
+        if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Media decode cancelled')
+        if not self.audio_stream_slot.acquire(blocking=False):raise PreviewBusyError('Audio producer busy')
+        try:
+            source,_=self._read(item_id,operation='audio_pcm_source',revision=revision,cancel=cancel)
+            def guard():
+                if self.audio_manifest(item_id)['revision']!=revision:raise ReaderChanged('Audio source changed during streaming')
+            with source,PCMStream(source,cancel=cancel,guard=guard) as stream:
+                yield stream
+        finally:self.audio_stream_slot.release()
 
     def audio_range(self, item_id, start, end, revision):
         if type(start) is not int or type(end) is not int or start < 0 or end < start or end - start + 1 > MAX_VIDEO_RANGE_BYTES:
@@ -376,7 +398,7 @@ class PreviewReader:
             suffix = source.suffix.casefold()
             if suffix not in IMAGE_MIME and suffix not in ('.cbz', '.zip') and suffix not in VIDEO_SUFFIXES and suffix not in AUDIO_SUFFIXES:
                 raise PreviewUnavailable('Unsupported preview type')
-            if operation in ('audio','audio_manifest','audio_range','audio_pcm'):
+            if operation in ('audio','audio_manifest','audio_range','audio_pcm','audio_pcm_source'):
                 if suffix not in AUDIO_MIME:
                     raise PreviewUnavailable('Audio player requires a supported audio item')
             elif operation in ('video','video_manifest','video_range','video_frame','video_frames_ai'):
@@ -407,11 +429,11 @@ class PreviewReader:
                 if operation in ('tag_source', 'tag_input'):
                     result = {'item_id': item_id, 'revision': current_revision,
                               'kind': 'image' if suffix in IMAGE_MIME else 'cover', 'page': 0}
-                if operation == 'audio_pcm':
+                if operation in ('audio_pcm','audio_pcm_source'):
                     if not 1<=info.st_size<=audio_input.MAX_AUDIO_BYTES:
                         raise PreviewUnavailable('Audio exceeds input limit')
-                    window=audio_input.read_window(file,*pcm,cancel=cancel)
-                    result={'item_id':item_id,'revision':current_revision,'window':window}
+                    result={'item_id':item_id,'revision':current_revision}
+                    if operation=='audio_pcm':result['window']=audio_input.read_window(file,*pcm,cancel=cancel)
                 elif operation == 'audio':
                     if info.st_size < 1 or info.st_size > MAX_PLAYBACK_BYTES:
                         raise PreviewUnavailable('Audio exceeds playback limit')
@@ -570,7 +592,7 @@ class PreviewReader:
                                     with archive.open(entry) as image:
                                         data = image.read(image_limit + 1)
                                 mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest','video','video_manifest','video_range','audio','audio_manifest','audio_range','audio_pcm','tag_source','page_catalog','animation_source','image_info','image_manifest','video_frames_ai') and len(data) > image_limit:
+                if operation not in ('manifest','video','video_manifest','video_range','audio','audio_manifest','audio_range','audio_pcm','audio_pcm_source','tag_source','page_catalog','animation_source','image_info','image_manifest','video_frames_ai') and len(data) > image_limit:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
                 # Verify the path was not replaced while reading, without repeating
@@ -598,7 +620,7 @@ class PreviewReader:
                     if operation not in ('preview', 'cover_input', 'video_frames_ai'):
                         raise ReaderChanged('Source changed while reading')
                     raise PreviewUnavailable('Source changed while reading')
-                if operation=='audio_pcm':
+                if operation in ('audio_pcm','audio_pcm_source'):
                     # Native extraction can take seconds. Recheck registration,
                     # exclusions and metadata before publishing producer input.
                     with self.catalog.connect() as db:
@@ -610,6 +632,7 @@ class PreviewReader:
                         _excluded(live['relative_path'],tuple(json.loads(live['excludes_json'])))):
                         raise ReaderChanged('Audio scope changed during extraction')
                     if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Media decode cancelled')
+                    if operation=='audio_pcm_source':return os.fdopen(os.dup(file.fileno()),'rb'),result
                     return result
                 if operation == 'animation_source':
                     return os.fdopen(os.dup(file.fileno()), 'rb'), result

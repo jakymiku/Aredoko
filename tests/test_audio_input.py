@@ -7,7 +7,7 @@ sys.path.insert(0,str(ROOT/'app'))
 import audio_input as audio
 import video_previews as native
 from production import ProductionCatalog
-from previews import PreviewReader,PreviewUnavailable,ReaderChanged
+from previews import PreviewReader,PreviewUnavailable,PreviewBusyError,ReaderChanged
 
 
 def wav_bytes():
@@ -150,6 +150,42 @@ class AudioSourceBoundaryTests(unittest.TestCase):
         with patch.object(self.reader,'_read') as read:
             with self.assertRaises(audio.MediaDecodeCancelled):self.read(cancel)
             read.assert_not_called()
+
+    def test_stream_precancel_and_stale_revision_start_no_decoder(self):
+        import audio_stream
+        event=threading.Event();event.set()
+        with patch.object(audio_stream.subprocess,'Popen') as launch:
+            with self.assertRaises(audio.MediaDecodeCancelled):
+                with self.reader.audio_pcm_stream(self.item,self.revision,event):pass
+            with self.assertRaises(ReaderChanged):
+                with self.reader.audio_pcm_stream(self.item,'0'*64):pass
+            launch.assert_not_called()
+
+    @unittest.skipUnless(os.environ.get('AREDOKO_MEDIA_TOOLS') or shutil.which('ffmpeg'),'Existing FFmpeg required; no download')
+    def test_stream_reads_current_revision_and_releases_owned_source_and_slot(self):
+        with self.reader.audio_pcm_stream(self.item,self.revision) as stream:
+            self.assertEqual(next(stream).frame_count,32000)
+            with self.assertRaises(PreviewBusyError):
+                with self.reader.audio_pcm_stream(self.item,self.revision):pass
+            self.assertFalse(stream.complete)
+            with self.assertRaises(StopIteration):next(stream)
+            self.assertTrue(stream.complete)
+        self.assertTrue(stream.source.closed);self.assertFalse(stream.reader.is_alive())
+        with self.reader.audio_pcm_stream(self.item,self.revision) as restarted:
+            self.assertEqual(len(list(restarted)),1);self.assertTrue(restarted.complete)
+
+    @unittest.skipUnless(os.environ.get('AREDOKO_MEDIA_TOOLS') or shutil.which('ffmpeg'),'Existing FFmpeg required; no download')
+    def test_stream_unregister_or_exclude_before_eof_prevents_completion(self):
+        with self.reader.audio_pcm_stream(self.item,self.revision) as stream:
+            next(stream);self.catalog.set_excludes(self.root,['*.wav'])
+            with self.assertRaises(PreviewUnavailable):next(stream)
+            self.assertFalse(stream.complete)
+        self.catalog.set_excludes(self.root,[])
+        with self.reader.audio_pcm_stream(self.item,self.revision) as stream:
+            next(stream);self.catalog.unregister_root(self.root)
+            with self.assertRaises(PreviewUnavailable):next(stream)
+            self.assertFalse(stream.complete)
+        self.assertTrue(stream.source.closed)
 
 
 if __name__=='__main__':unittest.main()
