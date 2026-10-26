@@ -1,5 +1,11 @@
 # P1B 所有セッションによる逐次アニメーション
 
+## 2026-10-26 原寸streamとbyte予算
+- `open`/`open-first`へ任意の厳密bool `original_size`を追加。省略/falseは従来の長辺2048pxを維持し、現行Core viewerだけtrueを送る。新経路は入力の最大16MP/各辺16384を維持して原寸BGRAを返し、毎frameの縮小を省く。旧manifest/frame・AI代表画像・native GIF経路は変更しない。
+- serverは既存4frame/128MiB batchを維持。Coreのqueue＋in-flight枚数も`min(4,128MiB/frameBytes)`とし、4000×4000なら2枚に減らす。巨大dimensionはpixel配列の確保前に拒否。Pillow canvas、HTTPの組立、表示bitmap等を含むアプリ全体RSSが128MiB以下という意味ではない。loop再開時も元寸法の一致を検証する。
+- 関連Python17 PASS（開発3.14と基本ZIP同梱3.11で各1回）、Core runner PASS、Portable frontend07 build成功。CPUで旧2048互換、原寸APNG poster除外、WebPのloop再開、byte予算、bool拒否/認証APIを確認。
+- 人の許可による限定native1試行 `data/ai-ui/snapshot-review-20261026/original-native01` は23 checks PASS、4PNG目視、所有exit0/decoder残存なし。生成2560×1440・3framesのAPNG/native GIF/GIF名WebPだけで、原寸header受信・2周・最終画像保持・元生成媒体不変を確認。初回一覧の`1–3 / 3`も確認した。2560pxの一例であり、全16MP境界/長時間RSS/FPSや複雑な実APNGの受入を代替しない。GPU推論0、通常DB/installed Alpha変更0。
+
 ## 2026-10-25 指定APNG黒化の診断と修正
 - ユーザーが明示提供した `ezgif-2-fec5498fcad4.png` だけを専用コピーで検査。320×320、17frame、各100ms、無限loop、palette PNG/Pモード・透明index0、465,863 bytes。原本SHA/mtime不変、画像や私物パスはGitへ収録しない。
 - source 22898bd相当の試験frontend08で**黒いシルエットを再現**。UIAではframe番号が進みloopも通るが、4枚の画面は黒化している。UIA成功をvisual成功とは扱わない。アプリexit0/所有残存0。

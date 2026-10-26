@@ -14,6 +14,14 @@ public sealed class AnimationStreamClient(HttpClient client)
 {
     public const int MaxFrames = 4;
     public const int MaxBytes = 128 * 1024 * 1024;
+    public const int MaxEdge = 16384;
+    public const long MaxPixels = 16_000_000;
+    public static int BufferCapacity(int width, int height)
+    {
+        if (width is < 1 or > MaxEdge || height is < 1 or > MaxEdge || (long)width*height>MaxPixels)
+            throw new ArgumentOutOfRangeException(nameof(width), "Invalid animation dimensions");
+        return (int)Math.Min(MaxFrames, MaxBytes/((long)width*height*4));
+    }
     public async Task<AnimationStream> OpenAsync(ImageSourceInfo source, CancellationToken cancellation)
     {
         var id = Guid.NewGuid().ToString("N");
@@ -21,7 +29,7 @@ public sealed class AnimationStreamClient(HttpClient client)
         try
         {
             using var response = await SendAsync(client, "open", new JsonObject
-            { ["item_id"] = source.ItemId, ["revision"] = source.Revision, ["session_id"] = id }, cancellation);
+            { ["item_id"] = source.ItemId, ["revision"] = source.Revision, ["session_id"] = id, ["original_size"] = true }, cancellation);
             var bytes = await BoundedBodyAsync(response, 8192, cancellation);
             using var doc = JsonDocument.Parse(bytes);
             var root = doc.RootElement;
@@ -91,7 +99,7 @@ public sealed class AnimationStream(HttpClient client, ImageSourceInfo source, s
         try
         {
             using var response = await AnimationStreamClient.SendAsync(client, first?"open-first":"next",
-                first?new JsonObject { ["item_id"]=source.ItemId,["revision"]=source.Revision,["session_id"]=id }
+                first?new JsonObject { ["item_id"]=source.ItemId,["revision"]=source.Revision,["session_id"]=id,["original_size"]=true }
                     :new JsonObject { ["session_id"] = id, ["count"] = count }, cancellation);
             if (response.Content.Headers.ContentType?.MediaType != "application/vnd.aredoko.animation-frame-batch" ||
                 response.Content.Headers.ContentLength is not long length || length < 4 || length > AnimationStreamClient.MaxBytes + 8196)
@@ -104,7 +112,8 @@ public sealed class AnimationStream(HttpClient client, ImageSourceInfo source, s
             using var doc = JsonDocument.Parse(header); var root = doc.RootElement;
             var w = root.GetProperty("width").GetInt32(); var h = root.GetProperty("height").GetInt32();
             if (root.GetProperty("session_id").GetString() != id || root.GetProperty("item_id").GetInt32() != source.ItemId || root.GetProperty("revision").GetString() != source.Revision ||
-                w is < 1 or > 2048 || h is < 1 or > 2048 || (width != 0 && (width != w || height != h)) ||
+                w is < 1 or > AnimationStreamClient.MaxEdge || h is < 1 or > AnimationStreamClient.MaxEdge ||
+                (long)w*h>AnimationStreamClient.MaxPixels || (width != 0 && (width != w || height != h)) ||
                 root.GetProperty("stride").GetInt32() != w * 4 || root.GetProperty("pixel_format").GetString() != "bgra8" ||
                 root.GetProperty("alpha").GetString() != "premultiplied") throw new InvalidDataException("Invalid frame layout");
             var done = root.GetProperty("done").GetBoolean(); var descriptions = root.GetProperty("frames");

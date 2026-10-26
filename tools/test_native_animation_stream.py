@@ -19,8 +19,10 @@ from native_ui_tools import process_memory
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--provided-sample',type=Path,help='Only the explicitly attached E:/picture/!gif/10.gif, read/copy only');parser.add_argument('--large-generated',action='store_true');args=parser.parse_args()
-    if args.large_generated and args.provided_sample:parser.error('Choose generated or explicitly provided media')
+    parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--provided-sample',type=Path,help='Only the explicitly attached E:/picture/!gif/10.gif, read/copy only');parser.add_argument('--large-generated',action='store_true')
+    parser.add_argument('--original-generated',action='store_true',help='Three 2560x1440 frames; verify original-size viewer transport')
+    args=parser.parse_args()
+    if sum((args.large_generated,args.original_generated,bool(args.provided_sample)))>1:parser.error('Choose one generated or explicitly provided media flow')
     front=args.frontend.resolve();target=args.output.resolve()
     if os.name!='nt' or not front.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file() or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('Dedicated frontend and new isolated output required')
     target.mkdir(parents=True);media=target/'media';media.mkdir()
@@ -31,7 +33,7 @@ def main():
     env={**os.environ,'LOCALAPPDATA':str(target/'user'),'APPDATA':str(target/'user'),'AREDOKO_VIEWER_TIMINGS':'1','WINAPP_UI_WORKFLOW_ID':'aredoko-stream-native-'+target.name}
     user=ctypes.WinDLL('user32',use_last_error=True);user.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)];user.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
     proc=cat=server=thread=None;main_hwnd=viewer_hwnd=None;observed=[];closes=[]
-    viewer_prefix='Aredoko — 画像ビューア';frame_count=18 if args.large_generated else 70
+    viewer_prefix='Aredoko — 画像ビューア';frame_count=3 if args.original_generated else 18 if args.large_generated else 70
     def check(name,value):
         report['checks'].append({'name':name,'pass':bool(value)});print(name,bool(value),flush=True)
         if not value:raise AssertionError(name)
@@ -76,7 +78,7 @@ def main():
             with Image.open(media/'provided-10.gif') as image:
                 report['provided_sample']={'format':image.format,'size':list(image.size),'frames':image.n_frames,'copied_to_isolated_media':True,'original_modified':False}
         else:
-            dimensions=(2560,1920) if args.large_generated else (180,160)
+            dimensions=(2560,1440) if args.original_generated else (2560,1920) if args.large_generated else (180,160)
             frames=[Image.new('RGBA',dimensions,(40+(i*7)%190,70+(i*3)%170,100+(i*11)%150,255)) for i in range(frame_count)]
             poster=Image.new('RGBA',dimensions,(210,210,210,255))
             durations=[80 if args.large_generated else 30]*frame_count;durations[0]=700;durations[min(64,frame_count-1)]=500;durations[-1]=800
@@ -111,7 +113,7 @@ def main():
             def send(self,status,body,mime='application/json; charset=utf-8',extra_headers=None):
                 if mime==MIME and status==200:
                     size=struct.unpack_from('<I',body)[0];metadata=json.loads(body[4:4+size])
-                    observed.append({'action':self.path.rsplit('/',1)[-1],'item_id':metadata['item_id'],'frames':metadata['frames'],'done':metadata['done']})
+                    observed.append({'action':self.path.rsplit('/',1)[-1],'item_id':metadata['item_id'],'width':metadata['width'],'height':metadata['height'],'frames':metadata['frames'],'done':metadata['done']})
                 elif self.path=='/api/library/animation/close' and status==200:closes.append(True)
                 return super().send(status,body,mime,extra_headers)
         server=ThreadingHTTPServer(('127.0.0.1',8769),Recorded,bind_and_activate=False);server.allow_reuse_address=False
@@ -127,6 +129,9 @@ def main():
             time.sleep(.2)
         check('owned main window',main_hwnd is not None)
         first_name='provided-10.gif' if args.provided_sample else 'a-long.png'
+        if args.original_generated:
+            ui(main_hwnd,'wait-for','TxtPageNumber','--value','1–3 / 3','-t','10000')
+            check('initial library range uses the same notation as navigation',True)
         ui(main_hwnd,'wait-for','Item'+str(ids[first_name]),'-t','10000');ui(main_hwnd,'invoke','Item'+str(ids[first_name]),'--action','select')
         ui(main_hwnd,'invoke','BtnDetails');ui(main_hwnd,'wait-for','BtnOpenImage','-p','IsEnabled','--value','True','-t','7000');ui(main_hwnd,'invoke','BtnOpenImage')
         wait('owned viewer window',find_viewer)
@@ -150,11 +155,17 @@ def main():
             check('open and first frame share one request',batches[0]['action']=='open-first')
             delivered=[f for x in batches for f in x['frames']]
             check('all frames and both cycles delivered without poster',[(f['index'],f['cycle']) for f in delivered]==[(i,c) for c in range(2) for i in range(frame_count)])
+            if args.original_generated:
+                check('APNG viewer receives original pixels beyond the old edge cap',all((x['width'],x['height'])==(2560,1440) for x in batches))
+                check('APNG batches remain within the byte budget',all(sum(f['byte_length'] for f in x['frames'])<=128*1024*1024 for x in batches))
             ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ViewerImage','--value','b-native.gifの画像','-t','10000');ui(viewer_hwnd,'wait-for','ImageZoomIn','-p','IsEnabled','--value','True','-t','10000');shot('native-gif')
             check('true GIF uses native path without a streaming decode session',not any(x['item_id']==ids['b-native.gif'] for x in observed))
-            ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ViewerImage','--value','c-disguised.gifの画像（アニメーション 8）','-t','30000')
+            ui(viewer_hwnd,'invoke','ImageNext');ui(viewer_hwnd,'wait-for','ViewerImage','--value',f'c-disguised.gifの画像（アニメーション {min(8,frame_count)}）','-t','30000')
             wait('disguised WebP completes and releases session',lambda:len(closes)>=2);shot('disguised-webp-final')
             check('WebP with gif extension streams actual decoded frames',any(x['item_id']==ids['c-disguised.gif'] for x in observed))
+            if args.original_generated:
+                webp=[x for x in observed if x['item_id']==ids['c-disguised.gif']]
+                check('WebP viewer receives original pixels beyond the old edge cap',all((x['width'],x['height'])==(2560,1440) for x in webp))
             if args.large_generated:
                 ui(viewer_hwnd,'invoke','ImageNext');wait('large GIF streams beyond its first frame',lambda:any(x['item_id']==ids['d-large.gif'] and any(f['index']>=2 for f in x['frames']) for x in observed),seconds=30)
                 shot('large-gif-streaming')
@@ -193,7 +204,9 @@ def main():
                 if main_hwnd:user.PostMessageW(int(main_hwnd),0x10,0,0)
                 proc.wait(timeout=12)
             except Exception:report['cleanup_error']=traceback.format_exc()
-        if server:server.shutdown();server.server_close()
+        if server:
+            if thread:server.shutdown()
+            server.server_close()
         if thread:thread.join(5)
         if server:
             for resource in (handler.download_jobs,handler.restore_jobs,handler.backup_jobs,handler.thumbnails,handler.results,handler.animations,handler.setup_jobs):resource.close()

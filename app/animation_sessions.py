@@ -35,7 +35,7 @@ def _identity(file):
 
 
 class Decoder:
-    def __init__(self, file, info, validate):
+    def __init__(self, file, info, validate, *, original_size=False):
         self.file, self.info, self.validate = file, info, validate
         self.lock = threading.Lock()
         self.cancelled = threading.Event()
@@ -55,7 +55,8 @@ class Decoder:
             loop = self.image.info.get('loop')
             self.plays = (1 if loop is None else 0 if _clamp_loop(loop) == 0
                           else _clamp_loop(loop) + (1 if self.image.format == 'GIF' else 0))
-            scale = min(1.0, VIEWER_MAX_EDGE / max(width, height))
+            self.source_size = (width, height)
+            scale = 1.0 if original_size else min(1.0, VIEWER_MAX_EDGE / max(width, height))
             self.width, self.height = max(1, round(width * scale)), max(1, round(height * scale))
             self.index = self.cycle = self.sequence = 0
             self.advance = False
@@ -84,9 +85,7 @@ class Decoder:
             self.image = None
         self.file.seek(0)
         self.image = Image.open(self.file)
-        width, height = self.image.size
-        scale = min(1.0, VIEWER_MAX_EDGE / max(width, height))
-        if max(1, round(width * scale)) != self.width or max(1, round(height * scale)) != self.height:
+        if self.image.size != self.source_size:
             raise AnimationGone('Animation source changed')
         self.image.seek(self.first)
         self.index = 0
@@ -183,8 +182,10 @@ class AnimationSessions:
             with self.lock:
                 self._expire()
 
-    def open(self, item_id, revision, session_id):
+    def open(self, item_id, revision, session_id, *, original_size=False):
         self.validate_id(session_id)
+        if type(original_size) is not bool:
+            raise ValueError('Invalid animation resolution preference')
         if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
             raise ValueError('Invalid item')
         if type(revision) is not str or re.fullmatch('[0-9a-f]{64}', revision) is None:
@@ -203,7 +204,7 @@ class AnimationSessions:
             def validate(expected):
                 self.previews.validate_animation(item_id, expected, file)
             try:
-                decoder = Decoder(file, {**info, 'session_id': session_id}, validate)
+                decoder = Decoder(file, {**info, 'session_id': session_id}, validate, original_size=original_size)
             except Exception:
                 file.close()
                 raise
@@ -214,10 +215,10 @@ class AnimationSessions:
             return {**info, 'session_id': session_id, 'max_batch_frames': MAX_BATCH_FRAMES,
                     'max_batch_bytes': MAX_BATCH_BYTES}
 
-    def open_first(self, item_id, revision, session_id):
+    def open_first(self, item_id, revision, session_id, *, original_size=False):
         # The client chooses the ID before sending, retaining close-before-open
         # protection when this combined response is cancelled or lost.
-        self.open(item_id, revision, session_id)
+        self.open(item_id, revision, session_id, original_size=original_size)
         return self.pull(session_id, 1)
 
     @staticmethod

@@ -595,10 +595,10 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if self.path.startswith('/api/library/animation/'):
                     try:
                         if self.path=='/api/library/animation/open-first':
-                            if set(body)!={'item_id','revision','session_id'}:raise ValueError('Invalid animation fields')
+                            if set(body) not in ({'item_id','revision','session_id'},{'item_id','revision','session_id','original_size'}):raise ValueError('Invalid animation fields')
                             return self.send(200,animations.open_first(**body),ANIMATION_MIME)
                         if self.path=='/api/library/animation/open':
-                            if set(body)!={'item_id','revision','session_id'}:raise ValueError('Invalid animation fields')
+                            if set(body) not in ({'item_id','revision','session_id'},{'item_id','revision','session_id','original_size'}):raise ValueError('Invalid animation fields')
                             return self.send(200,animations.open(**body))
                         if self.path=='/api/library/animation/next':
                             if set(body)!={'session_id','count'}:raise ValueError('Invalid animation fields')

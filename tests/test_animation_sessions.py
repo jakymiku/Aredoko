@@ -34,8 +34,8 @@ def unpack(data):
     return header, frames
 
 
-def generated(kind='PNG', count=3, loop=2, poster=False):
-    frames = [Image.new('RGBA', (12, 8), (i * 3 % 256, i * 7 % 256, i * 11 % 256, 128 if kind == 'PNG' else 255))
+def generated(kind='PNG', count=3, loop=2, poster=False, size=(12,8)):
+    frames = [Image.new('RGBA', size, (i * 3 % 256, i * 7 % 256, i * 11 % 256, 128 if kind == 'PNG' else 255))
               for i in range(count)]
     output = io.BytesIO()
     options = dict(format=kind, save_all=True, append_images=frames[1:], duration=[40 + i % 5 * 20 for i in range(count)])
@@ -43,7 +43,7 @@ def generated(kind='PNG', count=3, loop=2, poster=False):
     if poster:
         options['default_image'] = True
         options['append_images'] = frames
-        Image.new('RGBA', (12, 8), 'white').save(output, **options)
+        Image.new('RGBA', size, 'white').save(output, **options)
     else: frames[0].save(output, **options)
     return output.getvalue()
 
@@ -93,6 +93,39 @@ class AnimationSessionTests(unittest.TestCase):
         with source.open('r+b') as file:file.truncate(MAX_STREAM_IMAGE_BYTES+1)
         self.catalog.index.scan(self.root);self.catalog.sync_index()
         with self.assertRaises(PreviewUnavailable):self.reader.image_info(item)
+
+    def test_original_resolution_is_opt_in_and_batch_bytes_stay_bounded(self):
+        self.start(generated(count=5,loop=1,poster=True,size=(2560,16)))
+        legacy,_=unpack(self.owner.pull(self.sid,1))
+        self.assertEqual((legacy['width'],legacy['height']),(2048,13))
+        with patch.object(Image.Image,'resize',side_effect=AssertionError('Original frames must not be resized')):
+            header,frames=unpack(self.owner.open_first(self.item,self.info['revision'],'b'*32,original_size=True))
+            self.assertEqual((header['width'],header['height']),(2560,16))
+            frame_bytes=2560*16*4
+            self.assertEqual(len(frames[0][1]),frame_bytes)
+            self.assertEqual(frames[0][1][:4],bytes((0,0,0,128)))  # poster white is not played
+            with patch('animation_sessions.MAX_BATCH_BYTES',2*frame_bytes):
+                middle,frames=unpack(self.owner.pull('b'*32,4))
+                self.assertEqual([f['index'] for f,_ in frames],[1,2])
+                self.assertEqual(sum(len(data) for _,data in frames),2*frame_bytes)
+                self.assertFalse(middle['done'])
+            end,frames=unpack(self.owner.pull('b'*32,4))
+            self.assertEqual([f['index'] for f,_ in frames],[3,4]);self.assertTrue(end['done'])
+
+    def test_original_resolution_flag_rejects_non_boolean_before_opening_source(self):
+        self.start()
+        for bad in (1,0,'true',None,[]):
+            with self.subTest(value=bad),patch.object(self.reader,'animation_source',side_effect=AssertionError('Must validate preference first')):
+                with self.assertRaises(ValueError):self.owner.open(self.item,self.info['revision'],'b'*32,original_size=bad)
+            self.assertNotIn('b'*32,self.owner.sessions)
+
+    def test_original_webp_keeps_dimensions_when_reopening_the_loop(self):
+        self.start(generated('WEBP',count=2,loop=2,size=(3840,16)),name='original.webp')
+        header,frames=unpack(self.owner.open_first(self.item,self.info['revision'],'b'*32,original_size=True))
+        self.assertEqual((header['width'],header['height']),(3840,16))
+        end,frames=unpack(self.owner.pull('b'*32,4))
+        self.assertEqual([(f['index'],f['cycle']) for f,_ in frames],[(1,0),(0,1),(1,1)])
+        self.assertTrue(end['done']);self.assertTrue(all(len(data)==3840*16*4 for _,data in frames))
 
     def test_combined_open_first_retains_ownership_and_sequential_cursor(self):
         self.start(generated('PNG',count=70,loop=2,poster=True))
@@ -309,6 +342,12 @@ class AnimationSessionTests(unittest.TestCase):
                 self.assertEqual(response.headers.get_content_type(),'application/vnd.aredoko.animation-frame-batch')
             with post('next',{'session_id':'e'*32,'count':1}) as response:self.assertEqual(unpack(response.read())[1][0][0]['sequence'],1)
             with post('close',{'session_id':'e'*32}) as response:self.assertTrue(json.load(response)['closed'])
+            with post('open-first',{'item_id':self.item,'revision':self.info['revision'],'session_id':'d'*32,'original_size':True}) as response:
+                header,frames=unpack(response.read());self.assertEqual(header['width'],12);self.assertEqual(len(frames),1)
+            with post('close',{'session_id':'d'*32}) as response:self.assertTrue(json.load(response)['closed'])
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                post('open',{'item_id':self.item,'revision':self.info['revision'],'session_id':'c'*32,'original_size':1})
+            self.assertEqual(error.exception.code,400);error.exception.close()
             with self.assertRaises(urllib.error.HTTPError) as error: post('next', {'session_id': sid, 'count': 1})
             self.assertEqual(error.exception.code, 409); error.exception.close()
         finally:

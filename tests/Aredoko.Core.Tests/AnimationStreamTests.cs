@@ -11,7 +11,7 @@ internal static class AnimationStreamTests
     {
         var source = new ImageSourceInfo(7, new string('a', 64), "image/webp", 1400, true);
         string? sessionId = null; var closes = 0; var frameRequests = 0;
-        var malformed = false;
+        var malformed = false;var wide=false;var excessivePixels=false;
         using var handler = new Stub(async request =>
         {
             check(request.Headers.Contains("X-Aredoko-Token") && request.Headers.Contains("Origin"), "animation preserves authenticated owner headers");
@@ -19,22 +19,24 @@ internal static class AnimationStreamTests
             var id = body["session_id"]!.GetValue<string>();
             if (request.RequestUri!.AbsolutePath.EndsWith("/open"))
             {
+                check(body["original_size"]!.GetValue<bool>(),"viewer requests original animation size explicitly");
                 sessionId = id;
                 return Json(new JsonObject { ["item_id"] = 7, ["revision"] = source.Revision, ["session_id"] = id,
                     ["max_batch_frames"] = 4, ["max_batch_bytes"] = AnimationStreamClient.MaxBytes });
             }
             var first=request.RequestUri!.AbsolutePath.EndsWith("/open-first");
-            if(first){sessionId=id;frameRequests=0;check(body.Count==3&&!body.ContainsKey("count"),"combined open has exact source identity and client-owned ID");}
+            if(first){sessionId=id;frameRequests=0;check(body.Count==4&&body["original_size"]!.GetValue<bool>()&&!body.ContainsKey("count"),"combined open has exact identity and explicit original resolution");}
             check(id == sessionId, "animation close/pull stays with same session");
             if (request.RequestUri.AbsolutePath.EndsWith("/close")) { closes++; return Json(new JsonObject { ["closed"] = true }); }
             frameRequests++;
-            var pixels = new byte[] { 10, 20, 30, 128 };
+            var w=excessivePixels?4001:wide?2560:1;var h=excessivePixels?4000:1;
+            var pixels = wide&&!excessivePixels?new byte[w*4]:new byte[] { 10, 20, 30, 128 };
             var header = new JsonObject
             {
-                ["session_id"] = id, ["item_id"] = 7, ["revision"] = source.Revision, ["width"] = 1, ["height"] = 1,
-                ["stride"] = malformed ? 8 : 4, ["pixel_format"] = "bgra8", ["alpha"] = "premultiplied", ["done"] = false,
+                ["session_id"] = id, ["item_id"] = 7, ["revision"] = source.Revision, ["width"] = w, ["height"] = h,
+                ["stride"] = malformed ? 8 : w*4, ["pixel_format"] = "bgra8", ["alpha"] = "premultiplied", ["done"] = false,
                 ["frames"] = new JsonArray(new JsonObject { ["sequence"] = frameRequests - 1, ["index"] = first?0:69,
-                    ["cycle"] = 0, ["duration_ms"] = 80, ["byte_length"] = 4 })
+                    ["cycle"] = 0, ["duration_ms"] = 80, ["byte_length"] = pixels.Length })
             };
             var json = Encoding.UTF8.GetBytes(header.ToJsonString());
             var data = new byte[4 + json.Length + pixels.Length]; BinaryPrimitives.WriteInt32LittleEndian(data, json.Length);
@@ -65,6 +67,13 @@ internal static class AnimationStreamTests
         malformed=true;rejected=false;
         try{await new AnimationStreamClient(http).OpenFirstAsync(source,CancellationToken.None);}catch(InvalidDataException){rejected=true;}
         check(rejected&&closes==3,"malformed combined first response closes its preallocated session ID");
+        malformed=false;wide=true;
+        var original=await new AnimationStreamClient(http).OpenFirstAsync(source,CancellationToken.None);
+        check(original.First.Width==2560&&original.First.Height==1&&original.First.Frames[0].Pixels.Length==10240,"original animation frames exceed legacy 2048 edge without downscaling");
+        await original.Stream.DisposeAsync();excessivePixels=true;rejected=false;
+        try{await new AnimationStreamClient(http).OpenFirstAsync(source,CancellationToken.None);}catch(InvalidDataException){rejected=true;}
+        check(rejected,"original animation still rejects more than sixteen million pixels before allocation");
+        check(AnimationStreamClient.BufferCapacity(2560,1920)==4&&AnimationStreamClient.BufferCapacity(4000,4000)==2,"raw frame prefetch reduces count at the 128MiB budget");
     }
     private static HttpResponseMessage Json(JsonObject body) => new(HttpStatusCode.OK) { Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body.ToJsonString())) };
     private sealed class Stub(Func<HttpRequestMessage, Task<HttpResponseMessage>> handle) : HttpMessageHandler

@@ -2,9 +2,10 @@
 
 ## Sol再開checkpoint（2026-10-26、以下より優先）
 - `cc6f7e8`からclean/remote/PR #5 ref一致で再開。**`7aa2162`**：snapshotの既存原本guardを最大4件で並行化、120件以内/順位/世代/取消を保全。生成5万metadata＋実PNG80枚の旧44.590s→20.772s（各1回、他PC負荷非固定）、全payload SHA一致。CPU31 PASS、許可済みnative1試行15 checks/4PNG目視/exit0。[証拠](result-sessions.md)。属性API試作は効果がなく撤去済み。API/GUIの全性能合格ではない。
-- 一覧の初回表記も表示範囲に統一。Portable/frontend06 build成功（既存warnings維持）、この小修正後GUIは未実施。[キャッシュ済みSDKビルドの一時指定と失敗ログ](p3-continuous-browse.md)。installed Alpha/基本ZIP03は前日の`e52c8ec`のままで、今回のsourceはまだ反映していない。
-- **今回の制約**：ユーザーはPC使用中。GUI/GPUは都度回答後。5万件の限定nativeへの1回許可は実施済みで、他のテストへ拡張しない。GPU0、新規取得0、通常DB/私物/installed Alpha変更0、shutdownしない。利用枠が少なくなったらcommit/push/最新handoffを完了して終了する。
-- **現在の次の1件**：P1/P7のstreamアニメーション原寸表示。旧API/クライアントの2048px互換を保ち、新しいviewerだけ明示的に原寸を要求する。16MP入力・4frame/128MiB batch上限・取消/loop/disposalを維持する。完成後は関連CPU/Core/build、GUIが必要なら候補を用意してユーザーへ問い、回答待ちに独立作業を進める。P7/M1・公開runtime・R06–R09の残件は削除しない。
+- **`87fbf51`**：一覧の初回表記も表示範囲に統一。Portable/frontend06 build成功（既存warnings維持）、後続の原寸nativeで初回`1–3 / 3`も確認。[キャッシュ済みSDKビルドの一時指定と失敗ログ](p3-continuous-browse.md)。installed Alpha/基本ZIP03は前日の`e52c8ec`のままで、今回のsourceはまだ反映していない。
+- **P1原寸streamも実装/限定確認済み**：任意boolの明示要求で原寸APNG/WebP、旧APIの2048互換/16MP入力/4frame・128MiBを維持。Python17（開発/基本Python）/Core/Portable frontend07 PASS、許可済みnative23 checks/4PNG目視/exit0。[契約と限界](animation-streaming.md)。この変更のcommitは`git log -1 -- app/animation_sessions.py`。
+- **今回の制約**：ユーザーはPC使用中。GUI/GPUは都度回答後。5万件の限定native1回と原寸アニメーションnative1回は別々の回答を得て実施済みで、他のテストへ拡張しない。GPU推論0、新規取得0、通常DB/私物/installed Alpha変更0、shutdownしない。利用枠が少なくなったらcommit/push/最新handoffを完了して終了する。
+- **現在の次の1件**：P3の大量結果snapshot作成で通常40秒の通信制限へ達する経路を整理。作成だけ長い専用transportとし、range/neighbor/closeは短い通常transport・明示取消を維持する。関連Coreで取消と終了の独立を確認する。P7/M1・公開runtime・R06–R09の残件は削除しない。
 
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。

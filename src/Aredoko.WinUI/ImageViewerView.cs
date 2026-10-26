@@ -206,14 +206,17 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
 
     private async Task FillAnimationAsync()
     {
-        if (disposed || animationFetching || animationDone || animationStream is null || animationRequest is null || animationFrames.Count >= 4) return;
+        if (disposed || animationFetching || animationDone || animationStream is null || animationRequest is null) return;
+        var capacity=AnimationStreamClient.BufferCapacity(animationWidth,animationHeight);
+        if(animationFrames.Count>=capacity)return;
         var stream = animationStream; var stamp = version; var ct = animationRequest.Token;
         animationFetching = true;
         try
         {
-            // Existing queued + in-flight frames never exceeds four. Each frame
-            // owns its bytes, so consumed batches cannot retain old pixel arrays.
-            var batch = await stream.ReadAsync(4 - animationFrames.Count, ct);
+            // Queued + in-flight raw pixels stay within four frames/128MiB.
+            // Larger original frames reduce the count instead of the resolution.
+            // Each frame owns its bytes; consumed batches retain no old arrays.
+            var batch = await stream.ReadAsync(capacity - animationFrames.Count, ct);
             if (disposed || stamp != version || stream != animationStream || ct.IsCancellationRequested) return;
             if (batch.Width != animationWidth || batch.Height != animationHeight) throw new InvalidDataException("Animation dimensions changed");
             foreach (var frame in batch.Frames) animationFrames.Enqueue(frame);
