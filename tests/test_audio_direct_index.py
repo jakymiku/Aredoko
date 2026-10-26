@@ -143,6 +143,15 @@ class DirectAudioIndexTests(unittest.TestCase):
             self.index.index_item(self.item,self.revision)
         self.assertEqual(self.snapshot(),previous)
 
+    def test_scope_validator_can_reject_the_final_publication_boundary(self):
+        previous=self.seed();calls=[]
+        def validate():
+            calls.append(True)
+            if len(calls)==3:raise ValueError('generated scope changed at final publication')
+        with self.supplied(),self.assertRaisesRegex(ValueError,'scope changed'):
+            self.index.index_item(self.item,self.revision,validate=validate)
+        self.assertEqual(len(calls),3);self.assertEqual(self.snapshot(),previous)
+
     def test_disk_failure_rolls_back_and_private_stage_is_removed(self):
         previous=self.seed()
         with self.supplied(),patch('audio_direct_index.STAGE_BYTES',4096),self.assertRaises(sqlite3.Error):

@@ -47,3 +47,11 @@ CPU14（開発/基本Python）PASS：失敗・取消・容量不足・原本変�
 各itemの原本版を検証し、登録状態・catalog generation・audio store data_versionが途中変更されたら古い結果を破棄する。結果は`audio_match_ms`/`audio_match_end_ms`/`audio_match_source=direct-audio`で返し、転写していないsnippetを作らない。既存ResultSessions＋IndexStampにも接続でき、音声索引更新時の失効を確認した。通常server/WinUIの検索入口、音声同士の類似、owned workerの設定/idle releaseはまだ未接続。
 
 CPU8（開発は既存7＋追加1、基本Pythonは8）PASS。範囲の継承、1queryから複数range、安定tie、stale/empty/取消、索引途中変更、時刻付きsession保持と更新後失効を確認。供給vectorによる契約試験であり、音声理解の品質評価ではない。
+
+## 所有ジョブとモデル切替の内部基盤（2026-10-26）
+
+`AudioDirectJobs`は明示したaudio encoderを所有し、共通scopeのmissing/fresh判定→既定128件（最大1,000件）のbatch→atomic item保存を行う。次batchはfresh項目を飛ばすため、同じ先頭batchだけを反復しない。件数・対象外/未処理候補・取消/範囲変更を返す。途中の完了itemは保持し、現在のitemは失敗/取消/選択scope変更で公開しない。進捗はbackend lifetime内、再起動後はitem markerで明示batchを再開する。
+
+`InferenceOwnership`はimage/audioの2所有者に限定したlock。明示的に両方へ接続した場合、別ownerのresident workerを解放した後にだけ次を許可する。busy/解放失敗時に同時loadを許可しない。idle release/正常closeも所有範囲で行う。**この段階では通常のproduction handler/WinUIへ未接続**であり、通常アプリが音声用workerを勝手に起動する変更ではない。
+
+所有ジョブ8・所有切替7は開発/基本PythonともPASS。scopeの最終publication validatorも追加1 PASS。待機取消、fresh skip/次batch、未完item保持、scope変更、query busy、切替、idle release、所有closeを人工encoderで確認した。既存実GPU評価の許可は再利用せず、今回の新しい生成2音声pipeline試験は個別回答待ち。

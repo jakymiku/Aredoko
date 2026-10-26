@@ -62,10 +62,13 @@ class AudioDirectIndex:
             return db.execute('SELECT 1 FROM ai_audio_direct_sources WHERE item_id=? AND source_revision=? AND contract=?',
                               (item_id,revision,CONTRACT)).fetchone() is not None
 
-    def index_item(self,item_id,revision,*,cancel=None):
+    def index_item(self,item_id,revision,*,cancel=None,validate=None):
         if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid audio item')
         if type(revision) is not str or re.fullmatch('[0-9a-f]{64}',revision) is None:raise ValueError('Invalid audio revision')
         self._check(cancel)
+        if validate is not None:
+            if not callable(validate):raise ValueError('Invalid audio publication validator')
+            validate()
         if self.encoder.profile.key!=self.profile.key:raise ValueError('Audio encoder profile changed')
         with tempfile.TemporaryDirectory(prefix='aredoko-audio-stage-',dir=self.stage_parent) as temporary:
             path=Path(temporary)/'stage.sqlite'
@@ -98,16 +101,17 @@ class AudioDirectIndex:
                             indexed+=1
                     if not stream.complete or not frames:raise ValueError('Incomplete audio input cannot be published')
                 stage.commit()
-                try:self._publish(item_id,revision,path,decoded,indexed,frames,cancel)
+                try:self._publish(item_id,revision,path,decoded,indexed,frames,cancel,validate)
                 except InterruptedError:
                     self._check(cancel)
                     raise
             return {'item_id':item_id,'revision':revision,'decoded_windows':decoded,
                     'indexed_windows':indexed,'total_frames':frames,'contract':CONTRACT}
 
-    def _publish(self,item_id,revision,path,decoded,indexed,frames,cancel):
+    def _publish(self,item_id,revision,path,decoded,indexed,frames,cancel,validate):
         def check_source():
             self._check(cancel)
+            if validate is not None:validate()
             if self.encoder.profile.key!=self.profile.key:raise ValueError('Audio encoder namespace changed')
             if self.reader.audio_manifest(item_id)['revision']!=revision:
                 raise ReaderChanged('Audio source changed before index publication')
