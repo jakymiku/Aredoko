@@ -5,6 +5,7 @@ spool alive for this consumer). Subsequent range/neighbor reads never rerank.
 No source bytes, model weights or all-result metadata lists live in memory.
 """
 from contextlib import ExitStack
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import re
@@ -83,6 +84,7 @@ class FrozenResult:
         self.origin = None
         self.state = 'building'
         self.last_used = time.monotonic()
+        self.capture_executor = None
 
     def check(self):
         if self.stop.is_set():
@@ -128,7 +130,14 @@ class FrozenResult:
                     number += 1
                 return self.metadata
             try:
-                provider(consume)
+                # Overlap bounded source I/O; publish only after every owned
+                # check has joined. The original physical guards stay intact.
+                with ThreadPoolExecutor(max_workers=4, thread_name_prefix='result-source') as executor:
+                    self.capture_executor = executor
+                    try:
+                        provider(consume)
+                    finally:
+                        self.capture_executor = None
                 self.check()
                 self.state = 'ready'
             except sqlite3.Error as error:
@@ -152,6 +161,7 @@ class FrozenResult:
                 'JOIN library_roots r ON r.id=l.root_id WHERE i.id IN ('+','.join('?' for _ in ids)+')',ids).fetchall()
             grouped={}
             for row in rows:grouped.setdefault(row['id'],[]).append(row)
+            prepared=[]
             for item in items:
                 choices=grouped.get(item['id'],[])
                 if len(choices)>1:
@@ -160,7 +170,15 @@ class FrozenResult:
                     row=db.execute('SELECT '+self.catalog.FIELDS+',r.path,r.excludes_json,r.enabled'+self.catalog.JOIN+
                         'JOIN library_roots r ON r.id=l.root_id WHERE i.id=?',(item['id'],)).fetchone()
                 else:row=choices[0] if choices else None
-                yield self._current(item,capture=capture,row=row)
+                prepared.append((item,row))
+            def validate(pair):
+                item,row=pair
+                return self._current(item,capture=capture,row=row)
+            if capture and len(prepared)>=16 and self.capture_executor is not None:
+                # At most one provider page (120) is queued; map keeps rank.
+                yield from self.capture_executor.map(validate,prepared)
+            else:
+                for pair in prepared:yield validate(pair)
         self.check()
 
     def _current(self, payload, *, capture=False, for_viewer=False, row=_MISSING):

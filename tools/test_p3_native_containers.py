@@ -1,5 +1,5 @@
 """Generated-only Portable native card recycling acceptance. No model or private data."""
-import argparse, ctypes, hashlib, json, os, secrets, subprocess, sys,re, threading, time, traceback
+import argparse, ctypes, hashlib, json, os, secrets, socket, subprocess, sys,re, threading, time, traceback
 from ctypes import wintypes
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -95,7 +95,8 @@ def main():
             a=cat.change_shelf('create',name='素材')['id'];b=cat.change_shelf('create',name='資料')['id'];cat.change_shelf('create',name='空の棚')
             cat.change_shelf('assign',entity='item',object_ids=[first['id']],shelf_ids=[a,b])
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
-        handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger());handler.log_message=lambda *args:None
+        instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
+        handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger(),instance_id=instance);handler.log_message=lambda *args:None
         if args.initial_loading or args.usability_u1:
             empty_shelf=cat.change_shelf('create',name='案内確認用の空棚')['id']
             gate=threading.Event();original_provider=handler.results.provider
@@ -107,7 +108,11 @@ def main():
                 return original_provider(conditions,consume,cancelled)
             handler.results.provider=held
             if args.usability_u1:gate.set()
-        server=ThreadingHTTPServer(('127.0.0.1',8769),handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        server=ThreadingHTTPServer(('127.0.0.1',8769),handler,bind_and_activate=False)
+        server.allow_reuse_address=False
+        server.socket.setsockopt(socket.SOL_SOCKET,socket.SO_EXCLUSIVEADDRUSE,1)
+        server.server_bind();server.server_activate()
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         with (target/'app.log').open('w',encoding='utf-8') as log:
             proc=subprocess.Popen([str(front/'Aredoko.WinUI.exe'),'--ui-theme',args.theme,'--viewer-settings',str(target/'viewer-settings.json')],cwd=front,env=env,stdout=log,stderr=subprocess.STDOUT)
         report['owned_pid']=proc.pid
@@ -117,7 +122,7 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
-        if args.usability_u1 and not args.uia_only:
+        if (args.usability_u1 and not args.uia_only) or args.global_edge:
             # The owner launches this one test process; use normal Windows
             # activation, never input attachment, security bypass or other apps.
             report['foreground_activation_requested']=bool(user.SetForegroundWindow(int(hwnd)))
@@ -159,7 +164,7 @@ def main():
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.global_edge:
             from ui_global_edge_audit import audit
-            audit(ui,tree,shot,report,check,proc.pid,cat)
+            audit(ui,tree,shot,report,check,proc.pid,cat,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.library_tail:
             from ui_continuous_browse_audit import audit_tail
@@ -225,10 +230,12 @@ def main():
                 if proc.poll() is None:raise RuntimeError('Owned app did not close normally')
                 report['graceful_exit']=proc.returncode
             except Exception:report['cleanup_error']=traceback.format_exc()
-        if server:server.shutdown();server.server_close()
+        if server:
+            if thread:server.shutdown()
+            server.server_close()
         if thread:thread.join(5)
         if server:
-            for resource in (handler.thumbnails,handler.results,handler.animations,handler.setup_jobs,handler.download_jobs,handler.backup_jobs,handler.restore_jobs):resource.close()
+            for resource in (handler.startup_scans,handler.thumbnails,handler.results,handler.animations,handler.setup_jobs,handler.download_jobs,handler.backup_jobs,handler.restore_jobs):resource.close()
         if cat:cat.close()
         report['process_still_running']=proc is not None and proc.poll() is None
         report['test_script_sha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()

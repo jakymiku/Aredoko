@@ -16,7 +16,7 @@ def create_metadata(cat,media,count=50000):
         db.executemany('INSERT INTO item_locations(item_id,location_id) VALUES(?,?)',((index+1,index+1) for index in range(count)))
 
 
-def audit(ui,tree,shot,report,check,pid,cat):
+def audit(ui,tree,shot,report,check,pid,cat,*,input_guard):
     report['metadata_fixture']={'records':50000,'actual_generated_pngs':80,'filesystem_scan':False,'quality_or_scan_benchmark':False}
     def extent():
         text=tree().get('TxtPageNumber',{}).get('name','').replace(',','')
@@ -27,16 +27,20 @@ def audit(ui,tree,shot,report,check,pid,cat):
         report.setdefault('edge_memory',[]).append({'label':label,'native_keyed_cards':cards,'frontend':process_memory(pid),'test_host_backend':process_memory(os.getpid())})
         check(label+' native card exposure bounded',0<cards<100)
     def jump(last,expected,key):
-        ui('focus','BtnLayout');ui('send-keys','ctrl+end' if last else 'ctrl+home','--via','send-input')
+        ui('focus','BtnLayout')
+        if not input_guard():raise RuntimeError('Owned test window lost foreground; no keyboard input sent')
+        ui('send-keys','ctrl+end' if last else 'ctrl+home','--via','send-input')
         ui('wait-for','TxtPageNumber','--value',f'{expected[0]:,}–{expected[1]:,} / {expected[2]:,}','-t','15000')
         check('exact scoped range '+str(expected),extent()==expected)
         ui('wait-for','Item'+str(key),'-p','IsOffscreen','--value','False','-t','10000')
-    ui('invoke','Item1','--action','select');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000')
+    ui('invoke','Item1','--action','select');ui('invoke','BtnDetails');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000')
     ui('set-value','TxtTags','global-edge-unsaved');sample('first')
     jump(True,(49881,50000,50000),50000)
     ui('wait-for','TxtTags','--value','global-edge-unsaved','-t','5000');check('jump does not autosave first-item draft',cat.get(1)['tags']==[])
     shot('global-last');sample('last')
-    ui('focus','TxtTags');ui('send-keys','ctrl+home','--via','send-input')
+    ui('focus','TxtTags')
+    if not input_guard():raise RuntimeError('Owned test editor lost foreground; no keyboard input sent')
+    ui('send-keys','ctrl+home','--via','send-input')
     check('Ctrl Home in editor does not move result range',extent()==(49881,50000,50000))
     jump(False,(1,120,50000),1);ui('wait-for','TxtTags','--value','global-edge-unsaved','-t','5000')
     shot('global-first');sample('returned-first');ui('set-value','TxtTags','')

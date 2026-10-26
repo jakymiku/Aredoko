@@ -64,3 +64,13 @@ FrozenResultは1ページにつき1接続で最新metadataを取得するが、�
 旧COUNT反復を残した最初の全件測定は長時間化して9,720件時点で中断（正確な全件比較時間なし）。所有一時結果DBだけの排他lockによるtimeoutを使い、解除時の一時directory cleanup PermissionErrorもrawに残す。元catalog/原本/他アプリは変更せず、当該試験process終了済み。旧baselineを全件完走や速度倍率の根拠にしない。初回snapshotを全件完成してから公開する設計の待ち時間は今後の残件。
 
 上記の5万metadata計測とnative hostは開発用Python3.14。基本ZIPの同梱Python3.11による5万件の性能受入ではなく、同梱環境では基本CPU/通常EXEの限定確認を別途行った。
+
+## 2026-10-26：原本確認I/Oを最大4件で並行化
+
+snapshot作成中だけ4 workerで既存の`_current`を実行する。最大120件の1ページだけを投入し、provider順に書き込む。DB照会/複数locationの代表選択/順位/世代の前後検証は元のthreadに保持。祖先・reparse・leaf identityの検査を省略/恒久cache化しない。公開・一時領域の解放前にpoolをjoinし、途中の失敗や取消で部分結果を公開しない。range/neighborは従来の逐次検査を維持する。
+
+`data/ai-ui/snapshot-review-20261026/`（Git対象外）で同一生成5万metadata・実PNG80枚の比較：旧`cc6f7e8` 44.590s→並行版20.772s、全50,000行のordinal/ID/image/payload SHA一致、一時DB17,092,608 bytes。単回、開発Python3.14、利用中PCの他負荷/cold条件は非固定。5万実ファイルや製品Python3.11の性能保証ではない。先行の属性API試作は44.278sで効果がなく撤去した。
+
+関連CPU31 PASS（4 worker上限、順序、失敗非公開、取消時join/cleanupを追加）。既存`measure_library_scale.py --snapshot-only --count 120 --output <新規data/ai-ui配下>`に再利用可能な1回測定を追加し、小fixtureで正常終了/原本不変を確認。通常の反復coverage測定とは分離する。
+
+人の許可を得た限定native1試行`native01`は15 checks PASS、4PNG目視、所有exit0。基本ZIP03の既存UI＋新backendで先頭/末尾、フィルタ、draft保全を確認。通常DB/installed Alpha/GPUは使っていない。画像の初回読込未完了PNGをthumbnail速度の合格根拠にしない。画面上の初回ページ数表記と移動後の範囲表記の統一は次の小単位で扱う。

@@ -1,5 +1,6 @@
 """Measure generated 50k metadata paging and CPU-only scope counts, never model inference."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -9,6 +10,7 @@ from create_library_scale_fixture import create,digest
 from production import ProductionCatalog
 from ai_search import AISearch
 from ai_settings import AIProfileSettings
+from result_sessions import ResultSessions
 
 class NoInference:
     available=False
@@ -17,8 +19,28 @@ class NoInference:
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',type=Path,required=True)
-    target=parser.parse_args().output.resolve()
+    parser.add_argument('--snapshot-only',action='store_true',help='One fixed-order result snapshot; no repeated coverage timings')
+    parser.add_argument('--count',type=int,default=50000,help='Generated metadata count for snapshot-only (120..50000)')
+    args=parser.parse_args();target=args.output.resolve()
+    if not 120<=args.count<=50000 or (not args.snapshot_only and args.count!=50000):parser.error('Custom count is for bounded snapshot-only fixtures')
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Fresh output inside data/ai-ui required')
+    if args.snapshot_only:
+        fixture=create(target,count=args.count,root_count=2);catalog=ProductionCatalog(target/'catalog.sqlite')
+        def provider(conditions,consume,cancelled):return catalog.search(limit=120,result_sink=consume,cancelled=cancelled,**conditions)
+        owner=ResultSessions(catalog,provider,parent=target);report={'pass':False,'fixture':fixture,'actual_model':False,'native_gui_run':False}
+        try:
+            started=time.perf_counter();result=owner.create('a'*32,{});elapsed=time.perf_counter()-started
+            session=owner.sessions['a'*32];payload_hash=hashlib.sha256()
+            for row in session.db.execute('SELECT ordinal,item_id,image,payload FROM results ORDER BY ordinal'):
+                payload_hash.update(json.dumps(tuple(row),ensure_ascii=False,separators=(',',':')).encode('utf-8'))
+            report.update(seconds=elapsed,total=result['total'],workspace_bytes=session.bytes(),payload_sha256=payload_hash.hexdigest(),
+                          sources_unchanged=digest(target/'generated')==fixture['source_digest'])
+            report['pass']=result['total']==args.count and report['sources_unchanged']
+        finally:
+            report['owned_jobs_closed']=owner.close();catalog.close()
+            report['pass']=report['pass'] and report['owned_jobs_closed']
+            (target/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+        print(json.dumps(report,ensure_ascii=True));return 0 if report['pass'] else 1
     started=time.perf_counter();fixture=create(target);generated_seconds=time.perf_counter()-started
     catalog=ProductionCatalog(target/'catalog.sqlite');ai=AISearch(catalog,NoInference())
     report={'pass':False,'fixture':fixture,'generated_seconds':round(generated_seconds,3),'actual_model':False,'native_gui_run':False,'checks':[],'timings_ms':{}}

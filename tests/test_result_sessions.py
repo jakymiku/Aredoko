@@ -272,6 +272,60 @@ class ResultSessionTests(unittest.TestCase):
         self.assertNotIn('items', session.metadata)
         self.assertEqual(self.owner.read(self.sid, 120, 120)['total'], 125)
 
+    def test_capture_overlaps_at_most_four_sources_but_keeps_provider_order(self):
+        import result_sessions
+        original=result_sessions.FrozenResult._current
+        lock=threading.Lock();another=threading.Event();active=0;peak=0
+        first=self.items[0]['id'];completed=[]
+        def checked(session,payload,**kwargs):
+            nonlocal active,peak
+            with lock:active+=1;peak=max(peak,active)
+            try:
+                if payload['id']==first:
+                    self.assertTrue(another.wait(3))
+                else:another.set()
+                result=original(session,payload,**kwargs)
+                with lock:completed.append(payload['id'])
+                return result
+            finally:
+                with lock:active-=1
+        with patch.object(result_sessions.FrozenResult,'_current',new=checked):self.create()
+        session=self.owner.sessions[self.sid]
+        self.assertEqual([row[0] for row in session.db.execute('SELECT item_id FROM results ORDER BY ordinal')],[i['id'] for i in self.items])
+        self.assertGreaterEqual(peak,2);self.assertLessEqual(peak,4)
+        self.assertEqual(sorted(completed),sorted(i['id'] for i in self.items))
+        self.assertIsNone(session.capture_executor)
+        self.assertFalse(any(t.name.startswith('result-source') for t in threading.enumerate()))
+
+    def test_close_during_parallel_capture_joins_checks_before_workspace_cleanup(self):
+        import result_sessions
+        original=result_sessions.FrozenResult._current;entered=threading.Event();release=threading.Event();errors=[]
+        def held(session,payload,**kwargs):
+            entered.set();release.wait(4)
+            return original(session,payload,**kwargs)
+        def build():
+            try:self.create()
+            except Exception as error:errors.append(error)
+        with patch.object(result_sessions.FrozenResult,'_current',new=held):
+            thread=threading.Thread(target=build);thread.start();self.assertTrue(entered.wait(3))
+            try:self.assertFalse(self.owner.close(timeout=.02))
+            finally:release.set();thread.join(6)
+        self.assertFalse(thread.is_alive());self.assertTrue(errors)
+        self.assertFalse(list(self.base.glob('aredoko-results-*')))
+        self.assertFalse(any(t.name.startswith('result-source') for t in threading.enumerate()))
+
+    def test_parallel_capture_failure_never_publishes_partial_results(self):
+        import result_sessions
+        original=result_sessions.FrozenResult._current
+        def failed(session,payload,**kwargs):
+            if payload['id']==self.items[2]['id']:raise ResultUnavailable('Generated capture failure')
+            return original(session,payload,**kwargs)
+        with patch.object(result_sessions.FrozenResult,'_current',new=failed):
+            with self.assertRaises(ResultUnavailable):self.create()
+        self.assertNotIn(self.sid,self.owner.sessions)
+        self.assertFalse(list(self.base.glob('aredoko-results-*')))
+        self.assertFalse(any(t.name.startswith('result-source') for t in threading.enumerate()))
+
     def test_ai_one_encoding_one_rank_and_index_change_detection(self):
         encoder = Encoder(); ai = AISearch(self.catalog, encoder); self.addCleanup(ai.close)
         for item in self.items: ai.store.put(item['id'], revision(item), {'text': [1.] + [0.] * 7})
