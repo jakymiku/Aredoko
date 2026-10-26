@@ -74,7 +74,10 @@ def main():
                 elif operation=='audio':
                     if 'audio' not in profile.modalities:raise ValueError('Unsupported modality')
                     from audio_protocol import parse_audio_request
-                    vector=model.encode_audio(parse_audio_request(request))
+                    window=parse_audio_request(request)
+                    if window.is_digital_silence:
+                        print(json.dumps({'skip':True,'reason':'digital_silence'}),file=wire,flush=True);continue
+                    vector=model.encode_audio(window)
                 elif operation in ('query','document'):
                     text = request['text']
                     if not isinstance(text,str) or len(text)>4096: raise ValueError('Text limit')

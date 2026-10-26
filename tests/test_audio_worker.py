@@ -1,5 +1,5 @@
 """No model/GPU: audio namespace isolation and bounded private worker input."""
-import base64,contextlib,io,json,struct,sys,types,unittest
+import base64,contextlib,io,json,struct,sys,tempfile,types,unittest
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock,patch
@@ -66,6 +66,22 @@ class AudioWorkerTests(unittest.TestCase):
         self.assertEqual(parse_audio_request(json.loads(encoder.process.stdin.getvalue())),window())
         self.assertEqual(vector,[1.]+[0.]*767);self.assertEqual(encoder.telemetry,{'elapsed_ms':4})
 
+    def test_exact_positive_and_negative_zero_skip_before_model_start_but_quiet_sound_does_not(self):
+        encoder=EncoderProcess('unused-python','unused-model',audio_profile_for());encoder.telemetry={'old':True}
+        with patch.object(encoder,'_start') as start:
+            for value in (0.,-0.):self.assertIsNone(encoder.encode('audio',replace(window(),data=struct.pack('<f',value)*16)))
+            start.assert_not_called();self.assertEqual(encoder.telemetry,{})
+            encoder._closed=True
+            with self.assertRaises(AIUnavailable):encoder.encode('audio',replace(window(),data=b'\0'*64))
+        encoder=EncoderProcess('unused-python','unused-model',audio_profile_for());encoder.process=types.SimpleNamespace(stdin=io.StringIO())
+        with patch.object(encoder,'_start') as start,patch.object(encoder,'_response',return_value={'vector':[1.]+[0.]*767}):
+            self.assertIsNotNone(encoder.encode('audio',replace(window(),data=struct.pack('<f',1e-12)*16)));start.assert_called_once()
+
+    def test_unknown_audio_skip_reason_does_not_masquerade_as_silence(self):
+        encoder=EncoderProcess('unused-python','unused-model',audio_profile_for());encoder.process=types.SimpleNamespace(stdin=io.StringIO())
+        with patch.object(encoder,'_start'),patch.object(encoder,'_response',return_value={'skip':True,'reason':'unknown'}):
+            with self.assertRaisesRegex(AIUnavailable,'Missing embedding'):encoder.encode('audio',window())
+
     def test_audio_adapter_enables_only_the_explicit_tower_and_passes_arrays(self):
         model=MagicMock();model.get_embedding_dimension.return_value=768;constructor=MagicMock(return_value=model)
         fake_numpy=types.SimpleNamespace(frombuffer=MagicMock(return_value='generated-array'))
@@ -92,8 +108,9 @@ class AudioWorkerTests(unittest.TestCase):
 
     def test_worker_rejects_bad_audio_then_accepts_next_message_without_gpu(self):
         valid=audio_request(window());invalid={**valid,'channels':True}
-        rows,model=self.run_worker(io.StringIO(json.dumps(invalid)+'\n'+json.dumps(valid)+'\n'))
-        self.assertEqual(rows[0]['profile'],audio_profile_for().key);self.assertIn('error',rows[1]);self.assertEqual(len(rows[2]['vector']),768)
+        silent=audio_request(replace(window(),data=b'\0'*64))
+        rows,model=self.run_worker(io.StringIO(json.dumps(invalid)+'\n'+json.dumps(silent)+'\n'+json.dumps(valid)+'\n'))
+        self.assertEqual(rows[0]['profile'],audio_profile_for().key);self.assertIn('error',rows[1]);self.assertEqual(rows[2],{'skip':True,'reason':'digital_silence'});self.assertEqual(len(rows[3]['vector']),768)
         model.encode_audio.assert_called_once_with(window())
 
     def test_worker_rejects_oversized_lines_without_parsing_partial_messages(self):
@@ -102,6 +119,34 @@ class AudioWorkerTests(unittest.TestCase):
             def readline(self,size):self.requested=size;return 'x'*size
         stream=TooLarge();rows,model=self.run_worker(stream)
         self.assertEqual(stream.requested,12*1024*1024+1);self.assertEqual(rows[1],{'error':'SourceLimit'});model.encode_audio.assert_not_called()
+
+    def test_real_private_pipe_carries_maximum_pcm_with_an_owned_cpu_fixture(self):
+        # Real process/pipe/backpressure, but a fake torch/model inside that
+        # process. No selected runtime, weights, CUDA or external code executes.
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'aredoko-revision.txt').write_text(DEFAULT_PROFILE.revision)
+            shim=root/'owned_worker.py'
+            shim.write_text('import sys,types,contextlib\nsys.path.insert(0,'+repr(str(Path(__file__).resolve().parents[1]/'app'))+')\n'+'''
+sys.modules['torch']=types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda:False),float32='fake',inference_mode=contextlib.nullcontext)
+import ai_adapters
+class Model:
+    dimension=768
+    def encode_audio(self,window):
+        assert window.frame_count==480000
+        return types.SimpleNamespace(tolist=lambda:[1.]+[0.]*767)
+ai_adapters.load_adapter=lambda *args:Model()
+import ai_worker
+ai_worker.main()
+''',encoding='utf-8')
+            encoder=EncoderProcess(sys.executable,root,audio_profile_for());worker=None
+            response=encoder._response
+            def command(python,script,arguments,**kwargs):return [sys.executable,'-X','utf8','-B',str(shim),*arguments]
+            try:
+                with patch('ai_process.worker_command',side_effect=command),patch.object(encoder,'_response',side_effect=lambda:response(timeout=10)):
+                    result=encoder.encode('audio',PCMWindow(0,30000,struct.pack('<f',.25)*480000));worker=encoder.process
+                self.assertEqual(result,[1.]+[0.]*767);self.assertEqual(encoder.device,'cpu');self.assertTrue(encoder.resident)
+            finally:encoder.close()
+            if worker is not None:self.assertIsNotNone(worker.poll())
 
 
 if __name__=='__main__':unittest.main()

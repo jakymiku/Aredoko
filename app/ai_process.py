@@ -74,12 +74,18 @@ class EncoderProcess:
             self._stop();raise AIUnavailable('Incompatible AI worker')
         self.device=hello['device']
     def encode(self, operation, value):
-        audio_message=None
+        audio_message=None;audio_silent=False
         if operation=='audio':
             if 'audio' not in self.profile.modalities:raise AIUnavailable('Selected profile does not support audio input')
+            from audio_input import validate_pcm
             from audio_protocol import audio_request
-            audio_message=audio_request(value)  # Reject malformed input before loading a model.
+            validate_pcm(value);audio_silent=value.is_digital_silence
+            if not audio_silent:audio_message=audio_request(value)
         with self.lock:
+            if audio_silent:
+                if self._closed:raise AIUnavailable('AI worker is closed')
+                self.telemetry={};self.last_used=time.monotonic()
+                return None  # No fabricated content vector or model startup.
             self._start()
             request=audio_message if audio_message is not None else {'operation':operation}
             if audio_message is None:request['image' if operation=='image' else 'text']=base64.b64encode(value).decode('ascii') if operation=='image' else value
@@ -93,7 +99,7 @@ class EncoderProcess:
                     try: vector=normalized(vector,self.profile.dimension)
                     except (TypeError,ValueError) as ex:
                         self._stop();raise AIUnavailable('Invalid embedding from worker') from ex
-                elif not (operation=='image' and result.get('skip') is True):
+                elif not (result.get('skip') is True and (operation=='image' or operation=='audio' and result.get('reason')=='digital_silence')):
                     raise AIUnavailable('Missing embedding')
                 return vector
             except (OSError,KeyError) as ex:

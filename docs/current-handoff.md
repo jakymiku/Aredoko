@@ -17,7 +17,8 @@
 - **R06/R07音声worker契約もsource実装**：明示text/audio profile・別contract/key、型付きPCM private IPC、両側strict検証、default audio無効/legacy key保全。新worker/関連profile/release/PCMのCPU45 PASS、基本Pythonのworker9 PASS。[仕様](audio-content-design.md)。実モデルAPIの前記GPU評価とは区別し、新private IPCの実GPUは未実施。通常索引/UIや512D空間へは未接続、基本ZIP04/Alpha未収録。
 - **P6既知NOTICE漏れを修正**：ONNX Runtime付属`ThirdPartyNotices.txt`約333KBをcollectorが認識せず旧束へ未収録だった。名前判定を補強、CPU19 PASS。新規NOTICE束`runtime-notices05`（証拠root内）は52 distributions/92 entries/1,456,448bytes、不足distribution0。[詳細](runtime-notice-inventory.md)。旧sealed pack/約3GB archiveは変更せず、新封印待ち。公開承認や全native reviewを完了扱いにしない。
 - **P6 native対応表も作成**：`inspect_runtime_native.py`と生成CPU7 PASS。`runtime-native-review02.json` はdeclared native325（RECORD owner対応285/未対応40/重複0/不明PE0）、METADATA/RECORD SHA照合済み。未対応はCPython標準拡張/本体/同梱DLL等。[範囲・残review](runtime-notice-inventory.md)。payload全hash/依存graph/公開承認とは区別し、旧pack/archive不変。ctimeのpath/handle差による初回停止と修正も記録。
-- **現在の次の1件**：R07のデジタル無音を音声workerへ送らない小さな保護を追加する。完全ゼロPCMだけを明確にskipし、環境音/低音量音声をVAD相当と誤判定しない。producer/atomic保存・検索の統合は設計レビュー推奨として別単位。GPU/GUIの許可は全て実施済み、新範囲には新回答が必要。M1残受入・native公開review/host・R06最終方式選定/M2は未完、shutdownなし。
+- **R07デジタル無音保護も実装**：正/負の完全ゼロPCMはparentのモデル起動前にskip。低音量の非ゼロは通す。child側もstrict skip理由を維持。開発/基本Pythonでworker12 PASS、最大30秒PCMの実所有CPU subprocess/pipe往復・handshake・正規化・終了も確認。[仕様とVADとの区別](audio-content-design.md)。通常索引/空結果の永続化は未接続。
+- **現在の次の1件**：今回のsourceを新規基本ZIP05へまとめ、既存キャッシュでの必要なbuild/自己検査と同梱Python基本CPUまで行う。GUIが無変更の成功flowを反復しない。producer/atomic保存・検索の統合は設計レビュー推奨として別単位。GPU/GUIの許可は全て実施済み、新範囲には新回答が必要。M1残受入・native公開review/host・R06最終方式選定/M2は未完、shutdownなし。
 
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。

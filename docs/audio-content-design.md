@@ -91,6 +91,10 @@ CREATE TABLE IF NOT EXISTS ai_audio_segments(
 
 予備品質の条件と結果は[音声入力評価](audio-input-evaluation.md)を参照。R06最終方式選定、長時間音声の逐次producer/atomic保存/検索接続・無音対策・実録音/実曲の評価は残る。既存512D音響空間へ768Dを流用しない。
 
+**デジタル無音の局所保護**：検証済みPCMが全sampleで正/負のゼロの場合、parentはモデル起動前に`None`（索引候補なし）を返す。workerも同条件で`skip/digital_silence`を返し、未知のskip理由を無音扱いしない。小音量の非ゼロ値は通す。これは完全なVAD/雑音判定ではなく、general silenceの品質受入や空結果の永続化ではない。future producerは「完了したが候補なし」と未処理を区別して保存する必要がある。
+
+最終worker関連12 testsが開発Python/基本Python3.11ともPASS。最大30秒/1,920,000bytesを実所有subprocess/pipeで転送し、profile handshake、次元/正規化、終了/残存なしまで確認。child内のTorch/modelはfake CPU fixtureであり、実GPU/重みを使わない。実モデルの前記API評価と、private IPCのCPU試験を合算して新worker経由GPU成功とは記さない。
+
 ### 5.4 原子性と中断・再開契約
 - 音声1アイテムあたりのセグメント登録はSQLiteトランザクション内で不可分（Atomic）に実行。既存の同一 `item_id` の古いセグメントを全削除した上で一括挿入。
 - 処理中のキャンセル（`cancel.is_set()` / `check()`）を各セグメント抽出間、候補バッチ間、および多数セグメント評価中（256セグメントごと）に監視し、キャンセル時は部分的な不完全セグメントを残さず即時中断。

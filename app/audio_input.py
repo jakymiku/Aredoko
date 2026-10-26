@@ -38,6 +38,12 @@ class PCMWindow:
     @property
     def frame_count(self):return len(self.data)//4
 
+    @property
+    def is_digital_silence(self):
+        # Caller validates alignment/finiteness first. This is exact zero only,
+        # including negative zero; it is not a VAD or a loudness threshold.
+        return not any(value[0]!=0 for value in struct.iter_unpack('<f',self.data))
+
 
 def validate_pcm(window):
     if not isinstance(window,PCMWindow):raise AudioInputUnavailable('Expected an immutable PCM window')
