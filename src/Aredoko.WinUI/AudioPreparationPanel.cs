@@ -40,6 +40,10 @@ internal sealed class AudioPreparationPanel : IDisposable
         AutomationProperties.SetAutomationId(cancel,"CancelAudioContent");
         ToolTipService.SetToolTip(start,"準備済みの音声は再利用します。残りがある場合は、もう一度押すと続きへ進みます。");
         Content.Expanding+=async(_,_)=>{if(disposed)return;timer.Start();await RefreshAsync();};
+        Content.SizeChanged+=(_,args)=>
+        {
+            if(!disposed&&Content.IsExpanded&&args.NewSize.Height>args.PreviousSize.Height)Content.StartBringIntoView();
+        };
         Content.Collapsed+=(_,_)=>timer.Stop();
         timer.Tick+=Tick;
         start.Click+=async(_,_)=>await CommandAsync(true);

@@ -141,7 +141,7 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
-        if (args.usability_u1 and not args.uia_only) or args.global_edge:
+        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content:
             # The owner launches this one test process; use normal Windows
             # activation, never input attachment, security bypass or other apps.
             report['foreground_activation_requested']=bool(user.SetForegroundWindow(int(hwnd)))
@@ -190,7 +190,11 @@ def main():
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.audio_content:
             from ui_audio_content_audit import audit
-            audit(ui,tree,shot,report,check,cat,audio_feature,audio_gate,audio_reached)
+            def input_owned():
+                foreground=user.GetForegroundWindow();owner=wintypes.DWORD()
+                user.GetWindowThreadProcessId(foreground,ctypes.byref(owner))
+                return owner.value==proc.pid
+            audit(ui,tree,shot,report,check,cat,audio_feature,audio_gate,audio_reached,input_guard=input_owned)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.global_edge:
             from ui_global_edge_audit import audit
