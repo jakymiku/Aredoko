@@ -1,5 +1,19 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-26）
 
+## 今回の継続作業・終了checkpoint（以下より優先）
+
+- **現行アプリsource `2cf99b2`**、既存`feat/winui3-production-mvp-20261011`/PR #5を継続。今回`cc6f7e8`から引継ぎ。最後は文書だけのcommitを追加するため、最新HEADは`git log -1`で確認する。新branch/PR/main merge/Actionsなし。PR metadata connectorはTransport closedだったが、GitでPR #5 head refとremote branchの一致を確認する。
+- **利用者向け改善**：`7aa2162`の原本検査4並行、`b8b41a4`の作成中件数表示、`e965455`の原寸animation、`9968eac`のbounded HTTP再利用、`2cf99b2`のpage/thread内root解決再利用。生成小CBZの割当約27–35ms、生成実PNG5万件のsnapshot45.219→35.116s（単回）・全payload一致。大規模準備の約35秒待ちは残る。[一覧の証拠](result-sessions.md)/[viewerの証拠](viewer-performance.md)。
+- **最終基本ZIP06**：`dist/portable-basic-20261026-06/Aredoko` と adjacent `Aredoko-windows-x64.zip`、source **`2cf99b2`**、**800 files / 661,032,596bytes**。Core/Portable/起動画面CPU自己検査/同梱runtime/全inventory/ZIP照合、同梱Pythonの基本CPU23 PASS・owned EOF exit0。既存SDKキャッシュ用targetsは開発用で未同梱。06のGUIは未実施（WinUI変更のないflowを反復していない）。04では通常EXE再起動とviewer実入力を個別回答後に受入済み。
+- **installed Alphaは更新していない**：前日の`e52c8ec`のまま。普段のDB/設定/shortcut/旧release不変。新機能を試す候補は上記06であり、installed Alphaと同一版ではない。配布先clean Windowsは未受入。
+- **音声の到達点**：`ba6e3e7`の安全なPCM切り出し、`a59245b`のtext/audio専用profile/namespaceとprivate worker、`a33077f`の完全ゼロskipを実装。CPU45＋最終worker12（開発/基本Python、実CPU pipe含む）確認。`17b3265`の限定GPU予備評価では4合成発話×日英query8、合成音3、相互類似2が全Top1。**通常の音声自動索引/検索GUIへはまだ未接続**。[予備評価](audio-input-evaluation.md)/[契約](audio-content-design.md)。既存text/cover/512D保存は維持。
+- **P6の進捗**：`c6d8602`でONNX Runtimeの333KB ThirdPartyNotices収集漏れ修正・CPU19 PASS、新NOTICE束05は52 distributions/92 entries/1,456,448bytes。`750b116`でnative325の対応表（owner対応285/未対応40）・CPU7 PASS。旧sealed runtime/archiveは保持、新NOTICEでの再封印/個別native公開review/不変host/registry（0）は未完。[詳細](runtime-notice-inventory.md)。公開承認と混同しない。
+- **今回の制約/実施済み許可**：PC使用中のためGUI/GPUは各質問への回答後だけ実施。今回の各限定GUI、tone GPU1回、生成8本のGPU評価1バッチの許可は全て実施済みで、次回へ拡張しない。新モデル/依存取得0、私物scan/通常DB変更0。所有試験は終了。**shutdownしない**。終了準備開始時の5時間残枠は約10%、reset credit操作なし。
+- **次の1件（P3/P7）**：新候補06と既存`real-source-50k01`の生成実ファイルを使い、5万件の初回準備/取消/末尾移動・可視thumbnailだけを一つの限定native caseへ具体化し、GUI実行前にユーザーへ問い合わせる。生成ファイルは再作成せず、成功済みの取得/復元/棚/起動flowは反復しない。35秒待ちをさらに変える場合もsource identity/祖先guard/順位を維持する。
+- **別の次単位**：R07の長時間producer・atomic保存/backup fence・namespace/検索への接続は[一点レビュー用メモ](audio-producer-review.md)で**Astraクラス推奨**。全計画の再作成は不要。M1残受入のHC/物理DPI/clean Windows/長時間FPS-RSS、実録音/曲/ASR比較、M2と製品全体は未完。未受入を発生中の致命的不具合と混同しない。
+
+生証拠は `data/ai-ui/snapshot-review-20261026/`（Git対象外）。途中のharness失敗（撮影tooltip見出し、provider60件の期待等）と診断・修正は各技術文書/ログに保持する。06内docsはbuild時点のsnapshotであり、このリポジトリの最新引き継ぎを再開の正本とする。
+
 ## Sol再開checkpoint（2026-10-26、以下より優先）
 - `cc6f7e8`からclean/remote/PR #5 ref一致で再開。**`7aa2162`**：snapshotの既存原本guardを最大4件で並行化、120件以内/順位/世代/取消を保全。生成5万metadata＋実PNG80枚の旧44.590s→20.772s（各1回、他PC負荷非固定）、全payload SHA一致。CPU31 PASS、許可済みnative1試行15 checks/4PNG目視/exit0。[証拠](result-sessions.md)。属性API試作は効果がなく撤去済み。API/GUIの全性能合格ではない。
 - **`87fbf51`**：一覧の初回表記も表示範囲に統一。Portable/frontend06 build成功（既存warnings維持）、後続の原寸nativeで初回`1–3 / 3`も確認。[キャッシュ済みSDKビルドの一時指定と失敗ログ](p3-continuous-browse.md)。installed Alpha/基本ZIP03は前日の`e52c8ec`のままで、今回のsourceはまだ反映していない。

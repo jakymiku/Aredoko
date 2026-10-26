@@ -82,8 +82,8 @@
 | R03 | バックアップ/復旧・DB/profile更新失敗からの復帰 | なし | Sol実装、**Astra推奨：整合性設計/レビュー** | CPU_DONE：[停止時backup/新規復元](backup-recovery.md)・launcher引数CPU確認、UI導線R10/native R14 |
 | R04 | 大量索引の明示継続・差分・中断再開を一連で完成 | R01、R03契約 | Sol、複数保存先の競合のみAstraレビュー | CPU_DONE：[A/B/C](index-continuation.md)実装/CPU合格、実機GUI/GPU受入はR14 |
 | R05 | 動画起点の類似検索と時刻根拠/既存UI接続 | R01、既存動画索引 | Sol。集約契約が曖昧ならAstra | CPU_DONE：[保存済みframe最大集約/時刻根拠](video-similarity.md)、4通り根拠・視覚/音響空間分離・表紙/内部頁契約、UIシーク接続、実機R14 |
-| R06 | 音声/音楽の入力能力・モデル/契約/評価設計を決定 | なし | **Astra強く推奨：方式選定** | DOING：[現状監査](polish-audit-20261020.md)・[音声契約](audio-content-design.md)。保存空間は実装、既存EG2の直接入力と別方式の実入力比較/実測は未完 |
-| R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | DOING：発話区間の保存/検索/時刻根拠は実装・検証済み。元音声→発話抽出→通常索引へのproducer未実装 |
+| R06 | 音声/音楽の入力能力・モデル/契約/評価設計を決定 | なし | **Astra強く推奨：方式選定** | DOING：既存EG2の音声APIと生成8本の[直接入力予備評価](audio-input-evaluation.md)は実測済み。実録音/実曲/ASR等との比較・最終方式選定は未完 |
+| R07 | 発話内容の時間付き索引/検索adapter | R06、R03/R04契約 | Sol。新モデル取得は別途許可 | DOING：既存発話区間保存/検索/時刻根拠を維持。安全なPCM切り出し・専用音声profile/worker・完全ゼロskipを実装。長時間producer/atomic保存/通常検索への接続は[一点レビュー](audio-producer-review.md)後の別単位 |
 | R08 | 音響/音楽特徴の索引・日本語検索・類似検索 | R06、R03/R04契約 | **Astra推奨：特徴/比較設計**、実装Sol可 | DOING：512D保存/類似・記述子照合は実装済み。実音声/曲からの特徴抽出・実モデル空間/品質未受入 |
 | R09 | 音声/音楽の検索→再生→類似検索のGUI統合 | R07、R08 | Sol＋WinUI skills | CPU_DONE：再生/シーク/類似UI接続は保持。自動内容索引はR07/R08待ち。実音声の検索→再生受入が残る |
 | R10 | 初回設定・未索引/上限/失敗状態・資源管理の仕上げ | R01、既存設定 | Sol | CPU_DONE：[状態明瞭化・所有取消・診断情報](ui-consistency-checklist.md)、未索引/対象外/モデル未導入の案内、実機R14 |

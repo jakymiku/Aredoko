@@ -4,7 +4,7 @@
 
 ## 現行実行キュー（2026-10-25、実機フィードバック計画）
 
-**2026-10-26追記（以下の古い次作業より優先）**：P3 snapshot guardのbounded並行化、作成中件数表示、原寸animation streamとP1/P3のHTTP接続再利用を実装。新しい基本ZIP04/source`9968eac`へ収録し、生成専用nativeでprogress/animation/CBZ cache・通常EXE再起動まで限定確認済み。次は未受入のviewer実入力を一つにまとめる。正確なcommit/候補/未検証/実施許可は[current-handoff](current-handoff.md)を優先する。HC/物理DPI/clean Windows・長時間FPS/RSS・公開runtimeは未完。M1や全ロードマップ完了とは扱わない。
+**2026-10-26追記（以下の古い次作業より優先）**：bounded source検査・進捗表示・原寸animation・HTTP再利用・viewer実入力を実装/限定確認。実PNG5万件のroot解決を局所再利用し45.2→35.1秒（単回・準備待ちは残る）。最終基本ZIP06/source`2cf99b2`はbuild/基本CPU済み、06の追加GUIは未実施。音声は生成予備評価とPCM/専用workerまで進み、通常索引/UIは未接続。P6はThirdPartyNotices漏れ修正とnative対応表を追加。次は生成実ファイル5万件の限定nativeを具体化する。正確な候補/許可/残件は[current-handoff](current-handoff.md)を優先。HC/物理DPI/clean Windows・長時間FPS/RSS・runtime公開review/host、R07 producer/M2は未完。M1や全ロードマップ完了とは扱わない。
 
 [改善計画 U1–U6](usability-followup-20261025.md)を直近の実装キューへ統合する。**U1/U2/U4a/U4b/U5とU6 filterはsource実装済み、U3はpalette APNG黒化修正を含む局所改善済み**。2026-10-26の生成nativeでU4b/U5の最終refresh（Light）、実Ctrl＋クリック/グリッド右クリック一括整理（Dark）、表示切替の先頭保持まで確認済み。旧FAILは履歴として保持する。起動時照合は所有停止と任意オフの高度な設定も追加済み。**U3bの生成大容量GIF/APNG/CBZ限定受入と基本ZIP03/installed Alpha更新まで完了**（source `e52c8ec`、詳細はcurrent-handoff）。次はP3の既知の5万件metadata初回snapshot待ちの局所削減を一単位進める。HC/物理DPI、大画像FPS/長時間RSS、公開runtime権利/host、P7残受入/M1→R06–R09は維持。元のP0–P7/製品ビジョンを置き換えず、完了機能を繰り返さない。
 
