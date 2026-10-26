@@ -76,3 +76,12 @@
 新しい内部primitive：`VideoWindow`は最大16秒・1fpsの1〜16 RGB frames・各384px以内・全8MiB以内。時刻/寸法/immutable bytesを検証し、private wireで画素だけを転送する。URL/path/任意decoder入力を許可しない。`video_profile_for`はtext/video専用contractとnamespaceを作り、旧text/cover/audioのkeyを保持。adapterはvisionを残しaudioをloadせず、`model.encode({'video':frames})`を1回呼び、STの再samplingを無効化・140soft tokens/frame・timestamp promptなしを明示する。PIL資源はfinallyでcloseする。
 
 Python9件（開発/基本Python）・既存audio worker14・既存profile関連のCPU確認を実施。RGB時刻/wire上限・悪い入力・旧profile拒否・動画1入力へのbatch・黒frame非skip・model前validationを確認した。**この段階ではGPU/品質/区間索引/検索UIの完了ではない。** 次は個別許可による生成3frameのprivate worker GPU入力確認。その後にguard付きdecoder、長動画分割、atomic索引、検索/時刻根拠、image/audio/video所有モデルの同時常駐防止を一単位ずつ接続する。現行`InferenceOwnership`は2ownerのため、第三ownerを無計画に追加しない。
+
+
+### 生成3frameの実GPU API確認と区間decoder（2026-10-27）
+
+個別許可後`video-worker-gpu01`で実private workerへ3生成RGB frameを1動画として送信。動画と日本語queryが有限・正規化768Dを返し、cosine0.7425（精度/確率ではない）。child allocator peak965.7MiB、上限3072MiB、元画素不変、所有worker回収済み（既存close方式のexit1）。追加取得/GUI/DB/実動画0。API接続の限定合格で、検索品質や通常索引の完成とはしない。
+
+`video_window_decode.read_video_window`は検証済みseek可能handleから1既知区間だけをFFmpegで読み、RGB384正方・SAR/比率維持letterbox・1fps・最大16frameへ変換する。pipe/fd＋限定demuxer、20秒、出力上限、所有子回収を既存_runで保持。端数末尾は既知のtotal_duration_msでのみ最終frameを保持してsamplingし、短いdecodeから全体EOFを推測しない。初回はoutput側`-t`が3.3秒の末尾frameを落とすことを最小CPU診断で特定。input側の時間上限＋frame数上限へ修正し、赤→青の生成動画で後区間の実画素と3.3秒tailを確認。失敗log01/02も保持。
+
+`PreviewReader.video_input_window`へ内部接続し、既存の原本版・size/mtime/open handle・祖先link・登録/除外の前後検査、取消、slot解放を適用。HTTPにraw clip routeを追加せず、通常索引・DBは更新しない。known durationは将来のproducerが同じ検証済みsourceのprobe結果から与える必要がある。decoder6（開発/基本Python）、source5（両Python）、既存preview22/audio source18 PASS。通常の動画検索は従来方式のまま。次はduration/coverage planと全区間成功後のatomic保存、所有model統合である。

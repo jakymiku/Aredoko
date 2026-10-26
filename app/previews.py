@@ -22,6 +22,7 @@ from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
                             VIDEO_SUFFIXES, MAX_VIDEO_BYTES)
 import audio_input
 from audio_stream import PCMStream
+from video_window_decode import read_video_window,validate_interval,VideoWindowUnavailable
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
@@ -258,6 +259,14 @@ class PreviewReader:
     def video_manifest(self,item_id):
         return self._read(item_id,operation='video_manifest')
 
+    def video_input_window(self,item_id,start_ms,duration_ms,revision,*,total_duration_ms,cancel=None):
+        """Internal known-interval input; no model, index or public raw route."""
+        validate_interval(start_ms,duration_ms,total_duration_ms)
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}',revision) is None:raise ValueError('Invalid video revision')
+        if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Video decode cancelled')
+        return self._read(item_id,operation='video_window',revision=revision,
+                          clip=(start_ms,duration_ms,total_duration_ms),cancel=cancel)
+
     def read_audio(self, item_id):
         return self._read(item_id, operation='audio')
 
@@ -375,7 +384,7 @@ class PreviewReader:
             # A vanished/replaced page or folder is a rescan case, never a crash.
             raise (ReaderChanged if operation != 'preview' else PreviewUnavailable)('Folder book changed') from error
 
-    def _read(self, item_id, operation='preview', page=0, revision=None, start=None, end=None, row=None, row_loaded=False, root_cache=None, original=False, conditional=False, if_none_match=None, pcm=None, cancel=None):
+    def _read(self, item_id, operation='preview', page=0, revision=None, start=None, end=None, row=None, row_loaded=False, root_cache=None, original=False, conditional=False, if_none_match=None, pcm=None, cancel=None, clip=None):
         image_limit=MAX_LARGE_IMAGE_BYTES if original else MAX_IMAGE_BYTES
         if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
             raise PreviewUnavailable('Invalid item')
@@ -401,7 +410,7 @@ class PreviewReader:
             if operation in ('audio','audio_manifest','audio_range','audio_pcm','audio_pcm_source'):
                 if suffix not in AUDIO_MIME:
                     raise PreviewUnavailable('Audio player requires a supported audio item')
-            elif operation in ('video','video_manifest','video_range','video_frame','video_frames_ai'):
+            elif operation in ('video','video_manifest','video_range','video_frame','video_frames_ai','video_window'):
                 if suffix not in VIDEO_MIME and (operation != 'video_frames_ai' or suffix not in VIDEO_SUFFIXES):
                     raise PreviewUnavailable('Video player requires a supported video item')
             elif operation in ('image_info', 'image_manifest', 'image_frame', 'image_original', 'animation_source'):
@@ -463,14 +472,18 @@ class PreviewReader:
                         raise PreviewUnavailable('Video exceeds playback limit')
                     if data.lstrip()[:16].upper().startswith((b'#EXTM3U', b'[PLAYLIST]', b'<ASX')):
                         raise PreviewUnavailable('Playlist files are not played')
-                elif operation in ('video_manifest','video_range','video_frame'):
+                elif operation in ('video_manifest','video_range','video_frame','video_window'):
                     if not 1 <= info.st_size <= MAX_STREAM_VIDEO_BYTES:
                         raise PreviewUnavailable('Video exceeds stream limit')
                     prefix=file.read(512).lstrip()
                     if not prefix or prefix[:16].upper().startswith((b'#EXTM3U',b'[PLAYLIST]',b'<ASX')):
                         raise PreviewUnavailable('Playlist files are not played')
                     mime=VIDEO_MIME[suffix]
-                    if operation=='video_frame':
+                    if operation=='video_window':
+                        # The caller plans from guarded duration metadata; do
+                        # not derive successful whole-video EOF from this clip.
+                        file.seek(0);result=read_video_window(file,clip[0],clip[1],total_duration_ms=clip[2],cancel=cancel)
+                    elif operation=='video_frame':
                         file.seek(0);data=self.videos.read(file,current_revision,at_ms=page);mime='image/png'
                     elif operation=='video_manifest':
                         result={'item_id':item_id,'size_bytes':info.st_size,'mime':mime,'revision':current_revision}
@@ -592,14 +605,14 @@ class PreviewReader:
                                     with archive.open(entry) as image:
                                         data = image.read(image_limit + 1)
                                 mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest','video','video_manifest','video_range','audio','audio_manifest','audio_range','audio_pcm','audio_pcm_source','tag_source','page_catalog','animation_source','image_info','image_manifest','video_frames_ai') and len(data) > image_limit:
+                if operation not in ('manifest','video','video_manifest','video_range','video_window','audio','audio_manifest','audio_range','audio_pcm','audio_pcm_source','tag_source','page_catalog','animation_source','image_info','image_manifest','video_frames_ai') and len(data) > image_limit:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
                 # Verify the path was not replaced while reading, without repeating
                 # the redundant full Path.resolve(strict=True) filesystem round-trips.
                 current = source.stat(follow_symlinks=False)
                 if _reparse(current) or stat.S_ISLNK(current.st_mode) or (current.st_ino, current.st_dev) != (info.st_ino, info.st_dev):
-                    if operation in ('video_manifest','video_range','video_frame','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','animation_source','image_info','image_manifest','image_frame','image_original','manifest','page'):
+                    if operation in ('video_manifest','video_range','video_frame','video_window','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','animation_source','image_info','image_manifest','image_frame','image_original','manifest','page'):
                         raise ReaderChanged('Source location changed')
                     raise PreviewUnavailable('Location changed while previewing')
                 parts = PurePosixPath(row['relative_path']).parts
@@ -613,14 +626,14 @@ class PreviewReader:
                 for parent in parents:
                     p_info = parent.stat(follow_symlinks=False)
                     if _reparse(p_info) or stat.S_ISLNK(p_info.st_mode):
-                        if operation in ('video_manifest','video_range','video_frame','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','animation_source','image_info','image_manifest','image_frame','image_original','manifest','page'):
+                        if operation in ('video_manifest','video_range','video_frame','video_window','audio_manifest','audio_range','tag_source','tag_input','page_catalog','page_input','animation_source','image_info','image_manifest','image_frame','image_original','manifest','page'):
                             raise ReaderChanged('Source location changed')
                         raise PreviewUnavailable('Location changed while previewing')
                 if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (info.st_size, info.st_mtime_ns, info.st_ctime_ns):
                     if operation not in ('preview', 'cover_input', 'video_frames_ai'):
                         raise ReaderChanged('Source changed while reading')
                     raise PreviewUnavailable('Source changed while reading')
-                if operation in ('audio_pcm','audio_pcm_source'):
+                if operation in ('audio_pcm','audio_pcm_source','video_window'):
                     # Native extraction can take seconds. Recheck registration,
                     # exclusions and metadata before publishing producer input.
                     with self.catalog.connect() as db:
@@ -630,7 +643,7 @@ class PreviewReader:
                     if (live is None or live['status']!='present' or
                         any(live[key]!=row[key] for key in ('path','relative_path','size_bytes','mtime_ns')) or
                         _excluded(live['relative_path'],tuple(json.loads(live['excludes_json'])))):
-                        raise ReaderChanged('Audio scope changed during extraction')
+                        raise ReaderChanged('Media scope changed during extraction')
                     if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Media decode cancelled')
                     if operation=='audio_pcm_source':return os.fdopen(os.dup(file.fileno()),'rb'),result
                     return result
@@ -643,7 +656,7 @@ class PreviewReader:
                 if operation in ('video_range','audio_range'): return data, mime, info.st_size
                 if conditional:return (None if unchanged else data), mime, etag
                 return data, mime
-        except (VideoPreviewUnavailable, AnimationUnavailable, audio_input.AudioInputUnavailable) as error:
+        except (VideoPreviewUnavailable, VideoWindowUnavailable, AnimationUnavailable, audio_input.AudioInputUnavailable) as error:
             raise PreviewUnavailable('Preview unavailable') from error
         except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, zlib.error) as error:
             raise PreviewUnavailable('Invalid or unsupported archive') from error
@@ -709,7 +722,7 @@ def _check_folder(row, directory_info, pages):
 
 def _folder_read(row, item_id, operation, page, revision, *, original=False, conditional=False, if_none_match=None):
     """Pages of an image folder registered as one book. Read-only, bounded."""
-    if operation in ('video', 'video_manifest', 'video_range', 'video_frame', 'video_frames_ai'):
+    if operation in ('video', 'video_manifest', 'video_range', 'video_frame', 'video_frames_ai','video_window'):
         raise PreviewUnavailable('Video player requires a supported video item')
     if operation in ('audio', 'audio_manifest', 'audio_range'):
         raise PreviewUnavailable('Audio player requires a supported audio item')
