@@ -15,11 +15,12 @@ def digest(folder):
         value.update(path.read_bytes());value.update(str(path.stat().st_mtime_ns).encode())
     return value.hexdigest()
 
-def create(target,count=50_000,root_count=258):
+def create(target,count=50_000,root_count=258,*,materialize_images=False):
     if not 120<=count<=50_000 or not 2<=root_count<=258:raise ValueError('Bounded fixture size required')
+    if type(materialize_images) is not bool:raise ValueError('Explicit generated-file mode required')
     target.mkdir(parents=True,exist_ok=False)
     db=target/'catalog.sqlite';generated=target/'generated';generated.mkdir()
-    actual=min(75,count);catalog=ProductionCatalog(db)
+    actual=count if materialize_images else min(75,count);catalog=ProductionCatalog(db)
     try:
         roots=[];paths=[]
         for n in range(root_count):
@@ -33,9 +34,10 @@ def create(target,count=50_000,root_count=258):
         image=png(width=180,height=240)
         for n in range(1,count+1):
             if n<=actual:
-                root=roots[0];kind='image';name=f'{n:05d}-'+('長い作品名・日本語の素材-'*3)+'.png'
-                path=paths[0]/name
-                # These are the only records backed by real source files.
+                at=(n-1)%root_count if materialize_images else 0
+                root=roots[at];kind='image';name=f'{n:05d}-'+('長い作品名・日本語の素材-'*3)+'.png'
+                path=paths[at]/name
+                # Full mode creates ordinary independent files, not hardlinks.
                 path.write_bytes(image);size=len(image);mtime=path.stat().st_mtime_ns
             else:
                 root=roots[1+(n-actual-1)%(root_count-1)];kind,suffix=types[n%len(types)]
@@ -52,6 +54,7 @@ def create(target,count=50_000,root_count=258):
             connection.executemany('INSERT INTO items(id,title,kind,tags,shelf,favorite) VALUES(?,?,?,?,?,?)',metadata)
             connection.executemany('INSERT INTO item_locations(item_id,location_id) VALUES(?,?)',mappings)
         info={'metadata_count':count,'actual_png_files':actual,'registered_root_count':root_count,'roots':roots,
+            'all_items_backed_by_generated_files':materialize_images,
             'per_root':per_root,'long_root_id':roots[-1],'last_item_id':count,
             'max_root_path_chars':max(len(str(p.resolve())) for p in paths),'source_digest':digest(generated),
             'filesystem_scan_run':False,'generated_only':True}

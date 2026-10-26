@@ -84,3 +84,13 @@ snapshot作成中だけ4 workerで既存の`_current`を実行する。最大120
 Coreの任意observerは通常transportで毎秒poll（1要求2秒上限）し、create完了/取消時にpollも取消・待機する。ID/条件/件数/状態を検証し、旧serverで進捗非対応でもcreate自体を壊さない。WinUIはversion/取消/ローカルreporting flagで旧callbackを捨て、件数と初回の空領域だけを更新する。
 
 Python33/Core runner/Portable frontend08 PASS。明示許可の`data/ai-ui/snapshot-review-20261026/progress-native01`は生成1,201小画像の1試行、5 checks/4PNG目視/所有exit0。120/1,201の表示、部分行非公開、完了、中断、新しい1件検索への旧進捗混入なしを確認。長時間・全検索方式のnative受入を代替せず、GPU/通常DB/installed Alphaは未使用。
+
+### 実ファイル5万件とroot解決の局所再利用（2026-10-26）
+
+`measure_library_scale.py --snapshot-only --real-files`を追加。各metadataに独立した通常PNG（180×240）を用意し、原本identityが実際に取得できた件数・最初/最後の再確認も検証する。`--fixture`で明示した生成fixtureを再利用でき、5万ファイルの再生成を避ける。通常の反復coverage試験とは分離する。SQLで生成metadataを投入するため、ファイルが存在してもdirectory scanの速度証拠ではない。
+
+生成5万PNG/2 rootsの1回測定で45.219秒。作成中の各provider page・各threadだけ既存`_safe_path`のroot path/chain/正規解決結果を再利用する小変更後、同じfixtureは35.116秒（約22.3%短縮）。全50,000行のordinal/ID/image/payload SHA一致、全source identity取得、先頭/末尾present、原本digest不変、所有処理解放。一時DB52,617,216bytes。証拠は`real-source-50k01`/`real-source-reuse-50k02`/`real-source-comparison.json`（既存証拠root内）。fixture作成100.6秒と再利用前のdigest確認38.3秒はsnapshot時間へ含めない。
+
+祖先/reparse/leafのstatとsource resolveは各itemで維持し、アクセス許可/物理identityをcacheしない。range/neighborの再確認はcacheなし。cacheはthread-localかつpage内だけで、全session/全queryへ持ち越さない。最大4 worker/120件、世代/取消/join/部分結果非公開も保持する。
+
+関連初回56件は55 PASS/新scope試験1 FAIL。fixture providerが60/60/5件なのを120/5と誤想定したharness期待だったため、cacheのpage非共有/thread単独所有を確認する期待へ修正し対象1件PASS。raw失敗を保持。基本Python3.11のscope/同一payload/祖先link guard4件もPASS。実素材サイズ・cold cache・製品Pythonの5万件時間・GUI/RSSの総合受入ではない。約35秒の準備待ち自体は残る。

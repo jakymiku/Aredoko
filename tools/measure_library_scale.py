@@ -21,21 +21,42 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--snapshot-only',action='store_true',help='One fixed-order result snapshot; no repeated coverage timings')
     parser.add_argument('--count',type=int,default=50000,help='Generated metadata count for snapshot-only (120..50000)')
+    parser.add_argument('--real-files',action='store_true',help='Snapshot-only: create one ordinary generated PNG for every metadata row')
+    parser.add_argument('--fixture',type=Path,help='Snapshot-only: reuse an explicitly generated data/ai-ui fixture without duplicating its media')
     args=parser.parse_args();target=args.output.resolve()
     if not 120<=args.count<=50000 or (not args.snapshot_only and args.count!=50000):parser.error('Custom count is for bounded snapshot-only fixtures')
+    if args.real_files and not args.snapshot_only:parser.error('Real-file mode is one snapshot, not repeated broad benchmarks')
+    if args.fixture and not args.snapshot_only:parser.error('Fixture reuse is for one fixed snapshot')
     if not target.is_relative_to((REPO/'data/ai-ui').resolve()):parser.error('Fresh output inside data/ai-ui required')
     if args.snapshot_only:
-        fixture=create(target,count=args.count,root_count=2);catalog=ProductionCatalog(target/'catalog.sqlite')
+        began=time.perf_counter();source=target
+        if args.fixture:
+            source=args.fixture.resolve()
+            if not source.is_relative_to(REPO/'data/ai-ui') or (source/'fixture.json').stat().st_size>16384:parser.error('Bounded generated fixture required')
+            fixture=json.loads((source/'fixture.json').read_text(encoding='utf-8'))
+            if (fixture.get('generated_only') is not True or fixture.get('metadata_count')!=args.count or
+                args.real_files and fixture.get('all_items_backed_by_generated_files') is not True):parser.error('Generated fixture scope mismatch')
+            if digest(source/'generated')!=fixture['source_digest']:parser.error('Generated fixture sources changed')
+            target.mkdir(parents=True,exist_ok=False)
+        else:fixture=create(target,count=args.count,root_count=2,materialize_images=args.real_files)
+        preparation_seconds=time.perf_counter()-began;catalog=ProductionCatalog(source/'catalog.sqlite')
         def provider(conditions,consume,cancelled):return catalog.search(limit=120,result_sink=consume,cancelled=cancelled,**conditions)
         owner=ResultSessions(catalog,provider,parent=target);report={'pass':False,'fixture':fixture,'actual_model':False,'native_gui_run':False}
         try:
             started=time.perf_counter();result=owner.create('a'*32,{});elapsed=time.perf_counter()-started
-            session=owner.sessions['a'*32];payload_hash=hashlib.sha256()
+            session=owner.sessions['a'*32];payload_hash=hashlib.sha256();captured_sources=0
             for row in session.db.execute('SELECT ordinal,item_id,image,payload FROM results ORDER BY ordinal'):
                 payload_hash.update(json.dumps(tuple(row),ensure_ascii=False,separators=(',',':')).encode('utf-8'))
+                captured_sources+=isinstance(json.loads(row[3]).get('_source_identity'),list)
             report.update(seconds=elapsed,total=result['total'],workspace_bytes=session.bytes(),payload_sha256=payload_hash.hexdigest(),
-                          sources_unchanged=digest(target/'generated')==fixture['source_digest'])
+                          generated_seconds=0 if args.fixture else preparation_seconds,fixture_preparation_seconds=preparation_seconds,
+                          fixture_reused=bool(args.fixture),captured_source_count=captured_sources,
+                          sources_unchanged=digest(source/'generated')==fixture['source_digest'])
             report['pass']=result['total']==args.count and report['sources_unchanged']
+            if args.real_files:
+                first=session.read(0,1);last=session.read(args.count-1,1)
+                report['first_and_last_source_present']=all(reply['items'][0]['availability']=='present' for reply in (first,last))
+                report['pass']=report['pass'] and captured_sources==args.count and report['first_and_last_source_present']
         finally:
             report['owned_jobs_closed']=owner.close();catalog.close()
             report['pass']=report['pass'] and report['owned_jobs_closed']

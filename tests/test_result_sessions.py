@@ -112,6 +112,27 @@ class ResultSessionTests(unittest.TestCase):
             actual=list(session._currents(items,capture=True))
         self.assertEqual(actual,reference);self.assertEqual(connection.call_count,1);self.assertEqual(physical.call_count,len(items))
 
+    def test_creation_resolution_cache_is_thread_local_page_scoped_and_not_used_for_reads(self):
+        import result_sessions
+        original=result_sessions._safe_path;calls=[];lock=threading.Lock()
+        def observed(*args,**kwargs):
+            cache=kwargs.get('root_cache')
+            with lock:calls.append((cache,threading.get_ident(),args[1]))
+            return original(*args,**kwargs)
+        with patch('result_sessions._safe_path',side_effect=observed):self.create()
+        self.assertEqual(len(calls),125);self.assertTrue(all(isinstance(cache,dict) for cache,_,_ in calls))
+        owners={};pages={};item_pages={item['relative_path']:n//60 for n,item in enumerate(self.items)}
+        for cache,thread,path in calls:
+            owners.setdefault(id(cache),set()).add(thread);pages.setdefault(id(cache),set()).add(item_pages[path])
+        # This provider yields 60/60/5 rows: two four-worker pages, then one
+        # sequential page. Production's 120-row pages retain the same bound.
+        self.assertGreaterEqual(len(owners),3);self.assertLessEqual(len(owners),9)
+        self.assertTrue(all(len(threads)==1 for threads in owners.values()))
+        self.assertTrue(all(len(group)==1 for group in pages.values()))
+        calls.clear()
+        with patch('result_sessions._safe_path',side_effect=observed):self.owner.read(self.sid,0,1)
+        self.assertEqual(len(calls),1);self.assertIsNone(calls[0][0])
+
     def test_metadata_write_during_page_validation_never_returns_mixed_rows(self):
         import result_sessions
         self.create();original=result_sessions._safe_path;changed=[False]

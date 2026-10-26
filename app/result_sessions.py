@@ -179,9 +179,14 @@ class FrozenResult:
                         'JOIN library_roots r ON r.id=l.root_id WHERE i.id=?',(item['id'],)).fetchone()
                 else:row=choices[0] if choices else None
                 prepared.append((item,row))
+            roots=threading.local() if capture else None
             def validate(pair):
                 item,row=pair
-                return self._current(item,capture=capture,row=row)
+                cache=None
+                if roots is not None:
+                    if not hasattr(roots,'paths'):roots.paths={}
+                    cache=roots.paths
+                return self._current(item,capture=capture,row=row,root_cache=cache)
             if capture and len(prepared)>=16 and self.capture_executor is not None:
                 # At most one provider page (120) is queued; map keeps rank.
                 yield from self.capture_executor.map(validate,prepared)
@@ -189,7 +194,7 @@ class FrozenResult:
                 for pair in prepared:yield validate(pair)
         self.check()
 
-    def _current(self, payload, *, capture=False, for_viewer=False, row=_MISSING):
+    def _current(self, payload, *, capture=False, for_viewer=False, row=_MISSING, root_cache=None):
         # No access cache: registration/exclusion/ancestors/physical version are
         # checked even when the frozen metadata/rank was already read before.
         if self.stop.is_set():raise ResultUnavailable(conditions=self.conditions)
@@ -210,7 +215,10 @@ class FrozenResult:
                 if is_folder_book(current['relative_path']):
                     signature = PreviewReader(self.catalog).tag_source(item_id)['revision']
                 else:
-                    _, info = _safe_path(row['path'], row['relative_path'], return_info=True)
+                    # Only parsed/resolved root paths are reused, per thread and
+                    # provider page. _safe_path still stats every ancestor and
+                    # leaf on every item; no access/identity decision is cached.
+                    _, info = _safe_path(row['path'], row['relative_path'], root_cache=root_cache,return_info=True)
                     if not stat.S_ISREG(info.st_mode) or (info.st_size, info.st_mtime_ns) != (row['size_bytes'], row['mtime_ns']):
                         signature = 'unavailable'
                     else:

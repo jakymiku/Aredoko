@@ -18,7 +18,9 @@
 - **P6既知NOTICE漏れを修正**：ONNX Runtime付属`ThirdPartyNotices.txt`約333KBをcollectorが認識せず旧束へ未収録だった。名前判定を補強、CPU19 PASS。新規NOTICE束`runtime-notices05`（証拠root内）は52 distributions/92 entries/1,456,448bytes、不足distribution0。[詳細](runtime-notice-inventory.md)。旧sealed pack/約3GB archiveは変更せず、新封印待ち。公開承認や全native reviewを完了扱いにしない。
 - **P6 native対応表も作成**：`inspect_runtime_native.py`と生成CPU7 PASS。`runtime-native-review02.json` はdeclared native325（RECORD owner対応285/未対応40/重複0/不明PE0）、METADATA/RECORD SHA照合済み。未対応はCPython標準拡張/本体/同梱DLL等。[範囲・残review](runtime-notice-inventory.md)。payload全hash/依存graph/公開承認とは区別し、旧pack/archive不変。ctimeのpath/handle差による初回停止と修正も記録。
 - **R07デジタル無音保護も実装**：正/負の完全ゼロPCMはparentのモデル起動前にskip。低音量の非ゼロは通す。child側もstrict skip理由を維持。開発/基本Pythonでworker12 PASS、最大30秒PCMの実所有CPU subprocess/pipe往復・handshake・正規化・終了も確認。[仕様とVADとの区別](audio-content-design.md)。通常索引/空結果の永続化は未接続。
-- **現在の次の1件**：今回のsourceを新規基本ZIP05へまとめ、既存キャッシュでの必要なbuild/自己検査と同梱Python基本CPUまで行う。GUIが無変更の成功flowを反復しない。producer/atomic保存・検索の統合は設計レビュー推奨として別単位。GPU/GUIの許可は全て実施済み、新範囲には新回答が必要。M1残受入・native公開review/host・R06最終方式選定/M2は未完、shutdownなし。
+- **P3実ファイル5万件を測定/改善**：全件180×240の生成PNGでsnapshot45.219s→35.116s（単回・非固定負荷）。各page/threadのroot解決だけ既存cacheへ再利用し、全祖先/leaf guardは各itemで維持。全5万payload SHA/順序一致・全source取得・原本不変・先頭/末尾present。[証拠・初回fixture期待FAILと修正・残待ち](result-sessions.md)。基本Pythonの関連4件もPASS。以前の一部実ファイル20.8sと混同しない。
+- **基本ZIP05**：source`a33077f`、799 files/661,026,006bytes。Core/Portable/起動画面自己検査/全inventory/ZIP、同梱Python基本CPU23 PASS。05のGUI追加なし。上記P3の最後のroot解決改善はまだ未収録なので、新規ZIP06へまとめてから終了する。installed Alpha/shortcutは前日のまま。
+- **現在の次の1件**：最終P3変更をcommitし基本ZIP06のbuild/基本CPUを確認、その後引き継ぎ・remote一致で終了へ。残枠約16%（確認時点）から新しい大作業へは入らない。R07は[一点レビュー用メモ](audio-producer-review.md)を用意（Astraクラス推奨、全計画再作成は不要）。GPU/GUIの許可は全て実施済み、新範囲には新回答が必要。M1残受入・native公開review/host・R06最終方式選定/M2は未完、shutdownなし。
 
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。
