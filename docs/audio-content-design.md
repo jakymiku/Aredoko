@@ -69,6 +69,18 @@ CREATE TABLE IF NOT EXISTS ai_audio_segments(
 
 認識/特徴抽出モデルの選定・実推論・通常索引へのproducer接続は引き続き未完。今回のwave切り出しをR06/R07/R08の内容認識合格へ数えない。基本ZIP04/source`9968eac`とinstalled Alphaへは未収録。
 
+### 5.3a 既存モデルのCPU前処理契約（2026-10-26）
+
+`tools/inspect_audio_input_contract.py` を既存 `.venv-ai` で実行した `audio-contract01/report.json` はPASS。GPUを不可視にし、offline/local-only、model load/inferenceなし。固定版`914f7f8…`のlocal configは`gemma4_audio`、feature extractorは16kHz/128band。bounded safetensors headerに音声関連752tensors/611,223,040bytesを確認した。これは重みpayloadの構造情報であり、実VRAM/品質/他重み不要の一般保証ではない。
+
+登録生成WAV→検証済みPCM境界→ローカルAutoProcessorが接続し、1秒/16,000samplesから`input_features [1,99,128]`/float32とmask`[1,99]`、input_ids`[1,29]`を生成。全音声特徴はfinite、生成音声とモデル重みsize/mtime不変。既存sentence-transformers6.1.0/transformers5.19.0/numpy2.4.6を利用し、追加取得なし。本番profileはtext/cover、adapterの`audio_config=None`は維持する。
+
+次の限定API確認は `tools/probe_audio_embedding.py --gpu`（別途ユーザー回答後）。生成1秒のtone・実験用audio ON/vision OFFのみ、768D/finiteness/normと資源を確認し、通常DB・profile・索引を書き換えない。CPU前処理合格やtoneのAPI合格を、発話・環境音・音楽・類似の品質合格へ数えない。
+
+**上記GPU smokeは個別回答後1回実施済み**：`audio-gpu-smoke01/report.json` PASS/所有process exit0。audio ON/vision OFFの実験用modelで768D・全finite・norm1.00023、load6.58s/encode1.81s（生成tone1秒・単回）。PyTorch peak allocated1,167,375,360bytes / reserved1,176,502,272bytesであり、driver/nativeを含む総VRAMではない。新規取得0、通常DB/profile/本番adapter変更0、原本不変。発話内容や音楽の品質・ASRとの比較は未評価。
+
+追加の生成format試験は、既存同梱FFmpegでmp3/flac/ogg/opus/aac/m4a/wmaへ変換した2秒音声から各500ms/8,000samplesを取得してPASS。WAVと合わせ登録済み8形式の基本入力経路を確認したが、実私物の全codec/破損例の網羅ではない。
+
 ### 5.4 原子性と中断・再開契約
 - 音声1アイテムあたりのセグメント登録はSQLiteトランザクション内で不可分（Atomic）に実行。既存の同一 `item_id` の古いセグメントを全削除した上で一括挿入。
 - 処理中のキャンセル（`cancel.is_set()` / `check()`）を各セグメント抽出間、候補バッチ間、および多数セグメント評価中（256セグメントごと）に監視し、キャンセル時は部分的な不完全セグメントを残さず即時中断。

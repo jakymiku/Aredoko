@@ -81,6 +81,23 @@ class AudioWindowTests(unittest.TestCase):
             tail=audio.read_window(source,1750,1000);self.assertEqual(tail.frame_count,4000)
             with self.assertRaises(audio.AudioInputUnavailable):audio.read_window(source,3000,100)
 
+    @unittest.skipUnless(os.environ.get('AREDOKO_MEDIA_TOOLS') or shutil.which('ffmpeg'),'Existing FFmpeg required; no download')
+    def test_existing_tool_can_decode_the_registered_audio_formats(self):
+        # Only generated in-memory input/output; no user media, devices or files.
+        formats=[('mp3','libmp3lame','mp3',[]),('flac','flac','flac',[]),('ogg','libvorbis','ogg',[]),
+                 ('opus','libopus','ogg',['-ar','48000']),('aac','aac','adts',[]),
+                 ('m4a','aac','mp4',['-movflags','frag_keyframe+empty_moov']),('wma','wmav2','asf',[])]
+        for label,codec,muxer,extra in formats:
+            with self.subTest(format=label):
+                encoded=subprocess.run([audio._executable('ffmpeg'),'-nostdin','-v','error','-f','wav','-i','pipe:0',
+                    '-c:a',codec,*extra,'-f',muxer,'pipe:1'],input=wav_bytes(),capture_output=True,timeout=10,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+                self.assertEqual(encoded.returncode,0,encoded.stderr.decode(errors='replace'))
+                self.assertLess(len(encoded.stdout),1024*1024)
+                with tempfile.TemporaryFile() as source:
+                    source.write(encoded.stdout);source.flush();window=audio.read_window(source,250,500)
+                    self.assertEqual(window.frame_count,8000)
+
 
 class AudioSourceBoundaryTests(unittest.TestCase):
     def setUp(self):
