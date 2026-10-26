@@ -131,7 +131,7 @@ public sealed partial class MainPage
         if(browseReflowing||extending||!ready||disposed||folderHubOpen||shelfHubOpen||Items.Visibility!=Visibility.Visible)
         {change();return;}
         var anchor=CaptureBrowseAnchor();
-        var atEnd=resultScroll is not null&&browseBuffer is not null&&browseBuffer.End==browseBuffer.Total
+        var atEnd=resultScroll is not null&&resultScroll.ScrollableHeight>2&&browseBuffer is not null&&browseBuffer.End==browseBuffer.Total
             &&Math.Abs(resultScroll.ScrollableHeight-resultScroll.VerticalOffset)<2;
         if(anchor is null&&!atEnd){change();return;}
         var session=resultSession;var buffer=browseBuffer;var start=buffer?.Start;var end=buffer?.End;

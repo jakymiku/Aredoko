@@ -64,3 +64,12 @@ native `data/ai-ui/p3-global-edge-20261025/run04/report.json`、frontend05で14 
 
 
 2026-10-25 UI-2追加：検索準備中は初回登録案内を隠し、「検索結果を準備しています…」を表示。空状態で中断したら再検索を案内し、前の結果がある場合は保持する。空棚/履歴/お気に入り/絞り込みを未登録ライブラリと区別。専用GUIの新規一連と証拠は[棚UI](shelf-ui-20261023.md)の最新節を参照。既知警告のみでfrontend06 publish成功。
+
+
+## UI-2：検索ツールバーの省スペース化とfit境界（2026-10-27）
+
+source6209c6aで重複headerを除き、共通余白8へ。種類/検索方法のaccessible name・tooltipを維持し、Filter/View両groupのDesiredSizeから折返しを決める。通常幅で右詳細を開いても実際に収まる場合は同一行に保ち、特定のwindow幅840で一律に折り返さない。音声の種別表示も「音声・音楽」へ統一。Portable publish PASS（既存picker3/SDK IL2104）。
+
+個別許可後のDark初回はComboBoxのUIA枠がButtonより4px上下へ広いことをharnessが重なりと誤判定。矩形の垂直交差で同一行を認識する修正後、Light01/Dark02は操作非重複・詳細・grid・未保存draft保持・保存の機能確認PASS、正常exit0。query高さ32、query下からlistまで60px、詳細ありでも操作同列、list高さ560px（この生成fixture/通常window）。機能を減らさず一覧領域を広げた。
+
+ただしPNG目視で、fitしているlistをgridへ変えると先頭thumbnailが42px（他144px）に欠ける旧reflow不具合を発見。両報告のvisual_reviewはPARTIALへ訂正。ScrollableHeight=0/offset=0を「末尾」と解釈し、新gridの末尾へ移動していた。末尾保持は元のscrollable heightが2px超の場合だけに限定する修正を追加し、frontend03へpublish済み。専用fixtureで先頭が欠けないことを追加確認する。旧試行/ログは残す。
