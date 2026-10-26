@@ -48,10 +48,18 @@ def audit(ui,tree,shot,report,check,catalog,feature,release,reached,*,input_guar
     ui('focus','CmbSearchMode');ui('invoke','CmbSearchMode','--action','expand')
     if not input_guard():raise RuntimeError('Owned audio test lost foreground; no key input sent')
     ui('send-keys','end enter','--via','send-input')
-    ui('set-value','TxtQuery','生成した音声');ui('wait-for','Item1','-t','15000')
+    # A result from the previous empty query can still expose Item1 while the
+    # debounced search replaces its container. Submit explicitly and wait for
+    # the new query's evidence, not merely the old item's existence.
+    ui('set-value','TxtQuery','生成した音声');ui('invoke','BtnSearch')
+    ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','15000')
+    ui('wait-for','AIEvidence1','--value','音声の内容一致（0:00）','--contains','-t','15000')
     check('audio mode locks kind to the audio category',tree()['CmbKind'].get('isEnabled') is False)
-    ui('invoke','Item1','--action','select');ui('invoke','BtnDetails')
+    if not input_guard():raise RuntimeError('Owned audio test lost foreground; no pointer input sent')
+    ui('click','ItemTitle1')
+    ui('wait-for','BtnDetails','-p','IsEnabled','--value','True','-t','10000');ui('invoke','BtnDetails')
     ui('wait-for','BtnOpenAudio','-p','IsEnabled','--value','True','-t','10000');shot('audio-search-time')
+    check('direct audio evidence shows the indexed start time','音声の内容一致（0:00）' in tree()['AIEvidence1']['name'])
     check('audio player remains available without starting playback',True)
     check('generated tags were not changed',all(row['tags']==[] for row in catalog.search()['items']))
 

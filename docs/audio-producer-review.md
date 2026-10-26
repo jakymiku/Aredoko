@@ -82,3 +82,10 @@ frontend01/native01は準備・中断・再開・2item保存を確認後、検�
 harnessはpopupを開く前にfocusを与えるよう修正。`--audio-search-only`で生成2WAVを供給CPU encoderで事前索引化し、成功済みの準備flowを反復せず検索入口だけ確認できる。構文確認のみ、新たなGUI試行には別の回答が必要。証拠`data/ai-ui/continuation-20261026b/audio-native01`/`audio-native02`。
 
 基本ZIP07（sourcecaee977、806files/661,173,728bytes）はfrontend02を収録。全manifest/ZIP照合と同梱Pythonによる基本CPU23・owned EOF exit0 PASS。通常EXE入口GUI/clean Windowsは未検証。生成2音声GPU成功を実private worker/実録音/音楽/音声類似の一般品質合格へ拡張しない。
+
+
+## 音声検索GUIの残確認（2026-10-27）
+
+同じfrontend02/sourcecaee977で個別許可を得た2試行。audio-search01はmode切替と時刻付き結果まで表示したが、debounceによる一覧差替え中に旧SelectionItemPatternを操作してharness停止（正常exit0）。明示検索・AIEvidence待ち・所有画面の実クリックへ修正後、audio-search02は9checks/2PNG目視/正常exit0/原生成SHA・mtime不変でPASS。検索方法が音声へ固定され、2候補・内容一致0:00・明示詳細・音声を再生ボタンを確認した。実際の再生は行わず、CPU供給vectorのGUI接続検証である。成功済み準備flowは反復していない。
+
+目視で詳細に旧「音声内容の自動索引は未対応」が残ることを発見。実装済みの設定→AI検索の準備→音声の内容検索へ案内を修正し、音響類似と文章内容検索の索引を混同しない説明へ分離。Core runner/Portable build PASS、既存WUI1001警告3。旧案内を期待したCore2箇所とMSIX Before hook指定による開発build失敗は修正前ログを保持。証拠`data/ai-ui/continuation-20261027/`。案内文修正後の別GUIは未実施。

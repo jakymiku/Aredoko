@@ -4,7 +4,7 @@ namespace Aredoko.Core;
 
 public static class SimilaritySearch
 {
-    public const string AudioIndexingGuidance="音声内容の自動索引は未対応です。名前・タグでの検索と再生は利用できます。";
+    public const string AudioIndexingGuidance="内容から探すには、設定 → AI検索の準備 → 音声の内容検索で索引を作成し、検索方法の「音声の内容（AI）」を選んでください。ファイル名・タグ検索と再生はそのまま利用できます。";
     public const int MaxResponseBytes=2*1024*1024;
     public static bool CanStart(MediaRow row) => row.Id > 0 && row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" or "audio";
     public static JsonObject Request(int itemId,string kind,string view,int page,JsonObject scope,int? rootId=null) =>
@@ -20,7 +20,7 @@ public static class SimilaritySearch
         "unindexed" => originKind == "video"
             ? "この動画の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。"
             : originKind == "audio"
-            ? "この音声・曲の内容索引がないか古くなっています。" + AudioIndexingGuidance
+            ? "この音声・曲の類似検索に使える音響特徴がないか古くなっています。文章から探すための索引とは別です。" + AudioIndexingGuidance
             : "この画像・表紙の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。",
         "unsupported_profile" => originKind == "video"
             ? "選択中のモデルは動画の類似検索に対応していません。「AI索引」で画像・動画対応モデルを選ぶか、名前・タグ検索を利用してください。"
