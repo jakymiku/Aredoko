@@ -43,7 +43,7 @@ def main():
     for name,(source,_,__) in sources.items():shutil.copyfile(source,media/name)
     os.environ.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1')
     report={'pass':False,'gpu_inference':False,'external_download':False,'normal_profiles_changed':False,
-            'scope':'two generated clips: real decode/index/text retrieval; not private worker or broad quality acceptance',
+            'scope':'two generated clips: real decode/index/text retrieval; no broad quality acceptance',
             'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'items':[],'queries':[]}
     catalog=image_owner=audio_owner=None;owned_process=None
     report['execution_route']='owned-private-worker' if args.owned_worker else 'direct-adapter'

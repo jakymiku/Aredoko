@@ -89,3 +89,10 @@ harnessはpopupを開く前にfocusを与えるよう修正。`--audio-search-on
 同じfrontend02/sourcecaee977で個別許可を得た2試行。audio-search01はmode切替と時刻付き結果まで表示したが、debounceによる一覧差替え中に旧SelectionItemPatternを操作してharness停止（正常exit0）。明示検索・AIEvidence待ち・所有画面の実クリックへ修正後、audio-search02は9checks/2PNG目視/正常exit0/原生成SHA・mtime不変でPASS。検索方法が音声へ固定され、2候補・内容一致0:00・明示詳細・音声を再生ボタンを確認した。実際の再生は行わず、CPU供給vectorのGUI接続検証である。成功済み準備flowは反復していない。
 
 目視で詳細に旧「音声内容の自動索引は未対応」が残ることを発見。実装済みの設定→AI検索の準備→音声の内容検索へ案内を修正し、音響類似と文章内容検索の索引を混同しない説明へ分離。Core runner/Portable build PASS、既存WUI1001警告3。旧案内を期待したCore2箇所とMSIX Before hook指定による開発build失敗は修正前ログを保持。証拠`data/ai-ui/continuation-20261027/`。案内文修正後の別GUIは未実施。
+
+
+## 実private workerの限定確認（2026-10-27）
+
+`EncoderProcess`へ任意の明示GPU allocator予算を追加。未指定の通常動作は維持し、設定された音声ownerへ継承する。workerはmodel load前に空き容量とbudgetを確認し、CUDAがない/空き不足ではloadしない。driver/native allocationまでの絶対VRAM上限ではない。CPU契約14件は開発/基本Python双方PASS、既存HTTP5もPASS。
+
+個別回答後、既存生成001/002の2音声だけで `check_direct_audio_pipeline.py --gpu --owned-worker` を1回実行。実production owner→検証済み原本decode→実private audio worker→atomic保存→日本語2問が全Top1。index全体16.156s、child PyTorch peak1121.5MiB、allocator上限3072MiB、画像workerは起動せず。owner.closeでworker停止を確認（既存の所有kill終了方式なのでexit1、graceful終了とは呼ばない）。原生成SHA/mtime不変、追加取得/GUI/再生/通常DB変更0。証拠`data/ai-ui/continuation-20261027/audio-owned-gpu01`。実録音/実曲/音声類似の一般品質や配布先Windowsを証明しない。
