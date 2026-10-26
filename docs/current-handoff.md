@@ -8,7 +8,9 @@
 - P3の全件結果作成は文字検索でも専用15分transportへ分離。range/neighbor/close等は通常transport・明示取消を維持。Coreでliteral作成/通常range・close/取消ID cleanupを確認、WinUI最小build PASS（GUI再実施なし）。commitは`git log -1 -- src/Aredoko.Core/ResultSessionClient.cs`。
 - P3の作成中件数表示も実装/限定確認済み。building statusはcommit済み件数だけでpartial rowsを公開せず、Coreの任意observer/終了joinとUI versionで旧応答を抑止。Python33/Core/Portable frontend08 PASS、許可済み生成1,201件native1試行5 checks/4PNG目視/exit0。[仕様](result-sessions.md)。このunitのcommitは`git log -1 -- src/Aredoko.Core/ResultBuildProgress.cs`。前記2許可に加え進捗GUI1回も回答を得て実施済み。
 - **P1/P3 HTTP待ちの局所改善**：認証と原本guardを毎回維持したまま、boundedな画像/結果取得と読書位置保存へ接続再利用を導入。所有socket終了、framing/解除/認証を含む接続7・既存HTTP8・animation17・結果33 PASS。実.NET生成CPUでwarm info約10/8ms・1.18MB原本約30ms（旧約200ms台）、冷間接続は残る。[範囲と証拠](viewer-performance.md)。commitは`git log -1 -- app/owned_http_server.py`。
-- **現在の次の1件**：上記sourceを新規基本ZIP04へまとめる。ローカルSDK更新後の既存キャッシュ指定は開発用targetsだけに限定し、ZIPへ同梱しない。CPU/receipt確認後、生成アニメーション＋小CBZの新GUI範囲を問い合わせる。新GUIは未許可/未実施、installed Alphaは更新しない。P7/M1・公開runtime・R06–R09の残件は削除しない。
+- **最新基本ZIP04完成/限定受入**：`dist/portable-basic-20261026-04/Aredoko`、source **`9968eac`**、796 files / 660,993,785 bytes。Core/Portable/起動画面CPU自己検査/同梱runtime/全inventory/ZIP照合、同梱Pythonの基本CPU23 PASS。SDKキャッシュ指定は`--msbuild-targets`の開発用targetsだけ（ZIPへ同梱しない）。
+- **ZIP04の許可済みGUI各1試行**：`transport-native01` 29 checks/6PNG目視/frontend exit0/decoder2close。原寸アニメーションの同一接続再利用と最終frame、生成小CBZ往復/304再利用を確認。[数値と限界](viewer-performance.md)。通常入口 `Aredoko.exe` も `basic-native04` で専用DB/生成1画像の起動→正常終了→1回再起動、11 checks/所有4exit0/2PNG目視/inventory不変。GPU0、普段のDB/installed Alpha/shortcut更新0。GUI許可はすべて実施済みで、新しい範囲には回答が必要。
+- **現在の次の1件**：P7の残るビューワー実入力（中心zoom/左drag/下端hotzone/ホイール）を生成静止画・小CBZに限定してまとめる。まず既存Core契約とnative harnessを使って具体化し、GUI実行前に新たに問い合わせる。今回済みの通常起動/進捗/原寸streamを無変更反復しない。HC/物理DPI/clean Windows・長時間FPS/RSS・公開runtime権利/host（registry0）とM1→R06–R09は未完のまま維持する。
 
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。

@@ -60,3 +60,9 @@ R13 DOING / ALPHA未完 / R14 PARTIALを維持。viewer実機確認後もPZ2→P
 - 1接続は512応答・応答時点300秒・socket I/O待機10秒でclose判定。全要求の実行時間上限やプロセス全体の資源上限を意味しない。所有serverは受け付けたsocketを追跡し、backend資源終了前に閉じる。OS設定の変更なし。
 - 実policyのCPU単回測定 `dotnet-http05/report.json`：info初回226.7ms、再利用後10.2/7.7ms、原本30.0/29.8/29.0ms。`dotnet-http06`では実Core binary streamの生成512×256・10framesを取得し、先頭35.9ms・後続27.5/34.8/15.4ms、正常close。証拠は `data/ai-ui/snapshot-review-20261026/`（Git対象外）。冷間接続の遅延は残る。少数の生成素材・非固定PC負荷であり、画面present/FPS/Honeyview比較の結果ではない。06以前のprobeのPOST側server timestampは補正前のため、段階間の証拠に使わない。クライアント取得時間は有効。
 - 関連HTTP8、接続7、アニメーション17、結果session33 PASS。接続試験には不正認証、登録解除、重複Content-Length、Transfer-Encoding、client close、予算/idle、binary再利用と終了時切断を含む。最終ZIPと変更後GUIはこの節の追記時点では未確認。次の結果はcurrent-handoffを参照する。
+
+### 基本ZIP04の限定native確認
+
+source `9968eac`、`dist/portable-basic-20261026-04/Aredoko` の公開UIと現在の専用inline backend。ユーザー回答後1試行 `transport-native01/report.json`：29 checks PASS、所有frontend exit0、decoder2件のclose、6PNG全目視。2560×1440・3frames×2周のAPNG/WebPは原寸binary受信と最終有色frame保持、真のGIFはnative経路、binary batchの同一接続再利用を確認。生成原本のSHA/mtime不変。
+
+1000×700・3ページCBZの1→2→3→2→1で304再検証とbitmap再利用。XAML source割当まで初回34.5ms、後続27.4/27.5/28.1/26.7ms。APNG先頭389ms、native GIF105ms、WebP先頭333ms（単回・UIA/診断logあり）。昨日の3072×2048 CBZとは寸法が異なるため、数値の直接比較はしない。画面present/FPS/長時間RSS/複雑な差分APNGの総合受入ではない。通常EXE入口の確認は別にcurrent-handoffへ記録する。
