@@ -62,7 +62,12 @@ class ScoreSpool:
             raise
 
     def __enter__(self):
-        self._check()
+        try:self._check()
+        except BaseException:
+            # __exit__ is not called when entering an already-cancelled owner
+            # fails. Release its connection before removing the private folder.
+            self.close()
+            raise
         return self
 
     def __exit__(self, *args):

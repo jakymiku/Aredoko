@@ -21,6 +21,13 @@ def exact(rows):
 
 
 class ScoreSpoolTests(unittest.TestCase):
+    def test_cancelled_enter_removes_workspace_without_waiting_for_gc(self):
+        with tempfile.TemporaryDirectory() as parent:
+            with self.assertRaises(SearchCancelled):
+                with ScoreSpool(parent=parent,cancelled=lambda:True):
+                    self.fail('Cancelled owner must not enter')
+            self.assertEqual(list(Path(parent).iterdir()),[])
+
     def test_exact_fusion_with_missing_modes_global_spans_and_cross_batch_ties(self):
         rng = random.Random(20261018)
         scores = {}
