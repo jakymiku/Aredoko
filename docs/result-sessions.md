@@ -77,3 +77,10 @@ snapshot作成中だけ4 workerで既存の`_current`を実行する。最大120
 
 ### 結果作成だけの通信上限
 全件の原本検査は文字検索でも通常40秒を超えうるため、ResultSessionClientのcreateは検索方式に依存せず専用15分transportを使用する。range/neighbor/locate/edit/closeは従来の通常transportで、全APIの上限を延ばさない。明示取消は作成を止め、事前発行IDを通常transportでcloseする。Coreでliteral作成/通常range・closeの分離と作成中の取消cleanupを確認、WinUI最小buildもPASS。GUIの変更はなく、この差分だけの追加GUIは行っていない。
+
+### 作成中の件数表示
+`status`はbuilding中も`processed`（commit済みの確認件数）と`total`（順位作業中はnull）を返す。item/payloadは返さず、range/neighbor等は従来通りreadyまで拒否する。世代変更・取消で失効し、件数は小さな別lockで読み、builder全体のlockを待たない。
+
+Coreの任意observerは通常transportで毎秒poll（1要求2秒上限）し、create完了/取消時にpollも取消・待機する。ID/条件/件数/状態を検証し、旧serverで進捗非対応でもcreate自体を壊さない。WinUIはversion/取消/ローカルreporting flagで旧callbackを捨て、件数と初回の空領域だけを更新する。
+
+Python33/Core runner/Portable frontend08 PASS。明示許可の`data/ai-ui/snapshot-review-20261026/progress-native01`は生成1,201小画像の1試行、5 checks/4PNG目視/所有exit0。120/1,201の表示、部分行非公開、完了、中断、新しい1件検索への旧進捗混入なしを確認。長時間・全検索方式のnative受入を代替せず、GPU/通常DB/installed Alphaは未使用。

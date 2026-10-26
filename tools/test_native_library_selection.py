@@ -18,8 +18,8 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--attempt',type=int,choices=(1,2,3),required=True)
     parser.add_argument('--output',type=Path);parser.add_argument('--theme',choices=('dark','light'),default='dark')
     parser.add_argument('--verification-settings-only',action='store_true');parser.add_argument('--grid-pointer-only',action='store_true')
-    parser.add_argument('--cancel-range-only',action='store_true');args=parser.parse_args()
-    if sum((args.verification_settings_only,args.grid_pointer_only,args.cancel_range_only))>1:parser.error('Select one bounded scenario')
+    parser.add_argument('--cancel-range-only',action='store_true');parser.add_argument('--snapshot-progress-only',action='store_true');args=parser.parse_args()
+    if sum((args.verification_settings_only,args.grid_pointer_only,args.cancel_range_only,args.snapshot_progress_only))>1:parser.error('Select one bounded scenario')
     front=args.frontend.resolve();target=args.output.resolve() if args.output else REPO/'data/ai-ui/continuation-20261025b'/f'native-selection{args.attempt:02}'
     if os.name!='nt' or not front.is_relative_to(REPO/'data/ai-ui') or not target.is_relative_to(REPO/'data/ai-ui') or not (front/'Aredoko.WinUI.exe').is_file() or target.exists():parser.error('Dedicated frontend and new bounded output required')
     inspect_portable(front)  # Reject an incorrectly packaged build before launching.
@@ -62,6 +62,20 @@ def main():
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'not-installed'),models_root=target/'no-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
         handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),tagger=DisabledTagger(),profiles=profiles,instance_id=instance);handler.log_message=lambda *a:None
+        if args.snapshot_progress_only:
+            original_provider=handler.results.provider
+            def progress_provider(conditions,consume,cancelled):
+                def intercept(page):
+                    def held(number):
+                        if number==1:
+                            reached.set();deadline=time.monotonic()+30
+                            while not release.wait(.05):
+                                if cancelled():raise InterruptedError('Generated progress cancellation')
+                                if time.monotonic()>deadline:raise TimeoutError('Bounded progress gate expired')
+                        return page(number)
+                    return consume(held)
+                return original_provider(conditions,intercept,cancelled)
+            handler.results.provider=progress_provider
         server=ThreadingHTTPServer(('127.0.0.1',8769),handler,bind_and_activate=False)
         server.allow_reuse_address=False
         server.socket.setsockopt(socket.SOL_SOCKET,socket.SO_EXCLUSIVEADDRUSE,1)
@@ -76,7 +90,9 @@ def main():
             windows=[w for w in json.loads(cli('list-windows','-a',proc.pid,'--json')) if w.get('title') and w['title']!='PopupHost']
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);return True
             return False
-        wait('owned window available',find);ui('wait-for','Item1','-t','15000')
+        wait('owned window available',find)
+        if args.snapshot_progress_only:ui('wait-for','TxtCount','--value','準備中 120 / 1,201','-t','10000')
+        else:ui('wait-for','Item1','-t','15000')
     def stop():
         nonlocal cat,server,thread,handler,proc,hwnd
         release.set()
@@ -112,6 +128,14 @@ def main():
         shelf=cat.change_shelf('create',name='生成テスト棚')['id'];cat.close();cat=None
         before={str(p):[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for f in folders for p in f.iterdir()}
         start();check('existing folders do not start an automatic scan',not handler.startup_scans.requested)
+        if args.snapshot_progress_only:
+            check('building progress is visible without partial rows',reached.is_set() and 'Item1' not in tree())
+            shot('01-snapshot-building');release.set();ui('wait-for','Item1','-t','10000');ui('wait-for','TxtCount','--value','1,201 件','-t','10000')
+            shot('02-snapshot-ready');release.clear();reached.clear();ui('set-value','TxtQuery','generated')
+            ui('wait-for','TxtCount','--value','準備中 120 / 1,201','-t','10000');ui('invoke','BtnCancelSearch')
+            ui('wait-for','TxtCount','--value','中断','--contains','-t','10000');shot('03-snapshot-cancelled')
+            ui('set-value','TxtQuery','generated-0003');ui('wait-for','Item4','-t','10000');ui('wait-for','TxtCount','--value','1 件','-t','10000')
+            check('new search is not overwritten by cancelled progress','Item1' not in tree());shot('04-new-search-after-progress');stop();report['pass']=True;return 0
         if args.cancel_range_only:
             ui('invoke','BtnNext');ui('wait-for','Item61','-t','10000')
             ui('invoke','Item61','--action','select');ui('invoke','BtnDetails');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000')

@@ -136,12 +136,21 @@ public sealed partial class MainPage
                 {
                     SetAiSearchModelLoading(true,version);
                 }
+                var reporting=true;
+                var progress=new Progress<ResultBuildProgress>(value=>
+                {
+                    if(!reporting||disposed||!searches.IsCurrent(version)||cancellation.IsCancellationRequested)return;
+                    Count.Text=value.Total is int total?$"準備中 {value.Processed:N0} / {total:N0}":"準備中…";
+                    if(rows.Count==0)Empty.Text=value.Total is int expected
+                        ?$"一覧を準備しています…（{value.Processed:N0} / {expected:N0}件）":"検索結果を準備しています…";
+                });
                 try
                 {
-                    session = await api.Results.CreateAsync(conditions, cancellation);
+                    session = await api.Results.CreateAsync(conditions, cancellation,progress);
                 }
                 finally
                 {
+                    reporting=false;
                     if (usesAI) SetAiSearchModelLoading(false,version);
                 }
                 if (!searches.IsCurrent(version) || disposed || cancellation.IsCancellationRequested)

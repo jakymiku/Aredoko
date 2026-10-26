@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Aredoko.Core;
@@ -19,10 +20,14 @@ public sealed record ResultNeighbor(int Ordinal, MediaRow Item);
 // the native frontend. All range/neighbor reads use the same owned search ID.
 public sealed class ResultSessionClient(HttpClient client,HttpClient? creationClient=null)
 {
-    public async Task<ResultSession> CreateAsync(JsonObject conditions, CancellationToken cancellation)
+    public Task<ResultSession> CreateAsync(JsonObject conditions,CancellationToken cancellation)=>CreateAsync(conditions,cancellation,null);
+
+    public async Task<ResultSession> CreateAsync(JsonObject conditions, CancellationToken cancellation,IProgress<ResultBuildProgress>? progress)
     {
         var id = Guid.NewGuid().ToString("N"); var frozen = conditions.DeepClone().AsObject();
         var session = new ResultSession(client, id, frozen);
+        using var observing=CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        var observer=progress is null?Task.CompletedTask:ObserveAsync(id,frozen,progress,observing.Token);
         try
         {
             // Even literal results freeze/check the full matched library.
@@ -37,6 +42,32 @@ public sealed class ResultSessionClient(HttpClient client,HttpClient? creationCl
             return session;
         }
         catch { await session.DisposeAsync(); throw; }
+        finally
+        {
+            observing.Cancel();
+            await observer;
+        }
+    }
+
+    private async Task ObserveAsync(string id,JsonObject conditions,IProgress<ResultBuildProgress> progress,CancellationToken stop)
+    {
+        while(!stop.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1),stop);
+                using var deadline=CancellationTokenSource.CreateLinkedTokenSource(stop);
+                deadline.CancelAfter(TimeSpan.FromSeconds(2));
+                var root=await SendAsync(client,"status",new(){["session_id"]=id},deadline.Token);
+                var value=ResultBuildProgress.Parse(root,id,conditions);
+                if(value.State=="ready")return;
+                progress.Report(value);
+            }
+            catch(OperationCanceledException){if(stop.IsCancellationRequested)return;}
+            catch(ResultSessionException ex) when(ex.Status==HttpStatusCode.Gone){ } // create admission may still be queued
+            catch(Exception ex) when(ex is ResultSessionException or HttpRequestException or InvalidOperationException or IOException or JsonException or FormatException or OverflowException)
+            {return;} // Optional progress must not break creation/older servers.
+        }
     }
 
     internal static async Task<JsonObject> SendAsync(HttpClient client, string action, JsonObject payload, CancellationToken cancellation)

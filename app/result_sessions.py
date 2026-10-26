@@ -83,6 +83,9 @@ class FrozenResult:
         self.metadata = {}
         self.origin = None
         self.state = 'building'
+        self.progress_lock = threading.Lock()
+        self.expected_total = None
+        self.processed = 0
         self.last_used = time.monotonic()
         self.capture_executor = None
 
@@ -106,6 +109,8 @@ class FrozenResult:
                         expected = result['total']
                         if type(expected) is not int or expected < 0:
                             raise ValueError('Invalid result count')
+                        with self.progress_lock:
+                            self.expected_total = expected
                         self.metadata = {k: v for k, v in result.items() if k not in ('items', 'page', 'limit')}
                         if self.metadata.get('origin_id') is not None:
                             self.origin = self._current(self.catalog.get(self.metadata['origin_id']), capture=True)
@@ -123,10 +128,12 @@ class FrozenResult:
                         self.db.execute('INSERT INTO results VALUES(?,?,?,?)', (self.total, item['id'], int(image), payload))
                         self.total += 1
                     self.db.commit()
-                    if self.total == expected:
-                        break
                     if self.total > expected:
                         raise ResultUnavailable('Invalid result count', conditions=self.conditions)
+                    with self.progress_lock:
+                        self.processed = self.total
+                    if self.total == expected:
+                        break
                     number += 1
                 return self.metadata
             try:
@@ -139,7 +146,8 @@ class FrozenResult:
                     finally:
                         self.capture_executor = None
                 self.check()
-                self.state = 'ready'
+                with self.progress_lock:
+                    self.state = 'ready'
             except sqlite3.Error as error:
                 if self.stop.is_set():
                     raise ResultUnavailable(conditions=self.conditions) from error
@@ -379,7 +387,7 @@ class ResultSessions:
             self.builder=None
             self.build_lock.release()
 
-    def _get(self, session_id):
+    def _get(self, session_id, *, allow_building=False):
         self.identifier(session_id)
         with self.lock:
             self._expire()
@@ -387,14 +395,22 @@ class ResultSessions:
             if result is None:
                 old = self.retired.get(session_id)
                 raise ResultUnavailable(conditions=old[1] if old else None, expired=True)
-            if result.state != 'ready':
+            if result.state != 'ready' and not (allow_building and result.state == 'building'):
                 raise ResultUnavailable('Result session is still building', conditions=result.conditions)
             return result
 
     def status(self, session_id):
-        session = self._get(session_id)
-        session.check()
-        return {'session_id': session_id, 'state': session.state, 'total': session.total, 'conditions': session.conditions}
+        session = self._get(session_id, allow_building=True)
+        # The owner can become visible immediately before materialize starts.
+        # That initial zero-count state exposes no result metadata or rights.
+        if hasattr(session, 'initial_stamp'):
+            session.check()
+        elif session.stop.is_set():
+            raise ResultUnavailable(conditions=session.conditions)
+        with session.progress_lock:
+            return {'session_id': session_id, 'state': session.state,
+                    'total': session.expected_total, 'processed': session.processed,
+                    'conditions': session.conditions}
 
     def read(self, session_id, offset=0, limit=120):
         session = self._get(session_id)

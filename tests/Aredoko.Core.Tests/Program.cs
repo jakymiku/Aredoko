@@ -9,6 +9,7 @@ await ImageSourceInfoTests.Run(Check);
 await ThumbnailTests.Run(Check);
 await AnimationStreamTests.Run(Check);
 await ResultSessionTests.Run(Check);
+await ResultBuildProgressTests.Run(Check);
 await ShelfTests.Run(Check);
 await BackupTests.Run(Check);
 await AIEnvironmentTests.Run(Check);

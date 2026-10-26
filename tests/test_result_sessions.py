@@ -326,6 +326,52 @@ class ResultSessionTests(unittest.TestCase):
         self.assertFalse(list(self.base.glob('aredoko-results-*')))
         self.assertFalse(any(t.name.startswith('result-source') for t in threading.enumerate()))
 
+    def test_building_status_reports_committed_count_without_exposing_partial_ranges(self):
+        old=self.owner.provider;entered=threading.Event();release=threading.Event();errors=[]
+        def provider(conditions,consume,cancelled):
+            def observed(page):
+                def delayed(number):
+                    if number==1:entered.set();release.wait(4)
+                    return page(number)
+                return consume(delayed)
+            return old(conditions,observed,cancelled)
+        self.owner.provider=provider
+        def build():
+            try:self.create()
+            except Exception as error:errors.append(error)
+        thread=threading.Thread(target=build);thread.start()
+        try:
+            self.assertTrue(entered.wait(3))
+            status=self.owner.status(self.sid)
+            self.assertEqual((status['state'],status['processed'],status['total']),('building',60,125))
+            self.assertNotIn('items',status)
+            with self.assertRaises(ResultUnavailable):self.owner.read(self.sid,0,1)
+            with self.assertRaises(ResultUnavailable):self.owner.neighbor(self.sid,self.items[0]['id'],1)
+        finally:release.set();thread.join(5)
+        self.assertFalse(thread.is_alive());self.assertEqual(errors,[])
+        status=self.owner.status(self.sid)
+        self.assertEqual((status['state'],status['processed'],status['total']),('ready',125,125))
+
+    def test_building_status_validates_generation_and_can_be_cancelled(self):
+        old=self.owner.provider;entered=threading.Event();release=threading.Event();errors=[]
+        def provider(*args):entered.set();release.wait(4);return old(*args)
+        self.owner.provider=provider
+        def build():
+            try:self.create()
+            except Exception as error:errors.append(error)
+        thread=threading.Thread(target=build);thread.start()
+        try:
+            self.assertTrue(entered.wait(3))
+            status=self.owner.status(self.sid)
+            self.assertEqual((status['processed'],status['total']),(0,None))
+            self.catalog.unregister_root(self.root)
+            with self.assertRaises(ResultUnavailable):self.owner.status(self.sid)
+            self.owner.cancel(self.sid)
+            with self.assertRaises(ResultUnavailable):self.owner.status(self.sid)
+        finally:release.set();thread.join(5)
+        self.assertFalse(thread.is_alive());self.assertTrue(errors)
+        self.assertFalse(list(self.base.glob('aredoko-results-*')))
+
     def test_ai_one_encoding_one_rank_and_index_change_detection(self):
         encoder = Encoder(); ai = AISearch(self.catalog, encoder); self.addCleanup(ai.close)
         for item in self.items: ai.store.put(item['id'], revision(item), {'text': [1.] + [0.] * 7})
