@@ -31,3 +31,11 @@ M1の残受入（HC/物理DPI/clean Windows等）とruntime公開review/hostは�
 `aresample=async=1:first_pts=0`でpresentation時刻のgapを無音として維持する。無音/短い窓をEOFと推測せず、全stdout・float整合性・正常exit・最終source guardまで通った場合だけ`complete=True`。窓は暫定であり、consumerはこれより前に既存索引へ公開してはいけない。`PreviewReader.audio_pcm_stream`は原本版・登録・除外を各yield/EOFに再確認し、audio専用slot1つを所有。HTTPへは追加していない。
 
 生成60/65秒、timestamp gapを持つfragmented MP4、非finite/破損/上限、deadline/取消、戻り値ありの非zero終了、入力変更/登録解除/除外、slot解放をCPUで確認。stream12・source18は開発Python3.14/基本Python3.11の両方PASS、既存preview22 PASS。GPU/モデル/通常DB使用0。**worker配置・新namespaceでのatomic保存/backup fence・検索/GUI接続は未実装で、上記レビューの残りを維持する。**
+
+## 次の実装単位：専用namespaceでのatomic保存（2026-10-26）
+
+`AudioDirectIndex`を内部APIとして追加。呼出元が所有するtext/audio encoderを明示し、そのprofile専用sidecarだけに保存する。選択中のtext/coverや旧768D発話snippet/512D音響とは混在させない。30秒固定の逐次入力をprivate SQLiteへstage（最大16MiB/最大2,880窓）。正常EOF後だけcatalog guard→共有writer fenceの順で予約し、最終原本版・登録/除外・取消を確認して1itemのsource markerと時刻vectorを同一transactionで置換する。silent成功0候補はmarkerへ記録し、未処理と区別する。
+
+新しい`ai_audio_direct_sources`/`ai_audio_direct_windows`のあるaudio sidecarだけ`user_version=1`。既存sidecarは0を維持。backup/restoreの既知schemaとversion確認、inactive root purgeの両table削除も同時更新。decode/encoder待ちではwriter fenceを保持せず、途中のlive backupは以前の完了revisionを見る。vectorのstage読出しは64行ずつで、全window vectorのlistを作らない。検索への公開、通常producer job/GUI、音声workerの起動/idle releaseはまだ未接続。
+
+CPU14（開発/基本Python）PASS：失敗・取消・容量不足・原本変更で旧索引保持、silent marker、名前空間拒否、将来版拒否、stage削除、backup待ち取消、encode中backupの旧revision、旧/新sidecar復元、root purge時の原本保持。既存backup29・profile10もPASS。初回はSQLite接続contextがcloseしない解放漏れと、URI無効のprimary接続からのATTACHを検出し、明示close＋専用read-only接続に修正。次の1 FAILは2窓それぞれで同じroot解除を繰り返したfixtureを1回解除に修正したもの。`data/ai-ui/continuation-20261026b/audio-index/`に診断/修正後ログを保持する。供給PCM/人工vectorによる保存試験であり、実GPU音声検索の精度証拠ではない。

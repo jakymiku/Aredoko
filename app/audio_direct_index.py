@@ -1,0 +1,133 @@
+"""Atomic, time-grounded direct-audio vectors in an explicit audio namespace.
+
+Decode/encode stages are private and bounded. The caller supplies an owned
+encoder; this module never selects a model, starts a job, or alters the active
+image/text profile. Only a verified successful whole item becomes visible.
+"""
+from array import array
+from contextlib import closing,contextmanager
+import re
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+from ai_profiles import AUDIO_VECTOR_CONTRACT
+from ai_vectors import normalized
+from audio_input import SAMPLE_RATE,MAX_WINDOW_MS,MAX_START_MS,MediaDecodeCancelled,validate_pcm
+from previews import PreviewReader,ReaderChanged
+
+CONTRACT='direct-audio-window:v1'
+TABLES=(
+    '''CREATE TABLE IF NOT EXISTS ai_audio_direct_sources(
+        item_id INTEGER PRIMARY KEY,source_revision TEXT NOT NULL,contract TEXT NOT NULL,
+        decoded_windows INTEGER NOT NULL,indexed_windows INTEGER NOT NULL,total_frames INTEGER NOT NULL)''',
+    '''CREATE TABLE IF NOT EXISTS ai_audio_direct_windows(
+        item_id INTEGER NOT NULL,ordinal INTEGER NOT NULL,start_ms INTEGER NOT NULL,
+        end_ms INTEGER NOT NULL,vector BLOB NOT NULL,PRIMARY KEY(item_id,ordinal))''')
+MAX_WINDOWS=MAX_START_MS//MAX_WINDOW_MS
+STAGE_BYTES=16*1024*1024
+
+
+class AudioDirectIndex:
+    def __init__(self,catalog,encoder,*,reader=None,stage_parent=None):
+        profile=encoder.profile
+        if profile.modalities!=('text','audio') or profile.vector_contract!=AUDIO_VECTOR_CONTRACT:
+            raise ValueError('An explicit direct-audio encoder namespace is required')
+        self.catalog,self.encoder,self.profile=catalog,encoder,profile
+        self.reader=reader if reader is not None else PreviewReader(catalog)
+        self.stage_parent=stage_parent
+        from ai_search import VectorStore
+        # The same catalog guard -> writer fence order as live capture. A backup
+        # cannot discover a newly created sidecar between schema statements.
+        with self._boundary(None),catalog.writer_fence.write():
+            self.store=VectorStore(profile.store_path(catalog.path),profile,writer_fence=catalog.writer_fence)
+            with self.store.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                for statement in TABLES:db.execute(statement)
+                db.execute('PRAGMA user_version=1')
+
+    @staticmethod
+    def _check(cancel):
+        if cancel is not None and cancel.is_set():raise MediaDecodeCancelled('Audio index cancelled before publication')
+
+    @contextmanager
+    def _boundary(self,cancel):
+        while not self.catalog._guard.acquire(timeout=.05):self._check(cancel)
+        try:self._check(cancel);yield
+        finally:self.catalog._guard.release()
+
+    def fresh(self,item_id,revision):
+        with self.store.connect() as db:
+            return db.execute('SELECT 1 FROM ai_audio_direct_sources WHERE item_id=? AND source_revision=? AND contract=?',
+                              (item_id,revision,CONTRACT)).fetchone() is not None
+
+    def index_item(self,item_id,revision,*,cancel=None):
+        if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid audio item')
+        if type(revision) is not str or re.fullmatch('[0-9a-f]{64}',revision) is None:raise ValueError('Invalid audio revision')
+        self._check(cancel)
+        if self.encoder.profile.key!=self.profile.key:raise ValueError('Audio encoder profile changed')
+        with tempfile.TemporaryDirectory(prefix='aredoko-audio-stage-',dir=self.stage_parent) as temporary:
+            path=Path(temporary)/'stage.sqlite'
+            with closing(sqlite3.connect(path)) as stage:
+                stage.execute('PRAGMA page_size=4096')
+                stage.execute('PRAGMA journal_mode=MEMORY')
+                stage.execute('PRAGMA cache_size=-1024')
+                stage.execute('PRAGMA max_page_count='+str(STAGE_BYTES//4096))
+                stage.execute('CREATE TABLE windows(ordinal INTEGER PRIMARY KEY,start_ms INTEGER,end_ms INTEGER,vector BLOB)')
+                decoded=indexed=frames=0
+                with self.reader.audio_pcm_stream(item_id,revision,cancel) as stream:
+                    for window in stream:
+                        self._check(cancel)
+                        validate_pcm(window)
+                        # One forward 30s producer, no repeat/overlap or unbounded
+                        # custom tiny windows in this persistent index contract.
+                        if (decoded>=MAX_WINDOWS or window.start_ms!=frames*1000//SAMPLE_RATE
+                                or window.requested_duration_ms!=MAX_WINDOW_MS):
+                            raise ValueError('Invalid direct-audio window sequence')
+                        decoded+=1;frames+=window.frame_count
+                        if frames>MAX_START_MS*SAMPLE_RATE//1000:raise ValueError('Audio exceeds duration limit')
+                        if not window.is_digital_silence:
+                            vector=normalized(self.encoder.encode('audio',window),self.profile.dimension)
+                            self._check(cancel)
+                            packed=array('f',vector)
+                            if sys.byteorder!='little':packed.byteswap()
+                            end_ms=(frames*1000+SAMPLE_RATE-1)//SAMPLE_RATE
+                            stage.execute('INSERT INTO windows VALUES(?,?,?,?)',
+                                (decoded-1,window.start_ms,end_ms,packed.tobytes()))
+                            indexed+=1
+                    if not stream.complete or not frames:raise ValueError('Incomplete audio input cannot be published')
+                stage.commit()
+                try:self._publish(item_id,revision,path,decoded,indexed,frames,cancel)
+                except InterruptedError:
+                    self._check(cancel)
+                    raise
+            return {'item_id':item_id,'revision':revision,'decoded_windows':decoded,
+                    'indexed_windows':indexed,'total_frames':frames,'contract':CONTRACT}
+
+    def _publish(self,item_id,revision,path,decoded,indexed,frames,cancel):
+        def check_source():
+            self._check(cancel)
+            if self.encoder.profile.key!=self.profile.key:raise ValueError('Audio encoder namespace changed')
+            if self.reader.audio_manifest(item_id)['revision']!=revision:
+                raise ReaderChanged('Audio source changed before index publication')
+            self._check(cancel)
+        with self._boundary(cancel),self.catalog.writer_fence.write(cancelled=lambda:cancel is not None and cancel.is_set()):
+            check_source()
+            with self.store.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                db.execute('DELETE FROM ai_audio_direct_windows WHERE item_id=?',(item_id,))
+                db.execute('DELETE FROM ai_audio_direct_sources WHERE item_id=?',(item_id,))
+                db.execute('INSERT INTO ai_audio_direct_sources VALUES(?,?,?,?,?,?)',
+                           (item_id,revision,CONTRACT,decoded,indexed,frames))
+                # An explicit read-only connection avoids ATTACH inheriting the
+                # primary connection's URI policy on Windows. At most 64 vectors
+                # escape the stage cursor; the target transaction stays atomic.
+                with closing(sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True)) as stage:
+                    cursor=stage.execute('SELECT ordinal,start_ms,end_ms,vector FROM windows ORDER BY ordinal')
+                    while rows:=cursor.fetchmany(64):
+                        self._check(cancel)
+                        db.executemany('INSERT INTO ai_audio_direct_windows VALUES(?,?,?,?,?)',
+                                       ((item_id,*row) for row in rows))
+                # File changes/cancel while copying roll back to the prior item.
+                check_source()

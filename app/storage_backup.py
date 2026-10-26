@@ -64,7 +64,7 @@ def _profile_suffix(key):
 def _database(path,role):
     with closing(_connect(path)) as db:
         version=db.execute('PRAGMA user_version').fetchone()[0]
-        if version not in ((0,1,2,3) if role=='catalog' else (0,)):raise RecoveryError('Unsupported database version')
+        if version not in ((0,1,2,3) if role=='catalog' else (0,1)):raise RecoveryError('Unsupported database version')
         if db.execute('PRAGMA integrity_check').fetchall()!=[('ok',)]:raise RecoveryError('Database integrity check failed')
         objects=db.execute("SELECT name,type FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND type IN ('table','view','trigger')").fetchall()
         if any(kind!='table' for _,kind in objects):raise RecoveryError('Unsupported database objects')
@@ -72,6 +72,10 @@ def _database(path,role):
         if role=='catalog' and version<3:
             expected={**expected,'registered_root_preferences':[col for col in expected['registered_root_preferences'] if col[0]!='startup_scan']}
         if not REQUIRED[role]<=tables or tables-set(expected):raise RecoveryError('Unsupported database tables')
+        if role=='vectors':
+            direct={'ai_audio_direct_sources','ai_audio_direct_windows'}
+            if (version==1 and not direct<=tables) or (version==0 and direct&tables):
+                raise RecoveryError('Inconsistent direct-audio database version')
         shelf_tables={'shelves','item_shelves','root_shelves'}
         if role=='catalog' and ((version in (1,2,3) and not shelf_tables<=tables) or (version==0 and shelf_tables&tables)):
             raise RecoveryError('Inconsistent shelf database version')

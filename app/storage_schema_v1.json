@@ -1007,6 +1007,87 @@
         null,
         0
       ]
+    ],
+    "ai_audio_direct_sources": [
+      [
+        "item_id",
+        "INTEGER",
+        0,
+        null,
+        1
+      ],
+      [
+        "source_revision",
+        "TEXT",
+        1,
+        null,
+        0
+      ],
+      [
+        "contract",
+        "TEXT",
+        1,
+        null,
+        0
+      ],
+      [
+        "decoded_windows",
+        "INTEGER",
+        1,
+        null,
+        0
+      ],
+      [
+        "indexed_windows",
+        "INTEGER",
+        1,
+        null,
+        0
+      ],
+      [
+        "total_frames",
+        "INTEGER",
+        1,
+        null,
+        0
+      ]
+    ],
+    "ai_audio_direct_windows": [
+      [
+        "item_id",
+        "INTEGER",
+        1,
+        null,
+        1
+      ],
+      [
+        "ordinal",
+        "INTEGER",
+        1,
+        null,
+        2
+      ],
+      [
+        "start_ms",
+        "INTEGER",
+        1,
+        null,
+        0
+      ],
+      [
+        "end_ms",
+        "INTEGER",
+        1,
+        null,
+        0
+      ],
+      [
+        "vector",
+        "BLOB",
+        1,
+        null,
+        0
+      ]
     ]
   }
 }

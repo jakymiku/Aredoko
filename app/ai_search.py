@@ -47,7 +47,7 @@ def revision(row):
     fields=[row['root_id'],row['relative_path'],row['size_bytes'],row['mtime_ns'],row['title'],row['tags']]
     return hashlib.sha256(json.dumps(fields,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
 
-CURRENT_VECTOR_STORE_USER_VERSION = 0
+CURRENT_VECTOR_STORE_USER_VERSION = 1
 
 class VectorStore:
     def __init__(self,path,profile=DEFAULT_PROFILE,*,writer_fence=None):
@@ -60,7 +60,7 @@ class VectorStore:
                 ver = check_db.execute('PRAGMA user_version').fetchone()[0]
                 supported=CURRENT_VECTOR_STORE_USER_VERSION
                 # Historical in-catalog vector tables share the catalog's version;
-                # standalone vector databases still use version0 only.
+                # Standalone v1 adds direct-audio tables; legacy stores stay v0.
                 if ver in (1,2,3):
                     tables={row[0] for row in check_db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                     if {'production_marker','items','item_locations','library_roots','shelves','item_shelves','root_shelves'}<=tables and (ver==1 or 'registered_root_preferences' in tables):supported=ver
