@@ -1,5 +1,12 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-26）
 
+## Alpha更新完了（2026-10-26、起動対象の最新情報）
+
+- 追加依頼により**基本ZIP07/source `caee977`**へデスクトップ「Aredoko Alpha」の起動先を更新済み。新versioned release、前版06/source2cf99b2とshortcut backupを保持。MSIX登録は変更していない。
+- 配置先806files/661,173,728bytesをmanifest照合、bootstrap `--self-test` exit0。起動設定SHA256一致・通常DBサイズ/更新日時不変。通常DBを起動せず、GUI/GPU試験は追加していない。既に開いている旧版processを強制終了しない。証拠`data/ai-ui/continuation-20261026b/alpha-update-final.json`。
+- 引き継ぎ本体は`2be75c5`までPush済み。この更新記録のcommitは `git log -1 -- docs/current-handoff.md`。07の通常GUI/clean Windows未受入と音声検索GUIのPARTIALは解消扱いにしない。
+- ユーザーへの完成距離：画像/本の実検索評価と動画frame/時刻検索の既存実装を維持し、今回音声producer→保存→検索→WinUI入口を追加した。本格UIは並行開始可能。全媒体配布品質の残りは、(1)限定音声GUI＋private worker一連、(2)実録音/音楽と音声類似の品質・媒体横断検索→再生、(3)runtime公開NOTICE/host/registryとclean Windows導入、(4)重大残件の修正とまとめ受入。日数・完了率は未測定で確約しない。UIを全受入まで延期しない。
+
 ## 継続開発checkpoint（2026-10-26、以下の過去記録より優先）
 
 - アプリsource **`caee977`**、既存branch/PR #5を継続。起点`b156d6b`。最新記録commitは `git log -1 -- docs/current-handoff.md`。5時間枠95%使用で終了準備、shutdownしない。
