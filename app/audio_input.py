@@ -39,6 +39,19 @@ class PCMWindow:
     def frame_count(self):return len(self.data)//4
 
 
+def validate_pcm(window):
+    if not isinstance(window,PCMWindow):raise AudioInputUnavailable('Expected an immutable PCM window')
+    validate_window(window.start_ms,window.requested_duration_ms)
+    if (type(window.sample_rate) is not int or window.sample_rate!=SAMPLE_RATE or
+        type(window.channels) is not int or window.channels!=CHANNELS or window.sample_format!='f32le' or type(window.data) is not bytes):
+        raise AudioInputUnavailable('Unsupported PCM contract')
+    limit=window.requested_duration_ms*SAMPLE_RATE//1000*4
+    if (not window.data or len(window.data)%4 or len(window.data)>limit or
+        any(not math.isfinite(value[0]) for value in struct.iter_unpack('<f',window.data))):
+        raise AudioInputUnavailable('Invalid or empty PCM output')
+    return window
+
+
 def read_window(source,start_ms,duration_ms,cancel=None):
     validate_window(start_ms,duration_ms)
     if cancel is not None and cancel.is_set():raise MediaDecodeCancelled('Media decode cancelled')
@@ -53,6 +66,4 @@ def read_window(source,start_ms,duration_ms,cancel=None):
         data=_run(arguments,source,limit,time.monotonic()+10,cancel=cancel)
     except (VideoPreviewUnavailable,OSError) as error:raise AudioInputUnavailable('Audio input unavailable or exceeds limits') from error
     if cancel is not None and cancel.is_set():raise MediaDecodeCancelled('Media decode cancelled')
-    if not data or len(data)%4 or len(data)>limit or any(not math.isfinite(value[0]) for value in struct.iter_unpack('<f',data)):
-        raise AudioInputUnavailable('Invalid or empty PCM output')
-    return PCMWindow(start_ms,duration_ms,data)
+    return validate_pcm(PCMWindow(start_ms,duration_ms,data))

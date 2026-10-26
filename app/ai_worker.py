@@ -46,7 +46,12 @@ def main():
         model=load_adapter(profile,args.model,device,dtype)
         actual_dimension=model.dimension
     print(json.dumps({'ready':True,'device':device,'dimension':actual_dimension,'profile':profile.key}),file=wire,flush=True)
-    for line in sys.stdin:
+    # Existing image messages (8 MiB raw) fit below this private wire bound.
+    # A malformed oversized line terminates the owner rather than parsing a
+    # partial next message or allocating without a limit.
+    while line := sys.stdin.readline(12*1024*1024+1):
+        if len(line)>12*1024*1024:
+            print(json.dumps({'error':'SourceLimit'}),file=wire,flush=True);break
         try:
             request = json.loads(line)
             operation = request['operation']
@@ -66,6 +71,10 @@ def main():
                         print(json.dumps({'skip':True}),file=wire,flush=True)
                         continue
                     vector = model.encode_image(image)
+                elif operation=='audio':
+                    if 'audio' not in profile.modalities:raise ValueError('Unsupported modality')
+                    from audio_protocol import parse_audio_request
+                    vector=model.encode_audio(parse_audio_request(request))
                 elif operation in ('query','document'):
                     text = request['text']
                     if not isinstance(text,str) or len(text)>4096: raise ValueError('Text limit')

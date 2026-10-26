@@ -1,5 +1,5 @@
 """Validated local embedding profiles; no packages or model downloads."""
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -11,6 +11,7 @@ REVISION = LEGACY_REVISION
 LEGACY_PROFILE = 'embeddinggemma-2:' + LEGACY_REVISION + ':text-vision:768:v1'
 LEGACY_CONTRACT = 'normalized-f32:text4096:exif-rgb-image768:v1'
 VECTOR_CONTRACT = LEGACY_CONTRACT
+AUDIO_VECTOR_CONTRACT = 'normalized-f32:text4096:mono-f32le-16000hz-audio30000ms:v1'
 # Historical compatibility must never follow a future DEFAULT_PROFILE change.
 LEGACY_IDENTITY = {
     'model_id':'google/embeddinggemma-2','revision':LEGACY_REVISION,
@@ -39,7 +40,7 @@ class ModelProfile:
             raise ValueError('Unsupported embedding adapter')
         if type(self.dimension) is not int or not 1 <= self.dimension <= 4096:
             raise ValueError('Embedding dimension must be 1..4096')
-        if self.modalities not in (('text',), ('text','cover')):
+        if self.modalities not in (('text',), ('text','cover'), ('text','audio')):
             raise ValueError('Unsupported modalities')
         if self.adapter == 'sentence-transformers' and self.modalities != ('text',):
             raise ValueError('Generic adapter currently supports text only')
@@ -90,10 +91,14 @@ class ModelProfile:
         return data
 
     @property
+    def vector_contract(self):
+        return AUDIO_VECTOR_CONTRACT if 'audio' in self.modalities else VECTOR_CONTRACT
+
+    @property
     def key(self):
-        if VECTOR_CONTRACT==LEGACY_CONTRACT and self.identity()==LEGACY_IDENTITY:
+        if self.vector_contract==LEGACY_CONTRACT and self.identity()==LEGACY_IDENTITY:
             return LEGACY_PROFILE
-        payload={'contract':VECTOR_CONTRACT,**self.identity()}
+        payload={'contract':self.vector_contract,**self.identity()}
         return 'embedding-profile:'+hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
 
     def store_path(self,catalog):
@@ -104,6 +109,11 @@ class ModelProfile:
         return model_directory(repo,self.directory,models_root)
 
 DEFAULT_PROFILE=ModelProfile()
+
+def audio_profile_for(base=DEFAULT_PROFILE):
+    """Explicit worker profile only; never changes the selected image profile."""
+    if base.adapter!='embeddinggemma2':raise ValueError('Direct audio requires the registered EmbeddingGemma 2 adapter')
+    return replace(base,modalities=('text','audio'),label=base.label[:110]+'（音声入力）')
 
 def load_profile(path=None):
     if path is None:

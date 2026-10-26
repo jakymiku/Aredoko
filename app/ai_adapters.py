@@ -21,9 +21,12 @@ class SentenceTransformerAdapter:
     def encode_image(self,image):
         raise ValueError('Unsupported image encoder')
 
+    def encode_audio(self,window):
+        raise ValueError('Unsupported audio encoder')
+
 class EmbeddingGemma2Adapter(SentenceTransformerAdapter):
     def config(self):
-        config={'audio_config':None}
+        config={} if 'audio' in self.profile.modalities else {'audio_config':None}
         if 'cover' not in self.profile.modalities:
             config['vision_config']=None
         return config
@@ -32,6 +35,13 @@ class EmbeddingGemma2Adapter(SentenceTransformerAdapter):
         if 'cover' not in self.profile.modalities:
             raise ValueError('Unsupported image encoder')
         return self.model.encode({'image':image},normalize_embeddings=True)
+
+    def encode_audio(self,window):
+        if 'audio' not in self.profile.modalities:raise ValueError('Unsupported audio encoder')
+        from audio_input import validate_pcm
+        import numpy as np
+        validate_pcm(window)
+        return self.model.encode({'audio':{'array':np.frombuffer(window.data,dtype='<f4'),'sampling_rate':window.sample_rate}},normalize_embeddings=True)
 
 ADAPTERS={'embeddinggemma2':EmbeddingGemma2Adapter,'sentence-transformers':SentenceTransformerAdapter}
 

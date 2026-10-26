@@ -74,10 +74,15 @@ class EncoderProcess:
             self._stop();raise AIUnavailable('Incompatible AI worker')
         self.device=hello['device']
     def encode(self, operation, value):
+        audio_message=None
+        if operation=='audio':
+            if 'audio' not in self.profile.modalities:raise AIUnavailable('Selected profile does not support audio input')
+            from audio_protocol import audio_request
+            audio_message=audio_request(value)  # Reject malformed input before loading a model.
         with self.lock:
             self._start()
-            request={'operation':operation}
-            request['image' if operation=='image' else 'text']=base64.b64encode(value).decode('ascii') if operation=='image' else value
+            request=audio_message if audio_message is not None else {'operation':operation}
+            if audio_message is None:request['image' if operation=='image' else 'text']=base64.b64encode(value).decode('ascii') if operation=='image' else value
             try:
                 self.process.stdin.write(json.dumps(request,ensure_ascii=False)+'\n')
                 self.process.stdin.flush()

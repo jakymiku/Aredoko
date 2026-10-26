@@ -81,6 +81,16 @@ CREATE TABLE IF NOT EXISTS ai_audio_segments(
 
 追加の生成format試験は、既存同梱FFmpegでmp3/flac/ogg/opus/aac/m4a/wmaへ変換した2秒音声から各500ms/8,000samplesを取得してPASS。WAVと合わせ登録済み8形式の基本入力経路を確認したが、実私物の全codec/破損例の網羅ではない。
 
+### 5.3b 明示的な音声worker契約（2026-10-26）
+
+- `audio_profile_for()` が既存固定モデルからtext/audio用profileを派生させる。contractは`normalized-f32:text4096:mono-f32le-16000hz-audio30000ms:v1`。key/SQLite保存先はlegacy text/coverと異なり、表示名/配置変更では変わらない。本番の選択profileや設定へ自動登録しない。
+- 音声profileだけaudio towerを有効・vision towerを無効にする。既存defaultは従来どおりaudio無効。generic sentence-transformersには音声を無条件追加しない。
+- `EncoderProcess.encode('audio',PCMWindow)`→`audio_protocol`→`ai_worker`→adapterを接続。strictな16kHz/mono/f32le、時刻/長さ、finite/alignedなimmutable bytes、最大30秒/1,920,000bytesを両側で検証する。IPCはbase64と明示fieldのみ、path/URL/handleなし。不正な音声はworker起動前に拒否する。
+- worker入力行は最大12Mi文字で終了判定し、既存8MiB画像payloadを維持する。音声以外の既存profile/operationを保持し、返却vectorは既存の次元/有限性/正規化検査を通す。通常索引・音声512D保存・GUIにはまだ自動接続しない。
+- 新しいworker/profile/protocolと関連release/PCMのCPU45 PASS、基本Python3.11のworker9 PASS。default legacy key保全、専用key/契約変更、bad payloadの起動前拒否、private wire roundtrip、fake CPU workerのbad→good応答と過大行終了を確認。実モデルの音声APIは前節の限定GPUで確認済みだが、この新しいprivate IPC経由の実GPUは未実施。ソースの機能追加であり基本ZIP04/installed Alphaへは未収録。
+
+予備品質の条件と結果は[音声入力評価](audio-input-evaluation.md)を参照。R06最終方式選定、長時間音声の逐次producer/atomic保存/検索接続・無音対策・実録音/実曲の評価は残る。既存512D音響空間へ768Dを流用しない。
+
 ### 5.4 原子性と中断・再開契約
 - 音声1アイテムあたりのセグメント登録はSQLiteトランザクション内で不可分（Atomic）に実行。既存の同一 `item_id` の古いセグメントを全削除した上で一括挿入。
 - 処理中のキャンセル（`cancel.is_set()` / `check()`）を各セグメント抽出間、候補バッチ間、および多数セグメント評価中（256セグメントごと）に監視し、キャンセル時は部分的な不完全セグメントを残さず即時中断。
