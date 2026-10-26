@@ -112,3 +112,10 @@ harnessはpopupを開く前にfocusを与えるよう修正。`--audio-search-on
 音声の右クリックへ「内容が似た音声・曲を探す」を追加。既存の音響特徴ルートは維持。新入口は`audio-similar`として通常のroot/棚/favorite条件を保持し、視覚AI scope・runtime整合性確認・モデルloadを要求しない。起点と候補の両時刻をstrict Core parserで検証し、sourceがlegacyと混ざる応答を拒否する。画面履歴にdirect/legacyの別を保持して戻る/進むを復元する。
 
 Core runner/Portable publish PASS。Coreにはroots変数のshadowによる初回compile失敗を保持しaudioRootsへ修正済み。既存WUI1001 picker3とSDK由来IL2104を維持。result sessionの256MiB ranking予約も追加、focused capacity1 PASS。新候補`data/ai-ui/continuation-20261027/frontend01`へreceipt作成済み。GUIは個別質問への回答後、専用生成WAV/CPU供給vector・モデル利用不可の条件で右クリック/両時刻/詳細/画面履歴だけ確認する。音楽の意味品質はこの接続では評価しない。
+
+
+## 直接音声類似の限定native結果（2026-10-27）
+
+frontend01/sourcec8703fdを使用。個別許可後native01でcontext入口・起点除外・両時刻・詳細まで成功。favoriteへ移動した際、種類audioを保持した正しいfilter空案内をharnessが未絞込の案内と比較して停止した。製品FAILではなく、全5PNGを目視しPARTIAL、正常exit0。harnessを現行のfilter案内＋favorite見出し待ちへ修正し、追加許可後native02は9checks/4PNG目視/正常exit0、画面履歴でdirect類似の候補と条件が復元されることまでPASS。
+
+モデル利用不可・resident=falseの供給CPU encoderを用い、cached比較でモデルを起動しないこと、元生成SHA/mtime・タグ不変を確認。GPU・音声再生・通常DB・Alpha変更なし。旧失敗は保持。証拠`data/ai-ui/continuation-20261027/audio-similarity-native01`/`audio-similarity-native02`。実音楽の類似品質・長音声の性能は別途未受入。

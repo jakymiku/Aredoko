@@ -99,7 +99,10 @@ def audit_similarity(ui,tree,shot,report,check,catalog,feature,*,input_guard):
     if not input_guard():raise RuntimeError('Owned audio test lost foreground; no pointer input sent')
     ui('click','ItemTitle2');ui('wait-for','BtnDetails','-p','IsEnabled','--value','True','-t','10000');ui('invoke','BtnDetails')
     ui('wait-for','BtnOpenAudio','-p','IsEnabled','--value','True','-t','10000');shot('audio-similar-detail')
-    ui('invoke','NavFavorites');ui('wait-for','TxtEmpty','--value','お気に入りはまだありません','--contains','-t','10000')
+    ui('invoke','NavFavorites');ui('wait-for','LibraryHeading','--value','お気に入り','-t','10000')
+    # The retained audio kind is an active filter, so the existing application
+    # correctly shows the scoped-empty message rather than the unfiltered one.
+    ui('wait-for','TxtEmpty','--value','現在の検索範囲・種類に一致する作品はありません','--contains','-t','10000')
     ui('invoke','BtnNavigationBack')
     ui('wait-for','AIEvidence2','--value','起点 0:00 → 候補 0:00','--contains','-t','15000')
     check('screen history restores direct audio similarity','Item1' not in tree())
