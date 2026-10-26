@@ -11,7 +11,8 @@
 - **最新基本ZIP04完成/限定受入**：`dist/portable-basic-20261026-04/Aredoko`、source **`9968eac`**、796 files / 660,993,785 bytes。Core/Portable/起動画面CPU自己検査/同梱runtime/全inventory/ZIP照合、同梱Pythonの基本CPU23 PASS。SDKキャッシュ指定は`--msbuild-targets`の開発用targetsだけ（ZIPへ同梱しない）。
 - **ZIP04の許可済みGUI各1試行**：`transport-native01` 29 checks/6PNG目視/frontend exit0/decoder2close。原寸アニメーションの同一接続再利用と最終frame、生成小CBZ往復/304再利用を確認。[数値と限界](viewer-performance.md)。通常入口 `Aredoko.exe` も `basic-native04` で専用DB/生成1画像の起動→正常終了→1回再起動、11 checks/所有4exit0/2PNG目視/inventory不変。GPU0、普段のDB/installed Alpha/shortcut更新0。GUI許可はすべて実施済みで、新しい範囲には回答が必要。
 - **P7 viewer実入力も限定受入**：`tools/test_native_viewer_input.py`、ZIP04の生成静止画2枚/5ページCBZだけ。各回答後01/02を実施、01はtooltip混在撮影によるharness FAILを保持。viewport撮影＋寸法検証へ修正後02は9 checks/4PNG目視/所有exit0。中心zoomの目印座標不変、左dragは正確に(-80,-50)、実wheel画像前後/循環ONの本1→5→1、bar hide/hotzone/専用設定保持が通った。[証拠と未受入](viewer-performance.md)。製品のzoom修正は行っていない。
-- **現在の次の1件**：M1の残受入（HC/物理DPI/clean Windows・長時間FPS/RSS）と公開runtime権利/host（registry0）は未完として保持。既に通ったflowを反復せず、独立したR06/R07共通の安全なPCM切り出し境界をCPU/生成音声で小さく実装する。モデル選定・推論・音声内容認識の完了とは区別し、M1判定/M2の順序を維持する。新GUI/GPUには新回答が必要。shutdownなし。
+- **R06/R07共通PCM入力境界**：`app/audio_input.py` と内部 `PreviewReader.audio_pcm_window` を追加。最大30秒/16kHz mono f32le、所有FFmpegのfd/pipe限定・取消/回収、返却前の登録/除外/原本再確認。実生成WAVの位置/末尾/振幅・無音、変更/取消等の新規13、関連video21（PATHの独立試験1件はharness修正後に対象再確認）、基本Python3.11の新規13、追加lookup前取消1がPASS。[契約と限界](audio-content-design.md)。認識モデル選定/推論/通常AI索引へは未接続。基本ZIP04/installed Alphaへ未収録。
+- **現在の次の1件**：既存EmbeddingGemma 2アダプターとローカルconfigの音声入力契約を小範囲で確認し、生成PCMを実評価へ渡すために不足する部分を一つ具体化する。GPU/GUI/新規取得には新回答が必要。M1残受入（HC/物理DPI/clean Windows・長時間FPS/RSS）・公開runtime権利/host（registry0）・R06方式選定/M2は未完のまま。既に通ったflowを無変更反復しない。shutdownなし。
 
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。

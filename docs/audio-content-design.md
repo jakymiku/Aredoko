@@ -63,6 +63,12 @@ CREATE TABLE IF NOT EXISTS ai_audio_segments(
 - チャンネル: 1 (Mono) float32
 - 入力パイプライン: FFmpeg/fd 経由で安全にPCM抽出（一時ファイルへのパス出力や外部プロトコル読み込みを完全排除）。
 
+**2026-10-26：共通入力境界を実装**。`PreviewReader.audio_pcm_window(item_id,start_ms,duration_ms,revision,cancel)` は登録済み音声の検証済みhandleから最大30秒/1,920,000bytesの16kHz・mono・float32 little-endianを返す。内部producer用でHTTP routeは追加しない。開始位置/長さは厳密な整数、入力512MiB/24時間以内、FFmpegは既存実行物・fd/pipe・demuxer allowlist・10秒deadline・既存preview2slot。取消時は所有childを終了/回収し、返却前にも取消・登録/除外・原本の版/祖先を再確認する。元音声/出力ファイル/DBへ書き込まない。上限は出力と所有時間の制限であり、native heap全体の保証ではない。
+
+生成WAVで500msから750msの12,000samples、1,750msから末尾まで4,000samples、区間の振幅と無音保持、EOF拒否を実FFmpegで確認。原本変更/解除/除外/取消ではPCMを返さずworkerを解放。開発Python3.14で新規13＋関連video21のうち、PATH指定試験1件はbundled-tool環境を除外するharness修正後に対象再確認PASS。基本Python3.11で新規13 PASS、追加したlookup前取消1件は開発PythonでPASS。証拠 `data/ai-ui/snapshot-review-20261026/audio-*.log`（Git対象外）。基本Python初回のtests import失敗はisolated `_pth` がPYTHONPATHを無視する起動指定の問題で、明示sys.path指定後に確認した。
+
+認識/特徴抽出モデルの選定・実推論・通常索引へのproducer接続は引き続き未完。今回のwave切り出しをR06/R07/R08の内容認識合格へ数えない。基本ZIP04/source`9968eac`とinstalled Alphaへは未収録。
+
 ### 5.4 原子性と中断・再開契約
 - 音声1アイテムあたりのセグメント登録はSQLiteトランザクション内で不可分（Atomic）に実行。既存の同一 `item_id` の古いセグメントを全削除した上で一括挿入。
 - 処理中のキャンセル（`cancel.is_set()` / `check()`）を各セグメント抽出間、候補バッチ間、および多数セグメント評価中（256セグメントごと）に監視し、キャンセル時は部分的な不完全セグメントを残さず即時中断。

@@ -36,6 +36,10 @@ class VideoPreviewUnavailable(ValueError):
     pass
 
 
+class MediaDecodeCancelled(Exception):
+    """An explicitly owned native decode was cancelled and reaped."""
+
+
 def _executable(name):
     media = os.environ.get('AREDOKO_MEDIA_TOOLS')
     if media is not None:
@@ -51,7 +55,8 @@ def _executable(name):
     return str(Path(value).resolve())
 
 
-def _run(args, source, limit, deadline):
+def _run(args, source, limit, deadline, cancel=None):
+    if cancel is not None and cancel.is_set():raise MediaDecodeCancelled('Media decode cancelled')
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise VideoPreviewUnavailable('Video preview deadline exceeded')
@@ -82,7 +87,20 @@ def _run(args, source, limit, deadline):
         reader = threading.Thread(target=drain, daemon=True)
         reader.start()
         try:
-            process.wait(timeout=max(0.001, deadline - time.monotonic()))
+            if cancel is None:
+                process.wait(timeout=max(0.001, deadline - time.monotonic()))
+            else:
+                while process.poll() is None:
+                    if cancel.is_set():raise MediaDecodeCancelled('Media decode cancelled')
+                    remaining=deadline-time.monotonic()
+                    if remaining<=0:raise subprocess.TimeoutExpired(args,0)
+                    try:process.wait(timeout=min(.05,remaining))
+                    except subprocess.TimeoutExpired:pass
+                if cancel.is_set():raise MediaDecodeCancelled('Media decode cancelled')
+        except MediaDecodeCancelled:
+            if process.poll() is None:process.kill()
+            process.wait()
+            raise
         except subprocess.TimeoutExpired as error:
             process.kill()
             process.wait()

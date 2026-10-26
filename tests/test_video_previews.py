@@ -47,9 +47,13 @@ class VideoToolTests(unittest.TestCase):
             with self.assertRaises(video.VideoPreviewUnavailable): video._validate_png(data)
 
     def test_missing_tools_and_windows_batch_wrappers_are_not_run(self):
-        for found in (None, 'ffmpeg.cmd', 'ffmpeg.BAT'):
-            with patch.object(video.shutil, 'which', return_value=found):
-                with self.assertRaises(video.VideoPreviewUnavailable): video._executable('ffmpeg')
+        # This case exercises PATH lookup, independently of a test runner's
+        # explicit bundled-tool location used by native generated-media cases.
+        with patch.dict(os.environ):
+            os.environ.pop('AREDOKO_MEDIA_TOOLS',None)
+            for found in (None, 'ffmpeg.cmd', 'ffmpeg.BAT'):
+                with patch.object(video.shutil, 'which', return_value=found):
+                    with self.assertRaises(video.VideoPreviewUnavailable): video._executable('ffmpeg')
 
     def test_cache_is_bounded_by_revision_and_does_not_cache_failures(self):
         thumbnailer = video.VideoThumbnailer()
