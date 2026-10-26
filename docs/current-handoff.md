@@ -1,5 +1,18 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-26）
 
+## 継続開発checkpoint（2026-10-26、以下の過去記録より優先）
+
+- アプリsource **`caee977`**、既存branch/PR #5を継続。起点`b156d6b`。最新記録commitは `git log -1 -- docs/current-handoff.md`。5時間枠95%使用で終了準備、shutdownしない。
+- **5万実PNGの限定native受入完了**：`054a7f3`、既存生成fixtureを再利用・専用DBへbackup。進捗/中断/再検索/先頭末尾/条件/未保存タグ/可視thumbnail/正常終了PASS。再検索から初行32.263s（単回、準備待ちは残る）。証拠`data/ai-ui/continuation-20261026b/real-native01`、詳細[result-sessions](result-sessions.md)。全媒体cold性能/長時間RSSの合格ではない。
+- **直接音声内容検索を接続**：`f09dab7`逐次PCM、`c5534c8`専用namespace atomic保存、`d0dad91`scope付き検索/時刻、`320c2ad`所有batch/画像音声モデル排他、`8f41af2`認証API/result session、`6f5e367`WinUIの明示準備/中断/続きと検索方法「音声の内容（AI）」、`caee977`展開bodyの可視化。既存文字/表紙/512Dを混在させない。関連Python/Core・PortableビルドPASS、既存picker警告3。詳細[audio-producer-review](audio-producer-review.md)。
+- **実GPU限定PASS**：生成2音声の逐次decode→専用DB保存→日本語2問がTop1。load32.718s、index1.875/0.485s。元生成ファイル不変。`audio-pipeline-gpu01`。実private worker GPU一連、実録音/実曲/音声同士類似の一般品質は未受入。M2完成ではない。
+- **音声GUIはPARTIAL**：frontend01/source6f5e367のnative01とfrontend02/sourcecaee977のnative02。2試行とも準備/中断/再開・2item保存を確認。01は重複UIA option、02はpopup展開後のcombo focus取得でharness停止（キー未送信）。02でbody/操作の可視化修正を確認。検索方法切替・結果時刻表示は未確認、製品検索失敗と断定しない。失敗ログ/PNGを保持、正常exit0/所有process回収。追加GUI許可は消費済み。
+- **次の1件**：個別質問で許可を得て、既存frontend02＋`tools/test_p3_native_containers.py --audio-search-only`で検索方法切替/時刻根拠だけ1試行。今回harnessはpopup前focusに修正し、専用生成WAV2本をCPUで事前準備する。構文確認のみでnative未実行。成功した準備flowは反復しない。新出力先を使い、旧native01/02を上書きしない。
+- **新基本ZIP07**：`dist/portable-basic-20261026-07/Aredoko`＋adjacent ZIP、sourcecaee977、806files/661,173,728bytes。receipt/全inventory/ZIP照合・同梱backend基本CPU23/owned EOF exit0 PASS（`basic-cpu07`）。07の通常EXE GUI/clean Windowsは未受入。音声用AI環境/モデルは別途必要。ZIP内docsはbuild時snapshot、再開は本書を優先。
+- **Alpha更新の追加依頼あり**：引き継ぎ後に07へversioned配置・旧版/shortcut backup保持で更新予定。完了記録をこの上へ追記するまではinstalled Alphaは06/source2cf99b2。普段のDBを起動してテストしない。
+- ユーザーはPC使用中：GUI/GPUは毎回具体的質問への回答後。今回許可分は実施済み、追加取得0/通常DB・設定変更0/私物scan0。新しい大規模作業には入らない。P6 runtime公開NOTICE/host/registry、HC/物理DPI/clean Windows/長時間RSS、実音声/曲品質は残る。
+- **UIの開始条件**：全面UIの段階移行は全配布受入を待たず並行可能。「全4媒体が確実に内容検索できる配布品質」は音声実worker/実素材品質、媒体横断の取得→索引→検索→再生、clean Windows導入が残り、現時点では達成宣言しない。次は限定音声GUI→実worker一連→媒体横断受入→配布環境を順に仕上げる。日数を裏付けなく確約しない。
+
 ## installed Alpha更新checkpoint（2026-10-26、以下の未更新記録より優先）
 
 - 利用者の追加依頼により、基本ZIP06（app source **`2cf99b2`**）を新しいversioned releaseへ配置し、デスクトップの **Aredoko Alpha** の起動先を切替済み。前版`e52c8ec`と切替前shortcutは保持。MSIX登録は変更していない。

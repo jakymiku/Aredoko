@@ -40,8 +40,23 @@ def create_feature(catalog):
     return feature,release,reached
 
 
-def audit(ui,tree,shot,report,check,catalog,feature,release,reached,*,input_guard):
+def audit(ui,tree,shot,report,check,catalog,feature,release,reached,*,input_guard,search_only=False):
     report['authorization']='Explicit user approval required: generated WAVs + dedicated DB + CPU supplied encoder, no sound output/GPU'
+    if not search_only:prepare(ui,tree,shot,report,check,catalog,feature,release,reached)
+    # Set focus before opening the popup: the combo provider becomes stale while
+    # the popup is expanded. Do not resolve it again between expand and keys.
+    ui('focus','CmbSearchMode');ui('invoke','CmbSearchMode','--action','expand')
+    if not input_guard():raise RuntimeError('Owned audio test lost foreground; no key input sent')
+    ui('send-keys','end enter','--via','send-input')
+    ui('set-value','TxtQuery','生成した音声');ui('wait-for','Item1','-t','15000')
+    check('audio mode locks kind to the audio category',tree()['CmbKind'].get('isEnabled') is False)
+    ui('invoke','Item1','--action','select');ui('invoke','BtnDetails')
+    ui('wait-for','BtnOpenAudio','-p','IsEnabled','--value','True','-t','10000');shot('audio-search-time')
+    check('audio player remains available without starting playback',True)
+    check('generated tags were not changed',all(row['tags']==[] for row in catalog.search()['items']))
+
+
+def prepare(ui,tree,shot,report,check,catalog,feature,release,reached):
     ui('invoke','BtnSettings');ui('wait-for','BtnAIIndex','-t','10000');ui('invoke','BtnAIIndex')
     ui('wait-for','AudioContentOptions','-t','10000');ui('scroll-into-view','AudioContentOptions')
     ui('invoke','AudioContentOptions','--action','expand')
@@ -57,14 +72,3 @@ def audit(ui,tree,shot,report,check,catalog,feature,release,reached,*,input_guar
     ui('wait-for','AudioContentStatus','--value','準備完了','--contains','-t','15000');shot('audio-completed')
     check('both generated audio items are atomically ready',feature.status()['indexed']==2)
     ui('invoke','CloseButton');ui('wait-for','CloseButton','--gone','-t','10000')
-    ui('invoke','CmbSearchMode','--action','expand');ui('focus','CmbSearchMode')
-    if not input_guard():raise RuntimeError('Owned audio test lost foreground; no key input sent')
-    # The opened WinUI popup exposes the same option twice to UIA. Standard
-    # keyboard selection avoids that ambiguous mirror; never use post-message.
-    ui('send-keys','end enter','--via','send-input')
-    ui('set-value','TxtQuery','生成した音声');ui('wait-for','Item1','-t','15000')
-    check('audio mode locks kind to the audio category',tree()['CmbKind'].get('isEnabled') is False)
-    ui('invoke','Item1','--action','select');ui('invoke','BtnDetails')
-    ui('wait-for','BtnOpenAudio','-p','IsEnabled','--value','True','-t','10000');shot('audio-search-time')
-    check('audio player remains available without starting playback',True)
-    check('generated tags were not changed',all(row['tags']==[] for row in catalog.search()['items']))

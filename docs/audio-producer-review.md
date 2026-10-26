@@ -73,3 +73,12 @@ HTTP5（開発4＋修正後対象1、基本Python5）、既存result34/release11
 AI準備のscroll領域へ折りたたみ式`AudioPreparationPanel`を追加。展開時のstatusだけではmodel/DBを起動しない。現在の検索フォルダ/棚を対象に、明示作成・中断・進捗・続きのbatchを操作できる。dialogを閉じるとpollだけを終了し、所有jobは続行する。遅いstatus応答が新しいcommandを上書きしない世代と取消を持つ。本文の作業領域は変更しない。
 
 Core全体PASS（旧「7は無効」の試験を新しい境界8へ更新）、Portable build PASS。新しいIL2026はJsonValueの明示生成へ修正済み。既存WUI1001 picker警告3のみ。WinUI reviewで色/配置/bindingの追加差分、所有timer/取消、アクセス名・操作経路を確認。GUI受入は新候補を作成後、個別質問してから実施する。silent成功を未索引と誤表示しないfresh数も追加し、関連CPU検索9/HTTP response1 PASS。
+
+
+## 限定nativeの結果と配布候補（2026-10-26）
+
+frontend01/native01は準備・中断・再開・2item保存を確認後、検索方法popupの重複UIA optionで停止。frontend02/sourcecaee977/native02は展開時StartBringIntoViewによりbody/操作が見えることと同じ準備flowを確認し、popup展開後にcomboのfocus provider取得が失敗して停止した。実キーは未送信。両方exit0/所有process回収、PNGを目視し、**検索方法切替・結果の時刻表示は未検証**。2回目を総合PASSとしない。
+
+harnessはpopupを開く前にfocusを与えるよう修正。`--audio-search-only`で生成2WAVを供給CPU encoderで事前索引化し、成功済みの準備flowを反復せず検索入口だけ確認できる。構文確認のみ、新たなGUI試行には別の回答が必要。証拠`data/ai-ui/continuation-20261026b/audio-native01`/`audio-native02`。
+
+基本ZIP07（sourcecaee977、806files/661,173,728bytes）はfrontend02を収録。全manifest/ZIP照合と同梱Pythonによる基本CPU23・owned EOF exit0 PASS。通常EXE入口GUI/clean Windowsは未検証。生成2音声GPU成功を実private worker/実録音/音楽/音声類似の一般品質合格へ拡張しない。
