@@ -1,0 +1,108 @@
+"""Scoped direct-audio text retrieval; no invented transcript or UI dependency.
+
+Uses the common catalog filters and bounded score spool. A single request owns
+ranking once, and can serve range pages through the existing result sink shape.
+The encoder belongs to the explicit audio namespace, never the image worker.
+"""
+from array import array
+import math
+import sys
+
+from ai_score_spool import ScoreSpool,SearchCancelled
+from ai_vectors import normalized
+from audio_direct_index import CONTRACT,MAX_WINDOWS
+from audio_input import MAX_START_MS,SAMPLE_RATE
+from previews import PreviewUnavailable
+
+
+class AudioSearchChanged(ValueError):pass
+
+
+def _score(data,query):
+    if type(data) is not bytes or len(data)!=len(query)*4:return None
+    vector=array('f');vector.frombytes(data)
+    if sys.byteorder!='little':vector.byteswap()
+    norm=sum(value*value for value in vector)
+    if not math.isfinite(norm) or abs(norm-1)>1e-4:return None
+    divisor=math.sqrt(norm)
+    return sum(a*b/divisor for a,b in zip(query,vector))
+
+
+class AudioDirectSearch:
+    def __init__(self,index):self.index=index
+
+    def search(self,query,*,page=0,limit=60,result_sink=None,cancelled=None,**conditions):
+        if not isinstance(query,str) or not 1<=len(query.strip())<=4096:raise ValueError('Invalid audio query')
+        if type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:raise ValueError('Invalid audio paging')
+        if set(conditions)-{'view','root_id','root_ids','shelf','shelf_ids'}:raise ValueError('Unsupported audio search conditions')
+        if result_sink is not None and (not callable(result_sink) or page!=0):raise ValueError('Result sink requires page zero')
+        if cancelled is not None and not callable(cancelled):raise ValueError('Invalid cancellation callback')
+        index=self.index;catalog=index.catalog;generation=catalog.result_generation()
+        with index.store.connect() as monitor,ScoreSpool(cancelled=cancelled,parent=index.stage_parent) as spool:
+            version=monitor.execute('PRAGMA data_version').fetchone()[0]
+            def check():
+                if cancelled is not None and cancelled():raise SearchCancelled('Audio search cancelled')
+                if (catalog.result_generation()!=generation or index.encoder.profile.key!=index.profile.key
+                        or monitor.execute('PRAGMA data_version').fetchone()[0]!=version):
+                    raise AudioSearchChanged('Audio search changed; refresh results')
+            check()
+            candidate_total=indexed_total=0
+            def consume(fetch):
+                nonlocal candidate_total,indexed_total
+                number=0;vector=None
+                while True:
+                    check();batch=fetch(number);rows=batch['items'];candidate_total=batch['total']
+                    # Filter validation/selection precedes inference, including
+                    # an empty root/shelf/favorite scope.
+                    if rows and vector is None:
+                        vector=normalized(index.encoder.encode('query',query),index.profile.dimension);check()
+                    hits=self._rank(rows,vector,check) if rows else {}
+                    for row in rows:
+                        if row['id'] not in hits:continue
+                        score,start,end,revision=hits[row['id']]
+                        spool.add(row['id'],{'audio':score},payload={'item':row,'revision':revision,
+                            'audio_match_ms':start,'audio_match_end_ms':end})
+                        indexed_total+=1
+                    if (number+1)*batch['limit']>=batch['total']:break
+                    number+=1
+                check();spool.finalize('max')
+                def render(number):
+                    check();selected=spool.page(number,limit)
+                    payloads=spool.evidence([item for item,_ in selected['ranked']]);items=[]
+                    for item,score in selected['ranked']:
+                        payload=payloads[item]
+                        if index.reader.audio_manifest(item)['revision']!=payload['revision']:
+                            raise AudioSearchChanged('Matched audio changed; refresh results')
+                        items.append({**payload['item'],'semantic_score':round(score,6),
+                            'audio_match_ms':payload['audio_match_ms'],'audio_match_end_ms':payload['audio_match_end_ms'],
+                            'audio_match_source':'direct-audio','audio_match_contract':CONTRACT})
+                    check()
+                    return {'items':items,'total':selected['total'],'page':number,'limit':limit,
+                            'source':'audio-direct','profile':index.profile.key,
+                            'candidate_total':candidate_total,'indexed_total':indexed_total}
+                return render(page) if result_sink is None else result_sink(render)
+            return catalog.search(query='',kind='audio',limit=120,result_sink=consume,cancelled=cancelled,**conditions)
+
+    def _rank(self,rows,query,check):
+        if not rows:return {}
+        if len(rows)>120:raise ValueError('Audio ranking batch exceeds limit')
+        index=self.index;ids=[row['id'] for row in rows];best={};current=None;eligible=False
+        with index.store.connect() as db:
+            cursor=db.execute('SELECT w.item_id,w.ordinal,w.start_ms,w.end_ms,w.vector,'
+                's.source_revision,s.contract,s.decoded_windows,s.indexed_windows,s.total_frames '
+                'FROM ai_audio_direct_windows w JOIN ai_audio_direct_sources s ON s.item_id=w.item_id '
+                'WHERE w.item_id IN ('+','.join('?' for _ in ids)+') ORDER BY w.item_id,w.ordinal',ids)
+            for item,ordinal,start,end,data,revision,contract,decoded,indexed,frames in cursor:
+                check()
+                if item!=current:
+                    current=item;eligible=False
+                    if not (contract==CONTRACT and 1<=indexed<=decoded<=MAX_WINDOWS
+                            and 1<=frames<=MAX_START_MS*SAMPLE_RATE//1000):continue
+                    try:eligible=index.reader.audio_manifest(item)['revision']==revision
+                    except PreviewUnavailable:continue
+                if not eligible or not (0<=ordinal<decoded and 0<=start<end<=MAX_START_MS):continue
+                value=_score(data,query)
+                if value is not None and (item not in best or value>best[item][0]):
+                    best[item]=(value,start,end,revision)
+            cursor.close()
+        check();return best

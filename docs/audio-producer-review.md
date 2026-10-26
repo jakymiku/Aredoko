@@ -39,3 +39,11 @@ M1の残受入（HC/物理DPI/clean Windows等）とruntime公開review/hostは�
 新しい`ai_audio_direct_sources`/`ai_audio_direct_windows`のあるaudio sidecarだけ`user_version=1`。既存sidecarは0を維持。backup/restoreの既知schemaとversion確認、inactive root purgeの両table削除も同時更新。decode/encoder待ちではwriter fenceを保持せず、途中のlive backupは以前の完了revisionを見る。vectorのstage読出しは64行ずつで、全window vectorのlistを作らない。検索への公開、通常producer job/GUI、音声workerの起動/idle releaseはまだ未接続。
 
 CPU14（開発/基本Python）PASS：失敗・取消・容量不足・原本変更で旧索引保持、silent marker、名前空間拒否、将来版拒否、stage削除、backup待ち取消、encode中backupの旧revision、旧/新sidecar復元、root purge時の原本保持。既存backup29・profile10もPASS。初回はSQLite接続contextがcloseしない解放漏れと、URI無効のprimary接続からのATTACHを検出し、明示close＋専用read-only接続に修正。次の1 FAILは2窓それぞれで同じroot解除を繰り返したfixtureを1回解除に修正したもの。`data/ai-ui/continuation-20261026b/audio-index/`に診断/修正後ログを保持する。供給PCM/人工vectorによる保存試験であり、実GPU音声検索の精度証拠ではない。
+
+## 内部検索APIの接続（2026-10-26）
+
+`AudioDirectSearch`は同じaudio namespaceのencoderで文章queryを作り、`ProductionCatalog.search`のroot/棚/favorite/除外条件を共通利用する。120itemずつ、vectorはcursorで走査し、1itemのbest window/開始・終了時刻をbounded ScoreSpoolへ保存する。cosine同点はitem ID順、window同点は最初のordinal。追加範囲取得のために再encode/再rankしないresult sinkにも対応する。
+
+各itemの原本版を検証し、登録状態・catalog generation・audio store data_versionが途中変更されたら古い結果を破棄する。結果は`audio_match_ms`/`audio_match_end_ms`/`audio_match_source=direct-audio`で返し、転写していないsnippetを作らない。既存ResultSessions＋IndexStampにも接続でき、音声索引更新時の失効を確認した。通常server/WinUIの検索入口、音声同士の類似、owned workerの設定/idle releaseはまだ未接続。
+
+CPU8（開発は既存7＋追加1、基本Pythonは8）PASS。範囲の継承、1queryから複数range、安定tie、stale/empty/取消、索引途中変更、時刻付きsession保持と更新後失効を確認。供給vectorによる契約試験であり、音声理解の品質評価ではない。
