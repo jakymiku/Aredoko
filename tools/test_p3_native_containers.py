@@ -19,9 +19,11 @@ def main():
     parser.add_argument('--usability-u2',action='store_true')
     parser.add_argument('--usability-u3',action='store_true')
     parser.add_argument('--uia-only',action='store_true',help='Record input/hover checks as unverified; use UIA only')
+    parser.add_argument('--real-fixture',type=Path,help='Global-edge case only: reuse generated real-file fixture with a copied catalog')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
+    if args.real_fixture and not args.global_edge:parser.error('Real fixture requires the bounded global-edge case')
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
     if args.detail_actions:report['authorization']='2026-10-24 explicit human approval: contextual detail GUI on dedicated fixtures, Light/Dark; no AI/GPU inference'
     report['theme']=args.theme
@@ -79,11 +81,16 @@ def main():
         if args.detail_actions:
             from ui_detail_actions_audit import create_media
             create_media(media)
+        if args.real_fixture:
+            from ui_real_library_audit import copy_fixture
+            fixture,source_digest=copy_fixture(args.real_fixture,target/'catalog.sqlite')
+            report['real_fixture']=fixture
+            def sources():return source_digest()
         cat=ProductionCatalog(target/'catalog.sqlite')
-        if args.global_edge:
+        if args.global_edge and not args.real_fixture:
             from ui_global_edge_audit import create_metadata
             create_metadata(cat,media)
-        else:
+        elif not args.real_fixture:
             root=cat.add_root(str(media));cat.start_scan(root)
             if cat._worker:cat._worker.join(15)
         before=sources()
@@ -97,6 +104,9 @@ def main():
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
         handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger(),instance_id=instance);handler.log_message=lambda *args:None
+        if args.real_fixture:
+            from ui_real_library_audit import install_cancel_gate
+            real_gate=install_cancel_gate(handler)
         if args.initial_loading or args.usability_u1:
             empty_shelf=cat.change_shelf('create',name='案内確認用の空棚')['id']
             gate=threading.Event();original_provider=handler.results.provider
@@ -132,6 +142,9 @@ def main():
             ui('wait-for','TxtEmpty','--value','検索結果を準備しています…','-t','10000');shot('loading')
             ui('invoke','BtnCancelSearch');ui('wait-for','TxtEmpty','--value','検索を中断しました。もう一度「検索」を押してください。','-t','10000');shot('cancelled')
             gate.set();ui('invoke','BtnSearch')
+        if args.real_fixture:
+            from ui_real_library_audit import cancel_then_prepare
+            cancel_then_prepare(ui,tree,shot,check,report,real_gate)
         key='Item'+str(first['id']);ready();ui('wait-for',key,'-t','60000' if args.global_edge else '10000');shot('list-initial')
         visible=tree();count=sum(re.fullmatch(r'Item\d+',k) is not None for k in visible)
         check('panel realizes fewer cards than sixty-result page',0<count<60)
@@ -162,6 +175,10 @@ def main():
             from ui_continuous_browse_audit import audit_boundary120
             audit_boundary120(ui,cli,tree,shot,report,check,proc.pid,hwnd,cat)
             check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.real_fixture:
+            from ui_real_library_audit import audit
+            audit(ui,tree,shot,report,check,proc.pid,cat,handler.thumbnails,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.global_edge:
             from ui_global_edge_audit import audit
             audit(ui,tree,shot,report,check,proc.pid,cat,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
@@ -190,6 +207,7 @@ def main():
             try:shot('failure')
             except Exception:report['capture_error']=traceback.format_exc()
     finally:
+        if 'real_gate' in locals():real_gate.set()
         if (args.initial_loading or args.usability_u1) and "gate" in locals():gate.set()
         if proc is not None and proc.poll() is None and not hwnd:
             try:

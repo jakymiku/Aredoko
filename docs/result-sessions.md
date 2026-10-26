@@ -94,3 +94,11 @@ Python33/Core runner/Portable frontend08 PASS。明示許可の`data/ai-ui/snaps
 祖先/reparse/leafのstatとsource resolveは各itemで維持し、アクセス許可/物理identityをcacheしない。range/neighborの再確認はcacheなし。cacheはthread-localかつpage内だけで、全session/全queryへ持ち越さない。最大4 worker/120件、世代/取消/join/部分結果非公開も保持する。
 
 関連初回56件は55 PASS/新scope試験1 FAIL。fixture providerが60/60/5件なのを120/5と誤想定したharness期待だったため、cacheのpage非共有/thread単独所有を確認する期待へ修正し対象1件PASS。raw失敗を保持。基本Python3.11のscope/同一payload/祖先link guard4件もPASS。実素材サイズ・cold cache・製品Pythonの5万件時間・GUI/RSSの総合受入ではない。約35秒の準備待ち自体は残る。
+
+### 生成実ファイル5万件の限定native受入（2026-10-26）
+
+利用者の個別許可後、基本ZIP06のfrontendと同じapp sourceで1試行。既存`real-source-50k01`のPNG5万枚を再利用し、read-only source DBから新規専用DBへbackupして通常DB/Alphaを使わない。`test_p3_native_containers.py --global-edge --real-fixture <生成fixture>`で再開できる。scan/索引/GPUは実行しない。
+
+120/50,000件の進捗・部分行非公開、中断→再検索、50,000件目/先頭への移動、未保存タグ保持、1件検索の範囲保持、可視thumbnailを確認。自然な再検索→先頭行は32.263s（単回）。thumbnail job23/cache22・14,913bytes、公開card数11→9→10、frontend private約130→135→139MiB。6PNG目視、原本digest一致、所有exit0。証拠`data/ai-ui/continuation-20261026b/real-native01`。進捗/取消の再現には最初のproviderだけ120件後のgateを用い、再検索の時間にはgate待ちを含めない。
+
+大量の実素材、長時間scroll/RSS、基本Pythonの全経路やclean Windowsの受入ではない。約32秒の初回準備は依然として改善余地であり、過去の35.116sとの厳密な速度比較にも使わない。
