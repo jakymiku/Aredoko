@@ -1,5 +1,11 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-26）
 
+## installed Alpha更新checkpoint（2026-10-26、以下の未更新記録より優先）
+
+- 利用者の追加依頼により、基本ZIP06（app source **`2cf99b2`**）を新しいversioned releaseへ配置し、デスクトップの **Aredoko Alpha** の起動先を切替済み。前版`e52c8ec`と切替前shortcutは保持。MSIX登録は変更していない。
+- コピー先でmanifest全800 files / 661,032,596bytesのハッシュ照合、bootstrap `--self-test` exit0。起動設定SHA256一致、通常DBのサイズ/更新日時一致。通常GUI/DBを起動せず、GPUも使用していない。06そのもののGUI受入は引き続き未実施で、既存04の実績と区別する。
+- 生証拠：`data/ai-ui/snapshot-review-20261026/alpha-update-final.json`、更新script同所（Git対象外）。今回の更新は文書commitに記録するため、正確な記録commitは `git log -1 -- docs/current-handoff.md` で確認。次の作業は下記P3/P7の5万件限定native caseの具体化・実行前質問のまま。残枠約4%で終了準備、shutdownしない。
+
 ## 今回の継続作業・終了checkpoint（以下より優先）
 
 - **現行アプリsource `2cf99b2`**、既存`feat/winui3-production-mvp-20261011`/PR #5を継続。今回`cc6f7e8`から引継ぎ。最後は文書だけのcommitを追加するため、最新HEADは`git log -1`で確認する。新branch/PR/main merge/Actionsなし。PR metadata connectorはTransport closedだったが、GitでPR #5 head refとremote branchの一致を確認する。
