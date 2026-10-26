@@ -80,6 +80,11 @@ class EncoderProcess:
         self.device=hello['device']
     def encode(self, operation, value):
         audio_message=None;audio_silent=False
+        video_message=None
+        if operation=='video':
+            if 'video' not in self.profile.modalities:raise AIUnavailable('Selected profile does not support native video')
+            from video_protocol import video_request
+            video_message=video_request(value)
         if operation=='audio':
             if 'audio' not in self.profile.modalities:raise AIUnavailable('Selected profile does not support audio input')
             from audio_input import validate_pcm
@@ -92,8 +97,8 @@ class EncoderProcess:
                 self.telemetry={};self.last_used=time.monotonic()
                 return None  # No fabricated content vector or model startup.
             self._start()
-            request=audio_message if audio_message is not None else {'operation':operation}
-            if audio_message is None:request['image' if operation=='image' else 'text']=base64.b64encode(value).decode('ascii') if operation=='image' else value
+            request=video_message if video_message is not None else audio_message if audio_message is not None else {'operation':operation}
+            if audio_message is None and video_message is None:request['image' if operation=='image' else 'text']=base64.b64encode(value).decode('ascii') if operation=='image' else value
             try:
                 self.process.stdin.write(json.dumps(request,ensure_ascii=False)+'\n')
                 self.process.stdin.flush()

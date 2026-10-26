@@ -24,10 +24,13 @@ class SentenceTransformerAdapter:
     def encode_audio(self,window):
         raise ValueError('Unsupported audio encoder')
 
+    def encode_video(self,window):
+        raise ValueError('Unsupported video encoder')
+
 class EmbeddingGemma2Adapter(SentenceTransformerAdapter):
     def config(self):
         config={} if 'audio' in self.profile.modalities else {'audio_config':None}
-        if 'cover' not in self.profile.modalities:
+        if not {'cover','video'}.intersection(self.profile.modalities):
             config['vision_config']=None
         return config
 
@@ -42,6 +45,21 @@ class EmbeddingGemma2Adapter(SentenceTransformerAdapter):
         import numpy as np
         validate_pcm(window)
         return self.model.encode({'audio':{'array':np.frombuffer(window.data,dtype='<f4'),'sampling_rate':window.sample_rate}},normalize_embeddings=True)
+
+    def encode_video(self,window):
+        if 'video' not in self.profile.modalities:raise ValueError('Unsupported video encoder')
+        from PIL import Image
+        from video_input import validate_video,MAX_FRAMES
+        validate_video(window);frames=[]
+        try:
+            for data in window.frames:frames.append(Image.frombytes('RGB',(window.width,window.height),data))
+            # Source timestamps remain interval evidence outside the embedding.
+            # Already-sampled frames must not be sampled a second time by ST.
+            return self.model.encode({'video':frames},normalize_embeddings=True,
+                processing_kwargs={'video':{'do_sample_frames':False,'max_frames':MAX_FRAMES,
+                                           'max_soft_tokens':140,'add_timestamps':False}})
+        finally:
+            for frame in frames:frame.close()
 
 ADAPTERS={'embeddinggemma2':EmbeddingGemma2Adapter,'sentence-transformers':SentenceTransformerAdapter}
 

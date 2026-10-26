@@ -84,6 +84,10 @@ def main():
                         print(json.dumps({'skip':True}),file=wire,flush=True)
                         continue
                     vector = model.encode_image(image)
+                elif operation=='video':
+                    if 'video' not in profile.modalities:raise ValueError('Unsupported modality')
+                    from video_protocol import parse_video_request
+                    vector=model.encode_video(parse_video_request(request))
                 elif operation=='audio':
                     if 'audio' not in profile.modalities:raise ValueError('Unsupported modality')
                     from audio_protocol import parse_audio_request

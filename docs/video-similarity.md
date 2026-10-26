@@ -65,3 +65,14 @@
 - **受入ハーネス (`tools/test_video_similarity_acceptance.py`)**:
   - `--stage cpu`: 全単体テスト、Coreテスト、WinUIビルド、プログラムによる動画類似検索実証（2動画・1画像によるコサイン1.0最大集約と時刻記録）に合格。
   - `--stage gpu` / `--stage gui`: R14 バッチ実行用に準備完了。
+
+
+## 2026-10-27：モデルの動画直接入力と現行製品経路の区別
+
+利用者からの確認により、Google公式の[マルチモーダルガイド](https://ai.google.dev/gemma/docs/embeddinggemma/multimodal-embeddinggemma-with-sentence-transformers)と[モデルカード](https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2)、導入済みST/Transformersのvideo processorを照合。EmbeddingGemma 2は動画を直接入力でき、抽出済みPIL frame列も一つのvideoとして扱える。共有8,192token枠があり、既定の1fps/max32frames等のsamplingは実装版の設定も確認する。ファイルを丸ごと渡せば長動画の全場面/会話/BGMを無制限に理解するという意味ではない。
+
+**現在の通常Aredokoの索引は最大4代表フレームを個別imageとしてencodeする方式のまま**。そのtext→動画/動画→動画・画像と時刻接続は既存実装。動画そのものの区間入力、動画内音声との統合、長動画分割の通常producer/GUIは未接続。通常DB・既存vectorを勝手に再解釈しない。
+
+新しい内部primitive：`VideoWindow`は最大16秒・1fpsの1〜16 RGB frames・各384px以内・全8MiB以内。時刻/寸法/immutable bytesを検証し、private wireで画素だけを転送する。URL/path/任意decoder入力を許可しない。`video_profile_for`はtext/video専用contractとnamespaceを作り、旧text/cover/audioのkeyを保持。adapterはvisionを残しaudioをloadせず、`model.encode({'video':frames})`を1回呼び、STの再samplingを無効化・140soft tokens/frame・timestamp promptなしを明示する。PIL資源はfinallyでcloseする。
+
+Python9件（開発/基本Python）・既存audio worker14・既存profile関連のCPU確認を実施。RGB時刻/wire上限・悪い入力・旧profile拒否・動画1入力へのbatch・黒frame非skip・model前validationを確認した。**この段階ではGPU/品質/区間索引/検索UIの完了ではない。** 次は個別許可による生成3frameのprivate worker GPU入力確認。その後にguard付きdecoder、長動画分割、atomic索引、検索/時刻根拠、image/audio/video所有モデルの同時常駐防止を一単位ずつ接続する。現行`InferenceOwnership`は2ownerのため、第三ownerを無計画に追加しない。
