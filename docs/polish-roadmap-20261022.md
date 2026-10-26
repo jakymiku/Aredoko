@@ -132,6 +132,8 @@ restoreは全bundle検証→新directoryへ→未保存確認/所有job・接続
 
 ### P6 — 配布・UI-3
 
+**P6着手時に参照する予約仕様**：[初回セットアップ・任意AI環境導入](p6-first-run-setup-spec.md)（PLANNED / NOT STARTED）。意味検索・類似画像検索・動画検索・音声/音楽検索の複数選択、既存取得基盤の再利用、Python同梱/任意PyTorch runtime、初心者ガイド/修復を扱う。現在の次の1件を変更する指示ではなく、現行handoffと実装状況を再確認したうえで適切なP6段階に着手。runtimeの公開権利/NOTICE/固定host/registryとclean Windows受入を完了扱いにしない。
+
 LD4aからLD4b trusted catalog/transactional取得/再開/検証公開を実装。LD5はアプリ取得/既存指定/手動案内を一つの設定入口へ。default速度無制限・任意cap。基本Pythonと任意AIを分離し、system pip/driverを必須にしない。軽量通常検査/進捗/明示full修復を接続、新規ZIP候補と普通のAredoko.exeを用意。UI-3は設定/初回/進捗/空/エラー/各管理画面を統一し、到達できる機能は削減しない。
 
 **確認**: 生成HTTPの切断/再開/取消/破損、AI未導入/取得中の基本操作、ZIP再配置/再起動保持。新asset実取得は対象/容量/取得元を示し別許可。**移行**: 揃ったらP7。
