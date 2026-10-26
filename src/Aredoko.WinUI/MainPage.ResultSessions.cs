@@ -127,7 +127,7 @@ public sealed partial class MainPage
                 if (!searches.IsCurrent(version) || disposed) throw new OperationCanceledException(cancellation);
                 if (conditions is null) return new SearchResponse { Total = 0, Items = [] };
                 var mode = conditions["mode"]?.GetValue<string>();
-                var usesAI = mode is "semantic" or "similar" or "pending-proposals-semantic";
+                var usesAI = mode is "semantic" or "similar" or "pending-proposals-semantic" or "audio-direct";
                 if (usesAI)
                 {
                     await WaitForRuntimeVerificationBeforeSearchAsync(version, cancellation);

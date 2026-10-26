@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--usability-u3',action='store_true')
     parser.add_argument('--uia-only',action='store_true',help='Record input/hover checks as unverified; use UIA only')
     parser.add_argument('--real-fixture',type=Path,help='Global-edge case only: reuse generated real-file fixture with a copied catalog')
+    parser.add_argument('--audio-content',action='store_true',help='Generated WAV + supplied CPU encoder; no playback or GPU')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
@@ -60,7 +61,10 @@ def main():
     def sources():return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
     try:
         media=target/'media';media.mkdir()
-        for i in range(0 if args.detail_actions or args.global_edge else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        for i in range(0 if args.detail_actions or args.global_edge or args.audio_content else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        if args.audio_content:
+            from ui_audio_content_audit import create_media
+            create_media(media)
         if args.usability_u1:
             (media/'generated-000.png').rename(media/('generated-000-Test1145141919810364364-'+('LongName'*10)+'.png'))
         if args.usability_u2:
@@ -94,7 +98,7 @@ def main():
             root=cat.add_root(str(media));cat.start_scan(root)
             if cat._worker:cat._worker.join(15)
         before=sources()
-        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(50000 if args.global_edge else 6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
+        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(2 if args.audio_content else 50000 if args.global_edge else 6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
         if args.detail_actions:
             shelf=cat.change_shelf('create',name='確認用の棚')['id']
             cat.change_shelf('assign',entity='item',object_ids=[row['id'] for row in cat.search()['items']],shelf_ids=[shelf])
@@ -103,7 +107,12 @@ def main():
             cat.change_shelf('assign',entity='item',object_ids=[first['id']],shelf_ids=[a,b])
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
-        handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger(),instance_id=instance);handler.log_message=lambda *args:None
+        extras={}
+        if args.audio_content:
+            from ui_audio_content_audit import create_feature
+            audio_feature,audio_gate,audio_reached=create_feature(cat)
+            extras['audio_feature']=audio_feature
+        handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger(),instance_id=instance,**extras);handler.log_message=lambda *args:None
         if args.real_fixture:
             from ui_real_library_audit import install_cancel_gate
             real_gate=install_cancel_gate(handler)
@@ -179,6 +188,10 @@ def main():
             from ui_real_library_audit import audit
             audit(ui,tree,shot,report,check,proc.pid,cat,handler.thumbnails,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
             check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.audio_content:
+            from ui_audio_content_audit import audit
+            audit(ui,tree,shot,report,check,cat,audio_feature,audio_gate,audio_reached)
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.global_edge:
             from ui_global_edge_audit import audit
             audit(ui,tree,shot,report,check,proc.pid,cat,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
@@ -208,6 +221,7 @@ def main():
             except Exception:report['capture_error']=traceback.format_exc()
     finally:
         if 'real_gate' in locals():real_gate.set()
+        if 'audio_gate' in locals():audio_gate.set()
         if (args.initial_loading or args.usability_u1) and "gate" in locals():gate.set()
         if proc is not None and proc.poll() is None and not hwnd:
             try:
@@ -253,7 +267,7 @@ def main():
             server.server_close()
         if thread:thread.join(5)
         if server:
-            for resource in (handler.startup_scans,handler.thumbnails,handler.results,handler.animations,handler.setup_jobs,handler.download_jobs,handler.backup_jobs,handler.restore_jobs):resource.close()
+            for resource in (handler.startup_scans,handler.thumbnails,handler.results,handler.audio_content,handler.animations,handler.setup_jobs,handler.download_jobs,handler.backup_jobs,handler.restore_jobs):resource.close()
         if cat:cat.close()
         report['process_still_running']=proc is not None and proc.poll() is None
         report['test_script_sha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()

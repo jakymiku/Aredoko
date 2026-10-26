@@ -46,9 +46,9 @@ class AudioDirectSearch:
                         or monitor.execute('PRAGMA data_version').fetchone()[0]!=version):
                     raise AudioSearchChanged('Audio search changed; refresh results')
             check()
-            candidate_total=indexed_total=0
+            candidate_total=indexed_total=scored_total=0
             def consume(fetch):
-                nonlocal candidate_total,indexed_total
+                nonlocal candidate_total,indexed_total,scored_total
                 number=0;vector=None
                 while True:
                     check();batch=fetch(number);rows=batch['items'];candidate_total=batch['total']
@@ -56,13 +56,14 @@ class AudioDirectSearch:
                     # an empty root/shelf/favorite scope.
                     if rows and vector is None:
                         vector=normalized(index.encoder.encode('query',query),index.profile.dimension);check()
-                    hits=self._rank(rows,vector,check) if rows else {}
+                    hits,fresh=self._rank(rows,vector,check) if rows else ({},0)
+                    indexed_total+=fresh
                     for row in rows:
                         if row['id'] not in hits:continue
                         score,start,end,revision=hits[row['id']]
                         spool.add(row['id'],{'audio':score},payload={'item':row,'revision':revision,
                             'audio_match_ms':start,'audio_match_end_ms':end})
-                        indexed_total+=1
+                        scored_total+=1
                     if (number+1)*batch['limit']>=batch['total']:break
                     number+=1
                 check();spool.finalize('max')
@@ -78,31 +79,38 @@ class AudioDirectSearch:
                             'audio_match_source':'direct-audio','audio_match_contract':CONTRACT})
                     check()
                     return {'items':items,'total':selected['total'],'page':number,'limit':limit,
-                            'source':'audio-direct','profile':index.profile.key,
-                            'candidate_total':candidate_total,'indexed_total':indexed_total}
+                            'source':'audio-direct','profile':index.profile.key,'score_kind':'cosine',
+                            'candidate_total':candidate_total,'search_candidate_total':candidate_total,
+                            'indexed_total':indexed_total,'scored_total':scored_total,'search_complete':True,
+                            'search_status':('out_of_scope' if not candidate_total else 'unindexed' if not indexed_total else
+                                             'partially_indexed' if indexed_total<candidate_total else 'ready')}
                 return render(page) if result_sink is None else result_sink(render)
             return catalog.search(query='',kind='audio',limit=120,result_sink=consume,cancelled=cancelled,**conditions)
 
     def _rank(self,rows,query,check):
-        if not rows:return {}
+        if not rows:return {},0
         if len(rows)>120:raise ValueError('Audio ranking batch exceeds limit')
-        index=self.index;ids=[row['id'] for row in rows];best={};current=None;eligible=False
+        index=self.index;ids=[row['id'] for row in rows];best={};fresh={}
         with index.store.connect() as db:
-            cursor=db.execute('SELECT w.item_id,w.ordinal,w.start_ms,w.end_ms,w.vector,'
-                's.source_revision,s.contract,s.decoded_windows,s.indexed_windows,s.total_frames '
-                'FROM ai_audio_direct_windows w JOIN ai_audio_direct_sources s ON s.item_id=w.item_id '
-                'WHERE w.item_id IN ('+','.join('?' for _ in ids)+') ORDER BY w.item_id,w.ordinal',ids)
-            for item,ordinal,start,end,data,revision,contract,decoded,indexed,frames in cursor:
+            markers=db.execute('SELECT item_id,source_revision,contract,decoded_windows,indexed_windows,total_frames '
+                              'FROM ai_audio_direct_sources WHERE item_id IN ('+','.join('?' for _ in ids)+')',ids)
+            for item,revision,contract,decoded,indexed,frames in markers:
                 check()
-                if item!=current:
-                    current=item;eligible=False
-                    if not (contract==CONTRACT and 1<=indexed<=decoded<=MAX_WINDOWS
-                            and 1<=frames<=MAX_START_MS*SAMPLE_RATE//1000):continue
-                    try:eligible=index.reader.audio_manifest(item)['revision']==revision
-                    except PreviewUnavailable:continue
-                if not eligible or not (0<=ordinal<decoded and 0<=start<end<=MAX_START_MS):continue
+                if not (contract==CONTRACT and 0<=indexed<=decoded<=MAX_WINDOWS
+                        and 1<=frames<=MAX_START_MS*SAMPLE_RATE//1000):continue
+                try:
+                    if index.reader.audio_manifest(item)['revision']==revision:fresh[item]=(revision,decoded,indexed)
+                except PreviewUnavailable:continue
+            markers.close()
+            cursor=db.execute('SELECT item_id,ordinal,start_ms,end_ms,vector FROM ai_audio_direct_windows '
+                              'WHERE item_id IN ('+','.join('?' for _ in ids)+') ORDER BY item_id,ordinal',ids)
+            for item,ordinal,start,end,data in cursor:
+                check()
+                if item not in fresh:continue
+                revision,decoded,indexed=fresh[item]
+                if not indexed or not (0<=ordinal<decoded and 0<=start<end<=MAX_START_MS):continue
                 value=_score(data,query)
                 if value is not None and (item not in best or value>best[item][0]):
                     best[item]=(value,start,end,revision)
             cursor.close()
-        check();return best
+        check();return best,len(fresh)

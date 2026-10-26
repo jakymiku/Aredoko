@@ -41,6 +41,7 @@ public sealed class MediaRow
     public int? OriginMatchMs { get; set; }
     public int? AudioMatchMs { get; set; }
     public string? AudioMatchSnippet { get; set; }
+    public string? AudioMatchSource { get; set; }
     public int LiteralHits { get; set; }
     public int LiteralWords { get; set; }
     private static string FormatVideoTimestamp(int ms)
@@ -60,7 +61,7 @@ public sealed class MediaRow
                                        : Kind == "audio" ? "起点の音声・曲に似た候補"
                                        : "起点の画像・表紙に似た候補")
            : VideoMatchMs is int vms ? $"動画フレーム一致（{FormatVideoTimestamp(vms)}）" + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
-           : AudioMatchMs is int ams ? (AudioMatchSnippet?.StartsWith("音響特徴") == true ? $"音響特徴一致（{FormatVideoTimestamp(ams)} · 「{AudioMatchSnippet}」）" : $"音声発話一致（{FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · 「{AudioMatchSnippet}」")}）") + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
+           : AudioMatchMs is int ams ? (AudioMatchSource=="direct-audio"?$"音声の内容一致（{FormatVideoTimestamp(ams)}）":AudioMatchSnippet?.StartsWith("音響特徴") == true ? $"音響特徴一致（{FormatVideoTimestamp(ams)} · 「{AudioMatchSnippet}」）" : $"音声発話一致（{FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · 「{AudioMatchSnippet}」")}）") + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
            : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
           + (ScoreKind=="cosine" ? $"\n類似度 {score:F3}" : ScoreKind=="reciprocal-rank" ? $"\n順位統合値 {score:F4}" : "")
         : "";
@@ -242,6 +243,7 @@ public static class Protocol
         OriginMatchMs = row.TryGetProperty("origin_match_ms",out var oms) && oms.ValueKind==JsonValueKind.Number && oms.TryGetInt32(out var omsVal) && omsVal is >=0 and <=86400000 ? omsVal : null,
         AudioMatchMs = row.TryGetProperty("audio_match_ms",out var ams) && ams.ValueKind==JsonValueKind.Number && ams.TryGetInt32(out var amsVal) && amsVal is >=0 and <=86400000 ? amsVal : null,
         AudioMatchSnippet = row.TryGetProperty("audio_match_snippet",out var snip) && snip.ValueKind==JsonValueKind.String ? (snip.GetString() is { Length: >0 } s ? (s.Length>120 ? s[..120]+"…" : s) : null) : null,
+        AudioMatchSource = row.TryGetProperty("audio_match_source",out var audioSource)&&audioSource.ValueKind==JsonValueKind.String&&audioSource.GetString()=="direct-audio"?"direct-audio":null,
         SemanticScore = row.TryGetProperty("semantic_score",out var score) && score.ValueKind==JsonValueKind.Number && score.TryGetDouble(out var value) && double.IsFinite(value) ? value : null,
         LiteralHits = row.TryGetProperty("literal_hits",out var hits) && hits.TryGetInt32(out var count) ? count : 0,
         LiteralWords = row.TryGetProperty("literal_words",out var words) && words.TryGetInt32(out var total) ? total : 0,

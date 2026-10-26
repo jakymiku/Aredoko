@@ -51,7 +51,8 @@ class AudioDirectFeature:
             self.catalog.search(kind='audio',limit=1,**conditions)
         limit=body.get('limit',128)
         if type(limit) is not int or not 1<=limit<=1000:raise ValueError('Invalid audio indexing limit')
-        return self._ensure().start(body.get('conditions'),limit=body.get('limit',128))
+        self._ensure().start(body.get('conditions'),limit=body.get('limit',128))
+        return self.status()
 
     def search(self,query,**options):
         if not isinstance(query,str) or not 1<=len(query.strip())<=4096:raise ValueError('Invalid audio query')
@@ -59,7 +60,9 @@ class AudioDirectFeature:
         if set(options)-allowed-{'page','limit','cancelled','result_sink'}:raise ValueError('Invalid audio search options')
         self.catalog.search(kind='audio',limit=1,**{name:value for name,value in options.items() if name in allowed})
         return self._ensure().search(query,**options)
-    def cancel(self):return self.owner.cancel() if self.owner is not None else {'cancel_requested':False,**self.status()}
+    def cancel(self):
+        result=self.owner.cancel() if self.owner is not None else {'cancel_requested':False}
+        return {**self.status(),'cancel_requested':result['cancel_requested']}
     def release(self):return self.owner.release() if self.owner is not None else {'released':False,'resident':False}
     def stamp(self):
         self._ensure()

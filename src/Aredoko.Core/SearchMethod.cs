@@ -6,6 +6,7 @@ public readonly record struct SearchMethod(bool IsAI, string Source)
     public bool IsTagSemantic => Source == "pending-proposals-semantic";
     public bool IsTagCandidates => Source is "pending-proposals" or "pending-proposals-semantic";
     public bool IsPageText => Source == "page-text";
+    public bool IsAudioContent => Source == "audio-direct";
 
     public static SearchMethod FromIndex(int index) => index switch
     {
@@ -16,6 +17,7 @@ public readonly record struct SearchMethod(bool IsAI, string Source)
         4 => new(false, "pending-proposals"),
         5 => new(false, "page-text"),
         6 => new(false, "pending-proposals-semantic"),
+        7 => new(true, "audio-direct"),
         _ => throw new ArgumentOutOfRangeException(nameof(index))
     };
 }

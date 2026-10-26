@@ -23,6 +23,12 @@ public static class ResultSearchConditions
             if (method.IsAI || method.Source != "all") throw new ArgumentException("History uses literal search");
             result = new JsonObject { ["mode"] = "history", ["query"] = query, ["kind"] = kind };
         }
+        else if (method.IsAudioContent)
+        {
+            if (string.IsNullOrWhiteSpace(query))return null;
+            if(kind is not ("" or "audio"))throw new ArgumentException("音声の内容検索では種類を音声・音楽にしてください。");
+            result=new JsonObject{["mode"]="audio-direct",["query"]=query,["view"]=view};
+        }
         else if (method.IsPageText || method.IsTagCandidates)
         {
             if ((method.IsPageText || method.IsTagSemantic) && string.IsNullOrWhiteSpace(query)) return null;

@@ -429,7 +429,7 @@ public sealed partial class MainPage : Page
         var query=Query.Text; var kind=KindValue();var selectedKind=Kind.SelectedIndex;var selectedMode=SearchMode.SelectedIndex;var selectedRoots=selectedSearchRoots?.ToArray();var literalOnly=AIMatchedOnly.IsChecked==true;var boundary=BoundaryValue();var resultGroup=AIResultGroup.SelectedIndex;
         try {
             var method=SearchMethod.FromIndex(selectedMode);
-            if((origin is not null||method.IsAI&&!string.IsNullOrWhiteSpace(query))&&aiScope is null)throw new InvalidOperationException(aiScopeError);
+            if((origin is not null||method.IsAI&&!method.IsAudioContent&&!string.IsNullOrWhiteSpace(query))&&aiScope is null)throw new InvalidOperationException(aiScopeError);
             var pageSize=method.IsPageText?20:60;
             var conditions=ResultSearchConditions.Create(query,kind,view,method,aiScope,selectedRoots,
                 origin?.Id,literalOnly,boundary,ResultGroup(),selectedShelfIds);
@@ -443,7 +443,7 @@ public sealed partial class MainPage : Page
             }
             lastQuery=query; lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;
             SearchOptions.IsExpanded=false;
-            var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null||(method.IsAI&&query.Length>0),aiScope);
+            var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null||(method.IsAI&&!method.IsAudioContent&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             SearchOptions.Header="AI候補の表示";
             ResetBrowse(checked(page*pageSize),result);rows=result.Items;BindLibrarySelection();active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
@@ -469,6 +469,7 @@ public sealed partial class MainPage : Page
                 method.IsPageText ? "抽出・保存済みのページ本文から、同一ページ内で全語一致する作品を検索しています。「本を開く」で先頭の一致ページへ移動できます。"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsTagSemantic ? "未承認の英語タグ候補を含む索引から、言葉の意味が近い作品を表示しています。確定タグとは混ざりません。類似度は正解率ではありません。承認・却下・再生成の後はAI索引を更新してください。"
                 : method.IsTagCandidates ? "最新の生成履歴に未承認の候補がある作品を表示しています。確定タグにはまだ反映されていません。詳細の「AIタグ候補」から根拠を確認して承認・却下できます。"+(scopeWarning is null?"":" "+scopeWarning)
+                : method.IsAudioContent ? "索引済みの音声・音楽を、内容や音の特徴から探します。一致した時刻から再生できます。文字起こしは生成しません。"
                 : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}索引済みの作品を類似順に表示します。ファイル名・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。画像の見た目とファイル名・タグの意味では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsAI ? "探したい内容を文章で入力してください。初回の準備は左下の「設定」→「AI検索の準備」から。"
                 : "ファイル名・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions)+(scopeWarning is null?"":" "+scopeWarning);
@@ -545,7 +546,7 @@ public sealed partial class MainPage : Page
                 Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。");
             }
         }
-        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,"error");Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
+        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,"error");Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4 or 7?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
     private string EmptyScopeGuidance()
@@ -1093,13 +1094,14 @@ public sealed partial class MainPage : Page
     private void UpdateSearchMethod()
     {
         // SelectionChanged also runs during initialization and dirty-state rollback.
-        if(Query is null || SearchMethodHint is null || SimilarityBar is null || SimilarityTitle is null)return;
-        var method=SearchMethod.FromIndex(Math.Clamp(SearchMode.SelectedIndex,0,6));
+        if(Query is null || Kind is null || SearchMethodHint is null || SimilarityBar is null || SimilarityTitle is null)return;
+        var method=SearchMethod.FromIndex(Math.Clamp(SearchMode.SelectedIndex,0,7));
         SearchMode.IsEnabled=view!="history";
         var similar=similarityOrigin is not null;
         SimilarityBar.Visibility=similar?Visibility.Visible:Visibility.Collapsed;
         SimilarityTitle.Text=similar?"類似検索の起点: "+similarityOrigin!.Title:"";
-        var ai=method.IsAI&&!similar;
+        var ai=method.IsAI&&!method.IsAudioContent&&!similar;
+        Kind.IsEnabled=!method.IsAudioContent;
         SearchOptions.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         var candidates=method.IsTagCandidates&&!similar;
         var pageText=method.IsPageText&&!similar;
@@ -1120,10 +1122,15 @@ public sealed partial class MainPage : Page
             4=>"未承認のAIタグ候補（最新履歴）だけを検索します。確定タグとは混ざりません。",
             5=>"抽出・保存済みのページ本文（同じページ内の全語一致）を検索します。",
             6=>"英語を含む未承認タグ候補を、日本語の意味で探します。先にAI索引を作成してください。",
+            7=>"録音や曲の内容・特徴を文章で探します。「AI検索の準備」で音声の索引を作成してください。文字起こしは生成しません。",
             _=>"ファイル名・タグに含まれる文字で探します。"
         };
     private void SearchMode_Changed(object sender,SelectionChangedEventArgs e)
     {
+        if(SearchMode.SelectedIndex==7&&ready&&!populating)
+        {
+            populating=true;Kind.SelectedIndex=4;populating=false;
+        }
         UpdateSearchMethod();
         similarityCancellation?.Cancel();
         if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}
@@ -2559,10 +2566,12 @@ public sealed partial class MainPage : Page
                 finally{UpdateStart();}};
             timer.Tick+=async(_,_)=>await Refresh();
             var panel=new StackPanel {Spacing=12,MinWidth=320};
+            using var audioPreparation=new AudioPreparationPanel(api.AudioContent,AudioIndexConditions);
             panel.Children.Add(indexArt);
             foreach(var element in new UIElement[]{setupActions,explanation,modelChoice,modelWarning,modelApply,modelFeedback,scopeEditor.Content,
                 new TextBlock {Text="AIのメモリ・索引負荷",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},
                 release,releaseResult,idleChoice,pauseChoice,saveResource,resourceResult})panel.Children.Add(element);
+            panel.Children.Add(audioPreparation.Content);
             var content=new Grid {RowSpacing=12,MaxHeight=Math.Max(160,ActualHeight-240)};
             AutomationProperties.SetAutomationId(content,"AISettingsLayout");
             content.RowDefinitions.Add(new RowDefinition {Height=new GridLength(1,GridUnitType.Star)});

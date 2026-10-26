@@ -65,3 +65,11 @@ CPU8（開発は既存7＋追加1、基本Pythonは8）PASS。範囲の継承、
 HTTP5（開発4＋修正後対象1、基本Python5）、既存result34/release11/production8 PASS。HTTPの1 FAILはrangeの必須offset/limitをfixtureが省略して400になったものを修正。終了時の画像owner待ちを避ける修正は対象1 PASS。証拠は既存audio-indexディレクトリ。
 
 個別許可後、`check_direct_audio_pipeline.py --gpu`を生成001/002の2音声・日本語2問で1回実施。既存固定EG2のaudio-only adapter→逐次PCM→専用DB atomic保存→時刻付き検索が通り、2問ともTop1。load32.718s、index1.875/0.485s、PyTorch peak allocated1,175,973,888/reserved1,199,570,944bytes（driver/native除く）。3GiB空き条件・allocator約3GiB上限、元生成SHA/mtime不変、終了exit0、追加取得/GUI/通常DB/Alpha変更0。証拠`data/ai-ui/continuation-20261026b/audio-pipeline-gpu01`。実worker processでのGPU一連・長時間・録音/曲・一般品質を証明するものではなく、許可は消費済み。
+
+## WinUI入口の追加（2026-10-26）
+
+既存の検索方法indicesを維持して7へ「音声の内容（AI）」を追加。種類を音声・音楽へ揃え、文字/画像向けのAI scopeやRRF/文字全語一致条件を音声へ流用しない。フォルダ・棚・お気に入りは共通条件で維持する。右詳細・プレイヤーには既存の一致開始時刻を渡し、直接音声の根拠は「発話」ではなく「音声の内容一致」と表示する。
+
+AI準備のscroll領域へ折りたたみ式`AudioPreparationPanel`を追加。展開時のstatusだけではmodel/DBを起動しない。現在の検索フォルダ/棚を対象に、明示作成・中断・進捗・続きのbatchを操作できる。dialogを閉じるとpollだけを終了し、所有jobは続行する。遅いstatus応答が新しいcommandを上書きしない世代と取消を持つ。本文の作業領域は変更しない。
+
+Core全体PASS（旧「7は無効」の試験を新しい境界8へ更新）、Portable build PASS。新しいIL2026はJsonValueの明示生成へ修正済み。既存WUI1001 picker警告3のみ。WinUI reviewで色/配置/bindingの追加差分、所有timer/取消、アクセス名・操作経路を確認。GUI受入は新候補を作成後、個別質問してから実施する。silent成功を未索引と誤表示しないfresh数も追加し、関連CPU検索9/HTTP response1 PASS。

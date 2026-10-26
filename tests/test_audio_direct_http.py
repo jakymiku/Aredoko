@@ -64,7 +64,8 @@ class AudioHTTPTests(unittest.TestCase):
 
     def prepare(self):
         with self.supplied():
-            code,_=self.request('/api/library/audio-ai/start',{'consent':True});self.assertEqual(code,200)
+            code,state=self.request('/api/library/audio-ai/start',{'consent':True});self.assertEqual(code,200)
+            self.assertTrue(state['supported']);self.assertTrue(state['available'])
             self.feature.owner.thread.join(5)
         self.assertEqual(self.feature.status()['state'],'completed')
 

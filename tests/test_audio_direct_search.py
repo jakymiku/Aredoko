@@ -66,6 +66,12 @@ class AudioDirectSearchTests(unittest.TestCase):
         self.seed();self.path.write_bytes(b'changed generated source')
         self.assertEqual(AudioDirectSearch(self.index).search('audio')['total'],0)
 
+    def test_successful_silence_is_indexed_without_becoming_a_search_match(self):
+        silent=[fixture.PCMWindow(0,30000,b'\0'*(480000*4))]
+        with self.supplied(silent):self.index.index_item(self.item,self.revision)
+        result=AudioDirectSearch(self.index).search('audio')
+        self.assertEqual((result['total'],result['indexed_total'],result['search_status']),(0,1,'ready'))
+
     def test_empty_scope_and_invalid_conditions_do_not_load_encoder(self):
         self.seed()
         with patch.object(self.encoder,'encode') as encode:
