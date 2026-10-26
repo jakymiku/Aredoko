@@ -66,3 +66,9 @@ R13 DOING / ALPHA未完 / R14 PARTIALを維持。viewer実機確認後もPZ2→P
 source `9968eac`、`dist/portable-basic-20261026-04/Aredoko` の公開UIと現在の専用inline backend。ユーザー回答後1試行 `transport-native01/report.json`：29 checks PASS、所有frontend exit0、decoder2件のclose、6PNG全目視。2560×1440・3frames×2周のAPNG/WebPは原寸binary受信と最終有色frame保持、真のGIFはnative経路、binary batchの同一接続再利用を確認。生成原本のSHA/mtime不変。
 
 1000×700・3ページCBZの1→2→3→2→1で304再検証とbitmap再利用。XAML source割当まで初回34.5ms、後続27.4/27.5/28.1/26.7ms。APNG先頭389ms、native GIF105ms、WebP先頭333ms（単回・UIA/診断logあり）。昨日の3072×2048 CBZとは寸法が異なるため、数値の直接比較はしない。画面present/FPS/長時間RSS/複雑な差分APNGの総合受入ではない。通常EXE入口の確認は別にcurrent-handoffへ記録する。
+
+### P7：実入力の限定受入
+
+同じZIP04の `viewer-input02`（専用DB・生成静止画2枚/5ページCBZ、個別回答後の追加1試行）は9 checks PASS/所有frontend exit0/4PNG目視。ボタン拡大の目印中心は(591.5,390.5)のまま、左drag(-80,-50)後は(511.5,340.5)を実画素で確認。画像上で約1秒後にbarが隠れる/下端で再表示、実wheelの画像前後、本の循環ONで1→5→1、reader bar非表示、専用設定保存、原本不変が通った。OFF時停止は今回のnative範囲外（既存Core契約を維持）。DPI96/単一候補の結果であり、HC/物理マルチモニター/全入力機器の合格ではない。
+
+01はwindow screenshotへtooltip用28px見出しが混在し、中心ずれと誤判定したharness FAIL。UIA viewportと目印の画像内位置は不変だった。02では画像表示領域を指定して撮影し、撮影寸法もUIAと照合するよう実質修正した。01のFAIL/PNGは保持し、製品のzoom修正や未到達のdrag成功へ置き換えていない。新toolは `tools/test_native_viewer_input.py`。

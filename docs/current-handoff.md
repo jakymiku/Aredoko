@@ -10,7 +10,8 @@
 - **P1/P3 HTTP待ちの局所改善**：認証と原本guardを毎回維持したまま、boundedな画像/結果取得と読書位置保存へ接続再利用を導入。所有socket終了、framing/解除/認証を含む接続7・既存HTTP8・animation17・結果33 PASS。実.NET生成CPUでwarm info約10/8ms・1.18MB原本約30ms（旧約200ms台）、冷間接続は残る。[範囲と証拠](viewer-performance.md)。commitは`git log -1 -- app/owned_http_server.py`。
 - **最新基本ZIP04完成/限定受入**：`dist/portable-basic-20261026-04/Aredoko`、source **`9968eac`**、796 files / 660,993,785 bytes。Core/Portable/起動画面CPU自己検査/同梱runtime/全inventory/ZIP照合、同梱Pythonの基本CPU23 PASS。SDKキャッシュ指定は`--msbuild-targets`の開発用targetsだけ（ZIPへ同梱しない）。
 - **ZIP04の許可済みGUI各1試行**：`transport-native01` 29 checks/6PNG目視/frontend exit0/decoder2close。原寸アニメーションの同一接続再利用と最終frame、生成小CBZ往復/304再利用を確認。[数値と限界](viewer-performance.md)。通常入口 `Aredoko.exe` も `basic-native04` で専用DB/生成1画像の起動→正常終了→1回再起動、11 checks/所有4exit0/2PNG目視/inventory不変。GPU0、普段のDB/installed Alpha/shortcut更新0。GUI許可はすべて実施済みで、新しい範囲には回答が必要。
-- **現在の次の1件**：P7の残るビューワー実入力（中心zoom/左drag/下端hotzone/ホイール）を生成静止画・小CBZに限定してまとめる。まず既存Core契約とnative harnessを使って具体化し、GUI実行前に新たに問い合わせる。今回済みの通常起動/進捗/原寸streamを無変更反復しない。HC/物理DPI/clean Windows・長時間FPS/RSS・公開runtime権利/host（registry0）とM1→R06–R09は未完のまま維持する。
+- **P7 viewer実入力も限定受入**：`tools/test_native_viewer_input.py`、ZIP04の生成静止画2枚/5ページCBZだけ。各回答後01/02を実施、01はtooltip混在撮影によるharness FAILを保持。viewport撮影＋寸法検証へ修正後02は9 checks/4PNG目視/所有exit0。中心zoomの目印座標不変、左dragは正確に(-80,-50)、実wheel画像前後/循環ONの本1→5→1、bar hide/hotzone/専用設定保持が通った。[証拠と未受入](viewer-performance.md)。製品のzoom修正は行っていない。
+- **現在の次の1件**：M1の残受入（HC/物理DPI/clean Windows・長時間FPS/RSS）と公開runtime権利/host（registry0）は未完として保持。既に通ったflowを反復せず、独立したR06/R07共通の安全なPCM切り出し境界をCPU/生成音声で小さく実装する。モデル選定・推論・音声内容認識の完了とは区別し、M1判定/M2の順序を維持する。新GUI/GPUには新回答が必要。shutdownなし。
 
 ## Sol終了checkpoint（2026-10-26、以下の過去記録より優先）
 - **基点** `49ca8c8`（Antigravity/remote/Draft PR #5一致、clean）。既存ブランチを継続。最新アプリsource **`e52c8ec`**、この引継ぎのcommitは`git log -1 -- docs/current-handoff.md`。ロードマップ全体は未完。Actions/新PR/main merge/追加取得なし。
