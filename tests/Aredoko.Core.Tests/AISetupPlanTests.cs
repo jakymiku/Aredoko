@@ -42,6 +42,23 @@ static class AISetupPlanTests
         var skip=await client.CreateAsync(0);check(skip.SkipAI&&skip.Requirements.Count==0&&skip.Summary.Contains("AIは使わず"),"AI opt-out keeps basic use available");
         check(AISetupSelection.FromMask(12).SequenceEqual(new[]{"video","audio"}),"feature flags retain audio/video without implicit extra models");
         check(AISetupSelection.Normalize(16)==3&&AISetupSelection.Normalize(-1)==3,"invalid stored feature selection uses backward-compatible defaults");
+        var idleDownload=new AIDownloadJob(null,"idle",null,0,0,null,false,null,"",null);
+        var idleEnvironment=new AIEnvironmentJob(null,"idle",false,"",0,null,0,null);
+        var guidance=AISetupGuidance.Describe(plan,12,idleDownload,idleEnvironment);
+        check(guidance.Contains("不足する実行環境")&&guidance.Contains("動画の準備欄")&&guidance.Contains("音声の準備欄")&&!guidance.Contains("意味検索・類似画像："),"next steps use selected media and do not claim missing dependencies are ready");
+        var active=AISetupGuidance.Describe(plan,12,idleDownload with{State="downloading"},idleEnvironment with{State="validating"});
+        check(active.Contains("バックグラウンドで続いて")&&active.Contains("完了してから再起動"),"returning to setup does not stop acquisition or claim placement is complete");
+        var cancelled=AISetupGuidance.Describe(plan,12,idleDownload with{State="cancelled"},idleEnvironment with{State="cancelled"});
+        check(cancelled.Contains("取得は中止")&&cancelled.Contains("再開できます")&&cancelled.Contains("前の設定を保持"),"cancelled acquisition and placement have explicit recovery steps");
+        var published=AISetupGuidance.Describe(plan,15,idleDownload with{State="complete",Published=true},idleEnvironment);
+        check(published.Contains("取得だけでは設定は変わりません")&&!published.Contains("配置を確認しました"),"published download is not an applied environment or inference result");
+        var ready=plan with{Requirements=plan.Requirements.Select(r=>r with{FilesPresent=true}).ToArray()};
+        var pending=AISetupGuidance.Describe(ready with{RestartRequired=true},15,idleDownload,idleEnvironment with{State="complete",Saved=true});
+        check(pending.Contains("いつものAredoko.exe")&&pending.Contains("再起動後")&&!pending.Contains("次は「索引・詳細設定へ」"),"saved environment must restart before current-session indexing instructions");
+        var prepared=AISetupGuidance.Describe(ready,3,idleDownload,idleEnvironment);
+        check(prepared.Contains("動作確認とは別")&&prepared.Contains("索引・詳細設定へ")&&!prepared.Contains("音声の準備欄"),"present files lead to selected indexing without declaring hardware success");
+        check(!AISetupGuidance.Describe(plan with{Requirements=Array.Empty<AISetupRequirement>()},3,null,null).Contains("配置を確認しました"),"an empty dependency response cannot be declared ready");
+        check(!AISetupGuidance.Describe(skip,0,idleDownload with{State="downloading"},idleEnvironment).Contains("バックグラウンド"),"AI opt-out keeps next steps focused on basic use");
         foreach(var mutate in new Action<JsonObject>[]
         {
             row=>row["acquisition_started"]=true,row=>row["hardware_checked_by_plan"]=true,

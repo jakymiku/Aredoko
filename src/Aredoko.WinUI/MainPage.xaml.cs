@@ -2272,7 +2272,8 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private async void AI_Click(object sender,RoutedEventArgs e)
+    private async void AI_Click(object sender,RoutedEventArgs e)=>await OpenAISettingsAsync();
+    private async Task OpenAISettingsAsync()
     {
         if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
         var timer=DispatcherQueue.CreateTimer();timer.Interval=TimeSpan.FromSeconds(1);
@@ -2628,6 +2629,7 @@ public sealed partial class MainPage : Page
             actions.Children.Add(start);actions.Children.Add(cancel);Grid.SetRow(actions,2);content.Children.Add(actions);
             await RefreshProfiles();await RefreshResource();await Refresh();timer.Start();
             var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI検索の準備",Content=content,CloseButtonText="閉じる"};
+            AutomationProperties.SetAutomationId(dialog,"AISettingsDialog");
             environmentButton.Click+=(_,_)=>{if(scopeEditor.Saving)return;openEnvironment=true;dialog.Hide();};
             downloadButton.Click+=(_,_)=>{if(scopeEditor.Saving)return;openDownload=true;dialog.Hide();};
             dialog.Closing+=(_,args)=>{if(scopeEditor.Saving)args.Cancel=true;};

@@ -17,6 +17,12 @@ Core `--setup-plan`（reflection無効）/設定保持、生成backup3件とPort
 個別許可後のsetup-native01は、専用6媒体/既存固定model catalogのmetadataのみを使い、**前面化・物理入力なしのUIA操作**で10checks/3PNG目視/exit0 PASS。4用途→runtime未公開とmodel容量の区別→選択保存→再表示→AIなし選択保存→再表示を確認。download/setup jobはidle、audio/video ownerは未作成、生成原本不変。取得ボタンを押したりGPU/再生を使ったりしていない。モデル取得/配置の遷移後の新しい一連受入、実導入/clean Windowsは未完。
 
 ## 目的と対象
+### 2026-10-28：P6-S4のガイド復帰（source実装）
+
+用途ガイド→取得/配置/索引設定→ガイドの往復をawait可能な一つのflowへ接続。子画面を閉じると用途を保持してread-only planと既存取得/配置jobの状態を再確認する。取得中/中止/失敗、配置検査中、保存後の再起動待ち、媒体別索引の次手順を区別し、取得済みを設定済み・推論成功と扱わない。閉じる/用途変更で古い応答を取り消す。取得や索引は明示操作のみ、公開runtimeの未解決は保留したまま。
+
+Core関連21項目とPortable/frontend01 build PASS（既存picker3/SDK trim警告のみ）。nativeの取得/配置/索引画面からの復帰と選択保持は許可待ちで、実導入・clean Windows受入ではない。次の確認は`tools/test_p3_native_containers.py --setup-return`（新規専用出力、生成素材、UIAのみ、取得/推論なし）。
+
 ZIP解凍→`Aredoko.exe`でPythonなしの基本機能を起動。初回の用途選択から、必要な任意runtime/モデルの導入・検証、初心者向け使い方、故障時の安全な復旧まで一貫して案内する。WinUI 3ネイティブ、既存Python/SQLite/owned API、既存profile/namespaceを維持。
 
 利用目的は複数選択可能：**意味検索／類似画像検索／動画検索／音声・音楽検索**。基本検索だけで開始する「今はAIを使わない」を必ず設け、後から設定で追加・再実行できるようにする。
