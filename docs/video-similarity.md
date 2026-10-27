@@ -119,3 +119,21 @@ APIは認証付きPOST `/api/library/video-ai/similar`（item_idと任意page/li
 CPU結果：Terra similarity/index/search30 PASS/7.052s、追加weakref1 PASS。親HTTP5 PASS/3.609s（モデル不可＋image busyでも比較・原本変化session失効）、similarity/HTTP18 PASS/6.560s、最終2回帰PASS/0.460s（range中の候補変更と1候補spool後のcap超過・部分結果非公開）。重複runを合算しない。全て生成MP4・疑似vectorで、画像理解/実動画精度・native表示・GPUの合格ではない。
 
 Windows次工程：通常代表frame類似の入口を維持しつつ、直接動画準備と内容検索・直接動画類似の別入口をCore/WinUIへ。独立DBの生成2動画で、自己除外/両端時刻表示→候補の一致開始へseek→originへ戻れることを確認する。登録範囲変更・モデル不可cached・取消・上限案内も限定確認する。私物/通常DBを使わず、モデル/依存取得はしない。
+
+
+## 2026-10-27：Core/WinUIの直接動画source接続（未ビルド）
+
+CoreへVideoContentClient/Statusとmode8を追加し、LibraryApiの認証済みclientを使う。ResultSearchConditionsはvideo-direct/video-similarへ共通root/棚/view条件を渡し、画像AI scopeを要求しない。ResultSessionClientは動画類似をSimilaritySearchのdirectVideo parserへ渡す。Protocolはsource=direct-video/contract=direct-video-window:v1と両端を厳密検証し、代表frameの単一時刻と混同しない。区間は0<=start<end<=24h、長さ<=16秒。起点があれば起点両端も必要。表示は小数秒を保つ。
+
+WinUIは既存AI準備画面内にVideoPreparationPanelを追加。開くだけでは索引を開始せず、明示作成/中断、閉じた後の再表示/継続観測を提供する。検索方法は既存indexを保持して8へ動画内容を追加し、種類は動画に合わせる。右クリックには直接内容類似を別項目で追加し、旧「似た動画・素材」（代表frame）は維持。起点/候補区間は既存詳細のAIEvidenceへ。動画playerは既存VideoMatchMsの開始seekを再利用する。
+
+親がコードをレビューし、直接動画/音声類似を開始する時にkindだけでなくmodeも揃えて、元のmode7/8との食い違いを防いだ。履歴keyと復帰に直接動画flagを保持し、類似解除では両direct flagを解除。動画内容のqueryにはruntime準備待ちを適用するが、cached動画類似では適用しない。mode8のエラー案内漏れも相互レビューで修正。
+
+確認済みはXAML XMLの整形式・9項目とソースレビュー、既存generated backend HTTP5 PASS/3.562sまで。.NET SDK/csc/mcsがなく、新規Core tests、C# compile、WinUI/Portable build、native画面/GPUは未実行。147 C#関連sourceを固定HEADで取得したが、画像asset等を含む完全checkoutではない。ビルド可能・操作可能を実証したとはしない。
+
+Windows受入の次手順：
+1. 通常開発checkoutを最新branchへ同期し、インストール済み.NET10/cacheで `dotnet run --project tests/Aredoko.Core.Tests -c Release -- --video-content` を実施。既存Core回帰と既存Portableビルド手順を実行し、失敗は診断して対象修正する。Actionsは起動しない。
+2. 生成3.3秒/17.5秒MP4二本・独立catalog/設定/LOCALAPPDATAで起動。設定の動画内容欄を開くだけではjob/modelが起動しないこと、明示作成→中断→続き、閉じる/再表示を確認。
+3. mode8と種類動画、root/棚/favoriteの範囲を確認。内容query→一致区間表示→候補開始へseek。右クリック直接内容類似→自己除外/双方区間/旧代表frame入口併存を確認。
+4. 音声mode7から直接動画類似→検索入力、動画mode8から音声類似、戻る/進むと元の検索に戻る、未保存タグdraftの破棄確認を確認。cached動画類似はモデル利用不可でも使え、再推論しないことを専用ログで確認。
+5. 普段DB/Alpha/shortcutを変更せず所有processを正常終了。実encoder精度・長動画/大規模性能・配布全体の受入は別。Windows待ちには独立したCPU残件へ進む。

@@ -1,14 +1,13 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-27）
 
-## 継続開発checkpoint（2026-10-27、保存済み直接動画の類似検索）
+## 継続開発checkpoint（2026-10-27、直接動画のCore/WinUI source接続）
 
-- 起点 `accc4ced2b8f1cffb2a9ce871846a42067190ea3`。既存 `feat/winui3-production-mvp-20261011` / Draft PR #5を継続。ユーザー報告の残量は開始時69％（以降の残％は測定不可）。「一つずつ」の指示に従い、今回の単位はcached動画類似のbackend/APIまで。最新commitは本書のGit履歴を参照。
-- **直接動画の類似検索を接続**：Terra xhighが `VideoDirectSimilarity` とCPU testsを担当、親が成果物をレビューしjob/feature/認証API `/api/library/video-ai/similar` / `video-similar` result sessionへ接続。再推論・decodeなしで、自己除外、起点/候補の両一致区間、root/棚/exclusion、候補favorite、stable tiesを保持。モデルが利用不可・画像ownerがbusyでも保存済み索引を比較し、推論lock/workerを触らない。
-- **親レビュー修正**：候補交代時の旧vector保持による一時的3セット確保を解消（weakref回帰あり）。範囲結果作成中の原本変更/利用不可を入力400ではなく `VideoSearchChanged` / HTTP409の再検索案内へ統一。完全window連続性/frames総数/marker/contract/profile/revision、途中取消とspool回収を点検。
-- **CPU確認**：Terraのsimilarity/index/search **30 PASS / 7.052s**＋追加weakref1 PASS。親のAPI5 PASS /3.609s、similarity/API **18 PASS /6.560s**、最後の原本変更競合と「1候補計算後に上限超過」**2 PASS /0.460s**。別runの重複があり合算しない。生成MP4と疑似vectorのみ、実モデル/GUI/GPUなし。
-- **比較量の明示制限**：一要求100,000 window pair、1itemあたりfloat64 payload32MiB。超過は結果を返さず案内（部分順位を完了と偽らない）。1時間同士は1候補50,625 pairのため、多数長動画を一度に比較できる性能完成版ではない。RSS全体32MiB保証ではない。詳細は [動画正本](video-similarity.md)末尾。
-- **前段は保持**：`accc4ce`の明示動画索引/取消再開、3role・単一resident、backup/restore/purge、commit取消gate/初期化closeを維持。通常代表frame検索・旧音声類似を置換しない。通常DB/設定/Alpha・モデル/依存・OS変更0、Actions/新branch/PR/main merge0、shutdownなし。完全checkoutではない固定SHA部分snapshotで、他端末未push差分は未確認。
-- **次の1件**：Core/WinUIの明示動画準備・検索方式・右クリック直接動画類似・両端時刻表示と再生先時刻を接続する。音声側の実装を参考にして旧代表frame検索を維持。Windows/.NETがないため可能なsource/CPUを進め、build/native/実encoder受入手順を残す。長動画比較性能・媒体横断・配布全体は未完。
+- 起点 `6a389b191329031342c7cc804a74170b3a17e5f4`、既存開発branch / Draft PR #5を継続。ユーザーの開始時残量報告56％（以後は測定不可）。Terra xhighがCore/client/応答検証/tests、親がWinUI/LibraryApi接続と成果物レビューを担当。最新commitは本書のGit履歴。
+- **source接続**：設定→AI検索の準備に「動画の内容検索」の明示作成・中断・再表示/続き。検索方式8「動画の内容（AI）」、動画右クリック「内容が似た動画を探す」、両一致区間の表示、小数秒、既存playerの候補開始時刻seekへ接続。旧代表frame入口と音声mode7を維持。画面履歴に直接動画類似flagを保持、cached類似はモデル検証/ロード待ちを要求しない。通常文字検索・タグdraftの既存guardを保つ。
+- **親/相互レビュー修正**：ResultSessionClientでvideo-similarを厳密parserへ振り分け、video-direct namespaceを検証。source/contract/区間上限16秒/起点両端を検証しlegacy時刻点と区別。直接類似に入る際は媒体kindと検索方式を揃え、音声modeから動画類似→検索入力で種類不整合にならないよう補強。mode8の失敗案内漏れも修正。
+- **確認範囲**：XAML XMLとして整形式、検索方式9件（既存0–7＋動画8）、ソースのroute/scope/runtime bypass/history/dispose/seekをレビュー。生成動画の既存backend HTTP **5 PASS /3.562s**。**.NET SDK/csc/mcsがなく、Core tests・C# compile・WinUI/Portable build・native/GPUは全てUNRUN**。source存在確認をbuild/test合格と呼ばない。新VideoContentTestsはソース追加のみ。
+- **未完と次**：Windowsで `dotnet run --project tests/Aredoko.Core.Tests -c Release -- --video-content` と既存Core/Portable build、生成2動画・独立DB/設定の限定native受入（準備/取消再開、mode8、右クリック、両端根拠/seek、履歴復帰、未保存編集保全）。実encoder精度・長動画性能・Alpha/ZIP更新は未実施。Windows待ちには独立CPUの音声側取消/commit・初期化close境界を点検する。詳細は [動画正本](video-similarity.md)末尾。
+- 前段の動画backend/index/類似/回復を維持。通常DB/設定/Alpha変更0、モデル/依存download0、Actions/新branch/PR/main merge0、shutdownなし。C# source147filesを固定HEADで取得した部分snapshotであり完全checkoutではない。他端末未push差分は未確認。
 
 ## 継続開発checkpoint（2026-10-27、以下の過去記録より優先）
 

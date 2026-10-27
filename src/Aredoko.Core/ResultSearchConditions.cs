@@ -9,15 +9,16 @@ public static class ResultSearchConditions
     public static JsonObject? Create(string query, string kind, string view, SearchMethod method,
         JsonObject? scope, IReadOnlyList<int>? rootIds, int? originId = null,
         bool literalOnly = false, double? groupThreshold = null, string resultGroup = "all", IReadOnlyList<long>? shelfIds = null,
-        bool directAudioSimilarity = false)
+        bool directAudioSimilarity = false, bool directVideoSimilarity = false)
     {
+        if(directAudioSimilarity && directVideoSimilarity)throw new ArgumentException("Select one direct similarity mode");
         JsonObject result;
         if (originId is int origin)
         {
-            if(directAudioSimilarity)
+            if(directAudioSimilarity || directVideoSimilarity)
             {
                 if(origin<=0)throw new ArgumentOutOfRangeException(nameof(originId));
-                result=new JsonObject{["mode"]="audio-similar",["item_id"]=origin,["view"]=view};
+                result=new JsonObject{["mode"]=directVideoSimilarity?"video-similar":"audio-similar",["item_id"]=origin,["view"]=view};
                 if(FolderSearch.NormalizeNonEmpty(rootIds) is {} audioRoots)
                 {
                     var values=new JsonArray();foreach(var id in audioRoots)values.Add((JsonNode?)JsonValue.Create(id));
@@ -35,11 +36,12 @@ public static class ResultSearchConditions
             if (method.IsAI || method.Source != "all") throw new ArgumentException("History uses literal search");
             result = new JsonObject { ["mode"] = "history", ["query"] = query, ["kind"] = kind };
         }
-        else if (method.IsAudioContent)
+        else if (method.IsAudioContent || method.IsVideoContent)
         {
             if (string.IsNullOrWhiteSpace(query))return null;
-            if(kind is not ("" or "audio"))throw new ArgumentException("音声の内容検索では種類を音声・音楽にしてください。");
-            result=new JsonObject{["mode"]="audio-direct",["query"]=query,["view"]=view};
+            if(method.IsAudioContent && kind is not ("" or "audio"))throw new ArgumentException("音声の内容検索では種類を音声・音楽にしてください。");
+            if(method.IsVideoContent && kind is not ("" or "video"))throw new ArgumentException("動画の内容検索では種類を動画にしてください。");
+            result=new JsonObject{["mode"]=method.Source,["query"]=query,["view"]=view};
         }
         else if (method.IsPageText || method.IsTagCandidates)
         {

@@ -38,7 +38,11 @@ public sealed class MediaRow
     public string ScoreKind { get; set; } = "";
     public int? SimilarityOriginId { get; set; }
     public int? VideoMatchMs { get; set; }
+    public int? VideoMatchEndMs { get; set; }
+    public string? VideoMatchSource { get; set; }
+    public string? VideoMatchContract { get; set; }
     public int? OriginMatchMs { get; set; }
+    public int? OriginMatchEndMs { get; set; }
     public int? AudioMatchMs { get; set; }
     public string? AudioMatchSnippet { get; set; }
     public string? AudioMatchSource { get; set; }
@@ -54,8 +58,15 @@ public sealed class MediaRow
             ? $"{hours}:{minutes:D2}:{seconds:D2}"
             : $"{minutes}:{seconds:D2}";
     }
+    private static string FormatIntervalTimestamp(int ms) => FormatVideoTimestamp(ms) +
+        (ms%1000 == 0 ? "" : ("."+(ms%1000).ToString("D3")).TrimEnd('0'));
+    private static string FormatInterval(int start, int end) => $"{FormatIntervalTimestamp(start)}–{FormatIntervalTimestamp(end)}";
     public string AIEvidence => AIPage is not null || Proposal?.SemanticScore is not null ? "" : SemanticScore is double score
-        ? (SimilarityOriginId is int ? (VideoMatchMs is int matchMs ? (OriginMatchMs is int v2vOms ? $"動画一致（起点 {FormatVideoTimestamp(v2vOms)} → 候補 {FormatVideoTimestamp(matchMs)}）" : $"動画フレーム一致（{FormatVideoTimestamp(matchMs)}）")
+        ? (VideoMatchSource=="direct-video" && VideoMatchMs is int directStart && VideoMatchEndMs is int directEnd
+             ? (SimilarityOriginId is int && OriginMatchMs is int directOrigin && OriginMatchEndMs is int directOriginEnd
+                ? $"動画の内容一致（起点 {FormatInterval(directOrigin,directOriginEnd)} → 候補 {FormatInterval(directStart,directEnd)}）"
+                : $"動画の内容一致（{FormatInterval(directStart,directEnd)}）")
+           : SimilarityOriginId is int ? (VideoMatchMs is int matchMs ? (OriginMatchMs is int v2vOms ? $"動画一致（起点 {FormatVideoTimestamp(v2vOms)} → 候補 {FormatVideoTimestamp(matchMs)}）" : $"動画フレーム一致（{FormatVideoTimestamp(matchMs)}）")
                                        : AudioMatchMs is int aMatchMs ? (OriginMatchMs is int a2aOms ? $"音声・音楽一致（起点 {FormatVideoTimestamp(a2aOms)} → 候補 {FormatVideoTimestamp(aMatchMs)}）" : $"音声一致（{FormatVideoTimestamp(aMatchMs)}）")
                                        : OriginMatchMs is int oms ? (Kind == "audio" ? $"起点の音声（{FormatVideoTimestamp(oms)}）に似た候補" : $"起点の動画（{FormatVideoTimestamp(oms)}）に似た候補")
                                        : Kind == "audio" ? "起点の音声・曲に似た候補"
@@ -187,6 +198,8 @@ public static class Protocol
         foreach (var element in root.GetProperty("items").EnumerateArray())
         {
             var row=ReadRow(element);
+            if(root.TryGetProperty("source",out var source) && source.ValueKind==JsonValueKind.String && source.GetString()=="video-direct" && row.VideoMatchSource!="direct-video")
+                throw new InvalidDataException("動画の一致区間がありません。検索をやり直してください。");
             row.ScoreKind=root.TryGetProperty("score_kind",out var scoreKind) && scoreKind.ValueKind==JsonValueKind.String ? scoreKind.GetString()??"" : "";
             result.Items.Add(row);
         }
@@ -223,7 +236,9 @@ public static class Protocol
         return ReadRow(doc.RootElement);
     }
 
-    private static MediaRow ReadRow(JsonElement row) => new() {
+    private static MediaRow ReadRow(JsonElement row)
+    {
+        var result = new MediaRow {
         Id = row.GetProperty("id").GetInt32(),
         Title = row.GetProperty("title").GetString() ?? "",
         Kind = row.GetProperty("kind").GetString() ?? "",
@@ -240,7 +255,11 @@ public static class Protocol
         SimilarityGroup = row.TryGetProperty("similarity_group",out var group) && group.ValueKind==JsonValueKind.String ? group.GetString()??"" : "",
         SimilarityOriginId = row.TryGetProperty("similarity_origin_id",out var origin) && origin.ValueKind==JsonValueKind.Number && origin.TryGetInt32(out var originId) && originId>0 ? originId : null,
         VideoMatchMs = row.TryGetProperty("video_match_ms",out var vms) && vms.ValueKind==JsonValueKind.Number && vms.TryGetInt32(out var vmsVal) && vmsVal is >=0 and <=86400000 ? vmsVal : null,
+        VideoMatchEndMs = row.TryGetProperty("video_match_end_ms",out var vend) && vend.ValueKind==JsonValueKind.Number && vend.TryGetInt32(out var vendVal) && vendVal is >=0 and <=86400000 ? vendVal : null,
+        VideoMatchSource = row.TryGetProperty("video_match_source",out var videoSource) && videoSource.ValueKind==JsonValueKind.String ? videoSource.GetString() : null,
+        VideoMatchContract = row.TryGetProperty("video_match_contract",out var videoContract) && videoContract.ValueKind==JsonValueKind.String ? videoContract.GetString() : null,
         OriginMatchMs = row.TryGetProperty("origin_match_ms",out var oms) && oms.ValueKind==JsonValueKind.Number && oms.TryGetInt32(out var omsVal) && omsVal is >=0 and <=86400000 ? omsVal : null,
+        OriginMatchEndMs = row.TryGetProperty("origin_match_end_ms",out var oend) && oend.ValueKind==JsonValueKind.Number && oend.TryGetInt32(out var oendVal) && oendVal is >=0 and <=86400000 ? oendVal : null,
         AudioMatchMs = row.TryGetProperty("audio_match_ms",out var ams) && ams.ValueKind==JsonValueKind.Number && ams.TryGetInt32(out var amsVal) && amsVal is >=0 and <=86400000 ? amsVal : null,
         AudioMatchSnippet = row.TryGetProperty("audio_match_snippet",out var snip) && snip.ValueKind==JsonValueKind.String ? (snip.GetString() is { Length: >0 } s ? (s.Length>120 ? s[..120]+"…" : s) : null) : null,
         AudioMatchSource = row.TryGetProperty("audio_match_source",out var audioSource)&&audioSource.ValueKind==JsonValueKind.String&&audioSource.GetString()=="direct-audio"?"direct-audio":null,
@@ -250,7 +269,21 @@ public static class Protocol
         Match = row.TryGetProperty("match", out var match) && match.ValueKind == JsonValueKind.String ? match.GetString() ?? "" : "",
         AIPage = AIPageMatch.Read(row),
         Evidence = ReadEvidence(row)
-    };
+        };
+        // Only direct-video rows carry these three fields. Never interpret a
+        // missing or malformed interval as a legacy representative frame.
+        if(row.TryGetProperty("video_match_source",out _) || row.TryGetProperty("video_match_contract",out _) || row.TryGetProperty("video_match_end_ms",out _))
+        {
+            static bool ValidInterval(int? start,int? end) => start is int a && end is int b && a>=0 && a<b && b<=86400000 && b-a<=16000;
+            bool hasOrigin=row.TryGetProperty("similarity_origin_id",out _);
+            if(result.Kind!="video" || result.VideoMatchSource!="direct-video" || result.VideoMatchContract!="direct-video-window:v1" ||
+               !ValidInterval(result.VideoMatchMs,result.VideoMatchEndMs) ||
+               (hasOrigin && (result.SimilarityOriginId is null || !ValidInterval(result.OriginMatchMs,result.OriginMatchEndMs))) ||
+               (!hasOrigin && (row.TryGetProperty("origin_match_ms",out _) || row.TryGetProperty("origin_match_end_ms",out _))))
+                throw new InvalidDataException("動画の一致区間が無効です。検索をやり直してください。");
+        }
+        return result;
+    }
 
     private static SearchEvidence? ReadEvidence(JsonElement row)
     {
