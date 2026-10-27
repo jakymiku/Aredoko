@@ -1,14 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-27）
 
-## 継続開発checkpoint（2026-10-27、動画production接続）
+## 継続開発checkpoint（2026-10-27、保存済み直接動画の類似検索）
 
-- 起点 `1a7721d7e531fa99f8e0304a43e897aeba9b4636`。既存開発branch / Draft PR #5を継続。ユーザー指示でTerra xhighへ動画job/featureを分担し、親がコード・所有管理・HTTP接続と回復互換をレビュー/修正。最新commitは本書のGit履歴を参照。アプリの実機配布版/Alphaは未更新。
-- **直接動画のbackend production入口を接続**：`VideoDirectJobs` / `VideoDirectFeature`、認証付き `/api/library/video-ai/{status,start,cancel,release,search}`、`video-direct` result sessionと専用index stamp、終了回収/idle policy。明示consent・root/棚/favorite scope・件数上限・再開時fresh skipを維持。画像/音声/動画は明示roleで最大3登録、常駐モデルは排他handoffで1つ。前owner解放失敗では次を起動しない。通常の代表frame検索を維持。
-- **レビュー修正4点**：動画sidecarの厳密schemaをbackup/restoreへ追加（audio/videoの完全pairのみ、部分/混在/版不整合は拒否）、解除rootの動画vector/marker削除、取消vs最終commitの共有gate、lazy初期化のcatalog guard/writer fence待ちをcloseで中断。最終itemのcommitが先ならcancelは不受理、途中batchの成功済みitemは保持し次回skip。長いdecode/staging/copyは取消gateで塞がない。
-- **CPU確認**：親の所有管理/動画HTTP/既存音声HTTP **19 PASS / 5.787s**、レビュー修正後の動画job/feature/HTTP/recovery/index **37 PASS / 8.780s**。Terraの最終job/feature/index/search/HTTPは **41 PASS / 9.335s**。以前の試験と重複があり合算しない。backup関連初回31件中1 import ERRORは部分snapshotのfixture不足（残り30 PASS）、既存backup29件は27 PASS＋不足CLI/profileの2失敗→取得後その2件のみ **2 PASS / 0.709s**。製品失敗と混同しない。原本変更試験の意図した例外logは保持。詳細/手順は [動画正本](video-similarity.md)末尾。
-- **未検証/未実装**：実encoder/GPU/Windows/.NET build/native GUI・長動画性能。この環境は固定SHAの部分snapshotであり完全checkoutのgit statusではなく、他端末の未push差分は未確認。外部依存/モデル取得0、通常DB/設定/Alpha変更0、Actions/新branch/PR/main merge0、shutdownなし。
-- **次の1件**：保存済み直接動画の類似検索（自己除外・起点/候補両区間・scope・再推論なし）を音声側と同型で実装。その後、WinUI/Coreの明示動画準備・検索方式と結果時刻/再生接続。実機確認は手順を残し、Windows待ちで独立CPU作業を止めない。音声側の同型取消/初期化境界は今回変更していないため、別途必要範囲で評価する。
-- **クォータ**：公開された利用可能toolに残量取得機能がなく、残％を実測できない。残量を推定して報告しない。今回の機能単位で関連確認/保存を済ませて終了。今後も小単位でcheckpointを確保する。
+- 起点 `accc4ced2b8f1cffb2a9ce871846a42067190ea3`。既存 `feat/winui3-production-mvp-20261011` / Draft PR #5を継続。ユーザー報告の残量は開始時69％（以降の残％は測定不可）。「一つずつ」の指示に従い、今回の単位はcached動画類似のbackend/APIまで。最新commitは本書のGit履歴を参照。
+- **直接動画の類似検索を接続**：Terra xhighが `VideoDirectSimilarity` とCPU testsを担当、親が成果物をレビューしjob/feature/認証API `/api/library/video-ai/similar` / `video-similar` result sessionへ接続。再推論・decodeなしで、自己除外、起点/候補の両一致区間、root/棚/exclusion、候補favorite、stable tiesを保持。モデルが利用不可・画像ownerがbusyでも保存済み索引を比較し、推論lock/workerを触らない。
+- **親レビュー修正**：候補交代時の旧vector保持による一時的3セット確保を解消（weakref回帰あり）。範囲結果作成中の原本変更/利用不可を入力400ではなく `VideoSearchChanged` / HTTP409の再検索案内へ統一。完全window連続性/frames総数/marker/contract/profile/revision、途中取消とspool回収を点検。
+- **CPU確認**：Terraのsimilarity/index/search **30 PASS / 7.052s**＋追加weakref1 PASS。親のAPI5 PASS /3.609s、similarity/API **18 PASS /6.560s**、最後の原本変更競合と「1候補計算後に上限超過」**2 PASS /0.460s**。別runの重複があり合算しない。生成MP4と疑似vectorのみ、実モデル/GUI/GPUなし。
+- **比較量の明示制限**：一要求100,000 window pair、1itemあたりfloat64 payload32MiB。超過は結果を返さず案内（部分順位を完了と偽らない）。1時間同士は1候補50,625 pairのため、多数長動画を一度に比較できる性能完成版ではない。RSS全体32MiB保証ではない。詳細は [動画正本](video-similarity.md)末尾。
+- **前段は保持**：`accc4ce`の明示動画索引/取消再開、3role・単一resident、backup/restore/purge、commit取消gate/初期化closeを維持。通常代表frame検索・旧音声類似を置換しない。通常DB/設定/Alpha・モデル/依存・OS変更0、Actions/新branch/PR/main merge0、shutdownなし。完全checkoutではない固定SHA部分snapshotで、他端末未push差分は未確認。
+- **次の1件**：Core/WinUIの明示動画準備・検索方式・右クリック直接動画類似・両端時刻表示と再生先時刻を接続する。音声側の実装を参考にして旧代表frame検索を維持。Windows/.NETがないため可能なsource/CPUを進め、build/native/実encoder受入手順を残す。長動画比較性能・媒体横断・配布全体は未完。
 
 ## 継続開発checkpoint（2026-10-27、以下の過去記録より優先）
 

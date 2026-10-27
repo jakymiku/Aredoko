@@ -102,3 +102,20 @@ Python9件（開発/基本Python）・既存audio worker14・既存profile関連
 検証：親の所有管理/動画HTTP/既存音声HTTP19 PASS、最終動画job/feature/HTTP/recovery/index37 PASS。Terraのjob/feature/index/search/HTTP41 PASSは一部重複する別run。backup関連30 PASS＋fixture不足1 import ERROR、既存backup27 PASS＋不足ファイル2失敗→正しい固定SHAのfixture/CLI/profile補完後、失敗した2件のみPASS。初回エラーはcheckout不足であり製品不具合ではない。原本変更試験は意図したReaderChangedをlogする。モデル・GPU・GUIは使っていない。
 
 Windows再開手順：生成した短いMP4を独立catalogへ登録し、通常所有backendでstatusがlazyであることを確認→認証付きvideo-ai/startへconsentとroot条件→status完了→video-ai/searchとvideo-direct sessionで区間根拠を確認→cancel/resume/release・画像/音声へ切替時の単一resident・所有終了を確認する。既存モデルのみ使用、通常DB/Alphaを変更しない。未導入モデルを自動取得しない。実encoder品質、長動画/1時間225 decoder起動の性能、WinUI入口と動画起点直接類似は未受入/未実装である。
+
+
+## 2026-10-27：保存済み直接動画の類似検索（backend/API）
+
+`VideoDirectSimilarity`は専用video namespaceの全windowから最大cosineのpairを選び、候補の`video_match_ms/video_match_end_ms`と起点の`origin_match_ms/origin_match_end_ms`を返す。`mode=video-similar`、`source=video-direct`。自己除外・stable ID tie・root/棚/exclusion・候補favoriteを共通catalogで適用する。起点はfavorite条件で隠さず、root/棚の制約は適用する。
+
+動画では無音skipがないのでdecoded=indexed・ordinal連続・非最終16秒・最終区間上限・全frame数・正規化vector・契約と物理revisionを厳密照合し、不完全な索引を一致候補にしない。原本・index・profile・条件が途中で変われば結果を破棄し再検索案内を返す。モデル利用不可でもcached vectorがあれば利用し、推論groupを取得しない。
+
+APIは認証付きPOST `/api/library/video-ai/similar`（item_idと任意page/limit/view/root_ids/shelf/shelf_ids）。固定結果は `/api/library/results/create` のconditions `{mode:video-similar,item_id:...}`から作成でき、動画namespaceのstampと起点原本を再検証する。GUIにはまだ未接続。
+
+親はTerraの成果物をレビューし、候補を次へ読み込む前に前vectorを解放するよう修正を戻した。weakrefで前候補bufferが次の読込前に消えることを確認。親側でrender時のPreviewUnavailableをVideoSearchChangedに変換し、原本変更を入力エラーにしないよう補強した。
+
+比較はexact all-window-pairで、コストは起点window数×各候補window数×dimension。上限は1要求100,000pair/1item float64 vector payload32MiB。前候補を解放して起点＋現候補を保持し、全結果はScoreSpoolへ。1時間同士は225×225=50,625pair/候補。上限超過は日本語でフォルダー/棚の絞込を案内し、途中順位や偽のsearch_completeを返さない。payload上限はプロセスRSS全体の保証ではなく、大dimensionでは24時間前に上限へ達する。長動画・大規模catalogの性能は未受入。
+
+CPU結果：Terra similarity/index/search30 PASS/7.052s、追加weakref1 PASS。親HTTP5 PASS/3.609s（モデル不可＋image busyでも比較・原本変化session失効）、similarity/HTTP18 PASS/6.560s、最終2回帰PASS/0.460s（range中の候補変更と1候補spool後のcap超過・部分結果非公開）。重複runを合算しない。全て生成MP4・疑似vectorで、画像理解/実動画精度・native表示・GPUの合格ではない。
+
+Windows次工程：通常代表frame類似の入口を維持しつつ、直接動画準備と内容検索・直接動画類似の別入口をCore/WinUIへ。独立DBの生成2動画で、自己除外/両端時刻表示→候補の一致開始へseek→originへ戻れることを確認する。登録範囲変更・モデル不可cached・取消・上限案内も限定確認する。私物/通常DBを使わず、モデル/依存取得はしない。

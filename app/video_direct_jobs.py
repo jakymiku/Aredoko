@@ -136,6 +136,19 @@ class VideoDirectJobs:
             if acquired:self.inference.release()
             with self.guard:self.searching=False;self.last_used=time.monotonic()
 
+    def similar(self,item_id,**options):
+        from video_direct_similarity import VideoDirectSimilarity
+        cancelled=options.get('cancelled')
+        if cancelled is not None and not callable(cancelled):raise ValueError('Invalid video similarity cancellation')
+        options['cancelled']=lambda:self.closed or cancelled is not None and cancelled()
+        with self.guard:
+            if self.closed:raise AIUnavailable('Video owner is closing')
+            if self.searching or self.thread is not None and self.thread.is_alive():raise AIBusy('Video owner is busy')
+            self.searching=True
+        try:return VideoDirectSimilarity(self.index).similar(item_id,**options)
+        finally:
+            with self.guard:self.searching=False;self.last_used=time.monotonic()
+
     def configure(self,*,idle_release_seconds=0):
         if type(idle_release_seconds) is not int or not 0<=idle_release_seconds<=3600:raise ValueError('Invalid video idle release')
         with self.guard:

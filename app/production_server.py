@@ -175,6 +175,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         if mode=='similar':
             require(('item_id','kind','view','scope'))
             return ai.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
+        if mode=='video-similar':
+            require(('item_id','view','root_ids','shelf','shelf_ids'))
+            return video.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='video-direct':
             require(('query','view','root_ids','shelf','shelf_ids'))
             return video.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
@@ -192,7 +195,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         raise ValueError('Invalid result search mode')
     image_stamp=IndexStamp(ai) if isinstance(ai,AISearch) else None
     def result_stamp(conditions):
-        if conditions.get('mode')=='video-direct':return video.stamp()
+        if conditions.get('mode') in ('video-direct','video-similar'):return video.stamp()
         return audio.stamp() if conditions.get('mode') in ('audio-direct','audio-similar') else image_stamp() if image_stamp is not None else None
     results=ResultSessions(catalog,result_provider,index_stamp=image_stamp,index_stamp_for=result_stamp)
     resource_updates=threading.Lock()
@@ -635,6 +638,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if self.path in ('/api/library/video-ai/cancel','/api/library/video-ai/release'):
                         if body:raise ValueError('Expected empty video request')
                         return self.send(200,video.cancel() if self.path.endswith('/cancel') else video.release())
+                    if self.path=='/api/library/video-ai/similar':
+                        if set(body)-{'item_id','page','limit','view','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid video similarity fields')
+                        return self.send(200,video.similar(**body))
                     if self.path=='/api/library/video-ai/search':
                         if set(body)-{'query','page','limit','view','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid video search fields')
                         return self.send(200,video.search(**body))

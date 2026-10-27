@@ -72,3 +72,33 @@ class VideoHTTPTests(unittest.TestCase):
         with self.feature.owner.index.store.connect() as db:db.execute('UPDATE ai_video_direct_sources SET indexed_windows=0')
         self.assertEqual(self.request('/api/library/results/range',{'session_id':'b'*32,'offset':0,'limit':1})[0],409)
         self.assertEqual(self.request('/api/library/results/range',{'session_id':'a'*32,'offset':0,'limit':1})[0],200)
+
+    def test_cached_similarity_route_has_both_intervals_without_model_or_inference_lock(self):
+        (self.media/'second.mp4').write_bytes(self.path.read_bytes())
+        self.catalog.index.scan(self.root);self.catalog.sync_index();self.prepare()
+        before=self.feature.encoder.calls;self.feature.encoder.available=False
+        group=self.feature.image_ai.inference_group
+        image=group.owners[0]
+        with image:
+            image.encoder.resident=True
+            code,result=self.request('/api/library/video-ai/similar',{'item_id':self.item})
+        self.assertEqual(code,200);self.assertEqual(result['total'],1)
+        row=result['items'][0]
+        self.assertNotEqual(row['id'],self.item)
+        self.assertEqual((row['origin_match_ms'],row['origin_match_end_ms']),(0,16000))
+        self.assertEqual((row['video_match_ms'],row['video_match_end_ms']),(0,16000))
+        self.assertEqual(row['video_match_source'],'direct-video')
+        self.assertEqual(self.feature.encoder.calls,before)
+        self.assertTrue(image.encoder.resident)
+        self.assertEqual(self.request('/api/library/video-ai/similar',{'item_id':self.item},authorized=False)[0],403)
+        self.assertEqual(self.request('/api/library/video-ai/similar',{'item_id':self.item,'kind':'image'})[0],400)
+
+    def test_similarity_session_invalidates_when_origin_changes(self):
+        (self.media/'second.mp4').write_bytes(self.path.read_bytes())
+        self.catalog.index.scan(self.root);self.catalog.sync_index();self.prepare()
+        code,_=self.request('/api/library/results/create',{'session_id':'c'*32,'conditions':{'mode':'video-similar','item_id':self.item}})
+        self.assertEqual(code,200)
+        code,result=self.request('/api/library/results/range',{'session_id':'c'*32,'offset':0,'limit':1})
+        self.assertEqual(code,200);self.assertEqual(result['mode'],'video-similar')
+        self.path.write_bytes(b'changed generated origin')
+        self.assertEqual(self.request('/api/library/results/range',{'session_id':'c'*32,'offset':0,'limit':1})[0],409)

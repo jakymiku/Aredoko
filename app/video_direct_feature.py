@@ -77,6 +77,7 @@ class VideoDirectFeature:
     def cancel(self):
         result=self.owner.cancel() if self.owner is not None else {'cancel_requested':False}
         return {**self.status(),'cancel_requested':result['cancel_requested']}
+    def similar(self,item_id,**options):return self._ensure(require_model=False).similar(item_id,**options)
     def release(self):return self.owner.release() if self.owner is not None else {'released':False,'resident':False}
     def stamp(self):
         self._ensure(require_model=False)
