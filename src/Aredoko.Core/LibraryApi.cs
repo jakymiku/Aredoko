@@ -23,6 +23,7 @@ public sealed class LibraryApi : IDisposable
     public IndexContinuationClient Continuation {get;}
     public AudioContentClient AudioContent {get;}
     public VideoContentClient VideoContent {get;}
+    public AISetupPlanClient AISetupPlans {get;}
     public LibraryApi(HttpMessageHandler handler)
     {
         client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(40)};
@@ -40,6 +41,7 @@ public sealed class LibraryApi : IDisposable
         Continuation=new(tagClient);
         AudioContent=new(client);
         VideoContent=new(client);
+        AISetupPlans=new(client);
     }
     public Task<ArchiveManifest> ReaderManifestAsync(int id, CancellationToken cancellation) =>
         new ArchiveReaderClient(client).ManifestAsync(id, cancellation);

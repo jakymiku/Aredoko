@@ -27,12 +27,14 @@ def main():
     parser.add_argument('--video-content',action='store_true',help='Generated silent MP4s and supplied CPU encoder; no playback, model or GPU')
     parser.add_argument('--video-history-only',action='store_true',help='Pre-index on CPU, then only cached video similarity and folder navigation')
     parser.add_argument('--viewer-choice',action='store_true',help='Generated media: settings persistence, failed external fallback and internal double-click; no external app launched')
+    parser.add_argument('--setup-plan',action='store_true',help='UIA-only feature plan and opt-out; no foreground activation, input, download, model or GPU')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     if args.real_fixture and not args.global_edge:parser.error('Real fixture requires the bounded global-edge case')
     if args.compact_toolbar:args.detail_actions=True
     if args.viewer_choice:args.detail_actions=True
+    if args.setup_plan:args.detail_actions=True;args.uia_only=True
     if args.video_history_only:args.video_content=True
     if args.audio_similarity_only:args.audio_search_only=True
     if args.audio_search_only:args.audio_content=True
@@ -68,7 +70,7 @@ def main():
         return cli(*args,'-w',hwnd)
     def tree():return {n['automationId']:n for n in nodes(json.loads(ui('inspect','--depth','18','--json'))) if n.get('automationId')}
     def shot(name):
-        path=target/(name+'.png');ui('screenshot','--focus','--output',path);report['screenshots'].append(str(path));path.with_suffix('.json').write_text(json.dumps(tree(),ensure_ascii=False,indent=2),encoding='utf-8')
+        path=target/(name+'.png');ui('screenshot',*(() if args.uia_only else ('--focus',)),'--output',path);report['screenshots'].append(str(path));path.with_suffix('.json').write_text(json.dumps(tree(),ensure_ascii=False,indent=2),encoding='utf-8')
     def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','60000' if args.global_edge else '10000')
     def sources():return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
     try:
@@ -123,6 +125,9 @@ def main():
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
         extras={}
+        if args.setup_plan:
+            from ai_acquisition_registry import load_trusted_specs
+            extras['acquisition_specs']=load_trusted_specs(REPO)
         if args.video_content:
             from ui_video_content_audit import create_feature
             video_feature,video_gate,video_reached=create_feature(cat)
@@ -206,6 +211,10 @@ def main():
         elif args.compact_toolbar:
             from ui_compact_toolbar_audit import audit
             audit(ui,tree,shot,report,check,cat,first['id'],input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.setup_plan:
+            from ui_setup_plan_audit import audit
+            audit(ui,tree,shot,report,check,handler,target)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.viewer_choice:
             from ui_viewer_choice_audit import audit

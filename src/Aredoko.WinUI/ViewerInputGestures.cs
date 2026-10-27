@@ -22,6 +22,7 @@ internal static class ViewerOptions
     public static void Save(bool wheelUpAdvances)=>SaveValue(Value with {WheelUpAdvances=wheelUpAdvances});
     public static void SavePreferences(bool wheel,string theme,bool enlarge,bool external)=>SaveValue(Value with {WheelUpAdvances=wheel,Theme=ViewerInputSettings.NormalizeTheme(theme),EnlargeSmallImages=enlarge,OpenExternally=external});
     public static void SaveLibraryItemScale(int scale)=>SaveValue(Value with {LibraryItemScale=ViewerInputSettings.NormalizeScale(scale)});
+    public static void SaveAISetupFeatures(int selection)=>SaveValue(Value with{AISetupFeatures=AISetupSelection.Normalize(selection)});
     public static void SavePresentation(bool enlarge,bool controls,bool loop)=>SaveValue(Value with{EnlargeSmallImages=enlarge,AlwaysShowControls=controls,LoopBookPages=loop});
     private static void SaveValue(ViewerInputSettings next){next.Save(path);Value=next;}
 }

@@ -260,7 +260,7 @@ public sealed partial class MainPage
     private async Task OpenGettingStartedGuideAsync()
     {
         if (!ready || disposed || dialogOpen || saving || !await transitions.WaitAsync(0)) return;
-        dialogOpen = true;
+        dialogOpen = true;bool setupRequested=false;
         try
         {
             var panel = new StackPanel { Spacing = 16 };
@@ -281,11 +281,12 @@ public sealed partial class MainPage
                 panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
             }
             var scroll = new ScrollViewer { Content = panel, MaxHeight = Math.Max(160, ActualHeight - 240), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) };
-            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "使い方・初回設定", Content = scroll, CloseButtonText = "閉じる" };
+            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "使い方・初回設定", Content = scroll, PrimaryButtonText="使いたいAI機能から準備", CloseButtonText = "閉じる",DefaultButton=ContentDialogButton.None };
             AutomationProperties.SetAutomationId(dialog, "GettingStartedGuideDialog");
-            await dialog.ShowAsync();
+            setupRequested=await dialog.ShowAsync()==ContentDialogResult.Primary;
         }
         catch (Exception error) { Failure(error); }
         finally { dialogOpen = false; transitions.Release(); }
+        if(setupRequested&&!disposed)await OpenAISetupPlanAsync();
     }
 }

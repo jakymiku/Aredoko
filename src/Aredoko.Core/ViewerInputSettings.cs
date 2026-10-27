@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 
 namespace Aredoko.Core;
 
-public sealed record ViewerInputSettings(bool WheelUpAdvances=false,int LibraryItemScale=100,string Theme="system",bool EnlargeSmallImages=false,bool AlwaysShowControls=false,bool LoopBookPages=false,bool OpenExternally=false)
+public sealed record ViewerInputSettings(bool WheelUpAdvances=false,int LibraryItemScale=100,string Theme="system",bool EnlargeSmallImages=false,bool AlwaysShowControls=false,bool LoopBookPages=false,bool OpenExternally=false,int AISetupFeatures=3)
 {
     public int WheelStep(int delta)=>delta==0?0:(delta>0)==WheelUpAdvances?1:-1;
     public static ViewerInputSettings Load(string path)
@@ -19,13 +19,14 @@ public sealed record ViewerInputSettings(bool WheelUpAdvances=false,int LibraryI
             var controls=root.TryGetProperty("always_show_controls",out var c)&&c.ValueKind==JsonValueKind.True;
             var loop=root.TryGetProperty("loop_book_pages",out var l)&&l.ValueKind==JsonValueKind.True;
             var external=root.TryGetProperty("double_click_viewer",out var viewer)&&viewer.ValueKind==JsonValueKind.String&&viewer.GetString()=="external";
-            return new(root.GetProperty("wheel_up_advances").GetBoolean(),NormalizeScale(scale),theme,enlarge,controls,loop,external);
+            var features=root.TryGetProperty("ai_setup_features",out var f)&&f.ValueKind==JsonValueKind.Number&&f.TryGetInt32(out var mask)?AISetupSelection.Normalize(mask):3;
+            return new(root.GetProperty("wheel_up_advances").GetBoolean(),NormalizeScale(scale),theme,enlarge,controls,loop,external,features);
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return new();}
     }
     public static string NormalizeTheme(string? theme)=>theme is "light" or "dark"?theme:"system";
     public static int NormalizeScale(int value)=>value is >=60 and <=180&&value%20==0?value:100;
-    public JsonObject ToJson()=>new(){["version"]=1,["wheel_up_advances"]=WheelUpAdvances,["library_item_scale"]=NormalizeScale(LibraryItemScale),["theme"]=NormalizeTheme(Theme),["enlarge_small_images"]=EnlargeSmallImages,["always_show_controls"]=AlwaysShowControls,["loop_book_pages"]=LoopBookPages,["double_click_viewer"]=OpenExternally?"external":"internal"};
+    public JsonObject ToJson()=>new(){["version"]=1,["wheel_up_advances"]=WheelUpAdvances,["library_item_scale"]=NormalizeScale(LibraryItemScale),["theme"]=NormalizeTheme(Theme),["enlarge_small_images"]=EnlargeSmallImages,["always_show_controls"]=AlwaysShowControls,["loop_book_pages"]=LoopBookPages,["double_click_viewer"]=OpenExternally?"external":"internal",["ai_setup_features"]=AISetupSelection.Normalize(AISetupFeatures)};
     public void Save(string path)
     {
         var absolute=Path.GetFullPath(path);Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);

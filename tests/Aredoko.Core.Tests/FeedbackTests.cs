@@ -30,8 +30,9 @@ internal static class FeedbackTests
             File.WriteAllText(file,"{\"version\":1,\"wheel_up_advances\":true}");
             check(ViewerInputSettings.Load(file)==new ViewerInputSettings(true,100),"old viewer settings retain wheel direction with default item size");
             check(!ViewerInputSettings.Load(file).OpenExternally,"legacy settings keep the internal viewer by default");
-            var external=new ViewerInputSettings(true,140,"dark",true,true,true,true);external.Save(file);
+            var external=new ViewerInputSettings(true,140,"dark",true,true,true,true,12);external.Save(file);
             check(ViewerInputSettings.Load(file)==external,"external viewer choice survives restart with all existing preferences");
+            (external with{AISetupFeatures=0}).Save(file);check(ViewerInputSettings.Load(file).AISetupFeatures==0,"explicit AI opt-out persists after restart");
             (external with{OpenExternally=false}).Save(file);
             check(!ViewerInputSettings.Load(file).OpenExternally&&ViewerInputSettings.Load(file).LoopBookPages,"switching back to internal preserves book settings");
             foreach(var invalid in new[]{"null","true","1","\"future\""})

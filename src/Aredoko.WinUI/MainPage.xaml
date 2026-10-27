@@ -219,7 +219,7 @@
        <Button x:Name="GettingStartedFolders" Content="フォルダを登録する" Style="{StaticResource AccentButtonStyle}" Click="GettingStartedFolders_Click" AutomationProperties.AutomationId="GettingStartedFolders"/>
        <TextBlock Text="AI検索は任意です。ファイル名・タグ検索と閲覧は、モデルがなくても使えます。AIを使う場合はモデルと実行環境を準備し、検索用の索引を作成します。" TextWrapping="Wrap"/>
        <StackPanel Orientation="Horizontal" Spacing="8">
-        <Button x:Name="GettingStartedAI" Content="AI検索の準備・モデルの取得" Click="AI_Click" AutomationProperties.AutomationId="GettingStartedAI"/>
+        <Button x:Name="GettingStartedAI" Content="使いたいAI機能から準備（任意）" Click="GettingStartedAIPlan_Click" AutomationProperties.AutomationId="GettingStartedAI"/>
         <Button x:Name="GettingStartedHelp" Content="基本的な使い方を見る" Click="GettingStartedHelp_Click" AutomationProperties.AutomationId="GettingStartedGuide"/>
         <Button x:Name="GettingStartedDismiss" Content="あとで閉じる" Click="GettingStartedDismiss_Click" AutomationProperties.AutomationId="GettingStartedDismiss"/>
        </StackPanel>
