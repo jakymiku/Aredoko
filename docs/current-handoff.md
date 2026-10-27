@@ -1,12 +1,12 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-27）
 
-## 継続開発checkpoint（2026-10-27、残量19％での音声類似局所修正）
+## 継続開発checkpoint（2026-10-27、音声類似の破損索引対策）
 
-- 起点 `695fc878e4ee7078bebca60d9693caf0661cbb02`。既存開発branch / Draft PR #5を継続。ユーザーの残量報告19％に合わせ、今回はサブエージェントなしで小さなCPU修正1単位だけ進めて終了。現時点の残％は取得不可。最新commitは本書のGit履歴。
-- **音声cached類似の2問題を修正**：次候補のvector読込前に前候補のframes/vector参照を解放し、起点＋前候補＋次候補の一時3セット保持を解消。range render中の起点/候補原本変更・利用不可はAudioSearchChangedへ統一し、既存HTTP409再検索案内へ接続（旧ReaderChangedは400になった）。モデル再推論・decode・scope・無音window・順位・保存形式は変更しない。
-- **証拠**：旧codeでweakref回帰1 FAIL＋起点/候補変更2 ERRORを再現（意図したred3件/0.623s）。修正後、音声類似と既存認証HTTP **16 PASS /5.959s**、py_compile成功。生成WAV＋疑似vectorのみ。実model/GUI/GPUなし。[音声正本](audio-producer-review.md)末尾。
-- **前段の到達点を保持**：`d323db0`の動画Core/WinUI source（準備・mode8・直接類似・両区間・seek・履歴）と`695fc87`の音声取消commit/初期化close修正。動画UIは**Core/C# compile/WinUI・Portable build/native未実行**（SDK/Windowsなし）。XAML整形式とbackend確認をビルド合格と扱わない。音声job関連36 PASS/9.027sは前回の別run。
-- **次の1件**：Windows/.NET担当は [動画正本](video-similarity.md)末尾の `--video-content` Core tests→既存Core/Portable build→生成2動画/独立DBの限定native確認（準備/取消続き、mode8、直接類似/旧frame、両端根拠/seek、履歴、未保存draft）へ。Windowsなしの独立CPU候補は、音声cached類似の破損marker型/時間整合と長音声pair比較コストの点検（未着手）。今回の成功済み局所試験を無変更で繰り返さない。
+- 起点 `2ea69c297e63e629c3fe96124fa0843aa6a78575`、既存開発branch / Draft PR #5を継続。ユーザーの追加指示で、途中停止しやすい小単位として音声類似の破損データ対策を実施。今回もサブエージェントなし。最後の残量報告19％以降の現在残％は取得不可。最新commitは本書のGit履歴。
+- **確定不具合を修正**：AudioDirectSimilarityのmarker件数/frame数やwindow時刻が文字列/小数だと比較でTypeErrorとなる、decodedと総frame数が矛盾しても候補になる、短く壊れた区間を受理する条件を確認。厳密int検証、decoded=ceil(total_frames/30秒frame数)、各vector区間の正確なendを検証し、破損itemは索引なしとして除外。DBを自動修復/上書きしない。
+- **確認**：旧codeの破損回帰2methodで型例外・不正一致を再現（subtest 8 FAIL/10 ERROR、2.757s）。修正後の音声類似/認証HTTP **19 PASS /7.565s**、py_compile成功。起点と候補の両側、文字列/小数件数、時間矛盾、不正vector長/ゼロnorm/NaN、無音でordinalが飛ぶ正常索引を確認。生成WAV/疑似vectorのみ、実model/GUI/GPUなし。重複runとsubtestを合算しない。[音声正本](audio-producer-review.md)末尾。
+- **前段保全**：`2ea69c2`の旧候補buffer解放/原本変更409、`695fc87`の音声取消commit/初期化close、`d323db0`の動画Core/WinUI sourceを保持。動画UIのCore/C# compile/WinUI・Portable build/nativeはSDK/Windows不在で未実行。新規ビルド合格とはしない。
+- **次の1件**：Windows/.NET担当は [動画正本](video-similarity.md)末尾のCore `--video-content` →既存Core/Portable build→生成2動画の限定native確認へ。Windowsなしの独立CPU候補は長音声pair比較コストと明示的な作業量上限の必要性評価（未着手）。今回の型/時刻修正や成功試験を無変更で繰り返さない。
 - **未完/保全**：実動画/録音/音楽の品質、長動画比較/decoder性能、媒体横断、配布NOTICE/host/clean Windows等は未完。通常DB/設定/Alpha/ZIP/shortcut変更0、モデル/依存download0、Actions/新branch/PR/main merge0、shutdownなし。固定SHA部分snapshotで、他端末未push差分は未確認。
 
 ## 継続開発checkpoint（2026-10-27、以下の過去記録より優先）

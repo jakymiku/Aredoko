@@ -116,5 +116,50 @@ class DirectSimilarityTests(unittest.TestCase):
             AudioDirectSimilarity(self.index).similar(self.item,result_sink=changed)
         self.assertEqual(list(self.stage.iterdir()),[])
 
+    def test_corrupt_marker_types_and_frame_totals_are_excluded(self):
+        self.seed();second,_=self.add_item();search=AudioDirectSimilarity(self.index)
+        for item in (self.item,second):
+            revision=self.reader.audio_manifest(item)['revision']
+            for field,value in (('decoded_windows','bad'),('decoded_windows',1.5),
+                                ('indexed_windows','bad'),('total_frames','bad'),
+                                ('total_frames',496000.5),('total_frames',960001),
+                                ('decoded_windows',3)):
+                with self.subTest(item=item,field=field,value=value):
+                    with self.supplied():self.index.index_item(item,revision)
+                    with self.index.store.connect() as db:
+                        db.execute('UPDATE ai_audio_direct_sources SET '+field+'=? WHERE item_id=?',(value,item))
+                    result=search.similar(self.item)
+                    self.assertEqual(result['total'],0)
+                    self.assertEqual(list(self.stage.iterdir()),[])
+            with self.supplied():self.index.index_item(item,revision)
+
+    def test_corrupt_window_types_intervals_and_vectors_are_excluded(self):
+        self.seed();second,_=self.add_item();search=AudioDirectSimilarity(self.index)
+        for item in (self.item,second):
+            revision=self.reader.audio_manifest(item)['revision']
+            for field,value in (('ordinal',1.5),('ordinal','bad'),('start_ms','bad'),
+                                ('start_ms',30000.5),('end_ms','bad'),('end_ms',30999),
+                                ('end_ms',31000.5),('end_ms',31001),
+                                ('vector',b'broken'),('vector',b'\0'*12),
+                                ('vector',bytes.fromhex('0000c07f0000000000000000'))):
+                with self.subTest(item=item,field=field,value=value):
+                    with self.supplied():self.index.index_item(item,revision)
+                    with self.index.store.connect() as db:
+                        db.execute('UPDATE ai_audio_direct_windows SET '+field+'=? WHERE item_id=? AND ordinal=1',(value,item))
+                    result=search.similar(self.item)
+                    self.assertEqual(result['total'],0)
+                    self.assertEqual(list(self.stage.iterdir()),[])
+            with self.supplied():self.index.index_item(item,revision)
+
+    def test_skipped_silent_window_keeps_correct_ordinal_and_time(self):
+        from audio_input import PCMWindow
+        silent=PCMWindow(0,30000,b'\0'*(480000*4))
+        with self.supplied([silent,self.windows[1]]):self.index.index_item(self.item,self.revision)
+        second,_=self.add_item()
+        result=AudioDirectSimilarity(self.index).similar(self.item)
+        self.assertEqual(result['total'],1)
+        self.assertEqual(result['items'][0]['origin_match_ms'],30000)
+        self.assertEqual(result['items'][0]['id'],second)
+
 
 if __name__=='__main__':unittest.main()

@@ -15,6 +15,7 @@ from audio_input import MAX_START_MS,SAMPLE_RATE,MAX_WINDOW_MS
 from previews import PreviewUnavailable
 
 MAX_FRAME_BYTES=32*1024*1024
+WINDOW_FRAMES=SAMPLE_RATE*MAX_WINDOW_MS//1000
 
 
 class AudioDirectSimilarity:
@@ -28,8 +29,11 @@ class AudioDirectSimilarity:
                           'FROM ai_audio_direct_sources WHERE item_id=?',(row['id'],)).fetchone()
         if marker is None:return revision,[]
         saved,contract,decoded,indexed,frames=marker
-        if not (saved==revision and contract==CONTRACT and 0<indexed<=decoded<=MAX_WINDOWS
-                and 1<=frames<=MAX_START_MS*SAMPLE_RATE//1000):return revision,[]
+        if (saved!=revision or contract!=CONTRACT
+                or any(type(value) is not int for value in (decoded,indexed,frames))
+                or not (0<indexed<=decoded<=MAX_WINDOWS and 1<=frames<=MAX_START_MS*SAMPLE_RATE//1000)
+                or decoded!=(frames+WINDOW_FRAMES-1)//WINDOW_FRAMES):
+            return revision,[]
         result=[]
         cursor=db.execute('SELECT ordinal,start_ms,end_ms,vector FROM ai_audio_direct_windows '
                           'WHERE item_id=? ORDER BY ordinal',(row['id'],))
@@ -39,9 +43,10 @@ class AudioDirectSimilarity:
                 if len(result)>=indexed:return revision,[]
                 if (len(result)+1)*index.profile.dimension*8>MAX_FRAME_BYTES:
                     raise AIUnavailable('音声の比較に必要なメモリが上限を超えました。結果は作成していません。')
-                if not (0<=ordinal<decoded and start==ordinal*MAX_WINDOW_MS
-                        and start<end<=min(start+MAX_WINDOW_MS,(frames*1000+SAMPLE_RATE-1)//SAMPLE_RATE)
-                        and type(data) is bytes and len(data)==index.profile.dimension*4):return revision,[]
+                if (any(type(value) is not int for value in (ordinal,start,end))
+                        or not (0<=ordinal<decoded and start==ordinal*MAX_WINDOW_MS
+                            and start<end==min(start+MAX_WINDOW_MS,(frames*1000+SAMPLE_RATE-1)//SAMPLE_RATE))
+                        or type(data) is not bytes or len(data)!=index.profile.dimension*4):return revision,[]
                 packed=array('f');packed.frombytes(data)
                 if sys.byteorder!='little':packed.byteswap()
                 norm=sum(value*value for value in packed)

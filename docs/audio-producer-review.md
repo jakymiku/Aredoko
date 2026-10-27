@@ -141,3 +141,12 @@ Windows実workerとnative音声準備画面の最終連動は未確認。次回�
 renderで起点/候補のaudio_manifestがReaderChanged等のPreviewUnavailableを投げると、音声側はAudioSearchChangedの409ではなく一般ValueErrorの400へ落ちた。check_revisionでPreviewUnavailableとrevision不一致をAudioSearchChangedへ変換し、原本更新/利用不可を再検索の競合として扱う。検索scope・候補favorite・自己除外・無音skip・順位と時間根拠を変更せず、推論/decode/保存変更なし。
 
 旧codeでweakref1 FAIL、起点/候補変更2 ERROR（3件/0.623s）を再現。修正後の類似＋認証HTTP16 PASS/5.959s、py_compile成功。生成WAV/疑似vectorのみ、通常DB/実model/GUI/GPUは使っていない。破損markerの型/時間整合、長音声の全pair比較性能は今回の範囲外で未点検。
+
+
+## 2026-10-27：音声cached類似の破損marker・区間の厳密検証
+
+小単位の追加修正。markerのdecoded/indexed/total_framesとwindowのordinal/start/endを演算前に厳密int検証する。総frame数から期待する30秒window数がdecodedと一致すること、各vectorのendがmin(start+30秒,総frame数の切上げms)と正確に一致することを要求する。値が文字列/小数・時間不整合ならitem全体を索引なしとして除外し、DBの自動変更や推測補完はしない。無音skipによるordinalの穴は引き続き許可する。
+
+旧codeに対して回帰2method（起点/候補両方への破損注入）で8 FAIL/10 ERROR、2.757sを確認。修正後の類似＋認証HTTP19 PASS/7.565s、py_compile成功。件数/frame数の文字列/小数・frame数とdecodedの矛盾、ordinal/時刻の不正型・短すぎるend・過大end、vector長/ゼロnorm/NaNを確認し、正常な先頭無音skip→後続window一致も別回帰で確認。生成WAV/疑似vectorのみであり、実音声の精度評価ではない。原本/通常DB/既存配布を変更せず、サブエージェントなし。
+
+次のCPU候補は長音声の全window pair比較コストと作業量上限の必要性。今回の対策は破損marker/window行の局所検証であり、SQLiteファイル自体の破損や全検索経路の回復を保証するものではない。
