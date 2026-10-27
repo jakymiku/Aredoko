@@ -1,13 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-27）
 
-## モデル切替前の停止点（2026-10-27、一次点検のみ）
+## 継続開発checkpoint（2026-10-27、動画production接続）
 
-- ユーザーの指示で、新しい実装に入る前に一時停止。再開指示後に下記の既存「次の1件」を継続する。アプリコード変更なし。
-- 開始時の開発HEADは `d52c471fb456b4bb55006fc563d587e67de1090b`、`muse/video-coverage` HEADは `cdab68dc56dc1dd6f0d1decc4fbcb944d5cc4976`。branch一覧・PR #5（open/Draft）・既存PRを確認。Museの総尺完走照合と公開途中rollback補強は開発側に存在し、重複取り込みは不要。新branch/PR/merge/Actionsなし。
-- 取り込み済み `video_coverage.py` / `video_direct_index.py` / `video_direct_search.py` とPreviewReaderのguardを一次点検。点検・下記試験の範囲で追加の確定不具合は見つかっていないが、全レビュー・実モデル/GUI/GPU受入の完了宣言ではない。
-- Linux/Python 3.12の生成動画・疑似encoderによるCPU確認：`python -m unittest discover -s tests -p 'test_video_coverage.py' -v` **15 PASS / 1.496s**、`PYTHONPATH=app:tests python -m unittest test_video_direct_index test_video_direct_search test_video_window_source -v` **23 PASS / 4.381s**。総尺不足拒否、取消/原本変更/挿入途中失敗時の旧索引維持、scope・時刻・検索spoolを確認。以前の95/111件と合算しない。Windows/.NET SDK/実モデルはこの環境になく、実機確認は未実施。
-- clone認証を利用できず、GitHub connector経由で固定HEADの必要ファイル120件を取得し全blob SHAを照合した部分snapshotで確認。完全checkoutのgit status/fetchではなく、他端末の未push/未コミット差分は確認できない。ローカルの欠落ファイルを削除差分と扱わない。再開時はremote/PR HEADを再照合する。
-- 次の実装は引き続き**直接動画索引のproduction配線（明示job・モデル所有統合）**。現行image/audioの排他を維持し、第三workerの同時常駐を単純に許可しない。通常代表frame検索を保持。実機限定の確認は手順を残して別の独立タスクへ進む。
+- 起点 `1a7721d7e531fa99f8e0304a43e897aeba9b4636`。既存開発branch / Draft PR #5を継続。ユーザー指示でTerra xhighへ動画job/featureを分担し、親がコード・所有管理・HTTP接続と回復互換をレビュー/修正。最新commitは本書のGit履歴を参照。アプリの実機配布版/Alphaは未更新。
+- **直接動画のbackend production入口を接続**：`VideoDirectJobs` / `VideoDirectFeature`、認証付き `/api/library/video-ai/{status,start,cancel,release,search}`、`video-direct` result sessionと専用index stamp、終了回収/idle policy。明示consent・root/棚/favorite scope・件数上限・再開時fresh skipを維持。画像/音声/動画は明示roleで最大3登録、常駐モデルは排他handoffで1つ。前owner解放失敗では次を起動しない。通常の代表frame検索を維持。
+- **レビュー修正4点**：動画sidecarの厳密schemaをbackup/restoreへ追加（audio/videoの完全pairのみ、部分/混在/版不整合は拒否）、解除rootの動画vector/marker削除、取消vs最終commitの共有gate、lazy初期化のcatalog guard/writer fence待ちをcloseで中断。最終itemのcommitが先ならcancelは不受理、途中batchの成功済みitemは保持し次回skip。長いdecode/staging/copyは取消gateで塞がない。
+- **CPU確認**：親の所有管理/動画HTTP/既存音声HTTP **19 PASS / 5.787s**、レビュー修正後の動画job/feature/HTTP/recovery/index **37 PASS / 8.780s**。Terraの最終job/feature/index/search/HTTPは **41 PASS / 9.335s**。以前の試験と重複があり合算しない。backup関連初回31件中1 import ERRORは部分snapshotのfixture不足（残り30 PASS）、既存backup29件は27 PASS＋不足CLI/profileの2失敗→取得後その2件のみ **2 PASS / 0.709s**。製品失敗と混同しない。原本変更試験の意図した例外logは保持。詳細/手順は [動画正本](video-similarity.md)末尾。
+- **未検証/未実装**：実encoder/GPU/Windows/.NET build/native GUI・長動画性能。この環境は固定SHAの部分snapshotであり完全checkoutのgit statusではなく、他端末の未push差分は未確認。外部依存/モデル取得0、通常DB/設定/Alpha変更0、Actions/新branch/PR/main merge0、shutdownなし。
+- **次の1件**：保存済み直接動画の類似検索（自己除外・起点/候補両区間・scope・再推論なし）を音声側と同型で実装。その後、WinUI/Coreの明示動画準備・検索方式と結果時刻/再生接続。実機確認は手順を残し、Windows待ちで独立CPU作業を止めない。音声側の同型取消/初期化境界は今回変更していないため、別途必要範囲で評価する。
+- **クォータ**：公開された利用可能toolに残量取得機能がなく、残％を実測できない。残量を推定して報告しない。今回の機能単位で関連確認/保存を済ませて終了。今後も小単位でcheckpointを確保する。
 
 ## 継続開発checkpoint（2026-10-27、以下の過去記録より優先）
 

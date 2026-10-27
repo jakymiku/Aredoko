@@ -85,3 +85,20 @@ Python9件（開発/基本Python）・既存audio worker14・既存profile関連
 `video_window_decode.read_video_window`は検証済みseek可能handleから1既知区間だけをFFmpegで読み、RGB384正方・SAR/比率維持letterbox・1fps・最大16frameへ変換する。pipe/fd＋限定demuxer、20秒、出力上限、所有子回収を既存_runで保持。端数末尾は既知のtotal_duration_msでのみ最終frameを保持してsamplingし、短いdecodeから全体EOFを推測しない。初回はoutput側`-t`が3.3秒の末尾frameを落とすことを最小CPU診断で特定。input側の時間上限＋frame数上限へ修正し、赤→青の生成動画で後区間の実画素と3.3秒tailを確認。失敗log01/02も保持。
 
 `PreviewReader.video_input_window`へ内部接続し、既存の原本版・size/mtime/open handle・祖先link・登録/除外の前後検査、取消、slot解放を適用。HTTPにraw clip routeを追加せず、通常索引・DBは更新しない。known durationは将来のproducerが同じ検証済みsourceのprobe結果から与える必要がある。decoder6（開発/基本Python）、source5（両Python）、既存preview22/audio source18 PASS。通常の動画検索は従来方式のまま。次はduration/coverage planと全区間成功後のatomic保存、所有model統合である。
+
+
+## 2026-10-27：直接動画production job/API・レビュー修正
+
+`VideoDirectFeature`は固定された画像profileから別のtext/video profileを派生し、statusだけではsidecar/workerを起動しない。明示consentで`VideoDirectJobs`を開始し、登録videoだけを共通scopeで選び、最大1000件のbatchを処理する。再開は完了済みrevisionをskip。`video-direct` result sessionは動画indexの変更だけで失効し、通常literal sessionに波及しない。既存代表frame検索とは別経路である。
+
+所有groupのroleはimage/audio/videoに限定し、互いのresident workerを解放・非resident確認してから推論権を渡す。未知role/重複role/常駐済み新登録を拒否し、第三workerの同時常駐を許可しない。backend終了・idle policyへ動画ownerを接続した。
+
+親レビューとTerraによる再点検で次を修正した：
+- 動画v1 sidecarをbackup whitelistへ追加。v1は音声pairか動画pairの一方だけ、v0で直接媒体table・片側だけ・両pair混在は拒否。生成動画のlive capture→restoreで全marker/window一致、legacy namespace併存を確認。
+- 登録解除rootのpurgeで動画source/windowの両tableも削除し、生成原本bytesを保持。
+- 所有jobの取消と最終check/commit/progressを共有gateで直列化。取消が先なら旧公開を保持、最終item commitが先なら取消は不受理。途中まで成功したbatchはそのitemを保持し、再開でskip。gateは長いdecode/stage/copy中には保持しない。
+- 初期化にfeature close eventを渡し、catalog guard/fence待ちを中断。closeが無関係なcatalog操作を永久に待たない。
+
+検証：親の所有管理/動画HTTP/既存音声HTTP19 PASS、最終動画job/feature/HTTP/recovery/index37 PASS。Terraのjob/feature/index/search/HTTP41 PASSは一部重複する別run。backup関連30 PASS＋fixture不足1 import ERROR、既存backup27 PASS＋不足ファイル2失敗→正しい固定SHAのfixture/CLI/profile補完後、失敗した2件のみPASS。初回エラーはcheckout不足であり製品不具合ではない。原本変更試験は意図したReaderChangedをlogする。モデル・GPU・GUIは使っていない。
+
+Windows再開手順：生成した短いMP4を独立catalogへ登録し、通常所有backendでstatusがlazyであることを確認→認証付きvideo-ai/startへconsentとroot条件→status完了→video-ai/searchとvideo-direct sessionで区間根拠を確認→cancel/resume/release・画像/音声へ切替時の単一resident・所有終了を確認する。既存モデルのみ使用、通常DB/Alphaを変更しない。未導入モデルを自動取得しない。実encoder品質、長動画/1時間225 decoder起動の性能、WinUI入口と動画起点直接類似は未受入/未実装である。

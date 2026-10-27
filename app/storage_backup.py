@@ -73,9 +73,11 @@ def _database(path,role):
             expected={**expected,'registered_root_preferences':[col for col in expected['registered_root_preferences'] if col[0]!='startup_scan']}
         if not REQUIRED[role]<=tables or tables-set(expected):raise RecoveryError('Unsupported database tables')
         if role=='vectors':
-            direct={'ai_audio_direct_sources','ai_audio_direct_windows'}
-            if (version==1 and not direct<=tables) or (version==0 and direct&tables):
-                raise RecoveryError('Inconsistent direct-audio database version')
+            audio={'ai_audio_direct_sources','ai_audio_direct_windows'}
+            video={'ai_video_direct_sources','ai_video_direct_windows'}
+            present=tables & (audio | video)
+            if (version==1 and present not in (audio,video)) or (version==0 and present):
+                raise RecoveryError('Inconsistent direct-media database version')
         shelf_tables={'shelves','item_shelves','root_shelves'}
         if role=='catalog' and ((version in (1,2,3) and not shelf_tables<=tables) or (version==0 and shelf_tables&tables)):
             raise RecoveryError('Inconsistent shelf database version')

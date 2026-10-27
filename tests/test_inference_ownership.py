@@ -66,4 +66,26 @@ class OwnershipTests(unittest.TestCase):
             self.assertEqual(len(errors),1);self.assertTrue(self.left.locked())
 
 
+
+class VideoOwnershipTests(unittest.TestCase):
+    def test_explicit_video_handover_keeps_one_resident(self):
+        group=InferenceOwnership();encoders=[Encoder() for _ in range(3)]
+        owners=[group.for_encoder(e,role=r) for e,r in zip(encoders,('image','audio','video'))]
+        for i in (0,1,2,0,2,1):
+            with owners[i]:
+                self.assertFalse(any(e.resident for j,e in enumerate(encoders) if j!=i))
+                encoders[i].resident=True
+            self.assertEqual(sum(e.resident for e in encoders),1)
+        with self.assertRaises(ValueError):group.for_encoder(Encoder(),role='video')
+        with self.assertRaises(ValueError):group.for_encoder(encoders[0],role='video')
+    def test_failed_peer_release_blocks_video(self):
+        group=InferenceOwnership();image=Encoder();video=Encoder()
+        group.for_encoder(image);owner=group.for_encoder(video,role='video')
+        image.resident=True;image.release=lambda:None
+        with self.assertRaises(RuntimeError):owner.acquire()
+        self.assertFalse(owner.locked());self.assertFalse(video.resident)
+    def test_resident_registration_cannot_bypass_handover(self):
+        encoder=Encoder();encoder.resident=True
+        with self.assertRaises(ValueError):InferenceOwnership().for_encoder(encoder,role='video')
+
 if __name__=='__main__':unittest.main()

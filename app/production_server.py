@@ -53,6 +53,8 @@ from image_animations import AnimationUnavailable
 from result_sessions import ResultSessions, ResultUnavailable, ResultCapacity, IndexStamp
 from audio_direct_feature import AudioDirectFeature
 from audio_direct_search import AudioSearchChanged
+from video_direct_feature import VideoDirectFeature
+from video_direct_search import VideoSearchChanged
 from thumbnail_cache import ThumbnailCache, ThumbnailCancelled
 from contextlib import ExitStack
 import sys
@@ -118,9 +120,10 @@ def create_intent(enabled=False,question_set='v2-hybrid',check_order=True,*,ai_p
         return SearchIntent(LayaProcess(worker_python(repo,ai_python),laya_model_path(repo,models_root=models_root),question_set=question_set,check_order=check_order)) if enabled else SearchIntent()
     except (ValueError,OSError):return SearchIntent()
 
-def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),active_tagger_profile=None,restore_handoff=None,acquisition_specs=(),thumbnail_disk_path=None,audio_feature=None):
+def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=None,text_extractor=None,*,instance_id=None,runtime_preferences=None,tagger_profile_paths=(),active_tagger_profile=None,restore_handoff=None,acquisition_specs=(),thumbnail_disk_path=None,audio_feature=None,video_feature=None):
     ai=ai or create_ai(catalog)
     audio=audio_feature if audio_feature is not None else AudioDirectFeature(catalog,ai)
+    video=video_feature if video_feature is not None else VideoDirectFeature(catalog,ai)
     intent=intent or SearchIntent()
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
     profiles.writer_fence=catalog.writer_fence
@@ -172,6 +175,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         if mode=='similar':
             require(('item_id','kind','view','scope'))
             return ai.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
+        if mode=='video-direct':
+            require(('query','view','root_ids','shelf','shelf_ids'))
+            return video.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='audio-direct':
             require(('query','view','root_ids','shelf','shelf_ids'))
             return audio.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
@@ -186,6 +192,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         raise ValueError('Invalid result search mode')
     image_stamp=IndexStamp(ai) if isinstance(ai,AISearch) else None
     def result_stamp(conditions):
+        if conditions.get('mode')=='video-direct':return video.stamp()
         return audio.stamp() if conditions.get('mode') in ('audio-direct','audio-similar') else image_stamp() if image_stamp is not None else None
     results=ResultSessions(catalog,result_provider,index_stamp=image_stamp,index_stamp_for=result_stamp)
     resource_updates=threading.Lock()
@@ -563,6 +570,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(200,download_jobs.catalogs() if path.endswith('/catalog') else download_jobs.snapshot())
                 if path=='/api/library/ai/setup/job':return self.send(200,setup_jobs.snapshot())
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
+                if path=='/api/library/video-ai/status':
+                    if urlparse(self.path).query:return self.send(400,{'error':'Invalid video status query'})
+                    return self.send(200,video.status())
                 if path=='/api/library/audio-ai/status':
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid audio status query'})
                     return self.send(200,audio.status())
@@ -616,10 +626,18 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/','/api/library/audio-ai/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/','/api/library/audio-ai/','/api/library/video-ai/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
                 raw=self.rfile.read(length);self.request_body_consumed=len(raw)==length
                 body=json.loads(raw,**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
+                if self.path.startswith('/api/library/video-ai/'):
+                    if self.path=='/api/library/video-ai/start':return self.send(200,video.start(body))
+                    if self.path in ('/api/library/video-ai/cancel','/api/library/video-ai/release'):
+                        if body:raise ValueError('Expected empty video request')
+                        return self.send(200,video.cancel() if self.path.endswith('/cancel') else video.release())
+                    if self.path=='/api/library/video-ai/search':
+                        if set(body)-{'query','page','limit','view','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid video search fields')
+                        return self.send(200,video.search(**body))
                 if self.path.startswith('/api/library/audio-ai/'):
                     if self.path=='/api/library/audio-ai/start':return self.send(200,audio.start(body))
                     if self.path in ('/api/library/audio-ai/cancel','/api/library/audio-ai/release'):
@@ -878,6 +896,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                             return self.send(409,{'error':'AIリソース設定を保存できません。設定ファイルを確認してください。動作中の設定は保持されます。'})
                         if isinstance(ai,AISearch): ai.configure(**policy)
                         audio.configure(idle_release_seconds=policy['idle_release_seconds'])
+                        video.configure(idle_release_seconds=policy['idle_release_seconds'])
                     return self.send(200,{'saved':True,'policy':policy})
                 if self.path=='/api/library/ai/searches/prepare':
                     if body:raise ValueError('Expected empty preparation request')
@@ -970,6 +989,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if catalog._scan_mode == 'list_and_ai' and catalog._scan_stage == 'ai':res['ai_cancel_requested']=True
                     return self.send(200, res)
                 return self.send(404,{'error':'Not found'})
+            except VideoSearchChanged:return self.send(409,{'error':'動画の検索対象が変わりました。もう一度検索してください。','error_code':'video_scope_changed'})
             except AudioSearchChanged:return self.send(409,{'error':'音声の検索対象が変わりました。もう一度検索してください。','error_code':'audio_scope_changed'})
             except SearchCancelled:return self.send(409,{'error':'検索を中断しました。','error_code':'search_cancelled'})
             except SearchRequestConflict:return self.send(409,{'error':'検索の受付が無効か終了しています。再検索してください。','error_code':'search_request_unavailable'})
@@ -980,6 +1000,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})
     Handler.thumbnails=thumbnails
     Handler.audio_content=audio
+    Handler.video_content=video
     Handler.results=results
     Handler.animations=animations
     Handler.backup_jobs=backup_jobs
@@ -1071,6 +1092,7 @@ def _serve(args):
             acquisition_specs=()
         handler=production_handler(catalog,secrets.token_urlsafe(32),ai,intent,profiles,tagger,instance_id=args.instance_id,runtime_preferences=preferences,tagger_profile_paths=(args.tagger_profile,) if args.tagger_profile else (),restore_handoff=handoff,acquisition_specs=acquisition_specs,thumbnail_disk_path=catalog.path.parent/(catalog.path.name+'.thumbs.sqlite'))
         resources.callback(handler.audio_content.close)
+        resources.callback(handler.video_content.close)
         resources.callback(close_job,handler.startup_scans)
         resources.callback(close_job,handler.setup_jobs)
         resources.callback(close_job,handler.download_jobs)
