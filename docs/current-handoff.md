@@ -1,13 +1,13 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-27）
 
-## 継続開発checkpoint（2026-10-27、音声類似の破損索引対策）
+## 継続開発checkpoint（2026-10-27、音声類似の比較量上限）
 
-- 起点 `2ea69c297e63e629c3fe96124fa0843aa6a78575`、既存開発branch / Draft PR #5を継続。ユーザーの追加指示で、途中停止しやすい小単位として音声類似の破損データ対策を実施。今回もサブエージェントなし。最後の残量報告19％以降の現在残％は取得不可。最新commitは本書のGit履歴。
-- **確定不具合を修正**：AudioDirectSimilarityのmarker件数/frame数やwindow時刻が文字列/小数だと比較でTypeErrorとなる、decodedと総frame数が矛盾しても候補になる、短く壊れた区間を受理する条件を確認。厳密int検証、decoded=ceil(total_frames/30秒frame数)、各vector区間の正確なendを検証し、破損itemは索引なしとして除外。DBを自動修復/上書きしない。
-- **確認**：旧codeの破損回帰2methodで型例外・不正一致を再現（subtest 8 FAIL/10 ERROR、2.757s）。修正後の音声類似/認証HTTP **19 PASS /7.565s**、py_compile成功。起点と候補の両側、文字列/小数件数、時間矛盾、不正vector長/ゼロnorm/NaN、無音でordinalが飛ぶ正常索引を確認。生成WAV/疑似vectorのみ、実model/GUI/GPUなし。重複runとsubtestを合算しない。[音声正本](audio-producer-review.md)末尾。
-- **前段保全**：`2ea69c2`の旧候補buffer解放/原本変更409、`695fc87`の音声取消commit/初期化close、`d323db0`の動画Core/WinUI sourceを保持。動画UIのCore/C# compile/WinUI・Portable build/nativeはSDK/Windows不在で未実行。新規ビルド合格とはしない。
-- **次の1件**：Windows/.NET担当は [動画正本](video-similarity.md)末尾のCore `--video-content` →既存Core/Portable build→生成2動画の限定native確認へ。Windowsなしの独立CPU候補は長音声pair比較コストと明示的な作業量上限の必要性評価（未着手）。今回の型/時刻修正や成功試験を無変更で繰り返さない。
-- **未完/保全**：実動画/録音/音楽の品質、長動画比較/decoder性能、媒体横断、配布NOTICE/host/clean Windows等は未完。通常DB/設定/Alpha/ZIP/shortcut変更0、モデル/依存download0、Actions/新branch/PR/main merge0、shutdownなし。固定SHA部分snapshotで、他端末未push差分は未確認。
+- 起点 `5f0c30c48edd76fb8289083f2fcb83f819cc96ff`、既存開発branch / Draft PR #5を継続。小単位の追加作業、サブエージェントなし。最新commitは本書のGit履歴。最後の残量報告19％以降の現在残％は取得不可。
+- **今回の利用者向け変化**：直接音声類似の全window pair比較を1検索あたり累計100,000組に制限（動画側と同じ）。超過時はフォルダー/棚を絞る日本語案内で503、途中順位を返さずspoolを回収。上限内は既存の厳密最大cosine・両時刻・scope・無音skip・cached比較を保持。1時間同士は候補1件14,400組、6件86,400組、7件100,800組。単一候補でも上限を超える長音声は依然比較不可で、性能改善完了とはしない。
+- **確認**：旧codeで追加境界/cumulative/HTTP回帰3件がFAIL（0.999s）。修正後の音声類似/認証HTTP **23 PASS /8.519s**、py_compile成功。境界一致成功・超過拒否・候補を跨ぐ累計・scope/未索引除外・途中結果非公開・一時file回収を確認。生成WAV/疑似vectorのみ。[音声正本](audio-producer-review.md)末尾に単純演算計測と制約。
+- **前段保全**：`5f0c30c`の破損marker/window検証、`2ea69c2`のbuffer/原本変更409、`695fc87`の音声取消/close、`d323db0`の動画Core/WinUI sourceを保持。動画Core/C# compile/WinUI・Portable build/nativeはSDK/Windows不在で未実行。
+- **次の1件**：Windows/.NET担当は [動画正本](video-similarity.md)末尾のCore `--video-content` →既存Core/Portable build→生成2動画の限定native確認へ。Windowsなしでは、長音声/動画の厳密比較を上限内で高速化する独立CPU作業を検討（実装未着手）。今回の成功試験を無変更で繰り返さない。
+- **未完/保全**：実動画/録音/音楽の品質、長媒体比較/decoder性能、媒体横断、配布NOTICE/host/clean Windows等は未完。通常DB/設定/Alpha/ZIP/shortcut変更0、モデル/依存download0、Actions/新branch/PR/main merge0、shutdownなし。固定SHA部分snapshotで、他端末未push差分は未確認。
 
 ## 継続開発checkpoint（2026-10-27、以下の過去記録より優先）
 

@@ -2,6 +2,8 @@
 
 No encoder or PCM input is needed. At most two bounded item frame sets and
 one 120-item metadata page are retained; ranked results use the shared spool.
+Exact max-pair scoring costs O(origin windows × candidate windows × dimension).
+A request exceeding 100,000 pairs fails without publishing a partial ranking.
 """
 from array import array
 import math
@@ -15,6 +17,8 @@ from audio_input import MAX_START_MS,SAMPLE_RATE,MAX_WINDOW_MS
 from previews import PreviewUnavailable
 
 MAX_FRAME_BYTES=32*1024*1024
+# Bound total exact pair comparisons across all candidates in one request.
+MAX_PAIRS=100_000
 WINDOW_FRAMES=SAMPLE_RATE*MAX_WINDOW_MS//1000
 
 
@@ -87,9 +91,9 @@ class AudioDirectSimilarity:
             base={'mode':'audio-similar','origin_id':item_id,'origin_kind':'audio','origin_revision':origin_revision,
                   'source':'audio-direct','profile':index.profile.key,'score_kind':'cosine',
                   'similarity_status':'ready' if origin_frames else 'unindexed'}
-            candidate_total=indexed_total=0
+            candidate_total=indexed_total=pair_total=0
             def consume(fetch):
-                nonlocal candidate_total,indexed_total
+                nonlocal candidate_total,indexed_total,pair_total
                 number=0
                 while True:
                     check();batch=fetch(number)
@@ -101,6 +105,9 @@ class AudioDirectSimilarity:
                         revision,frames=self._frames(row,monitor,check) if origin_frames else (None,[])
                         if not frames:continue
                         indexed_total+=1;best=None
+                        pair_total+=len(frames)*len(origin_frames)
+                        if pair_total>MAX_PAIRS:
+                            raise AIUnavailable('音声の比較範囲が上限を超えました。対象フォルダーや棚を絞って再実行してください。')
                         for at,end,vector in frames:
                             for origin_at,origin_end,query in origin_frames:
                                 check();score=sum(a*b for a,b in zip(query,vector))

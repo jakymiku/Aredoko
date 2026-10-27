@@ -150,3 +150,14 @@ renderで起点/候補のaudio_manifestがReaderChanged等のPreviewUnavailable�
 旧codeに対して回帰2method（起点/候補両方への破損注入）で8 FAIL/10 ERROR、2.757sを確認。修正後の類似＋認証HTTP19 PASS/7.565s、py_compile成功。件数/frame数の文字列/小数・frame数とdecodedの矛盾、ordinal/時刻の不正型・短すぎるend・過大end、vector長/ゼロnorm/NaNを確認し、正常な先頭無音skip→後続window一致も別回帰で確認。生成WAV/疑似vectorのみであり、実音声の精度評価ではない。原本/通常DB/既存配布を変更せず、サブエージェントなし。
 
 次のCPU候補は長音声の全window pair比較コストと作業量上限の必要性。今回の対策は破損marker/window行の局所検証であり、SQLiteファイル自体の破損や全検索経路の回復を保証するものではない。
+
+
+## 2026-10-27：音声cached類似の全pair比較に上限
+
+音声類似は従来、item別32MiBのvector上限だけで候補間の比較総数を制限していなかった。30秒windowでは1時間120区間、24時間2,880区間となり、24時間同士は候補1件で8,294,400組（768Dで約63.7億乗算）。生成768D float64 arrayの内積＋SQLite PRAGMA data_versionだけをこの環境で単回計測すると1,000組0.046s、10,000組0.411s、100,000組4.080s。catalog/原本検証・全製品処理やWindows性能は含まず、応答時間の保証や厳密な性能評価ではない。無制限のまま全候補を比較する負荷を避けるため、動画既存方式と同じ累計100,000 pair/requestの明示上限を追加した。
+
+有効な起点/候補vectorを検証後に組数を加算し、超過候補のpair loopへ入る前にAIUnavailableを返す。途中でspoolへ保存済み候補があってもfinalize/render/result_sinkへ公開せず、context退出で回収。通常の認証APIは503/ai_unavailableとフォルダーや棚を絞る案内を返す。候補favorite/root/棚/除外・未索引・先頭無音skipの扱いは保持し、推論/decodeや索引DB更新を行わない。
+
+1時間の起点と1時間の候補は各14,400組、6候補86,400組まで通り、7候補100,800組で全検索を拒否する。短い音楽なら5分同士10×10=100組、1,000候補で上限一致。無音skipで有効vectorが減れば実際の組数も減る。単一候補で上限超過の場合はscopeを絞っても解消せず、より短い起点等が必要。capは壁時計の硬い期限ではなく、長音声の速度改善や一般品質受入の完了ではない。
+
+旧codeで追加境界/cumulative/HTTP3回帰がFAIL（0.999s）。修正後 `PYTHONPATH=app:tests:tools python -m unittest test_audio_direct_similarity test_audio_direct_http -q` は23 PASS/8.519s、py_compile成功。上限一致で厳密一致結果、1組以上超過の拒否、複数候補累計、scopeで除外された候補/未索引を非計上、result_sink未呼出・spool回収、認証HTTPの案内とitems非返却を検証。生成WAV/疑似vector/独立DBのみ。実model/GUI/GPU/Windows/.NETは実行せず、サブエージェントなし。

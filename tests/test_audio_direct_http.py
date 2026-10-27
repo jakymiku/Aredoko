@@ -119,6 +119,7 @@ class AudioHTTPTests(unittest.TestCase):
         self.assertEqual(result['items'][0]['origin_match_ms'],0)
         self.assertNotEqual(result['items'][0]['id'],origin)
         self.assertEqual(self.feature.encoder.calls,before)
+
         self.assertEqual(self.request('/api/library/audio-ai/similar',{'item_id':origin},authorized=False)[0],403)
         self.assertEqual(self.request('/api/library/audio-ai/similar',{'item_id':origin,'kind':'video'})[0],400)
         code,_=self.request('/api/library/results/create',{'session_id':'c'*32,'conditions':{'mode':'audio-similar','item_id':origin}})
@@ -126,6 +127,14 @@ class AudioHTTPTests(unittest.TestCase):
         code,result=self.request('/api/library/results/range',{'session_id':'c'*32,'offset':0,'limit':1})
         self.assertEqual(code,200);self.assertEqual(result['mode'],'audio-similar')
         self.assertEqual(self.feature.encoder.calls,before)
+
+    def test_similarity_pair_overflow_returns_actionable_error_without_results(self):
+        (self.media/'second.wav').write_bytes(self.path.read_bytes())
+        self.catalog.index.scan(self.root);self.catalog.sync_index();self.prepare()
+        with patch('audio_direct_similarity.MAX_PAIRS',3):
+            code,result=self.request('/api/library/audio-ai/similar',{'item_id':self.item})
+        self.assertEqual(code,503);self.assertEqual(result['error_code'],'ai_unavailable')
+        self.assertIn('フォルダーや棚',result['error']);self.assertNotIn('items',result)
 
 
 if __name__=='__main__':unittest.main()

@@ -13,6 +13,7 @@ import test_audio_direct_search as search_fixture
 from audio_direct_similarity import AudioDirectSimilarity
 from audio_direct_search import AudioSearchChanged
 from ai_score_spool import SearchCancelled
+from ai_process import AIUnavailable
 from result_sessions import ResultSessions,IndexStamp,ResultUnavailable
 
 
@@ -160,6 +161,35 @@ class DirectSimilarityTests(unittest.TestCase):
         self.assertEqual(result['total'],1)
         self.assertEqual(result['items'][0]['origin_match_ms'],30000)
         self.assertEqual(result['items'][0]['id'],second)
+
+    def test_pair_limit_accepts_exact_boundary_and_rejects_overflow(self):
+        self.seed();second,_=self.add_item();search=AudioDirectSimilarity(self.index)
+        with patch('audio_direct_similarity.MAX_PAIRS',4,create=True):
+            result=search.similar(self.item)
+        self.assertEqual([row['id'] for row in result['items']],[second])
+        with patch('audio_direct_similarity.MAX_PAIRS',3,create=True):
+            with self.assertRaisesRegex(AIUnavailable,'フォルダーや棚'):
+                search.similar(self.item)
+        self.assertEqual(list(self.stage.iterdir()),[])
+
+    def test_pair_limit_accumulates_candidates_without_publishing_partial_results(self):
+        self.seed();self.add_item();self.add_item('third.wav');published=[]
+        with patch('audio_direct_similarity.MAX_PAIRS',7,create=True):
+            with self.assertRaises(AIUnavailable):
+                AudioDirectSimilarity(self.index).similar(self.item,result_sink=published.append)
+        self.assertEqual(published,[])
+        self.assertEqual(list(self.stage.iterdir()),[])
+
+    def test_pair_limit_counts_only_indexed_candidates_in_scope(self):
+        self.seed();second,_=self.add_item();third,_=self.add_item('third.wav')
+        self.catalog.update([second],{'favorite':True});search=AudioDirectSimilarity(self.index)
+        with patch('audio_direct_similarity.MAX_PAIRS',4,create=True):
+            self.assertEqual(search.similar(self.item,view='favorites')['total'],1)
+            with self.index.store.connect() as db:
+                db.execute('DELETE FROM ai_audio_direct_sources WHERE item_id=?',(third,))
+            result=search.similar(self.item)
+            self.assertEqual((result['total'],result['candidate_total'],result['indexed_total']),(1,2,1))
+
 
 
 if __name__=='__main__':unittest.main()
