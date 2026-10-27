@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import threading
 import unittest
+import weakref
 from unittest.mock import patch
 
 sys.path[:0]=[str(Path(__file__).resolve().parents[1]/'app'),str(Path(__file__).resolve().parent)]
@@ -66,7 +67,7 @@ class DirectSimilarityTests(unittest.TestCase):
         self.seed();self.add_item();search=AudioDirectSimilarity(self.index)
         def changed(read):
             read(0);self.path.write_bytes(b'changed generated origin');return read(0)
-        with self.assertRaises((AudioSearchChanged,fixture.ReaderChanged)):search.similar(self.item,result_sink=changed)
+        with self.assertRaises(AudioSearchChanged):search.similar(self.item,result_sink=changed)
         self.assertEqual(list(self.stage.iterdir()),[])
 
     def test_index_write_during_range_discards_the_old_results(self):
@@ -92,6 +93,28 @@ class DirectSimilarityTests(unittest.TestCase):
             self.path.write_bytes(b'changed generated origin')
             with self.assertRaises(ResultUnavailable):sessions.read('a'*32,0,1)
         finally:sessions.close()
+
+    def test_previous_candidate_vectors_are_released_before_next_load(self):
+        self.seed();self.add_item();third,_=self.add_item('third.wav')
+        search=AudioDirectSimilarity(self.index);original=search._frames;previous=[];checked=[]
+        def tracking(row,db,check):
+            if row['id']!=self.item and previous:
+                checked.append(row['id'])
+                self.assertTrue(all(ref() is None for ref in previous))
+            revision,frames=original(row,db,check)
+            if row['id']!=self.item:previous[:]=[weakref.ref(frame[2]) for frame in frames]
+            return revision,frames
+        with patch.object(search,'_frames',side_effect=tracking):
+            self.assertEqual(search.similar(self.item)['total'],2)
+        self.assertEqual(checked,[third])
+
+    def test_candidate_change_during_range_reports_refresh_conflict(self):
+        self.seed();self.add_item()
+        def changed(read):
+            read(0);(self.media/'second.wav').write_bytes(b'changed generated candidate');return read(0)
+        with self.assertRaises(AudioSearchChanged):
+            AudioDirectSimilarity(self.index).similar(self.item,result_sink=changed)
+        self.assertEqual(list(self.stage.iterdir()),[])
 
 
 if __name__=='__main__':unittest.main()

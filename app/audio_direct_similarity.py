@@ -91,6 +91,8 @@ class AudioDirectSimilarity:
                     for row in batch['items']:
                         if row['id']==item_id:continue
                         candidate_total+=1
+                        # Release the previous candidate before allocating the next.
+                        frames=None;vector=None
                         revision,frames=self._frames(row,monitor,check) if origin_frames else (None,[])
                         if not frames:continue
                         indexed_total+=1;best=None
@@ -105,15 +107,18 @@ class AudioDirectSimilarity:
                     if (number+1)*batch['limit']>=batch['total']:break
                     number+=1
                 check();spool.finalize('max')
+                def check_revision(item,expected):
+                    try:current=index.reader.audio_manifest(item)['revision']
+                    except PreviewUnavailable:
+                        raise AudioSearchChanged('Audio source unavailable; refresh results') from None
+                    if current!=expected:raise AudioSearchChanged('Audio source changed; refresh results')
                 def render(number):
                     check()
-                    if index.reader.audio_manifest(item_id)['revision']!=origin_revision:
-                        raise AudioSearchChanged('Audio origin changed')
+                    check_revision(item_id,origin_revision)
                     selected=spool.page(number,limit);payloads=spool.evidence([key for key,_ in selected['ranked']]);items=[]
                     for key,score in selected['ranked']:
                         payload=payloads[key]
-                        if index.reader.audio_manifest(key)['revision']!=payload['revision']:
-                            raise AudioSearchChanged('Matched audio changed')
+                        check_revision(key,payload['revision'])
                         items.append({**payload['item'],'semantic_score':round(score,6),'similarity_origin_id':item_id,
                             'audio_match_source':'direct-audio','audio_match_contract':CONTRACT,
                             **{name:payload[name] for name in ('audio_match_ms','audio_match_end_ms','origin_match_ms','origin_match_end_ms')}})

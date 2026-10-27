@@ -132,3 +132,12 @@ Feature.closeはinit_lock取得前にclose eventをsetし、Index初期化のcat
 Terra担当のjobs/feature/index/HTTP/similarity/search52 PASS/11.377s、追加admission回帰後のfeature3 PASS/0.350s。親はdiffを独立reviewし、jobs/feature/index/HTTP36 PASS/9.027sとpy_compileを確認。重複runは合算しない。決定的gate回帰はplanning時の先行gateを除外し、copy後commit前に取消を入れる。最終commit後拒否・途中commit後取消/再開・無音成功再利用・catalog/fence待ちcloseを確認。通常DB/実録音/実model/GPU/GUI/外部取得は使っていない。
 
 Windows実workerとnative音声準備画面の最終連動は未確認。次回は通常の開発手順で生成fixture/独立設定に限定し、成功済み全flowを無条件に反復しない。
+
+
+## 2026-10-27：音声cached類似の候補buffer解放と原本変更分類
+
+残量19％の指示でサブエージェントを使わず、AudioDirectSimilarityの局所修正のみ実施。旧実装は新候補の_framesを評価する間に前候補framesと最後のvectorを保持し、起点＋前候補＋新候補の3セットが一時的に生存した。候補を読み込む前に前参照を解除し、weakrefで次読込時の解放を検証した。
+
+renderで起点/候補のaudio_manifestがReaderChanged等のPreviewUnavailableを投げると、音声側はAudioSearchChangedの409ではなく一般ValueErrorの400へ落ちた。check_revisionでPreviewUnavailableとrevision不一致をAudioSearchChangedへ変換し、原本更新/利用不可を再検索の競合として扱う。検索scope・候補favorite・自己除外・無音skip・順位と時間根拠を変更せず、推論/decode/保存変更なし。
+
+旧codeでweakref1 FAIL、起点/候補変更2 ERROR（3件/0.623s）を再現。修正後の類似＋認証HTTP16 PASS/5.959s、py_compile成功。生成WAV/疑似vectorのみ、通常DB/実model/GUI/GPUは使っていない。破損markerの型/時間整合、長音声の全pair比較性能は今回の範囲外で未点検。
