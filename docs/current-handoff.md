@@ -1,5 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-27）
 
+## モデル切替前の停止点（2026-10-27、一次点検のみ）
+
+- ユーザーの指示で、新しい実装に入る前に一時停止。再開指示後に下記の既存「次の1件」を継続する。アプリコード変更なし。
+- 開始時の開発HEADは `d52c471fb456b4bb55006fc563d587e67de1090b`、`muse/video-coverage` HEADは `cdab68dc56dc1dd6f0d1decc4fbcb944d5cc4976`。branch一覧・PR #5（open/Draft）・既存PRを確認。Museの総尺完走照合と公開途中rollback補強は開発側に存在し、重複取り込みは不要。新branch/PR/merge/Actionsなし。
+- 取り込み済み `video_coverage.py` / `video_direct_index.py` / `video_direct_search.py` とPreviewReaderのguardを一次点検。点検・下記試験の範囲で追加の確定不具合は見つかっていないが、全レビュー・実モデル/GUI/GPU受入の完了宣言ではない。
+- Linux/Python 3.12の生成動画・疑似encoderによるCPU確認：`python -m unittest discover -s tests -p 'test_video_coverage.py' -v` **15 PASS / 1.496s**、`PYTHONPATH=app:tests python -m unittest test_video_direct_index test_video_direct_search test_video_window_source -v` **23 PASS / 4.381s**。総尺不足拒否、取消/原本変更/挿入途中失敗時の旧索引維持、scope・時刻・検索spoolを確認。以前の95/111件と合算しない。Windows/.NET SDK/実モデルはこの環境になく、実機確認は未実施。
+- clone認証を利用できず、GitHub connector経由で固定HEADの必要ファイル120件を取得し全blob SHAを照合した部分snapshotで確認。完全checkoutのgit status/fetchではなく、他端末の未push/未コミット差分は確認できない。ローカルの欠落ファイルを削除差分と扱わない。再開時はremote/PR HEADを再照合する。
+- 次の実装は引き続き**直接動画索引のproduction配線（明示job・モデル所有統合）**。現行image/audioの排他を維持し、第三workerの同時常駐を単純に許可しない。通常代表frame検索を保持。実機限定の確認は手順を残して別の独立タスクへ進む。
+
 ## 継続開発checkpoint（2026-10-27、以下の過去記録より優先）
 
 - **アプリsource `bb7e77f`**。起点`6b2448d`、既存`feat/winui3-production-mvp-20261011` / Draft PR #5を継続。最終文書commitは `git log -1 -- docs/current-handoff.md`。リモートbranch/PR head refを照合し、他エージェント差分なし。新branch/PR/main merge/Actionsなし。
