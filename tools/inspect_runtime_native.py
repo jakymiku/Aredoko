@@ -1,8 +1,9 @@
 """Read-only native inventory/RECORD/NOTICE mapping; not redistribution approval.
 
 Reads bounded metadata and PE architecture headers, never loads DLLs or imports
-selected packages. Payload hashes come from the sealed manifest, not a new
-multi-GB verification. PE dependency imports and extra-tree files are not audited.
+selected packages. Optional --imports lists static/delay DLL names. Payload
+hashes come from the sealed manifest, not a new multi-GB verification. Dynamic
+loading, loader resolution, export forwarders and extra-tree files are not audited.
 """
 import argparse,csv,email.parser,hashlib,io,json,os,re,struct
 from pathlib import Path
@@ -50,7 +51,7 @@ def pe_machine(path):
     return {0x8664:'amd64',0x14c:'x86',0xaa64:'arm64'}.get(code,f'0x{code:04x}')
 
 
-def inspect(root,notices):
+def inspect(root,notices,*,imports=False):
     root=plain_path(root,directory=True);raw=_read(root/MARKER,LIMIT)
     manifest=json.loads(raw,object_pairs_hook=object_pairs)
     if manifest.get('format')!=FORMAT or not isinstance(manifest.get('entries'),list) or not 1<=len(manifest['entries'])<=250000:raise ValueError('Explicit sealed runtime inventory required')
@@ -96,6 +97,19 @@ def inspect(root,notices):
             linked.append({'name':name,'version':version,'notice_files':declarations[(re.sub('[-_.]+','-',name).casefold(),version)]})
         rows.append({'path':entry['path'],'bytes':entry['bytes'],'declared_sha256':entry['sha256'],
                      'pe_machine':pe_machine(path),'distribution_record_owners':linked})
+        if imports:
+            from pe_imports import read_imports
+            try:rows[-1]['static_imports']={'state':'inspected',**read_imports(path)}
+            except ValueError as error:rows[-1]['static_imports']={'state':'invalid','error':str(error)}
+    if imports:
+        candidates={}
+        for row in rows:candidates.setdefault(Path(row['path']).name.casefold(),[]).append(row)
+        for row in rows:
+            data=row['static_imports']
+            data['edges']=[{'name':name,'kind':kind,
+                'inventory_candidates':[item['path'] for item in candidates.get(name.casefold(),[])],
+                'same_machine_candidates':[item['path'] for item in candidates.get(name.casefold(),[]) if item['pe_machine']==row['pe_machine']]}
+                for kind in ('imports','delay_imports') for name in data.get(kind,[])]
     if _read(root/MARKER,LIMIT)!=raw:raise ValueError('Runtime manifest changed during audit')
     return {'format':'aredoko-runtime-native-review-v1','runtime_manifest_sha256':hashlib.sha256(raw).hexdigest(),
             'tool_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -103,16 +117,22 @@ def inspect(root,notices):
             'ambiguous_owner_count':sum(len(row['distribution_record_owners'])>1 for row in rows),
             'unknown_pe_count':sum(row['pe_machine'] is None for row in rows),'outside_record_references':outside,
             'distribution_metadata_hashes_verified':True,'payload_hashes_verified':False,'extra_tree_verified':False,'native_dependency_graph_inspected':False,
+            'static_imports_requested':imports,'static_imports_inspected':imports and all(row['static_imports']['state']=='inspected' for row in rows),
+            'static_import_bytes_read':sum(row['static_imports'].get('bytes_read',0) for row in rows) if imports else 0,
+            'unbundled_vc_imports':[{'path':row['path'],'name':edge['name'],'machine':row['pe_machine'],'kind':edge['kind']}
+                for row in rows for edge in row.get('static_imports',{}).get('edges',[]) if not edge['same_machine_candidates'] and re.fullmatch(r'(?:msvcp|vcruntime|concrt)\d+(?:_\w+)?\.dll',edge['name'],re.I)],
+            'dynamic_dependencies_inspected':False,'loader_resolution_verified':False,
             'redistribution_approved':False,'source_executed':False,'entries':rows}
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source',type=Path,required=True);parser.add_argument('--notices',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--imports',action='store_true',help='Read static/delay import names without loading DLLs; basename matches are candidates only')
     args=parser.parse_args();root=plain_path(args.source,directory=True);output=Path(os.path.abspath(args.output))
     if output.is_relative_to(root):parser.error('Audit output must stay outside the immutable runtime')
     storage_parent(output);plain_path(output,missing=True)
-    report=inspect(root,args.notices)
+    report=inspect(root,args.notices,imports=args.imports)
     with output.open('x',encoding='utf-8') as stream:json.dump(report,stream,ensure_ascii=False,indent=2)
     print(json.dumps({k:v for k,v in report.items() if k!='entries'},ensure_ascii=False));return 0
 

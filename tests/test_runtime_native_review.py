@@ -45,6 +45,29 @@ class NativeReviewTests(unittest.TestCase):
         for value in ['../../../outside.dll','C:\\private.dll','//host/file.dll','demo/file:stream.dll']:
             with self.subTest(value=value),self.assertRaises(ValueError):record_key(value)
 
+    def test_static_import_inventory_matches_are_candidates_not_loader_approval(self):
+        from test_pe_imports import image
+        for entry in self.entries:
+            if Path(entry['path']).suffix in ('.exe','.pyd','.dll'):
+                path=self.root/entry['path'];path.write_bytes(image(imports=('native.dll','KERNEL32.dll','MSVCP140_1.dll'),delayed=(),bits=32 if entry['path']=='python.exe' else 64))
+                entry['bytes']=path.stat().st_size;entry['sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
+        self.manifest();notices=self.base/'import-notices';write_bundle(self.root,notices)
+        with patch('subprocess.Popen',side_effect=AssertionError('No native execution')):report=inspect(self.root,notices,imports=True)
+        self.assertTrue(report['static_imports_inspected']);self.assertFalse(report['loader_resolution_verified'])
+        self.assertFalse(report['dynamic_dependencies_inspected']);self.assertFalse(report['redistribution_approved'])
+        edges=report['entries'][0]['static_imports']['edges']
+        self.assertEqual(edges[0]['inventory_candidates'],['Lib/site-packages/demo.libs/native.dll'])
+        self.assertEqual(edges[1]['inventory_candidates'],[])
+        python=next(row for row in report['entries'] if row['path']=='python.exe')
+        self.assertEqual(python['static_imports']['edges'][0]['same_machine_candidates'],[])
+        self.assertEqual(len(report['unbundled_vc_imports']),3)
+        self.assertLess(report['static_import_bytes_read'],32768)
+
+    def test_malformed_imports_are_incomplete_not_a_successful_empty_graph(self):
+        report=inspect(self.root,self.notices,imports=True)
+        self.assertFalse(report['static_imports_inspected'])
+        self.assertTrue(all(row['static_imports']['state']=='invalid' for row in report['entries']))
+
     def test_changed_native_size_is_rejected_before_review_output(self):
         (self.root/'python.exe').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError,'size changed'):inspect(self.root,self.notices)

@@ -1,4 +1,12 @@
-# Aredoko — 現行の単一引き継ぎ（2026-10-27）
+# Aredoko — 現行の単一引き継ぎ（2026-10-28）
+
+## 2026-10-28 継続中（以下の過去記録より優先）
+
+- 起点`d3e4885`、fetch後もremote/PR head ref一致・clean、新たなMuse差分なし。既存branch/PR #5を継続。PRのopen/Draft metadataはconnector Transport closedで未再確認。
+- **`d27a72e` P6-S4ガイド復帰**：用途を保存し、取得/配置/索引設定を閉じるとガイドへ戻り、既存job/planを更新。取得中/中止/検査中/再起動待ちと媒体別索引を区別。Core21/Portable frontend01 PASS。GUIの1試行質問は回答待ちで実行していない。
+- **`62e46d0` P6-S5の安全な復旧案内**：未配置/版相違/欠落/環境・設定不正を区別し、折りたたみの案内→既存診断情報→ガイドを接続。削除/初期化/OS変更なし。Core29＋生成read-only Python7、最終WinUI build PASS（picker既存3）。frontend02は最終Core境界補強前の候補で、最新sourceのnative受入ではない。実導入/機器診断/自動修復の完成とはしない。
+- **P6公開準備の独立CPU作業**：PEの静的/delay DLL依存監査を実装し、生成18件＋基本PythonでPE9 PASS。既存pack325file/2,757edgesの読取956,460bytes、NOTICE/manifest保持。ONNX Runtimeの2fileが必要とする`MSVCP140_1.dll`がpack内にないと判明。既存GPU/WD成功をclean Windows保証に拡張しない。正式な再配布元/条件/追加導入の選択が必要で、勝手にOSからコピー/取得しない。[証拠と残件](runtime-notice-inventory.md)。runtime公開/権利承認は未完。
+- PC使用中。GUI/GPUは具体的な一括範囲への回答後のみ。通常DB/私物/Alpha変更なし、Actions/main merge/shutdownなし。最終の完了内容/次の1件は終了前にこの節を更新する。
 
 ## Sol継続checkpoint（Muse引継ぎ後、以下の過去記録より優先）
 

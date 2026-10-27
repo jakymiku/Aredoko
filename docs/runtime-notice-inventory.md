@@ -73,3 +73,11 @@ python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --su
 生成CPU7 PASS。初回はWindows/Python3.14でpath.statのctime（creation）とfstatのctime（change）が異なることを検知して停止した。各clockをそれぞれ前後比較し、path/handle間はidentity/size/mtimeを照合するよう修正、clock差の許容とhandle内変更拒否を回帰確認した。失敗ログを保持する。
 
 報告は宣言済みinventoryの対応付けであり、全payload SHA・extra-tree全体・PE import/delay-import/dynamic依存グラフ・静的link由来・法的承認の検証ではない。これらの未実施flagと`redistribution_approved=False`を明示する。生証拠は`data/ai-ui/snapshot-review-20261026/`。基本ZIP/installed Alpha/旧runtimeを変更せず、外部取得0。
+
+## 2026-10-28：静的DLL依存を読取監査、MSVC追加要件を発見
+
+`inspect_runtime_native.py --imports`と`pe_imports.py`を追加。[Microsoft PE仕様](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format)に沿ってPE32/PE32+のRVAをsection/raw境界へ照合し、通常importとdelay-import（RVA/旧VA形式）からDLL名だけを読む。1 file 2MiB/96sections/各table512importsまで。危険なpath/切断header/未終端/曖昧RVA/clock別の原本変更を拒否し、DLLや選択runtimeをload/importしない。basenameと同architectureのinventory候補を記録するが、Windows loaderの実解決・dynamic loading・export forwarder・権利監査とは扱わない。
+
+生成PE9＋NOTICE/native統合9が開発Python3.14でPASS、PE9を同梱Python3.11でもPASS。実packの新規report `data/ai-ui/continuation-20261028/runtime-import-review02.json` は既存manifest `52406ef…`の**325 file全ての静的表を検査、2,757 edges（delay1）、読み取り956,460bytes**。元manifest/通知metadataの対応も保持。全payload再hashやpack作り直しはせず、`redistribution_approved=False`/loader/dynamic未検証を維持する。
+
+**公開前の具体的残件**：`onnxruntime.dll`と`onnxruntime_pybind11_state.pyd`はamd64の`MSVCP140_1.dll`をimportするが、pack内に同名候補がない。[ONNX公式](https://onnxruntime.ai/docs/install/)もWindows向けVC++ runtime要件を明記している。開発PCの成功だけではclean WindowsのWD動作を保証できないため、[Microsoftの再配布対象確認](https://learn.microsoft.com/en-us/cpp/windows/determining-which-dlls-to-redistribute?view=msvc-170)に従う正式な同梱元/条件の確認、または明示導入要件とclean Windows試験が必要。System32からの無断コピー、OSへの自動install、任意DLLサイト取得で埋めない。`caffe2_nvrtc.dll`のdelay-import `nvcuda.dll`もpack外で、GPU driver側依存として別途確認する。basename重複247edgesはloader誤解決の実証ではなく、候補の曖昧さとして残す。
