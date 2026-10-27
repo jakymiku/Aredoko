@@ -24,6 +24,15 @@ class DirectSimilarityTests(unittest.TestCase):
     snapshot=fixture.DirectAudioIndexTests.snapshot
     add_item=search_fixture.AudioDirectSearchTests.add_item
 
+    def test_cancellation_during_score_keeps_partial_ranking_private(self):
+        from ai_vectors import dot
+        self.seed();self.add_item();event=threading.Event();calls=[];published=[]
+        def scored(query,vector):
+            calls.append(1);result=dot(query,vector);event.set();return result
+        with patch('audio_direct_similarity.dot',side_effect=scored):
+            with self.assertRaises(SearchCancelled):AudioDirectSimilarity(self.index).similar(self.item,cancelled=event.is_set,result_sink=published.append)
+        self.assertEqual(len(calls),1);self.assertEqual(published,[]);self.assertEqual(list(self.stage.iterdir()),[])
+
     def test_exact_best_pair_has_both_times_without_loading_a_model(self):
         with self.supplied(),patch.object(self.encoder,'encode',side_effect=[[0,1,0],[1,0,0]]):
             self.index.index_item(self.item,self.revision)

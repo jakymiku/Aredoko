@@ -1,7 +1,6 @@
 """Generated videos and supplied window vectors; no model, GPU or quality claim."""
 from dataclasses import replace
 from pathlib import Path
-import builtins
 import sys
 import threading
 import unittest
@@ -133,13 +132,13 @@ class DirectVideoSimilarityTests(unittest.TestCase):
         revision=self.reader.video_manifest(second)['revision']
         with self.supplied(windows):self.index.index_item(second,revision)
         event=threading.Event();calls=[]
-        def summed(values):
-            calls.append(1);result=builtins.sum(values)
-            if len(calls)==9:event.set()  # Eight validation norms, then first pair.
+        from ai_vectors import dot
+        def scored(query,vector):
+            calls.append(1);result=dot(query,vector);event.set()
             return result
-        with patch('video_direct_similarity.sum',side_effect=summed,create=True):
+        with patch('video_direct_similarity.dot',side_effect=scored):
             with self.assertRaises(SearchCancelled):VideoDirectSimilarity(self.index).similar(self.item,cancelled=event.is_set)
-        self.assertEqual(len(calls),9);self.assertEqual(list(self.stage.iterdir()),[])
+        self.assertEqual(len(calls),1);self.assertEqual(list(self.stage.iterdir()),[])
 
     def test_pair_limit_fails_without_partial_ranking(self):
         self.seed();self.add_item()

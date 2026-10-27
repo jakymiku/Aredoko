@@ -159,3 +159,5 @@ CPU再open初回に開発Python3.14を使うと、Python3.11生成のrevisionと
 検索から壊れたcoverageを除外するだけでは、marker一致だけのfresh判定が再生成をskipする問題が残る。freshでも連続区間/件数/総frame/float32 vectorの正規化を1vectorずつ検証し、壊れたitemを次の明示batchへ戻す。既存公開を直接削除せず、従来の全区間stage→atomic置換を使う。planning中の取消もvectorごとに確認する。metadataだけの旧判定より確認量は増えるが、全vectorをRAMへ保持せず、model/decodeは開始しない。
 
 生成index/jobs28 PASS（原本変更の意図した例外logを含む）。追加回帰は欠落・ゼロvector・marker不整合/型、fresh検査中止、明示再作成で正常化を確認。`video-repair01.log`。新しいGUI/GPU受入は行っていない。
+
+2026-10-28：cached動画/音声の内積generatorを同じ乗算順・sum順のmapへ共通化。再索引不要、cap/全pair/取消/世代/原本guardを保全。関連32 PASS、同一Python内のfloat64 bit一致とkernelだけの補助計測は[音声正本](audio-producer-review.md#2026-10-28音声動画の内積ループを同じ計算順で軽量化)。長動画decoderの225プロセス/時間や実動画品質を改善済みとは扱わない。

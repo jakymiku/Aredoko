@@ -161,3 +161,11 @@ renderで起点/候補のaudio_manifestがReaderChanged等のPreviewUnavailable�
 1時間の起点と1時間の候補は各14,400組、6候補86,400組まで通り、7候補100,800組で全検索を拒否する。短い音楽なら5分同士10×10=100組、1,000候補で上限一致。無音skipで有効vectorが減れば実際の組数も減る。単一候補で上限超過の場合はscopeを絞っても解消せず、より短い起点等が必要。capは壁時計の硬い期限ではなく、長音声の速度改善や一般品質受入の完了ではない。
 
 旧codeで追加境界/cumulative/HTTP3回帰がFAIL（0.999s）。修正後 `PYTHONPATH=app:tests:tools python -m unittest test_audio_direct_similarity test_audio_direct_http -q` は23 PASS/8.519s、py_compile成功。上限一致で厳密一致結果、1組以上超過の拒否、複数候補累計、scopeで除外された候補/未索引を非計上、result_sink未呼出・spool回収、認証HTTPの案内とitems非返却を検証。生成WAV/疑似vector/独立DBのみ。実model/GUI/GPU/Windows/.NETは実行せず、サブエージェントなし。
+
+## 2026-10-28：音声・動画の内積ループを同じ計算順で軽量化
+
+両cached類似の`sum(a*b for a,b in zip(...))`を、共通の`sum(map(operator.mul,...))`へ変更。乗算順・sumへの入力順を変えず、Python generatorの各要素処理を減らす。正規化・全pair巡回・tie時刻・100,000pair上限・pairごとの取消/世代/DB検査・private spoolは変更しない。モデル/新依存/再索引も不要。
+
+生成768D float64 arrayの同じseed/1万pairを各Pythonで1回ずつ補助計測：基本Python3.11は0.240486→0.156169秒、開発3.14は0.275385→0.193622秒。内積kernelだけで、catalog/原本検証/DB guard込みの全検索速度や長音楽品質を測った値ではない。新旧scoreのhex一致、1/3/128/512/768D×40pairと小さい値/符号zeroを同一interpreter内でbit一致確認（両Python各2tests）。Python版を跨ぐsumのbit一致を保証するものではない。
+
+音声/動画の既存scope・破損・cap・取消と新たな音声pair中取消は**32 PASS**。初回31件中1件は動画testが旧moduleの`sum`9回目をhookする実装依存のため取消を発生させずFAIL（製品取消の喪失ではない）。normの回数依存をやめ、実際の最初のpair scoreで取消を発生させるよう修正し、次のcheckでSearchCancelled・部分順位非公開・spool回収まで確認。最終log `data/ai-ui/continuation-20261028/similarity-map02.log`。GPU/GUI/実音楽・実動画/通常DBは未使用。

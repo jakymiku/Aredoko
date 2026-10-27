@@ -11,6 +11,7 @@ import sys
 
 from ai_score_spool import ScoreSpool,SearchCancelled
 from ai_process import AIUnavailable
+from ai_vectors import dot
 from audio_direct_index import CONTRACT,MAX_WINDOWS
 from audio_direct_search import AudioSearchChanged
 from audio_input import MAX_START_MS,SAMPLE_RATE,MAX_WINDOW_MS
@@ -110,7 +111,7 @@ class AudioDirectSimilarity:
                             raise AIUnavailable('音声の比較範囲が上限を超えました。対象フォルダーや棚を絞って再実行してください。')
                         for at,end,vector in frames:
                             for origin_at,origin_end,query in origin_frames:
-                                check();score=sum(a*b for a,b in zip(query,vector))
+                                check();score=dot(query,vector)
                                 if best is None or score>best[0]:best=(score,at,end,origin_at,origin_end)
                         score,at,end,origin_at,origin_end=best
                         spool.add(row['id'],{'audio':score},payload={'item':row,'revision':revision,
