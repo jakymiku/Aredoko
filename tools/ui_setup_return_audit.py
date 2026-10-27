@@ -2,7 +2,7 @@
 import json
 
 
-def audit(ui,tree,shot,report,check,handler,target,*,profiles=None,recovery=False):
+def audit(ui,tree,shot,report,check,handler,target,*,profiles=None,recovery=False,skip_download=False):
     report['authorization']='Explicit per-run approval required: dedicated generated UIA-only guide return paths; no foreground, physical input, acquisition, model, GPU or normal data'
     ui('invoke','BtnSettings');ui('wait-for','BtnGettingStarted','-t','10000');ui('invoke','BtnGettingStarted')
     ui('wait-for','GettingStartedGuideDialog','-t','10000');ui('invoke','PrimaryButton')
@@ -10,13 +10,14 @@ def audit(ui,tree,shot,report,check,handler,target,*,profiles=None,recovery=Fals
     for name in ('video','audio'):ui('invoke','SetupFeature'+name,'--action','toggle')
     ui('invoke','ReviewAISetupPlan')
     ui('wait-for','AISetupNextSteps','--value','動画の準備欄','--contains','-t','15000')
-    ui('invoke','AISetupPlanDownload');ui('wait-for','AIDownloadDialog','-t','10000')
-    ui('wait-for','AIDownloadInformation','--value','容量','--contains','-t','10000')
-    # No consent toggle and no PrimaryButton invocation in the download dialog.
-    ui('invoke','CloseButton')
-    ui('wait-for','AISetupPlanDialog','-t','10000')
-    ui('wait-for','AISetupNextSteps','--value','音声の準備欄','--contains','-t','15000')
-    check('return from download refreshes selected-purpose next steps',True);shot('after-download')
+    if not skip_download:
+        ui('invoke','AISetupPlanDownload');ui('wait-for','AIDownloadDialog','-t','10000')
+        ui('wait-for','AIDownloadInformation','--value','容量','--contains','-t','10000')
+        # No consent toggle and no PrimaryButton invocation in the download dialog.
+        ui('invoke','CloseButton')
+        ui('wait-for','AISetupPlanDialog','-t','10000')
+        ui('wait-for','AISetupNextSteps','--value','音声の準備欄','--contains','-t','15000')
+        check('return from download refreshes selected-purpose next steps',True);shot('after-download')
     ui('invoke','AISetupPlanExisting');ui('wait-for','AIEnvironmentDialog','-t','10000')
     ui('wait-for','AIEnvironmentDiagnostic','--value','実行環境','--contains','-t','15000')
     ui('invoke','CloseButton');ui('wait-for','AISetupPlanDialog','-t','10000')

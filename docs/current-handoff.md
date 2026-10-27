@@ -5,6 +5,9 @@
 - 起点`d3e4885`、fetch後もremote/PR head ref一致・clean、新たなMuse差分なし。既存branch/PR #5を継続。PRのopen/Draft metadataはconnector Transport closedで未再確認。
 - **`d27a72e` P6-S4ガイド復帰**：用途を保存し、取得/配置/索引設定を閉じるとガイドへ戻り、既存job/planを更新。取得中/中止/検査中/再起動待ちと媒体別索引を区別。Core21/Portable frontend01 PASS。GUIの1試行質問は回答待ちで実行していない。
 - **`62e46d0` P6-S5の安全な復旧案内**：未配置/版相違/欠落/環境・設定不正を区別し、折りたたみの案内→既存診断情報→ガイドを接続。削除/初期化/OS変更なし。Core29＋生成read-only Python7、最終WinUI build PASS（picker既存3）。frontend02は最終Core境界補強前の候補で、最新sourceのnative受入ではない。実導入/機器診断/自動修復の完成とはしない。
+- **`ffe3998` profile変更待ちを区別**：全profileを列挙しないsnapshotでpending/明示override/設定不正をplanへ反映。旧モデルのcatalogを自動推薦せず、取得入口は再起動まで抑制。Core33/plan8+profile13/Portable frontend03 PASS。個別回答後のnative01は取得→ガイド成功、試験保存先差による期待不一致/旧modal cleanup失敗を保持。所有guideをUIA→通常closeで回収し、rawをPASSに改変しない。追加許可native02は残り配置/索引/診断復帰とpending/用途保持を11checks/3PNG目視/exit0 PASS。UI source ffe3998 /backend d6acd9c。[P6詳細](p6-first-run-setup-spec.md)。
+- **`d6acd9c` お気に入りの全件再作成を回避**：literal/allだけ当該payloadを更新し、元のorder/selection/draftを保持。自分の1世代更新だけを取り込み、favorites/AI/棚等は再取得。保存後private更新失敗は保存済み＋要再検索と返す。Python14/session35/Core10/WinUI build、生成5万PNGのDB copy確認PASS：初回snapshot30.633sとは別に保存更新11.949ms、provider初回1回、原本確認1件、旧fixture DB不変。GUIは未実施、`--favorite-patch`を用意。[正本](library-selection.md)。
+- **`3f5da55` 音声/動画内積の負荷を削減**：同じ乗算/sum順を保つmapへ共通化し、両Pythonの同一版内bit一致/関連32 PASS。kernelだけ基本Python1万pair0.240486→0.156169s、全検索/長媒体性能の保証ではない。cap/取消/guardは保持。[詳細と旧harness FAIL](audio-producer-review.md)。
 - **P6公開準備の独立CPU作業**：PEの静的/delay DLL依存監査を実装し、生成18件＋基本PythonでPE9 PASS。既存pack325file/2,757edgesの読取956,460bytes、NOTICE/manifest保持。ONNX Runtimeの2fileが必要とする`MSVCP140_1.dll`がpack内にないと判明。既存GPU/WD成功をclean Windows保証に拡張しない。正式な再配布元/条件/追加導入の選択が必要で、勝手にOSからコピー/取得しない。[証拠と残件](runtime-notice-inventory.md)。runtime公開/権利承認は未完。
 - PC使用中。GUI/GPUは具体的な一括範囲への回答後のみ。通常DB/私物/Alpha変更なし、Actions/main merge/shutdownなし。最終の完了内容/次の1件は終了前にこの節を更新する。
 

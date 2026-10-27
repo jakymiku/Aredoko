@@ -35,6 +35,8 @@ Core関連21項目とPortable/frontend01 build PASS（既存picker3/SDK trim警�
 
 Core33、Pythonのplan8＋profile13 PASS。Portable/frontend03は最新C#/Coreをpublish済み（既存picker3/SDK trimのみ）、backendは上記推薦抑制も補強。最新の一括確認は`--setup-recovery`で取得/配置/索引/診断の往復と、CPU fixtureによる保存profile変更→ガイドのpending表示をまとめる。旧frontend01への許可質問は未回答・未実施。新しい候補のGUIは対象範囲を更新してから確認し、旧許可へ自動拡張しない。
 
+個別回答後のfrontend03限定UIA：`setup-recovery-native01`で取得画面→ガイドを確認。配置後は試験のactiveモデル保存先と保存先設定が異なり、正しい再起動案内をtestが不足表示と誤比較して停止（raw FAIL/3PNGを保持）。cleanupもmodalを閉じずWM_CLOSEを送る旧harnessのため停止し、所有guideをUIAで閉じて通常closeで解放した（exit code欠測、強制終了なし）。試験設定を揃え、modalを閉じるcleanupへ修正後、追加回答による`native02 --setup-skip-download`は成功部分を繰り返さず、配置/索引/診断→ガイド、用途保持、profile pending、job idle/モデルowner未作成を11checks/3PNG目視/exit0でPASS。UI source ffe3998、backend d6acd9c。foreground/物理入力/Clipboard/取得/GPU/通常DB/Alphaなし。配布runtimeや実環境導入・自動修復の受入は別。
+
 ZIP解凍→`Aredoko.exe`でPythonなしの基本機能を起動。初回の用途選択から、必要な任意runtime/モデルの導入・検証、初心者向け使い方、故障時の安全な復旧まで一貫して案内する。WinUI 3ネイティブ、既存Python/SQLite/owned API、既存profile/namespaceを維持。
 
 利用目的は複数選択可能：**意味検索／類似画像検索／動画検索／音声・音楽検索**。基本検索だけで開始する「今はAIを使わない」を必ず設け、後から設定で追加・再実行できるようにする。

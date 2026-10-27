@@ -14,7 +14,8 @@ from storage_lease import plain_path,storage_parent
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--release',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--polish',action='store_true',help='Also check U4-U6 contracts on a current candidate')
-    parser.add_argument('--setup-plan',action='store_true',help='Also check the read-only purpose-based AI setup API');args=parser.parse_args()
+    parser.add_argument('--setup-plan',action='store_true',help='Also check the read-only purpose-based AI setup API')
+    parser.add_argument('--favorite-patch',action='store_true',help='Also check retained favorite-only result edits in the actual bundled backend');args=parser.parse_args()
     release=plain_path(args.release,directory=True);output=Path(os.path.abspath(args.output))
     if not (release.is_relative_to(REPO/'dist') or release.is_relative_to(REPO/'data/ai-ui')) or not output.is_relative_to(REPO/'data/ai-ui') or output.exists():parser.error('Explicit staged repository release and new dedicated evidence required')
     manifest=json.loads((release/'manifest.json').read_text(encoding='utf-8'))
@@ -73,6 +74,17 @@ def main():
             check('generated-only scan completes',request('/api/library/scan')['state']=='complete')
             items=request('/api/items?q=generated.png')['items'];check('filename search returns generated image',len(items)==1)
             preview=request('/api/library/preview/'+str(items[0]['id']),binary=True);check('actual bundled preview produces PNG',preview.startswith(b'\x89PNG\r\n\x1a\n'))
+            if args.favorite_patch:
+                report['favorite_patch']=True;sid=secrets.token_hex(16)
+                created=request('/api/library/results/create',{'session_id':sid,'conditions':{'mode':'literal','query':'generated.png','kind':'image','view':'all','root_ids':[root]}})
+                body={'session_id':sid,'item_ids':[items[0]['id']],'operation':'favorite_add','shelf_ids':[],'keep_session':True}
+                changed=request('/api/library/results/edit',body);ranged=request('/api/library/results/range',{'session_id':sid,'offset':0,'limit':1})
+                check('bundled favorite edit retains order and the owned result session',created.get('favorite_patch_supported') is True and changed['kept_session'] is True
+                      and ranged['total']==1 and ranged['items'][0]['id']==items[0]['id'] and ranged['items'][0]['favorite'] is True)
+                body['operation']='favorite_remove';changed=request('/api/library/results/edit',body)
+                ranged=request('/api/library/results/range',{'session_id':sid,'offset':0,'limit':1})
+                check('bundled favorite removal also keeps a normal literal result usable',changed['kept_session'] is True and ranged['items'][0]['favorite'] is False)
+                request('/api/library/results/close',{'session_id':sid})
             if args.polish:
                 report['polish']=True
                 check('runtime verification defaults on without AI assets',setup['verify_ai_runtime'] is True)

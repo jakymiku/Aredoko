@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--setup-plan',action='store_true',help='UIA-only feature plan and opt-out; no foreground activation, input, download, model or GPU')
     parser.add_argument('--setup-return',action='store_true',help='UIA-only return from acquisition, placement and index settings; no acquisition or inference')
     parser.add_argument('--setup-recovery',action='store_true',help='Setup return plus safe recovery, diagnostic return and saved-profile restart state')
+    parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
@@ -38,6 +39,7 @@ def main():
     if args.compact_toolbar:args.detail_actions=True
     if args.viewer_choice:args.detail_actions=True
     if args.setup_recovery:args.setup_return=True
+    if args.setup_skip_download and not args.setup_return:parser.error('Skipping download requires the bounded setup-return case')
     if args.favorite_patch:args.detail_actions=True;args.uia_only=True
     if args.setup_plan or args.setup_return:args.detail_actions=True;args.uia_only=True
     if args.video_history_only:args.video_content=True
@@ -148,6 +150,11 @@ def main():
                 audio_feature.owner.thread.join(10)
                 if audio_feature.status()['state']!='completed':raise RuntimeError('Generated CPU audio setup failed')
             extras['audio_feature']=audio_feature
+        if args.setup_return:
+            # The supplied missing-model directory is also the saved directory;
+            # otherwise the deliberate command-line fixture override correctly
+            # appears as a restart-only location change before any UI action.
+            (target/'launch-settings.json').write_text(json.dumps({'models_root':str(target/'missing-models')}),encoding='utf-8')
         handler=production_handler(cat,secrets.token_hex(32),ai=DisabledAI(),profiles=profiles,tagger=DisabledTagger(),instance_id=instance,**extras);handler.log_message=lambda *args:None
         if args.real_fixture:
             from ui_real_library_audit import install_cancel_gate
@@ -223,7 +230,7 @@ def main():
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.setup_return:
             from ui_setup_return_audit import audit
-            audit(ui,tree,shot,report,check,handler,target,profiles=profiles,recovery=args.setup_recovery)
+            audit(ui,tree,shot,report,check,handler,target,profiles=profiles,recovery=args.setup_recovery,skip_download=args.setup_skip_download)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.setup_plan:
             from ui_setup_plan_audit import audit
@@ -318,9 +325,14 @@ def main():
                 owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
                 if owner.value!=proc.pid:raise RuntimeError('Cleanup HWND changed')
                 # Only discard this flow's generated draft, never force-close.
-                for _ in range(2):
+                for _ in range(8):
                     if proc.poll() is not None:break
                     visible=tree();primary=visible.get('PrimaryButton',{})
+                    modal=next((name for name in ('AISetupPlanDialog','AIEnvironmentDialog','AIDownloadDialog','AISettingsDialog','DiagnosticsDialog') if name in visible),None)
+                    if modal is not None:
+                        ui('invoke','CloseButton','--action','invoke')
+                        ui('wait-for',modal,'--gone','-t','5000')
+                        continue
                     if primary.get('name')=='変更を破棄':
                         ui('invoke','PrimaryButton')
                         if proc.poll() is not None:break
