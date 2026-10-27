@@ -67,7 +67,26 @@ def plan_video_coverage(total_duration_ms):
     return tuple((start,min(step,total_duration_ms-start)) for start in range(0,total_duration_ms,step))
 
 
+class _CoverageWindows:
+    """Lazy one-window-at-a-time iterator over the probed plan.
+
+    total_duration_ms stays None until the first window is requested (the
+    probe is lazy too) and then lets a consumer verify after exhaustion
+    that iteration really reached the end of the video.
+    """
+    def __init__(self,source,*,cancel=None,guard=None):
+        self._source,self._cancel,self._guard=source,cancel,guard
+        self.total_duration_ms=None
+        self._plan=None;self._index=0
+    def __iter__(self):return self
+    def __next__(self):
+        if self._plan is None:
+            self.total_duration_ms=probe_video_duration_ms(self._source,cancel=self._cancel,guard=self._guard)
+            self._plan=plan_video_coverage(self.total_duration_ms)
+        if self._index>=len(self._plan):raise StopIteration
+        start,duration=self._plan[self._index];self._index+=1
+        return read_video_window(self._source,start,duration,total_duration_ms=self.total_duration_ms,cancel=self._cancel,guard=self._guard)
+
+
 def iter_video_coverage(source,*,cancel=None,guard=None):
-    total_duration_ms=probe_video_duration_ms(source,cancel=cancel,guard=guard)
-    for start,duration in plan_video_coverage(total_duration_ms):
-        yield read_video_window(source,start,duration,total_duration_ms=total_duration_ms,cancel=cancel,guard=guard)
+    return _CoverageWindows(source,cancel=cancel,guard=guard)

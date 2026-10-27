@@ -102,6 +102,11 @@ class VideoDirectIndex:
                         stage.execute('INSERT INTO windows VALUES(?,?,?,?)',
                             (decoded-1,window.start_ms,window.end_ms,packed.tobytes()))
                         indexed+=1
+                # Exhaustion alone is not proof of completion: the staged
+                # windows must end exactly at the total the producer probed.
+                total=getattr(windows,'total_duration_ms',None)
+                if total is None or expected_start!=total:
+                    raise ValueError('Incomplete video coverage cannot be published')
                 if not decoded:raise ValueError('Empty video coverage cannot be published')
                 stage.commit()
                 try:self._publish(item_id,revision,path,decoded,indexed,frames,cancel,validate)

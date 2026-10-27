@@ -137,6 +137,15 @@ class CoverageTests(unittest.TestCase):
         frame=windows[1].frames[0]
         self.assertGreater(frame[middle+2],200);self.assertLess(frame[middle],20)
 
+    def test_iterator_exposes_the_probed_total_for_completion_checks(self):
+        window=VideoWindow(0,16000,1,1,tuple(b'\0'*3 for _ in range(16)))
+        with patch('video_coverage.probe_video_duration_ms',return_value=17500),\
+             patch('video_coverage.read_video_window',return_value=window):
+            windows=iter_video_coverage(None)
+            self.assertIsNone(windows.total_duration_ms)
+            next(windows);self.assertEqual(windows.total_duration_ms,17500)
+            list(windows);self.assertEqual(windows.total_duration_ms,17500)
+
     def test_iterator_is_lazy_and_decodes_one_window_at_a_time(self):
         with patch('video_coverage.probe_video_duration_ms',return_value=60000) as probe,\
              patch('video_coverage.read_video_window',return_value='window') as decode:

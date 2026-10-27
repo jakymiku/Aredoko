@@ -34,6 +34,15 @@ def window(start_ms,end_ms):
     return VideoWindow(start_ms,end_ms,1,1,tuple(b'\0'*3 for _ in range(count)))
 
 
+class SuppliedCoverage:
+    """Iterator double that declares its probed total like the real stream."""
+    def __init__(self,windows,total,fail=False):
+        self._windows=windows;self.total_duration_ms=total;self._fail=fail
+    def __iter__(self):
+        yield from self._windows
+        if self._fail:raise ValueError('generated decoding failed after output')
+
+
 class SuppliedIndexTests(unittest.TestCase):
     def setUp(self):
         fixture.VideoWindowTests.setUpClass();self.addCleanup(fixture.VideoWindowTests.tearDownClass)
@@ -49,12 +58,11 @@ class SuppliedIndexTests(unittest.TestCase):
         self.windows=[window(0,16000),window(16000,17500)]
 
     @contextmanager
-    def supplied(self,windows=None,fail=False):
-        def stream():
-            yield from (self.windows if windows is None else windows)
-            if fail:raise ValueError('generated decoding failed after output')
+    def supplied(self,windows=None,fail=False,total=None):
+        chosen=self.windows if windows is None else windows
+        coverage=SuppliedCoverage(chosen,chosen[-1].end_ms if total is None else total,fail)
         @contextmanager
-        def source(*args,**kwargs):yield stream()
+        def source(*args,**kwargs):yield coverage
         with patch.object(self.reader,'video_coverage_stream',side_effect=source):yield
 
     def snapshot(self):
@@ -112,6 +120,36 @@ class SuppliedIndexTests(unittest.TestCase):
         with self.supplied(),patch.object(self.reader,'video_manifest',return_value={'revision':'0'*64}):
             with self.assertRaises(ReaderChanged):self.index.index_item(self.item,self.revision)
         self.assertEqual(self.snapshot(),previous)
+
+    def test_stream_ending_before_its_declared_total_publishes_nothing(self):
+        with self.supplied(total=33000),self.assertRaises(ValueError):self.index.index_item(self.item,self.revision)
+        self.assertEqual(self.snapshot(),[[],[]])
+        with self.supplied([window(0,16000)],total=17500),self.assertRaises(ValueError):
+            self.index.index_item(self.item,self.revision)
+        self.assertEqual(self.snapshot(),[[],[]])
+
+    def test_failure_after_copy_rolls_back_to_prior_publication(self):
+        previous=self.seed();calls=[]
+        def validator():
+            calls.append(True)
+            if len(calls)==3:raise MediaDecodeCancelled('cancelled after copy')
+        with self.supplied():
+            with self.assertRaises(MediaDecodeCancelled):self.index.index_item(self.item,self.revision,validate=validator)
+        self.assertEqual(len(calls),3)  # Start, pre-copy and post-copy checks.
+        self.assertEqual(self.snapshot(),previous);self.assertEqual(list(self.stage.iterdir()),[])
+
+    def test_insert_abort_mid_copy_rolls_back_to_prior_publication(self):
+        import sqlite3
+        previous=self.seed()
+        with self.index.store.connect() as db:
+            db.execute("CREATE TRIGGER fail_copy BEFORE INSERT ON ai_video_direct_windows "
+                       "WHEN NEW.ordinal>=2 BEGIN SELECT RAISE(ABORT,'copy failed'); END")
+        try:
+            with self.supplied([window(0,16000),window(16000,32000),window(32000,33000)]):
+                with self.assertRaises(sqlite3.Error):self.index.index_item(self.item,self.revision)
+        finally:
+            with self.index.store.connect() as db:db.execute('DROP TRIGGER IF EXISTS fail_copy')
+        self.assertEqual(self.snapshot(),previous);self.assertEqual(list(self.stage.iterdir()),[])
 
 
 class RealVideoIndexTests(unittest.TestCase):
