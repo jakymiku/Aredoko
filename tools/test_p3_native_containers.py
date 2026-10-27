@@ -24,14 +24,18 @@ def main():
     parser.add_argument('--audio-search-only',action='store_true',help='Prepare generated audio via CPU; native scenario only switches mode and checks result time')
     parser.add_argument('--audio-similarity-only',action='store_true',help='Cached audio origin similarity and navigation only, supplied CPU vectors')
     parser.add_argument('--compact-toolbar',action='store_true',help='Generated mixed media, toolbar geometry and explicit detail draft preservation')
+    parser.add_argument('--video-content',action='store_true',help='Generated silent MP4s and supplied CPU encoder; no playback, model or GPU')
+    parser.add_argument('--video-history-only',action='store_true',help='Pre-index on CPU, then only cached video similarity and folder navigation')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     if args.real_fixture and not args.global_edge:parser.error('Real fixture requires the bounded global-edge case')
     if args.compact_toolbar:args.detail_actions=True
+    if args.video_history_only:args.video_content=True
     if args.audio_similarity_only:args.audio_search_only=True
     if args.audio_search_only:args.audio_content=True
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
+    if args.video_content:report['authorization']='Explicit per-run permission: generated silent MP4s, dedicated DB, CPU vectors; no playback/GPU/models/normal DB/Alpha'
     if args.detail_actions:report['authorization']='2026-10-24 explicit human approval: contextual detail GUI on dedicated fixtures, Light/Dark; no AI/GPU inference'
     report['theme']=args.theme
     report['detail_audit_sha256']=hashlib.sha256((REPO/'tools/ui_detail_actions_audit.py').read_bytes()).hexdigest()
@@ -67,7 +71,10 @@ def main():
     def sources():return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
     try:
         media=target/'media';media.mkdir()
-        for i in range(0 if args.detail_actions or args.global_edge or args.audio_content else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        for i in range(0 if args.detail_actions or args.global_edge or args.audio_content or args.video_content else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        if args.video_content:
+            from ui_video_content_audit import create_media
+            create_media(media)
         if args.audio_content:
             from ui_audio_content_audit import create_media
             create_media(media)
@@ -104,7 +111,7 @@ def main():
             root=cat.add_root(str(media));cat.start_scan(root)
             if cat._worker:cat._worker.join(15)
         before=sources()
-        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(2 if args.audio_content else 50000 if args.global_edge else 6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
+        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(2 if args.audio_content or args.video_content else 50000 if args.global_edge else 6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
         if args.detail_actions:
             shelf=cat.change_shelf('create',name='確認用の棚')['id']
             cat.change_shelf('assign',entity='item',object_ids=[row['id'] for row in cat.search()['items']],shelf_ids=[shelf])
@@ -114,6 +121,13 @@ def main():
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
         extras={}
+        if args.video_content:
+            from ui_video_content_audit import create_feature
+            video_feature,video_gate,video_reached=create_feature(cat)
+            if args.video_history_only:
+                video_gate.set();video_feature.start({'consent':True});video_feature.owner.thread.join(20)
+                if video_feature.status()['state']!='completed':raise RuntimeError('Generated CPU video setup failed')
+            extras['video_feature']=video_feature
         if args.audio_content:
             from ui_audio_content_audit import create_feature
             audio_feature,audio_gate,audio_reached=create_feature(cat)
@@ -151,7 +165,8 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
-        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or args.compact_toolbar:
+        if args.video_content:ready()
+        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or args.compact_toolbar or args.video_content:
             # The owner launches this one test process; use normal Windows
             # activation, never input attachment, security bypass or other apps.
             report['foreground_activation_requested']=bool(user.SetForegroundWindow(int(hwnd)))
@@ -202,6 +217,14 @@ def main():
             from ui_real_library_audit import audit
             audit(ui,tree,shot,report,check,proc.pid,cat,handler.thumbnails,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
             check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.video_content:
+            from ui_video_content_audit import audit
+            def input_owned():
+                foreground=user.GetForegroundWindow();owner=wintypes.DWORD()
+                user.GetWindowThreadProcessId(foreground,ctypes.byref(owner))
+                return owner.value==proc.pid
+            audit(ui,tree,shot,report,check,cat,video_feature,video_gate,video_reached,input_guard=input_owned,history_only=args.video_history_only)
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.audio_content:
             from ui_audio_content_audit import audit,audit_similarity
             def input_owned():
@@ -242,6 +265,7 @@ def main():
     finally:
         if 'real_gate' in locals():real_gate.set()
         if 'audio_gate' in locals():audio_gate.set()
+        if 'video_gate' in locals():video_gate.set()
         if (args.initial_loading or args.usability_u1) and "gate" in locals():gate.set()
         if proc is not None and proc.poll() is None and not hwnd:
             try:
@@ -287,7 +311,7 @@ def main():
             server.server_close()
         if thread:thread.join(5)
         if server:
-            for resource in (handler.startup_scans,handler.thumbnails,handler.results,handler.audio_content,handler.animations,handler.setup_jobs,handler.download_jobs,handler.backup_jobs,handler.restore_jobs):resource.close()
+            for resource in (handler.startup_scans,handler.thumbnails,handler.results,handler.audio_content,handler.video_content,handler.animations,handler.setup_jobs,handler.download_jobs,handler.backup_jobs,handler.restore_jobs):resource.close()
         if cat:cat.close()
         report['process_still_running']=proc is not None and proc.poll() is None
         report['test_script_sha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()

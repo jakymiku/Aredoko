@@ -145,3 +145,11 @@ Windows受入の次手順：
 レビューで、cached類似には全coverage検証がある一方、動画の文章検索は欠落window・壊れたvector・marker件数不整合から部分一致を公開し、`ready`と報告することを生成CPU試験で再現。文章検索もordinal/連続区間/16秒境界/総frame/正規化vector/完全markerを全て検証したitemだけを順位へ公開するよう修正。120件のbatch cursorと定数サイズの集計を保ち、全vector集合を保持しない。range描画中の原本消失も500ではなく再検索が必要なVideoSearchChangedへ変換する。
 
 旧codeの追加2回帰は7subtest FAIL/2ERROR（同一run）を保持。修正後は検索/認証HTTP14 PASS。証拠`data/ai-ui/continuation-20261027b/`。これは破損索引を誤一致にしない確認であり、実モデル品質や長動画性能の受入ではない。壊れた索引のfresh判定・明示再生成導線は別途改善余地がある。
+
+### 通常所有pipelineとWinUIの限定受入
+
+frontend01（WinUI source d323db0、backend6ba34e6）と生成無音MP4二本/CPU供給vectorを使用。video-native01はWindows前面化が拒否され入力前に停止、exit0。初期準備を待ったnative02は準備lazy/開始/中断/atomic非公開/再開2件/文章queryの16–17.5秒/詳細/旧代表frame入口併存/直接類似・両区間/自己除外まで確認。7PNG目視。最後は試験でモデルを利用不可にしたまま通常query付きお気に入りへ移り、履歴の前提を満たさず停止したため全体PARTIALを保持。成功済み操作を反復せず、native03はCPU事前索引→モデル不可cached類似→登録フォルダ→戻るの限定10checks/3PNG目視/exit0でPASS。既存のタグ/生成原本不変、全所有process正常終了。実再生/seekは行っていない。
+
+個別GPU許可1バッチのvideo-owned-gpu01では、同じ生成色動画（3.3秒/17.5秒）を実production owner/private workerで全3区間保存し、日本語2問はTop1。index29.250s、child allocator peak1424.1MiB、上限3072MiB。画像worker未使用。raw reportは最後のharnessのread-only available代入でFAILを保持し、実際の索引/文章検索/明示release成功と区別する。harnessを修正したがGPUは再実行していない。保存済み専用DBを基本Python3.11＋モデル利用不可CPU encoderで再openし、cached類似（0推論/両区間）を別review.jsonで確認した。所有子は既存close方式exit1で回収。
+
+CPU再open初回に開発Python3.14を使うと、Python3.11生成のrevisionとWindows statのctime等の意味が異なり、安全に未索引扱いとなった。元の親と同じ基本Python3.11で再確認したもので、原本guardを弱めていない。GPU初回の原本pre SHA記録は欠測で、原本SHA/mtime前後一致まで成功扱いにしない（CPU再open前後は一致）。全結果は限定生成fixtureの配線確認で、実動画の一般品質・音声track・長時間性能・clean Windowsの合格ではない。
