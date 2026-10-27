@@ -13,7 +13,8 @@ from storage_lease import plain_path,storage_parent
 
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--release',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--polish',action='store_true',help='Also check U4-U6 contracts on a current candidate');args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--release',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--polish',action='store_true',help='Also check U4-U6 contracts on a current candidate')
+    parser.add_argument('--setup-plan',action='store_true',help='Also check the read-only purpose-based AI setup API');args=parser.parse_args()
     release=plain_path(args.release,directory=True);output=Path(os.path.abspath(args.output))
     if not (release.is_relative_to(REPO/'dist') or release.is_relative_to(REPO/'data/ai-ui')) or not output.is_relative_to(REPO/'data/ai-ui') or output.exists():parser.error('Explicit staged repository release and new dedicated evidence required')
     manifest=json.loads((release/'manifest.json').read_text(encoding='utf-8'))
@@ -57,6 +58,15 @@ def main():
             report['catalog_count']=len(catalogs['catalogs'])
             report['catalog_fingerprints']=[entry['catalog_id'] for entry in catalogs['catalogs']]
             check('setup and acquisition owners idle',request('/api/library/ai/setup/job')['state']=='idle' and request('/api/library/ai/setup/download/job')['state']=='idle')
+            if args.setup_plan:
+                plan=request('/api/library/ai/setup/plan',{'features':['semantic','image_similarity','video','audio']})
+                check('bundled setup shares the model without claiming a published runtime',len(plan['features'])==4 and len(plan['requirements'])==2
+                      and len(plan['selected_catalog_ids'])==1 and plan['known_download_bytes']>0 and plan['total_download_bytes'] is None
+                      and plan['unresolved_requirements']==['embedding-runtime'] and not plan['acquisition_started'])
+                skipped=request('/api/library/ai/setup/plan',{'features':[]})
+                check('bundled AI opt-out starts no AI owner or download',skipped['skip_ai'] and not skipped['requirements']
+                      and request('/api/library/ai/setup/download/job')['state']=='idle'
+                      and not request('/api/library/audio-ai/status')['initialized'] and not request('/api/library/video-ai/status')['initialized'])
             root=request('/api/library/roots',{'consent':True,'path':str(media),'recursive':True})['root_id'];request('/api/library/scan',{'root_id':root})
             deadline=time.monotonic()+12
             while request('/api/library/scan')['state']=='running' and time.monotonic()<deadline:time.sleep(.05)
