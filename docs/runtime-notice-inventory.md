@@ -81,3 +81,12 @@ python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --su
 生成PE9＋NOTICE/native統合9が開発Python3.14でPASS、PE9を同梱Python3.11でもPASS。実packの新規report `data/ai-ui/continuation-20261028/runtime-import-review02.json` は既存manifest `52406ef…`の**325 file全ての静的表を検査、2,757 edges（delay1）、読み取り956,460bytes**。元manifest/通知metadataの対応も保持。全payload再hashやpack作り直しはせず、`redistribution_approved=False`/loader/dynamic未検証を維持する。
 
 **公開前の具体的残件**：`onnxruntime.dll`と`onnxruntime_pybind11_state.pyd`はamd64の`MSVCP140_1.dll`をimportするが、pack内に同名候補がない。[ONNX公式](https://onnxruntime.ai/docs/install/)もWindows向けVC++ runtime要件を明記している。開発PCの成功だけではclean WindowsのWD動作を保証できないため、[Microsoftの再配布対象確認](https://learn.microsoft.com/en-us/cpp/windows/determining-which-dlls-to-redistribute?view=msvc-170)に従う正式な同梱元/条件の確認、または明示導入要件とclean Windows試験が必要。System32からの無断コピー、OSへの自動install、任意DLLサイト取得で埋めない。`caffe2_nvrtc.dll`のdelay-import `nvcuda.dll`もpack外で、GPU driver側依存として別途確認する。basename重複247edgesはloader誤解決の実証ではなく、候補の曖昧さとして残す。
+
+
+### 2026-10-28 終了前のMSVC配布元preflight（導入なし）
+
+既存Visual Studio Communityの`VC/Redist/MSVC`は`14.44.35112`だけがあり、その直下は`Auxiliary`のみ。期待する`x64/Microsoft.VC143.CRT`は存在しなかった。この標準redist配置を確認した範囲であり、PC全体をDLL探索していない。現在のpack不足を「VSがあるから解決済み」と扱わず、System32や他アプリのDLLをコピーしない。
+
+[Microsoftの配布ファイル判定](https://learn.microsoft.com/en-us/cpp/windows/determining-which-dlls-to-redistribute?view=msvc-170)では、central Redistributableを推奨しつつapp-local配布も可能と説明する。ただしapp-localでは更新提供をアプリ側が担う。[VS2022 REDIST一覧](https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution)は正規ライセンスを持つ利用者が該当条件の下で未改変ファイルを配布する範囲を示し、debug_nonredistを除外する。[配布条件の案内](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170)も個々のライセンス確認を求める。これをAredokoの権利承認や再配布物の完成とはしない。
+
+次は正規の固定取得元・版・容量/hash・ライセンスを揃え、ZIP方針に合うapp-local CRT一式か、利用者に明示する公式Redistributable導入かを選ぶ。新取得/展開/実行/OS導入/pack変更は今回行っていない。app-local採用時も単に欠けた1DLLを置くだけで完了とせず、そのDLLの依存と実workerの探索経路を確認する。clean Windows未受入。
