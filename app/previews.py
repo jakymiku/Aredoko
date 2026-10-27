@@ -23,6 +23,7 @@ from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
 import audio_input
 from audio_stream import PCMStream
 from video_window_decode import read_video_window,validate_interval,VideoWindowUnavailable
+from video_coverage import iter_video_coverage
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
@@ -185,6 +186,7 @@ class PreviewReader:
         self.catalog = catalog
         self.slots = threading.BoundedSemaphore(2)
         self.audio_stream_slot = threading.BoundedSemaphore(1)
+        self.video_stream_slot = threading.BoundedSemaphore(1)
         self.videos = VideoThumbnailer()
         self.animations = AnimationInspector()
 
@@ -300,6 +302,24 @@ class PreviewReader:
                 yield stream
         finally:self.audio_stream_slot.release()
 
+    @contextmanager
+    def video_coverage_stream(self,item_id,revision,cancel=None):
+        """Internal single-pass producer; successful exhaustion precedes save.
+
+        The duration probe and every decoded window recheck live registration
+        and the original revision. No HTTP route, model or persistent write here.
+        """
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}',revision) is None:
+            raise ValueError('Invalid video revision')
+        if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Video decode cancelled')
+        if not self.video_stream_slot.acquire(blocking=False):raise PreviewBusyError('Video producer busy')
+        try:
+            source,_=self._read(item_id,operation='video_coverage_source',revision=revision,cancel=cancel)
+            def guard():
+                if self.video_manifest(item_id)['revision']!=revision:raise ReaderChanged('Video source changed during streaming')
+            with source:yield iter_video_coverage(source,cancel=cancel,guard=guard)
+        finally:self.video_stream_slot.release()
+
     def audio_range(self, item_id, start, end, revision):
         if type(start) is not int or type(end) is not int or start < 0 or end < start or end - start + 1 > MAX_VIDEO_RANGE_BYTES:
             raise ValueError('Invalid bounded audio range')
@@ -410,7 +430,7 @@ class PreviewReader:
             if operation in ('audio','audio_manifest','audio_range','audio_pcm','audio_pcm_source'):
                 if suffix not in AUDIO_MIME:
                     raise PreviewUnavailable('Audio player requires a supported audio item')
-            elif operation in ('video','video_manifest','video_range','video_frame','video_frames_ai','video_window'):
+            elif operation in ('video','video_manifest','video_range','video_frame','video_frames_ai','video_window','video_coverage_source'):
                 if suffix not in VIDEO_MIME and (operation != 'video_frames_ai' or suffix not in VIDEO_SUFFIXES):
                     raise PreviewUnavailable('Video player requires a supported video item')
             elif operation in ('image_info', 'image_manifest', 'image_frame', 'image_original', 'animation_source'):
@@ -472,14 +492,16 @@ class PreviewReader:
                         raise PreviewUnavailable('Video exceeds playback limit')
                     if data.lstrip()[:16].upper().startswith((b'#EXTM3U', b'[PLAYLIST]', b'<ASX')):
                         raise PreviewUnavailable('Playlist files are not played')
-                elif operation in ('video_manifest','video_range','video_frame','video_window'):
+                elif operation in ('video_manifest','video_range','video_frame','video_window','video_coverage_source'):
                     if not 1 <= info.st_size <= MAX_STREAM_VIDEO_BYTES:
                         raise PreviewUnavailable('Video exceeds stream limit')
                     prefix=file.read(512).lstrip()
                     if not prefix or prefix[:16].upper().startswith((b'#EXTM3U',b'[PLAYLIST]',b'<ASX')):
                         raise PreviewUnavailable('Playlist files are not played')
                     mime=VIDEO_MIME[suffix]
-                    if operation=='video_window':
+                    if operation=='video_coverage_source':
+                        result={'item_id':item_id,'revision':current_revision}
+                    elif operation=='video_window':
                         # The caller plans from guarded duration metadata; do
                         # not derive successful whole-video EOF from this clip.
                         file.seek(0);result=read_video_window(file,clip[0],clip[1],total_duration_ms=clip[2],cancel=cancel)
@@ -605,7 +627,7 @@ class PreviewReader:
                                     with archive.open(entry) as image:
                                         data = image.read(image_limit + 1)
                                 mime = IMAGE_MIME[PurePosixPath(entry.filename).suffix.casefold()]
-                if operation not in ('manifest','video','video_manifest','video_range','video_window','audio','audio_manifest','audio_range','audio_pcm','audio_pcm_source','tag_source','page_catalog','animation_source','image_info','image_manifest','video_frames_ai') and len(data) > image_limit:
+                if operation not in ('manifest','video','video_manifest','video_range','video_window','video_coverage_source','audio','audio_manifest','audio_range','audio_pcm','audio_pcm_source','tag_source','page_catalog','animation_source','image_info','image_manifest','video_frames_ai') and len(data) > image_limit:
                     raise PreviewUnavailable('Image exceeds preview limit')
                 after = os.fstat(file.fileno())
                 # Verify the path was not replaced while reading, without repeating
@@ -633,7 +655,7 @@ class PreviewReader:
                     if operation not in ('preview', 'cover_input', 'video_frames_ai'):
                         raise ReaderChanged('Source changed while reading')
                     raise PreviewUnavailable('Source changed while reading')
-                if operation in ('audio_pcm','audio_pcm_source','video_window'):
+                if operation in ('audio_pcm','audio_pcm_source','video_window','video_coverage_source'):
                     # Native extraction can take seconds. Recheck registration,
                     # exclusions and metadata before publishing producer input.
                     with self.catalog.connect() as db:
@@ -646,6 +668,7 @@ class PreviewReader:
                         raise ReaderChanged('Media scope changed during extraction')
                     if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Media decode cancelled')
                     if operation=='audio_pcm_source':return os.fdopen(os.dup(file.fileno()),'rb'),result
+                    if operation=='video_coverage_source':return os.fdopen(os.dup(file.fileno()),'rb'),result
                     return result
                 if operation == 'animation_source':
                     return os.fdopen(os.dup(file.fileno()), 'rb'), result
