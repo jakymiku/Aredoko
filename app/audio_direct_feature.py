@@ -5,6 +5,7 @@ from ai_process import AIUnavailable,EncoderProcess
 from ai_profiles import audio_profile_for
 from ai_search import AIBusy
 from audio_direct_jobs import AudioDirectJobs
+from audio_input import MediaDecodeCancelled
 from result_sessions import IndexStamp
 
 
@@ -12,7 +13,7 @@ class AudioDirectFeature:
     def __init__(self,catalog,image_ai,*,encoder_factory=None,stage_parent=None):
         self.catalog,self.image_ai=catalog,image_ai
         self.stage_parent=stage_parent;self.owner=None;self.monitor=None;self.closed=False
-        self.init_lock=threading.Lock();self.idle_seconds=getattr(image_ai,'_idle_seconds',0);self.encoder=None;self.inference=None
+        self.init_lock=threading.Lock();self.close_event=threading.Event();self.idle_seconds=getattr(image_ai,'_idle_seconds',0);self.encoder=None;self.inference=None
         group=getattr(image_ai,'inference_group',None)
         if (group is not None and image_ai.profile.adapter=='embeddinggemma2'
                 and (encoder_factory is not None or isinstance(image_ai.encoder,EncoderProcess))):
@@ -36,7 +37,11 @@ class AudioDirectFeature:
             if self.closed:raise AIUnavailable('Audio feature is closing')
             if self.owner is None:
                 if self.catalog.writer_fence.paused:raise AIBusy('バックアップ中です。完了後に音声検索を実行してください。')
-                owner=AudioDirectJobs(self.catalog,self.encoder,inference=self.inference,stage_parent=self.stage_parent)
+                try:
+                    owner=AudioDirectJobs(self.catalog,self.encoder,inference=self.inference,stage_parent=self.stage_parent,init_cancel=self.close_event)
+                except (MediaDecodeCancelled,InterruptedError):
+                    if self.closed:raise AIUnavailable('Audio feature is closing') from None
+                    raise
                 if self.closed:owner.close();raise AIUnavailable('Audio feature is closing')
                 owner.configure(idle_release_seconds=self.idle_seconds)
                 self.owner=owner;self.monitor=IndexStamp(owner.index)
@@ -76,7 +81,7 @@ class AudioDirectFeature:
         if self.owner is not None:self.owner.configure(idle_release_seconds=idle_release_seconds)
 
     def close(self):
-        self.closed=True
+        self.closed=True;self.close_event.set()
         with self.init_lock:
             if self.owner is not None:self.owner.close()
             elif self.encoder is not None:self.encoder.close()

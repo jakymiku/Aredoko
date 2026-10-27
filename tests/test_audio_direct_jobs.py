@@ -1,5 +1,6 @@
 """Owned job/query and image/audio handover with supplied CPU encoders only."""
 from pathlib import Path
+from contextlib import contextmanager
 import sys
 import threading
 import time
@@ -77,6 +78,80 @@ class DirectAudioJobTests(unittest.TestCase):
             self.jobs.start();self.wait()
         self.assertEqual(self.jobs.status()['state'],'cancelled');self.assertEqual(self.snapshot(),previous)
         self.assertEqual(list(self.stage.iterdir()),[])
+
+    def test_cancel_after_copy_before_commit_keeps_previous_publication(self):
+        self.seed()
+        with self.index.store.connect() as db:db.execute("UPDATE ai_audio_direct_sources SET source_revision=?",('0'*64,))
+        previous=self.snapshot();ready=threading.Event();proceed=threading.Event();lock=threading.Lock();job=self.jobs
+        class Gate:
+            def __enter__(self):
+                # Planning also enters the gate; pause only after copying the item.
+                if threading.current_thread() is job.thread and job.status()['state']=='running':
+                    ready.set()
+                    if not proceed.wait(3):raise RuntimeError('test release timed out')
+                lock.acquire()
+            def __exit__(self,*args):lock.release()
+        self.jobs.publication_guard=Gate()
+        with self.supplied():
+            try:
+                self.jobs.start();self.assertTrue(ready.wait(3))
+                self.assertTrue(self.jobs.cancel()['cancel_requested'])
+            finally:proceed.set()
+            self.wait()
+        self.assertEqual(self.jobs.status()['state'],'cancelled')
+        self.assertEqual(self.snapshot(),previous)
+        self.assertEqual(list(self.stage.iterdir()),[])
+
+    def test_cancel_after_final_commit_is_rejected(self):
+        self.seed()
+        with self.index.store.connect() as db:db.execute("UPDATE ai_audio_direct_sources SET source_revision=?",('0'*64,))
+        previous=self.snapshot();ready=threading.Event();proceed=threading.Event();connect=self.index.store.connect
+        @contextmanager
+        def paused():
+            with connect() as db:
+                yield db
+                if threading.current_thread() is self.jobs.thread and self.jobs.status()['state']=='completed':
+                    ready.set()
+                    if not proceed.wait(3):raise RuntimeError('test release timed out')
+        with self.supplied(),patch.object(self.encoder,'encode',return_value=[0,1,0]),patch.object(self.index.store,'connect',side_effect=paused):
+            try:
+                self.jobs.start();self.assertTrue(ready.wait(3))
+                self.assertFalse(self.jobs.cancel()['cancel_requested'])
+            finally:proceed.set()
+            self.wait()
+        self.assertEqual((self.jobs.status()['state'],self.jobs.status()['indexed']),('completed',1))
+        self.assertNotEqual(self.snapshot(),previous)
+
+    def test_cancel_after_partial_commit_preserves_completed_item_and_resumes(self):
+        (self.media/'second.wav').write_bytes(fixture.wav_bytes())
+        self.catalog.index.scan(self.root);self.catalog.sync_index()
+        ready=threading.Event();proceed=threading.Event();connect=self.index.store.connect
+        @contextmanager
+        def paused():
+            with connect() as db:
+                yield db
+                if threading.current_thread() is self.jobs.thread and self.jobs.status()['indexed']==1:
+                    ready.set()
+                    if not proceed.wait(3):raise RuntimeError('test release timed out')
+        with self.supplied(),patch.object(self.index.store,'connect',side_effect=paused):
+            try:
+                self.jobs.start(limit=2);self.assertTrue(ready.wait(3))
+                self.assertTrue(self.jobs.cancel()['cancel_requested'])
+            finally:proceed.set()
+            self.wait()
+        self.assertEqual((self.jobs.status()['state'],self.jobs.status()['indexed']),('cancelled',1))
+        self.assertEqual(len(self.snapshot()[0]),1)
+        with self.supplied():self.jobs.start(limit=2);self.wait()
+        self.assertEqual((self.jobs.status()['reused'],self.jobs.status()['indexed']),(1,1))
+
+    def test_silent_item_commits_success_without_encoder_and_is_reused(self):
+        silent=[fixture.PCMWindow(0,30000,b'\0'*(480000*4))]
+        with self.supplied(silent),patch.object(self.encoder,'encode',side_effect=AssertionError('silent window must not infer')):
+            self.jobs.start();self.wait()
+            self.assertEqual((self.jobs.status()['state'],self.jobs.status()['indexed']),('completed',1))
+            self.assertEqual(len(self.snapshot()[1]),0)
+            self.jobs.start();self.wait()
+            self.assertEqual((self.jobs.status()['target'],self.jobs.status()['reused']),(0,1))
 
     def test_scope_changes_before_publication_are_reported_and_not_saved(self):
         def changed(*args):self.catalog.update([self.item],{'favorite':True});return [1,0,0]

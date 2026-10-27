@@ -23,11 +23,11 @@ ACTIVE={'planning','waiting','running','cancelling'}
 
 
 class AudioDirectJobs:
-    def __init__(self,catalog,encoder,*,inference=None,reader=None,stage_parent=None):
+    def __init__(self,catalog,encoder,*,inference=None,reader=None,stage_parent=None,init_cancel=None):
         self.catalog,self.encoder=catalog,encoder
-        self.index=AudioDirectIndex(catalog,encoder,reader=reader,stage_parent=stage_parent)
+        self.index=AudioDirectIndex(catalog,encoder,reader=reader,stage_parent=stage_parent,init_cancel=init_cancel)
         self.inference=inference if inference is not None else InferenceOwnership().for_encoder(encoder)
-        self.guard=threading.RLock();self.cancelled=threading.Event();self.thread=None
+        self.guard=threading.RLock();self.publication_guard=threading.Lock();self.cancelled=threading.Event();self.thread=None
         self.closed=False;self.searching=False;self.last_used=time.monotonic()
         self.idle_seconds=0;self.idle_stop=threading.Event();self.idle_thread=None
         self.value={'job_id':None,'state':'idle','candidate_total':0,'target':0,'processed':0,
@@ -63,6 +63,12 @@ class AudioDirectJobs:
     def _update(self,**changes):
         with self.guard:self.value.update(changes)
 
+    def _published(self):
+        # Count a complete item, including a silent one, only after commit.
+        with self.guard:
+            self.value['processed']+=1;self.value['indexed']+=1
+            if self.value['processed']==self.value['target']:self.value['state']='completed'
+
     def _run(self,conditions,limit):
         acquired=False;generation=self.catalog.result_generation()
         try:
@@ -84,16 +90,16 @@ class AudioDirectJobs:
                     if len(picks)==limit or seen>=reply['total']:return
                     number+=1
             self.catalog.search(kind='audio',limit=120,result_sink=collect,cancelled=self.cancelled.is_set,**conditions)
-            self._check(generation);self._update(target=len(picks),state='waiting' if picks else 'completed')
+            with self.publication_guard:
+                self._check(generation)
+                self._update(target=len(picks),state='waiting' if picks else 'completed')
             if picks:
                 while not self.inference.acquire(timeout=.05):self._check(generation)
                 acquired=True;self._check(generation);self._update(state='running')
                 for item,revision in picks:
                     self._check(generation)
-                    self.index.index_item(item,revision,cancel=self.cancelled,validate=lambda:self._check(generation))
-                    with self.guard:
-                        self.value['processed']+=1;self.value['indexed']+=1
-                self._check(generation);self._update(state='completed')
+                    self.index.index_item(item,revision,cancel=self.cancelled,validate=lambda:self._check(generation),
+                                          publication_guard=self.publication_guard,on_published=self._published)
         except (MediaDecodeCancelled,SearchCancelled,InterruptedError):self._update(state='cancelled',error_code=None)
         except AudioSearchChanged:self._update(state='failed',error_code='scope_changed')
         except Exception:
@@ -106,10 +112,11 @@ class AudioDirectJobs:
             self.last_used=time.monotonic()
 
     def cancel(self):
-        with self.guard:
-            accepted=self.thread is not None and self.thread.is_alive() and self.value['state'] in ACTIVE
-            if accepted:self.cancelled.set();self.value['state']='cancelling'
-            return {'cancel_requested':accepted,**self.status()}
+        with self.publication_guard:
+            with self.guard:
+                accepted=self.thread is not None and self.thread.is_alive() and self.value['state'] in ACTIVE
+                if accepted:self.cancelled.set();self.value['state']='cancelling'
+                return {'cancel_requested':accepted,**self.status()}
 
     def search(self,query,**options):
         cancelled=options.get('cancelled')
@@ -173,9 +180,10 @@ class AudioDirectJobs:
             finally:self.inference.release()
 
     def close(self):
-        with self.guard:
-            if self.closed:return
-            self.closed=True;self.cancelled.set();self.idle_stop.set()
+        with self.publication_guard:
+            with self.guard:
+                if self.closed:return
+                self.closed=True;self.cancelled.set();self.idle_stop.set()
         if self.idle_thread:self.idle_thread.join()
         # Closing only our encoder must not wait behind the other owner's whole
         # index batch. EncoderProcess.close also cancels its pre-launch checks.

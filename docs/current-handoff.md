@@ -1,13 +1,13 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-27）
 
-## 継続開発checkpoint（2026-10-27、直接動画のCore/WinUI source接続）
+## 継続開発checkpoint（2026-10-27、直接動画UI source＋音声取消/終了競合）
 
-- 起点 `6a389b191329031342c7cc804a74170b3a17e5f4`、既存開発branch / Draft PR #5を継続。ユーザーの開始時残量報告56％（以後は測定不可）。Terra xhighがCore/client/応答検証/tests、親がWinUI/LibraryApi接続と成果物レビューを担当。最新commitは本書のGit履歴。
-- **source接続**：設定→AI検索の準備に「動画の内容検索」の明示作成・中断・再表示/続き。検索方式8「動画の内容（AI）」、動画右クリック「内容が似た動画を探す」、両一致区間の表示、小数秒、既存playerの候補開始時刻seekへ接続。旧代表frame入口と音声mode7を維持。画面履歴に直接動画類似flagを保持、cached類似はモデル検証/ロード待ちを要求しない。通常文字検索・タグdraftの既存guardを保つ。
-- **親/相互レビュー修正**：ResultSessionClientでvideo-similarを厳密parserへ振り分け、video-direct namespaceを検証。source/contract/区間上限16秒/起点両端を検証しlegacy時刻点と区別。直接類似に入る際は媒体kindと検索方式を揃え、音声modeから動画類似→検索入力で種類不整合にならないよう補強。mode8の失敗案内漏れも修正。
-- **確認範囲**：XAML XMLとして整形式、検索方式9件（既存0–7＋動画8）、ソースのroute/scope/runtime bypass/history/dispose/seekをレビュー。生成動画の既存backend HTTP **5 PASS /3.562s**。**.NET SDK/csc/mcsがなく、Core tests・C# compile・WinUI/Portable build・native/GPUは全てUNRUN**。source存在確認をbuild/test合格と呼ばない。新VideoContentTestsはソース追加のみ。
-- **未完と次**：Windowsで `dotnet run --project tests/Aredoko.Core.Tests -c Release -- --video-content` と既存Core/Portable build、生成2動画・独立DB/設定の限定native受入（準備/取消再開、mode8、右クリック、両端根拠/seek、履歴復帰、未保存編集保全）。実encoder精度・長動画性能・Alpha/ZIP更新は未実施。Windows待ちには独立CPUの音声側取消/commit・初期化close境界を点検する。詳細は [動画正本](video-similarity.md)末尾。
-- 前段の動画backend/index/類似/回復を維持。通常DB/設定/Alpha変更0、モデル/依存download0、Actions/新branch/PR/main merge0、shutdownなし。C# source147filesを固定HEADで取得した部分snapshotであり完全checkoutではない。他端末未push差分は未確認。
+- 今回起点 `6a389b191329031342c7cc804a74170b3a17e5f4`。UI sourceを `d323db00aa096cdf971c18b374d9d60dbc554fac` に保存後、Windows専用確認を待たず独立した音声CPU安全修正へ進んだ。既存開発branch / Draft PR #5、Terra xhigh分担＋親レビューを継続。開始時のユーザー残量報告56％、現在残％は測定不可。最新commitは本書のGit履歴。
+- **動画Core/WinUI source接続済み・未ビルド**：設定の動画内容準備（明示作成/中断/再表示・続き）、mode8「動画の内容（AI）」、右クリック直接動画類似、両一致区間の小数秒表示、既存playerの開始seek、画面履歴flag、cached類似のruntime待ち回避。旧frame/音声mode7を維持。親レビューでmode/kindの整合とmode8失敗案内を補強。XAML整形式/9項目とsourceレビュー、backend HTTP5 PASS/3.562s。**Core tests/C# compile/WinUI・Portable build/native/GPUは全てUNRUN**（.NET SDK/csc/mcsなし）。[動画手順](video-similarity.md)末尾。
+- **音声の確定不具合2件を修正**：生成WAV＋疑似encoderで、最終source check後・commit前の取消を受理しても新索引が保存される競合と、lazy初期化がcatalog guardを待つとcloseが止まる条件を再現。`AudioDirectIndex/Jobs/Feature`へ動画と同じ短いpublication/cancel gateと初期化close eventを追加。最終commitが先なら取消は不受理、途中batchの完了itemは保持して再開時skip、無音のみの成功markerも維持。decode/stage/copy中はgateで取消を塞がない。
+- **音声CPU確認**：Terraのjobs/feature/index/HTTP/similarity/search **52 PASS /11.377s**、追加writer-fence admission回帰を含むfeature **3 PASS /0.350s**。親レビュー後のjobs/feature/index/HTTP **36 PASS /9.027s**、py_compile成功。別runの重複を合算しない。取消前rollback/最終commit後拒否/途中成功＋再開/無音再利用、catalog・writer fence待ちからclose、既存HTTPを確認。実encoder/GUI/GPUなし。[音声正本](audio-producer-review.md)末尾。
+- **次の1件**：Windows/.NETがある担当は `dotnet run --project tests/Aredoko.Core.Tests -c Release -- --video-content` → 既存Core/Portable build → 生成2動画・独立DB/設定の限定native確認（mode8、準備取消/続き、直接類似/旧frame、両端根拠/seek、履歴/未保存draft）へ。build失敗は診断して実修正する。Windowsがない担当は、独立CPU候補として音声cached類似の前候補buffer保持/原本変更時refresh分類を動画側のレビュー修正と照合する（未点検、今回の音声job修正とは別単位）。全受入待ちで同一flowを反復しない。
+- **未完/保全**：実動画/録音/音楽の品質、長動画比較/decoder性能、媒体横断、配布NOTICE/host/clean Windows等は未完。通常DB/設定/Alpha/ZIP/shortcut変更0、モデル/依存download0、Actions/新branch/PR/main merge0、shutdownなし。固定SHA部分snapshotで完全checkout/他端末未push差分の確認ではない。
 
 ## 継続開発checkpoint（2026-10-27、以下の過去記録より優先）
 

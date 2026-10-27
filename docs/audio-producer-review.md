@@ -119,3 +119,16 @@ Core runner/Portable publish PASS。Coreにはroots変数のshadowによる初�
 frontend01/sourcec8703fdを使用。個別許可後native01でcontext入口・起点除外・両時刻・詳細まで成功。favoriteへ移動した際、種類audioを保持した正しいfilter空案内をharnessが未絞込の案内と比較して停止した。製品FAILではなく、全5PNGを目視しPARTIAL、正常exit0。harnessを現行のfilter案内＋favorite見出し待ちへ修正し、追加許可後native02は9checks/4PNG目視/正常exit0、画面履歴でdirect類似の候補と条件が復元されることまでPASS。
 
 モデル利用不可・resident=falseの供給CPU encoderを用い、cached比較でモデルを起動しないこと、元生成SHA/mtime・タグ不変を確認。GPU・音声再生・通常DB・Alpha変更なし。旧失敗は保持。証拠`data/ai-ui/continuation-20261027/audio-similarity-native01`/`audio-similarity-native02`。実音楽の類似品質・長音声の性能は別途未受入。
+
+
+## 2026-10-27：所有音声jobの取消commit・初期化close競合修正
+
+動画側のreviewで修正した境界を音声側へ照合し、生成WAV＋疑似encoderで二つの実不具合を再現した。旧codeでは最終source checkとDB context退出commitの間にcancelを受理すると、jobはcancelledでも旧公開が新索引に置換された。また初回Feature._ensureがinit_lockを持ってcatalog guardを待つと、Feature.closeが無関係なguard解放を待ち続けた。
+
+修正はAudioDirectIndexの任意publication_guard/on_publishedとinit_cancel、およびJobs/Featureの共有gate・close eventだけ。最終source check→明示db.commit→item進捗/最終completedを短いgateで確定し、cancel/close/ゼロ対象完了も同gateに従う。先に受理した取消は未commit itemをrollbackし、最終itemのcommitが先ならcancel_requested=false。途中batchの既にcommitしたitemは残し次回fresh skip。無音windowのskipと成功marker、profile/namespace/schema/backup/検索を変えない。長いdecode/stage/copyやモデル待ちの間はgateを保持しない。
+
+Feature.closeはinit_lock取得前にclose eventをsetし、Index初期化のcatalog guardとwriter fence待ちを中断する。通常のpaused fast checkを通過直後にbackup pauseが始まるadmission競合もテストした。HTTPの応答shapeとstatus名は維持。
+
+Terra担当のjobs/feature/index/HTTP/similarity/search52 PASS/11.377s、追加admission回帰後のfeature3 PASS/0.350s。親はdiffを独立reviewし、jobs/feature/index/HTTP36 PASS/9.027sとpy_compileを確認。重複runは合算しない。決定的gate回帰はplanning時の先行gateを除外し、copy後commit前に取消を入れる。最終commit後拒否・途中commit後取消/再開・無音成功再利用・catalog/fence待ちcloseを確認。通常DB/実録音/実model/GPU/GUI/外部取得は使っていない。
+
+Windows実workerとnative音声準備画面の最終連動は未確認。次回は通常の開発手順で生成fixture/独立設定に限定し、成功済み全flowを無条件に反復しない。

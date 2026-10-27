@@ -30,7 +30,7 @@ STAGE_BYTES=16*1024*1024
 
 
 class AudioDirectIndex:
-    def __init__(self,catalog,encoder,*,reader=None,stage_parent=None):
+    def __init__(self,catalog,encoder,*,reader=None,stage_parent=None,init_cancel=None):
         profile=encoder.profile
         if profile.modalities!=('text','audio') or profile.vector_contract!=AUDIO_VECTOR_CONTRACT:
             raise ValueError('An explicit direct-audio encoder namespace is required')
@@ -40,12 +40,14 @@ class AudioDirectIndex:
         from ai_search import VectorStore
         # The same catalog guard -> writer fence order as live capture. A backup
         # cannot discover a newly created sidecar between schema statements.
-        with self._boundary(None),catalog.writer_fence.write():
+        with self._boundary(init_cancel),catalog.writer_fence.write(cancelled=lambda:init_cancel is not None and init_cancel.is_set()):
+            self._check(init_cancel)
             self.store=VectorStore(profile.store_path(catalog.path),profile,writer_fence=catalog.writer_fence)
             with self.store.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
                 for statement in TABLES:db.execute(statement)
                 db.execute('PRAGMA user_version=1')
+                self._check(init_cancel)
 
     @staticmethod
     def _check(cancel):
@@ -62,13 +64,15 @@ class AudioDirectIndex:
             return db.execute('SELECT 1 FROM ai_audio_direct_sources WHERE item_id=? AND source_revision=? AND contract=?',
                               (item_id,revision,CONTRACT)).fetchone() is not None
 
-    def index_item(self,item_id,revision,*,cancel=None,validate=None):
+    def index_item(self,item_id,revision,*,cancel=None,validate=None,publication_guard=None,on_published=None):
         if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid audio item')
         if type(revision) is not str or re.fullmatch('[0-9a-f]{64}',revision) is None:raise ValueError('Invalid audio revision')
         self._check(cancel)
         if validate is not None:
             if not callable(validate):raise ValueError('Invalid audio publication validator')
             validate()
+        if on_published is not None and (publication_guard is None or not callable(on_published)):
+            raise ValueError('Invalid audio publication callback')
         if self.encoder.profile.key!=self.profile.key:raise ValueError('Audio encoder profile changed')
         with tempfile.TemporaryDirectory(prefix='aredoko-audio-stage-',dir=self.stage_parent) as temporary:
             path=Path(temporary)/'stage.sqlite'
@@ -101,14 +105,14 @@ class AudioDirectIndex:
                             indexed+=1
                     if not stream.complete or not frames:raise ValueError('Incomplete audio input cannot be published')
                 stage.commit()
-                try:self._publish(item_id,revision,path,decoded,indexed,frames,cancel,validate)
+                try:self._publish(item_id,revision,path,decoded,indexed,frames,cancel,validate,publication_guard,on_published)
                 except InterruptedError:
                     self._check(cancel)
                     raise
             return {'item_id':item_id,'revision':revision,'decoded_windows':decoded,
                     'indexed_windows':indexed,'total_frames':frames,'contract':CONTRACT}
 
-    def _publish(self,item_id,revision,path,decoded,indexed,frames,cancel,validate):
+    def _publish(self,item_id,revision,path,decoded,indexed,frames,cancel,validate,publication_guard,on_published):
         def check_source():
             self._check(cancel)
             if validate is not None:validate()
@@ -133,5 +137,12 @@ class AudioDirectIndex:
                         self._check(cancel)
                         db.executemany('INSERT INTO ai_audio_direct_windows VALUES(?,?,?,?,?)',
                                        ((item_id,*row) for row in rows))
-                # File changes/cancel while copying roll back to the prior item.
-                check_source()
+                # Staging and copying do not hold the cancellation gate. The
+                # final check and commit are one decision with job cancellation.
+                def commit():
+                    check_source()
+                    db.commit()
+                    if on_published is not None:on_published()
+                if publication_guard is None:commit()
+                else:
+                    with publication_guard:commit()
