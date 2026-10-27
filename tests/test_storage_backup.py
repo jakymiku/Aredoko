@@ -97,7 +97,7 @@ class StorageBackupTests(TagFixture,unittest.TestCase):
         self.unchanged()
 
     def test_current_viewer_settings_roundtrip_preserves_all_fields_and_bytes(self):
-        value={'version':1,'wheel_up_advances':True,'library_item_scale':180,'theme':'dark','enlarge_small_images':True,'always_show_controls':True,'loop_book_pages':True}
+        value={'version':1,'wheel_up_advances':True,'library_item_scale':180,'theme':'dark','enlarge_small_images':True,'always_show_controls':True,'loop_book_pages':True,'double_click_viewer':'external'}
         raw=json.dumps(value,indent=2).encode('utf-8');self.viewer.write_bytes(raw)
         self.create();restore(self.bundle,self.output)
         self.assertEqual((self.output/'settings/viewer-settings.json').read_bytes(),raw)
@@ -352,7 +352,7 @@ class StorageLeaseTests(unittest.TestCase):
 class ViewerSettingsCompatibilityTests(unittest.TestCase):
     def test_legacy_partial_and_current_version_one_values(self):
         base={'version':1,'wheel_up_advances':False}
-        for extra in ({}, {'theme':'system'}, {'enlarge_small_images':False},
+        for extra in ({}, {'theme':'system'}, {'enlarge_small_images':False}, {'double_click_viewer':'internal'}, {'double_click_viewer':'external'},
                       *({'library_item_scale':scale,'theme':theme,'enlarge_small_images':True}
                         for scale in range(60,181,20) for theme in ('system','light','dark'))):
             with self.subTest(extra=extra):
@@ -362,7 +362,8 @@ class ViewerSettingsCompatibilityTests(unittest.TestCase):
         base={'version':1,'wheel_up_advances':True}
         for key,value in [('version',2),('version',True),('wheel_up_advances',1),('library_item_scale',True),
                           ('library_item_scale',60.0),('library_item_scale',61),('library_item_scale',200),
-                          ('theme','future'),('theme',None),('enlarge_small_images',1),('future_setting',True)]:
+                          ('theme','future'),('theme',None),('enlarge_small_images',1),('future_setting',True),
+                          ('double_click_viewer',True),('double_click_viewer',None),('double_click_viewer','future')]:
             with self.subTest(key=key,value=value),self.assertRaises(RecoveryError):
                 recovery._configuration('viewer_settings',json.dumps({**base,key:value}).encode())
         raw=json.dumps(base).encode()

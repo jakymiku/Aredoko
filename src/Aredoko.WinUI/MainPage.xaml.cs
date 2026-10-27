@@ -1241,6 +1241,8 @@ public sealed partial class MainPage : Page
         // The first click uses the normal selection/discard guard. Never open
         // a different or stale result if selection is pending or was cancelled.
         if(disposed||saving||dialogOpen||active?.Id!=itemId)return;
+        if(ViewerOptions.Value.OpenExternally&&!await OpenPreferredExternalAsync(active))return;
+        if(disposed||saving||dialogOpen||active?.Id!=itemId)return;
         if(ImageViewerPolicy.CanOpen(active))await OpenImageAsync();
         else if(ArchiveManifest.CanOpen(active))await OpenBookAsync();
         else if(VideoPlayerPolicy.CanOpen(active))await OpenVideoAsync();

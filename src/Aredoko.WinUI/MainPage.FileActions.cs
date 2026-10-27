@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Aredoko.Core;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
@@ -16,7 +17,7 @@ public sealed partial class MainPage
         FileProperties.IsExpanded=false;
         FilePropertyText.Text=active is null?"":LibraryFilePath.Describe(active,knownRoots.FirstOrDefault(r=>r.Id==active.RootId)?.Path??"登録先を確認できません");
     }
-    private void OpenInShell(MediaRow row,bool explorer)
+    private bool OpenInShell(MediaRow row,bool explorer,bool reportFailure=true)
     {
         try
         {
@@ -33,8 +34,33 @@ public sealed partial class MainPage
                 ShellReveal.SelectFile(path);
             }
             else Process.Start(new ProcessStartInfo(path){UseShellExecute=true});
+            return true;
         }
-        catch(Exception ex){Failure(new InvalidOperationException("元ファイルを開けません。登録先・ファイルの状態と既定のアプリを確認してください。",ex));AppLog.Error(ex);}
+        catch(Exception ex){if(reportFailure)Failure(new InvalidOperationException("元ファイルを開けません。登録先・ファイルの状態と既定のアプリを確認してください。",ex));AppLog.Error(ex);return false;}
+    }
+    private readonly ExternalActivationGate externalActivation=new();
+    // True only when the user explicitly chooses the internal fallback.
+    private async Task<bool> OpenPreferredExternalAsync(MediaRow row)
+    {
+        if(!externalActivation.TryActivate(row.Id,Environment.TickCount64,(int)GetDoubleClickTime()))return false;
+        if(!await transitions.WaitAsync(0))return false;
+        dialogOpen=true;
+        try
+        {
+            if(OpenInShell(row,false,reportFailure:false))
+            {
+                RecordContentOpened(row.Id);
+                return false;
+            }
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,
+                Title="既定のアプリで開けませんでした",
+                Content=$"{row.Title}\n\nファイルへのアクセスやWindowsの関連付けを確認してください。Aredokoの内蔵ビューアでも開けます。",
+                PrimaryButtonText="内蔵ビューアで開く",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
+            AutomationProperties.SetAutomationId(dialog,"ExternalViewerFallback");
+            return await dialog.ShowAsync()==ContentDialogResult.Primary;
+        }
+        catch(Exception ex){Failure(ex);return false;}
+        finally{dialogOpen=false;transitions.Release();}
     }
     private static bool IsFolderActionSource(object source)
     {

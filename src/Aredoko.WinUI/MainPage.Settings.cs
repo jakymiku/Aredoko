@@ -23,6 +23,12 @@ public sealed partial class MainPage
             theme.SelectedIndex=ViewerOptions.Value.Theme switch{"light"=>1,"dark"=>2,_=>0};
             AutomationProperties.SetAutomationId(theme,"SettingsTheme");
             panel.Children.Add(theme);
+            var viewer=new ComboBox{Header="ダブルクリックで開くアプリ",HorizontalAlignment=HorizontalAlignment.Stretch};
+            viewer.Items.Add("Aredokoの内蔵ビューア（既定）");viewer.Items.Add("Windowsの既定アプリ");
+            viewer.SelectedIndex=ViewerOptions.Value.OpenExternally?1:0;
+            AutomationProperties.SetAutomationId(viewer,"SettingsDoubleClickViewer");
+            panel.Children.Add(viewer);
+            panel.Children.Add(new TextBlock{Text="外部アプリにはAredokoの検索順位・連続閲覧の順番は引き継がれません。詳細パネルの表示ボタンでは、いつでも内蔵ビューアを開けます。",TextWrapping=TextWrapping.Wrap});
             panel.Children.Add(new TextBlock{Text="画像の拡大・操作バー・本の循環は、ビューア右クリックまたは下部の設定ボタンで変更できます。",TextWrapping=TextWrapping.Wrap});
             var wheel=new ComboBox{Header="ホイールで次の画像・ページへ",HorizontalAlignment=HorizontalAlignment.Stretch};
             wheel.Items.Add("下に回す（上で戻る）");wheel.Items.Add("上に回す（下で戻る）");wheel.SelectedIndex=ViewerOptions.Value.WheelUpAdvances?1:0;
@@ -57,10 +63,10 @@ public sealed partial class MainPage
                         savedVerification=enabled;
                     }
                     var selectedTheme=theme.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};
-                    ViewerOptions.SavePreferences(wheel.SelectedIndex==1,selectedTheme,ViewerOptions.Value.EnlargeSmallImages);
+                    ViewerOptions.SavePreferences(wheel.SelectedIndex==1,selectedTheme,ViewerOptions.Value.EnlargeSmallImages,viewer.SelectedIndex==1);
                     MainWindow.Current.ApplyTheme(selectedTheme);
                     dialog.RequestedTheme=selectedTheme switch{"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};
-                    savedText.Text="保存しました。テーマはすぐに、整合性チェックは次回起動から反映します。";
+                    savedText.Text="保存しました。表示・閲覧設定はすぐに、整合性チェックは次回起動から反映します。";
                 }
                 catch(Exception ex){savedText.Text="保存できません: "+ex.Message;}
                 finally{dialog.IsPrimaryButtonEnabled=true;deferral.Complete();}

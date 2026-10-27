@@ -29,10 +29,24 @@ internal static class FeedbackTests
             normal.Save(file);check(!ViewerInputSettings.Load(file).WheelUpAdvances&&Directory.GetFiles(dir).Length==1,"atomic settings overwrite leaves no temporary files");
             File.WriteAllText(file,"{\"version\":1,\"wheel_up_advances\":true}");
             check(ViewerInputSettings.Load(file)==new ViewerInputSettings(true,100),"old viewer settings retain wheel direction with default item size");
+            check(!ViewerInputSettings.Load(file).OpenExternally,"legacy settings keep the internal viewer by default");
+            var external=new ViewerInputSettings(true,140,"dark",true,true,true,true);external.Save(file);
+            check(ViewerInputSettings.Load(file)==external,"external viewer choice survives restart with all existing preferences");
+            (external with{OpenExternally=false}).Save(file);
+            check(!ViewerInputSettings.Load(file).OpenExternally&&ViewerInputSettings.Load(file).LoopBookPages,"switching back to internal preserves book settings");
+            foreach(var invalid in new[]{"null","true","1","\"future\""})
+            {
+                File.WriteAllText(file,"{\"version\":1,\"wheel_up_advances\":true,\"double_click_viewer\":"+invalid+"}");
+                check(!ViewerInputSettings.Load(file).OpenExternally&&ViewerInputSettings.Load(file).WheelUpAdvances,"invalid viewer choice is safely internal without losing legacy fields");
+            }
+            File.WriteAllText(file,"{\"version\":1,\"wheel_up_advances\":true}");
             var scaled=ViewerInputSettings.Load(file) with {LibraryItemScale=160};scaled.Save(file);
             check(ViewerInputSettings.Load(file)==new ViewerInputSettings(true,160),"item size and wheel direction survive restart together");
             (scaled with {WheelUpAdvances=false}).Save(file);
             check(ViewerInputSettings.Load(file)==new ViewerInputSettings(false,160),"changing wheel preference preserves item size");
+            var activation=new ExternalActivationGate();
+            check(activation.TryActivate(1,1000,500)&&!activation.TryActivate(1,1100,500),"pointer fallback and double-tap launch one external app");
+            check(activation.TryActivate(2,1100,500)&&activation.TryActivate(2,1700,500),"another item and later gestures can launch independently");
             foreach(var bad in new[]{"0","59","181","101","2147483648","null","\"large\""})
             {
                 File.WriteAllText(file,"{\"version\":1,\"wheel_up_advances\":true,\"library_item_scale\":"+bad+"}");

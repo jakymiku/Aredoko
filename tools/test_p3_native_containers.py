@@ -26,11 +26,13 @@ def main():
     parser.add_argument('--compact-toolbar',action='store_true',help='Generated mixed media, toolbar geometry and explicit detail draft preservation')
     parser.add_argument('--video-content',action='store_true',help='Generated silent MP4s and supplied CPU encoder; no playback, model or GPU')
     parser.add_argument('--video-history-only',action='store_true',help='Pre-index on CPU, then only cached video similarity and folder navigation')
+    parser.add_argument('--viewer-choice',action='store_true',help='Generated media: settings persistence, failed external fallback and internal double-click; no external app launched')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     if args.real_fixture and not args.global_edge:parser.error('Real fixture requires the bounded global-edge case')
     if args.compact_toolbar:args.detail_actions=True
+    if args.viewer_choice:args.detail_actions=True
     if args.video_history_only:args.video_content=True
     if args.audio_similarity_only:args.audio_search_only=True
     if args.audio_search_only:args.audio_content=True
@@ -166,7 +168,7 @@ def main():
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
         if args.video_content:ready()
-        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or args.compact_toolbar or args.video_content:
+        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or args.compact_toolbar or args.video_content or args.viewer_choice:
             # The owner launches this one test process; use normal Windows
             # activation, never input attachment, security bypass or other apps.
             report['foreground_activation_requested']=bool(user.SetForegroundWindow(int(hwnd)))
@@ -205,6 +207,11 @@ def main():
             from ui_compact_toolbar_audit import audit
             audit(ui,tree,shot,report,check,cat,first['id'],input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
             check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.viewer_choice:
+            from ui_viewer_choice_audit import audit
+            removed=audit(ui,cli,tree,shot,report,check,cat,media,target,proc.pid,hwnd,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
+            check('only the explicitly removed generated fixture changed',{key:value for key,value in before.items() if key!=removed}==sources())
+            report['pass']=True
         elif args.detail_actions:
             from ui_detail_actions_audit import audit
             audit(ui,tree,shot,check,cat,navigation_only=args.detail_navigation_only)
