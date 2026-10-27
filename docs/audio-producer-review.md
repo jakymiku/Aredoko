@@ -169,3 +169,22 @@ renderで起点/候補のaudio_manifestがReaderChanged等のPreviewUnavailable�
 生成768D float64 arrayの同じseed/1万pairを各Pythonで1回ずつ補助計測：基本Python3.11は0.240486→0.156169秒、開発3.14は0.275385→0.193622秒。内積kernelだけで、catalog/原本検証/DB guard込みの全検索速度や長音楽品質を測った値ではない。新旧scoreのhex一致、1/3/128/512/768D×40pairと小さい値/符号zeroを同一interpreter内でbit一致確認（両Python各2tests）。Python版を跨ぐsumのbit一致を保証するものではない。
 
 音声/動画の既存scope・破損・cap・取消と新たな音声pair中取消は**32 PASS**。初回31件中1件は動画testが旧moduleの`sum`9回目をhookする実装依存のため取消を発生させずFAIL（製品取消の喪失ではない）。normの回数依存をやめ、実際の最初のpair scoreで取消を発生させるよう修正し、次のcheckでSearchCancelled・部分順位非公開・spool回収まで確認。最終log `data/ai-ui/continuation-20261028/similarity-map02.log`。GPU/GUI/実音楽・実動画/通常DBは未使用。
+
+
+## 2026-10-28 Work：文章検索の破損item除外と明示batchによる回復
+
+AudioDirectSimilarityには厳密な破損検証があった一方、AudioDirectSearchはmarkerの型/実window件数を照合せず、不正windowを単にskipして残りを一致として返した。欠落vector・短すぎるtail・ゼロnorm/NaNがあっても旧区間のヒットが残り、文字列件数/時刻はTypeErrorになった。またfreshはmarkerのrevision/contract一致だけを見て、明示的に準備し直しても破損itemを再利用していた。生成fixtureで両問題を再現した。
+
+Indexにvalid_marker/valid_intervalを置いてSearch/Similarityから共用。decoded=ceil(total_frames/480000)、0<=indexed<=decoded<=2880、総frame数は24h以内、厳密int、各vectorのstart=ordinal*30000/end=min(start+30000,ceil(total_frames*1000/16000))を要求する。全無音（indexed=0）は有効、無音によるordinalの穴を許し、動画のようにvector全ordinal連続を要求しない。Searchは各itemの実vector件数とindexedを最後まで照合し、1区間でも不正型/時刻/長さ/非正規化があればそのitemの途中bestとindexed扱いを取り消す。正常候補は同じscope/score/time契約で検索可能。
+
+freshもstored windowを1本ずつ検証し、count/vector長/norm/区間が一致したときだけ再利用する。推論/decodeやDB変更はしない。job planningから取消eventを渡し、検査中も中断可能。破損itemは次の利用者による明示batchで従来の全item stage→source確認→atomic commitを使って再生成する。markerを消して自動修復する経路や新しいschema/backup契約は追加しない。producerについても、30秒未満のwindowの後にさらにwindowが続くと拒否する。短い最終window自体は有効で、途中失敗時は旧公開を保持する。
+
+render中のaudio_manifestがPreviewUnavailable/ReaderChangedを投げた場合はAudioSearchChangedへ変換。既存認証APIのHTTP409/audio_scope_changedで再検索を案内し、一般400へ分類しない。類似検索の10万pair cap・buffer/所有境界と既存float演算は変更していない。
+
+修正前の追加6methodで19 FAIL/6 ERROR/1.501s（破損注入subtestを含む）を再現。6ERROR中、取消引数は旧freshに存在しない新契約の確認であり、それ以外は型比較・原本変更例外の未分類。修正後 `PYTHONPATH=app:tests:tools python -m unittest test_audio_direct_search test_audio_direct_index test_audio_direct_jobs test_audio_direct_similarity test_audio_direct_http test_audio_direct_feature -q` は**70 PASS/13.942s**。有効候補の保持、破損marker/欠落/ordinal/時刻/vectorのitem全除外、indexed_totalの減少、全無音/先頭無音gap、明示jobの再生成、既存取消/commit/close/backup/類似境界を確認。py_compile成功。
+
+その後追加した2件を対象実行し**2 PASS/1.044s**：生成31.25秒/16kHz/mono WAVを本物の既存FFmpeg＋PreviewReader.audio_pcm_streamで読み、2window/500000frames・区間0–30000/30000–31250・fresh成功・原本SHA/mtime不変・一時stage回収を確認（疑似encoderのみ）。実認証loopback HTTPではrank後render前に生成原本を変更し409とitems非返却を確認。70件を無変更で再走させず、件数を重複合算しない。
+
+今回の変更でfreshは従来のmarker照合より多くの保存済みvectorを読む。1itemあたり最大2880windowを逐次処理し、全vectorを保持しないが、長音声/大量itemの準備planning速度は未受入。SQLiteファイル自体の破損や同時に整合値へ書き換えられたデータの真正性を保証するものではない。実録音/音楽品質・実model/Windows/GPU/WinUI/Portableは未実行。
+
+Windowsで必要な限定確認：独立DBに生成音声2件を準備し、停止した専用backendのsidecarコピーだけへ1vector欠落を注入→専用起動でそのitemが文章検索から外れる→明示準備で再生成→正しい時刻付き結果へ戻ることを確認する。通常DBや私物に破損を注入しない。前段一括favoriteのCore/WinUI/native受入は別残件として維持する。

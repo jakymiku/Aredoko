@@ -10,8 +10,7 @@ import sys
 
 from ai_score_spool import ScoreSpool,SearchCancelled
 from ai_vectors import normalized
-from audio_direct_index import CONTRACT,MAX_WINDOWS
-from audio_input import MAX_START_MS,SAMPLE_RATE
+from audio_direct_index import CONTRACT,valid_marker,valid_interval
 from previews import PreviewUnavailable
 
 
@@ -72,7 +71,10 @@ class AudioDirectSearch:
                     payloads=spool.evidence([item for item,_ in selected['ranked']]);items=[]
                     for item,score in selected['ranked']:
                         payload=payloads[item]
-                        if index.reader.audio_manifest(item)['revision']!=payload['revision']:
+                        try:revision=index.reader.audio_manifest(item)['revision']
+                        except PreviewUnavailable:
+                            raise AudioSearchChanged('Matched audio unavailable; refresh results') from None
+                        if revision!=payload['revision']:
                             raise AudioSearchChanged('Matched audio changed; refresh results')
                         items.append({**payload['item'],'semantic_score':round(score,6),
                             'audio_match_ms':payload['audio_match_ms'],'audio_match_end_ms':payload['audio_match_end_ms'],
@@ -90,16 +92,16 @@ class AudioDirectSearch:
     def _rank(self,rows,query,check):
         if not rows:return {},0
         if len(rows)>120:raise ValueError('Audio ranking batch exceeds limit')
-        index=self.index;ids=[row['id'] for row in rows];best={};fresh={}
+        index=self.index;ids=[row['id'] for row in rows];best={};fresh={};counts={}
         with index.store.connect() as db:
             markers=db.execute('SELECT item_id,source_revision,contract,decoded_windows,indexed_windows,total_frames '
                               'FROM ai_audio_direct_sources WHERE item_id IN ('+','.join('?' for _ in ids)+')',ids)
             for item,revision,contract,decoded,indexed,frames in markers:
                 check()
-                if not (contract==CONTRACT and 0<=indexed<=decoded<=MAX_WINDOWS
-                        and 1<=frames<=MAX_START_MS*SAMPLE_RATE//1000):continue
+                if contract!=CONTRACT or not valid_marker(decoded,indexed,frames):continue
                 try:
-                    if index.reader.audio_manifest(item)['revision']==revision:fresh[item]=(revision,decoded,indexed)
+                    if index.reader.audio_manifest(item)['revision']==revision:
+                        fresh[item]=(revision,decoded,indexed,frames);counts[item]=0
                 except PreviewUnavailable:continue
             markers.close()
             cursor=db.execute('SELECT item_id,ordinal,start_ms,end_ms,vector FROM ai_audio_direct_windows '
@@ -107,10 +109,17 @@ class AudioDirectSearch:
             for item,ordinal,start,end,data in cursor:
                 check()
                 if item not in fresh:continue
-                revision,decoded,indexed=fresh[item]
-                if not indexed or not (0<=ordinal<decoded and 0<=start<end<=MAX_START_MS):continue
+                revision,decoded,indexed,frames=fresh[item]
+                if counts[item]>=indexed or not valid_interval(ordinal,start,end,decoded,frames):
+                    fresh.pop(item);best.pop(item,None);continue
                 value=_score(data,query)
-                if value is not None and (item not in best or value>best[item][0]):
+                if value is None:
+                    fresh.pop(item);best.pop(item,None);continue
+                counts[item]+=1
+                if item not in best or value>best[item][0]:
                     best[item]=(value,start,end,revision)
             cursor.close()
+        for item,(_,_,indexed,_) in tuple(fresh.items()):
+            if counts[item]!=indexed:
+                fresh.pop(item);best.pop(item,None)
         check();return best,len(fresh)

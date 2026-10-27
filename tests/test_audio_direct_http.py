@@ -136,5 +136,16 @@ class AudioHTTPTests(unittest.TestCase):
         self.assertEqual(code,503);self.assertEqual(result['error_code'],'ai_unavailable')
         self.assertIn('フォルダーや棚',result['error']);self.assertNotIn('items',result)
 
+    def test_matched_audio_change_returns_a_refresh_conflict_instead_of_bad_request(self):
+        self.prepare();manifest=self.reader.audio_manifest;calls=[]
+        def changed(item):
+            calls.append(item)
+            if len(calls)==2:self.path.write_bytes(b'changed generated source')
+            return manifest(item)
+        with patch.object(self.reader,'audio_manifest',side_effect=changed):
+            code,result=self.request('/api/library/audio-ai/search',{'query':'audio'})
+        self.assertEqual(code,409);self.assertEqual(result['error_code'],'audio_scope_changed')
+        self.assertNotIn('items',result)
+
 
 if __name__=='__main__':unittest.main()

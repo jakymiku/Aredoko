@@ -12,15 +12,13 @@ import sys
 from ai_score_spool import ScoreSpool,SearchCancelled
 from ai_process import AIUnavailable
 from ai_vectors import dot
-from audio_direct_index import CONTRACT,MAX_WINDOWS
+from audio_direct_index import CONTRACT,valid_marker,valid_interval
 from audio_direct_search import AudioSearchChanged
-from audio_input import MAX_START_MS,SAMPLE_RATE,MAX_WINDOW_MS
 from previews import PreviewUnavailable
 
 MAX_FRAME_BYTES=32*1024*1024
 # Bound total exact pair comparisons across all candidates in one request.
 MAX_PAIRS=100_000
-WINDOW_FRAMES=SAMPLE_RATE*MAX_WINDOW_MS//1000
 
 
 class AudioDirectSimilarity:
@@ -34,10 +32,7 @@ class AudioDirectSimilarity:
                           'FROM ai_audio_direct_sources WHERE item_id=?',(row['id'],)).fetchone()
         if marker is None:return revision,[]
         saved,contract,decoded,indexed,frames=marker
-        if (saved!=revision or contract!=CONTRACT
-                or any(type(value) is not int for value in (decoded,indexed,frames))
-                or not (0<indexed<=decoded<=MAX_WINDOWS and 1<=frames<=MAX_START_MS*SAMPLE_RATE//1000)
-                or decoded!=(frames+WINDOW_FRAMES-1)//WINDOW_FRAMES):
+        if saved!=revision or contract!=CONTRACT or not valid_marker(decoded,indexed,frames) or not indexed:
             return revision,[]
         result=[]
         cursor=db.execute('SELECT ordinal,start_ms,end_ms,vector FROM ai_audio_direct_windows '
@@ -48,9 +43,7 @@ class AudioDirectSimilarity:
                 if len(result)>=indexed:return revision,[]
                 if (len(result)+1)*index.profile.dimension*8>MAX_FRAME_BYTES:
                     raise AIUnavailable('音声の比較に必要なメモリが上限を超えました。結果は作成していません。')
-                if (any(type(value) is not int for value in (ordinal,start,end))
-                        or not (0<=ordinal<decoded and start==ordinal*MAX_WINDOW_MS
-                            and start<end==min(start+MAX_WINDOW_MS,(frames*1000+SAMPLE_RATE-1)//SAMPLE_RATE))
+                if (not valid_interval(ordinal,start,end,decoded,frames)
                         or type(data) is not bytes or len(data)!=index.profile.dimension*4):return revision,[]
                 packed=array('f');packed.frombytes(data)
                 if sys.byteorder!='little':packed.byteswap()

@@ -72,6 +72,48 @@ class AudioDirectSearchTests(unittest.TestCase):
         result=AudioDirectSearch(self.index).search('audio')
         self.assertEqual((result['total'],result['indexed_total'],result['search_status']),(0,1,'ready'))
 
+    def test_corrupt_item_is_excluded_whole_while_valid_candidates_remain_searchable(self):
+        second,_=self.add_item();search=AudioDirectSearch(self.index)
+        statements=[
+            "UPDATE ai_audio_direct_sources SET decoded_windows='bad' WHERE item_id=?",
+            "UPDATE ai_audio_direct_sources SET indexed_windows='bad' WHERE item_id=?",
+            "UPDATE ai_audio_direct_sources SET total_frames='bad' WHERE item_id=?",
+            'UPDATE ai_audio_direct_sources SET decoded_windows=3 WHERE item_id=?',
+            'UPDATE ai_audio_direct_sources SET total_frames=496000.5 WHERE item_id=?',
+            'UPDATE ai_audio_direct_sources SET indexed_windows=0 WHERE item_id=?',
+            'DELETE FROM ai_audio_direct_windows WHERE item_id=? AND ordinal=1',
+            'UPDATE ai_audio_direct_windows SET ordinal=2 WHERE item_id=? AND ordinal=1',
+            "UPDATE ai_audio_direct_windows SET start_ms='bad' WHERE item_id=? AND ordinal=1",
+            'UPDATE ai_audio_direct_windows SET start_ms=30000.5 WHERE item_id=? AND ordinal=1',
+            'UPDATE ai_audio_direct_windows SET end_ms=30999 WHERE item_id=? AND ordinal=1',
+            'UPDATE ai_audio_direct_windows SET end_ms=31001 WHERE item_id=? AND ordinal=1',
+            "UPDATE ai_audio_direct_windows SET vector=x'000000000000000000000000' WHERE item_id=? AND ordinal=1",
+            "UPDATE ai_audio_direct_windows SET vector=x'0000c07f0000000000000000' WHERE item_id=? AND ordinal=1",
+            "UPDATE ai_audio_direct_windows SET vector=x'00' WHERE item_id=? AND ordinal=1",
+        ]
+        for statement in statements:
+            with self.subTest(statement=statement):
+                self.seed()
+                with self.index.store.connect() as db:db.execute(statement,(self.item,))
+                result=search.search('audio')
+                self.assertEqual([row['id'] for row in result['items']],[second])
+                self.assertEqual((result['indexed_total'],result['search_status']),(1,'partially_indexed'))
+                self.assertEqual(list(self.stage.iterdir()),[])
+
+    def test_silent_window_gap_is_valid_and_keeps_the_later_match_time(self):
+        silent=fixture.PCMWindow(0,30000,b'\0'*(480000*4))
+        with self.supplied([silent,self.windows[1]]):self.index.index_item(self.item,self.revision)
+        result=AudioDirectSearch(self.index).search('audio')
+        self.assertEqual((result['indexed_total'],result['search_status']),(1,'ready'))
+        self.assertEqual(result['items'][0]['audio_match_ms'],30000)
+
+    def test_matched_source_unavailable_during_range_reports_refresh_conflict(self):
+        self.seed()
+        def changed(read):
+            read(0);self.path.write_bytes(b'changed generated source');return read(0)
+        with self.assertRaises(AudioSearchChanged):AudioDirectSearch(self.index).search('audio',result_sink=changed)
+        self.assertEqual(list(self.stage.iterdir()),[])
+
     def test_empty_scope_and_invalid_conditions_do_not_load_encoder(self):
         self.seed()
         with patch.object(self.encoder,'encode') as encode:

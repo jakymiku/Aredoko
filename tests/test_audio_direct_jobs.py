@@ -51,6 +51,15 @@ class DirectAudioJobTests(unittest.TestCase):
         self.assertEqual((self.jobs.status()['target'],self.jobs.status()['reused']),(0,1))
         self.assertEqual(self.encoder.calls,calls)
 
+    def test_explicit_batch_rebuilds_a_corrupt_item_instead_of_reusing_its_marker(self):
+        self.seed()
+        with self.index.store.connect() as db:db.execute('DELETE FROM ai_audio_direct_windows WHERE item_id=? AND ordinal=1',(self.item,))
+        before=self.encoder.calls
+        with self.supplied():self.jobs.start();self.wait()
+        self.assertEqual((self.jobs.status()['state'],self.jobs.status()['reused'],self.jobs.status()['indexed']),('completed',0,1))
+        self.assertEqual(self.encoder.calls-before,2)
+        self.assertTrue(self.index.fresh(self.item,self.revision));self.assertEqual(len(self.snapshot()[1]),2)
+
     def test_bounded_batches_progress_beyond_already_indexed_first_item(self):
         (self.media/'second.wav').write_bytes(fixture.wav_bytes())
         self.catalog.index.scan(self.root);self.catalog.sync_index()

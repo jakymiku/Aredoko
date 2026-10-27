@@ -5,13 +5,16 @@ These tests do not evaluate speech or music understanding and never use GPU.
 from contextlib import closing,contextmanager
 from dataclasses import replace
 import json
+import hashlib
 from pathlib import Path
 import sqlite3
+import shutil
 import struct
 import sys
 import tempfile
 import threading
 import unittest
+import wave
 from unittest.mock import patch
 
 sys.path[:0]=[str(Path(__file__).resolve().parents[1]/'app'),str(Path(__file__).resolve().parent)]
@@ -101,6 +104,53 @@ class DirectAudioIndexTests(unittest.TestCase):
             report=self.index.index_item(self.item,self.revision);encode.assert_not_called()
         self.assertEqual(report['indexed_windows'],0);self.assertTrue(self.index.fresh(self.item,self.revision))
         self.assertEqual(self.snapshot()[1],[])
+
+    def test_fresh_rejects_broken_marker_or_window_payload_without_inference(self):
+        statements=[
+            "UPDATE ai_audio_direct_sources SET decoded_windows='bad' WHERE item_id=?",
+            'UPDATE ai_audio_direct_sources SET indexed_windows=0 WHERE item_id=?',
+            'UPDATE ai_audio_direct_sources SET total_frames=960001 WHERE item_id=?',
+            'DELETE FROM ai_audio_direct_windows WHERE item_id=? AND ordinal=1',
+            'UPDATE ai_audio_direct_windows SET end_ms=30999 WHERE item_id=? AND ordinal=1',
+            "UPDATE ai_audio_direct_windows SET vector=x'0000c07f0000000000000000' WHERE item_id=? AND ordinal=1",
+        ]
+        for statement in statements:
+            with self.subTest(statement=statement):
+                self.seed()
+                with self.index.store.connect() as db:db.execute(statement,(self.item,))
+                before=self.snapshot()
+                with patch.object(self.encoder,'encode',side_effect=AssertionError('fresh must not infer')):
+                    self.assertFalse(self.index.fresh(self.item,self.revision))
+                self.assertEqual(self.snapshot(),before)
+
+    def test_fresh_validates_silent_gaps_and_obeys_cancellation(self):
+        silent=PCMWindow(0,30000,b'\0'*(480000*4))
+        with self.supplied([silent,self.windows[1]]):self.index.index_item(self.item,self.revision)
+        self.assertTrue(self.index.fresh(self.item,self.revision))
+        event=threading.Event();event.set()
+        with self.assertRaises(MediaDecodeCancelled):self.index.fresh(self.item,self.revision,cancel=event)
+
+    def test_short_nonfinal_window_cannot_replace_previous_complete_index(self):
+        previous=self.seed()
+        windows=[PCMWindow(0,30000,struct.pack('<f',.25)*16000),PCMWindow(1000,30000,struct.pack('<f',.25)*16000)]
+        with self.supplied(windows),self.assertRaises(ValueError):self.index.index_item(self.item,self.revision)
+        self.assertEqual(self.snapshot(),previous);self.assertEqual(list(self.stage.iterdir()),[])
+
+    @unittest.skipUnless(shutil.which('ffmpeg'),'Existing FFmpeg required; no download')
+    def test_real_generated_pcm_stream_remains_fresh_with_a_partial_final_window(self):
+        with wave.open(str(self.path),'wb') as output:
+            output.setnchannels(1);output.setsampwidth(2);output.setframerate(16000)
+            output.writeframes(struct.pack('<h',8192)*500000)
+        self.catalog.index.scan(self.root);self.catalog.sync_index()
+        revision=self.reader.audio_manifest(self.item)['revision']
+        before=(self.path.stat().st_mtime_ns,hashlib.sha256(self.path.read_bytes()).hexdigest())
+        report=self.index.index_item(self.item,revision)
+        self.assertEqual((report['decoded_windows'],report['indexed_windows'],report['total_frames']),(2,2,500000))
+        self.assertTrue(self.index.fresh(self.item,revision))
+        with self.index.store.connect() as db:
+            self.assertEqual(db.execute('SELECT start_ms,end_ms FROM ai_audio_direct_windows ORDER BY ordinal').fetchall(),[(0,30000),(30000,31250)])
+        self.assertEqual((self.path.stat().st_mtime_ns,hashlib.sha256(self.path.read_bytes()).hexdigest()),before)
+        self.assertEqual(list(self.stage.iterdir()),[])
 
     def test_cancel_after_encoding_or_before_commit_keeps_old_data(self):
         previous=self.seed();event=threading.Event()

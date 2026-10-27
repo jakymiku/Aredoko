@@ -1,5 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
+## 2026-10-28 Work継続checkpoint（音声の破損索引除外・明示再生成、以下より優先）
+
+- 起点 **`6057bf6916c2f33ebd8ad9a94db12982a7de8f82`**、既存branch / PR #5のHEAD一致・open/Draftを確認。今回もサブエージェントなし。最新commitは本書のGit履歴。部分snapshotで他端末未push差分は未確認、現在クォータ残％は取得不可。
+- **利用者向け修正**：音声の文章検索が壊れたitemの残存windowだけを一致にする不具合、freshが成功markerだけを見て破損索引を再準備対象から外す不具合を再現・修正。marker型/30秒区間数/総PCM frame数、各時刻・vector正規化・実件数を全件照合し、壊れたitemは検索のindexed_totalから除外。明示batchは逐次検証し、破損itemを既存atomic stage/commitで再生成する。検索によるDB自動変更はない。正常な全無音/無音によるordinalの穴を維持。
+- **追加修正と保全**：文章検索のrender中の原本消失/変更はAudioSearchChanged→HTTP409へ。短いwindowの後にさらにwindowを返す不正producerは公開前に拒否し旧索引を保持。型/時間の検証をIndex/Search/Similarityで共用し、類似の既存10万pair cap・正規化/順位・buffer上限・所有取消/終了・backup/schema/namespaceを保持。
+- **確認**：旧実装で追加6methodに19 FAIL/6 ERROR（subtest含む、1.501s。うち取消API追加は旧未対応）を再現。修正後のaudio search/index/jobs/similarity/HTTP/feature **70 PASS /13.942s**。その後追加した実FFmpegの生成31.25秒WAV→30秒＋1.25秒tail→fresh＋原本SHA/mtime不変と、実認証HTTPの原本変更409の**2件がPASS /1.044s**。重複runを合算せず、py_compile成功。[音声正本](audio-producer-review.md)末尾。
+- **次の1件/Windows残件**：前段一括favoriteのCore `--favorite-patch`→WinUI/Portable build→生成libraryの同一session/選択/anchor保持を限定確認。その後、必要なら独立生成音声DBで破損item除外→明示準備→区間復帰をnative確認。今回のCPU成功試験や既に確認済みの動画/初回ガイドは無変更で再実行しない。runtime固定成果物/配布方針は情報待ちのまま、[正本](runtime-notice-inventory.md)の次手順を維持。
+- **未確認/保全**：今回CPU/生成WAVのみ。通常DB/settings/Alpha/shortcut/ZIP/私物変更0、実model/GPU/GUI/.NET/依存download/OS変更/Actions/新branch/PR/main merge/shutdown0。installed AlphaはZIP10/source0138a58を保持、今回sourceは未配布。実音楽/録音/動画品質、長媒体/動画内音声、runtime公開/clean Windows、HC/DPI/RSS、U7実入力と一括favoriteのbuild/nativeは未完。
+
 ## 2026-10-28 Work継続checkpoint（一括お気に入りの結果保持、以下より優先）
 
 - 起点 **`bb58c27844a02361615fe3d4bcf14a95a3a93a61`**、既存開発branch / PR #5のopen・Draft・未mergeをconnectorで再確認。固定SHAの部分snapshotを更新し既存ローカル差分0を確認して着手。他端末の未push差分は確認できない。サブエージェントなし、現在クォータ残％は取得不可。今回commitは本書のGit履歴。

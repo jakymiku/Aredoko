@@ -7,6 +7,7 @@ image/text profile. Only a verified successful whole item becomes visible.
 from array import array
 from contextlib import closing,contextmanager
 import re
+import math
 import sqlite3
 import sys
 import tempfile
@@ -26,7 +27,23 @@ TABLES=(
         item_id INTEGER NOT NULL,ordinal INTEGER NOT NULL,start_ms INTEGER NOT NULL,
         end_ms INTEGER NOT NULL,vector BLOB NOT NULL,PRIMARY KEY(item_id,ordinal))''')
 MAX_WINDOWS=MAX_START_MS//MAX_WINDOW_MS
+WINDOW_FRAMES=SAMPLE_RATE*MAX_WINDOW_MS//1000
 STAGE_BYTES=16*1024*1024
+
+
+def valid_marker(decoded,indexed,frames):
+    # Silent windows have no vector but still count as decoded coverage.
+    return (all(type(value) is int for value in (decoded,indexed,frames))
+            and 0<=indexed<=decoded<=MAX_WINDOWS
+            and 1<=frames<=MAX_START_MS*SAMPLE_RATE//1000
+            and decoded==(frames+WINDOW_FRAMES-1)//WINDOW_FRAMES)
+
+
+def valid_interval(ordinal,start,end,decoded,frames):
+    # Call only after validating the marker. Ordinal gaps may mean silence.
+    return (all(type(value) is int for value in (ordinal,start,end))
+            and 0<=ordinal<decoded and start==ordinal*MAX_WINDOW_MS
+            and start<end==min(start+MAX_WINDOW_MS,(frames*1000+SAMPLE_RATE-1)//SAMPLE_RATE))
 
 
 class AudioDirectIndex:
@@ -59,10 +76,28 @@ class AudioDirectIndex:
         try:self._check(cancel);yield
         finally:self.catalog._guard.release()
 
-    def fresh(self,item_id,revision):
+    def fresh(self,item_id,revision,*,cancel=None):
+        # A matching success marker cannot certify missing or damaged vectors.
+        # Validate one stored window at a time, without decoding or inference.
+        self._check(cancel)
         with self.store.connect() as db:
-            return db.execute('SELECT 1 FROM ai_audio_direct_sources WHERE item_id=? AND source_revision=? AND contract=?',
-                              (item_id,revision,CONTRACT)).fetchone() is not None
+            marker=db.execute('SELECT decoded_windows,indexed_windows,total_frames FROM ai_audio_direct_sources '
+                              'WHERE item_id=? AND source_revision=? AND contract=?',(item_id,revision,CONTRACT)).fetchone()
+            if marker is None or not valid_marker(*marker):return False
+            decoded,indexed,frames=marker;count=0
+            with closing(db.execute('SELECT ordinal,start_ms,end_ms,vector FROM ai_audio_direct_windows '
+                                    'WHERE item_id=? ORDER BY ordinal',(item_id,))) as cursor:
+                for ordinal,start,end,data in cursor:
+                    self._check(cancel)
+                    if (count>=indexed or not valid_interval(ordinal,start,end,decoded,frames)
+                            or type(data) is not bytes or len(data)!=self.profile.dimension*4):return False
+                    values=array('f');values.frombytes(data)
+                    if sys.byteorder!='little':values.byteswap()
+                    norm=sum(value*value for value in values)
+                    if not math.isfinite(norm) or abs(norm-1)>1e-4:return False
+                    count+=1
+            self._check(cancel)
+            return count==indexed
 
     def index_item(self,item_id,revision,*,cancel=None,validate=None,publication_guard=None,on_published=None):
         if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid audio item')
@@ -89,7 +124,7 @@ class AudioDirectIndex:
                         validate_pcm(window)
                         # One forward 30s producer, no repeat/overlap or unbounded
                         # custom tiny windows in this persistent index contract.
-                        if (decoded>=MAX_WINDOWS or window.start_ms!=frames*1000//SAMPLE_RATE
+                        if (decoded>=MAX_WINDOWS or frames%WINDOW_FRAMES or window.start_ms!=frames*1000//SAMPLE_RATE
                                 or window.requested_duration_ms!=MAX_WINDOW_MS):
                             raise ValueError('Invalid direct-audio window sequence')
                         decoded+=1;frames+=window.frame_count
