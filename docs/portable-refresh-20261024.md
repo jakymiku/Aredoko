@@ -2,6 +2,7 @@
 
 ## 最新候補10（2026-10-28、source0138a58）
 
+- **後続の明示指示でinstalled Alphaへ反映済み**：デスクトップshortcutは`%LOCALAPPDATA%/Programs/Aredoko/releases/20261028-0138a58/Aredoko.exe`へ切替。全818file照合・bootstrap自己検査exit0、通常DB/launch設定不変。旧release/shortcut保持、更新後のGUI起動なし。以下の「Alpha不変」は配布候補受入時点の履歴であり、この追加更新と区別する。
 - 通常入口：`C:/AI/Aredoko/dist/portable-basic-20261028-10/Aredoko/Aredoko.exe`。隣の`Aredoko-windows-x64.zip`。818files /661,537,190bytes、ZIP348,331,051bytes、SHA256 `345c8fa443ffdd5956e20118a3d39f57ed74da1004b0d78ea0c3afab965a520a`。
 - アプリsource `0138a584bd208f7856f14a5d1e509871ae12dbbd`、Assembly informational version `1.0.0+0138a584bd208f7856f14a5d1e509871ae12dbbd`。AIガイド復帰/復旧案内/profile変更待ち、通常一覧favoriteの全件再作成回避、音声/動画内積削減を収録。モデル/PyTorchは別途必要、runtime公開は未完。
 - Core/Portable/起動画面自己検査/runtime/全inventory/hash/ZIP照合、同梱Python基本27項目PASS。所有backend EOF/DB integrity/元生成画像保持を確認。

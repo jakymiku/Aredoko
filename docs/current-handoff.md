@@ -2,6 +2,7 @@
 
 ## 2026-10-28 終了checkpoint（以下の過去記録より優先）
 
+- **終了後のユーザー追加指示でinstalled Alpha更新済み**：基本ZIP10/source`0138a58`を`%LOCALAPPDATA%/Programs/Aredoko/releases/20261028-0138a58`へ新規copyし、デスクトップ「Aredoko Alpha」の起動先を切替。818files/661,537,190bytes全照合・bootstrap自己検査exit0、通常DBのsize/mtime・launch設定SHA不変。旧07releaseと旧shortcutを保持（`updates/20261028-0138a58/`）。GUI/GPUは起動せず、旧MSIX/Startメニュー登録は変更しない。記録`data/ai-ui/continuation-20261028/alpha-update-final.json`。以下の「Alpha未変更」はこの追加指示前の開発範囲を示す履歴。
 - 起点`d3e4885`、開始時fetch後remote/PR head ref一致・clean、新たなMuse差分なし。既存`feat/winui3-production-mvp-20261011` / PR #5を継続。PRのopen/Draft metadataはconnector Transport closedで未再確認。アプリ候補sourceは**`0138a58`**、本引き継ぎのcommitは`git log -1 -- docs/current-handoff.md`。後続の試験tool/文書変更をsealed ZIPへ追加したとは扱わない。
 - **`d27a72e` P6-S4＋`62e46d0` S5**：用途保存→取得/配置/索引/診断→ガイド復帰・準備状況再確認を接続。取得中/中止/検査中/再起動待ち、媒体別索引、欠落/版相違/環境不正の安全な案内を追加。削除/初期化/OS変更なし。**`ffe3998`**で保存profileの変更待ちを区別し、再起動前の旧モデル取得推薦を抑止。Core33/plan8+profile13/WinUI/Portable PASS。[P6正本](p6-first-run-setup-spec.md)。
 - **ガイドの限定native受入**：frontend03/UI source ffe3998/backend d6acd9c。native01は取得→復帰成功、試験保存先の不一致とmodal cleanup失敗をraw FAILのまま保持し、所有guideをUIA→通常closeで回収（初回exit code欠測）。追加許可native02は残り配置/索引/診断復帰・用途保持・pendingと取得抑制を11checks/3PNG目視/exit0 PASS。実runtime導入/自動修復/clean Windowsの受入とは区別。
