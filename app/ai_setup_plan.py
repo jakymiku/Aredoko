@@ -19,7 +19,7 @@ CATALOG_FIELDS=('catalog_id','name','kind','revision','bytes','license','license
                 'unpacked_bytes','unpacked_files','model_target')
 
 
-def plan_setup(body,*,profile,environment,catalogs):
+def plan_setup(body,*,profile,environment,catalogs,profile_status=None):
     if type(body) is not dict or set(body)!={'features'}:raise ValueError('Select setup features only')
     selected=body['features'];known={row[0] for row in FEATURES}
     if (type(selected) is not list or len(selected)>len(FEATURES)
@@ -30,9 +30,18 @@ def plan_setup(body,*,profile,environment,catalogs):
             'total_download_bytes':0,'unresolved_requirements':[],
             'unresolved_features':[],'can_download_all_missing':True,
             'inference_checked_by_plan':False,'hardware_checked_by_plan':False,
-            'settings_saved':False,'acquisition_started':False,'restart_required':False}
+            'settings_saved':False,'acquisition_started':False,'restart_required':False,
+            'profile_restart_required':False,'profile_override':False,'profile_selection_invalid':False}
     # Skipping AI must not even inspect a runtime/model directory or catalog.
     if not selected:return result
+    if profile_status is not None:
+        if not callable(profile_status):raise ValueError('Invalid profile snapshot provider')
+        selection=profile_status()
+        if type(selection) is not dict:raise ValueError('Invalid profile selection snapshot')
+        result['profile_restart_required']=selection.get('restart_required') is True
+        result['profile_override']=selection.get('command_line_override') is True
+        result['profile_selection_invalid']=selection.get('selection_invalid') is True
+        result['restart_required']=result['profile_restart_required']
     if not callable(environment) or not callable(catalogs):raise ValueError('Application snapshots required')
     for key,label,modality,description in FEATURES:
         if key not in selected:continue
@@ -41,13 +50,14 @@ def plan_setup(body,*,profile,environment,catalogs):
             'requires_indexing':True,'requirements':['embedding-runtime','embedding-model'] if supported else [],
             'unavailable_reason':None if supported else 'choose_compatible_model_profile'})
         if not supported:result['unresolved_features'].append(key)
-    result['can_download_all_missing']=not result['unresolved_features']
+    profile_blocked=result['profile_restart_required'] or result['profile_selection_invalid']
+    result['can_download_all_missing']=not result['unresolved_features'] and not profile_blocked
     if not any(feature['supported'] for feature in result['features']):return result
     state=environment();available=catalogs()
     if type(state) is not dict or type(available) is not dict or type(available.get('catalogs')) is not list:
         raise ValueError('Invalid setup snapshot')
     target=ModelTarget.for_profile('embedding',profile).to_dict()
-    result['restart_required']=state.get('restart_required') is True
+    result['restart_required']=result['restart_required'] or state.get('restart_required') is True
     rows=available['catalogs']
     for key,kind,present,target_identity in (
         ('embedding-runtime','runtime',state.get('runtime',{}),None),
@@ -60,7 +70,7 @@ def plan_setup(body,*,profile,environment,catalogs):
         candidates.sort(key=lambda row:row['catalog_id'])
         files_present=present.get('ready') is True
         # Do not choose arbitrarily between multiple registered distributions.
-        selected_catalog=candidates[0] if not files_present and len(candidates)==1 else None
+        selected_catalog=candidates[0] if not files_present and len(candidates)==1 and not profile_blocked else None
         dependency={'id':key,'kind':kind,'files_present':files_present,
                     'state':present.get('state','unknown'),'model_target':target_identity,
                     'download_candidates':candidates,'selected_catalog_id':selected_catalog['catalog_id'] if selected_catalog else None,
@@ -74,5 +84,5 @@ def plan_setup(body,*,profile,environment,catalogs):
             result['known_download_bytes']+=selected_catalog['bytes']
         elif not files_present:result['unresolved_requirements'].append(key)
     result['total_download_bytes']=None if result['unresolved_requirements'] else result['known_download_bytes']
-    result['can_download_all_missing']=not result['unresolved_requirements'] and not result['unresolved_features']
+    result['can_download_all_missing']=not result['unresolved_requirements'] and not result['unresolved_features'] and not profile_blocked
     return result

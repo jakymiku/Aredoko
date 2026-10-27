@@ -1,6 +1,6 @@
 # P6予約仕様：初回セットアップ・任意AI環境導入（2026-10-27）
 
-> **状態: P6-S1/S2の用途選択・既存入口接続はsource実装/関連Core・Portable build/限定UIA確認済み。S3以降と実環境導入は未完。** 現行の再開位置は `docs/current-handoff.md` を優先。現行branch・Draft PR #5を継続し、完了済みの取得基盤を再実装しない。
+> **状態: P6-S1/S2はsource/関連Core・Portable build/限定UIA確認済み。S4/S5のガイド復帰・安全な復旧案内はsourceと関連確認まで。S3の公開runtimeとS6の実導入受入は未完。** 現行の再開位置は `docs/current-handoff.md` を優先。現行branch・Draft PR #5を継続し、完了済みの取得基盤を再実装しない。
 
 ## 2026-10-27：P6-S1の現在地
 
@@ -28,6 +28,12 @@ Core関連21項目とPortable/frontend01 build PASS（既存picker3/SDK trim警�
 既存planのstate codeをCoreで保持し、未配置/モデル版の不一致/ファイル不足/実行環境の不正/設定不正を短い日本語で区別。「うまく使えないとき」を折りたたみ表示し、既存の診断情報画面へ往復できる。原本・DB・索引・環境の削除/初期化、システムPython変更、強制的な版マーカー変更は行わない。推論や機器の未確認も明示。未知stateは一般案内にし、生のパスや内部値を表示しない。全機能非対応/依存情報なしを配置正常と表示しない。
 
 関連Core29項目、read-only plan/APIの生成Python7件PASS。Portable/frontend02は最終Coreの境界補強前のbuildであり、最新sourceのnative受入ではない。GUIと実環境修復/clean Windowsは未検証、公開runtime/driver互換診断/自動修復完了とは扱わない。
+
+### モデル選択の再起動待ちもガイドへ反映
+
+使用モデルの保存先とは別に、profile選択は再起動まで旧namespaceで動く。従来planは環境保存先の変更しか再起動待ちに含めず、詳細設定から戻った直後に旧モデルの取得を勧める可能性があった。選択だけの軽量snapshotを追加し、全profile列挙やモデル実行なしでpending/起動引数優先/設定不正をplanへ反映。pending時は旧model catalogを自動選択せず、WinUIの取得入口も無効化し、先に再起動を案内する。現在のモデルや既存索引は切り替えない。
+
+Core33、Pythonのplan8＋profile13 PASS。Portable/frontend03は最新C#/Coreをpublish済み（既存picker3/SDK trimのみ）、backendは上記推薦抑制も補強。最新の一括確認は`--setup-recovery`で取得/配置/索引/診断の往復と、CPU fixtureによる保存profile変更→ガイドのpending表示をまとめる。旧frontend01への許可質問は未回答・未実施。新しい候補のGUIは対象範囲を更新してから確認し、旧許可へ自動拡張しない。
 
 ZIP解凍→`Aredoko.exe`でPythonなしの基本機能を起動。初回の用途選択から、必要な任意runtime/モデルの導入・検証、初心者向け使い方、故障時の安全な復旧まで一貫して案内する。WinUI 3ネイティブ、既存Python/SQLite/owned API、既存profile/namespaceを維持。
 

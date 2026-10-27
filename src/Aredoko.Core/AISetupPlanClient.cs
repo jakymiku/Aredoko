@@ -13,7 +13,8 @@ public static class AISetupSelection
 }
 public sealed record AISetupRequirement(string Id,bool FilesPresent,string Action,IReadOnlyList<string> CatalogIds,string State="unknown");
 public sealed record AISetupPlan(bool SkipAI,long KnownBytes,long? TotalBytes,bool RestartRequired,
-    IReadOnlyList<string> Unsupported,IReadOnlyList<AISetupRequirement> Requirements)
+    IReadOnlyList<string> Unsupported,IReadOnlyList<AISetupRequirement> Requirements,
+    bool ProfileRestartRequired=false,bool ProfileOverride=false,bool ProfileSelectionInvalid=false)
 {
     public string Summary
     {
@@ -21,6 +22,9 @@ public sealed record AISetupPlan(bool SkipAI,long KnownBytes,long? TotalBytes,bo
         {
             if(SkipAI)return "AIは使わず、ファイル名・タグ検索と閲覧から始められます。後から設定で追加できます。";
             var lines=new List<string>();
+            if(ProfileSelectionInvalid)lines.Add("保存したモデル選択を確認できません。「索引・詳細設定へ」で設定を確認してください。");
+            if(ProfileRestartRequired)lines.Add("モデルの変更待ちです。以下は起動中のモデルの確認結果です。新しいモデルの準備は再起動後に確認してください。");
+            if(ProfileOverride)lines.Add("起動引数のモデル指定が優先されています。保存したモデルへ切り替えるには、その指定を外して起動し直してください。");
             if(Unsupported.Count>0)lines.Add("選んだ機能の一部は現在のモデルに対応していません。準備画面で対応モデルを選択してください。");
             foreach(var requirement in Requirements)
             {
@@ -58,7 +62,10 @@ public sealed record AISetupPlan(bool SkipAI,long KnownBytes,long? TotalBytes,bo
         var skip=root.GetProperty("skip_ai").GetBoolean();var unsupported=root.GetProperty("unresolved_features").EnumerateArray().Select(row=>row.GetString()??"").ToArray();
         if(known<0||total is <0||total is long bytes&&bytes<known||skip!=(requested.Count==0)||skip&&(known!=0||requirements.Count!=0)
             ||unsupported.Distinct().Count()!=unsupported.Length||unsupported.Any(id=>!requested.Contains(id)))throw new InvalidDataException("AI準備の状態が無効です。");
-        return new(skip,known,total,root.GetProperty("restart_required").GetBoolean(),unsupported,requirements.AsReadOnly());
+        static bool Flag(JsonElement root,string name)=>root.TryGetProperty(name,out var value)&&value.GetBoolean();
+        var profileRestart=Flag(root,"profile_restart_required");var restart=root.GetProperty("restart_required").GetBoolean();
+        if(profileRestart&&!restart)throw new InvalidDataException("モデル変更の再起動状態が無効です。");
+        return new(skip,known,total,restart,unsupported,requirements.AsReadOnly(),profileRestart,Flag(root,"profile_override"),Flag(root,"profile_selection_invalid"));
     }
 }
 public sealed class AISetupPlanClient(HttpClient client)

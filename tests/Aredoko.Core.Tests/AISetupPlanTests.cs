@@ -73,6 +73,13 @@ static class AISetupPlanTests
         var unsupported=plan with{Requirements=Array.Empty<AISetupRequirement>(),Unsupported=new[]{"video"}};
         check(AISetupRecovery.Describe(unsupported).Contains("対応していません")&&!AISetupRecovery.Describe(unsupported).Contains("配置は確認できています"),"unsupported-only plan does not declare nonexistent dependencies ready");
         check(AISetupRecovery.Describe(unsupported with{Unsupported=Array.Empty<string>()}).Contains("環境の情報を確認できません"),"missing dependency data does not imply healthy files");
+        var changedProfile=Reply(AISetupSelection.FromMask(3));changedProfile["profile_restart_required"]=true;changedProfile["restart_required"]=true;
+        var changedPlan=AISetupPlan.Parse(changedProfile.ToJsonString(),AISetupSelection.FromMask(3));
+        check(changedPlan.ProfileRestartRequired&&changedPlan.Summary.Contains("起動中のモデル")&&AISetupGuidance.Describe(changedPlan,3,null,null).Contains("再起動後"),"pending profile selection remains distinct from the active namespace and blocks old-model recommendations");
+        changedProfile["profile_override"]=true;
+        check(AISetupPlan.Parse(changedProfile.ToJsonString(),AISetupSelection.FromMask(3)).Summary.Contains("起動引数のモデル指定"),"explicit model override is explained instead of promising the saved selection will apply");
+        var brokenSelection=ready with{ProfileSelectionInvalid=true};
+        check(AISetupGuidance.Describe(brokenSelection,3,null,null).Contains("モデル選択")&&!AISetupGuidance.Describe(brokenSelection,3,null,null).Contains("配置を確認しました"),"damaged profile preferences cannot be presented as ready for indexing");
         foreach(var mutate in new Action<JsonObject>[]
         {
             row=>row["acquisition_started"]=true,row=>row["hardware_checked_by_plan"]=true,
@@ -81,6 +88,7 @@ static class AISetupPlanTests
             row=>row["requirements"]!.AsArray()[0]!["action"]="run-pip",
             row=>row["requirements"]!.AsArray()[1]!["download_candidates"]!.AsArray()[0]!["catalog_id"]="https://example.invalid",
             row=>row["requirements"]!.AsArray()[0]!["state"]="C:\\private\\runtime",
+            row=>row["profile_restart_required"]=true,
         })
         {
             var bad=Reply(AISetupSelection.FromMask(15));mutate(bad);var rejected=false;

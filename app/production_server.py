@@ -740,7 +740,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     try:return self.send(202,setup_jobs.start(body))
                     except SetupBusy:return self.send(409,{'error':'AI環境の確認を開始できません。現在の状態を確認してください。','job':setup_jobs.snapshot()})
                 if self.path=='/api/library/ai/setup/plan':
-                    return self.send(200,plan_setup(body,profile=setup_profile,environment=setup.snapshot,catalogs=download_jobs.catalogs))
+                    return self.send(200,plan_setup(body,profile=setup_profile,environment=setup.snapshot,catalogs=download_jobs.catalogs,profile_status=profiles.selection_snapshot))
                 if self.path=='/api/library/ai/runtime-verification':
                     if set(body)!={'enabled'} or type(body['enabled']) is not bool:raise ValueError('Invalid runtime verification preference')
                     if setup_jobs.snapshot()['state'] in ('validating','saving','cancelling'):

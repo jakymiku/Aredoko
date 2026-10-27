@@ -40,13 +40,22 @@ class SetupPlanTests(unittest.TestCase):
     def test_skip_and_bad_requests_never_inspect_the_environment(self):
         env=Mock(side_effect=AssertionError('Do not inspect'))
         catalogs=Mock(side_effect=AssertionError('Do not read catalogs'))
-        result=plan_setup({'features':[]},profile=None,environment=env,catalogs=catalogs)
+        selection=Mock(side_effect=AssertionError('Do not inspect saved profile selection'))
+        result=plan_setup({'features':[]},profile=None,environment=env,catalogs=catalogs,profile_status=selection)
         self.assertTrue(result['skip_ai']);self.assertEqual(result['requirements'],[])
         for body in ({},{'features':'video'},{'features':['video','video']},{'features':['future']},
                      {'features':[{}]},{'features':[True]},{'features':[],'consent':True}):
             with self.subTest(body=body),self.assertRaises(ValueError):
                 plan_setup(body,profile=DEFAULT_PROFILE,environment=env,catalogs=catalogs)
-        env.assert_not_called();catalogs.assert_not_called()
+        env.assert_not_called();catalogs.assert_not_called();selection.assert_not_called()
+
+    def test_profile_pending_flags_do_not_hot_swap_the_dependency_target(self):
+        state={'runtime':{'ready':True},'model':{'ready':True}}
+        selection=lambda:{'restart_required':True,'command_line_override':False,'selection_invalid':False}
+        reply=plan_setup({'features':['audio']},profile=DEFAULT_PROFILE,environment=lambda:state,catalogs=lambda:{'catalogs':[]},profile_status=selection)
+        self.assertTrue(reply['restart_required']);self.assertTrue(reply['profile_restart_required'])
+        self.assertEqual(reply['requirements'][1]['model_target'],ModelTarget.for_profile('embedding',DEFAULT_PROFILE).to_dict())
+        self.assertFalse(reply['settings_saved']);self.assertFalse(reply['acquisition_started'])
 
     def test_wrong_revision_and_tagger_are_not_recommended(self):
         target=ModelTarget.for_profile('embedding',DEFAULT_PROFILE).to_dict()
@@ -112,6 +121,16 @@ class SetupPlanHttpTests(unittest.TestCase):
                 self.assertEqual(handler.setup_jobs.snapshot()['state'],'idle')
                 self.assertIsNone(handler.audio_content.owner);self.assertIsNone(handler.video_content.owner)
                 self.assertFalse((base/'launch-settings.json').exists())
+                # Changing a saved profile must not silently plan downloads for
+                # that profile while the old namespace is still active.
+                profiles.folder.mkdir();(profiles.folder/'next.json').write_text(json.dumps(DEFAULT_PROFILE.to_dict()),encoding='utf-8')
+                definition=profiles.active_definition;profiles.choose('local:next.json')
+                with patch.object(profiles,'_candidate',side_effect=AssertionError('Planning must not enumerate/inspect all profiles')):
+                    code,pending=request({'features':['audio']})
+                self.assertEqual(code,200);self.assertTrue(pending['profile_restart_required']);self.assertTrue(pending['restart_required'])
+                self.assertEqual(profiles.active_definition,definition);self.assertEqual(profiles.active,'default')
+                self.assertEqual(pending['selected_catalog_ids'],[]);self.assertEqual(pending['known_download_bytes'],0)
+                self.assertFalse(pending['can_download_all_missing'])
             finally:
                 server.shutdown();server.server_close();thread.join(3)
                 for name in ('results','startup_scans','thumbnails','audio_content','video_content','animations','setup_jobs','download_jobs','backup_jobs','restore_jobs'):

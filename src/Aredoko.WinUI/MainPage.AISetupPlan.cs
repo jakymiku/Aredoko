@@ -83,6 +83,7 @@ public sealed partial class MainPage
                 var expected=++version;request?.Dispose();request=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                 var cancellation=request;
                 review.IsEnabled=false;progress.Visibility=Visibility.Visible;
+                download.IsEnabled=false;existing.IsEnabled=false;dialog.IsPrimaryButtonEnabled=false;diagnostics.IsEnabled=false;recovery.Visibility=Visibility.Collapsed;nextSteps.Text="";
                 try
                 {
                     var selection=selected;
@@ -98,7 +99,7 @@ public sealed partial class MainPage
                     nextSteps.Text=AISetupGuidance.Describe(plan,selection,downloadJob,environmentJob);
                     recoveryText.Text=AISetupRecovery.Describe(plan);recovery.Visibility=plan.SkipAI?Visibility.Collapsed:Visibility.Visible;diagnostics.IsEnabled=!plan.SkipAI;
                     existing.IsEnabled=!plan.SkipAI;
-                    download.IsEnabled=plan.Requirements.Any(row=>row.Id=="embedding-model"&&!row.FilesPresent&&row.CatalogIds.Count>0);
+                    download.IsEnabled=!plan.ProfileRestartRequired&&!plan.ProfileSelectionInvalid&&plan.Requirements.Any(row=>row.Id=="embedding-model"&&!row.FilesPresent&&row.CatalogIds.Count>0);
                     dialog.IsPrimaryButtonEnabled=!plan.SkipAI;
                 }
                 catch(OperationCanceledException)when(cancellation.IsCancellationRequested){}

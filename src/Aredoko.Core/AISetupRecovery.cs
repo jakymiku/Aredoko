@@ -21,6 +21,7 @@ public static class AISetupRecovery
     {
         if(plan.SkipAI)return "AIを使わずに、ファイル名・タグ検索と閲覧を続けられます。後から設定でAIを追加できます。";
         var lines=new List<string>();
+        if(plan.ProfileSelectionInvalid)lines.Add("保存したモデル選択を確認できません。「索引・詳細設定へ」で有効なモデルを選び直してください。現在の索引や原本は削除しません。");
         if(plan.Unsupported.Count>0)lines.Add("選んだ機能の一部は現在のモデルに対応していません。「索引・詳細設定へ」で対応モデルを選択してください。");
         foreach(var requirement in plan.Requirements.Where(row=>!row.FilesPresent))
         {

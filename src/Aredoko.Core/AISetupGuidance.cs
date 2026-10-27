@@ -16,7 +16,9 @@ public static class AISetupGuidance
             lines.Add("配置の検査・保存が進行中です。配置画面で結果を確認し、完了してから再起動してください。");
         else if(environment?.State=="cancelled")lines.Add("配置の検査は中止されています。前の設定を保持しています。必要なら配置画面から確認し直してください。");
         else if(environment?.State=="failed")lines.Add("配置の検査は完了していません。配置画面で理由を確認してください。");
-        if(plan.RestartRequired)
+        if(plan.ProfileSelectionInvalid)
+            lines.Add("保存したモデル選択を「索引・詳細設定へ」で確認してください。起動中のモデルは切り替わっていません。");
+        else if(plan.RestartRequired)
             lines.Add("次はAredokoを閉じ、いつものAredoko.exeから起動し直してください。保存した環境は再起動後に反映されます。");
         else if(plan.Requirements.Count!=2||plan.Requirements.Any(row=>!row.FilesPresent)||plan.Unsupported.Count>0)
             lines.Add("不足する実行環境・モデルを取得または指定してください。配置と動作確認が済むまでは基本検索と閲覧を使えます。");

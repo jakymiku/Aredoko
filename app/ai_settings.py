@@ -179,6 +179,23 @@ class AIProfileSettings:
                     "valid": False, "ready": False,
                     "warning": "設定を読み込めません（" + type(ex).__name__ + "）。JSON内容・場所を確認してください。"}
 
+    def selection_snapshot(self):
+        """Read selection flags without enumerating profiles or opening models."""
+        try:
+            pending = self.selected()
+            error = self.startup_error
+        except (ValueError, OSError, json.JSONDecodeError) as ex:
+            pending = "invalid"
+            error = "保存済みのモデル設定が無効です（" + type(ex).__name__ + "）。"
+        return {"selected":pending,"active":self.active,
+                "command_line_override":self.override is not None and not self.transient_override,
+                "restored_active":self.transient_override,
+                "restart_required":self.transient_override or self.override is None and pending!=self.started,
+                "selection_pending":self.transient_override or pending!=self.started,
+                "selection_invalid":pending=="invalid","error":error,
+                "message":"復元時に使っていたモデルで開いています。保存した選択は次回起動時に適用します。" if self.transient_override else "起動時の -AIProfile が優先です。GUI設定は -AIProfile を外した次回起動から適用します。" if self.override else
+                          "モデルの変更は次回起動時に適用されます。現在の検索・索引処理は切り替わりません。"}
+
     def snapshot(self):
         candidates = [self._candidate("default")]
         if self.folder.is_dir() and not self.folder.is_symlink():
@@ -186,24 +203,12 @@ class AIProfileSettings:
             for entry in sorted(self.folder.iterdir(), key=lambda p: p.name)[:MAX_FILES]:
                 if NAME.fullmatch(entry.name) and (entry.is_file() or entry.is_symlink()):
                     candidates.append(self._candidate("local:" + entry.name))
-        try:
-            pending = self.selected()
-            error = self.startup_error
-        except (ValueError, OSError, json.JSONDecodeError) as ex:
-            pending = "invalid"
-            error = "保存済みのモデル設定が無効です（" + type(ex).__name__ + "）。"
+        selection=self.selection_snapshot();pending=selection['selected']
         if pending not in {row["id"] for row in candidates} and pending not in ("default", "invalid"):
             candidates.append(self._candidate(pending))
         try: resource=self.resource()
         except (ValueError,OSError,json.JSONDecodeError): resource=dict(RESOURCE_DEFAULT)
-        return {"profiles": candidates, "selected": pending, "active": self.active,
-                "resource":resource,
-                "command_line_override": self.override is not None and not self.transient_override,
-                "restored_active": self.transient_override,
-                "restart_required": self.transient_override or self.override is None and pending != self.started,
-                "error": error,
-                "message": "復元時に使っていたモデルで開いています。保存した選択は次回起動時に適用します。" if self.transient_override else "起動時の -AIProfile が優先です。GUI設定は -AIProfile を外した次回起動から適用します。" if self.override else
-                           "モデルの変更は次回起動時に適用されます。現在の検索・索引処理は切り替わりません。"}
+        return {"profiles":candidates,"resource":resource,**selection}
 
     def choose(self, profile_id):
         with self._write_lock:
