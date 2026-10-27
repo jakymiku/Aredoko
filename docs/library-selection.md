@@ -33,3 +33,11 @@
 ### 2026-10-26 範囲読み込みの中断
 - 同じ検索の追加ページ取得を中断すると、有効な結果sessionまで破棄し、詳細editorも無効のまま残る不具合を修正。現在versionの同一sessionに対する取消だけはsession/既存行を維持し、ページ番号とeditorを戻す。条件変更・期限切れ・通常の失敗での破棄は維持する。
 - `startup-review-20261026/cancel-range01` は不具合を再現したFAILとして保持。修正後の`cancel-range02`は生成1,201枚の専用DBで61–120の行/選択/編集保持、暗黙保存なし、121以降の再取得、新しい入力による検索、正常終了を確認。3PNGも目視済み。全検索方式・長時間試験の受入を代替しない。
+
+### 2026-10-28 お気に入り1件変更の全件再作成を回避
+
+通常の`literal`/`view=all`だけ、お気に入り保存後に所有結果の当該payloadを更新し、順序/件数/selection/他の行を保つ。`keep_session`は任意bool、旧4field APIは従来通り失効する。世代を進めるのは自分の1transactionだけと照合し、root/index/他の書込の変更を吸収しない。保存前は選択元の実file/scope/取消を検証し、保存後は同じcatalog guard内でprivate snapshotを更新する。private更新やstamp確認が失敗した場合、metadataは保存済みで`kept_session=false`と返し、保存失敗とは偽らず再検索へ戻す。favorites view/AI順位/棚編集は全再取得のまま。
+
+Coreはcreate時のcapabilityがある場合のみ拡張を要求し、旧serverには従来fieldだけを送る。WinUIの単体favorite（詳細checkbox/右click共有handler）は保持成功時にcaption/menuだけを更新し、未保存タグ/棚を保存しない。既存のviewport rangeは移動ごとに原本を再検証する。新しいGUI試験`--favorite-patch`はUIA checkboxで同じsession/再検索0/タグdraft保持を確認する用意まで、native未実施。
+
+関連Python14/既存session35/Core10/WinUI build PASS。生成5万PNGの既存fixtureをread-only確認してDBだけcopyした1回のCPU確認は、snapshot30.633秒とは別に、**favorite保存＋snapshot更新11.949ms、provider呼出は初回の1回のみ、選択元確認1件、先頭/末尾ID保持、DB integrity=ok、元fixture DB不変**。raw `data/ai-ui/continuation-20261028/favorite-50k01/report.json`。GUI全体の応答やcold初回表示の速度保証ではない。GPU/GUI/通常DB/Alphaを使用していない。

@@ -250,9 +250,10 @@ class FrozenResult:
             self.check();self.last_used=time.monotonic()
             return {'positions':[{'id':row[0],'ordinal':row[1]} for row in rows], 'conditions':self.conditions}
 
-    def edit(self,item_ids,operation,shelf_ids):
+    def edit(self,item_ids,operation,shelf_ids,keep_session=False):
         from selection_edits import validate_edit
         ids=validate_edit(item_ids,operation,shelf_ids)
+        if type(keep_session) is not bool:raise ValueError('Invalid result retention request')
         with self.lock:
             self.check()
             if self.state!='ready':raise ResultUnavailable(conditions=self.conditions)
@@ -266,7 +267,33 @@ class FrozenResult:
                     for item in self._currents([json.loads(row[0]) for row in rows]):
                         if item.get('availability')!='present':raise ResultUnavailable('Selection source unavailable',conditions=self.conditions)
                 self.check()
-            result=self.catalog.edit_result_selection(ids,operation,shelf_ids,validate,self.check)
+            keep=(keep_session and operation in ('favorite_add','favorite_remove')
+                  and self.conditions.get('mode')=='literal' and self.conditions.get('view','all')=='all'
+                  and self.origin is None)
+            def retain():
+                # Exactly our one metadata transaction may have advanced the
+                # generation. Never absorb an unrelated write/index/root change.
+                try:
+                    before=self.initial_stamp
+                    expected=((before[0][0],before[0][1]+1),before[1])
+                    if self.stop.is_set() or self.stamp()!=expected:return False
+                    with self.db:
+                        for item_id in ids:
+                            payload=json.loads(self.db.execute('SELECT payload FROM results WHERE item_id=?',(item_id,)).fetchone()[0])
+                            payload['favorite']=operation=='favorite_add'
+                            serialized=json.dumps(payload,ensure_ascii=False,separators=(',',':'))
+                            if len(serialized.encode('utf-8'))>512*1024:raise ResultCapacity('Result evidence exceeds workspace limit')
+                            self.db.execute('UPDATE results SET payload=? WHERE item_id=?',
+                                (serialized,item_id))
+                    self.initial_stamp=expected
+                    self.check()
+                    return True
+                except Exception:
+                    # Metadata already committed. Tell the caller to refresh;
+                    # never report a failed save or expose a partially patched set.
+                    self.stop.set()
+                    return False
+            result=self.catalog.edit_result_selection(ids,operation,shelf_ids,validate,self.check,after_commit=retain if keep else None)
             self.last_used=time.monotonic()
             return result
 
@@ -388,7 +415,7 @@ class ResultSessions:
                 if self.stopped.is_set() or session_id not in self.sessions:
                     raise ResultUnavailable(conditions=conditions)
             return {'session_id': session_id, 'state': 'ready', 'total': session.total, 'conditions': conditions,
-                    'range_limit': 120, 'idle_seconds': IDLE_SECONDS}
+                    'range_limit': 120, 'idle_seconds': IDLE_SECONDS,'favorite_patch_supported':True}
         except BaseException:
             if session is not None:
                 self.cancel(session_id)
@@ -445,9 +472,9 @@ class ResultSessions:
         session=self._get(session_id)
         return {'session_id':session_id,**session.locate(item_ids)}
 
-    def edit(self,session_id,item_ids,operation,shelf_ids):
+    def edit(self,session_id,item_ids,operation,shelf_ids,keep_session=False):
         session=self._get(session_id)
-        try:return {'session_id':session_id,**session.edit(item_ids,operation,shelf_ids)}
+        try:return {'session_id':session_id,**session.edit(item_ids,operation,shelf_ids,keep_session)}
         except (OSError,PreviewUnavailable,ReaderChanged) as error:
             raise ResultUnavailable('Selection source unavailable; refresh search',conditions=session.conditions) from error
         finally:

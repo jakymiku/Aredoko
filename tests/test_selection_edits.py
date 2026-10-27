@@ -16,7 +16,7 @@ class SelectionEditTests(unittest.TestCase):
         self.cat=ProductionCatalog(self.base/'catalog.sqlite');self.addCleanup(self.cat.close)
         self.root=self.cat.add_root(str(self.media));self.cat.start_scan(self.root);self.cat._worker.join(3)
         self.ids=[r['id'] for r in self.cat.search()['items']];self.number=0
-        def provider(conditions,consume,cancelled):return consume(lambda page:self.cat.search(page=page,**conditions))
+        def provider(conditions,consume,cancelled):return consume(lambda page:self.cat.search(page=page,**{k:v for k,v in conditions.items() if k!='mode'}))
         self.owner=ResultSessions(self.cat,provider,parent=self.base);self.addCleanup(self.owner.close)
     def session(self,**conditions):
         self.number+=1;sid=f'{self.number:032x}';self.owner.create(sid,conditions);return sid
@@ -30,6 +30,65 @@ class SelectionEditTests(unittest.TestCase):
         self.assertEqual(result['updated'],2)
         self.assertTrue(all(self.cat.get(i)['favorite'] for i in self.ids[:2]));self.assertEqual(self.cat.get(self.ids[0])['tags'],['keep'])
         self.edit(self.ids[:2],'favorite_remove');self.assertFalse(any(self.cat.get(i)['favorite'] for i in self.ids[:2]))
+
+    def test_literal_favorite_patch_keeps_frozen_order_and_only_checks_selected_sources(self):
+        sid=self.session(mode='literal');old=self.owner.read(sid)['items']
+        original=self.owner.sessions[sid]._currents;checked=[]
+        def capture(items,**kw):checked.extend(item['id'] for item in items);return original(items,**kw)
+        with patch.object(self.owner.sessions[sid],'_currents',side_effect=capture):
+            result=self.owner.edit(sid,self.ids[:1],'favorite_add',[],keep_session=True)
+        self.assertTrue(result['kept_session']);self.assertEqual(checked,self.ids[:1])
+        current=self.owner.read(sid)['items'];self.assertEqual([r['id'] for r in old],[r['id'] for r in current])
+        self.assertEqual([r['favorite'] for r in current],[True,False,False,False])
+        self.assertTrue(self.owner.edit(sid,self.ids[:1],'favorite_remove',[],keep_session=True)['kept_session'])
+        self.assertFalse(self.owner.read(sid)['items'][0]['favorite'])
+        self.cat.update(self.ids[1:2],{'tags':['unrelated change']})
+        with self.assertRaises(ResultUnavailable):self.owner.read(sid)
+
+    def test_favorite_filtered_and_ranked_results_still_require_refresh(self):
+        self.cat.update(self.ids,{'favorite':True})
+        for conditions in ({'mode':'literal','view':'favorites'},{'mode':'semantic'}):
+            sid=self.session(**conditions)
+            result=self.owner.edit(sid,self.ids[:1],'favorite_remove',[],keep_session=True)
+            self.assertFalse(result['kept_session'])
+            with self.assertRaises(ResultUnavailable):self.owner.read(sid)
+            self.owner.cancel(sid)
+
+    def test_retention_never_absorbs_an_extra_generation_or_index_change(self):
+        sid=self.session(mode='literal');original=apply
+        def extra(db,*args):
+            original(db,*args)
+            with self.cat._result_generation_lock:self.cat._result_generation+=1
+        with patch('selection_edits.apply',side_effect=extra):
+            # The existing pre-commit check rejects the extra generation and
+            # rolls back instead of rebasing over an unrelated metadata edit.
+            with self.assertRaises(ResultUnavailable):self.owner.edit(sid,self.ids[:1],'favorite_add',[],keep_session=True)
+        self.assertFalse(self.cat.get(self.ids[0])['favorite'])
+
+    def test_private_patch_failure_reports_saved_but_requires_refresh(self):
+        import sqlite3
+        sid=self.session(mode='literal');db=self.owner.sessions[sid].db
+        db.set_authorizer(lambda action,table,*_:sqlite3.SQLITE_DENY if action==sqlite3.SQLITE_UPDATE and table=='results' else sqlite3.SQLITE_OK)
+        result=self.owner.edit(sid,self.ids[:1],'favorite_add',[],keep_session=True)
+        self.assertFalse(result['kept_session']);self.assertTrue(self.cat.get(self.ids[0])['favorite'])
+        with self.assertRaises(ResultUnavailable):self.owner.read(sid)
+
+    def test_after_commit_stamp_failure_or_extra_write_never_reports_a_failed_save(self):
+        original=self.cat.edit_result_selection
+        for changes in ('exception','generation'):
+            sid=self.session(mode='literal')
+            def wrapped(*args,after_commit=None):
+                def committed():
+                    if changes=='exception':
+                        self.owner.sessions[sid].stamp=lambda:(_ for _ in ()).throw(OSError('generated missing sidecar'))
+                    else:
+                        with self.cat._result_generation_lock:self.cat._result_generation+=1
+                    return after_commit()
+                return original(*args,after_commit=committed)
+            with patch.object(self.cat,'edit_result_selection',side_effect=wrapped):
+                result=self.owner.edit(sid,self.ids[:1],'favorite_add',[],keep_session=True)
+            self.assertFalse(result['kept_session']);self.assertTrue(self.cat.get(self.ids[0])['favorite'])
+            self.owner.cancel(sid)
     def test_shelf_add_and_remove_preserve_other_memberships(self):
         a=self.cat.change_shelf('create',name='a')['id'];b=self.cat.change_shelf('create',name='b')['id'];c=self.cat.change_shelf('create',name='c')['id']
         self.cat.update([self.ids[0]],{'shelf_ids':[a]});self.cat.update([self.ids[1]],{'shelf_ids':[b]})
@@ -91,8 +150,12 @@ class SelectionEditTests(unittest.TestCase):
         body={'session_id':sid,'item_ids':self.ids[:2],'operation':'favorite_add','shelf_ids':[]}
         self.assertEqual(request('edit',body,'wrong')[0],403)
         self.assertEqual(request('edit',{**body,'unknown':True})[0],400)
+        self.assertEqual(request('edit',{**body,'keep_session':'true'})[0],400)
         self.assertEqual(request('edit',json.dumps(body)[:-1]+',"operation":"favorite_remove"}')[0],400)
         self.assertEqual(request('locate',{'session_id':sid,'item_ids':self.ids})[0],200)
+        code,reply=request('edit',{**body,'keep_session':True});self.assertEqual(code,200);self.assertTrue(reply['kept_session'])
+        self.assertEqual(request('locate',{'session_id':sid,'item_ids':self.ids})[0],200)
+        # Legacy requests still commit and invalidate the owner as before.
         self.assertEqual(request('edit',body)[0],200)
         self.assertEqual(request('edit',body)[0],409)
         self.assertTrue(all(self.cat.get(i)['favorite'] for i in self.ids[:2]))

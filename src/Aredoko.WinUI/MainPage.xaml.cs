@@ -1000,7 +1000,9 @@ public sealed partial class MainPage : Page
         try
         {
             // Save only the flag: an unsaved tag/shelf draft must not be committed.
-            await api.PostAsync("api/items/update",new JsonObject{{"ids",new JsonArray(row.Id)},{"changes",new JsonObject{{"favorite",value}}}});
+            bool kept=false;
+            if(resultSession is {} session&&!resultsNeedRefresh)kept=await session.EditFavoriteAsync(row.Id,value,CancellationToken.None);
+            else await api.PostAsync("api/items/update",new JsonObject{{"ids",new JsonArray(row.Id)},{"changes",new JsonObject{{"favorite",value}}}});
             row.Favorite=value;
             if(rows.FirstOrDefault(item=>item.Id==row.Id) is {} visibleRow)visibleRow.Favorite=value;
             if(active?.Id==row.Id)
@@ -1009,7 +1011,7 @@ public sealed partial class MainPage : Page
                 try{Favorite.IsChecked=value;}finally{updatingFavorite=false;}
             }
             RefreshFavoriteCard(row);
-            await RefreshResultRowsAfterEditAsync(favoriteOnly:true);
+            if(!kept)await RefreshResultRowsAfterEditAsync(favoriteOnly:true);
         }
         catch(Exception ex)
         {

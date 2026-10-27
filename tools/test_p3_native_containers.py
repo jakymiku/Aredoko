@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--setup-plan',action='store_true',help='UIA-only feature plan and opt-out; no foreground activation, input, download, model or GPU')
     parser.add_argument('--setup-return',action='store_true',help='UIA-only return from acquisition, placement and index settings; no acquisition or inference')
     parser.add_argument('--setup-recovery',action='store_true',help='Setup return plus safe recovery, diagnostic return and saved-profile restart state')
+    parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
@@ -37,6 +38,7 @@ def main():
     if args.compact_toolbar:args.detail_actions=True
     if args.viewer_choice:args.detail_actions=True
     if args.setup_recovery:args.setup_return=True
+    if args.favorite_patch:args.detail_actions=True;args.uia_only=True
     if args.setup_plan or args.setup_return:args.detail_actions=True;args.uia_only=True
     if args.video_history_only:args.video_content=True
     if args.audio_similarity_only:args.audio_search_only=True
@@ -214,6 +216,10 @@ def main():
         elif args.compact_toolbar:
             from ui_compact_toolbar_audit import audit
             audit(ui,tree,shot,report,check,cat,first['id'],input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.favorite_patch:
+            from ui_favorite_patch_audit import audit
+            audit(ui,tree,shot,report,check,handler,cat,first['id'])
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.setup_return:
             from ui_setup_return_audit import audit

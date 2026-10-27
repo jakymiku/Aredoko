@@ -6,6 +6,7 @@ if(args.Contains("--audio-content")){await AudioContentTests.Run(Check);return;}
 if(args.Contains("--video-content")){await VideoContentTests.Run(Check);return;}
 if(args.Contains("--viewer-preferences")){await FeedbackTests.Run(Check);return;}
 if(args.Contains("--setup-plan")){await AISetupPlanTests.Run(Check);return;}
+if(args.Contains("--favorite-patch")){await FavoritePatchTests.Run(Check);return;}
 ViewerInteractionTests.Run(Check);
 if(args.Contains("--viewer-interaction")){await ImageSourceInfoTests.Run(Check);return;}
 Check(!JsonSerializer.IsReflectionEnabledByDefault,"reflection disabled");
@@ -14,6 +15,7 @@ await ImageSourceInfoTests.Run(Check);
 await ThumbnailTests.Run(Check);
 await AnimationStreamTests.Run(Check);
 await ResultSessionTests.Run(Check);
+await FavoritePatchTests.Run(Check);
 await ResultBuildProgressTests.Run(Check);
 await ShelfTests.Run(Check);
 await BackupTests.Run(Check);

@@ -314,7 +314,7 @@ class ProductionCatalog(Catalog):
                     db.execute(f'UPDATE items SET {assignments} WHERE id IN ({marks})',list(changes.values())+ids)
             return {'updated':count}
 
-    def edit_result_selection(self,ids,operation,shelf_ids,validate,check):
+    def edit_result_selection(self,ids,operation,shelf_ids,validate,check,after_commit=None):
         from selection_edits import apply,validate_edit
         ids=validate_edit(ids,operation,shelf_ids)
         with self._guard:
@@ -326,7 +326,10 @@ class ProductionCatalog(Catalog):
                 validate()
                 apply(db,ids,operation,shelf_ids)
                 check()  # Cancellation/index changes before commit roll back all.
-        return {'updated':len(ids),'item_ids':ids,'operation':operation}
+            # Only the result owner may patch its private snapshot after the
+            # commit, before another guarded catalog mutation can intervene.
+            kept=after_commit() if after_commit is not None else False
+        return {'updated':len(ids),'item_ids':ids,'operation':operation,'kept_session':kept}
 
     def history_status(self):
         with self._guard:

@@ -39,6 +39,7 @@ public sealed class ResultSessionClient(HttpClient client,HttpClient? creationCl
                 root["idle_seconds"]?.GetValue<int>() != 900 || root["total"]?.GetValue<int>() is not int total || total < 0)
                 throw new InvalidDataException("Invalid result session");
             session.Total = total;
+            session.FavoritePatchSupported=root["favorite_patch_supported"]?.GetValue<bool>()==true;
             return session;
         }
         catch { await session.DisposeAsync(); throw; }
@@ -94,6 +95,7 @@ public sealed class ResultSession(HttpClient client, string id, JsonObject condi
     private int disposed;
     public string Id => id;
     public int Total { get; internal set; }
+    public bool FavoritePatchSupported { get; internal set; }
     public JsonObject Conditions => conditions.DeepClone().AsObject();
 
     private void Validate(JsonObject response)
@@ -150,16 +152,26 @@ public sealed class ResultSession(HttpClient client, string id, JsonObject condi
             throw new ArgumentException("Select 1 to 256 distinct item IDs",nameof(itemIds));
     }
     public async Task EditSelectionAsync(IReadOnlyList<int> itemIds,SelectionOperation operation,IReadOnlyList<long> shelfIds,CancellationToken cancellation)
+        =>await EditSelectionCoreAsync(itemIds,operation,shelfIds,false,cancellation);
+
+    public Task<bool> EditFavoriteAsync(int itemId,bool value,CancellationToken cancellation)
+        =>EditSelectionCoreAsync([itemId],value?SelectionOperation.FavoriteAdd:SelectionOperation.FavoriteRemove,[],FavoritePatchSupported,cancellation);
+
+    private async Task<bool> EditSelectionCoreAsync(IReadOnlyList<int> itemIds,SelectionOperation operation,IReadOnlyList<long> shelfIds,bool keepSession,CancellationToken cancellation)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed)!=0,this);ValidateSelectionIds(itemIds);ShelfProtocol.ValidateIds(shelfIds);
         var wire=operation switch{SelectionOperation.FavoriteAdd=>"favorite_add",SelectionOperation.FavoriteRemove=>"favorite_remove",SelectionOperation.ShelvesAdd=>"shelves_add",SelectionOperation.ShelvesRemove=>"shelves_remove",_=>throw new ArgumentOutOfRangeException(nameof(operation))};
         if((operation is SelectionOperation.FavoriteAdd or SelectionOperation.FavoriteRemove)&&shelfIds.Count!=0
             ||(operation is SelectionOperation.ShelvesAdd or SelectionOperation.ShelvesRemove)&&shelfIds.Count==0)throw new ArgumentException("Invalid shelves for operation");
-        var response=await ResultSessionClient.SendAsync(client,"edit",new JsonObject
+        var body=new JsonObject
             {["session_id"]=id,["item_ids"]=new JsonArray(itemIds.Select(value=>JsonValue.Create(value)).ToArray()),
-             ["operation"]=wire,["shelf_ids"]=new JsonArray(shelfIds.Select(value=>JsonValue.Create(value)).ToArray())},cancellation);
+             ["operation"]=wire,["shelf_ids"]=new JsonArray(shelfIds.Select(value=>JsonValue.Create(value)).ToArray())};
+        if(keepSession)body["keep_session"]=true;
+        var response=await ResultSessionClient.SendAsync(client,"edit",body,cancellation);
         if(response["session_id"]?.GetValue<string>()!=id||response["operation"]?.GetValue<string>()!=wire||response["updated"]?.GetValue<int>()!=itemIds.Count
             ||response["item_ids"]?.AsArray().Select(node=>node!.GetValue<int>()).SequenceEqual(itemIds)!=true)throw new InvalidDataException("Invalid selection edit acknowledgment");
+        if(keepSession&&response["kept_session"] is null)throw new InvalidDataException("Missing result retention acknowledgment");
+        return keepSession&&response["kept_session"]!.GetValue<bool>();
     }
 
     public async Task<ResultNeighbor?> NeighborAsync(int itemId, int direction, CancellationToken cancellation)
