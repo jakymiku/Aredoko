@@ -14,6 +14,8 @@ AIを使わない選択はruntime/model/catalogの確認すら行わず基本操
 
 Core `--setup-plan`（reflection無効）/設定保持、生成backup3件とPortable/frontend04を確認。初回はJsonArray.Add(string)がreflection無効で失敗したため、明示JsonValueへ修正し、新しいIL2026を除去。frontend03は修正前として使わず、04を候補とする。native入力/driver/実導入/clean Windowsを合格にしていない。予約仕様の全工程完了でもない。
 
+個別許可後のsetup-native01は、専用6媒体/既存固定model catalogのmetadataのみを使い、**前面化・物理入力なしのUIA操作**で10checks/3PNG目視/exit0 PASS。4用途→runtime未公開とmodel容量の区別→選択保存→再表示→AIなし選択保存→再表示を確認。download/setup jobはidle、audio/video ownerは未作成、生成原本不変。取得ボタンを押したりGPU/再生を使ったりしていない。モデル取得/配置の遷移後の新しい一連受入、実導入/clean Windowsは未完。
+
 ## 目的と対象
 ZIP解凍→`Aredoko.exe`でPythonなしの基本機能を起動。初回の用途選択から、必要な任意runtime/モデルの導入・検証、初心者向け使い方、故障時の安全な復旧まで一貫して案内する。WinUI 3ネイティブ、既存Python/SQLite/owned API、既存profile/namespaceを維持。
 

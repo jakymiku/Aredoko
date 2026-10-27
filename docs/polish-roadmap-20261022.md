@@ -4,13 +4,15 @@
 
 ## 現行実行キュー（2026-10-25、実機フィードバック計画）
 
+**2026-10-27 Sol引継ぎ後の更新（以下の旧checkpointより優先）**：Museの直接動画producer/検索/類似/Core/WinUIを同期し、Windows buildと生成限定GPU/GUIを確認。不完全coverageの文章検索除外と明示再生成を補強。U7の内蔵/既定アプリ選択はsource/build/設定・復元済みだが前面化が取得できずnative未確認。P6-S1/S2は用途選択・依存重複排除・既存取得/配置入口・AIスキップ保存まで実装し、UIAだけの限定nativeを確認。実runtime公開と全導入受入を完成扱いにしない。候補/次の1件/許可範囲は[current-handoff](current-handoff.md)を優先し、完了した動画基盤を再実装しない。
+
 **2026-10-27追記**：音声の通常producer/private worker→保存→文章検索の限定GPU/GUIとcached直接音声類似の入口・時刻・画面履歴を確認。UI-2はcompact検索toolbarとgrid先頭保持を改善し並行継続中。動画のnative区間入力はworker/guard付きdecoderまで追加、通常検索は従来4代表frameを維持。次はguard付きduration/coverage planから通常producerへ接続する。基本ZIP08/sourcebb7e77fは通常EXEの再起動まで限定確認済み、installed Alphaは07/sourcecaee977のまま。正確な根拠/未受入/新GUI・GPUの事前確認は[current-handoff](current-handoff.md)を優先。過去の「音声通常索引/UI未接続」は当時の記録である。
 
 **2026-10-26追記（以下の古い次作業より優先）**：bounded source検査・進捗表示・原寸animation・HTTP再利用・viewer実入力を実装/限定確認。実PNG5万件のroot解決を局所再利用し45.2→35.1秒（単回・準備待ちは残る）。最終基本ZIP06/source`2cf99b2`はbuild/基本CPU済み、06の追加GUIは未実施。音声は生成予備評価とPCM/専用workerまで進み、通常索引/UIは未接続。P6はThirdPartyNotices漏れ修正とnative対応表を追加。次は生成実ファイル5万件の限定nativeを具体化する。正確な候補/許可/残件は[current-handoff](current-handoff.md)を優先。HC/物理DPI/clean Windows・長時間FPS/RSS・runtime公開review/host、R07 producer/M2は未完。M1や全ロードマップ完了とは扱わない。
 
 [改善計画 U1–U6](usability-followup-20261025.md)を直近の実装キューへ統合する。
 
-**追加バックログ（2026-10-27、未実装）**：[U7（ダブルクリックの内蔵／外部ビューワー切替）](usability-followup-20261025.md#u7ダブルクリック時のビューワー選択2026-10-27-追加要望未実装)。既存の右クリック外部起動はそのまま、設定によりダブルクリックの起動先だけ選択可能にする。外部へAredokoの検索結果の並び・閲覧順は引き継がれない。**現行の次の1件はcurrent-handoff優先**で、U7を割り込ませない。
+**U7の状態**：[ダブルクリックの内蔵／外部切替](usability-followup-20261025.md)はsource実装済み、native/外部実起動は未確認。右クリック外部起動は維持。検索結果の並び・閲覧順は外部へ引き継がない。**現在の次の1件はcurrent-handoff優先**。
 
 **U1/U2/U4a/U4b/U5とU6 filterはsource実装済み、U3はpalette APNG黒化修正を含む局所改善済み**。2026-10-26の生成nativeでU4b/U5の最終refresh（Light）、実Ctrl＋クリック/グリッド右クリック一括整理（Dark）、表示切替の先頭保持まで確認済み。旧FAILは履歴として保持する。起動時照合は所有停止と任意オフの高度な設定も追加済み。**U3bの生成大容量GIF/APNG/CBZ限定受入と基本ZIP03/installed Alpha更新まで完了**（source `e52c8ec`、詳細はcurrent-handoff）。次はP3の既知の5万件metadata初回snapshot待ちの局所削減を一単位進める。HC/物理DPI、大画像FPS/長時間RSS、公開runtime権利/host、P7残受入/M1→R06–R09は維持。元のP0–P7/製品ビジョンを置き換えず、完了機能を繰り返さない。
 
