@@ -2,10 +2,12 @@
 
 Probes the container duration from the same seekable handle the interval
 decoder reads, plans contiguous windows of at most MAX_FRAMES seconds, and
-decodes every window in order. Duration is never inferred from decoded
-output, a short decode, or caller guesswork: an unknown or out-of-range
-duration fails, and any failed window discards the whole coverage. Does
-not load models, write indexes, or open a source path/URL.
+yields each decoded window one at a time so callers can encode or spool a
+window before advancing; this layer never holds more than one window of
+RGB. Duration is never inferred from decoded output, a short decode, or
+caller guesswork: no usable duration fails, and a failed window raises
+mid-iteration so the caller can discard anything spooled. Does not load
+models, write indexes, or open a source path/URL.
 """
 import json
 import math
@@ -17,6 +19,15 @@ from video_window_decode import read_video_window
 
 
 class VideoCoverageUnavailable(ValueError):pass
+
+
+def _duration_ms(raw):
+    """Container duration in ms, or None when the value is unusable."""
+    try:seconds=float(raw)
+    except (TypeError,ValueError):return None
+    if not math.isfinite(seconds) or seconds<=0:return None
+    total_ms=int(round(seconds*1000))
+    return total_ms if 1<=total_ms<=MAX_START_MS else None
 
 
 def probe_video_duration_ms(source,*,cancel=None,guard=None):
@@ -38,15 +49,15 @@ def probe_video_duration_ms(source,*,cancel=None,guard=None):
         document=json.loads(data)
         streams=document['streams']
         if not isinstance(streams,list) or len(streams)!=1:raise ValueError('Video stream unavailable')
-        raw=streams[0].get('duration')
-        if raw is None:raw=(document.get('format') or {}).get('duration')
-        seconds=float(raw)
+        candidates=[streams[0].get('duration'),(document.get('format') or {}).get('duration')]
     except (ValueError,KeyError,TypeError,AttributeError) as error:
         raise VideoCoverageUnavailable('Video duration unavailable') from error
-    if not math.isfinite(seconds) or seconds<=0:raise VideoCoverageUnavailable('Video duration unavailable')
-    total_ms=int(round(seconds*1000))
-    if not 1<=total_ms<=MAX_START_MS:raise VideoCoverageUnavailable('Video duration out of range')
-    return total_ms
+    # A present but unusable stream value ("N/A", 0, out of range) must not
+    # shadow a usable format duration; only no usable value at all fails.
+    for raw in candidates:
+        total_ms=_duration_ms(raw)
+        if total_ms is not None:return total_ms
+    raise VideoCoverageUnavailable('Video duration unavailable')
 
 
 def plan_video_coverage(total_duration_ms):
@@ -56,7 +67,7 @@ def plan_video_coverage(total_duration_ms):
     return tuple((start,min(step,total_duration_ms-start)) for start in range(0,total_duration_ms,step))
 
 
-def read_video_coverage(source,*,cancel=None,guard=None):
+def iter_video_coverage(source,*,cancel=None,guard=None):
     total_duration_ms=probe_video_duration_ms(source,cancel=cancel,guard=guard)
-    return tuple(read_video_window(source,start,duration,total_duration_ms=total_duration_ms,cancel=cancel,guard=guard)
-                 for start,duration in plan_video_coverage(total_duration_ms))
+    for start,duration in plan_video_coverage(total_duration_ms):
+        yield read_video_window(source,start,duration,total_duration_ms=total_duration_ms,cancel=cancel,guard=guard)
