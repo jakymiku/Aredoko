@@ -122,6 +122,8 @@ def main():
             root=cat.add_root(str(media));cat.start_scan(root)
             if cat._worker:cat._worker.join(15)
         before=sources()
+        if args.viewer_choice and args.uia_only:
+            (target/'viewer-settings.json').write_text(json.dumps({'version':1,'wheel_up_advances':False,'theme':args.theme,'double_click_viewer':'internal'}),encoding='utf-8')
         first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(2 if args.audio_content or args.video_content else 50000 if args.global_edge else 6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
         if args.detail_actions:
             shelf=cat.change_shelf('create',name='確認用の棚')['id']
@@ -184,7 +186,7 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
-        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or args.compact_toolbar or args.video_content or args.viewer_choice:
+        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or args.compact_toolbar or args.video_content or (args.viewer_choice and not args.uia_only):
             if args.video_content or args.viewer_choice:ready()
             # The owner launches this one test process; use normal Windows
             # activation, never input attachment, security bypass or other apps.
@@ -238,8 +240,8 @@ def main():
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.viewer_choice:
             from ui_viewer_choice_audit import audit
-            removed=audit(ui,cli,tree,shot,report,check,cat,media,target,proc.pid,hwnd,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
-            check('only the explicitly removed generated fixture changed',{key:value for key,value in before.items() if key!=removed}==sources())
+            removed=audit(ui,cli,tree,shot,report,check,cat,media,target,proc.pid,hwnd,input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only)
+            check('generated sources match the declared scope',{key:value for key,value in before.items() if key!=removed}==sources())
             report['pass']=True
         elif args.detail_actions:
             from ui_detail_actions_audit import audit
@@ -328,8 +330,10 @@ def main():
                 for _ in range(8):
                     if proc.poll() is not None:break
                     visible=tree();primary=visible.get('PrimaryButton',{})
-                    modal=next((name for name in ('AISetupPlanDialog','AIEnvironmentDialog','AIDownloadDialog','AISettingsDialog','DiagnosticsDialog') if name in visible),None)
+                    modal=next((name for name in ('AISetupPlanDialog','AIEnvironmentDialog','AIDownloadDialog','AISettingsDialog','DiagnosticsDialog','SettingsDialog','GettingStartedGuideDialog') if name in visible),None)
                     if modal is not None:
+                        combo=visible.get('SettingsDoubleClickViewer',{})
+                        if combo.get('expandState')=='expanded':ui('invoke',combo.get('selector','SettingsDoubleClickViewer'),'--action','collapse')
                         ui('invoke','CloseButton','--action','invoke')
                         ui('wait-for',modal,'--gone','-t','5000')
                         continue

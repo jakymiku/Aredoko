@@ -38,6 +38,9 @@
 
 通常の`literal`/`view=all`だけ、お気に入り保存後に所有結果の当該payloadを更新し、順序/件数/selection/他の行を保つ。`keep_session`は任意bool、旧4field APIは従来通り失効する。世代を進めるのは自分の1transactionだけと照合し、root/index/他の書込の変更を吸収しない。保存前は選択元の実file/scope/取消を検証し、保存後は同じcatalog guard内でprivate snapshotを更新する。private更新やstamp確認が失敗した場合、metadataは保存済みで`kept_session=false`と返し、保存失敗とは偽らず再検索へ戻す。favorites view/AI順位/棚編集は全再取得のまま。
 
-Coreはcreate時のcapabilityがある場合のみ拡張を要求し、旧serverには従来fieldだけを送る。WinUIの単体favorite（詳細checkbox/右click共有handler）は保持成功時にcaption/menuだけを更新し、未保存タグ/棚を保存しない。既存のviewport rangeは移動ごとに原本を再検証する。新しいGUI試験`--favorite-patch`はUIA checkboxで同じsession/再検索0/タグdraft保持を確認する用意まで、native未実施。
+Coreはcreate時のcapabilityがある場合のみ拡張を要求し、旧serverには従来fieldだけを送る。WinUIの単体favorite（詳細checkbox/右click共有handler）は保持成功時にcaption/menuだけを更新し、未保存タグ/棚を保存しない。既存のviewport rangeは移動ごとに原本を再検証する。新しいGUI試験`--favorite-patch`はUIA checkboxで同じsession/再検索0/タグdraft保持を確認する。
 
 関連Python14/既存session35/Core10/WinUI build PASS。生成5万PNGの既存fixtureをread-only確認してDBだけcopyした1回のCPU確認は、snapshot30.633秒とは別に、**favorite保存＋snapshot更新11.949ms、provider呼出は初回の1回のみ、選択元確認1件、先頭/末尾ID保持、DB integrity=ok、元fixture DB不変**。raw `data/ai-ui/continuation-20261028/favorite-50k01/report.json`。GUI全体の応答やcold初回表示の速度保証ではない。GPU/GUI/通常DB/Alphaを使用していない。
+
+
+個別許可後のZIP10/source0138a58 `favorite-native10`は10checks/2PNG全目視/exit0 PASS。favoriteのon/off保存後もprovider追加呼出0・session ID不変、未保存タグは保持されDBへ暗黙保存されない。右クリックと同じ保存handlerだが、今回の入力はcheckboxのUIA操作だけで実右クリックを行っていない。一括favorite/AI/favorites viewの再作成回避まで完成したとは扱わない。生証拠`data/ai-ui/continuation-20261028/favorite-native10/`。

@@ -7,16 +7,32 @@ import ctypes
 from ctypes import wintypes
 import json
 import time
+from native_ui_tools import nodes
 
 
-def audit(ui,cli,tree,shot,report,check,catalog,media,target,pid,main,*,input_guard):
-    report['authorization']='Explicit per-run approval required: generated media/settings only; one generated fixture removed to test fallback; no external app/playback/GPU'
+def audit(ui,cli,tree,shot,report,check,catalog,media,target,pid,main,*,input_guard,uia_only=False):
+    report['authorization']=('Explicit approval required: dedicated viewer preference UIA-only persistence; no physical input, foreground, file deletion or external activation'
+        if uia_only else 'Explicit per-run approval required: generated media/settings only; one generated fixture removed to test fallback; no external app/playback/GPU')
     preferences=target/'viewer-settings.json'
     def choose(external):
         ui('invoke','BtnSettings');ui('wait-for','SettingsDoubleClickViewer','-t','10000')
-        ui('focus','SettingsDoubleClickViewer');ui('invoke','SettingsDoubleClickViewer','--action','expand')
-        if not input_guard():raise RuntimeError('Owned viewer settings lost foreground; no key sent')
-        ui('send-keys','end enter' if external else 'home enter','--via','send-input')
+        if uia_only:
+            ui('invoke','SettingsDoubleClickViewer','--action','expand')
+            label='Windowsの既定アプリ' if external else 'Aredokoの内蔵ビューア（既定）'
+            # A native item and its text share a name, and WinUI can expose the
+            # same peer twice. Select one exact item slug from this live tree.
+            choices={n['selector'] for n in nodes(json.loads(ui('inspect','--depth','18','--json')))
+                if n.get('type') in ('ListItem','ComboBoxItem') and n.get('name')==label and n.get('selector') and not n.get('isOffscreen',True)}
+            if len(choices)!=1:raise RuntimeError('Expected one visible viewer choice item')
+            ui('invoke',choices.pop(),'--action','select')
+            combos={n['selector'] for n in nodes(json.loads(ui('inspect','--depth','18','--json')))
+                if n.get('type')=='ComboBox' and n.get('automationId')=='SettingsDoubleClickViewer' and n.get('selector') and not n.get('isOffscreen',True)}
+            if len(combos)!=1:raise RuntimeError('Expected one visible viewer ComboBox peer')
+            ui('invoke',combos.pop(),'--action','collapse')
+        else:
+            ui('focus','SettingsDoubleClickViewer');ui('invoke','SettingsDoubleClickViewer','--action','expand')
+            if not input_guard():raise RuntimeError('Owned viewer settings lost foreground; no key sent')
+            ui('send-keys','end enter' if external else 'home enter','--via','send-input')
         ui('invoke','SettingsSave');ui('wait-for','SettingsStatus','--value','保存しました','--contains','-t','10000')
         check('selected viewer preference saved: '+str(external),json.loads(preferences.read_text(encoding='utf-8'))['double_click_viewer']==('external' if external else 'internal'))
         shot('external-settings' if external else 'internal-settings')
@@ -25,6 +41,13 @@ def audit(ui,cli,tree,shot,report,check,catalog,media,target,pid,main,*,input_gu
     ui('invoke','BtnSettings');ui('wait-for','SettingsDoubleClickViewer','--value','Windowsの既定アプリ','-t','10000')
     check('reopened settings retains the external choice',True)
     ui('invoke','CloseButton');ui('wait-for','SettingsDoubleClickViewer','--gone','-t','10000')
+    if uia_only:
+        choose(False)
+        ui('invoke','BtnSettings');ui('wait-for','SettingsDoubleClickViewer','--value','Aredokoの内蔵ビューア（既定）','-t','10000')
+        check('reopened settings retains the internal choice',True)
+        ui('invoke','CloseButton');ui('wait-for','SettingsDoubleClickViewer','--gone','-t','10000')
+        report['physical_double_click_tested']=False;report['external_app_started']=False
+        return None
     images=[row for row in catalog.search()['items'] if row['kind']=='image'];valid,removed=images
     ui('click','ItemTitle'+str(removed['id']));ui('wait-for','BtnDetails','-p','IsEnabled','--value','True','-t','10000')
     path=media/removed['title']

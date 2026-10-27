@@ -1,5 +1,13 @@
 # 基本版ZIP候補（2026-10-24）
 
+## 最新候補10（2026-10-28、source0138a58）
+
+- 通常入口：`C:/AI/Aredoko/dist/portable-basic-20261028-10/Aredoko/Aredoko.exe`。隣の`Aredoko-windows-x64.zip`。818files /661,537,190bytes、ZIP348,331,051bytes、SHA256 `345c8fa443ffdd5956e20118a3d39f57ed74da1004b0d78ea0c3afab965a520a`。
+- アプリsource `0138a584bd208f7856f14a5d1e509871ae12dbbd`、Assembly informational version `1.0.0+0138a584bd208f7856f14a5d1e509871ae12dbbd`。AIガイド復帰/復旧案内/profile変更待ち、通常一覧favoriteの全件再作成回避、音声/動画内積削減を収録。モデル/PyTorchは別途必要、runtime公開は未完。
+- Core/Portable/起動画面自己検査/runtime/全inventory/hash/ZIP照合、同梱Python基本27項目PASS。所有backend EOF/DB integrity/元生成画像保持を確認。
+- 個別許可GUI：favorite-native10は10checks/2PNG目視/exit0（同一結果session、再検索0、未保存タグ保持）。basic-native10は通常EXE→正常終了→予定内1再起動、11checks/2PNG目視/WinUI・bootstrap計4exit0、payload保持。UIAのみのU7設定保存/再表示も8checks/3PNG目視/exit0、実ダブルクリック/外部起動は未確認。U7は初期Lightからsystem設定保存後Darkへ変化し、Light全行程受入ではない。
+- 生証拠`data/ai-ui/continuation-20261028/`の`basic10-final.json`、`basic-cpu10/`、`favorite-native10/`、`basic-native10/`、`u7-settings-native01/02`。pack-time receiptのnative未確認は後続受入と区別しsealed ZIPを書換えない。旧候補/installed Alpha（07/sourcecaee977）/shortcut不変、GPU/外部取得なし。clean Windows未受入、GitHub Releaseへ未公開。
+
 ## 最新候補09（2026-10-27、source176502f）
 
 - 通常入口：`C:/AI/Aredoko/dist/portable-basic-20261027-09/Aredoko/Aredoko.exe`。ZIPは親の`Aredoko-windows-x64.zip`。818files /661,474,739bytes、frontend05。旧08の検証済み基本Python/mediaとsource不変のbootstrapを再利用、旧Alpha/shortcutは未変更。

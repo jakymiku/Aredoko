@@ -1,15 +1,18 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
-## 2026-10-28 継続中（以下の過去記録より優先）
+## 2026-10-28 終了checkpoint（以下の過去記録より優先）
 
-- 起点`d3e4885`、fetch後もremote/PR head ref一致・clean、新たなMuse差分なし。既存branch/PR #5を継続。PRのopen/Draft metadataはconnector Transport closedで未再確認。
-- **`d27a72e` P6-S4ガイド復帰**：用途を保存し、取得/配置/索引設定を閉じるとガイドへ戻り、既存job/planを更新。取得中/中止/検査中/再起動待ちと媒体別索引を区別。Core21/Portable frontend01 PASS。GUIの1試行質問は回答待ちで実行していない。
-- **`62e46d0` P6-S5の安全な復旧案内**：未配置/版相違/欠落/環境・設定不正を区別し、折りたたみの案内→既存診断情報→ガイドを接続。削除/初期化/OS変更なし。Core29＋生成read-only Python7、最終WinUI build PASS（picker既存3）。frontend02は最終Core境界補強前の候補で、最新sourceのnative受入ではない。実導入/機器診断/自動修復の完成とはしない。
-- **`ffe3998` profile変更待ちを区別**：全profileを列挙しないsnapshotでpending/明示override/設定不正をplanへ反映。旧モデルのcatalogを自動推薦せず、取得入口は再起動まで抑制。Core33/plan8+profile13/Portable frontend03 PASS。個別回答後のnative01は取得→ガイド成功、試験保存先差による期待不一致/旧modal cleanup失敗を保持。所有guideをUIA→通常closeで回収し、rawをPASSに改変しない。追加許可native02は残り配置/索引/診断復帰とpending/用途保持を11checks/3PNG目視/exit0 PASS。UI source ffe3998 /backend d6acd9c。[P6詳細](p6-first-run-setup-spec.md)。
-- **`d6acd9c` お気に入りの全件再作成を回避**：literal/allだけ当該payloadを更新し、元のorder/selection/draftを保持。自分の1世代更新だけを取り込み、favorites/AI/棚等は再取得。保存後private更新失敗は保存済み＋要再検索と返す。Python14/session35/Core10/WinUI build、生成5万PNGのDB copy確認PASS：初回snapshot30.633sとは別に保存更新11.949ms、provider初回1回、原本確認1件、旧fixture DB不変。GUIは未実施、`--favorite-patch`を用意。[正本](library-selection.md)。
-- **`3f5da55` 音声/動画内積の負荷を削減**：同じ乗算/sum順を保つmapへ共通化し、両Pythonの同一版内bit一致/関連32 PASS。kernelだけ基本Python1万pair0.240486→0.156169s、全検索/長媒体性能の保証ではない。cap/取消/guardは保持。[詳細と旧harness FAIL](audio-producer-review.md)。
-- **P6公開準備の独立CPU作業**：PEの静的/delay DLL依存監査を実装し、生成18件＋基本PythonでPE9 PASS。既存pack325file/2,757edgesの読取956,460bytes、NOTICE/manifest保持。ONNX Runtimeの2fileが必要とする`MSVCP140_1.dll`がpack内にないと判明。既存GPU/WD成功をclean Windows保証に拡張しない。正式な再配布元/条件/追加導入の選択が必要で、勝手にOSからコピー/取得しない。[証拠と残件](runtime-notice-inventory.md)。runtime公開/権利承認は未完。
-- PC使用中。GUI/GPUは具体的な一括範囲への回答後のみ。通常DB/私物/Alpha変更なし、Actions/main merge/shutdownなし。最終の完了内容/次の1件は終了前にこの節を更新する。
+- 起点`d3e4885`、開始時fetch後remote/PR head ref一致・clean、新たなMuse差分なし。既存`feat/winui3-production-mvp-20261011` / PR #5を継続。PRのopen/Draft metadataはconnector Transport closedで未再確認。アプリ候補sourceは**`0138a58`**、本引き継ぎのcommitは`git log -1 -- docs/current-handoff.md`。後続の試験tool/文書変更をsealed ZIPへ追加したとは扱わない。
+- **`d27a72e` P6-S4＋`62e46d0` S5**：用途保存→取得/配置/索引/診断→ガイド復帰・準備状況再確認を接続。取得中/中止/検査中/再起動待ち、媒体別索引、欠落/版相違/環境不正の安全な案内を追加。削除/初期化/OS変更なし。**`ffe3998`**で保存profileの変更待ちを区別し、再起動前の旧モデル取得推薦を抑止。Core33/plan8+profile13/WinUI/Portable PASS。[P6正本](p6-first-run-setup-spec.md)。
+- **ガイドの限定native受入**：frontend03/UI source ffe3998/backend d6acd9c。native01は取得→復帰成功、試験保存先の不一致とmodal cleanup失敗をraw FAILのまま保持し、所有guideをUIA→通常closeで回収（初回exit code欠測）。追加許可native02は残り配置/索引/診断復帰・用途保持・pendingと取得抑制を11checks/3PNG目視/exit0 PASS。実runtime導入/自動修復/clean Windowsの受入とは区別。
+- **`d6acd9c` お気に入り変更の全件再作成を回避**：通常literal/allの単体favoriteだけ当該payload/caption/menuを更新し、order/selection/未保存draftを保持。自分の1世代だけを取り込み、favorites/AI/棚等は再取得。保存後snapshot更新失敗は保存済み＋再検索と返す。Python14/session35/Core10/WinUI PASS。既存生成5万PNGのDB copyでsnapshot30.633sと別に保存更新11.949ms/provider初回1回/原本確認1件/元DB不変。ZIP10のUIA nativeは10checks/2PNG目視/exit0、on/off後の再検索0・同一session・タグdraft保持を確認。[選択正本](library-selection.md)。一括操作の同じ最適化は未接続。
+- **`3f5da55` 音声/動画内積を局所高速化**：同じ演算順のmapへ共通化、各Python内のbit一致と関連32 PASS。基本Pythonのkernel1万pair0.240486→0.156169s。全検索/長媒体性能保証ではなく、比較cap/取消/guardは保持。[詳細と旧harness FAIL](audio-producer-review.md)。
+- **`ec72860` P6静的native依存監査**：PE32/PE32+の通常/delay importをbounded読取、生成18件＋基本PythonPE9 PASS。既存pack325files/2,757edgesの読取956,460bytes、旧manifest/NOTICE保持。ONNX Runtime2filesの必要な`MSVCP140_1.dll`がpack内にない。`nvcuda.dll`も外部依存。静的表の把握であり動的loader/再配布権利/clean Windowsの合格ではない。[証拠](runtime-notice-inventory.md)。
+- **最終基本ZIP10/source0138a58**：`dist/portable-basic-20261028-10/Aredoko/Aredoko.exe`と隣のZIP。818files/661,537,190bytes、ZIP348,331,051bytes。Core/Portable/自己検査/runtime/全inventory/ZIP、同梱backend基本27 PASS。個別許可の通常EXE起動→正常終了→予定内1再起動は11checks/2PNG目視/WinUI・bootstrap計4exit0。sealed payloadと元生成PNG不変。pack-time `native_gui_verified:false`はその時点の記録、後続受入はfinal/reviewを正本とする。[候補・SHA](portable-refresh-20261024.md)。
+- **U7設定保存のみ限定受入**：ZIP10の`u7-settings-native02`はUIAだけでWindows既定→保存/再表示→内蔵→保存/再表示、8checks/3PNG目視/exit0。01の同名item/text誤選択FAILと所有modal回収exit0を保持。初期Light→system設定保存でDarkへ変わったためLight単独受入ではない。fixture必須version/wheelの欠落は今後用に修正、追加GUIなし。実ダブルクリック/外部関連付け/fallbackは未検証。[U7正本](usability-followup-20261025.md)。
+- **次の1件：P6 runtimeのMSVC依存を正式に満たす配布設計**。既存Visual Studio Communityの正式redist/許諾情報を限定読取し、`MSVCP140_1.dll`の入手元と再配布条件、pack同梱か公式runtime導入かを確定する。既存VSの位置だけ`C:/Program Files/Microsoft Visual Studio/2022/Community`と判明、redist本体/許諾は未読。System32からのコピー/追加DL/OS導入/公開は勝手に行わない。その後native NOTICE・動的依存・不変host/trusted registry・clean Windowsへ。情報待ちならUI/機能の独立小単位へ進み、再調査やガイドの再実装を繰り返さない。
+- **未完**：実音楽/録音/動画品質、長媒体比較・decoder、動画内音声、runtime権利/公開host/registry、HC/物理DPI/長時間RSS/clean Windows、U7実入力。全ロードマップ/M1/M2完成とはしない。完成形UIは機能と並行。
+- 今回のGUI許可は全て消費、GPU0/外部取得0。PC使用中のため新しいGUI/GPUは具体的な範囲を質問し回答後のみ。通常DB/私物/Alpha/shortcut変更なし（AlphaはZIP07/sourcecaee977）。Actions/新PR/main merge/shutdownなし。生証拠`data/ai-ui/continuation-20261028/`はGit対象外。commit/pushとremote照合後に終了し、次回は上記1件から再開。
 
 ## Sol継続checkpoint（Muse引継ぎ後、以下の過去記録より優先）
 

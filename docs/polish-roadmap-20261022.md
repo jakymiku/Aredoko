@@ -4,6 +4,8 @@
 
 ## 現行実行キュー（2026-10-25、実機フィードバック計画）
 
+**2026-10-28更新（以下の旧checkpointより優先）**：P6-S4/S5の用途ガイド→取得/配置/索引/診断→ガイド復帰と状態更新、安全な復旧案内、profile変更待ちを実装/限定native確認。通常一覧favorite保存の全件再作成を回避し、未保存タグ/順序を保持。音声/動画の同順内積も局所高速化。基本ZIP10/source0138a58は同梱backend基本27・通常EXE再起動・favorite UIA確認済み。U7は設定保存/再表示のみUIA確認、外部実起動は未確認。P6静的DLL監査でONNX RuntimeのMSVCP140_1.dll欠落を特定。**次は正式MSVC再配布元/条件の確認→native依存/NOTICE→不変host/registry→clean Windows**。UIは並行継続し、runtime公開未完を全機能の致命的不具合と混同しない。候補/根拠/未完/許可は[current-handoff](current-handoff.md)を優先。全計画を作り直さず、完了した導線や媒体基盤を再実装しない。
+
 **2026-10-27 Sol引継ぎ後の更新（以下の旧checkpointより優先）**：Museの直接動画producer/検索/類似/Core/WinUIを同期し、Windows buildと生成限定GPU/GUIを確認。不完全coverageの文章検索除外と明示再生成を補強。U7の内蔵/既定アプリ選択はsource/build/設定・復元済みだが前面化が取得できずnative未確認。P6-S1/S2は用途選択・依存重複排除・既存取得/配置入口・AIスキップ保存まで実装し、UIAだけの限定nativeを確認。実runtime公開と全導入受入を完成扱いにしない。候補/次の1件/許可範囲は[current-handoff](current-handoff.md)を優先し、完了した動画基盤を再実装しない。
 
 **2026-10-27追記**：音声の通常producer/private worker→保存→文章検索の限定GPU/GUIとcached直接音声類似の入口・時刻・画面履歴を確認。UI-2はcompact検索toolbarとgrid先頭保持を改善し並行継続中。動画のnative区間入力はworker/guard付きdecoderまで追加、通常検索は従来4代表frameを維持。次はguard付きduration/coverage planから通常producerへ接続する。基本ZIP08/sourcebb7e77fは通常EXEの再起動まで限定確認済み、installed Alphaは07/sourcecaee977のまま。正確な根拠/未受入/新GUI・GPUの事前確認は[current-handoff](current-handoff.md)を優先。過去の「音声通常索引/UI未接続」は当時の記録である。
