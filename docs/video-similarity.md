@@ -161,3 +161,20 @@ CPU再open初回に開発Python3.14を使うと、Python3.11生成のrevisionと
 生成index/jobs28 PASS（原本変更の意図した例外logを含む）。追加回帰は欠落・ゼロvector・marker不整合/型、fresh検査中止、明示再作成で正常化を確認。`video-repair01.log`。新しいGUI/GPU受入は行っていない。
 
 2026-10-28：cached動画/音声の内積generatorを同じ乗算順・sum順のmapへ共通化。再索引不要、cap/全pair/取消/世代/原本guardを保全。関連32 PASS、同一Python内のfloat64 bit一致とkernelだけの補助計測は[音声正本](audio-producer-review.md#2026-10-28音声動画の内積ループを同じ計算順で軽量化)。長動画decoderの225プロセス/時間や実動画品質を改善済みとは扱わない。
+
+
+## 2026-10-28 Work：全区間準備を1つの所有デコーダーで逐次処理
+
+従来の`iter_video_coverage`は16秒windowごとにFFmpegを起動してseek/decodeし、1時間で225回起動した。通常の`PreviewReader.video_coverage_stream`を新しい`VideoCoverageStream`へ切り替え、検証済み同一fdのduration probe1回＋FFmpeg1回で全区間を順に読む。既存の単一区間APIと`iter_video_coverage`は低位の有界decode・比較確認用として維持し、既存の代表frame検索/通常再生を置換しない。
+
+初回nextまで起動しないcontext所有producer。既知総尺からceil(duration/1秒)の出力数を決め、従来と同じfps=1/round=up、SAR補正/384×384 pad/rgb24、既知末尾だけの1秒clone補助を使う。16frame/最大16秒のVideoWindowを1つずつ渡し、最終endはprobed総尺。モデル/profile/vector契約を変えず、自動再索引はしない。固定rgb出力の不足・不完全frame・上限超過・非0exitは成功扱いにしない。全windowを返した後も、実decoder exit0と原本guardを確認した正常exhaustionが必要。失敗すれば従来Indexのprivate stageを回収し、旧公開へrollbackする。
+
+stdout readerは1frame単位のqueue（最大1）と1frame分のpendingに抑え、消費側の推論待ちはbackpressureで止める。1window最大約6.75MiBに加えてqueue/pending/Python一時領域があり、呼出側が保持する旧windowやFFmpeg内部heapまで含む8MiB上限ではない。sourceはregular/最大32GiB、fd/pipeとdemuxer allowlist、max_pixels/alloc/stream/probe上限を継承。20秒/windowの待ち上限、取消・毎frame/毎window・正常終端でのidentity/登録/除外/revision確認を行う。入力path/URLや出力fileをFFmpegへ渡さず、FFREPORTを除去する。閉じる/早期break/失敗時は所有processをkill/waitしreaderをjoin、呼出側のsource handleを勝手に閉じない。未開始threadのstart失敗でもprocessを回収する。
+
+生成3.3秒/17.5秒・16秒境界の赤→青・動くtestsrc2で、旧方式と区間/末尾および**全RGB byteの一致**を確認。新経路の実production Indexで17.5秒/2windowをFFmpeg1回で保存し、途中cancelは旧公開を維持する。疑似decoderが全画素を書いてからexit7になった場合も旧索引不変・stage回収・producer slot解放を確認。短い出力・部分frame・余分なframe・no-progress deadline・precancel・未知duration・原本変更/登録取消・早期close・reader起動失敗の所有回収を確認した。
+
+試験記録：初期stream8 PASS/1.298s。続く関連index/jobs/認証HTTP/source＋追加2件は40 PASS/8.815s（意図した原本更新でjob失敗のlogger出力があり、テストFAILではない）。最終のstream9＋atomic失敗1は通過したが、同runに不存在の`NativeCoverageIndexTests`を指定して11 run中1 runner ERROR/1.828sを保持。`RealVideoIndexTests.test_real_long_video_and_cancel_between_windows`を正しく指定した追加1件はPASS/0.587sで、実productionの起動回数1と取消rollbackを確認した。成功済みの重複runは合算しない。py_compile成功。
+
+既存`tools/package_release.py`はapp直下の.pyを全てcopyするため、新moduleを次の候補に収録する経路はあるが、今回ZIPの作成/installed Alpha更新/Windows起動は行っていない。基本Python3.11/Windows上でのFFmpeg pipe/reader所有終了・実modelとのbackpressureは未確認。長時間、VFR、timestamp gap、全codec、実動画の品質/総RSS/性能は未受入。1時間の実測や「225倍高速化」の証拠ではない。
+
+Windows残確認は、最新sourceのCore/Portable build後、生成2動画と独立DB/settingsで、準備→中断→再開→区間付き文章検索/保存済み類似を限定確認する。専用decoder process1本と正常終了時の残存0を記録し、既存の通常backendへ接続しない。長動画の計測は別の1caseとし、decode/native process数と実model推論時間を分ける。

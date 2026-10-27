@@ -1,5 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
+## 2026-10-28 Work継続checkpoint（動画全区間を単一デコーダーで準備、以下より優先）
+
+- 起点 **`64ec8694fd925ed4defb2a3c8c898a368e74b24b`**、既存branch / PR #5のHEAD一致・open/Draftを確認。サブエージェントなし。最新commitは本書のGit履歴。部分snapshotで他端末未push差分は未確認、現在クォータ残％は取得不可。
+- **利用者向け変更**：動画の直接索引準備を、16秒ごとのFFmpeg再起動から **1 videoにつき1 ffprobe＋1 FFmpeg** の逐次RGB producerへ接続。従来は1時間でFFmpeg225回。今回1時間の実速度は測定せず、起動の重複を除いた実装まで。16秒/1fps/384px・端数tail・namespace/保存/検索/類似/旧代表frame入口は保持。
+- **所有と保全**：`VideoCoverageStream`を`PreviewReader.video_coverage_stream`のcontextで所有。1windowずつ渡し、queueは1frame、取消/原本・scope変更/早期close/reader開始失敗/出力不足・過多/異常exitでdecoderとthreadを回収。全画素が届いても正常exitと終端guard確認までは成功にしない。20秒/windowのdecode待ちを保持、モデル処理待ちを勝手に全job時間切れへ含めない。原本fd・形式/画素/出力上限・既存atomic stage/commitを保持。
+- **確認**：生成3.3/17.5秒、16秒で赤→青、動くtestsrc2で既存区間decoderとRGB全byte一致、端数時刻、FFmpeg実起動1回、原本SHA/mtime不変を確認。新stream初期8 PASS/1.298s、関連index/jobs/認証HTTP/source＋追加2件は**40 PASS/8.815s**（期待した原本変更例外logあり）。最終stream9件＋画素後異常exitのatomic保全1件はPASSだが同runの存在しないclass指定で**11 run中1 runner ERROR/1.828s**を保持。正しいclassの実production起動1回/取消rollback **1 PASS/0.587s**を追加確認。重複を合算せず、py_compile成功。[動画正本](video-similarity.md)末尾。
+- **次の1件/Windows残件**：前段一括favoriteのCore `--favorite-patch`→WinUI/Portable buildを行い、今回の新`app/video_stream.py`を含む候補で生成動画の明示準備→途中cancel→再開→区間検索を限定確認。その後長い生成動画でprocess数とdecode時間を一度計測（GPU/model時間を別記）。WinUI/Core変更自体は前段から未buildであり、今回配布済みとは扱わない。runtime固定成果物/配布方針は情報待ちを保持。
+- **未確認/保全**：今回既存FFmpeg＋生成素材＋疑似encoderだけ。通常DB/settings/Alpha/shortcut/ZIP/私物変更0、実model/GPU/GUI/.NET/download/OS変更/Actions/新branch/PR/main merge/shutdown0。installed AlphaはZIP10/source0138a58を保持。Windows/VFR/長時間/全codec/実動画品質/動画内音声・native全RSS・runtime公開/clean Windows、U7実入力等は未完。直前の音声破損回復・一括favoriteは保全し再実装しない。
+
 ## 2026-10-28 Work継続checkpoint（音声の破損索引除外・明示再生成、以下より優先）
 
 - 起点 **`6057bf6916c2f33ebd8ad9a94db12982a7de8f82`**、既存branch / PR #5のHEAD一致・open/Draftを確認。今回もサブエージェントなし。最新commitは本書のGit履歴。部分snapshotで他端末未push差分は未確認、現在クォータ残％は取得不可。

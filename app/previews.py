@@ -23,7 +23,7 @@ from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
 import audio_input
 from audio_stream import PCMStream
 from video_window_decode import read_video_window,validate_interval,VideoWindowUnavailable
-from video_coverage import iter_video_coverage
+from video_stream import VideoCoverageStream
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
@@ -317,7 +317,7 @@ class PreviewReader:
             source,_=self._read(item_id,operation='video_coverage_source',revision=revision,cancel=cancel)
             def guard():
                 if self.video_manifest(item_id)['revision']!=revision:raise ReaderChanged('Video source changed during streaming')
-            with source:yield iter_video_coverage(source,cancel=cancel,guard=guard)
+            with source,VideoCoverageStream(source,cancel=cancel,guard=guard) as stream:yield stream
         finally:self.video_stream_slot.release()
 
     def audio_range(self, item_id, start, end, revision):

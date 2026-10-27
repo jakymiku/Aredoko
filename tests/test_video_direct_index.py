@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -121,6 +122,19 @@ class SuppliedIndexTests(unittest.TestCase):
         with self.supplied(),self.assertRaises(ValueError):self.index.index_item(self.item,self.revision)
         self.assertEqual(self.snapshot(),previous);self.assertEqual(list(self.stage.iterdir()),[])
 
+    def test_owned_decoder_failure_after_complete_pixels_cannot_publish(self):
+        from video_stream import FRAME_BYTES
+        from video_window_decode import VideoWindowUnavailable
+        previous=self.seed();launch=subprocess.Popen;children=[]
+        def failed(args,**options):
+            code=f"import sys;sys.stdout.buffer.write(b'x'*{FRAME_BYTES*4});sys.exit(7)"
+            child=launch([sys.executable,'-c',code],**options);children.append(child);return child
+        with patch('video_stream.probe_video_duration_ms',return_value=3300),patch('video_stream.subprocess.Popen',side_effect=failed):
+            with self.assertRaises(VideoWindowUnavailable):self.index.index_item(self.item,self.revision)
+        self.assertEqual(self.snapshot(),previous);self.assertEqual(list(self.stage.iterdir()),[])
+        self.assertTrue(children);self.assertTrue(all(child.poll() is not None for child in children))
+        self.assertTrue(self.reader.video_stream_slot.acquire(blocking=False));self.reader.video_stream_slot.release()
+
     def test_out_of_sequence_windows_are_rejected_and_publish_nothing(self):
         for windows in ([window(100,16100),window(16100,17500)],
                         [window(0,1000),window(1000,17500)],
@@ -199,7 +213,10 @@ class RealVideoIndexTests(unittest.TestCase):
         long_path=self.media/'generated-long.mp4'
         scene='color=c=red:s=160x90:r=10:d=16[first];color=c=blue:s=160x90:r=10:d=1.5[second];[first][second]concat=n=2:v=1:a=0'
         generate(long_path,scene);self.prepare()
-        report=self.index.index_item(self.item,self.revision)
+        launch=subprocess.Popen
+        with patch('video_stream.subprocess.Popen',wraps=launch) as started:
+            report=self.index.index_item(self.item,self.revision)
+        self.assertEqual(sum('-vf' in call.args[0] for call in started.call_args_list),1)
         self.assertEqual((report['decoded_windows'],report['indexed_windows'],report['total_frames']),(2,2,18))
         previous_rows=None
         with self.index.store.connect() as db:
