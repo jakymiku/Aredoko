@@ -1,6 +1,12 @@
 # P6予約仕様：初回セットアップ・任意AI環境導入（2026-10-27）
 
-> **状態: PLANNED / NOT STARTED。** 現行P6の実行条件が整った際に着手する予約仕様。今回の文書追加は実装開始の指示ではない。実行キューと直近の次の1件は常に `docs/current-handoff.md` を優先。現行branch・Draft PR #5を継続し、完了済みの取得基盤を再実装しない。
+> **状態: P6-S1 source実装・CPU限定確認済み、S2以降は未完。** 現行の再開位置は `docs/current-handoff.md` を優先。現行branch・Draft PR #5を継続し、完了済みの取得基盤を再実装しない。
+
+## 2026-10-27：P6-S1の現在地
+
+`POST /api/library/ai/setup/plan`へ用途4種類の複数選択を渡すread-only契約を追加。検索profileのmodel/revision/directoryに一致する信頼済みcatalogだけを提示し、4用途で共有するembeddingモデルを1件へ集約。WDを必須化せず、runtimeとmodelを別要件として扱う。runtime未公開なら既存配置を選ぶ導線と未確定の総容量を返し、モデル容量だけで全導入容量を偽装しない。複数catalogが同じ要件に合致した場合も勝手に選ばない。
+
+AIを使わない選択はruntime/model/catalogの確認すら行わず基本操作を継続できる。現在の配置ファイルの存在と推論/driverの確認は別。planはGPU/モデル/索引/取得job/設定変更を起動せず、絶対ユーザーパスを応答へ含めない。認証・strict JSON/不正選択・重複・revision/role相違・既存配置・未対応profileを生成CPU7件で確認。証拠`data/ai-ui/continuation-20261027b/setup-plan01.log`。新しい用途選択WinUI、選択保存、配布runtime公開、clean Windowsはまだ未完。
 
 ## 目的と対象
 ZIP解凍→`Aredoko.exe`でPythonなしの基本機能を起動。初回の用途選択から、必要な任意runtime/モデルの導入・検証、初心者向け使い方、故障時の安全な復旧まで一貫して案内する。WinUI 3ネイティブ、既存Python/SQLite/owned API、既存profile/namespaceを維持。

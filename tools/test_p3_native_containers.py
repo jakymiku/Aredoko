@@ -167,8 +167,8 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
-        if args.video_content:ready()
         if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or args.compact_toolbar or args.video_content or args.viewer_choice:
+            if args.video_content or args.viewer_choice:ready()
             # The owner launches this one test process; use normal Windows
             # activation, never input attachment, security bypass or other apps.
             report['foreground_activation_requested']=bool(user.SetForegroundWindow(int(hwnd)))

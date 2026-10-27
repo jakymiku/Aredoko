@@ -55,6 +55,7 @@ from audio_direct_feature import AudioDirectFeature
 from audio_direct_search import AudioSearchChanged
 from video_direct_feature import VideoDirectFeature
 from video_direct_search import VideoSearchChanged
+from ai_setup_plan import plan_setup
 from thumbnail_cache import ThumbnailCache, ThumbnailCancelled
 from contextlib import ExitStack
 import sys
@@ -629,7 +630,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/','/api/library/audio-ai/','/api/library/video-ai/')) or self.path in ('/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/','/api/library/audio-ai/','/api/library/video-ai/')) or self.path in ('/api/library/ai/setup/plan','/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
                 raw=self.rfile.read(length);self.request_body_consumed=len(raw)==length
                 body=json.loads(raw,**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
@@ -738,6 +739,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if self.path=='/api/library/ai/setup/select':
                     try:return self.send(202,setup_jobs.start(body))
                     except SetupBusy:return self.send(409,{'error':'AI環境の確認を開始できません。現在の状態を確認してください。','job':setup_jobs.snapshot()})
+                if self.path=='/api/library/ai/setup/plan':
+                    return self.send(200,plan_setup(body,profile=setup_profile,environment=setup.snapshot,catalogs=download_jobs.catalogs))
                 if self.path=='/api/library/ai/runtime-verification':
                     if set(body)!={'enabled'} or type(body['enabled']) is not bool:raise ValueError('Invalid runtime verification preference')
                     if setup_jobs.snapshot()['state'] in ('validating','saving','cancelling'):
