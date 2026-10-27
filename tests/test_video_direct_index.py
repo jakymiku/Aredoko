@@ -93,6 +93,26 @@ class SuppliedIndexTests(unittest.TestCase):
         with self.assertRaises(ValueError):VideoDirectIndex(self.catalog,encoder)
         self.assertFalse(DEFAULT_PROFILE.store_path(self.catalog.path).exists())
 
+    def test_corrupt_coverage_is_not_reused_as_fresh(self):
+        mutations=[
+            'DELETE FROM ai_video_direct_windows WHERE item_id=? AND ordinal=1',
+            "UPDATE ai_video_direct_windows SET vector=x'000000000000000000000000' WHERE item_id=? AND ordinal=1",
+            'UPDATE ai_video_direct_sources SET total_frames=17 WHERE item_id=?',
+            "UPDATE ai_video_direct_sources SET indexed_windows='invalid' WHERE item_id=?",
+        ]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                self.seed()
+                with self.index.store.connect() as db:db.execute(mutation,(self.item,))
+                self.assertFalse(self.index.fresh(self.item,self.revision))
+                with self.supplied():self.index.index_item(self.item,self.revision)
+                self.assertTrue(self.index.fresh(self.item,self.revision))
+
+    def test_fresh_check_observes_cancellation_without_loading_the_encoder(self):
+        self.seed();cancel=threading.Event();cancel.set()
+        with patch.object(self.encoder,'encode',side_effect=AssertionError('Unexpected inference')):
+            with self.assertRaises(MediaDecodeCancelled):self.index.fresh(self.item,self.revision,cancel=cancel)
+
     def test_failed_decoder_or_embedding_preserves_prior_revision(self):
         previous=self.seed()
         with self.supplied(fail=True),self.assertRaises(ValueError):self.index.index_item(self.item,self.revision)

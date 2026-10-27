@@ -53,6 +53,15 @@ class DirectVideoJobTests(unittest.TestCase):
         self.assertEqual((self.jobs.status()['target'],self.jobs.status()['reused']),(0,1))
         self.assertEqual(self.encoder.calls,calls)
 
+    def test_next_explicit_batch_repairs_damaged_complete_marker(self):
+        with self.supplied():self.jobs.start();self.wait()
+        with self.index.store.connect() as db:db.execute('DELETE FROM ai_video_direct_windows WHERE ordinal=1')
+        self.assertFalse(self.index.fresh(self.item,self.revision));calls=self.encoder.calls
+        with self.supplied():self.jobs.start();self.wait()
+        self.assertEqual((self.jobs.status()['indexed'],self.jobs.status()['reused']),(1,0))
+        self.assertGreater(self.encoder.calls,calls)
+        self.assertTrue(self.index.fresh(self.item,self.revision))
+
     def test_bounded_batches_progress_beyond_already_indexed_first_item(self):
         shutil.copyfile(self.path,self.media/'second.mp4')
         self.catalog.index.scan(self.root);self.catalog.sync_index()

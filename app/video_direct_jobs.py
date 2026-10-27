@@ -83,7 +83,7 @@ class VideoDirectJobs:
                         self._check(generation);seen+=1
                         try:revision=self.index.reader.video_manifest(row['id'])['revision']
                         except PreviewUnavailable:unavailable+=1;continue
-                        if self.index.fresh(row['id'],revision):reused+=1
+                        if self.index.fresh(row['id'],revision,cancel=self.cancelled):reused+=1
                         else:picks.append((row['id'],revision))
                         if len(picks)==limit:break
                     self._update(reused=reused,unavailable=unavailable,remaining_candidates=max(0,reply['total']-seen))

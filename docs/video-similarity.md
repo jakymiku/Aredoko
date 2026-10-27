@@ -153,3 +153,9 @@ frontend01（WinUI source d323db0、backend6ba34e6）と生成無音MP4二本/CP
 個別GPU許可1バッチのvideo-owned-gpu01では、同じ生成色動画（3.3秒/17.5秒）を実production owner/private workerで全3区間保存し、日本語2問はTop1。index29.250s、child allocator peak1424.1MiB、上限3072MiB。画像worker未使用。raw reportは最後のharnessのread-only available代入でFAILを保持し、実際の索引/文章検索/明示release成功と区別する。harnessを修正したがGPUは再実行していない。保存済み専用DBを基本Python3.11＋モデル利用不可CPU encoderで再openし、cached類似（0推論/両区間）を別review.jsonで確認した。所有子は既存close方式exit1で回収。
 
 CPU再open初回に開発Python3.14を使うと、Python3.11生成のrevisionとWindows statのctime等の意味が異なり、安全に未索引扱いとなった。元の親と同じ基本Python3.11で再確認したもので、原本guardを弱めていない。GPU初回の原本pre SHA記録は欠測で、原本SHA/mtime前後一致まで成功扱いにしない（CPU再open前後は一致）。全結果は限定生成fixtureの配線確認で、実動画の一般品質・音声track・長時間性能・clean Windowsの合格ではない。
+
+### 壊れた索引を次の明示作成で再生成
+
+検索から壊れたcoverageを除外するだけでは、marker一致だけのfresh判定が再生成をskipする問題が残る。freshでも連続区間/件数/総frame/float32 vectorの正規化を1vectorずつ検証し、壊れたitemを次の明示batchへ戻す。既存公開を直接削除せず、従来の全区間stage→atomic置換を使う。planning中の取消もvectorごとに確認する。metadataだけの旧判定より確認量は増えるが、全vectorをRAMへ保持せず、model/decodeは開始しない。
+
+生成index/jobs28 PASS（原本変更の意図した例外logを含む）。追加回帰は欠落・ゼロvector・marker不整合/型、fresh検査中止、明示再作成で正常化を確認。`video-repair01.log`。新しいGUI/GPU受入は行っていない。

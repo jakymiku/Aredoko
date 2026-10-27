@@ -7,6 +7,7 @@ image/text profile. Only a verified successful whole item becomes visible.
 from array import array
 from contextlib import closing,contextmanager
 import re
+import math
 import sqlite3
 import sys
 import tempfile
@@ -61,10 +62,33 @@ class VideoDirectIndex:
         try:self._check(cancel);yield
         finally:self.catalog._guard.release()
 
-    def fresh(self,item_id,revision):
+    def fresh(self,item_id,revision,*,cancel=None):
+        # A matching marker alone is not enough: an interrupted repair or a
+        # damaged sidecar must remain eligible for the next explicit rebuild.
+        # Stream one vector at a time, without decoding or starting the model.
+        self._check(cancel)
         with self.store.connect() as db:
-            return db.execute('SELECT 1 FROM ai_video_direct_sources WHERE item_id=? AND source_revision=? AND contract=?',
-                              (item_id,revision,CONTRACT)).fetchone() is not None
+            marker=db.execute('SELECT decoded_windows,indexed_windows,total_frames FROM ai_video_direct_sources '
+                              'WHERE item_id=? AND source_revision=? AND contract=?',(item_id,revision,CONTRACT)).fetchone()
+            if marker is None:return False
+            decoded,indexed,frames=marker
+            if (any(type(v) is not int for v in marker) or not 1<=decoded==indexed<=MAX_WINDOWS
+                    or not 1<=frames<=MAX_START_MS//1000):return False
+            count=expected_start=frame_count=0
+            for ordinal,start,end,data in db.execute('SELECT ordinal,start_ms,end_ms,vector FROM ai_video_direct_windows '
+                                                   'WHERE item_id=? ORDER BY ordinal',(item_id,)):
+                self._check(cancel)
+                if (any(type(v) is not int for v in (ordinal,start,end)) or ordinal!=count or count>=decoded
+                        or start!=expected_start or not start<end<=min(start+MAX_FRAMES*1000,MAX_START_MS)
+                        or ordinal<decoded-1 and end-start!=MAX_FRAMES*1000
+                        or type(data) is not bytes or len(data)!=self.profile.dimension*4):return False
+                values=array('f');values.frombytes(data)
+                if sys.byteorder!='little':values.byteswap()
+                norm=sum(value*value for value in values)
+                if not math.isfinite(norm) or abs(norm-1)>1e-4:return False
+                count+=1;expected_start=end;frame_count+=(end-start+999)//1000
+            self._check(cancel)
+            return count==decoded and frame_count==frames
 
     def index_item(self,item_id,revision,*,cancel=None,validate=None,publication_guard=None,on_published=None):
         if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid video item')
