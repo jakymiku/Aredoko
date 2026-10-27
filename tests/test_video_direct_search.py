@@ -83,5 +83,34 @@ class VideoDirectSearchTests(unittest.TestCase):
         with self.assertRaises(SearchCancelled):
             VideoDirectSearch(self.index).search('video',cancelled=lambda:True)
 
+    def test_incomplete_or_corrupt_coverage_cannot_publish_a_partial_match(self):
+        mutations=[
+            'DELETE FROM ai_video_direct_windows WHERE item_id=? AND ordinal=1',
+            'UPDATE ai_video_direct_windows SET ordinal=2 WHERE item_id=? AND ordinal=1',
+            'UPDATE ai_video_direct_windows SET start_ms=16001 WHERE item_id=? AND ordinal=1',
+            'UPDATE ai_video_direct_windows SET end_ms=15000 WHERE item_id=? AND ordinal=0',
+            "UPDATE ai_video_direct_windows SET vector=x'000000000000000000000000' WHERE item_id=? AND ordinal=1",
+            'UPDATE ai_video_direct_sources SET indexed_windows=1 WHERE item_id=?',
+            'UPDATE ai_video_direct_sources SET total_frames=17 WHERE item_id=?',
+            "UPDATE ai_video_direct_sources SET decoded_windows='invalid' WHERE item_id=?",
+        ]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                self.seed()
+                with self.index.store.connect() as db:db.execute(mutation,(self.item,))
+                result=VideoDirectSearch(self.index).search('video')
+                self.assertEqual((result['total'],result['indexed_total'],result['search_status']),(0,0,'unindexed'))
+                self.assertEqual(list(self.stage.iterdir()),[])
+
+    def test_source_disappearing_during_range_is_a_refresh_conflict(self):
+        from previews import PreviewUnavailable
+        self.seed()
+        def consume(fetch):
+            self.assertEqual(fetch(0)['total'],1)
+            with patch.object(self.reader,'video_manifest',side_effect=PreviewUnavailable('generated source removed')):
+                with self.assertRaises(VideoSearchChanged):fetch(0)
+        VideoDirectSearch(self.index).search('video',result_sink=consume)
+        self.assertEqual(list(self.stage.iterdir()),[])
+
 
 if __name__=='__main__':unittest.main()

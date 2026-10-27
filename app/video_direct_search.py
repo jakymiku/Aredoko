@@ -11,12 +11,12 @@ import sys
 from ai_score_spool import ScoreSpool,SearchCancelled
 from ai_vectors import normalized
 from video_direct_index import CONTRACT,MAX_WINDOWS
-from video_input import MAX_START_MS
+from video_input import MAX_START_MS,MAX_FRAMES,FRAME_INTERVAL_MS
 from previews import PreviewUnavailable
 
 # Each covered second yields one frame, plus at most one partial-second
 # frame per window; anything beyond that cannot come from the index.
-MAX_FRAMES_TOTAL=MAX_START_MS//1000+MAX_WINDOWS
+MAX_FRAMES_TOTAL=MAX_START_MS//FRAME_INTERVAL_MS
 
 
 class VideoSearchChanged(ValueError):pass
@@ -76,7 +76,10 @@ class VideoDirectSearch:
                     payloads=spool.evidence([item for item,_ in selected['ranked']]);items=[]
                     for item,score in selected['ranked']:
                         payload=payloads[item]
-                        if index.reader.video_manifest(item)['revision']!=payload['revision']:
+                        try:revision=index.reader.video_manifest(item)['revision']
+                        except PreviewUnavailable:
+                            raise VideoSearchChanged('Matched video unavailable; refresh results') from None
+                        if revision!=payload['revision']:
                             raise VideoSearchChanged('Matched video changed; refresh results')
                         items.append({**payload['item'],'semantic_score':round(score,6),
                             'video_match_ms':payload['video_match_ms'],'video_match_end_ms':payload['video_match_end_ms'],
@@ -94,16 +97,18 @@ class VideoDirectSearch:
     def _rank(self,rows,query,check):
         if not rows:return {},0
         if len(rows)>120:raise ValueError('Video ranking batch exceeds limit')
-        index=self.index;ids=[row['id'] for row in rows];best={};fresh={}
+        index=self.index;ids=[row['id'] for row in rows];best={};fresh={};coverage={}
         with index.store.connect() as db:
             markers=db.execute('SELECT item_id,source_revision,contract,decoded_windows,indexed_windows,total_frames '
                               'FROM ai_video_direct_sources WHERE item_id IN ('+','.join('?' for _ in ids)+')',ids)
             for item,revision,contract,decoded,indexed,frames in markers:
                 check()
-                if not (contract==CONTRACT and 0<=indexed<=decoded<=MAX_WINDOWS
+                if not (contract==CONTRACT and all(type(v) is int for v in (decoded,indexed,frames))
+                        and 1<=indexed==decoded<=MAX_WINDOWS
                         and 1<=frames<=MAX_FRAMES_TOTAL):continue
                 try:
-                    if index.reader.video_manifest(item)['revision']==revision:fresh[item]=(revision,decoded,indexed)
+                    if index.reader.video_manifest(item)['revision']==revision:
+                        fresh[item]=(revision,decoded,frames);coverage[item]=[0,0,0]
                 except PreviewUnavailable:continue
             markers.close()
             cursor=db.execute('SELECT item_id,ordinal,start_ms,end_ms,vector FROM ai_video_direct_windows '
@@ -111,10 +116,20 @@ class VideoDirectSearch:
             for item,ordinal,start,end,data in cursor:
                 check()
                 if item not in fresh:continue
-                revision,decoded,indexed=fresh[item]
-                if not indexed or not (0<=ordinal<decoded and 0<=start<end<=MAX_START_MS):continue
+                revision,decoded,_=fresh[item];count,expected_start,frame_count=coverage[item]
+                if (any(type(v) is not int for v in (ordinal,start,end)) or ordinal!=count or count>=decoded
+                        or start!=expected_start or not start<end<=min(start+MAX_FRAMES*FRAME_INTERVAL_MS,MAX_START_MS)
+                        or ordinal<decoded-1 and end-start!=MAX_FRAMES*FRAME_INTERVAL_MS):
+                    fresh.pop(item);best.pop(item,None);continue
                 value=_score(data,query)
-                if value is not None and (item not in best or value>best[item][0]):
+                if value is None:
+                    fresh.pop(item);best.pop(item,None);continue
+                coverage[item]=[count+1,end,frame_count+(end-start+FRAME_INTERVAL_MS-1)//FRAME_INTERVAL_MS]
+                if item not in best or value>best[item][0]:
                     best[item]=(value,start,end,revision)
             cursor.close()
+        for item,(_,decoded,frames) in tuple(fresh.items()):
+            count,_,frame_count=coverage[item]
+            if count!=decoded or frame_count!=frames:
+                fresh.pop(item);best.pop(item,None)
         check();return best,len(fresh)

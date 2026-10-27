@@ -137,3 +137,11 @@ Windows受入の次手順：
 3. mode8と種類動画、root/棚/favoriteの範囲を確認。内容query→一致区間表示→候補開始へseek。右クリック直接内容類似→自己除外/双方区間/旧代表frame入口併存を確認。
 4. 音声mode7から直接動画類似→検索入力、動画mode8から音声類似、戻る/進むと元の検索に戻る、未保存タグdraftの破棄確認を確認。cached動画類似はモデル利用不可でも使え、再推論しないことを専用ログで確認。
 5. 普段DB/Alpha/shortcutを変更せず所有processを正常終了。実encoder精度・長動画/大規模性能・配布全体の受入は別。Windows待ちには独立したCPU残件へ進む。
+
+## 2026-10-27：Windows引継ぎレビューと動画文章検索の不完全索引保護
+
+`859803d`までfast-forward同期（clean、既存branch/PR #5一致）。Core `--video-content`と既存Core runner、既存cacheを使うPortable publish/frontend01がWindowsで成功。新しいcompile errorはなく、既存WUI1001 picker3とSDK IL2104を保持。GUI/GPUはまだ実行していない。
+
+レビューで、cached類似には全coverage検証がある一方、動画の文章検索は欠落window・壊れたvector・marker件数不整合から部分一致を公開し、`ready`と報告することを生成CPU試験で再現。文章検索もordinal/連続区間/16秒境界/総frame/正規化vector/完全markerを全て検証したitemだけを順位へ公開するよう修正。120件のbatch cursorと定数サイズの集計を保ち、全vector集合を保持しない。range描画中の原本消失も500ではなく再検索が必要なVideoSearchChangedへ変換する。
+
+旧codeの追加2回帰は7subtest FAIL/2ERROR（同一run）を保持。修正後は検索/認証HTTP14 PASS。証拠`data/ai-ui/continuation-20261027b/`。これは破損索引を誤一致にしない確認であり、実モデル品質や長動画性能の受入ではない。壊れた索引のfresh判定・明示再生成導線は別途改善余地がある。
