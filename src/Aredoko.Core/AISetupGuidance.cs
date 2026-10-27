@@ -11,7 +11,7 @@ public static class AISetupGuidance
             lines.Add(download.State=="cancelling"?"AI環境の取得を中止しています。取得画面で結果を確認できます。":"AI環境の取得はバックグラウンドで続いています。取得画面で進捗や中止を確認できます。");
         else if(download?.State=="cancelled")lines.Add("前回のAI環境の取得は中止されています。取得画面から再開できます。");
         else if(download?.State=="failed")lines.Add("前回のAI環境の取得は完了していません。取得画面で理由を確認してください。");
-        else if(download?.Published==true)lines.Add("取得済みのAI環境があります。取得画面の「保存先を設定する」から使用する環境を指定してください。取得だけでは設定は変わりません。");
+        else if(download?.Published==true)lines.Add("取得済みのAI環境があります。取得画面の設定ボタンから使用する環境を指定してください。取得だけでは設定は変わりません。");
         if(environment?.Active==true)
             lines.Add("配置の検査・保存が進行中です。配置画面で結果を確認し、完了してから再起動してください。");
         else if(environment?.State=="cancelled")lines.Add("配置の検査は中止されています。前の設定を保持しています。必要なら配置画面から確認し直してください。");

@@ -23,6 +23,12 @@ Core `--setup-plan`（reflection無効）/設定保持、生成backup3件とPort
 
 Core関連21項目とPortable/frontend01 build PASS（既存picker3/SDK trim警告のみ）。nativeの取得/配置/索引画面からの復帰と選択保持は許可待ちで、実導入・clean Windows受入ではない。次の確認は`tools/test_p3_native_containers.py --setup-return`（新規専用出力、生成素材、UIAのみ、取得/推論なし）。
 
+### P6-S5の安全な案内（2026-10-28、source）
+
+既存planのstate codeをCoreで保持し、未配置/モデル版の不一致/ファイル不足/実行環境の不正/設定不正を短い日本語で区別。「うまく使えないとき」を折りたたみ表示し、既存の診断情報画面へ往復できる。原本・DB・索引・環境の削除/初期化、システムPython変更、強制的な版マーカー変更は行わない。推論や機器の未確認も明示。未知stateは一般案内にし、生のパスや内部値を表示しない。全機能非対応/依存情報なしを配置正常と表示しない。
+
+関連Core29項目、read-only plan/APIの生成Python7件PASS。Portable/frontend02は最終Coreの境界補強前のbuildであり、最新sourceのnative受入ではない。GUIと実環境修復/clean Windowsは未検証、公開runtime/driver互換診断/自動修復完了とは扱わない。
+
 ZIP解凍→`Aredoko.exe`でPythonなしの基本機能を起動。初回の用途選択から、必要な任意runtime/モデルの導入・検証、初心者向け使い方、故障時の安全な復旧まで一貫して案内する。WinUI 3ネイティブ、既存Python/SQLite/owned API、既存profile/namespaceを維持。
 
 利用目的は複数選択可能：**意味検索／類似画像検索／動画検索／音声・音楽検索**。基本検索だけで開始する「今はAIを使わない」を必ず設け、後から設定で追加・再実行できるようにする。

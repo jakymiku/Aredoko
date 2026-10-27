@@ -11,7 +11,7 @@ public static class AISetupSelection
     public static int Normalize(int mask)=>mask is >=0 and <=15?mask:3;
     public static string[] FromMask(int mask)=>Features.Where((_,index)=>(Normalize(mask)&(1<<index))!=0).ToArray();
 }
-public sealed record AISetupRequirement(string Id,bool FilesPresent,string Action,IReadOnlyList<string> CatalogIds);
+public sealed record AISetupRequirement(string Id,bool FilesPresent,string Action,IReadOnlyList<string> CatalogIds,string State="unknown");
 public sealed record AISetupPlan(bool SkipAI,long KnownBytes,long? TotalBytes,bool RestartRequired,
     IReadOnlyList<string> Unsupported,IReadOnlyList<AISetupRequirement> Requirements)
 {
@@ -25,7 +25,7 @@ public sealed record AISetupPlan(bool SkipAI,long KnownBytes,long? TotalBytes,bo
             foreach(var requirement in Requirements)
             {
                 var label=requirement.Id=="embedding-runtime"?"実行環境":"検索用モデル";
-                lines.Add(requirement.FilesPresent?$"{label}：配置を確認できました。":requirement.CatalogIds.Count>0?$"{label}：ダウンロード候補があります。":$"{label}：自動取得は準備中です。配置済みの環境・モデルを指定できます。");
+                lines.Add(requirement.FilesPresent?$"{label}：配置を確認できました。":$"{label}：{AISetupRecovery.Reason(requirement.State)}"+(requirement.CatalogIds.Count>0?" ダウンロード候補があります。":" 自動取得は準備中です。配置済みの環境・モデルを指定できます。"));
             }
             if(KnownBytes>0)lines.Add($"取得候補の容量：{KnownBytes/(1024d*1024*1024):N2} GB"+(TotalBytes is null?"（未確定の実行環境等は別途必要）":""));
             if(RestartRequired)lines.Add("保存済みの環境変更は再起動後に反映されます。");
@@ -50,7 +50,9 @@ public sealed record AISetupPlan(bool SkipAI,long KnownBytes,long? TotalBytes,bo
                 ||action is not ("none" or "review_download" or "choose_download" or "select_existing_environment" or "select_existing_model"))throw new InvalidDataException("AI準備の依存関係が無効です。");
             var catalogs=row.GetProperty("download_candidates").EnumerateArray().Select(value=>value.GetProperty("catalog_id").GetString()??"").ToArray();
             if(catalogs.Length>256||catalogs.Distinct().Count()!=catalogs.Length||catalogs.Any(id=>id.Length!=64||id.Any(c=>!char.IsAsciiHexDigitLower(c))))throw new InvalidDataException("取得候補が無効です。");
-            requirements.Add(new(id,row.GetProperty("files_present").GetBoolean(),action,catalogs));
+            var state=row.TryGetProperty("state",out var stateValue)?stateValue.GetString()??"unknown":"unknown";
+            if(state.Length>80||state.Any(c=>c is not (>= 'a' and <= 'z') and not (>= '0' and <= '9') and not '_'))throw new InvalidDataException("AI準備の検査状態が無効です。");
+            requirements.Add(new(id,row.GetProperty("files_present").GetBoolean(),action,catalogs,state));
         }
         var known=root.GetProperty("known_download_bytes").GetInt64();var totalValue=root.GetProperty("total_download_bytes");long? total=totalValue.ValueKind==JsonValueKind.Null?null:totalValue.GetInt64();
         var skip=root.GetProperty("skip_ai").GetBoolean();var unsupported=root.GetProperty("unresolved_features").EnumerateArray().Select(row=>row.GetString()??"").ToArray();

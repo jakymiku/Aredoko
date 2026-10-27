@@ -23,6 +23,7 @@ public sealed partial class MainPage
                 if(destination=="download")await OpenAIDownloadDialogAsync();
                 else if(destination=="existing")await OpenAIEnvironmentDialogAsync();
                 else if(destination=="index")await OpenAISettingsAsync();
+                else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync();
                 else
                 {
                     if(destination=="skip")Notice("AIなしで始めます","ファイル名・タグ検索と閲覧を使えます。AIは設定から後で追加できます。");
@@ -48,6 +49,10 @@ public sealed partial class MainPage
             var summary=new TextBlock{Text="機能を選び、「必要な環境を確認」を押してください。",TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};
             AutomationProperties.SetAutomationId(summary,"AISetupPlanSummary");
             var nextSteps=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};AutomationProperties.SetAutomationId(nextSteps,"AISetupNextSteps");
+            var recoveryText=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};AutomationProperties.SetAutomationId(recoveryText,"AISetupRecoveryText");
+            var diagnostics=new Button{Content="診断情報を表示",IsEnabled=false};AutomationProperties.SetAutomationId(diagnostics,"AISetupDiagnostics");
+            var recoveryPanel=new StackPanel{Spacing=8};recoveryPanel.Children.Add(recoveryText);recoveryPanel.Children.Add(diagnostics);
+            var recovery=new Expander{Header="うまく使えないとき",Content=recoveryPanel,Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(recovery,"AISetupRecovery");
             var review=new Button{Content="必要な環境を確認"};AutomationProperties.SetAutomationId(review,"ReviewAISetupPlan");
             var download=new Button{Content="モデルの取得候補を見る",IsEnabled=false};AutomationProperties.SetAutomationId(download,"AISetupPlanDownload");
             var existing=new Button{Content="配置済みの環境・モデルを指定",IsEnabled=false};AutomationProperties.SetAutomationId(existing,"AISetupPlanExisting");
@@ -64,11 +69,13 @@ public sealed partial class MainPage
                     selected=choice.IsChecked==true?selected|(1<<index):selected&~(1<<index);
                     version++;request?.Cancel();download.IsEnabled=false;existing.IsEnabled=false;dialog.IsPrimaryButtonEnabled=false;
                     summary.Text="選択を変更しました。「必要な環境を確認」で更新できます。";nextSteps.Text="";
+                    recovery.Visibility=Visibility.Collapsed;diagnostics.IsEnabled=false;
                 }
                 choice.Checked+=(_,_)=>Changed();choice.Unchecked+=(_,_)=>Changed();panel.Children.Add(choice);
             }
-            panel.Children.Add(review);panel.Children.Add(progress);panel.Children.Add(summary);panel.Children.Add(nextSteps);
+            panel.Children.Add(review);panel.Children.Add(progress);panel.Children.Add(summary);
             var actions=new StackPanel{Spacing=8};actions.Children.Add(download);actions.Children.Add(existing);actions.Children.Add(skip);panel.Children.Add(actions);
+            panel.Children.Add(nextSteps);panel.Children.Add(recovery);
             dialog.Content=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             async Task ReviewAsync()
             {
@@ -89,6 +96,7 @@ public sealed partial class MainPage
                     if(lifetime.IsCancellationRequested||expected!=version)return;
                     summary.Text=plan.Summary;
                     nextSteps.Text=AISetupGuidance.Describe(plan,selection,downloadJob,environmentJob);
+                    recoveryText.Text=AISetupRecovery.Describe(plan);recovery.Visibility=plan.SkipAI?Visibility.Collapsed:Visibility.Visible;diagnostics.IsEnabled=!plan.SkipAI;
                     existing.IsEnabled=!plan.SkipAI;
                     download.IsEnabled=plan.Requirements.Any(row=>row.Id=="embedding-model"&&!row.FilesPresent&&row.CatalogIds.Count>0);
                     dialog.IsPrimaryButtonEnabled=!plan.SkipAI;
@@ -105,6 +113,7 @@ public sealed partial class MainPage
                 catch(Exception ex){summary.Text="選択を保存できませんでした。\n"+ex.Message;}
             }
             download.Click+=(_,_)=>MoveTo("download");existing.Click+=(_,_)=>MoveTo("existing");
+            diagnostics.Click+=(_,_)=>MoveTo("diagnostics");
             skip.Click+=(_,_)=>MoveTo("skip",0);
             dialog.PrimaryButtonClick+=(_,args)=>
             {

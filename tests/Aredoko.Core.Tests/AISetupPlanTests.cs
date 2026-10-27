@@ -59,6 +59,20 @@ static class AISetupPlanTests
         check(prepared.Contains("動作確認とは別")&&prepared.Contains("索引・詳細設定へ")&&!prepared.Contains("音声の準備欄"),"present files lead to selected indexing without declaring hardware success");
         check(!AISetupGuidance.Describe(plan with{Requirements=Array.Empty<AISetupRequirement>()},3,null,null).Contains("配置を確認しました"),"an empty dependency response cannot be declared ready");
         check(!AISetupGuidance.Describe(skip,0,idleDownload with{State="downloading"},idleEnvironment).Contains("バックグラウンド"),"AI opt-out keeps next steps focused on basic use");
+        var mismatch=Reply(AISetupSelection.FromMask(3));mismatch["requirements"]![1]!["state"]="model_revision_mismatch";
+        var mismatchedPlan=AISetupPlan.Parse(mismatch.ToJsonString(),AISetupSelection.FromMask(3));
+        check(mismatchedPlan.Summary.Contains("版が設定と一致")&&AISetupRecovery.Describe(mismatchedPlan).Contains("目印だけを書き換えず"),"wrong model revision has a safe recovery path without bypassing revision guards");
+        var invalid=plan with{Requirements=new[]{new AISetupRequirement("embedding-runtime",false,"select_existing_environment",Array.Empty<string>(),"preferences_invalid")}};
+        check(AISetupRecovery.Describe(invalid).Contains("設定ファイルの削除や初期化は行いません")&&AISetupRecovery.Describe(invalid).Contains("バックアップ"),"invalid settings guide to diagnostics and preserved backups instead of destructive reset");
+        var libraries=plan with{Requirements=new[]{new AISetupRequirement("embedding-runtime",false,"select_existing_environment",Array.Empty<string>(),"ai_libraries_missing")}};
+        check(libraries.Summary.Contains("ライブラリが不足")&&AISetupRecovery.Describe(libraries).Contains("システムPythonやドライバーは変更しません"),"missing AI libraries guide to an Aredoko runtime without changing the machine");
+        var presentRecovery=AISetupRecovery.Describe(ready);
+        check(presentRecovery.Contains("索引の状態")&&presentRecovery.Contains("この確認だけでは判定していません")&&presentRecovery.Contains("自動送信しません"),"present files do not mask missing indexing or promise tested hardware");
+        var unknown=plan with{Requirements=new[]{new AISetupRequirement("embedding-model",false,"select_existing_model",Array.Empty<string>(),"future_state")}};
+        check(!unknown.Summary.Contains("future_state")&&!AISetupRecovery.Describe(unknown).Contains("future_state"),"unknown state uses generic safe guidance rather than raw internal values");
+        var unsupported=plan with{Requirements=Array.Empty<AISetupRequirement>(),Unsupported=new[]{"video"}};
+        check(AISetupRecovery.Describe(unsupported).Contains("対応していません")&&!AISetupRecovery.Describe(unsupported).Contains("配置は確認できています"),"unsupported-only plan does not declare nonexistent dependencies ready");
+        check(AISetupRecovery.Describe(unsupported with{Unsupported=Array.Empty<string>()}).Contains("環境の情報を確認できません"),"missing dependency data does not imply healthy files");
         foreach(var mutate in new Action<JsonObject>[]
         {
             row=>row["acquisition_started"]=true,row=>row["hardware_checked_by_plan"]=true,
@@ -66,6 +80,7 @@ static class AISetupPlanTests
             row=>row["features"]=new JsonArray(new JsonObject{["id"]="future"}),
             row=>row["requirements"]!.AsArray()[0]!["action"]="run-pip",
             row=>row["requirements"]!.AsArray()[1]!["download_candidates"]!.AsArray()[0]!["catalog_id"]="https://example.invalid",
+            row=>row["requirements"]!.AsArray()[0]!["state"]="C:\\private\\runtime",
         })
         {
             var bad=Reply(AISetupSelection.FromMask(15));mutate(bad);var rejected=false;
