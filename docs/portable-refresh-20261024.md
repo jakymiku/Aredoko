@@ -1,5 +1,12 @@
 # 基本版ZIP候補（2026-10-24）
 
+## 最新候補09（2026-10-27、source176502f）
+
+- 通常入口：`C:/AI/Aredoko/dist/portable-basic-20261027-09/Aredoko/Aredoko.exe`。ZIPは親の`Aredoko-windows-x64.zip`。818files /661,474,739bytes、frontend05。旧08の検証済み基本Python/mediaとsource不変のbootstrapを再利用、旧Alpha/shortcutは未変更。
+- Museの動画全区間索引・文章検索・直接類似と不完全索引の拒否/再生成、U7のダブルクリック起動先選択、P6の用途選択・AIスキップ・既存取得/配置入口、最新利用ガイドを収録。モデル/PyTorchは別途必要。動画の実素材品質・U7の実外部起動・runtime公開の完成とはしない。
+- 全inventory/hash/ZIPと同梱runtimeのCPU検査PASS。新APIを含む同梱backend基本25項目、正常EOF・DB integrity・生成原本保持もPASS。個別回答後の**通常EXE起動→正常終了→予定内1再起動**は11checks/2PNG目視/WinUI・bootstrap計4exit0、設定/原本/全payload保持PASS。試験から前面化/物理入力/GPU/取得は行っていない。
+- 生証拠`data/ai-ui/continuation-20261027b/basic09-preparation.json`（梱包時点）、`basic09-final.json`（ZIP容量/SHA含む最終範囲）、`basic-cpu09/`、`basic-native09/report.json`/`review.json`。clean Windowsは未受入、GitHub Release公開はしていない。installed AlphaはZIP07/sourcecaee977のまま。
+
 ## 最新候補08（2026-10-27、sourcebb7e77f）
 
 - 通常入口：`C:/AI/Aredoko/dist/portable-basic-20261027-08/Aredoko/Aredoko.exe`。ZIPは同じ親の`Aredoko-windows-x64.zip`。810files /661,232,667bytes。source`bb7e77f`、WinUI source`21d60e8`、変更のないbootstrapと検証済み基本runtimeを再利用。旧候補/installed Alpha（07/sourcecaee977）は変更しない。

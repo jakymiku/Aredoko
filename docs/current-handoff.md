@@ -1,5 +1,20 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-27）
 
+## Sol継続checkpoint（Muse引継ぎ後、以下の過去記録より優先）
+
+- **起点`859803d`**へ既存branchをfast-forward（開始時clean）。Museの動画coverage/atomic索引/検索/類似/WinUIと音声取消・終了/比較上限をレビュー。既存`feat/winui3-production-mvp-20261011` / PR #5を継続、不要なbranch/PR/merge/Actionsなし。今回のapp sourceは**`176502f`**、最終記録commitは `git log -1 -- docs/current-handoff.md`。PR head refとremote branch一致。PR state/Draft metadataはconnector Transport closed、gh不在、未認証API404のため再確認できていない（head一致とは区別）。
+- **動画の誤一致・回復を修正**：`6ba34e6`で文章検索も全coverage/ordinal/区間/総frame/正規化を検証し、不完全索引の部分一致を公開しない。原本消失は再検索409へ。`693d0f2`でfreshも検証し、壊れたitemは次の明示batchで全区間stage→atomic再生成。生成検索/HTTP14、基本Python検索9、index/jobs28 PASS。[正本](video-similarity.md)。正常な原本や旧索引を無断変換しない。
+- **MuseのWindows接続を限定受入**：動画Core/既存CoreとPortable publish成功。生成2動画のGUIで準備lazy/開始/中断/再開/区間付き文章検索/直接類似/自己除外/旧代表frame入口を確認（native02、最後の試験条件不備で全体PARTIAL）。成功部分を反復せず、native03でモデル不可cached類似→登録フォルダ→戻るを確認、10checks/3PNG/exit0 PASS。旧前面化失敗も保持。[根拠](video-similarity.md)。
+- **実動画owner/private workerも限定確認**：生成無音の赤3.3秒/青17.5秒を全3区間保存、日本語2問Top1、index29.250s/child peak1424.1MiB/allocator3072MiB、明示release成功。raw GPU reportは最後のharnessのread-only property代入でFAILを保持。GPUを再実行せず同じ基本Python3.11で専用DBをCPU再openし、モデル不可・0推論のcached類似を補完PASS。Python3.14とのWindows revision差は安全に拒否、guardを弱めていない。実動画品質/動画内音声/長時間は未受入、GPU初回の原本pre SHAは欠測。[詳細・review](video-similarity.md)。
+- **音声側のMuse差分も確認**：音声jobs/feature/推論所有25件がWindows CPUでPASS。今回新しい音声GPUは実行せず、前回の限定実績を反復しない。
+- **U7をsource実装**：`60be42e`、設定の「ダブルクリックで開くアプリ」で内蔵（既定）/Windows既定を切替。既存パス検査とshell経路を共用、失敗時の内蔵選択・重複起動防止・保存/復元を追加。Core/backup/PortableはPASS。**native操作は未確認**：u7-native01/02とも前面化不可、入力前に正常exit0、生成画像削除/外部起動なし。準備待ち変更でも再現したため反復しない。次の確認はUIA設定だけか、ユーザーが実入力可能な時に範囲を限定して質問する。[U7正本](usability-followup-20261025.md)。
+- **P6-S1/S2を実装**：`751a7f2`read-only用途計画、`a76784c`WinUI入口/4用途選択/共有modelの重複排除/取得・配置・索引の既存入口/AIなし選択保存。選択はUI設定とbackupへ保持。runtime未公開・model容量と総容量未確定を区別し、driver/推論を検証したと偽装しない。APIは取得/モデル/索引/設定変更を起動しない。Coreのreflection無効JSON失敗を明示JsonValueで修正、frontend03は旧不良候補として使わない。frontend04の**UIAだけのnative10checks/3PNG/exit0 PASS**（用途保存→再表示→AIなし→再表示、job idle/owner未作成）。新しいモデル取得やGPUは使っていない。[P6正本](p6-first-run-setup-spec.md)。
+- **最終候補は基本ZIP09/source176502f**：`dist/portable-basic-20261027-09/Aredoko`＋隣のZIP、818files/661,474,739bytes、最終UI frontend05（04から利用案内文を更新）。全inventory/ZIP/runtime照合、同梱backend基本25、通常EXEの生成1PNG/専用DBで起動→正常終了→予定内1再起動（11checks/2PNG/4exit0）PASS。clean Windows未受入。**installed AlphaはZIP07/sourcecaee977のまま**、更新指示なし。[候補とSHA記録](portable-refresh-20261024.md)。guideも現行の媒体別準備・起動・GUI復元へ更新、古い配布記録は保持。
+- 生証拠は`data/ai-ui/continuation-20261027b/`（Git対象外）。初回Core JSON/Automation import、harnessの相対パス・foreground・モデル不可query条件・read-only available代入、旧Python revision差の失敗を保持。修正後の成功と混同しない。通常DB/設定/Alpha/shortcut/私物scan/外部取得/OS設定変更0。
+- **次の1件：P6-S4の導線仕上げ**。用途選択→既存のモデル取得/配置画面→閉じた後に用途ガイドへ戻って現在の準備状況を再確認→必要な再起動/媒体別索引の案内、を一単位で接続する。選択済みの用途を保ち、取得継続/中止・未公開runtimeを実装済み既存jobと区別する。新しい公開URL/hashを捏造せず、追加DLは明示許可後。GUIが使えなければ関連Core/APIと生成HTTPで先行する。動画基盤/U7/P6-S1/S2を再実装・全面再設計しない。
+- 残件：U7の実入力/外部関連付け起動、実音楽/録音/動画の一般品質、長媒体比較とdecoder性能、動画内音声の統合、runtimeの公開NOTICE/native依存review・host・trusted registry、clean Windows/HC/物理DPI/長時間RSS等。全ロードマップ/M1/M2完成とはしない。完成形UIは機能と並行継続する。
+- **ユーザーはPC使用中**。新しいGUI/GPUは具体的に質問し、回答後のみ実施。今回の各限定許可は全て消費済み。前面化を強行せず、入力不可時の既知失敗を別名で繰り返さない。Actions/新PR/main mergeなし、shutdownしない。枠が少なくなったらこの正本更新→commit/push→clean/remote一致で終了する。
+
 ## 継続開発checkpoint（2026-10-27、音声類似の比較量上限）
 
 - 起点 `5f0c30c48edd76fb8289083f2fcb83f819cc96ff`、既存開発branch / Draft PR #5を継続。小単位の追加作業、サブエージェントなし。最新commitは本書のGit履歴。最後の残量報告19％以降の現在残％は取得不可。

@@ -95,7 +95,7 @@ def main():
         return cli('ui',*parts,'-w',hwnd)
     def tree():return {n['automationId']:n for n in nodes(json.loads(ui('inspect','--depth','22','--json'))) if n.get('automationId')}
     def shot(name):
-        path=target/(name+'.png');ui('screenshot','--focus','--output',path)
+        path=target/(name+'.png');ui('screenshot',*(() if args.startup_only else ('--focus',)),'--output',path)
         report['screenshots'].append(str(path));path.with_suffix('.json').write_text(json.dumps(tree(),ensure_ascii=False,indent=2),encoding='utf-8')
     def request(path):
         headers={'Origin':'http://127.0.0.1:8769'}
