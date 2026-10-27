@@ -155,7 +155,10 @@ public sealed class ResultSession(HttpClient client, string id, JsonObject condi
         =>await EditSelectionCoreAsync(itemIds,operation,shelfIds,false,cancellation);
 
     public Task<bool> EditFavoriteAsync(int itemId,bool value,CancellationToken cancellation)
-        =>EditSelectionCoreAsync([itemId],value?SelectionOperation.FavoriteAdd:SelectionOperation.FavoriteRemove,[],FavoritePatchSupported,cancellation);
+        =>EditFavoritesAsync([itemId],value,cancellation);
+
+    public Task<bool> EditFavoritesAsync(IReadOnlyList<int> itemIds,bool value,CancellationToken cancellation)
+        =>EditSelectionCoreAsync(itemIds,value?SelectionOperation.FavoriteAdd:SelectionOperation.FavoriteRemove,[],FavoritePatchSupported,cancellation);
 
     private async Task<bool> EditSelectionCoreAsync(IReadOnlyList<int> itemIds,SelectionOperation operation,IReadOnlyList<long> shelfIds,bool keepSession,CancellationToken cancellation)
     {

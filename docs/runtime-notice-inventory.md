@@ -90,3 +90,10 @@ python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --su
 [Microsoftの配布ファイル判定](https://learn.microsoft.com/en-us/cpp/windows/determining-which-dlls-to-redistribute?view=msvc-170)では、central Redistributableを推奨しつつapp-local配布も可能と説明する。ただしapp-localでは更新提供をアプリ側が担う。[VS2022 REDIST一覧](https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution)は正規ライセンスを持つ利用者が該当条件の下で未改変ファイルを配布する範囲を示し、debug_nonredistを除外する。[配布条件の案内](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170)も個々のライセンス確認を求める。これをAredokoの権利承認や再配布物の完成とはしない。
 
 次は正規の固定取得元・版・容量/hash・ライセンスを揃え、ZIP方針に合うapp-local CRT一式か、利用者に明示する公式Redistributable導入かを選ぶ。新取得/展開/実行/OS導入/pack変更は今回行っていない。app-local採用時も単に欠けた1DLLを置くだけで完了とせず、そのDLLの依存と実workerの探索経路を確認する。clean Windows未受入。
+
+
+### 2026-10-28 Work：公式取得案内の再開情報（実体未取得）
+
+[Microsoft公式最新版案内](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)を再確認。v14の最新版は頻繁に更新されるため表に版番号を載せず、取得後のファイルpropertyで確認する方式。現掲載x64リンクは`https://aka.ms/vc14/vc_redist.x64.exe`であり、固定version/hashの成果物URLではない。対象architectureを一致させ、利用toolset以上のruntimeを使う要件を維持する。推測の版/hashや移動リンクだけでtrusted catalogへ登録しない。
+
+[公式DLL配布指針](https://learn.microsoft.com/en-us/cpp/windows/determining-which-dlls-to-redistribute?view=msvc-170)はcentral配布を推奨し、[再配布条件](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170)はVSライセンス等に基づく個別条件の確認を求める。今回の閲覧は個別承認でも導入方針の確定でもない。次は許可済み取得環境で正規成果物の版/bytes/SHA256/署名・適用条件を記録し、app-local同梱なら全依存とworker探索経路、centralなら利用者の明示同意/管理者要件/未導入時の基本機能継続を設計してから受入する。今回DLL/依存の取得・展開・実行/OS導入/pack/registry変更は行わず、情報待ちとして独立した一括favoriteのsource接続を進めた。

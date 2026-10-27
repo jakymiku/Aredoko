@@ -142,11 +142,21 @@ public sealed partial class MainPage
                     operation==SelectionOperation.ShelvesAdd?"指定した棚を追加します。ほかの棚への所属はそのまま残ります。":"指定した棚からだけ外します。作品と元ファイルは残ります。","BulkShelfChoice");
                 if(picked is null||picked.Length==0)return;shelves=picked;
             }
-            await session.EditSelectionAsync(ids,operation,shelves,CancellationToken.None);
+            var kept=false;
+            if(favorite)kept=await session.EditFavoritesAsync(ids,operation==SelectionOperation.FavoriteAdd,CancellationToken.None);
+            else await session.EditSelectionAsync(ids,operation,shelves,CancellationToken.None);
             committed=true;
-            SetSelectionSaveStatus("保存済み・一覧を更新しています…");
+            if(!kept)SetSelectionSaveStatus("保存済み・一覧を更新しています…");
             if(favorite)foreach(var row in rows.Where(row=>ids.Contains(row.Id))){row.Favorite=operation==SelectionOperation.FavoriteAdd;RefreshFavoriteCard(row);}
-            await RefreshResultRowsAfterEditAsync(favoriteOnly:favorite);
+            if(favorite&&active is {} selected&&ids.Contains(selected.Id))
+            {
+                // A one-item selection may still have an unsaved tag/shelf draft.
+                // A retained snapshot needs only the saved favorite flag updated.
+                var value=operation==SelectionOperation.FavoriteAdd;
+                saved=saved with {Favorite=value};selected.Favorite=value;updatingFavorite=true;
+                try{Favorite.IsChecked=value;}finally{updatingFavorite=false;}
+            }
+            if(!kept)await RefreshResultRowsAfterEditAsync(favoriteOnly:favorite);
             UpdateLibrarySelectionTools();if(!resultsNeedRefresh)Notice("保存しました",$"{ids.Length:N0} 件の整理を保存しました。");
         }
         catch(Exception ex){Failure(ex);}

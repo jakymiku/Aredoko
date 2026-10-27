@@ -54,6 +54,36 @@ class SelectionEditTests(unittest.TestCase):
             with self.assertRaises(ResultUnavailable):self.owner.read(sid)
             self.owner.cancel(sid)
 
+    def test_maximum_favorite_selection_keeps_order_without_recapturing_unselected_sources(self):
+        for n in range(4,724):(self.media/f'{n:04}.png').write_bytes(b'generated-only')
+        self.cat.start_scan(self.root);self.cat._worker.join(5)
+        self.assertFalse(self.cat._worker.is_alive())
+        with patch.object(self.owner,'provider',wraps=self.owner.provider) as provider:
+            sid=self.session(mode='literal',view='all');session=self.owner.sessions[sid]
+            def snapshot():
+                return [row for offset in range(0,session.total,120) for row in self.owner.read(sid,offset,120)['items']]
+            old=snapshot();self.assertEqual(len(old),724)
+            ids=[row['id'] for row in old[:255]]+[old[-1]['id']];checked=[]
+            original=session._currents
+            def capture(items,**kw):checked.extend(item['id'] for item in items);return original(items,**kw)
+            with patch.object(session,'_currents',side_effect=capture):
+                result=self.owner.edit(sid,ids,'favorite_add',[],keep_session=True)
+            self.assertTrue(result['kept_session']);self.assertEqual(result['updated'],256)
+            self.assertCountEqual(checked,ids);self.assertEqual(len(checked),256)
+            current=snapshot();self.assertEqual(provider.call_count,1)
+            self.assertEqual([r['id'] for r in current],[r['id'] for r in old])
+            for before,after in zip(old,current):
+                self.assertEqual(after,{**before,'favorite':True} if after['id'] in ids else before)
+
+    def test_later_private_patch_failure_invalidates_the_batch_after_saved_metadata(self):
+        sid=self.session(mode='literal');session=self.owner.sessions[sid]
+        session.db.execute('CREATE TRIGGER fail_patch BEFORE UPDATE ON results WHEN OLD.item_id='+str(self.ids[1])+" BEGIN SELECT RAISE(ABORT,'generated failure'); END")
+        result=self.owner.edit(sid,self.ids[:2],'favorite_add',[],keep_session=True)
+        self.assertFalse(result['kept_session'])
+        self.assertTrue(all(self.cat.get(i)['favorite'] for i in self.ids[:2]))
+        self.assertTrue(session.stop.is_set());self.assertFalse(session.path.exists())
+        with self.assertRaises(ResultUnavailable):self.owner.read(sid)
+
     def test_retention_never_absorbs_an_extra_generation_or_index_change(self):
         sid=self.session(mode='literal');original=apply
         def extra(db,*args):
@@ -99,7 +129,7 @@ class SelectionEditTests(unittest.TestCase):
         with self.assertRaises(ResultUnavailable):self.owner.edit(sid,self.ids[:2],'favorite_remove',[])
         self.assertTrue(self.cat.get(self.ids[0])['favorite'])
     def test_source_change_and_unregister_reject_without_partial_write(self):
-        sid=self.session();(self.media/'1.png').write_bytes(b'changed-size')
+        sid=self.session();(self.media/self.cat.get(self.ids[0])['relative_path']).write_bytes(b'changed-size')
         with self.assertRaises(ResultUnavailable):self.owner.edit(sid,self.ids[:2],'favorite_add',[])
         self.assertFalse(any(self.cat.get(i)['favorite'] for i in self.ids[:2]));self.owner.cancel(sid)
         sid=self.session();self.cat.unregister_root(self.root)

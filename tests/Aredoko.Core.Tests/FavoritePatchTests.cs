@@ -21,7 +21,7 @@ static class FavoritePatchTests
                 }
                 else if(request.RequestUri.AbsolutePath.EndsWith("/edit"))
                 {
-                    edits++;sent=body;reply=new(){["session_id"]=id,["item_ids"]=body["item_ids"]!.DeepClone(),["operation"]=body["operation"]!.DeepClone(),["updated"]=1};
+                    edits++;sent=body;reply=new(){["session_id"]=id,["item_ids"]=body["item_ids"]!.DeepClone(),["operation"]=body["operation"]!.DeepClone(),["updated"]=body["item_ids"]!.AsArray().Count};
                     if(supported)reply["kept_session"]=retained;
                 }
                 else reply=new(){["closed"]=true};
@@ -37,6 +37,19 @@ static class FavoritePatchTests
             check(!await session.EditFavoriteAsync(1201,false,CancellationToken.None)&&sent["operation"]!.GetValue<string>()=="favorite_remove","saved edit requiring refresh is distinct from a failed save");
             bool invalid=false;try{await session.EditFavoriteAsync(0,true,CancellationToken.None);}catch(ArgumentException){invalid=true;}
             check(invalid&&edits==2,"invalid favorite IDs never reach the server");
+            retained=true;
+            var ids=new[]{1201,601,50000};
+            check(await session.EditFavoritesAsync(ids,true,CancellationToken.None)==supported&&creates==1&&edits==3,"bulk favorites reuse the existing snapshot capability without another search");
+            check(sent!["item_ids"]!.AsArray().Select(node=>node!.GetValue<int>()).SequenceEqual(ids)
+                &&sent["operation"]!.GetValue<string>()=="favorite_add"&&sent["shelf_ids"]!.AsArray().Count==0,"bulk favorites preserve requested IDs including items outside the visible window");
+            check(supported?sent["keep_session"]?.GetValue<bool>()==true:!sent.ContainsKey("keep_session"),"bulk favorites keep compatibility with an older strict server");
+            retained=false;
+            check(!await session.EditFavoritesAsync(ids,false,CancellationToken.None)&&sent["operation"]!.GetValue<string>()=="favorite_remove","bulk save requiring refresh follows the existing fallback");
+            foreach(var bad in new[]{Array.Empty<int>(),new[]{1,1},new[]{1,0},Enumerable.Range(1,257).ToArray()})
+            {
+                invalid=false;try{await session.EditFavoritesAsync(bad,true,CancellationToken.None);}catch(ArgumentException){invalid=true;}
+                check(invalid&&edits==4,"invalid bulk favorite selection is rejected before HTTP");
+            }
         }
     }
     private sealed class Handler(Func<HttpRequestMessage,Task<HttpResponseMessage>> send):HttpMessageHandler

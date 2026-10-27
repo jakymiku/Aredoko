@@ -1,5 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
+## 2026-10-28 Work継続checkpoint（一括お気に入りの結果保持、以下より優先）
+
+- 起点 **`bb58c27844a02361615fe3d4bcf14a95a3a93a61`**、既存開発branch / PR #5のopen・Draft・未mergeをconnectorで再確認。固定SHAの部分snapshotを更新し既存ローカル差分0を確認して着手。他端末の未push差分は確認できない。サブエージェントなし、現在クォータ残％は取得不可。今回commitは本書のGit履歴。
+- **今回の利用者向け変更（Core/WinUI source、build/native未実行）**：通常literal/allの一括favorite保存も既存の`keep_session`契約を利用。最大256件・一覧外選択を保持したまま、serverが保持成功を返せば全件検索・一覧再作成を省き、星印/menuだけ更新する。単一選択の詳細が開いていれば保存済みfavoriteだけ同期し、未保存タグ/棚draftを保存しない。favorite限定/AI/棚操作・旧server・保持失敗は従来の再取得へ戻す。backendの既存複数件対応を再実装せず、Coreの`EditFavoritesAsync`とWinUI入口だけ追加。
+- **確認**：生成fixture＋独立DBでselection edit/既存result session **51 PASS /6.666s**、py_compile成功。724件中、一覧外を含む256件の原本確認だけ・provider初回1回・全順位/件数/非対象metadata保持、途中private patch失敗ではmetadata保存済み＋snapshot失効/回収を確認。初回は試験の閉じたDB参照と既存fixtureの列挙順依存、未取得module指定で1 FAIL/2 ERROR（17 run/1.840s）。試験を修正し正本moduleを取得して解消、製品不具合とは扱わない。[証拠とWindows手順](library-selection.md)末尾。
+- **runtime次手順は情報待ちのまま**：Microsoft公式で最新版URLは可変、x64/必要toolset以上の要件を確認したが、取得物の版/容量/hash・個別ライセンス・app-local/central導入方針は未確定。DLL/依存download・OS導入・公開なし。[再開時に必要な情報](runtime-notice-inventory.md)末尾。これを理由に独立機能作業を止めなかった。
+- **次の1件**：Windows/.NET担当は`dotnet run --project tests/Aredoko.Core.Tests -c Release -- --favorite-patch`→WinUI/Portable build→生成専用libraryで一括favoriteの同一session/再検索0/一覧外選択/anchor保持とfavorites view fallbackを限定確認。以下の動画/初回ガイド/内積高速化/Alpha更新は別側で確認済みなので再実装しない。runtime公開準備は上記固定情報が揃ってから継続。
+- **保全/未確認**：今回通常DB/設定/installed Alpha/shortcut/ZIP/私物変更0、download/OS変更/GPU/GUI/Actions/新branch/PR/main merge/shutdown0。installed Alphaは下記ZIP10/source0138a58のまま、今回sourceを配布済みとは扱わない。Core/C# compile・WinUI/nativeはSDK/Windows不在でUNRUN。実音楽/録音/動画品質、長媒体・動画内音声、runtime公開/clean Windows、HC/DPI/RSS、U7実入力等の未完は保持。
+
 ## 2026-10-28 終了checkpoint（以下の過去記録より優先）
 
 - **終了後のユーザー追加指示でinstalled Alpha更新済み**：基本ZIP10/source`0138a58`を`%LOCALAPPDATA%/Programs/Aredoko/releases/20261028-0138a58`へ新規copyし、デスクトップ「Aredoko Alpha」の起動先を切替。818files/661,537,190bytes全照合・bootstrap自己検査exit0、通常DBのsize/mtime・launch設定SHA不変。旧07releaseと旧shortcutを保持（`updates/20261028-0138a58/`）。GUI/GPUは起動せず、旧MSIX/Startメニュー登録は変更しない。記録`data/ai-ui/continuation-20261028/alpha-update-final.json`。以下の「Alpha未変更」はこの追加指示前の開発範囲を示す履歴。

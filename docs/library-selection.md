@@ -44,3 +44,23 @@ Coreはcreate時のcapabilityがある場合のみ拡張を要求し、旧server
 
 
 個別許可後のZIP10/source0138a58 `favorite-native10`は10checks/2PNG全目視/exit0 PASS。favoriteのon/off保存後もprovider追加呼出0・session ID不変、未保存タグは保持されDBへ暗黙保存されない。右クリックと同じ保存handlerだが、今回の入力はcheckboxのUIA操作だけで実右クリックを行っていない。一括favorite/AI/favorites viewの再作成回避まで完成したとは扱わない。生証拠`data/ai-ui/continuation-20261028/favorite-native10/`。
+
+
+## 2026-10-28 Work：一括favoriteの結果保持をCore/WinUIへ接続（source）
+
+既存backendの`keep_session`は複数件に対応済みだが、WinUIの一括操作は旧`EditSelectionAsync`を呼んで必ず全件snapshotを作り直していた。Coreへ`EditFavoritesAsync(ids,value,...)`を追加し、単体APIも同じ経路を共用。作成応答の`favorite_patch_supported`があるserverだけ拡張fieldを送り、保持成功のboolをWinUIへ返す。旧serverに未知fieldを送らず、件数/要求ID順序/操作の厳密ack検証と最大256件を維持する。
+
+WinUIは一括favoriteだけ新APIを使い、保持成功時は表示中の星印/menuを更新して同じresultSession/resultWindow/librarySelectionを維持。active詳細が対象ならsavedのfavoriteとcheckboxだけ同期し、タグ/棚/既読draftは書き込まない。`ApplyLibrarySelection`でeditorを初期化しない。失敗/非対応/AI/お気に入り限定など保持不可なら従来の再取得、棚は従来APIのまま。ResultWindowは移動ごとにserver rangeを再検証するため、一覧外の保存結果も戻った際に現payloadから読む。全件の原本検査を省略する新しいcacheは作らない。
+
+生成724件から先頭255件＋末尾1件を選ぶCPU回帰で256件だけのsource検査・provider1回・順位/件数/選択外metadata保持を確認。途中のprivate payload更新にSQLite triggerで障害を入れ、全metadataは保存済み、kept_session=false、snapshotは非公開・失効・回収となることも確認。既存のfiltered/AI再取得・原本変更/登録解除・取消rollback・strict認証HTTPを含む`PYTHONPATH=app:tests:tools python -m unittest test_selection_edits test_result_sessions -q`は**51 PASS/6.666s**、py_compile成功。初回17 runは閉じたprivate DBの参照、固定1.pngが選択対象と思い込む既存fixture（Linuxの列挙順で対象外）、不足module指定により1 FAIL/2 ERROR/1.840s。source変更試験は実際の選択IDのrelative_pathへ変更し、製品guardを弱めずに解消した。重複runは合算しない。
+
+Coreの`FavoritePatchTests`は旧/新serverそれぞれで複数ID・一覧外ID・保持不可fallback・未知field回避・空/重複/不正/257件を検証するsourceを追加。**.NET SDKとWindowsがなく、Core test/C# compile/WinUI/Portable/nativeは未実行**。元の単体native/5万件計測を今回の複数件GUI成功に流用しない。
+
+### Windowsで残る限定確認
+
+1. `dotnet run --project tests/Aredoko.Core.Tests -c Release -- --favorite-patch`を実行し、既存のWinUI/Portable手順でbuildする。Coreの旧server互換と保存済みfallbackを含める。
+2. 生成724件以上＋独立DB/settingsで通常文字検索/allを開く。複数選択（一覧外IDを含む、最大256）からfavorite追加/解除し、同一session ID・provider追加0・件数/選択/現在anchor・星印/menuの保持を確認。原本は不変、通常libraryへ接続しない。
+3. favorite限定検索で解除すると対象が消え、棚操作/AIは従来通り再取得されることを確認。必要以上の全媒体/GPU回帰はしない。
+4. 1件選択の詳細で未保存タグ/棚draftがある場合、favorite保存だけでDBへdraftが入らず、表示が保持されることを確認。保存後に保持不可なら「保存済み・一覧更新」の経路へ戻る。既存通常版backendが稼働中なら試験専用排他listenが失敗した時点で止める。
+
+今回の作業はsource接続と関連CPU契約まで。全GUI応答時間や大量選択の実機速度保証ではない。
