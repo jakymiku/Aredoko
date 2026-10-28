@@ -22,7 +22,9 @@ MAX_PAIRS=100_000
 
 
 class AudioDirectSimilarity:
-    def __init__(self,index):self.index=index
+    def __init__(self,index):
+        if index.source_kind!='audio':raise ValueError('Audio similarity requires audio items')
+        self.index=index
 
     def _frames(self,row,db,check):
         check();index=self.index

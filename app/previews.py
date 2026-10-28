@@ -303,6 +303,25 @@ class PreviewReader:
         finally:self.audio_stream_slot.release()
 
     @contextmanager
+    def video_audio_pcm_stream(self,item_id,revision,cancel=None):
+        """Internal first audio track of a registered video, on its timeline.
+
+        Shares the one PCM producer slot with audio files. This neither starts
+        an AI job nor publishes vectors, and is not a public raw-audio route.
+        """
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}',revision) is None:
+            raise ValueError('Invalid video revision')
+        if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Video audio decode cancelled')
+        if not self.audio_stream_slot.acquire(blocking=False):raise PreviewBusyError('Audio producer busy')
+        try:
+            source,_=self._read(item_id,operation='video_coverage_source',revision=revision,cancel=cancel)
+            def guard():
+                if self.video_manifest(item_id)['revision']!=revision:raise ReaderChanged('Video source changed during audio streaming')
+            with source,PCMStream(source,cancel=cancel,guard=guard,input_kind='video') as stream:
+                yield stream
+        finally:self.audio_stream_slot.release()
+
+    @contextmanager
     def video_coverage_stream(self,item_id,revision,cancel=None):
         """Internal single-pass producer; successful exhaustion precedes save.
 

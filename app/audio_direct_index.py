@@ -3,6 +3,8 @@
 Decode/encode stages are private and bounded. The caller supplies an owned
 encoder; this module never selects a model, starts a job, or alters the active
 image/text profile. Only a verified successful whole item becomes visible.
+The explicit source_kind='video' option extracts the first audio track while
+keeping the existing text/audio profile; video RGB vectors remain separate.
 """
 from array import array
 from contextlib import closing,contextmanager
@@ -47,7 +49,9 @@ def valid_interval(ordinal,start,end,decoded,frames):
 
 
 class AudioDirectIndex:
-    def __init__(self,catalog,encoder,*,reader=None,stage_parent=None,init_cancel=None):
+    def __init__(self,catalog,encoder,*,reader=None,stage_parent=None,init_cancel=None,source_kind='audio'):
+        if type(source_kind) is not str or source_kind not in ('audio','video'):raise ValueError('Invalid audio source kind')
+        self._source_kind=source_kind
         profile=encoder.profile
         if profile.modalities!=('text','audio') or profile.vector_contract!=AUDIO_VECTOR_CONTRACT:
             raise ValueError('An explicit direct-audio encoder namespace is required')
@@ -69,6 +73,15 @@ class AudioDirectIndex:
     @staticmethod
     def _check(cancel):
         if cancel is not None and cancel.is_set():raise MediaDecodeCancelled('Audio index cancelled before publication')
+
+    @property
+    def source_kind(self):return self._source_kind
+
+    def manifest(self,item_id):
+        return (self.reader.video_manifest if self.source_kind=='video' else self.reader.audio_manifest)(item_id)
+
+    def pcm_stream(self,item_id,revision,cancel=None):
+        return (self.reader.video_audio_pcm_stream if self.source_kind=='video' else self.reader.audio_pcm_stream)(item_id,revision,cancel)
 
     @contextmanager
     def _boundary(self,cancel):
@@ -125,7 +138,7 @@ class AudioDirectIndex:
                     progress({'item_id':item_id,'prepared_ms':prepared_ms,'total_ms':total,
                               'prepared_windows':prepared_windows,'phase':phase})
                     self._check(cancel)
-                with self.reader.audio_pcm_stream(item_id,revision,cancel) as stream:
+                with self.pcm_stream(item_id,revision,cancel) as stream:
                     report('decoding')
                     for window in stream:
                         self._check(cancel)
@@ -166,7 +179,7 @@ class AudioDirectIndex:
             self._check(cancel)
             if validate is not None:validate()
             if self.encoder.profile.key!=self.profile.key:raise ValueError('Audio encoder namespace changed')
-            if self.reader.audio_manifest(item_id)['revision']!=revision:
+            if self.manifest(item_id)['revision']!=revision:
                 raise ReaderChanged('Audio source changed before index publication')
             self._check(cancel)
         with self._boundary(cancel),self.catalog.writer_fence.write(cancelled=lambda:cancel is not None and cancel.is_set()):

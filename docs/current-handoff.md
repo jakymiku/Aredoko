@@ -1,5 +1,15 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
+## 2026-10-28 Work継続checkpoint（動画内音声の入力・保存・文章検索基盤、以下より優先）
+
+- 起点 **`17a661256b4993cc214adaabda96f96924e7fc3f`**（音声準備の時刻進捗を先にcommit/push/PR head照合済み）。既存branch/PR #5を継続、サブエージェントなし。ユーザーのreset後ガッツリ続行を受け複数単位を実装。現在残％は取得不可。今回commitは本書のGit履歴。
+- **動画内音声のCPU backend基盤を追加**：登録済みvideoの原本guard付き`video_audio_pcm_stream`で先頭音声trackを1decoderで16kHz/mono/f32le化。動画側format/32GiB/画素制限を明示選択し、通常音声のformat/512MiB制限は維持。先頭遅延はsilenceとして正しい位置を保持、音声track終了後の動画末尾は勝手にsilenceで埋めない。trackなし/不正decodeは成功にしない。
+- **保存・文章検索も接続（専用API/UI/jobは未接続）**：`AudioDirectIndex(...,source_kind='video')`が既存text/audio profileでPCMをatomic保存し、`AudioDirectSearch`はvideoだけのscopeで検索。response source=`video-audio-direct`、evidence source=`video-audio`で明示。通常audio-file検索とは分離し、RGB namespace/vecを再解釈しない。同一PCM profile内のitem ID保存なのでschema変更なし。旧音声類似へvideo設定Indexを誤投入した場合は拒否。backup/restore/purgeを生成fixtureで確認。
+- **確認**：PCM stream/動画音声source/既存video source **25 PASS/2.160s**、動画音声index＋既存音声search/similarity **34 PASS/7.408s**、既存認証HTTPの検索/類似focused2 **PASS/1.335s**、無track再生成が旧索引を保ち成功markerを作らない追加1件 **PASS/0.305s**。生成MKVのvideo3.2秒・audio1秒遅延/2.2秒終了、無track/取消/除外/旧revision/slot競合、保存前取消の旧索引保全、通常audioとvideoのscope非混在、元media不変・復旧往復を確認。重複runは合算しない。[動画正本](video-similarity.md)末尾。
+- **追加cleanup修正**：PCM reader threadのstart失敗で未開始threadをjoinして元例外を隠しstdoutを閉じ損ねる旧経路を修正。child回収/stdout close/元例外の保持を回帰確認。通常EOF/取消/期限/backpressureを保全。
+- **次の1件**：動画内音声をproductionへ接続するowned job/API→Coreの別source evidence/動画player seek→WinUIの明示準備/検索入口。既存audio ownerを再利用する単一所有設計が必要で、同じencoderを別ownerで二重closeしたりworkerを増やさない。trackなし理由の分類/全batchの扱いも決める。現在の`video-ai`は映像、`audio-ai`は音声fileだけのまま。Windows担当はCore `--audio-content`/`--video-content`/`--favorite-patch`→build→生成fixtureの限定確認へ。
+- **保全/未完**：通常DB/settings/Alpha/shortcut/ZIP/私物変更0、実model/GPU/GUI/.NET/download/OS変更/Actions/新branch/PR/main merge/shutdown0。AlphaはZIP10/source0138a58。今回動画音声の実model品質/HTTP/GUIは未受入・未接続で、既存の「動画内音声は対象外」案内を完成扱いで消さない。runtime公開/clean Windows/U7実入力等の残件、音声/動画時刻進捗・一括favorite・既存1時間比較を保持し、成功試験を反復しない。
+
 ## 2026-10-28 Work継続checkpoint（音声準備の時刻進捗、以下より優先）
 
 - 起点`a033b6981c77589fc0e1280c30bc92c4e18adbbe`、既存branch/PR #5のHEAD一致・open/Draftを確認。ユーザーはクォータreset後に複数単位の続行を指示。サブエージェントなし、現在残％は取得不可。今回commitは本書のGit履歴。

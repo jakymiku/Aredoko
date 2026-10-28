@@ -71,23 +71,23 @@ class AudioDirectSearch:
                     payloads=spool.evidence([item for item,_ in selected['ranked']]);items=[]
                     for item,score in selected['ranked']:
                         payload=payloads[item]
-                        try:revision=index.reader.audio_manifest(item)['revision']
+                        try:revision=index.manifest(item)['revision']
                         except PreviewUnavailable:
                             raise AudioSearchChanged('Matched audio unavailable; refresh results') from None
                         if revision!=payload['revision']:
                             raise AudioSearchChanged('Matched audio changed; refresh results')
                         items.append({**payload['item'],'semantic_score':round(score,6),
                             'audio_match_ms':payload['audio_match_ms'],'audio_match_end_ms':payload['audio_match_end_ms'],
-                            'audio_match_source':'direct-audio','audio_match_contract':CONTRACT})
+                            'audio_match_source':'video-audio' if index.source_kind=='video' else 'direct-audio','audio_match_contract':CONTRACT})
                     check()
                     return {'items':items,'total':selected['total'],'page':number,'limit':limit,
-                            'source':'audio-direct','profile':index.profile.key,'score_kind':'cosine',
+                            'source':'video-audio-direct' if index.source_kind=='video' else 'audio-direct','profile':index.profile.key,'score_kind':'cosine',
                             'candidate_total':candidate_total,'search_candidate_total':candidate_total,
                             'indexed_total':indexed_total,'scored_total':scored_total,'search_complete':True,
                             'search_status':('out_of_scope' if not candidate_total else 'unindexed' if not indexed_total else
                                              'partially_indexed' if indexed_total<candidate_total else 'ready')}
                 return render(page) if result_sink is None else result_sink(render)
-            return catalog.search(query='',kind='audio',limit=120,result_sink=consume,cancelled=cancelled,**conditions)
+            return catalog.search(query='',kind=index.source_kind,limit=120,result_sink=consume,cancelled=cancelled,**conditions)
 
     def _rank(self,rows,query,check):
         if not rows:return {},0
@@ -100,7 +100,7 @@ class AudioDirectSearch:
                 check()
                 if contract!=CONTRACT or not valid_marker(decoded,indexed,frames):continue
                 try:
-                    if index.reader.audio_manifest(item)['revision']==revision:
+                    if index.manifest(item)['revision']==revision:
                         fresh[item]=(revision,decoded,indexed,frames);counts[item]=0
                 except PreviewUnavailable:continue
             markers.close()

@@ -38,6 +38,28 @@ def fake_decoder(code,**kwargs):
 
 
 class AudioStreamTests(unittest.TestCase):
+    def test_video_input_uses_video_limits_and_demuxers_without_loosening_audio_defaults(self):
+        for kind in ('audio','video'):
+            with self.subTest(kind=kind),fake_decoder('import sys;sys.stdout.buffer.write(b"\\0"*64)',window_ms=1,input_kind=kind) as (stream,_,calls):
+                with stream:list(stream)
+                args=calls[0][0]
+                self.assertEqual(args[args.index('-format_whitelist')+1],audio.VIDEO_FORMATS if kind=='video' else audio.FORMATS)
+                self.assertEqual('-max_pixels' in args,kind=='video')
+                self.assertEqual(args[args.index('-map')+1],'0:a:0')
+        with patch.object(audio,'MAX_AUDIO_BYTES',1),fake_decoder('import sys;sys.stdout.buffer.write(b"\\0"*64)',window_ms=1) as (stream,children,_):
+            with self.assertRaises(audio.AudioInputUnavailable):stream.__enter__()
+            self.assertEqual(children,[])
+        with patch.object(audio,'MAX_AUDIO_BYTES',1),fake_decoder('import sys;sys.stdout.buffer.write(b"\\0"*64)',window_ms=1,input_kind='video') as (stream,_,__):
+            with stream:list(stream)
+            self.assertTrue(stream.complete)
+
+    def test_reader_start_failure_preserves_original_error_and_closes_stdout(self):
+        with fake_decoder('import time;time.sleep(20)') as (stream,children,_):
+            with patch.object(audio.threading.Thread,'start',side_effect=RuntimeError('generated reader start failure')):
+                with self.assertRaisesRegex(RuntimeError,'generated reader start failure'):stream.__enter__()
+            self.assertEqual(len(children),1);self.assertIsNotNone(children[0].poll())
+            self.assertTrue(children[0].stdout.closed);self.assertFalse(stream.complete)
+
     def test_one_pass_fd_only_and_explicit_successful_eof(self):
         with patch.dict(os.environ,{'FFREPORT':'file=forbidden.log'}),fake_decoder('import sys;sys.stdout.buffer.write(b"\\0"*128)',window_ms=1) as (stream,processes,calls):
             with stream:

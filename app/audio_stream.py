@@ -14,7 +14,8 @@ import time
 from audio_input import (AudioInputUnavailable, PCMWindow, SAMPLE_RATE,
                          MAX_WINDOW_MS, MAX_START_MS, MAX_AUDIO_BYTES,
                          FORMATS, validate_pcm, validate_window)
-from video_previews import _executable, MediaDecodeCancelled
+from video_previews import (_executable,MediaDecodeCancelled,FORMATS as VIDEO_FORMATS,
+                            MAX_VIDEO_BYTES,MAX_VIDEO_PIXELS)
 
 IDLE_SECONDS=10
 SESSION_SECONDS=1800
@@ -28,10 +29,14 @@ class PCMStream:
     supplied to this decoder. It runs before launch, each yield and completion.
     The input handle is never closed. Close, failure and early break reap the
     owned child and reader; a silent or short window does not mean EOF.
+    input_kind='video' explicitly selects the existing video container/size
+    policy. The default audio policy is unchanged; only track 0 is decoded.
     """
-    def __init__(self,source,*,window_ms=MAX_WINDOW_MS,cancel=None,guard=None):
+    def __init__(self,source,*,window_ms=MAX_WINDOW_MS,cancel=None,guard=None,input_kind='audio'):
         validate_window(0,window_ms)
         if guard is not None and not callable(guard):raise AudioInputUnavailable('Invalid source guard')
+        if type(input_kind) is not str or input_kind not in ('audio','video'):raise AudioInputUnavailable('Invalid PCM input kind')
+        self._video_input=input_kind=='video'
         self.source,self.window_ms,self.cancel,self.guard=source,window_ms,cancel,guard
         self.complete=False
         self.closed=False
@@ -60,14 +65,16 @@ class PCMStream:
         try:
             self._check()
             info=os.fstat(self.source.fileno())
-            if not stat.S_ISREG(info.st_mode) or not 1<=info.st_size<=MAX_AUDIO_BYTES:
+            maximum=MAX_VIDEO_BYTES if self._video_input else MAX_AUDIO_BYTES
+            if not stat.S_ISREG(info.st_mode) or not 1<=info.st_size<=maximum:
                 raise AudioInputUnavailable('Audio source exceeds stream limits')
             self.initial=self._identity(info)
             self.source.seek(0,os.SEEK_END);self.source.seek(0)
             args=[_executable('ffmpeg'),'-nostdin','-v','error','-max_alloc',str(64*1024*1024),
-                  '-protocol_whitelist','fd,pipe','-format_whitelist',FORMATS,
+                  '-protocol_whitelist','fd,pipe','-format_whitelist',VIDEO_FORMATS if self._video_input else FORMATS,
                   '-probesize','1048576','-analyzeduration','1000000','-max_streams','16',
-                  '-max_probe_packets','128','-threads','1','-i','fd:',
+                  '-max_probe_packets','128','-threads','1',
+                  *(['-max_pixels',str(MAX_VIDEO_PIXELS)] if self._video_input else []),'-i','fd:',
                   '-map','0:a:0','-vn','-sn','-dn','-ac','1','-ar',str(SAMPLE_RATE),
                   # Preserve timestamp gaps as silence on the decoded timeline;
                   # never infer EOF by repeatedly seeking an empty interval.
@@ -156,7 +163,7 @@ class PCMStream:
                 if self.process.poll() is None:self.process.kill()
                 self.process.wait(timeout=5)
         finally:
-            if self.reader is not None:
+            if self.reader is not None and self.reader.ident is not None:
                 self.reader.join(5)
                 if self.reader.is_alive():raise AudioInputUnavailable('Owned audio reader did not stop')
             if self.process is not None and self.process.stdout is not None:self.process.stdout.close()

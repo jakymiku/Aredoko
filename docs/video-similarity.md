@@ -214,3 +214,35 @@ Linux x86_64 / Python3.12.14 / FFmpeg6.1.1-3ubuntu5。`testsrc2=s=160x90:r=1:d=3
 両runの全RGB SHA256は`86706619c5b723bf5ffea84dffbfec8d4ef750e95155f166da489e02197416af`、保存したordinal/start/end/vectorのJSON digestは`c5096c314c1a9f7b53332b1c2d8243f581366c63d9a179a01c1e1ecc53750ce3`で一致。原生成SHA256`50cfb6bb6ced68575edb304fda50c026657949908a6753245cd4f06864a259c5`とmtimeも前後不変。試験用動画/DBは一時directoryだけを使い、終了時に回収した。raw記録はWork内部の`.codex/aredoko-video-hour-cost.json`（Git対象外）、ここに再開に必要な方法・数値・digestを保持する。
 
 この1caseでは約4.94倍だが、1fps/低解像度・疑似3D encoderの結果であり、高解像度/高fps/全codec/VFR/実GPUモデル・一般の動画準備速度へ外挿しない。総RSSは計測していない。cold/warmを揃えた多数回benchmarkでもない。1時間のCPU caseは実施済みとして無変更で再測定せず、残りはWindows実worker/用途別の限定受入へ進む。
+
+
+## 2026-10-28 Work：動画内音声の逐次入力→atomic保存→文章検索のCPU基盤
+
+### 入力の所有と時刻
+
+`PreviewReader.video_audio_pcm_stream(id,revision,cancel)`を追加。登録/除外/パス/原本revisionを確認したvideo fdを使い、通常audioと同じ1つのPCM producer slotで所有する。初回と各window/正常EOFでvideo_manifestを再検証し、close/取消/原本・scope変更/異常exitでchild/reader/slotを回収する。raw音声HTTP routeや自動scanは追加しない。
+
+PCMStreamの明示`input_kind='video'`だけが既存videoのdemuxer allowlist/32GiB/max_pixelsを使う。通常audioのformat/512MiBは変更せず、ネットワークやsource pathをFFmpegへ渡さない。先頭音声track `0:a:0`を選び、16kHz/mono/f32leを最大30秒ずつ供給する。`aresample=async=1:first_pts=0`で動画内の音声開始遅延/timestamp gapをsilenceとして保持するが、実audio EOF以降のvideo末尾を推測で埋めない。trackなしをsilenceの成功markerにしない。複数言語trackの選択、音声/映像のrank統合、文字起こしは未実装。
+
+### 保存と検索の明示設定
+
+```python
+index = AudioDirectIndex(catalog, audio_encoder, reader=reader, source_kind='video')
+revision = reader.video_manifest(video_id)['revision']
+index.index_item(video_id, revision)
+result = AudioDirectSearch(index).search('覚えている音や会話の特徴', root_ids=[root_id])
+```
+
+source_kindはconstructorでaudio/videoだけを受ける固定設定、既定はaudio。video設定ではmanifest/PCM streamをvideo側へ向け、既存の音声atomic stage/source確認/commit・厳密marker/区間/正規化・progress/取消を再利用する。workerの起動/選択は行わず、caller所有の**text/audio** encoderだけを要求する。RGB入力のvideo encoderは受理しない。
+
+音声fileとvideo内PCMは同一text/audio profile/次元/contractの空間で保存する（catalogのglobal item IDで区別）。元videoのkind/タグ/棚/お気に入りを保ち、video設定のqueryはkind=video、通常audio設定はkind=audioの共通scopeだけを検索する。RGB video namespaceとは別のままで、別profile/契約のvectorを混在させない。responseのsource=`video-audio-direct`、行のaudio_match_source=`video-audio`、audio_match_contract=`direct-audio-window:v1`と区間を返す。旧audio類似へvideo設定Indexを誤って渡した場合は拒否し、audio originやUI根拠へ黙って読み替えない。
+
+新schema/DB migrationは不要。既存backup/restoreはPCM namespace内のvideo item行も保持し、root purgeは両audio direct tableを片付け元videoを変更しないことを確認した。検索中の原本変更はAudioSearchChangedとなり、保存前取消は旧公開を保持する。
+
+### 確認と接続の残件
+
+生成Matroskaでvideo3.2秒/先頭audio1秒遅延・audio2.2秒終了を作り、0.5秒のPCMはsilence、1.5秒は有音、decoded PCMはvideo末尾まで伸ばされないことを確認。decodeは1回・fd/pipe限定、原本SHA/mtime/整理metadataは不変。trackなし、旧revision、precancel、slot競合、scope変更、早期close、source容量拒否の回収も確認。通常audioのformat/capが拡張されないこと、reader.start失敗時にも元例外を保ちstdoutをcloseすることを確認した（旧closeの未開始thread.join経路を修正）。
+
+PCM/source/既存video source **25 PASS/2.160s**。動画音声の実decode→疑似encode→保存→query、同一PCM store内でaudio-file/videoの検索非混在・favorite/root/棚scope、取消rollback/原本変更、backup/restore/purgeと既存音声search/similarityは **34 PASS/7.408s**。既存認証HTTPの音声検索/cached類似2件は **PASS/1.335s**。無trackに変わった原本の再生成が旧索引を保ちsilence成功markerを作らない追加1件は **PASS/0.305s**。py_compile成功。重複を合算せず、品質/実model/Windows/.NET/GPU/新配布の確認ではない。
+
+**production job/API/Core/WinUIは未接続**。現在のvideo-aiは映像、audio-aiは音声fileだけのままで、利用者画面からvideo-audioを使える完成機能とはしない。古いCoreが新sourceを誤表示しないよう、既存direct-audio evidenceとは別sourceを明示した。次は同じaudio encoder/inference ownerを一度だけ所有して両media kindの要求を直列化するproduction設計へ接続し、二重worker/二重closeを避ける。trackなし/壊れたdecodeは現時点ではAudioInputUnavailableのため、batch接続では理由分類と読み取れない候補の扱いも必要。続いて専用API/result stamp/Core evidence/動画playerの音声一致seek/WinUI明示入口を接続する。未実装の入口を実装済みと案内せず、namespace・一括favorite・準備時刻進捗と既存残件を維持する。
