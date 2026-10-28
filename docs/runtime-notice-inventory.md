@@ -116,3 +116,14 @@ python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --su
 
 
 VS Community 2022の公式原文（62,859bytes/SHA`41a207b1…`）も確認し、Section 4のDistributable Code許諾とREDIST一覧への参照、配布条件を取得receiptへ対応付けた。runtimeの利用者向け条項だけで一律に配布不可とも、署名があるから無条件で配布可とも判断しない。採用するファイル一式とVS許諾の適用・利用者向け第三者条項/NOTICEを整えた後に、新たな明示範囲でstatic展開/依存/loader確認へ進む。今回の範囲でEXE実行やDLLの再配置を行っていない。
+
+
+### 2026-10-29：インストーラーを起動しない静的展開の準備
+
+取得済みの同一署名済みEXEについて、既存7-Zip 26.01の一覧表示だけを実施（追加取得/展開なし）。WiXの[Burn v2公開構造](https://github.com/wixtoolset/wix3/blob/develop/src/burn/engine/section.cpp)に基づくbounded readerで、UX CAB=offset479744/140070bytes、attached CAB=offset630000/18091661bytesを読み取り確認。元EXEを実行しない。`tools/burn_containers.py`の生成4件PASS。
+
+明示許可後だけ使用する`tools/extract_msvc_review.py`を準備。固定source receipt/hash/現在のMicrosoft署名を照合し、新規の専用先へCABとflat memberを保存する。既存7-Zipを指定し、stdoutを逐次制限（単体64MiB/合計256MiB/512files）、危険path/同名case/予約device/上書きを拒否。installer/MSI action/DLLは実行しない。生成4件PASS。ツールを作ったことは実体展開や配布許諾の完了ではない。
+
+`tools/read_msi_inventory.py`はWindowsの[MSIDBOPEN_READONLY](https://learn.microsoft.com/windows/win32/api/msiquery/nf-msiquery-msiopendatabasew)と固定File/Media SELECTだけで対応表を読む。生成4件と、Windows上で自作したDB fixtureの実API読取/原本hash・mtime保持にPASS。検査ツール自身はcommit/transform/install/action/stream展開APIを使わない。fixture生成時の新DB作成と、選択MSIの読取を区別する。証拠`data/ai-ui/continuation-20261029/`。
+
+**取得済み公式EXEの展開は追加質問の回答待ち**。前回の取得/静的確認許可を展開/OS導入へ拡張せず、実CRT inventory/署名/依存/適用NOTICE/再配布条件・loader/clean Windows・公開host/registryは未完。既存のsealed pack/Alphaは不変。次は回答後に同じsourceから新規先へstatic展開し、File/MediaとCAB内容を対応付ける。
