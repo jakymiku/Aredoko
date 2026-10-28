@@ -22,6 +22,16 @@ MAX_PAIRS=100_000
 PAIR_VERSION_INTERVAL=64
 
 
+def validate_similarity_request(item_id,*,page=0,limit=60,result_sink=None,cancelled=None,**conditions):
+    """Validate a cached PCM request without creating an index or workspace."""
+    if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid audio origin')
+    if type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:raise ValueError('Invalid audio paging')
+    if set(conditions)-{'view','root_id','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid audio scope')
+    if result_sink is not None and (not callable(result_sink) or page):raise ValueError('Result sink requires page zero')
+    if cancelled is not None and not callable(cancelled):raise ValueError('Invalid cancellation')
+    return conditions
+
+
 class AudioDirectSimilarity:
     SOURCE_KIND='audio'
     RESULT_MODE='audio-similar'
@@ -62,11 +72,7 @@ class AudioDirectSimilarity:
         return revision,result if len(result)==indexed else []
 
     def similar(self,item_id,*,page=0,limit=60,result_sink=None,cancelled=None,**conditions):
-        if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid audio origin')
-        if type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:raise ValueError('Invalid audio paging')
-        if set(conditions)-{'view','root_id','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid audio scope')
-        if result_sink is not None and (not callable(result_sink) or page):raise ValueError('Result sink requires page zero')
-        if cancelled is not None and not callable(cancelled):raise ValueError('Invalid cancellation')
+        validate_similarity_request(item_id,page=page,limit=limit,result_sink=result_sink,cancelled=cancelled,**conditions)
         index=self.index;catalog=index.catalog;generation=catalog.result_generation()
         with index.store.connect() as monitor,ScoreSpool(cancelled=cancelled,parent=index.stage_parent) as spool:
             version=monitor.execute('PRAGMA data_version').fetchone()[0]

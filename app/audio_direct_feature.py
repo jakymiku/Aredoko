@@ -6,6 +6,7 @@ from ai_process import AIUnavailable,EncoderProcess
 from ai_profiles import audio_profile_for
 from ai_search import AIBusy
 from audio_direct_jobs import AudioDirectJobs
+from audio_direct_similarity import validate_similarity_request
 from audio_input import MediaDecodeCancelled
 from result_sessions import IndexStamp
 
@@ -106,8 +107,12 @@ class AudioDirectFeature:
     def cancel_video_audio(self):
         result=self.owner.cancel(source_kind='video') if self.owner is not None else {'cancel_requested':False}
         return {**self.status(),'cancel_requested':result['cancel_requested']}
-    def similar(self,item_id,**options):return self._ensure(require_model=False).similar(item_id,**options)
-    def similar_video_audio(self,item_id,**options):return self._ensure(require_model=False).similar(item_id,source_kind='video',**options)
+    def similar(self,item_id,**options):return self._similar(item_id,'audio',options)
+    def similar_video_audio(self,item_id,**options):return self._similar(item_id,'video',options)
+    def _similar(self,item_id,source_kind,options):
+        scope=validate_similarity_request(item_id,**options)
+        self.catalog.search(kind=source_kind,limit=1,**scope)
+        return self._ensure(require_model=False).similar(item_id,source_kind=source_kind,**options)
     def release(self):return self.owner.release() if self.owner is not None else {'released':False,'resident':False}
     def stamp(self):
         self._ensure(require_model=False)

@@ -1,5 +1,13 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-29）
 
+## 2026-10-29 Work軽量継続（類似検索の初期化前検証、以下より優先）
+
+- 起点 **`5f9ab9f34af136579dc1cc84dd7003f3e0ee037e`**。前回Work `9b7d91d`から18commits先行を確認し、変更されたローカルsnapshotを固定HEADへ同期。PR #5 open/Draftを確認。下段のWindows/Core/native/実worker・ZIP15受入を保持し再実施しない。今回commitは本書のGit履歴。
+- **軽い修正1件**：通常音声・動画内音声のcached類似が、不正なitem ID/page/limit/対象範囲でも400を返す前にowner/PCM索引を初期化する経路を修正。純粋な共通request validatorと既存catalogのscope検証をFeatureのlazy初期化より前へ移した。scorer側も同じvalidatorを使い、正しい検索・cached検索/上限/取消/原本guardは保全。
+- **確認**：新HTTP testは旧実装で1 FAIL/0.634s（ownerが作られる）。修正後、新HTTP＋両cached HTTP＋既存audio similarityは **20 PASS/7.153s**。生成sidecarを未作成状態にして全20不正リクエスト後もowner/monitor/sidecarなし・encode0を追加確認した1件 **PASS/0.577s**。重複を合算しない。py_compile成功。[音声正本](audio-producer-review.md)末尾。
+- 新C#/GUI/GPU/配布build・取得・通常DB/settings/私物/Alpha/OS/Actions/shutdown変更なし。下段の一度限りのshutdown指示は再適用しない。ここは部分snapshotで他端末の未push差分は未確認。
+- **次の1件は下段P6 CRT pack組込み準備を維持**。今回の軽量修正は次回のbackend同梱候補へ反映する。下段の静的展開許可を実DLLコピー/loader/import/worker確認へ拡張せず、Windows担当が具体的範囲を示して進める。
+
 ## 2026-10-29 ローカル継続の終了checkpoint（以下より優先）
 
 - **基準**：cleanな`53c5093`から既存branch/PR #5を継続しremote更新なしを確認。他AIのWork完了分は再実装していない。最終アプリsource **`0edbd409c81e4baf79788deef9830f3b01d86c85`**、文書commitは `git log -1 -- docs/current-handoff.md`。PR metadataはconnector不調で再取得できず、remote branch/PR head refで照合する。新branch/PR/merge/Actionsなし。
