@@ -59,6 +59,8 @@ def verify_before_gpu(python,target):
 
 
 def main():
+    if hasattr(sys.stdout,'reconfigure'):sys.stdout.reconfigure(encoding='utf-8')
+    if hasattr(sys.stderr,'reconfigure'):sys.stderr.reconfigure(encoding='utf-8')
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--fixture',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)

@@ -76,3 +76,12 @@ source6209c6aで重複headerを除き、共通余白8へ。種類/検索方法�
 
 
 修正source21d60e8/frontend03は個別許可後 `toolbar-reflow03` でDarkの先頭全表示・操作列・詳細・grid・draft・保存を確認。23checks/4PNG目視、元生成SHA/mtime不変、正常exit0。旧42pxだった先頭画像が他rowと同じ144px全表示へ戻った。Light/Darkのtoolbar機能確認と、この境界修正のDark実機確認を区別する。通常DB/Alpha/GPU/再生変更0。新しい全面UIの完了ではなく、主画面の一単位の改善である。
+
+
+## UI-2：詳細のファイル名重複・長名を整理（2026-10-29）
+
+source31f32dcで、タイトルと完全一致する裸の相対ファイル名だけ詳細の位置欄から省き、階層付き位置・別の表示名は保持する。詳細タイトル/位置は最大3行と省略表示、全文のアクセシブル名/tooltip・選択を維持。「元の検索に戻る」の説明をtooltipへ移し、動作は変えていない。Core表示5件/関連worker11項目・WinUI API照合/build PASS。
+
+ZIP14/source29114e6を、専用2PNG/DB・UIAだけでLight追加1試行とDark1試行、各9checks/3PNG/正常exit0で確認。計6PNGを目視。重複位置の解消、長名の3行上限/全文到達、階層付き位置、list/grid切替の未保存タグ保持と未自動保存を確認した。初回Lightは試験側の期待件数145対fixture2で起動前停止し、そのままFAIL記録を保持。追加許可後の修正は期待件数だけ。証拠 `data/ai-ui/continuation-20261029/detail-polish-{light02,dark01}/` と別のvisual review。
+
+この受入は詳細パネルの限定改善。小さいgridのファイル名表現や全カードの長名問題を解決済みとはせず、HC/物理DPI/実clipboard・hoverは未確認。専用以外のデータ、前面化要求、物理入力、再生、GPUを使わない。ZIP14の通常EXE起動経路の新規受入とも区別する。

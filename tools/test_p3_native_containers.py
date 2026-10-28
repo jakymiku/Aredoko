@@ -145,7 +145,7 @@ def main():
         before=sources()
         if args.viewer_choice and args.uia_only:
             (target/'viewer-settings.json').write_text(json.dumps({'version':1,'wheel_up_advances':False,'theme':args.theme,'double_click_viewer':'internal'}),encoding='utf-8')
-        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(3 if args.video_audio_content else 2 if args.audio_content or args.video_content else 50000 if args.global_edge else 6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
+        first=cat.search()['items'][0];check('generated catalog ready',cat.search()['total']==(3 if args.video_audio_content else 2 if args.detail_polish or args.audio_content or args.video_content else 50000 if args.global_edge else 6 if args.detail_actions else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145))
         if args.detail_actions:
             shelf=cat.change_shelf('create',name='確認用の棚')['id']
             cat.change_shelf('assign',entity='item',object_ids=[row['id'] for row in cat.search()['items']],shelf_ids=[shelf])

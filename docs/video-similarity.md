@@ -331,3 +331,12 @@ owned jobが既に選択したcatalog titleのbasenameを、任意`item_progress
 追加回答後、基本ZIP13のUI/sourcea2bc5d2＋backend136d22bで、生成MKV3本/専用DB/CPU検査vectorを使用。準備のlazy開始→処理中basename→中断時の未公開→再開→音声あり2本準備/trackなし1本skip→日本語文章の一致区間→詳細の再生入口（再生せず）→右click音の類似→起点/trackなし除外→登録folder/戻るの復元を14checks/6PNG目視/exit0で確認。cached類似はモデルavailable=false・推論呼出増加0。実model品質/実再生seek/複数track/HC/DPIは未受入。
 
 native01はsandboxの実行alias制限でツールを起動できず操作前停止。所有appは終了し、OS側の版preflightを確認してから追加1試行の回答を得た。native02が上記PASSで、初回を成功へ書き換えていない。証拠`data/ai-ui/continuation-20261029/video-audio-native0{1,2}`と隣のvisual review。前回からのGUI回答待ちを解消した範囲で、別の新案内UIまで受入済みにしない。
+
+
+### 2026-10-29：実workerによる動画内音声の限定GPU確認
+
+追加回答後、既存の生成WAV2本を小さなMKVへmuxし、専用DBで実際の音声worker→索引保存→日本語2問→解放後のcached動画音声類似を確認した。両問Top1一致、2itemともfresh、候補/起点の時刻を保持し、文字起こしを捏造しない。モデル解放後は再encodeを禁止してcached経路を確認。PyTorch割当上限3,072MiB、child peak1,121.5MiB（ドライバー等を含む総VRAM値ではない）。close後childは停止、既存kill解放のexit1でありgraceful exit0ではない。元の生成WAVのSHA/mtime不変。
+
+初回gpu01は4,947,898,990bytes/23,903filesの照合を推論180秒に含めて停止し、モデル/GPU推論は未開始。追加許可後gpu02では同じ完全検査を独立CPU工程へ移し、進捗付き161.875秒→索引32.547秒でPASS。照合を省略した高速化ではない。既存モデル/専用runtimeだけを利用し、追加取得・GUI・再生・通常DB/設定/Alphaの変更なし。生証拠 `data/ai-ui/continuation-20261029/video-audio-owned-gpu0{1,2}/report.json`。検査結果は同一process内の通常cacheへ渡し、永続的な検査省略を追加していない。ツールのUTF-8出力も補正したが、そのためのGPU再実行はしない。
+
+短い合成音声2本の接続確認であり、実動画/録音/音楽の検索品質、長時間性能、複数track、映像と音声のrank統合、再生/seekの受入ではない。

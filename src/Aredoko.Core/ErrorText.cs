@@ -11,14 +11,14 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
-        ["AI runtime dependencies unavailable"] = "AI実行環境の部品が不足しているか、読み込めません。「設定」→「AI環境の配置」で環境を確認してください。基本検索と閲覧は利用できます。",
-        ["AI runtime architecture incompatible"] = "AI実行環境の種類がこのアプリと一致しません。「設定」→「AI環境の配置」で対応するx64環境を選び直してください。基本検索と閲覧は利用できます。",
+        ["AI runtime dependencies unavailable"] = "AI実行環境の部品が不足しているか、読み込めません。「設定」の「AI検索の準備」から「配置済みを指定」を開いて確認してください。基本検索と閲覧は利用できます。",
+        ["AI runtime architecture incompatible"] = "AI実行環境の種類がこのアプリと一致しません。「設定」の「AI検索の準備」から「配置済みを指定」を開き、対応するx64環境を選び直してください。基本検索と閲覧は利用できます。",
         ["AI runtime initialization failed"] = "AIを起動できませんでした。ほかのAI処理を終了し、空きメモリとAI環境の設定を確認してから再試行してください。基本検索と閲覧は利用できます。",
         ["AI inference failed"] = "AIの処理を完了できませんでした。AI環境と対象ファイルを確認してから再試行してください。",
         ["Invalid AI worker response"] = "AIの応答を確認できませんでした。アプリを再起動し、AI環境を確認してください。",
         ["AI worker timed out"] = "AIの応答が時間内に返りませんでした。ほかのAI処理と空きメモリを確認して、再試行してください。",
         ["AI worker disconnected"] = "AIとの接続が切れました。AI環境を確認して、再試行してください。",
-        ["AI runtime validation failed"] = "AI実行環境の照合を完了できません。「設定」→「AI環境の配置」で環境を確認してください。",
+        ["AI runtime validation failed"] = "AI実行環境の照合を完了できません。「設定」の「AI検索の準備」から「配置済みを指定」を開いて確認してください。",
         ["Incompatible AI worker"] = "AI実行環境が選択中のモデルに対応していません。AI環境とモデルの設定を確認してください。",
         ["Invalid scan mode"] = "スキャン方法が無効です。アイテム一覧の更新、またはAI索引の作成を選び直してください。",
         ["Animation decoder busy"] = "アニメーションの処理が混んでいます。別のビューワーを閉じてから、開き直してください。",

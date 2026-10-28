@@ -68,7 +68,7 @@ R13 DOING/ALPHA未完/R14 PARTIAL。専用OCR保留、U09/U11/U13/U14、実音�
 
 ### 2026-10-29：AI起動失敗を安全な復旧案内へ接続
 
-推論workerの起動時エラーを固定3種類（依存部品を読めない／実行環境の種類が合わない／その他の初期化失敗）で返す。例外の私的pathや任意文字列をHTTP応答へ転送しない。特定DLLやVC++ installerを原因と断定せず、既存の「AI環境の配置」と基本操作の継続を案内する。WDとembeddingの両経路に適用し、音声・動画・動画内音声の準備も有限error_codeを保持する。失敗したembedding起動は所有process/pipe/telemetryを回収し、次の明示操作で再起動できる。旧workerの正常responseは互換、未知errorは一般案内。既存索引・タグ・原本・設定は書き換えない。
+推論workerの起動時エラーを固定3種類（依存部品を読めない／実行環境の種類が合わない／その他の初期化失敗）で返す。例外の私的pathや任意文字列をHTTP応答へ転送しない。特定DLLやVC++ installerを原因と断定せず、既存の「設定」→「AI検索の準備」→「配置済みを指定」と基本操作の継続を案内する。WDとembeddingの両経路に適用し、音声・動画・動画内音声の準備も有限error_codeを保持する。失敗したembedding起動は所有process/pipe/telemetryを回収し、次の明示操作で再起動できる。旧workerの正常responseは互換、未知errorは一般案内。既存索引・タグ・原本・設定は書き換えない。
 
 生成CPU関連88件（追加wire前）、最終wire6件、基本Python3.11の新経路9件、固定エラー日本語coverage4件、Core worker案内11項目とaudio/video関連、WinUI Portable buildがPASS。初回CPUのsandbox Temp拒否とCore試験の文言条件過剰は別の試験要因としてraw保持。coverageで検出した既存19件の英語エラー未翻訳も補完した。証拠`data/ai-ui/continuation-20261029/`。新しい案内のGUI・実runtime DLL不足・clean Windowsは未確認。依存ファイルの取得/実行/OS導入は行っていない。
 
@@ -78,3 +78,8 @@ R13 DOING/ALPHA未完/R14 PARTIAL。専用OCR保留、U09/U11/U13/U14、実音�
 旧worker readerは2件queueへのblocking putにより、過剰stdout/EOF/不正JSONの通知時に消費者のない旧queueへ停止できた。既存136d22bのreader＋生成StringIO/専用queueで再現し、repro thread自身はdrainして回収。新readerはnonblocking putとprocessごとのfault eventを使い、overflowを検出したら所有workerの応答を不正として回収する。旧queueのfaultが次のworkerへ混入しない。JSONの過深さも応答異常として扱う。
 
 最終新wire/実所有Python child/cleanupと既存release/audio/video protocol関連45件PASS。基本Python3.11でも実所有childのoverflow→reader終了→pipe/child回収がPASS。model/GPUを使わない。source再現はモデルや通常画面のcrash実証ではなく、異常なprivate worker出力に対する後始末改善。証拠`data/ai-ui/continuation-20261029/worker-reader-*`。
+
+
+### 2026-10-29：整合性検査の性能案は不採用
+
+全SHA検証と前後の原本検査を保ったまま重複パス確認を減らし、開いたハンドルの照合を追加する案を生成sealed packで比較した。525ファイル/590,793bytes・各1回ではguard 2,162→1,637回、時間1.470→2.719秒で、高速化は確認できなかった。関連89件は通ったが性能改善としては採用せず、製品コードと追加テストを戻した。提案source・生成結果は `data/ai-ui/continuation-20261029/runtime-digest-bench01/`、旧検査は維持。実5GB環境の起動速度改善や一般的な性能値とは扱わない。取消・既定照合・任意オフ設定も変更していない。
