@@ -4,6 +4,9 @@ import io
 import json
 from pathlib import Path
 import sys
+import queue
+import subprocess
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -15,6 +18,42 @@ from ai_process import AIUnavailable,AIWorkerUnavailable,EncoderProcess,worker_f
 
 
 class InferenceFailureTests(unittest.TestCase):
+    def test_real_owned_child_is_reaped_after_response_overflow(self):
+        encoder=EncoderProcess('unused','unused')
+        child=subprocess.Popen([sys.executable,'-u','-c','import sys,time;print("{}\\n{}\\n{}",flush=True);time.sleep(10)'],
+            stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,encoding='utf-8',
+            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        encoder.process=child
+        thread=threading.Thread(target=encoder._read,args=(child,encoder.responses,encoder.protocol_fault),daemon=True)
+        try:
+            thread.start();thread.join(2)
+            self.assertFalse(thread.is_alive());self.assertTrue(encoder.protocol_fault.is_set())
+            with self.assertRaises(AIUnavailable):encoder._response(.1)
+            self.assertIsNotNone(child.poll());self.assertIsNone(encoder.process)
+            self.assertTrue(child.stdin.closed and child.stdout.closed)
+        finally:encoder.close();thread.join(2)
+
+    def test_surplus_worker_output_does_not_strand_a_reader_on_an_abandoned_queue(self):
+        from types import SimpleNamespace
+        encoder=EncoderProcess('unused','unused');responses=queue.Queue(maxsize=2);fault=threading.Event()
+        process=SimpleNamespace(stdout=io.StringIO('{"ready":true}\n{"vector":[]}\n{"unexpected":true}\n'))
+        thread=threading.Thread(target=encoder._read,args=(process,responses,fault),daemon=True);thread.start();thread.join(1)
+        self.assertFalse(thread.is_alive());self.assertTrue(fault.is_set());self.assertEqual(responses.qsize(),2)
+        self.assertFalse(encoder.protocol_fault.is_set())  # The old queue cannot fault a replacement.
+        encoder.responses=responses;encoder.protocol_fault=fault
+        with patch.object(encoder,'_stop') as stop:
+            with self.assertRaisesRegex(AIUnavailable,'Invalid AI worker response'):encoder._response(.01)
+            stop.assert_called_once()
+
+    def test_full_queue_at_eof_or_parse_failure_also_never_blocks_cleanup(self):
+        from types import SimpleNamespace
+        for line in ('','not-json\n'):
+            encoder=EncoderProcess('unused','unused');responses=queue.Queue(maxsize=2);fault=threading.Event()
+            responses.put({'old':1});responses.put({'old':2})
+            thread=threading.Thread(target=encoder._read,args=(SimpleNamespace(stdout=io.StringIO(line)),responses,fault),daemon=True)
+            thread.start();thread.join(1)
+            self.assertFalse(thread.is_alive());self.assertTrue(fault.is_set())
+
     def test_classification_uses_types_and_windows_codes_never_private_text(self):
         for error,expected in ((ImportError('C:/private/model.dll'),'DependencyUnavailable'),
                                (OSError('DLL load failed: private'),'InitializationFailed'),

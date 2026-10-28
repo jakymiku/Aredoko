@@ -39,6 +39,7 @@ class EncoderProcess:
         self.process = None
         self.lock = threading.Lock()
         self.responses = queue.Queue(maxsize=2)
+        self.protocol_fault = threading.Event()
         self.device = ''
         self.telemetry = {}
         self._closed = False
@@ -52,22 +53,30 @@ class EncoderProcess:
     def resident(self):
         return self.process is not None and self.process.poll() is None
 
-    def _read(self, process, responses):
+    def _read(self, process, responses, fault):
+        def deliver(value):
+            try:responses.put_nowait(value);return True
+            except queue.Full:
+                # A stopped/replaced owner no longer consumes this exact queue.
+                # Never strand a daemon on put(), or poison a later worker.
+                fault.set();return False
         try:
             while True:
                 line = process.stdout.readline(100_001)
                 if not line or len(line)>100_000:
-                    responses.put({'error':'Worker stopped'})
+                    deliver({'error':'Worker stopped'})
                     return
-                responses.put(json.loads(line))
-        except (ValueError,OSError):
-            responses.put({'error':'Invalid worker response'})
+                if not deliver(json.loads(line)):return
+        except (ValueError,OSError,RecursionError):
+            deliver({'error':'Invalid worker response'})
     def _response(self, timeout=180):
+        if self.protocol_fault.is_set():
+            self._stop();raise AIUnavailable('Invalid AI worker response')
         try: result=self.responses.get(timeout=timeout)
         except queue.Empty:
             self._stop()
             raise AIUnavailable('AI worker timed out')
-        if type(result) is not dict:
+        if self.protocol_fault.is_set() or type(result) is not dict:
             self._stop();raise AIUnavailable('Invalid AI worker response')
         if 'error' in result: raise worker_failure(result)
         return result
@@ -82,6 +91,7 @@ class EncoderProcess:
         env=os.environ.copy()
         env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',PYTHONIOENCODING='utf-8',PYTHONDONTWRITEBYTECODE='1')
         self.responses=queue.Queue(maxsize=2)
+        self.protocol_fault=threading.Event()
         arguments=['--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())]
         if self.gpu_budget_mib is not None:arguments.extend(['--gpu-budget-mib',str(self.gpu_budget_mib)])
         try:command=worker_command(self.python,Path(__file__).with_name('ai_worker.py'),arguments,cancelled=lambda:self._closed)
@@ -90,7 +100,7 @@ class EncoderProcess:
         self.process=subprocess.Popen(command,
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,text=True,encoding='utf-8',env=env,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-        threading.Thread(target=self._read,args=(self.process,self.responses),daemon=True).start()
+        threading.Thread(target=self._read,args=(self.process,self.responses,self.protocol_fault),daemon=True).start()
         try:
             hello=self._response()
             if (hello.get('dimension')!=self.profile.dimension or hello.get('profile')!=self.profile.key
