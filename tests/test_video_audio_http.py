@@ -177,5 +177,17 @@ class VideoAudioHTTPTests(unittest.TestCase):
         self.assertEqual(code,200);self.assertEqual(frozen['mode'],'video-audio-similar')
         self.assertEqual(frozen['items'][0]['id'],row['id']);self.assertEqual(self.feature.encoder.calls,before)
 
+    def test_initialization_failure_returns_restart_guidance_without_breaking_library(self):
+        failure=RuntimeError('generated private initialization detail')
+        with patch('audio_direct_feature.IndexStamp',side_effect=failure),patch.object(self.feature.encoder,'close',wraps=self.feature.encoder.close) as closed:
+            code,reply=self.request('/api/library/video-audio-ai/start',{'consent':True})
+            self.assertEqual(code,503);self.assertIn('再起動',reply['error']);self.assertNotIn('private',reply['error'])
+            code,status=self.request('/api/library/video-audio-ai/status')
+            self.assertEqual(code,200);self.assertEqual((status['state'],status['error_code']),('failed','audio_initialization_failed'))
+            self.assertFalse(status['available']);self.assertFalse(status['initialized'])
+            self.assertEqual(self.request('/api/library/roots')[0],200)
+            self.assertEqual(self.request('/api/library/video-audio-ai/start',{'consent':True})[0],503)
+            self.feature.close();closed.assert_called_once()
+
 
 if __name__=='__main__':unittest.main()

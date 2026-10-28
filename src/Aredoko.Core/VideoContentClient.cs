@@ -34,7 +34,8 @@ public sealed record VideoContentStatus(bool Supported,bool Available,string Sta
 {
     public VideoItemProgress? ItemProgress {get;init;}
     public bool Busy=>State is "planning" or "waiting" or "running" or "cancelling";
-    public string Message=>!Supported?"現在のAIモデルは動画の内容検索に対応していません。"
+    public string Message=>ErrorCode=="video_initialization_failed"?"AI検索の初期化に失敗しました。アプリを再起動してから、もう一度実行してください。"
+        :!Supported?"現在のAIモデルは動画の内容検索に対応していません。"
         :!Available?"AI環境を準備すると、動画の内容から検索できます。"
         :State switch
         {

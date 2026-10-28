@@ -28,6 +28,8 @@ internal static class AudioContentTests
         using var http=new HttpClient(handler){BaseAddress=new Uri("http://127.0.0.1:8769/")};
         http.DefaultRequestHeaders.Add("X-Aredoko-Token","generated");
         var client=new AudioContentClient(http);
+        var failed=status.DeepClone().AsObject();failed["state"]="failed";failed["available"]=false;failed["error_code"]="audio_initialization_failed";
+        check(AudioContentStatus.Parse(failed.ToJsonString()).Message.Contains("再起動"),"audio initialization failure explains restart even when model unavailable");
         check(!(await client.StatusAsync()).Busy,"audio idle status does not claim active job");
         check((await client.StartAsync(new(){["root_ids"]=new JsonArray(7)})).Busy,"audio index status starts polling");
         check((await client.CancelAsync()).State=="cancelling","audio cancellation is visible");

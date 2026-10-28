@@ -29,6 +29,8 @@ internal static class VideoContentTests
         using var http=new HttpClient(handler){BaseAddress=new Uri("http://127.0.0.1:8769/")};
         http.DefaultRequestHeaders.Add("X-Aredoko-Token","generated");
         var client=new VideoContentClient(http);
+        var failed=status.DeepClone().AsObject();failed["state"]="failed";failed["available"]=false;failed["error_code"]="video_initialization_failed";
+        check(VideoContentStatus.Parse(failed.ToJsonString()).Message.Contains("再起動"),"video initialization failure explains restart even when model unavailable");
         check(!(await client.StatusAsync()).Busy,"video idle status is not active");
         check((await client.StartAsync(new(){["root_ids"]=new JsonArray(7)})).Busy,"video index status starts polling");
         check((await client.CancelAsync()).State=="cancelling","video cancellation is visible");

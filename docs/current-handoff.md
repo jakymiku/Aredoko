@@ -1,15 +1,15 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
-## 2026-10-28 Work継続checkpoint（動画内音声のcached類似検索、以下より優先）
+## 2026-10-28 Work継続checkpoint（cached動画音声類似と初期化/終了cleanup、以下より優先）
 
-- 起点`5641dfe863d3386dccf339ddc1bd852857d7e9f1`、同branch/open Draft PR #5のHEAD一致を確認。ユーザーの「止まってる？」を受け継続開発を再開。サブエージェントなし、現在クォータ％取得不可。今回commitは本書のGit履歴。
-- **新機能backend**：保存済みPCM索引から「音が似た動画」を探す`VideoAudioSimilarity`→共有audio owner→認証`video-audio-ai/similar`と固定mode `video-audio-similar`を追加。origin/candidateともvideoに限定し、通常audio-file類似/RGB動画類似と別mode/sourceを明示。追加decode/推論/モデル取得なし、モデルがavailable=falseでも同profileのcached索引を利用できる。
-- **根拠/安全性**：起点・候補それぞれのaudio開始/終了区間を返し、起点自身を除外。既存scorerを明示source別classで再利用し、正規化/厳密marker/破損除外、10万pair上限、最大2item分のvector保持、取消・原本/namespace/DB版変更・scopeを保全。通常AudioDirectSimilarityへvideo viewを誤投入すると引き続き拒否。固定結果は音声stampとscore spool予約を使用。
-- **Core/WinUIはsource接続まで**：右クリック「音が似た動画を探す」、専用固定mode/parser、起点→候補の正確な区間根拠/候補時刻からの動画再生、元検索への復帰と前後画面履歴の第三のsimilarity flagを追加。映像/通常音声の旧入口・番号/namespaceは保持。cached類似にmodel resident待ちを追加しない。
-- **確認**：新video-audio similarity5件＋既存audio similarity17件＋両認証cached類似HTTP2件 **24 PASS/9.756s**。実生成MKV/PCM・疑似3D encoder/独立DB、推論/decoder再使用なし、stable page・audio非混在・favorite/root/棚/除外、破損origin/candidate、取消/上限時の部分順位非公開、原本/DB stamp変更拒否、モデルavailable=falseのHTTP/固定結果を確認。py_compile成功。追加Core回帰は`--video-audio-content`sourceのみ、SDK/Windows不在でCore/C#/WinUI/Portable/nativeは**UNRUN**。配布builderはappの全.pyを含むことをsource確認し、新moduleの同梱漏れを避けた（新buildは未実施）。
-- **次**：Windows担当は[動画正本](video-similarity.md)末尾でCore `--video-audio-content`→既存音声/動画/favorite checks→cache build→生成fixtureの右クリック類似/両区間/seek/元検索/画面履歴を限定確認。Windowsなしの独立review対象は共有AudioDirectFeatureの初期化失敗/close経路（通常時の所有は確認済み、例外cleanupは未診断）。runtime固定成果物/配布方針は情報待ち、既存成功1時間性能caseを反復しない。
-- **前段保持**：`17a6612`音声時刻進捗→`12aa53e`動画内音声のguard入力/atomic保存→`28e5fae`owned API→`5641dfe`専用WinUI検索/区間/seek・両cancel APIのsource照合。音声全無音とvideo trackなしを区別し、batch枠/原本/backup/namespaceを保全。前段の正確な証拠/失敗は各正本。
-- 通常DB/settings/Alpha/ZIP/shortcut/私物変更0、実model/GPU/GUI/.NET/download/OS/Actions/main merge/shutdown0。installed AlphaはZIP10/source0138a58、今回source未配布。実model品質/複数track/映像と音声のrank統合・U7実入力/clean Windows等の残件を保持。
+- 起点`5641dfe`→**`dfaf1f6699ed662279ad63fc2fca1db41a4820ae`**で動画内音声のcached類似backend/Core/WinUI sourceをcommit/push。既存branch/open Draft PR #5を継続。今回cleanup commitは本書のGit履歴。ユーザーの「止まってる？」を受け再開、サブエージェントなし、現在クォータ％取得不可。
+- **新機能**：「音が似た動画」を保存済みPCM索引から比較するVideoAudioSimilarity→共有audio owner→認証`video-audio-ai/similar`/固定mode `video-audio-similar`を追加。origin/candidateともvideo限定、音声file/RGB類似と別mode/source。追加decode/推論なし、同profileのcached索引はモデルavailable=falseでも使用可。両区間、自己除外、10万pair cap/最大2item分buffer・破損/取消/原本・DB版/scope保全を継承。
+- **GUIはsourceまで**：動画の右クリック「音が似た動画を探す」、両区間の根拠/候補時刻再生、元検索復帰/前後画面履歴へ専用flagを追加。cached検索にmodel resident待ちを追加しない。通常audio/映像/代表frame/旧番号は保持。関連 **24 PASS/9.756s**（新類似5＋既存音声類似17＋両認証HTTP2）、py_compile成功。実model/Windows品質の確認ではない。[動画正本](video-similarity.md)末尾。
+- **追加の再現・修正**：audio/video Jobsが開始失敗threadをjoinしてcleanupを止める経路、未初期化Featureの二重encoder.close、音声role登録拒否時の新encoder未close、Feature初期化途中ownerの公開を修正。ownerとmonitorはconfigure後に一括公開、失敗はlocal owner/idle threadを回収し閉じたencoderの再利用を禁止。closeはinit_lockで一回だけ、初期化取消は先にclosed/eventを通知して既存catalog/fence待ちを中断する。
+- **失敗時の利用者向け応答**：初期化後段失敗は安全なAIUnavailable→HTTP503、statusは未初期化/failed・`audio_initialization_failed`または`video_initialization_failed`、Core sourceで再起動を案内。私的な例外文は応答へ出さず、causeを保持。通常ライブラリ/原本/既存索引は継続利用できる。
+- **cleanup確認**：新6methodの旧実装はsubtest込み**7 FAIL/4 ERROR・0.455s**（thread join例外等と新終了契約の不一致）。修正後のfault/旧初期化取消/動画通常経路/新HTTP3は **18 PASS/5.014s**。開始済みidle threadの回収を追加観測した1件 **PASS/0.076s**、py_compile成功。前段成功との重複合算なし。Coreのエラー表示回帰sourceも追加したが、SDK/Windowsなしで**Core/C#/WinUI/Portable/nativeはUNRUN**。[音声正本](audio-producer-review.md)末尾。
+- **次の1件（Windows）**：Core `--video-audio-content`→`--audio-content`/`--video-content`/`--favorite-patch`→既存cacheのWinUI/Portable build。生成fixture/独立DB/settingsで右クリック音声類似→両区間/seek→元検索/前後画面履歴/scope保持、前段専用準備の取消/再表示を限定確認。手順は動画正本末尾。今回packagerはapp全.py同梱をsource確認済み、新build未実施。新しい独立作業は現行queueと発見済み不具合を確認して選ぶ。runtime固定成果物/配布方針は情報待ち、成功1時間性能caseは反復しない。
+- 前段`17a6612`音声時刻進捗/`12aa53e`guard入力・atomic保存/`28e5fae`owned API/`5641dfe`専用検索・区間・seek/両cancelのsource照合を保持。通常DB/settings/Alpha/ZIP/shortcut/私物変更0、実model/GPU/GUI/.NET/download/OS/Actions/main merge/shutdown0。AlphaはZIP10/source0138a58、今回source未配布。複数track・音声映像rank統合/実model品質・U7実入力/clean Windows等は未受入。
 
 ## 2026-10-28 Work継続checkpoint（動画の区間進捗・1時間生成case、以下より優先）
 

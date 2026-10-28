@@ -299,7 +299,7 @@ dotnet run --project tests/Aredoko.Core.Tests -c Release -- --favorite-patch
 
 ## 2026-10-28 Work：保存済み動画内音声のvideo-to-video類似検索
 
-`VideoAudioSimilarity`は既存AudioDirectSimilarityの厳密scorerを明示source別classで利用する。通常audio classのsource_kind=audio制約を保ち、video classはvideo viewだけを許可。共通処理のmanifest/catalog kind/output mode/sourceだけを選び、RGB namespaceへfallbackしない。mode=`video-audio-similar`、source=`video-audio-direct`、origin_kind=video、行audio_match_source=video-audio/contract=direct-audio-window:v1、候補/起点両方の開始・終了msを返す。正規化・不完全/破損window除外・candidateを逐次解放・10万pair上限と32MiB/frame memory予算をそのまま保持する。追加decode/推論は行わない。
+`VideoAudioSimilarity`は既存AudioDirectSimilarityの厳密scorerを明示source別classで利用する。通常audio classのsource_kind=audio制約を保ち、video classはvideo viewだけを許可。共通処理のmanifest/catalog kind/output mode/sourceだけを選び、RGB namespaceへfallbackしない。mode=`video-audio-similar`、source=`video-audio-direct`、origin_kind=video、行audio_match_source=video-audio/contract=direct-audio-window:v1、候補/起点両方の開始・終了msを返す。正規化・不完全/破損window除外・candidateを逐次解放・10万pair上限と1 itemあたり32MiBのvector buffer予算をそのまま保持する。追加decode/推論は行わない。
 
 同じowned audio jobのsimilar(source_kind=video)を、認証POST `/api/library/video-audio-ai/similar`と固定結果modeへ接続。厳格body/未知field/認証、root/棚/除外/候補側favorite、起点自身除外を維持する。モデルavailable=falseでも同profileの保存済み索引を使える。音声file originをvideo類似へ、video originを音声file類似へ渡すと404。固定結果はPCM stampとAI spool予約を使い、別namespaceの索引を参照しない。取消/上限/原本・DB版変更は部分順位を公開しない。
 

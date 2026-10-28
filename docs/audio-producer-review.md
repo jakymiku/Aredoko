@@ -197,3 +197,21 @@ Windowsで必要な限定確認：独立DBに生成音声2件を準備し、停�
 Coreは最大24h/2880区間・ceil(prepared_ms/30000)・phase/state/保存前の整合を検証し、旧field省略/nullも受理。WinUI sourceは「何分まで解析済み／総尺確認中・未保存」を表示し、unknown totalのbarはindeterminateにする。stage区間は永続resumeとして扱わず、中断したitemは次回初めから準備する旨をtooltipへ追加。成功markerによる完了item再利用・原本guard・atomic publication・無音skip・namespaceは維持。観測を閉じてもjobが続く既存所有を保つ。
 
 関連index/jobs/認証HTTP/feature **46 PASS/9.404s**。2区間目encoderを止め、statusが30000ms/total null/区間1/公開件数0で応答すること、観測objectがjobを変更しないこと、取消後旧索引保持/current消去→再開始・保存成功後もcurrent消去を確認。無音30秒→有音tailの時刻と区間数は進むがencodeは1回。実生成31.25秒WAVの逐次入力でも最後のsavingだけtotal=31250となる。新しいCore `--audio-content`のparser/文言回帰はsourceのみで、.NET/WinUI/Portable/nativeは未実行。実model/GPU/取得/通常DB/配布変更なし。既存成功flowを無変更で反復しない。
+
+
+## 2026-10-28 Work：音声/動画ownerの初期化失敗・終了cleanup修正
+
+cached動画内音声類似の接続後、共有AudioDirectFeatureと対になるVideoDirectFeatureの失敗経路をreview。生成独立DB＋CPU fake encoder＋thread/monitor失敗注入だけで次を確認した。実model/GUI/GPU/新downloadは使わない。
+
+- Jobsのmain thread.start失敗後のcloseが未開始thread.joinで例外になりcheckpointへ進まない。idle thread.start失敗ではjoin例外がencoder.closeの手前で発生する。audio/video双方に存在した。
+- 未初期化Feature.closeを二度呼ぶとencoder.closeを二度呼ぶ。標準EncoderProcess自体は恒久closeだが、Featureのcaller-owned encoder境界では一度だけ所有回収する契約へ統一する。
+- 音声のrole登録が拒否されたとき、新しく作ったencoderがcloseされない（video側は既に回収）。拒否されたencoderだけを閉じ、既存image/audio/video peersは触らない。
+- audio Featureはmonitor初期化前にownerを公開しており、後段失敗でもinitialized=true/monitor=Noneになりうる。video側も後段失敗でencoderを恒久closeした後、再要求がそのencoderを使えるように見える。新しいterminal失敗契約で再利用を禁止する。
+
+Jobsはstart失敗したidle threadの参照を戻してconfigureの再試行を可能にし、closeではidentがない未開始threadをjoinしない。通常の開始済みthreadは従来どおり停止/回収してからcheckpointする。Featureはlocal ownerをconfigure→monitor構成→閉鎖再確認の後に一括公開する。後段失敗時はlocal monitor/owner/idle thread/encoderを回収し、closed/eventを通知して再利用を拒否。init_lock内の一回だけのcleanupと、lockを待つ前の取消通知を分け、既存catalog guard/writer fence待ちの中断を維持した。
+
+初期化失敗の通常Exceptionはcauseを保って安全なAIUnavailableへ変換し、認証HTTP503を返す。statusはinitialized=false/available=false/state=failed/error_code=audio_initialization_failed（映像はvideo_initialization_failed）。Core sourceではこのerrorを環境未導入より優先して再起動を案内する。通常ライブラリは動き、既存原本/索引を書き換えない。KeyboardInterrupt等のBaseExceptionは変換せず、cleanup後に元例外を再送出する。後段でencoderを閉じる前のDB初期化待ち等は従来の取消/再要求契約を維持する。
+
+旧実装の新6methodはsubtest込み **7 FAIL/4 ERROR・0.455s**。thread joinの実例外と、二重close/公開途中owner/新terminal契約不一致を記録。修正後のfault6＋旧音声Feature3＋旧動画Feature6＋HTTP3は **18 PASS/5.014s**。HTTPではrestart案内/私的な例外文の非公開/同じFeatureの再実行拒否、通常roots APIの応答、close一回、通常video-audio/音声共有owner・cached類似保全を確認した。monitor失敗時に実際に開始済みのidle threadが生存しないことを追加観測した **1 PASS/0.076s**。py_compile成功。重複runは合算しない。
+
+Core `--audio-content`/`--video-content`へavailable=false時も初期化失敗を再起動と表示する回帰sourceを追加。**SDK/Windows不在で未実行**。Windows担当は前段video-audio/Core/build/native確認と併せる。OSがthreadを一切作れない環境全体やcleanup自身のOS I/O障害に対する完全復旧保証ではなく、失敗したAI機能はアプリ再起動まで停止する。通常DB/settings/Alpha/shortcut/ZIPは未更新。

@@ -156,7 +156,9 @@ class VideoDirectJobs:
             if self.closed:raise AIUnavailable('Video owner is closing')
             self.idle_seconds=idle_release_seconds
             if idle_release_seconds and self.idle_thread is None:
-                self.idle_thread=threading.Thread(target=self._idle,name='direct-video-idle',daemon=True);self.idle_thread.start()
+                self.idle_thread=threading.Thread(target=self._idle,name='direct-video-idle',daemon=True)
+                try:self.idle_thread.start()
+                except BaseException:self.idle_thread=None;raise
 
     def release(self):
         with self.guard:
@@ -189,10 +191,10 @@ class VideoDirectJobs:
             with self.guard:
                 if self.closed:return
                 self.closed=True;self.cancelled.set();self.idle_stop.set()
-        if self.idle_thread:self.idle_thread.join()
+        if self.idle_thread is not None and self.idle_thread.ident is not None:self.idle_thread.join()
         # Closing only our encoder must not wait behind the other owner's whole
         # index batch. EncoderProcess.close also cancels its pre-launch checks.
         # Its own lock serializes any in-flight encode; no peer is touched here.
         self.encoder.close()
-        if self.thread:self.thread.join()
+        if self.thread is not None and self.thread.ident is not None:self.thread.join()
         self.index.store.checkpoint()

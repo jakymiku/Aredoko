@@ -1,4 +1,5 @@
 """Lazy production-facing audio feature. Status does not create a DB/worker."""
+import logging
 import threading
 
 from ai_process import AIUnavailable,EncoderProcess
@@ -12,7 +13,7 @@ from result_sessions import IndexStamp
 class AudioDirectFeature:
     def __init__(self,catalog,image_ai,*,encoder_factory=None,stage_parent=None):
         self.catalog,self.image_ai=catalog,image_ai
-        self.stage_parent=stage_parent;self.owner=None;self.monitor=None;self.closed=False
+        self.stage_parent=stage_parent;self.owner=None;self.monitor=None;self.closed=False;self.cleanup_done=False;self.initialization_failed=False
         self.init_lock=threading.Lock();self.close_event=threading.Event();self.idle_seconds=getattr(image_ai,'_idle_seconds',0);self.encoder=None;self.inference=None
         group=getattr(image_ai,'inference_group',None)
         if (group is not None and image_ai.profile.adapter=='embeddinggemma2'
@@ -21,16 +22,20 @@ class AudioDirectFeature:
             self.encoder=(encoder_factory(profile) if encoder_factory is not None else
                           EncoderProcess(image_ai.encoder.python,image_ai.encoder.model,profile,
                               gpu_budget_mib=image_ai.encoder.gpu_budget_mib))
-            self.inference=group.for_encoder(self.encoder)
+            try:self.inference=group.for_encoder(self.encoder)
+            except BaseException:
+                self.encoder.close()
+                raise
 
     def status(self):
         available=self.encoder is not None and bool(getattr(self.encoder,'available',True)) and not self.closed
         if self.owner is not None:return {'supported':True,'available':available,'initialized':True,**self.owner.status()}
-        return {'supported':self.encoder is not None,'available':available,'state':'idle','resident':False,
+        return {'supported':self.encoder is not None,'available':available,'state':'failed' if self.initialization_failed else 'idle','resident':False,
                 'initialized':False,'candidate_total':0,'target':0,'processed':0,'indexed':0,
-                'reused':0,'unavailable':0,'remaining_candidates':0,'job_id':None,'error_code':None,'item_progress':None,'source_kind':'audio'}
+                'reused':0,'unavailable':0,'remaining_candidates':0,'job_id':None,'error_code':'audio_initialization_failed' if self.initialization_failed else None,'item_progress':None,'source_kind':'audio'}
 
     def _ensure(self,*,require_model=True):
+        if self.initialization_failed:raise AIUnavailable('音声検索の初期化に失敗しました。アプリを再起動してから、もう一度実行してください。')
         if self.closed or self.encoder is None:raise AIUnavailable('音声の内容検索に対応するAI環境がありません。')
         if require_model and not bool(getattr(self.encoder,'available',True)):raise AIUnavailable('音声検索のモデルが未準備です。')
         with self.init_lock:
@@ -42,9 +47,26 @@ class AudioDirectFeature:
                 except (MediaDecodeCancelled,InterruptedError):
                     if self.closed:raise AIUnavailable('Audio feature is closing') from None
                     raise
-                if self.closed:owner.close();raise AIUnavailable('Audio feature is closing')
-                owner.configure(idle_release_seconds=self.idle_seconds)
-                self.owner=owner;self.monitor=IndexStamp(owner.index)
+                monitor=None
+                try:
+                    if self.closed:raise AIUnavailable('Audio feature is closing')
+                    owner.configure(idle_release_seconds=self.idle_seconds)
+                    monitor=IndexStamp(owner.index)
+                    if self.closed:raise AIUnavailable('Audio feature is closing')
+                except BaseException as error:
+                    # Closing an encoder is permanent. Do not retry a partially
+                    # initialized owner with that already-closed encoder.
+                    self.initialization_failed=not self.closed
+                    self.closed=True;self.close_event.set()
+                    try:
+                        if monitor is not None:monitor.close()
+                        self._cleanup_locked(owner)
+                    except Exception:
+                        logging.getLogger(__name__).exception('Failed cleaning audio owner initialization')
+                    if isinstance(error,Exception) and not isinstance(error,AIUnavailable):
+                        raise AIUnavailable('音声検索の初期化に失敗しました。アプリを再起動してから、もう一度実行してください。') from error
+                    raise
+                self.owner=owner;self.monitor=monitor
             return self.owner
 
     def start(self,body):
@@ -96,9 +118,18 @@ class AudioDirectFeature:
         self.idle_seconds=idle_release_seconds
         if self.owner is not None:self.owner.configure(idle_release_seconds=idle_release_seconds)
 
+    def _cleanup_locked(self,owner=None):
+        # init_lock serializes cleanup callers, while closed/close_event above
+        # can interrupt initialization before this lock becomes available.
+        if self.cleanup_done:return
+        self.cleanup_done=True
+        try:
+            target=owner if owner is not None else self.owner
+            if target is not None:target.close()
+            elif self.encoder is not None:self.encoder.close()
+        finally:
+            if self.monitor is not None:self.monitor.close()
+
     def close(self):
         self.closed=True;self.close_event.set()
-        with self.init_lock:
-            if self.owner is not None:self.owner.close()
-            elif self.encoder is not None:self.encoder.close()
-            if self.monitor is not None:self.monitor.close()
+        with self.init_lock:self._cleanup_locked()
