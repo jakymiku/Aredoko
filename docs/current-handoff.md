@@ -6,6 +6,8 @@
 - **Windows側の未確認を補完**：Coreのvideo-audio/audio/video/favorite各限定suite、Portable/frontend01 publishがPASS。既存picker3件/SDK trim警告は保持。同梱基本Python3.11＋生成素材の新video stream/video-audio source/index/HTTP/similarity/owned cleanupは44tests/30.544s PASS。source`9b7d91d`、証拠`data/ai-ui/work-sync-20261028/windows-build-review.json`と各log。
 - **現在の次**：動画内音声の準備/取消/再開→文章/音の類似→画面履歴、および一括favoriteの同一session/一覧外選択/favorites fallbackを、frontend01・専用DB/生成素材/CPU vectorの2ケースへ準備。GUIは2ケース各1試行の質問が回答待ちで未実施。実再生/seek・実model品質・GPU・通常DB・Alphaは対象外。新しい実装へ入る場合もこの既存binとsourceを区別する。
 - **追加の統合改善**：動画用途の初期ガイドに映像/動画内音声の別索引を案内し、共有audio ownerの他kind進捗を自分の進捗として表示しないよう補強。Core setup35/同梱Python setup8 PASS。ユーザーガイドにも新機能の入口とAlpha未収録を追記。この追加UIのnative受入は未実施。
+- **追加CPU進捗**：Workの音声/動画のindex/search/jobs/PCM streamをWindows基本Pythonで92tests PASS。`4205e87`はprivate pair内のDB版queryを最大64pair間隔へ削減、取消/catalog/profileと公開前/返却時guardは維持。768D/1万pairの単回は10,012→168query、0.520→0.467s、ID/score/両区間同一。39 unique関連method PASS（初回runner71にはimport再収集の重複あり）、新2件だけも再確認。基本ZIP11/source692d66cは全Core/Portable/同梱CPU34まで、後続perfは未収録。
+- **MSVC取得の明示許可は実施済み**：公式ファイル18,731,856bytes/version14.51.36247.0、Microsoft署名ValidとSHAを固定。[公開可能な取得receipt](msvc-runtime-source-20261028.json)。新しい静的inspect tool/生成7件と実Windows metadata読取も確認。installer実行/展開/OS導入/DLLコピー/catalog登録0。runtime EULAとVSの再配布許諾の対応は未承認であり、署名確認を公開承認にしない。GUI2ケースの質問は別で、回答待ちのまま。
 - AlphaはZIP10/source0138a58のまま。Work sourceはまだ配布物へ未反映。runtime固定取得物/再配布条件/host/clean Windows、実媒体品質、HC/DPI/RSSは残る。PC使用中のGUI/GPU事前確認を継続し、shutdownしない。
 
 ## 2026-10-28 Work継続checkpoint（cached動画音声類似と初期化/終了cleanup、以下より優先）

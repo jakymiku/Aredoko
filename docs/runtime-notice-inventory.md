@@ -104,3 +104,12 @@ python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --su
 `tools/inspect_msvc_redist.py --source <EXE> --source-url <公式URL> --output <新JSON>`を追加。最大96MiBの通常EXEをSHA256/サイズ/PE stubで照合し、Windowsの[Get-AuthenticodeSignature](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/get-authenticodesignature)とFileVersionInfoで有効なMicrosoft署名/版/製品名を読む。選択EXEの実行・展開・OS導入・DLLコピーはしない。x64 installerのstubがx86でもpayload architectureと混同せず、payload検証/取得URL由来の証明/再配布承認/clean Windowsはfalseに残す。[公式案内](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)の可変URLを固定catalogの代用にしない。
 
 生成7tests PASS、基本Pythonの初期6testsもPASS。生成した未署名bootstrapを読むWindows metadata確認は、親PS7のPSModulePathによりinbox PS5.1が互換性のないmoduleをautoloadして初回失敗。子processだけinbox Modulesを参照するようにし、署名NotSignedと版を読取成功。実行policy/OS環境を変更しておらず、raw失敗JSONと修正後証拠を保持する。実MSVCファイルは今回まだ取得せず、具体的取得許可の回答待ち。ライセンスや取得物の承認完了とはしない。
+
+
+### 2026-10-28 明示許可後の実成果物確認
+
+公式x64 EXEを専用先へ1回取得し、**14.51.36247.0 /18,731,856bytes / SHA256 `843068991daaa1f73ad9f6239bce4d0f6a07a51f18c37ea2a867e9beca71295c`**、Windows署名status=Valid/署名者Microsoft Corporationを確認。[公開可能な取得元receipt](msvc-runtime-source-20261028.json)に公式redirect後URL・版・容量・hashを記録。最新版リンクの内容を推測で固定したものではない。installerのPE stubはx86で、内部x64 DLLの検証とは区別した。
+
+公式ページが示す現行v14 runtimeライセンス原文（39,553bytes、SHA`08651651…`）も読み取り保存。インストール・利用の許諾と再配布の条件は同一と扱わず、runtimeの再配布制限と、別途のVisual Studio REDIST許諾との適用関係を確認する必要がある。**取得/署名確認は再配布承認ではない**。元EXE/ライセンスはignored evidence内だけ、Gitにbinaryを含めない。実行/展開/OS導入/DLLコピー/AI pack変更/catalog登録は0。
+
+次は適用するVS配布許諾と対象版の照合、ZIP方針に合う正式なapp-local CRT入手方法の決定→許可された別出力先で依存DLL一式/loader/通知を確認する。central導入を採用する場合も利用者の明示操作と権限・取消を扱い、ソフトが黙ってinstallerを実行する設計にしない。今回の取得許可をインストール許可へ拡張しない。
