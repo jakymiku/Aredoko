@@ -5,9 +5,17 @@
 - 起点`5f9ab9f`、remote同一/cleanを確認して既存branch/PR #5で続行。今回はユーザーが通常のGUI/GPUテストを許可。shutdown指示は再適用しない。
 - `fe62f60`/`1789142`：固定CRT12DLL/完全通知を新規AI packへ組込み、全SHA封印→実CPU loaderでapp-local解決→生成PNG/実EG2 GPU・WD CPUまでPASS。旧runtime/通常DB/Alphaは不変。pack `data/ai-ui/continuation-20261029b/crt-runtime01`、23,918files/4,950,784,575bytes、manifest `9ac04f2d56895690dd620971f2d3ae1dcffe731d45ba5225b26a4f86f845f731`。公開権利/host/clean Windowsは未完で製品catalogへ登録しない。[正本と証拠](runtime-notice-inventory.md)。
 - `2f01d50`/`cbc1c9e`：ライブラリ/棚の長名captionを実際の枠幅へ合わせ、全文到達とselection/draftを保持。Light/Dark各25checks、size flyoutの残り修正7checks、計16PNG目視、正常exit0。frontend01/02はsourceを区別。[UI証拠](p3-continuous-browse.md)。
+- 並行Work `a6f6e04` のcached音声/動画内音声の初期化前検証を確認して統合。アプリcode競合なし、handoffの同位置追記は双方を保存。Windows基本Python3.11で新しい不正要求/両cached類似HTTPの3件PASS。双方のcommitを保持したmerge commitでPushする。
 - 次は新しいpackの輸送ZIP/公開前のnative通知対応と、今回UIを収録する基本ZIP16の通常入口を小単位で仕上げる。まだこの節は作業中。最終candidate・未検証・次の1件を終了時に更新する。新branch/PR/main merge/Actions/外部取得0。
 - 一度限りの依頼でmonitor消灯/復帰を試したが短時間で再点灯し、維持はできなかった。全専用controllerを終了、OS display_state=1へ復帰確認済み。電源plan/実行policy/OS機能は変更しない。以後のGUIは通常表示で続行。
 
+## 2026-10-29 Work軽量継続（類似検索の初期化前検証、以下より優先）
+
+- 起点 **`5f9ab9f34af136579dc1cc84dd7003f3e0ee037e`**。前回Work `9b7d91d`から18commits先行を確認し、変更されたローカルsnapshotを固定HEADへ同期。PR #5 open/Draftを確認。下段のWindows/Core/native/実worker・ZIP15受入を保持し再実施しない。今回commitは本書のGit履歴。
+- **軽い修正1件**：通常音声・動画内音声のcached類似が、不正なitem ID/page/limit/対象範囲でも400を返す前にowner/PCM索引を初期化する経路を修正。純粋な共通request validatorと既存catalogのscope検証をFeatureのlazy初期化より前へ移した。scorer側も同じvalidatorを使い、正しい検索・cached検索/上限/取消/原本guardは保全。
+- **確認**：新HTTP testは旧実装で1 FAIL/0.634s（ownerが作られる）。修正後、新HTTP＋両cached HTTP＋既存audio similarityは **20 PASS/7.153s**。生成sidecarを未作成状態にして全20不正リクエスト後もowner/monitor/sidecarなし・encode0を追加確認した1件 **PASS/0.577s**。重複を合算しない。py_compile成功。[音声正本](audio-producer-review.md)末尾。
+- 新C#/GUI/GPU/配布build・取得・通常DB/settings/私物/Alpha/OS/Actions/shutdown変更なし。下段の一度限りのshutdown指示は再適用しない。ここは部分snapshotで他端末の未push差分は未確認。
+- **次の1件は下段P6 CRT pack組込み準備を維持**。今回の軽量修正は次回のbackend同梱候補へ反映する。下段の静的展開許可を実DLLコピー/loader/import/worker確認へ拡張せず、Windows担当が具体的範囲を示して進める。
 
 ## 2026-10-29 ローカル継続の終了checkpoint（以下より優先）
 

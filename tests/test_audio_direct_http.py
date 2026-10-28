@@ -82,6 +82,23 @@ class AudioHTTPTests(unittest.TestCase):
         self.assertEqual(self.request('/api/library/audio-ai/start',raw=b'{"consent":true,"consent":false}')[0],400)
         self.assertIsNone(self.feature.owner);self.assertEqual(self.feature.encoder.calls,0)
 
+    def test_invalid_cached_similarity_is_rejected_before_lazy_initialization(self):
+        # This fixture's existing direct index is closed and owns no connection.
+        # Remove only its generated sidecar to observe lazy creation precisely.
+        sidecar=self.feature.encoder.profile.store_path(self.catalog.path)
+        self.assertEqual(sidecar,self.index.store.path);sidecar.unlink()
+        malformed=({'item_id':True},{'item_id':0},{'item_id':'1'},
+                   {'item_id':1,'page':True},{'item_id':1,'page':-1},
+                   {'item_id':1,'limit':True},{'item_id':1,'limit':0},{'item_id':1,'limit':121},
+                   {'item_id':1,'root_ids':[True]},{'item_id':1,'shelf_ids':[True]})
+        for route in ('audio-ai','video-audio-ai'):
+            for body in malformed:
+                with self.subTest(route=route,body=body):
+                    self.assertEqual(self.request('/api/library/'+route+'/similar',body)[0],400)
+        self.assertIsNone(self.feature.owner)
+        self.assertIsNone(self.feature.monitor);self.assertEqual(self.feature.encoder.calls,0)
+        self.assertFalse(sidecar.exists())
+
     def test_owned_job_query_and_release_routes_keep_time_evidence(self):
         self.prepare()
         code,state=self.request('/api/library/audio-ai/status');self.assertEqual(code,200)

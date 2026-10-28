@@ -236,3 +236,12 @@ owned jobが既に選択したcatalog titleのbasenameを、任意`item_progress
 audio ownerのidle loopだけ、共有inference枠を取る際のpeer releaseのAIUnavailable/RuntimeErrorを捕捉せず、監視threadが終了する経路を確認（video側は対応済み）。通常のアプリcrash/data損失ではなく、待機モデルの自動解放が次回以降行われなくなる可能性のある不具合。既存0.2秒waitを維持して次回へ進み、無限tight retry/他ownerの強制終了はしない。
 
 初回fault testはAIUnavailable import漏れのharness失敗として保持。import後の旧codeは本来のAIUnavailableで監視終了・resident保持を再現して1 FAIL。修正後は次回取得成功→自分のencoder解放→thread生存/共有lock回収、既存idle/所有初期化cleanupを含む8tests PASS（2.078s）。生成encoderのみ、実model/GPU/GUIなし。証拠`work-sync-20261028/audio-idle-before*.log`/`audio-idle-after01.log`。基本ZIP12にはこの後続修正は未収録。
+
+
+## 2026-10-29 Work軽量修正：不正なcached類似要求は初期化前に拒否
+
+最新5f9ab9fを起点に、AudioDirectFeature.similar/similar_video_audioが_ensureの後でID/page/limit/scopeを検証していた経路を確認。不正要求でもowner/monitorやPCM sidecarが作られうる。scorerの純粋なvalidate_similarity_requestを共用し、Featureで型/値/許可fieldとcatalogのroot/棚scopeを検証してからlazy ownerへ進む。DB guard/pair poll/取消/上限・kind別namespaceの処理は維持する。正常な形式の未知origin IDを事前に全件探索する変更ではない。
+
+生成DB＋疑似encoderの認証HTTPで、音声file/動画内音声両prefixへ不正ID・page・limit・root/shelf型を計20通り投入。旧実装は全て400でもownerを作り、新testで **1 FAIL/0.634s**。修正後、新HTTP＋両cached HTTP＋既存audio similarityは **20 PASS/7.153s**。さらに生成PCM sidecarだけを未作成状態にした新testで、20要求後もowner/monitor/sidecarなし・encode0を **1 PASS/0.577s** 確認。py_compile成功。重複runを合算しない。既存の正常cached検索はモデルavailable=falseのまま成功する。
+
+今回は軽量backend修正のみ。最新ローカルWindows受入/ZIP15や既存成功性能測定は再実施せず、新GUI/GPU/モデル取得/通常DB/settings/Alpha/OS変更なし。次回backendを含む配布候補にはこの修正も含める。
