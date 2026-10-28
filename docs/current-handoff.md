@@ -1,4 +1,18 @@
-# Aredoko — 現行の単一引き継ぎ（2026-10-28）
+# Aredoko — 現行の単一引き継ぎ（2026-10-29）
+
+## 2026-10-29 ローカル継続の終了checkpoint（以下より優先）
+
+- **基準**：cleanな`53c5093`から既存branch/PR #5を継続しremote更新なしを確認。他AIのWork完了分は再実装していない。最終アプリsource **`0edbd409c81e4baf79788deef9830f3b01d86c85`**、文書commitは `git log -1 -- docs/current-handoff.md`。PR metadataはconnector不調で再取得できず、remote branch/PR head refで照合する。新branch/PR/merge/Actionsなし。
+- **利用者向け改善**：`136d22b`でAI依存不足/architecture/初期化の固定エラーを日本語の安全な復旧案内へ接続し、起動途中workerを回収。`13ed761`で異常stdoutの満杯queueにreaderが取り残される再現を修正。通常索引/原本を壊す実証ではない。最終案内は実在の「設定」→「AI検索の準備」→「配置済みを指定」。関連CPU/基本Python3.11/Core/WinUI build PASS。[AI環境](ai-runtime-setup.md)。
+- **完成形UIを一単位前進**：`31f32dc`で詳細の重複ファイル名を除き、長名を最大3行/省略/全文到達付きへ。階層付き位置と未保存タグは保持、元検索へ戻る表示を短縮。14/source29114e6でLight/Dark各9checks・計6PNG目視・正常exit0。初回Lightのfixture期待145対2は起動前のharness失敗、追加回答後に修正。小gridの長名/全カード、HC/実DPI/clipboard/hoverは未受入。[主画面](p3-continuous-browse.md)。
+- **前回のGUI残件を解消**：13のUI/sourcea2bc5d2＋backend136d22bで、動画内音声の準備/中断/再開・処理名・文章/音声類似/両区間/画面履歴14checks、745件一括favoriteの同一session/一覧外選択/favorites fallback12checksがPASS。全9PNG目視、双方exit0。初回のツール実行制限/UIA再利用失敗は残し、追加各1試行の許可範囲だけ実施。再生/seekや実モデル品質の受入ではない。
+- **動画内音声の実workerも限定PASS**：`29114e6`のtoolで生成2動画を専用DBへ索引し日本語2問が狙ったTop1、解放後のcached類似と両時刻まで確認。完全runtime照合161.875秒/約4.95GB→index32.547秒、PyTorch peak1,121.5MiB/上限3,072MiB。childは停止（既存kill式exit1）。初回は照合を180秒予算に含めた試験停止でGPU未開始、追加許可後は照合を別CPU工程へ移し省略せず成功。実録音/音楽/長動画の品質とは区別。[動画](video-similarity.md)。
+- **P6の正式CRT実体を前進**：`5c83009`/`5af2e86`で固定公式EXEを許可後に静的展開し、READONLY MSI対応表とx64 minimum **12DLL/2,666,168bytes/14.51.36247.0/署名Valid**を照合。既知不足msvcp140_1.dllも含む。[固定inventory](msvc-crt-inventory-20261029.json)/[残件](runtime-notice-inventory.md)。実installer/MSI action/DLL実行・OS install・既存runtimeへのコピー・公開0。今回の静的許可は消費済み。
+- **最新候補：基本ZIP15/source0edbd40**、`dist/portable-basic-20261029-15/Aredoko/Aredoko.exe`。822files/661,730,728bytes、ZIP348,427,988bytes。最終publish/全payload・ZIP/同梱check・基本CPU34/EOF exit0/integrity PASS。14の全Core1,438をsource差分照合で再利用し案内11項目だけ追加確認。15自体のGUI通常起動は未実施、14の限定nativeを15の新規受入とはしない。[正確なSHA/範囲](portable-refresh-20261024.md)。Alphaは従来ZIP10/source0138a58のまま。
+- **不採用案を残さない**：runtime検査の重複path削減＋handle照合は生成525fileで1.470→2.719秒、速くならず未commit案を戻した。CPU89件成功も高速化の証明にはせず、案と比較証拠だけignored出力へ保存。既定の完全検査/任意オフ/取消を維持。
+- **次の1件：P6の新規CRT packへの組込み準備**。上記12DLLの固定実体を使い、適用するVS配布条項/NOTICE、既存root/wheel内の旧CRTとの関係と配置方針を確定する。別出力にだけ組み込めるbuilderを小単位で作り、実DLLコピー/loader/import/worker確認が必要なら具体的範囲を提示して許可を得る（今回の静的展開許可へ拡張しない）。同じ公式EXE取得・一覧・成功済みnative/GPUを反復しない。その後immutable host/trusted registry/clean Windowsへ。UIはこれら全受入を待たず並行継続。
+- **残り/保全**：実媒体品質/複数track/rank融合/再生seek、U7実入力、HC/物理DPI/長時間RSS、公開runtime/clean Windows。M1/M2/全ロードマップは未完。生証拠root `data/ai-ui/continuation-20261029/`（Git対象外）。通常DB/settings/私物/Alpha変更0、追加モデル取得0。GUI/GPUは回答済み範囲を消費、次回PC使用中なら再び具体的に質問する。**ユーザーの最新一度限りの指示で、保存/Git/引き継ぎ確認後に `Stop-Computer`（Forceなし）を実行する**。強制終了や制限回避はしない。将来の継続に常時shutdown指示として持ち越さない。
+
 
 ## 2026-10-28 ローカル継続の終了checkpoint（以下より優先）
 

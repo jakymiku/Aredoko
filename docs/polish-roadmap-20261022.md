@@ -4,6 +4,8 @@
 
 ## 現行実行キュー（2026-10-25、実機フィードバック計画）
 
+**2026-10-29更新**：前回残件の動画内音声/一括favoriteの限定nativeと、生成2動画の実worker GPU検索を確認。AI起動失敗/異常reader回収と詳細長名/重複を改善し、Light/Dark詳細も限定受入。基本ZIP15/source0edbd40はpublish/同梱CPU34/全payload確認まで。公式x64 CRT12DLLの静的実体を固定し、次は適用条項/通知と新規pack組込み準備→loader/公開host/registry/clean Windows。成功済み検査を反復せず、正確な未受入/候補/次の1件は[current-handoff](current-handoff.md)最上段を優先。UIは引き続き機能と並行する。
+
 **2026-10-28 Work引継ぎ後の更新**：Workの動画内音声検索/類似、一括favorite、単一decoder/進捗/cleanupをWindowsでbuild・関連CPU確認。ガイド統合、処理中ファイル名、private類似比較のDB poll削減、audio idle解放の停止修正を追加。最新の試験ZIP13/sourcea2bc5d2は同梱CPU34まで、GUIは別候補frontend01の2ケースを質問中で未実施。MSVC正式成果物の版/容量/hash/署名は確定し、導入/公開は未実施。次は具体的GUIの回答後確認と、CRTの条件付き組込み/公開runtimeを進める。未検証と既知不具合を分け、[current-handoff](current-handoff.md)の最上段を優先する。既存計画を作り直さない。
 
 **2026-10-28更新（以下の旧checkpointより優先）**：P6-S4/S5の用途ガイド→取得/配置/索引/診断→ガイド復帰と状態更新、安全な復旧案内、profile変更待ちを実装/限定native確認。通常一覧favorite保存の全件再作成を回避し、未保存タグ/順序を保持。音声/動画の同順内積も局所高速化。基本ZIP10/source0138a58は同梱backend基本27・通常EXE再起動・favorite UIA確認済み。U7は設定保存/再表示のみUIA確認、外部実起動は未確認。P6静的DLL監査でONNX RuntimeのMSVCP140_1.dll欠落を特定。**次は正式MSVC再配布元/条件の確認→native依存/NOTICE→不変host/registry→clean Windows**。UIは並行継続し、runtime公開未完を全機能の致命的不具合と混同しない。候補/根拠/未完/許可は[current-handoff](current-handoff.md)を優先。全計画を作り直さず、完了した導線や媒体基盤を再実装しない。

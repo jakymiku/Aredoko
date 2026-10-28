@@ -145,3 +145,14 @@ source/製品 **e197723**、frontend07。通常入口 `dist/portable-basic-20261
 基本CPU11 PASS、manifest/全ZIP内容/hash照合PASS、全Coreの無変更反復はせず前回1025 assertionsの結果を保持。通常Aredoko.exeの復元失敗/別ZIP選択/有効backup準備/未同意block/破棄/予定内通常1再起動は28checks PASS、4所有exit0、5PNG目視、設定/生成原本/770payload不変。[復元の詳細と途中失敗](restore-review-20261024.md)。基本07で新たに全GUI/AI取得や推論/clean Windowsを再受入したものではない。
 
 Windows Sandboxのread-only snapshotは停止状態。Win32_OptionalFeatureのContainers-DisposableClientVMはInstallState2（無効）。OS機能を有効化せず、clean Windows確認は未実施のまま。AIモデル2catalogを収録し、runtimeの製品registryは0件。PyTorch/モデルなしの基本版であり、別途AI実行環境とモデルの配置/取得が必要。
+
+
+## 2026-10-29 基本ZIP15：起動復旧と詳細整理の最新候補
+
+source/実ProductVersion **0edbd409c81e4baf79788deef9830f3b01d86c85**。入口 `dist/portable-basic-20261029-15/Aredoko/Aredoko.exe`、ZIP **348,427,988bytes**、展開 **661,730,728bytes/822files**、ZIP SHA256 `4ab0a1f3d799663e8211d71fb95c0e2ec7beb203b1ca92fc6f156decef6d4d67`。旧Alpha/ZIP/shortcutは変更していない。PyTorch/モデル/CRT installerは同梱せず、基本版と任意AI環境の分離を維持する。
+
+AI起動時の有限エラー/回収、異常worker stdoutのreader回収、詳細のファイル名重複解消/長名3行、短い検索復帰ラベル、実際の設定入口に沿った復旧案内を収録。整合性検査の実験案は不採用で、この候補へ入れていない。14からCore/UIの差分がErrorTextの案内3件だけであることを機械照合し、14/source29114e6の全Core1,438 assertionsを再利用、変更案内11項目のみ追加確認。新しい最終sourceでWinUI Portable publish成功、既存picker3件/SDK IL2104×2は保持。Bootstrap/基本Python/mediaは検証済み14から再利用し、payload/ZIP全検証、同梱 `--check` 成功。
+
+同梱backendの生成DB/PNG・CPU34項目（AIなしの検索/preview、scan/list分離、棚/favorite、起動設定、EOF exit0、DB integrity・原本SHA/mtime保全）がPASS。確認後の全payloadも一致。証拠 `data/ai-ui/continuation-20261029/basic-cpu15/`、`basic15-final-review.json`、`dist/portable-basic-20261029-15/preparation.json` と `core-reuse.json`。
+
+14では同梱CPU34とLight/Dark詳細の限定nativeがPASS、15は案内文/ツールだけを更新した後続候補。**15そのもののGUI/通常EXE再起動・clean Windowsは新規未受入**。14のpreparationに後からGUI合格を上書きせず別receiptで記録する。専用外部AI環境での動画内音声GPU確認も、この基本ZIP自体のAI導入受入とは区別する。全ロードマップ/M1/M2完成の宣言ではない。
