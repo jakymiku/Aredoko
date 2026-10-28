@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 from ai_runtime import relative,object_pairs,digest,inspect_runtime,files
 from storage_lease import plain_path,storage_parent,storage_lease,identity
 from runtime_archive import RuntimeArchive,unpack_runtime
+from runtime_zip_parts import MAX_PART_BYTES
 
 @dataclass(frozen=True)
 class Artifact:
@@ -34,9 +35,10 @@ class Catalog:
         if not isinstance(raw,bytes) or len(raw)>32*1024**2:raise ValueError('Catalog exceeds limit')
         value=json.loads(raw,object_pairs_hook=object_pairs)
         fields={'format','id','revision','kind','license','license_url','allowed_hosts','entries'}
-        if isinstance(value,dict) and value.get('format')=='aredoko-acquisition-v3':fields.add('runtime_archive')
-        if not isinstance(value,dict) or set(value)!=fields or value['format'] not in ('aredoko-acquisition-v1','aredoko-acquisition-v2','aredoko-acquisition-v3'):raise ValueError('Unsupported acquisition catalog')
-        archive=RuntimeArchive.parse(value['runtime_archive']) if value['format']=='aredoko-acquisition-v3' else None
+        if isinstance(value,dict) and value.get('format') in ('aredoko-acquisition-v3','aredoko-acquisition-v4'):fields.add('runtime_archive')
+        if not isinstance(value,dict) or set(value)!=fields or value['format'] not in ('aredoko-acquisition-v1','aredoko-acquisition-v2','aredoko-acquisition-v3','aredoko-acquisition-v4'):raise ValueError('Unsupported acquisition catalog')
+        archive=RuntimeArchive.parse(value['runtime_archive']) if 'runtime_archive' in fields else None
+        if archive is not None and bool(archive.parts)!=(value['format']=='aredoko-acquisition-v4'):raise ValueError('Runtime ZIP parts require catalog v4')
         if not isinstance(value['id'],str) or re.fullmatch('[a-z0-9][a-z0-9_-]{0,63}',value['id']) is None:raise ValueError('Invalid catalog ID')
         if not isinstance(value['revision'],str) or re.fullmatch('[0-9a-f]{40}|[0-9a-f]{64}',value['revision']) is None or value['kind'] not in ('runtime','model'):raise ValueError('Immutable catalog revision required')
         if not isinstance(value['license'],str) or not 1<=len(value['license'])<=128 or any(ord(c)<32 for c in value['license']):raise ValueError('License declaration required')
@@ -71,7 +73,11 @@ class Catalog:
             total+=size
             if total>64*1024**3:raise ValueError('Acquisition exceeds limit')
             items.append(Artifact(name,None if inline else item['url'],size,checksum,role,content))
-        if archive is not None and (value['kind']!='runtime' or len(items)!=1 or items[0].role!='archive' or items[0].inline_data is not None or items[0].size<=0 or not items[0].path.lower().endswith('.zip')):raise ValueError('One fixed runtime ZIP is required')
+        if archive is not None:
+            if value['kind']!='runtime' or any(item.role!='archive' or item.inline_data is not None or item.size<=0 for item in items):raise ValueError('Fixed runtime ZIP artifacts required')
+            if archive.parts:
+                if set(archive.parts)!={item.path for item in items} or any(item.size>MAX_PART_BYTES for item in items):raise ValueError('Runtime ZIP parts differ from catalog entries')
+            elif len(items)!=1 or not items[0].path.lower().endswith('.zip'):raise ValueError('One fixed runtime ZIP is required')
         ordered=sorted(seen,key=lambda name:name.split('/'))
         if any(right.startswith(left+'/') for left,right in zip(ordered,ordered[1:])):raise ValueError('Artifact path collision')
         canonical=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
@@ -220,7 +226,8 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
         if actual!={item.path for item in catalog.entries}:raise ValueError('Acquisition inventory mismatch')
         if catalog.runtime_archive is not None:
             report('extracting',done,verified)
-            unpack_runtime(download_payload/catalog.entries[0].path,payload,catalog.runtime_archive,resume=True,cancelled=cancelled,
+            source=download_payload if catalog.runtime_archive.parts else download_payload/catalog.entries[0].path
+            unpack_runtime(source,payload,catalog.runtime_archive,resume=True,cancelled=cancelled,
                            progress=lambda value:report('extracting',done,verified))
             if validate is not validate_runtime:validate(payload,cancelled)
         else:validate(payload,cancelled)

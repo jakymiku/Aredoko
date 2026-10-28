@@ -4,10 +4,12 @@ Caller supplies a source-owned sealed inventory identity. Outputs are exclusivel
 new directories, or an explicitly owned acquisition stage with resume=True.
 """
 from dataclasses import dataclass
+from contextlib import contextmanager
 import hashlib,os,re,shutil,stat,zipfile
 from pathlib import Path
 from ai_runtime import LIMIT,MARKER,digest,files,inspect_runtime,parse_inventory,relative
 from storage_lease import plain_path,storage_parent
+from runtime_zip_parts import ZIPPartsReader,part_names
 
 
 @dataclass(frozen=True)
@@ -15,17 +17,37 @@ class RuntimeArchive:
     manifest_sha256:str
     unpacked_bytes:int
     unpacked_files:int
+    parts:tuple=()
 
     @classmethod
     def parse(cls,value):
-        if (not isinstance(value,dict) or set(value)!={'manifest_sha256','unpacked_bytes','unpacked_files'} or
+        fields={'manifest_sha256','unpacked_bytes','unpacked_files'}
+        if isinstance(value,dict) and 'parts' in value:fields.add('parts')
+        if (not isinstance(value,dict) or set(value)!=fields or
                 not isinstance(value['manifest_sha256'],str) or re.fullmatch('[0-9a-f]{64}',value['manifest_sha256']) is None or
                 type(value['unpacked_bytes']) is not int or not 1<=value['unpacked_bytes']<=64*1024**3 or
                 type(value['unpacked_files']) is not int or not 1<=value['unpacked_files']<=100000):
             raise ValueError('Invalid runtime archive binding')
-        return cls(**value)
+        return cls(value['manifest_sha256'],value['unpacked_bytes'],value['unpacked_files'],part_names(value['parts']) if 'parts' in value else ())
 
-    def to_dict(self):return dict(manifest_sha256=self.manifest_sha256,unpacked_bytes=self.unpacked_bytes,unpacked_files=self.unpacked_files)
+    def to_dict(self):
+        result=dict(manifest_sha256=self.manifest_sha256,unpacked_bytes=self.unpacked_bytes,unpacked_files=self.unpacked_files)
+        if self.parts:result['parts']=list(self.parts)
+        return result
+
+
+@contextmanager
+def _archive_input(path,parts):
+    if parts:
+        with ZIPPartsReader(path,parts) as stream:
+            with zipfile.ZipFile(stream) as archive:yield archive
+            stream.validate()
+    else:
+        path=plain_path(path)
+        stamp=lambda:(lambda s:(s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns))(plain_path(path).stat())
+        before=stamp()
+        with zipfile.ZipFile(path) as archive:yield archive
+        if stamp()!=before:raise ValueError('Runtime ZIP changed during validation')
 
 
 def _members(archive,spec,cancelled):
@@ -74,15 +96,13 @@ def _members(archive,spec,cancelled):
 def unpack_runtime(archive_path,output,spec,*,resume=False,cancelled=lambda:False,progress=None):
     if not isinstance(spec,RuntimeArchive):raise ValueError('Source-owned runtime archive binding required')
     RuntimeArchive.parse(spec.to_dict())
-    archive_path=plain_path(archive_path);output=Path(os.path.abspath(output))
-    stamp=lambda path:(lambda st:(st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns,st.st_ctime_ns))(plain_path(path).stat())
-    before=stamp(archive_path)
-    if output==archive_path or archive_path.is_relative_to(output):raise ValueError('Runtime ZIP overlaps output')
+    archive_path=plain_path(archive_path,directory=bool(spec.parts));output=Path(os.path.abspath(output))
+    if output==archive_path or archive_path.is_relative_to(output) or spec.parts and output.is_relative_to(archive_path):raise ValueError('Runtime ZIP overlaps output')
     if output.exists() and not resume:raise FileExistsError('New runtime expansion output required')
     def check():
         if cancelled():raise InterruptedError('Runtime expansion cancelled')
     check()
-    with zipfile.ZipFile(archive_path) as archive:
+    with _archive_input(archive_path,spec.parts) as archive:
         members,raw,expected=_members(archive,spec,cancelled)
         storage_parent(output/'marker');plain_path(output,directory=True)
         existing={p.relative_to(output).as_posix():p.stat().st_size for p in files(output,cancelled)}
@@ -114,19 +134,18 @@ def unpack_runtime(archive_path,output,spec,*,resume=False,cancelled=lambda:Fals
         storage_parent(output/'DLLs/marker')
         check();info=inspect_runtime(output,expected=spec.manifest_sha256,cancelled=cancelled)
         if {p.relative_to(output).as_posix() for p in files(output,cancelled)}!=set(members):raise ValueError('Runtime expansion inventory changed')
-    if stamp(archive_path)!=before:raise ValueError('Runtime ZIP changed during expansion')
     return {**info,'verification':'expanded_full','archive_executed':False}
 
 
-def inspect_archive(archive_path,*,cancelled=lambda:False):
+def inspect_archive(archive_path,*,cancelled=lambda:False,parts=()):
     """Publisher-side streaming check; returns binding without extraction/imports."""
-    archive_path=plain_path(archive_path)
-    with zipfile.ZipFile(archive_path) as archive:
+    parts=part_names(parts) if parts else ()
+    with _archive_input(archive_path,parts) as archive:
         marker=archive.getinfo(MARKER)
         if marker.file_size>LIMIT:raise ValueError('Runtime ZIP inventory exceeds limit')
         with archive.open(marker) as stream:raw=stream.read(LIMIT+1)
         value,_,_,checksum=parse_inventory(raw,cancelled=cancelled)
-        spec=RuntimeArchive(checksum,value['total_bytes'],value['files_count'])
+        spec=RuntimeArchive(checksum,value['total_bytes'],value['files_count'],parts)
         members,raw,expected=_members(archive,spec,cancelled)
         for name,info in members.items():
             entry=expected.get(name);size=entry['bytes'] if entry else len(raw);checksum=entry['sha256'] if entry else spec.manifest_sha256
