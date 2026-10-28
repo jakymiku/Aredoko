@@ -229,3 +229,10 @@ Core `--audio-content`/`--video-content`へavailable=false時も初期化失敗�
 owned jobが既に選択したcatalog titleのbasenameを、任意`item_progress.item_title`として返す。追加scan/DB照会・原本変更・namespace変更はない。表示名はcontrol/親pathを除き最大160 UTF-16単位、絵文字を途中で切らず省略。Coreは旧field省略を許容し、過長/path/controlなどの不正応答を拒否する。WinUIは現在処理中のbasenameを1行ellipsis＋tooltipで表示し、別source_kindの処理中や完了/取消/失敗後は消す。CLIや絶対pathを通常画面へ追加しない。
 
 関連jobs32/新label3（2itemで名前とIDの対応、完了時消去を含む）、Audio/Video Core関連、WinUI最小build PASS。`MaxLines`/`TextTrimming`は復元済みproject referencesのAPIで存在を確認。既存picker3警告は保持。GUI質問中のfrontend01/source9b7d91dはこの追加表示より前のbinであり、ファイル名表示のnative受入を完了扱いにしない。生証拠`work-sync-20261028/progress-title-*`と`core-*-title01.log`。
+
+
+### 2026-10-28 追加レビュー：idle解放監視の一時失敗後も継続
+
+audio ownerのidle loopだけ、共有inference枠を取る際のpeer releaseのAIUnavailable/RuntimeErrorを捕捉せず、監視threadが終了する経路を確認（video側は対応済み）。通常のアプリcrash/data損失ではなく、待機モデルの自動解放が次回以降行われなくなる可能性のある不具合。既存0.2秒waitを維持して次回へ進み、無限tight retry/他ownerの強制終了はしない。
+
+初回fault testはAIUnavailable import漏れのharness失敗として保持。import後の旧codeは本来のAIUnavailableで監視終了・resident保持を再現して1 FAIL。修正後は次回取得成功→自分のencoder解放→thread生存/共有lock回収、既存idle/所有初期化cleanupを含む8tests PASS（2.078s）。生成encoderのみ、実model/GPU/GUIなし。証拠`work-sync-20261028/audio-idle-before*.log`/`audio-idle-after01.log`。基本ZIP12にはこの後続修正は未収録。

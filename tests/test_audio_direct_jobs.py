@@ -12,6 +12,7 @@ import test_audio_direct_index as fixture
 from audio_direct_jobs import AudioDirectJobs
 from inference_ownership import InferenceOwnership
 from ai_search import AIBusy
+from ai_process import AIUnavailable
 
 
 class Encoder(fixture.Encoder):
@@ -216,6 +217,22 @@ class DirectAudioJobTests(unittest.TestCase):
         deadline=time.monotonic()+2
         while self.encoder.resident and time.monotonic()<deadline:time.sleep(.01)
         self.assertFalse(self.encoder.resident);self.assertEqual(self.vision.releases,0)
+
+
+    def test_idle_release_survives_transient_peer_release_failure(self):
+        self.encoder.resident=True;self.jobs.last_used=time.monotonic()-3
+        acquire=self.jobs.inference.acquire;attempts=[];errors=[]
+        def transient(*args,**kwargs):
+            attempts.append(1)
+            if len(attempts)==1:raise AIUnavailable('generated transient peer release failure')
+            return acquire(*args,**kwargs)
+        with patch.object(self.jobs.inference,'acquire',side_effect=transient),patch('threading.excepthook',side_effect=lambda args:errors.append(args.exc_value)):
+            self.jobs.configure(idle_release_seconds=1)
+            deadline=time.monotonic()+2
+            while self.encoder.resident and time.monotonic()<deadline:time.sleep(.01)
+            self.assertFalse(self.encoder.resident,repr(errors))
+            self.assertGreaterEqual(len(attempts),2);self.assertEqual(errors,[])
+            self.assertTrue(self.jobs.idle_thread.is_alive());self.assertFalse(self.group.lock.locked())
 
 
 if __name__=='__main__':unittest.main()

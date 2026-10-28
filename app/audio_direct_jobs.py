@@ -185,7 +185,13 @@ class AudioDirectJobs:
             with self.guard:
                 due=self.idle_seconds and not self.searching and self.value['state'] not in ACTIVE and time.monotonic()-self.last_used>=self.idle_seconds
             if not due or not bool(getattr(self.encoder,'resident',False)):continue
-            if not self.inference.acquire(blocking=False):continue
+            try:
+                acquired=self.inference.acquire(blocking=False)
+            except (AIUnavailable,RuntimeError):
+                # A peer can be busy/closing during handover. Keep the bounded
+                # idle observer alive so the next check can release this model.
+                continue
+            if not acquired:continue
             try:
                 with self.guard:
                     if (not self.closed and not self.searching and self.value['state'] not in ACTIVE
