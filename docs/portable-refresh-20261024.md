@@ -1,5 +1,12 @@
 # 基本版ZIP候補（2026-10-24）
 
+## 最新試験候補13（2026-10-28、sourcea2bc5d2、GUI受入待ち）
+
+- 通常入口`C:/AI/Aredoko/dist/portable-basic-20261028-13/Aredoko/Aredoko.exe`、隣の`Aredoko-windows-x64.zip`。source`a2bc5d27c342d1ffd308cdca94668e46442ec951`、実ProductVersion `1.0.0+a2bc5d27c342d1ffd308cdca94668e46442ec951`。**821files /661,695,036bytes**、ZIP348,413,028bytes、SHA256 `319cfc9081cc57c049b837b252c3526abb40f1285c72c7e80fc13400fc2e8c58`。
+- Workの動画/音声検索・類似・一括favoriteに、初期ガイド統合、current filename表示、private類似比較の版poll削減、音声idle解放の一時失敗回復を収録。モデル/PyTorch/取得したMSVC installerは同梱しない。installed AlphaはZIP10/source0138a58のまま。
+- 12でsource33e85bbの全Core/Portable/自己検査/全ZIP/runtimeを確認。13はそれ以降のCore/UI/Bootstrap/test source不変をGit差分で確認してCore全体の反復を省き、最終version付きPortable publishと、封印hash確認済みの同じbootstrap/runtimeで新規梱包。runtime/全payload/ZIP照合・同梱backend基本34項目/所有EOF exit0 PASS、post-CPU inventory/sizeと全backend.pyのsource一致も確認。既存picker/SDK trim警告は保持。
+- 13のGUI/実model/GPU/clean Windowsは未実施。質問中のfrontend01/source9b7d91dも別の限定候補であり、13の通常入口を受入済みとはしない。基本12/11と旧Alphaを変更せず保存。生証拠`data/ai-ui/work-sync-20261028/basic13-final.json`/`basic-cpu13/`、`dist/portable-basic-20261028-13/preparation.json`/build log。GitHub Releaseへ未公開。
+
 ## 基本候補11（2026-10-28、source692d66c、GUI受入前）
 
 - `dist/portable-basic-20261028-11/Aredoko/Aredoko.exe`と隣のZIPを新規生成。Workの動画単一decoder/進捗/動画内音声検索・類似/一括favoriteに、初期ガイドと共有進捗の補強を収録。Core全体/Portable/自己検査/runtime/全inventory/ZIP照合PASS、820 payload files。PyTorch/modelは未同梱。

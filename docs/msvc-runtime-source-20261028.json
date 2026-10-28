@@ -16,5 +16,10 @@
   "installer_executed": false,
   "payload_extracted": false,
   "catalog_registered": false,
-  "clean_windows_verified": false
+  "clean_windows_verified": false,
+  "vs2022_community_license_page": "https://visualstudio.microsoft.com/license-terms/vs2022-ga-community/",
+  "vs2022_community_license_document": "https://visualstudio.microsoft.com/wp-content/uploads/2021/11/Visual-Studio-2022-Community-License-EN.docx",
+  "vs2022_community_license_document_sha256": "41a207b10c8ab91d0d2f10a854715f73dca54509581692d2fe179aa3ffcb8540",
+  "vs_distributable_code_section_reviewed": true,
+  "vs_redist_scope_and_end_user_terms_application_pending": true
 }

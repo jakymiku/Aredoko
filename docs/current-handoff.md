@@ -1,6 +1,19 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
-## 2026-10-28 ローカルWindows引継ぎ中（以下のWork記録より優先）
+## 2026-10-28 ローカル継続の終了checkpoint（以下より優先）
+
+- **Workの10commitsを同期**：cleanな`bb58c27`→`9b7d91d`へfast-forward。Work「開発引き継ぎ確認」の完了報告とremoteを照合、完了機能を再実装していない。既存branch/PR #5を継続。PR head refは照合、open/Draftの現在metadataはconnector Transport closedで取得できず（Work確認時はopen/Draft）。
+- **Windows未確認分を補完**：Coreのvideo-audio59/audio43/video66/favorite26がPASS、Portable frontend01/source9b7d91d成功。同梱Python3.11で生成video stream/video-audio/cleanup44、別のmedia index/search/jobs/PCM92がPASS。通常DBや実model品質の確認とは区別する。証拠root`data/ai-ui/work-sync-20261028/`。
+- **追加sourceの利用者向け変化**：`692d66c`で動画内音声の別索引を初期ガイドへ案内し、他kindの進捗誤表示を防止。`33e85bb`で準備中ファイル名を1行表示（basename/160UTF-16/ellipsis、完了・取消で消去）。Core Audio49/Video72・setup35、関連PythonとWinUI build PASS。追加scan/モデル起動/設定変更を自動で始めない。
+- **性能と不具合**：`4205e87`でprivate類似pairのSQLite版pollを64pair以内へまとめ、取消/catalog/profileと公開前/返却時のguardは維持。768D生成1万pairはquery10,012→168、0.520→0.467s（trace有/各1回、実素材一般性能ではない）、ID/score/両区間同一。関連39 unique PASS（初回runner71には重複収集あり、新2件は別途確認）。`a2bc5d2`は音声idle解放の一時handover失敗で監視threadが止まる経路を再現・修正し8 PASS。crash/data破損を再現したとは扱わない。[音声](audio-producer-review.md)/[動画](video-similarity.md)。
+- **最新試験候補は基本ZIP13/sourcea2bc5d2**：`dist/portable-basic-20261028-13/Aredoko/Aredoko.exe`と隣のZIP。821files/661,695,036bytes、実ProductVersionもa2bc5d2。同梱基本CPU34/正常EOF/元PNG/DB integrity・全payload/ZIP検証PASS。33e85bbの全Coreを、Core/UI/Bootstrap source不変の証拠付きで再利用し、13では同じ全Coreを反復せずPortableを最終版でpublish。[正本/容量/SHA](portable-refresh-20261024.md)。13のGUI/実model/GPU/clean Windowsは未実施、Alphaや旧ZIPを更新していない。
+- **MSVCの固定実体を確認**：ユーザーの明示許可後に公式18,731,856bytes/version14.51.36247.0を取得、Microsoft署名Valid・SHA固定。静的inspector/生成7件/Windows metadata確認済み。runtimeとVS2022 Communityの公式原文・REDIST関係も読取。[公開receipt](msvc-runtime-source-20261028.json)/[条件と残件](runtime-notice-inventory.md)。installer実行/展開/DLLコピー/OS導入/catalog登録/公開承認は0。現在の許可はこの静的確認で消費済みであり、導入へ拡張しない。
+- **次の1件：質問中のGUI2ケース（回答後のみ）**。frontend01/source9b7d91dで①動画内音声の準備/中断/再開・文章/右click類似・画面履歴、②745生成itemの一括favorite・同一session/一覧外選択/favorites fallback、各1試行を準備済み。**GUIの回答はまだなく、実行0/1＋0/1**。`tools/test_p3_native_containers.py --frontend data/ai-ui/work-sync-20261028/frontend01 --output <新しい専用出力> --video-audio-content`、別出力で`--bulk-favorite-patch`。生成データ/CPU vectorだけ、再生/GPU/通常DB/Alphaを使わない。排他portが使用中なら止め、通常版へ接続しない。前面化を強行しない。
+- **試験側の補強**：`15a3a51`の上記2ケースと`09e9a6b`のAutomationId指定で、検索mode追加後の古いEndキーによる誤選択を防いだ。生成UIA-tree3件PASS、GUIそのものの成功ではない。初回basic11の期待503対正しい404、test import漏れ/重複収集、PSModulePath互換問題はrawを保持し、製品不具合と分けた。
+- GUI不可の間の独立次候補はP6の正式CRT一式/適用する配布条項・通知・安全な別出力への組込み準備。その後native依存/loader・公開host/trusted registry・clean Windowsへ。固定元を未取得状態へ戻して同じ調査やDLを反復しない。ユーザーのZIP配布方針を維持し、OS installerを自動実行しない。
+- **未完**：動画内音声の実model/録音/音楽/動画品質、実再生seek、複数track/rank統合、U7実入力、HC/物理DPI/長時間RSS、runtime公開。全ロードマップ/M1/M2完了とはしない。完成形UIは機能と並行。今回GPU0/GUI0、追加model取得0、Actions/新branch/PR/main merge/shutdown0。installed Alphaは前回更新したZIP10/source0138a58で、当作業から通常DB/settings/私物/shortcutへ変更していない。引き継ぎcommitは`git log -1 -- docs/current-handoff.md`、Push後にremote一致/cleanを確認して終了する。
+
+## 2026-10-28 ローカルWindows作業中の記録（当時、最上段の終了checkpointを優先）
 
 - Work「開発引き継ぎ確認」とGitHubの10commitsを確認。cleanな既存branchを`bb58c27`→`9b7d91d`へfast-forward、PR #5 head ref一致。新branch/PR/merge/Actionsなし。Workの完成済み実装は再作成しない。
 - **Windows側の未確認を補完**：Coreのvideo-audio/audio/video/favorite各限定suite、Portable/frontend01 publishがPASS。既存picker3件/SDK trim警告は保持。同梱基本Python3.11＋生成素材の新video stream/video-audio source/index/HTTP/similarity/owned cleanupは44tests/30.544s PASS。source`9b7d91d`、証拠`data/ai-ui/work-sync-20261028/windows-build-review.json`と各log。

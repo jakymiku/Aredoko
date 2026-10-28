@@ -4,6 +4,8 @@
 
 ## 現行実行キュー（2026-10-25、実機フィードバック計画）
 
+**2026-10-28 Work引継ぎ後の更新**：Workの動画内音声検索/類似、一括favorite、単一decoder/進捗/cleanupをWindowsでbuild・関連CPU確認。ガイド統合、処理中ファイル名、private類似比較のDB poll削減、audio idle解放の停止修正を追加。最新の試験ZIP13/sourcea2bc5d2は同梱CPU34まで、GUIは別候補frontend01の2ケースを質問中で未実施。MSVC正式成果物の版/容量/hash/署名は確定し、導入/公開は未実施。次は具体的GUIの回答後確認と、CRTの条件付き組込み/公開runtimeを進める。未検証と既知不具合を分け、[current-handoff](current-handoff.md)の最上段を優先する。既存計画を作り直さない。
+
 **2026-10-28更新（以下の旧checkpointより優先）**：P6-S4/S5の用途ガイド→取得/配置/索引/診断→ガイド復帰と状態更新、安全な復旧案内、profile変更待ちを実装/限定native確認。通常一覧favorite保存の全件再作成を回避し、未保存タグ/順序を保持。音声/動画の同順内積も局所高速化。基本ZIP10/source0138a58は同梱backend基本27・通常EXE再起動・favorite UIA確認済み。U7は設定保存/再表示のみUIA確認、外部実起動は未確認。P6静的DLL監査でONNX RuntimeのMSVCP140_1.dll欠落を特定。**次は正式MSVC再配布元/条件の確認→native依存/NOTICE→不変host/registry→clean Windows**。UIは並行継続し、runtime公開未完を全機能の致命的不具合と混同しない。候補/根拠/未完/許可は[current-handoff](current-handoff.md)を優先。全計画を作り直さず、完了した導線や媒体基盤を再実装しない。
 
 **2026-10-27 Sol引継ぎ後の更新（以下の旧checkpointより優先）**：Museの直接動画producer/検索/類似/Core/WinUIを同期し、Windows buildと生成限定GPU/GUIを確認。不完全coverageの文章検索除外と明示再生成を補強。U7の内蔵/既定アプリ選択はsource/build/設定・復元済みだが前面化が取得できずnative未確認。P6-S1/S2は用途選択・依存重複排除・既存取得/配置入口・AIスキップ保存まで実装し、UIAだけの限定nativeを確認。実runtime公開と全導入受入を完成扱いにしない。候補/次の1件/許可範囲は[current-handoff](current-handoff.md)を優先し、完了した動画基盤を再実装しない。
