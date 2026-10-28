@@ -1193,6 +1193,7 @@ public sealed partial class MainPage : Page
     private async void Nav_SelectionChanged(NavigationView sender,NavigationViewSelectionChangedEventArgs args)
     {
         if(!ready||populating||args.SelectedItem is not NavigationViewItem item)return;
+        ItemSizeFlyout.Hide();
         var next=item.Tag?.ToString()??"";
         if(next=="folders"){await OpenFolderHubAsync();return;}
         if(next=="shelf"){await OpenShelfHubAsync();return;}
@@ -1211,7 +1212,7 @@ public sealed partial class MainPage : Page
         }
         finally { transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();} }
     }
-    private void Layout_Click(object sender,RoutedEventArgs e){if(extending||saving||dialogOpen)return;tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";if(shelfHubOpen)RenderShelfLayout();else ReflowBrowse(()=>{RenderRows();RestoreSelection();});}
+    private void Layout_Click(object sender,RoutedEventArgs e){if(extending||saving||dialogOpen)return;ItemSizeFlyout.Hide();tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";if(shelfHubOpen)RenderShelfLayout();else ReflowBrowse(()=>{RenderRows();RestoreSelection();});}
     private void OpenDetails_Click(object sender,RoutedEventArgs e)
     {
         if(folderHubOpen)

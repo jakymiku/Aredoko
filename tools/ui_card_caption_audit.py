@@ -24,7 +24,7 @@ def audit(ui,tree,shot,report,check,catalog):
     for scale in (60,180):
         ui('invoke','BtnItemSize');ui('wait-for','ItemSizeSlider','-t','5000')
         ui('set-value','ItemSizeSlider',str(scale));ui('wait-for','ItemSizeLabel','--value',str(scale)+'%','-t','5000')
-        # Navigation unloads the size flyout without injecting Escape or input.
+        # Use UIA navigation without injecting Escape or physical input.
         ui('invoke','NavShelf');ui('wait-for','ShelfTitle'+str(shelf),'-t','10000')
         ui('invoke','NavAll');ui('wait-for','Item'+str(long_id),'-t','15000')
         time.sleep(.3)
@@ -40,3 +40,20 @@ def audit(ui,tree,shot,report,check,catalog):
     shot('shelf-caption')
     check('caption navigation preserves shelf membership',shelf in catalog.get(long_id)['shelf_ids'])
     report['unverified']=['physical DPI/high contrast','actual tooltip hover/copy','general 50k-item performance']
+
+
+def audit_menu(ui,tree,shot,report,check,catalog):
+    report['authorization']='Current user test approval; dedicated generated PNG/DB, UIA-only remaining size-menu case'
+    ui('invoke','BtnItemSize');ui('wait-for','ItemSizeSlider','-t','5000')
+    ui('set-value','ItemSizeSlider','60');ui('wait-for','ItemSizeLabel','--value','60%','-t','5000')
+    ui('invoke','NavShelf');ui('wait-for','ItemSizeSlider','--gone','-t','5000')
+    check('navigation closes the old size menu',True)
+    ui('invoke','NavAll');ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+    ui('invoke','BtnItemSize');ui('wait-for','ItemSizeSlider','-t','5000')
+    ui('invoke','BtnLayout');ui('wait-for','ItemSizeSlider','--gone','-t','5000')
+    check('layout switch closes the size menu',True)
+    row=next(x for x in catalog.search()['items'] if x['title']==LONG_NAME)
+    ui('wait-for','ItemTitle'+str(row['id']),'-t','10000')
+    check('full long title remains accessible after closing the menu',inspect_element(ui,'ItemTitle'+str(row['id']))['name']==LONG_NAME)
+    shot('caption-menu-closed')
+    report['unverified']=['physical input/hover','physical DPI/high contrast','general library performance']
