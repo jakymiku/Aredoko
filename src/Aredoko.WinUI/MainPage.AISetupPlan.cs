@@ -45,7 +45,7 @@ public sealed partial class MainPage
         {
             var selected=AISetupSelection.Normalize(ViewerOptions.Value.AISetupFeatures);long version=0;
             var panel=new StackPanel{Spacing=12};
-            panel.Children.Add(new TextBlock{Text="使いたい機能を選んでください。AIは任意です。ファイル名・タグ検索と閲覧は、AIを導入しなくても使えます。動画検索は映像、音声・音楽検索は音が対象です。",TextWrapping=TextWrapping.Wrap});
+            panel.Children.Add(new TextBlock{Text="使いたい機能を選んでください。AIは任意です。ファイル名・タグ検索と閲覧は、AIを導入しなくても使えます。動画は映像や動画内の音声、音声・音楽は音声ファイルの内容から探せます。索引は対象ごとに作成します。",TextWrapping=TextWrapping.Wrap});
             var summary=new TextBlock{Text="機能を選び、「必要な環境を確認」を押してください。",TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};
             AutomationProperties.SetAutomationId(summary,"AISetupPlanSummary");
             var nextSteps=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};AutomationProperties.SetAutomationId(nextSteps,"AISetupNextSteps");

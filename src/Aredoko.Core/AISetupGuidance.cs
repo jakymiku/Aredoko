@@ -26,7 +26,7 @@ public static class AISetupGuidance
         var features=AISetupSelection.FromMask(selection);
         var steps=new List<string>();
         if(features.Contains("semantic")||features.Contains("image_similarity"))steps.Add("意味検索・類似画像：画像や本の索引");
-        if(features.Contains("video"))steps.Add("動画の内容検索：動画の準備欄から映像の索引（音声は対象外）");
+        if(features.Contains("video"))steps.Add("動画の内容検索：動画の準備欄から映像の索引。動画の音で探す場合は「動画内の音声」で別の索引を作成");
         if(features.Contains("audio"))steps.Add("音声・音楽の内容検索：音声の準備欄から音の索引");
         if(steps.Count>0)lines.Add("環境の準備後に行うこと：\n"+string.Join("\n",steps));
         lines.Add("取得・配置の確認だけで、索引作成や推論が自動で始まることはありません。");

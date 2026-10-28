@@ -70,11 +70,11 @@ internal sealed class AudioPreparationPanel : IDisposable
         start.IsEnabled=!command&&value.Supported&&value.Available&&!value.Busy;
         cancel.IsEnabled=!command&&own&&value.Busy&&value.State!="cancelling";
         progress.Visibility=value.Busy?Visibility.Visible:Visibility.Collapsed;
-        var current=value.State=="running"?value.ItemProgress:null;
-        progress.IsIndeterminate=value.State!="running"||value.Target==0||current is {TotalMs:null};
+        var current=own&&value.State=="running"?value.ItemProgress:null;
+        progress.IsIndeterminate=!own||value.State!="running"||value.Target==0||current is {TotalMs:null};
         progress.Maximum=current?.TotalMs is int total?total:Math.Max(1,value.Target);
         progress.Value=current is {TotalMs:not null} tracked?tracked.PreparedMs:value.Processed;
-        AutomationProperties.SetName(progress,current is null?"音声の索引作成の進捗":"現在の音声の解析進捗。解析済み時刻で、保存前です。");
+        AutomationProperties.SetName(progress,current is null?Subject+"の索引作成の進捗":"現在の"+Subject+"の解析進捗。解析済み時刻で、保存前です。");
     }
     private async Task RefreshAsync()
     {

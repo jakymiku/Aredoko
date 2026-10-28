@@ -46,6 +46,10 @@ static class AISetupPlanTests
         var idleEnvironment=new AIEnvironmentJob(null,"idle",false,"",0,null,0,null);
         var guidance=AISetupGuidance.Describe(plan,12,idleDownload,idleEnvironment);
         check(guidance.Contains("不足する実行環境")&&guidance.Contains("動画の準備欄")&&guidance.Contains("音声の準備欄")&&!guidance.Contains("意味検索・類似画像："),"next steps use selected media and do not claim missing dependencies are ready");
+        var videoOnly=AISetupGuidance.Describe(plan,4,null,null);
+        check(videoOnly.Contains("動画内の音声")&&videoOnly.Contains("別の索引")&&!videoOnly.Contains("音声・音楽の内容検索："),"video setup explains separate audio evidence without selecting audio-file indexing");
+        var audioOnly=AISetupGuidance.Describe(plan,8,null,null);
+        check(audioOnly.Contains("音声の準備欄")&&!audioOnly.Contains("動画の準備欄"),"audio-file setup does not enable video indexing implicitly");
         var active=AISetupGuidance.Describe(plan,12,idleDownload with{State="downloading"},idleEnvironment with{State="validating"});
         check(active.Contains("バックグラウンドで続いて")&&active.Contains("完了してから再起動"),"returning to setup does not stop acquisition or claim placement is complete");
         var cancelled=AISetupGuidance.Describe(plan,12,idleDownload with{State="cancelled"},idleEnvironment with{State="cancelled"});

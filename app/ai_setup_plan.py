@@ -12,7 +12,7 @@ from model_locations import ModelTarget
 FEATURES=(
     ('semantic','意味検索','text','ファイル名・タグ等の意味で探します。画像検索は画像対応モデルが必要です。'),
     ('image_similarity','類似画像検索','cover','画像・表紙から似た作品を探します。先に画像の索引を作成します。'),
-    ('video','動画の内容検索','video','全区間の動画索引を作成します。動画内の音声は対象外です。'),
+    ('video','動画の内容検索','video','全区間の映像を索引化します。音で動画を探す場合は、別に動画内の音声索引を作成します。'),
     ('audio','音声・音楽の内容検索','audio','音声の内容・特徴を探します。文字起こしは保存しません。'),
 )
 CATALOG_FIELDS=('catalog_id','name','kind','revision','bytes','license','license_url','source_hosts',
