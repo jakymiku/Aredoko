@@ -178,3 +178,12 @@ VS Community 2022の公式原文（62,859bytes/SHA`41a207b1…`）も確認し�
 
 
 38件の具体的な内訳も読取確認済み：CPython本体4件（python.exe/pythonw.exe/python3.dll/python311.dll）と `DLLs/` 以下34件（標準拡張、OpenSSL/libffi/SQLite/Tcl/Tk等）。候補rootに `LICENSE.txt` は存在する。**38個のDLL不足や38個の起動エラーを検出した意味ではなく、Python wheelのRECORDにもMSVC componentにも属さないファイルの通知対応が未確定という意味**。次回はこの一覧とCPython同梱通知の実体を対応付けるところから始め、名前だけで第三者部分の再配布許諾を断定しない。既存335件のstatic import/実CRT loader成功は保持する。
+
+
+### CPython由来の未対応nativeを読む補助（2026-10-29b）
+
+`tools/inspect_runtime_notice_gaps.py --source <sealed-pack> --audit <matching-native-review.json> --output <new-report.json>` は、既存native監査のmanifest SHAと全行のdeclared bytes/SHAを照合してから、未所有のnativeだけとroot LICENSEを実hash確認する。元の所有者対応・candidate・registryは一切変更しない。本文の語句と行番号は人の確認候補にすぎず、語句がある/ないだけで所有・通知coverage・再配布可否を決定しない。unknown locationはPythonへ自動帰属させずunclassifiedのまま残す。
+
+基本Python3.11の生成5tests PASS：同size改変、stale manifest、件数偽装/重複/越境path、未分類の維持、`-I` の独立CLIまで。最初のCLIはtool自身のhelper path不足で実runtime読取前に停止し、app＋toolsを明示した後に上記CLI回帰と実体確認がPASS。実候補は **38件/20,382,600bytes** を読み、core候補4＋distribution候補34、LICENSE **36,874bytes / SHA e502c6b880ff58d614901495a9009c136539cd0b1e2a2abb8fc00b934c203419**。`continuation-20261029b/notice-gaps-real02.json`。元manifest/原本変更・selected code実行・GPU・追加取得0。
+
+root LICENSEにはlibffi/bzip2/Tclの該当語句が見つかる一方、OpenSSL/SQLite/LZMA/zlib/Expat/decimalの語句一致は0。これは別名・別ファイル・別供給元の可能性を残すので「ライセンスが存在しない」とは断定しない。**次は当該DLLの版/出所に対応した既存の通知原文を探し、packのどのfileへ同梱するかを固定する**。新しい上流原文取得が必要なら明示許可を得る。runtime完全照合/loader/GPUをこの補助のために再実行しない。基本ZIP16のアプリcodeは変わらず再buildしない。
