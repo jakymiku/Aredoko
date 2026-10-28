@@ -12,6 +12,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
 from ai_runtime import FORMAT,MARKER,LIMIT,relative,object_pairs
 from storage_lease import plain_path,storage_parent
 from collect_ai_runtime_notices import _read,validate_for_source
+from msvc_component_contract import COMPONENT,validate_component
 
 NATIVE=frozenset(('.exe','.dll','.pyd'))
 
@@ -88,6 +89,16 @@ def inspect(root,notices,*,imports=False):
             try:key=record_key(row[0])
             except ValueError:outside+=1;continue
             if key in owners:owners[key].add((name,version))
+    components=[];component_owners={}
+    component_path=root/(COMPONENT+'/component.json')
+    if component_path.exists() or component_path.is_symlink() or (COMPONENT+'/component.json').casefold() in declared:
+        value=json.loads(bound_metadata(component_path),object_pairs_hook=object_pairs)
+        component=validate_component(value,declared)
+        # These 12 small DLLs and 3 terms files are fully hashed, unlike the
+        # rest of this bounded header/metadata audit of the multi-GB pack.
+        for entry in (*value['dlls'],*value['notices']):bound_metadata(root/entry['path'],16*1024**2 if entry in value['dlls'] else 4*1024**2)
+        component['payload_hashes_verified']=True;components.append(component)
+        for name in component['dll_files']:component_owners[name.casefold()]=component
     rows=[]
     for key,entry in sorted(entries.items()):
         path=plain_path(root/entry['path'])
@@ -95,8 +106,10 @@ def inspect(root,notices,*,imports=False):
         linked=[]
         for name,version in sorted(owners[key]):
             linked.append({'name':name,'version':version,'notice_files':declarations[(re.sub('[-_.]+','-',name).casefold(),version)]})
+        component=component_owners.get(key);machine=pe_machine(path)
+        if component is not None and machine!='amd64':raise ValueError('Native CRT component must be amd64')
         rows.append({'path':entry['path'],'bytes':entry['bytes'],'declared_sha256':entry['sha256'],
-                     'pe_machine':pe_machine(path),'distribution_record_owners':linked})
+                     'pe_machine':machine,'distribution_record_owners':linked,'native_component_owner':component})
         if imports:
             from pe_imports import read_imports
             try:rows[-1]['static_imports']={'state':'inspected',**read_imports(path)}
@@ -113,7 +126,9 @@ def inspect(root,notices,*,imports=False):
     if _read(root/MARKER,LIMIT)!=raw:raise ValueError('Runtime manifest changed during audit')
     return {'format':'aredoko-runtime-native-review-v1','runtime_manifest_sha256':hashlib.sha256(raw).hexdigest(),
             'tool_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-            'native_count':len(rows),'unmapped_count':sum(not row['distribution_record_owners'] for row in rows),
+            'native_count':len(rows),'unmapped_count':sum(not row['distribution_record_owners'] and row['native_component_owner'] is None for row in rows),
+            'unmapped_distribution_record_count':sum(not row['distribution_record_owners'] for row in rows),
+            'native_components':components,
             'ambiguous_owner_count':sum(len(row['distribution_record_owners'])>1 for row in rows),
             'unknown_pe_count':sum(row['pe_machine'] is None for row in rows),'outside_record_references':outside,
             'distribution_metadata_hashes_verified':True,'payload_hashes_verified':False,'extra_tree_verified':False,'native_dependency_graph_inspected':False,

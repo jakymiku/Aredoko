@@ -161,3 +161,10 @@ VS Community 2022の公式原文（62,859bytes/SHA`41a207b1…`）も確認し�
 新しい `crt-runtime01` だけを選択し、既存EmbeddingGemma 2とWD Tagger、生成PNG2枚/専用DBで1バッチ確認。productionの完全照合72.872秒をモデル時間から分離し、EmbeddingGemmaの画像入力768D/有限/単位norm（CUDA、割当上限3,072MiB、telemetry peak931.8MiB）、WDのCPU候補6件がPASS。モデル起動/入力は23.176秒/3.424秒（一般性能値/検索精度ではない）。両所有workerを回収、既存kill解放のexit1/1。全選択入力metadata・生成PNG SHA/mtime不変、専用DB integrity=ok。ダウンロード/通常settings/OS導入なし。
 
 `tools/check_acquired_ai_runtime.py --existing-repository-models`はexactなrepo/models rootも明示選択でき、実際に使う2profileのmodel directoryだけをsnapshotする。別modelを列挙せず、cacheは専用先へ、CUDA予算/空き3GiB条件/完全検査を維持。初回 `crt-models01.log` は試験側の誤ったimport名でCLI開始前停止（GPU/worker開始0）。実在するtagger_profileへ修正しCLI importを確認後、`crt-models02/report.json`が上記PASS。新しいruntime上の接続確認で、全媒体/音楽/実画質・clean Windowsの受入ではない。
+
+
+### Native部品と通知のbound対応/輸送サイズ
+
+`msvc_component_contract` をbuilderと静的native auditorで共有し、専用component manifestの12DLL/3通知をsealed inventoryと照合する。偽のscope/承認、欠落/重複/改変/architecture不一致は拒否。小さいCRTと通知だけは全SHAを追加確認し、残る巨大native payloadの全検証・loader/権利承認とは分ける。生成5新規＋既存builder/native19関連tests PASS。実同候補の335 native中、Python RECORD対応285、MSVC component対応12、残る未対応38。unmapped_distribution_record_count=50を別記して、件数の意味を隠さない。全PE読取成功、静的VC未解決import0。actual loader/GPUの成功は前節の限定試験で、この静的auditはloader合格を捏造しない。
+
+配布輸送ZIPを1回作成し、全ZIP memberのstreaming SHA検査にPASS：**3,034,460,747bytes**、SHA `094ce0398f85b46cbb0c92635155953b9dec0db857757f1d448ebf440268005f`、作成163.751秒/読取17.629秒。`continuation-20261029b/runtime-transport01/report.json`。既存の単一ZIP v3は利用可能だが、[GitHub Releasesの1asset 2GiB未満](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)を超えるため、そのまま同hostへ置けない。次は互換を維持した分割transportの取得/展開を小単位で追加する。公開host/条項/registryの承認待ちは保ち、実uploadや架空URL登録は行わない。

@@ -22,11 +22,7 @@ from storage_lease import plain_path,storage_parent
 from package_release import validate_output
 from collect_ai_runtime_notices import _read,validate_for_source
 from inspect_runtime_native import pe_machine
-
-COMPONENT='THIRD_PARTY_NATIVE_LICENSES/msvc-v14'
-CRT_NAMES=frozenset(('concrt140.dll','msvcp140.dll','msvcp140_1.dll','msvcp140_2.dll',
-    'msvcp140_atomic_wait.dll','msvcp140_codecvt_ids.dll','vcamp140.dll','vccorlib140.dll',
-    'vcomp140.dll','vcruntime140.dll','vcruntime140_1.dll','vcruntime140_threads.dll'))
+from msvc_component_contract import COMPONENT,CRT_NAMES
 
 
 def _json(path,limit=1024*1024):
