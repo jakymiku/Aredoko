@@ -23,6 +23,7 @@ from previews import PreviewUnavailable
 MAX_FRAME_BYTES=32*1024*1024
 # Bound total exact pair comparisons per request; exceeding the cap returns no result.
 MAX_PAIRS=100_000
+PAIR_VERSION_INTERVAL=64
 MAX_WINDOW_MS=MAX_FRAMES*FRAME_INTERVAL_MS
 
 
@@ -76,10 +77,17 @@ class VideoDirectSimilarity:
         index=self.index;catalog=index.catalog;generation=catalog.result_generation()
         with index.store.connect() as monitor,ScoreSpool(cancelled=cancelled,parent=index.stage_parent) as spool:
             version=monitor.execute('PRAGMA data_version').fetchone()[0]
-            def check():
+            private_pairs=0
+            def check(*,pair=False):
+                nonlocal private_pairs
                 if cancelled is not None and cancelled():raise SearchCancelled('Video similarity cancelled')
+                # Cancellation and catalog/profile guards remain per pair.
+                # SQLite commits may be polled in bounded private work only:
+                # all window/candidate/finalization/render checks stay immediate.
+                private_pairs=private_pairs+1 if pair else 0
                 if (catalog.result_generation()!=generation or index.encoder.profile.key!=index.profile.key
-                        or monitor.execute('PRAGMA data_version').fetchone()[0]!=version):
+                        or ((not pair or private_pairs%PAIR_VERSION_INTERVAL==0)
+                            and monitor.execute('PRAGMA data_version').fetchone()[0]!=version)):
                     raise VideoSearchChanged('Video similarity changed; refresh results')
             # The origin obeys roots/shelves/exclusions, but the candidate-only
             # favorites view must not make an otherwise valid origin disappear.
@@ -118,7 +126,7 @@ class VideoDirectSimilarity:
                             raise AIUnavailable('動画の比較範囲が上限を超えました。対象フォルダーや棚を絞って再実行してください。')
                         for at,end,vector in frames:
                             for origin_at,origin_end,query in origin_frames:
-                                check();score=dot(query,vector)
+                                check(pair=True);score=dot(query,vector)
                                 if best is None or score>best[0]:best=(score,at,end,origin_at,origin_end)
                         score,at,end,origin_at,origin_end=best
                         spool.add(row['id'],{'video':score},payload={'item':row,'revision':revision,

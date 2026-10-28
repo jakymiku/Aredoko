@@ -215,3 +215,10 @@ Jobsはstart失敗したidle threadの参照を戻してconfigureの再試行を
 旧実装の新6methodはsubtest込み **7 FAIL/4 ERROR・0.455s**。thread joinの実例外と、二重close/公開途中owner/新terminal契約不一致を記録。修正後のfault6＋旧音声Feature3＋旧動画Feature6＋HTTP3は **18 PASS/5.014s**。HTTPではrestart案内/私的な例外文の非公開/同じFeatureの再実行拒否、通常roots APIの応答、close一回、通常video-audio/音声共有owner・cached類似保全を確認した。monitor失敗時に実際に開始済みのidle threadが生存しないことを追加観測した **1 PASS/0.076s**。py_compile成功。重複runは合算しない。
 
 Core `--audio-content`/`--video-content`へavailable=false時も初期化失敗を再起動と表示する回帰sourceを追加。**SDK/Windows不在で未実行**。Windows担当は前段video-audio/Core/build/native確認と併せる。OSがthreadを一切作れない環境全体やcleanup自身のOS I/O障害に対する完全復旧保証ではなく、失敗したAI機能はアプリ再起動まで停止する。通常DB/settings/Alpha/shortcut/ZIPは未更新。
+
+
+### 2026-10-28 ローカル：privateな類似比較のSQLite版問い合わせを削減
+
+音声/動画/動画内音声のcached pair比較で、取消・catalog世代/profileは引き続き全pair確認する。DBの`PRAGMA data_version`だけprivate計算中は最大64pair間隔へまとめ、window取得・候補境界・finalize前・range返却では毎回確認する。途中の外部DB commitは公開前に拒否し、partial rankingを返さない。dotの演算順/厳密最大/同点順/10万pair cap/2item buffer/source revisionの検証は変更しない。
+
+生成vectorと元の検証済みfixtureを使うCPU microcase（768D/10,000pairs/trace有効・各1回）は、旧0.520182s/DB問い合わせ10,012回→新0.467492s/168回。返却ID/score/両区間が同一、spool回収。全検索・実動画品質・端末一般性能の保証ではない。初回性能回帰は旧codeで2 FAILを確認。関連39 unique methodがPASS（runner上はimportしたTestCaseも収集して71実行になったため重複合算しない）。importをmodule aliasへ直し新2件だけを別Pythonで再確認PASS。短い4pair中の別connection commitでも結果sinkへ1件も渡さず拒否することを確認し、既存のpair途中取消もPASS。生証拠`data/ai-ui/work-sync-20261028/pair-version-*.json`/log。

@@ -310,3 +310,10 @@ Core/WinUI sourceには第三のdirectVideoAudioフラグを追加。右クリ�
 `--video-audio-content`回帰sourceにrequest scope/別mode/曖昧flags拒否、両区間の表示とseek、source/kind/revision/欠落origin区間/score/自己一致/起点ID違いの拒否、固定結果から専用strict parserへの接続を追加した。**SDK/Windowsがなく未実行**。追加moduleはpackage_releaseがappの全.pyをコピーする既存builder契約に含まれることをsource確認（新build/ZIPはなし）。
 
 Windowsでは前節のCore/cache build後、生成2動画＋無音trackなし/独立DB/settingsで右クリック→両区間根拠→候補時刻再生→元検索/前後画面履歴とscope保持をひとつの限定caseにまとめる。実model品質を疑似vectorから推測しない。複数track選択・映像/音声rank統合・新配布/clean Windowsは未受入のまま。
+
+
+### 2026-10-28 ローカル：privateな類似比較のSQLite版問い合わせを削減
+
+音声/動画/動画内音声のcached pair比較で、取消・catalog世代/profileは引き続き全pair確認する。DBの`PRAGMA data_version`だけprivate計算中は最大64pair間隔へまとめ、window取得・候補境界・finalize前・range返却では毎回確認する。途中の外部DB commitは公開前に拒否し、partial rankingを返さない。dotの演算順/厳密最大/同点順/10万pair cap/2item buffer/source revisionの検証は変更しない。
+
+生成vectorと元の検証済みfixtureを使うCPU microcase（768D/10,000pairs/trace有効・各1回）は、旧0.520182s/DB問い合わせ10,012回→新0.467492s/168回。返却ID/score/両区間が同一、spool回収。全検索・実動画品質・端末一般性能の保証ではない。初回性能回帰は旧codeで2 FAILを確認。関連39 unique methodがPASS（runner上はimportしたTestCaseも収集して71実行になったため重複合算しない）。importをmodule aliasへ直し新2件だけを別Pythonで再確認PASS。短い4pair中の別connection commitでも結果sinkへ1件も渡さず拒否することを確認し、既存のpair途中取消もPASS。生証拠`data/ai-ui/work-sync-20261028/pair-version-*.json`/log。
