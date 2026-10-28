@@ -147,3 +147,10 @@ VS Community 2022の公式原文（62,859bytes/SHA`41a207b1…`）も確認し�
 生成PE/偽license/専用packの10tests PASS（原本/輪内CRT保全、全依存set、通知束縛、改変・危険path・混在版・未知入力・出力重複の拒否、取消、最終検証失敗時のmarker撤去）。前段9件は基本Python3.11でもPASS。実体の `continuation-20261029b/crt-runtime01` は **23,918files/4,950,784,575bytes**、manifest SHA `9ac04f2d56895690dd620971f2d3ae1dcffe731d45ba5225b26a4f86f845f731`、コピー/全検証まで成功。動作確認は次の単位。今回ユーザーの「テストは好きに実行」を専用の配置/実行確認へ適用し、前日の静的展開だけの許可とは区別する。新しい依存取得/installer実行/OS install/公開はしない。
 
 [Microsoftのapp-local指針](https://learn.microsoft.com/en-us/cpp/windows/choosing-a-deployment-method?view=msvc-170)に従い、更新責任もapp側に残る。[2026 REDISTの対象](https://learn.microsoft.com/en-us/visualstudio/releases/2026/redistribution)は適切にライセンスされたVS等とその条項を条件にしており、旧2022条項の保存やDLL署名だけで公開を承認しない。公開時のpublisher適格性/適用条項・利用者向け通知の最終確認は残る。ここは技術的なローカル試験候補で、製品registryに登録していない。
+
+
+### 同候補のCPU loader確認
+
+`tools/check_ai_runtime_crt.py` は通常のruntime binding/既定オンの完全照合後、PATHから開発用環境を除いた専用子processを2本だけ逐次起動する。PyTorch2.9.1+cu128/TransformersのimportとCPU tensor演算、ONNX Runtime1.23.2のimport/providersが成功し双方exit0。EnumProcessModulesで実際に読んだCRTの場所とbytes SHAをcomponent manifestへ照合し、両processの共通CRT、特にORTの **MSVCP140_1.dllが新packのrootから読まれた**ことを確認した。単なるbasename候補一致をloader合格にしていない。
+
+生証拠 `continuation-20261029b/crt-load01/report.json`。全23,918files/4,950,784,575bytes照合は66.980秒（コピー直後でcache状態が違うため前日の162秒との速度改善比較にはしない）。import/CPUは12.877秒/0.830秒。manifest不変、GUI/GPU推論/モデルロード/通常DB/settings/OS installなし。開発PC上の限定受入であり、WindowsのAPI-set/driver/未ロード機能やclean Windows、公開権利/host/catalogを完成扱いにしない。
