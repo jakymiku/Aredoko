@@ -259,3 +259,39 @@ PCM/source/既存video source **25 PASS/2.160s**。動画音声の実decode→�
 関連30件は29 PASS/1 FAIL（10.684s）：新testが競合を503と誤期待、既存AIBusyの409を正として修正。修正したHTTP testと追加した全trackなし/専用取消atomic rollback/fresh probe回避・probe異常/cancel/guardを含む **8 PASS/4.765s**。実生成MKV＋疑似encoder＋独立DB/loopbackで確認、同じowner/encoderとclose一回も検証。py_compile成功。重複成功は合算しない。
 
 Core source_kindの表示/parser回帰はsource追加のみで.NET未実行。専用Core client/検索mode/evidence/player seekとWinUI入口は未接続、実model/Windows/native/品質・複数track選択/映像とのrank統合は未受入。映像検索が動画内音声まで検索するという案内には変更しない。
+
+
+## 2026-10-28 Work：Core/WinUIの独立した動画内音声検索と一致時刻再生（source実装、native未実施）
+
+前節の残件のうちCore/WinUI接続を実装した。SearchMethodは旧0–8を保ち、9=`video-audio-direct`を追加。共通direct-content判定で視覚AI scope/順位統合UIへ送らず、video kindと共通root/棚/favoriteを固定結果へ渡す。空入力は推論を開始しない。LibraryApi.VideoAudioContentは同じ認証HttpClientの固定prefixを使い、statusは共有ownerの現在/直近source_kindをそのまま返す。
+
+MediaRowはaudio_match_end_ms/contractを保持。video-audio evidenceはkind=video/source=video-audio/contract=direct-audio-window:v1・0≤start<end≤24h・幅30秒以下・有限scoreを必須とし、origin/映像根拠の混在を拒否する。動画内音声を従来の発話snippetや代表frameへ読み替えない。旧audio-file/legacy代表frame/legacy音声pointは保全。固定rangeは空結果も含めresponse sourceを専用modeと照合する。動画playerはこのsourceのaudio_match_msから開始し、その他は従来のvideo_match_msを維持する。正確な区間を「動画内の音声一致（0:30–0:31.25）」と表示し、発話や文字起こしを生成したとは表示しない。
+
+WinUI検索comboの末尾へ「動画内の音声（AI）」を追加し、選択時videoを固定。AI検索の準備には通常音声と別Expanderを同じpanel実装で接続。先頭track/音声なしskip/文字起こしなしを説明し、旧映像検索の「動画内音声は対象外」は正しいため保持する。shared ownerで別sourceを準備している間は取消buttonを無効にし、終わった別sourceの件数を自分の準備完了として表示しない。panel閉鎖は観測だけ停止、再展開でstatus取得、取消/開始の世代処理は維持する。
+
+追加の実CPU/認証HTTP **1 PASS/1.235s**：生成32秒video＋31.25秒sine audio、疑似encoderが後半windowを選ぶ条件で、実PCM→atomic index→固定結果へstart30000/end31250が保たれ、kind/source/contract/映像根拠非混在/発話snippetなしを確認した。初回結果を採用、性能計測ではない。test helperのFFREPORT環境除去/Windows非表示child指定を追加。py_compile成功、MainPage.xamlはXMLとして整合し旧9方式＋新末尾の計10方式を確認。**C# compile/test/native成功の代替とはしない。**
+
+Core `--video-audio-content` sourceに認証route/明示consent/scope、旧番号、空query/不正kind、exact interval/seek/代表frame互換、欠落・型・上限・source/contract・origin/映像混在の拒否、固定結果空rangeの別namespace拒否を追加した。既存runnerのinvalid modeを10へ更新。SDK/Windowsがなく未実行。
+
+### Windows担当の次の限定確認
+
+1. 通常checkoutを最新branch/HEADへfast-forward同期し、未commit差分を保全。インストール済み.NET10/cacheで以下を順に実行（新download/Actionsなし）。失敗時は診断→対象修正→必要な再確認。
+
+```powershell
+dotnet run --project tests/Aredoko.Core.Tests -c Release -- --video-audio-content
+dotnet run --project tests/Aredoko.Core.Tests -c Release -- --audio-content
+dotnet run --project tests/Aredoko.Core.Tests -c Release -- --video-content
+dotnet run --project tests/Aredoko.Core.Tests -c Release -- --favorite-patch
+```
+
+2. 既存のWinUI/Portable手順とcacheでbuild。今回新Core test/sourceも含める。通常Alpha/shortcut/ZIPを更新せず、排他的listen/起動ID照合の独立DB/settings候補を使う。
+3. 専用生成video（音声なし・32秒/音声31.25秒・音声開始遅延）だけを登録。現在のフォルダ/棚/favoriteを絞り「動画内の音声」を明示準備→途中中断→旧索引保持→再開。時刻/総尺未確定/未保存を確認し、閉じて再表示も同じjobへ戻ることを確認。
+4. 生成fixtureとインストール済みモデルで「動画内の音声（AI）」を検索し、videoだけ・専用根拠区間・動画playerが一致時刻から開くことを確認。品質を疑似encoder試験から推測しない。通常audioと映像検索へ戻しscope/旧mode番号・再生を確認。通常音声job中は動画panelの取消無効、逆向きも確認。全所有child終了/原本SHA・mtime不変を記録。
+
+実model品質/native seek・全codec/track時刻・build/新配布は未受入。保存済み動画内音声のvideo-to-video類似、複数track選択、映像/音声rank統合は未実装。
+
+### 差分レビューで追加した取消競合修正
+
+共有ownerへ移行すると、通常audio panelの最後のpollがaudio実行中でも、クリック直前にvideo jobが始まる可能性がある。UIのsource照合だけでは防げないため、通常audio-ai/cancelもsource_kind=audioを渡すよう修正した。video-audio-ai/cancelはvideoへ限定済み。Jobsのpublication guard＋status guard内で現在sourceを照合し、異なるsourceならcancel_requested=falseとする。内部owner.closeは両kindを所有して安全に停止する。前節の「通常audio cancelは全共有jobへ作用」はこの修正により置き換える。
+
+両方向の競合/正しいsourceの取消/旧commit保持の実HTTP2件はPASS。併せて指定した既存test methodが存在せず、同runは **3 run中2 PASS/1 runner ERROR（1.717s）**。製品失敗ではなくrunner指定誤りとして保持する。実在する追加idle取消testで両APIのempty body/未初期化/推論0を **1 PASS/0.716s** 確認した。成功済み競合testは重複再実行しない。

@@ -3,6 +3,7 @@ using System.Text.Json;
 void Check(bool result,string name){if(!result)throw new Exception(name);Console.WriteLine("PASS "+name);}
 if(args.Length>0&&args[0]=="--viewer-transport-probe"){await ViewerTransportProbe.Run(args);return;}
 if(args.Contains("--audio-content")){await AudioContentTests.Run(Check);return;}
+if(args.Contains("--video-audio-content")){await VideoAudioContentTests.Run(Check);return;}
 if(args.Contains("--video-content")){await VideoContentTests.Run(Check);return;}
 if(args.Contains("--viewer-preferences")){await FeedbackTests.Run(Check);return;}
 if(args.Contains("--setup-plan")){await AISetupPlanTests.Run(Check);return;}
@@ -22,6 +23,7 @@ await BackupTests.Run(Check);
 await AIEnvironmentTests.Run(Check);
 await AudioContentTests.Run(Check);
 await VideoContentTests.Run(Check);
+await VideoAudioContentTests.Run(Check);
 await AISetupPlanTests.Run(Check);
 await AIDownloadTests.Run(Check);
 await RootFavoritesTests.Run(Check);
@@ -103,14 +105,14 @@ bool tooMany=false;try{picker.Restore(Enumerable.Range(1,257));}catch(ArgumentEx
 Check(tooMany&&picker.Selected.SequenceEqual(new[]{1}),"oversize restore cannot partially replace draft");
 
 
-foreach(var (index,ai,source) in new[]{(0,false,"all"),(1,true,"all"),(2,true,"cover"),(3,true,"text"),(4,false,"pending-proposals"),(5,false,"page-text"),(6,false,"pending-proposals-semantic"),(7,true,"audio-direct"),(8,true,"video-direct")})
+foreach(var (index,ai,source) in new[]{(0,false,"all"),(1,true,"all"),(2,true,"cover"),(3,true,"text"),(4,false,"pending-proposals"),(5,false,"page-text"),(6,false,"pending-proposals-semantic"),(7,true,"audio-direct"),(8,true,"video-direct"),(9,true,"video-audio-direct")})
 {
     var method=SearchMethod.FromIndex(index);
     Check(method.IsAI==ai&&method.Source==source,$"search method {index} preserves API route/modality");
 }
 var textRequest=AIScopeRequests.Search("曖昧な素材","image","favorites",2,SearchMethod.FromIndex(3).Source,scopedIndex["scope"]!.AsObject());
 Check(textRequest["source"]!.GetValue<string>()=="text"&&textRequest["kind"]!.GetValue<string>()=="image"&&textRequest["view"]!.GetValue<string>()=="favorites"&&textRequest["page"]!.GetValue<int>()==2&&textRequest["scope"]!["root_ids"]!.AsArray().Count==1,"text-only mode preserves filters/page and frozen scope");
-bool invalidMode=false;try{SearchMethod.FromIndex(9);}catch(ArgumentOutOfRangeException){invalidMode=true;}
+bool invalidMode=false;try{SearchMethod.FromIndex(10);}catch(ArgumentOutOfRangeException){invalidMode=true;}
 Check(invalidMode,"invalid search mode cannot silently broaden retrieval");
 
 await ArchiveReaderTests.Run(Check);

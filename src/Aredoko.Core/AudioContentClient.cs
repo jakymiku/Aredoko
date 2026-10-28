@@ -69,11 +69,13 @@ public sealed record AudioContentStatus(bool Supported,bool Available,string Sta
     }
 }
 
-public sealed class AudioContentClient(HttpClient client)
+public sealed class AudioContentClient(HttpClient client,bool videoAudio=false)
 {
+    public string SourceKind=>videoAudio?"video":"audio";
+    private string Route=>videoAudio?"api/library/video-audio-ai/":"api/library/audio-ai/";
     public async Task<AudioContentStatus> StatusAsync(CancellationToken token=default)
     {
-        using var response=await client.GetAsync("api/library/audio-ai/status",token);
+        using var response=await client.GetAsync(Route+"status",token);
         return AudioContentStatus.Parse(await ReadAsync(response,token));
     }
     public Task<AudioContentStatus> StartAsync(JsonObject conditions,CancellationToken token=default)=>
@@ -82,7 +84,7 @@ public sealed class AudioContentClient(HttpClient client)
     private async Task<AudioContentStatus> PostAsync(string operation,JsonObject body,CancellationToken token)
     {
         using var content=new StringContent(body.ToJsonString(),Encoding.UTF8,"application/json");
-        using var response=await client.PostAsync("api/library/audio-ai/"+operation,content,token);
+        using var response=await client.PostAsync(Route+operation,content,token);
         return AudioContentStatus.Parse(await ReadAsync(response,token));
     }
     private static async Task<string> ReadAsync(HttpResponseMessage response,CancellationToken token)

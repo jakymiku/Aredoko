@@ -8,6 +8,9 @@ public static class VideoPlayerPolicy
     public static bool CanOpen(MediaRow row) => row.Kind == "video" && row.Availability == "present" &&
         Extensions.Any(extension => row.Location.EndsWith(extension, StringComparison.OrdinalIgnoreCase));
 
+    public static int? MatchStartMs(MediaRow row)=>row.Kind=="video"
+        ?(row.AudioMatchSource=="video-audio"?row.AudioMatchMs:row.VideoMatchMs):null;
+
     public static TimeSpan ClampSeek(TimeSpan target, TimeSpan duration)
     {
         if (duration <= TimeSpan.Zero || target <= TimeSpan.Zero) return TimeSpan.Zero;

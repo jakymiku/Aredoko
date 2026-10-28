@@ -8,6 +8,8 @@ public readonly record struct SearchMethod(bool IsAI, string Source)
     public bool IsPageText => Source == "page-text";
     public bool IsAudioContent => Source == "audio-direct";
     public bool IsVideoContent => Source == "video-direct";
+    public bool IsVideoAudioContent => Source == "video-audio-direct";
+    public bool IsDirectContent => IsAudioContent || IsVideoContent || IsVideoAudioContent;
 
     public static SearchMethod FromIndex(int index) => index switch
     {
@@ -20,6 +22,7 @@ public readonly record struct SearchMethod(bool IsAI, string Source)
         6 => new(false, "pending-proposals-semantic"),
         7 => new(true, "audio-direct"),
         8 => new(true, "video-direct"),
+        9 => new(true, "video-audio-direct"),
         _ => throw new ArgumentOutOfRangeException(nameof(index))
     };
 }

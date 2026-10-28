@@ -22,6 +22,7 @@ public sealed class LibraryApi : IDisposable
     public PageEvidenceClient PageEvidences {get;}
     public IndexContinuationClient Continuation {get;}
     public AudioContentClient AudioContent {get;}
+    public AudioContentClient VideoAudioContent {get;}
     public VideoContentClient VideoContent {get;}
     public AISetupPlanClient AISetupPlans {get;}
     public LibraryApi(HttpMessageHandler handler)
@@ -40,6 +41,7 @@ public sealed class LibraryApi : IDisposable
         PageEvidences=new(tagClient);
         Continuation=new(tagClient);
         AudioContent=new(client);
+        VideoAudioContent=new(client,videoAudio:true);
         VideoContent=new(client);
         AISetupPlans=new(client);
     }

@@ -127,6 +127,9 @@ public sealed class ResultSession(HttpClient client, string id, JsonObject condi
         if(conditions["mode"]?.GetValue<string>()=="video-direct" &&
             (root["source"]?.GetValue<string>()!="video-direct" || result.Items.Any(row=>row.VideoMatchSource!="direct-video" || row.SimilarityOriginId is not null)))
             throw new InvalidDataException("Invalid direct-video result namespace");
+        if(conditions["mode"]?.GetValue<string>()=="video-audio-direct" &&
+            (root["source"]?.GetValue<string>()!="video-audio-direct" || result.Items.Any(row=>row.AudioMatchSource!="video-audio")))
+            throw new InvalidDataException("Invalid video-audio result namespace");
         if (result.Items.Any(row => row.Id < 1) || result.Items.Select(row => row.Id).Distinct().Count() != result.Items.Count)
             throw new InvalidDataException("Invalid frozen result identities");
         return result;

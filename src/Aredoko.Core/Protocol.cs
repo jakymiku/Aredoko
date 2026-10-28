@@ -44,6 +44,8 @@ public sealed class MediaRow
     public int? OriginMatchMs { get; set; }
     public int? OriginMatchEndMs { get; set; }
     public int? AudioMatchMs { get; set; }
+    public int? AudioMatchEndMs { get; set; }
+    public string? AudioMatchContract { get; set; }
     public string? AudioMatchSnippet { get; set; }
     public string? AudioMatchSource { get; set; }
     public int LiteralHits { get; set; }
@@ -66,6 +68,8 @@ public sealed class MediaRow
              ? (SimilarityOriginId is int && OriginMatchMs is int directOrigin && OriginMatchEndMs is int directOriginEnd
                 ? $"動画の内容一致（起点 {FormatInterval(directOrigin,directOriginEnd)} → 候補 {FormatInterval(directStart,directEnd)}）"
                 : $"動画の内容一致（{FormatInterval(directStart,directEnd)}）")
+           : AudioMatchSource=="video-audio" && AudioMatchMs is int audioStart && AudioMatchEndMs is int audioEnd
+             ? $"動画内の音声一致（{FormatInterval(audioStart,audioEnd)}）"
            : SimilarityOriginId is int ? (VideoMatchMs is int matchMs ? (OriginMatchMs is int v2vOms ? $"動画一致（起点 {FormatVideoTimestamp(v2vOms)} → 候補 {FormatVideoTimestamp(matchMs)}）" : $"動画フレーム一致（{FormatVideoTimestamp(matchMs)}）")
                                        : AudioMatchMs is int aMatchMs ? (OriginMatchMs is int a2aOms ? $"音声・音楽一致（起点 {FormatVideoTimestamp(a2aOms)} → 候補 {FormatVideoTimestamp(aMatchMs)}）" : $"音声一致（{FormatVideoTimestamp(aMatchMs)}）")
                                        : OriginMatchMs is int oms ? (Kind == "audio" ? $"起点の音声（{FormatVideoTimestamp(oms)}）に似た候補" : $"起点の動画（{FormatVideoTimestamp(oms)}）に似た候補")
@@ -198,8 +202,13 @@ public static class Protocol
         foreach (var element in root.GetProperty("items").EnumerateArray())
         {
             var row=ReadRow(element);
-            if(root.TryGetProperty("source",out var source) && source.ValueKind==JsonValueKind.String && source.GetString()=="video-direct" && row.VideoMatchSource!="direct-video")
-                throw new InvalidDataException("動画の一致区間がありません。検索をやり直してください。");
+            if(root.TryGetProperty("source",out var source) && source.ValueKind==JsonValueKind.String)
+            {
+                if(source.GetString()=="video-direct" && row.VideoMatchSource!="direct-video")
+                    throw new InvalidDataException("動画の一致区間がありません。検索をやり直してください。");
+                if(source.GetString()=="video-audio-direct" && row.AudioMatchSource!="video-audio")
+                    throw new InvalidDataException("動画内音声の一致区間がありません。検索をやり直してください。");
+            }
             row.ScoreKind=root.TryGetProperty("score_kind",out var scoreKind) && scoreKind.ValueKind==JsonValueKind.String ? scoreKind.GetString()??"" : "";
             result.Items.Add(row);
         }
@@ -261,8 +270,10 @@ public static class Protocol
         OriginMatchMs = row.TryGetProperty("origin_match_ms",out var oms) && oms.ValueKind==JsonValueKind.Number && oms.TryGetInt32(out var omsVal) && omsVal is >=0 and <=86400000 ? omsVal : null,
         OriginMatchEndMs = row.TryGetProperty("origin_match_end_ms",out var oend) && oend.ValueKind==JsonValueKind.Number && oend.TryGetInt32(out var oendVal) && oendVal is >=0 and <=86400000 ? oendVal : null,
         AudioMatchMs = row.TryGetProperty("audio_match_ms",out var ams) && ams.ValueKind==JsonValueKind.Number && ams.TryGetInt32(out var amsVal) && amsVal is >=0 and <=86400000 ? amsVal : null,
+        AudioMatchEndMs = row.TryGetProperty("audio_match_end_ms",out var aend) && aend.ValueKind==JsonValueKind.Number && aend.TryGetInt32(out var aendVal) && aendVal is >=0 and <=86400000 ? aendVal : null,
+        AudioMatchContract = row.TryGetProperty("audio_match_contract",out var audioContract) && audioContract.ValueKind==JsonValueKind.String ? audioContract.GetString() : null,
         AudioMatchSnippet = row.TryGetProperty("audio_match_snippet",out var snip) && snip.ValueKind==JsonValueKind.String ? (snip.GetString() is { Length: >0 } s ? (s.Length>120 ? s[..120]+"…" : s) : null) : null,
-        AudioMatchSource = row.TryGetProperty("audio_match_source",out var audioSource)&&audioSource.ValueKind==JsonValueKind.String&&audioSource.GetString()=="direct-audio"?"direct-audio":null,
+        AudioMatchSource = row.TryGetProperty("audio_match_source",out var audioSource)&&audioSource.ValueKind==JsonValueKind.String&&audioSource.GetString() is "direct-audio" or "video-audio"?audioSource.GetString():null,
         SemanticScore = row.TryGetProperty("semantic_score",out var score) && score.ValueKind==JsonValueKind.Number && score.TryGetDouble(out var value) && double.IsFinite(value) ? value : null,
         LiteralHits = row.TryGetProperty("literal_hits",out var hits) && hits.TryGetInt32(out var count) ? count : 0,
         LiteralWords = row.TryGetProperty("literal_words",out var words) && words.TryGetInt32(out var total) ? total : 0,
@@ -270,6 +281,18 @@ public static class Protocol
         AIPage = AIPageMatch.Read(row),
         Evidence = ReadEvidence(row)
         };
+        // Video audio has a separate evidence contract. Never degrade an invalid
+        // interval into representative-frame or legacy transcript evidence.
+        if(result.AudioMatchSource=="video-audio" || result.Kind=="video" &&
+            (row.TryGetProperty("audio_match_source",out _) || row.TryGetProperty("audio_match_contract",out _) || row.TryGetProperty("audio_match_end_ms",out _)))
+        {
+            if(result.Kind!="video" || result.AudioMatchSource!="video-audio" || result.AudioMatchContract!="direct-audio-window:v1" ||
+               result.AudioMatchMs is not int start || result.AudioMatchEndMs is not int end || start>=end || end-start>30000 ||
+               result.SemanticScore is null || result.AIPage is not null ||
+               row.TryGetProperty("similarity_origin_id",out _) || row.TryGetProperty("origin_match_ms",out _) || row.TryGetProperty("origin_match_end_ms",out _) ||
+               row.TryGetProperty("video_match_ms",out _) || row.TryGetProperty("video_match_source",out _))
+                throw new InvalidDataException("動画内音声の一致区間が無効です。検索をやり直してください。");
+        }
         // Only direct-video rows carry these three fields. Never interpret a
         // missing or malformed interval as a legacy representative frame.
         if(row.TryGetProperty("video_match_source",out _) || row.TryGetProperty("video_match_contract",out _) || row.TryGetProperty("video_match_end_ms",out _))

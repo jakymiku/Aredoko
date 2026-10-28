@@ -1,31 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
-## 2026-10-28 Work継続checkpoint（動画内音声のowned production API、以下より優先）
+## 2026-10-28 Work継続checkpoint（音声進捗・動画内音声のbackendとGUI source、以下より優先）
 
-- 起点`12aa53ef3699f6b648e984af0ee220ee1d95d846`。同branch/Draft PR #5を継続、HEAD一致を確認。今回commitは本書のGit履歴。サブエージェントなし。
-- **動画内音声の認証backend接続**：`video-audio-ai/status,start,cancel,release,search`と固定結果mode `video-audio-direct`を追加。通常audioと同じencoder/owner/inference lock/idle release/closeを再利用し、kind別のstateless index viewで検索範囲を分離する。原本guard/atomic保存/取消/進捗/共通root・棚・favoriteを維持。statusのsource_kindは共有ownerで現在/直近に実行したaudioまたはvideoを示す。
-- **無trackと競合**：未準備videoだけをfd限定ffprobeで確認し、trackなしはunavailableとしてbatch枠を消費せず次へ進む。fresh項目はprobe不要。壊れたprobe/decodeはbatch失敗で成功扱いせず、旧commitを保持。動画専用cancelは通常audio-file jobを取り消さない。共有audio側cancelは従来どおり現在のaudio-role jobを中止する。
-- **確認**：初回関連30件は29 PASS/1 FAIL（10.684s、競合を503としたtest期待誤り。既存仕様409に修正）。修正＋追加後の動画HTTP6件/新probe2件 **8 PASS/4.765s**。認証/厳格body/consent、無track skip、全無trackでencode0、同じowner/encoder再利用・close1回、種類別検索、取消rollback、fresh probe回避、壊れたmetadata/取消/原本scope再確認、固定結果の音声stamp変更409・文字結果保全を確認。py_compile成功。Core source_kind parser/表示回帰はsource追加のみ。
-- **次の1件**：Coreのvideo-audio source/evidence・検索mode・動画playerの音声一致seek→WinUIの独立した明示準備/検索入口。backend HTTPは接続済みだがGUIからは未接続で、映像検索の「動画内音声は対象外」は消さない。Windows側はCore `--audio-content`/`--video-content`/`--favorite-patch`→build→生成fixtureで限定確認。実model品質/複数track選択/音声映像rank統合は未実装・未受入。
-- 通常DB/settings/Alpha/ZIP/shortcut/私物変更0、実model/GPU/GUI/.NET/download/OS/Actions/main merge/shutdown0。AlphaはZIP10/source0138a58を保持。現在クォータ％取得不可。証拠は[動画正本](video-similarity.md)末尾。
-
-## 2026-10-28 Work継続checkpoint（動画内音声の入力・保存・文章検索基盤、以下より優先）
-
-- 起点 **`17a661256b4993cc214adaabda96f96924e7fc3f`**（音声準備の時刻進捗を先にcommit/push/PR head照合済み）。既存branch/PR #5を継続、サブエージェントなし。ユーザーのreset後ガッツリ続行を受け複数単位を実装。現在残％は取得不可。今回commitは本書のGit履歴。
-- **動画内音声のCPU backend基盤を追加**：登録済みvideoの原本guard付き`video_audio_pcm_stream`で先頭音声trackを1decoderで16kHz/mono/f32le化。動画側format/32GiB/画素制限を明示選択し、通常音声のformat/512MiB制限は維持。先頭遅延はsilenceとして正しい位置を保持、音声track終了後の動画末尾は勝手にsilenceで埋めない。trackなし/不正decodeは成功にしない。
-- **保存・文章検索も接続（専用API/UI/jobは未接続）**：`AudioDirectIndex(...,source_kind='video')`が既存text/audio profileでPCMをatomic保存し、`AudioDirectSearch`はvideoだけのscopeで検索。response source=`video-audio-direct`、evidence source=`video-audio`で明示。通常audio-file検索とは分離し、RGB namespace/vecを再解釈しない。同一PCM profile内のitem ID保存なのでschema変更なし。旧音声類似へvideo設定Indexを誤投入した場合は拒否。backup/restore/purgeを生成fixtureで確認。
-- **確認**：PCM stream/動画音声source/既存video source **25 PASS/2.160s**、動画音声index＋既存音声search/similarity **34 PASS/7.408s**、既存認証HTTPの検索/類似focused2 **PASS/1.335s**、無track再生成が旧索引を保ち成功markerを作らない追加1件 **PASS/0.305s**。生成MKVのvideo3.2秒・audio1秒遅延/2.2秒終了、無track/取消/除外/旧revision/slot競合、保存前取消の旧索引保全、通常audioとvideoのscope非混在、元media不変・復旧往復を確認。重複runは合算しない。[動画正本](video-similarity.md)末尾。
-- **追加cleanup修正**：PCM reader threadのstart失敗で未開始threadをjoinして元例外を隠しstdoutを閉じ損ねる旧経路を修正。child回収/stdout close/元例外の保持を回帰確認。通常EOF/取消/期限/backpressureを保全。
-- **次の1件**：動画内音声をproductionへ接続するowned job/API→Coreの別source evidence/動画player seek→WinUIの明示準備/検索入口。既存audio ownerを再利用する単一所有設計が必要で、同じencoderを別ownerで二重closeしたりworkerを増やさない。trackなし理由の分類/全batchの扱いも決める。現在の`video-ai`は映像、`audio-ai`は音声fileだけのまま。Windows担当はCore `--audio-content`/`--video-content`/`--favorite-patch`→build→生成fixtureの限定確認へ。
-- **保全/未完**：通常DB/settings/Alpha/shortcut/ZIP/私物変更0、実model/GPU/GUI/.NET/download/OS変更/Actions/新branch/PR/main merge/shutdown0。AlphaはZIP10/source0138a58。今回動画音声の実model品質/HTTP/GUIは未受入・未接続で、既存の「動画内音声は対象外」案内を完成扱いで消さない。runtime公開/clean Windows/U7実入力等の残件、音声/動画時刻進捗・一括favorite・既存1時間比較を保持し、成功試験を反復しない。
-
-## 2026-10-28 Work継続checkpoint（音声準備の時刻進捗、以下より優先）
-
-- 起点`a033b6981c77589fc0e1280c30bc92c4e18adbbe`、既存branch/PR #5のHEAD一致・open/Draftを確認。ユーザーはクォータreset後に複数単位の続行を指示。サブエージェントなし、現在残％は取得不可。今回commitは本書のGit履歴。
-- **音声にもitem_progressを接続**：30秒PCM区間の解析済み時刻・段階を認証statusへ追加しCore/WinUI sourceへ接続。総尺は正常EOFまでnullのまま、割合を推測しない。無音もcoverage時刻を進めるが推論しない。保存前は未保存と表示し、processed/indexedは実commit後だけ。取消/失敗/保存成功でcurrent消去、再開始でreset。旧応答のfield省略/nullを許可。
-- **確認**：audio index/jobs/HTTP/feature **46 PASS/9.404s**。途中停止中のstatus応答、30000ms解析済み/total null/公開件数0、取消rollback/再開始、無音gap、実生成31.25秒WAVのEOF後だけ総尺確定を確認。Core `--audio-content`の回帰sourceを追加、.NET/WinUI/Portable/nativeは未実行。[音声正本](audio-producer-review.md)末尾。
-- **続ける独立作業**：動画内音声の原本guard付き逐次PCM入力を先行し、既存の音声/動画worker・namespace・原本を無断で再解釈しない。索引/検索/GUIの接続範囲は別途明記する。Windows側はCore `--audio-content`/`--video-content`/`--favorite-patch`→最新Portable→生成fixtureの限定確認へ。
-- **保全/未検証**：動画の区間進捗と1時間CPU比較、音声破損回復、一括favoriteを保持し反復しない。通常DB/settings/Alpha/shortcut/ZIP/私物変更0、実model/GPU/GUI/.NET/download/OS変更/Actions/新branch/PR/main merge/shutdown0。AlphaはZIP10/source0138a58。runtime固定成果物/配布方針・clean Windows・実媒体品質等の既存残件を保持。
+- 同branch `feat/winui3-production-mvp-20261011` / open Draft PR #5を継続。今回の先行checkpointは音声時刻進捗`17a6612`→動画内音声のguard付き入力/atomic保存/検索基盤`12aa53e`→owned production API`28e5fae`（remote/PR head照合済み）。今回のCore/WinUI接続commitは本書のGit履歴。サブエージェントなし、現在クォータ％は取得不可。
+- **実装済みbackend**：音声準備のitem_progress（解析済み時刻・総尺はEOFまでnull・未保存段階）をstatusへ追加。videoの先頭audio trackをfd限定/1decoder/16kHz mono PCMで取得し、先頭遅延を保持、audio EOF後のvideo末尾を水増ししない。既存text/audio profile内のglobal item IDで保存、RGB namespaceとは別。`video-audio-ai/status,start,cancel,release,search`と固定結果mode `video-audio-direct`を認証APIへ接続。通常audioと**同じowner/encoder/inference lock/idle release/close**を再利用し、kind別のstateless viewで検索範囲を分離。
+- **無track/取消/保全**：fresh videoはprobeせず再利用、未準備videoのtrackなしはunavailableへ加えてbatch枠を使わず次へ。probe/decode異常は成功にしない。両cancel APIはsource kindをpublication guard内で照合し、古いpanelから別種類のjobを取消さない（今回差分レビューで通常audio側も限定）。atomic保存/取消rollback、root/棚/favorite、原本revision、固定結果stampを保全。reader開始失敗の未開始thread.join/close漏れも修正済み。
+- **今回GUI接続はsourceまで**：検索方法9「動画内の音声（AI）」と独立した明示準備Expander、Core client/strict evidence/固定結果namespace確認、音声一致区間からの動画player seekを追加。映像検索と別入口で、先頭track/文字起こしなしを案内。別sourceを準備中のpanelは取消を無効にし、他jobの完了件数を自分の準備として表示しない。旧検索番号/音声/動画代表frameは保持。
+- **実証済み**：音声関連46 PASS/9.404s、動画音声入力/既存動画25 PASS/2.160s、index＋既存音声search/similarity34 PASS/7.408s等の詳細は各正本。production初回30件は29 PASS/1 FAIL（競合409を503と誤期待、test修正）。修正＋追加HTTP6/probe2は8 PASS/4.765s。さらに実生成32秒video/31.25秒PCM→後半一致`30000–31250ms`→認証固定結果の1件 PASS/1.235s。取消競合の追加runは実対象2 PASS/1 runner ERROR（不存在method指定、1.717s）、idle取消/厳格body追加1 PASS/0.716s。py_compile成功、XAML XML整合/10方式を確認。重複合算なし。C#回帰sourceは追加したが.NET SDKなしで**Core/WinUI/Portable build/nativeはUNRUN**。実model品質/GPU/複数track/映像とのrank統合も未受入。
+- **次の1件**：Windows担当は[動画正本末尾の手順](video-similarity.md)でCore `--video-audio-content`→既存`--audio-content`/`--video-content`/`--favorite-patch`→既存cacheのWinUI/Portable buildを実施。生成fixture/独立DBで明示準備→中断→再開→音声根拠と30秒seek→scope保持/再表示を限定確認。ここではWindows待ちにせず、次の独立実装は「動画内音声の保存済み索引を使う類似検索（video originに限定、音声file類似/RGB類似と別mode）」を検討できる。既存runtime固定成果物/配布方針は情報待ち、同じ成功性能caseは反復しない。
+- 通常DB/settings/Alpha/ZIP/shortcut/私物変更0、実model/GPU/GUI/.NET/download/OS/Actions/main merge/shutdown0。installed AlphaはZIP10/source0138a58、今回sourceは未配布。[動画正本](video-similarity.md)・[音声正本](audio-producer-review.md)に証拠。既存U7実入力/clean Windows等の未完を保持。
 
 ## 2026-10-28 Work継続checkpoint（動画の区間進捗・1時間生成case、以下より優先）
 

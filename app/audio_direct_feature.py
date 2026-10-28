@@ -77,7 +77,9 @@ class AudioDirectFeature:
         self.catalog.search(kind=source_kind,limit=1,**{name:value for name,value in options.items() if name in allowed})
         return self._ensure().search(query,source_kind=source_kind,**options)
     def cancel(self):
-        result=self.owner.cancel() if self.owner is not None else {'cancel_requested':False}
+        # Keep the original audio-file endpoint scoped to audio files, including
+        # a stale panel click after another source has acquired the shared owner.
+        result=self.owner.cancel(source_kind='audio') if self.owner is not None else {'cancel_requested':False}
         return {**self.status(),'cancel_requested':result['cancel_requested']}
     def cancel_video_audio(self):
         result=self.owner.cancel(source_kind='video') if self.owner is not None else {'cancel_requested':False}

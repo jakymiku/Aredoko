@@ -36,11 +36,12 @@ public static class ResultSearchConditions
             if (method.IsAI || method.Source != "all") throw new ArgumentException("History uses literal search");
             result = new JsonObject { ["mode"] = "history", ["query"] = query, ["kind"] = kind };
         }
-        else if (method.IsAudioContent || method.IsVideoContent)
+        else if (method.IsDirectContent)
         {
             if (string.IsNullOrWhiteSpace(query))return null;
             if(method.IsAudioContent && kind is not ("" or "audio"))throw new ArgumentException("音声の内容検索では種類を音声・音楽にしてください。");
             if(method.IsVideoContent && kind is not ("" or "video"))throw new ArgumentException("動画の内容検索では種類を動画にしてください。");
+            if(method.IsVideoAudioContent && kind is not ("" or "video"))throw new ArgumentException("動画内の音声検索では種類を動画にしてください。");
             result=new JsonObject{["mode"]=method.Source,["query"]=query,["view"]=view};
         }
         else if (method.IsPageText || method.IsTagCandidates)

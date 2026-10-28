@@ -1,8 +1,10 @@
 """Owned authenticated video-audio API with generated sources and fake encoder."""
 from pathlib import Path
+import os
 import shutil
 import sys
 import threading
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -39,6 +41,13 @@ class VideoAudioHTTPTests(unittest.TestCase):
         for body in ({'consent':False},{'consent':True,'source_kind':'audio'},{'consent':True,'conditions':{'root_ids':[999]}},{'consent':True,'limit':0}):
             self.assertEqual(self.request('/api/library/video-audio-ai/start',body)[0],400)
         self.assertEqual(self.request('/api/library/video-audio-ai/start',raw=b'{"consent":true,"consent":false}')[0],400)
+        self.assertIsNone(self.feature.owner);self.assertEqual(self.feature.encoder.calls,0)
+
+    def test_idle_source_specific_cancel_is_lazy_and_requires_empty_body(self):
+        for route in ('audio-ai','video-audio-ai'):
+            self.assertEqual(self.request('/api/library/'+route+'/cancel',{'source_kind':'video'})[0],400)
+            code,reply=self.request('/api/library/'+route+'/cancel',{})
+            self.assertEqual(code,200);self.assertFalse(reply['cancel_requested'])
         self.assertIsNone(self.feature.owner);self.assertEqual(self.feature.encoder.calls,0)
 
     def test_owned_batch_skips_trackless_video_and_shares_one_owner_with_audio_files(self):
@@ -91,7 +100,6 @@ class VideoAudioHTTPTests(unittest.TestCase):
         ready=threading.Event();proceed=threading.Event();encode=self.feature.encoder.encode
         # Make a fresh revision so the old committed item remains until replacement.
         path=self.media/'voice.mkv';info=path.stat()
-        import os
         os.utime(path,ns=(info.st_atime_ns,info.st_mtime_ns+1000000000))
         self.catalog.index.scan(self.root);self.catalog.sync_index()
         with owner.index.store.connect() as db:
@@ -104,6 +112,8 @@ class VideoAudioHTTPTests(unittest.TestCase):
             try:
                 self.assertEqual(self.request('/api/library/video-audio-ai/start',{'consent':True})[0],200)
                 self.assertTrue(ready.wait(3))
+                reply=self.request('/api/library/audio-ai/cancel',{})[1]
+                self.assertFalse(reply['cancel_requested']);self.assertEqual(reply['state'],'running')
                 self.assertTrue(self.request('/api/library/video-audio-ai/cancel',{})[1]['cancel_requested'])
             finally:proceed.set()
             owner.thread.join(5)
@@ -123,6 +133,30 @@ class VideoAudioHTTPTests(unittest.TestCase):
             db.execute('UPDATE ai_audio_direct_sources SET indexed_windows=0 WHERE item_id=?',(self.video,))
         self.assertEqual(self.request('/api/library/results/range',{'session_id':'b'*32,'offset':0,'limit':1})[0],409)
         self.assertEqual(self.request('/api/library/results/range',{'session_id':'a'*32,'offset':0,'limit':1})[0],200)
+
+    def test_real_pcm_tail_evidence_reaches_frozen_video_audio_range(self):
+        # A later window must carry its real video timeline, not the first frame.
+        from video_previews import _executable
+        path=self.media/'tail.mkv'
+        subprocess.run([_executable('ffmpeg'),'-nostdin','-v','error','-f','lavfi','-i','color=s=160x90:r=1:d=32',
+                        '-f','lavfi','-i','sine=sample_rate=16000:duration=31.25','-map','0:v:0','-map','1:a:0',
+                        '-c:v','mpeg4','-c:a','pcm_s16le','-threads','1',str(path)],check=True,timeout=15,
+                       env={k:v for k,v in os.environ.items() if k.upper()!='FFREPORT'},
+                       creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+        self.catalog.index.scan(self.root);self.catalog.sync_index()
+        target=next(row['id'] for row in self.catalog.search()['items'] if row['title']=='tail.mkv')
+        def encode(operation,value):
+            return [1,0,0] if operation=='query' or value.start_ms==30000 else [0,1,0]
+        with patch.object(self.feature.encoder,'encode',side_effect=encode):
+            self.start(limit=10)
+            self.assertEqual(self.request('/api/library/results/create',{'session_id':'c'*32,
+                'conditions':{'mode':'video-audio-direct','query':'tail','view':'all','root_ids':[self.root]}})[0],200)
+            code,result=self.request('/api/library/results/range',{'session_id':'c'*32,'offset':0,'limit':60})
+        self.assertEqual(code,200);self.assertEqual(result['source'],'video-audio-direct')
+        row=next(r for r in result['items'] if r['id']==target)
+        self.assertEqual((row['kind'],row['audio_match_source'],row['audio_match_contract']),('video','video-audio','direct-audio-window:v1'))
+        self.assertEqual((row['audio_match_ms'],row['audio_match_end_ms']),(30000,31250))
+        self.assertNotIn('video_match_ms',row);self.assertNotIn('audio_match_snippet',row)
 
 
 if __name__=='__main__':unittest.main()
