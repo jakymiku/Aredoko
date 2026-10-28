@@ -295,3 +295,18 @@ dotnet run --project tests/Aredoko.Core.Tests -c Release -- --favorite-patch
 共有ownerへ移行すると、通常audio panelの最後のpollがaudio実行中でも、クリック直前にvideo jobが始まる可能性がある。UIのsource照合だけでは防げないため、通常audio-ai/cancelもsource_kind=audioを渡すよう修正した。video-audio-ai/cancelはvideoへ限定済み。Jobsのpublication guard＋status guard内で現在sourceを照合し、異なるsourceならcancel_requested=falseとする。内部owner.closeは両kindを所有して安全に停止する。前節の「通常audio cancelは全共有jobへ作用」はこの修正により置き換える。
 
 両方向の競合/正しいsourceの取消/旧commit保持の実HTTP2件はPASS。併せて指定した既存test methodが存在せず、同runは **3 run中2 PASS/1 runner ERROR（1.717s）**。製品失敗ではなくrunner指定誤りとして保持する。実在する追加idle取消testで両APIのempty body/未初期化/推論0を **1 PASS/0.716s** 確認した。成功済み競合testは重複再実行しない。
+
+
+## 2026-10-28 Work：保存済み動画内音声のvideo-to-video類似検索
+
+`VideoAudioSimilarity`は既存AudioDirectSimilarityの厳密scorerを明示source別classで利用する。通常audio classのsource_kind=audio制約を保ち、video classはvideo viewだけを許可。共通処理のmanifest/catalog kind/output mode/sourceだけを選び、RGB namespaceへfallbackしない。mode=`video-audio-similar`、source=`video-audio-direct`、origin_kind=video、行audio_match_source=video-audio/contract=direct-audio-window:v1、候補/起点両方の開始・終了msを返す。正規化・不完全/破損window除外・candidateを逐次解放・10万pair上限と32MiB/frame memory予算をそのまま保持する。追加decode/推論は行わない。
+
+同じowned audio jobのsimilar(source_kind=video)を、認証POST `/api/library/video-audio-ai/similar`と固定結果modeへ接続。厳格body/未知field/認証、root/棚/除外/候補側favorite、起点自身除外を維持する。モデルavailable=falseでも同profileの保存済み索引を使える。音声file originをvideo類似へ、video originを音声file類似へ渡すと404。固定結果はPCM stampとAI spool予約を使い、別namespaceの索引を参照しない。取消/上限/原本・DB版変更は部分順位を公開しない。
+
+関連 **24 PASS/9.756s**（新動画音声類似5・既存音声類似17・両認証cached HTTP2）。生成MKVを実PCM化して保存し疑似vectorで順位/両区間/stable page/自己除外を確認。encodeとvideo_audio_pcm_streamを禁止patchしてcached検索が両方を呼ばないことを検証。同じPCM storeにaudio fileを保存しても候補へ混入しない。root/棚で起点拒否、favorite候補だけ・除外、欠落/破損vector/marker、取消・pair cap時非公開、保存後原本変更/fixed session無効、DB版変更を確認。HTTPはモデルavailable=falseの新API/固定結果と通常audioの旧動作、認証/未知field/誤kindを確認。py_compile成功。実model品質/高速性/Windows保証ではない。
+
+Core/WinUI sourceには第三のdirectVideoAudioフラグを追加。右クリックの「音が似た動画を探す」から専用modeに入り、起点→候補の区間根拠を表示して候補audio_match_msから動画再生する。未索引なら専用準備先を案内。元検索復帰とsession内前後画面履歴へflagを保存/復元し、映像類似へ取り違えない。Core parserはsource/mode/kind/profile/revision/score/count/identityと両区間を厳密検証し、普通のvideo-audio-direct query rangeはorigin付き行を拒否する。旧番号・通常音声・映像・代表frameの経路は保全。cached類似はモデル読み込み待ちをしない。
+
+`--video-audio-content`回帰sourceにrequest scope/別mode/曖昧flags拒否、両区間の表示とseek、source/kind/revision/欠落origin区間/score/自己一致/起点ID違いの拒否、固定結果から専用strict parserへの接続を追加した。**SDK/Windowsがなく未実行**。追加moduleはpackage_releaseがappの全.pyをコピーする既存builder契約に含まれることをsource確認（新build/ZIPはなし）。
+
+Windowsでは前節のCore/cache build後、生成2動画＋無音trackなし/独立DB/settingsで右クリック→両区間根拠→候補時刻再生→元検索/前後画面履歴とscope保持をひとつの限定caseにまとめる。実model品質を疑似vectorから推測しない。複数track選択・映像/音声rank統合・新配布/clean Windowsは未受入のまま。

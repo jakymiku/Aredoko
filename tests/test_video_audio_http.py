@@ -158,5 +158,24 @@ class VideoAudioHTTPTests(unittest.TestCase):
         self.assertEqual((row['audio_match_ms'],row['audio_match_end_ms']),(30000,31250))
         self.assertNotIn('video_match_ms',row);self.assertNotIn('audio_match_snippet',row)
 
+    def test_cached_video_audio_similarity_works_without_model_and_keeps_fixed_results_separate(self):
+        shutil.copyfile(self.media/'voice.mkv',self.media/'second.mkv')
+        self.catalog.index.scan(self.root);self.catalog.sync_index();self.start(limit=10)
+        before=self.feature.encoder.calls;self.feature.encoder.available=False
+        code,result=self.request('/api/library/video-audio-ai/similar',{'item_id':self.video})
+        self.assertEqual(code,200);self.assertEqual((result['mode'],result['source'],result['origin_kind']),('video-audio-similar','video-audio-direct','video'))
+        self.assertEqual(result['total'],1);row=result['items'][0]
+        self.assertEqual(row['audio_match_source'],'video-audio');self.assertEqual(row['similarity_origin_id'],self.video)
+        self.assertEqual(row['origin_match_ms'],0);self.assertGreater(row['origin_match_end_ms'],0)
+        self.assertEqual(self.feature.encoder.calls,before)
+        self.assertEqual(self.request('/api/library/video-audio-ai/similar',{'item_id':self.video},authorized=False)[0],403)
+        self.assertEqual(self.request('/api/library/video-audio-ai/similar',{'item_id':self.video,'kind':'audio'})[0],400)
+        self.assertEqual(self.request('/api/library/video-audio-ai/similar',{'item_id':self.item})[0],404)
+        self.assertEqual(self.request('/api/library/audio-ai/similar',{'item_id':self.video})[0],404)
+        self.assertEqual(self.request('/api/library/results/create',{'session_id':'d'*32,'conditions':{'mode':'video-audio-similar','item_id':self.video,'root_ids':[self.root]}})[0],200)
+        code,frozen=self.request('/api/library/results/range',{'session_id':'d'*32,'offset':0,'limit':1})
+        self.assertEqual(code,200);self.assertEqual(frozen['mode'],'video-audio-similar')
+        self.assertEqual(frozen['items'][0]['id'],row['id']);self.assertEqual(self.feature.encoder.calls,before)
+
 
 if __name__=='__main__':unittest.main()

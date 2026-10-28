@@ -8,7 +8,7 @@ namespace Aredoko_WinUI;
 public sealed partial class MainPage
 {
     private sealed record PageLocation(string Key,string Screen,SearchBookmark Search,MediaRow? Origin,
-        SearchBookmark? SimilarityReturn,bool DetailsOpen,(string Key,double Y)? Anchor,string FolderFilter,int FolderState,int[] CheckedRoots,bool DirectAudio,bool DirectVideo);
+        SearchBookmark? SimilarityReturn,bool DetailsOpen,(string Key,double Y)? Anchor,string FolderFilter,int FolderState,int[] CheckedRoots,bool DirectAudio,bool DirectVideo,bool DirectVideoAudio);
     private sealed class LocationComparer:IEqualityComparer<PageLocation>
     {
         public bool Equals(PageLocation? left,PageLocation? right)=>left?.Key==right?.Key;
@@ -31,9 +31,9 @@ public sealed partial class MainPage
         var search=new SearchBookmark(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,targetPage,selected,selectedShelfIds?.ToArray());
         var identity=new JsonObject{["screen"]=screen,["query"]=search.Query,["kind"]=search.Kind,["mode"]=search.Mode,
             ["roots"]=search.Roots is null?null:string.Join(",",search.Roots),["shelves"]=search.Shelves is null?null:string.Join(",",search.Shelves),
-            ["literal"]=search.LiteralOnly,["boundary"]=search.Boundary,["group"]=search.Group,["view"]=search.View,["page"]=search.Page,["origin"]=similarityOrigin?.Id,["audio_similarity"]=directAudioSimilarity,["video_similarity"]=directVideoSimilarity};
+            ["literal"]=search.LiteralOnly,["boundary"]=search.Boundary,["group"]=search.Group,["view"]=search.View,["page"]=search.Page,["origin"]=similarityOrigin?.Id,["audio_similarity"]=directAudioSimilarity,["video_similarity"]=directVideoSimilarity,["video_audio_similarity"]=directVideoAudioSimilarity};
         var origin=similarityOrigin is {} item?new MediaRow{Id=item.Id,Title=item.Title,Kind=item.Kind}:null;
-        return new(identity.ToJsonString(),screen,search,origin,similarityReturn,Details.IsPaneOpen,anchor,FolderFilterBox.Text,FolderStateFilter.SelectedIndex,checkedFolderIds.ToArray(),directAudioSimilarity,directVideoSimilarity);
+        return new(identity.ToJsonString(),screen,search,origin,similarityReturn,Details.IsPaneOpen,anchor,FolderFilterBox.Text,FolderStateFilter.SelectedIndex,checkedFolderIds.ToArray(),directAudioSimilarity,directVideoSimilarity,directVideoAudioSimilarity);
     }
     private void RecordNavigationLocation()
     {
@@ -90,7 +90,7 @@ public sealed partial class MainPage
                         Query.Text=bookmark.Query;Kind.SelectedIndex=bookmark.Kind;SearchMode.SelectedIndex=bookmark.Mode;
                         RestoreSearchRoots(bookmark.Roots);SetShelfScope(bookmark.Shelves);AIMatchedOnly.IsChecked=bookmark.LiteralOnly;
                         SimilarityBoundary.Value=bookmark.Boundary??double.NaN;AIResultGroup.SelectedIndex=bookmark.Group;
-                        view=bookmark.View;page=bookmark.Page;similarityOrigin=target.Origin;directAudioSimilarity=target.DirectAudio;directVideoSimilarity=target.DirectVideo;similarityReturn=target.SimilarityReturn;UpdateSearchMethod();RestoreNavigation();
+                        view=bookmark.View;page=bookmark.Page;similarityOrigin=target.Origin;directAudioSimilarity=target.DirectAudio;directVideoSimilarity=target.DirectVideo;directVideoAudioSimilarity=target.DirectVideoAudio;similarityReturn=target.SimilarityReturn;UpdateSearchMethod();RestoreNavigation();
                     }
                     finally{populating=false;}
                     await LoadAsync();

@@ -85,6 +85,7 @@ class AudioDirectFeature:
         result=self.owner.cancel(source_kind='video') if self.owner is not None else {'cancel_requested':False}
         return {**self.status(),'cancel_requested':result['cancel_requested']}
     def similar(self,item_id,**options):return self._ensure(require_model=False).similar(item_id,**options)
+    def similar_video_audio(self,item_id,**options):return self._ensure(require_model=False).similar(item_id,source_kind='video',**options)
     def release(self):return self.owner.release() if self.owner is not None else {'released':False,'resident':False}
     def stamp(self):
         self._ensure(require_model=False)

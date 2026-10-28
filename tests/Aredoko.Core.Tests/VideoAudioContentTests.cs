@@ -71,6 +71,33 @@ internal static class VideoAudioContentTests
         var missing=false;try{Protocol.ParseSearch(reply.ToJsonString());}catch(InvalidDataException){missing=true;}
         check(missing,"video audio envelope cannot downgrade to legacy audio evidence");
 
+        var similarSearch=ResultSearchConditions.Create("ignored","video","favorites",SearchMethod.FromIndex(0),null,[7],originId:9,shelfIds:[11],directVideoAudioSimilarity:true)!;
+        check(similarSearch["mode"]!.GetValue<string>()=="video-audio-similar"&&similarSearch["item_id"]!.GetValue<int>()==9&&!similarSearch.ContainsKey("scope"),"video audio similarity uses cached PCM mode without visual scope");
+        check(similarSearch["root_ids"]![0]!.GetValue<int>()==7&&similarSearch["shelf_ids"]![0]!.GetValue<long>()==11,"video audio similarity keeps folder and shelf scope");
+        var ambiguous=false;
+        try{ResultSearchConditions.Create("","video","all",method,null,null,originId:9,directVideoSimilarity:true,directVideoAudioSimilarity:true);}catch(ArgumentException){ambiguous=true;}
+        check(ambiguous,"ambiguous visual and audio video similarity is rejected");
+        var candidate=item.DeepClone().AsObject();candidate["similarity_origin_id"]=9;candidate["origin_match_ms"]=0;candidate["origin_match_end_ms"]=2200;
+        var similarReply=new JsonObject{["mode"]="video-audio-similar",["origin_id"]=9,["origin_kind"]="video",["origin_revision"]=new string('a',64),
+            ["profile"]="generated-audio-profile",["source"]="video-audio-direct",["score_kind"]="cosine",["similarity_status"]="ready",["page"]=0,["limit"]=60,
+            ["total"]=1,["search_complete"]=true,["search_candidate_total"]=1,["indexed_total"]=1,["items"]=new JsonArray(candidate.DeepClone())};
+        var compared=SimilaritySearch.Parse(similarReply.ToJsonString(),9,0,directVideoAudio:true);
+        check(compared.Items[0].AIEvidence.Contains("起点 0:00–0:02.2 → 候補 0:30–0:31.25")&&VideoPlayerPolicy.MatchStartMs(compared.Items[0])==30000,"video audio similarity preserves both intervals and seeks candidate audio");
+        check(SimilaritySearch.Guidance("unindexed","video",directVideoAudio:true).Contains("動画内の音声"),"unindexed video audio gives its own preparation guidance");
+        foreach(var change in new Action<JsonObject>[] {
+            value=>value["source"]="audio-direct",value=>value["mode"]="video-similar",value=>value["origin_kind"]="audio",
+            value=>value["origin_revision"]="invalid",value=>value["items"]![0]!["origin_match_end_ms"]=30001,
+            value=>value["items"]![0]!.AsObject().Remove("origin_match_end_ms"),value=>value["items"]![0]!["similarity_origin_id"]=8,
+            value=>value["items"]![0]!["id"]=9,value=>value["items"]![0]!["semantic_score"]=2})
+        {
+            var bad=similarReply.DeepClone().AsObject();change(bad);var rejected=false;
+            try{SimilaritySearch.Parse(bad.ToJsonString(),9,0,directVideoAudio:true);}catch(InvalidDataException){rejected=true;}
+            check(rejected,"invalid video audio similarity namespace, interval, identity or score is rejected");
+        }
+        var accidentalLegacy=false;
+        try{SimilaritySearch.Parse(similarReply.ToJsonString(),9,0);}catch(InvalidDataException){accidentalLegacy=true;}
+        check(accidentalLegacy,"video audio results cannot be read as legacy visual similarity");
+
         // Even an empty range must validate its namespace. The condition identity
         // alone does not prove that the server returned video audio results.
         string responseSource="video-audio-direct";
@@ -89,6 +116,19 @@ internal static class VideoAudioContentTests
         responseSource="audio-direct";var wrong=false;
         try{await session.RangeAsync(0,60,CancellationToken.None);}catch(InvalidDataException){wrong=true;}
         check(wrong,"empty video audio range rejects the audio-file namespace");
+
+        using var comparedHandler=new Stub(async request=>
+        {
+            var body=JsonNode.Parse(await request.Content!.ReadAsStringAsync())!.AsObject();
+            if(request.RequestUri!.AbsolutePath.EndsWith("/close"))return Reply(new(){["closed"]=true});
+            var response=similarReply.DeepClone().AsObject();response["session_id"]=body["session_id"]!.DeepClone();response["conditions"]=similarSearch.DeepClone();response["state"]="ready";
+            if(request.RequestUri.AbsolutePath.EndsWith("/create")){response["range_limit"]=120;response["idle_seconds"]=900;}
+            else{response["offset"]=0;response["limit"]=60;}
+            return Reply(response);
+        });
+        using var comparedHttp=new HttpClient(comparedHandler){BaseAddress=http.BaseAddress};
+        await using var comparedSession=await new ResultSessionClient(comparedHttp).CreateAsync(similarSearch,CancellationToken.None);
+        check((await comparedSession.RangeAsync(0,60,CancellationToken.None)).Items[0].OriginMatchEndMs==2200,"frozen video audio similarity routes through strict origin validation");
     }
     private static HttpResponseMessage Reply(JsonObject body)=>new(HttpStatusCode.OK)
     {Content=new ByteArrayContent(Encoding.UTF8.GetBytes(body.ToJsonString()))};

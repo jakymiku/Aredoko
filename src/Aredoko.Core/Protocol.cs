@@ -69,7 +69,9 @@ public sealed class MediaRow
                 ? $"動画の内容一致（起点 {FormatInterval(directOrigin,directOriginEnd)} → 候補 {FormatInterval(directStart,directEnd)}）"
                 : $"動画の内容一致（{FormatInterval(directStart,directEnd)}）")
            : AudioMatchSource=="video-audio" && AudioMatchMs is int audioStart && AudioMatchEndMs is int audioEnd
-             ? $"動画内の音声一致（{FormatInterval(audioStart,audioEnd)}）"
+             ? (SimilarityOriginId is int && OriginMatchMs is int audioOrigin && OriginMatchEndMs is int audioOriginEnd
+                ? $"動画内の音声一致（起点 {FormatInterval(audioOrigin,audioOriginEnd)} → 候補 {FormatInterval(audioStart,audioEnd)}）"
+                : $"動画内の音声一致（{FormatInterval(audioStart,audioEnd)}）")
            : SimilarityOriginId is int ? (VideoMatchMs is int matchMs ? (OriginMatchMs is int v2vOms ? $"動画一致（起点 {FormatVideoTimestamp(v2vOms)} → 候補 {FormatVideoTimestamp(matchMs)}）" : $"動画フレーム一致（{FormatVideoTimestamp(matchMs)}）")
                                        : AudioMatchMs is int aMatchMs ? (OriginMatchMs is int a2aOms ? $"音声・音楽一致（起点 {FormatVideoTimestamp(a2aOms)} → 候補 {FormatVideoTimestamp(aMatchMs)}）" : $"音声一致（{FormatVideoTimestamp(aMatchMs)}）")
                                        : OriginMatchMs is int oms ? (Kind == "audio" ? $"起点の音声（{FormatVideoTimestamp(oms)}）に似た候補" : $"起点の動画（{FormatVideoTimestamp(oms)}）に似た候補")
@@ -286,10 +288,13 @@ public static class Protocol
         if(result.AudioMatchSource=="video-audio" || result.Kind=="video" &&
             (row.TryGetProperty("audio_match_source",out _) || row.TryGetProperty("audio_match_contract",out _) || row.TryGetProperty("audio_match_end_ms",out _)))
         {
+            static bool ValidAudioInterval(int? start,int? end)=>start is int a && end is int b && a>=0 && a<b && b<=86400000 && b-a<=30000;
+            var hasOrigin=row.TryGetProperty("similarity_origin_id",out _);
             if(result.Kind!="video" || result.AudioMatchSource!="video-audio" || result.AudioMatchContract!="direct-audio-window:v1" ||
-               result.AudioMatchMs is not int start || result.AudioMatchEndMs is not int end || start>=end || end-start>30000 ||
+               !ValidAudioInterval(result.AudioMatchMs,result.AudioMatchEndMs) ||
                result.SemanticScore is null || result.AIPage is not null ||
-               row.TryGetProperty("similarity_origin_id",out _) || row.TryGetProperty("origin_match_ms",out _) || row.TryGetProperty("origin_match_end_ms",out _) ||
+               (hasOrigin && (result.SimilarityOriginId is null || !ValidAudioInterval(result.OriginMatchMs,result.OriginMatchEndMs))) ||
+               (!hasOrigin && (row.TryGetProperty("origin_match_ms",out _) || row.TryGetProperty("origin_match_end_ms",out _))) ||
                row.TryGetProperty("video_match_ms",out _) || row.TryGetProperty("video_match_source",out _))
                 throw new InvalidDataException("動画内音声の一致区間が無効です。検索をやり直してください。");
         }

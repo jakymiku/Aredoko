@@ -9,16 +9,16 @@ public static class ResultSearchConditions
     public static JsonObject? Create(string query, string kind, string view, SearchMethod method,
         JsonObject? scope, IReadOnlyList<int>? rootIds, int? originId = null,
         bool literalOnly = false, double? groupThreshold = null, string resultGroup = "all", IReadOnlyList<long>? shelfIds = null,
-        bool directAudioSimilarity = false, bool directVideoSimilarity = false)
+        bool directAudioSimilarity = false, bool directVideoSimilarity = false, bool directVideoAudioSimilarity = false)
     {
-        if(directAudioSimilarity && directVideoSimilarity)throw new ArgumentException("Select one direct similarity mode");
+        if((directAudioSimilarity?1:0)+(directVideoSimilarity?1:0)+(directVideoAudioSimilarity?1:0)>1)throw new ArgumentException("Select one direct similarity mode");
         JsonObject result;
         if (originId is int origin)
         {
-            if(directAudioSimilarity || directVideoSimilarity)
+            if(directAudioSimilarity || directVideoSimilarity || directVideoAudioSimilarity)
             {
                 if(origin<=0)throw new ArgumentOutOfRangeException(nameof(originId));
-                result=new JsonObject{["mode"]=directVideoSimilarity?"video-similar":"audio-similar",["item_id"]=origin,["view"]=view};
+                result=new JsonObject{["mode"]=directVideoAudioSimilarity?"video-audio-similar":directVideoSimilarity?"video-similar":"audio-similar",["item_id"]=origin,["view"]=view};
                 if(FolderSearch.NormalizeNonEmpty(rootIds) is {} audioRoots)
                 {
                     var values=new JsonArray();foreach(var id in audioRoots)values.Add((JsonNode?)JsonValue.Create(id));

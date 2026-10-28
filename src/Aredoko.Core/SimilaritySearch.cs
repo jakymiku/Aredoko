@@ -6,6 +6,7 @@ public static class SimilaritySearch
 {
     public const string AudioIndexingGuidance="内容から探すには、設定 → AI検索の準備 → 音声の内容検索で索引を作成し、検索方法の「音声の内容（AI）」を選んでください。ファイル名・タグ検索と再生はそのまま利用できます。";
     public const string VideoIndexingGuidance="内容から探すには、設定 → AI検索の準備 → 動画の内容検索で索引を作成してください。ファイル名・タグ検索や代表フレームによる検索も利用できます。";
+    public const string VideoAudioIndexingGuidance="音で似た動画を探すには、設定 → AI検索の準備 → 動画内の音声で索引を作成してください。先頭の音声トラックが対象です。";
     public const int MaxResponseBytes=2*1024*1024;
     public static bool CanStart(MediaRow row) => row.Id > 0 && row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" or "audio";
     public static JsonObject Request(int itemId,string kind,string view,int page,JsonObject scope,int? rootId=null) =>
@@ -16,7 +17,10 @@ public static class SimilaritySearch
         return new JsonObject {{"item_id",itemId},{"kind",kind},{"view",view},{"page",page},
             {"scope",FolderSearch.RestrictAIMulti(scope,rootIds)}};
     }
-    public static string Guidance(string status, string originKind = "",bool directAudio=false,bool directVideo=false) => directVideo
+    public static string Guidance(string status, string originKind = "",bool directAudio=false,bool directVideo=false,bool directVideoAudio=false) => directVideoAudio
+        ? status=="ready"?"動画内の音声・音の特徴が似た候補です。起点自身は除外しています。一致区間から動画を再生できます。類似度は正解率ではありません。"
+            :"この動画の音声索引がないか古くなっています。"+VideoAudioIndexingGuidance
+        :directVideo
         ? status=="ready"?"動画の内容が似た候補です。起点自身は除外しています。一致区間から再生できます。類似度は正解率ではありません。"
             :"この動画の内容索引がないか古くなっています。"+VideoIndexingGuidance
         :directAudio
@@ -42,9 +46,9 @@ public static class SimilaritySearch
         _ => "類似検索を利用できません。元の検索に戻るか、AI索引の設定を確認してください。"
     };
 
-    public static SearchResponse Parse(string text,int expectedId,int expectedPage,int expectedLimit=60,int? expectedOffset=null,bool directAudio=false,bool directVideo=false)
+    public static SearchResponse Parse(string text,int expectedId,int expectedPage,int expectedLimit=60,int? expectedOffset=null,bool directAudio=false,bool directVideo=false,bool directVideoAudio=false)
     {
-        if(directAudio && directVideo)throw new ArgumentException("Select one direct similarity mode");
+        if((directAudio?1:0)+(directVideo?1:0)+(directVideoAudio?1:0)>1)throw new ArgumentException("Select one direct similarity mode");
         if(expectedLimit is <1 or >120 || expectedOffset is <0)throw new ArgumentOutOfRangeException(nameof(expectedLimit));
         try
         {
@@ -55,14 +59,14 @@ public static class SimilaritySearch
             var source=root.GetProperty("source").GetString();
             var originKind=root.TryGetProperty("origin_kind",out var okProp)?okProp.GetString():null;
             if(root.GetProperty("origin_id").GetInt32()!=expectedId||root.GetProperty("page").GetInt32()!=expectedPage||
-               root.GetProperty("mode").GetString()!=(directVideo?"video-similar":directAudio?"audio-similar":"similar")||
-               (directVideo?source!="video-direct":directAudio?source!="audio-direct":source is not ("cover" or "acoustic"))||
+               root.GetProperty("mode").GetString()!=(directVideoAudio?"video-audio-similar":directVideo?"video-similar":directAudio?"audio-similar":"similar")||
+               (directVideoAudio?source!="video-audio-direct":directVideo?source!="video-direct":directAudio?source!="audio-direct":source is not ("cover" or "acoustic"))||
                root.GetProperty("score_kind").GetString()!="cosine"||root.GetProperty("limit").GetInt32()!=expectedLimit||
                status is not ("ready" or "unindexed" or "unsupported_profile")||
                revision is null||revision.Length!=64||revision.Any(c=>!(c is >= '0' and <= '9' or >= 'a' and <= 'f'))||
                string.IsNullOrWhiteSpace(profile)||profile.Length>256||
                (source == "cover" && originKind is not (null or "image" or "book" or "archive" or "video"))||
-               (source == "video-direct" && originKind != "video")||
+               ((source is "video-direct" or "video-audio-direct") && originKind != "video")||
                (source is "acoustic" or "audio-direct" && originKind != "audio"))
                 throw new InvalidDataException("類似検索の応答が要求と一致しません。検索をやり直してください。");
             var result=Protocol.ParseSearch(text);
@@ -72,9 +76,10 @@ public static class SimilaritySearch
                result.Items.Count!=Math.Min(expectedLimit,Math.Max(0,result.Total-(expectedOffset is int offset ? offset : (long)expectedPage*expectedLimit)))||
                result.Items.Select(row=>row.Id).Distinct().Count()!=result.Items.Count||
                result.Items.Any(row=>row.Id<1||row.Id==expectedId||row.SimilarityOriginId!=expectedId||
-                   (source == "cover" ? row.Kind is not ("image" or "book" or "archive" or "video") : source == "video-direct" ? row.Kind != "video" : row.Kind != "audio")||
+                   (source == "cover" ? row.Kind is not ("image" or "book" or "archive" or "video") : (source is "video-direct" or "video-audio-direct") ? row.Kind != "video" : row.Kind != "audio")||
                    (directAudio&&(row.AudioMatchSource!="direct-audio"||row.AudioMatchMs is not >=0||row.OriginMatchMs is not >=0))||
                    (directVideo&&(row.VideoMatchSource!="direct-video"||row.VideoMatchContract!="direct-video-window:v1"||row.VideoMatchEndMs is null||row.OriginMatchEndMs is null))||
+                   (directVideoAudio&&(row.AudioMatchSource!="video-audio"||row.AudioMatchContract!="direct-audio-window:v1"||row.AudioMatchEndMs is null||row.OriginMatchEndMs is null))||
                    row.SemanticScore is not double score||score < -1.000001||score > 1.000001))
                 throw new InvalidDataException("類似候補の内容が無効です。検索をやり直してください。");
             return result;

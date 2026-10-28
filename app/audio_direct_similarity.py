@@ -22,13 +22,17 @@ MAX_PAIRS=100_000
 
 
 class AudioDirectSimilarity:
+    SOURCE_KIND='audio'
+    RESULT_MODE='audio-similar'
+    RESULT_SOURCE='audio-direct'
+    EVIDENCE_SOURCE='direct-audio'
     def __init__(self,index):
-        if index.source_kind!='audio':raise ValueError('Audio similarity requires audio items')
+        if index.source_kind!=self.SOURCE_KIND:raise ValueError('Similarity index source does not match the requested media kind')
         self.index=index
 
     def _frames(self,row,db,check):
         check();index=self.index
-        try:revision=index.reader.audio_manifest(row['id'])['revision']
+        try:revision=index.manifest(row['id'])['revision']
         except PreviewUnavailable:return None,[]
         marker=db.execute('SELECT source_revision,contract,decoded_windows,indexed_windows,total_frames '
                           'FROM ai_audio_direct_sources WHERE item_id=?',(row['id'],)).fetchone()
@@ -80,12 +84,12 @@ class AudioDirectSimilarity:
                         if row['id']==item_id:return row
                     if (number+1)*batch['limit']>=batch['total']:raise KeyError(item_id)
                     number+=1
-            origin=catalog.search(kind='audio',limit=120,result_sink=find_origin,cancelled=cancelled,
+            origin=catalog.search(kind=self.SOURCE_KIND,limit=120,result_sink=find_origin,cancelled=cancelled,
                                   **{k:v for k,v in conditions.items() if k!='view'})
             origin_revision,origin_frames=self._frames(origin,monitor,check)
             if origin_revision is None:raise AudioSearchChanged('Audio origin unavailable')
-            base={'mode':'audio-similar','origin_id':item_id,'origin_kind':'audio','origin_revision':origin_revision,
-                  'source':'audio-direct','profile':index.profile.key,'score_kind':'cosine',
+            base={'mode':self.RESULT_MODE,'origin_id':item_id,'origin_kind':self.SOURCE_KIND,'origin_revision':origin_revision,
+                  'source':self.RESULT_SOURCE,'profile':index.profile.key,'score_kind':'cosine',
                   'similarity_status':'ready' if origin_frames else 'unindexed'}
             candidate_total=indexed_total=pair_total=0
             def consume(fetch):
@@ -116,7 +120,7 @@ class AudioDirectSimilarity:
                     number+=1
                 check();spool.finalize('max')
                 def check_revision(item,expected):
-                    try:current=index.reader.audio_manifest(item)['revision']
+                    try:current=index.manifest(item)['revision']
                     except PreviewUnavailable:
                         raise AudioSearchChanged('Audio source unavailable; refresh results') from None
                     if current!=expected:raise AudioSearchChanged('Audio source changed; refresh results')
@@ -128,11 +132,11 @@ class AudioDirectSimilarity:
                         payload=payloads[key]
                         check_revision(key,payload['revision'])
                         items.append({**payload['item'],'semantic_score':round(score,6),'similarity_origin_id':item_id,
-                            'audio_match_source':'direct-audio','audio_match_contract':CONTRACT,
+                            'audio_match_source':self.EVIDENCE_SOURCE,'audio_match_contract':CONTRACT,
                             **{name:payload[name] for name in ('audio_match_ms','audio_match_end_ms','origin_match_ms','origin_match_end_ms')}})
                     check()
                     return {**base,'items':items,'total':selected['total'],'page':number,'limit':limit,
                             'candidate_total':candidate_total,'search_candidate_total':candidate_total,
                             'indexed_total':indexed_total,'search_complete':True}
                 return render(page) if result_sink is None else result_sink(render)
-            return catalog.search(kind='audio',limit=120,result_sink=consume,cancelled=cancelled,**conditions)
+            return catalog.search(kind=self.SOURCE_KIND,limit=120,result_sink=consume,cancelled=cancelled,**conditions)
