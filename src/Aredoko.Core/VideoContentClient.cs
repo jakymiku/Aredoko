@@ -7,6 +7,7 @@ namespace Aredoko.Core;
 
 public sealed record VideoItemProgress(int ItemId,int PreparedMs,int? TotalMs,int PreparedWindows,string Phase)
 {
+    public string? ItemTitle {get;init;}
     private static string Clock(int ms)=>ms>=3600000?$"{ms/3600000}:{ms/60000%60:00}:{ms/1000%60:00}":$"{ms/60000}:{ms/1000%60:00}";
     public string Message=>TotalMs is not int total?"現在の動画を読み取っています（長さを確認中）…"
         :Phase=="saving"?$"現在の動画：{Clock(total)}の解析データを保存しています…"
@@ -25,7 +26,7 @@ public sealed record VideoItemProgress(int ItemId,int PreparedMs,int? TotalMs,in
             ||total is int known&&(known<1||prepared>known)
             ||total is null&&(prepared!=0||windows!=0||phase!="decoding")
             ||phase=="saving"&&(total is null||prepared!=total))throw new InvalidDataException("Invalid video item progress");
-        return new(id,prepared,total,windows,phase);
+        return new(id,prepared,total,windows,phase){ItemTitle=MediaProgressTitle.Read(row)};
     }
 }
 

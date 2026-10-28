@@ -7,6 +7,7 @@ namespace Aredoko.Core;
 
 public sealed record AudioItemProgress(int ItemId,int PreparedMs,int? TotalMs,int PreparedWindows,string Phase)
 {
+    public string? ItemTitle {get;init;}
     private static string Clock(int ms)=>ms>=3600000?$"{ms/3600000}:{ms/60000%60:00}:{ms/1000%60:00}":$"{ms/60000}:{ms/1000%60:00}";
     public string Message=>Phase=="saving"&&TotalMs is int total?$"現在の音声：{Clock(total)}の解析データを保存しています…"
         :(TotalMs is int known?$"現在の音声：{Clock(PreparedMs)} / {Clock(known)}（未保存）\n":$"現在の音声：{Clock(PreparedMs)}まで解析済み（総尺確認中・未保存）\n")+
@@ -23,7 +24,7 @@ public sealed record AudioItemProgress(int ItemId,int PreparedMs,int? TotalMs,in
         if(id<1||phase is not ("decoding" or "encoding" or "saving")||windows!=(prepared+29999)/30000
             ||total is int known&&(known<1||prepared>known)
             ||phase=="saving"&&(total is null||prepared!=total))throw new InvalidDataException("Invalid audio item progress");
-        return new(id,prepared,total,windows,phase);
+        return new(id,prepared,total,windows,phase){ItemTitle=MediaProgressTitle.Read(row)};
     }
 }
 

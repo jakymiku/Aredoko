@@ -12,6 +12,7 @@ internal sealed class AudioPreparationPanel : IDisposable
 {
     private readonly AudioContentClient client;
     private readonly Func<JsonObject> conditions;
+    private readonly TextBlock currentItem=new(){MaxLines=1,TextTrimming=TextTrimming.CharacterEllipsis,Visibility=Visibility.Collapsed};
     private readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap};
     private readonly Button start=new(){Content="音声の索引を作成",IsEnabled=false};
     private readonly Button cancel=new(){Content="中断",IsEnabled=false};
@@ -32,13 +33,14 @@ internal sealed class AudioPreparationPanel : IDisposable
         panel.Children.Add(new TextBlock{Text=VideoAudio
             ?"現在の検索フォルダ・棚にある動画の、先頭の音声トラックが対象です。音声のない動画は飛ばします。作成後は「動画内の音声（AI）」で探せます。文字起こしは保存しません。画面を閉じても準備は続きます。"
             :"現在の検索フォルダ・棚にある音声が対象です。作成後は検索方法の「音声の内容（AI）」で探せます。文字起こしは保存しません。画面を閉じても準備は続きます。",TextWrapping=TextWrapping.Wrap});
-        panel.Children.Add(status);panel.Children.Add(progress);
+        panel.Children.Add(currentItem);panel.Children.Add(status);panel.Children.Add(progress);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
         actions.Children.Add(start);actions.Children.Add(cancel);panel.Children.Add(actions);
         Content=new Expander{Header=VideoAudio?"動画内の音声":"音声の内容検索",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
         var automationPrefix=VideoAudio?"VideoAudioContent":"AudioContent";
         AutomationProperties.SetAutomationId(Content,automationPrefix+"Options");
         AutomationProperties.SetAutomationId(status,automationPrefix+"Status");
+        AutomationProperties.SetAutomationId(currentItem,automationPrefix+"CurrentItem");
         AutomationProperties.SetAutomationId(progress,automationPrefix+"Progress");
         AutomationProperties.SetName(progress,Subject+"の索引作成の進捗");
         AutomationProperties.SetAutomationId(start,"Start"+automationPrefix);
@@ -63,6 +65,9 @@ internal sealed class AudioPreparationPanel : IDisposable
     {
         if(disposed)return;
         latest=value;var own=value.SourceKind==client.SourceKind;
+        currentItem.Text=own&&value.Busy?value.ItemProgress?.ItemTitle??"":"";
+        currentItem.Visibility=string.IsNullOrEmpty(currentItem.Text)?Visibility.Collapsed:Visibility.Visible;
+        if(currentItem.Visibility==Visibility.Visible)ToolTipService.SetToolTip(currentItem,currentItem.Text);
         status.Text=!own&&value.Supported&&value.Available
             ?value.Busy?value.Message+"\nこの対象の索引は、現在の準備が終わってから作成できます。":$"{Subject}の索引を作成できます。準備済みの対象は再利用します。"
             :value.Message;

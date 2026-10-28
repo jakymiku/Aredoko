@@ -9,6 +9,7 @@ import logging
 import secrets
 import threading
 import time
+from media_progress import item_title
 
 from ai_process import AIUnavailable
 from ai_search import AIBusy
@@ -90,7 +91,7 @@ class AudioDirectJobs:
                                 if source_kind=='video' and not index.reader.video_audio_available(row['id'],revision,cancel=self.cancelled):
                                     unavailable+=1;continue
                             except PreviewUnavailable:unavailable+=1;continue
-                            picks.append((row['id'],revision))
+                            picks.append((row['id'],revision,item_title(row['title'])))
                         if len(picks)==limit:break
                     self._update(reused=reused,unavailable=unavailable,remaining_candidates=max(0,reply['total']-seen))
                     if len(picks)==limit or seen>=reply['total']:return
@@ -102,11 +103,11 @@ class AudioDirectJobs:
             if picks:
                 while not self.inference.acquire(timeout=.05):self._check(generation)
                 acquired=True;self._check(generation);self._update(state='running')
-                for item,revision in picks:
+                for item,revision,title in picks:
                     self._check(generation)
                     index.index_item(item,revision,cancel=self.cancelled,validate=lambda:self._check(generation),
                                      publication_guard=self.publication_guard,on_published=self._published,
-                                     progress=lambda value:self._update(item_progress=value))
+                                     progress=lambda value,title=title:self._update(item_progress={**value,'item_title':title}))
         except (MediaDecodeCancelled,SearchCancelled,InterruptedError):self._update(state='cancelled',error_code=None,item_progress=None)
         except AudioSearchChanged:self._update(state='failed',error_code='scope_changed',item_progress=None)
         except Exception:

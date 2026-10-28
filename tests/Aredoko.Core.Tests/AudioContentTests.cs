@@ -42,6 +42,15 @@ internal static class AudioContentTests
         check(progress.SourceKind=="audio","old audio status defaults to audio file source");
         var video=working.DeepClone().AsObject();video["source_kind"]="video";
         check(AudioContentStatus.Parse(video.ToJsonString()).Message.Contains("動画内の音声"),"shared audio owner identifies video audio jobs");
+        check(progress.ItemProgress!.ItemTitle is null,"old audio progress without filename remains compatible");
+        var named=working.DeepClone().AsObject();named["item_progress"]!["item_title"]="生成した音と動画🌟.mkv";
+        check(AudioContentStatus.Parse(named.ToJsonString()).ItemProgress!.ItemTitle=="生成した音と動画🌟.mkv","audio progress retains its bounded display filename");
+        foreach(var badTitle in new JsonNode?[]{JsonValue.Create("/private/file.mkv"),JsonValue.Create("bad\nname"),JsonValue.Create(new string('x',161)),JsonValue.Create(42)})
+        {
+            named["item_progress"]!["item_title"]=badTitle?.DeepClone();
+            try{AudioContentStatus.Parse(named.ToJsonString());check(false,"invalid audio progress title rejected");}
+            catch(InvalidDataException){check(true,"invalid audio progress title rejected");}
+        }
         var saving=working.DeepClone().AsObject();saving["item_progress"]!["prepared_ms"]=31000;saving["item_progress"]!["prepared_windows"]=2;saving["item_progress"]!["total_ms"]=31000;saving["item_progress"]!["phase"]="saving";
         check(AudioContentStatus.Parse(saving.ToJsonString()).Message.Contains("保存しています"),"known audio EOF is still not committed before save");
         foreach(var change in new Action<JsonObject>[] {

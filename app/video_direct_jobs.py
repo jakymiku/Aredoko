@@ -9,6 +9,7 @@ import logging
 import secrets
 import threading
 import time
+from media_progress import item_title
 
 from ai_process import AIUnavailable
 from ai_search import AIBusy
@@ -84,7 +85,7 @@ class VideoDirectJobs:
                         try:revision=self.index.reader.video_manifest(row['id'])['revision']
                         except PreviewUnavailable:unavailable+=1;continue
                         if self.index.fresh(row['id'],revision,cancel=self.cancelled):reused+=1
-                        else:picks.append((row['id'],revision))
+                        else:picks.append((row['id'],revision,item_title(row['title'])))
                         if len(picks)==limit:break
                     self._update(reused=reused,unavailable=unavailable,remaining_candidates=max(0,reply['total']-seen))
                     if len(picks)==limit or seen>=reply['total']:return
@@ -96,11 +97,11 @@ class VideoDirectJobs:
             if picks:
                 while not self.inference.acquire(timeout=.05):self._check(generation)
                 acquired=True;self._check(generation);self._update(state='running')
-                for item,revision in picks:
+                for item,revision,title in picks:
                     self._check(generation)
                     self.index.index_item(item,revision,cancel=self.cancelled,validate=lambda:self._check(generation),
                                           publication_guard=self.publication_guard,on_published=self._published,
-                                          progress=lambda value:self._update(item_progress=value))
+                                          progress=lambda value,title=title:self._update(item_progress={**value,'item_title':title}))
         except (MediaDecodeCancelled,SearchCancelled,InterruptedError):self._update(state='cancelled',error_code=None,item_progress=None)
         except VideoSearchChanged:self._update(state='failed',error_code='scope_changed',item_progress=None)
         except Exception:

@@ -317,3 +317,10 @@ Windowsでは前節のCore/cache build後、生成2動画＋無音trackなし/�
 音声/動画/動画内音声のcached pair比較で、取消・catalog世代/profileは引き続き全pair確認する。DBの`PRAGMA data_version`だけprivate計算中は最大64pair間隔へまとめ、window取得・候補境界・finalize前・range返却では毎回確認する。途中の外部DB commitは公開前に拒否し、partial rankingを返さない。dotの演算順/厳密最大/同点順/10万pair cap/2item buffer/source revisionの検証は変更しない。
 
 生成vectorと元の検証済みfixtureを使うCPU microcase（768D/10,000pairs/trace有効・各1回）は、旧0.520182s/DB問い合わせ10,012回→新0.467492s/168回。返却ID/score/両区間が同一、spool回収。全検索・実動画品質・端末一般性能の保証ではない。初回性能回帰は旧codeで2 FAILを確認。関連39 unique methodがPASS（runner上はimportしたTestCaseも収集して71実行になったため重複合算しない）。importをmodule aliasへ直し新2件だけを別Pythonで再確認PASS。短い4pair中の別connection commitでも結果sinkへ1件も渡さず拒否することを確認し、既存のpair途中取消もPASS。生証拠`data/ai-ui/work-sync-20261028/pair-version-*.json`/log。
+
+
+### 2026-10-28 準備中のファイル名を表示
+
+owned jobが既に選択したcatalog titleのbasenameを、任意`item_progress.item_title`として返す。追加scan/DB照会・原本変更・namespace変更はない。表示名はcontrol/親pathを除き最大160 UTF-16単位、絵文字を途中で切らず省略。Coreは旧field省略を許容し、過長/path/controlなどの不正応答を拒否する。WinUIは現在処理中のbasenameを1行ellipsis＋tooltipで表示し、別source_kindの処理中や完了/取消/失敗後は消す。CLIや絶対pathを通常画面へ追加しない。
+
+関連jobs32/新label3（2itemで名前とIDの対応、完了時消去を含む）、Audio/Video Core関連、WinUI最小build PASS。`MaxLines`/`TextTrimming`は復元済みproject referencesのAPIで存在を確認。既存picker3警告は保持。GUI質問中のfrontend01/source9b7d91dはこの追加表示より前のbinであり、ファイル名表示のnative受入を完了扱いにしない。生証拠`work-sync-20261028/progress-title-*`と`core-*-title01.log`。

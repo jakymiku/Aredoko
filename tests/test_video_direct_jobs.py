@@ -66,7 +66,7 @@ class DirectVideoJobTests(unittest.TestCase):
             try:
                 self.jobs.start();self.assertTrue(ready.wait(3));status=self.jobs.status()
                 self.assertEqual((status['state'],status['processed'],status['indexed']),('running',0,0))
-                self.assertEqual(status['item_progress'],{'item_id':self.item,'prepared_ms':16000,'total_ms':17500,'prepared_windows':1,'phase':'encoding'})
+                self.assertEqual(status['item_progress'],{'item_id':self.item,'prepared_ms':16000,'total_ms':17500,'prepared_windows':1,'phase':'encoding','item_title':self.path.name})
                 status['item_progress']['prepared_ms']=0
                 self.assertEqual(self.jobs.status()['item_progress']['prepared_ms'],16000)
                 self.assertTrue(self.jobs.cancel()['cancel_requested']);self.assertEqual(self.snapshot(),previous)

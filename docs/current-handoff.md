@@ -8,6 +8,7 @@
 - **追加の統合改善**：動画用途の初期ガイドに映像/動画内音声の別索引を案内し、共有audio ownerの他kind進捗を自分の進捗として表示しないよう補強。Core setup35/同梱Python setup8 PASS。ユーザーガイドにも新機能の入口とAlpha未収録を追記。この追加UIのnative受入は未実施。
 - **追加CPU進捗**：Workの音声/動画のindex/search/jobs/PCM streamをWindows基本Pythonで92tests PASS。`4205e87`はprivate pair内のDB版queryを最大64pair間隔へ削減、取消/catalog/profileと公開前/返却時guardは維持。768D/1万pairの単回は10,012→168query、0.520→0.467s、ID/score/両区間同一。39 unique関連method PASS（初回runner71にはimport再収集の重複あり）、新2件だけも再確認。基本ZIP11/source692d66cは全Core/Portable/同梱CPU34まで、後続perfは未収録。
 - **MSVC取得の明示許可は実施済み**：公式ファイル18,731,856bytes/version14.51.36247.0、Microsoft署名ValidとSHAを固定。[公開可能な取得receipt](msvc-runtime-source-20261028.json)。新しい静的inspect tool/生成7件と実Windows metadata読取も確認。installer実行/展開/OS導入/DLLコピー/catalog登録0。runtime EULAとVSの再配布許諾の対応は未承認であり、署名確認を公開承認にしない。GUI2ケースの質問は別で、回答待ちのまま。
+- **準備中ファイル名のsource接続**：音声/動画/動画内音声のcurrent progressに任意item_titleを追加し、1行ellipsis/tooltipで表示。basenameだけ最大160UTF-16単位、旧API省略互換・絵文字・制御/path拒否・2item対応/終了消去を確認。関連jobs32/label3、Audio/Video Core/WinUI build PASS。frontend01のGUI質問はこの後続表示を対象としていない。API status/取消は元どおりread-onlyで、新しい自動scanや推論はない。
 - AlphaはZIP10/source0138a58のまま。Work sourceはまだ配布物へ未反映。runtime固定取得物/再配布条件/host/clean Windows、実媒体品質、HC/DPI/RSSは残る。PC使用中のGUI/GPU事前確認を継続し、shutdownしない。
 
 ## 2026-10-28 Work継続checkpoint（cached動画音声類似と初期化/終了cleanup、以下より優先）

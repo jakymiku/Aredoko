@@ -41,6 +41,15 @@ internal static class VideoContentTests
         check(progress.ItemProgress is {PreparedMs:16000,PreparedWindows:1}&&progress.Processed==0&&progress.Indexed==0,
             "video item preparation is distinct from committed item counts");
         check(progress.Message.Contains("0:16 / 0:17")&&progress.Message.Contains("未保存")&&progress.Message.Contains("解析しています"),"long video message shows prepared time and pending persistence");
+        check(progress.ItemProgress!.ItemTitle is null,"old video progress without filename remains compatible");
+        var named=working.DeepClone().AsObject();named["item_progress"]!["item_title"]="生成した音と動画🌟.mkv";
+        check(VideoContentStatus.Parse(named.ToJsonString()).ItemProgress!.ItemTitle=="生成した音と動画🌟.mkv","video progress retains its bounded display filename");
+        foreach(var badTitle in new JsonNode?[]{JsonValue.Create("/private/file.mkv"),JsonValue.Create("bad\nname"),JsonValue.Create(new string('x',161)),JsonValue.Create(42)})
+        {
+            named["item_progress"]!["item_title"]=badTitle?.DeepClone();
+            try{VideoContentStatus.Parse(named.ToJsonString());check(false,"invalid video progress title rejected");}
+            catch(InvalidDataException){check(true,"invalid video progress title rejected");}
+        }
         var saving=working.DeepClone().AsObject();saving["item_progress"]!["prepared_ms"]=17500;saving["item_progress"]!["prepared_windows"]=2;saving["item_progress"]!["phase"]="saving";
         check(VideoContentStatus.Parse(saving.ToJsonString()).Message.Contains("保存しています"),"full staged coverage is still saving, not completed");
         var ending=saving.DeepClone().AsObject();ending["item_progress"]!["phase"]="decoding";

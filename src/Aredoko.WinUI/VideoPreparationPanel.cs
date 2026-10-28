@@ -12,6 +12,7 @@ internal sealed class VideoPreparationPanel : IDisposable
 {
     private readonly VideoContentClient client;
     private readonly Func<JsonObject> conditions;
+    private readonly TextBlock currentItem=new(){MaxLines=1,TextTrimming=TextTrimming.CharacterEllipsis,Visibility=Visibility.Collapsed};
     private readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap};
     private readonly Button start=new(){Content="動画の索引を作成",IsEnabled=false};
     private readonly Button cancel=new(){Content="中断",IsEnabled=false};
@@ -28,12 +29,13 @@ internal sealed class VideoPreparationPanel : IDisposable
         this.client=client;this.conditions=conditions;
         var panel=new StackPanel{Spacing=8};
         panel.Children.Add(new TextBlock{Text="現在の検索フォルダ・棚にある動画が対象です。作成後は検索方法の「動画の内容（AI）」で探せます。動画内の音声は対象外です。画面を閉じても準備は続きます。",TextWrapping=TextWrapping.Wrap});
-        panel.Children.Add(status);panel.Children.Add(progress);
+        panel.Children.Add(currentItem);panel.Children.Add(status);panel.Children.Add(progress);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
         actions.Children.Add(start);actions.Children.Add(cancel);panel.Children.Add(actions);
         Content=new Expander{Header="動画の内容検索",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
         AutomationProperties.SetAutomationId(Content,"VideoContentOptions");
         AutomationProperties.SetAutomationId(status,"VideoContentStatus");
+        AutomationProperties.SetAutomationId(currentItem,"VideoContentCurrentItem");
         AutomationProperties.SetAutomationId(progress,"VideoContentProgress");
         AutomationProperties.SetName(progress,"動画の索引作成の進捗");
         AutomationProperties.SetAutomationId(start,"StartVideoContent");
@@ -57,6 +59,9 @@ internal sealed class VideoPreparationPanel : IDisposable
     {
         if(disposed)return;
         latest=value;status.Text=value.Message;
+        currentItem.Text=value.Busy?value.ItemProgress?.ItemTitle??"":"";
+        currentItem.Visibility=string.IsNullOrEmpty(currentItem.Text)?Visibility.Collapsed:Visibility.Visible;
+        if(currentItem.Visibility==Visibility.Visible)ToolTipService.SetToolTip(currentItem,currentItem.Text);
         start.Content=value.RemainingCandidates>0?"続きの動画を準備":"動画の索引を作成";
         start.IsEnabled=!command&&value.Supported&&value.Available&&!value.Busy;
         cancel.IsEnabled=!command&&value.Busy&&value.State!="cancelling";
