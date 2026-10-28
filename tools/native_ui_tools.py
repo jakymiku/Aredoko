@@ -75,3 +75,26 @@ def process_memory(pid):
         if not api.GetProcessMemoryInfo(handle,ctypes.byref(value),value.cb):raise ctypes.WinError(ctypes.get_last_error())
         return {'working_set_bytes':value.WorkingSetSize,'private_bytes':value.PrivateUsage}
     finally:kernel.CloseHandle(handle)
+
+
+
+def select_combo_item(ui,combo_id,item_id):
+    """Select one live visible native item by stable AutomationId, never End.
+
+    The supplied UI helper must remain bound to its owned PID/window. WinUI may
+    expose the same peer twice, plus separate child text or hidden stale peers.
+    Resolve again after selection; prior popup selectors can become stale.
+    """
+    ui('invoke',combo_id,'--action','expand')
+    inspected=json.loads(ui('inspect','--depth','18','--json'))
+    choices={node['selector'] for node in nodes(inspected)
+        if node.get('type') in ('ListItem','ComboBoxItem') and node.get('automationId')==item_id
+        and node.get('selector') and not node.get('isOffscreen',True)}
+    if len(choices)!=1:raise RuntimeError('Expected one visible exact ComboBox item: '+item_id)
+    ui('invoke',choices.pop(),'--action','select')
+    current=json.loads(ui('inspect','--depth','18','--json'))
+    controls={node['selector'] for node in nodes(current)
+        if node.get('type')=='ComboBox' and node.get('automationId')==combo_id
+        and node.get('selector') and not node.get('isOffscreen',True)}
+    if len(controls)!=1:raise RuntimeError('Expected one visible ComboBox after selection: '+combo_id)
+    ui('invoke',controls.pop(),'--action','collapse')

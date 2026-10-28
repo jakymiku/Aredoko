@@ -43,11 +43,9 @@ def create_feature(catalog):
 def audit(ui,tree,shot,report,check,catalog,feature,release,reached,*,input_guard,search_only=False):
     report['authorization']='Explicit user approval required: generated WAVs + dedicated DB + CPU supplied encoder, no sound output/GPU'
     if not search_only:prepare(ui,tree,shot,report,check,catalog,feature,release,reached)
-    # Set focus before opening the popup: the combo provider becomes stale while
-    # the popup is expanded. Do not resolve it again between expand and keys.
-    ui('focus','CmbSearchMode');ui('invoke','CmbSearchMode','--action','expand')
-    if not input_guard():raise RuntimeError('Owned audio test lost foreground; no key input sent')
-    ui('send-keys','end enter','--via','send-input')
+    # A later appended search mode must not redirect this audio-file test.
+    from native_ui_tools import select_combo_item
+    select_combo_item(ui,'CmbSearchMode','ModeAudioContent')
     # A result from the previous empty query can still expose Item1 while the
     # debounced search replaces its container. Submit explicitly and wait for
     # the new query's evidence, not merely the old item's existence.

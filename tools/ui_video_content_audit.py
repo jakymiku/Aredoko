@@ -64,9 +64,8 @@ def audit(ui,tree,shot,report,check,catalog,feature,release,reached,*,input_guar
     ui('wait-for','VideoContentStatus','--value','準備完了','--contains','-t','20000');shot('video-completed')
     check('both generated video items are ready',feature.status()['indexed']==2)
     ui('invoke','CloseButton');ui('wait-for','CloseButton','--gone','-t','10000')
-    ui('focus','CmbSearchMode');ui('invoke','CmbSearchMode','--action','expand')
-    if not input_guard():raise RuntimeError('Owned video test lost foreground; no input sent')
-    ui('send-keys','end enter','--via','send-input')
+    from native_ui_tools import select_combo_item
+    select_combo_item(ui,'CmbSearchMode','ModeVideoContent')
     ui('set-value','TxtQuery','生成した動画');ui('invoke','BtnSearch')
     ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','15000')
     ui('wait-for','AIEvidence2','--value','動画の内容一致（0:16–0:17.5）','--contains','-t','15000');shot('video-query')

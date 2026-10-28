@@ -1,8 +1,7 @@
 """Generated video PCM native wiring; CPU vectors, no playback or real model."""
-import json
 import subprocess
 from ui_audio_content_audit import create_feature as create_audio_feature
-from native_ui_tools import nodes
+from native_ui_tools import select_combo_item
 from video_previews import _executable
 
 
@@ -30,18 +29,6 @@ def create_media(media):
         subprocess.run([*args,'-c:v','mpeg4','-threads','1',str(media/f'generated-{number:03}.mkv')],check=True,timeout=20,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
 
 
-def select_mode(ui,label):
-    ui('invoke','CmbSearchMode','--action','expand')
-    choices={node['selector'] for node in nodes(json.loads(ui('inspect','--depth','18','--json')))
-        if node.get('type') in ('ListItem','ComboBoxItem') and node.get('name')==label and node.get('selector') and not node.get('isOffscreen',True)}
-    if len(choices)!=1:raise RuntimeError('Expected one exact visible search method')
-    ui('invoke',choices.pop(),'--action','select')
-    combos={node['selector'] for node in nodes(json.loads(ui('inspect','--depth','18','--json')))
-        if node.get('type')=='ComboBox' and node.get('automationId')=='CmbSearchMode' and node.get('selector') and not node.get('isOffscreen',True)}
-    if len(combos)!=1:raise RuntimeError('Expected one visible search ComboBox')
-    ui('invoke',combos.pop(),'--action','collapse')
-
-
 def audit(ui,tree,shot,report,check,catalog,feature,release,reached,*,input_guard):
     report['authorization']='Explicit per-run approval: generated video PCM/CPU vectors/dedicated DB; no playback, model, GPU or normal data'
     rows={row['title']:row for row in catalog.search()['items']}
@@ -58,7 +45,7 @@ def audit(ui,tree,shot,report,check,catalog,feature,release,reached,*,input_guar
     ui('wait-for','VideoAudioContentStatus','--value','準備完了','--contains','-t','20000')
     check('two videos indexed and no-track video skipped',feature.status()['indexed']==2 and feature.status()['unavailable']==1)
     shot('video-audio-completed');ui('invoke','CloseButton');ui('wait-for','CloseButton','--gone','-t','10000')
-    select_mode(ui,'動画内の音声（AI）');ui('set-value','TxtQuery','生成した動画の音');ui('invoke','BtnSearch')
+    select_combo_item(ui,'CmbSearchMode','ModeVideoAudioContent');ui('set-value','TxtQuery','生成した動画の音');ui('invoke','BtnSearch')
     ui('wait-for','AIEvidence'+str(long),'--value','動画内の音声一致（0:30–0:31.25）','--contains','-t','15000')
     ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
     check('video audio method locks the video kind',tree()['CmbKind'].get('isEnabled') is False)
