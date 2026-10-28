@@ -29,6 +29,7 @@ def audit(ui,tree,shot,report,check,handler,catalog,item_id):
 
 
 def audit_bulk(ui,tree,shot,report,check,handler,catalog,*,input_guard):
+    from native_ui_tools import inspect_element
     report['authorization']='Explicit per-run approval: generated library, bulk retained favorites, owned physical Shift input; no playback/GPU/normal data'
     rows=catalog.search(limit=120)['items'];ids=[row['id'] for row in rows[:2]]
     ui('invoke','Item'+str(ids[0]),'--action','select');ui('focus','Item'+str(ids[0]))
@@ -36,7 +37,7 @@ def audit_bulk(ui,tree,shot,report,check,handler,catalog,*,input_guard):
     ui('send-keys','shift+down','--via','send-input');ui('wait-for','SelectionCountText','--value','2 件選択','--contains','-t','10000')
     for _ in range(14):
         ui('scroll','ItemList','--to','bottom')
-        if '一覧外 2 件' in tree().get('SelectionCountText',{}).get('name',''):break
+        if '一覧外 2 件' in inspect_element(ui,'SelectionCountText').get('name',''):break
         time.sleep(.25)
     ui('wait-for','SelectionCountText','--value','一覧外 2 件','--contains','-t','10000')
     ui('invoke','BtnDetails');ui('wait-for','SelectionFavoriteAdd','-t','10000')

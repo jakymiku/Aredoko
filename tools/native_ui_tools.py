@@ -13,6 +13,14 @@ def nodes(value):
         for child in value:
             yield from nodes(child)
 
+
+def inspect_element(ui,identifier):
+    """Read one stable peer without walking changing virtualized containers."""
+    value=json.loads(ui('inspect',identifier,'--depth','0','--json'))
+    peers=[node for node in nodes(value) if node.get('automationId')==identifier]
+    if len(peers)!=1:raise RuntimeError('Expected one exact UIA peer: '+identifier)
+    return peers[0]
+
 def invoke_tool(cli, app_pid, hwnd, identifier):
     if identifier not in TOOL_IDS:
         raise ValueError('Unknown production tool')

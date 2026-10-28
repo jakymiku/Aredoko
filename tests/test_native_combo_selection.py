@@ -4,10 +4,18 @@ from pathlib import Path
 import sys
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from native_ui_tools import select_combo_item
+from native_ui_tools import select_combo_item,inspect_element
 
 
 class NativeComboSelectionTests(unittest.TestCase):
+    def test_targeted_inspection_never_walks_a_recycling_list(self):
+        ui,calls=self.ui([{'elements':[{'automationId':'SelectionCountText','name':'一覧外 2 件'}]}])
+        self.assertEqual(inspect_element(ui,'SelectionCountText')['name'],'一覧外 2 件')
+        self.assertEqual(calls,[('inspect','SelectionCountText','--depth','0','--json')])
+        for value in ([],[{'automationId':'wrong'}],[{'automationId':'SelectionCountText'}]*2):
+            ui,_=self.ui([value])
+            with self.assertRaises(RuntimeError):inspect_element(ui,'SelectionCountText')
+
     def node(self,selector='item-a',**extra):
         return {'type':'ListItem','automationId':'ModeAudioContent','selector':selector,'isOffscreen':False,**extra}
 

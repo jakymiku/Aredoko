@@ -48,6 +48,9 @@ def main():
     if args.video_history_only:args.video_content=True
     if args.audio_similarity_only:args.audio_search_only=True
     if args.audio_search_only:args.audio_content=True
+    # Fail before launching any owned app if the app-execution alias cannot run
+    # in this process context. A readable PATH entry is not an executable probe.
+    subprocess.run(['winapp','--version'],check=True,capture_output=True,timeout=15)
     target.mkdir(parents=True);report={'pass':False,'checks':[],'screenshots':[],'target':'local','visual_review':'pending','authorization':'2026-10-24 current local-test-policy; generated isolated data','source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
     if args.video_content:report['authorization']='Explicit per-run permission: generated silent MP4s, dedicated DB, CPU vectors; no playback/GPU/models/normal DB/Alpha'
     if args.detail_actions:report['authorization']='2026-10-24 explicit human approval: contextual detail GUI on dedicated fixtures, Light/Dark; no AI/GPU inference'
