@@ -168,3 +168,13 @@ VS Community 2022の公式原文（62,859bytes/SHA`41a207b1…`）も確認し�
 `msvc_component_contract` をbuilderと静的native auditorで共有し、専用component manifestの12DLL/3通知をsealed inventoryと照合する。偽のscope/承認、欠落/重複/改変/architecture不一致は拒否。小さいCRTと通知だけは全SHAを追加確認し、残る巨大native payloadの全検証・loader/権利承認とは分ける。生成5新規＋既存builder/native19関連tests PASS。実同候補の335 native中、Python RECORD対応285、MSVC component対応12、残る未対応38。unmapped_distribution_record_count=50を別記して、件数の意味を隠さない。全PE読取成功、静的VC未解決import0。actual loader/GPUの成功は前節の限定試験で、この静的auditはloader合格を捏造しない。
 
 配布輸送ZIPを1回作成し、全ZIP memberのstreaming SHA検査にPASS：**3,034,460,747bytes**、SHA `094ce0398f85b46cbb0c92635155953b9dec0db857757f1d448ebf440268005f`、作成163.751秒/読取17.629秒。`continuation-20261029b/runtime-transport01/report.json`。既存の単一ZIP v3は利用可能だが、[GitHub Releasesの1asset 2GiB未満](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)を超えるため、そのまま同hostへ置けない。次は互換を維持した分割transportの取得/展開を小単位で追加する。公開host/条項/registryの承認待ちは保ち、実uploadや架空URL登録は行わない。
+
+
+### 分割輸送は実装済み、公開準備の残件（2026-10-29b）
+
+上節の「次は分割transport」は `292fdf2` で実装・生成HTTP/再開/展開/owned publication確認済み。実ZIPも1.90GB＋1.134GBの2partへ分割して全member/結合bytes SHAが一致し、基本ZIP16にも取得側を収録した。[輸送正本](runtime-archive-transport.md)を参照。実3GB外部配信や公開承認ではない。
+
+次は固定candidateの残る38 native（Python RECORD外）について実物と同梱通知の出所を対応付け、Microsoft等の適用再配布条項・実際の不変host/URLが揃った段階でproduction runtime catalogを登録する。既存の生成HTTP/同pack loader/GPU成功を繰り返して公開監査の代用にしない。権利/hostが未確定なら推測で登録せず、独立したUI/既知未受入を進める。
+
+
+38件の具体的な内訳も読取確認済み：CPython本体4件（python.exe/pythonw.exe/python3.dll/python311.dll）と `DLLs/` 以下34件（標準拡張、OpenSSL/libffi/SQLite/Tcl/Tk等）。候補rootに `LICENSE.txt` は存在する。**38個のDLL不足や38個の起動エラーを検出した意味ではなく、Python wheelのRECORDにもMSVC componentにも属さないファイルの通知対応が未確定という意味**。次回はこの一覧とCPython同梱通知の実体を対応付けるところから始め、名前だけで第三者部分の再配布許諾を断定しない。既存335件のstatic import/実CRT loader成功は保持する。

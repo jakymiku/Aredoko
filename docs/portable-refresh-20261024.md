@@ -156,3 +156,13 @@ AI起動時の有限エラー/回収、異常worker stdoutのreader回収、詳�
 同梱backendの生成DB/PNG・CPU34項目（AIなしの検索/preview、scan/list分離、棚/favorite、起動設定、EOF exit0、DB integrity・原本SHA/mtime保全）がPASS。確認後の全payloadも一致。証拠 `data/ai-ui/continuation-20261029/basic-cpu15/`、`basic15-final-review.json`、`dist/portable-basic-20261029-15/preparation.json` と `core-reuse.json`。
 
 14では同梱CPU34とLight/Dark詳細の限定nativeがPASS、15は案内文/ツールだけを更新した後続候補。**15そのもののGUI/通常EXE再起動・clean Windowsは新規未受入**。14のpreparationに後からGUI合格を上書きせず別receiptで記録する。専用外部AI環境での動画内音声GPU確認も、この基本ZIP自体のAI導入受入とは区別する。全ロードマップ/M1/M2完成の宣言ではない。
+
+## 2026-10-29 基本ZIP16：カード表示・Work更新・分割取得の収録
+
+source/実ProductVersion **292fdf2a2a121caf70e088c0753a8417d682250f**。入口 `dist/portable-basic-20261029-16/Aredoko/Aredoko.exe`、ZIP **348,446,465bytes**、SHA256 `556f6f0b5d5a49e574b7db1ca3fd111c14534880815f6a3238cb17a876c21f16`。展開 **823files/661,762,612bytes**。通常DB・installed Alpha（ZIP10/source0138a58）・shortcutは変更しない。モデル/PyTorch/CRT installerは基本版へ含めない。
+
+ライブラリと棚の長名captionの実枠幅制限、表示切替/ナビ遷移での表示サイズflyout解放、Work `a6f6e04` の不正cached類似要求を初期化前に拒否する修正、v4分割runtime ZIPの取得・結合copyなし展開を収録。製品registryはモデル2件/runtime0件で、公開URLや権利承認は追加していない。
+
+Core/tests/BootstrapはZIP15/source0edbd40から無変更を機械照合し、既存1,438 assertions＋変更案内11項目のreceiptを再利用。最新sourceでWinUI Portable publish、全payload/ZIP照合、同梱Python `--check` がPASS。既存WUI1001×3/SDK IL2104×2は保持。同梱CPU34項目がPASS、通常 `Aredoko.exe` の起動→正常終了→再起動も **11checks/2PNG目視/所有4exit0**。取得開始・物理入力・前面化要求・実model/GPUはこの通常起動試験では行わない。
+
+証拠 `data/ai-ui/continuation-20261029b/basic-cpu16/`、`basic-native16/`、`basic16-final-review.json`、`dist/portable-basic-20261029-16/preparation.json`。UI変更自体のLight/Dark/棚/未保存タグの限定受入と、外部CRT候補の実GPU/CPU確認はそれぞれ別receipt。今回の基本ZIPをAI自動導入・clean Windows・全ロードマップの完成としない。

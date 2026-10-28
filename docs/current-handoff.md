@@ -1,5 +1,16 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-29）
 
+## 2026-10-29b 終了checkpoint（以下より優先）
+
+- **基準/Git**：起点`5f9ab9f`。並行Work `a6f6e04346a7fb3f91ef86abdbfdec3eb3c049dc` の初期化前cached類似検証をレビューし、`376ecfa` で双方の履歴を維持して統合。handoffの同位置追記だけ競合し、双方を保存した。基本Python3.11の関連HTTP3件PASS。新branch/PR/main merge/force-push/Actionsなし。最終アプリsource **`292fdf2a2a121caf70e088c0753a8417d682250f`**、本引き継ぎcommitは `git log -1 -- docs/current-handoff.md`。PR metadata connector不調は継続し、remote branch/PR #5 head refで照合する。
+- **利用者向けUI**：`2f01d50`/`cbc1c9e` でライブラリ/棚の長いファイル名を実枠幅で省略し、全文tooltip/読み上げ/selection/draftを保持。表示方式・画面切替時にサイズmenuが残る不具合も修正。Light/Dark各25checks＋menu残件7checks、計16PNG目視/正常exit0。初回menu残留と修正後を別証拠に保持。[UI正本](p3-continuous-browse.md)。
+- **任意AI環境**：`fe62f60`/`1789142` で固定CRT12DLLを旧環境とは別のpackに組込み、`99e444e` で12DLL/3通知を封印inventoryへbound。候補 `data/ai-ui/continuation-20261029b/crt-runtime01`、23,918files/4,950,784,575bytes、manifest `9ac04f2d56895690dd620971f2d3ae1dcffe731d45ba5225b26a4f86f845f731`。実CPU loaderでrootのCRT解決（ORTのmsvcp140_1含む）を確認。生成PNGの実EG2 GPU 768D/WD CPU各1回PASS、専用DB integrity/原本不変/両worker回収。全文照合は既定どおり行い、GPU計測とは分離。再配布権利/clean Windows受入ではない。[native正本](runtime-notice-inventory.md)。
+- **輸送実装**：`292fdf2` でv4分割runtime ZIPの各part Range再開/全SHA/直接seek展開を追加。2〜8part/各2GiB未満、結合済み3GBcopyを作らない。v1/v2/v3・既定速度無制限・取消/所有publication/原本guardを維持。新規15method＋旧関連45、基本Python3.11で関連19/owner22もPASS（重複合算しない）。初回2FAILはpayloadの正規python311.zipを禁止したharness誤りで修正済み。実3,034,460,747bytes ZIPも1,900,000,000＋1,134,460,747bytesへ分割・全member/結合SHA検証PASS。実外部3GB配信/公開/registry登録はしていない。[輸送正本](runtime-archive-transport.md)。
+- **最新の試用候補**：`dist/portable-basic-20261029-16/Aredoko/Aredoko.exe`。source/ProductVersion292fdf2、ZIP348,446,465bytes/SHA `556f6f0b5d5a49e574b7db1ca3fd111c14534880815f6a3238cb17a876c21f16`、823files/661,762,612bytes。WinUI Portable publish/全payload/ZIP/同梱check・CPU34項目PASS、通常EXE起動→正常終了→1回再起動 **11checks/2PNG目視/所有4exit0**。Core/tests/BootstrapはZIP15から無変更を照合し過去1,438assertions＋案内11項目を再利用、反復していない。既存picker3件/SDK IL2104×2は保持。[候補正本](portable-refresh-20261024.md)。証拠は `data/ai-ui/continuation-20261029b/` の `basic16-final-review.json`、各report/log。installed Alphaは**ZIP10/source0138a58のまま**、通常DB/settings/shortcut/私物は不変。
+- **未完/未検証**：runtimeの適用再配布条項/実不変host/production registry/clean Windows。静的native335件はPython RECORD285＋MSVC component12＋未対応38、静的VC未解決import0。38はCPython本体4＋DLLs34（OpenSSL/SQLite/Tcl/Tk/標準拡張等）の通知対応未確定で、38起動不具合という意味ではない。実3GB外部転送、HC/物理DPI/長時間RSS、実媒体品質/全codec/実再生seek、U7実ダブルクリック/外部起動、音声映像rank統合等は残る。全ロードマップ/M1/M2完了としない。
+- **次の1件**：固定CRT candidateの上記CPython由来38件とroot LICENSE/実同梱通知の対応をread-onlyで整理し、必要なcomponent provenanceの契約を小さく追加する。旧candidateは改変しない。条項/実hostが揃うまで推測URLでregistryを有効化せず、待ちだけなら独立した完成形UI/既知未受入へ進む。成功済みCRT import/GPU/同一caption/native/全Coreを繰り返さない。
+- **終了条件/モニター**：ユーザーは今回GUI/GPUテストを許可。追加取得/installer/公開upload/OS power設定変更なし。消灯要求は通知されたがWindows側で再点灯し、専用helperは復帰処理を終え**初期の点灯状態/残存helperなし**を確認。実行policyは変更/回避していない。消灯維持の常設設定は作らない。今回shutdownはしない。利用枠が切れる前に文書/commit/push/remote一致を確認して終了し、次回は同計画の続きへ。
+
 ## 2026-10-29b 継続中checkpoint（以下より優先）
 
 - 起点`5f9ab9f`、remote同一/cleanを確認して既存branch/PR #5で続行。今回はユーザーが通常のGUI/GPUテストを許可。shutdown指示は再適用しない。

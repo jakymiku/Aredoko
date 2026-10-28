@@ -4,6 +4,8 @@
 
 ## 現行実行キュー（2026-10-25、実機フィードバック計画）
 
+**2026-10-29b更新（以下より優先）**：P6の新規app-local CRT packを封印し、実loaderのDLL解決・生成EG2 GPU/WD CPUまで限定確認。v4分割ZIPの再開/取消/結合copy不要の展開を追加し、実3.03GB ZIPの2分割検査もPASS。UI-2はライブラリ/棚のcaption幅とサイズmenuの残留を改善しLight/Dark限定受入。Work `a6f6e04` を双方の履歴を保って統合。基本ZIP16/source292fdf2は同梱CPU34＋通常EXE起動/再起動/正常終了までPASS。次はnative通知の残り38件/適用条項/実host→runtime registry→clean Windows。これは外部条件が必要な残件で、専用OCR/全面作り直し/同成功試験へ戻らない。詳細・次の1件は[current-handoff](current-handoff.md)最上段を優先。
+
 **2026-10-29更新**：前回残件の動画内音声/一括favoriteの限定nativeと、生成2動画の実worker GPU検索を確認。AI起動失敗/異常reader回収と詳細長名/重複を改善し、Light/Dark詳細も限定受入。基本ZIP15/source0edbd40はpublish/同梱CPU34/全payload確認まで。公式x64 CRT12DLLの静的実体を固定し、次は適用条項/通知と新規pack組込み準備→loader/公開host/registry/clean Windows。成功済み検査を反復せず、正確な未受入/候補/次の1件は[current-handoff](current-handoff.md)最上段を優先。UIは引き続き機能と並行する。
 
 **2026-10-28 Work引継ぎ後の更新**：Workの動画内音声検索/類似、一括favorite、単一decoder/進捗/cleanupをWindowsでbuild・関連CPU確認。ガイド統合、処理中ファイル名、private類似比較のDB poll削減、audio idle解放の停止修正を追加。最新の試験ZIP13/sourcea2bc5d2は同梱CPU34まで、GUIは別候補frontend01の2ケースを質問中で未実施。MSVC正式成果物の版/容量/hash/署名は確定し、導入/公開は未実施。次は具体的GUIの回答後確認と、CRTの条件付き組込み/公開runtimeを進める。未検証と既知不具合を分け、[current-handoff](current-handoff.md)の最上段を優先する。既存計画を作り直さない。
