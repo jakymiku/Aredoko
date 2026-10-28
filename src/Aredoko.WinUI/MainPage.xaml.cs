@@ -938,7 +938,10 @@ public sealed partial class MainPage : Page
         {
             active=row; editingShelfIds=active.ShelfIds.ToArray();saved=new(string.Join(", ",active.Tags),active.Shelf,active.Favorite,active.Reviewed){ShelfIds=editingShelfIds.ToArray()};
             Tags.Text=saved.Tags;UpdateShelfEditorLabel();Favorite.IsChecked=saved.Favorite;Reviewed.IsChecked=saved.Reviewed;
-            ItemTitle.Text=active.Title;ItemPath.Text=active.LocationLabel;UpdateFileProperties();Editor.IsEnabled=true;DetailsButton.IsEnabled=true;
+            ItemTitle.Text=active.Title;ItemPath.Text=active.DetailLocationLabel;
+            ItemPath.Visibility=string.IsNullOrEmpty(ItemPath.Text)?Visibility.Collapsed:Visibility.Visible;
+            ToolTipService.SetToolTip(ItemTitle,active.Title);ToolTipService.SetToolTip(ItemPath,active.LocationLabel);
+            UpdateFileProperties();Editor.IsEnabled=true;DetailsButton.IsEnabled=true;
             DetailPreview.ContextFlyout=SimilarityMenu(active);
             UpdateDirty();
             if(Details.IsPaneOpen)_ = ShowDetailPreviewAsync(active);

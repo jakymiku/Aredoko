@@ -9,10 +9,12 @@ if(args.Contains("--viewer-preferences")){await FeedbackTests.Run(Check);return;
 if(args.Contains("--setup-plan")){await AISetupPlanTests.Run(Check);return;}
 if(args.Contains("--favorite-patch")){await FavoritePatchTests.Run(Check);return;}
 if(args.Contains("--worker-errors")){WorkerErrorTests.Run(Check);return;}
+if(args.Contains("--media-presentation")){MediaPresentationTests.Run(Check);return;}
 ViewerInteractionTests.Run(Check);
 if(args.Contains("--viewer-interaction")){await ImageSourceInfoTests.Run(Check);return;}
 Check(!JsonSerializer.IsReflectionEnabledByDefault,"reflection disabled");
 WorkerErrorTests.Run(Check);
+MediaPresentationTests.Run(Check);
 AppBuildIdentityTests.Run(Check);
 await ImageSourceInfoTests.Run(Check);
 await ThumbnailTests.Run(Check);

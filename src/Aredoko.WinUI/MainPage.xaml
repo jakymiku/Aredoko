@@ -47,8 +47,8 @@
       <ContentControl x:Name="Editor" Grid.Row="1" IsEnabled="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
        <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="DetailScroll" AutomationProperties.Name="作品の詳細と編集"><StackPanel Spacing="12" Margin="{StaticResource FormScrollGutter}">
-      <TextBlock x:Name="ItemTitle" Text="作品を選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap"/>
-      <TextBlock x:Name="ItemPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+      <TextBlock x:Name="ItemTitle" Text="作品を選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="DetailItemTitle"/>
+      <TextBlock x:Name="ItemPath" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="DetailItemLocation"/>
       <Image x:Name="DetailPreview" IsDoubleTapEnabled="True" DoubleTapped="DetailPreview_DoubleTapped" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
       <StackPanel Spacing="8" AutomationProperties.AutomationId="DetailOpenActions">
        <Button x:Name="OpenImage" Content="画像を大きく表示" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenImage_Click" AutomationProperties.AutomationId="BtnOpenImage"/>
@@ -181,7 +181,7 @@
      <Grid x:Name="SimilarityBar" ColumnSpacing="12" Visibility="Collapsed">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <TextBlock x:Name="SimilarityTitle" VerticalAlignment="Center" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtSimilarityOrigin"/>
-      <Button Grid.Column="1" Content="元の検索に戻る（取得中は取消）" Click="SimilarityBack_Click" AutomationProperties.AutomationId="BtnSimilarityBack"/>
+      <Button Grid.Column="1" Content="元の検索に戻る" ToolTipService.ToolTip="類似検索の取得中は中断し、元の検索条件へ戻ります。" Click="SimilarityBack_Click" AutomationProperties.AutomationId="BtnSimilarityBack"/>
      </Grid>
     </StackPanel>
    </Grid>

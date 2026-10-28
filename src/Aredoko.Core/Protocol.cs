@@ -29,6 +29,9 @@ public sealed class MediaRow
     // trailing "/" ("./" for the registered folder itself); file paths never end so.
     public bool IsFolderBook => Location.EndsWith('/');
     public string LocationLabel => Location == "./" ? "登録フォルダ直下の画像（一冊）" : IsFolderBook ? Location + "（画像フォルダを一冊として表示）" : Location;
+    // Keep relative folders and logical-book context; do not repeat a bare
+    // filename immediately below the identical detail title.
+    public string DetailLocationLabel => string.Equals(LocationLabel,Title,StringComparison.Ordinal) ? "" : LocationLabel;
     public string Availability { get; set; } = "";
     // "related" when the row matched only through the user's related-term dictionary;
     // "partial" when nothing had every word and this row lacks one of them.
