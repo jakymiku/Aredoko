@@ -127,3 +127,12 @@ VS Community 2022の公式原文（62,859bytes/SHA`41a207b1…`）も確認し�
 `tools/read_msi_inventory.py`はWindowsの[MSIDBOPEN_READONLY](https://learn.microsoft.com/windows/win32/api/msiquery/nf-msiquery-msiopendatabasew)と固定File/Media SELECTだけで対応表を読む。生成4件と、Windows上で自作したDB fixtureの実API読取/原本hash・mtime保持にPASS。検査ツール自身はcommit/transform/install/action/stream展開APIを使わない。fixture生成時の新DB作成と、選択MSIの読取を区別する。証拠`data/ai-ui/continuation-20261029/`。
 
 **取得済み公式EXEの展開は追加質問の回答待ち**。前回の取得/静的確認許可を展開/OS導入へ拡張せず、実CRT inventory/署名/依存/適用NOTICE/再配布条件・loader/clean Windows・公開host/registryは未完。既存のsealed pack/Alphaは不変。次は回答後に同じsourceから新規先へstatic展開し、File/MediaとCAB内容を対応付ける。
+
+
+### 2026-10-29：許可後のx64最小runtime実体を静的照合
+
+追加の明示許可後、同じ公式EXEを新規`msvc-static01`へ静的展開。EXE内部は25 files/18,819,437bytesで、arm64とx64のMSI/CABが併存する。x64 minimumのMSI File/MediaをREADONLYで読み、対応するCABだけを別の検査subdirへ展開。**12 files/2,666,168bytes、全てamd64/14.51.36247.0、MSIのID/サイズと一致**。既知の不足`msvcp140_1.dll`もこの正規set内に存在する。[公開可能な固定inventory](msvc-crt-inventory-20261029.json)に全SHA/版/署名者/import/delay-importを記録した。set内のVC系静的依存未解決0、Windows API-set等・実loader/forwarder/混在する旧CRTは別検証。
+
+全12のWindows署名はValid、発行対象名はMicrosoft Windows Software Compatibility Publisher。最初のprobeはCorporate signerだけを想定して停止したが、元EXEの固定SHA/署名とMSI/CAB対応を保ったまま、実際のMicrosoft署名者を記録した。これを任意publisherや署名エラーの無視へ広げていない。初回の過剰条件FAILをrawで保持。原EXEと抽出物のSHA再照合済み。installer/DLL/MSI action実行0、OS install0、既存packへのコピー0、公開0。
+
+今回の追加許可はここまでの静的展開/検査で消費済み。**再配布許諾・通知の適用、アプリlocalへの新規組込み、実worker DLL探索/読み込み、clean Windows、公開host/registryは未完**。不足1DLLだけを無断コピーせず、世代の異なる同梱CRTとの関係を確認して新規packへ扱う。上記のtool準備時「展開回答待ち」は当時の記録で、この実施結果を優先する。

@@ -324,3 +324,10 @@ Windowsでは前節のCore/cache build後、生成2動画＋無音trackなし/�
 owned jobが既に選択したcatalog titleのbasenameを、任意`item_progress.item_title`として返す。追加scan/DB照会・原本変更・namespace変更はない。表示名はcontrol/親pathを除き最大160 UTF-16単位、絵文字を途中で切らず省略。Coreは旧field省略を許容し、過長/path/controlなどの不正応答を拒否する。WinUIは現在処理中のbasenameを1行ellipsis＋tooltipで表示し、別source_kindの処理中や完了/取消/失敗後は消す。CLIや絶対pathを通常画面へ追加しない。
 
 関連jobs32/新label3（2itemで名前とIDの対応、完了時消去を含む）、Audio/Video Core関連、WinUI最小build PASS。`MaxLines`/`TextTrimming`は復元済みproject referencesのAPIで存在を確認。既存picker3警告は保持。GUI質問中のfrontend01/source9b7d91dはこの追加表示より前のbinであり、ファイル名表示のnative受入を完了扱いにしない。生証拠`work-sync-20261028/progress-title-*`と`core-*-title01.log`。
+
+
+### 2026-10-29：動画内音声の限定native受入
+
+追加回答後、基本ZIP13のUI/sourcea2bc5d2＋backend136d22bで、生成MKV3本/専用DB/CPU検査vectorを使用。準備のlazy開始→処理中basename→中断時の未公開→再開→音声あり2本準備/trackなし1本skip→日本語文章の一致区間→詳細の再生入口（再生せず）→右click音の類似→起点/trackなし除外→登録folder/戻るの復元を14checks/6PNG目視/exit0で確認。cached類似はモデルavailable=false・推論呼出増加0。実model品質/実再生seek/複数track/HC/DPIは未受入。
+
+native01はsandboxの実行alias制限でツールを起動できず操作前停止。所有appは終了し、OS側の版preflightを確認してから追加1試行の回答を得た。native02が上記PASSで、初回を成功へ書き換えていない。証拠`data/ai-ui/continuation-20261029/video-audio-native0{1,2}`と隣のvisual review。前回からのGUI回答待ちを解消した範囲で、別の新案内UIまで受入済みにしない。

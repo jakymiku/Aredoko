@@ -2,14 +2,44 @@
 from pathlib import Path
 import hashlib
 import io
+import json
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from extract_msvc_review import cabinet_members,_pipe
+from extract_msvc_review import cabinet_members,_pipe,extract_cabinet,extract
 
 
 class MSVCExtractionTests(unittest.TestCase):
+    def test_flat_extraction_and_bundle_inventory_are_bound_to_the_same_source(self):
+        import test_burn_containers as fixture
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);source=root/'source';source.mkdir();exe=source/'generated.exe';exe.write_bytes(fixture.bundle())
+            digest=hashlib.sha256(exe.read_bytes()).hexdigest();size=exe.stat().st_size;reference=root/'reference.json'
+            reference.write_text(json.dumps({'format':'aredoko-msvc-source-reference-v1','observed_artifact_url':'https://aka.ms/generated',
+                'sha256':digest,'bytes':size,'file_version':'14.1.2.0'}))
+            tool=root/'existing-extractor.exe';tool.write_bytes(b'not executed')
+            reviewed={'sha256':digest,'bytes':size,'metadata':{'file_version':'14.1.2.0'}}
+            def pipe(tool,args,target,limit):
+                data=b'Path = 0\nSize = 4\n' if args[0]=='l' else b'data'
+                self.assertLessEqual(len(data),limit);target.write(data);return len(data),hashlib.sha256(data).hexdigest()
+            with patch('extract_msvc_review.inspect_installer',return_value=reviewed),patch('extract_msvc_review._pipe',side_effect=pipe):
+                output=root/'new';value=extract(exe,reference,output,tool)
+                self.assertEqual([r['path'] for r in value['entries']],['container-0/0','container-1/0'])
+                self.assertTrue(all((output/r['path']).read_bytes()==b'data' for r in value['entries']))
+                self.assertFalse(value['source_executed']);self.assertFalse(value['runtime_modified'])
+                self.assertEqual(hashlib.sha256(exe.read_bytes()).hexdigest(),digest)
+                with self.assertRaises((ValueError,FileExistsError)):extract(exe,reference,output,tool)
+
+    def test_remaining_budget_is_checked_before_creating_member_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);cab=root/'fixture.cab';cab.write_bytes(b'generated');output=root/'new'
+            def pipe(tool,args,target,limit):target.write(b'Path = 0\nSize = 4\n')
+            with patch('extract_msvc_review._pipe',side_effect=pipe),self.assertRaises(ValueError):
+                extract_cabinet(cab,output,'unused',remaining_bytes=3)
+            self.assertFalse(output.exists())
+
     def test_owned_tool_output_is_bounded_while_reading_and_always_released(self):
         class Process:
             def __init__(self,data,code=0):self.stdout=io.BytesIO(data);self.code=code;self.dead=False;self.killed=False

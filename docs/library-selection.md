@@ -64,3 +64,8 @@ Coreの`FavoritePatchTests`は旧/新serverそれぞれで複数ID・一覧外ID
 4. 1件選択の詳細で未保存タグ/棚draftがある場合、favorite保存だけでDBへdraftが入らず、表示が保持されることを確認。保存後に保持不可なら「保存済み・一覧更新」の経路へ戻る。既存通常版backendが稼働中なら試験専用排他listenが失敗した時点で止める。
 
 今回の作業はsource接続と関連CPU契約まで。全GUI応答時間や大量選択の実機速度保証ではない。
+
+
+### 2026-10-29：一括favorite差分更新のnative確認
+
+基本ZIP13/sourcea2bc5d2のUI＋backend136d22b、生成745 PNG/専用DBで確認。実Shiftによる2件選択→600件window外へscroll→favorite追加/解除で同じ固定session・provider呼出0・可視範囲/一覧外選択保持→favorite一覧内解除では条件に従い再取得し0件になる、を12checks/3PNG目視/exit0でPASS。原本不変。native01はvirtualized peer再利用中の全tree読取によるstale_elementで保存操作前に停止/exit0。固定SelectionCountTextだけを読む修正後、追加1試行の回答でnative02を実施。初回rawを保持。現在の元DBやAlphaを操作していない。証拠`data/ai-ui/continuation-20261029/bulk-favorite-native0{1,2}`。

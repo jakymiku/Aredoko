@@ -74,6 +74,28 @@ def _pipe(extractor,arguments,target,limit):
         process.wait(timeout=5);process.stdout.close();timer.join()
 
 
+def extract_cabinet(path,directory,extractor,*,remaining_bytes=MAX_TOTAL,remaining_files=MAX_FILES):
+    """Extract flat data only, including a nested CAB selected from the bundle."""
+    path=plain_path(path);directory=Path(os.path.abspath(directory));storage_parent(directory)
+    if path.is_relative_to(directory):raise ValueError('Cabinet output overlaps input')
+    plain_path(directory,missing=True)
+    listing=io.BytesIO()
+    _pipe(extractor,['l','-slt','-ba','-sccUTF-8','-tCab',path],listing,2*1024*1024)
+    members=cabinet_members(listing.getvalue().decode('utf-8-sig'))
+    if sum(item['bytes'] for item in members)>remaining_bytes or len(members)>remaining_files:
+        raise ValueError('Remaining bundle extraction budget exceeded')
+    directory.mkdir();result=[]
+    for item in members:
+        # stdout redirection avoids archive destination paths and links.
+        destination=directory/item['name'];plain_path(destination,missing=True)
+        with destination.open('xb') as target:
+            length,checksum=_pipe(extractor,['x','-so','-y','-tCab',path,item['name']],target,item['bytes'])
+        destination=plain_path(destination)
+        if length!=item['bytes'] or destination.stat().st_size!=length:raise ValueError('Cabinet member differs from declared size')
+        result.append({'path':item['name'],'bytes':length,'sha256':checksum})
+    return result
+
+
 def extract(source,reference,output,extractor):
     source=plain_path(source);reference=plain_path(reference);extractor=plain_path(extractor)
     if reference.stat().st_size>16384:raise ValueError('Source reference exceeds limit')
@@ -95,21 +117,12 @@ def extract(source,reference,output,extractor):
                     block=original.read(min(1024*1024,remaining))
                     if not block:raise RuntimeError('Installer changed during container copy')
                     target.write(block);remaining-=len(block)
-            listing=io.BytesIO()
-            _pipe(extractor,['l','-slt','-ba','-sccUTF-8','-tCab',path],listing,2*1024*1024)
-            members=cabinet_members(listing.getvalue().decode('utf-8-sig'))
+            directory=output/('container-'+str(span['index']))
+            members=extract_cabinet(path,directory,extractor,remaining_bytes=MAX_TOTAL-used,remaining_files=MAX_FILES-len(inventory))
             used+=sum(item['bytes'] for item in members)
             if used>MAX_TOTAL or len(inventory)+len(members)>MAX_FILES:raise ValueError('Bundle extraction exceeds review limit')
-            directory=output/('container-'+str(span['index']));directory.mkdir()
             for item in members:
-                # stdout redirection avoids trusting any archive destination
-                # paths, links or directory entries. No selected payload runs.
-                destination=directory/item['name'];plain_path(destination,missing=True)
-                with destination.open('xb') as target:
-                    length,checksum=_pipe(extractor,['x','-so','-y','-tCab',path,item['name']],target,item['bytes'])
-                destination=plain_path(destination)
-                if length!=item['bytes'] or destination.stat().st_size!=length:raise ValueError('Cabinet member differs from declared size')
-                inventory.append({'path':destination.relative_to(output).as_posix(),'bytes':length,'sha256':checksum})
+                inventory.append({**item,'path':(directory/item['path']).relative_to(output).as_posix()})
     # Include the actual source bytes in the before/after binding; a changed
     # source leaves an unapproved partial directory rather than a success receipt.
     hasher=hashlib.sha256()
