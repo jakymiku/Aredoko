@@ -97,3 +97,10 @@ python tools/collect_ai_runtime_notices.py --source <same-prepared-runtime> --su
 [Microsoft公式最新版案内](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)を再確認。v14の最新版は頻繁に更新されるため表に版番号を載せず、取得後のファイルpropertyで確認する方式。現掲載x64リンクは`https://aka.ms/vc14/vc_redist.x64.exe`であり、固定version/hashの成果物URLではない。対象architectureを一致させ、利用toolset以上のruntimeを使う要件を維持する。推測の版/hashや移動リンクだけでtrusted catalogへ登録しない。
 
 [公式DLL配布指針](https://learn.microsoft.com/en-us/cpp/windows/determining-which-dlls-to-redistribute?view=msvc-170)はcentral配布を推奨し、[再配布条件](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170)はVSライセンス等に基づく個別条件の確認を求める。今回の閲覧は個別承認でも導入方針の確定でもない。次は許可済み取得環境で正規成果物の版/bytes/SHA256/署名・適用条件を記録し、app-local同梱なら全依存とworker探索経路、centralなら利用者の明示同意/管理者要件/未導入時の基本機能継続を設計してから受入する。今回DLL/依存の取得・展開・実行/OS導入/pack/registry変更は行わず、情報待ちとして独立した一括favoriteのsource接続を進めた。
+
+
+### 2026-10-28 静的なMSVC取得物receiptの準備（取得回答待ち）
+
+`tools/inspect_msvc_redist.py --source <EXE> --source-url <公式URL> --output <新JSON>`を追加。最大96MiBの通常EXEをSHA256/サイズ/PE stubで照合し、Windowsの[Get-AuthenticodeSignature](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/get-authenticodesignature)とFileVersionInfoで有効なMicrosoft署名/版/製品名を読む。選択EXEの実行・展開・OS導入・DLLコピーはしない。x64 installerのstubがx86でもpayload architectureと混同せず、payload検証/取得URL由来の証明/再配布承認/clean Windowsはfalseに残す。[公式案内](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)の可変URLを固定catalogの代用にしない。
+
+生成7tests PASS、基本Pythonの初期6testsもPASS。生成した未署名bootstrapを読むWindows metadata確認は、親PS7のPSModulePathによりinbox PS5.1が互換性のないmoduleをautoloadして初回失敗。子processだけinbox Modulesを参照するようにし、署名NotSignedと版を読取成功。実行policy/OS環境を変更しておらず、raw失敗JSONと修正後証拠を保持する。実MSVCファイルは今回まだ取得せず、具体的取得許可の回答待ち。ライセンスや取得物の承認完了とはしない。

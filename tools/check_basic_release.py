@@ -4,6 +4,7 @@ Does not launch WinUI, bootstrap GUI, models, GPU, installers or normal user DB.
 Full payload/ZIP verification belongs to the preparation step.
 """
 import argparse,hashlib,json,os,queue,secrets,sqlite3,subprocess,sys,threading,time,traceback,urllib.request,zipfile
+from urllib.error import HTTPError
 from pathlib import Path
 REPO=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(REPO/'tools'))
@@ -15,6 +16,7 @@ from storage_lease import plain_path,storage_parent
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--release',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--polish',action='store_true',help='Also check U4-U6 contracts on a current candidate')
     parser.add_argument('--setup-plan',action='store_true',help='Also check the read-only purpose-based AI setup API')
+    parser.add_argument('--media-contracts',action='store_true',help='Check lazy video-audio routes and safe AI-unavailable responses without models')
     parser.add_argument('--favorite-patch',action='store_true',help='Also check retained favorite-only result edits in the actual bundled backend');args=parser.parse_args()
     release=plain_path(args.release,directory=True);output=Path(os.path.abspath(args.output))
     if not (release.is_relative_to(REPO/'dist') or release.is_relative_to(REPO/'data/ai-ui')) or not output.is_relative_to(REPO/'data/ai-ui') or output.exists():parser.error('Explicit staged repository release and new dedicated evidence required')
@@ -68,6 +70,21 @@ def main():
                 check('bundled AI opt-out starts no AI owner or download',skipped['skip_ai'] and not skipped['requirements']
                       and request('/api/library/ai/setup/download/job')['state']=='idle'
                       and not request('/api/library/audio-ai/status')['initialized'] and not request('/api/library/video-ai/status')['initialized'])
+            if args.media_contracts:
+                report['media_contracts']=True
+                status=request('/api/library/video-audio-ai/status')
+                check('video audio status is registered and lazy without AI',status['state']=='idle' and not status['initialized'] and not status['available'])
+                for route in ('audio-ai','video-audio-ai'):
+                    stopped=request('/api/library/'+route+'/cancel',{})
+                    check(route+' idle cancellation creates no owner',not stopped['cancel_requested'] and not stopped['initialized'])
+                for operation,body,expected in (('start',{'consent':False},400),('start',{'consent':True},503),('similar',{'item_id':1,'kind':'audio'},400)):
+                    try:
+                        request('/api/library/video-audio-ai/'+operation,body)
+                    except HTTPError as error:
+                        detail=json.load(error)
+                        check('video audio '+operation+' rejects unsafe/unavailable request with '+str(expected),error.code==expected and isinstance(detail.get('error'),str))
+                    else:raise AssertionError('Unexpected success without an AI environment')
+                check('video audio refusal leaves all AI owners uninitialized',not request('/api/library/audio-ai/status')['initialized'] and not request('/api/library/video-ai/status')['initialized'])
             root=request('/api/library/roots',{'consent':True,'path':str(media),'recursive':True})['root_id'];request('/api/library/scan',{'root_id':root})
             deadline=time.monotonic()+12
             while request('/api/library/scan')['state']=='running' and time.monotonic()<deadline:time.sleep(.05)

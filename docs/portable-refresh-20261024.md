@@ -1,5 +1,11 @@
 # 基本版ZIP候補（2026-10-24）
 
+## 基本候補11（2026-10-28、source692d66c、GUI受入前）
+
+- `dist/portable-basic-20261028-11/Aredoko/Aredoko.exe`と隣のZIPを新規生成。Workの動画単一decoder/進捗/動画内音声検索・類似/一括favoriteに、初期ガイドと共有進捗の補強を収録。Core全体/Portable/自己検査/runtime/全inventory/ZIP照合PASS、820 payload files。PyTorch/modelは未同梱。
+- 同梱backendのCPU34項目PASS（`work-sync-20261028/basic-cpu11b`）：新動画内音声status/cancel/strict body/AIなしの安全な拒否と基本検索・整理・正常EOF。初回`basic-cpu11`は未登録originのcached類似を503と誤期待してFAIL。正しく404で、cached索引準備はモデル利用不可でも可能な設計。無効fieldの400検査へ改めrawを保持した。元生成PNGとDB integrity保全。
+- この11はGUI未実施、installed Alpha（ZIP10/source0138a58）は変更しない。別のfrontend01/source9b7d91dで限定GUI2ケースの許可を質問中。後続のprivate pair版確認の改善は11に未収録。新候補/未検証を日常Alphaと混同しない。生証拠`data/ai-ui/work-sync-20261028/`、pack-time preparationも保持。
+
 ## 最新候補10（2026-10-28、source0138a58）
 
 - **後続の明示指示でinstalled Alphaへ反映済み**：デスクトップshortcutは`%LOCALAPPDATA%/Programs/Aredoko/releases/20261028-0138a58/Aredoko.exe`へ切替。全818file照合・bootstrap自己検査exit0、通常DB/launch設定不変。旧release/shortcut保持、更新後のGUI起動なし。以下の「Alpha不変」は配布候補受入時点の履歴であり、この追加更新と区別する。
