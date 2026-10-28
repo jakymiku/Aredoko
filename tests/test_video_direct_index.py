@@ -89,6 +89,27 @@ class SuppliedIndexTests(unittest.TestCase):
         reopened=VideoDirectIndex(self.catalog,self.encoder)
         self.assertTrue(reopened.fresh(self.item,self.revision))
 
+    def test_progress_describes_private_preparation_and_never_claims_publication(self):
+        previous=self.seed();events=[]
+        def progress(value):
+            events.append(value)
+            self.assertEqual(self.snapshot(),previous)
+        with self.supplied(),patch.object(self.encoder,'encode',return_value=[0,1,0]):
+            self.index.index_item(self.item,self.revision,progress=progress)
+        self.assertEqual([(v['phase'],v['prepared_ms'],v['prepared_windows']) for v in events],
+            [('decoding',0,0),('encoding',0,0),('decoding',16000,1),('encoding',16000,1),('decoding',17500,2),('saving',17500,2)])
+        self.assertTrue(all(v['total_ms']==17500 and v['item_id']==self.item for v in events))
+        self.assertNotEqual(self.snapshot(),previous);self.assertEqual(list(self.stage.iterdir()),[])
+
+    def test_cancel_from_progress_before_encoding_keeps_previous_index(self):
+        previous=self.seed();stop=threading.Event()
+        def progress(value):
+            if value['phase']=='encoding':stop.set()
+        with self.supplied(),patch.object(self.encoder,'encode') as encode,self.assertRaises(MediaDecodeCancelled):
+            self.index.index_item(self.item,self.revision,cancel=stop,progress=progress)
+        encode.assert_not_called();self.assertEqual(self.snapshot(),previous)
+        self.assertEqual(list(self.stage.iterdir()),[])
+
     def test_wrong_encoder_namespace_is_rejected_before_creating_a_sidecar(self):
         encoder=Encoder();encoder.profile=DEFAULT_PROFILE
         with self.assertRaises(ValueError):VideoDirectIndex(self.catalog,encoder)

@@ -32,6 +32,31 @@ internal static class VideoContentTests
         check(!(await client.StatusAsync()).Busy,"video idle status is not active");
         check((await client.StartAsync(new(){["root_ids"]=new JsonArray(7)})).Busy,"video index status starts polling");
         check((await client.CancelAsync()).State=="cancelling","video cancellation is visible");
+        check(VideoContentStatus.Parse(status.ToJsonString()).ItemProgress is null,"old video server without item progress remains compatible");
+        var working=status.DeepClone().AsObject();working["state"]="running";
+        working["item_progress"]=new JsonObject{["item_id"]=9,["prepared_ms"]=16000,["total_ms"]=17500,["prepared_windows"]=1,["phase"]="encoding"};
+        var progress=VideoContentStatus.Parse(working.ToJsonString());
+        check(progress.ItemProgress is {PreparedMs:16000,PreparedWindows:1}&&progress.Processed==0&&progress.Indexed==0,
+            "video item preparation is distinct from committed item counts");
+        check(progress.Message.Contains("0:16 / 0:17")&&progress.Message.Contains("未保存")&&progress.Message.Contains("解析しています"),"long video message shows prepared time and pending persistence");
+        var saving=working.DeepClone().AsObject();saving["item_progress"]!["prepared_ms"]=17500;saving["item_progress"]!["prepared_windows"]=2;saving["item_progress"]!["phase"]="saving";
+        check(VideoContentStatus.Parse(saving.ToJsonString()).Message.Contains("保存しています"),"full staged coverage is still saving, not completed");
+        var ending=saving.DeepClone().AsObject();ending["item_progress"]!["phase"]="decoding";
+        check(VideoContentStatus.Parse(ending.ToJsonString()).Message.Contains("終了を確認"),"last pixels still require successful decoder exhaustion");
+        var probing=working.DeepClone().AsObject();probing["item_progress"]!["prepared_ms"]=0;probing["item_progress"]!["prepared_windows"]=0;probing["item_progress"]!["total_ms"]=null;probing["item_progress"]!["phase"]="decoding";
+        check(VideoContentStatus.Parse(probing.ToJsonString()).Message.Contains("長さを確認中"),"unknown duration remains indeterminate before the probe");
+        foreach(var change in new Action<JsonObject>[] {
+            value=>value["item_progress"]=true,value=>value["item_progress"]!["item_id"]=0,
+            value=>value["item_progress"]!["prepared_ms"]=-1,value=>value["item_progress"]!["prepared_ms"]=17501,
+            value=>value["item_progress"]!["total_ms"]=86400001,value=>value["item_progress"]!["total_ms"]="17500",
+            value=>value["item_progress"]!.AsObject().Remove("total_ms"),value=>value["item_progress"]!["total_ms"]=null,
+            value=>value["item_progress"]!["prepared_windows"]=2,value=>value["item_progress"]!["phase"]="future",
+            value=>value["item_progress"]!["phase"]="saving",value=>value["state"]="completed",value=>value["processed"]=2})
+        {
+            var bad=working.DeepClone().AsObject();change(bad);var rejected=false;
+            try{VideoContentStatus.Parse(bad.ToJsonString());}catch(InvalidDataException){rejected=true;}
+            check(rejected,"invalid or stale video item progress is rejected");
+        }
         foreach(var change in new Action<JsonObject>[] {value=>value["target"]=-1,value=>value["processed"]=1001,
             value=>value["available"]="true",value=>value["indexed"]=true,value=>value["state"]="future"})
         {

@@ -64,6 +64,27 @@ class VideoHTTPTests(unittest.TestCase):
         self.assertEqual(result['items'][0]['video_match_end_ms'],16000)
         self.assertEqual(self.request('/api/library/video-ai/release',{})[0],200)
         self.assertFalse(self.feature.encoder.resident)
+
+    def test_authenticated_status_reports_uncommitted_item_progress_and_clears_after_save(self):
+        self.assertIsNone(self.feature.status()['item_progress'])
+        ready=threading.Event();proceed=threading.Event();encode=self.feature.encoder.encode
+        def paused(operation,window):
+            if window.start_ms==16000:
+                ready.set()
+                if not proceed.wait(3):raise RuntimeError('generated HTTP progress wait timed out')
+            return encode(operation,window)
+        with self.supplied(),patch.object(self.feature.encoder,'encode',side_effect=paused):
+            try:
+                self.assertEqual(self.request('/api/library/video-ai/start',{'consent':True})[0],200)
+                self.assertTrue(ready.wait(3))
+                self.assertEqual(self.request('/api/library/video-ai/status',authorized=False)[0],403)
+                code,status=self.request('/api/library/video-ai/status');self.assertEqual(code,200)
+                self.assertEqual((status['processed'],status['indexed']),(0,0))
+                self.assertEqual(status['item_progress'],{'item_id':self.item,'prepared_ms':16000,'total_ms':17500,'prepared_windows':1,'phase':'encoding'})
+            finally:proceed.set()
+            self.feature.owner.thread.join(5)
+        code,status=self.request('/api/library/video-ai/status')
+        self.assertEqual((code,status['state'],status['indexed']),(200,'completed',1));self.assertIsNone(status['item_progress'])
     def test_sessions_track_video_index_only(self):
         self.prepare()
         self.assertEqual(self.request('/api/library/results/create',{'session_id':'a'*32,'conditions':{'mode':'literal'}})[0],200)

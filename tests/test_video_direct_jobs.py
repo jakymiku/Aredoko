@@ -53,6 +53,31 @@ class DirectVideoJobTests(unittest.TestCase):
         self.assertEqual((self.jobs.status()['target'],self.jobs.status()['reused']),(0,1))
         self.assertEqual(self.encoder.calls,calls)
 
+    def test_partial_item_progress_survives_observation_but_not_cancel_or_restart(self):
+        self.seed()
+        with self.index.store.connect() as db:db.execute('UPDATE ai_video_direct_sources SET source_revision=?',('0'*64,))
+        previous=self.snapshot();ready=threading.Event();proceed=threading.Event();encode=self.encoder.encode
+        def paused(operation,window):
+            if window.start_ms==16000:
+                ready.set()
+                if not proceed.wait(3):raise RuntimeError('generated progress wait timed out')
+            return encode(operation,window)
+        with self.supplied(),patch.object(self.encoder,'encode',side_effect=paused):
+            try:
+                self.jobs.start();self.assertTrue(ready.wait(3));status=self.jobs.status()
+                self.assertEqual((status['state'],status['processed'],status['indexed']),('running',0,0))
+                self.assertEqual(status['item_progress'],{'item_id':self.item,'prepared_ms':16000,'total_ms':17500,'prepared_windows':1,'phase':'encoding'})
+                status['item_progress']['prepared_ms']=0
+                self.assertEqual(self.jobs.status()['item_progress']['prepared_ms'],16000)
+                self.assertTrue(self.jobs.cancel()['cancel_requested']);self.assertEqual(self.snapshot(),previous)
+            finally:proceed.set()
+            self.wait()
+        self.assertEqual(self.jobs.status()['state'],'cancelled');self.assertIsNone(self.jobs.status()['item_progress'])
+        self.assertEqual(self.snapshot(),previous)
+        with self.supplied():self.jobs.start();self.wait()
+        status=self.jobs.status();self.assertEqual((status['state'],status['indexed']),('completed',1))
+        self.assertIsNone(status['item_progress']);self.assertEqual(list(self.stage.iterdir()),[])
+
     def test_next_explicit_batch_repairs_damaged_complete_marker(self):
         with self.supplied():self.jobs.start();self.wait()
         with self.index.store.connect() as db:db.execute('DELETE FROM ai_video_direct_windows WHERE ordinal=1')
@@ -209,6 +234,7 @@ class DirectVideoJobTests(unittest.TestCase):
         with self.supplied(),patch.object(self.encoder,'encode',side_effect=changed):
             self.jobs.start();self.wait()
         self.assertEqual(self.jobs.status()['state'],'failed')
+        self.assertIsNone(self.jobs.status()['item_progress'])
         self.assertEqual(self.snapshot(),previous)
         self.assertEqual(list(self.stage.iterdir()),[])
 

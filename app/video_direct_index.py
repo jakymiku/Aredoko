@@ -90,7 +90,7 @@ class VideoDirectIndex:
             self._check(cancel)
             return count==decoded and frame_count==frames
 
-    def index_item(self,item_id,revision,*,cancel=None,validate=None,publication_guard=None,on_published=None):
+    def index_item(self,item_id,revision,*,cancel=None,validate=None,publication_guard=None,on_published=None,progress=None):
         if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid video item')
         if type(revision) is not str or re.fullmatch('[0-9a-f]{64}',revision) is None:raise ValueError('Invalid video revision')
         self._check(cancel)
@@ -99,6 +99,7 @@ class VideoDirectIndex:
             validate()
         if on_published is not None and (publication_guard is None or not callable(on_published)):
             raise ValueError('Invalid video publication callback')
+        if progress is not None and not callable(progress):raise ValueError('Invalid video progress callback')
         if self.encoder.profile.key!=self.profile.key:raise ValueError('Video encoder profile changed')
         with tempfile.TemporaryDirectory(prefix='aredoko-video-stage-',dir=self.stage_parent) as temporary:
             path=Path(temporary)/'stage.sqlite'
@@ -108,8 +109,15 @@ class VideoDirectIndex:
                 stage.execute('PRAGMA cache_size=-1024')
                 stage.execute('PRAGMA max_page_count='+str(STAGE_BYTES//4096))
                 stage.execute('CREATE TABLE windows(ordinal INTEGER PRIMARY KEY,start_ms INTEGER,end_ms INTEGER,vector BLOB)')
-                decoded=indexed=frames=0;expected_start=0;short_seen=False
+                decoded=indexed=frames=0;expected_start=prepared_ms=0;short_seen=False
+                def report(phase,total):
+                    if progress is None:return
+                    self._check(cancel)
+                    progress({'item_id':item_id,'prepared_ms':prepared_ms,'total_ms':total,
+                              'prepared_windows':indexed,'phase':phase})
+                    self._check(cancel)
                 with self.reader.video_coverage_stream(item_id,revision,cancel) as windows:
+                    report('decoding',getattr(windows,'total_duration_ms',None))
                     for window in windows:
                         self._check(cancel)
                         validate_video(window)
@@ -123,6 +131,10 @@ class VideoDirectIndex:
                         short_seen=duration<MAX_FRAMES*1000
                         expected_start=window.end_ms
                         decoded+=1;frames+=len(window.frames)
+                        total=getattr(windows,'total_duration_ms',None)
+                        if progress is not None and (type(total) is not int or not window.end_ms<=total<=MAX_START_MS):
+                            raise ValueError('Invalid known duration for video progress')
+                        report('encoding',total)
                         vector=normalized(self.encoder.encode('video',window),self.profile.dimension)
                         self._check(cancel)
                         packed=array('f',vector)
@@ -130,6 +142,8 @@ class VideoDirectIndex:
                         stage.execute('INSERT INTO windows VALUES(?,?,?,?)',
                             (decoded-1,window.start_ms,window.end_ms,packed.tobytes()))
                         indexed+=1
+                        prepared_ms=window.end_ms
+                        report('decoding',total)
                 # Exhaustion alone is not proof of completion: the staged
                 # windows must end exactly at the total the producer probed.
                 total=getattr(windows,'total_duration_ms',None)
@@ -137,6 +151,7 @@ class VideoDirectIndex:
                     raise ValueError('Incomplete video coverage cannot be published')
                 if not decoded:raise ValueError('Empty video coverage cannot be published')
                 stage.commit()
+                report('saving',total)
                 try:self._publish(item_id,revision,path,decoded,indexed,frames,cancel,validate,publication_guard,on_published)
                 except InterruptedError:
                     self._check(cancel)

@@ -39,6 +39,7 @@ internal sealed class VideoPreparationPanel : IDisposable
         AutomationProperties.SetAutomationId(start,"StartVideoContent");
         AutomationProperties.SetAutomationId(cancel,"CancelVideoContent");
         ToolTipService.SetToolTip(start,"準備済みの動画は再利用します。残りがある場合は、もう一度押すと続きへ進みます。");
+        ToolTipService.SetToolTip(cancel,"保存済みの動画は残ります。処理中の動画は保存せず、次回は初めから準備します。");
         Content.Expanding+=async(_,_)=>{if(disposed)return;timer.Start();await RefreshAsync();};
         Content.SizeChanged+=(_,args)=>
         {
@@ -60,8 +61,11 @@ internal sealed class VideoPreparationPanel : IDisposable
         start.IsEnabled=!command&&value.Supported&&value.Available&&!value.Busy;
         cancel.IsEnabled=!command&&value.Busy&&value.State!="cancelling";
         progress.Visibility=value.Busy?Visibility.Visible:Visibility.Collapsed;
-        progress.IsIndeterminate=value.State!="running"||value.Target==0;
-        progress.Maximum=Math.Max(1,value.Target);progress.Value=value.Processed;
+        var current=value.State=="running"?value.ItemProgress:null;
+        progress.IsIndeterminate=value.State!="running"||value.Target==0||current is {TotalMs:null};
+        progress.Maximum=current?.TotalMs is int total?total:Math.Max(1,value.Target);
+        progress.Value=current is {TotalMs:not null} tracked?tracked.PreparedMs:value.Processed;
+        AutomationProperties.SetName(progress,current is null?"動画の索引作成の進捗":"現在の動画の解析進捗。保存完了前のデータです。");
     }
     private async Task RefreshAsync()
     {

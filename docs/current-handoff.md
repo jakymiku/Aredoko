@@ -1,5 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
+## 2026-10-28 Work継続checkpoint（動画の区間進捗・1時間生成case、以下より優先）
+
+- 起点 **`fd088c39777cfd0ef0c20ae57890a6a73739b984`**、既存branch / PR #5のHEAD一致・open/Draftを確認。サブエージェントなし。最新commitは本書のGit履歴。部分snapshotで他端末未push差分は未確認、現在クォータ残％は取得不可。
+- **今回の利用者向け変更**：動画準備中のstatusへ任意の`item_progress`を追加。解析済み時刻/総尺・読み取り/解析/保存段階を返し、Core/WinUI sourceで現在の動画の進捗を表示。解析済み区間は未保存と明示し、保存成功まではprocessed/indexedへ加えない。取消/失敗/保存成功でcurrentを消し、再開始時にreset。中断した動画自体は次回初めから準備することもtooltipで案内。旧serverのfield省略と旧clientの既存応答を保全。
+- **確認**：video index/jobs/認証HTTP/feature **44 PASS /9.514s**、失敗時のcurrent消去の追加focused1 PASS/0.136s、py_compile成功。途中encoderを止めてもstatus取得が応答し、16000/17500ms・未保存区間1・完了件数0を確認。取消では旧索引を保持しcurrent消去、再開始して保存後にcurrent消去。C# parser/文言/ProgressBarはsourceレビューと回帰source追加まで、SDK/Windows不在でCore/WinUI build/nativeはUNRUN。
+- **前段単一decoderの1時間CPU比較を一度実施**：生成testsrc2/160×90/1fps/3600秒/MPEG4・疑似3D encoder・独立DBで旧区間方式 **17.237s/FFmpeg225回**、新方式 **3.487s/1回**（各ffprobe1回）。225区間/3600frameのRGBと保存window digestが一致、原本不変、全child回収/slot解放/stage回収。実model/GPU/高解像度/Windows速度の保証ではない。[方法・数値・限界](video-similarity.md)末尾。成功caseを再測定しない。
+- **次の1件**：Windows担当はCore `--video-content`と前段`--favorite-patch`→WinUI/Portable build→生成動画で現在時刻/未保存/保存待ち・中断/再開・panel再表示を限定確認。Windowsなしなら音声準備の解析済み時刻表示を同型で検討（音声の総尺不明を推測で埋めない、未着手）。runtime固定成果物/配布方針は情報待ちを保持。
+- **未確認/保全**：通常DB/settings/Alpha/shortcut/ZIP/私物変更0、実model/GPU/GUI/.NET/download/OS変更/Actions/新branch/PR/main merge/shutdown0。installed AlphaはZIP10/source0138a58を保持、今回sourceは未配布。実動画/音楽/録音品質、VFR/全codec/総RSS、動画内音声、runtime公開/clean Windows、U7実入力・前段一括favorite/native等は未完。
+
 ## 2026-10-28 Work継続checkpoint（動画全区間を単一デコーダーで準備、以下より優先）
 
 - 起点 **`64ec8694fd925ed4defb2a3c8c898a368e74b24b`**、既存branch / PR #5のHEAD一致・open/Draftを確認。サブエージェントなし。最新commitは本書のGit履歴。部分snapshotで他端末未push差分は未確認、現在クォータ残％は取得不可。

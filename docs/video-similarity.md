@@ -178,3 +178,39 @@ stdout readerは1frame単位のqueue（最大1）と1frame分のpendingに抑え
 既存`tools/package_release.py`はapp直下の.pyを全てcopyするため、新moduleを次の候補に収録する経路はあるが、今回ZIPの作成/installed Alpha更新/Windows起動は行っていない。基本Python3.11/Windows上でのFFmpeg pipe/reader所有終了・実modelとのbackpressureは未確認。長時間、VFR、timestamp gap、全codec、実動画の品質/総RSS/性能は未受入。1時間の実測や「225倍高速化」の証拠ではない。
 
 Windows残確認は、最新sourceのCore/Portable build後、生成2動画と独立DB/settingsで、準備→中断→再開→区間付き文章検索/保存済み類似を限定確認する。専用decoder process1本と正常終了時の残存0を記録し、既存の通常backendへ接続しない。長動画の計測は別の1caseとし、decode/native process数と実model推論時間を分ける。
+
+
+## 2026-10-28 Work：長い動画の区間進捗をAPI/Core/WinUIへ接続
+
+これまで準備画面は保存済みitem件数だけを表示し、1本の長い動画では内部windowが進んでも0/1のままだった。Indexに任意のprogress callbackを追加し、私有stageへ解析済みvectorを挿入した後だけprepared_ms/prepared_windowsを進める。読み取り前はdecoding、モデル呼出し中はencoding、正常exhaustionとstage commit後から公開commit待ちはsaving。既知durationを共有し、初回probe前の不明値はnullのまま保持する。callback前後も取消を検査し、長いdecode/encodeやprogress更新でpublication gateを保持しない。
+
+既存認証statusへ`item_progress`を任意object/nullとして追加（旧serverにはfield自体がない）。例は以下。preparedは解析済みの私有データであり、indexed/processedは引き続き実commit後のitem件数だけ。
+
+```json
+{"item_id":9,"prepared_ms":16000,"total_ms":3600000,"prepared_windows":1,"phase":"encoding"}
+```
+
+item_id以外の原本名/絶対pathを追加しない。Jobsのguard下で更新し、statusはdeepcopy。保存成功は既存のcommit/cancel gate内のon_publishedで件数を進めcurrentを消す。取消/失敗もcurrentを消し、新batchはnullから開始する。途中の解析区間を再開可能な保存物とは扱わない。検索/namespace/DB形式・既存resume/fresh/原本guard/単一resident契約は変更しない。
+
+Coreは旧field省略/nullを許し、新objectは厳密int/最大24h/5400区間/ceil(prepared_ms/16000)の整合/既知total以下/phase/stateの整合を確認。総尺不明は先頭decodingだけ、savingは全尺解析後だけ。完了stateに古いcurrentが残る応答も拒否する。WinUI sourceでは現在の動画の解析時刻をProgressBarへ使い、総尺不明/中断待ちはindeterminate。未保存、終了確認、保存中を短い日本語で区別し、完了件数とは混ぜない。panel閉鎖は観測だけを止め、再展開は同じjobのstatusを取得する既存契約を維持。中断した動画は次回初めから準備することもtooltipで案内する。
+
+生成fixture＋疑似encoderのindex/jobs/認証HTTP/featureは**44 PASS/9.514s**。encoderの2区間目を停止して16000/17500ms・1区間解析済み・processed/indexed=0、旧公開不変、status観測の非blocking、観測側のobject変更がjobへ逆流しないことを確認。取消/再開始/保存成功のcurrent消去、progressからencode前取消した場合のrollback、公開前の全phaseでも旧索引を維持することを確認。既存の想定原本変更による失敗logger出力を含むがtest FAILはない。失敗時current消去のassert追加後にその1件だけ**PASS/0.136s**、py_compile成功。重複runは合算しない。
+
+Coreの`--video-content`には旧server互換・未知duration・未保存/saving/終端確認・不正count/時間/phase/terminal stateのsource回帰を追加。**Core/C# compile/WinUI/Portable/nativeはWindows/.NET不在で未実行**。Windowsでは当該Core→前段`--favorite-patch`→buildを実施し、生成の短動画とやや長い動画/独立DBで時刻進捗・保存待ち・中断/再開・panelを閉じて再表示を一つの限定caseにまとめる。実model/GPU許可を自動拡張せず、通常backend/DBへ接続しない。
+
+## 2026-10-28 Work：1時間の生成動画による単一decoder比較（1caseだけ）
+
+Linux x86_64 / Python3.12.14 / FFmpeg6.1.1-3ubuntu5。`testsrc2=s=160x90:r=1:d=3600`をMPEG4/1fps/faststartで生成（生成0.616秒、21,993,463bytes）。独立ProductionCatalogと3D疑似video encoderを使い、同一Indexのproducerだけ旧`iter_video_coverage`へcontext adapterで差替えた旧runと、現在のVideoCoverageStreamの新runを各1回実行した。Source guard・SHA256集計・225回の疑似encode・stage/atomic保存を含む壁時計。実modelの推論は一切行っていない。
+
+| 指標 | 旧・区間ごとdecode | 新・単一decoder |
+| --- | ---: | ---: |
+| 全225区間の準備/保存 | 17.237230秒 | 3.487139秒 |
+| 最初の16秒windowがencoderへ届くまで | 0.141068秒 | 0.122945秒 |
+| FFmpeg起動 | 225 | 1 |
+| ffprobe起動 | 1 | 1 |
+| 保存window数 / 入力frame数 | 225 / 3600 | 225 / 3600 |
+| 所有child回収 / producer slot解放 / stage回収 | 全て成功 | 全て成功 |
+
+両runの全RGB SHA256は`86706619c5b723bf5ffea84dffbfec8d4ef750e95155f166da489e02197416af`、保存したordinal/start/end/vectorのJSON digestは`c5096c314c1a9f7b53332b1c2d8243f581366c63d9a179a01c1e1ecc53750ce3`で一致。原生成SHA256`50cfb6bb6ced68575edb304fda50c026657949908a6753245cd4f06864a259c5`とmtimeも前後不変。試験用動画/DBは一時directoryだけを使い、終了時に回収した。raw記録はWork内部の`.codex/aredoko-video-hour-cost.json`（Git対象外）、ここに再開に必要な方法・数値・digestを保持する。
+
+この1caseでは約4.94倍だが、1fps/低解像度・疑似3D encoderの結果であり、高解像度/高fps/全codec/VFR/実GPUモデル・一般の動画準備速度へ外挿しない。総RSSは計測していない。cold/warmを揃えた多数回benchmarkでもない。1時間のCPU caseは実施済みとして無変更で再測定せず、残りはWindows実worker/用途別の限定受入へ進む。

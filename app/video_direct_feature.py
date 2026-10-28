@@ -31,7 +31,7 @@ class VideoDirectFeature:
         if self.owner is not None:return {'supported':True,'available':available,'initialized':True,**self.owner.status()}
         return {'supported':self.encoder is not None,'available':available,'state':'idle','resident':False,
                 'initialized':False,'candidate_total':0,'target':0,'processed':0,'indexed':0,
-                'reused':0,'unavailable':0,'remaining_candidates':0,'job_id':None,'error_code':None}
+                'reused':0,'unavailable':0,'remaining_candidates':0,'job_id':None,'error_code':None,'item_progress':None}
 
     def _ensure(self,*,require_model=True):
         if self.closed or self.encoder is None:raise AIUnavailable('動画の内容検索に対応するAI環境がありません。')

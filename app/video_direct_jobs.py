@@ -31,7 +31,7 @@ class VideoDirectJobs:
         self.closed=False;self.searching=False;self.last_used=time.monotonic()
         self.idle_seconds=0;self.idle_stop=threading.Event();self.idle_thread=None
         self.value={'job_id':None,'state':'idle','candidate_total':0,'target':0,'processed':0,
-                    'indexed':0,'reused':0,'unavailable':0,'remaining_candidates':0,'error_code':None}
+                    'indexed':0,'reused':0,'unavailable':0,'remaining_candidates':0,'error_code':None,'item_progress':None}
 
     def status(self):
         with self.guard:return {**deepcopy(self.value),'resident':bool(getattr(self.encoder,'resident',False)),
@@ -50,7 +50,7 @@ class VideoDirectJobs:
             if not bool(getattr(self.encoder,'available',True)):raise AIUnavailable('Video model is unavailable')
             self.cancelled=threading.Event()
             self.value.update(job_id=secrets.token_hex(16),state='planning',candidate_total=0,target=0,processed=0,
-                              indexed=0,reused=0,unavailable=0,remaining_candidates=0,error_code=None)
+                              indexed=0,reused=0,unavailable=0,remaining_candidates=0,error_code=None,item_progress=None)
             self.thread=threading.Thread(target=self._run,args=(deepcopy(conditions),limit),name='direct-video-index',daemon=True)
             try:self.thread.start()
             except BaseException:self.value.update(state='failed',error_code='worker_start_failed');raise
@@ -66,7 +66,7 @@ class VideoDirectJobs:
     def _published(self):
         # Called after commit while the cancellation gate is still held.
         with self.guard:
-            self.value['processed']+=1;self.value['indexed']+=1
+            self.value['processed']+=1;self.value['indexed']+=1;self.value['item_progress']=None
             if self.value['processed']==self.value['target']:self.value['state']='completed'
 
     def _run(self,conditions,limit):
@@ -99,14 +99,15 @@ class VideoDirectJobs:
                 for item,revision in picks:
                     self._check(generation)
                     self.index.index_item(item,revision,cancel=self.cancelled,validate=lambda:self._check(generation),
-                                          publication_guard=self.publication_guard,on_published=self._published)
-        except (MediaDecodeCancelled,SearchCancelled,InterruptedError):self._update(state='cancelled',error_code=None)
-        except VideoSearchChanged:self._update(state='failed',error_code='scope_changed')
+                                          publication_guard=self.publication_guard,on_published=self._published,
+                                          progress=lambda value:self._update(item_progress=value))
+        except (MediaDecodeCancelled,SearchCancelled,InterruptedError):self._update(state='cancelled',error_code=None,item_progress=None)
+        except VideoSearchChanged:self._update(state='failed',error_code='scope_changed',item_progress=None)
         except Exception:
-            if self.closed or self.cancelled.is_set():self._update(state='cancelled',error_code=None)
+            if self.closed or self.cancelled.is_set():self._update(state='cancelled',error_code=None,item_progress=None)
             else:
                 logging.getLogger(__name__).exception('Owned direct-video index failed')
-                self._update(state='failed',error_code='video_index_failed')
+                self._update(state='failed',error_code='video_index_failed',item_progress=None)
         finally:
             if acquired:self.inference.release()
             self.last_used=time.monotonic()
