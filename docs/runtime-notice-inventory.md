@@ -186,4 +186,13 @@ VS Community 2022の公式原文（62,859bytes/SHA`41a207b1…`）も確認し�
 
 基本Python3.11の生成5tests PASS：同size改変、stale manifest、件数偽装/重複/越境path、未分類の維持、`-I` の独立CLIまで。最初のCLIはtool自身のhelper path不足で実runtime読取前に停止し、app＋toolsを明示した後に上記CLI回帰と実体確認がPASS。実候補は **38件/20,382,600bytes** を読み、core候補4＋distribution候補34、LICENSE **36,874bytes / SHA e502c6b880ff58d614901495a9009c136539cd0b1e2a2abb8fc00b934c203419**。`continuation-20261029b/notice-gaps-real02.json`。元manifest/原本変更・selected code実行・GPU・追加取得0。
 
-root LICENSEにはlibffi/bzip2/Tclの該当語句が見つかる一方、OpenSSL/SQLite/LZMA/zlib/Expat/decimalの語句一致は0。これは別名・別ファイル・別供給元の可能性を残すので「ライセンスが存在しない」とは断定しない。**次は当該DLLの版/出所に対応した既存の通知原文を探し、packのどのfileへ同梱するかを固定する**。新しい上流原文取得が必要なら明示許可を得る。runtime完全照合/loader/GPUをこの補助のために再実行しない。基本ZIP16のアプリcodeは変わらず再buildしない。
+root LICENSEにはlibffi/bzip2/Tclの該当語句が見つかる一方、OpenSSL/SQLite/LZMA/zlib/Expat/decimalの語句一致は0。これは別名・別ファイル・別供給元の可能性を残すので「ライセンスが存在しない」とは断定しない。**次は当該DLLの版/出所に対応した既存の通知原文を探し、packのどのfileへ同梱するかを固定する**。新model/依存binaryの追加取得が必要ならAGENTSの明示許可要件を守る。runtime完全照合/loader/GPUをこの補助のために再実行しない。基本ZIP16のアプリcodeは変わらず再buildしない。
+
+
+### 同38件の静的版情報と公式参照を固定（2026-10-29b）
+
+[CPython native reference](cpython-native-reference-20261029.json)に全38fileの封印SHA/bytesとWindows PEの版resourceを保存。Python本体/標準拡張32件は3.11.9、OpenSSL2件は3.0.13、SQLite1件は3.45.1.0、Tcl/Tk各1件は8.6.12。libffi1件は版resourceなしとしてunknownを維持。全38fileのSHAを再照合し、DLLロード/selected code実行はしていない。版resourceだけを供給元証明にしない。
+
+読み取り参照した[CPython 3.11.9のWindows external一覧](https://raw.githubusercontent.com/python/cpython/v3.11.9/PCbuild/get_externals.bat)は上記OpenSSL/SQLiteと整合し、libffi3.4.4/bzip2 1.0.8/xz5.2.5/zlib1.3.1/TclTk8.6.12.1を宣言する。後者の全byte対応は未証明で、実物の版として捏造しない。[同版のlicense原典](https://raw.githubusercontent.com/python/cpython/v3.11.9/Doc/license.rst)、[OpenSSL同版の原文](https://raw.githubusercontent.com/openssl/openssl/openssl-3.0.13/LICENSE.txt)、[SQLiteの公式copyright案内](https://sqlite.org/copyright.html)も参照URLとして固定。上流scriptは一切実行せず、通知原文をpackへ追加した扱いにしない。公式参照の確認は公開承認とは別。
+
+次はこの版/URL/ファイルSHAからnative通知のcomponent契約と同梱原文を具体化し、全対象と対応が揃った新規packだけを封印する。単なるLICENSE文字列一致で自動承認しない。新model/依存binaryの追加取得が必要な場合はAGENTSの許可要件を守り、公式文書の読取・通知原文と区別する。既存pack/基本ZIP16を上書きしない。
