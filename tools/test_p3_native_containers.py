@@ -34,6 +34,7 @@ def main():
     parser.add_argument('--setup-recovery',action='store_true',help='Setup return plus safe recovery, diagnostic return and saved-profile restart state')
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
+    parser.add_argument('--detail-polish',action='store_true',help='UIA-only two generated PNGs: deduplicated filenames, bounded long title and draft preservation')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
@@ -44,6 +45,7 @@ def main():
     if args.setup_recovery:args.setup_return=True
     if args.setup_skip_download and not args.setup_return:parser.error('Skipping download requires the bounded setup-return case')
     if args.favorite_patch:args.detail_actions=True;args.uia_only=True
+    if args.detail_polish:args.uia_only=True
     if args.setup_plan or args.setup_return:args.detail_actions=True;args.uia_only=True
     if args.video_history_only:args.video_content=True
     if args.audio_similarity_only:args.audio_search_only=True
@@ -85,10 +87,20 @@ def main():
     def shot(name):
         path=target/(name+'.png');ui('screenshot',*(() if args.uia_only else ('--focus',)),'--output',path);report['screenshots'].append(str(path));path.with_suffix('.json').write_text(json.dumps(tree(),ensure_ascii=False,indent=2),encoding='utf-8')
     def ready():ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','60000' if args.global_edge else '10000')
-    def sources():return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
+    def sources():
+        if not args.detail_polish:return {p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
+        from storage_lease import plain_path
+        value={}
+        for path in media.rglob('*'):
+            path=plain_path(path,directory=path.is_dir())
+            if path.is_file():value[path.relative_to(media).as_posix()]=[hashlib.sha256(path.read_bytes()).hexdigest(),path.stat().st_mtime_ns]
+        return value
     try:
         media=target/'media';media.mkdir()
-        for i in range(0 if args.detail_actions or args.global_edge or args.audio_content or args.video_content or args.video_audio_content else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        for i in range(0 if args.detail_polish or args.detail_actions or args.global_edge or args.audio_content or args.video_content or args.video_audio_content else 745 if args.continuous or args.library_tail else 125 if args.viewer_boundary120 else 145):(media/f'generated-{i:03}.png').write_bytes(png(width=120,height=160,color=(40+i%180,80,160)))
+        if args.detail_polish:
+            from ui_detail_polish_audit import create_media
+            create_media(media)
         if args.video_audio_content:
             from ui_video_audio_audit import create_media
             create_media(media)
@@ -260,6 +272,10 @@ def main():
             removed=audit(ui,cli,tree,shot,report,check,cat,media,target,proc.pid,hwnd,input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only)
             check('generated sources match the declared scope',{key:value for key,value in before.items() if key!=removed}==sources())
             report['pass']=True
+        elif args.detail_polish:
+            from ui_detail_polish_audit import audit
+            audit(ui,tree,shot,report,check,cat)
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.detail_actions:
             from ui_detail_actions_audit import audit
             audit(ui,tree,shot,check,cat,navigation_only=args.detail_navigation_only)
