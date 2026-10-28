@@ -1,5 +1,12 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
+## 2026-10-28 ローカルWindows引継ぎ中（以下のWork記録より優先）
+
+- Work「開発引き継ぎ確認」とGitHubの10commitsを確認。cleanな既存branchを`bb58c27`→`9b7d91d`へfast-forward、PR #5 head ref一致。新branch/PR/merge/Actionsなし。Workの完成済み実装は再作成しない。
+- **Windows側の未確認を補完**：Coreのvideo-audio/audio/video/favorite各限定suite、Portable/frontend01 publishがPASS。既存picker3件/SDK trim警告は保持。同梱基本Python3.11＋生成素材の新video stream/video-audio source/index/HTTP/similarity/owned cleanupは44tests/30.544s PASS。source`9b7d91d`、証拠`data/ai-ui/work-sync-20261028/windows-build-review.json`と各log。
+- **現在の次**：動画内音声の準備/取消/再開→文章/音の類似→画面履歴、および一括favoriteの同一session/一覧外選択/favorites fallbackを、frontend01・専用DB/生成素材/CPU vectorの2ケースへ準備。GUIは2ケース各1試行の質問が回答待ちで未実施。実再生/seek・実model品質・GPU・通常DB・Alphaは対象外。新しい実装へ入る場合もこの既存binとsourceを区別する。
+- AlphaはZIP10/source0138a58のまま。Work sourceはまだ配布物へ未反映。runtime固定取得物/再配布条件/host/clean Windows、実媒体品質、HC/DPI/RSSは残る。PC使用中のGUI/GPU事前確認を継続し、shutdownしない。
+
 ## 2026-10-28 Work継続checkpoint（cached動画音声類似と初期化/終了cleanup、以下より優先）
 
 - 起点`5641dfe`→**`dfaf1f6699ed662279ad63fc2fca1db41a4820ae`**で動画内音声のcached類似backend/Core/WinUI sourceをcommit/push。既存branch/open Draft PR #5を継続。今回cleanup commitは本書のGit履歴。ユーザーの「止まってる？」を受け再開、サブエージェントなし、現在クォータ％取得不可。
