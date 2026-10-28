@@ -1,5 +1,13 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
+## 2026-10-28 Work継続checkpoint（音声準備の時刻進捗、以下より優先）
+
+- 起点`a033b6981c77589fc0e1280c30bc92c4e18adbbe`、既存branch/PR #5のHEAD一致・open/Draftを確認。ユーザーはクォータreset後に複数単位の続行を指示。サブエージェントなし、現在残％は取得不可。今回commitは本書のGit履歴。
+- **音声にもitem_progressを接続**：30秒PCM区間の解析済み時刻・段階を認証statusへ追加しCore/WinUI sourceへ接続。総尺は正常EOFまでnullのまま、割合を推測しない。無音もcoverage時刻を進めるが推論しない。保存前は未保存と表示し、processed/indexedは実commit後だけ。取消/失敗/保存成功でcurrent消去、再開始でreset。旧応答のfield省略/nullを許可。
+- **確認**：audio index/jobs/HTTP/feature **46 PASS/9.404s**。途中停止中のstatus応答、30000ms解析済み/total null/公開件数0、取消rollback/再開始、無音gap、実生成31.25秒WAVのEOF後だけ総尺確定を確認。Core `--audio-content`の回帰sourceを追加、.NET/WinUI/Portable/nativeは未実行。[音声正本](audio-producer-review.md)末尾。
+- **続ける独立作業**：動画内音声の原本guard付き逐次PCM入力を先行し、既存の音声/動画worker・namespace・原本を無断で再解釈しない。索引/検索/GUIの接続範囲は別途明記する。Windows側はCore `--audio-content`/`--video-content`/`--favorite-patch`→最新Portable→生成fixtureの限定確認へ。
+- **保全/未検証**：動画の区間進捗と1時間CPU比較、音声破損回復、一括favoriteを保持し反復しない。通常DB/settings/Alpha/shortcut/ZIP/私物変更0、実model/GPU/GUI/.NET/download/OS変更/Actions/新branch/PR/main merge/shutdown0。AlphaはZIP10/source0138a58。runtime固定成果物/配布方針・clean Windows・実媒体品質等の既存残件を保持。
+
 ## 2026-10-28 Work継続checkpoint（動画の区間進捗・1時間生成case、以下より優先）
 
 - 起点 **`fd088c39777cfd0ef0c20ae57890a6a73739b984`**、既存branch / PR #5のHEAD一致・open/Draftを確認。サブエージェントなし。最新commitは本書のGit履歴。部分snapshotで他端末未push差分は未確認、現在クォータ残％は取得不可。

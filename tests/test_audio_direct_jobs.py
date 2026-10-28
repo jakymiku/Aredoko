@@ -51,6 +51,30 @@ class DirectAudioJobTests(unittest.TestCase):
         self.assertEqual((self.jobs.status()['target'],self.jobs.status()['reused']),(0,1))
         self.assertEqual(self.encoder.calls,calls)
 
+    def test_item_progress_is_uncommitted_and_cleared_on_cancel_restart_and_save(self):
+        self.seed()
+        with self.index.store.connect() as db:db.execute('UPDATE ai_audio_direct_sources SET source_revision=?',('0'*64,))
+        previous=self.snapshot();ready=threading.Event();proceed=threading.Event();encode=self.encoder.encode
+        def paused(operation,window):
+            if window.start_ms==30000:
+                ready.set()
+                if not proceed.wait(3):raise RuntimeError('generated progress wait timed out')
+            return encode(operation,window)
+        with self.supplied(),patch.object(self.encoder,'encode',side_effect=paused):
+            try:
+                self.jobs.start();self.assertTrue(ready.wait(3));status=self.jobs.status()
+                self.assertEqual((status['state'],status['processed'],status['indexed']),('running',0,0))
+                self.assertEqual(status['item_progress'],{'item_id':self.item,'prepared_ms':30000,'total_ms':None,'prepared_windows':1,'phase':'encoding'})
+                status['item_progress']['prepared_ms']=0
+                self.assertEqual(self.jobs.status()['item_progress']['prepared_ms'],30000)
+                self.assertTrue(self.jobs.cancel()['cancel_requested']);self.assertEqual(self.snapshot(),previous)
+            finally:proceed.set()
+            self.wait()
+        self.assertIsNone(self.jobs.status()['item_progress']);self.assertEqual(self.snapshot(),previous)
+        with self.supplied():self.jobs.start();self.wait()
+        self.assertEqual((self.jobs.status()['state'],self.jobs.status()['indexed']),('completed',1))
+        self.assertIsNone(self.jobs.status()['item_progress'])
+
     def test_explicit_batch_rebuilds_a_corrupt_item_instead_of_reusing_its_marker(self):
         self.seed()
         with self.index.store.connect() as db:db.execute('DELETE FROM ai_audio_direct_windows WHERE item_id=? AND ordinal=1',(self.item,))

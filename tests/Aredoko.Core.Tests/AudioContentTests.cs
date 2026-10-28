@@ -31,6 +31,26 @@ internal static class AudioContentTests
         check(!(await client.StatusAsync()).Busy,"audio idle status does not claim active job");
         check((await client.StartAsync(new(){["root_ids"]=new JsonArray(7)})).Busy,"audio index status starts polling");
         check((await client.CancelAsync()).State=="cancelling","audio cancellation is visible");
+        check(AudioContentStatus.Parse(status.ToJsonString()).ItemProgress is null,"old audio server without item progress remains compatible");
+        var working=status.DeepClone().AsObject();working["state"]="running";
+        working["item_progress"]=new JsonObject{["item_id"]=9,["prepared_ms"]=30000,["total_ms"]=null,["prepared_windows"]=1,["phase"]="encoding"};
+        var progress=AudioContentStatus.Parse(working.ToJsonString());
+        check(progress.ItemProgress is {PreparedMs:30000,TotalMs:null,PreparedWindows:1}&&progress.Processed==0&&progress.Indexed==0,"audio prepared time never invents total or committed counts");
+        check(progress.Message.Contains("0:30")&&progress.Message.Contains("総尺確認中")&&progress.Message.Contains("未保存"),"audio preparation explains unknown duration and pending save");
+        var saving=working.DeepClone().AsObject();saving["item_progress"]!["prepared_ms"]=31000;saving["item_progress"]!["prepared_windows"]=2;saving["item_progress"]!["total_ms"]=31000;saving["item_progress"]!["phase"]="saving";
+        check(AudioContentStatus.Parse(saving.ToJsonString()).Message.Contains("保存しています"),"known audio EOF is still not committed before save");
+        foreach(var change in new Action<JsonObject>[] {
+            value=>value["item_progress"]=true,value=>value["item_progress"]!["item_id"]=0,
+            value=>value["item_progress"]!["prepared_ms"]=-1,value=>value["item_progress"]!["prepared_ms"]=86400001,
+            value=>value["item_progress"]!["total_ms"]=29999,value=>value["item_progress"]!["total_ms"]="31000",
+            value=>value["item_progress"]!.AsObject().Remove("total_ms"),value=>value["item_progress"]!["prepared_windows"]=2,
+            value=>value["item_progress"]!["phase"]="future",value=>value["item_progress"]!["phase"]="saving",
+            value=>value["state"]="completed",value=>value["processed"]=2})
+        {
+            var bad=working.DeepClone().AsObject();change(bad);var rejected=false;
+            try{AudioContentStatus.Parse(bad.ToJsonString());}catch(InvalidDataException){rejected=true;}
+            check(rejected,"invalid or stale audio progress is rejected");
+        }
         foreach(var change in new Action<JsonObject>[] {value=>value["target"]=-1,value=>value["processed"]=1001,
             value=>value["available"]="true",value=>value["indexed"]=true,value=>value["state"]="future"})
         {

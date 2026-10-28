@@ -92,6 +92,26 @@ class AudioHTTPTests(unittest.TestCase):
         code,result=self.request('/api/library/audio-ai/release',{})
         self.assertEqual(code,200);self.assertFalse(result['resident'])
 
+    def test_status_reports_audio_time_without_a_guessed_total_then_clears_after_save(self):
+        ready=threading.Event();proceed=threading.Event();encode=self.feature.encoder.encode
+        def paused(operation,window):
+            if window.start_ms==30000:
+                ready.set()
+                if not proceed.wait(3):raise RuntimeError('generated HTTP progress wait timed out')
+            return encode(operation,window)
+        with self.supplied(),patch.object(self.feature.encoder,'encode',side_effect=paused):
+            try:
+                self.assertEqual(self.request('/api/library/audio-ai/start',{'consent':True})[0],200)
+                self.assertTrue(ready.wait(3))
+                self.assertEqual(self.request('/api/library/audio-ai/status',authorized=False)[0],403)
+                code,status=self.request('/api/library/audio-ai/status');self.assertEqual(code,200)
+                self.assertEqual((status['processed'],status['indexed']),(0,0))
+                self.assertEqual(status['item_progress'],{'item_id':self.item,'prepared_ms':30000,'total_ms':None,'prepared_windows':1,'phase':'encoding'})
+            finally:proceed.set()
+            self.feature.owner.thread.join(5)
+        code,status=self.request('/api/library/audio-ai/status')
+        self.assertEqual((code,status['state'],status['indexed']),(200,'completed',1));self.assertIsNone(status['item_progress'])
+
     def test_audio_result_session_tracks_only_its_own_index_namespace(self):
         self.prepare()
         self.assertEqual(self.request('/api/library/results/create',{'session_id':'a'*32,'conditions':{'mode':'literal'}})[0],200)

@@ -5,9 +5,32 @@ using System.Text.Json.Nodes;
 
 namespace Aredoko.Core;
 
+public sealed record AudioItemProgress(int ItemId,int PreparedMs,int? TotalMs,int PreparedWindows,string Phase)
+{
+    private static string Clock(int ms)=>ms>=3600000?$"{ms/3600000}:{ms/60000%60:00}:{ms/1000%60:00}":$"{ms/60000}:{ms/1000%60:00}";
+    public string Message=>Phase=="saving"&&TotalMs is int total?$"現在の音声：{Clock(total)}の解析データを保存しています…"
+        :(TotalMs is int known?$"現在の音声：{Clock(PreparedMs)} / {Clock(known)}（未保存）\n":$"現在の音声：{Clock(PreparedMs)}まで解析済み（総尺確認中・未保存）\n")+
+            (Phase=="encoding"?"内容を解析しています…":"音声の読み取りを続けています…");
+    internal static AudioItemProgress Parse(JsonElement row)
+    {
+        if(row.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Invalid audio item progress");
+        int Count(string name,int maximum)=>row.TryGetProperty(name,out var count)&&count.ValueKind==JsonValueKind.Number
+            &&count.TryGetInt32(out var value)&&value>=0&&value<=maximum?value:throw new InvalidDataException("Invalid audio item count");
+        var id=Count("item_id",int.MaxValue);var prepared=Count("prepared_ms",86400000);var windows=Count("prepared_windows",2880);
+        if(!row.TryGetProperty("total_ms",out var duration))throw new InvalidDataException("Missing audio duration");
+        int? total=duration.ValueKind==JsonValueKind.Null?null:Count("total_ms",86400000);
+        var phase=row.TryGetProperty("phase",out var named)&&named.ValueKind==JsonValueKind.String?named.GetString():null;
+        if(id<1||phase is not ("decoding" or "encoding" or "saving")||windows!=(prepared+29999)/30000
+            ||total is int known&&(known<1||prepared>known)
+            ||phase=="saving"&&(total is null||prepared!=total))throw new InvalidDataException("Invalid audio item progress");
+        return new(id,prepared,total,windows,phase);
+    }
+}
+
 public sealed record AudioContentStatus(bool Supported,bool Available,string State,int CandidateTotal,int Target,
     int Processed,int Indexed,int Reused,int Unavailable,int RemainingCandidates,bool Resident,string? ErrorCode)
 {
+    public AudioItemProgress? ItemProgress {get;init;}
     public bool Busy=>State is "planning" or "waiting" or "running" or "cancelling";
     public string Message=>!Supported?"現在のAIモデルは音声の内容検索に対応していません。"
         :!Available?"AI環境を準備すると、音声の内容から検索できます。"
@@ -15,7 +38,7 @@ public sealed record AudioContentStatus(bool Supported,bool Available,string Sta
         {
             "planning"=>"音声の準備状況を確認しています…",
             "waiting"=>"ほかのAI処理が終わるのを待っています…",
-            "running"=>$"音声を準備しています（{Processed:N0} / {Target:N0}件）",
+            "running"=>$"音声を準備しています（{Processed:N0} / {Target:N0}件）"+(ItemProgress is {} item?"\n"+item.Message:""),
             "cancelling"=>"現在の処理を安全に中断しています…",
             "cancelled"=>$"中断しました。準備済みの{Indexed:N0}件は保持されています。",
             "failed"=>ErrorCode=="scope_changed"?"検索対象が変更されました。もう一度作成してください。":"音声を準備できませんでした。AI環境とファイルの状態を確認してください。",
@@ -35,9 +58,11 @@ public sealed record AudioContentStatus(bool Supported,bool Available,string Sta
             throw new InvalidDataException("Invalid audio state");
         var target=Count("target");var processed=Count("processed");var indexed=Count("indexed");
         if(target>1000||processed>target||indexed>processed)throw new InvalidDataException("Invalid audio progress");
+        var progress=row.TryGetProperty("item_progress",out var current)&&current.ValueKind!=JsonValueKind.Null?AudioItemProgress.Parse(current):null;
+        if(progress is not null&&(state is not ("running" or "cancelling")||processed>=target))throw new InvalidDataException("Invalid current audio state");
         return new(Flag("supported"),Flag("available"),state,Count("candidate_total"),target,processed,indexed,
             Count("reused"),Count("unavailable"),Count("remaining_candidates"),Flag("resident"),
-            row.TryGetProperty("error_code",out var error)&&error.ValueKind==JsonValueKind.String?error.GetString():null);
+            row.TryGetProperty("error_code",out var error)&&error.ValueKind==JsonValueKind.String?error.GetString():null){ItemProgress=progress};
     }
 }
 

@@ -105,6 +105,17 @@ class DirectAudioIndexTests(unittest.TestCase):
         self.assertEqual(report['indexed_windows'],0);self.assertTrue(self.index.fresh(self.item,self.revision))
         self.assertEqual(self.snapshot()[1],[])
 
+    def test_progress_counts_silent_coverage_without_guessing_total_or_publishing(self):
+        previous=self.seed();events=[];silent=PCMWindow(0,30000,b'\0'*(480000*4))
+        def progress(value):events.append(value);self.assertEqual(self.snapshot(),previous)
+        with self.supplied([silent,self.windows[1]]),patch.object(self.encoder,'encode',return_value=[0,1,0]) as encode:
+            self.index.index_item(self.item,self.revision,progress=progress)
+        self.assertEqual(encode.call_count,1)
+        self.assertEqual([(e['phase'],e['prepared_ms'],e['prepared_windows'],e['total_ms']) for e in events],
+                         [('decoding',0,0,None),('decoding',30000,1,None),('encoding',30000,1,None),
+                          ('decoding',31000,2,None),('saving',31000,2,31000)])
+        self.assertNotEqual(self.snapshot(),previous);self.assertEqual(list(self.stage.iterdir()),[])
+
     def test_fresh_rejects_broken_marker_or_window_payload_without_inference(self):
         statements=[
             "UPDATE ai_audio_direct_sources SET decoded_windows='bad' WHERE item_id=?",
@@ -144,9 +155,11 @@ class DirectAudioIndexTests(unittest.TestCase):
         self.catalog.index.scan(self.root);self.catalog.sync_index()
         revision=self.reader.audio_manifest(self.item)['revision']
         before=(self.path.stat().st_mtime_ns,hashlib.sha256(self.path.read_bytes()).hexdigest())
-        report=self.index.index_item(self.item,revision)
+        events=[];report=self.index.index_item(self.item,revision,progress=events.append)
         self.assertEqual((report['decoded_windows'],report['indexed_windows'],report['total_frames']),(2,2,500000))
         self.assertTrue(self.index.fresh(self.item,revision))
+        self.assertTrue(all(e['total_ms'] is None for e in events[:-1]))
+        self.assertEqual(events[-1]['total_ms'],31250)
         with self.index.store.connect() as db:
             self.assertEqual(db.execute('SELECT start_ms,end_ms FROM ai_audio_direct_windows ORDER BY ordinal').fetchall(),[(0,30000),(30000,31250)])
         self.assertEqual((self.path.stat().st_mtime_ns,hashlib.sha256(self.path.read_bytes()).hexdigest()),before)

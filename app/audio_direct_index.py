@@ -99,7 +99,7 @@ class AudioDirectIndex:
             self._check(cancel)
             return count==indexed
 
-    def index_item(self,item_id,revision,*,cancel=None,validate=None,publication_guard=None,on_published=None):
+    def index_item(self,item_id,revision,*,cancel=None,validate=None,publication_guard=None,on_published=None,progress=None):
         if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid audio item')
         if type(revision) is not str or re.fullmatch('[0-9a-f]{64}',revision) is None:raise ValueError('Invalid audio revision')
         self._check(cancel)
@@ -108,6 +108,7 @@ class AudioDirectIndex:
             validate()
         if on_published is not None and (publication_guard is None or not callable(on_published)):
             raise ValueError('Invalid audio publication callback')
+        if progress is not None and not callable(progress):raise ValueError('Invalid audio progress callback')
         if self.encoder.profile.key!=self.profile.key:raise ValueError('Audio encoder profile changed')
         with tempfile.TemporaryDirectory(prefix='aredoko-audio-stage-',dir=self.stage_parent) as temporary:
             path=Path(temporary)/'stage.sqlite'
@@ -117,8 +118,15 @@ class AudioDirectIndex:
                 stage.execute('PRAGMA cache_size=-1024')
                 stage.execute('PRAGMA max_page_count='+str(STAGE_BYTES//4096))
                 stage.execute('CREATE TABLE windows(ordinal INTEGER PRIMARY KEY,start_ms INTEGER,end_ms INTEGER,vector BLOB)')
-                decoded=indexed=frames=0
+                decoded=indexed=frames=prepared_ms=prepared_windows=0
+                def report(phase,total=None):
+                    if progress is None:return
+                    self._check(cancel)
+                    progress({'item_id':item_id,'prepared_ms':prepared_ms,'total_ms':total,
+                              'prepared_windows':prepared_windows,'phase':phase})
+                    self._check(cancel)
                 with self.reader.audio_pcm_stream(item_id,revision,cancel) as stream:
+                    report('decoding')
                     for window in stream:
                         self._check(cancel)
                         validate_pcm(window)
@@ -130,6 +138,7 @@ class AudioDirectIndex:
                         decoded+=1;frames+=window.frame_count
                         if frames>MAX_START_MS*SAMPLE_RATE//1000:raise ValueError('Audio exceeds duration limit')
                         if not window.is_digital_silence:
+                            report('encoding')
                             vector=normalized(self.encoder.encode('audio',window),self.profile.dimension)
                             self._check(cancel)
                             packed=array('f',vector)
@@ -138,8 +147,13 @@ class AudioDirectIndex:
                             stage.execute('INSERT INTO windows VALUES(?,?,?,?)',
                                 (decoded-1,window.start_ms,end_ms,packed.tobytes()))
                             indexed+=1
+                        # Silence advances decoded coverage without inference.
+                        prepared_ms=(frames*1000+SAMPLE_RATE-1)//SAMPLE_RATE
+                        prepared_windows=decoded
+                        report('decoding')
                     if not stream.complete or not frames:raise ValueError('Incomplete audio input cannot be published')
                 stage.commit()
+                report('saving',prepared_ms)
                 try:self._publish(item_id,revision,path,decoded,indexed,frames,cancel,validate,publication_guard,on_published)
                 except InterruptedError:
                     self._check(cancel)

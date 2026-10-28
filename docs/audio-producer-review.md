@@ -188,3 +188,12 @@ render中のaudio_manifestがPreviewUnavailable/ReaderChangedを投げた場合�
 今回の変更でfreshは従来のmarker照合より多くの保存済みvectorを読む。1itemあたり最大2880windowを逐次処理し、全vectorを保持しないが、長音声/大量itemの準備planning速度は未受入。SQLiteファイル自体の破損や同時に整合値へ書き換えられたデータの真正性を保証するものではない。実録音/音楽品質・実model/Windows/GPU/WinUI/Portableは未実行。
 
 Windowsで必要な限定確認：独立DBに生成音声2件を準備し、停止した専用backendのsidecarコピーだけへ1vector欠落を注入→専用起動でそのitemが文章検索から外れる→明示準備で再生成→正しい時刻付き結果へ戻ることを確認する。通常DBや私物に破損を注入しない。前段一括favoriteのCore/WinUI/native受入は別残件として維持する。
+
+
+## 2026-10-28 Work：音声準備の解析済み時刻を表示（総尺は正常EOFまで不明）
+
+動画に続き、AudioDirectIndexの任意progress callback→Jobsのitem_progress→認証status→Core/WinUI sourceを接続した。fieldはitem_id/prepared_ms/total_ms/prepared_windows/phaseで、prepared_windowsはvector数ではなく完了したPCM区間数（無音を含む）。30秒区間を検証/解析・stageした後だけ時刻を進め、総尺はPCMStreamの正常exhaustionまでnull。短いPCMや無音をEOFと推測しない。正常終了後のsavingだけ実総frame数からtotal_msを確定し、公開commit前は完了件数へ加えない。
+
+Coreは最大24h/2880区間・ceil(prepared_ms/30000)・phase/state/保存前の整合を検証し、旧field省略/nullも受理。WinUI sourceは「何分まで解析済み／総尺確認中・未保存」を表示し、unknown totalのbarはindeterminateにする。stage区間は永続resumeとして扱わず、中断したitemは次回初めから準備する旨をtooltipへ追加。成功markerによる完了item再利用・原本guard・atomic publication・無音skip・namespaceは維持。観測を閉じてもjobが続く既存所有を保つ。
+
+関連index/jobs/認証HTTP/feature **46 PASS/9.404s**。2区間目encoderを止め、statusが30000ms/total null/区間1/公開件数0で応答すること、観測objectがjobを変更しないこと、取消後旧索引保持/current消去→再開始・保存成功後もcurrent消去を確認。無音30秒→有音tailの時刻と区間数は進むがencodeは1回。実生成31.25秒WAVの逐次入力でも最後のsavingだけtotal=31250となる。新しいCore `--audio-content`のparser/文言回帰はsourceのみで、.NET/WinUI/Portable/nativeは未実行。実model/GPU/取得/通常DB/配布変更なし。既存成功flowを無変更で反復しない。
