@@ -105,8 +105,9 @@ public sealed partial class MainPage
         var row=new Grid{ColumnSpacing=12,RowSpacing=8,Padding=new Thickness(8)};
         var artwork=new Grid();var icon=new SymbolIcon(Symbol.Folder);artwork.Children.Add(icon);
         var image=new Image{Stretch=Stretch.Uniform};artwork.Children.Add(image);row.Children.Add(artwork);
-        var text=new StackPanel{Spacing=4,VerticalAlignment=VerticalAlignment.Center};
-        var name=new TextBlock{Text=shelf.Name,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaTitleStyle"]};
+        var text=new StackPanel{Spacing=4,VerticalAlignment=VerticalAlignment.Center,MaxWidth=1};
+        var name=new TextBlock{Text=shelf.Name,TextWrapping=TextWrapping.NoWrap,MaxLines=1,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaTitleStyle"]};
+        AutomationProperties.SetAutomationId(name,$"ShelfTitle{id}");AutomationProperties.SetName(name,shelf.Name);
         ToolTipService.SetToolTip(name,shelf.Name);text.Children.Add(name);
         text.Children.Add(new TextBlock{Text=$"{shelf.ItemCount:N0} 件",Style=(Style)Resources["MediaMetadataStyle"]});row.Children.Add(text);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
@@ -131,6 +132,8 @@ public sealed partial class MainPage
             Grid.SetColumn(text,1);Grid.SetColumn(actions,2);actions.VerticalAlignment=VerticalAlignment.Center;
         }
         row.Children.Add(actions);SizeShelfItem(item,artwork);
+        row.SizeChanged+=(_,_)=>ConstrainCardCaption(row,text);
+        artwork.SizeChanged+=(_,_)=>ConstrainCardCaption(row,text);
         AutomationProperties.SetAutomationId(item,$"ShelfRow{id}");AutomationProperties.SetName(item,$"{shelf.Name}、{shelf.ItemCount:N0}件");args.Handled=true;
         if(shelf.Representative is {} representative)
         {
@@ -181,6 +184,8 @@ public sealed partial class MainPage
         item.Width=tiles?width:double.NaN;
         artwork.Width=tiles?Math.Max(96,width-32):48*scale;
         artwork.Height=tiles?Math.Min(144*scale,Math.Max(48,ShelfList.ActualHeight-108)):64*scale;
+        if(item.ContentTemplateRoot is Border {Child:Grid row}&&row.Children.OfType<StackPanel>().FirstOrDefault() is {} text)
+            ConstrainCardCaption(row,text);
         if(ShelfList.ItemsPanelRoot is ItemsWrapGrid wrap)wrap.ItemWidth=width+8;
     }
     private void UpdateShelfItemSizes()

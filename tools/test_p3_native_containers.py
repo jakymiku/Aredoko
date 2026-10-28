@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
     parser.add_argument('--detail-polish',action='store_true',help='UIA-only two generated PNGs: deduplicated filenames, bounded long title and draft preservation')
+    parser.add_argument('--card-captions',action='store_true',help='UIA-only library/shelf caption slots and 60/180 percent size changes')
     parser.add_argument("--detail-actions",action="store_true");parser.add_argument("--detail-navigation-only",action="store_true");parser.add_argument("--theme",choices=("light","dark"),default="dark");parser.add_argument("--continuous",action="store_true");parser.add_argument("--library-tail",action="store_true");parser.add_argument("--global-edge",action="store_true");parser.add_argument("--shelf-management",action="store_true");parser.add_argument("--initial-loading",action="store_true");parser.add_argument("--viewer-boundary120",action="store_true");args=parser.parse_args();target=args.output.resolve();front=args.frontend.resolve()
     if os.name!='nt' or not target.is_relative_to(REPO/'data/ai-ui') or target.exists():parser.error('New dedicated output under data/ai-ui required')
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
@@ -45,6 +46,7 @@ def main():
     if args.setup_recovery:args.setup_return=True
     if args.setup_skip_download and not args.setup_return:parser.error('Skipping download requires the bounded setup-return case')
     if args.favorite_patch:args.detail_actions=True;args.uia_only=True
+    if args.card_captions:args.detail_polish=True
     if args.detail_polish:args.uia_only=True
     if args.setup_plan or args.setup_return:args.detail_actions=True;args.uia_only=True
     if args.video_history_only:args.video_content=True
@@ -273,7 +275,8 @@ def main():
             check('generated sources match the declared scope',{key:value for key,value in before.items() if key!=removed}==sources())
             report['pass']=True
         elif args.detail_polish:
-            from ui_detail_polish_audit import audit
+            if args.card_captions:from ui_card_caption_audit import audit
+            else:from ui_detail_polish_audit import audit
             audit(ui,tree,shot,report,check,cat)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.detail_actions:

@@ -617,9 +617,9 @@ public sealed partial class MainPage : Page
         image.DoubleTapped += async (_, args) => { args.Handled=true; await OpenPreviewAsync(row.Id); };
         if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row)||AudioPlayerPolicy.CanOpen(row))
             ToolTipService.SetToolTip(image,ImageViewerPolicy.CanOpen(row)?"ダブルクリックで画像を大きく表示":VideoPlayerPolicy.CanOpen(row)?"ダブルクリックで動画を再生":AudioPlayerPolicy.CanOpen(row)?"ダブルクリックで音声を再生":"ダブルクリックで本を開く");
-        var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 1 };
         var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextWrapping=TextWrapping.NoWrap,MaxLines=1,TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
-        AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");text.Children.Add(title);
+        AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");AutomationProperties.SetName(title,row.Title);text.Children.Add(title);
         ToolTipService.SetToolTip(title, row.Title);
         var availability = row.Availability == "present" ? "" : AvailabilityLabel(row.Availability);
         var tagSummary = string.Join("、", row.Tags);
@@ -679,7 +679,8 @@ public sealed partial class MainPage : Page
             catch (OperationCanceledException) { }
         }
         image.Loaded += async (_, _) => await RefreshThumbnailAsync(force: true);
-        image.SizeChanged += async (_, _) => await RefreshThumbnailAsync();
+        content.SizeChanged += (_, _) => ConstrainCardCaption(content,text);
+        image.SizeChanged += async (_, _) => { ConstrainCardCaption(content,text); await RefreshThumbnailAsync(); };
         image.Unloaded += (_, _) => { ++thumbnailVersion; requestedEdge=0; visible?.Cancel();visible?.Dispose();visible=null;image.Source = null; };
         // Recycled containers must release requests before receiving another row.
         containerCleanup[item] = () =>
@@ -698,11 +699,11 @@ public sealed partial class MainPage : Page
         var width=LibraryTileLayout.Width(Math.Max(1,(Items.ActualWidth>0?Items.ActualWidth:ItemListContainer.ActualWidth)-16),libraryItemScale);
         item.Width=tiles?width:double.NaN;
         image.Width=tiles?Math.Max(96,width-32):48*scale;
-        // A StackPanel's unconstrained desired width otherwise clips the title
-        // before TextTrimming can apply. Constrain text to the actual card slot.
+        // The theme's container padding/border also occupies the card width.
+        // Use the actual Grid slot so the ellipsis stays inside that padding.
         if(item.ContentTemplateRoot is Border {Child:Grid content}&&content.Children.OfType<StackPanel>().FirstOrDefault() is {} text)
         {
-            text.Width=Math.Max(1,tiles?width-32:Items.ActualWidth-60-image.Width);
+            ConstrainCardCaption(content,text);
             // Reserve the same caption space before/after thumbnail completion;
             // the first decoded tile must not set a shorter uniform row height.
             text.MinHeight=tiles?44:0;
@@ -710,6 +711,12 @@ public sealed partial class MainPage : Page
         // Leave room for the filename and metadata even in a short window.
         var height=Math.Max(48,ItemListContainer.ActualHeight-108);
         image.Height=tiles?Math.Min(144*scale,height):64*scale;
+    }
+    private static void ConstrainCardCaption(Grid content,StackPanel text)
+    {
+        var available=content.ColumnDefinitions.Count>1?content.ColumnDefinitions[1].ActualWidth
+            :content.ActualWidth-content.Padding.Left-content.Padding.Right;
+        if(double.IsFinite(available)&&available>0)text.MaxWidth=Math.Max(1,available);
     }
     private void AttachXamlRoot()
     {
