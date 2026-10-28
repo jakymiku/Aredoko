@@ -136,3 +136,14 @@ VS Community 2022の公式原文（62,859bytes/SHA`41a207b1…`）も確認し�
 全12のWindows署名はValid、発行対象名はMicrosoft Windows Software Compatibility Publisher。最初のprobeはCorporate signerだけを想定して停止したが、元EXEの固定SHA/署名とMSI/CAB対応を保ったまま、実際のMicrosoft署名者を記録した。これを任意publisherや署名エラーの無視へ広げていない。初回の過剰条件FAILをrawで保持。原EXEと抽出物のSHA再照合済み。installer/DLL/MSI action実行0、OS install0、既存packへのコピー0、公開0。
 
 今回の追加許可はここまでの静的展開/検査で消費済み。**再配布許諾・通知の適用、アプリlocalへの新規組込み、実worker DLL探索/読み込み、clean Windows、公開host/registryは未完**。不足1DLLだけを無断コピーせず、世代の異なる同梱CRTとの関係を確認して新規packへ扱う。上記のtool準備時「展開回答待ち」は当時の記録で、この実施結果を優先する。
+
+
+### 2026-10-29 継続：既存packを変更しないapp-local CRT試験候補
+
+`tools/prepare_ai_runtime_crt.py` を追加。明示した既存sealed pack・固定CRT inventory・そのsource reference・完全なPython通知bundle・固定原本license DOCXから、新規のローカル試験packだけを作る。`--check`は作成しない。12 DLLの全名/amd64/版/署名記録/サイズ/SHAを束縛し、rootの旧CRT2個は新しい出力内でだけ置換する。wheel内の同名2個はRECORDとの関係を保つため変更せず、配置をreportする。元pack/元CRT/通常設定/OSは変更しない。
+
+コピー中に元manifestの各bytes/SHAを検証し、新しい出力を再度全検証して封印。失敗/取消では作成した最終markerだけを外し、partial evidenceを残す。古いPython通知を修正版bundleへ入替え、別のnative component manifestに12DLLと原本DOCX/可読TXT/NOTICEのhashを記録。可読TXTはWord段落の抽出で、原本も同梱する。再配布承認・clean Windows・実DLLロードの成功をbuilder自身が宣言することはない。
+
+生成PE/偽license/専用packの10tests PASS（原本/輪内CRT保全、全依存set、通知束縛、改変・危険path・混在版・未知入力・出力重複の拒否、取消、最終検証失敗時のmarker撤去）。前段9件は基本Python3.11でもPASS。実体の `continuation-20261029b/crt-runtime01` は **23,918files/4,950,784,575bytes**、manifest SHA `9ac04f2d56895690dd620971f2d3ae1dcffe731d45ba5225b26a4f86f845f731`、コピー/全検証まで成功。動作確認は次の単位。今回ユーザーの「テストは好きに実行」を専用の配置/実行確認へ適用し、前日の静的展開だけの許可とは区別する。新しい依存取得/installer実行/OS install/公開はしない。
+
+[Microsoftのapp-local指針](https://learn.microsoft.com/en-us/cpp/windows/choosing-a-deployment-method?view=msvc-170)に従い、更新責任もapp側に残る。[2026 REDISTの対象](https://learn.microsoft.com/en-us/visualstudio/releases/2026/redistribution)は適切にライセンスされたVS等とその条項を条件にしており、旧2022条項の保存やDLL署名だけで公開を承認しない。公開時のpublisher適格性/適用条項・利用者向け通知の最終確認は残る。ここは技術的なローカル試験候補で、製品registryに登録していない。
