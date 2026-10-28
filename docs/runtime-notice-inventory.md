@@ -154,3 +154,10 @@ VS Community 2022の公式原文（62,859bytes/SHA`41a207b1…`）も確認し�
 `tools/check_ai_runtime_crt.py` は通常のruntime binding/既定オンの完全照合後、PATHから開発用環境を除いた専用子processを2本だけ逐次起動する。PyTorch2.9.1+cu128/TransformersのimportとCPU tensor演算、ONNX Runtime1.23.2のimport/providersが成功し双方exit0。EnumProcessModulesで実際に読んだCRTの場所とbytes SHAをcomponent manifestへ照合し、両processの共通CRT、特にORTの **MSVCP140_1.dllが新packのrootから読まれた**ことを確認した。単なるbasename候補一致をloader合格にしていない。
 
 生証拠 `continuation-20261029b/crt-load01/report.json`。全23,918files/4,950,784,575bytes照合は66.980秒（コピー直後でcache状態が違うため前日の162秒との速度改善比較にはしない）。import/CPUは12.877秒/0.830秒。manifest不変、GUI/GPU推論/モデルロード/通常DB/settings/OS installなし。開発PC上の限定受入であり、WindowsのAPI-set/driver/未ロード機能やclean Windows、公開権利/host/catalogを完成扱いにしない。
+
+
+### 同CRT候補の実モデル/private worker確認
+
+新しい `crt-runtime01` だけを選択し、既存EmbeddingGemma 2とWD Tagger、生成PNG2枚/専用DBで1バッチ確認。productionの完全照合72.872秒をモデル時間から分離し、EmbeddingGemmaの画像入力768D/有限/単位norm（CUDA、割当上限3,072MiB、telemetry peak931.8MiB）、WDのCPU候補6件がPASS。モデル起動/入力は23.176秒/3.424秒（一般性能値/検索精度ではない）。両所有workerを回収、既存kill解放のexit1/1。全選択入力metadata・生成PNG SHA/mtime不変、専用DB integrity=ok。ダウンロード/通常settings/OS導入なし。
+
+`tools/check_acquired_ai_runtime.py --existing-repository-models`はexactなrepo/models rootも明示選択でき、実際に使う2profileのmodel directoryだけをsnapshotする。別modelを列挙せず、cacheは専用先へ、CUDA予算/空き3GiB条件/完全検査を維持。初回 `crt-models01.log` は試験側の誤ったimport名でCLI開始前停止（GPU/worker開始0）。実在するtagger_profileへ修正しCLI importを確認後、`crt-models02/report.json`が上記PASS。新しいruntime上の接続確認で、全媒体/音楽/実画質・clean Windowsの受入ではない。

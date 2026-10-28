@@ -85,3 +85,12 @@ source31f32dcで、タイトルと完全一致する裸の相対ファイル名�
 ZIP14/source29114e6を、専用2PNG/DB・UIAだけでLight追加1試行とDark1試行、各9checks/3PNG/正常exit0で確認。計6PNGを目視。重複位置の解消、長名の3行上限/全文到達、階層付き位置、list/grid切替の未保存タグ保持と未自動保存を確認した。初回Lightは試験側の期待件数145対fixture2で起動前停止し、そのままFAIL記録を保持。追加許可後の修正は期待件数だけ。証拠 `data/ai-ui/continuation-20261029/detail-polish-{light02,dark01}/` と別のvisual review。
 
 この受入は詳細パネルの限定改善。小さいgridのファイル名表現や全カードの長名問題を解決済みとはせず、HC/物理DPI/実clipboard・hoverは未確認。専用以外のデータ、前面化要求、物理入力、再生、GPUを使わない。ZIP14の通常EXE起動経路の新規受入とも区別する。
+
+
+## 2026-10-29 継続：小カードと棚の省略記号を枠内へ
+
+`2f01d50`で、カード幅から固定32pxを引いていた文字幅を、Gridの実際の内容幅/星列の幅へ変更。テーマのListViewItem padding/選択borderを二重に使い潰さず、ファイル名の省略記号がclipされない。ライブラリと棚の共通helperで、サイズ/詳細開閉/選択による幅変化を追従する。棚も1行ellipsis・全文tooltip/accessibilityを揃え、モデルや検索処理は変更しない。新しい列APIはproject referencesで存在確認し、Portable build/publish成功（既存picker3/SDK trim警告は維持）。
+
+frontend01/source2f01d50、生成2PNG/専用DB・UIAだけでLight/Dark各25checks/各7PNG目視/正常exit0。60/180%のgrid、list、棚の両layoutでtitle全名とカード内bounds・1行、棚所属、未保存タグ保持を確認。表示サイズの倍率は物理DPIの受入とはしない。captionサイズ調整に伴う全5万件性能は未計測。
+
+上記画像では表示サイズflyoutがUIAによるnavigation後も旧位置に残ることを観測した。`cbc1c9e`でナビ/表示切替時に明示Hideし、frontend02の未確認部分だけを `card-menu-dark01` で7checks/2PNG目視/exit0確認。全25項目を無変更で繰り返さず、旧画像/報告も保持した。証拠 `continuation-20261029b/card-captions-{light01,dark01}`、`card-menu-dark01`、`caption-visual-review.json`。通常DB/Alpha/媒体原本は変更していない。

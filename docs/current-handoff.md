@@ -1,5 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-29）
 
+## 2026-10-29b 継続中checkpoint（以下より優先）
+
+- 起点`5f9ab9f`、remote同一/cleanを確認して既存branch/PR #5で続行。今回はユーザーが通常のGUI/GPUテストを許可。shutdown指示は再適用しない。
+- `fe62f60`/`1789142`：固定CRT12DLL/完全通知を新規AI packへ組込み、全SHA封印→実CPU loaderでapp-local解決→生成PNG/実EG2 GPU・WD CPUまでPASS。旧runtime/通常DB/Alphaは不変。pack `data/ai-ui/continuation-20261029b/crt-runtime01`、23,918files/4,950,784,575bytes、manifest `9ac04f2d56895690dd620971f2d3ae1dcffe731d45ba5225b26a4f86f845f731`。公開権利/host/clean Windowsは未完で製品catalogへ登録しない。[正本と証拠](runtime-notice-inventory.md)。
+- `2f01d50`/`cbc1c9e`：ライブラリ/棚の長名captionを実際の枠幅へ合わせ、全文到達とselection/draftを保持。Light/Dark各25checks、size flyoutの残り修正7checks、計16PNG目視、正常exit0。frontend01/02はsourceを区別。[UI証拠](p3-continuous-browse.md)。
+- 次は新しいpackの輸送ZIP/公開前のnative通知対応と、今回UIを収録する基本ZIP16の通常入口を小単位で仕上げる。まだこの節は作業中。最終candidate・未検証・次の1件を終了時に更新する。新branch/PR/main merge/Actions/外部取得0。
+- 一度限りの依頼でmonitor消灯/復帰を試したが短時間で再点灯し、維持はできなかった。全専用controllerを終了、OS display_state=1へ復帰確認済み。電源plan/実行policy/OS機能は変更しない。以後のGUIは通常表示で続行。
+
+
 ## 2026-10-29 ローカル継続の終了checkpoint（以下より優先）
 
 - **基準**：cleanな`53c5093`から既存branch/PR #5を継続しremote更新なしを確認。他AIのWork完了分は再実装していない。最終アプリsource **`0edbd409c81e4baf79788deef9830f3b01d86c85`**、文書commitは `git log -1 -- docs/current-handoff.md`。PR metadataはconnector不調で再取得できず、remote branch/PR head refで照合する。新branch/PR/merge/Actionsなし。
