@@ -11,6 +11,34 @@ public static class ErrorText
 {
     private static readonly Dictionary<string, string> Exact = new()
     {
+        ["AI runtime dependencies unavailable"] = "AI実行環境の部品が不足しているか、読み込めません。「設定」→「AI環境の配置」で環境を確認してください。基本検索と閲覧は利用できます。",
+        ["AI runtime architecture incompatible"] = "AI実行環境の種類がこのアプリと一致しません。「設定」→「AI環境の配置」で対応するx64環境を選び直してください。基本検索と閲覧は利用できます。",
+        ["AI runtime initialization failed"] = "AIを起動できませんでした。ほかのAI処理を終了し、空きメモリとAI環境の設定を確認してから再試行してください。基本検索と閲覧は利用できます。",
+        ["AI inference failed"] = "AIの処理を完了できませんでした。AI環境と対象ファイルを確認してから再試行してください。",
+        ["Invalid AI worker response"] = "AIの応答を確認できませんでした。アプリを再起動し、AI環境を確認してください。",
+        ["AI worker timed out"] = "AIの応答が時間内に返りませんでした。ほかのAI処理と空きメモリを確認して、再試行してください。",
+        ["AI worker disconnected"] = "AIとの接続が切れました。AI環境を確認して、再試行してください。",
+        ["AI runtime validation failed"] = "AI実行環境の照合を完了できません。「設定」→「AI環境の配置」で環境を確認してください。",
+        ["Incompatible AI worker"] = "AI実行環境が選択中のモデルに対応していません。AI環境とモデルの設定を確認してください。",
+        ["Invalid scan mode"] = "スキャン方法が無効です。アイテム一覧の更新、またはAI索引の作成を選び直してください。",
+        ["Animation decoder busy"] = "アニメーションの処理が混んでいます。別のビューワーを閉じてから、開き直してください。",
+        ["Animation source changed or session closed"] = "アニメーションの元ファイルが変わったか、表示が終了しました。開き直してください。",
+        ["Animation unavailable"] = "このアニメーションを読み取れません。ファイルの状態と対応形式を確認してください。",
+        ["Invalid animation request"] = "アニメーション表示の指定が無効です。開き直してください。",
+        ["Invalid acquisition query"] = "取得状況の指定が無効です。取得画面を開き直してください。",
+        ["Invalid audio status query"] = "音声の準備状況の指定が無効です。設定を開き直してください。",
+        ["Invalid video audio status query"] = "動画内の音声の準備状況の指定が無効です。設定を開き直してください。",
+        ["Invalid video status query"] = "動画の準備状況の指定が無効です。設定を開き直してください。",
+        ["Invalid backup query"] = "バックアップ状況の指定が無効です。バックアップ画面を開き直してください。",
+        ["Invalid restore query"] = "復元状況の指定が無効です。復元画面を開き直してください。",
+        ["Invalid history query"] = "閲覧履歴の指定が無効です。履歴を開き直してください。",
+        ["Invalid shelf query"] = "棚の指定が無効です。棚一覧を開き直してください。",
+        ["Invalid thumbnail request"] = "サムネイルの指定が無効です。一覧を取得し直してください。",
+        ["Result source unavailable; refresh search"] = "検索対象を読み取れません。フォルダの接続と登録状態を確認し、検索し直してください。",
+        ["Results expired or changed; refresh search"] = "検索結果の有効期限が切れたか、対象が変わりました。検索し直してください。",
+        ["Thumbnail cancelled"] = "サムネイルの読み込みを中断しました。必要なときに再度読み込みます。",
+        ["Thumbnail source changed; rescan"] = "元ファイルが変わりました。アイテム一覧を更新してください。",
+        ["Thumbnail unavailable"] = "サムネイルを読み取れません。ファイルの状態を確認してください。",
         ["History generation changed"] = "閲覧履歴が更新されました。もう一度操作してください。",
         ["Result workspace busy or full; close another search"] = "検索用の領域が使用中か、空き容量が不足しています。別の検索を閉じて再試行してください。",
         ["AI index cleanup failed; library records were kept"] = "AI索引を削除できません。登録・タグ等の記録は残しています。AI処理の終了後に再試行してください。",
@@ -115,6 +143,14 @@ public static class ErrorText
         ["The library must not contain the application database"] = "アプリのデータベースを含むフォルダはライブラリにできません。",
         ["A scan is already running"] = "スキャン中です。完了後にやり直してください。",
         ["Scan in progress; retry after it completes"] = "スキャン中です。完了後にやり直してください。",
+    };
+
+    public static string? AIWorkerFailure(string? code) => code switch
+    {
+        "ai_runtime_dependencies_unavailable" => Localize("AI runtime dependencies unavailable"),
+        "ai_runtime_architecture_incompatible" => Localize("AI runtime architecture incompatible"),
+        "ai_runtime_initialization_failed" => Localize("AI runtime initialization failed"),
+        _ => null
     };
 
     private static string Field(string name) => name switch

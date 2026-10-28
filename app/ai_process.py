@@ -12,8 +12,23 @@ import time
 from ai_profiles import DEFAULT_PROFILE, REVISION
 from runtime_paths import worker_command
 from ai_vectors import normalized
+from inference_errors import STARTUP_ERRORS
 PROFILE = DEFAULT_PROFILE.key
 class AIUnavailable(RuntimeError): pass
+
+
+class AIWorkerUnavailable(AIUnavailable):
+    def __init__(self,wire_error):
+        self.code,message=STARTUP_ERRORS[wire_error]
+        super().__init__(message)
+
+
+def worker_failure(result):
+    """Private output is not trusted public text, including old worker errors."""
+    code=result.get('error') if type(result) is dict else None
+    if type(code) is str and set(result)=={'error'} and code in STARTUP_ERRORS:
+        return AIWorkerUnavailable(code)
+    return AIUnavailable('AI inference failed')
 class EncoderProcess:
     def __init__(self, python, model, profile=DEFAULT_PROFILE, *, gpu_budget_mib=None):
         if gpu_budget_mib is not None and (type(gpu_budget_mib) is not int or not 256<=gpu_budget_mib<=65536):
@@ -52,7 +67,9 @@ class EncoderProcess:
         except queue.Empty:
             self._stop()
             raise AIUnavailable('AI worker timed out')
-        if 'error' in result: raise AIUnavailable('AI inference failed: '+result['error'])
+        if type(result) is not dict:
+            self._stop();raise AIUnavailable('Invalid AI worker response')
+        if 'error' in result: raise worker_failure(result)
         return result
     def _start(self):
         if self._closed:
@@ -74,10 +91,15 @@ class EncoderProcess:
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,text=True,encoding='utf-8',env=env,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         threading.Thread(target=self._read,args=(self.process,self.responses),daemon=True).start()
-        hello=self._response()
-        if hello.get('dimension')!=self.profile.dimension or hello.get('profile')!=self.profile.key:
-            self._stop();raise AIUnavailable('Incompatible AI worker')
-        self.device=hello['device']
+        try:
+            hello=self._response()
+            if (hello.get('dimension')!=self.profile.dimension or hello.get('profile')!=self.profile.key
+                    or type(hello.get('device')) is not str):raise AIUnavailable('Incompatible AI worker')
+            self.device=hello['device']
+        except BaseException:
+            # A failed startup must not leave a half-ready resident child/queue.
+            self._stop()
+            raise
     def encode(self, operation, value):
         audio_message=None;audio_silent=False
         video_message=None

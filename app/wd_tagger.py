@@ -10,7 +10,7 @@ import subprocess
 import threading
 import time
 
-from ai_process import AIUnavailable
+from ai_process import AIUnavailable,worker_failure
 from ai_search import AIBusy
 from tag_suggestions import TaggerInfo, TagProposal, SuggestionConflict
 from tagger_profile import load_profile, RUNTIME_VERSION, WDProfile
@@ -102,6 +102,7 @@ class WDTagger:
                 if remaining<=0:raise AIUnavailable('タグ分類が制限時間を超えました。候補は保存していません。')
                 try:result=responses.get(timeout=min(.05,remaining))
                 except queue.Empty:continue
+                if type(result) is dict and 'error' in result:raise worker_failure(result)
                 if type(result) is not dict or set(result)!={'key','scores'} or result['key']!=self.profile.key:
                     raise AIUnavailable('タグ分類の応答を確認できません。候補は保存していません。')
                 scores=result['scores']

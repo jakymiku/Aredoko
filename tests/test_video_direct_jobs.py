@@ -78,6 +78,19 @@ class DirectVideoJobTests(unittest.TestCase):
         status=self.jobs.status();self.assertEqual((status['state'],status['indexed']),('completed',1))
         self.assertIsNone(status['item_progress']);self.assertEqual(list(self.stage.iterdir()),[])
 
+    def test_runtime_startup_failure_has_recovery_code_without_partial_publication(self):
+        from ai_process import AIWorkerUnavailable
+        previous=self.snapshot()
+        with self.supplied(),patch.object(self.encoder,'encode',side_effect=AIWorkerUnavailable('ArchitectureMismatch')),\
+             self.assertLogs('video_direct_jobs',level='ERROR'):
+            self.jobs.start();self.wait()
+        status=self.jobs.status()
+        self.assertEqual((status['state'],status['error_code']),('failed','ai_runtime_architecture_incompatible'))
+        self.assertIsNone(status['item_progress']);self.assertEqual(self.snapshot(),previous)
+        self.assertEqual(list(self.stage.iterdir()),[])
+        with self.supplied():self.jobs.start();self.wait()
+        self.assertEqual(self.jobs.status()['state'],'completed')
+
     def test_next_explicit_batch_repairs_damaged_complete_marker(self):
         with self.supplied():self.jobs.start();self.wait()
         with self.index.store.connect() as db:db.execute('DELETE FROM ai_video_direct_windows WHERE ordinal=1')

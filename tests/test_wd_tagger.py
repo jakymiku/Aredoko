@@ -156,6 +156,7 @@ class WDTests(unittest.TestCase):
         elif mode=='big':code+="sys.stdout.write('x'*2000001);sys.stdout.flush();time.sleep(30)"
         else:
             value={'key':self.profile.key,'scores':[.5]*5}
+            if mode=='dependency':value={'error':'DependencyUnavailable'}
             if mode=='wrong-key':value['key']='wrong'
             if mode=='bad-score':value['scores'][0]=True
             if mode=='wrong-size':value['scores']=[.5]
@@ -183,6 +184,13 @@ class WDTests(unittest.TestCase):
             with self.subTest(mode=mode),self.worker(mode):
                 with self.assertRaises(AIUnavailable):self.adapter._scores(png(),lambda:False)
             self.assert_stopped()
+
+    def test_dependency_failure_returns_recovery_guidance_and_stops_worker(self):
+        from ai_process import AIWorkerUnavailable
+        with self.worker('dependency'):
+            with self.assertRaises(AIWorkerUnavailable) as failure:self.adapter._scores(png(),lambda:False)
+            self.assertEqual(failure.exception.code,'ai_runtime_dependencies_unavailable')
+        self.assert_stopped()
 
     def test_timeout_cancel_and_close_stop_owned_worker(self):
         with self.worker('hang'):

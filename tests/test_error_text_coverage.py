@@ -36,6 +36,13 @@ class ErrorTextCoverageTests(unittest.TestCase):
         raised = set(re.findall(r"raise ValueError\('([^']+)'\)", sources))
         self.assertEqual(sorted(PUBLIC_FOLDER_ERRORS - raised), [])
 
+    def test_finite_worker_failures_are_localized(self):
+        import sys
+        sys.path.insert(0,str(REPO/'app'))
+        from inference_errors import STARTUP_ERRORS
+        mapped=set(re.findall(r'\["([^"]+)"\] = "',(REPO/'src/Aredoko.Core/ErrorText.cs').read_text(encoding='utf-8')))
+        self.assertEqual(sorted({message for code,message in STARTUP_ERRORS.values()}-mapped),[])
+
 
 if __name__ == '__main__':
     unittest.main()

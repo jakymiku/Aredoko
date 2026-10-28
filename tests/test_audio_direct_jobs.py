@@ -113,6 +113,21 @@ class DirectAudioJobTests(unittest.TestCase):
         self.assertEqual(self.jobs.status()['state'],'cancelled');self.assertEqual(self.snapshot(),previous)
         self.assertEqual(list(self.stage.iterdir()),[])
 
+    def test_runtime_startup_failure_has_recovery_code_and_preserves_saved_index(self):
+        from ai_process import AIWorkerUnavailable
+        self.seed()
+        with self.index.store.connect() as db:db.execute('UPDATE ai_audio_direct_sources SET source_revision=?',('0'*64,))
+        previous=self.snapshot()
+        with self.supplied(),patch.object(self.encoder,'encode',side_effect=AIWorkerUnavailable('DependencyUnavailable')),\
+             self.assertLogs('audio_direct_jobs',level='ERROR'):
+            self.jobs.start();self.wait()
+        status=self.jobs.status()
+        self.assertEqual((status['state'],status['error_code']),('failed','ai_runtime_dependencies_unavailable'))
+        self.assertIsNone(status['item_progress']);self.assertEqual(self.snapshot(),previous)
+        self.assertEqual(list(self.stage.iterdir()),[])
+        with self.supplied():self.jobs.start();self.wait()
+        self.assertEqual(self.jobs.status()['state'],'completed')
+
     def test_cancel_after_copy_before_commit_keeps_previous_publication(self):
         self.seed()
         with self.index.store.connect() as db:db.execute("UPDATE ai_audio_direct_sources SET source_revision=?",('0'*64,))

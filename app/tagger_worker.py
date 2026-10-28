@@ -90,7 +90,12 @@ def main():
         profile=WDProfile.from_dict(json.loads(args.profile_json))
         directory=profile.verify(Path(__file__).resolve().parents[1],hashes=True,models_root=args.models_root)
         labels(directory/'selected_tags.csv',profile.data()['label_count'])
-        import onnxruntime as ort
+        try:
+            import onnxruntime as ort
+        except Exception as error:
+            from inference_errors import startup_error
+            print(json.dumps(startup_error(error)),flush=True)
+            return
         if ort.__version__!=RUNTIME_VERSION:raise ValueError('Unexpected ONNX Runtime version')
         options=ort.SessionOptions()
         options.intra_op_num_threads=profile.data()['cpu_threads']

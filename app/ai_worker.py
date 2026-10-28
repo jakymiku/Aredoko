@@ -49,15 +49,22 @@ def main():
     os.environ.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1')
     # Library status/progress may print to stdout; preserve the protocol channel.
     wire = sys.stdout
-    with contextlib.redirect_stdout(sys.stderr):
-        import torch
-        from PIL import Image
-        from ai_adapters import load_adapter
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        configure_gpu_budget(torch,device,args.gpu_budget_mib)
-        dtype = torch.bfloat16 if profile.precision=='auto-bf16' and device == 'cuda' and torch.cuda.is_bf16_supported() else torch.float32
-        model=load_adapter(profile,args.model,device,dtype)
-        actual_dimension=model.dimension
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            import torch
+            from PIL import Image
+            from ai_adapters import load_adapter
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            configure_gpu_budget(torch,device,args.gpu_budget_mib)
+            dtype = torch.bfloat16 if profile.precision=='auto-bf16' and device == 'cuda' and torch.cuda.is_bf16_supported() else torch.float32
+            model=load_adapter(profile,args.model,device,dtype)
+            actual_dimension=model.dimension
+    except Exception as error:
+        from inference_errors import startup_error
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        print(json.dumps(startup_error(error)),file=wire,flush=True)
+        return
     print(json.dumps({'ready':True,'device':device,'dimension':actual_dimension,'profile':profile.key}),file=wire,flush=True)
     # Existing image messages (8 MiB raw) fit below this private wire bound.
     # A malformed oversized line terminates the owner rather than parsing a

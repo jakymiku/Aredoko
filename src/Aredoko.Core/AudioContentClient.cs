@@ -35,6 +35,7 @@ public sealed record AudioContentStatus(bool Supported,bool Available,string Sta
     public string SourceKind {get;init;}="audio";
     public bool Busy=>State is "planning" or "waiting" or "running" or "cancelling";
     public string Message=>ErrorCode=="audio_initialization_failed"?"AI検索の初期化に失敗しました。アプリを再起動してから、もう一度実行してください。"
+        :State=="failed"&&ErrorText.AIWorkerFailure(ErrorCode) is {} failure?failure
         :!Supported?"現在のAIモデルは音声の内容検索に対応していません。"
         :!Available?"AI環境を準備すると、音声の内容から検索できます。"
         :State switch

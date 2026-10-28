@@ -110,11 +110,12 @@ class AudioDirectJobs:
                                      progress=lambda value,title=title:self._update(item_progress={**value,'item_title':title}))
         except (MediaDecodeCancelled,SearchCancelled,InterruptedError):self._update(state='cancelled',error_code=None,item_progress=None)
         except AudioSearchChanged:self._update(state='failed',error_code='scope_changed',item_progress=None)
-        except Exception:
+        except Exception as error:
             if self.closed or self.cancelled.is_set():self._update(state='cancelled',error_code=None,item_progress=None)
             else:
                 logging.getLogger(__name__).exception('Owned direct-audio index failed')
-                self._update(state='failed',error_code='audio_index_failed',item_progress=None)
+                from ai_process import AIWorkerUnavailable
+                self._update(state='failed',error_code=error.code if isinstance(error,AIWorkerUnavailable) else 'audio_index_failed',item_progress=None)
         finally:
             if acquired:self.inference.release()
             self.last_used=time.monotonic()

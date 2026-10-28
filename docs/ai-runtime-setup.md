@@ -64,3 +64,10 @@ R13 DOING/ALPHA未完/R14 PARTIAL。専用OCR保留、U09/U11/U13/U14、実音�
 - 通常EXEの限定試験で、照合待ちの中断後にPendingSearchが同じ入力を自動再実行し、設定を開けない不具合を確認。中断クリック時までの入力を記録し、クリック後の新しい入力だけを再検索対象にする。新条件で破棄した旧結果を中断後に再び操作できないようにし、同じ有効sessionの範囲取得だけを止めた場合は元の表示位置へ戻す。
 - worker_commandの全照合/ロック待ちへ所有者の取消を渡す。Encoder.closeは照合中にも終了を伝え、WDは取消済みならPythonを起動しない。生成CPUで照合途中close→未起動/未cache/再利用拒否と、既に起動したWDの取消を確認。
 - 通常の認証loopback通信はシステムproxyを利用しない。配布先のproxy設定/自動検出に依存せず、tokenや媒体をproxyへ送らない。速度改善の数値はこの設定だけから推測しない。
+
+
+### 2026-10-29：AI起動失敗を安全な復旧案内へ接続
+
+推論workerの起動時エラーを固定3種類（依存部品を読めない／実行環境の種類が合わない／その他の初期化失敗）で返す。例外の私的pathや任意文字列をHTTP応答へ転送しない。特定DLLやVC++ installerを原因と断定せず、既存の「AI環境の配置」と基本操作の継続を案内する。WDとembeddingの両経路に適用し、音声・動画・動画内音声の準備も有限error_codeを保持する。失敗したembedding起動は所有process/pipe/telemetryを回収し、次の明示操作で再起動できる。旧workerの正常responseは互換、未知errorは一般案内。既存索引・タグ・原本・設定は書き換えない。
+
+生成CPU関連88件（追加wire前）、最終wire6件、基本Python3.11の新経路9件、固定エラー日本語coverage4件、Core worker案内11項目とaudio/video関連、WinUI Portable buildがPASS。初回CPUのsandbox Temp拒否とCore試験の文言条件過剰は別の試験要因としてraw保持。coverageで検出した既存19件の英語エラー未翻訳も補完した。証拠`data/ai-ui/continuation-20261029/`。新しい案内のGUI・実runtime DLL不足・clean Windowsは未確認。依存ファイルの取得/実行/OS導入は行っていない。
