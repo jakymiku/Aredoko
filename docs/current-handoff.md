@@ -1,5 +1,14 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-28）
 
+## 2026-10-28 Work継続checkpoint（動画内音声のowned production API、以下より優先）
+
+- 起点`12aa53ef3699f6b648e984af0ee220ee1d95d846`。同branch/Draft PR #5を継続、HEAD一致を確認。今回commitは本書のGit履歴。サブエージェントなし。
+- **動画内音声の認証backend接続**：`video-audio-ai/status,start,cancel,release,search`と固定結果mode `video-audio-direct`を追加。通常audioと同じencoder/owner/inference lock/idle release/closeを再利用し、kind別のstateless index viewで検索範囲を分離する。原本guard/atomic保存/取消/進捗/共通root・棚・favoriteを維持。statusのsource_kindは共有ownerで現在/直近に実行したaudioまたはvideoを示す。
+- **無trackと競合**：未準備videoだけをfd限定ffprobeで確認し、trackなしはunavailableとしてbatch枠を消費せず次へ進む。fresh項目はprobe不要。壊れたprobe/decodeはbatch失敗で成功扱いせず、旧commitを保持。動画専用cancelは通常audio-file jobを取り消さない。共有audio側cancelは従来どおり現在のaudio-role jobを中止する。
+- **確認**：初回関連30件は29 PASS/1 FAIL（10.684s、競合を503としたtest期待誤り。既存仕様409に修正）。修正＋追加後の動画HTTP6件/新probe2件 **8 PASS/4.765s**。認証/厳格body/consent、無track skip、全無trackでencode0、同じowner/encoder再利用・close1回、種類別検索、取消rollback、fresh probe回避、壊れたmetadata/取消/原本scope再確認、固定結果の音声stamp変更409・文字結果保全を確認。py_compile成功。Core source_kind parser/表示回帰はsource追加のみ。
+- **次の1件**：Coreのvideo-audio source/evidence・検索mode・動画playerの音声一致seek→WinUIの独立した明示準備/検索入口。backend HTTPは接続済みだがGUIからは未接続で、映像検索の「動画内音声は対象外」は消さない。Windows側はCore `--audio-content`/`--video-content`/`--favorite-patch`→build→生成fixtureで限定確認。実model品質/複数track選択/音声映像rank統合は未実装・未受入。
+- 通常DB/settings/Alpha/ZIP/shortcut/私物変更0、実model/GPU/GUI/.NET/download/OS/Actions/main merge/shutdown0。AlphaはZIP10/source0138a58を保持。現在クォータ％取得不可。証拠は[動画正本](video-similarity.md)末尾。
+
 ## 2026-10-28 Work継続checkpoint（動画内音声の入力・保存・文章検索基盤、以下より優先）
 
 - 起点 **`17a661256b4993cc214adaabda96f96924e7fc3f`**（音声準備の時刻進捗を先にcommit/push/PR head照合済み）。既存branch/PR #5を継続、サブエージェントなし。ユーザーのreset後ガッツリ続行を受け複数単位を実装。現在残％は取得不可。今回commitは本書のGit履歴。

@@ -5,6 +5,7 @@ manager. Yielded windows are provisional: only `complete` permits atomic index
 publication. No model, catalog, path, network or output file is opened here.
 """
 import os
+import json
 import queue
 import stat
 import subprocess
@@ -15,11 +16,33 @@ from audio_input import (AudioInputUnavailable, PCMWindow, SAMPLE_RATE,
                          MAX_WINDOW_MS, MAX_START_MS, MAX_AUDIO_BYTES,
                          FORMATS, validate_pcm, validate_window)
 from video_previews import (_executable,MediaDecodeCancelled,FORMATS as VIDEO_FORMATS,
-                            MAX_VIDEO_BYTES,MAX_VIDEO_PIXELS)
+                            MAX_VIDEO_BYTES,MAX_VIDEO_PIXELS,_run,MAX_PROBE_BYTES,VIDEO_TIMEOUT,VideoPreviewUnavailable)
 
 IDLE_SECONDS=10
 SESSION_SECONDS=1800
 READ_BYTES=65536
+
+
+def video_audio_available(source,*,cancel=None,guard=None):
+    """Probe the first audio stream without decoding, paths, or model use."""
+    if cancel is not None and cancel.is_set():raise MediaDecodeCancelled('Video audio probe cancelled')
+    if guard is not None:guard()
+    args=[_executable('ffprobe'),'-v','error','-max_alloc',str(64*1024*1024),
+          '-protocol_whitelist','fd,pipe','-format_whitelist',VIDEO_FORMATS,
+          '-probesize','1048576','-analyzeduration','1000000','-max_streams','16','-max_probe_packets','128',
+          '-threads','1','-max_pixels',str(MAX_VIDEO_PIXELS),'-select_streams','a:0','-show_entries','stream=index','-of','json','-i','fd:']
+    try:data=_run(args,source,MAX_PROBE_BYTES,time.monotonic()+VIDEO_TIMEOUT,cancel=cancel)
+    except (OSError,VideoPreviewUnavailable) as error:raise AudioInputUnavailable('Video audio track probe failed') from error
+    if cancel is not None and cancel.is_set():raise MediaDecodeCancelled('Video audio probe cancelled')
+    if guard is not None:guard()
+    try:
+        streams=json.loads(data)['streams']
+        if type(streams) is not list or len(streams)>1:raise ValueError('Invalid audio stream list')
+        if not streams:return False
+        index=streams[0]['index']
+        if type(index) is not int or not 0<=index<16:raise ValueError('Invalid audio stream index')
+        return True
+    except (ValueError,TypeError,KeyError) as error:raise AudioInputUnavailable('Video audio track metadata invalid') from error
 
 
 class PCMStream:

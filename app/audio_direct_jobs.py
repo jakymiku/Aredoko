@@ -31,27 +31,28 @@ class AudioDirectJobs:
         self.closed=False;self.searching=False;self.last_used=time.monotonic()
         self.idle_seconds=0;self.idle_stop=threading.Event();self.idle_thread=None
         self.value={'job_id':None,'state':'idle','candidate_total':0,'target':0,'processed':0,
-                    'indexed':0,'reused':0,'unavailable':0,'remaining_candidates':0,'error_code':None,'item_progress':None}
+                    'indexed':0,'reused':0,'unavailable':0,'remaining_candidates':0,'error_code':None,'item_progress':None,'source_kind':'audio'}
 
     def status(self):
         with self.guard:return {**deepcopy(self.value),'resident':bool(getattr(self.encoder,'resident',False)),
                                 'profile':self.index.profile.key,'searching':self.searching,'closed':self.closed}
 
-    def start(self,conditions=None,*,limit=128):
+    def start(self,conditions=None,*,limit=128,source_kind='audio'):
+        self.index.for_source_kind(source_kind)
         conditions={} if conditions is None else conditions
         if (type(conditions) is not dict or set(conditions)-{'view','root_id','root_ids','shelf','shelf_ids'}
                 or conditions.get('view','all') not in ('all','favorites','shelf')
                 or type(limit) is not int or not 1<=limit<=1000):raise ValueError('Invalid audio index scope or batch size')
         # Common catalog validation before any thread/model activation.
-        self.catalog.search(kind='audio',limit=1,**conditions)
+        self.catalog.search(kind=source_kind,limit=1,**conditions)
         with self.guard:
             if self.closed:raise AIUnavailable('Audio owner is closing')
             if self.searching or self.thread is not None and self.thread.is_alive():raise AIBusy('Audio owner is busy')
             if not bool(getattr(self.encoder,'available',True)):raise AIUnavailable('Audio model is unavailable')
             self.cancelled=threading.Event()
             self.value.update(job_id=secrets.token_hex(16),state='planning',candidate_total=0,target=0,processed=0,
-                              indexed=0,reused=0,unavailable=0,remaining_candidates=0,error_code=None,item_progress=None)
-            self.thread=threading.Thread(target=self._run,args=(deepcopy(conditions),limit),name='direct-audio-index',daemon=True)
+                              indexed=0,reused=0,unavailable=0,remaining_candidates=0,error_code=None,item_progress=None,source_kind=source_kind)
+            self.thread=threading.Thread(target=self._run,args=(deepcopy(conditions),limit,source_kind),name='direct-audio-index',daemon=True)
             try:self.thread.start()
             except BaseException:self.value.update(state='failed',error_code='worker_start_failed');raise
             return self.status()
@@ -69,8 +70,8 @@ class AudioDirectJobs:
             self.value['processed']+=1;self.value['indexed']+=1;self.value['item_progress']=None
             if self.value['processed']==self.value['target']:self.value['state']='completed'
 
-    def _run(self,conditions,limit):
-        acquired=False;generation=self.catalog.result_generation()
+    def _run(self,conditions,limit,source_kind):
+        acquired=False;generation=self.catalog.result_generation();index=self.index.for_source_kind(source_kind)
         try:
             picks=[];seen=reused=unavailable=0
             def collect(fetch):
@@ -81,15 +82,20 @@ class AudioDirectJobs:
                     self._update(candidate_total=reply['total'])
                     for row in reply['items']:
                         self._check(generation);seen+=1
-                        try:revision=self.index.reader.audio_manifest(row['id'])['revision']
+                        try:revision=index.manifest(row['id'])['revision']
                         except PreviewUnavailable:unavailable+=1;continue
-                        if self.index.fresh(row['id'],revision,cancel=self.cancelled):reused+=1
-                        else:picks.append((row['id'],revision))
+                        if index.fresh(row['id'],revision,cancel=self.cancelled):reused+=1
+                        else:
+                            try:
+                                if source_kind=='video' and not index.reader.video_audio_available(row['id'],revision,cancel=self.cancelled):
+                                    unavailable+=1;continue
+                            except PreviewUnavailable:unavailable+=1;continue
+                            picks.append((row['id'],revision))
                         if len(picks)==limit:break
                     self._update(reused=reused,unavailable=unavailable,remaining_candidates=max(0,reply['total']-seen))
                     if len(picks)==limit or seen>=reply['total']:return
                     number+=1
-            self.catalog.search(kind='audio',limit=120,result_sink=collect,cancelled=self.cancelled.is_set,**conditions)
+            self.catalog.search(kind=source_kind,limit=120,result_sink=collect,cancelled=self.cancelled.is_set,**conditions)
             with self.publication_guard:
                 self._check(generation)
                 self._update(target=len(picks),state='waiting' if picks else 'completed')
@@ -98,9 +104,9 @@ class AudioDirectJobs:
                 acquired=True;self._check(generation);self._update(state='running')
                 for item,revision in picks:
                     self._check(generation)
-                    self.index.index_item(item,revision,cancel=self.cancelled,validate=lambda:self._check(generation),
-                                          publication_guard=self.publication_guard,on_published=self._published,
-                                          progress=lambda value:self._update(item_progress=value))
+                    index.index_item(item,revision,cancel=self.cancelled,validate=lambda:self._check(generation),
+                                     publication_guard=self.publication_guard,on_published=self._published,
+                                     progress=lambda value:self._update(item_progress=value))
         except (MediaDecodeCancelled,SearchCancelled,InterruptedError):self._update(state='cancelled',error_code=None,item_progress=None)
         except AudioSearchChanged:self._update(state='failed',error_code='scope_changed',item_progress=None)
         except Exception:
@@ -112,14 +118,16 @@ class AudioDirectJobs:
             if acquired:self.inference.release()
             self.last_used=time.monotonic()
 
-    def cancel(self):
+    def cancel(self,*,source_kind=None):
         with self.publication_guard:
             with self.guard:
-                accepted=self.thread is not None and self.thread.is_alive() and self.value['state'] in ACTIVE
+                accepted=(self.thread is not None and self.thread.is_alive() and self.value['state'] in ACTIVE
+                          and (source_kind is None or self.value['source_kind']==source_kind))
                 if accepted:self.cancelled.set();self.value['state']='cancelling'
                 return {'cancel_requested':accepted,**self.status()}
 
-    def search(self,query,**options):
+    def search(self,query,*,source_kind='audio',**options):
+        index=self.index.for_source_kind(source_kind)
         cancelled=options.get('cancelled')
         if cancelled is not None and not callable(cancelled):raise ValueError('Invalid audio search cancellation')
         options['cancelled']=lambda:self.closed or cancelled is not None and cancelled()
@@ -132,7 +140,7 @@ class AudioDirectJobs:
             if not self.inference.acquire(blocking=False):raise AIBusy('Another AI owner is busy')
             acquired=True
             if self.closed:raise AIUnavailable('Audio owner is closing')
-            return AudioDirectSearch(self.index).search(query,**options)
+            return AudioDirectSearch(index).search(query,**options)
         finally:
             if acquired:self.inference.release()
             with self.guard:self.searching=False;self.last_used=time.monotonic()

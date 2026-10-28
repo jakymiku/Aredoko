@@ -37,6 +37,9 @@ internal static class AudioContentTests
         var progress=AudioContentStatus.Parse(working.ToJsonString());
         check(progress.ItemProgress is {PreparedMs:30000,TotalMs:null,PreparedWindows:1}&&progress.Processed==0&&progress.Indexed==0,"audio prepared time never invents total or committed counts");
         check(progress.Message.Contains("0:30")&&progress.Message.Contains("総尺確認中")&&progress.Message.Contains("未保存"),"audio preparation explains unknown duration and pending save");
+        check(progress.SourceKind=="audio","old audio status defaults to audio file source");
+        var video=working.DeepClone().AsObject();video["source_kind"]="video";
+        check(AudioContentStatus.Parse(video.ToJsonString()).Message.Contains("動画内の音声"),"shared audio owner identifies video audio jobs");
         var saving=working.DeepClone().AsObject();saving["item_progress"]!["prepared_ms"]=31000;saving["item_progress"]!["prepared_windows"]=2;saving["item_progress"]!["total_ms"]=31000;saving["item_progress"]!["phase"]="saving";
         check(AudioContentStatus.Parse(saving.ToJsonString()).Message.Contains("保存しています"),"known audio EOF is still not committed before save");
         foreach(var change in new Action<JsonObject>[] {
@@ -52,7 +55,8 @@ internal static class AudioContentTests
             check(rejected,"invalid or stale audio progress is rejected");
         }
         foreach(var change in new Action<JsonObject>[] {value=>value["target"]=-1,value=>value["processed"]=1001,
-            value=>value["available"]="true",value=>value["indexed"]=true,value=>value["state"]="future"})
+            value=>value["available"]="true",value=>value["indexed"]=true,value=>value["state"]="future",
+            value=>value["source_kind"]=true,value=>value["source_kind"]=null,value=>value["source_kind"]="future"})
         {
             var bad=status.DeepClone().AsObject();change(bad);var rejected=false;
             try{AudioContentStatus.Parse(bad.ToJsonString());}catch(InvalidDataException){rejected=true;}

@@ -107,5 +107,31 @@ class VideoAudioSourceTests(unittest.TestCase):
             started.assert_not_called()
         self.assertTrue(self.reader.audio_stream_slot.acquire(blocking=False));self.reader.audio_stream_slot.release()
 
+    def test_track_probe_uses_guarded_fd_and_rejects_malformed_metadata(self):
+        with patch('audio_stream._run',return_value=b'{"streams":[{"index":1}]}') as run:
+            self.assertTrue(self.reader.video_audio_available(self.item,self.revision))
+        args=run.call_args.args[0]
+        self.assertEqual(args[args.index('-i')+1],'fd:');self.assertNotIn(str(self.path),args)
+        self.assertEqual(args[args.index('-select_streams')+1],'a:0')
+        for data in (b'{}',b'bad',b'{"streams":null}',b'{"streams":[null]}',
+                     b'{"streams":[{"index":true}]}',b'{"streams":[{"index":16}]}',
+                     b'{"streams":[{"index":1},{"index":2}]}'):
+            with self.subTest(data=data),patch('audio_stream._run',return_value=data),self.assertRaises(AudioInputUnavailable):
+                self.reader.video_audio_available(self.item,self.revision)
+        def scope_change(*args,**kwargs):
+            self.catalog.set_excludes(self.root,['*.mkv']);return b'{"streams":[]}'
+        with patch('audio_stream._run',side_effect=scope_change),self.assertRaises(PreviewUnavailable):
+            self.reader.video_audio_available(self.item,self.revision)
+        self.assertTrue(self.reader.audio_stream_slot.acquire(blocking=False));self.reader.audio_stream_slot.release()
+
+    def test_track_probe_cancellation_is_not_treated_as_no_track(self):
+        stop=threading.Event()
+        def cancel(*args,**kwargs):stop.set();return b'{"streams":[]}'
+        with patch('audio_stream._run',side_effect=cancel),self.assertRaises(MediaDecodeCancelled):
+            self.reader.video_audio_available(self.item,self.revision,cancel=stop)
+        with patch('audio_stream._run') as run,self.assertRaises(MediaDecodeCancelled):
+            self.reader.video_audio_available(self.item,self.revision,cancel=stop)
+        run.assert_not_called()
+
 
 if __name__=='__main__':unittest.main()

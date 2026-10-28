@@ -185,6 +185,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         if mode=='audio-direct':
             require(('query','view','root_ids','shelf','shelf_ids'))
             return audio.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
+        if mode=='video-audio-direct':
+            require(('query','view','root_ids','shelf','shelf_ids'))
+            return audio.search_video_audio(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='audio-similar':
             require(('item_id','view','root_ids','shelf','shelf_ids'))
             return audio.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
@@ -197,7 +200,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     image_stamp=IndexStamp(ai) if isinstance(ai,AISearch) else None
     def result_stamp(conditions):
         if conditions.get('mode') in ('video-direct','video-similar'):return video.stamp()
-        return audio.stamp() if conditions.get('mode') in ('audio-direct','audio-similar') else image_stamp() if image_stamp is not None else None
+        return audio.stamp() if conditions.get('mode') in ('audio-direct','audio-similar','video-audio-direct') else image_stamp() if image_stamp is not None else None
     results=ResultSessions(catalog,result_provider,index_stamp=image_stamp,index_stamp_for=result_stamp)
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
@@ -580,6 +583,9 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if path=='/api/library/audio-ai/status':
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid audio status query'})
                     return self.send(200,audio.status())
+                if path=='/api/library/video-audio-ai/status':
+                    if urlparse(self.path).query:return self.send(400,{'error':'Invalid video audio status query'})
+                    return self.send(200,audio.status())
                 if path=='/api/library/ai/profiles': return self.send(200,profiles.snapshot())
                 if path=='/api/library/ai/resource':
                     try: return self.send(200,{'policy':profiles.resource()})
@@ -630,7 +636,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/','/api/library/audio-ai/','/api/library/video-ai/')) or self.path in ('/api/library/ai/setup/plan','/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
+                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/','/api/library/audio-ai/','/api/library/video-ai/','/api/library/video-audio-ai/')) or self.path in ('/api/library/ai/setup/plan','/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
                 raw=self.rfile.read(length);self.request_body_consumed=len(raw)==length
                 body=json.loads(raw,**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
@@ -645,6 +651,14 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if self.path=='/api/library/video-ai/search':
                         if set(body)-{'query','page','limit','view','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid video search fields')
                         return self.send(200,video.search(**body))
+                if self.path.startswith('/api/library/video-audio-ai/'):
+                    if self.path=='/api/library/video-audio-ai/start':return self.send(200,audio.start_video_audio(body))
+                    if self.path in ('/api/library/video-audio-ai/cancel','/api/library/video-audio-ai/release'):
+                        if body:raise ValueError('Expected empty video audio request')
+                        return self.send(200,audio.cancel_video_audio() if self.path.endswith('/cancel') else audio.release())
+                    if self.path=='/api/library/video-audio-ai/search':
+                        if set(body)-{'query','page','limit','view','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid video audio search fields')
+                        return self.send(200,audio.search_video_audio(**body))
                 if self.path.startswith('/api/library/audio-ai/'):
                     if self.path=='/api/library/audio-ai/start':return self.send(200,audio.start(body))
                     if self.path in ('/api/library/audio-ai/cancel','/api/library/audio-ai/release'):

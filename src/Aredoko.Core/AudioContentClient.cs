@@ -31,6 +31,7 @@ public sealed record AudioContentStatus(bool Supported,bool Available,string Sta
     int Processed,int Indexed,int Reused,int Unavailable,int RemainingCandidates,bool Resident,string? ErrorCode)
 {
     public AudioItemProgress? ItemProgress {get;init;}
+    public string SourceKind {get;init;}="audio";
     public bool Busy=>State is "planning" or "waiting" or "running" or "cancelling";
     public string Message=>!Supported?"現在のAIモデルは音声の内容検索に対応していません。"
         :!Available?"AI環境を準備すると、音声の内容から検索できます。"
@@ -38,7 +39,7 @@ public sealed record AudioContentStatus(bool Supported,bool Available,string Sta
         {
             "planning"=>"音声の準備状況を確認しています…",
             "waiting"=>"ほかのAI処理が終わるのを待っています…",
-            "running"=>$"音声を準備しています（{Processed:N0} / {Target:N0}件）"+(ItemProgress is {} item?"\n"+item.Message:""),
+            "running"=>$"{(SourceKind=="video"?"動画内の音声":"音声")}を準備しています（{Processed:N0} / {Target:N0}件）"+(ItemProgress is {} item?"\n"+item.Message:""),
             "cancelling"=>"現在の処理を安全に中断しています…",
             "cancelled"=>$"中断しました。準備済みの{Indexed:N0}件は保持されています。",
             "failed"=>ErrorCode=="scope_changed"?"検索対象が変更されました。もう一度作成してください。":"音声を準備できませんでした。AI環境とファイルの状態を確認してください。",
@@ -60,9 +61,11 @@ public sealed record AudioContentStatus(bool Supported,bool Available,string Sta
         if(target>1000||processed>target||indexed>processed)throw new InvalidDataException("Invalid audio progress");
         var progress=row.TryGetProperty("item_progress",out var current)&&current.ValueKind!=JsonValueKind.Null?AudioItemProgress.Parse(current):null;
         if(progress is not null&&(state is not ("running" or "cancelling")||processed>=target))throw new InvalidDataException("Invalid current audio state");
+        var sourceKind=row.TryGetProperty("source_kind",out var source)&&source.ValueKind==JsonValueKind.String?source.GetString():row.TryGetProperty("source_kind",out _)?null:"audio";
+        if(sourceKind is not ("audio" or "video"))throw new InvalidDataException("Invalid audio source kind");
         return new(Flag("supported"),Flag("available"),state,Count("candidate_total"),target,processed,indexed,
             Count("reused"),Count("unavailable"),Count("remaining_candidates"),Flag("resident"),
-            row.TryGetProperty("error_code",out var error)&&error.ValueKind==JsonValueKind.String?error.GetString():null){ItemProgress=progress};
+            row.TryGetProperty("error_code",out var error)&&error.ValueKind==JsonValueKind.String?error.GetString():null){ItemProgress=progress,SourceKind=sourceKind};
     }
 }
 

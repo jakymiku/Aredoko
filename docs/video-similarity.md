@@ -246,3 +246,16 @@ source_kindはconstructorでaudio/videoだけを受ける固定設定、既定�
 PCM/source/既存video source **25 PASS/2.160s**。動画音声の実decode→疑似encode→保存→query、同一PCM store内でaudio-file/videoの検索非混在・favorite/root/棚scope、取消rollback/原本変更、backup/restore/purgeと既存音声search/similarityは **34 PASS/7.408s**。既存認証HTTPの音声検索/cached類似2件は **PASS/1.335s**。無trackに変わった原本の再生成が旧索引を保ちsilence成功markerを作らない追加1件は **PASS/0.305s**。py_compile成功。重複を合算せず、品質/実model/Windows/.NET/GPU/新配布の確認ではない。
 
 **production job/API/Core/WinUIは未接続**。現在のvideo-aiは映像、audio-aiは音声fileだけのままで、利用者画面からvideo-audioを使える完成機能とはしない。古いCoreが新sourceを誤表示しないよう、既存direct-audio evidenceとは別sourceを明示した。次は同じaudio encoder/inference ownerを一度だけ所有して両media kindの要求を直列化するproduction設計へ接続し、二重worker/二重closeを避ける。trackなし/壊れたdecodeは現時点ではAudioInputUnavailableのため、batch接続では理由分類と読み取れない候補の扱いも必要。続いて専用API/result stamp/Core evidence/動画playerの音声一致seek/WinUI明示入口を接続する。未実装の入口を実装済みと案内せず、namespace・一括favorite・準備時刻進捗と既存残件を維持する。
+
+
+## 2026-10-28 Work：動画内音声のowned production APIと固定結果
+
+前節の未接続のうちbackendを実装。GET `/api/library/video-audio-ai/status`、POST同prefixの`start/cancel/release/search`を追加し、既存loopback認証・Host/Origin・容量制限・重複JSON/未知field拒否を継承する。startはconsent=trueと通常の共通scope/最大1000件（既定128）。音声file用と同じAudioDirectFeature/Jobs/encoder/inference role/monitorを使い、新worker/owner/DB initを増やさない。Indexのsource-kind viewは既存store/reader/encoderを共有する設定copyでcloseを所有しない。通常音声のAPI/default kindは保全。video専用cancelはvideo実行時だけ受理し、既存audio cancelは共有audio-role jobへ従来どおり適用する。releaseは共有modelに作用する。
+
+未準備videoは登録済みfdの先頭audio trackだけをffprobeで確認する。fd/pipeとvideo allowlist、16KiB出力/10秒/16streams/画素/原本revision/取消/共有PCM slotを制限。trackなしはunavailableへ加え、batch limitを消費せず次のvideoへ進む。全trackなしなら推論0、freshな索引はprobeも不要。probe異常/metadata不正/decode失敗は成功にせずbatch failed、旧索引を保持する。trackなしを永続negative cacheや全無音markerにしない。
+
+固定結果mode `video-audio-direct`は同じ音声stampとscore spool容量予約を使い、profile/保存marker変更時409を返す。文字だけの結果は影響を受けない。scope/kind/source/evidenceは前節どおり、通常audioと混在しない。statusは共有ownerのsource_kindを追加し、Core旧field省略はaudioとして互換保持、video実行中と表示可能にした（未build）。
+
+関連30件は29 PASS/1 FAIL（10.684s）：新testが競合を503と誤期待、既存AIBusyの409を正として修正。修正したHTTP testと追加した全trackなし/専用取消atomic rollback/fresh probe回避・probe異常/cancel/guardを含む **8 PASS/4.765s**。実生成MKV＋疑似encoder＋独立DB/loopbackで確認、同じowner/encoderとclose一回も検証。py_compile成功。重複成功は合算しない。
+
+Core source_kindの表示/parser回帰はsource追加のみで.NET未実行。専用Core client/検索mode/evidence/player seekとWinUI入口は未接続、実model/Windows/native/品質・複数track選択/映像とのrank統合は未受入。映像検索が動画内音声まで検索するという案内には変更しない。

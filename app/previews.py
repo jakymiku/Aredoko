@@ -21,7 +21,7 @@ from image_animations import (AnimationInspector, AnimationUnavailable,
 from video_previews import (VideoThumbnailer, VideoPreviewUnavailable,
                             VIDEO_SUFFIXES, MAX_VIDEO_BYTES)
 import audio_input
-from audio_stream import PCMStream
+from audio_stream import PCMStream,video_audio_available
 from video_window_decode import read_video_window,validate_interval,VideoWindowUnavailable
 from video_stream import VideoCoverageStream
 
@@ -319,6 +319,19 @@ class PreviewReader:
                 if self.video_manifest(item_id)['revision']!=revision:raise ReaderChanged('Video source changed during audio streaming')
             with source,PCMStream(source,cancel=cancel,guard=guard,input_kind='video') as stream:
                 yield stream
+        finally:self.audio_stream_slot.release()
+
+    def video_audio_available(self,item_id,revision,cancel=None):
+        if type(revision) is not str or re.fullmatch(r'[0-9a-f]{64}',revision) is None:raise ValueError('Invalid video revision')
+        if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Video audio probe cancelled')
+        if not self.audio_stream_slot.acquire(blocking=False):raise PreviewBusyError('Audio producer busy')
+        try:
+            source,_=self._read(item_id,operation='video_coverage_source',revision=revision,cancel=cancel)
+            with source:
+                if not 1<=os.fstat(source.fileno()).st_size<=MAX_VIDEO_BYTES:raise PreviewUnavailable('Video exceeds input limit')
+                def guard():
+                    if self.video_manifest(item_id)['revision']!=revision:raise ReaderChanged('Video changed during audio probe')
+                return video_audio_available(source,cancel=cancel,guard=guard)
         finally:self.audio_stream_slot.release()
 
     @contextmanager

@@ -28,7 +28,7 @@ class AudioDirectFeature:
         if self.owner is not None:return {'supported':True,'available':available,'initialized':True,**self.owner.status()}
         return {'supported':self.encoder is not None,'available':available,'state':'idle','resident':False,
                 'initialized':False,'candidate_total':0,'target':0,'processed':0,'indexed':0,
-                'reused':0,'unavailable':0,'remaining_candidates':0,'job_id':None,'error_code':None,'item_progress':None}
+                'reused':0,'unavailable':0,'remaining_candidates':0,'job_id':None,'error_code':None,'item_progress':None,'source_kind':'audio'}
 
     def _ensure(self,*,require_model=True):
         if self.closed or self.encoder is None:raise AIUnavailable('音声の内容検索に対応するAI環境がありません。')
@@ -48,26 +48,39 @@ class AudioDirectFeature:
             return self.owner
 
     def start(self,body):
+        return self._start(body,'audio')
+
+    def start_video_audio(self,body):return self._start(body,'video')
+
+    def _start(self,body,source_kind):
         if type(body) is not dict or body.get('consent') is not True or set(body)-{'consent','conditions','limit'}:
             raise ValueError('Explicit audio indexing consent required')
         conditions=body.get('conditions')
         if conditions is not None:
             if type(conditions) is not dict or set(conditions)-{'view','root_id','root_ids','shelf','shelf_ids'}:
                 raise ValueError('Invalid audio indexing scope')
-            self.catalog.search(kind='audio',limit=1,**conditions)
+            self.catalog.search(kind=source_kind,limit=1,**conditions)
         limit=body.get('limit',128)
         if type(limit) is not int or not 1<=limit<=1000:raise ValueError('Invalid audio indexing limit')
-        self._ensure().start(body.get('conditions'),limit=body.get('limit',128))
+        self._ensure().start(body.get('conditions'),limit=body.get('limit',128),source_kind=source_kind)
         return self.status()
 
     def search(self,query,**options):
+        return self._search(query,'audio',options)
+
+    def search_video_audio(self,query,**options):return self._search(query,'video',options)
+
+    def _search(self,query,source_kind,options):
         if not isinstance(query,str) or not 1<=len(query.strip())<=4096:raise ValueError('Invalid audio query')
         allowed={'view','root_id','root_ids','shelf','shelf_ids'}
         if set(options)-allowed-{'page','limit','cancelled','result_sink'}:raise ValueError('Invalid audio search options')
-        self.catalog.search(kind='audio',limit=1,**{name:value for name,value in options.items() if name in allowed})
-        return self._ensure().search(query,**options)
+        self.catalog.search(kind=source_kind,limit=1,**{name:value for name,value in options.items() if name in allowed})
+        return self._ensure().search(query,source_kind=source_kind,**options)
     def cancel(self):
         result=self.owner.cancel() if self.owner is not None else {'cancel_requested':False}
+        return {**self.status(),'cancel_requested':result['cancel_requested']}
+    def cancel_video_audio(self):
+        result=self.owner.cancel(source_kind='video') if self.owner is not None else {'cancel_requested':False}
         return {**self.status(),'cancel_requested':result['cancel_requested']}
     def similar(self,item_id,**options):return self._ensure(require_model=False).similar(item_id,**options)
     def release(self):return self.owner.release() if self.owner is not None else {'released':False,'resident':False}

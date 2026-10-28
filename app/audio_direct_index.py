@@ -8,6 +8,7 @@ keeping the existing text/audio profile; video RGB vectors remain separate.
 """
 from array import array
 from contextlib import closing,contextmanager
+from copy import copy
 import re
 import math
 import sqlite3
@@ -76,6 +77,13 @@ class AudioDirectIndex:
 
     @property
     def source_kind(self):return self._source_kind
+
+    def for_source_kind(self,source_kind):
+        # A stateless view: share the already initialized store, reader and
+        # caller-owned encoder. No schema work, worker registration or close.
+        if type(source_kind) is not str or source_kind not in ('audio','video'):raise ValueError('Invalid audio source kind')
+        if source_kind==self.source_kind:return self
+        view=copy(self);view._source_kind=source_kind;return view
 
     def manifest(self,item_id):
         return (self.reader.video_manifest if self.source_kind=='video' else self.reader.audio_manifest)(item_id)
