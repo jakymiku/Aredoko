@@ -5,6 +5,8 @@
 
 **本PCでの通常入口成功と、別Windowsでの受入を区別する。** 基本ZIP22/source68c0100はホストの通常入口から空DB→登録/一覧取得/タグ保存→終了/再起動まで成功。BasicZIP21では日本語/空白を含む別配置から同じユーザー設定も保持した。10/29のread-only確認ではSandbox targetは未起動/stale、OSの`Containers-DisposableClientVM`はInstallState2、既存guestへ接続できず。OS機能の有効化/再起動/VMの新規取得はしていない。別環境の起動確認は未実施。証拠は `data/ai-ui/continuation-20261029d/sandbox-readiness01.json`、新しい候補を使うときはsource/ZIP SHAを記録する。
 
+**10/29追記：ユーザー許可でSandboxを有効化済み、再起動待ち。** 通常のUAC経由DISMがexit3010、InstallState1。`/NoRestart`で再起動を抑止。再起動後にreadinessを確認してからゲスト受入へ進む。現時点でゲスト起動/clean Windows受入は未実施（`sandbox-enable01.json` / `.log`）。
+
 ### 持ち出し用の生成データセット
 
 基本ZIP22に対応する `dist/portable-validation-20261029-22.zip`（3,134bytes、SHA256 `adc2ec99dd400055b0c3f58797b2a66fc73a365e0487a73812636c1e72701892`）を作成した。アプリ本体とは別に渡す。PNG2枚/2ページCBZ1冊、候補ZIPと原本のSHA、短い確認手順、未記入の結果テンプレートの6filesだけで、実行ファイル/スクリプト/私物は入らない。全ZIP memberと元生成fileを照合済み。生成しただけで別Windows受入にしない。

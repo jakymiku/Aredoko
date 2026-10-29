@@ -1,5 +1,12 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-29）
 
+## 2026-10-29 Sandbox有効化（ユーザー明示許可・再起動待ち）
+
+- ユーザーの「そっちでオンに出来ないかな？」を受け、通常のUAC昇格でDISM `/Online /Enable-Feature /FeatureName:Containers-DisposableClientVM /All /NoRestart`を実行。**exit3010、機能InstallState1、Windows再起動が必要**。自動再起動は抑止済み。証拠は `data/ai-ui/continuation-20261029d/sandbox-enable01.json` / `.log`。
+- 下段のSandbox未導入/InstallState2は有効化前の履歴。この変更はユーザー許可に基づくOS機能設定。**Sandboxゲストを起動/接続したことや、clean WindowsでAredokoが合格したことにはしない。** app/通常DB/Alpha/モデルは不変。
+- 次回Windows再起動後にSandbox readinessを確認し、基本ZIP22＋生成検証セットで通常EXE起動/登録/閲覧/保存/アプリ再起動を確認する。候補と専用素材だけを入力共有し、結果を別保存する。P6の限定検証後は下段のUI主軸キューへ戻る。ユーザーの現在作業を中断する再起動は行わない。
+
+
 ## 2026-10-29d 終了checkpoint（以下より優先）
 
 - **Git/基準**：起点8f741f7→remoteのAGENTS追記6322fc1をclean fast-forward。既存 `feat/winui3-production-mvp-20261011` / Draft PR #5だけを継続。最終アプリsource **68c010020f909519e635b23a8f54cd47aab838ce**。検証セット作成CLIはf9841c2。最終引き継ぎcommitは本書のgit logで確認。AGENTSの過剰防御/抽象化を避けるルールを適用し、旧UI/配布/P7全体を作り直していない。
