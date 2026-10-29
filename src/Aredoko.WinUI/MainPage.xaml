@@ -213,21 +213,21 @@
       <StackPanel Margin="24,8,24,12" Spacing="8">
         <Image Source="ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png" Width="72" Height="64" Stretch="Uniform" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
        <TextBlock Text="Aredokoへようこそ" Style="{StaticResource TitleTextBlockStyle}" TextWrapping="Wrap"/>
-       <TextBlock x:Name="GettingStartedSummaryText" Text="まずは検索したいフォルダを登録し、スキャンして一覧に読み込みましょう。元の画像や動画は、その場所のまま管理します。" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedSummaryText"/>
+       <TextBlock x:Name="GettingStartedSummaryText" Text="フォルダを登録し、「アイテム一覧だけ取得」で始めましょう。ファイル名・タグ検索と閲覧はAIなしで使えます。" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedSummaryText"/>
        <Border Style="{StaticResource AredokoSurfaceStyle}">
         <StackPanel Spacing="4">
          <TextBlock Text="はじめる手順（3ステップ）" Style="{StaticResource SubtitleTextBlockStyle}" FontSize="15"/>
-         <TextBlock x:Name="GettingStartedStep1Text" Text="1. フォルダを追加: 未登録（次の手順）" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep1Text"/>
-         <TextBlock x:Name="GettingStartedStep2Text" Text="2. 一覧を読み込む: 未スキャン" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep2Text"/>
-         <TextBlock x:Name="GettingStartedStep3Text" Text="3. 必要ならAIを準備（任意）: 任意 — ファイル名・タグ検索と閲覧はAIなしで使えます" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep3Text"/>
+         <TextBlock x:Name="GettingStartedStep1Text" Text="1. フォルダを登録 — ここから開始" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep1Text"/>
+         <TextBlock x:Name="GettingStartedStep2Text" Text="2. 一覧を読み込む — 登録後に実行" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep2Text"/>
+         <TextBlock x:Name="GettingStartedStep3Text" Text="3. AI検索（任意） — 後から設定できます" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep3Text"/>
         </StackPanel>
        </Border>
        <Button x:Name="GettingStartedFolders" Content="フォルダを登録する" Style="{StaticResource AccentButtonStyle}" Click="GettingStartedFolders_Click" AutomationProperties.AutomationId="GettingStartedFolders"/>
-       <TextBlock Text="AI検索は任意です。ファイル名・タグ検索と閲覧は、モデルがなくても使えます。AIを使う場合はモデルと実行環境を準備し、検索用の索引を作成します。" TextWrapping="Wrap"/>
+       <TextBlock Text="情景や音の内容から探すには、モデル・実行環境とAI索引を追加します。元ファイルは変更しません。" TextWrapping="Wrap"/>
        <StackPanel Orientation="Horizontal" Spacing="8">
         <Button x:Name="GettingStartedAI" Content="使いたいAI機能から準備（任意）" Click="GettingStartedAIPlan_Click" AutomationProperties.AutomationId="GettingStartedAI"/>
         <Button x:Name="GettingStartedHelp" Content="基本的な使い方を見る" Click="GettingStartedHelp_Click" AutomationProperties.AutomationId="GettingStartedGuide"/>
-        <Button x:Name="GettingStartedDismiss" Content="あとで閉じる" Click="GettingStartedDismiss_Click" AutomationProperties.AutomationId="GettingStartedDismiss"/>
+        <Button x:Name="GettingStartedDismiss" Content="この案内を閉じる" Click="GettingStartedDismiss_Click" AutomationProperties.AutomationId="GettingStartedDismiss"/>
        </StackPanel>
       </StackPanel>
      </ScrollViewer>

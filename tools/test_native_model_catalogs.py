@@ -4,7 +4,7 @@ Model catalog display, generated library, or generated recovery cases only.
 Never starts external acquisition, installers, or a user's library. Optional
 --ai-startup-fixture runs explicitly authorized inference on generated data.
 """
-import argparse,ctypes,hashlib,json,os,socket,subprocess,sys,time,traceback
+import argparse,ctypes,hashlib,json,os,shutil,socket,subprocess,sys,time,traceback
 from ctypes import wintypes
 from pathlib import Path
 from urllib.request import build_opener,ProxyHandler,Request
@@ -25,11 +25,12 @@ def main():
     parser.add_argument('--restore-rejection',action='store_true',help='Reject two generated invalid backups, keep the current library, then one planned restart')
     parser.add_argument('--ai-startup-fixture',type=Path,help='Passing generated fixture from test_ai_startup_pack; actual GPU audit')
     parser.add_argument('--runtime',type=Path);parser.add_argument('--models',type=Path)
+    parser.add_argument('--relocate-after-first-run',action='store_true',help='With startup-only, copy the sealed basic app to a Japanese/space path before the same-user restart')
     parser.add_argument('--remember-library-view',action='store_true',help='With startup-only, persist grid on first run and verify it on the planned restart')
     parser.add_argument('--startup-only',action='store_true',help='Normal entry and one restart, generated data only')
     parser.add_argument('--installed-copy',action='store_true',help='Allow an explicitly selected versioned Aredoko copy in user Programs')
     args=parser.parse_args();release=args.release.resolve();target=args.output.resolve()
-    if args.remember_library_view and not args.startup_only:parser.error('Layout restart requires --startup-only')
+    if (args.remember_library_view or args.relocate_after_first_run) and not args.startup_only:parser.error('Layout/relocation restart requires --startup-only')
     if sum((args.getting_started,args.direct_entry,args.library_smoke,args.restore_rejection,args.ai_startup_fixture is not None,args.startup_only))>1:parser.error('Select one acceptance flow')
     if args.ai_startup_fixture and (args.runtime is None or args.models is None):parser.error('Explicit existing runtime/models required')
     if os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui'):
@@ -37,6 +38,7 @@ def main():
     if args.installed_copy:
         if not release.is_relative_to(Path.home()/'AppData/Local/Programs/Aredoko/releases'):parser.error('Explicit versioned Aredoko installation only')
     elif not release.is_relative_to(REPO/'dist'):parser.error('Explicit repository candidate required')
+    original_release=release
     manifest=verify_release(release)
     if manifest.get('models_bundled') is not False or manifest.get('ai_runtime_bundled') is not False:
         parser.error('Basic ZIP only')
@@ -65,6 +67,7 @@ def main():
     env={**os.environ,'LOCALAPPDATA':str(local),'APPDATA':str(local),'WINAPP_UI_WORKFLOW_ID':'aredoko-model-catalog-display-20261025'}
     report={'pass':False,'checks':[],'screenshots':[],'owned_pids':[],'exits':[],
             'authorization':'Current user/AGENTS instructions govern authorization; this harness grants none',
+            'relocation_requested':args.relocate_after_first_run,'relocation_method':'copy sealed directory; not archive extraction' if args.relocate_after_first_run else None,
             'startup_only':args.startup_only,'gpu_requested':args.ai_startup_fixture is not None,
             'direct_entry':args.direct_entry,'getting_started':args.getting_started,'library_smoke':args.library_smoke,'restore_rejection':args.restore_rejection,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
@@ -150,6 +153,13 @@ def main():
             bootstrap=None
     try:
         for phase in range(2):
+            if phase==1 and args.relocate_after_first_run:
+                release=target/'再配置 テスト'/'Aredoko'
+                shutil.copytree(original_release,release)
+                copied=verify_release(release)
+                check('relocated directory retains the sealed source and file inventory',copied==manifest)
+                expected=os.path.normcase(str(release/'bin/Aredoko.WinUI.exe'))
+                report['relocated_directory']=str(release)
             bootstrap=subprocess.Popen([str(release/'Aredoko.exe')],cwd=release,env=env)
             attach();ui('wait-for','GettingStartedFolders' if args.getting_started and phase==0 else 'Item'+str(item),'-t','20000')
             catalogs=request('/api/library/ai/setup/download/catalog')
@@ -194,7 +204,8 @@ def main():
                     check('restarted history has contextual guidance',True)
             elif args.getting_started and phase==0:
                 ui('wait-for','GettingStartedFolders','-p','IsOffscreen','--value','False','-t','10000')
-                check('empty first library shows welcome',True);shot('welcome')
+                ui('wait-for','GettingStartedStep3Text','--value','3. AI検索（任意） — 後から設定できます','-t','10000')
+                check('empty first library shows concise optional AI guidance',True);shot('welcome')
                 ui('invoke','GettingStartedGuide');ui('wait-for','GuideAddFolder','-t','10000');shot('guide-top')
                 ui('invoke','GuideAddFolder');ui('wait-for','RootPath','-p','IsEnabled','--value','True','-t','10000');shot('folder-entry')
                 ui('set-value','RootPath',media);ui('invoke','AddRoot')
@@ -244,7 +255,7 @@ def main():
         if args.ai_startup_fixture:check('source GPU fixture media unchanged',all(hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest for name,digest in fixture_hashes.items()))
         check('generated media unchanged',before==(hashlib.sha256(source.read_bytes()).hexdigest(),source.stat().st_mtime_ns))
         check('all owned exits zero',len(report['exits'])==4 and all(x['code']==0 for x in report['exits']))
-        verify_release(release);check('complete packaged inventory unchanged',True)
+        verify_release(release);verify_release(original_release);check('complete original and active packaged inventories unchanged',True)
         report['pass']=True
     except Exception:
         report['error']=traceback.format_exc();print(report['error'],flush=True)

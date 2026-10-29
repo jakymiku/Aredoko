@@ -20,13 +20,13 @@ public sealed partial class MainPage
         {
             Empty.Visibility = Visibility.Collapsed;
             if (GettingStartedStep1Text is not null)
-                GettingStartedStep1Text.Text = hasFolder ? $"1. フォルダを追加: 完了（{activeRoots.Length} フォルダ登録済み）" : "1. フォルダを追加: 未登録（次の手順）";
+                GettingStartedStep1Text.Text = hasFolder ? $"1. フォルダを登録 — 完了（{activeRoots.Length} フォルダ）" : "1. フォルダを登録 — ここから開始";
             if (GettingStartedStep2Text is not null)
-                GettingStartedStep2Text.Text = hasList ? "2. 一覧を読み込む: 完了" : (hasFolder ? "2. 一覧を読み込む: 未スキャン（次の手順）" : "2. 一覧を読み込む: 未スキャン");
+                GettingStartedStep2Text.Text = hasList ? "2. 一覧を読み込む — 完了" : (hasFolder ? "2. 一覧を読み込む — 一覧取得を実行" : "2. 一覧を読み込む — 登録後に実行");
             if (GettingStartedStep3Text is not null)
-                GettingStartedStep3Text.Text = aiIndexReady ? "3. 必要ならAIを準備（任意）: 準備完了" : "3. 必要ならAIを準備（任意）: 任意 — ファイル名・タグ検索と閲覧はAIなしで使えます";
+                GettingStartedStep3Text.Text = aiIndexReady ? "3. AI検索（任意） — 準備済み" : "3. AI検索（任意） — 後から設定できます";
             if (GettingStartedFolders is not null)
-                GettingStartedFolders.Content = hasFolder ? "登録フォルダをスキャンして一覧を読み込む" : "フォルダを登録する";
+                GettingStartedFolders.Content = hasFolder ? "登録フォルダの設定へ" : "フォルダを登録する";
         }
         else if (gettingStartedDismissed && rows.Count == 0 && !hasList && view == "all" && string.IsNullOrWhiteSpace(Query.Text) && Kind.SelectedIndex == 0 && selectedSearchRoots is null && selectedShelfIds is null && similarityOrigin is null)
         {
