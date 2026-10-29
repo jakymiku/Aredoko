@@ -215,7 +215,7 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
-        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or args.compact_toolbar or args.video_content or args.video_audio_content or args.bulk_favorite_patch or (args.viewer_choice and not args.uia_only):
+        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or (args.compact_toolbar and not args.uia_only) or args.video_content or args.video_audio_content or args.bulk_favorite_patch or (args.viewer_choice and not args.uia_only):
             if args.video_content or args.video_audio_content or args.bulk_favorite_patch or args.viewer_choice:ready()
             # The owner launches this one test process; use normal Windows
             # activation, never input attachment, security bypass or other apps.
@@ -253,7 +253,7 @@ def main():
             check("generated sources unchanged",before==sources());report["pass"]=True
         elif args.compact_toolbar:
             from ui_compact_toolbar_audit import audit
-            audit(ui,tree,shot,report,check,cat,first['id'],input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
+            audit(ui,tree,shot,report,check,cat,first['id'],input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.bulk_favorite_patch:
             from ui_favorite_patch_audit import audit_bulk

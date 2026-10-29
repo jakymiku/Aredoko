@@ -1,6 +1,6 @@
 """Mixed generated media only: geometry and editing through the native toolbar."""
 
-def audit(ui,tree,shot,report,check,catalog,first_id,*,input_guard):
+def audit(ui,tree,shot,report,check,catalog,first_id,*,input_guard,uia_only=False):
     report['authorization']='Explicit GUI approval required: generated mixed media, no playback/GPU/models'
     def geometry(name):
         state=tree();query=state['TxtQuery'];kind=state['CmbKind'];mode=state['CmbSearchMode'];actions=[state[key] for key in ('BtnLayout','BtnItemSize','BtnDetails')]
@@ -11,14 +11,20 @@ def audit(ui,tree,shot,report,check,catalog,first_id,*,input_guard):
         # ComboBox UIA bounds include focus padding around its visual button.
         # Same-row controls overlap vertically; their top edges need not match.
         inline=max(actions[0]['y'],mode['y'])<min(actions[0]['y']+actions[0]['height'],mode['y']+mode['height'])
-        check(name+': view actions have their own space',actions[0]['x']>=mode['x']+mode['width']-1 if inline else actions[0]['y']>=mode['y']+mode['height']-1)
+        check(name+': view actions have their own space',actions[0]['x']>=mode['x']+mode['width']-1 if inline else actions[0]['y']+actions[0]['height']<=mode['y']+1 or actions[0]['y']>=mode['y']+mode['height']-1)
+        check(name+': query remains usable',query['width']>=180)
+        check(name+': list starts below the search inputs',state['ItemList']['y']>=max(query['y']+query['height'],mode['y']+mode['height'])-1)
         check(name+': list starts below toolbar',state['ItemList']['y']>=max(row['y']+row['height'] for row in actions)-1)
         report.setdefault('toolbar_geometry',{})[name]={'query_height':query['height'],
             'query_to_list_gap':state['ItemList']['y']-query['y']-query['height'],
             'list_height':state['ItemList']['height'],'actions_inline':inline}
     geometry('full-width');shot('compact-toolbar')
-    if not input_guard():raise RuntimeError('Owned toolbar test lost foreground; no pointer input sent')
-    ui('click','ItemTitle'+str(first_id));ui('wait-for','BtnDetails','-p','IsEnabled','--value','True','-t','10000');ui('invoke','BtnDetails')
+    report['physical_input_requested']=not uia_only
+    if uia_only:ui('invoke','Item'+str(first_id),'--action','select')
+    else:
+        if not input_guard():raise RuntimeError('Owned toolbar test lost foreground; no pointer input sent')
+        ui('click','ItemTitle'+str(first_id))
+    ui('wait-for','BtnDetails','-p','IsEnabled','--value','True','-t','10000');ui('invoke','BtnDetails')
     ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000')
     geometry('details-open');shot('compact-toolbar-details')
     ui('set-value','TxtTags','toolbar-generated-draft');ui('invoke','BtnLayout')

@@ -1470,15 +1470,15 @@ public sealed partial class MainPage : Page
     private void UpdateSearchToolbarLayout()
     {
         if(ViewTools is null||SearchFilterTools is null||LibraryLayout is null||SearchTools is null)return;
-        // Inline details reduce the actual toolbar width independently of the
-        // window width. Long selected search labels also change the needed
-        // width; measure both groups rather than reserving a fixed 840px.
-        var filters=SearchFilterTools.DesiredSize.Width;var actions=ViewTools.DesiredSize.Width;
-        var required=filters>0&&actions>0?filters+actions+SearchTools.ColumnSpacing:840;
-        var narrow=LibraryLayout.ActualWidth<required;
-        Grid.SetRow(ViewTools,narrow?1:0);Grid.SetColumn(ViewTools,narrow?0:1);Grid.SetColumnSpan(ViewTools,narrow?2:1);
-        ViewTools.HorizontalAlignment=narrow?HorizontalAlignment.Left:HorizontalAlignment.Right;
-        ViewTools.Margin=narrow?new Thickness(0,8,0,0):new Thickness(0);
+        // Inline details and long search labels change the usable width.
+        // Keep the query usable and wrap only the group that does not fit.
+        var queryWidth=180+SearchButton.DesiredSize.Width+(CancelSearchButton.Visibility==Visibility.Visible?CancelSearchButton.DesiredSize.Width:0)+24;
+        var filterWrap=LibraryLayout.ActualWidth<queryWidth+SearchFilterTools.DesiredSize.Width;
+        Grid.SetRow(SearchFilterTools,filterWrap?1:0);Grid.SetColumn(SearchFilterTools,filterWrap?0:1);Grid.SetColumnSpan(SearchFilterTools,filterWrap?4:1);
+        SearchFilterTools.Margin=filterWrap?new Thickness(0,8,0,0):new Thickness(0);
+        var headerWrap=LibraryLayout.ActualWidth<HeadingTools.DesiredSize.Width+HeaderCommands.DesiredSize.Width+LibraryHeader.ColumnSpacing;
+        Grid.SetRow(HeaderCommands,headerWrap?1:0);Grid.SetColumn(HeaderCommands,headerWrap?0:1);Grid.SetColumnSpan(HeaderCommands,headerWrap?2:1);
+        HeaderCommands.Margin=headerWrap?new Thickness(0,8,0,0):new Thickness(0);
     }
 
     private void FolderHub_SizeChanged(object sender,SizeChangedEventArgs args)=>UpdateFolderLayout();
