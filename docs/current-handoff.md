@@ -9,7 +9,7 @@
 - **P6配布**：rootの「はじめに.txt」/簡潔なUSER_GUIDEを追加。Basic21でsealed directoryを日本語/空白の別pathへコピーし、同じユーザーのgrid保存/再起動保持を17checks/4exit0で確認（別Windowsや新ZIP展開そのものではない）。別環境用 `dist/portable-validation-20261029-22.zip` を生成し全6member/原本一致を確認。PNG2枚/2頁CBZ/候補SHA/手順/未記入結果だけ、app/モデル/実行script/私物なし。再作成は `tools/prepare_windows_validation.py`。[別Windows手順](portable-windows-validation.md)。Sandbox未起動/stale・feature InstallState2で、OS機能の有効化やguest取得はしていない。
 - **未完/未検証**：別Windows/clean machine受入、実runtime供給元/適用条項レビュー2件/不変host/production registry、実媒体品質/全codec/長時間描画RSS/HC/物理DPI/実キー・pointer等は残る。公開runtime/全ロードマップ/M1/M2の完了にはしない。installed AlphaはZIP10/source0138a58のまま。通常DB/設定/shortcut/モデル/私物は不変。Actions/DL/GPU推論/OS設定変更0。
 - **次の1件 UI**：通常幅で常駐している一覧下部の「前へ/次へ・範囲・再接続」を、件数/選択/読み込み範囲が伝わる形へ小さく整理する。範囲移動や復旧機能は削らず、連続スクロール/選択/未保存タグを維持。今回成功した同一Core/GUI/CPU soakを前提なく再実行しない。**P6の次**：用意した検証セットで利用可能な別Windowsの通常入口/保存/再配置を確認。環境有効化/新規取得/公開が必要なら許可要件を守り、未成立を合格で埋めず独立UI作業へ進む。
-- **証拠/終了**：`data/ai-ui/continuation-20261029d/` のbasic22-final-review.json、basic22-onboarding01、basic21-relocation01、basic22-validation-kit01.logと対象別reports。保存/commit/push・remote branch/PR5 head一致・clean・試験Aredoko残存なしを最終確認する。モニターへdesktop SC_MONITORPOWER offを送信。wake/常駐offループ/OS電源plan変更/shutdownは行わない。物理的な消灯維持は未観測。
+- **証拠/終了**：`data/ai-ui/continuation-20261029d/` のbasic22-final-review.json、basic22-onboarding01、basic21-relocation01、basic22-validation-kit01.logと対象別reports。保存/commit/push・remote branch/PR5 head一致・cleanを36e2472まで確認、試験Aredoko/Python残存0をfinal-process-check01.jsonへ記録。終了時にdesktop SC_MONITORPOWER offも再送しWindows応答あり（monitor-final-off01.json）。この終了結果の追記後の最終commitは本書git logを参照。wake/常駐offループ/OS電源plan変更/shutdownは行わない。物理的な消灯維持は未観測。
 
 
 ## 2026-10-29d 追加checkpoint（UI実装済み・配布候補へ収録中）
