@@ -186,7 +186,9 @@ def main():
                         ui('invoke',control);ui('wait-for','ItemSizeLabel','--value',value,'-t','10000')
                         check('packaged preset updates the shared size: '+value,True)
                     shot('packaged-size-presets')
-                    ui('invoke','NavFavorites');ui('invoke','NavAll');ui('wait-for','TxtCount','--value','1 件','-t','10000')
+                    ui('invoke','NavFavorites');ui('wait-for','TxtCount','--value','0 件','-t','10000')
+                    ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+                    ui('invoke','NavAll');ui('wait-for','TxtCount','--value','1 件','-t','10000')
                     check('size commands leave the generated library available',True)
                 shot(f'normal-startup-{phase+1}')
             elif args.ai_startup_fixture:
