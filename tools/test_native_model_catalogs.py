@@ -25,9 +25,11 @@ def main():
     parser.add_argument('--restore-rejection',action='store_true',help='Reject two generated invalid backups, keep the current library, then one planned restart')
     parser.add_argument('--ai-startup-fixture',type=Path,help='Passing generated fixture from test_ai_startup_pack; actual GPU audit')
     parser.add_argument('--runtime',type=Path);parser.add_argument('--models',type=Path)
+    parser.add_argument('--remember-library-view',action='store_true',help='With startup-only, persist grid on first run and verify it on the planned restart')
     parser.add_argument('--startup-only',action='store_true',help='Normal entry and one restart, generated data only')
     parser.add_argument('--installed-copy',action='store_true',help='Allow an explicitly selected versioned Aredoko copy in user Programs')
     args=parser.parse_args();release=args.release.resolve();target=args.output.resolve()
+    if args.remember_library_view and not args.startup_only:parser.error('Layout restart requires --startup-only')
     if sum((args.getting_started,args.direct_entry,args.library_smoke,args.restore_rejection,args.ai_startup_fixture is not None,args.startup_only))>1:parser.error('Select one acceptance flow')
     if args.ai_startup_fixture and (args.runtime is None or args.models is None):parser.error('Explicit existing runtime/models required')
     if os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui'):
@@ -62,7 +64,7 @@ def main():
     initial_settings=settings.read_bytes()
     env={**os.environ,'LOCALAPPDATA':str(local),'APPDATA':str(local),'WINAPP_UI_WORKFLOW_ID':'aredoko-model-catalog-display-20261025'}
     report={'pass':False,'checks':[],'screenshots':[],'owned_pids':[],'exits':[],
-            'authorization':'Per-run user permission is required; scope and approval are recorded in the conversation, not granted by this harness',
+            'authorization':'Current user/AGENTS instructions govern authorization; this harness grants none',
             'startup_only':args.startup_only,'gpu_requested':args.ai_startup_fixture is not None,
             'direct_entry':args.direct_entry,'getting_started':args.getting_started,'library_smoke':args.library_smoke,'restore_rejection':args.restore_rejection,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
@@ -155,6 +157,16 @@ def main():
             check(f'phase {phase}: no acquisition started',request('/api/library/ai/setup/download/job')['state']=='idle')
             if args.startup_only:
                 check(f'phase {phase}: dedicated single-item library available',request('/api/items')['total']==1)
+                if args.remember_library_view:
+                    if phase==0:
+                        ui('wait-for','BtnLayout','--value','グリッド表示','-t','10000');ui('invoke','BtnLayout')
+                    ui('wait-for','BtnLayout','--value','リスト表示','-t','10000')
+                    check(f'phase {phase}: chosen grid layout is active',True)
+                    viewer=json.loads((data/'viewer-settings.json').read_text(encoding='utf-8'))
+                    check(f'phase {phase}: layout saved independently of launch settings',viewer['library_view']=='grid')
+                    if phase==1:
+                        ui('invoke','BtnLayout');ui('wait-for','BtnLayout','--value','グリッド表示','-t','10000')
+                        check('switching back saves list presentation',json.loads((data/'viewer-settings.json').read_text())['library_view']=='list')
                 shot(f'normal-startup-{phase+1}')
             elif args.ai_startup_fixture:
                 from ui_ai_startup_audit import audit

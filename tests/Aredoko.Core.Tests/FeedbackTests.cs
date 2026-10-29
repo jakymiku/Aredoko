@@ -26,10 +26,15 @@ internal static class FeedbackTests
             check(ViewerInputSettings.Load(file)==appearance,"theme and small-image fit persist with existing preferences");
             (appearance with {LibraryItemScale=80}).Save(file);
             check(ViewerInputSettings.Load(file).Theme=="dark"&&ViewerInputSettings.Load(file).EnlargeSmallImages,"resizing preserves appearance preferences");
+            var grid=appearance with{LibraryTiles=true};grid.Save(file);
+            check(ViewerInputSettings.Load(file)==grid&&grid.ToJson()["library_view"]!.GetValue<string>()=="grid","grid view persists with all existing preferences");
+            (grid with{LibraryItemScale=80,Theme="light"}).Save(file);
+            check(ViewerInputSettings.Load(file).LibraryTiles,"size and theme changes retain the chosen grid view");
+            (grid with{LibraryTiles=false}).Save(file);check(!ViewerInputSettings.Load(file).LibraryTiles,"list view persists after changing back");
             normal.Save(file);check(!ViewerInputSettings.Load(file).WheelUpAdvances&&Directory.GetFiles(dir).Length==1,"atomic settings overwrite leaves no temporary files");
             File.WriteAllText(file,"{\"version\":1,\"wheel_up_advances\":true}");
             check(ViewerInputSettings.Load(file)==new ViewerInputSettings(true,100),"old viewer settings retain wheel direction with default item size");
-            check(!ViewerInputSettings.Load(file).OpenExternally,"legacy settings keep the internal viewer by default");
+            check(!ViewerInputSettings.Load(file).OpenExternally&&!ViewerInputSettings.Load(file).LibraryTiles,"legacy settings keep internal viewing and the list layout");
             var external=new ViewerInputSettings(true,140,"dark",true,true,true,true,12);external.Save(file);
             check(ViewerInputSettings.Load(file)==external,"external viewer choice survives restart with all existing preferences");
             (external with{AISetupFeatures=0}).Save(file);check(ViewerInputSettings.Load(file).AISetupFeatures==0,"explicit AI opt-out persists after restart");

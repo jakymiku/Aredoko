@@ -102,6 +102,7 @@ public sealed partial class MainPage : Page
             UpdateItemSizes();
         };
         Unloaded+=OnPageUnloaded;
+        tiles=ViewerOptions.Value.LibraryTiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
         libraryItemScale=ViewerOptions.Value.LibraryItemScale;ItemSizeSlider.Value=libraryItemScale;
         ItemSizeLabel.Text=$"{libraryItemScale}%";itemSizeReady=true;
         UpdateSearchMethod();
@@ -1219,7 +1220,15 @@ public sealed partial class MainPage : Page
         }
         finally { transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();} }
     }
-    private void Layout_Click(object sender,RoutedEventArgs e){if(extending||saving||dialogOpen)return;ItemSizeFlyout.Hide();tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";if(shelfHubOpen)RenderShelfLayout();else ReflowBrowse(()=>{RenderRows();RestoreSelection();});}
+    private void Layout_Click(object sender,RoutedEventArgs e)
+    {
+        if(extending||saving||dialogOpen)return;
+        try{ViewerOptions.SaveLibraryView(!tiles);}
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
+        {Notice("表示方法を保存できません",ex.Message,InfoBarSeverity.Warning);AppLog.Error(ex);return;}
+        ItemSizeFlyout.Hide();tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
+        if(shelfHubOpen)RenderShelfLayout();else ReflowBrowse(()=>{RenderRows();RestoreSelection();});
+    }
     private void OpenDetails_Click(object sender,RoutedEventArgs e)
     {
         if(folderHubOpen)
