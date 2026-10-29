@@ -68,3 +68,18 @@ def audit_guide(ui,shot,report,check,catalog,handler,target):
     ui('invoke','CloseButton');ui('wait-for','AISetupPlanDialog','--gone','-t','10000')
     shot('guide-return');report['physical_input_requested']=False
     report['unverified']=['physical keyboard/tab order','high contrast and physical DPI','real folder registration/model installation']
+
+
+def audit_diagnostics(ui,shot,report,check):
+    ui('invoke','BtnSettings');ui('wait-for','BtnDiagnostics','-t','10000');ui('invoke','BtnDiagnostics')
+    ui('wait-for','DiagnosticsDialog','-t','10000');ui('wait-for','BtnCloseDiagnostics','-t','10000')
+    dialog=json.loads(ui('inspect','DiagnosticsDialog','--depth','12','--json'))
+    closers={n.get('selector') for n in nodes(dialog) if n.get('type')=='Button' and n.get('name')=='閉じる' and not n.get('isOffscreen',True)}
+    check('diagnostics exposes one native close action',len(closers)==1)
+    close=inspect_element(ui,'BtnCloseDiagnostics');copy=inspect_element(ui,'BtnCopyDiagnostics')
+    check('close uses the footer below the copy action',not close['isOffscreen'] and close['height']>=32 and close['y']>copy['y']+copy['height'])
+    check('diagnostic text remains available',not inspect_element(ui,'TxtDiagnostics')['isOffscreen'])
+    shot('diagnostic-native-footer');ui('invoke','BtnCloseDiagnostics');ui('wait-for','DiagnosticsDialog','--gone','-t','10000')
+    check('native diagnostic close returns to the library',True)
+    report['physical_input_requested']=False;report['clipboard_requested']=False
+    report['unverified']=['physical Esc/Tab keys','clipboard operation','high contrast and physical DPI']

@@ -188,10 +188,9 @@ public sealed partial class MainPage
 
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="診断情報（匿名化済み）",CloseButtonText="閉じる",Content=panel};
             AutomationProperties.SetAutomationId(dialog,"DiagnosticsDialog");
-            var closeDiagBtn = new Button { Content = "閉じる", HorizontalAlignment = HorizontalAlignment.Right };
-            AutomationProperties.SetAutomationId(closeDiagBtn, "BtnCloseDiagnostics");
-            closeDiagBtn.Click += (_, _) => dialog.Hide();
-            panel.Children.Add(closeDiagBtn);
+            var closeStyle=new Style{TargetType=typeof(Button)};
+            closeStyle.Setters.Add(new Setter(AutomationProperties.AutomationIdProperty,"BtnCloseDiagnostics"));
+            dialog.CloseButtonStyle=closeStyle;
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
             await dialog.ShowAsync();

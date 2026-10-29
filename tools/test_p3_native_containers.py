@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--setup-recovery',action='store_true',help='Setup return plus safe recovery, diagnostic return and saved-profile restart state')
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
+    parser.add_argument('--diagnostic-footer-only',action='store_true',help='UIA-only diagnostic native close footer, no clipboard access')
     parser.add_argument('--guide-layout-only',action='store_true',help='UIA-only concise guide, preserved details and folder/AI entry points')
     parser.add_argument('--settings-layout-only',action='store_true',help='UIA-only settings action grid, footer save and reopen')
     parser.add_argument('--detail-fields-only',action='store_true',help='UIA-only wrapped tags and inline shelf picker without repeating captions')
@@ -54,6 +55,7 @@ def main():
     if args.favorite_patch:args.detail_actions=True;args.uia_only=True
     if args.caption_menu_only:args.card_captions=True
     if args.card_captions:args.detail_polish=True
+    if args.diagnostic_footer_only:args.detail_polish=True
     if args.guide_layout_only:args.detail_polish=True
     if args.settings_layout_only:args.detail_polish=True
     if args.detail_fields_only:args.detail_polish=True
@@ -296,6 +298,11 @@ def main():
             removed=audit(ui,cli,tree,shot,report,check,cat,media,target,proc.pid,hwnd,input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only)
             check('generated sources match the declared scope',{key:value for key,value in before.items() if key!=removed}==sources())
             report['pass']=True
+        elif args.diagnostic_footer_only:
+            from ui_settings_layout_audit import audit_diagnostics
+            report['diagnostics_audit_sha256']=hashlib.sha256((REPO/'tools/ui_settings_layout_audit.py').read_bytes()).hexdigest()
+            audit_diagnostics(ui,shot,report,check)
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.guide_layout_only:
             from ui_settings_layout_audit import audit_guide
             report['guide_audit_sha256']=hashlib.sha256((REPO/'tools/ui_settings_layout_audit.py').read_bytes()).hexdigest()
