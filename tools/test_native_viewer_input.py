@@ -114,7 +114,7 @@ def main():
             nonlocal viewer
             rows=[w for w in windows() if w.get('title','').startswith(prefix)]
             if len(rows)!=1:return False
-            viewer=str(rows[0]['hwnd']);return True
+            viewer=str(rows[0]['hwnd']);report.setdefault('viewer_windows',[]).append({'title':rows[0].get('title',''),'hwnd':viewer});return True
         wait('owned viewer opens',locate)
         if not args.inspect_controls:foreground(viewer)
     def close_viewer():

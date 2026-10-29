@@ -90,10 +90,12 @@ def audit(cli, main, pid, theme, rows, catalog, output, report, check):
         ui('wait-for',opener,'-p','IsEnabled','--value','True','-t','5000');ui('invoke',opener)
         handle=child_with(viewport);pin_chrome(handle,viewport)
         return handle
-    def close_viewer(handle,identifier):
-        ui('invoke',identifier,window=handle)
+    def close_viewer(handle,identifier=None):
+        owned(handle)
+        if identifier:ui('invoke',identifier,window=handle)
+        else:ui('close',window=handle)
         ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
-        check(theme+'/'+identifier+' restores main window',True)
+        check(theme+'/'+(identifier or 'native-close')+' restores main window',True)
 
     all_items();resize(1200,820)
     ui('wait-for','BtnLayout','-t','5000')
@@ -158,5 +160,5 @@ def audit(cli, main, pid, theme, rows, catalog, output, report, check):
 
     audio=open_viewer('audio.wav','BtnOpenAudio','VideoViewport')
     ui('wait-for','VideoSeek','-p','IsEnabled','--value','True','-t','10000',window=audio)
-    fits('audio-player',('VideoClose','VideoPlayPause','VideoSeek','VideoVolume'),window=audio)
-    shot('audio-player',window=audio,selector='AudioPlayerDialog');close_viewer(audio,'VideoClose')
+    fits('audio-player',('VideoPlayPause','VideoSeek','VideoVolume'),window=audio)
+    shot('audio-player',window=audio,selector='AudioPlayerDialog');close_viewer(audio)

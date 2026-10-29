@@ -15,7 +15,7 @@ namespace Aredoko_WinUI;
 
 // Bounded read-only native video player. Uses the authenticated loopback API
 // and bounded range streams; never opens, locks or mutates source paths directly.
-internal sealed class VideoPlayerView : Grid, IDisposable
+internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
 {
     private readonly LibraryApi api;
     private readonly int itemId;
@@ -45,7 +45,6 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         HorizontalAlignment = HorizontalAlignment.Stretch,
         VerticalAlignment = VerticalAlignment.Stretch
     };
-    private readonly Border header = new() { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
     private readonly Border toolbar = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
     private readonly Button playPause = IconButton(Symbol.Play);
     private readonly Button seekBack = IconButton(Symbol.Back);
@@ -54,8 +53,6 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     private readonly Button volumeDown = TextButton("−");
     private readonly Button volumeUp = TextButton("＋");
     private readonly Button retry = IconButton(Symbol.Refresh);
-    private readonly Button close = IconButton(Symbol.Cancel);
-    private readonly TextBlock title = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock positionText = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock volumeText = new() { Text = "音量 80%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
@@ -71,6 +68,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     private bool busy, disposed, failed, loaded, playing, muted, keyboardChrome;
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
+    public string WindowTitle => "Aredoko — " + (isAudio ? "音声再生" : "動画再生") + "　" + itemTitle;
+    public event Action<string>? TitleChanged;
 
     public VideoPlayerView(LibraryApi api, int itemId, string titleText, int? initialPositionMs = null, bool isAudio = false)
     {
@@ -88,28 +87,26 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         viewport.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
         viewport.Children.Add(playerElement);
         Children.Add(viewport);
-        header.Style = toolbar.Style = (Style)Application.Current.Resources["ImageViewerOverlayStyle"];
-        var heading = new Grid { ColumnSpacing = 12 };
-        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        title.Text = itemTitle; ToolTipService.SetToolTip(title, itemTitle);
-        title.Style = positionText.Style = volumeText.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
-        heading.Children.Add(title); SetColumn(positionText, 1); heading.Children.Add(positionText); SetColumn(close, 2); heading.Children.Add(close);
-        header.Child = heading; Children.Add(header);
-        var actions=new Grid{ColumnSpacing=8};actions.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});actions.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+        toolbar.Style = (Style)Application.Current.Resources["ImageViewerOverlayStyle"];
+        positionText.Style = volumeText.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
+        positionText.HorizontalAlignment = HorizontalAlignment.Center;
+        var actions = new Grid { ColumnSpacing = 8 };
+        actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        actions.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var playback=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
         foreach(var control in new UIElement[]{playPause,seekBack,seekForward,retry})playback.Children.Add(control);
         var audio=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Right};
         foreach(var control in new UIElement[]{mute,volumeDown,volumeSlider,volumeUp,volumeText})audio.Children.Add(control);
-        actions.Children.Add(playback);SetColumn(audio,1);actions.Children.Add(audio);
+        actions.Children.Add(playback); SetColumn(positionText,1); actions.Children.Add(positionText); SetColumn(audio,2); actions.Children.Add(audio);
         Identify(volumeSlider,"VideoVolume","音量（0〜100）");
         volumeSlider.ValueChanged+=(_,_)=>{if(updatingVolume)return;volume=VideoPlayerPolicy.ClampVolume((int)Math.Round(volumeSlider.Value));if(mediaPlayer is not null)mediaPlayer.Volume=volume/100.0;UpdateControls();ShowChrome();};
         viewport.Tapped+=(_,args)=>{if(!busy&&loaded&&!failed){args.Handled=true;TogglePlayPause();}};
         toolbar.BorderThickness=new Thickness(0,1,0,0);toolbar.CornerRadius=new CornerRadius(0);
         toolbar.MaxWidth=double.PositiveInfinity;toolbar.Padding=new Thickness(8,4,8,4);
-        var bottom = new StackPanel { Spacing = 4, HorizontalAlignment=HorizontalAlignment.Stretch }; bottom.Children.Add(seekBar);bottom.Children.Add(actions); bottom.Children.Add(status);
+        var bottom = new StackPanel { Spacing = 4, HorizontalAlignment=HorizontalAlignment.Stretch }; bottom.Children.Add(seekBar);bottom.Children.Add(actions);
         toolbar.Child = bottom; Children.Add(toolbar);
+        ViewerChromeController.AttachNotices(this,96,status);
         seekPreview.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
         seekTime.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         seekHint.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
@@ -146,13 +143,12 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         seekBar.PointerExited+=(_,_)=>{HideSeekPreview();ShowChrome();};
         Identify(viewport, "VideoViewport", isAudio ? "音声再生。スペースで再生・一時停止、左右キーで移動" : "動画表示。スペースで再生・一時停止、左右キーで移動");
         Identify(playerElement, "VideoElement", itemTitle + (isAudio ? "の音声" : "の動画"));
-        Identify(header, "VideoHeader", (isAudio ? "音声" : "動画") + "の情報と閉じる"); Identify(toolbar, "VideoToolbar", (isAudio ? "音声" : "動画") + "の操作");
+        Identify(toolbar, "VideoToolbar", (isAudio ? "音声" : "動画") + "の操作");
         Identify(playPause, "VideoPlayPause", "再生");
         Identify(seekBack, "VideoSeekBack", "1秒戻る"); Identify(seekForward, "VideoSeekForward", "1秒進む");
         Identify(mute, "VideoMute", "消音");
         Identify(volumeDown, "VideoVolumeDown", "音量を下げる"); Identify(volumeUp, "VideoVolumeUp", "音量を上げる");
-        Identify(retry, "VideoRetry", (isAudio ? "音声" : "動画") + "を再試行"); Identify(close, "VideoClose", (isAudio ? "音声再生" : "動画再生") + "を閉じる");
-        AutomationProperties.SetAutomationId(title, "VideoTitle");
+        Identify(retry, "VideoRetry", (isAudio ? "音声" : "動画") + "を再試行");
         AutomationProperties.SetAutomationId(positionText, "VideoPosition");
         AutomationProperties.SetAutomationId(volumeText, "VideoVolumeStatus");
         AutomationProperties.SetAutomationId(status, "VideoStatus");
@@ -161,13 +157,12 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         ToolTipService.SetToolTip(seekBack, "1秒戻る（←）"); ToolTipService.SetToolTip(seekForward, "1秒進む（→）");
         ToolTipService.SetToolTip(mute, "消音 / 消音解除（M）");
         ToolTipService.SetToolTip(volumeDown, "音量を下げる"); ToolTipService.SetToolTip(volumeUp, "音量を上げる");
-        ToolTipService.SetToolTip(retry, isAudio ? "音声の読み込みを再試行" : "読み込みを再試行"); ToolTipService.SetToolTip(close, "閉じる（Esc）");
+        ToolTipService.SetToolTip(retry, isAudio ? "音声の読み込みを再試行" : "読み込みを再試行");
         playPause.Click += (_, _) => TogglePlayPause();
         seekBack.Click += (_, _) => Seek(-1); seekForward.Click += (_, _) => Seek(1);
         mute.Click += (_, _) => ToggleMute();
         volumeDown.Click += (_, _) => AdjustVolume(-20); volumeUp.Click += (_, _) => AdjustVolume(20);
         retry.Click += async (_, _) => await OpenAsync();
-        close.Click += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
         UpdateControls(); ShowChrome();
     }
 
@@ -179,14 +174,14 @@ internal sealed class VideoPlayerView : Grid, IDisposable
     private void ShowChrome()
     {
         if (disposed) return;
-        header.Visibility = toolbar.Visibility = Visibility.Visible;
+        toolbar.Visibility = Visibility.Visible;
         hideTimer.Stop(); if (!keyboardChrome && !busy && !failed) hideTimer.Start();
     }
 
     private void HideChrome()
     {
         HideSeekPreview();viewport.Focus(FocusState.Programmatic);
-        header.Visibility = toolbar.Visibility = Visibility.Collapsed;
+        toolbar.Visibility = Visibility.Collapsed;
     }
 
     public void AttachNavigation(UIElement dialog)
@@ -281,7 +276,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             if (nextPlayer is not null) { try { nextPlayer.Source = null; playerElement.SetMediaPlayer(null); nextPlayer.Dispose(); } catch { } }
             source?.Dispose();
             stream?.Dispose();
-            if (!disposed && current == version) { busy = false; UpdateControls(); if (!keyboardChrome && !failed) hideTimer.Start(); }
+            if (!disposed && current == version) { busy = false; UpdateControls(); TitleChanged?.Invoke(WindowTitle); if (!keyboardChrome && !failed) hideTimer.Start(); }
         }
     }
 
@@ -435,7 +430,6 @@ internal sealed class VideoPlayerView : Grid, IDisposable
         updatingVolume=true;try{volumeSlider.Value=volume;volumeSlider.IsEnabled=!busy;}finally{updatingVolume=false;}
         volumeText.Text = muted ? $"消音中（{volume}%）" : $"音量 {volume}%";
         retry.IsEnabled = !busy && failed;
-        close.IsEnabled = true;
     }
 
     public void Dispose()

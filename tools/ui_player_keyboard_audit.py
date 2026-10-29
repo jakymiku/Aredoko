@@ -27,6 +27,9 @@ def audit(ui,tree,open_viewer,close_viewer,foreground,shot,wait,report,current_v
     if report['control_state_only']:
         ui(viewer,'wait-for','VideoPlayPause','-p','IsEnabled','--value','True','-t','10000')
         if tree(viewer)['VideoPlayPause']['name']=='一時停止':ui(viewer,'invoke','VideoPlayPause')
+        current=tree(viewer)
+        observations.append(('native window title identifies the audio file',report['viewer_windows'][-1]['title'].endswith('silent-controls.wav')))
+        observations.append(('player has one native title bar and a docked position label','VideoHeader' not in current and 'VideoClose' not in current and 'VideoPosition' in current and current['VideoPosition']['y'] >= current['VideoToolbar']['y']))
         before=number('VideoVolume');ui(viewer,'set-value','VideoVolume','75');after=number('VideoVolume')
         observations.append(('UIA slider updates the displayed volume',before==80 and after==75))
         ui(viewer,'invoke','VideoMute');state=tree(viewer)

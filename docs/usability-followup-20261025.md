@@ -242,3 +242,9 @@ U1の後、独立したU4aを先行してもよい。U3で素材再現待ちと�
 プレイヤーのpreview shortcutがSliderの左右キーとButtonのSpaceも先に処理する経路をsourceで確認。frontend内のvisual ancestry判定で、音量/シークの矢印やbuttonのSpace/Enter、文字入力/選択controlの操作をcontrol側へ返す。画像は設定menu表示中のMoveAsyncを止め、画像/本ともmenuのnative key操作を通す。viewport上の既存shortcut・クリック・wheel・拡大/読書位置/設定値は保持。
 
 既存Portable候補16で実キーのreproを試みたが、最初は前面化不可、次はwinappがWindowsのlocked/secure desktopを明示して**入力前停止/正常exit0**。ユーザーのGUI許可不足ではなくdesktop readiness不足であり、repro済み/実キー合格とは記録しない。UIA-only専用modeでは、無音WAV/専用DBで音量75/消音とpauseの独立、元media不変を確認。初回getterのRangeValue想定違いは表示Textの読取に修正済み。codeのPortable buildは0 errors/既存WUI1001×3。新sourceのpublishとUIA-only確認を行い、解除後に `tools/test_native_viewer_input.py --keyboard-controls` の一括3ケースを確認する。`--inspect-controls` は実キーを検証しない。
+
+### 2026-10-29c：動画・音声の表示整理
+
+- 画像・本と同様、ファイル名をOSタイトルへ表示し、動画・音声の重複した上部バーを廃止。シーク位置は下部の再生／音量操作の間へ配置した。閉じる操作はOSの×／Alt+F4／既存Escを使用する。
+- 読込・失敗の通知は操作バーと独立したoverlayへ移し、通知の出入りで操作バーの高さが変わらない。字幕や再生画像の変換・新decoderは追加しない。
+- Portable build成功、既存picker analyzer警告3件を保持。関連UIA／通常入口は最終候補で確認する。locked desktopの実キー未受入は継続し、UIA成功をキーボード成功に置き換えない。

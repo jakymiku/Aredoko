@@ -45,9 +45,10 @@ internal sealed class ViewerChromeController : IDisposable
     public void Start(){if(disposed)return;timer.Stop();if(ViewerOptions.Value.AlwaysShowControls)toolbar.Visibility=Visibility.Visible;else timer.Start();}
     public void Stop()=>timer.Stop();
     public void Dispose(){disposed=true;timer.Stop();}
-    public static void AttachNotices(Grid root,params TextBlock[] messages)
+    public static void AttachNotices(Grid root,params TextBlock[] messages) => AttachNotices(root,64,messages);
+    public static void AttachNotices(Grid root,double bottomInset,params TextBlock[] messages)
     {
-        var stack=new StackPanel{Spacing=8,VerticalAlignment=VerticalAlignment.Bottom,HorizontalAlignment=HorizontalAlignment.Center,MaxWidth=600,Margin=new Thickness(16,0,16,64)};
+        var stack=new StackPanel{Spacing=8,VerticalAlignment=VerticalAlignment.Bottom,HorizontalAlignment=HorizontalAlignment.Center,MaxWidth=600,Margin=new Thickness(16,0,16,bottomInset)};
         foreach(var message in messages)
         {
             var host=new Border{Child=message,RequestedTheme=ElementTheme.Dark,Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"]};

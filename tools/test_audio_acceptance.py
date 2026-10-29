@@ -479,10 +479,13 @@ def run_gui_stage(target_dir):
         report['screenshots'].append(str(player_shot))
 
         # Close player
-        try:
-            ui('invoke', 'VideoClose')
-        except Exception:
-            ui('send-keys', '{ESC}')
+        if not app_pid:
+            raise RuntimeError('Owned audio process unavailable')
+        listed = subprocess.run(['winapp', 'ui', 'list-windows', '-a', str(app_pid), '--json'], capture_output=True, text=True, check=True)
+        players = [w for w in json.loads(listed.stdout) if w.get('title', '').startswith('Aredoko — 音声再生')]
+        if len(players) != 1:
+            raise RuntimeError('One owned audio player required for native close')
+        ui('close', window=players[0]['hwnd'])
         time.sleep(1)
 
         # Trigger context menu on audio item

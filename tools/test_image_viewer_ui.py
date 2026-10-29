@@ -141,11 +141,13 @@ def main():
         if phase.endswith('-viewer') or phase.endswith('-reader') or phase.endswith('-video'):
             prefix='Image' if phase.endswith('-viewer') else ('Video' if phase.endswith('-video') else 'Reader')
             outer=next(n for n in all_nodes if n.get('automationId')==prefix+'Viewport')
-            close_node=next(n for n in all_nodes if n.get('automationId')==prefix+'Close')
-            check(phase+' header is flush to image canvas top',0<=close_node['y']-outer['y']<=12)
-            header=next(n for n in all_nodes if n.get('automationId')==prefix+'Header')
             toolbar=next(n for n in all_nodes if n.get('automationId')==prefix+'Toolbar')
-            check(phase+' bands dock flush without side or bottom gaps',abs(header['x']-outer['x'])<=2 and abs(header['width']-outer['width'])<=2 and abs(toolbar['x']-outer['x'])<=2 and abs(toolbar['width']-outer['width'])<=2 and abs(toolbar['y']+toolbar['height']-outer['y']-outer['height'])<=2)
+            if prefix=='Video':
+                check(phase+' duplicate client header removed',not any(n.get('automationId') in ('VideoHeader','VideoClose') for n in all_nodes))
+            else:
+                close_node=next(n for n in all_nodes if n.get('automationId')==prefix+'Close')
+                check(phase+' header is flush to image canvas top',0<=close_node['y']-outer['y']<=12)
+            check(phase+' toolbar docks flush without side or bottom gaps',abs(toolbar['x']-outer['x'])<=2 and abs(toolbar['width']-outer['width'])<=2 and abs(toolbar['y']+toolbar['height']-outer['y']-outer['height'])<=2)
             check(phase+' dedicated window keeps library disabled',hwnd!=main_hwnd and not user32.IsWindowEnabled(int(main_hwnd)))
         if phase.endswith('-viewer'):
             bounds={n['automationId']:n for n in all_nodes if n.get('automationId') in ('ImageViewport','ViewerImage')}
@@ -462,10 +464,17 @@ def main():
                 def open_video():
                     ui('inspect','BtnOpenVideo','--json');ui('invoke','BtnOpenVideo');ui('wait-for','VideoPlayerDialog','-t','5000')
                     if not keys('f10','VideoViewport'):raise RuntimeError('Cannot reveal video controls with owned keyboard')
-                    ui('wait-for','VideoClose','-t','5000')
+                    ui('wait-for','VideoPlayPause','-t','5000')
+                def video_title(name):
+                    windows=json.loads(cli('ui','list-windows','-a',app_pid,'--json'))
+                    matches=[w for w in windows if str(w.get('hwnd'))==str(hwnd)]
+                    check(theme+' native video title identifies '+name,len(matches)==1 and matches[0].get('title','').endswith(name))
                 def close_video():
                     physical=keys('esc','VideoViewport')
-                    if not physical:ui('invoke','VideoClose')
+                    if not physical:
+                        owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
+                        if owner.value!=app_pid:raise RuntimeError('Owned video close target changed')
+                        user32.PostMessageW(int(hwnd),0x10,0,0)
                     ui('wait-for','VideoPlayerDialog','--gone','-t','5000')
                     return physical
                 select('a.png');prop('BtnOpenImage','IsEnabled','True');prop('BtnOpenVideo','IsEnabled','False');prop('BtnOpenBook','IsEnabled','False')
@@ -473,8 +482,8 @@ def main():
                 if not args.video_range_only:ui('wait-for','DetailPreview','-t','10000')
                 prop('BtnOpenVideo','IsEnabled','True');prop('BtnOpenImage','IsEnabled','False');prop('BtnOpenBook','IsEnabled','False')
                 ui('set-value','TxtTags','video-draft');wait('TxtEditStatus','未保存の変更')
-                open_video();wait('VideoStatus',shown_video);wait('VideoTitle','clip.mp4');wait('VideoPosition','0:00 / 0:02')
-                audit(theme+'-video',('VideoViewport','VideoPlayPause','VideoSeekBack','VideoSeekForward','VideoMute','VideoVolumeDown','VideoVolumeUp','VideoRetry','VideoClose'))
+                open_video();wait('VideoStatus',shown_video);video_title('clip.mp4');wait('VideoPosition','0:00 / 0:02')
+                audit(theme+'-video',('VideoViewport','VideoPlayPause','VideoSeekBack','VideoSeekForward','VideoMute','VideoVolumeDown','VideoVolumeUp','VideoRetry'))
                 shot(theme+'-video-opened-wide')
                 ui('invoke','VideoPlayPause');wait('VideoStatus','再生中');wait('VideoPlayPause','一時停止');check(theme+' video play starts playback',True)
                 ui('invoke','VideoPlayPause');wait('VideoStatus','一時停止中');wait('VideoPlayPause','再生');check(theme+' video pause stops playback',True)
@@ -500,13 +509,13 @@ def main():
                 ui('invoke','VideoMute');wait('VideoVolumeStatus','消音中（80%）');wait('VideoMute','消音解除')
                 ui('invoke','VideoMute');wait('VideoVolumeStatus','音量 80%');wait('VideoMute','消音')
                 check(theme+' video volume and mute controls update state',True)
-                if keys('ctrl+s','VideoClose'):check(theme+' video player blocks background save',catalog.get(ids['clip.mp4'])['tags']==[])
+                if keys('ctrl+s','VideoPlayPause'):check(theme+' video player blocks background save',catalog.get(ids['clip.mp4'])['tags']==[])
                 resize(700,620);shot(theme+'-video-narrow')
                 physical=close_video();wait('TxtTags','video-draft');wait('TxtEditStatus','未保存の変更')
                 check(theme+' video player retains unsaved tags',catalog.get(ids['clip.mp4'])['tags']==[])
                 if physical:focus_assert('BtnOpenVideo');check(theme+' video Escape restores opener focus',True)
                 ui('invoke','BtnCloseDetails');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready();resize(1200,820)
-                select('clip.wmv');open_video();wait('VideoStatus',shown_video);wait('VideoTitle','clip.wmv');wait('VideoPosition','0:00 / 0:02');check(theme+' WMV format opens natively',True);close_video()
+                select('clip.wmv');open_video();wait('VideoStatus',shown_video);video_title('clip.wmv');wait('VideoPosition','0:00 / 0:02');check(theme+' WMV format opens natively',True);close_video()
                 wait('PreviewStatus'+str(ids['unsupported.mkv']),'動画の先頭フレーム')
                 select('unsupported.mkv');open_video();wait('VideoStatus',unsupported_video);wait('VideoPosition','—');prop('VideoPlayPause','IsEnabled','False');prop('VideoRetry','IsEnabled','True');shot(theme+'-video-unsupported');check(theme+' unsupported codec shows guidance while thumbnail works',True);close_video()
                 select('broken.mp4');open_video();wait('VideoStatus',unsupported_video);prop('VideoRetry','IsEnabled','True');check(theme+' corrupt video shows guidance',True);close_video()
@@ -514,12 +523,12 @@ def main():
                 ui('invoke','VideoRetry');wait('VideoStatus',shown_video);wait('VideoPosition','0:00 / 0:02');check(theme+' video 503 manual retry succeeds',True);close_video()
                 faults['video_play_code']=409;open_video();wait('VideoStatus','ファイルが更新されました。閉じて再スキャンしてから、開き直してください。');wait('VideoPosition','—');check(theme+' video 409 conflict guidance',True);close_video()
                 if args.video_seek_only:
-                    entered.clear();released.clear();faults['frame_delay']=True;open_video();wait('VideoStatus',shown_video);ui('hover','VideoSeek','--dwell-time','0');check(theme+' delayed seek thumbnail started',entered.wait(5));close_video();select('clip.wmv');open_video();wait('VideoStatus',shown_video);released.set();time.sleep(.3);wait('VideoTitle','clip.wmv');check(theme+' late seek thumbnail cannot replace next player',True);close_video()
+                    entered.clear();released.clear();faults['frame_delay']=True;open_video();wait('VideoStatus',shown_video);ui('hover','VideoSeek','--dwell-time','0');check(theme+' delayed seek thumbnail started',entered.wait(5));close_video();select('clip.wmv');open_video();wait('VideoStatus',shown_video);released.set();time.sleep(.3);video_title('clip.wmv');check(theme+' late seek thumbnail cannot replace next player',True);close_video()
                 select('clip.mp4');open_video();wait('VideoStatus',shown_video)
                 tree=json.loads(ui('inspect','--json','--depth','16'));outer=next(n for n in nodes(tree) if n.get('automationId')=='VideoViewport')
-                move_owned(outer,.15,'VideoViewport');ui('wait-for','VideoClose','--gone','-t','10000');shot(theme+'-video-controls-hidden')
-                move_owned(outer,.85,'VideoViewport');ui('wait-for','VideoClose','-t','5000');shot(theme+'-video-controls-revealed');check(theme+' video chrome hides and reappears with mouse motion',True)
-                move_owned(outer,.15,'VideoViewport');ui('wait-for','VideoClose','--gone','-t','10000')
+                move_owned(outer,.15,'VideoViewport');ui('wait-for','VideoPlayPause','--gone','-t','10000');shot(theme+'-video-controls-hidden')
+                move_owned(outer,.85,'VideoViewport');ui('wait-for','VideoPlayPause','-t','5000');shot(theme+'-video-controls-revealed');check(theme+' video chrome hides and reappears with mouse motion',True)
+                move_owned(outer,.15,'VideoViewport');ui('wait-for','VideoPlayPause','--gone','-t','10000')
                 if keys('esc','VideoViewport'):
                     ui('wait-for','VideoPlayerDialog','--gone','-t','5000');focus_assert('BtnOpenVideo');check(theme+' video Escape closes while chrome is hidden',True)
                 else:raise RuntimeError('Hidden video Escape unavailable')
@@ -528,12 +537,12 @@ def main():
                     wait('PreviewStatus'+str(ids['clip.mp4']),'動画の先頭フレーム')
                     double_click_owned('Preview'+str(ids['clip.mp4']));ui('wait-for','VideoPlayerDialog','-t','5000')
                     if not keys('f10','VideoViewport'):raise RuntimeError('Cannot reveal double-click video controls')
-                    wait('VideoTitle','clip.mp4');wait('VideoStatus',shown_video);shot(theme+'-video-double-click')
+                    video_title('clip.mp4');wait('VideoStatus',shown_video);shot(theme+'-video-double-click')
                     close_video();wait('TxtEditStatus','保存済み');check(theme+' video list thumbnail double click opens native video player',True)
                     ui('set-value','TxtTags','video-dc-draft');wait('TxtEditStatus','未保存の変更')
                     ui('wait-for','DetailPreview','-t','5000');double_click_owned('DetailPreview');ui('wait-for','VideoPlayerDialog','-t','5000')
                     if not keys('f10','VideoViewport'):raise RuntimeError('Cannot reveal detail double-click video controls')
-                    wait('VideoTitle','clip.mp4');close_video();wait('TxtTags','video-dc-draft');wait('TxtEditStatus','未保存の変更')
+                    video_title('clip.mp4');close_video();wait('TxtTags','video-dc-draft');wait('TxtEditStatus','未保存の変更')
                     check(theme+' video detail thumbnail double click preserves unsaved draft',catalog.get(ids['clip.mp4'])['tags']==[])
                     ui('invoke','BtnCloseDetails');ui('wait-for','PrimaryButton','-t','5000');ui('invoke','PrimaryButton');ready()
                     owner=wintypes.DWORD();user32.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))

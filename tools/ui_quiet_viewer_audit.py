@@ -49,8 +49,10 @@ def audit(cli,main,pid,theme,rows,catalog,output,report,check):
     def pin(window,viewport):
         user32.SetForegroundWindow(int(window));ui('focus',viewport,window=window)
         ui('send-keys','tab','--target',viewport,'--via','send-input',window=window)
-    def close(window,identifier):
-        ui('invoke',identifier,window=window);ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+    def close(window,identifier=None):
+        if identifier:ui('invoke',identifier,window=window)
+        else:ui('close',window=window)
+        ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
     def quiet(window,identifiers,toolbar,maxheight):
         current=tree(window)
         check(theme+' '+toolbar+' normal notices absent',all(i not in current or current[i].get('isOffscreen',True) for i in identifiers))
@@ -113,7 +115,7 @@ def audit(cli,main,pid,theme,rows,catalog,output,report,check):
             ui('wait-for','VideoPlayPause','--value','一時停止','-t','5000',window=handle)
             quiet(handle,('VideoStatus',),'VideoToolbar',110)
             ui('invoke','VideoPlayPause',window=handle)
-        shot('audio-quiet' if is_audio else 'video-quiet',handle,'AudioPlayerDialog' if is_audio else 'VideoPlayerDialog');close(handle,'VideoClose')
+        shot('audio-quiet' if is_audio else 'video-quiet',handle,'AudioPlayerDialog' if is_audio else 'VideoPlayerDialog');close(handle)
     ui('invoke','BtnCloseDetails');ui('invoke','NavFolders');ui('wait-for','TxtFolderSelectionSummary','-t','10000')
     check(theme+' folder guidance uses plain Japanese',tree()['TxtFolderSelectionSummary']['name']=='フォルダを選ぶと、まとめて検索や設定ができます。')
     shot('folders-plain-copy',selector='Nav')
