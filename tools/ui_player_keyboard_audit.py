@@ -94,7 +94,7 @@ def audit_autohide(ui,tree,open_viewer,close_viewer,shot,report,current_viewer):
     ui(viewer,'invoke','VideoRetry')
     ui(viewer,'wait-for','VideoPlayPause','-p','IsEnabled','--value','True','-t','10000')
     expected=report['autohide_mode']=='automatic'
-    if expected:ui(viewer,'wait-for','VideoToolbar','-p','IsOffscreen','--value','True','-t','5000')
+    if expected:ui(viewer,'wait-for','VideoToolbar','--gone','-t','5000')
     else:time.sleep(1.3)
     current=tree(viewer)
     offscreen='VideoToolbar' not in current or current['VideoToolbar']['isOffscreen']
