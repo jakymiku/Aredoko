@@ -13,24 +13,37 @@ def audit(ui,tree,shot,report,check,catalog,first_id,*,input_guard,uia_only=Fals
         inline=max(actions[0]['y'],mode['y'])<min(actions[0]['y']+actions[0]['height'],mode['y']+mode['height'])
         check(name+': view actions have their own space',actions[0]['x']>=mode['x']+mode['width']-1 if inline else actions[0]['y']+actions[0]['height']<=mode['y']+1 or actions[0]['y']>=mode['y']+mode['height']-1)
         check(name+': query remains usable',query['width']>=180)
+        heading=state['LibraryHeading'];full_width=report.setdefault('heading_full_width',heading['width'])
+        check(name+': full library heading remains visible',heading['width']>=full_width-1)
         check(name+': list starts below the search inputs',state['ItemList']['y']>=max(query['y']+query['height'],mode['y']+mode['height'])-1)
         check(name+': list starts below toolbar',state['ItemList']['y']>=max(row['y']+row['height'] for row in actions)-1)
         report.setdefault('toolbar_geometry',{})[name]={'query_height':query['height'],
             'query_to_list_gap':state['ItemList']['y']-query['y']-query['height'],
             'list_height':state['ItemList']['height'],'actions_inline':inline}
     if wrap_only:
-        from native_ui_tools import select_combo_item
+        import json
+        from native_ui_tools import nodes
+        def choose_mode(identifier):
+            ui('invoke','CmbSearchMode','--action','expand')
+            raw=json.loads(ui('inspect','--depth','18','--json'))
+            choices={n['selector'] for n in nodes(raw) if n.get('automationId')==identifier and n.get('type') in ('ListItem','ComboBoxItem') and n.get('selector') and not n.get('isOffscreen',True)}
+            if len(choices)!=1:raise RuntimeError('One visible owned search method required')
+            ui('invoke',choices.pop(),'--action','select')
+            ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+            ui('invoke','CmbSearchMode','--action','collapse')
         for nav,heading in [('NavFolders','登録フォルダ'),('NavShelf','棚')]:
             ui('invoke',nav);ui('wait-for','LibraryHeading','--value',heading,'-t','10000')
             state=tree()
             check(heading+': library view actions hidden',all(k not in state or state[k].get('isOffscreen',True) for k in ('BtnLayout','BtnItemSize','BtnDetails')))
         ui('invoke','NavAll');ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+        choose_mode('ModeText')
+        ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+        ui('wait-for','Item'+str(first_id),'-t','10000')
         ui('invoke','Item'+str(first_id),'--action','select');ui('invoke','BtnDetails')
         ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000')
-        select_combo_item(ui,'CmbSearchMode','ModeText')
         for width in (1600,1100):
             resize(width,820);geometry('width-'+str(width));shot('width-'+str(width))
-        ui('invoke','BtnCloseDetails');select_combo_item(ui,'CmbSearchMode','ModeLiteral');resize(1200,820)
+        ui('invoke','BtnCloseDetails');choose_mode('ModeLiteral');resize(1200,820)
         ui('wait-for','Item'+str(first_id),'-t','10000')
         check('search mode returns to literal with generated results',True)
         report['physical_input_requested']=False

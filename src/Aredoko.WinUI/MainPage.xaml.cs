@@ -1483,7 +1483,10 @@ public sealed partial class MainPage : Page
         var filterWrap=LibraryLayout.ActualWidth<queryWidth+SearchFilterTools.DesiredSize.Width;
         Grid.SetRow(SearchFilterTools,filterWrap?1:0);Grid.SetColumn(SearchFilterTools,filterWrap?0:1);Grid.SetColumnSpan(SearchFilterTools,filterWrap?4:1);
         SearchFilterTools.Margin=filterWrap?new Thickness(0,8,0,0):new Thickness(0);
-        var headerWrap=LibraryLayout.ActualWidth<HeadingTools.DesiredSize.Width+HeaderCommands.DesiredSize.Width+LibraryHeader.ColumnSpacing;
+        // The star column clips HeadingTools.DesiredSize; its horizontal
+        // children still expose the natural width needed for the full title.
+        var headingWidth=NavigationBackButton.DesiredSize.Width+NavigationForwardButton.DesiredSize.Width+MainViewTitle.DesiredSize.Width+2*HeadingTools.Spacing;
+        var headerWrap=LibraryLayout.ActualWidth<headingWidth+HeaderCommands.DesiredSize.Width+LibraryHeader.ColumnSpacing;
         Grid.SetRow(HeaderCommands,headerWrap?1:0);Grid.SetColumn(HeaderCommands,headerWrap?0:1);Grid.SetColumnSpan(HeaderCommands,headerWrap?2:1);
         HeaderCommands.Margin=headerWrap?new Thickness(0,8,0,0):new Thickness(0);
     }
