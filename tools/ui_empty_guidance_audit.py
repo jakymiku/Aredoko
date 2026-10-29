@@ -1,5 +1,5 @@
 """Small generated-only feedback and popup lifecycle scenario, UIA only."""
-from native_ui_tools import inspect_element
+from native_ui_tools import inspect_element, select_combo_item
 
 
 def audit(ui,tree,shot,report,check):
@@ -7,8 +7,7 @@ def audit(ui,tree,shot,report,check):
     def menu_hidden(label):
         state=tree();check(label,'BtnReconnect' not in state or state['BtnReconnect']['isOffscreen'])
     def mode(identifier):
-        ui('invoke','CmbSearchMode','--action','expand');ui('wait-for',identifier,'-t','5000')
-        ui('invoke',identifier,'--action','select');ui('invoke','CmbSearchMode','--action','collapse')
+        select_combo_item(ui,'CmbSearchMode',identifier)
         ui('invoke','BtnSearch')
     ui('invoke','BrowseActions');ui('wait-for','BtnReconnect','-t','5000')
     ui('set-value','TxtQuery','no-such-filename');ui('invoke','BtnSearch');ready()

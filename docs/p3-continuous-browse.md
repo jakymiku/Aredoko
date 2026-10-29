@@ -115,3 +115,12 @@ cfff134で表示操作を見出しへ、種類/検索方法をquery横へ移し�
 - `9fdf07c` は登録フォルダの二重の作品一覧戻るを共通ヘッダー `BtnRoots`へ統一。frontend08のfolder-toolbar-dark01は8checks/exit0/1PNG目視。通常幅で登録フォーム/戻るを確認し、操作自体は保持。診断の重複closeもnative footer一つへ統一する。個別GUI候補はbase HEADに作業差分を含む場合があり、reportのsource_files/assembly SHAを根拠とし、後のcommitだけでProductVersionを言い換えない。
 
 - 診断画面の追加確認で、AcceptsReturnをText代入後に設定していたため実TextBox/UIAが先頭行だけになる製品不具合を発見（diagnostic-footer-dark02 FAIL/exit0）。複数行を有効にしてからTextを代入する順序へ修正。独自close styleも外し標準footerを維持。frontend10のdark03は9checks/exit0/1PNG目視、全行とビルド元/配布種別のUIA保持を確認。copy操作は未実行だが既存の全report文字列をコピーする処理は不変。dark01の可視だけの8checksを全文受入にしない。
+
+
+## 2026-10-29e：一覧下部と文脈に合う案内、初回AI用途
+
+b81bbc3は読み込み済み範囲/LibrarySelection全体の選択数を固定footerへ配置し、前後範囲と接続・一覧更新をnative MenuFlyoutへ集約した。既存handler/IsEnabled/捨てる確認を再利用。frontend01の生成145PNG・専用DB・UIA-onlyはLight/Dark各14checks/exit0、各3PNGを目視。検索条件、画面外選択、draftと取消を保持。popup撮影はWinAppの合成画像なので位置の実測には使わない。証拠 continuation-20261029e/footer-{light01,dark01}。
+
+ab1d812はliteralの不一致をAI準備の案内から分離し、共通CloseBrowseMenusを検索/直接folder/shelf/navigationで適用。frontend02/empty-guidance01では視覚文言は正しいがUIA Nameが固定案内メッセージであった。94eac96で固定名だけ外し、TxtEmpty ID/LiveSettingを維持。frontend03/guidance-setup02では実文言/検索時popup終了を確認し、次のComboBoxが同じpeerを二重列挙して試験側停止/exit0。残りを成功にしない。既存select_combo_itemを再利用して直す。
+
+e362a32は4用途を説明付き2列のnative CheckBoxへ整理。選択mask/要件確認/保存/AIなし開始・取得同意は維持。restored projectのAPI確認とPortable build/publish0errors（既存picker3/trim2警告）、native用途画面は次の許可付き試行。frontend03 assembly/source fingerprintは各reportが正本。モデル・私物・通常DB・Alphaは使わない。

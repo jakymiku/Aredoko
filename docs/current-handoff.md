@@ -1,5 +1,15 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-29）
 
+
+## 2026-10-29e 継続checkpoint（以下より優先、作業中）
+
+- 起点120d217、remote branch/PR5 head一致・他AI更新なし。現在アプリsource **e362a32**。b81bbc3で一覧下部の読み込み範囲・全体選択数を整理し、範囲移動/一覧更新を一つのnative menuへ集約。frontend01の生成145PNGはLight/Dark各14checks・正常exit0。未保存タグ、検索条件、画面外選択、取消を維持。[技術記録](p3-continuous-browse.md)末尾。
+- ab1d812で通常検索0件の案内をファイル名・タグ向けに修正し、検索/フォルダ/棚への移動時に残るmenuを閉じる。94eac96で固定された読み上げ名を外し実際の案内を公開。e362a32で初回AI用途を説明付き2列へ整理。frontend03の案内文はnative確認済み。続く方式切替は試験側の二重peer選択で停止し、残りは未確認。既存の一意selector helperへ修正し、追加試行の許可待ち。初回frontend02の固定名FAILも保持する。
+- P6：36d43ccで検証セット作成前に選択folderとZIP内manifest/sums/entry集合・サイズを照合し、別ZIPの混入を拒否。生成6testsを基本Python3.11でPASS。全payload SHAの再実行済みとはしない。最新試用可能な受入済み配布物は引き続き**基本ZIP22/source68c0100**。新しいZIP23はfrontend03で作成/通常EXE確認の明示許可を受領済み、まだ未作成。
+- SandboxはOS再起動待ち（現在bootは機能有効化前）。guest起動/clean Windows受入なし。モデルruntimeの適用条項/供給元レビュー・実host・registryも未完。Core/Bootstrap/backendは無変更、260e577の1,441assertionsを照合して再利用。新WinUIはbuild/publish0errors、既存picker3/SDK trim2警告を保持。
+- **今回だけの制約**：利用者がPC使用中のため、GUI/GPU/負荷・focus変更は対象と範囲を示し許可後に実行。モニター消灯/shutdown/通常DB/Alpha更新なし。Actions・新規取得なし。次は残り案内/用途GUI→ZIP23通常入口→UI主軸の次の小単位。使用枠が少なくなる前に最終checkpoint/commit/pushを行う。これはロードマップ完了ではない。
+
+
 ## 2026-10-29 Sandbox有効化（ユーザー明示許可・再起動待ち）
 
 - ユーザーの「そっちでオンに出来ないかな？」を受け、通常のUAC昇格でDISM `/Online /Enable-Feature /FeatureName:Containers-DisposableClientVM /All /NoRestart`を実行。**exit3010、機能InstallState1、Windows再起動が必要**。自動再起動は抑止済み。証拠は `data/ai-ui/continuation-20261029d/sandbox-enable01.json` / `.log`。
