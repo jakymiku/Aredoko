@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--setup-recovery',action='store_true',help='Setup return plus safe recovery, diagnostic return and saved-profile restart state')
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
+    parser.add_argument('--setup-choice-layout',action='store_true',help='Combine contextual feedback with explained purpose choices; no acquisition or inference')
     parser.add_argument('--empty-guidance-only',action='store_true',help='UIA-only literal/AI-unavailable feedback and browse menu cleanup on navigation')
     parser.add_argument('--footer-actions-only',action='store_true',help='UIA-only range menu, retained selection/draft and refresh over145 generated PNGs')
     parser.add_argument('--folder-toolbar-only',action='store_true',help='UIA-only single folder return action and registration form access')
@@ -58,6 +59,7 @@ def main():
     if args.favorite_patch:args.detail_actions=True;args.uia_only=True
     if args.caption_menu_only:args.card_captions=True
     if args.card_captions:args.detail_polish=True
+    if args.setup_choice_layout:args.empty_guidance_only=True
     if args.empty_guidance_only:args.detail_polish=True
     if args.footer_actions_only:args.uia_only=True
     if args.folder_toolbar_only:args.detail_polish=True
@@ -184,7 +186,7 @@ def main():
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
         extras={}
-        if args.setup_plan or args.setup_return:
+        if args.setup_plan or args.setup_return or args.setup_choice_layout:
             from ai_acquisition_registry import load_trusted_specs
             extras['acquisition_specs']=load_trusted_specs(REPO)
         if args.video_content:
@@ -308,6 +310,10 @@ def main():
             from ui_empty_guidance_audit import audit
             report['empty_audit_sha256']=hashlib.sha256((REPO/'tools/ui_empty_guidance_audit.py').read_bytes()).hexdigest()
             audit(ui,tree,shot,report,check)
+            if args.setup_choice_layout:
+                from ui_setup_plan_audit import audit as audit_setup
+                report['setup_audit_sha256']=hashlib.sha256((REPO/'tools/ui_setup_plan_audit.py').read_bytes()).hexdigest()
+                audit_setup(ui,tree,shot,report,check,handler,target,check_layout=True)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.footer_actions_only:
             from ui_footer_actions_audit import audit
