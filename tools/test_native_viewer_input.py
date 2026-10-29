@@ -22,7 +22,11 @@ def main():
     parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--keyboard-controls',action='store_true',help='Only generated silent audio controls and image menu keyboard routing')
     parser.add_argument('--inspect-controls',action='store_true',help='With --keyboard-controls, inspect generated player UIA state only; never verify real keys')
+    parser.add_argument('--inspect-notices',action='store_true',help='Only compare a generated audio player temporary failure and successful retry, UIA only')
+    parser.add_argument('--inspect-autohide',choices=('automatic','always'),help='UIA-only timer behavior after a generated temporary failure/retry')
     args=parser.parse_args();front=args.frontend.resolve();target=args.output.resolve()
+    if args.inspect_autohide and not args.inspect_notices:parser.error('--inspect-autohide requires --inspect-notices')
+    if args.inspect_notices and not (args.inspect_controls and args.keyboard_controls):parser.error('--inspect-notices requires both control inspection flags')
     if args.inspect_controls and not args.keyboard_controls:parser.error('--inspect-controls requires --keyboard-controls')
     if (os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui') or
         not (front.is_relative_to(REPO/'dist') or front.is_relative_to(REPO/'data/ai-ui'))):parser.error('Dedicated Windows candidate and new evidence directory required')
@@ -30,7 +34,7 @@ def main():
     from PIL import Image,ImageDraw
     report={'pass':False,'checks':[],'screenshots':[],'visual_review':'pending','gpu_inference':False,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
-            'frontend_sha256':hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest(),'keyboard_controls':args.keyboard_controls,'control_state_only':args.inspect_controls,'physical_keyboard_attempted':False,'keyboard_control_pass':False}
+            'frontend_sha256':hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest(),'keyboard_controls':args.keyboard_controls,'control_state_only':args.inspect_controls,'physical_keyboard_attempted':False,'keyboard_control_pass':False,'notices_only':args.inspect_notices,'autohide_mode':args.inspect_autohide}
     env={**os.environ,'LOCALAPPDATA':str(target/'user'),'APPDATA':str(target/'user'),
          'WINAPP_UI_WORKFLOW_ID':'aredoko-viewer-input-'+secrets.token_hex(8)}
     user=ctypes.WinDLL('user32',use_last_error=True)
@@ -138,13 +142,24 @@ def main():
         ids={item['title']:item['id'] for item in cat.search()['items']}
         profiles=AIProfileSettings(target,target/'ai-settings.json',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
-        handler=production_handler(cat,secrets.token_hex(32),DisabledAI(),profiles=profiles,tagger=DisabledTagger(),instance_id=instance,runtime_preferences=target/'launch-settings.json')
+        test_token=secrets.token_hex(32)
+        handler=production_handler(cat,test_token,DisabledAI(),profiles=profiles,tagger=DisabledTagger(),instance_id=instance,runtime_preferences=target/'launch-settings.json')
+        manifest_faults={'fail_next':args.inspect_notices,'injected':0}
+        if args.inspect_notices:
+            get=handler.do_GET
+            route='/api/library/audio/'+str(ids['silent-controls.wav'])+'/manifest'
+            def temporary_manifest_failure(self):
+                if (self.path==route and self.valid_host() and self.headers.get('X-Aredoko-Token')==test_token and manifest_faults['fail_next']):
+                    manifest_faults['fail_next']=False;manifest_faults['injected']+=1
+                    return self.send(503,{'error':'Preview workers busy'})
+                return get(self)
+            handler.do_GET=temporary_manifest_failure
         handler.log_message=lambda *args:None
         server=OwnedHTTPServer(('127.0.0.1',8769),handler,bind_and_activate=False);server.allow_reuse_address=False
         server.socket.setsockopt(socket.SOL_SOCKET,socket.SO_EXCLUSIVEADDRUSE,1);server.server_bind();server.server_activate()
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         app_log=(target/'app.log').open('w',encoding='utf-8')
-        if args.inspect_controls:(target/'viewer-settings.json').write_text(json.dumps({'version':1,'wheel_up_advances':False,'always_show_controls':True}))
+        if args.inspect_controls:(target/'viewer-settings.json').write_text(json.dumps({'version':1,'wheel_up_advances':False,'always_show_controls':args.inspect_autohide!='automatic'}))
         proc=subprocess.Popen([str(front/'Aredoko.WinUI.exe'),'--ui-theme','dark','--viewer-settings',str(target/'viewer-settings.json')],cwd=front,env=env,stdout=app_log,stderr=subprocess.STDOUT)
         report['owned_pid']=proc.pid
         def main_window():
@@ -154,7 +169,13 @@ def main():
             main_hwnd=str(rows[0]['hwnd']);return True
         wait('owned main window',main_window)
         ui(main_hwnd,'wait-for','Item'+str(ids['a-center.png']),'-t','15000')
-        if args.keyboard_controls:
+        if args.inspect_notices:
+            from ui_player_keyboard_audit import audit_notices,audit_autohide
+            inspection=audit_autohide if args.inspect_autohide else audit_notices
+            observations=inspection(ui,tree,open_viewer,close_viewer,shot,report,lambda:viewer)
+            for name,value in observations:check(name,value)
+            check('one temporary authenticated manifest failure only',manifest_faults['injected']==1)
+        elif args.keyboard_controls:
             from ui_player_keyboard_audit import audit
             observations=audit(ui,tree,open_viewer,close_viewer,foreground,shot,wait,report,lambda:viewer)
             for name,value in observations:check(name,value)

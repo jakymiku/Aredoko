@@ -19,10 +19,10 @@ internal sealed class ViewerChromeController : IDisposable
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer timer;
     private readonly Grid root;
     private readonly Border toolbar;
-    private readonly ScrollViewer viewport;
+    private readonly UIElement viewport;
     private readonly Func<bool> keepVisible;
     private bool overToolbar,disposed;
-    public ViewerChromeController(Grid root,Border toolbar,ScrollViewer viewport,Func<bool> keepVisible)
+    public ViewerChromeController(Grid root,Border toolbar,UIElement viewport,Func<bool> keepVisible)
     {
         this.root=root;this.toolbar=toolbar;this.viewport=viewport;this.keepVisible=keepVisible;
         timer=root.DispatcherQueue.CreateTimer();timer.Interval=TimeSpan.FromSeconds(1);timer.IsRepeating=false;

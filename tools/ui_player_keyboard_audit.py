@@ -60,3 +60,45 @@ def audit(ui,tree,open_viewer,close_viewer,foreground,shot,wait,report,current_v
     report['keyboard_control_pass']=all(value for _,value in observations)
     report['keyboard_control_observations']=[{'name':name,'pass':value} for name,value in observations]
     return observations
+
+
+def audit_notices(ui,tree,open_viewer,close_viewer,shot,report,current_viewer):
+    """A real 503/retry on generated audio, no physical input or playback."""
+    observations=[]
+    open_viewer('silent-controls.wav','BtnOpenAudio','Aredoko — 音声再生')
+    viewer=current_viewer()
+    ui(viewer,'wait-for','VideoRetry','-p','IsEnabled','--value','True','-t','10000')
+    failed=tree(viewer)
+    observations.append(('temporary failure has visible retry guidance',not failed['VideoStatus']['isOffscreen'] and '少し待って再試行' in failed['VideoStatus']['name']))
+    shot('player-temporary-failure')
+    ui(viewer,'invoke','VideoRetry')
+    ui(viewer,'wait-for','VideoPlayPause','-p','IsEnabled','--value','True','-t','10000')
+    ready=tree(viewer)
+    geometry=lambda state:[state['VideoToolbar'][key] for key in ('x','y','width','height')]
+    report['notice_toolbar_geometry']={'failure':geometry(failed),'ready':geometry(ready)}
+    observations.append(('retry keeps toolbar position and height',all(abs(a-b)<=1 for a,b in zip(geometry(failed),geometry(ready)))))
+    observations.append(('successful retry clears notice and remains paused',('VideoStatus' not in ready or ready['VideoStatus']['isOffscreen']) and ready['VideoPlayPause']['name']=='再生'))
+    shot('player-after-retry');close_viewer()
+    return observations
+
+
+def audit_autohide(ui,tree,open_viewer,close_viewer,shot,report,current_viewer):
+    """Exercise real dispatcher timer and preference without mouse/key input."""
+    open_viewer('silent-controls.wav','BtnOpenAudio','Aredoko — 音声再生')
+    viewer=current_viewer()
+    ui(viewer,'wait-for','VideoRetry','-p','IsEnabled','--value','True','-t','10000')
+    time.sleep(1.3)
+    failure=tree(viewer)
+    observations=[('failure keeps retry controls available beyond hide delay',not failure['VideoToolbar']['isOffscreen'])]
+    shot('failure-controls-held')
+    ui(viewer,'invoke','VideoRetry')
+    ui(viewer,'wait-for','VideoPlayPause','-p','IsEnabled','--value','True','-t','10000')
+    expected=report['autohide_mode']=='automatic'
+    if expected:ui(viewer,'wait-for','VideoToolbar','-p','IsOffscreen','--value','True','-t','5000')
+    else:time.sleep(1.3)
+    current=tree(viewer)
+    offscreen='VideoToolbar' not in current or current['VideoToolbar']['isOffscreen']
+    observations.append(('automatic hide or always-visible preference is respected',offscreen==expected))
+    report['player_auto_hide']={'expected_hidden':expected,'observed_hidden':offscreen,'physical_input':False}
+    shot('automatic-hidden' if expected else 'always-visible');close_viewer()
+    return observations

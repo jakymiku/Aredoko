@@ -527,7 +527,7 @@ def main():
                 select('clip.mp4');open_video();wait('VideoStatus',shown_video)
                 tree=json.loads(ui('inspect','--json','--depth','16'));outer=next(n for n in nodes(tree) if n.get('automationId')=='VideoViewport')
                 move_owned(outer,.15,'VideoViewport');ui('wait-for','VideoPlayPause','--gone','-t','10000');shot(theme+'-video-controls-hidden')
-                move_owned(outer,.85,'VideoViewport');ui('wait-for','VideoPlayPause','-t','5000');shot(theme+'-video-controls-revealed');check(theme+' video chrome hides and reappears with mouse motion',True)
+                move_owned(outer,.99,'VideoViewport');ui('wait-for','VideoPlayPause','-t','5000');shot(theme+'-video-controls-revealed');check(theme+' video chrome hides and reappears with mouse motion',True)
                 move_owned(outer,.15,'VideoViewport');ui('wait-for','VideoPlayPause','--gone','-t','10000')
                 if keys('esc','VideoViewport'):
                     ui('wait-for','VideoPlayerDialog','--gone','-t','5000');focus_assert('BtnOpenVideo');check(theme+' video Escape closes while chrome is hidden',True)

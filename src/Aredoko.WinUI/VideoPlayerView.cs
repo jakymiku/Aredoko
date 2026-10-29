@@ -23,7 +23,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly int? initialPositionMs;
     private readonly bool isAudio;
     private readonly CancellationTokenSource lifetime = new();
-    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer hideTimer;
+    private readonly ViewerChromeController hideTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer positionTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer previewTimer;
     private readonly Slider seekBar = new() { Minimum=0, Maximum=1, SmallChange=1, LargeChange=10, StepFrequency=0.1, IsThumbToolTipEnabled=false, HorizontalAlignment=HorizontalAlignment.Stretch };
@@ -78,8 +78,6 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         itemTitle = titleText;
         this.initialPositionMs = initialPositionMs;
         this.isAudio = isAudio;
-        hideTimer = DispatcherQueue.CreateTimer(); hideTimer.Interval = TimeSpan.FromSeconds(2.5); hideTimer.IsRepeating = false;
-        hideTimer.Tick += (_, _) => { if (!disposed && !keyboardChrome && !seekHover && !busy && !failed) HideChrome(); };
         positionTimer = DispatcherQueue.CreateTimer(); positionTimer.Interval = TimeSpan.FromMilliseconds(200);
         positionTimer.Tick += (_, _) => SyncPosition();
         previewTimer=DispatcherQueue.CreateTimer();previewTimer.Interval=TimeSpan.FromMilliseconds(320);previewTimer.IsRepeating=false;
@@ -107,6 +105,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         var bottom = new StackPanel { Spacing = 4, HorizontalAlignment=HorizontalAlignment.Stretch }; bottom.Children.Add(seekBar);bottom.Children.Add(actions);
         toolbar.Child = bottom; Children.Add(toolbar);
         ViewerChromeController.AttachNotices(this,96,status);
+        hideTimer = new(this,toolbar,viewport,()=>keyboardChrome||seekHover||busy||failed);
         seekPreview.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
         seekTime.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         seekHint.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
@@ -171,22 +170,11 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private static void Identify(DependencyObject control, string id, string name)
     { AutomationProperties.SetAutomationId(control, id); AutomationProperties.SetName(control, name); }
 
-    private void ShowChrome()
-    {
-        if (disposed) return;
-        toolbar.Visibility = Visibility.Visible;
-        hideTimer.Stop(); if (!keyboardChrome && !busy && !failed) hideTimer.Start();
-    }
-
-    private void HideChrome()
-    {
-        HideSeekPreview();viewport.Focus(FocusState.Programmatic);
-        toolbar.Visibility = Visibility.Collapsed;
-    }
+    private void ShowChrome() { if (!disposed) hideTimer.Show(); }
 
     public void AttachNavigation(UIElement dialog)
     {
-        dialog.AddHandler(PointerMovedEvent, new PointerEventHandler((_, _) => { keyboardChrome = false; ShowChrome(); }), true);
+        dialog.AddHandler(PointerMovedEvent, new PointerEventHandler((_, _) => { keyboardChrome = false; }), true);
         dialog.PreviewKeyDown += (_, args) =>
         {
             if (args.Key == VirtualKey.Escape) { args.Handled = true; CloseRequested?.Invoke(this, EventArgs.Empty); return; }
@@ -436,7 +424,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     {
         if (disposed) return;
         disposed = true;
-        hideTimer.Stop();previewTimer.Stop();
+        hideTimer.Dispose();previewTimer.Stop();
         lifetime.Cancel();
         request?.Cancel();
         ClearMedia();
