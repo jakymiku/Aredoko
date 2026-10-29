@@ -420,7 +420,7 @@ public sealed partial class MainPage : Page
         };
     }
     private async Task LoadAsync(bool reuseSession=false) {
-        CloseBrowseMenus();
+        CloseBrowseMenus();EmptyAIRecovery.Visibility=Visibility.Collapsed;
         // The accepted destination owns the heading even while its request is
         // pending or fails. Never label old, disabled rows as the new results.
         UpdateLibraryHeading();Count.Text="検索中…";
@@ -559,7 +559,30 @@ public sealed partial class MainPage : Page
                 Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。");
             }
         }
-        catch(Exception ex) { if(searches.IsCurrent(version)){lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,"error");Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=false;Next.IsEnabled=false;Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。":origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。":selectedMode is >0 and <4 or 7 or 8 or 9?(ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")?"AI環境（モデル・Python）が未導入です。ファイル名・タグの文字検索、棚・整理、閲覧はそのまま利用できます。\n「設定」→「AI検索の準備」で導入手順を確認できます。":$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"):"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";Failure(ex);} }
+        catch(Exception ex)
+        {
+            if(searches.IsCurrent(version))
+            {
+                var missingAI=origin is null&&ex is not ResultSessionException&&(selectedMode is >0 and <4 or 7 or 8 or 9)&&
+                    (ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません"));
+                lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;
+                lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();
+                rows=[];active=null;if(!folderSettingsActive)Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;
+                detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
+                ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";
+                Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();
+                GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,missingAI?"no_results":"error");
+                Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=Next.IsEnabled=false;
+                Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。"
+                    :origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AI索引の対象を確認してください。"
+                    :missingAI?"AI検索にはモデルと実行環境の準備が必要です。\nファイル名・タグ検索と閲覧は、AIなしでも使えます。"
+                    :selectedMode is >0 and <4 or 7 or 8 or 9?$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"
+                    :"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";
+                EmptyAIRecovery.Visibility=missingAI?Visibility.Visible:Visibility.Collapsed;
+                if(missingAI){Notice("AIの準備が必要です");AppLog.Error(ex);}
+                else Failure(ex);
+            }
+        }
         finally {if(searches.IsCurrent(version)){Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;Items.IsEnabled=true;}}
     }
     private string EmptyScopeGuidance()
@@ -1125,6 +1148,12 @@ public sealed partial class MainPage : Page
     private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;if(ready&&!dialogOpen)Query.Focus(FocusState.Keyboard);}
     private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0,true);}
+    private async void EmptyLiteralSearch_Click(object sender,RoutedEventArgs e)
+    {
+        searchTimer.Stop();
+        populating=true;SearchMode.SelectedIndex=0;populating=false;
+        await NavigateAsync(0,true);
+    }
     private void CancelSearch_Click(object sender,RoutedEventArgs e)
     {
         searchTimer.Stop();

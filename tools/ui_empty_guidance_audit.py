@@ -17,7 +17,7 @@ def audit(ui,tree,shot,report,check):
     menu_hidden('new query dismisses the browse popup');shot('literal-empty-guidance')
     mode('ModeSemantic');ui('wait-for','TxtCount','--value','—','-t','10000')
     ui('wait-for','TxtEmpty','--value','AI','--contains','-t','10000');text=inspect_element(ui,'TxtEmpty')['name']
-    check('unavailable AI keeps its setup guidance','AI' in text and '設定' in text);shot('ai-unavailable-guidance')
+    check('unavailable AI keeps its setup guidance','AI' in text and ('設定' in text or '準備' in text));shot('ai-unavailable-guidance')
     mode('ModeLiteral');ready();ui('wait-for','TxtCount','--value','0 件','-t','10000')
     check('return to literal search clears the misleading AI guidance','AI索引' not in inspect_element(ui,'TxtEmpty')['name'])
     ui('set-value','TxtQuery','image-0.png');ui('invoke','BtnSearch');ready();ui('wait-for','TxtCount','--value','1 件','-t','10000')
