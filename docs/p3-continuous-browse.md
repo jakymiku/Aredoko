@@ -124,3 +124,5 @@ b81bbc3は読み込み済み範囲/LibrarySelection全体の選択数を固定fo
 ab1d812はliteralの不一致をAI準備の案内から分離し、共通CloseBrowseMenusを検索/直接folder/shelf/navigationで適用。frontend02/empty-guidance01では視覚文言は正しいがUIA Nameが固定案内メッセージであった。94eac96で固定名だけ外し、TxtEmpty ID/LiveSettingを維持。frontend03/guidance-setup02では実文言/検索時popup終了を確認し、次のComboBoxが同じpeerを二重列挙して試験側停止/exit0。残りを成功にしない。既存select_combo_itemを再利用して直す。
 
 e362a32は4用途を説明付き2列のnative CheckBoxへ整理。選択mask/要件確認/保存/AIなし開始・取得同意は維持。restored projectのAPI確認とPortable build/publish0errors（既存picker3/trim2警告）、native用途画面は次の許可付き試行。frontend03 assembly/source fingerprintは各reportが正本。モデル・私物・通常DB・Alphaは使わない。
+
+- 追加許可後guidance-setup03は20checks/exit0。literal/AI案内、検索・folder・shelfへのpopup終了、用途2列、保存mask15とAIなし0/idleを確認し5PNG目視。先行FAILを消さず、生成2PNGのSHA保持。モデル取得/GPU/通常データなし。

@@ -195,3 +195,10 @@ Core/tests/BootstrapはZIP15/source0edbd40から無変更を機械照合し、�
 - 全てUIA-only。Basic22のwelcome/登録scan選択/保存後一覧/再起動後ガイドの4PNG目視。別Windows/Sandbox/HC/物理DPI/実入力/公開AI runtimeは未検証。Basic20の初期capture欠けを通常表示の再現済み不具合へ広げない。
 - 別環境用の生成検証セットと作成CLIを追加。[現行手順](portable-windows-validation.md)を参照。アプリ/モデルはそのセットへ含めず、自動で合格へ変更しない。
 - 証拠は `data/ai-ui/continuation-20261029d/basic22-final-review.json`、`basic22-onboarding01`、`basic21-relocation01`、`basic22-validation-kit01.log`。新規DL/Actions/GPU/通常DB・Alpha変更なし。
+
+
+## 2026-10-29e 基本ZIP23（一覧操作・案内・用途説明）
+
+- frontend/application source e362a32、packaging source e3c126b、826files/661,869,018bytes。ZIP348,507,822bytes/SHA256 `9362eb86dbe3af75c59ca79474485057f474e7d3a0412ab072664d83065cb650`。dist/portable-basic-20261029-23/Aredoko/Aredoko.exe。footer/空案内/初回AI用途2列を収録。旧候補/Alphaを上書きしない。
+- 既存runtime/Bootstrapを再利用し封印全entry/ZIP/同梱check成功。Core/Bootstrap無変更を照合し1,441assertionsを再利用。通常入口は生成PNG1枚・専用DBで起動/終了/1回再起動11checks・所有4exit0・2PNG目視。新規download/GPU/通常DB/Alphaなし。全CPU34/全回帰の新規実施とはしない。
+- 生成検証セット23は6データfileだけ、アプリZIPとのmetadata一致を新CLIで確認。SHA `6d714eed42654a508e2ef33c3698cad274b74e9943295d3436120295ca1cd1d6`。別Windowsでの実受入、runtime公開条項/host/registryは未完。証拠 continuation-20261029e/basic23-final-review.json、basic23-startup01、preparation/log。後続のAI空画面直接操作はこの候補に含まない。

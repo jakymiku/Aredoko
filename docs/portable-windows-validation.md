@@ -1,6 +1,11 @@
 # PortableのWindows準備・検証（2026-10-21）
 
 
+## 2026-10-29e 現在の生成確認セット
+
+基本ZIP23の対になる `dist/portable-validation-20261029-23.zip` を作成。アプリZIP SHAは `9362eb86dbe3af75c59ca79474485057f474e7d3a0412ab072664d83065cb650`、セットSHAは `6d714eed42654a508e2ef33c3698cad274b74e9943295d3436120295ca1cd1d6`。作成時に選択directoryとZIPのmanifest/sums/entry集合・サイズを照合し、別候補の組合せを拒否する（生成6tests PASS）。これはclean Windows実行結果ではない。旧22も保存する。Sandboxは機能有効化後のOS再起動待ち。
+
+
 ## 2026-10-29：開発環境のないWindowsでの受入手順（現行）
 
 **本PCでの通常入口成功と、別Windowsでの受入を区別する。** 基本ZIP22/source68c0100はホストの通常入口から空DB→登録/一覧取得/タグ保存→終了/再起動まで成功。BasicZIP21では日本語/空白を含む別配置から同じユーザー設定も保持した。10/29のread-only確認ではSandbox targetは未起動/stale、OSの`Containers-DisposableClientVM`はInstallState2、既存guestへ接続できず。OS機能の有効化/再起動/VMの新規取得はしていない。別環境の起動確認は未実施。証拠は `data/ai-ui/continuation-20261029d/sandbox-readiness01.json`、新しい候補を使うときはsource/ZIP SHAを記録する。
