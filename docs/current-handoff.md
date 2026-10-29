@@ -1,5 +1,15 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-29）
 
+## 2026-10-29d 作業中checkpoint（以下より優先）
+
+- 起点8f741f7、remoteのAGENTS追記だけの6322fc1をclean fast-forwardで取り込み。過剰防御/抽象化を避ける新ルールを確認。UI改善＋P6配布の並行指示で実装を再開し、古い「今回は文書だけ」は適用しない。モニターへ一度だけdesktop SC_MONITORPOWER消灯を送信（monitor-off01.json）、wake/電源設定変更/shutdownなし。
+- **UI**：cfff134で検索と種類/方式を同じ行、表示操作を見出しへ移し、幅不足時は各群を折り返す。54a08ffで音声等の空白枠へテーマ対応native icon、実画像取得時は非表示、既存Image先頭/再利用/サイズ変更・取消を保持。frontend02/source54a08ffは生成6媒体でLight/Dark各31checks/exit0、両grid/list・未保存タグと保存を確認。sourcecfff134の先行各28を二重合算しない。1100px詳細時の見出しclip27px（自然73px）を目視/矩形で発見し、257f74cで子の自然幅から算定へ修正。frontend03/source257f74cの幅ケースは23checks/exit0、1100pxも見出し73pxを保持し2PNG目視。
+- **試験側**：wrap01は検索変更で閉じた詳細へcloseを送ったFAIL、02は選択直後の全tree walkがstaleで停止。source修正を装わず履歴保存。更新完了後の再選択・ID指定待機に直した03は21checks/exit0まで通ったが見出しclipは後の目視で発見し上記製品修正へ進んだ。実pointer/keyの合格とはしない。
+- **P6**：84a593dでPortable出力へUTF8 BOMの「はじめに.txt」と簡潔なUSER_GUIDEを追加し、通常入口/フォルダ一覧取得/任意AI/更新/診断用空DBを説明。基本Python3.11の既存Portable梱包/ZIP1件PASS。Sandboxは未起動/stale・OS feature InstallState2、guest受入は未実施/OS変更なし。既存portable-windows-validationへ新規Windowsの最小手順を追記した。
+- **依存読取**：4046880で明示frontend/PIDだけのnative module inspectorを追加し、不一致拒否も確認。frontend02の専用UIAで158modules、WinUI本体は同梱先、開発SDK/NuGetからの読込を観測せず。外部3件はIME/securityのhost拡張で配布依存と混同しない。clean Windows/全codec/AI runtime公開の成功ではない。証拠root data/ai-ui/continuation-20261029d/、生pathsはignored reportのみ。
+- **次**：frontend03の見出し欠け修正を幅ケースだけ確認→右詳細の棚操作/タグ欄の情報密度へ。P6は最終の新基本ZIPにguideとUIを収録し、通常入口/再起動をまとめる。Alphaは旧ZIP10のまま。最終の候補/commit/未検証/二系統の次を終了時に更新する。
+
+
 ## 2026-10-29 ユーザー決定：UI改善を主軸に配布・別環境起動も並行（以下より優先）
 
 - ユーザーは「一旦使い心地と見やすさの開発へシフト、次の開発指示から」と明示。**今回は文書更新のみで、アプリ実装・GUI/GPU試験・Alpha更新は行わない。** 起点`705194e`、fetch後remote/PR #5 head ref一致・cleanを確認。今回commitは本書のGit履歴。

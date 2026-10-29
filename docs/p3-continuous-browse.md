@@ -94,3 +94,9 @@ ZIP14/source29114e6を、専用2PNG/DB・UIAだけでLight追加1試行とDark1�
 frontend01/source2f01d50、生成2PNG/専用DB・UIAだけでLight/Dark各25checks/各7PNG目視/正常exit0。60/180%のgrid、list、棚の両layoutでtitle全名とカード内bounds・1行、棚所属、未保存タグ保持を確認。表示サイズの倍率は物理DPIの受入とはしない。captionサイズ調整に伴う全5万件性能は未計測。
 
 上記画像では表示サイズflyoutがUIAによるnavigation後も旧位置に残ることを観測した。`cbc1c9e`でナビ/表示切替時に明示Hideし、frontend02の未確認部分だけを `card-menu-dark01` で7checks/2PNG目視/exit0確認。全25項目を無変更で繰り返さず、旧画像/報告も保持した。証拠 `continuation-20261029b/card-captions-{light01,dark01}`、`card-menu-dark01`、`caption-visual-review.json`。通常DB/Alpha/媒体原本は変更していない。
+
+### 2026-10-29d：検索・表示操作の2段化と媒体アイコン
+
+cfff134で表示操作を見出しへ、種類/検索方法をquery横へ移し、グループ単位で幅に応じて折り返す。54a08ffで音声等の空白previewにnative/テーマ対応iconを追加、実画像が来たら隠す。Imageを先頭に保ち、仮想化/サイズ変更/取消/未保存編集を保持。frontend02の生成6媒体はLight/Dark各31checks/所有exit0、各list/details/grid PNGを目視。先行frontend01各28の結果は二重合算しない。
+
+幅1600/1100と長い検索方法の試験03は21checks/exit0だが、目視で1100詳細時の見出しclip（自然73px→27px）を発見。257f74cでstar列に制約された親幅から子の自然幅合計へ変更し、frontend03のheader-fit-dark01は23checks/exit0・1600/1100の2PNG目視、両幅73pxを保持した。Search切替で詳細が閉じた後にcloseした01、選択直後のtree walkがstaleだった02は試験側FAILとして保持し、更新待機/明示IDへ変更。実pointer/key/全DPIは確認していない。証拠root `data/ai-ui/continuation-20261029d/`。Source/assembly/test SHAは各reportを参照する。
