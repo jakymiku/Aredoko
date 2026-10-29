@@ -1,5 +1,12 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-29）
 
+## 2026-10-29c 継続中checkpoint（以下より優先）
+
+- cleanな`62d2c1a`からfetchし、branch/PR #5 head ref一致・他AI更新なしを確認。ユーザーは今回GUI/GPUの事前確認不要、終了時のモニター復帰も不要と明示。shutdownはしない。
+- P6の前回「次の1件」を実装中。固定38nativeのCPython component契約、元の通知13件/105,350bytes＋commit固定source receipt、元packを保全する新規pack builder、static auditorへの接続を追加。新model/依存binary取得・native code実行はない。通知原文は公式公開文書から取得し、mpdecimalだけ元headerの先頭license commentを無変更抽出。SQLiteは日付付きsnapshotを明示。
+- 生成9tests（原本/既存出力保全、改変/欠落/偽承認/範囲、copy中・最終検証の取消）と既存CRT/native/gap関連21件PASS。実候補は `data/ai-ui/continuation-20261029c/cpython-runtime01` へコピー/全照合中、完成値は終了checkpointで記録する。既存runtime/基本ZIP16/Alpha/通常DBは変更しない。supplier provenance/notice coverage/公開承認はfalseを維持し、単なるmapped=0を公開受入にしない。
+- monitor-off01はC#未使用field warningで指示前停止。修正後off02は消灯通知が来たが直後にWindowsが再点灯。復帰指示は送っておらず、power plan/security policy/他appは変更していない。終了時にもう一度消灯指示を送る。常駐の強制消灯loopは作らない。
+
 ## 2026-10-29b 終了checkpoint（以下より優先）
 
 - **基準/Git**：起点`5f9ab9f`。並行Work `a6f6e04346a7fb3f91ef86abdbfdec3eb3c049dc` の初期化前cached類似検証をレビューし、`376ecfa` で双方の履歴を維持して統合。handoffの同位置追記だけ競合し、双方を保存した。基本Python3.11の関連HTTP3件PASS。新branch/PR/main merge/force-push/Actionsなし。最終アプリsource **`292fdf2a2a121caf70e088c0753a8417d682250f`**、本引き継ぎcommitは `git log -1 -- docs/current-handoff.md`。PR metadata connector不調は継続し、remote branch/PR #5 head refで照合する。

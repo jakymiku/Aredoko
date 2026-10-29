@@ -55,6 +55,14 @@ class NativeComponentTests(unittest.TestCase):
         self.assertEqual(sum(row['native_component_owner'] is not None for row in result['entries']),12)
         self.assertEqual(before,{path:path.read_bytes() for path in self.root.rglob('*') if path.is_file()})
 
+    def test_isolated_cli_reads_selected_component_without_importing_selected_runtime(self):
+        import subprocess
+        target=self.base/'native-cli.json'
+        result=subprocess.run([sys.executable,'-I','-B',str(ROOT/'tools/inspect_runtime_native.py'),
+            '--source',str(self.root),'--notices',str(self.notices),'--output',str(target)],capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stderr)
+        value=json.loads(target.read_text());self.assertEqual(value['unmapped_count'],1)
+        self.assertFalse(value['source_executed']);self.assertFalse(value['redistribution_approved'])
     def test_changed_metadata_payload_and_notice_are_rejected_even_at_equal_size(self):
         for path in (self.directory/'component.json',self.root/'msvcp140_1.dll',self.directory/'NOTICE.txt'):
             before=path.read_bytes();path.write_bytes(b'x'*len(before))

@@ -40,6 +40,12 @@ This document contains licensing notices and acknowledgements for third-party so
 
 ## 3. Python Runtime & Open-Source Libraries
 
+### CPython and bundled Windows native libraries
+
+The local CPython 3.11.9 AI-runtime candidate retains its original installed `LICENSE.txt`. Supplementary original notices, attribution and commit-pinned source receipts are stored in [config/runtime-notices/cpython311-20261029](config/runtime-notices/cpython311-20261029/sources.json), including OpenSSL, libffi, bzip2, XZ/liblzma, zlib, Expat, mpdecimal, Tcl/Tk and a dated SQLite copyright snapshot. The mpdecimal text is its original leading license comment; its full source hash and extraction are recorded.
+
+The publisher tool binds these texts to explicit native-file hashes in a **new** runtime candidate. This does not establish supplier provenance, complete linked-code coverage or redistribution approval. The runtime remains optional and unregistered for public download; these publisher inputs are not added to the basic ZIP. See [native notice inventory](docs/runtime-notice-inventory.md).
+
 ### PyTorch
 - **License**: BSD 3-Clause License
 - **Copyright**: (c) 2016-present, Meta Platforms, Inc. and affiliates.
