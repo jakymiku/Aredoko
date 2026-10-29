@@ -403,7 +403,7 @@ public sealed partial class MainPage : Page
     }
     private async void Reconnect_Click(object sender,RoutedEventArgs e)
     {
-        BrowseActionsFlyout.Hide();
+        CloseBrowseMenus();
         if(!await transitions.WaitAsync(0))return;
         try{if(await ConfirmDiscardAsync())await ConnectAsync();}finally{transitions.Release();}
     }
@@ -420,6 +420,7 @@ public sealed partial class MainPage : Page
         };
     }
     private async Task LoadAsync(bool reuseSession=false) {
+        CloseBrowseMenus();
         // The accepted destination owns the heading even while its request is
         // pending or fails. Never label old, disabled rows as the new results.
         UpdateLibraryHeading();Count.Text="検索中…";
@@ -472,7 +473,7 @@ public sealed partial class MainPage : Page
                     :resultGroup==1&&result.GroupBoundary is null?"参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像の見た目／ファイル名・タグの意味で区切りを指定してください。"
                     :resultGroup==0&&result.OtherTotal>0?"区切り以上の候補はありません。類似度の区切りを下げるか、参考候補を表示してください。"
                     :AISearchStatus.Guidance(AISearchStatus.Ready,query:query))
-                :query.Length>0?"候補がありません。検索条件やAI索引の状態を確認してください。":EmptyScopeGuidance();
+                :query.Length>0?"ファイル名・タグに一致する作品はありません。検索語や絞り込み条件を変更してください。":EmptyScopeGuidance();
             var explanation=
                 method.IsPageText ? "抽出・保存済みのページ本文から、同一ページ内で全語一致する作品を検索しています。「本を開く」で先頭の一致ページへ移動できます。"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsTagSemantic ? "未承認の英語タグ候補を含む索引から、言葉の意味が近い作品を表示しています。確定タグとは混ざりません。類似度は正解率ではありません。承認・却下・再生成の後はAI索引を更新してください。"
@@ -1185,9 +1186,10 @@ public sealed partial class MainPage : Page
     }
     private void AIMatchedOnly_Changed(object sender,RoutedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private void Kind_Changed(object sender,SelectionChangedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private void CloseBrowseMenus(){ItemSizeFlyout.Hide();BrowseActionsFlyout.Hide();}
     private void BrowseActions_Click(object sender,RoutedEventArgs e)=>ItemSizeFlyout.Hide();
-    private async void Previous_Click(object sender,RoutedEventArgs e){BrowseActionsFlyout.Hide();await NavigateAsync(PreviousBrowsePage());}
-    private async void Next_Click(object sender,RoutedEventArgs e){BrowseActionsFlyout.Hide();await NavigateAsync(NextBrowsePage());}
+    private async void Previous_Click(object sender,RoutedEventArgs e){CloseBrowseMenus();await NavigateAsync(PreviousBrowsePage());}
+    private async void Next_Click(object sender,RoutedEventArgs e){CloseBrowseMenus();await NavigateAsync(NextBrowsePage());}
     private void RestoreNavigation()
     {
         populating=true;
@@ -1203,7 +1205,7 @@ public sealed partial class MainPage : Page
     private async void Nav_SelectionChanged(NavigationView sender,NavigationViewSelectionChangedEventArgs args)
     {
         if(!ready||populating||args.SelectedItem is not NavigationViewItem item)return;
-        ItemSizeFlyout.Hide();BrowseActionsFlyout.Hide();
+        CloseBrowseMenus();
         var next=item.Tag?.ToString()??"";
         if(next=="folders"){await OpenFolderHubAsync();return;}
         if(next=="shelf"){await OpenShelfHubAsync();return;}
@@ -1228,7 +1230,7 @@ public sealed partial class MainPage : Page
         try{ViewerOptions.SaveLibraryView(!tiles);}
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
         {Notice("表示方法を保存できません",ex.Message,InfoBarSeverity.Warning);AppLog.Error(ex);return;}
-        ItemSizeFlyout.Hide();BrowseActionsFlyout.Hide();tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
+        CloseBrowseMenus();tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
         if(shelfHubOpen)RenderShelfLayout();else ReflowBrowse(()=>{RenderRows();RestoreSelection();});
     }
     private void OpenDetails_Click(object sender,RoutedEventArgs e)
@@ -1592,7 +1594,7 @@ public sealed partial class MainPage : Page
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
-            CloseShelfHubCore();
+            CloseBrowseMenus();CloseShelfHubCore();
             await RefreshSearchRootsAsync();
             if(checkedFolderIds.Count==0&&selectedSearchRoots is not null)
                 foreach(var id in selectedSearchRoots.Where(id=>knownRoots.Any(r=>r.Enabled&&r.Id==id)))

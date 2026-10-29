@@ -53,7 +53,7 @@ public sealed partial class MainPage
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
-            searches.Next();similarityCancellation?.Cancel();
+            CloseBrowseMenus();searches.Next();similarityCancellation?.Cancel();
             CloseFolderHubCore();CloseShelfHubCore();ClearSimilarity();
             resultWindow?.Dispose();resultWindow=null;
             var previous=resultSession;resultSession=null;await CloseResultSessionAsync(previous);
