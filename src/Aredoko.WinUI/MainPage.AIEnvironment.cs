@@ -19,7 +19,7 @@ public sealed partial class MainPage
             dialogOpen=true;
             var panel=new StackPanel{Spacing=12};
             var modelScope=new ComboBox{Header="モデル保存先の対象",HorizontalAlignment=HorizontalAlignment.Stretch};
-            foreach(var (label,role) in new (string,string?)[]{("すべてのモデル（共通）",null),("画像・文字検索","embedding"),("画像のタグ付け（WD Tagger）","tagger"),("検索意図の解析","intent")})
+            foreach(var (label,role) in new (string,string?)[]{("すべてのモデル（共通）",null),("内容検索（文章・画像・動画・音声）","embedding"),("画像のタグ付け（WD Tagger）","tagger"),("検索意図の解析","intent")})
                 modelScope.Items.Add(new ComboBoxItem{Content=label,Tag=role});
             var modelTargets=new Dictionary<string,AIModelTarget>();
             void AddModel(AIModelTarget target)

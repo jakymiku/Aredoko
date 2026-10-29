@@ -591,7 +591,9 @@ public sealed partial class MainPage : Page
         if(selectedShelfIds is not null)return "この棚には作品がありません。作品の詳細で所属する棚を選択できます。";
         if(selectedSearchRoots is not null)return "選択したフォルダに表示できる作品がありません。スキャンや接続状態を確認するか、検索範囲を解除してください。";
         if(view=="history")return "閲覧履歴はありません。作品を開くと、ここに表示されます。";
-        if(view=="favorites")return "お気に入りはまだありません。作品の右クリックメニューや詳細から登録できます。";
+        if(view=="favorites")return knownRoots.Any(root=>root.Enabled&&root.Favorite)
+            ?"お気に入りの作品はまだありません。上のお気に入りフォルダを開くか、作品を右クリックして登録できます。"
+            :"お気に入りはまだありません。作品の右クリックメニューや詳細から登録できます。";
         return knownRoots.Count>0?"作品がありません。登録フォルダのスキャンや接続状態を確認してください。":"フォルダ管理からフォルダを登録し、スキャンしてください。";
     }
     private readonly Dictionary<ListViewItem, Action> containerCleanup = new();
