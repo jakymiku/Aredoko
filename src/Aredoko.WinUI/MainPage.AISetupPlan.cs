@@ -45,7 +45,7 @@ public sealed partial class MainPage
         {
             var selected=AISetupSelection.Normalize(ViewerOptions.Value.AISetupFeatures);long version=0;
             var panel=new StackPanel{Spacing=12};
-            panel.Children.Add(new TextBlock{Text="使いたい機能を選んでください。AIは任意です。ファイル名・タグ検索と閲覧は、AIを導入しなくても使えます。動画は映像や動画内の音声、音声・音楽は音声ファイルの内容から探せます。索引は対象ごとに作成します。",TextWrapping=TextWrapping.Wrap});
+            panel.Children.Add(new TextBlock{Text="探したい内容を選んでください。ファイル名・タグの文字検索と閲覧は、AIなしでも使えます。",TextWrapping=TextWrapping.Wrap});
             var summary=new TextBlock{Text="機能を選び、「必要な環境を確認」を押してください。",TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};
             AutomationProperties.SetAutomationId(summary,"AISetupPlanSummary");
             var nextSteps=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};AutomationProperties.SetAutomationId(nextSteps,"AISetupNextSteps");
@@ -60,10 +60,22 @@ public sealed partial class MainPage
             var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(progress,"AISetupPlanProgress");AutomationProperties.SetName(progress,"AI準備の確認中");
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="使いたいAI機能",PrimaryButtonText="索引・詳細設定へ",CloseButtonText="後で",DefaultButton=ContentDialogButton.None,IsPrimaryButtonEnabled=false};
             AutomationProperties.SetAutomationId(dialog,"AISetupPlanDialog");
-            foreach(var (label,index) in new[]{("意味検索",0),("類似画像検索",1),("動画の内容検索",2),("音声・音楽の内容検索",3)})
+            var choices=new Grid{ColumnSpacing=12,RowSpacing=8};
+            choices.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            choices.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            choices.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});choices.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+            foreach(var (label,description,index) in new[]{
+                ("ファイル名・タグの意味","言い換えや曖昧な言葉で探します。",0),
+                ("画像の見た目・類似検索","画像・表紙・ページの情景や、似た画像を探します。",1),
+                ("動画の内容","映像の場面や、動画内の音声から探します。",2),
+                ("音声・音楽の内容","音声ファイルの話題や音の特徴から探します。",3)})
             {
-                var choice=new CheckBox{Content=label,IsChecked=(selected&(1<<index))!=0};
+                var content=new StackPanel{Spacing=4};
+                content.Children.Add(new TextBlock{Text=label,TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]});
+                content.Children.Add(new TextBlock{Text=description,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
+                var choice=new CheckBox{Content=content,IsChecked=(selected&(1<<index))!=0,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch,VerticalAlignment=VerticalAlignment.Top};
                 AutomationProperties.SetAutomationId(choice,"SetupFeature"+AISetupSelection.Features[index]);
+                AutomationProperties.SetName(choice,label);AutomationProperties.SetHelpText(choice,description);
                 void Changed()
                 {
                     selected=choice.IsChecked==true?selected|(1<<index):selected&~(1<<index);
@@ -71,9 +83,10 @@ public sealed partial class MainPage
                     summary.Text="選択を変更しました。「必要な環境を確認」で更新できます。";nextSteps.Text="";
                     recovery.Visibility=Visibility.Collapsed;diagnostics.IsEnabled=false;
                 }
-                choice.Checked+=(_,_)=>Changed();choice.Unchecked+=(_,_)=>Changed();panel.Children.Add(choice);
+                choice.Checked+=(_,_)=>Changed();choice.Unchecked+=(_,_)=>Changed();
+                Grid.SetRow(choice,index/2);Grid.SetColumn(choice,index%2);choices.Children.Add(choice);
             }
-            panel.Children.Add(review);panel.Children.Add(progress);panel.Children.Add(summary);
+            panel.Children.Add(choices);panel.Children.Add(review);panel.Children.Add(progress);panel.Children.Add(summary);
             var actions=new StackPanel{Spacing=8};actions.Children.Add(download);actions.Children.Add(existing);actions.Children.Add(skip);panel.Children.Add(actions);
             panel.Children.Add(nextSteps);panel.Children.Add(recovery);
             dialog.Content=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
