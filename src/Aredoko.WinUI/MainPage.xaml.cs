@@ -1985,7 +1985,7 @@ public sealed partial class MainPage : Page
         if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
         try
         {
-            if(folderSettingsActive&&folderDraft is not null&&!folderDraft.TargetIds.SequenceEqual(targetIds))
+            if(Dirty||(folderSettingsActive&&folderDraft is not null&&!folderDraft.TargetIds.SequenceEqual(targetIds)))
                 if(!await ConfirmDiscardAsync())return;
             OpenFolderSettingsPanel(targetIds,focusUnregister);
         }
