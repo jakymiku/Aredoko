@@ -196,3 +196,14 @@ root LICENSEにはlibffi/bzip2/Tclの該当語句が見つかる一方、OpenSSL
 読み取り参照した[CPython 3.11.9のWindows external一覧](https://raw.githubusercontent.com/python/cpython/v3.11.9/PCbuild/get_externals.bat)は上記OpenSSL/SQLiteと整合し、libffi3.4.4/bzip2 1.0.8/xz5.2.5/zlib1.3.1/TclTk8.6.12.1を宣言する。後者の全byte対応は未証明で、実物の版として捏造しない。[同版のlicense原典](https://raw.githubusercontent.com/python/cpython/v3.11.9/Doc/license.rst)、[OpenSSL同版の原文](https://raw.githubusercontent.com/openssl/openssl/openssl-3.0.13/LICENSE.txt)、[SQLiteの公式copyright案内](https://sqlite.org/copyright.html)も参照URLとして固定。上流scriptは一切実行せず、通知原文をpackへ追加した扱いにしない。公式参照の確認は公開承認とは別。
 
 次はこの版/URL/ファイルSHAからnative通知のcomponent契約と同梱原文を具体化し、全対象と対応が揃った新規packだけを封印する。単なるLICENSE文字列一致で自動承認しない。新model/依存binaryの追加取得が必要な場合はAGENTSの許可要件を守り、公式文書の読取・通知原文と区別する。既存pack/基本ZIP16を上書きしない。
+
+
+### 2026-10-29c：CPython通知を新規packへ同梱、全nativeを追跡
+
+`9fc485b` で固定CPython component契約/新規pack builder/static auditor接続を追加。公式通知13件105,350bytesを `config/runtime-notices/cpython311-20261029/` に保持し、各取得URLはcommitへ固定（SQLiteだけ日付付きsnapshot）。mpdecimalは同版headerの先頭license commentを無変更抽出し、元source全体SHAと抽出方法を記録。追加model/依存binary取得・上流script/selected code実行はない。原文の空白/改行とOpenSSL AUTHORSのMarkdown見出しは原文どおり保持し、`6c0b85e` のexact directory属性でGitの誤検知だけを区別する。アプリcodeの警告を抑制していない。
+
+`tools/prepare_cpython_runtime_notices.py` は指定したparent manifest/38file SHA/観測版と通知全件を検証し、新規出力だけへコピーする。元LICENSE/全wheel/CRT等のpayloadを変更せず、元LICENSEとreference.json/sources.json/原文/NOTICE/per-file bindingsを追加。取消/失敗時は自身の最終markerだけを除き、原本と部分証拠を保存する。生成9testsと既存CRT/native/gap関連21件（基本Python3.11）PASS。既存native auditorの `-I` helper解決もCLIで確認。
+
+実候補 `data/ai-ui/continuation-20261029c/cpython-runtime01` は **23,936files/4,950,977,993bytes**、manifest **`07b65b6b7a27caeaed8f344f4644f4725172bb4004792e453e89dc4cbb0ff736`**。全コピー元SHA＋出力全SHAにPASS、旧parent23,918payload entryはすべて同一、追加18fileのみ。static importsでは335 nativeがPython RECORD285＋MSVC12＋CPython38に対応し、unmapped0/unknown PE0/静的VC不足0。**supplier_binary_hashes_verified/notice_coverage_reviewed/redistribution_approvedはfalse、components_pending_notice_review=2を維持**。対応表が完成しても全リンクコードや権利/clean Windowsを承認した意味ではない。バイナリ不変なので成功済みmodel/GPU/importは反復していない。証拠 `cpython-prepare01.log` / `cpython-native-real01.json` / `cpython-final-review01.json`。
+
+同候補を基本Python3.11で圧縮し、ZIP **3,013,440,816bytes/SHA bfaf332d5947faae971eda241c342238c8711ee216fb9dd798d3fd5bf4613576**、2分割後の全member/結合SHAもPASS。`.part001` **1,900,000,000bytes/ecf16e6bbf0aaf0c76cc572d10f7872797f20531cbadee0653686165e4bdc018**、`.part002` **1,113,440,816bytes/9bcd4be425f9d8531115f2b505585dad4967e9dec3538b508bdcd9c8bd21bd03**。旧ZIPからの差は圧縮環境等も異なるため性能改善値にしない。`runtime-transport02/` / `runtime-transport-parts02/parts.json`。外部配信/upload/catalog登録0、既存pack/基本ZIP16/Alpha不変。

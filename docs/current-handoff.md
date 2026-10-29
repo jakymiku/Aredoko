@@ -3,8 +3,9 @@
 ## 2026-10-29c 継続中checkpoint（以下より優先）
 
 - cleanな`62d2c1a`からfetchし、branch/PR #5 head ref一致・他AI更新なしを確認。ユーザーは今回GUI/GPUの事前確認不要、終了時のモニター復帰も不要と明示。shutdownはしない。
-- P6の前回「次の1件」を実装中。固定38nativeのCPython component契約、元の通知13件/105,350bytes＋commit固定source receipt、元packを保全する新規pack builder、static auditorへの接続を追加。新model/依存binary取得・native code実行はない。通知原文は公式公開文書から取得し、mpdecimalだけ元headerの先頭license commentを無変更抽出。SQLiteは日付付きsnapshotを明示。
-- 生成9tests（原本/既存出力保全、改変/欠落/偽承認/範囲、copy中・最終検証の取消）と既存CRT/native/gap関連21件PASS。実候補は `data/ai-ui/continuation-20261029c/cpython-runtime01` へコピー/全照合中、完成値は終了checkpointで記録する。既存runtime/基本ZIP16/Alpha/通常DBは変更しない。supplier provenance/notice coverage/公開承認はfalseを維持し、単なるmapped=0を公開受入にしない。
+- **P6を一単位完了**：`9fc485b`/`6c0b85e` のCPython component契約・通知13件105,350bytes・新規pack builder・static auditor接続が完了。生成9＋関連21（基本Python3.11）PASS。実 `cpython-runtime01` は23,936files/4,950,977,993bytes、manifest `07b65b6b7a27caeaed8f344f4644f4725172bb4004792e453e89dc4cbb0ff736`、旧parent全payload entry同一/追加18通知fileのみ。335nativeのinventory対応は0gapだが、再配布/供給元証明/notice coverage承認はfalse・pending component2。ZIP3,013,440,816bytesと2part全member/結合SHAを確認。公開host/registry/clean Windowsは未完。[正本](runtime-notice-inventory.md)末尾と `data/ai-ui/continuation-20261029c/` の各report。model/GPU成功は不変なので反復しない。
+- **UI操作の局所修正**：`053d022` で音量/シークSliderとButtonのnative keyをpreview shortcutより優先し、画像/本の設定menu表示中は背景の送りを抑制。Portable build0 errors/既存WUI1001×3、APIはrestored projectで確認。実キーreproは前面化不可→locked/secure desktopをwinappが明示し入力前停止、両所有exit0。許可不足ではなくdesktop readiness不足で、実キーを合格にしない。既存ZIP16のUIA-only生成無音WAVでは音量75/消音とpause独立・原本不変・正常exit0を確認（getter schema誤認は修正）。新sourceの実キーは未確認、最終候補のpublish/UIAを後でまとめる。[U2追記](usability-followup-20261025.md)と `keyboard-baseline01/02` / `player-uia-state01/02`。Source buildと旧SUTを混同しない。
+- **次の独立作業**：P6の公開判断待ちだけで止めず、P7の動画区間検索を既存の承認済み生成代表素材で小さく評価する。旧赤/青動画2本の単純接続試験は反復せず、sceneと一致時刻を対象にする。物理入力はunlock確認まで行わない。次の具体的成果は終了checkpointで更新する。
 - monitor-off01はC#未使用field warningで指示前停止。修正後off02は消灯通知が来たが直後にWindowsが再点灯。復帰指示は送っておらず、power plan/security policy/他appは変更していない。終了時にもう一度消灯指示を送る。常駐の強制消灯loopは作らない。
 
 ## 2026-10-29b 終了checkpoint（以下より優先）
