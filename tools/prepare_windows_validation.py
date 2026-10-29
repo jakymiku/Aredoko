@@ -19,7 +19,16 @@ def main():
     manifest=verify_release(release)
     if manifest.get('ai_runtime_bundled') is not False or manifest.get('models_bundled') is not False:parser.error('Basic ZIP only')
     app_zip=plain_path(release.parent/'Aredoko-windows-x64.zip')
-    identity={'application_zip':app_zip.name,'zip_bytes':app_zip.stat().st_size,'zip_sha256':digest(app_zip),'manifest_sha256':digest(release/'manifest.json'),'clean_windows_verified':False}
+    # Pair the selected sealed directory with its archive before publishing a
+    # checklist. Payload hashing remains the release builder's responsibility.
+    with zipfile.ZipFile(app_zip) as application:
+        expected={'Aredoko/'+row['path'] for row in manifest['entries']}|{'Aredoko/manifest.json','Aredoko/sha256sums.txt'}
+        names=application.namelist()
+        if len(names)!=len(expected) or set(names)!=expected:raise ValueError('Application ZIP inventory does not match the selected release')
+        for name in ('manifest.json','sha256sums.txt'):
+            if application.read('Aredoko/'+name)!=(release/name).read_bytes():raise ValueError('Application ZIP metadata does not match the selected release: '+name)
+        if any(application.getinfo('Aredoko/'+row['path']).file_size!=row['bytes'] for row in manifest['entries']):raise ValueError('Application ZIP sizes do not match the selected release')
+    identity={'application_zip':app_zip.name,'zip_bytes':app_zip.stat().st_size,'zip_sha256':digest(app_zip),'manifest_sha256':digest(release/'manifest.json'),'archive_metadata_matches_release':True,'clean_windows_verified':False}
     storage_parent(out);out.mkdir();media=out/'media';media.mkdir()
     first=png(color=(88,111,190));second=png(color=(73,133,111))
     (media/'blue-image.png').write_bytes(first);(media/'green-image.png').write_bytes(second)

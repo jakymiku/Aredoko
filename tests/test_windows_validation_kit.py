@@ -1,0 +1,58 @@
+"""Archive/directory identity contracts for the generated validation kit."""
+import contextlib,io,json,sys,tempfile,unittest,warnings,zipfile
+from pathlib import Path
+from unittest.mock import patch
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
+import prepare_windows_validation as tool
+
+
+class WindowsValidationKitTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory(prefix='aredoko-validation-');self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name);self.release=self.root/'dist/basic/Aredoko';self.release.mkdir(parents=True)
+        self.out=self.root/'dist/validation';self.zip=self.release.parent/'Aredoko-windows-x64.zip'
+        self.manifest={'models_bundled':False,'ai_runtime_bundled':False,'entries':[{'path':'payload.txt','bytes':7,'sha256':'unused-existing-verifier'}]}
+        (self.release/'manifest.json').write_bytes(json.dumps(self.manifest).encode())
+        (self.release/'sha256sums.txt').write_bytes(b'sealed sums\n')
+        self.members={'Aredoko/manifest.json':(self.release/'manifest.json').read_bytes(),'Aredoko/sha256sums.txt':b'sealed sums\n','Aredoko/payload.txt':b'payload'}
+
+    def write_zip(self,members=None,duplicate=False):
+        with zipfile.ZipFile(self.zip,'w') as z:
+            for name,value in (self.members if members is None else members).items():z.writestr(name,value)
+            if duplicate:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore',UserWarning);z.writestr('Aredoko/payload.txt',b'payload')
+
+    def run_tool(self):
+        with patch.object(tool,'REPO',self.root),patch.object(tool,'verify_release',return_value=self.manifest),patch.object(sys,'argv',['prepare_windows_validation','--release',str(self.release),'--output',str(self.out)]),contextlib.redirect_stdout(io.StringIO()):
+            tool.main()
+
+    def rejected(self):
+        with self.assertRaises(ValueError):self.run_tool()
+        self.assertFalse(self.out.exists());self.assertFalse(self.out.with_suffix('.zip').exists())
+
+    def test_matching_archive_builds_data_only_kit_without_claiming_acceptance(self):
+        self.write_zip();before=self.zip.read_bytes();self.run_tool()
+        candidate=json.loads((self.out/'candidate.json').read_text());self.assertTrue(candidate['archive_metadata_matches_release']);self.assertFalse(candidate['clean_windows_verified'])
+        result=json.loads((self.out/'result-template.json').read_text());self.assertIsNone(result['normal_exe_start']);self.assertFalse(result['clean_windows_verified'])
+        with zipfile.ZipFile(self.out.with_suffix('.zip')) as z:
+            self.assertEqual(len(z.namelist()),6);self.assertFalse(any(Path(name).suffix.lower() in ('.exe','.cmd','.ps1','.py') for name in z.namelist()))
+        self.assertEqual(self.zip.read_bytes(),before)
+
+    def test_other_build_manifest_is_rejected_before_output(self):
+        self.write_zip({**self.members,'Aredoko/manifest.json':b'other build'});self.rejected()
+
+    def test_other_build_sums_are_rejected_before_output(self):
+        self.write_zip({**self.members,'Aredoko/sha256sums.txt':b'other sums'});self.rejected()
+
+    def test_duplicate_payload_member_is_rejected(self):
+        self.write_zip(duplicate=True);self.rejected()
+
+    def test_changed_member_size_is_rejected(self):
+        self.write_zip({**self.members,'Aredoko/payload.txt':b'longer payload'});self.rejected()
+
+    def test_unexpected_member_is_rejected(self):
+        self.write_zip({**self.members,'Aredoko/extra.txt':b'extra'});self.rejected()
+
+
+if __name__=='__main__':unittest.main()
