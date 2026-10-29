@@ -1,6 +1,6 @@
 """Mixed generated media only: geometry and editing through the native toolbar."""
 
-def audit(ui,tree,shot,report,check,catalog,first_id,*,input_guard,uia_only=False):
+def audit(ui,tree,shot,report,check,catalog,first_id,*,input_guard,uia_only=False,resize=None,wrap_only=False):
     report['authorization']='Explicit GUI approval required: generated mixed media, no playback/GPU/models'
     def geometry(name):
         state=tree();query=state['TxtQuery'];kind=state['CmbKind'];mode=state['CmbSearchMode'];actions=[state[key] for key in ('BtnLayout','BtnItemSize','BtnDetails')]
@@ -18,6 +18,31 @@ def audit(ui,tree,shot,report,check,catalog,first_id,*,input_guard,uia_only=Fals
         report.setdefault('toolbar_geometry',{})[name]={'query_height':query['height'],
             'query_to_list_gap':state['ItemList']['y']-query['y']-query['height'],
             'list_height':state['ItemList']['height'],'actions_inline':inline}
+    if wrap_only:
+        from native_ui_tools import select_combo_item
+        for nav,heading in [('NavFolders','登録フォルダ'),('NavShelf','棚')]:
+            ui('invoke',nav);ui('wait-for','LibraryHeading','--value',heading,'-t','10000')
+            state=tree()
+            check(heading+': library view actions hidden',all(k not in state or state[k].get('isOffscreen',True) for k in ('BtnLayout','BtnItemSize','BtnDetails')))
+        ui('invoke','NavAll');ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+        ui('invoke','Item'+str(first_id),'--action','select');ui('invoke','BtnDetails')
+        ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000')
+        select_combo_item(ui,'CmbSearchMode','ModeText')
+        for width in (1600,1100):
+            resize(width,820);geometry('width-'+str(width));shot('width-'+str(width))
+        ui('invoke','BtnCloseDetails');select_combo_item(ui,'CmbSearchMode','ModeLiteral');resize(1200,820)
+        ui('wait-for','Item'+str(first_id),'-t','10000')
+        check('search mode returns to literal with generated results',True)
+        report['physical_input_requested']=False
+        return
+    for row in catalog.search()['items']:
+        if row['kind']=='audio':
+            ui('wait-for','PreviewPlaceholder'+str(row['id']),'-t','10000')
+            check('audio without artwork has a named media icon',not tree()['PreviewPlaceholder'+str(row['id'])]['isOffscreen'])
+        elif row['kind']=='image':
+            ui('wait-for','PreviewStatus'+str(row['id']),'--gone','-t','10000')
+            state=tree();key='PreviewPlaceholder'+str(row['id'])
+            check('decoded image keeps real artwork instead of placeholder',key not in state or state[key]['isOffscreen'])
     geometry('full-width');shot('compact-toolbar')
     report['physical_input_requested']=not uia_only
     if uia_only:ui('invoke','Item'+str(first_id),'--action','select')

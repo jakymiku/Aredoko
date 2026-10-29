@@ -13,6 +13,7 @@
    <Setter Property="BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}"/>
    <Setter Property="BorderThickness" Value="2"/>
   </Style>
+  <Style x:Key="MediaPlaceholderIconStyle" TargetType="SymbolIcon"><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
   <Style x:Key="MediaTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}"><Setter Property="FontWeight" Value="SemiBold"/></Style>
   <Style x:Key="MediaMetadataStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}"><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
  </Page.Resources>

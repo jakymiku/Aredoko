@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--audio-content',action='store_true',help='Generated WAV + supplied CPU encoder; no playback or GPU')
     parser.add_argument('--audio-search-only',action='store_true',help='Prepare generated audio via CPU; native scenario only switches mode and checks result time')
     parser.add_argument('--audio-similarity-only',action='store_true',help='Cached audio origin similarity and navigation only, supplied CPU vectors')
+    parser.add_argument('--toolbar-wrap-only',action='store_true',help='UIA-only width/long search label and folder/shelf header transitions')
     parser.add_argument('--compact-toolbar',action='store_true',help='Generated mixed media, toolbar geometry and explicit detail draft preservation')
     parser.add_argument('--video-audio-content',action='store_true',help='Generated video PCM, supplied CPU vectors, no playback or GPU')
     parser.add_argument('--bulk-favorite-patch',action='store_true',help='Generated 745-item library; retained bulk favorites and fallback')
@@ -42,6 +43,7 @@ def main():
     if not (front.is_relative_to(REPO/'data/ai-ui') or front.is_relative_to(REPO/'dist')) or not (front/'Aredoko.WinUI.exe').is_file():parser.error('Dedicated published frontend required')
     if args.real_fixture and not args.global_edge:parser.error('Real fixture requires the bounded global-edge case')
     if args.bulk_favorite_patch:args.continuous=True
+    if args.toolbar_wrap_only:args.compact_toolbar=True;args.uia_only=True
     if args.compact_toolbar:args.detail_actions=True
     if args.viewer_choice:args.detail_actions=True
     if args.setup_recovery:args.setup_return=True
@@ -61,6 +63,7 @@ def main():
     if args.video_content:report['authorization']='Explicit per-run permission: generated silent MP4s, dedicated DB, CPU vectors; no playback/GPU/models/normal DB/Alpha'
     if args.detail_actions:report['authorization']='2026-10-24 explicit human approval: contextual detail GUI on dedicated fixtures, Light/Dark; no AI/GPU inference'
     report['theme']=args.theme
+    if args.compact_toolbar:report['toolbar_audit_sha256']=hashlib.sha256((REPO/'tools/ui_compact_toolbar_audit.py').read_bytes()).hexdigest()
     report['detail_audit_sha256']=hashlib.sha256((REPO/'tools/ui_detail_actions_audit.py').read_bytes()).hexdigest()
     report['app_assembly_sha256']=hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()
     report['source_worktree_diff_sha256']=hashlib.sha256(subprocess.check_output(['git','diff','--','src'],cwd=REPO)).hexdigest()
@@ -87,6 +90,14 @@ def main():
         owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
         if owner.value!=proc.pid:raise RuntimeError('Owned HWND changed')
         return cli(*args,'-w',hwnd)
+    def resize(width,height):
+        owner=wintypes.DWORD();user.GetWindowThreadProcessId(int(hwnd),ctypes.byref(owner))
+        if owner.value!=proc.pid:raise RuntimeError('Owned resize target changed')
+        user.SetWindowPos.argtypes=[wintypes.HWND,wintypes.HWND,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,wintypes.UINT]
+        user.GetDpiForWindow.argtypes=[wintypes.HWND];user.GetDpiForWindow.restype=wintypes.UINT
+        scale=user.GetDpiForWindow(int(hwnd))/96
+        if not user.SetWindowPos(int(hwnd),None,0,0,round(width*scale),round(height*scale),0x16):raise ctypes.WinError(ctypes.get_last_error())
+        time.sleep(.3)
     def tree():return {n['automationId']:n for n in nodes(json.loads(ui('inspect','--depth','18','--json'))) if n.get('automationId')}
     def shot(name):
         path=target/(name+'.png');ui('screenshot',*(() if args.uia_only else ('--focus',)),'--output',path);report['screenshots'].append(str(path));path.with_suffix('.json').write_text(json.dumps(tree(),ensure_ascii=False,indent=2),encoding='utf-8')
@@ -253,7 +264,7 @@ def main():
             check("generated sources unchanged",before==sources());report["pass"]=True
         elif args.compact_toolbar:
             from ui_compact_toolbar_audit import audit
-            audit(ui,tree,shot,report,check,cat,first['id'],input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only)
+            audit(ui,tree,shot,report,check,cat,first['id'],input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only,resize=resize,wrap_only=args.toolbar_wrap_only)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.bulk_favorite_patch:
             from ui_favorite_patch_audit import audit_bulk

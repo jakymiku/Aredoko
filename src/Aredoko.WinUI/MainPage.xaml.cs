@@ -647,7 +647,13 @@ public sealed partial class MainPage : Page
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(text, 1);
         }
-        content.Children.Add(image); content.Children.Add(text);
+        // Keep Image as the first child: resizing/recycling already owns it.
+        var symbol=row.Kind switch { "audio"=>Symbol.Audio,"video"=>Symbol.Video,"book" or "archive"=>Symbol.Library,"image"=>Symbol.Pictures,_=>Symbol.Document };
+        var placeholder=new Viewbox { Width=32,Height=32,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,IsHitTestVisible=false,
+            Child=new SymbolIcon(symbol) { Style=(Style)Resources["MediaPlaceholderIconStyle"] } };
+        AutomationProperties.SetAutomationId(placeholder,$"PreviewPlaceholder{row.Id}");
+        AutomationProperties.SetName(placeholder,MediaKindFilter.DisplayName(row));
+        content.Children.Add(image);content.Children.Add(placeholder);content.Children.Add(text);
         item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
         item.ContextFlyout=SimilarityMenu(row);
         UpdateSelectionFrame(item);
@@ -673,15 +679,16 @@ public sealed partial class MainPage : Page
                 var bitmap = await thumbnails.GetAsync(row, cancellation, edge);
                 if (cancellation.IsCancellationRequested || disposed || version != thumbnailVersion) return;
                 image.Source = bitmap;
+                placeholder.Visibility=bitmap is null?Visibility.Visible:Visibility.Collapsed;
                 previewStatus.Text = bitmap is null ? "プレビューなし" : "";
-                previewStatus.Visibility = bitmap is null ? Visibility.Visible : Visibility.Collapsed;
+                previewStatus.Visibility = bitmap is null && row.Kind!="audio" ? Visibility.Visible : Visibility.Collapsed;
             }
             catch (OperationCanceledException) { }
         }
         image.Loaded += async (_, _) => await RefreshThumbnailAsync(force: true);
         content.SizeChanged += (_, _) => ConstrainCardCaption(content,text);
         image.SizeChanged += async (_, _) => { ConstrainCardCaption(content,text); await RefreshThumbnailAsync(); };
-        image.Unloaded += (_, _) => { ++thumbnailVersion; requestedEdge=0; visible?.Cancel();visible?.Dispose();visible=null;image.Source = null; };
+        image.Unloaded += (_, _) => { ++thumbnailVersion; requestedEdge=0; visible?.Cancel();visible?.Dispose();visible=null;image.Source = null;placeholder.Visibility=Visibility.Visible; };
         // Recycled containers must release requests before receiving another row.
         containerCleanup[item] = () =>
         {
