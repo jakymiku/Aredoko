@@ -126,3 +126,12 @@ ab1d812はliteralの不一致をAI準備の案内から分離し、共通CloseBr
 e362a32は4用途を説明付き2列のnative CheckBoxへ整理。選択mask/要件確認/保存/AIなし開始・取得同意は維持。restored projectのAPI確認とPortable build/publish0errors（既存picker3/trim2警告）、native用途画面は次の許可付き試行。frontend03 assembly/source fingerprintは各reportが正本。モデル・私物・通常DB・Alphaは使わない。
 
 - 追加許可後guidance-setup03は20checks/exit0。literal/AI案内、検索・folder・shelfへのpopup終了、用途2列、保存mask15とAIなし0/idleを確認し5PNG目視。先行FAILを消さず、生成2PNGのSHA保持。モデル取得/GPU/通常データなし。
+
+
+### 2026-10-29e：AI未導入からの復帰・棚の絞り込み
+
+3e0ec2bは既存のAI未導入判定に限り、空画面から用途選択/同じ語でファイル名・タグ検索へ直行する操作を追加。通常の接続異常/期限切れ/類似失敗は従来のerror表示と診断を保持。検索開始時に復帰ボタンを隠し、順位/範囲/原本は変えない。frontend04のempty-ai-recovery01は11checks/exit0・2PNG目視、生成2PNG/専用DB/UIA-only。準備画面の往復、文字検索への復帰、取得/owner0を確認した。
+
+68e2718は共通棚選択へ名前filter、表示件数/全選択数/表示外数を追加。HashSetで選択を保持し、絞り込みで消えた所属を適用時に落とさない。既存64棚上限、未知ID保全、取消/明示保存を維持。shelf-filter01は取消/draft保持/適用前DB不変まで成功し、保存の実文言「保存しました」に対し旧期待「保存済み」で停止。failure画像とDBの[1,74,75]/tag保存を確認し、製品保存失敗にはしない。
+
+f7b733aで取得画面をモデル/実行環境と任意タグ付けの短い説明にし、既定無制限の速度設定をExpanderへ。復旧guideの重複closeをnative一つへ統一。frontend06/shelf-acquisition02は成功済み取消を省いて残り保存/再表示・表示外所属・取得画面・速度展開・復旧closeを12checks/exit0、4PNG目視。実download/backup開始は0、棚初期設定/一括routeの個別GUI/64件入力/HC/DPIは未実施。証拠root continuation-20261029e、ui-recovery-shelf-review01.json。
