@@ -242,8 +242,8 @@ def run_gui_stage(target_dir):
         report['screenshots'].append(str(backup_shot))
 
         # Close backup guide dialog
-        ui('wait-for', 'BtnCloseBackupGuide', '-t', '5000')
-        ui('invoke', 'BtnCloseBackupGuide')
+        ui('wait-for', 'CloseButton', '-t', '5000')
+        ui('invoke', 'CloseButton')
         time.sleep(1)
 
         report['pass'] = True

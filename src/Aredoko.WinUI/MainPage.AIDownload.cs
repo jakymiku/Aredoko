@@ -12,7 +12,7 @@ public sealed partial class MainPage
         :item.ModelTarget?.Role switch
         {
             "tagger"=>"画像タグ付けモデル（"+item.Name+"）",
-            "embedding"=>"画像・文章検索モデル（"+item.Name+"）",
+            "embedding"=>"内容検索モデル（"+item.Name+"）",
             _=>item.Name+"（モデル）"
         };
 
@@ -29,14 +29,17 @@ public sealed partial class MainPage
             var information=new TextBlock{Text="取得できる環境を確認しています。",TextWrapping=TextWrapping.Wrap};
             var license=new HyperlinkButton{Content="ライセンスを確認",Visibility=Visibility.Collapsed};
             var speed=new NumberBox{Header="速度上限（MB/秒、0で無制限）",Value=0,Minimum=0,Maximum=1000000,SmallChange=1};
-            var consent=new CheckBox{Content="容量とライセンスを確認し、この環境を取得する"};
+            var consent=new CheckBox{Content="容量とライセンスを確認し、選択したファイルを取得する"};
             var status=new TextBlock{TextWrapping=TextWrapping.Wrap};var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};
             var destination=new TextBox{Header="取得した環境",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};
             var select=new Button{Content="配置済みの環境を指定",Visibility=Visibility.Collapsed};var refresh=new Button{Content="状態を更新"};
             foreach(var (control,id) in new (DependencyObject,string)[]{(choice,"AIDownloadCatalog"),(information,"AIDownloadInformation"),(license,"AIDownloadLicense"),(speed,"AIDownloadSpeed"),(consent,"AIDownloadConsent"),(status,"AIDownloadStatus"),(progress,"AIDownloadProgress"),(destination,"AIDownloadDestination"),(select,"AIDownloadSelect"),(refresh,"AIDownloadRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(progress,"AI環境の取得進捗");
-            panel.Children.Add(new TextBlock{Text="取得中も閲覧・文字検索を利用できます。取得後に使用する環境を指定し、次回起動時に反映します。",TextWrapping=TextWrapping.Wrap});
-            foreach(var control in new UIElement[]{choice,information,license,speed,consent,progress,status,destination,select,refresh})panel.Children.Add(control);
+            var downloadSettings=new Expander{Header="速度制限（既定は制限なし）",Content=speed,HorizontalAlignment=HorizontalAlignment.Stretch};
+            AutomationProperties.SetAutomationId(downloadSettings,"AIDownloadSettings");
+            var introduction=new TextBlock{Text="AI検索には検索モデルと実行環境が必要です。画像タグ付けモデルは追加機能です。取得後に使う環境を指定し、再起動して反映します。",TextWrapping=TextWrapping.Wrap};
+            AutomationProperties.SetAutomationId(introduction,"AIDownloadIntroduction");panel.Children.Add(introduction);
+            foreach(var control in new UIElement[]{choice,information,license,consent,downloadSettings,progress,status,destination,select,refresh})panel.Children.Add(control);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI環境の取得",PrimaryButtonText="取得・再開",IsPrimaryButtonEnabled=false,SecondaryButtonText="中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=FormScrollContent.Wrap(panel),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}};
             AutomationProperties.SetAutomationId(dialog,"AIDownloadDialog");

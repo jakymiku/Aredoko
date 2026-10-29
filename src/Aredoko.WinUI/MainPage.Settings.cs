@@ -135,10 +135,6 @@ public sealed partial class MainPage
             AutomationProperties.SetAutomationId(offline,"BackupRecoveryAdvanced");panel.Children.Add(offline);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップと復旧ガイド",CloseButtonText="閉じる",Content=panel};
             AutomationProperties.SetAutomationId(dialog,"BackupGuideDialog");
-            var closeBtn = new Button { Content = "閉じる", HorizontalAlignment = HorizontalAlignment.Right };
-            AutomationProperties.SetAutomationId(closeBtn, "BtnCloseBackupGuide");
-            closeBtn.Click += (_, _) => dialog.Hide();
-            panel.Children.Add(closeBtn);
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
             await dialog.ShowAsync();

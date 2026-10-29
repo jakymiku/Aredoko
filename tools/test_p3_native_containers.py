@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--setup-recovery',action='store_true',help='Setup return plus safe recovery, diagnostic return and saved-profile restart state')
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
+    parser.add_argument('--shelf-picker-remaining',action='store_true',help='Only remaining shelf save/reopen, then acquisition explanations and recovery-guide footer; no jobs')
     parser.add_argument('--shelf-picker-filter',action='store_true',help='UIA-only shelf filtering retains hidden memberships and unsaved tags')
     parser.add_argument('--empty-ai-recovery',action='store_true',help='UIA-only direct AI setup and literal-search recovery on generated images')
     parser.add_argument('--setup-choice-layout',action='store_true',help='Combine contextual feedback with explained purpose choices; no acquisition or inference')
@@ -61,6 +62,7 @@ def main():
     if args.favorite_patch:args.detail_actions=True;args.uia_only=True
     if args.caption_menu_only:args.card_captions=True
     if args.card_captions:args.detail_polish=True
+    if args.shelf_picker_remaining:args.shelf_picker_filter=True
     if args.shelf_picker_filter:args.detail_polish=True
     if args.empty_ai_recovery:args.detail_polish=True
     if args.setup_choice_layout:args.empty_guidance_only=True
@@ -193,7 +195,7 @@ def main():
         if args.shelf_picker_filter:
             from ui_shelf_filter_audit import prepare
             report['shelf_filter_fixture']=prepare(cat)
-        if args.setup_plan or args.setup_return or args.setup_choice_layout:
+        if args.setup_plan or args.setup_return or args.setup_choice_layout or args.shelf_picker_remaining:
             from ai_acquisition_registry import load_trusted_specs
             extras['acquisition_specs']=load_trusted_specs(REPO)
         if args.video_content:
@@ -316,7 +318,11 @@ def main():
         elif args.shelf_picker_filter:
             from ui_shelf_filter_audit import audit
             report['shelf_audit_sha256']=hashlib.sha256((REPO/'tools/ui_shelf_filter_audit.py').read_bytes()).hexdigest()
-            audit(ui,tree,shot,report,check,cat)
+            audit(ui,tree,shot,report,check,cat,remaining=args.shelf_picker_remaining)
+            if args.shelf_picker_remaining:
+                from ui_acquisition_guidance_audit import audit as audit_guidance
+                report['acquisition_guidance_sha256']=hashlib.sha256((REPO/'tools/ui_acquisition_guidance_audit.py').read_bytes()).hexdigest()
+                audit_guidance(ui,tree,shot,report,check,handler)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.empty_ai_recovery:
             from ui_empty_ai_recovery_audit import audit
