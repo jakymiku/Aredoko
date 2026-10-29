@@ -17,7 +17,7 @@ public sealed partial class MainPage
         dialogOpen=true;string? destination=null;
         try
         {
-            var panel=new StackPanel{Spacing=16};
+            var panel=new StackPanel{Spacing=12};
             var theme=new ComboBox{Header="表示テーマ",HorizontalAlignment=HorizontalAlignment.Stretch};
             theme.Items.Add("Windowsの設定に合わせる");theme.Items.Add("ライト");theme.Items.Add("ダーク");
             theme.SelectedIndex=ViewerOptions.Value.Theme switch{"light"=>1,"dark"=>2,_=>0};
@@ -44,7 +44,9 @@ public sealed partial class MainPage
             try{var setup=await api.GetAsync("api/library/ai/setup");savedVerification=setup["verify_ai_runtime"]?.GetValue<bool>()??true;verification.IsChecked=savedVerification;verification.IsEnabled=true;}
             catch{verificationHint.Text="バックエンドに接続できません。整合性チェックの設定は変更できません。";}
             var savedText=new TextBlock{TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(savedText,"SettingsStatus");
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="設定",PrimaryButtonText="保存",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)}};
+            var scroll=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)};
+            AutomationProperties.SetAutomationId(scroll,"SettingsScroll");
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="設定",PrimaryButtonText="保存",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=scroll};
             AutomationProperties.SetAutomationId(dialog,"SettingsDialog");
             // Preserve the existing UI Automation identifier on the native footer button.
             var saveStyle=new Style{TargetType=typeof(Button),BasedOn=(Style)Application.Current.Resources["AccentButtonStyle"]};
@@ -71,9 +73,16 @@ public sealed partial class MainPage
                 catch(Exception ex){savedText.Text="保存できません: "+ex.Message;}
                 finally{dialog.IsPrimaryButtonEnabled=true;deferral.Complete();}
             };
-            panel.Children.Add(wheel);panel.Children.Add(hint);panel.Children.Add(advanced);panel.Children.Add(savedText);
+            panel.Children.Add(wheel);panel.Children.Add(hint);
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
+            panel.Children.Add(new TextBlock{Text="ライブラリ・AI",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],Margin=new Thickness(0,4,0,0)});
+            var tools=new Grid{ColumnSpacing=8,RowSpacing=8};
+            tools.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            tools.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            for(var row=0;row<3;row++)tools.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+            AutomationProperties.SetAutomationId(tools,"SettingsTools");
+            var toolIndex=0;
             foreach(var (label,id,target) in new[]{
                 ("使い方・初回設定","BtnGettingStarted","help"),
                 ("AI検索の準備","BtnAIIndex","ai"),
@@ -83,8 +92,9 @@ public sealed partial class MainPage
                 ("診断情報を表示・コピー","BtnDiagnostics","diagnostics")})
             {
                 var button=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(button,id);
-                button.Click+=(_,_)=>{destination=target;dialog.Hide();};panel.Children.Add(button);
+                button.Click+=(_,_)=>{destination=target;dialog.Hide();};Grid.SetRow(button,toolIndex/2);Grid.SetColumn(button,toolIndex%2);tools.Children.Add(button);toolIndex++;
             }
+            panel.Children.Add(tools);panel.Children.Add(advanced);panel.Children.Add(savedText);
             await dialog.ShowAsync();
             await Task.WhenAny(closedTcs.Task, Task.Delay(500));
         }

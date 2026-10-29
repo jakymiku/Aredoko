@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--setup-recovery',action='store_true',help='Setup return plus safe recovery, diagnostic return and saved-profile restart state')
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
+    parser.add_argument('--settings-layout-only',action='store_true',help='UIA-only settings action grid, footer save and reopen')
     parser.add_argument('--detail-fields-only',action='store_true',help='UIA-only wrapped tags and inline shelf picker without repeating captions')
     parser.add_argument('--detail-polish',action='store_true',help='UIA-only two generated PNGs: deduplicated filenames, bounded long title and draft preservation')
     parser.add_argument('--card-captions',action='store_true',help='UIA-only library/shelf caption slots and 60/180 percent size changes')
@@ -52,6 +53,7 @@ def main():
     if args.favorite_patch:args.detail_actions=True;args.uia_only=True
     if args.caption_menu_only:args.card_captions=True
     if args.card_captions:args.detail_polish=True
+    if args.settings_layout_only:args.detail_polish=True
     if args.detail_fields_only:args.detail_polish=True
     if args.detail_polish:args.uia_only=True
     if args.setup_plan or args.setup_return:args.detail_actions=True;args.uia_only=True
@@ -292,6 +294,11 @@ def main():
             removed=audit(ui,cli,tree,shot,report,check,cat,media,target,proc.pid,hwnd,input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only)
             check('generated sources match the declared scope',{key:value for key,value in before.items() if key!=removed}==sources())
             report['pass']=True
+        elif args.settings_layout_only:
+            from ui_settings_layout_audit import audit
+            report['settings_audit_sha256']=hashlib.sha256((REPO/'tools/ui_settings_layout_audit.py').read_bytes()).hexdigest()
+            audit(ui,shot,report,check,target)
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.detail_fields_only:
             from ui_detail_polish_audit import audit_fields
             report['fields_audit_sha256']=hashlib.sha256((REPO/'tools/ui_detail_polish_audit.py').read_bytes()).hexdigest()
