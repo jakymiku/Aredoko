@@ -1,5 +1,17 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-29）
 
+## 2026-10-29d 終了checkpoint（以下より優先）
+
+- **Git/基準**：起点8f741f7→remoteのAGENTS追記6322fc1をclean fast-forward。既存 `feat/winui3-production-mvp-20261011` / Draft PR #5だけを継続。最終アプリsource **68c010020f909519e635b23a8f54cd47aab838ce**。検証セット作成CLIはf9841c2。最終引き継ぎcommitは本書のgit logで確認。AGENTSの過剰防御/抽象化を避けるルールを適用し、旧UI/配布/P7全体を作り直していない。
+- **UIでできること**：検索/種類/方式と表示操作を2行にまとめ、必要時だけ折返す。native媒体placeholder、長いタグの折返し/棚の変更ボタン一行化、grid/listの再起動保持、設定操作の2列化、3手順の使い方/詳細展開/フォルダ直行、初回カードの自然な表現、重複戻る/閉じるの整理を完了。fa75131で診断TextBoxが先頭1行だけになる実不具合を修正し、全診断/ビルド元を保持。個別commit/候補baseとworking差分/実証は[p3-continuous-browse末尾](p3-continuous-browse.md)。
+- **最小確認**：表示設定の変更後に基本Python3.11関連3method＋Portable梱包1method、Core限定79/全1,441assertions PASS（重複加算しない）。以後Core/Bootstrap/backend無変更を照合して再利用。WinUI build/publishは0errors、既存picker WUI1001×3/SDK IL2104×2のみ。専用DB/生成素材/UIA-onlyで検索/詳細のLight/Dark、幅1100/1600、設定の保存/再表示、ガイドの両導線、登録画面/診断を確認。試験側のstale/不要scrollと診断全文欠落の製品FAILを分けて保存し、修正後を確認。物理キー/hoverの受入へ拡大しない。
+- **最新試用候補**：`dist/portable-basic-20261029-22/Aredoko/Aredoko.exe`、source/ProductVersion68c0100、826files/661,850,275bytes。ZIP348,497,442bytes/SHA `fc0cd88edd9ae8373c19dfe1de9abf683bb88e6900f4f6d3c6a1a8d8128f79e3`。publish/全payload/ZIP/同梱check、CPU34（Basic20）を確認。通常EXEから空DB→初回ガイド→生成フォルダ登録→一覧のみ取得→タグ保存→終了→1再起動は17checks/所有4exit0/4PNG目視。Basic21の同ケースは二重合算しない。[候補の正本](portable-refresh-20261024.md)末尾。
+- **P6配布**：rootの「はじめに.txt」/簡潔なUSER_GUIDEを追加。Basic21でsealed directoryを日本語/空白の別pathへコピーし、同じユーザーのgrid保存/再起動保持を17checks/4exit0で確認（別Windowsや新ZIP展開そのものではない）。別環境用 `dist/portable-validation-20261029-22.zip` を生成し全6member/原本一致を確認。PNG2枚/2頁CBZ/候補SHA/手順/未記入結果だけ、app/モデル/実行script/私物なし。再作成は `tools/prepare_windows_validation.py`。[別Windows手順](portable-windows-validation.md)。Sandbox未起動/stale・feature InstallState2で、OS機能の有効化やguest取得はしていない。
+- **未完/未検証**：別Windows/clean machine受入、実runtime供給元/適用条項レビュー2件/不変host/production registry、実媒体品質/全codec/長時間描画RSS/HC/物理DPI/実キー・pointer等は残る。公開runtime/全ロードマップ/M1/M2の完了にはしない。installed AlphaはZIP10/source0138a58のまま。通常DB/設定/shortcut/モデル/私物は不変。Actions/DL/GPU推論/OS設定変更0。
+- **次の1件 UI**：通常幅で常駐している一覧下部の「前へ/次へ・範囲・再接続」を、件数/選択/読み込み範囲が伝わる形へ小さく整理する。範囲移動や復旧機能は削らず、連続スクロール/選択/未保存タグを維持。今回成功した同一Core/GUI/CPU soakを前提なく再実行しない。**P6の次**：用意した検証セットで利用可能な別Windowsの通常入口/保存/再配置を確認。環境有効化/新規取得/公開が必要なら許可要件を守り、未成立を合格で埋めず独立UI作業へ進む。
+- **証拠/終了**：`data/ai-ui/continuation-20261029d/` のbasic22-final-review.json、basic22-onboarding01、basic21-relocation01、basic22-validation-kit01.logと対象別reports。保存/commit/push・remote branch/PR5 head一致・clean・試験Aredoko残存なしを最終確認する。モニターへdesktop SC_MONITORPOWER offを送信。wake/常駐offループ/OS電源plan変更/shutdownは行わない。物理的な消灯維持は未観測。
+
+
 ## 2026-10-29d 追加checkpoint（UI実装済み・配布候補へ収録中）
 
 - 6b0bb56で設定6操作を2列3行、bc73b09で使い方を3手順/旧詳細展開/フォルダ直行へ、9fdf07cで登録フォルダの二重戻るを共通BtnRootsへ統一。専用DB/生成素材/UIA-onlyで各対象を確認。[証拠とbase HEAD/作業差分の注意](p3-continuous-browse.md)末尾。

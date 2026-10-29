@@ -184,3 +184,14 @@ Core/tests/BootstrapはZIP15/source0edbd40から無変更を機械照合し、�
 - 起動2PNGは初期navigation/headingの一部がcaptureに描かれないがUIA peer/寸法は存在する。起動受入と区別し、全面目視合格とはしない。別のnative UIA fixtureでは見出し/navigation/設定を描画できている。実monitor表示/HC/物理DPI/clean Windowsは未検証。
 - Sandboxは未起動/stale、OS feature InstallState2。機能有効化やOS変更はせず、[別Windows確認手順](portable-windows-validation.md)を更新。開発PC合格を別環境受入にしない。
 - 証拠：`data/ai-ui/continuation-20261029d/basic20-final-review.json`、`basic20-cpu01`、`basic20-startup01`、各build/log。ZIP20は後続のsettings整理6b0bb56を含まない。次回candidateで収録する。
+
+
+## 2026-10-29d 基本ZIP22（現在の試用候補）
+
+- source/ProductVersion `68c010020f909519e635b23a8f54cd47aab838ce`、`dist/portable-basic-20261029-22/Aredoko/Aredoko.exe`。826files/661,850,275bytes。ZIP348,497,442bytes/SHA256 `fc0cd88edd9ae8373c19dfe1de9abf683bb88e6900f4f6d3c6a1a8d8128f79e3`。旧ZIP/installed Alphaは上書きしない。
+- 検索/表示操作の2行化、native媒体アイコン、タグ折返し/棚行、grid/list保存、設定6操作の2列化、短いガイド/フォルダ登録直行、診断全文欠落の修正、二重の戻る/閉じる整理を収録。初回カードの「任意」重複と「あとで閉じる」も自然な表現へ修正。
+- Portable publish/全payload/ZIP/同梱check PASS。Coreは260e577以後不変を照合し今回1,441assertionsを再利用。backend/runtime/Bootstrap無変更のCPU34（Basic20）も反復しない。既存picker WUI1001×3/SDK IL2104×2は残る。
+- **通常Aredoko.exe**から専用空DB→簡潔な初回案内→ガイドから登録→生成PNGの一覧のみ取得→タグ保存→正常終了→1回再起動・保持を17checks/所有4exit0で確認。Basic21の同ケース17を二重合算しない。Basic21の別配置テスト17checks/4exit0はsealed directoryを日本語/空白pathへコピーし同じユーザーのgrid設定を保持。別OS/別PCや新規ZIP展開そのものの受入ではない。
+- 全てUIA-only。Basic22のwelcome/登録scan選択/保存後一覧/再起動後ガイドの4PNG目視。別Windows/Sandbox/HC/物理DPI/実入力/公開AI runtimeは未検証。Basic20の初期capture欠けを通常表示の再現済み不具合へ広げない。
+- 別環境用の生成検証セットと作成CLIを追加。[現行手順](portable-windows-validation.md)を参照。アプリ/モデルはそのセットへ含めず、自動で合格へ変更しない。
+- 証拠は `data/ai-ui/continuation-20261029d/basic22-final-review.json`、`basic22-onboarding01`、`basic21-relocation01`、`basic22-validation-kit01.log`。新規DL/Actions/GPU/通常DB・Alpha変更なし。

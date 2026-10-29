@@ -3,7 +3,19 @@
 
 ## 2026-10-29：開発環境のないWindowsでの受入手順（現行）
 
-**本PCでの通常入口成功と、別Windowsでの受入を区別する。** 基本ZIP19/sourcebb0d328はホストの通常起動/終了/再起動まで成功。10/29のread-only確認ではSandbox targetは未起動/stale、OSの`Containers-DisposableClientVM`はInstallState2、既存guestへ接続できず。OS機能の有効化/再起動/VMの新規取得はしていない。別環境の起動確認は未実施。証拠は `data/ai-ui/continuation-20261029d/sandbox-readiness01.json`、新しい候補を使うときはsource/ZIP SHAを記録する。
+**本PCでの通常入口成功と、別Windowsでの受入を区別する。** 基本ZIP22/source68c0100はホストの通常入口から空DB→登録/一覧取得/タグ保存→終了/再起動まで成功。BasicZIP21では日本語/空白を含む別配置から同じユーザー設定も保持した。10/29のread-only確認ではSandbox targetは未起動/stale、OSの`Containers-DisposableClientVM`はInstallState2、既存guestへ接続できず。OS機能の有効化/再起動/VMの新規取得はしていない。別環境の起動確認は未実施。証拠は `data/ai-ui/continuation-20261029d/sandbox-readiness01.json`、新しい候補を使うときはsource/ZIP SHAを記録する。
+
+### 持ち出し用の生成データセット
+
+基本ZIP22に対応する `dist/portable-validation-20261029-22.zip`（3,134bytes、SHA256 `adc2ec99dd400055b0c3f58797b2a66fc73a365e0487a73812636c1e72701892`）を作成した。アプリ本体とは別に渡す。PNG2枚/2ページCBZ1冊、候補ZIPと原本のSHA、短い確認手順、未記入の結果テンプレートの6filesだけで、実行ファイル/スクリプト/私物は入らない。全ZIP memberと元生成fileを照合済み。生成しただけで別Windows受入にしない。
+
+次の候補へ作り直すときは、既存出力へ上書きせず次を実行する。
+
+```powershell
+python tools/prepare_windows_validation.py --release dist/portable-basic-20261029-22/Aredoko --output dist/portable-validation-new-candidate
+```
+
+`--release`は封印済み基本版、隣の`Aredoko-windows-x64.zip`と組にする。追加取得/アプリ起動/設定変更は行わない。実際の別Windows確認は下記の手順で行い、結果テンプレートのコピーへ成功/失敗/未実施を記録する。
 
 ### 基本版の最小確認
 
