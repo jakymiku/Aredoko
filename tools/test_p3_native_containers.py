@@ -263,6 +263,9 @@ def main():
             audit(ui,tree,shot,check,cat,first["id"],a,b)
             check("generated sources unchanged",before==sources());report["pass"]=True
         elif args.compact_toolbar:
+            if args.toolbar_wrap_only:
+                subprocess.run(['pwsh','-NoProfile','-File',str(REPO/'tools/inspect_frontend_modules.ps1'),'-OwnedPid',str(proc.pid),'-Executable',str(front/'Aredoko.WinUI.exe'),'-Output',str(target/'frontend-modules.json')],check=True,timeout=15,capture_output=True,text=True)
+                report['frontend_modules_report']='frontend-modules.json'
             from ui_compact_toolbar_audit import audit
             audit(ui,tree,shot,report,check,cat,first['id'],input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only,resize=resize,wrap_only=args.toolbar_wrap_only)
             check('generated sources unchanged',before==sources());report['pass']=True
