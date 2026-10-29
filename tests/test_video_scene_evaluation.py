@@ -37,6 +37,11 @@ class VideoSceneEvaluationTests(unittest.TestCase):
         self.assertFalse(result['top1']);self.assertEqual(result['recall_at3'],0);self.assertEqual(result['reciprocal_rank'],0)
         self.assertEqual(result['interval_matches'],0);self.assertEqual(result['expected_intervals'],2)
         with self.assertRaises(ValueError):assess(self.value,'unlabelled',[],self.ids)
+    def test_duplicate_unknown_ids_or_invalid_ranges_cannot_inflate_recall(self):
+        valid={'id':1,'video_match_ms':0,'video_match_end_ms':16000}
+        for rows in ([valid,valid.copy()],[dict(valid,id=999)],[dict(valid,id=True)],[dict(valid,video_match_ms=-1)],
+            [dict(valid,video_match_end_ms=50000)],[dict(valid,video_match_ms='0')]):
+            with self.subTest(rows=rows),self.assertRaises(ValueError):assess(self.value,'bookA_p02',rows,self.ids)
     def test_sealed_fixture_and_equal_size_byte_tampering_are_checked(self):
         before={p:p.read_bytes() for p in self.root.rglob('*') if p.is_file()};value,sha=fixture(self.root)
         self.assertEqual(len(value['videos']),3);self.assertEqual(len(sha),64)

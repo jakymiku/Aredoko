@@ -28,3 +28,6 @@ python tools/evaluate_video_scene_assets.py prepare --zip <承認済み8枚ZIP> 
 prepareは明示された2ZIPだけを読み、新規outputだけへ生成する。runは専用fixture/DB・既存runtime/model・offline cacheを使い、完全照合を推論時間切れの前に完了させる。最大300秒の索引batch後に中断/所有解放。評価完了のpassとaccuracyを分離し、品質低下があっても正直にmetricsへ残す。
 
 CPUの正解/時刻/集計/入力改変・未知file拒否6testsがPASS。最初のprepareはhelper import名が違い、ZIP読取/output作成/GPU開始前に停止した。実在の `video_previews._executable` へ直してCPU生成→GPU1回が成功。成功した同素材のGPU評価をコード/モデル/decoder/順位変更なしで反復しない。次の品質対象は動作を含む代表動画/実音楽・録音等で、別の明示された素材と正解が必要。
+
+
+後続のtool整備では、派生PNG/concat/動画をexclusive/new-onlyで作成し、FFmpegにも既存出力の上書きを許可しない。返却item IDの重複/未知ID・不正時刻でRecallが膨らまないよう拒否し、次の評価から順位候補/score/区間も保持する。CPUの集計/拒否契約は7tests PASS。上記の実GPU結果は **`c2c1a64` のtool/hash** に固定された既存reportで、後続版による再推論はしていない。

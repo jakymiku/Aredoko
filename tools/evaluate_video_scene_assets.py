@@ -53,16 +53,19 @@ def prepare(zips,output):
     for i,key in enumerate(SCENES):
         with Image.open(io.BytesIO(assets[key]['data'])) as source:
             image=ImageOps.pad(source.convert('RGB'),(256,384),method=Image.Resampling.LANCZOS,color=(24,24,24))
-            name=f'scene-{i}.png';image.save(frames/name);image.close();names[key]=name
+            name=f'scene-{i}.png'
+            with (frames/name).open('xb') as stream:image.save(stream,format='PNG')
+            image.close();names[key]=name
     entries=[]
     for name,layout in LAYOUTS.items():
         lines=[];segments=[];cursor=0
         for scene,seconds in layout:
             lines.extend(["file '"+names[scene]+"'",'duration '+str(seconds)]);segments.append({'scene':scene,'start_ms':cursor,'end_ms':cursor+seconds*1000});cursor+=seconds*1000
-        lines.append("file '"+names[layout[-1][0]]+"'");concat=frames/(Path(name).stem+'.txt');concat.write_text('\n'.join(lines)+'\n')
+        lines.append("file '"+names[layout[-1][0]]+"'");concat=frames/(Path(name).stem+'.txt')
+        with concat.open('x',encoding='utf-8') as stream:stream.write('\n'.join(lines)+'\n')
         destination=media/name
         subprocess.run([_executable('ffmpeg'),'-nostdin','-v','error','-f','concat','-safe','1','-i',str(concat),
-            '-t',str(cursor/1000),'-vf','fps=1,format=yuv420p','-c:v','mpeg4','-q:v','2','-an','-y',str(destination)],check=True,timeout=45,capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            '-t',str(cursor/1000),'-vf','fps=1,format=yuv420p','-c:v','mpeg4','-q:v','2','-an','-n',str(destination)],check=True,timeout=45,capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         entries.append({'path':name,'bytes':destination.stat().st_size,'sha256':digest(destination),'duration_ms':cursor,'segments':segments})
     after=[{'name':p.name,'bytes':p.stat().st_size,'mtime_ns':p.stat().st_mtime_ns,'sha256':digest(p)} for p in paths]
     if sources!=after:raise ValueError('Representative source ZIP changed')
@@ -93,6 +96,12 @@ def fixture(root):
 def assess(value,scene,items,id_names):
     gold={row['path']:(seg['start_ms'],seg['end_ms']) for row in value['videos'] for seg in row['segments'] if seg['scene']==scene}
     if not gold:raise ValueError('Expected scene absent from fixed fixture')
+    seen=set();durations={row['path']:row['duration_ms'] for row in value['videos']}
+    for row in items:
+        item=row.get('id');start=row.get('video_match_ms');end=row.get('video_match_end_ms')
+        if (type(item) is not int or item not in id_names or item in seen or type(start) is not int or type(end) is not int
+            or not 0<=start<end<=durations[id_names[item]]):raise ValueError('Unexpected, duplicate or invalid retrieval candidate')
+        seen.add(item)
     ranks=[i+1 for i,row in enumerate(items) if id_names.get(row.get('id')) in gold]
     intervals=[]
     for row in items:
@@ -119,7 +128,6 @@ def run(fixture_root,runtime,output):
     catalog=image_owner=feature=process=None
     try:
         from runtime_paths import bind_runtime,verify_runtime_pack,model_directory
-        from ai_runtime import inspect_runtime
         manifest_sha=hashlib.sha256(_read(runtime/MARKER,32*1024**2)).hexdigest();bind_runtime(runtime,manifest_sha)
         started=time.monotonic();verify_runtime_pack(runtime/'python.exe');report['verification_seconds']=round(time.monotonic()-started,3)
         import torch
@@ -148,7 +156,8 @@ def run(fixture_root,runtime,output):
         expected={(row['path'],seg['start_ms'],seg['end_ms']) for row in value['videos'] for seg in row['segments']}
         if {(id_names[i],start,end) for i,start,end in report['stored_intervals']}!=expected:raise ValueError('Stored scene coverage differs from fixture')
         for row in value['queries']:
-            started=time.monotonic();result=feature.search(row['query'],root_ids=[root]);results.append({**row,**assess(value,row['scene'],result['items'],id_names),'seconds':round(time.monotonic()-started,3)})
+            started=time.monotonic();result=feature.search(row['query'],root_ids=[root]);results.append({**row,**assess(value,row['scene'],result['items'],id_names),'seconds':round(time.monotonic()-started,3),
+                'ranked_candidates':[{'id':r['id'],'file':id_names[r['id']],'score':r.get('score'),'interval':[r['video_match_ms'],r['video_match_end_ms']]} for r in result['items']]})
         report['queries']=results;n=len(results)
         report['metrics']={'query_count':n,'top1':sum(r['top1'] for r in results)/n,'mean_recall_at3':sum(r['recall_at3'] for r in results)/n,
             'mrr':sum(r['reciprocal_rank'] for r in results)/n,'interval_matches':sum(r['interval_matches'] for r in results),'expected_intervals':sum(r['expected_intervals'] for r in results)}
