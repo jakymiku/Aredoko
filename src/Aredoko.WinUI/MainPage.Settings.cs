@@ -162,9 +162,9 @@ public sealed partial class MainPage
             var panel=new StackPanel{Spacing=12};
             var txt = new TextBox
             {
-                Text = report,
                 IsReadOnly = true,
                 AcceptsReturn = true,
+                Text = report,
                 TextWrapping = TextWrapping.Wrap,
                 Height = 280,
                 FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas, Cascadia Code, monospace")
@@ -188,9 +188,6 @@ public sealed partial class MainPage
 
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="診断情報（匿名化済み）",CloseButtonText="閉じる",Content=panel};
             AutomationProperties.SetAutomationId(dialog,"DiagnosticsDialog");
-            var closeStyle=new Style{TargetType=typeof(Button)};
-            closeStyle.Setters.Add(new Setter(AutomationProperties.AutomationIdProperty,"BtnCloseDiagnostics"));
-            dialog.CloseButtonStyle=closeStyle;
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
             await dialog.ShowAsync();

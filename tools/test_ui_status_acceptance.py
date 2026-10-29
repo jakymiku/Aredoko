@@ -223,8 +223,8 @@ def run_gui_stage(target_dir):
         report['screenshots'].append(str(diag_shot))
 
         # Close diagnostics dialog
-        ui('wait-for', 'BtnCloseDiagnostics', '-t', '5000')
-        ui('invoke', 'BtnCloseDiagnostics')
+        ui('wait-for', 'CloseButton', '-t', '5000')
+        ui('invoke', 'CloseButton')
         time.sleep(1)
 
         # 3. Settings dialog and Backup Guide
