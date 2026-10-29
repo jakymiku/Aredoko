@@ -142,3 +142,6 @@ f7b733aで取得画面をモデル/実行環境と任意タグ付けの短い説
 1e8e7caは共通表示サイズflyoutに小60/中100/大180のnative Buttonを追加し、既存Slider/標準復帰/Ctrl+wheel/保存/仮想化の経路を再利用。新しいサイズ計算や全件生成は追加しない。基本ZIP24の通常入口で生成1PNG、presetの同一行/非重複と値変更、一覧へ戻る操作、終了/再起動を含む16checks/4exit0・3PNG目視。shelf画面のpreset個別GUI/Light preset/物理wheel/HC/DPIは未確認。a52cc0cはNavFavorites完了を待ってNavAllへ戻る試験側だけの待機を追加した。
 
 bf0db36は配置先のembedding役割を「内容検索（文章・画像・動画・音声）」と説明し、お気に入りフォルダはあるが作品は0件のときに「お気に入りはまだありません」と案内しない。既存enabled/favorite条件と表示する作品のscopeを保持する文言修正。Portable build0errors/既存3warnings、GUI/publish/ZIP24への収録は未実施。個別のミラー単体テストや無変更の全回帰は追加しない。
+
+
+8ee9049はお気に入りフォルダ行にnativeの操作ボタン/右クリックmenuを追加し、既存APIによる解除と登録設定へ直接移る。再利用時に古いContextFlyoutを消し、名前はstar列で制約する。新しい設定入口からアイテム編集を失わないよう、共通SelectFolderForSettingsAsyncでもDirty時に既存破棄確認を通す。生成fixtureは2PNG/2registered roots・favorite boolをCPUで確認、Portable build/publish0errors（既存警告保持）。frontend08/source8ee9049のGUIは具体化して許可待ち。ZIP24/通常DB/Alphaには未反映。
