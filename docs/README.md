@@ -5,11 +5,11 @@
 ## まず読む
 - [ルートAGENTS](../AGENTS.md) / [現行引き継ぎ](current-handoff.md) / [製品ビジョン](product-vision.md)
 - [現行P0–P7統合ロードマップ](polish-roadmap-20261022.md) / [R01–R14・M1/M2完成台帳](completion-roadmap.md)
-- [実機フィードバック改善計画 U1–U6（2026-10-25）](usability-followup-20261025.md) — 計画のみ。次回実装はU1aから、Sol/Antigravity共通。
+- [実機フィードバック改善計画 U1–U6（2026-10-25）](usability-followup-20261025.md) — Sol/Antigravity共通。実装・限定受入の進捗と現行引き継ぎを参照し、完了済みのU1等へ戻らない。
 - [開発優先順位](development-priorities.md) / [開始ガイド](agent-start.md) / [仕様の方向性](spec.md)
 
 ## 開発・テスト方針
-- [ローカルGUI/GPUテストと再試行ループを防ぐ診断ルール](local-test-policy.md) — 新規機能/バグ修正のローカル実機試験は許可不要。旧回数制限は履歴として保持し、原因不明の反復FAILは診断/BLOCKEDへ
+- [ローカルGUI/GPUテストと再試行ループを防ぐ診断ルール](local-test-policy.md) — 通常のローカル試験方針。各回のユーザー指定（事前承認等）を優先する。旧回数制限は履歴として保持し、原因不明の反復FAILは診断へ
 
 ## 機能別の現行仕様と根拠（対象のときのみ）
 - 検索/AI: [AI検索](ai-search-plan.md)、[モデルprofile](model-profiles.md)、[検索品質](search-quality-baseline.md)、[ページ画像](page-image-search.md)、[媒体内容索引](media-content-plan.md)、[タグ候補](tag-suggestions.md)
