@@ -28,9 +28,10 @@ def main():
     parser.add_argument('--relocate-after-first-run',action='store_true',help='With startup-only, copy the sealed basic app to a Japanese/space path before the same-user restart')
     parser.add_argument('--remember-library-view',action='store_true',help='With startup-only, persist grid on first run and verify it on the planned restart')
     parser.add_argument('--startup-only',action='store_true',help='Normal entry and one restart, generated data only')
+    parser.add_argument('--size-presets',action='store_true',help='With startup-only, inspect compact size commands on the packaged app; no physical input')
     parser.add_argument('--installed-copy',action='store_true',help='Allow an explicitly selected versioned Aredoko copy in user Programs')
     args=parser.parse_args();release=args.release.resolve();target=args.output.resolve()
-    if (args.remember_library_view or args.relocate_after_first_run) and not args.startup_only:parser.error('Layout/relocation restart requires --startup-only')
+    if (args.remember_library_view or args.relocate_after_first_run or args.size_presets) and not args.startup_only:parser.error('Layout/relocation restart requires --startup-only')
     if sum((args.getting_started,args.direct_entry,args.library_smoke,args.restore_rejection,args.ai_startup_fixture is not None,args.startup_only))>1:parser.error('Select one acceptance flow')
     if args.ai_startup_fixture and (args.runtime is None or args.models is None):parser.error('Explicit existing runtime/models required')
     if os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui'):
@@ -177,6 +178,16 @@ def main():
                     if phase==1:
                         ui('invoke','BtnLayout');ui('wait-for','BtnLayout','--value','グリッド表示','-t','10000')
                         check('switching back saves list presentation',json.loads((data/'viewer-settings.json').read_text())['library_view']=='list')
+                if args.size_presets and phase==0:
+                    ui('invoke','BtnItemSize');ui('wait-for','ItemSizeSmall','-t','10000')
+                    choices=[tree()[key] for key in ('ItemSizeSmall','ItemSizeMedium','ItemSizeLarge')]
+                    check('packaged size choices share a row without overlapping',all(abs(node['y']-choices[0]['y'])<=1 for node in choices) and all(right['x']>=left['x']+left['width']+7 for left,right in zip(choices,choices[1:])))
+                    for control,value in (('ItemSizeSmall','60%'),('ItemSizeLarge','180%'),('ItemSizeMedium','100%')):
+                        ui('invoke',control);ui('wait-for','ItemSizeLabel','--value',value,'-t','10000')
+                        check('packaged preset updates the shared size: '+value,True)
+                    shot('packaged-size-presets')
+                    ui('invoke','NavFavorites');ui('invoke','NavAll');ui('wait-for','TxtCount','--value','1 件','-t','10000')
+                    check('size commands leave the generated library available',True)
                 shot(f'normal-startup-{phase+1}')
             elif args.ai_startup_fixture:
                 from ui_ai_startup_audit import audit

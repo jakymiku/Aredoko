@@ -807,7 +807,9 @@ public sealed partial class MainPage : Page
         // Resize existing containers: keep selection, dirty edits and decoded thumbnails.
         UpdateItemSizes();itemSizeSaveTimer.Stop();itemSizeSaveTimer.Start();
     }
+    private void SmallItemSize_Click(object sender,RoutedEventArgs args)=>ItemSizeSlider.Value=60;
     private void ResetItemSize_Click(object sender,RoutedEventArgs args)=>ItemSizeSlider.Value=100;
+    private void LargeItemSize_Click(object sender,RoutedEventArgs args)=>ItemSizeSlider.Value=180;
     private void Library_PointerWheelChanged(object sender,PointerRoutedEventArgs args)
     {
         if(!itemSizeReady||dialogOpen||folderHubOpen)return;

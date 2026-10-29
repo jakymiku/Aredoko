@@ -133,6 +133,11 @@
      <Button.Flyout><Flyout x:Name="ItemSizeFlyout" Placement="Bottom">
       <StackPanel Width="240" Spacing="8">
        <TextBlock Text="アイテムの表示サイズ" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+       <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="小" MinWidth="64" Click="SmallItemSize_Click" AutomationProperties.Name="小さい表示サイズ（60パーセント）" AutomationProperties.AutomationId="ItemSizeSmall"/>
+        <Button Content="中" MinWidth="64" Click="ResetItemSize_Click" AutomationProperties.Name="標準の表示サイズ（100パーセント）" AutomationProperties.AutomationId="ItemSizeMedium"/>
+        <Button Content="大" MinWidth="64" Click="LargeItemSize_Click" AutomationProperties.Name="大きい表示サイズ（180パーセント）" AutomationProperties.AutomationId="ItemSizeLarge"/>
+       </StackPanel>
        <Slider x:Name="ItemSizeSlider" Minimum="60" Maximum="180" Value="100" StepFrequency="20" SnapsTo="StepValues" IsThumbToolTipEnabled="False" ValueChanged="ItemSizeSlider_ValueChanged" AutomationProperties.Name="アイテムの表示サイズ（パーセント）" AutomationProperties.AutomationId="ItemSizeSlider"/>
        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <TextBlock x:Name="ItemSizeLabel" Text="100%" VerticalAlignment="Center" AutomationProperties.AutomationId="ItemSizeLabel"/>
