@@ -72,3 +72,12 @@ source `9968eac`、`dist/portable-basic-20261026-04/Aredoko` の公開UIと現�
 同じZIP04の `viewer-input02`（専用DB・生成静止画2枚/5ページCBZ、個別回答後の追加1試行）は9 checks PASS/所有frontend exit0/4PNG目視。ボタン拡大の目印中心は(591.5,390.5)のまま、左drag(-80,-50)後は(511.5,340.5)を実画素で確認。画像上で約1秒後にbarが隠れる/下端で再表示、実wheelの画像前後、本の循環ONで1→5→1、reader bar非表示、専用設定保存、原本不変が通った。OFF時停止は今回のnative範囲外（既存Core契約を維持）。DPI96/単一候補の結果であり、HC/物理マルチモニター/全入力機器の合格ではない。
 
 01はwindow screenshotへtooltip用28px見出しが混在し、中心ずれと誤判定したharness FAIL。UIA viewportと目印の画像内位置は不変だった。02では画像表示領域を指定して撮影し、撮影寸法もUIAと照合するよう実質修正した。01のFAIL/PNGは保持し、製品のzoom修正や未到達のdrag成功へ置き換えていない。新toolは `tools/test_native_viewer_input.py`。
+
+### 2026-10-29c：原寸APNG/WebPのCPUデコーダー・32周の限定確認
+
+`data/ai-ui/continuation-20261029c/animation-soak-cpu01/report.json`。本番 `animation_sessions.Decoder(original_size=True)`を別CPUプロセスで使用。新規生成の2560×1440・8frames/80ms/無限loop APNG143,668bytesとlossless WebP257,878bytesを、4frames/batchで各256frames（32周）処理した。全sequence/index/cycle、原寸/byte長/128MiB budget、原本SHA/mtime不変、decoder/image/handle解放がPASS。元媒体・通常DB・モデル・GPU/GUIは使わない。
+
+- APNG：復号等7.139s、先頭4frame batch101.7ms。warm後のprivate bytesは49.03MiB程度、最終−warmは−4KiB、close後20.47MiB。payload保持中のサンプル最大105.52MiB。
+- WebP：9.143s、先頭batch137.5ms。warm後66.62〜66.89MiB、最終−warmは−272KiB、close後23.95MiB。payload保持中のサンプル最大123.26MiB。
+
+CPUプロセスのこの短い単回・小圧縮サイズの合成画像では、周回に比例するprivate bytesの増加を観測しなかった。サンプル最大は瞬間peakではない。再生待ち時間/HTTP/WinUI/bitmap/GPU描画を含まず、画像の表示FPSやアプリ全体・長時間RSSの受入ではない。probeは同rootの `animation-soak-probe01.py`、SHA/Python/Pillow版をreportへ記録。成功済みの大容量GIF/18frame nativeを繰り返した試験ではない。次は必要ならUIA-onlyの連続描画・高速切替取消でfrontend/decoderの保持を分けて確認する。

@@ -166,3 +166,11 @@ source/実ProductVersion **292fdf2a2a121caf70e088c0753a8417d682250f**。入口 `
 Core/tests/BootstrapはZIP15/source0edbd40から無変更を機械照合し、既存1,438 assertions＋変更案内11項目のreceiptを再利用。最新sourceでWinUI Portable publish、全payload/ZIP照合、同梱Python `--check` がPASS。既存WUI1001×3/SDK IL2104×2は保持。同梱CPU34項目がPASS、通常 `Aredoko.exe` の起動→正常終了→再起動も **11checks/2PNG目視/所有4exit0**。取得開始・物理入力・前面化要求・実model/GPUはこの通常起動試験では行わない。
 
 証拠 `data/ai-ui/continuation-20261029b/basic-cpu16/`、`basic-native16/`、`basic16-final-review.json`、`dist/portable-basic-20261029-16/preparation.json`。UI変更自体のLight/Dark/棚/未保存タグの限定受入と、外部CRT候補の実GPU/CPU確認はそれぞれ別receipt。今回の基本ZIPをAI自動導入・clean Windows・全ロードマップの完成としない。
+
+## 2026-10-29c：基本ZIP19・操作バーと完全照合の改善
+
+- 最新候補 `dist/portable-basic-20261029-19/Aredoko/Aredoko.exe`、source/ProductVersion `bb0d328931eeeb7246dd3192f5f99b1e48542850`。825files/661,796,403bytes。ZIP348,465,989bytes、SHA256 `a427e4af4625350e0d9d744b5de16c5b76b813050d7dc366c888356da7938592`、manifest SHA256 `c38aca6cd1c7bf4f941441727efb88eb75b6585bb55f239f89fdc3928c415018`。旧Alpha・旧candidateを保持。
+- 画像/本のmenuキー保全、音量/ボタンのnative key優先、動画/音声のOSタイトル化・通知分離・操作バー共通化を収録。backendは完全SHAを省略せず2readerで照合する `0c73cdb` を収録。
+- Portable publish/全payload/ZIP/同梱check PASS。Core/Bootstrap/testsは292fdf2以降不変のsource照合で1,438assertionsと既存案内を再利用。ZIP18のCPU34は19とbackend/runtime/起動EXEの全封印entryが同一のため反復せず再利用する。新しいCore全回帰やGPUを実施したとは扱わない。既存picker WUI1001×3/SDK trim IL2104×2を保持。
+- 新19のUIA-only生成音声は自動非表示4＋常時表示4、通常EXEは起動→正常終了→1回再起動11checks/所有4exit0、6PNG目視。タイトル/音量/通知時geometryは前段ZIP18/source365d9a1の5＋5checks/3PNGで確認（19の新規再試験へ加算しない）。物理キー/下端pointer再表示はlocked desktopで未検証。
+- 証拠 `data/ai-ui/continuation-20261029c/basic19-final-review.json`、各 `player-*` / `basic18-cpu01` / `basic19-startup01`。17は中間buildのみ、18は前段の受入候補。installed AlphaはZIP10/source0138a58のまま。公開runtime・clean Windows・全P7/M1/M2は未完。

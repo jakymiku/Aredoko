@@ -251,3 +251,5 @@ U1の後、独立したU4aを先行してもよい。U3で素材再現待ちと�
 
 - ZIP18/source365d9a1でCPU34、音声UIA5項目、実503→再試行UIA5項目、通常EXE起動/再起動11項目PASS。通知あり/なしのバー座標は1184×83pxで同一、音声の3PNG目視・所有exit0。初回は試験のfrontendパス誤指定で起動前停止。
 - 後続の操作バー共通化：動画・音声も既存ViewerChromeControllerを使用し、約1秒/下端表示/操作中・失敗中保持/常時表示設定を画像・本と揃える。独自timerを除去し、解放も共通化。新しい物理マウス・キーの受入はlocked desktopのため未実施。生成音声の自動timer/常時表示は次候補で確認する。
+
+- 共通化source `bb0d328`のZIP19で生成無音WAVをUIA-only確認。`player-autohide02`4checksは503中の保持→成功後の非表示、`player-always01`4checksは常時表示設定を確認、4PNG目視/両exit0。前者01は非表示でUIA要素が消えたのにIsOffscreenを読もうとした試験FAILで、`--gone`待機へ訂正した。新規buildは0errors/既存WUI1001×3（初回CS8602はイベント登録前のcontroller初期化へ直し解消）。下端への実ポインター再表示・native keyは現desktopで未実施、旧画像/本の成功と新動画の受入を混同しない。

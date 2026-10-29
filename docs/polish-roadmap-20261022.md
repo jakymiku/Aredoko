@@ -4,6 +4,8 @@
 
 ## 現行実行キュー（2026-10-25、実機フィードバック計画）
 
+**2026-10-29c更新（以下より優先）**：CPython/native通知の38file対応と新規sealed packを追加し、静的inventoryは未所有0件。ただし適用条項/供給元証明/coverage・公開承認/host/registry/clean Windowsは未完。完全照合は全SHAを維持した2readerへ改善し、実4.95GBの単回85.071→68.373秒。生成slideshow3本・日英7問の実動画索引はTop1 7/7・一致区間13/13（実写/動作/音声品質ではない）。UIは画像/本のmenuキーとプレイヤーnative key優先、動画/音声のOSタイトル・通知分離・1秒bar共通化を追加。基本ZIP19/sourcebb0d328は限定UIA/通常入口を確認済み。成功済み小画像/82.55MiB GIF/3frame原寸/CBZの試験を反復せず、次はP7の持続APNG/WebPと高速切替のRSS/解放を生成素材で一度確認し、再現した問題だけ局所改善する。P6の外部条件待ちだけでUI/品質改善を止めない。詳細は[current-handoff](current-handoff.md)最上段。
+
 **2026-10-29b更新（以下より優先）**：P6の新規app-local CRT packを封印し、実loaderのDLL解決・生成EG2 GPU/WD CPUまで限定確認。v4分割ZIPの再開/取消/結合copy不要の展開を追加し、実3.03GB ZIPの2分割検査もPASS。UI-2はライブラリ/棚のcaption幅とサイズmenuの残留を改善しLight/Dark限定受入。Work `a6f6e04` を双方の履歴を保って統合。基本ZIP16/source292fdf2は同梱CPU34＋通常EXE起動/再起動/正常終了までPASS。次はnative通知の残り38件/適用条項/実host→runtime registry→clean Windows。これは外部条件が必要な残件で、専用OCR/全面作り直し/同成功試験へ戻らない。詳細・次の1件は[current-handoff](current-handoff.md)最上段を優先。
 
 **2026-10-29更新**：前回残件の動画内音声/一括favoriteの限定nativeと、生成2動画の実worker GPU検索を確認。AI起動失敗/異常reader回収と詳細長名/重複を改善し、Light/Dark詳細も限定受入。基本ZIP15/source0edbd40はpublish/同梱CPU34/全payload確認まで。公式x64 CRT12DLLの静的実体を固定し、次は適用条項/通知と新規pack組込み準備→loader/公開host/registry/clean Windows。成功済み検査を反復せず、正確な未受入/候補/次の1件は[current-handoff](current-handoff.md)最上段を優先。UIは引き続き機能と並行する。
