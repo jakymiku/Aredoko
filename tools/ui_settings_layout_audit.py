@@ -61,7 +61,7 @@ def audit_guide(ui,shot,report,check,catalog,handler,target):
     check('guide opens the folder registration form directly',not inspect_element(ui,'RootPath')['isOffscreen'])
     check('opening registration does not scan or alter the generated catalog',catalog.search()['total']==before)
     shot('guide-folder-entry')
-    ui('invoke','BtnBackToLibrary');ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+    ui('invoke','BtnRoots');ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
     open_guide();ui('invoke','PrimaryButton');ui('wait-for','AISetupPlanDialog','-t','10000')
     check('optional AI guidance retains the purpose selection entry',True)
     check('following guidance starts no downloads or inference',handler.setup_jobs.snapshot()['state']=='idle' and handler.download_jobs.snapshot()['state']=='idle')
@@ -83,3 +83,17 @@ def audit_diagnostics(ui,shot,report,check):
     check('native diagnostic close returns to the library',True)
     report['physical_input_requested']=False;report['clipboard_requested']=False
     report['unverified']=['physical Esc/Tab keys','clipboard operation','high contrast and physical DPI']
+
+
+def audit_folder_toolbar(ui,shot,report,check):
+    ui('invoke','NavFolders');ui('wait-for','TxtFolderFilter','-t','10000')
+    state=json.loads(ui('inspect','--depth','14','--json'))
+    back={n.get('selector') for n in nodes(state) if n.get('type')=='Button' and n.get('name')=='作品一覧へ戻る' and not n.get('isOffscreen',True)}
+    check('folder screen exposes a single return-to-library action',len(back)==1)
+    check('common header return is visible',not inspect_element(ui,'BtnRoots')['isOffscreen'])
+    ui('invoke','BtnToggleAddFolder');ui('wait-for','RootPath','-p','IsEnabled','--value','True','-t','10000')
+    check('folder registration remains directly reachable',not inspect_element(ui,'RootPath')['isOffscreen'])
+    shot('folder-single-return');ui('invoke','BtnRoots');ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+    ui('wait-for','BtnRoots','--value','フォルダ管理','-t','10000')
+    check('same header returns and restores the library action',True)
+    report['physical_input_requested']=False;report['unverified']=['physical keyboard/tab order','high contrast and physical DPI']

@@ -1554,7 +1554,6 @@ public sealed partial class MainPage : Page
         else await OpenFolderHubAsync();
     }
 
-    private async void BackToLibrary_Click(object sender,RoutedEventArgs e)=>await ReturnToLibraryAsync(selectedSearchRoots);
 
     private async void ResetAllFolders_Click(object sender,RoutedEventArgs e)=>await ReturnToLibraryAsync(null);
 

@@ -122,7 +122,7 @@ def audit(cli, main, pid, theme, rows, catalog, output, report, check):
     shot('narrow-settings')
     ui('invoke','CloseButton');ready()
     ui('invoke','NavFolders');ui('wait-for','FolderList','-t','10000')
-    header=('TxtFolderFilter','CmbFolderState','BtnFolderLayout','BtnToggleAddFolder','BtnBackToLibrary')
+    header=('TxtFolderFilter','CmbFolderState','BtnFolderLayout','BtnToggleAddFolder','BtnRoots')
     header_ok=fits('narrow-folders',header,minimum_width={'TxtFolderFilter':120})
     fits('narrow-folder-actions',('BtnSearchSelectedFolders','BtnEditSelectedFolders','BtnUnregisterSelectedFolders','BtnSearchAllFolders'))
     shot('narrow-folders',selector='Nav')

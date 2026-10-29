@@ -184,7 +184,7 @@ $child=Start-Process -FilePath $Link -WindowStyle Hidden -PassThru
         root_id=api('/api/library/roots')['items'][0]['id']
         report['generated_root_id']=root_id
         item=items['items'][0];item_id=item['id']
-        ui('invoke','BtnBackToLibrary');wait('TxtCount',value='1 件')
+        ui('invoke','BtnRoots');wait('TxtCount',value='1 件')
         ui('set-value','TxtQuery','alpha-blue-card');ui('invoke','BtnSearch');time.sleep(.6)
         wait('Item'+str(item_id));ui('invoke','Item'+str(item_id),'--action','select')
         wait('TxtTags');ui('set-value','TxtTags','alpha-native-saved');ui('invoke','BtnSave')
