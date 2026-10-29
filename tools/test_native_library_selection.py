@@ -137,7 +137,7 @@ def main():
             ui('set-value','TxtQuery','generated-0003');ui('wait-for','Item4','-t','10000');ui('wait-for','TxtCount','--value','1 件','-t','10000')
             check('new search is not overwritten by cancelled progress','Item1' not in tree());shot('04-new-search-after-progress');stop();report['pass']=True;return 0
         if args.cancel_range_only:
-            ui('invoke','BtnNext');ui('wait-for','Item61','-t','10000')
+            ui('invoke','BrowseActions');ui('invoke','BtnNext');ui('wait-for','Item61','-t','10000')
             ui('invoke','Item61','--action','select');ui('invoke','BtnDetails');ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000')
             original_read=handler.results.read;held_once=threading.Event();release.clear()
             def held_range(session_id,offset=0,limit=120):
@@ -146,13 +146,13 @@ def main():
                     if not release.wait(20):raise RuntimeError('Bounded test range gate timed out')
                 return original_read(session_id,offset,limit)
             handler.results.read=held_range
-            ui('invoke','BtnNext');wait('next uncached result range is in progress',reached.is_set)
+            ui('invoke','BrowseActions');ui('invoke','BtnNext');wait('next uncached result range is in progress',reached.is_set)
             ui('invoke','BtnCancelSearch');ui('wait-for','BtnCancelSearch','--gone','-t','10000')
             ui('wait-for','Item61','-t','10000');ui('wait-for','TxtPageNumber','--value','61–120','--contains','-t','10000')
             ui('wait-for','TxtTags','-p','IsEnabled','--value','True','-t','10000');shot('01-cancelled-range-retained')
             ui('set-value','TxtTags','unsaved-cancel-draft');check('cancelled range leaves selected item editable','unsaved-cancel-draft' in ui('get-value','TxtTags'))
             ui('set-value','TxtTags','');check('no draft is written implicitly',cat.get(61)['tags']==[])
-            release.set();ui('invoke','BtnNext');ui('wait-for','Item121','-t','10000');shot('02-cancelled-range-retried')
+            release.set();ui('invoke','BrowseActions');ui('invoke','BtnNext');ui('wait-for','Item121','-t','10000');shot('02-cancelled-range-retried')
             ui('set-value','TxtQuery','generated-0003');ui('wait-for','TxtCount','--value','1 件','-t','15000');ui('wait-for','Item4','-t','10000');shot('03-new-input-after-cancel')
             check('later input can start a new search','Item61' not in tree());stop();report['pass']=True;return 0
         if args.verification_settings_only:
