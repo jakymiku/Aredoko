@@ -1,5 +1,23 @@
 # PortableのWindows準備・検証（2026-10-21）
 
+
+## 2026-10-29：開発環境のないWindowsでの受入手順（現行）
+
+**本PCでの通常入口成功と、別Windowsでの受入を区別する。** 基本ZIP19/sourcebb0d328はホストの通常起動/終了/再起動まで成功。10/29のread-only確認ではSandbox targetは未起動/stale、OSの`Containers-DisposableClientVM`はInstallState2、既存guestへ接続できず。OS機能の有効化/再起動/VMの新規取得はしていない。別環境の起動確認は未実施。証拠は `data/ai-ui/continuation-20261029d/sandbox-readiness01.json`、新しい候補を使うときはsource/ZIP SHAを記録する。
+
+### 基本版の最小確認
+
+1. 開発用Python/.NET SDK/WinApp CLI/Aredoko登録がないWindows x64のテスト用ユーザーで行う。通常データを持ち込まず、生成PNG2枚と小CBZのみ用意する。OS版と既存runtimeの有無を記録する。
+2. 受け取ったZIPのSHAとsourceを照合し、空白・日本語を含む新しい場所へすべて解凍する。旧版や実データへ上書きしない。追加環境を先に導入して不足を隠さない。
+3. 通常の`Aredoko.exe`から起動する。起動進捗→ライブラリ/初回案内を確認し、手動backend起動や開発用コマンドを使わない。AIを準備せず基本操作へ進む。
+4. 生成素材フォルダを登録し、「一覧のみ」を読み込む。ファイル名検索→画像/本の閲覧→タグ・棚・お気に入りの保存を確認する。
+5. アプリを普通に閉じ、もう一度`Aredoko.exe`を開く。保存内容とフォルダ登録が残り、元PNG/CBZのSHAが変わらないことを確認する。
+6. 終了後、同じZIPを別の場所へ解凍し、その`Aredoko.exe`から起動する。同じユーザーの保存内容を保持することを確認する。通常の起動確認を`Check-Startup.cmd`の空DBで代用しない。
+7. 失敗時はOS版、候補のSHA/source、失敗段階、表示文とログの場所を記録する。試験を成功にせず、必要な依存/起動経路の不足として切り分ける。OS設定変更やinstaller実行は既存の許可ルールに従う。
+
+任意AI環境は、基本版の受入後に別項目として取得/配置/索引/検索/再起動を確認する。基本版が動いたことをAI環境の配布完了にしない。実runtimeの条項/host/registryとモデル条件が未完の現在、未確認の取得先や自動導入を成功扱いしない。下記10/21の記録は当時の履歴。
+
+
 > **起動タイムアウトは修正版で解消し、fresh smokeのready/通常close/早期cancelを実機確認済みです。** 最新入口は `dist/portable-startup-diagnostic-20261021-02/Aredoko/Check-Startup.cmd`。[修正・実測・限界](portable-startup-console-fix.md)。以下の旧準備/失敗記録は履歴です。
 
 > **後続の手動確認は起動失敗（20:41 Initial screen timed out）です。** 下記は準備時点の記録であり起動成功の証拠ではありません。最新の診断状況は[codex-handoff](codex-handoff.md)冒頭を参照。元の配布は保持し、新しい診断用frontendだけ別途build済み。原因特定・GUI再検証は未完了。

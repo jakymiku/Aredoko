@@ -160,10 +160,34 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-release-shortcut.ps1"\r\nif errorlevel 1 pause\r\n', encoding='utf-8')
     else:
         (output_dir / 'USER_GUIDE.md').write_text(
-            '# Aredoko\n\nAredoko.exeを開くと通常のライブラリで起動します。\n\n'
-            'Check-Startup.cmdは毎回新しい専用の空のDBで起動を確認します。既存DBや設定は使いません。\n\n'
-            'DB/タグ/索引は従来のユーザーデータ領域に保存し、配布フォルダと分離します。\n\n'
-            '[利用ガイド](docs/user-guide.md) / [起動経路の実装と未検証事項](docs/portable-startup-check.md)\n', encoding='utf-8')
+            '# Aredoko を使い始める\n\n'
+            'ZIPをすべて解凍し、Aredoko.exeを開いてください。バックエンドは一緒に起動します。\n\n'
+            '初めての方は [はじめに.txt](はじめに.txt)、詳しい使い方は [利用ガイド](docs/user-guide.md) をご覧ください。\n\n'
+            '通常はCheck-Startup.cmdを使う必要はありません。起動できないときの診断用で、専用の空のライブラリを使います。\n', encoding='utf-8')
+        (output_dir / 'はじめに.txt').write_text(
+            'Aredoko を使い始める\n'
+            '===================\n\n'
+            '1. ZIPをすべて解凍する\n'
+            '   ZIPの中から直接起動せず、解凍したフォルダを開いてください。\n\n'
+            '2. Aredoko.exeを開く\n'
+            '   起動中は進捗が表示されます。Pythonやバックエンドを別に起動する必要はありません。\n\n'
+            '3. フォルダを追加して、アイテム一覧を読み込む\n'
+            '   フォルダの登録後、一覧だけの読み込みか、AI索引の作成も行うかを選べます。\n'
+            '   後から行う場合は「登録フォルダ」の設定から読み込めます。\n\n'
+            '4. 検索・閲覧・整理を試す\n'
+            '   まず「ファイル名・タグ」で検索できます。ダブルクリックで対応するビューアが開きます。\n'
+            '   右クリックや「詳細」からタグ・棚・お気に入りを編集できます。\n\n'
+            'AI検索を使うには\n'
+            '   モデルとAI実行環境が別途必要です。「設定」のAI検索の準備から、取得や既存配置の案内を確認してください。\n'
+            '   AIを準備しなくても、ファイル名・タグ検索や整理・閲覧は利用できます。\n\n'
+            '更新するときは\n'
+            '   Aredokoを終了し、新しいZIPを別のフォルダへ解凍してAredoko.exeを開きます。\n'
+            '   登録情報・タグ・棚・設定は、既定ではユーザーデータ領域に保存され、配布フォルダとは分かれています。\n'
+            '   大切な登録情報は、更新前に設定のバックアップから保存できます。\n\n'
+            '起動できないときだけ\n'
+            '   Check-Startup.cmdで、専用の空のライブラリによる起動確認ができます。普段の作品が出ないのはこのためです。\n'
+            '   通常利用ではAredoko.exeへ戻ってください。エラーが出た場合は、表示された内容とログの場所を控えてください。\n\n'
+            '詳しい使い方：docs\\user-guide.md\n', encoding='utf-8-sig')
         (output_dir / 'Aredoko.cmd').write_text('@echo off\r\nstart "" "%~dp0Aredoko.exe" %*\r\n', encoding='ascii')
     if portable_frontend is not None:
         copy_payload(bootstrap, output_dir / 'Aredoko.exe')
