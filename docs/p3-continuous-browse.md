@@ -135,3 +135,10 @@ e362a32は4用途を説明付き2列のnative CheckBoxへ整理。選択mask/要
 68e2718は共通棚選択へ名前filter、表示件数/全選択数/表示外数を追加。HashSetで選択を保持し、絞り込みで消えた所属を適用時に落とさない。既存64棚上限、未知ID保全、取消/明示保存を維持。shelf-filter01は取消/draft保持/適用前DB不変まで成功し、保存の実文言「保存しました」に対し旧期待「保存済み」で停止。failure画像とDBの[1,74,75]/tag保存を確認し、製品保存失敗にはしない。
 
 f7b733aで取得画面をモデル/実行環境と任意タグ付けの短い説明にし、既定無制限の速度設定をExpanderへ。復旧guideの重複closeをnative一つへ統一。frontend06/shelf-acquisition02は成功済み取消を省いて残り保存/再表示・表示外所属・取得画面・速度展開・復旧closeを12checks/exit0、4PNG目視。実download/backup開始は0、棚初期設定/一括routeの個別GUI/64件入力/HC/DPIは未実施。証拠root continuation-20261029e、ui-recovery-shelf-review01.json。
+
+
+### 2026-10-30：表示サイズpresetとZIP24の通常起動
+
+1e8e7caは共通表示サイズflyoutに小60/中100/大180のnative Buttonを追加し、既存Slider/標準復帰/Ctrl+wheel/保存/仮想化の経路を再利用。新しいサイズ計算や全件生成は追加しない。基本ZIP24の通常入口で生成1PNG、presetの同一行/非重複と値変更、一覧へ戻る操作、終了/再起動を含む16checks/4exit0・3PNG目視。shelf画面のpreset個別GUI/Light preset/物理wheel/HC/DPIは未確認。a52cc0cはNavFavorites完了を待ってNavAllへ戻る試験側だけの待機を追加した。
+
+bf0db36は配置先のembedding役割を「内容検索（文章・画像・動画・音声）」と説明し、お気に入りフォルダはあるが作品は0件のときに「お気に入りはまだありません」と案内しない。既存enabled/favorite条件と表示する作品のscopeを保持する文言修正。Portable build0errors/既存3warnings、GUI/publish/ZIP24への収録は未実施。個別のミラー単体テストや無変更の全回帰は追加しない。

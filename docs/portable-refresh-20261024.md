@@ -202,3 +202,10 @@ Core/tests/BootstrapはZIP15/source0edbd40から無変更を機械照合し、�
 - frontend/application source e362a32、packaging source e3c126b、826files/661,869,018bytes。ZIP348,507,822bytes/SHA256 `9362eb86dbe3af75c59ca79474485057f474e7d3a0412ab072664d83065cb650`。dist/portable-basic-20261029-23/Aredoko/Aredoko.exe。footer/空案内/初回AI用途2列を収録。旧候補/Alphaを上書きしない。
 - 既存runtime/Bootstrapを再利用し封印全entry/ZIP/同梱check成功。Core/Bootstrap無変更を照合し1,441assertionsを再利用。通常入口は生成PNG1枚・専用DBで起動/終了/1回再起動11checks・所有4exit0・2PNG目視。新規download/GPU/通常DB/Alphaなし。全CPU34/全回帰の新規実施とはしない。
 - 生成検証セット23は6データfileだけ、アプリZIPとのmetadata一致を新CLIで確認。SHA `6d714eed42654a508e2ef33c3698cad274b74e9943295d3436120295ca1cd1d6`。別Windowsでの実受入、runtime公開条項/host/registryは未完。証拠 continuation-20261029e/basic23-final-review.json、basic23-startup01、preparation/log。後続のAI空画面直接操作はこの候補に含まない。
+
+
+## 2026-10-30 基本ZIP24（今回の試用候補）
+
+- `dist/portable-basic-20261029-24/Aredoko/Aredoko.exe`。frontend/application source **1e8e7caa8c91520d8c4afad7483de681fd80a0b5**、packaging source4379f2c。826files/661,889,270bytes。ZIP348,515,945bytes/SHA256 `987946c4212c386061ca3b90a6e588389b711e62aeb94ee643e3090ed43f319d`。下部操作/空案内/用途説明に加え、AI未導入時の直接操作、棚filter/表示外選択保持、取得要件説明/速度折畳み、復旧close、小中大preset、基本から読める同梱guideを収録。旧候補とinstalled Alphaは保持。
+- 全payload/ZIP/同梱check PASS。Core/Bootstrap/backendは不変を照合して前段のCore1,441assertions/CPU34の受入を再利用し、全回帰を反復していない。既存picker3/SDK IL2104×2は保持。GUIは明示許可を受けた生成PNG1枚・専用DB・UIA-onlyの1試行で、通常EXE起動→3preset/配置→終了→1回再起動 **16checks/所有4exit0**。PNG3枚を目視。前面化要求/物理入力/GPU/モデル取得/通常DB/Alpha変更なし。
+- 生成確認セット24も6data filesで作成。SHA256 `317dc8d93c0aad28610a09765d4933de6ef65ef53419ff81d39448a2fc562072`。ZIP24とmanifest/sums/inventory/size対応を照合。別Windows/全媒体再生/HC/物理DPIの受入ではない。証拠 continuation-20261029e/basic24-final-review.json、basic24-startup01、basic24-validation-kit01.log、distのpreparation/runtime-check。後続bf0db36の配置対象名/フォルダだけのお気に入り案内はsource/buildのみで未収録。

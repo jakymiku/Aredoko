@@ -1,6 +1,11 @@
 # PortableのWindows準備・検証（2026-10-21）
 
 
+## 2026-10-30 最新セット24
+
+現在の試用候補は基本ZIP24/source1e8e7ca。アプリZIP SHA `987946c4212c386061ca3b90a6e588389b711e62aeb94ee643e3090ed43f319d`、対になる生成確認セット `dist/portable-validation-20261029-24.zip` のSHA `317dc8d93c0aad28610a09765d4933de6ef65ef53419ff81d39448a2fc562072`。ホストの通常EXE/小中大/終了・再起動は限定確認済みだが、別Windows/Sandboxは未受入。機能有効化後のOS再起動を利用者の都合で済ませた後、readinessと当該候補の検証可否を確認する。旧セット23/22を上書きしない。
+
+
 ## 2026-10-29e 現在の生成確認セット
 
 基本ZIP23の対になる `dist/portable-validation-20261029-23.zip` を作成。アプリZIP SHAは `9362eb86dbe3af75c59ca79474485057f474e7d3a0412ab072664d83065cb650`、セットSHAは `6d714eed42654a508e2ef33c3698cad274b74e9943295d3436120295ca1cd1d6`。作成時に選択directoryとZIPのmanifest/sums/entry集合・サイズを照合し、別候補の組合せを拒否する（生成6tests PASS）。これはclean Windows実行結果ではない。旧22も保存する。Sandboxは機能有効化後のOS再起動待ち。
