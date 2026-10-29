@@ -11,7 +11,7 @@
 - **試験の失敗と未検証**：初回controlの候補path誤指定は起動前停止。autohide01は正常にcollapsedでUIA peerが消えたのにIsOffscreenを待ったharness FAIL→`--gone`の02で成功。notice01と両設定はUIA-only/物理入力false、新動画の下端pointer/実キーを合格にしない。新video codec/seek/音声再生・HC/物理DPI・長時間RSS・実媒体品質・clean Windows/公開runtimeは残る。全ロードマップ/M1/M2完了ではない。
 - **P7・原寸CPU復号の保持**：生成2560×1440/8frame APNG・WebPを本番Decoderで各256frame/32周処理し、sequence/原寸/budget/解放/原本不変PASS。warm後privateはAPNG約49MiB/WebP約67MiBで増加傾向なし、close後約20/24MiB。7.139/9.143sはCPU処理のみで、HTTP/WinUI/FPS/長時間全RSSは未検証。[正本](viewer-performance.md)末尾、`animation-soak-cpu01/report.json`。
 - **次の1件**：P7のAPNG/WebP連続描画・高速切替取消を、生成素材・独立DB/UIA-onlyで小さく確認し、frontend/decoderのメモリ保持を分けて再現したボトルネックだけ修正する。今回成功したCPU32周は再測定しない。10/26の82.55MiB GIF/18frame APNG/CBZや3frame原寸・小10.gifの成功は再実行しない。locked desktop中は物理入力を要求しないUIA/CPUを使い、実入力を必要とする受入は未検証で残す。P6は適用条項/供給元レビューと実immutable hostが揃ってからruntime registryへ進む。推測URL/無承認公開をしない。
-- **モニター**：off02は消灯通知後にWindowsが再点灯。復帰指示は送らず、常駐消灯loop/電源plan/security policy変更はない。終了時に一度だけ消灯を再送し、結果を下記へ記録する。今回shutdownしない。
+- **終了確認/モニター**：`94150a6`で保存/Push、branch/PR #5 head ref一致・clean・Aredoko試験process0を確認。残り約9%で終了準備。最終の有限消灯 `monitor-final-off01.json` は10.1sでoff通知あり→Windows側で再点灯（state1）、helperは正常終了。復帰指示/常駐消灯loop/電源plan/security policy変更なし、消灯維持はできていない。shutdownしない。この結果追記後の最終handoff commitは本書のGit履歴で確認する。
 
 ## 2026-10-29c 継続中checkpoint（以下より優先）
 
