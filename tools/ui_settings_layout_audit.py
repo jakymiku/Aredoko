@@ -38,3 +38,33 @@ def audit(ui,shot,report,check,target):
     ui('invoke','CloseButton');ui('wait-for','SettingsDialog','--gone','-t','10000')
     report['physical_input_requested']=False
     report['unverified']=['physical keyboard/tab order','high contrast and physical DPI','all destination screen actions']
+
+
+def audit_guide(ui,shot,report,check,catalog,handler,target):
+    before=catalog.search()['total']
+    def open_guide():
+        ui('invoke','BtnSettings');ui('wait-for','BtnGettingStarted','-t','10000');ui('invoke','BtnGettingStarted')
+        ui('wait-for','GuideAddFolder','-t','10000')
+    open_guide()
+    folder=inspect_element(ui,'GuideAddFolder');more=inspect_element(ui,'GuideDetails')
+    footer=inspect_element(ui,'PrimaryButton')
+    check('folder and optional AI entries are visible in the concise guide',not folder['isOffscreen'] and not footer['isOffscreen'] and folder['height']>=32)
+    check('collapsed detailed guidance remains reachable',not more['isOffscreen'] and more['height']>=40)
+    shot('guide-overview')
+    ui('invoke','GuideDetails','--action','expand')
+    expanded=json.loads(ui('inspect','GuideDetails','--depth','15','--json'))
+    names={n.get('name') for n in nodes(expanded) if n.get('type')=='TextBlock' or n.get('type')=='Text'}
+    expected=('1. フォルダを登録する','2. 検索して開く','3. AI検索を準備する（任意）','4. 内容から探す・整理する','閲覧・データ保護')
+    check('all five original detailed sections remain available',all(v in names for v in expected))
+    ui('invoke','GuideDetails','--action','collapse');ui('invoke','GuideAddFolder')
+    ui('wait-for','GettingStartedGuideDialog','--gone','-t','10000');ui('wait-for','RootPath','-p','IsEnabled','--value','True','-t','10000')
+    check('guide opens the folder registration form directly',not inspect_element(ui,'RootPath')['isOffscreen'])
+    check('opening registration does not scan or alter the generated catalog',catalog.search()['total']==before)
+    shot('guide-folder-entry')
+    ui('invoke','BtnBackToLibrary');ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+    open_guide();ui('invoke','PrimaryButton');ui('wait-for','AISetupPlanDialog','-t','10000')
+    check('optional AI guidance retains the purpose selection entry',True)
+    check('following guidance starts no downloads or inference',handler.setup_jobs.snapshot()['state']=='idle' and handler.download_jobs.snapshot()['state']=='idle')
+    ui('invoke','CloseButton');ui('wait-for','AISetupPlanDialog','--gone','-t','10000')
+    shot('guide-return');report['physical_input_requested']=False
+    report['unverified']=['physical keyboard/tab order','high contrast and physical DPI','real folder registration/model installation']
