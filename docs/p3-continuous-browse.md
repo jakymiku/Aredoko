@@ -145,3 +145,8 @@ bf0db36は配置先のembedding役割を「内容検索（文章・画像・動�
 
 
 8ee9049はお気に入りフォルダ行にnativeの操作ボタン/右クリックmenuを追加し、既存APIによる解除と登録設定へ直接移る。再利用時に古いContextFlyoutを消し、名前はstar列で制約する。新しい設定入口からアイテム編集を失わないよう、共通SelectFolderForSettingsAsyncでもDirty時に既存破棄確認を通す。生成fixtureは2PNG/2registered roots・favorite boolをCPUで確認、Portable build/publish0errors（既存警告保持）。frontend08/source8ee9049のGUIは具体化して許可待ち。ZIP24/通常DB/Alphaには未反映。
+
+
+frontend08/favorite-root-actions01（専用2PNG/2root・UIA-only）は設定直行、破棄確認の取消でdraft保持、作品お気に入り解除、folderだけの案内、両folder解除まで成功。最後のfolderが消えても古い空案内が残る実不具合でFAIL/exit0。両root favorite=false/enabled=1、items2、tag未保存をDBでも確認。menu/設定/失敗PNG計3枚を目視。復旧/登録解除/メディア削除の障害ではない。
+
+f2ba198は既存の差分更新がLoadAsyncを通らないことを踏まえ、literal/空query/0作品のお気に入りに限り、フォルダ表示とEmptyScopeGuidanceを同じUI更新で更新する。検索語/AI/類似の案内は保持。Portable build0errors（既存3warnings）。frontend09で残る解除後案内/登録・原本保持だけを追加許可後に確認し、成功済みの設定/取消を反復しない。旧FAILは保持する。
