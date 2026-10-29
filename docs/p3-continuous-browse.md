@@ -100,3 +100,18 @@ frontend01/source2f01d50、生成2PNG/専用DB・UIAだけでLight/Dark各25chec
 cfff134で表示操作を見出しへ、種類/検索方法をquery横へ移し、グループ単位で幅に応じて折り返す。54a08ffで音声等の空白previewにnative/テーマ対応iconを追加、実画像が来たら隠す。Imageを先頭に保ち、仮想化/サイズ変更/取消/未保存編集を保持。frontend02の生成6媒体はLight/Dark各31checks/所有exit0、各list/details/grid PNGを目視。先行frontend01各28の結果は二重合算しない。
 
 幅1600/1100と長い検索方法の試験03は21checks/exit0だが、目視で1100詳細時の見出しclip（自然73px→27px）を発見。257f74cでstar列に制約された親幅から子の自然幅合計へ変更し、frontend03のheader-fit-dark01は23checks/exit0・1600/1100の2PNG目視、両幅73pxを保持した。Search切替で詳細が閉じた後にcloseした01、選択直後のtree walkがstaleだった02は試験側FAILとして保持し、更新待機/明示IDへ変更。実pointer/key/全DPIは確認していない。証拠root `data/ai-ui/continuation-20261029d/`。Source/assembly/test SHAは各reportを参照する。
+
+
+## 2026-10-29d：検索・詳細・設定の密度改善
+
+- `cfff134` は検索欄と種類/方式を同じ行、表示操作を見出しへ移動。狭い場合は操作群を折り返す。`54a08ff` は音声等の空枠をnative SymbolIconで示し、実画像取得時に隠す。既存Image先頭・セル再利用・取消を維持。frontend02/source54a08ffの生成6媒体Light/Dark各31checks/exit0。先行frontend01各28は別証拠で二重合算しない。
+- 1100px詳細時に見出し幅27pxへclipする実不具合を発見し、`257f74c` で子の自然幅から算定。frontend03の1600/1100pxは23checks/exit0、両幅で見出し73px保持/2PNG目視。試験側の古い詳細close・ComboBox変更直後のstaleは別FAILとして保存。
+- `2cea680` はタグを最大120pxで折返し、棚名と変更ボタンを一行に整理。frontend04/source2cea680のLight02/Dark01各11checks/exit0、4PNG目視。長いタグのdraft、棚選択取消、grid切替、保存を保持。Light01は収まったフォームへ不要なscrollを送ったharness FAILであり、`df998c8`で試験だけ修正。
+- `260e577` はgrid/listの明示切替を既存viewer-settingsのoptional `library_view`へatomic保存。サイズ/theme/閲覧設定と共存し、legacyはlist。バックアップ形式の受入も同時更新。基本Python3.11の関連3method、Core限定79assertions、変更後の全Core1,441assertions PASS。検索順位/DB schema/画面履歴の並びは変更しない。
+- `6b0bb56` は設定の6操作を2列3行に整理し、高度な設定を末尾へ。frontend05（build時HEAD260e577＋今回settings変更、reportのsource_filesで固定）はrequested Light/Dark各15checks/exit0、4PNG目視で両色の表示・native footer保存/再表示を確認（保存したsystemテーマはOS表示へ反映）。個別の全遷移/実キー/HC/物理DPIは未検証。
+- 証拠は `data/ai-ui/continuation-20261029d/`。専用DB/生成素材/UIA-only。前面化/物理入力/モデル/GPU/通常DB/Alphaの変更なし。monitor-off/locked desktop下のcaptureを実入力受入やclean Windows合格にしない。
+
+- `bc73b09` は使い方ガイドを3手順＋72px装飾に整理し、旧5節の詳細をExpanderへ保持。フォルダ登録への直接ボタンを追加し、任意AI用途選択も維持。frontend06（build時HEAD6b0bb56＋guide差分）はLight/Dark各11checks/exit0、概要2枚/登録2枚/復帰1枚を目視。新規取得/モデル/実scanなし。
+- `9fdf07c` は登録フォルダの二重の作品一覧戻るを共通ヘッダー `BtnRoots`へ統一。frontend08のfolder-toolbar-dark01は8checks/exit0/1PNG目視。通常幅で登録フォーム/戻るを確認し、操作自体は保持。診断の重複closeもnative footer一つへ統一する。個別GUI候補はbase HEADに作業差分を含む場合があり、reportのsource_files/assembly SHAを根拠とし、後のcommitだけでProductVersionを言い換えない。
+
+- 診断画面の追加確認で、AcceptsReturnをText代入後に設定していたため実TextBox/UIAが先頭行だけになる製品不具合を発見（diagnostic-footer-dark02 FAIL/exit0）。複数行を有効にしてからTextを代入する順序へ修正。独自close styleも外し標準footerを維持。frontend10のdark03は9checks/exit0/1PNG目視、全行とビルド元/配布種別のUIA保持を確認。copy操作は未実行だが既存の全report文字列をコピーする処理は不変。dark01の可視だけの8checksを全文受入にしない。

@@ -174,3 +174,13 @@ Core/tests/BootstrapはZIP15/source0edbd40から無変更を機械照合し、�
 - Portable publish/全payload/ZIP/同梱check PASS。Core/Bootstrap/testsは292fdf2以降不変のsource照合で1,438assertionsと既存案内を再利用。ZIP18のCPU34は19とbackend/runtime/起動EXEの全封印entryが同一のため反復せず再利用する。新しいCore全回帰やGPUを実施したとは扱わない。既存picker WUI1001×3/SDK trim IL2104×2を保持。
 - 新19のUIA-only生成音声は自動非表示4＋常時表示4、通常EXEは起動→正常終了→1回再起動11checks/所有4exit0、6PNG目視。タイトル/音量/通知時geometryは前段ZIP18/source365d9a1の5＋5checks/3PNGで確認（19の新規再試験へ加算しない）。物理キー/下端pointer再表示はlocked desktopで未検証。
 - 証拠 `data/ai-ui/continuation-20261029c/basic19-final-review.json`、各 `player-*` / `basic18-cpu01` / `basic19-startup01`。17は中間buildのみ、18は前段の受入候補。installed AlphaはZIP10/source0138a58のまま。公開runtime・clean Windows・全P7/M1/M2は未完。
+
+
+## 2026-10-29d 基本ZIP20（UI改善・簡潔な配布入口）
+
+- 新規出力 `dist/portable-basic-20261029-20/Aredoko`、source/ProductVersion `260e577`。826files/661,839,164bytes、ZIP348,490,569bytes/SHA256 `03f387a6ab306686bf40448203ccc1269a7c679df637e99d09ece6593546d124`。旧候補/installed Alphaは上書きしない。
+- `84a593d`のUTF8 BOM `はじめに.txt`をrootへ同梱。通常Aredoko.exe/解凍/初回一覧取得/任意AI/新しい解凍先への更新/診断用空DBを短く案内し、USER_GUIDEから詳しい使い方へ接続。基本Python3.11の既存梱包/ZIPテスト1method PASS。
+- Portable publish/全payload/ZIP/同梱check、CPU34項目PASS。Core変更後は今回の全1,441assertionsを確認し、無変更BootstrapだけZIP19とSHA照合して再利用。通常EXE→終了→1回再起動は16checks/所有4exit0。gridの保存と再起動時復元、listへ戻した保存、生成原本不変を含む。
+- 起動2PNGは初期navigation/headingの一部がcaptureに描かれないがUIA peer/寸法は存在する。起動受入と区別し、全面目視合格とはしない。別のnative UIA fixtureでは見出し/navigation/設定を描画できている。実monitor表示/HC/物理DPI/clean Windowsは未検証。
+- Sandboxは未起動/stale、OS feature InstallState2。機能有効化やOS変更はせず、[別Windows確認手順](portable-windows-validation.md)を更新。開発PC合格を別環境受入にしない。
+- 証拠：`data/ai-ui/continuation-20261029d/basic20-final-review.json`、`basic20-cpu01`、`basic20-startup01`、各build/log。ZIP20は後続のsettings整理6b0bb56を含まない。次回candidateで収録する。

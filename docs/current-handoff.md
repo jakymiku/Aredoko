@@ -1,5 +1,13 @@
 # Aredoko — 現行の単一引き継ぎ（2026-10-29）
 
+## 2026-10-29d 追加checkpoint（UI実装済み・配布候補へ収録中）
+
+- 6b0bb56で設定6操作を2列3行、bc73b09で使い方を3手順/旧詳細展開/フォルダ直行へ、9fdf07cで登録フォルダの二重戻るを共通BtnRootsへ統一。専用DB/生成素材/UIA-onlyで各対象を確認。[証拠とbase HEAD/作業差分の注意](p3-continuous-browse.md)末尾。
+- 診断TextBoxが実際に先頭1行だけになる不具合を追加発見し、AcceptsReturn→Textの順へ修正。frontend10 diagnostic-footer-dark03は全文/ビルド情報保持を含む9checks/exit0/1PNG目視。旧02のFAILを保持。閉じるは標準footer一つ、clipboard未操作。各commitは本節直前のgit logを参照。
+- BasicZIP20/source260e577は826files・CPU34/通常EXE16checks/所有4exit0、grid保存/再起動/戻したlist保存まで。後続settings/guide修正を含まない。次はそれらを基本ZIP21へ収録し、通常EXEから空DB→ガイド→生成フォルダ登録→一覧のみ取得→タグ保存→再起動を1ケースで確認する。Coreは260e577以後不変を照合して今回1,441assertionsを再利用する。
+- モニター消灯要求済み、復帰/OS電源設定変更/shutdownなし。物理キー/HC/DPI/別Windows/公開runtimeは未検証。Sandbox未起動/feature InstallState2のため有効化やguest新規取得はしない。通常DB/Alpha/私物/モデルは不変。外部条件待ちを理由にUIを止めず、この後の最終checkpointを優先。
+
+
 ## 2026-10-29d 作業中checkpoint（以下より優先）
 
 - 起点8f741f7、remoteのAGENTS追記だけの6322fc1をclean fast-forwardで取り込み。過剰防御/抽象化を避ける新ルールを確認。UI改善＋P6配布の並行指示で実装を再開し、古い「今回は文書だけ」は適用しない。モニターへ一度だけdesktop SC_MONITORPOWER消灯を送信（monitor-off01.json）、wake/電源設定変更/shutdownなし。
