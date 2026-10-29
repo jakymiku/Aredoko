@@ -60,11 +60,12 @@
       <TextBlock x:Name="AudioSearchHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="AudioSearchHint"/>
       <Button x:Name="TagSuggestionsButton" Content="AIタグ候補" Visibility="Collapsed" IsEnabled="False" Click="TagSuggestions_Click" AutomationProperties.AutomationId="BtnTagSuggestions"/>
 
-       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
-       <StackPanel Spacing="4">
-        <TextBox x:Name="Shelf" Header="棚" IsReadOnly="True" TextWrapping="Wrap" AutomationProperties.Name="所属する棚" AutomationProperties.AutomationId="TxtShelf"/>
-        <Button x:Name="ChooseShelvesButton" Content="棚を選択" Click="ChooseShelves_Click" AutomationProperties.AutomationId="BtnChooseShelves"/>
-       </StackPanel>
+       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextWrapping="Wrap" MaxHeight="120" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
+       <Grid ColumnSpacing="8">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBox x:Name="Shelf" Header="棚" PlaceholderText="棚なし" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="96" AutomationProperties.Name="所属する棚" AutomationProperties.AutomationId="TxtShelf"/>
+        <Button x:Name="ChooseShelvesButton" Grid.Column="1" VerticalAlignment="Bottom" Content="変更" ToolTipService.ToolTip="所属する棚を変更" Click="ChooseShelves_Click" AutomationProperties.Name="所属する棚を変更" AutomationProperties.AutomationId="BtnChooseShelves"/>
+       </Grid>
        <CheckBox x:Name="Favorite" Content="お気に入り" Checked="Favorite_Checked" Unchecked="Favorite_Checked" AutomationProperties.AutomationId="ChkFavorite"/>
        <CheckBox x:Name="Reviewed" Visibility="Collapsed" Content="確認済み" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkReviewed"/>
        <Expander x:Name="FileProperties" Header="ファイルのプロパティ" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="FileProperties"><TextBlock x:Name="FilePropertyText" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="FilePropertyText"/></Expander>
