@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--setup-recovery',action='store_true',help='Setup return plus safe recovery, diagnostic return and saved-profile restart state')
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
+    parser.add_argument('--footer-actions-only',action='store_true',help='UIA-only range menu, retained selection/draft and refresh over145 generated PNGs')
     parser.add_argument('--folder-toolbar-only',action='store_true',help='UIA-only single folder return action and registration form access')
     parser.add_argument('--diagnostic-footer-only',action='store_true',help='UIA-only diagnostic native close footer, no clipboard access')
     parser.add_argument('--guide-layout-only',action='store_true',help='UIA-only concise guide, preserved details and folder/AI entry points')
@@ -56,6 +57,7 @@ def main():
     if args.favorite_patch:args.detail_actions=True;args.uia_only=True
     if args.caption_menu_only:args.card_captions=True
     if args.card_captions:args.detail_polish=True
+    if args.footer_actions_only:args.uia_only=True
     if args.folder_toolbar_only:args.detail_polish=True
     if args.diagnostic_footer_only:args.detail_polish=True
     if args.guide_layout_only:args.detail_polish=True
@@ -300,6 +302,11 @@ def main():
             removed=audit(ui,cli,tree,shot,report,check,cat,media,target,proc.pid,hwnd,input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only)
             check('generated sources match the declared scope',{key:value for key,value in before.items() if key!=removed}==sources())
             report['pass']=True
+        elif args.footer_actions_only:
+            from ui_footer_actions_audit import audit
+            report['footer_audit_sha256']=hashlib.sha256((REPO/'tools/ui_footer_actions_audit.py').read_bytes()).hexdigest()
+            audit(ui,tree,shot,report,check,cat)
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.folder_toolbar_only:
             from ui_settings_layout_audit import audit_folder_toolbar
             report['folder_audit_sha256']=hashlib.sha256((REPO/'tools/ui_settings_layout_audit.py').read_bytes()).hexdigest()
