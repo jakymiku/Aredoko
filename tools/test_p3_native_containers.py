@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--setup-recovery',action='store_true',help='Setup return plus safe recovery, diagnostic return and saved-profile restart state')
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
+    parser.add_argument('--favorite-root-removal-only',action='store_true',help='Only remaining last-folder guidance and registration/media retention')
     parser.add_argument('--favorite-root-actions',action='store_true',help='UIA-only favorite folder commands, dirty tag guard and last-folder removal')
     parser.add_argument('--shelf-picker-remaining',action='store_true',help='Only remaining shelf save/reopen, then acquisition explanations and recovery-guide footer; no jobs')
     parser.add_argument('--shelf-picker-filter',action='store_true',help='UIA-only shelf filtering retains hidden memberships and unsaved tags')
@@ -63,6 +64,7 @@ def main():
     if args.favorite_patch:args.detail_actions=True;args.uia_only=True
     if args.caption_menu_only:args.card_captions=True
     if args.card_captions:args.detail_polish=True
+    if args.favorite_root_removal_only:args.favorite_root_actions=True
     if args.favorite_root_actions:args.detail_polish=True
     if args.shelf_picker_remaining:args.shelf_picker_filter=True
     if args.shelf_picker_filter:args.detail_polish=True
@@ -196,7 +198,7 @@ def main():
         extras={}
         if args.favorite_root_actions:
             from ui_favorite_root_actions_audit import prepare
-            report['favorite_root_fixture']=prepare(cat,target)
+            report['favorite_root_fixture']=prepare(cat,target,file_favorite=not args.favorite_root_removal_only)
         if args.shelf_picker_filter:
             from ui_shelf_filter_audit import prepare
             report['shelf_filter_fixture']=prepare(cat)
@@ -323,7 +325,7 @@ def main():
         elif args.favorite_root_actions:
             from ui_favorite_root_actions_audit import audit
             report['favorite_root_audit_sha256']=hashlib.sha256((REPO/'tools/ui_favorite_root_actions_audit.py').read_bytes()).hexdigest()
-            audit(ui,tree,shot,report,check,cat)
+            audit(ui,tree,shot,report,check,cat,remaining=args.favorite_root_removal_only)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.shelf_picker_filter:
             from ui_shelf_filter_audit import audit

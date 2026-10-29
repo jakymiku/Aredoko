@@ -48,6 +48,10 @@ public sealed partial class MainPage
             await api.SetRootFavoriteAsync(row.Id,value);
             knownRoots=knownRoots.Select(root=>root.Id==row.Id?root with{Favorite=value}:root).ToArray();
             UpdateFavoriteRootList();if(folderHubOpen)RenderFolderHub();
+            // A frozen empty result can be patched without running LoadAsync.
+            // Keep the folder area and its guidance in the same UI update.
+            if(view=="favorites"&&rows.Count==0&&SearchMode.SelectedIndex==0&&string.IsNullOrWhiteSpace(Query.Text)&&similarityOrigin is null)
+                Empty.Text=EmptyScopeGuidance();
             resultsNeedRefresh=true;
             if(!folderHubOpen&&!shelfHubOpen)await RefreshResultRowsAfterEditAsync();
         }
