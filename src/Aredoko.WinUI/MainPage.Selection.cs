@@ -32,6 +32,8 @@ public sealed partial class MainPage
         SelectionTools.Visibility=preparingSelection||librarySelection.Count>1||outside>0?Visibility.Visible:Visibility.Collapsed;
         CancelSelectionPreparation.Visibility=preparingSelection?Visibility.Visible:Visibility.Collapsed;
         SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件を選択しています。";
+        FooterSelection.Text=$"{librarySelection.Count:N0} 件選択";
+        FooterSelection.Visibility=librarySelection.Count>0?Visibility.Visible:Visibility.Collapsed;
         DetailsButton.IsEnabled=!saving&&!preparingSelection&&(librarySelection.Count>0||active is not null);
         ClearSelectionButton.IsEnabled=!saving&&!preparingSelection&&!dialogOpen;
         foreach(var container in containerCleanup.Keys.ToArray())

@@ -301,7 +301,20 @@
      </Grid>
     </Grid>
    <StackPanel Grid.Row="4" Spacing="8">
-    <StackPanel x:Name="ItemPagerRow" Orientation="Horizontal" Spacing="8"><Button x:Name="Previous" Content="前へ" Click="Previous_Click" AutomationProperties.AutomationId="BtnPrevious"/><TextBlock x:Name="PageNumber" AutomationProperties.AutomationId="TxtPageNumber" VerticalAlignment="Center"/><Button x:Name="Next" Content="次へ" Click="Next_Click" AutomationProperties.AutomationId="BtnNext"/><Button Content="再接続" Click="Reconnect_Click" AutomationProperties.AutomationId="BtnReconnect"/></StackPanel>
+    <Grid x:Name="ItemPagerRow" ColumnSpacing="8">
+     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <TextBlock Text="読み込み済み" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center"/>
+     <TextBlock x:Name="PageNumber" Grid.Column="1" AutomationProperties.AutomationId="TxtPageNumber" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="一覧はスクロールすると続きが読み込まれます。数字は現在読み込まれている範囲です。"/>
+     <TextBlock x:Name="FooterSelection" Grid.Column="2" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center" AutomationProperties.AutomationId="FooterSelection"/>
+     <Button Grid.Column="3" Content="一覧の操作" Click="BrowseActions_Click" AutomationProperties.AutomationId="BrowseActions" ToolTipService.ToolTip="一覧の更新・範囲移動">
+      <Button.Flyout><MenuFlyout x:Name="BrowseActionsFlyout">
+       <MenuFlyoutItem x:Name="Previous" Text="前の範囲を読み込む" IsEnabled="False" Click="Previous_Click" AutomationProperties.AutomationId="BtnPrevious"/>
+       <MenuFlyoutItem x:Name="Next" Text="次の範囲を読み込む" IsEnabled="False" Click="Next_Click" AutomationProperties.AutomationId="BtnNext"/>
+       <MenuFlyoutSeparator/>
+       <MenuFlyoutItem Text="接続と一覧を更新" Click="Reconnect_Click" AutomationProperties.AutomationId="BtnReconnect"/>
+      </MenuFlyout></Button.Flyout>
+     </Button>
+    </Grid>
     <ProgressBar x:Name="Busy" IsIndeterminate="True" Visibility="Collapsed"/>
     <InfoBar x:Name="Status" IsOpen="False" IsClosable="False" Title="接続準備中" AutomationProperties.AutomationId="StatusBar" AutomationProperties.Name="ステータス通知">
      <InfoBar.ActionButton><Button x:Name="StatusMore" Content="説明" Visibility="Collapsed" AutomationProperties.Name="検索結果の説明を読む" AutomationProperties.AutomationId="BtnStatusDetails">

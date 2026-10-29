@@ -403,6 +403,7 @@ public sealed partial class MainPage : Page
     }
     private async void Reconnect_Click(object sender,RoutedEventArgs e)
     {
+        BrowseActionsFlyout.Hide();
         if(!await transitions.WaitAsync(0))return;
         try{if(await ConfirmDiscardAsync())await ConnectAsync();}finally{transitions.Release();}
     }
@@ -1184,8 +1185,9 @@ public sealed partial class MainPage : Page
     }
     private void AIMatchedOnly_Changed(object sender,RoutedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private void Kind_Changed(object sender,SelectionChangedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
-    private async void Previous_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(PreviousBrowsePage());
-    private async void Next_Click(object sender,RoutedEventArgs e)=>await NavigateAsync(NextBrowsePage());
+    private void BrowseActions_Click(object sender,RoutedEventArgs e)=>ItemSizeFlyout.Hide();
+    private async void Previous_Click(object sender,RoutedEventArgs e){BrowseActionsFlyout.Hide();await NavigateAsync(PreviousBrowsePage());}
+    private async void Next_Click(object sender,RoutedEventArgs e){BrowseActionsFlyout.Hide();await NavigateAsync(NextBrowsePage());}
     private void RestoreNavigation()
     {
         populating=true;
@@ -1201,7 +1203,7 @@ public sealed partial class MainPage : Page
     private async void Nav_SelectionChanged(NavigationView sender,NavigationViewSelectionChangedEventArgs args)
     {
         if(!ready||populating||args.SelectedItem is not NavigationViewItem item)return;
-        ItemSizeFlyout.Hide();
+        ItemSizeFlyout.Hide();BrowseActionsFlyout.Hide();
         var next=item.Tag?.ToString()??"";
         if(next=="folders"){await OpenFolderHubAsync();return;}
         if(next=="shelf"){await OpenShelfHubAsync();return;}
@@ -1226,7 +1228,7 @@ public sealed partial class MainPage : Page
         try{ViewerOptions.SaveLibraryView(!tiles);}
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
         {Notice("表示方法を保存できません",ex.Message,InfoBarSeverity.Warning);AppLog.Error(ex);return;}
-        ItemSizeFlyout.Hide();tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
+        ItemSizeFlyout.Hide();BrowseActionsFlyout.Hide();tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
         if(shelfHubOpen)RenderShelfLayout();else ReflowBrowse(()=>{RenderRows();RestoreSelection();});
     }
     private void OpenDetails_Click(object sender,RoutedEventArgs e)
