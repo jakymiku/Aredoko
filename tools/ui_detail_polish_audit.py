@@ -54,7 +54,8 @@ def audit_fields(ui,tree,shot,report,check,catalog):
     tags=inspect_element(ui,'TxtTags')
     check('long tags wrap into a bounded taller field',baseline+14<tags['height']<=120)
     check('editing wrapped tags does not save implicitly',catalog.get(short['id'])['tags']==old['tags'])
-    ui('scroll','DetailScroll','--to','bottom');state=tree();shelf=state['TxtShelf'];button=state['BtnChooseShelves']
+    state=tree();shelf=state['TxtShelf'];button=state['BtnChooseShelves']
+    check('shelf action remains visible without scrolling past wrapped tags',not button['isOffscreen'] and button['height']>=32)
     check('shelf selection button shares the current shelf row',abs(shelf['y']+shelf['height']-button['y']-button['height'])<=2 and button['x']>=shelf['x']+shelf['width']-1)
     ui('invoke','BtnChooseShelves');ui('wait-for','ChooseShelfList','-t','5000');ui('invoke','CloseButton')
     ui('wait-for','ChooseShelfList','--gone','-t','5000');ui('wait-for','TxtTags','--value',long_tags,'-t','10000')
