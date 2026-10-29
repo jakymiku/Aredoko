@@ -20,14 +20,17 @@ from portable_frontend import inspect_portable
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--frontend',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--keyboard-controls',action='store_true',help='Only generated silent audio controls and image menu keyboard routing')
+    parser.add_argument('--inspect-controls',action='store_true',help='With --keyboard-controls, inspect generated player UIA state only; never verify real keys')
     args=parser.parse_args();front=args.frontend.resolve();target=args.output.resolve()
+    if args.inspect_controls and not args.keyboard_controls:parser.error('--inspect-controls requires --keyboard-controls')
     if (os.name!='nt' or target.exists() or not target.is_relative_to(REPO/'data/ai-ui') or
         not (front.is_relative_to(REPO/'dist') or front.is_relative_to(REPO/'data/ai-ui'))):parser.error('Dedicated Windows candidate and new evidence directory required')
     inspect_portable(front);target.mkdir(parents=True);media=target/'media';media.mkdir()
     from PIL import Image,ImageDraw
     report={'pass':False,'checks':[],'screenshots':[],'visual_review':'pending','gpu_inference':False,
             'source_head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
-            'frontend_sha256':hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest()}
+            'frontend_sha256':hashlib.sha256((front/'Aredoko.WinUI.dll').read_bytes()).hexdigest(),'keyboard_controls':args.keyboard_controls,'control_state_only':args.inspect_controls,'physical_keyboard_attempted':False,'keyboard_control_pass':False}
     env={**os.environ,'LOCALAPPDATA':str(target/'user'),'APPDATA':str(target/'user'),
          'WINAPP_UI_WORKFLOW_ID':'aredoko-viewer-input-'+secrets.token_hex(8)}
     user=ctypes.WinDLL('user32',use_last_error=True)
@@ -61,6 +64,16 @@ def main():
     def foreground(hwnd):
         owned(hwnd)
         if user.GetForegroundWindow()!=int(hwnd):user.SetForegroundWindow(int(hwnd))
+        if user.GetForegroundWindow()!=int(hwnd) and args.keyboard_controls:
+            current=tree(hwnd)
+            identifier=next((key for key in ('VideoViewport','ImageViewport') if key in current),None)
+            if identifier is not None:
+                area=current[identifier];location=wintypes.POINT(round(area['x']+area['width']/2),round(area['y']+area['height']/2))
+                owner=wintypes.DWORD();user.GetWindowThreadProcessId(user.WindowFromPoint(location),ctypes.byref(owner))
+                # An ordinary click may activate this visible test viewport.
+                # Refuse if any other process covers that exact point.
+                if owner.value==proc.pid:
+                    ui(hwnd,'click',identifier);time.sleep(.15)
         if user.GetForegroundWindow()!=int(hwnd):raise RuntimeError('Owned foreground input unavailable; no fallback to another app')
     def point(hwnd,x,y):
         foreground(hwnd);owner=wintypes.DWORD();user.GetWindowThreadProcessId(user.WindowFromPoint(wintypes.POINT(x,y)),ctypes.byref(owner))
@@ -73,7 +86,7 @@ def main():
         # bottom hotzone. No toolbar button, image action or foreign app hit.
         ui(hwnd,'drag',coordinate,coordinate)
     def shot(name):
-        current=tree(viewer);viewport='ImageViewport' if 'ImageViewport' in current else 'ReaderViewport'
+        current=tree(viewer);viewport='VideoViewport' if 'VideoViewport' in current else 'ImageViewport' if 'ImageViewport' in current else 'ReaderViewport'
         # Window capture can compose a tooltip with per-window headings. Crop
         # the selected viewport so a tooltip cannot shift the pixel origin.
         path=target/(name+'.png');ui(viewer,'screenshot',viewport,'--output',str(path))
@@ -102,7 +115,8 @@ def main():
             rows=[w for w in windows() if w.get('title','').startswith(prefix)]
             if len(rows)!=1:return False
             viewer=str(rows[0]['hwnd']);return True
-        wait('owned viewer opens',locate);foreground(viewer)
+        wait('owned viewer opens',locate)
+        if not args.inspect_controls:foreground(viewer)
     def close_viewer():
         owned(viewer);user.PostMessageW(int(viewer),0x10,0,0)
         wait('owned viewer closes',lambda:not any(str(w['hwnd'])==viewer for w in windows()))
@@ -114,6 +128,10 @@ def main():
             for number in range(5):
                 with Image.new('RGB',(1000,700),(35+number*30,80,140)) as image,io.BytesIO() as buffer:
                     image.save(buffer,format='PNG');archive.writestr(f'{number}.png',buffer.getvalue())
+        if args.keyboard_controls:
+            import wave
+            with wave.open(str(media/'silent-controls.wav'),'wb') as audio:
+                audio.setnchannels(1);audio.setsampwidth(2);audio.setframerate(16000);audio.writeframes(b'\0\0'*16000*20)
         before={p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()}
         cat=ProductionCatalog(target/'catalog.sqlite');root=cat.add_root(str(media));cat.start_scan(root)
         if cat._worker:cat._worker.join(10)
@@ -126,6 +144,7 @@ def main():
         server.socket.setsockopt(socket.SOL_SOCKET,socket.SO_EXCLUSIVEADDRUSE,1);server.server_bind();server.server_activate()
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         app_log=(target/'app.log').open('w',encoding='utf-8')
+        if args.inspect_controls:(target/'viewer-settings.json').write_text(json.dumps({'version':1,'wheel_up_advances':False,'always_show_controls':True}))
         proc=subprocess.Popen([str(front/'Aredoko.WinUI.exe'),'--ui-theme','dark','--viewer-settings',str(target/'viewer-settings.json')],cwd=front,env=env,stdout=app_log,stderr=subprocess.STDOUT)
         report['owned_pid']=proc.pid
         def main_window():
@@ -135,34 +154,39 @@ def main():
             main_hwnd=str(rows[0]['hwnd']);return True
         wait('owned main window',main_window)
         ui(main_hwnd,'wait-for','Item'+str(ids['a-center.png']),'-t','15000')
-        open_viewer('a-center.png','BtnOpenImage','Aredoko — 画像ビューア')
-        bar(viewer,'ImageViewport')
-        ui(viewer,'wait-for','ImageActualSize','-p','IsEnabled','--value','True','-t','15000')
-        ui(viewer,'hover','ImageViewport','--dwell-time','0')
-        wait('image toolbar hides while pointer remains over image',lambda:not visible(viewer,'ImageToolbar'),seconds=5)
-        check('image toolbar hides over the canvas',True);before_zoom=marker(shot('01-fit'))
-        bar(viewer,'ImageViewport');wait('bottom hotzone reveals controls',lambda:visible(viewer,'ImageToolbar'))
-        check('bottom hotzone reveals image controls',True)
-        ui(viewer,'invoke','ImageZoomIn');time.sleep(.3);after_zoom=marker(shot('02-centered-zoom'))
-        report['marker_before_zoom']=before_zoom;report['marker_after_zoom']=after_zoom
-        check('button zoom preserves the image center',max(abs(a-b) for a,b in zip(before_zoom,after_zoom))<=5)
-        area=tree(viewer)['ImageViewport'];x=round(area['x']+area['width']/2+50);y=round(area['y']+area['height']/2+30)
-        start=point(viewer,x,y);end=point(viewer,x-80,y-50);ui(viewer,'drag',start,end,'--dwell-ms','100');time.sleep(.25)
-        after_pan=marker(shot('03-left-drag'));report['marker_after_pan']=after_pan
-        check('left drag moves zoomed image by the pointer displacement',abs(after_pan[0]-after_zoom[0]+80)<=15 and abs(after_pan[1]-after_zoom[1]+50)<=15)
-        bar(viewer,'ImageViewport');ui(viewer,'invoke','ImageFit');ui(viewer,'hover','ImageViewport','--dwell-time','0')
-        foreground(viewer);ui(viewer,'scroll','ImageViewport','--wheel','-1');ui(viewer,'wait-for','ViewerImage','--value','b-next.pngの画像','-t','10000')
-        time.sleep(.25);ui(viewer,'scroll','ImageViewport','--wheel','1');ui(viewer,'wait-for','ViewerImage','--value','a-center.pngの画像','-t','10000')
-        check('real wheel advances and returns between images',True);close_viewer()
-        open_viewer('book.cbz','BtnOpenBook','Aredoko — 本ビューア');ui(viewer,'wait-for','ReaderImage','--value','1ページ','-t','10000')
-        bar(viewer,'ReaderViewport');ui(viewer,'invoke','ReaderSettings');ui(viewer,'wait-for','ViewerLoopPages','-t','5000');ui(viewer,'invoke','ViewerLoopPages')
-        ui(viewer,'hover','ReaderViewport','--dwell-time','0');foreground(viewer)
-        ui(viewer,'scroll','ReaderViewport','--wheel','1');ui(viewer,'wait-for','ReaderImage','--value','5ページ','-t','10000')
-        time.sleep(.25);ui(viewer,'scroll','ReaderViewport','--wheel','-1');ui(viewer,'wait-for','ReaderImage','--value','1ページ','-t','10000')
-        check('real wheel wraps both book boundaries with loop enabled',True)
-        wait('reader toolbar hides over image',lambda:not visible(viewer,'ReaderToolbar'),seconds=5);check('reader toolbar hides over image',True);shot('04-book-loop-hidden')
-        close_viewer();settings=json.loads((target/'viewer-settings.json').read_text(encoding='utf-8'))
-        check('loop preference saved only in dedicated settings',settings['loop_book_pages'] is True and settings['always_show_controls'] is False)
+        if args.keyboard_controls:
+            from ui_player_keyboard_audit import audit
+            observations=audit(ui,tree,open_viewer,close_viewer,foreground,shot,wait,report,lambda:viewer)
+            for name,value in observations:check(name,value)
+        else:
+            open_viewer('a-center.png','BtnOpenImage','Aredoko — 画像ビューア')
+            bar(viewer,'ImageViewport')
+            ui(viewer,'wait-for','ImageActualSize','-p','IsEnabled','--value','True','-t','15000')
+            ui(viewer,'hover','ImageViewport','--dwell-time','0')
+            wait('image toolbar hides while pointer remains over image',lambda:not visible(viewer,'ImageToolbar'),seconds=5)
+            check('image toolbar hides over the canvas',True);before_zoom=marker(shot('01-fit'))
+            bar(viewer,'ImageViewport');wait('bottom hotzone reveals controls',lambda:visible(viewer,'ImageToolbar'))
+            check('bottom hotzone reveals image controls',True)
+            ui(viewer,'invoke','ImageZoomIn');time.sleep(.3);after_zoom=marker(shot('02-centered-zoom'))
+            report['marker_before_zoom']=before_zoom;report['marker_after_zoom']=after_zoom
+            check('button zoom preserves the image center',max(abs(a-b) for a,b in zip(before_zoom,after_zoom))<=5)
+            area=tree(viewer)['ImageViewport'];x=round(area['x']+area['width']/2+50);y=round(area['y']+area['height']/2+30)
+            start=point(viewer,x,y);end=point(viewer,x-80,y-50);ui(viewer,'drag',start,end,'--dwell-ms','100');time.sleep(.25)
+            after_pan=marker(shot('03-left-drag'));report['marker_after_pan']=after_pan
+            check('left drag moves zoomed image by the pointer displacement',abs(after_pan[0]-after_zoom[0]+80)<=15 and abs(after_pan[1]-after_zoom[1]+50)<=15)
+            bar(viewer,'ImageViewport');ui(viewer,'invoke','ImageFit');ui(viewer,'hover','ImageViewport','--dwell-time','0')
+            foreground(viewer);ui(viewer,'scroll','ImageViewport','--wheel','-1');ui(viewer,'wait-for','ViewerImage','--value','b-next.pngの画像','-t','10000')
+            time.sleep(.25);ui(viewer,'scroll','ImageViewport','--wheel','1');ui(viewer,'wait-for','ViewerImage','--value','a-center.pngの画像','-t','10000')
+            check('real wheel advances and returns between images',True);close_viewer()
+            open_viewer('book.cbz','BtnOpenBook','Aredoko — 本ビューア');ui(viewer,'wait-for','ReaderImage','--value','1ページ','-t','10000')
+            bar(viewer,'ReaderViewport');ui(viewer,'invoke','ReaderSettings');ui(viewer,'wait-for','ViewerLoopPages','-t','5000');ui(viewer,'invoke','ViewerLoopPages')
+            ui(viewer,'hover','ReaderViewport','--dwell-time','0');foreground(viewer)
+            ui(viewer,'scroll','ReaderViewport','--wheel','1');ui(viewer,'wait-for','ReaderImage','--value','5ページ','-t','10000')
+            time.sleep(.25);ui(viewer,'scroll','ReaderViewport','--wheel','-1');ui(viewer,'wait-for','ReaderImage','--value','1ページ','-t','10000')
+            check('real wheel wraps both book boundaries with loop enabled',True)
+            wait('reader toolbar hides over image',lambda:not visible(viewer,'ReaderToolbar'),seconds=5);check('reader toolbar hides over image',True);shot('04-book-loop-hidden')
+            close_viewer();settings=json.loads((target/'viewer-settings.json').read_text(encoding='utf-8'))
+            check('loop preference saved only in dedicated settings',settings['loop_book_pages'] is True and settings['always_show_controls'] is False)
         check('generated source hashes and mtimes unchanged',before=={p.name:[hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns] for p in media.iterdir()})
         report['pass']=True
     except Exception:

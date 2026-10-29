@@ -235,3 +235,10 @@ U1の後、独立したU4aを先行してもよい。U3で素材再現待ちと�
 - 採用：設定・helpから起動候補の版/commitを確認しやすくし、報告時にsourceと旧配布物を混同しない。既存診断表示を活用する。
 - 採用：設定値の移動は既存値を引き継ぐ。新しい「設定画面を探す」作業を増やさず、ビューア内に関連項目をまとめる。
 - 見送り：大規模UI全面再設計、常駐キャラクター拡大、全frameの永続キャッシュ、無根拠なcodec交換、別frontend、専用OCR。今回の症状に必要な局所改善を優先する。
+
+
+## 2026-10-29c：ネイティブ操作部のキーを優先する局所改善
+
+プレイヤーのpreview shortcutがSliderの左右キーとButtonのSpaceも先に処理する経路をsourceで確認。frontend内のvisual ancestry判定で、音量/シークの矢印やbuttonのSpace/Enter、文字入力/選択controlの操作をcontrol側へ返す。画像は設定menu表示中のMoveAsyncを止め、画像/本ともmenuのnative key操作を通す。viewport上の既存shortcut・クリック・wheel・拡大/読書位置/設定値は保持。
+
+既存Portable候補16で実キーのreproを試みたが、最初は前面化不可、次はwinappがWindowsのlocked/secure desktopを明示して**入力前停止/正常exit0**。ユーザーのGUI許可不足ではなくdesktop readiness不足であり、repro済み/実キー合格とは記録しない。UIA-only専用modeでは、無音WAV/専用DBで音量75/消音とpauseの独立、元media不変を確認。初回getterのRangeValue想定違いは表示Textの読取に修正済み。codeのPortable buildは0 errors/既存WUI1001×3。新sourceのpublishとUIA-only確認を行い、解除後に `tools/test_native_viewer_input.py --keyboard-controls` の一括3ケースを確認する。`--inspect-controls` は実キーを検証しない。

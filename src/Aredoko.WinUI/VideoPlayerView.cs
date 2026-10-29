@@ -199,6 +199,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable
             foreach (var modifier in new[] { VirtualKey.Control, VirtualKey.Shift, VirtualKey.Menu, VirtualKey.LeftWindows, VirtualKey.RightWindows })
                 if ((Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(modifier) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0) return;
             if (args.Key == VirtualKey.F10) { keyboardChrome = true; ShowChrome(); args.Handled = true; return; }
+            if (ViewerInputGestures.IsNativeControlKey(args.OriginalSource,args.Key)) return;
             if (args.Key == VirtualKey.Space) { args.Handled = true; TogglePlayPause(); return; }
             if (args.Key == VirtualKey.M) { args.Handled = true; ToggleMute(); return; }
             if (args.Key == VirtualKey.Left) { args.Handled = true; Seek(-1); return; }

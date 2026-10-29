@@ -141,7 +141,8 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         dialog.AddHandler(PointerMovedEvent, new PointerEventHandler((_, _) => { keyboardChrome = false; }), true);
         dialog.PreviewKeyDown += async (_, args) =>
         {
-            if (args.Key == VirtualKey.Escape) { if(menuOpen)return; args.Handled = true; CloseRequested?.Invoke(this, EventArgs.Empty); return; }
+            if (menuOpen) return;
+            if (args.Key == VirtualKey.Escape) { args.Handled = true; CloseRequested?.Invoke(this, EventArgs.Empty); return; }
             if (args.Key is VirtualKey.Tab or VirtualKey.F10)
             { keyboardChrome = true; ShowChrome(); if (args.Key == VirtualKey.F10) args.Handled = true; return; }
             if (args.Key is not (VirtualKey.Left or VirtualKey.Right)) return;
@@ -243,7 +244,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
 
     public async Task MoveAsync(int direction)
     {
-        if (disposed || navigating) return;
+        if (disposed || navigating || menuOpen) return;
         var moved = false; navigating = true; UpdateControls();
         try { moved = await sequence.TryMoveAsync(direction, lifetime.Token); }
         catch (OperationCanceledException) when (disposed || lifetime.IsCancellationRequested) { }

@@ -134,7 +134,8 @@ public void AttachNavigation(UIElement dialog)
         dialog.AddHandler(PointerMovedEvent,new PointerEventHandler((_,_)=>{keyboardChrome=false;}),true);
         dialog.PreviewKeyDown+=async(_,args)=>
         {
-            if(args.Key==VirtualKey.Escape){if(menuOpen)return;args.Handled=true;CloseRequested?.Invoke(this,EventArgs.Empty);return;}
+            if(menuOpen)return;
+            if(args.Key==VirtualKey.Escape){args.Handled=true;CloseRequested?.Invoke(this,EventArgs.Empty);return;}
             if(args.Key==VirtualKey.Tab){keyboardChrome=true;ShowChrome();return;}
             foreach(var modifier in new[]{VirtualKey.Control,VirtualKey.Shift,VirtualKey.Menu,VirtualKey.LeftWindows,VirtualKey.RightWindows})
                 if((Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(modifier)&Windows.UI.Core.CoreVirtualKeyStates.Down)!=0)return;

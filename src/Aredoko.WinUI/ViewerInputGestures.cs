@@ -29,6 +29,19 @@ internal static class ViewerOptions
 
 internal static class ViewerInputGestures
 {
+    // Routed preview shortcuts must not consume the focused control's own keys.
+    // Keep this in the frontend: it only inspects the local visual ancestry.
+    public static bool IsNativeControlKey(object? originalSource,VirtualKey key)
+    {
+        for(var node=originalSource as DependencyObject;node is not null;node=VisualTreeHelper.GetParent(node))
+        {
+            if(node is TextBox or ComboBox)return true;
+            if(node is ButtonBase&&key is (VirtualKey.Space or VirtualKey.Enter))return true;
+            if(node is Slider&&key is (VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down
+                or VirtualKey.Home or VirtualKey.End or VirtualKey.PageUp or VirtualKey.PageDown))return true;
+        }
+        return false;
+    }
     public static void ZoomCentered(ScrollViewer viewport,float factor)
     {
         var x=ViewerViewportMath.ZoomOffset(viewport.HorizontalOffset,Math.Max(1,viewport.ViewportWidth),viewport.ZoomFactor,factor);
