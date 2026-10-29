@@ -130,8 +130,17 @@ class RuntimeContractTests(unittest.TestCase):
 
     def test_legacy_venv_command_is_unchanged(self):
         script=self.base/'worker.py';script.write_bytes(b'fixture')
-        command=worker_command(sys.executable,script,['--model','fixture'])
-        self.assertEqual(command,[sys.executable,'-X','utf8','-B','-u',str(script),'--model','fixture'])
+        legacy=self.base/'legacy-venv/Scripts/python.exe';legacy.parent.mkdir(parents=True);legacy.write_bytes(b'not executed')
+        command=worker_command(legacy,script,['--model','fixture'])
+        self.assertEqual(command,[str(legacy),'-X','utf8','-B','-u',str(script),'--model','fixture'])
+
+    def test_unsealed_standalone_python_still_uses_the_isolated_worker_bootstrap(self):
+        script=self.base/'worker.py';script.write_bytes(b'fixture')
+        standalone=self.base/'standalone/python.exe';standalone.parent.mkdir();standalone.write_bytes(b'not executed')
+        (standalone.parent/'python311._pth').write_text('python311.zip\n.\n')
+        command=worker_command(standalone,script,['--model','fixture'])
+        self.assertEqual(command[:6],[str(standalone),'-X','utf8','-I','-B','-u'])
+        self.assertEqual(command[6],'-c');self.assertEqual(command[-3:],[str(script),'--model','fixture'])
 
     def test_prepare_new_pack_never_changes_source_or_downloads(self):
         source=fixture(self.base/'source',source=True)

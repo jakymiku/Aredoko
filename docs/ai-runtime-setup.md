@@ -83,3 +83,14 @@ R13 DOING/ALPHA未完/R14 PARTIAL。専用OCR保留、U09/U11/U13/U14、実音�
 ### 2026-10-29：整合性検査の性能案は不採用
 
 全SHA検証と前後の原本検査を保ったまま重複パス確認を減らし、開いたハンドルの照合を追加する案を生成sealed packで比較した。525ファイル/590,793bytes・各1回ではguard 2,162→1,637回、時間1.470→2.719秒で、高速化は確認できなかった。関連89件は通ったが性能改善としては採用せず、製品コードと追加テストを戻した。提案source・生成結果は `data/ai-ui/continuation-20261029/runtime-digest-bench01/`、旧検査は維持。実5GB環境の起動速度改善や一般的な性能値とは扱わない。取消・既定照合・任意オフ設定も変更していない。
+
+
+### 2026-10-29c：完全照合を2本の読み取りで実行
+
+64file以上のruntimeでは、常に最大2個のfileだけを読み取り検証し、chunk/file完了通知は64件のbounded queueを介して呼び出し元threadで処理する。少数fileは従来の逐次経路を使う。全SHA、通常path/リンク拒否、size/前後metadata、正確なfile集合、最後のmanifest SHAは維持。既定の完全照合/高度設定の明示opt-out/verified cache・所有者の意味を変更しない。新しい設定項目や依存取得はない。
+
+取消/observer例外/改変/peer読取失敗ではlocal stopを通知して全readerをjoinし、親のlease/cache/worker処理へ戻る前に回収する。progressとユーザーの取消callbackはcaller threadで呼び出し、thread非安全なUI/owner callbackへ並列通知しない。小さいpack、zero-byte file、marker途中変更、後からの再試行も確認した。
+
+基本Python3.11の生成8tests PASS、AI runtime/paths/新CPython/CRT等65件では64PASS＋legacy test fixture1FAIL。旧fixtureが `sys.executable` を必ずvenvと仮定しており、embedded Pythonの正しい `-I` bootstrapと不一致だった。explicit生成venvへ修正し、standaloneは隔離bootstrapを使う独立testも追加。当該2tests PASS、他の成功64件を再実行していない。製品のisolated worker起動は弱めていない。
+
+実4,950,977,993bytes/23,936files（manifest07b65b6b…）で、旧逐次 **85.071秒** → prototype2reader **68.263秒**、progress付き実装 **68.373秒**（旧比約19.6%短縮）。各1回、逐次→並列の順でcacheを初期化しておらず、cold起動/他PC/総起動時間の保証ではない。完全照合の結果/最後のbytes・filesは同一、51,848callbackはcaller thread、終了後reader0、selected code実行/GPU0。証拠は `data/ai-ui/continuation-20261029c/runtime-parallel-real01/` と `runtime-parallel-production01/`、関連log。生成527file/67MBの先行1比較も1.753→1.431秒で、これと実packを混ぜて一般値にしない。

@@ -156,12 +156,14 @@ def inspect_runtime(root, *, verify=False, expected=None, cancelled=lambda: Fals
             counts['bytes_done']+=amount
             if progress is not None:progress(dict(counts))
         report()
-        for entry in entries:
+        def validate(entry,stopped,on_chunk):
             path=plain_path(root/entry['path'])
-            if path.stat().st_size!=entry['bytes'] or digest(path,cancelled,report)!=entry['sha256']:
+            if path.stat().st_size!=entry['bytes'] or digest(path,stopped,on_chunk)!=entry['sha256']:
                 raise ValueError('Runtime file changed')
-            counts['files_done']+=1
-            report()
+        def file_done():
+            counts['files_done']+=1;report()
+        from runtime_verification import verify_entries
+        verify_entries(entries,validate,cancelled,report,file_done)
     if verify and digest(marker,cancelled)!=checksum:raise ValueError('Runtime inventory changed during validation')
     return {'root':str(root),'python':str(python),'manifest_sha256':checksum,'abi':abi,
             'files':len(entries),'bytes':total,'verification':'full' if verify else 'core_only',
