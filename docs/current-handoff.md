@@ -1,5 +1,15 @@
-# Aredoko — 現行の単一引き継ぎ（2026-10-30）
+# Aredoko — 現行の単一引き継ぎ（2026-11-01）
 
+
+
+## 2026-11-01 作業checkpoint（以下の旧終了記録より優先）
+
+- 起点ed619e0、fetch後remote branch/PR5 head ref一致・clean。他AI更新なし。既存branch/PR5継続、コミット34d2802（folder設定/draft）、12f9797（検証kitの版/ハッシュ対応）、d84c5cf（限定受入）、8cc23fc（設定の固定feedback）。現在のアプリsourceは8cc23fc、frontend02へpublish済み。最終commitは本書Git履歴。
+- **UI**：folder設定は一覧取得→折畳みの除外/初期棚/起動時/解除へ整理。除外保存で棚draftを破棄する経路、同じfolder設定への再入、保存後展開を修正。個別保存/相互draft保持はLight02、再表示/別folder取消/batchはLight03・Dark03で確認。初回FAILは期待値/短命status/閉じる仕様/準備中の非表示peerのharness原因と製品修正を区別して保持。[証拠](p3-continuous-browse.md)末尾。SettingsStatusはscroll外へ移しnative footer直前に固定、Lightの4関連操作確認済み・Darkは実行中。
+- **確認**：Core1444（全体1回）/関連10checks、WinUI build/publish0errors。SDK10.0.403の要求10.0.14未取得にはignored targetsで既存runtime/crossgen/ILLink10.0.13を使用、依存DL/プロジェクト設定変更なし。既存picker WUI1001×3/SDK IL2104×2は保持。GUIは当該user許可・生成素材/専用DB/UIA-only。元メディア/通常DB/Alpha/GPU/OS設定/Actions/shutdownは変更なし。
+- **開発用CLI**：ユーザー指定agent-desktop v1.0.2を専用ignored先へ取得/同版checksum確認。owned windowのread/native-ID lookupは成功。生HWND→w-ID、ref_idのharness修正後、状態file置換1175のthird-party errorを観測。semantic collapse/foreground保持は未確認。Aredoko成功へ混ぜず[限定評価](agent-desktop-evaluation.md)へ。既存WinAppを継続、tool調査の反復でUIを止めない。試験appの通常起動は前面表示し得ることを説明しuser了承済み。強制前面化/物理入力なし。
+- **P6**：12f9797で生成kitのcandidate/resultへmanifest版・日時・platformとZIP/manifest hashを伝達（CPU7＋変更後該当1 PASS）。source未記録はnull、clean Windows成功にはしない。Sandboxの旧有効化履歴は保全。11/1bootは有効化後だが現在WMI InstallState2、WindowsSandbox.exeなし、target未接続/stale。再起動待ちだけという旧記述は現行状態ではない。原因不明・再有効化/guest実行なし、`sandbox-readiness01.json`。
+- **候補/次**：現在受入済み基本ZIPは旧24/source1e8e7caのまま。user許可済みの基本ZIP25へ最新frontend02とbackend/tools/docsをまとめ、通常EXE→終了→1回再起動を専用PNG1枚で確認する。新しい大きな実装前にこの区切りを完了。公開runtimeの適用条項/host/registry、別Windows受入、HC/DPI/physical入力/実媒体品質は未完。現在のGUI/GPUは引き続きuserへ具体化して確認。本セッションは残量30%前後で引き継ぎ開始、終了時shutdownしない。
 
 
 ## 2026-10-30 終了checkpoint（continuation-20261029e、以下より優先）

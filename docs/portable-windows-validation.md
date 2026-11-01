@@ -1,6 +1,13 @@
 # PortableのWindows準備・検証（2026-10-21）
 
 
+## 2026-11-01 現在のSandboxと検証レポート
+
+以前の有効化（exit3010/InstallState1）は保持。11/1のbootは有効化後だが、現在のread-only WMIはInstallState2、WindowsSandbox.exeなし、WinApp targetはnot running/not attached/stale。原因は未特定。旧「OS再起動だけ待つ」状態からは変わっている。guest未実行・OS設定変更なし。再有効化や他のclean Windowsが必要かはuserと確認してから進め、ホスト成功を代用しない。証拠 `data/ai-ui/continuation-20261101/sandbox-readiness01.json`。
+
+検証セット作成CLIはmanifestの版・作成日時・platformと、ZIP/manifestのSHAを結果templateにも記録する。既存manifestにsource revisionはないためnullで示し、sidecarから推測しない。旧セットを無言で書換えず、新候補ごとに作成する。
+
+
 ## 2026-10-30 最新セット24
 
 現在の試用候補は基本ZIP24/source1e8e7ca。アプリZIP SHA `987946c4212c386061ca3b90a6e588389b711e62aeb94ee643e3090ed43f319d`、対になる生成確認セット `dist/portable-validation-20261029-24.zip` のSHA `317dc8d93c0aad28610a09765d4933de6ef65ef53419ff81d39448a2fc562072`。ホストの通常EXE/小中大/終了・再起動は限定確認済みだが、別Windows/Sandboxは未受入。機能有効化後のOS再起動を利用者の都合で済ませた後、readinessと当該候補の検証可否を確認する。旧セット23/22を上書きしない。

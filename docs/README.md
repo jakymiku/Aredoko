@@ -11,6 +11,8 @@
 ## 開発・テスト方針
 - [ローカルGUI/GPUテストと再試行ループを防ぐ診断ルール](local-test-policy.md) — 通常のローカル試験方針。各回のユーザー指定（事前承認等）を優先する。旧回数制限は履歴として保持し、原因不明の反復FAILは診断へ
 
+- [agent-desktopの限定評価](agent-desktop-evaluation.md) — 任意の開発用CLI。read成功と操作未確認を区別し、製品依存へ入れない
+
 ## 機能別の現行仕様と根拠（対象のときのみ）
 - 検索/AI: [AI検索](ai-search-plan.md)、[モデルprofile](model-profiles.md)、[検索品質](search-quality-baseline.md)、[ページ画像](page-image-search.md)、[媒体内容索引](media-content-plan.md)、[タグ候補](tag-suggestions.md)
 - 登録/整理: [フォルダ管理](folder-library-management.md)、[複数棚](multi-shelf-storage.md)、[棚UI](shelf-ui-20261023.md)
