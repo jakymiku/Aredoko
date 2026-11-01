@@ -1985,6 +1985,12 @@ public sealed partial class MainPage : Page
         if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
         try
         {
+            if(folderSettingsActive&&folderDraft is not null&&folderDraft.TargetIds.SequenceEqual(targetIds.Order()))
+            {
+                Details.IsPaneOpen=true;
+                if(focusUnregister){RootRemovalSection.IsExpanded=true;UnregisterConsent.Focus(FocusState.Programmatic);}
+                return;
+            }
             if(Dirty||(folderSettingsActive&&folderDraft is not null&&!folderDraft.TargetIds.SequenceEqual(targetIds)))
                 if(!await ConfirmDiscardAsync())return;
             OpenFolderSettingsPanel(targetIds,focusUnregister);
@@ -2039,6 +2045,8 @@ public sealed partial class MainPage : Page
             if(folderDraft.ShelfIdsToSave is {} selectedShelves)ShowRootShelfSelection(selectedShelves);
             FillUnsetShelf.IsChecked=false;
             SingleRootSection.Visibility=folderDraft.IsBatch?Visibility.Collapsed:Visibility.Visible;
+            RootShelfSettings.IsExpanded=folderDraft.IsBatch;
+            RootRemovalSection.IsExpanded=focusUnregister;
             RootExcludes.Text=folderDraft.ExclusionsText;
             RootStartupScan.SelectedIndex=targets.All(root=>root.StartupScan==targets[0].StartupScan)
                 ? targets[0].StartupScan switch{"list"=>1,"list_and_ai"=>2,_=>0} : -1;
@@ -2123,7 +2131,9 @@ public sealed partial class MainPage : Page
             var result=await api.SetRootShelvesAsync(targets,ids,draft.FillUnset);
             var primary=ids.Length==0?"":ShelfName(ids.Min());
             knownRoots=knownRoots.Select(root=>targets.Contains(root.Id)?root with{DefaultShelf=primary,ShelfIds=ids.ToArray()}:root).ToArray();
+            var shelfExpanded=RootShelfSettings.IsExpanded;
             resultsNeedRefresh=true;OpenFolderSettingsPanel(targets);
+            RootShelfSettings.IsExpanded=shelfExpanded;
             if(pendingExcludes is not null){RootExcludes.Text=pendingExcludes;UpdateFolderDraftState();}
             FolderEditStatus.Text=$"初期棚を保存しました。棚未設定の作品 {result["updated"]?.GetValue<int>()??0:N0} 件に適用しました。"+(pendingExcludes is null?"":"除外ルールは未保存です。");
             ScanStatus.Text=FolderEditStatus.Text;
@@ -2136,21 +2146,24 @@ public sealed partial class MainPage : Page
 
     private async void SaveExcludes_Click(object sender,RoutedEventArgs e)
     {
-        if(folderDraft is null||folderDraft.IsBatch||folderDraft.TargetIds.Count!=1||saving)return;
+        if(folderDraft is null||folderDraft.IsBatch||folderDraft.TargetIds.Count!=1||saving||dialogOpen)return;
         SyncFolderDraftFromControls();
-        SaveExcludes.IsEnabled=false;saving=true;
+        var draft=folderDraft;var rootId=draft.TargetIds[0];var savedText=draft.ExclusionsText;
+        var exclusions=draft.ParseExclusions();
+        SaveExcludes.IsEnabled=false;FolderEditorPanel.IsEnabled=false;saving=true;
         try
         {
-            var rootId=folderDraft.TargetIds[0];
-            var patterns=new JsonArray(folderDraft.ParseExclusions().Select(s=>(JsonNode?)JsonValue.Create(s)).ToArray());
+            var patterns=new JsonArray(exclusions.Select(s=>(JsonNode?)JsonValue.Create(s)).ToArray());
             await api.PostAsync("api/library/excludes",new JsonObject{{"root_id",rootId},{"patterns",patterns}});
-            await RefreshSearchRootsAsync();
-            OpenFolderSettingsPanel(new[]{rootId});
+            draft.MarkExclusionsSaved(savedText);
+            knownRoots=knownRoots.Select(root=>root.Id==rootId?root with{Exclusions=exclusions}:root).ToArray();
             ScanStatus.Text="除外を更新。次回スキャンで反映します。";
-            FolderEditStatus.Text="除外ルールを保存しました。";
+            FolderEditStatus.Text="除外ルールを保存しました。"+(draft.IsShelfChanged?"初期棚は未保存です。":"");
+            try{await RefreshSearchRootsAsync();}
+            catch(Exception ex){AppLog.Error(ex);FolderEditStatus.Text="除外ルールは保存済みです。一覧を更新できなかったため、再接続してください。"+(draft.IsShelfChanged?"初期棚は未保存です。":"");}
         }
         catch(Exception ex){ScanStatus.Text=ex.Message;FolderEditStatus.Text=ex.Message;}
-        finally{saving=false;SaveExcludes.IsEnabled=true;}
+        finally{saving=false;SaveExcludes.IsEnabled=true;FolderEditorPanel.IsEnabled=true;}
     }
 
     private async Task StartScanWithModeAsync(IReadOnlyList<int> targetIds, string mode)

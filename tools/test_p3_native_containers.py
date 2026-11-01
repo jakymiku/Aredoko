@@ -36,6 +36,8 @@ def main():
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
     parser.add_argument('--favorite-root-removal-only',action='store_true',help='Only remaining last-folder guidance and registration/media retention')
+    parser.add_argument('--folder-settings-layout',action='store_true',help='Generated roots: section layout and independent draft saves; UIA only')
+    parser.add_argument('--agent-desktop',type=Path,help='Optional development-only agent-desktop headless probe over the owned test window')
     parser.add_argument('--favorite-root-actions',action='store_true',help='UIA-only favorite folder commands, dirty tag guard and last-folder removal')
     parser.add_argument('--shelf-picker-remaining',action='store_true',help='Only remaining shelf save/reopen, then acquisition explanations and recovery-guide footer; no jobs')
     parser.add_argument('--shelf-picker-filter',action='store_true',help='UIA-only shelf filtering retains hidden memberships and unsaved tags')
@@ -65,6 +67,8 @@ def main():
     if args.caption_menu_only:args.card_captions=True
     if args.card_captions:args.detail_polish=True
     if args.favorite_root_removal_only:args.favorite_root_actions=True
+    if args.folder_settings_layout:args.detail_polish=True
+    if args.agent_desktop and not args.folder_settings_layout:parser.error('agent-desktop probe requires the bounded folder-settings case')
     if args.favorite_root_actions:args.detail_polish=True
     if args.shelf_picker_remaining:args.shelf_picker_filter=True
     if args.shelf_picker_filter:args.detail_polish=True
@@ -196,6 +200,9 @@ def main():
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
         extras={}
+        if args.folder_settings_layout:
+            from ui_folder_settings_audit import prepare
+            report['folder_settings_fixture']=prepare(cat,target)
         if args.favorite_root_actions:
             from ui_favorite_root_actions_audit import prepare
             report['favorite_root_fixture']=prepare(cat,target,file_favorite=not args.favorite_root_removal_only)
@@ -322,6 +329,14 @@ def main():
             removed=audit(ui,cli,tree,shot,report,check,cat,media,target,proc.pid,hwnd,input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only)
             check('generated sources match the declared scope',{key:value for key,value in before.items() if key!=removed}==sources())
             report['pass']=True
+        elif args.folder_settings_layout:
+            from ui_folder_settings_audit import audit
+            report['folder_settings_audit_sha256']=hashlib.sha256((REPO/'tools/ui_folder_settings_audit.py').read_bytes()).hexdigest()
+            audit(ui,tree,shot,report,check,cat)
+            if args.agent_desktop:
+                from agent_desktop_probe import audit as audit_agent_desktop
+                audit_agent_desktop(args.agent_desktop,hwnd,proc.pid,ui,target,report,check)
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.favorite_root_actions:
             from ui_favorite_root_actions_audit import audit
             report['favorite_root_audit_sha256']=hashlib.sha256((REPO/'tools/ui_favorite_root_actions_audit.py').read_bytes()).hexdigest()

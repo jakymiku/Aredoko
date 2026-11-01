@@ -86,7 +86,7 @@ public sealed class FolderSettingsDraft
 {
     private readonly IReadOnlyList<RegisteredRootRow> targets;
     private readonly List<int> remainingIds;
-    private readonly string initialExclusionsText;
+    private string initialExclusionsText;
     public IReadOnlyList<int> TargetIds => remainingIds;
     public bool IsBatch => targets.Count > 1;
     public ShelfSummary Summary { get; }
@@ -151,6 +151,8 @@ public sealed class FolderSettingsDraft
     }
 
     public bool IsExclusionsChanged => !IsBatch && NormalizeExclusionsText(ExclusionsText) != NormalizeExclusionsText(initialExclusionsText);
+
+    public void MarkExclusionsSaved(string savedText) => initialExclusionsText = savedText;
 
     public bool IsDirty => IsShelfChanged || IsExclusionsChanged;
 

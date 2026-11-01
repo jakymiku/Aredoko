@@ -80,32 +80,44 @@
        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="FolderDetailScroll" AutomationProperties.Name="登録フォルダの設定"><StackPanel Spacing="12" Margin="{StaticResource FormScrollGutter}">
         <TextBlock x:Name="FolderTargetTitle" Text="フォルダを選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderTargetTitle"/>
         <TextBlock x:Name="FolderTargetPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TxtFolderTargetPath"/>
-        <TextBlock x:Name="CurrentShelfSummary" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtCurrentShelfSummary"/>
-        <Button Content="棚を選択（複数可）" Click="ChooseRootShelves_Click" AutomationProperties.AutomationId="BtnChooseRootShelves"/>
-        <ComboBox x:Name="RootInitialShelf" Header="初期棚（新規登録／選択フォルダの設定）" HorizontalAlignment="Stretch" SelectionChanged="RootInitialShelf_Changed" AutomationProperties.Name="初期棚" AutomationProperties.AutomationId="RootInitialShelf"/>
-        <TextBox x:Name="RootNewShelf" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" TextChanged="FolderEditor_Changed" AutomationProperties.Name="新しい棚の名前" AutomationProperties.AutomationId="RootNewShelf"/>
-        <TextBlock Text="新しく見つかったファイルをこの棚へ入れます。個別に変更・解除した棚は再スキャンしても保持します。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
-        <CheckBox x:Name="FillUnsetShelf" Content="既存の棚未設定ファイルにも適用（個別に解除した棚を含む）" Checked="FolderEditor_Checked" Unchecked="FolderEditor_Checked" AutomationProperties.AutomationId="FillUnsetShelf"/>
-        <Button x:Name="SaveRootShelf" Content="選択フォルダの初期棚を保存" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="SaveRootShelf_Click" AutomationProperties.AutomationId="SaveRootShelf"/>
         <StackPanel x:Name="SingleRootSection" Spacing="12">
-         <ComboBox x:Name="ScanModeChoice" Header="スキャン方法" SelectedIndex="0" HorizontalAlignment="Stretch" AutomationProperties.Name="スキャン方法" AutomationProperties.AutomationId="ScanModeChoice">
+         <TextBlock Text="一覧の取得" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+         <ComboBox x:Name="ScanModeChoice" Header="取得する内容" SelectedIndex="0" HorizontalAlignment="Stretch" AutomationProperties.Name="スキャン方法" AutomationProperties.AutomationId="ScanModeChoice">
           <ComboBoxItem Content="アイテム一覧だけ取得" Tag="list" AutomationProperties.AutomationId="ScanModeList"/>
           <ComboBoxItem Content="一覧取得＋AI索引を作成" Tag="list_and_ai" AutomationProperties.AutomationId="ScanModeListAndAI"/>
          </ComboBox>
-         <TextBox x:Name="RootExcludes" Header="スキャン対象から除外（例: cache, *.tmp）" TextChanged="FolderEditor_Changed" AutomationProperties.Name="除外ルール" AutomationProperties.AutomationId="RootExcludes"/>
-         <Button x:Name="SaveExcludes" Content="選択フォルダの除外を更新" HorizontalAlignment="Stretch" Click="SaveExcludes_Click" AutomationProperties.AutomationId="SaveExcludes"/>
-         <Button x:Name="ScanRoot" Content="選択フォルダをスキャン / 再開" HorizontalAlignment="Stretch" Click="ScanRoot_Click" AutomationProperties.AutomationId="ScanRoot"/>
-         <Button x:Name="CancelScan" Content="スキャンをキャンセル" HorizontalAlignment="Stretch" Click="CancelScan_Click" AutomationProperties.AutomationId="CancelScan"/>
+         <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <Button x:Name="ScanRoot" Content="スキャン / 再開" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="ScanRoot_Click" AutomationProperties.Name="選択フォルダをスキャン / 再開" AutomationProperties.AutomationId="ScanRoot"/>
+          <Button x:Name="CancelScan" Grid.Column="1" Content="中止" ToolTipService.ToolTip="実行中のスキャンを中止" Click="CancelScan_Click" AutomationProperties.Name="実行中のスキャンを中止" AutomationProperties.AutomationId="CancelScan"/>
+         </Grid>
+         <Expander Header="除外ルール" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="RootExclusionsSection"><StackPanel Spacing="8">
+          <TextBox x:Name="RootExcludes" Header="除外する名前・パターン" PlaceholderText="cache, *.tmp" TextChanged="FolderEditor_Changed" AutomationProperties.Name="除外ルール" AutomationProperties.AutomationId="RootExcludes"/>
+          <TextBlock Text="カンマで区切って指定します。保存したルールは次回のスキャンから反映します。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
+          <Button x:Name="SaveExcludes" Content="除外ルールを保存" HorizontalAlignment="Stretch" Click="SaveExcludes_Click" AutomationProperties.AutomationId="SaveExcludes"/>
+         </StackPanel></Expander>
         </StackPanel>
-        <ComboBox x:Name="RootStartupScan" Header="起動時の自動スキャン" PlaceholderText="複数の設定値" HorizontalAlignment="Stretch" SelectionChanged="RootStartupScan_Changed" AutomationProperties.AutomationId="RootStartupScan" AutomationProperties.Name="起動時の自動スキャン">
-         <ComboBoxItem Content="しない"/><ComboBoxItem Content="アイテム一覧だけ更新"/><ComboBoxItem Content="一覧更新＋AI索引を作成"/>
-        </ComboBox>
-        <TextBlock Text="変更はすぐ保存され、次回起動の画面表示後から適用します。AIが未準備でも一覧は更新します。" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}"/>
-        <StackPanel Spacing="8">
+        <Expander x:Name="RootShelfSettings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.Name="初期棚の設定" AutomationProperties.AutomationId="RootShelfSettings">
+         <Expander.Header><StackPanel Spacing="4"><TextBlock Text="初期棚" Style="{StaticResource BodyStrongTextBlockStyle}"/><TextBlock x:Name="CurrentShelfSummary" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtCurrentShelfSummary"/></StackPanel></Expander.Header>
+         <StackPanel Spacing="8">
+          <TextBlock Text="新しく見つかったファイルを入れる棚です。個別に変更・解除した棚は再スキャンしても保持します。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
+          <Button Content="棚を選択（複数可）" Click="ChooseRootShelves_Click" AutomationProperties.AutomationId="BtnChooseRootShelves"/>
+          <ComboBox x:Name="RootInitialShelf" Header="棚を指定・新しく作成" HorizontalAlignment="Stretch" SelectionChanged="RootInitialShelf_Changed" AutomationProperties.Name="初期棚" AutomationProperties.AutomationId="RootInitialShelf"/>
+          <TextBox x:Name="RootNewShelf" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" TextChanged="FolderEditor_Changed" AutomationProperties.Name="新しい棚の名前" AutomationProperties.AutomationId="RootNewShelf"/>
+          <CheckBox x:Name="FillUnsetShelf" HorizontalContentAlignment="Stretch" Checked="FolderEditor_Checked" Unchecked="FolderEditor_Checked" AutomationProperties.Name="既存の棚未設定ファイルにも適用（個別に解除した棚を含む）" AutomationProperties.AutomationId="FillUnsetShelf"><TextBlock Text="既存の棚未設定ファイルにも適用（個別に解除した棚を含む）" TextWrapping="Wrap"/></CheckBox>
+          <Button x:Name="SaveRootShelf" Content="初期棚を保存" HorizontalAlignment="Stretch" Click="SaveRootShelf_Click" AutomationProperties.AutomationId="SaveRootShelf"/>
+         </StackPanel>
+        </Expander>
+        <Expander Header="起動時の自動スキャン" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="RootStartupSection"><StackPanel Spacing="8">
+         <ComboBox x:Name="RootStartupScan" Header="次回からの起動時の動作" PlaceholderText="複数の設定値" HorizontalAlignment="Stretch" SelectionChanged="RootStartupScan_Changed" AutomationProperties.AutomationId="RootStartupScan" AutomationProperties.Name="起動時の自動スキャン">
+          <ComboBoxItem Content="しない"/><ComboBoxItem Content="アイテム一覧だけ更新"/><ComboBoxItem Content="一覧更新＋AI索引を作成"/>
+         </ComboBox>
+         <TextBlock Text="変更はすぐ保存されます。次回起動の画面表示後から実行し、AIが未準備でも一覧は更新します。" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}"/>
+        </StackPanel></Expander>
+        <Expander x:Name="RootRemovalSection" Header="登録の解除" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="RootRemovalSection"><StackPanel Spacing="8">
          <TextBlock x:Name="UnregisterTargetText" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtUnregisterTarget"/>
-         <CheckBox x:Name="UnregisterConsent" Content="登録解除を許可（元ファイルは残り、再登録でタグ・棚を復元）" Checked="UnregisterConsent_Changed" Unchecked="UnregisterConsent_Changed" AutomationProperties.AutomationId="UnregisterConsent"/>
+         <CheckBox x:Name="UnregisterConsent" HorizontalContentAlignment="Stretch" Checked="UnregisterConsent_Changed" Unchecked="UnregisterConsent_Changed" AutomationProperties.Name="登録解除を許可（元ファイルは残り、再登録でタグ・棚を復元）" AutomationProperties.AutomationId="UnregisterConsent"><TextBlock Text="登録解除を許可（元ファイルは残り、再登録でタグ・棚を復元）" TextWrapping="Wrap"/></CheckBox>
          <Button x:Name="UnregisterRoot" Content="選択フォルダの登録を解除" HorizontalAlignment="Stretch" IsEnabled="False" Click="UnregisterRoot_Click" AutomationProperties.AutomationId="UnregisterRoot"/>
-        </StackPanel>
+        </StackPanel></Expander>
        </StackPanel></ScrollViewer>
        <StackPanel Grid.Row="1" Spacing="4">
         <TextBlock x:Name="FolderEditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderEditStatus"/>
