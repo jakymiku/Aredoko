@@ -36,7 +36,9 @@ def main():
     parser.add_argument('--setup-skip-download',action='store_true',help='Remaining setup case only: do not repeat an already accepted download return')
     parser.add_argument('--favorite-patch',action='store_true',help='UIA-only favorite edits keep the literal session, selection and unsaved tags without rebuilding')
     parser.add_argument('--favorite-root-removal-only',action='store_true',help='Only remaining last-folder guidance and registration/media retention')
+    parser.add_argument('--folder-settings-remaining',action='store_true',help='Only folder draft reopen/switch and batch; prior individual saves remain recorded')
     parser.add_argument('--folder-settings-layout',action='store_true',help='Generated roots: section layout and independent draft saves; UIA only')
+    parser.add_argument('--agent-desktop-only',action='store_true',help='Only remaining optional Agent Desktop probe; no repeated folder edits')
     parser.add_argument('--agent-desktop',type=Path,help='Optional development-only agent-desktop headless probe over the owned test window')
     parser.add_argument('--favorite-root-actions',action='store_true',help='UIA-only favorite folder commands, dirty tag guard and last-folder removal')
     parser.add_argument('--shelf-picker-remaining',action='store_true',help='Only remaining shelf save/reopen, then acquisition explanations and recovery-guide footer; no jobs')
@@ -67,6 +69,10 @@ def main():
     if args.caption_menu_only:args.card_captions=True
     if args.card_captions:args.detail_polish=True
     if args.favorite_root_removal_only:args.favorite_root_actions=True
+    if args.agent_desktop_only:
+        if not args.agent_desktop:parser.error('agent-desktop-only requires the explicit executable')
+        args.folder_settings_remaining=True
+    if args.folder_settings_remaining:args.folder_settings_layout=True
     if args.folder_settings_layout:args.detail_polish=True
     if args.agent_desktop and not args.folder_settings_layout:parser.error('agent-desktop probe requires the bounded folder-settings case')
     if args.favorite_root_actions:args.detail_polish=True
@@ -202,7 +208,7 @@ def main():
         extras={}
         if args.folder_settings_layout:
             from ui_folder_settings_audit import prepare
-            report['folder_settings_fixture']=prepare(cat,target)
+            report['folder_settings_fixture']=prepare(cat,target,remaining=args.folder_settings_remaining)
         if args.favorite_root_actions:
             from ui_favorite_root_actions_audit import prepare
             report['favorite_root_fixture']=prepare(cat,target,file_favorite=not args.favorite_root_removal_only)
@@ -332,7 +338,11 @@ def main():
         elif args.folder_settings_layout:
             from ui_folder_settings_audit import audit
             report['folder_settings_audit_sha256']=hashlib.sha256((REPO/'tools/ui_folder_settings_audit.py').read_bytes()).hexdigest()
-            audit(ui,tree,shot,report,check,cat)
+            if args.agent_desktop_only:
+                ui('invoke','BtnRoots');ui('wait-for','LibraryHeading','--value','登録フォルダ','-t','10000')
+                ui('wait-for','FolderList','-p','IsOffscreen','--value','False','-t','10000')
+                ui('invoke','ConfigFolder'+str(report['folder_settings_fixture']['roots'][0]));ui('wait-for','ScanRoot','-t','10000')
+            else:audit(ui,tree,shot,report,check,cat,remaining=args.folder_settings_remaining)
             if args.agent_desktop:
                 from agent_desktop_probe import audit as audit_agent_desktop
                 audit_agent_desktop(args.agent_desktop,hwnd,proc.pid,ui,target,report,check)
@@ -507,6 +517,9 @@ def main():
                             # Window destruction can precede process-handle signaling.
                             try:proc.wait(timeout=8);break
                             except subprocess.TimeoutExpired:raise
+                    user.IsWindow.argtypes=[wintypes.HWND];user.IsWindow.restype=wintypes.BOOL
+                    if not user.IsWindow(int(hwnd)):
+                        proc.wait(timeout=8);break
                     if not user.PostMessageW(int(hwnd),0x10,0,0):raise ctypes.WinError(ctypes.get_last_error())
                     try:proc.wait(timeout=5);break
                     except subprocess.TimeoutExpired:pass

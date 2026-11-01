@@ -20,22 +20,16 @@ def audit(executable, hwnd, pid, ui, target, report, check):
             log.write(json.dumps({'args':args,'exit':result.returncode,'result':value},ensure_ascii=False)+'\n')
         if result.returncode or not value.get('ok'):raise RuntimeError('Agent Desktop: '+result.stdout+result.stderr)
         return value
-    report['agent_desktop']={'sha256':hashlib.sha256(executable.read_bytes()).hexdigest(),'headed':False,'window_id':hwnd,'pid':pid}
+    window_id='w-'+str(int(hwnd))
+    report['agent_desktop']={'sha256':hashlib.sha256(executable.read_bytes()).hexdigest(),'headed':False,'window_id':window_id,'pid':pid}
     run('version')
     ui('scroll-into-view','RootShelfSettings')
     ui('invoke','RootShelfSettings','--action','expand')
     before=user.GetForegroundWindow()
-    snapshot=run('snapshot','--window-id',hwnd,'--max-depth','18','--include-bounds')
+    snapshot=run('snapshot','--window-id',window_id,'--max-depth','18','--include-bounds')
     check('agent-desktop reads only the owned folder settings window','初期棚' in json.dumps(snapshot,ensure_ascii=False))
-    found=run('find','--window-id',hwnd,'--native-id','RootShelfSettings','--exact')
-    def refs(value):
-        if isinstance(value,dict):
-            for key,item in value.items():
-                if key=='ref' and isinstance(item,str) and item.startswith('@'):yield item
-                else:yield from refs(item)
-        elif isinstance(value,list):
-            for item in value:yield from refs(item)
-    matches=set(refs(found))
+    found=run('find','--window-id',window_id,'--native-id','RootShelfSettings','--exact')
+    matches={item['ref_id'] for item in found['data']['matches'] if isinstance(item.get('ref_id'),str) and item['ref_id'].startswith('@')}
     check('agent-desktop resolves one native settings ref',len(matches)==1)
     run('collapse',matches.pop())
     from native_ui_tools import inspect_element

@@ -152,3 +152,13 @@ frontend08/favorite-root-actions01（専用2PNG/2root・UIA-only）は設定直�
 f2ba198は既存の差分更新がLoadAsyncを通らないことを踏まえ、literal/空query/0作品のお気に入りに限り、フォルダ表示とEmptyScopeGuidanceを同じUI更新で更新する。検索語/AI/類似の案内は保持。Portable build0errors（既存3warnings）。frontend09で残る解除後案内/登録・原本保持だけを追加許可後に確認し、成功済みの設定/取消を反復しない。旧FAILは保持する。
 
 追加許可後frontend09/sourcef2ba198のfavorite-root-removal02は9checks/exit0/残存processなし。最後のfolder解除後の正しい案内、2root登録/enabled・2items・元PNG不変・tag未保存を確認し1PNG目視。先行の設定/取消は反復していない。favorite-root-final-review.jsonも参照。ZIP24/Alphaには未収録、モデル配置役割名/物理右クリック/HC/DPI/多数folderの個別受入は残す。
+
+
+## 2026-11-01：登録フォルダ設定の階層と個別保存（source34d2802）
+
+- 一覧取得を前面、除外・初期棚・起動時更新・解除をnative Expanderへ。進捗/未保存は固定footerに残し、batchの対象/混在値、同意、既存操作を保全。
+- Terraのレビューで、除外保存時のdraft再作成による未保存棚の消失経路を修正。保存成功した除外だけbaselineへ反映し、リクエスト中の編集を止め、POST失敗と更新失敗を区別。同じfolder設定への再入でdraftを保持、棚保存後も展開を保持する。
+- Core関連10checks PASS。最初の旧cached-targetが削除されSDK10.0.403既定runtime10.0.14が未取得のbuildはNETSDK1112。ignoredの専用targetsで既存10.0.13 runtime/crossgen/ILLinkへ明示固定し、新規取得/プロジェクト依存変更なしにbuild/publish0errors（従来WUI1001×3/IL2104×2）。
+- frontend01で個別保存/相互draft保全をLight02までに確認。Light03の再表示/別folder取消/batch3項目、Dark03は同項目を含む7checks・正常exit0・生成原本保持。関連画像5枚を確認。全手順1runのPASSとは合算せず、`data/ai-ui/continuation-20261101/folder-settings-final-review.json`へ範囲を明記。
+- builtin除外を含めない期待値、短命な保存文言、閉じるを破棄確認と誤認した試験、非表示の準備中folder行を読む試験を修正。FAILは全て保持。製品の追加破損とは区別する。初回cleanupの破棄後HWND消滅競合は、window消滅時に所有process終了を待つ方式へ修正。強制終了なし。HC/物理入力/DPI/実folder/スキャン・起動時設定の再受入は今回の対象外。
+- [agent-desktop評価](agent-desktop-evaluation.md)は読取/対象特定まで。操作未確認を製品GUIの成功へ混ぜない。
