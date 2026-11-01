@@ -102,7 +102,7 @@
           <TextBlock Text="新しく見つかったファイルを入れる棚です。個別に変更・解除した棚は再スキャンしても保持します。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
           <Button Content="棚を選択（複数可）" Click="ChooseRootShelves_Click" AutomationProperties.AutomationId="BtnChooseRootShelves"/>
           <ComboBox x:Name="RootInitialShelf" Header="棚を指定・新しく作成" HorizontalAlignment="Stretch" SelectionChanged="RootInitialShelf_Changed" AutomationProperties.Name="初期棚" AutomationProperties.AutomationId="RootInitialShelf"/>
-          <TextBox x:Name="RootNewShelf" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" TextChanged="FolderEditor_Changed" AutomationProperties.Name="新しい棚の名前" AutomationProperties.AutomationId="RootNewShelf"/>
+          <TextBox x:Name="RootNewShelf" Visibility="Collapsed" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" TextChanged="FolderEditor_Changed" AutomationProperties.Name="新しい棚の名前" AutomationProperties.AutomationId="RootNewShelf"/>
           <CheckBox x:Name="FillUnsetShelf" HorizontalContentAlignment="Stretch" Checked="FolderEditor_Checked" Unchecked="FolderEditor_Checked" AutomationProperties.Name="既存の棚未設定ファイルにも適用（個別に解除した棚を含む）" AutomationProperties.AutomationId="FillUnsetShelf"><TextBlock Text="既存の棚未設定ファイルにも適用（個別に解除した棚を含む）" TextWrapping="Wrap"/></CheckBox>
           <Button x:Name="SaveRootShelf" Content="初期棚を保存" HorizontalAlignment="Stretch" Click="SaveRootShelf_Click" AutomationProperties.AutomationId="SaveRootShelf"/>
          </StackPanel>
@@ -282,26 +282,32 @@
       </StackPanel>
      </Grid>
      <Border x:Name="FolderAddPanel" Grid.Row="1" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
-      <ScrollViewer x:Name="FolderAddScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="フォルダ登録の入力項目" AutomationProperties.AutomationId="FolderAddScroll">
-      <StackPanel Spacing="8" Margin="{StaticResource FormScrollGutter}">
-       <Grid ColumnSpacing="8">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBox x:Name="RootPath" Header="追加・再登録するフォルダ" PlaceholderText="選択するか、絶対パスを入力" AutomationProperties.Name="追加するフォルダ" AutomationProperties.AutomationId="RootPath"/>
-        <Button x:Name="ChooseFolder" Grid.Column="1" VerticalAlignment="Bottom" Content="フォルダを選ぶ" Click="ChooseFolder_Click" AutomationProperties.AutomationId="ChooseFolder"/>
-       </Grid>
-       <Grid ColumnSpacing="8">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <TextBox x:Name="AddRootExcludes" Header="除外ルール" PlaceholderText="cache, *.tmp" ToolTipService.ToolTip="除外する名前・パターンをカンマ区切りで指定" AutomationProperties.Name="新規登録の除外ルール" AutomationProperties.AutomationId="AddRootExcludes"/>
-        <ComboBox x:Name="AddRootInitialShelf" Grid.Column="1" Header="初期棚" ToolTipService.ToolTip="新規ファイルに設定する棚" HorizontalAlignment="Stretch" SelectionChanged="AddRootInitialShelf_Changed" AutomationProperties.Name="新規登録の初期棚" AutomationProperties.AutomationId="AddRootInitialShelf"/>
-        <TextBox x:Name="AddRootNewShelf" Grid.Column="2" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" AutomationProperties.Name="新規登録の新しい棚の名前" AutomationProperties.AutomationId="AddRootNewShelf"/>
-       </Grid>
-       <CheckBox x:Name="RootRecursive" Content="サブフォルダを含める" IsChecked="True" AutomationProperties.AutomationId="RootRecursive"/>
-       <CheckBox x:Name="RootFolderBooks" HorizontalContentAlignment="Stretch" AutomationProperties.Name="画像フォルダを一冊として扱う" AutomationProperties.AutomationId="RootFolderBooks"><TextBlock Text="画像フォルダを一冊として扱う（フォルダ直下の画像をまとめて1冊にします。素材やバラの画像には使わないでください。スキャン後は変更できません）" TextWrapping="Wrap"/></CheckBox>
-       <StackPanel Orientation="Horizontal" Spacing="12">
-
+      <ContentControl x:Name="FolderRegistrationEditor" HorizontalContentAlignment="Stretch"><Grid RowSpacing="8">
+       <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+       <ScrollViewer x:Name="FolderAddScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="フォルダ登録の入力項目" AutomationProperties.AutomationId="FolderAddScroll">
+        <StackPanel Spacing="8" Margin="{StaticResource FormScrollGutter}">
+         <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <TextBox x:Name="RootPath" Header="追加・再登録するフォルダ" PlaceholderText="選択するか、絶対パスを入力" AutomationProperties.Name="追加するフォルダ" AutomationProperties.AutomationId="RootPath"/>
+          <Button x:Name="ChooseFolder" Grid.Column="1" VerticalAlignment="Bottom" Content="フォルダを選ぶ" Click="ChooseFolder_Click" AutomationProperties.AutomationId="ChooseFolder"/>
+         </Grid>
+         <CheckBox x:Name="RootRecursive" Content="サブフォルダを含める" IsChecked="True" AutomationProperties.AutomationId="RootRecursive"/>
+         <TextBlock Text="登録後に、一覧だけを取得するかAI索引も作成するか選べます。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
+         <Expander x:Name="FolderRegistrationOptions" Header="追加の設定" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="FolderRegistrationOptions">
+          <StackPanel Spacing="8">
+           <TextBox x:Name="AddRootExcludes" Header="除外ルール" PlaceholderText="cache, *.tmp" ToolTipService.ToolTip="除外する名前・パターンをカンマ区切りで指定" AutomationProperties.Name="新規登録の除外ルール" AutomationProperties.AutomationId="AddRootExcludes"/>
+           <ComboBox x:Name="AddRootInitialShelf" Header="初期棚" ToolTipService.ToolTip="新規ファイルに設定する棚" HorizontalAlignment="Stretch" SelectionChanged="AddRootInitialShelf_Changed" AutomationProperties.Name="新規登録の初期棚" AutomationProperties.AutomationId="AddRootInitialShelf"/>
+           <TextBox x:Name="AddRootNewShelf" Visibility="Collapsed" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" AutomationProperties.Name="新規登録の新しい棚の名前" AutomationProperties.AutomationId="AddRootNewShelf"/>
+           <CheckBox x:Name="RootFolderBooks" HorizontalContentAlignment="Stretch" AutomationProperties.Name="画像フォルダを一冊として扱う" AutomationProperties.AutomationId="RootFolderBooks"><TextBlock Text="画像フォルダを一冊として扱う（フォルダ直下の画像をまとめて1冊にします。素材やバラの画像には使わないでください。スキャン後は変更できません）" TextWrapping="Wrap"/></CheckBox>
+          </StackPanel>
+         </Expander>
+        </StackPanel>
+       </ScrollViewer>
+       <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
         <Button x:Name="AddRoot" Content="登録" Style="{StaticResource AccentButtonStyle}" Click="AddRoot_Click" AutomationProperties.AutomationId="AddRoot"/>
+        <Button Content="キャンセル" ToolTipService.ToolTip="入力を保持して閉じる" Click="ToggleAddFolder_Click" AutomationProperties.AutomationId="CancelAddFolder"/>
        </StackPanel>
-      </StackPanel></ScrollViewer>
+      </Grid></ContentControl>
      </Border>
      <Border x:Name="FolderSelectionPanel" Grid.Row="2" Style="{StaticResource AredokoSurfaceStyle}">
       <StackPanel Spacing="8">

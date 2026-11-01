@@ -1545,7 +1545,7 @@ public sealed partial class MainPage : Page
         for(var i=0;i<4;i++)FolderSelectionButtons.ColumnDefinitions[i].Width=i<2||!narrow?GridLength.Auto:new GridLength(0);
         var buttons=new[]{SearchSelectedFoldersButton,EditSelectedFoldersButton,UnregisterSelectedFoldersButton,SearchAllFoldersButton};
         for(var i=0;i<buttons.Length;i++){Grid.SetColumn(buttons[i],narrow?i%2:i);Grid.SetRow(buttons[i],narrow?i/2:0);}
-        FolderAddScroll.MaxHeight=Math.Max(96,FolderHubView.ActualHeight-FolderHeader.ActualHeight-FolderSelectionPanel.ActualHeight-64);
+        FolderAddScroll.MaxHeight=Math.Max(96,FolderHubView.ActualHeight-FolderHeader.ActualHeight-FolderSelectionPanel.ActualHeight-112);
     }
 
     private void Details_PaneStateChanged(object sender,object args)=>UpdateDetailLayout();
@@ -1673,6 +1673,7 @@ public sealed partial class MainPage : Page
             foreach(var shelf in knownShelves)AddRootInitialShelf.Items.Add(new ComboBoxItem {Content=shelf,Tag="existing"});
             AddRootInitialShelf.SelectedItem=AddRootInitialShelf.Items.OfType<ComboBoxItem>().FirstOrDefault(x=>x.Content?.ToString()==previous) ?? AddRootInitialShelf.Items[0];
             AddRootNewShelf.IsEnabled=(AddRootInitialShelf.SelectedItem as ComboBoxItem)?.Tag?.ToString()=="new";
+            AddRootNewShelf.Visibility=AddRootNewShelf.IsEnabled?Visibility.Visible:Visibility.Collapsed;
         }
         finally{folderPopulating=before;}
     }
@@ -1681,6 +1682,7 @@ public sealed partial class MainPage : Page
     {
         if(AddRootNewShelf is null)return;
         AddRootNewShelf.IsEnabled=(AddRootInitialShelf.SelectedItem as ComboBoxItem)?.Tag?.ToString()=="new";
+        AddRootNewShelf.Visibility=AddRootNewShelf.IsEnabled?Visibility.Visible:Visibility.Collapsed;
     }
 
     private void ToggleAddFolder_Click(object sender,RoutedEventArgs e)
@@ -1710,7 +1712,10 @@ public sealed partial class MainPage : Page
 
     private async void AddRoot_Click(object sender,RoutedEventArgs e)
     {
-        AddRoot.IsEnabled=false;
+        AddRoot.IsEnabled=false;FolderRegistrationEditor.IsEnabled=false;AddRoot.Content="登録しています…";
+        var addedIds = new List<int>();
+        var errors = new List<string>();
+        var failedPaths = new List<string>();
         try
         {
             var rawPaths = RootPath.Text.Split(new[]{';','\r','\n'}, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -1719,12 +1724,9 @@ public sealed partial class MainPage : Page
                 throw new InvalidOperationException("追加するフォルダを選択するか、パスを入力してください。");
 
             var shelf=ReadInitialShelf(AddRootInitialShelf,AddRootNewShelf);
-            var patterns=new JsonArray(AddRootExcludes.Text.Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Select(s=>(JsonNode?)JsonValue.Create(s)).ToArray());
+            var patterns=AddRootExcludes.Text.Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries);
             var recursive = RootRecursive.IsChecked == true;
             var folderBooks = RootFolderBooks.IsChecked == true;
-
-            var addedIds = new List<int>();
-            var errors = new List<string>();
 
             foreach(var path in rawPaths)
             {
@@ -1734,7 +1736,7 @@ public sealed partial class MainPage : Page
                     {
                         {"path", path},
                         {"consent", true},
-                        {"excludes", patterns},
+                        {"excludes", new JsonArray(patterns.Select(pattern=>(JsonNode?)JsonValue.Create(pattern)).ToArray())},
                         {"default_shelf", shelf},
                         {"folder_books", folderBooks},
                         {"recursive", recursive}
@@ -1745,6 +1747,7 @@ public sealed partial class MainPage : Page
                 catch(Exception ex)
                 {
                     errors.Add($"{path}: {ex.Message}");
+                    failedPaths.Add(path);
                 }
             }
 
@@ -1754,20 +1757,37 @@ public sealed partial class MainPage : Page
                 throw new InvalidOperationException(msg);
             }
 
-            RootPath.Text=""; AddRootExcludes.Text=""; AddRootNewShelf.Text=""; RootFolderBooks.IsChecked=false; RootRecursive.IsChecked=true; AddRootInitialShelf.SelectedIndex=0;
+            if(errors.Count==0)
+            {
+                RootPath.Text=""; AddRootExcludes.Text=""; AddRootNewShelf.Text=""; RootFolderBooks.IsChecked=false; RootRecursive.IsChecked=true; AddRootInitialShelf.SelectedIndex=0;
+                FolderAddPanel.Visibility=Visibility.Collapsed;
+            }
+            else RootPath.Text=string.Join("; ",failedPaths);
             await RefreshSearchRootsAsync();
             await LoadAIScopeAsync();
 
             OpenFolderSettingsPanel(addedIds);
             await PromptPostRegistrationScanAsync(addedIds);
+            if(errors.Count>0)
+                Notice("一部のフォルダを登録できませんでした",$"{addedIds.Count} 件を登録、{failedPaths.Count} 件は未登録です。入力欄に残したフォルダを確認して再試行してください。{string.Join(" / ",errors)}",InfoBarSeverity.Warning);
         }
-        catch(Exception ex){ScanStatus.Text=ex.Message;Failure(ex);}
-        finally{AddRoot.IsEnabled=true;}
+        catch(Exception ex)
+        {
+            ScanStatus.Text=ex.Message;
+            if(addedIds.Count==0)Failure(ex);
+            else
+            {
+                AppLog.Error(ex);
+                Notice("登録後の処理を完了できませんでした",$"{addedIds.Count} 件の登録内容は保存されています。未登録は {failedPaths.Count} 件です。{string.Join(" / ",errors)} 画面更新・スキャンの準備に失敗しました: {ex.Message}",InfoBarSeverity.Warning);
+            }
+        }
+        finally{AddRoot.IsEnabled=true;FolderRegistrationEditor.IsEnabled=true;AddRoot.Content="登録";}
     }
 
     private void PrefillRestoreRoot(RegisteredRootRow row)
     {
         FolderAddPanel.Visibility=Visibility.Visible;
+        FolderRegistrationOptions.IsExpanded=true;
         RootPath.Text=row.Path;
         AddRootExcludes.Text=string.Join(", ",row.Exclusions);
         RootFolderBooks.IsChecked=row.FolderBooks;RootRecursive.IsChecked=row.Recursive;
@@ -2091,6 +2111,7 @@ public sealed partial class MainPage : Page
         if(RootNewShelf is null)return;
         var tag=(RootInitialShelf.SelectedItem as ComboBoxItem)?.Tag?.ToString();
         RootNewShelf.IsEnabled=tag=="new";
+        RootNewShelf.Visibility=RootNewShelf.IsEnabled?Visibility.Visible:Visibility.Collapsed;
         if(!folderPopulating&&folderDraft is not null&&tag!="multiple")folderDraft.ClearShelfIdSelection();
         UpdateFolderDraftState();
     }
