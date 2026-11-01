@@ -209,3 +209,11 @@ Core/tests/BootstrapはZIP15/source0edbd40から無変更を機械照合し、�
 - `dist/portable-basic-20261029-24/Aredoko/Aredoko.exe`。frontend/application source **1e8e7caa8c91520d8c4afad7483de681fd80a0b5**、packaging source4379f2c。826files/661,889,270bytes。ZIP348,515,945bytes/SHA256 `987946c4212c386061ca3b90a6e588389b711e62aeb94ee643e3090ed43f319d`。下部操作/空案内/用途説明に加え、AI未導入時の直接操作、棚filter/表示外選択保持、取得要件説明/速度折畳み、復旧close、小中大preset、基本から読める同梱guideを収録。旧候補とinstalled Alphaは保持。
 - 全payload/ZIP/同梱check PASS。Core/Bootstrap/backendは不変を照合して前段のCore1,441assertions/CPU34の受入を再利用し、全回帰を反復していない。既存picker3/SDK IL2104×2は保持。GUIは明示許可を受けた生成PNG1枚・専用DB・UIA-onlyの1試行で、通常EXE起動→3preset/配置→終了→1回再起動 **16checks/所有4exit0**。PNG3枚を目視。前面化要求/物理入力/GPU/モデル取得/通常DB/Alpha変更なし。
 - 生成確認セット24も6data filesで作成。SHA256 `317dc8d93c0aad28610a09765d4933de6ef65ef53419ff81d39448a2fc562072`。ZIP24とmanifest/sums/inventory/size対応を照合。別Windows/全媒体再生/HC/物理DPIの受入ではない。証拠 continuation-20261029e/basic24-final-review.json、basic24-startup01、basic24-validation-kit01.log、distのpreparation/runtime-check。後続bf0db36の配置対象名/フォルダだけのお気に入り案内はsource/buildのみで未収録。
+
+
+## 2026-11-01：基本ZIP25（限定受入済み）
+
+- `dist/portable-basic-20261101-25/Aredoko/Aredoko.exe`、frontend source/ProductVersion **8cc23fc2b07c177b38c846594f483fdbfa92c5fc**、packaging source1851a84。827files/661,920,009bytes、ZIP348,532,308bytes、SHA `78c21608926c37b487bb4fe59b600c96f7f4dd943946a88360f95cfced3a9c51`。全payload/ZIP/同梱check通過。既存runtime/media/bootstrapをZIP24から再利用、Core1444と関連10を再利用し全回帰/CPU34を繰り返していない。
+- 通常EXEの起動→正常終了→1回再起動を生成PNG1枚/専用DBで確認（basic25-startup01：11checks、所有4process全exit0、2PNG生成・再起動画像を確認）。GPU/モデル/取得/通常DB/Alphaは使わず、既存ZIP24・インストール済みAlphaは維持。
+- 対応する `dist/portable-validation-20261101-25.zip`：6data files、SHA `2b7006eb4f501f7272ed0db3afa41e1f33be6064f9c4657ccbb3d7e9a90b1a50`。版/日時/platformと正確なZIP/manifest hashを結果templateにも伝達。sourceはmanifest未記録のためnull。作成は別Windows合格ではない。
+- 後続d727876の登録追加UI/一括登録修正はこのZIPに未収録。最新frontend03はbuild/publishまで、GUI未受入。証拠 `data/ai-ui/continuation-20261101/final-review.json` / basic25-prepare01.log / basic25-startup01/report.json。

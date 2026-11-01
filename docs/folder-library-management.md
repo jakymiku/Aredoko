@@ -101,3 +101,11 @@
 - CIはAGENTSのmanual-only／資源制約を守る。文書のみの今回にCIや製品テストを回さない。実装時も必要な局所テストを選び、同じ評価を無目的に反復しない。
 
 各縦切りの完了／未検証をhandoffへ記録して次へ進む。既に他AIが実装していた場合は作り直さず差分と残課題のみ扱う。
+
+
+## 2026-11-01：フォルダ追加の整理と一括登録修正（d727876）
+
+- 基本のパス/サブフォルダ指定を前へ、除外/初期棚/画像フォルダの本扱いを追加設定へ。登録/入力保持キャンセルはscroll外へ固定。新しい棚の入力は新規作成を選んだときだけ表示、再登録では既存設定を展開して表示する。登録中はControlの入力を停止し、進行中の表示を出す。
+- AddRoot_ClickがJsonArrayを各パスのJsonObjectへ再利用しており、2件目で「The node already has a parent.」となるコード経路を確認（LibraryApiはToJsonStringだけで親子を外さない）。パターン文字列を保持し、各リクエストで独立したJsonArrayへ変換するよう修正。CPU上で旧経路の例外と新しい独立配列の同内容serializeを確認した。実際の複数root登録GUI合格とは区別する。
+- 全成功は入力をclearして欄を閉じる。一部失敗は未登録pathと設定を保持し、件数/理由/再試行を案内。登録後の更新/scan案内が失敗しても、保存済み件数と未登録情報を消さない。Terraのコードレビュー指摘を反映した。
+- 関連WinUI build/publish成功（従来WUI1001×3/IL2104×2）。最初のBorder.IsEnabled誤用をContentControlへ修正しbuild02で0errors。最新試験出力 `data/ai-ui/continuation-20261101/frontend03`、ProductVersion source d727876。GUI/部分失敗API経由/physical入力は未検証。基本ZIP25/source8cc23fcにはこの追加変更は含まない。

@@ -167,3 +167,6 @@ f2ba198は既存の差分更新がLoadAsyncを通らないことを踏まえ、l
 ## 2026-11-01：設定保存結果の固定表示（source8cc23fc）
 
 SettingsStatusをscroll内容から外し、native保存/閉じるfooterの直前へ配置。表示・閲覧・高度設定・保存契約を維持し、読み上げはPolite。frontend02の設定保存/上下scroll/再表示4操作は成功、Dark01は原本保持を含む8checks/exit0。Light01は保存時に既定systemテーマへ移るfixture不整合が画像で判明し、厳密なLight受入にはしない。専用設定fileにも指定themeを記録し、実際のComboBox選択を待つようharnessを修正。Lightの未確認分は追加許可を待つ。第三者CLIのstorage errorは別記し、Aredokoの設定失敗と混同しない。
+
+
+設定feedbackの後続受入：fixtureの保存themeを明示したfrontend02/settings-feedback-light02は8checks/exit0/原本保持。実Lightの保存結果画像を確認し、Dark01/8checks/exit0と区別して両テーマを受入。CLIの再試行はせず、tool失敗を成功へ書換えていない。最新登録変更d727876は別のbuild/publish済み単位で、上記settings GUIの対象へ混ぜない。
