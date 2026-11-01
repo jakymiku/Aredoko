@@ -43,10 +43,16 @@ public sealed partial class MainPage
             bool? savedVerification=null;
             try{var setup=await api.GetAsync("api/library/ai/setup");savedVerification=setup["verify_ai_runtime"]?.GetValue<bool>()??true;verification.IsChecked=savedVerification;verification.IsEnabled=true;}
             catch{verificationHint.Text="バックエンドに接続できません。整合性チェックの設定は変更できません。";}
-            var savedText=new TextBlock{TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(savedText,"SettingsStatus");
-            var scroll=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)};
+            var savedText=new TextBlock{TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            AutomationProperties.SetAutomationId(savedText,"SettingsStatus");
+            AutomationProperties.SetLiveSetting(savedText,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
+            var scroll=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)};
             AutomationProperties.SetAutomationId(scroll,"SettingsScroll");
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="設定",PrimaryButtonText="保存",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=scroll};
+            var content=new Grid{MaxHeight=Math.Max(160,ActualHeight-240),RowSpacing=8};
+            content.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
+            content.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+            content.Children.Add(scroll);Grid.SetRow(savedText,1);content.Children.Add(savedText);
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="設定",PrimaryButtonText="保存",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=content};
             AutomationProperties.SetAutomationId(dialog,"SettingsDialog");
             // Preserve the existing UI Automation identifier on the native footer button.
             var saveStyle=new Style{TargetType=typeof(Button),BasedOn=(Style)Application.Current.Resources["AccentButtonStyle"]};
@@ -94,7 +100,7 @@ public sealed partial class MainPage
                 var button=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(button,id);
                 button.Click+=(_,_)=>{destination=target;dialog.Hide();};Grid.SetRow(button,toolIndex/2);Grid.SetColumn(button,toolIndex%2);tools.Children.Add(button);toolIndex++;
             }
-            panel.Children.Add(tools);panel.Children.Add(advanced);panel.Children.Add(savedText);
+            panel.Children.Add(tools);panel.Children.Add(advanced);
             await dialog.ShowAsync();
             await Task.WhenAny(closedTcs.Task, Task.Delay(500));
         }

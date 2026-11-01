@@ -50,6 +50,7 @@ def main():
     parser.add_argument('--folder-toolbar-only',action='store_true',help='UIA-only single folder return action and registration form access')
     parser.add_argument('--diagnostic-footer-only',action='store_true',help='UIA-only diagnostic native close footer, no clipboard access')
     parser.add_argument('--guide-layout-only',action='store_true',help='UIA-only concise guide, preserved details and folder/AI entry points')
+    parser.add_argument('--settings-feedback-only',action='store_true',help='UIA-only persistent settings save feedback at either scroll edge')
     parser.add_argument('--settings-layout-only',action='store_true',help='UIA-only settings action grid, footer save and reopen')
     parser.add_argument('--detail-fields-only',action='store_true',help='UIA-only wrapped tags and inline shelf picker without repeating captions')
     parser.add_argument('--detail-polish',action='store_true',help='UIA-only two generated PNGs: deduplicated filenames, bounded long title and draft preservation')
@@ -74,7 +75,7 @@ def main():
         args.folder_settings_remaining=True
     if args.folder_settings_remaining:args.folder_settings_layout=True
     if args.folder_settings_layout:args.detail_polish=True
-    if args.agent_desktop and not args.folder_settings_layout:parser.error('agent-desktop probe requires the bounded folder-settings case')
+    if args.agent_desktop and not (args.folder_settings_layout or args.settings_feedback_only):parser.error('agent-desktop probe requires a bounded folder or settings case')
     if args.favorite_root_actions:args.detail_polish=True
     if args.shelf_picker_remaining:args.shelf_picker_filter=True
     if args.shelf_picker_filter:args.detail_polish=True
@@ -85,6 +86,7 @@ def main():
     if args.folder_toolbar_only:args.detail_polish=True
     if args.diagnostic_footer_only:args.detail_polish=True
     if args.guide_layout_only:args.detail_polish=True
+    if args.settings_feedback_only:args.detail_polish=True
     if args.settings_layout_only:args.detail_polish=True
     if args.detail_fields_only:args.detail_polish=True
     if args.detail_polish:args.uia_only=True
@@ -394,6 +396,16 @@ def main():
             from ui_settings_layout_audit import audit_guide
             report['guide_audit_sha256']=hashlib.sha256((REPO/'tools/ui_settings_layout_audit.py').read_bytes()).hexdigest()
             audit_guide(ui,shot,report,check,cat,handler,target)
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.settings_feedback_only:
+            from ui_settings_feedback_audit import audit
+            audit(ui,shot,report,check)
+            if args.agent_desktop:
+                from agent_desktop_probe import audit as audit_agent_desktop
+                ui('invoke','BtnRoots');ui('wait-for','LibraryHeading','--value','登録フォルダ','-t','10000')
+                ui('wait-for','FolderList','-p','IsOffscreen','--value','False','-t','10000')
+                ui('invoke','ConfigFolder'+str(cat.registered_roots()[0]['id']));ui('wait-for','ScanRoot','-t','10000')
+                audit_agent_desktop(args.agent_desktop,hwnd,proc.pid,ui,target,report,check)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.settings_layout_only:
             from ui_settings_layout_audit import audit
