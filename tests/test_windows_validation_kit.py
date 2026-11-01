@@ -11,7 +11,7 @@ class WindowsValidationKitTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory(prefix='aredoko-validation-');self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.release=self.root/'dist/basic/Aredoko';self.release.mkdir(parents=True)
         self.out=self.root/'dist/validation';self.zip=self.release.parent/'Aredoko-windows-x64.zip'
-        self.manifest={'models_bundled':False,'ai_runtime_bundled':False,'entries':[{'path':'payload.txt','bytes':7,'sha256':'unused-existing-verifier'}]}
+        self.manifest={'version':'fixture-v1','created_at':'2026-10-29T18:25:21Z','platform':'windows-x64','models_bundled':False,'ai_runtime_bundled':False,'entries':[{'path':'payload.txt','bytes':7,'sha256':'unused-existing-verifier'}]}
         (self.release/'manifest.json').write_bytes(json.dumps(self.manifest).encode())
         (self.release/'sha256sums.txt').write_bytes(b'sealed sums\n')
         self.members={'Aredoko/manifest.json':(self.release/'manifest.json').read_bytes(),'Aredoko/sha256sums.txt':b'sealed sums\n','Aredoko/payload.txt':b'payload'}
@@ -35,9 +35,21 @@ class WindowsValidationKitTests(unittest.TestCase):
         self.write_zip();before=self.zip.read_bytes();self.run_tool()
         candidate=json.loads((self.out/'candidate.json').read_text());self.assertTrue(candidate['archive_metadata_matches_release']);self.assertFalse(candidate['clean_windows_verified'])
         result=json.loads((self.out/'result-template.json').read_text());self.assertIsNone(result['normal_exe_start']);self.assertFalse(result['clean_windows_verified'])
+        expected={'version':'fixture-v1','created_at':'2026-10-29T18:25:21Z','platform':'windows-x64','source_revision':None}
+        self.assertEqual(candidate['release_identity'],expected);self.assertEqual(result['release_identity'],expected)
+        self.assertEqual(result['application_zip_sha256'],candidate['zip_sha256']);self.assertEqual(result['manifest_sha256'],candidate['manifest_sha256'])
+        self.assertIn('source_revisionがnull', (self.out/'はじめに.txt').read_text(encoding='utf-8-sig'))
         with zipfile.ZipFile(self.out.with_suffix('.zip')) as z:
             self.assertEqual(len(z.namelist()),6);self.assertFalse(any(Path(name).suffix.lower() in ('.exe','.cmd','.ps1','.py') for name in z.namelist()))
         self.assertEqual(self.zip.read_bytes(),before)
+
+    def test_legacy_manifest_omitted_identity_fields_stay_unknown(self):
+        for key in ('version','created_at','platform'):self.manifest.pop(key)
+        (self.release/'manifest.json').write_bytes(json.dumps(self.manifest).encode())
+        self.members['Aredoko/manifest.json']=(self.release/'manifest.json').read_bytes()
+        self.write_zip();self.run_tool()
+        identity=json.loads((self.out/'candidate.json').read_text())['release_identity']
+        self.assertEqual(identity,{'version':None,'created_at':None,'platform':None,'source_revision':None})
 
     def test_other_build_manifest_is_rejected_before_output(self):
         self.write_zip({**self.members,'Aredoko/manifest.json':b'other build'});self.rejected()
