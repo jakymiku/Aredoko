@@ -2,15 +2,15 @@
 
 
 
-## 2026-11-01 作業checkpoint（以下の旧終了記録より優先）
+## 2026-11-01 終了checkpoint（以下の旧記録より優先）
 
-- 起点ed619e0、fetch後remote branch/PR5 head ref一致・clean。他AI更新なし。既存branch/PR5継続、コミット34d2802（folder設定/draft）、12f9797（検証kitの版/ハッシュ対応）、d84c5cf（限定受入）、8cc23fc（設定の固定feedback）。現在のアプリsourceは8cc23fc、frontend02へpublish済み。最終commitは本書Git履歴。
-- **UI**：folder設定は一覧取得→折畳みの除外/初期棚/起動時/解除へ整理。除外保存で棚draftを破棄する経路、同じfolder設定への再入、保存後展開を修正。個別保存/相互draft保持はLight02、再表示/別folder取消/batchはLight03・Dark03で確認。初回FAILは期待値/短命status/閉じる仕様/準備中の非表示peerのharness原因と製品修正を区別して保持。[証拠](p3-continuous-browse.md)末尾。SettingsStatusはscroll外へ移しnative footer直前に固定、Lightの4関連操作確認済み・Darkは実行中。
-- **確認**：Core1444（全体1回）/関連10checks、WinUI build/publish0errors。SDK10.0.403の要求10.0.14未取得にはignored targetsで既存runtime/crossgen/ILLink10.0.13を使用、依存DL/プロジェクト設定変更なし。既存picker WUI1001×3/SDK IL2104×2は保持。GUIは当該user許可・生成素材/専用DB/UIA-only。元メディア/通常DB/Alpha/GPU/OS設定/Actions/shutdownは変更なし。
-- **開発用CLI**：ユーザー指定agent-desktop v1.0.2を専用ignored先へ取得/同版checksum確認。owned windowのread/native-ID lookupは成功。生HWND→w-ID、ref_idのharness修正後、状態file置換1175のthird-party errorを観測。semantic collapse/foreground保持は未確認。Aredoko成功へ混ぜず[限定評価](agent-desktop-evaluation.md)へ。既存WinAppを継続、tool調査の反復でUIを止めない。試験appの通常起動は前面表示し得ることを説明しuser了承済み。強制前面化/物理入力なし。
-- **P6**：12f9797で生成kitのcandidate/resultへmanifest版・日時・platformとZIP/manifest hashを伝達（CPU7＋変更後該当1 PASS）。source未記録はnull、clean Windows成功にはしない。Sandboxの旧有効化履歴は保全。11/1bootは有効化後だが現在WMI InstallState2、WindowsSandbox.exeなし、target未接続/stale。再起動待ちだけという旧記述は現行状態ではない。原因不明・再有効化/guest実行なし、`sandbox-readiness01.json`。
-- **候補/次**：現在受入済み基本ZIPは旧24/source1e8e7caのまま。user許可済みの基本ZIP25へ最新frontend02とbackend/tools/docsをまとめ、通常EXE→終了→1回再起動を専用PNG1枚で確認する。新しい大きな実装前にこの区切りを完了。公開runtimeの適用条項/host/registry、別Windows受入、HC/DPI/physical入力/実媒体品質は未完。現在のGUI/GPUは引き続きuserへ具体化して確認。本セッションは残量30%前後で引き継ぎ開始、終了時shutdownしない。
-
+- **Git/方針**：起点ed619e0、fetch後remote branch/PR5 head ref一致・cleanから継続。他AI更新なし。既存branch/PR5だけを使用。最終アプリsource **d727876**、最終handoff commitは本書Git履歴。主な実装は34d2802（folder設定・draft）、8cc23fc（設定feedback）、d727876（登録UI・複数登録/部分失敗）。12f9797は別Windows検証kitの結果対応。新branch/PR/main merge/Actions/force pushなし。ユーザー指示に従いTerraへ小単位を委譲し親がレビューした。
+- **利用者にできること**：登録folderの一覧取得を前へ、初期棚/除外/起動時/解除をnative折畳みへ整理。除外保存で未保存の棚が消える経路を修正し、逆順保存・同folder再入・展開を保全。設定の保存結果をscroll外のfooter直前へ固定。さらに登録formを場所/サブフォルダと追加設定へ分け、登録/入力保持cancelを固定、新しい棚の欄は新規作成時のみ表示。複数パス登録のJsonArray親再利用を修正し、一部失敗は未登録path/設定/件数を保持、後続更新失敗でも登録済み情報を案内する。
+- **実証/未実証**：34d2802の個別保存/相互draft保持はLight02、再表示/別folder取消/batchはLight03・Dark03で確認。8cc23fcのsettings-feedback-light02・dark01は各8checks/exit0、実テーマ画像を確認。初回の既定除外/短命status/閉じる仕様/準備中非表示peer/保存themeのharness FAILは保持し、製品不具合と区別。[証拠](p3-continuous-browse.md)。Core1444（全体1回）/関連10、関連build/publish0errors。最新d727876/frontend03は**build/publish・コードレビュー・CPU JSON所有の最小確認まで、複数folder/部分失敗GUIは未検証**。[登録の詳細](folder-library-management.md)末尾。SDK10.0.403の要求10.0.14未取得にはignored targetsで既存runtime/crossgen/ILLink10.0.13を使用、依存DL/プロジェクト設定変更なし。既存WUI1001×3/IL2104×2は保持。
+- **最新の通常入口候補**：**dist/portable-basic-20261101-25/Aredoko/Aredoko.exe**、app source/ProductVersion8cc23fc、packaging1851a84。827files/661,920,009bytes、ZIP348,532,308bytes/SHA `78c21608926c37b487bb4fe59b600c96f7f4dd943946a88360f95cfced3a9c51`。payload/ZIP/同梱check、通常EXE→終了→1再起動11checks/所有4exit0/再起動画像確認。**d727876の登録追加変更は未収録**。新しい検査用frontend03は `data/ai-ui/continuation-20261101/frontend03`、次の関連GUIへそのまま使い、source変更前に再publishしない。旧ZIP24/installed Alpha（ZIP10/source0138a58）を上書きしていない。[配布記録](portable-refresh-20261024.md)。evidence rootは `data/ai-ui/continuation-20261101/`、final-review.json等。
+- **P6**：対になる検証セット25は6data files、SHA `2b7006eb4f501f7272ed0db3afa41e1f33be6064f9c4657ccbb3d7e9a90b1a50`。candidate/resultへmanifest版/日時/platformとZIP/manifest SHAを伝達（関連CPU7＋該当変更1 PASS）。sourceはmanifest未記録につきnull。Sandboxの旧有効化履歴は保全。11/1bootは有効化後だが、現在WMI InstallState2・WindowsSandbox.exeなし・target未接続/stale。原因不明、単なる再起動待ちとは扱わず、有効化/guest起動/OS変更はしていない。別Windows受入、公開runtimeの適用条項/host/registryは未完。
+- **tool/制約**：ユーザー指定agent-desktop v1.0.2をignored専用先へ取得・同版checksum確認、read/native-ID lookup成功。w-ID/ref_id対応後、state file置換1175のthird-party storage errorを観測。semantic操作/foreground保持は未確認。CLI調査は止めて既存WinAppを継続し、製品失敗へ混ぜない。[限定評価](agent-desktop-evaluation.md)。GUI/GPUは現在のuser指定どおり事前確認。試験appの通常起動は前面表示し得ることを説明し了承済み、強制前面化/物理入力なし。生成素材/専用DBのみ、通常DB/私物/Alpha/GPU推論/OS設定/shutdown/monitorは変更なし。
+- **次の1件**：ユーザーから検証偏重の指摘があり、AGENTS/roadmapへ実装優先を再明記。frontend03で新しい登録単位の**複数有効folder＋無効pathの部分失敗、失敗入力保持、通常の一覧取得選択**を許可付きの必要最小限1batchで確認し、問題がなければ新候補へ収録する。既存のsettings/棚/ZIP25通常入口やCLIの失敗を再試験の主題にしない。harnessの新設/期待値の推測で時間を使わず既存の登録試験を活かす。以後は検索→閲覧→整理の往復UIへ戻る。P6はSandboxの現状をuserと確認してから別環境受入、無断再有効化や再起動はしない。HC/DPI/physical入力/実媒体品質/全ロードマップ完了は未達のまま。今回は枠を多めに残して安全な単位で終了、PCは停止しない。
 
 ## 2026-10-30 終了checkpoint（continuation-20261029e、以下より優先）
 
