@@ -6,6 +6,7 @@ from native_ui_tools import inspect_element, nodes
 def audit(ui, shot, report, check):
     ui('invoke', 'BtnSettings')
     ui('wait-for', 'SettingsDoubleClickViewer', '-t', '10000')
+    ui('wait-for','SettingsTheme','--value','ライト' if report['theme']=='light' else 'ダーク','-t','10000')
     ui('scroll', 'SettingsScroll', '--to', 'top')
     combo = 'SettingsDoubleClickViewer'
     choice = 'Windowsの既定アプリ'

@@ -11,3 +11,5 @@
 - headless操作はバックグラウンドUIAを意味する。試験アプリの通常起動時にWindowsが前面表示することまで防止しない。現在のユーザー指定どおり、GUI/GPU試験は対象を示して確認する。
 
 次は新しい変更のGUI確認に、既存の読取を反復せず小さいsemantic操作を1件だけ併せる。失敗時はdelivery/retry契約とlive stateで判断し、物理入力へ拡張しない。
+
+追記：frontend02/source8cc23fcの設定確認後にsemantic操作だけを再度併せたが、snapshot成功後のfindで状態fileのatomic replaceに失敗（INTERNAL / Windows error1175 / not_delivered / safe）。Aredoko操作前のthird-party storage errorで、セキュリティ設定や状態file削除で回避していない。製品の設定4操作は通過し、Darkはtoolなしで8checks/exit0。以後の通常試験は既存WinAppを継続する。agent-desktop単独の無変更再試行は行わず、必要な新試験か修正版があるときに限り再評価する。

@@ -205,6 +205,8 @@ def main():
         if args.shelf_management:
             a=cat.change_shelf('create',name='素材')['id'];b=cat.change_shelf('create',name='資料')['id'];cat.change_shelf('create',name='空の棚')
             cat.change_shelf('assign',entity='item',object_ids=[first['id']],shelf_ids=[a,b])
+        if args.settings_feedback_only:
+            (target/'viewer-settings.json').write_text(json.dumps({'version':1,'theme':args.theme,'wheel_up_advances':False,'double_click_viewer':'internal'}),encoding='utf-8')
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
         extras={}

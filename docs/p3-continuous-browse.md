@@ -162,3 +162,8 @@ f2ba198は既存の差分更新がLoadAsyncを通らないことを踏まえ、l
 - frontend01で個別保存/相互draft保全をLight02までに確認。Light03の再表示/別folder取消/batch3項目、Dark03は同項目を含む7checks・正常exit0・生成原本保持。関連画像5枚を確認。全手順1runのPASSとは合算せず、`data/ai-ui/continuation-20261101/folder-settings-final-review.json`へ範囲を明記。
 - builtin除外を含めない期待値、短命な保存文言、閉じるを破棄確認と誤認した試験、非表示の準備中folder行を読む試験を修正。FAILは全て保持。製品の追加破損とは区別する。初回cleanupの破棄後HWND消滅競合は、window消滅時に所有process終了を待つ方式へ修正。強制終了なし。HC/物理入力/DPI/実folder/スキャン・起動時設定の再受入は今回の対象外。
 - [agent-desktop評価](agent-desktop-evaluation.md)は読取/対象特定まで。操作未確認を製品GUIの成功へ混ぜない。
+
+
+## 2026-11-01：設定保存結果の固定表示（source8cc23fc）
+
+SettingsStatusをscroll内容から外し、native保存/閉じるfooterの直前へ配置。表示・閲覧・高度設定・保存契約を維持し、読み上げはPolite。frontend02の設定保存/上下scroll/再表示4操作は成功、Dark01は原本保持を含む8checks/exit0。Light01は保存時に既定systemテーマへ移るfixture不整合が画像で判明し、厳密なLight受入にはしない。専用設定fileにも指定themeを記録し、実際のComboBox選択を待つようharnessを修正。Lightの未確認分は追加許可を待つ。第三者CLIのstorage errorは別記し、Aredokoの設定失敗と混同しない。
