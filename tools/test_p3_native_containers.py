@@ -56,6 +56,7 @@ def main():
     parser.add_argument('--settings-feedback-only',action='store_true',help='UIA-only persistent settings save feedback at either scroll edge')
     parser.add_argument('--settings-layout-only',action='store_true',help='UIA-only settings action grid, footer save and reopen')
     parser.add_argument('--detail-fields-only',action='store_true',help='UIA-only wrapped tags and inline shelf picker without repeating captions')
+    parser.add_argument('--keyboard-entry',action='store_true',help='Owned-window Enter search and generated folder registration; physical keys, no GPU')
     parser.add_argument('--detail-scroll',action='store_true',help='Generated-data UIA detail scroll reset and same-item retention')
     parser.add_argument('--detail-polish',action='store_true',help='UIA-only two generated PNGs: deduplicated filenames, bounded long title and draft preservation')
     parser.add_argument('--card-captions',action='store_true',help='UIA-only library/shelf caption slots and 60/180 percent size changes')
@@ -95,9 +96,11 @@ def main():
     if args.guide_layout_only:args.detail_polish=True
     if args.settings_feedback_only:args.detail_polish=True
     if args.settings_layout_only:args.detail_polish=True
+    if args.keyboard_entry:args.detail_polish=True
     if args.detail_scroll:args.detail_polish=True
     if args.detail_fields_only:args.detail_polish=True
     if args.detail_polish:args.uia_only=True
+    if args.keyboard_entry:args.uia_only=False
     if args.setup_plan or args.setup_return:args.detail_actions=True;args.uia_only=True
     if args.video_history_only:args.video_content=True
     if args.audio_similarity_only:args.audio_search_only=True
@@ -289,8 +292,8 @@ def main():
             if len(windows)==1:hwnd=str(windows[0]['hwnd']);break
             time.sleep(.2)
         check('owned native window available',hwnd is not None)
-        if (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or (args.compact_toolbar and not args.uia_only) or args.video_content or args.video_audio_content or args.bulk_favorite_patch or (args.viewer_choice and not args.uia_only):
-            if args.video_content or args.video_audio_content or args.bulk_favorite_patch or args.viewer_choice:ready()
+        if args.keyboard_entry or (args.usability_u1 and not args.uia_only) or args.global_edge or args.audio_content or (args.compact_toolbar and not args.uia_only) or args.video_content or args.video_audio_content or args.bulk_favorite_patch or (args.viewer_choice and not args.uia_only):
+            if args.keyboard_entry or args.video_content or args.video_audio_content or args.bulk_favorite_patch or args.viewer_choice:ready()
             # The owner launches this one test process; use normal Windows
             # activation, never input attachment, security bypass or other apps.
             report['foreground_activation_requested']=bool(user.SetForegroundWindow(int(hwnd)))
@@ -442,6 +445,10 @@ def main():
             from ui_settings_layout_audit import audit
             report['settings_audit_sha256']=hashlib.sha256((REPO/'tools/ui_settings_layout_audit.py').read_bytes()).hexdigest()
             audit(ui,shot,report,check,target)
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.keyboard_entry:
+            from ui_keyboard_entry_audit import audit
+            audit(ui,shot,report,check,handler,cat,target,input_guard=lambda:user.GetForegroundWindow()==int(hwnd))
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.detail_scroll:
             from ui_detail_polish_audit import audit_scroll

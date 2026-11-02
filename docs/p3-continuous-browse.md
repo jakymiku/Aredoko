@@ -197,3 +197,10 @@ source `0d1ccf2`、試験候補 `data/ai-ui/continuation-20261103/frontend01`。
 Portable build/publishは成功（既存WUI1001×3、SDK IL2104×2のみ）。生成PNG2枚・専用DBのUIA `--detail-scroll` は7checks、graceful_exit0、残存appなし。同一作品の閉じる→再表示でscroll保持、開いたpane/閉じたpaneの別作品選択でtitleがviewport上端へ戻ることを確認。`detail-scroll01/detail-scroll-reset.png`を目視し、Lightのtitle/preview/編集欄の重なりなし。ComfyUI queueがrunning0/pending0の時に開始。
 
 同一作品の保存/再検索時のscroll保持、物理wheel、HC/DPIは今回未検証。RootPathの修飾なしEnterによる登録は同sourceでbuild確認まで、実キー入力は未検証。既存の登録/部分失敗/scan案内のGUI成功をEnter経路の成功と読み替えない。
+
+
+## 2026-11-03 検索のEnter確定・IME中の自動検索抑止
+
+source3ff0849。Queryの修飾なしEnterを既存Search_Click→NavigateAsyncへ接続し、範囲・類似解除・未保存確認を再利用。既存の300ms自動検索と検索ボタンは維持。TextCompositionStarted/Endedで変換中を追跡し、その間はtimerとTickからの検索を抑止する。RootPathのEnterにもcomposition guardを追加し、Ctrl/Shift/Alt/Win付きEnterは対象外。restored projectへのwinapp find-apiでTextBox compositionイベントの存在を確認。
+
+Portable build/publish成功（既存warningのみ）、試験版frontend02。keyboard-entry01は通常の前面化をWindowsに拒否され、入力前に停止/所有app exit0。実Enter・実日本語IMEは未検証であり、成功扱いにしない。生成2PNGだけを用い、GPU/モデル/通常DB/Alphaを利用していない。再現と次の一手はdeferred-issues D04。

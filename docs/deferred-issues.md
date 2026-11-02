@@ -12,3 +12,6 @@
 D03（試験側・修正済み/再実行待ち）：registration-filter01は件数の旧文言「全記録」を期待して停止。実candidateは「全」。登録/scan操作前、所有process exit0。期待値のみ修正し、新許可なしに再実行していない。製品の登録失敗と断定しない。
 
 D03追記：ユーザー追加許可後のregistration-filter02は10checks/exit0で受入。D03は解決済み（初回FAILは保持）。登録/部分失敗/filter/resetはa0ac6cbで限定確認済み。
+
+
+D04（2026-11-03・試験環境/未受入）：frontend02/source3ff0849のkeyboard-entry01は、owned HWNDへの通常SetForegroundWindowがfalseで停止。生成fixture/起動は成功し、キー入力前に中止、appは正常終了。検索/登録のEnter、実日本語IMEは未検証。入力attach/権限回避/他appへのsend-inputは行わず、同じ前面化失敗を変更なしで再試行しない。source build/publish成功とは区別し、次回テスト窓を通常操作で前面にできる状況で1batchへ戻る。

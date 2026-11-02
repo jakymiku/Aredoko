@@ -231,3 +231,12 @@ paired kit `dist/portable-validation-20261102-26.zip` は6data files/SHA `888bac
 `package_release.py --source-revision <40桁commit>`（Python APIは`source_revision=`）で、明示されたアプリソース版をmanifestへ記録。現在HEADからは推測しない。省略時はnull、旧manifestも互換のまま。別Windows検証kitのcandidate.json/result-template.jsonへ同じrevisionを伝達し、未受入の`clean_windows_verified:false`を維持する。artifactと指定commitが対応することは作成側が確認する。
 
 生成データの関連CPU確認はstaging4＋validation-kit8 PASS。不正revisionは出力作成/build前に拒否、ASCII大文字hexは小文字化、旧形式の不明値・ZIP対応照合を維持。GUI/OS設定/配布受入を代用しない。
+
+
+## 2026-11-03 基本ZIP27とSandbox再有効化
+
+候補`dist/portable-basic-20261103-27/Aredoko/Aredoko.exe`、app source0d1ccf26fb0de0c05f2ea579fb248215ff879604、packaging51ea066。828files/661,961,741bytes、ZIP348,557,881bytes/SHA `eba02b46f45f21fa568e46ab7b8ea93f3c8d97cd50ba4155bbc17b91e5b50885`。全payload/ZIP・同梱check、通常EXE→正常終了→1再起動は11checks/所有4exit0。source3ff0849の後続Enter/IME変更は未収録。旧Alpha/通常DBは不変。
+
+対のdata-only検証kit27は6files、SHA `2636c6db1a6f6d874471c343de3fa31f60b30713c14a49d9c685b0bdc8565ed7`。candidate/resultへ明示source_revisionを伝達し、clean Windows未受入を維持。
+
+userはComfyUI処理完了後のSandbox再有効化（再起動なし）を明示許可。queueが0/0になった後、通常UACをuserが承認。直接DISMの/Online /Enable-Feature /FeatureName:Containers-DisposableClientVM /All /NoRestartは**exit3010、reboot required=yes、restart suppressed**。WMI InstallState1。証拠data/ai-ui/continuation-20261103/sandbox-enable-result.jsonとsandbox-dism.log。最初のPowerShell -File試行は結果ログなし、成功根拠にせず、直接DISMの記録で判断。OS/実行ポリシーを回避せず、再起動・guest起動はしていない。Windows再起動後にreadiness→同候補/生成kitの別環境確認へ進む。
