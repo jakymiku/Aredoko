@@ -1,6 +1,16 @@
-# Aredoko — 現行の単一引き継ぎ（2026-11-02）
+# Aredoko — 現行の単一引き継ぎ（2026-11-03）
 
 
+
+## 2026-11-03 終了checkpoint（以下より優先）
+
+- **実装/Git**：起点3b35360、fetch後remote/PR5 ref一致・clean、他AI作業なし。既存branch/PR5のみ継続。app source **37c2271**。0d1ccf2で詳細scrollとEnter登録、3ff0849で検索Enter/IME中debounce抑止、37c2271で設定の通信待ち解消。Terraへ限定委譲し親がレビュー。CI/新branch/PR/main mergeなし。
+- **できるようになったこと**：別の作品の詳細はtitle/previewがある先頭から開き、同じ作品の開き直しは位置を保持。検索欄のEnterは既存の検索/未保存確認へ接続し、日本語変換中の自動検索を抑止。設定は先に開き、整合性チェックの値だけ後から取得、待機中でもlocal設定保存/closeが可能。51ea066で配布manifestと検証結果に明示source_revisionを伝達。
+- **確認/未検証**：WinUI build/publish成功（既存WUI1001×3/SDK IL2104×2のみ）。detail-scroll01は7checks/exit0、settings-load01は8checks/exit0。関連CPU12 PASS。実Enterはkeyboard-entry01/02でWindows/WinAppのforeground条件を満たせず入力前停止/exit0（D04）。UIA focusも前面化の代替にはならず一時変更を撤去。2回の失敗を保持し無変更再試行しない。実キー/実日本語IME、同item save/refreshのscroll、HC/DPIは未検証。全P7完了/新しい致命的bug修正中とはしない。
+- **最新配布候補**：**dist/portable-basic-20261103-28/Aredoko/Aredoko.exe**、app37c2271/packaging0b1dd53。全照合/同梱check/通常EXE→終了→1再起動11checks/所有4exit0、再起動画像確認。対応data-only kit28あり。詳細とSHAはportable-refresh末尾。旧ZIP27以下とinstalled Alpha（ZIP10/source0138a58）は更新していない。通常DB/私物/モデル取得/GPU推論/shutdown/monitorも変更なし。
+- **Sandbox**：ユーザーはComfyUI処理完了後の再有効化（再起動なし）を明示許可、Windows UACも承認済み。直接DISM exit3010、reboot required=yes、/NoRestartで抑止。機能state1、guest起動/別Windows合格は未実施。ComfyUIは件数のみ読み、idle0/0の確認後にbuild/GUI/有効化を実施、queueや内容に手を加えない。証拠data/ai-ui/continuation-20261103/sandbox-enable-result.jsonとsandbox-dism.log。
+- **Sandbox準備を追加**：`1ef73f2`でtools/prepare_windows_sandbox.pyを追加。関連CPU7 PASS、sealed ZIP28/kit28から `data/ai-ui/continuation-20261103/sandbox-basic28/Aredoko.wsb` を生成済み（exact read-only app/kit、新規evidenceのみ書込、network/clipboard/vGPU/音声映像入力等Disable）。guest起動なし。hostの絶対pathを含む生成設定はignored、通常DB/私物を共有しない。このhelperはhostの検証準備用で、既存候補28を再梱包する必要はない。最終handoff commitは本書Git履歴。
+- **次の1件**：P6はWindows再起動後にreadinessを確認し、用意したsandbox-basic28/Aredoko.wsbで、基本ZIP28＋kit28の通常起動/登録・検索・画像/CBZ/保存・再起動をSandboxで一連確認する。guest終了前に結果・ログをC:\AredokoEvidenceへ保存する。再起動はユーザー都合に任せる。UIは検索→閲覧の導線へ：一致ページ/時刻がある検索結果の詳細ボタンに短い文脈説明を付け、元ファイル変更時の読書位置fallback/seek可能範囲を保つ（既存OpenBook/Video/Audioは一致情報を渡しており、移動処理を再実装しない）。D04の実入力はテスト窓が通常前面になれる状況でのみ再開し、成功済みGUI/ZIPチェックを主作業に戻さない。
 
 ## 2026-11-03 進行checkpoint 2（以下より優先）
 
