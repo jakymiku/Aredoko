@@ -224,3 +224,10 @@ Core/tests/BootstrapはZIP15/source0edbd40から無変更を機械照合し、�
 `dist/portable-basic-20261102-26/Aredoko/Aredoko.exe`、app source85123b4、packaging8c6486e。828files/661,943,719bytes、ZIP348,546,043bytes/SHA `7e6f883e4264bc49a2509fd24efea26c10bc8914299a6d2e484e6db779702ca4`。全payload/ZIP/同梱check成功。root登録/部分失敗/filterとfooter一括整理を収録。ユーザー許可のbasic26-startup01は通常EXE→終了→1再起動11checks/所有4exit0、生成原本とsettings/payload保持。再起動PNG確認、GPU/取得/通常DB/Alpha不使用。
 
 paired kit `dist/portable-validation-20261102-26.zip` は6data files/SHA `888bace9f09d62c412ab3a29c61b6dcd514b8aec69861e6d0b643c4c5e890cb2`。別Windows/clean machineの合格ではない。モデル/AI runtime未同梱。インストール済みAlphaは更新していない。後続837c855のプロパティ操作は未収録で、Explorer/clipboardは未確認のまま。
+
+
+## 2026-11-03 配布候補のソース版を伝達
+
+`package_release.py --source-revision <40桁commit>`（Python APIは`source_revision=`）で、明示されたアプリソース版をmanifestへ記録。現在HEADからは推測しない。省略時はnull、旧manifestも互換のまま。別Windows検証kitのcandidate.json/result-template.jsonへ同じrevisionを伝達し、未受入の`clean_windows_verified:false`を維持する。artifactと指定commitが対応することは作成側が確認する。
+
+生成データの関連CPU確認はstaging4＋validation-kit8 PASS。不正revisionは出力作成/build前に拒否、ASCII大文字hexは小文字化、旧形式の不明値・ZIP対応照合を維持。GUI/OS設定/配布受入を代用しない。

@@ -56,11 +56,15 @@ def validate_output(output):
         raise FileExistsError('Choose a new output directory; existing files are never removed')
 
 
-def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False, frontend_msix=None, portable_frontend=None, bootstrap=None):
+def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False, frontend_msix=None, portable_frontend=None, bootstrap=None, source_revision=None):
     output_dir = Path(os.path.abspath(output_dir))
     validate_output(output_dir)
     if not isinstance(version, str) or not 1 <= len(version) <= 64 or any(ord(c) < 32 for c in version):
         raise ValueError('Invalid version label')
+    if source_revision is not None:
+        if not isinstance(source_revision, str) or len(source_revision) != 40 or any(c not in '0123456789abcdefABCDEF' for c in source_revision):
+            raise ValueError('Source revision must be a full 40-character hexadecimal commit')
+        source_revision = source_revision.lower()
     required = [REPO / name for name in (
         'app/production_server.py', 'app/storage_schema_v1.json', 'THIRD_PARTY_NOTICES.md',
         'docs/user-guide.md', 'tools/start-aredoko.ps1', 'tools/native-arguments.ps1',
@@ -103,7 +107,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         for name in PAYLOAD:
             plain_path(binary / name)
     if dry_run:
-        return {'version': version, 'dry_run': True, 'pass': True,
+        return {'version': version, 'source_revision': source_revision, 'dry_run': True, 'pass': True,
                 'readiness': 'staging-only', 'frontend_activation': activation, 'python_bundled': python_runtime is not None,
                 'ai_runtime_bundled': include_ai_runtime, 'media_tools_bundled': media_tools is not None,
                 'runtime_imports_verified': False, 'clean_machine_activation_verified': False}
@@ -198,7 +202,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             plain_path(path)
             entries.append({'path': path.relative_to(output_dir).as_posix(),
                             'bytes': path.stat().st_size, 'sha256': compute_sha256(path)})
-    manifest = {'format': 'aredoko-release-manifest', 'version': version,
+    manifest = {'format': 'aredoko-release-manifest', 'version': version, 'source_revision': source_revision,
                 'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                 'platform': 'windows-x64', 'files_count': len(entries),
                 'total_bytes': sum(e['bytes'] for e in entries), 'entries': entries,
@@ -219,6 +223,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, default=REPO / 'dist/aredoko-release-windows-x64')
     parser.add_argument('--version', default='1.0.0')
+    parser.add_argument('--source-revision', help='Explicit full commit of the supplied frontend source; never inferred from current HEAD')
     parser.add_argument('--skip-build', action='store_true')
     parser.add_argument('--check', action='store_true', help='Validate a new destination and existing build without writing or launching')
     parser.add_argument('--python-runtime', type=Path, help='Explicit prepared standalone Windows Python directory; never downloaded')
@@ -230,7 +235,7 @@ def main():
     args = parser.parse_args()
     package(args.output_dir, args.version, args.skip_build, args.check,
             python_runtime=args.python_runtime, media_tools=args.media_tools, include_ai_runtime=args.include_ai_runtime, frontend_msix=args.frontend_msix,
-            portable_frontend=args.portable_frontend, bootstrap=args.bootstrap)
+            portable_frontend=args.portable_frontend, bootstrap=args.bootstrap, source_revision=args.source_revision)
 
 
 if __name__ == '__main__':

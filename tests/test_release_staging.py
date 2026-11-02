@@ -83,10 +83,31 @@ class ReleaseStagingTests(unittest.TestCase):
     def test_check_never_creates_parents_or_builds(self):
         target = self.base / 'missing parent' / 'new stage'
         with patch.object(release.subprocess, 'run') as build:
-            result = release.package(target, dry_run=True)
+            result = release.package(target, dry_run=True, source_revision='ABCDEF0123' * 4)
         build.assert_not_called()
         self.assertTrue(result['pass'])
+        self.assertEqual(result['source_revision'], 'abcdef0123' * 4)
         self.assertFalse(target.parent.exists())
+
+    def test_cli_explicit_source_revision_is_sealed_and_normalized(self):
+        revision = 'ABCDEF0123' * 4
+        with patch.object(sys, 'argv', ['package_release', '--output-dir', str(self.output),
+                                      '--skip-build', '--source-revision', revision]):
+            release.main()
+        manifest = verify_release(self.output)
+        self.assertEqual(manifest['source_revision'], revision.lower())
+        self.assertEqual(manifest['readiness'], 'staging-only')
+        self.assertFalse(manifest['clean_machine_activation_verified'])
+
+    def test_invalid_source_revision_never_builds_or_creates_output(self):
+        target = self.base / 'missing parent' / 'new stage'
+        for revision in ('', 'a' * 39, 'a' * 41, 'g' * 40, 'a' * 39 + '\n', 123, True):
+            for dry_run in (False, True):
+                with self.subTest(revision=revision, dry_run=dry_run), patch.object(release.subprocess, 'run') as build:
+                    with self.assertRaisesRegex(ValueError, 'Source revision'):
+                        release.package(target, source_revision=revision, dry_run=dry_run)
+                    build.assert_not_called()
+                    self.assertFalse(target.parent.exists())
 
     def test_check_detects_missing_build_without_writing(self):
         (self.binary / release.PAYLOAD[0]).unlink()
@@ -106,6 +127,7 @@ class ReleaseStagingTests(unittest.TestCase):
     def test_manifest_profiles_tools_and_no_private_data(self):
         result = release.package(self.output, skip_build=True)
         self.assertEqual(result['readiness'], 'staging-only')
+        self.assertIsNone(result['source_revision'])
         self.assertFalse(result['python_bundled'])
         self.assertFalse(result['ai_runtime_bundled'])
         self.assertFalse(result['clean_machine_activation_verified'])

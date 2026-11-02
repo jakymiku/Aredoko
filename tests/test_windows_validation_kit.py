@@ -43,6 +43,17 @@ class WindowsValidationKitTests(unittest.TestCase):
             self.assertEqual(len(z.namelist()),6);self.assertFalse(any(Path(name).suffix.lower() in ('.exe','.cmd','.ps1','.py') for name in z.namelist()))
         self.assertEqual(self.zip.read_bytes(),before)
 
+    def test_explicit_source_revision_reaches_candidate_and_result(self):
+        revision='abcdef0123'*4
+        self.manifest['source_revision']=revision
+        (self.release/'manifest.json').write_bytes(json.dumps(self.manifest).encode())
+        self.members['Aredoko/manifest.json']=(self.release/'manifest.json').read_bytes()
+        self.write_zip();self.run_tool()
+        for name in ('candidate.json','result-template.json'):
+            data=json.loads((self.out/name).read_text())
+            self.assertEqual(data['release_identity']['source_revision'],revision)
+            self.assertFalse(data['clean_windows_verified'])
+
     def test_legacy_manifest_omitted_identity_fields_stay_unknown(self):
         for key in ('version','created_at','platform'):self.manifest.pop(key)
         (self.release/'manifest.json').write_bytes(json.dumps(self.manifest).encode())

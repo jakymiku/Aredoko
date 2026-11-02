@@ -28,7 +28,7 @@ def main():
         for name in ('manifest.json','sha256sums.txt'):
             if application.read('Aredoko/'+name)!=(release/name).read_bytes():raise ValueError('Application ZIP metadata does not match the selected release: '+name)
         if any(application.getinfo('Aredoko/'+row['path']).file_size!=row['bytes'] for row in manifest['entries']):raise ValueError('Application ZIP sizes do not match the selected release')
-    release_identity={'version':manifest.get('version'),'created_at':manifest.get('created_at'),'platform':manifest.get('platform'),'source_revision':None}
+    release_identity={'version':manifest.get('version'),'created_at':manifest.get('created_at'),'platform':manifest.get('platform'),'source_revision':manifest.get('source_revision')}
     identity={'application_zip':app_zip.name,'zip_bytes':app_zip.stat().st_size,'zip_sha256':digest(app_zip),'manifest_sha256':digest(release/'manifest.json'),'release_identity':release_identity,'archive_metadata_matches_release':True,'clean_windows_verified':False}
     storage_parent(out);out.mkdir();media=out/'media';media.mkdir()
     first=png(color=(88,111,190));second=png(color=(73,133,111))
@@ -46,7 +46,7 @@ def main():
         'Aredoko 別Windowsの基本版確認セット\n\n'
         'このセットは検証用の生成画像2枚と2ページCBZだけです。アプリやAI環境は含みません。合格済みという意味ではありません。\n'
         '普段のライブラリがない検証用Windowsユーザーで、同じ候補の基本ZIPと一緒に使ってください。\n\n'
-        '1. candidate.jsonのZIP SHA256と候補を照合し、アプリを新しい場所へすべて解凍します。release_identityは検証済みmanifestの版・作成日時・対象OSです。source_revisionがnullなら元のmanifestに記録がなく、未確認です。開発用Python/.NET SDKや追加runtimeを先に導入せず、OS版と既存環境を記録します。\n'
+        '1. candidate.jsonのZIP SHA256と候補を照合し、アプリを新しい場所へすべて解凍します。release_identityは検証済みmanifestの版・作成日時・対象OS・記録されたソースrevisionです。source_revisionがnullなら元のmanifestに記録がなく、未確認です。開発用Python/.NET SDKや追加runtimeを先に導入せず、OS版と既存環境を記録します。\n'
         '2. 通常のAredoko.exeを開き、初回案内とライブラリが出ることを確認します。Check-Startup.cmdの空DBで代用しません。\n'
         '3. このセットのmediaフォルダを登録し、「アイテム一覧だけ取得」を実行。PNG2件とCBZ1件が見つかることを確認します。AIは準備しません。\n'
         '4. ファイル名検索、画像表示、CBZの2ページ送り、タグ・棚・お気に入りの保存を確認します。\n'
