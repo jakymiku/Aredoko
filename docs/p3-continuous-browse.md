@@ -170,3 +170,8 @@ SettingsStatusをscroll内容から外し、native保存/閉じるfooterの直�
 
 
 設定feedbackの後続受入：fixtureの保存themeを明示したfrontend02/settings-feedback-light02は8checks/exit0/原本保持。実Lightの保存結果画像を確認し、Dark01/8checks/exit0と区別して両テーマを受入。CLIの再試行はせず、tool失敗を成功へ書換えていない。最新登録変更d727876は別のbuild/publish済み単位で、上記settings GUIの対象へ混ぜない。
+
+
+## 2026-11-02：登録・filterの限定受入（a0ac6cb）
+
+許可付きregistration-filter02は10checks/exit0/残存processなし。生成PNG/専用DB、有効root2/無効path1で、二つ目も登録できること、部分失敗のpath保持・警告、一覧だけの取得、検索DB反映、filterの0件案内/resetと非表示選択保持、原本hash保持を確認。partial-result/resetの2PNGを確認。初回01の旧文言FAILを保持し、source a0ac6cbの受入とした。後続d29f88eのパスcopy/clipboard、全DPI等は対象外。証拠data/ai-ui/continuation-20261102/registration-filter02/report.json。新しい同内容試験を反復しない。

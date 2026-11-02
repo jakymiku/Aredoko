@@ -10,3 +10,5 @@
 前回の登録UI・複数登録/部分失敗は実装済みのGUI未検証であり、未修正バグとして二重登録しない。詳細はcurrent-handoffを参照。
 
 D03（試験側・修正済み/再実行待ち）：registration-filter01は件数の旧文言「全記録」を期待して停止。実candidateは「全」。登録/scan操作前、所有process exit0。期待値のみ修正し、新許可なしに再実行していない。製品の登録失敗と断定しない。
+
+D03追記：ユーザー追加許可後のregistration-filter02は10checks/exit0で受入。D03は解決済み（初回FAILは保持）。登録/部分失敗/filter/resetはa0ac6cbで限定確認済み。

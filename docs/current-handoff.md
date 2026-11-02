@@ -2,6 +2,12 @@
 
 
 
+## 2026-11-02 登録確認完了・実装続行（以下より優先）
+
+- userの追加1batch許可でregistration-filter02を実行、**10checks/exit0/原本保持/残存processなし**。複数root登録・部分失敗path保持/案内、一覧のみscan、filter解除/非表示選択保持までa0ac6cb候補で受入。2PNG確認。[証拠](p3-continuous-browse.md)末尾。D03は解決済み、初回FAILは保持。成功済み登録試験を繰り返さない。
+- d29f88eのファイルパスcopyはbuild済み・GUI/clipboard未確認で、上のGUI受入には含めない。現在は複数選択した作品の整理をfooterから見つけやすくする実装へ進行。既存SelectionMenu/保存guard/選択範囲を再利用し、機能を重複実装しない。GUI/GPUは引き続き具体化してuser確認後。最新source/進行差分はgit statusを優先する。
+
+
 ## 2026-11-02 続行checkpoint（以下より優先）
 
 - a0ac6cbのfolder filter/件数/空案内に続き、ライブラリ右クリックへファイルのパスをコピーする操作を追加。登録rootと既存LibraryFilePath.Resolveを使い、原本/検索/タグdraft/選択は変更しない。関連WinUI build0errors、既存picker警告3のみ。新しいcopy操作はGUI/clipboard未検証、通常DB/Alphaへ未反映。
