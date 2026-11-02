@@ -38,6 +38,19 @@ public sealed partial class MainPage
         }
         catch(Exception ex){if(reportFailure)Failure(new InvalidOperationException("元ファイルを開けません。登録先・ファイルの状態と既定のアプリを確認してください。",ex));AppLog.Error(ex);return false;}
     }
+    private void CopyFilePath(MediaRow row)
+    {
+        try
+        {
+            var root=knownRoots.FirstOrDefault(r=>r.Id==row.RootId&&r.Enabled)
+                ??throw new InvalidOperationException("登録フォルダを確認してください。");
+            var path=LibraryFilePath.Resolve(root.Path,row.Location);
+            var package=new DataPackage();package.SetText(path);Clipboard.SetContent(package);
+            Notice("パスをコピーしました","他のアプリへ貼り付けできます。",InfoBarSeverity.Success);
+            Status.IsOpen=true;
+        }
+        catch(Exception ex){Failure(ex);}
+    }
     private readonly ExternalActivationGate externalActivation=new();
     // True only when the user explicitly chooses the internal fallback.
     private async Task<bool> OpenPreferredExternalAsync(MediaRow row)

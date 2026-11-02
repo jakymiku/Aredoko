@@ -878,6 +878,9 @@ public sealed partial class MainPage : Page
             var action=new MenuFlyoutItem{Text=label,IsEnabled=row.Availability=="present"};AutomationProperties.SetAutomationId(action,id+row.Id);
             action.Click+=(_,_)=>OpenInShell(row,explorer);menu.Items.Add(action);
         }
+        var copyPath=new MenuFlyoutItem{Text="ファイルのパスをコピー",IsEnabled=row.Availability=="present"};
+        AutomationProperties.SetAutomationId(copyPath,"CopyFilePath"+row.Id);
+        copyPath.Click+=(_,_)=>CopyFilePath(row);menu.Items.Add(copyPath);
         return menu;
     }
     private void ClearSimilarity()
