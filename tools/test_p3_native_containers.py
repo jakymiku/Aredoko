@@ -56,6 +56,7 @@ def main():
     parser.add_argument('--settings-feedback-only',action='store_true',help='UIA-only persistent settings save feedback at either scroll edge')
     parser.add_argument('--settings-layout-only',action='store_true',help='UIA-only settings action grid, footer save and reopen')
     parser.add_argument('--detail-fields-only',action='store_true',help='UIA-only wrapped tags and inline shelf picker without repeating captions')
+    parser.add_argument('--settings-load',action='store_true',help='UIA settings open/save/close with a held verification GET')
     parser.add_argument('--keyboard-entry',action='store_true',help='Owned-window Enter search and generated folder registration; physical keys, no GPU')
     parser.add_argument('--detail-scroll',action='store_true',help='Generated-data UIA detail scroll reset and same-item retention')
     parser.add_argument('--detail-polish',action='store_true',help='UIA-only two generated PNGs: deduplicated filenames, bounded long title and draft preservation')
@@ -96,6 +97,7 @@ def main():
     if args.guide_layout_only:args.detail_polish=True
     if args.settings_feedback_only:args.detail_polish=True
     if args.settings_layout_only:args.detail_polish=True
+    if args.settings_load:args.detail_polish=True
     if args.keyboard_entry:args.detail_polish=True
     if args.detail_scroll:args.detail_polish=True
     if args.detail_fields_only:args.detail_polish=True
@@ -445,6 +447,10 @@ def main():
             from ui_settings_layout_audit import audit
             report['settings_audit_sha256']=hashlib.sha256((REPO/'tools/ui_settings_layout_audit.py').read_bytes()).hexdigest()
             audit(ui,shot,report,check,target)
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.settings_load:
+            from ui_settings_load_audit import audit
+            audit(ui,shot,report,check,handler)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.keyboard_entry:
             from ui_keyboard_entry_audit import audit

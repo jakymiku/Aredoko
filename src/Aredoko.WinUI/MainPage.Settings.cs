@@ -36,13 +36,31 @@ public sealed partial class MainPage
             var hint=new TextBlock{Text="拡大中は画像のスクロールを優先します。マウスの進む・戻るも使えます。",TextWrapping=TextWrapping.Wrap};
             var verification=new CheckBox{Content="AI実行環境の全ファイルを照合する",IsEnabled=false};
             AutomationProperties.SetAutomationId(verification,"SettingsVerifyAIRuntime");
-            var verificationHint=new TextBlock{Text="既定はオンです。オフにすると破損や変更を検出しにくくなります。次回起動から反映します。基本確認と、新しく取得するファイルの検証は省略しません。",TextWrapping=TextWrapping.Wrap};
+            const string verificationHelp="既定はオンです。オフにすると破損や変更を検出しにくくなります。次回起動から反映します。基本確認と、新しく取得するファイルの検証は省略しません。";
+            var verificationHint=new TextBlock{Text="整合性チェックの設定を読み込んでいます…",TextWrapping=TextWrapping.Wrap};
             var advancedContent=new StackPanel{Spacing=8};advancedContent.Children.Add(verification);advancedContent.Children.Add(verificationHint);
             var advanced=new Expander{Header="高度な設定",Content=advancedContent,HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(advanced,"SettingsAdvanced");
             bool? savedVerification=null;
-            try{var setup=await api.GetAsync("api/library/ai/setup");savedVerification=setup["verify_ai_runtime"]?.GetValue<bool>()??true;verification.IsChecked=savedVerification;verification.IsEnabled=true;}
-            catch{verificationHint.Text="バックエンドに接続できません。整合性チェックの設定は変更できません。";}
+            using var verificationLifetime=new CancellationTokenSource();
+            Task? verificationLoad=null;
+            async Task LoadVerificationAsync()
+            {
+                try
+                {
+                    var setup=await api.GetAsync("api/library/ai/setup",verificationLifetime.Token);
+                    if(verificationLifetime.IsCancellationRequested||disposed)return;
+                    savedVerification=setup["verify_ai_runtime"]?.GetValue<bool>()??true;
+                    verification.IsChecked=savedVerification;verification.IsEnabled=true;verificationHint.Text=verificationHelp;
+                }
+                catch(OperationCanceledException) when(verificationLifetime.IsCancellationRequested){}
+                catch(Exception ex)
+                {
+                    AppLog.Error(ex);
+                    if(!verificationLifetime.IsCancellationRequested&&!disposed)
+                        verificationHint.Text="バックエンドに接続できません。整合性チェックの設定は変更できません。";
+                }
+            }
             var savedText=new TextBlock{TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             AutomationProperties.SetAutomationId(savedText,"SettingsStatus");
             AutomationProperties.SetLiveSetting(savedText,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
@@ -81,7 +99,8 @@ public sealed partial class MainPage
             };
             panel.Children.Add(wheel);panel.Children.Add(hint);
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
+            dialog.Opened += (_, _) => verificationLoad=LoadVerificationAsync();
+            dialog.Closed += (_, _) => {if(!verificationLifetime.IsCancellationRequested)verificationLifetime.Cancel();closedTcs.TrySetResult(true);};
             panel.Children.Add(new TextBlock{Text="ライブラリ・AI",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],Margin=new Thickness(0,4,0,0)});
             var tools=new Grid{ColumnSpacing=8,RowSpacing=8};
             tools.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
@@ -101,8 +120,16 @@ public sealed partial class MainPage
                 button.Click+=(_,_)=>{destination=target;dialog.Hide();};Grid.SetRow(button,toolIndex/2);Grid.SetColumn(button,toolIndex%2);tools.Children.Add(button);toolIndex++;
             }
             panel.Children.Add(tools);panel.Children.Add(advanced);
-            await dialog.ShowAsync();
-            await Task.WhenAny(closedTcs.Task, Task.Delay(500));
+            try
+            {
+                await dialog.ShowAsync();
+                await Task.WhenAny(closedTcs.Task, Task.Delay(500));
+            }
+            finally
+            {
+                verificationLifetime.Cancel();
+                if(verificationLoad is not null)await verificationLoad;
+            }
         }
         catch(Exception ex){Failure(ex);}
         finally{dialogOpen=false;transitions.Release();RestoreNavigation();}
