@@ -38,6 +38,7 @@ def main():
     parser.add_argument('--favorite-root-removal-only',action='store_true',help='Only remaining last-folder guidance and registration/media retention')
     parser.add_argument('--folder-settings-remaining',action='store_true',help='Only folder draft reopen/switch and batch; prior individual saves remain recorded')
     parser.add_argument('--folder-settings-layout',action='store_true',help='Generated roots: section layout and independent draft saves; UIA only')
+    parser.add_argument('--registration-filter',action='store_true',help='One generated-data UIA partial registration and folder filter batch')
     parser.add_argument('--agent-desktop-only',action='store_true',help='Only remaining optional Agent Desktop probe; no repeated folder edits')
     parser.add_argument('--agent-desktop',type=Path,help='Optional development-only agent-desktop headless probe over the owned test window')
     parser.add_argument('--favorite-root-actions',action='store_true',help='UIA-only favorite folder commands, dirty tag guard and last-folder removal')
@@ -75,6 +76,7 @@ def main():
         args.folder_settings_remaining=True
     if args.folder_settings_remaining:args.folder_settings_layout=True
     if args.folder_settings_layout:args.detail_polish=True
+    if args.registration_filter:args.detail_polish=True
     if args.agent_desktop and not (args.folder_settings_layout or args.settings_feedback_only):parser.error('agent-desktop probe requires a bounded folder or settings case')
     if args.favorite_root_actions:args.detail_polish=True
     if args.shelf_picker_remaining:args.shelf_picker_filter=True
@@ -210,6 +212,9 @@ def main():
         profiles=AIProfileSettings(REPO,target/'ai-settings.json',profile_directory=target/'profiles',ai_python=str(target/'missing-python'),models_root=target/'missing-models')
         instance=secrets.token_hex(16);env['AREDOKO_STARTUP_INSTANCE']=instance
         extras={}
+        if args.registration_filter:
+            from ui_registration_filter_audit import prepare
+            report['registration_filter_fixture']=prepare(target)
         if args.folder_settings_layout:
             from ui_folder_settings_audit import prepare
             report['folder_settings_fixture']=prepare(cat,target,remaining=args.folder_settings_remaining)
@@ -339,6 +344,11 @@ def main():
             removed=audit(ui,cli,tree,shot,report,check,cat,media,target,proc.pid,hwnd,input_guard=lambda:user.GetForegroundWindow()==int(hwnd),uia_only=args.uia_only)
             check('generated sources match the declared scope',{key:value for key,value in before.items() if key!=removed}==sources())
             report['pass']=True
+        elif args.registration_filter:
+            from ui_registration_filter_audit import audit
+            report['registration_filter_audit_sha256']=hashlib.sha256((REPO/'tools/ui_registration_filter_audit.py').read_bytes()).hexdigest()
+            audit(ui,tree,shot,report,check,cat)
+            check('generated sources unchanged',before==sources());report['pass']=True
         elif args.folder_settings_layout:
             from ui_folder_settings_audit import audit
             report['folder_settings_audit_sha256']=hashlib.sha256((REPO/'tools/ui_folder_settings_audit.py').read_bytes()).hexdigest()

@@ -2,6 +2,13 @@
 
 
 
+## 2026-11-02 続行checkpoint（以下より優先）
+
+- a0ac6cbのfolder filter/件数/空案内に続き、ライブラリ右クリックへファイルのパスをコピーする操作を追加。登録rootと既存LibraryFilePath.Resolveを使い、原本/検索/タグdraft/選択は変更しない。関連WinUI build0errors、既存picker警告3のみ。新しいcopy操作はGUI/clipboard未検証、通常DB/Alphaへ未反映。
+- 許可済みregistration-filter01は、harnessが旧文言「全記録」を期待して操作前に停止。実candidateは「全」。所有exit0、登録/scan未実施、元data/source保持。D03として記録し期待値だけ修正。再試行していない。実登録/部分失敗/filter解除は引き続き未検証。証拠data/ai-ui/continuation-20261102/registration-filter01/。
+- 現在の方針は非致命的な問題をdeferred-issuesへ集約して実装優先。GUI/GPUは現在のuser許可範囲だけ。新GUI候補の乱造やtool調査、旧合格の再実行をしない。次の関連GUIは新許可が必要。source a0ac6cb候補frontend01はcopy操作を含まないので混同しない。
+
+
 ## 2026-11-02 作業checkpoint（以下より優先）
 
 - 起点06902b4、fetch後clean・remote branch/PR5 head ref一致。他AI更新なし。ユーザーは今回ギリギリまでの作業を許可し、GUI/GPUは事前確認、致命的でない問題は記録して後でまとめて対応するよう指示。AGENTSと[対応待ち一覧](deferred-issues.md)へ反映。
