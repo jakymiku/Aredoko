@@ -286,6 +286,14 @@
        <Button x:Name="FolderLayoutButton" Content="グリッド表示" Click="FolderLayout_Click" AutomationProperties.AutomationId="BtnFolderLayout"/>
        <Button x:Name="ToggleAddFolderButton" Content="フォルダを追加" Click="ToggleAddFolder_Click" AutomationProperties.AutomationId="BtnToggleAddFolder"/>
        <Button x:Name="ClearFolderFilters" Content="絞り込みを解除" Visibility="Collapsed" Click="ClearFolderFilters_Click" AutomationProperties.AutomationId="BtnClearFolderFilters"/>
+       <Button Content="選択" AutomationProperties.Name="フォルダの一括選択" AutomationProperties.AutomationId="FolderSelectionMenu">
+        <Button.Flyout><MenuFlyout>
+         <MenuFlyoutItem Text="表示中の登録フォルダをすべて選択" Click="SelectVisibleFolders_Click" AutomationProperties.AutomationId="SelectVisibleFolders"/>
+         <MenuFlyoutItem Text="表示中の登録フォルダの選択を解除" Click="DeselectVisibleFolders_Click" AutomationProperties.AutomationId="DeselectVisibleFolders"/>
+         <MenuFlyoutSeparator/>
+         <MenuFlyoutItem Text="すべての選択を解除" Click="ClearAllFolderSelections_Click" AutomationProperties.AutomationId="ClearAllFolderSelections"/>
+        </MenuFlyout></Button.Flyout>
+       </Button>
       </StackPanel>
      </Grid>
      <Border x:Name="FolderAddPanel" Grid.Row="1" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">

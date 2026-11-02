@@ -1815,6 +1815,28 @@ public sealed partial class MainPage : Page
         finally{folderPopulating=previous;}
         if(ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();
     }
+    private void SelectVisibleFolders_Click(object sender,RoutedEventArgs e)
+    {
+        if(!ready||!folderHubOpen||saving||dialogOpen||folderPopulating)return;
+        var ids=FilteredFolders().Where(root=>root.Enabled).Select(root=>root.Id).ToArray();
+        if(checkedFolderIds.Count+ids.Count(id=>!checkedFolderIds.Contains(id))>FolderSearch.MaxRoots)
+        {
+            Notice("選択できる数を超えています",$"フォルダは最大 {FolderSearch.MaxRoots} 件まで選択できます。表示対象を絞り込んでください。",InfoBarSeverity.Warning);
+            return;
+        }
+        checkedFolderIds.UnionWith(ids);RenderFolderHub();
+    }
+    private void DeselectVisibleFolders_Click(object sender,RoutedEventArgs e)
+    {
+        if(!ready||!folderHubOpen||saving||dialogOpen||folderPopulating)return;
+        checkedFolderIds.ExceptWith(FilteredFolders().Where(root=>root.Enabled).Select(root=>root.Id));
+        RenderFolderHub();
+    }
+    private void ClearAllFolderSelections_Click(object sender,RoutedEventArgs e)
+    {
+        if(!ready||!folderHubOpen||saving||dialogOpen||folderPopulating)return;
+        checkedFolderIds.Clear();RenderFolderHub();
+    }
     private void FolderLayout_Click(object sender,RoutedEventArgs e)
     {
         folderTiles=!folderTiles;
