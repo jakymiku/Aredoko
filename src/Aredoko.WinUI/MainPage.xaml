@@ -68,7 +68,13 @@
        </Grid>
        <CheckBox x:Name="Favorite" Content="お気に入り" Checked="Favorite_Checked" Unchecked="Favorite_Checked" AutomationProperties.AutomationId="ChkFavorite"/>
        <CheckBox x:Name="Reviewed" Visibility="Collapsed" Content="確認済み" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkReviewed"/>
-       <Expander x:Name="FileProperties" Header="ファイルのプロパティ" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="FileProperties"><TextBlock x:Name="FilePropertyText" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="FilePropertyText"/></Expander>
+       <Expander x:Name="FileProperties" Header="ファイルのプロパティ" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="FileProperties">
+        <StackPanel Spacing="8">
+         <TextBlock x:Name="FilePropertyText" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="FilePropertyText"/>
+         <Button x:Name="OpenFileLocation" Content="保存場所を開く" HorizontalAlignment="Stretch" IsEnabled="False" Click="OpenFileLocation_Click" AutomationProperties.AutomationId="OpenFileLocation"/>
+         <Button x:Name="CopySelectedFilePath" Content="パスをコピー" HorizontalAlignment="Stretch" IsEnabled="False" Click="CopySelectedFilePath_Click" AutomationProperties.AutomationId="CopySelectedFilePath"/>
+        </StackPanel>
+       </Expander>
        </StackPanel></ScrollViewer>
        <StackPanel Grid.Row="1" Spacing="8">
       <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>

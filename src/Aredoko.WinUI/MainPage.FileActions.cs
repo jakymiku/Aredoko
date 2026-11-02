@@ -16,6 +16,15 @@ public sealed partial class MainPage
     {
         FileProperties.IsExpanded=false;
         FilePropertyText.Text=active is null?"":LibraryFilePath.Describe(active,knownRoots.FirstOrDefault(r=>r.Id==active.RootId)?.Path??"登録先を確認できません");
+        OpenFileLocation.IsEnabled=CopySelectedFilePath.IsEnabled=active is {Availability:"present"};
+    }
+    private void OpenFileLocation_Click(object sender,RoutedEventArgs e)
+    {
+        if(active is {Availability:"present"} row)OpenInShell(row,true);
+    }
+    private void CopySelectedFilePath_Click(object sender,RoutedEventArgs e)
+    {
+        if(active is {Availability:"present"} row)CopyFilePath(row);
     }
     private bool OpenInShell(MediaRow row,bool explorer,bool reportFailure=true)
     {
