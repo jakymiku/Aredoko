@@ -1575,6 +1575,7 @@ public sealed partial class MainPage : Page
     {
         scanPollTimer.Stop();
         folderHubOpen=false;
+        ToolTipService.SetToolTip(Count,null);
         MainViewTitle.Text="ライブラリ";
         RootsButton.Content="フォルダ管理";
         FolderHubView.Visibility=Visibility.Collapsed;
@@ -1804,6 +1805,13 @@ public sealed partial class MainPage : Page
 
     private void FolderFilter_Changed(object sender,TextChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();}
     private async void FolderStateFilter_Changed(object sender,SelectionChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)await RefreshSearchRootsAsync();}
+    private void ClearFolderFilters_Click(object sender,RoutedEventArgs e)
+    {
+        var previous=folderPopulating;folderPopulating=true;
+        try{FolderFilterBox.Text="";FolderStateFilter.SelectedIndex=0;}
+        finally{folderPopulating=previous;}
+        if(ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();
+    }
     private void FolderLayout_Click(object sender,RoutedEventArgs e)
     {
         folderTiles=!folderTiles;
@@ -1827,7 +1835,16 @@ public sealed partial class MainPage : Page
         try
         {
             var visible=FilteredFolders();
-            Count.Text=$"{visible.Count:N0} フォルダ";
+            Count.Text=$"表示 {visible.Count:N0} / 全 {knownRoots.Count:N0} フォルダ";
+            ToolTipService.SetToolTip(Count,"表示中の件数 / 解除済みを含む保存済みフォルダの総数");
+            var hasNameFilter=!string.IsNullOrWhiteSpace(FolderFilterBox.Text);
+            var state=FolderStateFilter.SelectedIndex;
+            ClearFolderFilters.Visibility=FolderFilterBox.Text.Length>0||state!=0?Visibility.Visible:Visibility.Collapsed;
+            FolderEmpty.Text=knownRoots.Count==0
+                ? "登録フォルダはありません。「フォルダを追加」から登録できます。"
+                : !hasNameFilter&&state==0&&!knownRoots.Any(root=>root.Enabled)
+                    ? "登録中のフォルダはありません。解除済みのフォルダは表示状態から確認できます。"
+                    : "条件に一致するフォルダはありません。絞り込みを解除して確認できます。";
             FolderList.Items.Clear();
             FolderList.ItemsPanel=(ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(folderTiles
                 ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1\"/></ItemsPanelTemplate>"
