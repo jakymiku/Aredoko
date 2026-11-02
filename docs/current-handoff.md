@@ -2,6 +2,14 @@
 
 
 
+## 2026-11-02 作業checkpoint（以下より優先）
+
+- 起点06902b4、fetch後clean・remote branch/PR5 head ref一致。他AI更新なし。ユーザーは今回ギリギリまでの作業を許可し、GUI/GPUは事前確認、致命的でない問題は記録して後でまとめて対応するよう指示。AGENTSと[対応待ち一覧](deferred-issues.md)へ反映。
+- a0ac6cbで登録フォルダの表示/総件数、絞り込み解除、未登録/登録中なし/条件不一致それぞれの空案内を追加。resetは既存の選択と設定draftを保持し、network再取得なしにfilterだけを戻す。Terra実装を親レビュー、WinUI build/publish0errors、既存WUI1001×3/IL2104×2のみ。
+- 試験候補 `data/ai-ui/continuation-20261102/frontend01` source a0ac6cb。前回のd727876登録変更を含む。ユーザーが生成画像・専用DB・有効root2個/無効path1個で登録/部分失敗/絞り込み/解除/選択保持のUIA1batchを明示許可。実行結果は後続checkpointを参照、現時点では未確認。強制前面化/physical入力/GPU/通常DB/Alphaは範囲外。
+- 通常配布候補は引き続きZIP25/source8cc23fc（後続登録/filterは未収録）。原本/既存DB/OS/Sandbox/モデル/Alpha/Actions/shutdownは変更なし。軽微な懸念D01（folder state切替の通信失敗の案内、コード上/未再現）は今は修正せず記録。
+
+
 ## 2026-11-01 終了checkpoint（以下の旧記録より優先）
 
 - **Git/方針**：起点ed619e0、fetch後remote branch/PR5 head ref一致・cleanから継続。他AI更新なし。既存branch/PR5だけを使用。最終アプリsource **d727876**、最終handoff commitは本書Git履歴。主な実装は34d2802（folder設定・draft）、8cc23fc（設定feedback）、d727876（登録UI・複数登録/部分失敗）。12f9797は別Windows検証kitの結果対応。新branch/PR/main merge/Actions/force pushなし。ユーザー指示に従いTerraへ小単位を委譲し親がレビューした。
