@@ -329,6 +329,11 @@
      </Grid>
     </Grid>
    <StackPanel Grid.Row="4" Spacing="8">
+    <Grid Visibility="{Binding Visibility, ElementName=ItemPagerRow}">
+    <StackPanel x:Name="FooterSelectionActions" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+     <Button x:Name="FooterBulkActions" Content="まとめて整理" Click="FooterBulkActions_Click" AutomationProperties.AutomationId="FooterBulkActions"/>
+     <Button x:Name="FooterClearSelection" Content="選択を解除" Click="ClearLibrarySelection_Click" AutomationProperties.AutomationId="FooterClearSelection"/>
+    </StackPanel></Grid>
     <Grid x:Name="ItemPagerRow" ColumnSpacing="8">
      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
      <TextBlock Text="読み込み済み" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center"/>

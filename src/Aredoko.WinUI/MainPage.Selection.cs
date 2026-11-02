@@ -34,6 +34,8 @@ public sealed partial class MainPage
         SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件を選択しています。";
         FooterSelection.Text=$"{librarySelection.Count:N0} 件選択";
         FooterSelection.Visibility=librarySelection.Count>0?Visibility.Visible:Visibility.Collapsed;
+        FooterSelectionActions.Visibility=librarySelection.Count>1?Visibility.Visible:Visibility.Collapsed;
+        FooterBulkActions.IsEnabled=FooterClearSelection.IsEnabled=!saving&&!dialogOpen&&!preparingSelection;
         DetailsButton.IsEnabled=!saving&&!preparingSelection&&(librarySelection.Count>0||active is not null);
         ClearSelectionButton.IsEnabled=!saving&&!preparingSelection&&!dialogOpen;
         foreach(var container in containerCleanup.Keys.ToArray())
@@ -103,6 +105,11 @@ public sealed partial class MainPage
         finally{transitions.Release();}
     }
     private void CancelSelectionPreparation_Click(object sender,RoutedEventArgs e)=>selectionPreparation?.Cancel();
+    private void FooterBulkActions_Click(object sender,RoutedEventArgs e)
+    {
+        if(disposed||saving||dialogOpen||preparingSelection||librarySelection.Count<2)return;
+        SelectionMenu().ShowAt(FooterBulkActions);
+    }
     private MenuFlyout SelectionMenu()
     {
         var menu=new MenuFlyout();var expected=librarySelection.Ids.ToArray();var session=resultSession?.Id;
