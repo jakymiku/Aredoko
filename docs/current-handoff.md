@@ -2,6 +2,12 @@
 
 
 
+## 2026-11-02 一括整理の限定受入（以下より優先）
+
+- 最新アプリsource85123b4。footerのまとめて整理/選択解除を実装、関連build/publish成功。user許可のbulk-footer01は9checks/exit0/原本保持/残存processなし、2PNG確認。既存一括favorite・棚picker cancel・選択保持/解除を確認し、session/IDs/保存guardを維持。通常DB/Alpha/clipboard/GPUは使っていない。新しい試験flag/moduleはtoolsのみ。
+- 登録/filterはa0ac6cbのregistration-filter02で受入済み。copy path（d29f88e）はbuild/コードレビューまで、GUI/clipboard未検証。これらを混同しない。P6は同じfrontend02/source85123b4と既存基本runtime/bootstrap/backendで新ZIP26を梱包する。通常EXE/別Windowsはまだ未検証、既存ZIP25の正常入口結果を新候補の実測へ転記しない。
+
+
 ## 2026-11-02 登録確認完了・実装続行（以下より優先）
 
 - userの追加1batch許可でregistration-filter02を実行、**10checks/exit0/原本保持/残存processなし**。複数root登録・部分失敗path保持/案内、一覧のみscan、filter解除/非表示選択保持までa0ac6cb候補で受入。2PNG確認。[証拠](p3-continuous-browse.md)末尾。D03は解決済み、初回FAILは保持。成功済み登録試験を繰り返さない。

@@ -175,3 +175,8 @@ SettingsStatusをscroll内容から外し、native保存/閉じるfooterの直�
 ## 2026-11-02：登録・filterの限定受入（a0ac6cb）
 
 許可付きregistration-filter02は10checks/exit0/残存processなし。生成PNG/専用DB、有効root2/無効path1で、二つ目も登録できること、部分失敗のpath保持・警告、一覧だけの取得、検索DB反映、filterの0件案内/resetと非表示選択保持、原本hash保持を確認。partial-result/resetの2PNGを確認。初回01の旧文言FAILを保持し、source a0ac6cbの受入とした。後続d29f88eのパスcopy/clipboard、全DPI等は対象外。証拠data/ai-ui/continuation-20261102/registration-filter02/report.json。新しい同内容試験を反復しない。
+
+
+## 2026-11-02：一覧footerからの一括整理（85123b4）
+
+FooterBulkActionsは既存SelectionMenuを呼び、複数選択時だけ表示。解除は既存ConfirmDiscard保護付き処理へ接続し、session/選択IDs/保存中guardを維持。許可付きbulk-footer01はUIA-onlyで9checks/exit0/原本保持、残存processなし。2件選択→お気に入り保存→選択保持→棚picker cancel→footer解除を確認。menu/解除後の2PNG確認。physical入力/HC/DPI/大量選択の再受入/clipboardは今回未実施。登録の成功試験は反復していない。証拠data/ai-ui/continuation-20261102/bulk-footer01/report.json。
