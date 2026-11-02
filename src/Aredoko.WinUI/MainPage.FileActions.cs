@@ -14,12 +14,16 @@ namespace Aredoko_WinUI;
 
 public sealed partial class MainPage
 {
+    private bool rootPathComposing;
+    private void RootPath_CompositionStarted(TextBox sender,TextCompositionStartedEventArgs args)=>rootPathComposing=true;
+    private void RootPath_CompositionEnded(TextBox sender,TextCompositionEndedEventArgs args)=>rootPathComposing=false;
+    private static bool IsUnmodifiedEnter(KeyRoutedEventArgs e)=>!e.Handled&&e.Key==VirtualKey.Enter&&
+        !SelectionKey(VirtualKey.Control)&&!SelectionKey(VirtualKey.Shift)&&!SelectionKey(VirtualKey.Menu)&&
+        !SelectionKey(VirtualKey.LeftWindows)&&!SelectionKey(VirtualKey.RightWindows);
     private void RootPath_KeyDown(object sender,KeyRoutedEventArgs e)
     {
-        if(e.Handled||e.Key!=VirtualKey.Enter||!ready||disposed||saving||dialogOpen||
-           !FolderRegistrationEditor.IsEnabled||!AddRoot.IsEnabled||string.IsNullOrWhiteSpace(RootPath.Text)||
-           SelectionKey(VirtualKey.Control)||SelectionKey(VirtualKey.Shift)||SelectionKey(VirtualKey.Menu)||
-           SelectionKey(VirtualKey.LeftWindows)||SelectionKey(VirtualKey.RightWindows))return;
+        if(!IsUnmodifiedEnter(e)||rootPathComposing||!ready||disposed||saving||dialogOpen||
+           !FolderRegistrationEditor.IsEnabled||!AddRoot.IsEnabled||string.IsNullOrWhiteSpace(RootPath.Text))return;
         e.Handled=true;
         AddRoot_Click(AddRoot,new RoutedEventArgs());
     }

@@ -108,7 +108,7 @@ public sealed partial class MainPage : Page
         UpdateSearchMethod();
         thumbnails = new ThumbnailService(api);
         searchTimer=DispatcherQueue.CreateTimer(); searchTimer.Interval=TimeSpan.FromMilliseconds(300);
-        searchTimer.Tick+=async (_,_)=>{searchTimer.Stop(); if(PendingSearch) await NavigateAsync(0);};
+        searchTimer.Tick+=async (_,_)=>{searchTimer.Stop(); if(PendingSearch&&!queryComposing) await NavigateAsync(0);};
         scanPollTimer=DispatcherQueue.CreateTimer(); scanPollTimer.Interval=TimeSpan.FromSeconds(1);
         scanPollTimer.Tick+=async (_,_)=>await PollScanStateAsync();
         runtimeVerifyTimer=DispatcherQueue.CreateTimer(); runtimeVerifyTimer.Interval=TimeSpan.FromSeconds(1);
@@ -1169,7 +1169,20 @@ public sealed partial class MainPage : Page
     private async void Save_Click(object sender,RoutedEventArgs e)=>await SaveAsync();
     private async void SaveShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;await SaveAsync();}
     private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;if(ready&&!dialogOpen)Query.Focus(FocusState.Keyboard);}
-    private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private bool queryComposing;
+    private void Query_CompositionStarted(TextBox sender,TextCompositionStartedEventArgs args){queryComposing=true;searchTimer.Stop();}
+    private void Query_CompositionEnded(TextBox sender,TextCompositionEndedEventArgs args)
+    {
+        queryComposing=false;
+        if(ready&&!populating&&!disposed){searchTimer.Stop();searchTimer.Start();}
+    }
+    private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating&&!queryComposing){searchTimer.Stop();searchTimer.Start();}}
+    private void Query_KeyDown(object sender,KeyRoutedEventArgs e)
+    {
+        if(!IsUnmodifiedEnter(e)||queryComposing||!ready||disposed||saving||dialogOpen||populating)return;
+        e.Handled=true;
+        Search_Click(sender,new RoutedEventArgs());
+    }
     private async void Search_Click(object sender,RoutedEventArgs e){searchTimer.Stop();await NavigateAsync(0,true);}
     private async void EmptyLiteralSearch_Click(object sender,RoutedEventArgs e)
     {
