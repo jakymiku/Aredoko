@@ -95,6 +95,8 @@ def audit_scroll(ui,tree,shot,report,check,catalog):
     ui('invoke','Item'+str(short['id']),'--action','select');ui('invoke','BtnDetails')
     ui('wait-for','DetailItemTitle','--value',short['title'],'-t','10000')
     ui('wait-for','DetailItemTitle','-p','IsOffscreen','--value','False','-t','10000')
-    check('switching items while the pane is closed resets on reopening',True)
+    title=inspect_element(ui,'DetailItemTitle');viewport=inspect_element(ui,'DetailScroll')
+    check('switching items while the pane is closed resets on reopening',
+          viewport['y']<=title['y']<viewport['y']+24)
     shot('detail-scroll-reset')
     report['unverified']=['physical wheel input','high contrast and DPI','same-item save and refresh scroll retention']

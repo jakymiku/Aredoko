@@ -188,3 +188,12 @@ FooterBulkActionsは既存SelectionMenuを呼び、複数選択時だけ表示�
 ## 2026-11-02：最新source4b51901の追加UI受入
 
 user許可のfolder-selection01は9checks/exit0/残存processなし・原本/source保持。present作品の保存場所/パスボタンの表示・有効状態、登録中/解除済みの混在filterに対する一括選択・表示外選択保持・表示分解除・全解除と未保存の除外draft保持を確認した。解除済みrootはdisabledで対象にならず、2PNGを確認。Explorer/clipboardボタンは押していない。Light UIAのみ、physical入力/HC/DPI/選択上限境界の実機確認は未実施。既存経路/SDK/NuGetは変更なし。基本ZIP26はsource85123b4までであり、後続のproperty/フォルダ選択menuを含まない。証拠data/ai-ui/continuation-20261102/folder-selection01/report.jsonとfinal-review.json。
+
+
+## 2026-11-03 詳細パネルの閲覧位置
+
+source `0d1ccf2`、試験候補 `data/ai-ui/continuation-20261103/frontend01`。別itemへの切替時だけ詳細ScrollViewerを先頭へ戻し、同じitemの再表示では明示resetしない。閉じたpaneと未準備viewportではpendingを保持し、pane/Loaded/SizeChangedで適用。既存の選択・未保存確認・仮想化は維持。
+
+Portable build/publishは成功（既存WUI1001×3、SDK IL2104×2のみ）。生成PNG2枚・専用DBのUIA `--detail-scroll` は7checks、graceful_exit0、残存appなし。同一作品の閉じる→再表示でscroll保持、開いたpane/閉じたpaneの別作品選択でtitleがviewport上端へ戻ることを確認。`detail-scroll01/detail-scroll-reset.png`を目視し、Lightのtitle/preview/編集欄の重なりなし。ComfyUI queueがrunning0/pending0の時に開始。
+
+同一作品の保存/再検索時のscroll保持、物理wheel、HC/DPIは今回未検証。RootPathの修飾なしEnterによる登録は同sourceでbuild確認まで、実キー入力は未検証。既存の登録/部分失敗/scan案内のGUI成功をEnter経路の成功と読み替えない。
