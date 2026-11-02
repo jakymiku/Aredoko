@@ -4,14 +4,25 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
+using Windows.System;
 
 namespace Aredoko_WinUI;
 
 public sealed partial class MainPage
 {
+    private void RootPath_KeyDown(object sender,KeyRoutedEventArgs e)
+    {
+        if(e.Handled||e.Key!=VirtualKey.Enter||!ready||disposed||saving||dialogOpen||
+           !FolderRegistrationEditor.IsEnabled||!AddRoot.IsEnabled||string.IsNullOrWhiteSpace(RootPath.Text)||
+           SelectionKey(VirtualKey.Control)||SelectionKey(VirtualKey.Shift)||SelectionKey(VirtualKey.Menu)||
+           SelectionKey(VirtualKey.LeftWindows)||SelectionKey(VirtualKey.RightWindows))return;
+        e.Handled=true;
+        AddRoot_Click(AddRoot,new RoutedEventArgs());
+    }
     private void UpdateFileProperties()
     {
         FileProperties.IsExpanded=false;

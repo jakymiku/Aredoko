@@ -67,3 +67,34 @@ def audit_fields(ui,tree,shot,report,check,catalog):
     ui('invoke','BtnSave');ui('wait-for','BtnSave','-p','IsEnabled','--value','False','-t','10000')
     check('wrapped tags save the same comma separated values',sorted(catalog.get(short['id'])['tags'])==sorted(v.strip() for v in long_tags.split(',')))
     shot('detail-fields-saved');report['unverified']=['physical text editing/copy','physical DPI/high contrast']
+
+
+def audit_scroll(ui,tree,shot,report,check,catalog):
+    """Different items start at top; reopening the same item keeps its scroll."""
+    rows=catalog.search()['items']
+    short=next(row for row in rows if row['title']=='image-0.png')
+    long=next(row for row in rows if row['title']==LONG_NAME)
+    ui('wait-for','ItemList','-p','IsEnabled','--value','True','-t','10000')
+    ui('invoke','Item'+str(short['id']),'--action','select');ui('invoke','BtnDetails')
+    ui('wait-for','DetailItemTitle','--value',short['title'],'-t','10000')
+    ui('invoke','FileProperties','--action','expand')
+    ui('scroll','DetailScroll','--to','bottom')
+    ui('wait-for','DetailItemTitle','-p','IsOffscreen','--value','True','-t','10000')
+    ui('invoke','BtnCloseDetails');ui('invoke','BtnDetails')
+    ui('wait-for','DetailItemTitle','-p','IsOffscreen','--value','True','-t','10000')
+    check('reopening the same item retains the scrolled detail position',True)
+    ui('invoke','Item'+str(long['id']),'--action','select')
+    ui('wait-for','DetailItemTitle','--value',long['title'],'-t','10000')
+    ui('wait-for','DetailItemTitle','-p','IsOffscreen','--value','False','-t','10000')
+    title=inspect_element(ui,'DetailItemTitle');viewport=inspect_element(ui,'DetailScroll')
+    check('switching items in an open pane returns the title to the top',
+          viewport['y']<=title['y']<viewport['y']+24)
+    ui('invoke','FileProperties','--action','expand');ui('scroll','DetailScroll','--to','bottom')
+    ui('wait-for','DetailItemTitle','-p','IsOffscreen','--value','True','-t','10000')
+    ui('invoke','BtnCloseDetails')
+    ui('invoke','Item'+str(short['id']),'--action','select');ui('invoke','BtnDetails')
+    ui('wait-for','DetailItemTitle','--value',short['title'],'-t','10000')
+    ui('wait-for','DetailItemTitle','-p','IsOffscreen','--value','False','-t','10000')
+    check('switching items while the pane is closed resets on reopening',True)
+    shot('detail-scroll-reset')
+    report['unverified']=['physical wheel input','high contrast and DPI','same-item save and refresh scroll retention']

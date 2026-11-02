@@ -978,23 +978,39 @@ public sealed partial class MainPage : Page
     }
     private async void Items_Changed(object sender,SelectionChangedEventArgs e)=>await ChangeLibrarySelectionAsync();
     private void UpdateSelectionFrame(ListViewItem item)=>item.Style=(Style)Resources[item.IsSelected?"MediaItemSelectedCardStyle":"MediaItemCardStyle"];
+    private int? detailScrollItemId;
+    private bool detailScrollResetPending;
     private void ApplySelectedRow(MediaRow row)
     {
         var previous=populating;populating=true;
         try
         {
+            if(detailScrollItemId!=row.Id)
+            {
+                detailScrollItemId=row.Id;
+                detailScrollResetPending=true;
+            }
             active=row; editingShelfIds=active.ShelfIds.ToArray();saved=new(string.Join(", ",active.Tags),active.Shelf,active.Favorite,active.Reviewed){ShelfIds=editingShelfIds.ToArray()};
             Tags.Text=saved.Tags;UpdateShelfEditorLabel();Favorite.IsChecked=saved.Favorite;Reviewed.IsChecked=saved.Reviewed;
             ItemTitle.Text=active.Title;ItemPath.Text=active.DetailLocationLabel;
             ItemPath.Visibility=string.IsNullOrEmpty(ItemPath.Text)?Visibility.Collapsed:Visibility.Visible;
             ToolTipService.SetToolTip(ItemTitle,active.Title);ToolTipService.SetToolTip(ItemPath,active.LocationLabel);
             UpdateFileProperties();Editor.IsEnabled=true;DetailsButton.IsEnabled=true;
+            ApplyPendingDetailScrollReset();
             DetailPreview.ContextFlyout=SimilarityMenu(active);
             UpdateDirty();
             if(Details.IsPaneOpen)_ = ShowDetailPreviewAsync(active);
         }
         finally{populating=previous;}
     }
+    private void ApplyPendingDetailScrollReset()
+    {
+        if(!detailScrollResetPending||active?.Id!=detailScrollItemId||!Details.IsPaneOpen||
+           Editor.Visibility!=Visibility.Visible||!DetailScroll.IsLoaded||DetailScroll.ViewportHeight<=0)return;
+        if(DetailScroll.VerticalOffset<=0||DetailScroll.ChangeView(null,0,null,true))detailScrollResetPending=false;
+    }
+    private void DetailScroll_Loaded(object sender,RoutedEventArgs e)=>ApplyPendingDetailScrollReset();
+    private void DetailScroll_SizeChanged(object sender,SizeChangedEventArgs e)=>ApplyPendingDetailScrollReset();
     private void RestoreSelection()
     {
         var previous=populating;populating=true;
@@ -1551,7 +1567,7 @@ public sealed partial class MainPage : Page
         FolderAddScroll.MaxHeight=Math.Max(96,FolderHubView.ActualHeight-FolderHeader.ActualHeight-FolderSelectionPanel.ActualHeight-112);
     }
 
-    private void Details_PaneStateChanged(object sender,object args)=>UpdateDetailLayout();
+    private void Details_PaneStateChanged(object sender,object args){UpdateDetailLayout();ApplyPendingDetailScrollReset();}
 
     private void UpdateDetailLayout()
     {

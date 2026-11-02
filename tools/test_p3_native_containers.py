@@ -56,6 +56,7 @@ def main():
     parser.add_argument('--settings-feedback-only',action='store_true',help='UIA-only persistent settings save feedback at either scroll edge')
     parser.add_argument('--settings-layout-only',action='store_true',help='UIA-only settings action grid, footer save and reopen')
     parser.add_argument('--detail-fields-only',action='store_true',help='UIA-only wrapped tags and inline shelf picker without repeating captions')
+    parser.add_argument('--detail-scroll',action='store_true',help='Generated-data UIA detail scroll reset and same-item retention')
     parser.add_argument('--detail-polish',action='store_true',help='UIA-only two generated PNGs: deduplicated filenames, bounded long title and draft preservation')
     parser.add_argument('--card-captions',action='store_true',help='UIA-only library/shelf caption slots and 60/180 percent size changes')
     parser.add_argument('--caption-menu-only',action='store_true',help='Remaining caption case only: size menu closes on navigation/layout')
@@ -94,6 +95,7 @@ def main():
     if args.guide_layout_only:args.detail_polish=True
     if args.settings_feedback_only:args.detail_polish=True
     if args.settings_layout_only:args.detail_polish=True
+    if args.detail_scroll:args.detail_polish=True
     if args.detail_fields_only:args.detail_polish=True
     if args.detail_polish:args.uia_only=True
     if args.setup_plan or args.setup_return:args.detail_actions=True;args.uia_only=True
@@ -440,6 +442,10 @@ def main():
             from ui_settings_layout_audit import audit
             report['settings_audit_sha256']=hashlib.sha256((REPO/'tools/ui_settings_layout_audit.py').read_bytes()).hexdigest()
             audit(ui,shot,report,check,target)
+            check('generated sources unchanged',before==sources());report['pass']=True
+        elif args.detail_scroll:
+            from ui_detail_polish_audit import audit_scroll
+            audit_scroll(ui,tree,shot,report,check,cat)
             check('generated sources unchanged',before==sources());report['pass']=True
         elif args.detail_fields_only:
             from ui_detail_polish_audit import audit_fields
