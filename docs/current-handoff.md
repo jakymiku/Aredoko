@@ -1,5 +1,15 @@
-# Aredoko — 現行の単一引き継ぎ（2026-11-01）
+# Aredoko — 現行の単一引き継ぎ（2026-11-02）
 
+
+
+## 2026-11-02 終了checkpoint（以下の進行記録より優先）
+
+- **Git/実装**：起点06902b4、fetch後clean・remote branch/PR5 head ref一致、他AI更新なしで既存branch/PR5を継続。最新アプリsource **4b51901**、最終handoff commitは本書git履歴。a0ac6cbはfolder件数/filter解除/空案内、d29f88eは右クリックcopy path、85123b4はfooter一括整理、837c855はpropertyの保存場所/copy入口、4b51901はfolderのfilter対象一括選択。Terraへ各単位を委譲し親レビュー/最小build、既存の保存・選択・path検証を再利用。
+- **受入**：登録/部分失敗/一覧のみscan/filter解除/非表示選択保持はregistration-filter02 **10checks/exit0**。footerのfavorite保存/棚cancel/選択解除はbulk-footer01 **9checks/exit0**。propertyボタン表示/有効状態、folderの登録中のみ選択/非表示選択/未保存draft保持/全解除はfolder-selection01 **9checks/exit0**。全てuser許可の生成素材/独立DB/UIA-only、原本保持・残存processなし、対象画像確認済み。01の旧文言期待値FAILを保持しD03解決済みに更新。**Explorer/clipboardは実行していない**。Lightの関連範囲だけ、HC/DPI/physical入力/大量folder限界/実メディアは未検証。[証拠](p3-continuous-browse.md)末尾とdata/ai-ui/continuation-20261102/final-review.json。
+- **build/試験版**：各変更のPortable build/publish0errors、既存WUI1001×3/IL2104×2は抑制なし。既存SDK/runtimeのcached targetsはcontinuation-20261101/cached-frameworks.targets、依存DLなし。最新関連GUIに使った **data/ai-ui/continuation-20261102/frontend03** はsource4b51901、変更がなければ再publish不要。Core/backend/Bootstrap無変更を維持し、旧Core1444/関連10を再利用、全回帰/soak/GPUを反復していない。
+- **通常配布候補**：**dist/portable-basic-20261102-26/Aredoko/Aredoko.exe**、app85123b4 / packaging8c6486e、828files/661,943,719bytes、ZIP348,546,043bytes/SHA `7e6f883e4264bc49a2509fd24efea26c10bc8914299a6d2e484e6db779702ca4`。payload/ZIP/同梱check、通常EXE→終了→1再起動 **11checks/所有4exit0**、再起動画像確認。最新2単位837c855/4b51901は未収録なので混同しない。paired kit26は6data files/SHA `888bace9f09d62c412ab3a29c61b6dcd514b8aec69861e6d0b643c4c5e890cb2`。別Windows受入ではない。[候補記録](portable-refresh-20261024.md)。installed Alphaは旧ZIP10のまま、無断更新なし。
+- **方針/保留**：userの今回指定はギリギリまで開発、GUI/GPUは毎回事前確認、非致命的な問題は[対応待ち一覧](deferred-issues.md)へまとめて後で対応。AGENTSへ反映。再現した致命的不具合は今回なし。D01の通信失敗時案内はコード上の懸念/未再現で未修正、D02のagent-desktop storage問題は開発toolの保留。ツール調査/軽微バグ修正で実装を止めない。通常DB/私物/Alpha/clipboard/Explorer/GPU/モデル/OS/Sandbox/monitor/shutdown/Actionsは操作していない。
+- **次の1件**：最新の受入済みfrontend03を、次の意味ある変更単位と一緒に基本ZIPへ収録（26を黙って上書きしない）。UI主軸はロードマップ4の検索→閲覧→整理の往復へ進め、実際の操作の不便を小単位で実装。成功済み登録/filter/一括整理/ZIP26通常入口を反復せず、新しいclipboard/Explorer実操作が必要なときだけ対象を示して許可を得る。P6別WindowsはSandboxの旧有効化と現状無効報告の食い違いが未解決、無断再有効化/再起動せずuserと確認する。公開AI runtimeの適用条項/host/registryも未完。全ロードマップ完了ではない。
 
 
 ## 2026-11-02 一括整理の限定受入（以下より優先）

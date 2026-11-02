@@ -183,3 +183,8 @@ FooterBulkActionsは既存SelectionMenuを呼び、複数選択時だけ表示�
 
 
 837c855でファイルのプロパティへ保存場所/パスcopyのnativeボタンを追加。既存OpenInShell/CopyFilePathへ接続し、activeなpresent作品だけ有効。選択/draft/検証経路は維持。Explorer/clipboard実操作は未確認。基本ZIP26/source85123b4には後続の837c855/4b51901を含まない。
+
+
+## 2026-11-02：最新source4b51901の追加UI受入
+
+user許可のfolder-selection01は9checks/exit0/残存processなし・原本/source保持。present作品の保存場所/パスボタンの表示・有効状態、登録中/解除済みの混在filterに対する一括選択・表示外選択保持・表示分解除・全解除と未保存の除外draft保持を確認した。解除済みrootはdisabledで対象にならず、2PNGを確認。Explorer/clipboardボタンは押していない。Light UIAのみ、physical入力/HC/DPI/選択上限境界の実機確認は未実施。既存経路/SDK/NuGetは変更なし。基本ZIP26はsource85123b4までであり、後続のproperty/フォルダ選択menuを含まない。証拠data/ai-ui/continuation-20261102/folder-selection01/report.jsonとfinal-review.json。
