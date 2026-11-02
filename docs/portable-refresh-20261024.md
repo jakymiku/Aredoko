@@ -217,3 +217,10 @@ Core/tests/BootstrapはZIP15/source0edbd40から無変更を機械照合し、�
 - 通常EXEの起動→正常終了→1回再起動を生成PNG1枚/専用DBで確認（basic25-startup01：11checks、所有4process全exit0、2PNG生成・再起動画像を確認）。GPU/モデル/取得/通常DB/Alphaは使わず、既存ZIP24・インストール済みAlphaは維持。
 - 対応する `dist/portable-validation-20261101-25.zip`：6data files、SHA `2b7006eb4f501f7272ed0db3afa41e1f33be6064f9c4657ccbb3d7e9a90b1a50`。版/日時/platformと正確なZIP/manifest hashを結果templateにも伝達。sourceはmanifest未記録のためnull。作成は別Windows合格ではない。
 - 後続d727876の登録追加UI/一括登録修正はこのZIPに未収録。最新frontend03はbuild/publishまで、GUI未受入。証拠 `data/ai-ui/continuation-20261101/final-review.json` / basic25-prepare01.log / basic25-startup01/report.json。
+
+
+## 2026-11-02：基本ZIP26（限定受入済み）
+
+`dist/portable-basic-20261102-26/Aredoko/Aredoko.exe`、app source85123b4、packaging8c6486e。828files/661,943,719bytes、ZIP348,546,043bytes/SHA `7e6f883e4264bc49a2509fd24efea26c10bc8914299a6d2e484e6db779702ca4`。全payload/ZIP/同梱check成功。root登録/部分失敗/filterとfooter一括整理を収録。ユーザー許可のbasic26-startup01は通常EXE→終了→1再起動11checks/所有4exit0、生成原本とsettings/payload保持。再起動PNG確認、GPU/取得/通常DB/Alpha不使用。
+
+paired kit `dist/portable-validation-20261102-26.zip` は6data files/SHA `888bace9f09d62c412ab3a29c61b6dcd514b8aec69861e6d0b643c4c5e890cb2`。別Windows/clean machineの合格ではない。モデル/AI runtime未同梱。インストール済みAlphaは更新していない。後続837c855のプロパティ操作は未収録で、Explorer/clipboardは未確認のまま。

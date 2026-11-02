@@ -1,6 +1,11 @@
 # PortableのWindows準備・検証（2026-10-21）
 
 
+## 2026-11-02 最新の対になる候補
+
+基本ZIP26/app85123b4、アプリSHA `7e6f883e4264bc49a2509fd24efea26c10bc8914299a6d2e484e6db779702ca4`、生成セット26 SHA `888bace9f09d62c412ab3a29c61b6dcd514b8aec69861e6d0b643c4c5e890cb2`。ホストの専用DBによる通常入口/再起動は限定受入済み、別Windowsは未確認。Sandboxの状態を今回変更・再調査していない。旧25以下を上書きせず、試用sourceを混同しない。
+
+
 ## 2026-11-01 現在のSandboxと検証レポート
 
 以前の有効化（exit3010/InstallState1）は保持。11/1のbootは有効化後だが、現在のread-only WMIはInstallState2、WindowsSandbox.exeなし、WinApp targetはnot running/not attached/stale。原因は未特定。旧「OS再起動だけ待つ」状態からは変わっている。guest未実行・OS設定変更なし。再有効化や他のclean Windowsが必要かはuserと確認してから進め、ホスト成功を代用しない。証拠 `data/ai-ui/continuation-20261101/sandbox-readiness01.json`。
