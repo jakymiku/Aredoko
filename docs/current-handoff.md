@@ -2,6 +2,12 @@
 
 
 
+## 2026-11-03 進行checkpoint 2（以下より優先）
+
+- 最新app source **37c2271**。0d1ccf2は詳細scroll＋Enter登録、3ff0849は検索Enter/IME中debounce抑止、37c2271は設定を通信応答前に表示。詳細scrollはfrontend01/detail-scroll01で7checks/exit0、設定はfrontend03/settings-load01で8checks/exit0。build/publish成功。keyboard-entry01は通常の前面化が拒否され、キー入力前に停止/exit0（D04）。実Enter/実日本語IMEは未検証。失敗と製品bugを混同しない。
+- P6 source51ea066でmanifest/検証kitに明示source_revisionを伝達（関連CPU12 PASS）。基本ZIP27/app0d1ccf2は全照合＋通常起動/再起動11checks/所有4exit0。後続3ff/37cは未収録、新しい基本ZIP28へまとめる準備中。旧Alphaは変更していない。
+- Sandboxは**ユーザーが通常UACを承認し、DISM exit3010で有効化完了・Windows再起動待ち**。/NoRestartで再起動抑止、WMI state1。guest起動/clean Windows合格ではない。下段の未実行/UAC待ちは当時の履歴。証拠data/ai-ui/continuation-20261103/sandbox-enable-result.jsonとsandbox-dism.log。userのComfyUI処理が0/0になった後に実施し、Comfy内容/queueを変更していない。
+
 ## 2026-11-03 作業中checkpoint（以下より優先）
 
 - **最新実装/確認**：`0d1ccf2`で詳細scrollとEnter登録を実装。Portable build/publish成功、frontend01のdetail-scroll01は7checks/exit0、Light画像確認済み（詳細はp3-continuous-browse末尾）。同作品の開き直し保持/別作品を開いた時の先頭復帰は確認、同作品save/refreshとEnter実入力は未検証。

@@ -204,3 +204,10 @@ Portable build/publishは成功（既存WUI1001×3、SDK IL2104×2のみ）。�
 source3ff0849。Queryの修飾なしEnterを既存Search_Click→NavigateAsyncへ接続し、範囲・類似解除・未保存確認を再利用。既存の300ms自動検索と検索ボタンは維持。TextCompositionStarted/Endedで変換中を追跡し、その間はtimerとTickからの検索を抑止する。RootPathのEnterにもcomposition guardを追加し、Ctrl/Shift/Alt/Win付きEnterは対象外。restored projectへのwinapp find-apiでTextBox compositionイベントの存在を確認。
 
 Portable build/publish成功（既存warningのみ）、試験版frontend02。keyboard-entry01は通常の前面化をWindowsに拒否され、入力前に停止/所有app exit0。実Enter・実日本語IMEは未検証であり、成功扱いにしない。生成2PNGだけを用い、GPU/モデル/通常DB/Alphaを利用していない。再現と次の一手はdeferred-issues D04。
+
+
+## 2026-11-03 設定画面を通信待ちより先に表示
+
+source37c2271、frontend03。runtime-verificationのGETをContentDialog.Opened後へ移し、読み込み中は当該checkboxだけ無効・状態説明を表示。表示テーマ/閲覧設定と既存の機能入口はすぐ使える。dialog所有CTSで閉じた時にGETを取消し、taskを回収、遅い応答で閉じたUIへ書かない。保存時に未知のverification値は更新しない。
+
+Portable build/publish成功（既存warningのみ）。settings-load01は生成PNG2枚・専用DB/UIAで8checks、exit0。専用serverの当該GETだけをgateで待たせ、応答前にdialog表示・local保存・closeが可能、gate解放後の再表示で既定verificationオン取得を確認。入力/foreground要求/GPU/通常DBなし。写真では保存結果がnative footer直前に見える。theme未指定fixtureの保存でWindows既定Darkへ反映されたため、Light/Dark両theme確認とは称さない。実切断/実IME/HC/DPIは未確認。
