@@ -2,6 +2,13 @@
 
 
 
+## 2026-11-03 追加：生成物の整理（以下より優先）
+
+- userの容量整理指示で、実測15.82GiB（約17GB）から再生成可能な12directory/5,419,106,356bytes（5.05GiB）を削除。現状は概算10.77GiB（約11.6GB）。この時点で180GBは存在しなかった。
+- 削除は基本ZIP24/25/26、11/1・11/2のfrontend01–03、11/3のfrontend01–02、src/Aredoko.WinUI/bin。Git追跡ファイル・reparse pointなし、使用中repo executableなしを確認。最初は読み取り専用属性で停止し、同じ検証済み生成物のみ通常Remove-Item -LiteralPath -Recurse -Forceで完了（ACL/実行policy変更なし）。
+- 現行ZIP28/予備ZIP27/Alpha関連ZIP10、frontend03、paired kit、Sandbox準備、すべてのDB・モデル・venv・obj・cached targets・logs/screenshots/reportsは保持。過去のfrontend pathは履歴で、削除分を再実行するには対応sourceから再publishが必要。次のpackagingは保持したZIP28/27をbaseにし、削除済み24–26を入力にしない。
+- 詳細一覧/実測はignoredのdata/cleanup-20261103/inventory.json・plan.json・result.json。ソース変更なし、最新EXE2種の存在確認とGit差分確認を実施。AGENTSへ定期的な容量整理のルールを追記。
+
 ## 2026-11-03 終了checkpoint（以下より優先）
 
 - **実装/Git**：起点3b35360、fetch後remote/PR5 ref一致・clean、他AI作業なし。既存branch/PR5のみ継続。app source **37c2271**。0d1ccf2で詳細scrollとEnter登録、3ff0849で検索Enter/IME中debounce抑止、37c2271で設定の通信待ち解消。Terraへ限定委譲し親がレビュー。CI/新branch/PR/main mergeなし。
