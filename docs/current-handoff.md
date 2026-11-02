@@ -2,6 +2,14 @@
 
 
 
+## 2026-11-03 作業中checkpoint（以下より優先）
+
+- 起点3b35360、fetch後clean・remote/PR5 head ref一致。他AI変更なし。最新user方針はWinUI改善＋Windows配布の実用性確認を優先、その後にマルチプラットフォーム。Avaloniaは将来候補で今は着手しない。AGENTS/roadmapへ反映作業中。
+- **現在の負荷条件**：ComfyUIがloopback8188でrunning1/pending0。内容や生成物は読まず件数だけ確認。user指定で処理が終わるまでGUI/GPU/Sandbox・重いbuild/testを待ち、ソース作業を進めている。APIのqueue内容/生成処理を変更しない。
+- **追加許可**：userは「処理完了後のSandbox再有効化（再起動なし）」を明示許可済み。現在feature InstallState2。用意したignoredスクリプトdata/ai-ui/continuation-20261103/enable-sandbox.ps1はDISM /Enable-Feature /FeatureName:Containers-DisposableClientVM /All /NoRestart、まだ実行していない。実行前にComfy queue idleを確認し、通常UAC経由で実行。セキュリティ回避/強制終了/再起動は禁止。3010なら再起動待ちを記録し独立した開発へ。
+- **実装中**：別の作品を選んだ時だけ詳細scrollを先頭へ戻す変更（MainPage.xaml/.xaml.cs）。同一item IDのsave/refreshで不要にresetせず、閉じたpaneの再表示/viewport準備後にpending resetを適用する。Terra実装を親レビュー中、ソース保存済み、build/GUIはComfy処理完了待ち。現時点の差分はgit statusを参照し、過去のGUI受入へ混ぜない。
+
+
 ## 2026-11-02 終了checkpoint（以下の進行記録より優先）
 
 - **Git/実装**：起点06902b4、fetch後clean・remote branch/PR5 head ref一致、他AI更新なしで既存branch/PR5を継続。最新アプリsource **4b51901**、最終handoff commitは本書git履歴。a0ac6cbはfolder件数/filter解除/空案内、d29f88eは右クリックcopy path、85123b4はfooter一括整理、837c855はpropertyの保存場所/copy入口、4b51901はfolderのfilter対象一括選択。Terraへ各単位を委譲し親レビュー/最小build、既存の保存・選択・path検証を再利用。
