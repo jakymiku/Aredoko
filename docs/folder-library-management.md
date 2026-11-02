@@ -109,3 +109,8 @@
 - AddRoot_ClickがJsonArrayを各パスのJsonObjectへ再利用しており、2件目で「The node already has a parent.」となるコード経路を確認（LibraryApiはToJsonStringだけで親子を外さない）。パターン文字列を保持し、各リクエストで独立したJsonArrayへ変換するよう修正。CPU上で旧経路の例外と新しい独立配列の同内容serializeを確認した。実際の複数root登録GUI合格とは区別する。
 - 全成功は入力をclearして欄を閉じる。一部失敗は未登録pathと設定を保持し、件数/理由/再試行を案内。登録後の更新/scan案内が失敗しても、保存済み件数と未登録情報を消さない。Terraのコードレビュー指摘を反映した。
 - 関連WinUI build/publish成功（従来WUI1001×3/IL2104×2）。最初のBorder.IsEnabled誤用をContentControlへ修正しbuild02で0errors。最新試験出力 `data/ai-ui/continuation-20261101/frontend03`、ProductVersion source d727876。GUI/部分失敗API経由/physical入力は未検証。基本ZIP25/source8cc23fcにはこの追加変更は含まない。
+
+
+## 2026-11-02：登録フォルダ一括選択（4b51901）
+
+native選択menuに表示中の登録folderを選択/解除・全解除を追加。FilteredFoldersのEnabledのみを対象とし、前2操作はfilterで隠れたchecked IDsを保持、全解除だけは全IDsを消す。既存FolderSearch.MaxRootsを超える場合は変更前に警告し、部分選択しない。設定draftは触らず、API書込みなし。保存/ダイアログ/画面準備中のguardを持つ。関連build/publish0errors、既存警告のみ。最新frontend03/source4b51901、GUI結果はcurrent-handoff最上段を優先。

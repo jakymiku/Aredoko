@@ -180,3 +180,6 @@ SettingsStatusをscroll内容から外し、native保存/閉じるfooterの直�
 ## 2026-11-02：一覧footerからの一括整理（85123b4）
 
 FooterBulkActionsは既存SelectionMenuを呼び、複数選択時だけ表示。解除は既存ConfirmDiscard保護付き処理へ接続し、session/選択IDs/保存中guardを維持。許可付きbulk-footer01はUIA-onlyで9checks/exit0/原本保持、残存processなし。2件選択→お気に入り保存→選択保持→棚picker cancel→footer解除を確認。menu/解除後の2PNG確認。physical入力/HC/DPI/大量選択の再受入/clipboardは今回未実施。登録の成功試験は反復していない。証拠data/ai-ui/continuation-20261102/bulk-footer01/report.json。
+
+
+837c855でファイルのプロパティへ保存場所/パスcopyのnativeボタンを追加。既存OpenInShell/CopyFilePathへ接続し、activeなpresent作品だけ有効。選択/draft/検証経路は維持。Explorer/clipboard実操作は未確認。基本ZIP26/source85123b4には後続の837c855/4b51901を含まない。
