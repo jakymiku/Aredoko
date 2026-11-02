@@ -240,3 +240,17 @@ paired kit `dist/portable-validation-20261102-26.zip` は6data files/SHA `888bac
 対のdata-only検証kit27は6files、SHA `2636c6db1a6f6d874471c343de3fa31f60b30713c14a49d9c685b0bdc8565ed7`。candidate/resultへ明示source_revisionを伝達し、clean Windows未受入を維持。
 
 userはComfyUI処理完了後のSandbox再有効化（再起動なし）を明示許可。queueが0/0になった後、通常UACをuserが承認。直接DISMの/Online /Enable-Feature /FeatureName:Containers-DisposableClientVM /All /NoRestartは**exit3010、reboot required=yes、restart suppressed**。WMI InstallState1。証拠data/ai-ui/continuation-20261103/sandbox-enable-result.jsonとsandbox-dism.log。最初のPowerShell -File試行は結果ログなし、成功根拠にせず、直接DISMの記録で判断。OS/実行ポリシーを回避せず、再起動・guest起動はしていない。Windows再起動後にreadiness→同候補/生成kitの別環境確認へ進む。
+
+
+## 2026-11-03 最終候補：基本ZIP28
+
+`dist/portable-basic-20261103-28/Aredoko/Aredoko.exe`。app source **37c227194bddfba16b9840d86ebcfabcaa43a295**、packaging0b1dd53。詳細scroll/検索Enter・IME guard/先に開く設定画面まで収録。828files/661,999,727bytes、ZIP348,574,801bytes/SHA `e6bd4c2bff7919db8567f0c3dca4b2caee86ed301a68f8118ee584c5157d9ee0`。全payload/ZIP/同梱check、通常EXE→終了→1再起動は11checks/所有4exit0。再起動画像を確認。旧Alpha/通常DB/元メディアは不変。
+
+対応検証kit28は6data files、SHA `6450e539585779c404be52635cc4ea2e6c941662b7ea16b78f30257b4481a428`。manifest sourceをcandidate/resultへ引継ぎ、clean Windowsは未受入。既存Core1444/関連10を再利用し全回帰を反復していない。実EnterはD04の前面化制約により入力前停止、実日本語IME/HC/DPI/実媒体全品質/AI新規導入も今回の合格範囲外。
+
+
+### 再起動後のSandbox準備ファイル
+
+`tools/prepare_windows_sandbox.py --release <基本版directory> --validation-kit <対応kit directory> --output <新しいdata/ai-ui出力先>`を追加。7件の生成CPUテストと、実際のsealed ZIP28/kit28への生成はPASS。出力は`data/ai-ui/continuation-20261103/sandbox-basic28/Aredoko.wsb`とREADME/evidence。アプリとkitだけをexact/read-only共有し、新規evidenceだけ書込み可。network/clipboard/vGPU/入力・printer共有はDisable、logon時はguestのアプリfolderをExplorerで開くだけで、アプリ/スクリプトを自動実行しない。XMLは[Microsoft公式仕様](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file)を参照。
+
+既存出力/入力との重なり/link経由/候補とkitのmanifest・ZIP不一致を拒否。絶対host pathを含む生成物はignoredに置く。guest起動/guestでのWinUI表示/性能/保存は**未検証**。再起動後に `.wsb` を開き、guestで通常Aredoko.exeを手動起動、kitの手順を実施。Sandboxを閉じる前に結果とログをguestのC:\AredokoEvidenceへ保存する。hostの通常DBや私物は共有していない。
