@@ -104,3 +104,13 @@ Work HEAD`68db65b`を実機へ取り込み、既存runtime/cacheだけで準備�
 ### 2026-11-04 ZIP29への別配置更新
 
 同じゲストでZIP28を停止後、基本ZIP29/source12b65680276ddba927934e89d777672cb2661903をC:\Aredoko29へ別read-only共有。通常Aredoko.exeを起動し、既存guest AppDataの3件/タグ保持、CBZ2/2緑ページ復元、タグ検索1件、詳細の検索根拠展開（入力語一致）を視覚確認。再scan/新しい保存を反復せず、通常終了・wsb exit0。コピーDB integrity_check=ok。証拠は同evidence/update29-result.json・update29-appdata。後続の元ファイル状態案内は未収録。ゲスト停止/OS設定/AI取得は行わない。
+
+### 2026-11-04 ZIP30の通常入口・viewer内整理
+
+source138964e7f33cfaae4d94605a0904c473afd83d57、別read-only共有C:\Aredoko30。通常EXEからall/空文字検索→生成blue画像→viewer star登録→成功表示→通常viewer close→一覧star/詳細checkbox同期→app通常終了exit0。元のguest AppDataを継続し、guest内同梱Pythonによるread-only DB検査はintegrity ok、blueだけfavorite=1、green/CBZ=0、既存CBZタグとreader_progress.page=1保持。証拠は同evidence/update30-result.json・update30-db-check.json・update30-appdata。host UIAの保存拒否/保存中close競合とは別結果。ゲストを停止しない。
+
+### 2026-11-04 ZIP31の本ビューア操作
+
+sourcebb59c405074c93e7b3176182a789fa85c4ef6769、C:\Aredoko31の通常EXEから既存guest専用DBを使用。本CBZの2/2緑ページ復元→viewer star登録成功→通常close→一覧star/詳細checkbox/既存tag確認→app通常終了。guest内同梱Pythonのread-only DBはintegrity ok、blue favorite=1/green=0/CBZ=1、CBZタグとpage index1保持。追加起動のEnter観察を含む2入口は各wsb exit0。evidence/update31-result.json・update31-db-check.json・update31-appdata。
+
+Enter観察：blue入力で自動検索が先に1件へ更新、Return後も1件維持。空欄で自動検索が3件へ戻り、Return後も3件維持。guestへ通常キー入力できた事実と、Enter単独で検索を起動した証明を区別する。実日本語IMEとEnter単独の機能受入は未検証。ホスト前面化失敗D04の合格への読み替えはしない。Sandbox内の保存途中close/API拒否のfixtureは今回反復していない。

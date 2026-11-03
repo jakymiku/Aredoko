@@ -17,3 +17,5 @@ D03追記：ユーザー追加許可後のregistration-filter02は10checks/exit0
 D04（2026-11-03・試験環境/未受入）：frontend02/source3ff0849のkeyboard-entry01は、owned HWNDへの通常SetForegroundWindowがfalseで停止。生成fixture/起動は成功し、キー入力前に中止、appは正常終了。検索/登録のEnter、実日本語IMEは未検証。入力attach/権限回避/他appへのsend-inputは行わず、同じ前面化失敗を変更なしで再試行しない。source build/publish成功とは区別し、次回テスト窓を通常操作で前面にできる状況で1batchへ戻る。
 
 D04追記：keyboard-entry02（同じEnter確認、frontend03/source37c2271）で通常UIA focusを先に試すと、WinApp自体が「非foregroundなのでfocus拒否」と入力前に停止/exit0。focusはactivationの代わりにならないと確認し、一時的な前置focus変更は撤去。関連試行は計2回、キー入力0。別名の再試行で枠をリセットせず、手動でテスト窓を通常前面にできる状況まで実キー確認を保留する。
+
+D04追記（2026-11-04）：Sandboxの操作可能なdesktopでは通常Return入力は送れた。ただしblue→1件/空欄→3件は自動検索が先行しており、Return後の状態保持だけを観測。Enterが独立して検索を起動した因果証明と実日本語IMEは引き続き未検証。evidence/update31-result.jsonにこの限界を明記。hostの初回2失敗をPASSへ上書きせず、環境前面化の問題と製品機能の受入を分ける。

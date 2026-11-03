@@ -1,15 +1,17 @@
 # Aredoko — 現行の単一引き継ぎ（2026-11-04）
 
-## 2026-11-04 進行checkpoint（以下より優先）
+## 2026-11-04 終了checkpoint（以下より優先）
 
-- Git起点1aaf06a、fetch/remote/PR5 ref一致、既存branch/Draft PR5継続。未追跡Aredoko-test/はuser作業として不干渉。f52c047は一致ページ/時刻の案内、12b6568は詳細の検索根拠展開、61da1f4は元ファイルmissing/unavailable/未対応形式の説明。既存reader/player/検索/保存/安全guardは再実装せず、Core/backend無変更。
-- frontend03/source12b6568はPortable publish成功、detail-evidence-dark01/light01各14checks/exit0/原本不変。frontend04/source61da1f4はbuild/publish、detail-availability-light03の9checks/exit0/2PNG目視。後者は生成serializer状態fixture、実ドライブ切断/未対応形式/Darkは未検証。初回fixture失敗はraw保持。詳細はp3-continuous-browse末尾。
-- **配布候補29**：dist/portable-basic-20261104-29/Aredoko/Aredoko.exe、source12b6568（後続61da1f4は未収録）。全payload/ZIP/同梱check、通常EXE終了/1再起動11checks/全所有exit0、専用元PNG不変。対応kit29あり。旧installed Alpha/通常DB/ZIP28は更新していない。
-- **Sandbox限定受入完了**：userが手動DISM等で起動回復。WinApp agent準備はE_ACCESSDENIED、非対話guestが残ったため同じguestへwsb connect、ExistingLogin exec/shareとcomputer-useで確認（後半はuser指定6.1 Terra）。ZIP28通常起動/生成3件登録/一覧のみscan/PNG/CBZ2頁/タグ保存/タグ検索/正常終了/再起動の登録タグ読書位置保持を確認。ZIP29へ別read-only共有の更新でも3件/タグ/CBZ2頁目/検索根拠保持を確認。両版app通常終了、exit0、コピーDB integrity_check=ok。
-- 証拠はdata/ai-ui/continuation-20261103/sandbox-basic28/evidence/acceptance-summary.json・guest-appdata、update29-result.json・update29-appdata。ゲスト自体は停止せず稼働中。準備済みwsbのnetwork-disable適用とは称さず、実AI/GPU/他媒体/別物理Windows/全P6・P7は未受入。OS設定/再起動/シャットダウン/Actionsは操作していない。
-- **次**：UIは検索→閲覧→整理の次の小単位をソースから選定中。P6は次の意味あるUI単位と61da1f4をまとめた新候補へ（29を上書きしない）。成功済みSandbox一連やZIP29起動を主作業として反復しない。runtime公開条項/host/registry、D04実Enter/IMEは残件のまま。
-
-
+- **Git**：起点1aaf06a、fetch/remote/PR5一致から既存branch/Draft PR5継続。最終app source **bb59c40**。最終handoff HEADは本書のGit履歴。未追跡Aredoko-test/はuser作業として不干渉。新branch/PR/Actions/main merge/force pushなし。
+- **できること**：f52c047は詳細ボタン下の一致ページ/時刻案内、12b6568は詳細の検索根拠展開と全一致語、61da1f4は元ファイル欠落/接続不可/未対応形式の説明、138964eは画像viewer内favorite、bb59c40は本にも接続し保存をViewerFavoriteActionへ共通化。通常文字検索/all（root/棚等scope維持）から画像・本を見たまま登録/解除でき、一覧/詳細へ同期。AI/類似/お気に入り/履歴の新bar操作は未接続、従来一覧の整理を維持。Core/backend/API/原本guardは無変更。
+- **ホスト実証**：Portable publish成功、既存WUI1001×3/IL2104×2のみ。検索根拠Light/Dark各14checks、元ファイル状態fixture9、本favorite9、共通化後画像12/API拒否・非保持ack fallback9を各独立DB/UIAで確認、全exit0/原本不変/残存なし。保存中は画像/ページ送りを止め、closeはfavoriteと読書位置の保存完了を待つ。tag/shelf draftをDBへ混ぜない。前段1444Core/関連10のsource不変を再利用し全回帰を反復していない。
+- **試験失敗の区別**：初回の詳細明示open欠落、状態fixtureのtable/status指定、非表示page-count peer待ち、nav直後のstale UIA、cp932 stdoutの試験側失敗をraw保全。診断→既存契約に沿うfixture修正後の対象結果が上記。製品の致命的不具合や未修正bugと混同しない。詳細はp3-continuous-browse末尾。
+- **最新候補31**：dist/portable-basic-20261104-31/Aredoko/Aredoko.exe、source bb59c405074c93e7b3176182a789fa85c4ef6769。828files/662,058,041bytes、全payload/ZIP/同梱check照合。ZIP SHAとkit31はportable-refresh末尾。予備30、guest共有中28/29、installed Alpha/source0138a58を保持。通常DB/私物/モデル/OS設定/再起動/shutdownは変更なし。
+- **Sandbox実証**：userが手動DISM等で回復後、WinApp agentはE_ACCESSDENIEDで停止。残った同じguestへwsb connectし、ExistingLogin exec/shareとcomputer-use（後半user指定6.1 Terra）で確認。ZIP28の通常EXE→初回→生成3件登録/一覧のみscan→PNG/CBZ2頁→タグ保存/検索→正常終了/再起動の登録/タグ/読書位置保持を確認。29別配置更新でも保持と検索根拠、30は画像star、31はCBZ2/2→本star→一覧/詳細同期を確認。appは全通常終了、wsb exit0。各guestコピーDB及び31 guest内同梱Pythonのread-only DB検査はintegrity ok。31でblue/CBZ favorite=1、green=0、CBZtag/読書位置page index1を保持。
+- **証拠/限界**：data/ai-ui/continuation-20261103/sandbox-basic28/evidence/ のacceptance-summary.json・guest-appdata、update29/30/31-{result,db-check}.json・各appdata（存在する記録を正本参照）。guest自体は停止せず稼働中、appは終了。managed guestのnetwork-disable設定適用とは称さない。実AI/GPU/他媒体/別物理Windows/全P6・P7は未受入。Enterはguestで実キー入力後の結果保持を観察したが、自動検索先行につきEnter単独起動/実IMEは未証明（D04）。
+- **user再確認**：ホスト/SandboxどちらのGUIも許可。ただし実行場所・入口・source・確認範囲を分け、ホスト合格をSandbox合格として報告しない。今回保存競合/API拒否fixtureはhost、通常packaged入口の操作はguest。
+- **容量整理**：再生成可能な旧frontend01/02/03/04/05と旧ZIP27、計1,837,394,774bytesを削除。絶対path/Git非追跡/linksなし/使用processなしを検証しcontinuation-20261103b/cleanup-{plan,result}{,02}.jsonへ記録。ログ/失敗証拠/DB/モデル/SDK、現行frontend07/予備06とguest共有候補は保持。削除済みfrontendの過去pathは再publishが必要。
+- **次の1件**：UIは動画/音声を再生しながら整理する操作へ、今回の共通favorite部品と既存scope/close契約を再利用できる最小単位を選ぶ。P6は生成WAV/MP4の基本再生をSandboxで限定確認する（今回のPNG/CBZ成功を全媒体へ広げない）。成功済み登録/更新/PNG/CBZ一連や旧性能soakを主作業へ戻さない。runtime公開条項/host/registry・実IME/HC/DPIは残件のまま。
 
 ## 2026-11-03 追加：生成物の整理（以下より優先）
 

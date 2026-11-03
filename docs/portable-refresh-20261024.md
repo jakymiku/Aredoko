@@ -260,3 +260,15 @@ userはComfyUI処理完了後のSandbox再有効化（再起動なし）を明�
 source12b65680276ddba927934e89d777672cb2661903、dist/portable-basic-20261104-29/Aredoko/Aredoko.exe。一致ページ/時刻案内と詳細検索根拠を収録。後続61da1f4は未収録。既存ZIP28のbootstrap/基本Python/media runtimeを再利用、全828files/662,013,889bytesを照合。ZIP SHA256 1322cad53ef315bb09f8fd254a3c846449dd223738f39f2284e4741a18ce8e3a、対応kit29は6files/SHA256 9af2feccf134cf1d9e2e940ead2ad09abae91ff300a8b56d420b4f75197a7d47。source bindingはmanifestに明示。
 
 同梱check、ZIP全memberとpayload照合、通常EXEから終了/予定内1再起動11checks/所有全exit0/生成原本・settings・全inventory不変。data/ai-ui/continuation-20261103b/basic29-startup01、2PNG確認。さらに同一SandboxのZIP28専用AppDataを29別配置から保持し、3件/タグ/CBZ読書位置2/2・検索根拠/正常終了を確認（portable-windows-validation末尾）。準備時preparation.jsonのgui_tested/clean_windows_verified=falseは当時の記録として保持し、後続結果を区別する。全AI/全媒体/全P6を完了とはしない。
+
+## 2026-11-04 基本ZIP30
+
+source138964e7f33cfaae4d94605a0904c473afd83d57、dist/portable-basic-20261104-30/Aredoko/Aredoko.exe。ZIP29後の元ファイル状態案内と、通常文字検索からの画像viewerお気に入りを収録。828files/662,043,949bytes、ZIP SHA256 40a7cbf45c6246e9a53872bde9bd3ce98ca960cc0aa7185e035791d3b0b01406、kit30は6files/SHA256 58c3508cb90516ba9340133777d207e151f0466d77d728514e4e599b7d5f687d。全payload/ZIP/同梱check成功。旧29/28/installed Alphaは未更新。
+
+同じguestの専用AppDataを保持し、通常EXEからblue画像のviewer内favorite登録・一覧/詳細同期・正常終了exit0を限定受入。DB integrity ok、他item/既存タグ/読書位置保全。portable-windows-validation末尾参照。ZIP29で成功済みの登録・再起動一連を30で反復せず、変更した操作に絞った。全AI/全媒体/全P6・P7は未完。
+
+## 2026-11-04 基本ZIP31（最新）
+
+sourcebb59c405074c93e7b3176182a789fa85c4ef6769、dist/portable-basic-20261104-31/Aredoko/Aredoko.exe。画像/本の閲覧中favorite共通処理を収録、828files/662,058,041bytes、ZIP SHA256 1096884aa09c936d4515ff72adb58639734e4b88262e37ab07c2194d66570f59、kit31は6files/SHA256 ebf9cfa5f789731310cebd655ebc03a3f714e0eeb244500d0b723311d73c3731。全payload/ZIP/同梱check成功。予備30、既存guest共有28/29、installed Alphaを維持。
+
+**Sandbox**の通常入口ではCBZ2/2・本star登録・一覧/詳細同期・既存タグ/位置保持・正常終了を限定受入。2回の通常EXEはwsb exit0、guest DB integrity ok。**ホスト**では共通処理の画像12/本9/拒否fallback9checksを別fixtureで確認。ホストの合格をguestの競合試験合格とは称さない。Enter単独起動/実IME/全媒体/全AI/全P6・P7は未受入。正本portable-windows-validation末尾とsource付き各report参照。

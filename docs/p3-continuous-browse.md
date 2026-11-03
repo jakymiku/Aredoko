@@ -251,3 +251,5 @@ ViewerFavoriteActionを画像/本の2箇所で共有し、state読取・対象ID
 frontend07/Portable publish成功（既存warningのみ）。**ホスト**reader-favorite-host02は9checks/exit0/原本不変：2page CBZのfavorite登録/解除、未保存tag保持、再表示2/2復元、保存中closeとreader progress両方の保全。初回01はOSタイトルへ移された非表示ReaderPageNumber peerを待った試験FAILでraw保持。shared-favorite-image-host01は12checks、shared-favorite-failure-host02は9checks、各exit0/原本不変/残存なし。failure-host01は保存拒否/fallback通過後、nav直後のstale UIA peerで停止。stdout cp932の記録エラーも保全し、一覧準備完了とpeer再取得・UTF8を試験側だけへ追加した。2回の失敗を製品bugにしない。
 
 読書viewer star/成功noticeを親が画像確認。本の新しい通常packaged Sandbox操作はこの時点では未実行。実通信断/Dark/HC/DPI/AI範囲のfavoriteは未検証・未実装のまま。関連安全確認に絞り、全回帰・旧soakを反復していない。
+
+ZIP31/sourcebb59c40の**Sandbox**確認：同じ専用guest DBを通常EXEから再利用し、CBZ2/2復元・book star登録・一覧/詳細同期・既存tag/位置保持・通常終了exit0。guest DB integrity ok、blueとCBZのみfavorite=1。証拠はevidence/update31-{result,db-check}.json・update31-appdata。ホストの保存途中close/拒否fixtureと混同しない。
