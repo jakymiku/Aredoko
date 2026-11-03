@@ -239,3 +239,15 @@ ImageViewerViewの操作バーに状態付きstarを追加。既存sessionが順
 ViewerWindow.BeforeCloseAsyncで開始済み保存を回収し、close/escapeと保存が競合してもDB保存を途中cancelしない。成功後だけ一覧card/詳細/saved.Favoriteを共通ApplyFavoriteValueへ同期、tag/shelf draftは保存も破棄もしない。保持ackがfalseなら保存済みと報告して一覧へ戻り、既存favorite-only refresh/位置復帰経路を再利用する。通信失敗は成功と称さず一覧での状態確認を案内する。
 
 frontend05→表示世代チェックを追加した最終frontend06のPortable publish成功（既存warningのみ）。viewer-favorite-light01は前段、light02は最終sourceで各12checks/exit0/生成原本不変/残存なし。生成2画像を含む6媒体/独立DB/UIA-onlyで、表示中1件の追加、詳細へ同期/未保存tagをDBへ混ぜない、保存POSTをgateで止めた間の画像送り無効とclose待機、解放後の解除完了・tag保持、次画像へ移動後は次のIDだけ保存、最後に見た画像への復帰を確認。画像付きstar/保存結果を目視。実キー/physical/Dark/HC/DPI/実通信断/keep=falseの競合は未検証。全回帰は反復せずCore/backend変更なし。
+
+2026-11-04 viewer favorite追加安全確認：viewer-favorite-failure01は生成API拒否後の非変更/失敗表示、次の保存をkeep_session=falseで成功させた場合の一覧更新/未保存タグ保持、favorite-only scopeで新action非表示を9checks/exit0/原本不変で確認。実通信断ではなく供給したResultUnavailable/非保持ack。保存失敗画像を目視確認。このfixtureはホストWindowsの専用DBであり、下記Sandbox結果と区別する。
+
+基本ZIP30/source138964eは別Sandboxでも通常EXEから全件・空文字検索→blue画像→star登録の成功表示→閉じた一覧star/詳細checkboxの同期→通常終了exit0を確認（user指定6.1 Terra）。guest DB read-only integrity ok、blueのみfavorite=1、CBZのタグ/読書位置2/2保全。evidence/update30-result.json・update30-db-check.json・update30-appdata。詳細な保存競合/失敗fixtureをSandboxでも反復したものではない。
+
+## 2026-11-04 本の閲覧中のお気に入りと保存処理の共通化
+
+ViewerFavoriteActionを画像/本の2箇所で共有し、state読取・対象ID/世代・flag-only保存・保存中無効化・flush/close・失敗表示を一箇所へ集約。新しい汎用frameworkやbackend経路は作らない。本は既存のreader progress flushの前にfavorite saveを回収し、2つの保存を完了してからclose。metadata draftを保存しない。同じ通常文字検索/all条件だけを接続し、filtered/AI等の既存viewerは維持する。
+
+frontend07/Portable publish成功（既存warningのみ）。**ホスト**reader-favorite-host02は9checks/exit0/原本不変：2page CBZのfavorite登録/解除、未保存tag保持、再表示2/2復元、保存中closeとreader progress両方の保全。初回01はOSタイトルへ移された非表示ReaderPageNumber peerを待った試験FAILでraw保持。shared-favorite-image-host01は12checks、shared-favorite-failure-host02は9checks、各exit0/原本不変/残存なし。failure-host01は保存拒否/fallback通過後、nav直後のstale UIA peerで停止。stdout cp932の記録エラーも保全し、一覧準備完了とpeer再取得・UTF8を試験側だけへ追加した。2回の失敗を製品bugにしない。
+
+読書viewer star/成功noticeを親が画像確認。本の新しい通常packaged Sandbox操作はこの時点では未実行。実通信断/Dark/HC/DPI/AI範囲のfavoriteは未検証・未実装のまま。関連安全確認に絞り、全回帰・旧soakを反復していない。

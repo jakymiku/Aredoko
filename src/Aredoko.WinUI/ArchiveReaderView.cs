@@ -15,6 +15,8 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
 {
     private bool actualPixels;
     private readonly LibraryApi api;
+    private readonly ViewerFavoriteAction favorite;
+    public event Action<int,bool,bool>? FavoriteChanged;
     private readonly ViewerPageCache<(string Revision,int Page),BitmapImage> pageCache=new();
     private readonly ReaderProgressWriter progressWriter;
     private CancellationTokenSource? preload;
@@ -59,9 +61,13 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
 
-    public ArchiveReaderView(LibraryApi api, int itemId, string title, PageTextMatch? initialMatch=null,AIPageMatch? initialPageMatch=null)
+    public ArchiveReaderView(LibraryApi api, int itemId, string title, PageTextMatch? initialMatch=null,AIPageMatch? initialPageMatch=null,ResultSession? favoriteSession=null,int favoriteOrdinal=0)
     {
         this.api=api;this.itemId=itemId;bookTitle=title;this.initialMatch=initialMatch;this.initialPageMatch=initialPageMatch;cancellation=lifetime.Token;
+        favorite=new(favoriteSession,message=>ViewerNotice.Set(status,message));favorite.Attach();
+        favorite.Changed+=(id,value,kept)=>FavoriteChanged?.Invoke(id,value,kept);
+        favorite.ReturnRequested+=()=>CloseRequested?.Invoke(this,EventArgs.Empty);
+        favorite.StateChanged+=()=>{if(favorite.IsSaving)ShowChrome();UpdateActions();};
         progressWriter=new((book,position)=>api.SaveReaderProgressAsync(book,position.Page,position.Mode,CancellationToken.None));
         progressWriter.StateChanged+=error=>
         {
@@ -70,7 +76,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
             if(error is not null){keyboardChrome=true;ShowChrome();}
             if(error is not null)AppLog.Error(error);
         };
-        hideTimer=new(this,toolbar,viewport,()=>keyboardChrome||menuOpen);
+        hideTimer=new(this,toolbar,viewport,()=>keyboardChrome||menuOpen||favorite.IsSaving);
         menu=ViewerChromeController.Settings(true,()=>{FitImages();UpdateActions();hideTimer.Start();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
         viewport.Style=(Style)Application.Current.Resources["ImageViewerCanvasStyle"];
         toolbar.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
@@ -81,7 +87,8 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         count.Style=zoom.Style=status.Style=progressStatus.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         ViewerInputGestures.AttachPan(viewport);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,HorizontalAlignment=HorizontalAlignment.Center};
-        foreach(var control in new UIElement[]{previous,next,zoomOut,zoomIn,fit,actualSize,zoom,retry,reopen,settings})actions.Children.Add(control);
+        foreach(var control in new UIElement[]{previous,next,zoomOut,zoomIn,fit,actualSize,zoom,favorite.Button,retry,reopen,settings})actions.Children.Add(control);
+        Identify(favorite.Button,"ReaderFavorite","お気に入りを読み込み中");
         toolbar.Child=actions;Children.Add(toolbar);ViewerChromeController.AttachNotices(this,status,progressStatus);
         Identify(actualSize,"ReaderActualSize","本のページを原寸で表示");ToolTipService.SetToolTip(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）");
         actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImages();viewport.ChangeView(0,0,1,true);}else ViewerInputGestures.ZoomCentered(viewport,(float)OriginalZoom());};
@@ -106,6 +113,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         retry.Click+=async(_,_)=>{if(manifest is null)await OpenAsync();else await LoadAsync(targetPage);};reopen.Click+=async(_,_)=>await OpenAsync(true);
         zoomOut.Click+=(_,_)=>ViewerInputGestures.ZoomCentered(viewport,Math.Max(viewport.MinZoomFactor,viewport.ZoomFactor-.5f));zoomIn.Click+=(_,_)=>ViewerInputGestures.ZoomCentered(viewport,Math.Min(viewport.MaxZoomFactor,viewport.ZoomFactor+.5f));fit.Click+=(_,_)=>{actualPixels=false;FitImages();viewport.ChangeView(0,0,1,true);};
         UpdateActions();
+        favorite.Refresh(itemId,favoriteOrdinal);
     }
     private static Button IconButton(Symbol symbol)=>new(){Content=new SymbolIcon(symbol),MinWidth=36,Padding=new Thickness(8)};
     private static void Identify(DependencyObject control,string id,string name){AutomationProperties.SetAutomationId(control,id);AutomationProperties.SetName(control,name);}
@@ -148,7 +156,7 @@ public void AttachNavigation(UIElement dialog)
     public Task OpenAsync()=>OpenAsync(false);
     private async Task OpenAsync(bool fromBeginning)
     {
-        if(busy||disposed||closing)return;busy=true;failed=loaded=false;manifest=null;page=0;ClearImages();pageCache.Clear();preload?.Cancel();count.Text="—";ViewerNotice.Set(status,"本を開いています…");hideTimer.Stop();UpdateActions();
+        if(busy||disposed||closing||favorite.IsSaving)return;busy=true;failed=loaded=false;manifest=null;page=0;ClearImages();pageCache.Clear();preload?.Cancel();count.Text="—";ViewerNotice.Set(status,"本を開いています…");hideTimer.Stop();UpdateActions();
         int start=0;allowProgressSave=true;ViewerNotice.Set(progressStatus);
         try
         {
@@ -182,6 +190,7 @@ public void AttachNavigation(UIElement dialog)
     public async Task FlushProgressAsync()
     {
         closing=true;preload?.Cancel();UpdateActions();
+        await favorite.FlushAsync();
         if(progressWriter.HasPending){ViewerNotice.Set(progressStatus,"読書位置を保存しています…");ShowChrome();}
         await progressWriter.FlushAsync();
     }
@@ -210,7 +219,7 @@ public void AttachNavigation(UIElement dialog)
     }
     private async Task LoadAsync(int requestedPage)
     {
-        var book=manifest;if(busy||disposed||closing||book is null||requestedPage<0||requestedPage>=book.PageCount)return;
+        var book=manifest;if(busy||disposed||closing||favorite.IsSaving||book is null||requestedPage<0||requestedPage>=book.PageCount)return;
         var trace=new ViewerLoadTrace("reader-spread");
         actualPixels=false;busy=true;failed=false;preload?.Cancel();hideTimer.Stop();
         var target=ReaderSpreadPolicy.Anchor(requestedPage,book.PageCount,mode);
@@ -247,11 +256,13 @@ public void AttachNavigation(UIElement dialog)
     private void UpdateActions()
     {
         TitleChanged?.Invoke(WindowTitle);
-        previous.IsEnabled=!busy&&!closing&&manifest is not null&&(page>0||ViewerOptions.Value.LoopBookPages);
-        next.IsEnabled=!busy&&!closing&&manifest is not null&&ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,1,ViewerOptions.Value.LoopBookPages)<manifest.PageCount;
-        retry.IsEnabled=!busy&&!closing&&failed;reopen.IsEnabled=!busy&&!closing;settings.IsEnabled=!busy&&!closing;
-        foreach(var option in modes)option.IsEnabled=!busy&&!closing;saveProgress.IsEnabled=!busy&&!closing&&loaded&&manifest is not null;
+        var blocked=busy||closing||favorite.IsSaving;
+        favorite.UpdateAvailability(!disposed&&!busy&&!closing&&loaded&&manifest is not null);
+        previous.IsEnabled=!blocked&&manifest is not null&&(page>0||ViewerOptions.Value.LoopBookPages);
+        next.IsEnabled=!blocked&&manifest is not null&&ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,1,ViewerOptions.Value.LoopBookPages)<manifest.PageCount;
+        retry.IsEnabled=!blocked&&failed;reopen.IsEnabled=!blocked;settings.IsEnabled=!blocked;
+        foreach(var option in modes)option.IsEnabled=!blocked;saveProgress.IsEnabled=!blocked&&loaded&&manifest is not null;
         zoom.Text=$"倍率 {viewport.ZoomFactor/OriginalZoom()*100:0}%";zoomOut.IsEnabled=loaded&&!busy&&viewport.ZoomFactor>viewport.MinZoomFactor;zoomIn.IsEnabled=loaded&&!busy&&viewport.ZoomFactor<viewport.MaxZoomFactor;actualSize.IsEnabled=loaded&&!busy;fit.IsEnabled=loaded&&!busy;
     }
-    public void Dispose(){if(disposed)return;disposed=true;hideTimer.Dispose();menu.Hide();preload?.Cancel();lifetime.Cancel();pageCache.Dispose();ClearImages();manifest=null;lifetime.Dispose();}
+    public void Dispose(){if(disposed)return;disposed=true;favorite.Dispose();hideTimer.Dispose();menu.Hide();preload?.Cancel();lifetime.Cancel();pageCache.Dispose();ClearImages();manifest=null;lifetime.Dispose();}
 }

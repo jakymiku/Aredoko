@@ -1394,6 +1394,12 @@ public sealed partial class MainPage : Page
         else if(AudioPlayerPolicy.CanOpen(active))await OpenAudioAsync();
     }
     private async void OpenImage_Click(object sender,RoutedEventArgs e)=>await OpenImageAsync();
+    private static ResultSession? ViewerFavoriteSession(ResultSession? session)
+    {
+        if(session is null||!session.FavoritePatchSupported)return null;
+        var conditions=session.Conditions;
+        return conditions["mode"]?.GetValue<string>()=="literal"&&(conditions["view"]?.GetValue<string>()??"all")=="all"?session:null;
+    }
     private async Task OpenImageAsync()
     {
         if(active is null||!ImageViewerPolicy.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
@@ -1407,10 +1413,7 @@ public sealed partial class MainPage : Page
             if(resultsNeedRefresh||selectedIndex<0)throw new InvalidOperationException("検索結果が変わりました。一覧から作品を選び直してください。");
             var ordinal=checked(browseStart+selectedIndex);
             var sequence=new ImageViewerSequence(active,ordinal,session.Total,session.NeighborAsync);
-            var conditions=session.Conditions;
-            var canKeepFavorites=session.FavoritePatchSupported&&conditions["mode"]?.GetValue<string>()=="literal"&&
-                (conditions["view"]?.GetValue<string>()??"all")=="all";
-            var viewer=new ImageViewerView(api,sequence,canKeepFavorites?session:null);imageViewer=viewer;
+            var viewer=new ImageViewerView(api,sequence,ViewerFavoriteSession(session));imageViewer=viewer;
             var window=new ViewerWindow(viewer,"画像ビューア","ImageViewerDialog");viewerWindow=window;
             window.BeforeCloseAsync=viewer.FlushFavoriteAsync;
             viewer.FavoriteChanged+=(id,value,kept)=>
@@ -1500,10 +1503,13 @@ public sealed partial class MainPage : Page
         if(active is null||!ArchiveManifest.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
         // Opening a book neither saves nor discards the current metadata draft.
         dialogOpen=true;searchTimer.Stop();
-        var readerItemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
+        var readerRow=active;var readerItemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;var viewerResultsChanged=false;
         try
         {
-            var reader=new ArchiveReaderView(api,active.Id,active.Title,active.PageText,active.AIPage);readerView=reader;
+            var selectedIndex=rows.FindIndex(row=>row.Id==readerItemId);
+            var favorites=!resultsNeedRefresh&&selectedIndex>=0?ViewerFavoriteSession(resultSession):null;
+            var reader=new ArchiveReaderView(api,active.Id,active.Title,active.PageText,active.AIPage,favorites,Math.Max(0,browseStart+selectedIndex));readerView=reader;
+            reader.FavoriteChanged+=(id,value,kept)=>{if(id==readerItemId)ApplyFavoriteValue(readerRow,value);viewerResultsChanged|=!kept;};
             var window=new ViewerWindow(reader,"読書画面","ArchiveReaderDialog");viewerWindow=window;
             window.BeforeCloseAsync=reader.FlushProgressAsync;
             reader.ContentOpened+=RecordContentOpened;
@@ -1519,11 +1525,13 @@ public sealed partial class MainPage : Page
             {
                 // Switching to the narrow overlay can close the pane while
                 // reading. Restore the same item's editor and unsaved draft.
+                if(!disposed&&viewerResultsChanged)await RefreshResultRowsAfterEditAsync(favoriteOnly:true);
                 if(!disposed&&detailsWereOpen&&active?.Id==readerItemId)
                 {
                     Details.IsPaneOpen=true;OpenBook.Focus(FocusState.Programmatic);
                 }
             }
+            catch(Exception ex){if(!disposed)Failure(ex);}
             finally{transitions.Release();}
             if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }
