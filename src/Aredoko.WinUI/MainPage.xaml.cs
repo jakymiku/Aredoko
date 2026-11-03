@@ -1111,14 +1111,7 @@ public sealed partial class MainPage : Page
             bool kept=false;
             if(resultSession is {} session&&!resultsNeedRefresh)kept=await session.EditFavoriteAsync(row.Id,value,CancellationToken.None);
             else await api.PostAsync("api/items/update",new JsonObject{{"ids",new JsonArray(row.Id)},{"changes",new JsonObject{{"favorite",value}}}});
-            row.Favorite=value;
-            if(rows.FirstOrDefault(item=>item.Id==row.Id) is {} visibleRow)visibleRow.Favorite=value;
-            if(active?.Id==row.Id)
-            {
-                saved=saved with {Favorite=value};active.Favorite=value;updatingFavorite=true;
-                try{Favorite.IsChecked=value;}finally{updatingFavorite=false;}
-            }
-            RefreshFavoriteCard(row);
+            ApplyFavoriteValue(row,value);
             if(!kept)await RefreshResultRowsAfterEditAsync(favoriteOnly:true);
         }
         catch(Exception ex)
@@ -1127,6 +1120,17 @@ public sealed partial class MainPage : Page
             Failure(ex);
         }
         finally{saving=false;Favorite.IsEnabled=true;UpdateDirty();transitions.Release();}
+    }
+    private void ApplyFavoriteValue(MediaRow row,bool value)
+    {
+        row.Favorite=value;
+        if(rows.FirstOrDefault(item=>item.Id==row.Id) is {} visibleRow)visibleRow.Favorite=value;
+        if(active?.Id==row.Id)
+        {
+            saved=saved with {Favorite=value};active.Favorite=value;updatingFavorite=true;
+            try{Favorite.IsChecked=value;}finally{updatingFavorite=false;}
+        }
+        RefreshFavoriteCard(row);
     }
     private void RefreshFavoriteCard(MediaRow row)
     {
@@ -1395,7 +1399,7 @@ public sealed partial class MainPage : Page
         if(active is null||!ImageViewerPolicy.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
         dialogOpen=true;searchTimer.Stop();var itemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
         var session=resultSession;
-        int? lastOpened=null;var lastOrdinal=0;
+        int? lastOpened=null;var lastOrdinal=0;var viewerResultsChanged=false;
         try
         {
             if(session is null)throw new InvalidOperationException("同じ条件で検索し直してから画像を開いてください。");
@@ -1403,8 +1407,18 @@ public sealed partial class MainPage : Page
             if(resultsNeedRefresh||selectedIndex<0)throw new InvalidOperationException("検索結果が変わりました。一覧から作品を選び直してください。");
             var ordinal=checked(browseStart+selectedIndex);
             var sequence=new ImageViewerSequence(active,ordinal,session.Total,session.NeighborAsync);
-            var viewer=new ImageViewerView(api,sequence);imageViewer=viewer;
+            var conditions=session.Conditions;
+            var canKeepFavorites=session.FavoritePatchSupported&&conditions["mode"]?.GetValue<string>()=="literal"&&
+                (conditions["view"]?.GetValue<string>()??"all")=="all";
+            var viewer=new ImageViewerView(api,sequence,canKeepFavorites?session:null);imageViewer=viewer;
             var window=new ViewerWindow(viewer,"画像ビューア","ImageViewerDialog");viewerWindow=window;
+            window.BeforeCloseAsync=viewer.FlushFavoriteAsync;
+            viewer.FavoriteChanged+=(id,value,kept)=>
+            {
+                var row=rows.FirstOrDefault(row=>row.Id==id)??(active?.Id==id?active:null);
+                if(row is not null)ApplyFavoriteValue(row,value);
+                viewerResultsChanged|=!kept;
+            };
             viewer.ContentOpened+=id=>{lastOpened=id;lastOrdinal=sequence.Position;RecordContentOpened(id);};
             viewer.CloseRequested+=(_,_)=>window.Close();viewer.AttachNavigation(viewer);
             window.Closed+=(_,_)=>viewer.Dispose();
@@ -1416,6 +1430,15 @@ public sealed partial class MainPage : Page
             imageViewer?.Dispose();imageViewer=null;viewerWindow=null;dialogOpen=false;
             try
             {
+                if(!disposed&&viewerResultsChanged)
+                {
+                    await RefreshResultRowsAfterEditAsync(favoriteOnly:true);session=resultSession;
+                    if(lastOpened is int changed&&session is not null)
+                    {
+                        var position=(await session.LocateAsync([changed],CancellationToken.None)).FirstOrDefault();
+                        if(position is not null)lastOrdinal=position.Ordinal;else lastOpened=null;
+                    }
+                }
                 if(!disposed&&lastOpened is int target&&session is not null)
                     await RestoreViewerSelectionAsync(target,lastOrdinal,session,detailsWereOpen);
                 if(!disposed&&detailsWereOpen&&active?.Id==itemId){Details.IsPaneOpen=true;OpenImage.Focus(FocusState.Programmatic);}

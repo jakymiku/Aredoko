@@ -231,3 +231,11 @@ Portable publish成功（初回sandbox内はMSBuild task host接続失敗、通�
 元ファイルmissing/unavailableでは、詳細上部に接続・場所・更新の確認先と登録タグ/棚が残ることを表示。presentでも既存媒体policyが開けない形式にはpropertyから保存場所を開く案内を表示。閲覧権限・path/preview guard・metadata保存は無変更。既存のdisabledボタンを隠して機能を削減しない。
 
 frontend04のPortable publish成功（既存warningのみ）。detail-availability-light03は9checks/正常exit0/原本不変/残存なし、2PNG目視。catalog serializer境界でmissing/unavailableを供給し、disabled閲覧の理由、編集欄有効、正常作品で案内非表示を確認。01は誤った保存table列、02はunavailableが永続statusではないというfixture失敗で、どちらもfrontend起動前。既存schemaを確認し、03はDBを改変しないAPI状態fixtureへ修正。実ドライブ切断・未対応形式・Dark/HC/DPIは未検証。ZIP29/source12b6568にはこの後続変更は未収録。
+
+## 2026-11-04 画像を見ながらお気に入りを整理
+
+ImageViewerViewの操作バーに状態付きstarを追加。既存sessionが順位を保ったままfavorite patchできる通常文字検索のview=all（root/棚等の既存scopeは維持）から接続する。AI/類似/お気に入り/履歴は既存一覧の操作を維持し、新しいbar操作は出さない。Core/backend契約を拡張せず、1件rangeで現在画像のfavoriteを確認し、既存EditFavoriteAsyncでflagのみ保存。画像送り中/状態取得中/保存中は対象操作を無効、保存中は画像送りも停止。遅い応答は表示世代/IDで破棄する。
+
+ViewerWindow.BeforeCloseAsyncで開始済み保存を回収し、close/escapeと保存が競合してもDB保存を途中cancelしない。成功後だけ一覧card/詳細/saved.Favoriteを共通ApplyFavoriteValueへ同期、tag/shelf draftは保存も破棄もしない。保持ackがfalseなら保存済みと報告して一覧へ戻り、既存favorite-only refresh/位置復帰経路を再利用する。通信失敗は成功と称さず一覧での状態確認を案内する。
+
+frontend05→表示世代チェックを追加した最終frontend06のPortable publish成功（既存warningのみ）。viewer-favorite-light01は前段、light02は最終sourceで各12checks/exit0/生成原本不変/残存なし。生成2画像を含む6媒体/独立DB/UIA-onlyで、表示中1件の追加、詳細へ同期/未保存tagをDBへ混ぜない、保存POSTをgateで止めた間の画像送り無効とclose待機、解放後の解除完了・tag保持、次画像へ移動後は次のIDだけ保存、最後に見た画像への復帰を確認。画像付きstar/保存結果を目視。実キー/physical/Dark/HC/DPI/実通信断/keep=falseの競合は未検証。全回帰は反復せずCore/backend変更なし。

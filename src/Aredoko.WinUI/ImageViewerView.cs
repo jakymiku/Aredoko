@@ -18,6 +18,13 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private bool actualPixels;
     private readonly LibraryApi api;
     private readonly ImageViewerSequence sequence;
+    private readonly ResultSession? favoriteSession;
+    private readonly Button favorite=IconButton(Symbol.OutlineStar);
+    private bool? favoriteValue;
+    private bool savingFavorite;
+    private Task favoriteSave=Task.CompletedTask;
+    public event Action<int,bool,bool>? FavoriteChanged;
+    public Task FlushFavoriteAsync()=>favoriteSave;
     private readonly CancellationTokenSource lifetime = new();
     private readonly ViewerChromeController hideTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer animTimer;
@@ -63,10 +70,11 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private bool busy, disposed, loaded, navigating;
     private int version;
 
-    public ImageViewerView(LibraryApi api, ImageViewerSequence sequence)
+    public ImageViewerView(LibraryApi api, ImageViewerSequence sequence,ResultSession? favoriteSession=null)
     {
         this.api = api; this.sequence = sequence;
-        hideTimer = new(this,toolbarHost,viewport,()=>keyboardChrome||menuOpen);
+        this.favoriteSession=favoriteSession;
+        hideTimer = new(this,toolbarHost,viewport,()=>keyboardChrome||menuOpen||savingFavorite);
         animTimer = DispatcherQueue.CreateTimer(); animTimer.IsRepeating = false;
         animTimer.Tick += (_, _) => AdvanceAnimationFrame();
         toolbarHost.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
@@ -77,7 +85,10 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         viewport.SizeChanged += (_, _) => FitImage();
         viewport.ViewChanged += (_, _) => UpdateControls();
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var control in new UIElement[] { previous, next, zoomOut, zoomIn, fit, actualSize, zoom, retry,settings }) actions.Children.Add(control);
+        foreach (var control in new UIElement[] { previous, next, zoomOut, zoomIn, fit, actualSize, zoom, favorite,retry,settings }) actions.Children.Add(control);
+        favorite.Visibility=favoriteSession is null?Visibility.Collapsed:Visibility.Visible;
+        Identify(favorite,"ImageFavorite","お気に入りを読み込み中");
+        favorite.Click+=async(_,_)=>{favoriteSave=SaveFavoriteAsync();await favoriteSave;};
         toolbarHost.Child=actions;Children.Add(toolbarHost);ViewerChromeController.AttachNotices(this,status);
         title.Style = count.Style = zoom.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
         Identify(viewport, "ImageViewport", "画像表示。左右キーで画像送り、拡大してスクロールできます");
@@ -126,13 +137,52 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         count.Text = $"{sequence.Position + 1} / {sequence.Count}";
         ToolTipService.SetToolTip(count, sequence.IsSession ? "検索結果内の位置。画像だけを検索順に移動します" : "現在の検索結果ページに含まれる画像");
         AutomationProperties.SetName(image, title.Text + "の画像");
+        favoriteValue=null;
+        favorite.Content=new SymbolIcon(Symbol.OutlineStar);
+        AutomationProperties.SetName(favorite,"お気に入りを読み込み中");
+        ToolTipService.SetToolTip(favorite,"お気に入りを読み込み中");
+        if(favoriteSession is not null)_=LoadFavoriteAsync();
     }
     private void UpdateControls()
     {
-        previous.IsEnabled = !disposed && !navigating && sequence.HasPrevious; next.IsEnabled = !disposed && !navigating && sequence.HasNext;
+        previous.IsEnabled = !disposed && !navigating && !savingFavorite && sequence.HasPrevious; next.IsEnabled = !disposed && !navigating && !savingFavorite && sequence.HasNext;
+        favorite.IsEnabled=!disposed&&!navigating&&!savingFavorite&&loaded&&favoriteValue is not null;
         zoom.Text = loaded?$"倍率 {viewport.ZoomFactor/OriginalZoom() * 100:0}%":"倍率 —";
         zoomOut.IsEnabled = loaded && !busy && viewport.ZoomFactor > viewport.MinZoomFactor;
         zoomIn.IsEnabled = loaded && !busy && viewport.ZoomFactor < viewport.MaxZoomFactor; actualSize.IsEnabled=loaded&&!busy; fit.IsEnabled = loaded && !busy;
+    }
+    private async Task LoadFavoriteAsync()
+    {
+        var id=sequence.Current.Id;var ordinal=sequence.Position;var requestedVersion=version;
+        try
+        {
+            var result=await favoriteSession!.RangeAsync(ordinal,1,lifetime.Token);
+            if(disposed||version!=requestedVersion||sequence.Current.Id!=id)return;
+            if(result.Items.Count!=1||result.Items[0].Id!=id)throw new InvalidDataException("表示中の画像を確認できません。");
+            favoriteValue=result.Items[0].Favorite;UpdateFavoriteControl();
+        }
+        catch(OperationCanceledException) when(lifetime.IsCancellationRequested){}
+        catch(Exception ex){if(!disposed&&version==requestedVersion&&sequence.Current.Id==id){AutomationProperties.SetName(favorite,"お気に入りの状態を取得できません");ToolTipService.SetToolTip(favorite,"お気に入りの状態を取得できません。一覧で確認してください。");AppLog.Error(ex);}}
+    }
+    private void UpdateFavoriteControl()
+    {
+        favorite.Content=new SymbolIcon(favoriteValue==true?Symbol.SolidStar:Symbol.OutlineStar);
+        var label=favoriteValue==true?"お気に入りを解除":"お気に入りに登録";
+        AutomationProperties.SetName(favorite,label);ToolTipService.SetToolTip(favorite,label);UpdateControls();
+    }
+    private async Task SaveFavoriteAsync()
+    {
+        if(disposed||navigating||savingFavorite||favoriteValue is null||favoriteSession is null)return;
+        var id=sequence.Current.Id;var value=!favoriteValue.Value;savingFavorite=true;ShowChrome();UpdateControls();
+        try
+        {
+            var kept=await favoriteSession.EditFavoriteAsync(id,value,CancellationToken.None);
+            favoriteValue=value;FavoriteChanged?.Invoke(id,value,kept);UpdateFavoriteControl();
+            ViewerNotice.Set(status,value?"お気に入りに登録しました。":"お気に入りを解除しました。");
+            if(!kept){ViewerNotice.Set(status,"保存しました。検索結果を更新するため一覧へ戻ります。");CloseRequested?.Invoke(this,EventArgs.Empty);}
+        }
+        catch(Exception ex){ViewerNotice.Set(status,"お気に入りを保存できませんでした。一覧で状態を確認してください。");AppLog.Error(ex);}
+        finally{savingFavorite=false;if(!disposed)UpdateControls();}
     }
     // Tunnel before ScrollViewer consumes arrow keys; scope is this modal only.
     public void AttachNavigation(UIElement dialog)
@@ -244,7 +294,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
 
     public async Task MoveAsync(int direction)
     {
-        if (disposed || navigating || menuOpen) return;
+        if (disposed || navigating || menuOpen || savingFavorite) return;
         var moved = false; navigating = true; UpdateControls();
         try { moved = await sequence.TryMoveAsync(direction, lifetime.Token); }
         catch (OperationCanceledException) when (disposed || lifetime.IsCancellationRequested) { }
