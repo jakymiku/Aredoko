@@ -272,3 +272,11 @@ source138964e7f33cfaae4d94605a0904c473afd83d57、dist/portable-basic-20261104-30
 sourcebb59c405074c93e7b3176182a789fa85c4ef6769、dist/portable-basic-20261104-31/Aredoko/Aredoko.exe。画像/本の閲覧中favorite共通処理を収録、828files/662,058,041bytes、ZIP SHA256 1096884aa09c936d4515ff72adb58639734e4b88262e37ab07c2194d66570f59、kit31は6files/SHA256 ebf9cfa5f789731310cebd655ebc03a3f714e0eeb244500d0b723311d73c3731。全payload/ZIP/同梱check成功。予備30、既存guest共有28/29、installed Alphaを維持。
 
 **Sandbox**の通常入口ではCBZ2/2・本star登録・一覧/詳細同期・既存タグ/位置保持・正常終了を限定受入。2回の通常EXEはwsb exit0、guest DB integrity ok。**ホスト**では共通処理の画像12/本9/拒否fallback9checksを別fixtureで確認。ホストの合格をguestの競合試験合格とは称さない。Enter単独起動/実IME/全媒体/全AI/全P6・P7は未受入。正本portable-windows-validation末尾とsource付き各report参照。
+
+## 2026-11-04 ユーザー指定のinstalled Alpha更新・旧版削除
+
+引き継ぎ後の追加依頼で、候補31/sourcebb59c40をcurrent-user Programs内の新しい版別releaseへ配置。全828payload/manifest照合、bootstrap --self-test、**ホスト**の実インストール配置を--installed-copy/専用DBで通常EXE起動/終了/1再起動11checks・全所有exit0・inventory不変を確認。デスクトップ「Aredoko Alpha」のtarget/working directory/iconを新しい20261104-bb59c40へ切替、引数を保持。旧MSIX/Startメニュー登録は別物で変更しない。
+
+追加の「旧版はDBだけ引き継いで消してよい」に従い、旧版6release（2811863/2cf99b2/42c0743/caee977/e52c8ec/0138a58）計3,967,905,792bytesを削除。絶対path/最新除外/manifest/リンクなし/Gitなし/DB・モデル非包含/使用中processなしを確認し、通常設定の旧release参照0件を確認。通常DBは外部の既存AppDataに保持、size/mtimeとJSON設定hash不変。モデル/DB/設定を旧アプリ本体と一緒に削除していない。削除前shortcutコピーは更新記録として保持するが、旧payload削除後の即時rollbackを保証するものではない。
+
+証拠はignored continuation-20261103b/alpha-{stage,shortcut-update,update-final,old-release-delete-plan,old-release-delete-result,data-before,old-release-references}.json・installed-alpha31-startup01。絶対user pathをGitへ含めない。WinUI DLLのProductVersionはbuild時親HEADの1.0.0+138964e、実装sourceは作業差分を含むbb59c40でmanifestに明示、frontend07のsource_files hashとnative結果で対応を確認。通常ユーザーDBを新版で開く実データ受入は今回実行せず、更新配置と専用データの起動を確認した。

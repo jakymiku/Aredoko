@@ -2,6 +2,7 @@
 
 ## 2026-11-04 終了checkpoint（以下より優先）
 
+- **終了後のuser追加依頼も完了**：installed Alphaのdesktop入口を最新版31/sourcebb59c40へ更新。新versioned releaseの全828hash・bootstrap自己検査・ホスト実配置/専用DBの通常入口/終了/1再起動11checks/全所有exit0を確認。追加の旧版削除許可で旧6release計3,967,905,792bytesを検証後削除、旧AI参照0件、通常DBのsize/mtimeとJSON設定hash不変。通常DB自体は起動していない。旧MSIX/Startメニュー登録は変更なし。ProductVersionはbuild時親138964e、差分込みsourcebb59c40はmanifestとsource-files証拠で明示。正確な範囲はportable-refresh末尾、ignored alpha-update-final.json。
 - **Git**：起点1aaf06a、fetch/remote/PR5一致から既存branch/Draft PR5継続。最終app source **bb59c40**。最終handoff HEADは本書のGit履歴。未追跡Aredoko-test/はuser作業として不干渉。新branch/PR/Actions/main merge/force pushなし。
 - **できること**：f52c047は詳細ボタン下の一致ページ/時刻案内、12b6568は詳細の検索根拠展開と全一致語、61da1f4は元ファイル欠落/接続不可/未対応形式の説明、138964eは画像viewer内favorite、bb59c40は本にも接続し保存をViewerFavoriteActionへ共通化。通常文字検索/all（root/棚等scope維持）から画像・本を見たまま登録/解除でき、一覧/詳細へ同期。AI/類似/お気に入り/履歴の新bar操作は未接続、従来一覧の整理を維持。Core/backend/API/原本guardは無変更。
 - **ホスト実証**：Portable publish成功、既存WUI1001×3/IL2104×2のみ。検索根拠Light/Dark各14checks、元ファイル状態fixture9、本favorite9、共通化後画像12/API拒否・非保持ack fallback9を各独立DB/UIAで確認、全exit0/原本不変/残存なし。保存中は画像/ページ送りを止め、closeはfavoriteと読書位置の保存完了を待つ。tag/shelf draftをDBへ混ぜない。前段1444Core/関連10のsource不変を再利用し全回帰を反復していない。
