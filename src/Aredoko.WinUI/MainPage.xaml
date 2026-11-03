@@ -56,6 +56,7 @@
        <Button x:Name="OpenBook" Content="本を開く" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenBook_Click" AutomationProperties.AutomationId="BtnOpenBook"/>
        <Button x:Name="OpenVideo" Content="動画を再生" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenVideo_Click" AutomationProperties.AutomationId="BtnOpenVideo"/>
        <Button x:Name="OpenAudio" Content="音声を再生" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenAudio_Click" AutomationProperties.AutomationId="BtnOpenAudio"/>
+       <TextBlock x:Name="DetailOpenHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="DetailOpenHint"/>
       </StackPanel>
       <TextBlock x:Name="AudioSearchHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="AudioSearchHint"/>
       <Button x:Name="TagSuggestionsButton" Content="AIタグ候補" Visibility="Collapsed" IsEnabled="False" Click="TagSuggestions_Click" AutomationProperties.AutomationId="BtnTagSuggestions"/>

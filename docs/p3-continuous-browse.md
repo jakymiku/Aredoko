@@ -211,3 +211,9 @@ Portable build/publish成功（既存warningのみ）、試験版frontend02。ke
 source37c2271、frontend03。runtime-verificationのGETをContentDialog.Opened後へ移し、読み込み中は当該checkboxだけ無効・状態説明を表示。表示テーマ/閲覧設定と既存の機能入口はすぐ使える。dialog所有CTSで閉じた時にGETを取消し、taskを回収、遅い応答で閉じたUIへ書かない。保存時に未知のverification値は更新しない。
 
 Portable build/publish成功（既存warningのみ）。settings-load01は生成PNG2枚・専用DB/UIAで8checks、exit0。専用serverの当該GETだけをgateで待たせ、応答前にdialog表示・local保存・closeが可能、gate解放後の再表示で既定verificationオン取得を確認。入力/foreground要求/GPU/通常DBなし。写真では保存結果がnative footer直前に見える。theme未指定fixtureの保存でWindows既定Darkへ反映されたため、Light/Dark両theme確認とは称さない。実切断/実IME/HC/DPIは未確認。
+
+## 2026-11-04 検索結果の開き始める位置を詳細に表示
+
+MainPageの媒体別操作直下へ短い案内を追加。一致ページ番号、動画/音声の開始時刻を表示し、一致情報なしでは非表示。既存readerのrevision照合・読書位置fallback、playerの開始時刻選択/範囲制限は変更しない。Core/backend/保存処理は無変更。
+
+Portable publish成功（初回sandbox内はMSBuild task host接続失敗、通常権限境界を解消した再publishは既存SDK IL2104のみ）。既存WinUI analyzer WUI1001×3は保持。data/ai-ui/continuation-20261103b/frontend01。生成6媒体・独立DB・供給した表示専用match metadata・UIA-onlyのopen-context-light02は11checks/正常exit0/残存なし/原本SHA・mtime不変。4PNG目視。初回light01は詳細を明示的に開く試験操作の欠落で停止、製品bugとせずraw保持。ignored check-open-context.pyで既存harnessを再利用。モデル/推論/再生なし。実検索精度/実一致位置への移動/Dark/HC/DPI/実入力はこの確認に含めない。

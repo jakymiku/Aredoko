@@ -1050,6 +1050,25 @@ public sealed partial class MainPage : Page
         OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);
         OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);
         OpenAudio.IsEnabled=active is not null&&AudioPlayerPolicy.CanOpen(active);
+        // Describe the same match passed to the reader/player. The viewer still
+        // checks the current source revision or available playback duration.
+        DetailOpenHint.Text="";
+        if(active is {Kind: "book" or "archive"} book)
+        {
+            var matchPage=book.AIPage?.Page??book.PageText?.Pages.FirstOrDefault()?.Page;
+            var matchState=book.AIPage?.SourceState??book.PageText?.SourceState;
+            if(matchPage is int page)
+                DetailOpenHint.Text=matchState=="current"
+                    ?$"一致した {page+1:N0} ページを開きます。元ファイルが変わっていた場合は、読書位置を復元します。"
+                    :"一致ページの元ファイルを確認できないため、読書位置を復元します。";
+        }
+        else if(active is {Kind: "video" or "audio"} media)
+        {
+            var matchMs=media.Kind=="video"?VideoPlayerPolicy.MatchStartMs(media):media.AudioMatchMs??media.VideoMatchMs;
+            if(matchMs is int ms)
+                DetailOpenHint.Text=$"一致した {VideoPlayerPolicy.FormatTime(TimeSpan.FromMilliseconds(ms))} から再生します（再生可能な範囲内）。";
+        }
+        DetailOpenHint.Visibility=DetailOpenHint.Text.Length>0?Visibility.Visible:Visibility.Collapsed;
         var canReview=active is not null&&TagReviewProtocol.CanOpen(active);
         TagSuggestionsButton.Visibility=canReview?Visibility.Visible:Visibility.Collapsed;
         TagSuggestionsButton.IsEnabled=canReview&&!saving;
