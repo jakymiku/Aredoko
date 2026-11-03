@@ -1069,6 +1069,14 @@ public sealed partial class MainPage : Page
                 DetailOpenHint.Text=$"一致した {VideoPlayerPolicy.FormatTime(TimeSpan.FromMilliseconds(ms))} から再生します（再生可能な範囲内）。";
         }
         DetailOpenHint.Visibility=DetailOpenHint.Text.Length>0?Visibility.Visible:Visibility.Collapsed;
+        var evidence=new List<string>();
+        if(active?.AIEvidence is {Length:>0} aiEvidence)evidence.Add(aiEvidence);
+        if(active?.AIPage is {} pageEvidence)evidence.Add(pageEvidence.Summary);
+        if(active?.PageText is {} textEvidence)evidence.Add(textEvidence.Summary);
+        if(active?.Proposal is {} proposalEvidence)evidence.Add(proposalEvidence.Summary);
+        if(active?.Evidence is {} wordEvidence)evidence.Add(Protocol.DescribeEvidence(wordEvidence,wordsPerPart:int.MaxValue));
+        DetailEvidenceText.Text=string.Join("\n\n",evidence.Where(value=>value.Length>0));
+        DetailEvidence.Visibility=DetailEvidenceText.Text.Length>0?Visibility.Visible:Visibility.Collapsed;
         var canReview=active is not null&&TagReviewProtocol.CanOpen(active);
         TagSuggestionsButton.Visibility=canReview?Visibility.Visible:Visibility.Collapsed;
         TagSuggestionsButton.IsEnabled=canReview&&!saving;

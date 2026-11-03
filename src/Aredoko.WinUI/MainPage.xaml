@@ -59,6 +59,9 @@
        <TextBlock x:Name="DetailOpenHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="DetailOpenHint"/>
       </StackPanel>
       <TextBlock x:Name="AudioSearchHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="AudioSearchHint"/>
+      <Expander x:Name="DetailEvidence" Header="検索の根拠" Visibility="Collapsed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="DetailEvidence">
+       <TextBlock x:Name="DetailEvidenceText" TextWrapping="Wrap" IsTextSelectionEnabled="True" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="DetailEvidenceText"/>
+      </Expander>
       <Button x:Name="TagSuggestionsButton" Content="AIタグ候補" Visibility="Collapsed" IsEnabled="False" Click="TagSuggestions_Click" AutomationProperties.AutomationId="BtnTagSuggestions"/>
 
        <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextWrapping="Wrap" MaxHeight="120" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>

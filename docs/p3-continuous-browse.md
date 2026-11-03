@@ -217,3 +217,9 @@ Portable build/publish成功（既存warningのみ）。settings-load01は生成
 MainPageの媒体別操作直下へ短い案内を追加。一致ページ番号、動画/音声の開始時刻を表示し、一致情報なしでは非表示。既存readerのrevision照合・読書位置fallback、playerの開始時刻選択/範囲制限は変更しない。Core/backend/保存処理は無変更。
 
 Portable publish成功（初回sandbox内はMSBuild task host接続失敗、通常権限境界を解消した再publishは既存SDK IL2104のみ）。既存WinUI analyzer WUI1001×3は保持。data/ai-ui/continuation-20261103b/frontend01。生成6媒体・独立DB・供給した表示専用match metadata・UIA-onlyのopen-context-light02は11checks/正常exit0/残存なし/原本SHA・mtime不変。4PNG目視。初回light01は詳細を明示的に開く試験操作の欠落で停止、製品bugとせずraw保持。ignored check-open-context.pyで既存harnessを再利用。モデル/推論/再生なし。実検索精度/実一致位置への移動/Dark/HC/DPI/実入力はこの確認に含めない。
+
+## 2026-11-04 詳細の検索根拠を折り畳み表示
+
+一覧では2行へ省略している既存のAI類似/内部ページ/本文/候補タグ/一致語の根拠を、詳細の「検索の根拠」から読めるようにした。文字一致は既存protocolで検証・上限制御済みの語をすべて表示し、入力語・関連語・一致なしを区別。一致情報のない作品では非表示。選択に追従し、タグ編集中に折り畳みを勝手に閉じない。既存MediaMetadataStyle/ThemeResource・標準Expander/選択可能TextBlockを使用。新規API/保存/検索/reader/playerロジック変更なし。
+
+最終frontend03（continuation-20261103b）へ既存依存だけでPortable publish成功、既存WUI1001×3/SDK IL2104×2のみ。frontend02は最終一致語の省略解除前なのでGUI候補と混同しない。関連native GUIは確認待ち。
