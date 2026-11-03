@@ -1050,6 +1050,14 @@ public sealed partial class MainPage : Page
         OpenBook.IsEnabled=active is not null&&ArchiveManifest.CanOpen(active);
         OpenVideo.IsEnabled=active is not null&&VideoPlayerPolicy.CanOpen(active);
         OpenAudio.IsEnabled=active is not null&&AudioPlayerPolicy.CanOpen(active);
+        DetailAvailabilityHint.Text=active is null?"":active.Availability!="present"
+            ?active.Availability=="missing"
+                ?"元ファイルが見つかりません。登録フォルダの接続やファイルの場所を確認してください。登録済みのタグや棚は残っています。"
+                :"元ファイルにアクセスできません。登録フォルダの接続や更新状態を確認してください。登録済みのタグや棚は残っています。"
+            :active.Kind is "image" or "book" or "archive" or "video" or "audio"&&
+                !OpenImage.IsEnabled&&!OpenBook.IsEnabled&&!OpenVideo.IsEnabled&&!OpenAudio.IsEnabled
+                ?"この形式はアプリ内で開けません。「ファイルのプロパティ」から保存場所を開けます。":"";
+        DetailAvailabilityHint.Visibility=DetailAvailabilityHint.Text.Length>0?Visibility.Visible:Visibility.Collapsed;
         // Describe the same match passed to the reader/player. The viewer still
         // checks the current source revision or available playback duration.
         DetailOpenHint.Text="";

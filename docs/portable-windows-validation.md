@@ -92,3 +92,15 @@ Work HEAD`68db65b`を実機へ取り込み、既存runtime/cacheだけで準備�
 今回の新配布をin-placeで変更しない。配布内docsは準備時snapshotであり、最新の受入状況はrepoの[handoff](codex-handoff.md)と出力直下のJSONを参照する。モデル導入3経路、ZIP/再配置/通常DBの保存・restart、実GUI、HoneyView比較、clean Windows、U09/U11/U13/U14、ALPHA後実音声/音楽は残る。Actions/DL/GPU/GUI/OS設定/旧shutdownなし。
 
 既存準備PS1のUTF8 BOMは変更せず保持。Windows PowerShell5.1のParserで構文/日本語を確認し、準備script自体は再実行しない。最初のparser helper起動は既定execution policyで拒否され、既存CMDと同じprocess-only Bypass指定後に確認した。OSの実行ポリシー変更はない。
+
+## 2026-11-04 Sandbox基本版の限定受入
+
+ユーザーが手動DISM等でSandbox起動を回復後、基本ZIP28/app37c2271を開発環境のないゲストで通常Aredoko.exeから確認した。WinAppのagent準備はE_ACCESSDENIED、画面なしguestが残り、別wsb起動は単一起動制限に拒否された。wsb listの同一IDへ通常connectするとdesktopが表示され、ExistingLogin exec/shareは成功。agent/System実行の回避・OS設定変更・ホスト再起動は行わず、以後のGUIはcomputer-useによる視覚確認（後半はユーザー指定6.1 Terra）。準備済みwsbそのものの起動成功やnetwork無効化の保証とは区別する。
+
+共有は候補をC:\Aredoko、生成kitをC:\AredokoValidationへ読み取り専用、専用evidenceのみC:\AredokoEvidenceへ書込可。通常EXE起動→初回案内→生成media登録→一覧のみscan3件→PNG表示→CBZ1/2から2/2（緑）→タグsandbox-acceptance-20261104明示保存→タグ検索1件→通常終了→同じEXE再起動→登録3件/タグ保持→CBZ2/2復元→通常終了まで視覚確認。初回/再起動wsb execは両exit0。独立guestのAppDataを専用証拠へコピーし、親でSQLite integrity_check=ok、items3件/CBZの保存タグ、reader_progress.page=1（0始まり）を再確認。
+
+証拠: data/ai-ui/continuation-20261103/sandbox-basic28/evidence/acceptance-summary.json、guest-appdata（DB/logs）、inventory.txt、appdata-paths.txt。秘密を含み得るrawはignoredのままGitへ含めない。ゲスト自体は停止しない。モデル取得/AI/GPU/音声動画/別物理Windows/更新移行/全P6・P7は未受入。後続source12b6568のZIP29は別候補なのでこの結果を転記しない。
+
+### 2026-11-04 ZIP29への別配置更新
+
+同じゲストでZIP28を停止後、基本ZIP29/source12b65680276ddba927934e89d777672cb2661903をC:\Aredoko29へ別read-only共有。通常Aredoko.exeを起動し、既存guest AppDataの3件/タグ保持、CBZ2/2緑ページ復元、タグ検索1件、詳細の検索根拠展開（入力語一致）を視覚確認。再scan/新しい保存を反復せず、通常終了・wsb exit0。コピーDB integrity_check=ok。証拠は同evidence/update29-result.json・update29-appdata。後続の元ファイル状態案内は未収録。ゲスト停止/OS設定/AI取得は行わない。

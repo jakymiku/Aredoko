@@ -223,3 +223,11 @@ Portable publish成功（初回sandbox内はMSBuild task host接続失敗、通�
 一覧では2行へ省略している既存のAI類似/内部ページ/本文/候補タグ/一致語の根拠を、詳細の「検索の根拠」から読めるようにした。文字一致は既存protocolで検証・上限制御済みの語をすべて表示し、入力語・関連語・一致なしを区別。一致情報のない作品では非表示。選択に追従し、タグ編集中に折り畳みを勝手に閉じない。既存MediaMetadataStyle/ThemeResource・標準Expander/選択可能TextBlockを使用。新規API/保存/検索/reader/playerロジック変更なし。
 
 最終frontend03（continuation-20261103b）へ既存依存だけでPortable publish成功、既存WUI1001×3/SDK IL2104×2のみ。frontend02は最終一致語の省略解除前なのでGUI候補と混同しない。関連native GUIは確認待ち。
+
+2026-11-04追記：最終frontend03の検索根拠はdetail-evidence-dark01/light01各14checks/正常exit0/原本不変/残存なし。AIページのmodel説明、5番目の一致語・関連語・未一致語、別作品で旧根拠を非表示、タグdraft保持と明示保存を確認。Darkの4対象画像とLightの根拠2画像を親が目視確認。表示専用metadata fixtureで実AI検索精度や実メディア再生の実証ではない。初回open-context-light01の試験契約FAILも保持。
+
+## 2026-11-04 元ファイルを開けない理由を詳細で表示
+
+元ファイルmissing/unavailableでは、詳細上部に接続・場所・更新の確認先と登録タグ/棚が残ることを表示。presentでも既存媒体policyが開けない形式にはpropertyから保存場所を開く案内を表示。閲覧権限・path/preview guard・metadata保存は無変更。既存のdisabledボタンを隠して機能を削減しない。
+
+frontend04のPortable publish成功（既存warningのみ）。detail-availability-light03は9checks/正常exit0/原本不変/残存なし、2PNG目視。catalog serializer境界でmissing/unavailableを供給し、disabled閲覧の理由、編集欄有効、正常作品で案内非表示を確認。01は誤った保存table列、02はunavailableが永続statusではないというfixture失敗で、どちらもfrontend起動前。既存schemaを確認し、03はDBを改変しないAPI状態fixtureへ修正。実ドライブ切断・未対応形式・Dark/HC/DPIは未検証。ZIP29/source12b6568にはこの後続変更は未収録。
