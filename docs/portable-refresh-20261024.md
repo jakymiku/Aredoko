@@ -254,3 +254,9 @@ userはComfyUI処理完了後のSandbox再有効化（再起動なし）を明�
 `tools/prepare_windows_sandbox.py --release <基本版directory> --validation-kit <対応kit directory> --output <新しいdata/ai-ui出力先>`を追加。7件の生成CPUテストと、実際のsealed ZIP28/kit28への生成はPASS。出力は`data/ai-ui/continuation-20261103/sandbox-basic28/Aredoko.wsb`とREADME/evidence。アプリとkitだけをexact/read-only共有し、新規evidenceだけ書込み可。network/clipboard/vGPU/音声・映像入力/printer共有はDisable、logon時はguestのアプリfolderをExplorerで開くだけで、アプリ/スクリプトを自動実行しない。XMLは[Microsoft公式仕様](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file)を参照。
 
 既存出力/入力との重なり/link経由/候補とkitのmanifest・ZIP不一致を拒否。絶対host pathを含む生成物はignoredに置く。guest起動/guestでのWinUI表示/性能/保存は**未検証**。再起動後に `.wsb` を開き、guestで通常Aredoko.exeを手動起動、kitの手順を実施。Sandboxを閉じる前に結果とログをguestのC:\AredokoEvidenceへ保存する。hostの通常DBや私物は共有していない。
+
+## 2026-11-04 基本ZIP29
+
+source12b65680276ddba927934e89d777672cb2661903、dist/portable-basic-20261104-29/Aredoko/Aredoko.exe。一致ページ/時刻案内と詳細検索根拠を収録。後続61da1f4は未収録。既存ZIP28のbootstrap/基本Python/media runtimeを再利用、全828files/662,013,889bytesを照合。ZIP SHA256 1322cad53ef315bb09f8fd254a3c846449dd223738f39f2284e4741a18ce8e3a、対応kit29は6files/SHA256 9af2feccf134cf1d9e2e940ead2ad09abae91ff300a8b56d420b4f75197a7d47。source bindingはmanifestに明示。
+
+同梱check、ZIP全memberとpayload照合、通常EXEから終了/予定内1再起動11checks/所有全exit0/生成原本・settings・全inventory不変。data/ai-ui/continuation-20261103b/basic29-startup01、2PNG確認。さらに同一SandboxのZIP28専用AppDataを29別配置から保持し、3件/タグ/CBZ読書位置2/2・検索根拠/正常終了を確認（portable-windows-validation末尾）。準備時preparation.jsonのgui_tested/clean_windows_verified=falseは当時の記録として保持し、後続結果を区別する。全AI/全媒体/全P6を完了とはしない。

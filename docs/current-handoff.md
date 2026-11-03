@@ -1,4 +1,13 @@
-# Aredoko — 現行の単一引き継ぎ（2026-11-03）
+# Aredoko — 現行の単一引き継ぎ（2026-11-04）
+
+## 2026-11-04 進行checkpoint（以下より優先）
+
+- Git起点1aaf06a、fetch/remote/PR5 ref一致、既存branch/Draft PR5継続。未追跡Aredoko-test/はuser作業として不干渉。f52c047は一致ページ/時刻の案内、12b6568は詳細の検索根拠展開、61da1f4は元ファイルmissing/unavailable/未対応形式の説明。既存reader/player/検索/保存/安全guardは再実装せず、Core/backend無変更。
+- frontend03/source12b6568はPortable publish成功、detail-evidence-dark01/light01各14checks/exit0/原本不変。frontend04/source61da1f4はbuild/publish、detail-availability-light03の9checks/exit0/2PNG目視。後者は生成serializer状態fixture、実ドライブ切断/未対応形式/Darkは未検証。初回fixture失敗はraw保持。詳細はp3-continuous-browse末尾。
+- **配布候補29**：dist/portable-basic-20261104-29/Aredoko/Aredoko.exe、source12b6568（後続61da1f4は未収録）。全payload/ZIP/同梱check、通常EXE終了/1再起動11checks/全所有exit0、専用元PNG不変。対応kit29あり。旧installed Alpha/通常DB/ZIP28は更新していない。
+- **Sandbox限定受入完了**：userが手動DISM等で起動回復。WinApp agent準備はE_ACCESSDENIED、非対話guestが残ったため同じguestへwsb connect、ExistingLogin exec/shareとcomputer-useで確認（後半はuser指定6.1 Terra）。ZIP28通常起動/生成3件登録/一覧のみscan/PNG/CBZ2頁/タグ保存/タグ検索/正常終了/再起動の登録タグ読書位置保持を確認。ZIP29へ別read-only共有の更新でも3件/タグ/CBZ2頁目/検索根拠保持を確認。両版app通常終了、exit0、コピーDB integrity_check=ok。
+- 証拠はdata/ai-ui/continuation-20261103/sandbox-basic28/evidence/acceptance-summary.json・guest-appdata、update29-result.json・update29-appdata。ゲスト自体は停止せず稼働中。準備済みwsbのnetwork-disable適用とは称さず、実AI/GPU/他媒体/別物理Windows/全P6・P7は未受入。OS設定/再起動/シャットダウン/Actionsは操作していない。
+- **次**：UIは検索→閲覧→整理の次の小単位をソースから選定中。P6は次の意味あるUI単位と61da1f4をまとめた新候補へ（29を上書きしない）。成功済みSandbox一連やZIP29起動を主作業として反復しない。runtime公開条項/host/registry、D04実Enter/IMEは残件のまま。
 
 
 
