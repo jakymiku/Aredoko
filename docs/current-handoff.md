@@ -1,5 +1,17 @@
 # Aredoko — 現行の単一引き継ぎ（2026-11-04）
 
+## 2026-11-09 環境復元後の再確認（以下より優先）
+
+- **最新user指定：今回は計画のみ**。ホストへの開発SDK/WinApp/開発venv導入は、配布EXEから環境取得→AI起動→生成素材の索引/検索まで受入してから。以前の基本依存復旧許可を先行実行しない。[配布計画の実装順序0–6](lightweight-distribution.md#実装再開時の計画2026-11-09現在は計画のみ)へ作業単位・完了条件を整理。ビルドはSandbox等の隔離環境、ホストは製品が管理するruntimeの導入試験に残す。既存Python3.13があるため完全なPython未導入試験とは区別する。次の1件は、実装再開指示後に公式Pythonのvenv/pip対応形式・固定artifact検証契約・隔離ビルド手段を確定すること。新取得経路は未実装、今回は取得/環境導入なし。
+- **user方針の明確化**：Python非同梱→初回起動でアプリ専用Python取得→AIを選んだ利用者だけ、そのPythonからアプリ管理venvへ公式PyTorch等を導入する。利用者PCで公式ビルド済み配布物を組み合わせ、自前の巨大runtime pack公開を必須にしない。公式URLだけを信頼根拠にせず対応版/依存/hashを固定。lightweight-distribution冒頭を正本として旧同梱/pack公開キューより優先。新方式はまだ未実装。
+- **AI-ready条件をuser再確認**：公式artifact/hash照合→構築後の必要file/inventory・model整合性確認→隔離生成fixtureの実load/推論確認をすべて通して初めてEmbeddingGemma 2を有効にする。構築済みfileの自己採番hashだけを公式一致の証拠としない。未完/不一致はreadyにせず、基本機能と既存DB/profileを保全する。
+- 基本開発依存の再取得はuser許可済み。ただしuser指摘に従い、素のホストを配布テストへ活用するためSDK導入はまだ実行していない。最初はPythonなしで動くbootstrapの取得・検証・配置・再利用を実装し、基本起動→AI opt-in venvへ進む。embeddable版のpip/venv制約を確認し、方式を選定してから取得する。
+
+- user申告：Cドライブ初期化により以前のAlpha等は消失。GitHub/PR5/remote/local HEADはc1db4ebで一致。追跡967filesをGit filters適用のblob hashで全照合し不一致0、各raw SHA256もignored data/environment-check-20261109/source-hashes.jsonへ記録。未追跡Aredoko-test/は不干渉。
+- 現環境にはinstalled Alpha、dist候補、同梱Python、.venv-ai、.NET SDK、NuGet cache、WinAppがない。dotnetは旧3.1 runtimeのみ。Python3.13.17のSSL/SQLite/sha256正常、app/tools/testsの442Pythonを構文検査しエラー0。pip check正常だがPillow/numpy/torch/pytestは未導入、py launcherはPython登録を認識していない。python-health.json参照。旧実機合格を復元環境の合格としない。
+- modelsは21files/66,857,743bytes、確認した重み拡張子safetensors/onnx/gguf/pt/pthは0。設定・tokenizer等だけをモデル完全復旧としない。
+- ここまでのhash/環境確認では、ソース実装・設定・通常DB変更や外部依存取得は実施していない（本記録と配布方針の追記を除く）。モデル本体の追加取得は容量/出所を確認して別扱いにする。
+
 ## 2026-11-04 終了checkpoint（以下より優先）
 
 - **終了後のuser追加依頼も完了**：installed Alphaのdesktop入口を最新版31/sourcebb59c40へ更新。新versioned releaseの全828hash・bootstrap自己検査・ホスト実配置/専用DBの通常入口/終了/1再起動11checks/全所有exit0を確認。追加の旧版削除許可で旧6release計3,967,905,792bytesを検証後削除、旧AI参照0件、通常DBのsize/mtimeとJSON設定hash不変。通常DB自体は起動していない。旧MSIX/Startメニュー登録は変更なし。ProductVersionはbuild時親138964e、差分込みsourcebb59c40はmanifestとsource-files証拠で明示。正確な範囲はportable-refresh末尾、ignored alpha-update-final.json。
