@@ -2,6 +2,7 @@
 
 ## 2026-11-10 終了checkpoint（以下の旧計画より優先）
 
+- **終了後のuser追加指定：次回からキャッシュ管理も組み込む**。設定に削除可能なcache容量・「キャッシュを削除」・「保存先を開く」と専用folderの手動削除案内を用意する。削除後は修復/再構築に再downloadが必要になることを説明する。現行は整合性確認が元nupkg/wheelを参照するため、先に検証必須artifactと削除可能cacheを分離し、削除後も通常起動/導入済AI検索が成立する契約を実装・確認してから削除可と表示する。取得/構築/検証中は対象を保護、モデル/実行venv/DB/原本を削除対象にしない。今回は方針記録のみ、cache削除や製品ボタン実装は未実施。既存の次の1件（AI自動構築接続）と同じ導入設計へ組み込む。
 - **Git/指示**：最新実装HEAD **e73c88265af157221c14f4ade2a46997a7b8a8dd**、最終handoff HEADは本書Git履歴。既存branch/Draft PR5継続、Actions/main merge/force pushなし。Aredoko-test/は不干渉。user指定で専用folder開発を再開し、GUI/GPU直前通知。GPU未実施。依存と固定公式モデルの試験取得はuser明示承認済み（空き15GB目安は本体容量ではなく構築用）。
 - **できること**：aab70b5でローカルSDK/公式Python native取得、a74ffafで再利用検証と基本venv、f71e71fで初回案内→公式CPython/Pillow取得→検証/構築→通常WinUI接続。e73c882で公式44wheel固定recipe/オフラインAI venv構築・導入bytes原本照合。開発用の明示入口からモデルload/索引/日本語AI検索をCPU実証。ただし製品画面のAI自動構築・有効化はまだ未接続。
 - **候補/ホストGUI**：`dist/portable-managed-20261110-01/Aredoko/Aredoko.exe`、source **f71e71fe4c869c6d0976efc25201e944d0531a58**、Python非同梱657payload/499,999,163bytes（manifest等込み659files/500,180,692bytes）。全hash/公式artifact/venv/import/media probe CPU PASS。6.1 Terraのhost GUIで初回案内/自動取得→生成PNG1件登録/一覧のみscan→filename検索→viewer→初回終了0→再起動時promptなし/1件保持、DB readonly integrity ok。2回目の終了は他app操作を優先し未完、candidate native/WinUI PID41652/24696の残存をread-only確認。通常DBを使わず独立LOCALAPPDATA。生成直後SHA baseline未採取のGUI fixtureで原本不変は称さない。Windows Sandbox guest受入ではない。
