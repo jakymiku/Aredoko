@@ -179,7 +179,10 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
                         headers={'Accept-Encoding':'identity'}
                         if offset:headers['Range']='bytes='+str(offset)+'-'
                         request=urllib.request.Request(item.url,headers=headers)
-                        with opener.open(request,timeout=10) as response:
+                        # Large official wheels/models can stall briefly on a
+                        # shared connection. Preserve range-resume rather than
+                        # failing after the previous aggressive 10-second read.
+                        with opener.open(request,timeout=30) as response:
                             _source(response.geturl(),catalog.hosts,catalog.test_loopback)
                             if response.status==206:
                                 expected=f'bytes {offset}-{item.size-1}/{item.size}'
@@ -206,7 +209,7 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
                         if not _transient_transfer(error):raise
                         check()
                         if retries>=2:
-                            raise OSError('Artifact transfer interrupted; resume the saved partial file') from None
+                            raise OSError('Artifact transfer interrupted ('+type(error).__name__+'); resume the saved partial file') from error
                         retries+=1
                         # Closing the failed stream flushes Python's buffered
                         # writes. The next request starts at the actual file size.

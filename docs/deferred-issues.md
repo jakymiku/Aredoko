@@ -6,6 +6,7 @@
 | --- | --- | --- | --- |
 | D01 | コード上の懸念。登録フォルダの表示状態変更が失敗した場合の案内が不明確 | MainPage.xaml.cs FolderStateFilter_Changedはasync voidからRefreshSearchRootsAsyncを直接await。接続切断時の例外境界を後で確認。実機再現なし、現時点でクラッシュと断定しない | 通常 |
 | D02 | 開発ツールの操作確認を保留。製品機能の不具合ではない | agent-desktop v1.0.2のstate file置換1175。既存WinAppへ戻して開発を継続。新しい根拠なしに単独再試行しない | 低 |
+| D05 | 初回準備の失敗案内の助詞が不自然（再現済み、機能停止原因ではない） | 2026-11-10 managed01/source f71e71f。OS sandboxのDNS失敗時に「Pythonを取得していますに失敗しました」と表示。Bootstrap.SetupCommandが進行文へ「に失敗」を連結するため。ネットワークは通常ホスト権限で解消済み。後で進行文と失敗文を分ける | 低 |
 
 前回の登録UI・複数登録/部分失敗は実装済みのGUI未検証であり、未修正バグとして二重登録しない。詳細はcurrent-handoffを参照。
 

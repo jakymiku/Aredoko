@@ -140,7 +140,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
     for item in (REPO / 'app').iterdir():
         if item.is_file() and item.suffix in ('.py', '.json'):
             copy_payload(item, app_dir / item.name)
-    for sub in ('ai-profiles', 'profiles', 'tagger-profiles', 'acquisition'):
+    for sub in ('ai-profiles', 'profiles', 'tagger-profiles', 'acquisition', 'ai-runtime-recipes'):
         source = REPO / 'config' / sub
         if source.exists():
             copy_payload(source, config_dir / sub)

@@ -14,6 +14,25 @@ SDK初回起動が開発HTTPS証明書を生成したことを観測した。信
 
 ### Pythonなしの取得処理：最初のCPU実証
 
+#### 2026-11-10 実候補/ホストGUIとAI取得の継続
+
+managed01/source f71e71fe4c869c6d0976efc25201e944d0531a58は657files/499,999,163bytes（展開後約500MB、Pythonなし、media約331MBを含む）。独立AppDataで全release hash→公式CPython artifact/展開file→Pillow artifact/venv→import/media probe成功。ホストGUIは初回案内→自動取得/構築→基本WinUI→生成PNG1件登録/一覧のみscan→filename検索→viewer→終了0→再起動時取得promptなし/1件保持まで実証。最終2回目の終了は未観測。Windows Sandboxでの受入ではない。詳細制約はcurrent-handoff/ignored summary。
+
+15GBはAI導入のartifact原本・構築先・モデル・cacheが同時存在する作業空き目安で、Alpha配布本体の容量ではない。現行候補約500MB、基本Python/venv、完成AI venv/model、cache、試験コピーは別集計する。userはこの見積りと公式PyTorch cu128/固定モデルの試験取得を明示承認済み。GPUは未実施。
+
+公式EmbeddingGemma2は既存trusted catalog `8ee756badd8a85a24d1dbf80103be005b2b9c21b3e91d009a8568704d634406e`、revision `914f7f89142e33e77833254d9c9b90c3cef7303b`で1,525,821,059bytesを全hash/既存profile照合して配置完了。取得中断のpartialを再利用し、read timeout30秒へ変更後に完了。PyTorch2.9.1+cu128は公式cp313 wheel（2,862,036,321bytes、SHA256 `ad9183864acdd99fc5143d7ca9d3d2e7ddfc9a9600ff43217825d4e5e9855ccc`）を既存resumable acquirerで取得中。pip dry-runの不完全部分は失敗し、インストールはしていない。途中からreadyにしない。
+
+`build_ai_wheel_lock.py`は明示pip reportを公式URL/hash/対応tags/固定rootsで検査してdraft lock/require-hashes requirementsを生成。PyTorchの取得済みlocal wheelも既知の公式hashとfilenameが一致するときだけ公式URLへ束縛して記録できる。`prepare_ai_environment.py`はnative確認済みCPythonから明示実行するオフライン開発入口。lockの明示SHA256と内容を検証し、pipなしAI venvへ公式wheel payloadを展開、元wheel bytesと導入bytes・全site inventoryを照合する。CLI wrapperを生成せず、wheel内script原本は非entrypointとして保管する。purelib/platlib/dataは対応先へ配置、未対応.data categoryは拒否する。AI-ready marker/settingsは書かず、モデルload/実推論の次gateを残す。初回GUIへのAI自動構築接続はまだ未完。
+
+#### 実AI環境・検索のCPU確認と容量（2026-11-10終了時）
+
+- PyTorch/torchvisionを公開hash/sizeでresumable取得完了。44依存のresolver reportから公式origin/tag/固定roots/hashを確認したdraft recipeを`config/ai-runtime-recipes/cp313-cu128-draft.json`へ保存。raw SHA256 `2d99a5178762590aabc384ee27aecb66e6614241219b3321365b31631f707858`。`pip download --require-hashes --no-deps`で全44wheelを確認した。source recipeはdraftのままで、製品のAI-ready登録をしない。
+- `data/ai-lock01/ai-venv01`にpipなしAI venv構築。元wheelとの照合対象payloadは4,861,133,598bytes、venv等込み実配置4,861,676,124bytes。Sympyのman pageも.data/data→shareへ保持する。新しい厳密検証は余分なpth/scriptに加え未検証pycも拒否する（旧packの既存cache契約は変えない）。大きな照合中のfiles/bytes実進捗を追加。生成単体はlock4件・runtime6件PASS。関連旧runtime含む44件はOS sandboxでhardlink/HTTP2ERROR・権限symlink1skip、失敗2件だけ通常権限でPASS。progress追加時の未検証ZIP先読みによる試験FAILは、hash確認後のmetadata計数へ順序修正して対象6件PASS。
+- CPU実モデル試験：CUDA_VISIBLE_DEVICES=-1、CPU2threads、生成青/赤PNG2件、独立catalog/vector DBのみ。固定profile/revision・768次元を維持して2件索引完了→日本語「青色の四角い画像」で2結果/先頭blue.png。87.066秒（load含む単回、性能保証ではない）。原本SHA/mtime不変、DB integrity ok、所有worker close。証拠`data/ai-cpu01/result.json`とsearch-result.json。これは実backendの検索クラス/私有workerによるCPU確認で、GUIからのAI自動構築・GPU/通常AlphaのAI使用可能を意味しない。
+- 容量実測（bytes、開発用SDK/試験コピーは除外）：配布candidate500,180,692＋基本CPython39,613,524＋基本venv15,301,329＋AIvenv4,861,676,124＋model1,525,821,059＝6,942,592,728bytes（約6.94GB）。構築cacheは重複整理前約5.97GB、後3,099,520,069bytes。15GBは構築時の空き目安で本体容量ではない。
+- 重複torch取得target2files/2,871,684,244bytesを、canonical44wheelと全SHA一致・絶対path境界・Git非追跡・linkなし・参照processなしを確認して削除。モデル/venv/ログ/SDK/原本は保持。`data/capacity-20261110/cleanup-{plan,result}.json`、runtime-and-cache.json参照。古いtorch-result.jsonのrootは履歴pathで、次回は保持した`data/ai-lock01/wheels`を使い再downloadしない。
+- GPU未実施。Computer Use後の黄色枠はuser報告、node_repl js_resetを実行して再captureを止めた。消失確認のための新しいscreenshotは再captureになるので行っていない。ホストGUIの2回目の終了は未観測、candidate内Aredoko.exe/WinUIの残存をread-only確認、user他app操作を妨げる前面化/強制終了はしない。
+
 続行checkpoint 2：`managed_python=cpython-3.13.17-pillow-12.3.0-win-x64-v1`を明示したPortable manifestだけが非同梱を選べる。未知ID/同梱Pythonとの混在/AI同梱/必須helper欠落は拒否。`package_release --managed-python-setup <built-helper>`を追加。Bootstrap sourceは初回の内容/容量/保存方式の案内→native `--fetch cpython|pillow`（固定公式URL/hash・atomic artifact公開）→base配置/照合→基本venv構築/照合へ接続。setupは排他leaseと取消markerを使い、未検証のbackendを起動しない。Python不要取得helperの実downloadはCPython/Pillowとも確認済み。新初回GUIの実動作はまだ未検証。
 
 起動preflightは外部baseを公式nupkgから照合し、基本venvを公式wheel/launcher/base bindingと照合してから専用Pythonでprobe/backendを起動する。既存startup cacheはrelease inventory専用のためmanaged版では使用せず、毎回full検査。通常/起動確認のDB・設定は分け、runtimeだけを明示共有。既存同梱版のcache契約は維持。CLIの手動--check等へのmanaged保存先導線は未完。
