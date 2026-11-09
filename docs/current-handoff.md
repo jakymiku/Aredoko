@@ -2,6 +2,8 @@
 
 ## 2026-11-10 開発再開（以下の計画のみ・SDK延期より優先）
 
+- **継続checkpoint（aab70b5後）**：userからクォータ残り10%前後までの継続指示を再確認。一区切りで止めない。取得済みPythonの`--verify`を追加し公式nupkg再照合→全展開file照合/余分・欠落・変更拒否/links拒否、Ctrl+C時の未公開を実装。正常・変更・欠落・追加fileでCPU確認。`prepare_basic_runtime.py`で公式Pillow12.3.0 cp313 wheelの固定SHA256→pipなし基本venv構築→wheel bytes/venv launcher/base binding/余分なpth・script検証→import probeを実装。実基本venv正常、生成単体5 PASS。
+- **実利用のCPU範囲**：同venvで生成PNG登録→filename検索→catalog再open後検索→原本SHA/mtime不変→DB integrity ok。ignored data/development-tools/basic-catalog-fixture01/result.json。実backend lifecycleは通常ホスト権限で10 PASS/17.935s（GUI/GPUなし）。Codex OS sandbox内では同suiteがloopback startup timeoutで3FAIL/2ERROR/92.004s、実行条件を切り替えて解消。製品の起動不能と断定しない。GUI/AI/通常DB未使用。通常bootstrapとの接続は引き続き未完。
 - userが専用folder開発方式で実装再開を指示。GUI/GPU試験は直前に一言知らせる。今回はCPUのみでGUI/GPU未使用。ホストへ永続PATH/SDK登録/Visual Studio/WinApp導入なし。ただし.NET初回動作が開発HTTPS証明書を生成（信頼操作なし）、以後wrapperで生成無効。OS完全隔離とは称さない。
 - 起点5f74881、fetchとPR5 head一致。新しい開発用prepare-dev-dotnet/dev-dotnet scriptsで公式.NET10.0.403 ZIPを固定SHA512照合してignored専用folderへ配置。NuGet/CLI cacheも集約、成功/失敗時の環境変数復元を実証。WinUI Portable build成功0error/既存WUI1001×3、Core CPU suite exit0、取得登録CPU8 PASS。新branch/Actions/main mergeなし、Aredoko-test不干渉。
 - Python不要のnative取得helper `PythonSetup.cs`と明示開発入口prepare-native-python.ps1を追加。公式PSF NuGet Python3.13.17を固定URL/公開SHA512検証→新規stage→未使用destinationへ配置。実download/正常展開、破損hash拒否・公開なし、既存destination拒否、展開PythonのSSL/SQLite正常を確認。同公式packageでvenv/pip起動も成功。初回TLS失敗はプロセス内TLS1.2指定後に解決。通常DB/私物/モデル変更なし。

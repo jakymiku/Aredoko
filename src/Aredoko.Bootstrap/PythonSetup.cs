@@ -5,9 +5,22 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 internal static class PythonSetup
 {
+    [StructLayout(LayoutKind.Sequential)] struct FileInformation { public uint Attributes; public System.Runtime.InteropServices.ComTypes.FILETIME Created,Access,Written; public uint Volume,SizeHigh,SizeLow,Links,IndexHigh,IndexLow; }
+    [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetFileInformationByHandle(SafeFileHandle handle, out FileInformation information);
+
+    static void SingleLink(FileStream stream)
+    {
+        FileInformation information;
+        if(!GetFileInformationByHandle(stream.SafeFileHandle, out information) || information.Links != 1)
+            throw new IOException("Hardlinked runtime files are not accepted.");
+    }
+    static volatile bool cancelled;
     const string Url = "https://api.nuget.org/v3-flatcontainer/python/3.13.17/python.3.13.17.nupkg";
     // NuGet catalog entry for Python Software Foundation's python 3.13.17.
     const string Hash = "DmZ5KLtPGVc8bNiPZRM7LgeyQ6XHFvM1tWqma7nsb4IyglbSLDop4joCdqxcam14YhH+q1JIkK0eVmKRlsaynA==";
@@ -16,8 +29,9 @@ internal static class PythonSetup
     {
         try
         {
-            if(args.Length != 2) throw new ArgumentException("Usage: PythonSetup.exe <new-output-directory> <verified-package-or-download>");
-            Prepare(args[0], args[1]);
+            Console.CancelKeyPress += delegate(object sender, ConsoleCancelEventArgs eventArgs) { eventArgs.Cancel = true; cancelled = true; };
+            if(args.Length != 2 && !(args.Length == 3 && args[2] == "--verify")) throw new ArgumentException("Usage: PythonSetup.exe <output-directory> <package-or-download> [--verify]");
+            Prepare(args[0], args[1], args.Length == 3);
             return 0;
         }
         catch(Exception error)
@@ -37,15 +51,16 @@ internal static class PythonSetup
         }
     }
 
-    static void Prepare(string destination, string package)
+    static void Prepare(string destination, string package, bool verify)
     {
         destination = Path.GetFullPath(destination);
         var parent = Path.GetDirectoryName(destination);
         DirectoryGuard(parent);
-        if(Directory.Exists(destination) || File.Exists(destination))
+        if(verify) DirectoryGuard(destination);
+        else if(Directory.Exists(destination) || File.Exists(destination))
             throw new IOException("Refusing to overwrite an existing environment.");
         var stage = Path.Combine(parent, "python-stage-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(stage);
+        if(!verify || package == "download") Directory.CreateDirectory(stage);
         // Failed staging is retained for diagnosis, never published as usable.
         var archive = Path.Combine(stage, "python.nupkg");
         if(package == "download")
@@ -68,6 +83,7 @@ internal static class PythonSetup
                     int count;
                     while((count = input.Read(buffer, 0, buffer.Length)) != 0)
                     {
+                        CheckCancelled();
                         total += count;
                         if(total > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
                         output.Write(buffer, 0, count);
@@ -80,40 +96,87 @@ internal static class PythonSetup
             package = Path.GetFullPath(package);
             DirectoryGuard(Path.GetDirectoryName(package));
             if((File.GetAttributes(package) & FileAttributes.ReparsePoint) != 0) throw new IOException("Package links are not accepted.");
-            File.Copy(package, archive, false);
+            if(verify) archive = package;
+            else File.Copy(package, archive, false);
         }
         // Keep the exact bytes locked from verification through extraction.
         using(var input = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
+            SingleLink(input);
             using(var sha = SHA512.Create())
                 if(Convert.ToBase64String(sha.ComputeHash(input)) != Hash)
                     throw new IOException("Official package SHA512 mismatch. Environment not published.");
             input.Position = 0;
             var payload = Path.Combine(stage, "payload");
-            Directory.CreateDirectory(payload);
+            if(!verify) Directory.CreateDirectory(payload);
             using(var zip = new ZipArchive(input, ZipArchiveMode.Read, true))
             {
+                var expected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach(var entry in zip.Entries)
                 {
+                    CheckCancelled();
                     var name = entry.FullName.Replace('/', '\\');
                     if(name.Contains(":") || name.StartsWith("\\") || Array.Exists(name.Split('\\'), part => part == ".." || part == "."))
                         throw new IOException("Invalid package entry.");
-                    var output = Path.GetFullPath(Path.Combine(payload, name));
-                    if(!output.StartsWith(payload + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    var baseDirectory = verify ? destination : payload;
+                    var output = Path.GetFullPath(Path.Combine(baseDirectory, name));
+                    if(!output.StartsWith(baseDirectory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                         throw new IOException("Package path escaped staging.");
+                    if(verify)
+                    {
+                        if(name.EndsWith("\\")) { DirectoryGuard(output); continue; }
+                        if(!expected.Add(output)) throw new IOException("Duplicate package file.");
+                        DirectoryGuard(Path.GetDirectoryName(output));
+                        if((File.GetAttributes(output) & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
+                            throw new IOException("Runtime file must be ordinary.");
+                        using(var source = entry.Open())
+                        using(var target = new FileStream(output, FileMode.Open, FileAccess.Read, FileShare.Read))
+                        using(var sha = SHA256.Create())
+                        {
+                            SingleLink(target);
+                            if(target.Length != entry.Length || Convert.ToBase64String(sha.ComputeHash(source)) != Convert.ToBase64String(sha.ComputeHash(target)))
+                                throw new IOException("Runtime file changed: " + name);
+                        }
+                        continue;
+                    }
                     if(name.EndsWith("\\")) { Directory.CreateDirectory(output); continue; }
                     Directory.CreateDirectory(Path.GetDirectoryName(output));
                     using(var source = entry.Open())
                     using(var target = new FileStream(output, FileMode.CreateNew, FileAccess.Write))
                         source.CopyTo(target);
                 }
+                if(verify)
+                {
+                    VerifyInventory(destination, expected);
+                    Console.WriteLine("Existing Python matches the verified official package.");
+                    return;
+                }
             }
             if(!File.Exists(Path.Combine(payload, "tools", "python.exe")) || !Directory.Exists(Path.Combine(payload, "tools", "Lib", "venv")))
                 throw new IOException("Expected CPython/venv layout missing.");
             DirectoryGuard(parent);
+            CheckCancelled();
             Directory.Move(payload, destination);
         }
         Console.WriteLine("Official package verified and extracted: " + destination);
         Console.WriteLine("AI dependencies and model compatibility have NOT been verified.");
+    }
+
+    static void VerifyInventory(string directory, HashSet<string> expected)
+    {
+        CheckCancelled();
+        DirectoryGuard(directory);
+        foreach(var child in Directory.GetFileSystemEntries(directory))
+        {
+            var attributes = File.GetAttributes(child);
+            if((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Runtime contains a link.");
+            if((attributes & FileAttributes.Directory) != 0) VerifyInventory(child, expected);
+            else if(!expected.Contains(child)) throw new IOException("Unlisted runtime file: " + child);
+        }
+    }
+
+    static void CheckCancelled()
+    {
+        if(cancelled) throw new OperationCanceledException("Python preparation cancelled; environment not published.");
     }
 }

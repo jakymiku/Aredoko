@@ -14,6 +14,12 @@ SDK初回起動が開発HTTPS証明書を生成したことを観測した。信
 
 ### Pythonなしの取得処理：最初のCPU実証
 
+続行分：native helperへ`--verify`を追加。公式archive自体のSHA512を再検証し、展開済み全fileを元archiveのbytesと照合、欠落/変更/余分file/links/hardlinksを拒否する。ローカルarchiveでの検査はコピー/stagingを新たに作らない。Ctrl+Cは協調取消し、公開直前にも確認する。GUIの取消・再開・通信read中の即時取消はまだ未接続。
+
+`tools/prepare_basic_runtime.py`はnativeで検証したCPython3.13.17から明示実行するオフライン構築処理。Pillow12.3.0 cp313 Windows x64 wheelを[公式PyPI metadata](https://pypi.org/pypi/Pillow/12.3.0/json)の固定SHA256で照合し、pipなしvenvへ導入する。`--wheel <wheel> --output <new-venv>`、再利用前検査は`--verify`。wheel全bytes/venv base binding/launcher一致、余分pth・script等を確認してからimport probe。base自体の公式原本確認はnative helperの責務。venv shell activation scriptsは製品から実行せず、その内容の真正性確認は本処理の保証に含めない。AI-ready markerは作らない。
+
+CPU確認：native再利用の正常/変更/追加/欠落、基本環境実構築/再検査、生成単体5PASS。基本venvで生成PNGをcatalogへ登録→filename検索→再open保持、原本不変、DB integrity ok。実backend lifecycle通常ホスト権限10PASS/17.935s。先行したCodex OS sandbox内の同suiteはloopback startup timeoutで3FAIL/2ERROR、実行条件変更後に成功したため製品bugと混同しない。GUI/AI/model推論/通常DBは未使用。
+
 `src/Aredoko.Bootstrap/PythonSetup.cs`はWindows同梱.NET Frameworkで動く独立console helper。公式CPython NuGet 3.13.17を候補として固定URL/公開SHA512で照合し、新規stagingに展開してから指定した未使用directoryへ公開する。既存環境は上書きしない。hash不一致・異常path・取得失敗を拒否し、失敗stageは証拠として保持する。downloadはTLS1.2・redirect拒否・128MiB上限。検証から展開までarchiveをwrite不可で保持する。SHAの根拠は[NuGet公式registration](https://api.nuget.org/v3/registration5-semver1/python/3.13.17.json)から参照するcatalogEntryのpackageHash。
 
 開発入口は`./tools/prepare-native-python.ps1 -OutputDirectory <新規directory> [-Package <取得済nupkg>]`。Package省略は実downloadのため明示した取得操作としてのみ使う。初回GUIや通常bootstrapからの自動呼出しは未接続。現在の配布検証は同梱Pythonを前提としており、このhelperだけで新方式の配布完了とはしない。取得済環境の再利用・取消/再開・進捗通知・修復・AI venv導入・製品runtimeへの接続は次の実装。

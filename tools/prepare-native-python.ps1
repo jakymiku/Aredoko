@@ -2,7 +2,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
-    [string]$Package = 'download'
+    [string]$Package = 'download',
+    [switch]$Verify
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -12,5 +13,7 @@ $compiler = Join-Path ([Environment]::GetFolderPath('Windows')) 'Microsoft.NET\F
 $executable = Join-Path $build ('PythonSetup-' + [Guid]::NewGuid().ToString('N') + '.exe')
 & $compiler /nologo /target:exe /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll "/out:$executable" (Join-Path $root 'src/Aredoko.Bootstrap/PythonSetup.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Native acquisition helper compilation failed' }
-& $executable $OutputDirectory $Package
+$arguments = @($OutputDirectory, $Package)
+if ($Verify) { $arguments += '--verify' }
+& $executable @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Python preparation failed; incomplete staging retained, environment not published' }
