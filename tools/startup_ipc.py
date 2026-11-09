@@ -177,11 +177,12 @@ def serve_owned(root, incoming, outgoing, *, smoke=False):
         base = os.environ.get('LOCALAPPDATA', '')
         if not base or not Path(base).is_absolute():raise ValueError('User data is unavailable')
         data = Path(base) / 'Aredoko'
+        runtime_data = data
         if smoke:
             data = data / 'startup-check' / pipe._session
             settings = {}  # Never inherit real DB, model or viewer paths.
         else:settings = load_settings(data)
-        launch(root, data, settings, progress=pipe.control, startup_pipe=pipe)
+        launch(root, data, settings, progress=pipe.control, startup_pipe=pipe, runtime_data=runtime_data)
         status = 'session_complete'
     except StartupCancelled:status = 'cancelled'
     except Exception as error:

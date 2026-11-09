@@ -192,5 +192,18 @@ class StartupValidationTests(unittest.TestCase):
         self.run_check();self.run_check()
         self.assertEqual(self.calls,2);self.assertFalse(self.cache.exists())
 
+    def test_managed_python_never_reuses_release_only_receipt(self):
+        # Full preflight owns the external runtime check. Even a warm release
+        # receipt must not skip that callback for an external runtime candidate.
+        self.run_check()
+        self.manifest['managed_python'] = runtime.MANAGED_PYTHON
+        (self.root/'manifest.json').write_text(json.dumps(self.manifest), encoding='utf-8')
+        calls = []
+        for _ in range(2):
+            result = cache.startup_preflight(self.root, self.cache,
+                lambda: calls.append('full external check') or self.manifest)
+            self.assertEqual(result, self.manifest)
+        self.assertEqual(len(calls), 2)
+
 
 if __name__=='__main__':unittest.main()

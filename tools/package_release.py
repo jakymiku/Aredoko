@@ -16,7 +16,7 @@ import time
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'app'))
 from storage_lease import plain_path, storage_parent
-from release_runtime import python_layout, media_layout, configure_embedded_python
+from release_runtime import python_layout, media_layout, configure_embedded_python, MANAGED_PYTHON
 from packaged_frontend import inspect_msix, copy_msix_payload, PACKAGE_PATH
 
 PAYLOAD = ('Aredoko.WinUI.exe', 'Aredoko.WinUI.dll', 'Aredoko.Core.dll',
@@ -56,7 +56,7 @@ def validate_output(output):
         raise FileExistsError('Choose a new output directory; existing files are never removed')
 
 
-def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False, frontend_msix=None, portable_frontend=None, bootstrap=None, source_revision=None):
+def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False, frontend_msix=None, portable_frontend=None, bootstrap=None, source_revision=None, managed_python_setup=None):
     output_dir = Path(os.path.abspath(output_dir))
     validate_output(output_dir)
     if not isinstance(version, str) or not 1 <= len(version) <= 64 or any(ord(c) < 32 for c in version):
@@ -81,9 +81,15 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
     frontend = inspect_msix(frontend_msix) if frontend_msix is not None else None
     portable_frontend = Path(os.path.abspath(portable_frontend)) if portable_frontend is not None else None
     bootstrap = Path(os.path.abspath(bootstrap)) if bootstrap is not None else None
+    managed_python_setup = Path(os.path.abspath(managed_python_setup)) if managed_python_setup is not None else None
+    if managed_python_setup is not None:
+        if portable_frontend is None or python_runtime is not None or include_ai_runtime:
+            raise ValueError('Managed Python requires Portable without bundled Python/AI')
+        plain_path(managed_python_setup)
+        plain_path(REPO / 'tools/prepare_basic_runtime.py')
     if (portable_frontend is None) != (bootstrap is None):raise ValueError('Portable publish and bootstrap must be supplied together')
     if portable_frontend is not None:
-        if frontend_msix is not None or python_runtime is None or media_tools is None:
+        if frontend_msix is not None or (python_runtime is None and managed_python_setup is None) or media_tools is None:
             raise ValueError('Portable requires Python/media and cannot use an MSIX')
         from portable_frontend import inspect_portable, inspect_bootstrap
         inspect_portable(portable_frontend)
@@ -91,7 +97,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         binary = portable_frontend
     activation = 'portable' if portable_frontend is not None else 'msix' if frontend is not None else 'unconfigured'
     sources = [binary, REPO / 'app', REPO / 'config', REPO / 'docs', REPO / 'tools']
-    sources += [p for p in (python_runtime, media_tools, frontend_msix, portable_frontend, bootstrap) if p is not None]
+    sources += [p for p in (python_runtime, media_tools, frontend_msix, portable_frontend, bootstrap, managed_python_setup) if p is not None]
     for source in sources:
         if output_dir.is_relative_to(source) or source.is_relative_to(output_dir):
             raise ValueError('Output and payload source directories must not overlap')
@@ -107,10 +113,12 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         for name in PAYLOAD:
             plain_path(binary / name)
     if dry_run:
-        return {'version': version, 'source_revision': source_revision, 'dry_run': True, 'pass': True,
+        result = {'version': version, 'source_revision': source_revision, 'dry_run': True, 'pass': True,
                 'readiness': 'staging-only', 'frontend_activation': activation, 'python_bundled': python_runtime is not None,
                 'ai_runtime_bundled': include_ai_runtime, 'media_tools_bundled': media_tools is not None,
                 'runtime_imports_verified': False, 'clean_machine_activation_verified': False}
+        if managed_python_setup is not None:result['managed_python'] = MANAGED_PYTHON
+        return result
 
     # Exclusive creation is the reservation. Failure leaves an incomplete new
     # staging directory, never a recursive deletion of an existing directory.
@@ -140,6 +148,9 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         copy_payload(REPO / 'tools' / name, output_dir / name)
     for name in ('backup_library.py', 'release_runtime.py', 'launch_release.py', 'probe_release_runtime.py', 'startup_validation.py', 'startup_progress.py', 'startup_ipc.py', 'portable_frontend.py', 'packaged_frontend.py'):
         copy_payload(REPO / 'tools' / name, tools_dir / name)
+    if managed_python_setup is not None:
+        copy_payload(managed_python_setup, tools_dir / 'PythonSetup.exe')
+        copy_payload(REPO / 'tools/prepare_basic_runtime.py', tools_dir / 'prepare_basic_runtime.py')
     if portable_frontend is None:
         copy_payload(REPO / 'tools/install-release-shortcut.ps1', output_dir / 'install-release-shortcut.ps1')
     if frontend_msix is not None:
@@ -210,6 +221,8 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
                 'media_tools_bundled': media_tools is not None, 'runtime_imports_verified': False,
                 'models_bundled': False,
                 'clean_machine_activation_verified': False}
+    if managed_python_setup is not None:
+        manifest['managed_python'] = MANAGED_PYTHON
     (output_dir / 'sha256sums.txt').write_text(''.join(
         f"{e['sha256']}  {e['path']}\n" for e in entries), encoding='utf-8')
     # Publish the completion marker last. No template databases or models are
@@ -232,10 +245,11 @@ def main():
     parser.add_argument('--frontend-msix', type=Path, help='Explicit self-contained frontend MSIX; its published payload supplies bin. No install/signing')
     parser.add_argument('--portable-frontend', type=Path, help='Explicit Portable publish directory with build receipt')
     parser.add_argument('--bootstrap', type=Path, help='Built root Aredoko.exe for the portable channel')
+    parser.add_argument('--managed-python-setup', type=Path, help='Explicit native acquisition helper; staging only until first-run integration')
     args = parser.parse_args()
     package(args.output_dir, args.version, args.skip_build, args.check,
             python_runtime=args.python_runtime, media_tools=args.media_tools, include_ai_runtime=args.include_ai_runtime, frontend_msix=args.frontend_msix,
-            portable_frontend=args.portable_frontend, bootstrap=args.bootstrap, source_revision=args.source_revision)
+            portable_frontend=args.portable_frontend, bootstrap=args.bootstrap, source_revision=args.source_revision, managed_python_setup=args.managed_python_setup)
 
 
 if __name__ == '__main__':

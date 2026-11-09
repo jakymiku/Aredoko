@@ -11,7 +11,8 @@ import subprocess
 import sys
 import zipfile
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / ('backend/app' if (ROOT / 'backend/app').is_dir() else 'app')))
 from storage_lease import plain_path, storage_parent
 
 # https://pypi.org/pypi/Pillow/12.3.0/json, cp313 Windows x64 wheel.
@@ -65,6 +66,7 @@ def verify_environment(archive, output):
 
 
 def prepare(wheel, output, *, verify=False):
+    check_cancelled()
     if sys.version_info[:3] != (3, 13, 17) or sys.platform != 'win32':
         raise RuntimeError('Invoke with the verified CPython 3.13.17 Windows interpreter')
     wheel = plain_path(Path(os.path.abspath(wheel)))
@@ -90,8 +92,10 @@ def prepare(wheel, output, *, verify=False):
                 names.add(entry.filename.casefold())
             if not verify:
                 subprocess.run([sys.executable, '-I', '-B', '-m', 'venv', '--without-pip', str(output)], check=True)
+                check_cancelled()
                 site = plain_path(output / 'Lib/site-packages', directory=True)
                 for entry in archive.infolist():
+                    check_cancelled()
                     destination = site.joinpath(*entry.filename.split('/'))
                     storage_parent(destination)
                     plain_path(destination, missing=True)
@@ -99,11 +103,18 @@ def prepare(wheel, output, *, verify=False):
                         while block := source.read(1024 * 1024):
                             target.write(block)
             verify_environment(archive, output)
+    check_cancelled()
     python = plain_path(output / 'Scripts/python.exe')
     probe = subprocess.run([str(python), '-I', '-B', str(Path(__file__).with_name('probe_release_runtime.py'))],
                            check=True, capture_output=True, text=True)
     print(probe.stdout.strip())
     return python
+
+
+def check_cancelled():
+    marker = os.environ.get('AREDOKO_SETUP_CANCEL')
+    if marker and Path(marker).exists():
+        raise InterruptedError('Basic environment setup cancelled; backend not started')
 
 
 def main():

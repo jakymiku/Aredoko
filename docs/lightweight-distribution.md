@@ -14,6 +14,12 @@ SDK初回起動が開発HTTPS証明書を生成したことを観測した。信
 
 ### Pythonなしの取得処理：最初のCPU実証
 
+続行checkpoint 2：`managed_python=cpython-3.13.17-pillow-12.3.0-win-x64-v1`を明示したPortable manifestだけが非同梱を選べる。未知ID/同梱Pythonとの混在/AI同梱/必須helper欠落は拒否。`package_release --managed-python-setup <built-helper>`を追加。Bootstrap sourceは初回の内容/容量/保存方式の案内→native `--fetch cpython|pillow`（固定公式URL/hash・atomic artifact公開）→base配置/照合→基本venv構築/照合へ接続。setupは排他leaseと取消markerを使い、未検証のbackendを起動しない。Python不要取得helperの実downloadはCPython/Pillowとも確認済み。新初回GUIの実動作はまだ未検証。
+
+起動preflightは外部baseを公式nupkgから照合し、基本venvを公式wheel/launcher/base bindingと照合してから専用Pythonでprobe/backendを起動する。既存startup cacheはrelease inventory専用のためmanaged版では使用せず、毎回full検査。通常/起動確認のDB・設定は分け、runtimeだけを明示共有。既存同梱版のcache契約は維持。CLIの手動--check等へのmanaged保存先導線は未完。
+
+配布候補用mediaはFFmpeg公式download pageが案内するBtbN系[FFmpeg-Builds](https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases)のn8.1 win64 GPL ZIP。公開asset digest `e54b2fdb1af658faf60ebc805886f73d9c9903c6183c929ebb0aae6065d860a4`に一致、194,054,343bytes、実version n8.1.3-34-ga35157abb9-20261109。これはFFmpeg本家が作ったWindows binaryと称さない。原本ZIP/LICENSEをignoredに保持、今回のローカル候補の公開配布はしない。全依存NOTICE/対応sourceの公開義務確認は引き続き別途必要。
+
 続行分：native helperへ`--verify`を追加。公式archive自体のSHA512を再検証し、展開済み全fileを元archiveのbytesと照合、欠落/変更/余分file/links/hardlinksを拒否する。ローカルarchiveでの検査はコピー/stagingを新たに作らない。Ctrl+Cは協調取消し、公開直前にも確認する。GUIの取消・再開・通信read中の即時取消はまだ未接続。
 
 `tools/prepare_basic_runtime.py`はnativeで検証したCPython3.13.17から明示実行するオフライン構築処理。Pillow12.3.0 cp313 Windows x64 wheelを[公式PyPI metadata](https://pypi.org/pypi/Pillow/12.3.0/json)の固定SHA256で照合し、pipなしvenvへ導入する。`--wheel <wheel> --output <new-venv>`、再利用前検査は`--verify`。wheel全bytes/venv base binding/launcher一致、余分pth・script等を確認してからimport probe。base自体の公式原本確認はnative helperの責務。venv shell activation scriptsは製品から実行せず、その内容の真正性確認は本処理の保証に含めない。AI-ready markerは作らない。

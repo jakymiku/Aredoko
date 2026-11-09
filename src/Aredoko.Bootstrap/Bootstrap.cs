@@ -25,8 +25,10 @@ internal sealed class Bootstrap : Form
     Stream input;
     bool helloSent;
     volatile bool cancelRequested, interactive, finished;
+    volatile bool awaitingConsent;
     bool allowClose, failed;
     string logPath;
+    string setupCancelPath;
     long lastFrame=Stopwatch.GetTimestamp();
     readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer();
     readonly JavaScriptSerializer json=new JavaScriptSerializer { MaxJsonLength=4096, RecursionLimit=8 };
@@ -74,7 +76,7 @@ internal sealed class Bootstrap : Form
         // Rendering and the message pump precede all filesystem/runtime work.
         Shown+=delegate { Refresh();new Thread(Run){IsBackground=true,Name="Aredoko owner"}.Start(); };
         timer.Interval=1000;timer.Tick+=delegate {
-            if(!finished&&!interactive&&!cancelRequested&&(Stopwatch.GetTimestamp()-lastFrame)/(double)Stopwatch.Frequency>180)
+            if(!finished&&!interactive&&!cancelRequested&&!awaitingConsent&&(Stopwatch.GetTimestamp()-lastFrame)/(double)Stopwatch.Frequency>180)
             {stage.Text="準備に時間がかかっています。終了処理を待っています。";CancelStartup();}
         };timer.Start();
     }
@@ -83,6 +85,11 @@ internal sealed class Bootstrap : Form
     {
         if(interactive||cancelRequested)return;cancelRequested=true;
         cancel.Enabled=false;stage.Text="終了処理中です。しばらくお待ちください。";
+        if(setupCancelPath!=null)
+        {
+            try { using(var marker=new FileStream(setupCancelPath,FileMode.CreateNew,FileAccess.Write,FileShare.Read)){} }
+            catch(IOException error) { count.Text="取消通知を保存できませんでした: "+error.Message; }
+        }
         new Thread(delegate(){try{Send("cancel");}catch(Exception){}}){IsBackground=true}.Start();
     }
     void Send(string command)
@@ -114,6 +121,95 @@ internal sealed class Bootstrap : Form
             {Native.FileInfo info;if(!Native.GetFileInformationByHandle(file.SafeFileHandle,out info)||info.Links!=1)throw new IOException("通常のファイルを使用してください。");}
         }
     }
+
+    static string ManagedDirectory(string parent,string name)
+    {
+        Ordinary(parent,true);
+        var path=Path.Combine(parent,name);
+        if(!Directory.Exists(path))Directory.CreateDirectory(path);
+        Ordinary(path,true);return path;
+    }
+
+    void SetupCommand(string executable,string arguments,string root,FileStream log,string label)
+    {
+        if(cancelRequested)throw new OperationCanceledException();
+        Ordinary(executable,false);
+        UI(delegate {stage.Text=label;count.Text="検証が完了するまでお待ちください。";});
+        using(var child=new Process())
+        {
+            child.StartInfo=new ProcessStartInfo(executable,arguments) {UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,WorkingDirectory=root};
+            child.StartInfo.EnvironmentVariables.Remove("PYTHONHOME");child.StartInfo.EnvironmentVariables.Remove("PYTHONPATH");
+            child.StartInfo.EnvironmentVariables["PYTHONDONTWRITEBYTECODE"]="1";
+            child.StartInfo.EnvironmentVariables["PYTHONUTF8"]="1";
+            child.StartInfo.EnvironmentVariables["AREDOKO_SETUP_CANCEL"]=setupCancelPath;
+            var logLock=new object();
+            DataReceivedEventHandler record=delegate(object sender,DataReceivedEventArgs line) {
+                if(line.Data==null)return;
+                var bytes=Encoding.UTF8.GetBytes(line.Data+Environment.NewLine);
+                lock(logLock){log.Write(bytes,0,bytes.Length);log.Flush();}
+            };
+            child.OutputDataReceived+=record;child.ErrorDataReceived+=record;
+            child.Start();child.BeginOutputReadLine();child.BeginErrorReadLine();
+            // Children poll the cancellation marker; do not terminate a venv
+            // writer and then let another startup race its incomplete files.
+            while(!child.WaitForExit(100))Interlocked.Exchange(ref lastFrame,Stopwatch.GetTimestamp());
+            child.WaitForExit();
+            if(cancelRequested)throw new OperationCanceledException();
+            if(child.ExitCode!=0)throw new IOException(label+"に失敗しました。ログを確認してください。");
+        }
+    }
+
+    string EnsurePython(string root,string local,FileStream log)
+    {
+        var bundled=Path.Combine(root,"runtime","python","python.exe");
+        var manifest=Path.Combine(root,"manifest.json");Ordinary(manifest,false);
+        if(new FileInfo(manifest).Length>32*1024*1024)throw new IOException("配布情報が大きすぎます。");
+        var metadata=new JavaScriptSerializer {MaxJsonLength=32*1024*1024}.DeserializeObject(File.ReadAllText(manifest,Encoding.UTF8)) as Dictionary<string,object>;
+        const string identifier="cpython-3.13.17-pillow-12.3.0-win-x64-v1";
+        if(metadata!=null&&!metadata.ContainsKey("managed_python")) {Ordinary(bundled,false);return bundled;}
+        if(metadata==null||!metadata.ContainsKey("managed_python")||!Equals(metadata["managed_python"],identifier)
+            ||!metadata.ContainsKey("python_bundled")||!Equals(metadata["python_bundled"],false)
+            ||!metadata.ContainsKey("frontend_activation")||!Equals(metadata["frontend_activation"],"portable")
+            ||!metadata.ContainsKey("media_tools_bundled")||!Equals(metadata["media_tools_bundled"],true)
+            ||!metadata.ContainsKey("ai_runtime_bundled")||!Equals(metadata["ai_runtime_bundled"],false))
+            throw new IOException("同梱Pythonが見つかりません。配布物を確認してください。");
+        if(Directory.Exists(Path.Combine(root,"runtime","python")))
+            throw new IOException("Python非同梱版に予期しないPythonフォルダがあります。別の新規フォルダへ展開してください。");
+        var app=ManagedDirectory(local,"Aredoko");
+        var artifacts=ManagedDirectory(app,"runtime-artifacts");var runtimes=ManagedDirectory(app,"runtimes");
+        var package=Path.Combine(artifacts,"python.3.13.17.nupkg");
+        var wheel=Path.Combine(artifacts,"pillow-12.3.0-cp313-cp313-win_amd64.whl");
+        var basePython=Path.Combine(runtimes,"cpython-3.13.17");var environment=Path.Combine(runtimes,identifier);
+        var helper=Path.Combine(root,"tools","PythonSetup.exe");Ordinary(helper,false);
+        setupCancelPath=Path.Combine(app,"logs","setup-cancel-"+session);
+        // One owner for this shared setup location. Existing backend data and
+        // working environments are not deleted or overwritten.
+        var lease=Path.Combine(app,"runtime-setup.owner.lock");
+        if(File.Exists(lease))Ordinary(lease,false);
+        using(var owner=new FileStream(lease,FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None))
+        {
+            Native.FileInfo ownerInfo;
+            if(!Native.GetFileInformationByHandle(owner.SafeFileHandle,out ownerInfo)||ownerInfo.Links!=1||(ownerInfo.Attributes&0x400)!=0)
+                throw new IOException("基本環境の保存先を確認できません。");
+            if(cancelRequested)throw new OperationCanceledException();
+            if(!File.Exists(package)||!File.Exists(wheel))
+            {
+                if(smoke)throw new IOException("基本環境が未導入です。通常のAredoko.exeから準備してください。");
+                DialogResult choice=DialogResult.Cancel;
+                awaitingConsent=true;
+                Invoke((Action)delegate { choice=MessageBox.Show(this,"Aredokoの基本機能に必要なPython 3.13.17とPillow 12.3.0を公式配布元から取得します。\n取得は約22MBです。展開・構築用に300MB以上の空き容量を推奨します。\nアプリ専用領域へ保存し、システムのPythonやPATHは変更しません。\nAI環境・モデルはここでは取得しません。\n\n準備を開始しますか？","Aredoko 初回準備",MessageBoxButtons.OKCancel,MessageBoxIcon.Information); });
+                awaitingConsent=false;
+                Interlocked.Exchange(ref lastFrame,Stopwatch.GetTimestamp());
+                if(choice!=DialogResult.OK)throw new OperationCanceledException();
+            }
+            if(!File.Exists(package))SetupCommand(helper,"--fetch cpython \""+package+"\"",root,log,"Pythonを取得しています");
+            if(!File.Exists(wheel))SetupCommand(helper,"--fetch pillow \""+wheel+"\"",root,log,"画像処理ライブラリを取得しています");
+            SetupCommand(helper,"\""+basePython+"\" \""+package+"\""+(Directory.Exists(basePython)?" --verify":""),root,log,"Pythonを検証・配置しています");
+            var script=Path.Combine(root,"tools","prepare_basic_runtime.py");Ordinary(script,false);
+            SetupCommand(Path.Combine(basePython,"tools","python.exe"),"-I -X utf8 -B \""+script+"\" --wheel \""+wheel+"\" --output \""+environment+"\""+(Directory.Exists(environment)?" --verify":""),root,log,"基本環境を構築・確認しています");
+        }
+        return Path.Combine(environment,"Scripts","python.exe");
+    }
     void Run()
     {
         IntPtr process=IntPtr.Zero;
@@ -125,7 +221,7 @@ internal sealed class Bootstrap : Form
             // CREATE_NO_WINDOW keeps it console-free; pythonw may expose None streams.
             var python=Path.Combine(root,"runtime","python","python.exe");
             var script=Path.Combine(root,"tools","launch_release.py");
-            Ordinary(python,false);Ordinary(script,false);
+            Ordinary(script,false);
             var local=LocalDataRoot(Environment.GetEnvironmentVariable("LOCALAPPDATA"));
             Ordinary(local,true);
             var logDirectory=Path.Combine(local,"Aredoko","logs");
@@ -137,6 +233,7 @@ internal sealed class Bootstrap : Form
             using(var log=new FileStream(logPath,FileMode.CreateNew,FileAccess.Write,FileShare.Read))
             {
                 Native.FileInfo logInfo;if(!Native.GetFileInformationByHandle(log.SafeFileHandle,out logInfo)||logInfo.Links!=1)throw new IOException("ログの保存先を確認できません。");
+                python=EnsurePython(root,local,log);Ordinary(python,false);log.Flush();
                 Stream output;
                 process=Native.Start(python,"\""+python+"\" -I -X utf8 -B -u \""+script+"\" "+(smoke?"--startup-smoke":"--startup-owned"),root,log.SafeFileHandle.DangerousGetHandle(),out input,out output);
                 bool resultSeen=false, helloSeen=false;
@@ -177,6 +274,10 @@ internal sealed class Bootstrap : Form
                 uint exitCode;if(!Native.GetExitCodeProcess(process,out exitCode)||(!cancelRequested&&exitCode!=0)||!resultSeen)
                     throw new IOException("起動を完了できませんでした。");
             }
+            finished=true;UI(delegate {allowClose=true;Close();});
+        }
+        catch(OperationCanceledException)
+        {
             finished=true;UI(delegate {allowClose=true;Close();});
         }
         catch(Exception error)

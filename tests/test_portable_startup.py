@@ -56,6 +56,53 @@ class PortableStagingTests(unittest.TestCase):
         return staging.release.package(self.output, skip_build=True, python_runtime=python, media_tools=media,
             portable_frontend=frontend, bootstrap=bootstrap)
 
+    def managed_stage(self):
+        frontend, bootstrap = self.source()
+        _, media = staging.ReleaseStagingTests.runtime(self)
+        helper = self.base / 'PythonSetup.exe'
+        helper.write_bytes(pe_fixture())
+        script = self.repo / 'tools/prepare_basic_runtime.py'
+        script.write_text('# generated setup fixture')
+        manifest = staging.release.package(self.output, skip_build=True, media_tools=media,
+            portable_frontend=frontend, bootstrap=bootstrap, managed_python_setup=helper)
+        return manifest
+
+    def test_managed_python_package_is_explicit_and_never_bundles_python(self):
+        manifest = self.managed_stage()
+        self.assertFalse(manifest['python_bundled'])
+        self.assertEqual(manifest['managed_python'], runtime.MANAGED_PYTHON)
+        self.assertFalse((self.output / 'runtime/python').exists())
+        self.assertTrue((self.output / 'tools/PythonSetup.exe').is_file())
+        runtime.verify_release(self.output)
+        # A rewritten acquisition ID cannot silently opt out of runtime checks.
+        manifest['managed_python'] = 'untrusted-latest'
+        (self.output / 'manifest.json').write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'managed Python'):
+            runtime.verify_release(self.output)
+
+    def test_managed_preflight_requires_explicit_data_and_checks_both_artifacts(self):
+        self.managed_stage()
+        import launch_release as launcher
+        with self.assertRaisesRegex(ValueError, 'explicit application data'):
+            launcher.preflight(self.output, imports=False)
+        data = self.base / 'generated data'
+        base, environment, package, wheel = launcher.managed_python_paths(data)
+        for path in (base / 'tools/python.exe', environment / 'Scripts/python.exe', package, wheel):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'generated placeholder; never executed')
+        completed = subprocess.CompletedProcess([], 0, '', '')
+        with patch.object(launcher, '_runtime_check', return_value=completed) as check:
+            manifest = launcher.preflight(self.output, imports=False, managed_data=data)
+        self.assertEqual(manifest['managed_python'], runtime.MANAGED_PYTHON)
+        self.assertEqual(check.call_count, 2)
+        self.assertEqual(check.call_args_list[0].args[0],
+                         [str(self.output / 'tools/PythonSetup.exe'), str(base), str(package), '--verify'])
+        self.assertIn(str(wheel), check.call_args_list[1].args[0])
+        with patch.object(launcher, '_runtime_check', return_value=subprocess.CompletedProcess([], 1, '', 'generated hash mismatch')) as check:
+            with self.assertRaisesRegex(RuntimeError, 'hash mismatch'):
+                launcher.preflight(self.output, imports=False, managed_data=data)
+        self.assertEqual(check.call_count, 1)
+
     def test_explicit_portable_package_has_all_owned_entrypoints_and_readonly_zip(self):
         manifest = self.stage()
         self.assertEqual(manifest['frontend_activation'], 'portable')
@@ -228,7 +275,7 @@ class OwnedWorkerTests(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as temp:
             called = []
-            def launch(root, data, settings, *, progress, startup_pipe):
+            def launch(root, data, settings, *, progress, startup_pipe, runtime_data=None):
                 called.append((data, settings));startup_pipe.mark_ready()
             class Incoming:
                 def __init__(self):self.first = True;self.closed = threading.Event()

@@ -59,7 +59,7 @@ class ModelRoleLocationsTests(unittest.TestCase):
         def ai(*a,**kw):observed['embedding']=kw['models_root'];return DisabledAI()
         def tagger(*a,**kw):observed['tagger']=kw['models_root'];return DisabledTagger()
         fake=SimpleNamespace(server_port=0,server_close=lambda:None,serve_forever=lambda **kw:None)
-        with patch.object(server,'create_ai',side_effect=ai),patch.object(server,'create_intent',side_effect=intent),patch.object(server,'create_tagger',side_effect=tagger),patch.object(server,'ThreadingHTTPServer',return_value=fake):server._serve(args)
+        with patch.object(server,'create_ai',side_effect=ai),patch.object(server,'create_intent',side_effect=intent),patch.object(server,'create_tagger',side_effect=tagger),patch.object(server,'OwnedHTTPServer',return_value=fake):server._serve(args)
         self.assertEqual(observed,{r:Path(self.values[f]) for r,f in MODEL_ROOT_FIELDS.items()})
     def test_invalid_direct_cli_role_root_fails_before_creating_database(self):
         output=self.base/'untouched'/'catalog.sqlite'

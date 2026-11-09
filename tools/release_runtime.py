@@ -14,6 +14,7 @@ from storage_lease import plain_path
 from startup_progress import StartupProgress
 
 MANIFEST_LIMIT = 32 * 1024 * 1024
+MANAGED_PYTHON = 'cpython-3.13.17-pillow-12.3.0-win-x64-v1'
 REQUIRED_FILES = {'bin/Aredoko.WinUI.exe', 'bin/Aredoko.WinUI.dll', 'bin/Aredoko.Core.dll',
                   'bin/Aredoko.WinUI.deps.json', 'bin/Aredoko.WinUI.runtimeconfig.json',
                   'backend/app/production_server.py', 'backend/app/storage_schema_v1.json',
@@ -201,8 +202,14 @@ def _verify_inventory(root, data, entries, expected, total, progress, *, actual=
         raise ValueError('Unsupported frontend activation')
     if activation == 'msix' and not {'frontend/Aredoko.msix', 'tools/packaged_frontend.py'} <= expected:
         raise ValueError('Release inventory is missing packaged frontend files')
+    managed = data.get('managed_python')
+    if managed is not None and (managed != MANAGED_PYTHON or activation != 'portable'
+            or data.get('python_bundled') is not False or data.get('ai_runtime_bundled') is not False
+            or not {'tools/PythonSetup.exe', 'tools/prepare_basic_runtime.py'} <= expected
+            or any(name.startswith('runtime/python/') for name in expected)):
+        raise ValueError('Invalid managed Python acquisition contract')
     if activation == 'portable' and (not {'Aredoko.exe', 'bin/portable-build.json', 'tools/portable_frontend.py', 'tools/startup_ipc.py', 'tools/startup_progress.py'} <= expected
-            or data.get('python_bundled') is not True or data.get('media_tools_bundled') is not True):
+            or (managed is None and data.get('python_bundled') is not True) or data.get('media_tools_bundled') is not True):
         raise ValueError('Release inventory is missing portable runtime or bootstrap files')
     if actual != expected | {'manifest.json', 'sha256sums.txt'}:
         raise ValueError('Unlisted or missing release files')

@@ -2,6 +2,9 @@
 
 ## 2026-11-10 開発再開（以下の計画のみ・SDK延期より優先）
 
+- **継続checkpoint 2（a74ffaf後、作業継続中）**：managed_pythonの固定IDを持つPortableだけがPython非同梱を選べる配布契約を追加。native初回案内→公式CPython/Pillowの固定hash取得→基本venv構築/再検証→launcher/backendへ専用Pythonを渡すsourceを接続。Cancel markerと排他setup lease、同梱版へのfallback拒否、通常DBとsmoke DBを分けたruntime共有を実装。Bootstrap compile/CPU selftest成功、初回GUIは未実施。外部runtimeはrelease-only起動receiptを使わず毎回full検査。
+- **関連CPU/配布準備**：managed packaging/preflight生成2PASS、既存Portable staging+基本14PASS、owned worker/進捗17PASS、startup cache19中17PASS/2symlink権限skip（新managed cache拒否も別PASS）、復元選択/モデル配置の対象31中旧server名mock1ERROR→現行OwnedHTTPServerへ修正し該当8PASS。最初の広いportable suiteはOS sandboxのloopback/hardlink制約とUTF-8指定漏れで1FAIL/4ERROR。原因を分け、通常ホスト権限・製品同様-X utf8で対象staging9PASS。全GUI/P7/全回帰受入としない。
+- **実物**：frontend-managed01を専用SDKでpublish/receipt照合（既存WUI1001×3/IL2104×2のみ）。FFmpeg公式案内先のBtbN系n8.1 vendor ZIPを公開SHA256照合して復旧、ffmpeg/ffprobe -version成功。vendor原本/licenseとmedia-managed01をignoredに保持。新Python非同梱候補を梱包する段階、まだ通常EXE/初回GUIの実証なし。FFmpeg GPL/NOTICE/source提供の公開準備は別残件で、今回の候補を公開配布済みとしない。
 - **継続checkpoint（aab70b5後）**：userからクォータ残り10%前後までの継続指示を再確認。一区切りで止めない。取得済みPythonの`--verify`を追加し公式nupkg再照合→全展開file照合/余分・欠落・変更拒否/links拒否、Ctrl+C時の未公開を実装。正常・変更・欠落・追加fileでCPU確認。`prepare_basic_runtime.py`で公式Pillow12.3.0 cp313 wheelの固定SHA256→pipなし基本venv構築→wheel bytes/venv launcher/base binding/余分なpth・script検証→import probeを実装。実基本venv正常、生成単体5 PASS。
 - **実利用のCPU範囲**：同venvで生成PNG登録→filename検索→catalog再open後検索→原本SHA/mtime不変→DB integrity ok。ignored data/development-tools/basic-catalog-fixture01/result.json。実backend lifecycleは通常ホスト権限で10 PASS/17.935s（GUI/GPUなし）。Codex OS sandbox内では同suiteがloopback startup timeoutで3FAIL/2ERROR/92.004s、実行条件を切り替えて解消。製品の起動不能と断定しない。GUI/AI/通常DB未使用。通常bootstrapとの接続は引き続き未完。
 - userが専用folder開発方式で実装再開を指示。GUI/GPU試験は直前に一言知らせる。今回はCPUのみでGUI/GPU未使用。ホストへ永続PATH/SDK登録/Visual Studio/WinApp導入なし。ただし.NET初回動作が開発HTTPS証明書を生成（信頼操作なし）、以後wrapperで生成無効。OS完全隔離とは称さない。

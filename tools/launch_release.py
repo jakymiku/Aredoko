@@ -14,7 +14,7 @@ from contextlib import nullcontext
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from release_runtime import verify_release, python_layout, media_layout, runtime_environment
+from release_runtime import verify_release, python_layout, media_layout, runtime_environment, MANAGED_PYTHON
 from storage_lease import plain_path, storage_parent, storage_lease
 from packaged_frontend import prepare_frontend
 from startup_progress import StartupCancelled, StartupProgress
@@ -112,17 +112,41 @@ def _runtime_check(command, *, root, timeout, progress, capture=False):
             _stop_owned(child)
 
 
-def preflight(root, *, imports=True, progress=None):
+def managed_python_paths(data):
+    runtime = data / 'runtimes'
+    artifacts = data / 'runtime-artifacts'
+    return (runtime / 'cpython-3.13.17', runtime / MANAGED_PYTHON,
+            artifacts / 'python.3.13.17.nupkg', artifacts / 'pillow-12.3.0-cp313-cp313-win_amd64.whl')
+
+
+def preflight(root, *, imports=True, progress=None, managed_data=None):
     control = progress if progress is not None else StartupProgress()
     manifest = verify_release(root, progress=progress)
     with control.phase('runtime_layout'):
-        if manifest.get('python_bundled') is not True or manifest.get('media_tools_bundled') is not True:
+        managed = manifest.get('managed_python') == MANAGED_PYTHON
+        if (not managed and manifest.get('python_bundled') is not True) or manifest.get('media_tools_bundled') is not True:
             raise ValueError('The staged release needs bundled Python and FFmpeg/ffprobe')
-        python_layout(root / 'runtime/python', manifest.get('ai_runtime_bundled') is True, progress=progress)
+        python = root / 'runtime/python/python.exe'
+        if managed:
+            if managed_data is None:
+                raise ValueError('Managed Python requires an explicit application data directory')
+            base, environment, package, wheel = managed_python_paths(managed_data)
+            python = environment / 'Scripts/python.exe'
+            for path in (base, environment):plain_path(path, directory=True)
+            for path in (package, wheel, base / 'tools/python.exe', python):plain_path(path)
+            commands = ([str(root / 'tools/PythonSetup.exe'), str(base), str(package), '--verify'],
+                        [str(base / 'tools/python.exe'), '-I', '-X', 'utf8', '-B', str(root / 'tools/prepare_basic_runtime.py'),
+                         '--wheel', str(wheel), '--output', str(environment), '--verify'])
+            for command in commands:
+                result = _runtime_check(command, root=root, timeout=90, progress=control, capture=True)
+                if result.returncode:
+                    raise RuntimeError('Managed Python verification failed: ' + result.stderr[-2000:])
+        else:
+            python_layout(root / 'runtime/python', manifest.get('ai_runtime_bundled') is True, progress=progress)
         media_layout(root / 'runtime/media', progress=progress)
     if imports:
         if os.name != 'nt':raise RuntimeError('Windows runtime checks require Windows')
-        args = [str(root / 'runtime/python/python.exe'), '-B', str(root / 'tools/probe_release_runtime.py')]
+        args = [str(python), '-I', '-X', 'utf8', '-B', str(root / 'tools/probe_release_runtime.py')]
         if manifest.get('ai_runtime_bundled') is True:args.append('--ai')
         with control.phase('python_imports'):
             result = _runtime_check(args, root=root, timeout=90, progress=control, capture=True)
@@ -228,7 +252,7 @@ def run_session(backend_command, app_command, *, port, instance, logs, cwd, env,
     if restore_handoff is not None:return restore_handoff.finish(effective_data,backend,app)
 
 
-def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full=False, preferences_path=None, startup_overrides=None):
+def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full=False, preferences_path=None, startup_overrides=None, runtime_data=None):
     # All writable state stays outside the versioned release. Reject accidental
     # source/payload placement before creating logs or opening a database.
     def validate_writable_locations(current):
@@ -247,7 +271,7 @@ def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full
             if not rolled_back and startup_overrides:settings.update(startup_overrides)
             validate_writable_locations(settings)
         for attempt in range(8):
-            result=_launch_once(root,data,settings,progress=progress if attempt==0 else None,startup_pipe=startup_pipe if attempt==0 else None,force_full=force_full,preferences_path=preferences_path,explicit_profile=attempt==0 and bool(startup_overrides and startup_overrides.get('ai_profile')))
+            result=_launch_once(root,data,settings,progress=progress if attempt==0 else None,startup_pipe=startup_pipe if attempt==0 else None,force_full=force_full,preferences_path=preferences_path,explicit_profile=attempt==0 and bool(startup_overrides and startup_overrides.get('ai_profile')),runtime_data=runtime_data)
             if not isinstance(result,dict) or result.get('restart') is not True:return result
             check_pending_restore(data)
             settings=load_settings(data,preferences_path)
@@ -255,7 +279,7 @@ def launch(root, data, settings, *, progress=None, startup_pipe=None, force_full
         raise RuntimeError('Too many restore restarts in one launcher session')
 
 
-def _launch_once(root,data,settings,*,progress=None,startup_pipe=None,force_full=False,preferences_path=None,explicit_profile=False):
+def _launch_once(root,data,settings,*,progress=None,startup_pipe=None,force_full=False,preferences_path=None,explicit_profile=False,runtime_data=None):
     instance = secrets.token_hex(16)
     logs = data / 'logs' / (time.strftime('%Y%m%d-%H%M%S') + '-' + instance)
     storage_parent(logs / 'launcher.log');plain_path(logs, directory=True)
@@ -277,7 +301,14 @@ def _launch_once(root,data,settings,*,progress=None,startup_pipe=None,force_full
     try:
         from startup_validation import startup_preflight
         manifest = startup_preflight(root, data / 'release-validation',
-            lambda: preflight(root, progress=progress), progress=progress, force_full=force_full)
+            lambda: preflight(root, progress=progress, managed_data=runtime_data if runtime_data is not None else data),
+            progress=progress, force_full=force_full)
+        if manifest.get('managed_python') == MANAGED_PYTHON:
+            _, environment, _, _ = managed_python_paths(runtime_data if runtime_data is not None else data)
+            backend[0] = str(environment / 'Scripts/python.exe')
+            ai_argument = backend.index('--ai-python') + 1
+            if backend[ai_argument] == str(root / 'runtime/python/python.exe'):
+                backend[ai_argument] = backend[0]
         if progress is not None:progress.check_cancelled()
         portable = manifest.get('frontend_activation') == 'portable'
         if startup_pipe is not None and not portable:raise ValueError('The owned bootstrap requires an explicit portable release')

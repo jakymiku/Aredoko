@@ -107,6 +107,9 @@ def startup_preflight(root, cache_directory, full_check, *, progress=None,
         root, manifest, entries, expected, total = runtime._manifest(root, control)
         manifest_hash = runtime.digest(plain_path(root / 'manifest.json'), progress=control)
     if manifest.get('frontend_activation') != 'portable':return full_check()
+    # This receipt inventories the release only, never the external Python.
+    # Managed-runtime startup remains a full check until its own cache exists.
+    if 'managed_python' in manifest:return full_check()
     normalized_root = os.path.normcase(str(root))
     identity = {'format': FORMAT, 'root': normalized_root,
                 'manifest': manifest_hash, 'contract': contract}

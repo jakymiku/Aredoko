@@ -46,6 +46,14 @@ class BasicRuntimeTests(unittest.TestCase):
     def test_verified_bytes_and_base_are_accepted(self):
         self.verify()
 
+    def test_cancel_before_setup_does_not_touch_environment(self):
+        marker = self.output / 'generated-cancel-marker'
+        marker.write_text('generated fixture')
+        with patch.dict(runtime.os.environ, {'AREDOKO_SETUP_CANCEL': str(marker)}):
+            with self.assertRaises(InterruptedError):
+                runtime.prepare(self.output / 'absent-wheel.whl', self.output / 'not-created')
+        self.assertFalse((self.output / 'not-created').exists())
+
     def test_changed_pillow_is_refused(self):
         (self.site / 'PIL/__init__.py').write_bytes(b'changed fixture')
         with self.assertRaisesRegex(ValueError, 'Pillow file changed'):

@@ -11,7 +11,7 @@ $build = Join-Path $root 'data/development-tools'
 New-Item -ItemType Directory -Force $build | Out-Null
 $compiler = Join-Path ([Environment]::GetFolderPath('Windows')) 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $executable = Join-Path $build ('PythonSetup-' + [Guid]::NewGuid().ToString('N') + '.exe')
-& $compiler /nologo /target:exe /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll "/out:$executable" (Join-Path $root 'src/Aredoko.Bootstrap/PythonSetup.cs')
+& $compiler /nologo /target:exe /platform:x64 /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll "/out:$executable" (Join-Path $root 'src/Aredoko.Bootstrap/PythonSetup.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Native acquisition helper compilation failed' }
 $arguments = @($OutputDirectory, $Package)
 if ($Verify) { $arguments += '--verify' }

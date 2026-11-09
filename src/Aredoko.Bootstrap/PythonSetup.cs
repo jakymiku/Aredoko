@@ -30,6 +30,7 @@ internal static class PythonSetup
         try
         {
             Console.CancelKeyPress += delegate(object sender, ConsoleCancelEventArgs eventArgs) { eventArgs.Cancel = true; cancelled = true; };
+            if(args.Length == 3 && args[0] == "--fetch") { Fetch(args[1], args[2]); return 0; }
             if(args.Length != 2 && !(args.Length == 3 && args[2] == "--verify")) throw new ArgumentException("Usage: PythonSetup.exe <output-directory> <package-or-download> [--verify]");
             Prepare(args[0], args[1], args.Length == 3);
             return 0;
@@ -51,8 +52,66 @@ internal static class PythonSetup
         }
     }
 
+    static void Fetch(string artifact, string destination)
+    {
+        CheckCancelled();
+        string url, expected;
+        bool python = artifact == "cpython";
+        if(python) { url = Url; expected = Hash; }
+        else if(artifact == "pillow")
+        {
+            url = "https://files.pythonhosted.org/packages/a6/9b/7a58e61d62be561da3a356fe2384d4059a6345fc130e23ef1c36a5b81d24/pillow-12.3.0-cp313-cp313-win_amd64.whl";
+            expected = "1cca606cd25738df4ed873d5ad46bbdb3d83b5cbca291f6b4ff13a4df6b0bbe8";
+        }
+        else throw new ArgumentException("Unknown fixed artifact.");
+        destination = Path.GetFullPath(destination);
+        var parent = Path.GetDirectoryName(destination);
+        DirectoryGuard(parent);
+        if(File.Exists(destination) || Directory.Exists(destination)) throw new IOException("Artifact destination already exists.");
+        var temporary = Path.Combine(parent, "artifact-" + Guid.NewGuid().ToString("N") + ".partial");
+        Download(url, temporary);
+        using(var input = new FileStream(temporary, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using(var sha = python ? (HashAlgorithm)SHA512.Create() : SHA256.Create())
+        {
+            SingleLink(input);
+            var hash = sha.ComputeHash(input);
+            var actual = python ? Convert.ToBase64String(hash) : BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+            if(actual != expected) throw new IOException("Official artifact hash mismatch; not published.");
+        }
+        CheckCancelled();
+        DirectoryGuard(parent);
+        File.Move(temporary, destination);
+        Console.WriteLine("Verified official artifact: " + artifact);
+    }
+
+    static void Download(string url, string destination)
+    {
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+        var request = (HttpWebRequest)WebRequest.Create(url);
+        request.AllowAutoRedirect = false;
+        request.Timeout = 60000;
+        request.ReadWriteTimeout = 60000;
+        using(var response = (HttpWebResponse)request.GetResponse())
+        {
+            if(response.StatusCode != HttpStatusCode.OK) throw new IOException("Unexpected package response.");
+            if(response.ContentLength > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
+            using(var input = response.GetResponseStream())
+            using(var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write))
+            {
+                var buffer = new byte[65536]; long total = 0; int count;
+                while((count = input.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    CheckCancelled(); total += count;
+                    if(total > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
+                    output.Write(buffer, 0, count);
+                }
+            }
+        }
+    }
+
     static void Prepare(string destination, string package, bool verify)
     {
+        CheckCancelled();
         destination = Path.GetFullPath(destination);
         var parent = Path.GetDirectoryName(destination);
         DirectoryGuard(parent);
@@ -66,30 +125,7 @@ internal static class PythonSetup
         if(package == "download")
         {
             Console.WriteLine("Downloading official CPython 3.13.17...");
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            var request = (HttpWebRequest)WebRequest.Create(Url);
-            request.AllowAutoRedirect = false;
-            request.Timeout = 60000;
-            request.ReadWriteTimeout = 60000;
-            using(var response = (HttpWebResponse)request.GetResponse())
-            {
-                if(response.StatusCode != HttpStatusCode.OK) throw new IOException("Unexpected package response.");
-                if(response.ContentLength > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
-                using(var input = response.GetResponseStream())
-                using(var output = new FileStream(archive, FileMode.CreateNew, FileAccess.Write))
-                {
-                    var buffer = new byte[65536];
-                    long total = 0;
-                    int count;
-                    while((count = input.Read(buffer, 0, buffer.Length)) != 0)
-                    {
-                        CheckCancelled();
-                        total += count;
-                        if(total > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
-                        output.Write(buffer, 0, count);
-                    }
-                }
-            }
+            Download(Url, archive);
         }
         else
         {
@@ -177,6 +213,8 @@ internal static class PythonSetup
 
     static void CheckCancelled()
     {
+        var marker = Environment.GetEnvironmentVariable("AREDOKO_SETUP_CANCEL");
+        if(!String.IsNullOrEmpty(marker) && File.Exists(marker)) cancelled = true;
         if(cancelled) throw new OperationCanceledException("Python preparation cancelled; environment not published.");
     }
 }
