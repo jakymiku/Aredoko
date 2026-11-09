@@ -1,5 +1,27 @@
 # 通常起動とAI追加環境を分ける配布計画
 
+## 2026-11-10 開発再開：専用フォルダのSDK
+
+ユーザー承認で計画段階を終了し実装を再開。開発はホストの専用フォルダ方式を第一選択とする。以下の「SDK導入は検索受入後」「ビルドはSandbox」は11月9日の計画で、この変更により置き換える。システムへのSDK登録や永続PATH変更を避け、配布版の通常起動へ開発環境変数を引き継がない。完全な開発環境未導入条件の受入はSandbox等で別に行う。GUI/GPU試験は実行前にユーザーへ知らせる。
+
+`tools/prepare-dev-dotnet.ps1`はMicrosoft公式の.NET SDK 10.0.403 win-x64 ZIPを固定SHA512で照合し、ignoredの`data/development-tools`へ新規展開する。版/hashの根拠はMicrosoftの[10.0 release metadata](https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json)。既存SDK directoryは上書きせず、取得/hash失敗時は未完fileを実行しない。これは開発用で、製品の初回取得経路ではない。
+
+利用例：`./tools/dev-dotnet.ps1 build src/Aredoko.WinUI/Aredoko.WinUI.csproj -c Portable '--property:Platform=x64' '--property:AredokoPackageChannel=Portable'`。PowerShellのコロン付き短縮引数解釈を避けるため、MSBuild propertyは引用した長形式で渡す。SDK/CLI home/NuGet cacheは専用directoryに集約し、成功・失敗ともプロセス環境変数を復元する。永続PATH/registryを書き換えず、Visual Studio/WinApp GUIを導入しない。OSの完全隔離ではない。
+
+SDK初回起動が開発HTTPS証明書を生成したことを観測した。信頼操作は未実施。wrapperへ`DOTNET_GENERATE_ASPNET_CERTIFICATE=false`を追加して以後の生成を抑止した。システム全体の変更が一切ないと報告しない。
+
+製品用Pythonは未選定。公式NuGetの3.11系列は照会時3.11.9までのため、開発互換性だけで古い版を標準採用しない。更新される公式配布形式と対応AI依存の組合せを次に実証する。既存backendのABI検証はPython 3.11以上を受け入れるが、これだけで新しいPython版の推論互換性を保証しない。
+
+### Pythonなしの取得処理：最初のCPU実証
+
+`src/Aredoko.Bootstrap/PythonSetup.cs`はWindows同梱.NET Frameworkで動く独立console helper。公式CPython NuGet 3.13.17を候補として固定URL/公開SHA512で照合し、新規stagingに展開してから指定した未使用directoryへ公開する。既存環境は上書きしない。hash不一致・異常path・取得失敗を拒否し、失敗stageは証拠として保持する。downloadはTLS1.2・redirect拒否・128MiB上限。検証から展開までarchiveをwrite不可で保持する。SHAの根拠は[NuGet公式registration](https://api.nuget.org/v3/registration5-semver1/python/3.13.17.json)から参照するcatalogEntryのpackageHash。
+
+開発入口は`./tools/prepare-native-python.ps1 -OutputDirectory <新規directory> [-Package <取得済nupkg>]`。Package省略は実downloadのため明示した取得操作としてのみ使う。初回GUIや通常bootstrapからの自動呼出しは未接続。現在の配布検証は同梱Pythonを前提としており、このhelperだけで新方式の配布完了とはしない。取得済環境の再利用・取消/再開・進捗通知・修復・AI venv導入・製品runtimeへの接続は次の実装。
+
+2026-11-10 CPU証拠：公式公開SHA512一致のnupkgでnative helperの展開成功、実downloadも成功。初回downloadのTLS失敗はTLS1.2明示後に解決。破損fixtureはhash不一致で公開directoryなし、既存destinationは拒否。展開したPython3.13.17のSSL/SQLite/import正常、SQLite in-memory integrity ok。別の同じ公式packageからvenv作成→pip26.2.2起動を確認。AI依存・実モデルload/検索・通常DB・GUI/GPUは未実施。ignored `data/development-tools`に取得物/専用SDK/venv/失敗stageを保持する。
+
+専用SDKでWinUI Portable build成功（0error/既存WUI1001×3）、Core CPU suite exit0、既存取得登録CPU8件PASS。wrapperは成功/失敗時のPATH/DOTNET_ROOT/NUGET_PACKAGES/CLI_HOME復元を確認。初回のPowerShell引数解釈とnull環境変数復元の不備は修正済み。全媒体/配布先の受入ではない。
+
 ## 2026-11-09 ユーザー指定の完成形（以下の旧方式より優先）
 
 - 配布物にはPythonを含めない。Pythonなしで動くネイティブbootstrapが初回起動で取得内容・容量・進捗を示し、アプリ専用の基本Pythonを取得・検証して基本機能を起動する。システムPythonやPATHに依存しない。

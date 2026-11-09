@@ -1,5 +1,13 @@
 # Aredoko — 現行の単一引き継ぎ（2026-11-04）
 
+## 2026-11-10 開発再開（以下の計画のみ・SDK延期より優先）
+
+- userが専用folder開発方式で実装再開を指示。GUI/GPU試験は直前に一言知らせる。今回はCPUのみでGUI/GPU未使用。ホストへ永続PATH/SDK登録/Visual Studio/WinApp導入なし。ただし.NET初回動作が開発HTTPS証明書を生成（信頼操作なし）、以後wrapperで生成無効。OS完全隔離とは称さない。
+- 起点5f74881、fetchとPR5 head一致。新しい開発用prepare-dev-dotnet/dev-dotnet scriptsで公式.NET10.0.403 ZIPを固定SHA512照合してignored専用folderへ配置。NuGet/CLI cacheも集約、成功/失敗時の環境変数復元を実証。WinUI Portable build成功0error/既存WUI1001×3、Core CPU suite exit0、取得登録CPU8 PASS。新branch/Actions/main mergeなし、Aredoko-test不干渉。
+- Python不要のnative取得helper `PythonSetup.cs`と明示開発入口prepare-native-python.ps1を追加。公式PSF NuGet Python3.13.17を固定URL/公開SHA512検証→新規stage→未使用destinationへ配置。実download/正常展開、破損hash拒否・公開なし、既存destination拒否、展開PythonのSSL/SQLite正常を確認。同公式packageでvenv/pip起動も成功。初回TLS失敗はプロセス内TLS1.2指定後に解決。通常DB/私物/モデル変更なし。
+- **未完を区別**：通常bootstrap/配布manifestはまだ同梱Python前提。helperは独立console段階で、製品初回GUI・取消/再開/再利用/修復・AI venv/モデル/推論/検索は未接続・未検証。Python3.13.17は配布候補でAI互換性未受入。証拠と取得定義はlightweight-distribution冒頭、ignored data/development-toolsへ保存。
+- **次の1件**：native helperを製品初回導線へ接続する前に、外部のアプリ専用基本Pythonを既存release manifest/startup validatorが扱う契約を最小変更で実装する。検証済artifactに束縛した再利用/取消/進捗/公開receiptを加え、基本backend起動をCPUで確認する。その後AI opt-in venvへ。SDK復旧や全回帰を主作業へ戻さない。
+
 ## 2026-11-09 環境復元後の再確認（以下より優先）
 
 - **最新user指定：今回は計画のみ**。ホストへの開発SDK/WinApp/開発venv導入は、配布EXEから環境取得→AI起動→生成素材の索引/検索まで受入してから。以前の基本依存復旧許可を先行実行しない。[配布計画の実装順序0–6](lightweight-distribution.md#実装再開時の計画2026-11-09現在は計画のみ)へ作業単位・完了条件を整理。ビルドはSandbox等の隔離環境、ホストは製品が管理するruntimeの導入試験に残す。既存Python3.13があるため完全なPython未導入試験とは区別する。次の1件は、実装再開指示後に公式Pythonのvenv/pip対応形式・固定artifact検証契約・隔離ビルド手段を確定すること。新取得経路は未実装、今回は取得/環境導入なし。
