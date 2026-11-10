@@ -2,7 +2,7 @@
 
 ## 2026-11-10 続行：導入済み環境と削除可能cacheの分離
 
-`aredoko-managed-ai-runtime-v1`は、固定公式44wheelのSHA256と展開payloadを照合した後、その原本由来のhashをreceiptへ保存する。基本CPythonは公式nupkgのSHA512とbase binding/launcherを検証する。モデルの生成素材による実推論を終えるまでreceipt/利用設定を公開しない。初回選択では元wheelとの来歴照合も必須とし、自己申告のfile inventoryだけを信用しない。保存したreceipt SHAをlaunch settingsへ固定した後は、元wheelを消しても実行fileの完全照合を行える。小さい基本CPython nupkgは検証に必要なため保持する。これはpublisher署名や、同じWindows userによるappとsettings両方の差替えを防ぐ仕組みではない。
+`aredoko-managed-ai-runtime-v1`は、固定公式44wheelのSHA256と展開payloadを照合した後、その原本由来のhashをreceiptへ保存する。基本CPythonは公式nupkgのSHA512とbase binding/launcherを検証する。モデルの生成素材による実推論を終えるまでreceipt/利用設定を公開しない。初回選択では元wheelとの来歴照合も必須とし、自己申告のfile inventoryだけを信用しない。保存したreceipt SHAをlaunch settingsへ固定した後は、元wheelを消しても実行fileの完全照合を行える。小さい基本CPython nupkgは検証に必要なため保持する。最終reviewでmanaged AI venvも既存basic verifierと同じ5個のpyvenv.cfg keyだけへ制限し、CPython site.pyが小文字化する大文字alias/余分keyでsystem/user siteを有効化される解釈差を拒否。生成fixtureのalias/重複/余分keyと通常設定をCPU確認。これはpublisher署名や、同じWindows userによるappとsettings両方の差替えを防ぐ仕組みではない。
 
 設定の「ストレージとキャッシュ」は、app専用`runtime-cache/wheels`の容量/path/再取得の注意を表示し、明示同意後に選択済み環境を全照合してから削除する。対象は固定recipeのwheelだけ。未知file/link/hardlinkは削除前に拒否し、model/venv/DB/原本/基本Python evidenceへ触れない。取得/構築/明示選択は共有leaseで排他化。取消は削除開始前まで受け付ける。`incoming`の未完downloadや過去のretained cacheは現行ボタンの対象外であり、全cacheを一括清掃したとは称さない。
 
@@ -14,7 +14,7 @@
 
 新規構築の実証：data/auto-ai01へ公式CPython base/artifactと保持wheelを独立コピーし、製品のAIEnvironmentJobsをそのまま実行。全44wheelから新venvを構築し、既存固定モデルを全照合して再利用、GPU text/image probe（peak931.8MiB）→receipt作成→全22,652file/4,861,676,424bytes照合→独立設定のatomic保存まで465.895秒でPASS。新receipt SHAは7bf2ee2e7809f0cb9ecdfa6343074c41c51e9f74f0e9a53a520978eaabc0fa40。モデル/既存環境/通常設定は変更なし。この経路ではnetwork取得を再実行せず、保持済み公式artifactを利用した。実取得は前段の個別acquirer実証と生成HTTPの取消/再開試験、製品自動構築からの新規network一連は未受入。証拠data/auto-ai01/result.json。
 
-続行：同じ自動構築環境のcanonical cache44file/2,972,088,117bytesを製品削除serviceで除去後、新規production backendを保存済みruntime/root/hashへ束縛して起動。全22,652file/4,861,676,424bytesを32.01秒で照合し、APIから2生成画像をGPU索引→日本語検索2結果/先頭blue.png、正常EOF終了0、原本SHA/mtime不変、SQLite整合を確認。data/auto-ai-api01/result.json。初回fixtureがruntime verificationの完了をreadyと誤って待ち、実際のverifiedを受け取ってtimeoutした記録はfixture-first-failure.jsonへ保持。期待値を既存契約へ修正し、削除/構築を反復せず索引/検索部分を再確認した。GUIの検索操作を実証したものではない。 さらに同じproduction APIのbuild/startから選択済み環境を再利用し、既存resident検索workerをshared inference groupで解放→一時GPU probe→設定保存（論理内容不変）→検索worker再load/2結果を確認。cache再取得/新venv/再索引なし。data/auto-ai-api01/reuse-job.json・reuse-result.json。
+続行：同じ自動構築環境のcanonical cache44file/2,972,088,117bytesを製品削除serviceで除去後、新規production backendを保存済みruntime/root/hashへ束縛して起動。全22,652file/4,861,676,424bytesを32.01秒で照合し、APIから2生成画像をGPU索引→日本語検索2結果/先頭blue.png、正常EOF終了0、原本SHA/mtime不変、SQLite整合を確認。data/auto-ai-api01/result.json。初回fixtureがruntime verificationの完了をreadyと誤って待ち、実際のverifiedを受け取ってtimeoutした記録はfixture-first-failure.jsonへ保持。期待値を既存契約へ修正し、削除/構築を反復せず索引/検索部分を再確認した。GUIの検索操作を実証したものではない。 さらに同じproduction APIのbuild/startから選択済み環境を再利用し、既存resident検索workerをshared inference groupで解放→一時GPU probe→設定保存（論理内容不変）→検索worker再load/2結果を確認。cache再取得/新venv/再索引なし。data/auto-ai-api01/reuse-job.json・reuse-result.json。 最終候補03の梱包backendでも、独立DB/設定/保存済み索引コピーからcacheなし全file検証36.17秒→GPU検索2結果/先頭blue→正常EOF終了0・原本/DB整合を確認。data/release-ai-api01/result.json。
 
 
 ## 2026-11-10 開発再開：専用フォルダのSDK

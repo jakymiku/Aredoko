@@ -72,4 +72,20 @@ class ManagedRuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'generated runtime file'):
                 inspect_runtime(self.root,verify=True)
 
+class VenvBindingTests(unittest.TestCase):
+    def test_unknown_or_case_alias_keys_cannot_enable_user_site_packages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base=Path(directory);root=base/'runtime';home=base/'python'
+            (root/'Scripts').mkdir(parents=True);launchers=home/'Lib/venv/scripts/nt';launchers.mkdir(parents=True)
+            for target,original in (('python.exe','venvlauncher.exe'),('pythonw.exe','venvwlauncher.exe')):
+                (root/'Scripts'/target).write_bytes(b'generated launcher');(launchers/original).write_bytes(b'generated launcher')
+            cfg=f'home = {home}\ninclude-system-site-packages = false\nversion = 3.13.17\nexecutable = {home / "python.exe"}\ncommand = generated venv creation\n'
+            path=root/'pyvenv.cfg';path.write_text(cfg,encoding='utf8');managed.verify_binding(root,home)
+            # CPython site.py lowercases/strips keys. Such an alias would
+            # otherwise override the false setting when Python starts.
+            for extra in ('INCLUDE-SYSTEM-SITE-PACKAGES = true\n','home = other\n','HOME = other\n','include-system-site-packages= true\n','unknown = value\n'):
+                with self.subTest(extra=extra):
+                    path.write_text(cfg+extra,encoding='utf8')
+                    with self.assertRaises(ValueError):managed.verify_binding(root,home)
+
 if __name__=='__main__':unittest.main()

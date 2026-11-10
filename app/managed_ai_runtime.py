@@ -64,7 +64,8 @@ def verify_binding(root, home):
         key,value = line.split(' = ',1)
         if key in values:raise ValueError('Duplicate venv configuration')
         values[key]=value
-    if (values.get('include-system-site-packages')!='false' or values.get('version')!='3.13.17'
+    if (set(values)!={'home','include-system-site-packages','version','executable','command'}
+            or values.get('include-system-site-packages')!='false' or values.get('version')!='3.13.17'
             or Path(values.get('home',''))!=home or Path(values.get('executable',''))!=home/'python.exe'):
         raise ValueError('Managed venv base binding changed')
     for name,original in (('python.exe','venvlauncher.exe'),('pythonw.exe','venvwlauncher.exe')):
