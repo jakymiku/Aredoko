@@ -280,3 +280,17 @@ sourcebb59c405074c93e7b3176182a789fa85c4ef6769、dist/portable-basic-20261104-31
 追加の「旧版はDBだけ引き継いで消してよい」に従い、旧版6release（2811863/2cf99b2/42c0743/caee977/e52c8ec/0138a58）計3,967,905,792bytesを削除。絶対path/最新除外/manifest/リンクなし/Gitなし/DB・モデル非包含/使用中processなしを確認し、通常設定の旧release参照0件を確認。通常DBは外部の既存AppDataに保持、size/mtimeとJSON設定hash不変。モデル/DB/設定を旧アプリ本体と一緒に削除していない。削除前shortcutコピーは更新記録として保持するが、旧payload削除後の即時rollbackを保証するものではない。
 
 証拠はignored continuation-20261103b/alpha-{stage,shortcut-update,update-final,old-release-delete-plan,old-release-delete-result,data-before,old-release-references}.json・installed-alpha31-startup01。絶対user pathをGitへ含めない。WinUI DLLのProductVersionはbuild時親HEADの1.0.0+138964e、実装sourceは作業差分を含むbb59c40でmanifestに明示、frontend07のsource_files hashとnative結果で対応を確認。通常ユーザーDBを新版で開く実データ受入は今回実行せず、更新配置と専用データの起動を確認した。
+
+
+## 2026-11-11 Python非同梱候補03・自動AI構築とcache管理
+
+source **5b9f1d15745a3807d7f1ccbc8e6d7f53b2c13505**。dist/portable-managed-20261111-03/Aredoko/Aredoko.exe、frontend-product04。663payload/500,188,353bytes、manifest等込み665files/500,371,609bytes。ZIP215,024,930bytes、SHA256 `00ef06df5f4e0436758a1f3f47963135f19bc625e2ed748e204ca8da997ed005`。全release hash/公式CPython・Pillow検証/base/基本venv/import/media/ZIP照合PASS。native bootstrap/helperはsource不変の候補01から再利用。Python/model/AI venvは同梱せず、appの明示初回/AI opt-in導入へ接続する。
+
+候補内backendを独立設定/生成DB・保存済み索引コピーで起動し、選択済みmanaged AI runtimeのcacheなし完全検証→GPU日本語検索2結果/先頭blue.png→正常EOF終了0、生成原本SHA/mtime不変・SQLite integrity okを確認（data/release-ai-api01/result.json）。基礎Pythonは公式検証済みのホスト専用環境から実行。新candidateの実GUI、通常native EXE操作、完全Python未導入Windows/Sandbox guestは未受入。source/APIの成功をguest/GUI合格としない。Computer Useの応答停止D06は別記録、今回の新pane/動画音声starはbuildまで。
+
+通常Alpha/shortcut/通常DBは変更なし。現行03と予備01を保持し、中間02のpayload/ZIPと不要publish/binは絶対path・Git非追跡・links・使用processを確認して整理。preflight/log/失敗証拠・SDK/モデル/venv/DBは保持。data/capacity-20261111/cleanup-{plan,result}.json・cleanup-final-{plan,result}.json、合計1,540,266,750bytes。実行構成の論理容量は最終03差分反映6,968,528,170bytes（cacheなし、SDK/ZIP/開発コピー/通常データ別）。
+
+
+最終review後の現行候補は **04/source2748640459f3c63e0dc994532d158c31a3d124d0**。差分はmanaged AI venv設定の既知5key制限で、対象CPU6件/実venvの通常設定PASS。C#は5b9f1d1から不変なのでfrontend-product04を再利用（ProductVersionは5b9f1d1）。04は663payload/499,984,667bytes、manifest込み665files/500,167,921bytes。ZIP214,938,342bytes、SHA256 `1c6b941660154e1f18fefcc2cc8e4b4aa643e320a2c1a9bd2fe3941c947dda50`。全payload/公式basic artifacts/venv/import/media/ZIPの最終検証PASS。03の梱包backend GPU結果は最後の検証条件追加前の結果として区別し、04のGUI/guest受入を称さない。
+
+中間03のpayload/ZIPは現行04検証後に同じ安全条件で整理（715,396,539bytes）。総整理量2,255,663,289bytes、証拠cleanup-superseded03-{plan,result}.json。04/予備01、frontend-product04/失敗再現cache02、全log/DB/model/venv/SDKは保持。最終04差分を反映した実行構成相当6,968,324,482bytes（約6.97GB、NTFS割当量ではなく論理file容量）。中間03を参照する旧ignored runnerは当時の再現記録で、そのまま再実行せず現行04へ明示して使う。
