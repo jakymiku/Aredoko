@@ -253,3 +253,10 @@ frontend07/Portable publish成功（既存warningのみ）。**ホスト**reader
 読書viewer star/成功noticeを親が画像確認。本の新しい通常packaged Sandbox操作はこの時点では未実行。実通信断/Dark/HC/DPI/AI範囲のfavoriteは未検証・未実装のまま。関連安全確認に絞り、全回帰・旧soakを反復していない。
 
 ZIP31/sourcebb59c40の**Sandbox**確認：同じ専用guest DBを通常EXEから再利用し、CBZ2/2復元・book star登録・一覧/詳細同期・既存tag/位置保持・通常終了exit0。guest DB integrity ok、blueとCBZのみfavorite=1。証拠はevidence/update31-{result,db-check}.json・update31-appdata。ホストの保存途中close/拒否fixtureと混同しない。
+
+
+## 2026-11-11 動画・音声の再生中のお気に入り
+
+画像/本のViewerFavoriteActionをVideoPlayerViewにも接続。通常文字検索/allの有効なresult sessionだけに星ボタンを表示し、再生を止めずにflagだけを保存する。選択行/詳細へ同期し、非保持ackでは既存契約どおり一覧へ戻って再取得する。保存中はbarを表示し、閉じる際にFlushFavoriteAsyncを待つ。タグ/棚の未保存draft、再生位置・音量・消音・seekは変更しない。AI/類似/お気に入り/履歴scopeは従来どおり新actionを非表示とする。
+
+関連Portable build成功（既存WUI1001×3）。この時点では新しい動画/音声GUI操作、保存中close/保存拒否の実機確認は未実施。共有部品の過去画像/本受入を新しい媒体の受入として数えない。Core/backend/保存APIの追加はない。

@@ -5,7 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace Aredoko_WinUI;
 
-// Shared by image and book viewers. The owner controls when media is ready
+// Shared by image, book and media viewers. The owner controls when media is ready
 // and waits for FlushAsync before disposing this action.
 internal sealed class ViewerFavoriteAction(ResultSession? session,Action<string> notice) : IDisposable
 {

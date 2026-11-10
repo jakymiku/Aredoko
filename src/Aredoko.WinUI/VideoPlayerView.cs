@@ -22,6 +22,9 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly string itemTitle;
     private readonly int? initialPositionMs;
     private readonly bool isAudio;
+    private readonly ViewerFavoriteAction favorite;
+    public event Action<int,bool,bool>? FavoriteChanged;
+    public Task FlushFavoriteAsync()=>favorite.FlushAsync();
     private readonly CancellationTokenSource lifetime = new();
     private readonly ViewerChromeController hideTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer positionTimer;
@@ -71,13 +74,17 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     public string WindowTitle => "Aredoko — " + (isAudio ? "音声再生" : "動画再生") + "　" + itemTitle;
     public event Action<string>? TitleChanged;
 
-    public VideoPlayerView(LibraryApi api, int itemId, string titleText, int? initialPositionMs = null, bool isAudio = false)
+    public VideoPlayerView(LibraryApi api, int itemId, string titleText, int? initialPositionMs = null, bool isAudio = false,ResultSession? favoriteSession=null,int favoriteOrdinal=0)
     {
         this.api = api;
         this.itemId = itemId;
         itemTitle = titleText;
         this.initialPositionMs = initialPositionMs;
         this.isAudio = isAudio;
+        favorite=new(favoriteSession,message=>ViewerNotice.Set(status,message));favorite.Attach();
+        favorite.Changed+=(id,value,kept)=>FavoriteChanged?.Invoke(id,value,kept);
+        favorite.ReturnRequested+=()=>CloseRequested?.Invoke(this,EventArgs.Empty);
+        favorite.StateChanged+=()=>{if(favorite.IsSaving)ShowChrome();UpdateControls();};
         positionTimer = DispatcherQueue.CreateTimer(); positionTimer.Interval = TimeSpan.FromMilliseconds(200);
         positionTimer.Tick += (_, _) => SyncPosition();
         previewTimer=DispatcherQueue.CreateTimer();previewTimer.Interval=TimeSpan.FromMilliseconds(320);previewTimer.IsRepeating=false;
@@ -93,7 +100,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         actions.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var playback=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
-        foreach(var control in new UIElement[]{playPause,seekBack,seekForward,retry})playback.Children.Add(control);
+        foreach(var control in new UIElement[]{playPause,seekBack,seekForward,favorite.Button,retry})playback.Children.Add(control);
+        Identify(favorite.Button,isAudio?"AudioFavorite":"VideoFavorite","お気に入りを読み込み中");
         var audio=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Right};
         foreach(var control in new UIElement[]{mute,volumeDown,volumeSlider,volumeUp,volumeText})audio.Children.Add(control);
         actions.Children.Add(playback); SetColumn(positionText,1); actions.Children.Add(positionText); SetColumn(audio,2); actions.Children.Add(audio);
@@ -105,7 +113,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         var bottom = new StackPanel { Spacing = 4, HorizontalAlignment=HorizontalAlignment.Stretch }; bottom.Children.Add(seekBar);bottom.Children.Add(actions);
         toolbar.Child = bottom; Children.Add(toolbar);
         ViewerChromeController.AttachNotices(this,96,status);
-        hideTimer = new(this,toolbar,viewport,()=>keyboardChrome||seekHover||busy||failed);
+        hideTimer = new(this,toolbar,viewport,()=>keyboardChrome||seekHover||busy||failed||favorite.IsSaving);
         seekPreview.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
         seekTime.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         seekHint.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
@@ -162,7 +170,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         mute.Click += (_, _) => ToggleMute();
         volumeDown.Click += (_, _) => AdjustVolume(-20); volumeUp.Click += (_, _) => AdjustVolume(20);
         retry.Click += async (_, _) => await OpenAsync();
-        UpdateControls(); ShowChrome();
+        favorite.Refresh(itemId,favoriteOrdinal);UpdateControls(); ShowChrome();
     }
 
     private static Button IconButton(Symbol symbol) => new() { Content = new SymbolIcon(symbol), MinWidth = 36, Padding = new Thickness(8) };
@@ -192,7 +200,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
 
     public async Task OpenAsync()
     {
-        if (disposed) return;
+        if (disposed||favorite.IsSaving) return;
         var current = ++version;
         request?.Cancel(); request?.Dispose();
         request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
@@ -404,6 +412,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
 
     private void UpdateControls()
     {
+        favorite.UpdateAvailability(!disposed&&!busy&&loaded&&!failed);
         seekBar.IsEnabled=!busy&&loaded&&!failed;SyncSeekBar();
         playPause.IsEnabled = !busy && loaded;
         playPause.Content = new SymbolIcon(playing ? Symbol.Pause : Symbol.Play);
@@ -417,13 +426,14 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         volumeUp.IsEnabled = !busy && volume < 100;
         updatingVolume=true;try{volumeSlider.Value=volume;volumeSlider.IsEnabled=!busy;}finally{updatingVolume=false;}
         volumeText.Text = muted ? $"消音中（{volume}%）" : $"音量 {volume}%";
-        retry.IsEnabled = !busy && failed;
+        retry.IsEnabled = !busy && failed&&!favorite.IsSaving;
     }
 
     public void Dispose()
     {
         if (disposed) return;
         disposed = true;
+        favorite.Dispose();
         hideTimer.Dispose();previewTimer.Stop();
         lifetime.Cancel();
         request?.Cancel();
