@@ -127,6 +127,10 @@ def inspect_runtime(root, *, verify=False, expected=None, cancelled=lambda: Fals
     if marker.stat().st_size>LIMIT:raise ValueError('Runtime inventory exceeds limit')
     with marker.open('rb') as stream:raw=stream.read(LIMIT+1)
     if len(raw)>LIMIT:raise ValueError('Runtime inventory exceeds limit')
+    document=json.loads(raw,object_pairs_hook=object_pairs)
+    if isinstance(document,dict) and document.get('format')=='aredoko-managed-ai-runtime-v1':
+        from managed_ai_runtime import inspect
+        return inspect(root,verify=verify,expected=expected,cancelled=cancelled,progress=progress)
     value,abi,by_name,checksum=parse_inventory(raw,expected=expected,cancelled=cancelled)
     entries=value['entries'];names=set(by_name);total=value['total_bytes']
     # A small ordinary-startup inspection checks executable/core paths only.

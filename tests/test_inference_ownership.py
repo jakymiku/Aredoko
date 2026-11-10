@@ -65,6 +65,18 @@ class OwnershipTests(unittest.TestCase):
             thread=threading.Thread(target=release);thread.start();thread.join(1)
             self.assertEqual(len(errors),1);self.assertTrue(self.left.locked())
 
+    def test_setup_probe_releases_residents_without_registering_another_slot(self):
+        self.image.resident=True;self.audio.resident=True
+        with self.group.reserve_for_setup():
+            self.assertFalse(self.image.resident or self.audio.resident)
+            self.assertEqual(len(self.group.owners),2)
+            with self.assertRaisesRegex(RuntimeError,'busy'):
+                with self.group.reserve_for_setup():pass
+        self.assertFalse(self.group.lock.locked())
+        with self.assertRaisesRegex(ValueError,'generated'):
+            with self.group.reserve_for_setup():raise ValueError('generated')
+        self.assertFalse(self.group.lock.locked())
+
 
 
 class VideoOwnershipTests(unittest.TestCase):

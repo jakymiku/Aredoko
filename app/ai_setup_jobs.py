@@ -7,6 +7,7 @@ import threading
 from ai_runtime_preferences import UNSET, MODEL_ROOT_FIELDS
 from model_locations import ModelTarget
 from storage_lease import StorageBusyError
+from runtime_cache import cache_lease
 
 ACTIVE={'validating','cancelling','saving'}
 ID=re.compile(r'[0-9a-f]{32}\Z')
@@ -80,8 +81,9 @@ class AISetupJobs:
 
     def _run(self,selection):
         try:
-            result=self.preferences.select(**selection,consent=True,cancelled=self.cancelled.is_set,
-                progress=self._progress,publish=self._publish)
+            with cache_lease(self.preferences.path.parent):
+                result=self.preferences.select(**selection,consent=True,cancelled=self.cancelled.is_set,
+                    progress=self._progress,publish=self._publish)
             with self.lock:self.value.update(state='complete',stage='complete',result=result,
                 message='設定を保存しました。次回起動時に反映します。')
         except Exception as error:

@@ -103,7 +103,9 @@ class AIRuntimePreferences:
         info=None
         if runtime_root is not UNSET and runtime_root is not None:
             if not isinstance(runtime_root,str) or not Path(runtime_root).is_absolute():raise ValueError('Select an absolute runtime folder')
-            info=inspect_runtime(runtime_root,verify=True,cancelled=cancelled,progress=progress)
+            previous=read_preferences(self.path) if self.path.exists() else {}
+            pinned=previous.get('ai_runtime_manifest_sha256') if previous.get('ai_runtime_root')==runtime_root else None
+            info=inspect_runtime(runtime_root,verify=True,expected=pinned,cancelled=cancelled,progress=progress)
         if models_root is not UNSET and models_root is not None:
             if not isinstance(models_root,str) or not Path(models_root).is_absolute():raise ValueError('Select an absolute models folder')
             models_root=str(plain_path(models_root,directory=True))

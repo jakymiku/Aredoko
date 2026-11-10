@@ -12,7 +12,7 @@ from ai_profiles import DEFAULT_PROFILE
 from ai_settings import AIProfileSettings
 from production import ProductionCatalog
 from production_server import create_ai, create_intent
-from runtime_paths import model_directory, worker_python
+from runtime_paths import model_directory, worker_python, runtime_root, bind_runtime
 from tagger_profile import load_profile
 from video_previews import _executable, VideoPreviewUnavailable
 
@@ -70,6 +70,15 @@ class RuntimePathsTests(unittest.TestCase):
             path = media / ('ffmpeg.exe' if os.name == 'nt' else 'ffmpeg');path.write_bytes(b'fixture')
             self.assertEqual(_executable('ffmpeg'), str(path))
         which.assert_not_called()
+
+    def test_managed_scripts_binding_cannot_fall_back_when_marker_disappears(self):
+        outer=self.repo/'managed';scripts=outer/'Scripts';scripts.mkdir(parents=True)
+        python=scripts/'python.exe';marker=outer/'aredoko-ai-runtime.json';marker.write_text('{}')
+        self.assertEqual(runtime_root(python),outer)
+        bind_runtime(outer,'a'*64);marker.unlink()
+        self.assertEqual(runtime_root(python),outer)
+        (scripts/'aredoko-ai-runtime.json').write_text('{}')
+        self.assertEqual(runtime_root(python),scripts)
 
 
 if __name__ == '__main__':unittest.main()

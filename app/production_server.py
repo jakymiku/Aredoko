@@ -41,8 +41,11 @@ from tagger_profile import load_profile as load_tagger_profile
 from model_locations import FIELD as LOCATIONS, ModelTarget
 from storage_lease import storage_lease,storage_parent
 from runtime_paths import worker_python, bind_runtime, start_runtime_verification, configure_runtime_verification
-from ai_runtime_preferences import AIRuntimePreferences, read_preferences, model_root, MODEL_ROOT_FIELDS
+from ai_runtime_preferences import AIRuntimePreferences, read_preferences, model_root, MODEL_ROOT_FIELDS, runtime_python
 from ai_setup_jobs import AISetupJobs, SetupBusy
+from ai_environment_jobs import AIEnvironmentJobs, EnvironmentBusy
+from contextlib import nullcontext
+from runtime_cache import RuntimeCache, CacheBusy
 from backup_jobs import BackupJobs,BackupBusy
 from ai_download_jobs import AIDownloadJobs,DownloadBusy
 from ai_acquisition_registry import load_trusted_specs
@@ -140,6 +143,11 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     setup.writer_fence=catalog.writer_fence
     setup_jobs=AISetupJobs(setup)
     download_jobs=AIDownloadJobs(setup.path.parent/'ai-downloads',specifications=acquisition_specs)
+    def jobs_active(*jobs):return any(job.thread is not None and job.thread.is_alive() for job in jobs)
+    environment_jobs=AIEnvironmentJobs(setup,profile=setup_profile,specifications=acquisition_specs,
+        reserve=getattr(getattr(ai,'inference_group',None),'reserve_for_setup',nullcontext),
+        busy=lambda:jobs_active(setup_jobs,download_jobs,cache_jobs))
+    cache_jobs=RuntimeCache(setup.path,busy=lambda:jobs_active(setup_jobs,download_jobs,environment_jobs))
     def backup_configuration():
         # Only explicitly configured app-owned profile/settings paths. No media
         # discovery and no arbitrary path supplied by the HTTP caller.
@@ -578,7 +586,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 if path in ('/api/library/ai/setup/download/catalog','/api/library/ai/setup/download/job'):
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid acquisition query'})
                     return self.send(200,download_jobs.catalogs() if path.endswith('/catalog') else download_jobs.snapshot())
+                if path=='/api/library/ai/setup/build':return self.send(200,environment_jobs.describe())
                 if path=='/api/library/ai/setup/job':return self.send(200,setup_jobs.snapshot())
+                if path in ('/api/library/runtime-cache','/api/library/runtime-cache/job'):
+                    if urlparse(self.path).query:return self.send(400,{'error':'Invalid cache query'})
+                    try:return self.send(200,cache_jobs.describe() if path.endswith('runtime-cache') else cache_jobs.snapshot())
+                    except (ValueError,OSError,KeyError):return self.send(409,{'error':'キャッシュの状態を確認できません。AI環境の設定を確認してください。'})
                 if path=='/api/library/ai/status': return self.send(200,ai.status())
                 if path=='/api/library/video-ai/status':
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid video status query'})
@@ -639,7 +652,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 # Only an explicit dictionary import may carry a larger document.
                 limit=MAX_IMPORT_BYTES if self.path=='/api/library/terms/import' else 32768
                 if not 0<length<=limit: return self.reject_post(413,{'error':'Invalid body size'})
-                strict=self.path.startswith(('/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/','/api/library/audio-ai/','/api/library/video-ai/','/api/library/video-audio-ai/')) or self.path in ('/api/library/ai/setup/plan','/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
+                strict=self.path.startswith(('/api/library/ai/setup/build/','/api/library/runtime-cache/','/api/library/animation/','/api/library/results/','/api/library/shelves/','/api/library/backup/','/api/library/startup-scan/','/api/library/audio-ai/','/api/library/video-ai/','/api/library/video-audio-ai/')) or self.path in ('/api/library/ai/setup/plan','/api/library/ai/setup/select','/api/library/ai/setup/cancel','/api/library/ai/runtime-verification','/api/library/history/delete','/api/library/roots/favorite','/api/library/roots/shelves','/api/library/roots/startup-scan')
                 raw=self.rfile.read(length);self.request_body_consumed=len(raw)==length
                 body=json.loads(raw,**({'object_pairs_hook':object_pairs} if strict else {}))
                 if not isinstance(body,dict): raise ValueError('Expected an object')
@@ -747,7 +760,29 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     except BackupBusy:return self.send(409,{'error':'バックアップを開始できません。現在の処理を確認してください。','job':backup_jobs.snapshot()})
                     except KeyError:return self.send(409,{'error':'現在のバックアップと一致しません。'})
                     except (ValueError,TypeError):return self.send(400,{'error':'バックアップの保存先と選択内容を確認してください。'})
+                if self.path.startswith('/api/library/runtime-cache/'):
+                    try:
+                        if self.path=='/api/library/runtime-cache/clear':return self.send(202,cache_jobs.start(body))
+                        if self.path=='/api/library/runtime-cache/cancel':
+                            if body:raise ValueError('Empty cancellation request required')
+                            return self.send(200,cache_jobs.cancel())
+                        return self.send(404,{'error':'Not found'})
+                    except CacheBusy:return self.send(409,{'error':'準備・検証中はキャッシュを削除できません。'})
+                    except (ValueError,TypeError):return self.send(400,{'error':'キャッシュ削除の確認内容を確認してください。'})
+                if self.path.startswith('/api/library/ai/setup/build/'):
+                    try:
+                        if self.path=='/api/library/ai/setup/build/start':return self.send(202,environment_jobs.start(body))
+                        if self.path=='/api/library/ai/setup/build/cancel':
+                            if body:raise ValueError('Empty cancellation request required')
+                            return self.send(200,environment_jobs.cancel())
+                        return self.send(404,{'error':'Not found'})
+                    except EnvironmentBusy:return self.send(409,{'error':'他の準備処理の完了後に開始してください。'})
+                    except (ValueError,TypeError):return self.send(400,{'error':'AI環境構築の同意と対応モデルを確認してください。'})
+                if jobs_active(environment_jobs) and self.path in ('/api/library/ai/setup/download/start','/api/library/ai/setup/select','/api/library/ai/runtime-verification'):
+                    return self.send(409,{'error':'AI環境の構築中です。完了または中止してから設定してください。'})
                 if self.path.startswith('/api/library/ai/setup/download/'):
+
+                    # Acquisition catalogs never expose arbitrary cache paths.
                     try:
                         if self.path=='/api/library/ai/setup/download/start':return self.send(202,download_jobs.start(body))
                         if self.path=='/api/library/ai/setup/download/cancel':
@@ -1037,6 +1072,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     Handler.setup_jobs=setup_jobs
     Handler.startup_scans=startup_scans
     Handler.download_jobs=download_jobs
+    Handler.cache_jobs=cache_jobs
+    Handler.environment_jobs=environment_jobs
     return Handler
 
 def main():
@@ -1078,8 +1115,8 @@ def _serve(args):
         try:
             selected=read_preferences(preferences)
             if selected.get('ai_runtime_root') and args.ai_python is not None:
-                expected=Path(selected['ai_runtime_root'])/'python.exe'
-                if expected.absolute()==Path(args.ai_python).absolute():bind_runtime(expected.parent,selected['ai_runtime_manifest_sha256'])
+                expected=runtime_python(selected,None,Path(args.db).parent/'unavailable-runtime/python.exe')
+                if expected.absolute()==Path(args.ai_python).absolute():bind_runtime(Path(selected['ai_runtime_root']),selected['ai_runtime_manifest_sha256'])
         except (ValueError,OSError,KeyError):pass
     configure_runtime_verification(selected.get('verify_ai_runtime',True))
     from restore_handoff import RestoreHandoff
@@ -1125,6 +1162,8 @@ def _serve(args):
         resources.callback(close_job,handler.startup_scans)
         resources.callback(close_job,handler.setup_jobs)
         resources.callback(close_job,handler.download_jobs)
+        resources.callback(close_job,handler.cache_jobs)
+        resources.callback(close_job,handler.environment_jobs)
         resources.callback(handler.animations.close)
         resources.callback(handler.results.close)
         resources.callback(handler.thumbnails.close)

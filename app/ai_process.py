@@ -30,12 +30,14 @@ def worker_failure(result):
         return AIWorkerUnavailable(code)
     return AIUnavailable('AI inference failed')
 class EncoderProcess:
-    def __init__(self, python, model, profile=DEFAULT_PROFILE, *, gpu_budget_mib=None):
+    def __init__(self, python, model, profile=DEFAULT_PROFILE, *, gpu_budget_mib=None, budget_if_cuda=False):
         if gpu_budget_mib is not None and (type(gpu_budget_mib) is not int or not 256<=gpu_budget_mib<=65536):
             raise ValueError('Invalid worker GPU budget')
         self.python,self.model = Path(python),Path(model)
         self.profile=profile
         self.gpu_budget_mib=gpu_budget_mib
+        if type(budget_if_cuda)is not bool:raise ValueError('Invalid conditional GPU budget')
+        self.budget_if_cuda=budget_if_cuda
         self.process = None
         self.lock = threading.Lock()
         self.responses = queue.Queue(maxsize=2)
@@ -94,6 +96,7 @@ class EncoderProcess:
         self.protocol_fault=threading.Event()
         arguments=['--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())]
         if self.gpu_budget_mib is not None:arguments.extend(['--gpu-budget-mib',str(self.gpu_budget_mib)])
+        if self.budget_if_cuda:arguments.append('--budget-if-cuda')
         try:command=worker_command(self.python,Path(__file__).with_name('ai_worker.py'),arguments,cancelled=lambda:self._closed)
         except (ValueError,OSError,RuntimeError) as error:raise AIUnavailable('AI runtime validation failed') from error
         if self._closed:raise AIUnavailable('AI worker is closed')

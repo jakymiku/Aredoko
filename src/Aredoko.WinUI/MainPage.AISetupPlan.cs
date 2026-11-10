@@ -21,6 +21,7 @@ public sealed partial class MainPage
                 var destination=await ShowAISetupPlanStepAsync(refresh);
                 if(disposed)return;
                 if(destination=="download")await OpenAIDownloadDialogAsync();
+                else if(destination=="automatic")await OpenAIAutoEnvironmentDialogAsync();
                 else if(destination=="existing")await OpenAIEnvironmentDialogAsync();
                 else if(destination=="index")await OpenAISettingsAsync();
                 else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync();
@@ -56,6 +57,7 @@ public sealed partial class MainPage
             var review=new Button{Content="必要な環境を確認"};AutomationProperties.SetAutomationId(review,"ReviewAISetupPlan");
             var download=new Button{Content="モデルの取得候補を見る",IsEnabled=false};AutomationProperties.SetAutomationId(download,"AISetupPlanDownload");
             var existing=new Button{Content="配置済みの環境・モデルを指定",IsEnabled=false};AutomationProperties.SetAutomationId(existing,"AISetupPlanExisting");
+            var automatic=new Button{Content="EmbeddingGemma 2を自動構築"};AutomationProperties.SetAutomationId(automatic,"AISetupPlanAutomatic");
             var skip=new Button{Content="今はAIを使わず始める"};AutomationProperties.SetAutomationId(skip,"SkipAISetup");
             var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(progress,"AISetupPlanProgress");AutomationProperties.SetName(progress,"AI準備の確認中");
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="使いたいAI機能",PrimaryButtonText="索引・詳細設定へ",CloseButtonText="後で",DefaultButton=ContentDialogButton.None,IsPrimaryButtonEnabled=false};
@@ -87,7 +89,7 @@ public sealed partial class MainPage
                 Grid.SetRow(choice,index/2);Grid.SetColumn(choice,index%2);choices.Children.Add(choice);
             }
             panel.Children.Add(choices);panel.Children.Add(review);panel.Children.Add(progress);panel.Children.Add(summary);
-            var actions=new StackPanel{Spacing=8};actions.Children.Add(download);actions.Children.Add(existing);actions.Children.Add(skip);panel.Children.Add(actions);
+            var actions=new StackPanel{Spacing=8};actions.Children.Add(automatic);actions.Children.Add(download);actions.Children.Add(existing);actions.Children.Add(skip);panel.Children.Add(actions);
             panel.Children.Add(nextSteps);panel.Children.Add(recovery);
             dialog.Content=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             async Task ReviewAsync()
@@ -127,6 +129,7 @@ public sealed partial class MainPage
                 catch(Exception ex){summary.Text="選択を保存できませんでした。\n"+ex.Message;}
             }
             download.Click+=(_,_)=>MoveTo("download");existing.Click+=(_,_)=>MoveTo("existing");
+            automatic.Click+=(_,_)=>MoveTo("automatic");
             diagnostics.Click+=(_,_)=>MoveTo("diagnostics");
             skip.Click+=(_,_)=>MoveTo("skip",0);
             dialog.PrimaryButtonClick+=(_,args)=>

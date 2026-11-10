@@ -62,12 +62,23 @@ def bind_runtime(root,expected):
     _pack_bindings[_root_key(root)]=expected
 
 
+def runtime_root(python):
+    python=Path(python)
+    direct=python.parent
+    if (direct/'aredoko-ai-runtime.json').exists() or _root_key(direct) in _pack_bindings:
+        return direct
+    outer=direct.parent
+    if direct.name.casefold()=='scripts' and ((outer/'aredoko-ai-runtime.json').exists() or _root_key(outer) in _pack_bindings):
+        return outer
+    return direct
+
+
 def runtime_verification_status(python):
     if python is None:
         return _idle_status('idle')
     python=Path(python)
-    root_key=_root_key(python.parent)
-    marker=python.parent/'aredoko-ai-runtime.json'
+    root_key=_root_key(runtime_root(python))
+    marker=runtime_root(python)/'aredoko-ai-runtime.json'
     expected=_pack_bindings.get(root_key)
     with _state_lock:
         entry=_verify_state.get(root_key)
@@ -95,8 +106,8 @@ def runtime_verification_status(python):
 
 def verify_runtime_pack(python, *, cancelled=lambda: False):
     python=Path(python)
-    root_key=_root_key(python.parent)
-    marker=python.parent/'aredoko-ai-runtime.json'
+    root_key=_root_key(runtime_root(python))
+    marker=runtime_root(python)/'aredoko-ai-runtime.json'
     expected=_pack_bindings.get(root_key)
     if expected is None and not (marker.exists() or marker.is_symlink()):
         return None
@@ -108,7 +119,7 @@ def verify_runtime_pack(python, *, cancelled=lambda: False):
     try:
         if cancelled():raise RuntimeError('Runtime validation cancelled')
         try:
-            info=inspect_runtime(python.parent,expected=expected,cancelled=cancelled)
+            info=inspect_runtime(runtime_root(python),expected=expected,cancelled=cancelled)
         except Exception as error:
             with _state_lock:
                 prev=_verify_state.get(root_key) or {}
@@ -165,7 +176,7 @@ def verify_runtime_pack(python, *, cancelled=lambda: False):
                     cur['bytes_total']=int(counts.get('bytes_total',cur['bytes_total']))
                     cur['elapsed_seconds']=max(0.0,now-started_at)
         try:
-            full_info=inspect_runtime(python.parent,verify=True,expected=expected,cancelled=cancelled,progress=_on_progress)
+            full_info=inspect_runtime(runtime_root(python),verify=True,expected=expected,cancelled=cancelled,progress=_on_progress)
             if cancelled():raise RuntimeError('Runtime validation cancelled')
             elapsed=max(0.0,time.monotonic()-started_at)
             with _state_lock:
@@ -208,7 +219,7 @@ class RuntimeVerificationJob:
         self.thread=threading.Thread(target=self._run,daemon=True,name='ai-runtime-verify')
 
     def _run(self):
-        key=_root_key(self.python.parent)
+        key=_root_key(runtime_root(self.python))
         try:
             verify_runtime_pack(self.python,cancelled=self.cancelled.is_set)
         except Exception:
@@ -230,11 +241,11 @@ def start_runtime_verification(python):
     if python is None:
         return False
     python=Path(python)
-    root_key=_root_key(python.parent)
+    root_key=_root_key(runtime_root(python))
     if not _verify_enabled:
         with _state_lock:_verify_state[root_key]=_idle_status('skipped')
         return None
-    marker=python.parent/'aredoko-ai-runtime.json'
+    marker=runtime_root(python)/'aredoko-ai-runtime.json'
     expected=_pack_bindings.get(root_key)
     if expected is None and not (marker.exists() or marker.is_symlink()):
         return False

@@ -5,6 +5,7 @@ can keep their own namespaces while relinquishing the other idle worker before
 loading. A failed release never grants the next owner permission to infer.
 """
 import threading
+from contextlib import contextmanager
 
 
 class InferenceOwnership:
@@ -32,6 +33,19 @@ class InferenceOwnership:
                 raise ValueError('Register an inactive encoder before loading its model')
             owner=_OwnerLock(self,encoder,role);self.owners.append(owner)
             return owner
+
+    @contextmanager
+    def reserve_for_setup(self):
+        """One temporary probe; never adds a persistent image/audio/video slot."""
+        if not self.lock.acquire(blocking=False):raise RuntimeError('AI inference is busy')
+        try:
+            with self.registry:peers=[owner.encoder for owner in self.owners]
+            for peer in peers:
+                if bool(getattr(peer,'resident',False)):
+                    peer.release()
+                    if bool(getattr(peer,'resident',False)):raise RuntimeError('Previous model owner is still resident')
+            yield
+        finally:self.lock.release()
 
 
 class _OwnerLock:

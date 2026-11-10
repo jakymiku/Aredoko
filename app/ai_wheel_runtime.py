@@ -30,7 +30,7 @@ def installed_path(name):
     return 'Lib/site-packages/' + name
 
 
-def verify_wheels(root, artifacts, lock, *, cancelled=lambda: False, progress=None):
+def verify_wheels(root, artifacts, lock, *, cancelled=lambda: False, progress=None, inventory=None):
     """Compare every imported package byte directly with its official wheel."""
     root = plain_path(root, directory=True)
     artifacts = plain_path(artifacts, directory=True)
@@ -81,6 +81,8 @@ def verify_wheels(root, artifacts, lock, *, cancelled=lambda: False, progress=No
                             report()
                         if left.digest() != right.digest():
                             raise ValueError('Installed AI payload changed: ' + name)
+                        if inventory is not None:
+                            inventory.append({'path': name, 'bytes': item.file_size, 'sha256': left.hexdigest()})
                     completed += 1;report()
         if digest(wheel, cancelled) != entry['sha256']:
             raise ValueError('AI wheel changed during content verification')

@@ -26,6 +26,9 @@ class AudioWorkerTests(unittest.TestCase):
         cuda.mem_get_info.return_value=(2*1024**3,8*1024**3)
         with self.assertRaisesRegex(RuntimeError,'Insufficient'):ai_worker.configure_gpu_budget(torch,'cuda',3072)
         with self.assertRaisesRegex(RuntimeError,'requires CUDA'):ai_worker.configure_gpu_budget(torch,'cpu',3072)
+        cuda.mem_get_info.reset_mock()
+        ai_worker.configure_gpu_budget(torch,'cpu',4096,budget_if_cuda=True)
+        cuda.mem_get_info.assert_not_called()
         for value in (True,0,65537):
             with self.assertRaises(ValueError):EncoderProcess('unused','unused',gpu_budget_mib=value)
         cuda.set_per_process_memory_fraction.assert_not_called()

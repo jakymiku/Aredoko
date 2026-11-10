@@ -1,5 +1,18 @@
 # 通常起動とAI追加環境を分ける配布計画
 
+## 2026-11-10 続行：導入済み環境と削除可能cacheの分離
+
+`aredoko-managed-ai-runtime-v1`は、固定公式44wheelのSHA256と展開payloadを照合した後、その原本由来のhashをreceiptへ保存する。基本CPythonは公式nupkgのSHA512とbase binding/launcherを検証する。モデルの生成素材による実推論を終えるまでreceipt/利用設定を公開しない。初回選択では元wheelとの来歴照合も必須とし、自己申告のfile inventoryだけを信用しない。保存したreceipt SHAをlaunch settingsへ固定した後は、元wheelを消しても実行fileの完全照合を行える。小さい基本CPython nupkgは検証に必要なため保持する。これはpublisher署名や、同じWindows userによるappとsettings両方の差替えを防ぐ仕組みではない。
+
+設定の「ストレージとキャッシュ」は、app専用`runtime-cache/wheels`の容量/path/再取得の注意を表示し、明示同意後に選択済み環境を全照合してから削除する。対象は固定recipeのwheelだけ。未知file/link/hardlinkは削除前に拒否し、model/venv/DB/原本/基本Python evidenceへ触れない。取得/構築/明示選択は共有leaseで排他化。取消は削除開始前まで受け付ける。`incoming`の未完downloadや過去のretained cacheは現行ボタンの対象外であり、全cacheを一括清掃したとは称さない。
+
+実証：独立data/managed-cache01で、選択済みAI venv22,652file/4,861,676,124bytesを完全照合し、専用cache44file/2,972,088,117bytesを削除。元の取得原本1組は別のignored開発folderへ保持。cache削除後の新workerで生成青赤PNG2件を索引し、「青色の四角い画像」で2結果/先頭blue.pngをGPU実証。RTX4070Ti、PyTorch割当4096MiB、観測peak931.8MiB、load/index/search14.935s（事前完全照合27.35sは別）。profile/revision/768次元維持、生成原本SHA/mtime不変、catalog/vector DB integrity ok、worker close。証拠はignored data/managed-cache01/evidence/cache-result.json と data/ai-gpu01/result.json。通常DB/Alpha/私物を使わず、ホスト実証でありSandbox guest受入ではない。
+
+自動構築は製品設定と初回AI案内へ接続済み（製品GUIの実操作は確認中）。固定公式wheel/model catalog、pipなし新規venv、生成素材のtext/image推論、検証済みreceiptと既存atomic settings publicationを順に使う。既存正常runtime/modelは再利用し、別モデルの配置と索引namespaceは保持する。構築失敗/取消では旧設定を保ち、新しい未完環境をreadyにしない。GPUがなければCPUで確認し、既存推論groupの排他内で一時workerだけを実行する。公開配布に必要な全license/NOTICE/署名、完全Python未導入Windowsと実GUI AI検索は別受入。
+
+新規構築の実証：data/auto-ai01へ公式CPython base/artifactと保持wheelを独立コピーし、製品のAIEnvironmentJobsをそのまま実行。全44wheelから新venvを構築し、既存固定モデルを全照合して再利用、GPU text/image probe（peak931.8MiB）→receipt作成→全22,652file/4,861,676,424bytes照合→独立設定のatomic保存まで465.895秒でPASS。新receipt SHAは7bf2ee2e7809f0cb9ecdfa6343074c41c51e9f74f0e9a53a520978eaabc0fa40。モデル/既存環境/通常設定は変更なし。この経路ではnetwork取得を再実行せず、保持済み公式artifactを利用した。実取得は前段の個別acquirer実証と生成HTTPの取消/再開試験、製品自動構築からの新規network一連は未受入。証拠data/auto-ai01/result.json。
+
+
 ## 2026-11-10 開発再開：専用フォルダのSDK
 
 ユーザー承認で計画段階を終了し実装を再開。開発はホストの専用フォルダ方式を第一選択とする。以下の「SDK導入は検索受入後」「ビルドはSandbox」は11月9日の計画で、この変更により置き換える。システムへのSDK登録や永続PATH変更を避け、配布版の通常起動へ開発環境変数を引き継がない。完全な開発環境未導入条件の受入はSandbox等で別に行う。GUI/GPU試験は実行前にユーザーへ知らせる。

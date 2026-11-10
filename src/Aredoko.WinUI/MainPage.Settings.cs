@@ -105,7 +105,7 @@ public sealed partial class MainPage
             var tools=new Grid{ColumnSpacing=8,RowSpacing=8};
             tools.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
             tools.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-            for(var row=0;row<3;row++)tools.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+            for(var row=0;row<4;row++)tools.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
             AutomationProperties.SetAutomationId(tools,"SettingsTools");
             var toolIndex=0;
             foreach(var (label,id,target) in new[]{
@@ -114,7 +114,9 @@ public sealed partial class MainPage
                 ("関連語を編集","BtnRelatedTerms","terms"),
                 ("閲覧履歴を削除","BtnClearHistory","history"),
                 ("バックアップと復元","BtnBackupGuide","backup"),
-                ("診断情報を表示・コピー","BtnDiagnostics","diagnostics")})
+                ("診断情報を表示・コピー","BtnDiagnostics","diagnostics"),
+                ("ストレージとキャッシュ","BtnRuntimeCache","runtime-cache"),
+                ("AI環境を自動構築","BtnAIEnvironment","ai-environment")})
             {
                 var button=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(button,id);
                 button.Click+=(_,_)=>{destination=target;dialog.Hide();};Grid.SetRow(button,toolIndex/2);Grid.SetColumn(button,toolIndex%2);tools.Children.Add(button);toolIndex++;
@@ -141,6 +143,8 @@ public sealed partial class MainPage
             else if(destination=="history")await DeleteHistoryAsync();
             else if(destination=="backup")await OpenBackupDialogAsync();
             else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync();
+            else if(destination=="ai-environment")await OpenAIAutoEnvironmentDialogAsync();
+            else if(destination=="runtime-cache")await OpenRuntimeCacheDialogAsync();
         }
     }
     private async Task OpenRecoveryGuideDialogAsync()
