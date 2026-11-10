@@ -10,7 +10,11 @@
 
 自動構築は製品設定と初回AI案内へ接続済み（製品GUIの実操作は確認中）。固定公式wheel/model catalog、pipなし新規venv、生成素材のtext/image推論、検証済みreceiptと既存atomic settings publicationを順に使う。既存正常runtime/modelは再利用し、別モデルの配置と索引namespaceは保持する。構築失敗/取消では旧設定を保ち、新しい未完環境をreadyにしない。GPUがなければCPUで確認し、既存推論groupの排他内で一時workerだけを実行する。公開配布に必要な全license/NOTICE/署名、完全Python未導入Windowsと実GUI AI検索は別受入。
 
+自動構築の取得にも既存acquirerの任意bytes_per_second上限を接続。初回設定/設定dialogで既定無制限・任意MB/秒を選べる。再表示中のjobは実際の上限を表示し、構築中の変更は無効化する。runtime/model両取得への伝達と不正型/範囲をCPU確認。
+
 新規構築の実証：data/auto-ai01へ公式CPython base/artifactと保持wheelを独立コピーし、製品のAIEnvironmentJobsをそのまま実行。全44wheelから新venvを構築し、既存固定モデルを全照合して再利用、GPU text/image probe（peak931.8MiB）→receipt作成→全22,652file/4,861,676,424bytes照合→独立設定のatomic保存まで465.895秒でPASS。新receipt SHAは7bf2ee2e7809f0cb9ecdfa6343074c41c51e9f74f0e9a53a520978eaabc0fa40。モデル/既存環境/通常設定は変更なし。この経路ではnetwork取得を再実行せず、保持済み公式artifactを利用した。実取得は前段の個別acquirer実証と生成HTTPの取消/再開試験、製品自動構築からの新規network一連は未受入。証拠data/auto-ai01/result.json。
+
+続行：同じ自動構築環境のcanonical cache44file/2,972,088,117bytesを製品削除serviceで除去後、新規production backendを保存済みruntime/root/hashへ束縛して起動。全22,652file/4,861,676,424bytesを32.01秒で照合し、APIから2生成画像をGPU索引→日本語検索2結果/先頭blue.png、正常EOF終了0、原本SHA/mtime不変、SQLite整合を確認。data/auto-ai-api01/result.json。初回fixtureがruntime verificationの完了をreadyと誤って待ち、実際のverifiedを受け取ってtimeoutした記録はfixture-first-failure.jsonへ保持。期待値を既存契約へ修正し、削除/構築を反復せず索引/検索部分を再確認した。GUIの検索操作を実証したものではない。 さらに同じproduction APIのbuild/startから選択済み環境を再利用し、既存resident検索workerをshared inference groupで解放→一時GPU probe→設定保存（論理内容不変）→検索worker再load/2結果を確認。cache再取得/新venv/再索引なし。data/auto-ai-api01/reuse-job.json・reuse-result.json。
 
 
 ## 2026-11-10 開発再開：専用フォルダのSDK

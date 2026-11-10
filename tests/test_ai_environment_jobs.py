@@ -66,6 +66,22 @@ class EnvironmentTests(unittest.TestCase):
             with self.assertRaises(jobs.EnvironmentBusy):self.manager.start({'consent':True})
         self.assertEqual(self.manager.snapshot()['state'],'failed');self.assertTrue(self.manager.close())
 
+    def test_bandwidth_limit_reaches_runtime_and_model_acquisition(self):
+        for rate in (True,0,-1,1.5,2**40+1):
+            with self.assertRaises(ValueError):self.manager.start({'consent':True,'bytes_per_second':rate})
+        self.validator.side_effect=ValueError('Generated missing model')
+        self.acquire.side_effect=None;self.acquire.return_value={'root':str(self.data/'downloaded')}
+        self.manager.start({'consent':True,'bytes_per_second':2_000_000});self.assertEqual(self.finish()['state'],'complete')
+        self.assertEqual(self.acquire.call_args.kwargs['bytes_per_second'],2_000_000)
+        self.assertEqual(self.manager.snapshot()['bytes_per_second'],2_000_000)
+        self.inspect.side_effect=ValueError('Generated missing environment')
+        self.acquire.reset_mock()
+        def cancelled(*args,**kwargs):self.manager.cancel();raise InterruptedError('generated cancel')
+        self.acquire.side_effect=cancelled
+        with patch.object(jobs,'verify_base'):
+            self.manager.start({'consent':True,'bytes_per_second':1_000_000});self.assertEqual(self.finish()['state'],'cancelled')
+        self.assertEqual(self.acquire.call_args.kwargs['bytes_per_second'],1_000_000)
+
     def test_failed_model_validation_acquires_only_trusted_model(self):
         self.validator.side_effect=ValueError('generated missing model')
         target=self.data/'downloaded';target.mkdir()

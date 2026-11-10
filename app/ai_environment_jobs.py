@@ -66,7 +66,7 @@ class AIEnvironmentJobs:
         self.spec=next(((catalog,validator) for catalog,validator in specifications if catalog.kind=='model' and catalog.key=='embeddinggemma-2'),None)
         self.catalog=wheel_catalog() if profile is not None and profile.to_dict()==DEFAULT_PROFILE.to_dict() and self.spec is not None else None
         self.lock=threading.RLock();self.cancelled=threading.Event();self.thread=None;self.closed=False;self.committed=False
-        self.value={'state':'idle','stage':'idle','saved':False,'bytes_done':0,'bytes_total':None,'files_done':0,'files_total':None,'message':'','error_code':None,'result':None}
+        self.value={'state':'idle','stage':'idle','saved':False,'bytes_per_second':None,'bytes_done':0,'bytes_total':None,'files_done':0,'files_total':None,'message':'','error_code':None,'result':None}
 
     def describe(self):
         total=(sum(entry.size for entry in self.catalog.entries)+sum(entry.size for entry in self.spec[0].entries)) if self.catalog else None
@@ -81,13 +81,15 @@ class AIEnvironmentJobs:
         with self.lock:return deepcopy(self.value)
 
     def start(self,body):
-        if not isinstance(body,dict) or set(body)!={'consent'} or body['consent']is not True:raise ValueError('Explicit AI setup consent required')
+        if not isinstance(body,dict) or 'consent' not in body or set(body)-{'consent','bytes_per_second'} or body['consent']is not True:raise ValueError('Explicit AI setup consent required')
+        rate=body.get('bytes_per_second')
+        if rate is not None and (type(rate)is not int or not 1<=rate<=2**40):raise ValueError('Invalid optional bandwidth limit')
         with self.lock:
             if self.catalog is None:raise ValueError('Automatic setup supports the built-in EmbeddingGemma 2 profile')
             if self.closed or self.thread is not None and self.thread.is_alive() or self.busy():raise EnvironmentBusy('Another setup operation is active')
             self.cancelled=threading.Event();self.committed=False
-            self.value.update(state='waiting',stage='waiting',saved=False,bytes_done=0,bytes_total=None,files_done=0,files_total=None,message='AI環境の準備を開始しています。',error_code=None,result=None)
-            self.thread=threading.Thread(target=self._run,daemon=True,name='aredoko-ai-environment')
+            self.value.update(state='waiting',stage='waiting',saved=False,bytes_per_second=rate,bytes_done=0,bytes_total=None,files_done=0,files_total=None,message='AI環境の準備を開始しています。',error_code=None,result=None)
+            self.thread=threading.Thread(target=self._run,args=(rate,),daemon=True,name='aredoko-ai-environment')
             try:self.thread.start()
             except Exception as error:
                 self.thread=None;self.value.update(state='failed',error_code='worker_start_failed',message='準備を開始できませんでした。')
@@ -114,7 +116,7 @@ class AIEnvironmentJobs:
             self._check();self.value.update(state='saving',message='動作確認済みの設定を保存しています。')
             operation();self.committed=True;self.value['saved']=True
 
-    def _run(self):
+    def _run(self,rate):
         try:
             with cache_lease(self.data):
                 self._check();settings=read_preferences(self.preferences.path) if self.preferences.path.exists() else {}
@@ -138,7 +140,7 @@ class AIEnvironmentJobs:
                     if not complete:
                         self._phase('downloading_runtime','公式のAI実行パッケージを取得しています。')
                         downloaded=acquire(self.catalog,self.data/'runtime-cache/incoming',validate=lambda root,cancelled:None,
-                                           publish=lambda operation:(self._check(),operation()),cancelled=self.cancelled.is_set,progress=self._progress)
+                                           publish=lambda operation:(self._check(),operation()),cancelled=self.cancelled.is_set,progress=self._progress,bytes_per_second=rate)
                         source=Path(downloaded['root'])
                         # The complete immutable collection moves as a whole.
                         # A previous interrupted flat cache is retained separately.
@@ -160,7 +162,7 @@ class AIEnvironmentJobs:
                 if model_collection is None:
                     self._phase('downloading_model','公式の検索モデルを取得・検証しています。')
                     downloaded=acquire(catalog,self.data/'ai-downloads',validate=validator,
-                        publish=lambda operation:(self._check(),operation()),cancelled=self.cancelled.is_set,progress=self._progress)
+                        publish=lambda operation:(self._check(),operation()),cancelled=self.cancelled.is_set,progress=self._progress,bytes_per_second=rate)
                     model_collection=Path(downloaded['root'])
                 self._phase('probing','生成素材でモデルの読み込みと推論を確認しています。')
                 proof=probe_model(python,self.profile.model_path(Path(__file__).resolve().parents[1],models_root=model_collection),self.profile,
