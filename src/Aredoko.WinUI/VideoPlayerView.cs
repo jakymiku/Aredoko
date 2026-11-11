@@ -56,6 +56,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button volumeDown = TextButton("−");
     private readonly Button volumeUp = TextButton("＋");
     private readonly Button retry = IconButton(Symbol.Refresh);
+    private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly TextBlock positionText = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock volumeText = new() { Text = "音量 80%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
@@ -71,6 +72,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private bool busy, disposed, failed, loaded, playing, muted, keyboardChrome;
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
+    public event Action? EditDetailsRequested;
     public string WindowTitle => "Aredoko — " + (isAudio ? "音声再生" : "動画再生") + "　" + itemTitle;
     public event Action<string>? TitleChanged;
 
@@ -100,8 +102,11 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         actions.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var playback=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
-        foreach(var control in new UIElement[]{playPause,seekBack,seekForward,favorite.Button,retry})playback.Children.Add(control);
+        foreach(var control in new UIElement[]{playPause,seekBack,seekForward,favorite.Button,editDetails,retry})playback.Children.Add(control);
         Identify(favorite.Button,isAudio?"AudioFavorite":"VideoFavorite","お気に入りを読み込み中");
+        Identify(editDetails,"PlayerEditDetails","再生を閉じて詳細で整理");
+        ToolTipService.SetToolTip(editDetails,"再生を閉じて詳細で整理");
+        editDetails.Click += (_, _) => EditDetailsRequested?.Invoke();
         var audio=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Right};
         foreach(var control in new UIElement[]{mute,volumeDown,volumeSlider,volumeUp,volumeText})audio.Children.Add(control);
         actions.Children.Add(playback); SetColumn(positionText,1); actions.Children.Add(positionText); SetColumn(audio,2); actions.Children.Add(audio);

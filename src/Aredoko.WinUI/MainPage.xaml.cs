@@ -1453,47 +1453,40 @@ public sealed partial class MainPage : Page
     }
     private async void OpenBook_Click(object sender,RoutedEventArgs e)=>await OpenBookAsync();
     private async void OpenVideo_Click(object sender,RoutedEventArgs e)=>await OpenVideoAsync();
-    private async Task OpenVideoAsync()
-    {
-        if(active is null||!VideoPlayerPolicy.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
-        dialogOpen=true;searchTimer.Stop();var itemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;var playerRow=active;var viewerResultsChanged=false;
-        try
-        {
-            var selectedIndex=rows.FindIndex(row=>row.Id==itemId);
-            var favorites=!resultsNeedRefresh&&selectedIndex>=0?ViewerFavoriteSession(resultSession):null;
-            var player=new VideoPlayerView(api,active.Id,active.Title,VideoPlayerPolicy.MatchStartMs(active),favoriteSession:favorites,favoriteOrdinal:Math.Max(0,browseStart+selectedIndex));videoPlayer=player;
-            var window=new ViewerWindow(player,"動画再生","VideoPlayerDialog");viewerWindow=window;
-            window.BeforeCloseAsync=player.FlushFavoriteAsync;
-            player.FavoriteChanged+=(id,value,kept)=>{if(id==itemId)ApplyFavoriteValue(playerRow,value);viewerResultsChanged|=!kept;};
-            player.ContentOpened+=RecordContentOpened;
-            player.CloseRequested+=(_,_)=>window.Close();player.AttachNavigation(player);
-            window.Closed+=(_,_)=>player.Dispose();
-            await window.ShowAsync(player.OpenAsync);
-        }
-        catch(Exception ex){Failure(ex);}
-        finally
-        {
-            videoPlayer?.Dispose();videoPlayer=null;viewerWindow=null;dialogOpen=false;
-            try{if(!disposed&&viewerResultsChanged)await RefreshResultRowsAfterEditAsync(favoriteOnly:true);if(!disposed&&detailsWereOpen&&active?.Id==itemId){Details.IsPaneOpen=true;OpenVideo.Focus(FocusState.Programmatic);}}
-            finally{transitions.Release();}
-            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
-        }
-    }
+    private Task OpenVideoAsync()=>OpenPlayerAsync(isAudio:false);
     private async void OpenAudio_Click(object sender,RoutedEventArgs e)=>await OpenAudioAsync();
-    private async Task OpenAudioAsync()
+    private Task OpenAudioAsync()=>OpenPlayerAsync(isAudio:true);
+
+    private async Task OpenPlayerAsync(bool isAudio)
     {
-        if(active is null||!AudioPlayerPolicy.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
-        dialogOpen=true;searchTimer.Stop();var itemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;var playerRow=active;var viewerResultsChanged=false;
+        if(active is not {} playerRow || !(isAudio ? AudioPlayerPolicy.CanOpen(playerRow) : VideoPlayerPolicy.CanOpen(playerRow))
+            || saving || dialogOpen || !await transitions.WaitAsync(0))return;
+
+        dialogOpen=true;
+        searchTimer.Stop();
+        var itemId=playerRow.Id;
+        var detailsWereOpen=Details.IsPaneOpen;
+        var viewerResultsChanged=false;
+        var editDetails=false;
         try
         {
             var selectedIndex=rows.FindIndex(row=>row.Id==itemId);
             var favorites=!resultsNeedRefresh&&selectedIndex>=0?ViewerFavoriteSession(resultSession):null;
-            var player=new VideoPlayerView(api,active.Id,active.Title,active.AudioMatchMs??active.VideoMatchMs,isAudio:true,favoriteSession:favorites,favoriteOrdinal:Math.Max(0,browseStart+selectedIndex));videoPlayer=player;
-            var window=new ViewerWindow(player,"音声再生","AudioPlayerDialog");viewerWindow=window;
+            var start=isAudio ? playerRow.AudioMatchMs??playerRow.VideoMatchMs : VideoPlayerPolicy.MatchStartMs(playerRow);
+            var player=new VideoPlayerView(api,itemId,playerRow.Title,start,isAudio,favorites,Math.Max(0,browseStart+selectedIndex));
+            videoPlayer=player;
+            var window=new ViewerWindow(player,isAudio?"音声再生":"動画再生",isAudio?"AudioPlayerDialog":"VideoPlayerDialog");
+            viewerWindow=window;
             window.BeforeCloseAsync=player.FlushFavoriteAsync;
-            player.FavoriteChanged+=(id,value,kept)=>{if(id==itemId)ApplyFavoriteValue(playerRow,value);viewerResultsChanged|=!kept;};
+            player.FavoriteChanged+=(id,value,kept)=>
+            {
+                if(id==itemId)ApplyFavoriteValue(playerRow,value);
+                viewerResultsChanged|=!kept;
+            };
             player.ContentOpened+=RecordContentOpened;
-            player.CloseRequested+=(_,_)=>window.Close();player.AttachNavigation(player);
+            player.EditDetailsRequested+=()=>{editDetails=true;window.Close();};
+            player.CloseRequested+=(_,_)=>window.Close();
+            player.AttachNavigation(player);
             window.Closed+=(_,_)=>player.Dispose();
             await window.ShowAsync(player.OpenAsync);
         }
@@ -1501,7 +1494,26 @@ public sealed partial class MainPage : Page
         finally
         {
             videoPlayer?.Dispose();videoPlayer=null;viewerWindow=null;dialogOpen=false;
-            try{if(!disposed&&viewerResultsChanged)await RefreshResultRowsAfterEditAsync(favoriteOnly:true);if(!disposed&&detailsWereOpen&&active?.Id==itemId){Details.IsPaneOpen=true;OpenAudio.Focus(FocusState.Programmatic);}}
+            try
+            {
+                if(!disposed&&viewerResultsChanged)await RefreshResultRowsAfterEditAsync(favoriteOnly:true);
+                if(!disposed&&active is {} current&&current.Id==itemId)
+                {
+                    if(editDetails)
+                    {
+                        ShowItemDetailsPane();
+                        Details.IsPaneOpen=true;
+                        await ShowDetailPreviewAsync(current,preserveExisting:true);
+                        if(!disposed&&active?.Id==itemId)Tags.Focus(FocusState.Programmatic);
+                    }
+                    else if(detailsWereOpen)
+                    {
+                        Details.IsPaneOpen=true;
+                        (isAudio?OpenAudio:OpenVideo).Focus(FocusState.Programmatic);
+                    }
+                }
+            }
+            catch(Exception ex){if(!disposed)Failure(ex);}
             finally{transitions.Release();}
             if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }
