@@ -110,6 +110,24 @@ class WindowsSandboxTests(unittest.TestCase):
             tool.prepare(self.release, self.kit, self.output)
         self.assertFalse(self.output.parent.exists())
 
+    def test_managed_download_enables_only_guest_networking_for_matching_release(self):
+        with self.assertRaisesRegex(ValueError, 'managed Python release'):
+            tool.prepare(self.release, self.kit, self.output, managed_python_download=True)
+        self.assertFalse(self.output.parent.exists())
+
+        self.manifest.update(managed_python=tool.MANAGED_PYTHON, python_bundled=False)
+        target = tool.prepare(self.release, self.kit, self.output, managed_python_download=True)
+        config = ET.parse(target).getroot()
+        self.assertEqual(config.findtext('Networking'), 'Enable')
+        for option in ('vGPU', 'ClipboardRedirection', 'AudioInput', 'VideoInput', 'PrinterRedirection'):
+            self.assertEqual(config.findtext(option), 'Disable')
+        self.assertEqual(config.findtext('LogonCommand/Command'), r'explorer.exe C:\Aredoko')
+        self.assertEqual([row.findtext('ReadOnly') for row in config.findall('MappedFolders/MappedFolder')],
+                         ['true', 'true', 'false'])
+        readme = (self.output / 'README.txt').read_text(encoding='utf-8-sig')
+        self.assertIn('CPythonとPillow', readme)
+        self.assertIn('生成素材3件', readme)
+
 
 if __name__ == '__main__':
     unittest.main()

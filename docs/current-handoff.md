@@ -2,6 +2,14 @@
 
 旧checkpointより本書を優先。過去の全文・判断は本書のGit履歴と[履歴目録](history-index.md)から辿る。
 
+## 2026-11-11 候補05とPython未導入Windowsの配布試験
+
+- 開始時のローカル・remote・Draft PR #5のHEADは `63b0c13`。製品source `f487f1d` で動画・音声の操作バーに「再生を閉じて詳細で整理」を追加。同じ作品の詳細を開き、タグ欄へフォーカスする。既存のお気に入り保存待ちを通り、タグと棚の下書きを保持する。最新branch HEADは本書のGit履歴を参照。
+- **候補05のホストGUI**。通常EXEと専用設定・DB、生成MP4/WAVで、操作バーのボタンから同じ詳細に戻ることを確認。WAVのタグ下書きは画面に残りDBは未更新。専用SQLiteの書き込みを一時保留した試験では、保存完了までプレイヤーが残り、解除後に星を保存して詳細にも反映した。通常終了0、所有プロセス残存なし、専用DB整合と生成原本のSHA一致。前面化できなかったため、詳細を閉じた一覧からの物理ダブルクリックと復帰時のキーボードフォーカスは未確認。証拠は `data/gui-player-details01/run-01`。
+- **候補05の配布物**。 `dist/portable-managed-20261111-05/Aredoko/Aredoko.exe`、Python非同梱663 payload、manifest込み665 files / 500,167,539 bytes。Portable build/publish、全payloadとZIPのSHA照合済み。ZIP 214,938,155 bytes、SHA256 `af65bd2d0b62e04f16055e86c91068ad38c8ed6d70136099090e433c5ff1130a`。frontendは `data/development-tools/frontend-player-details01`。候補04を受入済み予備として保持。installed Alpha・通常DB・shortcutは未変更。
+- **P6試験準備**。`prepare_windows_sandbox.py --managed-python-download` を追加。既定ではオフライン、指定時はPython非同梱のmanaged候補でゲスト通信を有効化。候補と生成kitのSHAを照合し、読み取り専用で共有する。vGPU・クリップボード等は無効。Sandbox設定8件、Portable startup 18件PASS。後者はCodexの制限内ではハードリンク拒否とloopback timeoutがあり、専用一時領域・通常権限で確認した。
+- **候補05のゲスト受入はBLOCKED**。再開用の手動設定は `data/ai-ui/managed-candidate05-clean-manual/Aredoko.wsb`。GUIと基本環境取得の許可後、以前のWinSxSパス（9278）は非PEで起動拒否。拡張子の関連付け・System32入口が見つからず、署名が有効な9818コンポーネントからの起動も、Windows Sandbox自身のイベント1000／`0xc0000409` で即時終了。ホスト証拠は `data/ai-ui/managed-candidate05-clean`。ゲスト内の新規公式取得・通常EXE起動・一覧表示は未実施。OS設定の変更、AI取得・GPU推論は未実施。
+
 ## 2026-11-11 候補04のGUI受入
 
 - 開始時のローカル、remote、Draft PR #5のHEADは `4d521e7`。候補04（製品source `2748640`）の通常 `Aredoko.exe` をホストWindowsで起動。今回のGUI・GPU許可を取得後、専用設定・DBと生成素材で操作した。製品コードは候補と同じ。今回の引き継ぎHEADは本書のGit履歴を参照。
@@ -10,9 +18,9 @@
 - D06と別経路のWinApp UI Automationで受入完了。画面遷移直後の古いUIA要素や隠れたプレイヤー操作バーは、遷移完了の確認や所有ウィンドウでのF10表示で切り分けた。Computer Use自体の復旧は未確認。WinApp初回のテレメトリ案内が出た時点で送信の有無は未計測。以後はプロセス環境で無効化。
 - 3起動とも通常終了0、所有プロセス残存なし。生成原本・基本artifactのSHA/mtime、専用DB整合、配布物663件の照合に成功。結果表・画像・ログはignoredの `data/gui-acceptance04/session-result.md` と同階層。製品不具合として起票する再現はなかった。新規ネットワーク取得の全一連、実ファイル入りキャッシュのGUI削除、完全Python未導入Windows・Sandbox guestでの今回の候補04は別途受入。
 
-## 現在地
+## 候補04までの実装記録
 
-- **branch / PR**：`feat/winui3-production-mvp-20261011` / Draft PR #5を継続。開始時HEAD・remote・PR headはb7fc431一致。実装は **815f0d1 → d7dc9a6 → 5b9f1d1 → 2748640459f3c63e0dc994532d158c31a3d124d0**、push済み。最終handoff commitは本書のGit履歴。Actions/新branch/新PR/main merge/force pushなし。未追跡`Aredoko-test/`はuser作業として不干渉。
+- **branch / PR**：`feat/winui3-production-mvp-20261011` / Draft PR #5を継続。候補04までの実装は **815f0d1 → d7dc9a6 → 5b9f1d1 → 2748640459f3c63e0dc994532d158c31a3d124d0**、push済み。Actions/新branch/新PR/main merge/force pushなし。未追跡`Aredoko-test/`はuser作業として不干渉。
 - **user指示**：クォータ残10%前後まで継続し引き継ぐ。今回はGUI/GPU許可済み、実行前に通知。通常DB/私物/installed Alpha/shortcut/OS設定/driverは変更なし、shutdownなし。C drive復旧後のAlphaは再導入していない。
 
 ## 利用者にできること
@@ -32,12 +40,12 @@
 
 ## 候補・容量・証拠
 
-- 最新候補は **dist/portable-managed-20261111-04/Aredoko/Aredoko.exe**、source **2748640**（frontendのC#は5b9f1d1から不変）。Python非同梱663payload/499,984,667bytes、manifest込み665files/500,167,921bytes、ZIP214,938,342bytes。最後のcfg境界修正を含む実venv通常設定のCPU確認もPASS。全payload/公式basic artifacts/venv/import/media/ZIPを検証、正確なfiles/bytes/SHAは同directoryのpreflight.jsonと[配布記録](portable-refresh-20261024.md)末尾。現行frontendはdata/development-tools/frontend-product04。installed Alpha/通常shortcutの更新は未実施。
+- 予備の候補04は **dist/portable-managed-20261111-04/Aredoko/Aredoko.exe**、source **2748640**（frontendのC#は5b9f1d1から不変）。Python非同梱663payload/499,984,667bytes、manifest込み665files/500,167,921bytes、ZIP214,938,342bytes。最後のcfg境界修正を含む実venv通常設定のCPU確認もPASS。全payload/公式basic artifacts/venv/import/media/ZIPを検証、正確なfiles/bytes/SHAは同directoryのpreflight.jsonと[配布記録](portable-refresh-20261024.md)末尾。候補04のfrontendはdata/development-tools/frontend-product04。
 - cache削除後の構成相当は **6,968,324,482bytes（約6.97GB）**：app全manifest込み500,167,921、base39,588,189、basic venv15,301,385、AI venv receipt込み4,865,379,772、model1,525,821,059、必要artifact22,066,156。最終候補04への差分も反映した論理file容量。ZIP/SDK/開発コピー/通常DB/原本は別。15GBは構築時空き目安。保持開発原本1組はdata/ai-lock01/wheels、通常cacheと混同しない。
 - 不要な中間publish/frontend-auto01と再生成可能bin、計412,721,466bytesを絶対path/Git非追跡/link/process非参照確認・ignored記録後に削除。後続buildのbinと置換済み候補02/frontend-product03も同じ安全確認で整理し、合計2,255,663,289bytesを削除。中間03も退役、最新04/予備01・現行frontend04/失敗再現cache02は保持。モデル/venv/DB/log/SDKはゴミ扱いしない。
 - 証拠：data/auto-ai01/{result,cache-clear-result}.json、data/auto-ai-api01/{result,reuse-job,reuse-result,fixture-first-failure}.json、data/ai-gpu01/result.json、data/managed-cache01/evidence、data/gui-cache02/{cleanup,session-result}.json、data/capacity-20261111。初回API fixtureのready/verified誤期待は失敗記録を保持し、契約修正後に索引/検索部分だけ再確認。詳細は[配布設計](lightweight-distribution.md)最上段と[UI記録](p3-continuous-browse.md)末尾。
 
 ## 次の1件
 
-1. **P6**：完全Python未導入の別Windowsで、候補04の通常EXEから公式基本環境を準備し、生成素材の一覧表示までを一単位として受け入れる。新規取得とGUI・GPUの実行は対象を具体化して事前確認する。ホストGUIの24項目は、関連実装や環境が変わった部分だけを再確認する。
-2. **UI**：再生中の星の受入は完了。閲覧から整理に戻る次の小単位へ進む。保存・原本・起動に影響する再現を優先し、非致命的なものは[対応待ち](deferred-issues.md)に記録する。
+1. **P6**：標準入口から起動できるSandboxか別のPython未導入Windowsで、候補05の通常EXEから公式基本環境を取得・照合し、生成素材3件の一覧表示まで確認する。WinSxS直接起動の同じ失敗を繰り返さない。新規取得とGUI・GPUの実行は対象を具体化して事前確認する。
+2. **UI**：候補05の一覧ダブルクリックから詳細への復帰とタグ欄のフォーカスを、前面操作できる専用環境で限定確認する。実装は検索・一覧から閲覧と整理への往復を続ける。保存・原本・起動に影響する再現を優先し、非致命的なものは[対応待ち](deferred-issues.md)に記録する。

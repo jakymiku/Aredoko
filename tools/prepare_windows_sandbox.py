@@ -9,13 +9,13 @@ import os
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-from release_runtime import digest, ordinary_tree, verify_release
+from release_runtime import MANAGED_PYTHON, digest, ordinary_tree, verify_release
 from storage_lease import plain_path, storage_parent
 
 REPO = Path(__file__).resolve().parents[1]
 
 
-def prepare(release, validation_kit, output):
+def prepare(release, validation_kit, output, *, managed_python_download=False):
     release = plain_path(release, directory=True)
     validation_kit = plain_path(validation_kit, directory=True)
     output = Path(os.path.abspath(output))
@@ -35,6 +35,9 @@ def prepare(release, validation_kit, output):
             or manifest.get('ai_runtime_bundled') is not False
             or manifest.get('models_bundled') is not False):
         raise ValueError('A sealed portable basic release is required')
+    if managed_python_download and (manifest.get('managed_python') != MANAGED_PYTHON
+                                    or manifest.get('python_bundled') is not False):
+        raise ValueError('The download trial requires a managed Python release without bundled Python')
     # Reject linked descendants before exposing a whole kit directory to a guest.
     for _ in ordinary_tree(validation_kit):
         pass
@@ -48,8 +51,9 @@ def prepare(release, validation_kit, output):
 
     evidence = output / 'evidence'
     configuration = ET.Element('Configuration')
-    for option in ('vGPU', 'Networking', 'ClipboardRedirection', 'AudioInput', 'VideoInput', 'PrinterRedirection'):
+    for option in ('vGPU', 'ClipboardRedirection', 'AudioInput', 'VideoInput', 'PrinterRedirection'):
         ET.SubElement(configuration, option).text = 'Disable'
+    ET.SubElement(configuration, 'Networking').text = 'Enable' if managed_python_download else 'Disable'
     mappings = ET.SubElement(configuration, 'MappedFolders')
     for host, guest, readonly in (
             (release, r'C:\Aredoko', True),
@@ -68,18 +72,29 @@ def prepare(release, validation_kit, output):
     evidence.mkdir()
     target = output / 'Aredoko.wsb'
     ET.ElementTree(configuration).write(target, encoding='utf-8', xml_declaration=True)
+    if managed_python_download:
+        trial = (
+            '起動前に、ゲストのPython・.NET SDKの有無と %LOCALAPPDATA%\\Aredoko が未作成であることを記録してください。'
+            'ゲストに基本環境のファイルを先に持ち込まず、通常EXEから公式のCPythonとPillowの取得・構築を確認します。'
+            '読み取り専用で展開済みの候補を使い、生成素材チェックリストの手順2〜3で生成素材3件の一覧表示まで確認します。'
+            'AI環境やモデルの取得は省略します。'
+            '結果と %LOCALAPPDATA%\\Aredoko\\logs の起動ログを証拠に残してください。\n'
+            'この構成ではゲストのネットワークを有効にします。\n'
+        )
+    else:
+        trial = 'AIや追加runtimeは取得せず、結果は実際に確認した項目だけ記録します。\nネットワークは無効です。\n'
     (output / 'README.txt').write_text(
         'Aredoko Windows Sandbox 手動確認\n\n'
         'Sandbox有効化が3010（再起動待ち）で終わった場合、Windowsを再起動してからAredoko.wsbを開いてください。'
         'このツールは再起動やSandbox起動を行いません。\n'
-        'ゲストではC:\\Aredokoが開きます。通常のAredoko.exeを手動で開き、'
-        'C:\\AredokoValidation\\はじめに.txtの生成素材チェックリストを実施してください。'
-        'AIや追加runtimeは取得せず、結果は実際に確認した項目だけ記録します。\n'
+        'ゲストではC:\\Aredokoが開きます。'
+        '通常のAredoko.exeとC:\\AredokoValidation\\はじめに.txtの生成素材チェックリストを使います。\n'
+        + trial +
         'アプリと検証セットは読み取り専用です。result-template.jsonをC:\\AredokoEvidenceへコピーして編集してください。'
         '配置変更の確認はゲスト内の別フォルダへアプリ一式をコピーして行います。\n'
         'ゲストのデータはSandbox終了時に消えます。閉じる前に結果と必要なログをC:\\AredokoEvidenceへ保存してください。'
         'このフォルダだけがホストのevidenceフォルダへ書き戻されます。\n'
-        'ネットワーク、クリップボード、vGPU、音声入力、映像入力、プリンター共有は無効です。\n'
+        'クリップボード、vGPU、音声入力、映像入力、プリンター共有は無効です。\n'
         'この設定の準備はclean Windowsでの動作合格を意味しません。\n\n'
         '設定形式: https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file\n',
         encoding='utf-8-sig')
@@ -91,8 +106,11 @@ def main():
     parser.add_argument('--release', type=Path, required=True)
     parser.add_argument('--validation-kit', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--managed-python-download', action='store_true',
+                        help='Enable guest networking for the managed Python first-run trial')
     args = parser.parse_args()
-    configuration = prepare(args.release, args.validation_kit, args.output)
+    configuration = prepare(args.release, args.validation_kit, args.output,
+                            managed_python_download=args.managed_python_download)
     print(json.dumps({'configuration': str(configuration), 'clean_windows_verified': False}))
 
 
