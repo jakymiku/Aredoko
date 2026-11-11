@@ -2,6 +2,14 @@
 
 旧checkpointより本書を優先。過去の全文・判断は本書のGit履歴と[履歴目録](history-index.md)から辿る。
 
+## 2026-11-11 候補04のGUI受入
+
+- 開始時のローカル、remote、Draft PR #5のHEADは `4d521e7`。候補04（製品source `2748640`）の通常 `Aredoko.exe` をホストWindowsで起動。今回のGUI・GPU許可を取得後、専用設定・DBと生成素材で操作した。製品コードは候補と同じ。今回の引き継ぎHEADは本書のGit履歴を参照。
+- **P0-1〜5、A1〜6、B1〜4、C1〜9の24件PASS**。AI準備の同意・容量・提供元・ライセンス、速度既定と5MB/秒、実進捗と再表示を確認。既存runtime/modelをCUDAで再利用し、未選択プロファイル・別配置・別索引を保持。別試行の全照合フェーズ中止は設定SHA一致。空キャッシュの表示・案内・Explorerでの保存先確認・削除無効を確認。通常再起動後の日本語GUI検索で `blue.png` が先頭。保存済みベクトルの内容も一致。
+- 生成MP4/WAVで再生中の星の登録・解除、一覧と詳細への同期、タグと棚の下書き保持を確認。専用SQLiteの書き込みを一時保留し、閉じる要求後も保存待ちでプレイヤーが残り、解除後に保存・終了することを確認。通常再起動後も星が保持され、お気に入り一覧から開くWAVの操作バーでは星が非表示。
+- D06と別経路のWinApp UI Automationで受入完了。画面遷移直後の古いUIA要素や隠れたプレイヤー操作バーは、遷移完了の確認や所有ウィンドウでのF10表示で切り分けた。Computer Use自体の復旧は未確認。WinApp初回のテレメトリ案内が出た時点で送信の有無は未計測。以後はプロセス環境で無効化。
+- 3起動とも通常終了0、所有プロセス残存なし。生成原本・基本artifactのSHA/mtime、専用DB整合、配布物663件の照合に成功。結果表・画像・ログはignoredの `data/gui-acceptance04/session-result.md` と同階層。製品不具合として起票する再現はなかった。新規ネットワーク取得の全一連、実ファイル入りキャッシュのGUI削除、完全Python未導入Windows・Sandbox guestでの今回の候補04は別途受入。
+
 ## 現在地
 
 - **branch / PR**：`feat/winui3-production-mvp-20261011` / Draft PR #5を継続。開始時HEAD・remote・PR headはb7fc431一致。実装は **815f0d1 → d7dc9a6 → 5b9f1d1 → 2748640459f3c63e0dc994532d158c31a3d124d0**、push済み。最終handoff commitは本書のGit履歴。Actions/新branch/新PR/main merge/force pushなし。未追跡`Aredoko-test/`はuser作業として不干渉。
@@ -13,7 +21,7 @@
 - **キャッシュ管理**：設定「ストレージとキャッシュ」で専用wheel cacheの容量/path/開く/削除・手動削除案内。選択済み環境を全照合してから固定recipeのwheelだけを削除。取得/構築/選択と共有leaseで排他。モデル/venv/DB/原本は対象外。元wheel由来receipt SHAを設定へ固定した後は、cacheなしでも完全照合・実行できる。小さい基本Python/Pillow検証artifactは保持。未完incoming/過去retained folderは現行削除ボタンの対象外。
 - **動画・音声のお気に入り**：画像/本と共通のViewerFavoriteActionを接続。通常文字検索/allの有効なresult sessionから、再生を継続したままflag-only保存、一覧/詳細同期、close時に保存完了を待つ。タグ/棚draftは保存しない。AI/類似/お気に入り/履歴scopeは新action非表示を維持。
 
-## 実証済み / 未検証
+## 今回のGUI受入より前の実証記録
 
 - **AI新規構築 PASS（ホスト）**：専用data/auto-ai01へ保持済み公式base/wheelを独立コピーし、製品AIEnvironmentJobsを実行。新venv22,652file/4,861,676,424bytes→固定モデル全照合→CUDA text/image probe（観測peak931.8MiB）→receipt/設定公開まで465.895秒。取得原本と既存model/venvは変更なし。新方式の初期登録では元wheel provenanceも必須、任意folderの自己申告inventoryだけを信用しない。最終reviewで既存basic verifierと同じpyvenv.cfgの既知5keyに限定し、大文字alias等によるCPythonとの解釈差を対象CPU6件と実venv設定で確認。最後の差分は検証条件のみ、GPU試験を無意味に反復していない。
 - **cache削除後の実検索 PASS（ホスト）**：44file/2,972,088,117bytesを製品serviceで削除。保存済みroot/hashを使う新production backendで全file照合32.01秒→生成青赤PNG2件GPU索引→「青色の四角い画像」で2結果/先頭blue.png→EOF正常終了0。原本SHA/mtime不変、catalog/vector DB integrity ok。さらに実build/start APIでcacheなし既存環境を再利用し、resident検索workerを解放→一時probe→設定内容不変→検索継続を確認（再取得/新venv/再索引なし）。
@@ -31,5 +39,5 @@
 
 ## 次の1件
 
-1. **P6**：frontend-product04/候補04をそのまま使い、操作可能なWindows GUI経路で自動構築paneの同意・容量/license・進捗・中止・再表示とcache paneを限定確認する。既存cacheなし選択済み環境と独立settings/DBを再利用し、5GB環境を試験のたびに再構築しない。D06のtool診断を開発の前提にせず、必要ならユーザーが操作できる状況で短く受入する。完全Python未導入のguest確認は別件として区別する。
-2. **UI**：生成WAV/MP4だけで再生中starの登録/解除・一覧同期・draft保持・保存中closeを確認し、通ったら閲覧→整理の次の小単位へ進む。過去の画像/本や基本登録の成功を毎回全反復しない。非致命的なものは[対応待ち](deferred-issues.md)、保存/原本/起動不能は優先。
+1. **P6**：完全Python未導入の別Windowsで、候補04の通常EXEから公式基本環境を準備し、生成素材の一覧表示までを一単位として受け入れる。新規取得とGUI・GPUの実行は対象を具体化して事前確認する。ホストGUIの24項目は、関連実装や環境が変わった部分だけを再確認する。
+2. **UI**：再生中の星の受入は完了。閲覧から整理に戻る次の小単位へ進む。保存・原本・起動に影響する再現を優先し、非致命的なものは[対応待ち](deferred-issues.md)に記録する。
