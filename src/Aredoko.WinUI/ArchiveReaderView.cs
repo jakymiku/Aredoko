@@ -42,6 +42,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
     private readonly Border toolbar = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
     private readonly Button previous = IconButton(Symbol.Back), next = IconButton(Symbol.Forward), zoomOut = IconButton(Symbol.ZoomOut), zoomIn = IconButton(Symbol.ZoomIn);
     private readonly Button fit = IconButton(Symbol.FullScreen), retry = IconButton(Symbol.Refresh), reopen = IconButton(Symbol.RepeatAll), settings = IconButton(Symbol.Setting);
+    private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly Button actualSize=new(){Content="原寸",MinWidth=36,Padding=new Thickness(8)};
     private readonly TextBlock count = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock zoom = new() { Text = "倍率 100%", VerticalAlignment = VerticalAlignment.Center };
@@ -60,6 +61,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
     private bool busy, disposed, failed, loaded, keyboardChrome, menuOpen;
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
+    public event Action? EditDetailsRequested;
 
     public ArchiveReaderView(LibraryApi api, int itemId, string title, PageTextMatch? initialMatch=null,AIPageMatch? initialPageMatch=null,ResultSession? favoriteSession=null,int favoriteOrdinal=0)
     {
@@ -87,8 +89,11 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         count.Style=zoom.Style=status.Style=progressStatus.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         ViewerInputGestures.AttachPan(viewport);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,HorizontalAlignment=HorizontalAlignment.Center};
-        foreach(var control in new UIElement[]{previous,next,zoomOut,zoomIn,fit,actualSize,zoom,favorite.Button,retry,reopen,settings})actions.Children.Add(control);
+        foreach(var control in new UIElement[]{previous,next,zoomOut,zoomIn,fit,actualSize,zoom,favorite.Button,editDetails,retry,reopen,settings})actions.Children.Add(control);
         Identify(favorite.Button,"ReaderFavorite","お気に入りを読み込み中");
+        Identify(editDetails,"ReaderEditDetails","読書を閉じて詳細で整理");
+        ToolTipService.SetToolTip(editDetails,"読書を閉じて詳細で整理");
+        editDetails.Click+=(_,_)=>EditDetailsRequested?.Invoke();
         toolbar.Child=actions;Children.Add(toolbar);ViewerChromeController.AttachNotices(this,status,progressStatus);
         Identify(actualSize,"ReaderActualSize","本のページを原寸で表示");ToolTipService.SetToolTip(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）");
         actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImages();viewport.ChangeView(0,0,1,true);}else ViewerInputGestures.ZoomCentered(viewport,(float)OriginalZoom());};
@@ -261,6 +266,7 @@ public void AttachNavigation(UIElement dialog)
         previous.IsEnabled=!blocked&&manifest is not null&&(page>0||ViewerOptions.Value.LoopBookPages);
         next.IsEnabled=!blocked&&manifest is not null&&ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,1,ViewerOptions.Value.LoopBookPages)<manifest.PageCount;
         retry.IsEnabled=!blocked&&failed;reopen.IsEnabled=!blocked;settings.IsEnabled=!blocked;
+        editDetails.IsEnabled=!closing&&!disposed;
         foreach(var option in modes)option.IsEnabled=!blocked;saveProgress.IsEnabled=!blocked&&loaded&&manifest is not null;
         zoom.Text=$"倍率 {viewport.ZoomFactor/OriginalZoom()*100:0}%";zoomOut.IsEnabled=loaded&&!busy&&viewport.ZoomFactor>viewport.MinZoomFactor;zoomIn.IsEnabled=loaded&&!busy&&viewport.ZoomFactor<viewport.MaxZoomFactor;actualSize.IsEnabled=loaded&&!busy;fit.IsEnabled=loaded&&!busy;
     }

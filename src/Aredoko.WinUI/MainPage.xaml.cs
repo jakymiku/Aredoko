@@ -140,10 +140,12 @@ public sealed partial class MainPage : Page
     // Loaded and the portable owner must await the same in-flight operation.
     internal Task InitializeFirstPageAsync()=>firstPageInitialization??=InitializeFirstPageCoreAsync();
     private async Task InitializeFirstPageCoreAsync() {
-        ready=true;
         AttachXamlRoot();
         AppLog.Startup("page_initialization_starting");
         await ConnectAsync();
+        // NavigationView can raise its initial selection while authentication is in flight.
+        if(disposed)return;
+        ready=true;
         UpdateNavigationLayout(ActualWidth);
         AppLog.Startup("page_initialization_completed");
     }
@@ -1508,12 +1510,7 @@ public sealed partial class MainPage : Page
                 if(!disposed&&active is {} current&&current.Id==itemId)
                 {
                     if(editDetails)
-                    {
-                        ShowItemDetailsPane();
-                        Details.IsPaneOpen=true;
-                        await ShowDetailPreviewAsync(current,preserveExisting:true);
-                        if(!disposed&&active?.Id==itemId)Tags.Focus(FocusState.Programmatic);
-                    }
+                        await OpenDetailsAfterViewerAsync(current);
                     else if(detailsWereOpen)
                     {
                         Details.IsPaneOpen=true;
@@ -1526,12 +1523,20 @@ public sealed partial class MainPage : Page
             if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }
     }
+    private async Task OpenDetailsAfterViewerAsync(MediaRow row)
+    {
+        ShowItemDetailsPane();
+        Details.IsPaneOpen=true;
+        await ShowDetailPreviewAsync(row,preserveExisting:true);
+        if(!disposed&&active?.Id==row.Id)Tags.Focus(FocusState.Programmatic);
+    }
     private async Task OpenBookAsync()
     {
         if(active is null||!ArchiveManifest.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
         // Opening a book neither saves nor discards the current metadata draft.
         dialogOpen=true;searchTimer.Stop();
         var readerRow=active;var readerItemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;var viewerResultsChanged=false;
+        var editDetails=false;
         try
         {
             var selectedIndex=rows.FindIndex(row=>row.Id==readerItemId);
@@ -1541,6 +1546,7 @@ public sealed partial class MainPage : Page
             var window=new ViewerWindow(reader,"読書画面","ArchiveReaderDialog");viewerWindow=window;
             window.BeforeCloseAsync=reader.FlushProgressAsync;
             reader.ContentOpened+=RecordContentOpened;
+            reader.EditDetailsRequested+=()=>{editDetails=true;window.Close();};
             reader.CloseRequested+=(_,_)=>window.Close();reader.AttachNavigation(reader);
             window.Closed+=(_,_)=>reader.Dispose();
             await window.ShowAsync(reader.OpenAsync);
@@ -1554,9 +1560,14 @@ public sealed partial class MainPage : Page
                 // Switching to the narrow overlay can close the pane while
                 // reading. Restore the same item's editor and unsaved draft.
                 if(!disposed&&viewerResultsChanged)await RefreshResultRowsAfterEditAsync(favoriteOnly:true);
-                if(!disposed&&detailsWereOpen&&active?.Id==readerItemId)
+                if(!disposed&&active is {} current&&current.Id==readerItemId)
                 {
-                    Details.IsPaneOpen=true;OpenBook.Focus(FocusState.Programmatic);
+                    if(editDetails)
+                        await OpenDetailsAfterViewerAsync(current);
+                    else if(detailsWereOpen)
+                    {
+                        Details.IsPaneOpen=true;OpenBook.Focus(FocusState.Programmatic);
+                    }
                 }
             }
             catch(Exception ex){if(!disposed)Failure(ex);}
