@@ -113,9 +113,11 @@ static class StatusClarityTests
         }
         """);
 
-        var report = DiagnosticsReport.Generate(aiStatus, aiScope, roots: null, shelfCount: 5, termCount: 12, theme: "Dark", rootCount: 3, enabledRootCount: 2);
+        var report = DiagnosticsReport.Generate(aiStatus, aiScope, roots: null, shelfCount: 5, termCount: 12, theme: "Dark",
+            rootCount: 3, enabledRootCount: 2, basicRuntime: new("cpython","3.13.17",64,true));
         check(report.Contains("Aredoko 診断サマリー"), "DiagnosticsReport header generated");
         check(report.Contains("UIテーマ: Dark"), "DiagnosticsReport contains UI theme");
+        check(report.Contains("基本Python: CPython 3.13.17（64ビット、仮想環境）"), "DiagnosticsReport identifies the basic Python runtime");
         check(report.Contains("登録フォルダ数: 3 件"), "DiagnosticsReport contains folder count");
         check(report.Contains("棚（タグ分類）数: 5 件"), "DiagnosticsReport contains shelf count");
         check(report.Contains("AI利用可否: 利用可能"), "DiagnosticsReport contains AI available");
@@ -129,5 +131,6 @@ static class StatusClarityTests
         var nullReport = DiagnosticsReport.Generate(null, null, roots: null);
         check(nullReport.Contains("Aredoko 診断サマリー"), "DiagnosticsReport handles null status/scope safely");
         check(nullReport.Contains("未設定または全フォルダ"), "DiagnosticsReport describes null scope safely");
+        check(!nullReport.Contains("基本Python:"), "DiagnosticsReport keeps working with an older backend");
     }
 }

@@ -1949,7 +1949,7 @@ public sealed partial class MainPage : Page
     }
 
     private void FolderFilter_Changed(object sender,TextChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();}
-    private async void FolderStateFilter_Changed(object sender,SelectionChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)await RefreshSearchRootsAsync();}
+    private void FolderStateFilter_Changed(object sender,SelectionChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();}
     private void ClearFolderFilters_Click(object sender,RoutedEventArgs e)
     {
         var previous=folderPopulating;folderPopulating=true;

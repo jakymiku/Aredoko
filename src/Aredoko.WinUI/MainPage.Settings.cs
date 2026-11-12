@@ -189,7 +189,8 @@ public sealed partial class MainPage
             System.Text.Json.Nodes.JsonNode? aiStatus = null;
             try { aiStatus = await api.GetAsync("api/library/ai/status"); } catch { }
             var build=AppBuildIdentity.FromAssembly(typeof(App).Assembly,AppContext.BaseDirectory);
-            var report=DiagnosticsReport.Generate(aiStatus,aiScope,knownRoots,knownShelves?.Count??0,0,ActualTheme.ToString(),appVersion:build.Version)
+            var report=DiagnosticsReport.Generate(aiStatus,aiScope,knownRoots,knownShelves?.Count??0,0,ActualTheme.ToString(),
+                appVersion:build.Version,basicRuntime:api.BasicRuntime)
                 +"\n"+build.ToDiagnosticText();
 
             var panel=new StackPanel{Spacing=12};

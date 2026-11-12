@@ -52,7 +52,8 @@ public static class DiagnosticsReport
         string theme = "Dark",
         string appVersion = "1.0.0-beta",
         int rootCount = -1,
-        int enabledRootCount = -1)
+        int enabledRootCount = -1,
+        BasicRuntimeDiagnostic? basicRuntime = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("=== Aredoko 診断サマリー (Opt-in Diagnostic Report) ===");
@@ -60,6 +61,12 @@ public static class DiagnosticsReport
         sb.AppendLine($"アプリ版: Aredoko v{appVersion}");
         sb.AppendLine($"OS環境: {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
         sb.AppendLine($"ランタイム: {RuntimeInformation.FrameworkDescription}");
+        if(basicRuntime is {} runtime)
+        {
+            var implementation=runtime.Implementation=="cpython"?"CPython":runtime.Implementation;
+            var environment=runtime.VirtualEnvironment?"仮想環境":"ベース環境";
+            sb.AppendLine($"基本Python: {implementation} {runtime.Version}（{runtime.Bits}ビット、{environment}）");
+        }
         sb.AppendLine($"UIテーマ: {theme}");
         sb.AppendLine();
 

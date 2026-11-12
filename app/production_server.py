@@ -331,6 +331,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                 except ValueError as ex:return self.send(400,{'error':str(ex)})
             if path=='/api/session':
                 session={'mode':'production','token':token,'stats':catalog.stats()}
+                session['basic_runtime']={
+                    'implementation':sys.implementation.name,
+                    'version':'.'.join(map(str,sys.version_info[:3])),
+                    'bits':64 if sys.maxsize>2**32 else 32,
+                    'virtual_environment':sys.prefix!=sys.base_prefix,
+                }
                 if instance_id is not None:session['instance_id']=instance_id
                 return self.send(200,session)
             # Native client supplies the session token for library-specific reads.

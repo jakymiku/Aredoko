@@ -130,11 +130,11 @@ internal sealed class Bootstrap : Form
         Ordinary(path,true);return path;
     }
 
-    void SetupCommand(string executable,string arguments,string root,FileStream log,string label)
+    void SetupCommand(string executable,string arguments,string root,FileStream log,string operation)
     {
         if(cancelRequested)throw new OperationCanceledException();
         Ordinary(executable,false);
-        UI(delegate {stage.Text=label;count.Text="検証が完了するまでお待ちください。";});
+        UI(delegate {stage.Text=operation+"中です…";count.Text="処理が完了するまでお待ちください。";});
         using(var child=new Process())
         {
             child.StartInfo=new ProcessStartInfo(executable,arguments) {UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,WorkingDirectory=root};
@@ -155,7 +155,7 @@ internal sealed class Bootstrap : Form
             while(!child.WaitForExit(100))Interlocked.Exchange(ref lastFrame,Stopwatch.GetTimestamp());
             child.WaitForExit();
             if(cancelRequested)throw new OperationCanceledException();
-            if(child.ExitCode!=0)throw new IOException(label+"に失敗しました。ログを確認してください。");
+            if(child.ExitCode!=0)throw new IOException(operation+"に失敗しました。ログを確認してください。");
         }
     }
 
@@ -202,11 +202,11 @@ internal sealed class Bootstrap : Form
                 Interlocked.Exchange(ref lastFrame,Stopwatch.GetTimestamp());
                 if(choice!=DialogResult.OK)throw new OperationCanceledException();
             }
-            if(!File.Exists(package))SetupCommand(helper,"--fetch cpython \""+package+"\"",root,log,"Pythonを取得しています");
-            if(!File.Exists(wheel))SetupCommand(helper,"--fetch pillow \""+wheel+"\"",root,log,"画像処理ライブラリを取得しています");
-            SetupCommand(helper,"\""+basePython+"\" \""+package+"\""+(Directory.Exists(basePython)?" --verify":""),root,log,"Pythonを検証・配置しています");
+            if(!File.Exists(package))SetupCommand(helper,"--fetch cpython \""+package+"\"",root,log,"Pythonの取得");
+            if(!File.Exists(wheel))SetupCommand(helper,"--fetch pillow \""+wheel+"\"",root,log,"画像処理ライブラリの取得");
+            SetupCommand(helper,"\""+basePython+"\" \""+package+"\""+(Directory.Exists(basePython)?" --verify":""),root,log,"Pythonの検証と配置");
             var script=Path.Combine(root,"tools","prepare_basic_runtime.py");Ordinary(script,false);
-            SetupCommand(Path.Combine(basePython,"tools","python.exe"),"-I -X utf8 -B \""+script+"\" --wheel \""+wheel+"\" --output \""+environment+"\""+(Directory.Exists(environment)?" --verify":""),root,log,"基本環境を構築・確認しています");
+            SetupCommand(Path.Combine(basePython,"tools","python.exe"),"-I -X utf8 -B \""+script+"\" --wheel \""+wheel+"\" --output \""+environment+"\""+(Directory.Exists(environment)?" --verify":""),root,log,"基本環境の構築・確認");
         }
         return Path.Combine(environment,"Scripts","python.exe");
     }

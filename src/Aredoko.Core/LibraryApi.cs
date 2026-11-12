@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 namespace Aredoko.Core;
+public sealed record BasicRuntimeDiagnostic(string Implementation,string Version,int Bits,bool VirtualEnvironment);
+
 public sealed class LibraryApi : IDisposable
 {
     private readonly HttpClient client;
@@ -25,6 +27,7 @@ public sealed class LibraryApi : IDisposable
     public AudioContentClient VideoAudioContent {get;}
     public VideoContentClient VideoContent {get;}
     public AISetupPlanClient AISetupPlans {get;}
+    public BasicRuntimeDiagnostic? BasicRuntime {get; private set;}
     public LibraryApi(HttpMessageHandler handler)
     {
         client=new(handler){BaseAddress=new Uri("http://127.0.0.1:8769/"),Timeout=TimeSpan.FromSeconds(40)};
@@ -73,6 +76,10 @@ public sealed class LibraryApi : IDisposable
         if(startupInstance is not null&&(!doc.RootElement.TryGetProperty("instance_id",out var instance)||instance.GetString()!=startupInstance))
             throw new InvalidOperationException("今回起動したバックエンドを確認できません。");
         if (doc.RootElement.GetProperty("mode").GetString() != "production") throw new InvalidOperationException("製品用APIではありません。start-winui.ps1から起動してください。");
+        BasicRuntime=doc.RootElement.TryGetProperty("basic_runtime",out var runtime)
+            ?new(runtime.GetProperty("implementation").GetString()!,runtime.GetProperty("version").GetString()!,
+                 runtime.GetProperty("bits").GetInt32(),runtime.GetProperty("virtual_environment").GetBoolean())
+            :null;
         client.DefaultRequestHeaders.Remove("X-Aredoko-Token");
         client.DefaultRequestHeaders.Add("X-Aredoko-Token",doc.RootElement.GetProperty("token").GetString());
         client.DefaultRequestHeaders.Remove("Origin");
