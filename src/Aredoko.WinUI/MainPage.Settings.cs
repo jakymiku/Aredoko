@@ -23,7 +23,7 @@ public sealed partial class MainPage
             theme.SelectedIndex=ViewerOptions.Value.Theme switch{"light"=>1,"dark"=>2,_=>0};
             AutomationProperties.SetAutomationId(theme,"SettingsTheme");
             panel.Children.Add(theme);
-            var viewer=new ComboBox{Header="ダブルクリックで開くアプリ",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var viewer=new ComboBox{Header="一覧から開くアプリ（ダブルクリック・Enter）",HorizontalAlignment=HorizontalAlignment.Stretch};
             viewer.Items.Add("Aredokoの内蔵ビューア（既定）");viewer.Items.Add("Windowsの既定アプリ");
             viewer.SelectedIndex=ViewerOptions.Value.OpenExternally?1:0;
             AutomationProperties.SetAutomationId(viewer,"SettingsDoubleClickViewer");

@@ -7,6 +7,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Microsoft.Win32.SafeHandles;
 
 internal static class PythonSetup
@@ -86,27 +87,38 @@ internal static class PythonSetup
 
     static void Download(string url, string destination)
     {
+        CheckCancelled();
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         var request = (HttpWebRequest)WebRequest.Create(url);
         request.AllowAutoRedirect = false;
         request.Timeout = 60000;
         request.ReadWriteTimeout = 60000;
-        using(var response = (HttpWebResponse)request.GetResponse())
+        // The owner can cancel while GetResponse or a response read is blocked.
+        using(var monitor = new Timer(delegate { if(CancellationRequested()) request.Abort(); }, null, 100, 100))
         {
-            if(response.StatusCode != HttpStatusCode.OK) throw new IOException("Unexpected package response.");
-            if(response.ContentLength > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
-            using(var input = response.GetResponseStream())
-            using(var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write))
+            try
             {
-                var buffer = new byte[65536]; long total = 0; int count;
-                while((count = input.Read(buffer, 0, buffer.Length)) != 0)
+                using(var response = (HttpWebResponse)request.GetResponse())
                 {
-                    CheckCancelled(); total += count;
-                    if(total > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
-                    output.Write(buffer, 0, count);
+                    if(response.StatusCode != HttpStatusCode.OK) throw new IOException("Unexpected package response.");
+                    if(response.ContentLength > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
+                    using(var input = response.GetResponseStream())
+                    using(var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write))
+                    {
+                        var buffer = new byte[65536]; long total = 0; int count;
+                        while((count = input.Read(buffer, 0, buffer.Length)) != 0)
+                        {
+                            CheckCancelled(); total += count;
+                            if(total > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
+                            output.Write(buffer, 0, count);
+                        }
+                    }
                 }
             }
+            catch(WebException) { CheckCancelled(); throw; }
+            catch(IOException) { CheckCancelled(); throw; }
         }
+        CheckCancelled();
     }
 
     static void Prepare(string destination, string package, bool verify)
@@ -211,10 +223,16 @@ internal static class PythonSetup
         }
     }
 
-    static void CheckCancelled()
+    static bool CancellationRequested()
     {
+        if(cancelled) return true;
         var marker = Environment.GetEnvironmentVariable("AREDOKO_SETUP_CANCEL");
         if(!String.IsNullOrEmpty(marker) && File.Exists(marker)) cancelled = true;
-        if(cancelled) throw new OperationCanceledException("Python preparation cancelled; environment not published.");
+        return cancelled;
+    }
+
+    static void CheckCancelled()
+    {
+        if(CancellationRequested()) throw new OperationCanceledException("Python preparation cancelled; environment not published.");
     }
 }
