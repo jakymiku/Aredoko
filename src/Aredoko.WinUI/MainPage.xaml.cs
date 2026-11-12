@@ -52,6 +52,7 @@ public sealed partial class MainPage : Page
     private readonly HashSet<int> checkedFolderIds=[];
     private FolderSettingsDraft? folderDraft;
     private bool folderHubOpen, folderTiles, folderPopulating, folderSettingsActive, pollingScan, gettingStartedDismissed, aiIndexReady, scanRootsRefreshed;
+    private long? emptyLibraryScanJob;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer scanPollTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer runtimeVerifyTimer;
     private readonly CancellationTokenSource runtimeVerifyLifetime=new();
@@ -1380,6 +1381,13 @@ public sealed partial class MainPage : Page
     }
     private async void DetailPreview_DoubleTapped(object sender,DoubleTappedRoutedEventArgs e)
     { if(active is null)return;e.Handled=true;await OpenPreviewAsync(active.Id); }
+    private async void Items_PreviewKeyDown(object sender,KeyRoutedEventArgs e)
+    {
+        if(!IsUnmodifiedEnter(e)||e.OriginalSource is not ListViewItem { IsSelected:true, Tag:int itemId }
+            ||!ready||disposed||saving||dialogOpen||librarySelection.Count!=1||active?.Id!=itemId)return;
+        e.Handled=true;
+        if(!e.KeyStatus.WasKeyDown)await OpenPreviewAsync(itemId);
+    }
     private async Task OpenPreviewAsync(int itemId)
     {
         if(librarySelection.Count!=1||SelectionKey(Windows.System.VirtualKey.Control)||SelectionKey(Windows.System.VirtualKey.Shift))return;
@@ -1691,7 +1699,7 @@ public sealed partial class MainPage : Page
 
     private void CloseFolderHubCore()
     {
-        scanPollTimer.Stop();
+        if(emptyLibraryScanJob is null)scanPollTimer.Stop();
         folderHubOpen=false;
         ToolTipService.SetToolTip(Count,null);
         MainViewTitle.Text="ライブラリ";
@@ -2354,7 +2362,13 @@ public sealed partial class MainPage : Page
                 body["root_id"]=targetIds[0];
             else
                 body["root_ids"]=new JsonArray(targetIds.Select(id=>(JsonNode?)JsonValue.Create(id)).ToArray());
-            await api.PostAsync("api/library/scan",body);
+            var started=await api.PostAsync("api/library/scan",body);
+            if(disposed)return;
+            if(rows.Count==0&&!knownRoots.Any(root=>root.Enabled&&root.PresentCount>0))
+            {
+                emptyLibraryScanJob=started["job_id"]?.GetValue<long>();
+                if(emptyLibraryScanJob is not null&&!scanPollTimer.IsRunning)scanPollTimer.Start();
+            }
             scanRootsRefreshed=false;
             ScanStatus.Text=mode=="list_and_ai"?"スキャン開始（一覧＋AI索引）":"スキャン開始（一覧のみ）";
             await PollScanStateAsync();
@@ -2431,13 +2445,18 @@ public sealed partial class MainPage : Page
         finally{saving=false;}
     }
 
+    private bool CanRefreshEmptyLibraryAfterScan()=>!disposed&&!folderHubOpen&&!shelfHubOpen&&rows.Count==0&&active is null
+        &&view=="all"&&similarityOrigin is null&&selectedSearchRoots is null&&selectedShelfIds is null
+        &&Kind.SelectedIndex==0&&SearchMode.SelectedIndex==0&&string.IsNullOrWhiteSpace(Query.Text);
+
     private async Task PollScanStateAsync()
     {
-        if(pollingScan||disposed||!folderHubOpen)return;
+        if(pollingScan||disposed||(!folderHubOpen&&emptyLibraryScanJob is null))return;
         pollingScan=true;
         try
         {
             var state=await api.GetAsync("api/library/scan");
+            if(disposed)return;
             var phase=state["state"]?.GetValue<string>() ?? "idle";
             var mode=state["mode"]?.GetValue<string>() ?? "list";
             var stage=state["stage"]?.GetValue<string>() ?? phase;
@@ -2451,6 +2470,29 @@ public sealed partial class MainPage : Page
             bool listRunning = phase is "running" or "cancelling";
             bool aiRunning = mode == "list_and_ai" && (stage == "ai" || aiState is "running" or "cancelling");
             bool anyRunning = listRunning || aiRunning;
+
+            if(emptyLibraryScanJob is long job&&state["id"]?.GetValue<long>() is long observedJob
+                &&(observedJob>job||observedJob==job&&!listRunning))
+            {
+                if(observedJob==job&&phase=="complete"&&CanRefreshEmptyLibraryAfterScan())
+                {
+                    // The folder-to-library transition may still be reading an empty snapshot.
+                    if(dialogOpen||saving||!await transitions.WaitAsync(0))return;
+                    emptyLibraryScanJob=null;
+                    try
+                    {
+                        await RefreshSearchRootsAsync();
+                        if(CanRefreshEmptyLibraryAfterScan())await LoadAsync();
+                    }
+                    finally{transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
+                }
+                else emptyLibraryScanJob=null;
+            }
+            if(!folderHubOpen)
+            {
+                if(emptyLibraryScanJob is null)scanPollTimer.Stop();
+                return;
+            }
 
             if(ScanRoot is not null)ScanRoot.IsEnabled=!anyRunning;
             if(SaveExcludes is not null)SaveExcludes.IsEnabled=!anyRunning;
@@ -2507,7 +2549,15 @@ public sealed partial class MainPage : Page
                 ScanStatus.Text = scanError;
             }
         }
-        catch(Exception ex){if(ScanStatus is not null)ScanStatus.Text=ex.Message;}
+        catch(Exception ex)
+        {
+            if(folderHubOpen)ScanStatus.Text=ex.Message;
+            else
+            {
+                emptyLibraryScanJob=null;scanPollTimer.Stop();
+                AppLog.Error(ex);
+            }
+        }
         finally{pollingScan=false;}
     }
 
