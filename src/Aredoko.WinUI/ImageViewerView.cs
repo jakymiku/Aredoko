@@ -32,6 +32,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private bool keyboardChrome, failed;
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
+    public event Action? EditDetailsRequested;
     private CancellationTokenSource? request;
     private ViewerImageCodec.NativeAnimation? nativeAnimation;
     private readonly ViewerPageCache<int,BitmapImage> staticCache=new(3,96*1024*1024);
@@ -59,6 +60,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button fit = IconButton(Symbol.FullScreen);
     private readonly Button actualSize=new(){Content="原寸",MinWidth=36,Padding=new Thickness(8)};
     private readonly Button retry = IconButton(Symbol.Refresh);
+    private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly TextBlock title = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock count = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock zoom = new() { Text = "倍率 100%", VerticalAlignment = VerticalAlignment.Center };
@@ -84,8 +86,11 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         viewport.SizeChanged += (_, _) => FitImage();
         viewport.ViewChanged += (_, _) => UpdateControls();
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var control in new UIElement[] { previous, next, zoomOut, zoomIn, fit, actualSize, zoom, favorite.Button,retry,settings }) actions.Children.Add(control);
+        foreach (var control in new UIElement[] { previous, next, zoomOut, zoomIn, fit, actualSize, zoom, favorite.Button,editDetails,retry,settings }) actions.Children.Add(control);
         Identify(favorite.Button,"ImageFavorite","お気に入りを読み込み中");
+        Identify(editDetails,"ImageEditDetails","画像を閉じて詳細で整理");
+        ToolTipService.SetToolTip(editDetails,"画像を閉じて詳細で整理");
+        editDetails.Click+=(_,_)=>EditDetailsRequested?.Invoke();
         toolbarHost.Child=actions;Children.Add(toolbarHost);ViewerChromeController.AttachNotices(this,status);
         title.Style = count.Style = zoom.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
         Identify(viewport, "ImageViewport", "画像表示。左右キーで画像送り、拡大してスクロールできます");
@@ -140,6 +145,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     {
         previous.IsEnabled = !disposed && !navigating && !favorite.IsSaving && sequence.HasPrevious; next.IsEnabled = !disposed && !navigating && !favorite.IsSaving && sequence.HasNext;
         favorite.UpdateAvailability(!disposed&&!navigating&&loaded);
+        editDetails.IsEnabled=!disposed&&!navigating&&loaded;
         zoom.Text = loaded?$"倍率 {viewport.ZoomFactor/OriginalZoom() * 100:0}%":"倍率 —";
         zoomOut.IsEnabled = loaded && !busy && viewport.ZoomFactor > viewport.MinZoomFactor;
         zoomIn.IsEnabled = loaded && !busy && viewport.ZoomFactor < viewport.MaxZoomFactor; actualSize.IsEnabled=loaded&&!busy; fit.IsEnabled = loaded && !busy;

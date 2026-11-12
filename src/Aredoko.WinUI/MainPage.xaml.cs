@@ -1416,6 +1416,7 @@ public sealed partial class MainPage : Page
         dialogOpen=true;searchTimer.Stop();var itemId=active.Id;var detailsWereOpen=Details.IsPaneOpen;
         var session=resultSession;
         int? lastOpened=null;var lastOrdinal=0;var viewerResultsChanged=false;
+        var editDetails=false;
         try
         {
             if(session is null)throw new InvalidOperationException("同じ条件で検索し直してから画像を開いてください。");
@@ -1433,6 +1434,7 @@ public sealed partial class MainPage : Page
                 viewerResultsChanged|=!kept;
             };
             viewer.ContentOpened+=id=>{lastOpened=id;lastOrdinal=sequence.Position;RecordContentOpened(id);};
+            viewer.EditDetailsRequested+=()=>{editDetails=true;window.Close();};
             viewer.CloseRequested+=(_,_)=>window.Close();viewer.AttachNavigation(viewer);
             window.Closed+=(_,_)=>viewer.Dispose();
             await window.ShowAsync(viewer.OpenAsync);
@@ -1454,7 +1456,13 @@ public sealed partial class MainPage : Page
                 }
                 if(!disposed&&lastOpened is int target&&session is not null)
                     await RestoreViewerSelectionAsync(target,lastOrdinal,session,detailsWereOpen);
-                if(!disposed&&detailsWereOpen&&active?.Id==itemId){Details.IsPaneOpen=true;OpenImage.Focus(FocusState.Programmatic);}
+                if(!disposed&&editDetails&&session is not null&&ReferenceEquals(resultSession,session)
+                    &&!PendingSearch&&active is {} current&&current.Id==lastOpened)
+                    await OpenDetailsAfterViewerAsync(current);
+                else if(!disposed&&detailsWereOpen&&active?.Id==itemId)
+                {
+                    Details.IsPaneOpen=true;OpenImage.Focus(FocusState.Programmatic);
+                }
             }
             catch(Exception ex){if(!disposed)Failure(ex);}
             finally{transitions.Release();}
