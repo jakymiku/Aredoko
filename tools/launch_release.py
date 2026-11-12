@@ -349,10 +349,14 @@ def main():
     checks.add_argument('--startup-smoke', action='store_true', help='Internal portable startup check with fresh isolated data')
     parser.add_argument('--full-check', action='store_true', help='Force full preflight on this launch, refreshing normal-startup validation')
     parser.add_argument('--no-error-dialog', action='store_true', help='Automation only: keep error logs and nonzero exit without a modal dialog')
+    parser.add_argument('--managed-data', type=Path,
+                        help='Existing Aredoko app-data directory for --check or --check-activation (no downloads)')
     parser.add_argument('--settings', type=Path, help='Explicit launch-settings.json (otherwise in LOCALAPPDATA/Aredoko)')
     for key in set(PATH_OPTIONS) | {'viewer_settings', 'ui_theme', 'ai_ranking'} | RUNTIME_FIELDS:
         parser.add_argument('--' + key.replace('_', '-'))
     args = parser.parse_args()
+    if args.managed_data is not None and not (args.check or args.check_activation):
+        parser.error('--managed-data requires --check or --check-activation')
     if args.startup_preflight or args.startup_owned or args.startup_smoke:
         # This is a one-shot worker, not the user-facing product entrypoint.
         # Use independent raw descriptors: a blocked writer must not hold a
@@ -373,7 +377,8 @@ def main():
         if args.verify_only:
             manifest = verify_release(ROOT)
         elif args.check or args.check_activation:
-            manifest = preflight(ROOT)
+            managed_data = args.managed_data.absolute() if args.managed_data is not None else None
+            manifest = preflight(ROOT, managed_data=managed_data)
             if args.check_activation:prepare_frontend(ROOT, manifest)
         else:
             if os.name != 'nt':raise RuntimeError('Aredoko release launch requires Windows')

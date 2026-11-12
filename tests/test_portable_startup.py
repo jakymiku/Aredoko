@@ -103,6 +103,24 @@ class PortableStagingTests(unittest.TestCase):
                 launcher.preflight(self.output, imports=False, managed_data=data)
         self.assertEqual(check.call_count, 1)
 
+    def test_managed_check_cli_only_accepts_data_for_read_only_runtime_checks(self):
+        import launch_release as launcher
+        data = self.base / 'generated data'
+        manifest = {'version': 'fixture', 'frontend_activation': 'portable'}
+        for option in ('--check', '--check-activation'):
+            with self.subTest(option=option), patch.object(sys, 'argv', ['launch_release', option, '--managed-data', str(data)]), \
+                    patch.object(launcher, 'preflight', return_value=manifest) as preflight, \
+                    patch.object(launcher, 'prepare_frontend') as frontend:
+                self.assertEqual(launcher.main(), 0)
+                preflight.assert_called_once_with(launcher.ROOT, managed_data=data)
+                self.assertEqual(frontend.call_count, int(option == '--check-activation'))
+        for option in ('--verify-only', '--startup-owned'):
+            with self.subTest(option=option), patch.object(sys, 'argv', ['launch_release', option, '--managed-data', str(data)]), \
+                    patch.object(launcher, 'preflight') as preflight, self.assertRaises(SystemExit) as error:
+                launcher.main()
+            self.assertEqual(error.exception.code, 2)
+            preflight.assert_not_called()
+
     def test_explicit_portable_package_has_all_owned_entrypoints_and_readonly_zip(self):
         manifest = self.stage()
         self.assertEqual(manifest['frontend_activation'], 'portable')
