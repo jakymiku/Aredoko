@@ -7,6 +7,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
@@ -130,6 +131,38 @@ internal sealed class Bootstrap : Form
         Ordinary(path,true);return path;
     }
 
+    static FileStream OpenVerifiedSetupHelper(string root,Dictionary<string,object> metadata)
+    {
+        const string relative="tools/PythonSetup.exe";
+        const string invalid="基本環境の準備ファイルが配布情報と一致しません。ZIPを確認し、新しいフォルダに展開してください。";
+        object value;
+        var entries=metadata.TryGetValue("entries",out value)?value as System.Collections.IEnumerable:null;
+        if(entries==null)throw new IOException(invalid);
+        var matches=entries.OfType<Dictionary<string,object>>().Where(entry=>
+        {
+            object path;
+            return entry.TryGetValue("path",out path)&&String.Equals(path as string,relative,StringComparison.OrdinalIgnoreCase);
+        }).ToArray();
+        object bytes, hash;
+        if(matches.Length!=1||!matches[0].TryGetValue("bytes",out bytes)||!(bytes is int||bytes is long)
+            ||!matches[0].TryGetValue("sha256",out hash)||!(hash is string))throw new IOException(invalid);
+
+        var helper=Path.Combine(root,"tools","PythonSetup.exe");
+        Ordinary(helper,false);
+        var file=new FileStream(helper,FileMode.Open,FileAccess.Read,FileShare.Read);
+        try
+        {
+            Native.FileInfo info;
+            if(!Native.GetFileInformationByHandle(file.SafeFileHandle,out info)||info.Links!=1||(info.Attributes&0x400)!=0
+                ||file.Length!=Convert.ToInt64(bytes))throw new IOException(invalid);
+            using(var sha=SHA256.Create())
+                if(BitConverter.ToString(sha.ComputeHash(file)).Replace("-","").ToLowerInvariant()!=(string)hash)
+                    throw new IOException(invalid);
+            return file;
+        }
+        catch{file.Dispose();throw;}
+    }
+
     void SetupCommand(string executable,string arguments,string root,FileStream log,string operation)
     {
         if(cancelRequested)throw new OperationCanceledException();
@@ -175,12 +208,18 @@ internal sealed class Bootstrap : Form
             throw new IOException("同梱Pythonが見つかりません。配布物を確認してください。");
         if(Directory.Exists(Path.Combine(root,"runtime","python")))
             throw new IOException("Python非同梱版に予期しないPythonフォルダがあります。別の新規フォルダへ展開してください。");
+        // The native helper runs before the Python owner's full release preflight.
+        using(var verifiedHelper=OpenVerifiedSetupHelper(root,metadata))
+            return EnsureManagedPython(root,local,log,identifier,verifiedHelper.Name);
+    }
+
+    string EnsureManagedPython(string root,string local,FileStream log,string identifier,string helper)
+    {
         var app=ManagedDirectory(local,"Aredoko");
         var artifacts=ManagedDirectory(app,"runtime-artifacts");var runtimes=ManagedDirectory(app,"runtimes");
         var package=Path.Combine(artifacts,"python.3.13.17.nupkg");
         var wheel=Path.Combine(artifacts,"pillow-12.3.0-cp313-cp313-win_amd64.whl");
         var basePython=Path.Combine(runtimes,"cpython-3.13.17");var environment=Path.Combine(runtimes,identifier);
-        var helper=Path.Combine(root,"tools","PythonSetup.exe");Ordinary(helper,false);
         setupCancelPath=Path.Combine(app,"logs","setup-cancel-"+session);
         // One owner for this shared setup location. Existing backend data and
         // working environments are not deleted or overwritten.
