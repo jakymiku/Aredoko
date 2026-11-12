@@ -6,6 +6,8 @@ using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
@@ -106,12 +108,22 @@ internal static class PythonSetup
                     using(var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write))
                     {
                         var buffer = new byte[65536]; long total = 0; int count;
+                        var expectedBytes=Math.Max(0,response.ContentLength);
+                        var progressClock=Stopwatch.StartNew();
+                        ReportDownload(0,expectedBytes);
                         while((count = input.Read(buffer, 0, buffer.Length)) != 0)
                         {
                             CheckCancelled(); total += count;
                             if(total > 128L * 1024 * 1024) throw new IOException("Package exceeds download limit.");
                             output.Write(buffer, 0, count);
+                            if(progressClock.ElapsedMilliseconds>=250)
+                            {
+                                ReportDownload(total,expectedBytes);
+                                progressClock.Restart();
+                            }
                         }
+                        CheckCancelled();
+                        ReportDownload(total,expectedBytes);
                     }
                 }
             }
@@ -119,6 +131,11 @@ internal static class PythonSetup
             catch(IOException) { CheckCancelled(); throw; }
         }
         CheckCancelled();
+    }
+
+    static void ReportDownload(long received,long total)
+    {
+        Console.WriteLine(String.Format(CultureInfo.InvariantCulture,"aredoko-download-progress {0} {1}",received,total));
     }
 
     static void Prepare(string destination, string package, bool verify)

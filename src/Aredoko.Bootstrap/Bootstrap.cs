@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -42,6 +43,9 @@ internal sealed class Bootstrap : Form
             {
                 var p=new JavaScriptSerializer().DeserializeObject("{\"format\":\"aredoko-startup-progress-v1\",\"sequence\":1,\"stage\":\"file_hashes\",\"state\":\"running\",\"completed_files\":2,\"total_files\":4,\"completed_bytes\":10,\"total_bytes\":20}") as Dictionary<string,object>;
                 if(ProgressText(p).Item3!=50)return 2;
+                var download=SetupDownloadProgress("aredoko-download-progress 500000 1000000");
+                if(download==null||download.Item2!=50||SetupDownloadProgress("aredoko-download-progress 1 0").Item2.HasValue)return 2;
+                if(SetupDownloadProgress("aredoko-download-progress 20 10")!=null)return 2;
                 try{Number(true);return 2;}catch(IOException){}
                 try{ValidateKeys("{\"kind\":1,\"kind\":2}");return 2;}catch(IOException){}
                 foreach(var invalid in new[]{null,"","relative","C:relative",@"\root-relative"})
@@ -167,7 +171,8 @@ internal sealed class Bootstrap : Form
     {
         if(cancelRequested)throw new OperationCanceledException();
         Ordinary(executable,false);
-        UI(delegate {stage.Text=operation+"中です…";count.Text="処理が完了するまでお待ちください。";});
+        UI(delegate {stage.Text=operation+"中です…";count.Text="処理が完了するまでお待ちください。";progress.Style=ProgressBarStyle.Marquee;});
+        var downloading=arguments.StartsWith("--fetch ",StringComparison.Ordinal);
         using(var child=new Process())
         {
             child.StartInfo=new ProcessStartInfo(executable,arguments) {UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,WorkingDirectory=root};
@@ -178,6 +183,16 @@ internal sealed class Bootstrap : Form
             var logLock=new object();
             DataReceivedEventHandler record=delegate(object sender,DataReceivedEventArgs line) {
                 if(line.Data==null)return;
+                var download=downloading?SetupDownloadProgress(line.Data):null;
+                if(download!=null)
+                {
+                    UI(delegate {
+                        if(cancelRequested)return;
+                        count.Text=download.Item1;
+                        if(download.Item2.HasValue){progress.Style=ProgressBarStyle.Continuous;progress.Value=download.Item2.Value;}
+                    });
+                    return;
+                }
                 var bytes=Encoding.UTF8.GetBytes(line.Data+Environment.NewLine);
                 lock(logLock){log.Write(bytes,0,bytes.Length);log.Flush();}
             };
@@ -190,6 +205,21 @@ internal sealed class Bootstrap : Form
             if(cancelRequested)throw new OperationCanceledException();
             if(child.ExitCode!=0)throw new IOException(operation+"に失敗しました。ログを確認してください。");
         }
+    }
+
+    static Tuple<string,int?> SetupDownloadProgress(string line)
+    {
+        var fields=line.Split(' ');
+        const long limit=128L*1024*1024;
+        long received,total;
+        if(fields.Length!=3||fields[0]!="aredoko-download-progress"
+            ||!Int64.TryParse(fields[1],NumberStyles.None,CultureInfo.InvariantCulture,out received)
+            ||!Int64.TryParse(fields[2],NumberStyles.None,CultureInfo.InvariantCulture,out total)
+            ||received>limit||total>limit||total>0&&received>total)return null;
+        var done=String.Format(CultureInfo.CurrentCulture,"{0:F1} MB",received/1000000.0);
+        if(total==0)return Tuple.Create<string,int?>("取得済み "+done,null);
+        var expected=String.Format(CultureInfo.CurrentCulture,"{0:F1} MB",total/1000000.0);
+        return Tuple.Create<string,int?>("取得済み "+done+" / "+expected,(int)(received*100/total));
     }
 
     string EnsurePython(string root,string local,FileStream log)
