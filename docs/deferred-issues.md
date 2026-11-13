@@ -4,9 +4,9 @@
 
 | ID | 状態・影響 | 根拠と次の確認 | 優先度 |
 | --- | --- | --- | --- |
-| D01 | コード上の懸念。登録フォルダの表示状態変更が失敗した場合の案内が不明確 | MainPage.xaml.cs FolderStateFilter_Changedはasync voidからRefreshSearchRootsAsyncを直接await。接続切断時の例外境界を後で確認。実機再現なし、現時点でクラッシュと断定しない | 通常 |
+| D01 | **解消済み**（以前は登録フォルダの表示状態変更が非同期失敗時を想定していた懸念） | 現行 `MainPage.xaml.cs` の `FolderStateFilter_Changed` は既読込済み `knownRoots` に対して同期の `RenderFolderHub()` のみを呼び出すため、async void 未捕捉境界は存在しない（再読込ボタン等は `transitions`/例外処理内） | 完了 |
 | D02 | 開発ツールの操作確認を保留。製品機能の不具合ではない | agent-desktop v1.0.2のstate file置換1175。既存WinAppへ戻して開発を継続。新しい根拠なしに単独再試行しない | 低 |
-| D05 | 初回準備の失敗案内の助詞が不自然（再現済み、機能停止原因ではない） | 2026-11-10 managed01/source f71e71f。OS sandboxのDNS失敗時に「Pythonを取得していますに失敗しました」と表示。Bootstrap.SetupCommandが進行文へ「に失敗」を連結するため。ネットワークは通常ホスト権限で解消済み。後で進行文と失敗文を分ける | 低 |
+| D05 | **解消済み**（初回準備失敗時の助詞表現） | 現行 `src/Aredoko.Bootstrap/Bootstrap.cs` の `SetupCommand` 呼出は `"Pythonの取得"` / `"画像処理ライブラリの取得"` / `"Pythonの検証と配置"` / `"基本環境の構築・確認"` の名詞句を渡し、進行中（`…中です…`）・失敗（`…に失敗しました。ログを確認してください。`）とも自然な日本語になるよう是正済み | 完了 |
 | D06 | 開発用Computer Useが画面取得・終了操作で応答せず、製品GUI受入を保留 | 2026-11-11 cache_gui。専用frontend-cache02のwindow列挙まで成功。get_window/stateが返らず入力前に中断。終了用Alt+F4も応答せず結果不明、node_repl reset済み。PID/path/parent照合後にfixtureのみ終了、owner/backendは回収。製品の画面停止と断定せず、同じ経路を反復しない。data/gui-cache02/cleanup.json・session-result.json | 通常 |
 
 

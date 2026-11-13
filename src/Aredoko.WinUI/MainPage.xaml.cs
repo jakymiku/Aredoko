@@ -177,9 +177,9 @@ public sealed partial class MainPage : Page
         finally{if(StartupReady.Pending)try{await StartupReady.SignalAsync(false);}catch(Exception ex){AppLog.Error(ex);}}
     }
     private string ResultGroup()=>AIResultGroup.SelectedIndex switch {0=>"leading",1=>"other",_=>"all"};
-    private void AIResultGroup_Changed(object sender,SelectionChangedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private void AIResultGroup_Changed(object sender,SelectionChangedEventArgs e){UpdateClearSearchConditionsVisibility();similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private double? BoundaryValue()=>SearchMode.SelectedIndex is 2 or 3 && double.IsFinite(SimilarityBoundary.Value)?SimilarityBoundary.Value:null;
-    private void SimilarityBoundary_Changed(NumberBox sender,NumberBoxValueChangedEventArgs args){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private void SimilarityBoundary_Changed(NumberBox sender,NumberBoxValueChangedEventArgs args){UpdateClearSearchConditionsVisibility();similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private void RestoreSearchRoots(IReadOnlyList<int>? ids)
     {
         selectedSearchRoots=ids is null?null:ids.ToArray();
@@ -228,6 +228,7 @@ public sealed partial class MainPage : Page
         ActiveSearchScopeText.Text="検索対象フィルタがオンになっています — "+(warning is null?summary:$"{summary} — {warning}");
         ActiveSearchScopeBar.Visibility=selectedSearchRoots is null?Visibility.Collapsed:Visibility.Visible;
         ResetAllFoldersButton.Visibility=selectedSearchRoots is null?Visibility.Collapsed:Visibility.Visible;
+        UpdateClearSearchConditionsVisibility();
     }
     private async Task RefreshSearchRootsAsync()
     {
@@ -423,7 +424,7 @@ public sealed partial class MainPage : Page
         };
     }
     private async Task LoadAsync(bool reuseSession=false) {
-        CloseBrowseMenus();EmptyAIRecovery.Visibility=Visibility.Collapsed;
+        CloseBrowseMenus();EmptyAIRecovery.Visibility=Visibility.Collapsed;EmptyResetConditionsButton.Visibility=Visibility.Collapsed;
         // The accepted destination owns the heading even while its request is
         // pending or fails. Never label old, disabled rows as the new results.
         UpdateLibraryHeading();Count.Text="検索中…";
@@ -463,6 +464,7 @@ public sealed partial class MainPage : Page
             PageNumber.Text=rows.Count==0?"0 件":$"{browseStart+1:N0}–{browseStart+rows.Count:N0} / {result.Total:N0}";
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*pageSize<result.Total;
             VisualAssets.State(EmptyArt,"no_results");Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
+            EmptyResetConditionsButton.Visibility=rows.Count==0&&HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
             Empty.Text=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"探したいページ内の語句を入力して検索してください。":"この範囲に一致するページ本文はありません。")
                 :method.IsTagSemantic?(string.IsNullOrWhiteSpace(query)?"未承認タグから探したい内容を入力してください。":"索引済みの未承認タグ候補がありません。設定の「AI検索の準備」で索引を作成してください。")
                 :method.IsTagCandidates?"この範囲に一致する未承認のAIタグ候補はありません。作品の詳細「AIタグ候補」から候補を生成・確認できます。"
@@ -582,6 +584,7 @@ public sealed partial class MainPage : Page
                     :selectedMode is >0 and <4 or 7 or 8 or 9?$"この条件ではAI検索を利用できません。\n{ex.Message}\nファイル名・タグ検索に切り替えるか、AI索引の設定を確認してください。"
                     :"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";
                 EmptyAIRecovery.Visibility=missingAI?Visibility.Visible:Visibility.Collapsed;
+                EmptyResetConditionsButton.Visibility=!missingAI&&HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
                 if(missingAI){Notice("AIの準備が必要です");AppLog.Error(ex);}
                 else Failure(ex);
             }
@@ -1237,7 +1240,62 @@ public sealed partial class MainPage : Page
         queryComposing=false;
         if(ready&&!populating&&!disposed){searchTimer.Stop();searchTimer.Start();}
     }
-    private void Query_Changed(object sender,TextChangedEventArgs e){if(ready&&!populating&&!queryComposing){searchTimer.Stop();searchTimer.Start();}}
+    private void Query_Changed(object sender,TextChangedEventArgs e){UpdateClearSearchConditionsVisibility();if(ready&&!populating&&!queryComposing){searchTimer.Stop();searchTimer.Start();}}
+    private bool HasActiveSearchConditions()
+        =>!string.IsNullOrEmpty(Query?.Text)
+        ||(Kind?.SelectedIndex??0)>0
+        ||(SearchMode?.SelectedIndex??0)>0
+        ||similarityOrigin is not null
+        ||selectedShelfIds is not null
+        ||selectedSearchRoots is not null
+        ||AIMatchedOnly?.IsChecked==true
+        ||UnreviewedOnly?.IsChecked==true
+        ||view=="unreviewed"
+        ||(SimilarityBoundary is not null&&double.IsFinite(SimilarityBoundary.Value))
+        ||(AIResultGroup?.SelectedIndex??0)>0;
+    private void UpdateClearSearchConditionsVisibility()
+    {
+        if(ClearSearchConditionsButton is null)return;
+        var next=HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
+        if(ClearSearchConditionsButton.Visibility!=next)
+        {
+            ClearSearchConditionsButton.Visibility=next;
+            UpdateSearchToolbarLayout();
+        }
+    }
+    private async void ClearSearchConditions_Click(object sender,RoutedEventArgs e)
+    {
+        if(!ready||disposed||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        searchTimer.Stop();
+        try
+        {
+            if(!await ConfirmDiscardAsync())return;
+            similarityCancellation?.Cancel();
+            populating=true;
+            try
+            {
+                queryComposing=false;
+                Query.Text="";
+                Kind.SelectedIndex=0;
+                SearchMode.SelectedIndex=0;
+                AIMatchedOnly.IsChecked=false;
+                UnreviewedOnly.IsChecked=false;
+                if(view=="unreviewed")view="all";
+                SimilarityBoundary.Value=double.NaN;
+                AIResultGroup.SelectedIndex=0;
+                SetShelfScope(null);
+                RestoreSearchRoots(null);
+                ClearSimilarity();
+                UpdateSearchMethod();
+                RestoreNavigation();
+            }
+            finally{populating=false;}
+            UpdateClearSearchConditionsVisibility();
+            page=0;
+            await LoadAsync();
+        }
+        finally{transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
+    }
     private void Query_KeyDown(object sender,KeyRoutedEventArgs e)
     {
         if(!IsUnmodifiedEnter(e)||queryComposing||!ready||disposed||saving||dialogOpen||populating)return;
@@ -1286,6 +1344,7 @@ public sealed partial class MainPage : Page
         SearchMethodHint.Text=similar?(directVideoAudioSimilarity?"保存済みの動画内音声から、音の特徴が似た動画を探しています。一致区間から再生できます。検索語の入力や「検索」で通常の検索に戻ります。":directVideoSimilarity?"作成済みの動画索引から内容が似た候補を探しています。動画内の音声は対象外です。検索語の入力や「検索」で通常の検索に戻ります。":directAudioSimilarity?"作成済みの音声の内容・特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="video"?"動画の代表フレームから似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="audio"?"音声・音楽の音響特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchModeDescription(SearchMode.SelectedIndex);
         ToolTipService.SetToolTip(SearchMode,SearchMethodHint.Text);
         AutomationProperties.SetHelpText(SearchMode,SearchMethodHint.Text);
+        UpdateClearSearchConditionsVisibility();
     }
     private static string SearchModeDescription(int index)=>index switch
         {
@@ -1310,8 +1369,8 @@ public sealed partial class MainPage : Page
         similarityCancellation?.Cancel();
         if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}
     }
-    private void AIMatchedOnly_Changed(object sender,RoutedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
-    private void Kind_Changed(object sender,SelectionChangedEventArgs e){similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private void AIMatchedOnly_Changed(object sender,RoutedEventArgs e){UpdateClearSearchConditionsVisibility();similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
+    private void Kind_Changed(object sender,SelectionChangedEventArgs e){UpdateClearSearchConditionsVisibility();similarityCancellation?.Cancel();if(ready&&!populating){searchTimer.Stop();searchTimer.Start();}}
     private void CloseBrowseMenus(){ItemSizeFlyout.Hide();BrowseActionsFlyout.Hide();}
     private void BrowseActions_Click(object sender,RoutedEventArgs e)=>ItemSizeFlyout.Hide();
     private async void Previous_Click(object sender,RoutedEventArgs e){CloseBrowseMenus();await NavigateAsync(PreviousBrowsePage());}
@@ -1327,6 +1386,7 @@ public sealed partial class MainPage : Page
         UnreviewedOnly.IsChecked=view=="unreviewed";
         UnreviewedOnly.IsEnabled=view is "all" or "unreviewed";
         populating=false;
+        UpdateClearSearchConditionsVisibility();
     }
     private async void Nav_SelectionChanged(NavigationView sender,NavigationViewSelectionChangedEventArgs args)
     {

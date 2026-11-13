@@ -58,6 +58,7 @@ public sealed partial class MainPage
         FooterSelection.Visibility=librarySelection.Count>0?Visibility.Visible:Visibility.Collapsed;
         FooterSelectionActions.Visibility=librarySelection.Count>1?Visibility.Visible:Visibility.Collapsed;
         SelectionBulkActions.IsEnabled=FooterBulkActions.IsEnabled=FooterClearSelection.IsEnabled=!saving&&!dialogOpen&&!preparingSelection;
+        if(SelectVisibleItemsMenuItem is not null)SelectVisibleItemsMenuItem.IsEnabled=!saving&&!dialogOpen&&!preparingSelection&&rows.Count>0&&resultSession is not null;
         DetailsButton.IsEnabled=!saving&&!preparingSelection&&(librarySelection.Count>0||active is not null);
         ClearSelectionButton.IsEnabled=!saving&&!preparingSelection&&!dialogOpen;
         foreach(var container in containerCleanup.Keys.ToArray())
@@ -154,7 +155,33 @@ public sealed partial class MainPage
             var action=new MenuFlyoutItem{Text=label,IsEnabled=enabled};AutomationProperties.SetAutomationId(action,id);
             action.Click+=async(_,_)=>{if(session==resultSession?.Id&&expected.SequenceEqual(librarySelection.Ids))await EditLibrarySelectionAsync(operation);};menu.Items.Add(action);
         }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var clear=new MenuFlyoutItem{Text="選択を解除",IsEnabled=enabled};AutomationProperties.SetAutomationId(clear,"BulkClearSelection");
+        clear.Click+=ClearLibrarySelection_Click;menu.Items.Add(clear);
         return menu;
+    }
+    private async void SelectVisibleItems_Click(object sender,RoutedEventArgs e)
+    {
+        CloseBrowseMenus();
+        if(!ready||disposed||saving||dialogOpen||preparingSelection||rows.Count==0||resultSession is null||!await transitions.WaitAsync(0))return;
+        var detailsWereOpen=Details.IsPaneOpen;
+        try
+        {
+            if(!await ConfirmDiscardAsync())
+            {
+                if(detailsWereOpen&&(active is not null||librarySelection.Count>0))Details.IsPaneOpen=true;
+                return;
+            }
+            BindLibrarySelection();
+            var visiblePositions=rows.Select((row,index)=>new ResultPosition(row.Id,browseStart+index)).ToArray();
+            var selectedIds=visiblePositions.Take(LibrarySelection.Maximum).Select(position=>position.Id).ToArray();
+            librarySelection.Clear();
+            librarySelection.Visible(visiblePositions,selectedIds,selectedIds[^1]);
+            RestoreSelection();ApplyLibrarySelection();
+            if(detailsWereOpen&&(active is not null||librarySelection.Count>0))Details.IsPaneOpen=true;
+        }
+        catch(Exception ex){RestoreSelection();Failure(ex);}
+        finally{transitions.Release();}
     }
     private async void SelectionFavoriteAdd_Click(object sender,RoutedEventArgs e)=>await EditLibrarySelectionAsync(SelectionOperation.FavoriteAdd);
     private async void SelectionFavoriteRemove_Click(object sender,RoutedEventArgs e)=>await EditLibrarySelectionAsync(SelectionOperation.FavoriteRemove);

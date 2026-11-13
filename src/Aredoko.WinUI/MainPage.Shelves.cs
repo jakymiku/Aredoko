@@ -28,7 +28,7 @@ public sealed partial class MainPage
     private string ShelfScopeName()=>selectedShelfIds is null?"ライブラリ":string.Join("、",selectedShelfIds.Select(ShelfName));
     private void SetShelfScope(IReadOnlyList<long>? ids)
     {
-        selectedShelfIds=ids?.ToArray();UpdateShelfScopeLabel();
+        selectedShelfIds=ids?.ToArray();UpdateShelfScopeLabel();UpdateClearSearchConditionsVisibility();
     }
     private void UpdateShelfScopeLabel()
     {
