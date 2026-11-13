@@ -633,6 +633,14 @@ public sealed partial class MainPage : Page
         finally { populating = false; }
     }
 
+    private string FormatRowMetadata(MediaRow row)
+    {
+        var availability=row.Availability=="present"?"":AvailabilityLabel(row.Availability);
+        if(tiles)return row.MatchLabel+availability;
+        var shelfSummary=row.ShelfIds.Length>0?string.Join("、",row.ShelfIds.Select(ShelfName)):row.Shelf;
+        var tagSummary=string.Join("、",row.Tags);
+        return $"{row.MatchLabel}{MediaKindFilter.DisplayName(row)}{(availability.Length>0?" · "+availability:"")}{(shelfSummary.Length>0?" · 棚:"+shelfSummary:"")}{(tagSummary.Length>0?" · "+tagSummary:"")}";
+    }
     private void Items_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.ItemContainer is not ListViewItem item) return;
@@ -652,12 +660,13 @@ public sealed partial class MainPage : Page
         var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextWrapping=TextWrapping.NoWrap,MaxLines=1,TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
         AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");AutomationProperties.SetName(title,row.Title);text.Children.Add(title);
         ToolTipService.SetToolTip(title, row.Title);
-        var availability = row.Availability == "present" ? "" : AvailabilityLabel(row.Availability);
-        var tagSummary = string.Join("、", row.Tags);
-        var metadata = tiles ? row.MatchLabel + availability
-            : $"{row.MatchLabel}{MediaKindFilter.DisplayName(row)}{(availability.Length > 0 ? " · " + availability : "")}{(tagSummary.Length > 0 ? " · " + tagSummary : "")}";
+        var metadata = FormatRowMetadata(row);
         if (!string.IsNullOrWhiteSpace(metadata))
-            text.Children.Add(new TextBlock { Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] });
+        {
+            var metaBlock = new TextBlock { Tag = "ItemMeta", Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] };
+            AutomationProperties.SetAutomationId(metaBlock, $"ItemMeta{row.Id}");
+            text.Children.Add(metaBlock);
+        }
         if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");ToolTipService.SetToolTip(evidence,row.AIEvidence);text.Children.Add(evidence);}
         if(row.Proposal is ProposalMatch proposal){var prop=new TextBlock {Text=proposal.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(prop,$"ProposalEvidence{row.Id}");ToolTipService.SetToolTip(prop,proposal.Summary);text.Children.Add(prop);}
         if(row.AIPage is AIPageMatch aiPage){var pimage=new TextBlock {Text=aiPage.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(pimage,$"AIPageEvidence{row.Id}");ToolTipService.SetToolTip(pimage,aiPage.Summary);text.Children.Add(pimage);}
@@ -1139,9 +1148,13 @@ public sealed partial class MainPage : Page
     {
         foreach(var item in containerCleanup.Keys.Where(item=>item.Tag is int id&&id==row.Id).ToArray())
         {
-            if(item.ContentTemplateRoot is Border{Child:Grid content}&&content.Children.OfType<StackPanel>().FirstOrDefault() is {} captions
-                &&captions.Children.OfType<TextBlock>().FirstOrDefault() is {} title)
-                title.Text=(row.Favorite?"★ ":"")+row.Title;
+            if(item.ContentTemplateRoot is Border{Child:Grid content}&&content.Children.OfType<StackPanel>().FirstOrDefault() is {} captions)
+            {
+                if(captions.Children.OfType<TextBlock>().FirstOrDefault() is {} title)
+                    title.Text=(row.Favorite?"★ ":"")+row.Title;
+                if(captions.Children.OfType<TextBlock>().FirstOrDefault(tb=>Equals(tb.Tag,"ItemMeta")) is {} metaBlock)
+                    metaBlock.Text=FormatRowMetadata(row);
+            }
             item.ContextFlyout=SimilarityMenu(row);
         }
         if(active?.Id==row.Id)DetailPreview.ContextFlyout=SimilarityMenu(active);
@@ -1151,6 +1164,7 @@ public sealed partial class MainPage : Page
         if(saving||dialogOpen)return false;
         RememberCurrentLocation();
         if(!Dirty&&!FolderDirty)return true;
+        var detailsWereOpen=Details.IsPaneOpen;
         dialogOpen=true;
         try {
             var content=Dirty?active?.Title:FolderTargetTitle.Text;
@@ -1174,7 +1188,12 @@ public sealed partial class MainPage : Page
                 OpenFolderSettingsPanel(ids);
             }
             return accepted;
-        }finally{dialogOpen=false;}
+        }
+        finally
+        {
+            dialogOpen=false;
+            if(!disposed&&detailsWereOpen&&(active is not null||folderSettingsActive))Details.IsPaneOpen=true;
+        }
     }
     private async Task SaveAsync() {
         if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id||!Dirty)return;
@@ -1644,17 +1663,17 @@ public sealed partial class MainPage : Page
     private void UpdateNavigationLayout(double width)
     {
         if(width<=0)return;
-        var expanded=width>=1000;
+        var expanded=width>=(Details.IsPaneOpen?1080:1000);
         Nav.PaneDisplayMode=expanded?NavigationViewPaneDisplayMode.Left:NavigationViewPaneDisplayMode.LeftCompact;
         Nav.IsPaneOpen=expanded;
+        Details.DisplayMode=width<720?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
+        Details.OpenPaneLength=width>=1080?320:width>=880?280:Math.Clamp(width-600,240,280);
     }
     private void Page_SizeChanged(object sender,SizeChangedEventArgs e)
     {
         tagReview?.Fit(e.NewSize.Width,e.NewSize.Height);
         if(Details is null || ViewTools is null)return;
         UpdateNavigationLayout(e.NewSize.Width);
-        Details.DisplayMode=e.NewSize.Width<1000?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
-        Details.OpenPaneLength=Math.Min(320,Math.Max(240,e.NewSize.Width-64));
         if(active is null&&!folderSettingsActive)Details.IsPaneOpen=false;
         UpdateDetailLayout();
     }
@@ -1662,6 +1681,7 @@ public sealed partial class MainPage : Page
     {
         UpdateSearchToolbarLayout();
         UpdateFolderLayout();
+        UpdateNavigationLayout(ActualWidth);
         UpdateDetailLayout();
     }
     private void SearchToolbarPart_SizeChanged(object sender,SizeChangedEventArgs e)=>UpdateSearchToolbarLayout();
@@ -1693,11 +1713,18 @@ public sealed partial class MainPage : Page
         FolderAddScroll.MaxHeight=Math.Max(96,FolderHubView.ActualHeight-FolderHeader.ActualHeight-FolderSelectionPanel.ActualHeight-112);
     }
 
-    private void Details_PaneStateChanged(object sender,object args){UpdateDetailLayout();ApplyPendingDetailScrollReset();}
+    private void Details_PaneStateChanged(object sender,object args)
+    {
+        UpdateNavigationLayout(ActualWidth);
+        UpdateDetailLayout();
+        ApplyPendingDetailScrollReset();
+    }
 
     private void UpdateDetailLayout()
     {
         if(Details is null||LibraryLayout is null)return;
+        var compact=ActualWidth<1100||ActualHeight<820;
+        if(DetailPreview is not null)DetailPreview.Height=ActualHeight<760?112:compact?136:160;
         var gap=Details.IsPaneOpen&&Details.DisplayMode==SplitViewDisplayMode.Inline?16:0;
         if(LibraryLayout.Margin.Right!=gap)LibraryLayout.Margin=new Thickness(0,0,gap,0);
         // Overlay panes must also occlude the content at their outer edge;

@@ -200,15 +200,26 @@ public sealed partial class MainPage
     private async void ChooseShelves_Click(object sender,RoutedEventArgs args)
     {
         if(active is null||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        var detailsWereOpen=Details.IsPaneOpen;
+        var itemId=active.Id;
         try
         {
-            var itemId=active.Id;await RefreshShelfDescriptorsAsync();
+            await RefreshShelfDescriptorsAsync();
             if(disposed||saving||dialogOpen||active?.Id!=itemId)return;
             var ids=await PickShelfIdsAsync("棚を選択",editingShelfIds,"所属する棚を選択してください。選択を外すと、その棚から解除します。");
             if(ids is not null&&active?.Id==itemId){editingShelfIds=ids;UpdateShelfEditorLabel();UpdateDirty();}
         }
         catch(Exception ex){Failure(ex);}
-        finally{dialogOpen=false;transitions.Release();}
+        finally
+        {
+            dialogOpen=false;
+            if(!disposed&&detailsWereOpen&&active?.Id==itemId)
+            {
+                Details.IsPaneOpen=true;
+                ChooseShelvesButton.Focus(FocusState.Programmatic);
+            }
+            transitions.Release();
+        }
     }
     private async Task EditShelfNameAsync(ShelfDescriptor? shelf=null)
     {

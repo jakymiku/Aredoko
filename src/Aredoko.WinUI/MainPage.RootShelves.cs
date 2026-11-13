@@ -19,9 +19,11 @@ public sealed partial class MainPage
     private async void ChooseRootShelves_Click(object sender,RoutedEventArgs args)
     {
         if(folderDraft is null||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        var detailsWereOpen=Details.IsPaneOpen;
+        var draft=folderDraft;
         try
         {
-            var draft=folderDraft;await RefreshShelfDescriptorsAsync();
+            await RefreshShelfDescriptorsAsync();
             if(disposed||saving||dialogOpen||!ReferenceEquals(folderDraft,draft))return;
             var ids=await PickShelfIdsAsync("初期棚を選択",draft.ShelfIdsToSave??Array.Empty<long>(),
                 draft.IsBatch?$"選択した {draft.TargetIds.Count} フォルダに同じ初期棚を設定します。保存すると新規登録する作品に適用します。":"新規登録する作品に設定する棚を選択してください。",prefix:"ChooseRootShelf");
@@ -29,6 +31,12 @@ public sealed partial class MainPage
             draft.SelectShelfIds(ids);ShowRootShelfSelection(ids);UpdateFolderDraftState();
         }
         catch(Exception ex){Failure(ex);}
-        finally{dialogOpen=false;transitions.Release();}
+        finally
+        {
+            dialogOpen=false;
+            if(!disposed&&detailsWereOpen&&folderSettingsActive&&ReferenceEquals(folderDraft,draft))
+                Details.IsPaneOpen=true;
+            transitions.Release();
+        }
     }
 }

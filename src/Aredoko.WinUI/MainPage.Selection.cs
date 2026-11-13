@@ -62,15 +62,26 @@ public sealed partial class MainPage
         foreach(var container in containerCleanup.Keys.ToArray())UpdateSelectionFrame(container);
         if(populating||!ready||disposed)return;
         if(saving||preparingSelection||dialogOpen||!await transitions.WaitAsync(0)){RestoreSelection();return;}
+        var detailsWereOpen=Details.IsPaneOpen;
         try
         {
             var selected=Items.SelectedItems.OfType<string>().Select(RowForKey).Where(row=>row is not null).Select(row=>row!.Id).ToArray();
-            if(selected.Length==1&&librarySelection.Count==1&&librarySelection.Contains(selected[0]))return;
-            if(!await ConfirmDiscardAsync()){RestoreSelection();return;}
+            if(selected.Length==1&&librarySelection.Count==1&&librarySelection.Contains(selected[0]))
+            {
+                if(detailsWereOpen&&active is not null)Details.IsPaneOpen=true;
+                return;
+            }
+            if(!await ConfirmDiscardAsync())
+            {
+                RestoreSelection();
+                if(detailsWereOpen&&(active is not null||librarySelection.Count>0))Details.IsPaneOpen=true;
+                return;
+            }
             BindLibrarySelection();
             if(selected.Length==1&&!SelectionKey(VirtualKey.Control)&&!SelectionKey(VirtualKey.Shift))librarySelection.Single(SelectionPosition(selected[0])!);
             else librarySelection.Visible(rows.Select((row,index)=>new ResultPosition(row.Id,browseStart+index)).ToArray(),selected,!SelectionKey(VirtualKey.Shift)&&selected.Length>0?selected[^1]:null);
             ApplyLibrarySelection();
+            if(detailsWereOpen&&(active is not null||librarySelection.Count>0))Details.IsPaneOpen=true;
         }
         catch(Exception ex){RestoreSelection();Failure(ex);}
         finally{transitions.Release();}
