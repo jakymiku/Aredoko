@@ -1192,7 +1192,7 @@ public sealed partial class MainPage : Page
         finally
         {
             dialogOpen=false;
-            if(!disposed&&detailsWereOpen&&(active is not null||folderSettingsActive))Details.IsPaneOpen=true;
+            if(!disposed&&detailsWereOpen&&(active is not null||librarySelection.Count>0||folderSettingsActive))Details.IsPaneOpen=true;
         }
     }
     private async Task SaveAsync() {
@@ -1674,7 +1674,7 @@ public sealed partial class MainPage : Page
         tagReview?.Fit(e.NewSize.Width,e.NewSize.Height);
         if(Details is null || ViewTools is null)return;
         UpdateNavigationLayout(e.NewSize.Width);
-        if(active is null&&!folderSettingsActive)Details.IsPaneOpen=false;
+        if(active is null&&librarySelection.Count==0&&!folderSettingsActive)Details.IsPaneOpen=false;
         UpdateDetailLayout();
     }
     private void LibraryLayout_SizeChanged(object sender,SizeChangedEventArgs e)

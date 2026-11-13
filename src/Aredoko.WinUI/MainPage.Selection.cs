@@ -19,23 +19,45 @@ public sealed partial class MainPage
         if(librarySelection.SessionId==resultSession?.Id)return;
         selectionPreparation?.Cancel();librarySelection.Bind(resultSession?.Id,resultSession?.Total??0);UpdateLibrarySelectionTools();
     }
+    private string FormatSelectionSummaryDetails()
+    {
+        if(librarySelection.Count==0)return "";
+        var selectedRows=rows.Where(row=>librarySelection.Contains(row.Id)).ToArray();
+        if(selectedRows.Length==0)return $"現在の表示範囲外で {librarySelection.Count:N0} 件を選択中";
+        var titles=string.Join("、",selectedRows.Take(3).Select(row=>row.Title));
+        var extra=librarySelection.Count-Math.Min(3,selectedRows.Length);
+        if(extra>0)titles+=$" ほか{extra:N0}件";
+        var favorites=selectedRows.Count(row=>row.Favorite);
+        var shelves=selectedRows.SelectMany(row=>row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName):string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf}).Where(name=>!string.IsNullOrWhiteSpace(name)).Distinct().ToArray();
+        var shelfLabel=shelves.Length>0?"棚: "+string.Join("、",shelves):"棚なし";
+        return $"対象: {titles}\n現在: お気に入り {favorites:N0}/{selectedRows.Length:N0} 件 · {shelfLabel}";
+    }
+    private void UpdateSelectionSummaryDetails()
+    {
+        var details=FormatSelectionSummaryDetails();
+        SelectionSummaryDetails.Text=details;
+        SelectionSummaryDetails.Visibility=details.Length>0?Visibility.Visible:Visibility.Collapsed;
+    }
     private void ShowSelectionSummary()
     {
         folderSettingsActive=false;folderDraft=null;DetailPaneTitle.Text="選択した作品";
         FolderEditorPanel.Visibility=Editor.Visibility=Visibility.Collapsed;SelectionSummaryPanel.Visibility=Visibility.Visible;
         SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件を選択しています。";
+        UpdateSelectionSummaryDetails();
     }
     private void UpdateLibrarySelectionTools()
     {
         var outside=librarySelection.Ids.Count(id=>rows.All(row=>row.Id!=id));
         SelectionCountText.Text=preparingSelection?"範囲を選択しています…":$"{librarySelection.Count:N0} 件選択"+(outside>0?$"（一覧外 {outside:N0} 件）":"");
         SelectionTools.Visibility=preparingSelection||librarySelection.Count>1||outside>0?Visibility.Visible:Visibility.Collapsed;
+        SelectionBulkActions.Visibility=librarySelection.Count>1?Visibility.Visible:Visibility.Collapsed;
         CancelSelectionPreparation.Visibility=preparingSelection?Visibility.Visible:Visibility.Collapsed;
         SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件を選択しています。";
+        UpdateSelectionSummaryDetails();
         FooterSelection.Text=$"{librarySelection.Count:N0} 件選択";
         FooterSelection.Visibility=librarySelection.Count>0?Visibility.Visible:Visibility.Collapsed;
         FooterSelectionActions.Visibility=librarySelection.Count>1?Visibility.Visible:Visibility.Collapsed;
-        FooterBulkActions.IsEnabled=FooterClearSelection.IsEnabled=!saving&&!dialogOpen&&!preparingSelection;
+        SelectionBulkActions.IsEnabled=FooterBulkActions.IsEnabled=FooterClearSelection.IsEnabled=!saving&&!dialogOpen&&!preparingSelection;
         DetailsButton.IsEnabled=!saving&&!preparingSelection&&(librarySelection.Count>0||active is not null);
         ClearSelectionButton.IsEnabled=!saving&&!preparingSelection&&!dialogOpen;
         foreach(var container in containerCleanup.Keys.ToArray())
@@ -119,7 +141,7 @@ public sealed partial class MainPage
     private void FooterBulkActions_Click(object sender,RoutedEventArgs e)
     {
         if(disposed||saving||dialogOpen||preparingSelection||librarySelection.Count<2)return;
-        SelectionMenu().ShowAt(FooterBulkActions);
+        SelectionMenu().ShowAt(sender as FrameworkElement??FooterBulkActions);
     }
     private MenuFlyout SelectionMenu()
     {
@@ -146,7 +168,7 @@ public sealed partial class MainPage
     private async Task EditLibrarySelectionAsync(SelectionOperation operation)
     {
         if(disposed||saving||dialogOpen||preparingSelection||librarySelection.Count==0||resultSession is not {} session||librarySelection.SessionId!=session.Id||!await transitions.WaitAsync(0))return;
-        saving=true;searchTimer.Stop();var ids=librarySelection.Ids.ToArray();var favorite=operation is SelectionOperation.FavoriteAdd or SelectionOperation.FavoriteRemove;var committed=false;
+        saving=true;searchTimer.Stop();var ids=librarySelection.Ids.ToArray();var favorite=operation is SelectionOperation.FavoriteAdd or SelectionOperation.FavoriteRemove;var committed=false;var detailsWereOpen=Details.IsPaneOpen;
         SetSelectionSaveStatus("保存しています…");
         try
         {
@@ -176,6 +198,7 @@ public sealed partial class MainPage
                 saved=saved with {Favorite=value};selected.Favorite=value;updatingFavorite=true;
                 try{Favorite.IsChecked=value;}finally{updatingFavorite=false;}
             }
+            if(detailsWereOpen&&!disposed)Details.IsPaneOpen=true;
             if(!kept)await RefreshResultRowsAfterEditAsync(favoriteOnly:favorite);
             UpdateLibrarySelectionTools();if(!resultsNeedRefresh)Notice("保存しました",$"{ids.Length:N0} 件の整理を保存しました。");
         }
@@ -187,6 +210,11 @@ public sealed partial class MainPage
             {
                 foreach(var button in SelectionSummaryPanel.Children.OfType<Button>())button.IsEnabled=true;
                 SetSelectionSaveStatus(committed?(resultsNeedRefresh?"保存済みです。一覧を検索し直してください。":$"{ids.Length:N0} 件を保存しました。") : "");
+                if(detailsWereOpen&&(active is not null||librarySelection.Count>0))
+                {
+                    if(active is null)ShowSelectionSummary();
+                    Details.IsPaneOpen=true;
+                }
                 UpdateLibrarySelectionTools();
                 UpdateDirty();
                 if(PendingSearch){searchTimer.Stop();searchTimer.Start();}
