@@ -4,11 +4,13 @@
 
 ## 現行HEAD・最新候補/予備
 
-- **作業ブランチ / PR**: `feat/winui3-production-mvp-20261011` / Draft PR #5（最新コードコミット `c068248` / `c0682484e8302a197ee6fa76d402f3139c279bb4`）
+- **作業ブランチ / PR**: `feat/winui3-production-mvp-20261011` / Draft PR #5。今回の選択修正は本書の最終更新コミットに含む。
 - **最新配布候補**: 候補14 `dist/portable-managed-20261114-14/Aredoko/Aredoko.exe`（`alpha-managed-20261114-14`、Python非同梱 `663` payload / `500,275,418` bytes、WinUI `data/development-tools/frontend-product12`、ZIP `215,177,771` bytes）
 - **直前予備**: 候補13 `dist/portable-managed-20261113-13/Aredoko/Aredoko.exe`（`0e34708`）。証拠用候補05/06/09を保持。
 
 ## 最近確認した変更
+
+- **選択上限とサマリーの修正**。読み込み済みが256件を超えると全選択を無効にし、上限をメニューに表示。右の選択サマリーをスクロールできるようにした。Portable frontend `data/development-tools/frontend-product13` のホストGUIで、363件時に部分選択されないこと、32棚のサマリーをスクロールして選択を解除できること、DB整合・原本SHA・通常終了0を確認。証拠 `data/gui-search-reset-select01/quick-run01/summary.json`。配布候補14は修正前の `c068248`。
 
 - **検索・絞り込み条件の一括解除と表示中ページ全選択**（`MainPage.xaml` / `MainPage.xaml.cs` / `MainPage.Shelves.cs` / `MainPage.Selection.cs`）：`BtnClearSearchConditions`・0件時 `EmptyResetConditions`（未保存時は `ConfirmDiscardAsync()` で保護）と `BtnSelectVisibleItems`（表示中ページ一括選択）・`SelectionSummaryClear`・`BulkClearSelection` を追加。ホスト実機GUI `data/gui-search-reset-select01/run05/summary.json` で初期非表示・0件復元・破棄キャンセル保持/確定復元・3件選択/2経路解除・DB整合・原本不変・通常終了0を確認。
 - **候補14 オフライン Windows Sandbox 受入 PASS**（`data/ai-ui/managed-candidate14-offline/evidence/result.json`）：未導入ゲスト（`WDAGUtilityAccount`、`baseline_was_clean: true`、`<Networking>Disable</Networking>`）へ保持済み公式 artifact を事前配置して起動し、`Official package verified and extracted`、`mode: "production"`、`basic_runtime` `cpython 3.13.17`（64bit `venv`）、`normal_exit: 0` を確認。`WindowsSandbox*` UI 0件（`vmmemWindowsSandbox` PID 17900 はホスト側で残存）。

@@ -36,7 +36,8 @@
        <TextBlock x:Name="DetailPaneTitle" Text="詳細と整理" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
        <Button Grid.Column="1" Click="CloseDetails_Click" ToolTipService.ToolTip="詳細を閉じる（Esc）" AutomationProperties.Name="詳細を閉じる" AutomationProperties.AutomationId="BtnCloseDetails"><SymbolIcon Symbol="Cancel"/></Button>
       </Grid>
-      <StackPanel x:Name="SelectionSummaryPanel" Grid.Row="1" Visibility="Collapsed" Spacing="12">
+      <ScrollViewer x:Name="SelectionSummaryScroll" Grid.Row="1" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="選択した作品の整理" AutomationProperties.AutomationId="SelectionSummaryScroll">
+      <StackPanel x:Name="SelectionSummaryPanel" Spacing="12" Margin="{StaticResource FormScrollGutter}">
        <TextBlock x:Name="SelectionSummaryText" TextWrapping="Wrap" Style="{StaticResource BodyStrongTextBlockStyle}" AutomationProperties.AutomationId="SelectionSummaryText"/>
        <TextBlock x:Name="SelectionSummaryDetails" Visibility="Collapsed" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="SelectionSummaryDetails"/>
        <TextBlock x:Name="SelectionEditStatus" Visibility="Collapsed" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="SelectionEditStatus"/>
@@ -47,6 +48,7 @@
        <Button Content="棚から外す…" Click="SelectionShelfRemove_Click" AutomationProperties.AutomationId="SelectionShelfRemove"/>
        <Button x:Name="SelectionSummaryClearButton" Content="選択を解除" Click="ClearLibrarySelection_Click" AutomationProperties.AutomationId="SelectionSummaryClear"/>
       </StackPanel>
+      </ScrollViewer>
       <ContentControl x:Name="Editor" Grid.Row="1" IsEnabled="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
        <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
        <ScrollViewer x:Name="DetailScroll" Loaded="DetailScroll_Loaded" SizeChanged="DetailScroll_SizeChanged" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="DetailScroll" AutomationProperties.Name="作品の詳細と編集"><StackPanel Spacing="12" Margin="{StaticResource FormScrollGutter}">
@@ -368,7 +370,7 @@
        <MenuFlyoutItem x:Name="Previous" Text="前の範囲を読み込む" IsEnabled="False" Click="Previous_Click" AutomationProperties.AutomationId="BtnPrevious"/>
        <MenuFlyoutItem x:Name="Next" Text="次の範囲を読み込む" IsEnabled="False" Click="Next_Click" AutomationProperties.AutomationId="BtnNext"/>
        <MenuFlyoutSeparator/>
-       <MenuFlyoutItem x:Name="SelectVisibleItemsMenuItem" Text="表示中の作品をすべて選択" IsEnabled="False" Click="SelectVisibleItems_Click" AutomationProperties.AutomationId="BtnSelectVisibleItems"/>
+       <MenuFlyoutItem x:Name="SelectVisibleItemsMenuItem" Text="読み込み済みの作品をすべて選択" IsEnabled="False" Click="SelectVisibleItems_Click" AutomationProperties.AutomationId="BtnSelectVisibleItems"/>
        <MenuFlyoutSeparator/>
        <MenuFlyoutItem Text="接続と一覧を更新" Click="Reconnect_Click" AutomationProperties.AutomationId="BtnReconnect"/>
       </MenuFlyout></Button.Flyout>

@@ -280,7 +280,7 @@ source `a3f1f7f92d0a6e8d839db44a66014e67687ce589`、Portable frontend `data/deve
 
 ## 2026-11-14 複数選択の一括整理とサマリーパネル保持
 
-source `0e34708d4284f3898033c3fd766014e67687ce589`、Portable frontend `data/development-tools/frontend-product11`（候補13へ同梱）。一覧で複数選択した状態から上部ツールと右サマリーをそのまま使って一括整理しやすくするため以下を改善した。
+source `0e34708d4284f3898033c3fd7660239bdaec09f2`、Portable frontend `data/development-tools/frontend-product11`（候補13へ同梱）。一覧で複数選択した状態から上部ツールと右サマリーをそのまま使って一括整理しやすくするため以下を改善した。
 
 - **上部選択ツールとサマリー詳細**: `MainPage.xaml` / `MainPage.Selection.cs` で、`SelectionTools`（`librarySelection.Count > 1`）に `SelectionBulkActions`（「まとめて整理」）を追加し、`SelectionSummaryPanel` の `SelectionSummaryText` 下に `SelectionSummaryDetails`（先頭最大3件のタイトル、現在の `お気に入り X/Y 件 · 棚: ...`／`棚なし` 要約）を追加。一括お気に入り・一括棚編集後も `RefreshFavoriteCard` とともに即時更新する。
 - **リサイズ・キャンセル・一括適用後のパネル保持**: `Page_SizeChanged`（`librarySelection.Count == 0` 条件追加）・`ConfirmDiscardAsync`・`EditLibrarySelectionAsync` で `Details.IsPaneOpen` を保持し、ウィンドウ幅縮小や一括棚選択ダイアログのキャンセル／適用後にサマリーパネルが閉じないよう修正した。

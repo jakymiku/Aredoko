@@ -1796,7 +1796,7 @@ public sealed partial class MainPage : Page
 
     private void ShowItemDetailsPane()
     {
-        SelectionSummaryPanel.Visibility=Visibility.Collapsed;
+        SelectionSummaryScroll.Visibility=Visibility.Collapsed;
         folderSettingsActive=false;folderDraft=null;
         DetailPaneTitle.Text="詳細と整理";
         FolderEditorPanel.Visibility=Visibility.Collapsed;
@@ -2299,7 +2299,7 @@ public sealed partial class MainPage : Page
         try
         {
             DetailPaneTitle.Text=folderDraft.IsBatch?$"一括設定（{targets.Length}件）":"フォルダの設定";
-            SelectionSummaryPanel.Visibility=Visibility.Collapsed;
+            SelectionSummaryScroll.Visibility=Visibility.Collapsed;
             Editor.Visibility=Visibility.Collapsed;
             FolderEditorPanel.Visibility=Visibility.Visible;
             Details.IsPaneOpen=true;
