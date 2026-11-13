@@ -292,3 +292,17 @@ source `0e34708d4284f3898033c3fd766014e67687ce589`、Portable frontend `data/dev
 - `SelectionShelfAdd` からの `BulkShelfChoice` ダイアログをキャンセルしても `SelectionSummaryPanel` が開いたまま状態を保持 (`shelf_cancel_keeps_summary_open: true`)。
 - 既存棚「一括棚」への追加と `SelectionFavoriteAdd` 適用後、`SelectionSummaryDetails` が `"現在: お気に入り 2/2 件 · 棚: 一括棚"` へ更新され、一覧行 `ItemMeta1`/`ItemMeta2` へ `"画像 · 棚:一括棚"`、SQLite DB（`favorite=1`、`item_shelves` 2件、`integrity_check=ok`）が一致。
 - 257件以上の範囲選択準備中や物理DPI/ハイコントラストは別途確認。
+
+## 2026-11-14 検索・絞り込み条件の一括解除と表示中ページ全選択
+
+source `c0682484e8302a197ee6fa76d402f3139c279bb4`、Portable frontend `data/development-tools/frontend-product12`（候補14へ同梱）。検索・絞り込み条件を迷わず解除できる導線と、一覧の表示中ページを1操作で全選択・解除できる導線を追加した。
+
+- **条件の一括解除**: `MainPage.xaml` / `MainPage.xaml.cs` / `MainPage.Shelves.cs` で、検索フィルタツール欄に `BtnClearSearchConditions`（`ClearSearchConditionsButton`）を、0件時の空状態 `StackPanel` に `EmptyResetConditions`（`EmptyResetConditionsButton`）を追加した。`HasActiveSearchConditions()` と `UpdateClearSearchConditionsVisibility()` で検索語・種類・タグ・範囲・棚絞り込み等の有効時のみ表示し、`ClearSearchConditions_Click` は `ConfirmDiscardAsync()` ガードを通ってから全条件を既定状態（「すべて」／「すべての種類」・空検索・棚絞り込み解除）へ戻す。
+- **表示中ページの全選択と解除**: `MainPage.xaml` / `MainPage.Selection.cs` で、`BrowseActionsFlyout` に `BtnSelectVisibleItems`（`SelectVisibleItemsMenuItem` → `SelectVisibleItems_Click`、既存 `LibrarySelection.Maximum` 256件枠内）を、`SelectionSummaryPanel` に `SelectionSummaryClear`（`SelectionSummaryClearButton`）を、`SelectionMenu()` に `BulkClearSelection` を追加した。
+
+単体確認（`tools\dev-dotnet.ps1 run --project tests\Aredoko.Core.Tests\Aredoko.Core.Tests.csproj -c Release --no-restore` exit 0、`frontend-product12` Portable publish exit 0）およびホスト実機GUI `data/gui-search-reset-select01/run05/summary.json`（UIA自動化、生成2画像+1CBZ、独立DB）で以下を確認した：
+
+- 初期状態は `3 件`、両解除ボタン非表示（`initial_clean: true`）。`notfound-xyz` 検索で `0 件`・`BtnClearSearchConditions`・`EmptyResetConditions` 表示（`empty_shows_reset_buttons: true`）、`EmptyResetConditions` で `3 件`・空検索へ復元（`empty_reset_restores_all: true`）。
+- `CmbKind='画像'` で `2 件` へ絞り込み後に `TxtTags='未保存タグ'` を入力し、`BtnClearSearchConditions` 押下→確認ダイアログで `CloseButton`（`編集を続ける`）を選ぶと下書きと `2 件` を維持（`reset_cancel_preserves_draft: true`）、`PrimaryButton`（`変更を破棄`）で `すべての種類` と `3 件` を復元（`reset_confirm_restores_kind_and_items: true`）。
+- `BrowseActions` → `BtnSelectVisibleItems` で `3 件選択`（`select_visible_selects_all`）、`BtnDetails` 後のサマリー表示（`summary_shows_three_items`: `"対象: blue-image.png、green-image.png、two-pages.cbz\n現在: お気に入り 0/3 件 · 棚なし"`）、`SelectionSummaryClear` での選択解除（`summary_clear_clears_selection: true`）および `SelectionBulkActions` → `BulkClearSelection` での選択解除（`bulk_clear_clears_selection: true`）を確認。`db_intact: true`、`exit_code: 0`、`originals_sha_match: true`、残存 `Aredoko*` プロセスなし。
+- なお先行試行 `run04` の `0 件 after kind=動画` は、テスト側で `TxtTags` 未保存状態のまま `CmbKind` 変更を行って確認ダイアログを出した試験順の不備（製品仕様通り）。257件超のページ跨ぎ範囲選択、実日本語IME、物理DPI・ハイコントラストは未検証。
