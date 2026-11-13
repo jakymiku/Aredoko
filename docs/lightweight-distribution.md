@@ -1,5 +1,12 @@
 # 通常起動とAI追加環境を分ける配布計画
 
+## 2026-11-13 候補12の梱包・検証・容量整理
+
+- **候補12**：`dist/portable-managed-20261113-12/Aredoko/Aredoko.exe`（source `a3f1f7f92d0a6e8d839db44a66014e67687ce589`、`data/development-tools/frontend-product10`）。Python非同梱663 payload／500,234,011 bytes。ZIP `Aredoko-windows-x64.zip` 215,161,764 bytes、SHA-256 `2f26740834c10908148982c545552ec726fdc989665c8ee863c19096605b1b22`。`validation-kit.zip` 6 files、SHA-256 `6ade139ba2eb158848b979395f9c7143f34e6e6f7ad77d9a50578178761f0ba7`。
+- `python -B dist/portable-managed-20261113-12/Aredoko/tools/launch_release.py --check --managed-data data/gui-ai-candidate09/LocalAppData/Aredoko` は PASS（`pass: true`、`readiness: staging-only`）。`tests/test_portable_startup.py` 19件（`OK`）、`tests/test_windows_sandbox.py` 8件（`OK`）も PASS。
+- Windows Sandbox 設定は `data/ai-ui/managed-candidate12-offline/Aredoko.wsb` と新規公式基本環境ダウンロード確認用の `data/ai-ui/managed-candidate12-online-manual/Aredoko.wsb` を生成済み（実Sandbox起動および新規ダウンロード受入は未実施・要明示確認）。
+- 予備として候補11を保持し、置き換え済みの候補10と `frontend-product09`（計1,050 files / 881,013,336 bytes）を安全確認後に削除（証拠 `data/capacity-20261113/cleanup-candidate10-frontend09.json`）。
+
 ## 2026-11-10 続行：導入済み環境と削除可能cacheの分離
 
 `aredoko-managed-ai-runtime-v1`は、固定公式44wheelのSHA256と展開payloadを照合した後、その原本由来のhashをreceiptへ保存する。基本CPythonは公式nupkgのSHA512とbase binding/launcherを検証する。モデルの生成素材による実推論を終えるまでreceipt/利用設定を公開しない。初回選択では元wheelとの来歴照合も必須とし、自己申告のfile inventoryだけを信用しない。保存したreceipt SHAをlaunch settingsへ固定した後は、元wheelを消しても実行fileの完全照合を行える。小さい基本CPython nupkgは検証に必要なため保持する。最終reviewでmanaged AI venvも既存basic verifierと同じ5個のpyvenv.cfg keyだけへ制限し、CPython site.pyが小文字化する大文字alias/余分keyでsystem/user siteを有効化される解釈差を拒否。生成fixtureのalias/重複/余分keyと通常設定をCPU確認。これはpublisher署名や、同じWindows userによるappとsettings両方の差替えを防ぐ仕組みではない。

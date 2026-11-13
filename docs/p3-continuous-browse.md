@@ -260,3 +260,20 @@ ZIP31/sourcebb59c40の**Sandbox**確認：同じ専用guest DBを通常EXEから
 画像/本のViewerFavoriteActionをVideoPlayerViewにも接続。通常文字検索/allの有効なresult sessionだけに星ボタンを表示し、再生を止めずにflagだけを保存する。選択行/詳細へ同期し、非保持ackでは既存契約どおり一覧へ戻って再取得する。保存中はbarを表示し、閉じる際にFlushFavoriteAsyncを待つ。タグ/棚の未保存draft、再生位置・音量・消音・seekは変更しない。AI/類似/お気に入り/履歴scopeは従来どおり新actionを非表示とする。
 
 関連Portable build成功（既存WUI1001×3）。この時点では新しい動画/音声GUI操作、保存中close/保存拒否の実機確認は未実施。共有部品の過去画像/本受入を新しい媒体の受入として数えない。Core/backend/保存APIの追加はない。
+
+## 2026-11-13 狭めのウィンドウでの詳細・一覧比較とタグ・棚操作
+
+source `a3f1f7f92d0a6e8d839db44a66014e67687ce589`、Portable frontend `data/development-tools/frontend-product10`（候補12へ同梱）。920×700px 前後の狭めのウィンドウで詳細パネルを開いたまま一覧を見比べ、タグ・棚を操作しやすくするため以下を修正した。
+
+- **詳細を Inline 維持**: `UpdateNavigationLayout` で `Details.DisplayMode` を `720px` 未満のみ `Overlay`（`720px` 以上は `Inline`）とし、`Details.IsPaneOpen` 時は `1080px` 未満で先に左 `Nav` を畳むように変更。幅に応じて `Details.OpenPaneLength` を調整（`>=1080` は `320`、`>=880` は `280`、`720〜879` は `Math.Clamp(width - 600, 240, 280)`）し、`LibraryLayout_SizeChanged` と `Details_PaneStateChanged` からも再レイアウトする。
+- **一覧行と詳細の比較・下書き保持**: `FormatRowMetadata` で一覧メタデータ行に `棚:<棚名>` とタグを表示し、`Items_ContainerContentChanging` で `ItemMeta{id}` を付与して `RefreshFavoriteCard` で選択・保存後にその場更新する。`ChooseShelves_Click`・`ChooseRootShelves_Click`・`ConfirmDiscardAsync`・`ChangeLibrarySelectionAsync` で操作開始時の `Details.IsPaneOpen` を保持し、棚選択や未保存確認キャンセル後も詳細を開いたまま下書きを維持する。
+- **狭い領域でのボタンとプレビュー収まり**: `MainPage.xaml` の `Favorite`（`ChkFavorite`）・`Reviewed`（`ChkReviewed`）チェックボックスへ `MinWidth="0"` を設定し、`UpdateDetailLayout` で高さ `760px` 未満のとき `DetailPreview.Height` を `112` へ抑えて保存ボタン周りを収めやすくした。
+
+ホスト実機GUI確認 `data/gui-narrow-compare01/run04`（UIA自動化、生成2画像・1CBZ・独立DB、`Aredoko.Core.Tests` / Portable起動19件 / Sandbox設定8件 / 候補12 `--check` は別途PASS）では終了コード 0・原本SHA不変・DB整合維持で以下を確認した：
+
+- `920×700` ウィンドウで一覧右側 (`628`) と詳細左側 (`673`) が重ならず `Inline` 並置表示。
+- タグ下書き入力中に棚選択ダイアログで新規棚「比較棚」を適用しても、詳細が開いたまま下書きを維持 (`shelf_picker_keeps_details_and_draft: true`)。
+- 別作品選択時の未保存確認でキャンセルしても、詳細が開いたまま下書きを維持 (`discard_continue_keeps_details_and_draft: true`)。
+- 明示保存直後に一覧のメタデータ行へ `"画像 · 棚:比較棚 · 比較タグA、夏"` が即時反映。
+- `Item2`（`green-image.png`）へ切り替えても light-dismiss されず詳細が開いたまま比較でき、DB保存を維持 (`narrow_item_switch_compares_without_light_dismiss: true`、`db_saved_and_intact: true`)。
+- `run01`〜`run03` ではテスト側のウィンドウ列挙順・空 `TextBox` 属性・未所属棚表示 `'棚なし'` の期待値を修正し、`run04` で全項目合格。物理DPI・ハイコントラスト・実日本語IME・ルート棚ダイアログ単体のGUI操作は未確認。

@@ -4,15 +4,17 @@
 
 ## 2026-11-12〜13 再インストール後の配布受入と一覧・閲覧改善
 
-- 開始時のローカル、remote、PR #5のHEADは `98a8107`。製品sourceは `622190b`。**最新は候補11** `dist/portable-managed-20261113-11/Aredoko/Aredoko.exe`。Python非同梱663 payload／500,220,843 bytes。全payload・ZIP照合済み。ZIP 215,157,496 bytes、SHA-256 `4bda9315821e2385b0621a154014d7be09f6017e65031dc013395a26fdc27a79`。WinUIは候補09と同一の `data/development-tools/frontend-product09`。候補10を直前の予備として保持。
+- **最新は候補12** `dist/portable-managed-20261113-12/Aredoko/Aredoko.exe`（製品source `a3f1f7f` / `a3f1f7f92d0a6e8d839db44a66014e67687ce589`、WinUI `data/development-tools/frontend-product10`）。Python非同梱663 payload／500,234,011 bytes。ZIP 215,161,764 bytes、SHA-256 `2f26740834c10908148982c545552ec726fdc989665c8ee863c19096605b1b22`。`validation-kit.zip` 6 files、SHA-256 `6ade139ba2eb158848b979395f9c7143f34e6e6f7ad77d9a50578178761f0ba7`。直前の予備として候補11を保持。
+- **狭めのウィンドウでの一覧比較とタグ・棚操作（UI）**。`920×700` 前後で詳細を開いたまま一覧を見比べてタグ・棚操作できるよう改善：`Details.DisplayMode` を `720px` 以上で `Inline` 維持（`Details` 開時に `1080px` 未満で `Nav` を先に畳み、pane幅を `240〜320px` へ調整）、棚選択ダイアログ（作品棚・ルート棚）および未保存破棄キャンセル・切替時に `Details.IsPaneOpen` と下書きを復元、`ChkFavorite`/`ChkReviewed` の `MinWidth="0"` と低高さ時の `DetailPreview.Height=112` 調整、一覧メタデータ行への `棚:<棚名>`・タグ表示と `RefreshFavoriteCard` による即時更新を追加。ホスト実機GUI `data/gui-narrow-compare01/run04` で `Inline` 並置（`list_right: 628 <= detail_left: 673`）、棚適用・破棄キャンセルでの詳細・下書き保持、保存後 `"画像 · 棚:比較棚 · 比較タグA、夏"` 即時反映、別作品比較切替、DB整合・原本SHA一致・終了0を確認。
+- **候補12の確認状況**。`Aredoko.Core.Tests`、`tests/test_portable_startup.py` 19件、`tests/test_windows_sandbox.py` 8件、`launch_release.py --check --managed-data data/gui-ai-candidate09/LocalAppData/Aredoko` は PASS。Sandbox設定 `data/ai-ui/managed-candidate12-offline/Aredoko.wsb` と `data/ai-ui/managed-candidate12-online-manual/Aredoko.wsb` を作成済み（候補12自体の実Sandbox起動・新規ダウンロード確認は未実施）。
 - **実ネットワーク初回準備は候補05／Sandboxで確認**。再インストール後は標準 `System32/WindowsSandbox.exe` から新規ゲストが起動。Python・.NET SDKなしのゲストで同意→公式CPython 3.13.17／Pillow 12.3.0を取得→公式ハッシュ一致→WinUI起動。生成3件は一覧のみスキャンし「検索」押下後に表示。生成原本SHA・専用DB整合は一致。再起動でartifactの時刻不変、終了0。初期の同意UIA失敗は所有ダイアログ操作で再開した。証拠 `data/ai-ui/managed-candidate05-clean-20261112`。
 - **起動・初回一覧の修正**。候補05で初期の選択イベントが認証と競合し、初回と再起動時にエラーを記録。接続と初期表示後まで操作イベントを待たせ、候補06の同じゲストでは起動から既存3件表示・エラー再発なし・終了0。空の無条件一覧に早く戻ったときは、対象スキャン完了後に自動更新。専用スキャンを保留したホストGUIで検索ボタンなしの反映を確認。登録状態フィルタは読み込み済みの登録情報を使う。解除済み／お気に入り切替で再通信なしを確認。
-- **閲覧から整理へ**。一覧の単独選択をEnterで開ける。画像・読書ビューアにも「詳細で整理」を追加。ホストで画像を送ってから表示中の作品へ戻ることと、切替取消で元作品と未保存タグが残ることを確認。CBZは読書位置保存を一時保留し、新ボタンが完了を待ってから閉じ、タグ下書き保持と2ページ目の復元を確認。候補10では物理ダブルクリックで一覧からMP4を開き、閉じていた詳細とタグ欄へのフォーカスを確認。証拠 `data/gui-{library-entry01,reader-details01,image-details01,basic-diagnostics01,candidate10}`。
-- **基本環境の保全と診断**。候補09のSandboxでは生成用に破損させたCPythonコピーを拒否し、DBや使用可能な環境を作成しなかった。正規コピーに戻すと起動0。候補10以降は準備ヘルパーを実行前にマニフェストのSHA-256と照合。候補10は同長の改変コピーを拒否し、ネットワーク無効の新規ゲストでは保持済み公式artifactから構築・正常終了0。診断画面は基本Pythonの版・ビット数・仮想環境の状態を表示。候補11の `launch_release.py --check --managed-data <既存Aredokoデータ>` は再取得なしで照合・import・FFmpeg確認済み。証拠 `data/verified-python-helper10`、`data/ai-ui/managed-candidate10-offline`、`data/gui-candidate11`。
-- **基本取得の進捗と取消**。総量が分かればMBと進捗率、分からなければ取得済みMBを表示。ループバックでヘッダー待ち／本文待ちの取消は約0.1秒。表示は通信を行わない生成ヘルパーの実GUIで確認。候補11のホスト通常起動では候補10の専用DBに登録済みのWAV・MP4を保持して終了0。診断CLIは破損fixtureの書き換え・DB作成なしで終了1。Core、Portable起動19件、Sandbox設定8件はPASS。証拠 `data/basic-runtime-download-progress01`、`data/gui-candidate10/run-02`、`data/gui-candidate11`。
+- **閲覧から整理へ**。一覧の単独選択をEnterで開ける。画像・読書ビューアにも「詳細で整理」を追加。ホストで画像を送ってから表示中の作品へ戻ることと、切替取消で元作品と未保存タグが残ることを確認。CBZは読書位置保存を一時保留し、新ボタンが完了を待ってから閉じ、タグ下書き保持と2ページ目の復元を確認。候補10では物理ダブルクリックで一覧からMP4を開き、閉じていた詳細とタグ欄へのフォーカスを確認。証拠 `data/gui-{library-entry01,reader-details01,image-details01,basic-diagnostics01,candidate10,narrow-compare01}`。
+- **基本環境の保全と診断**。候補09のSandboxでは生成用に破損させたCPythonコピーを拒否し、DBや使用可能な環境を作成しなかった。正規コピーに戻すと起動0。候補10以降は準備ヘルパーを実行前にマニフェストのSHA-256と照合。候補10は同長の改変コピーを拒否し、ネットワーク無効の新規ゲストでは保持済み公式artifactから構築・正常終了0。診断画面は基本Pythonの版・ビット数・仮想環境の状態を表示。候補11/12の `launch_release.py --check --managed-data <既存Aredokoデータ>` は再取得なしで照合・import・FFmpeg確認済み。証拠 `data/verified-python-helper10`、`data/ai-ui/managed-candidate10-offline`、`data/gui-candidate11`。
+- **基本取得の進捗と取消**。総量が分かればMBと進捗率、分からなければ取得済みMBを表示。ループバックでヘッダー待ち／本文待ちの取消は約0.1秒。表示は通信を行わない生成ヘルパーの実GUIで確認。候補11のホスト通常起動では候補10の専用DBに登録済みのWAV・MP4を保持して終了0。診断CLIは破損fixtureの書き換え・DB作成なしで終了1。証拠 `data/basic-runtime-download-progress01`、`data/gui-candidate10/run-02`、`data/gui-candidate11`。
 - **GPUは候補09／ホストで確認**。保持済みAI環境22,652件の全照合後、GUIの「青色の四角い画像」で `blue.png` → `red.png`。CUDA約859 MiB peak、ベクトル4行・設定・生成原本不変、終了0。初回の試験待ち時間95秒は実機の照合より短かったため、同じ起動で進捗を確認して続行。新規AI取得・再構築なし。証拠 `data/gui-ai-candidate09/run-01`。
-- **生成物整理**。再生成できる中間frontend6件と候補07・08を、絶対path・Git非追跡・リンク・使用プロセスを確認して整理。合計2,418,306,757 bytes。ハッシュ・誤った発行条件の証拠は `data/capacity-20261113`。ネットワーク初回取得・認証修正・GPU・オフライン起動の証拠に対応する候補05／06／09／10は保持。
-- **未受入**。候補11そのものの新規公式ネットワーク取得を含む一連、AI依存・モデルの新規取得を含む全経路、実日本語IME、HC／物理DPI、署名・正式公開。今回の試験は専用設定／DBと生成素材を使用。通常版Alpha・ショートカット・OS設定は変更なし。
+- **生成物整理**。再生成できる中間frontend6件と候補07・08（合計2,418,306,757 bytes）、および候補12作成後に候補10と `frontend-product09`（計1,050 files / 881,013,336 bytes）を、絶対path・Git非追跡・リンク・使用プロセス確認後に整理。証拠は `data/capacity-20261113`（今回記録 `cleanup-candidate10-frontend09.json`）。ネットワーク初回取得・認証修正・GPU・直前予備の証拠に対応する候補05／06／09／11は保持。
+- **未受入**。候補12そのものの新規公式ネットワーク取得・オフラインSandbox起動一連、AI依存・モデルの新規取得を含む全経路、ルート棚ダイアログ単体のGUI操作、実日本語IME、HC／物理DPI、署名・正式公開。今回の試験は専用設定／DBと生成素材を使用。通常版Alpha・ショートカット・OS設定は変更なし。
 
 ## 2026-11-11 候補05とPython未導入Windowsの配布試験
 
@@ -59,5 +61,5 @@
 
 ## 次の1件
 
-1. **P6**：候補11の標準Sandbox起動で公式基本環境を新規取得し、実ダウンロードのMB表示・一覧までを受け入れる。候補05の取得済み結果を利用し、再検証は変更部分に絞る。新規取得は明示確認。設定は `data/ai-ui/managed-candidate11-online-manual/Aredoko.wsb`。
-2. **UI**：狭めのウィンドウで詳細を開いた状態の一覧比較とタグ・棚操作を一単位で確認し、再現した使いづらさを改善する。候補10で確認済みのダブルクリック、Enter、詳細復帰は関連変更時だけ再確認する。
+1. **P6**：候補12の標準Sandbox起動で公式基本環境を新規取得し、実ダウンロードのMB表示・一覧までを受け入れる。候補05の取得済み結果を利用し、再検証は変更部分に絞る。新規取得は明示確認。設定は `data/ai-ui/managed-candidate12-online-manual/Aredoko.wsb`（オフライン構成は `data/ai-ui/managed-candidate12-offline/Aredoko.wsb`）。
+2. **UI**：中央の一覧・検索から次の1単位（狭い幅や複数選択・フィルタ切替時の操作性など）を確認し、再現した使いづらさを小単位で改善する。候補10で確認済みのダブルクリック、Enter、詳細復帰および候補12の狭い幅での比較・棚操作は関連変更時だけ再確認する。
