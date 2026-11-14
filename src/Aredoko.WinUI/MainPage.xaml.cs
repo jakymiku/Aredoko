@@ -636,11 +636,14 @@ public sealed partial class MainPage : Page
         finally { populating = false; }
     }
 
-    private string FormatRowMetadata(MediaRow row)
+    private string FormatRowMetadata(MediaRow row, bool summarizeShelves = true)
     {
         var availability=row.Availability=="present"?"":AvailabilityLabel(row.Availability);
         if(tiles)return row.MatchLabel+availability;
-        var shelfSummary=row.ShelfIds.Length>0?string.Join("、",row.ShelfIds.Select(ShelfName)):row.Shelf;
+        var shelves=row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName).Where(name=>!string.IsNullOrWhiteSpace(name)).ToArray():string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf};
+        var shelfSummary=summarizeShelves&&shelves.Length>3
+            ? string.Join("、",shelves.Take(3))+$" ほか{shelves.Length-3:N0}棚"
+            : string.Join("、",shelves);
         var tagSummary=string.Join("、",row.Tags);
         return $"{row.MatchLabel}{MediaKindFilter.DisplayName(row)}{(availability.Length>0?" · "+availability:"")}{(shelfSummary.Length>0?" · 棚:"+shelfSummary:"")}{(tagSummary.Length>0?" · "+tagSummary:"")}";
     }
@@ -668,6 +671,7 @@ public sealed partial class MainPage : Page
         {
             var metaBlock = new TextBlock { Tag = "ItemMeta", Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] };
             AutomationProperties.SetAutomationId(metaBlock, $"ItemMeta{row.Id}");
+            ToolTipService.SetToolTip(metaBlock, FormatRowMetadata(row, summarizeShelves: false));
             text.Children.Add(metaBlock);
         }
         if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");ToolTipService.SetToolTip(evidence,row.AIEvidence);text.Children.Add(evidence);}
@@ -1156,7 +1160,10 @@ public sealed partial class MainPage : Page
                 if(captions.Children.OfType<TextBlock>().FirstOrDefault() is {} title)
                     title.Text=(row.Favorite?"★ ":"")+row.Title;
                 if(captions.Children.OfType<TextBlock>().FirstOrDefault(tb=>Equals(tb.Tag,"ItemMeta")) is {} metaBlock)
+                {
                     metaBlock.Text=FormatRowMetadata(row);
+                    ToolTipService.SetToolTip(metaBlock,FormatRowMetadata(row,summarizeShelves:false));
+                }
             }
             item.ContextFlyout=SimilarityMenu(row);
         }

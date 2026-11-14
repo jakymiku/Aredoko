@@ -28,9 +28,10 @@ public sealed partial class MainPage
         var extra=librarySelection.Count-Math.Min(3,selectedRows.Length);
         if(extra>0)titles+=$" ほか{extra:N0}件";
         var favorites=selectedRows.Count(row=>row.Favorite);
+        var outside=librarySelection.Count-selectedRows.Length;
         var shelves=selectedRows.SelectMany(row=>row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName):string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf}).Where(name=>!string.IsNullOrWhiteSpace(name)).Distinct().ToArray();
         var shelfLabel=shelves.Length>0?"棚: "+string.Join("、",shelves):"棚なし";
-        return $"対象: {titles}\n現在: お気に入り {favorites:N0}/{selectedRows.Length:N0} 件 · {shelfLabel}";
+        return $"対象: {titles}\n現在: お気に入り {favorites:N0}/{selectedRows.Length:N0} 件{(outside>0?$"（一覧外 {outside:N0} 件）":"")} · {shelfLabel}";
     }
     private void UpdateSelectionSummaryDetails()
     {
@@ -65,6 +66,12 @@ public sealed partial class MainPage
                 ? $"読み込み済みの作品をすべて選択（上限 {LibrarySelection.Maximum} 件）"
                 : "読み込み済みの作品をすべて選択";
             SelectVisibleItemsMenuItem.IsEnabled=!overLimit&&!saving&&!dialogOpen&&!preparingSelection&&rows.Count>0&&resultSession is not null;
+            if(SelectFirstMaxItemsMenuItem is not null)
+            {
+                SelectFirstMaxItemsMenuItem.Text=$"読み込み済みの先頭 {LibrarySelection.Maximum} 件を選択";
+                SelectFirstMaxItemsMenuItem.Visibility=overLimit?Visibility.Visible:Visibility.Collapsed;
+                SelectFirstMaxItemsMenuItem.IsEnabled=overLimit&&!saving&&!dialogOpen&&!preparingSelection&&resultSession is not null;
+            }
         }
         DetailsButton.IsEnabled=!saving&&!preparingSelection&&(librarySelection.Count>0||active is not null);
         ClearSelectionButton.IsEnabled=!saving&&!preparingSelection&&!dialogOpen;
@@ -167,11 +174,14 @@ public sealed partial class MainPage
         clear.Click+=ClearLibrarySelection_Click;menu.Items.Add(clear);
         return menu;
     }
-    private async void SelectVisibleItems_Click(object sender,RoutedEventArgs e)
+    private async void SelectVisibleItems_Click(object sender,RoutedEventArgs e)=>await SelectLoadedRowsAsync(capToMaximum:false);
+    private async void SelectFirstMaxItems_Click(object sender,RoutedEventArgs e)=>await SelectLoadedRowsAsync(capToMaximum:true);
+    private async Task SelectLoadedRowsAsync(bool capToMaximum)
     {
         CloseBrowseMenus();
-        if(!ready||disposed||saving||dialogOpen||preparingSelection||rows.Count is 0 or > LibrarySelection.Maximum
-            ||resultSession is null||!await transitions.WaitAsync(0))return;
+        var overLimit=rows.Count>LibrarySelection.Maximum;
+        if(!ready||disposed||saving||dialogOpen||preparingSelection||rows.Count==0||resultSession is null
+            ||(capToMaximum?!overLimit:overLimit)||!await transitions.WaitAsync(0))return;
         var detailsWereOpen=Details.IsPaneOpen;
         try
         {
@@ -182,7 +192,7 @@ public sealed partial class MainPage
             }
             BindLibrarySelection();
             var visiblePositions=rows.Select((row,index)=>new ResultPosition(row.Id,browseStart+index)).ToArray();
-            var selectedIds=visiblePositions.Select(position=>position.Id).ToArray();
+            var selectedIds=(capToMaximum?visiblePositions.Take(LibrarySelection.Maximum):visiblePositions).Select(position=>position.Id).ToArray();
             librarySelection.Clear();
             librarySelection.Visible(visiblePositions,selectedIds,selectedIds[^1]);
             RestoreSelection();ApplyLibrarySelection();
