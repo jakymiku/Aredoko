@@ -306,3 +306,17 @@ source `c0682484e8302a197ee6fa76d402f3139c279bb4`、Portable frontend `data/deve
 - `CmbKind='画像'` で `2 件` へ絞り込み後に `TxtTags='未保存タグ'` を入力し、`BtnClearSearchConditions` 押下→確認ダイアログで `CloseButton`（`編集を続ける`）を選ぶと下書きと `2 件` を維持（`reset_cancel_preserves_draft: true`）、`PrimaryButton`（`変更を破棄`）で `すべての種類` と `3 件` を復元（`reset_confirm_restores_kind_and_items: true`）。
 - `BrowseActions` → `BtnSelectVisibleItems` で `3 件選択`（`select_visible_selects_all`）、`BtnDetails` 後のサマリー表示（`summary_shows_three_items`: `"対象: blue-image.png、green-image.png、two-pages.cbz\n現在: お気に入り 0/3 件 · 棚なし"`）、`SelectionSummaryClear` での選択解除（`summary_clear_clears_selection: true`）および `SelectionBulkActions` → `BulkClearSelection` での選択解除（`bulk_clear_clears_selection: true`）を確認。`db_intact: true`、`exit_code: 0`、`originals_sha_match: true`、残存 `Aredoko*` プロセスなし。
 - なお先行試行 `run04` の `0 件 after kind=動画` は、テスト側で `TxtTags` 未保存状態のまま `CmbKind` 変更を行って確認ダイアログを出した試験順の不備（製品仕様通り）。257件超のページ跨ぎ範囲選択、実日本語IME、物理DPI・ハイコントラストは未検証。
+
+## 2026-11-15 選択上限時の先頭256件一括選択・一覧行の多棚要約・サマリースクロール
+
+source `6fefe0ed45350c6429ac91f6966d2ef776a388bb`（`frontend-product13`、`data/gui-search-reset-select01/quick-run01/summary.json`）および `921060675a42c9d9b9aefde94c613c35569d76d5`（Portable frontend `data/development-tools/frontend-product14`、候補15へ同梱）。256件超過時の部分選択誤認の防止と、257件以上読み込み時の明示一括選択、多数の棚所属時の視認性を改善した。
+
+- **選択上限ガードとサマリースクロール**（`6fefe0e`）：`MainPage.Selection.cs` で `rows.Count > LibrarySelection.Maximum`（256件）のとき `BtnSelectVisibleItems` を無効化して「読み込み済みの作品をすべて選択（上限 256 件）」へ切り替え、`MainPage.xaml` の `SelectionSummaryPanel` を `SelectionSummaryScroll`（`ScrollViewer`）で包んで多数棚でも下部整理・解除ボタンへ到達できるようにした。ホスト実機GUI `data/gui-search-reset-select01/quick-run01/summary.json` で3件選択・32棚スクロール解除・363件時上限無効・`db_intact: true`・`exit_code: 0`・`originals_sha_match: true` を確認。
+- **先頭256件一括選択・一覧行多棚要約・一覧外表示**（`9210606`）：`MainPage.xaml` / `MainPage.Selection.cs` の `BrowseActionsFlyout` に `BtnSelectFirstMaxItems`（「読み込み済みの先頭 256 件を選択」）を追加し、`rows.Count > LibrarySelection.Maximum` の間だけ表示・有効化して `SelectLoadedRowsAsync(capToMaximum)` で共通処理化。あわせて `FormatSelectionSummaryDetails()` で `librarySelection.Count > selectedRows.Length` 時に `（一覧外 X 件）` を付記し、`MainPage.xaml.cs` の `FormatRowMetadata()` で1行一覧メタデータ上の棚表示を先頭3棚＋`ほかN棚` に要約してタグ表示を残し、`ItemMeta{id}` Tooltip に全棚＋タグ文字列を設定した。
+
+単体確認（`tools\dev-dotnet.ps1 run --project tests\Aredoko.Core.Tests\Aredoko.Core.Tests.csproj -c Release --no-restore` exit 0、`frontend-product14` Portable publish exit 0 + `portable-build.json` 373 entries）およびホスト実機GUI `data/gui-search-reset-select01/quick-run02/summary.json`（UIA自動化、独立DB、生成2画像+1CBZ+複製360件）で以下を確認した：
+
+- 32棚＋`blue-sample-tag` 付与項目で `ItemMeta1` が `"画像 · 棚:テスト用の長い棚の名前を表示するための項目 00、テスト用の長い棚の名前を表示するための項目 01、テスト用の長い棚の名前を表示するための項目 02 ほか29棚 · blue-sample-tag"` となり、棚を3件要約しつつタグ表示を保持。
+- 3件選択（`select_visible_selects_all: "3 件選択"`）後、32棚を含む `SelectionSummaryScroll` 末尾スクロールと `SelectionSummaryClear` による解除（`summary_clear_clears_selection: true`）を確認。
+- 363件読み込み後、`BtnSelectVisibleItems` 無効化・`"上限 256 件"` 表示（`over_limit_disabled_without_partial_selection: true`）の一方で、`BtnSelectFirstMaxItems` から `256 件選択`（`select_first_max_selects_256`）および `SelectionBulkActions` → `BulkClearSelection` 解除（`first_max_cleared: true`）を確認。`db_intact: true`、`exit_code: 0`、`originals_sha_match: true`、残存 `Aredoko*` プロセスなし。
+- なお257件超のページ跨ぎ範囲選択（Shift選択 `RangeAsync`）・実日本語IME・物理DPI・ハイコントラストは引き続き未検証。
