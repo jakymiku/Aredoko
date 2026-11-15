@@ -4,25 +4,25 @@
 
 ## 現行HEAD・最新候補/予備
 - ブランチ / PR：`feat/winui3-production-mvp-20261011` / Draft [PR #5](https://github.com/jakymiku/Aredoko/pull/5)
-- 直近実装コミット：`e29310c1635eec4f70631b566e4a0eeb05ed0fd2`（起動診断詳細化・カードタグ検索・詳細導線整理。本ドキュメント更新コミットで `HEAD` 前進）
-- 最新配布候補：**候補17** `dist/portable-managed-20261115-17/Aredoko/Aredoko.exe`（source `e29310c1635eec4f70631b566e4a0eeb05ed0fd2`、`663` files / `500,397,856` bytes、ZIP `215,229,832` bytes SHA-256 `e110f523c4f4874c46ad6d3fb418846ba7b498ebbc8e4b9db36d938b4f707498`）
-  - `--self-test`（終了0）・`preflight.json`（`pass: true`、`readiness: "staging-only"`）・単体試験 `34` 件 PASS。オフライン Sandbox（`data/ai-ui/managed-candidate17-offline/evidence/failure.json`）は、ホスト SAC `0` 一方でゲスト側 `verified_and_reputable_policy_state: 1` の App Control 拒否により **BLOCKED**。
+- 直近実装コミット：`1f1ef5948a82cfd5938d64be8cf274528fe307d9`（確定タグ完全一致絞り込み B案・全30タグ選択・棚作成キャンセル案内・安全 Sandbox ランナー。本ドキュメント更新コミットで `HEAD` 前進）
+- 最新配布候補：**候補18** `dist/portable-managed-20261115-18/Aredoko/Aredoko.exe`（source `1f1ef5948a82cfd5938d64be8cf274528fe307d9`、`663` files / `500,415,918` bytes、ZIP `215,237,074` bytes SHA-256 `2a425f0a101b7992652dd8e246d9b2893a11c3f61cec4dcdf5d2c6555166ffba`、`validation-kit.zip` `6` files SHA-256 `18265900a59fd8d76a21ce6aaba3eb1e4d6098448024bbe7ceb04bcc7c1fca8f`）
+  - `--self-test`（終了0）・`preflight.json`（`pass: true`、`readiness: "staging-only"`）が PASS。
 - 受入済み直前予備：**候補15** `dist/portable-managed-20261115-15/Aredoko/Aredoko.exe`（source `921060675a42c9d9b9aefde94c613c35569d76d5`、2026-11-15 03:40 オフライン Sandbox PASS）
-- 現行 frontend / 保持証拠：`data/development-tools/frontend-product16`（`portable-build.json` 再生成済み）、証拠候補 `05` / `06` / `09`、`data/ai-ui/managed-candidate16-offline/evidence`
-- 削除済み（安全確認後）：`dist/portable-managed-20261115-16`（`674` files / `715,718,153` bytes、[記録](data/capacity-20261113/cleanup-candidate16.json)）
+- 現行 frontend / 保持証拠：`data/development-tools/frontend-product17`（`portable-build.json` 照合済み）、証拠候補 `05` / `06` / `09`、`data/ai-ui/managed-candidate17-offline/evidence`
+- 削除済み（安全確認後）：`dist/portable-managed-20261115-17`・`data/development-tools/frontend-product16`（計 `1,050` files / `881,420,467` bytes、[記録](data/capacity-20261113/cleanup-candidate17-frontend16.json)）
 
 ## 最近確認した変更
-- **詳細ペイン・タグ検索と動画類似フライアウトの実機確認**（[UI記録](docs/p3-continuous-browse.md)）：`Tags` / `Shelf` に縦スクロールバー追加、`BtnFilterByActiveTag` の静的 `AutomationProperties.Name` を削除して動的件数・タグ名ラベル（1件時 `タグ「{tag}」で検索…` / 複数時 `この作品のタグで検索（N 件）…`）を修正、`SimilarityMenu` へ `FilterByItemTag{id}_0` / `FilterByItemTags{id}` を追加、`SaveAsync` のフォーカス復帰対象・`RevertEditsButton` 再同期・`DetailPreview.ContextFlyout` 再構築を更新。`Aredoko.Core.Tests`（終了0、以降 `Core` 無変更）・`frontend-product16` publish & `receipt_ok`・[gui-detail-actions03](data/gui-detail-actions03/run04/result.json) `run04` 4項目（`detail_tag_button_count_label` / `single_tag_detail_filter_search` / `video_detail_similarity_flyout` / `save_resets_revert_and_updates_tag_label`、`exit_code: 0`・`sqlite_integrity_ok: true`・`originals_sha_match: true`・`passed: true`）が PASS。
-- **P6 起動診断強化・候補17梱包・オフライン Sandbox 検証**（[配布記録](docs/lightweight-distribution.md)）：`probe_release_runtime.py` に `'detail': str(error)`、`prepare_basic_runtime.py`・`launch_release.py` に非0終了時の `stdout`/`stderr` 送出を追加し、`test_basic_runtime.py`・`test_portable_startup.py`・`test_windows_sandbox.py` `34` 件 PASS（`38.629s`）。候補17は `Aredoko.exe --self-test` と `preflight.json` が PASS、オフライン Sandbox はゲスト `verified_and_reputable_policy_state: 1` により `Start-Process` で `"An Application Control policy has blocked this file."`（`startup-*.log` 生成前）となり BLOCKED。
+- **確定タグの独立絞り込み（B案）・全30タグ選択・棚作成キャンセル案内**（[UI記録](docs/p3-continuous-browse.md)）：`media_filters` / `ai_scope` / `ProductionCatalog` / `production_server` / 直接動画・音声検索類似 / `page_text` / `tag_candidate_search` / `tag_semantics` / `Aredoko.Core` へ `tag` スコープを統合し、WinUI へ `TagScopeBar`（`TxtTagScope`「タグ：{tag}」＋ `BtnClearTagScope`「×」）と履歴・条件解除・類似戻る連携を実装。20件打ち切りを撤廃して全30タグ選択と「〜で絞り込む」表記へ改め、`MainPage.ShelfPicker.cs` に「キャンセルしても棚は残る」案内（`ChooseShelfCreateNote`）を追加。`Aredoko.Core.Tests`（終了0）、バックエンド/起動 `98` 件（`70.405s` OK）、直接動画/音声 `58` 件（`38.003s` OK）、[gui-tag-scope01](data/gui-tag-scope01/run01/result.json) `run01` 全7項目（`exit_code: 0`・`sqlite_integrity_ok: true`・`originals_sha_match: true`・`passed: true`）が PASS。
+- **P6 安全 Sandbox 終了処理・候補18梱包**（[配布記録](docs/lightweight-distribution.md)）：[sandbox_trial.py](tools/sandbox_trial.py) で既存 Sandbox 検出時は起動拒否（終了2）し自起動プロセス群のみ終了するよう修正（`tests/test_windows_sandbox.py` 2件追加・上記 `98` 件に含め PASS）。候補18の梱包・ZIP・validation-kit・`--self-test`・`preflight.json` が PASS。
 
 ## 利用者にできること
-- 詳細ペインの保存済みタグから単一タグ直接表記／件数表記で一覧絞り込み、動画選択時の詳細ペイン「似た動画を探す…」3種検索、編集・保存後の取り消し状態・プレビュー右クリック即時同期、`SettingsDialog` ⇔ 各サブダイアログ・フォルダ/棚管理の往復が利用可能。
+- 詳細欄やカード右クリックの保存タグ（最大30件・空白含む）から `「タグ：{tag}」×` チップで対象を完全一致絞り込みし、文字検索・履歴戻る/進む・一括解除と併用可能。棚作成時のキャンセル挙動も作成前後で確認可能。
 
 ## 未受入・未検証
-- コード署名／未署名に対するゲスト側 Smart App Control（`verified_and_reputable_policy_state: 1`）環境での実行（候補16の後段 `probe_release_runtime.py` 失敗再現、候補17オフライン／オンライン `managed-candidate17-online-manual/Aredoko.wsb` クリーン起動を含む）。
-- UI未確認：ロック中セッションで `BLOCKED` となったカード右クリック項目（`FilterByItemTags{id}`・`FilterByItemTag{id}_0`・`SelectRangeTo{id}`）、音声選択時 `BtnDetailFindSimilar`、`TxtTags` / `TxtShelf` 長文スクロール実機操作、`AIAutoEnvironmentDialog` の「設定へ戻る」クリック、実日本語IME、物理DPI・ハイコントラスト。
+- 候補18のクリーンゲスト環境（オフライン／オンライン）および未署名・ゲスト側 Smart App Control（`verified_and_reputable_policy_state: 1`）環境での起動検証（候補16後段 `probe_release_runtime.py` 失敗切り分けを含む）。
+- UI未確認：AI有効時のUI操作上でのタグ絞り込み併用、カード右クリック `FilterByItemTags{id}` / `FilterByItemTag{id}_0` / `SelectRangeTo{id}`、音声選択時 `BtnDetailFindSimilar`、長文タグ/棚スクロール、`AIAutoEnvironmentDialog` の「設定へ戻る」、実日本語IME、物理DPI、ハイコントラスト。
 - AI専用テスト：専用OCR（引き続き保留）、新規環境からの自動AI構築オンライン一連。
 
 ## 次の1件（P6 / UI）
-- **P6**：署名済み／SAC許容可能な実環境またはゲスト条件での候補17クリーン起動確認と、候補16で見られた `prepare_basic_runtime.py` の `probe_release_runtime.py` 後段エラー切り分け（新規エラー詳細ログ出力を活用）。
-- **UI（[現行優先表](docs/polish-roadmap-20261022.md#ux-priority-20261029)）**：インタラクティブセッション下でのカード右クリックタグ検索（`FilterByItemTags{id}` / `FilterByItemTag{id}_0`）・`SelectRangeTo{id}`・`TxtTags`/`TxtShelf` 長文スクロール・音声類似フライアウト実機確認と残余使いやすさ改善を進める。
+- **P6**：署名済み／SAC許容可能な環境での候補18クリーン起動確認（候補16後段 `probe_release_runtime.py` 詳細ログ切り分けを含む）。
+- **UI（[現行優先表](docs/polish-roadmap-20261022.md#ux-priority-20261029)）**：インタラクティブセッション下でのカード右クリック操作（`FilterByItemTags{id}` / `SelectRangeTo{id}`）・音声類似フライアウト・長文タグ/棚スクロール確認と残余使いやすさ改善を進める。
