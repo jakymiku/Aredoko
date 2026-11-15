@@ -334,3 +334,13 @@ source `1f573d2b5d63754a1fd973821e46ca103ec6baa6`、Portable frontend `data/deve
 - **ページ跨ぎ範囲選択と詳細維持（Scenario B）**: `Item1` 選択＋`BtnDetails` で詳細表示のまま `BrowseActions` → `BtnNext` で `61–120 / 300` へ移動し、詳細が閉じず `SelectionCountText`=`"1 件選択（一覧外 1 件）"`、`SelectionSummaryDetails` に `"現在の表示範囲外で 1 件を選択中"` を維持（`details_kept_across_page_turn: true`）。続けて `Item65` 選択後に `BtnSelectRangeSpan`（「直前の選択からここまで選択（65 件）」）を実行し、`SelectionCountText`=`"65 件選択（一覧外 60 件）"`、`FooterSelection`=`"65 件選択"`、サマリー詳細に `"現在: お気に入り 0/5 件（一覧外 60 件） · 棚: 既存棚A、初期新規棚B"` を確認。
 - **256件超ガード（Scenario C）**: 選択解除後に `1–60 / 300` の先頭項目を選択し、`241–300 / 300` へ移動して末尾項目（300件目）を選択すると、`BtnSelectRangeSpan` が無効化（`IsEnabled == False`）されラベルが `"直前の選択からここまで選択（300 件・上限 256 件）"` となることを確認。
 - 先行試行 `run01` は `TxtCurrentShelfSummary` 複合表示形式（`既存棚A ほか1棚`）の試験側アサーション不一致、`run02` はロック中セッションで右クリック `winapp ui click --right` が `No interactive desktop is available` となった試験制約。そのため `SelectRangeTo{id}` 右クリック実機操作・実日本語IME・物理DPI・ハイコントラストは引き続き未確認。なお `frontend-product15` 同梱の配布再梱包はまだ実施していない（次回区切りまたは P6 再梱包時に実施）。
+
+### 2026-11-15（後半）：複数棚スコープ移動・作品からの棚ジャンプ・3棚要約（frontend-product16 / 候補16）
+
+- 実装（`d1367f88d687b02ac05aeb53cea152072e35c7aa`）：
+  - 複数棚スコープ操作：棚ハブに `BtnOpenMultipleShelves`（「複数棚を開く」）、検索対象バー `ShelfScopeBar` に `BtnChangeShelfScope`（「棚を変更」）を追加し、`PickShelfIdsAsync`（`ScopeShelfChoice`、全解除で絞り込み解除）で複数棚を一括表示・切替できるようにした。棚削除時（`DeleteShelfAsync`）にスコープ内の残余棚を保持し、また棚スコープ閲覧中に左ナビの `NavShelf` を押した際は `Navigation_ItemInvoked` から棚ハブへ戻れるようにした（`MainPage.Settings.cs`）。
+  - 選択作品からの棚ジャンプ：詳細ペインの棚行へ `BtnOpenActiveShelves`（「開く」）、一覧カードのコンテキストメニューへ `OpenItemShelves{id}`（「所属する棚を開く」）を追加し、作品の所属棚スコープへ直接移動できるようにした。
+  - 3棚までの要約表示：`ShelfProtocol.SummarizeNames` を `Aredoko.Core` に追加し、3棚までは全件、4棚以上は先頭3棚＋`ほかN棚` を表示しつつツールチップに全棚一覧を保持するよう `TxtShelf`、`TxtSelectionSummaryDetails`、`ItemMeta{id}`、`LibraryHeading`、`TxtShelfScope` を統一した。
+- 検証と確認範囲：
+  - `Aredoko.Core.Tests`（`dotnet.exe run --project tests\Aredoko.Core.Tests\Aredoko.Core.Tests.csproj -c Release --no-restore`、終了コード `0`）で `ShelfTests.cs` の `SummarizeNames` 4件を含む全件が PASS。
+  - 独立ホスト GUI 試験 `data/gui-shelf-scope01/check.py` `run03`（`summary.json`、`exit_code: 0`、`db_intact: true`、`originals_sha_match: true`）で、単一作品詳細（`棚A、棚B、棚C ほか1棚`）、2件選択サマリー（`現在: お気に入り 0/2 件 · 棚: 棚A、棚B、棚C ほか2棚`）、`BtnOpenActiveShelves` 遷移（`2 件`）、`BtnChangeShelfScope` での `棚E` 絞込（`1 件`）、`NavShelf` → `BtnOpenMultipleShelves` での `棚A、棚E` 表示（`2 件`）→ `BtnClearShelfScope` 全4件復帰の5シナリオが PASS。先行 `run01` は `winapp ui invoke` の存在しない `--action add-to-selection` 引数による試験側失敗（PowerShell `SelectionItemPattern` へ修正）、`run02` は `NavShelf` 選択中再押下の `Navigation_ItemInvoked` 未処理（`MainPage.Settings.cs` 修正）と終端 `cp932` コンソール出力時の `\xb7` `UnicodeEncodeError`（`ensure_ascii=True` 出力へ修正）を解消した。なお `SelectRangeTo{id}` 右クリック実機操作・実日本語IME・物理DPI・ハイコントラストは引き続き未確認。
