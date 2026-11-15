@@ -422,6 +422,7 @@ public sealed partial class MainPage : Page
             "unreviewed"=>"ライブラリ（未確認）",
             _=>"ライブラリ"
         };
+        ToolTipService.SetToolTip(MainViewTitle,selectedShelfIds is not null?ShelfScopeName(summarize:false):MainViewTitle.Text);
     }
     private async Task LoadAsync(bool reuseSession=false) {
         CloseBrowseMenus();EmptyAIRecovery.Visibility=Visibility.Collapsed;EmptyResetConditionsButton.Visibility=Visibility.Collapsed;
@@ -641,9 +642,7 @@ public sealed partial class MainPage : Page
         var availability=row.Availability=="present"?"":AvailabilityLabel(row.Availability);
         if(tiles)return row.MatchLabel+availability;
         var shelves=row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName).Where(name=>!string.IsNullOrWhiteSpace(name)).ToArray():string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf};
-        var shelfSummary=summarizeShelves&&shelves.Length>3
-            ? string.Join("、",shelves.Take(3))+$" ほか{shelves.Length-3:N0}棚"
-            : string.Join("、",shelves);
+        var shelfSummary=ShelfProtocol.SummarizeNames(shelves,maxVisible:summarizeShelves?3:0);
         var tagSummary=string.Join("、",row.Tags);
         return $"{row.MatchLabel}{MediaKindFilter.DisplayName(row)}{(availability.Length>0?" · "+availability:"")}{(shelfSummary.Length>0?" · 棚:"+shelfSummary:"")}{(tagSummary.Length>0?" · "+tagSummary:"")}";
     }
@@ -862,6 +861,15 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetAutomationId(favoriteAction,"ToggleFavorite"+row.Id);
         favoriteAction.Click+=async(_,_)=>await SetFavoriteAsync(row,!row.Favorite);
         menu.Items.Add(favoriteAction);
+        if(row.ShelfIds.Length>0)
+        {
+            var shelfIds=row.ShelfIds.ToArray();
+            var openShelvesAction=new MenuFlyoutItem{Text=shelfIds.Length==1?$"棚「{ShelfName(shelfIds[0])}」を開く":$"所属する棚を開く（{shelfIds.Length:N0} 棚）"};
+            AutomationProperties.SetAutomationId(openShelvesAction,"OpenItemShelves"+row.Id);
+            ToolTipService.SetToolTip(openShelvesAction,string.Join("、",shelfIds.Select(ShelfName)));
+            openShelvesAction.Click+=async(_,_)=>await OpenShelfScopeAsync(shelfIds);
+            menu.Items.Add(openShelvesAction);
+        }
         if(librarySelection.Anchor is {} anchor&&anchor.Id!=row.Id&&SelectionPosition(row.Id) is {} targetPos)
         {
             var spanCount=Math.Abs((long)targetPos.Ordinal-anchor.Ordinal)+1;
@@ -1125,6 +1133,10 @@ public sealed partial class MainPage : Page
         TagSuggestionsButton.IsEnabled=canReview&&!saving;
         AudioSearchHint.Text=SimilaritySearch.AudioIndexingGuidance;
         AudioSearchHint.Visibility=active?.Kind=="audio"?Visibility.Visible:Visibility.Collapsed;
+        var hasActiveShelves=active is {ShelfIds.Length:>0};
+        OpenActiveShelvesButton.Visibility=hasActiveShelves?Visibility.Visible:Visibility.Collapsed;
+        OpenActiveShelvesButton.IsEnabled=hasActiveShelves&&!saving&&tagReviewSyncItem!=active!.Id;
+        ToolTipService.SetToolTip(OpenActiveShelvesButton,hasActiveShelves?$"所属する棚を開く（{string.Join("、",active!.ShelfIds.Select(ShelfName))}）":"この作品の所属する棚を表示");
     }
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private async void Favorite_Checked(object sender,RoutedEventArgs args)
@@ -1229,7 +1241,7 @@ public sealed partial class MainPage : Page
         // editor control, and only if the user has not chosen another control
         // while the request was pending. Never take focus from another window.
         var focused=FocusManager.GetFocusedElement(XamlRoot) as Control;
-        var restore=focused==Tags||focused==Shelf||focused==ChooseShelvesButton||focused==Favorite||focused==Reviewed||focused==Save;
+        var restore=focused==Tags||focused==Shelf||focused==ChooseShelvesButton||focused==OpenActiveShelvesButton||focused==Favorite||focused==Reviewed||focused==Save;
         var focusState=focused?.FocusState==FocusState.Keyboard?FocusState.Keyboard:FocusState.Programmatic;
         saving=true;Editor.IsEnabled=false;var id=active.Id;
         var displacedFocus=FocusManager.GetFocusedElement(XamlRoot);
@@ -1243,7 +1255,7 @@ public sealed partial class MainPage : Page
         finally
         {
             var unchangedFocus=ReferenceEquals(displacedFocus,FocusManager.GetFocusedElement(XamlRoot));
-            saving=false;Editor.IsEnabled=true;Save.IsEnabled=Dirty;
+            saving=false;Editor.IsEnabled=true;Save.IsEnabled=Dirty;UpdateDetailActions();
             if(!disposed&&active?.Id==id&&Details.IsPaneOpen&&restore&&unchangedFocus)
             {
                 // A successful save disables Save; continue at the tag field.

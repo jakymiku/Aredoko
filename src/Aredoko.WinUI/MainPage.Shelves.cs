@@ -25,7 +25,7 @@ public sealed partial class MainPage
         UpdateShelfScopeLabel();
     }
     private string ShelfName(long id)=>shelfDescriptors.FirstOrDefault(s=>s.Id==id)?.Name??"見つからない棚";
-    private string ShelfScopeName()=>selectedShelfIds is null?"ライブラリ":string.Join("、",selectedShelfIds.Select(ShelfName));
+    private string ShelfScopeName(bool summarize=true)=>selectedShelfIds is null?"ライブラリ":ShelfProtocol.SummarizeNames(selectedShelfIds.Select(ShelfName),"ライブラリ",summarize?3:0);
     private void SetShelfScope(IReadOnlyList<long>? ids)
     {
         selectedShelfIds=ids?.ToArray();UpdateShelfScopeLabel();UpdateClearSearchConditionsVisibility();
@@ -35,11 +35,13 @@ public sealed partial class MainPage
         if(ShelfScopeBar is null)return;
         ShelfScopeBar.Visibility=selectedShelfIds is null?Visibility.Collapsed:Visibility.Visible;
         ShelfScopeText.Text=selectedShelfIds is null?"":"検索対象: "+ShelfScopeName();
-        ToolTipService.SetToolTip(ShelfScopeText,ShelfScopeText.Text);
+        ToolTipService.SetToolTip(ShelfScopeText,selectedShelfIds is null?"":"検索対象: "+ShelfScopeName(summarize:false));
     }
     private void UpdateShelfEditorLabel()
     {
-        Shelf.Text=editingShelfIds.Length==0?"棚なし":string.Join("、",editingShelfIds.Select(ShelfName));
+        var names=editingShelfIds.Select(ShelfName).ToArray();
+        Shelf.Text=ShelfProtocol.SummarizeNames(names,"棚なし",3);
+        ToolTipService.SetToolTip(Shelf,ShelfProtocol.SummarizeNames(names,"棚なし",0));
     }
     private void CloseShelfHubCore()
     {
@@ -76,18 +78,61 @@ public sealed partial class MainPage
         foreach(var load in shelfLoads.Values){load.Cancel();load.Dispose();}shelfLoads.Clear();
         shelfKeys.Clear();foreach(var shelf in shelfDescriptors)shelfKeys.Add(shelf.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Count.Text=$"{shelfDescriptors.Count:N0} 棚";
+        OpenMultipleShelvesButton.IsEnabled=shelfDescriptors.Count>0;
         ShelfHubMessage.Text=shelfDescriptors.Count==0?"「棚を作成」から追加できます。作品の詳細で所属する棚を選べます。":"棚を開くと、その棚の作品を表示します。";
     }
-    private async Task OpenShelfItemsAsync(long id)
+    private Task OpenShelfItemsAsync(long id)=>OpenShelfScopeAsync(new[]{id});
+    private async Task OpenShelfScopeAsync(IReadOnlyList<long> ids)
     {
-        if(saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        if(ids.Count==0||saving||dialogOpen||!await transitions.WaitAsync(0))return;
         try
         {
             if(!await ConfirmDiscardAsync())return;
-            CloseShelfHubCore();CloseFolderHubCore();SetShelfScope(new[]{id});
+            CloseShelfHubCore();CloseFolderHubCore();SetShelfScope(ids);
             ClearSimilarity();view="all";page=0;RestoreNavigation();UpdateSearchMethod();await LoadAsync();
         }
         finally{transitions.Release();}
+    }
+    private async void OpenActiveShelves_Click(object sender,RoutedEventArgs args)
+    {
+        if(active is {ShelfIds.Length:>0} row)await OpenShelfScopeAsync(row.ShelfIds.ToArray());
+    }
+    private async void OpenMultipleShelves_Click(object sender,RoutedEventArgs args)=>await ChooseShelfScopeAsync();
+    private async void ChangeShelfScope_Click(object sender,RoutedEventArgs args)=>await ChooseShelfScopeAsync();
+    private async Task ChooseShelfScopeAsync()
+    {
+        if(!ready||disposed||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        var detailsWereOpen=Details.IsPaneOpen;
+        try
+        {
+            if(!await ConfirmDiscardAsync())return;
+            await RefreshShelfDescriptorsAsync();
+            if(disposed||saving||dialogOpen||shelfDescriptors.Count==0)return;
+            var initial=selectedShelfIds??[];
+            var picked=await PickShelfIdsAsync("表示する棚を選択",initial,
+                "選択した棚のいずれかに所属する作品を表示します。すべての選択を外すと棚の絞り込みを解除します。",
+                "ScopeShelfChoice",allowCreate:false);
+            if(picked is null||disposed)return;
+            dialogOpen=false;
+            if(picked.Length==0)
+            {
+                if(selectedShelfIds is null)return;
+                SetShelfScope(null);
+                if(shelfHubOpen)return;
+                page=0;RestoreNavigation();await LoadAsync();
+                return;
+            }
+            if(!shelfHubOpen&&selectedShelfIds is not null&&selectedShelfIds.Order().SequenceEqual(picked.Order()))return;
+            CloseShelfHubCore();CloseFolderHubCore();SetShelfScope(picked);
+            ClearSimilarity();view="all";page=0;RestoreNavigation();UpdateSearchMethod();await LoadAsync();
+        }
+        catch(Exception ex){Failure(ex);}
+        finally
+        {
+            dialogOpen=false;
+            if(!disposed&&detailsWereOpen&&!shelfHubOpen&&(active is not null||librarySelection.Count>0))Details.IsPaneOpen=true;
+            transitions.Release();
+        }
     }
     private async void ShelfList_ItemClick(object sender,ItemClickEventArgs args)
     {
@@ -261,7 +306,11 @@ public sealed partial class MainPage
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="棚を削除しますか？",Content=$"「{shelf.Name}」を削除します。作品と元ファイルは残ります。",PrimaryButtonText="棚を削除",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Close};
             if(await dialog.ShowAsync()!=ContentDialogResult.Primary)return;
             await api.Shelves.DeleteAsync(shelf.Id);resultsNeedRefresh=true;
-            if(selectedShelfIds?.Contains(shelf.Id)==true)SetShelfScope(null);
+            if(selectedShelfIds?.Contains(shelf.Id)==true)
+            {
+                var remaining=selectedShelfIds.Where(id=>id!=shelf.Id).ToArray();
+                SetShelfScope(remaining.Length>0?remaining:null);
+            }
             await ReloadShelfHubAsync();
         }
         catch(Exception ex){Failure(ex);}

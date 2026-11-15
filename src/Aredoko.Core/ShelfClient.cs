@@ -50,6 +50,14 @@ public static class ShelfProtocol
         }
         return result;
     }
+    public static string SummarizeNames(IEnumerable<string> names, string emptyText = "", int maxVisible = 3)
+    {
+        var list = names.Where(name => !string.IsNullOrWhiteSpace(name)).ToArray();
+        if (list.Length == 0) return emptyText;
+        return maxVisible > 0 && list.Length > maxVisible
+            ? string.Join("、", list.Take(maxVisible)) + $" ほか{list.Length - maxVisible:N0}棚"
+            : string.Join("、", list);
+    }
 }
 
 // IDs and JSON data only: no WinUI types, native handles or OS-specific paths.

@@ -19,7 +19,7 @@ public sealed partial class MainPage
         if(librarySelection.SessionId==resultSession?.Id)return;
         selectionPreparation?.Cancel();librarySelection.Bind(resultSession?.Id,resultSession?.Total??0);UpdateLibrarySelectionTools();
     }
-    private string FormatSelectionSummaryDetails()
+    private string FormatSelectionSummaryDetails(bool summarizeShelves=true)
     {
         if(librarySelection.Count==0)return "";
         var selectedRows=rows.Where(row=>librarySelection.Contains(row.Id)).ToArray();
@@ -30,13 +30,14 @@ public sealed partial class MainPage
         var favorites=selectedRows.Count(row=>row.Favorite);
         var outside=librarySelection.Count-selectedRows.Length;
         var shelves=selectedRows.SelectMany(row=>row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName):string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf}).Where(name=>!string.IsNullOrWhiteSpace(name)).Distinct().ToArray();
-        var shelfLabel=shelves.Length>0?"棚: "+string.Join("、",shelves):"棚なし";
+        var shelfLabel=shelves.Length>0?"棚: "+ShelfProtocol.SummarizeNames(shelves,maxVisible:summarizeShelves?3:0):"棚なし";
         return $"対象: {titles}\n現在: お気に入り {favorites:N0}/{selectedRows.Length:N0} 件{(outside>0?$"（一覧外 {outside:N0} 件）":"")} · {shelfLabel}";
     }
     private void UpdateSelectionSummaryDetails()
     {
         var details=FormatSelectionSummaryDetails();
         SelectionSummaryDetails.Text=details;
+        ToolTipService.SetToolTip(SelectionSummaryDetails,details.Length>0?FormatSelectionSummaryDetails(summarizeShelves:false):null);
         SelectionSummaryDetails.Visibility=details.Length>0?Visibility.Visible:Visibility.Collapsed;
     }
     private void ShowSelectionSummary()

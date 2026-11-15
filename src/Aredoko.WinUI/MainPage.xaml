@@ -71,9 +71,10 @@
 
        <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextWrapping="Wrap" MaxHeight="120" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
        <Grid ColumnSpacing="8">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <TextBox x:Name="Shelf" Header="棚" PlaceholderText="棚なし" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="96" AutomationProperties.Name="所属する棚" AutomationProperties.AutomationId="TxtShelf"/>
         <Button x:Name="ChooseShelvesButton" Grid.Column="1" VerticalAlignment="Bottom" Content="変更" ToolTipService.ToolTip="所属する棚を変更" Click="ChooseShelves_Click" AutomationProperties.Name="所属する棚を変更" AutomationProperties.AutomationId="BtnChooseShelves"/>
+        <Button x:Name="OpenActiveShelvesButton" Grid.Column="2" VerticalAlignment="Bottom" Content="開く" Visibility="Collapsed" ToolTipService.ToolTip="この作品の所属する棚を表示" Click="OpenActiveShelves_Click" AutomationProperties.Name="所属する棚を開く" AutomationProperties.AutomationId="BtnOpenActiveShelves"/>
        </Grid>
        <CheckBox x:Name="Favorite" MinWidth="0" Content="お気に入り" Checked="Favorite_Checked" Unchecked="Favorite_Checked" AutomationProperties.AutomationId="ChkFavorite"/>
        <CheckBox x:Name="Reviewed" MinWidth="0" Visibility="Collapsed" Content="確認済み" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkReviewed"/>
@@ -215,6 +216,7 @@
      <StackPanel x:Name="ShelfScopeBar" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
       <Button Content="棚一覧" Click="ShelfList_Click" AutomationProperties.AutomationId="BtnShelfList"/>
       <TextBlock x:Name="ShelfScopeText" VerticalAlignment="Center" MaxWidth="360" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtShelfScope"/>
+      <Button Content="棚を変更…" Click="ChangeShelfScope_Click" AutomationProperties.Name="検索対象の棚を変更" AutomationProperties.AutomationId="BtnChangeShelfScope"/>
       <Button Content="解除" Click="ClearShelfScope_Click" AutomationProperties.Name="棚の検索条件を解除" AutomationProperties.AutomationId="BtnClearShelfScope"/>
      </StackPanel>
      <Grid x:Name="SimilarityBar" ColumnSpacing="12" Visibility="Collapsed">
@@ -275,6 +277,7 @@
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
      <StackPanel Orientation="Horizontal" Spacing="8">
       <Button Content="棚を作成" Click="CreateShelf_Click" AutomationProperties.AutomationId="BtnCreateShelf"/>
+      <Button x:Name="OpenMultipleShelvesButton" Content="棚を選択して開く…" IsEnabled="False" Click="OpenMultipleShelves_Click" AutomationProperties.AutomationId="BtnOpenMultipleShelves"/>
       <Button Content="更新" Click="RefreshShelves_Click" AutomationProperties.AutomationId="BtnRefreshShelves"/>
       <Button x:Name="ShelfLayoutButton" Content="グリッド表示" Click="Layout_Click" AutomationProperties.AutomationId="BtnShelfLayout"/>
       <Button Content="表示サイズ" Click="ShelfSize_Click" AutomationProperties.AutomationId="BtnShelfSize"/>

@@ -47,6 +47,10 @@ internal static class ShelfTests
         check(calls.Count==5,"shelf client uses existing CRUD/assignment endpoints");
         var rejected=false;try{ShelfProtocol.Ids(new long[]{1,1});}catch(ArgumentException){rejected=true;}
         check(rejected,"duplicate shelf IDs rejected before request");
+        check(ShelfProtocol.SummarizeNames(Array.Empty<string>(), "棚なし")=="棚なし","empty shelf names use empty label");
+        check(ShelfProtocol.SummarizeNames(new[]{"A","B","C"})=="A、B、C","up to three shelf names stay expanded");
+        check(ShelfProtocol.SummarizeNames(new[]{"A","B","C","D","E"})=="A、B、C ほか2棚","more than three shelf names summarize extra count");
+        check(ShelfProtocol.SummarizeNames(new[]{"A","B","C","D","E"}, maxVisible: 0)=="A、B、C、D、E","maxVisible 0 renders full shelf list");
     }
     private static HttpResponseMessage Reply(string json)=>new(HttpStatusCode.OK){Content=new StringContent(json,Encoding.UTF8,"application/json")};
     private sealed class Stub(Func<HttpRequestMessage,Task<HttpResponseMessage>> send):HttpMessageHandler

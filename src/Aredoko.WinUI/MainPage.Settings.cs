@@ -10,6 +10,7 @@ public sealed partial class MainPage
     private async void Navigation_ItemInvoked(NavigationView sender,NavigationViewItemInvokedEventArgs args)
     {
         if(args.InvokedItemContainer is NavigationViewItem {Tag:"settings"})await OpenSettingsAsync();
+        else if(!shelfHubOpen&&selectedShelfIds is not null&&args.InvokedItemContainer is NavigationViewItem {Tag:"shelf"})await OpenShelfHubAsync();
     }
     private async Task OpenSettingsAsync()
     {
