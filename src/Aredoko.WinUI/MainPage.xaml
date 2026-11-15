@@ -70,11 +70,11 @@
       </Expander>
       <Button x:Name="TagSuggestionsButton" Content="AIタグ候補" Visibility="Collapsed" IsEnabled="False" Click="TagSuggestions_Click" AutomationProperties.AutomationId="BtnTagSuggestions"/>
 
-       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextWrapping="Wrap" MaxHeight="120" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
-       <Button x:Name="FilterByActiveTagButton" Content="この作品のタグで検索…" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="登録済みのタグを選んで一覧を検索します" AutomationProperties.Name="この作品のタグで検索" AutomationProperties.AutomationId="BtnFilterByActiveTag"/>
+       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextWrapping="Wrap" MaxHeight="120" ScrollViewer.VerticalScrollBarVisibility="Auto" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
+       <Button x:Name="FilterByActiveTagButton" Content="この作品のタグで検索…" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="登録済みのタグを選んで一覧を検索します" AutomationProperties.AutomationId="BtnFilterByActiveTag"/>
        <Grid ColumnSpacing="8">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBox x:Name="Shelf" Header="棚" PlaceholderText="棚なし" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="96" AutomationProperties.Name="所属する棚" AutomationProperties.AutomationId="TxtShelf"/>
+        <TextBox x:Name="Shelf" Header="棚" PlaceholderText="棚なし" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="96" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="所属する棚" AutomationProperties.AutomationId="TxtShelf"/>
         <Button x:Name="ChooseShelvesButton" Grid.Column="1" VerticalAlignment="Bottom" Content="変更" ToolTipService.ToolTip="所属する棚を変更" Click="ChooseShelves_Click" AutomationProperties.Name="所属する棚を変更" AutomationProperties.AutomationId="BtnChooseShelves"/>
         <Button x:Name="OpenActiveShelvesButton" Grid.Column="2" VerticalAlignment="Bottom" Content="開く" Visibility="Collapsed" ToolTipService.ToolTip="この作品の所属する棚を表示" Click="OpenActiveShelves_Click" AutomationProperties.Name="所属する棚を開く" AutomationProperties.AutomationId="BtnOpenActiveShelves"/>
        </Grid>

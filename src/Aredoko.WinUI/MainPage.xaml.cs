@@ -870,6 +870,33 @@ public sealed partial class MainPage : Page
             openShelvesAction.Click+=async(_,_)=>await OpenShelfScopeAsync(shelfIds);
             menu.Items.Add(openShelvesAction);
         }
+        if(row.Tags.Length>0)
+        {
+            var itemTags=row.Tags.ToArray();
+            if(itemTags.Length==1)
+            {
+                var tag=itemTags[0];
+                var searchTagAction=new MenuFlyoutItem{Text=$"タグ「{tag}」で検索"};
+                AutomationProperties.SetAutomationId(searchTagAction,$"FilterByItemTag{row.Id}_0");
+                searchTagAction.Click+=async(_,_)=>await FilterByTagAsync(tag);
+                menu.Items.Add(searchTagAction);
+            }
+            else
+            {
+                var tagMenu=new MenuFlyoutSubItem{Text=$"タグで検索（{itemTags.Length:N0} 件）"};
+                AutomationProperties.SetAutomationId(tagMenu,$"FilterByItemTags{row.Id}");
+                ToolTipService.SetToolTip(tagMenu,string.Join("、",itemTags.Take(20)));
+                for(var i=0;i<Math.Min(itemTags.Length,20);i++)
+                {
+                    var tag=itemTags[i];
+                    var tagItem=new MenuFlyoutItem{Text=$"「{tag}」で検索"};
+                    AutomationProperties.SetAutomationId(tagItem,$"FilterByItemTag{row.Id}_{i}");
+                    tagItem.Click+=async(_,_)=>await FilterByTagAsync(tag);
+                    tagMenu.Items.Add(tagItem);
+                }
+                menu.Items.Add(tagMenu);
+            }
+        }
         if(librarySelection.Anchor is {} anchor&&anchor.Id!=row.Id&&SelectionPosition(row.Id) is {} targetPos)
         {
             var spanCount=Math.Abs((long)targetPos.Ordinal-anchor.Ordinal)+1;
@@ -1183,6 +1210,8 @@ public sealed partial class MainPage : Page
         var hasActiveTags=activeTags.Length>0;
         FilterByActiveTagButton.Visibility=hasActiveTags?Visibility.Visible:Visibility.Collapsed;
         FilterByActiveTagButton.IsEnabled=hasActiveTags&&!saving&&tagReviewSyncItem!=active?.Id;
+        FilterByActiveTagButton.Content=activeTags.Length==1?$"タグ「{activeTags[0]}」で検索…":$"この作品のタグで検索（{activeTags.Length:N0} 件）…";
+        ToolTipService.SetToolTip(FilterByActiveTagButton,hasActiveTags?$"登録済みのタグを選んで一覧を検索します（{string.Join("、",activeTags.Take(10))}）":"登録済みのタグを選んで一覧を検索します");
         if(hasActiveTags)
         {
             var tagFlyout=new MenuFlyout();
@@ -1302,7 +1331,7 @@ public sealed partial class MainPage : Page
         // editor control, and only if the user has not chosen another control
         // while the request was pending. Never take focus from another window.
         var focused=FocusManager.GetFocusedElement(XamlRoot) as Control;
-        var restore=focused==Tags||focused==Shelf||focused==ChooseShelvesButton||focused==OpenActiveShelvesButton||focused==Favorite||focused==Reviewed||focused==Save||focused==RevertEditsButton;
+        var restore=focused==Tags||focused==Shelf||focused==ChooseShelvesButton||focused==OpenActiveShelvesButton||focused==Favorite||focused==Reviewed||focused==Save||focused==RevertEditsButton||focused==FilterByActiveTagButton||focused==DetailFindSimilarButton;
         var focusState=focused?.FocusState==FocusState.Keyboard?FocusState.Keyboard:FocusState.Programmatic;
         saving=true;Editor.IsEnabled=false;var id=active.Id;
         var displacedFocus=FocusManager.GetFocusedElement(XamlRoot);
@@ -1316,11 +1345,16 @@ public sealed partial class MainPage : Page
         finally
         {
             var unchangedFocus=ReferenceEquals(displacedFocus,FocusManager.GetFocusedElement(XamlRoot));
-            saving=false;Editor.IsEnabled=true;Save.IsEnabled=Dirty;UpdateDetailActions();
+            saving=false;Editor.IsEnabled=true;Save.IsEnabled=Dirty;
+            var canRevert=active is not null&&Dirty;
+            RevertEditsButton.Visibility=canRevert?Visibility.Visible:Visibility.Collapsed;
+            RevertEditsButton.IsEnabled=canRevert;
+            UpdateDetailActions();
+            if(active is not null)DetailPreview.ContextFlyout=SimilarityMenu(active);
             if(!disposed&&active?.Id==id&&Details.IsPaneOpen&&restore&&unchangedFocus)
             {
                 // A successful save disables Save; continue at the tag field.
-                var target=(focused==Save&&!Save.IsEnabled)||(focused==RevertEditsButton&&!RevertEditsButton.IsEnabled)?Tags:focused;
+                var target=(focused==Save&&!Save.IsEnabled)||(focused==RevertEditsButton&&!RevertEditsButton.IsEnabled)||(focused==FilterByActiveTagButton&&!FilterByActiveTagButton.IsEnabled)||(focused==DetailFindSimilarButton&&!DetailFindSimilarButton.IsEnabled)?Tags:focused;
                 target?.Focus(focusState);
             }
             if(PendingSearch){searchTimer.Stop();searchTimer.Start();}

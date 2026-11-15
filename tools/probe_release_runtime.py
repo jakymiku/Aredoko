@@ -37,7 +37,7 @@ def main():
     try:
         print(json.dumps(probe(args.ai)))
     except Exception as error:
-        print(json.dumps({'pass': False, 'error': type(error).__name__}))
+        print(json.dumps({'pass': False, 'error': type(error).__name__, 'detail': str(error)}))
         return 1
     return 0
 

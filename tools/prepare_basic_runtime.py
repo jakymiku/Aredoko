@@ -106,7 +106,10 @@ def prepare(wheel, output, *, verify=False):
     check_cancelled()
     python = plain_path(output / 'Scripts/python.exe')
     probe = subprocess.run([str(python), '-I', '-B', str(Path(__file__).with_name('probe_release_runtime.py'))],
-                           check=True, capture_output=True, text=True)
+                           capture_output=True, text=True)
+    if probe.returncode != 0:
+        detail = probe.stdout.strip() or probe.stderr.strip() or f'exit {probe.returncode}'
+        raise RuntimeError('Basic runtime probe failed: ' + detail)
     print(probe.stdout.strip())
     return python
 

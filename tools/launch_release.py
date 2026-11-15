@@ -140,7 +140,8 @@ def preflight(root, *, imports=True, progress=None, managed_data=None):
             for command in commands:
                 result = _runtime_check(command, root=root, timeout=90, progress=control, capture=True)
                 if result.returncode:
-                    raise RuntimeError('Managed Python verification failed: ' + result.stderr[-2000:])
+                    detail = (result.stderr or result.stdout or '').strip()[-2000:]
+                    raise RuntimeError('Managed Python verification failed: ' + detail)
         else:
             python_layout(root / 'runtime/python', manifest.get('ai_runtime_bundled') is True, progress=progress)
         media_layout(root / 'runtime/media', progress=progress)
@@ -151,7 +152,8 @@ def preflight(root, *, imports=True, progress=None, managed_data=None):
         with control.phase('python_imports'):
             result = _runtime_check(args, root=root, timeout=90, progress=control, capture=True)
             if result.returncode or json.loads(result.stdout).get('pass') is not True:
-                raise RuntimeError('Bundled Python imports failed; check the prepared runtime')
+                detail = (result.stdout or result.stderr or '').strip()[-500:]
+                raise RuntimeError('Bundled Python imports failed; check the prepared runtime' + (f': {detail}' if detail else ''))
         with control.phase('media_probe'):
             for name in ('ffmpeg.exe', 'ffprobe.exe'):
                 result = _runtime_check([str(root / 'runtime/media' / name), '-version'],

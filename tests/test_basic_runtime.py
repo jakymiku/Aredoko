@@ -1,6 +1,9 @@
 """Generated-only verification boundaries; no network or runtime execution."""
+import contextlib
 import io
+import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -9,6 +12,7 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 import prepare_basic_runtime as runtime
+import probe_release_runtime as probe_tool
 
 
 class BasicRuntimeTests(unittest.TestCase):
@@ -80,6 +84,29 @@ class BasicRuntimeTests(unittest.TestCase):
                 (self.output / 'pyvenv.cfg').write_text(text)
                 with self.assertRaises(ValueError):
                     self.verify()
+
+    def test_probe_failure_surfaces_diagnostic_output(self):
+        captured = io.StringIO()
+        with patch.object(probe_tool, 'probe', side_effect=ImportError('cannot load _imaging')), \
+                patch.object(sys, 'argv', ['probe_release_runtime']), \
+                contextlib.redirect_stdout(captured):
+            code = probe_tool.main()
+        self.assertEqual(code, 1)
+        payload = json.loads(captured.getvalue())
+        self.assertEqual(payload, {'pass': False, 'error': 'ImportError', 'detail': 'cannot load _imaging'})
+
+        wheel_path = self.output.parent / 'pillow.whl'
+        wheel_bytes = self.payload.getvalue()
+        wheel_path.write_bytes(wheel_bytes)
+        wheel_digest = runtime.hashlib.sha256(wheel_bytes).hexdigest()
+        failed_probe = subprocess.CompletedProcess(
+            [], 1, '{"pass": false, "error": "ImportError", "detail": "missing pillow"}', '')
+        with patch.object(runtime, 'PILLOW_SHA256', wheel_digest), \
+                patch.object(runtime.sys, 'version_info', (3, 13, 17, 'final', 0)), \
+                patch.object(runtime.sys, 'platform', 'win32'), \
+                patch.object(runtime.subprocess, 'run', return_value=failed_probe):
+            with self.assertRaisesRegex(RuntimeError, 'missing pillow'):
+                runtime.prepare(wheel_path, self.output, verify=True)
 
 
 if __name__ == '__main__':
