@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 import prepare_windows_sandbox as tool
+import sandbox_trial as trial
 
 
 class WindowsSandboxTests(unittest.TestCase):
@@ -127,6 +128,36 @@ class WindowsSandboxTests(unittest.TestCase):
         readme = (self.output / 'README.txt').read_text(encoding='utf-8-sig')
         self.assertIn('CPythonとPillow', readme)
         self.assertIn('生成素材3件', readme)
+
+    def test_safe_sandbox_runner_refuses_when_existing_sandbox_active(self):
+        wsb = self.root / 'data/ai-ui/trial/Trial.wsb'
+        wsb.parent.mkdir(parents=True)
+        wsb.write_text('<Configuration />', encoding='utf-8')
+        killed = []
+        launched = []
+        with self.assertRaises(trial.ExistingSandboxError):
+            trial.run_wsb_trial(
+                wsb,
+                wsb.parent / 'evidence',
+                list_processes=lambda: [{'pid': 4242, 'name': 'WindowsSandbox.exe', 'parent_pid': 1, 'cmdline': r'C:\other\User.wsb'}],
+                popen=lambda *a, **kw: launched.append(a),
+                stop_pids=lambda pids: killed.extend(pids),
+            )
+        self.assertEqual(launched, [])
+        self.assertEqual(killed, [])
+
+    def test_select_owned_sandbox_pids_ignores_unrelated_instances(self):
+        wsb = (self.root / 'data/ai-ui/trial/Trial.wsb').resolve()
+        processes = [
+            {'pid': 100, 'name': 'WindowsSandbox.exe', 'parent_pid': 1, 'cmdline': f'"C:\\Windows\\System32\\WindowsSandbox.exe" "{wsb}"'},
+            {'pid': 101, 'name': 'WindowsSandboxClient.exe', 'parent_pid': 100, 'cmdline': 'WindowsSandboxClient.exe'},
+            {'pid': 102, 'name': 'WindowsSandboxServer.exe', 'parent_pid': 101, 'cmdline': ''},
+            {'pid': 200, 'name': 'WindowsSandbox.exe', 'parent_pid': 1, 'cmdline': r'"C:\Windows\System32\WindowsSandbox.exe" "C:\Other\User.wsb"'},
+            {'pid': 201, 'name': 'WindowsSandboxClient.exe', 'parent_pid': 200, 'cmdline': 'WindowsSandboxClient.exe'},
+        ]
+        owned = trial.select_owned_sandbox_pids(processes, 100, wsb)
+        self.assertEqual(owned, [100, 101, 102])
+        self.assertEqual(trial.select_owned_sandbox_pids(processes, 100, wsb, pre_existing_pids={100}), [])
 
 
 if __name__ == '__main__':

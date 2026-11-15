@@ -219,6 +219,14 @@
      </StackPanel>
     </Expander>
     <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Margin="0,4,0,0" Spacing="4">
+     <StackPanel x:Name="TagScopeBar" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+      <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Padding="8,2">
+       <StackPanel Orientation="Horizontal" Spacing="6">
+        <TextBlock x:Name="TagScopeText" VerticalAlignment="Center" MaxWidth="360" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtTagScope"/>
+        <Button x:Name="ClearTagScopeButton" Content="×" Padding="6,1" MinWidth="0" MinHeight="0" Click="ClearTagScope_Click" ToolTipService.ToolTip="タグでの絞り込みを解除" AutomationProperties.Name="タグでの絞り込みを解除" AutomationProperties.AutomationId="BtnClearTagScope"/>
+       </StackPanel>
+      </Border>
+     </StackPanel>
      <StackPanel x:Name="ShelfScopeBar" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
       <Button Content="棚一覧" Click="ShelfList_Click" AutomationProperties.AutomationId="BtnShelfList"/>
       <TextBlock x:Name="ShelfScopeText" VerticalAlignment="Center" MaxWidth="360" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtShelfScope"/>

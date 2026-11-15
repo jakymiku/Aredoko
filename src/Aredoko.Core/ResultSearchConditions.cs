@@ -6,12 +6,35 @@ namespace Aredoko.Core;
 // A null result is the established empty-input state of explicit text/tag AI.
 public static class ResultSearchConditions
 {
+    public const int MaxTagLength = 60;
+
+    public static string? NormalizeTag(string? tag)
+    {
+        if (tag is null) return null;
+        var trimmed = tag.Trim();
+        if (trimmed.Length is < 1 or > MaxTagLength)
+            throw new ArgumentException($"タグは1～{MaxTagLength}文字で指定してください。", nameof(tag));
+        return trimmed;
+    }
+
+    public static JsonObject? RestrictTag(JsonObject? conditions, string? tag)
+    {
+        var normalized = NormalizeTag(tag);
+        if (conditions is null || normalized is null) return conditions;
+        var semantic = conditions["mode"]?.GetValue<string>() is "semantic" or "similar";
+        var target = semantic ? conditions["scope"]?.AsObject() ?? throw new InvalidDataException("Missing search scope") : conditions;
+        target["tag"] = normalized;
+        return conditions;
+    }
+
     public static JsonObject? Create(string query, string kind, string view, SearchMethod method,
         JsonObject? scope, IReadOnlyList<int>? rootIds, int? originId = null,
         bool literalOnly = false, double? groupThreshold = null, string resultGroup = "all", IReadOnlyList<long>? shelfIds = null,
-        bool directAudioSimilarity = false, bool directVideoSimilarity = false, bool directVideoAudioSimilarity = false)
+        bool directAudioSimilarity = false, bool directVideoSimilarity = false, bool directVideoAudioSimilarity = false,
+        string? tag = null)
     {
         if((directAudioSimilarity?1:0)+(directVideoSimilarity?1:0)+(directVideoAudioSimilarity?1:0)>1)throw new ArgumentException("Select one direct similarity mode");
+        JsonObject Finish(JsonObject conditions) => RestrictTag(ShelfProtocol.Restrict(conditions, shelfIds), tag)!;
         JsonObject result;
         if (originId is int origin)
         {
@@ -24,12 +47,12 @@ public static class ResultSearchConditions
                     var values=new JsonArray();foreach(var id in audioRoots)values.Add((JsonNode?)JsonValue.Create(id));
                     result["root_ids"]=values;
                 }
-                return ShelfProtocol.Restrict(result,shelfIds);
+                return Finish(result);
             }
             if (scope is null) throw new ArgumentException("AI scope is required", nameof(scope));
             result = SimilaritySearch.RequestMulti(origin, kind, view, 0, scope, rootIds);
             result.Remove("page"); result["mode"] = "similar";
-            return ShelfProtocol.Restrict(result,shelfIds);
+            return Finish(result);
         }
         if (view == "history")
         {
@@ -55,7 +78,7 @@ public static class ResultSearchConditions
             result = AIScopeRequests.Search(query, kind, view, 0, method.Source,
                 FolderSearch.RestrictAIMulti(scope, rootIds), literalOnly, groupThreshold, resultGroup);
             result.Remove("page"); result["mode"] = "semantic";
-            return ShelfProtocol.Restrict(result,shelfIds);
+            return Finish(result);
         }
         else result = new JsonObject { ["mode"] = "literal", ["query"] = query, ["kind"] = kind, ["view"] = view };
         var roots = FolderSearch.NormalizeNonEmpty(rootIds);
@@ -64,6 +87,6 @@ public static class ResultSearchConditions
             var values = new JsonArray(); foreach (var id in roots) values.Add((JsonNode?)JsonValue.Create(id));
             result["root_ids"] = values;
         }
-        return ShelfProtocol.Restrict(result,shelfIds);
+        return Finish(result);
     }
 }

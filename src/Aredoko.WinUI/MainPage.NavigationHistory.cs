@@ -28,9 +28,9 @@ public sealed partial class MainPage
             var index=rows.FindIndex(row=>row.Id==anchorId);
             if(index>=0)targetPage=(browseStart+index)/resultPageSize;
         }
-        var search=new SearchBookmark(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,targetPage,selected,selectedShelfIds?.ToArray());
+        var search=new SearchBookmark(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,targetPage,selected,selectedShelfIds?.ToArray(),selectedTagScope);
         var identity=new JsonObject{["screen"]=screen,["query"]=search.Query,["kind"]=search.Kind,["mode"]=search.Mode,
-            ["roots"]=search.Roots is null?null:string.Join(",",search.Roots),["shelves"]=search.Shelves is null?null:string.Join(",",search.Shelves),
+            ["roots"]=search.Roots is null?null:string.Join(",",search.Roots),["shelves"]=search.Shelves is null?null:string.Join(",",search.Shelves),["tag"]=search.Tag,
             ["literal"]=search.LiteralOnly,["boundary"]=search.Boundary,["group"]=search.Group,["view"]=search.View,["page"]=search.Page,["origin"]=similarityOrigin?.Id,["audio_similarity"]=directAudioSimilarity,["video_similarity"]=directVideoSimilarity,["video_audio_similarity"]=directVideoAudioSimilarity};
         var origin=similarityOrigin is {} item?new MediaRow{Id=item.Id,Title=item.Title,Kind=item.Kind}:null;
         return new(identity.ToJsonString(),screen,search,origin,similarityReturn,Details.IsPaneOpen,anchor,FolderFilterBox.Text,FolderStateFilter.SelectedIndex,checkedFolderIds.ToArray(),directAudioSimilarity,directVideoSimilarity,directVideoAudioSimilarity);
@@ -88,7 +88,7 @@ public sealed partial class MainPage
                     try
                     {
                         Query.Text=bookmark.Query;Kind.SelectedIndex=bookmark.Kind;SearchMode.SelectedIndex=bookmark.Mode;
-                        RestoreSearchRoots(bookmark.Roots);SetShelfScope(bookmark.Shelves);AIMatchedOnly.IsChecked=bookmark.LiteralOnly;
+                        RestoreSearchRoots(bookmark.Roots);SetShelfScope(bookmark.Shelves);SetTagScope(bookmark.Tag);AIMatchedOnly.IsChecked=bookmark.LiteralOnly;
                         SimilarityBoundary.Value=bookmark.Boundary??double.NaN;AIResultGroup.SelectedIndex=bookmark.Group;
                         view=bookmark.View;page=bookmark.Page;similarityOrigin=target.Origin;directAudioSimilarity=target.DirectAudio;directVideoSimilarity=target.DirectVideo;directVideoAudioSimilarity=target.DirectVideoAudio;similarityReturn=target.SimilarityReturn;UpdateSearchMethod();RestoreNavigation();
                     }

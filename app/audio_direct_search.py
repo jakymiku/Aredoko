@@ -33,7 +33,7 @@ class AudioDirectSearch:
     def search(self,query,*,page=0,limit=60,result_sink=None,cancelled=None,**conditions):
         if not isinstance(query,str) or not 1<=len(query.strip())<=4096:raise ValueError('Invalid audio query')
         if type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:raise ValueError('Invalid audio paging')
-        if set(conditions)-{'view','root_id','root_ids','shelf','shelf_ids'}:raise ValueError('Unsupported audio search conditions')
+        if set(conditions)-{'view','root_id','root_ids','shelf','shelf_ids','tag'}:raise ValueError('Unsupported audio search conditions')
         if result_sink is not None and (not callable(result_sink) or page!=0):raise ValueError('Result sink requires page zero')
         if cancelled is not None and not callable(cancelled):raise ValueError('Invalid cancellation callback')
         index=self.index;catalog=index.catalog;generation=catalog.result_generation()

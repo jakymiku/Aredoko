@@ -14,7 +14,7 @@ import time
 from ai_process import AIUnavailable
 from ai_search import AIBusy
 from library_index import TYPES, _excluded
-from media_filters import QUERY_KINDS,kind_clause
+from media_filters import QUERY_KINDS,kind_clause,tag_clause
 from page_index import identifier, token
 from previews import ReaderChanged
 from search_terms import normalize_document, split_terms
@@ -208,7 +208,7 @@ class PageTextIndex:
                     'source_state': self.pages.state(item_id, head['source_revision']),
                     'total': total, 'offset': offset, 'limit': limit, 'pages': pages}
 
-    def search(self, query, *, kind='', view='all', page=0, root_ids=None, shelf=None, model=None, shelf_ids=None):
+    def search(self, query, *, kind='', view='all', page=0, root_ids=None, shelf=None, model=None, shelf_ids=None, tag=None):
         if type(query) is not str or not 1 <= len(query) <= 300:
             raise ValueError('Invalid text query')
         terms = split_terms(query)
@@ -227,6 +227,7 @@ class PageTextIndex:
             raise ValueError('Invalid shelf')
         if model is not None and (type(model) is not str or not 1 <= len(model) <= 256):
             raise ValueError('Invalid model')
+        tag_where, tag_values = tag_clause(tag)
         with self.catalog._guard:
             with self.catalog.connect() as db:
                 # Apply current root rules even before the next scan. Historical
@@ -249,6 +250,7 @@ class PageTextIndex:
                 where.extend({'all': [], 'favorites': ['i.favorite=1'], 'unreviewed': ['i.reviewed=0'], 'shelf': ["i.shelf<>''"]}[view])
                 shelf_where,shelf_values=shelf_clause(shelf,shelf_ids)
                 where.extend(shelf_where);values.extend(shelf_values)
+                where.extend(tag_where);values.extend(tag_values)
                 if model is not None:
                     where.append("json_extract(t.producer_json,'$.model')=?"); values.append(model)
                 for term in terms:

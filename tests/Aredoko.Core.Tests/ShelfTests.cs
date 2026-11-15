@@ -51,6 +51,19 @@ internal static class ShelfTests
         check(ShelfProtocol.SummarizeNames(new[]{"A","B","C"})=="A、B、C","up to three shelf names stay expanded");
         check(ShelfProtocol.SummarizeNames(new[]{"A","B","C","D","E"})=="A、B、C ほか2棚","more than three shelf names summarize extra count");
         check(ShelfProtocol.SummarizeNames(new[]{"A","B","C","D","E"}, maxVisible: 0)=="A、B、C、D、E","maxVisible 0 renders full shelf list");
+
+        var taggedLiteral=ResultSearchConditions.Create("海","image","all",SearchMethod.FromIndex(0),scope,new[]{1},tag:" 背景 ")!;
+        check(taggedLiteral["tag"]!.GetValue<string>()=="背景","literal conditions carry trimmed exact tag filter");
+        var taggedAI=ResultSearchConditions.Create("海","image","all",SearchMethod.FromIndex(1),scope,new[]{1},shelfIds:new long[]{sid},tag:"blue sky")!;
+        check(taggedAI["scope"]!["tag"]!.GetValue<string>()=="blue sky","AI conditions place exact tag inside cloned scope without mutating saved scope");
+        check(!scope.ContainsKey("tag"),"tag filter leaves saved AI scope untouched");
+        var taggedSimilar=ResultSearchConditions.Create("","","all",SearchMethod.FromIndex(0),scope,null,originId:1,shelfIds:new long[]{sid},tag:"背景")!;
+        check(taggedSimilar["scope"]!["tag"]!.GetValue<string>()=="背景","similar conditions retain exact tag inside scope");
+        check(FolderSearch.LiteralRouteMulti("海","image","all",0,new[]{1},"背景").Contains("&tag=%E8%83%8C%E6%99%AF"),"literal route encodes exact tag parameter");
+        var badTag=false;try{ResultSearchConditions.NormalizeTag("   ");}catch(ArgumentException){badTag=true;}
+        check(badTag,"blank tag filter rejected");
+        badTag=false;try{ResultSearchConditions.NormalizeTag(new string('a',61));}catch(ArgumentException){badTag=true;}
+        check(badTag,"oversized tag filter rejected");
     }
     private static HttpResponseMessage Reply(string json)=>new(HttpStatusCode.OK){Content=new StringContent(json,Encoding.UTF8,"application/json")};
     private sealed class Stub(Func<HttpRequestMessage,Task<HttpResponseMessage>> send):HttpMessageHandler

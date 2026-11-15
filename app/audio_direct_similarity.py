@@ -26,7 +26,7 @@ def validate_similarity_request(item_id,*,page=0,limit=60,result_sink=None,cance
     """Validate a cached PCM request without creating an index or workspace."""
     if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid audio origin')
     if type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:raise ValueError('Invalid audio paging')
-    if set(conditions)-{'view','root_id','root_ids','shelf','shelf_ids'}:raise ValueError('Invalid audio scope')
+    if set(conditions)-{'view','root_id','root_ids','shelf','shelf_ids','tag'}:raise ValueError('Invalid audio scope')
     if result_sink is not None and (not callable(result_sink) or page):raise ValueError('Result sink requires page zero')
     if cancelled is not None and not callable(cancelled):raise ValueError('Invalid cancellation')
     return conditions

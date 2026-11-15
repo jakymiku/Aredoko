@@ -29,12 +29,16 @@ public sealed partial class MainPage
         TextBox? newShelfBox=null;
         Button? createShelfButton=null;
         TextBlock? createError=null;
+        TextBlock? createNote=null;
+        const string createStayNote="※「作成して選択」で作成した棚は即座に保存され、「キャンセル」しても棚一覧に残ります（作品への選択のみ取り消されます）。";
         if(allowCreate)
         {
             newShelfBox=new TextBox{PlaceholderText="新しい棚を作成",MaxLength=80,MinWidth=0,HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(newShelfBox,prefix+"NewName");AutomationProperties.SetName(newShelfBox,"新しい棚の名前");
             createShelfButton=new Button{Content="作成して選択",IsEnabled=false,VerticalAlignment=VerticalAlignment.Center};
             AutomationProperties.SetAutomationId(createShelfButton,prefix+"CreateNew");AutomationProperties.SetName(createShelfButton,"新しい棚を作成して選択");
+            createNote=new TextBlock{Text=createStayNote,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            AutomationProperties.SetAutomationId(createNote,prefix+"CreateNote");
             createError=new TextBlock{Visibility=Visibility.Collapsed,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             AutomationProperties.SetAutomationId(createError,prefix+"CreateError");
             var createRow=new Grid{ColumnSpacing=8};
@@ -42,7 +46,7 @@ public sealed partial class MainPage
             createRow.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
             Grid.SetColumn(newShelfBox,0);Grid.SetColumn(createShelfButton,1);
             createRow.Children.Add(newShelfBox);createRow.Children.Add(createShelfButton);
-            panel.Children.Add(createRow);panel.Children.Add(createError);
+            panel.Children.Add(createRow);panel.Children.Add(createNote);panel.Children.Add(createError);
         }
         panel.Children.Add(filter);panel.Children.Add(count);panel.Children.Add(list);
         dialogOpen=true;
@@ -88,6 +92,7 @@ public sealed partial class MainPage
                     await RefreshShelfDescriptorsAsync();
                     SyncOptions(new ShelfDescriptor(createdId,name,0));
                     selected.Add(createdId);resultsNeedRefresh=true;
+                    if(createNote is not null)createNote.Text=$"棚「{name}」を作成しました。作成した棚は「キャンセル」しても残ります（作品への選択のみ取り消されます）。";
                     newShelfBox.Text="";filter.Text="";
                     Rebuild();
                 }

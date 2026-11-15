@@ -173,7 +173,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         def require(allowed):
             if set(values) - set(allowed):raise ValueError('Invalid result conditions')
         if mode in ('literal','history'):
-            require(('query','kind','view','root_ids','shelf','shelf_ids'))
+            require(('query','kind','view','root_ids','shelf','shelf_ids','tag'))
             if mode=='history':
                 if values.get('view','history')!='history':raise ValueError('Invalid history filter')
                 values['view']='history'
@@ -185,25 +185,25 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             require(('item_id','kind','view','scope'))
             return ai.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='video-similar':
-            require(('item_id','view','root_ids','shelf','shelf_ids'))
+            require(('item_id','view','root_ids','shelf','shelf_ids','tag'))
             return video.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='video-direct':
-            require(('query','view','root_ids','shelf','shelf_ids'))
+            require(('query','view','root_ids','shelf','shelf_ids','tag'))
             return video.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='audio-direct':
-            require(('query','view','root_ids','shelf','shelf_ids'))
+            require(('query','view','root_ids','shelf','shelf_ids','tag'))
             return audio.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='video-audio-direct':
-            require(('query','view','root_ids','shelf','shelf_ids'))
+            require(('query','view','root_ids','shelf','shelf_ids','tag'))
             return audio.search_video_audio(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='audio-similar':
-            require(('item_id','view','root_ids','shelf','shelf_ids'))
+            require(('item_id','view','root_ids','shelf','shelf_ids','tag'))
             return audio.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='video-audio-similar':
-            require(('item_id','view','root_ids','shelf','shelf_ids'))
+            require(('item_id','view','root_ids','shelf','shelf_ids','tag'))
             return audio.similar_video_audio(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode in ('page-text','pending-proposals','pending-proposals-semantic'):
-            require(('query','kind','view','root_ids','shelf','shelf_ids','model'))
+            require(('query','kind','view','root_ids','shelf','shelf_ids','model','tag'))
             if mode=='page-text':return consume(lambda page:page_text.search(page=page,**values))
             if mode=='pending-proposals':return consume(lambda page:search_candidates(suggestions,page=page,**values))
             return semantic_candidates(suggestions,ai,page=0,**values,cancelled=cancelled,result_sink=consume)
@@ -327,7 +327,8 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         if len(parts)>64 or any(not part.isascii() or not part.isdigit() or len(part)>19 for part in parts):raise ValueError('Invalid shelf selection')
                         shelf_ids=[int(part) for part in parts]
                     if 'shelf' in args and len(args['shelf'])!=1:raise ValueError('Invalid shelf selection')
-                    return self.send(200,catalog.search(param('q'),param('kind'),param('view','all'),int(page),root_id=root,root_ids=roots,shelf=param('shelf',None),shelf_ids=shelf_ids))
+                    if 'tag' in args and len(args['tag'])!=1:raise ValueError('Invalid tag filter')
+                    return self.send(200,catalog.search(param('q'),param('kind'),param('view','all'),int(page),root_id=root,root_ids=roots,shelf=param('shelf',None),shelf_ids=shelf_ids,tag=param('tag',None)))
                 except ValueError as ex:return self.send(400,{'error':str(ex)})
             if path=='/api/session':
                 session={'mode':'production','token':token,'stats':catalog.stats()}

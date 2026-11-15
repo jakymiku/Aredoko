@@ -13,12 +13,17 @@ public static class FolderSearch
             +(rootId is int id ? "&root_id="+id.ToString(CultureInfo.InvariantCulture) : "");
     }
 
-    public static string LiteralRouteMulti(string query,string kind,string view,int page,IReadOnlyList<int>? rootIds)
+    public static string LiteralRouteMulti(string query,string kind,string view,int page,IReadOnlyList<int>? rootIds,string? tag=null)
     {
+        var route=BaseRoute(query,kind,view,page);
         var normalized=NormalizeNonEmpty(rootIds);
-        if(normalized is null)return BaseRoute(query,kind,view,page);
-        if(normalized.Length==1)return BaseRoute(query,kind,view,page)+"&root_id="+normalized[0].ToString(CultureInfo.InvariantCulture);
-        return BaseRoute(query,kind,view,page)+"&root_ids="+string.Join(",",normalized.Select(id=>id.ToString(CultureInfo.InvariantCulture)));
+        if(normalized is not null)
+            route+=normalized.Length==1
+                ?"&root_id="+normalized[0].ToString(CultureInfo.InvariantCulture)
+                :"&root_ids="+string.Join(",",normalized.Select(id=>id.ToString(CultureInfo.InvariantCulture)));
+        if(ResultSearchConditions.NormalizeTag(tag) is {} exactTag)
+            route+="&tag="+Uri.EscapeDataString(exactTag);
+        return route;
     }
 
     // The result is owned by this request. Selected roots intersect saved

@@ -83,14 +83,14 @@ class PendingTagVectors:
         return True,True
 
 
-def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=None,shelf=None,model=None,*,shelf_ids=None,cancelled=None,result_sink=None):
+def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=None,shelf=None,model=None,*,shelf_ids=None,tag=None,cancelled=None,result_sink=None):
     from ai_search import AIBusy,MAX_ITEMS,revision
     from tag_candidate_search import validate_candidate_search
     from tag_suggestions import SuggestionConflict
-    validate_candidate_search(query,kind,view,page,root_ids,shelf,model,shelf_ids)
+    validate_candidate_search(query,kind,view,page,root_ids,shelf,model,shelf_ids,tag)
     if not query.strip():raise ValueError('Enter a semantic tag query')
     if not hasattr(ai,'pending_tags') or not ai.encoder.available:raise AIUnavailable('タグ候補の意味検索にはAIモデルと索引が必要です。')
-    scope=ai._scope({'root_ids':root_ids,'kind':kind,'shelf':shelf,**({'shelf_ids':shelf_ids} if shelf_ids is not None else {})})
+    scope=ai._scope({'root_ids':root_ids,'kind':kind,'shelf':shelf,**({'shelf_ids':shelf_ids} if shelf_ids is not None else {}),**({'tag':tag} if tag is not None else {})})
     if not ai.inference.acquire(blocking=False):raise AIBusy('AI処理中です。完了後に検索してください。')
     try:
         with ai._search_workspace(scope,cancelled) as (spool,check):

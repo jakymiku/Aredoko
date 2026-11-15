@@ -2,13 +2,13 @@
 import json
 from shelves import shelf_clause
 from library_index import TYPES
-from media_filters import QUERY_KINDS,kind_clause
+from media_filters import QUERY_KINDS,kind_clause,tag_clause
 from search_terms import normalize, split_terms
 from tag_suggestions import SuggestionConflict
 from ai_search import AIBusy
 
 
-def validate_candidate_search(query='', kind='', view='all', page=0, root_ids=None, shelf=None, model=None, shelf_ids=None):
+def validate_candidate_search(query='', kind='', view='all', page=0, root_ids=None, shelf=None, model=None, shelf_ids=None, tag=None):
     if not isinstance(query,str) or len(query)>300 or kind not in ('',*QUERY_KINDS) or view not in ('all','favorites','unreviewed','shelf'):
         raise ValueError('Invalid candidate search')
     if type(page) is not int or not 0<=page<=1000000:raise ValueError('Invalid page')
@@ -20,12 +20,13 @@ def validate_candidate_search(query='', kind='', view='all', page=0, root_ids=No
             raise ValueError('Invalid roots')
         root_ids=sorted(root_ids)
     shelf_clause(shelf,shelf_ids)
+    tag_clause(tag)
     terms=split_terms(query)
     return terms
 
 
-def search_candidates(service, query='', kind='', view='all', page=0, root_ids=None, shelf=None, model=None, shelf_ids=None):
-    terms=validate_candidate_search(query,kind,view,page,root_ids,shelf,model,shelf_ids)
+def search_candidates(service, query='', kind='', view='all', page=0, root_ids=None, shelf=None, model=None, shelf_ids=None, tag=None):
+    terms=validate_candidate_search(query,kind,view,page,root_ids,shelf,model,shelf_ids,tag)
     catalog=service.catalog
     # Snapshot the DB scope and bounded page source checks against root edits.
     # No model is called; only these <=60 sources are checked for freshness.
@@ -45,6 +46,8 @@ def search_candidates(service, query='', kind='', view='all', page=0, root_ids=N
             where.extend({'all':[],'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],'shelf':["i.shelf<>''"]}[view])
             shelf_where,shelf_values=shelf_clause(shelf,shelf_ids)
             where.extend(shelf_where);values.extend(shelf_values)
+            tag_where,tag_values=tag_clause(tag)
+            where.extend(tag_where);values.extend(tag_values)
             if model is not None:where.append("json_extract(b.producer_json,'$.model')=?");values.append(model)
             for term in terms:
                 where.append("EXISTS(SELECT 1 FROM tag_proposals p WHERE p.batch_id=b.id AND p.state='pending' AND instr(candidate_normalize(p.tag),?)>0)")

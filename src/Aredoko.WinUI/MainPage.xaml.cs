@@ -62,6 +62,7 @@ public sealed partial class MainPage : Page
     private JsonObject? aiScope;
     private string aiScopeError="AI索引の画面で対象を確認・保存してください。";
     private string view="all", lastQuery="";
+    private string? selectedTagScope;
     private MediaRow? similarityOrigin;
     private bool directAudioSimilarity;
     private bool directVideoSimilarity;
@@ -71,7 +72,7 @@ public sealed partial class MainPage : Page
     private CancellationToken? explicitlyCancelledSearch;
     private bool returningFromSimilarity;
     private SearchBookmark? similarityReturn;
-    private sealed record SearchBookmark(string Query,int Kind,int Mode,int[]? Roots,bool LiteralOnly,double? Boundary,int Group,string View,int Page,int Selection,long[]? Shelves);
+    private sealed record SearchBookmark(string Query,int Kind,int Mode,int[]? Roots,bool LiteralOnly,double? Boundary,int Group,string View,int Page,int Selection,long[]? Shelves,string? Tag=null);
 
     public MainPage() {
         InitializeComponent();
@@ -444,7 +445,7 @@ public sealed partial class MainPage : Page
             if((origin is not null&&!DirectContentSimilarity||origin is null&&method.IsAI&&!method.IsDirectContent&&!string.IsNullOrWhiteSpace(query))&&aiScope is null)throw new InvalidOperationException(aiScopeError);
             var pageSize=method.IsPageText?20:60;
             var conditions=ResultSearchConditions.Create(query,kind,view,method,aiScope,selectedRoots,
-                origin?.Id,literalOnly,boundary,ResultGroup(),selectedShelfIds,directAudioSimilarity,directVideoSimilarity,directVideoAudioSimilarity);
+                origin?.Id,literalOnly,boundary,ResultGroup(),selectedShelfIds,directAudioSimilarity,directVideoSimilarity,directVideoAudioSimilarity,selectedTagScope);
             var result=await ReadResultPageAsync(conditions,reuseSession,version,page,pageSize,cancellation);
             if(!searches.IsCurrent(version)||disposed)return;
             resultPageSize=pageSize;
@@ -508,7 +509,7 @@ public sealed partial class MainPage : Page
                 var guidance=SimilaritySearch.Guidance(result.SimilarityStatus,origin.Kind,directAudioSimilarity,directVideoSimilarity,directVideoAudioSimilarity);
                 Empty.Text=result.SimilarityStatus=="ready"
                     ?(result.SearchCandidateTotal is int cand&&cand>0&&result.IndexedTotal==0?$"この範囲の作品はまだAI索引が作成されていません（対象 {cand:N0}件・未索引）。設定の「AI検索の準備」から索引を作成してください。"
-                    :result.SearchCandidateTotal==0?"この範囲（フォルダ・種類）に対象作品がありません。"
+                    :result.SearchCandidateTotal==0?"この範囲（フォルダ・種類・タグ）に対象作品がありません。"
                     :"この範囲に索引済みの類似候補はありません。種類・フォルダ・AI対象を確認してください。")
                     :guidance;
                 var originTitle=origin.Kind=="video"?(directVideoAudioSimilarity?"音が似た動画":directVideoSimilarity?"内容が似た動画":"似た動画・素材"):origin.Kind=="audio"?"似た音声・曲":"似た画像・表紙";
@@ -594,6 +595,7 @@ public sealed partial class MainPage : Page
     }
     private string EmptyScopeGuidance()
     {
+        if(selectedTagScope is not null)return $"タグ「{selectedTagScope}」に一致する作品はありません。タグの解除や条件の変更をお試しください。";
         if(Kind.SelectedIndex>0)return "現在の検索範囲・種類に一致する作品はありません。条件を変更してください。";
         if(selectedShelfIds is not null)return "この棚には作品がありません。作品の詳細で所属する棚を選択できます。";
         if(selectedSearchRoots is not null)return "選択したフォルダに表示できる作品がありません。スキャンや接続状態を確認するか、検索範囲を解除してください。";
@@ -876,20 +878,20 @@ public sealed partial class MainPage : Page
             if(itemTags.Length==1)
             {
                 var tag=itemTags[0];
-                var searchTagAction=new MenuFlyoutItem{Text=$"タグ「{tag}」で検索"};
+                var searchTagAction=new MenuFlyoutItem{Text=$"タグ「{tag}」で絞り込む"};
                 AutomationProperties.SetAutomationId(searchTagAction,$"FilterByItemTag{row.Id}_0");
                 searchTagAction.Click+=async(_,_)=>await FilterByTagAsync(tag);
                 menu.Items.Add(searchTagAction);
             }
             else
             {
-                var tagMenu=new MenuFlyoutSubItem{Text=$"タグで検索（{itemTags.Length:N0} 件）"};
+                var tagMenu=new MenuFlyoutSubItem{Text=$"タグで絞り込む（{itemTags.Length:N0} 件）"};
                 AutomationProperties.SetAutomationId(tagMenu,$"FilterByItemTags{row.Id}");
-                ToolTipService.SetToolTip(tagMenu,string.Join("、",itemTags.Take(20)));
-                for(var i=0;i<Math.Min(itemTags.Length,20);i++)
+                ToolTipService.SetToolTip(tagMenu,string.Join("、",itemTags));
+                for(var i=0;i<itemTags.Length;i++)
                 {
                     var tag=itemTags[i];
-                    var tagItem=new MenuFlyoutItem{Text=$"「{tag}」で検索"};
+                    var tagItem=new MenuFlyoutItem{Text=$"「{tag}」で絞り込む"};
                     AutomationProperties.SetAutomationId(tagItem,$"FilterByItemTag{row.Id}_{i}");
                     tagItem.Click+=async(_,_)=>await FilterByTagAsync(tag);
                     tagMenu.Items.Add(tagItem);
@@ -965,7 +967,7 @@ public sealed partial class MainPage : Page
         {
             if(!await ConfirmDiscardAsync())return;
             // Use the context-menu row, never whichever item happens to be selected.
-            similarityReturn??=new(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,page,source.Id,selectedShelfIds?.ToArray());
+            similarityReturn??=new(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,page,source.Id,selectedShelfIds?.ToArray(),selectedTagScope);
             similarityOrigin=source;directAudioSimilarity=directAudio&&source.Kind=="audio";directVideoSimilarity=directVideo&&source.Kind=="video";directVideoAudioSimilarity=directVideoAudio&&source.Kind=="video";
             if(DirectContentSimilarity){populating=true;try{Kind.SelectedIndex=directVideoSimilarity||directVideoAudioSimilarity?3:4;SearchMode.SelectedIndex=directVideoAudioSimilarity?9:directVideoSimilarity?8:7;}finally{populating=false;}}
             if(view=="history")view="all";page=0;UpdateSearchMethod();await LoadAsync();
@@ -988,7 +990,7 @@ public sealed partial class MainPage : Page
             Query.Text=bookmark.Query;Kind.SelectedIndex=bookmark.Kind;SearchMode.SelectedIndex=bookmark.Mode;
             RestoreSearchRoots(bookmark.Roots);AIMatchedOnly.IsChecked=bookmark.LiteralOnly;
             SimilarityBoundary.Value=bookmark.Boundary??double.NaN;AIResultGroup.SelectedIndex=bookmark.Group;
-            SetShelfScope(bookmark.Shelves);view=bookmark.View;page=bookmark.Page;ClearSimilarity();RestoreNavigation();populating=false;
+            SetShelfScope(bookmark.Shelves);SetTagScope(bookmark.Tag);view=bookmark.View;page=bookmark.Page;ClearSimilarity();RestoreNavigation();populating=false;
             await LoadAsync();
             await FocusRowAsync(bookmark.Selection);
         }
@@ -1210,15 +1212,15 @@ public sealed partial class MainPage : Page
         var hasActiveTags=activeTags.Length>0;
         FilterByActiveTagButton.Visibility=hasActiveTags?Visibility.Visible:Visibility.Collapsed;
         FilterByActiveTagButton.IsEnabled=hasActiveTags&&!saving&&tagReviewSyncItem!=active?.Id;
-        FilterByActiveTagButton.Content=activeTags.Length==1?$"タグ「{activeTags[0]}」で検索…":$"この作品のタグで検索（{activeTags.Length:N0} 件）…";
-        ToolTipService.SetToolTip(FilterByActiveTagButton,hasActiveTags?$"登録済みのタグを選んで一覧を検索します（{string.Join("、",activeTags.Take(10))}）":"登録済みのタグを選んで一覧を検索します");
+        FilterByActiveTagButton.Content=activeTags.Length==1?$"タグ「{activeTags[0]}」で絞り込み…":$"この作品のタグで絞り込み（{activeTags.Length:N0} 件）…";
+        ToolTipService.SetToolTip(FilterByActiveTagButton,hasActiveTags?$"登録済みの確定タグを選んで一覧を絞り込みます（{string.Join("、",activeTags)}）":"登録済みの確定タグを選んで一覧を絞り込みます");
         if(hasActiveTags)
         {
             var tagFlyout=new MenuFlyout();
-            for(var i=0;i<Math.Min(activeTags.Length,20);i++)
+            for(var i=0;i<activeTags.Length;i++)
             {
                 var tag=activeTags[i];
-                var tagItem=new MenuFlyoutItem{Text=$"「{tag}」で検索"};
+                var tagItem=new MenuFlyoutItem{Text=$"「{tag}」で絞り込む"};
                 AutomationProperties.SetAutomationId(tagItem,$"FilterByActiveTag{i}");
                 tagItem.Click+=async(_,_)=>await FilterByTagAsync(tag);
                 tagFlyout.Items.Add(tagItem);
@@ -1379,6 +1381,33 @@ public sealed partial class MainPage : Page
     {
         if(active is not null&&DetailFindSimilarButton.Flyout is null)await StartSimilarityAsync(active);
     }
+    private void SetTagScope(string? tag)
+    {
+        selectedTagScope=ResultSearchConditions.NormalizeTag(tag);
+        UpdateTagScopeLabel();
+        UpdateClearSearchConditionsVisibility();
+    }
+    private void UpdateTagScopeLabel()
+    {
+        if(TagScopeBar is null||TagScopeText is null)return;
+        TagScopeBar.Visibility=selectedTagScope is null?Visibility.Collapsed:Visibility.Visible;
+        TagScopeText.Text=selectedTagScope is null?"":$"タグ：{selectedTagScope}";
+        ToolTipService.SetToolTip(TagScopeText,selectedTagScope is null?"":$"確定タグで絞り込み中：{selectedTagScope}");
+    }
+    private async void ClearTagScope_Click(object sender,RoutedEventArgs e)
+    {
+        if(!ready||disposed||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        searchTimer.Stop();
+        try
+        {
+            if(!await ConfirmDiscardAsync())return;
+            SetTagScope(null);
+            page=0;
+            RestoreNavigation();
+            await LoadAsync();
+        }
+        finally{transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
+    }
     private async Task FilterByTagAsync(string tag)
     {
         if(!ready||disposed||saving||dialogOpen||string.IsNullOrWhiteSpace(tag)||!await transitions.WaitAsync(0))return;
@@ -1394,8 +1423,9 @@ public sealed partial class MainPage : Page
                 CloseShelfHubCore();
                 CloseFolderHubCore();
                 if(view=="history"||view=="unreviewed")view="all";
-                Query.Text=tag;
+                Query.Text="";
                 SearchMode.SelectedIndex=0;
+                SetTagScope(tag);
                 ClearSimilarity();
                 UpdateSearchMethod();
                 RestoreNavigation();
@@ -1423,6 +1453,7 @@ public sealed partial class MainPage : Page
         ||(SearchMode?.SelectedIndex??0)>0
         ||similarityOrigin is not null
         ||selectedShelfIds is not null
+        ||selectedTagScope is not null
         ||selectedSearchRoots is not null
         ||AIMatchedOnly?.IsChecked==true
         ||UnreviewedOnly?.IsChecked==true
@@ -1460,6 +1491,7 @@ public sealed partial class MainPage : Page
                 SimilarityBoundary.Value=double.NaN;
                 AIResultGroup.SelectedIndex=0;
                 SetShelfScope(null);
+                SetTagScope(null);
                 RestoreSearchRoots(null);
                 ClearSimilarity();
                 UpdateSearchMethod();

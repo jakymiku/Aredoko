@@ -1,13 +1,13 @@
 """Explicit registered-library scope; no paths, SQL, or model-space changes."""
 from library_index import TYPES
-from media_filters import QUERY_KINDS,kind_clause
+from media_filters import QUERY_KINDS,kind_clause,normalize_tag_filter,tag_clause
 from shelves import shelf_clause
 
 MAX_ROOTS = 256
 
 
 def validate_scope(value):
-    if not isinstance(value, dict) or set(value) - {'root_ids', 'kind', 'shelf', 'shelf_ids', 'shelf_filter_ids'}:
+    if not isinstance(value, dict) or set(value) - {'root_ids', 'kind', 'shelf', 'shelf_ids', 'shelf_filter_ids', 'tag'}:
         raise ValueError('Invalid AI scope')
     roots = value.get('root_ids')
     if roots is not None:
@@ -27,6 +27,7 @@ def validate_scope(value):
     result={'root_ids': roots, 'kind': kind, 'shelf': shelf}
     if 'shelf_ids' in value:result['shelf_ids']=None if value['shelf_ids'] is None else sorted(value['shelf_ids'])
     if 'shelf_filter_ids' in value:result['shelf_filter_ids']=None if value['shelf_filter_ids'] is None else sorted(value['shelf_filter_ids'])
+    if 'tag' in value:result['tag']=normalize_tag_filter(value['tag'])
     return result
 
 
@@ -48,5 +49,7 @@ def scope_clause(scope):
     where.extend(clauses);values.extend(parameters)
     # UI shelf browsing narrows, rather than overwrites, the saved AI shelf.
     clauses,parameters=shelf_clause(shelf_ids=scope.get('shelf_filter_ids'))
+    where.extend(clauses);values.extend(parameters)
+    clauses,parameters=tag_clause(scope.get('tag'))
     where.extend(clauses);values.extend(parameters)
     return where, values
