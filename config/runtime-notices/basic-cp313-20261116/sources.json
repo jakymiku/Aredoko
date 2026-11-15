@@ -1,0 +1,29 @@
+{
+  "format": "aredoko-basic-runtime-notices-v1",
+  "date": "2026-11-16",
+  "managed_python_id": "cpython-3.13.17-pillow-12.3.0-win-x64-v1",
+  "redistribution_approved": false,
+  "note": "Basic runtime packages are downloaded on-demand after user consent via PythonSetup.exe / prepare_basic_runtime.py and not bundled in the Basic ZIP.",
+  "artifacts": [
+    {
+      "name": "python",
+      "version": "3.13.17",
+      "package": "python.3.13.17.nupkg",
+      "package_sha512": "0e667928bb4f19573c6cd88f65133b2e07b243a5c716f335b56aa66bb9ec6f82328256d22c3a29e23a0276ac5c6a6d786211feab524890ad1e56629196c6b29c",
+      "extracted_notice": "cpython-3.13.17-LICENSE.txt",
+      "notice_bytes": 33861,
+      "notice_sha256": "62bec384df47b0328307db41455ff6ea2559e5546b394ac69148561b21703120",
+      "license": "PSF-2.0 and bundled CPython Windows dependency notices"
+    },
+    {
+      "name": "pillow",
+      "version": "12.3.0",
+      "package": "pillow-12.3.0-cp313-cp313-win_amd64.whl",
+      "package_sha256": "1cca606cd25738df4ed873d5ad46bbdb3d83b5cbca291f6b4ff13a4df6b0bbe8",
+      "extracted_notice": "pillow-12.3.0-LICENSE.txt",
+      "notice_bytes": 78016,
+      "notice_sha256": "4f7866a74802c6326f81faff59a56546b6aec2b10b91973e0e9308de95e79857",
+      "license": "MIT-CMU (with embedded libjpeg, zlib-ng, libtiff, xz notices)"
+    }
+  ]
+}

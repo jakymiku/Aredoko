@@ -20,3 +20,8 @@ Windows製品フロントエンドは**ネイティブWinUI 3**、共通検索/�
 
 ## 安全と貢献
 原本は原則読み取り専用で、ユーザーの私物を無断走査・移動・削除しない。認証情報・個人データ・DB・モデルをコミットしない。CIは手動起動のみ・残枠が使えない間は実行しない。既存の開発ブランチと[Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5)を継続する。
+
+## ライセンスと配布形態
+- **Aredoko 本体**：[MIT License](LICENSE)（Copyright (c) 2026 JAKYMIKU）。
+- **同梱物・導入ランタイム・モデル**：FFmpeg/ffprobe（GPLv3）、.NET / Windows App SDK / WebView2 / WinML、基本 Python 3.13.17 / Pillow 12.3.0、任意 AI 環境（PyTorch / CUDA / Hugging Face 系 44 パッケージ）、および各モデルはそれぞれのライセンスに従います。詳細は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) と [config/desktop-notices/](config/desktop-notices/manifest.json) を参照してください。
+- **未署名配布**：配布 ZIP 内の実行ファイル・DLL（約 55 本の非 Microsoft 製 PE）は Authenticode コード署名を行わず**未署名**で配布します。Windows のスマート アプリ コントロールが強制（オン）になっている環境では、OS ポリシーにより未署名 EXE の起動がブロックされる場合があります。

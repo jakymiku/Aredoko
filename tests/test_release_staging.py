@@ -37,13 +37,18 @@ class ReleaseStagingTests(unittest.TestCase):
         for source in (ROOT / 'app').iterdir():
             if source.is_file() and source.suffix in ('.py', '.json'):
                 shutil.copy2(source, self.repo / 'app' / source.name)
-        for name in ('THIRD_PARTY_NOTICES.md', 'docs/user-guide.md',
+        for name in ('LICENSE', 'THIRD_PARTY_NOTICES.md', 'docs/user-guide.md',
                      'tools/start-aredoko.ps1', 'tools/native-arguments.ps1', 'tools/backup_library.py',
                      'tools/release_runtime.py', 'tools/launch_release.py', 'tools/probe_release_runtime.py', 'tools/startup_validation.py',
                      'tools/packaged_frontend.py', 'tools/startup_progress.py', 'tools/startup_ipc.py', 'tools/portable_frontend.py', 'tools/install-release-shortcut.ps1'):
             target = self.repo / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, target)
+        desktop_notices = self.repo / 'config/desktop-notices'
+        desktop_notices.mkdir(parents=True, exist_ok=True)
+        for source in (ROOT / 'config/desktop-notices').iterdir():
+            if source.is_file():
+                shutil.copy2(source, desktop_notices / source.name)
         for source in (ROOT / 'docs').glob('*.md'):
             shutil.copy2(source, self.repo / 'docs' / source.name)
         profile = self.repo / 'config/ai-profiles/fixture.json'
@@ -132,6 +137,10 @@ class ReleaseStagingTests(unittest.TestCase):
         self.assertFalse(result['ai_runtime_bundled'])
         self.assertFalse(result['clean_machine_activation_verified'])
         entries = {row['path']: row for row in result['entries']}
+        self.assertIn('LICENSE', entries)
+        self.assertIn('THIRD_PARTY_NOTICES.md', entries)
+        self.assertIn('THIRD_PARTY_LICENSES/NOTICE.txt', entries)
+        self.assertIn('THIRD_PARTY_LICENSES/manifest.json', entries)
         self.assertIn('backend/config/ai-profiles/fixture.json', entries)
         self.assertIn('native-arguments.ps1', entries)
         self.assertIn('tools/backup_library.py', entries)

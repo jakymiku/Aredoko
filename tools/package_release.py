@@ -66,12 +66,14 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             raise ValueError('Source revision must be a full 40-character hexadecimal commit')
         source_revision = source_revision.lower()
     required = [REPO / name for name in (
-        'app/production_server.py', 'app/storage_schema_v1.json', 'THIRD_PARTY_NOTICES.md',
+        'LICENSE', 'app/production_server.py', 'app/storage_schema_v1.json', 'THIRD_PARTY_NOTICES.md',
+        'config/desktop-notices/NOTICE.txt', 'config/desktop-notices/manifest.json',
         'docs/user-guide.md', 'tools/start-aredoko.ps1', 'tools/native-arguments.ps1',
         'tools/backup_library.py', 'tools/release_runtime.py', 'tools/launch_release.py',
         'tools/probe_release_runtime.py', 'tools/startup_validation.py', 'tools/startup_progress.py', 'tools/startup_ipc.py', 'tools/portable_frontend.py', 'tools/packaged_frontend.py', 'tools/install-release-shortcut.ps1')]
     for path in required:
         plain_path(path)
+    plain_path(REPO / 'config/desktop-notices', directory=True)
     binary = REPO / 'src/Aredoko.WinUI/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64'
     if include_ai_runtime and python_runtime is None:
         raise ValueError('--include-ai-runtime requires --python-runtime')
@@ -163,7 +165,9 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             configure_embedded_python(runtime_dir / 'python', stem)
         if media_tools is not None:
             copy_payload(media_tools, runtime_dir / 'media')
+    copy_payload(REPO / 'LICENSE', output_dir / 'LICENSE')
     copy_payload(REPO / 'THIRD_PARTY_NOTICES.md', output_dir / 'THIRD_PARTY_NOTICES.md')
+    copy_payload(REPO / 'config/desktop-notices', output_dir / 'THIRD_PARTY_LICENSES')
     docs_dir = output_dir / 'docs'; docs_dir.mkdir()
     for source in (REPO / 'docs').glob('*.md'):
         copy_payload(source, docs_dir / source.name)
@@ -178,14 +182,18 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             '# Aredoko を使い始める\n\n'
             'ZIPをすべて解凍し、Aredoko.exeを開いてください。バックエンドは一緒に起動します。\n\n'
             '初めての方は [はじめに.txt](はじめに.txt)、詳しい使い方は [利用ガイド](docs/user-guide.md) をご覧ください。\n\n'
-            '通常はCheck-Startup.cmdを使う必要はありません。起動できないときの診断用で、専用の空のライブラリを使います。\n', encoding='utf-8')
+            '通常はCheck-Startup.cmdを使う必要はありません。起動できないときの診断用で、専用の空のライブラリを使います。\n\n'
+            '本配布版は未署名（Authenticode 署名なし）です。Windows のスマート アプリ コントロールが有効な環境では起動が制限される場合があります。\n'
+            'ライセンス情報は [LICENSE](LICENSE)、[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、および `THIRD_PARTY_LICENSES/` をご覧ください。\n', encoding='utf-8')
         (output_dir / 'はじめに.txt').write_text(
             'Aredoko を使い始める\n'
             '===================\n\n'
             '1. ZIPをすべて解凍する\n'
             '   ZIPの中から直接起動せず、解凍したフォルダを開いてください。\n\n'
             '2. Aredoko.exeを開く\n'
-            '   起動中は進捗が表示されます。Pythonやバックエンドを別に起動する必要はありません。\n\n'
+            '   起動中は進捗が表示されます。Pythonやバックエンドを別に起動する必要はありません。\n'
+            '   ※ 本配布版は未署名（コード署名なし）です。Windows のスマート アプリ コントロールが\n'
+            '   　 強制（オン）になっている環境では、未署名実行ファイルとしてブロックされる場合があります。\n\n'
             '3. フォルダを追加して、アイテム一覧を読み込む\n'
             '   フォルダの登録後、一覧だけの読み込みか、AI索引の作成も行うかを選べます。\n'
             '   後から行う場合は「登録フォルダ」の設定から読み込めます。\n\n'
