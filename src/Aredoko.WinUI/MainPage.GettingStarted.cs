@@ -257,10 +257,10 @@ public sealed partial class MainPage
 
     private async void GettingStartedHelp_Click(object sender, RoutedEventArgs args) => await OpenGettingStartedGuideAsync();
 
-    private async Task OpenGettingStartedGuideAsync()
+    private async Task OpenGettingStartedGuideAsync(bool fromSettings=false)
     {
         if (!ready || disposed || dialogOpen || saving || !await transitions.WaitAsync(0)) return;
-        dialogOpen = true;bool setupRequested=false,folderRequested=false;
+        dialogOpen = true;bool setupRequested=false,folderRequested=false,returnToSettings=false;
         try
         {
             var panel = new StackPanel { Spacing = 16 };
@@ -284,6 +284,8 @@ public sealed partial class MainPage
             }
             var addFolder=new Button{Content="フォルダの登録へ",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(addFolder,"GuideAddFolder");panel.Children.Add(addFolder);
+            Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Stretch}:null;
+            if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
             var details=new StackPanel{Spacing=12};
             foreach (var (title, text) in new[]
             {
@@ -303,7 +305,11 @@ public sealed partial class MainPage
             var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "使い方・初回設定", Content = scroll, PrimaryButtonText="使いたいAI機能から準備", CloseButtonText = "閉じる",DefaultButton=ContentDialogButton.None };
             AutomationProperties.SetAutomationId(dialog, "GettingStartedGuideDialog");
             addFolder.Click+=(_,_)=>{folderRequested=true;dialog.Hide();};
+            if(backToSettings is not null)backToSettings.Click+=(_,_)=>{returnToSettings=true;dialog.Hide();};
+            var closedTcs=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            dialog.Closed+=(_,_)=>closedTcs.TrySetResult(true);
             setupRequested=await dialog.ShowAsync()==ContentDialogResult.Primary;
+            await Task.WhenAny(closedTcs.Task,Task.Delay(500));
         }
         catch (Exception error) { Failure(error); }
         finally { dialogOpen = false; transitions.Release(); }
@@ -313,5 +319,6 @@ public sealed partial class MainPage
             if(folderHubOpen)FolderAddPanel.Visibility=Visibility.Visible;
         }
         else if(setupRequested&&!disposed)await OpenAISetupPlanAsync();
+        else if(returnToSettings&&!disposed)await OpenSettingsAsync();
     }
 }

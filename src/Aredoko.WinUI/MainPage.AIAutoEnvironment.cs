@@ -7,10 +7,10 @@ namespace Aredoko_WinUI;
 
 public sealed partial class MainPage
 {
-    private async Task OpenAIAutoEnvironmentDialogAsync()
+    private async Task OpenAIAutoEnvironmentDialogAsync(bool fromSettings=false)
     {
         if(!ready||disposed||dialogOpen||!await transitions.WaitAsync(0))return;
-        dialogOpen=true;bool open=true,busy=false;Task? polling=null;
+        dialogOpen=true;bool open=true,busy=false,returnToSettings=false;Task? polling=null;
         using var lifetime=new CancellationTokenSource();
         var timer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(1)};
         try
@@ -28,6 +28,8 @@ public sealed partial class MainPage
             panel.Children.Add(description);panel.Children.Add(licenses);
             panel.Children.Add(new TextBlock{Text="初回は数GBのダウンロードと構築を行います。途中で閉じても処理は続きます。中止した場合は前の設定を保持します。\n既存のモデル・環境は再利用し、変更・削除しません。GPUが利用できる場合は動作確認に使用します（上限4GB）。",TextWrapping=TextWrapping.Wrap});
             panel.Children.Add(consent);panel.Children.Add(speedSettings);panel.Children.Add(progress);panel.Children.Add(status);
+            Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Left}:null;
+            if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
             var scroll=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI環境を自動構築",PrimaryButtonText="取得・構築して確認",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=scroll,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
             AutomationProperties.SetAutomationId(dialog,"AIAutoEnvironmentDialog");AutomationProperties.SetAutomationId(consent,"AIAutoEnvironmentConsent");AutomationProperties.SetAutomationId(status,"AIAutoEnvironmentStatus");
@@ -38,6 +40,7 @@ public sealed partial class MainPage
                 if(!open||disposed)return;
                 var active=Active();var supported=summary?["supported"]?.GetValue<bool>()??false;
                 consent.IsEnabled=supported&&!busy&&!active;
+                if(backToSettings is not null)backToSettings.IsEnabled=!busy;
                 speed.IsEnabled=!busy&&!active;
                 if(active)speed.Value=(current?["bytes_per_second"]?.GetValue<long>()??0)/1_000_000d;
                 dialog.IsPrimaryButtonEnabled=supported&&!busy&&!active&&consent.IsChecked==true;
@@ -89,12 +92,17 @@ public sealed partial class MainPage
                 catch(Exception ex){operationError="中止の状態を確認できませんでした。\n"+ex.Message;}
                 finally{busy=false;deferral.Complete();Render();}
             };
+            if(backToSettings is not null)backToSettings.Click+=(_,_)=>{if(!busy){returnToSettings=true;dialog.Hide();}};
             dialog.Closing+=(_,args)=>{if(busy)args.Cancel=true;};
             dialog.Opened+=(_,_)=>{polling=RefreshAsync();timer.Start();};
             timer.Tick+=(_,_)=>{if(Active()&&!busy&&(polling is null||polling.IsCompleted))polling=RefreshAsync();};
+            var closedTcs=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            dialog.Closed+=(_,_)=>closedTcs.TrySetResult(true);
             await dialog.ShowAsync();
+            await Task.WhenAny(closedTcs.Task,Task.Delay(500));
         }
         catch(Exception ex){Failure(ex);}
         finally{open=false;timer.Stop();lifetime.Cancel();if(polling is not null)await polling;dialogOpen=false;transitions.Release();RestoreNavigation();}
+        if(returnToSettings&&!disposed)await OpenSettingsAsync();
     }
 }

@@ -106,7 +106,7 @@ public sealed partial class MainPage
             var tools=new Grid{ColumnSpacing=8,RowSpacing=8};
             tools.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
             tools.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-            for(var row=0;row<4;row++)tools.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+            for(var row=0;row<5;row++)tools.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
             AutomationProperties.SetAutomationId(tools,"SettingsTools");
             var toolIndex=0;
             foreach(var (label,id,target) in new[]{
@@ -117,7 +117,9 @@ public sealed partial class MainPage
                 ("バックアップと復元","BtnBackupGuide","backup"),
                 ("診断情報を表示・コピー","BtnDiagnostics","diagnostics"),
                 ("ストレージとキャッシュ","BtnRuntimeCache","runtime-cache"),
-                ("AI環境を自動構築","BtnAIEnvironment","ai-environment")})
+                ("AI環境を自動構築","BtnAIEnvironment","ai-environment"),
+                ("登録フォルダを管理","BtnSettingsOpenFolders","folders"),
+                ("棚一覧を管理","BtnSettingsOpenShelves","shelves")})
             {
                 var button=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(button,id);
                 button.Click+=(_,_)=>{destination=target;dialog.Hide();};Grid.SetRow(button,toolIndex/2);Grid.SetColumn(button,toolIndex%2);tools.Children.Add(button);toolIndex++;
@@ -139,19 +141,21 @@ public sealed partial class MainPage
         if(destination is not null)
         {
             if(destination=="ai")AI_Click(this,new RoutedEventArgs());
-            else if(destination=="help")await OpenGettingStartedGuideAsync();
+            else if(destination=="help")await OpenGettingStartedGuideAsync(fromSettings:true);
             else if(destination=="terms")RelatedTerms_Click(this,new RoutedEventArgs());
             else if(destination=="history")await DeleteHistoryAsync();
-            else if(destination=="backup")await OpenBackupDialogAsync();
-            else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync();
-            else if(destination=="ai-environment")await OpenAIAutoEnvironmentDialogAsync();
-            else if(destination=="runtime-cache")await OpenRuntimeCacheDialogAsync();
+            else if(destination=="backup")await OpenBackupDialogAsync(fromSettings:true);
+            else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync(fromSettings:true);
+            else if(destination=="ai-environment")await OpenAIAutoEnvironmentDialogAsync(fromSettings:true);
+            else if(destination=="runtime-cache")await OpenRuntimeCacheDialogAsync(fromSettings:true);
+            else if(destination=="folders")await OpenFolderHubAsync();
+            else if(destination=="shelves")await OpenShelfHubAsync();
         }
     }
-    private async Task OpenRecoveryGuideDialogAsync()
+    private async Task OpenRecoveryGuideDialogAsync(bool fromBackup=false,bool fromSettings=false)
     {
         if(!ready||disposed||dialogOpen||!await transitions.WaitAsync(0))return;
-        dialogOpen=true;
+        dialogOpen=true;bool returnToBackup=false;
         try
         {
             var panel=new StackPanel{Spacing=12};
@@ -172,6 +176,13 @@ public sealed partial class MainPage
             }};
             AutomationProperties.SetAutomationId(offline,"BackupRecoveryAdvanced");panel.Children.Add(offline);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップと復旧ガイド",CloseButtonText="閉じる",Content=panel};
+            if(fromBackup)
+            {
+                var backBtn=new Button{Content="バックアップと復元へ戻る",HorizontalAlignment=HorizontalAlignment.Left};
+                AutomationProperties.SetAutomationId(backBtn,"BtnBackToBackup");
+                backBtn.Click+=(_,_)=>{returnToBackup=true;dialog.Hide();};
+                panel.Children.Add(backBtn);
+            }
             AutomationProperties.SetAutomationId(dialog,"BackupGuideDialog");
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
@@ -180,11 +191,12 @@ public sealed partial class MainPage
         }
         catch(Exception ex){Failure(ex);}
         finally{dialogOpen=false;transitions.Release();RestoreNavigation();}
+        if(returnToBackup&&!disposed)await OpenBackupDialogAsync(fromSettings:fromSettings);
     }
-    private async Task OpenDiagnosticsDialogAsync()
+    private async Task OpenDiagnosticsDialogAsync(bool fromSettings=false)
     {
         if(!ready||disposed||dialogOpen||!await transitions.WaitAsync(0))return;
-        dialogOpen=true;
+        dialogOpen=true;bool returnToSettings=false;
         try
         {
             System.Text.Json.Nodes.JsonNode? aiStatus = null;
@@ -218,10 +230,19 @@ public sealed partial class MainPage
                 Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
                 copyStatus.Text = "診断情報をクリップボードにコピーしました。外部への自動送信は行われません。";
             };
-            panel.Children.Add(copyBtn);
+            var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
+            actions.Children.Add(copyBtn);
+            panel.Children.Add(actions);
             panel.Children.Add(copyStatus);
 
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="診断情報（匿名化済み）",CloseButtonText="閉じる",Content=panel};
+            if(fromSettings)
+            {
+                var backBtn=new Button{Content="設定へ戻る"};
+                AutomationProperties.SetAutomationId(backBtn,"BtnBackToSettings");
+                backBtn.Click+=(_,_)=>{returnToSettings=true;dialog.Hide();};
+                actions.Children.Add(backBtn);
+            }
             AutomationProperties.SetAutomationId(dialog,"DiagnosticsDialog");
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed += (_, _) => closedTcs.TrySetResult(true);
@@ -230,5 +251,6 @@ public sealed partial class MainPage
         }
         catch(Exception ex){Failure(ex);}
         finally{dialogOpen=false;transitions.Release();RestoreNavigation();}
+        if(returnToSettings&&!disposed)await OpenSettingsAsync();
     }
 }

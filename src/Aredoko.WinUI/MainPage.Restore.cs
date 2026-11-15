@@ -8,10 +8,10 @@ namespace Aredoko_WinUI;
 
 public sealed partial class MainPage
 {
-    private async Task OpenRestoreDialogAsync()
+    private async Task OpenRestoreDialogAsync(bool fromBackup=false,bool fromSettings=false)
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        bool open=true,busy=false,restart=false;long revision=0;RestoreJob? current=null;Task? polling=null;string? operationError=null;
+        bool open=true,busy=false,restart=false,returnToBackup=false;long revision=0;RestoreJob? current=null;Task? polling=null;string? operationError=null;
         using var lifetime=new CancellationTokenSource();
         var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(650)};
         try
@@ -26,10 +26,13 @@ public sealed partial class MainPage
             var consent=new CheckBox{Content="現在のライブラリを残し、準備済みの内容で復元して再起動する",Visibility=Visibility.Collapsed};
             var status=new TextBlock{Text="復元の状態を確認しています。",TextWrapping=TextWrapping.Wrap};
             var progress=new ProgressBar{Minimum=0,Maximum=100};var refresh=new Button{Content="状態を更新"};
+            var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};actions.Children.Add(refresh);
+            Button? backToBackup=fromBackup?new Button{Content="バックアップと復元へ戻る"}:null;
+            if(backToBackup is not null){AutomationProperties.SetAutomationId(backToBackup,"BtnBackToBackup");actions.Children.Add(backToBackup);}
             foreach(var (control,id) in new (DependencyObject,string)[]{(source,"RestoreSource"),(folder,"RestoreChooseFolder"),(zip,"RestoreChooseZip"),(omit,"RestoreOmitVectors"),(consent,"RestoreConsent"),(status,"RestoreStatus"),(progress,"RestoreProgress"),(refresh,"RestoreRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(progress,"復元準備の進捗");
             panel.Children.Add(new TextBlock{Text="元の画像・動画は変更しません。バックアップを新しい保存先で検証し、最後に再起動して切り替えます。準備中もこの画面を閉じられます。",TextWrapping=TextWrapping.Wrap});
-            foreach(var control in new UIElement[]{source,choose,omit,progress,status,consent,refresh})panel.Children.Add(control);
+            foreach(var control in new UIElement[]{source,choose,omit,progress,status,consent,actions})panel.Children.Add(control);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップから復元",PrimaryButtonText="復元を準備",SecondaryButtonText="準備を中止",CloseButtonText="閉じる",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false,DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)}};
             AutomationProperties.SetAutomationId(dialog,"RestoreDialog");
@@ -46,6 +49,7 @@ public sealed partial class MainPage
                 folder.IsEnabled=zip.IsEnabled=omit.IsEnabled=!frozen;
                 consent.Visibility=value.State=="completed"?Visibility.Visible:Visibility.Collapsed;
                 consent.IsEnabled=!busy&&!value.RestartRequested&&value.SwitchSupported;
+                if(backToBackup is not null)backToBackup.IsEnabled=!busy&&!value.RestartRequested;
                 dialog.PrimaryButtonText=value.State=="completed"?"復元して再起動":"復元を準備";
                 dialog.IsPrimaryButtonEnabled=!busy&&!value.RestartRequested&&(value.State=="completed"?value.SwitchSupported&&consent.IsChecked==true:!value.Active&&!string.IsNullOrEmpty(source.Text));
                 dialog.SecondaryButtonText=value.State=="completed"?"準備を破棄":"準備を中止";
@@ -75,6 +79,7 @@ public sealed partial class MainPage
             };
             consent.Checked+=(_,_)=>{if(current is not null)Render(current);};consent.Unchecked+=(_,_)=>{if(current is not null)Render(current);};
             refresh.Click+=async(_,_)=>{if(!busy&&(polling is null||polling.IsCompleted)){polling=RefreshAsync();await polling;}};
+            if(backToBackup is not null)backToBackup.Click+=(_,_)=>{if(!busy&&current?.RestartRequested!=true){returnToBackup=true;dialog.Hide();}};
             dialog.PrimaryButtonClick+=async(_,args)=>
             {
                 args.Cancel=true;if(busy||current is null||current.Active||current.RestartRequested)return;
@@ -102,7 +107,10 @@ public sealed partial class MainPage
             dialog.Closing+=(_,args)=>{if(busy)args.Cancel=true;};
             timer.Tick+=(_,_)=>{if(!busy&&current?.Active==true&&(polling is null||polling.IsCompleted))polling=RefreshAsync();};
             dialog.Opened+=(_,_)=>{polling=RefreshAsync();timer.Start();};
+            var closedTcs=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            dialog.Closed+=(_,_)=>closedTcs.TrySetResult(true);
             await dialog.ShowAsync();
+            await Task.WhenAny(closedTcs.Task,Task.Delay(500));
         }
         catch(Exception ex){Failure(ex);}
         finally
@@ -111,5 +119,6 @@ public sealed partial class MainPage
             dialogOpen=false;transitions.Release();RestoreNavigation();
         }
         if(restart&&!disposed)MainWindow.Current.CompleteRestoreRestart();
+        else if(returnToBackup&&!disposed)await OpenBackupDialogAsync(fromSettings:fromSettings);
     }
 }

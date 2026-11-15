@@ -8,10 +8,10 @@ namespace Aredoko_WinUI;
 
 public sealed partial class MainPage
 {
-    private async Task OpenBackupDialogAsync()
+    private async Task OpenBackupDialogAsync(bool fromSettings=false)
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        dialogOpen=true;bool showGuide=false,showRestore=false,open=true,submitting=false;long revision=0;
+        dialogOpen=true;bool showGuide=false,showRestore=false,returnToSettings=false,open=true,submitting=false;long revision=0;
         using var lifetime=new CancellationTokenSource();BackupJob? current=null;Task? polling=null;string? lastError=null;
         var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(650)};
         try
@@ -32,6 +32,8 @@ public sealed partial class MainPage
             var help=new Button{Content="復旧ガイド"};
             AutomationProperties.SetAutomationId(help,"BackupRecoveryHelp");
             var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};actions.Children.Add(reconnect);actions.Children.Add(guide);actions.Children.Add(help);
+            Button? backToSettings=fromSettings?new Button{Content="設定へ戻る"}:null;
+            if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");actions.Children.Add(backToSettings);}
             foreach(var (control,id) in new (DependencyObject,string)[]{(basic,"BackupBasic"),(settings,"BackupSettings"),(history,"BackupHistory"),(position,"BackupReaderPosition"),(vectors,"BackupVectors"),(destination,"BackupDestination"),(choose,"BackupChoose"),(status,"BackupStatus"),(progress,"BackupProgress"),(reconnect,"BackupRefresh"),(guide,"BackupRestoreGuide")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(progress,"バックアップの進捗");
             panel.Children.Add(new TextBlock{Text="元の画像・動画、AIモデル、Python環境、サムネイルは含みません。この画面を閉じても作成は続き、再び開くと進捗を確認できます。",TextWrapping=TextWrapping.Wrap});
@@ -44,6 +46,7 @@ public sealed partial class MainPage
                 if(!open||disposed)return;
                 current=job;bool busy=submitting||job.Active;
                 foreach(var control in new Control[]{settings,history,position,vectors,choose})control.IsEnabled=!busy;
+                if(backToSettings is not null)backToSettings.IsEnabled=!submitting;
                 dialog.IsPrimaryButtonEnabled=!busy&&!string.IsNullOrEmpty(destination.Text)&&!(job.Published&&job.Output==destination.Text);
                 dialog.IsSecondaryButtonEnabled=job.Active&&job.State is not ("cancelling" or "publishing")&&!submitting;
                 progress.IsIndeterminate=job.Active&&job.BytesTotal is not >0;
@@ -76,6 +79,7 @@ public sealed partial class MainPage
             reconnect.Click+=async(_,_)=>{if(!submitting&&(polling is null||polling.IsCompleted)){polling=RefreshAsync();await polling;}};
             guide.Click+=(_,_)=>{showRestore=true;dialog.Hide();};
             help.Click+=(_,_)=>{showGuide=true;dialog.Hide();};
+            if(backToSettings is not null)backToSettings.Click+=(_,_)=>{if(!submitting){returnToSettings=true;dialog.Hide();}};
             dialog.PrimaryButtonClick+=async(_,args)=>
             {
                 args.Cancel=true;if(submitting||current is null||current.Active)return;
@@ -113,7 +117,8 @@ public sealed partial class MainPage
             open=false;timer.Stop();lifetime.Cancel();if(polling is not null)await polling;
             dialogOpen=false;transitions.Release();RestoreNavigation();
         }
-        if(showRestore&&!disposed)await OpenRestoreDialogAsync();
-        if(showGuide&&!disposed)await OpenRecoveryGuideDialogAsync();
+        if(showRestore&&!disposed)await OpenRestoreDialogAsync(fromBackup:true,fromSettings:fromSettings);
+        else if(showGuide&&!disposed)await OpenRecoveryGuideDialogAsync(fromBackup:true,fromSettings:fromSettings);
+        else if(returnToSettings&&!disposed)await OpenSettingsAsync();
     }
 }

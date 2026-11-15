@@ -138,6 +138,7 @@ def prepare(runtime_release, output, *, dotnet='dotnet', make_zip=True, msbuild_
     package(release, version='alpha-portable-0', skip_build=True, python_runtime=python, media_tools=media,
             include_ai_runtime=manifest.get('ai_runtime_bundled') is True, portable_frontend=frontend, bootstrap=bootstrap)
     verify_release(release)
+    run([str(release / 'Aredoko.exe'), '--self-test'], 'release-bootstrap-cpu', timeout=30)
     # Probe real Windows imports/media, without opening GUI or a user database.
     run([str(release / 'runtime/python/python.exe'), '-I', '-B', str(release / 'tools/launch_release.py'), '--check'], 'runtime-check', timeout=240)
     if make_zip:
