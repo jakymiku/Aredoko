@@ -219,20 +219,22 @@
      </StackPanel>
     </Expander>
     <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Margin="0,4,0,0" Spacing="4">
-     <StackPanel x:Name="TagScopeBar" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
-      <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Padding="8,2">
-       <StackPanel Orientation="Horizontal" Spacing="6">
-        <TextBlock x:Name="TagScopeText" VerticalAlignment="Center" MaxWidth="360" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtTagScope"/>
-        <Button x:Name="ClearTagScopeButton" Content="×" Padding="6,1" MinWidth="0" MinHeight="0" Click="ClearTagScope_Click" ToolTipService.ToolTip="タグでの絞り込みを解除" AutomationProperties.Name="タグでの絞り込みを解除" AutomationProperties.AutomationId="BtnClearTagScope"/>
-       </StackPanel>
+     <Grid x:Name="TagScopeBar" Visibility="Collapsed">
+      <Border HorizontalAlignment="Left" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Padding="8,2">
+       <Grid ColumnSpacing="6">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBlock x:Name="TagScopeText" Grid.Column="0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtTagScope"/>
+        <Button x:Name="ClearTagScopeButton" Grid.Column="1" Content="×" Padding="6,1" MinWidth="0" MinHeight="0" Click="ClearTagScope_Click" ToolTipService.ToolTip="タグでの絞り込みを解除" AutomationProperties.Name="タグでの絞り込みを解除" AutomationProperties.AutomationId="BtnClearTagScope"/>
+       </Grid>
       </Border>
-     </StackPanel>
-     <StackPanel x:Name="ShelfScopeBar" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
-      <Button Content="棚一覧" Click="ShelfList_Click" AutomationProperties.AutomationId="BtnShelfList"/>
-      <TextBlock x:Name="ShelfScopeText" VerticalAlignment="Center" MaxWidth="360" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtShelfScope"/>
-      <Button Content="棚を変更…" Click="ChangeShelfScope_Click" AutomationProperties.Name="検索対象の棚を変更" AutomationProperties.AutomationId="BtnChangeShelfScope"/>
-      <Button Content="解除" Click="ClearShelfScope_Click" AutomationProperties.Name="棚の検索条件を解除" AutomationProperties.AutomationId="BtnClearShelfScope"/>
-     </StackPanel>
+     </Grid>
+     <Grid x:Name="ShelfScopeBar" ColumnSpacing="8" Visibility="Collapsed">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Button Grid.Column="0" Content="棚一覧" Click="ShelfList_Click" AutomationProperties.AutomationId="BtnShelfList"/>
+      <TextBlock x:Name="ShelfScopeText" Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtShelfScope"/>
+      <Button Grid.Column="2" Content="棚を変更…" Click="ChangeShelfScope_Click" AutomationProperties.Name="検索対象の棚を変更" AutomationProperties.AutomationId="BtnChangeShelfScope"/>
+      <Button Grid.Column="3" Content="解除" Click="ClearShelfScope_Click" AutomationProperties.Name="棚の検索条件を解除" AutomationProperties.AutomationId="BtnClearShelfScope"/>
+     </Grid>
      <Grid x:Name="SimilarityBar" ColumnSpacing="12" Visibility="Collapsed">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <TextBlock x:Name="SimilarityTitle" VerticalAlignment="Center" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="TxtSimilarityOrigin"/>

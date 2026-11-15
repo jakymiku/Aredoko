@@ -401,3 +401,18 @@ source `1f573d2b5d63754a1fd973821e46ca103ec6baa6`、Portable frontend `data/deve
     4. `history_back_restores_tag_condition`：履歴の「戻る」（`BtnNavigationBack`）で `タグ：青空`・検索語・`両方で探す（AI）`・`1 件`（`Item1`、スクリーンショット `final-after-back.png` 確認済み）を復元。
   - なお終了時の `PermissionError: [WinError 32] ... derived.sqlite` はテスト終了直前の `sys.exit(0)` 後の Python `weakref._exitfunc` による一時サムネイルディレクトリ片付け警告であり、検索・UI・DB 整合性結果（`passed: true`）には影響なし。
   - 残る未確認範囲：カード右クリック `FilterByItemTag{id}_0` 単一タグ直出し（2個以上時と別分岐の実AI併用）・`SelectRangeTo{id}`・未確認ビュー実UI操作・音声類似フライアウト・長文タグ/棚スクロール・`AIAutoEnvironmentDialog` の「設定へ戻る」・実日本語IME・物理DPI・ハイコントラスト。
+
+### 2026-11-16（UI仕上げ）：スコープバー狭幅応答性・音声類似フライアウト明確化・長文タグ/棚・設定往復（frontend-product19）
+
+- 実装（[MainPage.xaml](file:///c:/AI/Aredoko/src/Aredoko.WinUI/MainPage.xaml)・[MainPage.xaml.cs](file:///c:/AI/Aredoko/src/Aredoko.WinUI/MainPage.xaml.cs)）：
+  - `TagScopeBar` と `ShelfScopeBar` の `MaxWidth="360"` ＋ `StackPanel` を `Grid`（`*` / `Auto`）へ変更し、詳細ペインを開いた `1200×800` でも長文タグ・複数棚サマリ表示時に「×」「棚一覧」「棚を変更…」「解除」が右端で見切れないよう改善。
+  - `AddSimilarityMenuItems` へ動画・音声類似メニュー構築を集約し、音声の直接音響類似ラベルを「音の響き・音響が似た音声・曲を探す」へ明確化するとともに、一覧右クリック・詳細フライアウト双方へ説明ツールチップを付与。
+- 検証：
+  - `Aredoko.Core.Tests`（`-c Release` 終了コード `0`）、`dotnet publish -c Portable` で [frontend-product19](file:///c:/AI/Aredoko/data/development-tools/frontend-product19) および `portable-build.json`（`inspect_portable` PASS）を生成。
+  - 独立ホスト GUI 試験 [check.py](file:///c:/AI/Aredoko/data/gui-ui-polish01/check.py) `run06`（[summary.json](file:///c:/AI/Aredoko/data/gui-ui-polish01/run06/summary.json)、生成 PNG 2件 + 生成 WAV 2件、独立DB/設定、終了コード `0`・`db_intact: true`・`originals_sha_match: true`）と 5 枚のスクリーンショット目視確認で以下すべてが PASS：
+    1. `detail_30_tags`（[detail-30-tags.png](file:///c:/AI/Aredoko/data/gui-ui-polish01/run06/detail-30-tags.png)）：30タグ＋4棚でも `TxtTags` 高さ `120px` 上限内で縦スクロールし `BtnSave` や `BtnFilterByActiveTag`（`この作品のタグで絞り込み（30 件）…`）を押し出さず、`TxtShelf` へ `…ほか1棚` サマリ表示。
+    2. `tag_scope_narrow_1200x800`（[tag-scope-narrow.png](file:///c:/AI/Aredoko/data/gui-ui-polish01/run06/tag-scope-narrow.png)）：詳細ペイン展開中かつ 30 番目の長文タグ適用時に `BtnClearTagScope`（`x=803..827`）が `area_right=880` / `detail_left=913` 内に収まり見切れなし、「×」解除で `4 件` 復帰。
+    3. `shelf_scope_narrow_1200x800`（[shelf-scope-narrow.png](file:///c:/AI/Aredoko/data/gui-ui-polish01/run06/shelf-scope-narrow.png)）：詳細ペイン展開中かつ長文 4 棚適用時に `BtnShelfList`・`TxtShelfScope`・`BtnChangeShelfScope`・`BtnClearShelfScope`（`x=828..880`）が `area_right=880` 内に重なりなく収まり、「解除」で `4 件` 復帰。
+    4. `audio_similarity_flyout` / `audio_similarity_back_ok`（[audio-similar-flyout.png](file:///c:/AI/Aredoko/data/gui-ui-polish01/run06/audio-similar-flyout.png)）：生成 WAV 選択時の `BtnDetailFindSimilar`（`似た音声・曲を探す…`）で `DetailFindSimilarAudioContent`（`内容が似た音声・曲を探す`）と `DetailFindSimilarAudioVisual`（`音の響き・音響が似た音声・曲を探す`）の両項目表示とクリック→`SimilarityBar`→`BtnSimilarityBack` 復帰を確認。
+    5. `settings_ai_env_back_roundtrip`（[ai-auto-env-dialog.png](file:///c:/AI/Aredoko/data/gui-ui-polish01/run06/ai-auto-env-dialog.png)）：`SettingsDialog` → `BtnAIEnvironment` → `AIAutoEnvironmentDialog` → `BtnBackToSettings`（`設定へ戻る`）で `SettingsDialog` へ復帰し閉じるまでを確認。
+  - 残る未確認範囲：通常デスクトップ対話操作が必要なカード右クリック項目（単一タグ直出し `FilterByItemTag{id}_0`・範囲選択 `SelectRangeTo{id}`）、未確認ビュー実UI操作、実日本語IME変換、物理マルチDPI・ハイコントラスト。

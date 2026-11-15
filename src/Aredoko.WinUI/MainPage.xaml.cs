@@ -922,21 +922,8 @@ public sealed partial class MainPage : Page
         }
         if(SimilaritySearch.CanStart(row))
         {
-            if(row.Kind=="video")
-            {
-                var content=new MenuFlyoutItem{Text="内容が似た動画を探す"};AutomationProperties.SetAutomationId(content,"FindSimilarVideoContent"+row.Id);
-                content.Click+=async(_,_)=>await StartSimilarityAsync(row,directVideo:true);menu.Items.Add(content);
-                var audioContent=new MenuFlyoutItem{Text="音が似た動画を探す"};AutomationProperties.SetAutomationId(audioContent,"FindSimilarVideoAudio"+row.Id);
-                ToolTipService.SetToolTip(audioContent,"準備済みの動画内音声の索引を使います。映像・音声ファイルの類似検索とは別です。");
-                audioContent.Click+=async(_,_)=>await StartSimilarityAsync(row,directVideoAudio:true);menu.Items.Add(audioContent);
-            }
-            if(row.Kind=="audio")
-            {
-                var content=new MenuFlyoutItem{Text="内容が似た音声・曲を探す"};AutomationProperties.SetAutomationId(content,"FindSimilarAudioContent"+row.Id);
-                content.Click+=async(_,_)=>await StartSimilarityAsync(row,true);menu.Items.Add(content);
-            }
-            var search=new MenuFlyoutItem {Text=row.Kind=="video"?"似た動画・素材を探す":row.Kind=="audio"?"似た音声・曲を探す":"似た画像・素材を探す"};AutomationProperties.SetAutomationId(search,"FindSimilar"+row.Id);
-            search.Click+=async(_,_)=>await StartSimilarityAsync(row);menu.Items.Add(search);menu.Items.Add(new MenuFlyoutSeparator());
+            AddSimilarityMenuItems(menu.Items,row,forDetail:false);
+            menu.Items.Add(new MenuFlyoutSeparator());
         }
         if(ArchiveManifest.CanOpen(row))
         {
@@ -954,6 +941,42 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetAutomationId(copyPath,"CopyFilePath"+row.Id);
         copyPath.Click+=(_,_)=>CopyFilePath(row);menu.Items.Add(copyPath);
         return menu;
+    }
+    private void AddSimilarityMenuItems(IList<MenuFlyoutItemBase> target,MediaRow row,bool forDetail)
+    {
+        var suffix=forDetail?"":row.Id.ToString();
+        var prefix=forDetail?"DetailFindSimilar":"FindSimilar";
+        if(row.Kind=="video")
+        {
+            var content=new MenuFlyoutItem{Text="内容が似た動画を探す"};
+            AutomationProperties.SetAutomationId(content,prefix+"VideoContent"+suffix);
+            ToolTipService.SetToolTip(content,"作成済みの動画内容索引を使い、似た場面・動きの動画を探します。");
+            content.Click+=async(_,_)=>await StartSimilarityAsync(row,directVideo:true);
+            target.Add(content);
+            var audioContent=new MenuFlyoutItem{Text="音が似た動画を探す"};
+            AutomationProperties.SetAutomationId(audioContent,prefix+"VideoAudio"+suffix);
+            ToolTipService.SetToolTip(audioContent,"準備済みの動画内音声の索引を使います。映像・音声ファイルの類似検索とは別です。");
+            audioContent.Click+=async(_,_)=>await StartSimilarityAsync(row,directVideoAudio:true);
+            target.Add(audioContent);
+        }
+        else if(row.Kind=="audio")
+        {
+            var content=new MenuFlyoutItem{Text="内容が似た音声・曲を探す"};
+            AutomationProperties.SetAutomationId(content,prefix+"AudioContent"+suffix);
+            ToolTipService.SetToolTip(content,"作成済みの音声内容索引（AI）を使い、内容が似た音声・曲を探します。");
+            content.Click+=async(_,_)=>await StartSimilarityAsync(row,directAudio:true);
+            target.Add(content);
+        }
+        var fallbackId=forDetail
+            ? (row.Kind=="video"?"DetailFindSimilarVideoVisual":row.Kind=="audio"?"DetailFindSimilarAudioVisual":"DetailFindSimilarVisual")
+            : ("FindSimilar"+suffix);
+        var fallbackText=row.Kind=="video"?"似た動画・素材を探す":row.Kind=="audio"?"音の響き・音響が似た音声・曲を探す":"似た画像・素材を探す";
+        var search=new MenuFlyoutItem{Text=fallbackText};
+        AutomationProperties.SetAutomationId(search,fallbackId);
+        if(row.Kind=="video")ToolTipService.SetToolTip(search,"代表フレームの見た目から似た動画・素材を探します。");
+        else if(row.Kind=="audio")ToolTipService.SetToolTip(search,"AI索引を使わず、音声・音楽の音響特徴から似た候補を探します。");
+        search.Click+=async(_,_)=>await StartSimilarityAsync(row);
+        target.Add(search);
     }
     private void ClearSimilarity()
     {
@@ -1179,26 +1202,11 @@ public sealed partial class MainPage : Page
         DetailFindSimilarButton.IsEnabled=canFindSimilar&&!saving&&tagReviewSyncItem!=active?.Id;
         if(canFindSimilar&&active is {} simRow)
         {
-            if(simRow.Kind=="video")
+            if(simRow.Kind is "video" or "audio")
             {
-                DetailFindSimilarButton.Content="似た動画を探す…";
+                DetailFindSimilarButton.Content=simRow.Kind=="video"?"似た動画を探す…":"似た音声・曲を探す…";
                 var simFlyout=new MenuFlyout();
-                var vContent=new MenuFlyoutItem{Text="内容が似た動画を探す"};AutomationProperties.SetAutomationId(vContent,"DetailFindSimilarVideoContent");
-                vContent.Click+=async(_,_)=>await StartSimilarityAsync(simRow,directVideo:true);simFlyout.Items.Add(vContent);
-                var vAudio=new MenuFlyoutItem{Text="音が似た動画を探す"};AutomationProperties.SetAutomationId(vAudio,"DetailFindSimilarVideoAudio");
-                vAudio.Click+=async(_,_)=>await StartSimilarityAsync(simRow,directVideoAudio:true);simFlyout.Items.Add(vAudio);
-                var vVisual=new MenuFlyoutItem{Text="似た動画・素材を探す"};AutomationProperties.SetAutomationId(vVisual,"DetailFindSimilarVideoVisual");
-                vVisual.Click+=async(_,_)=>await StartSimilarityAsync(simRow);simFlyout.Items.Add(vVisual);
-                DetailFindSimilarButton.Flyout=simFlyout;
-            }
-            else if(simRow.Kind=="audio")
-            {
-                DetailFindSimilarButton.Content="似た音声・曲を探す…";
-                var simFlyout=new MenuFlyout();
-                var aContent=new MenuFlyoutItem{Text="内容が似た音声・曲を探す"};AutomationProperties.SetAutomationId(aContent,"DetailFindSimilarAudioContent");
-                aContent.Click+=async(_,_)=>await StartSimilarityAsync(simRow,directAudio:true);simFlyout.Items.Add(aContent);
-                var aVisual=new MenuFlyoutItem{Text="似た音声・曲を探す"};AutomationProperties.SetAutomationId(aVisual,"DetailFindSimilarAudioVisual");
-                aVisual.Click+=async(_,_)=>await StartSimilarityAsync(simRow);simFlyout.Items.Add(aVisual);
+                AddSimilarityMenuItems(simFlyout.Items,simRow,forDetail:true);
                 DetailFindSimilarButton.Flyout=simFlyout;
             }
             else
