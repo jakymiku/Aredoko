@@ -31,8 +31,22 @@ internal static class LibrarySelectionTests
         selection.Single(new(5,4));bool invalid=false;
         try{await selection.RangeAsync(new(6,5),false,(_,_,_)=>Task.FromResult<IReadOnlyList<int>>(new[]{5,5}),CancellationToken.None);}catch(InvalidDataException){invalid=true;}
         check(invalid&&selection.Ids.SequenceEqual(new[]{5}),"invalid server range leaves the previous selection intact");
-        selection.Visible([new(6,5)],[6],6);selection.Bind("filtered",1,[new(6,0)]);
-        check(selection.Count==1&&selection.Contains(6)&&!selection.Contains(5)&&selection.Anchor==new ResultPosition(6,0),"rebasing preserves remaining IDs and drops filtered-out items");
+        selection.Clear();
+        check(selection.PreviousAnchor is null,"clear resets PreviousAnchor");
+        selection.Single(new(12,1));
+        check(selection.Anchor==new ResultPosition(12,1)&&selection.PreviousAnchor is null,"first single selection after clear has no PreviousAnchor");
+        selection.Single(new(14,3));
+        check(selection.Anchor==new ResultPosition(14,3)&&selection.PreviousAnchor==new ResultPosition(12,1),"second distinct single selection retains the previous anchor");
+        selection.Single(new(14,3));
+        check(selection.PreviousAnchor==new ResultPosition(12,1),"re-selecting the same row keeps the previous anchor intact");
+        await selection.RangeAsync(new(16,5),false,(offset,count,token)=>Task.FromResult<IReadOnlyList<int>>(Enumerable.Range(12+offset-1,count).ToArray()),CancellationToken.None);
+        check(selection.PreviousAnchor is null,"range selection resets PreviousAnchor");
+        selection.Single(new(5,4));selection.Single(new(6,5));
+        check(selection.PreviousAnchor==new ResultPosition(5,4),"Distinct Single establishes PreviousAnchor before Visible");
+        selection.Visible([new(6,5)],[6],6);
+        check(selection.PreviousAnchor is null,"visible selection resets PreviousAnchor");
+        selection.Bind("filtered",1,[new(6,0)]);
+        check(selection.Count==1&&selection.Contains(6)&&!selection.Contains(5)&&selection.Anchor==new ResultPosition(6,0)&&selection.PreviousAnchor is null,"rebasing preserves remaining IDs, drops filtered-out items, and resets PreviousAnchor");
 
         var requests=new List<string>();
         using var handler=new Stub(async request=>

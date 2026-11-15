@@ -457,7 +457,7 @@ public sealed partial class MainPage : Page
             var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null&&!DirectContentSimilarity||(origin is null&&method.IsAI&&!method.IsDirectContent&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             SearchOptions.Header="AI候補の表示";
-            ResetBrowse(checked(page*pageSize),result);rows=result.Items;BindLibrarySelection();active=null; if(!folderSettingsActive)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
+            ResetBrowse(checked(page*pageSize),result);rows=result.Items;BindLibrarySelection();active=null; if(!folderSettingsActive&&librarySelection.Count==0)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             UpdateLibraryHeading();
             Count.Text=$"{result.Total:N0} 件";
@@ -861,7 +861,23 @@ public sealed partial class MainPage : Page
         var favoriteAction=new MenuFlyoutItem{Text=row.Favorite?"お気に入りを解除":"お気に入りに登録"};
         AutomationProperties.SetAutomationId(favoriteAction,"ToggleFavorite"+row.Id);
         favoriteAction.Click+=async(_,_)=>await SetFavoriteAsync(row,!row.Favorite);
-        menu.Items.Add(favoriteAction);menu.Items.Add(new MenuFlyoutSeparator());
+        menu.Items.Add(favoriteAction);
+        if(librarySelection.Anchor is {} anchor&&anchor.Id!=row.Id&&SelectionPosition(row.Id) is {} targetPos)
+        {
+            var spanCount=Math.Abs((long)targetPos.Ordinal-anchor.Ordinal)+1;
+            var overLimit=spanCount>LibrarySelection.Maximum;
+            var rangeItem=new MenuFlyoutItem
+            {
+                Text=overLimit
+                    ? $"選択起点からここまで選択（{spanCount:N0} 件・上限 {LibrarySelection.Maximum} 件）"
+                    : $"選択起点からここまで選択（{spanCount:N0} 件）",
+                IsEnabled=!overLimit&&!saving&&!dialogOpen&&!preparingSelection&&resultSession is not null&&resultWindow is not null
+            };
+            AutomationProperties.SetAutomationId(rangeItem,"SelectRangeTo"+row.Id);
+            rangeItem.Click+=async(_,_)=>await SelectLibraryRangeAsync(targetPos,false);
+            menu.Items.Add(rangeItem);
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
         if(view=="history")
         {
             var remove=new MenuFlyoutItem{Text="閲覧履歴から削除"};AutomationProperties.SetAutomationId(remove,"RemoveHistory"+row.Id);

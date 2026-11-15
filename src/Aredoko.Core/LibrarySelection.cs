@@ -13,6 +13,7 @@ public sealed class LibrarySelection
     public string? SessionId {get;private set;}
     public int Total {get;private set;}
     public ResultPosition? Anchor {get;private set;}
+    public ResultPosition? PreviousAnchor {get;private set;}
     public int Count=>entries.Count;
     public IReadOnlyList<int> Ids=>entries.Values.OrderBy(row=>row.Ordinal).Select(row=>row.Id).ToArray();
     public bool Contains(int id)=>entries.ContainsKey(id);
@@ -28,7 +29,7 @@ public sealed class LibrarySelection
         foreach(var row in next)Validate(row);
         if(next.Select(row=>row.Id).Distinct().Count()!=next.Length||next.Select(row=>row.Ordinal).Distinct().Count()!=next.Length)
             throw new InvalidDataException("Duplicate selection position");
-        entries=next.ToDictionary(row=>row.Id);Anchor=anchor;version++;
+        entries=next.ToDictionary(row=>row.Id);Anchor=anchor;PreviousAnchor=null;version++;
     }
     public void Bind(string? sessionId,int total,IReadOnlyList<ResultPosition>? retained=null)
     {
@@ -43,7 +44,13 @@ public sealed class LibrarySelection
         }
         catch{SessionId=oldSession;Total=oldTotal;throw;}
     }
-    public void Single(ResultPosition row){Validate(row);Commit([row],row);}
+    public void Single(ResultPosition row)
+    {
+        Validate(row);
+        var previous=Anchor is {} current&&current.Id!=row.Id?current:PreviousAnchor;
+        Commit([row],row);
+        PreviousAnchor=previous;
+    }
     public void Clear()=>Commit([],null);
     public void Visible(IReadOnlyList<ResultPosition> visible,IReadOnlyList<int> selected,int? anchorId=null)
     {

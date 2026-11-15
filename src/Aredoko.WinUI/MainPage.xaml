@@ -372,6 +372,7 @@
        <MenuFlyoutSeparator/>
        <MenuFlyoutItem x:Name="SelectVisibleItemsMenuItem" Text="読み込み済みの作品をすべて選択" IsEnabled="False" Click="SelectVisibleItems_Click" AutomationProperties.AutomationId="BtnSelectVisibleItems"/>
        <MenuFlyoutItem x:Name="SelectFirstMaxItemsMenuItem" Text="読み込み済みの先頭 256 件を選択" Visibility="Collapsed" IsEnabled="False" Click="SelectFirstMaxItems_Click" AutomationProperties.AutomationId="BtnSelectFirstMaxItems"/>
+       <MenuFlyoutItem x:Name="SelectRangeSpanMenuItem" Text="直前の選択からここまで選択" Visibility="Collapsed" IsEnabled="False" Click="SelectRangeSpan_Click" AutomationProperties.AutomationId="BtnSelectRangeSpan"/>
        <MenuFlyoutSeparator/>
        <MenuFlyoutItem Text="接続と一覧を更新" Click="Reconnect_Click" AutomationProperties.AutomationId="BtnReconnect"/>
       </MenuFlyout></Button.Flyout>

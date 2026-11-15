@@ -72,6 +72,25 @@ public sealed partial class MainPage
                 SelectFirstMaxItemsMenuItem.Visibility=overLimit?Visibility.Visible:Visibility.Collapsed;
                 SelectFirstMaxItemsMenuItem.IsEnabled=overLimit&&!saving&&!dialogOpen&&!preparingSelection&&resultSession is not null;
             }
+            if(SelectRangeSpanMenuItem is not null)
+            {
+                if(librarySelection.Anchor is {} currentAnchor&&librarySelection.PreviousAnchor is {} prevAnchor&&prevAnchor.Id!=currentAnchor.Id)
+                {
+                    var spanCount=Math.Abs((long)currentAnchor.Ordinal-prevAnchor.Ordinal)+1;
+                    var overSpanLimit=spanCount>LibrarySelection.Maximum;
+                    SelectRangeSpanMenuItem.Visibility=Visibility.Visible;
+                    SelectRangeSpanMenuItem.Text=overSpanLimit
+                        ? $"直前の選択からここまで選択（{spanCount:N0} 件・上限 {LibrarySelection.Maximum} 件）"
+                        : $"直前の選択からここまで選択（{spanCount:N0} 件）";
+                    SelectRangeSpanMenuItem.IsEnabled=!overSpanLimit&&!saving&&!dialogOpen&&!preparingSelection&&resultSession is not null&&resultWindow is not null;
+                }
+                else
+                {
+                    SelectRangeSpanMenuItem.Visibility=Visibility.Collapsed;
+                    SelectRangeSpanMenuItem.Text="直前の選択からここまで選択";
+                    SelectRangeSpanMenuItem.IsEnabled=false;
+                }
+            }
         }
         DetailsButton.IsEnabled=!saving&&!preparingSelection&&(librarySelection.Count>0||active is not null);
         ClearSelectionButton.IsEnabled=!saving&&!preparingSelection&&!dialogOpen;
@@ -130,21 +149,66 @@ public sealed partial class MainPage
             if(source is ListViewItem{Tag:int id}&&SelectionPosition(id) is {} target)
             {args.Handled=true;previewClicks.Reset();await SelectLibraryRangeAsync(target,(args.KeyModifiers&VirtualKeyModifiers.Control)!=0);return;}
     }
-    private async Task SelectLibraryRangeAsync(ResultPosition target,bool additive)
+    private async Task SelectLibraryRangeAsync(ResultPosition target,bool additive,ResultPosition? explicitOrigin=null)
     {
-        if(disposed||saving||dialogOpen||preparingSelection||resultSession is not {} session||resultWindow is not {} window||!await transitions.WaitAsync(0))return;
+        if(disposed||saving||dialogOpen||preparingSelection||resultSession is not {} session||resultWindow is not {} window)return;
+        var origin=explicitOrigin??librarySelection.Anchor;
+        if(origin is not null&&Math.Abs((long)target.Ordinal-origin.Ordinal)+1>LibrarySelection.Maximum)
+        {
+            Notice($"一括整理は一度に {LibrarySelection.Maximum} 件まで","検索や棚で絞り込んでから選択してください。",InfoBarSeverity.Warning);
+            return;
+        }
+        if(!await transitions.WaitAsync(0))return;
+        var detailsWereOpen=Details.IsPaneOpen;
+        var previousTarget=librarySelection.Anchor;
+        var previousOrigin=librarySelection.PreviousAnchor;
+        var anchorSwapped=false;
         try
         {
-            if(!await ConfirmDiscardAsync())return;
-            BindLibrarySelection();selectionPreparation?.Dispose();selectionPreparation=new();preparingSelection=true;UpdateLibrarySelectionTools();
+            if(!await ConfirmDiscardAsync())
+            {
+                if(detailsWereOpen&&(active is not null||librarySelection.Count>0))Details.IsPaneOpen=true;
+                return;
+            }
+            BindLibrarySelection();
+            if(explicitOrigin is {} originPos)
+            {
+                librarySelection.Single(originPos);
+                anchorSwapped=true;
+            }
+            selectionPreparation?.Dispose();selectionPreparation=new();preparingSelection=true;UpdateLibrarySelectionTools();
             await librarySelection.RangeAsync(target,additive,async(offset,count,cancellation)=>
             {var result=await window.ReadAsync(offset,count,cancellation);return result.Items.Select(row=>row.Id).ToArray();},selectionPreparation.Token);
             if(disposed||!ReferenceEquals(session,resultSession))return;
             RestoreSelection();ApplyLibrarySelection();
+            if(detailsWereOpen&&(active is not null||librarySelection.Count>0))Details.IsPaneOpen=true;
         }
-        catch(OperationCanceledException){}
-        catch(Exception ex){if(!disposed){RestoreSelection();Failure(ex);}}
+        catch(OperationCanceledException)
+        {
+            if(!disposed&&anchorSwapped&&ReferenceEquals(session,resultSession)&&previousTarget is {} restoredTarget)
+            {
+                if(previousOrigin is {} restoredOrigin)librarySelection.Single(restoredOrigin);
+                librarySelection.Single(restoredTarget);
+                RestoreSelection();ApplyLibrarySelection();
+            }
+        }
+        catch(Exception ex)
+        {
+            if(!disposed&&anchorSwapped&&ReferenceEquals(session,resultSession)&&previousTarget is {} restoredTarget)
+            {
+                if(previousOrigin is {} restoredOrigin)librarySelection.Single(restoredOrigin);
+                librarySelection.Single(restoredTarget);
+                RestoreSelection();ApplyLibrarySelection();
+            }
+            if(!disposed){RestoreSelection();Failure(ex);}
+        }
         finally{preparingSelection=false;if(!disposed)UpdateLibrarySelectionTools();transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
+    }
+    private async void SelectRangeSpan_Click(object sender,RoutedEventArgs e)
+    {
+        CloseBrowseMenus();
+        if(librarySelection.Anchor is {} target&&librarySelection.PreviousAnchor is {} origin&&origin.Id!=target.Id)
+            await SelectLibraryRangeAsync(target,false,origin);
     }
     private async void ClearLibrarySelection_Click(object sender,RoutedEventArgs e)
     {
@@ -226,7 +290,7 @@ public sealed partial class MainPage
             {
                 shelfDescriptors=(await api.Shelves.ListAsync()).ToList();
                 var picked=await PickShelfIdsAsync(operation==SelectionOperation.ShelvesAdd?"選択した作品を棚に追加":"選択した作品を棚から外す",[],
-                    operation==SelectionOperation.ShelvesAdd?"指定した棚を追加します。ほかの棚への所属はそのまま残ります。":"指定した棚からだけ外します。作品と元ファイルは残ります。","BulkShelfChoice");
+                    operation==SelectionOperation.ShelvesAdd?"指定した棚を追加します。ほかの棚への所属はそのまま残ります。":"指定した棚からだけ外します。作品と元ファイルは残ります。","BulkShelfChoice",allowCreate:operation==SelectionOperation.ShelvesAdd);
                 if(picked is null||picked.Length==0)return;shelves=picked;
             }
             var kept=false;
