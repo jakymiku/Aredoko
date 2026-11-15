@@ -61,6 +61,7 @@
        <Button x:Name="OpenBook" Content="本を開く" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenBook_Click" AutomationProperties.AutomationId="BtnOpenBook"/>
        <Button x:Name="OpenVideo" Content="動画を再生" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenVideo_Click" AutomationProperties.AutomationId="BtnOpenVideo"/>
        <Button x:Name="OpenAudio" Content="音声を再生" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenAudio_Click" AutomationProperties.AutomationId="BtnOpenAudio"/>
+       <Button x:Name="DetailFindSimilarButton" Content="似た画像・素材を探す" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Click="DetailFindSimilar_Click" AutomationProperties.AutomationId="BtnDetailFindSimilar"/>
        <TextBlock x:Name="DetailOpenHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="DetailOpenHint"/>
       </StackPanel>
       <TextBlock x:Name="AudioSearchHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="AudioSearchHint"/>
@@ -70,6 +71,7 @@
       <Button x:Name="TagSuggestionsButton" Content="AIタグ候補" Visibility="Collapsed" IsEnabled="False" Click="TagSuggestions_Click" AutomationProperties.AutomationId="BtnTagSuggestions"/>
 
        <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextWrapping="Wrap" MaxHeight="120" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
+       <Button x:Name="FilterByActiveTagButton" Content="この作品のタグで検索…" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="登録済みのタグを選んで一覧を検索します" AutomationProperties.Name="この作品のタグで検索" AutomationProperties.AutomationId="BtnFilterByActiveTag"/>
        <Grid ColumnSpacing="8">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <TextBox x:Name="Shelf" Header="棚" PlaceholderText="棚なし" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="96" AutomationProperties.Name="所属する棚" AutomationProperties.AutomationId="TxtShelf"/>
@@ -88,7 +90,11 @@
        </StackPanel></ScrollViewer>
        <StackPanel Grid.Row="1" Spacing="8">
       <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>
-       <Button x:Name="Save" Content="保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.AutomationId="BtnSave"/>
+       <Grid ColumnSpacing="8">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Button x:Name="Save" Content="保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.AutomationId="BtnSave"/>
+        <Button x:Name="RevertEditsButton" Grid.Column="1" Content="元に戻す" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="未保存のタグ・棚・確認状態の編集を保存前の状態に戻します" Click="RevertEdits_Click" AutomationProperties.Name="未保存の変更を元に戻す" AutomationProperties.AutomationId="BtnRevertEdits"/>
+       </Grid>
       </StackPanel>
        </Grid></ContentControl>
       <ContentControl x:Name="FolderEditorPanel" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"><Grid RowSpacing="12">

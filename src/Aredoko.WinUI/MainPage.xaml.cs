@@ -1022,12 +1022,13 @@ public sealed partial class MainPage : Page
     private async void Items_Changed(object sender,SelectionChangedEventArgs e)=>await ChangeLibrarySelectionAsync();
     private void UpdateSelectionFrame(ListViewItem item)=>item.Style=(Style)Resources[item.IsSelected?"MediaItemSelectedCardStyle":"MediaItemCardStyle"];
     private int? detailScrollItemId;
-    private bool detailScrollResetPending;
+    private bool detailScrollResetPending, revertStatusActive;
     private void ApplySelectedRow(MediaRow row)
     {
         var previous=populating;populating=true;
         try
         {
+            revertStatusActive=false;
             if(detailScrollItemId!=row.Id)
             {
                 detailScrollItemId=row.Id;
@@ -1074,12 +1075,19 @@ public sealed partial class MainPage : Page
         UpdateDetailActions();
         if(blocked)
         {
+            revertStatusActive=false;
             EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";
             Save.IsEnabled=false;
+            RevertEditsButton.Visibility=Visibility.Collapsed;
+            RevertEditsButton.IsEnabled=false;
             return;
         }
-        EditStatus.Text=Dirty?"未保存の変更":"保存済み";
+        if(Dirty)revertStatusActive=false;
+        EditStatus.Text=Dirty?"未保存の変更":revertStatusActive?"未保存の変更を元に戻しました":"保存済み";
         Save.IsEnabled=active is not null&&Dirty&&!saving;
+        var canRevert=active is not null&&Dirty&&!saving;
+        RevertEditsButton.Visibility=canRevert?Visibility.Visible:Visibility.Collapsed;
+        RevertEditsButton.IsEnabled=canRevert;
     }
     private void UpdateDetailActions()
     {
@@ -1137,6 +1145,58 @@ public sealed partial class MainPage : Page
         OpenActiveShelvesButton.Visibility=hasActiveShelves?Visibility.Visible:Visibility.Collapsed;
         OpenActiveShelvesButton.IsEnabled=hasActiveShelves&&!saving&&tagReviewSyncItem!=active!.Id;
         ToolTipService.SetToolTip(OpenActiveShelvesButton,hasActiveShelves?$"所属する棚を開く（{string.Join("、",active!.ShelfIds.Select(ShelfName))}）":"この作品の所属する棚を表示");
+        var canFindSimilar=active is not null&&SimilaritySearch.CanStart(active);
+        DetailFindSimilarButton.Visibility=canFindSimilar?Visibility.Visible:Visibility.Collapsed;
+        DetailFindSimilarButton.IsEnabled=canFindSimilar&&!saving&&tagReviewSyncItem!=active?.Id;
+        if(canFindSimilar&&active is {} simRow)
+        {
+            if(simRow.Kind=="video")
+            {
+                DetailFindSimilarButton.Content="似た動画を探す…";
+                var simFlyout=new MenuFlyout();
+                var vContent=new MenuFlyoutItem{Text="内容が似た動画を探す"};AutomationProperties.SetAutomationId(vContent,"DetailFindSimilarVideoContent");
+                vContent.Click+=async(_,_)=>await StartSimilarityAsync(simRow,directVideo:true);simFlyout.Items.Add(vContent);
+                var vAudio=new MenuFlyoutItem{Text="音が似た動画を探す"};AutomationProperties.SetAutomationId(vAudio,"DetailFindSimilarVideoAudio");
+                vAudio.Click+=async(_,_)=>await StartSimilarityAsync(simRow,directVideoAudio:true);simFlyout.Items.Add(vAudio);
+                var vVisual=new MenuFlyoutItem{Text="似た動画・素材を探す"};AutomationProperties.SetAutomationId(vVisual,"DetailFindSimilarVideoVisual");
+                vVisual.Click+=async(_,_)=>await StartSimilarityAsync(simRow);simFlyout.Items.Add(vVisual);
+                DetailFindSimilarButton.Flyout=simFlyout;
+            }
+            else if(simRow.Kind=="audio")
+            {
+                DetailFindSimilarButton.Content="似た音声・曲を探す…";
+                var simFlyout=new MenuFlyout();
+                var aContent=new MenuFlyoutItem{Text="内容が似た音声・曲を探す"};AutomationProperties.SetAutomationId(aContent,"DetailFindSimilarAudioContent");
+                aContent.Click+=async(_,_)=>await StartSimilarityAsync(simRow,directAudio:true);simFlyout.Items.Add(aContent);
+                var aVisual=new MenuFlyoutItem{Text="似た音声・曲を探す"};AutomationProperties.SetAutomationId(aVisual,"DetailFindSimilarAudioVisual");
+                aVisual.Click+=async(_,_)=>await StartSimilarityAsync(simRow);simFlyout.Items.Add(aVisual);
+                DetailFindSimilarButton.Flyout=simFlyout;
+            }
+            else
+            {
+                DetailFindSimilarButton.Content="似た画像・素材を探す";
+                DetailFindSimilarButton.Flyout=null;
+            }
+        }
+        else DetailFindSimilarButton.Flyout=null;
+        var activeTags=active?.Tags??[];
+        var hasActiveTags=activeTags.Length>0;
+        FilterByActiveTagButton.Visibility=hasActiveTags?Visibility.Visible:Visibility.Collapsed;
+        FilterByActiveTagButton.IsEnabled=hasActiveTags&&!saving&&tagReviewSyncItem!=active?.Id;
+        if(hasActiveTags)
+        {
+            var tagFlyout=new MenuFlyout();
+            for(var i=0;i<Math.Min(activeTags.Length,20);i++)
+            {
+                var tag=activeTags[i];
+                var tagItem=new MenuFlyoutItem{Text=$"「{tag}」で検索"};
+                AutomationProperties.SetAutomationId(tagItem,$"FilterByActiveTag{i}");
+                tagItem.Click+=async(_,_)=>await FilterByTagAsync(tag);
+                tagFlyout.Items.Add(tagItem);
+            }
+            FilterByActiveTagButton.Flyout=tagFlyout;
+        }
+        else FilterByActiveTagButton.Flyout=null;
     }
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private async void Favorite_Checked(object sender,RoutedEventArgs args)
@@ -1210,6 +1270,7 @@ public sealed partial class MainPage : Page
             var accepted=await dialog.ShowAsync()==ContentDialogResult.Primary;
             if(accepted&&Dirty)
             {
+                revertStatusActive=false;
                 var previous=populating;populating=true;
                 try
                 {
@@ -1241,7 +1302,7 @@ public sealed partial class MainPage : Page
         // editor control, and only if the user has not chosen another control
         // while the request was pending. Never take focus from another window.
         var focused=FocusManager.GetFocusedElement(XamlRoot) as Control;
-        var restore=focused==Tags||focused==Shelf||focused==ChooseShelvesButton||focused==OpenActiveShelvesButton||focused==Favorite||focused==Reviewed||focused==Save;
+        var restore=focused==Tags||focused==Shelf||focused==ChooseShelvesButton||focused==OpenActiveShelvesButton||focused==Favorite||focused==Reviewed||focused==Save||focused==RevertEditsButton;
         var focusState=focused?.FocusState==FocusState.Keyboard?FocusState.Keyboard:FocusState.Programmatic;
         saving=true;Editor.IsEnabled=false;var id=active.Id;
         var displacedFocus=FocusManager.GetFocusedElement(XamlRoot);
@@ -1259,13 +1320,59 @@ public sealed partial class MainPage : Page
             if(!disposed&&active?.Id==id&&Details.IsPaneOpen&&restore&&unchangedFocus)
             {
                 // A successful save disables Save; continue at the tag field.
-                var target=focused==Save&&!Save.IsEnabled?Tags:focused;
+                var target=(focused==Save&&!Save.IsEnabled)||(focused==RevertEditsButton&&!RevertEditsButton.IsEnabled)?Tags:focused;
                 target?.Focus(focusState);
             }
             if(PendingSearch){searchTimer.Stop();searchTimer.Start();}
         }
     }
     private async void Save_Click(object sender,RoutedEventArgs e)=>await SaveAsync();
+    private void RevertEdits_Click(object sender,RoutedEventArgs e)
+    {
+        if(!ready||populating||saving||dialogOpen||active is null||tagReviewSyncItem==active.Id||!Dirty)return;
+        revertStatusActive=true;
+        var previous=populating;populating=true;
+        try
+        {
+            Tags.Text=saved.Tags;editingShelfIds=saved.ShelfIds?.ToArray()??[];UpdateShelfEditorLabel();
+            Favorite.IsChecked=saved.Favorite;Reviewed.IsChecked=saved.Reviewed;
+        }
+        finally{populating=previous;}
+        UpdateDirty();
+        Tags.Focus(FocusState.Programmatic);
+    }
+    private async void DetailFindSimilar_Click(object sender,RoutedEventArgs e)
+    {
+        if(active is not null&&DetailFindSimilarButton.Flyout is null)await StartSimilarityAsync(active);
+    }
+    private async Task FilterByTagAsync(string tag)
+    {
+        if(!ready||disposed||saving||dialogOpen||string.IsNullOrWhiteSpace(tag)||!await transitions.WaitAsync(0))return;
+        searchTimer.Stop();
+        try
+        {
+            if(!await ConfirmDiscardAsync())return;
+            similarityCancellation?.Cancel();
+            populating=true;
+            try
+            {
+                queryComposing=false;
+                CloseShelfHubCore();
+                CloseFolderHubCore();
+                if(view=="history"||view=="unreviewed")view="all";
+                Query.Text=tag;
+                SearchMode.SelectedIndex=0;
+                ClearSimilarity();
+                UpdateSearchMethod();
+                RestoreNavigation();
+            }
+            finally{populating=false;}
+            UpdateClearSearchConditionsVisibility();
+            page=0;
+            await LoadAsync();
+        }
+        finally{transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
+    }
     private async void SaveShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;await SaveAsync();}
     private void SearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){e.Handled=true;if(ready&&!dialogOpen)Query.Focus(FocusState.Keyboard);}
     private bool queryComposing;
