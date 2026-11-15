@@ -133,18 +133,118 @@ class WindowsSandboxTests(unittest.TestCase):
         wsb = self.root / 'data/ai-ui/trial/Trial.wsb'
         wsb.parent.mkdir(parents=True)
         wsb.write_text('<Configuration />', encoding='utf-8')
+        evidence = wsb.parent / 'evidence'
+        evidence.mkdir()
+        prior_result = evidence / 'result.json'
+        prior_failure = evidence / 'failure.json'
+        prior_result.write_text('{"pass": true}', encoding='utf-8')
+        prior_failure.write_text('{"error": "old"}', encoding='utf-8')
         killed = []
         launched = []
         with self.assertRaises(trial.ExistingSandboxError):
             trial.run_wsb_trial(
                 wsb,
-                wsb.parent / 'evidence',
+                evidence,
                 list_processes=lambda: [{'pid': 4242, 'name': 'WindowsSandbox.exe', 'parent_pid': 1, 'cmdline': r'C:\other\User.wsb'}],
                 popen=lambda *a, **kw: launched.append(a),
                 stop_pids=lambda pids: killed.extend(pids),
             )
         self.assertEqual(launched, [])
         self.assertEqual(killed, [])
+        self.assertTrue(prior_result.exists())
+        self.assertTrue(prior_failure.exists())
+        self.assertFalse((evidence / 'runs').exists())
+
+    def test_safe_sandbox_runner_aborts_when_process_probe_fails(self):
+        from types import SimpleNamespace
+
+        with patch('sandbox_trial.subprocess.run', return_value=SimpleNamespace(returncode=1, stdout='', stderr='CIM denied')):
+            with self.assertRaises(trial.SandboxProbeError):
+                trial.list_sandbox_processes()
+        with patch('sandbox_trial.subprocess.run', return_value=SimpleNamespace(returncode=0, stdout='', stderr='')):
+            with self.assertRaises(trial.SandboxProbeError):
+                trial.list_sandbox_processes()
+
+        wsb = self.root / 'data/ai-ui/trial/Trial.wsb'
+        wsb.parent.mkdir(parents=True)
+        wsb.write_text('<Configuration />', encoding='utf-8')
+        evidence = wsb.parent / 'evidence'
+        evidence.mkdir()
+        prior_result = evidence / 'result.json'
+        prior_result.write_text('{"pass": true}', encoding='utf-8')
+        launched = []
+        with self.assertRaises(trial.SandboxProbeError):
+            trial.run_wsb_trial(
+                wsb,
+                evidence,
+                list_processes=lambda: (_ for _ in ()).throw(trial.SandboxProbeError('CIM denied')),
+                popen=lambda *a, **kw: launched.append(a),
+            )
+        self.assertEqual(launched, [])
+        self.assertTrue(prior_result.exists())
+        self.assertFalse((evidence / 'runs').exists())
+
+    def test_safe_sandbox_runner_isolates_per_run_evidence_and_wsb(self):
+        wsb = self.root / 'data/ai-ui/trial/Trial.wsb'
+        wsb.parent.mkdir(parents=True)
+        evidence = wsb.parent / 'evidence'
+        evidence.mkdir()
+        prior_failure = evidence / 'failure.json'
+        prior_failure.write_text('{"prior": 1}', encoding='utf-8')
+        wsb.write_text(
+            '<Configuration><MappedFolders>'
+            '<MappedFolder><HostFolder>C:\\old\\evidence</HostFolder>'
+            '<SandboxFolder>C:\\AredokoEvidence</SandboxFolder><ReadOnly>false</ReadOnly></MappedFolder>'
+            '</MappedFolders></Configuration>',
+            encoding='utf-8',
+        )
+
+        launched = []
+        killed = []
+        probe_calls = {'n': 0}
+
+        class FakeProc:
+            pid = 9001
+
+            def wait(self, timeout=None):
+                return 0
+
+            def poll(self):
+                return 0
+
+        def fake_popen(cmd, **kw):
+            launch_wsb = Path(cmd[1])
+            launched.append(launch_wsb)
+            (launch_wsb.parent / 'result.json').write_text('{"pass": true}', encoding='utf-8')
+            return FakeProc()
+
+        def fake_list():
+            probe_calls['n'] += 1
+            if probe_calls['n'] == 1:
+                return []
+            if probe_calls['n'] == 2:
+                return [
+                    {'pid': 9001, 'name': 'WindowsSandbox.exe', 'parent_pid': 1, 'cmdline': f'"WindowsSandbox.exe" "{launched[0]}"'},
+                    {'pid': 7777, 'name': 'WindowsSandbox.exe', 'parent_pid': 1, 'cmdline': r'"WindowsSandbox.exe" "C:\Other\User.wsb"'},
+                ]
+            return [{'pid': 7777, 'name': 'WindowsSandbox.exe', 'parent_pid': 1, 'cmdline': r'"WindowsSandbox.exe" "C:\Other\User.wsb"'}]
+
+        passed, report = trial.run_wsb_trial(
+            wsb,
+            evidence,
+            settle_seconds=0,
+            list_processes=fake_list,
+            popen=fake_popen,
+            stop_pids=lambda pids: killed.extend(pids),
+        )
+        self.assertTrue(passed)
+        self.assertTrue(prior_failure.exists())
+        run_dir = Path(report['evidence_dir'])
+        self.assertEqual(run_dir.parent, evidence / 'runs')
+        self.assertEqual(launched, [run_dir / 'Trial.wsb'])
+        rewritten = ET.parse(launched[0]).getroot()
+        self.assertEqual(rewritten.findtext('MappedFolders/MappedFolder/HostFolder'), str(run_dir))
+        self.assertEqual(killed, [9001])
 
     def test_select_owned_sandbox_pids_ignores_unrelated_instances(self):
         wsb = (self.root / 'data/ai-ui/trial/Trial.wsb').resolve()

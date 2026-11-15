@@ -1422,11 +1422,7 @@ public sealed partial class MainPage : Page
                 queryComposing=false;
                 CloseShelfHubCore();
                 CloseFolderHubCore();
-                if(view=="history"||view=="unreviewed")view="all";
-                Query.Text="";
-                SearchMode.SelectedIndex=0;
                 SetTagScope(tag);
-                ClearSimilarity();
                 UpdateSearchMethod();
                 RestoreNavigation();
             }
