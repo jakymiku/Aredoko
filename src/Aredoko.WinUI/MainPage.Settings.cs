@@ -102,28 +102,41 @@ public sealed partial class MainPage
             var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Opened += (_, _) => verificationLoad=LoadVerificationAsync();
             dialog.Closed += (_, _) => {if(!verificationLifetime.IsCancellationRequested)verificationLifetime.Cancel();closedTcs.TrySetResult(true);};
-            panel.Children.Add(new TextBlock{Text="ライブラリ・AI",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],Margin=new Thickness(0,4,0,0)});
-            var tools=new Grid{ColumnSpacing=8,RowSpacing=8};
-            tools.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-            tools.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-            for(var row=0;row<5;row++)tools.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
-            AutomationProperties.SetAutomationId(tools,"SettingsTools");
-            var toolIndex=0;
-            foreach(var (label,id,target) in new[]{
-                ("使い方・初回設定","BtnGettingStarted","help"),
-                ("AI検索の準備","BtnAIIndex","ai"),
-                ("関連語を編集","BtnRelatedTerms","terms"),
-                ("閲覧履歴を削除","BtnClearHistory","history"),
-                ("バックアップと復元","BtnBackupGuide","backup"),
-                ("診断情報を表示・コピー","BtnDiagnostics","diagnostics"),
-                ("ストレージとキャッシュ","BtnRuntimeCache","runtime-cache"),
-                ("AI環境を自動構築","BtnAIEnvironment","ai-environment"),
-                ("登録フォルダを管理","BtnSettingsOpenFolders","folders"),
-                ("棚一覧を管理","BtnSettingsOpenShelves","shelves")})
+            panel.Children.Add(new TextBlock{Text="ライブラリ・AI・保守",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],Margin=new Thickness(0,4,0,0)});
+            var toolsStack=new StackPanel{Spacing=10};
+            foreach(var (groupTitle,entries) in new (string,(string Label,string Id,string Target)[])[]{
+                ("日常の整理・使い方",[
+                    ("登録フォルダを管理","BtnSettingsOpenFolders","folders"),
+                    ("棚一覧を管理","BtnSettingsOpenShelves","shelves"),
+                    ("関連語を編集","BtnRelatedTerms","terms"),
+                    ("使い方・初回設定","BtnGettingStarted","help")]),
+                ("AI検索の準備・環境",[
+                    ("AI検索の準備","BtnAIIndex","ai"),
+                    ("AI環境を自動構築","BtnAIEnvironment","ai-environment")]),
+                ("保守・バックアップ・診断",[
+                    ("バックアップと復元","BtnBackupGuide","backup"),
+                    ("診断情報を表示・コピー","BtnDiagnostics","diagnostics"),
+                    ("ストレージとキャッシュ","BtnRuntimeCache","runtime-cache"),
+                    ("閲覧履歴を削除","BtnClearHistory","history")])})
             {
-                var button=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(button,id);
-                button.Click+=(_,_)=>{destination=target;dialog.Hide();};Grid.SetRow(button,toolIndex/2);Grid.SetColumn(button,toolIndex%2);tools.Children.Add(button);toolIndex++;
+                toolsStack.Children.Add(new TextBlock{Text=groupTitle,Style=(Style)Resources["MediaMetadataStyle"]});
+                var groupGrid=new Grid{ColumnSpacing=8,RowSpacing=8};
+                groupGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+                groupGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+                for(var r=0;r<(entries.Length+1)/2;r++)groupGrid.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+                for(var i=0;i<entries.Length;i++)
+                {
+                    var (label,id,target)=entries[i];
+                    var button=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Stretch};
+                    AutomationProperties.SetAutomationId(button,id);
+                    button.Click+=(_,_)=>{destination=target;dialog.Hide();};
+                    Grid.SetRow(button,i/2);Grid.SetColumn(button,i%2);
+                    groupGrid.Children.Add(button);
+                }
+                toolsStack.Children.Add(groupGrid);
             }
+            var tools=new ContentControl{Content=toolsStack,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch,IsTabStop=false};
+            AutomationProperties.SetAutomationId(tools,"SettingsTools");
             panel.Children.Add(tools);panel.Children.Add(advanced);
             try
             {

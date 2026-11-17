@@ -459,7 +459,7 @@ public sealed partial class MainPage : Page
             var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null&&!DirectContentSimilarity||(origin is null&&method.IsAI&&!method.IsDirectContent&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             SearchOptions.Header="AI候補の表示";
-            ResetBrowse(checked(page*pageSize),result);rows=result.Items;BindLibrarySelection();active=null; if(!folderSettingsActive&&librarySelection.Count==0)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();
+            ResetBrowse(checked(page*pageSize),result);rows=result.Items;BindLibrarySelection();active=null; if(!folderSettingsActive&&librarySelection.Count==0)Details.IsPaneOpen=false; DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;RenderRows();UpdateBrowseTagsFlyout();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text="";
             UpdateLibraryHeading();
             Count.Text=$"{result.Total:N0} 件";
@@ -642,11 +642,49 @@ public sealed partial class MainPage : Page
     private string FormatRowMetadata(MediaRow row, bool summarizeShelves = true)
     {
         var availability=row.Availability=="present"?"":AvailabilityLabel(row.Availability);
-        if(tiles)return row.MatchLabel+availability;
         var shelves=row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName).Where(name=>!string.IsNullOrWhiteSpace(name)).ToArray():string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf};
-        var shelfSummary=ShelfProtocol.SummarizeNames(shelves,maxVisible:summarizeShelves?3:0);
-        var tagSummary=string.Join("、",row.Tags);
+        var shelfSummary=ShelfProtocol.SummarizeNames(shelves,maxVisible:!summarizeShelves?0:tiles?1:3);
+        var tagSummary=tiles?string.Join("、",row.Tags.Take(3)):string.Join("、",row.Tags);
+        if(tiles)
+        {
+            var parts=new List<string>();
+            if(availability.Length>0)parts.Add(availability);
+            if(shelfSummary.Length>0)parts.Add("棚:"+shelfSummary);
+            if(tagSummary.Length>0)parts.Add(tagSummary);
+            return row.MatchLabel+string.Join(" · ",parts);
+        }
         return $"{row.MatchLabel}{MediaKindFilter.DisplayName(row)}{(availability.Length>0?" · "+availability:"")}{(shelfSummary.Length>0?" · 棚:"+shelfSummary:"")}{(tagSummary.Length>0?" · "+tagSummary:"")}";
+    }
+    private Border CreateCardBadge(string text, double maxWidth) =>
+        new()
+        {
+            Style = (Style)Resources["CardBadgeBorderStyle"],
+            Child = new TextBlock
+            {
+                Text = text,
+                MaxWidth = maxWidth,
+                MaxLines = 1,
+                TextWrapping = TextWrapping.NoWrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Style = (Style)Resources["MediaMetadataStyle"],
+            },
+        };
+    private void PopulateCardBadges(StackPanel badgeRow, MediaRow row)
+    {
+        badgeRow.Children.Clear();
+        var maxBadgeTextWidth = tiles ? 96.0 : 140.0;
+        badgeRow.Children.Add(CreateCardBadge(MediaKindFilter.DisplayName(row), maxBadgeTextWidth));
+        var shelves=row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName).Where(name=>!string.IsNullOrWhiteSpace(name)).ToArray():string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf};
+        if(shelves.Length>0)
+        {
+            var shelfLabel=ShelfProtocol.SummarizeNames(shelves,maxVisible:1);
+            badgeRow.Children.Add(CreateCardBadge("棚:"+shelfLabel,maxBadgeTextWidth));
+        }
+        if(row.Tags.Length>0)
+        {
+            var suffix=row.Tags.Length>1?$" +{row.Tags.Length-1}":"";
+            badgeRow.Children.Add(CreateCardBadge("#"+row.Tags[0]+suffix,maxBadgeTextWidth));
+        }
     }
     private void Items_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
@@ -667,10 +705,13 @@ public sealed partial class MainPage : Page
         var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextWrapping=TextWrapping.NoWrap,MaxLines=1,TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
         AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");AutomationProperties.SetName(title,row.Title);text.Children.Add(title);
         ToolTipService.SetToolTip(title, row.Title);
+        var badgeRow = new StackPanel { Tag = "ItemBadges", Orientation = Orientation.Horizontal, Spacing = 4 };
+        PopulateCardBadges(badgeRow, row);
+        text.Children.Add(badgeRow);
         var metadata = FormatRowMetadata(row);
         if (!string.IsNullOrWhiteSpace(metadata))
         {
-            var metaBlock = new TextBlock { Tag = "ItemMeta", Text = metadata, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] };
+            var metaBlock = new TextBlock { Tag = "ItemMeta", Text = metadata, TextWrapping = TextWrapping.Wrap, MaxLines = tiles ? 2 : 3, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] };
             AutomationProperties.SetAutomationId(metaBlock, $"ItemMeta{row.Id}");
             ToolTipService.SetToolTip(metaBlock, FormatRowMetadata(row, summarizeShelves: false));
             text.Children.Add(metaBlock);
@@ -697,11 +738,13 @@ public sealed partial class MainPage : Page
         }
         // Keep Image as the first child: resizing/recycling already owns it.
         var symbol=row.Kind switch { "audio"=>Symbol.Audio,"video"=>Symbol.Video,"book" or "archive"=>Symbol.Library,"image"=>Symbol.Pictures,_=>Symbol.Document };
+        var thumbPlate = new Border { Tag = "ThumbPlate", Style = (Style)Resources["ThumbPlateStyle"] };
+        Canvas.SetZIndex(thumbPlate, -1);
         var placeholder=new Viewbox { Width=32,Height=32,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,IsHitTestVisible=false,
             Child=new SymbolIcon(symbol) { Style=(Style)Resources["MediaPlaceholderIconStyle"] } };
         AutomationProperties.SetAutomationId(placeholder,$"PreviewPlaceholder{row.Id}");
         AutomationProperties.SetName(placeholder,MediaKindFilter.DisplayName(row));
-        content.Children.Add(image);content.Children.Add(placeholder);content.Children.Add(text);
+        content.Children.Add(image);content.Children.Add(thumbPlate);content.Children.Add(placeholder);content.Children.Add(text);
         item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
         item.ContextFlyout=SimilarityMenu(row);
         UpdateSelectionFrame(item);
@@ -761,11 +804,16 @@ public sealed partial class MainPage : Page
             ConstrainCardCaption(content,text);
             // Reserve the same caption space before/after thumbnail completion;
             // the first decoded tile must not set a shorter uniform row height.
-            text.MinHeight=tiles?44:0;
+            text.MinHeight=tiles?60:0;
         }
         // Leave room for the filename and metadata even in a short window.
         var height=Math.Max(48,ItemListContainer.ActualHeight-108);
         image.Height=tiles?Math.Min(144*scale,height):64*scale;
+        if(image.Parent is Grid cardGrid&&cardGrid.Children.OfType<Border>().FirstOrDefault(border=>Equals(border.Tag,"ThumbPlate")) is {} thumbPlate)
+        {
+            thumbPlate.Width=image.Width;
+            thumbPlate.Height=image.Height;
+        }
     }
     private static void ConstrainCardCaption(Grid content,StackPanel text)
     {
@@ -1236,6 +1284,73 @@ public sealed partial class MainPage : Page
             FilterByActiveTagButton.Flyout=tagFlyout;
         }
         else FilterByActiveTagButton.Flyout=null;
+
+        ActiveTagChipsPanel.Children.Clear();
+        var draftTags=active is null?[]:Current().ParsedTags;
+        var hasDraftTags=draftTags.Length>0;
+        ActiveTagChipsScroll.Visibility=hasDraftTags?Visibility.Visible:Visibility.Collapsed;
+        if(hasDraftTags)
+        {
+            var canEditDraft=active is not null&&!saving&&tagReviewSyncItem!=active.Id;
+            for(var i=0;i<draftTags.Length;i+=2)
+            {
+                var chipRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4};
+                for(var j=i;j<Math.Min(i+2,draftTags.Length);j++)
+                {
+                    var index=j;
+                    var tag=draftTags[index];
+                    var chipText=new TextBlock{Text="#"+tag,MaxWidth=110,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center,Style=(Style)Resources["MediaMetadataStyle"]};
+                    var removeBtn=new Button{Content="×",Padding=new Thickness(4,0,4,0),MinWidth=0,MinHeight=0,IsEnabled=canEditDraft};
+                    ToolTipService.SetToolTip(removeBtn,$"タグ「{tag}」を外す");
+                    AutomationProperties.SetAutomationId(removeBtn,$"RemoveDraftTag{index}");
+                    AutomationProperties.SetName(removeBtn,$"タグ「{tag}」を外す");
+                    removeBtn.Click+=(_,_)=>
+                    {
+                        if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id)return;
+                        Tags.Text=string.Join(", ",Current().ParsedTags.Where(existing=>existing!=tag));
+                        Tags.Focus(FocusState.Programmatic);
+                    };
+                    var chipInner=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4};
+                    chipInner.Children.Add(chipText);
+                    chipInner.Children.Add(removeBtn);
+                    chipRow.Children.Add(new Border{Style=(Style)Resources["CardBadgeBorderStyle"],Child=chipInner});
+                }
+                ActiveTagChipsPanel.Children.Add(chipRow);
+            }
+        }
+
+        var candidateTags=active is null?[]:rows.SelectMany(row=>row.Tags).Where(t=>!string.IsNullOrWhiteSpace(t)).Distinct().Where(t=>!draftTags.Contains(t)).Take(25).ToArray();
+        var canSuggest=active is not null&&candidateTags.Length>0;
+        SuggestExistingTagsButton.Visibility=canSuggest?Visibility.Visible:Visibility.Collapsed;
+        SuggestExistingTagsButton.IsEnabled=canSuggest&&!saving&&tagReviewSyncItem!=active!.Id&&draftTags.Length<30;
+        if(canSuggest)
+        {
+            var suggestFlyout=new MenuFlyout();
+            for(var i=0;i<candidateTags.Length;i++)
+            {
+                var candidateTag=candidateTags[i];
+                var suggestItem=new MenuFlyoutItem{Text=$"＋ {candidateTag}"};
+                AutomationProperties.SetAutomationId(suggestItem,$"SuggestTag{i}");
+                suggestItem.Click+=(_,_)=>
+                {
+                    if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id)return;
+                    Tags.Text=string.Join(", ",Current().ParsedTags.Append(candidateTag).Distinct());
+                    Tags.Focus(FocusState.Programmatic);
+                };
+                suggestFlyout.Items.Add(suggestItem);
+            }
+            SuggestExistingTagsButton.Flyout=suggestFlyout;
+        }
+        else SuggestExistingTagsButton.Flyout=null;
+    }
+    private async void Tags_KeyDown(object sender,KeyRoutedEventArgs e)
+    {
+        if(e.Key==Windows.System.VirtualKey.Enter&&SelectionKey(Windows.System.VirtualKey.Control)&&!SelectionKey(Windows.System.VirtualKey.Shift)&&!SelectionKey(Windows.System.VirtualKey.Menu)
+           &&ready&&!disposed&&!saving&&!dialogOpen&&Dirty&&tagReviewSyncItem!=active?.Id)
+        {
+            e.Handled=true;
+            await SaveAsync();
+        }
     }
     private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
     private async void Favorite_Checked(object sender,RoutedEventArgs args)
@@ -1286,6 +1401,8 @@ public sealed partial class MainPage : Page
             {
                 if(captions.Children.OfType<TextBlock>().FirstOrDefault() is {} title)
                     title.Text=(row.Favorite?"★ ":"")+row.Title;
+                if(captions.Children.OfType<StackPanel>().FirstOrDefault(sp=>Equals(sp.Tag,"ItemBadges")) is {} badges)
+                    PopulateCardBadges(badges,row);
                 if(captions.Children.OfType<TextBlock>().FirstOrDefault(tb=>Equals(tb.Tag,"ItemMeta")) is {} metaBlock)
                 {
                     metaBlock.Text=FormatRowMetadata(row);
@@ -1393,7 +1510,46 @@ public sealed partial class MainPage : Page
     {
         selectedTagScope=ResultSearchConditions.NormalizeTag(tag);
         UpdateTagScopeLabel();
+        UpdateBrowseTagsFlyout();
         UpdateClearSearchConditionsVisibility();
+    }
+    private void UpdateBrowseTagsFlyout()
+    {
+        if(BrowseTagsButton is null)return;
+        var rankedTags=rows
+            .SelectMany(row=>row.Tags.Distinct())
+            .GroupBy(tag=>tag)
+            .Select(group=>(Tag:group.Key,Count:group.Count()))
+            .OrderByDescending(entry=>entry.Count)
+            .ThenBy(entry=>entry.Tag,StringComparer.CurrentCultureIgnoreCase)
+            .Take(30)
+            .ToArray();
+        var visible=rankedTags.Length>0||selectedTagScope is not null;
+        BrowseTagsButton.Visibility=visible?Visibility.Visible:Visibility.Collapsed;
+        BrowseTagsButton.IsEnabled=visible&&!saving;
+        if(!visible)
+        {
+            BrowseTagsButton.Flyout=null;
+            return;
+        }
+        var flyout=new MenuFlyout();
+        if(selectedTagScope is not null)
+        {
+            var clearItem=new MenuFlyoutItem{Text="タグ絞り込みを解除"};
+            AutomationProperties.SetAutomationId(clearItem,"BrowseTagClear");
+            clearItem.Click+=(s,e)=>ClearTagScope_Click(s,e);
+            flyout.Items.Add(clearItem);
+            if(rankedTags.Length>0)flyout.Items.Add(new MenuFlyoutSeparator());
+        }
+        for(var i=0;i<rankedTags.Length;i++)
+        {
+            var (tag,count)=rankedTags[i];
+            var tagItem=new MenuFlyoutItem{Text=$"#{tag}（{count:N0} 件）"};
+            AutomationProperties.SetAutomationId(tagItem,$"BrowseTagItem{i}");
+            tagItem.Click+=async(_,_)=>await FilterByTagAsync(tag);
+            flyout.Items.Add(tagItem);
+        }
+        BrowseTagsButton.Flyout=flyout;
     }
     private void UpdateTagScopeLabel()
     {

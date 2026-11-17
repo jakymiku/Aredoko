@@ -16,6 +16,23 @@
   <Style x:Key="MediaPlaceholderIconStyle" TargetType="SymbolIcon"><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
   <Style x:Key="MediaTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}"><Setter Property="FontWeight" Value="SemiBold"/></Style>
   <Style x:Key="MediaMetadataStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}"><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/></Style>
+  <Style x:Key="CardBadgeBorderStyle" TargetType="Border">
+   <Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}"/>
+   <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+   <Setter Property="BorderThickness" Value="1"/>
+   <Setter Property="CornerRadius" Value="4"/>
+   <Setter Property="Padding" Value="6,1"/>
+   <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style x:Key="ThumbPlateStyle" TargetType="Border">
+   <Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}"/>
+   <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+   <Setter Property="BorderThickness" Value="1"/>
+   <Setter Property="CornerRadius" Value="6"/>
+   <Setter Property="HorizontalAlignment" Value="Center"/>
+   <Setter Property="VerticalAlignment" Value="Center"/>
+   <Setter Property="IsHitTestVisible" Value="False"/>
+  </Style>
  </Page.Resources>
  <Page.KeyboardAccelerators><KeyboardAccelerator Key="Home" Modifiers="Control" Invoked="BrowseEdgeShortcut"/><KeyboardAccelerator Key="End" Modifiers="Control" Invoked="BrowseEdgeShortcut"/><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchShortcut"/><KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveShortcut"/><KeyboardAccelerator Key="Escape" Invoked="CancelSearchShortcut"/><KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="HistoryBackShortcut"/><KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="HistoryForwardShortcut"/></Page.KeyboardAccelerators>
  <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Auto" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="180" SelectionChanged="Nav_SelectionChanged" ItemInvoked="Navigation_ItemInvoked" AutomationProperties.AutomationId="Nav">
@@ -70,7 +87,11 @@
       </Expander>
       <Button x:Name="TagSuggestionsButton" Content="AIタグ候補" Visibility="Collapsed" IsEnabled="False" Click="TagSuggestions_Click" AutomationProperties.AutomationId="BtnTagSuggestions"/>
 
-       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" TextWrapping="Wrap" MaxHeight="120" ScrollViewer.VerticalScrollBarVisibility="Auto" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
+       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" PlaceholderText="カンマ区切りで入力（Ctrl+Enterで保存）" TextWrapping="Wrap" MaxHeight="120" ScrollViewer.VerticalScrollBarVisibility="Auto" KeyDown="Tags_KeyDown" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
+       <ScrollViewer x:Name="ActiveTagChipsScroll" Visibility="Collapsed" MaxHeight="88" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="ActiveTagChipsScroll">
+        <StackPanel x:Name="ActiveTagChipsPanel" Spacing="4" AutomationProperties.AutomationId="ActiveTagChipsPanel"/>
+       </ScrollViewer>
+       <Button x:Name="SuggestExistingTagsButton" Content="一覧の既存タグから追加…" HorizontalAlignment="Stretch" Visibility="Collapsed" ToolTipService.ToolTip="表示中の一覧にある既存タグから選んで追加します" AutomationProperties.Name="既存タグから追加" AutomationProperties.AutomationId="BtnSuggestExistingTags"/>
        <Button x:Name="FilterByActiveTagButton" Content="この作品のタグで検索…" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="登録済みのタグを選んで一覧を検索します" AutomationProperties.AutomationId="BtnFilterByActiveTag"/>
        <Grid ColumnSpacing="8">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -163,7 +184,8 @@
      <TextBlock x:Name="Count" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TxtCount"/>
     <StackPanel x:Name="ViewTools" VerticalAlignment="Center" Visibility="{Binding Visibility, ElementName=SearchTools, Mode=OneWay}" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" SizeChanged="SearchToolbarPart_SizeChanged">
     <Button x:Name="LayoutButton" Content="グリッド表示" Click="Layout_Click" AutomationProperties.AutomationId="BtnLayout"/>
-    <Button Content="表示サイズ" ToolTipService.ToolTip="Ctrl＋ホイールでも変更できます" AutomationProperties.AutomationId="BtnItemSize">
+    <Button ToolTipService.ToolTip="Ctrl＋ホイールでも変更できます" AutomationProperties.Name="表示サイズ" AutomationProperties.AutomationId="BtnItemSize">
+     <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="View"/><TextBlock Text="表示サイズ"/></StackPanel>
      <Button.Flyout><Flyout x:Name="ItemSizeFlyout" Placement="Bottom">
       <StackPanel Width="240" Spacing="8">
        <TextBlock Text="アイテムの表示サイズ" Style="{StaticResource BodyStrongTextBlockStyle}"/>
@@ -181,9 +203,9 @@
       </StackPanel>
      </Flyout></Button.Flyout>
     </Button>
-    <Button x:Name="DetailsButton" Content="詳細" IsEnabled="False" Click="OpenDetails_Click" AutomationProperties.AutomationId="BtnDetails"/>
+    <Button x:Name="DetailsButton" IsEnabled="False" Click="OpenDetails_Click" AutomationProperties.Name="詳細" AutomationProperties.AutomationId="BtnDetails"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="DockRight"/><TextBlock Text="詳細"/></StackPanel></Button>
     </StackPanel>
-     <Button x:Name="RootsButton" Content="フォルダ管理" Click="Roots_Click" AutomationProperties.AutomationId="BtnRoots"/>
+     <Button x:Name="RootsButton" Click="Roots_Click" AutomationProperties.Name="フォルダ管理" AutomationProperties.AutomationId="BtnRoots"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Folder"/><TextBlock Text="フォルダ管理"/></StackPanel></Button>
     </StackPanel>
    </Grid>
    <Grid x:Name="ItemSearchRow" Grid.Row="1" ColumnSpacing="8"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -191,9 +213,10 @@
     <StackPanel x:Name="SearchFilterTools" Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" SizeChanged="SearchToolbarPart_SizeChanged">
     <ComboBox x:Name="Kind" ToolTipService.ToolTip="表示するファイルの種類" SelectedIndex="0" SelectionChanged="Kind_Changed" MinWidth="116" AutomationProperties.Name="種類" AutomationProperties.AutomationId="CmbKind"><ComboBoxItem Content="すべての種類"/><ComboBoxItem Content="本"/><ComboBoxItem Content="画像"/><ComboBoxItem Content="動画"/><ComboBoxItem Content="音声・音楽"/><ComboBoxItem Content="圧縮ファイル" ToolTipService.ToolTip="ZIP・CBZをまとめて表示"/><ComboBoxItem Content="素材"/></ComboBox>
     <ComboBox x:Name="SearchMode" SelectedIndex="0" SelectionChanged="SearchMode_Changed" MinWidth="116" AutomationProperties.Name="検索方法" AutomationProperties.AutomationId="CmbSearchMode"><ComboBoxItem Content="ファイル名・タグ" AutomationProperties.AutomationId="ModeLiteral"/><ComboBoxItem Content="両方で探す（AI）" AutomationProperties.AutomationId="ModeSemantic"/><ComboBoxItem Content="画像の見た目（AI）" AutomationProperties.AutomationId="ModeVisual"/><ComboBoxItem Content="ファイル名・タグの意味（AI）" AutomationProperties.AutomationId="ModeText"/><ComboBoxItem Content="未承認タグ候補" AutomationProperties.AutomationId="ModeTagCandidates"/><ComboBoxItem Content="ページ本文" AutomationProperties.AutomationId="ModePageText"/><ComboBoxItem Content="タグ候補の意味（AI）" AutomationProperties.AutomationId="ModeTagSemantic"/><ComboBoxItem Content="音声の内容（AI）" AutomationProperties.AutomationId="ModeAudioContent"/><ComboBoxItem Content="動画の内容（AI）" AutomationProperties.AutomationId="ModeVideoContent"/><ComboBoxItem Content="動画内の音声（AI）" AutomationProperties.AutomationId="ModeVideoAudioContent"/></ComboBox>
+    <Button x:Name="BrowseTagsButton" Content="タグ一覧…" Visibility="Collapsed" ToolTipService.ToolTip="一覧内の確定タグから選んで絞り込みます" AutomationProperties.Name="タグ一覧から絞り込む" AutomationProperties.AutomationId="BtnBrowseTags"/>
     <Button x:Name="ClearSearchConditionsButton" Content="条件を解除" Visibility="Collapsed" VerticalAlignment="Bottom" ToolTipService.ToolTip="検索語・種類・検索方法・絞り込みを初期状態に戻します" Click="ClearSearchConditions_Click" AutomationProperties.Name="検索条件を解除" AutomationProperties.AutomationId="BtnClearSearchConditions"/>
     </StackPanel>
-    <Button Grid.Column="2" x:Name="SearchButton" Content="検索" VerticalAlignment="Bottom" Style="{StaticResource AccentButtonStyle}" Click="Search_Click" AutomationProperties.AutomationId="BtnSearch"/>
+    <Button Grid.Column="2" x:Name="SearchButton" VerticalAlignment="Bottom" Style="{StaticResource AccentButtonStyle}" Click="Search_Click" AutomationProperties.Name="検索" AutomationProperties.AutomationId="BtnSearch"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Find"/><TextBlock Text="検索"/></StackPanel></Button>
     <Button Grid.Column="3" x:Name="CancelSearchButton" Content="中断" VerticalAlignment="Bottom" Visibility="Collapsed" Click="CancelSearch_Click" AutomationProperties.Name="検索中断" AutomationProperties.AutomationId="BtnCancelSearch"/>
    </Grid>
    <Grid x:Name="SearchTools" Grid.Row="2" ColumnSpacing="16">

@@ -74,6 +74,7 @@ public sealed partial class MainPage
                     }
                     finally{populating=before;}
                 }
+                UpdateBrowseTagsFlyout();
                 RestoreSelection();if(active is null)ApplyLibrarySelection();
                 if(anchor is {} retained&&rows.Any(row=>RowKey(row.Id)==retained.Key))await RestoreBrowseAnchorAsync(anchor);
             }

@@ -19,6 +19,19 @@
 | 3 | 登録フォルダ・設定・初回案内 | 日常操作と高度な設定を整理し、短く自然な日本語と次の操作が分かる導線にする。警告/進捗/未保存/検索範囲を隠さない |
 | 4 | 検索→閲覧→整理の往復 | 選択・位置・編集状態を保って戻れる操作を磨く。完了済みのタイトル/操作バー整理を繰り返さず、実際の不便から改善する |
 
+### 2026-11-17 UI/UX ブラッシュアップ・タスクキュー（UI-A〜UI-D）
+
+別エージェント／継続開発時に同じ設計方針と互換条件（既存 `AutomationId`・`content.Children[0]` = `Image`・`captions.Children.OfType<TextBlock>()` の先頭 = `title`・`Tag="ItemMeta"`・動的ボタンの文字列 `.Content`）を壊さず進められるよう、以下の4単位をタスクとして固定する。
+
+| ID | 状態 | 対象ファイル / 主なシンボル | 改善内容と完了条件 |
+| --- | --- | --- | --- |
+| **UI-A** | 完了（`frontend-product20` Light/Dark 受入） | [MainPage.xaml](file:///c:/AI/Aredoko/src/Aredoko.WinUI/MainPage.xaml)（`BtnItemSize`, `BtnDetails`, `BtnRoots`, `BtnSearch`）・[MainPage.xaml.cs](file:///c:/AI/Aredoko/src/Aredoko.WinUI/MainPage.xaml.cs)（`FormatRowMetadata`, `Items_ContainerContentChanging`, `SizeItem`, `RefreshFavoriteCard`） | 主要ボタンへアイコン付与。カードサムネイル背面に角丸プレート（`Tag="ThumbPlate"`, `ZIndex=-1`、`Children[0]` は `Image` 維持）を敷き、種別・棚・先頭タグのピルバッジ行（`Tag="ItemBadges"`）を追加。グリッド表示でも棚1件＋先頭3タグを要約表示し、`RefreshFavoriteCard` と同期する |
+| **UI-B** | 完了（`frontend-product20` Light/Dark 受入） | [MainPage.xaml](file:///c:/AI/Aredoko/src/Aredoko.WinUI/MainPage.xaml)（`TxtTags`, `ActiveTagChipsScroll`, `ActiveTagChipsPanel`, `BtnSuggestExistingTags`）・[MainPage.xaml.cs](file:///c:/AI/Aredoko/src/Aredoko.WinUI/MainPage.xaml.cs)（`Tags_KeyDown`, `UpdateDetailActions`, `Editor_Changed`） | 編集中タグのチップ一覧と「×」削除ボタン（`RemoveDraftTag{i}`）、一覧内既存タグからのワンクリック追加メニュー（`BtnSuggestExistingTags` → `SuggestTag{i}`）、`TxtTags` での `Ctrl+Enter` 保存を実装し、`Save` / `BtnRevertEdits` / 未保存確認と整合させる |
+| **UI-C** | 完了（`frontend-product20` Light/Dark 受入） | [MainPage.xaml](file:///c:/AI/Aredoko/src/Aredoko.WinUI/MainPage.xaml)（`BtnBrowseTags`）・[MainPage.xaml.cs](file:///c:/AI/Aredoko/src/Aredoko.WinUI/MainPage.xaml.cs)（`UpdateBrowseTagsFlyout`, `LoadAsync`, `SetTagScope`, `RefreshResultRowsAfterEditAsync`） | 検索バー横の「タグ一覧…」ボタン（`BtnBrowseTags`）から現在表示中の確定タグを件数順に集計（最大30件・絞り込み解除項目 `BrowseTagClear`・各項目 `BrowseTagItem{i}`）し、作品未選択時でも1クリックで `TagScopeBar` 絞り込みできるようにする |
+| **UI-D** | 完了（`frontend-product20` Light/Dark 受入） | [MainPage.Settings.cs](file:///c:/AI/Aredoko/src/Aredoko.WinUI/MainPage.Settings.cs)（`SettingsTools` 内10ツールボタン） | `SettingsTools` 内の全10個の `AutomationId`・文言・遷移先を維持したまま「日常の整理・使い方」「AI検索の準備・環境」「保守・バックアップ・診断」の3グループ見出し付きレイアウトへ整理する |
+
+※ 各タスク完了後は `Aredoko.Core.Tests` と Portable publish ＋ Light / Dark 両テーマの実 WinUI GUI 検証を実施し、本表の「状態」と [current-handoff.md](current-handoff.md) を更新する。
+
 **直近の実装単位**：検索領域・一覧ヘッダー/表示操作・項目の情報密度を、既存部品/共通resourceで改善する。最新sourceと生成データで短く現状を確認し、計画やmockだけで終わらず実装へ進む。最初から全画面/独自UI基盤を書き直さない。
 
 **2026-11-02 の到達点**：d727876の登録/部分失敗とa0ac6cbのfilter/件数/空案内は登録10checksで限定受入。85123b4で一覧footerから一括整理を追加し9checks受入、4b51901までのフォルダ一括選択・property操作の表示/有効状態も9checks受入。新規のパスcopy実操作/Explorerは未確認。基本ZIP26/source85123b4は通常EXE/終了/再起動11checks、後続2単位はfrontend03で限定確認。次は最新の受入済み変更を次のZIP候補へまとめ、UIキュー4の閲覧と一覧の往復へ進む。登録/一括選択の成功試験を毎回再実行せず、非致命的な問題はdeferred-issuesへ記録して実装を優先する。
