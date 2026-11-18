@@ -4,21 +4,21 @@
 
 ## 現行HEAD・最新候補/予備
 - ブランチ / PR：`feat/winui3-production-mvp-20261011` / Draft [PR #5](https://github.com/jakymiku/Aredoko/pull/5)
-- 直近機能コミット：`7eb7f3e`（**UI-A〜UI-D**・`frontend-product20`）、`01eecad`（候補20 E2E）
-- 最新配布候補：**候補21** `dist/portable-managed-20261118-21/Aredoko/Aredoko.exe`（source `7eb7f3e64fbe1521177ae3bd0245acf50be48db9`、`675` files / `501,291,470` bytes、ZIP `215,442,877` bytes SHA-256 `dd4659f5...`、`--self-test`・`preflight.json`・`validation-kit.zip`・オフライン Sandbox E2E PASS）
-- 受入済み直前予備：**候補20**（P6 E2E PASS）、**候補19**（P6 E2E PASS）、**候補15**（旧基準 Sandbox PASS）
-- 現行 frontend / 保持証拠：`data/development-tools/frontend-product20`（直前予備 `frontend-product19`、`frontend-product18` 整理済み）、証拠候補 `05` / `06` / `09`、`data/ai-ui/managed-candidate21-p6-e2e`
+- 直近機能コミット：`f4f3cd3`（**62項目 UI文言・導線改善 `A01`〜`F06`**・`frontend-product21`＋`bootstrap22.exe`）、`7eb7f3e`（**UI-A〜UI-D**・`frontend-product20`）
+- 最新配布候補：**候補22** `dist/portable-managed-20261118-22/Aredoko/Aredoko.exe`（source `f4f3cd3aacf7a527bf827102d97aa8e8eb548e60`、`675` files / `501,318,494` bytes、ZIP `215,457,790` bytes SHA-256 `3d4b14a8...`、`--self-test`・`preflight.json`・`validation-kit.zip` PASS；Sandbox E2E は候補22では未実施）
+- 受入済み直前予備：**候補21**（P6 Sandbox E2E PASS）、**候補19**（P6 Sandbox E2E PASS）
+- 現行 frontend / 保持証拠：`data/development-tools/frontend-product21`（直前予備 `frontend-product20`；候補20・`frontend-product19`・`run06_light_sandbox` は `data/_cleanup_candidates/20261118-candidate22/` へ隔離）、証拠候補 `05` / `06` / `09`、`data/ai-ui/managed-candidate21-p6-e2e`
 
 ## 最近確認した変更
-- **候補21 P6 再梱包・オフライン Windows Sandbox E2E（2026-11-18）**：`UI-A〜UI-D` を含む `frontend-product20`＋`LICENSE`＋`THIRD_PARTY_LICENSES/` を候補21へ再梱包し、[managed-candidate21-p6-e2e](data/ai-ui/managed-candidate21-p6-e2e/evidence/runs/run-20261118-002809-b1bbe8/result.json)（`<Networking>Disable</Networking>`・ゲスト内SAC無効化下）で ZIP 展開→登録/閲覧/保存→別パス再配置→保持/検索（[after-restart.png](data/ai-ui/managed-candidate21-p6-e2e/evidence/runs/run-20261118-002809-b1bbe8/after-restart.png)）・DB・原本SHA整合まで PASS。
-- **WinUI UI-A〜UI-D ブラッシュアップ（`7eb7f3e`、`frontend-product20`）**：カード背景プレート＋種別/棚/タグバッジ、グリッド時棚/タグ表示、詳細タグチップ削除・既存タグ追加・`Ctrl+Enter`保存、検索バー「タグ一覧…」（`BtnBrowseTags`）、設定3グループ整理。`Aredoko.Core.Tests` 終了コード `0` と [gui-ui-polish02](data/gui-ui-polish02/run04_light/summary.json)（Light `run04_light`・Dark `run05_dark`）PASS。
+- **UI文言・導線・情報階層改善 `A01`〜`F06`（`f4f3cd3`、`frontend-product21`・候補22）**：[Bootstrap.cs](src/Aredoko.Bootstrap/Bootstrap.cs) の初回準備案内整理、`GettingStarted` 3手順化、`AISetupPlan` 一括可否/10進GB表示、`CmbSearchMode` 全10項目/範囲表示/診断情報（実件数・共有前確認）・詳細 `ChkFavorite` 配置＆タグ保存/取消・設定グループ見出し＆未保存3択バー・肯定文言「AI検索用データも復元」を反映。`Aredoko.Core.Tests` 終了コード `0`、Python単体 `15`件＋`31`件 OK、[gui-ui-polish02](data/gui-ui-polish02/run07_dark/summary.json)（Light `run06_light`・Dark `run07_dark`）PASS。
+- **候補22 再梱包・事前検証（2026-11-18）**：`frontend-product21`＋`bootstrap22.exe`＋`LICENSE`/`THIRD_PARTY_LICENSES/` で `dist/portable-managed-20261118-22` を生成し、`Aredoko.exe --self-test`（`0`）と `preflight.json`（`pass: true`、`frontend_activation: "portable"`）を確認。
 
 ## 利用者にできること
-- 候補21（[Aredoko.exe](dist/portable-managed-20261118-21/Aredoko/Aredoko.exe)）をそのまま試用・ZIP展開・別配置でき、新UI（見やすいカード・タグチップ整理・「タグ一覧…」・設定グループ化・`LICENSE`/`THIRD_PARTY_LICENSES/`同梱）を一通り利用できる。
+- 候補22（[Aredoko.exe](dist/portable-managed-20261118-22/Aredoko/Aredoko.exe)）で改善後の日本語UI・導線・診断/設定・`LICENSE`/`THIRD_PARTY_LICENSES/` 同梱構成をそのまま試用・ZIP展開・別配置できる（クリーンSandbox E2E確認済みの予備は候補21）。
 
 ## 未受入・未検証
-- ユーザー実機での試用フィードバック反映、P6-3（`cp313-cu128-draft.json` 供給元レビュー・実 immutable host・`TRUSTED_CATALOGS` 登録）。
-- UI未確認：通常デスクトップ右クリック項目（`FilterByItemTag{id}_0` 単一タグ・`SelectRangeTo{id}`）、`Ctrl+Enter` 実キー入力、未確認ビュー、実日本語IME、物理DPI、ハイコントラスト。専用OCR（引き続き保留）。
+- 候補22 のオフライン Windows Sandbox E2E、`Bootstrap.exe` 初回DL文言の実クリーン環境表示、ユーザー実機試用フィードバック反映、P6-3（`cp313-cu128-draft.json` 供給元レビュー・実 immutable host・`TRUSTED_CATALOGS` 登録）。
+- UI未確認：登録直後 `PromptPostRegistrationScanAsync` 実操作、`CmbSearchMode` 全10項目実切替・関連性/復元AIデータ切替、未保存バー実クリック、実日本語IME、物理DPI、ハイコントラスト。専用OCR（引き続き保留）。
 
 ## 次の1件（P6 / UI）
-- **ユーザー試用フィードバック対応または P6-3 外部条件整備**：候補21一式の実利用テストの結果（違和感・改善希望）があれば UI タスクとして対応し、なければ P6-3（`cp313-cu128` 供給元レビュー・immutable host）または残UI確認へ進む。
+- **候補22のユーザー実機試用／P6 オフライン Sandbox E2E または P6-3 外部条件整備**：必要に応じ候補22（`bootstrap22.exe` 含む）で P6 Sandbox E2E または実利用テストを実施し、違和感があれば UI 改善、なければ P6-3（`cp313-cu128` 供給元レビュー・immutable host）へ進む。
