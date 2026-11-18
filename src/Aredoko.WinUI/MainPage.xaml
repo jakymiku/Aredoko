@@ -403,6 +403,14 @@
      <Button x:Name="FooterBulkActions" Content="まとめて整理" Click="FooterBulkActions_Click" AutomationProperties.AutomationId="FooterBulkActions"/>
      <Button x:Name="FooterClearSelection" Content="選択を解除" Click="ClearLibrarySelection_Click" AutomationProperties.AutomationId="FooterClearSelection"/>
     </StackPanel></Grid>
+    <Border x:Name="RuntimeVerifyCard" Padding="12,8" CornerRadius="{ThemeResource ControlCornerRadius}" Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" Visibility="Collapsed" AutomationProperties.AutomationId="RuntimeVerifyCard" AutomationProperties.Name="AI環境の準備状況">
+     <Grid ColumnSpacing="16">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <TextBlock x:Name="RuntimeVerifyTitle" Text="AI環境の整合性を検証中…" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" AutomationProperties.AutomationId="RuntimeVerifyTitle"/>
+      <ProgressBar x:Name="RuntimeVerifyProgress" Grid.Column="1" Minimum="0" Maximum="100" Width="220" IsIndeterminate="True" VerticalAlignment="Center" AutomationProperties.AutomationId="RuntimeVerifyProgress"/>
+      <TextBlock x:Name="RuntimeVerifyDetail" Grid.Column="2" Text="ファイルを走査しています…" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.AutomationId="RuntimeVerifyDetail"/>
+     </Grid>
+    </Border>
     <Grid x:Name="ItemPagerRow" ColumnSpacing="8">
      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
      <TextBlock Text="読み込み済み" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center"/>
@@ -430,13 +438,6 @@
      </Button></InfoBar.ActionButton>
     </InfoBar>
    </StackPanel>
-   <Border x:Name="RuntimeVerifyCard" Grid.RowSpan="5" Canvas.ZIndex="20" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,16" Padding="14,10" CornerRadius="{ThemeResource ControlCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" MaxWidth="360" Visibility="Collapsed" AutomationProperties.AutomationId="RuntimeVerifyCard" AutomationProperties.Name="AI環境の準備状況">
-    <StackPanel Spacing="6">
-     <TextBlock x:Name="RuntimeVerifyTitle" Text="AI環境の整合性を検証中…" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="RuntimeVerifyTitle"/>
-     <ProgressBar x:Name="RuntimeVerifyProgress" Minimum="0" Maximum="100" Width="280" IsIndeterminate="True" AutomationProperties.AutomationId="RuntimeVerifyProgress"/>
-     <TextBlock x:Name="RuntimeVerifyDetail" Text="ファイルを走査しています…" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="RuntimeVerifyDetail"/>
-    </StackPanel>
-   </Border>
   </Grid>
    </SplitView>
  </NavigationView>
