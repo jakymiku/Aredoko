@@ -46,21 +46,21 @@ public sealed partial class MainPage
         {
             var selected=AISetupSelection.Normalize(ViewerOptions.Value.AISetupFeatures);long version=0;
             var panel=new StackPanel{Spacing=12};
-            panel.Children.Add(new TextBlock{Text="探したい内容を選んでください。ファイル名・タグの文字検索と閲覧は、AIなしでも使えます。",TextWrapping=TextWrapping.Wrap});
-            var summary=new TextBlock{Text="機能を選び、「必要な環境を確認」を押してください。",TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};
+            panel.Children.Add(new TextBlock{Text="探したい内容を選んでください。名前・タグの文字検索と閲覧は、AIなしでも使えます。",TextWrapping=TextWrapping.Wrap});
+            var summary=new TextBlock{Text="使いたい機能を選び、「必要なものを確認」を押してください。",TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};
             AutomationProperties.SetAutomationId(summary,"AISetupPlanSummary");
             var nextSteps=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};AutomationProperties.SetAutomationId(nextSteps,"AISetupNextSteps");
             var recoveryText=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};AutomationProperties.SetAutomationId(recoveryText,"AISetupRecoveryText");
-            var diagnostics=new Button{Content="診断情報を表示",IsEnabled=false};AutomationProperties.SetAutomationId(diagnostics,"AISetupDiagnostics");
+            var diagnostics=new Button{Content="診断情報を確認",IsEnabled=false};AutomationProperties.SetAutomationId(diagnostics,"AISetupDiagnostics");
             var recoveryPanel=new StackPanel{Spacing=8};recoveryPanel.Children.Add(recoveryText);recoveryPanel.Children.Add(diagnostics);
             var recovery=new Expander{Header="うまく使えないとき",Content=recoveryPanel,Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(recovery,"AISetupRecovery");
-            var review=new Button{Content="必要な環境を確認"};AutomationProperties.SetAutomationId(review,"ReviewAISetupPlan");
-            var download=new Button{Content="モデルの取得候補を見る",IsEnabled=false};AutomationProperties.SetAutomationId(download,"AISetupPlanDownload");
-            var existing=new Button{Content="配置済みの環境・モデルを指定",IsEnabled=false};AutomationProperties.SetAutomationId(existing,"AISetupPlanExisting");
-            var automatic=new Button{Content="EmbeddingGemma 2を自動構築"};AutomationProperties.SetAutomationId(automatic,"AISetupPlanAutomatic");
+            var review=new Button{Content="必要なものを確認"};AutomationProperties.SetAutomationId(review,"ReviewAISetupPlan");
+            var download=new Button{Content="ダウンロードできるモデルを選ぶ",IsEnabled=false};AutomationProperties.SetAutomationId(download,"AISetupPlanDownload");
+            var existing=new Button{Content="手元のモデル・環境を使う",IsEnabled=false};AutomationProperties.SetAutomationId(existing,"AISetupPlanExisting");
+            var automatic=new Button{Content="自動セットアップ（セットアップ内容を見る）"};AutomationProperties.SetAutomationId(automatic,"AISetupPlanAutomatic");
             var skip=new Button{Content="今はAIを使わず始める"};AutomationProperties.SetAutomationId(skip,"SkipAISetup");
             var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(progress,"AISetupPlanProgress");AutomationProperties.SetName(progress,"AI準備の確認中");
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="使いたいAI機能",PrimaryButtonText="索引・詳細設定へ",CloseButtonText="後で",DefaultButton=ContentDialogButton.None,IsPrimaryButtonEnabled=false};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AIで探す方法",PrimaryButtonText="AI検索を設定へ",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,IsPrimaryButtonEnabled=false};
             AutomationProperties.SetAutomationId(dialog,"AISetupPlanDialog");
             var choices=new Grid{ColumnSpacing=12,RowSpacing=8};
             choices.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
@@ -82,7 +82,7 @@ public sealed partial class MainPage
                 {
                     selected=choice.IsChecked==true?selected|(1<<index):selected&~(1<<index);
                     version++;request?.Cancel();download.IsEnabled=false;existing.IsEnabled=false;dialog.IsPrimaryButtonEnabled=false;
-                    summary.Text="選択を変更しました。「必要な環境を確認」で更新できます。";nextSteps.Text="";
+                    summary.Text="選択を変更しました。「必要なものを確認」を押すと最新状態を確認できます。";nextSteps.Text="";
                     recovery.Visibility=Visibility.Collapsed;diagnostics.IsEnabled=false;
                 }
                 choice.Checked+=(_,_)=>Changed();choice.Unchecked+=(_,_)=>Changed();
@@ -113,6 +113,7 @@ public sealed partial class MainPage
                     summary.Text=plan.Summary;
                     nextSteps.Text=AISetupGuidance.Describe(plan,selection,downloadJob,environmentJob);
                     recoveryText.Text=AISetupRecovery.Describe(plan);recovery.Visibility=plan.SkipAI?Visibility.Collapsed:Visibility.Visible;diagnostics.IsEnabled=!plan.SkipAI;
+                    automatic.Content=plan.SkipAI?"自動セットアップ（セットアップ内容を見る）":plan.AutomaticSetupSupported?"自動セットアップ（セットアップ内容を見る）":"自動セットアップ（現在のモデルは非対応）";
                     existing.IsEnabled=!plan.SkipAI;
                     download.IsEnabled=!plan.ProfileRestartRequired&&!plan.ProfileSelectionInvalid&&plan.Requirements.Any(row=>row.Id=="embedding-model"&&!row.FilesPresent&&row.CatalogIds.Count>0);
                     dialog.IsPrimaryButtonEnabled=!plan.SkipAI;

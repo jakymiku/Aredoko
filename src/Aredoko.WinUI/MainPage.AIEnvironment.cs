@@ -18,8 +18,8 @@ public sealed partial class MainPage
         {
             dialogOpen=true;
             var panel=new StackPanel{Spacing=12};
-            var modelScope=new ComboBox{Header="モデル保存先の対象",HorizontalAlignment=HorizontalAlignment.Stretch};
-            foreach(var (label,role) in new (string,string?)[]{("すべてのモデル（共通）",null),("内容検索（文章・画像・動画・音声）","embedding"),("画像のタグ付け（WD Tagger）","tagger"),("検索意図の解析","intent")})
+            var modelScope=new ComboBox{Header="保存先を変える範囲",HorizontalAlignment=HorizontalAlignment.Stretch};
+            foreach(var (label,role) in new (string,string?)[]{("すべてのモデル（共通）",null),("用途別：内容検索（文章・画像・動画・音声）","embedding"),("用途別：画像のタグ付け（WD Tagger）","tagger"),("用途別：検索意図の解析","intent")})
                 modelScope.Items.Add(new ComboBoxItem{Content=label,Tag=role});
             var modelTargets=new Dictionary<string,AIModelTarget>();
             void AddModel(AIModelTarget target)
@@ -83,7 +83,7 @@ public sealed partial class MainPage
             {
                 models.Text=locations?.ModelLocation(SelectedRole(),SelectedTarget())??"標準の場所";
                 resetModels.Content=SelectedTarget() is not null?"このモデルの指定を解除":SelectedRole() is null?"すべて標準に戻す":"この対象を標準に戻す";
-                scopeNote.Text=SelectedTarget() is not null?"このモデルだけの保存先です。他のモデルと役割の保存先は保持します。":SelectedRole() is null?"共通の場所を変更すると、すべてのモデルの個別指定も解除します。モデルファイルは移動しません。":"この対象だけを変更します。同じ対象のモデル別指定は解除します。他の対象の保存先は保持します。";
+                scopeNote.Text=SelectedTarget() is not null?"このモデルだけの保存先を変更します。他のモデルや用途の指定はそのまま残ります（フォルダ内のファイルは移動しません）。":SelectedRole() is null?"すべてのモデルを共通の場所へ設定すると、モデルごとの個別指定は解除されます（フォルダ内のファイルは移動しません）。":"同じ用途のモデル別指定が解除されます。他の用途の指定はそのまま残ります（フォルダ内のファイルは移動しません）。";
             }
             modelScope.SelectionChanged+=(_,_)=>RenderModelLocation();
             RenderModelLocation();

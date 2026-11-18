@@ -47,8 +47,8 @@ public static class DiagnosticsReport
         JsonNode? aiStatus,
         JsonNode? aiScope,
         IReadOnlyList<RegisteredRootRow>? roots = null,
-        int shelfCount = 0,
-        int termCount = 0,
+        int shelfCount = -1,
+        int termCount = -1,
         string theme = "Dark",
         string appVersion = "1.0.0-beta",
         int rootCount = -1,
@@ -75,8 +75,8 @@ public static class DiagnosticsReport
         var rEnabled = enabledRootCount >= 0 ? enabledRootCount : (roots?.Count(r => r.Enabled) ?? 0);
         sb.AppendLine($"登録フォルダ数: {rTotal} 件 (パス情報は非公開)");
         sb.AppendLine($"有効フォルダ数: {rEnabled} 件");
-        sb.AppendLine($"棚（タグ分類）数: {shelfCount} 件");
-        sb.AppendLine($"関連語辞書エントリ数: {termCount} 件");
+        sb.AppendLine($"棚の数: {(shelfCount >= 0 ? $"{shelfCount} 件" : "未確認")}");
+        sb.AppendLine($"登録した関連語: {(termCount >= 0 ? $"{termCount} 件" : "未確認")}");
         sb.AppendLine();
 
         sb.AppendLine("--- AI機能・モデル状態 ---");
@@ -126,7 +126,7 @@ public static class DiagnosticsReport
 
         sb.AppendLine("--- 機密保護・プライバシー注記 ---");
         sb.AppendLine("※ 認証トークンとユーザー名は伏字にしています。実行場所やAI状態など、共有前に内容を確認してください。");
-        sb.AppendLine("※ この診断情報は外部サーバーへ自動送信されません。クリップボードへのコピーまたは保存のみ可能です。");
+        sb.AppendLine("※ この診断情報は外部サーバーへ自動送信されません。クリップボードへのコピーのみ可能です。");
         sb.AppendLine("====================================================");
 
         return sb.ToString();

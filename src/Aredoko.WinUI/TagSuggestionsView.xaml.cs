@@ -80,7 +80,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
             AutomationProperties.SetAutomationId(row,$"TagCandidate{value.Id}");AutomationProperties.SetName(row,$"{value.Tag} {value.StateLabel}");Candidates.Items.Add(row);
         }
         Candidates.SelectedIndex=Candidates.Items.Count>0?0:-1;
-        if(Candidates.Items.Count==0){Explanation.Text="候補はありません。自動承認は行いません。";Edited.Text="";}
+        if(Candidates.Items.Count==0){Explanation.Text="この履歴にはタグ候補がありません。自動承認は行いません。";Edited.Text="";}
         evidenceCancellation?.Cancel();evidenceCancellation?.Dispose();evidenceCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         if(!batch.Stale)_=ShowEvidenceAsync(batch,evidenceCancellation.Token);UpdateButtons();
     }

@@ -5,8 +5,8 @@
   <StackPanel Grid.Row="1" Spacing="8">
    <StackPanel Orientation="Horizontal" Spacing="8">
     <Button x:Name="Generate" Content="候補を生成" Click="Generate_Click" AutomationProperties.AutomationId="TagGenerate"/>
-    <Button x:Name="Refresh" Content="最新へ" Click="Refresh_Click" AutomationProperties.AutomationId="TagRefresh"/>
-    <Button x:Name="Older" Content="古い履歴" Click="Older_Click" AutomationProperties.AutomationId="TagOlder"/>
+    <Button x:Name="Refresh" Content="最新の候補を表示" Click="Refresh_Click" AutomationProperties.AutomationId="TagRefresh"/>
+    <Button x:Name="Older" Content="以前の履歴を読み込む" Click="Older_Click" AutomationProperties.AutomationId="TagOlder"/>
     <Button x:Name="Cancel" Content="中止" Click="Cancel_Click" IsEnabled="False" AutomationProperties.AutomationId="TagCancel"/>
    </StackPanel>
    <ComboBox x:Name="Batches" Header="生成履歴" HorizontalAlignment="Stretch" SelectionChanged="Batch_Changed" AutomationProperties.AutomationId="TagBatches"/>

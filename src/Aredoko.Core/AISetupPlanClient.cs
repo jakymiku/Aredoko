@@ -14,7 +14,8 @@ public static class AISetupSelection
 public sealed record AISetupRequirement(string Id,bool FilesPresent,string Action,IReadOnlyList<string> CatalogIds,string State="unknown");
 public sealed record AISetupPlan(bool SkipAI,long KnownBytes,long? TotalBytes,bool RestartRequired,
     IReadOnlyList<string> Unsupported,IReadOnlyList<AISetupRequirement> Requirements,
-    bool ProfileRestartRequired=false,bool ProfileOverride=false,bool ProfileSelectionInvalid=false)
+    bool ProfileRestartRequired=false,bool ProfileOverride=false,bool ProfileSelectionInvalid=false,
+    bool AutomaticSetupSupported=false)
 {
     public string Summary
     {
@@ -22,18 +23,25 @@ public sealed record AISetupPlan(bool SkipAI,long KnownBytes,long? TotalBytes,bo
         {
             if(SkipAI)return "AIは使わず、ファイル名・タグ検索と閲覧から始められます。後から設定で追加できます。";
             var lines=new List<string>();
-            if(ProfileSelectionInvalid)lines.Add("保存したモデル選択を確認できません。「索引・詳細設定へ」で設定を確認してください。");
+            if(ProfileSelectionInvalid)lines.Add("保存したモデル選択を確認できません。「AI検索を設定へ」で設定を確認してください。");
             if(ProfileRestartRequired)lines.Add("モデルの変更待ちです。以下は起動中のモデルの確認結果です。新しいモデルの準備は再起動後に確認してください。");
             if(ProfileOverride)lines.Add("起動引数のモデル指定が優先されています。保存したモデルへ切り替えるには、その指定を外して起動し直してください。");
-            if(Unsupported.Count>0)lines.Add("選んだ機能の一部は現在のモデルに対応していません。準備画面で対応モデルを選択してください。");
+            if(Unsupported.Count>0)lines.Add("選んだ機能の一部は現在のモデルに対応していません。設定画面で対応モデルを選択してください。");
             foreach(var requirement in Requirements)
             {
                 var label=requirement.Id=="embedding-runtime"?"実行環境":"検索用モデル";
-                lines.Add(requirement.FilesPresent?$"{label}：配置を確認できました。":$"{label}：{AISetupRecovery.Reason(requirement.State)}"+(requirement.CatalogIds.Count>0?" ダウンロード候補があります。":" 自動取得は準備中です。配置済みの環境・モデルを指定できます。"));
+                var suffix=requirement.CatalogIds.Count>0
+                    ?" 個別ダウンロード候補があります。"
+                    :AutomaticSetupSupported
+                        ?" 自動セットアップを使えます（用意したフォルダを指定することもできます）。"
+                        :" 用意したフォルダを指定してください。";
+                lines.Add(requirement.FilesPresent
+                    ?$"{label}：ファイルの配置を確認済み（推論の動作確認とは別）"
+                    :$"{label}：{AISetupRecovery.Reason(requirement.State)}{suffix}");
             }
-            if(KnownBytes>0)lines.Add($"取得候補の容量：{KnownBytes/(1024d*1024*1024):N2} GB"+(TotalBytes is null?"（未確定の実行環境等は別途必要）":""));
+            if(KnownBytes>0)lines.Add($"個別ダウンロードの目安　{KnownBytes/1_000_000_000d:N2} GB"+(TotalBytes is null?"（ほかに必要なファイルあり）":""));
             if(RestartRequired)lines.Add("保存済みの環境変更は再起動後に反映されます。");
-            lines.Add("この確認では取得やAI処理を開始しません。配置の確認後、索引の作成が必要です。");
+            lines.Add("この確認では取得やAI処理を開始しません。配置の確認後、検索用データ（索引）の作成が必要です。");
             return string.Join("\n",lines);
         }
     }
@@ -65,7 +73,7 @@ public sealed record AISetupPlan(bool SkipAI,long KnownBytes,long? TotalBytes,bo
         static bool Flag(JsonElement root,string name)=>root.TryGetProperty(name,out var value)&&value.GetBoolean();
         var profileRestart=Flag(root,"profile_restart_required");var restart=root.GetProperty("restart_required").GetBoolean();
         if(profileRestart&&!restart)throw new InvalidDataException("モデル変更の再起動状態が無効です。");
-        return new(skip,known,total,restart,unsupported,requirements.AsReadOnly(),profileRestart,Flag(root,"profile_override"),Flag(root,"profile_selection_invalid"));
+        return new(skip,known,total,restart,unsupported,requirements.AsReadOnly(),profileRestart,Flag(root,"profile_override"),Flag(root,"profile_selection_invalid"),Flag(root,"automatic_setup_supported"));
     }
 }
 public sealed class AISetupPlanClient(HttpClient client)

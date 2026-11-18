@@ -66,12 +66,13 @@ public sealed partial class MainPage
             Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;
             RenderShelfLayout();RestoreNavigation();await ReloadShelfHubAsync();RecordNavigationLocation();
         }
-        catch(Exception ex){Failure(ex);ShelfHubMessage.Text="棚を取得できませんでした。「更新」で再試行できます。";}
+        catch(Exception ex){Failure(ex);ShelfHubMessage.Text="棚を取得できませんでした。「更新」で再試行できます。";ShelfHubMessage.Visibility=Visibility.Visible;}
         finally{transitions.Release();}
     }
     private async Task ReloadShelfHubAsync()
     {
         ShelfHubMessage.Text="読み込み中…";
+        ShelfHubMessage.Visibility=Visibility.Visible;
         await RefreshShelfDescriptorsAsync();
         if(disposed||!shelfHubOpen)return;
         shelfRefresh.Clear();
@@ -79,7 +80,8 @@ public sealed partial class MainPage
         shelfKeys.Clear();foreach(var shelf in shelfDescriptors)shelfKeys.Add(shelf.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Count.Text=$"{shelfDescriptors.Count:N0} 棚";
         OpenMultipleShelvesButton.IsEnabled=shelfDescriptors.Count>0;
-        ShelfHubMessage.Text=shelfDescriptors.Count==0?"「棚を作成」から追加できます。作品の詳細で所属する棚を選べます。":"棚を開くと、その棚の作品を表示します。";
+        ShelfHubMessage.Text=shelfDescriptors.Count==0?"棚で作品をまとめられます。「棚を作成」から追加できます。":"";
+        ShelfHubMessage.Visibility=shelfDescriptors.Count==0?Visibility.Visible:Visibility.Collapsed;
     }
     private Task OpenShelfItemsAsync(long id)=>OpenShelfScopeAsync(new[]{id});
     private async Task OpenShelfScopeAsync(IReadOnlyList<long> ids)

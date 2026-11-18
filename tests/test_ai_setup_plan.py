@@ -35,6 +35,7 @@ class SetupPlanTests(unittest.TestCase):
         self.assertIsNone(result['total_download_bytes'])
         self.assertEqual(result['unresolved_requirements'],['embedding-runtime'])
         self.assertFalse(result['can_download_all_missing'])
+        self.assertTrue(result['automatic_setup_supported'])
         self.assertFalse(result['hardware_checked_by_plan']);self.assertFalse(result['inference_checked_by_plan'])
 
     def test_skip_and_bad_requests_never_inspect_the_environment(self):
@@ -43,6 +44,7 @@ class SetupPlanTests(unittest.TestCase):
         selection=Mock(side_effect=AssertionError('Do not inspect saved profile selection'))
         result=plan_setup({'features':[]},profile=None,environment=env,catalogs=catalogs,profile_status=selection)
         self.assertTrue(result['skip_ai']);self.assertEqual(result['requirements'],[])
+        self.assertFalse(result['automatic_setup_supported'])
         for body in ({},{'features':'video'},{'features':['video','video']},{'features':['future']},
                      {'features':[{}]},{'features':[True]},{'features':[],'consent':True}):
             with self.subTest(body=body),self.assertRaises(ValueError):
@@ -54,6 +56,7 @@ class SetupPlanTests(unittest.TestCase):
         selection=lambda:{'restart_required':True,'command_line_override':False,'selection_invalid':False}
         reply=plan_setup({'features':['audio']},profile=DEFAULT_PROFILE,environment=lambda:state,catalogs=lambda:{'catalogs':[]},profile_status=selection)
         self.assertTrue(reply['restart_required']);self.assertTrue(reply['profile_restart_required'])
+        self.assertFalse(reply['automatic_setup_supported'])
         self.assertEqual(reply['requirements'][1]['model_target'],ModelTarget.for_profile('embedding',DEFAULT_PROFILE).to_dict())
         self.assertFalse(reply['settings_saved']);self.assertFalse(reply['acquisition_started'])
 

@@ -74,7 +74,7 @@ public sealed partial class MainPage
                         var selected=Selected()?.Id;knownCatalogs=items;choice.Items.Clear();
                         foreach(var item in items)choice.Items.Add(new ComboBoxItem{Content=DownloadCatalogLabel(item),Tag=item});
                         var index=items.ToList().FindIndex(item=>item.Id==(job.Active?job.CatalogId:selected??job.CatalogId));choice.SelectedIndex=index>=0?index:items.Count>0?0:-1;
-                        if(items.Count==0)information.Text="アプリから取得できるAI環境は公開準備中です。配置済みの環境は前の画面から指定できます。";
+                        if(items.Count==0)information.Text="個別にダウンロードできる候補がありません。「手元のモデル・環境を使う」から用意したフォルダを指定するか、対応モデルでは自動セットアップを利用できます。";
                     }
                     current=job;operationError=null;Render();
                 }
@@ -86,7 +86,7 @@ public sealed partial class MainPage
                 consent.IsChecked=false;
                 if(Selected() is {} selected)
                 {
-                    var scope=selected.Kind=="model"?"モデルファイルのみです。利用には対応する実行環境が必要です。\n":"";
+                    var scope=selected.Kind=="model"?"モデルファイルのみです。手元の実行環境または自動セットアップの実行環境と組み合わせて使います。\n":"";
                     var capacity=selected.UnpackedBytes is {} expanded?$"取得 {selected.Bytes/1000000d:N1} MB・展開後 {expanded/1000000d:N1} MB（{selected.UnpackedFiles:N0} ファイル）\n取得先に両方の容量の空きが必要です。":$"容量 {selected.Bytes/1000000d:N1} MB";
                     information.Text=scope+capacity+$"\n取得元 {string.Join(", ",selected.SourceHosts)}\n{selected.License}\nバージョン {selected.Revision}";
                     license.NavigateUri=selected.LicenseUri;license.Visibility=Visibility.Visible;

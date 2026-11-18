@@ -73,12 +73,14 @@
       <TextBlock x:Name="ItemPath" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="DetailItemLocation"/>
       <TextBlock x:Name="DetailAvailabilityHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="DetailAvailabilityHint"/>
       <Image x:Name="DetailPreview" IsDoubleTapEnabled="True" DoubleTapped="DetailPreview_DoubleTapped" Height="160" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="選択作品の表紙" AutomationProperties.AutomationId="DetailPreview"/>
+      <CheckBox x:Name="Favorite" MinWidth="0" Content="★ お気に入り" ToolTipService.ToolTip="お気に入りの状態は切り替えた時点で保存されます" Checked="Favorite_Checked" Unchecked="Favorite_Checked" AutomationProperties.Name="お気に入り" AutomationProperties.AutomationId="ChkFavorite"/>
       <StackPanel Spacing="8" AutomationProperties.AutomationId="DetailOpenActions">
        <Button x:Name="OpenImage" Content="画像を大きく表示" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenImage_Click" AutomationProperties.AutomationId="BtnOpenImage"/>
        <Button x:Name="OpenBook" Content="本を開く" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenBook_Click" AutomationProperties.AutomationId="BtnOpenBook"/>
        <Button x:Name="OpenVideo" Content="動画を再生" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenVideo_Click" AutomationProperties.AutomationId="BtnOpenVideo"/>
        <Button x:Name="OpenAudio" Content="音声を再生" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" Click="OpenAudio_Click" AutomationProperties.AutomationId="BtnOpenAudio"/>
        <Button x:Name="DetailFindSimilarButton" Content="似た画像・素材を探す" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" Click="DetailFindSimilar_Click" AutomationProperties.AutomationId="BtnDetailFindSimilar"/>
+       <Button x:Name="FilterByActiveTagButton" Content="このタグで絞り込む" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="この作品の確定タグで一覧を絞り込みます" AutomationProperties.AutomationId="BtnFilterByActiveTag"/>
        <TextBlock x:Name="DetailOpenHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="DetailOpenHint"/>
       </StackPanel>
       <TextBlock x:Name="AudioSearchHint" TextWrapping="Wrap" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="AudioSearchHint"/>
@@ -87,19 +89,17 @@
       </Expander>
       <Button x:Name="TagSuggestionsButton" Content="AIタグ候補" Visibility="Collapsed" IsEnabled="False" Click="TagSuggestions_Click" AutomationProperties.AutomationId="BtnTagSuggestions"/>
 
-       <TextBox x:Name="Tags" Header="タグ（カンマ区切り）" PlaceholderText="カンマ区切りで入力（Ctrl+Enterで保存）" TextWrapping="Wrap" MaxHeight="120" ScrollViewer.VerticalScrollBarVisibility="Auto" KeyDown="Tags_KeyDown" TextChanged="Editor_Changed" AutomationProperties.Name="タグ（カンマ区切り）" AutomationProperties.AutomationId="TxtTags"/>
+       <TextBox x:Name="Tags" Header="タグ" PlaceholderText="例：海, 夕焼け" ToolTipService.ToolTip="カンマ区切りで入力（Ctrl+EnterまたはCtrl+Sで保存）" TextWrapping="Wrap" MaxHeight="120" ScrollViewer.VerticalScrollBarVisibility="Auto" KeyDown="Tags_KeyDown" TextChanged="Editor_Changed" AutomationProperties.Name="タグ" AutomationProperties.AutomationId="TxtTags"/>
        <ScrollViewer x:Name="ActiveTagChipsScroll" Visibility="Collapsed" MaxHeight="88" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="ActiveTagChipsScroll">
         <StackPanel x:Name="ActiveTagChipsPanel" Spacing="4" AutomationProperties.AutomationId="ActiveTagChipsPanel"/>
        </ScrollViewer>
-       <Button x:Name="SuggestExistingTagsButton" Content="一覧の既存タグから追加…" HorizontalAlignment="Stretch" Visibility="Collapsed" ToolTipService.ToolTip="表示中の一覧にある既存タグから選んで追加します" AutomationProperties.Name="既存タグから追加" AutomationProperties.AutomationId="BtnSuggestExistingTags"/>
-       <Button x:Name="FilterByActiveTagButton" Content="この作品のタグで検索…" HorizontalAlignment="Stretch" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="登録済みのタグを選んで一覧を検索します" AutomationProperties.AutomationId="BtnFilterByActiveTag"/>
+       <Button x:Name="SuggestExistingTagsButton" Content="一覧からタグを追加" HorizontalAlignment="Stretch" Visibility="Collapsed" ToolTipService.ToolTip="表示中の一覧にあるタグから選んで編集中の作品に追加します" AutomationProperties.Name="一覧からタグを追加" AutomationProperties.AutomationId="BtnSuggestExistingTags"/>
        <Grid ColumnSpacing="8">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <TextBox x:Name="Shelf" Header="棚" PlaceholderText="棚なし" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="96" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="所属する棚" AutomationProperties.AutomationId="TxtShelf"/>
         <Button x:Name="ChooseShelvesButton" Grid.Column="1" VerticalAlignment="Bottom" Content="変更" ToolTipService.ToolTip="所属する棚を変更" Click="ChooseShelves_Click" AutomationProperties.Name="所属する棚を変更" AutomationProperties.AutomationId="BtnChooseShelves"/>
         <Button x:Name="OpenActiveShelvesButton" Grid.Column="2" VerticalAlignment="Bottom" Content="開く" Visibility="Collapsed" ToolTipService.ToolTip="この作品の所属する棚を表示" Click="OpenActiveShelves_Click" AutomationProperties.Name="所属する棚を開く" AutomationProperties.AutomationId="BtnOpenActiveShelves"/>
        </Grid>
-       <CheckBox x:Name="Favorite" MinWidth="0" Content="お気に入り" Checked="Favorite_Checked" Unchecked="Favorite_Checked" AutomationProperties.AutomationId="ChkFavorite"/>
        <CheckBox x:Name="Reviewed" MinWidth="0" Visibility="Collapsed" Content="確認済み" Checked="Editor_Checked" Unchecked="Editor_Checked" AutomationProperties.AutomationId="ChkReviewed"/>
        <Expander x:Name="FileProperties" Header="ファイルのプロパティ" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="FileProperties">
         <StackPanel Spacing="8">
@@ -113,8 +113,8 @@
       <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>
        <Grid ColumnSpacing="8">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <Button x:Name="Save" Content="保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.AutomationId="BtnSave"/>
-        <Button x:Name="RevertEditsButton" Grid.Column="1" Content="元に戻す" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="未保存のタグ・棚・確認状態の編集を保存前の状態に戻します" Click="RevertEdits_Click" AutomationProperties.Name="未保存の変更を元に戻す" AutomationProperties.AutomationId="BtnRevertEdits"/>
+        <Button x:Name="Save" Content="変更を保存" ToolTipService.ToolTip="タグ・棚の変更を保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.Name="変更を保存" AutomationProperties.AutomationId="BtnSave"/>
+        <Button x:Name="RevertEditsButton" Grid.Column="1" Content="未保存の変更を取り消す" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="未保存のタグ・棚の編集を保存前の状態に戻します" Click="RevertEdits_Click" AutomationProperties.Name="未保存の変更を取り消す" AutomationProperties.AutomationId="BtnRevertEdits"/>
        </Grid>
       </StackPanel>
        </Grid></ContentControl>
@@ -124,41 +124,41 @@
         <TextBlock x:Name="FolderTargetTitle" Text="フォルダを選んでください" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderTargetTitle"/>
         <TextBlock x:Name="FolderTargetPath" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TxtFolderTargetPath"/>
         <StackPanel x:Name="SingleRootSection" Spacing="12">
-         <TextBlock Text="一覧の取得" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-         <ComboBox x:Name="ScanModeChoice" Header="取得する内容" SelectedIndex="0" HorizontalAlignment="Stretch" AutomationProperties.Name="スキャン方法" AutomationProperties.AutomationId="ScanModeChoice">
-          <ComboBoxItem Content="アイテム一覧だけ取得" Tag="list" AutomationProperties.AutomationId="ScanModeList"/>
-          <ComboBoxItem Content="一覧取得＋AI索引を作成" Tag="list_and_ai" AutomationProperties.AutomationId="ScanModeListAndAI"/>
+         <TextBlock Text="ファイル一覧の作成・更新" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+         <ComboBox x:Name="ScanModeChoice" Header="作成・更新する内容" SelectedIndex="0" SelectionChanged="ScanModeChoice_Changed" HorizontalAlignment="Stretch" AutomationProperties.Name="作成・更新する内容" AutomationProperties.AutomationId="ScanModeChoice">
+          <ComboBoxItem Content="ファイル一覧だけ" Tag="list" AutomationProperties.AutomationId="ScanModeList"/>
+          <ComboBoxItem Content="ファイル一覧とAI検索用データ" Tag="list_and_ai" AutomationProperties.AutomationId="ScanModeListAndAI"/>
          </ComboBox>
          <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <Button x:Name="ScanRoot" Content="スキャン / 再開" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="ScanRoot_Click" AutomationProperties.Name="選択フォルダをスキャン / 再開" AutomationProperties.AutomationId="ScanRoot"/>
-          <Button x:Name="CancelScan" Grid.Column="1" Content="中止" ToolTipService.ToolTip="実行中のスキャンを中止" Click="CancelScan_Click" AutomationProperties.Name="実行中のスキャンを中止" AutomationProperties.AutomationId="CancelScan"/>
+          <Button x:Name="ScanRoot" Content="一覧を更新" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="ScanRoot_Click" AutomationProperties.Name="選択フォルダの一覧を更新" AutomationProperties.AutomationId="ScanRoot"/>
+          <Button x:Name="CancelScan" Grid.Column="1" Content="中止" ToolTipService.ToolTip="実行中の更新を中止" Click="CancelScan_Click" AutomationProperties.Name="実行中の更新を中止" AutomationProperties.AutomationId="CancelScan"/>
          </Grid>
          <Expander Header="除外ルール" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="RootExclusionsSection"><StackPanel Spacing="8">
-          <TextBox x:Name="RootExcludes" Header="除外する名前・パターン" PlaceholderText="cache, *.tmp" TextChanged="FolderEditor_Changed" AutomationProperties.Name="除外ルール" AutomationProperties.AutomationId="RootExcludes"/>
-          <TextBlock Text="カンマで区切って指定します。保存したルールは次回のスキャンから反映します。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
+          <TextBox x:Name="RootExcludes" Header="一覧に含めない名前・パターン" PlaceholderText="cache, *.tmp" TextChanged="FolderEditor_Changed" AutomationProperties.Name="一覧に含めない名前・パターン" AutomationProperties.AutomationId="RootExcludes"/>
+          <TextBlock Text="半角カンマ（,）で区切って指定します。次の一覧更新から適用されます。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
           <Button x:Name="SaveExcludes" Content="除外ルールを保存" HorizontalAlignment="Stretch" Click="SaveExcludes_Click" AutomationProperties.AutomationId="SaveExcludes"/>
          </StackPanel></Expander>
         </StackPanel>
-        <Expander x:Name="RootShelfSettings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.Name="初期棚の設定" AutomationProperties.AutomationId="RootShelfSettings">
-         <Expander.Header><StackPanel Spacing="4"><TextBlock Text="初期棚" Style="{StaticResource BodyStrongTextBlockStyle}"/><TextBlock x:Name="CurrentShelfSummary" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtCurrentShelfSummary"/></StackPanel></Expander.Header>
+        <Expander x:Name="RootShelfSettings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.Name="新しく見つけた作品を入れる棚の設定" AutomationProperties.AutomationId="RootShelfSettings">
+         <Expander.Header><StackPanel Spacing="4"><TextBlock Text="新しく見つけた作品を入れる棚" Style="{StaticResource BodyStrongTextBlockStyle}"/><TextBlock x:Name="CurrentShelfSummary" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtCurrentShelfSummary"/></StackPanel></Expander.Header>
          <StackPanel Spacing="8">
-          <TextBlock Text="新しく見つかったファイルを入れる棚です。個別に変更・解除した棚は再スキャンしても保持します。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
+          <TextBlock Text="新しく見つかった作品を入れる棚です。個別に変更・解除した棚は再更新しても保持します。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
           <Button Content="棚を選択（複数可）" Click="ChooseRootShelves_Click" AutomationProperties.AutomationId="BtnChooseRootShelves"/>
-          <ComboBox x:Name="RootInitialShelf" Header="棚を指定・新しく作成" HorizontalAlignment="Stretch" SelectionChanged="RootInitialShelf_Changed" AutomationProperties.Name="初期棚" AutomationProperties.AutomationId="RootInitialShelf"/>
+          <ComboBox x:Name="RootInitialShelf" Header="棚を指定・新しく作成" HorizontalAlignment="Stretch" SelectionChanged="RootInitialShelf_Changed" AutomationProperties.Name="新しく見つけた作品を入れる棚" AutomationProperties.AutomationId="RootInitialShelf"/>
           <TextBox x:Name="RootNewShelf" Visibility="Collapsed" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" TextChanged="FolderEditor_Changed" AutomationProperties.Name="新しい棚の名前" AutomationProperties.AutomationId="RootNewShelf"/>
-          <CheckBox x:Name="FillUnsetShelf" HorizontalContentAlignment="Stretch" Checked="FolderEditor_Checked" Unchecked="FolderEditor_Checked" AutomationProperties.Name="既存の棚未設定ファイルにも適用（個別に解除した棚を含む）" AutomationProperties.AutomationId="FillUnsetShelf"><TextBlock Text="既存の棚未設定ファイルにも適用（個別に解除した棚を含む）" TextWrapping="Wrap"/></CheckBox>
+          <CheckBox x:Name="FillUnsetShelf" HorizontalContentAlignment="Stretch" Checked="FolderEditor_Checked" Unchecked="FolderEditor_Checked" AutomationProperties.Name="今ある棚なしの作品にも適用（自分で棚から外した作品も対象）" AutomationProperties.AutomationId="FillUnsetShelf"><TextBlock Text="今ある棚なしの作品にも適用（自分で棚から外した作品も対象）" TextWrapping="Wrap"/></CheckBox>
           <Button x:Name="SaveRootShelf" Content="初期棚を保存" HorizontalAlignment="Stretch" Click="SaveRootShelf_Click" AutomationProperties.AutomationId="SaveRootShelf"/>
          </StackPanel>
         </Expander>
-        <Expander Header="起動時の自動スキャン" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="RootStartupSection"><StackPanel Spacing="8">
-         <ComboBox x:Name="RootStartupScan" Header="次回からの起動時の動作" PlaceholderText="複数の設定値" HorizontalAlignment="Stretch" SelectionChanged="RootStartupScan_Changed" AutomationProperties.AutomationId="RootStartupScan" AutomationProperties.Name="起動時の自動スキャン">
-          <ComboBoxItem Content="しない"/><ComboBoxItem Content="アイテム一覧だけ更新"/><ComboBoxItem Content="一覧更新＋AI索引を作成"/>
+        <Expander Header="起動時の自動更新" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="RootStartupSection"><StackPanel Spacing="8">
+         <ComboBox x:Name="RootStartupScan" Header="起動時に更新するもの" PlaceholderText="複数の設定値" HorizontalAlignment="Stretch" SelectionChanged="RootStartupScan_Changed" AutomationProperties.AutomationId="RootStartupScan" AutomationProperties.Name="起動時に更新するもの">
+          <ComboBoxItem Content="更新しない"/><ComboBoxItem Content="ファイル一覧"/><ComboBoxItem Content="ファイル一覧とAI検索用データ"/>
          </ComboBox>
-         <TextBlock Text="変更はすぐ保存されます。次回起動の画面表示後から実行し、AIが未準備でも一覧は更新します。" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}"/>
+         <TextBlock Text="次回起動から適用されます。AIが未準備のときはファイル一覧だけ更新します。" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}"/>
         </StackPanel></Expander>
         <Expander x:Name="RootRemovalSection" Header="登録の解除" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="RootRemovalSection"><StackPanel Spacing="8">
          <TextBlock x:Name="UnregisterTargetText" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtUnregisterTarget"/>
-         <CheckBox x:Name="UnregisterConsent" HorizontalContentAlignment="Stretch" Checked="UnregisterConsent_Changed" Unchecked="UnregisterConsent_Changed" AutomationProperties.Name="登録解除を許可（元ファイルは残り、再登録でタグ・棚を復元）" AutomationProperties.AutomationId="UnregisterConsent"><TextBlock Text="登録解除を許可（元ファイルは残り、再登録でタグ・棚を復元）" TextWrapping="Wrap"/></CheckBox>
+         <CheckBox x:Name="UnregisterConsent" HorizontalContentAlignment="Stretch" Checked="UnregisterConsent_Changed" Unchecked="UnregisterConsent_Changed" AutomationProperties.Name="この登録を解除する（元ファイルは残り、再登録でタグと棚が戻ります）" AutomationProperties.AutomationId="UnregisterConsent"><TextBlock Text="この登録を解除する（元ファイルは残り、再登録でタグと棚が戻ります）" TextWrapping="Wrap"/></CheckBox>
          <Button x:Name="UnregisterRoot" Content="選択フォルダの登録を解除" HorizontalAlignment="Stretch" IsEnabled="False" Click="UnregisterRoot_Click" AutomationProperties.AutomationId="UnregisterRoot"/>
         </StackPanel></Expander>
        </StackPanel></ScrollViewer>
@@ -205,15 +205,15 @@
     </Button>
     <Button x:Name="DetailsButton" IsEnabled="False" Click="OpenDetails_Click" AutomationProperties.Name="詳細" AutomationProperties.AutomationId="BtnDetails"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="DockRight"/><TextBlock Text="詳細"/></StackPanel></Button>
     </StackPanel>
-     <Button x:Name="RootsButton" Click="Roots_Click" AutomationProperties.Name="フォルダ管理" AutomationProperties.AutomationId="BtnRoots"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Folder"/><TextBlock Text="フォルダ管理"/></StackPanel></Button>
+     <Button x:Name="RootsButton" Click="Roots_Click" AutomationProperties.Name="登録フォルダ" AutomationProperties.AutomationId="BtnRoots"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Folder"/><TextBlock Text="登録フォルダ"/></StackPanel></Button>
     </StackPanel>
    </Grid>
    <Grid x:Name="ItemSearchRow" Grid.Row="1" ColumnSpacing="8"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-    <TextBox x:Name="Query" PlaceholderText="ファイル名・タグを検索（Ctrl+F）" ToolTipService.ToolTip="検索する言葉を入力（Ctrl+F）" MaxLength="300" TextChanged="Query_Changed" KeyDown="Query_KeyDown" TextCompositionStarted="Query_CompositionStarted" TextCompositionEnded="Query_CompositionEnded" AutomationProperties.Name="ファイル名・タグ検索" AutomationProperties.AutomationId="TxtQuery"/>
+    <TextBox x:Name="Query" PlaceholderText="名前・タグを検索（Ctrl+F）" ToolTipService.ToolTip="検索する言葉を入力（Ctrl+F）" MaxLength="300" TextChanged="Query_Changed" KeyDown="Query_KeyDown" TextCompositionStarted="Query_CompositionStarted" TextCompositionEnded="Query_CompositionEnded" AutomationProperties.Name="名前・タグ検索" AutomationProperties.AutomationId="TxtQuery"/>
     <StackPanel x:Name="SearchFilterTools" Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" SizeChanged="SearchToolbarPart_SizeChanged">
     <ComboBox x:Name="Kind" ToolTipService.ToolTip="表示するファイルの種類" SelectedIndex="0" SelectionChanged="Kind_Changed" MinWidth="116" AutomationProperties.Name="種類" AutomationProperties.AutomationId="CmbKind"><ComboBoxItem Content="すべての種類"/><ComboBoxItem Content="本"/><ComboBoxItem Content="画像"/><ComboBoxItem Content="動画"/><ComboBoxItem Content="音声・音楽"/><ComboBoxItem Content="圧縮ファイル" ToolTipService.ToolTip="ZIP・CBZをまとめて表示"/><ComboBoxItem Content="素材"/></ComboBox>
-    <ComboBox x:Name="SearchMode" SelectedIndex="0" SelectionChanged="SearchMode_Changed" MinWidth="116" AutomationProperties.Name="検索方法" AutomationProperties.AutomationId="CmbSearchMode"><ComboBoxItem Content="ファイル名・タグ" AutomationProperties.AutomationId="ModeLiteral"/><ComboBoxItem Content="両方で探す（AI）" AutomationProperties.AutomationId="ModeSemantic"/><ComboBoxItem Content="画像の見た目（AI）" AutomationProperties.AutomationId="ModeVisual"/><ComboBoxItem Content="ファイル名・タグの意味（AI）" AutomationProperties.AutomationId="ModeText"/><ComboBoxItem Content="未承認タグ候補" AutomationProperties.AutomationId="ModeTagCandidates"/><ComboBoxItem Content="ページ本文" AutomationProperties.AutomationId="ModePageText"/><ComboBoxItem Content="タグ候補の意味（AI）" AutomationProperties.AutomationId="ModeTagSemantic"/><ComboBoxItem Content="音声の内容（AI）" AutomationProperties.AutomationId="ModeAudioContent"/><ComboBoxItem Content="動画の内容（AI）" AutomationProperties.AutomationId="ModeVideoContent"/><ComboBoxItem Content="動画内の音声（AI）" AutomationProperties.AutomationId="ModeVideoAudioContent"/></ComboBox>
-    <Button x:Name="BrowseTagsButton" Content="タグ一覧…" Visibility="Collapsed" ToolTipService.ToolTip="一覧内の確定タグから選んで絞り込みます" AutomationProperties.Name="タグ一覧から絞り込む" AutomationProperties.AutomationId="BtnBrowseTags"/>
+    <ComboBox x:Name="SearchMode" SelectedIndex="0" SelectionChanged="SearchMode_Changed" MinWidth="116" AutomationProperties.Name="検索方法" AutomationProperties.AutomationId="CmbSearchMode"><ComboBoxItem Content="名前・タグの文字" AutomationProperties.AutomationId="ModeLiteral"/><ComboBoxItem Content="名前・タグの意味＋画像の見た目（AI）" AutomationProperties.AutomationId="ModeSemantic"/><ComboBoxItem Content="画像の見た目（AI）" AutomationProperties.AutomationId="ModeVisual"/><ComboBoxItem Content="名前・タグの意味（AI）" AutomationProperties.AutomationId="ModeText"/><ComboBoxItem Content="未承認タグの文字" AutomationProperties.AutomationId="ModeTagCandidates"/><ComboBoxItem Content="ページ内の文字" AutomationProperties.AutomationId="ModePageText"/><ComboBoxItem Content="未承認タグの意味（AI）" AutomationProperties.AutomationId="ModeTagSemantic"/><ComboBoxItem Content="音声・音楽（AI）" AutomationProperties.AutomationId="ModeAudioContent"/><ComboBoxItem Content="動画の映像（AI）" AutomationProperties.AutomationId="ModeVideoContent"/><ComboBoxItem Content="動画内の音（AI）" AutomationProperties.AutomationId="ModeVideoAudioContent"/></ComboBox>
+    <Button x:Name="BrowseTagsButton" Content="タグで絞り込む" Visibility="Collapsed" ToolTipService.ToolTip="読み込み済みの作品で多いタグから絞り込みます" AutomationProperties.Name="タグで絞り込む" AutomationProperties.AutomationId="BtnBrowseTags"/>
     <Button x:Name="ClearSearchConditionsButton" Content="条件を解除" Visibility="Collapsed" VerticalAlignment="Bottom" ToolTipService.ToolTip="検索語・種類・検索方法・絞り込みを初期状態に戻します" Click="ClearSearchConditions_Click" AutomationProperties.Name="検索条件を解除" AutomationProperties.AutomationId="BtnClearSearchConditions"/>
     </StackPanel>
     <Button Grid.Column="2" x:Name="SearchButton" VerticalAlignment="Bottom" Style="{StaticResource AccentButtonStyle}" Click="Search_Click" AutomationProperties.Name="検索" AutomationProperties.AutomationId="BtnSearch"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Find"/><TextBlock Text="検索"/></StackPanel></Button>
@@ -227,17 +227,17 @@
     </InfoBar>
     <Grid x:Name="ActiveSearchScopeBar" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" ColumnSpacing="8" Visibility="Collapsed">
      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-     <TextBlock x:Name="ActiveSearchScopeText" Text="検索対象フィルタがオンになっています" VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtActiveSearchScope"/>
-     <Button Grid.Column="1" x:Name="ResetAllFoldersButton" Content="解除" Click="ResetAllFolders_Click" AutomationProperties.Name="検索対象フォルダのフィルタを解除" AutomationProperties.AutomationId="BtnResetAllFolders"/>
+     <TextBlock x:Name="ActiveSearchScopeText" Text="検索する場所" VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtActiveSearchScope"/>
+     <Button Grid.Column="1" x:Name="ResetAllFoldersButton" Content="範囲を解除" Click="ResetAllFolders_Click" AutomationProperties.Name="検索する場所の範囲を解除" AutomationProperties.AutomationId="BtnResetAllFolders"/>
     </Grid>
-    <Expander x:Name="SearchOptions" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,8,0,0" Header="AI候補の表示" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="ExpandSearchOptions">
+    <Expander x:Name="SearchOptions" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,8,0,0" Header="AI検索結果の絞り込み" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="ExpandSearchOptions">
      <StackPanel Spacing="8">
 
     <ComboBox x:Name="SearchRoot" Visibility="Collapsed" Header="単一フォルダで素早く切替（サブフォルダを含む）" HorizontalAlignment="Stretch" SelectionChanged="SearchRoot_Changed" AutomationProperties.Name="検索フォルダ" AutomationProperties.AutomationId="CmbSearchRoot"/>
     <CheckBox x:Name="UnreviewedOnly" Visibility="Collapsed" Content="未確認のアイテムだけを表示" Checked="UnreviewedOnly_Changed" Unchecked="UnreviewedOnly_Changed" AutomationProperties.AutomationId="ChkUnreviewedOnly"/>
-    <CheckBox x:Name="AIMatchedOnly" Content="ファイル名・タグで全語一致の候補のみ" Visibility="Collapsed" Checked="AIMatchedOnly_Changed" Unchecked="AIMatchedOnly_Changed" AutomationProperties.Name="AI候補をファイル名・タグの全語一致で絞る" AutomationProperties.AutomationId="ChkAIMatchedOnly"/>
-    <NumberBox x:Name="SimilarityBoundary" Header="類似度の区切り（空欄＝自動）" Minimum="-1" Maximum="1" Visibility="Collapsed" ValueChanged="SimilarityBoundary_Changed" AutomationProperties.Name="類似度の区切り" AutomationProperties.AutomationId="NumSimilarityBoundary"/>
-    <ComboBox x:Name="AIResultGroup" Header="AI候補の表示" SelectedIndex="0" HorizontalAlignment="Stretch" Visibility="Collapsed" SelectionChanged="AIResultGroup_Changed" AutomationProperties.AutomationId="CmbAIResultGroup" AutomationProperties.Name="AI候補の表示"><ComboBoxItem Content="上位の類似候補"/><ComboBoxItem Content="その他の参考候補"/><ComboBoxItem Content="すべてのAI候補"/></ComboBox>
+    <CheckBox x:Name="AIMatchedOnly" Content="名前・タグに検索語がすべて含まれる候補だけ" Visibility="Collapsed" Checked="AIMatchedOnly_Changed" Unchecked="AIMatchedOnly_Changed" AutomationProperties.Name="名前・タグに検索語がすべて含まれる候補だけに絞る" AutomationProperties.AutomationId="ChkAIMatchedOnly"/>
+    <NumberBox x:Name="SimilarityBoundary" Header="上位候補に含める類似度（空欄＝自動）" Minimum="-1" Maximum="1" Visibility="Collapsed" ValueChanged="SimilarityBoundary_Changed" AutomationProperties.Name="上位候補に含める類似度" AutomationProperties.AutomationId="NumSimilarityBoundary"/>
+    <ComboBox x:Name="AIResultGroup" Header="表示する候補" SelectedIndex="0" HorizontalAlignment="Stretch" Visibility="Collapsed" SelectionChanged="AIResultGroup_Changed" AutomationProperties.AutomationId="CmbAIResultGroup" AutomationProperties.Name="表示する候補"><ComboBoxItem Content="上位の類似候補"/><ComboBoxItem Content="その他の参考候補"/><ComboBoxItem Content="すべてのAI候補"/></ComboBox>
      <TextBlock x:Name="SearchMethodHint" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtSearchMethodHint"/>
      </StackPanel>
     </Expander>
@@ -292,21 +292,21 @@
      <ScrollViewer x:Name="GettingStarted" Grid.Row="1" Visibility="Collapsed" MaxWidth="580" HorizontalAlignment="Center" VerticalAlignment="Top" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="GettingStarted">
       <StackPanel Margin="24,8,24,12" Spacing="8">
         <Image Source="ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png" Width="72" Height="64" Stretch="Uniform" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
-       <TextBlock Text="Aredokoへようこそ" Style="{StaticResource TitleTextBlockStyle}" TextWrapping="Wrap"/>
-       <TextBlock x:Name="GettingStartedSummaryText" Text="フォルダを登録し、「アイテム一覧だけ取得」で始めましょう。ファイル名・タグ検索と閲覧はAIなしで使えます。" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedSummaryText"/>
+       <TextBlock Text="どのフォルダを探しますか？" Style="{StaticResource TitleTextBlockStyle}" TextWrapping="Wrap"/>
+       <TextBlock x:Name="GettingStartedSummaryText" Text="探したいフォルダを追加すると、ファイル一覧を作って名前・タグで探せます（AIなしで使えます）。" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedSummaryText"/>
        <Border Style="{StaticResource AredokoSurfaceStyle}">
         <StackPanel Spacing="4">
-         <TextBlock Text="はじめる手順（3ステップ）" Style="{StaticResource SubtitleTextBlockStyle}" FontSize="15"/>
-         <TextBlock x:Name="GettingStartedStep1Text" Text="1. フォルダを登録 — ここから開始" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep1Text"/>
-         <TextBlock x:Name="GettingStartedStep2Text" Text="2. 一覧を読み込む — 登録後に実行" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep2Text"/>
-         <TextBlock x:Name="GettingStartedStep3Text" Text="3. AI検索（任意） — 後から設定できます" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep3Text"/>
+         <TextBlock Text="はじめ方（3ステップ）" Style="{StaticResource SubtitleTextBlockStyle}" FontSize="15"/>
+         <TextBlock x:Name="GettingStartedStep1Text" Text="1. フォルダを追加 — 探す場所を覚えます" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep1Text"/>
+         <TextBlock x:Name="GettingStartedStep2Text" Text="2. ファイル一覧を作る — 作品を見つけて名前・タグで探せます" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep2Text"/>
+         <TextBlock x:Name="GettingStartedStep3Text" Text="3. AIで探す（任意） — 情景や音で探したいときに設定します" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedStep3Text"/>
         </StackPanel>
        </Border>
-       <Button x:Name="GettingStartedFolders" Content="フォルダを登録する" Style="{StaticResource AccentButtonStyle}" Click="GettingStartedFolders_Click" AutomationProperties.AutomationId="GettingStartedFolders"/>
-       <TextBlock Text="情景や音の内容から探すには、モデル・実行環境とAI索引を追加します。元ファイルは変更しません。" TextWrapping="Wrap"/>
+       <Button x:Name="GettingStartedFolders" Content="フォルダを追加" Style="{StaticResource AccentButtonStyle}" Click="GettingStartedFolders_Click" AutomationProperties.AutomationId="GettingStartedFolders"/>
+       <TextBlock Text="元ファイルは変更・移動しません。AI検索は後からいつでも追加できます。" TextWrapping="Wrap"/>
        <StackPanel Orientation="Horizontal" Spacing="8">
-        <Button x:Name="GettingStartedAI" Content="使いたいAI機能から準備（任意）" Click="GettingStartedAIPlan_Click" AutomationProperties.AutomationId="GettingStartedAI"/>
-        <Button x:Name="GettingStartedHelp" Content="基本的な使い方を見る" Click="GettingStartedHelp_Click" AutomationProperties.AutomationId="GettingStartedGuide"/>
+        <Button x:Name="GettingStartedHelp" Content="使い方" Click="GettingStartedHelp_Click" AutomationProperties.AutomationId="GettingStartedGuide"/>
+        <Button x:Name="GettingStartedAI" Content="AIで探す方法（任意）" Click="GettingStartedAIPlan_Click" AutomationProperties.AutomationId="GettingStartedAI"/>
         <Button x:Name="GettingStartedDismiss" Content="この案内を閉じる" Click="GettingStartedDismiss_Click" AutomationProperties.AutomationId="GettingStartedDismiss"/>
        </StackPanel>
       </StackPanel>
@@ -364,10 +364,11 @@
          <TextBlock Text="登録後に、一覧だけを取得するかAI索引も作成するか選べます。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
          <Expander x:Name="FolderRegistrationOptions" Header="追加の設定" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="FolderRegistrationOptions">
           <StackPanel Spacing="8">
-           <TextBox x:Name="AddRootExcludes" Header="除外ルール" PlaceholderText="cache, *.tmp" ToolTipService.ToolTip="除外する名前・パターンをカンマ区切りで指定" AutomationProperties.Name="新規登録の除外ルール" AutomationProperties.AutomationId="AddRootExcludes"/>
-           <ComboBox x:Name="AddRootInitialShelf" Header="初期棚" ToolTipService.ToolTip="新規ファイルに設定する棚" HorizontalAlignment="Stretch" SelectionChanged="AddRootInitialShelf_Changed" AutomationProperties.Name="新規登録の初期棚" AutomationProperties.AutomationId="AddRootInitialShelf"/>
+           <TextBox x:Name="AddRootExcludes" Header="一覧に含めない名前・パターン" PlaceholderText="cache, *.tmp" ToolTipService.ToolTip="除外する名前・パターンを半角カンマ（,）区切りで指定" AutomationProperties.Name="新規登録の除外ルール" AutomationProperties.AutomationId="AddRootExcludes"/>
+           <ComboBox x:Name="AddRootInitialShelf" Header="新しく見つけた作品を入れる棚" ToolTipService.ToolTip="新規作品に設定する棚" HorizontalAlignment="Stretch" SelectionChanged="AddRootInitialShelf_Changed" AutomationProperties.Name="新規登録の初期棚" AutomationProperties.AutomationId="AddRootInitialShelf"/>
            <TextBox x:Name="AddRootNewShelf" Visibility="Collapsed" Header="新しい棚の名前" MaxLength="80" IsEnabled="False" AutomationProperties.Name="新規登録の新しい棚の名前" AutomationProperties.AutomationId="AddRootNewShelf"/>
-           <CheckBox x:Name="RootFolderBooks" HorizontalContentAlignment="Stretch" AutomationProperties.Name="画像フォルダを一冊として扱う" AutomationProperties.AutomationId="RootFolderBooks"><TextBlock Text="画像フォルダを一冊として扱う（フォルダ直下の画像をまとめて1冊にします。素材やバラの画像には使わないでください。スキャン後は変更できません）" TextWrapping="Wrap"/></CheckBox>
+           <CheckBox x:Name="RootFolderBooks" Content="フォルダ直下の画像を1冊の本にまとめる" HorizontalContentAlignment="Stretch" AutomationProperties.Name="フォルダ直下の画像を1冊の本にまとめる" AutomationProperties.AutomationId="RootFolderBooks"/>
+           <TextBlock Text="※ スキャン後は変更できません。素材集やバラの画像には使わないでください。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
           </StackPanel>
          </Expander>
         </StackPanel>
@@ -405,7 +406,7 @@
     <Grid x:Name="ItemPagerRow" ColumnSpacing="8">
      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
      <TextBlock Text="読み込み済み" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center"/>
-     <TextBlock x:Name="PageNumber" Grid.Column="1" AutomationProperties.AutomationId="TxtPageNumber" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="一覧はスクロールすると続きが読み込まれます。数字は現在読み込まれている範囲です。"/>
+     <TextBlock x:Name="PageNumber" Grid.Column="1" AutomationProperties.AutomationId="TxtPageNumber" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="現在読み込まれている件数と全体の件数"/>
      <TextBlock x:Name="FooterSelection" Grid.Column="2" Visibility="Collapsed" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center" AutomationProperties.AutomationId="FooterSelection"/>
      <Button Grid.Column="3" Content="一覧の操作" Click="BrowseActions_Click" AutomationProperties.AutomationId="BrowseActions" ToolTipService.ToolTip="一覧の更新・範囲移動">
       <Button.Flyout><MenuFlyout x:Name="BrowseActionsFlyout">

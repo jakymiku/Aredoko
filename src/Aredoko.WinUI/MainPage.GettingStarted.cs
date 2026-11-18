@@ -19,19 +19,23 @@ public sealed partial class MainPage
         if (show)
         {
             Empty.Visibility = Visibility.Collapsed;
+            if (GettingStartedSummaryText is not null)
+                GettingStartedSummaryText.Text = hasFolder
+                    ? "登録したフォルダからファイル一覧を作ると、名前・タグで探せます。"
+                    : "探したいフォルダを追加すると、ファイル一覧を作って名前・タグで探せます（AIなしで使えます）。";
             if (GettingStartedStep1Text is not null)
-                GettingStartedStep1Text.Text = hasFolder ? $"1. フォルダを登録 — 完了（{activeRoots.Length} フォルダ）" : "1. フォルダを登録 — ここから開始";
+                GettingStartedStep1Text.Text = hasFolder ? $"1. フォルダを追加 — 完了（{activeRoots.Length} フォルダ）" : "1. フォルダを追加 — 探す場所を覚えます";
             if (GettingStartedStep2Text is not null)
-                GettingStartedStep2Text.Text = hasList ? "2. 一覧を読み込む — 完了" : (hasFolder ? "2. 一覧を読み込む — 一覧取得を実行" : "2. 一覧を読み込む — 登録後に実行");
+                GettingStartedStep2Text.Text = hasList ? "2. ファイル一覧を作る — 完了" : (hasFolder ? "2. ファイル一覧を作る — 下のボタンから作成できます" : "2. ファイル一覧を作る — 作品を見つけて名前・タグで探せます");
             if (GettingStartedStep3Text is not null)
-                GettingStartedStep3Text.Text = aiIndexReady ? "3. AI検索（任意） — 準備済み" : "3. AI検索（任意） — 後から設定できます";
+                GettingStartedStep3Text.Text = aiIndexReady ? "3. AIで探す（任意） — 準備済み" : "3. AIで探す（任意） — 情景や音で探したいときに設定します";
             if (GettingStartedFolders is not null)
-                GettingStartedFolders.Content = hasFolder ? "登録フォルダの設定へ" : "フォルダを登録する";
+                GettingStartedFolders.Content = hasFolder ? "ファイル一覧を作る（登録フォルダへ）" : "フォルダを追加";
         }
         else if (gettingStartedDismissed && rows.Count == 0 && !hasList && view == "all" && string.IsNullOrWhiteSpace(Query.Text) && Kind.SelectedIndex == 0 && selectedSearchRoots is null && selectedShelfIds is null && similarityOrigin is null)
         {
             Empty.Visibility = Visibility.Visible;
-            Empty.Text = "フォルダ管理や設定から、フォルダの登録・スキャンをいつでも実行できます。";
+            Empty.Text = "「登録フォルダ」から、フォルダの追加やファイル一覧の作成をいつでも実行できます。";
         }
     }
 
@@ -100,8 +104,8 @@ public sealed partial class MainPage
                     Spacing = 2,
                     Children =
                     {
-                        new TextBlock { Text = "アイテム一覧だけ取得（推奨）", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] },
-                        new TextBlock { Text = "ファイル名・タグ検索と閲覧がすぐ使えます。AI処理は起動しません。", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"], Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextWrapping = TextWrapping.Wrap }
+                        new TextBlock { Text = "ファイル一覧を作る（推奨）", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] },
+                        new TextBlock { Text = "名前・タグで探せます。AIなしですぐ使えます。", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"], Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextWrapping = TextWrapping.Wrap }
                     }
                 }
             };
@@ -116,8 +120,8 @@ public sealed partial class MainPage
                     Spacing = 2,
                     Children =
                     {
-                        new TextBlock { Text = "一覧取得＋AI索引を作成", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] },
-                        new TextBlock { Text = "一覧取得の成功後、新規・変更分に現在のモデル・範囲設定でAI索引を作成します（タグ候補の自動承認はしません）。", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"], Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextWrapping = TextWrapping.Wrap }
+                        new TextBlock { Text = "ファイル一覧とAI検索用データを作る", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] },
+                        new TextBlock { Text = "現在のモデルと対象範囲で、新規・変更分の検索用データを作ります（タグ候補の自動承認はしません）。", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"], Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextWrapping = TextWrapping.Wrap }
                     }
                 }
             };
@@ -127,13 +131,14 @@ public sealed partial class MainPage
             var choiceLater = new RadioButton
             {
                 GroupName = "PostRegScanChoice",
+                Visibility = Visibility.Collapsed,
                 Content = new StackPanel
                 {
                     Spacing = 2,
                     Children =
                     {
-                        new TextBlock { Text = "後で", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] },
-                        new TextBlock { Text = "登録だけ保持します。「登録フォルダ → 対象フォルダの設定 → スキャン」から実行できます。", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"], Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextWrapping = TextWrapping.Wrap }
+                        new TextBlock { Text = "今は登録だけ", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] },
+                        new TextBlock { Text = "「登録フォルダ」からあとでファイル一覧を作れます。", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"], Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextWrapping = TextWrapping.Wrap }
                     }
                 }
             };
@@ -156,13 +161,13 @@ public sealed partial class MainPage
                         {
                             new TextBlock
                             {
-                                Text = "AI未準備: " + aiReason + " 選択しただけでモデル取得や環境導入は始まりません。",
+                                Text = "AI未設定：" + aiReason + "（選択しただけでダウンロードや設定変更は始まりません）",
                                 TextWrapping = TextWrapping.Wrap,
                                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
                             },
                             new Button
                             {
-                                Content = "AI検索の準備を開く",
+                                Content = "AIを設定",
                                 HorizontalAlignment = HorizontalAlignment.Left
                             }
                         }
@@ -197,12 +202,15 @@ public sealed partial class MainPage
             {
                 XamlRoot = XamlRoot,
                 RequestedTheme = ActualTheme,
-                Title = "登録したフォルダをスキャンしますか？",
+                Title = "登録したフォルダのファイル一覧を作りますか？",
                 Content = scroll,
-                PrimaryButtonText = "実行",
-                CloseButtonText = "後で",
+                PrimaryButtonText = "一覧を作る",
+                CloseButtonText = "今は登録だけ",
                 DefaultButton = ContentDialogButton.Primary
             };
+            void UpdatePrimaryText() => dialog.PrimaryButtonText = choiceListAndAI.IsChecked == true ? "一覧とAI検索用データを作る" : "一覧を作る";
+            choiceListOnly.Checked += (_, _) => UpdatePrimaryText();
+            choiceListAndAI.Checked += (_, _) => UpdatePrimaryText();
             currentDialog = dialog;
             AutomationProperties.SetAutomationId(dialog, "PostRegistrationScanDialog");
 
@@ -210,7 +218,7 @@ public sealed partial class MainPage
 
             if (openAiSetupRequested)
             {
-                ScanStatus.Text = "登録しました。AIの準備後にスキャンを実行してください。";
+                ScanStatus.Text = "フォルダを登録しました。AIを設定した後、「登録フォルダ」から一覧を作成できます。";
                 Notice("フォルダを登録しました", ScanStatus.Text);
                 return;
             }
@@ -222,28 +230,23 @@ public sealed partial class MainPage
                     if (!aiAvailable)
                     {
                         await StartScanWithModeAsync(targetIds, "list");
-                        var msg = "AIが未準備のためアイテム一覧のみスキャンを開始しました。AI索引は「AI検索の準備」完了後に実行できます。";
+                        var msg = "AIが未設定のためファイル一覧だけ作成を開始しました。AI検索用データは「設定 → AI検索を設定」の完了後に作成できます。";
                         ScanStatus.Text = msg;
-                        Notice("一覧スキャンを開始しました", msg);
+                        Notice("ファイル一覧の作成を開始しました", msg);
                     }
                     else
                     {
                         await StartScanWithModeAsync(targetIds, "list_and_ai");
                     }
                 }
-                else if (choiceListOnly.IsChecked == true)
-                {
-                    await StartScanWithModeAsync(targetIds, "list");
-                }
                 else
                 {
-                    ScanStatus.Text = "登録しました。「登録フォルダ → 対象フォルダの設定 → スキャン」から実行できます。";
-                    Notice("フォルダを登録しました", ScanStatus.Text);
+                    await StartScanWithModeAsync(targetIds, "list");
                 }
             }
             else
             {
-                ScanStatus.Text = "登録しました。「登録フォルダ → 対象フォルダの設定 → スキャン」から実行できます。";
+                ScanStatus.Text = "フォルダを登録しました。「登録フォルダ」の［一覧を作る］からいつでも実行できます。";
                 Notice("フォルダを登録しました", ScanStatus.Text);
             }
         }
@@ -271,29 +274,30 @@ public sealed partial class MainPage
             welcome.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
             welcome.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
             welcome.Children.Add(greeting);
-            var introduction=new TextBlock{Text="まずはフォルダを登録して、検索と閲覧を始めましょう。AIは後から追加できます。",TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center};
+            var introduction=new TextBlock{Text="まずはフォルダを追加して、検索と閲覧を始めましょう。AIは後からいつでも設定できます。",TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center};
             Grid.SetColumn(introduction,1);welcome.Children.Add(introduction);panel.Children.Add(welcome);
             foreach(var (title,text) in new[]{
-                ("1. フォルダを追加", "検索したいフォルダを選び、登録後は「アイテム一覧だけ取得」で始められます。元ファイルは変更しません。"),
-                ("2. 検索・閲覧・整理", "ファイル名・タグで検索し、ダブルクリックで開きます。タグや棚の編集は「詳細」から行えます。"),
-                ("3. 必要ならAIを準備", "情景や音の内容から探したい場合は、下の「使いたいAI機能から準備」へ。モデル・実行環境・索引が必要です。")})
+                ("1. フォルダを追加", "検索したいフォルダを選び、「ファイル一覧を作る」で始められます。元ファイルは変更しません。"),
+                ("2. 検索・閲覧・整理", "名前・タグで検索し、ダブルクリックで開きます。右側の詳細でタグ付けや棚分けができます。"),
+                ("3. 必要ならAIを設定", "情景や音の内容から探したいときは「AIで探す方法」へ。自動セットアップやダウンロード可能なモデルを選べます。")})
             {
                 var step=new StackPanel{Spacing=4};
                 step.Children.Add(new TextBlock{Text=title,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]});
                 step.Children.Add(new TextBlock{Text=text,TextWrapping=TextWrapping.Wrap});panel.Children.Add(step);
             }
-            var addFolder=new Button{Content="フォルダの登録へ",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var hasRegistered=knownRoots.Any(r=>r.Enabled);
+            var addFolder=new Button{Content=hasRegistered?"登録フォルダを開く":"フォルダを追加",HorizontalAlignment=HorizontalAlignment.Stretch,Style=(Style)Application.Current.Resources["AccentButtonStyle"]};
             AutomationProperties.SetAutomationId(addFolder,"GuideAddFolder");panel.Children.Add(addFolder);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Stretch}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
             var details=new StackPanel{Spacing=12};
             foreach (var (title, text) in new[]
             {
-                ("1. フォルダを登録する", "「登録フォルダ」→「フォルダを追加」から検索したい場所を選びます。サブフォルダを含めるかも選べます。登録成功時に「アイテム一覧だけ取得（推奨）」「一覧取得＋AI索引を作成」「後で」を選択できます。「後で」を選んだ場合も「登録フォルダ → 対象フォルダの設定 → スキャン」からいつでも実行できます。元ファイルは移動・変換しません。"),
-                ("2. 検索して開く", "検索欄にファイル名やタグを入力します。画像・本・動画・音声はダブルクリックで開けます。設定で内蔵ビューアとWindowsの既定アプリを選べます。右クリックからエクスプローラーでも開けます。"),
-                ("3. AI検索を準備する（任意）", "下の「使いたいAI機能から準備」で用途を選び、必要なモデルと実行環境を確認します。取得前に容量とライセンスを確認でき、AIなしで始めることもできます。EmbeddingGemma 2は設定の「AI環境を自動構築」で公式パッケージとモデルを取得・確認できます。別のモデルや配置済みの環境は手動で指定します。変更後は再起動し、「AI検索の準備」で索引を作ります。動画・音声はそれぞれの内容検索欄から作成してください。WD Taggerの画像タグ候補は任意です。"),
-                ("4. 内容から探す・整理する", "準備後は「画像の見た目」などのAI検索方法で、覚えている情景や特徴を入力します。右側の詳細でタグや棚を編集できます。タグ・棚は保存ボタンで保存し、お気に入りはすぐ反映します。AIタグは候補を確認してから承認します。"),
-                ("閲覧・データ保護", "一覧ではCtrl+Homeで検索結果の先頭、Ctrl+Endで末尾へ移動できます。画像や本は左右キー・ホイール・マウスの進む／戻るで送れます。ホイール方向やテーマは設定で、小さい画像の拡大・操作バーの常時表示・ページのループ移動はビューアの設定メニューで変更できます。バックアップと復元も設定から実行できます。フォルダ解除や棚の削除で元メディアは削除しません。"),
+                ("1. フォルダを追加する", "「登録フォルダ」→［フォルダを追加］から検索したい場所を選びます。サブフォルダを含めるかも選べます。登録後は「ファイル一覧を作る（推奨）」「ファイル一覧とAI検索用データを作る」または「今は登録だけ」を選べます。元ファイルは移動・変換しません。"),
+                ("2. 検索して開く", "検索欄に名前やタグを入力します。画像・本・動画・音声はダブルクリックで開けます。設定でAredokoとWindowsの既定アプリを選べます。右クリックから保存場所も開けます。"),
+                ("3. AIで探す準備をする（任意）", "「AIで探す方法」から用途を選び、必要なものを確認します。EmbeddingGemma 2は「自動セットアップ」で公式パッケージとモデルを取得・確認できます。このほか「ダウンロードできるモデルを選ぶ」「手元のモデルを使う」も選べます。変更後は再起動し、「AI検索を設定」から検索用データを作ります。動画・音声はそれぞれの欄から作成してください。WD TaggerのAIタグ候補は任意です。"),
+                ("4. 内容から探す・整理する", "準備後は「画像の見た目（AI）」などの検索方法で、覚えている情景や特徴を入力します。右側の詳細でお気に入りは即反映し、タグ・棚は［変更を保存］で保存します。AIタグ候補は内容を確認してから承認します。"),
+                ("閲覧・データ保護", "一覧ではCtrl+Homeで先頭、Ctrl+Endで末尾へ移動できます。画像や本は左右キー・ホイール・マウスの進む／戻るで送れます。ホイール方向や開くアプリは設定で、小さい画像の拡大・操作バーの常時表示・先頭へのループ移動はビューアの設定メニューで変更できます。バックアップと復元も設定から行えます。登録解除や棚の削除で元ファイルは消えません。"),
             })
             {
                 details.Children.Add(new TextBlock { Text = title, Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"], TextWrapping = TextWrapping.Wrap });
@@ -302,7 +306,7 @@ public sealed partial class MainPage
             var more=new Expander{Header="詳しい手順・操作とデータ保護",Content=details,HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(more,"GuideDetails");panel.Children.Add(more);
             var scroll = new ScrollViewer { Content = panel, MaxHeight = Math.Max(160, ActualHeight - 240), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) };
-            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "使い方・初回設定", Content = scroll, PrimaryButtonText="使いたいAI機能から準備", CloseButtonText = "閉じる",DefaultButton=ContentDialogButton.None };
+            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "使い方", Content = scroll, PrimaryButtonText="AIで探す方法", CloseButtonText = "閉じる",DefaultButton=ContentDialogButton.None };
             AutomationProperties.SetAutomationId(dialog, "GettingStartedGuideDialog");
             addFolder.Click+=(_,_)=>{folderRequested=true;dialog.Hide();};
             if(backToSettings is not null)backToSettings.Click+=(_,_)=>{returnToSettings=true;dialog.Hide();};

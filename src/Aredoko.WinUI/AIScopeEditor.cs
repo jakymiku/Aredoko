@@ -27,7 +27,7 @@ public sealed class AIScopeEditor : IDisposable
     private readonly ComboBox shelfMode=new() {Header="棚の条件",HorizontalAlignment=HorizontalAlignment.Stretch};
     private readonly TextBox shelf=new() {Header="棚（完全一致）",MaxLength=80};
     private readonly Button refresh=new() {Content="件数を確認"};
-    private readonly Button save=new() {Content="保存してAI検索に適用"};
+    private readonly Button save=new() {Content="この範囲を保存"};
     private readonly Button revert=new() {Content="保存済みに戻す"};
     private readonly TextBlock feedback=new() {TextWrapping=TextWrapping.Wrap};
     private readonly TextBlock[] counts=Enumerable.Range(0,4).Select(_=>new TextBlock {TextWrapping=TextWrapping.Wrap}).ToArray();
@@ -82,12 +82,12 @@ public sealed class AIScopeEditor : IDisposable
         rootPager.Children.Add(rootPrevious);rootPager.Children.Add(rootPage);rootPager.Children.Add(rootNext);
         foreach(var element in new UIElement[]{all,rootQuery,rootSummary,rootViewport,rootPager,rootPath,kind,shelfMode,shelf})fields.Children.Add(element);
         var panel=new StackPanel {Spacing=12};
-        panel.Children.Add(new TextBlock {Text="保存するまで現在のAI対象は変わりません。閉じると未保存の条件は破棄します。文字検索には適用しません。",TextWrapping=TextWrapping.Wrap});
+        panel.Children.Add(new TextBlock {Text="AI検索と、これから作る検索用データに適用します。文字検索・作成済みデータ・モデルは変更しません。",TextWrapping=TextWrapping.Wrap});
         panel.Children.Add(fields);panel.Children.Add(refresh);
         var countPanel=new StackPanel {Spacing=4};
         for(int i=0;i<counts.Length;i++){AutomationProperties.SetAutomationId(counts[i],$"AIScopeCount{i}");countPanel.Children.Add(counts[i]);}
         panel.Children.Add(countPanel);panel.Children.Add(save);panel.Children.Add(revert);panel.Children.Add(feedback);
-        Content=new Expander {Header="AI検索と索引の対象",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
+        Content=new Expander {Header="AIで探すフォルダと作品",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
         AutomationProperties.SetAutomationId(Content,"AIScopeOptions");
         Content.Loaded+=async(_,_)=>{if(initializing&&!closed&&!initializationStarted){initializationStarted=true;await InitializeAsync();}};
         refresh.Click+=async(_,_)=>await RefreshCountsAsync();

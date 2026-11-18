@@ -35,8 +35,8 @@ public sealed partial class MainPage
             if(!await ConfirmDiscardAsync())return;
             await RefreshHistoryGenerationAsync();var generation=historyGeneration;
             dialogOpen=true;
-            var title=itemId is int id?rows.FirstOrDefault(row=>row.Id==id)?.Title??"選択した作品":"すべての閲覧履歴";
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="閲覧履歴を削除しますか？",Content=title+"\nタグ・棚・お気に入り・読書位置・元ファイルは残ります。",PrimaryButtonText="履歴を削除",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Close};
+            var targetTitle=itemId is int id?(rows.FirstOrDefault(row=>row.Id==id)?.Title??"選択した作品"):null;
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=targetTitle is not null?"この作品の閲覧履歴を削除しますか？":"すべての閲覧履歴を削除しますか？",Content=(targetTitle is not null?$"対象：{targetTitle}\n":"")+"タグ・棚・お気に入り・本の読書位置・元ファイルは残ります。",PrimaryButtonText="履歴を削除",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Close};
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(dialog,"HistoryDeleteDialog");
             var accepted=await dialog.ShowAsync()==ContentDialogResult.Primary;dialogOpen=false;
             if(!accepted||disposed)return;

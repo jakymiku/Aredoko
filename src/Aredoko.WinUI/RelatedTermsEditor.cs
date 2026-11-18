@@ -12,9 +12,9 @@ public sealed class RelatedTermsEditor
     private const int ShownEntries = 200;
     private readonly LibraryApi api;
     private readonly StackPanel panel = new() { Spacing = 12, MinWidth = 280 };
-    private readonly TextBox term = new() { Header = "見出し語（ファイルやタグにある名前）", PlaceholderText = "例: 博麗霊夢", MaxLength = RelatedTerms.MaxWordChars };
-    private readonly TextBox aliases = new() { Header = "別名・表記ゆれ（、区切り）", PlaceholderText = "例: 霊夢、reimu" };
-    private readonly TextBox related = new() { Header = "思い出す手がかりの語（、区切り）", PlaceholderText = "例: 東方、巫女" };
+    private readonly TextBox term = new() { Header = "作品名・タグにある言葉", PlaceholderText = "例: 博麗霊夢", MaxLength = RelatedTerms.MaxWordChars };
+    private readonly TextBox aliases = new() { Header = "別の呼び名（、区切り）", PlaceholderText = "例: 霊夢、reimu" };
+    private readonly TextBox related = new() { Header = "探すときに思い浮かぶ言葉（、区切り）", PlaceholderText = "例: 東方、巫女" };
     private readonly Button save = new() { Content = "保存" };
     private readonly Button delete = new() { Content = "この見出し語を削除" };
     private readonly Button export = new() { Content = "ファイルに書き出す" };
@@ -37,7 +37,7 @@ public sealed class RelatedTermsEditor
         AutomationProperties.SetAutomationId(import, "ImportRelatedTerms");
         AutomationProperties.SetAutomationId(status, "RelatedTermStatus");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        var help = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "ファイル名・タグ検索で、手がかりの語から見出し語と別名も候補に含めます。例:「東方 巫女」で博麗霊夢のタグやファイル名の作品も表示します。入力した語に一致する作品が先に並びます。" };
+        var help = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "例：「東方 巫女」で探すと「博麗霊夢」「霊夢、reimu」も候補に。入力した言葉にそのまま一致する作品が先に並びます。" };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { save, delete } };
         var files = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { export, import } };
         foreach (var element in new UIElement[] { help, entries, term, aliases, related, actions, files, status }) panel.Children.Add(element);

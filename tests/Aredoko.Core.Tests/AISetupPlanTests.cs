@@ -37,8 +37,8 @@ static class AISetupPlanTests
         using var handler=new Handler();using var http=new HttpClient(handler){BaseAddress=new Uri("http://127.0.0.1:8769/")};
         var client=new AISetupPlanClient(http);var plan=await client.CreateAsync(15);
         check(handler.Calls==1&&plan.Requirements.Count==2,"four uses request one shared runtime and model plan");
-        check(plan.KnownBytes==100&&plan.TotalBytes is null&&plan.Summary.Contains("別途必要"),"unknown runtime bytes are not presented as a complete download size");
-        check(plan.Summary.Contains("自動取得は準備中")&&plan.Summary.Contains("取得やAI処理を開始しません"),"unpublished runtime and read-only planning are explicit");
+        check(plan.KnownBytes==100&&plan.TotalBytes is null&&plan.Summary.Contains("ほかに必要なファイルあり")&&plan.Summary.Contains("個別ダウンロードの目安"),"unknown runtime bytes are not presented as a complete download size");
+        check(plan.Summary.Contains("用意したフォルダを指定してください")&&(plan with{AutomaticSetupSupported=true}).Summary.Contains("自動セットアップを使えます")&&plan.Summary.Contains("取得やAI処理を開始しません"),"runtime guidance distinguishes automatic setup from manual-only and stays read-only");
         var skip=await client.CreateAsync(0);check(skip.SkipAI&&skip.Requirements.Count==0&&skip.Summary.Contains("AIは使わず"),"AI opt-out keeps basic use available");
         check(AISetupSelection.FromMask(12).SequenceEqual(new[]{"video","audio"}),"feature flags retain audio/video without implicit extra models");
         check(AISetupSelection.Normalize(16)==3&&AISetupSelection.Normalize(-1)==3,"invalid stored feature selection uses backward-compatible defaults");

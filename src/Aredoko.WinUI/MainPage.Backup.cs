@@ -18,26 +18,27 @@ public sealed partial class MainPage
         {
             var selected=BackupSelection.Load(ViewerOptions.BackupChoicesPath);
             var panel=new StackPanel{Spacing=12};
-            var basic=new CheckBox{Content="ライブラリ情報（登録フォルダ・タグ・棚・お気に入り）",IsChecked=true,IsEnabled=false};
+            var basic=new TextBlock{Text="必ず含む　登録フォルダ・タグ・棚・お気に入り",TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]};
+            var optionalHeading=new TextBlock{Text="追加で含める項目",Style=(Style)Resources["MediaMetadataStyle"],Margin=new Thickness(0,4,0,0)};
             var settings=new CheckBox{Content="設定とカスタムプロファイル",IsChecked=selected.Settings};
             var history=new CheckBox{Content="閲覧履歴",IsChecked=selected.History};
             var position=new CheckBox{Content="本の読書位置",IsChecked=selected.ReaderProgress};
-            var vectors=new CheckBox{Content="AI索引（再作成可能・容量が大きくなります）",IsChecked=selected.Vectors};
+            var vectors=new CheckBox{Content="AI検索用データ（あとで作り直せます・容量が大きくなります）",IsChecked=selected.Vectors};
             var destination=new TextBox{Header="保存先",IsReadOnly=true,PlaceholderText="保存するフォルダを選んでください",TextWrapping=TextWrapping.Wrap};
             var choose=new Button{Content="保存先を選ぶ"};
+            var excludeNote=new TextBlock{Text="元ファイル・AIモデル・実行環境・サムネイルは対象外です（画面を閉じても作成は続きます）。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             var status=new TextBlock{Text="バックアップの状態を確認しています。",TextWrapping=TextWrapping.Wrap};
             var progress=new ProgressBar{IsIndeterminate=false,Minimum=0,Maximum=100,Value=0};
             var reconnect=new Button{Content="状態を更新"};
             var guide=new Button{Content="バックアップから復元"};
-            var help=new Button{Content="復旧ガイド"};
+            var help=new Button{Content="復元の手順"};
             AutomationProperties.SetAutomationId(help,"BackupRecoveryHelp");
             var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};actions.Children.Add(reconnect);actions.Children.Add(guide);actions.Children.Add(help);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る"}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");actions.Children.Add(backToSettings);}
             foreach(var (control,id) in new (DependencyObject,string)[]{(basic,"BackupBasic"),(settings,"BackupSettings"),(history,"BackupHistory"),(position,"BackupReaderPosition"),(vectors,"BackupVectors"),(destination,"BackupDestination"),(choose,"BackupChoose"),(status,"BackupStatus"),(progress,"BackupProgress"),(reconnect,"BackupRefresh"),(guide,"BackupRestoreGuide")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(progress,"バックアップの進捗");
-            panel.Children.Add(new TextBlock{Text="元の画像・動画、AIモデル、Python環境、サムネイルは含みません。この画面を閉じても作成は続き、再び開くと進捗を確認できます。",TextWrapping=TextWrapping.Wrap});
-            foreach(var control in new UIElement[]{basic,settings,history,position,vectors,destination,choose,progress,status,actions})panel.Children.Add(control);
+            foreach(var control in new UIElement[]{basic,optionalHeading,settings,history,position,vectors,destination,choose,excludeNote,progress,status,actions})panel.Children.Add(control);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップと復元",PrimaryButtonText="バックアップを作成",SecondaryButtonText="作成を中止",CloseButtonText="閉じる",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false,DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)}};
             AutomationProperties.SetAutomationId(dialog,"BackupDialog");

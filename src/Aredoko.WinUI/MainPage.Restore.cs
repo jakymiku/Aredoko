@@ -22,8 +22,8 @@ public sealed partial class MainPage
             var source=new TextBox{Header="復元元",IsReadOnly=true,PlaceholderText="バックアップを選んでください",TextWrapping=TextWrapping.Wrap};
             var folder=new Button{Content="フォルダを選ぶ"};var zip=new Button{Content="ZIPを選ぶ"};
             var choose=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};choose.Children.Add(folder);choose.Children.Add(zip);
-            var omit=new CheckBox{Content="AI索引を除いて復元する（あとで再作成できます）",IsChecked=true};
-            var consent=new CheckBox{Content="現在のライブラリを残し、準備済みの内容で復元して再起動する",Visibility=Visibility.Collapsed};
+            var omit=new CheckBox{Content="AI検索用データも復元（含めなかったデータはあとで作り直せます）",IsChecked=false};
+            var consent=new CheckBox{Content="元のライブラリを残したまま、復元先に切り替えて再起動する",Visibility=Visibility.Collapsed};
             var status=new TextBlock{Text="復元の状態を確認しています。",TextWrapping=TextWrapping.Wrap};
             var progress=new ProgressBar{Minimum=0,Maximum=100};var refresh=new Button{Content="状態を更新"};
             var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};actions.Children.Add(refresh);
@@ -31,9 +31,9 @@ public sealed partial class MainPage
             if(backToBackup is not null){AutomationProperties.SetAutomationId(backToBackup,"BtnBackToBackup");actions.Children.Add(backToBackup);}
             foreach(var (control,id) in new (DependencyObject,string)[]{(source,"RestoreSource"),(folder,"RestoreChooseFolder"),(zip,"RestoreChooseZip"),(omit,"RestoreOmitVectors"),(consent,"RestoreConsent"),(status,"RestoreStatus"),(progress,"RestoreProgress"),(refresh,"RestoreRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(progress,"復元準備の進捗");
-            panel.Children.Add(new TextBlock{Text="元の画像・動画は変更しません。バックアップを新しい保存先で検証し、最後に再起動して切り替えます。準備中もこの画面を閉じられます。",TextWrapping=TextWrapping.Wrap});
+            panel.Children.Add(new TextBlock{Text="新しい場所に復元先を用意して確認します。現在のライブラリと元ファイルはそのまま残ります（画面を閉じても準備は続きます）。",TextWrapping=TextWrapping.Wrap});
             foreach(var control in new UIElement[]{source,choose,omit,progress,status,consent,actions})panel.Children.Add(control);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップから復元",PrimaryButtonText="復元を準備",SecondaryButtonText="準備を中止",CloseButtonText="閉じる",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false,DefaultButton=ContentDialogButton.None,
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップから復元",PrimaryButtonText="復元先を準備して確認",SecondaryButtonText="準備を中止",CloseButtonText="閉じる",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false,DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)}};
             AutomationProperties.SetAutomationId(dialog,"RestoreDialog");
             void Render(RestoreJob value)
@@ -44,15 +44,15 @@ public sealed partial class MainPage
                 // selection and AI policy are the inputs for the next attempt.
                 var syncInputs=value.Active||value.State=="completed"||value.RestartRequested;
                 if(value.Source is not null&&(syncInputs||string.IsNullOrEmpty(source.Text)))source.Text=value.Source;
-                if(value.WithoutVectors is {} policy&&(syncInputs||first))omit.IsChecked=policy;
+                if(value.WithoutVectors is {} policy&&(syncInputs||first))omit.IsChecked=!policy;
                 var frozen=busy||value.Active||value.State=="completed"||value.RestartRequested;
                 folder.IsEnabled=zip.IsEnabled=omit.IsEnabled=!frozen;
                 consent.Visibility=value.State=="completed"?Visibility.Visible:Visibility.Collapsed;
                 consent.IsEnabled=!busy&&!value.RestartRequested&&value.SwitchSupported;
                 if(backToBackup is not null)backToBackup.IsEnabled=!busy&&!value.RestartRequested;
-                dialog.PrimaryButtonText=value.State=="completed"?"復元して再起動":"復元を準備";
+                dialog.PrimaryButtonText=value.State=="completed"?"復元先に切り替えて再起動":"復元先を準備して確認";
                 dialog.IsPrimaryButtonEnabled=!busy&&!value.RestartRequested&&(value.State=="completed"?value.SwitchSupported&&consent.IsChecked==true:!value.Active&&!string.IsNullOrEmpty(source.Text));
-                dialog.SecondaryButtonText=value.State=="completed"?"準備を破棄":"準備を中止";
+                dialog.SecondaryButtonText=value.State=="completed"?"準備した復元先を破棄":"準備を中止";
                 dialog.IsSecondaryButtonEnabled=!busy&&!value.RestartRequested&&(value.Active||value.State=="completed");
                 progress.Value=value.Progress*100;progress.IsIndeterminate=value.Active&&value.Progress==0;
                 status.Text=value.State=="idle"?"バックアップを選んで復元の準備を始めてください。":value.Message;
@@ -89,7 +89,7 @@ public sealed partial class MainPage
                 {
                     if(current.State=="completed")
                     {await FlushReaderProgressAsync();current=await api.Restores.RestartAsync(current.Id!,lifetime.Token);}
-                    else current=await api.Restores.StartAsync(source.Text,omit.IsChecked==true,lifetime.Token);
+                    else current=await api.Restores.StartAsync(source.Text,omit.IsChecked!=true,lifetime.Token);
                 }
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
                 catch(Exception ex){operationError="操作を確認できません。「状態を更新」で再確認してください。\n"+ex.Message;}

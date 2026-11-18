@@ -21,17 +21,19 @@ public sealed partial class MainPage
             var help=new TextBlock{TextWrapping=TextWrapping.Wrap};
             var status=new TextBlock{TextWrapping=TextWrapping.Wrap};
             var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};
-            var consent=new CheckBox{Content="修復・再構築には再ダウンロードが必要になることを確認しました。"};
+            var consent=new CheckBox{Content="修復や再構築のときに再ダウンロードが必要になることに同意する"};
             var folder=new Button{Content="保存先を開く",IsEnabled=false};
             var refresh=new Button{Content="状態を更新"};
             var buttons=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};buttons.Children.Add(folder);buttons.Children.Add(refresh);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る"}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");buttons.Children.Add(backToSettings);}
+            var manualDeleteNote=new Expander{Header="手動で削除する場合の注意",HorizontalAlignment=HorizontalAlignment.Stretch,Content=new TextBlock{Text="取得・構築・検証が完了してから、上の保存先フォルダ内にある .whl ファイル（wheel）だけを対象にしてください。",TextWrapping=TextWrapping.Wrap}};
             var panel=new StackPanel{Spacing=12,MaxWidth=650};
             panel.Children.Add(capacity);panel.Children.Add(path);panel.Children.Add(help);panel.Children.Add(buttons);
-            panel.Children.Add(new TextBlock{Text="モデル・実行環境・登録情報は削除しません。取得・構築・検証中は削除できません。\n手動で削除する場合も、準備が完了してから上の専用フォルダ内のwheelファイルだけを対象にしてください。",TextWrapping=TextWrapping.Wrap});
+            panel.Children.Add(new TextBlock{Text="モデル本体・実行環境・登録情報は削除しません（取得・構築・検証中は削除できません）。",TextWrapping=TextWrapping.Wrap});
+            panel.Children.Add(manualDeleteNote);
             panel.Children.Add(consent);panel.Children.Add(progress);panel.Children.Add(status);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="ストレージとキャッシュ",PrimaryButtonText="キャッシュを削除",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=panel,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AIのダウンロードキャッシュ",PrimaryButtonText="キャッシュを削除…",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=panel,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
             AutomationProperties.SetAutomationId(dialog,"RuntimeCacheDialog");AutomationProperties.SetAutomationId(path,"RuntimeCachePath");
             AutomationProperties.SetAutomationId(capacity,"RuntimeCacheCapacity");AutomationProperties.SetAutomationId(consent,"RuntimeCacheConsent");
             AutomationProperties.SetAutomationId(folder,"RuntimeCacheOpenFolder");AutomationProperties.SetAutomationId(status,"RuntimeCacheStatus");
@@ -41,7 +43,7 @@ public sealed partial class MainPage
             {
                 if(!open||disposed)return;
                 var bytes=summary?["bytes"]?.GetValue<long>()??0;var files=summary?["files"]?.GetValue<int>()??0;
-                if(summary is not null){capacity.Text=$"取得キャッシュ：{bytes/1_000_000_000d:N2} GB（{files:N0}ファイル）";path.Text=summary["path"]?.GetValue<string>()??"";help.Text=summary["message"]?.GetValue<string>()??"";}
+                if(summary is not null){capacity.Text=summary["bytes"] is not null&&summary["files"] is not null?$"対象　{bytes/1_000_000_000d:N2} GB・{files:N0}ファイル":"対象　未確認";path.Text=summary["path"]?.GetValue<string>()??"";help.Text=summary["message"]?.GetValue<string>()??"";}
                 var active=Active();dialog.IsPrimaryButtonEnabled=!busy&&!active&&consent.IsChecked==true&&(summary?["can_delete"]?.GetValue<bool>()??false);
                 dialog.IsSecondaryButtonEnabled=!busy&&current?["state"]?.GetValue<string>()=="checking";
                 folder.IsEnabled=!busy&&!active&&(summary?["exists"]?.GetValue<bool>()??false);refresh.IsEnabled=!busy;

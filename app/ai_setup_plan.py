@@ -6,7 +6,7 @@ does not mean inference/hardware compatibility has been tested.
 """
 from copy import deepcopy
 
-from ai_profiles import ModelProfile
+from ai_profiles import DEFAULT_PROFILE, ModelProfile
 from model_locations import ModelTarget
 
 FEATURES=(
@@ -29,6 +29,7 @@ def plan_setup(body,*,profile,environment,catalogs,profile_status=None):
             'features':[],'requirements':[],'selected_catalog_ids':[],'known_download_bytes':0,
             'total_download_bytes':0,'unresolved_requirements':[],
             'unresolved_features':[],'can_download_all_missing':True,
+            'automatic_setup_supported':False,
             'inference_checked_by_plan':False,'hardware_checked_by_plan':False,
             'settings_saved':False,'acquisition_started':False,'restart_required':False,
             'profile_restart_required':False,'profile_override':False,'profile_selection_invalid':False}
@@ -51,6 +52,7 @@ def plan_setup(body,*,profile,environment,catalogs,profile_status=None):
             'unavailable_reason':None if supported else 'choose_compatible_model_profile'})
         if not supported:result['unresolved_features'].append(key)
     profile_blocked=result['profile_restart_required'] or result['profile_selection_invalid']
+    result['automatic_setup_supported']=isinstance(profile,ModelProfile) and profile.to_dict()==DEFAULT_PROFILE.to_dict() and not profile_blocked
     result['can_download_all_missing']=not result['unresolved_features'] and not profile_blocked
     if not any(feature['supported'] for feature in result['features']):return result
     state=environment();available=catalogs()

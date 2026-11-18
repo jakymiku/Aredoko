@@ -119,7 +119,9 @@ static class StatusClarityTests
         check(report.Contains("UIテーマ: Dark"), "DiagnosticsReport contains UI theme");
         check(report.Contains("基本Python: CPython 3.13.17（64ビット、仮想環境）"), "DiagnosticsReport identifies the basic Python runtime");
         check(report.Contains("登録フォルダ数: 3 件"), "DiagnosticsReport contains folder count");
-        check(report.Contains("棚（タグ分類）数: 5 件"), "DiagnosticsReport contains shelf count");
+        check(report.Contains("棚の数: 5 件"), "DiagnosticsReport contains shelf count");
+        check(report.Contains("登録した関連語: 12 件"), "DiagnosticsReport contains related term count");
+        check(!report.Contains("または保存"), "DiagnosticsReport only advertises clipboard copy");
         check(report.Contains("AI利用可否: 利用可能"), "DiagnosticsReport contains AI available");
         check(report.Contains("EmbeddingGemma 2"), "DiagnosticsReport contains model label");
         check(report.Contains("2 フォルダに制限"), "DiagnosticsReport contains scope information");
@@ -130,6 +132,7 @@ static class StatusClarityTests
         // 6. DiagnosticsReport handles nulls gracefully
         var nullReport = DiagnosticsReport.Generate(null, null, roots: null);
         check(nullReport.Contains("Aredoko 診断サマリー"), "DiagnosticsReport handles null status/scope safely");
+        check(nullReport.Contains("棚の数: 未確認") && nullReport.Contains("登録した関連語: 未確認"), "DiagnosticsReport distinguishes unconfirmed shelf/term counts from zero");
         check(nullReport.Contains("未設定または全フォルダ"), "DiagnosticsReport describes null scope safely");
         check(!nullReport.Contains("基本Python:"), "DiagnosticsReport keeps working with an older backend");
     }

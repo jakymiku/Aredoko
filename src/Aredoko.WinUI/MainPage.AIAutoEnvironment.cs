@@ -18,7 +18,7 @@ public sealed partial class MainPage
             JsonNode? summary=null,current=null;string? operationError=null;
             var description=new TextBlock{Text="取得内容を確認しています…",TextWrapping=TextWrapping.Wrap};
             var licenses=new StackPanel{Spacing=4};
-            var consent=new CheckBox{Content="提供元・ライセンス・容量を確認し、取得とAIの動作確認に同意します。",IsEnabled=false};
+            var consent=new CheckBox{Content="提供元・ライセンス・容量を確認し、ダウンロードと動作確認に同意する",IsEnabled=false};
             var speed=new NumberBox{Header="速度上限（MB/秒、0で無制限）",Value=0,Minimum=0,Maximum=1000000,SmallChange=1};
             AutomationProperties.SetAutomationId(speed,"AIAutoEnvironmentSpeed");
             var speedSettings=new Expander{Header="速度制限（既定は制限なし）",Content=speed,HorizontalAlignment=HorizontalAlignment.Stretch};
@@ -26,12 +26,12 @@ public sealed partial class MainPage
             var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};
             var panel=new StackPanel{Spacing=12,MaxWidth=650};
             panel.Children.Add(description);panel.Children.Add(licenses);
-            panel.Children.Add(new TextBlock{Text="初回は数GBのダウンロードと構築を行います。途中で閉じても処理は続きます。中止した場合は前の設定を保持します。\n既存のモデル・環境は再利用し、変更・削除しません。GPUが利用できる場合は動作確認に使用します（上限4GB）。",TextWrapping=TextWrapping.Wrap});
+            panel.Children.Add(new TextBlock{Text="動作確認後に設定を保存します（閉じても処理は続きます）。中止しても元のモデル・環境・設定は残ります。GPUが使える場合は動作確認に使用します（上限4 GB）。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
             panel.Children.Add(consent);panel.Children.Add(speedSettings);panel.Children.Add(progress);panel.Children.Add(status);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Left}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
             var scroll=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI環境を自動構築",PrimaryButtonText="取得・構築して確認",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=scroll,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AIの自動セットアップ",PrimaryButtonText="ダウンロードして設定",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=scroll,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
             AutomationProperties.SetAutomationId(dialog,"AIAutoEnvironmentDialog");AutomationProperties.SetAutomationId(consent,"AIAutoEnvironmentConsent");AutomationProperties.SetAutomationId(status,"AIAutoEnvironmentStatus");
             AutomationProperties.SetLiveSetting(status,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
             bool Active()=>current?["state"]?.GetValue<string>() is "waiting" or "checking_runtime" or "checking_base" or "downloading_runtime" or "building" or "checking_model" or "downloading_model" or "probing" or "saving" or "cancelling";
@@ -59,7 +59,7 @@ public sealed partial class MainPage
                     summary=await api.GetAsync("api/library/ai/setup/build",lifetime.Token);current=summary["job"];
                     if(licenses.Children.Count==0)
                     {
-                        description.Text=summary["supported"]?.GetValue<bool>()==true?$"EmbeddingGemma 2：公式の固定版パッケージとモデルを取得し、整合性と実推論を確認してから設定を保存します。\n最大取得量の目安 {(summary["download_bytes"]?.GetValue<long>()??0)/1_000_000_000d:N2} GB、構築時の空き容量目安15 GB。\n取得元：Python Software Foundation / PyTorch / PyPI / Google（Hugging Face）":"現在のモデルは自動構築の対象外です。AI環境の手動選択を利用してください。";
+                        description.Text=summary["supported"]?.GetValue<bool>()==true?$"対象モデル　EmbeddingGemma 2\n最大取得量　{(summary["download_bytes"]?.GetValue<long>()??0)/1_000_000_000d:N2} GB\n必要な空き容量　約15 GB以上\n提供元　Python Software Foundation / PyTorch / PyPI / Google（Hugging Face）":"現在のモデルは自動セットアップの対象外です。「手元のモデル・環境を使う」から用意したフォルダを指定してください。";
                         if(summary["licenses"] is JsonArray entries)foreach(var entry in entries)
                             if(Uri.TryCreate(entry?["url"]?.GetValue<string>(),UriKind.Absolute,out var uri))
                             {

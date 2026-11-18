@@ -99,12 +99,12 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImages();viewport.ChangeView(0,0,1,true);}else ViewerInputGestures.ZoomCentered(viewport,(float)OriginalZoom());};
         Identify(viewport,"ReaderViewport","本の表示。左右キーでページ送り、右クリックで表示設定");Identify(image,"ReaderImage","本のページ");Identify(second,"ReaderImageSecond","見開きのもう一方のページ");
         Identify(previous,"ReaderPrevious","前のページ");Identify(next,"ReaderNext","次のページ");Identify(zoomOut,"ReaderZoomOut","本を縮小");Identify(zoomIn,"ReaderZoomIn","本を拡大");Identify(fit,"ReaderFit","本の表示をリセット");
-        Identify(retry,"ReaderRetry","現在のページを再試行");Identify(reopen,"ReaderReopen","本を最初から開き直す");Identify(settings,"ReaderSettings","本の表示設定");
+        Identify(retry,"ReaderRetry","現在のページを再試行");Identify(reopen,"ReaderReopen","本を最初から開き直す");Identify(settings,"ReaderSettings","本の表示と操作");
         Identify(toolbar,"ReaderToolbar","本の操作");AutomationProperties.SetAutomationId(count,"ReaderPageNumber");AutomationProperties.SetAutomationId(status,"ReaderStatus");AutomationProperties.SetAutomationId(zoom,"ReaderZoomStatus");
         Identify(progressStatus,"ReaderProgressStatus","読書位置の保存状態");Identify(saveProgress,"ReaderSaveProgress","読書位置を保存し直す");
         AutomationProperties.SetLiveSetting(progressStatus,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         AutomationProperties.SetLiveSetting(status,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        foreach(var (button,text) in new[]{(previous,"前へ"),(next,"次へ"),(zoomOut,"縮小"),(zoomIn,"拡大"),(fit,"画面に合わせる"),(retry,"再試行"),(reopen,"最初から開き直す"),(settings,"単ページ・見開きの設定")})ToolTipService.SetToolTip(button,text);
+        foreach(var (button,text) in new[]{(previous,"前へ"),(next,"次へ"),(zoomOut,"縮小"),(zoomIn,"拡大"),(fit,"画面に合わせる"),(retry,"再試行"),(reopen,"最初から開き直す"),(settings,"本の表示と操作")})ToolTipService.SetToolTip(button,text);
         foreach(var (value,label,id) in new[]{(ReaderDisplayMode.Single,"単ページ","ReaderSingle"),(ReaderDisplayMode.RightToLeft,"見開き（右→左）","ReaderRtl"),(ReaderDisplayMode.LeftToRight,"見開き（左→右）","ReaderLtr")})
         {
             var option=new RadioMenuFlyoutItem{Text=label,GroupName="ReaderDisplay",IsChecked=value==ReaderDisplayMode.Single};Identify(option,id,label);modes.Add(option);menu.Items.Add(option);

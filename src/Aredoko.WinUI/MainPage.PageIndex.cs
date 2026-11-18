@@ -26,11 +26,11 @@ public sealed partial class MainPage
             var first=new NumberBox{Header="開始ページ",Minimum=1,Maximum=snapshot.PageCount,Value=1,SmallChange=1};
             var count=new NumberBox{Header=new TextBlock{Text="ページ数（最大16）",TextWrapping=TextWrapping.Wrap},Minimum=1,Maximum=Math.Min(16,snapshot.PageCount),Value=Math.Min(16,snapshot.PageCount),SmallChange=1};
             var limit=new NumberBox{Header="今回追加するページ数の上限",Minimum=1,Maximum=128,Value=64,SmallChange=16};
-            var prepare=new Button{Content="追加範囲を確認",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var prepare=new Button{Content="件数を確認",HorizontalAlignment=HorizontalAlignment.Stretch};
             var planText=new TextBlock{Text="範囲を確認してから開始してください。",TextWrapping=TextWrapping.Wrap};
             var chunkFields=new StackPanel{Spacing=8,Visibility=Visibility.Collapsed};
             foreach(var element in new UIElement[]{limit,prepare,planText})chunkFields.Children.Add(element);
-            var start=new Button{Content="選んだページを追加",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var start=new Button{Content="選んだページのデータを作る",HorizontalAlignment=HorizontalAlignment.Stretch};
             var next=new Button{Content="次の未準備範囲を選ぶ",HorizontalAlignment=HorizontalAlignment.Stretch};
             var cancel=new Button{Content="処理を中断",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};
             var progress=new ProgressBar{Minimum=0,Maximum=16,Visibility=Visibility.Collapsed};
@@ -53,7 +53,7 @@ public sealed partial class MainPage
             var content=new Grid{Width=Math.Clamp(XamlRoot.Size.Width-112,240,440),Height=Math.Clamp(XamlRoot.Size.Height-240,260,420)};
             content.RowDefinitions.Add(new(){Height=GridLength.Auto});content.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});content.RowDefinitions.Add(new(){Height=GridLength.Auto});
             Grid.SetRow(viewport,1);Grid.SetRow(actions,2);content.Children.Add(heading);content.Children.Add(viewport);content.Children.Add(actions);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="本のページをAI検索に追加",Content=content,CloseButtonText="閉じる"};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="本のページ画像（AI検索用データ）",Content=content,CloseButtonText="閉じる"};
             AutomationProperties.SetAutomationId(dialog,"PageAIDialog");
             var busy=false;var closeRequested=false;string? job=null;PageImageCoverage? coverage=null;PageChunkPlan? plan=null;PageChunkStatus? chunk=null;
             bool Chunked()=>mode.SelectedIndex==1;
@@ -62,7 +62,7 @@ public sealed partial class MainPage
                 first.IsEnabled=count.IsEnabled=mode.IsEnabled=limit.IsEnabled=!busy;
                 prepare.IsEnabled=!busy&&coverage?.CanPrepare==true;
                 start.IsEnabled=!busy&&coverage?.CanPrepare==true&&(!Chunked()||plan?.CanStart==true||chunk?.CanResume==true);
-                start.Content=Chunked()?(chunk?.CanResume==true?"同じ範囲を再開":"確認した範囲を追加"):"選んだページを追加";
+                start.Content=Chunked()?(chunk?.CanResume==true?"前回の続きから作る":"確認した範囲のデータを作る"):"選んだページのデータを作る";
                 next.Visibility=Chunked()?Visibility.Collapsed:Visibility.Visible;
                 next.IsEnabled=!busy&&coverage?.CanPrepare==true&&coverage.NextRange is not null;
             }
