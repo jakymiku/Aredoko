@@ -27,7 +27,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
     private readonly CancellationToken cancellation;
     private readonly ViewerChromeController hideTimer;
     private readonly string bookTitle;
-    public string WindowTitle=>$"Aredoko — 本ビューア　{bookTitle} [{count.Text}]";
+    public string WindowTitle=>$"{bookTitle}（{count.Text}）— Aredoko";
     public event Action<string>? TitleChanged;
     private readonly Grid canvas = new();
     private readonly StackPanel pages = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -43,9 +43,9 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button previous = IconButton(Symbol.Back), next = IconButton(Symbol.Forward), zoomOut = IconButton(Symbol.ZoomOut), zoomIn = IconButton(Symbol.ZoomIn);
     private readonly Button fit = IconButton(Symbol.FullScreen), retry = IconButton(Symbol.Refresh), reopen = IconButton(Symbol.RepeatAll), settings = IconButton(Symbol.Setting);
     private readonly Button editDetails = IconButton(Symbol.Edit);
-    private readonly Button actualSize=new(){Content="原寸",MinWidth=36,Padding=new Thickness(8)};
+    private readonly Button actualSize=new(){Content="1:1",MinWidth=36,Padding=new Thickness(8)};
     private readonly TextBlock count = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock zoom = new() { Text = "倍率 100%", VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock zoom = new() { Text = "100%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly TextBlock progressStatus=new(){Visibility=Visibility.Collapsed,TextWrapping=TextWrapping.Wrap,HorizontalAlignment=HorizontalAlignment.Center};
     private readonly MenuFlyoutItem saveProgress=new(){Text="読書位置を保存し直す"};
@@ -91,8 +91,8 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,HorizontalAlignment=HorizontalAlignment.Center};
         foreach(var control in new UIElement[]{previous,next,zoomOut,zoomIn,fit,actualSize,zoom,favorite.Button,editDetails,retry,reopen,settings})actions.Children.Add(control);
         Identify(favorite.Button,"ReaderFavorite","お気に入りを読み込み中");
-        Identify(editDetails,"ReaderEditDetails","読書を閉じて詳細で整理");
-        ToolTipService.SetToolTip(editDetails,"読書を閉じて詳細で整理");
+        Identify(editDetails,"ReaderEditDetails","詳細で編集");
+        ToolTipService.SetToolTip(editDetails,"閉じて詳細パネルを開く");
         editDetails.Click+=(_,_)=>EditDetailsRequested?.Invoke();
         toolbar.Child=actions;Children.Add(toolbar);ViewerChromeController.AttachNotices(this,status,progressStatus);
         Identify(actualSize,"ReaderActualSize","本のページを原寸で表示");ToolTipService.SetToolTip(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）");
@@ -173,7 +173,7 @@ public void AttachNavigation(UIElement dialog)
                 if(saved is not null){mode=saved.Mode;start=fromBeginning?0:saved.RestorePage(result);}
             }
             catch(Exception) when(!cancellation.IsCancellationRequested)
-            {allowProgressSave=fromBeginning;ViewerNotice.Set(progressStatus,"読書位置を取得できませんでした。先頭から表示します。保存済み位置は移動するまで保持します。");}
+            {allowProgressSave=fromBeginning;ViewerNotice.Set(progressStatus,"読書位置を読み込めないため先頭から表示します");}
             if(!fromBeginning&&(initialPageMatch?.InitialReaderPage(result)??initialMatch?.InitialReaderPage(result)) is int requested)
             {
                 start=ReaderSpreadPolicy.Anchor(requested,result.PageCount,mode);
@@ -256,7 +256,7 @@ public void AttachNavigation(UIElement dialog)
     {
         if(disposed||cancellation.IsCancellationRequested)return;ClearImages();failed=true;loaded=false;ViewerNotice.Set(progressStatus,"前に読めたページの位置を保持しています");
         if(ex is ArchiveReadException{RequiresReopen:true}){manifest=null;count.Text="—";}
-        ViewerNotice.Set(status,ex switch{ArchiveReadException=>ex.Message,OperationCanceledException=>"読み込みがタイムアウトしました。再試行してください。",HttpRequestException=>"接続できません。閉じてライブラリから再接続してください。",_=>"このページを表示できません。未対応形式・破損・画像サイズを確認してください。"});ShowChrome();
+        ViewerNotice.Set(status,ex switch{ArchiveReadException=>ex.Message,OperationCanceledException=>"読み込みがタイムアウトしました。再試行してください",HttpRequestException=>"接続できません。閉じて再接続してください",_=>"表示できません（未対応形式または破損）"});ShowChrome();
     }
     private void UpdateActions()
     {
@@ -268,7 +268,7 @@ public void AttachNavigation(UIElement dialog)
         retry.IsEnabled=!blocked&&failed;reopen.IsEnabled=!blocked;settings.IsEnabled=!blocked;
         editDetails.IsEnabled=!closing&&!disposed;
         foreach(var option in modes)option.IsEnabled=!blocked;saveProgress.IsEnabled=!blocked&&loaded&&manifest is not null;
-        zoom.Text=$"倍率 {viewport.ZoomFactor/OriginalZoom()*100:0}%";zoomOut.IsEnabled=loaded&&!busy&&viewport.ZoomFactor>viewport.MinZoomFactor;zoomIn.IsEnabled=loaded&&!busy&&viewport.ZoomFactor<viewport.MaxZoomFactor;actualSize.IsEnabled=loaded&&!busy;fit.IsEnabled=loaded&&!busy;
+        zoom.Text=$"{viewport.ZoomFactor/OriginalZoom()*100:0}%";zoomOut.IsEnabled=loaded&&!busy&&viewport.ZoomFactor>viewport.MinZoomFactor;zoomIn.IsEnabled=loaded&&!busy&&viewport.ZoomFactor<viewport.MaxZoomFactor;actualSize.IsEnabled=loaded&&!busy;fit.IsEnabled=loaded&&!busy;
     }
     public void Dispose(){if(disposed)return;disposed=true;favorite.Dispose();hideTimer.Dispose();menu.Hide();preload?.Cancel();lifetime.Cancel();pageCache.Dispose();ClearImages();manifest=null;lifetime.Dispose();}
 }

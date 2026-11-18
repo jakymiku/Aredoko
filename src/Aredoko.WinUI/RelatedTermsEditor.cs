@@ -16,10 +16,10 @@ public sealed class RelatedTermsEditor
     private readonly TextBox aliases = new() { Header = "別の呼び名（、区切り）", PlaceholderText = "例: 霊夢、reimu" };
     private readonly TextBox related = new() { Header = "探すときに思い浮かぶ言葉（、区切り）", PlaceholderText = "例: 東方、巫女" };
     private readonly Button save = new() { Content = "保存" };
-    private readonly Button delete = new() { Content = "この見出し語を削除" };
-    private readonly Button export = new() { Content = "ファイルに書き出す" };
-    private readonly Button import = new() { Content = "ファイルから読み込む" };
-    private readonly ComboBox entries = new() { Header = "登録済み（選ぶと編集できます）", HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly Button delete = new() { Content = "削除" };
+    private readonly Button export = new() { Content = "書き出し…" };
+    private readonly Button import = new() { Content = "読み込み…" };
+    private readonly ComboBox entries = new() { Header = "登録済みの語", HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap };
     private List<RelatedTermEntry> loaded = [];
     private bool busy;
@@ -37,7 +37,7 @@ public sealed class RelatedTermsEditor
         AutomationProperties.SetAutomationId(import, "ImportRelatedTerms");
         AutomationProperties.SetAutomationId(status, "RelatedTermStatus");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        var help = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "例：「東方 巫女」で探すと「博麗霊夢」「霊夢、reimu」も候補に。入力した言葉にそのまま一致する作品が先に並びます。" };
+        var help = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "言い換えを登録すると検索で一緒に探します（例：巫女 → 霊夢）" };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { save, delete } };
         var files = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { export, import } };
         foreach (var element in new UIElement[] { help, entries, term, aliases, related, actions, files, status }) panel.Children.Add(element);
@@ -84,7 +84,7 @@ public sealed class RelatedTermsEditor
             if (error is not null) { status.Text = error; return; }
             await api.PostAsync("api/library/terms", RelatedTerms.Upsert(term.Text, aliasWords, relatedWords));
             await RefreshAsync(term.Text.Trim());
-            status.Text = "保存しました。次のファイル名・タグ検索から使われます。";
+            status.Text = "✓ 保存しました";
         });
         delete.Click += async (_, _) => await RunAsync(async () =>
         {

@@ -26,7 +26,7 @@ public sealed partial class MainPage
             var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};
             var panel=new StackPanel{Spacing=12,MaxWidth=650};
             panel.Children.Add(description);panel.Children.Add(licenses);
-            panel.Children.Add(new TextBlock{Text="動作確認後に設定を保存します（閉じても処理は続きます）。中止しても元のモデル・環境・設定は残ります。GPUが使える場合は動作確認に使用します（上限4 GB）。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
+            panel.Children.Add(new TextBlock{Text="• 画面を閉じても続行します\n• 中止しても元の設定は残ります\n• GPU使用（上限4 GB）",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
             panel.Children.Add(consent);panel.Children.Add(speedSettings);panel.Children.Add(progress);panel.Children.Add(status);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Left}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
@@ -59,7 +59,7 @@ public sealed partial class MainPage
                     summary=await api.GetAsync("api/library/ai/setup/build",lifetime.Token);current=summary["job"];
                     if(licenses.Children.Count==0)
                     {
-                        description.Text=summary["supported"]?.GetValue<bool>()==true?$"対象モデル　EmbeddingGemma 2\n最大取得量　{(summary["download_bytes"]?.GetValue<long>()??0)/1_000_000_000d:N2} GB\n必要な空き容量　約15 GB以上\n提供元　Python Software Foundation / PyTorch / PyPI / Google（Hugging Face）":"現在のモデルは自動セットアップの対象外です。「手元のモデル・環境を使う」から用意したフォルダを指定してください。";
+                        description.Text=summary["supported"]?.GetValue<bool>()==true?$"対象モデル：{""}EmbeddingGemma 2\n最大取得量：{(summary["download_bytes"]?.GetValue<long>()??0)/1_000_000_000d:N2} GB\n必要な空き：約15 GB以上\n提供元：Python / PyTorch / PyPI / Google (HF)":"このモデルは自動セットアップ非対応です。「手元のファイルを使う」から指定してください";
                         if(summary["licenses"] is JsonArray entries)foreach(var entry in entries)
                             if(Uri.TryCreate(entry?["url"]?.GetValue<string>(),UriKind.Absolute,out var uri))
                             {

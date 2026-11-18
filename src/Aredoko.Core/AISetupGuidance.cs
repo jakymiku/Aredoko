@@ -17,12 +17,12 @@ public static class AISetupGuidance
         else if(environment?.State=="cancelled")lines.Add("配置の検査は中止されています。前の設定を保持しています。必要なら配置画面から確認し直してください。");
         else if(environment?.State=="failed")lines.Add("配置の検査は完了していません。配置画面で理由を確認してください。");
         if(plan.ProfileSelectionInvalid)
-            lines.Add("保存したモデル選択を「索引・詳細設定へ」で確認してください。起動中のモデルは切り替わっていません。");
+            lines.Add("保存したモデル選択を「AI検索を設定」で確認してください。起動中のモデルは切り替わっていません。");
         else if(plan.RestartRequired)
             lines.Add("次はAredokoを閉じ、いつものAredoko.exeから起動し直してください。保存した環境は再起動後に反映されます。");
         else if(plan.Requirements.Count!=2||plan.Requirements.Any(row=>!row.FilesPresent)||plan.Unsupported.Count>0)
             lines.Add("不足する実行環境・モデルを取得または指定してください。配置と動作確認が済むまでは基本検索と閲覧を使えます。");
-        else lines.Add("配置を確認しました。推論・対応機器の動作確認とは別です。次は「索引・詳細設定へ」で、登録したフォルダの索引を作成します。");
+        else lines.Add("配置を確認しました。推論・対応機器の動作確認とは別です。次は「AI検索を設定」で、登録したフォルダのAI検索データを作成します。");
         var features=AISetupSelection.FromMask(selection);
         var steps=new List<string>();
         if(features.Contains("semantic")||features.Contains("image_similarity"))steps.Add("意味検索・類似画像：画像や本の索引");

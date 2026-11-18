@@ -55,10 +55,10 @@ internal sealed class ViewerFavoriteAction(ResultSession? session,Action<string>
         {
             var kept=await session.EditFavoriteAsync(id,target,CancellationToken.None);
             value=target;Changed?.Invoke(id,target,kept);Update();
-            notice(target?"お気に入りに登録しました。":"お気に入りを解除しました。");
-            if(!kept){notice("保存しました。検索結果を更新するため一覧へ戻ります。");ReturnRequested?.Invoke();}
+            notice(target?"★ お気に入りに追加しました":"☆ お気に入りを解除しました");
+            if(!kept){notice("✓ お気に入りを更新しました");ReturnRequested?.Invoke();}
         }
-        catch(Exception ex){notice("お気に入りを保存できませんでした。一覧で状態を確認してください。");AppLog.Error(ex);}
+        catch(Exception ex){notice("お気に入りを保存できませんでした");AppLog.Error(ex);}
         finally{IsSaving=false;if(!disposed)StateChanged?.Invoke();}
     }
     public void Dispose(){if(disposed)return;disposed=true;lifetime.Cancel();lifetime.Dispose();}

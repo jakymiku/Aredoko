@@ -14,8 +14,8 @@ internal sealed class AudioPreparationPanel : IDisposable
     private readonly Func<JsonObject> conditions;
     private readonly TextBlock currentItem=new(){MaxLines=1,TextTrimming=TextTrimming.CharacterEllipsis,Visibility=Visibility.Collapsed};
     private readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap};
-    private readonly Button start=new(){Content="検索用データを作る",IsEnabled=false};
-    private readonly Button cancel=new(){Content="中断",IsEnabled=false};
+    private readonly Button start=new(){Content="AI検索データを作成",IsEnabled=false};
+    private readonly Button cancel=new(){Content="中止",IsEnabled=false};
     private readonly ProgressBar progress=new(){Visibility=Visibility.Collapsed,IsIndeterminate=true};
     private readonly DispatcherTimer timer=new(){Interval=TimeSpan.FromSeconds(1)};
     private readonly CancellationTokenSource lifetime=new();
@@ -23,31 +23,31 @@ internal sealed class AudioPreparationPanel : IDisposable
     private bool disposed,observing,command;
     private long version;
     private bool VideoAudio=>client.SourceKind=="video";
-    private string Subject=>VideoAudio?"動画内の音声":"音声";
+    private string Subject=>VideoAudio?"動画の音":"音声";
     public Expander Content {get;}
 
     public AudioPreparationPanel(AudioContentClient client,Func<JsonObject> conditions)
     {
         this.client=client;this.conditions=conditions;
         var panel=new StackPanel{Spacing=8};
-        panel.Children.Add(new TextBlock{Text=VideoAudio
-            ?"現在の検索フォルダ・棚にある動画の先頭音声トラックが対象です。作成後は「動画内の音（AI）」で探せます（文字起こしは保存しません）。画面を閉じても処理は続きます。"
-            :"現在の検索フォルダ・棚にある音声ファイルが対象です。作成後は「音声・音楽（AI）」で探せます（文字起こしは保存しません）。画面を閉じても処理は続きます。",TextWrapping=TextWrapping.Wrap});
+        var scopeDesc=new TextBlock{Text=VideoAudio?"現在の範囲の動画（先頭音声）が対象 · 閉じても続行":"現在の範囲の音声が対象 · 閉じても続行",TextWrapping=TextWrapping.Wrap};
+        ToolTipService.SetToolTip(scopeDesc,VideoAudio?"作成後は「動画の音（AI）」で探せます（文字起こしは保存しません）。":"作成後は「音声（AI）」で探せます（文字起こしは保存しません）。");
+        panel.Children.Add(scopeDesc);
         panel.Children.Add(currentItem);panel.Children.Add(status);panel.Children.Add(progress);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
         actions.Children.Add(start);actions.Children.Add(cancel);panel.Children.Add(actions);
-        Content=new Expander{Header=VideoAudio?"動画内の音":"音声・音楽",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
+        Content=new Expander{Header=VideoAudio?"動画の音":"音声",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
         var automationPrefix=VideoAudio?"VideoAudioContent":"AudioContent";
         AutomationProperties.SetAutomationId(Content,automationPrefix+"Options");
         AutomationProperties.SetAutomationId(status,automationPrefix+"Status");
         AutomationProperties.SetAutomationId(currentItem,automationPrefix+"CurrentItem");
         AutomationProperties.SetAutomationId(progress,automationPrefix+"Progress");
-        AutomationProperties.SetName(progress,Subject+"の検索用データ作成の進捗");
+        AutomationProperties.SetName(progress,Subject+"のAI検索データ作成の進捗");
         AutomationProperties.SetAutomationId(start,"Start"+automationPrefix);
         AutomationProperties.SetAutomationId(cancel,"Cancel"+automationPrefix);
-        start.Content="検索用データを作る";
-        ToolTipService.SetToolTip(start,$"準備済みの{Subject}は再利用します。残りがある場合は、もう一度押すと続きへ進みます。");
-        ToolTipService.SetToolTip(cancel,$"保存済みの{Subject}は残ります。処理中の対象は保存せず、次回は初めから準備します。");
+        start.Content="AI検索データを作成";
+        ToolTipService.SetToolTip(start,$"作成済みの{Subject}は再利用します。残りがある場合はもう一度押すと続きへ進みます");
+        ToolTipService.SetToolTip(cancel,$"完了分は保存済みです。処理中の対象のみ次回やり直します");
         Content.Expanding+=async(_,_)=>{if(disposed)return;timer.Start();await RefreshAsync();};
         Content.SizeChanged+=(_,args)=>
         {
@@ -71,7 +71,7 @@ internal sealed class AudioPreparationPanel : IDisposable
         status.Text=!own&&value.Supported&&value.Available
             ?value.Busy?value.Message+"\nこの対象の索引は、現在の準備が終わってから作成できます。":$"{Subject}の索引を作成できます。準備済みの対象は再利用します。"
             :value.Message;
-        start.Content=own&&value.RemainingCandidates>0?"続きの検索用データを作る":"検索用データを作る";
+        start.Content=own&&value.RemainingCandidates>0?$"続きから作成（残り {value.RemainingCandidates:N0}件）":"AI検索データを作成";
         start.IsEnabled=!command&&value.Supported&&value.Available&&!value.Busy;
         cancel.IsEnabled=!command&&own&&value.Busy&&value.State!="cancelling";
         progress.Visibility=value.Busy?Visibility.Visible:Visibility.Collapsed;

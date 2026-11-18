@@ -27,7 +27,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Border toolbarHost = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
     private readonly Button settings = IconButton(Symbol.Setting);
     private bool menuOpen;
-    public string WindowTitle=>$"Aredoko — 画像ビューア　{sequence.Current.Title} [{sequence.Position+1}/{sequence.Count}]";
+    public string WindowTitle=>$"{sequence.Current.Title}（{sequence.Position+1}/{sequence.Count}）— Aredoko";
     public event Action<string>? TitleChanged;
     private bool keyboardChrome, failed;
     public event Action<int>? ContentOpened;
@@ -58,12 +58,12 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button zoomOut = IconButton(Symbol.ZoomOut);
     private readonly Button zoomIn = IconButton(Symbol.ZoomIn);
     private readonly Button fit = IconButton(Symbol.FullScreen);
-    private readonly Button actualSize=new(){Content="原寸",MinWidth=36,Padding=new Thickness(8)};
+    private readonly Button actualSize=new(){Content="1:1",MinWidth=36,Padding=new Thickness(8)};
     private readonly Button retry = IconButton(Symbol.Refresh);
     private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly TextBlock title = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock count = new() { VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock zoom = new() { Text = "倍率 100%", VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock zoom = new() { Text = "100%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
     private bool busy, disposed, loaded, navigating;
     private int version;
@@ -88,8 +88,8 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
         foreach (var control in new UIElement[] { previous, next, zoomOut, zoomIn, fit, actualSize, zoom, favorite.Button,editDetails,retry,settings }) actions.Children.Add(control);
         Identify(favorite.Button,"ImageFavorite","お気に入りを読み込み中");
-        Identify(editDetails,"ImageEditDetails","画像を閉じて詳細で整理");
-        ToolTipService.SetToolTip(editDetails,"画像を閉じて詳細で整理");
+        Identify(editDetails,"ImageEditDetails","詳細で編集");
+        ToolTipService.SetToolTip(editDetails,"閉じて詳細パネルを開く");
         editDetails.Click+=(_,_)=>EditDetailsRequested?.Invoke();
         toolbarHost.Child=actions;Children.Add(toolbarHost);ViewerChromeController.AttachNotices(this,status);
         title.Style = count.Style = zoom.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
@@ -146,7 +146,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         previous.IsEnabled = !disposed && !navigating && !favorite.IsSaving && sequence.HasPrevious; next.IsEnabled = !disposed && !navigating && !favorite.IsSaving && sequence.HasNext;
         favorite.UpdateAvailability(!disposed&&!navigating&&loaded);
         editDetails.IsEnabled=!disposed&&!navigating&&loaded;
-        zoom.Text = loaded?$"倍率 {viewport.ZoomFactor/OriginalZoom() * 100:0}%":"倍率 —";
+        zoom.Text = loaded?$"{viewport.ZoomFactor/OriginalZoom() * 100:0}%":"—";
         zoomOut.IsEnabled = loaded && !busy && viewport.ZoomFactor > viewport.MinZoomFactor;
         zoomIn.IsEnabled = loaded && !busy && viewport.ZoomFactor < viewport.MaxZoomFactor; actualSize.IsEnabled=loaded&&!busy; fit.IsEnabled = loaded && !busy;
     }
@@ -269,8 +269,8 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
             if (disposed) return;
             failed = true; ShowChrome();
             ViewerNotice.Set(status, ex is ResultSessionException
-                ? "検索結果が更新されたか、有効期限が切れました。閉じて同じ条件で再検索してください。"
-                : "次の画像を取得できません。接続を確認して、もう一度操作してください。");
+                ? "結果の有効期限が切れました。閉じて再検索してください"
+                : "次の画像を取得できません。接続を確認して再試行してください");
             AppLog.Error(ex);
         }
         finally { navigating = false; if (!disposed) UpdateControls(); }
@@ -371,11 +371,11 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
                     StopAnimation(true);
                     ViewerNotice.Set(status,ex switch
                     {
-                        ArchiveReadException { Status: System.Net.HttpStatusCode.NotFound } => "画像を読み取れません。未接続・破損・容量制限を確認し、更新した場合は再スキャンしてください。",
+                        ArchiveReadException { Status: System.Net.HttpStatusCode.NotFound } => "画像を読み込めません（未接続・破損の可能性）",
                         ArchiveReadException => ex.Message,
-                        OperationCanceledException => "読み込みがタイムアウトしました。再試行してください。",
-                        HttpRequestException => "接続できません。閉じてライブラリから再接続してください。",
-                        _ => "画像を表示できません。未対応形式・破損・画像サイズを確認してください。"
+                        OperationCanceledException => "読み込みがタイムアウトしました。再試行してください",
+                        HttpRequestException => "接続できません。閉じて再接続してください",
+                        _ => "表示できません（未対応形式または破損）"
                     });
                     failed = true; retry.IsEnabled = true; ShowChrome();
                 }

@@ -13,7 +13,7 @@ public sealed partial class MainPage
         int scannedItems = activeRoots.Sum(r => r.PresentCount);
         bool hasList = rows.Count > 0 || scannedItems > 0 || activeRoots.Any(r => !string.IsNullOrEmpty(r.LastScannedAt));
 
-        bool show = !gettingStartedDismissed && rows.Count == 0 && !hasList && view == "all" && string.IsNullOrWhiteSpace(Query.Text)
+        bool show = !gettingStartedDismissed && !settingsHubOpen && rows.Count == 0 && !hasList && view == "all" && string.IsNullOrWhiteSpace(Query.Text)
             && Kind.SelectedIndex == 0 && selectedSearchRoots is null && selectedShelfIds is null && similarityOrigin is null;
         GettingStarted.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (show)
@@ -21,21 +21,21 @@ public sealed partial class MainPage
             Empty.Visibility = Visibility.Collapsed;
             if (GettingStartedSummaryText is not null)
                 GettingStartedSummaryText.Text = hasFolder
-                    ? "登録したフォルダからファイル一覧を作ると、名前・タグで探せます。"
-                    : "探したいフォルダを追加すると、ファイル一覧を作って名前・タグで探せます（AIなしで使えます）。";
+                    ? "一覧を更新すると名前・タグで探せます。"
+                    : "フォルダを追加するだけで、作品の名前やタグをすぐに探せます。";
             if (GettingStartedStep1Text is not null)
-                GettingStartedStep1Text.Text = hasFolder ? $"1. フォルダを追加 — 完了（{activeRoots.Length} フォルダ）" : "1. フォルダを追加 — 探す場所を覚えます";
+                GettingStartedStep1Text.Text = hasFolder ? $"完了（{activeRoots.Length} フォルダ）" : "探したい場所を登録";
             if (GettingStartedStep2Text is not null)
-                GettingStartedStep2Text.Text = hasList ? "2. ファイル一覧を作る — 完了" : (hasFolder ? "2. ファイル一覧を作る — 下のボタンから作成できます" : "2. ファイル一覧を作る — 作品を見つけて名前・タグで探せます");
+                GettingStartedStep2Text.Text = hasList ? "準備完了" : hasFolder ? "一覧を更新して検索" : "名前・種類・タグで検索";
             if (GettingStartedStep3Text is not null)
-                GettingStartedStep3Text.Text = aiIndexReady ? "3. AIで探す（任意） — 準備済み" : "3. AIで探す（任意） — 情景や音で探したいときに設定します";
+                GettingStartedStep3Text.Text = aiIndexReady ? "準備完了" : "見た目・意味・音で検索";
             if (GettingStartedFolders is not null)
-                GettingStartedFolders.Content = hasFolder ? "ファイル一覧を作る（登録フォルダへ）" : "フォルダを追加";
+                GettingStartedFolders.Content = hasFolder ? "登録フォルダを開く" : "フォルダを追加";
         }
         else if (gettingStartedDismissed && rows.Count == 0 && !hasList && view == "all" && string.IsNullOrWhiteSpace(Query.Text) && Kind.SelectedIndex == 0 && selectedSearchRoots is null && selectedShelfIds is null && similarityOrigin is null)
         {
             Empty.Visibility = Visibility.Visible;
-            Empty.Text = "「登録フォルダ」から、フォルダの追加やファイル一覧の作成をいつでも実行できます。";
+            Empty.Text = "左メニューの「登録フォルダ」からいつでも追加・更新できます。";
         }
     }
 
@@ -290,22 +290,29 @@ public sealed partial class MainPage
             AutomationProperties.SetAutomationId(addFolder,"GuideAddFolder");panel.Children.Add(addFolder);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Stretch}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
-            var details=new StackPanel{Spacing=12};
-            foreach (var (title, text) in new[]
+            foreach (var (index, title, text) in new[]
             {
-                ("1. フォルダを追加する", "「登録フォルダ」→［フォルダを追加］から検索したい場所を選びます。サブフォルダを含めるかも選べます。登録後は「ファイル一覧を作る（推奨）」「ファイル一覧とAI検索用データを作る」または「今は登録だけ」を選べます。元ファイルは移動・変換しません。"),
-                ("2. 検索して開く", "検索欄に名前やタグを入力します。画像・本・動画・音声はダブルクリックで開けます。設定でAredokoとWindowsの既定アプリを選べます。右クリックから保存場所も開けます。"),
-                ("3. AIで探す準備をする（任意）", "「AIで探す方法」から用途を選び、必要なものを確認します。EmbeddingGemma 2は「自動セットアップ」で公式パッケージとモデルを取得・確認できます。このほか「ダウンロードできるモデルを選ぶ」「手元のモデルを使う」も選べます。変更後は再起動し、「AI検索を設定」から検索用データを作ります。動画・音声はそれぞれの欄から作成してください。WD TaggerのAIタグ候補は任意です。"),
-                ("4. 内容から探す・整理する", "準備後は「画像の見た目（AI）」などの検索方法で、覚えている情景や特徴を入力します。右側の詳細でお気に入りは即反映し、タグ・棚は［変更を保存］で保存します。AIタグ候補は内容を確認してから承認します。"),
-                ("閲覧・データ保護", "一覧ではCtrl+Homeで先頭、Ctrl+Endで末尾へ移動できます。画像や本は左右キー・ホイール・マウスの進む／戻るで送れます。ホイール方向や開くアプリは設定で、小さい画像の拡大・操作バーの常時表示・先頭へのループ移動はビューアの設定メニューで変更できます。バックアップと復元も設定から行えます。登録解除や棚の削除で元ファイルは消えません。"),
+                (1, "1. フォルダの追加", "「登録フォルダ → ＋ フォルダを追加」から検索したいフォルダを選びます。登録後に「ファイル一覧を作る（推奨）」または「一覧＋AI検索データ」を選べます。元のファイルは一切変更・移動しません。"),
+                (2, "2. 検索して開く", "検索欄に名前・タグを入力すると絞り込めます。ダブルクリックや詳細欄のボタンで作品を開きます。右側の詳細でタグ追加（Enterで確定）や棚分けができます。"),
+                (3, "3. AI検索の準備（任意）", "「設定 → AI検索」または「AIで探す方法」から用途に応じたセットアップを行います。自動セットアップ、モデルダウンロード、手元のモデル指定から選べます。"),
+                (4, "4. 内容検索と整理", "検索欄で［AI］を選ぶと、画像の見た目・言葉の意味・音声・動画の内容で探せます。AIタグ候補の承認は詳細欄の「✨ AI候補」から行えます。"),
+                (5, "5. ショートカットとデータ保護", "Ctrl+Fで検索欄へ移動、Ctrl+Sでタグ・棚を保存、Ctrl+Home/Endで一覧の先頭/末尾へ移動できます。バックアップ・復元は「設定 → 管理・診断」で行えます。")
             })
             {
-                details.Children.Add(new TextBlock { Text = title, Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"], TextWrapping = TextWrapping.Wrap });
-                details.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+                var body = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+                var topicExpander = new Expander
+                {
+                    Header = title,
+                    Content = body,
+                    IsExpanded = index == 1,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch
+                };
+                AutomationProperties.SetAutomationId(topicExpander, $"GuideTopic{index}");
+                panel.Children.Add(topicExpander);
             }
-            var more=new Expander{Header="詳しい手順・操作とデータ保護",Content=details,HorizontalAlignment=HorizontalAlignment.Stretch};
-            AutomationProperties.SetAutomationId(more,"GuideDetails");panel.Children.Add(more);
             var scroll = new ScrollViewer { Content = panel, MaxHeight = Math.Max(160, ActualHeight - 240), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) };
+            AutomationProperties.SetAutomationId(scroll, "GettingStartedGuideScroll");
             var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "使い方", Content = scroll, PrimaryButtonText="AIで探す方法", CloseButtonText = "閉じる",DefaultButton=ContentDialogButton.None };
             AutomationProperties.SetAutomationId(dialog, "GettingStartedGuideDialog");
             addFolder.Click+=(_,_)=>{folderRequested=true;dialog.Hide();};

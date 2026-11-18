@@ -58,7 +58,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button retry = IconButton(Symbol.Refresh);
     private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly TextBlock positionText = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock volumeText = new() { Text = "音量 80%", VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock volumeText = new() { Text = "🔊 80%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
     private CancellationTokenSource? request;
     private MediaPlayer? mediaPlayer;
@@ -104,8 +104,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         var playback=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
         foreach(var control in new UIElement[]{playPause,seekBack,seekForward,favorite.Button,editDetails,retry})playback.Children.Add(control);
         Identify(favorite.Button,isAudio?"AudioFavorite":"VideoFavorite","お気に入りを読み込み中");
-        Identify(editDetails,"PlayerEditDetails","再生を閉じて詳細で整理");
-        ToolTipService.SetToolTip(editDetails,"再生を閉じて詳細で整理");
+        Identify(editDetails,"PlayerEditDetails","詳細で編集");
+        ToolTipService.SetToolTip(editDetails,"閉じて詳細パネルを開く");
         editDetails.Click += (_, _) => EditDetailsRequested?.Invoke();
         var audio=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Right};
         foreach(var control in new UIElement[]{mute,volumeDown,volumeSlider,volumeUp,volumeText})audio.Children.Add(control);
@@ -410,7 +410,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
             ArchiveReadException { Status: HttpStatusCode.Forbidden } => ex.Message,
             OperationCanceledException => "読み込みがタイムアウトしました。再試行してください。",
             HttpRequestException => "接続できません。閉じてライブラリから再接続してください。",
-            _ => "この動画はWindowsの標準機能では再生できません。未対応の形式・コーデック、破損、または容量制限（2TBまで）を確認してください。"
+            _ => "この動画は再生できません（未対応の形式・コーデック）"
         });
         ShowChrome();
     }
@@ -430,7 +430,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         volumeDown.IsEnabled = !busy && volume > 0;
         volumeUp.IsEnabled = !busy && volume < 100;
         updatingVolume=true;try{volumeSlider.Value=volume;volumeSlider.IsEnabled=!busy;}finally{updatingVolume=false;}
-        volumeText.Text = muted ? $"消音中（{volume}%）" : $"音量 {volume}%";
+        volumeText.Text = muted ? "🔇" : $"🔊 {volume}%";
         retry.IsEnabled = !busy && failed&&!favorite.IsSaving;
     }
 

@@ -26,17 +26,17 @@ public sealed partial class MainPage
                 AutomationProperties.SetAutomationId(box,"BatchBook"+row.Id);AutomationProperties.SetName(box,row.Title);
                 choices.Items.Add(new ListViewItem{Content=box,Padding=new Thickness(0,0,24,0),HorizontalContentAlignment=HorizontalAlignment.Stretch});
             }
-            var limit=new NumberBox{Header="今回追加する合計ページ数の上限",Minimum=1,Maximum=PageBatchRequests.MaxTotal,Value=64,SmallChange=16};
-            var summary=new TextBlock{Text="本を選んで範囲を確認してください。",TextWrapping=TextWrapping.Wrap};
+            var limit=new NumberBox{Header="合計ページ上限",Minimum=1,Maximum=PageBatchRequests.MaxTotal,Value=64,SmallChange=16};
+            var summary=new TextBlock{Text="本を選んで範囲を確認してください",TextWrapping=TextWrapping.Wrap};
             var details=new TextBlock{TextWrapping=TextWrapping.Wrap};
             var prepare=new Button{Content="範囲を確認",HorizontalAlignment=HorizontalAlignment.Stretch};
-            var start=new Button{Content="追加を開始",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};
-            var resume=new Button{Content="同じ範囲を再開",Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch};
-            var cancel=new Button{Content="処理を中断",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};
+            var start=new Button{Content="作成",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};
+            var resume=new Button{Content="再開",Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch};
+            var cancel=new Button{Content="中止",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};
             foreach(var(control,id) in new (DependencyObject,string)[]{(choices,"BatchBooks"),(limit,"BatchPageLimit"),(summary,"BatchSummary"),(details,"BatchRanges"),(prepare,"BatchPreview"),(start,"BatchStart"),(resume,"BatchResume"),(cancel,"BatchCancel")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(choices,"追加する本を最大8冊選択");AutomationProperties.SetName(limit,"合計ページ数の上限");
             var fields=new StackPanel{Spacing=12};
-            fields.Children.Add(new TextBlock{Text="表示中の検索結果から最大8冊。各本の次の未準備範囲を、1冊最大16ページ追加します。",TextWrapping=TextWrapping.Wrap});
+            fields.Children.Add(new TextBlock{Text="最大8冊・各16ページまで作成します",TextWrapping=TextWrapping.Wrap});
             fields.Children.Add(choices);fields.Children.Add(limit);fields.Children.Add(details);
             var viewport=new ScrollViewer{Content=FormScrollContent.Wrap(fields),HorizontalScrollMode=ScrollMode.Disabled,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var actions=new StackPanel{Spacing=8};foreach(var element in new UIElement[]{summary,prepare,start,resume,cancel})actions.Children.Add(element);
@@ -83,7 +83,7 @@ public sealed partial class MainPage
                         lines.Add($"{row.Title}：{range.Start+1}〜{range.Start+count}ページ");
                     }
                     plan=proposed;details.Text=string.Join("\n",lines);
-                    summary.Text=plan.Count==0?"選んだ本は準備済みです。":$"今回: {plan.Count}冊・{plan.Sum(b=>b.PageIds.Count)}ページ。まだ追加していません。";
+                    summary.Text=plan.Count==0?"選んだ本は作成済みです":$"{plan.Count}冊・{plan.Sum(b=>b.PageIds.Count)}ページを追加します";
                 }
                 catch(Exception ex){summary.Text=ex.Message;}
                 finally{busy=false;Buttons();if(closing)dialog.Hide();}
@@ -92,7 +92,7 @@ public sealed partial class MainPage
             {
                 if(current?.Running!=true)return;
                 try{await api.PostAsync("api/library/ai/pages/cancel",new JsonObject{{"job_id",current.JobId}});}
-                catch(Exception ex){summary.Text="中断を確認できません。AI設定の処理状況を確認してください。";AppLog.Error(ex);}
+                catch(Exception ex){summary.Text="中止を確認できません。AI設定で状態を確認してください。";AppLog.Error(ex);}
             }
             async Task Run(bool retry)
             {

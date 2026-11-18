@@ -37,7 +37,8 @@ public sealed partial class MainPage
             AutomationProperties.SetName(progress,"AI環境の取得進捗");
             var downloadSettings=new Expander{Header="速度制限（既定は制限なし）",Content=speed,HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(downloadSettings,"AIDownloadSettings");
-            var introduction=new TextBlock{Text="AI検索には検索モデルと実行環境が必要です。画像タグ付けモデルは追加機能です。取得後に使う環境を指定し、再起動して反映します。",TextWrapping=TextWrapping.Wrap};
+            var introduction=new TextBlock{Text="取得後に使う環境を指定し、再起動して反映します",TextWrapping=TextWrapping.Wrap};
+            ToolTipService.SetToolTip(introduction,"AI検索には検索モデルと実行環境が必要です。画像タグ付けモデルは追加機能です。");
             AutomationProperties.SetAutomationId(introduction,"AIDownloadIntroduction");panel.Children.Add(introduction);
             foreach(var control in new UIElement[]{choice,information,license,consent,downloadSettings,progress,status,destination,select,refresh})panel.Children.Add(control);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI環境の取得",PrimaryButtonText="取得・再開",IsPrimaryButtonEnabled=false,SecondaryButtonText="中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
@@ -74,7 +75,7 @@ public sealed partial class MainPage
                         var selected=Selected()?.Id;knownCatalogs=items;choice.Items.Clear();
                         foreach(var item in items)choice.Items.Add(new ComboBoxItem{Content=DownloadCatalogLabel(item),Tag=item});
                         var index=items.ToList().FindIndex(item=>item.Id==(job.Active?job.CatalogId:selected??job.CatalogId));choice.SelectedIndex=index>=0?index:items.Count>0?0:-1;
-                        if(items.Count==0)information.Text="個別にダウンロードできる候補がありません。「手元のモデル・環境を使う」から用意したフォルダを指定するか、対応モデルでは自動セットアップを利用できます。";
+                        if(items.Count==0)information.Text="ダウンロードできるモデルはありません（「自動セットアップ」または「手元のファイルを使う」を利用できます）";
                     }
                     current=job;operationError=null;Render();
                 }
@@ -86,9 +87,9 @@ public sealed partial class MainPage
                 consent.IsChecked=false;
                 if(Selected() is {} selected)
                 {
-                    var scope=selected.Kind=="model"?"モデルファイルのみです。手元の実行環境または自動セットアップの実行環境と組み合わせて使います。\n":"";
-                    var capacity=selected.UnpackedBytes is {} expanded?$"取得 {selected.Bytes/1000000d:N1} MB・展開後 {expanded/1000000d:N1} MB（{selected.UnpackedFiles:N0} ファイル）\n取得先に両方の容量の空きが必要です。":$"容量 {selected.Bytes/1000000d:N1} MB";
-                    information.Text=scope+capacity+$"\n取得元 {string.Join(", ",selected.SourceHosts)}\n{selected.License}\nバージョン {selected.Revision}";
+                    var scope=selected.Kind=="model"?"モデルのみ（実行環境が別途必要）\n":"";
+                    var capacity=selected.UnpackedBytes is {} expanded?$"サイズ：{selected.Bytes/1000000d:N1} MB ／ 展開後：{expanded/1000000d:N1} MB（{selected.UnpackedFiles:N0}件）\n⚠ 必要な空き：{(selected.Bytes+expanded)/1000000d:N1} MB以上":$"容量：{selected.Bytes/1000000d:N1} MB";
+                    information.Text=scope+capacity+$"\n提供元：{string.Join(", ",selected.SourceHosts)}\nライセンス：{selected.License}\n版：{selected.Revision}";
                     license.NavigateUri=selected.LicenseUri;license.Visibility=Visibility.Visible;
                 }
                 else license.Visibility=Visibility.Collapsed;

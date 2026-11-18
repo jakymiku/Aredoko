@@ -58,9 +58,9 @@ static class AISetupPlanTests
         check(published.Contains("取得だけでは設定は変わりません")&&!published.Contains("配置を確認しました"),"published download is not an applied environment or inference result");
         var ready=plan with{Requirements=plan.Requirements.Select(r=>r with{FilesPresent=true}).ToArray()};
         var pending=AISetupGuidance.Describe(ready with{RestartRequired=true},15,idleDownload,idleEnvironment with{State="complete",Saved=true});
-        check(pending.Contains("いつものAredoko.exe")&&pending.Contains("再起動後")&&!pending.Contains("次は「索引・詳細設定へ」"),"saved environment must restart before current-session indexing instructions");
+        check(pending.Contains("いつものAredoko.exe")&&pending.Contains("再起動後")&&!pending.Contains("次は「AI検索を設定」"),"saved environment must restart before current-session indexing instructions");
         var prepared=AISetupGuidance.Describe(ready,3,idleDownload,idleEnvironment);
-        check(prepared.Contains("動作確認とは別")&&prepared.Contains("索引・詳細設定へ")&&!prepared.Contains("音声の準備欄"),"present files lead to selected indexing without declaring hardware success");
+        check(prepared.Contains("動作確認とは別")&&prepared.Contains("AI検索を設定")&&!prepared.Contains("音声の準備欄"),"present files lead to selected indexing without declaring hardware success");
         check(!AISetupGuidance.Describe(plan with{Requirements=Array.Empty<AISetupRequirement>()},3,null,null).Contains("配置を確認しました"),"an empty dependency response cannot be declared ready");
         check(!AISetupGuidance.Describe(skip,0,idleDownload with{State="downloading"},idleEnvironment).Contains("バックグラウンド"),"AI opt-out keeps next steps focused on basic use");
         var mismatch=Reply(AISetupSelection.FromMask(3));mismatch["requirements"]![1]!["state"]="model_revision_mismatch";
@@ -71,7 +71,7 @@ static class AISetupPlanTests
         var libraries=plan with{Requirements=new[]{new AISetupRequirement("embedding-runtime",false,"select_existing_environment",Array.Empty<string>(),"ai_libraries_missing")}};
         check(libraries.Summary.Contains("ライブラリが不足")&&AISetupRecovery.Describe(libraries).Contains("システムPythonやドライバーは変更しません"),"missing AI libraries guide to an Aredoko runtime without changing the machine");
         var presentRecovery=AISetupRecovery.Describe(ready);
-        check(presentRecovery.Contains("索引の状態")&&presentRecovery.Contains("この確認だけでは判定していません")&&presentRecovery.Contains("自動送信しません"),"present files do not mask missing indexing or promise tested hardware");
+        check(presentRecovery.Contains("AI検索データの状態")&&presentRecovery.Contains("この確認だけでは判定していません")&&presentRecovery.Contains("自動送信しません"),"present files do not mask missing indexing or promise tested hardware");
         var unknown=plan with{Requirements=new[]{new AISetupRequirement("embedding-model",false,"select_existing_model",Array.Empty<string>(),"future_state")}};
         check(!unknown.Summary.Contains("future_state")&&!AISetupRecovery.Describe(unknown).Contains("future_state"),"unknown state uses generic safe guidance rather than raw internal values");
         var unsupported=plan with{Requirements=Array.Empty<AISetupRequirement>(),Unsupported=new[]{"video"}};

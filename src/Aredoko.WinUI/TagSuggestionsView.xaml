@@ -4,9 +4,9 @@
   <TextBlock x:Name="Status" TextWrapping="Wrap" AutomationProperties.AutomationId="TagStatus" AutomationProperties.LiveSetting="Polite"/>
   <StackPanel Grid.Row="1" Spacing="8">
    <StackPanel Orientation="Horizontal" Spacing="8">
-    <Button x:Name="Generate" Content="候補を生成" Click="Generate_Click" AutomationProperties.AutomationId="TagGenerate"/>
-    <Button x:Name="Refresh" Content="最新の候補を表示" Click="Refresh_Click" AutomationProperties.AutomationId="TagRefresh"/>
-    <Button x:Name="Older" Content="以前の履歴を読み込む" Click="Older_Click" AutomationProperties.AutomationId="TagOlder"/>
+    <Button x:Name="Generate" Content="✨ 生成" Click="Generate_Click" AutomationProperties.AutomationId="TagGenerate"/>
+    <Button x:Name="Refresh" Content="⟳ 更新" Click="Refresh_Click" AutomationProperties.AutomationId="TagRefresh"/>
+    <Button x:Name="Older" Content="過去の履歴" Click="Older_Click" AutomationProperties.AutomationId="TagOlder"/>
     <Button x:Name="Cancel" Content="中止" Click="Cancel_Click" IsEnabled="False" AutomationProperties.AutomationId="TagCancel"/>
    </StackPanel>
    <ComboBox x:Name="Batches" Header="生成履歴" HorizontalAlignment="Stretch" SelectionChanged="Batch_Changed" AutomationProperties.AutomationId="TagBatches"/>
@@ -20,12 +20,12 @@
      <Image x:Name="Evidence" Visibility="Collapsed" Height="110" Stretch="Uniform" AutomationProperties.Name="候補を生成した画像または本の先頭ページ" AutomationProperties.AutomationId="TagEvidence"/>
      <TextBlock x:Name="Provenance" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TagProvenance"/>
      <TextBlock x:Name="Explanation" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="TagExplanation"/>
-     <TextBox x:Name="Edited" Header="承認するタグ（修正できます）" MaxLength="60" TextChanged="Edited_Changed" AutomationProperties.AutomationId="TagEdited"/>
+     <TextBox x:Name="Edited" Header="タグ名" MaxLength="60" TextChanged="Edited_Changed" AutomationProperties.AutomationId="TagEdited"/>
      <StackPanel Orientation="Horizontal" Spacing="8">
-      <Button x:Name="Accept" Content="承認して保存" Click="Accept_Click" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="TagAccept"/>
-      <Button x:Name="Reject" Content="却下" Click="Reject_Click" AutomationProperties.AutomationId="TagReject"/>
+      <Button x:Name="Accept" Content="✓ 承認" Click="Accept_Click" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="TagAccept"/>
+      <Button x:Name="Reject" Content="× 却下" Click="Reject_Click" AutomationProperties.AutomationId="TagReject"/>
      </StackPanel>
-     <Expander x:Name="Metadata" Header="モデルと生成条件" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Visibility="Collapsed" AutomationProperties.AutomationId="TagMetadata">
+     <Expander x:Name="Metadata" Header="技術情報" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Visibility="Collapsed" AutomationProperties.AutomationId="TagMetadata">
       <TextBlock x:Name="ModelDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.AutomationId="TagModelDetails"/>
      </Expander>
     </StackPanel>

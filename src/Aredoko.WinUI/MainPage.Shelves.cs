@@ -25,7 +25,7 @@ public sealed partial class MainPage
         UpdateShelfScopeLabel();
     }
     private string ShelfName(long id)=>shelfDescriptors.FirstOrDefault(s=>s.Id==id)?.Name??"見つからない棚";
-    private string ShelfScopeName(bool summarize=true)=>selectedShelfIds is null?"ライブラリ":ShelfProtocol.SummarizeNames(selectedShelfIds.Select(ShelfName),"ライブラリ",summarize?3:0);
+    private string ShelfScopeName(bool summarize=true)=>selectedShelfIds is null?"すべての作品":ShelfProtocol.SummarizeNames(selectedShelfIds.Select(ShelfName),"すべての作品",summarize?3:0);
     private void SetShelfScope(IReadOnlyList<long>? ids)
     {
         selectedShelfIds=ids?.ToArray();UpdateShelfScopeLabel();UpdateClearSearchConditionsVisibility();
@@ -56,13 +56,13 @@ public sealed partial class MainPage
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
             CloseBrowseMenus();searches.Next();similarityCancellation?.Cancel();
-            CloseFolderHubCore();CloseShelfHubCore();ClearSimilarity();
+            CloseSettingsHubCore();CloseFolderHubCore();CloseShelfHubCore();ClearSimilarity();
             resultWindow?.Dispose();resultWindow=null;
             var previous=resultSession;resultSession=null;await CloseResultSessionAsync(previous);
             shelfHubOpen=true;active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;
             MainViewTitle.Text="棚";Count.Text="";
             ItemSearchRow.Visibility=SearchTools.Visibility=ItemListContainer.Visibility=ItemPagerRow.Visibility=Visibility.Collapsed;
-            ShelfHubView.Visibility=Visibility.Visible;ShelfList.ItemsSource=shelfKeys;
+            ShelfHubView.Visibility=Visibility.Visible;ShelfList.ItemsSource=shelfKeys;UpdateLayoutToggleVisuals();
             Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;
             RenderShelfLayout();RestoreNavigation();await ReloadShelfHubAsync();RecordNavigationLocation();
         }
@@ -112,7 +112,7 @@ public sealed partial class MainPage
             if(disposed||saving||dialogOpen||shelfDescriptors.Count==0)return;
             var initial=selectedShelfIds??[];
             var picked=await PickShelfIdsAsync("表示する棚を選択",initial,
-                "選択した棚のいずれかに所属する作品を表示します。すべての選択を外すと棚の絞り込みを解除します。",
+                "選択した棚の作品を表示します",
                 "ScopeShelfChoice",allowCreate:false);
             if(picked is null||disposed)return;
             dialogOpen=false;

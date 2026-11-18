@@ -20,15 +20,15 @@ public sealed class AIScopeEditor : IDisposable
     private readonly TextBlock rootPage=new();
     private readonly Button rootPrevious=new() {Content="前へ"};
     private readonly Button rootNext=new() {Content="次へ"};
-    private readonly TextBox rootPath=new() {Header="フォルダのフルパス（選択・コピーできます）",IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MaxHeight=120,Visibility=Visibility.Collapsed};
+    private readonly TextBox rootPath=new() {Header="フルパス",IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MaxHeight=120,Visibility=Visibility.Collapsed};
     private readonly List<Button> pathButtons=[];
     private readonly CheckBox all=new() {Content="登録フォルダをすべて対象にする"};
     private readonly ComboBox kind=new() {Header="対象の種類",HorizontalAlignment=HorizontalAlignment.Stretch};
     private readonly ComboBox shelfMode=new() {Header="棚の条件",HorizontalAlignment=HorizontalAlignment.Stretch};
     private readonly TextBox shelf=new() {Header="棚（完全一致）",MaxLength=80};
     private readonly Button refresh=new() {Content="件数を確認"};
-    private readonly Button save=new() {Content="この範囲を保存"};
-    private readonly Button revert=new() {Content="保存済みに戻す"};
+    private readonly Button save=new() {Content="保存"};
+    private readonly Button revert=new() {Content="元に戻す"};
     private readonly TextBlock feedback=new() {TextWrapping=TextWrapping.Wrap};
     private readonly TextBlock[] counts=Enumerable.Range(0,4).Select(_=>new TextBlock {TextWrapping=TextWrapping.Wrap}).ToArray();
     private readonly Dictionary<int,CheckBox> roots=new();
@@ -82,12 +82,14 @@ public sealed class AIScopeEditor : IDisposable
         rootPager.Children.Add(rootPrevious);rootPager.Children.Add(rootPage);rootPager.Children.Add(rootNext);
         foreach(var element in new UIElement[]{all,rootQuery,rootSummary,rootViewport,rootPager,rootPath,kind,shelfMode,shelf})fields.Children.Add(element);
         var panel=new StackPanel {Spacing=12};
-        panel.Children.Add(new TextBlock {Text="AI検索と、これから作る検索用データに適用します。文字検索・作成済みデータ・モデルは変更しません。",TextWrapping=TextWrapping.Wrap});
+        var scopeNote=new TextBlock {Text="AI検索の対象範囲（文字検索には影響しません）",TextWrapping=TextWrapping.Wrap};
+        ToolTipService.SetToolTip(scopeNote,"AI検索とこれから作るAI検索データに適用します。作成済みデータやモデルは変更しません。");
+        panel.Children.Add(scopeNote);
         panel.Children.Add(fields);panel.Children.Add(refresh);
         var countPanel=new StackPanel {Spacing=4};
         for(int i=0;i<counts.Length;i++){AutomationProperties.SetAutomationId(counts[i],$"AIScopeCount{i}");countPanel.Children.Add(counts[i]);}
         panel.Children.Add(countPanel);panel.Children.Add(save);panel.Children.Add(revert);panel.Children.Add(feedback);
-        Content=new Expander {Header="AIで探すフォルダと作品",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
+        Content=new Expander {Header="AI検索の対象範囲",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
         AutomationProperties.SetAutomationId(Content,"AIScopeOptions");
         Content.Loaded+=async(_,_)=>{if(initializing&&!closed&&!initializationStarted){initializationStarted=true;await InitializeAsync();}};
         refresh.Click+=async(_,_)=>await RefreshCountsAsync();
@@ -174,7 +176,7 @@ public sealed class AIScopeEditor : IDisposable
         rootPrevious.IsEnabled=!initializing&&!saving&&picker.Page>0;
         rootNext.IsEnabled=!initializing&&!saving&&picker.Page+1<picker.PageCount;
         rootPage.Text=$"{picker.Page+1} / {picker.PageCount}";
-        rootSummary.Text=$"一致: {picker.MatchCount:N0} フォルダ · 個別選択: {picker.SelectionCount:N0} / {RootPicker.SelectionLimit}（絞り込みやページ切替でも保持）";
+        rootSummary.Text=$"表示 {picker.MatchCount:N0} · 選択 {picker.SelectionCount:N0}/{RootPicker.SelectionLimit}";
         foreach(var button in pathButtons)button.IsEnabled=!initializing&&!saving;
         shelf.IsEnabled=!initializing&&!saving&&shelfMode.SelectedIndex==1;
         refresh.IsEnabled=!initializing&&!counting&&!saving;
@@ -207,7 +209,7 @@ public sealed class AIScopeEditor : IDisposable
             if(closed)return;
             if(data["valid"]?.GetValue<bool>()!=true)throw new InvalidOperationException("対象を選び直してください。");
             saved=(JsonObject)data["scope"]!.DeepClone();applied((JsonObject)saved.DeepClone());
-            feedback.Text="保存しました。AI検索と次の索引作成に適用します。現在の索引・モデルは変更しません。";
+            feedback.Text="✓ 保存しました";
         } catch(Exception ex){
             if(!closed) {
                 // A lost response does not prove the server rejected the save.
@@ -218,7 +220,7 @@ public sealed class AIScopeEditor : IDisposable
                     var verified=actual["valid"]?.GetValue<bool>()==true?actual["scope"] as JsonObject:null;
                     if(verified is not null&&JsonNode.DeepEquals(verified,requested)) {
                         saved=(JsonObject)verified.DeepClone();applied((JsonObject)saved.DeepClone());
-                        feedback.Text="保存しました（保存結果を再確認）。AI検索と次の索引作成に適用します。";
+                        feedback.Text="✓ 保存しました（再確認済み）";
                     } else if(verified is not null&&saved is not null&&JsonNode.DeepEquals(verified,saved)) {
                         feedback.Text="保存できません。保存済みの対象を維持しました。件数を確認して再保存してください: "+ex.Message;
                     } else {

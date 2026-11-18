@@ -7,268 +7,277 @@ namespace Aredoko_WinUI;
 
 public sealed partial class MainPage
 {
+    private bool settingsPopulating;
+    private bool? savedVerificationState;
+    private string settingsReturnCount="";
+    private CancellationTokenSource? settingsLoadLifetime;
+
     private async void Navigation_ItemInvoked(NavigationView sender,NavigationViewItemInvokedEventArgs args)
     {
-        if(args.InvokedItemContainer is NavigationViewItem {Tag:"settings"})await OpenSettingsAsync();
+        if(args.InvokedItemContainer is NavigationViewItem {Tag:"settings"})await OpenSettingsAsync("all");
+        else if(args.InvokedItemContainer is NavigationViewItem {Tag:"ai"})await OpenSettingsAsync("ai");
         else if(!shelfHubOpen&&selectedShelfIds is not null&&args.InvokedItemContainer is NavigationViewItem {Tag:"shelf"})await OpenShelfHubAsync();
     }
-    private async Task OpenSettingsAsync()
+
+    private void CloseSettingsHubCore()
     {
-        if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        dialogOpen=true;string? destination=null;
+        if(!settingsHubOpen&&SettingsHubView?.Visibility!=Visibility.Visible)return;
+        settingsLoadLifetime?.Cancel();
+        settingsLoadLifetime?.Dispose();
+        settingsLoadLifetime=null;
+        settingsHubOpen=false;
+        if(SettingsHubView is not null)SettingsHubView.Visibility=Visibility.Collapsed;
+        UpdateLibraryHeading();
+        ItemSearchRow.Visibility=SearchTools.Visibility=ItemListContainer.Visibility=ItemPagerRow.Visibility=Visibility.Visible;
+    }
+
+    private void SetSettingsCategory(string category)
+    {
+        currentSettingsCategory=category;
+        var accent=ThemeStyle("AccentButtonStyle");
+        if(SettingsCatAllButton is not null)SettingsCatAllButton.Style=category=="all"?accent:null;
+        if(SettingsCatGeneralButton is not null)SettingsCatGeneralButton.Style=category=="general"?accent:null;
+        if(SettingsCatLibraryButton is not null)SettingsCatLibraryButton.Style=category=="library"?accent:null;
+        if(SettingsCatAIButton is not null)SettingsCatAIButton.Style=category=="ai"?accent:null;
+        if(SettingsCatMaintenanceButton is not null)SettingsCatMaintenanceButton.Style=category=="maintenance"?accent:null;
+        if(SettingsSectionAI is not null)SettingsSectionAI.Visibility=category is "all" or "ai"?Visibility.Visible:Visibility.Collapsed;
+        if(SettingsSectionGeneral is not null)SettingsSectionGeneral.Visibility=category is "all" or "general"?Visibility.Visible:Visibility.Collapsed;
+        if(SettingsSectionLibrary is not null)SettingsSectionLibrary.Visibility=category is "all" or "library"?Visibility.Visible:Visibility.Collapsed;
+        if(SettingsSectionMaintenance is not null)SettingsSectionMaintenance.Visibility=category is "all" or "maintenance"?Visibility.Visible:Visibility.Collapsed;
+        SettingsScroll?.ChangeView(null,0,null,true);
+        RestoreNavigation();
+    }
+
+    private async Task OpenSettingsAsync(string? category=null)
+    {
+        if(!ready||disposed||dialogOpen||saving)
+        {
+            RestoreNavigation();
+            return;
+        }
+        if(settingsHubOpen)
+        {
+            if(category is not null)SetSettingsCategory(category);
+            return;
+        }
+        if(!await transitions.WaitAsync(0))
+        {
+            RestoreNavigation();
+            return;
+        }
         try
         {
-            var panel=new StackPanel{Spacing=12};
-            panel.Children.Add(new TextBlock{Text="表示と閲覧",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]});
-            var theme=new ComboBox{Header="表示テーマ",HorizontalAlignment=HorizontalAlignment.Stretch};
-            theme.Items.Add("Windowsの設定に合わせる");theme.Items.Add("ライト");theme.Items.Add("ダーク");
-            theme.SelectedIndex=ViewerOptions.Value.Theme switch{"light"=>1,"dark"=>2,_=>0};
-            AutomationProperties.SetAutomationId(theme,"SettingsTheme");
-            panel.Children.Add(theme);
-            var viewer=new ComboBox{Header="作品を開くアプリ",HorizontalAlignment=HorizontalAlignment.Stretch};
-            viewer.Items.Add("Aredoko");viewer.Items.Add("Windowsの既定アプリ");
-            viewer.SelectedIndex=ViewerOptions.Value.OpenExternally?1:0;
-            AutomationProperties.SetAutomationId(viewer,"SettingsDoubleClickViewer");
-            panel.Children.Add(viewer);
-            var externalHint=new TextBlock{Text="Aredokoの一覧順で続けて見るには、詳細から開いてください。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"],Visibility=viewer.SelectedIndex==1?Visibility.Visible:Visibility.Collapsed};
-            panel.Children.Add(externalHint);
-            var wheel=new ComboBox{Header="次の画像・ページに進む方向",HorizontalAlignment=HorizontalAlignment.Stretch};
-            wheel.Items.Add("ホイールを下に回す");wheel.Items.Add("ホイールを上に回す");wheel.SelectedIndex=ViewerOptions.Value.WheelUpAdvances?1:0;
-            AutomationProperties.SetAutomationId(wheel,"SettingsWheel");
-            panel.Children.Add(wheel);
-            var verification=new CheckBox{Content="起動時にAI環境の全ファイルを確認（次回起動から適用）",IsEnabled=false};
-            AutomationProperties.SetAutomationId(verification,"SettingsVerifyAIRuntime");
-            const string verificationHelpDefault="既定はオンです。オフにすると破損や変更を検出しにくくなります。";
-            const string verificationHelpOff="オフにすると破損や変更を検出しにくくなります（次回起動から適用）。基本確認と新規取得ファイルの検証は続きます。";
-            var verificationHint=new TextBlock{Text="確認設定を読み込んでいます…",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
-            var advancedContent=new StackPanel{Spacing=8};advancedContent.Children.Add(verification);advancedContent.Children.Add(verificationHint);
-            var advanced=new Expander{Header="高度な設定",Content=advancedContent,HorizontalAlignment=HorizontalAlignment.Stretch};
-            AutomationProperties.SetAutomationId(advanced,"SettingsAdvanced");
-            bool? savedVerification=null;
-            using var verificationLifetime=new CancellationTokenSource();
-            Task? verificationLoad=null;
-            var initialTheme=theme.SelectedIndex;
-            var initialViewer=viewer.SelectedIndex;
-            var initialWheel=wheel.SelectedIndex;
-            var initialVerification=true;
-            bool IsDirty()=>theme.SelectedIndex!=initialTheme||viewer.SelectedIndex!=initialViewer||wheel.SelectedIndex!=initialWheel
-                ||(savedVerification is not null&&(verification.IsChecked==true)!=initialVerification);
-            var savedText=new TextBlock{TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
-            AutomationProperties.SetAutomationId(savedText,"SettingsStatus");
-            AutomationProperties.SetLiveSetting(savedText,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-            var unsavedPrompt=new TextBlock{Text="変更が保存されていません。保存してから続けますか？",TextWrapping=TextWrapping.Wrap};
-            AutomationProperties.SetAutomationId(unsavedPrompt,"SettingsUnsavedPrompt");
-            var saveAndContinueBtn=new Button{Content="保存して続ける",Style=(Style)Application.Current.Resources["AccentButtonStyle"]};
-            var discardAndContinueBtn=new Button{Content="保存せず続ける"};
-            var cancelNavBtn=new Button{Content="戻る"};
-            AutomationProperties.SetAutomationId(saveAndContinueBtn,"SettingsSaveAndContinue");
-            AutomationProperties.SetAutomationId(discardAndContinueBtn,"SettingsDiscardAndContinue");
-            AutomationProperties.SetAutomationId(cancelNavBtn,"SettingsCancelNavigation");
-            var unsavedActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,Children={saveAndContinueBtn,discardAndContinueBtn,cancelNavBtn}};
-            var unsavedBar=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Padding=new Thickness(10),Visibility=Visibility.Collapsed,Child=new StackPanel{Spacing=8,Children={unsavedPrompt,unsavedActions}}};
-            AutomationProperties.SetAutomationId(unsavedBar,"SettingsUnsavedBar");
-            var scroll=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)};
-            AutomationProperties.SetAutomationId(scroll,"SettingsScroll");
-            var footerStack=new StackPanel{Spacing=8};
-            footerStack.Children.Add(unsavedBar);
-            footerStack.Children.Add(savedText);
-            var content=new Grid{MaxHeight=Math.Max(160,ActualHeight-240),RowSpacing=8};
-            content.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});
-            content.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
-            content.Children.Add(scroll);Grid.SetRow(footerStack,1);content.Children.Add(footerStack);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="設定",PrimaryButtonText="変更を保存",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=content};
-            AutomationProperties.SetAutomationId(dialog,"SettingsDialog");
-            // Preserve the existing UI Automation identifier on the native footer button.
-            var saveStyle=new Style{TargetType=typeof(Button),BasedOn=(Style)Application.Current.Resources["AccentButtonStyle"]};
-            saveStyle.Setters.Add(new Setter(AutomationProperties.AutomationIdProperty,"SettingsSave"));
-            dialog.PrimaryButtonStyle=saveStyle;
-            string? pendingDestination=null;
-            bool pendingClose=false, allowCloseWithoutSave=false, populatingSettings=false;
-            void UpdateDirtyUI()
+            if(!await ConfirmDiscardAsync())
             {
-                if(populatingSettings)return;
-                var dirty=IsDirty();
-                savedText.Text=dirty?"未保存の変更":"";
-                if(!dirty){unsavedBar.Visibility=Visibility.Collapsed;pendingDestination=null;pendingClose=false;}
+                RestoreNavigation();
+                return;
             }
-            async Task LoadVerificationAsync()
+            CloseBrowseMenus();
+            if(!folderHubOpen&&!shelfHubOpen)settingsReturnCount=Count.Text;
+            CloseFolderHubCore();
+            CloseShelfHubCore();
+            settingsHubOpen=true;
+            active=null;
+            Details.IsPaneOpen=false;
+            DetailsButton.IsEnabled=false;
+            MainViewTitle.Text="設定";
+            Count.Text="";
+            ItemSearchRow.Visibility=SearchTools.Visibility=ItemListContainer.Visibility=ItemPagerRow.Visibility=Visibility.Collapsed;
+            SettingsHubView.Visibility=Visibility.Visible;
+            settingsPopulating=true;
+            try
             {
-                try
+                SettingsThemeCombo.SelectedIndex=ViewerOptions.Value.Theme switch{"light"=>1,"dark"=>2,_=>0};
+                SettingsDoubleClickCheck.IsChecked=ViewerOptions.Value.OpenExternally;
+                SettingsWheelCombo.SelectedIndex=ViewerOptions.Value.WheelUpAdvances?1:0;
+                SettingsInstantStatus.Text="変更した設定はすぐに反映されます";
+            }
+            finally{settingsPopulating=false;}
+            SetSettingsCategory(category??"all");
+        }
+        catch(Exception ex){Failure(ex);}
+        finally{transitions.Release();}
+        if(settingsHubOpen&&!disposed)_ = LoadSettingsStatusAsync();
+    }
+
+    private async Task LoadSettingsStatusAsync()
+    {
+        settingsLoadLifetime?.Cancel();
+        settingsLoadLifetime?.Dispose();
+        var cts=new CancellationTokenSource();
+        settingsLoadLifetime=cts;
+        var token=cts.Token;
+        if(SettingsVerifyAIRuntimeCheck is not null)SettingsVerifyAIRuntimeCheck.IsEnabled=false;
+        try
+        {
+            var setupTask=api.GetAsync("api/library/ai/setup",token);
+            var statusTask=api.GetAsync("api/library/ai/status",token);
+            await Task.WhenAll(setupTask,statusTask);
+            if(token.IsCancellationRequested||disposed||!settingsHubOpen)return;
+
+            var setup=await setupTask;
+            savedVerificationState=setup["verify_ai_runtime"]?.GetValue<bool>()??true;
+            settingsPopulating=true;
+            try
+            {
+                if(SettingsVerifyAIRuntimeCheck is not null)
                 {
-                    var setup=await api.GetAsync("api/library/ai/setup",verificationLifetime.Token);
-                    if(verificationLifetime.IsCancellationRequested||disposed)return;
-                    savedVerification=setup["verify_ai_runtime"]?.GetValue<bool>()??true;
-                    initialVerification=savedVerification.Value;
-                    populatingSettings=true;
-                    try{verification.IsChecked=savedVerification;}finally{populatingSettings=false;}
-                    verification.IsEnabled=true;
-                    verificationHint.Text=savedVerification.Value?verificationHelpDefault:verificationHelpOff;
-                }
-                catch(OperationCanceledException) when(verificationLifetime.IsCancellationRequested){}
-                catch(Exception ex)
-                {
-                    AppLog.Error(ex);
-                    if(!verificationLifetime.IsCancellationRequested&&!disposed)
-                        verificationHint.Text="バックエンドに接続できないため、現在は変更できません。";
+                    SettingsVerifyAIRuntimeCheck.IsChecked=savedVerificationState;
+                    SettingsVerifyAIRuntimeCheck.IsEnabled=true;
                 }
             }
-            async Task<bool> SaveSettingsCoreAsync()
+            finally{settingsPopulating=false;}
+
+            var statusData=await statusTask;
+            ApplyRuntimeVerificationSnapshot(statusData);
+            var available=statusData["available"]?.GetValue<bool>()==true;
+            var state=statusData["state"]?.GetValue<string>()??"idle";
+            var processed=statusData["processed"]?.GetValue<int>()??0;
+            var total=statusData["total"]?.GetValue<int>()??0;
+            var model=statusData["model"]?.GetValue<string>()??"";
+            var statusCode=statusData["status_code"]?.GetValue<string>()??"";
+            var errorText=statusData["error"]?.GetValue<string>()??"";
+            if(available)
             {
-                try
+                SettingsAIStep1Status.Text="✓ 導入済み";
+                SettingsAIStep2Status.Text=string.IsNullOrWhiteSpace(model)?"✓ 使用可能":$"✓ {model}";
+                SettingsAIStep3Status.Text=state switch
                 {
-                    var enabled=verification.IsChecked==true;
-                    var verificationChanged=savedVerification is bool previous&&enabled!=previous;
-                    if(verificationChanged)
-                    {
-                        await api.PostAsync("api/library/ai/runtime-verification",new System.Text.Json.Nodes.JsonObject{["enabled"]=enabled});
-                        savedVerification=enabled;
-                        initialVerification=enabled;
-                    }
-                    var selectedTheme=theme.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};
-                    var openExternally=viewer.SelectedIndex==1;
-                    ViewerOptions.SavePreferences(wheel.SelectedIndex==1,selectedTheme,ViewerOptions.Value.EnlargeSmallImages,openExternally);
-                    initialTheme=theme.SelectedIndex;
-                    initialViewer=viewer.SelectedIndex;
-                    initialWheel=wheel.SelectedIndex;
-                    MainWindow.Current.ApplyTheme(selectedTheme);
-                    dialog.RequestedTheme=selectedTheme switch{"light"=>ElementTheme.Light,"dark"=>ElementTheme.Dark,_=>ElementTheme.Default};
-                    RefreshThumbnailTooltips();
-                    unsavedBar.Visibility=Visibility.Collapsed;
-                    savedText.Text=verificationChanged?"変更を保存しました（AI環境の確認設定は次回起動から適用）":"変更を保存しました";
-                    return true;
-                }
-                catch(Exception ex){savedText.Text="保存できません: "+ex.Message;return false;}
+                    "complete"=>$"✓ 作成済み（{processed}/{total}）",
+                    "running"=>$"作成中（{processed}/{total}）",
+                    "cancelling"=>"中断中",
+                    "partial"=>$"一部作成（{processed}/{total}）",
+                    _=>"未作成"
+                };
+                SettingsAINextHint.Text=state=="complete"
+                    ?"AI検索の準備が整っています。検索欄の［AI］から使えます。"
+                    :"［AI検索を設定］から対象フォルダのAI検索データを作成できます。";
             }
-            theme.SelectionChanged+=(_,_)=>UpdateDirtyUI();
-            viewer.SelectionChanged+=(_,_)=>{externalHint.Visibility=viewer.SelectedIndex==1?Visibility.Visible:Visibility.Collapsed;UpdateDirtyUI();};
-            wheel.SelectionChanged+=(_,_)=>UpdateDirtyUI();
-            verification.Checked+=(_,_)=>{verificationHint.Text=verificationHelpDefault;UpdateDirtyUI();};
-            verification.Unchecked+=(_,_)=>{verificationHint.Text=verificationHelpOff;UpdateDirtyUI();};
-            saveAndContinueBtn.Click+=async(_, _)=>
+            else
             {
-                saveAndContinueBtn.IsEnabled=discardAndContinueBtn.IsEnabled=cancelNavBtn.IsEnabled=false;
-                try
+                var needsRuntime=statusCode.Contains("runtime")||errorText.Contains("Python")||errorText.Contains("ライブラリ");
+                if(needsRuntime)
                 {
-                    if(!await SaveSettingsCoreAsync())return;
-                    if(pendingDestination is {} next){destination=next;pendingDestination=null;allowCloseWithoutSave=true;dialog.Hide();}
-                    else if(pendingClose){pendingClose=false;allowCloseWithoutSave=true;dialog.Hide();}
-                }
-                finally{saveAndContinueBtn.IsEnabled=discardAndContinueBtn.IsEnabled=cancelNavBtn.IsEnabled=true;}
-            };
-            discardAndContinueBtn.Click+=(_,_)=>
-            {
-                allowCloseWithoutSave=true;
-                if(pendingDestination is {} next){destination=next;pendingDestination=null;}
-                pendingClose=false;
-                dialog.Hide();
-            };
-            cancelNavBtn.Click+=(_,_)=>{pendingDestination=null;pendingClose=false;unsavedBar.Visibility=Visibility.Collapsed;};
-            dialog.PrimaryButtonClick+=async (_,args)=>
-            {
-                args.Cancel=true;var deferral=args.GetDeferral();
-                await Task.Yield();dialog.IsPrimaryButtonEnabled=false;
-                try{await SaveSettingsCoreAsync();}
-                finally{dialog.IsPrimaryButtonEnabled=true;deferral.Complete();}
-            };
-            var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            dialog.Opened += (_, _) => verificationLoad=LoadVerificationAsync();
-            dialog.Closing += (_, args) =>
-            {
-                if(!allowCloseWithoutSave&&IsDirty()&&destination is null)
-                {
-                    args.Cancel=true;
-                    pendingDestination=null;
-                    pendingClose=true;
-                    unsavedPrompt.Text="変更が保存されていません。保存してから閉じますか？";
-                    saveAndContinueBtn.Content="保存して閉じる";
-                    discardAndContinueBtn.Content="保存せず閉じる";
-                    unsavedBar.Visibility=Visibility.Visible;
-                }
-            };
-            dialog.Closed += (_, _) => {if(!verificationLifetime.IsCancellationRequested)verificationLifetime.Cancel();closedTcs.TrySetResult(true);};
-            void NavigateTool(string target)
-            {
-                if(IsDirty())
-                {
-                    pendingClose=false;
-                    pendingDestination=target;
-                    unsavedPrompt.Text="変更が保存されていません。保存してから続けますか？";
-                    saveAndContinueBtn.Content="保存して続ける";
-                    discardAndContinueBtn.Content="保存せず続ける";
-                    unsavedBar.Visibility=Visibility.Visible;
+                    SettingsAIStep1Status.Text="未導入";
+                    SettingsAIStep2Status.Text="環境導入後に設定";
+                    SettingsAIStep3Status.Text="待機中";
+                    SettingsAINextHint.Text="［AIの自動セットアップ］または［AI検索を設定］から実行環境を用意してください。";
                 }
                 else
                 {
-                    destination=target;
-                    allowCloseWithoutSave=true;
-                    dialog.Hide();
+                    SettingsAIStep1Status.Text="✓ 導入済み";
+                    SettingsAIStep2Status.Text="未導入 / 要確認";
+                    SettingsAIStep3Status.Text="待機中";
+                    SettingsAINextHint.Text="［AI検索を設定］から検索モデルをダウンロードまたは指定してください。";
                 }
-            }
-            var toolsStack=new StackPanel{Spacing=10};
-            foreach(var (groupTitle,entries) in new (string,(string Label,string Id,string Target)[])[]{
-                ("ライブラリ",[
-                    ("登録フォルダ","BtnSettingsOpenFolders","folders"),
-                    ("棚一覧","BtnSettingsOpenShelves","shelves"),
-                    ("関連語の辞書","BtnRelatedTerms","terms")]),
-                ("AI検索",[
-                    ("AI検索を設定","BtnAIIndex","ai"),
-                    ("自動セットアップ（AI環境）","BtnAIEnvironment","ai-environment")]),
-                ("バックアップと管理",[
-                    ("バックアップと復元","BtnBackupGuide","backup"),
-                    ("診断情報","BtnDiagnostics","diagnostics"),
-                    ("AIのダウンロードキャッシュ","BtnRuntimeCache","runtime-cache"),
-                    ("すべての閲覧履歴を削除…","BtnClearHistory","history")])})
-            {
-                toolsStack.Children.Add(new TextBlock{Text=groupTitle,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],Margin=new Thickness(0,4,0,0)});
-                var groupGrid=new Grid{ColumnSpacing=8,RowSpacing=8};
-                groupGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-                groupGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-                for(var r=0;r<(entries.Length+1)/2;r++)groupGrid.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
-                for(var i=0;i<entries.Length;i++)
-                {
-                    var (label,id,target)=entries[i];
-                    var button=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Stretch};
-                    AutomationProperties.SetAutomationId(button,id);
-                    button.Click+=(_,_)=>NavigateTool(target);
-                    Grid.SetRow(button,i/2);Grid.SetColumn(button,i%2);
-                    groupGrid.Children.Add(button);
-                }
-                toolsStack.Children.Add(groupGrid);
-            }
-            var helpBtn=new Button{Content="使い方を見る",HorizontalAlignment=HorizontalAlignment.Left};
-            AutomationProperties.SetAutomationId(helpBtn,"BtnGettingStarted");
-            helpBtn.Click+=(_,_)=>NavigateTool("help");
-            toolsStack.Children.Add(helpBtn);
-            var tools=new ContentControl{Content=toolsStack,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch,IsTabStop=false};
-            AutomationProperties.SetAutomationId(tools,"SettingsTools");
-            panel.Children.Add(tools);panel.Children.Add(advanced);
-            try
-            {
-                await dialog.ShowAsync();
-                await Task.WhenAny(closedTcs.Task, Task.Delay(500));
-            }
-            finally
-            {
-                verificationLifetime.Cancel();
-                if(verificationLoad is not null)await verificationLoad;
             }
         }
-        catch(Exception ex){Failure(ex);}
-        finally{dialogOpen=false;transitions.Release();RestoreNavigation();}
-        if(destination is not null)
+        catch(OperationCanceledException) when(token.IsCancellationRequested){}
+        catch(Exception ex)
         {
-            if(destination=="ai")AI_Click(this,new RoutedEventArgs());
-            else if(destination=="help")await OpenGettingStartedGuideAsync(fromSettings:true);
-            else if(destination=="terms")RelatedTerms_Click(this,new RoutedEventArgs());
-            else if(destination=="history")await DeleteHistoryAsync();
-            else if(destination=="backup")await OpenBackupDialogAsync(fromSettings:true);
-            else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync(fromSettings:true);
-            else if(destination=="ai-environment")await OpenAIAutoEnvironmentDialogAsync(fromSettings:true);
-            else if(destination=="runtime-cache")await OpenRuntimeCacheDialogAsync(fromSettings:true);
-            else if(destination=="folders")await OpenFolderHubAsync();
-            else if(destination=="shelves")await OpenShelfHubAsync();
+            AppLog.Error(ex);
+            if(!token.IsCancellationRequested&&!disposed&&settingsHubOpen)
+            {
+                SettingsAIStep1Status.Text="確認できません";
+                SettingsAIStep2Status.Text="—";
+                SettingsAIStep3Status.Text="—";
+                SettingsAINextHint.Text="バックエンドに接続できないため状態を取得できませんでした。";
+            }
         }
     }
+
+    private void SaveInstantViewerOptions(string statusMessage)
+    {
+        var selectedTheme=SettingsThemeCombo.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};
+        var openExternally=SettingsDoubleClickCheck.IsChecked==true;
+        var wheelUp=SettingsWheelCombo.SelectedIndex==1;
+        ViewerOptions.SavePreferences(wheelUp,selectedTheme,ViewerOptions.Value.EnlargeSmallImages,openExternally);
+        MainWindow.Current.ApplyTheme(selectedTheme);
+        RefreshThumbnailTooltips();
+        SettingsInstantStatus.Text=statusMessage;
+    }
+
+    private void SettingsInstantCombo_Changed(object sender,SelectionChangedEventArgs e)
+    {
+        if(!ready||settingsPopulating||disposed||!settingsHubOpen)return;
+        try{SaveInstantViewerOptions("✓ 表示・操作設定を反映しました");}
+        catch(Exception ex){SettingsInstantStatus.Text="保存できません: "+ex.Message;}
+    }
+
+    private async void SettingsInstantPreference_Changed(object sender,RoutedEventArgs e)
+    {
+        if(!ready||settingsPopulating||disposed||!settingsHubOpen)return;
+        if(ReferenceEquals(sender,SettingsDoubleClickCheck))
+        {
+            try{SaveInstantViewerOptions("✓ 閲覧設定を反映しました");}
+            catch(Exception ex){SettingsInstantStatus.Text="保存できません: "+ex.Message;}
+            return;
+        }
+        if(ReferenceEquals(sender,SettingsVerifyAIRuntimeCheck))
+        {
+            var enabled=SettingsVerifyAIRuntimeCheck.IsChecked==true;
+            if(savedVerificationState is bool prev&&prev==enabled)return;
+            SettingsVerifyAIRuntimeCheck.IsEnabled=false;
+            try
+            {
+                await api.PostAsync("api/library/ai/runtime-verification",new System.Text.Json.Nodes.JsonObject{["enabled"]=enabled});
+                savedVerificationState=enabled;
+                SettingsInstantStatus.Text=enabled?"✓ 起動時AIチェックを有効にしました（次回起動から）":"✓ 起動時AIチェックを簡略化しました（次回起動から）";
+            }
+            catch(Exception ex)
+            {
+                SettingsInstantStatus.Text="保存できません: "+ex.Message;
+                settingsPopulating=true;
+                try{SettingsVerifyAIRuntimeCheck.IsChecked=savedVerificationState??true;}
+                finally{settingsPopulating=false;}
+            }
+            finally{if(!disposed&&SettingsVerifyAIRuntimeCheck is not null)SettingsVerifyAIRuntimeCheck.IsEnabled=true;}
+        }
+    }
+
+    private void SettingsCategory_Click(object sender,RoutedEventArgs e)
+    {
+        if(sender is Button {Tag:string cat})SetSettingsCategory(cat);
+    }
+
+    private async void CloseSettings_Click(object sender,RoutedEventArgs e)
+    {
+        if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
+        var needLoad=resultSession is null||PendingSearch;
+        try
+        {
+            CloseSettingsHubCore();
+            RestoreNavigation();
+            UpdateSearchMethod();
+            UpdateLibraryHeading();
+            if(!needLoad)
+            {
+                Count.Text=settingsReturnCount;
+                RestoreSelection();
+            }
+        }
+        finally{transitions.Release();}
+        if(needLoad&&!disposed)await LoadAsync();
+    }
+
+    private async void SettingsGettingStarted_Click(object sender,RoutedEventArgs e)=>await OpenGettingStartedGuideAsync(fromSettings:true);
+    private async void SettingsAIIndex_Click(object sender,RoutedEventArgs e)
+    {
+        await OpenAISettingsAsync();
+        if(!disposed&&settingsHubOpen)await LoadSettingsStatusAsync();
+    }
+    private async void SettingsAIEnvironment_Click(object sender,RoutedEventArgs e)
+    {
+        await OpenAIAutoEnvironmentDialogAsync(fromSettings:true);
+        if(!disposed&&settingsHubOpen)await LoadSettingsStatusAsync();
+    }
+    private async void SettingsOpenFolders_Click(object sender,RoutedEventArgs e)=>await OpenFolderHubAsync();
+    private async void SettingsOpenShelves_Click(object sender,RoutedEventArgs e)=>await OpenShelfHubAsync();
+    private void SettingsRelatedTerms_Click(object sender,RoutedEventArgs e)=>RelatedTerms_Click(sender,e);
+    private async void SettingsClearHistory_Click(object sender,RoutedEventArgs e)=>await DeleteHistoryAsync();
+    private async void SettingsBackup_Click(object sender,RoutedEventArgs e)=>await OpenBackupDialogAsync(fromSettings:true);
+    private async void SettingsDiagnostics_Click(object sender,RoutedEventArgs e)=>await OpenDiagnosticsDialogAsync(fromSettings:true);
+    private async void SettingsRuntimeCache_Click(object sender,RoutedEventArgs e)=>await OpenRuntimeCacheDialogAsync(fromSettings:true);
     private async Task OpenRecoveryGuideDialogAsync(bool fromBackup=false,bool fromSettings=false)
     {
         if(!ready||disposed||dialogOpen||!await transitions.WaitAsync(0))return;

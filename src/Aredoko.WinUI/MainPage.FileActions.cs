@@ -60,7 +60,7 @@ public sealed partial class MainPage
             else Process.Start(new ProcessStartInfo(path){UseShellExecute=true});
             return true;
         }
-        catch(Exception ex){if(reportFailure)Failure(new InvalidOperationException("元ファイルを開けません。登録先・ファイルの状態と既定のアプリを確認してください。",ex));AppLog.Error(ex);return false;}
+        catch(Exception ex){if(reportFailure)Failure(new InvalidOperationException("外部アプリで開けません。状態と既定のアプリを確認してください",ex));AppLog.Error(ex);return false;}
     }
     private void CopyFilePath(MediaRow row)
     {
@@ -90,9 +90,9 @@ public sealed partial class MainPage
                 return false;
             }
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,
-                Title="既定のアプリで開けませんでした",
-                Content=$"{row.Title}\n\nファイルへのアクセスやWindowsの関連付けを確認してください。Aredokoの内蔵ビューアでも開けます。",
-                PrimaryButtonText="内蔵ビューアで開く",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
+                Title="外部アプリで開けませんでした",
+                Content=$"{row.Title}\n\nAredoko で開きますか？",
+                PrimaryButtonText="Aredokoで開く",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
             AutomationProperties.SetAutomationId(dialog,"ExternalViewerFallback");
             return await dialog.ShowAsync()==ContentDialogResult.Primary;
         }
@@ -127,9 +127,9 @@ public sealed partial class MainPage
             {
                 RequestedTheme=ActualTheme,
                 XamlRoot=XamlRoot,
-                Title="解除済みフォルダの記録を完全削除",
-                Content=$"{row.ShortPath}（{row.Path}）の登録履歴・タグ・棚・お気に入り・閲覧履歴・読書位置・AI索引をデータベースから完全に削除します。\nPC上の元ファイルは変更・削除されません。この操作は元に戻せません。",
-                PrimaryButtonText="記録を完全削除",
+                Title="記録を完全に削除しますか？",
+                Content=$"{row.ShortPath}（{row.Path}）\n\n• 削除されるもの：登録履歴・タグ・棚・お気に入り・履歴・読書位置・AI検索データ\n• 残るもの：PC上の元ファイル（変更・削除されません）\n\n⚠ この操作は元に戻せません。",
+                PrimaryButtonText="記録を削除",
                 CloseButtonText="キャンセル",
                 DefaultButton=ContentDialogButton.Close
             };
@@ -139,7 +139,7 @@ public sealed partial class MainPage
             var result=await api.PostAsync("api/library/roots/purge",new System.Text.Json.Nodes.JsonObject{{"root_id",row.Id},{"consent",true}});
             var removed=result["removed_items"]?.GetValue<int>()??0;
             await RefreshSearchRootsAsync();await LoadAIScopeAsync();RenderFolderHub();
-            Notice("記録を完全削除しました",$"解除済みフォルダのデータベース記録（{removed:N0}件）を削除しました。元ファイルは変更していません。");
+            Notice("記録を削除しました",$"{removed:N0}件（元ファイルは変更なし）");
         }
         catch(Exception ex){if(!disposed)Failure(ex);}
         finally{dialogOpen=false;transitions.Release();}

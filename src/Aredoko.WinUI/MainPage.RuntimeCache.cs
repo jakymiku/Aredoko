@@ -27,13 +27,15 @@ public sealed partial class MainPage
             var buttons=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};buttons.Children.Add(folder);buttons.Children.Add(refresh);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る"}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");buttons.Children.Add(backToSettings);}
-            var manualDeleteNote=new Expander{Header="手動で削除する場合の注意",HorizontalAlignment=HorizontalAlignment.Stretch,Content=new TextBlock{Text="取得・構築・検証が完了してから、上の保存先フォルダ内にある .whl ファイル（wheel）だけを対象にしてください。",TextWrapping=TextWrapping.Wrap}};
+            var manualDeleteNote=new Expander{Header="手動削除の注意",HorizontalAlignment=HorizontalAlignment.Stretch,Content=new TextBlock{Text="処理完了後に、上の保存先内の .whl ファイルだけを削除してください",TextWrapping=TextWrapping.Wrap}};
             var panel=new StackPanel{Spacing=12,MaxWidth=650};
             panel.Children.Add(capacity);panel.Children.Add(path);panel.Children.Add(help);panel.Children.Add(buttons);
-            panel.Children.Add(new TextBlock{Text="モデル本体・実行環境・登録情報は削除しません（取得・構築・検証中は削除できません）。",TextWrapping=TextWrapping.Wrap});
+            var cacheSafeNote=new TextBlock{Text="不要になったダウンロードファイル（.whl）だけを削除します。モデル・登録情報は残ります",TextWrapping=TextWrapping.Wrap};
+            ToolTipService.SetToolTip(cacheSafeNote,"取得・構築・検証中は削除できません");
+            panel.Children.Add(cacheSafeNote);
             panel.Children.Add(manualDeleteNote);
             panel.Children.Add(consent);panel.Children.Add(progress);panel.Children.Add(status);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AIのダウンロードキャッシュ",PrimaryButtonText="キャッシュを削除…",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=panel,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="ダウンロード済みファイルの整理",PrimaryButtonText="キャッシュを削除…",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=panel,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
             AutomationProperties.SetAutomationId(dialog,"RuntimeCacheDialog");AutomationProperties.SetAutomationId(path,"RuntimeCachePath");
             AutomationProperties.SetAutomationId(capacity,"RuntimeCacheCapacity");AutomationProperties.SetAutomationId(consent,"RuntimeCacheConsent");
             AutomationProperties.SetAutomationId(folder,"RuntimeCacheOpenFolder");AutomationProperties.SetAutomationId(status,"RuntimeCacheStatus");

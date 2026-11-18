@@ -30,11 +30,11 @@ public sealed partial class MainPage
             var planText=new TextBlock{Text="範囲を確認してから開始してください。",TextWrapping=TextWrapping.Wrap};
             var chunkFields=new StackPanel{Spacing=8,Visibility=Visibility.Collapsed};
             foreach(var element in new UIElement[]{limit,prepare,planText})chunkFields.Children.Add(element);
-            var start=new Button{Content="選んだページのデータを作る",HorizontalAlignment=HorizontalAlignment.Stretch};
-            var next=new Button{Content="次の未準備範囲を選ぶ",HorizontalAlignment=HorizontalAlignment.Stretch};
-            var cancel=new Button{Content="処理を中断",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};
+            var start=new Button{Content="作成",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var next=new Button{Content="次の未作成範囲",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var cancel=new Button{Content="中止",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};
             var progress=new ProgressBar{Minimum=0,Maximum=16,Visibility=Visibility.Collapsed};
-            var status=new TextBlock{Text="追加した範囲を「画像の見た目（AI）」で検索できます。",TextWrapping=TextWrapping.Wrap};
+            var status=new TextBlock{Text="追加した範囲を「見た目（AI）」で検索できます",TextWrapping=TextWrapping.Wrap};
             var coverageText=new TextBlock{TextWrapping=TextWrapping.Wrap};var rangesText=new TextBlock{TextWrapping=TextWrapping.Wrap};
             var ranges=new Expander{Header="準備済みの範囲",HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch,
                 Content=new ScrollViewer{Content=FormScrollContent.Wrap(rangesText),MaxHeight=120,HorizontalScrollMode=ScrollMode.Disabled,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}};
@@ -53,7 +53,7 @@ public sealed partial class MainPage
             var content=new Grid{Width=Math.Clamp(XamlRoot.Size.Width-112,240,440),Height=Math.Clamp(XamlRoot.Size.Height-240,260,420)};
             content.RowDefinitions.Add(new(){Height=GridLength.Auto});content.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});content.RowDefinitions.Add(new(){Height=GridLength.Auto});
             Grid.SetRow(viewport,1);Grid.SetRow(actions,2);content.Children.Add(heading);content.Children.Add(viewport);content.Children.Add(actions);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="本のページ画像（AI検索用データ）",Content=content,CloseButtonText="閉じる"};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="ページのAI検索データ",Content=content,CloseButtonText="閉じる"};
             AutomationProperties.SetAutomationId(dialog,"PageAIDialog");
             var busy=false;var closeRequested=false;string? job=null;PageImageCoverage? coverage=null;PageChunkPlan? plan=null;PageChunkStatus? chunk=null;
             bool Chunked()=>mode.SelectedIndex==1;
@@ -62,7 +62,7 @@ public sealed partial class MainPage
                 first.IsEnabled=count.IsEnabled=mode.IsEnabled=limit.IsEnabled=!busy;
                 prepare.IsEnabled=!busy&&coverage?.CanPrepare==true;
                 start.IsEnabled=!busy&&coverage?.CanPrepare==true&&(!Chunked()||plan?.CanStart==true||chunk?.CanResume==true);
-                start.Content=Chunked()?(chunk?.CanResume==true?"前回の続きから作る":"確認した範囲のデータを作る"):"選んだページのデータを作る";
+                start.Content=Chunked()?(chunk?.CanResume==true?"続きから作成":"作成"):"作成";
                 next.Visibility=Chunked()?Visibility.Collapsed:Visibility.Visible;
                 next.IsEnabled=!busy&&coverage?.CanPrepare==true&&coverage.NextRange is not null;
             }
@@ -80,7 +80,7 @@ public sealed partial class MainPage
             {
                 if(job is null)return;
                 try{await api.PostAsync("api/library/ai/pages/cancel",new JsonObject{{"job_id",job}});}
-                catch(Exception ex){status.Text="中断を確認できません。設定の「AI検索の準備」で処理状況を確認してください。";AppLog.Error(ex);}
+                catch(Exception ex){status.Text="中止を確認できません。設定で状況を確認してください。";AppLog.Error(ex);}
             }
             mode.SelectionChanged+=(_,_)=>{fields.Visibility=Chunked()?Visibility.Collapsed:Visibility.Visible;chunkFields.Visibility=Chunked()?Visibility.Visible:Visibility.Collapsed;InvalidatePlan();};
             limit.ValueChanged+=(_,_)=>{if(!busy)InvalidatePlan();};
@@ -137,7 +137,7 @@ public sealed partial class MainPage
                         {
                             if(result["job_id"]?.GetValue<string>()!=job)throw new InvalidOperationException("処理状況が変わりました。設定の「AI検索の準備」で確認してください。");
                             var state=result["state"]!.GetValue<string>();progress.Value=result["processed"]!.GetValue<int>();
-                            status.Text=state switch{"complete"=>$"追加しました: {result["indexed"]}ページ（再利用 {result["reused"]}）。","cancelled"=>"中断しました。今回の未完了範囲は保存していません。前回の索引は使えます。","failed"=>result["error"]!.GetValue<string>(),_=>$"処理中: {result["processed"]}/{result["total"]}ページ"};
+                            status.Text=state switch{"complete"=>$"追加しました: {result["indexed"]}ページ（再利用 {result["reused"]}）","cancelled"=>"中止しました（前回のデータは使えます）","failed"=>result["error"]!.GetValue<string>(),_=>$"処理中: {result["processed"]}/{result["total"]}ページ"};
                             if(state is not ("running" or "cancelling")){job=null;ApplyCoverage(await api.PageEvidences.ImageCoverageAsync(row.Id,snapshot.SourceRevision,scope,initial.Profile),state=="complete");break;}
                             await Task.Delay(500);result=await api.GetAsync("api/library/ai/status");
                         }

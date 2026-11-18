@@ -14,8 +14,8 @@ internal sealed class VideoPreparationPanel : IDisposable
     private readonly Func<JsonObject> conditions;
     private readonly TextBlock currentItem=new(){MaxLines=1,TextTrimming=TextTrimming.CharacterEllipsis,Visibility=Visibility.Collapsed};
     private readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap};
-    private readonly Button start=new(){Content="検索用データを作る",IsEnabled=false};
-    private readonly Button cancel=new(){Content="中断",IsEnabled=false};
+    private readonly Button start=new(){Content="AI検索データを作成",IsEnabled=false};
+    private readonly Button cancel=new(){Content="中止",IsEnabled=false};
     private readonly ProgressBar progress=new(){Visibility=Visibility.Collapsed,IsIndeterminate=true};
     private readonly DispatcherTimer timer=new(){Interval=TimeSpan.FromSeconds(1)};
     private readonly CancellationTokenSource lifetime=new();
@@ -28,20 +28,22 @@ internal sealed class VideoPreparationPanel : IDisposable
     {
         this.client=client;this.conditions=conditions;
         var panel=new StackPanel{Spacing=8};
-        panel.Children.Add(new TextBlock{Text="現在の検索フォルダ・棚にある動画が対象です。作成後は「動画の映像（AI）」で探せます（動画内の音は対象外）。画面を閉じても処理は続きます。",TextWrapping=TextWrapping.Wrap});
+        var scopeDesc=new TextBlock{Text="現在の範囲の動画が対象 · 閉じても続行",TextWrapping=TextWrapping.Wrap};
+        ToolTipService.SetToolTip(scopeDesc,"作成後は「動画の場面（AI）」で探せます（動画内の音は対象外）。");
+        panel.Children.Add(scopeDesc);
         panel.Children.Add(currentItem);panel.Children.Add(status);panel.Children.Add(progress);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
         actions.Children.Add(start);actions.Children.Add(cancel);panel.Children.Add(actions);
-        Content=new Expander{Header="動画の映像",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
+        Content=new Expander{Header="動画の場面",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
         AutomationProperties.SetAutomationId(Content,"VideoContentOptions");
         AutomationProperties.SetAutomationId(status,"VideoContentStatus");
         AutomationProperties.SetAutomationId(currentItem,"VideoContentCurrentItem");
         AutomationProperties.SetAutomationId(progress,"VideoContentProgress");
-        AutomationProperties.SetName(progress,"動画の索引作成の進捗");
+        AutomationProperties.SetName(progress,"動画のAI検索データ作成の進捗");
         AutomationProperties.SetAutomationId(start,"StartVideoContent");
         AutomationProperties.SetAutomationId(cancel,"CancelVideoContent");
-        ToolTipService.SetToolTip(start,"準備済みの動画は再利用します。残りがある場合は、もう一度押すと続きへ進みます。");
-        ToolTipService.SetToolTip(cancel,"保存済みの動画は残ります。処理中の動画は保存せず、次回は初めから準備します。");
+        ToolTipService.SetToolTip(start,"作成済みの動画は再利用します。残りがある場合はもう一度押すと続きへ進みます");
+        ToolTipService.SetToolTip(cancel,"完了分は保存済みです。処理中の動画のみ次回やり直します");
         Content.Expanding+=async(_,_)=>{if(disposed)return;timer.Start();await RefreshAsync();};
         Content.SizeChanged+=(_,args)=>
         {
@@ -62,7 +64,7 @@ internal sealed class VideoPreparationPanel : IDisposable
         currentItem.Text=value.Busy?value.ItemProgress?.ItemTitle??"":"";
         currentItem.Visibility=string.IsNullOrEmpty(currentItem.Text)?Visibility.Collapsed:Visibility.Visible;
         if(currentItem.Visibility==Visibility.Visible)ToolTipService.SetToolTip(currentItem,currentItem.Text);
-        start.Content=value.RemainingCandidates>0?"続きの検索用データを作る":"検索用データを作る";
+        start.Content=value.RemainingCandidates>0?$"続きから作成（残り {value.RemainingCandidates:N0}件）":"AI検索データを作成";
         start.IsEnabled=!command&&value.Supported&&value.Available&&!value.Busy;
         cancel.IsEnabled=!command&&value.Busy&&value.State!="cancelling";
         progress.Visibility=value.Busy?Visibility.Visible:Visibility.Collapsed;

@@ -48,11 +48,11 @@ public sealed partial class MainPage
             var done=state["processed"]?.GetValue<int>()??0;
             StartupUpdateAction.Visibility=Visibility.Visible;
             StartupUpdateAction.IsEnabled=true;
-            StartupUpdateAction.Content=startupUpdatesRunning?"停止":"一覧を更新";
-            StartupUpdateBar.Title=startupUpdatesRunning?"起動時の更新中":"起動時の更新";
+            StartupUpdateAction.Content=startupUpdatesRunning?"中止":"一覧を更新";
+            StartupUpdateBar.Title=startupUpdatesRunning?"起動時の更新":"起動時の更新";
             if(startupUpdatesRunning)
             {
-                StartupUpdateBar.Message=$"{done}/{total} フォルダ完了。検索・閲覧はそのまま使えます。";
+                StartupUpdateBar.Message=$"起動時の更新 {done}/{total} フォルダ";
                 StartupUpdateBar.Severity=InfoBarSeverity.Informational;
                 StartupUpdateBar.IsOpen=true;
             }
@@ -67,8 +67,8 @@ public sealed partial class MainPage
                     ||state["results"]?.AsArray().Any(row=>row?["state"]?.GetValue<string>()!="complete"
                         ||row?["ai_state"]?.GetValue<string>() is "failed" or "error" or "skipped" or "cancelled" or "unknown")==true;
                 StartupUpdateBar.Message=warning
-                    ?$"{done}/{total} フォルダ処理済み。一部は未完了です。登録フォルダの状態を確認してください。取得済みの一覧は保持されています。"
-                    :$"{done} フォルダを更新しました。編集中の内容はそのままです。";
+                    ?$"一部のフォルダを更新できませんでした（{done}/{total}）"
+                    :$"{done}フォルダを更新しました";
                 StartupUpdateBar.Severity=warning?InfoBarSeverity.Warning:InfoBarSeverity.Success;
                 StartupUpdateBar.IsOpen=true;
             }

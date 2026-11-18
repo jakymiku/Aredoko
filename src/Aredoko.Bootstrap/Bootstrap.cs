@@ -266,7 +266,7 @@ internal sealed class Bootstrap : Form
                 if(smoke)throw new IOException("基本環境が未導入です。通常のAredoko.exeから準備してください。");
                 DialogResult choice=DialogResult.Cancel;
                 awaitingConsent=true;
-                Invoke((Action)delegate { choice=MessageBox.Show(this,"基本機能を使うためのファイルをダウンロードします。\n全取得時は約22 MB・空き容量の目安300 MB以上です。\nAI検索のモデルや環境は別途任意です（ここでは取得しません）。\n\n詳細：Python 3.13.17・Pillow 12.3.0（公式配布元からアプリ専用領域へ保存し、システムのPythonやPATHは変更しません）\n\nダウンロードを開始しますか？","Aredoko 初回準備",MessageBoxButtons.OKCancel,MessageBoxIcon.Information); });
+                Invoke((Action)delegate { choice=MessageBox.Show(this,"初回のみ基本ファイル（約22 MB）をダウンロードします。\n空き容量目安：300 MB以上 · 元ファイルやPC環境は変更しません。\n\n詳細：Python 3.13.17・Pillow 12.3.0（AIモデル等は任意のため含みません）\nダウンロードを開始しますか？","Aredoko 初回準備",MessageBoxButtons.OKCancel,MessageBoxIcon.Information); });
                 awaitingConsent=false;
                 Interlocked.Exchange(ref lastFrame,Stopwatch.GetTimestamp());
                 if(choice!=DialogResult.OK)throw new OperationCanceledException();

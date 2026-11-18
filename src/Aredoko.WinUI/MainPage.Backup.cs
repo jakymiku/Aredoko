@@ -20,13 +20,13 @@ public sealed partial class MainPage
             var panel=new StackPanel{Spacing=12};
             var basic=new TextBlock{Text="必ず含む　登録フォルダ・タグ・棚・お気に入り",TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]};
             var optionalHeading=new TextBlock{Text="追加で含める項目",Style=(Style)Resources["MediaMetadataStyle"],Margin=new Thickness(0,4,0,0)};
-            var settings=new CheckBox{Content="設定とカスタムプロファイル",IsChecked=selected.Settings};
+            var settings=new CheckBox{Content="設定",IsChecked=selected.Settings};
             var history=new CheckBox{Content="閲覧履歴",IsChecked=selected.History};
             var position=new CheckBox{Content="本の読書位置",IsChecked=selected.ReaderProgress};
-            var vectors=new CheckBox{Content="AI検索用データ（あとで作り直せます・容量が大きくなります）",IsChecked=selected.Vectors};
+            var vectors=new CheckBox{Content="AI検索データ（大容量・あとで再作成可）",IsChecked=selected.Vectors};
             var destination=new TextBox{Header="保存先",IsReadOnly=true,PlaceholderText="保存するフォルダを選んでください",TextWrapping=TextWrapping.Wrap};
             var choose=new Button{Content="保存先を選ぶ"};
-            var excludeNote=new TextBlock{Text="元ファイル・AIモデル・実行環境・サムネイルは対象外です（画面を閉じても作成は続きます）。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            var excludeNote=new TextBlock{Text="対象外：元ファイル・AIモデル・環境・サムネイル（閉じても続行）",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             var status=new TextBlock{Text="バックアップの状態を確認しています。",TextWrapping=TextWrapping.Wrap};
             var progress=new ProgressBar{IsIndeterminate=false,Minimum=0,Maximum=100,Value=0};
             var reconnect=new Button{Content="状態を更新"};

@@ -25,8 +25,8 @@ public sealed partial class MainPage
         {
             await RefreshShelfDescriptorsAsync();
             if(disposed||saving||dialogOpen||!ReferenceEquals(folderDraft,draft))return;
-            var ids=await PickShelfIdsAsync("初期棚を選択",draft.ShelfIdsToSave??Array.Empty<long>(),
-                draft.IsBatch?$"選択した {draft.TargetIds.Count} フォルダに同じ初期棚を設定します。保存すると新規登録する作品に適用します。":"新規登録する作品に設定する棚を選択してください。",prefix:"ChooseRootShelf");
+            var ids=await PickShelfIdsAsync("自動で入れる棚を選択",draft.ShelfIdsToSave??Array.Empty<long>(),
+                draft.IsBatch?$"{draft.TargetIds.Count}フォルダの「自動で入れる棚」を設定します":"新規作品を入れる棚を選びます",prefix:"ChooseRootShelf");
             if(ids is null||!ReferenceEquals(folderDraft,draft))return;
             draft.SelectShelfIds(ids);ShowRootShelfSelection(ids);UpdateFolderDraftState();
         }

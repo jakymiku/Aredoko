@@ -46,21 +46,27 @@ public sealed partial class MainPage
             var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};var refresh=new Button{Content="状態を更新"};
             foreach(var (control,id) in new (DependencyObject,string)[]{(runtime,"AIEnvironmentRuntime"),(models,"AIEnvironmentModels"),(chooseRuntime,"AIEnvironmentChooseRuntime"),(resetRuntime,"AIEnvironmentResetRuntime"),(chooseModels,"AIEnvironmentChooseModels"),(resetModels,"AIEnvironmentResetModels"),(diagnostic,"AIEnvironmentDiagnostic"),(status,"AIEnvironmentStatus"),(progress,"AIEnvironmentProgress"),(refresh,"AIEnvironmentRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(resetRuntime,"AI実行環境を標準に戻す");AutomationProperties.SetName(resetModels,"モデル保存先を標準に戻す");AutomationProperties.SetName(progress,"AI環境の検査進捗");
-            panel.Children.Add(new TextBlock{Text="配置済みのフォルダを選ぶと内容を確認し、次回起動の設定として保存します。検査中も通常の閲覧・文字検索を利用できます。",TextWrapping=TextWrapping.Wrap});
+            var descTop=new TextBlock{Text="配置済みのフォルダを確認して設定します（ファイルは移動しません）",TextWrapping=TextWrapping.Wrap};
+            ToolTipService.SetToolTip(descTop,"配置済みのフォルダを選ぶと内容を確認し、次回起動の設定として保存します。検査中も通常の閲覧・文字検索を利用できます。");
+            panel.Children.Add(descTop);
             var acquiredLocation=new TextBox{Header=acquired?.Kind=="runtime"?"取得した実行環境":$"取得した{ModelLabel(acquired?.ModelTarget)}（{acquired?.ModelTarget?.ModelId}）",Text=acquired?.Root??"",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed};
             var useAcquired=new Button{Content=acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う",Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed,IsEnabled=false};
             AutomationProperties.SetAutomationId(acquiredLocation,"AIEnvironmentAcquiredLocation");AutomationProperties.SetAutomationId(useAcquired,"AIEnvironmentUseAcquired");
             panel.Children.Add(acquiredLocation);panel.Children.Add(useAcquired);
             panel.Children.Add(runtime);
             var runtimeActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};runtimeActions.Children.Add(chooseRuntime);runtimeActions.Children.Add(resetRuntime);panel.Children.Add(runtimeActions);
-            panel.Children.Add(new TextBlock{Text="Aredoko用のAI実行環境一式（aredoko-ai-runtime.jsonがあるフォルダ）を指定します。モデルとは別に用意します。",TextWrapping=TextWrapping.Wrap});
+            var runtimeHint=new TextBlock{Text="aredoko-ai-runtime.json があるフォルダを指定",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            ToolTipService.SetToolTip(runtimeHint,"Aredoko用のAI実行環境一式（aredoko-ai-runtime.jsonがあるフォルダ）を指定します。モデルとは別に用意します。");
+            panel.Children.Add(runtimeHint);
             panel.Children.Add(modelScope);panel.Children.Add(models);panel.Children.Add(scopeNote);
             var modelActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};modelActions.Children.Add(chooseModels);modelActions.Children.Add(resetModels);panel.Children.Add(modelActions);
-            panel.Children.Add(new TextBlock{Text="モデル別のフォルダをまとめた親フォルダを指定します。例：models の中に embeddinggemma-2 がある場合は models を選びます。",TextWrapping=TextWrapping.Wrap});
+            var modelHint=new TextBlock{Text="モデル群の親フォルダ（例：models）を指定",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            ToolTipService.SetToolTip(modelHint,"モデル別のフォルダをまとめた親フォルダを指定します。例：models の中に embeddinggemma-2 がある場合は models を選びます。");
+            panel.Children.Add(modelHint);
             foreach(var control in new UIElement[]{diagnostic,setupArt,progress,status,refresh})panel.Children.Add(control);
-            var download=new Button{Content="アプリで取得・取得状況"};AutomationProperties.SetAutomationId(download,"AIEnvironmentDownload");panel.Children.Add(download);
-            var guide=new HyperlinkButton{Content="AI環境の配置ガイド",NavigateUri=new Uri("https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/ai-environment-guide.md")};AutomationProperties.SetAutomationId(guide,"AIEnvironmentGuide");panel.Children.Add(guide);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI環境の追加と配置",SecondaryButtonText="検査を中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
+            var download=new Button{Content="ダウンロード・進行状況"};AutomationProperties.SetAutomationId(download,"AIEnvironmentDownload");panel.Children.Add(download);
+            var guide=new HyperlinkButton{Content="配置ガイド",NavigateUri=new Uri("https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/ai-environment-guide.md")};AutomationProperties.SetAutomationId(guide,"AIEnvironmentGuide");panel.Children.Add(guide);
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="手元のAIファイルを使う",SecondaryButtonText="確認を中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=FormScrollContent.Wrap(panel),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}};
             AutomationProperties.SetAutomationId(dialog,"AIEnvironmentDialog");
             void Render(AIEnvironmentJob job)
@@ -83,7 +89,7 @@ public sealed partial class MainPage
             {
                 models.Text=locations?.ModelLocation(SelectedRole(),SelectedTarget())??"標準の場所";
                 resetModels.Content=SelectedTarget() is not null?"このモデルの指定を解除":SelectedRole() is null?"すべて標準に戻す":"この対象を標準に戻す";
-                scopeNote.Text=SelectedTarget() is not null?"このモデルだけの保存先を変更します。他のモデルや用途の指定はそのまま残ります（フォルダ内のファイルは移動しません）。":SelectedRole() is null?"すべてのモデルを共通の場所へ設定すると、モデルごとの個別指定は解除されます（フォルダ内のファイルは移動しません）。":"同じ用途のモデル別指定が解除されます。他の用途の指定はそのまま残ります（フォルダ内のファイルは移動しません）。";
+                scopeNote.Text=SelectedTarget() is not null?"このモデルだけ変更（ファイルは移動しません）":SelectedRole() is null?"すべてのモデルを変更（ファイルは移動しません）":"同じ用途のモデルを変更（ファイルは移動しません）";
             }
             modelScope.SelectionChanged+=(_,_)=>RenderModelLocation();
             RenderModelLocation();
@@ -99,8 +105,8 @@ public sealed partial class MainPage
                 foreach(var entry in value.ModelLocations??Array.Empty<AIModelLocation>())
                     if(!modelTargets.Values.Contains(entry.Target)&&modelTargets.Count<33)AddModel(entry.Target);
                 RenderModelLocation();
-                diagnostic.Text="実行環境："+(value.RuntimeFilesPresent?"ファイルあり":"未導入または要確認")+"　検索モデル："+(value.ModelFilesPresent?"ファイルあり":"未導入または要確認");
-                diagnostic.Text+=value.RestartRequired?"\n保存した設定は、Aredokoを再起動すると反映されます。":"\n設定変更は次回起動時に反映します。AIの動作確認とは別です。";
+                diagnostic.Text=(value.RuntimeFilesPresent?"✓ AI実行環境":"⚠ AI実行環境（要確認）")+"　"+(value.ModelFilesPresent?"✓ 検索モデル":"⚠ 検索モデル（要確認）");
+                diagnostic.Text+=value.RestartRequired?"\n再起動後に反映されます":"\n設定変更は次回起動時に反映";
             }
             async Task RefreshAsync(bool locations=false)
             {

@@ -60,9 +60,9 @@ internal sealed class ViewerChromeController : IDisposable
     public static MenuFlyout Settings(bool book,Action changed,Action<Exception> failed)
     {
         var menu=new MenuFlyout();
-        var enlarge=new ToggleMenuFlyoutItem{Text="小さい画像も画面に合わせて拡大"};
-        var controls=new ToggleMenuFlyoutItem{Text="操作バーを常に表示"};
-        var loop=new ToggleMenuFlyoutItem{Text="最後のページから先頭へ戻る"};
+        var enlarge=new ToggleMenuFlyoutItem{Text="小さい画像を画面に合わせる"};
+        var controls=new ToggleMenuFlyoutItem{Text="操作バーを常時表示"};
+        var loop=new ToggleMenuFlyoutItem{Text="末尾から先頭へループ"};
         foreach(var (item,id) in new[]{(enlarge,"ViewerEnlargeImages"),(controls,"ViewerAlwaysControls"),(loop,"ViewerLoopPages")})
             AutomationProperties.SetAutomationId(item,id);
         void Sync(){enlarge.IsChecked=ViewerOptions.Value.EnlargeSmallImages;controls.IsChecked=ViewerOptions.Value.AlwaysShowControls;loop.IsChecked=ViewerOptions.Value.LoopBookPages;}

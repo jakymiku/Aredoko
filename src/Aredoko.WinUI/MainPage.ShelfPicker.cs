@@ -30,7 +30,7 @@ public sealed partial class MainPage
         Button? createShelfButton=null;
         TextBlock? createError=null;
         TextBlock? createNote=null;
-        const string createStayNote="※「作成して選択」で作成した棚は即座に保存され、「キャンセル」しても棚一覧に残ります（作品への選択のみ取り消されます）。";
+        const string createStayNote="作成した棚はキャンセルしても残ります";
         if(allowCreate)
         {
             newShelfBox=new TextBox{PlaceholderText="新しい棚を作成",MaxLength=80,MinWidth=0,HorizontalAlignment=HorizontalAlignment.Stretch};
@@ -92,7 +92,7 @@ public sealed partial class MainPage
                     await RefreshShelfDescriptorsAsync();
                     SyncOptions(new ShelfDescriptor(createdId,name,0));
                     selected.Add(createdId);resultsNeedRefresh=true;
-                    if(createNote is not null)createNote.Text=$"棚「{name}」を作成しました。作成した棚は「キャンセル」しても残ります（作品への選択のみ取り消されます）。";
+                    if(createNote is not null)createNote.Text=$"棚「{name}」を作成しました（キャンセルしても残ります）";
                     newShelfBox.Text="";filter.Text="";
                     Rebuild();
                 }

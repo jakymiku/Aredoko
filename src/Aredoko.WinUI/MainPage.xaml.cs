@@ -51,7 +51,9 @@ public sealed partial class MainPage : Page
     private IReadOnlyList<string> knownShelves=[];
     private readonly HashSet<int> checkedFolderIds=[];
     private FolderSettingsDraft? folderDraft;
-    private bool folderHubOpen, folderTiles, folderPopulating, folderSettingsActive, pollingScan, gettingStartedDismissed, aiIndexReady, scanRootsRefreshed;
+    private bool folderHubOpen, settingsHubOpen, folderTiles, folderPopulating, folderSettingsActive, pollingScan, gettingStartedDismissed, aiIndexReady, scanRootsRefreshed;
+    private int lastTextSearchMode=0, lastAISearchMode=1;
+    private string currentSettingsCategory="all";
     private long? emptyLibraryScanJob;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer scanPollTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer runtimeVerifyTimer;
@@ -60,7 +62,7 @@ public sealed partial class MainPage : Page
     private long? aiModelLoadingVersion;
     private long? runtimeVerifyClientStartedTick;
     private JsonObject? aiScope;
-    private string aiScopeError="AI索引の画面で対象を確認・保存してください。";
+    private string aiScopeError="AI設定で検索対象を確認・保存してください。";
     private string view="all", lastQuery="";
     private string? selectedTagScope;
     private MediaRow? similarityOrigin;
@@ -104,7 +106,7 @@ public sealed partial class MainPage : Page
             UpdateItemSizes();
         };
         Unloaded+=OnPageUnloaded;
-        tiles=ViewerOptions.Value.LibraryTiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
+        tiles=ViewerOptions.Value.LibraryTiles;UpdateLayoutToggleVisuals();
         libraryItemScale=ViewerOptions.Value.LibraryItemScale;ItemSizeSlider.Value=libraryItemScale;
         ItemSizeLabel.Text=$"{libraryItemScale}%";itemSizeReady=true;
         UpdateSearchMethod();
@@ -116,9 +118,10 @@ public sealed partial class MainPage : Page
         runtimeVerifyTimer=DispatcherQueue.CreateTimer(); runtimeVerifyTimer.Interval=TimeSpan.FromSeconds(1);
         runtimeVerifyTimer.Tick+=async (_,_)=>await PollRuntimeVerificationAsync();
     }
+    private Style? ThemeStyle(string key)=>(Resources.TryGetValue(key,out var local)?local:Application.Current.Resources.TryGetValue(key,out var app)?app:null) as Style;
     private static bool SameRoots(IReadOnlyList<int>? a,IReadOnlyList<int>? b)=>
         ReferenceEquals(a,b)||(a is not null&&b is not null&&a.SequenceEqual(b));
-    private bool PendingSearch => !folderHubOpen&&!shelfHubOpen&&(Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind||SearchMode.SelectedIndex!=lastMode||!SameRoots(selectedSearchRoots,lastRoots)||(AIMatchedOnly.IsChecked==true)!=lastLiteralOnly||BoundaryValue()!=lastBoundary||AIResultGroup.SelectedIndex!=lastResultGroup);
+    private bool PendingSearch => !folderHubOpen&&!shelfHubOpen&&!settingsHubOpen&&(Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind||SearchMode.SelectedIndex!=lastMode||!SameRoots(selectedSearchRoots,lastRoots)||(AIMatchedOnly.IsChecked==true)!=lastLiteralOnly||BoundaryValue()!=lastBoundary||AIResultGroup.SelectedIndex!=lastResultGroup);
     private EditorState Current()=>new(Tags.Text,editingShelfIds.Length==0?"":ShelfName(editingShelfIds.Min()),Favorite.IsChecked==true,Reviewed.IsChecked==true){ShelfIds=editingShelfIds.ToArray()};
     private bool Dirty=>active is not null && EditorState.IsDirty(saved,Current());
     private bool FolderDirty=>folderSettingsActive && folderDraft is {IsDirty:true};
@@ -265,9 +268,9 @@ public sealed partial class MainPage : Page
         {
             if(!aiModelResident&&RuntimeVerifyCard.Visibility==Visibility.Collapsed)
             {
-                RuntimeVerifyTitle.Text="AIモデルを読み込み中…";
+                RuntimeVerifyTitle.Text="AIを起動中…";
                 RuntimeVerifyProgress.IsIndeterminate=true;
-                RuntimeVerifyDetail.Text="初回検索のためAIモデルをメモリに準備しています…";
+                RuntimeVerifyDetail.Text="初回のみ時間がかかります";
                 RuntimeVerifyCard.Visibility=Visibility.Visible;
             }
             if(!runtimeVerifyTimer.IsRunning)runtimeVerifyTimer.Start();
@@ -276,6 +279,15 @@ public sealed partial class MainPage : Page
         {
             _ = PollRuntimeVerificationAsync();
         }
+    }
+    private void UpdateNavAIStatus(bool available,bool busy)
+    {
+        if(NavAIStatus is null)return;
+        var label=busy?"AI：確認中":available?"AI：使用可":"AI：未設定";
+        NavAIStatus.Content=label;
+        var tip=busy?"AI検索の環境・モデルを確認しています":available?"AI検索を使用できます（クリックでAI設定）":"AI検索は未設定です（クリックして準備）";
+        ToolTipService.SetToolTip(NavAIStatus,tip);
+        AutomationProperties.SetName(NavAIStatus,label);
     }
     private bool ApplyRuntimeVerificationSnapshot(JsonNode data)
     {
@@ -286,6 +298,7 @@ public sealed partial class MainPage : Page
         var state=rv?["state"]?.GetValue<string>()??"idle";
         if(available&&state=="verifying")
         {
+            UpdateNavAIStatus(available,true);
             runtimeVerifyClientStartedTick??=Environment.TickCount64;
             var clientElapsed=Math.Max(0.0,(Environment.TickCount64-runtimeVerifyClientStartedTick.Value)/1000.0);
             var serverElapsed=rv?["elapsed_seconds"]?.GetValue<double>()??0.0;
@@ -303,18 +316,18 @@ public sealed partial class MainPage : Page
             RuntimeVerifyProgress.Value=percent;
             if(slow)
             {
-                RuntimeVerifyTitle.Text="照合に時間がかかっています";
+                RuntimeVerifyTitle.Text="時間がかかっています";
                 RuntimeVerifyDetail.Text=bytesTotal>0
-                    ?$"AI環境の整合性を検証中… {percent:F0}% ({bytesDoneGb:F1} / {bytesTotalGb:F1} GB) — 5分以上経過しています。完了までそのままお待ちください。"
-                    :"照合に時間がかかっています（5分以上経過）。完了までそのままお待ちください。";
+                    ?$"AIを確認中 {percent:F0}% ({bytesDoneGb:F1} / {bytesTotalGb:F1} GB) — そのままお待ちください"
+                    :"時間がかかっています。そのままお待ちください";
             }
             else
             {
-                RuntimeVerifyTitle.Text="AI環境の整合性を検証中…";
+                RuntimeVerifyTitle.Text="AIを確認中";
                 RuntimeVerifyDetail.Text=bytesTotal>0
                     ?$"{percent:F0}% ({bytesDoneGb:F1} / {bytesTotalGb:F1} GB)"
                     :filesTotal>0?$"{percent:F0}% ({filesDone:N0} / {filesTotal:N0} ファイル)"
-                    :"ファイルを走査しています…";
+                    :"確認しています…";
             }
             RuntimeVerifyCard.Visibility=Visibility.Visible;
             if(!runtimeVerifyTimer.IsRunning)runtimeVerifyTimer.Start();
@@ -323,13 +336,15 @@ public sealed partial class MainPage : Page
         runtimeVerifyClientStartedTick=null;
         if(available&&aiModelLoadingVersion is not null&&!resident)
         {
-            RuntimeVerifyTitle.Text="AIモデルを読み込み中…";
+            UpdateNavAIStatus(available,true);
+            RuntimeVerifyTitle.Text="AIを起動中…";
             RuntimeVerifyProgress.IsIndeterminate=true;
-            RuntimeVerifyDetail.Text="初回検索のためAIモデルをメモリに準備しています…";
+            RuntimeVerifyDetail.Text="初回のみ時間がかかります";
             RuntimeVerifyCard.Visibility=Visibility.Visible;
             if(!runtimeVerifyTimer.IsRunning)runtimeVerifyTimer.Start();
             return false;
         }
+        UpdateNavAIStatus(available,false);
         RuntimeVerifyCard.Visibility=Visibility.Collapsed;
         runtimeVerifyTimer.Stop();
         return false;
@@ -382,17 +397,17 @@ public sealed partial class MainPage : Page
             var bytesDone=rv?["bytes_done"]?.GetValue<long>()??0L;
             var bytesTotal=rv?["bytes_total"]?.GetValue<long>()??0L;
             var percent=bytesTotal>0?Math.Clamp(bytesDone*100.0/bytesTotal,0.0,100.0):0.0;
-            Count.Text=slow?"照合に時間がかかっています":bytesTotal>0?$"AI環境を照合中 {percent:F0}%":"AI環境を照合中…";
+            Count.Text=slow?"時間がかかっています":bytesTotal>0?$"AIを確認中 {percent:F0}%":"AIを確認中…";
             if(rows.Count==0)
             {
                 Empty.Visibility=Visibility.Visible;
                 Empty.Text=slow
-                    ?"照合に時間がかかっています（5分以上経過）。AI環境の整合性チェック完了後に検索を開始します。"
-                    :$"AI環境の整合性を検証しています（{percent:F0}%）。完了後に自動で検索を開始します…";
+                    ?"AIの確認に時間がかかっています。完了後に検索します。"
+                    :$"AIの確認後に検索します（{percent:F0}%）";
             }
             if(slow)
             {
-                Notice("照合に時間がかかっています","AI環境の整合性チェックに5分以上かかっています。完了後に自動で検索を開始します。",InfoBarSeverity.Warning);
+                Notice("時間がかかっています","AIの確認完了後に自動で検索を開始します。",InfoBarSeverity.Warning);
             }
             await Task.Delay(500,cancellation);
         }
@@ -404,7 +419,7 @@ public sealed partial class MainPage : Page
             var data=await api.GetAsync("api/library/ai/scope");
             if(data["valid"]?.GetValue<bool>()!=true){aiScopeError=data["error"]?.GetValue<string>()??"AI対象を選び直してください。";return;}
             aiScope=(JsonObject)data["scope"]!.DeepClone();
-        } catch(Exception ex){aiScopeError="AI対象を取得できません。AI索引の画面で確認してください。"+ex.Message;}
+        } catch(Exception ex){aiScopeError="AI対象を取得できません。AI検索設定で確認してください。"+ex.Message;}
     }
     private async void Reconnect_Click(object sender,RoutedEventArgs e)
     {
@@ -415,13 +430,13 @@ public sealed partial class MainPage : Page
     private string KindValue()=>MediaKindFilter.FromIndex(Kind.SelectedIndex);
     private void UpdateLibraryHeading()
     {
-        if(folderHubOpen||shelfHubOpen)return;
+        if(folderHubOpen||shelfHubOpen||settingsHubOpen)return;
         MainViewTitle.Text=selectedShelfIds is not null?ShelfScopeName():view switch
         {
             "favorites"=>"お気に入り",
             "history"=>"閲覧履歴",
-            "unreviewed"=>"ライブラリ（未確認）",
-            _=>"ライブラリ"
+            "unreviewed"=>"未確認の作品",
+            _=>"すべての作品"
         };
         ToolTipService.SetToolTip(MainViewTitle,selectedShelfIds is not null?ShelfScopeName(summarize:false):MainViewTitle.Text);
     }
@@ -433,7 +448,7 @@ public sealed partial class MainPage : Page
         startupSearchSucceeded=false;UpdateFavoriteRootList();
         var version=searches.Next(); Busy.Visibility=Visibility.Visible;
         GettingStarted.Visibility=Visibility.Collapsed;
-        if(rows.Count==0){VisualAssets.State(EmptyArt,"searching");Empty.Visibility=Visibility.Visible;Empty.Text="検索結果を準備しています…";}
+        if(rows.Count==0){VisualAssets.State(EmptyArt,"searching");Empty.Visibility=Visibility.Visible;Empty.Text="検索中…";}
         similarityCancellation?.Cancel();similarityCancellation?.Dispose();similarityCancellation=new();explicitlyCancelledSearch=null;
         CancelSearchButton.Visibility=Visibility.Visible;
         var cancellation=similarityCancellation.Token;var origin=similarityOrigin;
@@ -467,63 +482,63 @@ public sealed partial class MainPage : Page
             Previous.IsEnabled=page>0; Next.IsEnabled=(page+1)*pageSize<result.Total;
             VisualAssets.State(EmptyArt,"no_results");Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
             EmptyResetConditionsButton.Visibility=rows.Count==0&&HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
-            Empty.Text=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ内の文字を入力して検索してください（抽出済みのページ本文が検索対象です）。":"この範囲に一致するページ本文はありません。")
-                :method.IsTagSemantic?(string.IsNullOrWhiteSpace(query)?"未承認タグから探したい内容を入力してください。":"検索用データがある未承認タグ候補がありません。設定の「AI検索を設定」で検索用データを作成してください。")
-                :method.IsTagCandidates?"この範囲に一致する未承認のAIタグ候補はありません。作品の詳細「AIタグ候補」から候補を生成・確認できます。"
-                :method.IsVideoAudioContent?(string.IsNullOrWhiteSpace(query)?"動画内で探したい音や会話の特徴を文章で入力してください。":"この範囲に音声データ作成済みの動画がありません。設定の「AI検索を設定」→「動画内の音」から検索用データを作成してください。")
-                :method.IsVideoContent?(string.IsNullOrWhiteSpace(query)?"探したい動画の場面を文章で入力してください。":"この範囲に映像データ作成済みの動画がありません。"+SimilaritySearch.VideoIndexingGuidance)
+            Empty.Text=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ内の文字を入力してください":"一致するページ本文はありません")
+                :method.IsTagSemantic?(string.IsNullOrWhiteSpace(query)?"AIタグ候補から探す言葉を入力してください":"AIタグ候補のAI検索データがありません")
+                :method.IsTagCandidates?"該当するAIタグ候補はありません"
+                :method.IsVideoAudioContent?(string.IsNullOrWhiteSpace(query)?"探したい音の特徴を入力してください":"動画の音のAI検索データがありません")
+                :method.IsVideoContent?(string.IsNullOrWhiteSpace(query)?"探したい動画の場面を入力してください":"動画の映像のAI検索データがありません")
                 :method.IsAI&&query.Length>0?(!string.IsNullOrEmpty(result.SearchStatus)&&result.SearchStatus!="ready"
                     ?AISearchStatus.Guidance(result.SearchStatus,result.SearchCandidateTotal??0,result.IndexedTotal??0,query:query)
                     :result.SearchCandidateTotal>0&&result.IndexedTotal==0?AISearchStatus.Guidance(AISearchStatus.Unindexed,result.SearchCandidateTotal??0,result.IndexedTotal??0)
                     :result.SearchCandidateTotal==0?AISearchStatus.Guidance(AISearchStatus.OutOfScope)
                     :result.SearchStatus=="partially_indexed"&&result.Total==0?AISearchStatus.Guidance(AISearchStatus.PartiallyIndexed,result.SearchCandidateTotal??0,result.IndexedTotal??0)
-                    :resultGroup==1&&result.GroupBoundary is null?"参考候補の区切りがありません。「すべてのAI候補」を選ぶか、画像の見た目／名前・タグの意味（AI）で区切りを指定してください。"
-                    :resultGroup==0&&result.OtherTotal>0?"区切り以上の候補はありません。上位候補に含める類似度を下げるか、表示する候補を切り替えてください。"
+                    :resultGroup==1&&result.GroupBoundary is null?"参考候補はありません"
+                    :resultGroup==0&&result.OtherTotal>0?"しきい値以上の候補はありません"
                     :AISearchStatus.Guidance(AISearchStatus.Ready,query:query))
-                :query.Length>0?"名前・タグに一致する作品はありません。検索語や絞り込み条件を変更してください。":EmptyScopeGuidance();
+                :query.Length>0?"一致する作品はありません":EmptyScopeGuidance();
             var explanation=
                 method.IsPageText ? "抽出・保存済みのページ本文が検索対象です（同じページ内に検索語がすべて含まれる本を表示しています）。「本を開く」で先頭の一致ページへ移動できます。"+(scopeWarning is null?"":" "+scopeWarning)
-                : method.IsTagSemantic ? "未承認の英語タグ候補を含むデータから、言葉の意味が近い作品を表示しています。確定タグとは混ざりません。類似度は正解率ではありません。承認・却下・再生成の後は検索用データを更新してください。"
-                : method.IsTagCandidates ? "最新の生成履歴に未承認の候補がある作品を表示しています。確定タグにはまだ反映されていません。詳細の「AIタグ候補」から根拠を確認して承認・却下できます。"+(scopeWarning is null?"":" "+scopeWarning)
-                : method.IsVideoAudioContent ? "検索用データがある動画内の音を、内容や音の特徴から探します。一致区間の開始から動画を再生できます。先頭の音声トラックが対象です。文字起こしは生成しません。"
-                : method.IsVideoContent ? "検索用データがある動画を、場面や動きの内容から探します。一致区間の開始から再生できます。動画内の音は対象外です。"
-                : method.IsAudioContent ? "検索用データがある音声・音楽を、内容や音の特徴から探します。一致した時刻から再生できます。文字起こしは生成しません。"
-                : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}検索用データがある作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。画像の見た目と名前・タグの意味では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
-                : method.IsAI ? "探したい内容を文章で入力してください。初回の設定は左下の「設定」→「AI検索を設定」から行えます。"
+                : method.IsTagSemantic ? "AIタグ候補（英語を含む）から意味が近い作品を表示しています。確定タグとは混ざりません。類似度は正解率ではありません。承認・却下・再生成の後はAI検索データを更新してください。"
+                : method.IsTagCandidates ? "最新の生成履歴に未承認のAIタグ候補がある作品を表示しています。確定タグにはまだ反映されていません。詳細の「AIタグ候補」から根拠を確認して承認・却下できます。"+(scopeWarning is null?"":" "+scopeWarning)
+                : method.IsVideoAudioContent ? "AI検索データがある動画内の音を、内容や音の特徴から探します。一致区間の開始から動画を再生できます。先頭の音声トラックが対象です。文字起こしは生成しません。"
+                : method.IsVideoContent ? "AI検索データがある動画を、場面や動きの内容から探します。一致区間の開始から再生できます。動画内の音は対象外です。"
+                : method.IsAudioContent ? "AI検索データがある音声・音楽を、内容や音の特徴から探します。一致した時刻から再生できます。文字起こしは生成しません。"
+                : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}AI検索データがある作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。見た目と言葉の意味では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
+                : method.IsAI ? "探したい内容を文章で入力してください。初回の設定は左下の「設定」→「AI検索」から行えます。"
                 : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions)+(scopeWarning is null?"":" "+scopeWarning);
-            var summary=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ内の文字を入力してください。":$"ページ本文一致 {result.Total:N0}件")
-                :method.IsTagSemantic?(result.PendingIndexRemaining is >0?$"未承認タグ候補 · 更新が必要: {result.PendingIndexRemaining:N0}件":"未承認タグの意味で検索しています。")
-                :method.IsTagCandidates?"未承認の候補です。詳細から確認・承認できます。"
-                :method.IsVideoAudioContent?(string.IsNullOrWhiteSpace(query)?"動画内で探したい音の特徴を入力してください。":$"動画内の音候補 {result.Total:N0}件 · 準備済み {result.IndexedTotal??0:N0}件")
-                :method.IsVideoContent?(string.IsNullOrWhiteSpace(query)?"探したい動画の場面を入力してください。":$"動画の映像候補 {result.Total:N0}件 · 準備済み {result.IndexedTotal??0:N0}件")
-                :method.IsAI?(query.Length==0?"探したい内容を入力してください。"
+            var summary=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ内の文字を入力してください":$"ページ内一致 {result.Total:N0}冊")
+                :method.IsTagSemantic?(result.PendingIndexRemaining is >0?$"AIタグ候補 · 要更新 {result.PendingIndexRemaining:N0}件":"AIタグ候補（AI）")
+                :method.IsTagCandidates?$"AIタグ候補あり {result.Total:N0}件"
+                :method.IsVideoAudioContent?(string.IsNullOrWhiteSpace(query)?"探したい音の特徴を入力してください":$"動画の音 {result.Total:N0}件 · 準備済み {result.IndexedTotal??0:N0}件")
+                :method.IsVideoContent?(string.IsNullOrWhiteSpace(query)?"探したい動画の場面を入力してください":$"動画の場面 {result.Total:N0}件 · 準備済み {result.IndexedTotal??0:N0}件")
+                :method.IsAI?(query.Length==0?"探したい内容を入力してください"
                     :result.SearchStatus=="unindexed"?$"未作成（対象 {result.SearchCandidateTotal??0:N0}件）"
                     :result.SearchStatus=="out_of_scope"?"対象外（0件）"
-                    :$"上位 {result.LeadingTotal:N0}件 · 参考 {result.OtherTotal:N0}件")
+                    :$"AI候補 {result.Total:N0}件（上位 {result.LeadingTotal:N0} · 参考 {result.OtherTotal:N0}）")
                 :Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions);
             var noticeSeverity=scopeWarning is not null||result.PendingIndexRemaining is >0||(method.IsAI&&query.Length>0&&(result.SearchStatus is "unindexed" or "out_of_scope"||(result.SearchStatus=="partially_indexed"&&result.Total==0)))
                 ?InfoBarSeverity.Warning:InfoBarSeverity.Informational;
-            Notice(method.IsPageText?"ページ本文":method.IsTagCandidates?"タグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),noticeSeverity,explanation);
+            Notice(method.IsPageText?"ページ内一致":method.IsTagCandidates?"AIタグ候補":method.IsAI?"AI検索":"検索結果",summary+(scopeWarning is null?"":" "+scopeWarning),noticeSeverity,explanation);
             if(origin is not null)
             {
                 var guidance=SimilaritySearch.Guidance(result.SimilarityStatus,origin.Kind,directAudioSimilarity,directVideoSimilarity,directVideoAudioSimilarity);
                 Empty.Text=result.SimilarityStatus=="ready"
-                    ?(result.SearchCandidateTotal is int cand&&cand>0&&result.IndexedTotal==0?$"この範囲の作品はまだAI検索用データが作成されていません（対象 {cand:N0}件）。設定の「AI検索を設定」から作成してください。"
-                    :result.SearchCandidateTotal==0?"この範囲（フォルダ・種類・タグ）に対象作品がありません。"
-                    :"この範囲に準備済みの類似候補はありません。種類・フォルダ・AIの対象範囲を確認してください。")
+                    ?(result.SearchCandidateTotal is int cand&&cand>0&&result.IndexedTotal==0?$"AI検索データが未作成です（対象 {cand:N0}件）"
+                    :result.SearchCandidateTotal==0?"条件に合う作品はありません"
+                    :"似た候補はありません")
                     :guidance;
-                var originTitle=origin.Kind=="video"?(directVideoAudioSimilarity?"音が似た動画":directVideoSimilarity?"内容が似た動画":"似た動画・素材"):origin.Kind=="audio"?"似た音声・曲":"似た画像・表紙";
+                var originTitle=origin.Kind=="video"?(directVideoAudioSimilarity?"音が似た動画":directVideoSimilarity?"場面が似た動画":"似た動画"):origin.Kind=="audio"?"似た音声・曲":"似た画像・表紙";
                 var simSummary = result.SimilarityStatus != "ready"
                     ? guidance
                     : result.SearchCandidateTotal is int sc && sc > 0 && result.IndexedTotal == 0
-                    ? $"未索引（対象 {sc:N0}件）"
+                    ? $"未作成（対象 {sc:N0}件）"
                     : result.SearchCandidateTotal == 0
                     ? "対象外（0件）"
                     : $"{result.Total:N0}件の候補";
                 var simSeverity = scopeWarning is not null || result.SimilarityStatus != "ready" || (result.SearchCandidateTotal is int sc2 && (sc2 == 0 || result.IndexedTotal == 0))
                     ? InfoBarSeverity.Warning
                     : InfoBarSeverity.Informational;
-                Notice(originTitle,simSummary+(scopeWarning is null?"":" "+scopeWarning),simSeverity,guidance+(result.SearchComplete?" 選択範囲の索引済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
+                Notice(originTitle,simSummary+(scopeWarning is null?"":" "+scopeWarning),simSeverity,guidance+(result.SearchComplete?" 選択範囲の準備済み作品全体から表示します。":result.CoverageLimit is int similarityLimit?$" 最大{similarityLimit:N0}件の対象から表示します。":""));
             }
             RestoreSelection();ApplyLibrarySelection();
             UpdateFavoriteRootList();startupSearchSucceeded=true;RecordNavigationLocation();UpdateGettingStarted();
@@ -546,7 +561,7 @@ public sealed partial class MainPage : Page
                     if(!folderSettingsActive)Details.IsPaneOpen=false;
                     detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
                     ItemTitle.Text="作品を選んでください";ItemPath.Text="";Tags.Text="";Shelf.Text="";Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";
-                    RenderRows();Count.Text="中断しました";PageNumber.Text="—";Previous.IsEnabled=Next.IsEnabled=false;
+                    RenderRows();Count.Text="中止しました";PageNumber.Text="—";Previous.IsEnabled=Next.IsEnabled=false;
                 }
                 else
                 {
@@ -554,16 +569,16 @@ public sealed partial class MainPage : Page
                     // result. Restore paging to the rows that remain on screen.
                     page=Math.Max(0,browseStart/resultPageSize);
                     Editor.IsEnabled=active is not null;UpdateDirty();
-                    Count.Text=$"{resultSession.Total:N0} 件（移動を中断）";
+                    Count.Text=$"{resultSession.Total:N0} 件（移動を中止）";
                     PageNumber.Text=FormatLoadedPageRange(browseStart,rows.Count,resultSession.Total);
                     Previous.IsEnabled=browseStart>0;Next.IsEnabled=browseStart+rows.Count<resultSession.Total;
                 }
                 if(rows.Count==0)
                 {
                     GettingStarted.Visibility=Visibility.Collapsed;Empty.Visibility=Visibility.Visible;
-                    VisualAssets.State(EmptyArt,"no_results");Empty.Text="検索を中断しました。もう一度「検索」を押してください。";
+                    VisualAssets.State(EmptyArt,"no_results");Empty.Text="検索を中止しました";
                 }
-                Notice("検索中断","検索を中断しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中断しました。");
+                Notice("検索中止","検索を中止しました。",InfoBarSeverity.Informational,"ユーザーの操作により検索処理を中止しました。");
             }
         }
         catch(Exception ex)
@@ -580,11 +595,11 @@ public sealed partial class MainPage : Page
                 Favorite.IsChecked=false;Reviewed.IsChecked=false;EditStatus.Text="";RenderRows();
                 GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,missingAI?"no_results":"error");
                 Empty.Visibility=Visibility.Visible;Count.Text="—";PageNumber.Text="—";Previous.IsEnabled=Next.IsEnabled=false;
-                Empty.Text=ex is ResultSessionException?"検索結果が更新されたか、有効期限が切れました。同じ条件で「検索」を押してください。"
-                    :origin is not null?"類似検索を完了できませんでした。「元の検索に戻る」か、AIの対象範囲を確認してください。"
-                    :missingAI?"AI検索にはモデルと実行環境の設定が必要です。\n名前・タグの文字検索と閲覧は、AIなしでも使えます。"
-                    :selectedMode is >0 and <4 or 7 or 8 or 9?$"この条件ではAI検索を利用できません。\n{ex.Message}\n名前・タグの文字検索に切り替えるか、AI設定を確認してください。"
-                    :"検索を完了できませんでした。検索フォルダや接続状態を確認してください。";
+                Empty.Text=ex is ResultSessionException?"結果の有効期限が切れました。再検索してください"
+                    :origin is not null?"類似検索に失敗しました"
+                    :missingAI?"AIが未設定です（名前・タグ検索は使えます）"
+                    :selectedMode is >0 and <4 or 7 or 8 or 9?$"この条件ではAI検索できません（{ex.Message}）"
+                    :"検索できませんでした";
                 EmptyAIRecovery.Visibility=missingAI?Visibility.Visible:Visibility.Collapsed;
                 EmptyResetConditionsButton.Visibility=!missingAI&&HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
                 if(missingAI){Notice("AIの準備が必要です");AppLog.Error(ex);}
@@ -596,15 +611,13 @@ public sealed partial class MainPage : Page
     internal static string FormatLoadedPageRange(int start,int count,int total)=>count==0?"0件":$"{count:N0}件（{start+1:N0}–{start+count:N0} / 全{total:N0}件）";
     private string EmptyScopeGuidance()
     {
-        if(selectedTagScope is not null)return $"タグ「{selectedTagScope}」に一致する作品はありません。タグの解除や条件の変更をお試しください。";
-        if(Kind.SelectedIndex>0)return "現在の検索範囲・種類に一致する作品はありません。条件を変更してください。";
-        if(selectedShelfIds is not null)return "この棚には作品がありません。作品の詳細で所属する棚を選択できます。";
-        if(selectedSearchRoots is not null)return "選択したフォルダに表示できる作品がありません。一覧の更新や接続状態を確認するか、検索範囲を解除してください。";
-        if(view=="history")return "閲覧履歴はありません。作品を開くと、ここに表示されます。";
-        if(view=="favorites")return knownRoots.Any(root=>root.Enabled&&root.Favorite)
-            ?"お気に入りの作品はまだありません。上のお気に入りフォルダを開くか、作品を右クリックして登録できます。"
-            :"お気に入りはまだありません。作品の右クリックメニューや詳細から登録できます。";
-        return knownRoots.Count>0?"作品がありません。登録フォルダの一覧更新や接続状態を確認してください。":"「登録フォルダ」からフォルダを追加し、一覧を作ってください。";
+        if(selectedTagScope is not null)return $"タグ「{selectedTagScope}」の作品はありません";
+        if(Kind.SelectedIndex>0)return "条件に合う作品はありません";
+        if(selectedShelfIds is not null)return "この棚に作品はありません";
+        if(selectedSearchRoots is not null)return "このフォルダに作品がありません";
+        if(view=="history")return "閲覧履歴はまだありません";
+        if(view=="favorites")return "お気に入りはまだありません（★ で追加できます）";
+        return knownRoots.Count>0?"作品がありません（登録フォルダの一覧を更新してください）":"まだ作品がありません";
     }
     private readonly Dictionary<ListViewItem, Action> containerCleanup = new();
 
@@ -667,7 +680,6 @@ public sealed partial class MainPage : Page
         }
         var parts=new List<string>();
         if(availability.Length>0)parts.Add(availability);
-        if(!tiles&&row.Tags.Length>1)parts.Add("ほかタグ: "+string.Join("、",row.Tags.Skip(1)));
         return row.MatchLabel+string.Join(" · ",parts);
     }
     private Border CreateCardBadge(string text, double maxWidth, string? automationId = null)
@@ -691,23 +703,42 @@ public sealed partial class MainPage : Page
     private void PopulateCardBadges(StackPanel badgeRow, MediaRow row)
     {
         badgeRow.Children.Clear();
-        var maxBadgeTextWidth = tiles ? 96.0 : 140.0;
+        var maxBadgeTextWidth = tiles ? 72.0 : 140.0;
         var kindText = MediaKindFilter.DisplayName(row);
         var labels = new List<string> { kindText };
         badgeRow.Children.Add(CreateCardBadge(kindText, maxBadgeTextWidth, $"ItemKindBadge{row.Id}"));
         var shelves=row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName).Where(name=>!string.IsNullOrWhiteSpace(name)).ToArray():string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf};
         if(shelves.Length>0)
         {
-            var shelfText = "棚:" + ShelfProtocol.SummarizeNames(shelves, maxVisible: 1);
+            var shelfText = "📚 " + ShelfProtocol.SummarizeNames(shelves, maxVisible: 1);
             labels.Add(shelfText);
             badgeRow.Children.Add(CreateCardBadge(shelfText, maxBadgeTextWidth, $"ItemShelfBadge{row.Id}"));
         }
         if(row.Tags.Length>0)
         {
-            var suffix=row.Tags.Length>1?$" +{row.Tags.Length-1}":"";
-            var tagText = "#" + row.Tags[0] + suffix;
-            labels.Add(tagText);
-            badgeRow.Children.Add(CreateCardBadge(tagText, maxBadgeTextWidth, $"ItemTagBadge{row.Id}"));
+            if (tiles)
+            {
+                var suffix = row.Tags.Length > 1 ? $" +{row.Tags.Length - 1}" : "";
+                var tagText = "#" + row.Tags[0] + suffix;
+                labels.Add(tagText);
+                badgeRow.Children.Add(CreateCardBadge(tagText, maxBadgeTextWidth, $"ItemTagBadge{row.Id}"));
+            }
+            else
+            {
+                var visibleCount = Math.Min(row.Tags.Length, 3);
+                for (var i = 0; i < visibleCount; i++)
+                {
+                    var tagText = "#" + row.Tags[i];
+                    labels.Add(tagText);
+                    badgeRow.Children.Add(CreateCardBadge(tagText, maxBadgeTextWidth, i == 0 ? $"ItemTagBadge{row.Id}" : $"ItemTagBadge{row.Id}_{i}"));
+                }
+                if (row.Tags.Length > 3)
+                {
+                    var moreText = $"+{row.Tags.Length - 3}";
+                    labels.Add(moreText);
+                    badgeRow.Children.Add(CreateCardBadge(moreText, maxBadgeTextWidth));
+                }
+            }
         }
         AutomationProperties.SetName(badgeRow, string.Join(" · ", labels));
     }
@@ -745,7 +776,7 @@ public sealed partial class MainPage : Page
         if(row.AIPage is AIPageMatch aiPage){var pimage=new TextBlock {Text=aiPage.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(pimage,$"AIPageEvidence{row.Id}");ToolTipService.SetToolTip(pimage,aiPage.Summary);text.Children.Add(pimage);}
         if(row.PageText is PageTextMatch pageText){var ptext=new TextBlock {Text=pageText.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(ptext,$"PageTextEvidence{row.Id}");ToolTipService.SetToolTip(ptext,pageText.Summary);text.Children.Add(ptext);}
         if(row.Evidence is {AllDirect:false}){var words=new TextBlock {Text=Protocol.DescribeEvidence(row.Evidence),TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(words,$"SearchEvidence{row.Id}");text.Children.Add(words);}
-        var previewStatus = new TextBlock { Text = row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" ? "読込中" : "プレビューなし", Style = (Style)Resources["MediaMetadataStyle"] };
+        var previewStatus = new TextBlock { Text = "", Visibility = Visibility.Collapsed, Style = (Style)Resources["MediaMetadataStyle"] };
         AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
         text.Children.Add(previewStatus);
         if (tiles)
@@ -795,8 +826,8 @@ public sealed partial class MainPage : Page
                 if (cancellation.IsCancellationRequested || disposed || version != thumbnailVersion) return;
                 image.Source = bitmap;
                 placeholder.Visibility=bitmap is null?Visibility.Visible:Visibility.Collapsed;
-                previewStatus.Text = bitmap is null ? "プレビューなし" : "";
-                previewStatus.Visibility = bitmap is null && row.Kind!="audio" ? Visibility.Visible : Visibility.Collapsed;
+                previewStatus.Text = "";
+                previewStatus.Visibility = Visibility.Collapsed;
             }
             catch (OperationCanceledException) { }
         }
@@ -927,18 +958,18 @@ public sealed partial class MainPage : Page
     {
         if(librarySelection.Count>1&&librarySelection.Contains(row.Id))return SelectionMenu();
         var menu=new MenuFlyout();
-        var detailsAction=new MenuFlyoutItem{Text="詳細"};
+        var detailsAction=new MenuFlyoutItem{Text="詳細を開く"};
         AutomationProperties.SetAutomationId(detailsAction,"OpenDetails"+row.Id);
         detailsAction.Click+=async(_,_)=>await OpenRowDetailsAsync(row);
         menu.Items.Add(detailsAction);
-        var favoriteAction=new MenuFlyoutItem{Text=row.Favorite?"お気に入りを解除":"お気に入りに登録"};
+        var favoriteAction=new MenuFlyoutItem{Text=row.Favorite?"☆ お気に入りを解除":"★ お気に入りに追加"};
         AutomationProperties.SetAutomationId(favoriteAction,"ToggleFavorite"+row.Id);
         favoriteAction.Click+=async(_,_)=>await SetFavoriteAsync(row,!row.Favorite);
         menu.Items.Add(favoriteAction);
         if(row.ShelfIds.Length>0)
         {
             var shelfIds=row.ShelfIds.ToArray();
-            var openShelvesAction=new MenuFlyoutItem{Text=shelfIds.Length==1?$"棚「{ShelfName(shelfIds[0])}」を開く":$"所属する棚を開く（{shelfIds.Length:N0} 棚）"};
+            var openShelvesAction=new MenuFlyoutItem{Text=shelfIds.Length==1?$"📚 棚「{ShelfName(shelfIds[0])}」を開く":$"📚 所属する棚を開く（{shelfIds.Length:N0} 棚）"};
             AutomationProperties.SetAutomationId(openShelvesAction,"OpenItemShelves"+row.Id);
             ToolTipService.SetToolTip(openShelvesAction,string.Join("、",shelfIds.Select(ShelfName)));
             openShelvesAction.Click+=async(_,_)=>await OpenShelfScopeAsync(shelfIds);
@@ -950,20 +981,20 @@ public sealed partial class MainPage : Page
             if(itemTags.Length==1)
             {
                 var tag=itemTags[0];
-                var searchTagAction=new MenuFlyoutItem{Text=$"タグ「{tag}」で絞り込む"};
+                var searchTagAction=new MenuFlyoutItem{Text=$"# タグ「{tag}」で絞り込む"};
                 AutomationProperties.SetAutomationId(searchTagAction,$"FilterByItemTag{row.Id}_0");
                 searchTagAction.Click+=async(_,_)=>await FilterByTagAsync(tag);
                 menu.Items.Add(searchTagAction);
             }
             else
             {
-                var tagMenu=new MenuFlyoutSubItem{Text=$"タグで絞り込む（{itemTags.Length:N0} 件）"};
+                var tagMenu=new MenuFlyoutSubItem{Text=$"# タグで絞り込む（{itemTags.Length:N0} 件）"};
                 AutomationProperties.SetAutomationId(tagMenu,$"FilterByItemTags{row.Id}");
                 ToolTipService.SetToolTip(tagMenu,string.Join("、",itemTags));
                 for(var i=0;i<itemTags.Length;i++)
                 {
                     var tag=itemTags[i];
-                    var tagItem=new MenuFlyoutItem{Text=$"「{tag}」で絞り込む"};
+                    var tagItem=new MenuFlyoutItem{Text=$"#{tag}"};
                     AutomationProperties.SetAutomationId(tagItem,$"FilterByItemTag{row.Id}_{i}");
                     tagItem.Click+=async(_,_)=>await FilterByTagAsync(tag);
                     tagMenu.Items.Add(tagItem);
@@ -978,8 +1009,8 @@ public sealed partial class MainPage : Page
             var rangeItem=new MenuFlyoutItem
             {
                 Text=overLimit
-                    ? $"選択起点からここまで選択（{spanCount:N0} 件・上限 {LibrarySelection.Maximum} 件）"
-                    : $"選択起点からここまで選択（{spanCount:N0} 件）",
+                    ? $"ここまで範囲選択（{spanCount:N0} 件・上限 {LibrarySelection.Maximum} 件）"
+                    : $"ここまで範囲選択（{spanCount:N0} 件）",
                 IsEnabled=!overLimit&&!saving&&!dialogOpen&&!preparingSelection&&resultSession is not null&&resultWindow is not null
             };
             AutomationProperties.SetAutomationId(rangeItem,"SelectRangeTo"+row.Id);
@@ -987,29 +1018,33 @@ public sealed partial class MainPage : Page
             menu.Items.Add(rangeItem);
         }
         menu.Items.Add(new MenuFlyoutSeparator());
+        var addedSearchSection=false;
         if(view=="history")
         {
-            var remove=new MenuFlyoutItem{Text="この作品の閲覧履歴を削除…"};AutomationProperties.SetAutomationId(remove,"RemoveHistory"+row.Id);
+            var remove=new MenuFlyoutItem{Text="閲覧履歴から削除…"};AutomationProperties.SetAutomationId(remove,"RemoveHistory"+row.Id);
             remove.Click+=async(_,_)=>await DeleteHistoryAsync(row.Id);menu.Items.Add(remove);
+            addedSearchSection=true;
         }
         if(SimilaritySearch.CanStart(row))
         {
             AddSimilarityMenuItems(menu.Items,row,forDetail:false);
-            menu.Items.Add(new MenuFlyoutSeparator());
+            addedSearchSection=true;
         }
         if(ArchiveManifest.CanOpen(row))
         {
-            var pages=new MenuFlyoutItem {Text="本のページをAI検索に追加…"};AutomationProperties.SetAutomationId(pages,"IndexBookPages"+row.Id);
+            var pages=new MenuFlyoutItem {Text="ページをAI検索データに追加…"};AutomationProperties.SetAutomationId(pages,"IndexBookPages"+row.Id);
             pages.Click+=async(_,_)=>await IndexBookPagesAsync(row);menu.Items.Add(pages);
-            var batch=new MenuFlyoutItem {Text="複数の本をAI検索に追加…"};AutomationProperties.SetAutomationId(batch,"IndexBookBatch"+row.Id);
+            var batch=new MenuFlyoutItem {Text="複数の本をAI検索データに追加…"};AutomationProperties.SetAutomationId(batch,"IndexBookBatch"+row.Id);
             batch.Click+=async(_,_)=>await IndexBookBatchAsync(row);menu.Items.Add(batch);
+            addedSearchSection=true;
         }
-        foreach(var (label,id,explorer) in new[]{("エクスプローラーで表示","ShowInExplorer",true),("既定のアプリで開く","OpenDefault",false)})
+        if(addedSearchSection)menu.Items.Add(new MenuFlyoutSeparator());
+        foreach(var (label,id,explorer) in new[]{("エクスプローラーで開く","ShowInExplorer",true),("既定のアプリで開く","OpenDefault",false)})
         {
             var action=new MenuFlyoutItem{Text=label,IsEnabled=row.Availability=="present"};AutomationProperties.SetAutomationId(action,id+row.Id);
             action.Click+=(_,_)=>OpenInShell(row,explorer);menu.Items.Add(action);
         }
-        var copyPath=new MenuFlyoutItem{Text="ファイルのパスをコピー",IsEnabled=row.Availability=="present"};
+        var copyPath=new MenuFlyoutItem{Text="パスをコピー",IsEnabled=row.Availability=="present"};
         AutomationProperties.SetAutomationId(copyPath,"CopyFilePath"+row.Id);
         copyPath.Click+=(_,_)=>CopyFilePath(row);menu.Items.Add(copyPath);
         return menu;
@@ -1020,33 +1055,33 @@ public sealed partial class MainPage : Page
         var prefix=forDetail?"DetailFindSimilar":"FindSimilar";
         if(row.Kind=="video")
         {
-            var content=new MenuFlyoutItem{Text="内容が似た動画を探す"};
+            var content=new MenuFlyoutItem{Text="場面が似た動画を探す"};
             AutomationProperties.SetAutomationId(content,prefix+"VideoContent"+suffix);
-            ToolTipService.SetToolTip(content,"作成済みの動画内容索引を使い、似た場面・動きの動画を探します。");
+            ToolTipService.SetToolTip(content,"作成済みの動画AI検索データから似た場面・動きを探します。");
             content.Click+=async(_,_)=>await StartSimilarityAsync(row,directVideo:true);
             target.Add(content);
             var audioContent=new MenuFlyoutItem{Text="音が似た動画を探す"};
             AutomationProperties.SetAutomationId(audioContent,prefix+"VideoAudio"+suffix);
-            ToolTipService.SetToolTip(audioContent,"準備済みの動画内音声の索引を使います。映像・音声ファイルの類似検索とは別です。");
+            ToolTipService.SetToolTip(audioContent,"動画内音声のAI検索データを使います（映像の類似検索とは別です）。");
             audioContent.Click+=async(_,_)=>await StartSimilarityAsync(row,directVideoAudio:true);
             target.Add(audioContent);
         }
         else if(row.Kind=="audio")
         {
-            var content=new MenuFlyoutItem{Text="内容が似た音声・曲を探す"};
+            var content=new MenuFlyoutItem{Text="似た曲・音声を探す"};
             AutomationProperties.SetAutomationId(content,prefix+"AudioContent"+suffix);
-            ToolTipService.SetToolTip(content,"作成済みの音声内容索引（AI）を使い、内容が似た音声・曲を探します。");
+            ToolTipService.SetToolTip(content,"音声のAI検索データを使い、内容が似た曲・音声を探します。");
             content.Click+=async(_,_)=>await StartSimilarityAsync(row,directAudio:true);
             target.Add(content);
         }
         var fallbackId=forDetail
             ? (row.Kind=="video"?"DetailFindSimilarVideoVisual":row.Kind=="audio"?"DetailFindSimilarAudioVisual":"DetailFindSimilarVisual")
             : ("FindSimilar"+suffix);
-        var fallbackText=row.Kind=="video"?"似た動画・素材を探す":row.Kind=="audio"?"音の響き・音響が似た音声・曲を探す":"似た画像・素材を探す";
+        var fallbackText=row.Kind=="video"?"見た目が似た動画を探す":row.Kind=="audio"?"音の響きが似た曲を探す":"似た画像・素材を探す";
         var search=new MenuFlyoutItem{Text=fallbackText};
         AutomationProperties.SetAutomationId(search,fallbackId);
         if(row.Kind=="video")ToolTipService.SetToolTip(search,"代表フレームの見た目から似た動画・素材を探します。");
-        else if(row.Kind=="audio")ToolTipService.SetToolTip(search,"AI索引を使わず、音声・音楽の音響特徴から似た候補を探します。");
+        else if(row.Kind=="audio")ToolTipService.SetToolTip(search,"AI検索データを使わず、音の響き・音響特徴から似た候補を探します。");
         search.Click+=async(_,_)=>await StartSimilarityAsync(row);
         target.Add(search);
     }
@@ -1202,14 +1237,14 @@ public sealed partial class MainPage : Page
         if(blocked)
         {
             revertStatusActive=false;
-            EditStatus.Text="承認後のタグを確認できません。AIタグ候補を開き直してください。";
+            EditStatus.Text="タグを確認できません。AI候補を開き直してください";
             Save.IsEnabled=false;
             RevertEditsButton.Visibility=Visibility.Collapsed;
             RevertEditsButton.IsEnabled=false;
             return;
         }
         if(Dirty)revertStatusActive=false;
-        EditStatus.Text=Dirty?"未保存の変更":revertStatusActive?"未保存の変更を取り消しました":"保存済み";
+        EditStatus.Text=Dirty?"● 未保存の変更":revertStatusActive?"変更を取り消しました":"";
         Save.IsEnabled=active is not null&&Dirty&&!saving;
         var canRevert=active is not null&&Dirty&&!saving;
         RevertEditsButton.Visibility=canRevert?Visibility.Visible:Visibility.Collapsed;
@@ -1229,11 +1264,11 @@ public sealed partial class MainPage : Page
         OpenAudio.IsEnabled=active is not null&&AudioPlayerPolicy.CanOpen(active);
         DetailAvailabilityHint.Text=active is null?"":active.Availability!="present"
             ?active.Availability=="missing"
-                ?"元ファイルが見つかりません。登録フォルダの接続やファイルの場所を確認してください。登録済みのタグや棚は残っています。"
-                :"元ファイルにアクセスできません。登録フォルダの接続や更新状態を確認してください。登録済みのタグや棚は残っています。"
+                ?"⚠ 元ファイルが見つかりません（タグ・棚は保持）"
+                :"⚠ 元ファイルにアクセスできません（タグ・棚は保持）"
             :active.Kind is "image" or "book" or "archive" or "video" or "audio"&&
                 !OpenImage.IsEnabled&&!OpenBook.IsEnabled&&!OpenVideo.IsEnabled&&!OpenAudio.IsEnabled
-                ?"この形式はアプリ内で開けません。「ファイルのプロパティ」から保存場所を開けます。":"";
+                ?"アプリ内では開けない形式です（ファイル情報から場所を開けます）":"";
         DetailAvailabilityHint.Visibility=DetailAvailabilityHint.Text.Length>0?Visibility.Visible:Visibility.Collapsed;
         // Describe the same match passed to the reader/player. The viewer still
         // checks the current source revision or available playback duration.
@@ -1244,14 +1279,14 @@ public sealed partial class MainPage : Page
             var matchState=book.AIPage?.SourceState??book.PageText?.SourceState;
             if(matchPage is int page)
                 DetailOpenHint.Text=matchState=="current"
-                    ?$"一致した {page+1:N0} ページを開きます。元ファイルが変わっていた場合は、読書位置を復元します。"
-                    :"一致ページの元ファイルを確認できないため、読書位置を復元します。";
+                    ?$"{page+1:N0} ページ目を開きます"
+                    :"読書位置を復元して開きます";
         }
         else if(active is {Kind: "video" or "audio"} media)
         {
             var matchMs=media.Kind=="video"?VideoPlayerPolicy.MatchStartMs(media):media.AudioMatchMs??media.VideoMatchMs;
             if(matchMs is int ms)
-                DetailOpenHint.Text=$"一致した {VideoPlayerPolicy.FormatTime(TimeSpan.FromMilliseconds(ms))} から再生します（再生可能な範囲内）。";
+                DetailOpenHint.Text=$"{VideoPlayerPolicy.FormatTime(TimeSpan.FromMilliseconds(ms))} から再生します";
         }
         DetailOpenHint.Visibility=DetailOpenHint.Text.Length>0?Visibility.Visible:Visibility.Collapsed;
         var evidence=new List<string>();
@@ -1278,38 +1313,21 @@ public sealed partial class MainPage : Page
         {
             if(simRow.Kind is "video" or "audio")
             {
-                DetailFindSimilarButton.Content=simRow.Kind=="video"?"似た動画を探す…":"似た音声・曲を探す…";
+                DetailFindSimilarButton.Content=simRow.Kind=="video"?"≈ 似た動画…":"≈ 似た音声…";
                 var simFlyout=new MenuFlyout();
                 AddSimilarityMenuItems(simFlyout.Items,simRow,forDetail:true);
                 DetailFindSimilarButton.Flyout=simFlyout;
             }
             else
             {
-                DetailFindSimilarButton.Content="似た画像・素材を探す";
+                DetailFindSimilarButton.Content="≈ 似た作品";
                 DetailFindSimilarButton.Flyout=null;
             }
         }
         else DetailFindSimilarButton.Flyout=null;
-        var activeTags=active?.Tags??[];
-        var hasActiveTags=activeTags.Length>0;
-        FilterByActiveTagButton.Visibility=hasActiveTags?Visibility.Visible:Visibility.Collapsed;
-        FilterByActiveTagButton.IsEnabled=hasActiveTags&&!saving&&tagReviewSyncItem!=active?.Id;
-        FilterByActiveTagButton.Content=activeTags.Length==1?$"タグ「{activeTags[0]}」で絞り込む":$"このタグで絞り込む（{activeTags.Length:N0} 件）…";
-        ToolTipService.SetToolTip(FilterByActiveTagButton,hasActiveTags?$"この作品の確定タグで一覧を絞り込みます（{string.Join("、",activeTags)}）":"この作品の確定タグで一覧を絞り込みます");
-        if(hasActiveTags)
-        {
-            var tagFlyout=new MenuFlyout();
-            for(var i=0;i<activeTags.Length;i++)
-            {
-                var tag=activeTags[i];
-                var tagItem=new MenuFlyoutItem{Text=$"「{tag}」で絞り込む"};
-                AutomationProperties.SetAutomationId(tagItem,$"FilterByActiveTag{i}");
-                tagItem.Click+=async(_,_)=>await FilterByTagAsync(tag);
-                tagFlyout.Items.Add(tagItem);
-            }
-            FilterByActiveTagButton.Flyout=tagFlyout;
-        }
-        else FilterByActiveTagButton.Flyout=null;
+        FilterByActiveTagButton.Visibility=Visibility.Collapsed;
+        FilterByActiveTagButton.IsEnabled=false;
+        FilterByActiveTagButton.Flyout=null;
 
         ActiveTagChipsPanel.Children.Clear();
         var draftTags=active is null?[]:Current().ParsedTags;
@@ -1318,31 +1336,65 @@ public sealed partial class MainPage : Page
         if(hasDraftTags)
         {
             var canEditDraft=active is not null&&!saving&&tagReviewSyncItem!=active.Id;
-            for(var i=0;i<draftTags.Length;i+=2)
+            var maxRowWidth=ActiveTagChipsScroll.ActualWidth>60
+                ? ActiveTagChipsScroll.ActualWidth-4
+                : Math.Max(180,Details.OpenPaneLength-56);
+            var chipRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=6};
+            double rowWidth=0;
+            for(var i=0;i<draftTags.Length;i++)
             {
-                var chipRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4};
-                for(var j=i;j<Math.Min(i+2,draftTags.Length);j++)
+                var index=i;
+                var tag=draftTags[index];
+                var chipLabel=new TextBlock{Text="#"+tag,MaxWidth=140,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center,Style=(Style)Resources["MediaMetadataStyle"]};
+                var tagBtn=new Button
                 {
-                    var index=j;
-                    var tag=draftTags[index];
-                    var chipText=new TextBlock{Text="#"+tag,MaxWidth=110,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center,Style=(Style)Resources["MediaMetadataStyle"]};
-                    var removeBtn=new Button{Content="×",Padding=new Thickness(4,0,4,0),MinWidth=0,MinHeight=0,IsEnabled=canEditDraft};
-                    ToolTipService.SetToolTip(removeBtn,$"タグ「{tag}」を外す");
-                    AutomationProperties.SetAutomationId(removeBtn,$"RemoveDraftTag{index}");
-                    AutomationProperties.SetName(removeBtn,$"タグ「{tag}」を外す");
-                    removeBtn.Click+=(_,_)=>
-                    {
-                        if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id)return;
-                        Tags.Text=string.Join(", ",Current().ParsedTags.Where(existing=>existing!=tag));
-                        Tags.Focus(FocusState.Programmatic);
-                    };
-                    var chipInner=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4};
-                    chipInner.Children.Add(chipText);
-                    chipInner.Children.Add(removeBtn);
-                    chipRow.Children.Add(new Border{Style=(Style)Resources["CardBadgeBorderStyle"],Child=chipInner});
+                    Content=chipLabel,
+                    Padding=new Thickness(6,2,4,2),
+                    MinWidth=0,
+                    MinHeight=0,
+                    Background=new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderThickness=new Thickness(0)
+                };
+                ToolTipService.SetToolTip(tagBtn,$"「{tag}」で一覧を絞り込む");
+                AutomationProperties.SetAutomationId(tagBtn,$"DraftTagChip{index}");
+                AutomationProperties.SetName(tagBtn,$"タグ「{tag}」で絞り込む");
+                tagBtn.Click+=async(_,_)=>await FilterByTagAsync(tag);
+                var removeBtn=new Button
+                {
+                    Content="×",
+                    Padding=new Thickness(4,1,4,1),
+                    MinWidth=0,
+                    MinHeight=0,
+                    Background=new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderThickness=new Thickness(0),
+                    IsEnabled=canEditDraft
+                };
+                ToolTipService.SetToolTip(removeBtn,$"タグ「{tag}」を外す");
+                AutomationProperties.SetAutomationId(removeBtn,$"RemoveDraftTag{index}");
+                AutomationProperties.SetName(removeBtn,$"タグ「{tag}」を外す");
+                removeBtn.Click+=(_,_)=>
+                {
+                    if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id)return;
+                    Tags.Text=string.Join(", ",Current().ParsedTags.Where(existing=>existing!=tag));
+                    Tags.Focus(FocusState.Programmatic);
+                };
+                var chipInner=new StackPanel{Orientation=Orientation.Horizontal,Spacing=2};
+                chipInner.Children.Add(tagBtn);
+                chipInner.Children.Add(removeBtn);
+                var chip=new Border{Style=(Style)Resources["CardBadgeBorderStyle"],Padding=new Thickness(2),Child=chipInner};
+                chip.Measure(new Windows.Foundation.Size(double.PositiveInfinity,double.PositiveInfinity));
+                var chipWidth=chip.DesiredSize.Width;
+                if(chipRow.Children.Count>0&&rowWidth+6+chipWidth>maxRowWidth)
+                {
+                    ActiveTagChipsPanel.Children.Add(chipRow);
+                    chipRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=6};
+                    rowWidth=0;
                 }
-                ActiveTagChipsPanel.Children.Add(chipRow);
+                if(chipRow.Children.Count>0)rowWidth+=6;
+                chipRow.Children.Add(chip);
+                rowWidth+=chipWidth;
             }
+            if(chipRow.Children.Count>0)ActiveTagChipsPanel.Children.Add(chipRow);
         }
 
         var candidateTags=active is null?[]:rows.SelectMany(row=>row.Tags).Where(t=>!string.IsNullOrWhiteSpace(t)).Distinct().Where(t=>!draftTags.Contains(t)).Take(25).ToArray();
@@ -1371,6 +1423,14 @@ public sealed partial class MainPage : Page
     }
     private async void Tags_KeyDown(object sender,KeyRoutedEventArgs e)
     {
+        if(IsUnmodifiedEnter(e)&&ready&&!disposed&&!saving&&!dialogOpen)
+        {
+            e.Handled=true;
+            var normalized=string.Join(", ",Current().ParsedTags);
+            if(Tags.Text!=normalized)Tags.Text=normalized;
+            Tags.SelectionStart=Tags.Text.Length;
+            return;
+        }
         if(e.Key==Windows.System.VirtualKey.Enter&&SelectionKey(Windows.System.VirtualKey.Control)&&!SelectionKey(Windows.System.VirtualKey.Shift)&&!SelectionKey(Windows.System.VirtualKey.Menu)
            &&ready&&!disposed&&!saving&&!dialogOpen&&Dirty&&tagReviewSyncItem!=active?.Id)
         {
@@ -1501,10 +1561,10 @@ public sealed partial class MainPage : Page
         try {
             await api.SaveAsync(id,snapshot);
             saved=snapshot;active.Tags=snapshot.ParsedTags;active.Shelf=snapshot.Shelf;active.ShelfIds=snapshot.ShelfIds?.ToArray()??[];active.Favorite=snapshot.Favorite;active.Reviewed=snapshot.Reviewed;
-            EditStatus.Text="保存済み・一覧を更新しています…";await RefreshResultRowsAfterEditAsync();
-            EditStatus.Text=resultsNeedRefresh?"保存済みです。一覧を検索し直してください。":"保存しました";
+            EditStatus.Text="保存しました（一覧を更新中…）";await RefreshResultRowsAfterEditAsync();
+            EditStatus.Text=resultsNeedRefresh?"保存しました（再検索してください）":"✓ 保存しました";
             if(!resultsNeedRefresh)Notice("保存しました");
-        }catch(Exception ex){Failure(ex);EditStatus.Text="保存できませんでした。変更内容は残っています。";}
+        }catch(Exception ex){Failure(ex);EditStatus.Text="保存できませんでした（編集内容は残っています）";}
         finally
         {
             var unchangedFocus=ReferenceEquals(displacedFocus,FocusManager.GetFocusedElement(XamlRoot));
@@ -1571,7 +1631,7 @@ public sealed partial class MainPage : Page
         var flyout=new MenuFlyout();
         if(selectedTagScope is not null)
         {
-            var clearItem=new MenuFlyoutItem{Text="タグ絞り込みを解除"};
+            var clearItem=new MenuFlyoutItem{Text="タグの絞り込みを解除"};
             AutomationProperties.SetAutomationId(clearItem,"BrowseTagClear");
             clearItem.Click+=(s,e)=>ClearTagScope_Click(s,e);
             flyout.Items.Add(clearItem);
@@ -1579,7 +1639,7 @@ public sealed partial class MainPage : Page
         }
         if(rankedTags.Length>0)
         {
-            var headerItem=new MenuFlyoutItem{Text="読み込み済みの作品で多いタグ",IsEnabled=false};
+            var headerItem=new MenuFlyoutItem{Text="よく使われるタグ",IsEnabled=false};
             AutomationProperties.SetAutomationId(headerItem,"BrowseTagsHeader");
             flyout.Items.Add(headerItem);
         }
@@ -1626,6 +1686,7 @@ public sealed partial class MainPage : Page
             try
             {
                 queryComposing=false;
+                CloseSettingsHubCore();
                 CloseShelfHubCore();
                 CloseFolderHubCore();
                 SetTagScope(tag);
@@ -1692,6 +1753,9 @@ public sealed partial class MainPage : Page
                 if(view=="unreviewed")view="all";
                 SimilarityBoundary.Value=double.NaN;
                 AIResultGroup.SelectedIndex=0;
+                CloseSettingsHubCore();
+                CloseShelfHubCore();
+                CloseFolderHubCore();
                 SetShelfScope(null);
                 SetTagScope(null);
                 RestoreSearchRoots(null);
@@ -1732,11 +1796,33 @@ public sealed partial class MainPage : Page
         similarityCancellation.Cancel();
     }
     private void CancelSearchShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs e){if(Busy.Visibility==Visibility.Visible||searchTimer.IsRunning){e.Handled=true;searchTimer.Stop();similarityCancellation?.Cancel();}else if(Details.IsPaneOpen&&!folderSettingsActive){e.Handled=true;Details.IsPaneOpen=false;}}
+    private void SearchCategoryText_Click(object sender,RoutedEventArgs e)
+    {
+        if(!ready||populating)return;
+        if(SearchMode.SelectedIndex is not (0 or 4 or 5))
+            SearchMode.SelectedIndex=lastTextSearchMode is 0 or 4 or 5?lastTextSearchMode:0;
+    }
+    private void SearchCategoryAI_Click(object sender,RoutedEventArgs e)
+    {
+        if(!ready||populating)return;
+        if(SearchMode.SelectedIndex is 0 or 4 or 5)
+            SearchMode.SelectedIndex=lastAISearchMode is not (0 or 4 or 5)?lastAISearchMode:1;
+    }
     private void UpdateSearchMethod()
     {
         // SelectionChanged also runs during initialization and dirty-state rollback.
         if(Query is null || Kind is null || SearchMethodHint is null || SimilarityBar is null || SimilarityTitle is null)return;
-        var method=SearchMethod.FromIndex(Math.Clamp(SearchMode.SelectedIndex,0,9));
+        var modeIndex=Math.Clamp(SearchMode.SelectedIndex,0,9);
+        var method=SearchMethod.FromIndex(modeIndex);
+        var isAIMode=modeIndex is not (0 or 4 or 5);
+        if(isAIMode)lastAISearchMode=modeIndex;
+        else lastTextSearchMode=modeIndex;
+        var accent=ThemeStyle("AccentButtonStyle");
+        if(SearchCategoryTextButton is not null)SearchCategoryTextButton.Style=isAIMode?null:accent;
+        if(SearchCategoryAIButton is not null)SearchCategoryAIButton.Style=isAIMode?accent:null;
+        for(var i=0;i<SearchMode.Items.Count;i++)
+            if(SearchMode.Items[i] is ComboBoxItem option)
+                option.Visibility=(i is not (0 or 4 or 5))==isAIMode?Visibility.Visible:Visibility.Collapsed;
         SearchMode.IsEnabled=view!="history";
         var similar=similarityOrigin is not null;
         SimilarityBar.Visibility=similar?Visibility.Visible:Visibility.Collapsed;
@@ -1760,7 +1846,7 @@ public sealed partial class MainPage : Page
         SimilarityBoundary.Visibility=!similar&&SearchMode.SelectedIndex is 2 or 3?Visibility.Visible:Visibility.Collapsed;
         AIResultGroup.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
         AIMatchedOnly.Visibility=ai?Visibility.Visible:Visibility.Collapsed;
-        Query.PlaceholderText=method.IsTagSemantic?"例：青髪のツインテール（未承認タグの意味）":pageText?"ページ内の文字を入力":candidates?"未承認の候補タグ名で絞り込み（空欄で全未承認候補）":method.IsAI?"探したい内容を文章で入力":"名前・タグを検索（Ctrl+F）";
+        Query.PlaceholderText=method.IsTagSemantic?"例：青髪のツインテール（AIタグ候補の意味）":pageText?"ページ内の文字を入力":candidates?"AIタグ候補の文字を入力（空欄で全件）":method.IsAI?"覚えている内容を文章で（例：夕焼けの海）":"名前・タグで検索（Ctrl+F）";
         SearchMethodHint.Text=similar?(directVideoAudioSimilarity?"保存済みの動画内音声から、音の特徴が似た動画を探しています。一致区間から再生できます。検索語の入力や「検索」で通常の検索に戻ります。":directVideoSimilarity?"作成済みの動画データから内容が似た候補を探しています。動画内の音は対象外です。検索語の入力や「検索」で通常の検索に戻ります。":directAudioSimilarity?"作成済みの音声の内容・特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="video"?"動画の代表場面から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":similarityOrigin?.Kind=="audio"?"音声・音楽の音響特徴から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。":"画像・表紙の見た目から似た候補を探しています。検索語の入力や「検索」で通常の検索に戻ります。"):SearchModeDescription(SearchMode.SelectedIndex);
         ToolTipService.SetToolTip(SearchMode,SearchMethodHint.Text);
         AutomationProperties.SetHelpText(SearchMode,SearchMethodHint.Text);
@@ -1798,7 +1884,9 @@ public sealed partial class MainPage : Page
     private void RestoreNavigation()
     {
         populating=true;
-        Nav.SelectedItem=folderHubOpen
+        Nav.SelectedItem=settingsHubOpen
+            ? (currentSettingsCategory=="ai"?NavAIStatus:SettingsNavItem)
+            : folderHubOpen
             ? FolderNavigation
             : shelfHubOpen||selectedShelfIds is not null
             ? Nav.MenuItems.OfType<NavigationViewItem>().First(x=>x.Tag?.ToString()=="shelf")
@@ -1813,6 +1901,8 @@ public sealed partial class MainPage : Page
         if(!ready||populating||args.SelectedItem is not NavigationViewItem item)return;
         CloseBrowseMenus();
         var next=item.Tag?.ToString()??"";
+        if(next=="settings"){await OpenSettingsAsync("all");return;}
+        if(next=="ai"){await OpenSettingsAsync("ai");return;}
         if(next=="folders"){await OpenFolderHubAsync();return;}
         if(next=="shelf"){await OpenShelfHubAsync();return;}
         if(next is not ("all" or "favorites" or "unreviewed" or "shelf" or "history"))return;
@@ -1820,7 +1910,7 @@ public sealed partial class MainPage : Page
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
-            CloseShelfHubCore();SetShelfScope(null);
+            CloseSettingsHubCore();CloseShelfHubCore();SetShelfScope(null);
             CloseFolderHubCore();
             populating=true;
             if(next=="history"){historyReturnMode=SearchMode.SelectedIndex;SearchMode.SelectedIndex=0;}
@@ -1830,15 +1920,28 @@ public sealed partial class MainPage : Page
         }
         finally { transitions.Release();if((PendingSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();} }
     }
-    private void Layout_Click(object sender,RoutedEventArgs e)
+    private void UpdateLayoutToggleVisuals()
     {
-        if(extending||saving||dialogOpen)return;
-        try{ViewerOptions.SaveLibraryView(!tiles);}
+        var accent=ThemeStyle("AccentButtonStyle");
+        if(LayoutButton is not null)LayoutButton.Style=tiles?null:accent;
+        if(LayoutGridButton is not null)LayoutGridButton.Style=tiles?accent:null;
+        if(ShelfLayoutButton is not null)ShelfLayoutButton.Style=tiles?null:accent;
+        if(ShelfLayoutGridButton is not null)ShelfLayoutGridButton.Style=tiles?accent:null;
+        if(FolderLayoutButton is not null)FolderLayoutButton.Style=folderTiles?null:accent;
+        if(FolderLayoutGridButton is not null)FolderLayoutGridButton.Style=folderTiles?accent:null;
+    }
+    private void SetLibraryTiles(bool nextTiles)
+    {
+        if(tiles==nextTiles||extending||saving||dialogOpen)return;
+        try{ViewerOptions.SaveLibraryView(nextTiles);}
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
         {Notice("表示方法を保存できません",ex.Message,InfoBarSeverity.Warning);AppLog.Error(ex);return;}
-        CloseBrowseMenus();tiles=!tiles;LayoutButton.Content=ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
+        CloseBrowseMenus();tiles=nextTiles;UpdateLayoutToggleVisuals();
         if(shelfHubOpen)RenderShelfLayout();else ReflowBrowse(()=>{RenderRows();RestoreSelection();});
     }
+    private void LayoutList_Click(object sender,RoutedEventArgs e)=>SetLibraryTiles(false);
+    private void LayoutGrid_Click(object sender,RoutedEventArgs e)=>SetLibraryTiles(true);
+    private void Layout_Click(object sender,RoutedEventArgs e)=>SetLibraryTiles(!tiles);
     private void OpenDetails_Click(object sender,RoutedEventArgs e)
     {
         if(folderHubOpen)
@@ -2204,7 +2307,7 @@ public sealed partial class MainPage : Page
     {
         if(Details is null||LibraryLayout is null)return;
         var compact=ActualWidth<1100||ActualHeight<820;
-        if(DetailPreview is not null)DetailPreview.Height=ActualHeight<760?112:compact?136:160;
+        if(DetailPreview is not null)DetailPreview.Height=ActualHeight<760?140:compact?172:200;
         var gap=Details.IsPaneOpen&&Details.DisplayMode==SplitViewDisplayMode.Inline?16:0;
         if(LibraryLayout.Margin.Right!=gap)LibraryLayout.Margin=new Thickness(0,0,gap,0);
         // Overlay panes must also occlude the content at their outer edge;
@@ -2219,6 +2322,7 @@ public sealed partial class MainPage : Page
         SelectionSummaryScroll.Visibility=Visibility.Collapsed;
         folderSettingsActive=false;folderDraft=null;
         DetailPaneTitle.Text="詳細と整理";
+        DetailPaneTitle.Visibility=Visibility.Collapsed;
         FolderEditorPanel.Visibility=Visibility.Collapsed;
         Editor.Visibility=Visibility.Visible;
     }
@@ -2228,8 +2332,7 @@ public sealed partial class MainPage : Page
         if(emptyLibraryScanJob is null)scanPollTimer.Stop();
         folderHubOpen=false;
         ToolTipService.SetToolTip(Count,null);
-        MainViewTitle.Text="ライブラリ";
-        RootsButton.Content="登録フォルダ";
+        UpdateLibraryHeading();
         FolderHubView.Visibility=Visibility.Collapsed;
         ItemSearchRow.Visibility=Visibility.Visible;
         SearchTools.Visibility=Visibility.Visible;
@@ -2280,7 +2383,7 @@ public sealed partial class MainPage : Page
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
-            CloseBrowseMenus();CloseShelfHubCore();
+            CloseBrowseMenus();CloseSettingsHubCore();CloseShelfHubCore();
             await RefreshSearchRootsAsync();
             if(checkedFolderIds.Count==0&&selectedSearchRoots is not null)
                 foreach(var id in selectedSearchRoots.Where(id=>knownRoots.Any(r=>r.Enabled&&r.Id==id)))
@@ -2288,12 +2391,12 @@ public sealed partial class MainPage : Page
             folderHubOpen=true;
             await PollScanStateAsync();
             MainViewTitle.Text="登録フォルダ";
-            RootsButton.Content="作品一覧へ戻る";
             ItemSearchRow.Visibility=Visibility.Collapsed;
             SearchTools.Visibility=Visibility.Collapsed;
             ItemListContainer.Visibility=Visibility.Collapsed;
             ItemPagerRow.Visibility=Visibility.Collapsed;
             FolderHubView.Visibility=Visibility.Visible;
+            UpdateLayoutToggleVisuals();
             RestoreNavigation();
             RenderFolderHub();
             scanPollTimer.Start();
@@ -2365,7 +2468,7 @@ public sealed partial class MainPage : Page
 
     private async void AddRoot_Click(object sender,RoutedEventArgs e)
     {
-        AddRoot.IsEnabled=false;FolderRegistrationEditor.IsEnabled=false;AddRoot.Content="登録しています…";
+        AddRoot.IsEnabled=false;FolderRegistrationEditor.IsEnabled=false;AddRoot.Content="追加しています…";
         var addedIds = new List<int>();
         var errors = new List<string>();
         var failedPaths = new List<string>();
@@ -2422,7 +2525,7 @@ public sealed partial class MainPage : Page
             OpenFolderSettingsPanel(addedIds);
             await PromptPostRegistrationScanAsync(addedIds);
             if(errors.Count>0)
-                Notice("一部のフォルダを登録できませんでした",$"{addedIds.Count} 件を登録、{failedPaths.Count} 件は未登録です。入力欄に残したフォルダを確認して再試行してください。{string.Join(" / ",errors)}",InfoBarSeverity.Warning);
+                Notice("一部のフォルダを追加できませんでした",$"{addedIds.Count}件追加・{failedPaths.Count}件失敗",InfoBarSeverity.Warning,string.Join("\n",errors));
         }
         catch(Exception ex)
         {
@@ -2431,10 +2534,10 @@ public sealed partial class MainPage : Page
             else
             {
                 AppLog.Error(ex);
-                Notice("登録後の処理を完了できませんでした",$"{addedIds.Count} 件の登録内容は保存されています。未登録は {failedPaths.Count} 件です。{string.Join(" / ",errors)} 画面更新・スキャンの準備に失敗しました: {ex.Message}",InfoBarSeverity.Warning);
+                Notice("追加後の処理に失敗しました",$"{addedIds.Count}件追加済み・{failedPaths.Count}件失敗",InfoBarSeverity.Warning,$"{string.Join(" / ",errors)}\n{ex.Message}");
             }
         }
-        finally{AddRoot.IsEnabled=true;FolderRegistrationEditor.IsEnabled=true;AddRoot.Content="登録";}
+        finally{AddRoot.IsEnabled=true;FolderRegistrationEditor.IsEnabled=true;AddRoot.Content="追加";}
     }
 
     private void PrefillRestoreRoot(RegisteredRootRow row)
@@ -2470,7 +2573,7 @@ public sealed partial class MainPage : Page
         var ids=FilteredFolders().Where(root=>root.Enabled).Select(root=>root.Id).ToArray();
         if(checkedFolderIds.Count+ids.Count(id=>!checkedFolderIds.Contains(id))>FolderSearch.MaxRoots)
         {
-            Notice("選択できる数を超えています",$"フォルダは最大 {FolderSearch.MaxRoots} 件まで選択できます。表示対象を絞り込んでください。",InfoBarSeverity.Warning);
+            Notice("選択上限を超えています",$"選択できるのは最大 {FolderSearch.MaxRoots} 件です",InfoBarSeverity.Warning);
             return;
         }
         checkedFolderIds.UnionWith(ids);RenderFolderHub();
@@ -2486,12 +2589,16 @@ public sealed partial class MainPage : Page
         if(!ready||!folderHubOpen||saving||dialogOpen||folderPopulating)return;
         checkedFolderIds.Clear();RenderFolderHub();
     }
-    private void FolderLayout_Click(object sender,RoutedEventArgs e)
+    private void SetFolderTiles(bool nextTiles)
     {
-        folderTiles=!folderTiles;
-        FolderLayoutButton.Content=folderTiles?"リスト表示":"グリッド表示";
+        if(folderTiles==nextTiles)return;
+        folderTiles=nextTiles;
+        UpdateLayoutToggleVisuals();
         RenderFolderHub();
     }
+    private void FolderLayoutList_Click(object sender,RoutedEventArgs e)=>SetFolderTiles(false);
+    private void FolderLayoutGrid_Click(object sender,RoutedEventArgs e)=>SetFolderTiles(true);
+    private void FolderLayout_Click(object sender,RoutedEventArgs e)=>SetFolderTiles(!folderTiles);
 
     private IReadOnlyList<RegisteredRootRow> FilteredFolders()
     {
@@ -2509,16 +2616,16 @@ public sealed partial class MainPage : Page
         try
         {
             var visible=FilteredFolders();
-            Count.Text=$"表示 {visible.Count:N0} / 全 {knownRoots.Count:N0} フォルダ";
-            ToolTipService.SetToolTip(Count,"表示中の件数 / 解除済みを含む保存済みフォルダの総数");
+            Count.Text=$"{visible.Count:N0} / {knownRoots.Count:N0} フォルダ";
+            ToolTipService.SetToolTip(Count,"表示中 / 登録履歴の合計フォルダ数");
             var hasNameFilter=!string.IsNullOrWhiteSpace(FolderFilterBox.Text);
             var state=FolderStateFilter.SelectedIndex;
             ClearFolderFilters.Visibility=FolderFilterBox.Text.Length>0||state!=0?Visibility.Visible:Visibility.Collapsed;
             FolderEmpty.Text=knownRoots.Count==0
-                ? "登録フォルダはありません。「フォルダを追加」から登録できます。"
+                ? "ここにフォルダをドロップ、または［＋ フォルダを追加］"
                 : !hasNameFilter&&state==0&&!knownRoots.Any(root=>root.Enabled)
-                    ? "登録中のフォルダはありません。解除済みのフォルダは表示状態から確認できます。"
-                    : "条件に一致するフォルダはありません。絞り込みを解除して確認できます。";
+                    ? "登録中のフォルダはありません"
+                    : "該当するフォルダはありません";
             FolderList.Items.Clear();
             FolderList.ItemsPanel=(ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(folderTiles
                 ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1\"/></ItemsPanelTemplate>"
@@ -2625,13 +2732,13 @@ public sealed partial class MainPage : Page
                 favoriteMenu.Click+=async(_,_)=>await SetRootFavoriteAsync(row,!row.Favorite);menu.Items.Add(favoriteMenu);
                 if(row.Enabled)
                 {
-                    var manageItem=new MenuFlyoutItem {Text="設定・初期棚・スキャン"};
+                    var manageItem=new MenuFlyoutItem {Text="フォルダの設定"};
                     AutomationProperties.SetAutomationId(manageItem,$"ManageRoot{row.Id}");
                     manageItem.Click+=async(_,_)=>await SelectFolderForSettingsAsync(new[]{row.Id},false);
                     var browseItem=new MenuFlyoutItem {Text="フォルダを開く"};
                     AutomationProperties.SetAutomationId(browseItem,$"BrowseRoot{row.Id}");
                     browseItem.Click+=async(_,_)=>await ReturnToLibraryAsync(new[]{row.Id});
-                    var toggleItem=new MenuFlyoutItem {Text=checkedFolderIds.Contains(row.Id)?"今回の検索対象から外す":"今回の検索対象に含める"};
+                    var toggleItem=new MenuFlyoutItem {Text=checkedFolderIds.Contains(row.Id)?"選択から外す":"選択に含める"};
                     AutomationProperties.SetAutomationId(toggleItem,$"ToggleSearchRoot{row.Id}");
                     toggleItem.Click+=(_,_)=>{if(checkedFolderIds.Contains(row.Id))checkedFolderIds.Remove(row.Id);else if(checkedFolderIds.Count<FolderSearch.MaxRoots)checkedFolderIds.Add(row.Id);RenderFolderHub();};
                     menu.Items.Add(manageItem);menu.Items.Add(browseItem);menu.Items.Add(toggleItem);
@@ -2657,13 +2764,13 @@ public sealed partial class MainPage : Page
 
     private void UpdateFolderSelectionBar()
     {
-        if(FolderSelectionSummary is null||SearchSelectedFoldersButton is null||EditSelectedFoldersButton is null||UnregisterSelectedFoldersButton is null)return;
+        if(FolderSelectionPanel is null||FolderSelectionSummary is null||SearchSelectedFoldersButton is null||EditSelectedFoldersButton is null||UnregisterSelectedFoldersButton is null)return;
         var selectedRows=knownRoots.Where(r=>r.Enabled&&checkedFolderIds.Contains(r.Id)).OrderBy(r=>r.Id).ToArray();
         var count=selectedRows.Length;
+        FolderSelectionPanel.Visibility=count>0?Visibility.Visible:Visibility.Collapsed;
         if(count==0)
         {
-            FolderSelectionSummary.Text="フォルダを選ぶと、まとめて検索や設定ができます。";
-            SearchSelectedFoldersButton.Content="選択したフォルダを検索";
+            FolderSelectionSummary.Text="";
             SearchSelectedFoldersButton.IsEnabled=false;
             EditSelectedFoldersButton.IsEnabled=false;
             UnregisterSelectedFoldersButton.IsEnabled=false;
@@ -2671,12 +2778,13 @@ public sealed partial class MainPage : Page
         else
         {
             var names=string.Join("、",selectedRows.Take(3).Select(r=>r.ShortPath))+(count>3?$" ほか{count-3}件":"");
-            FolderSelectionSummary.Text=$"選択中: {count} フォルダ（{names}）";
-            SearchSelectedFoldersButton.Content=$"選択した {count} フォルダを検索";
+            FolderSelectionSummary.Text=$"{count}フォルダ選択中（{names}）";
+            SearchSelectedFoldersButton.Content=$"🔍 {count}フォルダを検索";
             SearchSelectedFoldersButton.IsEnabled=true;
             EditSelectedFoldersButton.IsEnabled=true;
             UnregisterSelectedFoldersButton.IsEnabled=true;
         }
+        UpdateFolderLayout();
     }
 
     private async void EditSelectedFolders_Click(object sender,RoutedEventArgs e)
@@ -2718,6 +2826,7 @@ public sealed partial class MainPage : Page
         folderPopulating=true;
         try
         {
+            DetailPaneTitle.Visibility=Visibility.Visible;
             DetailPaneTitle.Text=folderDraft.IsBatch?$"一括設定（{targets.Length}件）":"フォルダの設定";
             SelectionSummaryScroll.Visibility=Visibility.Collapsed;
             Editor.Visibility=Visibility.Collapsed;
@@ -2729,7 +2838,7 @@ public sealed partial class MainPage : Page
                 ? $"選択した {targets.Length} フォルダ: {string.Join("、",targets.Select(r=>r.ShortPath))}"
                 : targets[0].ShortPath;
             FolderTargetPath.Text=string.Join("\n",targets.Select(r=>$"{r.Path}（{(r.Online?"接続OK":"未接続")}・{r.PresentCount:N0}件）"));
-            CurrentShelfSummary.Text=$"現在の初期棚: {folderDraft.Summary.DisplayText}";
+            CurrentShelfSummary.Text=$"現在: {folderDraft.Summary.DisplayText}";
             RootInitialShelf.Items.Clear();
             if(folderDraft.IsBatch)
                 RootInitialShelf.Items.Add(new ComboBoxItem {Content=folderDraft.Summary.IsMixed?"複数の設定値（変更しない）":$"変更しない（現在: {folderDraft.Summary.DisplayText}）",Tag="keep"});
@@ -2761,11 +2870,11 @@ public sealed partial class MainPage : Page
             RootExcludes.Text=folderDraft.ExclusionsText;
             RootStartupScan.SelectedIndex=targets.All(root=>root.StartupScan==targets[0].StartupScan)
                 ? targets[0].StartupScan switch{"list"=>1,"list_and_ai"=>2,_=>0} : -1;
-            SaveRootShelf.Content=folderDraft.IsBatch?$"選択した {targets.Length} フォルダの初期棚を保存":"選択フォルダの初期棚を保存";
-            UnregisterTargetText.Text=$"対象　{string.Join("、",targets.Select(r=>r.ShortPath))}（{targets.Length} フォルダ・{targets.Sum(r=>r.PresentCount):N0} 件）\n元ファイルは残り、再登録でタグと棚が戻ります。";
+            SaveRootShelf.Content=folderDraft.IsBatch?$"保存（{targets.Length}フォルダ）":"保存";
+            UnregisterTargetText.Text=$"{string.Join("、",targets.Select(r=>r.ShortPath))}（{targets.Length} フォルダ・{targets.Sum(r=>r.PresentCount):N0} 件）\n元ファイルは残り、再登録でタグと棚が戻ります。";
             UnregisterConsent.IsChecked=false;
-            UnregisterRoot.IsEnabled=false;
-            UnregisterRoot.Content=folderDraft.IsBatch?$"選択した {targets.Length} フォルダの登録を解除":"選択フォルダの登録を解除";
+            UnregisterRoot.IsEnabled=true;
+            UnregisterRoot.Content=folderDraft.IsBatch?$"登録を解除（{targets.Length}フォルダ）":"登録を解除";
             UpdateScanRootButtonLabel();
             UpdateFolderDraftState();
             if(focusUnregister)UnregisterConsent.Focus(FocusState.Programmatic);
@@ -2812,15 +2921,15 @@ public sealed partial class MainPage : Page
     private void FolderEditor_Checked(object sender,RoutedEventArgs e)=>UpdateFolderDraftState();
     private void UnregisterConsent_Changed(object sender,RoutedEventArgs e)
     {
-        if(UnregisterRoot is not null)UnregisterRoot.IsEnabled=UnregisterConsent.IsChecked==true;
+        if(UnregisterRoot is not null)UnregisterRoot.IsEnabled=!saving;
     }
 
     private async void SaveRootShelf_Click(object sender,RoutedEventArgs e)
     {
         if(folderDraft is null||saving||dialogOpen)return;
         SyncFolderDraftFromControls();var draft=folderDraft;
-        if(!draft.IsShelfChanged){FolderEditStatus.Text="初期棚の変更はありません。";return;}
-        SaveRootShelf.IsEnabled=false;FolderEditorPanel.IsEnabled=false;saving=true;FolderEditStatus.Text="初期棚を保存しています…";
+        if(!draft.IsShelfChanged){FolderEditStatus.Text="変更はありません";return;}
+        SaveRootShelf.IsEnabled=false;FolderEditorPanel.IsEnabled=false;saving=true;FolderEditStatus.Text="保存しています…";
         try
         {
             var ids=draft.ShelfIdsToSave?.ToArray();
@@ -2848,12 +2957,12 @@ public sealed partial class MainPage : Page
             resultsNeedRefresh=true;OpenFolderSettingsPanel(targets);
             RootShelfSettings.IsExpanded=shelfExpanded;
             if(pendingExcludes is not null){RootExcludes.Text=pendingExcludes;UpdateFolderDraftState();}
-            FolderEditStatus.Text=$"初期棚を保存しました。棚未設定の作品 {result["updated"]?.GetValue<int>()??0:N0} 件に適用しました。"+(pendingExcludes is null?"":"除外ルールは未保存です。");
+            FolderEditStatus.Text=$"保存しました（棚なし {result["updated"]?.GetValue<int>()??0:N0}件に適用）"+(pendingExcludes is null?"":" · 除外は未保存");
             ScanStatus.Text=FolderEditStatus.Text;
             try{await RefreshSearchRootsAsync();}
-            catch(Exception ex){AppLog.Error(ex);FolderEditStatus.Text="初期棚は保存済みです。一覧を更新できなかったため、再接続してください。";}
+            catch(Exception ex){AppLog.Error(ex);FolderEditStatus.Text="保存しました（一覧の更新に失敗）";}
         }
-        catch(Exception ex){Failure(ex);FolderEditStatus.Text="初期棚を保存できませんでした。選択内容は残っています。";}
+        catch(Exception ex){Failure(ex);FolderEditStatus.Text="保存できませんでした（選択内容は残っています）";}
         finally{saving=false;SaveRootShelf.IsEnabled=true;FolderEditorPanel.IsEnabled=true;}
     }
 
@@ -2870,10 +2979,10 @@ public sealed partial class MainPage : Page
             await api.PostAsync("api/library/excludes",new JsonObject{{"root_id",rootId},{"patterns",patterns}});
             draft.MarkExclusionsSaved(savedText);
             knownRoots=knownRoots.Select(root=>root.Id==rootId?root with{Exclusions=exclusions}:root).ToArray();
-            ScanStatus.Text="除外を更新。次回スキャンで反映します。";
-            FolderEditStatus.Text="除外ルールを保存しました。"+(draft.IsShelfChanged?"初期棚は未保存です。":"");
+            ScanStatus.Text="次回の一覧更新で反映されます";
+            FolderEditStatus.Text="除外を保存しました"+(draft.IsShelfChanged?" · 自動棚は未保存":"");
             try{await RefreshSearchRootsAsync();}
-            catch(Exception ex){AppLog.Error(ex);FolderEditStatus.Text="除外ルールは保存済みです。一覧を更新できなかったため、再接続してください。"+(draft.IsShelfChanged?"初期棚は未保存です。":"");}
+            catch(Exception ex){AppLog.Error(ex);FolderEditStatus.Text="保存しました（一覧の更新に失敗）"+(draft.IsShelfChanged?" · 自動棚は未保存":"");}
         }
         catch(Exception ex){ScanStatus.Text=ex.Message;FolderEditStatus.Text=ex.Message;}
         finally{saving=false;SaveExcludes.IsEnabled=true;FolderEditorPanel.IsEnabled=true;}
@@ -2897,7 +3006,7 @@ public sealed partial class MainPage : Page
                 if(emptyLibraryScanJob is not null&&!scanPollTimer.IsRunning)scanPollTimer.Start();
             }
             scanRootsRefreshed=false;
-            ScanStatus.Text=mode=="list_and_ai"?"スキャン開始（一覧＋AI索引）":"スキャン開始（一覧のみ）";
+            ScanStatus.Text=mode=="list_and_ai"?"更新開始（一覧＋AI検索データ）":"更新開始（一覧のみ）";
             await PollScanStateAsync();
         }
         catch(Exception ex){ScanStatus.Text=ex.Message;Failure(ex);}
@@ -2915,8 +3024,8 @@ public sealed partial class MainPage : Page
         bool firstScan=targets.Length>0&&targets.All(r=>string.IsNullOrEmpty(r.LastScannedAt)&&r.PresentCount==0);
         bool withAI=ScanModeChoice?.SelectedIndex==1;
         ScanRoot.Content=firstScan
-            ?(withAI?"一覧とAI検索用データを作る":"一覧を作る")
-            :(withAI?"一覧とAI検索用データを更新":"一覧を更新");
+            ?(withAI?"一覧とAIデータを作成":"ファイル一覧を作成")
+            :(withAI?"一覧とAIデータを更新":"ファイル一覧を更新");
     }
 
     private async void ScanRoot_Click(object sender,RoutedEventArgs e)
@@ -2931,7 +3040,7 @@ public sealed partial class MainPage : Page
         try
         {
             await api.PostAsync("api/library/cancel",new JsonObject());
-            ScanStatus.Text="キャンセル要求済み。前回の索引を保持します。";
+            ScanStatus.Text="中止しています…（前回のデータは残ります）";
             await PollScanStateAsync();
         }
         catch(Exception ex){ScanStatus.Text=ex.Message;}
@@ -2939,7 +3048,29 @@ public sealed partial class MainPage : Page
 
     private async void UnregisterRoot_Click(object sender,RoutedEventArgs e)
     {
-        if(folderDraft is null||UnregisterConsent.IsChecked!=true||saving)return;
+        if(folderDraft is null||saving||dialogOpen)return;
+        if(UnregisterConsent.IsChecked!=true)
+        {
+            if(!await transitions.WaitAsync(0))return;
+            var confirmed=false;
+            dialogOpen=true;
+            try
+            {
+                var confirmDialog=new ContentDialog
+                {
+                    XamlRoot=XamlRoot,
+                    RequestedTheme=ActualTheme,
+                    Title="フォルダの登録を解除",
+                    Content=$"対象: {folderDraft.TargetIds.Count} フォルダ\n元のファイル・タグ・棚は残ります（再登録で復元できます）。",
+                    PrimaryButtonText="登録を解除",
+                    CloseButtonText="キャンセル",
+                    DefaultButton=ContentDialogButton.Close
+                };
+                confirmed=await confirmDialog.ShowAsync()==ContentDialogResult.Primary;
+            }
+            finally{dialogOpen=false;transitions.Release();}
+            if(!confirmed||disposed||folderDraft is null)return;
+        }
         UnregisterRoot.IsEnabled=false;saving=true;
         try
         {
@@ -2973,7 +3104,7 @@ public sealed partial class MainPage : Page
             {
                 folderSettingsActive=false;folderDraft=null;Details.IsPaneOpen=false;
                 ShowItemDetailsPane();
-                var msg=$"{succeeded.Count}フォルダの登録を解除しました。元ファイルと保存済みのタグ・棚は保持しています。";
+                var msg=$"{succeeded.Count}フォルダの登録を解除しました（元ファイル・タグ・棚は保持）";
                 ScanStatus.Text=msg;
                 Notice("登録を解除しました",msg);
             }
@@ -2984,11 +3115,11 @@ public sealed partial class MainPage : Page
                 ScanStatus.Text=msg;
             }
         }
-        catch(Exception ex){ScanStatus.Text=ex.Message;UnregisterRoot.IsEnabled=UnregisterConsent.IsChecked==true;}
-        finally{saving=false;}
+        catch(Exception ex){ScanStatus.Text=ex.Message;UnregisterRoot.IsEnabled=true;}
+        finally{saving=false;if(UnregisterRoot is not null)UnregisterRoot.IsEnabled=true;}
     }
 
-    private bool CanRefreshEmptyLibraryAfterScan()=>!disposed&&!folderHubOpen&&!shelfHubOpen&&rows.Count==0&&active is null
+    private bool CanRefreshEmptyLibraryAfterScan()=>!disposed&&!folderHubOpen&&!shelfHubOpen&&!settingsHubOpen&&rows.Count==0&&active is null
         &&view=="all"&&similarityOrigin is null&&selectedSearchRoots is null&&selectedShelfIds is null
         &&Kind.SelectedIndex==0&&SearchMode.SelectedIndex==0&&string.IsNullOrWhiteSpace(Query.Text);
 
@@ -3055,36 +3186,36 @@ public sealed partial class MainPage : Page
 
             if(listRunning)
             {
-                var prefix = phase == "cancelling" ? "一覧の登録をキャンセル中" : "一覧の登録中";
+                var prefix = phase == "cancelling" ? "更新を中止中" : "一覧を更新中";
                 ScanStatus.Text = $"{prefix} · {discovered} 件";
             }
             else if(aiRunning)
             {
-                var prefix = aiState == "cancelling" ? "AI索引をキャンセル中" : "AI索引の作成中";
+                var prefix = aiState == "cancelling" ? "AIデータ作成を中止中" : "AIデータ作成中";
                 ScanStatus.Text = $"{prefix} · {aiProcessed}/{aiTotal} 件";
             }
             else if(phase == "failed")
             {
-                ScanStatus.Text = $"スキャン失敗 · {scanError}";
+                ScanStatus.Text = $"更新失敗 · {scanError}";
             }
             else if(!string.IsNullOrEmpty(aiError) || aiState == "failed")
             {
-                ScanStatus.Text = $"一覧完了 · AI未完了: {aiError}";
+                ScanStatus.Text = $"一覧更新完了 · AI未完了: {aiError}";
             }
             else if(phase == "complete")
             {
                 if(mode == "list_and_ai")
                 {
                     if(aiState == "skipped")
-                        ScanStatus.Text = $"一覧完了 ({discovered} 件) · AIスキップ ({aiError})";
+                        ScanStatus.Text = $"一覧を更新しました（{discovered}件）· AIは未実行";
                     else if(aiState == "cancelled")
-                        ScanStatus.Text = $"一覧完了 ({discovered} 件) · AIキャンセル";
+                        ScanStatus.Text = $"一覧を更新しました（{discovered}件）· AI中止";
                     else
-                        ScanStatus.Text = $"一覧・AI索引完了 ({discovered} 件)";
+                        ScanStatus.Text = $"一覧・AI検索データ完了（{discovered}件）";
                 }
                 else
                 {
-                    ScanStatus.Text = $"一覧完了 · {discovered} 件";
+                    ScanStatus.Text = $"一覧を更新しました（{discovered}件）";
                 }
             }
             else if(!string.IsNullOrEmpty(scanError))
@@ -3151,15 +3282,16 @@ public sealed partial class MainPage : Page
         {
             if(!await ConfirmDiscardAsync())return;
             dialogOpen=true;reload=true;
-            var explanation=new TextBlock {Text="AI検索には検索モデルと実行環境が必要です。モデル選択や保存先の変更は再起動で反映されます。新しいモデルを使うには検索用データの作り直しが必要です。",TextWrapping=TextWrapping.Wrap};
-            var environmentButton=new Button{Content="手元のフォルダを指定"};AutomationProperties.SetAutomationId(environmentButton,"AIEnvironmentOpen");
-            var downloadButton=new Button{Content="ダウンロードできるモデルを選ぶ",Style=(Style)Resources["AccentButtonStyle"]};AutomationProperties.SetAutomationId(downloadButton,"AIModelDownloadOpen");
+            var explanation=new TextBlock {Text="モデル・保存先の変更は再起動後に反映されます。",TextWrapping=TextWrapping.Wrap};
+            ToolTipService.SetToolTip(explanation,"AI検索には検索モデルと実行環境が必要です。新しいモデルを使うにはAI検索データの作り直しが必要です。");
+            var environmentButton=new Button{Content="手元のファイルを使う"};AutomationProperties.SetAutomationId(environmentButton,"AIEnvironmentOpen");
+            var downloadButton=new Button{Content="モデルをダウンロード",Style=(Style)Resources["AccentButtonStyle"]};AutomationProperties.SetAutomationId(downloadButton,"AIModelDownloadOpen");
             var setupActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};setupActions.Children.Add(downloadButton);setupActions.Children.Add(environmentButton);
-            var modelChoice=new ComboBox {Header="次回使うモデル",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var modelChoice=new ComboBox {Header="使用するモデル",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(modelChoice,"AIProfileChoice");
             var modelWarning=new TextBlock {TextWrapping=TextWrapping.Wrap};
             AutomationProperties.SetAutomationId(modelWarning,"AIProfileWarning");
-            var modelApply=new Button {Content="モデル選択を保存",IsEnabled=false};
+            var modelApply=new Button {Content="保存",IsEnabled=false};
             AutomationProperties.SetAutomationId(modelApply,"AIProfileApply");
             var modelFeedback=new TextBlock {TextWrapping=TextWrapping.Wrap};
             AutomationProperties.SetAutomationId(modelFeedback,"AIProfileFeedback");
@@ -3206,9 +3338,9 @@ public sealed partial class MainPage : Page
                     var restart=data["restart_required"]?.GetValue<bool>()==true;
                     var activeLabel=active=="command-line"?"起動引数で指定したモデル":profileLabels.GetValueOrDefault(active,"確認が必要");
                     var selectedLabel=profileLabels.GetValueOrDefault(savedProfile,savedProfile);
-                    modelFeedback.Text=$"使用中のモデル　{activeLabel}\n次回使うモデル　{selectedLabel}"
-                        +(overridden?"\n起動引数のモデル指定が優先されています。外して再起動すると次回使うモデルに切り替わります。"
-                            :restart?"\n再起動で切り替わります。"
+                    modelFeedback.Text=$"使用中: {activeLabel}\n設定: {selectedLabel}"
+                        +(overridden?"\n起動引数の指定が優先されています"
+                            :restart?"\n再起動後に切り替わります"
                             :"")
                         +(data["error"]?.GetValue<string>() is string err && err.Length>0?"\n"+err:"");
                 }
@@ -3228,20 +3360,20 @@ public sealed partial class MainPage : Page
             var indexArt=VisualAssets.Sticker();
             var status=new TextBlock {TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(status,"AIStatus");
             var statusDetailText=new TextBlock {TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true,Style=(Style)Resources["MediaMetadataStyle"]};
-            var statusDetailExpander=new Expander {Header="診断詳細",Content=statusDetailText,Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch};
+            var statusDetailExpander=new Expander {Header="詳細情報",Content=statusDetailText,Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(statusDetailExpander,"AIIndexErrorDetails");
-            var start=new Button {Content="検索用データを作成・更新",IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
-            var cancel=new Button {Content="中断",IsEnabled=false};AutomationProperties.SetAutomationId(cancel,"CancelAIIndex");
+            var start=new Button {Content="AI検索データを作成",IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
+            var cancel=new Button {Content="中止",IsEnabled=false};AutomationProperties.SetAutomationId(cancel,"CancelAIIndex");
             var resumeBooks=new Button{Content="前回の本の追加を再開",Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(resumeBooks,"ResumeBookBatch");
             PageBatchStatus? resumableBooks=null;
             var resumeChunks=new Button{Content="前回のページ追加を再開",Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(resumeChunks,"ResumeBookChunks");
             PageChunkStatus? resumableChunks=null;string? ownedPageJob=null;
-            var resumeContinuation=new Button{Content="前回の続きから作る",Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(resumeContinuation,"ResumeAIContinuation");AutomationProperties.SetName(resumeContinuation,"前回の続きから作る");
+            var resumeContinuation=new Button{Content="前回の続きから作成",Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(resumeContinuation,"ResumeAIContinuation");AutomationProperties.SetName(resumeContinuation,"前回の続きから作成");
             IndexContinuationStatus? resumableContinuation=null;string? ownedContinuationJob=null;
             IndexContinuationPlan? continuationPlan=null;bool planningContinuation=false;string? activeProfile=null;
             var planContinuation=new Button{Content="未作成の対象を確認",IsEnabled=false};AutomationProperties.SetAutomationId(planContinuation,"PlanAIContinuation");AutomationProperties.SetName(planContinuation,"未作成の対象を確認");
-            var startContinuation=new Button{Content="表示した対象のデータを作る",Visibility=Visibility.Collapsed,IsEnabled=false};AutomationProperties.SetAutomationId(startContinuation,"StartAIContinuation");AutomationProperties.SetName(startContinuation,"表示した対象のデータを作る");
-            var continuationText=new TextBlock{TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(continuationText,"AIContinuationSummary");AutomationProperties.SetName(continuationText,"未作成の検索用データ計画状況");
+            var startContinuation=new Button{Content="続きから作成",Visibility=Visibility.Collapsed,IsEnabled=false};AutomationProperties.SetAutomationId(startContinuation,"StartAIContinuation");AutomationProperties.SetName(startContinuation,"続きから作成");
+            var continuationText=new TextBlock{TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(continuationText,"AIContinuationSummary");AutomationProperties.SetName(continuationText,"未作成のAI検索データ計画状況");
             void InvalidateContinuationPlan()
             {
                 continuationPlan=null;
@@ -3249,17 +3381,18 @@ public sealed partial class MainPage : Page
                 continuationText.Visibility=Visibility.Collapsed;
                 startContinuation.Visibility=Visibility.Collapsed;
             }
-            var release=new Button {Content="AIをメモリから解放",IsEnabled=false};
+            var release=new Button {Content="メモリを解放",IsEnabled=false};
             AutomationProperties.SetAutomationId(release,"AIRelease");
             var releaseResult=new TextBlock {TextWrapping=TextWrapping.Wrap};
             AutomationProperties.SetAutomationId(releaseResult,"AIReleaseResult");
-            var idleChoice=new ComboBox {Header="使っていないモデルをメモリから外すまで",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var idleChoice=new ComboBox {Header="未使用時の自動解放",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(idleChoice,"AIIdleRelease");
             AutomationProperties.SetName(idleChoice,"使っていないモデルをメモリから外すまでの時間");
-            var pauseChoice=new ComboBox {Header="検索用データの作成中、1回のAI処理後に休む時間",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var pauseChoice=new ComboBox {Header="作成中の休止（負荷軽減）",HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(pauseChoice,"AIIndexPause");
             AutomationProperties.SetName(pauseChoice,"1回のAI処理後に休む時間");
-            var saveResource=new Button {Content="リソース設定を保存"};
+            var saveResource=new Button {Content="保存"};
+            ToolTipService.SetToolTip(saveResource,"保存後すぐ適用されます（GPU使用率やゲームFPSの上限は保証しません）");
             AutomationProperties.SetAutomationId(saveResource,"AISaveResource");
             var resourceResult=new TextBlock {TextWrapping=TextWrapping.Wrap};
             AutomationProperties.SetAutomationId(resourceResult,"AIResourceStatus");
@@ -3283,8 +3416,8 @@ public sealed partial class MainPage : Page
                     var policy=await api.GetAsync("api/library/ai/resource");
                     SelectOption(idleChoice,policy["policy"]?["idle_release_seconds"]?.GetValue<int>() ?? 0,"秒");
                     SelectOption(pauseChoice,policy["policy"]?["index_pause_ms"]?.GetValue<int>() ?? 0,"ms");
-                    resourceResult.Text="リソース設定は保存後すぐ適用。GPU使用率やゲームFPSの上限は保証しません。";
-                } catch(Exception ex) {resourceResult.Text="リソース設定を取得できません: "+ex.Message;}
+                    resourceResult.Text="保存後すぐ適用されます";
+                } catch(Exception ex) {resourceResult.Text="設定を取得できません: "+ex.Message;}
             }
             saveResource.Click+=async (_,_)=>{
                 if(idleChoice.SelectedItem is not ComboBoxItem idle || idle.Tag is not int idleValue ||
@@ -3292,11 +3425,11 @@ public sealed partial class MainPage : Page
                 saveResource.IsEnabled=false;idleChoice.IsEnabled=false;pauseChoice.IsEnabled=false;
                 try {
                     await api.PostAsync("api/library/ai/resource",new JsonObject{{"idle_release_seconds",idleValue},{"index_pause_ms",pauseValue}});
-                    resourceResult.Text="保存しました。モデル・索引は変更しません。自動解放は次のアイドル時間から有効です。";
-                }catch(Exception ex){resourceResult.Text="設定を保存できません: "+ex.Message;}
+                    resourceResult.Text="✓ 保存しました（次の待機時間から有効）";
+                }catch(Exception ex){resourceResult.Text="保存できません: "+ex.Message;}
                 finally{saveResource.IsEnabled=true;idleChoice.IsEnabled=true;pauseChoice.IsEnabled=true;}
             };
-            using var scopeEditor=new AIScopeEditor(api,value=>{aiScope=value;aiScopeError="AI索引の画面で対象を選び直して保存してください。";});
+            using var scopeEditor=new AIScopeEditor(api,value=>{aiScope=value;aiScopeError="AI検索の対象範囲を選び直して保存してください。";});
             bool availableForIndex=false,indexRunning=false,starting=false;
             void UpdateStart()
             {
@@ -3344,12 +3477,12 @@ public sealed partial class MainPage : Page
                     {
                         var statusCode=data["status_code"]?.GetValue<string>() ?? "";
                         status.Text=statusCode.Contains("runtime")||errorText.Contains("Python")||errorText.Contains("ライブラリ")
-                            ?"AIの実行環境が見つかりません。上の［手元のフォルダを指定］または「設定 → 自動セットアップ（AI環境）」から用意してください。名前・タグの文字検索はそのまま使えます。"
+                            ?"① AI実行環境：未導入（上の「手元のファイルを使う」または自動セットアップを用意）"
                             :statusCode.Contains("model")||statusCode.Contains("missing")||string.IsNullOrEmpty(data["model_id"]?.GetValue<string>())
-                                ?"検索モデルが見つかりません。上の［ダウンロードできるモデルを選ぶ］または［手元のフォルダを指定］から用意してください。名前・タグの文字検索はそのまま使えます。"
+                                ?"② 検索モデル：未導入（ダウンロードまたは手元のファイルを用意）"
                             :statusCode.Contains("profile")||statusCode.Contains("revision")||statusCode.Contains("invalid")
-                                ?"モデルの設定または版の確認が必要です。上の［次回使うモデル］や「設定 → 診断情報」を確認してください。名前・タグの文字検索はそのまま使えます。"
-                                :"AIの準備状況を確認できません。「設定 → 診断情報」で確認するか、名前・タグの文字検索をお使いください。";
+                                ?"② 検索モデル：要確認（モデル設定または診断情報を確認）"
+                                :"状態を確認できません（診断情報を確認してください）";
                         statusDetailText.Text=errorText;
                         statusDetailExpander.Visibility=string.IsNullOrEmpty(errorText)?Visibility.Collapsed:Visibility.Visible;
                     }
@@ -3421,7 +3554,7 @@ public sealed partial class MainPage : Page
                     continuationText.Visibility=Visibility.Visible;
                     if(plan.CanStart)
                     {
-                        startContinuation.Content=$"表示した対象のデータを作る（{plan.SelectedTotal:N0}件）";
+                        startContinuation.Content=$"続きから作成（残り {plan.SelectedTotal:N0}件）";
                         startContinuation.Visibility=Visibility.Visible;
                     }
                     else
@@ -3494,7 +3627,7 @@ public sealed partial class MainPage : Page
             using var videoAudioPreparation=new AudioPreparationPanel(api.VideoAudioContent,AudioIndexConditions);
             panel.Children.Add(indexArt);
             foreach(var element in new UIElement[]{setupActions,explanation,modelChoice,modelWarning,modelApply,modelFeedback,scopeEditor.Content,
-                new TextBlock {Text="メモリと処理負荷",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},
+                new TextBlock {Text="メモリと負荷",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]},
                 release,releaseResult,idleChoice,pauseChoice,saveResource,resourceResult})panel.Children.Add(element);
             panel.Children.Add(audioPreparation.Content);
             panel.Children.Add(videoPreparation.Content);
@@ -3512,7 +3645,7 @@ public sealed partial class MainPage : Page
             continuationActions.Children.Add(planContinuation);continuationActions.Children.Add(startContinuation);
             var indexInfo=new StackPanel {Spacing=8};
             AutomationProperties.SetAutomationId(indexInfo,"AIIndexSummary");
-            indexInfo.Children.Add(new TextBlock {Text="現在のAI検索用データ",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]});
+            indexInfo.Children.Add(new TextBlock {Text="AI検索データ",Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]});
             indexInfo.Children.Add(status);
             indexInfo.Children.Add(statusDetailExpander);
             indexInfo.Children.Add(continuationText);

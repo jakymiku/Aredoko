@@ -23,7 +23,7 @@ public sealed partial class MainPage
     {
         if(librarySelection.Count==0)return "";
         var selectedRows=rows.Where(row=>librarySelection.Contains(row.Id)).ToArray();
-        if(selectedRows.Length==0)return $"現在の表示範囲外で {librarySelection.Count:N0} 件を選択中";
+        if(selectedRows.Length==0)return $"表示外に {librarySelection.Count:N0} 件選択中";
         var titles=string.Join("、",selectedRows.Take(3).Select(row=>row.Title));
         var extra=librarySelection.Count-Math.Min(3,selectedRows.Length);
         if(extra>0)titles+=$" ほか{extra:N0}件";
@@ -42,19 +42,22 @@ public sealed partial class MainPage
     }
     private void ShowSelectionSummary()
     {
-        folderSettingsActive=false;folderDraft=null;DetailPaneTitle.Text="選択した作品";
+        folderSettingsActive=false;folderDraft=null;DetailPaneTitle.Visibility=Visibility.Visible;DetailPaneTitle.Text="選択した作品";
         FolderEditorPanel.Visibility=Editor.Visibility=Visibility.Collapsed;SelectionSummaryScroll.Visibility=Visibility.Visible;
-        SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件を選択しています。";
+        SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件選択中";
         UpdateSelectionSummaryDetails();
     }
     private void UpdateLibrarySelectionTools()
     {
         var outside=librarySelection.Ids.Count(id=>rows.All(row=>row.Id!=id));
-        SelectionCountText.Text=preparingSelection?"範囲を選択しています…":$"{librarySelection.Count:N0} 件選択"+(outside>0?$"（一覧外 {outside:N0} 件）":"");
+        SelectionCountText.Text=preparingSelection?"選択中…":$"{librarySelection.Count:N0} 件選択"+(outside>0?$"（表示外 {outside:N0} 件）":"");
         SelectionTools.Visibility=preparingSelection||librarySelection.Count>1||outside>0?Visibility.Visible:Visibility.Collapsed;
+        var canActDirect=!preparingSelection&&librarySelection.Count>0;
+        SelectionDirectFavoriteButton.Visibility=SelectionDirectShelfButton.Visibility=canActDirect?Visibility.Visible:Visibility.Collapsed;
+        SelectionDirectFavoriteButton.IsEnabled=SelectionDirectShelfButton.IsEnabled=canActDirect&&!saving&&!dialogOpen;
         SelectionBulkActions.Visibility=librarySelection.Count>1?Visibility.Visible:Visibility.Collapsed;
         CancelSelectionPreparation.Visibility=preparingSelection?Visibility.Visible:Visibility.Collapsed;
-        SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件を選択しています。";
+        SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件選択中";
         UpdateSelectionSummaryDetails();
         FooterSelection.Text=$"{librarySelection.Count:N0} 件選択";
         FooterSelection.Visibility=librarySelection.Count>0?Visibility.Visible:Visibility.Collapsed;
@@ -64,12 +67,12 @@ public sealed partial class MainPage
         {
             var overLimit=rows.Count>LibrarySelection.Maximum;
             SelectVisibleItemsMenuItem.Text=overLimit
-                ? $"読み込み済みの作品をすべて選択（上限 {LibrarySelection.Maximum} 件）"
-                : "読み込み済みの作品をすべて選択";
+                ? $"表示中をすべて選択（上限 {LibrarySelection.Maximum} 件）"
+                : "表示中をすべて選択";
             SelectVisibleItemsMenuItem.IsEnabled=!overLimit&&!saving&&!dialogOpen&&!preparingSelection&&rows.Count>0&&resultSession is not null;
             if(SelectFirstMaxItemsMenuItem is not null)
             {
-                SelectFirstMaxItemsMenuItem.Text=$"読み込み済みの先頭 {LibrarySelection.Maximum} 件を選択";
+                SelectFirstMaxItemsMenuItem.Text=$"先頭 {LibrarySelection.Maximum} 件を選択";
                 SelectFirstMaxItemsMenuItem.Visibility=overLimit?Visibility.Visible:Visibility.Collapsed;
                 SelectFirstMaxItemsMenuItem.IsEnabled=overLimit&&!saving&&!dialogOpen&&!preparingSelection&&resultSession is not null;
             }
@@ -81,14 +84,14 @@ public sealed partial class MainPage
                     var overSpanLimit=spanCount>LibrarySelection.Maximum;
                     SelectRangeSpanMenuItem.Visibility=Visibility.Visible;
                     SelectRangeSpanMenuItem.Text=overSpanLimit
-                        ? $"直前の選択からここまで選択（{spanCount:N0} 件・上限 {LibrarySelection.Maximum} 件）"
-                        : $"直前の選択からここまで選択（{spanCount:N0} 件）";
+                        ? $"ここまで範囲選択（{spanCount:N0} 件・上限 {LibrarySelection.Maximum} 件）"
+                        : $"ここまで範囲選択（{spanCount:N0} 件）";
                     SelectRangeSpanMenuItem.IsEnabled=!overSpanLimit&&!saving&&!dialogOpen&&!preparingSelection&&resultSession is not null&&resultWindow is not null;
                 }
                 else
                 {
                     SelectRangeSpanMenuItem.Visibility=Visibility.Collapsed;
-                    SelectRangeSpanMenuItem.Text="直前の選択からここまで選択";
+                    SelectRangeSpanMenuItem.Text="ここまで範囲選択";
                     SelectRangeSpanMenuItem.IsEnabled=false;
                 }
             }
@@ -156,7 +159,7 @@ public sealed partial class MainPage
         var origin=explicitOrigin??librarySelection.Anchor;
         if(origin is not null&&Math.Abs((long)target.Ordinal-origin.Ordinal)+1>LibrarySelection.Maximum)
         {
-            Notice($"一括整理は一度に {LibrarySelection.Maximum} 件まで","検索や棚で絞り込んでから選択してください。",InfoBarSeverity.Warning);
+            Notice($"一度に {LibrarySelection.Maximum} 件まで","検索や棚で絞り込んでから選択してください",InfoBarSeverity.Warning);
             return;
         }
         if(!await transitions.WaitAsync(0))return;

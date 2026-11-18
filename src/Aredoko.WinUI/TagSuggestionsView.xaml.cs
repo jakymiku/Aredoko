@@ -44,7 +44,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         Edited.IsEnabled=pending&&!dirty;Accept.IsEnabled=pending&&!dirty&&!string.IsNullOrWhiteSpace(Edited.Text);
         Reject.IsEnabled=pending;
     }
-    private void Message(string message)=>Status.Text=message+(dirty?"\n未保存の編集があります。承認するには、閉じて詳細の編集を保存してください。":"");
+    private void Message(string message)=>Status.Text=message+(dirty?"\n⚠ 詳細に未保存の編集があります（保存後に承認できます）":"");
     private async Task RunAsync(Func<Task> operation)
     {
         if(busy||disposed)return;busy=true;UpdateButtons();
@@ -62,8 +62,8 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         Batches.Items.Clear();Candidates.Items.Clear();
         foreach(var value in loaded.Batches)Batches.Items.Add(new ComboBoxItem{Content=$"履歴 #{value.Id} · {value.Candidates.Count}候補"+(value.Stale?" · 元ファイル変更あり":""),Tag=value});
         populating=false;Batches.SelectedIndex=loaded.Batches.Count>0?0:-1;
-        if(loaded.Batches.Count==0){Provenance.Text="まだ候補がありません。";Explanation.Text="画像または本の先頭ページから候補を生成します。";Edited.Text="";}
-        Message(loaded.Available?"候補は未確定です。根拠を確認し、必要なら修正して承認してください。":loaded.Reason);
+        if(loaded.Batches.Count==0){Provenance.Text="候補はまだありません";Explanation.Text="［✨ 生成］で候補を作成できます";Edited.Text="";}
+        Message(loaded.Available?"根拠を確認して承認・却下できます":loaded.Reason);
     }
     private void Batch_Changed(object sender,SelectionChangedEventArgs e)
     {
@@ -80,7 +80,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
             AutomationProperties.SetAutomationId(row,$"TagCandidate{value.Id}");AutomationProperties.SetName(row,$"{value.Tag} {value.StateLabel}");Candidates.Items.Add(row);
         }
         Candidates.SelectedIndex=Candidates.Items.Count>0?0:-1;
-        if(Candidates.Items.Count==0){Explanation.Text="この履歴にはタグ候補がありません。自動承認は行いません。";Edited.Text="";}
+        if(Candidates.Items.Count==0){Explanation.Text="この履歴に候補はありません";Edited.Text="";}
         evidenceCancellation?.Cancel();evidenceCancellation?.Dispose();evidenceCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         if(!batch.Stale)_=ShowEvidenceAsync(batch,evidenceCancellation.Token);UpdateButtons();
     }
