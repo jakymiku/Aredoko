@@ -34,14 +34,46 @@ public sealed partial class MainPage
     {
         if(ShelfScopeBar is null)return;
         ShelfScopeBar.Visibility=selectedShelfIds is null?Visibility.Collapsed:Visibility.Visible;
-        ShelfScopeText.Text=selectedShelfIds is null?"":"検索対象: "+ShelfScopeName();
-        ToolTipService.SetToolTip(ShelfScopeText,selectedShelfIds is null?"":"検索対象: "+ShelfScopeName(summarize:false));
+        ShelfScopeText.Text=selectedShelfIds is null?"":"📚 "+ShelfScopeName();
+        ToolTipService.SetToolTip(ShelfScopeText,selectedShelfIds is null?"":"📚 "+ShelfScopeName(summarize:false));
     }
     private void UpdateShelfEditorLabel()
     {
         var names=editingShelfIds.Select(ShelfName).ToArray();
         Shelf.Text=ShelfProtocol.SummarizeNames(names,"棚なし",3);
         ToolTipService.SetToolTip(Shelf,ShelfProtocol.SummarizeNames(names,"棚なし",0));
+        if(ActiveShelfChipsPanel is null)return;
+        ActiveShelfChipsPanel.Children.Clear();
+        if(editingShelfIds.Length==0)
+        {
+            ActiveShelfChipsPanel.Children.Add(new TextBlock{Text="棚なし",Style=ThemeStyle("MediaMetadataStyle")});
+            AutomationProperties.SetName(ActiveShelfChipsPanel,"棚なし");
+            return;
+        }
+        var chipElements=new List<FrameworkElement>(editingShelfIds.Length);
+        for(var i=0;i<editingShelfIds.Length;i++)
+        {
+            var shelfId=editingShelfIds[i];
+            var shelfName=ShelfName(shelfId);
+            var label=new TextBlock{Text="📚 "+shelfName,MaxWidth=140,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center,Style=ThemeStyle("MediaMetadataStyle")};
+            var chipBtn=new Button
+            {
+                Content=label,
+                Padding=new Thickness(6,2,6,2),
+                MinWidth=0,
+                MinHeight=0,
+                Background=new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness=new Thickness(0)
+            };
+            ToolTipService.SetToolTip(chipBtn,$"棚「{shelfName}」の作品を表示");
+            AutomationProperties.SetAutomationId(chipBtn,$"DetailShelfChip{i}");
+            AutomationProperties.SetName(chipBtn,$"棚「{shelfName}」を開く");
+            chipBtn.Click+=async(_,_)=>await OpenShelfScopeAsync(new[]{shelfId});
+            chipElements.Add(new Border{Style=ThemeStyle("CardBadgeBorderStyle"),Padding=new Thickness(2),Child=chipBtn});
+        }
+        var maxRowWidth=DetailScroll is not null&&DetailScroll.ActualWidth>60?DetailScroll.ActualWidth-28:Math.Max(180,Details.OpenPaneLength-56);
+        PopulateWrappedChips(ActiveShelfChipsPanel,maxRowWidth,chipElements);
+        AutomationProperties.SetName(ActiveShelfChipsPanel,ShelfProtocol.SummarizeNames(names,"棚なし",0));
     }
     private void CloseShelfHubCore()
     {
@@ -79,7 +111,7 @@ public sealed partial class MainPage
         foreach(var load in shelfLoads.Values){load.Cancel();load.Dispose();}shelfLoads.Clear();
         shelfKeys.Clear();foreach(var shelf in shelfDescriptors)shelfKeys.Add(shelf.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Count.Text=$"{shelfDescriptors.Count:N0} 棚";
-        OpenMultipleShelvesButton.IsEnabled=shelfDescriptors.Count>0;
+        OpenMultipleShelvesButton.IsEnabled=shelfDescriptors.Count>1;
         ShelfHubMessage.Text=shelfDescriptors.Count==0?"棚で作品をまとめられます。「棚を作成」から追加できます。":"";
         ShelfHubMessage.Visibility=shelfDescriptors.Count==0?Visibility.Visible:Visibility.Collapsed;
     }
@@ -150,13 +182,18 @@ public sealed partial class MainPage
         var shelf=shelfDescriptors.FirstOrDefault(x=>x.Id==id);if(shelf is null||item.ContentTemplateRoot is not Border host)return;
         shelfRealized.Add(item);item.Width=double.NaN;item.ContextFlyout=null;
         var row=new Grid{ColumnSpacing=12,RowSpacing=8,Padding=new Thickness(8)};
-        var artwork=new Grid();var icon=new SymbolIcon(Symbol.Folder);artwork.Children.Add(icon);
+        var artwork=new Grid();
+        var thumbPlate=new Border{Tag="ThumbPlate",Style=ThemeStyle("ThumbPlateStyle")};
+        Canvas.SetZIndex(thumbPlate,-1);
+        var icon=new Viewbox{Width=32,Height=32,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,IsHitTestVisible=false,
+            Child=new SymbolIcon(Symbol.Library){Style=ThemeStyle("MediaPlaceholderIconStyle")}};
+        artwork.Children.Add(thumbPlate);artwork.Children.Add(icon);
         var image=new Image{Stretch=Stretch.Uniform};artwork.Children.Add(image);row.Children.Add(artwork);
         var text=new StackPanel{Spacing=4,VerticalAlignment=VerticalAlignment.Center,MaxWidth=1};
         var name=new TextBlock{Text=shelf.Name,TextWrapping=TextWrapping.NoWrap,MaxLines=1,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaTitleStyle"]};
         AutomationProperties.SetAutomationId(name,$"ShelfTitle{id}");AutomationProperties.SetName(name,shelf.Name);
         ToolTipService.SetToolTip(name,shelf.Name);text.Children.Add(name);
-        text.Children.Add(new TextBlock{Text=$"{shelf.ItemCount:N0} 件",Style=(Style)Resources["MediaMetadataStyle"]});row.Children.Add(text);
+        text.Children.Add(new TextBlock{Text=$"{shelf.ItemCount:N0} 作品",Style=(Style)Resources["MediaMetadataStyle"]});row.Children.Add(text);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
         var open=new Button{Content="開く"};AutomationProperties.SetAutomationId(open,$"ShelfOpen{id}");AutomationProperties.SetName(open,$"{shelf.Name}を開く");
         open.Click+=async(_,_)=>await OpenShelfItemsAsync(id);actions.Children.Add(open);
@@ -222,7 +259,7 @@ public sealed partial class MainPage
         ShelfList.ItemsSource=null;
         foreach(var request in shelfLoads.Values){request.Cancel();request.Dispose();}shelfLoads.Clear();shelfRealized.Clear();shelfRefresh.Clear();
         ShelfList.ItemsPanel=MediaItemsPanel();ShelfList.ItemsSource=shelfKeys;
-        ShelfLayoutButton.Content=tiles?"リスト表示":"グリッド表示";
+        UpdateLayoutToggleVisuals();
     }
     private void SizeShelfItem(ListViewItem item,Grid artwork)
     {
@@ -231,6 +268,11 @@ public sealed partial class MainPage
         item.Width=tiles?width:double.NaN;
         artwork.Width=tiles?Math.Max(96,width-32):48*scale;
         artwork.Height=tiles?Math.Min(144*scale,Math.Max(48,ShelfList.ActualHeight-108)):64*scale;
+        if(artwork.Children.OfType<Border>().FirstOrDefault(border=>Equals(border.Tag,"ThumbPlate")) is {} thumbPlate)
+        {
+            thumbPlate.Width=artwork.Width;
+            thumbPlate.Height=artwork.Height;
+        }
         if(item.ContentTemplateRoot is Border {Child:Grid row}&&row.Children.OfType<StackPanel>().FirstOrDefault() is {} text)
             ConstrainCardCaption(row,text);
         if(ShelfList.ItemsPanelRoot is ItemsWrapGrid wrap)wrap.ItemWidth=width+8;
@@ -253,7 +295,7 @@ public sealed partial class MainPage
         {
             await RefreshShelfDescriptorsAsync();
             if(disposed||saving||dialogOpen||active?.Id!=itemId)return;
-            var ids=await PickShelfIdsAsync("棚を選択",editingShelfIds,"所属する棚を選択してください。選択を外すと、その棚から解除します。");
+            var ids=await PickShelfIdsAsync("棚を選択",editingShelfIds,"チェックで追加、外すと解除します。");
             if(ids is not null&&active?.Id==itemId){editingShelfIds=ids;UpdateShelfEditorLabel();UpdateDirty();}
         }
         catch(Exception ex){Failure(ex);}
@@ -279,7 +321,7 @@ public sealed partial class MainPage
             var error=new TextBlock{TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(error,"TxtShelfNameError");
             var panel=new StackPanel{Spacing=8};panel.Children.Add(name);panel.Children.Add(error);
             dialogOpen=true;
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=shelf is null?"棚を作成":"棚の名前を変更",Content=panel,PrimaryButtonText=shelf is null?"作成":"変更",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Close};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=shelf is null?"棚を作成":"棚の名前を変更",Content=panel,PrimaryButtonText=shelf is null?"作成":"変更",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Primary};
             var committing=false;
             dialog.Closing+=(_,closing)=>{if(committing)closing.Cancel=true;};
             dialog.PrimaryButtonClick+=async(_,eventArgs)=>

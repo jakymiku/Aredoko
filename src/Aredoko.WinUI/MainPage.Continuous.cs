@@ -66,8 +66,7 @@ public sealed partial class MainPage
             finally{populating=wasPopulating;}
             Items.UpdateLayout();await RestoreBrowseAnchorAsync(anchor);
             if(disposed||token.IsCancellationRequested)return;
-            PageNumber.Text=FormatLoadedPageRange(browseStart,buffer.End-browseStart,buffer.Total);
-            Previous.IsEnabled=browseStart>0;Next.IsEnabled=buffer.End<buffer.Total;
+            UpdateBrowseFooter(FormatLoadedPageRange(browseStart,buffer.End-browseStart,buffer.Total),browseStart>0,buffer.End<buffer.Total);
         }
         catch(OperationCanceledException){}
         catch(Exception ex){if(!disposed){browseFailed=true;Failure(ex);}}
@@ -99,8 +98,7 @@ public sealed partial class MainPage
             if(disposed||!ReferenceEquals(session,resultSession))return;
             resultScroll?.ChangeView(null,last?resultScroll.ScrollableHeight:0,null,true);
             await YieldBrowseLayoutAsync();
-            PageNumber.Text=FormatLoadedPageRange(start,rows.Count,browseBuffer.Total);
-            Previous.IsEnabled=start>0;Next.IsEnabled=browseBuffer.End<browseBuffer.Total;
+            UpdateBrowseFooter(FormatLoadedPageRange(start,rows.Count,browseBuffer.Total),start>0,browseBuffer.End<browseBuffer.Total);
         }
         catch(OperationCanceledException){}
         catch(Exception error){if(!disposed)Failure(error);}

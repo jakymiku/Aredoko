@@ -44,7 +44,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button fit = IconButton(Symbol.FullScreen), retry = IconButton(Symbol.Refresh), reopen = IconButton(Symbol.RepeatAll), settings = IconButton(Symbol.Setting);
     private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly Button actualSize=new(){Content="1:1",MinWidth=36,Padding=new Thickness(8)};
-    private readonly TextBlock count = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock count = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) };
     private readonly TextBlock zoom = new() { Text = "100%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly TextBlock progressStatus=new(){Visibility=Visibility.Collapsed,TextWrapping=TextWrapping.Wrap,HorizontalAlignment=HorizontalAlignment.Center};
@@ -89,7 +89,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         count.Style=zoom.Style=status.Style=progressStatus.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         ViewerInputGestures.AttachPan(viewport);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,HorizontalAlignment=HorizontalAlignment.Center};
-        foreach(var control in new UIElement[]{previous,next,zoomOut,zoomIn,fit,actualSize,zoom,favorite.Button,editDetails,retry,reopen,settings})actions.Children.Add(control);
+        foreach(var control in new UIElement[]{previous,count,next,zoomOut,zoomIn,fit,actualSize,zoom,favorite.Button,editDetails,retry,reopen,settings})actions.Children.Add(control);
         Identify(favorite.Button,"ReaderFavorite","お気に入りを読み込み中");
         Identify(editDetails,"ReaderEditDetails","詳細で編集");
         ToolTipService.SetToolTip(editDetails,"閉じて詳細パネルを開く");
@@ -265,7 +265,8 @@ public void AttachNavigation(UIElement dialog)
         favorite.UpdateAvailability(!disposed&&!busy&&!closing&&loaded&&manifest is not null);
         previous.IsEnabled=!blocked&&manifest is not null&&(page>0||ViewerOptions.Value.LoopBookPages);
         next.IsEnabled=!blocked&&manifest is not null&&ReaderSpreadPolicy.Move(page,manifest.PageCount,mode,1,ViewerOptions.Value.LoopBookPages)<manifest.PageCount;
-        retry.IsEnabled=!blocked&&failed;reopen.IsEnabled=!blocked;settings.IsEnabled=!blocked;
+        retry.Visibility=failed?Visibility.Visible:Visibility.Collapsed;
+        retry.IsEnabled=failed&&!blocked;reopen.IsEnabled=!blocked;settings.IsEnabled=!blocked;
         editDetails.IsEnabled=!closing&&!disposed;
         foreach(var option in modes)option.IsEnabled=!blocked;saveProgress.IsEnabled=!blocked&&loaded&&manifest is not null;
         zoom.Text=$"{viewport.ZoomFactor/OriginalZoom()*100:0}%";zoomOut.IsEnabled=loaded&&!busy&&viewport.ZoomFactor>viewport.MinZoomFactor;zoomIn.IsEnabled=loaded&&!busy&&viewport.ZoomFactor<viewport.MaxZoomFactor;actualSize.IsEnabled=loaded&&!busy;fit.IsEnabled=loaded&&!busy;

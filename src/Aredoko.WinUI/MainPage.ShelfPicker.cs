@@ -50,7 +50,7 @@ public sealed partial class MainPage
         }
         panel.Children.Add(filter);panel.Children.Add(count);panel.Children.Add(list);
         dialogOpen=true;
-        var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=title,Content=panel,PrimaryButtonText="適用",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Close};
+        var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=title,Content=panel,PrimaryButtonText="適用",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Primary};
         bool rebuilding=false;
         bool creating=false;
         dialog.Closing+=(_,closing)=>{if(creating)closing.Cancel=true;};

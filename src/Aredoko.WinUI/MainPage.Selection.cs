@@ -42,7 +42,7 @@ public sealed partial class MainPage
     }
     private void ShowSelectionSummary()
     {
-        folderSettingsActive=false;folderDraft=null;DetailPaneTitle.Visibility=Visibility.Visible;DetailPaneTitle.Text="選択した作品";
+        folderSettingsActive=false;folderDraft=null;DetailKindBadge.Visibility=Visibility.Collapsed;DetailPaneTitle.Visibility=Visibility.Visible;DetailPaneTitle.Text="選択した作品";
         FolderEditorPanel.Visibility=Editor.Visibility=Visibility.Collapsed;SelectionSummaryScroll.Visibility=Visibility.Visible;
         SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件選択中";
         UpdateSelectionSummaryDetails();
@@ -309,7 +309,7 @@ public sealed partial class MainPage
                 // A retained snapshot needs only the saved favorite flag updated.
                 var value=operation==SelectionOperation.FavoriteAdd;
                 saved=saved with {Favorite=value};selected.Favorite=value;updatingFavorite=true;
-                try{Favorite.IsChecked=value;}finally{updatingFavorite=false;}
+                try{SyncFavoriteToggle(value);}finally{updatingFavorite=false;}
             }
             if(detailsWereOpen&&!disposed)Details.IsPaneOpen=true;
             if(!kept)await RefreshResultRowsAfterEditAsync(favoriteOnly:favorite);

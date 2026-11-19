@@ -58,7 +58,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button retry = IconButton(Symbol.Refresh);
     private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly TextBlock positionText = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock volumeText = new() { Text = "🔊 80%", VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock volumeText = new() { Text = "80%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
     private CancellationTokenSource? request;
     private MediaPlayer? mediaPlayer;
@@ -73,7 +73,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
     public event Action? EditDetailsRequested;
-    public string WindowTitle => "Aredoko — " + (isAudio ? "音声再生" : "動画再生") + "　" + itemTitle;
+    public string WindowTitle => $"{itemTitle} — Aredoko";
     public event Action<string>? TitleChanged;
 
     public VideoPlayerView(LibraryApi api, int itemId, string titleText, int? initialPositionMs = null, bool isAudio = false,ResultSession? favoriteSession=null,int favoriteOrdinal=0)
@@ -430,7 +430,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         volumeDown.IsEnabled = !busy && volume > 0;
         volumeUp.IsEnabled = !busy && volume < 100;
         updatingVolume=true;try{volumeSlider.Value=volume;volumeSlider.IsEnabled=!busy;}finally{updatingVolume=false;}
-        volumeText.Text = muted ? "🔇" : $"🔊 {volume}%";
+        volumeText.Text = muted ? "消音" : $"{volume}%";
         retry.IsEnabled = !busy && failed&&!favorite.IsSaving;
     }
 

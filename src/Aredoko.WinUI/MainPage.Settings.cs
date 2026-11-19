@@ -34,12 +34,13 @@ public sealed partial class MainPage
     private void SetSettingsCategory(string category)
     {
         currentSettingsCategory=category;
-        var accent=ThemeStyle("AccentButtonStyle");
-        if(SettingsCatAllButton is not null)SettingsCatAllButton.Style=category=="all"?accent:null;
-        if(SettingsCatGeneralButton is not null)SettingsCatGeneralButton.Style=category=="general"?accent:null;
-        if(SettingsCatLibraryButton is not null)SettingsCatLibraryButton.Style=category=="library"?accent:null;
-        if(SettingsCatAIButton is not null)SettingsCatAIButton.Style=category=="ai"?accent:null;
-        if(SettingsCatMaintenanceButton is not null)SettingsCatMaintenanceButton.Style=category=="maintenance"?accent:null;
+        var selected=ThemeStyle("SelectedSegmentButtonStyle");
+        var unselected=ThemeStyle("UnselectedSegmentButtonStyle");
+        if(SettingsCatAllButton is not null)SettingsCatAllButton.Style=category=="all"?selected:unselected;
+        if(SettingsCatGeneralButton is not null)SettingsCatGeneralButton.Style=category=="general"?selected:unselected;
+        if(SettingsCatLibraryButton is not null)SettingsCatLibraryButton.Style=category=="library"?selected:unselected;
+        if(SettingsCatAIButton is not null)SettingsCatAIButton.Style=category=="ai"?selected:unselected;
+        if(SettingsCatMaintenanceButton is not null)SettingsCatMaintenanceButton.Style=category=="maintenance"?selected:unselected;
         if(SettingsSectionAI is not null)SettingsSectionAI.Visibility=category is "all" or "ai"?Visibility.Visible:Visibility.Collapsed;
         if(SettingsSectionGeneral is not null)SettingsSectionGeneral.Visibility=category is "all" or "general"?Visibility.Visible:Visibility.Collapsed;
         if(SettingsSectionLibrary is not null)SettingsSectionLibrary.Visibility=category is "all" or "library"?Visibility.Visible:Visibility.Collapsed;
@@ -131,6 +132,9 @@ public sealed partial class MainPage
             var statusData=await statusTask;
             ApplyRuntimeVerificationSnapshot(statusData);
             var available=statusData["available"]?.GetValue<bool>()==true;
+            var accent=ThemeStyle("AccentButtonStyle");
+            if(SettingsAIIndexButton is not null)SettingsAIIndexButton.Style=available?accent:null;
+            if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?null:accent;
             var state=statusData["state"]?.GetValue<string>()??"idle";
             var processed=statusData["processed"]?.GetValue<int>()??0;
             var total=statusData["total"]?.GetValue<int>()??0;
@@ -271,6 +275,11 @@ public sealed partial class MainPage
         await OpenAIAutoEnvironmentDialogAsync(fromSettings:true);
         if(!disposed&&settingsHubOpen)await LoadSettingsStatusAsync();
     }
+    private async void SettingsAISetupPlan_Click(object sender,RoutedEventArgs e)
+    {
+        await OpenAISetupPlanAsync();
+        if(!disposed&&settingsHubOpen)await LoadSettingsStatusAsync();
+    }
     private async void SettingsOpenFolders_Click(object sender,RoutedEventArgs e)=>await OpenFolderHubAsync();
     private async void SettingsOpenShelves_Click(object sender,RoutedEventArgs e)=>await OpenShelfHubAsync();
     private void SettingsRelatedTerms_Click(object sender,RoutedEventArgs e)=>RelatedTerms_Click(sender,e);
@@ -289,7 +298,7 @@ public sealed partial class MainPage
             panel.Children.Add(new TextBlock
             {
                 Text="同じ画面の「バックアップから復元」から復元できます。新しい保存先で検証され、元のライブラリと元ファイルは残ります。自動再起動は対応した配布版の Aredoko.exe から起動した場合に利用できます。\n\n"+
-                     "バックアップにはライブラリ情報と、選択した設定・履歴・読書位置・AI検索用データが含まれます。元の画像・動画、モデル、Python環境、サムネイルキャッシュは含みません。",
+                     "バックアップにはライブラリ情報と、選択した設定・履歴・読書位置・AI検索データが含まれます。元の画像・動画、モデル、Python環境、サムネイルキャッシュは含みません。",
                 TextWrapping=TextWrapping.Wrap
             });
             var offline=new Expander{Header="起動できない場合",HorizontalAlignment=HorizontalAlignment.Stretch,Content=new TextBlock
@@ -297,7 +306,7 @@ public sealed partial class MainPage
                 Text="アプリを終了してから、復旧ツールで新しい復元先を指定してください。既存のDBや元のメディアへ上書きしないでください。\n\n"+
                      "バックアップ例：\npython tools/backup_library.py backup --catalog <catalog.sqlite> --output <新バックアップ先>\n\n"+
                      "復元例：\npython tools/backup_library.py restore --bundle <バックアップ先> --output <新復元先>\n\n"+
-                     "破損したAI検索用データを除いて復元する場合は --without-ai を指定します。CLIを使用できる環境が必要です。",
+                     "破損したAI検索データを除いて復元する場合は --without-ai を指定します。CLIを使用できる環境が必要です。",
                 TextWrapping=TextWrapping.Wrap
             }};
             AutomationProperties.SetAutomationId(offline,"BackupRecoveryAdvanced");panel.Children.Add(offline);

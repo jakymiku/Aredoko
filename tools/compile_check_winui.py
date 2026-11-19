@@ -34,6 +34,7 @@ TYPE_NAMESPACES = {
     'KeyboardAccelerator': 'Microsoft.UI.Xaml.Input',
     'MicaBackdrop': 'Microsoft.UI.Xaml.Media',
     'SolidColorBrush': 'Microsoft.UI.Xaml.Media',
+    'ToggleButton': 'Microsoft.UI.Xaml.Controls.Primitives',
     'RowDefinition': 'Microsoft.UI.Xaml.Controls',
     'ColumnDefinition': 'Microsoft.UI.Xaml.Controls',
 }

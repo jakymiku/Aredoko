@@ -115,13 +115,14 @@ public sealed partial class MainPage
             var choiceListAndAI = new RadioButton
             {
                 GroupName = "PostRegScanChoice",
+                IsEnabled = aiAvailable,
                 Content = new StackPanel
                 {
                     Spacing = 2,
                     Children =
                     {
-                        new TextBlock { Text = "ファイル一覧とAI検索用データを作る", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] },
-                        new TextBlock { Text = "現在のモデルと対象範囲で、新規・変更分の検索用データを作ります（タグ候補の自動承認はしません）。", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"], Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextWrapping = TextWrapping.Wrap }
+                        new TextBlock { Text = "ファイル一覧とAI検索データを作る", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] },
+                        new TextBlock { Text = "現在のモデルと対象範囲で、新規・変更分のAI検索データを作ります（タグ候補の自動承認はしません）。", Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"], Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextWrapping = TextWrapping.Wrap }
                     }
                 }
             };
@@ -208,7 +209,7 @@ public sealed partial class MainPage
                 CloseButtonText = "今は登録だけ",
                 DefaultButton = ContentDialogButton.Primary
             };
-            void UpdatePrimaryText() => dialog.PrimaryButtonText = choiceListAndAI.IsChecked == true ? "一覧とAI検索用データを作る" : "一覧を作る";
+            void UpdatePrimaryText() => dialog.PrimaryButtonText = choiceListAndAI.IsChecked == true ? "一覧とAI検索データを作る" : "一覧を作る";
             choiceListOnly.Checked += (_, _) => UpdatePrimaryText();
             choiceListAndAI.Checked += (_, _) => UpdatePrimaryText();
             currentDialog = dialog;
@@ -230,7 +231,7 @@ public sealed partial class MainPage
                     if (!aiAvailable)
                     {
                         await StartScanWithModeAsync(targetIds, "list");
-                        var msg = "AIが未設定のためファイル一覧だけ作成を開始しました。AI検索用データは「設定 → AI検索を設定」の完了後に作成できます。";
+                        var msg = "AIが未設定のためファイル一覧だけ作成を開始しました。AI検索データは「設定 → AI検索を設定」の完了後に作成できます。";
                         ScanStatus.Text = msg;
                         Notice("ファイル一覧の作成を開始しました", msg);
                     }

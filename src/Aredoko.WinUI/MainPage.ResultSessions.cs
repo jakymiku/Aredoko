@@ -54,8 +54,7 @@ public sealed partial class MainPage
                 librarySelection.Bind(replacement.Id,replacement.Total,positions);
                 page=start/resultPageSize;ResetBrowse(start,result);rows=result.Items;
                 Count.Text=$"{result.Total:N0} 件";
-                PageNumber.Text=FormatLoadedPageRange(start,rows.Count,result.Total);
-                Previous.IsEnabled=start>0;Next.IsEnabled=start+rows.Count<result.Total;
+                UpdateBrowseFooter(FormatLoadedPageRange(start,rows.Count,result.Total),start>0,start+rows.Count<result.Total);
                 Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
                 if(!keepCards)RenderRows();
                 else

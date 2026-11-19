@@ -649,3 +649,85 @@ flowchart LR
 3. **タグ入力方式（UB-D13）**：**タグチップ一覧＋［+ タグを追加］入力欄** へ統合する（カンマ区切りの貼り付け一括追加と既存タグ候補選択は維持）。
 4. **設定のページ化（UB-T01）**：ポップアップダイアログではなく **主画面内の設定ページ（分類タブ切替）** にする。
 5. **用語と着手順**：`AI検索データ`／`ファイル一覧を更新`／`自動で入れる棚` 等で用語を統一し、**`UB-1` から順番に `UB-7` まで実装する**。
+
+---
+
+## 9. 第2弾：直感性・ユーザーフレンドリー徹底改善（UB-8〜UB-12）
+
+> 追加監査対象：`feat/winui3-production-mvp-20261011` (`e7464ad` / 配布候補24 / `frontend-product23`) の Light/Dark 実機スクリーンショット（`list-badges.png`, `grid-badges.png`, `details-chips.png`, `settings-grouped.png`）および `src/Aredoko.WinUI` 全画面ソースコード。
+
+### 9.1 発見された直感性・視覚階層の課題
+
+1. **主操作ボタンと選択中トグルの視覚競合**：一覧・棚・フォルダの表示切替 `[☰｜▦]` や `[文字｜AI]`、設定タブがいずれも濃い青の `AccentButtonStyle` で塗られており、画面内で唯一の主操作（`🔍 検索` や `保存` 等）よりトグルの方が目立っている。
+2. **AI 未設定時の検索バー行き止まり**：`AI：未設定` の状態で検索バー `[AI]` を選んでも、検索してエラーになるまで準備不足に気付かない。
+3. **絞り込みバーとフッターの冗長性**：フォルダ・タグ・棚・類似の4つの絞り込みバーの見た目が不揃いで、フッター左端の「読み込み済み」やページ移動ボタンの隠蔽（`⋯ その他` 内）が直感性を下げている。
+4. **詳細ペインの情報重複と常時Disabled保存バー**：
+   - タグチップ（`#空 ×` `#夜景 ×`）と直下のテキストボックス（`空, 夜景`）に同じタグが二重表示されている。
+   - `[ ] ★` のチェックボックスが素朴で、上段の閉じた × 行に 40px の空き白帯がある。
+   - 「棚」欄が入力できる白枠 TextBox に見えてクリック先が分かりにくい。
+   - 未編集でも下端に大きなグレーの `[保存]` ボタンが常駐している。
+5. **棚・登録フォルダ・設定・AI準備の即応性不足（実バグ含む）**：
+   - **実バグ** (`MainPage.Shelves.cs:225`)：`RenderShelfLayout()` が `ShelfLayoutButton.Content = tiles ? "リスト表示" : "グリッド表示";` と書き換えてしまい、`[☰｜▦]` のアイコンが破壊される。
+   - フォルダカード見出しが `名前（ShortPath）` の重複表示、ボタン「フォルダを開く」が Explorer と紛らわしく、1クリック更新もない。
+   - 設定のボタン群に1行説明がなく、用途別 AI 準備ウィザードへの導線も設定ページ内にない。また `AISetupPlan` ダイアログは初回・チェック変更のたびに「必要なものを確認」を手動押下させる構造になっている。
+   - ビューア（画像・本）のツールバーに現在ページ/総数が見えず、`retry` ボタンも失敗していないのに常時並んでいる。
+
+### 9.2 第2弾 修正・改善一覧（Before / After 対照表）
+
+#### A. 主画面・検索バー・一覧カード・フッター（UB-8）
+
+| ID | 対象ファイル・箇所 | 改善内容 | 修正前（Before） | 修正後（After） |
+| --- | --- | --- | --- | --- |
+| **UB-8A** | `MainPage.xaml` / `MainPage.xaml.cs` (`UpdateLayoutToggleVisuals`, `UpdateSearchMethod`) | 選択中トグルと主CTAの視覚階層分離 | `[☰｜▦]`・`[文字｜AI]`・設定タブに `AccentButtonStyle` を使用 | 選択中セグメント用に `SelectedSegmentButtonStyle`（薄色背景＋アクセント枠線）、非選択用に `UnselectedSegmentButtonStyle` を新設。塗り潰し青（`AccentButtonStyle`）は主操作ボタン専用に統一 |
+| **UB-8B** | `MainPage.xaml` / `MainPage.xaml.cs` (`ApplyRuntimeVerificationSnapshot`, `SearchTools`) | AI未設定のインライン案内バー | `[AI]` を押しても未準備が検索前には分からず、検索後にエラーになる | AI未準備時に検索バー直下へ `SearchAIUnreadyBar`（`⚠ AI検索はまだ準備されていません` ＋ `[✨ AIを準備する]` ＋ `[文字検索に戻る]`）を1行表示 |
+| **UB-8C** | `MainPage.xaml` / `MainPage.xaml.cs` / `MainPage.Shelves.cs` | 検索条件ピルの一貫化 | `ActiveSearchScopeBar`・`ShelfScopeBar`・`SimilarityBar`・`TagScopeBar` の枠デザインが不統一 | 全4種を `ScopePillBorderStyle` の丸角ピルへ統一し、`📁`・`#`・`📚`・`≈` 接頭辞＋コンパクト `×` 解除に揃える |
+| **UB-8D** | `MainPage.xaml.cs` (`Items_ContainerContentChanging`, `RefreshFavoriteCard`) | リスト表示カード右端のクイック操作 | リスト行で気に入りと再生/閲覧に右クリックや詳細ペインが必要 | リスト行右端（Col 2）へ `☆/★`（`ItemFavToggle{id}`）＋開ける作品は `▶`（`ItemOpenQuick{id}`）を1クリック配置。Gridはシンプル維持 |
+| **UB-8E** | `MainPage.xaml` / `MainPage.xaml.cs` (`FormatLoadedPageRange`, `ItemPagerRow`) | フッター表記簡潔化と直接ページ移動 | `"読み込み済み"` ラベル＋ `"3件（1–3 / 全3件）"`＋ページ移動が `⋯ その他` 内に隠蔽 | `"読み込み済み"` を削除し `"全 3 件"` / `"1–60 件 / 全 300 件"` 表記へ変更。複数ページ時は `◀ 前へ` / `次へ ▶` をフッターに直接表示 |
+
+#### B. 右側詳細ペイン（UB-9）
+
+| ID | 対象ファイル・箇所 | 改善内容 | 修正前（Before） | 修正後（After） |
+| --- | --- | --- | --- | --- |
+| **UB-9A** | `MainPage.xaml` / `MainPage.xaml.cs` (`SplitView.Pane` Row 0, `ApplySelectedRow`) | 上段空白へのメディア種別ピル配置 | `[×]` ボタンだけの白い空帯が上段に広がる | Row 0 左側に種類バッジ（`DetailKindBadge`：`🖼 画像`・`📖 本` 等）を配置 |
+| **UB-9B** | `MainPage.xaml` / `MainPage.xaml.cs` (`ChkFavorite`) / `compile_check_winui.py` | お気に入り操作の星アイコン化 | 素朴な `[ ] ★` チェックボックス | UIA `TogglePattern`（`AutomationId="ChkFavorite"`）を保ったまま星型 `ToggleButton`（未登録 `☆` / 登録済はテーマ別アンバー `★`）へ刷新 |
+| **UB-9C** | `MainPage.xaml` / `MainPage.xaml.cs` (`draftTags`, `TxtTags`, `ActiveTagChipsPanel`) | タグ二重表示の解消と追加専用欄 | 上の `#空 ×` チップと下の `"空, 夜景"` テキスト欄で同じタグが重複表示 | 編集中タグは `draftTags[]` としてチップのみに表示（`ActiveTagChipsPanel` にUIA名同期）。`TxtTags` は常時空の追加専用欄 `Placeholder="＋ タグを追加（Enter・カンマ可）"`＋`＋` 確定ボタン（`BtnCommitTagInput`）へ統合（カンマ貼り付け・未確定入力の未保存検知も保持） |
+| **UB-9D** | `MainPage.xaml` / `MainPage.Shelves.cs` (`ActiveShelfChipsPanel`, `UpdateShelfEditorLabel`) | 棚欄のクリック可能チップ化 | 入力欄に見える白枠 `IsReadOnly` TextBox＋隣に「開く」「変更」 | クリックで即絞り込める `📚 棚名` チップ行（`DetailShelfChip{i}`）＋「変更」ボタンへ置換（`TxtShelf` は互換のため非表示同期） |
+| **UB-9E** | `MainPage.xaml` / `MainPage.xaml.cs` (`DetailSaveBar`, `UpdateDirty`) | 未編集時の保存バー自動格納 | 未編集でも最下段に大きな無効状態 `[保存]` ボタンが常駐 | 未編集かつ状態通知なし時は `DetailSaveBar` を `Collapsed` にし、プレビュー・タグ領域を広く確保。変更発生時に `● 未保存の変更`＋`[保存]`＋`[元に戻す]` を即座に表示 |
+
+#### C. 棚一覧・登録フォルダ画面（UB-10）
+
+| ID | 対象ファイル・箇所 | 改善内容 | 修正前（Before） | 修正後（After） |
+| --- | --- | --- | --- | --- |
+| **UB-10A** | `MainPage.Shelves.cs:225` (`RenderShelfLayout`) | **実バグ修正**：棚レイアウトボタン破壊防止 | `ShelfLayoutButton.Content = tiles ? "リスト表示" : "グリッド表示";` がアイコンを上書き | `UpdateLayoutToggleVisuals();` 呼び出しへ置換し、`[☰｜▦]` セグメントを維持 |
+| **UB-10B** | `MainPage.Shelves.cs` | 棚カード・作成ダイアログ改善 | フォルダアイコン裸置き、`"{N} 件"`、作成ダイアログ既定が「キャンセル」、1件でも複数選択が有効 | `ThumbPlateStyle`＋`Symbol.Library`、`"{N} 作品"`、`EditShelfNameAsync` の `DefaultButton = Primary`（削除確認は `Close` 維持）、複数選択は `shelfDescriptors.Count > 1` で有効 |
+| **UB-10C** | `MainPage.xaml.cs` (`RenderFolderHub`) | フォルダカード視認性・直接更新 | タイトル `"media（...media）"` 重複、`·` 羅列メタ、`"フォルダを開く"` ボタン（Explorerと紛らわしい）、直接更新ボタンなし | 見出しは `row.Name`、状態/棚/モードはバッジピル化、`"フォルダを開く"` → `"作品を見る"` に改称し、1クリック更新ボタン `"⟳ 更新"`（`QuickScanFolder{id}`）を追加 |
+| **UB-10D** | `MainPage.xaml` (`FolderAddPanel`) | D&D 追加のヒント追加 | パス入力欄だけでドロップ追加に気付きにくい | フォルダ追加パネル内に `💡 エクスプローラーからフォルダをドラッグ＆ドロップでも追加できます` を追加 |
+
+#### D. 設定・AI準備ウィザード・AI詳細・登録後・棚ピッカー（UB-11）
+
+| ID | 対象ファイル・箇所 | 改善内容 | 修正前（Before） | 修正後（After） |
+| --- | --- | --- | --- | --- |
+| **UB-11A** | `MainPage.xaml` / `MainPage.Settings.cs` | 設定アクションカード・AIウィザード導線・動的CTA | 「ライブラリ」「管理」ボタンに説明がなく並置のみ。ウィザード導線がなく、AI未設定でも青ボタンが「AI検索を設定」固定 | 2列アクションカード（太字タイトル＋1行説明）化、AI枠へ `[✨ 用途からAI準備を選ぶ]`（`BtnAISetupPlan`）追加、AI状態に応じ未設定時は `[AIの自動セットアップ]`・準備後は `[AI検索を設定]` を主CTA強調、`OpenRecoveryGuideDialogAsync` の用語統一 |
+| **UB-11B** | `MainPage.AISetupPlan.cs` | AI用途別ウィザードの自動確認 | 初回やチェック変更のたびに「必要なものを確認」を手動押下させる | 開いた瞬間（`Opened`）およびチェック変更の 300ms デバウンス後に自動で最新計画を確認 |
+| **UB-11C** | `MainPage.xaml.cs` (`OpenAISettingsAsync`) | AI検索設定ダイアログのカード整理 | 設定要素と動画/音声準備が一列に縦積み | モデル/対象範囲/メモリ負荷/動画・音声準備を `AredokoSurfaceStyle` カードへ整理、下部の状態サマリーも枠囲み（`AutomationId` 全維持） |
+| **UB-11D** | `MainPage.GettingStarted.cs:115-215` | 登録直後ダイアログの誤選択防止・用語統一 | `"AI検索用データ"` 表記、AI未準備でも AI 付ラジオを選択可能 | `"AI検索データ"` へ統一し、`!aiAvailable` 時は `choiceListAndAI.IsEnabled = false` にして下段の `[AIを設定]` へ誘導 |
+| **UB-11E** | `MainPage.ShelfPicker.cs:53` / `MainPage.Shelves.cs:256` | 棚選択ダイアログ既定ボタン修正 | `DefaultButton = Close`（キャンセルが青色）、やや長い説明文 | `DefaultButton = Primary`（適用を主CTA）、案内文を `"チェックで追加、外すと解除します。"` へ短縮 |
+
+#### E. ビューア画面（UB-12）
+
+| ID | 対象ファイル・箇所 | 改善内容 | 修正前（Before） | 修正後（After） |
+| --- | --- | --- | --- | --- |
+| **UB-12A** | `ImageViewerView.cs` / `ArchiveReaderView.cs` | 位置表示のバー統合・失敗時のみ再試行 | `count`（`1 / 12` 等）がツールバーに未配置、`retry` が正常時も常時表示 | `previous` と `next` の間に `count` を表示、`retry` はエラー発生時のみ `Visibility.Visible` |
+| **UB-12B** | `VideoPlayerView.cs` | タイトル先出し・音量表記整理 | `"Aredoko — 動画再生 ..."`（作品名が末尾）、`"🔊 80%"`（音量アイコンと絵文字が重複） | `"$itemTitle — Aredoko"` へ変更、`"80%"`（ミュート時のみ `"ミュート"`/`"🔇"` 調整）へ簡潔化 |
+
+### 9.3 保全する不変条件・互換ポイント
+
+- 既存の全 `AutomationProperties.AutomationId` を維持（`ChkFavorite` は `TogglePattern` を提供する `ToggleButton`、`BtnSave` / `TxtTags` / `TxtShelf` / `FolderMeta{id}` / `OpenFolder{id}` / `BtnAISetupPlan` 含む）。
+- 検索方法コンボ（`CmbSearchMode`）の 0..9 インデックス順、原本保護・パス検証・未保存確認（`ConfirmDiscardAsync`）・取消競合保護は変更しない。
+- `compile_check_winui.py` の型マッピングに `ToggleButton` を追加し、スタブビルド・Portable ビルドともエラー 0 を維持する。
+
+### 9.4 検証計画（第2弾）
+
+- `dotnet test tests/Aredoko.Core.Tests/Aredoko.Core.Tests.csproj -c Release --no-restore`＋`python -m unittest tests.test_winui_compile_stub`＋`tools/ui_empty_guidance_audit.py`
+- Portable WinUI publish (`data/development-tools/frontend-product24`)
+- `data/gui-ui-polish02/check.py` を UB-8〜12 検証付きに拡張して Light (`run13_light`)・Dark (`run14_dark`) 両方で実機起動＋スクリーンショット全件目視確認（`list-badges`, `ai-unready-bar`, `grid-badges`, `details-chips`, `details-dirty`, `settings-grouped`, `folder-hub`, `shelf-hub`）

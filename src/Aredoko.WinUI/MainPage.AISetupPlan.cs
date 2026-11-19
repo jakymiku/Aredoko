@@ -15,10 +15,9 @@ public sealed partial class MainPage
         aiSetupFlowOpen=true;
         try
         {
-            bool refresh=false;
             while(!disposed&&ready)
             {
-                var destination=await ShowAISetupPlanStepAsync(refresh);
+                var destination=await ShowAISetupPlanStepAsync();
                 if(disposed)return;
                 if(destination=="download")await OpenAIDownloadDialogAsync();
                 else if(destination=="automatic")await OpenAIAutoEnvironmentDialogAsync();
@@ -30,12 +29,11 @@ public sealed partial class MainPage
                     if(destination=="skip")Notice("AIなしで始めます","名前・タグ検索と閲覧が使えます（あとで設定できます）");
                     return;
                 }
-                refresh=true;
             }
         }
         finally{aiSetupFlowOpen=false;}
     }
-    private async Task<string?> ShowAISetupPlanStepAsync(bool refreshOnOpen)
+    private async Task<string?> ShowAISetupPlanStepAsync()
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return null;
         dialogOpen=true;string? destination=null;
@@ -47,14 +45,15 @@ public sealed partial class MainPage
             var selected=AISetupSelection.Normalize(ViewerOptions.Value.AISetupFeatures);long version=0;
             var panel=new StackPanel{Spacing=12};
             panel.Children.Add(new TextBlock{Text="何で探したいですか？（名前・タグ検索はAIなしでOK）",TextWrapping=TextWrapping.Wrap});
-            var summary=new TextBlock{Text="使いたい機能を選んで「必要なものを確認」を押してください",TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};
+            var summary=new TextBlock{Text="必要な環境を確認しています…",TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};
             AutomationProperties.SetAutomationId(summary,"AISetupPlanSummary");
             var nextSteps=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};AutomationProperties.SetAutomationId(nextSteps,"AISetupNextSteps");
             var recoveryText=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};AutomationProperties.SetAutomationId(recoveryText,"AISetupRecoveryText");
             var diagnostics=new Button{Content="診断情報",IsEnabled=false};AutomationProperties.SetAutomationId(diagnostics,"AISetupDiagnostics");
             var recoveryPanel=new StackPanel{Spacing=8};recoveryPanel.Children.Add(recoveryText);recoveryPanel.Children.Add(diagnostics);
             var recovery=new Expander{Header="うまく使えないとき",Content=recoveryPanel,Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(recovery,"AISetupRecovery");
-            var review=new Button{Content="必要なものを確認"};AutomationProperties.SetAutomationId(review,"ReviewAISetupPlan");
+            var review=new Button{Content="再確認"};AutomationProperties.SetAutomationId(review,"ReviewAISetupPlan");
+            var autoReviewTimer=DispatcherQueue.CreateTimer();autoReviewTimer.Interval=TimeSpan.FromMilliseconds(300);autoReviewTimer.IsRepeating=false;
             var download=new Button{Content="モデルをダウンロード",IsEnabled=false};AutomationProperties.SetAutomationId(download,"AISetupPlanDownload");
             var existing=new Button{Content="手元のファイルを使う",IsEnabled=false};AutomationProperties.SetAutomationId(existing,"AISetupPlanExisting");
             var automatic=new Button{Content="自動セットアップ"};AutomationProperties.SetAutomationId(automatic,"AISetupPlanAutomatic");
@@ -82,8 +81,9 @@ public sealed partial class MainPage
                 {
                     selected=choice.IsChecked==true?selected|(1<<index):selected&~(1<<index);
                     version++;request?.Cancel();download.IsEnabled=false;existing.IsEnabled=false;dialog.IsPrimaryButtonEnabled=false;
-                    summary.Text="選択を変更しました。「必要なものを確認」を押すと最新状態を確認できます。";nextSteps.Text="";
+                    summary.Text="構成を確認しています…";nextSteps.Text="";
                     recovery.Visibility=Visibility.Collapsed;diagnostics.IsEnabled=false;
+                    autoReviewTimer.Stop();autoReviewTimer.Start();
                 }
                 choice.Checked+=(_,_)=>Changed();choice.Unchecked+=(_,_)=>Changed();
                 Grid.SetRow(choice,index/2);Grid.SetColumn(choice,index%2);choices.Children.Add(choice);
@@ -94,7 +94,8 @@ public sealed partial class MainPage
             dialog.Content=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             async Task ReviewAsync()
             {
-                if(!review.IsEnabled)return;
+                autoReviewTimer.Stop();
+                request?.Cancel();
                 var expected=++version;request?.Dispose();request=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                 var cancellation=request;
                 review.IsEnabled=false;progress.Visibility=Visibility.Visible;
@@ -120,10 +121,11 @@ public sealed partial class MainPage
                 }
                 catch(OperationCanceledException)when(cancellation.IsCancellationRequested){}
                 catch(Exception ex){if(!lifetime.IsCancellationRequested&&expected==version)summary.Text="確認できませんでした。基本機能はそのまま使えます。\n"+ex.Message;}
-                finally{if(!lifetime.IsCancellationRequested){review.IsEnabled=true;progress.Visibility=Visibility.Collapsed;}}
+                finally{if(!lifetime.IsCancellationRequested&&expected==version){review.IsEnabled=true;progress.Visibility=Visibility.Collapsed;}}
             }
+            autoReviewTimer.Tick+=(_,_)=>{if(!lifetime.IsCancellationRequested&&!disposed)reviewing=ReviewAsync();};
             review.Click+=async(_,_)=>{reviewing=ReviewAsync();await reviewing;};
-            dialog.Opened+=(_,_)=>{if(refreshOnOpen)reviewing=ReviewAsync();};
+            dialog.Opened+=(_,_)=>{reviewing=ReviewAsync();};
             void MoveTo(string target,int? selection=null)
             {
                 try{ViewerOptions.SaveAISetupFeatures(selection??selected);destination=target;dialog.Hide();}
@@ -139,8 +141,8 @@ public sealed partial class MainPage
                 catch(Exception ex){args.Cancel=true;summary.Text="選択を保存できませんでした。\n"+ex.Message;}
             };
             var closed=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            dialog.Closed+=(_,_)=>{lifetime.Cancel();closed.TrySetResult(true);};
-            await dialog.ShowAsync();await Task.WhenAny(closed.Task,Task.Delay(500));
+            dialog.Closed+=(_,_)=>{autoReviewTimer.Stop();lifetime.Cancel();closed.TrySetResult(true);};
+            await dialog.ShowAsync();autoReviewTimer.Stop();await Task.WhenAny(closed.Task,Task.Delay(500));
             if(destination is null&&!disposed)ViewerOptions.SaveAISetupFeatures(selected);
         }
         catch(Exception ex){if(!disposed)Failure(ex);}

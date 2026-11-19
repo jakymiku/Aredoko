@@ -62,7 +62,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button retry = IconButton(Symbol.Refresh);
     private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly TextBlock title = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock count = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock count = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) };
     private readonly TextBlock zoom = new() { Text = "100%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
     private bool busy, disposed, loaded, navigating;
@@ -86,7 +86,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         viewport.SizeChanged += (_, _) => FitImage();
         viewport.ViewChanged += (_, _) => UpdateControls();
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var control in new UIElement[] { previous, next, zoomOut, zoomIn, fit, actualSize, zoom, favorite.Button,editDetails,retry,settings }) actions.Children.Add(control);
+        foreach (var control in new UIElement[] { previous, count, next, zoomOut, zoomIn, fit, actualSize, zoom, favorite.Button, editDetails, retry, settings }) actions.Children.Add(control);
         Identify(favorite.Button,"ImageFavorite","お気に入りを読み込み中");
         Identify(editDetails,"ImageEditDetails","詳細で編集");
         ToolTipService.SetToolTip(editDetails,"閉じて詳細パネルを開く");
@@ -146,6 +146,8 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         previous.IsEnabled = !disposed && !navigating && !favorite.IsSaving && sequence.HasPrevious; next.IsEnabled = !disposed && !navigating && !favorite.IsSaving && sequence.HasNext;
         favorite.UpdateAvailability(!disposed&&!navigating&&loaded);
         editDetails.IsEnabled=!disposed&&!navigating&&loaded;
+        retry.Visibility = failed ? Visibility.Visible : Visibility.Collapsed;
+        retry.IsEnabled = failed && !busy && !navigating && !disposed;
         zoom.Text = loaded?$"{viewport.ZoomFactor/OriginalZoom() * 100:0}%":"—";
         zoomOut.IsEnabled = loaded && !busy && viewport.ZoomFactor > viewport.MinZoomFactor;
         zoomIn.IsEnabled = loaded && !busy && viewport.ZoomFactor < viewport.MaxZoomFactor; actualSize.IsEnabled=loaded&&!busy; fit.IsEnabled = loaded && !busy;
@@ -244,7 +246,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         {
             if (!disposed && stamp == version && stream == animationStream)
             {
-                StopAnimation(true); failed = true; retry.IsEnabled = true;
+                StopAnimation(true); failed = true; UpdateControls();
                 ViewerNotice.Set(status, "アニメーションを読み取れません。開き直してください。"); ShowChrome(); AppLog.Error(ex);
             }
         }
