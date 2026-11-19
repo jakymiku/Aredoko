@@ -542,7 +542,7 @@
     </Grid>
     <Grid x:Name="SettingsHubView" Grid.Row="1" Grid.RowSpan="3" Visibility="Collapsed" Margin="0,0,12,0" RowSpacing="12" AutomationProperties.AutomationId="SettingsDialog" AutomationProperties.Name="設定">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-     <Grid ColumnSpacing="8">
+     <Grid ColumnSpacing="8" MaxWidth="960" HorizontalAlignment="Left">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto" VerticalScrollBarVisibility="Disabled">
        <Border HorizontalAlignment="Left" CornerRadius="{ThemeResource ControlCornerRadius}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" Padding="2">
@@ -558,7 +558,7 @@
       <Button x:Name="CloseSettingsButton" Grid.Column="1" Content="← 作品一覧へ戻る" Click="CloseSettings_Click" AutomationProperties.Name="閉じる" AutomationProperties.AutomationId="CloseButton"/>
      </Grid>
      <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="設定項目" AutomationProperties.AutomationId="SettingsScroll">
-      <StackPanel Spacing="16" Margin="0,0,8,16">
+      <StackPanel Spacing="16" Margin="0,0,8,16" MaxWidth="960" HorizontalAlignment="Left">
        <TextBlock x:Name="SettingsInstantStatus" Text="変更した設定はすぐに反映されます" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="TxtSettingsStatus"/>
        <StackPanel x:Name="SettingsSectionAI" Spacing="8">
         <TextBlock Text="AI検索の準備状況" Style="{StaticResource SubtitleTextBlockStyle}"/>
@@ -588,6 +588,7 @@
           <TextBlock x:Name="SettingsAINextHint" Text="AIを使わなくても名前・タグで検索できます。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
           <StackPanel Orientation="Horizontal" Spacing="8">
            <Button x:Name="SettingsAIIndexButton" Content="AI検索を設定" Style="{StaticResource AccentButtonStyle}" Click="SettingsAIIndex_Click" AutomationProperties.AutomationId="BtnAIIndex"/>
+           <Button x:Name="SettingsAIMediaPrepButton" Content="🎬 動画・音声のAIデータ" Click="SettingsAIMediaPrep_Click" AutomationProperties.AutomationId="BtnAIMediaPrep"/>
            <Button x:Name="SettingsAIEnvironmentButton" Content="AIの自動セットアップ" Click="SettingsAIEnvironment_Click" AutomationProperties.AutomationId="BtnAIEnvironment"/>
            <Button x:Name="SettingsAISetupPlanButton" Content="✨ 用途からAI準備を選ぶ" Click="SettingsAISetupPlan_Click" AutomationProperties.AutomationId="BtnAISetupPlan"/>
           </StackPanel>
@@ -600,7 +601,7 @@
         <Border Style="{StaticResource AredokoSurfaceStyle}">
          <StackPanel Spacing="12">
           <Grid ColumnSpacing="12">
-           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+           <Grid.ColumnDefinitions><ColumnDefinition Width="240"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
            <TextBlock Text="テーマ" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}"/>
            <ComboBox x:Name="SettingsThemeCombo" Grid.Column="1" MinWidth="220" SelectionChanged="SettingsInstantCombo_Changed" AutomationProperties.Name="テーマ" AutomationProperties.AutomationId="SettingsTheme">
             <ComboBoxItem Content="Windowsの設定に合わせる" Tag="system"/>
@@ -609,7 +610,7 @@
            </ComboBox>
           </Grid>
           <Grid ColumnSpacing="12">
-           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+           <Grid.ColumnDefinitions><ColumnDefinition Width="240"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
            <TextBlock Text="マウスホイール（画像・本）" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}"/>
            <ComboBox x:Name="SettingsWheelCombo" Grid.Column="1" MinWidth="220" SelectionChanged="SettingsInstantCombo_Changed" AutomationProperties.Name="画像・本表示中のホイール操作" AutomationProperties.AutomationId="SettingsWheel">
             <ComboBoxItem Content="下回しで次へ（標準）" Tag="down"/>
@@ -650,7 +651,7 @@
            </Button>
           </Grid>
           <Grid ColumnSpacing="12">
-           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+           <Grid.ColumnDefinitions><ColumnDefinition Width="240"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
            <TextBlock Text="閲覧履歴" VerticalAlignment="Center" Style="{StaticResource MediaMetadataStyle}"/>
            <Button x:Name="SettingsClearHistoryButton" Grid.Column="1" Content="閲覧履歴をすべて消去…" Click="SettingsClearHistory_Click" AutomationProperties.AutomationId="BtnClearHistory"/>
           </Grid>

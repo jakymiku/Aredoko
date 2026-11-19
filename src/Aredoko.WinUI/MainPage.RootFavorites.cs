@@ -56,6 +56,6 @@ public sealed partial class MainPage
             if(!folderHubOpen&&!shelfHubOpen)await RefreshResultRowsAfterEditAsync();
         }
         catch(Exception ex){Failure(ex);}
-        finally{saving=false;transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
+        finally{saving=false;transitions.Release();if(PendingAutoSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
 }

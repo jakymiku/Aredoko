@@ -76,8 +76,8 @@ class VideoToolTests(unittest.TestCase):
             for call in run.call_args_list:
                 args, source, limit, deadline = call.args
                 self.assertIs(source, file)
-                self.assertEqual(args[args.index('-i') + 1], 'pipe:0')
-                self.assertEqual(args[args.index('-protocol_whitelist') + 1], 'pipe')
+                self.assertEqual(args[args.index('-i') + 1], 'fd:')
+                self.assertEqual(args[args.index('-protocol_whitelist') + 1], 'fd,pipe')
                 self.assertNotIn('concat', args[args.index('-format_whitelist') + 1])
                 self.assertEqual(args[args.index('-threads') + 1], '1')
                 self.assertEqual(args[args.index('-max_pixels') + 1], str(video.MAX_VIDEO_PIXELS))
@@ -311,6 +311,68 @@ class NativeVideoTests(unittest.TestCase):
         with tempfile.TemporaryFile() as source:
             source.write(b'not a video'); source.seek(0)
             with self.assertRaises(video.VideoPreviewUnavailable): video.VideoThumbnailer().read(source, 'corrupt')
+
+
+def _find_ffmpeg():
+    try:
+        return video._executable('ffmpeg'), video._executable('ffprobe')
+    except video.VideoPreviewUnavailable:
+        return None
+
+
+class NonFaststartAndCompatTests(unittest.TestCase):
+    def test_large_non_faststart_mp4_thumbnail_and_yuv444p_compat_transcode(self):
+        tools = _find_ffmpeg()
+        if tools is None:
+            self.skipTest('FFmpeg tools unavailable')
+        ffmpeg, _ = tools
+        from previews import ReaderChanged
+        from video_compat import VideoCompatCache
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            media = base / 'media'
+            media.mkdir()
+            large_non_faststart = media / 'large_non_faststart.mp4'
+            odd_yuv444 = media / 'odd_yuv444p.mp4'
+            subprocess.run([
+                ffmpeg, '-nostdin', '-v', 'error', '-f', 'lavfi',
+                '-i', 'testsrc2=s=1280x720:r=15:d=3',
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '10', '-pix_fmt', 'yuv420p',
+                str(large_non_faststart),
+            ], check=True, timeout=20)
+            self.assertGreater(large_non_faststart.stat().st_size, 1_500_000)
+            subprocess.run([
+                ffmpeg, '-nostdin', '-v', 'error', '-f', 'lavfi',
+                '-i', 'color=c=blue:s=641x481:d=0.4',
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv444p',
+                str(odd_yuv444),
+            ], check=True, timeout=15)
+            with large_non_faststart.open('rb') as handle:
+                thumb = video.VideoThumbnailer().read(handle, 'large-non-faststart', edge=256)
+            video._validate_png(thumb)
+            before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in media.iterdir()}
+            catalog = ProductionCatalog(base / 'catalog.sqlite')
+            self.addCleanup(catalog.close)
+            root = catalog.add_root(str(media))
+            catalog.index.scan(root)
+            catalog.sync_index()
+            items = {r['title']: r['id'] for r in catalog.search()['items']}
+            reader = PreviewReader(catalog)
+            compat = VideoCompatCache(reader)
+            self.addCleanup(compat.close)
+            manifest = compat.manifest(items['odd_yuv444p.mp4'])
+            self.assertEqual(manifest['mime'], 'video/mp4')
+            self.assertGreater(manifest['size_bytes'], 64)
+            head, mime, total = compat.read_range(
+                items['odd_yuv444p.mp4'], 0, min(65535, manifest['size_bytes'] - 1), manifest['revision'])
+            self.assertEqual(mime, 'video/mp4')
+            self.assertEqual(total, manifest['size_bytes'])
+            self.assertIn(b'ftyp', head[:64])
+            # Mutating source must invalidate cached compat ranges immediately.
+            odd_yuv444.write_bytes(b'mutated')
+            with self.assertRaises(ReaderChanged):
+                compat.read_range(items['odd_yuv444p.mp4'], 0, 15, manifest['revision'])
+            self.assertEqual(before['large_non_faststart.mp4'], hashlib.sha256(large_non_faststart.read_bytes()).hexdigest())
 
 
 if __name__ == '__main__': unittest.main()

@@ -485,3 +485,43 @@ class ThumbnailHTTPTests(unittest.TestCase):
             with urllib.request.urlopen(urllib.request.Request(base2, headers={'X-Aredoko-Token': 'test-token'})) as resp:
                 second_bytes = resp.read()
         self.assertEqual(second_bytes, first_bytes)
+
+
+class VideoThumbnailDiskTests(unittest.TestCase):
+    def test_video_thumbnail_persists_in_thumbnail_disk(self):
+        import subprocess
+        import video_previews as vp
+        try:
+            ffmpeg = vp._executable('ffmpeg')
+            vp._executable('ffprobe')
+        except vp.VideoPreviewUnavailable:
+            self.skipTest('FFmpeg tools unavailable')
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name)
+        media = base / 'media'
+        media.mkdir()
+        vid = media / 'clip.mp4'
+        subprocess.run([
+            ffmpeg, '-nostdin', '-v', 'error', '-f', 'lavfi',
+            '-i', 'color=c=green:s=320x180:d=0.3',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+            str(vid),
+        ], check=True, timeout=15)
+        catalog = ProductionCatalog(base / 'catalog.sqlite')
+        self.addCleanup(catalog.close)
+        root = catalog.add_root(str(media))
+        catalog.index.scan(root)
+        catalog.sync_index()
+        video_id = catalog.search()['items'][0]['id']
+        disk = base / 'catalog.sqlite.thumbs.sqlite'
+        c1 = ThumbnailCache(PreviewReader(catalog), disk_path=disk)
+        first = c1.read(video_id, edge=256)
+        c1.close()
+        self.assertTrue(first.startswith(b'\x89PNG'))
+        previews2 = PreviewReader(catalog)
+        c2 = ThumbnailCache(previews2, disk_path=disk)
+        self.addCleanup(c2.close)
+        with patch.object(previews2, 'video_thumbnail', side_effect=AssertionError('video thumb should hit disk')):
+            second = c2.read(video_id, edge=256)
+        self.assertEqual(second, first)

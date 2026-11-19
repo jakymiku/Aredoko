@@ -152,6 +152,8 @@ class ThumbnailCache:
             info = self.previews.image_info(item_id)
         elif kind in ('book', 'archive'):
             info = self.previews.manifest(item_id)
+        elif kind == 'video':
+            info = self.previews.video_manifest(item_id)
         else:
             raise PreviewUnavailable('No derived thumbnail for this media')
         return kind, info['revision']
@@ -159,7 +161,7 @@ class ThumbnailCache:
     def _validate(self, item_id, kind, revision, result):
         if self._probe(item_id) != (kind, revision):
             raise ReaderChanged('Thumbnail source changed')
-        if kind != 'image':
+        if kind not in ('image', 'video'):
             data, _, tag = self.previews.page_source(item_id, 0, revision, result[1])
             if data is not None or tag != result[1]:
                 raise ReaderChanged('Thumbnail page changed')
@@ -278,6 +280,9 @@ class ThumbnailCache:
             detach()
 
     def _build(self, item_id, kind, revision, edge, stopped):
+        if kind == 'video':
+            png, _ = self._source_call(lambda: self.previews.video_thumbnail(item_id, min(edge, 512)), stopped)
+            return png, None
         if kind == 'image':
             source, _ = self._source_call(lambda: self.previews.animation_source(item_id, revision), stopped)
             with source:

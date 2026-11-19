@@ -15,13 +15,13 @@ internal sealed class ViewerWindow : Window
     private readonly TaskCompletionSource closed=new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IntPtr owner;
     private readonly bool ownerWasEnabled;
+    private IViewerWindowTitle? titleSource;
     private bool preparingClose,closePrepared;
     public Func<Task>? BeforeCloseAsync {get;set;}
     public ViewerWindow(Grid content,string title,string id)
     {
         Title="Aredoko — "+title;
-        var titleSource=content as IViewerWindowTitle;
-        void UpdateTitle(string value)=>Title=value;
+        titleSource=content as IViewerWindowTitle;
         if(titleSource is not null){Title=titleSource.WindowTitle;titleSource.TitleChanged+=UpdateTitle;}
         owner=WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current);
         var handle=WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -42,10 +42,30 @@ internal sealed class ViewerWindow : Window
         Closed+=(_,_)=>
         {
             if(titleSource is not null)titleSource.TitleChanged-=UpdateTitle;
+            titleSource=null;
             if(ownerWasEnabled)EnableWindow(owner,true);
             closed.TrySetResult();
             Content=null;
         };
+    }
+    private void UpdateTitle(string value)=>Title=value;
+    public void ToggleMaximize()
+    {
+        if(AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+        {
+            if(presenter.State==Microsoft.UI.Windowing.OverlappedPresenterState.Maximized)presenter.Restore();
+            else presenter.Maximize();
+        }
+    }
+    public void SwapContent(Grid nextContent,string title,string id)
+    {
+        if(titleSource is not null)titleSource.TitleChanged-=UpdateTitle;
+        titleSource=nextContent as IViewerWindowTitle;
+        Title=titleSource?.WindowTitle??("Aredoko — "+title);
+        if(titleSource is not null)titleSource.TitleChanged+=UpdateTitle;
+        AutomationProperties.SetAutomationId(nextContent,id);
+        AutomationProperties.SetName(nextContent,title);
+        Content=nextContent;
     }
     public async Task ShowAsync(Func<Task> load)
     {

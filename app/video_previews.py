@@ -22,6 +22,8 @@ MAX_VIDEO_PIXELS = 16_000_000
 MAX_FRAME_BYTES = 512 * 1024
 MAX_PROBE_BYTES = 16 * 1024
 VIDEO_EDGE = 256
+MIN_VIDEO_EDGE = 128
+MAX_VIDEO_EDGE = 512
 VIDEO_TIMEOUT = 10.0
 VIDEO_CACHE_ENTRIES = 32  # At most 16 MiB of derived PNG data; never disk cache.
 FORMATS = 'mov,matroska,webm,avi,asf,mpegts'
@@ -29,9 +31,15 @@ FORMATS = 'mov,matroska,webm,avi,asf,mpegts'
 # Merely setting SAR=1 after a raw-pixel resize distorts anamorphic videos.
 # Explicit expressions also work on older installed builds without reset_sar.
 _display_width = 'iw*if(gt(sar,0),sar,1)'
-_scale = f'min(1,min({VIDEO_EDGE}/({_display_width}),{VIDEO_EDGE}/ih))'
-THUMBNAIL_FILTER = (f"scale=w='max(1,trunc(({_display_width})*{_scale}))':"
-                    f"h='max(1,trunc(ih*{_scale}))',setsar=1")
+
+
+def _thumbnail_filter(edge=VIDEO_EDGE):
+    scale = f'min(1,min({edge}/({_display_width}),{edge}/ih))'
+    return (f"scale=w='max(1,trunc(({_display_width})*{scale}))':"
+            f"h='max(1,trunc(ih*{scale}))',setsar=1")
+
+
+THUMBNAIL_FILTER = _thumbnail_filter(VIDEO_EDGE)
 
 
 class VideoPreviewUnavailable(ValueError):
@@ -129,12 +137,12 @@ def _dimensions(document):
         raise VideoPreviewUnavailable('Video dimensions unavailable or exceed limits') from error
 
 
-def _validate_png(data):
+def _validate_png(data, max_edge=VIDEO_EDGE):
     if (len(data) < 33 or len(data) > MAX_FRAME_BYTES
             or data[:8] != b'\x89PNG\r\n\x1a\n' or data[8:16] != b'\0\0\0\rIHDR'):
         raise VideoPreviewUnavailable('Invalid video thumbnail')
     width, height = struct.unpack_from('>II', data, 16)
-    if min(width, height) < 1 or max(width, height) > VIDEO_EDGE:
+    if min(width, height) < 1 or max(width, height) > max_edge:
         raise VideoPreviewUnavailable('Video thumbnail exceeds dimensions')
 
 
@@ -176,8 +184,8 @@ class VideoThumbnailer:
         deadline = time.monotonic() + VIDEO_TIMEOUT
         common = ['-v', 'error', '-max_alloc', str(64 * 1024 * 1024),
                   '-protocol_whitelist', 'fd,pipe', '-format_whitelist', FORMATS,
-                  '-probesize', '1048576', '-analyzeduration', '1000000',
-                  '-max_streams', '16', '-max_probe_packets', '128',
+                  '-probesize', '4194304', '-analyzeduration', '3000000',
+                  '-max_streams', '16', '-max_probe_packets', '512',
                   '-threads', '1', '-max_pixels', str(MAX_VIDEO_PIXELS)]
         probe = _run([ffprobe, *common, '-select_streams', 'V:0',
                       '-show_entries', 'stream=width,height,duration:format=duration', '-of', 'json',
@@ -198,38 +206,37 @@ class VideoThumbnailer:
             frames.append((0, self.read(source, revision, at_ms=None)))
         return frames
 
-    def read(self, source, revision, at_ms=None):
+    def read(self, source, revision, at_ms=None, edge=VIDEO_EDGE):
         if at_ms is not None and (type(at_ms) is not int or not 0 <= at_ms <= 86_400_000):
             raise ValueError('Invalid video frame time')
-        cache_key = revision if at_ms is None else (revision, at_ms)
+        if type(edge) is not int or not MIN_VIDEO_EDGE <= edge <= MAX_VIDEO_EDGE:
+            raise ValueError('Invalid video thumbnail size')
+        cache_key = (revision if at_ms is None else (revision, at_ms)) if edge == VIDEO_EDGE else (revision, at_ms, edge)
         with self.lock:
             if cache_key in self.cache:
                 self.cache.move_to_end(cache_key)
                 return self.cache[cache_key]
         ffprobe, ffmpeg = _executable('ffprobe'), _executable('ffmpeg')
         deadline = time.monotonic() + VIDEO_TIMEOUT
-        # These options are input-scoped. Only the already open stdin handle
-        # can be read, including when a container tries to reference another file.
+        # Always use seekable fd: on the already open regular-file handle so
+        # non-faststart MP4/MOV (moov after >1 MiB mdat) probe cleanly with no paths.
         common = ['-v', 'error', '-max_alloc', str(64 * 1024 * 1024),
-                  '-protocol_whitelist', 'pipe', '-format_whitelist', FORMATS,
-                  '-probesize', '1048576', '-analyzeduration', '1000000',
-                  '-max_streams', '16', '-max_probe_packets', '128',
+                  '-protocol_whitelist', 'fd,pipe', '-format_whitelist', FORMATS,
+                  '-probesize', '4194304', '-analyzeduration', '3000000',
+                  '-max_streams', '16', '-max_probe_packets', '512',
                   '-threads', '1', '-max_pixels', str(MAX_VIDEO_PIXELS)]
-        # fd input can seek on the inherited regular-file handle. No paths or
-        # external protocols are allowed. Older tools fail to preview safely.
-        input_url = 'pipe:0' if at_ms is None else 'fd:'
-        if at_ms is not None:
-            common[common.index('pipe')] = 'fd,pipe'
+        input_url = 'fd:'
         probe = _run([ffprobe, *common, '-select_streams', 'V:0',
                       '-show_entries', 'stream=width,height', '-of', 'json',
                       '-i', input_url], source, MAX_PROBE_BYTES, deadline)
         _dimensions(probe)
+        vf = THUMBNAIL_FILTER if edge == VIDEO_EDGE else _thumbnail_filter(edge)
         png = _run([ffmpeg, '-nostdin', *common, *([] if at_ms is None else ['-ss', f'{at_ms / 1000:.3f}']), '-i', input_url,
                     '-map', '0:V:0', '-an', '-sn', '-dn', '-frames:v', '1',
-                    '-vf', THUMBNAIL_FILTER,
+                    '-vf', vf,
                     '-filter_threads', '1', '-threads', '1', '-c:v', 'png',
                     '-f', 'image2pipe', 'pipe:1'], source, MAX_FRAME_BYTES, deadline)
-        _validate_png(png)
+        _validate_png(png, max_edge=edge)
         with self.lock:
             self.cache[cache_key] = png
             self.cache.move_to_end(cache_key)

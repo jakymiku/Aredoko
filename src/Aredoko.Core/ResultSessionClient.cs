@@ -181,18 +181,22 @@ public sealed class ResultSession(HttpClient client, string id, JsonObject condi
         return keepSession&&response["kept_session"]!.GetValue<bool>();
     }
 
-    public async Task<ResultNeighbor?> NeighborAsync(int itemId, int direction, CancellationToken cancellation)
+    public Task<ResultNeighbor?> NeighborAsync(int itemId, int direction, CancellationToken cancellation)
+        => NeighborAsync(itemId, direction, cancellation, includeBooks: false);
+
+    public async Task<ResultNeighbor?> NeighborAsync(int itemId, int direction, CancellationToken cancellation, bool includeBooks)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
         if (itemId < 1 || direction is not (-1 or 1)) throw new ArgumentOutOfRangeException(nameof(itemId));
-        var root = await ResultSessionClient.SendAsync(client, "neighbor", new JsonObject
-        { ["session_id"] = id, ["item_id"] = itemId, ["direction"] = direction }, cancellation);
+        var payload = new JsonObject { ["session_id"] = id, ["item_id"] = itemId, ["direction"] = direction };
+        if (includeBooks) payload["include_books"] = true;
+        var root = await ResultSessionClient.SendAsync(client, "neighbor", payload, cancellation);
         Validate(root);
         if (root["current_id"]?.GetValue<int>() != itemId) throw new InvalidDataException("Result origin changed");
         if (root["neighbor"] is null) return null;
         var neighbor = root["neighbor"]!.AsObject(); var ordinal = neighbor["ordinal"]!.GetValue<int>();
         var row = Protocol.ParseItem(neighbor["item"]!.ToJsonString());
-        if (ordinal < 0 || ordinal >= Total || row.Id == itemId || !ImageViewerPolicy.CanOpen(row))
+        if (ordinal < 0 || ordinal >= Total || row.Id == itemId || !(ImageViewerPolicy.CanOpen(row) || (includeBooks && ArchiveManifest.CanOpen(row))))
             throw new InvalidDataException("Invalid image neighbor");
         return new(ordinal, row);
     }

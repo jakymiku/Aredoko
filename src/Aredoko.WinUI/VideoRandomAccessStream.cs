@@ -26,21 +26,26 @@ internal sealed partial class VideoRandomAccessStream : IRandomAccessStream
     public IAsyncOperationWithProgress<IBuffer,uint> ReadAsync(IBuffer buffer,uint count,InputStreamOptions options)=>AsyncInfo.Run<IBuffer,uint>(async(token,progress)=>
     {
         ObjectDisposedException.ThrowIf(disposed,this);
-        if(count>buffer.Capacity||count>8*VideoManifest.ChunkBytes)throw new ArgumentOutOfRangeException(nameof(count));
+        if(count>buffer.Capacity)throw new ArgumentOutOfRangeException(nameof(count));
         await reads.WaitAsync(token).ConfigureAwait(false);
         try
         {
-            var start=Position;var wanted=(int)Math.Min((ulong)count,Size-start);
+            var start=Position;
+            var wanted=(int)Math.Min(Math.Min((ulong)count,(ulong)(8*VideoManifest.ChunkBytes)),Size-start);
             if((options&InputStreamOptions.Partial)!=0)wanted=Math.Min(wanted,VideoManifest.ChunkBytes);
-            using var writer=new DataWriter();var done=0;
+            var done=0;
             while(done<wanted)
             {
                 var bytes=await source.ReadAsync((long)start+done,Math.Min(VideoManifest.ChunkBytes,wanted-done),token).ConfigureAwait(false);
-                writer.WriteBytes(bytes);done+=bytes.Length;progress.Report((uint)done);
+                if(bytes.Length==0)break;
+                bytes.CopyTo(0,buffer,(uint)done,bytes.Length);
+                done+=bytes.Length;
+                progress.Report((uint)done);
             }
+            buffer.Length=(uint)done;
             ObjectDisposedException.ThrowIf(disposed,this);
             lock(sync){if(position==start)position+=(uint)done;}
-            return writer.DetachBuffer();
+            return buffer;
         }
         finally{reads.Release();}
     });

@@ -48,7 +48,7 @@ public sealed partial class MainPage
             Notice("閲覧履歴を削除しました",$"{result["removed"]?.GetValue<int>()??0:N0}件の履歴を削除しました。");
         }
         catch(Exception ex){if(!disposed)Failure(ex);}
-        finally{dialogOpen=false;transitions.Release();if(PendingSearch&&!disposed)searchTimer.Start();}
+        finally{dialogOpen=false;transitions.Release();if(PendingAutoSearch&&!disposed)searchTimer.Start();}
     }
     private async void UnreviewedOnly_Changed(object sender,RoutedEventArgs args)
     {

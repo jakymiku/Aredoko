@@ -7,7 +7,7 @@ MAX_ROOTS = 256
 
 
 def validate_scope(value):
-    if not isinstance(value, dict) or set(value) - {'root_ids', 'kind', 'shelf', 'shelf_ids', 'shelf_filter_ids', 'tag'}:
+    if not isinstance(value, dict) or set(value) - {'root_ids', 'kind', 'shelf', 'shelf_ids', 'shelf_filter_ids', 'tag', 'book_pages'}:
         raise ValueError('Invalid AI scope')
     roots = value.get('root_ids')
     if roots is not None:
@@ -28,6 +28,11 @@ def validate_scope(value):
     if 'shelf_ids' in value:result['shelf_ids']=None if value['shelf_ids'] is None else sorted(value['shelf_ids'])
     if 'shelf_filter_ids' in value:result['shelf_filter_ids']=None if value['shelf_filter_ids'] is None else sorted(value['shelf_filter_ids'])
     if 'tag' in value:result['tag']=normalize_tag_filter(value['tag'])
+    if 'book_pages' in value:
+        book_pages=value['book_pages']
+        if type(book_pages) is not str or book_pages not in ('cover_only','all_pages'):
+            raise ValueError('Invalid book_pages scope')
+        result['book_pages']=book_pages
     return result
 
 

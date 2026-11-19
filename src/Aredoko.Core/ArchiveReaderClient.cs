@@ -137,8 +137,24 @@ public sealed class ArchiveReaderClient(HttpClient client)
     public async Task<VideoRangeSource> OpenVideoRangeAsync(int itemId,CancellationToken cancellation)
     {
         if(itemId<1)throw new ArgumentOutOfRangeException(nameof(itemId));
-        var (data,_)=await ReadMediaAsync($"api/library/video/{itemId}/manifest",4096,null,cancellation,seconds:5);
-        return new VideoRangeSource(client,VideoManifest.Parse(data,itemId),cancellation);
+        try
+        {
+            var (data,_)=await ReadMediaAsync($"api/library/video/{itemId}/manifest",4096,null,cancellation,seconds:5);
+            return new VideoRangeSource(client,VideoManifest.Parse(data,itemId),cancellation);
+        }
+        catch(ArchiveReadException ex) when(ex.Status==HttpStatusCode.ServiceUnavailable)
+        {
+            await Task.Delay(150,cancellation);
+            var (data,_)=await ReadMediaAsync($"api/library/video/{itemId}/manifest",4096,null,cancellation,seconds:5);
+            return new VideoRangeSource(client,VideoManifest.Parse(data,itemId),cancellation);
+        }
+    }
+
+    public async Task<VideoRangeSource> OpenVideoCompatRangeAsync(int itemId,CancellationToken cancellation)
+    {
+        if(itemId<1)throw new ArgumentOutOfRangeException(nameof(itemId));
+        var (data,_)=await ReadMediaAsync($"api/library/video-compat/{itemId}/manifest",4096,null,cancellation,seconds:50);
+        return new VideoRangeSource(client,VideoManifest.Parse(data,itemId),cancellation,routePrefix:"api/library/video-compat");
     }
 
     public async Task<VideoRangeSource> OpenAudioRangeAsync(int itemId,CancellationToken cancellation)

@@ -30,13 +30,28 @@ public sealed class ImageViewerSequence
     }
 
     public ImageViewerSequence(MediaRow selected, int ordinal, int total,
-        Func<int, int, CancellationToken, Task<ResultNeighbor?>> neighbor)
+        Func<int, int, CancellationToken, Task<ResultNeighbor?>> neighbor,
+        bool previousExhausted = false, bool nextExhausted = false)
     {
         if (!ImageViewerPolicy.CanOpen(selected) || total < 1 || ordinal < 0 || ordinal >= total)
             throw new ArgumentException("Selected image is outside the result session", nameof(selected));
         this.neighbor = neighbor ?? throw new ArgumentNullException(nameof(neighbor));
         items = []; count = total; Position = ordinal;
+        this.previousExhausted = previousExhausted;
+        this.nextExhausted = nextExhausted;
         remoteCurrent = new(selected.Id, selected.Title, selected.Location);
+    }
+
+    public void MoveTo(ResultNeighbor target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (!ImageViewerPolicy.CanOpen(target.Item) || target.Item.Id == Current.Id ||
+            target.Ordinal < 0 || target.Ordinal >= Count)
+            throw new InvalidDataException("Invalid result image order");
+        Interlocked.Increment(ref navigationVersion);
+        remoteCurrent = new(target.Item.Id, target.Item.Title, target.Item.Location);
+        Position = target.Ordinal;
+        previousExhausted = nextExhausted = false;
     }
 
     public bool TryMove(int direction)

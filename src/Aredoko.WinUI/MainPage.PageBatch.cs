@@ -127,6 +127,6 @@ public sealed partial class MainPage
             root.Changed+=fit;try{await dialog.ShowAsync();}finally{root.Changed-=fit;}
         }
         catch(Exception ex){if(!disposed)Failure(ex);}
-        finally{dialogOpen=false;transitions.Release();if(PendingSearch&&!disposed)searchTimer.Start();}
+        finally{dialogOpen=false;transitions.Release();if(PendingAutoSearch&&!disposed)searchTimer.Start();}
     }
 }

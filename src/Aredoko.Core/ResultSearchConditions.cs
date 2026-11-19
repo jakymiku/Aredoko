@@ -31,7 +31,7 @@ public static class ResultSearchConditions
         JsonObject? scope, IReadOnlyList<int>? rootIds, int? originId = null,
         bool literalOnly = false, double? groupThreshold = null, string resultGroup = "all", IReadOnlyList<long>? shelfIds = null,
         bool directAudioSimilarity = false, bool directVideoSimilarity = false, bool directVideoAudioSimilarity = false,
-        string? tag = null)
+        string? tag = null, int? originPage = null)
     {
         if((directAudioSimilarity?1:0)+(directVideoSimilarity?1:0)+(directVideoAudioSimilarity?1:0)>1)throw new ArgumentException("Select one direct similarity mode");
         JsonObject Finish(JsonObject conditions) => RestrictTag(ShelfProtocol.Restrict(conditions, shelfIds), tag)!;
@@ -50,7 +50,7 @@ public static class ResultSearchConditions
                 return Finish(result);
             }
             if (scope is null) throw new ArgumentException("AI scope is required", nameof(scope));
-            result = SimilaritySearch.RequestMulti(origin, kind, view, 0, scope, rootIds);
+            result = SimilaritySearch.RequestMulti(origin, kind, view, 0, scope, rootIds, originPage);
             result.Remove("page"); result["mode"] = "similar";
             return Finish(result);
         }

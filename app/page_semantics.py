@@ -256,7 +256,7 @@ class PageVectors:
             ai._last_activity = time.monotonic()
             with ai.guard: ai.store.save_state(state)
 
-    def _publish_range(self, pages, state, item_id, revision):
+    def _publish_range(self, pages, state, item_id, revision, *, save_progress=True):
         """Caller owns shared inference lock; publish one <=16-page range atomically."""
         ai = self.ai
         if ai.cancel.is_set(): raise InterruptedError()
@@ -279,7 +279,8 @@ class PageVectors:
                 state['reused'] += 1
             packed.append((item_id, revision, p['page_id'], p['page'], raw_bytes, CONTRACT))
             state['processed'] += 1
-            with ai.guard: ai.store.save_state(state)
+            if save_progress:
+                with ai.guard: ai.store.save_state(state)
             if did_infer and state['processed'] < state['total'] and ai._index_pause_ms:
                 if ai.cancel.wait(ai._index_pause_ms/1000): raise InterruptedError()
         # Never hold the catalog guard while running the model. Publish the
@@ -294,6 +295,41 @@ class PageVectors:
                 db.execute('DELETE FROM ai_page_vectors WHERE item_id=? AND (source_revision<>? OR contract<>?)',
                            (item_id, revision, CONTRACT))
                 db.executemany('INSERT OR REPLACE INTO ai_page_vectors VALUES(?,?,?,?,?,?)', packed)
+
+    def index_all_pages(self, item_id, scope):
+        """Index any uncached internal pages of a book/archive in bounded batches."""
+        ai = self.ai
+        if ai.cancel.is_set():
+            raise InterruptedError()
+        snap = self.index.refresh(item_id, cancelled=ai.cancel.is_set)
+        revision = snap['source_revision']
+        with ai.catalog.connect() as db:
+            self.index._allowed(db, item_id)
+            head = self.index._head(db, item_id)
+            if head is None or head['source_revision'] != revision:
+                raise ReaderChanged('Page source changed')
+            entries = [dict(p) for p in db.execute(
+                'SELECT page_id, page FROM page_entries WHERE snapshot_id=? ORDER BY page',
+                (head['id'],))]
+        if not entries:
+            return False
+        with ai.store.connect() as db:
+            ready = {
+                pid for pid, data in db.execute(
+                    'SELECT page_id, vector FROM ai_page_vectors WHERE item_id=? AND source_revision=? AND contract=?',
+                    (item_id, revision, CONTRACT))
+                if _is_valid_packed(data, ai.profile.dimension)
+            }
+        missing = [p for p in entries if p['page_id'] not in ready]
+        if not missing:
+            return False
+        local_state = {'scope': scope, 'processed': 0, 'total': len(missing), 'reused': 0}
+        for offset in range(0, len(missing), MAX_PAGES):
+            if ai.cancel.is_set():
+                raise InterruptedError()
+            chunk = missing[offset:offset + MAX_PAGES]
+            self._publish_range(chunk, local_state, item_id, revision, save_progress=False)
+        return True
 
     def rank(self, rows, query, *, check=None):
         """One best page per current book. Metadata checks only; no image decode."""

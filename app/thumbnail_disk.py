@@ -194,8 +194,8 @@ class ThumbnailDisk:
             data, digest, tag = row
             if (not isinstance(data, bytes) or not 8 <= len(data) <= MAX_RENDERED_PNG_BYTES
                     or not data.startswith(b'\x89PNG\r\n\x1a\n') or hashlib.sha256(data).hexdigest() != digest
-                    or (key[1] == 'image' and tag is not None)
-                    or (key[1] != 'image' and (not isinstance(tag, str) or re.fullmatch(r'W/"[0-9a-f]{64}"', tag) is None))):
+                    or (key[1] in ('image', 'video') and tag is not None)
+                    or (key[1] not in ('image', 'video') and (not isinstance(tag, str) or re.fullmatch(r'W/"[0-9a-f]{64}"', tag) is None))):
                 db.execute('DELETE FROM thumbs WHERE key=?', (self.key(key),)); db.commit()
                 return None
             tick = self._next_tick(db)

@@ -32,6 +32,12 @@ internal static class ViewerInputGestures
 {
     // Routed preview shortcuts must not consume the focused control's own keys.
     // Keep this in the frontend: it only inspects the local visual ancestry.
+    public static bool IsInteractiveControl(object? originalSource,DependencyObject boundary)
+    {
+        for(var node=originalSource as DependencyObject;node is not null&&node!=boundary;node=VisualTreeHelper.GetParent(node))
+            if(node is ButtonBase or ScrollBar or Slider or TextBox or ComboBox or ToggleSwitch or CheckBox)return true;
+        return false;
+    }
     public static bool IsNativeControlKey(object? originalSource,VirtualKey key)
     {
         for(var node=originalSource as DependencyObject;node is not null;node=VisualTreeHelper.GetParent(node))

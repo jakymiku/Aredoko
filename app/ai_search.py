@@ -22,11 +22,11 @@ from inference_ownership import InferenceOwnership
 from search_terms import normalize, normalize_tags
 from ai_result_groups import boundary
 from ai_score_spool import ScoreSpool, ScoreSpoolError, SearchCancelled
-from previews import PreviewReader, PreviewUnavailable
+from previews import PreviewReader, PreviewUnavailable, PreviewBusyError, ReaderChanged
 from search_requests import SearchRequests
 from index_continuation import IndexContinuation, JOB as CONTINUATION_JOB, public_state
 from tag_semantics import PendingTagVectors
-from page_semantics import PageVectors, SCHEMA as PAGE_VECTOR_SCHEMA
+from page_semantics import CONTRACT as PAGE_CONTRACT, PageVectors, SCHEMA as PAGE_VECTOR_SCHEMA, unpack as unpack_page_vector
 from audio_semantics import AudioSpeechVectors, SCHEMA as AUDIO_SEGMENT_SCHEMA
 from audio_acoustics import AudioAcousticVectors, SCHEMA as AUDIO_ACOUSTIC_SCHEMA
 
@@ -603,6 +603,14 @@ class AISearch:
                             did_infer=did_infer or tag_inferred
                             if not tag_ready and state['indexed']>indexed_before:
                                 state['indexed']-=1;state['skipped']+=1
+                        if (row is not None and not self.cancel.is_set()
+                                and scope and scope.get('book_pages')=='all_pages'
+                                and 'cover' in self.profile.modalities and row['kind'] in ('book','archive')):
+                            try:
+                                if self.pages.index_all_pages(item_id,scope):
+                                    did_infer=True
+                            except (PreviewUnavailable,ReaderChanged,PreviewBusyError,KeyError,OSError):
+                                pass
                         if continuing and not self.cancel.is_set():
                             with self.catalog._guard:
                                 self.continuation.check(state,[item_id])
@@ -665,12 +673,13 @@ class AISearch:
                 query_vector=None;candidate_total=indexed_total=0
                 words=list(dict.fromkeys(normalize(query).split()))
                 allowed=('image','book','archive','video') if source=='cover' else None
+                include_pages=scope is None or scope.get('book_pages')!='cover_only'
                 for rows in self._search_batches(kind,view,scope,check,allowed):
                     candidate_total+=len(rows)
                     if query_vector is None:
                         query_vector=normalized(self.encoder.encode('query',query),self.profile.dimension)
                     check()
-                    page_scores=self.pages.rank(rows,query_vector,check=check) if source in ('all','cover') else {}
+                    page_scores=self.pages.rank(rows,query_vector,check=check) if (source in ('all','cover') and include_pages) else {}
                     speech_scores=self.audio_speech.rank(rows,query_vector,check=check) if source in ('all','text') else {}
                     acoustic_scores=self.audio_acoustics.rank(rows,query,query_vector,check=check) if source in ('all','text') else {}
                     audio_scores=dict(speech_scores)
@@ -730,8 +739,8 @@ class AISearch:
         """Refuse a busy encoder; never touch the profile, catalog or vector DB."""
         return self._release()
 
-    def similar(self,item_id,kind='',view='all',page=0,limit=60,scope=None,*,cancelled=None,result_sink=None):
-        """Item-origin cover cosine search. Cached vectors work with no model installed.
+    def similar(self,item_id,kind='',view='all',page=0,limit=60,scope=None,origin_page=None,*,cancelled=None,result_sink=None):
+        """Item-origin or page-origin visual cosine search.
 
         The origin must be in scope, but need not satisfy result-only kind/view
         filters. Missing/stale cover vectors return an explicit empty fallback,
@@ -741,6 +750,8 @@ class AISearch:
             raise ValueError('Invalid item')
         if type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:
             raise ValueError('Invalid paging')
+        if origin_page is not None and (type(origin_page) is not int or not 0<=origin_page<10000):
+            raise ValueError('Invalid origin page')
         if not isinstance(kind,str) or kind and kind not in QUERY_KINDS or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
         scope=self._scope(scope)
@@ -754,11 +765,15 @@ class AISearch:
                 if origin is None:raise KeyError(item_id)
                 if origin['kind'] not in ('image','book','archive','video','audio'):
                     raise ValueError('Invalid similarity source')
+                if origin_page is not None and origin['kind'] not in ('book','archive'):
+                    raise ValueError('Origin page requires a book or archive')
                 is_audio=origin['kind']=='audio'
                 result={'total':0,'items':[],'page':page,'limit':limit,'mode':'similar',
                         'origin_id':item_id,'origin_kind':origin['kind'],'origin_revision':revision(origin),'profile':self.profile.key,
                         'scope':scope,'source':'acoustic' if is_audio else 'cover','ranking':'max','score_kind':'cosine',
                         'coverage_limit':MAX_ITEMS,'similarity_status':'unsupported_profile'}
+                if origin_page is not None:
+                    result['origin_page']=origin_page
                 if not is_audio and 'cover' not in self.profile.modalities:
                     return result if result_sink is None else result_sink(lambda number:{**result,'page':number})
                 if is_audio:
@@ -800,7 +815,38 @@ class AISearch:
                         return {**result,'total':selected['total'],'page':number,'items':items,'similarity_status':'ready',
                                 'search_complete':True,'search_candidate_total':candidate_total,'indexed_total':indexed_total,'index_limit':MAX_ITEMS}
                     return render_page(page) if result_sink is None else result_sink(render_page)
-                if origin['kind']=='video':
+                if origin_page is not None:
+                    query=None
+                    try:
+                        tag_rev=self.previews.tag_source(item_id)['revision']
+                    except (PreviewUnavailable,ReaderChanged,OSError):
+                        tag_rev=None
+                    if tag_rev is not None:
+                        with self.store.connect() as db:
+                            rec=db.execute('SELECT vector FROM ai_page_vectors WHERE item_id=? AND source_revision=? AND page=? AND contract=?',
+                                (item_id,tag_rev,origin_page,PAGE_CONTRACT)).fetchone()
+                        if rec is not None:
+                            query=unpack_page_vector(rec[0],self.profile.dimension)
+                    if query is None:
+                        if not self.encoder.available:
+                            empty={**result,'similarity_status':'unindexed'}
+                            return empty if result_sink is None else result_sink(lambda number:{**empty,'page':number})
+                        try:
+                            manifest=self.previews.page_catalog(item_id)
+                            if origin_page>=len(manifest['pages']):raise KeyError(item_id)
+                            page_bytes,_,_=self.previews.page_source(item_id,origin_page,manifest['revision'])
+                            encoded=self.encoder.encode('image',page_bytes)
+                            if encoded is not None:query=normalized(encoded,self.profile.dimension)
+                        except PreviewBusyError as ex:
+                            raise AIBusy('元ページを読み込み中です。少し待ってから再度お試しください。') from ex
+                        except (PreviewUnavailable,ReaderChanged,OSError) as ex:
+                            raise KeyError(item_id) from ex
+                    if query is None:
+                        empty={**result,'similarity_status':'unindexed'}
+                        return empty if result_sink is None else result_sink(lambda number:{**empty,'page':number})
+                    origin_frames=None
+                    track_origin_hits=False
+                elif origin['kind']=='video':
                     origin_frames=self.store.video_frames(origin)
                     if not origin_frames:
                         empty={**result,'similarity_status':'unindexed'}
@@ -814,16 +860,19 @@ class AISearch:
                         return empty if result_sink is None else result_sink(lambda number:{**empty,'page':number})
                     origin_frames=None
                     track_origin_hits=False
+                include_pages=scope is None or scope.get('book_pages')!='cover_only'
                 candidate_total=indexed_total=0
                 for rows in self._search_batches(kind,view,scope,check,('image','book','archive','video'),item_id):
                     candidate_total+=len(rows)
                     origin_hits={} if track_origin_hits else None
-                    scores,video_hits,_,_=self.store.scores_with_content(rows,query,'cover',query_frames=origin_frames,origin_hits=origin_hits)
+                    page_scores=self.pages.rank(rows,query,check=check) if include_pages else {}
+                    scores,video_hits,page_hits,_=self.store.scores_with_content(rows,query,'cover',page_scores=page_scores,query_frames=origin_frames,origin_hits=origin_hits)
                     for row in rows:
                         rid=row['id']
                         if rid in scores:
                             pl={'revision':revision(row)}
                             if rid in video_hits:pl['video_match_ms']=video_hits[rid]
+                            if rid in page_hits:pl['ai_page_match']=page_hits[rid]
                             if origin_hits is not None and rid in origin_hits:pl['origin_match_ms']=origin_hits[rid]
                             spool.add(rid,scores[rid],payload=pl)
                     indexed_total+=len(scores)
@@ -843,6 +892,7 @@ class AISearch:
                                       'similarity_evidence':'cover'}
                             pl=payloads.get(key,{})
                             if 'video_match_ms' in pl:row_dict['video_match_ms']=pl['video_match_ms']
+                            if 'ai_page_match' in pl:row_dict['ai_page_match']=pl['ai_page_match']
                             if 'origin_match_ms' in pl:row_dict['origin_match_ms']=pl['origin_match_ms']
                             items.append(row_dict)
                         check()

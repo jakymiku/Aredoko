@@ -144,7 +144,7 @@ public sealed partial class MainPage
         finally
         {
             saving=false;transitions.Release();
-            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+            if(PendingAutoSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }
     }
 }

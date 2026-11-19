@@ -73,8 +73,9 @@ class FrozenResult:
             self.db.execute('PRAGMA cache_size=-2048')
             self.db.execute('PRAGMA temp_store=FILE')
             self.db.execute('PRAGMA max_page_count=' + str(budget // 4096))
-            self.db.executescript('CREATE TABLE results(ordinal INTEGER PRIMARY KEY,item_id INTEGER UNIQUE,image INTEGER NOT NULL,payload TEXT NOT NULL);'
-                                 'CREATE INDEX result_images ON results(image,ordinal);')
+            self.db.executescript('CREATE TABLE results(ordinal INTEGER PRIMARY KEY,item_id INTEGER UNIQUE,image INTEGER NOT NULL,visual INTEGER NOT NULL,payload TEXT NOT NULL);'
+                                 'CREATE INDEX result_images ON results(image,ordinal);'
+                                 'CREATE INDEX result_visual ON results(visual,ordinal);')
             self.db.set_progress_handler(lambda: int(self.stop.is_set()), 1000)
         except BaseException:
             self.resources.close()
@@ -123,9 +124,12 @@ class FrozenResult:
                         payload = json.dumps(item, ensure_ascii=False, separators=(',', ':'))
                         if len(payload.encode('utf-8')) > 512 * 1024:
                             raise ResultCapacity('Result evidence exceeds workspace limit')
-                        image = (item.get('kind') == 'image' and item.get('availability') == 'present'
-                                 and Path(item.get('relative_path', '')).suffix.casefold() in IMAGE_MIME)
-                        self.db.execute('INSERT INTO results VALUES(?,?,?,?)', (self.total, item['id'], int(image), payload))
+                        rel = item.get('relative_path', '')
+                        avail = item.get('availability') == 'present'
+                        image = avail and item.get('kind') == 'image' and Path(rel).suffix.casefold() in IMAGE_MIME
+                        is_book = avail and (is_folder_book(rel) or Path(rel).suffix.casefold() in ('.cbz', '.zip'))
+                        visual = image or is_book
+                        self.db.execute('INSERT INTO results VALUES(?,?,?,?,?)', (self.total, item['id'], int(image), int(visual), payload))
                         self.total += 1
                     self.db.commit()
                     if self.total > expected:
@@ -312,8 +316,8 @@ class FrozenResult:
             return {**self.metadata, 'offset': offset, 'limit': limit, 'items': items,
                     'conditions': self.conditions, 'state': 'ready'}
 
-    def neighbor(self, item_id, direction):
-        if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807 or type(direction) is not int or direction not in (-1, 1):
+    def neighbor(self, item_id, direction, *, include_books=False):
+        if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807 or type(direction) is not int or direction not in (-1, 1) or type(include_books) is not bool:
             raise ValueError('Invalid result neighbor')
         with self.lock:
             self.check()
@@ -323,7 +327,8 @@ class FrozenResult:
                 raise ResultUnavailable('Current item is outside this result session', conditions=self.conditions)
             self._current(json.loads(origin[1]), for_viewer=True)
             sign, order = ('>', 'ASC') if direction == 1 else ('<', 'DESC')
-            row = self.db.execute(f'SELECT ordinal,payload FROM results WHERE image=1 AND ordinal{sign}? ORDER BY ordinal {order} LIMIT 1', (origin[0],)).fetchone()
+            col = 'visual' if include_books else 'image'
+            row = self.db.execute(f'SELECT ordinal,payload FROM results WHERE {col}=1 AND ordinal{sign}? ORDER BY ordinal {order} LIMIT 1', (origin[0],)).fetchone()
             target = None if row is None else {'ordinal': row[0], 'item': self._current(json.loads(row[1]), for_viewer=True)}
             self.check()
             self.last_used = time.monotonic()
@@ -459,10 +464,10 @@ class ResultSessions:
         finally:
             if session.stop.is_set(): session.close()
 
-    def neighbor(self, session_id, item_id, direction):
+    def neighbor(self, session_id, item_id, direction, include_books=False):
         session = self._get(session_id)
         try:
-            return {'session_id': session_id, **session.neighbor(item_id, direction)}
+            return {'session_id': session_id, **session.neighbor(item_id, direction, include_books=include_books)}
         except (OSError, PreviewUnavailable, ReaderChanged) as error:
             raise ResultUnavailable('Result source unavailable; refresh results', conditions=session.conditions) from error
         finally:

@@ -29,6 +29,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly ViewerChromeController hideTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer positionTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer previewTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer tapTimer;
     private readonly Slider seekBar = new() { Minimum=0, Maximum=1, SmallChange=1, LargeChange=10, StepFrequency=0.1, IsThumbToolTipEnabled=false, HorizontalAlignment=HorizontalAlignment.Stretch };
     private readonly Image seekImage = new() { Width=256, Height=144, Stretch=Stretch.Uniform };
     private readonly TextBlock seekHint = new() { Text="読み込み中…", HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Center };
@@ -56,6 +57,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button volumeDown = TextButton("−");
     private readonly Button volumeUp = TextButton("＋");
     private readonly Button retry = IconButton(Symbol.Refresh);
+    private readonly Button openExternal = new() { Content = "外部アプリで開く", Visibility = Visibility.Collapsed, IsEnabled = false, Padding = new Thickness(10, 4, 10, 4) };
     private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly TextBlock positionText = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock volumeText = new() { Text = "80%", VerticalAlignment = VerticalAlignment.Center };
@@ -73,6 +75,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
     public event Action? EditDetailsRequested;
+    public event Action? OpenExternalRequested;
+    public event Action? ToggleMaximizeRequested;
     public string WindowTitle => $"{itemTitle} — Aredoko";
     public event Action<string>? TitleChanged;
 
@@ -91,6 +95,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         positionTimer.Tick += (_, _) => SyncPosition();
         previewTimer=DispatcherQueue.CreateTimer();previewTimer.Interval=TimeSpan.FromMilliseconds(320);previewTimer.IsRepeating=false;
         previewTimer.Tick+=async(_,_)=>await LoadSeekPreviewAsync();
+        tapTimer=DispatcherQueue.CreateTimer();tapTimer.Interval=TimeSpan.FromMilliseconds(220);tapTimer.IsRepeating=false;
+        tapTimer.Tick+=(_,_)=>{if(!disposed&&!busy&&loaded&&!failed)TogglePlayPause();};
         viewport.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
         viewport.Children.Add(playerElement);
         Children.Add(viewport);
@@ -102,7 +108,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         actions.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var playback=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
-        foreach(var control in new UIElement[]{playPause,seekBack,seekForward,favorite.Button,editDetails,retry})playback.Children.Add(control);
+        foreach(var control in new UIElement[]{playPause,seekBack,seekForward,favorite.Button,editDetails,retry,openExternal})playback.Children.Add(control);
         Identify(favorite.Button,isAudio?"AudioFavorite":"VideoFavorite","お気に入りを読み込み中");
         Identify(editDetails,"PlayerEditDetails","詳細で編集");
         ToolTipService.SetToolTip(editDetails,"閉じて詳細パネルを開く");
@@ -112,7 +118,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         actions.Children.Add(playback); SetColumn(positionText,1); actions.Children.Add(positionText); SetColumn(audio,2); actions.Children.Add(audio);
         Identify(volumeSlider,"VideoVolume","音量（0〜100）");
         volumeSlider.ValueChanged+=(_,_)=>{if(updatingVolume)return;volume=VideoPlayerPolicy.ClampVolume((int)Math.Round(volumeSlider.Value));if(mediaPlayer is not null)mediaPlayer.Volume=volume/100.0;UpdateControls();ShowChrome();};
-        viewport.Tapped+=(_,args)=>{if(!busy&&loaded&&!failed){args.Handled=true;TogglePlayPause();}};
+        viewport.Tapped+=(_,args)=>{if(!busy&&loaded&&!failed&&!ViewerInputGestures.IsInteractiveControl(args.OriginalSource,viewport)){args.Handled=true;tapTimer.Stop();tapTimer.Start();}};
+        viewport.DoubleTapped+=(_,args)=>{if(ViewerInputGestures.IsInteractiveControl(args.OriginalSource,viewport))return;args.Handled=true;tapTimer.Stop();ToggleMaximizeRequested?.Invoke();};
         toolbar.BorderThickness=new Thickness(0,1,0,0);toolbar.CornerRadius=new CornerRadius(0);
         toolbar.MaxWidth=double.PositiveInfinity;toolbar.Padding=new Thickness(8,4,8,4);
         var bottom = new StackPanel { Spacing = 4, HorizontalAlignment=HorizontalAlignment.Stretch }; bottom.Children.Add(seekBar);bottom.Children.Add(actions);
@@ -161,6 +168,9 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         Identify(mute, "VideoMute", "消音");
         Identify(volumeDown, "VideoVolumeDown", "音量を下げる"); Identify(volumeUp, "VideoVolumeUp", "音量を上げる");
         Identify(retry, "VideoRetry", (isAudio ? "音声" : "動画") + "を再試行");
+        Identify(openExternal, "VideoOpenExternal", "既定のアプリで開く");
+        ToolTipService.SetToolTip(openExternal, "既定の外部アプリで再生します");
+        openExternal.Click += (_, _) => OpenExternalRequested?.Invoke();
         AutomationProperties.SetAutomationId(positionText, "VideoPosition");
         AutomationProperties.SetAutomationId(volumeText, "VideoVolumeStatus");
         AutomationProperties.SetAutomationId(status, "VideoStatus");
@@ -215,68 +225,104 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         positionText.Text = "—";
         ViewerNotice.Set(status,isAudio ? "音声を読み込んでいます…" : "動画を読み込んでいます…");
         hideTimer.Stop(); UpdateControls();
-        IRandomAccessStream? stream = null;
-        VideoRangeSource? rangeSource = null;
-        MediaSource? source = null;
-        MediaPlayer? nextPlayer = null;
+        async Task OpenRangeStreamAsync(Func<Task<VideoRangeSource>> opener, int timeoutSeconds)
+        {
+            IRandomAccessStream? stream = null;
+            VideoRangeSource? rangeSource = null;
+            MediaSource? source = null;
+            MediaPlayer? nextPlayer = null;
+            var openSettled = false;
+            try
+            {
+                rangeSource = await opener();
+                var localRange = rangeSource;
+                stream = new VideoRandomAccessStream(rangeSource);
+                var mime = rangeSource.Manifest.Mime;
+                cancellation.ThrowIfCancellationRequested();
+                source = MediaSource.CreateFromStream(stream, mime);
+                await source.OpenAsync().AsTask(cancellation);
+                if (source.State != MediaSourceState.Opened) throw new InvalidDataException(isAudio ? "音声を開けません。" : "動画を開けません。");
+                var opened = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                nextPlayer = new MediaPlayer { AutoPlay = false, Volume = volume / 100.0, IsMuted = muted };
+                nextPlayer.MediaOpened += (_, _) => opened.TrySetResult(true);
+                nextPlayer.MediaFailed += (_, args) =>
+                {
+                    var failure = localRange?.Failure ?? mediaRange?.Failure ?? new InvalidDataException(args.ErrorMessage);
+                    opened.TrySetException(failure);
+                    if (openSettled)
+                        DispatcherQueue.TryEnqueue(() => { if (!disposed && current == version && loaded && ReferenceEquals(mediaPlayer, nextPlayer)) ReportFailure(failure); });
+                };
+                nextPlayer.MediaEnded += (_, _) => DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (disposed || current != version || !loaded || !ReferenceEquals(mediaPlayer, nextPlayer)) return;
+                    playing = false; positionTimer.Stop();
+                    position = duration;
+                    positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
+                    ViewerNotice.Set(status);
+                    UpdateControls(); ShowChrome();
+                });
+                playerElement.SetMediaPlayer(nextPlayer);
+                nextPlayer.Source = source;
+                await opened.Task.WaitAsync(TimeSpan.FromSeconds(timeoutSeconds), cancellation);
+                openSettled = true;
+                if (disposed || current != version)
+                {
+                    rangeSource?.Dispose(); nextPlayer.Source = null; playerElement.SetMediaPlayer(null); nextPlayer.Dispose(); source.Dispose(); stream.Dispose();
+                    rangeSource = null; nextPlayer = null; source = null; stream = null;
+                    return;
+                }
+                mediaStream = stream; mediaRange = rangeSource; mediaSource = source; mediaPlayer = nextPlayer;
+                stream = null; rangeSource = null; source = null; nextPlayer = null;
+                var natural = mediaPlayer.PlaybackSession.NaturalDuration;
+                duration = natural > TimeSpan.Zero && natural != TimeSpan.MaxValue
+                    ? natural
+                    : mediaSource.Duration is TimeSpan d && d > TimeSpan.Zero ? d : TimeSpan.FromSeconds(1);
+                position = TimeSpan.Zero;
+                if (initialPositionMs is int startMs && startMs > 0 && duration > TimeSpan.Zero)
+                {
+                    var target = TimeSpan.FromMilliseconds(Math.Min(startMs, Math.Max(0, duration.TotalMilliseconds - 50)));
+                    try { mediaPlayer.PlaybackSession.Position = target; position = target; } catch { }
+                }
+                positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
+                loaded = true;
+                ContentOpened?.Invoke(itemId);
+                ViewerNotice.Set(status);
+            }
+            catch (Exception ex) when (rangeSource?.Failure is { } sourceFailure && !ReferenceEquals(ex, sourceFailure))
+            {
+                throw sourceFailure;
+            }
+            finally
+            {
+                rangeSource?.Dispose();
+                if (nextPlayer is not null) { try { nextPlayer.Source = null; playerElement.SetMediaPlayer(null); nextPlayer.Dispose(); } catch { } }
+                source?.Dispose();
+                stream?.Dispose();
+            }
+        }
         try
         {
-            rangeSource=isAudio ? await api.OpenAudioRangeAsync(itemId,cancellation) : await api.OpenVideoRangeAsync(itemId,cancellation);
-            stream=new VideoRandomAccessStream(rangeSource);var mime=rangeSource.Manifest.Mime;
-            cancellation.ThrowIfCancellationRequested();
-            source = MediaSource.CreateFromStream(stream, mime);
-            await source.OpenAsync().AsTask(cancellation);
-            if (source.State != MediaSourceState.Opened) throw new InvalidDataException(isAudio ? "音声を開けません。" : "動画を開けません。");
-            var opened = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            nextPlayer = new MediaPlayer { AutoPlay = false, Volume = volume / 100.0, IsMuted = muted };
-            nextPlayer.MediaOpened += (_, _) => opened.TrySetResult(true);
-            nextPlayer.MediaFailed += (_, args) =>
-            {
-                opened.TrySetException(rangeSource?.Failure ?? mediaRange?.Failure ?? new InvalidDataException(args.ErrorMessage));
-                DispatcherQueue.TryEnqueue(() => { if (!disposed && current == version) ReportFailure(rangeSource?.Failure ?? mediaRange?.Failure ?? new InvalidDataException(args.ErrorMessage)); });
-            };
-            nextPlayer.MediaEnded += (_, _) => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (disposed || current != version || !loaded) return;
-                playing = false; positionTimer.Stop();
-                position = duration;
-                positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
-                ViewerNotice.Set(status);
-                UpdateControls(); ShowChrome();
-            });
-            playerElement.SetMediaPlayer(nextPlayer);
-            nextPlayer.Source = source;
-            await opened.Task.WaitAsync(TimeSpan.FromSeconds(8), cancellation);
-            if (disposed || current != version)
-            {
-                rangeSource?.Dispose();nextPlayer.Source = null; playerElement.SetMediaPlayer(null); nextPlayer.Dispose(); source.Dispose(); stream.Dispose();
-                return;
-            }
-            mediaStream = stream; mediaRange=rangeSource; mediaSource = source; mediaPlayer = nextPlayer;
-            stream = null; rangeSource=null; source = null; nextPlayer = null;
-            var natural = mediaPlayer.PlaybackSession.NaturalDuration;
-            duration = natural > TimeSpan.Zero && natural != TimeSpan.MaxValue
-                ? natural
-                : mediaSource.Duration is TimeSpan d && d > TimeSpan.Zero ? d : TimeSpan.FromSeconds(1);
-            position = TimeSpan.Zero;
-            if (initialPositionMs is int startMs && startMs > 0 && duration > TimeSpan.Zero)
-            {
-                var target = TimeSpan.FromMilliseconds(Math.Min(startMs, Math.Max(0, duration.TotalMilliseconds - 50)));
-                try { mediaPlayer.PlaybackSession.Position = target; position = target; } catch { }
-            }
-            positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
-            loaded = true;
-            ContentOpened?.Invoke(itemId);
-            ViewerNotice.Set(status);
+            await OpenRangeStreamAsync(isAudio ? () => api.OpenAudioRangeAsync(itemId, cancellation) : () => api.OpenVideoRangeAsync(itemId, cancellation), 8);
         }
         catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && current != version) { }
-        catch (Exception ex) { if (current == version) ReportFailure(rangeSource?.Failure ?? ex); }
+        catch (Exception ex) when (!isAudio && !disposed && current == version && !cancellation.IsCancellationRequested
+            && ex is not OperationCanceledException
+            && ex is not HttpRequestException
+            && ex is not ArchiveReadException { Status: HttpStatusCode.Forbidden or HttpStatusCode.NotFound or HttpStatusCode.Conflict or HttpStatusCode.ServiceUnavailable })
+        {
+            AppLog.Error(ex);
+            ClearMedia();
+            ViewerNotice.Set(status, "互換形式で再生を準備しています…");
+            try
+            {
+                await OpenRangeStreamAsync(() => api.OpenVideoCompatRangeAsync(itemId, cancellation), 15);
+            }
+            catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && current != version) { }
+            catch (Exception compatEx) { if (current == version) ReportFailure(compatEx); }
+        }
+        catch (Exception ex) { if (current == version) ReportFailure(ex); }
         finally
         {
-            rangeSource?.Dispose();
-            if (nextPlayer is not null) { try { nextPlayer.Source = null; playerElement.SetMediaPlayer(null); nextPlayer.Dispose(); } catch { } }
-            source?.Dispose();
-            stream?.Dispose();
             if (!disposed && current == version) { busy = false; UpdateControls(); TitleChanged?.Invoke(WindowTitle); if (!keyboardChrome && !failed) hideTimer.Start(); }
         }
     }
@@ -432,6 +478,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         updatingVolume=true;try{volumeSlider.Value=volume;volumeSlider.IsEnabled=!busy;}finally{updatingVolume=false;}
         volumeText.Text = muted ? "消音" : $"{volume}%";
         retry.IsEnabled = !busy && failed&&!favorite.IsSaving;
+        openExternal.Visibility = !isAudio && failed && !busy ? Visibility.Visible : Visibility.Collapsed;
+        openExternal.IsEnabled = !isAudio && failed && !busy && !favorite.IsSaving;
     }
 
     public void Dispose()
@@ -439,7 +487,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         if (disposed) return;
         disposed = true;
         favorite.Dispose();
-        hideTimer.Dispose();previewTimer.Stop();
+        hideTimer.Dispose();previewTimer.Stop();tapTimer.Stop();
         lifetime.Cancel();
         request?.Cancel();
         ClearMedia();

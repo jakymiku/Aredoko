@@ -367,5 +367,45 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
             folder_recs = db.execute('SELECT page FROM ai_page_vectors WHERE item_id=?', (other,)).fetchall()
         self.assertEqual(len(folder_recs), 2)
 
+    def test_all_pages_scope_indexes_and_controls_search_plus_origin_page_similarity(self):
+        # Empty ai_page_vectors initially; indexing with book_pages='all_pages' populates pages automatically.
+        all_scope = {'root_ids': [self.root], 'book_pages': 'all_pages'}
+        cover_only_scope = {'root_ids': [self.root], 'book_pages': 'cover_only'}
+        (self.loose / 'match.png').write_bytes(png(color=(90, 80, 70)))
+        self.scan()
+        match_id = self.ids['match.png']
+
+        # Before indexing internal pages, origin_page=1 encodes on the fly if encoder is available.
+        self.ai.start(scope=cover_only_scope)
+        self.ai.worker.join(10)
+        self.assertEqual(self.records(), [])
+        sim_live = self.ai.similar(self.item, scope=all_scope, origin_page=1)
+        self.assertEqual(sim_live['origin_page'], 1)
+        self.assertEqual(sim_live['similarity_status'], 'ready')
+        self.assertEqual(sim_live['items'][0]['id'], match_id)
+
+        # Indexing with book_pages='all_pages' builds ai_page_vectors for already-fresh books too.
+        self.ai.start(scope=all_scope)
+        self.ai.worker.join(10)
+        self.assertEqual(self.ai.status()['state'], 'complete')
+        self.assertEqual(len(self.records()), 2)
+
+        # Cached page vector works even with image encoding blocked.
+        with patch.object(self.encoder, 'encode', side_effect=AssertionError('should reuse page vector')):
+            sim_cached = self.ai.similar(self.item, scope=all_scope, origin_page=1)
+        self.assertEqual(sim_cached['items'][0]['id'], match_id)
+
+        # Search obeys book_pages scope setting ('cover_only' omits internal page matches).
+        all_hits = {i['id']: i for i in self.ai.search('内側', source='cover', scope=all_scope)['items']}
+        cover_hits = {i['id']: i for i in self.ai.search('内側', source='cover', scope=cover_only_scope)['items']}
+        self.assertIn('ai_page_match', all_hits[self.item])
+        self.assertNotIn('ai_page_match', cover_hits[self.item])
+
+        for bad_page in (-1, 10000, '1', True):
+            with self.assertRaises(ValueError):
+                self.ai.similar(self.item, scope=all_scope, origin_page=bad_page)
+        with self.assertRaises(ValueError):
+            self.ai.similar(match_id, scope=all_scope, origin_page=0)
+
 
 if __name__=='__main__':unittest.main()

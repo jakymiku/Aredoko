@@ -247,7 +247,7 @@ public sealed partial class MainPage
     private async void CloseSettings_Click(object sender,RoutedEventArgs e)
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        var needLoad=resultSession is null||PendingSearch;
+        var needLoad=resultSession is null||PendingAutoSearch;
         try
         {
             CloseSettingsHubCore();
@@ -268,6 +268,11 @@ public sealed partial class MainPage
     private async void SettingsAIIndex_Click(object sender,RoutedEventArgs e)
     {
         await OpenAISettingsAsync();
+        if(!disposed&&settingsHubOpen)await LoadSettingsStatusAsync();
+    }
+    private async void SettingsAIMediaPrep_Click(object sender,RoutedEventArgs e)
+    {
+        await OpenAISettingsAsync(initialSection:"media");
         if(!disposed&&settingsHubOpen)await LoadSettingsStatusAsync();
     }
     private async void SettingsAIEnvironment_Click(object sender,RoutedEventArgs e)

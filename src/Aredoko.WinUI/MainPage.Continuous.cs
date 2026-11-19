@@ -41,7 +41,7 @@ public sealed partial class MainPage
     }
     private async void ResultScroll_Changed(object? sender,ScrollViewerViewChangedEventArgs args)
     {
-        if(!ready||!Items.IsEnabled||args.IsIntermediate||disposed||extending||browseReflowing||browseFailed||saving||dialogOpen||PendingSearch||folderHubOpen)return;
+        if(!ready||!Items.IsEnabled||args.IsIntermediate||disposed||extending||browseReflowing||browseFailed||saving||dialogOpen||PendingAutoSearch||folderHubOpen)return;
         if(resultScroll is not ScrollViewer scroll||browseBuffer is not ResultBuffer buffer||resultWindow is not ResultWindow window)return;
         var forward=scroll.VerticalOffset+scroll.ViewportHeight*2>=scroll.ExtentHeight&&buffer.End<buffer.Total;
         var backward=!forward&&scroll.VerticalOffset<scroll.ViewportHeight&&buffer.Start>0;
@@ -73,7 +73,7 @@ public sealed partial class MainPage
         finally
         {
             extending=false;transitions.Release();
-            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+            if(PendingAutoSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }
     }
     private async void BrowseEdgeShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs args)
@@ -86,13 +86,13 @@ public sealed partial class MainPage
     }
     private async Task JumpBrowseEdgeAsync(bool last)
     {
-        if(extending||browseReflowing||PendingSearch||resultSession is not {} session||resultWindow is not {} window||session.Total==0||!await transitions.WaitAsync(0))return;
+        if(extending||browseReflowing||PendingAutoSearch||resultSession is not {} session||resultWindow is not {} window||session.Total==0||!await transitions.WaitAsync(0))return;
         extending=true;var token=renderCancellation.Token;
         try
         {
             var start=last?Math.Max(0,session.Total-ResultWindow.BlockSize):0;
             var result=await window.ReadAsync(start,Math.Min(ResultWindow.BlockSize,session.Total-start),token);
-            if(disposed||token.IsCancellationRequested||PendingSearch||!ReferenceEquals(session,resultSession))return;
+            if(disposed||token.IsCancellationRequested||PendingAutoSearch||!ReferenceEquals(session,resultSession))return;
             ResetBrowse(start,result);rows=browseBuffer!.Items.ToList();page=start/resultPageSize;
             RenderRows();RestoreSelection();Items.UpdateLayout();await YieldBrowseLayoutAsync();
             if(disposed||!ReferenceEquals(session,resultSession))return;
@@ -105,7 +105,7 @@ public sealed partial class MainPage
         finally
         {
             extending=false;transitions.Release();
-            if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+            if(PendingAutoSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
         }
     }
     private (string Key,double Y)? CaptureBrowseAnchor()

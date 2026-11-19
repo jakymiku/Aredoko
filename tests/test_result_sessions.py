@@ -483,5 +483,25 @@ class ResultSessionTests(unittest.TestCase):
             server.shutdown(); server.server_close(); thread.join(5)
             handler.results.close(); handler.animations.close(); handler.setup_jobs.close()
 
+    def test_visual_neighbor_include_books_traverses_images_and_cbz(self):
+        import zipfile
+        output = io.BytesIO(); Image.new('RGB', (4, 4), 'blue').save(output, format='PNG'); blue = output.getvalue()
+        with zipfile.ZipFile(self.media / '000_book.cbz', 'w') as zf:
+            zf.writestr('001.png', blue)
+        (self.media / '000_clip.mp4').write_bytes(b'placeholder')
+        (self.media / '125_after.png').write_bytes(blue)
+        self.catalog.index.scan(self.root); self.catalog.sync_index()
+        by_name = {Path(r['relative_path']).name: r['id'] for p in range(3) for r in self.catalog.search(page=p)['items']}
+        prev_img = by_name['124.png']
+        cbz_id = by_name['000_book.cbz']
+        next_img = by_name['125_after.png']
+        self.create()
+        # Default include_books=False continues skipping books and videos.
+        self.assertEqual(self.owner.neighbor(self.sid, prev_img, 1)['neighbor']['item']['id'], next_img)
+        # include_books=True crosses from Image -> CBZ -> Image while still skipping videos.
+        self.assertEqual(self.owner.neighbor(self.sid, prev_img, 1, include_books=True)['neighbor']['item']['id'], cbz_id)
+        self.assertEqual(self.owner.neighbor(self.sid, cbz_id, 1, include_books=True)['neighbor']['item']['id'], next_img)
+        self.assertEqual(self.owner.neighbor(self.sid, next_img, -1, include_books=True)['neighbor']['item']['id'], cbz_id)
+
 
 if __name__ == '__main__': unittest.main()

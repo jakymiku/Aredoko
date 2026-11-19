@@ -9,7 +9,7 @@ public static class PageChunkRequests
     internal static string Profile(string profile)=>profile.Length is >0 and <=256?profile:throw new ArgumentException("モデル設定を確認してください。");
     internal static JsonObject Scope(JsonObject scope)
     {
-        if(scope.Any(p=>p.Key is not ("root_ids" or "kind" or "shelf")))throw new ArgumentException("対象範囲が無効です。");
+        if(scope.Any(p=>p.Key is not ("root_ids" or "kind" or "shelf" or "book_pages")))throw new ArgumentException("対象範囲が無効です。");
         JsonArray? roots=null;
         if(scope["root_ids"] is JsonNode node)
         {
@@ -29,7 +29,16 @@ public static class PageChunkRequests
         if(scope.ContainsKey("kind")&&scope["kind"] is null)throw new ArgumentException("対象の種類が無効です。");
         var kind=scope["kind"]?.GetValue<string>()??"";var shelf=scope["shelf"]?.GetValue<string>();
         if(kind is not ("" or "book" or "archive" or "compressed" or "image" or "video" or "audio" or "material")||shelf?.Length>80)throw new ArgumentException("対象条件が無効です。");
-        return new(){{"root_ids",roots},{"kind",kind},{"shelf",shelf}};
+        string? bookPages=null;
+        if(scope.ContainsKey("book_pages"))
+        {
+            if(scope["book_pages"] is null)throw new ArgumentException("対象範囲が無効です。");
+            bookPages=scope["book_pages"]!.GetValue<string>();
+            if(bookPages is not ("cover_only" or "all_pages"))throw new ArgumentException("対象範囲が無効です。");
+        }
+        var result=new JsonObject{{"root_ids",roots},{"kind",kind},{"shelf",shelf}};
+        if(bookPages is not null)result["book_pages"]=bookPages;
+        return result;
     }
     public static JsonObject Plan(int item,string revision,JsonObject scope,int maximum,string profile)
     {

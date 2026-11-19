@@ -111,6 +111,7 @@ public sealed partial class MainPage
         try
         {
             await api.PostAsync("api/library/roots",new System.Text.Json.Nodes.JsonObject{{"path",row.Path},{"consent",true},{"excludes",new System.Text.Json.Nodes.JsonArray(row.Exclusions.Select(s=>(System.Text.Json.Nodes.JsonNode?)System.Text.Json.Nodes.JsonValue.Create(s)).ToArray())},{"default_shelf",row.DefaultShelf},{"folder_books",row.FolderBooks},{"recursive",row.Recursive}});
+            thumbnails.ResetSession();
             await RefreshSearchRootsAsync();await LoadAIScopeAsync();RenderFolderHub();
             Notice("再登録しました","タグ・棚を復元しました。必要に応じて「⟳ 更新」から一覧を更新できます。");
         }
@@ -138,6 +139,7 @@ public sealed partial class MainPage
             if(!accepted||disposed)return;
             var result=await api.PostAsync("api/library/roots/purge",new System.Text.Json.Nodes.JsonObject{{"root_id",row.Id},{"consent",true}});
             var removed=result["removed_items"]?.GetValue<int>()??0;
+            thumbnails.ResetSession();
             await RefreshSearchRootsAsync();await LoadAIScopeAsync();RenderFolderHub();
             Notice("記録を削除しました",$"{removed:N0}件（元ファイルは変更なし）");
         }

@@ -60,6 +60,7 @@ from video_direct_feature import VideoDirectFeature
 from video_direct_search import VideoSearchChanged
 from ai_setup_plan import plan_setup
 from thumbnail_cache import ThumbnailCache, ThumbnailCancelled
+from video_compat import VideoCompatCache
 from contextlib import ExitStack
 import sys
 
@@ -167,6 +168,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     restore_jobs=RestoreStagingJobs(catalog.path.parent/'restore-staging',handoff=restore_handoff)
     animations=AnimationSessions(previews)
     thumbnails=ThumbnailCache(previews,disk_path=thumbnail_disk_path)
+    video_compat=VideoCompatCache(previews)
     def result_provider(conditions, consume, cancelled):
         values = dict(conditions)
         mode = values.pop('mode', None)
@@ -182,7 +184,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             require(('query','kind','view','source','scope','literal_only','group_threshold','result_group'))
             return ai.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='similar':
-            require(('item_id','kind','view','scope'))
+            require(('item_id','kind','view','scope','origin_page'))
             return ai.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='video-similar':
             require(('item_id','view','root_ids','shelf','shelf_ids','tag'))
@@ -550,8 +552,35 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                         return self.send(503,{'error':'Preview workers busy'})
                     except (PreviewUnavailable,OSError,RuntimeError,NotImplementedError):
                         return self.send(404,{'error':'Preview unavailable'})
-                    except ValueError:
+                    except (ValueError,TypeError):
                         return self.send(400,{'error':'Invalid video range request'})
+                if path.startswith('/api/library/video-compat/'):
+                    try:
+                        match=re.fullmatch(r'/api/library/video-compat/([1-9][0-9]{0,18})/(manifest|range)',path)
+                        if match is None:raise ValueError('Invalid compat video route')
+                        item=int(match[1])
+                        if item>9223372036854775807:raise ValueError('Invalid item')
+                        query=parse_qs(urlparse(self.path).query,keep_blank_values=True,strict_parsing=True,max_num_fields=2)
+                        if match[2]=='range':
+                            if set(query)!={'revision'} or len(query['revision'])!=1:raise ValueError('One revision is required')
+                            values=self.headers.get_all('Range',[])
+                            value=re.fullmatch(r'bytes=(0|[1-9][0-9]{0,12})-(0|[1-9][0-9]{0,12})',values[0]) if len(values)==1 else None
+                            if value is None:raise ValueError('One explicit bounded range is required')
+                            start,end=map(int,value.groups())
+                            data,mime,size=video_compat.read_range(item,start,end,query['revision'][0])
+                            return self.send(206,data,mime,{'Content-Range':f'bytes {start}-{end}/{size}','Accept-Ranges':'bytes','ETag':'"'+query['revision'][0]+'"'})
+                        if query:raise ValueError('Unexpected compat video query')
+                        return self.send(200,video_compat.manifest(item))
+                    except VideoRangeUnsatisfiable as error:
+                        return self.send(416,{'error':'Video range outside source'},extra_headers={'Content-Range':f'bytes */{error.size}'})
+                    except ReaderChanged:
+                        return self.send(409,{'error':'Archive changed; rescan and reopen the reader'})
+                    except PreviewBusyError:
+                        return self.send(503,{'error':'Preview workers busy'})
+                    except (PreviewUnavailable,OSError,RuntimeError,NotImplementedError):
+                        return self.send(404,{'error':'Compat video unavailable'})
+                    except ValueError:
+                        return self.send(400,{'error':'Invalid compat video request'})
                 if path.startswith('/api/library/audio/'):
                     try:
                         match=re.fullmatch(r'/api/library/audio/([1-9][0-9]{0,18})(?:/(manifest|range))?',path)
@@ -709,7 +738,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                             if set(body)!={'session_id','offset','limit'}:raise ValueError('Invalid result fields')
                             return self.send(200,results.read(**body))
                         if self.path=='/api/library/results/neighbor':
-                            if set(body)!={'session_id','item_id','direction'}:raise ValueError('Invalid result fields')
+                            if set(body) not in ({'session_id','item_id','direction'},{'session_id','item_id','direction','include_books'}):raise ValueError('Invalid result fields')
                             return self.send(200,results.neighbor(**body))
                         if self.path=='/api/library/results/locate':
                             if set(body)!={'session_id','item_ids'}:raise ValueError('Invalid result fields')
@@ -978,11 +1007,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
                     return self.send(200,ai.search_requests.cancel(body['request_id']))
                 if self.path=='/api/library/ai/similar':
-                    if set(body)-{'item_id','kind','view','page','limit','scope','request_id'}:raise ValueError('Invalid similarity request')
+                    if set(body)-{'item_id','kind','view','page','limit','scope','request_id','origin_page'}:raise ValueError('Invalid similarity request')
                     scope=validate_scope(body['scope']) if 'scope' in body else profiles.scope()
                     try:
+                        extra={'origin_page':body['origin_page']} if 'origin_page' in body else {}
                         return self._search_reply(body,lambda cancelled:ai.similar(body.get('item_id'),body.get('kind',''),body.get('view','all'),
-                            body.get('page',0),body.get('limit',60),scope=scope,cancelled=cancelled))
+                            body.get('page',0),body.get('limit',60),scope=scope,**extra,cancelled=cancelled))
                     except KeyError:return self.send(404,{'error':'Similarity source unavailable'})
                 if self.path=='/api/library/ai/search':
                     if set(body)-{'query','kind','view','page','source','ranking','scope','literal_only','group_threshold','result_group','request_id'}:raise ValueError('Invalid AI search request')
@@ -1070,6 +1100,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             except KeyError: return self.send(404,{'error':'Root not found'})
             except OSError: return self.send(409,{'error':'Folder unavailable; records preserved'})
     Handler.thumbnails=thumbnails
+    Handler.video_compat=video_compat
     Handler.audio_content=audio
     Handler.video_content=video
     Handler.results=results
@@ -1174,6 +1205,7 @@ def _serve(args):
         resources.callback(handler.animations.close)
         resources.callback(handler.results.close)
         resources.callback(handler.thumbnails.close)
+        resources.callback(handler.video_compat.close)
         resources.callback(close_job,handler.backup_jobs)
         resources.callback(close_job,handler.restore_jobs)
         server=OwnedHTTPServer(('127.0.0.1',args.port),handler)

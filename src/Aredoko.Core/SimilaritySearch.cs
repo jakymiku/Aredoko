@@ -9,13 +9,16 @@ public static class SimilaritySearch
     public const string VideoAudioIndexingGuidance="音で似た動画を探すには、設定 → AI検索の準備 → 動画内の音声で索引を作成してください。先頭の音声トラックが対象です。";
     public const int MaxResponseBytes=2*1024*1024;
     public static bool CanStart(MediaRow row) => row.Id > 0 && row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" or "audio";
-    public static JsonObject Request(int itemId,string kind,string view,int page,JsonObject scope,int? rootId=null) =>
-        RequestMulti(itemId,kind,view,page,scope,rootId is int id ? new[]{id} : null);
-    public static JsonObject RequestMulti(int itemId,string kind,string view,int page,JsonObject scope,IReadOnlyList<int>? rootIds)
+    public static JsonObject Request(int itemId,string kind,string view,int page,JsonObject scope,int? rootId=null,int? originPage=null) =>
+        RequestMulti(itemId,kind,view,page,scope,rootId is int id ? new[]{id} : null,originPage);
+    public static JsonObject RequestMulti(int itemId,string kind,string view,int page,JsonObject scope,IReadOnlyList<int>? rootIds,int? originPage=null)
     {
         if(itemId<=0 || page<0)throw new ArgumentOutOfRangeException(nameof(itemId));
-        return new JsonObject {{"item_id",itemId},{"kind",kind},{"view",view},{"page",page},
+        if(originPage is < 0 or >= 10000)throw new ArgumentOutOfRangeException(nameof(originPage));
+        var req=new JsonObject {{"item_id",itemId},{"kind",kind},{"view",view},{"page",page},
             {"scope",FolderSearch.RestrictAIMulti(scope,rootIds)}};
+        if(originPage is int p)req["origin_page"]=p;
+        return req;
     }
     public static string Guidance(string status, string originKind = "",bool directAudio=false,bool directVideo=false,bool directVideoAudio=false) => directVideoAudio
         ? status=="ready"?"動画内の音声・音の特徴が似た候補です。起点自身は除外しています。一致区間から動画を再生できます。類似度は正解率ではありません。"

@@ -229,3 +229,11 @@ class ScopeTests(unittest.TestCase):
         request({'scope':{'root_ids':[]}})
         self.assertEqual(request()['scope']['root_ids'],[])
         self.assertEqual(self.encoder.calls,[])
+
+    def test_book_pages_scope_validation_and_defaults(self):
+        self.assertNotIn('book_pages', validate_scope({}))
+        self.assertEqual(validate_scope({'book_pages': 'cover_only'})['book_pages'], 'cover_only')
+        self.assertEqual(validate_scope({'book_pages': 'all_pages'})['book_pages'], 'all_pages')
+        for bad in ({'book_pages': None}, {'book_pages': True}, {'book_pages': 'none'}, {'book_pages': 1}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                validate_scope(bad)

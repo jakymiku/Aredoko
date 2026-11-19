@@ -206,7 +206,7 @@ public sealed partial class MainPage
             }
             if(!disposed){RestoreSelection();Failure(ex);}
         }
-        finally{preparingSelection=false;if(!disposed)UpdateLibrarySelectionTools();transitions.Release();if(PendingSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
+        finally{preparingSelection=false;if(!disposed)UpdateLibrarySelectionTools();transitions.Release();if(PendingAutoSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
     private async void SelectRangeSpan_Click(object sender,RoutedEventArgs e)
     {
@@ -330,7 +330,7 @@ public sealed partial class MainPage
                 }
                 UpdateLibrarySelectionTools();
                 UpdateDirty();
-                if(PendingSearch){searchTimer.Stop();searchTimer.Start();}
+                if(PendingAutoSearch){searchTimer.Stop();searchTimer.Start();}
             }
         }
     }

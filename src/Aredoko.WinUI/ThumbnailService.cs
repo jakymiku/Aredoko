@@ -6,21 +6,87 @@ namespace Aredoko_WinUI;
 
 internal sealed class ThumbnailService(LibraryApi api)
 {
-    private readonly SemaphoreSlim workers = new(2, 2);
+    private const int MaxMemoryEntries = 256;
+    private readonly SemaphoreSlim workers = new(4, 4);
+    private readonly object cacheLock = new();
+    private readonly Dictionary<(long Generation, int ItemId, int Edge), LinkedListNode<CacheEntry>> cacheMap = new();
+    private readonly LinkedList<CacheEntry> cacheOrder = new();
+    private long generation = 1;
+
+    private readonly record struct CacheEntry((long Generation, int ItemId, int Edge) Key, BitmapImage Image);
+
+    public BitmapImage? TryGetCached(MediaRow row, int edge)
+    {
+        if (row.Availability != "present" || (row.Kind != "image" && row.Kind != "book" && row.Kind != "archive" && row.Kind != "video")) return null;
+        lock (cacheLock)
+        {
+            var key = (generation, row.Id, edge);
+            if (!cacheMap.TryGetValue(key, out var node)) return null;
+            cacheOrder.Remove(node);
+            cacheOrder.AddFirst(node);
+            return node.Value.Image;
+        }
+    }
+
+    public void ResetSession()
+    {
+        lock (cacheLock)
+        {
+            generation++;
+            cacheMap.Clear();
+            cacheOrder.Clear();
+        }
+    }
+
+    public void InvalidateItem(int itemId)
+    {
+        lock (cacheLock)
+        {
+            var keys = cacheMap.Keys.Where(k => k.ItemId == itemId).ToArray();
+            foreach (var key in keys)
+            {
+                if (cacheMap.Remove(key, out var node))
+                    cacheOrder.Remove(node);
+            }
+        }
+    }
+
+    private void Put(long expectedGeneration, int itemId, int edge, BitmapImage image)
+    {
+        lock (cacheLock)
+        {
+            if (expectedGeneration != generation) return;
+            var key = (expectedGeneration, itemId, edge);
+            if (cacheMap.TryGetValue(key, out var existing))
+            {
+                cacheOrder.Remove(existing);
+                cacheMap.Remove(key);
+            }
+            var node = new LinkedListNode<CacheEntry>(new CacheEntry(key, image));
+            cacheOrder.AddFirst(node);
+            cacheMap[key] = node;
+            while (cacheOrder.Count > MaxMemoryEntries && cacheOrder.Last is { } oldest)
+            {
+                cacheOrder.RemoveLast();
+                cacheMap.Remove(oldest.Value.Key);
+            }
+        }
+    }
 
     public async Task<BitmapImage?> GetAsync(MediaRow row, CancellationToken cancellation, int edge = PreviewPolicy.Edge)
     {
         if (row.Availability != "present" || (row.Kind != "image" && row.Kind != "book" && row.Kind != "archive" && row.Kind != "video")) return null;
+        if (TryGetCached(row, edge) is { } cached) return cached;
+        long requestGeneration;
+        lock (cacheLock) requestGeneration = generation;
         await workers.WaitAsync(cancellation);
         try
         {
             cancellation.ThrowIfCancellationRequested();
-            // Each realization reaches a guarded backend cache. A row-key-only
-            // local hit cannot authorize current scope or physical source.
-            // Video's existing preview endpoint also emits a bounded 256px PNG.
-            var png = row.Kind == "video"
-                ? await api.PreviewAsync(row.Id, cancellation)
-                : await api.ThumbnailAsync(row.Id, edge, cancellation);
+            if (TryGetCached(row, edge) is { } racedHit) return racedHit;
+            // All supported media thumbnails (including videos) flow through the
+            // guarded persistent thumbnail endpoint with live source validation.
+            var png = await api.ThumbnailAsync(row.Id, edge, cancellation);
             if (png is null) return null;
             using var stream = new InMemoryRandomAccessStream();
             using (var writer = new DataWriter(stream))
@@ -30,6 +96,7 @@ internal sealed class ThumbnailService(LibraryApi api)
             stream.Seek(0);
             var image = new BitmapImage(); await image.SetSourceAsync(stream);
             cancellation.ThrowIfCancellationRequested();
+            Put(requestGeneration, row.Id, edge, image);
             return image;
         }
         catch (OperationCanceledException) { throw; }

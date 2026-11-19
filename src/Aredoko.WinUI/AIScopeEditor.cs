@@ -24,6 +24,7 @@ public sealed class AIScopeEditor : IDisposable
     private readonly List<Button> pathButtons=[];
     private readonly CheckBox all=new() {Content="登録フォルダをすべて対象にする"};
     private readonly ComboBox kind=new() {Header="対象の種類",HorizontalAlignment=HorizontalAlignment.Stretch};
+    private readonly ComboBox bookPages=new() {Header="CBZ・ZIP・本の内部ページ",HorizontalAlignment=HorizontalAlignment.Stretch};
     private readonly ComboBox shelfMode=new() {Header="棚の条件",HorizontalAlignment=HorizontalAlignment.Stretch};
     private readonly TextBox shelf=new() {Header="棚（完全一致）",MaxLength=80};
     private readonly Button refresh=new() {Content="件数を確認"};
@@ -41,7 +42,13 @@ public sealed class AIScopeEditor : IDisposable
     public Expander Content {get;}
     public bool Saving=>saving;
     public bool Ready=>!initializing&&!saving&&!counting&&confirmed&&!Dirty&&saved is not null&&target>0;
-    private bool Dirty=>saved is null || !JsonNode.DeepEquals(saved,Draft());
+    private static JsonObject NormalizeForCompare(JsonObject value)
+    {
+        var copy=(JsonObject)value.DeepClone();
+        if(!copy.ContainsKey("book_pages")||copy["book_pages"] is null)copy["book_pages"]="cover_only";
+        return copy;
+    }
+    private bool Dirty=>saved is null || !JsonNode.DeepEquals(NormalizeForCompare(saved),Draft());
 
     public AIScopeEditor(LibraryApi api,Action<JsonObject?> applied)
     {
@@ -54,6 +61,7 @@ public sealed class AIScopeEditor : IDisposable
         rootPrevious.Click+=(_,_)=>{picker.Move(-1);RenderRoots();};
         rootNext.Click+=(_,_)=>{picker.Move(1);RenderRoots();};
         AutomationProperties.SetAutomationId(kind,"AIScopeKind");AutomationProperties.SetName(kind,"AI対象の種類");
+        AutomationProperties.SetAutomationId(bookPages,"AIScopeBookPages");AutomationProperties.SetName(bookPages,"CBZ・ZIP・本の内部ページのAI対象");
         AutomationProperties.SetAutomationId(shelfMode,"AIScopeShelfMode");AutomationProperties.SetName(shelfMode,"AI対象の棚条件");
         AutomationProperties.SetAutomationId(shelf,"AIScopeShelf");
         AutomationProperties.SetAutomationId(refresh,"AIScopeRefresh");
@@ -65,13 +73,17 @@ public sealed class AIScopeEditor : IDisposable
             var item=new ComboBoxItem {Content=labels[i],Tag=kinds[i]};
             AutomationProperties.SetAutomationId(item,"AIScopeKind_"+(kinds[i].Length==0?"all":kinds[i]));kind.Items.Add(item);
         }
+        foreach(var (value,label) in new[]{("cover_only","表紙のみ（標準・高速）"),("all_pages","内部のすべての画像も含める（CBZ・ZIP・本）")}) {
+            var item=new ComboBoxItem {Content=label,Tag=value};
+            AutomationProperties.SetAutomationId(item,$"AIScopeBookPages_{value}");bookPages.Items.Add(item);
+        }
         foreach(var (value,label) in new[]{(0,"棚を指定しない"),(1,"指定した棚"),(2,"未整理のみ")}) {
             var item=new ComboBoxItem {Content=label,Tag=value};
             AutomationProperties.SetAutomationId(item,$"AIScopeShelfMode_{value}");shelfMode.Items.Add(item);
         }
-        kind.SelectedIndex=0;shelfMode.SelectedIndex=0;
+        kind.SelectedIndex=0;bookPages.SelectedIndex=0;shelfMode.SelectedIndex=0;
         all.Checked+=(_,_)=>Changed();all.Unchecked+=(_,_)=>Changed();
-        kind.SelectionChanged+=(_,_)=>Changed();shelfMode.SelectionChanged+=(_,_)=>Changed();shelf.TextChanged+=(_,_)=>Changed();
+        kind.SelectionChanged+=(_,_)=>Changed();bookPages.SelectionChanged+=(_,_)=>Changed();shelfMode.SelectionChanged+=(_,_)=>Changed();shelf.TextChanged+=(_,_)=>Changed();
         // Bound the expanding settings extent even with hundreds of roots.
         var rootViewport=new ScrollViewer {Content=FormScrollContent.Wrap(rootList),MaxHeight=160,
             HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,
@@ -80,7 +92,7 @@ public sealed class AIScopeEditor : IDisposable
         AutomationProperties.SetName(rootViewport,"AI対象フォルダ一覧");
         var rootPager=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
         rootPager.Children.Add(rootPrevious);rootPager.Children.Add(rootPage);rootPager.Children.Add(rootNext);
-        foreach(var element in new UIElement[]{all,rootQuery,rootSummary,rootViewport,rootPager,rootPath,kind,shelfMode,shelf})fields.Children.Add(element);
+        foreach(var element in new UIElement[]{all,rootQuery,rootSummary,rootViewport,rootPager,rootPath,kind,bookPages,shelfMode,shelf})fields.Children.Add(element);
         var panel=new StackPanel {Spacing=12};
         var scopeNote=new TextBlock {Text="AI検索の対象範囲（文字検索には影響しません）",TextWrapping=TextWrapping.Wrap};
         ToolTipService.SetToolTip(scopeNote,"AI検索とこれから作るAI検索データに適用します。作成済みデータやモデルは変更しません。");
@@ -97,12 +109,13 @@ public sealed class AIScopeEditor : IDisposable
         revert.Click+=async(_,_)=>{Restore(saved??Empty());await RefreshCountsAsync();};
         Sync();
     }
-    private static JsonObject Empty()=>new() {{"root_ids",new JsonArray()},{"kind",""},{"shelf",null}};
+    private static JsonObject Empty()=>new() {{"root_ids",new JsonArray()},{"kind",""},{"shelf",null},{"book_pages","cover_only"}};
     private JsonObject Draft()
     {
         var ids=new JsonArray();foreach(var id in picker.Selected)ids.Add((JsonNode?)JsonValue.Create(id));
         return new JsonObject {{"root_ids",all.IsChecked==true?null:ids},{"kind",kind.SelectedItem is ComboBoxItem selected?selected.Tag as string??"":""},
-            {"shelf",shelfMode.SelectedIndex==0?null:shelfMode.SelectedIndex==2?"":shelf.Text}};
+            {"shelf",shelfMode.SelectedIndex==0?null:shelfMode.SelectedIndex==2?"":shelf.Text},
+            {"book_pages",bookPages.SelectedItem is ComboBoxItem bp?bp.Tag as string??"cover_only":"cover_only"}};
     }
     private void Restore(JsonObject value)
     {
@@ -111,6 +124,7 @@ public sealed class AIScopeEditor : IDisposable
         var chosen=value["root_ids"] is JsonArray ids?ids.Select(n=>n!.GetValue<int>()).ToHashSet():[];
         picker.Restore(chosen);rootQuery.Text="";rootPath.Visibility=Visibility.Collapsed;RenderRoots();
         kind.SelectedIndex=Array.IndexOf(kinds,value["kind"]?.GetValue<string>()??"");
+        bookPages.SelectedIndex=value["book_pages"]?.GetValue<string>()=="all_pages"?1:0;
         var name=value["shelf"]?.GetValue<string>();shelfMode.SelectedIndex=name is null?0:name.Length==0?2:1;shelf.Text=name??"";
         initializing=false;Changed();
     }
@@ -170,7 +184,7 @@ public sealed class AIScopeEditor : IDisposable
     private void Sync()
     {
         if(closed)return;
-        all.IsEnabled=kind.IsEnabled=shelfMode.IsEnabled=!initializing&&!saving;
+        all.IsEnabled=kind.IsEnabled=bookPages.IsEnabled=shelfMode.IsEnabled=!initializing&&!saving;
         foreach(var pair in roots)pair.Value.IsEnabled=!initializing&&!saving&&all.IsChecked!=true&&(picker.SelectionCount<RootPicker.SelectionLimit||picker.IsSelected(pair.Key));
         rootQuery.IsEnabled=!initializing&&!saving;
         rootPrevious.IsEnabled=!initializing&&!saving&&picker.Page>0;
