@@ -771,3 +771,20 @@ flowchart LR
 - `Aredoko.Core.Tests`（`-c Release --no-restore`）、Python単体テスト（`test_winui_compile_stub` / `test_ai_setup_plan` / `test_native_combo_selection` / `test_portable_startup` / `test_windows_sandbox`）。
 - `frontend-product25` Portable publish＋拡張 `check.py` Light (`run15_light`)・Dark (`run16_dark`) 実行（今回追加した `ItemDetailsQuick`・`BackupDialog`・`DiagnosticsDialog`・`RelatedTermsDialog`・`AISetupPlanDialog` の実機確認＆全スクリーンショット目視確認）。
 - `UB-1`〜`UB-15` 全反映の **配布候補25**（`dist/portable-managed-20261119-25`）を再梱包し、`Aredoko.exe --self-test`・`preflight.json`・`Aredoko-windows-x64.zip`・`validation-kit.zip` を検証。
+
+---
+
+## 11. 候補26：実機試用フィードバック13項目の修正・機能改善
+
+> 対象：候補25の実機試用フィードバック（改善7項目・不満5項目・一部生成動画サムネ/再生バグ）。コード `cdf17b6`（`data/development-tools/frontend-product26`）。
+
+| 区分 | 内容 | 主な実装箇所 |
+| --- | --- | --- |
+| CBZ・連続閲覧 | CBZ内部ページ・画像の右クリック類似検索（`origin_page`）、CBZ末尾→隣接画像・圧縮ファイルへの同一 `ViewerWindow.SwapContent` 横断遷移 | `ArchiveReaderView.cs`, `ImageViewerView.cs`, `ViewerWindow.cs`, `ResultSessionClient.cs`, `result_sessions.py`, `production_server.py` |
+| CBZ AI範囲 | `book_pages`（`cover_only` / `all_pages`）選択UI・全ページベクトル索引と類似検索 | `AIScopeEditor.cs`, `PageChunks.cs`, `ai_scope.py`, `page_semantics.py`, `ai_search.py` |
+| 動画サムネ・互換再生 | `fd:` シーク入力＋`ThumbnailDisk` 動画キャッシュ、`playback_slots(4)`、`VideoRandomAccessStream.ReadAsync` 修正、`VideoCompatCache`（H.264 `yuv420p` faststart 変換＋失敗時外部アプリ誘導） | `video_previews.py`, `previews.py`, `thumbnail_cache.py`, `thumbnail_disk.py`, `video_compat.py`, `VideoRandomAccessStream.cs`, `VideoPlayerView.cs` |
+| 一覧・ビューア操作 | スクロール復帰用のセッション内 256 件 LRU `BitmapImage` キャッシュ、ビューア内ダブルクリック最大化 | `ThumbnailService.cs`, `ViewerInputGestures.cs`, `ViewerWindow.cs`, `ImageViewerView.cs`, `ArchiveReaderView.cs`, `VideoPlayerView.cs` |
+| 検索・設定UI | 文字/AI切替時の自動検索抑止（`PendingAutoSearch`）、設定幅 `960px` 整理、「🎬 動画・音声のAIデータ」直行ボタン＋セクションタブ、AIモデル選択時の固定幅維持 | `MainPage.xaml`, `MainPage.xaml.cs`, `MainPage.Settings.cs` |
+
+- 検証：`Aredoko.Core.Tests`（`1,467` PASS）、Python 単体 `171` 件（`125` 件 skipped=5＋`39` 件＋`7` 件 OK）、[check.py](data/gui-ui-polish02/check.py) Light（`run17f_light`）・Dark（`run18_dark`）全項目 PASS＋スクリーンショット確認、**配布候補26**（`dist/portable-managed-20261120-26`）再梱包・検証 PASS。
+
