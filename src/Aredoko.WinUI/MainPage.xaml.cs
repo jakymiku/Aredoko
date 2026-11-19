@@ -495,7 +495,7 @@ public sealed partial class MainPage : Page
         ToolTipService.SetToolTip(MainViewTitle,selectedShelfIds is not null?ShelfScopeName(summarize:false):MainViewTitle.Text);
     }
     private async Task LoadAsync(bool reuseSession=false) {
-        CloseBrowseMenus();EmptyAIRecovery.Visibility=Visibility.Collapsed;EmptyResetConditionsButton.Visibility=Visibility.Collapsed;
+        CloseBrowseMenus();EmptyAIRecovery.Visibility=Visibility.Collapsed;EmptyResetConditionsButton.Visibility=Visibility.Collapsed;EmptyOpenFoldersButton.Visibility=Visibility.Collapsed;
         // The accepted destination owns the heading even while its request is
         // pending or fails. Never label old, disabled rows as the new results.
         UpdateLibraryHeading();Count.Text="検索中…";
@@ -535,6 +535,7 @@ public sealed partial class MainPage : Page
             UpdateBrowseFooter(FormatLoadedPageRange(browseStart,rows.Count,result.Total),page>0,(page+1)*pageSize<result.Total);
             VisualAssets.State(EmptyArt,"no_results");Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
             EmptyResetConditionsButton.Visibility=rows.Count==0&&HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
+            EmptyOpenFoldersButton.Visibility=rows.Count==0&&!HasActiveSearchConditions()&&view=="all"&&selectedShelfIds is null&&selectedTagScope is null&&selectedSearchRoots is null&&GettingStarted.Visibility!=Visibility.Visible?Visibility.Visible:Visibility.Collapsed;
             Empty.Text=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ内の文字を入力してください":"一致するページ本文はありません")
                 :method.IsTagSemantic?(string.IsNullOrWhiteSpace(query)?"AIタグ候補から探す言葉を入力してください":"AIタグ候補のAI検索データがありません")
                 :method.IsTagCandidates?"該当するAIタグ候補はありません"
@@ -871,6 +872,12 @@ public sealed partial class MainPage : Page
             StyleCardFavoriteButton(favBtn,row);
             favBtn.Click+=async(_,_)=>await SetFavoriteAsync(row,!row.Favorite);
             quickActions.Children.Add(favBtn);
+            var detailsBtn=new Button{Content="✎",Padding=new Thickness(8,4,8,4),MinWidth=34,Style=ThemeStyle("UnselectedSegmentButtonStyle")};
+            AutomationProperties.SetAutomationId(detailsBtn,$"ItemDetailsQuick{row.Id}");
+            AutomationProperties.SetName(detailsBtn,$"{row.Title}の詳細を開く");
+            ToolTipService.SetToolTip(detailsBtn,"詳細・タグを編集");
+            detailsBtn.Click+=async(_,_)=>await OpenRowDetailsAsync(row);
+            quickActions.Children.Add(detailsBtn);
             if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row)||AudioPlayerPolicy.CanOpen(row))
             {
                 var openBtn=new Button{Content="▶",Padding=new Thickness(8,4,8,4),MinWidth=34,Style=ThemeStyle("UnselectedSegmentButtonStyle")};
@@ -1969,17 +1976,18 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetHelpText(SearchMode,SearchMethodHint.Text);
         UpdateClearSearchConditionsVisibility();
     }
+    private async void EmptyOpenFolders_Click(object sender,RoutedEventArgs e)=>await OpenFolderHubAsync();
     private static string SearchModeDescription(int index)=>index switch
         {
             1=>"名前・タグの意味と、画像・表紙の見た目を組み合わせます（AI）。",
-            2=>"検索用データがある画像・表紙・本のページや、動画の代表場面を見た目から探します（AI）。",
+            2=>"AI検索データがある画像・表紙・本のページや、動画の代表場面を見た目から探します（AI）。",
             3=>"名前やタグの意味・言い換えで探します。本の本文・音声の文字起こしは対象外です（AI）。",
             4=>"未承認のAIタグ候補（最新履歴）だけを文字で検索します。確定タグとは混ざりません。",
             5=>"抽出済みのページ本文が検索対象です（同じページ内で検索語がすべて含まれる本を探します）。",
-            6=>"英語を含む未承認タグ候補を、日本語の意味で探します。先に検索用データを作成してください（AI）。",
-            9=>"動画内の音や会話の特徴を文章で探します。「設定 → AI検索を設定 → 動画内の音」で検索用データを作成してください（先頭トラック対象・文字起こしなし）。",
-            8=>"動画の場面や動きを文章で探します。「設定 → AI検索を設定 → 動画の映像」で検索用データを作成してください（音は対象外）。",
-            7=>"音声や音楽の内容・特徴を文章で探します。「設定 → AI検索を設定 → 音声・音楽」で検索用データを作成してください（文字起こしなし）。",
+            6=>"英語を含む未承認タグ候補を、日本語の意味で探します。先にAI検索データを作成してください（AI）。",
+            9=>"動画内の音や会話の特徴を文章で探します。「設定 → AI検索を設定 → 動画内の音」でAI検索データを作成してください（先頭トラック対象・文字起こしなし）。",
+            8=>"動画の場面や動きを文章で探します。「設定 → AI検索を設定 → 動画の映像」でAI検索データを作成してください（音は対象外）。",
+            7=>"音声や音楽の内容・特徴を文章で探します。「設定 → AI検索を設定 → 音声・音楽」でAI検索データを作成してください（文字起こしなし）。",
             _=>"名前・タグに含まれる文字で探します。"
         };
     private void SearchMode_Changed(object sender,SelectionChangedEventArgs e)

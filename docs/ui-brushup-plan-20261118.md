@@ -731,3 +731,43 @@ flowchart LR
 - `dotnet test tests/Aredoko.Core.Tests/Aredoko.Core.Tests.csproj -c Release --no-restore`＋`python -m unittest tests.test_winui_compile_stub`＋`tools/ui_empty_guidance_audit.py`
 - Portable WinUI publish (`data/development-tools/frontend-product24`)
 - `data/gui-ui-polish02/check.py` を UB-8〜12 検証付きに拡張して Light (`run13_light`)・Dark (`run14_dark`) 両方で実機起動＋スクリーンショット全件目視確認（`list-badges`, `ai-unready-bar`, `grid-badges`, `details-chips`, `details-dirty`, `settings-grouped`, `folder-hub`, `shelf-hub`）
+
+---
+
+## 10. 第3弾：日常クイック導線と補助ダイアログ一括ブラッシュアップ（UB-13〜UB-16）
+
+> 追加監査対象：`5bb569d` (`frontend-product24`) 以降の未監査ダイアログ（バックアップ・復元・一時キャッシュ・診断・関連語辞書・AIタグ候補・AI自動セットアップ）および日常操作の動線・表記ズレ。
+
+### 10.1 第3弾 修正・改善一覧（Before / After 対照表）
+
+#### A. 日常操作・空状態・表記ズレ修正（UB-13）
+
+| ID | 対象ファイル・箇所 | 改善内容 | 修正前（Before） | 修正後（After） |
+| --- | --- | --- | --- | --- |
+| **UB-13A** | `MainPage.xaml.cs` (`Items_ContainerContentChanging`) | リスト行からの1クリック詳細・タグ編集 | リスト行右端は `☆`・`▶` のみで、詳細を開くには右上 `[詳細]` ボタン等が必要（単一クリック自動展開は U1 仕様に反する） | リスト行右端の `quickActions` に `✎` ボタン（`ItemDetailsQuick{id}`、Tooltip「詳細・タグを編集」）を追加し、1クリックで詳細ペインを開けるようにする（U1 の単一選択非自動展開は維持） |
+| **UB-13B** | `MainPage.xaml` / `MainPage.xaml.cs` (`LoadAsync`) | 空状態から登録フォルダへの直行ボタン | 登録済みフォルダが空のとき「登録フォルダの一覧を更新してください」と文言が出るだけで押せるボタンがない | `Empty` 直下に `📁 登録フォルダを開く`（`BtnEmptyOpenFolders`）を条件表示し、空状態から1クリックで登録フォルダへ移動可能にする |
+| **UB-13C** | `MainPage.xaml` (`DetailSaveBar`, `FileProperties`) | 保存バー境界線とファイル操作2列化 | `DetailSaveBar` に上区切り線がなくスクロール欄と溶け込む。`OpenFileLocation` と `CopySelectedFilePath` が縦2段で縦幅を取る | `DetailSaveBar` に上境界線（`BorderThickness="0,1,0,0"`）を追加し、`📁 保存場所を開く`・`📋 パスをコピー` を2列横並びへ整理（`AutomationId` 維持） |
+| **UB-13D** | `MainPage.FileActions.cs:115, 162` / `MainPage.xaml.cs:1975-1982` | 表記ズレ・旧用語の修正 | ドロップ通知が実ボタン名「追加」と食い違う `"「登録」"` 表記、再登録通知が `"スキャン"`、`SearchModeDescription` に `"検索用データ"` が4箇所残存 | `"「追加」"`・`"「⟳ 更新」から一覧を更新"`・`"AI検索データ"` へ統一 |
+
+#### B. 保守・診断ダイアログのカード整理（UB-14）
+
+| ID | 対象ファイル・箇所 | 改善内容 | 修正前（Before） | 修正後（After） |
+| --- | --- | --- | --- | --- |
+| **UB-14A** | `MainPage.Backup.cs` | バックアップ画面のカード化・保存先1行化 | 全要素が縦ベタ並び、待機時も0%プログレスバー常時表示、下部4ボタン横並びで狭幅ではみ出しやすい | 含める項目カード＋保存先1行（`destination`＋`保存先を選ぶ`）＋待機中 `progress` 非表示＋操作/補助の2行整理（全 `AutomationId` 維持） |
+| **UB-14B** | `MainPage.Restore.cs` | 復元画面のカード化・待機バー非表示 | 復元元・オプション・進捗バーが平坦並びで待機中も0%バー常駐 | 復元元選択とオプションをカード整理、待機中は `progress` を `Collapsed`（同意必須・全 `AutomationId` 維持） |
+| **UB-14C** | `MainPage.RuntimeCache.cs` | 一時キャッシュ画面のスクロール対応とカード化 | `ScrollViewer` なしで低解像度ウィンドウで見切れの恐れ、情報が平坦並び | `ScrollViewer` ラップ＋「対象キャッシュ」カード＆「削除前の確認」カードへ整理（同意必須・全 `AutomationId` 維持） |
+| **UB-14D** | `MainPage.Settings.cs` (`OpenDiagnosticsDialogAsync`) | 診断情報コピーの主CTA化・レイアウト整理 | `診断情報をコピー` が通常ボタン、`設定へ戻る` が同一行に窮屈に並び、空の `copyStatus` が余白を占有 | `BtnCopyDiagnostics` に `AccentButtonStyle`、`copyStatus` はコピー後のみ表示、`BtnBackToSettings` を右寄せ配置 |
+
+#### C. 辞書・AIタグ候補・AI自動セットアップの改善（UB-15）
+
+| ID | 対象ファイル・箇所 | 改善内容 | 修正前（Before） | 修正後（After） |
+| --- | --- | --- | --- | --- |
+| **UB-15A** | `RelatedTermsEditor.cs` | 関連語辞書のカード化・新規入力ボタン・主CTA | 「保存」が通常ボタン、新規入力へ戻るボタンがなく3欄手動クリアが必要、空でも「削除」が有効 | 「保存」を `AccentButtonStyle`、`＋ 新規`（`NewRelatedTerm`）追加、入力欄と書き出し/読み込みを別カード整理（全 `AutomationId` 可視維持）、見出し語空時は「削除」を無効化 |
+| **UB-15B** | `TagSuggestionsView.xaml` / `.cs` | AIタグ候補2ペイン境界と空状態主CTA | 候補リストが白地に溶け込み境界が曖昧、候補0件でも `✨ 生成` が通常ボタンで初手が分かりにくい | `Candidates` を `AredokoSurfaceStyle` 枠で囲み、候補0件かつ生成可能時は `TagGenerate` を `AccentButtonStyle` で強調 |
+| **UB-15C** | `MainPage.AIAutoEnvironment.cs` | AI自動セットアップの概要カード整理 | 概要・注意事項・ライセンスリンクが平坦に縦積みされ同意欄へ到達しにくい | 概要と注意事項を `AredokoSurfaceStyle` カードへ整理し、ライセンス枠を分離して同意チェックを見やすく配置 |
+
+#### D. 包括テスト＆配布候補25再梱包（UB-16）
+
+- `Aredoko.Core.Tests`（`-c Release --no-restore`）、Python単体テスト（`test_winui_compile_stub` / `test_ai_setup_plan` / `test_native_combo_selection` / `test_portable_startup` / `test_windows_sandbox`）。
+- `frontend-product25` Portable publish＋拡張 `check.py` Light (`run15_light`)・Dark (`run16_dark`) 実行（今回追加した `ItemDetailsQuick`・`BackupDialog`・`DiagnosticsDialog`・`RelatedTermsDialog`・`AISetupPlanDialog` の実機確認＆全スクリーンショット目視確認）。
+- `UB-1`〜`UB-15` 全反映の **配布候補25**（`dist/portable-managed-20261119-25`）を再梱包し、`Aredoko.exe --self-test`・`preflight.json`・`Aredoko-windows-x64.zip`・`validation-kit.zip` を検証。

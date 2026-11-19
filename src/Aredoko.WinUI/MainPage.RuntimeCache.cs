@@ -16,9 +16,9 @@ public sealed partial class MainPage
         try
         {
             JsonNode? summary=null,current=null;string? operationError=null;
-            var capacity=new TextBlock{Text="容量を確認しています…",TextWrapping=TextWrapping.Wrap};
+            var capacity=new TextBlock{Text="容量を確認しています…",TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]};
             var path=new TextBox{Header="ダウンロードキャッシュの保存先",IsReadOnly=true,TextWrapping=TextWrapping.Wrap};
-            var help=new TextBlock{TextWrapping=TextWrapping.Wrap};
+            var help=new TextBlock{TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             var status=new TextBlock{TextWrapping=TextWrapping.Wrap};
             var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};
             var consent=new CheckBox{Content="修復や再構築のときに再ダウンロードが必要になることに同意する"};
@@ -29,13 +29,17 @@ public sealed partial class MainPage
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");buttons.Children.Add(backToSettings);}
             var manualDeleteNote=new Expander{Header="手動削除の注意",HorizontalAlignment=HorizontalAlignment.Stretch,Content=new TextBlock{Text="処理完了後に、上の保存先内の .whl ファイルだけを削除してください",TextWrapping=TextWrapping.Wrap}};
             var panel=new StackPanel{Spacing=12,MaxWidth=650};
-            panel.Children.Add(capacity);panel.Children.Add(path);panel.Children.Add(help);panel.Children.Add(buttons);
-            var cacheSafeNote=new TextBlock{Text="不要になったダウンロードファイル（.whl）だけを削除します。モデル・登録情報は残ります",TextWrapping=TextWrapping.Wrap};
+            var infoStack=new StackPanel{Spacing=8};
+            infoStack.Children.Add(capacity);infoStack.Children.Add(path);infoStack.Children.Add(help);infoStack.Children.Add(buttons);
+            panel.Children.Add(new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=infoStack});
+            var cacheSafeNote=new TextBlock{Text="不要になったダウンロードファイル（.whl）だけを削除します。モデル・登録情報は残ります",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             ToolTipService.SetToolTip(cacheSafeNote,"取得・構築・検証中は削除できません");
-            panel.Children.Add(cacheSafeNote);
-            panel.Children.Add(manualDeleteNote);
-            panel.Children.Add(consent);panel.Children.Add(progress);panel.Children.Add(status);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="ダウンロード済みファイルの整理",PrimaryButtonText="キャッシュを削除…",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=panel,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
+            var cleanStack=new StackPanel{Spacing=8};
+            cleanStack.Children.Add(cacheSafeNote);cleanStack.Children.Add(consent);cleanStack.Children.Add(manualDeleteNote);
+            panel.Children.Add(new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=cleanStack});
+            panel.Children.Add(progress);panel.Children.Add(status);
+            var scroll=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="ダウンロード済みファイルの整理",PrimaryButtonText="キャッシュを削除…",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=scroll,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
             AutomationProperties.SetAutomationId(dialog,"RuntimeCacheDialog");AutomationProperties.SetAutomationId(path,"RuntimeCachePath");
             AutomationProperties.SetAutomationId(capacity,"RuntimeCacheCapacity");AutomationProperties.SetAutomationId(consent,"RuntimeCacheConsent");
             AutomationProperties.SetAutomationId(folder,"RuntimeCacheOpenFolder");AutomationProperties.SetAutomationId(status,"RuntimeCacheStatus");

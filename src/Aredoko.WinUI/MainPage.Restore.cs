@@ -25,14 +25,17 @@ public sealed partial class MainPage
             var omit=new CheckBox{Content="AI検索データも復元",IsChecked=false};
             var consent=new CheckBox{Content="復元後に再起動して切り替える（元のライブラリは残ります）",Visibility=Visibility.Collapsed};
             var status=new TextBlock{Text="状態を確認中…",TextWrapping=TextWrapping.Wrap};
-            var progress=new ProgressBar{Minimum=0,Maximum=100};var refresh=new Button{Content="状態を更新"};
+            var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};var refresh=new Button{Content="状態を更新"};
             var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};actions.Children.Add(refresh);
             Button? backToBackup=fromBackup?new Button{Content="バックアップと復元へ戻る"}:null;
             if(backToBackup is not null){AutomationProperties.SetAutomationId(backToBackup,"BtnBackToBackup");actions.Children.Add(backToBackup);}
             foreach(var (control,id) in new (DependencyObject,string)[]{(source,"RestoreSource"),(folder,"RestoreChooseFolder"),(zip,"RestoreChooseZip"),(omit,"RestoreOmitVectors"),(consent,"RestoreConsent"),(status,"RestoreStatus"),(progress,"RestoreProgress"),(refresh,"RestoreRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(progress,"復元準備の進捗");
-            panel.Children.Add(new TextBlock{Text="新しい場所に復元します（現在のライブラリ・元ファイルは残ります）",TextWrapping=TextWrapping.Wrap});
-            foreach(var control in new UIElement[]{source,choose,omit,progress,status,consent,actions})panel.Children.Add(control);
+            var sourceStack=new StackPanel{Spacing=8};
+            sourceStack.Children.Add(new TextBlock{Text="新しい場所に復元します（現在のライブラリ・元ファイルは残ります）",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
+            sourceStack.Children.Add(source);sourceStack.Children.Add(choose);sourceStack.Children.Add(omit);
+            var sourceCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=sourceStack};
+            foreach(var control in new UIElement[]{sourceCard,progress,status,consent,actions})panel.Children.Add(control);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップから復元",PrimaryButtonText="復元先を準備",SecondaryButtonText="中止",CloseButtonText="閉じる",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false,DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)}};
             AutomationProperties.SetAutomationId(dialog,"RestoreDialog");
@@ -54,6 +57,7 @@ public sealed partial class MainPage
                 dialog.IsPrimaryButtonEnabled=!busy&&!value.RestartRequested&&(value.State=="completed"?value.SwitchSupported&&consent.IsChecked==true:!value.Active&&!string.IsNullOrEmpty(source.Text));
                 dialog.SecondaryButtonText=value.State=="completed"?"準備した復元先を破棄":"中止";
                 dialog.IsSecondaryButtonEnabled=!busy&&!value.RestartRequested&&(value.Active||value.State=="completed");
+                progress.Visibility=value.Active||value.State=="completed"?Visibility.Visible:Visibility.Collapsed;
                 progress.Value=value.Progress*100;progress.IsIndeterminate=value.Active&&value.Progress==0;
                 status.Text=value.State=="idle"?"バックアップを選んで復元を開始してください":value.Message;
                 if(value.State=="completed"&&!value.SwitchSupported)status.Text+="\n自動再起動できません。Aredoko.exe から起動し直してください";

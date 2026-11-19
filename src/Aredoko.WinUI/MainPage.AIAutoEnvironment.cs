@@ -25,8 +25,12 @@ public sealed partial class MainPage
             var status=new TextBlock{TextWrapping=TextWrapping.Wrap};
             var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};
             var panel=new StackPanel{Spacing=12,MaxWidth=650};
-            panel.Children.Add(description);panel.Children.Add(licenses);
-            panel.Children.Add(new TextBlock{Text="• 画面を閉じても続行します\n• 中止しても元の設定は残ります\n• GPU使用（上限4 GB）",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
+            var overviewStack=new StackPanel{Spacing=8};
+            overviewStack.Children.Add(description);
+            overviewStack.Children.Add(new TextBlock{Text="• 画面を閉じても続行します\n• 中止しても元の設定は残ります\n• GPU使用（上限4 GB）",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
+            panel.Children.Add(new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=overviewStack});
+            var licensesCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=licenses,Visibility=Visibility.Collapsed};
+            panel.Children.Add(licensesCard);
             panel.Children.Add(consent);panel.Children.Add(speedSettings);panel.Children.Add(progress);panel.Children.Add(status);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Left}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
@@ -66,6 +70,7 @@ public sealed partial class MainPage
                                 licenses.Children.Add(new TextBlock{Text=entry?["name"]?.GetValue<string>()??"ライセンス",TextWrapping=TextWrapping.Wrap});
                                 licenses.Children.Add(new HyperlinkButton{Content="提供元のライセンスを確認",NavigateUri=uri});
                             }
+                        licensesCard.Visibility=licenses.Children.Count>0?Visibility.Visible:Visibility.Collapsed;
                     }
                     operationError=null;Render();
                 }

@@ -38,6 +38,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     {
         if(disposed)return;
         Generate.IsEnabled=!busy&&!closing&&history?.Available==true;
+        Generate.Style=Generate.IsEnabled&&Candidates.Items.Count==0?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
         Refresh.IsEnabled=!busy&&!closing;Older.IsEnabled=!busy&&!closing&&history?.NextBefore is not null;
         Cancel.IsEnabled=busy&&requestId is not null&&!closing;Batches.IsEnabled=!busy;Candidates.IsEnabled=!busy;
         var pending=!busy&&!closing&&batch is {Stale:false}&&candidate is {State:"pending"};

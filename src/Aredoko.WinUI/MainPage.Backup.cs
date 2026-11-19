@@ -25,20 +25,30 @@ public sealed partial class MainPage
             var position=new CheckBox{Content="本の読書位置",IsChecked=selected.ReaderProgress};
             var vectors=new CheckBox{Content="AI検索データ（大容量・あとで再作成可）",IsChecked=selected.Vectors};
             var destination=new TextBox{Header="保存先",IsReadOnly=true,PlaceholderText="保存するフォルダを選んでください",TextWrapping=TextWrapping.Wrap};
-            var choose=new Button{Content="保存先を選ぶ"};
+            var choose=new Button{Content="保存先を選ぶ",VerticalAlignment=VerticalAlignment.Bottom};
             var excludeNote=new TextBlock{Text="対象外：元ファイル・AIモデル・環境・サムネイル（閉じても続行）",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             var status=new TextBlock{Text="バックアップの状態を確認しています。",TextWrapping=TextWrapping.Wrap};
-            var progress=new ProgressBar{IsIndeterminate=false,Minimum=0,Maximum=100,Value=0};
+            var progress=new ProgressBar{IsIndeterminate=false,Minimum=0,Maximum=100,Value=0,Visibility=Visibility.Collapsed};
             var reconnect=new Button{Content="状態を更新"};
             var guide=new Button{Content="バックアップから復元"};
             var help=new Button{Content="復元の手順"};
             AutomationProperties.SetAutomationId(help,"BackupRecoveryHelp");
-            var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};actions.Children.Add(reconnect);actions.Children.Add(guide);actions.Children.Add(help);
+            var restoreRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};restoreRow.Children.Add(guide);restoreRow.Children.Add(help);
+            var utilRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};utilRow.Children.Add(reconnect);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る"}:null;
-            if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");actions.Children.Add(backToSettings);}
+            if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");utilRow.Children.Add(backToSettings);}
             foreach(var (control,id) in new (DependencyObject,string)[]{(basic,"BackupBasic"),(settings,"BackupSettings"),(history,"BackupHistory"),(position,"BackupReaderPosition"),(vectors,"BackupVectors"),(destination,"BackupDestination"),(choose,"BackupChoose"),(status,"BackupStatus"),(progress,"BackupProgress"),(reconnect,"BackupRefresh"),(guide,"BackupRestoreGuide")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(progress,"バックアップの進捗");
-            foreach(var control in new UIElement[]{basic,optionalHeading,settings,history,position,vectors,destination,choose,excludeNote,progress,status,actions})panel.Children.Add(control);
+            var itemsStack=new StackPanel{Spacing=4};
+            foreach(var control in new UIElement[]{basic,optionalHeading,settings,history,position,vectors})itemsStack.Children.Add(control);
+            var itemsCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=itemsStack};
+            var destRow=new Grid{ColumnSpacing=8};
+            destRow.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            destRow.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+            destRow.Children.Add(destination);Grid.SetColumn(choose,1);destRow.Children.Add(choose);
+            var destStack=new StackPanel{Spacing=8};destStack.Children.Add(destRow);destStack.Children.Add(excludeNote);
+            var destCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=destStack};
+            foreach(var control in new UIElement[]{itemsCard,destCard,progress,status,restoreRow,utilRow})panel.Children.Add(control);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="バックアップと復元",PrimaryButtonText="バックアップを作成",SecondaryButtonText="作成を中止",CloseButtonText="閉じる",IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false,DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new Thickness(0,0,16,0)}};
             AutomationProperties.SetAutomationId(dialog,"BackupDialog");
@@ -50,6 +60,7 @@ public sealed partial class MainPage
                 if(backToSettings is not null)backToSettings.IsEnabled=!submitting;
                 dialog.IsPrimaryButtonEnabled=!busy&&!string.IsNullOrEmpty(destination.Text)&&!(job.Published&&job.Output==destination.Text);
                 dialog.IsSecondaryButtonEnabled=job.Active&&job.State is not ("cancelling" or "publishing")&&!submitting;
+                progress.Visibility=job.Active||job.Published?Visibility.Visible:Visibility.Collapsed;
                 progress.IsIndeterminate=job.Active&&job.BytesTotal is not >0;
                 progress.Value=job.BytesTotal is >0?Math.Clamp(100d*job.BytesDone/job.BytesTotal.Value,0,100):job.Published?100:0;
                 status.Text=job.Message;

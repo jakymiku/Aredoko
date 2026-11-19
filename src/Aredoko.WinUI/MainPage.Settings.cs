@@ -357,20 +357,25 @@ public sealed partial class MainPage
             AutomationProperties.SetAutomationId(txt, "TxtDiagnostics");
             panel.Children.Add(txt);
 
-            var copyStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Style = (Style)Resources["MediaMetadataStyle"] };
+            var copyStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed, Style = (Style)Resources["MediaMetadataStyle"] };
             AutomationProperties.SetAutomationId(copyStatus, "TxtDiagnosticsStatus");
-            var copyBtn = new Button { Content = "診断情報をコピー", HorizontalAlignment = HorizontalAlignment.Left };
+            var copyBtn = new Button { Content = "診断情報をコピー", HorizontalAlignment = HorizontalAlignment.Left, Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
             AutomationProperties.SetAutomationId(copyBtn, "BtnCopyDiagnostics");
             copyBtn.Click += (_, _) =>
             {
                 var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
                 package.SetText(report);
                 Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
-                copyStatus.Text = "診断情報をクリップボードにコピーしました。外部への自動送信は行われません。";
+                copyStatus.Text = "✓ 診断情報をクリップボードにコピーしました。外部への自動送信は行われません。";
+                copyStatus.Visibility = Visibility.Visible;
             };
-            var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
-            actions.Children.Add(copyBtn);
-            actions.Children.Add(new TextBlock{Text="共有前に内容を確認",VerticalAlignment=VerticalAlignment.Center,Style=(Style)Resources["MediaMetadataStyle"]});
+            var actions=new Grid{ColumnSpacing=8};
+            actions.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            actions.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+            var copyRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
+            copyRow.Children.Add(copyBtn);
+            copyRow.Children.Add(new TextBlock{Text="共有前に内容を確認",VerticalAlignment=VerticalAlignment.Center,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
+            actions.Children.Add(copyRow);
             panel.Children.Add(actions);
             panel.Children.Add(copyStatus);
 
@@ -380,6 +385,7 @@ public sealed partial class MainPage
                 var backBtn=new Button{Content="設定へ戻る"};
                 AutomationProperties.SetAutomationId(backBtn,"BtnBackToSettings");
                 backBtn.Click+=(_,_)=>{returnToSettings=true;dialog.Hide();};
+                Grid.SetColumn(backBtn,1);
                 actions.Children.Add(backBtn);
             }
             AutomationProperties.SetAutomationId(dialog,"DiagnosticsDialog");

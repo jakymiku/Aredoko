@@ -188,19 +188,24 @@
        <Expander x:Name="FileProperties" Header="ファイル情報" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="FileProperties">
         <StackPanel Spacing="8">
          <TextBlock x:Name="FilePropertyText" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="FilePropertyText"/>
-         <Button x:Name="OpenFileLocation" Content="保存場所を開く" HorizontalAlignment="Stretch" IsEnabled="False" Click="OpenFileLocation_Click" AutomationProperties.AutomationId="OpenFileLocation"/>
-         <Button x:Name="CopySelectedFilePath" Content="パスをコピー" HorizontalAlignment="Stretch" IsEnabled="False" Click="CopySelectedFilePath_Click" AutomationProperties.AutomationId="CopySelectedFilePath"/>
+         <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Button x:Name="OpenFileLocation" Content="📁 保存場所を開く" HorizontalAlignment="Stretch" IsEnabled="False" Click="OpenFileLocation_Click" AutomationProperties.Name="保存場所を開く" AutomationProperties.AutomationId="OpenFileLocation"/>
+          <Button x:Name="CopySelectedFilePath" Grid.Column="1" Content="📋 パスをコピー" HorizontalAlignment="Stretch" IsEnabled="False" Click="CopySelectedFilePath_Click" AutomationProperties.Name="パスをコピー" AutomationProperties.AutomationId="CopySelectedFilePath"/>
+         </Grid>
         </StackPanel>
        </Expander>
        </StackPanel></ScrollViewer>
-       <StackPanel x:Name="DetailSaveBar" Grid.Row="1" Spacing="8" Visibility="Collapsed" AutomationProperties.AutomationId="DetailSaveBar">
-      <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>
-       <Grid x:Name="DetailSaveButtons" ColumnSpacing="8" Visibility="Collapsed">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <Button x:Name="Save" Content="保存" ToolTipService.ToolTip="タグ・棚の変更を保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.Name="変更を保存" AutomationProperties.AutomationId="BtnSave"/>
-        <Button x:Name="RevertEditsButton" Grid.Column="1" Content="元に戻す" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="未保存の変更を保存前の状態に戻す" Click="RevertEdits_Click" AutomationProperties.Name="未保存の変更を取り消す" AutomationProperties.AutomationId="BtnRevertEdits"/>
-       </Grid>
-      </StackPanel>
+       <Border x:Name="DetailSaveBar" Grid.Row="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Padding="0,10,0,0" Visibility="Collapsed" AutomationProperties.AutomationId="DetailSaveBar">
+        <StackPanel Spacing="8">
+         <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>
+         <Grid x:Name="DetailSaveButtons" ColumnSpacing="8" Visibility="Collapsed">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <Button x:Name="Save" Content="保存" ToolTipService.ToolTip="タグ・棚の変更を保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.Name="変更を保存" AutomationProperties.AutomationId="BtnSave"/>
+          <Button x:Name="RevertEditsButton" Grid.Column="1" Content="元に戻す" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="未保存の変更を保存前の状態に戻す" Click="RevertEdits_Click" AutomationProperties.Name="未保存の変更を取り消す" AutomationProperties.AutomationId="BtnRevertEdits"/>
+         </Grid>
+        </StackPanel>
+       </Border>
        </Grid></ContentControl>
       <ContentControl x:Name="FolderEditorPanel" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"><Grid RowSpacing="12">
        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -404,6 +409,7 @@
        <Button Content="名前・タグで探す" Click="EmptyLiteralSearch_Click" AutomationProperties.AutomationId="EmptyLiteralSearch"/>
       </StackPanel>
       <Button x:Name="EmptyResetConditionsButton" Content="条件をすべて解除" Visibility="Collapsed" HorizontalAlignment="Center" Click="ClearSearchConditions_Click" AutomationProperties.AutomationId="EmptyResetConditions"/>
+      <Button x:Name="EmptyOpenFoldersButton" Content="📁 登録フォルダを開く" Visibility="Collapsed" HorizontalAlignment="Center" Click="EmptyOpenFolders_Click" AutomationProperties.AutomationId="BtnEmptyOpenFolders"/>
      </StackPanel>
      <ScrollViewer x:Name="GettingStarted" Grid.Row="1" Visibility="Collapsed" MaxWidth="660" HorizontalAlignment="Center" VerticalAlignment="Top" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="GettingStarted">
       <StackPanel Margin="24,12,24,16" Spacing="12">

@@ -112,7 +112,7 @@ public sealed partial class MainPage
         {
             await api.PostAsync("api/library/roots",new System.Text.Json.Nodes.JsonObject{{"path",row.Path},{"consent",true},{"excludes",new System.Text.Json.Nodes.JsonArray(row.Exclusions.Select(s=>(System.Text.Json.Nodes.JsonNode?)System.Text.Json.Nodes.JsonValue.Create(s)).ToArray())},{"default_shelf",row.DefaultShelf},{"folder_books",row.FolderBooks},{"recursive",row.Recursive}});
             await RefreshSearchRootsAsync();await LoadAIScopeAsync();RenderFolderHub();
-            Notice("再登録しました","タグ・棚を復元しました。必要に応じて設定からスキャンできます。");
+            Notice("再登録しました","タグ・棚を復元しました。必要に応じて「⟳ 更新」から一覧を更新できます。");
         }
         catch(Exception ex){Failure(ex);}
         finally{transitions.Release();}
@@ -159,7 +159,7 @@ public sealed partial class MainPage
             var folders=items.OfType<StorageFolder>().Select(f=>f.Path).Where(p=>!string.IsNullOrWhiteSpace(p)).ToArray();
             if(folders.Length==0)throw new InvalidOperationException("登録するフォルダをドロップしてください。");
             FolderAddPanel.Visibility=Visibility.Visible;RootPath.Text=string.Join("; ",folders);RootFolderBooks.IsChecked=false;RootRecursive.IsChecked=true;RootPath.Focus(FocusState.Programmatic);
-            Notice("フォルダを受け取りました","設定を確認して「登録」を押してください。");
+            Notice("フォルダを受け取りました","設定を確認して「追加」を押してください。");
         }
         catch(Exception ex){Failure(ex);}
         finally{deferral.Complete();}

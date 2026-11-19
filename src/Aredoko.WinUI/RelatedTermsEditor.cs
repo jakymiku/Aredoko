@@ -15,8 +15,9 @@ public sealed class RelatedTermsEditor
     private readonly TextBox term = new() { Header = "作品名・タグにある言葉", PlaceholderText = "例: 博麗霊夢", MaxLength = RelatedTerms.MaxWordChars };
     private readonly TextBox aliases = new() { Header = "別の呼び名（、区切り）", PlaceholderText = "例: 霊夢、reimu" };
     private readonly TextBox related = new() { Header = "探すときに思い浮かぶ言葉（、区切り）", PlaceholderText = "例: 東方、巫女" };
-    private readonly Button save = new() { Content = "保存" };
-    private readonly Button delete = new() { Content = "削除" };
+    private readonly Button save = new() { Content = "保存", Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
+    private readonly Button newEntry = new() { Content = "＋ 新規" };
+    private readonly Button delete = new() { Content = "削除", IsEnabled = false };
     private readonly Button export = new() { Content = "書き出し…" };
     private readonly Button import = new() { Content = "読み込み…" };
     private readonly ComboBox entries = new() { Header = "登録済みの語", HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -31,6 +32,7 @@ public sealed class RelatedTermsEditor
         AutomationProperties.SetAutomationId(aliases, "RelatedAliases");
         AutomationProperties.SetAutomationId(related, "RelatedWords");
         AutomationProperties.SetAutomationId(save, "SaveRelatedTerm");
+        AutomationProperties.SetAutomationId(newEntry, "NewRelatedTerm");
         AutomationProperties.SetAutomationId(delete, "DeleteRelatedTerm");
         AutomationProperties.SetAutomationId(entries, "RelatedTermList");
         AutomationProperties.SetAutomationId(export, "ExportRelatedTerms");
@@ -38,9 +40,22 @@ public sealed class RelatedTermsEditor
         AutomationProperties.SetAutomationId(status, "RelatedTermStatus");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         var help = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "言い換えを登録すると検索で一緒に探します（例：巫女 → 霊夢）" };
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { save, delete } };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { save, newEntry, delete } };
+        var editStack = new StackPanel { Spacing = 10, Children = { entries, term, aliases, related, actions } };
+        var editCard = new Border { Style = (Style)Application.Current.Resources["AredokoSurfaceStyle"], Child = editStack };
+        var filesHeading = new TextBlock { Text = "辞書の書き出し・読み込み", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] };
         var files = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { export, import } };
-        foreach (var element in new UIElement[] { help, entries, term, aliases, related, actions, files, status }) panel.Children.Add(element);
+        var filesCard = new Border { Style = (Style)Application.Current.Resources["AredokoSurfaceStyle"], Child = new StackPanel { Spacing = 8, Children = { filesHeading, files } } };
+        foreach (var element in new UIElement[] { help, editCard, filesCard, status }) panel.Children.Add(element);
+        term.TextChanged += (_, _) => UpdateDeleteEnabled();
+        newEntry.Click += (_, _) =>
+        {
+            if (busy) return;
+            entries.SelectedIndex = -1;
+            term.Text = aliases.Text = related.Text = "";
+            UpdateDeleteEnabled();
+            term.Focus(FocusState.Programmatic);
+        };
         // Files are touched only through the pickers the user opens here.
         export.Click += async (_, _) => await RunAsync(async () =>
         {
@@ -101,11 +116,13 @@ public sealed class RelatedTermsEditor
 
     public Task LoadAsync() => RunAsync(() => RefreshAsync(null));
 
+    private void UpdateDeleteEnabled() => delete.IsEnabled = !busy && !string.IsNullOrWhiteSpace(term.Text);
+
     private async Task RunAsync(Func<Task> action)
     {
         if (busy) return;
         busy = true;
-        save.IsEnabled = delete.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = false;
+        save.IsEnabled = newEntry.IsEnabled = delete.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = false;
         term.IsEnabled = aliases.IsEnabled = related.IsEnabled = false;
         status.Text = "処理しています…";
         try
@@ -117,8 +134,9 @@ public sealed class RelatedTermsEditor
         finally
         {
             busy = false;
-            save.IsEnabled = delete.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = true;
+            save.IsEnabled = newEntry.IsEnabled = entries.IsEnabled = export.IsEnabled = import.IsEnabled = true;
             term.IsEnabled = aliases.IsEnabled = related.IsEnabled = true;
+            UpdateDeleteEnabled();
         }
     }
 
