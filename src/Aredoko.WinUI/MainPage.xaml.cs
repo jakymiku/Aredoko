@@ -772,6 +772,27 @@ public sealed partial class MainPage : Page
             Child = tb,
         };
     }
+    private Border CreateEvidencePill(string icon, string summary, string automationId, string styleKey)
+    {
+        var display = summary.StartsWith(icon, StringComparison.Ordinal) ? summary : $"{icon} {summary}";
+        var label = new TextBlock
+        {
+            Text = display,
+            TextWrapping = TextWrapping.Wrap,
+            MaxLines = 2,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Style = (Style)Resources["CaptionTextBlockStyle"],
+        };
+        AutomationProperties.SetAutomationId(label, automationId);
+        ToolTipService.SetToolTip(label, summary);
+        var pill = new Border
+        {
+            Style = (Style)Resources[styleKey],
+            Child = label,
+        };
+        ToolTipService.SetToolTip(pill, summary);
+        return pill;
+    }
     private void PopulateCardBadges(StackPanel badgeRow, MediaRow row)
     {
         badgeRow.Children.Clear();
@@ -870,11 +891,11 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetAutomationId(metaBlock, $"ItemMeta{row.Id}");
         ToolTipService.SetToolTip(metaBlock, FormatRowMetadata(row, summarizeShelves: false));
         text.Children.Add(metaBlock);
-        if(row.AIEvidence.Length>0){var evidence=new TextBlock {Text=row.AIEvidence,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(evidence,$"AIEvidence{row.Id}");ToolTipService.SetToolTip(evidence,row.AIEvidence);text.Children.Add(evidence);}
-        if(row.Proposal is ProposalMatch proposal){var prop=new TextBlock {Text=proposal.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(prop,$"ProposalEvidence{row.Id}");ToolTipService.SetToolTip(prop,proposal.Summary);text.Children.Add(prop);}
-        if(row.AIPage is AIPageMatch aiPage){var pimage=new TextBlock {Text=aiPage.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(pimage,$"AIPageEvidence{row.Id}");ToolTipService.SetToolTip(pimage,aiPage.Summary);text.Children.Add(pimage);}
-        if(row.PageText is PageTextMatch pageText){var ptext=new TextBlock {Text=pageText.Summary,TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(ptext,$"PageTextEvidence{row.Id}");ToolTipService.SetToolTip(ptext,pageText.Summary);text.Children.Add(ptext);}
-        if(row.Evidence is {AllDirect:false}){var words=new TextBlock {Text=Protocol.DescribeEvidence(row.Evidence),TextWrapping=TextWrapping.Wrap,MaxLines=2,TextTrimming=TextTrimming.CharacterEllipsis,Style=(Style)Resources["MediaMetadataStyle"]};AutomationProperties.SetAutomationId(words,$"SearchEvidence{row.Id}");text.Children.Add(words);}
+        if(row.AIEvidence.Length>0)text.Children.Add(CreateEvidencePill(row.Kind=="video"?"🎬":row.Kind=="audio"?"🎵":"✨",row.AIEvidence,$"AIEvidence{row.Id}","EvidenceAIPillStyle"));
+        if(row.Proposal is ProposalMatch proposal)text.Children.Add(CreateEvidencePill("🎬",proposal.Summary,$"ProposalEvidence{row.Id}","EvidenceAIPillStyle"));
+        if(row.AIPage is AIPageMatch aiPage)text.Children.Add(CreateEvidencePill("📄",aiPage.Summary,$"AIPageEvidence{row.Id}","EvidenceAIPillStyle"));
+        if(row.PageText is PageTextMatch pageText)text.Children.Add(CreateEvidencePill("📄",pageText.Summary,$"PageTextEvidence{row.Id}","EvidencePagePillStyle"));
+        if(row.Evidence is {AllDirect:false})text.Children.Add(CreateEvidencePill("💬",Protocol.DescribeEvidence(row.Evidence),$"SearchEvidence{row.Id}","EvidenceWordPillStyle"));
         var previewStatus = new TextBlock { Text = "", Visibility = Visibility.Collapsed, Style = (Style)Resources["MediaMetadataStyle"] };
         AutomationProperties.SetAutomationId(previewStatus, $"PreviewStatus{row.Id}");
         text.Children.Add(previewStatus);
@@ -2275,10 +2296,35 @@ public sealed partial class MainPage : Page
     { if(active is null)return;e.Handled=true;await OpenPreviewAsync(active.Id); }
     private async void Items_PreviewKeyDown(object sender,KeyRoutedEventArgs e)
     {
-        if(!IsUnmodifiedEnter(e)||e.OriginalSource is not ListViewItem { IsSelected:true, Tag:int itemId }
+        if(e.Handled||e.OriginalSource is not ListViewItem { IsSelected:true, Tag:int itemId }
             ||!ready||disposed||saving||dialogOpen||librarySelection.Count!=1||active?.Id!=itemId)return;
-        e.Handled=true;
-        if(!e.KeyStatus.WasKeyDown)await OpenPreviewAsync(itemId);
+        if(IsUnmodifiedEnter(e))
+        {
+            e.Handled=true;
+            if(!e.KeyStatus.WasKeyDown)await OpenPreviewAsync(itemId);
+            return;
+        }
+        if(e.Key==Windows.System.VirtualKey.Space
+            &&!SelectionKey(Windows.System.VirtualKey.Control)
+            &&!SelectionKey(Windows.System.VirtualKey.Shift)
+            &&!SelectionKey(Windows.System.VirtualKey.Menu)
+            &&!SelectionKey(Windows.System.VirtualKey.LeftWindows)
+            &&!SelectionKey(Windows.System.VirtualKey.RightWindows))
+        {
+            e.Handled=true;
+            if(e.KeyStatus.WasKeyDown)return;
+            if(Details.IsPaneOpen)
+            {
+                if(!await ConfirmDiscardAsync())return;
+                Details.IsPaneOpen=false;
+            }
+            else if(active is {} current)
+            {
+                ShowItemDetailsPane();
+                Details.IsPaneOpen=true;
+                await ShowDetailPreviewAsync(current);
+            }
+        }
     }
     private async Task OpenPreviewAsync(int itemId)
     {

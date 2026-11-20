@@ -4,9 +4,30 @@
    <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Light">
      <SolidColorBrush x:Key="FavoriteStarBrush" Color="#FFC47100"/>
+     <SolidColorBrush x:Key="EvidenceAIBackground" Color="#140067C0"/>
+     <SolidColorBrush x:Key="EvidenceAIBorderBrush" Color="#2E0067C0"/>
+     <SolidColorBrush x:Key="EvidencePageBackground" Color="#140F7B0F"/>
+     <SolidColorBrush x:Key="EvidencePageBorderBrush" Color="#2E0F7B0F"/>
+     <SolidColorBrush x:Key="EvidenceWordBackground" Color="#149D5D00"/>
+     <SolidColorBrush x:Key="EvidenceWordBorderBrush" Color="#2E9D5D00"/>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Default">
      <SolidColorBrush x:Key="FavoriteStarBrush" Color="#FFFBBF24"/>
+     <SolidColorBrush x:Key="EvidenceAIBackground" Color="#2460CDFF"/>
+     <SolidColorBrush x:Key="EvidenceAIBorderBrush" Color="#3D60CDFF"/>
+     <SolidColorBrush x:Key="EvidencePageBackground" Color="#246CCB5F"/>
+     <SolidColorBrush x:Key="EvidencePageBorderBrush" Color="#3D6CCB5F"/>
+     <SolidColorBrush x:Key="EvidenceWordBackground" Color="#24FCE100"/>
+     <SolidColorBrush x:Key="EvidenceWordBorderBrush" Color="#3DFCE100"/>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="HighContrast">
+     <SolidColorBrush x:Key="FavoriteStarBrush" Color="{ThemeResource SystemColorHighlightColor}"/>
+     <SolidColorBrush x:Key="EvidenceAIBackground" Color="Transparent"/>
+     <SolidColorBrush x:Key="EvidenceAIBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+     <SolidColorBrush x:Key="EvidencePageBackground" Color="Transparent"/>
+     <SolidColorBrush x:Key="EvidencePageBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+     <SolidColorBrush x:Key="EvidenceWordBackground" Color="Transparent"/>
+     <SolidColorBrush x:Key="EvidenceWordBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
     </ResourceDictionary>
    </ResourceDictionary.ThemeDictionaries>
    <DataTemplate x:Key="MediaContainerTemplate"><Border HorizontalAlignment="Stretch"/></DataTemplate>
@@ -31,6 +52,30 @@
     <Setter Property="CornerRadius" Value="4"/>
     <Setter Property="Padding" Value="6,2"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
+   </Style>
+   <Style x:Key="EvidenceAIPillStyle" TargetType="Border">
+    <Setter Property="Background" Value="{ThemeResource EvidenceAIBackground}"/>
+    <Setter Property="BorderBrush" Value="{ThemeResource EvidenceAIBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Padding" Value="6,2"/>
+    <Setter Property="HorizontalAlignment" Value="Left"/>
+   </Style>
+   <Style x:Key="EvidencePagePillStyle" TargetType="Border">
+    <Setter Property="Background" Value="{ThemeResource EvidencePageBackground}"/>
+    <Setter Property="BorderBrush" Value="{ThemeResource EvidencePageBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Padding" Value="6,2"/>
+    <Setter Property="HorizontalAlignment" Value="Left"/>
+   </Style>
+   <Style x:Key="EvidenceWordPillStyle" TargetType="Border">
+    <Setter Property="Background" Value="{ThemeResource EvidenceWordBackground}"/>
+    <Setter Property="BorderBrush" Value="{ThemeResource EvidenceWordBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Padding" Value="6,2"/>
+    <Setter Property="HorizontalAlignment" Value="Left"/>
    </Style>
    <Style x:Key="ScopePillBorderStyle" TargetType="Border">
     <Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}"/>
