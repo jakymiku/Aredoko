@@ -61,7 +61,7 @@ public sealed partial class MainPage
         UpdateSelectionSummaryDetails();
         FooterSelection.Text=$"{librarySelection.Count:N0} 件選択";
         FooterSelection.Visibility=librarySelection.Count>0?Visibility.Visible:Visibility.Collapsed;
-        FooterSelectionActions.Visibility=librarySelection.Count>1?Visibility.Visible:Visibility.Collapsed;
+        FooterSelectionActions.Visibility=Visibility.Collapsed;
         SelectionBulkActions.IsEnabled=FooterBulkActions.IsEnabled=FooterClearSelection.IsEnabled=!saving&&!dialogOpen&&!preparingSelection;
         if(SelectVisibleItemsMenuItem is not null)
         {

@@ -319,6 +319,7 @@ public sealed partial class MainPage : Page
                 RuntimeVerifyTitle.Text="AIを起動中…";
                 RuntimeVerifyProgress.IsIndeterminate=true;
                 RuntimeVerifyDetail.Text="初回のみ時間がかかります";
+                ToolTipService.SetToolTip(RuntimeVerifyCard,$"{RuntimeVerifyTitle.Text} — {RuntimeVerifyDetail.Text}");
                 RuntimeVerifyCard.Visibility=Visibility.Visible;
             }
             if(!runtimeVerifyTimer.IsRunning)runtimeVerifyTimer.Start();
@@ -337,12 +338,12 @@ public sealed partial class MainPage : Page
             ?Visibility.Visible:Visibility.Collapsed;
     }
     private async void SearchAIUnreadySetup_Click(object sender,RoutedEventArgs e)=>await OpenSettingsAsync("ai");
-    private void UpdateNavAIStatus(bool available,bool busy)
+    private void UpdateNavAIStatus(bool available,bool busy,int? verifyPercent=null)
     {
         if(NavAIStatus is null)return;
-        var label=busy?"AI：確認中":available?"AI：使用可":"AI：未設定";
+        var label=busy?(verifyPercent is int pct?$"AI：確認中 {pct}%":"AI：確認中"):available?"AI：使用可":"AI：未設定";
         NavAIStatus.Content=label;
-        var tip=busy?"AI検索の環境・モデルを確認しています":available?"AI検索を使用できます（クリックでAI設定）":"AI検索は未設定です（クリックして準備）";
+        var tip=busy?"AI検索の環境・モデルを確認しています（名前・タグ検索はそのまま使えます）":available?"AI検索を使用できます（クリックでAI設定）":"AI検索は未設定です（クリックして準備）";
         ToolTipService.SetToolTip(NavAIStatus,tip);
         AutomationProperties.SetName(NavAIStatus,label);
     }
@@ -357,7 +358,6 @@ public sealed partial class MainPage : Page
         var state=rv?["state"]?.GetValue<string>()??"idle";
         if(available&&state=="verifying")
         {
-            UpdateNavAIStatus(available,true);
             runtimeVerifyClientStartedTick??=Environment.TickCount64;
             var clientElapsed=Math.Max(0.0,(Environment.TickCount64-runtimeVerifyClientStartedTick.Value)/1000.0);
             var serverElapsed=rv?["elapsed_seconds"]?.GetValue<double>()??0.0;
@@ -369,6 +369,7 @@ public sealed partial class MainPage : Page
             var filesTotal=rv?["files_total"]?.GetValue<int>()??0;
             var percent=bytesTotal>0?Math.Clamp(bytesDone*100.0/bytesTotal,0.0,100.0)
                 :filesTotal>0?Math.Clamp(filesDone*100.0/filesTotal,0.0,100.0):0.0;
+            UpdateNavAIStatus(available,true,(bytesTotal>0||filesTotal>0)?(int)Math.Round(percent):null);
             var bytesDoneGb=bytesDone/(1024.0*1024.0*1024.0);
             var bytesTotalGb=bytesTotal/(1024.0*1024.0*1024.0);
             RuntimeVerifyProgress.IsIndeterminate=bytesTotal<=0&&filesTotal<=0;
@@ -384,10 +385,11 @@ public sealed partial class MainPage : Page
             {
                 RuntimeVerifyTitle.Text="AIを確認中";
                 RuntimeVerifyDetail.Text=bytesTotal>0
-                    ?$"{percent:F0}% ({bytesDoneGb:F1} / {bytesTotalGb:F1} GB)"
-                    :filesTotal>0?$"{percent:F0}% ({filesDone:N0} / {filesTotal:N0} ファイル)"
-                    :"確認しています…";
+                    ?$"{percent:F0}% ({bytesDoneGb:F1} / {bytesTotalGb:F1} GB) · 名前・タグ検索はそのまま使えます"
+                    :filesTotal>0?$"{percent:F0}% ({filesDone:N0} / {filesTotal:N0} ファイル) · 名前・タグ検索はそのまま使えます"
+                    :"確認しています… · 名前・タグ検索はそのまま使えます";
             }
+            ToolTipService.SetToolTip(RuntimeVerifyCard,$"{RuntimeVerifyTitle.Text} — {RuntimeVerifyDetail.Text}");
             RuntimeVerifyCard.Visibility=Visibility.Visible;
             if(!runtimeVerifyTimer.IsRunning)runtimeVerifyTimer.Start();
             return true;
@@ -399,6 +401,7 @@ public sealed partial class MainPage : Page
             RuntimeVerifyTitle.Text="AIを起動中…";
             RuntimeVerifyProgress.IsIndeterminate=true;
             RuntimeVerifyDetail.Text="初回のみ時間がかかります";
+            ToolTipService.SetToolTip(RuntimeVerifyCard,$"{RuntimeVerifyTitle.Text} — {RuntimeVerifyDetail.Text}");
             RuntimeVerifyCard.Visibility=Visibility.Visible;
             if(!runtimeVerifyTimer.IsRunning)runtimeVerifyTimer.Start();
             return false;

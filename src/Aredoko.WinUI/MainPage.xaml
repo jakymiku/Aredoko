@@ -407,16 +407,6 @@
      <Expander x:Name="FavoriteRootArea" Header="お気に入りのフォルダ" IsExpanded="True" Visibility="Collapsed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,0,0,8" AutomationProperties.AutomationId="FavoriteRootArea">
       <ListView x:Name="FavoriteRootList" MaxHeight="144" SelectionMode="None" IsItemClickEnabled="True" ItemClick="FavoriteRoot_ItemClick" ContainerContentChanging="FavoriteRoot_ContainerContentChanging" ItemTemplate="{StaticResource MediaContainerTemplate}" HorizontalContentAlignment="Stretch" AutomationProperties.Name="お気に入りの登録フォルダ" AutomationProperties.AutomationId="FavoriteRootList"/>
      </Expander>
-     <Grid x:Name="SelectionTools" Grid.Row="1" Visibility="Collapsed" ColumnSpacing="6" Margin="0,0,0,8">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-      <TextBlock x:Name="SelectionCountText" VerticalAlignment="Center" AutomationProperties.AutomationId="SelectionCountText"/>
-      <Button x:Name="SelectionDirectFavoriteButton" Grid.Column="1" Content="★ お気に入り" Click="SelectionFavoriteAdd_Click" AutomationProperties.Name="選択した作品をお気に入りに追加" AutomationProperties.AutomationId="SelectionDirectFavorite"/>
-      <Button x:Name="SelectionDirectShelfButton" Grid.Column="2" Content="📚 棚に追加…" Click="SelectionShelfAdd_Click" AutomationProperties.Name="選択した作品を棚に追加" AutomationProperties.AutomationId="SelectionDirectShelf"/>
-      <Button x:Name="SelectionBulkActions" Grid.Column="3" Content="その他 ▾" Click="FooterBulkActions_Click" Visibility="Collapsed" AutomationProperties.Name="まとめて整理" AutomationProperties.AutomationId="SelectionBulkActions"/>
-      <Button x:Name="ClearSelectionButton" Grid.Column="4" Content="解除" Click="ClearLibrarySelection_Click" AutomationProperties.Name="選択を解除" AutomationProperties.AutomationId="ClearLibrarySelection"/>
-      <Button x:Name="CancelSelectionPreparation" Grid.Column="5" Content="中止" Click="CancelSelectionPreparation_Click" Visibility="Collapsed" AutomationProperties.Name="選択の準備を中止" AutomationProperties.AutomationId="CancelSelectionPreparation"/>
-      <TextBlock x:Name="SelectionInlineStatus" Grid.Column="6" Visibility="Collapsed" VerticalAlignment="Center" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="SelectionInlineStatus" AutomationProperties.LiveSetting="Polite"/>
-     </Grid>
      <ListView x:Name="Items" Grid.Row="2" SelectionMode="Extended" Loaded="Items_Loaded" PreviewKeyDown="Items_PreviewKeyDown" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.HelpText="Enterで選択した作品を開く。Ctrl/Shiftで複数選択（最大256件）、Ctrl+Homeで先頭、Ctrl+Endで末尾へ移動" AutomationProperties.AutomationId="ItemList"/>
      <StackPanel Grid.Row="2" Spacing="12" Margin="24" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Visibility, ElementName=Empty}">
       <Image x:Name="EmptyArt" Width="128" Height="112" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_state_no_results_512.png" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
@@ -428,6 +418,19 @@
       <Button x:Name="EmptyResetConditionsButton" Content="条件をすべて解除" Visibility="Collapsed" HorizontalAlignment="Center" Click="ClearSearchConditions_Click" AutomationProperties.AutomationId="EmptyResetConditions"/>
       <Button x:Name="EmptyOpenFoldersButton" Content="📁 登録フォルダを開く" Visibility="Collapsed" HorizontalAlignment="Center" Click="EmptyOpenFolders_Click" AutomationProperties.AutomationId="BtnEmptyOpenFolders"/>
      </StackPanel>
+     <Border x:Name="SelectionTools" Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="12,0,12,16" Padding="14,6" CornerRadius="20" Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" BorderThickness="1.5" Canvas.ZIndex="10" Translation="0,0,16" Visibility="Collapsed" AutomationProperties.AutomationId="SelectionTools">
+      <Border.Shadow><ThemeShadow/></Border.Shadow>
+      <Grid ColumnSpacing="6">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <TextBlock x:Name="SelectionCountText" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,0,4,0" AutomationProperties.AutomationId="SelectionCountText"/>
+       <Button x:Name="SelectionDirectFavoriteButton" Grid.Column="1" Content="★ お気に入り" Padding="10,4" Click="SelectionFavoriteAdd_Click" AutomationProperties.Name="選択した作品をお気に入りに追加" AutomationProperties.AutomationId="SelectionDirectFavorite"/>
+       <Button x:Name="SelectionDirectShelfButton" Grid.Column="2" Content="📚 棚に追加…" Padding="10,4" Click="SelectionShelfAdd_Click" AutomationProperties.Name="選択した作品を棚に追加" AutomationProperties.AutomationId="SelectionDirectShelf"/>
+       <Button x:Name="SelectionBulkActions" Grid.Column="3" Content="その他 ▾" Padding="10,4" Click="FooterBulkActions_Click" Visibility="Collapsed" AutomationProperties.Name="まとめて整理" AutomationProperties.AutomationId="SelectionBulkActions"/>
+       <Button x:Name="ClearSelectionButton" Grid.Column="4" Content="解除" Padding="10,4" Click="ClearLibrarySelection_Click" AutomationProperties.Name="選択を解除" AutomationProperties.AutomationId="ClearLibrarySelection"/>
+       <Button x:Name="CancelSelectionPreparation" Grid.Column="5" Content="中止" Padding="10,4" Click="CancelSelectionPreparation_Click" Visibility="Collapsed" AutomationProperties.Name="選択の準備を中止" AutomationProperties.AutomationId="CancelSelectionPreparation"/>
+       <TextBlock x:Name="SelectionInlineStatus" Grid.Column="6" Visibility="Collapsed" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="SelectionInlineStatus" AutomationProperties.LiveSetting="Polite"/>
+      </Grid>
+     </Border>
      <ScrollViewer x:Name="GettingStarted" Grid.Row="1" Visibility="Collapsed" MaxWidth="660" HorizontalAlignment="Center" VerticalAlignment="Top" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="GettingStarted">
       <StackPanel Margin="24,12,24,16" Spacing="12">
        <StackPanel Orientation="Horizontal" Spacing="12">
@@ -705,18 +708,17 @@
       </StackPanel>
      </ScrollViewer>
     </Grid>
-   <StackPanel Grid.Row="4" Spacing="8">
-    <Grid Visibility="{Binding Visibility, ElementName=ItemPagerRow}">
+   <StackPanel Grid.Row="4" Spacing="6">
     <StackPanel x:Name="FooterSelectionActions" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
      <Button x:Name="FooterBulkActions" Content="まとめて整理" Click="FooterBulkActions_Click" AutomationProperties.AutomationId="FooterBulkActions"/>
      <Button x:Name="FooterClearSelection" Content="選択を解除" Click="ClearLibrarySelection_Click" AutomationProperties.AutomationId="FooterClearSelection"/>
-    </StackPanel></Grid>
-    <Border x:Name="RuntimeVerifyCard" Padding="12,8" CornerRadius="{ThemeResource ControlCornerRadius}" Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" Visibility="Collapsed" AutomationProperties.AutomationId="RuntimeVerifyCard" AutomationProperties.Name="AI環境の準備状況">
-     <Grid ColumnSpacing="16">
+    </StackPanel>
+    <Border x:Name="RuntimeVerifyCard" HorizontalAlignment="Left" Padding="10,4" CornerRadius="12" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Visibility="Collapsed" AutomationProperties.AutomationId="RuntimeVerifyCard" AutomationProperties.Name="AI環境の準備状況">
+     <Grid ColumnSpacing="10">
       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-      <TextBlock x:Name="RuntimeVerifyTitle" Text="AIを確認中" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" AutomationProperties.AutomationId="RuntimeVerifyTitle"/>
-      <ProgressBar x:Name="RuntimeVerifyProgress" Grid.Column="1" Minimum="0" Maximum="100" Width="220" IsIndeterminate="True" VerticalAlignment="Center" AutomationProperties.AutomationId="RuntimeVerifyProgress"/>
-      <TextBlock x:Name="RuntimeVerifyDetail" Grid.Column="2" Text="確認しています…" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.AutomationId="RuntimeVerifyDetail"/>
+      <TextBlock x:Name="RuntimeVerifyTitle" Text="AIを確認中" Style="{StaticResource MediaMetadataStyle}" FontWeight="SemiBold" VerticalAlignment="Center" AutomationProperties.AutomationId="RuntimeVerifyTitle"/>
+      <ProgressBar x:Name="RuntimeVerifyProgress" Grid.Column="1" Minimum="0" Maximum="100" Width="120" IsIndeterminate="True" VerticalAlignment="Center" AutomationProperties.AutomationId="RuntimeVerifyProgress"/>
+      <TextBlock x:Name="RuntimeVerifyDetail" Grid.Column="2" Text="確認しています…" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center" MaxLines="1" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="RuntimeVerifyDetail"/>
      </Grid>
     </Border>
     <Grid x:Name="ItemPagerRow" ColumnSpacing="8">
