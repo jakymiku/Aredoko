@@ -25,6 +25,7 @@ public sealed partial class MainPage : Page
     private XamlRoot? trackedXamlRoot;
     private double lastObservedRasterizationScale = 1.0;
     private readonly Dictionary<ListViewItem, Action> containerRefresh = new();
+    private readonly Dictionary<ListViewItem, Action> containerQuickActionSync = new();
     private CancellationTokenSource renderCancellation = new();
     private CancellationTokenSource? detailCancellation;
     private ArchiveReaderView? readerView;
@@ -696,6 +697,7 @@ public sealed partial class MainPage : Page
     private void ReleaseContainer(ListViewItem item)
     {
         containerRefresh.Remove(item);
+        containerQuickActionSync.Remove(item);
         if (containerCleanup.Remove(item, out var release)) release();
         if (item.ContentTemplateRoot is Border host) host.Child=null;
         item.ContextFlyout=null; item.Tag=null;
@@ -955,6 +957,7 @@ public sealed partial class MainPage : Page
                 quickActions.Visibility = (activeOverlay || row.Favorite) ? Visibility.Visible : Visibility.Collapsed;
             }
             UpdateTileQuickActions();
+            containerQuickActionSync[item] = UpdateTileQuickActions;
             content.PointerEntered += (_, _) => { pointerOver = true; UpdateTileQuickActions(); };
             content.PointerExited += (_, _) => { pointerOver = false; UpdateTileQuickActions(); };
             tileGotFocus = (_, _) => { cardFocused = true; UpdateTileQuickActions(); };
@@ -1746,12 +1749,7 @@ public sealed partial class MainPage : Page
                    && quickActions.Children.OfType<Button>().FirstOrDefault() is {} favBtn)
                 {
                     StyleCardFavoriteButton(favBtn,row);
-                    if(tiles)
-                    {
-                        var focused=item.FocusState!=FocusState.Unfocused||quickActions.Children.OfType<Control>().Any(c=>c.FocusState!=FocusState.Unfocused);
-                        if(row.Favorite)quickActions.Visibility=Visibility.Visible;
-                        else if(!focused)quickActions.Visibility=Visibility.Collapsed;
-                    }
+                    if(containerQuickActionSync.TryGetValue(item,out var syncQuick))syncQuick();
                 }
             }
             item.ContextFlyout=SimilarityMenu(row);
@@ -4160,6 +4158,6 @@ public sealed partial class MainPage : Page
         if(imageViewer is {} activeImage)await activeImage.FlushFavoriteAsync();
         if(videoPlayer is {} activeVideo)await activeVideo.FlushFavoriteAsync();
     }
-    public void Stop(){if(disposed)return;disposed=true;settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){if(disposed)return;disposed=true;settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();containerQuickActionSync.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 
