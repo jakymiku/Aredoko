@@ -4,6 +4,7 @@
 /models/
 /fixtures/generated/
 /private/
+/Aredoko-test/
 .env
 .env.*
 !.env.example
