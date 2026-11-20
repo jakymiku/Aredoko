@@ -2655,7 +2655,7 @@ public sealed partial class MainPage : Page
         Nav.PaneDisplayMode=expanded?NavigationViewPaneDisplayMode.Left:NavigationViewPaneDisplayMode.LeftCompact;
         Nav.IsPaneOpen=expanded;
         Details.DisplayMode=width<720?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
-        Details.OpenPaneLength=width>=1080?320:width>=880?280:Math.Clamp(width-600,240,280);
+        Details.OpenPaneLength=width>=1080?340:width>=880?300:Math.Clamp(width-580,260,300);
     }
     private void Page_SizeChanged(object sender,SizeChangedEventArgs e)
     {
@@ -2713,13 +2713,17 @@ public sealed partial class MainPage : Page
         if(Details is null||LibraryLayout is null)return;
         var compact=ActualWidth<1100||ActualHeight<820;
         if(DetailPreview is not null)DetailPreview.Height=ActualHeight<760?140:compact?172:200;
-        var gap=Details.IsPaneOpen&&Details.DisplayMode==SplitViewDisplayMode.Inline?16:0;
-        if(LibraryLayout.Margin.Right!=gap)LibraryLayout.Margin=new Thickness(0,0,gap,0);
-        // Overlay panes must also occlude the content at their outer edge;
-        // antialiasing there otherwise exposes a sliver of the Search button.
-        LibraryLayout.Clip=Details.IsPaneOpen&&Details.DisplayMode==SplitViewDisplayMode.Overlay
-            ?new RectangleGeometry{Rect=new Windows.Foundation.Rect(0,0,Math.Max(0,LibraryLayout.ActualWidth-Details.OpenPaneLength),LibraryLayout.ActualHeight)}
-            :null;
+        var inlineOpen=Details.IsPaneOpen&&Details.DisplayMode==SplitViewDisplayMode.Inline;
+        if(MainContentSurface is not null)
+        {
+            MainContentSurface.CornerRadius=inlineOpen?new CornerRadius(8,8,0,0):new CornerRadius(8,0,0,0);
+            MainContentSurface.BorderThickness=inlineOpen?new Thickness(1,1,1,0):new Thickness(1,1,0,0);
+            // Overlay panes must also occlude the content at their outer edge;
+            // antialiasing there otherwise exposes a sliver of the Search button.
+            MainContentSurface.Clip=Details.IsPaneOpen&&Details.DisplayMode==SplitViewDisplayMode.Overlay
+                ?new RectangleGeometry{Rect=new Windows.Foundation.Rect(0,0,Math.Max(0,MainContentSurface.ActualWidth-Details.OpenPaneLength),MainContentSurface.ActualHeight)}
+                :null;
+        }
     }
 
     private void ShowItemDetailsPane()

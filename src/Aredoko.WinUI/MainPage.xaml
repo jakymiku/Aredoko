@@ -103,6 +103,11 @@
  </Page.Resources>
  <Page.KeyboardAccelerators><KeyboardAccelerator Key="Home" Modifiers="Control" Invoked="BrowseEdgeShortcut"/><KeyboardAccelerator Key="End" Modifiers="Control" Invoked="BrowseEdgeShortcut"/><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchShortcut"/><KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveShortcut"/><KeyboardAccelerator Key="Escape" Invoked="CancelSearchShortcut"/><KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="HistoryBackShortcut"/><KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="HistoryForwardShortcut"/></Page.KeyboardAccelerators>
  <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Auto" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="180" SelectionChanged="Nav_SelectionChanged" ItemInvoked="Navigation_ItemInvoked" AutomationProperties.AutomationId="Nav">
+  <NavigationView.Resources>
+   <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent"/>
+   <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent"/>
+   <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+  </NavigationView.Resources>
   <NavigationView.MenuItems>
    <NavigationViewItem Content="すべて" Tag="all" Icon="Home" IsSelected="True" AutomationProperties.AutomationId="NavAll"/>
    <NavigationViewItem Content="お気に入り" Tag="favorites" Icon="Favorite" AutomationProperties.AutomationId="NavFavorites"/>
@@ -114,9 +119,9 @@
    <NavigationViewItem x:Name="NavAIStatus" Content="AI：確認中" Tag="ai" AutomationProperties.Name="AI検索の状態と設定" AutomationProperties.AutomationId="BtnNavAIStatus"><NavigationViewItem.Icon><FontIcon Glyph="&#xE99A;"/></NavigationViewItem.Icon></NavigationViewItem>
    <NavigationViewItem x:Name="SettingsNavItem" Content="設定" Tag="settings" Icon="Setting" AutomationProperties.AutomationId="BtnSettings"/>
   </NavigationView.FooterMenuItems>
-   <SplitView x:Name="Details" PaneOpened="Details_PaneStateChanged" PaneClosed="Details_PaneStateChanged" Margin="16" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="320" PaneBackground="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+   <SplitView x:Name="Details" PaneOpened="Details_PaneStateChanged" PaneClosed="Details_PaneStateChanged" Margin="0" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="False" OpenPaneLength="340" PaneBackground="Transparent">
     <SplitView.Pane>
-     <Border KeyDown="Detail_KeyDown" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource OverlayCornerRadius}">
+     <Border x:Name="DetailPaneBorder" KeyDown="Detail_KeyDown" Margin="8,0,12,12" Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{ThemeResource OverlayCornerRadius}">
      <Grid RowSpacing="16" Padding="16">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -291,6 +296,7 @@
      </Grid>
      </Border>
     </SplitView.Pane>
+  <Border x:Name="MainContentSurface" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,1,0,0" CornerRadius="8,0,0,0" Padding="20,14,12,12">
   <Grid x:Name="LibraryLayout" SizeChanged="LibraryLayout_SizeChanged" RowSpacing="8">
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
    <Grid x:Name="LibraryHeader" ColumnSpacing="16">
@@ -806,6 +812,7 @@
     </InfoBar>
    </StackPanel>
   </Grid>
+  </Border>
    </SplitView>
  </NavigationView>
 </Page>
