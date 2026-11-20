@@ -788,3 +788,19 @@ flowchart LR
 
 - 検証：`Aredoko.Core.Tests`（`1,467` PASS）、Python 単体 `171` 件（`125` 件 skipped=5＋`39` 件＋`7` 件 OK）、[check.py](data/gui-ui-polish02/check.py) Light（`run17f_light`）・Dark（`run18_dark`）全項目 PASS＋スクリーンショット確認、**配布候補26**（`dist/portable-managed-20261120-26`）再梱包・検証 PASS。
 
+---
+
+## 12. 候補27：試用フィードバック4項目の実装・検証
+
+> 対象：候補26試用後の要望4項目（CBZ全ページ一括AI索引＋100ページ超過警告、動画再生一時停止場面の類似検索、画像・本・動画横断の視覚類似＋種類フィルタ絞り込み、中央フローティングピル型＋高速フェード収納＋カプセルシークバー付きビューアUI）。コード `f785280`（`data/development-tools/frontend-product27`）。
+
+| 区分 | 内容 | 主な実装箇所 |
+| --- | --- | --- |
+| CBZ 全ページ一括AI索引 | `POST /api/library/ai/pages/all`（16ページ原子分割＋済スキップ＋中断対応）、右クリック `IndexBookAllPages`・`PageAIDialog` 内 `PageAIAddAll`、100ページ超（`LargeBookWarningThreshold`）確認ダイアログ | `page_semantics.py`, `production_server.py`, `PageChunks.cs`, `PageEvidenceClient.cs`, `MainPage.PageIndex.cs`, `MainPage.xaml.cs` |
+| 動画の一時停止場面類似 | `origin_ms` によるフレーム抽出（前250msフォールバック／1000ms近似キャッシュ）、`VideoPlayerView` 右クリック＆`VideoSettings` メニュー `VideoFindSimilarFrame` から一時停止し類似検索起動 | `ai_search.py`, `production_server.py`, `ResultSearchConditions.cs`, `SimilaritySearch.cs`, `MainPage.xaml.cs`, `MainPage.NavigationHistory.cs`, `VideoPlayerView.cs` |
+| 横断視覚類似＋種類絞込 | `AISearch.similar` の `image`/`book`/`archive`/`video` 横断検索、類似結果表示中の `Kind` 変更即時再実行（`PendingAutoSearch`）、`DetailFindSimilarButton`／`SearchMethodHint` 文言刷新 | `ai_search.py`, `MainPage.xaml.cs` |
+| ピル型ビューアUI・シークバー | `ViewerFloatingPillStyle`、`ViewerChromeController` 72px下部ホバー110ms表示・140ms待ち160msフェード収納・ピン留め（`\uE718`）・カプセル型シークバー（`ImageSequenceSeek` / `ReaderPageSeek` / `VideoSeek`） | `App.xaml`, `ViewerChromeController.cs`, `ArchiveReaderView.cs`, `ImageViewerView.cs`, `VideoPlayerView.cs`, `ImageViewerSequence.cs` |
+
+- 検証（コード `f785280`）：`Aredoko.Core.Tests`（`1,477` PASS / `0` FAIL）、Python 単体（`test_winui_compile_stub`＋`test_native_combo_selection` `7` 件 OK、`test_ai_setup_plan`＋`test_portable_startup`＋`test_windows_sandbox` `39` 件 OK、`test_video_previews` ほか8モジュール `127` 件 OK skipped=5 ＋ FFmpeg `PATH` 下 `test_video_previews`＋`test_video_frames` `25` 件 OK skipped=1）、[check.py](data/gui-ui-polish02/check.py) Light（`run20_light`）・Dark（`run21_dark`）全項目 PASS（`video_floating_pill_autohide_and_frame_menu_ok`・`cbz_page_similar_and_cross_media_swap_ok`）＋Light/Dark スクリーンショット確認、**配布候補27**（`dist/portable-managed-20261120-27`）再梱包・検証 PASS。
+
+
