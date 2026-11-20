@@ -503,5 +503,43 @@ class ResultSessionTests(unittest.TestCase):
         self.assertEqual(self.owner.neighbor(self.sid, cbz_id, 1, include_books=True)['neighbor']['item']['id'], next_img)
         self.assertEqual(self.owner.neighbor(self.sid, next_img, -1, include_books=True)['neighbor']['item']['id'], cbz_id)
 
+    def test_cancel_during_locate_closes_sqlite_and_removes_workspace(self):
+        self.create()
+        session = self.owner.sessions[self.sid]
+        entered = threading.Event()
+        release = threading.Event()
+        original_check = session.check
+        calls = 0
+
+        def held_check():
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                entered.set()
+                release.wait(3)
+            return original_check()
+
+        errors = []
+        session.check = held_check
+
+        def run_locate():
+            try:
+                self.owner.locate(self.sid, [self.items[0]['id']])
+            except Exception as error:
+                errors.append(error)
+
+        worker = threading.Thread(target=run_locate)
+        worker.start()
+        try:
+            self.assertTrue(entered.wait(2))
+            self.owner.cancel(self.sid)
+        finally:
+            release.set()
+            worker.join(4)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], ResultUnavailable)
+        self.assertFalse(list(self.base.glob('aredoko-results-*')))
+
 
 if __name__ == '__main__': unittest.main()

@@ -47,6 +47,7 @@ public sealed partial class MainPage
         if(SettingsSectionMaintenance is not null)SettingsSectionMaintenance.Visibility=category is "all" or "maintenance"?Visibility.Visible:Visibility.Collapsed;
         SettingsScroll?.ChangeView(null,0,null,true);
         RestoreNavigation();
+        if(ready&&settingsHubOpen)RememberCurrentLocation();
     }
 
     private async Task OpenSettingsAsync(string? category=null)
@@ -95,6 +96,7 @@ public sealed partial class MainPage
             }
             finally{settingsPopulating=false;}
             SetSettingsCategory(category??"all");
+            RecordNavigationLocation();
         }
         catch(Exception ex){Failure(ex);}
         finally{transitions.Release();}
@@ -145,17 +147,63 @@ public sealed partial class MainPage
             {
                 SettingsAIStep1Status.Text="✓ 導入済み";
                 SettingsAIStep2Status.Text=string.IsNullOrWhiteSpace(model)?"✓ 使用可能":$"✓ {model}";
-                SettingsAIStep3Status.Text=state switch
+                int? covTarget=null,covFresh=null;
+                var unscopedPresentTotal=0;
+                var scopeInvalid=false;
+                var scopeInvalidHint="";
+                if(state is not ("running" or "cancelling"))
                 {
-                    "complete"=>$"✓ 作成済み（{processed}/{total}）",
-                    "running"=>$"作成中（{processed}/{total}）",
-                    "cancelling"=>"中断中",
-                    "partial"=>$"一部作成（{processed}/{total}）",
-                    _=>"未作成"
-                };
-                SettingsAINextHint.Text=state=="complete"
-                    ?"AI検索の準備が整っています。検索欄の［AI］から使えます。"
-                    :"［AI検索を設定］から対象フォルダのAI検索データを作成できます。";
+                    System.Text.Json.Nodes.JsonObject? effectiveScope=null;
+                    try
+                    {
+                        var scopeData=await api.GetAsync("api/library/ai/scope",token);
+                        if(scopeData["valid"]?.GetValue<bool>()==true&&scopeData["scope"] is System.Text.Json.Nodes.JsonObject validScope)
+                        {
+                            effectiveScope=(System.Text.Json.Nodes.JsonObject)validScope.DeepClone();
+                            aiScope=(System.Text.Json.Nodes.JsonObject)effectiveScope.DeepClone();
+                        }
+                        else
+                        {
+                            scopeInvalid=true;
+                            scopeInvalidHint=scopeData["error"]?.GetValue<string>()??aiScopeError;
+                        }
+                    }
+                    catch(OperationCanceledException) when(token.IsCancellationRequested){throw;}
+                    catch(Exception scopeEx)
+                    {
+                        AppLog.Error(scopeEx);
+                        effectiveScope=aiScope is not null?(System.Text.Json.Nodes.JsonObject)aiScope.DeepClone():null;
+                    }
+                    if(token.IsCancellationRequested||disposed||!settingsHubOpen)return;
+                    if(!scopeInvalid&&effectiveScope is not null)
+                    {
+                        if(effectiveScope["root_ids"] is System.Text.Json.Nodes.JsonArray scopedRoots)
+                        {
+                            var scopedIds=scopedRoots.Select(node=>node?.GetValue<int>()??-1).Where(id=>id>0).ToHashSet();
+                            unscopedPresentTotal=knownRoots.Where(root=>root.Enabled&&!scopedIds.Contains(root.Id)).Sum(root=>root.PresentCount);
+                        }
+                        try
+                        {
+                            var covData=await api.PostAsync("api/library/ai/coverage",AIScopeRequests.Scoped(effectiveScope),token);
+                            covTarget=covData["target_total"]?.GetValue<int>();
+                            covFresh=covData["fresh_total"]?.GetValue<int>();
+                        }
+                        catch(OperationCanceledException) when(token.IsCancellationRequested){throw;}
+                        catch(Exception covEx){AppLog.Error(covEx);}
+                        if(token.IsCancellationRequested||disposed||!settingsHubOpen)return;
+                    }
+                }
+                if(scopeInvalid)
+                {
+                    SettingsAIStep3Status.Text="対象範囲の要確認";
+                    SettingsAINextHint.Text=string.IsNullOrWhiteSpace(scopeInvalidHint)?"［AI検索を設定］の「対象範囲」を選び直して保存してください。":scopeInvalidHint;
+                }
+                else
+                {
+                    var (step3Text,nextHint)=AISearchStatus.SettingsDataStatus(state,processed,total,covTarget,covFresh,unscopedPresentTotal);
+                    SettingsAIStep3Status.Text=step3Text;
+                    SettingsAINextHint.Text=nextHint;
+                }
             }
             else
             {
@@ -250,6 +298,7 @@ public sealed partial class MainPage
         var needLoad=resultSession is null||PendingAutoSearch;
         try
         {
+            RememberCurrentLocation();
             CloseSettingsHubCore();
             RestoreNavigation();
             UpdateSearchMethod();
@@ -258,6 +307,7 @@ public sealed partial class MainPage
             {
                 Count.Text=settingsReturnCount;
                 RestoreSelection();
+                RecordNavigationLocation();
             }
         }
         finally{transitions.Release();}

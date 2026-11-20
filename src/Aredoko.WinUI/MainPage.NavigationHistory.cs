@@ -8,7 +8,7 @@ namespace Aredoko_WinUI;
 public sealed partial class MainPage
 {
     private sealed record PageLocation(string Key,string Screen,SearchBookmark Search,MediaRow? Origin,
-        SearchBookmark? SimilarityReturn,bool DetailsOpen,(string Key,double Y)? Anchor,string FolderFilter,int FolderState,int[] CheckedRoots,bool DirectAudio,bool DirectVideo,bool DirectVideoAudio);
+        SearchBookmark? SimilarityReturn,bool DetailsOpen,(string Key,double Y)? Anchor,string FolderFilter,int FolderState,int[] CheckedRoots,bool DirectAudio,bool DirectVideo,bool DirectVideoAudio,string SettingsCategory="all");
     private sealed class LocationComparer:IEqualityComparer<PageLocation>
     {
         public bool Equals(PageLocation? left,PageLocation? right)=>left?.Key==right?.Key;
@@ -19,7 +19,7 @@ public sealed partial class MainPage
 
     private PageLocation CaptureLocation()
     {
-        var screen=folderHubOpen?"folders":shelfHubOpen?"shelves":"library";
+        var screen=settingsHubOpen?"settings":folderHubOpen?"folders":shelfHubOpen?"shelves":"library";
         var anchor=screen=="library"?CaptureBrowseAnchor():null;
         var selected=active?.Id??0;
         var targetPage=page;
@@ -29,11 +29,13 @@ public sealed partial class MainPage
             if(index>=0)targetPage=(browseStart+index)/resultPageSize;
         }
         var search=new SearchBookmark(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,targetPage,selected,selectedShelfIds?.ToArray(),selectedTagScope,similarityOriginPage,similarityOriginMs);
-        var identity=new JsonObject{["screen"]=screen,["query"]=search.Query,["kind"]=search.Kind,["mode"]=search.Mode,
-            ["roots"]=search.Roots is null?null:string.Join(",",search.Roots),["shelves"]=search.Shelves is null?null:string.Join(",",search.Shelves),["tag"]=search.Tag,
-            ["literal"]=search.LiteralOnly,["boundary"]=search.Boundary,["group"]=search.Group,["view"]=search.View,["page"]=search.Page,["origin"]=similarityOrigin?.Id,["origin_page"]=similarityOriginPage,["origin_ms"]=similarityOriginMs,["audio_similarity"]=directAudioSimilarity,["video_similarity"]=directVideoSimilarity,["video_audio_similarity"]=directVideoAudioSimilarity};
+        var identity=screen=="settings"
+            ? new JsonObject{["screen"]="settings"}
+            : new JsonObject{["screen"]=screen,["query"]=search.Query,["kind"]=search.Kind,["mode"]=search.Mode,
+                ["roots"]=search.Roots is null?null:string.Join(",",search.Roots),["shelves"]=search.Shelves is null?null:string.Join(",",search.Shelves),["tag"]=search.Tag,
+                ["literal"]=search.LiteralOnly,["boundary"]=search.Boundary,["group"]=search.Group,["view"]=search.View,["page"]=search.Page,["origin"]=similarityOrigin?.Id,["origin_page"]=similarityOriginPage,["origin_ms"]=similarityOriginMs,["audio_similarity"]=directAudioSimilarity,["video_similarity"]=directVideoSimilarity,["video_audio_similarity"]=directVideoAudioSimilarity};
         var origin=similarityOrigin is {} item?new MediaRow{Id=item.Id,Title=item.Title,Kind=item.Kind}:null;
-        return new(identity.ToJsonString(),screen,search,origin,similarityReturn,Details.IsPaneOpen,anchor,FolderFilterBox.Text,FolderStateFilter.SelectedIndex,checkedFolderIds.ToArray(),directAudioSimilarity,directVideoSimilarity,directVideoAudioSimilarity);
+        return new(identity.ToJsonString(),screen,search,origin,similarityReturn,Details.IsPaneOpen,anchor,FolderFilterBox.Text,FolderStateFilter.SelectedIndex,checkedFolderIds.ToArray(),directAudioSimilarity,directVideoSimilarity,directVideoAudioSimilarity,currentSettingsCategory);
     }
     private void RecordNavigationLocation()
     {
@@ -59,7 +61,12 @@ public sealed partial class MainPage
         var moved=false;
         try
         {
-            if(target.Screen=="folders")
+            if(target.Screen=="settings")
+            {
+                await OpenSettingsAsync(target.SettingsCategory);
+                moved=settingsHubOpen;
+            }
+            else if(target.Screen=="folders")
             {
                 await OpenFolderHubAsync();
                 if(folderHubOpen)
@@ -83,7 +90,7 @@ public sealed partial class MainPage
                 try
                 {
                     if(!await ConfirmDiscardAsync())return;
-                    var bookmark=target.Search;CloseShelfHubCore();CloseFolderHubCore();
+                    var bookmark=target.Search;CloseSettingsHubCore();CloseShelfHubCore();CloseFolderHubCore();
                     populating=true;
                     try
                     {

@@ -149,7 +149,7 @@ public sealed class LibraryApi : IDisposable
         if(!response.IsSuccessStatusCode) throw new InvalidOperationException(ErrorText.FromResponse(text,(int)response.StatusCode));
         return text;
     }
-    public Task<JsonNode> PostAsync(string route,JsonObject data) => PostAsync(route,data.ToJsonString());
+    public Task<JsonNode> PostAsync(string route,JsonObject data,CancellationToken cancellation=default) => PostAsync(route,data.ToJsonString(),cancellation);
     private async Task<JsonNode> PostAsync(string route,string data,CancellationToken cancellation=default) {
         using var content=new StringContent(data,Encoding.UTF8,"application/json");
         using var response=await client.PostAsync(route,content,cancellation);

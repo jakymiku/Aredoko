@@ -135,5 +135,30 @@ static class StatusClarityTests
         check(nullReport.Contains("棚の数: 未確認") && nullReport.Contains("登録した関連語: 未確認"), "DiagnosticsReport distinguishes unconfirmed shelf/term counts from zero");
         check(nullReport.Contains("未設定または全フォルダ"), "DiagnosticsReport describes null scope safely");
         check(!nullReport.Contains("基本Python:"), "DiagnosticsReport keeps working with an older backend");
+
+        // 7. SettingsDataStatus reflects live library coverage and unscoped folders instead of stale job counts
+        var staleSixOfTwoHundred = AISearchStatus.SettingsDataStatus("complete", 6, 6, coverageTargetTotal: 211, coverageFreshTotal: 6);
+        check(staleSixOfTwoHundred.Step3Status.Contains("6 / 211") && staleSixOfTwoHundred.Step3Status.Contains("未作成 205"),
+            "SettingsDataStatus shows 6/211 partial coverage instead of stale 6/6 complete");
+        check(staleSixOfTwoHundred.NextHint.Contains("205 件") && staleSixOfTwoHundred.NextHint.Contains("AI検索を設定"),
+            "SettingsDataStatus guides user to index remaining 205 items");
+
+        var scopedSixUnscopedRest = AISearchStatus.SettingsDataStatus("complete", 6, 6, coverageTargetTotal: 6, coverageFreshTotal: 6, unscopedPresentTotal: 205);
+        check(scopedSixUnscopedRest.Step3Status.Contains("6/6") && scopedSixUnscopedRest.Step3Status.Contains("対象外 205"),
+            "SettingsDataStatus warns when active folders have 205 items outside AI scope");
+        check(scopedSixUnscopedRest.NextHint.Contains("対象範囲"),
+            "SettingsDataStatus directs user to check AI scope when folders are excluded");
+
+        var fullyReady = AISearchStatus.SettingsDataStatus("complete", 6, 6, coverageTargetTotal: 211, coverageFreshTotal: 211);
+        check(fullyReady.Step3Status == "✓ 作成済み（211/211）" && fullyReady.NextHint.Contains("検索欄の［AI］"),
+            "SettingsDataStatus shows complete checkmark only when all scoped items are indexed");
+
+        var unindexedAll = AISearchStatus.SettingsDataStatus("idle", 0, 0, coverageTargetTotal: 211, coverageFreshTotal: 0);
+        check(unindexedAll.Step3Status == "未作成（0 / 211 件）",
+            "SettingsDataStatus shows exact target count when 0 items are indexed");
+
+        var runningOverride = AISearchStatus.SettingsDataStatus("running", 12, 211, coverageTargetTotal: 211, coverageFreshTotal: 6);
+        check(runningOverride.Step3Status == "作成中（12/211）",
+            "SettingsDataStatus prioritizes live running progress over static coverage");
     }
 }

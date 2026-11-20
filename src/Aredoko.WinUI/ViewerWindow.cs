@@ -76,15 +76,38 @@ internal sealed class ViewerWindow : Window
     // AppWindow.Closing covers system close affordances. Buttons/Escape and
     // owner shutdown also use this explicit path before Window.Close().
     public new void Close()=>_=RequestCloseAsync();
+    internal void ForceCloseFromOwner()
+    {
+        if(closePrepared)return;
+        BeforeCloseAsync=null;
+        closePrepared=true;
+        try{base.Close();}
+        catch(Exception ex)
+        {
+            if(ownerWasEnabled)EnableWindow(owner,true);
+            closed.TrySetResult();
+            AppLog.Error(ex);
+        }
+    }
     public async Task RequestCloseAsync()
     {
         if(preparingClose||closePrepared)return;preparingClose=true;
         try
         {
-            if(BeforeCloseAsync is not null)await BeforeCloseAsync();
+            if(BeforeCloseAsync is not null)
+            {
+                try{await BeforeCloseAsync();}
+                catch(Exception flushEx){AppLog.Error(flushEx);}
+            }
             closePrepared=true;base.Close();
         }
-        catch(Exception ex){closePrepared=false;AppLog.Error(ex);}
+        catch(Exception ex)
+        {
+            closePrepared=false;
+            if(ownerWasEnabled)EnableWindow(owner,true);
+            closed.TrySetResult();
+            AppLog.Error(ex);
+        }
         finally{preparingClose=false;}
     }
 }

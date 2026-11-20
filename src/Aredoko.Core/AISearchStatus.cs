@@ -46,4 +46,49 @@ public static class AISearchStatus
         "partial" => "一部完了",
         _ => state
     };
+
+    public static (string Step3Status, string NextHint) SettingsDataStatus(
+        string jobState,
+        int jobProcessed,
+        int jobTotal,
+        int? coverageTargetTotal = null,
+        int? coverageFreshTotal = null,
+        int unscopedPresentTotal = 0)
+    {
+        if (jobState == "running")
+            return ($"作成中（{jobProcessed:N0}/{jobTotal:N0}）", "AI検索データを作成しています。完了前でも作成済み分から検索できます。");
+        if (jobState == "cancelling")
+            return ("中断中", "AI検索データの作成を中断しています。");
+
+        if (coverageTargetTotal is int target && coverageFreshTotal is int fresh)
+        {
+            var clampedFresh = Math.Clamp(fresh, 0, Math.Max(0, target));
+            var remaining = Math.Max(0, target - clampedFresh);
+            if (target == 0)
+            {
+                if (unscopedPresentTotal > 0)
+                    return ($"対象外（全 {unscopedPresentTotal:N0} 件がAI対象外）",
+                        "登録フォルダがAI検索の対象範囲に含まれていません。［AI検索を設定］の「対象範囲」を確認してください。");
+                return ("対象なし（0 件）", "作品を追加すると［AI検索を設定］からAI検索データを作成できます。");
+            }
+            if (clampedFresh == 0)
+                return ($"未作成（0 / {target:N0} 件）",
+                    $"対象 {target:N0} 件のAI検索データが未作成です。［AI検索を設定］から作成できます。");
+            if (remaining > 0)
+                return ($"一部作成（{clampedFresh:N0} / {target:N0} 件・未作成 {remaining:N0} 件）",
+                    $"未作成の作品が {remaining:N0} 件あります。［AI検索を設定］からAI検索データを追加作成できます。");
+            if (unscopedPresentTotal > 0)
+                return ($"対象分は作成済み（{clampedFresh:N0}/{target:N0} · 対象外 {unscopedPresentTotal:N0} 件）",
+                    $"AI対象外のフォルダに {unscopedPresentTotal:N0} 件あります。含める場合は［AI検索を設定］の「対象範囲」を確認してください。");
+            return ($"✓ 作成済み（{clampedFresh:N0}/{target:N0}）",
+                "AI検索の準備が整っています。検索欄の［AI］から使えます。");
+        }
+
+        return jobState switch
+        {
+            "complete" => ($"✓ 作成済み（{jobProcessed:N0}/{jobTotal:N0}）", "AI検索の準備が整っています。検索欄の［AI］から使えます。"),
+            "partial" or "cancelled" or "interrupted" => ($"一部作成（{jobProcessed:N0}/{jobTotal:N0}）", "［AI検索を設定］から残りのAI検索データを作成できます。"),
+            _ => ("未作成", "［AI検索を設定］から対象フォルダのAI検索データを作成できます。")
+        };
+    }
 }

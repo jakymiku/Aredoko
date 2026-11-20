@@ -535,7 +535,8 @@ public sealed partial class MainPage : Page
             ResetBrowse(checked(page*pageSize),result);rows=result.Items;BindLibrarySelection();active=null; if(!folderSettingsActive&&librarySelection.Count==0){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;} DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();SyncFavoriteToggle(false);Reviewed.IsChecked=false;RenderRows();UpdateBrowseTagsFlyout();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text=""; UpdateDetailSaveBar();
             UpdateLibraryHeading();
-            Count.Text=$"{result.Total:N0} 件";
+            if(settingsHubOpen)settingsReturnCount=$"{result.Total:N0} 件";
+            else Count.Text=$"{result.Total:N0} 件";
             UpdateBrowseFooter(FormatLoadedPageRange(browseStart,rows.Count,result.Total),page>0,(page+1)*pageSize<result.Total);
             VisualAssets.State(EmptyArt,"no_results");Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
             EmptyResetConditionsButton.Visibility=rows.Count==0&&HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
@@ -4049,6 +4050,12 @@ public sealed partial class MainPage : Page
     }
 
     public Task FlushReaderProgressAsync()=>readerView?.FlushProgressAsync()??Task.CompletedTask;
-    public void Stop(){if(disposed)return;disposed=true;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.Close();similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public async Task FlushViewerStateAsync()
+    {
+        if(readerView is {} activeReader)await activeReader.FlushProgressAsync();
+        if(imageViewer is {} activeImage)await activeImage.FlushFavoriteAsync();
+        if(videoPlayer is {} activeVideo)await activeVideo.FlushFavoriteAsync();
+    }
+    public void Stop(){if(disposed)return;disposed=true;settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

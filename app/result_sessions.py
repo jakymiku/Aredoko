@@ -475,7 +475,9 @@ class ResultSessions:
 
     def locate(self,session_id,item_ids):
         session=self._get(session_id)
-        return {'session_id':session_id,**session.locate(item_ids)}
+        try:return {'session_id':session_id,**session.locate(item_ids)}
+        finally:
+            if session.stop.is_set():session.close()
 
     def edit(self,session_id,item_ids,operation,shelf_ids,keep_session=False):
         session=self._get(session_id)

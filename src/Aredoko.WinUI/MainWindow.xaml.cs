@@ -30,7 +30,11 @@ public sealed partial class MainWindow : Window
             try
             {
                 if(RootFrame.Content is MainPage page&&await page.ConfirmDiscardAsync())
-                {await page.FlushReaderProgressAsync();closing=true;Close();}
+                {
+                    try{await page.FlushViewerStateAsync().WaitAsync(TimeSpan.FromSeconds(3));}
+                    catch(Exception flushEx){AppLog.Error(flushEx);}
+                    closing=true;Close();
+                }
             }
             catch(Exception ex){AppLog.Error(ex);}
             finally{preparingClose=false;}
