@@ -770,11 +770,37 @@ public sealed partial class MainPage : Page
     private void PopulateCardBadges(StackPanel badgeRow, MediaRow row)
     {
         badgeRow.Children.Clear();
-        var maxBadgeTextWidth = tiles ? 72.0 : 140.0;
+        var maxBadgeTextWidth = tiles ? 96.0 : 140.0;
         var kindText = MediaKindFilter.DisplayName(row);
         var labels = new List<string> { kindText };
-        badgeRow.Children.Add(CreateCardBadge(kindText, maxBadgeTextWidth, $"ItemKindBadge{row.Id}"));
         var shelves=row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName).Where(name=>!string.IsNullOrWhiteSpace(name)).ToArray():string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf};
+        if (!tiles)
+        {
+            badgeRow.Children.Add(CreateCardBadge(kindText, maxBadgeTextWidth, $"ItemKindBadge{row.Id}"));
+        }
+        else if (row.Kind == "image")
+        {
+            if (Kind.SelectedIndex is not (0 or 1))
+            {
+                badgeRow.Children.Add(CreateCardBadge(kindText, maxBadgeTextWidth, $"ItemKindBadge{row.Id}"));
+            }
+            else if (shelves.Length == 0 && row.Tags.Length == 0)
+            {
+                var kindHint = new TextBlock
+                {
+                    Text = kindText,
+                    MaxWidth = maxBadgeTextWidth,
+                    MaxLines = 1,
+                    TextWrapping = TextWrapping.NoWrap,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Style = (Style)Resources["MediaMetadataStyle"],
+                    Opacity = 0.72,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                AutomationProperties.SetAutomationId(kindHint, $"ItemKindBadge{row.Id}");
+                badgeRow.Children.Add(kindHint);
+            }
+        }
         if(shelves.Length>0)
         {
             var shelfText = "📚 " + ShelfProtocol.SummarizeNames(shelves, maxVisible: 1);
@@ -808,6 +834,7 @@ public sealed partial class MainPage : Page
             }
         }
         AutomationProperties.SetName(badgeRow, string.Join(" · ", labels));
+        badgeRow.Visibility = badgeRow.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
     private void Items_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
@@ -816,7 +843,7 @@ public sealed partial class MainPage : Page
         if (args.InRecycleQueue || disposed || RowForKey(args.Item) is not MediaRow row) return;
         if (item.ContentTemplateRoot is not Border host) return;
         args.Handled=true;
-        var content = new Grid { Padding = new Thickness(8), ColumnSpacing = 12, RowSpacing = 8 };
+        var content = new Grid { Padding = tiles ? new Thickness(6) : new Thickness(8), ColumnSpacing = 12, RowSpacing = tiles ? 6 : 8 };
         content.AddHandler(PointerPressedEvent,new PointerEventHandler(LibrarySelectionPointerPressed),true);
         var image = new Image { Tag = row.Id, IsDoubleTapEnabled = true, Stretch = Stretch.Uniform };
         AutomationProperties.SetAutomationId(image, $"Preview{row.Id}");
@@ -868,7 +895,74 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetAutomationId(placeholder,$"PreviewPlaceholder{row.Id}");
         AutomationProperties.SetName(placeholder,MediaKindFilter.DisplayName(row));
         content.Children.Add(image);content.Children.Add(thumbPlate);content.Children.Add(placeholder);content.Children.Add(text);
-        if(!tiles)
+        RoutedEventHandler? tileGotFocus = null, tileLostFocus = null;
+        if (tiles)
+        {
+            if (row.Kind != "image")
+            {
+                var kindOverlayText = new TextBlock
+                {
+                    Text = DetailKindLabel(row),
+                    MaxLines = 1,
+                    TextWrapping = TextWrapping.NoWrap,
+                    Style = (Style)Resources["MediaMetadataStyle"],
+                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                };
+                AutomationProperties.SetAutomationId(kindOverlayText, $"ItemKindBadge{row.Id}");
+                var kindOverlay = new Border
+                {
+                    Style = (Style)Resources["MediaKindOverlayPillStyle"],
+                    RequestedTheme = ElementTheme.Dark,
+                    Child = kindOverlayText,
+                };
+                Grid.SetRow(kindOverlay, 0);
+                Canvas.SetZIndex(kindOverlay, 2);
+                content.Children.Add(kindOverlay);
+            }
+            var quickActions = new StackPanel
+            {
+                Tag = "ItemQuickActions",
+                Style = (Style)Resources["TileQuickActionPillStyle"],
+                RequestedTheme = ElementTheme.Dark,
+            };
+            Grid.SetRow(quickActions, 0);
+            Canvas.SetZIndex(quickActions, 2);
+            quickActions.DoubleTapped += (_, a) => a.Handled = true;
+            var favBtn = new Button { Padding = new Thickness(6, 2, 6, 2), MinWidth = 28, MinHeight = 28 };
+            AutomationProperties.SetAutomationId(favBtn, $"ItemFavToggle{row.Id}");
+            StyleCardFavoriteButton(favBtn, row);
+            favBtn.Click += async (_, _) => await SetFavoriteAsync(row, !row.Favorite);
+            var detailsBtn = new Button
+            {
+                Content = "✎",
+                Padding = new Thickness(6, 2, 6, 2),
+                MinWidth = 28,
+                MinHeight = 28,
+                Style = ThemeStyle("UnselectedSegmentButtonStyle"),
+            };
+            AutomationProperties.SetAutomationId(detailsBtn, $"ItemDetailsQuick{row.Id}");
+            AutomationProperties.SetName(detailsBtn, $"{row.Title}の詳細を開く");
+            ToolTipService.SetToolTip(detailsBtn, "詳細・タグを編集");
+            detailsBtn.Click += async (_, _) => await OpenRowDetailsAsync(row);
+            quickActions.Children.Add(favBtn);
+            quickActions.Children.Add(detailsBtn);
+            content.Children.Add(quickActions);
+            bool pointerOver = false, cardFocused = false;
+            void UpdateTileQuickActions()
+            {
+                var activeOverlay = pointerOver || cardFocused;
+                detailsBtn.Visibility = activeOverlay ? Visibility.Visible : Visibility.Collapsed;
+                quickActions.Visibility = (activeOverlay || row.Favorite) ? Visibility.Visible : Visibility.Collapsed;
+            }
+            UpdateTileQuickActions();
+            content.PointerEntered += (_, _) => { pointerOver = true; UpdateTileQuickActions(); };
+            content.PointerExited += (_, _) => { pointerOver = false; UpdateTileQuickActions(); };
+            tileGotFocus = (_, _) => { cardFocused = true; UpdateTileQuickActions(); };
+            tileLostFocus = (_, _) => { cardFocused = false; UpdateTileQuickActions(); };
+            item.GotFocus += tileGotFocus;
+            item.LostFocus += tileLostFocus;
+        }
+        else
         {
             var quickActions=new StackPanel{Tag="ItemQuickActions",Orientation=Orientation.Horizontal,Spacing=4,VerticalAlignment=VerticalAlignment.Center};
             quickActions.DoubleTapped+=(_,a)=>a.Handled=true;
@@ -941,6 +1035,8 @@ public sealed partial class MainPage : Page
         // Recycled containers must release requests before receiving another row.
         containerCleanup[item] = () =>
         {
+            if (tileGotFocus is not null) item.GotFocus -= tileGotFocus;
+            if (tileLostFocus is not null) item.LostFocus -= tileLostFocus;
             ++thumbnailVersion; requestedEdge=0;
             visible?.Cancel(); visible?.Dispose(); visible=null;
             image.Source=null;
@@ -962,8 +1058,8 @@ public sealed partial class MainPage : Page
     {
         var scale=libraryItemScale/100d;
         var width=LibraryTileLayout.Width(Math.Max(1,(Items.ActualWidth>0?Items.ActualWidth:ItemListContainer.ActualWidth)-16),libraryItemScale);
-        item.Width=tiles?width:double.NaN;
-        image.Width=tiles?Math.Max(96,width-32):48*scale;
+        item.Width=tiles?Math.Max(1,width-2):double.NaN;
+        image.Width=tiles?Math.Max(104,width-20):48*scale;
         // The theme's container padding/border also occupies the card width.
         // Use the actual Grid slot so the ellipsis stays inside that padding.
         if(item.ContentTemplateRoot is Border {Child:Grid content}&&content.Children.OfType<StackPanel>().FirstOrDefault() is {} text)
@@ -975,7 +1071,7 @@ public sealed partial class MainPage : Page
         }
         // Leave room for the filename and metadata even in a short window.
         var height=Math.Max(48,ItemListContainer.ActualHeight-108);
-        image.Height=tiles?Math.Min(144*scale,height):64*scale;
+        image.Height=tiles?Math.Min(160*scale,height):64*scale;
         if(image.Parent is Grid cardGrid&&cardGrid.Children.OfType<Border>().FirstOrDefault(border=>Equals(border.Tag,"ThumbPlate")) is {} thumbPlate)
         {
             thumbPlate.Width=image.Width;
@@ -1648,7 +1744,15 @@ public sealed partial class MainPage : Page
                 }
                 if(content.Children.OfType<StackPanel>().FirstOrDefault(sp=>Equals(sp.Tag,"ItemQuickActions")) is {} quickActions
                    && quickActions.Children.OfType<Button>().FirstOrDefault() is {} favBtn)
+                {
                     StyleCardFavoriteButton(favBtn,row);
+                    if(tiles)
+                    {
+                        var focused=item.FocusState!=FocusState.Unfocused||quickActions.Children.OfType<Control>().Any(c=>c.FocusState!=FocusState.Unfocused);
+                        if(row.Favorite)quickActions.Visibility=Visibility.Visible;
+                        else if(!focused)quickActions.Visibility=Visibility.Collapsed;
+                    }
+                }
             }
             item.ContextFlyout=SimilarityMenu(row);
         }
