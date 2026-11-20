@@ -58,6 +58,46 @@ internal sealed class Bootstrap : Form
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
         var form=new Bootstrap(args.Length==1);Application.Run(form);return form.failed?2:0;
     }
+    static bool IsDarkTheme()
+    {
+        if(SystemInformation.HighContrast)return false;
+        try
+        {
+            var value=Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize","AppsUseLightTheme",1);
+            return value is int && (int)value==0;
+        }
+        catch(Exception){return false;}
+    }
+    static void ApplyDarkTitleBar(IntPtr hwnd)
+    {
+        try
+        {
+            int enabled=1;
+            if(Native.DwmSetWindowAttribute(hwnd,20,ref enabled,4)!=0)Native.DwmSetWindowAttribute(hwnd,19,ref enabled,4);
+        }
+        catch(Exception){}
+    }
+    static void StyleButton(Button button,bool dark)
+    {
+        button.FlatStyle=FlatStyle.Flat;
+        button.FlatAppearance.BorderSize=1;
+        if(dark)
+        {
+            button.BackColor=Color.FromArgb(45,45,51);
+            button.ForeColor=Color.FromArgb(245,245,248);
+            button.FlatAppearance.BorderColor=Color.FromArgb(72,72,82);
+            button.FlatAppearance.MouseOverBackColor=Color.FromArgb(58,58,66);
+            button.FlatAppearance.MouseDownBackColor=Color.FromArgb(38,38,44);
+        }
+        else
+        {
+            button.BackColor=Color.FromArgb(255,255,255);
+            button.ForeColor=Color.FromArgb(24,24,28);
+            button.FlatAppearance.BorderColor=Color.FromArgb(209,209,214);
+            button.FlatAppearance.MouseOverBackColor=Color.FromArgb(242,242,245);
+            button.FlatAppearance.MouseDownBackColor=Color.FromArgb(232,232,236);
+        }
+    }
     Bootstrap(bool check)
     {
         smoke=check;Text=check?"Aredoko 起動チェック":"Aredoko";
@@ -65,12 +105,33 @@ internal sealed class Bootstrap : Form
         FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
         Font=new Font("Yu Gothic UI",10);
         try{Icon=System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);}catch(Exception){}
+        var dark=IsDarkTheme();
         var heading=new Label { Text="Aredokoを起動しています",AutoSize=true,Location=new Point(24,20),Font=new Font(Font,FontStyle.Bold) };
         stage.SetBounds(24,58,420,36);stage.Text=check?"専用の空のライブラリで起動を確認します。":"準備が終わるまでお待ちください。";
         progress.SetBounds(24,104,420,16);progress.Style=ProgressBarStyle.Marquee;
         count.SetBounds(24,129,420,30);
         cancel.SetBounds(334,181,110,30);cancel.Text="キャンセル";
         logs.SetBounds(24,181,130,30);logs.Text="ログを開く";logs.Visible=false;
+        if(!SystemInformation.HighContrast)
+        {
+            if(dark)
+            {
+                BackColor=Color.FromArgb(31,31,35);
+                ForeColor=Color.FromArgb(245,245,248);
+                heading.ForeColor=Color.FromArgb(245,245,248);
+                stage.ForeColor=Color.FromArgb(220,220,228);
+                count.ForeColor=Color.FromArgb(170,170,180);
+                HandleCreated+=delegate { ApplyDarkTitleBar(Handle); };
+            }
+            else
+            {
+                BackColor=Color.FromArgb(249,249,251);
+                ForeColor=Color.FromArgb(24,24,28);
+                count.ForeColor=Color.FromArgb(96,96,104);
+            }
+            StyleButton(cancel,dark);
+            StyleButton(logs,dark);
+        }
         Controls.AddRange(new Control[]{heading,stage,progress,count,cancel,logs});
         cancel.Click+=delegate { if(finished){allowClose=true;Close();}else CancelStartup(); };
         logs.Click+=delegate {try{if(logPath!=null&&File.Exists(logPath))Process.Start(new ProcessStartInfo(logPath){UseShellExecute=true});}catch(Exception){stage.Text="ログを開けませんでした。";} };
@@ -418,6 +479,7 @@ internal sealed class Bootstrap : Form
         [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)] struct Startup {public int Size;public string Reserved,Desktop,Title;public uint X,Y,Width,Height,XChars,YChars,Fill,Flags;public short Show,ReservedSize;public IntPtr ReservedPtr,In,Out,Error;}
         [StructLayout(LayoutKind.Sequential)] struct Extended {public Startup Info;public IntPtr Attributes;}
         [StructLayout(LayoutKind.Sequential)] struct ProcessInfo {public IntPtr Process,Thread;public uint Id,ThreadId;}
+        [DllImport("dwmapi.dll")]internal static extern int DwmSetWindowAttribute(IntPtr hwnd,int attr,ref int attrValue,int attrSize);
         [DllImport("kernel32.dll",SetLastError=true)]static extern bool CreatePipe(out IntPtr read,out IntPtr write,ref Security security,uint size);
         [DllImport("kernel32.dll",SetLastError=true)]static extern bool SetHandleInformation(IntPtr handle,uint mask,uint flags);
         [DllImport("kernel32.dll",SetLastError=true)]static extern bool InitializeProcThreadAttributeList(IntPtr list,int count,int flags,ref IntPtr size);
