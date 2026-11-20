@@ -213,7 +213,7 @@ Check(groupedRequest["group_threshold"]!.GetValue<double>()==.5&&groupedRequest[
 var evidence=Protocol.ParseSearch("""{"total":1,"score_kind":"cosine","group_boundary":0.5,"leading_total":3,"other_total":3,"items":[{"id":1,"title":"image.png","kind":"image","tags":[],"shelf":"","favorite":false,"reviewed":false,"semantic_score":0.8,"literal_words":1,"literal_hits":0,"similarity_group":"leading"}]}""");
 Check(evidence.GroupBoundary==.5&&evidence.OtherTotal==3&&evidence.Items[0].AIEvidence.Contains("文字一致0/1語")&&evidence.Items[0].AIEvidence.Contains("0.800"),"AI groups and relative score parsed without percentages");
 evidence.Items[0].LiteralHits=1;Check(evidence.Items[0].AIEvidence.StartsWith("名前・タグで全語一致"),"literal evidence does not claim character certainty");
-evidence.Items[0].ScoreKind="reciprocal-rank";Check(evidence.Items[0].AIEvidence.Contains("順位統合値"),"RRF uses separate score label");
+evidence.Items[0].ScoreKind="reciprocal-rank";Check(evidence.Items[0].AIEvidence.Contains("一致率"),"RRF uses separate score label");
 
 await ImageViewerTests.Run(Check);
 

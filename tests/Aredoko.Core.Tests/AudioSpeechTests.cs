@@ -117,7 +117,7 @@ static class AudioSpeechTests
         var parsedLiteral = Protocol.ParseSearch(jsonWithLiteral);
         var itemLiteral = parsedLiteral.Items[0];
         check(itemLiteral.AIEvidence.Contains("音声発話一致（2:05 · 「当時の状況について伺えますか」） · 文字一致2/3語"), "AIEvidence includes literal word count");
-        check(itemLiteral.AIEvidence.Contains("順位統合値 0.8123"), "AIEvidence includes reciprocal-rank score");
+        check(itemLiteral.AIEvidence.Contains("一致率 0.8123"), "AIEvidence includes reciprocal-rank score");
 
         // 4. Long snippet truncation
         var longSnippet = new string('あ', 150);

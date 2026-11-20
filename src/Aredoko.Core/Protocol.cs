@@ -83,7 +83,7 @@ public sealed class MediaRow
            : VideoMatchMs is int vms ? $"動画フレーム一致（{FormatVideoTimestamp(vms)}）" + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
            : AudioMatchMs is int ams ? (AudioMatchSource=="direct-audio"?$"音声の内容一致（{FormatVideoTimestamp(ams)}）":AudioMatchSnippet?.StartsWith("音響特徴") == true ? $"音響特徴一致（{FormatVideoTimestamp(ams)} · 「{AudioMatchSnippet}」）" : $"音声発話一致（{FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · 「{AudioMatchSnippet}」")}）") + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
            : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
-          + (ScoreKind=="cosine" ? $"\n類似度 {score:F3}" : ScoreKind=="reciprocal-rank" ? $"\n順位統合値 {score:F4}" : "")
+          + (ScoreKind=="cosine" ? $"\n類似度 {score:F3}" : ScoreKind=="reciprocal-rank" ? $"\n一致率 {score:F4}" : "")
         : "";
     public string MatchLabel => Match switch { "related" => "関連語の候補 · ", "partial" => "一部の語のみ一致 · ", _ => "" };
     public string KindAndTags => MatchLabel + $"{Kind} · {string.Join("、", Tags)}";

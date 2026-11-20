@@ -566,7 +566,7 @@ public sealed partial class MainPage : Page
                 : method.IsVideoAudioContent ? "AI検索データがある動画内の音を、内容や音の特徴から探します。一致区間の開始から動画を再生できます。先頭の音声トラックが対象です。文字起こしは生成しません。"
                 : method.IsVideoContent ? "AI検索データがある動画を、場面や動きの内容から探します。一致区間の開始から再生できます。動画内の音は対象外です。"
                 : method.IsAudioContent ? "AI検索データがある音声・音楽を、内容や音の特徴から探します。一致した時刻から再生できます。文字起こしは生成しません。"
-                : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}AI検索データがある作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・順位統合値は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。見た目と言葉の意味では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
+                : method.IsAI && query.Length>0 ? $"AI検索の候補です。{(result.CoverageLimit is int coverage ? $"最大{coverage:N0}件の対象から、" : "")}AI検索データがある作品を類似順に表示します。名前・タグの一致とAI類似候補を区別しています。類似度・一致率は正解率ではありません。{(result.GroupBoundary is double cut?$" 上位候補{result.LeadingTotal:N0}件／参考候補{result.OtherTotal:N0}件（区切り{cut:F3}）。":" 類似度に明確な落差がない場合は自動で区切りません。見た目と言葉の意味では区切りを手動指定できます。")}"+(scopeWarning is null?"":" "+scopeWarning)
                 : method.IsAI ? "探したい内容を文章で入力してください。初回の設定は左下の「設定」→「AI検索」から行えます。"
                 : "名前・タグの文字検索。"+Protocol.DescribePartial(result.PartialWords)+Protocol.DescribeExpansions(result.Expansions)+(scopeWarning is null?"":" "+scopeWarning);
             var summary=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ内の文字を入力してください":$"ページ内一致 {result.Total:N0}冊")
@@ -774,12 +774,13 @@ public sealed partial class MainPage : Page
     }
     private Border CreateEvidencePill(string icon, string summary, string automationId, string styleKey)
     {
-        var display = summary.StartsWith(icon, StringComparison.Ordinal) ? summary : $"{icon} {summary}";
+        var singleLineSummary = tiles ? summary.Replace("\r\n", "\n").Replace("\n", " · ") : summary;
+        var display = singleLineSummary.StartsWith(icon, StringComparison.Ordinal) ? singleLineSummary : $"{icon} {singleLineSummary}";
         var label = new TextBlock
         {
             Text = display,
-            TextWrapping = TextWrapping.Wrap,
-            MaxLines = 2,
+            TextWrapping = tiles ? TextWrapping.NoWrap : TextWrapping.Wrap,
+            MaxLines = tiles ? 1 : 2,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Style = (Style)Resources["CaptionTextBlockStyle"],
         };
@@ -887,7 +888,7 @@ public sealed partial class MainPage : Page
         ToolTipService.SetToolTip(badgeRow, FormatRowMetadata(row, summarizeShelves: false));
         text.Children.Add(badgeRow);
         var metadata = FormatRowMetadata(row);
-        var metaBlock = new TextBlock { Tag = "ItemMeta", Text = metadata, Visibility = string.IsNullOrWhiteSpace(metadata) ? Visibility.Collapsed : Visibility.Visible, TextWrapping = TextWrapping.Wrap, MaxLines = tiles ? 2 : 3, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] };
+        var metaBlock = new TextBlock { Tag = "ItemMeta", Text = metadata, Visibility = string.IsNullOrWhiteSpace(metadata) ? Visibility.Collapsed : Visibility.Visible, TextWrapping = TextWrapping.Wrap, MaxLines = tiles ? 1 : 3, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaMetadataStyle"] };
         AutomationProperties.SetAutomationId(metaBlock, $"ItemMeta{row.Id}");
         ToolTipService.SetToolTip(metaBlock, FormatRowMetadata(row, summarizeShelves: false));
         text.Children.Add(metaBlock);
@@ -1094,7 +1095,7 @@ public sealed partial class MainPage : Page
             ConstrainCardCaption(content,text);
             // Reserve the same caption space before/after thumbnail completion;
             // the first decoded tile must not set a shorter uniform row height.
-            text.MinHeight=tiles?60:0;
+            text.MinHeight=tiles?78:0;
         }
         // Leave room for the filename and metadata even in a short window.
         var height=Math.Max(48,ItemListContainer.ActualHeight-108);
