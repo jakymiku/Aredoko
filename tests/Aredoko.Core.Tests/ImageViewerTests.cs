@@ -24,6 +24,7 @@ internal static class ImageViewerTests
         check(sequence.TryMove(1) && sequence.Current.Id==5 && sequence.HasPrevious, "sequence moves to next result image");
         check(!sequence.HasNext && !sequence.TryMove(1) && sequence.Current.Id==5, "sequence stops at last image");
         check(sequence.TryMove(-1) && sequence.Current.Id==3, "sequence moves back in search order");
+        check(sequence.TryJumpTo(1) && sequence.Current.Id==5 && sequence.TryJumpTo(0) && sequence.Current.Id==3 && !sequence.TryJumpTo(2), "TryJumpTo jumps within local sequence bounds");
         try { sequence.TryMove(2);check(false,"bad direction"); } catch(ArgumentOutOfRangeException) { check(sequence.Position==0,"bad direction leaves sequence unchanged"); }
         try { new ImageViewerSequence([absent],2);check(false,"out of scope image"); } catch(ArgumentException) { check(true,"sequence rejects absent/out of scope selection"); }
         check(new ImageViewerSequence([first,first],5).Count==1,"sequence removes duplicate IDs");

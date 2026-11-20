@@ -184,7 +184,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
             require(('query','kind','view','source','scope','literal_only','group_threshold','result_group'))
             return ai.search(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='similar':
-            require(('item_id','kind','view','scope','origin_page'))
+            require(('item_id','kind','view','scope','origin_page','origin_ms'))
             return ai.similar(page=0,limit=120,**values,cancelled=cancelled,result_sink=consume)
         if mode=='video-similar':
             require(('item_id','view','root_ids','shelf','shelf_ids','tag'))
@@ -954,6 +954,15 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                             if state.get('job_id')==body['job_id'] and state.get('state') in ('running','cancelling'):
                                 ai.cancel.set();ai.store.save_state({**state,'state':'cancelling'});accepted=True
                     return self.send(200,{'cancel_requested':accepted})
+                if self.path=='/api/library/ai/pages/all':
+                    if set(body)!={'item_id','revision','scope','profile'}:
+                        return self.send(400,{'error':'Invalid all-page request'})
+                    if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
+                    try:
+                        return self.send(200,ai.pages.start_all(body['item_id'],body['revision'],validate_scope(body['scope']),body['profile']))
+                    except ReaderChanged:return self.send(409,{'error':'Page source changed; review again'})
+                    except (PreviewUnavailable,OSError,KeyError):return self.send(404,{'error':'Page source unavailable'})
+                    except (ValueError,TypeError):return self.send(400,{'error':'Invalid all-page request'})
                 if self.path=='/api/library/ai/pages':
                     if set(body)!={'item_id','page_ids','revision','scope'}:raise ValueError('Invalid page index fields')
                     if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
@@ -1007,10 +1016,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     if not isinstance(ai,AISearch):raise AIUnavailable(ai.status()['error'])
                     return self.send(200,ai.search_requests.cancel(body['request_id']))
                 if self.path=='/api/library/ai/similar':
-                    if set(body)-{'item_id','kind','view','page','limit','scope','request_id','origin_page'}:raise ValueError('Invalid similarity request')
+                    if set(body)-{'item_id','kind','view','page','limit','scope','request_id','origin_page','origin_ms'}:raise ValueError('Invalid similarity request')
                     scope=validate_scope(body['scope']) if 'scope' in body else profiles.scope()
                     try:
-                        extra={'origin_page':body['origin_page']} if 'origin_page' in body else {}
+                        extra={}
+                        if 'origin_page' in body:extra['origin_page']=body['origin_page']
+                        if 'origin_ms' in body:extra['origin_ms']=body['origin_ms']
                         return self._search_reply(body,lambda cancelled:ai.similar(body.get('item_id'),body.get('kind',''),body.get('view','all'),
                             body.get('page',0),body.get('limit',60),scope=scope,**extra,cancelled=cancelled))
                     except KeyError:return self.send(404,{'error':'Similarity source unavailable'})

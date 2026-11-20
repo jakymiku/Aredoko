@@ -739,8 +739,8 @@ class AISearch:
         """Refuse a busy encoder; never touch the profile, catalog or vector DB."""
         return self._release()
 
-    def similar(self,item_id,kind='',view='all',page=0,limit=60,scope=None,origin_page=None,*,cancelled=None,result_sink=None):
-        """Item-origin or page-origin visual cosine search.
+    def similar(self,item_id,kind='',view='all',page=0,limit=60,scope=None,origin_page=None,origin_ms=None,*,cancelled=None,result_sink=None):
+        """Item-origin, page-origin, or video-frame-origin visual cosine search.
 
         The origin must be in scope, but need not satisfy result-only kind/view
         filters. Missing/stale cover vectors return an explicit empty fallback,
@@ -750,8 +750,12 @@ class AISearch:
             raise ValueError('Invalid item')
         if type(page) is not int or page<0 or type(limit) is not int or not 1<=limit<=120:
             raise ValueError('Invalid paging')
+        if origin_page is not None and origin_ms is not None:
+            raise ValueError('Cannot specify both origin_page and origin_ms')
         if origin_page is not None and (type(origin_page) is not int or not 0<=origin_page<10000):
             raise ValueError('Invalid origin page')
+        if origin_ms is not None and (type(origin_ms) is not int or not 0<=origin_ms<=86_400_000):
+            raise ValueError('Invalid origin timestamp')
         if not isinstance(kind,str) or kind and kind not in QUERY_KINDS or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
         scope=self._scope(scope)
@@ -767,6 +771,8 @@ class AISearch:
                     raise ValueError('Invalid similarity source')
                 if origin_page is not None and origin['kind'] not in ('book','archive'):
                     raise ValueError('Origin page requires a book or archive')
+                if origin_ms is not None and origin['kind']!='video':
+                    raise ValueError('Origin timestamp requires a video')
                 is_audio=origin['kind']=='audio'
                 result={'total':0,'items':[],'page':page,'limit':limit,'mode':'similar',
                         'origin_id':item_id,'origin_kind':origin['kind'],'origin_revision':revision(origin),'profile':self.profile.key,
@@ -774,6 +780,8 @@ class AISearch:
                         'coverage_limit':MAX_ITEMS,'similarity_status':'unsupported_profile'}
                 if origin_page is not None:
                     result['origin_page']=origin_page
+                if origin_ms is not None:
+                    result['origin_ms']=origin_ms
                 if not is_audio and 'cover' not in self.profile.modalities:
                     return result if result_sink is None else result_sink(lambda number:{**result,'page':number})
                 if is_audio:
@@ -841,6 +849,33 @@ class AISearch:
                             raise AIBusy('元ページを読み込み中です。少し待ってから再度お試しください。') from ex
                         except (PreviewUnavailable,ReaderChanged,OSError) as ex:
                             raise KeyError(item_id) from ex
+                    if query is None:
+                        empty={**result,'similarity_status':'unindexed'}
+                        return empty if result_sink is None else result_sink(lambda number:{**empty,'page':number})
+                    origin_frames=None
+                    track_origin_hits=False
+                elif origin_ms is not None:
+                    query=None
+                    if self.encoder.available:
+                        try:
+                            manifest=self.previews.video_manifest(item_id)
+                            try:
+                                frame_png,_=self.previews.video_frame(item_id,origin_ms,manifest['revision'])
+                            except PreviewUnavailable:
+                                if origin_ms<=0:raise
+                                frame_png,_=self.previews.video_frame(item_id,max(0,origin_ms-250),manifest['revision'])
+                            encoded=self.encoder.encode('image',frame_png)
+                            if encoded is not None:query=normalized(encoded,self.profile.dimension)
+                        except PreviewBusyError as ex:
+                            raise AIBusy('動画のフレームを読み込み中です。少し待ってから再度お試しください。') from ex
+                        except (PreviewUnavailable,ReaderChanged,OSError) as ex:
+                            raise KeyError(item_id) from ex
+                    else:
+                        saved_frames=self.store.video_frames(origin)
+                        if saved_frames:
+                            closest=min(saved_frames,key=lambda pair:abs(pair[0]-origin_ms))
+                            if abs(closest[0]-origin_ms)<=1000:
+                                query=closest[1]
                     if query is None:
                         empty={**result,'similarity_status':'unindexed'}
                         return empty if result_sink is None else result_sink(lambda number:{**empty,'page':number})

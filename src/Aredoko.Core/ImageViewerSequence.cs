@@ -54,6 +54,15 @@ public sealed class ImageViewerSequence
         previousExhausted = nextExhausted = false;
     }
 
+    public bool TryJumpTo(int index)
+    {
+        if (IsSession) throw new InvalidOperationException("Use asynchronous session navigation");
+        if (index < 0 || index >= Count) return false;
+        Interlocked.Increment(ref navigationVersion);
+        Position = index;
+        return true;
+    }
+
     public bool TryMove(int direction)
     {
         ValidateDirection(direction);

@@ -37,7 +37,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Border seekPreview = new() { Width=272, HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Bottom, Visibility=Visibility.Collapsed, IsHitTestVisible=false, RequestedTheme=ElementTheme.Dark };
     private CancellationTokenSource? previewRequest;
     private bool updatingSeek, seekHover, previewBusy, updatingVolume;
-    private readonly Slider volumeSlider=new(){Minimum=0,Maximum=100,StepFrequency=1,SmallChange=5,LargeChange=20,Width=112,VerticalAlignment=VerticalAlignment.Center};
+    private readonly Slider volumeSlider=new(){Minimum=0,Maximum=100,StepFrequency=1,SmallChange=5,LargeChange=20,Width=88,VerticalAlignment=VerticalAlignment.Center};
     private readonly Dictionary<int,BitmapImage> previewFrames=[];
     private readonly Queue<int> previewFrameOrder=[];
     private int previewWanted=-1, previewDisplayed=-1;
@@ -49,7 +49,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         HorizontalAlignment = HorizontalAlignment.Stretch,
         VerticalAlignment = VerticalAlignment.Stretch
     };
-    private readonly Border toolbar = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
+    private readonly Border toolbar = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center, RequestedTheme = ElementTheme.Dark };
     private readonly Button playPause = IconButton(Symbol.Play);
     private readonly Button seekBack = IconButton(Symbol.Back);
     private readonly Button seekForward = IconButton(Symbol.Forward);
@@ -57,8 +57,16 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button volumeDown = TextButton("−");
     private readonly Button volumeUp = TextButton("＋");
     private readonly Button retry = IconButton(Symbol.Refresh);
-    private readonly Button openExternal = new() { Content = "外部アプリで開く", Visibility = Visibility.Collapsed, IsEnabled = false, Padding = new Thickness(10, 4, 10, 4) };
+    private readonly Button openExternal = new() { Content = "外部アプリで開く", Visibility = Visibility.Collapsed, IsEnabled = false, Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(14) };
     private readonly Button editDetails = IconButton(Symbol.Edit);
+    private readonly Button settings = IconButton(Symbol.More);
+    private readonly Microsoft.UI.Xaml.Controls.Primitives.ToggleButton pinButton;
+    private readonly Action syncPin;
+    private readonly MenuFlyout menu = new();
+    private readonly MenuFlyoutItem? findSimilarFrame;
+    private readonly ToggleMenuFlyoutItem alwaysControlsMenuItem = new() { Text = "操作バーを常時表示" };
+    private int menuTargetMs;
+    private bool menuOpen;
     private readonly TextBlock positionText = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock volumeText = new() { Text = "80%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
@@ -77,6 +85,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     public event Action? EditDetailsRequested;
     public event Action? OpenExternalRequested;
     public event Action? ToggleMaximizeRequested;
+    public event Action<int,int>? FindSimilarFrameRequested;
     public string WindowTitle => $"{itemTitle} — Aredoko";
     public event Action<string>? TitleChanged;
 
@@ -100,32 +109,81 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         viewport.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
         viewport.Children.Add(playerElement);
         Children.Add(viewport);
-        toolbar.Style = (Style)Application.Current.Resources["ImageViewerOverlayStyle"];
+        ViewerChromeController.StyleFloatingPill(toolbar, cornerRadius: 20, padding: new Thickness(14, 8, 14, 8));
+        toolbar.MinWidth = 540;
+        toolbar.MaxWidth = 760;
+        SizeChanged += (_, _) => { toolbar.Width = ActualWidth > 0 ? Math.Clamp(ActualWidth - 48, 320, 740) : 700; };
         positionText.Style = volumeText.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
         positionText.HorizontalAlignment = HorizontalAlignment.Center;
         var actions = new Grid { ColumnSpacing = 8 };
         actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         actions.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        var playback=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
+        ViewerChromeController.StylePillButton(favorite.Button);
+        (pinButton, syncPin) = ViewerChromeController.CreatePinButton("VideoPinToolbar", () => { alwaysControlsMenuItem.IsChecked = ViewerOptions.Value.AlwaysShowControls; hideTimer?.SyncPinState(); }, ex => { ViewerNotice.Set(status, "設定を保存できませんでした。"); AppLog.Error(ex); });
+        var playback=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4};
         foreach(var control in new UIElement[]{playPause,seekBack,seekForward,favorite.Button,editDetails,retry,openExternal})playback.Children.Add(control);
         Identify(favorite.Button,isAudio?"AudioFavorite":"VideoFavorite","お気に入りを読み込み中");
         Identify(editDetails,"PlayerEditDetails","詳細で編集");
         ToolTipService.SetToolTip(editDetails,"閉じて詳細パネルを開く");
         editDetails.Click += (_, _) => EditDetailsRequested?.Invoke();
         var audio=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Right};
-        foreach(var control in new UIElement[]{mute,volumeDown,volumeSlider,volumeUp,volumeText})audio.Children.Add(control);
+        foreach(var control in new UIElement[]{mute,volumeDown,volumeSlider,volumeUp,volumeText,ViewerChromeController.Divider(),settings,pinButton})audio.Children.Add(control);
+        ViewerChromeController.ApplySliderTheme(volumeSlider);
         actions.Children.Add(playback); SetColumn(positionText,1); actions.Children.Add(positionText); SetColumn(audio,2); actions.Children.Add(audio);
         Identify(volumeSlider,"VideoVolume","音量（0〜100）");
         volumeSlider.ValueChanged+=(_,_)=>{if(updatingVolume)return;volume=VideoPlayerPolicy.ClampVolume((int)Math.Round(volumeSlider.Value));if(mediaPlayer is not null)mediaPlayer.Volume=volume/100.0;UpdateControls();ShowChrome();};
         viewport.Tapped+=(_,args)=>{if(!busy&&loaded&&!failed&&!ViewerInputGestures.IsInteractiveControl(args.OriginalSource,viewport)){args.Handled=true;tapTimer.Stop();tapTimer.Start();}};
         viewport.DoubleTapped+=(_,args)=>{if(ViewerInputGestures.IsInteractiveControl(args.OriginalSource,viewport))return;args.Handled=true;tapTimer.Stop();ToggleMaximizeRequested?.Invoke();};
-        toolbar.BorderThickness=new Thickness(0,1,0,0);toolbar.CornerRadius=new CornerRadius(0);
-        toolbar.MaxWidth=double.PositiveInfinity;toolbar.Padding=new Thickness(8,4,8,4);
-        var bottom = new StackPanel { Spacing = 4, HorizontalAlignment=HorizontalAlignment.Stretch }; bottom.Children.Add(seekBar);bottom.Children.Add(actions);
+        seekBar.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var seekHost = ViewerChromeController.WrapScrubber(seekBar, double.NaN);
+        var bottom = new StackPanel { Spacing = 6, HorizontalAlignment=HorizontalAlignment.Stretch }; bottom.Children.Add(seekHost);bottom.Children.Add(actions);
         toolbar.Child = bottom; Children.Add(toolbar);
-        ViewerChromeController.AttachNotices(this,96,status);
-        hideTimer = new(this,toolbar,viewport,()=>keyboardChrome||seekHover||busy||failed||favorite.IsSaving);
+        ViewerChromeController.AttachNotices(this,104,status);
+        hideTimer = new(this,toolbar,viewport,()=>keyboardChrome||menuOpen||seekHover||busy||failed||favorite.IsSaving);
+        AutomationProperties.SetAutomationId(alwaysControlsMenuItem,"VideoAlwaysControls");
+        alwaysControlsMenuItem.IsChecked=ViewerOptions.Value.AlwaysShowControls;
+        alwaysControlsMenuItem.Click+=(_,_)=>
+        {
+            try
+            {
+                ViewerOptions.SavePresentation(ViewerOptions.Value.EnlargeSmallImages,alwaysControlsMenuItem.IsChecked,ViewerOptions.Value.LoopBookPages);
+                syncPin();hideTimer.SyncPinState();
+            }
+            catch(Exception ex){alwaysControlsMenuItem.IsChecked=ViewerOptions.Value.AlwaysShowControls;ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);}
+        };
+        if(!isAudio)
+        {
+            findSimilarFrame=new MenuFlyoutItem{Text="≈ この場面に似た画像・動画を探す"};
+            Identify(findSimilarFrame,"VideoFindSimilarFrame","この場面に似た画像・動画を探す");
+            findSimilarFrame.Click+=(_,_)=>
+            {
+                if(busy||disposed||!loaded||failed)return;
+                var targetMs=menuTargetMs;
+                if(playing)TogglePlayPause();
+                FindSimilarFrameRequested?.Invoke(itemId,targetMs);
+            };
+            menu.Items.Add(findSimilarFrame);
+            menu.Items.Add(new MenuFlyoutSeparator());
+        }
+        menu.Items.Add(alwaysControlsMenuItem);
+        menu.Opened+=(_,_)=>
+        {
+            alwaysControlsMenuItem.IsChecked=ViewerOptions.Value.AlwaysShowControls;
+            if(findSimilarFrame is not null)
+            {
+                var pos=loaded&&mediaPlayer is not null?VideoPlayerPolicy.ClampSeek(mediaPlayer.PlaybackSession.Position,duration):position;
+                if(pos>position)position=pos;
+                menuTargetMs=(int)Math.Clamp(Math.Round(position.TotalMilliseconds),0,86_400_000);
+                var label=VideoPlayerPolicy.FormatTime(TimeSpan.FromMilliseconds(menuTargetMs));
+                findSimilarFrame.Text=playing?$"≈ 一時停止してこの場面（{label}）に似た画像・動画を探す":$"≈ この場面（{label}）に似た画像・動画を探す";
+                AutomationProperties.SetName(findSimilarFrame,findSimilarFrame.Text);
+                findSimilarFrame.IsEnabled=!busy&&!disposed&&loaded&&!failed;
+            }
+            menuOpen=true;ShowChrome();
+        };
+        menu.Closed+=(_,_)=>{menuOpen=false;hideTimer.Start();};
+        viewport.ContextFlyout=menu;settings.Flyout=menu;
         seekPreview.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
         seekTime.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         seekHint.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
@@ -138,11 +196,12 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         {
             if(!loaded||busy||failed||seekBar.ActualWidth<=0)return;
             seekHover=true;hideTimer.Stop();var point=args.GetCurrentPoint(seekBar).Position;
+            var rootX=args.GetCurrentPoint(this).Position.X;
             var seconds=Math.Clamp(point.X/seekBar.ActualWidth,0,1)*duration.TotalSeconds;
             var millis=(int)Math.Min(86_400_000,Math.Max(0,Math.Min(seconds,duration.TotalSeconds-0.05))*1000);
             previewWanted=(int)Math.Clamp(Math.Round(millis/1000.0)*1000,0,Math.Max(0,Math.Floor((duration.TotalMilliseconds-50)/1000)*1000));
             seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(previewWanted),duration).Split(" / ")[0];
-            seekPreview.Margin=new Thickness(Math.Clamp(point.X+8-136,8,Math.Max(8,ActualWidth-280)),0,0,toolbar.ActualHeight+8);
+            seekPreview.Margin=new Thickness(Math.Clamp(rootX-136,8,Math.Max(8,ActualWidth-280)),0,0,toolbar.ActualHeight+24);
             if(isAudio)
             {
                 seekHint.Visibility=Visibility.Collapsed;
@@ -163,6 +222,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         Identify(viewport, "VideoViewport", isAudio ? "音声再生。スペースで再生・一時停止、左右キーで移動" : "動画表示。スペースで再生・一時停止、左右キーで移動");
         Identify(playerElement, "VideoElement", itemTitle + (isAudio ? "の音声" : "の動画"));
         Identify(toolbar, "VideoToolbar", (isAudio ? "音声" : "動画") + "の操作");
+        Identify(settings, "VideoSettings", isAudio ? "音声のメニュー" : "動画のメニュー（この場面に似た作品を探す・操作バー設定）");
+        ToolTipService.SetToolTip(settings, isAudio ? "再生メニュー" : "メニュー（右クリックでも開けます）");
         Identify(playPause, "VideoPlayPause", "再生");
         Identify(seekBack, "VideoSeekBack", "1秒戻る"); Identify(seekForward, "VideoSeekForward", "1秒進む");
         Identify(mute, "VideoMute", "消音");
@@ -188,8 +249,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         favorite.Refresh(itemId,favoriteOrdinal);UpdateControls(); ShowChrome();
     }
 
-    private static Button IconButton(Symbol symbol) => new() { Content = new SymbolIcon(symbol), MinWidth = 36, Padding = new Thickness(8) };
-    private static Button TextButton(string label) => new() { Content = label, MinWidth = 36, Padding = new Thickness(8) };
+    private static Button IconButton(Symbol symbol) => ViewerChromeController.PillButton(symbol);
+    private static Button TextButton(string label) => ViewerChromeController.PillTextButton(label);
     private static void Identify(DependencyObject control, string id, string name)
     { AutomationProperties.SetAutomationId(control, id); AutomationProperties.SetName(control, name); }
 
@@ -487,7 +548,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         if (disposed) return;
         disposed = true;
         favorite.Dispose();
-        hideTimer.Dispose();previewTimer.Stop();tapTimer.Stop();
+        hideTimer.Dispose();menu.Hide();previewTimer.Stop();tapTimer.Stop();
         lifetime.Cancel();
         request?.Cancel();
         ClearMedia();

@@ -5,7 +5,10 @@ namespace Aredoko.Core;
 
 public static class PageChunkRequests
 {
-    public const int MaxPages=128,ChunkSize=16;
+    public const int MaxPages=128,ChunkSize=16,LargeBookWarningThreshold=100;
+    public static bool NeedsLargeBookWarning(int pageCount)=>pageCount>LargeBookWarningThreshold;
+    public static string LargeBookWarningMessage(string title,int pageCount,int remainingPages)=>
+        $"「{title}」は {pageCount:N0} ページ（未登録 {remainingPages:N0} ページ）あるため、全ページの登録に時間がかかる可能性があります。\n\n途中で中止しても、処理済みのページは保持されます。このまま全ページを登録しますか？";
     internal static string Profile(string profile)=>profile.Length is >0 and <=256?profile:throw new ArgumentException("モデル設定を確認してください。");
     internal static JsonObject Scope(JsonObject scope)
     {
@@ -45,6 +48,11 @@ public static class PageChunkRequests
         PageEvidenceProtocol.ValidateId(item);PageEvidenceProtocol.ValidateToken(revision,nameof(revision));
         if(maximum is <1 or >MaxPages)throw new ArgumentOutOfRangeException(nameof(maximum));
         return new(){{"item_id",item},{"revision",revision},{"scope",Scope(scope)},{"max_pages",maximum},{"profile",Profile(profile)}};
+    }
+    public static JsonObject AllPages(int item,string revision,JsonObject scope,string profile)
+    {
+        PageEvidenceProtocol.ValidateId(item);PageEvidenceProtocol.ValidateToken(revision,nameof(revision));
+        return new(){{"item_id",item},{"revision",revision},{"scope",Scope(scope)},{"profile",Profile(profile)}};
     }
     public static JsonObject Start(PageChunkPlan plan)
     {
@@ -137,5 +145,50 @@ public sealed record PageChunkStatus(string JobId,int ItemId,string Revision,str
         }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException or ArgumentException)
         {throw new InvalidDataException("ページの処理状況を読み取れません。",ex);}
+    }
+}
+
+public sealed record PageAllStatus(string JobId,string State,int ItemId,string Revision,string Profile,int PageCount,int AlreadyIndexed,int Processed,int Total,int Indexed,int ChunksCompleted,int ChunksTotal,string Error)
+{
+    public bool Running=>State is "running" or "cancelling";
+    public bool Complete=>State=="complete";
+    public string Summary=>Total==0
+        ?$"全 {PageCount:N0} ページはすでに登録済みです"
+        :$"全ページ処理: {AlreadyIndexed+Indexed}/{PageCount} ページ（今回 {Indexed}/{Total} · {ChunksCompleted}/{ChunksTotal}回）";
+    public static PageAllStatus Parse(byte[] bytes,string expectedProfile,string? expectedJobId,int expectedItem,string expectedRevision)
+    {
+        try
+        {
+            using var doc=JsonDocument.Parse(bytes);var r=doc.RootElement;
+            var job=TagReviewProtocol.Text(r,"job_id",32);
+            var source=TagReviewProtocol.Text(r,"source_revision",64);
+            var state=TagReviewProtocol.Text(r,"state",16);
+            var actualItem=r.GetProperty("item_id").GetInt32();
+            var profile=r.GetProperty("profile").GetString()??"";
+            var pageCount=r.GetProperty("page_count").GetInt32();
+            var alreadyIndexed=r.GetProperty("already_indexed").GetInt32();
+            var processed=r.GetProperty("processed").GetInt32();
+            var total=r.GetProperty("total").GetInt32();
+            var indexed=r.GetProperty("indexed").GetInt32();
+            var chunksCompleted=r.GetProperty("chunks_completed").GetInt32();
+            var chunksTotal=r.GetProperty("chunks_total").GetInt32();
+            var error=r.GetProperty("error").GetString();
+            if(r.GetProperty("job").GetString()!="book-pages-all"
+                ||job.Length!=32||job.Any(c=>!(c is >= '0' and <= '9' or >= 'a' and <= 'f'))
+                ||(expectedJobId is not null&&job!=expectedJobId)
+                ||actualItem!=expectedItem||source!=expectedRevision
+                ||!TagReviewProtocol.IsRevision(source)||profile!=expectedProfile||profile.Length is <1 or >256
+                ||state is not ("running" or "cancelling" or "complete" or "cancelled" or "interrupted" or "failed")
+                ||pageCount is <1 or >10000||alreadyIndexed<0||alreadyIndexed>pageCount
+                ||total!=pageCount-alreadyIndexed||processed<0||processed>total
+                ||indexed<0||indexed>total||chunksTotal!=(total+15)/16
+                ||chunksCompleted<0||chunksCompleted>chunksTotal
+                ||(state=="complete"&&(indexed!=total||processed!=total))
+                ||error is null||error.Length>1024)
+                throw new InvalidDataException("全ページ登録の状況が変わりました。");
+            return new(job,state,actualItem,source,profile,pageCount,alreadyIndexed,processed,total,indexed,chunksCompleted,chunksTotal,error);
+        }
+        catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException or ArgumentException)
+        {throw new InvalidDataException("全ページ登録の状況を読み取れません。",ex);}
     }
 }

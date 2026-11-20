@@ -150,6 +150,13 @@ static class SimilarityTests
         })));
         try{await oversized.SimilarAsync(7,"","all",0,scope,null,CancellationToken.None);check(false,"oversized response");}
         catch(InvalidDataException){check(true,"oversized response rejected before JSON parsing");}
+
+        var frameReq=SimilaritySearch.Request(7,"image","all",0,scope,originMs:12500);
+        check(frameReq["origin_ms"]!.GetValue<int>()==12500&&!frameReq.ContainsKey("origin_page"),"origin_ms serialized on video frame similarity request");
+        var condFrame=ResultSearchConditions.Create("","video","all",SearchMethod.FromIndex(0),scope,null,originId:7,originMs:4200)!;
+        check(condFrame["origin_ms"]!.GetValue<int>()==4200&&condFrame["kind"]!.GetValue<string>()=="video","ResultSearchConditions carries origin_ms and kind filter");
+        var mutuallyExclusive=false;try{SimilaritySearch.Request(7,"","all",0,scope,originPage:1,originMs:100);}catch(ArgumentException){mutuallyExclusive=true;}
+        check(mutuallyExclusive,"originPage and originMs cannot both be specified");
     }
     private static string Response()=>"""{"total":0,"items":[],"similarity_status":"unindexed","origin_id":7,"origin_revision":"0000000000000000000000000000000000000000000000000000000000000000","profile":"test-profile","page":0,"limit":60,"mode":"similar","source":"cover","score_kind":"cosine"}""";
     private static void Reject(Action<bool,string> check,string text,string name)

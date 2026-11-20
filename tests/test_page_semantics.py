@@ -407,5 +407,154 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         with self.assertRaises(ValueError):
             self.ai.similar(match_id, scope=all_scope, origin_page=0)
 
+    def test_start_all_pages_http_and_cancellation(self):
+        import zipfile
+        big_cbz = self.loose / 'big_18.cbz'
+        with zipfile.ZipFile(big_cbz, 'w') as zf:
+            for idx in range(18):
+                zf.writestr(f'{idx:03d}.png', png(color=(90, 80, 70) if idx == 17 else (10 + idx, 20, 30)))
+        self.scan()
+        big_id = self.ids['big_18.cbz']
+        self.pages.refresh(big_id)
+        big_rev = self.pages.list(big_id)['source_revision']
+        big_scope = {'root_ids': [self.root]}
+
+        server = ThreadingHTTPServer(('127.0.0.1', 0), production_handler(self.catalog, 'test', ai=self.ai))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close); self.addCleanup(server.shutdown)
+        origin = f'http://127.0.0.1:{server.server_port}'
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+        def post(path, payload):
+            req = urllib.request.Request(origin + path, json.dumps(payload).encode(),
+                headers={'Origin': origin, 'X-Aredoko-Token': 'test', 'Content-Type': 'application/json'})
+            try:
+                resp = opener.open(req, timeout=5)
+            except urllib.error.HTTPError as ex:
+                resp = ex
+            with resp:
+                return resp.code, json.loads(resp.read())
+
+        code, bad = post('/api/library/ai/pages/all', {'item_id': big_id, 'revision': big_rev, 'scope': big_scope, 'profile': 'wrong'})
+        self.assertEqual(code, 400)
+        code, stale = post('/api/library/ai/pages/all', {'item_id': big_id, 'revision': '0'*64, 'scope': big_scope, 'profile': self.ai.profile.key})
+        self.assertEqual(code, 409)
+
+        entered = threading.Event(); proceed = threading.Event(); self.addCleanup(proceed.set)
+        calls = 0
+        def cancel_hook(*_):
+            nonlocal calls
+            calls += 1
+            if calls == 18:
+                entered.set()
+                proceed.wait(5)
+        self.encoder.hook = cancel_hook
+        code, body = post('/api/library/ai/pages/all', {'item_id': big_id, 'revision': big_rev, 'scope': big_scope, 'profile': self.ai.profile.key})
+        self.assertEqual(code, 200)
+        self.assertEqual((body['job'], body['page_count'], body['chunks_total']), ('book-pages-all', 18, 2))
+        self.assertTrue(entered.wait(5))
+        c_code, c_body = post('/api/library/ai/pages/cancel', {'job_id': body['job_id']})
+        self.assertEqual(c_code, 200)
+        self.assertTrue(c_body['cancel_requested'])
+        proceed.set()
+        self.ai.worker.join(10)
+        self.assertEqual(self.ai.status()['state'], 'cancelled')
+        with self.ai.store.connect() as db:
+            partial_count = db.execute('SELECT count(*) FROM ai_page_vectors WHERE item_id=?', (big_id,)).fetchone()[0]
+        self.assertEqual(partial_count, 16)
+
+        self.encoder.hook = None
+        code, body2 = post('/api/library/ai/pages/all', {'item_id': big_id, 'revision': big_rev, 'scope': big_scope, 'profile': self.ai.profile.key})
+        self.assertEqual(code, 200)
+        self.assertEqual((body2['already_indexed'], body2['total'], body2['chunks_total']), (16, 2, 1))
+        self.ai.worker.join(10)
+        self.assertEqual(self.ai.status()['state'], 'complete')
+        with self.ai.store.connect() as db:
+            full_count = db.execute('SELECT count(*) FROM ai_page_vectors WHERE item_id=?', (big_id,)).fetchone()[0]
+        self.assertEqual(full_count, 18)
+
+        code, body3 = post('/api/library/ai/pages/all', {'item_id': big_id, 'revision': big_rev, 'scope': big_scope, 'profile': self.ai.profile.key})
+        self.assertEqual(code, 200)
+        self.assertEqual((body3['state'], body3['total'], body3['already_indexed']), ('complete', 0, 18))
+
+    def test_video_frame_origin_ms_similarity_and_cross_media_kind_filter(self):
+        from ai_search import revision
+        match_img = self.loose / 'near_frame.png'
+        match_img.write_bytes(png(color=(90, 80, 70)))
+        vid_origin = self.loose / 'origin_clip.mp4'
+        vid_cand = self.loose / 'cand_clip.mp4'
+        vid_origin.write_bytes(b'ftypmp42' + b'\0' * 128)
+        vid_cand.write_bytes(b'ftypmp42' + b'\1' * 128)
+        self.scan()
+        img_id = self.ids['near_frame.png']
+        vo_id = self.ids['origin_clip.mp4']
+        vc_id = self.ids['cand_clip.mp4']
+
+        all_scope = {'root_ids': [self.root], 'book_pages': 'all_pages'}
+        # Index images + book pages on axis 1 where appropriate
+        self.ai.start(scope=all_scope)
+        self.ai.worker.join(10)
+        # Ensure video candidate has representative frame matching axis 1
+        vc_row = self.catalog.get(vc_id)
+        vo_row = self.catalog.get(vo_id)
+        axis1 = [float(i == 1) for i in range(self.ai.profile.dimension)]
+        axis0 = [float(i == 0) for i in range(self.ai.profile.dimension)]
+        self.ai.store.put(vc_id, revision(vc_row), {'text': axis0, 'cover': axis1}, video_frames=[(3000, axis1)])
+        self.ai.store.put(vo_id, revision(vo_row), {'text': axis0, 'cover': axis0}, video_frames=[(0, axis0)])
+        # Ensure book page 1 matches axis 1 (comic page 1 color != (90,80,70), so set page 1 vector directly)
+        with self.ai.store.connect() as db:
+            from array import array
+            blob = array('f', axis1).tobytes()
+            db.execute('INSERT OR REPLACE INTO ai_page_vectors VALUES(?,?,?,?,?,?)',
+                       (self.item, self.revision, self.page_ids[1], 1, blob, 'book-page-image:v1'))
+
+        server = ThreadingHTTPServer(('127.0.0.1', 0), production_handler(self.catalog, 'test', ai=self.ai))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close); self.addCleanup(server.shutdown)
+        origin = f'http://127.0.0.1:{server.server_port}'
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+        def post(path, payload):
+            req = urllib.request.Request(origin + path, json.dumps(payload).encode(),
+                headers={'Origin': origin, 'X-Aredoko-Token': 'test', 'Content-Type': 'application/json'})
+            with opener.open(req, timeout=5) as resp:
+                return json.loads(resp.read())
+
+        req_id = post('/api/library/ai/searches/prepare', {})['request_id']
+        seen_calls = []
+        def fake_frame(item_id, at_ms, rev):
+            seen_calls.append(at_ms)
+            if at_ms == 1500:
+                raise PreviewUnavailable('eof')
+            return png(color=(90, 80, 70)), 'image/png'
+
+        with patch.object(self.ai.previews, 'video_manifest', return_value={'revision': 'a' * 64}), \
+             patch.object(self.ai.previews, 'video_frame', side_effect=fake_frame):
+            mixed = post('/api/library/ai/similar', {'item_id': vo_id, 'kind': '', 'view': 'all', 'page': 0, 'limit': 60, 'scope': all_scope, 'origin_ms': 1500, 'request_id': req_id})
+            self.assertEqual(seen_calls, [1500, 1250])
+            self.assertEqual(mixed['origin_ms'], 1500)
+            self.assertEqual(mixed['similarity_status'], 'ready')
+            mixed_kinds = {it['kind']: it for it in mixed['items']}
+            self.assertEqual(set(mixed_kinds), {'image', 'book', 'video'})
+            self.assertIn('ai_page_match', mixed_kinds['book'])
+            self.assertEqual(mixed_kinds['video']['video_match_ms'], 3000)
+
+            req_img = post('/api/library/ai/searches/prepare', {})['request_id']
+            only_img = post('/api/library/ai/similar', {'item_id': vo_id, 'kind': 'image', 'view': 'all', 'page': 0, 'limit': 60, 'scope': all_scope, 'origin_ms': 1250, 'request_id': req_img})
+            self.assertEqual({it['kind'] for it in only_img['items']}, {'image'})
+            self.assertIn(img_id, [it['id'] for it in only_img['items']])
+
+            req_vid = post('/api/library/ai/searches/prepare', {})['request_id']
+            only_vid = post('/api/library/ai/similar', {'item_id': vo_id, 'kind': 'video', 'view': 'all', 'page': 0, 'limit': 60, 'scope': all_scope, 'origin_ms': 1250, 'request_id': req_vid})
+            self.assertEqual([it['id'] for it in only_vid['items']], [vc_id])
+
+        # Validation guards
+        with self.assertRaises(ValueError):
+            self.ai.similar(vo_id, scope=all_scope, origin_ms=-1)
+        with self.assertRaises(ValueError):
+            self.ai.similar(self.item, scope=all_scope, origin_page=0, origin_ms=0)
+        with self.assertRaises(ValueError):
+            self.ai.similar(img_id, scope=all_scope, origin_ms=100)
+
 
 if __name__=='__main__':unittest.main()

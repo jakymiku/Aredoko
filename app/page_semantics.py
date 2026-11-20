@@ -1,5 +1,6 @@
 """Explicit, bounded book-page embeddings; no OCR or source-media writes."""
 from array import array
+import copy
 import itertools
 import math
 import operator
@@ -15,6 +16,7 @@ from previews import ReaderChanged, PreviewBusyError, PreviewUnavailable
 
 CONTRACT = 'book-page-image:v1'
 MAX_PAGES = 16
+ALL_JOB = 'book-pages-all'
 _HEX64 = re.compile(r'[0-9a-f]{64}').fullmatch
 SCHEMA = '''CREATE TABLE IF NOT EXISTS ai_page_vectors(
     item_id INTEGER NOT NULL, source_revision TEXT NOT NULL, page_id TEXT NOT NULL,
@@ -209,6 +211,103 @@ class PageVectors:
         from page_chunks import start_chunked
         return start_chunked(self.ai, item_id, page_ids, revision, scope,
                              self.ai.profile.key, chunk_size=chunk_size)
+
+    def start_all(self, item_id, revision, scope, profile):
+        """Index every remaining page of one book/archive in atomic 16-page ranges."""
+        from ai_search import AIBusy
+        identifier(item_id); token(revision)
+        ai = self.ai
+        if type(profile) is not str or profile != ai.profile.key:
+            raise ValueError('AI profile changed')
+        scope = ai._scope(scope)
+        if scope is None:
+            raise ValueError('Explicit scope required')
+        if not ai.encoder.available or 'cover' not in ai.profile.modalities:
+            raise AIUnavailable('選択中のモデルでは画像のAI検索を利用できません。')
+        with ai.guard:
+            if ai._closed:
+                raise AIUnavailable('AI is closing')
+            if ai.worker and ai.worker.is_alive():
+                raise AIBusy('AI索引を作成中です。')
+            with ai.catalog._guard:
+                ai.catalog._require_idle()
+                row = ai._current_rows([item_id], scope).get(item_id)
+                if row is None or row['kind'] not in ('book', 'archive'):
+                    raise KeyError('Page source unavailable')
+                with ai.catalog.connect() as db:
+                    self.index._allowed(db, item_id)
+                    head = self.index._head(db, item_id)
+                    if head is None:
+                        raise KeyError('Page source unavailable')
+                    if head['source_revision'] != revision:
+                        raise ReaderChanged('Page source changed')
+                    entries = [dict(p) for p in db.execute(
+                        'SELECT page_id,page FROM page_entries WHERE snapshot_id=? ORDER BY page',
+                        (head['id'],))]
+                if self.index.state(item_id, revision) != 'current':
+                    raise ReaderChanged('Page source changed')
+            with ai.store.connect() as db:
+                ready = {
+                    pid for pid, data in db.execute(
+                        'SELECT page_id,vector FROM ai_page_vectors WHERE item_id=? AND source_revision=? AND contract=?',
+                        (item_id, revision, CONTRACT))
+                    if _is_valid_packed(data, ai.profile.dimension)
+                }
+            missing = [p for p in entries if p['page_id'] not in ready]
+            already = len(entries) - len(missing)
+            if not missing:
+                return {
+                    'state': 'complete', 'job': ALL_JOB, 'job_id': secrets.token_hex(16),
+                    'item_id': item_id, 'source_revision': revision, 'profile': profile,
+                    'scope': copy.deepcopy(scope), 'page_count': len(entries),
+                    'already_indexed': already, 'processed': 0, 'total': 0,
+                    'indexed': 0, 'reused': 0, 'skipped': 0,
+                    'chunks_total': 0, 'chunks_completed': 0, 'error': '',
+                }
+            ai.cancel.clear()
+            state = {
+                'state': 'running', 'job': ALL_JOB, 'job_id': secrets.token_hex(16),
+                'item_id': item_id, 'source_revision': revision, 'profile': profile,
+                'scope': copy.deepcopy(scope), 'page_count': len(entries),
+                'already_indexed': already, 'processed': 0, 'total': len(missing),
+                'indexed': 0, 'reused': 0, 'skipped': 0,
+                'chunks_total': (len(missing) + MAX_PAGES - 1) // MAX_PAGES,
+                'chunks_completed': 0, 'error': '',
+            }
+            initial = copy.deepcopy(state)
+            ai.store.save_state(state)
+            ai.worker = threading.Thread(target=self._build_all, args=(missing, state), daemon=True)
+            ai.worker.start()
+        return initial
+
+    def _build_all(self, missing, state):
+        ai = self.ai; item_id = state['item_id']; revision = state['source_revision']
+        try:
+            with ai.inference:
+                for offset in range(0, len(missing), MAX_PAGES):
+                    if ai.cancel.is_set():
+                        raise InterruptedError()
+                    chunk = missing[offset:offset + MAX_PAGES]
+                    with ai.catalog._guard:
+                        ai.catalog._require_idle()
+                        if ai._current_rows([item_id], state['scope']).get(item_id) is None:
+                            raise KeyError('Page source unavailable')
+                        self.selection(item_id, [p['page_id'] for p in chunk], revision)
+                    self._publish_range(chunk, state, item_id, revision)
+                    state['indexed'] += len(chunk)
+                    state['chunks_completed'] += 1
+                    with ai.guard:
+                        ai.store.save_state(state)
+                state['state'] = 'complete'
+        except InterruptedError:
+            state['state'] = 'cancelled'
+        except Exception as ex:
+            state['state'] = 'failed'
+            state['error'] = 'ページ索引を保存できませんでした（'+type(ex).__name__+'）。元ファイル・登録範囲を確認して再実行してください。'
+        finally:
+            ai._last_activity = time.monotonic()
+            with ai.guard:
+                ai.store.save_state(state)
 
     def start(self, item_id, page_ids, revision, scope):
         from ai_search import AIBusy

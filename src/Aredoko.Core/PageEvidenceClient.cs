@@ -358,6 +358,18 @@ public sealed class PageEvidenceClient(HttpClient client)
         return status;
     }
 
+    public async Task<PageAllStatus> StartAllPagesAsync(int itemId,string revision,JsonObject scope,string profile,CancellationToken cancellation=default)
+    {
+        var bytes=await ReadAsync("api/library/ai/pages/all",PageChunkRequests.AllPages(itemId,revision,scope,profile),PageEvidenceProtocol.MaxJsonBytes,cancellation);
+        return PageAllStatus.Parse(bytes,profile,null,itemId,revision);
+    }
+
+    public async Task<PageAllStatus> AllPagesStatusAsync(PageAllStatus owned,CancellationToken cancellation=default)
+    {
+        var bytes=await ReadAsync("api/library/ai/status",null,PageEvidenceProtocol.MaxJsonBytes,cancellation);
+        return PageAllStatus.Parse(bytes,owned.Profile,owned.JobId,owned.ItemId,owned.Revision);
+    }
+
     public async Task<PageImageCoverage> ImageCoverageAsync(int itemId,string revision,JsonObject scope,string? expectedProfile=null,CancellationToken cancellation=default)
     {
         PageEvidenceProtocol.ValidateId(itemId);PageEvidenceProtocol.ValidateToken(revision,nameof(revision));

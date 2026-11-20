@@ -39,11 +39,18 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, RequestedTheme = ElementTheme.Dark
     };
-    private readonly Border toolbar = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0), RequestedTheme = ElementTheme.Dark };
+    private readonly Border toolbar = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Center, RequestedTheme = ElementTheme.Dark };
     private readonly Button previous = IconButton(Symbol.Back), next = IconButton(Symbol.Forward), zoomOut = IconButton(Symbol.ZoomOut), zoomIn = IconButton(Symbol.ZoomIn);
     private readonly Button fit = IconButton(Symbol.FullScreen), retry = IconButton(Symbol.Refresh), reopen = IconButton(Symbol.RepeatAll), settings = IconButton(Symbol.Setting);
     private readonly Button editDetails = IconButton(Symbol.Edit);
-    private readonly Button actualSize=new(){Content="1:1",MinWidth=36,Padding=new Thickness(8)};
+    private readonly Button actualSize=ViewerChromeController.PillTextButton("1:1");
+    private readonly Microsoft.UI.Xaml.Controls.Primitives.ToggleButton pinButton;
+    private readonly Action syncPin;
+    private readonly Slider pageScrubber = new() { Minimum = 1, Maximum = 1, Value = 1, SmallChange = 1, LargeChange = 5, StepFrequency = 1, IsThumbToolTipEnabled = false };
+    private readonly Border scrubberHost;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer scrubTimer;
+    private int scrubTargetPage;
+    private bool updatingScrubber, scrubberDragging;
     private readonly TextBlock count = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) };
     private readonly TextBlock zoom = new() { Text = "100%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
@@ -85,23 +92,45 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
             if(error is not null){keyboardChrome=true;ShowChrome();}
             if(error is not null)AppLog.Error(error);
         };
-        hideTimer=new(this,toolbar,viewport,()=>keyboardChrome||menuOpen||favorite.IsSaving);
-        menu=ViewerChromeController.Settings(true,()=>{FitImages();UpdateActions();hideTimer.Start();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
+        hideTimer=new(this,toolbar,viewport,()=>keyboardChrome||menuOpen||scrubberDragging||favorite.IsSaving);
+        scrubTimer=DispatcherQueue.CreateTimer();scrubTimer.Interval=TimeSpan.FromMilliseconds(60);scrubTimer.IsRepeating=false;
+        scrubTimer.Tick+=async(_,_)=>
+        {
+            if(disposed||closing||manifest is null)return;
+            if(busy){scrubTimer.Stop();scrubTimer.Start();return;}
+            var anchor=ReaderSpreadPolicy.Anchor(scrubTargetPage,manifest.PageCount,mode);
+            if(anchor==page)return;
+            allowProgressSave=true;
+            await LoadAsync(anchor);
+        };
+        scrubberHost=ViewerChromeController.WrapScrubber(pageScrubber,168);
+        scrubberHost.Visibility=Visibility.Collapsed;
+        (pinButton,syncPin)=ViewerChromeController.CreatePinButton("ReaderPinToolbar",()=>hideTimer.SyncPinState(),ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
+        menu=ViewerChromeController.Settings(true,()=>{syncPin();hideTimer.SyncPinState();FitImages();UpdateActions();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
         viewport.Style=(Style)Application.Current.Resources["ImageViewerCanvasStyle"];
-        toolbar.Style=(Style)Application.Current.Resources["ImageViewerOverlayStyle"];
-        // Edge overlays must paint the last pixel; a translucent stroke reveals the page underneath.
-        toolbar.BorderThickness=new Thickness(0);
+        ViewerChromeController.StyleFloatingPill(toolbar);
         pages.Children.Add(image);pages.Children.Add(second);canvas.Children.Add(pages);viewport.Content=canvas;Children.Add(viewport);
         viewport.SizeChanged+=(_,_)=>FitImages();viewport.ViewChanged+=(_,_)=>UpdateActions();
         count.Style=zoom.Style=status.Style=progressStatus.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         ViewerInputGestures.AttachPan(viewport);
-        var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,HorizontalAlignment=HorizontalAlignment.Center};
-        foreach(var control in new UIElement[]{previous,count,next,zoomOut,zoomIn,fit,actualSize,zoom,favorite.Button,editDetails,retry,reopen,settings})actions.Children.Add(control);
+        ViewerChromeController.StylePillButton(favorite.Button);
+        var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Center};
+        foreach(var control in new UIElement[]{fit,actualSize,zoomOut,zoomIn,zoom,ViewerChromeController.Divider(),previous,count,next,scrubberHost,ViewerChromeController.Divider(),favorite.Button,editDetails,retry,reopen,settings,pinButton})actions.Children.Add(control);
+        Identify(pageScrubber,"ReaderPageSeek","ページ位置の移動");
+        pageScrubber.AddHandler(PointerPressedEvent,new PointerEventHandler((_,_)=>{scrubberDragging=true;hideTimer.Show();}),true);
+        pageScrubber.AddHandler(PointerReleasedEvent,new PointerEventHandler((_,_)=>{scrubberDragging=false;hideTimer.Start();}),true);
+        pageScrubber.PointerCaptureLost+=(_,_)=>{scrubberDragging=false;};
+        pageScrubber.ValueChanged+=(_,_)=>
+        {
+            if(updatingScrubber||disposed||closing||manifest is null)return;
+            scrubTargetPage=Math.Clamp((int)Math.Round(pageScrubber.Value)-1,0,manifest.PageCount-1);
+            scrubTimer.Stop();scrubTimer.Start();
+        };
         Identify(favorite.Button,"ReaderFavorite","お気に入りを読み込み中");
         Identify(editDetails,"ReaderEditDetails","詳細で編集");
         ToolTipService.SetToolTip(editDetails,"閉じて詳細パネルを開く");
         editDetails.Click+=(_,_)=>EditDetailsRequested?.Invoke();
-        toolbar.Child=actions;Children.Add(toolbar);ViewerChromeController.AttachNotices(this,status,progressStatus);
+        toolbar.Child=actions;Children.Add(toolbar);ViewerChromeController.AttachNotices(this,76,status,progressStatus);
         Identify(actualSize,"ReaderActualSize","本のページを原寸で表示");ToolTipService.SetToolTip(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）");
         actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImages();viewport.ChangeView(0,0,1,true);}else ViewerInputGestures.ZoomCentered(viewport,(float)OriginalZoom());};
         Identify(viewport,"ReaderViewport","本の表示。左右キーでページ送り、右クリックで表示設定");Identify(image,"ReaderImage","本のページ");Identify(second,"ReaderImageSecond","見開きのもう一方のページ");
@@ -129,17 +158,17 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
             {
                 if(currentPageIndexes.Length==1)
                 {
-                    findSimilarPage1.Text=$"≈ このページ（{currentPageIndexes[0]+1}ページ目）に似た画像を探す";
+                    findSimilarPage1.Text=$"≈ このページ（{currentPageIndexes[0]+1}ページ目）に似た画像・動画を探す";
                     AutomationProperties.SetName(findSimilarPage1,findSimilarPage1.Text);
                     findSimilarPage1.IsEnabled=true;findSimilarPage1.Visibility=Visibility.Visible;
                     findSimilarPage2.Visibility=Visibility.Collapsed;
                 }
                 else
                 {
-                    findSimilarPage1.Text=$"≈ {currentPageIndexes[0]+1}ページ目に似た画像を探す";
+                    findSimilarPage1.Text=$"≈ {currentPageIndexes[0]+1}ページ目に似た画像・動画を探す";
                     AutomationProperties.SetName(findSimilarPage1,findSimilarPage1.Text);
                     findSimilarPage1.IsEnabled=true;findSimilarPage1.Visibility=Visibility.Visible;
-                    findSimilarPage2.Text=$"≈ {currentPageIndexes[1]+1}ページ目に似た画像を探す";
+                    findSimilarPage2.Text=$"≈ {currentPageIndexes[1]+1}ページ目に似た画像・動画を探す";
                     AutomationProperties.SetName(findSimilarPage2,findSimilarPage2.Text);
                     findSimilarPage2.IsEnabled=true;findSimilarPage2.Visibility=Visibility.Visible;
                 }
@@ -160,7 +189,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         UpdateActions();
         favorite.Refresh(itemId,favoriteOrdinal);
     }
-    private static Button IconButton(Symbol symbol)=>new(){Content=new SymbolIcon(symbol),MinWidth=36,Padding=new Thickness(8)};
+    private static Button IconButton(Symbol symbol)=>ViewerChromeController.PillButton(symbol);
     private static void Identify(DependencyObject control,string id,string name){AutomationProperties.SetAutomationId(control,id);AutomationProperties.SetName(control,name);}
     private void ShowChrome()=>hideTimer.Show();
     public void FocusViewport()=>viewport.Focus(FocusState.Programmatic);
@@ -350,6 +379,20 @@ public void AttachNavigation(UIElement dialog)
         editDetails.IsEnabled=!closing&&!disposed;
         foreach(var option in modes)option.IsEnabled=!blocked;saveProgress.IsEnabled=!blocked&&loaded&&manifest is not null;
         zoom.Text=$"{viewport.ZoomFactor/OriginalZoom()*100:0}%";zoomOut.IsEnabled=loaded&&!busy&&viewport.ZoomFactor>viewport.MinZoomFactor;zoomIn.IsEnabled=loaded&&!busy&&viewport.ZoomFactor<viewport.MaxZoomFactor;actualSize.IsEnabled=loaded&&!busy;fit.IsEnabled=loaded&&!busy;
+        var hasMultiPages=manifest is {PageCount:>1};
+        scrubberHost.Visibility=hasMultiPages?Visibility.Visible:Visibility.Collapsed;
+        pageScrubber.IsEnabled=!blocked&&loaded&&hasMultiPages;
+        if(manifest is {} currentBook)
+        {
+            updatingScrubber=true;
+            try
+            {
+                pageScrubber.Maximum=Math.Max(1,currentBook.PageCount);
+                pageScrubber.Value=Math.Clamp(page+1,1,currentBook.PageCount);
+            }
+            finally{updatingScrubber=false;}
+            ToolTipService.SetToolTip(pageScrubber,$"{page+1} / {currentBook.PageCount}ページ");
+        }
     }
-    public void Dispose(){if(disposed)return;disposed=true;favorite.Dispose();hideTimer.Dispose();menu.Hide();preload?.Cancel();lifetime.Cancel();pageCache.Dispose();ClearImages();manifest=null;lifetime.Dispose();}
+    public void Dispose(){if(disposed)return;disposed=true;scrubTimer.Stop();favorite.Dispose();hideTimer.Dispose();menu.Hide();preload?.Cancel();lifetime.Cancel();pageCache.Dispose();ClearImages();manifest=null;lifetime.Dispose();}
 }

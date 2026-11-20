@@ -63,6 +63,23 @@ internal static class PageChunkTests
         check(route=="/api/library/ai/pages/chunked/resume"&&body!["job_id"]!.GetValue<string>()==job&&resumed.JobId!=saved.JobId,"chunk resume uses saved job and accepts own new ID");
         currentResponse["page_ids"]![0]=new string('e',64);refused=false;try{await api.PageEvidences.ChunkStatusAsync(resumed);}catch(InvalidDataException){refused=true;}
         check(refused,"chunk polling rejects replaced page selection");
+
+        check(!PageChunkRequests.NeedsLargeBookWarning(100)&&PageChunkRequests.NeedsLargeBookWarning(101),"large book warning triggers strictly over 100 pages");
+        check(PageChunkRequests.LargeBookWarningMessage("big.cbz",105,40).Contains("105")&&PageChunkRequests.LargeBookWarningMessage("big.cbz",105,40).Contains("40"),"large book warning includes page counts");
+        var allReq=PageChunkRequests.AllPages(7,rev,scope,profile);
+        check(allReq["item_id"]!.GetValue<int>()==7&&allReq["profile"]!.GetValue<string>()==profile,"all-pages request includes item and profile");
+        JsonObject AllStatus(string state="running",int total=18,int processed=16,int indexed=16,int chunksComplete=1)=>new(){
+            {"job","book-pages-all"},{"job_id",job},{"item_id",7},{"source_revision",rev},{"profile",profile},
+            {"page_count",20},{"already_indexed",2},{"processed",processed},{"total",total},{"indexed",indexed},
+            {"chunks_total",2},{"chunks_completed",chunksComplete},{"state",state},{"error",""}};
+        var parsedAll=PageAllStatus.Parse(Bytes(AllStatus()),profile,job,7,rev);
+        check(parsedAll.Running&&!parsedAll.Complete&&parsedAll.Indexed==16&&parsedAll.ChunksCompleted==1,"all-pages status parses running progress");
+        currentResponse=AllStatus();
+        var startedAll=await api.PageEvidences.StartAllPagesAsync(7,rev,scope,profile);
+        check(route=="/api/library/ai/pages/all"&&startedAll.JobId==job,"all-pages client posts to /api/library/ai/pages/all");
+        currentResponse=AllStatus(state:"complete",processed:18,indexed:18,chunksComplete:2);
+        var polledAll=await api.PageEvidences.AllPagesStatusAsync(startedAll);
+        check(polledAll.Complete&&!polledAll.Running&&polledAll.Indexed==18,"all-pages polling parses completion");
     }
     private sealed class Stub(Func<HttpRequestMessage,Task<HttpResponseMessage>> response):HttpMessageHandler
     {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellation)=>response(request);}
