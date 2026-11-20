@@ -3031,11 +3031,27 @@ public sealed partial class MainPage : Page
             var hasNameFilter=!string.IsNullOrWhiteSpace(FolderFilterBox.Text);
             var state=FolderStateFilter.SelectedIndex;
             ClearFolderFilters.Visibility=FolderFilterBox.Text.Length>0||state!=0?Visibility.Visible:Visibility.Collapsed;
-            FolderEmpty.Text=knownRoots.Count==0
-                ? "ここにフォルダをドロップ、または［＋ フォルダを追加］"
-                : !hasNameFilter&&state==0&&!knownRoots.Any(root=>root.Enabled)
-                    ? "登録中のフォルダはありません"
-                    : "該当するフォルダはありません";
+            if(knownRoots.Count==0)
+            {
+                FolderEmptyTitle.Text="まだ登録フォルダがありません";
+                FolderEmpty.Text="ここにフォルダをドロップ、または［＋ フォルダを追加］から登録できます（元のファイルは移動・変更しません）。";
+                FolderEmptyAddButton.Visibility=Visibility.Visible;
+                FolderEmptyClearFiltersButton.Visibility=Visibility.Collapsed;
+            }
+            else if(!hasNameFilter&&state==0&&!knownRoots.Any(root=>root.Enabled))
+            {
+                FolderEmptyTitle.Text="登録中のフォルダはありません";
+                FolderEmpty.Text="解除済みのフォルダは上の表示状態を「すべて」に切り替えると確認できます。";
+                FolderEmptyAddButton.Visibility=Visibility.Visible;
+                FolderEmptyClearFiltersButton.Visibility=Visibility.Collapsed;
+            }
+            else
+            {
+                FolderEmptyTitle.Text="該当するフォルダはありません";
+                FolderEmpty.Text="絞り込み条件に一致する登録フォルダがありません。";
+                FolderEmptyAddButton.Visibility=Visibility.Collapsed;
+                FolderEmptyClearFiltersButton.Visibility=Visibility.Visible;
+            }
             FolderList.Items.Clear();
             FolderList.ItemsPanel=(ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(folderTiles
                 ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1\"/></ItemsPanelTemplate>"
@@ -3177,7 +3193,7 @@ public sealed partial class MainPage : Page
                 item.ContextFlyout=menu;
                 FolderList.Items.Add(item);
             }
-            FolderEmpty.Visibility=visible.Count==0?Visibility.Visible:Visibility.Collapsed;
+            FolderEmptyState.Visibility=FolderEmpty.Visibility=visible.Count==0?Visibility.Visible:Visibility.Collapsed;
             UpdateFolderSelectionBar();
         }
         finally{folderPopulating=false;}

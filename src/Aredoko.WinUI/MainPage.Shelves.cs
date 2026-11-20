@@ -98,22 +98,27 @@ public sealed partial class MainPage
             Busy.Visibility=Visibility.Collapsed;CancelSearchButton.Visibility=Visibility.Collapsed;
             RenderShelfLayout();RestoreNavigation();await ReloadShelfHubAsync();RecordNavigationLocation();
         }
-        catch(Exception ex){Failure(ex);ShelfHubMessage.Text="棚を取得できませんでした。「更新」で再試行できます。";ShelfHubMessage.Visibility=Visibility.Visible;}
+        catch(Exception ex){Failure(ex);ShelfHubStatus.Text="棚を取得できませんでした。「更新」で再試行できます。";ShelfHubStatus.Visibility=Visibility.Visible;ShelfEmptyState.Visibility=Visibility.Collapsed;}
         finally{transitions.Release();}
     }
     private async Task ReloadShelfHubAsync()
     {
-        ShelfHubMessage.Text="読み込み中…";
-        ShelfHubMessage.Visibility=Visibility.Visible;
+        ShelfHubStatus.Text="読み込み中…";
+        ShelfHubStatus.Visibility=Visibility.Visible;
+        ShelfEmptyState.Visibility=Visibility.Collapsed;
         await RefreshShelfDescriptorsAsync();
         if(disposed||!shelfHubOpen)return;
         shelfRefresh.Clear();
         foreach(var load in shelfLoads.Values){load.Cancel();load.Dispose();}shelfLoads.Clear();
         shelfKeys.Clear();foreach(var shelf in shelfDescriptors)shelfKeys.Add(shelf.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var hasShelves=shelfDescriptors.Count>0;
         Count.Text=$"{shelfDescriptors.Count:N0} 棚";
         OpenMultipleShelvesButton.IsEnabled=shelfDescriptors.Count>1;
-        ShelfHubMessage.Text=shelfDescriptors.Count==0?"棚で作品をまとめられます。「棚を作成」から追加できます。":"";
-        ShelfHubMessage.Visibility=shelfDescriptors.Count==0?Visibility.Visible:Visibility.Collapsed;
+        ShelfViewTools.Visibility=hasShelves?Visibility.Visible:Visibility.Collapsed;
+        ShelfHubStatus.Text="";
+        ShelfHubStatus.Visibility=Visibility.Collapsed;
+        ShelfHubMessage.Text=hasShelves?"":"お気に入りのシリーズや作業用の素材をテーマごとにまとめられます。「棚を作成」から追加できます（元ファイルは移動しません）。";
+        ShelfEmptyState.Visibility=hasShelves?Visibility.Collapsed:Visibility.Visible;
     }
     private Task OpenShelfItemsAsync(long id)=>OpenShelfScopeAsync(new[]{id});
     private async Task OpenShelfScopeAsync(IReadOnlyList<long> ids)

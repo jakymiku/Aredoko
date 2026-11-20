@@ -494,16 +494,26 @@
       <Button Content="棚を作成" Style="{StaticResource AccentButtonStyle}" Click="CreateShelf_Click" AutomationProperties.AutomationId="BtnCreateShelf"/>
       <Button x:Name="OpenMultipleShelvesButton" Content="複数選択して開く…" IsEnabled="False" Click="OpenMultipleShelves_Click" AutomationProperties.AutomationId="BtnOpenMultipleShelves"/>
       <Button Content="更新" Click="RefreshShelves_Click" AutomationProperties.AutomationId="BtnRefreshShelves"/>
-      <Border CornerRadius="{ThemeResource ControlCornerRadius}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" Padding="2">
-       <StackPanel Orientation="Horizontal" Spacing="2">
-        <Button x:Name="ShelfLayoutButton" MinWidth="32" Padding="8,5" Click="LayoutList_Click" ToolTipService.ToolTip="リスト表示" AutomationProperties.Name="リスト表示" AutomationProperties.AutomationId="BtnShelfLayout"><FontIcon Glyph="&#xE8FD;" FontSize="14"/></Button>
-        <Button x:Name="ShelfLayoutGridButton" MinWidth="32" Padding="8,5" Click="LayoutGrid_Click" ToolTipService.ToolTip="グリッド表示" AutomationProperties.Name="グリッド表示" AutomationProperties.AutomationId="BtnShelfLayoutGrid"><FontIcon Glyph="&#xE8A9;" FontSize="14"/></Button>
-       </StackPanel>
-      </Border>
-      <Button Content="サイズ" Click="ShelfSize_Click" AutomationProperties.Name="表示サイズ" AutomationProperties.AutomationId="BtnShelfSize"/>
+      <StackPanel x:Name="ShelfViewTools" Orientation="Horizontal" Spacing="8">
+       <Border CornerRadius="{ThemeResource ControlCornerRadius}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" Padding="2">
+        <StackPanel Orientation="Horizontal" Spacing="2">
+         <Button x:Name="ShelfLayoutButton" MinWidth="32" Padding="8,5" Click="LayoutList_Click" ToolTipService.ToolTip="リスト表示" AutomationProperties.Name="リスト表示" AutomationProperties.AutomationId="BtnShelfLayout"><FontIcon Glyph="&#xE8FD;" FontSize="14"/></Button>
+         <Button x:Name="ShelfLayoutGridButton" MinWidth="32" Padding="8,5" Click="LayoutGrid_Click" ToolTipService.ToolTip="グリッド表示" AutomationProperties.Name="グリッド表示" AutomationProperties.AutomationId="BtnShelfLayoutGrid"><FontIcon Glyph="&#xE8A9;" FontSize="14"/></Button>
+        </StackPanel>
+       </Border>
+       <Button Content="サイズ" Click="ShelfSize_Click" AutomationProperties.Name="表示サイズ" AutomationProperties.AutomationId="BtnShelfSize"/>
+      </StackPanel>
      </StackPanel>
-     <TextBlock x:Name="ShelfHubMessage" Grid.Row="1" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="TxtShelfHubMessage"/>
+     <TextBlock x:Name="ShelfHubStatus" Grid.Row="1" Visibility="Collapsed" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.LiveSetting="Polite"/>
      <ListView x:Name="ShelfList" SizeChanged="ShelfList_SizeChanged" PointerWheelChanged="Library_PointerWheelChanged" ItemTemplate="{StaticResource MediaContainerTemplate}" ItemContainerStyle="{StaticResource MediaItemCardStyle}" Grid.Row="2" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ShelfList_ItemClick" ContainerContentChanging="ShelfList_ContainerContentChanging" HorizontalContentAlignment="Stretch" AutomationProperties.Name="棚一覧" AutomationProperties.AutomationId="ShelfList"/>
+     <Border x:Name="ShelfEmptyState" Grid.Row="2" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}" Padding="32,28" Margin="24" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
+      <StackPanel Spacing="12" HorizontalAlignment="Center">
+       <FontIcon Glyph="&#xE8F1;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
+       <TextBlock Text="まだ棚がありません" Style="{StaticResource SubtitleTextBlockStyle}" TextAlignment="Center"/>
+       <TextBlock x:Name="ShelfHubMessage" Text="お気に入りのシリーズや作業用の素材をテーマごとにまとめられます。「棚を作成」から追加できます（元ファイルは移動しません）。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap" TextAlignment="Center" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="TxtShelfHubMessage"/>
+       <Button x:Name="ShelfEmptyCreateButton" Content="＋ 最初の棚を作成" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Center" Margin="0,4,0,0" Click="CreateShelf_Click" AutomationProperties.AutomationId="BtnCreateFirstShelf"/>
+      </StackPanel>
+     </Border>
     </Grid>
     <Grid x:Name="FolderHubView" SizeChanged="FolderHub_SizeChanged" AllowDrop="True" DragOver="Folder_DragOver" Drop="Folder_Drop" Grid.Row="1" Grid.RowSpan="3" Margin="0,0,12,0" Visibility="Collapsed" RowSpacing="12">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -580,7 +590,17 @@
      </Border>
      <Grid Grid.Row="3">
       <ListView x:Name="FolderList" SelectionMode="Single" HorizontalContentAlignment="Stretch" AutomationProperties.Name="登録フォルダ一覧" AutomationProperties.AutomationId="FolderList"/>
-      <TextBlock x:Name="FolderEmpty" Text="条件に一致する登録フォルダはありません。「＋ フォルダを追加」から登録できます。" Visibility="Collapsed" TextWrapping="Wrap" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center" AutomationProperties.AutomationId="TxtFolderEmpty"/>
+      <Border x:Name="FolderEmptyState" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}" Padding="32,28" Margin="24" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
+       <StackPanel Spacing="12" HorizontalAlignment="Center">
+        <FontIcon Glyph="&#xE8B7;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
+        <TextBlock x:Name="FolderEmptyTitle" Text="まだ登録フォルダがありません" Style="{StaticResource SubtitleTextBlockStyle}" TextAlignment="Center"/>
+        <TextBlock x:Name="FolderEmpty" Text="ここにフォルダをドロップ、または［＋ フォルダを追加］から登録できます（元のファイルは移動・変更しません）。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap" TextAlignment="Center" AutomationProperties.AutomationId="TxtFolderEmpty"/>
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,4,0,0">
+         <Button x:Name="FolderEmptyAddButton" Content="＋ フォルダを追加" Style="{StaticResource AccentButtonStyle}" Click="ToggleAddFolder_Click" AutomationProperties.AutomationId="BtnFolderEmptyAdd"/>
+         <Button x:Name="FolderEmptyClearFiltersButton" Content="絞り込み解除" Visibility="Collapsed" Click="ClearFolderFilters_Click" AutomationProperties.AutomationId="BtnFolderEmptyClearFilters"/>
+        </StackPanel>
+       </StackPanel>
+      </Border>
      </Grid>
     </Grid>
     <Grid x:Name="SettingsHubView" Grid.Row="1" Grid.RowSpan="3" Visibility="Collapsed" Margin="0,0,12,0" RowSpacing="12" AutomationProperties.AutomationId="SettingsDialog" AutomationProperties.Name="設定">
