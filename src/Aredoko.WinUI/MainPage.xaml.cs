@@ -2076,6 +2076,8 @@ public sealed partial class MainPage : Page
         var unselected=ThemeStyle("UnselectedSegmentButtonStyle");
         if(SearchCategoryTextButton is not null)SearchCategoryTextButton.Style=isAIMode?unselected:selected;
         if(SearchCategoryAIButton is not null)SearchCategoryAIButton.Style=isAIMode?selected:unselected;
+        if(SearchCategorySegment is not null)SearchCategorySegment.Style=ThemeStyle(isAIMode?"AISearchSegmentBorderStyle":"SearchSegmentBorderStyle");
+        Query.Style=isAIMode?ThemeStyle("AIHeroQueryTextBoxStyle"):null;
         for(var i=0;i<SearchMode.Items.Count;i++)
             if(SearchMode.Items[i] is ComboBoxItem option)
                 option.Visibility=(i is not (0 or 4 or 5))==isAIMode?Visibility.Visible:Visibility.Collapsed;
@@ -2673,12 +2675,12 @@ public sealed partial class MainPage : Page
     private void SearchToolbarPart_SizeChanged(object sender,SizeChangedEventArgs e)=>UpdateSearchToolbarLayout();
     private void UpdateSearchToolbarLayout()
     {
-        if(ViewTools is null||SearchFilterTools is null||LibraryLayout is null||SearchTools is null)return;
+        if(ViewTools is null||SearchFilterTools is null||SearchCategorySegment is null||LibraryLayout is null||SearchTools is null)return;
         // Inline details and long search labels change the usable width.
-        // Keep the query usable and wrap only the group that does not fit.
-        var queryWidth=180+SearchButton.DesiredSize.Width+(CancelSearchButton.Visibility==Visibility.Visible?CancelSearchButton.DesiredSize.Width:0)+24;
+        // Keep the hero command bar grouped and wrap only the filter cluster.
+        var queryWidth=SearchCategorySegment.DesiredSize.Width+220+SearchButton.DesiredSize.Width+(CancelSearchButton.Visibility==Visibility.Visible?CancelSearchButton.DesiredSize.Width+8:0)+32;
         var filterWrap=LibraryLayout.ActualWidth<queryWidth+SearchFilterTools.DesiredSize.Width;
-        Grid.SetRow(SearchFilterTools,filterWrap?1:0);Grid.SetColumn(SearchFilterTools,filterWrap?0:1);Grid.SetColumnSpan(SearchFilterTools,filterWrap?4:1);
+        Grid.SetRow(SearchFilterTools,filterWrap?1:0);Grid.SetColumn(SearchFilterTools,filterWrap?0:4);Grid.SetColumnSpan(SearchFilterTools,filterWrap?5:1);
         SearchFilterTools.Margin=filterWrap?new Thickness(0,8,0,0):new Thickness(0);
         // The star column clips HeadingTools.DesiredSize; its horizontal
         // children still expose the natural width needed for the full title.
