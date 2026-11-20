@@ -135,8 +135,11 @@ public sealed partial class MainPage
             ApplyRuntimeVerificationSnapshot(statusData);
             var available=statusData["available"]?.GetValue<bool>()==true;
             var accent=ThemeStyle("AccentButtonStyle");
+            var subtle=ThemeStyle("UnselectedSegmentButtonStyle");
             if(SettingsAIIndexButton is not null)SettingsAIIndexButton.Style=available?accent:null;
-            if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?null:accent;
+            if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?subtle:accent;
+            if(SettingsAISetupPlanButton is not null)SettingsAISetupPlanButton.Style=available?subtle:null;
+            if(SettingsAISetupRowLabel is not null)SettingsAISetupRowLabel.Text=available?"環境の再構成・用途選び：":"初回セットアップ：";
             var state=statusData["state"]?.GetValue<string>()??"idle";
             var processed=statusData["processed"]?.GetValue<int>()??0;
             var total=statusData["total"]?.GetValue<int>()??0;
