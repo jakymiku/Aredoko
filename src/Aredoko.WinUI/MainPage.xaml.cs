@@ -703,11 +703,11 @@ public sealed partial class MainPage : Page
         int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) &&
         rowById.TryGetValue(id, out var row) ? row : null;
 
-    private void SyncRowsState()
+    private void SyncRowsState(bool updateCaptionHeight = true)
     {
         rowById.Clear();
         foreach (var row in rows) rowById[row.Id] = row;
-        cachedGridCaptionMinHeight = ComputeGridCaptionMinHeight();
+        if (updateCaptionHeight) cachedGridCaptionMinHeight = ComputeGridCaptionMinHeight();
     }
 
     private void SyncItemsWrapGridSize()
@@ -1337,6 +1337,10 @@ public sealed partial class MainPage : Page
                 h += EstimateTilePillHeight("💬", Protocol.DescribeEvidence(r.Evidence));
             if (h > maxHeight) maxHeight = h;
         }
+        if (similarityOrigin is not null || SearchMethod.FromIndex(SearchMode.SelectedIndex).IsAI)
+        {
+            if (maxHeight < 72.0) maxHeight = 72.0;
+        }
         return maxHeight;
     }
     private double GridCaptionMinHeight()=>tiles?cachedGridCaptionMinHeight:0;
@@ -1656,9 +1660,14 @@ public sealed partial class MainPage : Page
             Items.UpdateLayout();
             Items.ScrollIntoView(key);
             Items.UpdateLayout();
-            if(Items.ContainerFromItem(key) is ListViewItem target&&target.IsLoaded&&target.Focus(FocusState.Keyboard)&&target.FocusState!=FocusState.Unfocused)return;
+            if(Items.ContainerFromItem(key) is ListViewItem target&&target.IsLoaded)
+            {
+                UpdateSelectionFrame(target);
+                if(target.Focus(FocusState.Keyboard)&&target.FocusState!=FocusState.Unfocused)return;
+            }
             await Task.Delay(30);
         }
+        if(Items.ContainerFromItem(key) is ListViewItem realized)UpdateSelectionFrame(realized);
     }
     private static string AvailabilityLabel(string state) => state switch { "present" => "登録済み", "missing" => "ファイル不明", "unavailable" => "接続・更新を確認", _ => state };
     private int detailPreviewId;
@@ -1694,7 +1703,11 @@ public sealed partial class MainPage : Page
         }finally{transitions.Release();if((PendingAutoSearch)&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
     private async void Items_Changed(object sender,SelectionChangedEventArgs e)=>await ChangeLibrarySelectionAsync();
-    private void UpdateSelectionFrame(ListViewItem item)=>item.Style=(Style)Resources[item.IsSelected?"MediaItemSelectedCardStyle":"MediaItemCardStyle"];
+    private void UpdateSelectionFrame(ListViewItem item)
+    {
+        var selected=item.IsSelected||(item.Tag is int id&&librarySelection.Contains(id));
+        item.Style=(Style)Resources[selected?"MediaItemSelectedCardStyle":"MediaItemCardStyle"];
+    }
     private int? detailScrollItemId;
     private bool detailScrollResetPending, revertStatusActive;
     private void ApplySelectedRow(MediaRow row)
@@ -2641,6 +2654,7 @@ public sealed partial class MainPage : Page
             var canCrossNavigate=session is not null&&!resultsNeedRefresh&&selectedIndex>=0;
             var favorites=canCrossNavigate?ViewerFavoriteSession(session):null;
             var ordinal=selectedIndex>=0?checked(browseStart+selectedIndex):0;
+            lastOpened=initialRow.Id;lastOrdinal=ordinal;
             var currentRowsById=new Dictionary<int,MediaRow>();
             foreach(var row in rows)currentRowsById[row.Id]=row;
             currentRowsById[initialRow.Id]=initialRow;
@@ -2685,6 +2699,10 @@ public sealed partial class MainPage : Page
                 var viewer=new ImageViewerView(api,seq,favorites,visualNeighborFn,visualAtOrdinalFn);
                 imageViewer=viewer;
                 viewer.FavoriteChanged+=TrackFavorite;
+                viewer.CurrentItemChanged+=(id,pos)=>{
+                    lastOpened=id;lastOrdinal=pos;currentOrdinal=pos;
+                    if(currentRowsById.TryGetValue(id,out var hit))currentRow=hit;
+                };
                 viewer.ContentOpened+=id=>{
                     lastOpened=id;lastOrdinal=seq.Position;currentOrdinal=seq.Position;
                     if(currentRowsById.TryGetValue(id,out var hit))currentRow=hit;

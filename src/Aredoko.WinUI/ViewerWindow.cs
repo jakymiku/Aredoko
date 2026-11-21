@@ -13,12 +13,15 @@ internal sealed class ViewerWindow : Window
     [DllImport("user32.dll", SetLastError=true)] private static extern IntPtr SetWindowLongPtrW(IntPtr hwnd,int index,IntPtr value);
     [DllImport("user32.dll")] private static extern bool EnableWindow(IntPtr hwnd,bool enabled);
     [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr SendMessageW(IntPtr hwnd,uint msg,IntPtr wParam,IntPtr lParam);
     private readonly TaskCompletionSource closed=new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IntPtr owner;
     private readonly UIElement? ownerContent;
     private readonly bool ownerWasEnabled;
     private bool ownerWasHitTestVisible=true;
     private bool ownerSuspended;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? ownerToolTipSweepTimer;
+    private int ownerToolTipSweepCount;
     private IViewerWindowTitle? titleSource;
     private bool preparingClose,closePrepared;
     public Func<Task>? BeforeCloseAsync {get;set;}
@@ -57,12 +60,30 @@ internal sealed class ViewerWindow : Window
     {
         if(ownerContent?.XamlRoot is not { } root)return;
         foreach(var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(root))
-            if(popup.Child is ToolTip tip)tip.IsOpen=false;
+            if(popup.Child is ToolTip tip){tip.IsOpen=false;popup.IsOpen=false;}
+    }
+    private void StartOwnerToolTipSweep()
+    {
+        ownerToolTipSweepCount=0;
+        if(ownerToolTipSweepTimer is null)
+        {
+            ownerToolTipSweepTimer=DispatcherQueue.CreateTimer();
+            ownerToolTipSweepTimer.Interval=TimeSpan.FromMilliseconds(100);
+            ownerToolTipSweepTimer.Tick+=(_,_)=>
+            {
+                DismissOwnerToolTips();
+                if(++ownerToolTipSweepCount>=6)ownerToolTipSweepTimer?.Stop();
+            };
+        }
+        ownerToolTipSweepTimer.Stop();
+        ownerToolTipSweepTimer.Start();
     }
     private void SuspendOwner()
     {
         if(ownerSuspended)return;
         ownerSuspended=true;
+        SendMessageW(owner,0x001F,IntPtr.Zero,IntPtr.Zero);
+        SendMessageW(owner,0x02A3,IntPtr.Zero,IntPtr.Zero);
         ownerWasHitTestVisible=ownerContent?.IsHitTestVisible??true;
         if(ownerContent is not null)ownerContent.IsHitTestVisible=false;
         DismissOwnerToolTips();
@@ -70,6 +91,7 @@ internal sealed class ViewerWindow : Window
     }
     private void RestoreOwner()
     {
+        ownerToolTipSweepTimer?.Stop();
         if(!ownerSuspended)return;
         ownerSuspended=false;
         if(ownerContent is not null)ownerContent.IsHitTestVisible=ownerWasHitTestVisible;
@@ -101,7 +123,7 @@ internal sealed class ViewerWindow : Window
         {
             Activate();
             DismissOwnerToolTips();
-            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,DismissOwnerToolTips);
+            StartOwnerToolTipSweep();
             _ = load();
             await closed.Task;
         }

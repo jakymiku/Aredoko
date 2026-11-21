@@ -197,24 +197,44 @@ public sealed partial class MainPage
 
     private async Task RestoreViewerSelectionAsync(int itemId, int ordinal, ResultSession session, bool detailsWereOpen)
     {
-        if (disposed || PendingSearch || !ReferenceEquals(resultSession, session)) return;
+        if (disposed || !ReferenceEquals(resultSession, session)) return;
         if (active?.Id == itemId)
         {
             // Do not reload or overwrite a tag/shelf draft for the original row.
-            RestoreSelection(); await FocusRowAsync(itemId); return;
+            if (SelectionPosition(itemId) is { } samePos)
+            {
+                BindLibrarySelection();
+                librarySelection.Single(samePos);
+            }
+            RestoreSelection(); await FocusRowAsync(itemId); UpdateLibrarySelectionTools(); return;
         }
         if (Dirty && !await ConfirmDiscardAsync()) return;
         var targetPage = ordinal / resultPageSize;
-        if (ordinal<browseStart||ordinal>=browseStart+rows.Count)
+        if (ordinal < browseStart || ordinal >= browseStart + rows.Count)
         {
-            page = targetPage; await LoadAsync(reuseSession: true);
-            if (disposed || PendingSearch || !ReferenceEquals(resultSession, session)) return;
+            var start = Math.Clamp(targetPage * resultPageSize, 0, Math.Max(0, session.Total - 1));
+            var count = Math.Min(resultPageSize, session.Total - start);
+            if (resultWindow is not { } window || count <= 0) return;
+            var result = await window.ReadAsync(start, count, CancellationToken.None);
+            if (disposed || !ReferenceEquals(resultSession, session)) return;
+            ResetBrowse(start, result);
+            rows = browseBuffer!.Items.ToList();
+            SyncRowsState();
+            page = start / resultPageSize;
+            RenderRows();
+            UpdateBrowseFooter(FormatLoadedPageRange(start, rows.Count, browseBuffer.Total), start > 0, browseBuffer.End < browseBuffer.Total);
         }
         var selected = rows.FirstOrDefault(row => row.Id == itemId);
         if (selected is null) return;
+        if (SelectionPosition(selected.Id) is { } pos)
+        {
+            BindLibrarySelection();
+            librarySelection.Single(pos);
+        }
         ApplySelectedRow(selected); RestoreSelection();
         Details.IsPaneOpen = detailsWereOpen;
         await FocusRowAsync(itemId);
+        UpdateLibrarySelectionTools();
     }
 
     private async Task CloseResultsAndApiAsync(ResultSession session)

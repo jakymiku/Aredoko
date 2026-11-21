@@ -144,40 +144,39 @@ public sealed partial class MainPage
             var result=await window.ReadAsync(offset,count,token);
             if(disposed||token.IsCancellationRequested||!ReferenceEquals(session,resultSession)||!ReferenceEquals(buffer,browseBuffer))return;
             var previousStart=buffer.Start;
-            var previousCaptionHeight=cachedGridCaptionMinHeight;
             var needAnchor=forward?(buffer.Items.Count+result.Items.Count>buffer.MaxCapacity):true;
             var anchor=needAnchor?CaptureBrowseAnchor():null;
-            buffer.Extend(offset,result);browseStart=buffer.Start;rows=buffer.Items.ToList();SyncRowsState();
-            if(tiles&&Math.Abs(cachedGridCaptionMinHeight-previousCaptionHeight)>0.1)
-            {
-                SyncItemsWrapGridSize();
-                foreach(var item in containerCleanup.Keys.ToArray())
-                    if(item.ContentTemplateRoot is Border { Child: Grid content }&&content.Children.OfType<StackPanel>().FirstOrDefault() is {} text)
-                        text.MinHeight=GridCaptionMinHeight();
-            }
+            buffer.Extend(offset,result);browseStart=buffer.Start;rows=buffer.Items.ToList();SyncRowsState(updateCaptionHeight:false);
             var startShifted=buffer.Start!=previousStart;
             var wasPopulating=populating;populating=true;
             try
             {
                 if(forward&&!startShifted)
                 {
-                    foreach(var added in result.Items)resultKeys.Add(RowKey(added.Id));
+                    foreach(var added in result.Items)
+                    {
+                        var key=RowKey(added.Id);
+                        resultKeys.Add(key);
+                        if(librarySelection.Contains(added.Id))Items.SelectedItems.Add(key);
+                    }
                 }
                 else if(forward)
                 {
                     var evicted=Math.Max(0,buffer.Start-previousStart);
                     for(var i=0;i<evicted&&resultKeys.Count>0;i++)resultKeys.RemoveAt(0);
                     foreach(var added in result.Items)resultKeys.Add(RowKey(added.Id));
+                    RestoreSelection();
                 }
                 else
                 {
                     var wanted=rows.Select(row=>RowKey(row.Id)).ToArray();var keep=wanted.ToHashSet();
                     for(var i=resultKeys.Count-1;i>=0;i--)if(!keep.Contains(resultKeys[i]))resultKeys.RemoveAt(i);
                     for(var i=0;i<wanted.Length;i++)if(i>=resultKeys.Count||resultKeys[i]!=wanted[i])resultKeys.Insert(i,wanted[i]);
+                    RestoreSelection();
                 }
-                RestoreSelection();
             }
             finally{populating=wasPopulating;}
+            if(forward&&!startShifted&&librarySelection.Count>0)UpdateLibrarySelectionTools();
             if(startShifted)
             {
                 Items.UpdateLayout();await RestoreBrowseAnchorAsync(anchor);

@@ -37,6 +37,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     public event Action<string>? TitleChanged;
     private bool keyboardChrome, failed;
     public event Action<int>? ContentOpened;
+    public event Action<int,int>? CurrentItemChanged;
     public event EventHandler? CloseRequested;
     public event Action? EditDetailsRequested;
     public event Action? ToggleMaximizeRequested;
@@ -198,6 +199,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private void UpdateIdentity()
     {
         TitleChanged?.Invoke(WindowTitle);
+        CurrentItemChanged?.Invoke(sequence.Current.Id, sequence.Position);
         title.Text = sequence.Current.Title;
         count.Text = $"{sequence.Position + 1} / {sequence.Count}";
         AutomationProperties.SetName(image, title.Text + "の画像");
