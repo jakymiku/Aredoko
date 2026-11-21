@@ -2605,8 +2605,8 @@ public sealed partial class MainPage : Page
         if(disposed||saving||dialogOpen||active?.Id!=itemId)return;
         if(ImageViewerPolicy.CanOpen(active))await OpenImageAsync();
         else if(ArchiveManifest.CanOpen(active))await OpenBookAsync();
-        else if(VideoPlayerPolicy.CanOpen(active))await OpenVideoAsync();
-        else if(AudioPlayerPolicy.CanOpen(active))await OpenAudioAsync();
+        else if(VideoPlayerPolicy.CanOpen(active))await OpenVideoAsync(autoPlay:true);
+        else if(AudioPlayerPolicy.CanOpen(active))await OpenAudioAsync(autoPlay:true);
     }
     private async void OpenImage_Click(object sender,RoutedEventArgs e)=>await OpenImageAsync();
     private static ResultSession? ViewerFavoriteSession(ResultSession? session)
@@ -2832,11 +2832,11 @@ public sealed partial class MainPage : Page
     }
     private async void OpenBook_Click(object sender,RoutedEventArgs e)=>await OpenBookAsync();
     private async void OpenVideo_Click(object sender,RoutedEventArgs e)=>await OpenVideoAsync();
-    private Task OpenVideoAsync()=>OpenPlayerAsync(isAudio:false);
+    private Task OpenVideoAsync(bool autoPlay=false)=>OpenPlayerAsync(isAudio:false,autoPlay:autoPlay);
     private async void OpenAudio_Click(object sender,RoutedEventArgs e)=>await OpenAudioAsync();
-    private Task OpenAudioAsync()=>OpenPlayerAsync(isAudio:true);
+    private Task OpenAudioAsync(bool autoPlay=false)=>OpenPlayerAsync(isAudio:true,autoPlay:autoPlay);
 
-    private async Task OpenPlayerAsync(bool isAudio)
+    private async Task OpenPlayerAsync(bool isAudio,bool autoPlay=false)
     {
         if(active is not {} playerRow || !(isAudio ? AudioPlayerPolicy.CanOpen(playerRow) : VideoPlayerPolicy.CanOpen(playerRow))
             || saving || dialogOpen || !await transitions.WaitAsync(0))return;
@@ -2853,7 +2853,7 @@ public sealed partial class MainPage : Page
             var selectedIndex=rows.FindIndex(row=>row.Id==itemId);
             var favorites=!resultsNeedRefresh&&selectedIndex>=0?ViewerFavoriteSession(resultSession):null;
             var start=isAudio ? playerRow.AudioMatchMs??playerRow.VideoMatchMs : VideoPlayerPolicy.MatchStartMs(playerRow);
-            var player=new VideoPlayerView(api,itemId,playerRow.Title,start,isAudio,favorites,Math.Max(0,browseStart+selectedIndex));
+            var player=new VideoPlayerView(api,itemId,playerRow.Title,start,isAudio,favorites,Math.Max(0,browseStart+selectedIndex),autoPlay:autoPlay);
             videoPlayer=player;
             var window=new ViewerWindow(player,isAudio?"音声再生":"動画再生",isAudio?"AudioPlayerDialog":"VideoPlayerDialog");
             viewerWindow=window;

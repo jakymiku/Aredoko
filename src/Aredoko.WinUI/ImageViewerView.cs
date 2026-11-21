@@ -32,6 +32,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button settings = IconButton(Symbol.Setting);
     private bool menuOpen, updatingScrubber, scrubberDragging;
     private int scrubTargetOrdinal;
+    private int? pendingScrubOrdinal;
     public string WindowTitle=>$"{sequence.Current.Title}（{sequence.Position+1}/{sequence.Count}）— Aredoko";
     public event Action<string>? TitleChanged;
     private bool keyboardChrome, failed;
@@ -86,15 +87,19 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         favorite=new(favoriteSession,message=>ViewerNotice.Set(status,message));
         favorite.Attach();favorite.Changed+=(id,value,kept)=>FavoriteChanged?.Invoke(id,value,kept);
         favorite.ReturnRequested+=()=>CloseRequested?.Invoke(this,EventArgs.Empty);
-        favorite.StateChanged+=()=>{if(favorite.IsSaving)ShowChrome();UpdateControls();};
+        favorite.StateChanged+=()=>{if(favorite.IsSaving)ShowChrome();UpdateControls();hideTimer?.RefreshHoverHint();};
         hideTimer = new(this,toolbarHost,viewport,()=>keyboardChrome||menuOpen||scrubberDragging||favorite.IsSaving);
         animTimer = DispatcherQueue.CreateTimer(); animTimer.IsRepeating = false;
         animTimer.Tick += (_, _) => AdvanceAnimationFrame();
         scrubTimer = DispatcherQueue.CreateTimer(); scrubTimer.Interval = TimeSpan.FromMilliseconds(80); scrubTimer.IsRepeating = false;
-        scrubTimer.Tick += async (_, _) => await JumpToOrdinalAsync(scrubTargetOrdinal);
+        scrubTimer.Tick += async (_, _) =>
+        {
+            if (scrubberDragging) return;
+            await JumpToOrdinalAsync(scrubTargetOrdinal);
+        };
         scrubberHost = ViewerChromeController.WrapScrubber(sequenceScrubber, 160);
         scrubberHost.Visibility = sequence.Count > 1 && (!sequence.IsSession || visualAtOrdinal is not null) ? Visibility.Visible : Visibility.Collapsed;
-        (pinButton, syncPin) = ViewerChromeController.CreatePinButton("ImagePinToolbar", () => hideTimer.SyncPinState(), ex => { ViewerNotice.Set(status, "設定を保存できませんでした。"); AppLog.Error(ex); });
+        (pinButton, syncPin) = ViewerChromeController.CreatePinButton("ImagePinToolbar", () => { hideTimer.SyncPinState(); hideTimer.RefreshHoverHint(); }, ex => { ViewerNotice.Set(status, "設定を保存できませんでした。"); AppLog.Error(ex); });
         ViewerChromeController.StyleFloatingPill(toolbarHost);
         viewport.Style = (Style)Application.Current.Resources["ImageViewerCanvasStyle"];
         canvas.Children.Add(image); viewport.Content = canvas; Children.Add(viewport);
@@ -105,18 +110,19 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
         foreach (var control in new UIElement[] { fit, actualSize, zoomOut, zoomIn, zoom, ViewerChromeController.Divider(), previous, count, next, scrubberHost, ViewerChromeController.Divider(), favorite.Button, editDetails, retry, settings, pinButton }) actions.Children.Add(control);
         Identify(sequenceScrubber, "ImageSequenceSeek", "作品位置の移動");
-        sequenceScrubber.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => { scrubberDragging = true; hideTimer.Show(); }), true);
-        sequenceScrubber.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, _) => { scrubberDragging = false; hideTimer.Start(); }), true);
-        sequenceScrubber.PointerCaptureLost += (_, _) => { scrubberDragging = false; };
+        sequenceScrubber.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => { scrubberDragging = true; scrubTimer.Stop(); hideTimer.Show(); }), true);
+        sequenceScrubber.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, _) => FinishScrubDrag()), true);
+        sequenceScrubber.PointerCaptureLost += (_, _) => FinishScrubDrag();
+        sequenceScrubber.PointerCanceled += (_, _) => FinishScrubDrag();
         sequenceScrubber.ValueChanged += (_, _) =>
         {
             if (updatingScrubber || disposed || sequence.Count <= 1) return;
             scrubTargetOrdinal = Math.Clamp((int)Math.Round(sequenceScrubber.Value) - 1, 0, sequence.Count - 1);
+            if (scrubberDragging) { count.Text = $"{scrubTargetOrdinal + 1} / {sequence.Count}"; return; }
             scrubTimer.Stop(); scrubTimer.Start();
         };
         Identify(favorite.Button,"ImageFavorite","お気に入りを読み込み中");
         Identify(editDetails,"ImageEditDetails","詳細で編集");
-        ToolTipService.SetToolTip(editDetails,"閉じて詳細パネルを開く");
         editDetails.Click+=(_,_)=>EditDetailsRequested?.Invoke();
         toolbarHost.Child=actions;Children.Add(toolbarHost);ViewerChromeController.AttachNotices(this,76,status);
         title.Style = count.Style = zoom.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
@@ -125,23 +131,34 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         Identify(toolbarHost, "ImageToolbar", "画像の操作");
         Identify(previous, "ImagePrevious", "前の画像"); Identify(next, "ImageNext", "次の画像");
         Identify(zoomOut, "ImageZoomOut", "画像を縮小"); Identify(zoomIn, "ImageZoomIn", "画像を拡大");
-        Identify(actualSize,"ImageActualSize","画像を原寸で表示");ToolTipService.SetToolTip(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）");
+        Identify(actualSize,"ImageActualSize","画像を原寸で表示");
         Identify(fit, "ImageFit", "画像の表示をリセット"); Identify(retry, "ImageRetry", "画像を再試行");
-        ToolTipService.SetToolTip(previous, "前の画像（←）"); ToolTipService.SetToolTip(next, "次の画像（→）");
-        ToolTipService.SetToolTip(zoomOut, "縮小"); ToolTipService.SetToolTip(zoomIn, "拡大");
-        ToolTipService.SetToolTip(fit, "画面に合わせる"); ToolTipService.SetToolTip(retry, "読み込みを再試行");
         AutomationProperties.SetAutomationId(title, "ImageTitle"); AutomationProperties.SetAutomationId(count, "ImagePosition");
         AutomationProperties.SetAutomationId(zoom, "ImageZoomStatus"); AutomationProperties.SetAutomationId(status, "ImageStatus");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        Identify(settings,"ImageSettings","画像ビューアの設定");ToolTipService.SetToolTip(settings,"表示・操作バーの設定");
-        var menu=ViewerChromeController.Settings(false,()=>{syncPin();hideTimer.SyncPinState();FitImage();UpdateControls();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
+        Identify(settings,"ImageSettings","画像ビューアの設定");
+        foreach (var (button, hint) in new (FrameworkElement, string)[] {
+            (fit, "画面に合わせる"),
+            (actualSize, "原寸表示（画像の1pxを画面の1pxで表示）"),
+            (zoomOut, "縮小"),
+            (zoomIn, "拡大"),
+            (previous, "前の画像（←）"),
+            (next, "次の画像（→）"),
+            (editDetails, "詳細でタグ・棚を編集（ビューアを閉じる）"),
+            (retry, "再試行"),
+            (settings, "表示設定・似た画像を探す")
+        })
+            hideTimer.AttachHoverHint(button, hint);
+        hideTimer.AttachHoverHint(favorite.Button, () => AutomationProperties.GetName(favorite.Button));
+        hideTimer.AttachHoverHint(pinButton, () => ViewerOptions.Value.AlwaysShowControls ? "操作バーの固定を解除" : "操作バーを常に表示（ピン留め）");
+        var menu=ViewerChromeController.Settings(false,()=>{syncPin();hideTimer.SyncPinState();hideTimer.RefreshHoverHint();FitImage();UpdateControls();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
         var findSimilar=new MenuFlyoutItem{Text="≈ この画像に似た画像・動画を探す"};
         Identify(findSimilar,"ImageFindSimilar","この画像に似た画像・動画を探す");
         findSimilar.Click+=(_,_)=>{if(!busy&&!navigating&&loaded)FindSimilarRequested?.Invoke(sequence.Current.Id);};
         menu.Items.Insert(0,findSimilar);
         menu.Items.Insert(1,new MenuFlyoutSeparator());
         settings.Flyout=menu;viewport.ContextFlyout=menu;
-        menu.Opened+=(_,_)=>{findSimilar.IsEnabled=!busy&&!navigating&&loaded;menuOpen=true;ShowChrome();};menu.Closed+=(_,_)=>{menuOpen=false;hideTimer.Start();};
+        menu.Opened+=(_,_)=>{findSimilar.IsEnabled=!busy&&!navigating&&loaded;menuOpen=true;hideTimer.HideHoverHint();ShowChrome();};menu.Closed+=(_,_)=>{menuOpen=false;hideTimer.Start();};
         viewport.DoubleTapped+=(_,args)=>{if(ViewerInputGestures.IsInteractiveControl(args.OriginalSource,viewport))return;args.Handled=true;ToggleMaximizeRequested?.Invoke();};
         previous.Click += async (_, _) => await MoveAsync(-1); next.Click += async (_, _) => await MoveAsync(1);
         zoomOut.Click += (_, _) => ViewerInputGestures.ZoomCentered(viewport,Math.Max(viewport.MinZoomFactor, viewport.ZoomFactor - .5f));
@@ -150,6 +167,15 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImage();viewport.ChangeView(0,0,1,true);}else ViewerInputGestures.ZoomCentered(viewport,(float)OriginalZoom());};
         retry.Click += async (_, _) => await OpenAsync();
         UpdateIdentity(); UpdateControls();
+    }
+    private void FinishScrubDrag()
+    {
+        if (!scrubberDragging) return;
+        scrubberDragging = false; hideTimer.Start();
+        if (disposed || menuOpen || sequence.Count <= 1) return;
+        if (scrubTargetOrdinal == sequence.Position) { UpdateIdentity(); UpdateControls(); return; }
+        if (navigating || favorite.IsSaving) { pendingScrubOrdinal = scrubTargetOrdinal; return; }
+        _ = JumpToOrdinalAsync(scrubTargetOrdinal);
     }
     public void FocusViewport()=>viewport.Focus(FocusState.Programmatic);
     private void ShowChrome()=>hideTimer.Show();
@@ -187,14 +213,17 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         zoomIn.IsEnabled = loaded && !busy && viewport.ZoomFactor < viewport.MaxZoomFactor; actualSize.IsEnabled=loaded&&!busy; fit.IsEnabled = loaded && !busy;
         var hasScrubber = sequence.Count > 1 && (!sequence.IsSession || visualAtOrdinal is not null);
         scrubberHost.Visibility = hasScrubber ? Visibility.Visible : Visibility.Collapsed;
-        sequenceScrubber.IsEnabled = !disposed && !navigating && !favorite.IsSaving && hasScrubber;
-        updatingScrubber = true;
-        try
+        sequenceScrubber.IsEnabled = !disposed && !favorite.IsSaving && hasScrubber;
+        if (!scrubberDragging && pendingScrubOrdinal is null)
         {
-            sequenceScrubber.Maximum = Math.Max(1, sequence.Count);
-            sequenceScrubber.Value = Math.Clamp(sequence.Position + 1, 1, Math.Max(1, sequence.Count));
+            updatingScrubber = true;
+            try
+            {
+                sequenceScrubber.Maximum = Math.Max(1, sequence.Count);
+                sequenceScrubber.Value = Math.Clamp(sequence.Position + 1, 1, Math.Max(1, sequence.Count));
+            }
+            finally { updatingScrubber = false; }
         }
-        finally { updatingScrubber = false; }
         ToolTipService.SetToolTip(sequenceScrubber, $"{sequence.Position + 1} / {sequence.Count}");
     }
     // Tunnel before ScrollViewer consumes arrow keys; scope is this modal only.
@@ -357,6 +386,11 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
                 await NavigateToItemRequested(handoffTarget, direction);
             return;
         }
+        if (!disposed && pendingScrubOrdinal is int queued)
+        {
+            pendingScrubOrdinal = null;
+            if (queued != sequence.Position) { await JumpToOrdinalAsync(queued); return; }
+        }
         if (!moved || disposed) return;
         actualPixels=false;version++; loaded = false; StopAnimation(true); retry.IsEnabled = false;
         UpdateIdentity(); ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
@@ -368,7 +402,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
     private async Task JumpToOrdinalAsync(int targetOrdinal)
     {
         if (disposed || menuOpen || sequence.Count <= 1) return;
-        if (navigating || favorite.IsSaving) { scrubTimer.Stop(); scrubTimer.Start(); return; }
+        if (navigating || favorite.IsSaving) { pendingScrubOrdinal = targetOrdinal; return; }
         if (targetOrdinal == sequence.Position) return;
         var direction = targetOrdinal >= sequence.Position ? 1 : -1;
         var moved = false; ResultNeighbor? handoffTarget = null;
@@ -421,6 +455,11 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
             if (!disposed && NavigateToItemRequested is not null)
                 await NavigateToItemRequested(handoffTarget, direction);
             return;
+        }
+        if (!disposed && pendingScrubOrdinal is int queued)
+        {
+            pendingScrubOrdinal = null;
+            if (queued != sequence.Position) { await JumpToOrdinalAsync(queued); return; }
         }
         if (!moved || disposed) return;
         actualPixels=false;version++; loaded = false; StopAnimation(true); retry.IsEnabled = false;
