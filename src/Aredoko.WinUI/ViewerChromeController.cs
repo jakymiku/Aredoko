@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -301,6 +302,7 @@ internal sealed class ViewerChromeController : IDisposable
     {
         Content=new SymbolIcon(symbol),
         MinWidth=32,
+        Width=32,
         Height=32,
         Padding=new Thickness(6),
         CornerRadius=new CornerRadius(16),
@@ -311,11 +313,26 @@ internal sealed class ViewerChromeController : IDisposable
     public static void StylePillButton(ButtonBase button)
     {
         button.MinWidth=32;
+        button.Width=32;
         button.Height=32;
         button.Padding=new Thickness(6);
         button.CornerRadius=new CornerRadius(16);
         button.Background=new SolidColorBrush(Colors.Transparent);
         button.BorderThickness=new Thickness(0);
+    }
+
+    public static void FixNumericSlot(TextBlock label,double width,TextAlignment alignment=TextAlignment.Center)
+    {
+        label.Width=width;
+        label.TextAlignment=alignment;
+        label.TextWrapping=TextWrapping.NoWrap;
+        Typography.SetNumeralAlignment(label,FontNumeralAlignment.Tabular);
+    }
+
+    public static double CountSlotWidth(int maxCount,bool spread)
+    {
+        var digits=Math.Max(2,Math.Max(1,maxCount).ToString().Length);
+        return spread?Math.Max(78,digits*3*8+26):Math.Max(56,digits*2*8+20);
     }
 
     public static Button PillTextButton(string text)=>new()
@@ -398,7 +415,6 @@ internal sealed class ViewerChromeController : IDisposable
                 button.IsChecked=pinned;
                 var name=pinned?"操作バーの固定を解除":"操作バーを常に表示（ピン留め）";
                 AutomationProperties.SetName(button,name);
-                ToolTipService.SetToolTip(button,name);
             }
             finally{syncing=false;}
         }

@@ -119,6 +119,12 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         SizeChanged += (_, _) => { toolbar.Width = ActualWidth > 0 ? Math.Clamp(ActualWidth - 48, 320, 740) : 700; };
         positionText.Style = volumeText.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
         positionText.HorizontalAlignment = HorizontalAlignment.Center;
+        positionText.TextWrapping = TextWrapping.NoWrap;
+        positionText.TextAlignment = TextAlignment.Center;
+        positionText.MinWidth = 96;
+        Microsoft.UI.Xaml.Documents.Typography.SetNumeralAlignment(positionText, FontNumeralAlignment.Tabular);
+        Microsoft.UI.Xaml.Documents.Typography.SetNumeralAlignment(seekTime, FontNumeralAlignment.Tabular);
+        ViewerChromeController.FixNumericSlot(volumeText, 40, TextAlignment.Right);
         var actions = new Grid { ColumnSpacing = 8 };
         actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         actions.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
@@ -269,7 +275,6 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         Identify(volumeDown, "VideoVolumeDown", "音量を下げる"); Identify(volumeUp, "VideoVolumeUp", "音量を上げる");
         Identify(retry, "VideoRetry", (isAudio ? "音声" : "動画") + "を再試行");
         Identify(openExternal, "VideoOpenExternal", "既定のアプリで開く");
-        ToolTipService.SetToolTip(openExternal, "既定の外部アプリで再生します");
         openExternal.Click += (_, _) => OpenExternalRequested?.Invoke();
         AutomationProperties.SetAutomationId(positionText, "VideoPosition");
         AutomationProperties.SetAutomationId(volumeText, "VideoVolumeStatus");
@@ -281,6 +286,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         hideTimer.AttachHoverHint(favorite.Button, () => AutomationProperties.GetName(favorite.Button));
         hideTimer.AttachHoverHint(editDetails, "詳細でタグ・棚を編集（プレーヤーを閉じる）");
         hideTimer.AttachHoverHint(retry, isAudio ? "音声の読み込みを再試行" : "動画の読み込みを再試行");
+        hideTimer.AttachHoverHint(openExternal, "既定の外部アプリで再生します");
         hideTimer.AttachHoverHint(mute, () => muted ? "消音解除（M）" : "消音（M）");
         hideTimer.AttachHoverHint(volumeDown, "音量を下げる");
         hideTimer.AttachHoverHint(volumeUp, "音量を上げる");

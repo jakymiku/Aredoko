@@ -126,6 +126,8 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         editDetails.Click+=(_,_)=>EditDetailsRequested?.Invoke();
         toolbarHost.Child=actions;Children.Add(toolbarHost);ViewerChromeController.AttachNotices(this,76,status);
         title.Style = count.Style = zoom.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
+        ViewerChromeController.FixNumericSlot(zoom, 44);
+        ViewerChromeController.FixNumericSlot(count, ViewerChromeController.CountSlotWidth(sequence.Count, spread: false));
         Identify(viewport, "ImageViewport", "画像表示。左右キーで画像送り、拡大してスクロールできます");
         Identify(image, "ViewerImage", sequence.Current.Title + "の画像");
         Identify(toolbarHost, "ImageToolbar", "画像の操作");
@@ -150,6 +152,8 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         })
             hideTimer.AttachHoverHint(button, hint);
         hideTimer.AttachHoverHint(favorite.Button, () => AutomationProperties.GetName(favorite.Button));
+        hideTimer.AttachHoverHint(zoom, () => loaded ? $"表示倍率（原寸 {imageWidth:0} × {imageHeight:0} px）" : "表示倍率");
+        hideTimer.AttachHoverHint(count, () => sequence.IsSession ? "検索結果内の位置（左右キーまたはバーで移動）" : "現在のページ内の画像位置");
         hideTimer.AttachHoverHint(pinButton, () => ViewerOptions.Value.AlwaysShowControls ? "操作バーの固定を解除" : "操作バーを常に表示（ピン留め）");
         var menu=ViewerChromeController.Settings(false,()=>{syncPin();hideTimer.SyncPinState();hideTimer.RefreshHoverHint();FitImage();UpdateControls();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
         var findSimilar=new MenuFlyoutItem{Text="≈ この画像に似た画像・動画を探す"};
@@ -188,16 +192,14 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         var scale = actualPixels?1/(XamlRoot?.RasterizationScale??1):Math.Min(ViewerOptions.Value.EnlargeSmallImages?double.PositiveInfinity:1/(XamlRoot?.RasterizationScale??1),Math.Min(canvas.Width / imageWidth, canvas.Height / imageHeight));
         image.Width = imageWidth * scale; image.Height = imageHeight * scale;
         viewport.MaxZoomFactor=(float)Math.Max(4,OriginalZoom());
-        ToolTipService.SetToolTip(image,$"{imageWidth:0} × {imageHeight:0} px");
         AutomationProperties.SetHelpText(image,$"{imageWidth:0} x {imageHeight:0} pixels");
     }
     private double OriginalZoom()=>double.IsFinite(image.Width)&&image.Width>0?Math.Max(.001,imageWidth/image.Width/(XamlRoot?.RasterizationScale??1)):1;
     private void UpdateIdentity()
     {
         TitleChanged?.Invoke(WindowTitle);
-        title.Text = sequence.Current.Title; ToolTipService.SetToolTip(title, title.Text);
+        title.Text = sequence.Current.Title;
         count.Text = $"{sequence.Position + 1} / {sequence.Count}";
-        ToolTipService.SetToolTip(count, sequence.IsSession ? "検索結果内の位置。画像だけを検索順に移動します" : "現在の検索結果ページに含まれる画像");
         AutomationProperties.SetName(image, title.Text + "の画像");
         favorite.Refresh(sequence.Current.Id,sequence.Position);
     }
@@ -224,7 +226,6 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
             }
             finally { updatingScrubber = false; }
         }
-        ToolTipService.SetToolTip(sequenceScrubber, $"{sequence.Position + 1} / {sequence.Count}");
     }
     // Tunnel before ScrollViewer consumes arrow keys; scope is this modal only.
     public void AttachNavigation(UIElement dialog)

@@ -113,6 +113,8 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         pages.Children.Add(image);pages.Children.Add(second);canvas.Children.Add(pages);viewport.Content=canvas;Children.Add(viewport);
         viewport.SizeChanged+=(_,_)=>FitImages();viewport.ViewChanged+=(_,_)=>UpdateActions();
         count.Style=zoom.Style=status.Style=progressStatus.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
+        ViewerChromeController.FixNumericSlot(zoom, 44);
+        ViewerChromeController.FixNumericSlot(count, ViewerChromeController.CountSlotWidth(99, spread: true));
         ViewerInputGestures.AttachPan(viewport);
         ViewerChromeController.StylePillButton(favorite.Button);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Center};
@@ -149,6 +151,8 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         foreach(var (button,text) in new (FrameworkElement,string)[]{(fit,"画面に合わせる"),(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）"),(zoomOut,"縮小"),(zoomIn,"拡大"),(previous,"前のページ"),(next,"次のページ"),(editDetails,"詳細でタグ・棚を編集（ビューアを閉じる）"),(retry,"再試行"),(reopen,"先頭ページから開き直す"),(settings,"表示設定（単ページ・見開き・類似検索）")})
             hideTimer.AttachHoverHint(button,text);
         hideTimer.AttachHoverHint(favorite.Button,()=>AutomationProperties.GetName(favorite.Button));
+        hideTimer.AttachHoverHint(zoom, () => image.Source is BitmapImage bmp && bmp.PixelWidth > 0 ? $"表示倍率（原寸 {bmp.PixelWidth} × {bmp.PixelHeight} px）" : "表示倍率");
+        hideTimer.AttachHoverHint(count, "ページ位置（左右キーまたはバーで移動）");
         hideTimer.AttachHoverHint(pinButton,()=>ViewerOptions.Value.AlwaysShowControls?"操作バーの固定を解除":"操作バーを常に表示（ピン留め）");
         menu.Items.Add(findSimilarPage1);menu.Items.Add(findSimilarPage2);menu.Items.Add(new MenuFlyoutSeparator());
         foreach(var (value,label,id) in new[]{(ReaderDisplayMode.Single,"単ページ","ReaderSingle"),(ReaderDisplayMode.RightToLeft,"見開き（右→左）","ReaderRtl"),(ReaderDisplayMode.LeftToRight,"見開き（左→右）","ReaderLtr")})
@@ -254,7 +258,6 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         second.Width=height*b;second.Height=height;
         viewport.MaxZoomFactor=(float)Math.Max(4,OriginalZoom());
         AutomationProperties.SetHelpText(image,$"{first.PixelWidth} x {first.PixelHeight} pixels");
-        ToolTipService.SetToolTip(image,$"{first.PixelWidth} × {first.PixelHeight} px");
     }
     private double OriginalZoom()=>image.Source is BitmapImage first?Math.Max(.001,first.PixelWidth/Math.Max(1,image.Width)/(XamlRoot?.RasterizationScale??1)):1;
 public void AttachNavigation(UIElement dialog)
@@ -287,6 +290,7 @@ public void AttachNavigation(UIElement dialog)
         {
             await progressWriter.FlushAsync();
             var result=await api.ReaderManifestAsync(itemId,cancellation);cancellation.ThrowIfCancellationRequested();manifest=result;
+            count.Width=ViewerChromeController.CountSlotWidth(result.PageCount,spread:true);
             try
             {
                 var saved=await api.ReaderProgressAsync(itemId,cancellation);cancellation.ThrowIfCancellationRequested();
@@ -425,7 +429,6 @@ public void AttachNavigation(UIElement dialog)
                 pageScrubber.Value=Math.Clamp(page+1,1,currentBook.PageCount);
             }
             finally{updatingScrubber=false;}
-            ToolTipService.SetToolTip(pageScrubber,$"{page+1} / {currentBook.PageCount}ページ");
         }
     }
     public void Dispose(){if(disposed)return;disposed=true;scrubTimer.Stop();favorite.Dispose();hideTimer.Dispose();menu.Hide();preload?.Cancel();lifetime.Cancel();pageCache.Dispose();ClearImages();manifest=null;lifetime.Dispose();}

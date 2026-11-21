@@ -29,7 +29,7 @@ internal sealed class ViewerFavoriteAction(ResultSession? session,Action<string>
         Label("お気に入りを読み込み中");
         if(session is not null)_=LoadAsync(id,ordinal,currentVersion);
     }
-    private void Label(string text){AutomationProperties.SetName(Button,text);ToolTipService.SetToolTip(Button,text);}
+    private void Label(string text){AutomationProperties.SetName(Button,text);}
     private void Update()
     {
         Button.Content=new SymbolIcon(value==true?Symbol.SolidStar:Symbol.OutlineStar);

@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace Aredoko_WinUI;
 
@@ -14,7 +15,10 @@ internal sealed class ViewerWindow : Window
     [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr hwnd);
     private readonly TaskCompletionSource closed=new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IntPtr owner;
+    private readonly UIElement? ownerContent;
     private readonly bool ownerWasEnabled;
+    private bool ownerWasHitTestVisible=true;
+    private bool ownerSuspended;
     private IViewerWindowTitle? titleSource;
     private bool preparingClose,closePrepared;
     public Func<Task>? BeforeCloseAsync {get;set;}
@@ -24,6 +28,7 @@ internal sealed class ViewerWindow : Window
         titleSource=content as IViewerWindowTitle;
         if(titleSource is not null){Title=titleSource.WindowTitle;titleSource.TitleChanged+=UpdateTitle;}
         owner=WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current);
+        ownerContent=MainWindow.Current.Content;
         var handle=WinRT.Interop.WindowNative.GetWindowHandle(this);
         Marshal.SetLastPInvokeError(0);
         var previous=SetWindowLongPtrW(handle,-8,owner);
@@ -43,10 +48,32 @@ internal sealed class ViewerWindow : Window
         {
             if(titleSource is not null)titleSource.TitleChanged-=UpdateTitle;
             titleSource=null;
-            if(ownerWasEnabled)EnableWindow(owner,true);
+            RestoreOwner();
             closed.TrySetResult();
             Content=null;
         };
+    }
+    private void DismissOwnerToolTips()
+    {
+        if(ownerContent?.XamlRoot is not { } root)return;
+        foreach(var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(root))
+            if(popup.Child is ToolTip tip)tip.IsOpen=false;
+    }
+    private void SuspendOwner()
+    {
+        if(ownerSuspended)return;
+        ownerSuspended=true;
+        ownerWasHitTestVisible=ownerContent?.IsHitTestVisible??true;
+        if(ownerContent is not null)ownerContent.IsHitTestVisible=false;
+        DismissOwnerToolTips();
+        if(ownerWasEnabled)EnableWindow(owner,false);
+    }
+    private void RestoreOwner()
+    {
+        if(!ownerSuspended)return;
+        ownerSuspended=false;
+        if(ownerContent is not null)ownerContent.IsHitTestVisible=ownerWasHitTestVisible;
+        if(ownerWasEnabled)EnableWindow(owner,true);
     }
     private void UpdateTitle(string value)=>Title=value;
     public void ToggleMaximize()
@@ -69,9 +96,16 @@ internal sealed class ViewerWindow : Window
     }
     public async Task ShowAsync(Func<Task> load)
     {
-        if(ownerWasEnabled)EnableWindow(owner,false);
-        try { Activate();_ = load();await closed.Task; }
-        finally { if(ownerWasEnabled)EnableWindow(owner,true); }
+        SuspendOwner();
+        try
+        {
+            Activate();
+            DismissOwnerToolTips();
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,DismissOwnerToolTips);
+            _ = load();
+            await closed.Task;
+        }
+        finally { RestoreOwner(); }
     }
     // AppWindow.Closing covers system close affordances. Buttons/Escape and
     // owner shutdown also use this explicit path before Window.Close().
@@ -84,7 +118,7 @@ internal sealed class ViewerWindow : Window
         try{base.Close();}
         catch(Exception ex)
         {
-            if(ownerWasEnabled)EnableWindow(owner,true);
+            RestoreOwner();
             closed.TrySetResult();
             AppLog.Error(ex);
         }
@@ -104,7 +138,7 @@ internal sealed class ViewerWindow : Window
         catch(Exception ex)
         {
             closePrepared=false;
-            if(ownerWasEnabled)EnableWindow(owner,true);
+            RestoreOwner();
             closed.TrySetResult();
             AppLog.Error(ex);
         }
