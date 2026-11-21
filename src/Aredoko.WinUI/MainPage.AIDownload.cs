@@ -24,25 +24,36 @@ public sealed partial class MainPage
         try
         {
             dialogOpen=true;
-            var panel=new StackPanel{Spacing=12};
-            var choice=new ComboBox{Header="取得するAI環境",HorizontalAlignment=HorizontalAlignment.Stretch};
-            var information=new TextBlock{Text="取得できる環境を確認しています。",TextWrapping=TextWrapping.Wrap};
-            var license=new HyperlinkButton{Content="ライセンスを確認",Visibility=Visibility.Collapsed};
+            var panel=new StackPanel{Spacing=12,MaxWidth=540};
+            var choice=new ComboBox{Header="取得するモデル・環境",HorizontalAlignment=HorizontalAlignment.Stretch};
+            var information=new TextBlock{Text="取得できる環境を確認しています。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            var license=new HyperlinkButton{Content="ライセンスを確認",Visibility=Visibility.Collapsed,Padding=new Thickness(0,2,0,2)};
             var speed=new NumberBox{Header="速度上限（MB/秒、0で無制限）",Value=0,Minimum=0,Maximum=1000000,SmallChange=1};
             var consent=new CheckBox{Content="容量とライセンスを確認し、選択したファイルを取得する"};
             var status=new TextBlock{TextWrapping=TextWrapping.Wrap};var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};
-            var destination=new TextBox{Header="取得した環境",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};
-            var select=new Button{Content="配置済みの環境を指定",Visibility=Visibility.Collapsed};var refresh=new Button{Content="状態を更新"};
+            var destination=new TextBox{Header="保存先フォルダ",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};
+            var select=new Button{Content="配置済みの環境を指定",Visibility=Visibility.Collapsed};var refresh=new Button{Content="⟳ 状態を更新"};
             foreach(var (control,id) in new (DependencyObject,string)[]{(choice,"AIDownloadCatalog"),(information,"AIDownloadInformation"),(license,"AIDownloadLicense"),(speed,"AIDownloadSpeed"),(consent,"AIDownloadConsent"),(status,"AIDownloadStatus"),(progress,"AIDownloadProgress"),(destination,"AIDownloadDestination"),(select,"AIDownloadSelect"),(refresh,"AIDownloadRefresh")})AutomationProperties.SetAutomationId(control,id);
             AutomationProperties.SetName(progress,"AI環境の取得進捗");
-            var downloadSettings=new Expander{Header="速度制限（既定は制限なし）",Content=speed,HorizontalAlignment=HorizontalAlignment.Stretch};
+            var downloadSettings=new Expander{Header="速度制限（既定は制限なし）",Content=speed,HorizontalAlignment=Microsoft.UI.Xaml.HorizontalAlignment.Stretch,HorizontalContentAlignment=Microsoft.UI.Xaml.HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(downloadSettings,"AIDownloadSettings");
-            var introduction=new TextBlock{Text="取得後に使う環境を指定し、再起動して反映します",TextWrapping=TextWrapping.Wrap};
+            var introduction=new TextBlock{Text="取得したいモデルを選んでダウンロードします（追加機能は後からでも設定できます）。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             ToolTipService.SetToolTip(introduction,"AI検索には検索モデルと実行環境が必要です。画像タグ付けモデルは追加機能です。");
+            AutomationProperties.SetName(introduction,"AI検索には検索モデルと実行環境が必要です。画像タグ付けモデルは追加機能です。");
             AutomationProperties.SetAutomationId(introduction,"AIDownloadIntroduction");panel.Children.Add(introduction);
-            foreach(var control in new UIElement[]{choice,information,license,consent,downloadSettings,progress,status,destination,select,refresh})panel.Children.Add(control);
+
+            var infoBox=new Border{Background=(Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],CornerRadius=new CornerRadius(6),Padding=new Thickness(10,8,10,8),Child=new StackPanel{Spacing=4,Children={information,license}}};
+            var card1=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=new StackPanel{Spacing=10,Children={choice,infoBox,consent}}};
+            panel.Children.Add(card1);
+
+            var actionRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,Children={select,refresh}};
+            var card2=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=new StackPanel{Spacing=8,Children={progress,status,destination,actionRow}}};
+            panel.Children.Add(card2);
+            panel.Children.Add(downloadSettings);
+
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI環境の取得",PrimaryButtonText="取得・再開",IsPrimaryButtonEnabled=false,SecondaryButtonText="中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=FormScrollContent.Wrap(panel),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}};
+            dialog.Resources["ContentDialogMaxWidth"]=580d;
             AutomationProperties.SetAutomationId(dialog,"AIDownloadDialog");
             AIDownloadCatalog? Selected()=>(choice.SelectedItem as ComboBoxItem)?.Tag as AIDownloadCatalog;
             void Render()
@@ -54,20 +65,24 @@ public sealed partial class MainPage
                 progress.Visibility=current?.Active==true||current?.Published==true?Visibility.Visible:Visibility.Collapsed;
                 progress.IsIndeterminate=current?.State=="extracting"||current?.Active==true&&current.BytesTotal is not >0;
                 progress.Value=current?.BytesTotal is >0?Math.Clamp(100d*current.BytesReceived/current.BytesTotal.Value,0,100):current?.Published==true?100:0;
-                status.Text=current?.State is null or "idle"?"取得する環境を選んでください。":current.Message;
-                if(current is {State:not "idle"} job)status.Text+=$"\n取得 {job.BytesReceived/1000000d:N1} MB / "+(job.BytesTotal is {} total?$"{total/1000000d:N1} MB":"確認中")+$"　検証済み {job.BytesVerified/1000000d:N1} MB";
+                var candidate=AIDownloadSelection.FromPublished(current,knownCatalogs);
+                if(candidate is not null&&current is {State:not "idle"} verifiedJob)
+                {
+                    status.Text=candidate.ModelTarget?.Role=="tagger"
+                        ?$"✓ 準備完了（{verifiedJob.BytesVerified/1000000d:N1} MB 検証済み）\nこのまま閉じて、作品詳細の「✨ AI候補」からすぐ使えます。"
+                        :$"✓ ダウンロード完了（{verifiedJob.BytesVerified/1000000d:N1} MB 検証済み）\n下の青いボタンから設定を保存し、Aredoko を再起動すると反映されます。";
+                }
+                else
+                {
+                    status.Text=current?.State is null or "idle"?"取得するモデルを選んでください。":current.Message;
+                    if(current is {State:not "idle"} job)status.Text+=$"\n取得 {job.BytesReceived/1000000d:N1} MB / "+(job.BytesTotal is {} total?$"{total/1000000d:N1} MB":"確認中")+$"（検証済み {job.BytesVerified/1000000d:N1} MB）";
+                }
                 if(operationError is not null)status.Text+="\n"+operationError;
                 destination.Text=current?.Root??"";destination.Visibility=current?.Published==true&&current.Root is not null?Visibility.Visible:Visibility.Collapsed;
-                var candidate=AIDownloadSelection.FromPublished(current,knownCatalogs);
                 select.Visibility=candidate is not null?Visibility.Visible:Visibility.Collapsed;select.IsEnabled=!busy;
-                select.Style=candidate is not null&&!busy?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
-                select.Content=candidate?.Kind=="runtime"?"① 次にここを押す：この実行環境を設定する →":"① 次にここを押す：このモデルの保存先を設定する →";
-                if(candidate is not null)
-                {
-                    status.Text+=candidate.ModelTarget?.Role=="tagger"
-                        ?"\n✓ タグ付けモデルの取得が完了しました！ 今すぐ作品詳細の「✨ AI候補」から利用できます（保存先を明示設定する場合は下の青いボタンを押してください）。"
-                        :"\n▶ 次の手順：下の青いボタンを押し、開いた画面で［このモデルの保存先を使う］を押してから Aredoko を再起動すると反映されます。";
-                }
+                var needsExplicitActivation=candidate is not null&&candidate.ModelTarget?.Role!="tagger";
+                select.Style=needsExplicitActivation&&!busy?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
+                select.Content=candidate?.Kind=="runtime"?"この実行環境を有効化する →":candidate?.ModelTarget?.Role=="tagger"?"保存先を明示設定…":"このモデルを有効化する →";
             }
             async Task RefreshAsync(bool catalogs=false)
             {
@@ -95,12 +110,21 @@ public sealed partial class MainPage
                 consent.IsChecked=false;
                 if(Selected() is {} selected)
                 {
-                    var scope=selected.Kind=="model"?"モデルのみ（実行環境が別途必要）\n":"";
-                    var capacity=selected.UnpackedBytes is {} expanded?$"サイズ：{selected.Bytes/1000000d:N1} MB ／ 展開後：{expanded/1000000d:N1} MB（{selected.UnpackedFiles:N0}件）\n⚠ 必要な空き：{(selected.Bytes+expanded)/1000000d:N1} MB以上":$"容量：{selected.Bytes/1000000d:N1} MB";
-                    information.Text=scope+capacity+$"\n提供元：{string.Join(", ",selected.SourceHosts)}\nライセンス：{selected.License}\n版：{selected.Revision}";
+                    var note=selected.Kind=="model"
+                        ?(selected.ModelTarget?.Role=="tagger"?" · 同梱ランタイムで動作（追加の実行環境は不要）":" · AI検索用の実行環境と組み合わせて使います")
+                        :"";
+                    var capacity=selected.UnpackedBytes is {} expanded
+                        ?$"容量：{selected.Bytes/1000000d:N1} MB ／ 展開後：{expanded/1000000d:N1} MB（{selected.UnpackedFiles:N0}件）· 必要な空き：{(selected.Bytes+expanded)/1000000d:N1} MB以上"
+                        :$"容量：{selected.Bytes/1000000d:N1} MB{note}";
+                    information.Text=capacity+$"\nライセンス：{selected.License} · 提供元：{string.Join(", ",selected.SourceHosts)}";
+                    ToolTipService.SetToolTip(information,$"版（Revision）: {selected.Revision}");
                     license.NavigateUri=selected.LicenseUri;license.Visibility=Visibility.Visible;
                 }
-                else license.Visibility=Visibility.Collapsed;
+                else
+                {
+                    ToolTipService.SetToolTip(information,null);
+                    license.Visibility=Visibility.Collapsed;
+                }
                 Render();
             };
             consent.Checked+=(_,_)=>Render();consent.Unchecked+=(_,_)=>Render();

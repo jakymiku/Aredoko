@@ -48,11 +48,18 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
             OpenSetup.Style=OpenSetup.IsEnabled?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
         }
         Refresh.IsEnabled=!busy&&!closing;Older.IsEnabled=!busy&&!closing&&history?.NextBefore is not null;
-        Cancel.IsEnabled=busy&&requestId is not null&&!closing;Batches.IsEnabled=!busy;Candidates.IsEnabled=!busy;
+        if(BusyProgress is not null)BusyProgress.Visibility=busy?Visibility.Visible:Visibility.Collapsed;
+        var canCancel=busy&&requestId is not null&&!closing;
+        Cancel.IsEnabled=canCancel;
+        Cancel.Visibility=busy&&requestId is not null?Visibility.Visible:Visibility.Collapsed;
+        Batches.IsEnabled=!busy;
+        Batches.Visibility=Batches.Items.Count>0?Visibility.Visible:Visibility.Collapsed;
+        Candidates.IsEnabled=!busy;
         var pending=!busy&&!closing&&batch is {Stale:false}&&candidate is {State:"pending"};
         Edited.IsEnabled=pending&&!dirty;Accept.IsEnabled=pending&&!dirty&&!string.IsNullOrWhiteSpace(Edited.Text);
         Reject.IsEnabled=pending;
         var pendingCount=!busy&&!closing&&batch is {Stale:false}?batch.Candidates.Count(c=>c.State=="pending"):0;
+        if(BatchReviewActions is not null)BatchReviewActions.Visibility=pendingCount>0?Visibility.Visible:Visibility.Collapsed;
         if(AcceptAll is not null)
         {
             AcceptAll.Content=pendingCount>0?$"✓ 未承認をすべて承認 ({pendingCount}件)":"✓ 未承認をすべて承認";
@@ -73,7 +80,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         catch(Exception ex){if(!disposed){Message(ex.Message+"\n最新へ戻して状態を確認できます。");AppLog.Error(ex);}}
         finally{busy=false;requestId=null;if(!disposed){UpdateButtons();if(closing)CloseReady?.Invoke();}}
     }
-    public Task LoadAsync()=>RunAsync(()=>LoadCoreAsync(null));
+    public Task LoadAsync(){Message("状態を確認しています…");return RunAsync(()=>LoadCoreAsync(null));}
     private async Task LoadCoreAsync(long? before)
     {
         var loaded=await api.HistoryAsync(itemId,before,lifetime.Token);if(disposed)return;
@@ -82,8 +89,13 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         Batches.Items.Clear();Candidates.Items.Clear();
         foreach(var value in loaded.Batches)Batches.Items.Add(new ComboBoxItem{Content=$"履歴 #{value.Id} · {value.Candidates.Count}候補"+(value.Stale?" · 元ファイル変更あり":""),Tag=value});
         populating=false;Batches.SelectedIndex=loaded.Batches.Count>0?0:-1;
-        if(loaded.Batches.Count==0){Provenance.Text="候補はまだありません";Explanation.Text="［✨ 生成］で候補を作成できます";Edited.Text="";}
-        Message(loaded.Available?"根拠を確認して承認・却下できます":loaded.Reason);
+        if(loaded.Batches.Count==0)
+        {
+            Provenance.Text=loaded.Available?"まだ候補がありません":"タグ付けモデルが未導入です";
+            Explanation.Text=loaded.Available?"上の［✨ 生成］を押すと、この作品のタグ候補を作成します。":"上の［📥 モデルを取得・設定］からモデルを取得するとすぐ使えます。";
+            Edited.Text="";
+        }
+        Message(loaded.Available?"［✨ 生成］から候補を作成し、根拠を確認して承認・却下できます。":loaded.Reason);
     }
     private void Batch_Changed(object sender,SelectionChangedEventArgs e)
     {

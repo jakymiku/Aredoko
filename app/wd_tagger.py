@@ -17,7 +17,7 @@ from model_locations import ModelTarget
 from tag_suggestions import TaggerInfo, TagProposal, SuggestionConflict
 from tagger_profile import load_profile, RUNTIME_VERSION, WDProfile
 from tagger_worker import labels, bundled_ort_dll
-from runtime_paths import worker_python,worker_command,runtime_root
+from runtime_paths import worker_python,worker_command,runtime_root,bound_runtime_digest
 from ai_runtime import MARKER,inspect_runtime
 from storage_lease import plain_path
 
@@ -39,6 +39,7 @@ class WDTagger:
         self.ai=ai
         self._lock=threading.Lock()
         self._closed=threading.Event()
+        self._runtime_cache=None
         p=profile.data()
         self.info=TaggerInfo(p['adapter'],'1/'+profile.key,p['model_id'],p['revision'],
                             'exif-first-frame-white-square-bicubic-bgr-nhwc-255-v1')
@@ -82,7 +83,17 @@ class WDTagger:
                 # Downloaded model packs do not contain machine-runtime claims.
                 # The selected sealed runtime declares its own installed version;
                 # worker_command still verifies the full pack before execution.
-                info=inspect_runtime(root)
+                expected=bound_runtime_digest(self.python)
+                if expected is not None:
+                    st=plain_path(runtime_marker).stat()
+                    cache_key=(str(root),expected,st.st_mtime_ns,st.st_size)
+                    if self._runtime_cache is not None and self._runtime_cache[0]==cache_key:
+                        info=self._runtime_cache[1]
+                    else:
+                        info=inspect_runtime(root,expected=expected)
+                        self._runtime_cache=(cache_key,info)
+                else:
+                    info=inspect_runtime(root)
                 if 'onnxruntime' in info['abi']['modules']:
                     metadata=plain_path(root/f'Lib/site-packages/onnxruntime-{RUNTIME_VERSION}.dist-info/METADATA')
                     if metadata.stat().st_size>1024**2:raise ValueError('Runtime metadata exceeds limit')

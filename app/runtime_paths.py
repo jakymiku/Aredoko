@@ -62,6 +62,12 @@ def bind_runtime(root,expected):
     _pack_bindings[_root_key(root)]=expected
 
 
+def bound_runtime_digest(python):
+    if python is None:
+        return None
+    return _pack_bindings.get(_root_key(runtime_root(python)))
+
+
 def runtime_root(python):
     python=Path(python)
     direct=python.parent

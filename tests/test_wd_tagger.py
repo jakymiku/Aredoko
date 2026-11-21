@@ -340,5 +340,23 @@ class WDTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_status_uses_bound_runtime_digest_and_caches_inspection(self):
+        from runtime_paths import bind_runtime, _pack_bindings, _root_key
+        sealed = self.repo / 'ai-cu128-bound'
+        (sealed / 'Scripts').mkdir(parents=True)
+        py = sealed / 'Scripts/python.exe'
+        py.write_bytes(b'fixture')
+        (sealed / 'aredoko-ai-runtime.json').write_text('{}', encoding='utf-8')
+        digest = 'b' * 64
+        bind_runtime(sealed, digest)
+        self.addCleanup(lambda: _pack_bindings.pop(_root_key(sealed), None))
+        adapter = WDTagger(self.repo, self.profile, ai_python=py)
+        self.addCleanup(adapter.close)
+        with patch('wd_tagger.inspect_runtime', return_value={'abi': {'modules': ['torch', 'PIL']}}) as inspect_mock, \
+             patch('wd_tagger.bundled_ort_dll', return_value=self.repo / 'bin/onnxruntime.dll'):
+            self.assertTrue(adapter.status()['available'])
+            self.assertTrue(adapter.status()['available'])
+        inspect_mock.assert_called_once_with(sealed, expected=digest)
+
 
 if __name__=='__main__':unittest.main()
