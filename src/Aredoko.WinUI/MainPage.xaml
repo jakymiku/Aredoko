@@ -147,7 +147,7 @@
   </ResourceDictionary>
  </Page.Resources>
  <Page.KeyboardAccelerators><KeyboardAccelerator Key="Home" Modifiers="Control" Invoked="BrowseEdgeShortcut"/><KeyboardAccelerator Key="End" Modifiers="Control" Invoked="BrowseEdgeShortcut"/><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchShortcut"/><KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveShortcut"/><KeyboardAccelerator Key="Escape" Invoked="CancelSearchShortcut"/><KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="HistoryBackShortcut"/><KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="HistoryForwardShortcut"/></Page.KeyboardAccelerators>
- <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Auto" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="180" SelectionChanged="Nav_SelectionChanged" ItemInvoked="Navigation_ItemInvoked" AutomationProperties.AutomationId="Nav">
+ <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Left" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="180" SelectionChanged="Nav_SelectionChanged" ItemInvoked="Navigation_ItemInvoked" AutomationProperties.AutomationId="Nav">
   <NavigationView.Resources>
    <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent"/>
    <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent"/>
@@ -380,7 +380,7 @@
       </StackPanel>
      </Flyout></Button.Flyout>
     </Button>
-    <Button x:Name="DetailsButton" IsEnabled="False" Click="OpenDetails_Click" ToolTipService.ToolTip="選択作品の詳細・タグ編集" AutomationProperties.Name="詳細" AutomationProperties.AutomationId="BtnDetails"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="DockRight"/><TextBlock Text="詳細"/></StackPanel></Button>
+    <Button x:Name="DetailsButton" IsEnabled="False" Click="OpenDetails_Click" ToolTipService.ToolTip="選択作品の詳細・タグ編集（Space）" AutomationProperties.Name="詳細" AutomationProperties.AutomationId="BtnDetails"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="DockRight"/><TextBlock Text="詳細"/></StackPanel></Button>
     </StackPanel>
      <Button x:Name="RootsButton" Visibility="Collapsed" Click="Roots_Click" AutomationProperties.Name="登録フォルダ" AutomationProperties.AutomationId="BtnRoots"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Folder"/><TextBlock Text="登録フォルダ"/></StackPanel></Button>
     </StackPanel>

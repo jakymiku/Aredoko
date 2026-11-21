@@ -60,6 +60,7 @@ public sealed partial class MainPage
         SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件選択中";
         UpdateSelectionSummaryDetails();
         FooterSelection.Text=$"{librarySelection.Count:N0} 件選択";
+        ToolTipService.SetToolTip(FooterSelection,librarySelection.Count==1?"Space: 詳細・タグ編集を開閉 / Enter: 作品を開く":null);
         FooterSelection.Visibility=librarySelection.Count>0?Visibility.Visible:Visibility.Collapsed;
         FooterSelectionActions.Visibility=Visibility.Collapsed;
         SelectionBulkActions.IsEnabled=FooterBulkActions.IsEnabled=FooterClearSelection.IsEnabled=!saving&&!dialogOpen&&!preparingSelection;

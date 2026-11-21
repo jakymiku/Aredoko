@@ -101,7 +101,7 @@ public sealed class LibraryApi : IDisposable
         if(view=="history")
         {
             if(semantic||source!="all")throw new ArgumentException("閲覧履歴は名前・タグ検索を使ってください。");
-            return Protocol.ParseSearch(await client.GetStringAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
+            return Protocol.ParseSearch(await client.GetStringAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds),cancellation));
         }
         if(source is "pending-proposals" or "pending-proposals-semantic")
         {
@@ -111,14 +111,14 @@ public sealed class LibraryApi : IDisposable
         if(source=="page-text")
         {
             if(string.IsNullOrWhiteSpace(q))return new SearchResponse{Total=0,Items=[]};
-            return await PageEvidences.SearchTextAsync(q,kind,view,page,rootIds);
+            return await PageEvidences.SearchTextAsync(q,kind,view,page,rootIds,cancellation:cancellation);
         }
         if(semantic && !string.IsNullOrWhiteSpace(q))
         {
             var result=await new SearchRequestClient(aiClient).RunAsync("api/library/ai/search",AIScopeRequests.Search(q,kind,view,page,source,FolderSearch.RestrictAIMulti(scope,rootIds),literalOnly,groupThreshold,resultGroup),cancellation,seconds:900);
             return Protocol.ParseSearch(Encoding.UTF8.GetString(result));
         }
-        return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds)));
+        return Protocol.ParseSearch(await GetTextAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds),cancellation));
     }
     public Task<JsonNode> SetRootShelvesAsync(IReadOnlyList<int> rootIds,IReadOnlyList<long> shelfIds,bool fillUnset)
     {

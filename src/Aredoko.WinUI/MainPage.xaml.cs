@@ -53,11 +53,13 @@ public sealed partial class MainPage : Page
     private readonly HashSet<int> checkedFolderIds=[];
     private FolderSettingsDraft? folderDraft;
     private bool folderHubOpen, settingsHubOpen, folderTiles, folderPopulating, folderSettingsActive, pollingScan, gettingStartedDismissed, aiIndexReady, scanRootsRefreshed, aiRuntimeChecked, aiRuntimeAvailable;
+    private bool? lastAutoNavExpanded;
     private string[] draftTags=[];
     private int lastTextSearchMode=0, lastAISearchMode=1;
     private string currentSettingsCategory="all";
     private long? emptyLibraryScanJob;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer scanPollTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer folderFilterTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer runtimeVerifyTimer;
     private readonly CancellationTokenSource runtimeVerifyLifetime=new();
     private bool pollingRuntimeVerify, aiModelResident;
@@ -119,6 +121,8 @@ public sealed partial class MainPage : Page
         searchTimer.Tick+=async (_,_)=>{searchTimer.Stop(); if(PendingAutoSearch&&!queryComposing) await NavigateAsync(0);};
         scanPollTimer=DispatcherQueue.CreateTimer(); scanPollTimer.Interval=TimeSpan.FromSeconds(1);
         scanPollTimer.Tick+=async (_,_)=>await PollScanStateAsync();
+        folderFilterTimer=DispatcherQueue.CreateTimer(); folderFilterTimer.Interval=TimeSpan.FromMilliseconds(150);
+        folderFilterTimer.Tick+=(_,_)=>{folderFilterTimer.Stop();if(!disposed&&ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();};
         runtimeVerifyTimer=DispatcherQueue.CreateTimer(); runtimeVerifyTimer.Interval=TimeSpan.FromSeconds(1);
         runtimeVerifyTimer.Tick+=async (_,_)=>await PollRuntimeVerificationAsync();
     }
@@ -805,28 +809,9 @@ public sealed partial class MainPage : Page
         {
             badgeRow.Children.Add(CreateCardBadge(kindText, maxBadgeTextWidth, $"ItemKindBadge{row.Id}"));
         }
-        else if (row.Kind == "image")
+        else if (row.Kind == "image" && Kind.SelectedIndex is not (0 or 1))
         {
-            if (Kind.SelectedIndex is not (0 or 1))
-            {
-                badgeRow.Children.Add(CreateCardBadge(kindText, maxBadgeTextWidth, $"ItemKindBadge{row.Id}"));
-            }
-            else if (shelves.Length == 0 && row.Tags.Length == 0)
-            {
-                var kindHint = new TextBlock
-                {
-                    Text = kindText,
-                    MaxWidth = maxBadgeTextWidth,
-                    MaxLines = 1,
-                    TextWrapping = TextWrapping.NoWrap,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    Style = (Style)Resources["MediaMetadataStyle"],
-                    Opacity = 0.72,
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                AutomationProperties.SetAutomationId(kindHint, $"ItemKindBadge{row.Id}");
-                badgeRow.Children.Add(kindHint);
-            }
+            badgeRow.Children.Add(CreateCardBadge(kindText, maxBadgeTextWidth, $"ItemKindBadge{row.Id}"));
         }
         if(shelves.Length>0)
         {
@@ -1082,6 +1067,15 @@ public sealed partial class MainPage : Page
             requestedEdge=initialEdge;
         }
     }
+    private double GridCaptionMinHeight()
+    {
+        if(!tiles)return 0;
+        if(rows.Any(r=>r.AIEvidence.Length>0||r.Proposal is not null||r.AIPage is not null||r.PageText is not null||r.Evidence is {AllDirect:false}))
+            return 78;
+        if(rows.Any(r=>r.ShelfIds.Length>0||!string.IsNullOrWhiteSpace(r.Shelf)||r.Tags.Length>0||r.Availability!="present"||r.MatchLabel.Length>0||(r.Kind=="image"&&Kind.SelectedIndex is not (0 or 1))))
+            return 48;
+        return 24;
+    }
     private void SizeItem(ListViewItem item,Image image)
     {
         var scale=libraryItemScale/100d;
@@ -1095,7 +1089,7 @@ public sealed partial class MainPage : Page
             ConstrainCardCaption(content,text);
             // Reserve the same caption space before/after thumbnail completion;
             // the first decoded tile must not set a shorter uniform row height.
-            text.MinHeight=tiles?78:0;
+            text.MinHeight=GridCaptionMinHeight();
         }
         // Leave room for the filename and metadata even in a short window.
         var height=Math.Max(48,ItemListContainer.ActualHeight-108);
@@ -2699,8 +2693,13 @@ public sealed partial class MainPage : Page
     {
         if(width<=0)return;
         var expanded=width>=(Details.IsPaneOpen?1080:1000);
-        Nav.PaneDisplayMode=expanded?NavigationViewPaneDisplayMode.Left:NavigationViewPaneDisplayMode.LeftCompact;
-        Nav.IsPaneOpen=expanded;
+        var displayMode=width>=720?NavigationViewPaneDisplayMode.Left:NavigationViewPaneDisplayMode.LeftCompact;
+        if(Nav.PaneDisplayMode!=displayMode)Nav.PaneDisplayMode=displayMode;
+        if(lastAutoNavExpanded!=expanded)
+        {
+            lastAutoNavExpanded=expanded;
+            Nav.IsPaneOpen=expanded;
+        }
         Details.DisplayMode=width<720?SplitViewDisplayMode.Overlay:SplitViewDisplayMode.Inline;
         Details.OpenPaneLength=width>=1080?340:width>=880?300:Math.Clamp(width-580,260,300);
     }
@@ -2716,7 +2715,6 @@ public sealed partial class MainPage : Page
     {
         UpdateSearchToolbarLayout();
         UpdateFolderLayout();
-        UpdateNavigationLayout(ActualWidth);
         UpdateDetailLayout();
     }
     private void SearchToolbarPart_SizeChanged(object sender,SizeChangedEventArgs e)=>UpdateSearchToolbarLayout();
@@ -2785,6 +2783,7 @@ public sealed partial class MainPage : Page
 
     private void CloseFolderHubCore()
     {
+        folderFilterTimer.Stop();
         if(emptyLibraryScanJob is null)scanPollTimer.Stop();
         folderHubOpen=false;
         ToolTipService.SetToolTip(Count,null);
@@ -3015,10 +3014,11 @@ public sealed partial class MainPage : Page
         RootPath.Focus(FocusState.Programmatic);
     }
 
-    private void FolderFilter_Changed(object sender,TextChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();}
-    private void FolderStateFilter_Changed(object sender,SelectionChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating)RenderFolderHub();}
+    private void FolderFilter_Changed(object sender,TextChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating){folderFilterTimer.Stop();folderFilterTimer.Start();}}
+    private void FolderStateFilter_Changed(object sender,SelectionChangedEventArgs e){if(ready&&folderHubOpen&&!folderPopulating){folderFilterTimer.Stop();RenderFolderHub();}}
     private void ClearFolderFilters_Click(object sender,RoutedEventArgs e)
     {
+        folderFilterTimer.Stop();
         var previous=folderPopulating;folderPopulating=true;
         try{FolderFilterBox.Text="";FolderStateFilter.SelectedIndex=0;}
         finally{folderPopulating=previous;}
@@ -3095,7 +3095,7 @@ public sealed partial class MainPage : Page
             else
             {
                 FolderEmptyTitle.Text="該当するフォルダはありません";
-                FolderEmpty.Text="絞り込み条件に一致する登録フォルダがありません。";
+                FolderEmpty.Text="絞り込み条件に一致するフォルダはありません。";
                 FolderEmptyAddButton.Visibility=Visibility.Collapsed;
                 FolderEmptyClearFiltersButton.Visibility=Visibility.Visible;
             }
@@ -4230,6 +4230,6 @@ public sealed partial class MainPage : Page
         if(imageViewer is {} activeImage)await activeImage.FlushFavoriteAsync();
         if(videoPlayer is {} activeVideo)await activeVideo.FlushFavoriteAsync();
     }
-    public void Stop(){if(disposed)return;disposed=true;settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();containerQuickActionSync.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){if(disposed)return;disposed=true;settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();folderFilterTimer.Stop();thumbnails.ResetSession();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();containerQuickActionSync.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 
