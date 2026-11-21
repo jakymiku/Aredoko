@@ -144,8 +144,8 @@ public sealed partial class MainPage
                 SettingsAIIndexButton.Style=available?accent:null;
                 SettingsAIIndexButton.Content="AI検索を設定";
             }
-            if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?subtle:accent;
-            if(SettingsAISetupPlanButton is not null)SettingsAISetupPlanButton.Style=available?subtle:null;
+            if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?null:accent;
+            if(SettingsAISetupPlanButton is not null)SettingsAISetupPlanButton.Style=null;
             if(SettingsAISetupRowLabel is not null)SettingsAISetupRowLabel.Text=available?"環境の再構成・用途選び：":"初回セットアップ：";
             var state=statusData["state"]?.GetValue<string>()??"idle";
             var processed=statusData["processed"]?.GetValue<int>()??0;

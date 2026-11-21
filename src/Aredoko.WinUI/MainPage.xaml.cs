@@ -1369,6 +1369,15 @@ public sealed partial class MainPage : Page
             AddSimilarityMenuItems(menu.Items,row,forDetail:false);
             addedSearchSection=true;
         }
+        if(TagReviewProtocol.CanOpen(row))
+        {
+            var tagSuggestions=new MenuFlyoutItem{Text="✨ AIタグ候補を作成・確認…"};
+            AutomationProperties.SetAutomationId(tagSuggestions,"TagSuggestions"+row.Id);
+            ToolTipService.SetToolTip(tagSuggestions,"WD Tagger でこの作品のタグ候補を生成・承認します。");
+            tagSuggestions.Click+=async(_,_)=>await OpenTagSuggestionsAsync(row);
+            menu.Items.Add(tagSuggestions);
+            addedSearchSection=true;
+        }
         if(ArchiveManifest.CanOpen(row))
         {
             var pages=new MenuFlyoutItem {Text="ページをAI検索データに追加…"};AutomationProperties.SetAutomationId(pages,"IndexBookPages"+row.Id);
@@ -2764,15 +2773,19 @@ public sealed partial class MainPage : Page
     }
     private async void TagSuggestions_Click(object sender,RoutedEventArgs e)
     {
-        if(active is null||!TagReviewProtocol.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
-        var id=active.Id;var detailsWereOpen=Details.IsPaneOpen;dialogOpen=true;searchTimer.Stop();
+        if(active is not null)await OpenTagSuggestionsAsync(active);
+    }
+    private async Task OpenTagSuggestionsAsync(MediaRow targetRow)
+    {
+        if(!TagReviewProtocol.CanOpen(targetRow)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        var id=targetRow.Id;var isDirty=active?.Id==id&&Dirty;var detailsWereOpen=Details.IsPaneOpen;dialogOpen=true;searchTimer.Stop();
         var openTaggerDownload=false;
         var root=XamlRoot;Windows.Foundation.TypedEventHandler<XamlRoot,XamlRootChangedEventArgs> rootChanged=(_,_)=>tagReview?.Fit(root.Size.Width,root.Size.Height);
         root.Changed+=rootChanged;
         try
         {
             if(tagReviewSyncItem==id)await SyncTagReviewAsync(id);
-            tagReview=new TagSuggestionsView(api.TagReviews,id,Dirty){RequestedTheme=ActualTheme};tagReview.Fit(root.Size.Width,root.Size.Height);
+            tagReview=new TagSuggestionsView(api.TagReviews,id,isDirty){RequestedTheme=ActualTheme};tagReview.Fit(root.Size.Width,root.Size.Height);
             tagReview.OpenSetupRequested+=()=>openTaggerDownload=true;
             var dialog=new ContentDialog{RequestedTheme=ActualTheme,XamlRoot=XamlRoot,Title="AIタグ候補",Content=tagReview,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,FullSizeDesired=true};
             dialog.Resources["ContentDialogMaxWidth"]=720d;
@@ -2796,10 +2809,18 @@ public sealed partial class MainPage : Page
     private async Task SyncTagReviewAsync(int id)
     {
         var fresh=await api.TagReviews.ItemAsync(id,CancellationToken.None);
-        if(disposed||active?.Id!=id)return;
-        active.Tags=fresh.Tags;active.Shelf=fresh.Shelf;active.ShelfIds=fresh.ShelfIds.ToArray();active.Favorite=fresh.Favorite;active.Reviewed=fresh.Reviewed;
-        editingShelfIds=fresh.ShelfIds.ToArray();draftTags=fresh.Tags.ToArray();Tags.Text="";UpdateShelfEditorLabel();SyncFavoriteToggle(fresh.Favorite);Reviewed.IsChecked=fresh.Reviewed;
-        saved=Current();tagReviewSyncItem=null;await RefreshResultRowsAfterEditAsync();
+        if(disposed)return;
+        if(active?.Id==id)
+        {
+            active.Tags=fresh.Tags;active.Shelf=fresh.Shelf;active.ShelfIds=fresh.ShelfIds.ToArray();active.Favorite=fresh.Favorite;active.Reviewed=fresh.Reviewed;
+            editingShelfIds=fresh.ShelfIds.ToArray();draftTags=fresh.Tags.ToArray();Tags.Text="";UpdateShelfEditorLabel();SyncFavoriteToggle(fresh.Favorite);Reviewed.IsChecked=fresh.Reviewed;
+            saved=Current();
+        }
+        else if(rows.FirstOrDefault(row=>row.Id==id) is {} listed)
+        {
+            listed.Tags=fresh.Tags;listed.Shelf=fresh.Shelf;listed.ShelfIds=fresh.ShelfIds.ToArray();listed.Favorite=fresh.Favorite;listed.Reviewed=fresh.Reviewed;
+        }
+        tagReviewSyncItem=null;await RefreshResultRowsAfterEditAsync();
     }
     private void UpdateNavigationLayout(double width)
     {

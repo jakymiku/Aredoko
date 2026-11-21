@@ -106,12 +106,39 @@ public sealed partial class MainPage
             var step1Card=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=new StackPanel{Spacing=10,Children={step1Header,choices}}};
             panel.Children.Add(step1Card);
 
+            var miniStatusGrid=new Grid{ColumnSpacing=8,Visibility=Visibility.Collapsed};
+            miniStatusGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            miniStatusGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            var runtimeBadgeText=new TextBlock{Text="確認中…",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap};
+            var modelBadgeText=new TextBlock{Text="確認中…",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap};
+            foreach(var (col,titleText,valueBlock) in new[]{(0,"① AI実行環境",runtimeBadgeText),(1,"② 検索モデル",modelBadgeText)})
+            {
+                var card=new Border
+                {
+                    Background=(Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+                    BorderBrush=(Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                    BorderThickness=new Thickness(1),
+                    CornerRadius=new CornerRadius(6),
+                    Padding=new Thickness(10,6,10,6),
+                    Child=new StackPanel
+                    {
+                        Spacing=2,
+                        Children=
+                        {
+                            new TextBlock{Text=titleText,Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"],Foreground=(Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]},
+                            valueBlock
+                        }
+                    }
+                };
+                Grid.SetColumn(card,col);miniStatusGrid.Children.Add(card);
+            }
+            var divider=new Border{Height=1,Background=(Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],Margin=new Thickness(0,2,0,2)};
             var statusBox=new Border
             {
                 Background=(Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
                 CornerRadius=new CornerRadius(6),
                 Padding=new Thickness(12,10,12,10),
-                Child=new StackPanel{Spacing=6,Children={summary,nextSteps}}
+                Child=new StackPanel{Spacing=8,Children={summary,divider,nextSteps}}
             };
             var actionsGrid=new Grid{ColumnSpacing=8,RowSpacing=8};
             actionsGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
@@ -132,6 +159,7 @@ public sealed partial class MainPage
                     {
                         new TextBlock{Text="② 現在の準備状況とセットアップ",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]},
                         progress,
+                        miniStatusGrid,
                         statusBox,
                         actionsGrid
                     }
@@ -164,20 +192,32 @@ public sealed partial class MainPage
                 var expected=++version;request?.Dispose();request=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                 var cancellation=request;
                 review.IsEnabled=false;progress.Visibility=Visibility.Visible;
+                miniStatusGrid.Visibility=Visibility.Collapsed;divider.Visibility=Visibility.Collapsed;
                 download.IsEnabled=false;existing.IsEnabled=false;dialog.IsPrimaryButtonEnabled=false;diagnostics.IsEnabled=false;recovery.Visibility=Visibility.Collapsed;nextSteps.Text="";
                 try
                 {
                     var selection=selected;
                     var plan=await api.AISetupPlans.CreateAsync(selection,cancellation.Token);
-                    AIDownloadJob? downloadJob=null;AIEnvironmentJob? environmentJob=null;
+                    AIDownloadJob? downloadJob=null;AIEnvironmentJob? environmentJob=null;IReadOnlyList<AIDownloadCatalog>? catalogs=null;
                     if(!plan.SkipAI)
                     {
                         var acquisition=api.AIDownloads.JobAsync(cancellation.Token);var placement=api.AIEnvironment.JobAsync(cancellation.Token);
-                        await Task.WhenAll(acquisition,placement);downloadJob=await acquisition;environmentJob=await placement;
+                        var catalogTask=api.AIDownloads.CatalogsAsync(cancellation.Token);
+                        await Task.WhenAll(acquisition,placement,catalogTask);
+                        downloadJob=await acquisition;environmentJob=await placement;catalogs=await catalogTask;
                     }
                     if(lifetime.IsCancellationRequested||expected!=version)return;
+                    if(downloadJob?.Published==true&&catalogs is not null&&catalogs.FirstOrDefault(c=>c.Id==downloadJob.CatalogId)?.ModelTarget?.Role=="tagger")
+                        downloadJob=null;
+                    var runtimeReq=plan.Requirements.FirstOrDefault(r=>r.Id=="embedding-runtime");
+                    var modelReq=plan.Requirements.FirstOrDefault(r=>r.Id=="embedding-model");
+                    miniStatusGrid.Visibility=plan.SkipAI||runtimeReq is null||modelReq is null?Visibility.Collapsed:Visibility.Visible;
+                    if(runtimeReq is not null)runtimeBadgeText.Text=runtimeReq.FilesPresent?"✓ 配置済み":"⚠ 要導入";
+                    if(modelReq is not null)modelBadgeText.Text=modelReq.FilesPresent?"✓ 配置済み":"⚠ 要導入";
+                    divider.Visibility=Visibility.Visible;
                     summary.Text=plan.Summary;
                     nextSteps.Text=AISetupGuidance.Describe(plan,selection,downloadJob,environmentJob);
+                    divider.Visibility=string.IsNullOrWhiteSpace(nextSteps.Text)?Visibility.Collapsed:Visibility.Visible;
                     recoveryText.Text=AISetupRecovery.Describe(plan);recovery.Visibility=plan.SkipAI?Visibility.Collapsed:Visibility.Visible;diagnostics.IsEnabled=!plan.SkipAI;
                     automatic.Content=plan.SkipAI?"自動セットアップ":plan.AutomaticSetupSupported?"自動セットアップ":"自動セットアップ（このモデルは非対応）";
                     var allPresent=!plan.SkipAI&&plan.Requirements.Count>0&&plan.Requirements.All(row=>row.FilesPresent);
@@ -189,7 +229,7 @@ public sealed partial class MainPage
                     dialog.IsPrimaryButtonEnabled=!plan.SkipAI;
                 }
                 catch(OperationCanceledException)when(cancellation.IsCancellationRequested){}
-                catch(Exception ex){if(!lifetime.IsCancellationRequested&&expected==version)summary.Text="確認できませんでした。基本機能はそのまま使えます。\n"+ex.Message;}
+                catch(Exception ex){if(!lifetime.IsCancellationRequested&&expected==version){miniStatusGrid.Visibility=Visibility.Collapsed;divider.Visibility=Visibility.Collapsed;summary.Text="確認できませんでした。基本機能はそのまま使えます。\n"+ex.Message;}}
                 finally{if(!lifetime.IsCancellationRequested&&expected==version){review.IsEnabled=true;progress.Visibility=Visibility.Collapsed;}}
             }
             autoReviewTimer.Tick+=(_,_)=>{if(!lifetime.IsCancellationRequested&&!disposed)reviewing=ReviewAsync();};
