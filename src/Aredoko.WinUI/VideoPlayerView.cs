@@ -32,15 +32,14 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly ViewerChromeController hideTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer positionTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer previewTimer;
-    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer tapTimer;
     private readonly Slider seekBar = new() { Minimum=0, Maximum=1, SmallChange=1, LargeChange=10, StepFrequency=0.1, IsThumbToolTipEnabled=false, HorizontalAlignment=HorizontalAlignment.Stretch };
     private readonly Image seekImage = new() { Width=256, Height=144, Stretch=Stretch.Uniform };
     private readonly TextBlock seekHint = new() { Text="読み込み中…", HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Center };
     private readonly TextBlock seekTime = new() { HorizontalAlignment=HorizontalAlignment.Center };
     private readonly Border seekPreview = new() { Width=272, HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Bottom, Visibility=Visibility.Collapsed, IsHitTestVisible=false, RequestedTheme=ElementTheme.Dark };
     private CancellationTokenSource? previewRequest;
-    private bool updatingSeek, seekHover, seekDragging, previewBusy, updatingVolume, compatAttempted;
-    private long lastDoubleTapTick, lastMaximizeTick;
+    private bool updatingSeek, seekHover, seekDragging, previewBusy, updatingVolume, compatAttempted, preTapPlaying;
+    private long lastSingleTapTick, lastDoubleTapTick, lastMaximizeTick;
     private readonly Slider volumeSlider=new(){Minimum=0,Maximum=100,StepFrequency=1,SmallChange=5,LargeChange=20,Width=88,VerticalAlignment=VerticalAlignment.Center};
     private readonly Dictionary<int,BitmapImage> previewFrames=[];
     private readonly Queue<int> previewFrameOrder=[];
@@ -110,8 +109,6 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         positionTimer.Tick += (_, _) => SyncPosition();
         previewTimer=DispatcherQueue.CreateTimer();previewTimer.Interval=TimeSpan.FromMilliseconds(320);previewTimer.IsRepeating=false;
         previewTimer.Tick+=async(_,_)=>await LoadSeekPreviewAsync();
-        tapTimer=DispatcherQueue.CreateTimer();tapTimer.Interval=TimeSpan.FromMilliseconds(doubleClickMs);tapTimer.IsRepeating=false;
-        tapTimer.Tick+=(_,_)=>{if(!disposed&&!busy&&loaded&&!failed)TogglePlayPause();};
         viewport.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
         viewport.Children.Add(playerElement);
         Children.Add(viewport);
@@ -141,18 +138,27 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         viewport.Tapped+=(_,args)=>
         {
             if(Environment.TickCount64-lastDoubleTapTick<=doubleClickMs+80)return;
-            if(!busy&&loaded&&!failed&&!ViewerInputGestures.IsInteractiveControl(args.OriginalSource,viewport)){args.Handled=true;tapTimer.Stop();tapTimer.Start();}
+            if(!busy&&loaded&&!failed&&!ViewerInputGestures.IsInteractiveControl(args.OriginalSource,viewport))
+            {
+                args.Handled=true;
+                preTapPlaying=playing;
+                lastSingleTapTick=Environment.TickCount64;
+                TogglePlayPause(revealChrome:false);
+            }
         };
         viewport.DoubleTapped+=(_,args)=>
         {
             if(ViewerInputGestures.IsInteractiveControl(args.OriginalSource,viewport))return;
             args.Handled=true;
-            lastDoubleTapTick=Environment.TickCount64;
-            lastMaximizeTick=lastDoubleTapTick;
-            tapTimer.Stop();
-            var wasPlaying=playing;
+            var now=Environment.TickCount64;
+            var revertFirstTap=(now-lastSingleTapTick)<=doubleClickMs+100;
+            lastDoubleTapTick=now;
+            lastMaximizeTick=now;
+            var shouldPlay=revertFirstTap?preTapPlaying:playing;
+            if(loaded&&!busy&&!failed&&shouldPlay!=playing)
+                TogglePlayPause(revealChrome:false);
             ToggleMaximizeRequested?.Invoke();
-            if(wasPlaying)
+            if(shouldPlay)
                 DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,()=>
                 {
                     if(!disposed&&loaded&&!failed&&playing&&mediaPlayer is not null
@@ -223,13 +229,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         seekBar.ValueChanged+=(_,_)=>
         {
             if(updatingSeek)return;
-            var target=TimeSpan.FromSeconds(seekBar.Value);
-            if(seekDragging)
-            {
-                if(loaded&&!busy&&!failed)positionText.Text=VideoPlayerPolicy.FormatPosition(VideoPlayerPolicy.ClampSeek(target,duration),duration);
-                return;
-            }
-            SeekTo(target);
+            SeekTo(TimeSpan.FromSeconds(seekBar.Value),revealChrome:!seekDragging);
         };
         seekBar.AddHandler(PointerMovedEvent,new PointerEventHandler((_,args)=>
         {
@@ -502,7 +502,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         SyncSeekBar();
     }
 
-    private void StartPlayback()
+    private void StartPlayback(bool revealChrome = true)
     {
         if (!loaded || busy || failed || mediaPlayer is null || playing) return;
         if (position >= duration && duration > TimeSpan.Zero)
@@ -515,13 +515,13 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         positionTimer.Start();
         ViewerNotice.Set(status);
         UpdateControls();
-        ShowChrome();
+        if (revealChrome) ShowChrome();
     }
 
-    private void TogglePlayPause()
+    private void TogglePlayPause(bool revealChrome = true)
     {
         if (!loaded || busy || failed || mediaPlayer is null) return;
-        if (!playing) { StartPlayback(); return; }
+        if (!playing) { StartPlayback(revealChrome); return; }
         playing = false;
         positionTimer.Stop();
         mediaPlayer.Pause();
@@ -529,25 +529,27 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         if (sessionPos > position) position = VideoPlayerPolicy.ClampSeek(sessionPos, duration);
         positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
         ViewerNotice.Set(status);
-        UpdateControls(); ShowChrome();
+        UpdateControls();
+        if (revealChrome) ShowChrome();
     }
 
     private void FinishSeekDrag()
     {
         if (!seekDragging) return;
         seekDragging = false;
-        SeekTo(TimeSpan.FromSeconds(seekBar.Value));
+        SeekTo(TimeSpan.FromSeconds(seekBar.Value), revealChrome: false);
         hideTimer.Start();
     }
 
     private void Seek(double deltaSeconds)=>SeekTo(position+TimeSpan.FromSeconds(deltaSeconds));
 
-    private void SeekTo(TimeSpan target)
+    private void SeekTo(TimeSpan target, bool revealChrome = true)
     {
         if(!loaded||busy||failed||mediaPlayer is null)return;
         position=VideoPlayerPolicy.ClampSeek(target,duration);mediaPlayer.PlaybackSession.Position=position;
         positionText.Text=VideoPlayerPolicy.FormatPosition(position,duration);
-        ViewerNotice.Set(status);UpdateControls();ShowChrome();
+        ViewerNotice.Set(status);UpdateControls();
+        if(revealChrome)ShowChrome();
     }
     private void SyncSeekBar()
     {
@@ -665,7 +667,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         if (disposed) return;
         disposed = true;
         favorite.Dispose();
-        hideTimer.Dispose();menu.Hide();previewTimer.Stop();tapTimer.Stop();
+        hideTimer.Dispose();menu.Hide();previewTimer.Stop();
         lifetime.Cancel();
         request?.Cancel();
         ClearMedia();

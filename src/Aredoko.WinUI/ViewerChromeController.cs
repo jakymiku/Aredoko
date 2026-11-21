@@ -28,9 +28,12 @@ internal sealed class ViewerChromeController : IDisposable
     private readonly Border toolbar;
     private readonly UIElement viewport;
     private readonly Func<bool> keepVisible;
-    private readonly Border hoverHint=new(){IsHitTestVisible=false,Visibility=Visibility.Collapsed,RequestedTheme=ElementTheme.Dark,Background=new SolidColorBrush(Color.FromArgb(0xEB,0x20,0x20,0x26)),BorderBrush=new SolidColorBrush(Color.FromArgb(0x55,0xFF,0xFF,0xFF)),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(10,4,10,4),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Bottom};
+    private readonly Canvas hoverLayer=new(){IsHitTestVisible=false};
+    private readonly Border hoverHint=new(){IsHitTestVisible=false,Opacity=0,RequestedTheme=ElementTheme.Dark,Background=new SolidColorBrush(Color.FromArgb(0xEB,0x20,0x20,0x26)),BorderBrush=new SolidColorBrush(Color.FromArgb(0x55,0xFF,0xFF,0xFF)),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(10,4,10,4)};
     private readonly TextBlock hoverHintText=new(){Foreground=new SolidColorBrush(Colors.White),TextWrapping=TextWrapping.NoWrap};
+    private readonly TranslateTransform hoverHintTransform=new();
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer hoverHintTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer hoverHideTimer;
     private FrameworkElement? hoverTarget;
     private Func<string>? hoverTextProvider;
     private Storyboard? activeStoryboard;
@@ -42,9 +45,13 @@ internal sealed class ViewerChromeController : IDisposable
         this.root=root;this.toolbar=toolbar;this.viewport=viewport;this.keepVisible=keepVisible;
         hoverHintText.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         hoverHint.Child=hoverHintText;
-        Canvas.SetZIndex(hoverHint,20);
+        hoverHint.RenderTransform=hoverHintTransform;
+        hoverHint.SizeChanged+=(_,_)=>{if(!disposed&&hoverHint.Opacity>0&&hoverTarget is not null)PositionHoverHint();};
+        Canvas.SetZIndex(hoverLayer,20);
         hoverHintTimer=root.DispatcherQueue.CreateTimer();hoverHintTimer.Interval=TimeSpan.FromMilliseconds(140);hoverHintTimer.IsRepeating=false;
         hoverHintTimer.Tick+=(_,_)=>ShowHoverHint();
+        hoverHideTimer=root.DispatcherQueue.CreateTimer();hoverHideTimer.Interval=TimeSpan.FromMilliseconds(60);hoverHideTimer.IsRepeating=false;
+        hoverHideTimer.Tick+=(_,_)=>HideHoverHint();
         timer=root.DispatcherQueue.CreateTimer();timer.Interval=TimeSpan.FromMilliseconds(140);timer.IsRepeating=false;
         timer.Tick+=(_,_)=>
         {
@@ -204,53 +211,73 @@ internal sealed class ViewerChromeController : IDisposable
     public void AttachHoverHint(FrameworkElement target,Func<string> textProvider)
     {
         ToolTipService.SetToolTip(target,null);
-        if(!root.Children.Contains(hoverHint))root.Children.Add(hoverHint);
+        if(!hoverLayer.Children.Contains(hoverHint))hoverLayer.Children.Add(hoverHint);
+        if(!root.Children.Contains(hoverLayer))root.Children.Add(hoverLayer);
         target.PointerEntered+=(_,_)=>
         {
             if(disposed)return;
+            hoverHideTimer.Stop();
             hoverTarget=target;hoverTextProvider=textProvider;
-            if(hoverHint.Visibility==Visibility.Visible)ShowHoverHint();
+            if(hoverHint.Opacity>0)ShowHoverHint();
             else { hoverHintTimer.Stop(); hoverHintTimer.Start(); }
         };
-        target.PointerExited+=(_,_)=>{if(ReferenceEquals(hoverTarget,target))HideHoverHint();};
+        target.PointerExited+=(_,_)=>
+        {
+            if(ReferenceEquals(hoverTarget,target))
+            {
+                hoverHintTimer.Stop();
+                hoverHideTimer.Stop();
+                hoverHideTimer.Start();
+            }
+        };
         target.AddHandler(UIElement.PointerPressedEvent,new PointerEventHandler((_,_)=>{if(ReferenceEquals(hoverTarget,target))HideHoverHint();}),true);
     }
 
     public void RefreshHoverHint()
     {
-        if(!disposed&&hoverHint.Visibility==Visibility.Visible&&hoverTarget is not null&&hoverTextProvider is not null)
+        if(!disposed&&hoverHint.Opacity>0&&hoverTarget is not null&&hoverTextProvider is not null)
             ShowHoverHint();
     }
 
     public void HideHoverHint()
     {
         hoverHintTimer.Stop();
+        hoverHideTimer.Stop();
         hoverTarget=null;
         hoverTextProvider=null;
-        hoverHint.Visibility=Visibility.Collapsed;
+        hoverHint.Opacity=0;
+    }
+
+    private void PositionHoverHint()
+    {
+        if(hoverTarget is null||!hoverTarget.IsLoaded)return;
+        var w=hoverHint.ActualWidth>0?hoverHint.ActualWidth:hoverHint.DesiredSize.Width;
+        var h=hoverHint.ActualHeight>0?hoverHint.ActualHeight:Math.Max(26,hoverHint.DesiredSize.Height);
+        var pt=hoverTarget.TransformToVisual(root).TransformPoint(new Windows.Foundation.Point(hoverTarget.ActualWidth/2,0));
+        var rootW=root.ActualWidth>0?root.ActualWidth:w+16;
+        var rootH=root.ActualHeight>0?root.ActualHeight:200;
+        var toolbarH=toolbar.ActualHeight>0?toolbar.ActualHeight:44;
+        hoverHintTransform.X=Math.Clamp(pt.X-w/2,8,Math.Max(8,rootW-w-8));
+        hoverHintTransform.Y=Math.Max(8,rootH-toolbarH-24-h);
     }
 
     private void ShowHoverHint()
     {
         if(disposed||hoverTarget is null||hoverTextProvider is null||!hoverTarget.IsLoaded||toolbar.Visibility!=Visibility.Visible||hiding)
         {
-            hoverHint.Visibility=Visibility.Collapsed;
+            hoverHint.Opacity=0;
             return;
         }
         var text=hoverTextProvider();
         if(string.IsNullOrWhiteSpace(text))
         {
-            hoverHint.Visibility=Visibility.Collapsed;
+            hoverHint.Opacity=0;
             return;
         }
         hoverHintText.Text=text;
         hoverHint.Measure(new Windows.Foundation.Size(420,60));
-        var center=hoverTarget.TransformToVisual(root).TransformPoint(new Windows.Foundation.Point(hoverTarget.ActualWidth/2,0)).X;
-        var rootWidth=root.ActualWidth>0?root.ActualWidth:hoverHint.DesiredSize.Width+16;
-        var left=Math.Clamp(center-hoverHint.DesiredSize.Width/2,8,Math.Max(8,rootWidth-hoverHint.DesiredSize.Width-8));
-        var bottom=(toolbar.ActualHeight>0?toolbar.ActualHeight:44)+24;
-        hoverHint.Margin=new Thickness(left,0,0,bottom);
-        hoverHint.Visibility=Visibility.Visible;
+        PositionHoverHint();
+        hoverHint.Opacity=1;
     }
 
     public void Dispose()
