@@ -16,8 +16,8 @@ from thumbnail_disk import ThumbnailDisk
 
 EDGES = (128, 256, 512, 1024)
 METHOD = 'first-visible-exif-rgba-lanczos-v1'
-CACHE_BYTES = 64 * 1024 * 1024
-CACHE_ENTRIES = 256
+CACHE_BYTES = 192 * 1024 * 1024
+CACHE_ENTRIES = 1024
 MAX_JOBS = 32
 
 

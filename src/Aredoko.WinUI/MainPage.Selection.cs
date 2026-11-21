@@ -238,6 +238,10 @@ public sealed partial class MainPage
             var action=new MenuFlyoutItem{Text=label,IsEnabled=enabled};AutomationProperties.SetAutomationId(action,id);
             action.Click+=async(_,_)=>{if(session==resultSession?.Id&&expected.SequenceEqual(librarySelection.Ids))await EditLibrarySelectionAsync(operation);};menu.Items.Add(action);
         }
+        var bulkTagSuggestions=new MenuFlyoutItem{Text="✨ AIタグ候補をまとめて生成",IsEnabled=enabled};
+        AutomationProperties.SetAutomationId(bulkTagSuggestions,"BulkTagSuggestions");
+        bulkTagSuggestions.Click+=async(_,_)=>{if(session==resultSession?.Id&&expected.SequenceEqual(librarySelection.Ids))await GenerateSelectionTagSuggestionsAsync();};
+        menu.Items.Add(bulkTagSuggestions);
         menu.Items.Add(new MenuFlyoutSeparator());
         var clear=new MenuFlyoutItem{Text="選択を解除",IsEnabled=enabled};AutomationProperties.SetAutomationId(clear,"BulkClearSelection");
         clear.Click+=ClearLibrarySelection_Click;menu.Items.Add(clear);
@@ -274,6 +278,134 @@ public sealed partial class MainPage
     private async void SelectionFavoriteRemove_Click(object sender,RoutedEventArgs e)=>await EditLibrarySelectionAsync(SelectionOperation.FavoriteRemove);
     private async void SelectionShelfAdd_Click(object sender,RoutedEventArgs e)=>await EditLibrarySelectionAsync(SelectionOperation.ShelvesAdd);
     private async void SelectionShelfRemove_Click(object sender,RoutedEventArgs e)=>await EditLibrarySelectionAsync(SelectionOperation.ShelvesRemove);
+    private async void SelectionTagSuggestions_Click(object sender,RoutedEventArgs e)=>await GenerateSelectionTagSuggestionsAsync();
+
+    private CancellationTokenSource? bulkTagGenerationCts;
+
+    private async Task GenerateSelectionTagSuggestionsAsync()
+    {
+        if(disposed||saving||dialogOpen||preparingSelection||librarySelection.Count==0||resultSession is not {} session||librarySelection.SessionId!=session.Id||!await transitions.WaitAsync(0))return;
+        saving=true;searchTimer.Stop();
+        var ids=librarySelection.Ids.ToArray();
+        var detailsWereOpen=Details.IsPaneOpen;
+        var loadedRows=rows.ToDictionary(r=>r.Id);
+        var succeeded=0;var skipped=0;var failed=0;
+        string? availabilityError=null;
+        var summaryText="";
+        bulkTagGenerationCts?.Dispose();
+        bulkTagGenerationCts=new CancellationTokenSource();
+        var cts=bulkTagGenerationCts;
+        try
+        {
+            await Task.Yield();if(disposed)return;
+            UpdateLibrarySelectionTools();
+            foreach(var button in SelectionSummaryPanel.Children.OfType<Button>())button.IsEnabled=false;
+            SetSelectionSaveStatus($"AIタグ候補の対象を確認中… (0/{ids.Length:N0} 件)");
+
+            var targets=new List<int>(ids.Length);
+            foreach(var id in ids)
+            {
+                if(disposed||cts.IsCancellationRequested)break;
+                MediaRow? row;
+                if(!loadedRows.TryGetValue(id,out row))
+                {
+                    try{row=await api.TagReviews.ItemAsync(id,cts.Token);}
+                    catch(OperationCanceledException) when(cts.IsCancellationRequested){break;}
+                    catch{skipped++;continue;}
+                }
+                if(TagReviewProtocol.CanOpen(row))targets.Add(id);
+                else skipped++;
+            }
+
+            if(targets.Count==0)
+            {
+                summaryText="選択した作品にAIタグ候補の対象（画像・本）がありません。";
+                Notice("AIタグ候補の対象がありません",summaryText,InfoBarSeverity.Warning);
+                return;
+            }
+
+            var firstHistory=await api.TagReviews.HistoryAsync(targets[0],null,cts.Token);
+            if(!firstHistory.Available)
+            {
+                availabilityError=firstHistory.Reason;
+                summaryText="AIタグ候補を生成できません";
+                Notice("AIタグ候補を作成できません",availabilityError,InfoBarSeverity.Warning);
+                return;
+            }
+
+            var done=0;
+            foreach(var id in targets)
+            {
+                if(disposed||cts.IsCancellationRequested)break;
+                SetSelectionSaveStatus($"AIタグ候補を生成中… ({done:N0}/{targets.Count:N0} 件)");
+                var reqId=Guid.NewGuid().ToString("N");
+                try
+                {
+                    await api.TagReviews.GenerateAsync(id,reqId,cts.Token);
+                    succeeded++;
+                }
+                catch(OperationCanceledException) when(cts.IsCancellationRequested)
+                {
+                    try{await api.TagReviews.CancelAsync(reqId,CancellationToken.None);}catch{}
+                    break;
+                }
+                catch(Exception ex)
+                {
+                    AppLog.Error(ex);
+                    failed++;
+                    if(succeeded==0&&ex.Message.Contains("未導入"))
+                    {
+                        availabilityError=ex.Message;
+                        break;
+                    }
+                }
+                done++;
+            }
+
+            if(availabilityError is not null)
+            {
+                summaryText=availabilityError;
+                Notice("AIタグ候補を作成できません",availabilityError,InfoBarSeverity.Warning);
+            }
+            else
+            {
+                var detail=$"{succeeded:N0} 件の候補を作成しました（詳細の「✨ AI候補」または「AIタグ候補（文字）」検索で確認できます）。"
+                    +(skipped>0?$" 対象外 {skipped:N0} 件はスキップ。":"")
+                    +(failed>0?$" 失敗 {failed:N0} 件。":"");
+                summaryText=$"AIタグ候補：{succeeded:N0} 件生成"+(skipped>0?$" · 対象外 {skipped:N0} 件":"")+(failed>0?$" · 失敗 {failed:N0} 件":"");
+                Notice("AIタグ候補を生成しました",detail,failed>0?InfoBarSeverity.Warning:InfoBarSeverity.Success);
+                Status.IsOpen=true;
+            }
+        }
+        catch(OperationCanceledException) when(cts.IsCancellationRequested)
+        {
+            summaryText="AIタグ候補の生成を中止しました。";
+        }
+        catch(Exception ex)
+        {
+            summaryText=ex.Message;
+            Failure(ex);
+        }
+        finally
+        {
+            if(ReferenceEquals(bulkTagGenerationCts,cts))bulkTagGenerationCts=null;
+            cts.Dispose();
+            saving=false;dialogOpen=false;transitions.Release();
+            if(!disposed)
+            {
+                foreach(var button in SelectionSummaryPanel.Children.OfType<Button>())button.IsEnabled=true;
+                SetSelectionSaveStatus(summaryText);
+                if(detailsWereOpen&&(active is not null||librarySelection.Count>0))
+                {
+                    if(active is null)ShowSelectionSummary();
+                    Details.IsPaneOpen=true;
+                }
+                UpdateLibrarySelectionTools();
+                UpdateDirty();
+                if(PendingAutoSearch){searchTimer.Stop();searchTimer.Start();}
+            }
+        }
+    }
     private void SetSelectionSaveStatus(string text)
     {
         SelectionEditStatus.Text=SelectionInlineStatus.Text=text;

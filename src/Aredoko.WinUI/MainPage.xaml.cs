@@ -712,6 +712,17 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetName(item, "");
     }
 
+    private int CurrentThumbnailEdge()
+    {
+        var scale = libraryItemScale / 100d;
+        var availWidth = Items.ActualWidth > 0 ? Items.ActualWidth : ItemListContainer.ActualWidth;
+        var tileWidth = LibraryTileLayout.Width(Math.Max(1, availWidth - 16), libraryItemScale);
+        var imgW = tiles ? Math.Max(104, tileWidth - 20) : 72 * scale;
+        var maxH = Math.Max(48, ItemListContainer.ActualHeight - 108);
+        var imgH = tiles ? Math.Min(160 * scale, maxH) : 54 * scale;
+        return ThumbnailPolicy.EdgeFor(imgW, imgH, XamlRoot?.RasterizationScale ?? 1);
+    }
+
     private void RenderRows()
     {
         renderCancellation.Cancel(); renderCancellation.Dispose(); renderCancellation = new();
@@ -727,6 +738,7 @@ public sealed partial class MainPage : Page
             Items.ItemsSource=resultKeys;
         }
         finally { populating = false; }
+        _ = thumbnails.PrefetchRowsAsync(rows.ToArray(), CurrentThumbnailEdge(), renderCancellation.Token);
     }
 
     private static string ThumbnailOpenTooltip(MediaRow row)=>ViewerOptions.Value.OpenExternally
@@ -830,16 +842,16 @@ public sealed partial class MainPage : Page
             }
             else
             {
-                var visibleCount = Math.Min(row.Tags.Length, 3);
+                var visibleCount = Math.Min(row.Tags.Length, 5);
                 for (var i = 0; i < visibleCount; i++)
                 {
                     var tagText = "#" + row.Tags[i];
                     labels.Add(tagText);
                     badgeRow.Children.Add(CreateCardBadge(tagText, maxBadgeTextWidth, i == 0 ? $"ItemTagBadge{row.Id}" : $"ItemTagBadge{row.Id}_{i}"));
                 }
-                if (row.Tags.Length > 3)
+                if (row.Tags.Length > 5)
                 {
-                    var moreText = $"+{row.Tags.Length - 3}";
+                    var moreText = $"+{row.Tags.Length - 5}";
                     labels.Add(moreText);
                     badgeRow.Children.Add(CreateCardBadge(moreText, maxBadgeTextWidth));
                 }
@@ -848,6 +860,48 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetName(badgeRow, string.Join(" · ", labels));
         badgeRow.Visibility = badgeRow.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
+    private string FormatListFolderLabel(MediaRow row)
+    {
+        var root = knownRoots.FirstOrDefault(r => r.Id == row.RootId);
+        var rootName = root is null ? "" : (!string.IsNullOrWhiteSpace(root.Name) ? root.Name : root.ShortPath);
+        var loc = row.Location.Replace('\\', '/');
+        if (row.IsFolderBook)
+        {
+            var rel = loc == "./" ? rootName : loc.TrimEnd('/');
+            return string.IsNullOrWhiteSpace(rel) ? "" : $"📁 {rel}（一冊）";
+        }
+        var slash = loc.LastIndexOf('/');
+        var sub = slash > 0 ? loc[..slash] : "";
+        if (!string.IsNullOrWhiteSpace(rootName) && !string.IsNullOrWhiteSpace(sub)) return $"📁 {rootName}/{sub}";
+        if (!string.IsNullOrWhiteSpace(sub)) return $"📁 {sub}";
+        if (!string.IsNullOrWhiteSpace(rootName)) return $"📁 {rootName}";
+        return "";
+    }
+    private static string FormatListFileDetails(MediaRow row)
+    {
+        var parts = new List<string>(3);
+        if (!row.IsFolderBook && row.Modified > 0)
+        {
+            try
+            {
+                parts.Add(DateTimeOffset.FromUnixTimeMilliseconds(row.Modified / 1000000).ToLocalTime().ToString("yyyy/MM/dd HH:mm"));
+            }
+            catch (ArgumentOutOfRangeException) { }
+        }
+        if (row.Size > 0)
+        {
+            var sizeText = row.Size >= 1024L * 1024 * 1024 ? $"{row.Size / (1024d * 1024 * 1024):N2} GB"
+                : row.Size >= 1024L * 1024 ? $"{row.Size / (1024d * 1024):N1} MB"
+                : $"{Math.Max(1, Math.Round(row.Size / 1024d)):N0} KB";
+            parts.Add(sizeText);
+        }
+        if (!row.IsFolderBook)
+        {
+            var ext = System.IO.Path.GetExtension(row.Location).TrimStart('.').ToUpperInvariant();
+            if (!string.IsNullOrEmpty(ext)) parts.Add(ext);
+        }
+        return string.Join(" · ", parts);
+    }
     private void Items_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.ItemContainer is not ListViewItem item) return;
@@ -855,7 +909,8 @@ public sealed partial class MainPage : Page
         if (args.InRecycleQueue || disposed || RowForKey(args.Item) is not MediaRow row) return;
         if (item.ContentTemplateRoot is not Border host) return;
         args.Handled=true;
-        var content = new Grid { Padding = tiles ? new Thickness(6) : new Thickness(8), ColumnSpacing = 12, RowSpacing = tiles ? 6 : 8 };
+        item.Margin = tiles ? new Thickness(0, 0, 10, 10) : new Thickness(0, 0, 8, 6);
+        var content = new Grid { Padding = tiles ? new Thickness(6) : new Thickness(10, 6, 10, 6), ColumnSpacing = 12, RowSpacing = tiles ? 6 : 8 };
         content.AddHandler(PointerPressedEvent,new PointerEventHandler(LibrarySelectionPointerPressed),true);
         var image = new Image { Tag = row.Id, IsDoubleTapEnabled = true, Stretch = Stretch.Uniform };
         AutomationProperties.SetAutomationId(image, $"Preview{row.Id}");
@@ -895,6 +950,7 @@ public sealed partial class MainPage : Page
         {
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             Grid.SetColumn(text, 1);
         }
@@ -977,6 +1033,52 @@ public sealed partial class MainPage : Page
         }
         else
         {
+            var folderLabel=FormatListFolderLabel(row);
+            var fileDetails=FormatListFileDetails(row);
+            if(!string.IsNullOrEmpty(folderLabel)||!string.IsNullOrEmpty(fileDetails))
+            {
+                var listMetaPanel=new StackPanel
+                {
+                    Tag="ItemListMeta",
+                    Spacing=2,
+                    VerticalAlignment=VerticalAlignment.Center,
+                    HorizontalAlignment=HorizontalAlignment.Right,
+                    MaxWidth=260,
+                    Margin=new Thickness(8,0,8,0),
+                };
+                if(!string.IsNullOrEmpty(folderLabel))
+                {
+                    var folderTb=new TextBlock
+                    {
+                        Text=folderLabel,
+                        MaxLines=1,
+                        TextWrapping=TextWrapping.NoWrap,
+                        TextTrimming=TextTrimming.CharacterEllipsis,
+                        HorizontalAlignment=HorizontalAlignment.Right,
+                        Style=(Style)Resources["MediaMetadataStyle"],
+                    };
+                    ToolTipService.SetToolTip(folderTb,row.LocationLabel);
+                    AutomationProperties.SetAutomationId(folderTb,$"ItemFolderMeta{row.Id}");
+                    listMetaPanel.Children.Add(folderTb);
+                }
+                if(!string.IsNullOrEmpty(fileDetails))
+                {
+                    var detailsTb=new TextBlock
+                    {
+                        Text=fileDetails,
+                        MaxLines=1,
+                        TextWrapping=TextWrapping.NoWrap,
+                        TextTrimming=TextTrimming.CharacterEllipsis,
+                        HorizontalAlignment=HorizontalAlignment.Right,
+                        Style=(Style)Resources["MediaMetadataStyle"],
+                    };
+                    ToolTipService.SetToolTip(detailsTb,fileDetails);
+                    AutomationProperties.SetAutomationId(detailsTb,$"ItemFileMeta{row.Id}");
+                    listMetaPanel.Children.Add(detailsTb);
+                }
+                Grid.SetColumn(listMetaPanel,2);
+                content.Children.Add(listMetaPanel);
+            }
             var quickActions=new StackPanel{Tag="ItemQuickActions",Orientation=Orientation.Horizontal,Spacing=4,VerticalAlignment=VerticalAlignment.Center};
             quickActions.DoubleTapped+=(_,a)=>a.Handled=true;
             var favBtn=new Button{Padding=new Thickness(8,4,8,4),MinWidth=34};
@@ -999,7 +1101,7 @@ public sealed partial class MainPage : Page
                 openBtn.Click+=async(_,_)=>await OpenRowPreviewQuickAsync(row);
                 quickActions.Children.Add(openBtn);
             }
-            Grid.SetColumn(quickActions,2);
+            Grid.SetColumn(quickActions,3);
             content.Children.Add(quickActions);
         }
         item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
@@ -1031,7 +1133,7 @@ public sealed partial class MainPage : Page
                 }
                 // Coalesce resize/slider events; keep the last image while a
                 // larger derivative is prepared, and reject recycled replies.
-                if (!force) await Task.Delay(80, cancellation);
+                if (!force && image.Source is not null) await Task.Delay(80, cancellation);
                 var bitmap = await thumbnails.GetAsync(row, cancellation, edge);
                 if (cancellation.IsCancellationRequested || disposed || version != thumbnailVersion) return;
                 image.Source = bitmap;
@@ -1081,7 +1183,7 @@ public sealed partial class MainPage : Page
         var scale=libraryItemScale/100d;
         var width=LibraryTileLayout.Width(Math.Max(1,(Items.ActualWidth>0?Items.ActualWidth:ItemListContainer.ActualWidth)-16),libraryItemScale);
         item.Width=tiles?Math.Max(1,width-2):double.NaN;
-        image.Width=tiles?Math.Max(104,width-20):48*scale;
+        image.Width=tiles?Math.Max(104,width-20):72*scale;
         // The theme's container padding/border also occupies the card width.
         // Use the actual Grid slot so the ellipsis stays inside that padding.
         if(item.ContentTemplateRoot is Border {Child:Grid content}&&content.Children.OfType<StackPanel>().FirstOrDefault() is {} text)
@@ -1093,7 +1195,7 @@ public sealed partial class MainPage : Page
         }
         // Leave room for the filename and metadata even in a short window.
         var height=Math.Max(48,ItemListContainer.ActualHeight-108);
-        image.Height=tiles?Math.Min(160*scale,height):64*scale;
+        image.Height=tiles?Math.Min(160*scale,height):54*scale;
         if(image.Parent is Grid cardGrid&&cardGrid.Children.OfType<Border>().FirstOrDefault(border=>Equals(border.Tag,"ThumbPlate")) is {} thumbPlate)
         {
             thumbPlate.Width=image.Width;
@@ -1102,6 +1204,13 @@ public sealed partial class MainPage : Page
     }
     private static void ConstrainCardCaption(Grid content,StackPanel text)
     {
+        if(content.ColumnDefinitions.Count>=4&&content.Children.OfType<StackPanel>().FirstOrDefault(sp=>Equals(sp.Tag,"ItemListMeta")) is {} listMeta)
+        {
+            var cw=content.ActualWidth;
+            var narrow=cw>0&&cw<560;
+            listMeta.Visibility=narrow?Visibility.Collapsed:Visibility.Visible;
+            if(cw>0)listMeta.MaxWidth=Math.Clamp(cw*0.28,160,280);
+        }
         var available=content.ColumnDefinitions.Count>1?content.ColumnDefinitions[1].ActualWidth
             :content.ActualWidth-content.Padding.Left-content.Padding.Right;
         if(double.IsFinite(available)&&available>0)text.MaxWidth=Math.Max(1,available);
@@ -3101,8 +3210,8 @@ public sealed partial class MainPage : Page
             }
             FolderList.Items.Clear();
             FolderList.ItemsPanel=(ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(folderTiles
-                ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1\"/></ItemsPanelTemplate>"
-                : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"1\"/></ItemsPanelTemplate>");
+                ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"3.0\"/></ItemsPanelTemplate>"
+                : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"3.0\"/></ItemsPanelTemplate>");
             foreach(var row in visible)
             {
                 var card=new Grid {Padding=new Thickness(10),ColumnSpacing=12,RowSpacing=8};
@@ -4230,6 +4339,6 @@ public sealed partial class MainPage : Page
         if(imageViewer is {} activeImage)await activeImage.FlushFavoriteAsync();
         if(videoPlayer is {} activeVideo)await activeVideo.FlushFavoriteAsync();
     }
-    public void Stop(){if(disposed)return;disposed=true;settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();folderFilterTimer.Stop();thumbnails.ResetSession();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();containerQuickActionSync.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){if(disposed)return;disposed=true;bulkTagGenerationCts?.Cancel();settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();folderFilterTimer.Stop();thumbnails.ResetSession();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();containerQuickActionSync.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

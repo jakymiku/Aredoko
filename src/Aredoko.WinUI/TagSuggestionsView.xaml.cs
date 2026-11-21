@@ -44,6 +44,17 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         var pending=!busy&&!closing&&batch is {Stale:false}&&candidate is {State:"pending"};
         Edited.IsEnabled=pending&&!dirty;Accept.IsEnabled=pending&&!dirty&&!string.IsNullOrWhiteSpace(Edited.Text);
         Reject.IsEnabled=pending;
+        var pendingCount=!busy&&!closing&&batch is {Stale:false}?batch.Candidates.Count(c=>c.State=="pending"):0;
+        if(AcceptAll is not null)
+        {
+            AcceptAll.Content=pendingCount>0?$"✓ 未承認をすべて承認 ({pendingCount}件)":"✓ 未承認をすべて承認";
+            AcceptAll.IsEnabled=pendingCount>0&&!dirty;
+        }
+        if(RejectAll is not null)
+        {
+            RejectAll.Content=pendingCount>0?$"× 未承認をすべて却下 ({pendingCount}件)":"× 未承認をすべて却下";
+            RejectAll.IsEnabled=pendingCount>0;
+        }
     }
     private void Message(string message)=>Status.Text=message+(dirty?"\n⚠ 詳細に未保存の編集があります（保存後に承認できます）":"");
     private async Task RunAsync(Func<Task> operation)
@@ -77,7 +88,8 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         Metadata.Visibility=Visibility.Visible;Metadata.IsExpanded=false;
         foreach(var value in batch.Candidates)
         {
-            var row=new ListViewItem{Content=new TextBlock{Text=$"{value.Tag}\n{value.StateLabel}",TextWrapping=TextWrapping.Wrap},Tag=value};
+            var badge=value.State switch{"pending"=>"● 未承認","accepted"=>"✓ 承認済み",_=>"× 却下済み"};
+            var row=new ListViewItem{Content=new TextBlock{Text=$"{value.Tag}\n{badge}",TextWrapping=TextWrapping.Wrap},Tag=value};
             AutomationProperties.SetAutomationId(row,$"TagCandidate{value.Id}");AutomationProperties.SetName(row,$"{value.Tag} {value.StateLabel}");Candidates.Items.Add(row);
         }
         Candidates.SelectedIndex=Candidates.Items.Count>0?0:-1;
@@ -119,6 +131,26 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     }
     private async void Accept_Click(object sender,RoutedEventArgs e)=>await ReviewAsync(true);
     private async void Reject_Click(object sender,RoutedEventArgs e)=>await ReviewAsync(false);
+    private async Task ReviewAllPendingAsync(bool accept)
+    {
+        if(batch is not {Stale:false}||(accept&&dirty))return;
+        var pending=batch.Candidates.Where(c=>c.State=="pending").ToArray();
+        if(pending.Length==0)return;
+        await RunAsync(async()=>{
+            var done=0;
+            foreach(var item in pending)
+            {
+                if(lifetime.Token.IsCancellationRequested||disposed)break;
+                if(accept)ApprovalAttempted=true;
+                await api.ReviewAsync(itemId,item,accept,item.Tag,lifetime.Token);
+                done++;
+                if(!disposed)Message(accept?$"承認中… ({done}/{pending.Length} 件)":$"却下中… ({done}/{pending.Length} 件)");
+            }
+            await LoadCoreAsync(null);
+        });
+    }
+    private async void AcceptAll_Click(object sender,RoutedEventArgs e)=>await ReviewAllPendingAsync(true);
+    private async void RejectAll_Click(object sender,RoutedEventArgs e)=>await ReviewAllPendingAsync(false);
     private async Task CancelGenerationAsync()
     {
         var id=requestId;if(id is null||disposed)return;

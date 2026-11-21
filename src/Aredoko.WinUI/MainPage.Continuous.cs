@@ -67,6 +67,7 @@ public sealed partial class MainPage
             Items.UpdateLayout();await RestoreBrowseAnchorAsync(anchor);
             if(disposed||token.IsCancellationRequested)return;
             UpdateBrowseFooter(FormatLoadedPageRange(browseStart,buffer.End-browseStart,buffer.Total),browseStart>0,buffer.End<buffer.Total);
+            _ = thumbnails.PrefetchRowsAsync(rows.ToArray(), CurrentThumbnailEdge(), renderCancellation.Token);
         }
         catch(OperationCanceledException){}
         catch(Exception ex){if(!disposed){browseFailed=true;Failure(ex);}}

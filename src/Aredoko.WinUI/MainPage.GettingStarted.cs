@@ -267,37 +267,104 @@ public sealed partial class MainPage
         dialogOpen = true;bool setupRequested=false,folderRequested=false,returnToSettings=false;
         try
         {
-            var panel = new StackPanel { Spacing = 16 };
-            var greeting = VisualAssets.Sticker(72);
+            var panel = new StackPanel { Spacing = 14, MaxWidth = 600 };
+            var greeting = VisualAssets.Sticker(64);
             greeting.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri("ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png")) { DecodePixelWidth = 192 };
             greeting.Visibility = Visibility.Visible;
-            var welcome=new Grid{ColumnSpacing=12};
-            welcome.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-            welcome.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            var welcome = new Grid { ColumnSpacing = 12 };
+            welcome.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            welcome.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             welcome.Children.Add(greeting);
-            var introduction=new TextBlock{Text="まずはフォルダを追加して、検索と閲覧を始めましょう。AIは後からいつでも設定できます。",TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center};
-            Grid.SetColumn(introduction,1);welcome.Children.Add(introduction);panel.Children.Add(welcome);
-            foreach(var (title,text) in new[]{
-                ("1. フォルダを追加", "検索したいフォルダを選び、「ファイル一覧を作る」で始められます。元ファイルは変更しません。"),
-                ("2. 検索・閲覧・整理", "名前・タグで検索し、ダブルクリックで開きます。右側の詳細でタグ付けや棚分けができます。"),
-                ("3. 必要ならAIを設定", "情景や音の内容から探したいときは「AIで探す方法」へ。自動セットアップやダウンロード可能なモデルを選べます。")})
+            var introStack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+            introStack.Children.Add(new TextBlock
             {
-                var step=new StackPanel{Spacing=4};
-                step.Children.Add(new TextBlock{Text=title,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]});
-                step.Children.Add(new TextBlock{Text=text,TextWrapping=TextWrapping.Wrap});panel.Children.Add(step);
+                Text = "まずはフォルダを追加して、検索と閲覧を始めましょう。AIは後からいつでも設定できます。",
+                Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
+                TextWrapping = TextWrapping.Wrap
+            });
+            introStack.Children.Add(new TextBlock
+            {
+                Text = "🔒 元のファイルやフォルダは一切変更・移動・外部送信しません",
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                TextWrapping = TextWrapping.Wrap
+            });
+            Grid.SetColumn(introStack, 1);
+            welcome.Children.Add(introStack);
+            var welcomeCard = new Border
+            {
+                Style = (Style)Application.Current.Resources["AredokoSurfaceStyle"],
+                Child = welcome
+            };
+            panel.Children.Add(welcomeCard);
+
+            var overviewGrid = new Grid { ColumnSpacing = 8 };
+            overviewGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            overviewGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            overviewGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var stepSummaries = new[]
+            {
+                ("① フォルダを追加", "検索したいフォルダを登録し「ファイル一覧を作る」で準備完了"),
+                ("② 探して開く・整理", "名前・タグで即検索。Spaceや右側の詳細でタグ付け・棚分け"),
+                ("③ AIで探す（任意）", "画像の見た目・言葉の意味・動画の場面・音声から横断検索")
+            };
+            for (var i = 0; i < stepSummaries.Length; i++)
+            {
+                var (stepTitle, stepDesc) = stepSummaries[i];
+                var stepCard = new Border
+                {
+                    Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+                    BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(6),
+                    Padding = new Thickness(10, 8, 10, 8),
+                    Child = new StackPanel
+                    {
+                        Spacing = 4,
+                        Children =
+                        {
+                            new TextBlock { Text = stepTitle, Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"], TextWrapping = TextWrapping.Wrap },
+                            new TextBlock { Text = stepDesc, Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"], Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextWrapping = TextWrapping.Wrap }
+                        }
+                    }
+                };
+                Grid.SetColumn(stepCard, i);
+                overviewGrid.Children.Add(stepCard);
             }
-            var hasRegistered=knownRoots.Any(r=>r.Enabled);
-            var addFolder=new Button{Content=hasRegistered?"登録フォルダを開く":"フォルダを追加",HorizontalAlignment=HorizontalAlignment.Stretch,Style=(Style)Application.Current.Resources["AccentButtonStyle"]};
-            AutomationProperties.SetAutomationId(addFolder,"GuideAddFolder");panel.Children.Add(addFolder);
-            Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Stretch}:null;
-            if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
+            panel.Children.Add(overviewGrid);
+
+            var hasRegistered = knownRoots.Any(r => r.Enabled);
+            var addFolder = new Button { Content = hasRegistered ? "📁 登録フォルダを開く" : "📁 フォルダを追加", HorizontalAlignment = HorizontalAlignment.Stretch, Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
+            AutomationProperties.SetAutomationId(addFolder, "GuideAddFolder");
+            Button? backToSettings = fromSettings ? new Button { Content = "設定へ戻る", HorizontalAlignment = HorizontalAlignment.Stretch } : null;
+            if (backToSettings is not null) AutomationProperties.SetAutomationId(backToSettings, "BtnBackToSettings");
+
+            var quickActions = new Grid { ColumnSpacing = 8 };
+            quickActions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            quickActions.Children.Add(addFolder);
+            if (backToSettings is not null)
+            {
+                quickActions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                Grid.SetColumn(backToSettings, 1);
+                quickActions.Children.Add(backToSettings);
+            }
+            panel.Children.Add(quickActions);
+
+            var detailsHeader = new TextBlock
+            {
+                Text = "詳しい使い方・ショートカット",
+                Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            panel.Children.Add(detailsHeader);
+
             foreach (var (index, title, text) in new[]
             {
-                (1, "1. フォルダの追加", "「登録フォルダ → ＋ フォルダを追加」から検索したいフォルダを選びます。登録後に「ファイル一覧を作る（推奨）」または「一覧＋AI検索データ」を選べます。元のファイルは一切変更・移動しません。"),
-                (2, "2. 検索して開く", "検索欄に名前・タグを入力すると絞り込めます。ダブルクリックや詳細欄のボタンで作品を開きます。右側の詳細でタグ追加（Enterで確定）や棚分けができます。"),
-                (3, "3. AI検索の準備（任意）", "「設定 → AI検索」または「AIで探す方法」から用途に応じたセットアップを行います。自動セットアップ、モデルダウンロード、手元のモデル指定から選べます。"),
-                (4, "4. 内容検索と整理", "検索欄で［AI］を選ぶと、画像の見た目・言葉の意味・音声・動画の内容で探せます。AIタグ候補の承認は詳細欄の「✨ AI候補」から行えます。"),
-                (5, "5. ショートカットとデータ保護", "Ctrl+Fで検索欄へ移動、Ctrl+Sでタグ・棚を保存、Ctrl+Home/Endで一覧の先頭/末尾へ移動できます。バックアップ・復元は「設定 → 管理・診断」で行えます。")
+                (1, "1. フォルダの追加と更新方法", "左メニューの「登録フォルダ → ＋ フォルダを追加」（またはウィンドウへドラッグ＆ドロップ）から検索したいフォルダを登録します。登録直後に「ファイル一覧を作る（推奨）」または「一覧＋AI検索データ」を選べます。フォルダ内に新しく追加・変更した作品があるときは「⟳ 更新」で再読み込みできます。"),
+                (2, "2. 文字検索・閲覧・タグと棚の整理", "検索欄に名前やタグを入力すると即座に絞り込めます（関連語辞書で表記ゆれ・同義語にも対応）。作品のダブルクリックやEnterで内蔵ビューアが開きます。Spaceキーまたは「詳細」ボタンで右側の詳細ペインを開き、タグの追加（Enter確定）・お気に入り・棚への追加（複数選択時も下のバーから一括操作可能）を行えます。"),
+                (3, "3. AI検索の準備とモデルの選び方（任意）", "曖昧な言葉や画像の見た目・動画の場面・音声の内容で探したいときは、下の「AIで探す方法」または「設定 → AI検索」から用途をチェックしてセットアップします。自動セットアップ／モデルダウンロード／手元のモデル指定に対応しています。"),
+                (4, "4. 似た作品の検索・AIタグ候補（WD Tagger）", "作品を右クリック（または詳細ペインの「≈ 似た作品」）から、見た目が似た画像・本・動画や音が似た曲を探せます。画像や本は詳細ペインの「✨ AI候補」または複数選択メニューからローカルWD Taggerによるタグ候補生成・承認が行えます（確定タグは自動上書きされません）。"),
+                (5, "5. ショートカット一覧とバックアップ", "・Ctrl+F：検索欄へ移動 / Ctrl+S：タグや棚の変更を保存\n・Space：詳細・プレビュー欄を開閉 / Enter：選択した作品を開く\n・Ctrl+Home / Ctrl+End：一覧の先頭・末尾へ移動\n\nタグ・棚・設定の控えの保存と別フォルダへの安全な復元は「設定 → 管理・診断 → 💾 バックアップと復元」で行えます。")
             })
             {
                 var body = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
@@ -305,7 +372,7 @@ public sealed partial class MainPage
                 {
                     Header = title,
                     Content = body,
-                    IsExpanded = index == 1,
+                    IsExpanded = false,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     HorizontalContentAlignment = HorizontalAlignment.Stretch
                 };
@@ -314,7 +381,8 @@ public sealed partial class MainPage
             }
             var scroll = new ScrollViewer { Content = panel, MaxHeight = Math.Max(160, ActualHeight - 240), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) };
             AutomationProperties.SetAutomationId(scroll, "GettingStartedGuideScroll");
-            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "使い方", Content = scroll, PrimaryButtonText="AIで探す方法", CloseButtonText = "閉じる",DefaultButton=ContentDialogButton.None };
+            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "はじめ方・使い方", Content = scroll, PrimaryButtonText="AIで探す方法", CloseButtonText = "閉じる",DefaultButton=ContentDialogButton.None };
+            dialog.Resources["ContentDialogMaxWidth"] = 680d;
             AutomationProperties.SetAutomationId(dialog, "GettingStartedGuideDialog");
             addFolder.Click+=(_,_)=>{folderRequested=true;dialog.Hide();};
             if(backToSettings is not null)backToSettings.Click+=(_,_)=>{returnToSettings=true;dialog.Hide();};

@@ -188,6 +188,7 @@
        <Button Content="☆ お気に入りを解除" HorizontalAlignment="Stretch" Click="SelectionFavoriteRemove_Click" AutomationProperties.AutomationId="SelectionFavoriteRemove"/>
        <Button Content="📚 棚に追加…" HorizontalAlignment="Stretch" Click="SelectionShelfAdd_Click" AutomationProperties.AutomationId="SelectionShelfAdd"/>
        <Button Content="📚 棚から外す…" HorizontalAlignment="Stretch" Click="SelectionShelfRemove_Click" AutomationProperties.AutomationId="SelectionShelfRemove"/>
+       <Button x:Name="SelectionTagSuggestionsButton" Content="✨ AIタグ候補をまとめて生成" HorizontalAlignment="Stretch" Click="SelectionTagSuggestions_Click" AutomationProperties.AutomationId="SelectionTagSuggestions"/>
        <Button x:Name="SelectionSummaryClearButton" Content="選択を解除" HorizontalAlignment="Stretch" Click="ClearLibrarySelection_Click" AutomationProperties.AutomationId="SelectionSummaryClear"/>
       </StackPanel>
       </ScrollViewer>
@@ -771,22 +772,21 @@
         <TextBlock Text="ライブラリと整理" Style="{StaticResource SubtitleTextBlockStyle}"/>
         <Border Style="{StaticResource AredokoSurfaceStyle}">
          <StackPanel Spacing="10">
-          <Grid ColumnSpacing="8" RowSpacing="8">
-           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-           <Button x:Name="SettingsOpenFoldersButton" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsOpenFolders_Click" AutomationProperties.Name="登録フォルダ" AutomationProperties.AutomationId="BtnSettingsOpenFolders">
+          <Grid ColumnSpacing="8">
+           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+           <Button x:Name="SettingsOpenFoldersButton" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsOpenFolders_Click" AutomationProperties.Name="登録フォルダ" AutomationProperties.AutomationId="BtnSettingsOpenFolders">
             <StackPanel Spacing="2">
              <TextBlock Text="📁 登録フォルダ" Style="{StaticResource BodyStrongTextBlockStyle}"/>
              <TextBlock Text="検索するフォルダの追加・更新・除外設定" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
             </StackPanel>
            </Button>
-           <Button x:Name="SettingsOpenShelvesButton" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsOpenShelves_Click" AutomationProperties.Name="棚一覧" AutomationProperties.AutomationId="BtnSettingsOpenShelves">
+           <Button x:Name="SettingsOpenShelvesButton" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsOpenShelves_Click" AutomationProperties.Name="棚一覧" AutomationProperties.AutomationId="BtnSettingsOpenShelves">
             <StackPanel Spacing="2">
              <TextBlock Text="📚 棚一覧" Style="{StaticResource BodyStrongTextBlockStyle}"/>
              <TextBlock Text="棚の作成・名前変更・整理" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
             </StackPanel>
            </Button>
-           <Button x:Name="SettingsRelatedTermsButton" Grid.Row="1" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsRelatedTerms_Click" AutomationProperties.Name="関連語辞書" AutomationProperties.AutomationId="BtnRelatedTerms">
+           <Button x:Name="SettingsRelatedTermsButton" Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsRelatedTerms_Click" AutomationProperties.Name="関連語辞書" AutomationProperties.AutomationId="BtnRelatedTerms">
             <StackPanel Spacing="2">
              <TextBlock Text="💬 関連語辞書" Style="{StaticResource BodyStrongTextBlockStyle}"/>
              <TextBlock Text="同じ意味で探す言葉（言い換え）を登録" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
@@ -809,22 +809,21 @@
        <StackPanel x:Name="SettingsSectionMaintenance" Spacing="8">
         <TextBlock Text="バックアップと診断" Style="{StaticResource SubtitleTextBlockStyle}"/>
         <Border Style="{StaticResource AredokoSurfaceStyle}">
-         <Grid ColumnSpacing="8" RowSpacing="8">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-          <Button x:Name="SettingsBackupButton" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsBackup_Click" AutomationProperties.Name="バックアップと復元" AutomationProperties.AutomationId="BtnBackupGuide">
+         <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Button x:Name="SettingsBackupButton" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsBackup_Click" AutomationProperties.Name="バックアップと復元" AutomationProperties.AutomationId="BtnBackupGuide">
            <StackPanel Spacing="2">
             <TextBlock Text="💾 バックアップと復元" Style="{StaticResource BodyStrongTextBlockStyle}"/>
             <TextBlock Text="タグや棚の控えを保存・別フォルダへ復元" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
            </StackPanel>
           </Button>
-          <Button x:Name="SettingsDiagnosticsButton" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsDiagnostics_Click" AutomationProperties.Name="診断情報" AutomationProperties.AutomationId="BtnDiagnostics">
+          <Button x:Name="SettingsDiagnosticsButton" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsDiagnostics_Click" AutomationProperties.Name="診断情報" AutomationProperties.AutomationId="BtnDiagnostics">
            <StackPanel Spacing="2">
             <TextBlock Text="📋 診断情報" Style="{StaticResource BodyStrongTextBlockStyle}"/>
             <TextBlock Text="動作環境の確認とサポート用コピー" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
            </StackPanel>
           </Button>
-          <Button x:Name="SettingsRuntimeCacheButton" Grid.Row="1" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsRuntimeCache_Click" AutomationProperties.Name="一時キャッシュ整理" AutomationProperties.AutomationId="BtnRuntimeCache">
+          <Button x:Name="SettingsRuntimeCacheButton" Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top" Padding="12,10" Click="SettingsRuntimeCache_Click" AutomationProperties.Name="一時キャッシュ整理" AutomationProperties.AutomationId="BtnRuntimeCache">
            <StackPanel Spacing="2">
             <TextBlock Text="🧹 一時キャッシュ整理" Style="{StaticResource BodyStrongTextBlockStyle}"/>
             <TextBlock Text="ダウンロード済み一時ファイルの確認・削除" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>

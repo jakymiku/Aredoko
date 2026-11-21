@@ -236,7 +236,7 @@ public sealed partial class MainPage
                 request=new();shelfLoads[item]=request;var cancellation=request.Token;
                 try
                 {
-                    if(!force)await Task.Delay(80,cancellation);
+                    if(!force&&image.Source is not null)await Task.Delay(80,cancellation);
                     var bitmap=await thumbnails.GetAsync(representative,cancellation,edge);
                     if(cancellation.IsCancellationRequested||disposed||!shelfHubOpen||ownVersion!=version)return;
                     image.Source=bitmap;icon.Visibility=bitmap is null?Visibility.Visible:Visibility.Collapsed;
@@ -257,8 +257,8 @@ public sealed partial class MainPage
         host.Child=row;
     }
     private ItemsPanelTemplate MediaItemsPanel()=>(ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(tiles
-        ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1\"/></ItemsPanelTemplate>"
-        : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"1\"/></ItemsPanelTemplate>");
+        ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"3.0\"/></ItemsPanelTemplate>"
+        : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"3.0\"/></ItemsPanelTemplate>");
     private void RenderShelfLayout()
     {
         ShelfList.ItemsSource=null;

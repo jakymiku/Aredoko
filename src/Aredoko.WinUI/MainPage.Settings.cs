@@ -136,7 +136,11 @@ public sealed partial class MainPage
             var available=statusData["available"]?.GetValue<bool>()==true;
             var accent=ThemeStyle("AccentButtonStyle");
             var subtle=ThemeStyle("UnselectedSegmentButtonStyle");
-            if(SettingsAIIndexButton is not null)SettingsAIIndexButton.Style=available?accent:null;
+            if(SettingsAIIndexButton is not null)
+            {
+                SettingsAIIndexButton.Style=available?accent:null;
+                SettingsAIIndexButton.Content="AI検索を設定";
+            }
             if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?subtle:accent;
             if(SettingsAISetupPlanButton is not null)SettingsAISetupPlanButton.Style=available?subtle:null;
             if(SettingsAISetupRowLabel is not null)SettingsAISetupRowLabel.Text=available?"環境の再構成・用途選び：":"初回セットアップ：";
@@ -206,6 +210,13 @@ public sealed partial class MainPage
                     var (step3Text,nextHint)=AISearchStatus.SettingsDataStatus(state,processed,total,covTarget,covFresh,unscopedPresentTotal);
                     SettingsAIStep3Status.Text=step3Text;
                     SettingsAINextHint.Text=nextHint;
+                    if(SettingsAIIndexButton is not null)
+                    {
+                        if(covTarget is int target&&covFresh is int fresh&&target>fresh)
+                            SettingsAIIndexButton.Content=fresh==0?$"✨ AI検索データを作成 ({target:N0}件)":$"✨ 未作成のAIデータを作成 ({target-fresh:N0}件)";
+                        else if(state is not ("running" or "cancelling")&&covTarget is int t&&covFresh==t&&t>0)
+                            SettingsAIIndexButton.Content="AI検索の設定・モデル切替";
+                    }
                 }
             }
             else
