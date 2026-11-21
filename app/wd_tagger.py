@@ -12,10 +12,12 @@ import time
 
 from ai_process import AIUnavailable,worker_failure
 from ai_search import AIBusy
+from ai_runtime_preferences import read_preferences,model_root
+from model_locations import ModelTarget
 from tag_suggestions import TaggerInfo, TagProposal, SuggestionConflict
 from tagger_profile import load_profile, RUNTIME_VERSION, WDProfile
-from tagger_worker import labels
-from runtime_paths import worker_python,worker_command
+from tagger_worker import labels, bundled_ort_dll
+from runtime_paths import worker_python,worker_command,runtime_root
 from ai_runtime import MARKER,inspect_runtime
 from storage_lease import plain_path
 
@@ -28,10 +30,11 @@ class DisabledTagger:
 
 
 class WDTagger:
-    def __init__(self,repo,profile,ai=None,*,ai_python=None,models_root=None):
+    def __init__(self,repo,profile,ai=None,*,ai_python=None,models_root=None,preferences_path=None):
         self.repo=Path(repo)
         self.python=worker_python(self.repo,ai_python)
         self.models_root=models_root
+        self.preferences_path=Path(preferences_path) if preferences_path is not None else None
         self.profile=profile
         self.ai=ai
         self._lock=threading.Lock()
@@ -40,25 +43,62 @@ class WDTagger:
         self.info=TaggerInfo(p['adapter'],'1/'+profile.key,p['model_id'],p['revision'],
                             'exif-first-frame-white-square-bicubic-bgr-nhwc-255-v1')
 
+    def _effective_models_root(self):
+        try:
+            self.profile.verify(self.repo,models_root=self.models_root)
+            return self.models_root
+        except (ValueError,OSError):
+            pass
+        if self.preferences_path is not None:
+            try:
+                selected=read_preferences(self.preferences_path)
+                candidate=model_root(selected,'tagger',self.models_root,target=ModelTarget.for_profile('tagger',self.profile))
+                if candidate is not None:
+                    self.profile.verify(self.repo,models_root=candidate)
+                    return Path(candidate)
+            except (ValueError,OSError,KeyError):
+                pass
+            try:
+                downloads=plain_path(self.preferences_path.parent/'ai-downloads',directory=True)
+                for entry in sorted(downloads.iterdir(),reverse=True):
+                    if not entry.name.startswith('wd-') or entry.is_symlink() or not entry.is_dir():continue
+                    try:
+                        self.profile.verify(self.repo,models_root=entry)
+                        return entry
+                    except (ValueError,OSError):
+                        continue
+            except (ValueError,OSError):
+                pass
+        return self.models_root
+
     def status(self):
         try:
-            directory=self.profile.verify(self.repo,models_root=self.models_root)
+            effective_root=self._effective_models_root()
+            directory=self.profile.verify(self.repo,models_root=effective_root)
             marker=directory/'aredoko-runtime.json'
-            runtime_marker=self.python.parent/MARKER
+            root=runtime_root(self.python)
+            runtime_marker=root/MARKER
             if runtime_marker.exists() or runtime_marker.is_symlink():
                 # Downloaded model packs do not contain machine-runtime claims.
                 # The selected sealed runtime declares its own installed version;
                 # worker_command still verifies the full pack before execution.
-                info=inspect_runtime(self.python.parent)
-                metadata=plain_path(self.python.parent/f'Lib/site-packages/onnxruntime-{RUNTIME_VERSION}.dist-info/METADATA')
-                if metadata.stat().st_size>1024**2:raise ValueError('Runtime metadata exceeds limit')
-                with metadata.open('rb') as stream:raw=stream.read(1024**2+1)
-                if len(raw)>1024**2:raise ValueError('Runtime metadata exceeds limit')
-                declared=email.parser.BytesParser().parsebytes(raw,headersonly=True)
-                runtime_ready=('onnxruntime' in info['abi']['modules'] and declared.get_all('Name')==['onnxruntime']
-                               and declared.get_all('Version')==[RUNTIME_VERSION])
-            else:
+                info=inspect_runtime(root)
+                if 'onnxruntime' in info['abi']['modules']:
+                    metadata=plain_path(root/f'Lib/site-packages/onnxruntime-{RUNTIME_VERSION}.dist-info/METADATA')
+                    if metadata.stat().st_size>1024**2:raise ValueError('Runtime metadata exceeds limit')
+                    with metadata.open('rb') as stream:raw=stream.read(1024**2+1)
+                    if len(raw)>1024**2:raise ValueError('Runtime metadata exceeds limit')
+                    declared=email.parser.BytesParser().parsebytes(raw,headersonly=True)
+                    runtime_ready=(declared.get_all('Name')==['onnxruntime']
+                                   and declared.get_all('Version')==[RUNTIME_VERSION])
+                else:
+                    runtime_ready=('PIL' in info['abi']['modules'] and bundled_ort_dll(self.repo) is not None)
+            elif marker.exists() or marker.is_symlink():
                 runtime_ready=(not marker.is_symlink() and json.loads(marker.read_text(encoding='utf-8'))=={'onnxruntime':RUNTIME_VERSION})
+            else:
+                prefix=self.python.parent.parent if self.python.parent.name.casefold()=='scripts' else self.python.parent
+                has_pil=(root/'Lib/site-packages/PIL/__init__.py').is_file() or (prefix/'Lib/site-packages/PIL/__init__.py').is_file()
+                runtime_ready=(has_pil and bundled_ort_dll(self.repo) is not None)
             ready=not self._closed.is_set() and self.python.is_file() and runtime_ready
         except (ValueError,OSError):ready=False
         return {'available':ready,'reason':'' if ready else UNAVAILABLE,
@@ -73,7 +113,8 @@ class WDTagger:
         except (ValueError,OSError,RuntimeError) as error:
             if cancelled() or self._closed.is_set():raise SuggestionConflict('タグ候補の生成を取り消しました。候補は保存していません。') from error
             raise AIUnavailable('AI runtime validation failed') from error
-        if self.models_root is not None:command+=['--models-root',str(Path(self.models_root).absolute())]
+        effective_root=self._effective_models_root()
+        if effective_root is not None:command+=['--models-root',str(Path(effective_root).absolute())]
         process=subprocess.Popen(command,
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env=env,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
@@ -135,7 +176,7 @@ class WDTagger:
                 raise SuggestionConflict('タグ候補の生成を取り消しました。候補は保存していません。')
             scores=self._scores(source['data'],cancelled)
             config=self.profile.data()
-            rows=labels(self.profile.directory(self.repo,models_root=self.models_root)/'selected_tags.csv',config['label_count'])
+            rows=labels(self.profile.directory(self.repo,models_root=self._effective_models_root())/'selected_tags.csv',config['label_count'])
             candidates=[]
             for index,((name,category),score) in enumerate(zip(rows,scores)):
                 threshold=config['general_threshold'] if category==0 else config['character_threshold']
@@ -158,10 +199,10 @@ class WDTagger:
         with self._lock:pass
 
 
-def create_tagger(ai=None,profile_path=None,repo=None,*,ai_python=None,models_root=None,profile_definition=None):
+def create_tagger(ai=None,profile_path=None,repo=None,*,ai_python=None,models_root=None,profile_definition=None,preferences_path=None):
     repo=Path(repo) if repo else Path(__file__).resolve().parents[1]
     try:
         definition=load_profile(repo,profile_path) if profile_definition is None else profile_definition
         if not isinstance(definition,WDProfile):raise ValueError('Invalid tagger definition')
-        return WDTagger(repo,definition,ai,ai_python=ai_python,models_root=models_root)
+        return WDTagger(repo,definition,ai,ai_python=ai_python,models_root=models_root,preferences_path=preferences_path)
     except (ValueError,OSError):return DisabledTagger()

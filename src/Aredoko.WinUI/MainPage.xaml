@@ -678,7 +678,7 @@
         <Border Style="{StaticResource AredokoSurfaceStyle}">
          <StackPanel Spacing="12">
           <Grid ColumnSpacing="8">
-           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
            <Border Grid.Column="0" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="6" Padding="10,8">
             <StackPanel Spacing="2">
              <TextBlock Text="① AI実行環境" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -695,6 +695,12 @@
             <StackPanel Spacing="2">
              <TextBlock Text="③ AI検索データ" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
              <TextBlock x:Name="SettingsAIStep3Status" Text="確認中…" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap"/>
+            </StackPanel>
+           </Border>
+           <Border Grid.Column="3" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="6" Padding="10,8">
+            <StackPanel Spacing="2">
+             <TextBlock Text="④ 画像タグ付け" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+             <TextBlock x:Name="SettingsAIStep4Status" Text="確認中…" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap"/>
             </StackPanel>
            </Border>
           </Grid>

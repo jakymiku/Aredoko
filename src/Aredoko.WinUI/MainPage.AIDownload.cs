@@ -60,7 +60,14 @@ public sealed partial class MainPage
                 destination.Text=current?.Root??"";destination.Visibility=current?.Published==true&&current.Root is not null?Visibility.Visible:Visibility.Collapsed;
                 var candidate=AIDownloadSelection.FromPublished(current,knownCatalogs);
                 select.Visibility=candidate is not null?Visibility.Visible:Visibility.Collapsed;select.IsEnabled=!busy;
-                select.Content=candidate?.Kind=="runtime"?"この実行環境を設定する":"このモデルの保存先を設定する";
+                select.Style=candidate is not null&&!busy?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
+                select.Content=candidate?.Kind=="runtime"?"① 次にここを押す：この実行環境を設定する →":"① 次にここを押す：このモデルの保存先を設定する →";
+                if(candidate is not null)
+                {
+                    status.Text+=candidate.ModelTarget?.Role=="tagger"
+                        ?"\n✓ タグ付けモデルの取得が完了しました！ 今すぐ作品詳細の「✨ AI候補」から利用できます（保存先を明示設定する場合は下の青いボタンを押してください）。"
+                        :"\n▶ 次の手順：下の青いボタンを押し、開いた画面で［このモデルの保存先を使う］を押してから Aredoko を再起動すると反映されます。";
+                }
             }
             async Task RefreshAsync(bool catalogs=false)
             {

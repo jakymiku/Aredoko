@@ -76,6 +76,7 @@ public sealed partial class MainPage
                 VisualAssets.State(setupArt,job.Active?"indexing":job.Saved?"completed":job.State=="failed"?"error":null);
                 foreach(var control in new Control[]{chooseRuntime,chooseModels,resetRuntime,resetModels,modelScope})control.IsEnabled=!active;
                 useAcquired.IsEnabled=!active&&acquired is not null&&(acquired.Kind=="runtime"||acquired.ModelTarget is not null)&&!(job.Saved&&job.Id==acquiredJob);
+                useAcquired.Style=useAcquired.IsEnabled?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
                 useAcquired.Content=job.Saved&&job.Id==acquiredJob?"次回起動に設定済み":acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う";
                 dialog.IsSecondaryButtonEnabled=job.Active&&!busy&&job.State is not ("cancelling" or "saving");
                 progress.Visibility=job.Active||job.Saved?Visibility.Visible:Visibility.Collapsed;
@@ -83,6 +84,13 @@ public sealed partial class MainPage
                 progress.Value=job.BytesTotal is >0?Math.Clamp(100d*job.BytesDone/job.BytesTotal.Value,0,100):job.Saved?100:0;
                 status.Text=job.State=="idle"?"使用するフォルダを選んでください。":job.Message;
                 if(job.Active&&job.BytesTotal is >0)status.Text+=$"\n{job.BytesDone/1048576d:N1} / {job.BytesTotal.Value/1048576d:N1} MB";
+                if(job.Saved)
+                {
+                    var role=acquired?.ModelTarget?.Role??SelectedRole();
+                    status.Text+=role=="tagger"
+                        ?"\n✓ 設定を保存しました。画像タグ付け（WD Tagger）は再起動なしで今すぐ利用できます。"
+                        :"\n✓ 設定を保存しました。反映するには Aredoko を一度閉じて再起動してください。";
+                }
                 if(operationError is not null)status.Text+="\n"+operationError;
             }
             void RenderModelLocation()

@@ -20,6 +20,7 @@ public sealed partial class MainPage
                 var destination=await ShowAISetupPlanStepAsync();
                 if(disposed)return;
                 if(destination=="download")await OpenAIDownloadDialogAsync();
+                else if(destination=="download-tagger")await OpenAIDownloadDialogAsync(preferRole:"tagger");
                 else if(destination=="automatic")await OpenAIAutoEnvironmentDialogAsync();
                 else if(destination=="existing")await OpenAIEnvironmentDialogAsync();
                 else if(destination=="index")await OpenAISettingsAsync();
@@ -137,6 +138,23 @@ public sealed partial class MainPage
                 }
             };
             panel.Children.Add(step2Card);
+            var taggerBtn=new Button{Content="🏷 タグ付けモデルを取得・設定",HorizontalAlignment=HorizontalAlignment.Left};
+            AutomationProperties.SetAutomationId(taggerBtn,"AISetupPlanTaggerDownload");
+            var step3Card=new Border
+            {
+                Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],
+                Child=new StackPanel
+                {
+                    Spacing=8,
+                    Children=
+                    {
+                        new TextBlock{Text="③ 画像の自動タグ候補（WD Tagger・任意）",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap},
+                        new TextBlock{Text="画像や本の表紙からタグ候補（キャラクター・一般タグ）を自動提案します。基本の実行環境で動作するため、4.8GBのAI検索環境が未導入でもモデル（約468MB）を取得するだけですぐに使えます。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]},
+                        taggerBtn
+                    }
+                }
+            };
+            panel.Children.Add(step3Card);
             panel.Children.Add(recovery);
             dialog.Content=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             async Task ReviewAsync()
@@ -183,6 +201,7 @@ public sealed partial class MainPage
                 catch(Exception ex){summary.Text="選択を保存できませんでした。\n"+ex.Message;}
             }
             download.Click+=(_,_)=>MoveTo("download");existing.Click+=(_,_)=>MoveTo("existing");
+            taggerBtn.Click+=(_,_)=>MoveTo("download-tagger");
             automatic.Click+=(_,_)=>MoveTo("automatic");
             diagnostics.Click+=(_,_)=>MoveTo("diagnostics");
             skip.Click+=(_,_)=>MoveTo("skip",0);

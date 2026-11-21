@@ -265,5 +265,80 @@ class WDTests(unittest.TestCase):
             self.assertEqual(call.kwargs['env']['HF_HUB_DISABLE_XET'],'1')
             self.assertEqual(call.kwargs['env']['HTTPS_PROXY'],'http://127.0.0.1:1234')
 
+    def test_bundled_onnxruntime_dll_inference_and_hot_downloaded_model_activation(self):
+        import struct
+        from tagger_worker import OrtDllSession, bundled_ort_dll, infer
+        dll = bundled_ort_dll(ROOT)
+        self.assertIsNotNone(dll)
+
+        def varint(v):
+            out = bytearray()
+            while v >= 0x80:
+                out.append((v & 0x7f) | 0x80); v >>= 7
+            out.append(v)
+            return bytes(out)
+        def fv(fn, v): return varint((fn << 3) | 0) + varint(v)
+        def fb(fn, b):
+            if isinstance(b, str): b = b.encode('utf-8')
+            return varint((fn << 3) | 2) + varint(len(b)) + b
+        def tvi(name, dims):
+            sb = b''.join(fb(1, fb(2, 'batch') if d is None else fv(1, d)) for d in dims)
+            return fb(1, name) + fb(2, fb(1, fv(1, 1) + fb(2, sb)))
+        def attr_int(name, val): return fb(1, name) + fv(3, val) + fv(20, 2)
+        def tensor_i64(name, vals):
+            raw = struct.pack(f'<{len(vals)}q', *vals)
+            return fv(1, len(vals)) + fv(2, 7) + fb(8, name) + fb(9, raw)
+        def tensor_f32(name, vals):
+            raw = struct.pack(f'<{len(vals)}f', *vals)
+            return fv(1, len(vals)) + fv(2, 1) + fb(8, name) + fb(9, raw)
+
+        n1 = fb(1, 'in') + fb(2, 'flat') + fb(4, 'Flatten') + fb(5, attr_int('axis', 1))
+        n2 = fb(1, 'flat') + fb(1, 'idx') + fb(2, 'sl') + fb(4, 'Gather') + fb(5, attr_int('axis', 1))
+        n3 = fb(1, 'sl') + fb(1, 'scale') + fb(2, 'scaled') + fb(4, 'Mul')
+        n4 = fb(1, 'scaled') + fb(2, 'out') + fb(4, 'Sigmoid')
+        graph = (fb(1, n1) + fb(1, n2) + fb(1, n3) + fb(1, n4) + fb(2, 'g') +
+                 fb(5, tensor_i64('idx', [0, 1, 2, 3, 4])) + fb(5, tensor_f32('scale', [0.001])) +
+                 fb(11, tvi('in', [None, 224, 224, 3])) + fb(12, tvi('out', [None, 5])))
+        onnx_bytes = fv(1, 7) + fb(7, graph) + fb(8, fb(1, '') + fv(2, 14))
+
+        cfg = self.profile.data()
+        cfg['input_size'] = 224
+        cfg['artifacts']['model.onnx'] = {'size': len(onnx_bytes), 'sha256': hashlib.sha256(onnx_bytes).hexdigest()}
+        profile = WDProfile.from_dict(cfg)
+        prefs = self.repo / 'launch-settings.json'
+        prefs.write_text('{}', encoding='utf-8')
+        empty_models = self.repo / 'empty-models'
+        empty_models.mkdir()
+        dl_dir = self.repo / 'ai-downloads' / ('wd-swinv2-v3-' + 'a' * 24)
+        model_sub = profile.directory(self.repo, models_root=dl_dir)
+        model_sub.mkdir(parents=True)
+        (model_sub / 'model.onnx').write_bytes(onnx_bytes)
+        (model_sub / 'selected_tags.csv').write_bytes(self.csv)
+        (model_sub / 'aredoko-source.json').write_text(json.dumps(profile.identity()), encoding='utf-8')
+
+        # Simulated managed AI runtime without the onnxruntime wheel, using bundled onnxruntime.dll
+        sealed = self.repo / 'ai-cu128-fixture'
+        (sealed / 'Scripts').mkdir(parents=True)
+        py = sealed / 'Scripts/python.exe'
+        py.write_bytes(b'fixture')
+        (sealed / 'aredoko-ai-runtime.json').write_text('{}', encoding='utf-8')
+        adapter = WDTagger(self.repo, profile, ai_python=py, models_root=empty_models, preferences_path=prefs)
+        self.addCleanup(adapter.close)
+        with patch('wd_tagger.inspect_runtime', return_value={'abi': {'modules': ['torch', 'PIL', 'numpy']}}), \
+             patch('wd_tagger.bundled_ort_dll', return_value=dll):
+            self.assertTrue(adapter.status()['available'])
+            self.assertEqual(adapter._effective_models_root(), dl_dir)
+
+        session = OrtDllSession(dll, model_sub / 'model.onnx', cpu_threads=2)
+        try:
+            with patch.dict(sys.modules, {'numpy': None}):
+                scores_no_np = infer(session, png(width=64, height=64, color=(120, 80, 40)), profile)
+            scores_with_np = infer(session, png(width=64, height=64, color=(120, 80, 40)), profile)
+            self.assertEqual(len(scores_no_np), 5)
+            self.assertEqual([round(x, 5) for x in scores_no_np], [round(x, 5) for x in scores_with_np])
+            self.assertTrue(all(0 < x < 1 for x in scores_no_np))
+        finally:
+            session.close()
+
 
 if __name__=='__main__':unittest.main()

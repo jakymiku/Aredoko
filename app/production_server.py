@@ -216,7 +216,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         return audio.stamp() if conditions.get('mode') in ('audio-direct','audio-similar','video-audio-direct','video-audio-similar') else image_stamp() if image_stamp is not None else None
     results=ResultSessions(catalog,result_provider,index_stamp=image_stamp,index_stamp_for=result_stamp)
     resource_updates=threading.Lock()
-    suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai),previews=previews)
+    suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai,preferences_path=setup.path),previews=previews)
     def ai_scan_hook(target_roots, discovered, cancelled):
         from scan_ai_followup import run_scan_ai
         if not ai.status().get('available',False):
@@ -618,7 +618,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(200,{**backup_jobs.snapshot(),'backup_supported':True,'restore_supported':restore_handoff is not None,
                         'default_selection':{'settings':True,'history':True,'reader_progress':True,'vectors':False}})
                 if path=='/api/library/intent/status':return self.send(200,intent.status())
-                if path=='/api/library/ai/setup':return self.send(200,{**setup.snapshot(),'selection_api_supported':True,'downloads_supported':download_jobs.supported,'job':setup_jobs.snapshot()})
+                if path=='/api/library/ai/setup':return self.send(200,{**setup.snapshot(),'tagger':suggestions.status(),'selection_api_supported':True,'downloads_supported':download_jobs.supported,'job':setup_jobs.snapshot()})
                 if path in ('/api/library/ai/setup/download/catalog','/api/library/ai/setup/download/job'):
                     if urlparse(self.path).query:return self.send(400,{'error':'Invalid acquisition query'})
                     return self.send(200,download_jobs.catalogs() if path.endswith('/catalog') else download_jobs.snapshot())
@@ -1198,7 +1198,7 @@ def _serve(args):
         if tag_definition is not None:
             try:tag_root=model_root(placements,'tagger',tag_root,target=ModelTarget.for_profile('tagger',tag_definition))
             except ValueError:pass
-        tagger=create_tagger(ai,args.tagger_profile,profile_definition=tag_definition,**{**runtime,'models_root':tag_root});resources.callback(tagger.close)
+        tagger=create_tagger(ai,args.tagger_profile,profile_definition=tag_definition,preferences_path=preferences,**{**runtime,'models_root':tag_root});resources.callback(tagger.close)
         try:
             acquisition_specs=load_trusted_specs(Path(__file__).resolve().parents[1])
         except (OSError,ValueError,UnicodeError) as error:

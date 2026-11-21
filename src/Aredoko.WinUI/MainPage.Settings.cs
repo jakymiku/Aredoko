@@ -120,6 +120,9 @@ public sealed partial class MainPage
 
             var setup=await setupTask;
             savedVerificationState=setup["verify_ai_runtime"]?.GetValue<bool>()??true;
+            var taggerReady=setup["tagger"]?["available"]?.GetValue<bool>()==true;
+            if(SettingsAIStep4Status is not null)SettingsAIStep4Status.Text=taggerReady?"✓ 使用可能 (WD Tagger)":"モデル未導入";
+            if(SettingsAIDownloadTaggerButton is not null)SettingsAIDownloadTaggerButton.Content=taggerReady?"🏷 タグ付けモデルの再取得・設定":"🏷 タグ付けモデルを取得";
             settingsPopulating=true;
             try
             {
@@ -247,6 +250,7 @@ public sealed partial class MainPage
                 SettingsAIStep1Status.Text="確認できません";
                 SettingsAIStep2Status.Text="—";
                 SettingsAIStep3Status.Text="—";
+                if(SettingsAIStep4Status is not null)SettingsAIStep4Status.Text="—";
                 SettingsAINextHint.Text="バックエンドに接続できないため状態を取得できませんでした。";
             }
         }
