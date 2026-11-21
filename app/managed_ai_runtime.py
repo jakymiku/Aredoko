@@ -14,7 +14,12 @@ from pathlib import Path
 
 from ai_runtime import MARKER, LIMIT, REQUIRED_MODULES, relative, object_pairs, digest, files, validate_abi
 from ai_wheel_runtime import verify_wheels
+import native_accel
 from storage_lease import plain_path, storage_lease
+
+_ORIG_PLAIN_PATH = plain_path
+_ORIG_DIGEST = digest
+_ORIG_FILES = files
 
 FORMAT = 'aredoko-managed-ai-runtime-v1'
 GENERATED={'.gitignore','pyvenv.cfg','aredoko-ai-environment-draft.json',
@@ -161,16 +166,31 @@ def inspect(root, *, expected=None, verify=False, cancelled=lambda:False, progre
             if name in authoritative:
                 if entry!=authoritative[name]:raise ValueError('Receipt differs from original official wheel')
             elif name not in GENERATED:raise ValueError('Unrecognized generated runtime file')
-    done=size=0
-    for entry in entries:
-        name=entry['path']
-        if not verify and name.casefold() not in required:continue
-        path=plain_path(root/name)
-        if path.stat().st_size!=entry['bytes'] or digest(path,cancelled)!=entry['sha256']:raise ValueError('Managed runtime changed: '+name)
-        done+=1;size+=entry['bytes']
-        if progress:progress({'stage':'checking_runtime','files_done':done,'files_total':len(entries),'bytes_done':size,'bytes_total':total})
-    if verify and {path.relative_to(root).as_posix().casefold() for path in files(root,cancelled,include_cache=True)}!=names|{MARKER}:
-        raise ValueError('Unlisted or missing managed runtime files')
+    if (verify and plain_path is _ORIG_PLAIN_PATH and digest is _ORIG_DIGEST
+            and files is _ORIG_FILES and native_accel.available()):
+        def _native_progress(files_done,bytes_done):
+            if progress:progress({'stage':'checking_runtime','files_done':files_done,'files_total':len(entries),'bytes_done':bytes_done,'bytes_total':total})
+        try:
+            native_accel.verify_manifest(
+                root,entries,workers=0,cancelled=cancelled,
+                progress=_native_progress if progress is not None else None,
+            )
+        except native_accel.NativeVerificationChanged as err:
+            raise ValueError('Managed runtime changed: '+err.path) from err
+        actual_rel=native_accel.list_plain_files(root,include_cache=True,cancelled=cancelled)
+        if {p.casefold() for p in actual_rel}!=names|{MARKER}:
+            raise ValueError('Unlisted or missing managed runtime files')
+    else:
+        done=size=0
+        for entry in entries:
+            name=entry['path']
+            if not verify and name.casefold() not in required:continue
+            path=plain_path(root/name)
+            if path.stat().st_size!=entry['bytes'] or digest(path,cancelled)!=entry['sha256']:raise ValueError('Managed runtime changed: '+name)
+            done+=1;size+=entry['bytes']
+            if progress:progress({'stage':'checking_runtime','files_done':done,'files_total':len(entries),'bytes_done':size,'bytes_total':total})
+        if verify and {path.relative_to(root).as_posix().casefold() for path in files(root,cancelled,include_cache=True)}!=names|{MARKER}:
+            raise ValueError('Unlisted or missing managed runtime files')
     if digest(marker,cancelled)!=checksum:raise ValueError('Managed receipt changed during verification')
     return {'root':str(root),'python':str(root/'Scripts/python.exe'),'manifest_sha256':checksum,'abi':abi,'files':len(entries),'bytes':total,
             'verification':'full' if verify else 'core_only','model_loaded':False,'driver_tested':value['probe']['device']=='cuda','cache_required':False}

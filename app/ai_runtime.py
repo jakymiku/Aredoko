@@ -9,7 +9,10 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import struct
+import native_accel
 from storage_lease import plain_path
+
+_ORIG_PLAIN_PATH = plain_path
 
 FORMAT = 'aredoko-ai-runtime-v1'
 MARKER = 'aredoko-ai-runtime.json'
@@ -54,6 +57,10 @@ def digest(path, cancelled=lambda: False, on_bytes=None):
     return result.hexdigest()
 
 
+_ORIG_DIGEST = digest
+_ORIG_FILES = None
+
+
 def files(root, cancelled=lambda: False, *, include_cache=False):
     root=plain_path(root, directory=True)
     for path in sorted(root.iterdir()):
@@ -64,6 +71,9 @@ def files(root, cancelled=lambda: False, *, include_cache=False):
         if directory and path.name == '__pycache__' and not include_cache:continue
         if directory:yield from files(path, cancelled, include_cache=include_cache)
         else:yield path
+
+
+_ORIG_FILES = files
 
 
 def validate_abi(value):
@@ -153,21 +163,39 @@ def inspect_runtime(root, *, verify=False, expected=None, cancelled=lambda: Fals
         if (root/name).stat().st_size!=entry['bytes'] or digest(root/name,cancelled)!=entry['sha256']:
             raise ValueError('Runtime core file changed')
     if verify:
-        if {p.relative_to(root).as_posix() for p in files(root,cancelled)}!=names|{MARKER}:
-            raise ValueError('Unlisted or missing runtime files')
-        counts={'stage':'checking_runtime','files_done':0,'files_total':len(entries),'bytes_done':0,'bytes_total':total}
-        def report(amount=0):
-            counts['bytes_done']+=amount
-            if progress is not None:progress(dict(counts))
-        report()
-        def validate(entry,stopped,on_chunk):
-            path=plain_path(root/entry['path'])
-            if path.stat().st_size!=entry['bytes'] or digest(path,stopped,on_chunk)!=entry['sha256']:
-                raise ValueError('Runtime file changed')
-        def file_done():
-            counts['files_done']+=1;report()
-        from runtime_verification import verify_entries
-        verify_entries(entries,validate,cancelled,report,file_done)
+        if cancelled():raise RuntimeError('Runtime validation cancelled')
+        if (len(entries)>=64 and plain_path is _ORIG_PLAIN_PATH and digest is _ORIG_DIGEST
+                and files is _ORIG_FILES and native_accel.available()):
+            actual_rel=native_accel.list_plain_files(root,include_cache=False,cancelled=cancelled)
+            if set(actual_rel)!=names|{MARKER}:
+                raise ValueError('Unlisted or missing runtime files')
+            counts={'stage':'checking_runtime','files_done':0,'files_total':len(entries),'bytes_done':0,'bytes_total':total}
+            def on_native_progress(files_done,bytes_done):
+                counts['files_done']=files_done;counts['bytes_done']=bytes_done
+                if progress is not None:progress(dict(counts))
+            try:
+                native_accel.verify_manifest(
+                    root,entries,workers=0,cancelled=cancelled,
+                    progress=on_native_progress if progress is not None else None,
+                )
+            except native_accel.NativeVerificationChanged as err:
+                raise ValueError('Runtime file changed') from err
+        else:
+            if {p.relative_to(root).as_posix() for p in files(root,cancelled)}!=names|{MARKER}:
+                raise ValueError('Unlisted or missing runtime files')
+            counts={'stage':'checking_runtime','files_done':0,'files_total':len(entries),'bytes_done':0,'bytes_total':total}
+            def report(amount=0):
+                counts['bytes_done']+=amount
+                if progress is not None:progress(dict(counts))
+            report()
+            def validate(entry,stopped,on_chunk):
+                path=plain_path(root/entry['path'])
+                if path.stat().st_size!=entry['bytes'] or digest(path,stopped,on_chunk)!=entry['sha256']:
+                    raise ValueError('Runtime file changed')
+            def file_done():
+                counts['files_done']+=1;report()
+            from runtime_verification import verify_entries
+            verify_entries(entries,validate,cancelled,report,file_done)
     if verify and digest(marker,cancelled)!=checksum:raise ValueError('Runtime inventory changed during validation')
     return {'root':str(root),'python':str(python),'manifest_sha256':checksum,'abi':abi,
             'files':len(entries),'bytes':total,'verification':'full' if verify else 'core_only',

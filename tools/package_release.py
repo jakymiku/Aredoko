@@ -56,7 +56,7 @@ def validate_output(output):
         raise FileExistsError('Choose a new output directory; existing files are never removed')
 
 
-def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False, frontend_msix=None, portable_frontend=None, bootstrap=None, source_revision=None, managed_python_setup=None):
+def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, python_runtime=None, media_tools=None, include_ai_runtime=False, frontend_msix=None, portable_frontend=None, bootstrap=None, source_revision=None, managed_python_setup=None, native_dll=None):
     output_dir = Path(os.path.abspath(output_dir))
     validate_output(output_dir)
     if not isinstance(version, str) or not 1 <= len(version) <= 64 or any(ord(c) < 32 for c in version):
@@ -84,6 +84,9 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
     portable_frontend = Path(os.path.abspath(portable_frontend)) if portable_frontend is not None else None
     bootstrap = Path(os.path.abspath(bootstrap)) if bootstrap is not None else None
     managed_python_setup = Path(os.path.abspath(managed_python_setup)) if managed_python_setup is not None else None
+    native_dll = Path(os.path.abspath(native_dll)) if native_dll is not None else None
+    if native_dll is not None:
+        plain_path(native_dll)
     if managed_python_setup is not None:
         if portable_frontend is None or python_runtime is not None or include_ai_runtime:
             raise ValueError('Managed Python requires Portable without bundled Python/AI')
@@ -99,7 +102,7 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         binary = portable_frontend
     activation = 'portable' if portable_frontend is not None else 'msix' if frontend is not None else 'unconfigured'
     sources = [binary, REPO / 'app', REPO / 'config', REPO / 'docs', REPO / 'tools']
-    sources += [p for p in (python_runtime, media_tools, frontend_msix, portable_frontend, bootstrap, managed_python_setup) if p is not None]
+    sources += [p for p in (python_runtime, media_tools, frontend_msix, portable_frontend, bootstrap, managed_python_setup, native_dll) if p is not None]
     for source in sources:
         if output_dir.is_relative_to(source) or source.is_relative_to(output_dir):
             raise ValueError('Output and payload source directories must not overlap')
@@ -139,6 +142,8 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
         for item in binary.iterdir():
             if item.suffix.lower() != '.pdb' and item.name.lower() not in ('appx', 'publish'):
                 copy_payload(item, bin_dir / item.name)
+    if native_dll is not None:
+        copy_payload(native_dll, bin_dir / 'aredoko_native.dll')
     for item in (REPO / 'app').iterdir():
         if item.is_file() and item.suffix in ('.py', '.json'):
             copy_payload(item, app_dir / item.name)
@@ -254,10 +259,12 @@ def main():
     parser.add_argument('--portable-frontend', type=Path, help='Explicit Portable publish directory with build receipt')
     parser.add_argument('--bootstrap', type=Path, help='Built root Aredoko.exe for the portable channel')
     parser.add_argument('--managed-python-setup', type=Path, help='Explicit native acquisition helper; staging only until first-run integration')
+    parser.add_argument('--native-dll', type=Path, help='Explicit compiled aredoko_native.dll accelerator binary to bundle into bin/')
     args = parser.parse_args()
     package(args.output_dir, args.version, args.skip_build, args.check,
             python_runtime=args.python_runtime, media_tools=args.media_tools, include_ai_runtime=args.include_ai_runtime, frontend_msix=args.frontend_msix,
-            portable_frontend=args.portable_frontend, bootstrap=args.bootstrap, source_revision=args.source_revision, managed_python_setup=args.managed_python_setup)
+            portable_frontend=args.portable_frontend, bootstrap=args.bootstrap, source_revision=args.source_revision, managed_python_setup=args.managed_python_setup,
+            native_dll=args.native_dll)
 
 
 if __name__ == '__main__':

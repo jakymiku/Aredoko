@@ -15,6 +15,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+import native_accel
+
+_ORIG_SCANDIR = os.scandir
+
 DEFAULT_EXCLUDES = ('.git', '.svn', '__pycache__', 'node_modules', 'Thumbs.db', 'desktop.ini')
 TYPES = {
     'book': {'.cbz', '.pdf', '.epub'},
@@ -321,52 +325,73 @@ class LibraryIndex:
                           missing=0, excluded=0, skipped_links=0, ignored_files=0)
             seen = _now()
             db.execute('CREATE TEMP TABLE scan_seen(path TEXT PRIMARY KEY) WITHOUT ROWID')
-            pending = [root]
-            # Explicit directory stack keeps depth independent of Python recursion.
-            while pending:
-                if cancelled and cancelled():
-                    raise InterruptedError('Scan cancelled; previous index preserved')
-                directory = pending.pop()
-                directory_info = directory.stat(follow_symlinks=False)
-                if not stat.S_ISDIR(directory_info.st_mode) or _reparse(directory_info) or directory.is_symlink():
-                    raise OSError(f'Directory changed during scan: {directory}')
-                # Finish each book before walking the next directory. Keep only
-                # one folder's page metadata, not every page in the entire root.
-                pages = []
-                with os.scandir(directory) as entries:
-                    for entry in entries:
-                        if cancelled and cancelled():
-                            raise InterruptedError('Scan cancelled; previous index preserved')
-                        rel = Path(entry.path).relative_to(root).as_posix()
-                        info = entry.stat(follow_symlinks=False)
-                        if stat.S_ISLNK(info.st_mode) or _reparse(info):
-                            counts['skipped_links'] += 1
-                            continue
-                        if _excluded(rel, patterns):
-                            continue
-                        if stat.S_ISDIR(info.st_mode):
-                            if row['recursive']:pending.append(Path(entry.path))
-                            continue
-                        if not stat.S_ISREG(info.st_mode):
-                            continue
-                        # Never index the local SQLite database as a media item.
-                        if Path(entry.path).resolve(strict=False) in (self.path,):
-                            continue
-                        kind = EXT_TYPES.get(Path(entry.name).suffix.casefold())
-                        if kind is None:
-                            counts['ignored_files'] += 1
-                            continue
-                        if folder_books and kind == 'image':
-                            pages.append((entry.name, info.st_size, info.st_mtime_ns))
-                            continue
-                        self._record(db, root_id, rel, kind, info.st_size, info.st_mtime_ns, seen, counts, dry_run, progress)
-                if pages:
+            if os.scandir is _ORIG_SCANDIR and native_accel.available():
+                try:
+                    native_scan = native_accel.scan_tree(
+                        root, self.path, patterns,
+                        recursive=bool(row['recursive']), folder_books=folder_books,
+                        cancelled=cancelled,
+                    )
+                except native_accel.NativeCancelled as error:
+                    raise InterruptedError('Scan cancelled; previous index preserved') from error
+                counts['skipped_links'] = native_scan.skipped_links
+                counts['ignored_files'] = native_scan.ignored_files
+                for rel, kind, size, mtime_ns in native_scan.items:
                     if cancelled and cancelled():
                         raise InterruptedError('Scan cancelled; previous index preserved')
-                    parent = directory.relative_to(root).as_posix()
-                    rel = FOLDER_ROOT if parent == '.' else parent + '/'
+                    self._record(db, root_id, rel, kind, size, mtime_ns, seen, counts, dry_run, progress)
+                for dir_rel, pages in native_scan.folder_pages:
+                    if cancelled and cancelled():
+                        raise InterruptedError('Scan cancelled; previous index preserved')
                     size, token = folder_signature(pages)
-                    self._record(db, root_id, rel, 'book', size, token, seen, counts, dry_run, progress)
+                    self._record(db, root_id, dir_rel, 'book', size, token, seen, counts, dry_run, progress)
+            else:
+                pending = [root]
+                # Explicit directory stack keeps depth independent of Python recursion.
+                while pending:
+                    if cancelled and cancelled():
+                        raise InterruptedError('Scan cancelled; previous index preserved')
+                    directory = pending.pop()
+                    directory_info = directory.stat(follow_symlinks=False)
+                    if not stat.S_ISDIR(directory_info.st_mode) or _reparse(directory_info) or directory.is_symlink():
+                        raise OSError(f'Directory changed during scan: {directory}')
+                    # Finish each book before walking the next directory. Keep only
+                    # one folder's page metadata, not every page in the entire root.
+                    pages = []
+                    with os.scandir(directory) as entries:
+                        for entry in entries:
+                            if cancelled and cancelled():
+                                raise InterruptedError('Scan cancelled; previous index preserved')
+                            rel = Path(entry.path).relative_to(root).as_posix()
+                            info = entry.stat(follow_symlinks=False)
+                            if stat.S_ISLNK(info.st_mode) or _reparse(info):
+                                counts['skipped_links'] += 1
+                                continue
+                            if _excluded(rel, patterns):
+                                continue
+                            if stat.S_ISDIR(info.st_mode):
+                                if row['recursive']:pending.append(Path(entry.path))
+                                continue
+                            if not stat.S_ISREG(info.st_mode):
+                                continue
+                            # Never index the local SQLite database as a media item.
+                            if Path(entry.path).resolve(strict=False) in (self.path,):
+                                continue
+                            kind = EXT_TYPES.get(Path(entry.name).suffix.casefold())
+                            if kind is None:
+                                counts['ignored_files'] += 1
+                                continue
+                            if folder_books and kind == 'image':
+                                pages.append((entry.name, info.st_size, info.st_mtime_ns))
+                                continue
+                            self._record(db, root_id, rel, kind, info.st_size, info.st_mtime_ns, seen, counts, dry_run, progress)
+                    if pages:
+                        if cancelled and cancelled():
+                            raise InterruptedError('Scan cancelled; previous index preserved')
+                        parent = directory.relative_to(root).as_posix()
+                        rel = FOLDER_ROOT if parent == '.' else parent + '/'
+                        size, token = folder_signature(pages)
+                        self._record(db, root_id, rel, 'book', size, token, seen, counts, dry_run, progress)
             if cancelled and cancelled():
                 raise InterruptedError('Scan cancelled; previous index preserved')
             # No missing inference happens until a complete, error-free tree walk.

@@ -7,11 +7,18 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 import io
+import os
 import threading
 import time
 
+import native_accel
 from previews import PreviewUnavailable, PreviewBusyError, ReaderChanged
-from image_animations import MAX_IMAGE_PIXELS, MAX_RENDERED_PNG_BYTES
+from image_animations import (
+    MAX_IMAGE_PIXELS,
+    MAX_RENDERED_PNG_BYTES,
+    MAX_STREAM_IMAGE_BYTES,
+    detect_animation_header,
+)
 from thumbnail_disk import ThumbnailDisk
 
 EDGES = (128, 256, 512, 1024)
@@ -300,6 +307,38 @@ class ThumbnailCache:
         from PIL import Image, ImageOps
         if stopped():
             raise ThumbnailCancelled()
+        if native_accel.available() and getattr(Image.open, '__module__', '') == 'PIL.Image':
+            raw = None
+            try:
+                source.seek(0, os.SEEK_END)
+                raw_size = source.tell()
+                source.seek(0)
+                if 0 < raw_size <= MAX_STREAM_IMAGE_BYTES:
+                    raw = source.read()
+            except (OSError, ValueError, AttributeError):
+                raw = None
+            if raw and not detect_animation_header(raw[:32768]):
+                dims = native_accel.probe_image(raw)
+                if dims is not None:
+                    w, h = dims
+                    if w < 1 or h < 1 or w * h > MAX_IMAGE_PIXELS:
+                        raise PreviewUnavailable('Thumbnail image too large')
+                    estimate = w * h * 12 + edge * edge * 16
+                    with self.decode_budget.reserve(estimate, stopped):
+                        if stopped():
+                            raise ThumbnailCancelled()
+                        try:
+                            png_bytes = native_accel.render_thumbnail(
+                                raw, edge, MAX_IMAGE_PIXELS, MAX_RENDERED_PNG_BYTES
+                            )
+                        except native_accel.NativeImageTooLarge as error:
+                            raise PreviewUnavailable(str(error)) from error
+                        if png_bytes is not None:
+                            return png_bytes
+            try:
+                source.seek(0)
+            except (OSError, ValueError, AttributeError):
+                pass
         try:
             with Image.open(source) as image:
                 if image.width < 1 or image.height < 1 or image.width * image.height > MAX_IMAGE_PIXELS:

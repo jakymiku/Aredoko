@@ -9,6 +9,7 @@ from pathlib import Path
 import sqlite3
 import threading
 import time
+import native_accel
 from ai_process import AIUnavailable
 from ai_profiles import DEFAULT_PROFILE
 from runtime_paths import runtime_verification_status
@@ -207,16 +208,30 @@ class VectorStore:
         video_hits={}
         # Read only candidate IDs; unrelated persisted vectors need not be scanned.
         ids=list(eligible)
+        dim=self.dimension
+        expect_bytes=dim*4
+        use_native=native_accel.available()
+        single_meta=[];single_chunks=[]
+        multi_meta=[];multi_chunks=[]
+        vf_meta=[];vf_chunks=[]
         with self.connect() as db:
             for offset in range(0,len(ids),ROW_BATCH_SIZE):
                 batch=ids[offset:offset+ROW_BATCH_SIZE]
                 sql='SELECT * FROM ai_vectors WHERE item_id IN ('+','.join('?' for _ in batch)+')'
                 for item_id,rev,mode,data in db.execute(sql,batch):
                     if mode not in self.profile.modalities or eligible.get(item_id)!=rev or source!='all' and mode!=source: continue
+                    if use_native:
+                        if not isinstance(data,(bytes,bytearray,memoryview)) or len(data)!=expect_bytes:continue
+                        raw=bytes(data)
+                        if is_multi and mode=='cover':
+                            multi_meta.append((item_id,mode));multi_chunks.append(raw)
+                        else:
+                            single_meta.append((item_id,mode));single_chunks.append(raw)
+                        continue
                     try:
                         vec=array('f');vec.frombytes(data)
                     except (ValueError,TypeError):continue
-                    if len(vec)!=self.dimension: continue
+                    if len(vec)!=dim: continue
                     sq=sum(map(operator.mul,vec,vec))
                     if not math.isfinite(sq) or abs(sq-1)>1e-4: continue
                     if is_multi and mode=='cover':
@@ -236,10 +251,14 @@ class VectorStore:
                     for item_id,rev,at_ms,data in db.execute(vsql,batch):
                         if eligible.get(item_id)!=rev:continue
                         if not (isinstance(at_ms,int) and 0<=at_ms<=86_400_000):continue
+                        if use_native:
+                            if not isinstance(data,(bytes,bytearray,memoryview)) or len(data)!=expect_bytes:continue
+                            vf_meta.append((item_id,at_ms));vf_chunks.append(bytes(data))
+                            continue
                         try:
                             vec=array('f');vec.frombytes(data)
                         except (ValueError,TypeError):continue
-                        if len(vec)!=self.dimension: continue
+                        if len(vec)!=dim: continue
                         sq=sum(map(operator.mul,vec,vec))
                         if not math.isfinite(sq) or abs(sq-1)>1e-4: continue
                         if is_multi:
@@ -257,6 +276,30 @@ class VectorStore:
                                 scores.setdefault(item_id,{})['cover']=score
                                 video_hits[item_id]=at_ms
                                 if origin_hits is not None:origin_hits[item_id]=active_frames[0][0]
+        if use_native:
+            query_vecs=[v for _,v in active_frames] if is_multi else [active_frames[0][1]]
+            if single_meta:
+                ns,_,nv=native_accel.score_f32_batch([active_frames[0][1]],b''.join(single_chunks),len(single_meta),dim,normalize_vec=False)
+                for idx,(item_id,mode) in enumerate(single_meta):
+                    if nv[idx]:
+                        scores.setdefault(item_id,{})[mode]=ns[idx]
+                        if origin_hits is not None and mode=='cover':origin_hits[item_id]=active_frames[0][0]
+            if multi_meta:
+                ms_scores,mbq,mv=native_accel.score_f32_batch(query_vecs,b''.join(multi_chunks),len(multi_meta),dim,normalize_vec=False)
+                for idx,(item_id,mode) in enumerate(multi_meta):
+                    if mv[idx]:
+                        scores.setdefault(item_id,{})[mode]=ms_scores[idx]
+                        if origin_hits is not None:origin_hits[item_id]=active_frames[mbq[idx]][0]
+            if vf_meta:
+                vs,vbq,vv=native_accel.score_f32_batch(query_vecs,b''.join(vf_chunks),len(vf_meta),dim,normalize_vec=False)
+                for idx,(item_id,at_ms) in enumerate(vf_meta):
+                    if not vv[idx]:continue
+                    score=vs[idx]
+                    prev=scores.get(item_id,{}).get('cover')
+                    if prev is None or score>prev or (score==prev and item_id not in video_hits):
+                        scores.setdefault(item_id,{})['cover']=score
+                        video_hits[item_id]=at_ms
+                        if origin_hits is not None:origin_hits[item_id]=active_frames[vbq[idx]][0]
         for vid in video_ids:
             if vid in scores and 'cover' in scores[vid] and vid not in video_hits:
                 video_hits[vid]=0

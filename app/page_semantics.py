@@ -9,6 +9,7 @@ import secrets
 import threading
 import time
 
+import native_accel
 from ai_process import AIUnavailable
 from ai_vectors import normalized
 from page_index import PageIndex, identifier, token
@@ -66,6 +67,9 @@ def _score_packed(data, dimension, query):
         return sum(map(operator.mul, query, map(operator.truediv, value, itertools.repeat(norm))))
     except (ValueError, TypeError, OverflowError):
         return None
+
+
+_ORIG_SCORE_PACKED = _score_packed
 
 
 class PageVectors:
@@ -438,25 +442,47 @@ class PageVectors:
         dim = ai.profile.dimension; model_id = ai.profile.model_id
         model_rev = ai.profile.revision; profile_key = ai.profile.key
         hex64 = _HEX64
+        expect_bytes = dim * 4
+        use_native = _score_packed is _ORIG_SCORE_PACKED and native_accel.available()
+        def apply_score(item_id, rev, pid, page, score):
+            if item_id not in result or score > result[item_id][0]:
+                result[item_id] = (score, {'source_revision':rev, 'source_state':'current',
+                    'page_id':pid, 'page':page, 'model':model_id,
+                    'model_revision':model_rev, 'profile':profile_key,
+                    'preprocessing':CONTRACT, 'semantic_score':round(score, 6)})
         with ai.store.connect() as db:
             for offset in range(0, len(ids), 256):
                 batch = ids[offset:offset+256]
                 # Stream at most a book's best score, never retain all page blobs.
                 records = db.execute('SELECT item_id,source_revision,page_id,page,vector FROM ai_page_vectors '
                     'WHERE contract=? AND item_id IN ('+','.join('?' for _ in batch)+') ORDER BY item_id,page', [CONTRACT, *batch])
+                pending_meta = []; pending_chunks = []
+                def flush_chunk():
+                    if not pending_meta: return
+                    scores_arr, _, valid_arr = native_accel.score_f32_batch(
+                        [query], b''.join(pending_chunks), len(pending_meta), dim, normalize_vec=True)
+                    for idx, (m_item_id, m_rev, m_pid, m_page) in enumerate(pending_meta):
+                        if valid_arr[idx]:
+                            apply_score(m_item_id, m_rev, m_pid, m_page, scores_arr[idx])
+                    pending_meta.clear(); pending_chunks.clear()
                 for ordinal, (item_id, rev, pid, page, data) in enumerate(records):
                     if check is not None and ordinal%256==0:check()
                     if (type(page) is not int or not 0<=page<10000
                             or type(rev) is not str or hex64(rev) is None
                             or type(pid) is not str or hex64(pid) is None):
                         continue
+                    if use_native:
+                        if isinstance(data, (bytes, bytearray, memoryview)) and len(data) == expect_bytes:
+                            pending_meta.append((item_id, rev, pid, page))
+                            pending_chunks.append(bytes(data))
+                            if len(pending_meta) >= 512:
+                                flush_chunk()
+                        continue
                     score = _score_packed(data, dim, query)
                     if score is None: continue
-                    if item_id not in result or score > result[item_id][0]:
-                        result[item_id] = (score, {'source_revision':rev, 'source_state':'current',
-                            'page_id':pid, 'page':page, 'model':model_id,
-                            'model_revision':model_rev, 'profile':profile_key,
-                            'preprocessing':CONTRACT, 'semantic_score':round(score, 6)})
+                    apply_score(item_id, rev, pid, page, score)
+                if use_native:
+                    flush_chunk()
         # A stale or unavailable source is omitted rather than presented as a
         # current page number. Reader checks the exact revision again on opening.
         # Keep one short catalog guard hold per candidate book while batching
