@@ -272,8 +272,7 @@ class FrozenResult:
                         if item.get('availability')!='present':raise ResultUnavailable('Selection source unavailable',conditions=self.conditions)
                 self.check()
             keep=(keep_session and operation in ('favorite_add','favorite_remove')
-                  and self.conditions.get('mode')=='literal' and self.conditions.get('view','all')=='all'
-                  and self.origin is None)
+                  and self.conditions.get('view','all')!='favorites')
             def retain():
                 # Exactly our one metadata transaction may have advanced the
                 # generation. Never absorb an unrelated write/index/root change.
@@ -289,6 +288,8 @@ class FrozenResult:
                             if len(serialized.encode('utf-8'))>512*1024:raise ResultCapacity('Result evidence exceeds workspace limit')
                             self.db.execute('UPDATE results SET payload=? WHERE item_id=?',
                                 (serialized,item_id))
+                    if self.origin is not None and self.origin['id'] in ids:
+                        self.origin={**self.origin,'favorite':operation=='favorite_add'}
                     self.initial_stamp=expected
                     self.check()
                     return True

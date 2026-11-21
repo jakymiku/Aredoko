@@ -80,9 +80,10 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private VideoRangeSource? mediaRange;
     private TimeSpan duration = TimeSpan.Zero;
     private TimeSpan position = TimeSpan.Zero;
+    private TimeSpan lastTickPosition = TimeSpan.Zero;
     private int volume = 80;
-    private int version;
-    private bool busy, disposed, failed, loaded, playing, muted, keyboardChrome;
+    private int version, stalledAtEndTicks;
+    private bool busy, disposed, failed, loaded, playing, ended, observedPlaying, muted, keyboardChrome;
     public event Action<int>? ContentOpened;
     public event EventHandler? CloseRequested;
     public event Action? EditDetailsRequested;
@@ -279,7 +280,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         hideTimer.AttachHoverHint(seekForward, "1秒進む（→）");
         hideTimer.AttachHoverHint(favorite.Button, () => AutomationProperties.GetName(favorite.Button));
         hideTimer.AttachHoverHint(editDetails, "詳細でタグ・棚を編集（プレーヤーを閉じる）");
-        hideTimer.AttachHoverHint(retry, isAudio ? "音声の読み込みを再試行" : "再試行");
+        hideTimer.AttachHoverHint(retry, isAudio ? "音声の読み込みを再試行" : "動画の読み込みを再試行");
         hideTimer.AttachHoverHint(mute, () => muted ? "消音解除（M）" : "消音（M）");
         hideTimer.AttachHoverHint(volumeDown, "音量を下げる");
         hideTimer.AttachHoverHint(volumeUp, "音量を上げる");
@@ -339,42 +340,49 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
             if (source.State != MediaSourceState.Opened) throw new InvalidDataException(isAudio ? "音声を開けません。" : "動画を開けません。");
             var opened = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             nextPlayer = new MediaPlayer { AutoPlay = false, Volume = volume / 100.0, IsMuted = muted };
-            nextPlayer.MediaOpened += (_, _) => opened.TrySetResult(true);
-            nextPlayer.PlaybackSession.PlaybackStateChanged += (session, _) =>
+            var player = nextPlayer;
+            player.MediaOpened += (_, _) => opened.TrySetResult(true);
+            player.PlaybackSession.PlaybackStateChanged += (session, _) =>
             {
-                if (session.PlaybackState != MediaPlaybackState.Paused) return;
+                var state = session.PlaybackState;
+                var sessionPos = session.Position;
                 DispatcherQueue.TryEnqueue(() =>
                 {
-                    if (!disposed && current == version && loaded && playing && ReferenceEquals(mediaPlayer, nextPlayer)
-                        && Environment.TickCount64 - lastMaximizeTick <= 1500 && position < duration - TimeSpan.FromMilliseconds(150))
+                    if (disposed || current != version || !loaded || !playing || !ReferenceEquals(mediaPlayer, player)) return;
+                    if (state == MediaPlaybackState.Playing) { observedPlaying = true; return; }
+                    if (state == MediaPlaybackState.Paused && Environment.TickCount64 - lastMaximizeTick <= 1500 && !IsNearEnd(sessionPos, duration))
+                    {
                         mediaPlayer.Play();
+                        return;
+                    }
+                    if (state is MediaPlaybackState.Paused or MediaPlaybackState.None && !seekDragging)
+                    {
+                        if (IsNearEnd(sessionPos, duration)) HandlePlaybackEnded();
+                        else if (observedPlaying) HandlePlaybackPaused(sessionPos);
+                    }
                 });
             };
-            nextPlayer.MediaFailed += (sender, args) =>
+            player.MediaFailed += (sender, args) =>
             {
                 var failure = localRange?.Failure ?? mediaRange?.Failure ?? new InvalidDataException(args.ErrorMessage);
                 opened.TrySetException(failure);
                 if (openSettled)
                     DispatcherQueue.TryEnqueue(() =>
                     {
-                        if (disposed || current != version || !loaded || !ReferenceEquals(mediaPlayer, nextPlayer)) return;
+                        if (disposed || current != version || !loaded || !ReferenceEquals(mediaPlayer, player)) return;
                         if (!isAudio && !isCompat && !compatAttempted && localRange?.Failure is not ArchiveReadException { Status: HttpStatusCode.Forbidden or HttpStatusCode.NotFound or HttpStatusCode.Conflict or HttpStatusCode.ServiceUnavailable })
                             _ = TryCompatFallbackAsync(current, resumePlay: playing);
                         else
                             ReportFailure(failure);
                     });
             };
-            nextPlayer.MediaEnded += (_, _) => DispatcherQueue.TryEnqueue(() =>
+            player.MediaEnded += (_, _) => DispatcherQueue.TryEnqueue(() =>
             {
-                if (disposed || current != version || !loaded || !ReferenceEquals(mediaPlayer, nextPlayer)) return;
-                playing = false; positionTimer.Stop();
-                position = duration;
-                positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
-                ViewerNotice.Set(status);
-                UpdateControls(); ShowChrome();
+                if (!disposed && current == version && loaded && ReferenceEquals(mediaPlayer, player))
+                    HandlePlaybackEnded();
             });
-            playerElement.SetMediaPlayer(nextPlayer);
-            nextPlayer.Source = source;
+            playerElement.SetMediaPlayer(player);
+            player.Source = source;
             await opened.Task.WaitAsync(TimeSpan.FromSeconds(timeoutSeconds), cancellation);
             openSettled = true;
             if (disposed || current != version)
@@ -493,11 +501,71 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         }
     }
 
+    private static bool IsNearEnd(TimeSpan pos, TimeSpan dur)
+        => dur > TimeSpan.Zero && pos >= dur - TimeSpan.FromMilliseconds(Math.Min(350, dur.TotalMilliseconds * 0.25));
+
+    private void HandlePlaybackEnded()
+    {
+        if (disposed || !loaded) return;
+        var wasPlaying = playing;
+        playing = false;
+        ended = true;
+        observedPlaying = false;
+        stalledAtEndTicks = 0;
+        positionTimer.Stop();
+        position = duration;
+        positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
+        ViewerNotice.Set(status);
+        UpdateControls();
+        if (wasPlaying) ShowChrome();
+    }
+
+    private void HandlePlaybackPaused(TimeSpan sessionPos)
+    {
+        if (disposed || !loaded || !playing) return;
+        playing = false;
+        observedPlaying = false;
+        stalledAtEndTicks = 0;
+        positionTimer.Stop();
+        position = VideoPlayerPolicy.ClampSeek(sessionPos, duration);
+        positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
+        ViewerNotice.Set(status);
+        UpdateControls();
+        ShowChrome();
+    }
+
     private void SyncPosition()
     {
         if (disposed || !loaded || !playing || mediaPlayer is null) return;
-        var sessionPos = mediaPlayer.PlaybackSession.Position;
+        var session = mediaPlayer.PlaybackSession;
+        var state = session.PlaybackState;
+        var sessionPos = session.Position;
         if (sessionPos > position) position = VideoPlayerPolicy.ClampSeek(sessionPos, duration);
+        if (state == MediaPlaybackState.Playing) observedPlaying = true;
+        if (!seekDragging && duration > TimeSpan.Zero)
+        {
+            if (state is MediaPlaybackState.Paused or MediaPlaybackState.None)
+            {
+                if (IsNearEnd(sessionPos, duration) || IsNearEnd(position, duration)) { HandlePlaybackEnded(); return; }
+                if (observedPlaying && Environment.TickCount64 - lastMaximizeTick > 1500) { HandlePlaybackPaused(sessionPos); return; }
+            }
+            else if (state == MediaPlaybackState.Playing && observedPlaying && sessionPos >= duration - TimeSpan.FromMilliseconds(60))
+            {
+                if (Math.Abs((sessionPos - lastTickPosition).TotalMilliseconds) < 5)
+                {
+                    if (++stalledAtEndTicks >= 2) { mediaPlayer.Pause(); HandlePlaybackEnded(); return; }
+                }
+                else
+                {
+                    stalledAtEndTicks = 0;
+                }
+            }
+            else
+            {
+                stalledAtEndTicks = 0;
+            }
+        }
+        lastTickPosition = sessionPos;
         positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
         SyncSeekBar();
     }
@@ -505,11 +573,15 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private void StartPlayback(bool revealChrome = true)
     {
         if (!loaded || busy || failed || mediaPlayer is null || playing) return;
-        if (position >= duration && duration > TimeSpan.Zero)
+        if (ended || IsNearEnd(position, duration))
         {
             position = TimeSpan.Zero;
             mediaPlayer.PlaybackSession.Position = TimeSpan.Zero;
         }
+        ended = false;
+        observedPlaying = false;
+        stalledAtEndTicks = 0;
+        lastTickPosition = position;
         playing = true;
         mediaPlayer.Play();
         positionTimer.Start();
@@ -522,10 +594,20 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     {
         if (!loaded || busy || failed || mediaPlayer is null) return;
         if (!playing) { StartPlayback(revealChrome); return; }
+        var session = mediaPlayer.PlaybackSession;
+        if (observedPlaying && session.PlaybackState is MediaPlaybackState.Paused or MediaPlaybackState.None && IsNearEnd(session.Position, duration))
+        {
+            playing = false;
+            ended = true;
+            StartPlayback(revealChrome);
+            return;
+        }
         playing = false;
+        observedPlaying = false;
+        stalledAtEndTicks = 0;
         positionTimer.Stop();
         mediaPlayer.Pause();
-        var sessionPos = mediaPlayer.PlaybackSession.Position;
+        var sessionPos = session.Position;
         if (sessionPos > position) position = VideoPlayerPolicy.ClampSeek(sessionPos, duration);
         positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
         ViewerNotice.Set(status);
@@ -546,7 +628,10 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private void SeekTo(TimeSpan target, bool revealChrome = true)
     {
         if(!loaded||busy||failed||mediaPlayer is null)return;
+        ended = false;
+        stalledAtEndTicks = 0;
         position=VideoPlayerPolicy.ClampSeek(target,duration);mediaPlayer.PlaybackSession.Position=position;
+        lastTickPosition = position;
         positionText.Text=VideoPlayerPolicy.FormatPosition(position,duration);
         ViewerNotice.Set(status);UpdateControls();
         if(revealChrome)ShowChrome();
@@ -612,7 +697,10 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         mediaRange?.Dispose();mediaRange=null;
         positionTimer.Stop();
         playing = false;
-        duration = position = TimeSpan.Zero;
+        ended = false;
+        observedPlaying = false;
+        stalledAtEndTicks = 0;
+        duration = position = lastTickPosition = TimeSpan.Zero;
         if (mediaPlayer is not null)
         {
             try { mediaPlayer.Pause(); mediaPlayer.Source = null; playerElement.SetMediaPlayer(null); mediaPlayer.Dispose(); } catch { }
@@ -656,6 +744,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         volumeUp.IsEnabled = !busy && volume < 100;
         updatingVolume=true;try{volumeSlider.Value=volume;volumeSlider.IsEnabled=!busy;}finally{updatingVolume=false;}
         volumeText.Text = muted ? "消音" : $"{volume}%";
+        retry.Visibility = failed ? Visibility.Visible : Visibility.Collapsed;
         retry.IsEnabled = !busy && failed&&!favorite.IsSaving;
         openExternal.Visibility = !isAudio && failed && !busy ? Visibility.Visible : Visibility.Collapsed;
         openExternal.IsEnabled = !isAudio && failed && !busy && !favorite.IsSaving;

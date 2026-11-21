@@ -10,6 +10,20 @@ internal sealed class ThumbnailService(LibraryApi api)
     private const long MaxMemoryBytes = 768L * 1024 * 1024;
     private const int MaxPngEntries = 6000;
     private const long MaxPngBytes = 384L * 1024 * 1024;
+    private sealed class InflightFetch(CancellationTokenSource cts, Task<byte[]?> task)
+    {
+        public CancellationTokenSource Cts { get; } = cts;
+        public Task<byte[]?> Task { get; } = task;
+        public int Waiters = 1;
+        public bool Completed;
+        public bool Retired;
+        private int ctsRefs = 2;
+        public void ReleaseCts()
+        {
+            if (Interlocked.Decrement(ref ctsRefs) == 0) Cts.Dispose();
+        }
+    }
+
     private readonly SemaphoreSlim workers = new(8, 8);
     private readonly SemaphoreSlim prefetchWorkers = new(3, 3);
     private readonly object cacheLock = new();
@@ -17,7 +31,7 @@ internal sealed class ThumbnailService(LibraryApi api)
     private readonly LinkedList<CacheEntry> cacheOrder = new();
     private readonly Dictionary<(long Generation, int ItemId, int Edge), LinkedListNode<PngEntry>> pngMap = new();
     private readonly LinkedList<PngEntry> pngOrder = new();
-    private readonly Dictionary<(long Generation, int ItemId, int Edge), Task<byte[]?>> inflight = new();
+    private readonly Dictionary<(long Generation, int ItemId, int Edge), InflightFetch> inflight = new();
     private CancellationTokenSource generationCts = new();
     private long currentMemoryBytes;
     private long currentPngBytes;
@@ -65,11 +79,21 @@ internal sealed class ThumbnailService(LibraryApi api)
     public void ResetSession()
     {
         CancellationTokenSource previous;
+        List<InflightFetch> retired;
         lock (cacheLock)
         {
             generation++;
             previous = generationCts;
             generationCts = new CancellationTokenSource();
+            retired = [];
+            foreach (var entry in inflight.Values)
+            {
+                if (!entry.Retired)
+                {
+                    entry.Retired = true;
+                    retired.Add(entry);
+                }
+            }
             inflight.Clear();
             cacheMap.Clear();
             cacheOrder.Clear();
@@ -79,14 +103,24 @@ internal sealed class ThumbnailService(LibraryApi api)
             currentPngBytes = 0;
         }
         previous.Cancel();
+        foreach (var entry in retired)
+            entry.ReleaseCts();
     }
 
     public void InvalidateItem(int itemId)
     {
+        List<InflightFetch> retired;
         lock (cacheLock)
         {
+            retired = [];
             foreach (var key in inflight.Keys.Where(k => k.ItemId == itemId).ToArray())
-                inflight.Remove(key);
+            {
+                if (inflight.Remove(key, out var entry) && !entry.Retired)
+                {
+                    entry.Retired = true;
+                    retired.Add(entry);
+                }
+            }
             foreach (var key in cacheMap.Keys.Where(k => k.ItemId == itemId).ToArray())
             {
                 if (cacheMap.Remove(key, out var node))
@@ -103,6 +137,11 @@ internal sealed class ThumbnailService(LibraryApi api)
                     currentPngBytes = Math.Max(0, currentPngBytes - node.Value.Data.LongLength);
                 }
             }
+        }
+        foreach (var entry in retired)
+        {
+            entry.Cts.Cancel();
+            entry.ReleaseCts();
         }
     }
 
@@ -159,11 +198,11 @@ internal sealed class ThumbnailService(LibraryApi api)
 
     private async Task<byte[]?> FetchBytesAsync(int itemId, int edge, CancellationToken genToken)
     {
-        await workers.WaitAsync(genToken);
+        await workers.WaitAsync(genToken).ConfigureAwait(false);
         try
         {
             genToken.ThrowIfCancellationRequested();
-            return await api.ThumbnailAsync(itemId, edge, genToken);
+            return await api.ThumbnailAsync(itemId, edge, genToken).ConfigureAwait(false);
         }
         finally { workers.Release(); }
     }
@@ -174,7 +213,7 @@ internal sealed class ThumbnailService(LibraryApi api)
         if (TryGetCached(row, edge) is { } cached) return cached;
         (long Generation, int ItemId, int Edge) key;
         byte[]? cachedPng;
-        Task<byte[]?>? sharedFetch = null;
+        InflightFetch? sharedFetch = null;
         lock (cacheLock)
         {
             key = (generation, row.Id, edge);
@@ -184,18 +223,30 @@ internal sealed class ThumbnailService(LibraryApi api)
                 pngOrder.Remove(pngNode!);
                 pngOrder.AddFirst(pngNode!);
             }
-            else if (!inflight.TryGetValue(key, out sharedFetch!))
+            else if (inflight.TryGetValue(key, out var existing) && !existing.Cts.IsCancellationRequested)
             {
-                var created = FetchBytesAsync(row.Id, edge, generationCts.Token);
+                existing.Waiters++;
+                sharedFetch = existing;
+            }
+            else
+            {
+                var cts = CancellationTokenSource.CreateLinkedTokenSource(generationCts.Token);
+                var created = new InflightFetch(cts, FetchBytesAsync(row.Id, edge, cts.Token));
                 inflight[key] = created;
                 sharedFetch = created;
-                _ = created.ContinueWith(_ =>
+                _ = created.Task.ContinueWith(t =>
                 {
+                    if (t.IsFaulted) _ = t.Exception;
+                    bool releaseRetired = false;
                     lock (cacheLock)
                     {
+                        created.Completed = true;
                         if (inflight.TryGetValue(key, out var current) && ReferenceEquals(current, created))
                             inflight.Remove(key);
+                        if (!created.Retired) { created.Retired = true; releaseRetired = true; }
                     }
+                    created.ReleaseCts();
+                    if (releaseRetired) created.ReleaseCts();
                 }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             }
         }
@@ -204,7 +255,37 @@ internal sealed class ThumbnailService(LibraryApi api)
             cancellation.ThrowIfCancellationRequested();
             // All supported media thumbnails (including videos) flow through the
             // guarded persistent thumbnail endpoint with live source validation.
-            var png = cachedPng ?? await sharedFetch!.WaitAsync(cancellation);
+            byte[]? png;
+            if (cachedPng is not null)
+            {
+                png = cachedPng;
+            }
+            else
+            {
+                try
+                {
+                    png = await sharedFetch!.Task.WaitAsync(cancellation);
+                }
+                finally
+                {
+                    var cancelNow = false;
+                    var disposeNow = false;
+                    lock (cacheLock)
+                    {
+                        sharedFetch!.Waiters--;
+                        if (sharedFetch.Waiters == 0 && !sharedFetch.Retired)
+                        {
+                            sharedFetch.Retired = true;
+                            if (inflight.TryGetValue(key, out var current) && ReferenceEquals(current, sharedFetch))
+                                inflight.Remove(key);
+                            cancelNow = !sharedFetch.Completed;
+                            disposeNow = true;
+                        }
+                    }
+                    if (cancelNow) sharedFetch!.Cts.Cancel();
+                    if (disposeNow) sharedFetch!.ReleaseCts();
+                }
+            }
             if (png is null) return null;
             if (cachedPng is null)
                 PutPng(key.Generation, row.Id, edge, png);

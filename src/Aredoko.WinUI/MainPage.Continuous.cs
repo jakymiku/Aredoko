@@ -13,8 +13,11 @@ public sealed partial class MainPage
     private readonly ObservableCollection<string> resultKeys=new();
     private ResultBuffer? browseBuffer;
     private int browseStart;
-    private bool browseFailed,extending,browseReflowing;
+    private bool browseFailed,extending,browseReflowing,fastScrolling;
     private ScrollViewer? resultScroll;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? scrollSettleTimer;
+    private long lastScrollTick;
+    private double lastScrollOffset;
 
     private int PreviousBrowsePage()=>Math.Max(0,(browseStart-1)/resultPageSize);
     private int NextBrowsePage()=>browseBuffer?.End/resultPageSize??page+1;
@@ -40,8 +43,82 @@ public sealed partial class MainPage
         resultScroll=scroll;
         if(scroll is not null)scroll.ViewChanged+=ResultScroll_Changed;
     }
+    private void EnsureScrollSettleTimer()
+    {
+        if(scrollSettleTimer is not null)return;
+        scrollSettleTimer=DispatcherQueue.CreateTimer();
+        scrollSettleTimer.Interval=TimeSpan.FromMilliseconds(80);
+        scrollSettleTimer.IsRepeating=false;
+        scrollSettleTimer.Tick+=(_,_)=>
+        {
+            if(disposed||!fastScrolling)return;
+            fastScrolling=false;
+            ResumeVisibleThumbnails();
+        };
+    }
+    private void ResumeVisibleThumbnails()
+    {
+        if(disposed)return;
+        foreach(var refresh in containerRefresh.Values.ToArray())
+            refresh();
+    }
+    private void ResetFastScroll()
+    {
+        fastScrolling=false;
+        scrollSettleTimer?.Stop();
+        lastScrollTick=0;
+        lastScrollOffset=0;
+    }
     private void ResultScroll_Changed(object? sender,ScrollViewerViewChangedEventArgs args)
-        => _ = TryExtendBrowseWindowAsync(args.IsIntermediate);
+    {
+        if(resultScroll is { ViewportHeight: > 0 } scroll)
+        {
+            var now=Environment.TickCount64;
+            var offset=scroll.VerticalOffset;
+            if(args.IsIntermediate)
+            {
+                var elapsed=now-lastScrollTick;
+                if(lastScrollTick>0&&elapsed<300)
+                {
+                    var delta=Math.Abs(offset-lastScrollOffset);
+                    if(elapsed>=8)
+                    {
+                        if(delta/scroll.ViewportHeight/(elapsed/1000.0)>3.0)
+                            fastScrolling=true;
+                        lastScrollTick=now;
+                        lastScrollOffset=offset;
+                    }
+                    else if(delta>scroll.ViewportHeight*0.25)
+                    {
+                        fastScrolling=true;
+                    }
+                }
+                else
+                {
+                    lastScrollTick=now;
+                    lastScrollOffset=offset;
+                }
+                if(fastScrolling)
+                {
+                    EnsureScrollSettleTimer();
+                    scrollSettleTimer!.Stop();
+                    scrollSettleTimer.Start();
+                }
+            }
+            else
+            {
+                lastScrollTick=now;
+                lastScrollOffset=offset;
+                if(fastScrolling)
+                {
+                    fastScrolling=false;
+                    scrollSettleTimer?.Stop();
+                    ResumeVisibleThumbnails();
+                }
+            }
+        }
+        _ = TryExtendBrowseWindowAsync(args.IsIntermediate);
+    }
 
     private (bool Forward, bool Backward) GetNeededBrowseEdge(ScrollViewer scroll, ResultBuffer buffer, bool isIntermediate)
     {
@@ -107,7 +184,7 @@ public sealed partial class MainPage
             }
             if(disposed||token.IsCancellationRequested)return;
             UpdateBrowseFooter(FormatLoadedPageRange(browseStart,buffer.End-browseStart,buffer.Total),browseStart>0,buffer.End<buffer.Total);
-            if(result.Items.Count>0)_ = thumbnails.PrefetchRowsAsync(result.Items.ToArray(), CurrentThumbnailEdge(), renderCancellation.Token);
+            if(!fastScrolling&&result.Items.Count>0)_ = thumbnails.PrefetchRowsAsync(result.Items.ToArray(), CurrentThumbnailEdge(), renderCancellation.Token);
         }
         catch(OperationCanceledException){}
         catch(Exception ex){if(!disposed){browseFailed=true;Failure(ex);}}

@@ -46,13 +46,37 @@ class SelectionEditTests(unittest.TestCase):
         with self.assertRaises(ResultUnavailable):self.owner.read(sid)
 
     def test_favorite_filtered_and_ranked_results_still_require_refresh(self):
-        self.cat.update(self.ids,{'favorite':True})
-        for conditions in ({'mode':'literal','view':'favorites'},{'mode':'semantic'}):
+        for conditions in ({'mode':'literal','view':'favorites'},{'mode':'semantic','view':'favorites'}):
+            self.cat.update(self.ids,{'favorite':True})
             sid=self.session(**conditions)
             result=self.owner.edit(sid,self.ids[:1],'favorite_remove',[],keep_session=True)
             self.assertFalse(result['kept_session'])
             with self.assertRaises(ResultUnavailable):self.owner.read(sid)
             self.owner.cancel(sid)
+
+    def test_ai_similar_and_shelf_sessions_keep_frozen_order_on_favorite_patch(self):
+        shelf=self.cat.change_shelf('create',name='shelf-keep')['id']
+        self.cat.update(self.ids,{'shelf_ids':[shelf]})
+        origin=self.ids[-1]
+        original_provider=self.owner.provider
+        def sim_provider(conditions,consume,cancelled):
+            if conditions.get('mode')=='similar':
+                return consume(lambda page:{**self.cat.search(page=page),'origin_id':origin} if page==0 else {'total':len(self.ids),'page':page,'limit':60,'items':[]})
+            return original_provider(conditions,consume,cancelled)
+        with patch.object(self.owner,'provider',side_effect=sim_provider):
+            for conditions in ({'mode':'semantic','view':'all'},{'mode':'literal','view':'shelf'},{'mode':'similar','view':'all'}):
+                sid=self.session(**conditions)
+                old=self.owner.read(sid)['items']
+                result=self.owner.edit(sid,self.ids[:1],'favorite_add',[],keep_session=True)
+                self.assertTrue(result['kept_session'],conditions)
+                current=self.owner.read(sid)['items']
+                self.assertEqual([r['id'] for r in old],[r['id'] for r in current])
+                self.assertTrue(current[0]['favorite'])
+                self.assertTrue(self.owner.edit(sid,self.ids[:1],'favorite_remove',[],keep_session=True)['kept_session'])
+                self.assertFalse(self.owner.read(sid)['items'][0]['favorite'])
+                self.cat.update(self.ids[1:2],{'tags':['unrelated-change']})
+                with self.assertRaises(ResultUnavailable):self.owner.read(sid)
+                self.owner.cancel(sid)
 
     def test_maximum_favorite_selection_keeps_order_without_recapturing_unselected_sources(self):
         for n in range(4,724):(self.media/f'{n:04}.png').write_bytes(b'generated-only')

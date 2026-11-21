@@ -763,6 +763,7 @@ public sealed partial class MainPage : Page
 
     private void RenderRows()
     {
+        ResetFastScroll();
         renderCancellation.Cancel(); renderCancellation.Dispose(); renderCancellation = new();
         SyncRowsState();
         populating = true;
@@ -1248,20 +1249,24 @@ public sealed partial class MainPage : Page
             if (!image.IsLoaded || renderToken.IsCancellationRequested || disposed) return;
             var edge = ThumbnailPolicy.EdgeFor(image.Width, image.Height, XamlRoot?.RasterizationScale ?? 1);
             if (!force && requestedEdge == edge) return;
+            if (thumbnails.TryGetCached(row, edge) is BitmapImage instantBitmap)
+            {
+                requestedEdge = edge;
+                ++thumbnailVersion;
+                visible?.Cancel(); visible?.Dispose(); visible = null;
+                if (!ReferenceEquals(image.Source, instantBitmap)) image.Source = instantBitmap;
+                placeholder.Visibility = Visibility.Collapsed;
+                previewStatus.Text = "";
+                previewStatus.Visibility = Visibility.Collapsed;
+                return;
+            }
+            if (fastScrolling) return;
             requestedEdge = edge;
             var version = ++thumbnailVersion;
             visible?.Cancel(); visible?.Dispose(); visible = CancellationTokenSource.CreateLinkedTokenSource(renderToken);
             var cancellation = visible.Token;
             try
             {
-                if (thumbnails.TryGetCached(row, edge) is BitmapImage instantBitmap)
-                {
-                    if (!ReferenceEquals(image.Source, instantBitmap)) image.Source = instantBitmap;
-                    placeholder.Visibility = Visibility.Collapsed;
-                    previewStatus.Text = "";
-                    previewStatus.Visibility = Visibility.Collapsed;
-                    return;
-                }
                 // Coalesce resize/slider events; keep the last image while a
                 // larger derivative is prepared, and reject recycled replies.
                 if (!force && image.Source is not null) await Task.Delay(80, cancellation);
@@ -2610,11 +2615,7 @@ public sealed partial class MainPage : Page
     }
     private async void OpenImage_Click(object sender,RoutedEventArgs e)=>await OpenImageAsync();
     private static ResultSession? ViewerFavoriteSession(ResultSession? session)
-    {
-        if(session is null||!session.FavoritePatchSupported)return null;
-        var conditions=session.Conditions;
-        return conditions["mode"]?.GetValue<string>()=="literal"&&(conditions["view"]?.GetValue<string>()??"all")=="all"?session:null;
-    }
+        => session is { FavoritePatchSupported: true } ? session : null;
     private Task OpenImageAsync()=>active is {} row&&ImageViewerPolicy.CanOpen(row)?OpenVisualSessionAsync(row):Task.CompletedTask;
     private Task OpenBookAsync()=>active is {} row&&ArchiveManifest.CanOpen(row)?OpenVisualSessionAsync(row):Task.CompletedTask;
     private async Task OpenVisualSessionAsync(MediaRow initialRow)
@@ -4519,6 +4520,6 @@ public sealed partial class MainPage : Page
         if(imageViewer is {} activeImage)await activeImage.FlushFavoriteAsync();
         if(videoPlayer is {} activeVideo)await activeVideo.FlushFavoriteAsync();
     }
-    public void Stop(){if(disposed)return;disposed=true;bulkTagGenerationCts?.Cancel();settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();folderFilterTimer.Stop();thumbnails.ResetSession();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();containerQuickActionSync.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){if(disposed)return;disposed=true;bulkTagGenerationCts?.Cancel();settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();folderFilterTimer.Stop();ResetFastScroll();thumbnails.ResetSession();DetachXamlRoot();itemSizeTimer.Stop();containerRefresh.Clear();containerQuickActionSync.Clear();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in containerCleanup.Keys.ToArray())ReleaseContainer(item);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 
