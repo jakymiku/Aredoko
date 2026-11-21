@@ -102,7 +102,6 @@ public sealed partial class MainPage
         foreach(var container in containerCleanup.Keys.ToArray())
         {
             UpdateSelectionFrame(container);
-            if(container.Tag is int id&&rows.FirstOrDefault(row=>row.Id==id) is {} row)container.ContextFlyout=SimilarityMenu(row);
         }
     }
     private void ApplyLibrarySelection()

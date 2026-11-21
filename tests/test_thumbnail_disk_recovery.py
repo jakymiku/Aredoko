@@ -133,3 +133,26 @@ class PersistentRecoveryTests(unittest.TestCase):
         self.assertEqual(sum(sql.startswith('COMMIT') for sql in trace), 2)
         with closing(sqlite3.connect(self.path)) as db:
             self.assertEqual(db.execute('SELECT touched FROM thumbs').fetchone()[0], disk.tick)
+
+    def test_incremental_byte_and_entry_counters_match_table(self):
+        disk = self.reopen()
+        k2 = (*self.key[:-1], 256)
+        k3 = (*self.key[:-1], 512)
+        png2 = b'\x89PNG\r\n\x1a\n' + b'B' * 64
+        disk.put(k2, (png2, None))
+        disk.put(k2, (png2 + b'!', None))
+        disk.put(k3, (self.png, None))
+        size, count = disk.db.execute('SELECT COALESCE(SUM(length(png)),0),COUNT(*) FROM thumbs').fetchone()
+        self.assertEqual((disk._bytes, disk._count), (size, count))
+        disk.db.execute('UPDATE thumbs SET digest=? WHERE key=?', ('0' * 64, disk.key(k3)))
+        disk.db.commit()
+        self.assertIsNone(disk.get(k3))
+        size, count = disk.db.execute('SELECT COALESCE(SUM(length(png)),0),COUNT(*) FROM thumbs').fetchone()
+        self.assertEqual((disk._bytes, disk._count), (size, count))
+        disk.close()
+
+        reopened = self.reopen()
+        self.addCleanup(reopened.close)
+        reopened._open()
+        size, count = reopened.db.execute('SELECT COALESCE(SUM(length(png)),0),COUNT(*) FROM thumbs').fetchone()
+        self.assertEqual((reopened._bytes, reopened._count), (size, count))

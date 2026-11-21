@@ -19,8 +19,8 @@ from storage_lease import (
     StoragePathError,
 )
 
-MAX_BYTES = 512 * 1024 * 1024
-MAX_ENTRIES = 4096
+MAX_BYTES = 2 * 1024 * 1024 * 1024
+MAX_ENTRIES = 32_768
 SCHEMA_VERSION = 1
 TABLE_COLUMNS = (
     ('key', 'TEXT', 0, None, 1),
@@ -45,6 +45,8 @@ class ThumbnailDisk:
         self.tick = 0
         self._touches = {}
         self._touch_count = 0
+        self._bytes = 0
+        self._count = 0
         self._lease = None
         if path is not None:
             try:
@@ -112,10 +114,13 @@ class ThumbnailDisk:
             db.execute('PRAGMA trusted_schema=OFF')
 
         db.execute('PRAGMA journal_mode=DELETE')
+        db.execute('PRAGMA synchronous=NORMAL')
         db.execute('PRAGMA cache_size=-2048')
         db.execute('PRAGMA max_page_count=' + str(max(1, self.max_bytes // 4096)))
         db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_RENDERED_PNG_BYTES + 4096)
         db.execute('CREATE TABLE IF NOT EXISTS thumbs(key TEXT PRIMARY KEY, png BLOB NOT NULL, digest TEXT NOT NULL, tag TEXT, touched INTEGER NOT NULL)')
+        if self.max_bytes > 65536:
+            db.execute('CREATE INDEX IF NOT EXISTS thumbs_touched ON thumbs(touched, key)')
         db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
         db.commit()
 
@@ -138,6 +143,8 @@ class ThumbnailDisk:
                 size -= old[1]
                 count -= 1
             db.commit()
+        self._bytes = size
+        self._count = count
         self.db = db
 
     def _open(self):
@@ -151,6 +158,8 @@ class ThumbnailDisk:
                     self.db.execute('PRAGMA max_page_count=' + str(max(1, self.max_bytes // 4096)))
                     self.db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_RENDERED_PNG_BYTES + 4096)
                     self.db.execute('CREATE TABLE thumbs(key TEXT PRIMARY KEY, png BLOB NOT NULL, digest TEXT NOT NULL, tag TEXT, touched INTEGER NOT NULL)')
+                    self._bytes = 0
+                    self._count = 0
                 else:
                     self._open_persistent()
             except (StoragePathError, StorageBusyError, sqlite3.Error, OSError, ValueError):
@@ -196,7 +205,11 @@ class ThumbnailDisk:
                     or not data.startswith(b'\x89PNG\r\n\x1a\n') or hashlib.sha256(data).hexdigest() != digest
                     or (key[1] in ('image', 'video') and tag is not None)
                     or (key[1] not in ('image', 'video') and (not isinstance(tag, str) or re.fullmatch(r'W/"[0-9a-f]{64}"', tag) is None))):
+                row_len = len(data) if isinstance(data, bytes) else 0
                 db.execute('DELETE FROM thumbs WHERE key=?', (self.key(key),)); db.commit()
+                if row_len:
+                    self._bytes = max(0, self._bytes - row_len)
+                self._count = max(0, self._count - 1)
                 return None
             tick = self._next_tick(db)
             self._touches[self.key(key)] = tick
@@ -218,18 +231,29 @@ class ThumbnailDisk:
         if len(data) > budget:
             return
         try:
+            cache_key = self.key(key)
             # Eviction must observe reads which have not reached the disk yet.
             self._flush_touches(db)
-            db.execute('DELETE FROM thumbs WHERE key=?', (self.key(key),))
-            size, count = db.execute('SELECT COALESCE(SUM(length(png)),0),COUNT(*) FROM thumbs').fetchone()
+            existing = db.execute('SELECT length(png) FROM thumbs WHERE key=?', (cache_key,)).fetchone()
+            if existing is not None:
+                db.execute('DELETE FROM thumbs WHERE key=?', (cache_key,))
+                self._bytes = max(0, self._bytes - existing[0])
+                self._count = max(0, self._count - 1)
+            size, count = self._bytes, self._count
             while size + len(data) > budget or count >= MAX_ENTRIES:
                 old = db.execute('SELECT key,length(png) FROM thumbs ORDER BY touched,key LIMIT 1').fetchone()
                 if old is None:
                     break
-                db.execute('DELETE FROM thumbs WHERE key=?', (old[0],)); size -= old[1]; count -= 1
+                db.execute('DELETE FROM thumbs WHERE key=?', (old[0],))
+                size -= old[1]
+                count -= 1
+            self._bytes = max(0, size)
+            self._count = max(0, count)
             tick = self._next_tick(db)
             db.execute('INSERT INTO thumbs VALUES(?,?,?,?,?)',
-                       (self.key(key), data, hashlib.sha256(data).hexdigest(), tag, tick))
+                       (cache_key, data, hashlib.sha256(data).hexdigest(), tag, tick))
+            self._bytes += len(data)
+            self._count += 1
             db.commit()
         except (sqlite3.Error, OSError, TypeError, ValueError, OverflowError):
             self.close(flush=False)
@@ -249,6 +273,8 @@ class ThumbnailDisk:
             self.db = None
         self._touches.clear()
         self._touch_count = 0
+        self._bytes = 0
+        self._count = 0
         if self.directory is not None:
             try:
                 self.directory.cleanup()

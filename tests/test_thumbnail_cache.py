@@ -486,6 +486,21 @@ class ThumbnailHTTPTests(unittest.TestCase):
                 second_bytes = resp.read()
         self.assertEqual(second_bytes, first_bytes)
 
+    def test_disk_hit_promotes_to_ram_without_re_reading_disk(self):
+        cache_file = self.base / 'promote_cache.sqlite'
+        c1 = ThumbnailCache(self.previews, disk_path=cache_file, max_active=4)
+        expected = c1.read(self.ids['image.png'], edge=128)
+        c1.close()
+
+        c2 = ThumbnailCache(self.previews, disk_path=cache_file, max_active=4)
+        self.addCleanup(c2.close)
+        first = c2.read(self.ids['image.png'], edge=128)
+        self.assertEqual(first, expected)
+        self.assertEqual(len(c2.cache), 1)
+        with patch.object(c2.disk, 'get', side_effect=AssertionError('promoted entry must hit RAM')):
+            second = c2.read(self.ids['image.png'], edge=128)
+        self.assertEqual(second, expected)
+
 
 class VideoThumbnailDiskTests(unittest.TestCase):
     def test_video_thumbnail_persists_in_thumbnail_disk(self):

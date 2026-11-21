@@ -38,6 +38,8 @@ public sealed partial class MainPage : Page
     [System.Runtime.InteropServices.DllImport("user32.dll")]private static extern uint GetDoubleClickTime();
     [System.Runtime.InteropServices.DllImport("user32.dll")]private static extern int GetSystemMetrics(int index);
     private List<MediaRow> rows=[];
+    private readonly Dictionary<int, MediaRow> rowById = new();
+    private double cachedGridCaptionMinHeight = 26;
     private MediaRow? active;
     private EditorState saved;
     private bool updatingFavorite;
@@ -540,7 +542,7 @@ public sealed partial class MainPage : Page
             var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null&&!DirectContentSimilarity||(origin is null&&method.IsAI&&!method.IsDirectContent&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             SearchOptions.Header="AI検索結果の絞り込み";
-            ResetBrowse(checked(page*pageSize),result);rows=result.Items;BindLibrarySelection();active=null; if(!folderSettingsActive&&librarySelection.Count==0){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;} DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();SyncFavoriteToggle(false);Reviewed.IsChecked=false;RenderRows();UpdateBrowseTagsFlyout();
+            ResetBrowse(checked(page*pageSize),result);rows=result.Items;SyncRowsState();BindLibrarySelection();active=null; if(!folderSettingsActive&&librarySelection.Count==0){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;} DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();SyncFavoriteToggle(false);Reviewed.IsChecked=false;RenderRows();UpdateBrowseTagsFlyout();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text=""; UpdateDetailSaveBar();
             UpdateLibraryHeading();
             if(settingsHubOpen)settingsReturnCount=$"{result.Total:N0} 件";
@@ -624,7 +626,7 @@ public sealed partial class MainPage : Page
                 }
                 if(resultSession is null)
                 {
-                    resultWindow?.Dispose();resultWindow=null;rows=[];active=null;BindLibrarySelection();
+                    resultWindow?.Dispose();resultWindow=null;rows=[];SyncRowsState();active=null;BindLibrarySelection();
                     if(!folderSettingsActive){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;}
                     detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
                     ItemTitle.Text="作品を選んでください";ItemPath.Text="";draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();SyncFavoriteToggle(false);Reviewed.IsChecked=false;EditStatus.Text="";UpdateDetailSaveBar();
@@ -655,7 +657,7 @@ public sealed partial class MainPage : Page
                     (ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません"));
                 lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;
                 lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();
-                rows=[];active=null;if(!folderSettingsActive){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;}DetailsButton.IsEnabled=false;
+                rows=[];SyncRowsState();active=null;if(!folderSettingsActive){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;}DetailsButton.IsEnabled=false;
                 detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
                 ItemTitle.Text="作品を選んでください";ItemPath.Text="";draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();
                 SyncFavoriteToggle(false);Reviewed.IsChecked=false;EditStatus.Text="";UpdateDetailSaveBar();RenderRows();
@@ -698,13 +700,49 @@ public sealed partial class MainPage : Page
 
     private static string RowKey(int id) => id.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private MediaRow? RowForKey(object? key) => key is string value &&
-        int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id)
-        ? rows.FirstOrDefault(row => row.Id == id) : null;
+        int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) &&
+        rowById.TryGetValue(id, out var row) ? row : null;
+
+    private void SyncRowsState()
+    {
+        rowById.Clear();
+        foreach (var row in rows) rowById[row.Id] = row;
+        cachedGridCaptionMinHeight = ComputeGridCaptionMinHeight();
+    }
+
+    private void SyncItemsWrapGridSize()
+    {
+        if (Items.ItemsPanelRoot is not ItemsWrapGrid wrap) return;
+        if (!tiles)
+        {
+            wrap.ItemWidth = double.NaN;
+            wrap.ItemHeight = double.NaN;
+            return;
+        }
+        var availW = Items.ActualWidth > 0 ? Items.ActualWidth : ItemListContainer.ActualWidth;
+        if (availW <= 16 || ItemListContainer.ActualHeight <= 48) return;
+        var scale = libraryItemScale / 100d;
+        var tileW = LibraryTileLayout.Width(Math.Max(1, availW - 16), libraryItemScale);
+        var imgHeight = Math.Min(160 * scale, Math.Max(48, ItemListContainer.ActualHeight - 108));
+        var captionHeight = cachedGridCaptionMinHeight > 0 ? cachedGridCaptionMinHeight : 26;
+        wrap.ItemWidth = tileW + 8;
+        wrap.ItemHeight = Math.Ceiling(imgHeight + 26 + captionHeight) + 10;
+    }
+
+    private void ItemContainer_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
+    {
+        if (args.Handled || disposed || sender is not ListViewItem item || item.Tag is not int id || !rowById.TryGetValue(id, out var row)) return;
+        var menu = SimilarityMenu(row);
+        if (args.TryGetPosition(item, out var position)) menu.ShowAt(item, position);
+        else menu.ShowAt(item);
+        args.Handled = true;
+    }
 
     private void ReleaseContainer(ListViewItem item)
     {
         containerRefresh.Remove(item);
         containerQuickActionSync.Remove(item);
+        item.ContextRequested -= ItemContainer_ContextRequested;
         if (containerCleanup.Remove(item, out var release)) release();
         if (item.ContentTemplateRoot is Border host) host.Child=null;
         item.ContextFlyout=null; item.Tag=null;
@@ -726,6 +764,7 @@ public sealed partial class MainPage : Page
     private void RenderRows()
     {
         renderCancellation.Cancel(); renderCancellation.Dispose(); renderCancellation = new();
+        SyncRowsState();
         populating = true;
         try
         {
@@ -736,6 +775,7 @@ public sealed partial class MainPage : Page
             // owned by C#; no reflection-based property binding or custom COM model.
             resultKeys.Clear();foreach(var row in rows)resultKeys.Add(RowKey(row.Id));
             Items.ItemsSource=resultKeys;
+            SyncItemsWrapGridSize();
         }
         finally { populating = false; }
         _ = thumbnails.PrefetchRowsAsync(rows.ToArray(), CurrentThumbnailEdge(), renderCancellation.Token);
@@ -750,7 +790,7 @@ public sealed partial class MainPage : Page
     private void RefreshThumbnailTooltips()
     {
         foreach(var item in containerCleanup.Keys.ToArray())
-            if(item.Tag is int id&&rows.FirstOrDefault(r=>r.Id==id) is {} row
+            if(item.Tag is int id&&rowById.TryGetValue(id, out var row)
                 &&item.ContentTemplateRoot is Border{Child:Grid content}
                 &&content.Children.FirstOrDefault() is Image image
                 &&(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row)||AudioPlayerPolicy.CanOpen(row)))
@@ -790,22 +830,57 @@ public sealed partial class MainPage : Page
     }
     private Border CreateEvidencePill(string icon, string summary, string automationId, string styleKey)
     {
-        var singleLineSummary = tiles ? summary.Replace("\r\n", "\n").Replace("\n", " · ") : summary;
-        var display = singleLineSummary.StartsWith(icon, StringComparison.Ordinal) ? singleLineSummary : $"{icon} {singleLineSummary}";
-        var label = new TextBlock
+        var normalized = summary.Replace("\r\n", "\n");
+        var lines = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var display = normalized.StartsWith(icon, StringComparison.Ordinal) ? normalized : $"{icon} {normalized}";
+        UIElement content;
+        if (tiles && lines.Length > 1)
         {
-            Text = display,
-            TextWrapping = tiles ? TextWrapping.NoWrap : TextWrapping.Wrap,
-            MaxLines = tiles ? 1 : 2,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Style = (Style)Resources["CaptionTextBlockStyle"],
-        };
-        AutomationProperties.SetAutomationId(label, automationId);
-        ToolTipService.SetToolTip(label, summary);
+            var firstLine = lines[0].StartsWith(icon, StringComparison.Ordinal) ? lines[0] : $"{icon} {lines[0]}";
+            var secondLine = string.Join(" · ", lines.Skip(1));
+            var stack = new StackPanel { Spacing = 1 };
+            stack.Children.Add(new TextBlock
+            {
+                Text = firstLine,
+                TextWrapping = TextWrapping.NoWrap,
+                MaxLines = 1,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Style = (Style)Resources["CaptionTextBlockStyle"],
+            });
+            stack.Children.Add(new TextBlock
+            {
+                Text = secondLine,
+                TextWrapping = TextWrapping.NoWrap,
+                MaxLines = 1,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Style = (Style)Resources["CaptionTextBlockStyle"],
+            });
+            AutomationProperties.SetAutomationId(stack, automationId);
+            AutomationProperties.SetName(stack, display);
+            ToolTipService.SetToolTip(stack, summary);
+            content = stack;
+        }
+        else
+        {
+            var singleText = tiles && lines.Length == 1
+                ? (lines[0].StartsWith(icon, StringComparison.Ordinal) ? lines[0] : $"{icon} {lines[0]}")
+                : display;
+            var label = new TextBlock
+            {
+                Text = singleText,
+                TextWrapping = TextWrapping.Wrap,
+                MaxLines = 2,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Style = (Style)Resources["CaptionTextBlockStyle"],
+            };
+            AutomationProperties.SetAutomationId(label, automationId);
+            ToolTipService.SetToolTip(label, summary);
+            content = label;
+        }
         var pill = new Border
         {
             Style = (Style)Resources[styleKey],
-            Child = label,
+            Child = content,
         };
         ToolTipService.SetToolTip(pill, summary);
         return pill;
@@ -918,7 +993,7 @@ public sealed partial class MainPage : Page
         image.DoubleTapped += async (_, args) => { args.Handled=true; await OpenPreviewAsync(row.Id); };
         if(ImageViewerPolicy.CanOpen(row)||ArchiveManifest.CanOpen(row)||VideoPlayerPolicy.CanOpen(row)||AudioPlayerPolicy.CanOpen(row))
             ToolTipService.SetToolTip(image,ThumbnailOpenTooltip(row));
-        var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 1 };
+        var text = new StackPanel { Spacing = 4, VerticalAlignment = tiles ? VerticalAlignment.Top : VerticalAlignment.Center, MaxWidth = 1 };
         var title=new TextBlock { Text = (row.Favorite ? "★ " : "") + row.Title, TextWrapping=TextWrapping.NoWrap,MaxLines=1,TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Resources["MediaTitleStyle"] };
         AutomationProperties.SetAutomationId(title,$"ItemTitle{row.Id}");AutomationProperties.SetName(title,row.Title);text.Children.Add(title);
         ToolTipService.SetToolTip(title, row.Title);
@@ -1105,7 +1180,7 @@ public sealed partial class MainPage : Page
             content.Children.Add(quickActions);
         }
         item.Tag=row.Id;AutomationProperties.SetAutomationId(item, $"Item{row.Id}"); AutomationProperties.SetName(item, row.Title);
-        item.ContextFlyout=SimilarityMenu(row);
+        item.ContextRequested += ItemContainer_ContextRequested;
         UpdateSelectionFrame(item);
         content.DoubleTapped+=async(_,args)=>{args.Handled=true;await OpenPreviewAsync(row.Id);};
         var renderToken = renderCancellation.Token;
@@ -1159,6 +1234,8 @@ public sealed partial class MainPage : Page
         containerRefresh[item] = () => _ = RefreshThumbnailAsync();
         // Wire loading/cancellation before the live template receives this image.
         host.Child=content;SizeItem(item,image);
+        if(tiles&&Items.ItemsPanelRoot is ItemsWrapGrid wrap&&(double.IsNaN(wrap.ItemWidth)||double.IsNaN(wrap.ItemHeight)))
+            SyncItemsWrapGridSize();
         var initialEdge=ThumbnailPolicy.EdgeFor(image.Width,image.Height,XamlRoot?.RasterizationScale??1);
         if(thumbnails.TryGetCached(row,initialEdge) is BitmapImage cachedBitmap)
         {
@@ -1169,15 +1246,25 @@ public sealed partial class MainPage : Page
             requestedEdge=initialEdge;
         }
     }
-    private double GridCaptionMinHeight()
+    private double ComputeGridCaptionMinHeight()
     {
         if(!tiles)return 0;
-        if(rows.Any(r=>r.AIEvidence.Length>0||r.Proposal is not null||r.AIPage is not null||r.PageText is not null||r.Evidence is {AllDirect:false}))
-            return 78;
-        if(rows.Any(r=>r.ShelfIds.Length>0||!string.IsNullOrWhiteSpace(r.Shelf)||r.Tags.Length>0||r.Availability!="present"||r.MatchLabel.Length>0||(r.Kind=="image"&&Kind.SelectedIndex is not (0 or 1))))
-            return 48;
-        return 24;
+        var hasPill=false;
+        var hasMeta=false;
+        var nonDefaultImageCheck=Kind.SelectedIndex is not (0 or 1);
+        foreach(var r in rows)
+        {
+            if(r.AIEvidence.Length>0||r.Proposal is not null||r.AIPage is not null||r.PageText is not null||r.Evidence is {AllDirect:false})
+            {
+                hasPill=true;
+                break;
+            }
+            if(!hasMeta&&(r.ShelfIds.Length>0||!string.IsNullOrWhiteSpace(r.Shelf)||r.Tags.Length>0||r.Availability!="present"||r.MatchLabel.Length>0||(r.Kind=="image"&&nonDefaultImageCheck)))
+                hasMeta=true;
+        }
+        return hasPill?116:hasMeta?56:30;
     }
+    private double GridCaptionMinHeight()=>tiles?cachedGridCaptionMinHeight:0;
     private void SizeItem(ListViewItem item,Image image)
     {
         var scale=libraryItemScale/100d;
@@ -1250,8 +1337,8 @@ public sealed partial class MainPage : Page
     private void UpdateItemSizesCore()
     {
         UpdateShelfItemSizes();
-        if(Items.ItemsPanelRoot is ItemsWrapGrid wrap)
-            wrap.ItemWidth=tiles?LibraryTileLayout.Width(Math.Max(1,Items.ActualWidth-16),libraryItemScale)+8:double.NaN;
+        cachedGridCaptionMinHeight = ComputeGridCaptionMinHeight();
+        SyncItemsWrapGridSize();
         foreach(var item in containerCleanup.Keys.ToArray())
             if(item.ContentTemplateRoot is Border { Child: Grid content }&&content.Children.FirstOrDefault() is Image image)SizeItem(item,image);
         foreach(var refresh in containerRefresh.Values.ToArray())refresh();
@@ -1889,7 +1976,6 @@ public sealed partial class MainPage : Page
                     if(containerQuickActionSync.TryGetValue(item,out var syncQuick))syncQuick();
                 }
             }
-            item.ContextFlyout=SimilarityMenu(row);
         }
         if(active?.Id==row.Id)DetailPreview.ContextFlyout=SimilarityMenu(active);
     }

@@ -6,19 +6,25 @@ namespace Aredoko_WinUI;
 
 internal sealed class ThumbnailService(LibraryApi api)
 {
-    private const int MaxMemoryEntries = 1200;
-    private const long MaxMemoryBytes = 512L * 1024 * 1024;
-    private readonly SemaphoreSlim workers = new(6, 6);
-    private readonly SemaphoreSlim prefetchWorkers = new(2, 2);
+    private const int MaxMemoryEntries = 2000;
+    private const long MaxMemoryBytes = 768L * 1024 * 1024;
+    private const int MaxPngEntries = 6000;
+    private const long MaxPngBytes = 384L * 1024 * 1024;
+    private readonly SemaphoreSlim workers = new(8, 8);
+    private readonly SemaphoreSlim prefetchWorkers = new(3, 3);
     private readonly object cacheLock = new();
     private readonly Dictionary<(long Generation, int ItemId, int Edge), LinkedListNode<CacheEntry>> cacheMap = new();
     private readonly LinkedList<CacheEntry> cacheOrder = new();
+    private readonly Dictionary<(long Generation, int ItemId, int Edge), LinkedListNode<PngEntry>> pngMap = new();
+    private readonly LinkedList<PngEntry> pngOrder = new();
     private readonly Dictionary<(long Generation, int ItemId, int Edge), Task<byte[]?>> inflight = new();
     private CancellationTokenSource generationCts = new();
     private long currentMemoryBytes;
+    private long currentPngBytes;
     private long generation = 1;
 
     private readonly record struct CacheEntry((long Generation, int ItemId, int Edge) Key, BitmapImage Image, long Bytes);
+    private readonly record struct PngEntry((long Generation, int ItemId, int Edge) Key, byte[] Data);
 
     public BitmapImage? TryGetCached(MediaRow row, int edge)
     {
@@ -30,6 +36,29 @@ internal sealed class ThumbnailService(LibraryApi api)
             cacheOrder.Remove(node);
             cacheOrder.AddFirst(node);
             return node.Value.Image;
+        }
+    }
+
+    private byte[]? TryGetPng(long expectedGeneration, int itemId, int edge)
+    {
+        lock (cacheLock)
+        {
+            if (expectedGeneration != generation) return null;
+            var key = (expectedGeneration, itemId, edge);
+            if (!pngMap.TryGetValue(key, out var node)) return null;
+            pngOrder.Remove(node);
+            pngOrder.AddFirst(node);
+            return node.Value.Data;
+        }
+    }
+
+    private bool HasPng(long expectedGeneration, int itemId, int edge)
+    {
+        lock (cacheLock)
+        {
+            if (expectedGeneration != generation) return false;
+            var key = (expectedGeneration, itemId, edge);
+            return cacheMap.ContainsKey(key) || pngMap.ContainsKey(key);
         }
     }
 
@@ -45,6 +74,9 @@ internal sealed class ThumbnailService(LibraryApi api)
             cacheMap.Clear();
             cacheOrder.Clear();
             currentMemoryBytes = 0;
+            pngMap.Clear();
+            pngOrder.Clear();
+            currentPngBytes = 0;
         }
         previous.Cancel();
     }
@@ -62,6 +94,40 @@ internal sealed class ThumbnailService(LibraryApi api)
                     cacheOrder.Remove(node);
                     currentMemoryBytes = Math.Max(0, currentMemoryBytes - node.Value.Bytes);
                 }
+            }
+            foreach (var key in pngMap.Keys.Where(k => k.ItemId == itemId).ToArray())
+            {
+                if (pngMap.Remove(key, out var node))
+                {
+                    pngOrder.Remove(node);
+                    currentPngBytes = Math.Max(0, currentPngBytes - node.Value.Data.LongLength);
+                }
+            }
+        }
+    }
+
+    private void PutPng(long expectedGeneration, int itemId, int edge, byte[] png)
+    {
+        if (png.LongLength > MaxPngBytes) return;
+        lock (cacheLock)
+        {
+            if (expectedGeneration != generation) return;
+            var key = (expectedGeneration, itemId, edge);
+            if (pngMap.TryGetValue(key, out var existing))
+            {
+                pngOrder.Remove(existing);
+                pngMap.Remove(key);
+                currentPngBytes = Math.Max(0, currentPngBytes - existing.Value.Data.LongLength);
+            }
+            var node = new LinkedListNode<PngEntry>(new PngEntry(key, png));
+            pngOrder.AddFirst(node);
+            pngMap[key] = node;
+            currentPngBytes += png.LongLength;
+            while ((pngOrder.Count > MaxPngEntries || (currentPngBytes > MaxPngBytes && pngOrder.Count > 1)) && pngOrder.Last is { } oldest)
+            {
+                pngOrder.RemoveLast();
+                pngMap.Remove(oldest.Value.Key);
+                currentPngBytes = Math.Max(0, currentPngBytes - oldest.Value.Data.LongLength);
             }
         }
     }
@@ -107,11 +173,18 @@ internal sealed class ThumbnailService(LibraryApi api)
         if (row.Availability != "present" || (row.Kind != "image" && row.Kind != "book" && row.Kind != "archive" && row.Kind != "video")) return null;
         if (TryGetCached(row, edge) is { } cached) return cached;
         (long Generation, int ItemId, int Edge) key;
-        Task<byte[]?> sharedFetch;
+        byte[]? cachedPng;
+        Task<byte[]?>? sharedFetch = null;
         lock (cacheLock)
         {
             key = (generation, row.Id, edge);
-            if (!inflight.TryGetValue(key, out sharedFetch!))
+            cachedPng = pngMap.TryGetValue(key, out var pngNode) ? pngNode.Value.Data : null;
+            if (cachedPng is not null)
+            {
+                pngOrder.Remove(pngNode!);
+                pngOrder.AddFirst(pngNode!);
+            }
+            else if (!inflight.TryGetValue(key, out sharedFetch!))
             {
                 var created = FetchBytesAsync(row.Id, edge, generationCts.Token);
                 inflight[key] = created;
@@ -131,8 +204,10 @@ internal sealed class ThumbnailService(LibraryApi api)
             cancellation.ThrowIfCancellationRequested();
             // All supported media thumbnails (including videos) flow through the
             // guarded persistent thumbnail endpoint with live source validation.
-            var png = await sharedFetch.WaitAsync(cancellation);
+            var png = cachedPng ?? await sharedFetch!.WaitAsync(cancellation);
             if (png is null) return null;
+            if (cachedPng is null)
+                PutPng(key.Generation, row.Id, edge, png);
             cancellation.ThrowIfCancellationRequested();
             if (TryGetCached(row, edge) is { } racedHit) return racedHit;
             using var stream = new InMemoryRandomAccessStream();
@@ -144,7 +219,8 @@ internal sealed class ThumbnailService(LibraryApi api)
             var image = new BitmapImage { DecodePixelWidth = edge, DecodePixelType = DecodePixelType.Logical };
             await image.SetSourceAsync(stream);
             cancellation.ThrowIfCancellationRequested();
-            var estimatedBytes = Math.Max((long)edge * edge * 4L, png.LongLength * 4L);
+            var pixelBytes = (long)image.PixelWidth * image.PixelHeight * 4L;
+            var estimatedBytes = pixelBytes > 0 ? pixelBytes : Math.Max((long)edge * edge * 4L, png.LongLength * 4L);
             Put(key.Generation, row.Id, edge, image, estimatedBytes);
             return image;
         }
@@ -176,49 +252,39 @@ internal sealed class ThumbnailService(LibraryApi api)
         try
         {
             // Let newly realized viewport items issue their visible-priority requests first.
-            await Task.Delay(120, token);
+            await Task.Delay(120, token).ConfigureAwait(false);
             var tasks = new List<Task>(rows.Count);
             foreach (var row in rows)
             {
                 if (token.IsCancellationRequested) break;
                 if (row.Availability != "present" || (row.Kind != "image" && row.Kind != "book" && row.Kind != "archive" && row.Kind != "video")) continue;
-                if (TryGetCached(row, edge) is not null) continue;
+                if (HasPng(expectedGen, row.Id, edge)) continue;
                 tasks.Add(PrefetchOneAsync(row, edge, expectedGen, token));
             }
-            if (tasks.Count > 0) await Task.WhenAll(tasks);
+            if (tasks.Count > 0) await Task.WhenAll(tasks).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
     }
 
     private async Task PrefetchOneAsync(MediaRow row, int edge, long expectedGen, CancellationToken token)
     {
-        if (token.IsCancellationRequested || TryGetCached(row, edge) is not null) return;
-        await prefetchWorkers.WaitAsync(token);
+        if (token.IsCancellationRequested || HasPng(expectedGen, row.Id, edge)) return;
+        await prefetchWorkers.WaitAsync(token).ConfigureAwait(false);
         try
         {
-            if (token.IsCancellationRequested || TryGetCached(row, edge) is not null) return;
+            if (token.IsCancellationRequested || HasPng(expectedGen, row.Id, edge)) return;
             lock (cacheLock)
             {
                 if (expectedGen != generation || inflight.ContainsKey((expectedGen, row.Id, edge))) return;
             }
-            var png = await api.ThumbnailAsync(row.Id, edge, token, nearby: true);
-            if (png is null || token.IsCancellationRequested || TryGetCached(row, edge) is not null) return;
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream))
-            {
-                writer.WriteBytes(png); await writer.StoreAsync(); writer.DetachStream();
-            }
-            stream.Seek(0);
-            var image = new BitmapImage { DecodePixelWidth = edge, DecodePixelType = DecodePixelType.Logical };
-            await image.SetSourceAsync(stream);
-            if (token.IsCancellationRequested) return;
-            var estimatedBytes = Math.Max((long)edge * edge * 4L, png.LongLength * 4L);
-            Put(expectedGen, row.Id, edge, image, estimatedBytes);
+            var png = await api.ThumbnailAsync(row.Id, edge, token, nearby: true).ConfigureAwait(false);
+            if (png is null || token.IsCancellationRequested) return;
+            PutPng(expectedGen, row.Id, edge, png);
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) when (ex is HttpRequestException or ObjectDisposedException or IOException or System.Runtime.InteropServices.COMException or ArgumentException or InvalidDataException)
+        catch (Exception ex) when (ex is HttpRequestException or ObjectDisposedException or IOException)
         {
-            // Best-effort speculative warm; visible realization retries cleanly.
+            // Best-effort speculative warm into PNG byte cache; UI decodes only on realization.
         }
         finally
         {

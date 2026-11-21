@@ -23,8 +23,8 @@ from thumbnail_disk import ThumbnailDisk
 
 EDGES = (128, 256, 512, 1024)
 METHOD = 'first-visible-exif-rgba-lanczos-v1'
-CACHE_BYTES = 192 * 1024 * 1024
-CACHE_ENTRIES = 1024
+CACHE_BYTES = 512 * 1024 * 1024
+CACHE_ENTRIES = 8192
 MAX_JOBS = 32
 
 
@@ -86,11 +86,13 @@ class _Job:
 
 
 class ThumbnailCache:
-    def __init__(self, previews, *, max_bytes=CACHE_BYTES, max_entries=CACHE_ENTRIES, disk_path=None, disk_max_bytes=None):
+    def __init__(self, previews, *, max_bytes=CACHE_BYTES, max_entries=CACHE_ENTRIES, disk_path=None, disk_max_bytes=None, max_active=2):
         self.previews = previews
         self.max_bytes = max_bytes
         self.max_entries = max_entries
+        self.max_active = max(1, int(max_active))
         self.lock = threading.Lock()
+        self.disk_lock = threading.Lock()
         self.changed = threading.Condition(self.lock)
         self.active = 0
         self.order = 0
@@ -107,11 +109,12 @@ class ThumbnailCache:
             self.closed = True
             self.cache.clear()
             self.bytes = 0
-            self.disk.close()
             self.decode_budget.close()
             for job in self.jobs.values():
                 job.stop.set()
             self.changed.notify_all()
+        with self.disk_lock:
+            self.disk.close()
 
     def _acquire(self, job, stopped):
         while True:
@@ -123,7 +126,7 @@ class ThumbnailCache:
                 pending = [value for value in self.jobs.values()
                            if not value.running and not value.ready.is_set() and not value.stop.is_set()]
                 first = min(pending, key=lambda value: (not bool(value.visible_waiters), value.order), default=None)
-                if self.active < 2 and first is job:
+                if self.active < self.max_active and first is job:
                     job.running = True
                     self.active += 1
                     self.changed.notify_all()
@@ -173,12 +176,9 @@ class ThumbnailCache:
             if data is not None or tag != result[1]:
                 raise ReaderChanged('Thumbnail page changed')
 
-    def _put(self, key, result):
+    def _put_ram(self, key, result):
         data = result[0]
-        if self.closed:
-            return
-        self.disk.put(key, result)
-        if len(data) > self.max_bytes:
+        if self.closed or len(data) > self.max_bytes:
             return
         previous = self.cache.pop(key, None)
         if previous is not None:
@@ -189,6 +189,12 @@ class ThumbnailCache:
             _, removed = self.cache.popitem(last=False)
             self.bytes -= len(removed[0])
 
+    def _put(self, key, result):
+        if self.closed:
+            return
+        self._put_ram(key, result)
+        self.disk.put(key, result)
+
     def read(self, item_id, edge=256, *, priority='visible', cancelled=lambda: False):
         if type(priority) is not str or priority not in ('visible', 'nearby'):
             raise ValueError('Invalid thumbnail priority')
@@ -198,33 +204,46 @@ class ThumbnailCache:
             raise ThumbnailCancelled()
         kind, revision = self._source_call(lambda: self._probe(item_id), cancelled)
         key = (METHOD, kind, item_id, revision, 0, edge)
+        from_disk = False
         with self.lock:
             if self.closed:
                 raise ThumbnailCancelled()
             result = self.cache.get(key)
             if result is not None:
                 self.cache.move_to_end(key)
-            else:
-                result = self.disk.get(key)
-            if result is None:
-                job = self.jobs.get(key)
-                if job is not None and job.stop.is_set():
-                    raise PreviewBusyError('Thumbnail cancellation completing')
-                leader = job is None
-                if leader:
-                    if len(self.jobs) >= MAX_JOBS:
-                        raise PreviewBusyError('Thumbnail workers busy')
-                    self.order += 1
-                    job = _Job(order=self.order)
-                    self.jobs[key] = job
-                job.waiters += 1
-                job.visible_waiters += priority == 'visible'
-                self.changed.notify_all()
+        if result is None:
+            with self.disk_lock:
+                disk_result = None if self.closed else self.disk.get(key)
+            with self.lock:
+                if self.closed:
+                    raise ThumbnailCancelled()
+                result = self.cache.get(key)
+                if result is not None:
+                    self.cache.move_to_end(key)
+                elif disk_result is not None:
+                    result = disk_result
+                    from_disk = True
+                if result is None:
+                    job = self.jobs.get(key)
+                    if job is not None and job.stop.is_set():
+                        raise PreviewBusyError('Thumbnail cancellation completing')
+                    leader = job is None
+                    if leader:
+                        if len(self.jobs) >= MAX_JOBS:
+                            raise PreviewBusyError('Thumbnail workers busy')
+                        self.order += 1
+                        job = _Job(order=self.order)
+                        self.jobs[key] = job
+                    job.waiters += 1
+                    job.visible_waiters += priority == 'visible'
+                    self.changed.notify_all()
         if result is not None:
             self._source_call(lambda: self._validate(item_id, kind, revision, result), cancelled)
             with self.lock:
                 if self.closed or cancelled():
                     raise ThumbnailCancelled()
+                if from_disk and key not in self.cache:
+                    self._put_ram(key, result)
             return result[0]
         attached = True
 
@@ -258,10 +277,16 @@ class ThumbnailCache:
                     result = self._build(item_id, kind, revision, edge, stopped)
                     if stopped():
                         raise ThumbnailCancelled()
+                    should_store = False
                     with self.lock:
-                        if not job.stop.is_set():
-                            self._put(key, result)
+                        if not self.closed and not job.stop.is_set():
+                            self._put_ram(key, result)
                             job.result = result
+                            should_store = True
+                    if should_store:
+                        with self.disk_lock:
+                            if not self.closed and not job.stop.is_set():
+                                self.disk.put(key, result)
                 except Exception as error:
                     job.error = error
                 finally:

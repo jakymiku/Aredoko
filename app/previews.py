@@ -182,9 +182,9 @@ def _zip_directory_limit(file):
     return has_supported_image
 
 class PreviewReader:
-    def __init__(self, catalog):
+    def __init__(self, catalog, *, max_slots=2):
         self.catalog = catalog
-        self.slots = threading.BoundedSemaphore(2)
+        self.slots = threading.BoundedSemaphore(max(1, int(max_slots)))
         self.playback_slots = threading.BoundedSemaphore(4)
         self.audio_stream_slot = threading.BoundedSemaphore(1)
         self.video_stream_slot = threading.BoundedSemaphore(1)

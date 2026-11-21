@@ -9,6 +9,7 @@ using Windows.Foundation;
 namespace Aredoko_WinUI;
 public sealed partial class MainPage
 {
+    private const int BrowseBufferCapacity = 2400;
     private readonly ObservableCollection<string> resultKeys=new();
     private ResultBuffer? browseBuffer;
     private int browseStart;
@@ -19,7 +20,7 @@ public sealed partial class MainPage
     private int NextBrowsePage()=>browseBuffer?.End/resultPageSize??page+1;
     private void ResetBrowse(int start,SearchResponse result)
     {
-        browseBuffer=new ResultBuffer(start,result);browseStart=start;browseFailed=false;
+        browseBuffer=new ResultBuffer(start,result,BrowseBufferCapacity);browseStart=start;browseFailed=false;
     }
     private static T? Descendant<T>(DependencyObject parent) where T:DependencyObject
     {
@@ -39,12 +40,24 @@ public sealed partial class MainPage
         resultScroll=scroll;
         if(scroll is not null)scroll.ViewChanged+=ResultScroll_Changed;
     }
-    private async void ResultScroll_Changed(object? sender,ScrollViewerViewChangedEventArgs args)
+    private void ResultScroll_Changed(object? sender,ScrollViewerViewChangedEventArgs args)
+        => _ = TryExtendBrowseWindowAsync(args.IsIntermediate);
+
+    private (bool Forward, bool Backward) GetNeededBrowseEdge(ScrollViewer scroll, ResultBuffer buffer, bool isIntermediate)
     {
-        if(!ready||!Items.IsEnabled||args.IsIntermediate||disposed||extending||browseReflowing||browseFailed||saving||dialogOpen||PendingAutoSearch||folderHubOpen)return;
+        if (scroll.ViewportHeight <= 0) return (false, false);
+        var forward = scroll.VerticalOffset + scroll.ViewportHeight * 3 >= scroll.ExtentHeight && buffer.End < buffer.Total;
+        if (forward && isIntermediate && buffer.Items.Count + ResultWindow.BlockSize > buffer.MaxCapacity)
+            forward = false;
+        var backward = !forward && !isIntermediate && scroll.VerticalOffset < scroll.ViewportHeight && buffer.Start > 0;
+        return (forward, backward);
+    }
+
+    private async Task TryExtendBrowseWindowAsync(bool isIntermediate)
+    {
+        if(!ready||!Items.IsEnabled||disposed||extending||browseReflowing||browseFailed||saving||dialogOpen||PendingAutoSearch||folderHubOpen)return;
         if(resultScroll is not ScrollViewer scroll||browseBuffer is not ResultBuffer buffer||resultWindow is not ResultWindow window)return;
-        var forward=scroll.VerticalOffset+scroll.ViewportHeight*2>=scroll.ExtentHeight&&buffer.End<buffer.Total;
-        var backward=!forward&&scroll.VerticalOffset<scroll.ViewportHeight&&buffer.Start>0;
+        var (forward,backward)=GetNeededBrowseEdge(scroll,buffer,isIntermediate);
         if(!forward&&!backward||!await transitions.WaitAsync(0))return;
         extending=true;var session=resultSession;var token=renderCancellation.Token;
         try
@@ -53,21 +66,48 @@ public sealed partial class MainPage
             var count=forward?Math.Min(ResultWindow.BlockSize,buffer.Total-offset):buffer.Start-offset;
             var result=await window.ReadAsync(offset,count,token);
             if(disposed||token.IsCancellationRequested||!ReferenceEquals(session,resultSession)||!ReferenceEquals(buffer,browseBuffer))return;
-            var anchor=CaptureBrowseAnchor();
-            buffer.Extend(offset,result);browseStart=buffer.Start;rows=buffer.Items.ToList();
-            var wanted=rows.Select(row=>RowKey(row.Id)).ToArray();var keep=wanted.ToHashSet();
+            var previousStart=buffer.Start;
+            var previousCaptionHeight=cachedGridCaptionMinHeight;
+            var needAnchor=forward?(buffer.Items.Count+result.Items.Count>buffer.MaxCapacity):true;
+            var anchor=needAnchor?CaptureBrowseAnchor():null;
+            buffer.Extend(offset,result);browseStart=buffer.Start;rows=buffer.Items.ToList();SyncRowsState();
+            if(tiles&&Math.Abs(cachedGridCaptionMinHeight-previousCaptionHeight)>0.1)
+            {
+                SyncItemsWrapGridSize();
+                foreach(var item in containerCleanup.Keys.ToArray())
+                    if(item.ContentTemplateRoot is Border { Child: Grid content }&&content.Children.OfType<StackPanel>().FirstOrDefault() is {} text)
+                        text.MinHeight=GridCaptionMinHeight();
+            }
+            var startShifted=buffer.Start!=previousStart;
             var wasPopulating=populating;populating=true;
             try
             {
-                for(var i=resultKeys.Count-1;i>=0;i--)if(!keep.Contains(resultKeys[i]))resultKeys.RemoveAt(i);
-                for(var i=0;i<wanted.Length;i++)if(i>=resultKeys.Count||resultKeys[i]!=wanted[i])resultKeys.Insert(i,wanted[i]);
+                if(forward&&!startShifted)
+                {
+                    foreach(var added in result.Items)resultKeys.Add(RowKey(added.Id));
+                }
+                else if(forward)
+                {
+                    var evicted=Math.Max(0,buffer.Start-previousStart);
+                    for(var i=0;i<evicted&&resultKeys.Count>0;i++)resultKeys.RemoveAt(0);
+                    foreach(var added in result.Items)resultKeys.Add(RowKey(added.Id));
+                }
+                else
+                {
+                    var wanted=rows.Select(row=>RowKey(row.Id)).ToArray();var keep=wanted.ToHashSet();
+                    for(var i=resultKeys.Count-1;i>=0;i--)if(!keep.Contains(resultKeys[i]))resultKeys.RemoveAt(i);
+                    for(var i=0;i<wanted.Length;i++)if(i>=resultKeys.Count||resultKeys[i]!=wanted[i])resultKeys.Insert(i,wanted[i]);
+                }
                 RestoreSelection();
             }
             finally{populating=wasPopulating;}
-            Items.UpdateLayout();await RestoreBrowseAnchorAsync(anchor);
+            if(startShifted)
+            {
+                Items.UpdateLayout();await RestoreBrowseAnchorAsync(anchor);
+            }
             if(disposed||token.IsCancellationRequested)return;
             UpdateBrowseFooter(FormatLoadedPageRange(browseStart,buffer.End-browseStart,buffer.Total),browseStart>0,buffer.End<buffer.Total);
-            _ = thumbnails.PrefetchRowsAsync(rows.ToArray(), CurrentThumbnailEdge(), renderCancellation.Token);
+            if(result.Items.Count>0)_ = thumbnails.PrefetchRowsAsync(result.Items.ToArray(), CurrentThumbnailEdge(), renderCancellation.Token);
         }
         catch(OperationCanceledException){}
         catch(Exception ex){if(!disposed){browseFailed=true;Failure(ex);}}
@@ -75,6 +115,11 @@ public sealed partial class MainPage
         {
             extending=false;transitions.Release();
             if(PendingAutoSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}
+            else if(!disposed&&resultScroll is {} currentScroll&&browseBuffer is {} currentBuffer)
+            {
+                var (moreForward,moreBackward)=GetNeededBrowseEdge(currentScroll,currentBuffer,isIntermediate);
+                if(moreForward||moreBackward)DispatcherQueue.TryEnqueue(()=>_ = TryExtendBrowseWindowAsync(isIntermediate));
+            }
         }
     }
     private async void BrowseEdgeShortcut(KeyboardAccelerator sender,KeyboardAcceleratorInvokedEventArgs args)
@@ -94,7 +139,7 @@ public sealed partial class MainPage
             var start=last?Math.Max(0,session.Total-ResultWindow.BlockSize):0;
             var result=await window.ReadAsync(start,Math.Min(ResultWindow.BlockSize,session.Total-start),token);
             if(disposed||token.IsCancellationRequested||PendingAutoSearch||!ReferenceEquals(session,resultSession))return;
-            ResetBrowse(start,result);rows=browseBuffer!.Items.ToList();page=start/resultPageSize;
+            ResetBrowse(start,result);rows=browseBuffer!.Items.ToList();SyncRowsState();page=start/resultPageSize;
             RenderRows();RestoreSelection();Items.UpdateLayout();await YieldBrowseLayoutAsync();
             if(disposed||!ReferenceEquals(session,resultSession))return;
             resultScroll?.ChangeView(null,last?resultScroll.ScrollableHeight:0,null,true);

@@ -31,7 +31,7 @@ public sealed partial class MainPage
             if(anchorPosition is null&&anchorId is int known)anchorPosition=(await replacement.LocateAsync([known],CancellationToken.None)).FirstOrDefault();
             var desired=anchorPosition is not null&&anchorId is int oldAnchor&&oldRows.ContainsKey(oldAnchor)
                 ?anchorPosition.Ordinal-rows.FindIndex(row=>row.Id==oldAnchor):oldStart;
-            var length=Math.Min(ResultBuffer.Capacity,Math.Max(resultPageSize,oldCount));
+            var length=Math.Min(BrowseBufferCapacity,Math.Max(resultPageSize,oldCount));
             var start=Math.Clamp(desired,0,Math.Max(0,replacement.Total-length));
             var count=Math.Min(length,replacement.Total-start);
             var window=new ResultWindow(replacement.Total,replacement.RangeAsync);
@@ -52,7 +52,7 @@ public sealed partial class MainPage
                 if(keepCards)result.Items=items.Select(row=>oldRows.GetValueOrDefault(row.Id,row)).ToList();
                 resultSession=replacement;resultWindow=window;resultsNeedRefresh=false;
                 librarySelection.Bind(replacement.Id,replacement.Total,positions);
-                page=start/resultPageSize;ResetBrowse(start,result);rows=result.Items;
+                page=start/resultPageSize;ResetBrowse(start,result);rows=result.Items;SyncRowsState();
                 Count.Text=$"{result.Total:N0} 件";
                 UpdateBrowseFooter(FormatLoadedPageRange(start,rows.Count,result.Total),start>0,start+rows.Count<result.Total);
                 Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;

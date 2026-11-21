@@ -133,7 +133,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     profiles=profiles or AIProfileSettings(Path(__file__).resolve().parents[1])
     profiles.writer_fence=catalog.writer_fence
     base=handler_for(catalog,token)
-    previews=PreviewReader(catalog)
+    previews=PreviewReader(catalog, max_slots=6)
     page_index=PageIndex(catalog,previews)
     page_text=PageTextIndex(catalog,page_index,text_extractor)
     try:setup_profile=(ModelProfile.from_dict(json.loads(profiles.active_definition)) if profiles.active_definition is not None else load_profile(profiles.startup_path)) if not profiles.startup_error else None
@@ -167,7 +167,7 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
     backup_jobs=BackupJobs(catalog,quiesce=catalog.writer_fence.pause,configuration=backup_configuration)
     restore_jobs=RestoreStagingJobs(catalog.path.parent/'restore-staging',handoff=restore_handoff)
     animations=AnimationSessions(previews)
-    thumbnails=ThumbnailCache(previews,disk_path=thumbnail_disk_path)
+    thumbnails=ThumbnailCache(previews,disk_path=thumbnail_disk_path,max_active=4)
     video_compat=VideoCompatCache(previews)
     def result_provider(conditions, consume, cancelled):
         values = dict(conditions)

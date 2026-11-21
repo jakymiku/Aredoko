@@ -17,5 +17,8 @@ internal static class ResultBufferTests
         try{buffer.Extend(buffer.End,duplicate);check(false,"duplicate rejected");}catch(InvalidDataException){check(ReferenceEquals(before,buffer.Items),"duplicate failure leaves buffer unchanged");}
         var changed=Range(buffer.End,10);changed.Total=49999;
         try{buffer.Extend(buffer.End,changed);check(false,"scope total rejected");}catch(InvalidDataException){check(ReferenceEquals(before,buffer.Items),"changed session total cannot mix metadata");}
+        var large=new ResultBuffer(0,Range(0,60),capacity:2400);
+        while(large.End<1500)large.Extend(large.End,Range(large.End,120));
+        check(large.MaxCapacity==2400&&large.Start==0&&large.Items.Count==1500&&large.End==1500,"custom 2400 capacity retains 1500 items without head eviction");
     }
 }

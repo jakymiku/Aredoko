@@ -257,8 +257,8 @@ public sealed partial class MainPage
         host.Child=row;
     }
     private ItemsPanelTemplate MediaItemsPanel()=>(ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(tiles
-        ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"3.0\"/></ItemsPanelTemplate>"
-        : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"3.0\"/></ItemsPanelTemplate>");
+        ? "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsWrapGrid Orientation=\"Horizontal\" CacheLength=\"1.5\"/></ItemsPanelTemplate>"
+        : "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><ItemsStackPanel CacheLength=\"1.5\"/></ItemsPanelTemplate>");
     private void RenderShelfLayout()
     {
         ShelfList.ItemsSource=null;
