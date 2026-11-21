@@ -703,6 +703,7 @@
            <StackPanel Orientation="Horizontal" Spacing="8">
             <Button x:Name="SettingsAIIndexButton" Content="AI検索を設定" Style="{StaticResource AccentButtonStyle}" Click="SettingsAIIndex_Click" AutomationProperties.AutomationId="BtnAIIndex"/>
             <Button x:Name="SettingsAIMediaPrepButton" Content="🎬 動画・音声のAIデータ" Click="SettingsAIMediaPrep_Click" AutomationProperties.AutomationId="BtnAIMediaPrep"/>
+            <Button x:Name="SettingsAIDownloadTaggerButton" Content="🏷 タグ付けモデルを取得" Click="SettingsAIDownloadTagger_Click" AutomationProperties.AutomationId="BtnAIDownloadTagger"/>
            </StackPanel>
            <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock x:Name="SettingsAISetupRowLabel" Text="初回セットアップ・再構成：" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center"/>

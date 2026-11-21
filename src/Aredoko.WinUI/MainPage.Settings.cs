@@ -339,6 +339,11 @@ public sealed partial class MainPage
         await OpenAISettingsAsync(initialSection:"media");
         if(!disposed&&settingsHubOpen)await LoadSettingsStatusAsync();
     }
+    private async void SettingsAIDownloadTagger_Click(object sender,RoutedEventArgs e)
+    {
+        await OpenAIDownloadDialogAsync(preferRole:"tagger");
+        if(!disposed&&settingsHubOpen)await LoadSettingsStatusAsync();
+    }
     private async void SettingsAIEnvironment_Click(object sender,RoutedEventArgs e)
     {
         await OpenAIAutoEnvironmentDialogAsync(fromSettings:true);

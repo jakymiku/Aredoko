@@ -16,7 +16,7 @@ public sealed partial class MainPage
             _=>item.Name+"（モデル）"
         };
 
-    private async Task OpenAIDownloadDialogAsync()
+    private async Task OpenAIDownloadDialogAsync(string? preferRole = null)
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
         bool open=true,busy=false;AIDownloadSelection? applySelection=null;IReadOnlyList<AIDownloadCatalog> knownCatalogs=Array.Empty<AIDownloadCatalog>();long revision=0;AIDownloadJob? current=null;Task? polling=null;string? operationError=null;
@@ -74,7 +74,8 @@ public sealed partial class MainPage
                     {
                         var selected=Selected()?.Id;knownCatalogs=items;choice.Items.Clear();
                         foreach(var item in items)choice.Items.Add(new ComboBoxItem{Content=DownloadCatalogLabel(item),Tag=item});
-                        var index=items.ToList().FindIndex(item=>item.Id==(job.Active?job.CatalogId:selected??job.CatalogId));choice.SelectedIndex=index>=0?index:items.Count>0?0:-1;
+                        var preferredIndex=(!job.Active&&selected is null&&!string.IsNullOrEmpty(preferRole))?items.ToList().FindIndex(item=>item.ModelTarget?.Role==preferRole):-1;
+                        var index=preferredIndex>=0?preferredIndex:items.ToList().FindIndex(item=>item.Id==(job.Active?job.CatalogId:selected??job.CatalogId));choice.SelectedIndex=index>=0?index:items.Count>0?0:-1;
                         if(items.Count==0)information.Text="ダウンロードできるモデルはありません（「自動セットアップ」または「手元のファイルを使う」を利用できます）";
                     }
                     current=job;operationError=null;Render();

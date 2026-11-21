@@ -2766,12 +2766,14 @@ public sealed partial class MainPage : Page
     {
         if(active is null||!TagReviewProtocol.CanOpen(active)||saving||dialogOpen||!await transitions.WaitAsync(0))return;
         var id=active.Id;var detailsWereOpen=Details.IsPaneOpen;dialogOpen=true;searchTimer.Stop();
+        var openTaggerDownload=false;
         var root=XamlRoot;Windows.Foundation.TypedEventHandler<XamlRoot,XamlRootChangedEventArgs> rootChanged=(_,_)=>tagReview?.Fit(root.Size.Width,root.Size.Height);
         root.Changed+=rootChanged;
         try
         {
             if(tagReviewSyncItem==id)await SyncTagReviewAsync(id);
             tagReview=new TagSuggestionsView(api.TagReviews,id,Dirty){RequestedTheme=ActualTheme};tagReview.Fit(root.Size.Width,root.Size.Height);
+            tagReview.OpenSetupRequested+=()=>openTaggerDownload=true;
             var dialog=new ContentDialog{RequestedTheme=ActualTheme,XamlRoot=XamlRoot,Title="AIタグ候補",Content=tagReview,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,FullSizeDesired=true};
             dialog.Resources["ContentDialogMaxWidth"]=720d;
             var closeStyle=new Style(typeof(Button));closeStyle.Setters.Add(new Setter(AutomationProperties.AutomationIdProperty,"TagClose"));dialog.CloseButtonStyle=closeStyle;
@@ -2787,8 +2789,9 @@ public sealed partial class MainPage : Page
             tagReview?.Dispose();tagReview=null;
             try{if(sync&&!disposed){tagReviewSyncItem=id;await SyncTagReviewAsync(id);}}
             catch(Exception ex){if(!disposed)Failure(ex);}
-            finally{dialogOpen=false;transitions.Release();if(!disposed){if(detailsWereOpen&&active?.Id==id)Details.IsPaneOpen=true;UpdateDirty();if(PendingAutoSearch)searchTimer.Start();}}
+            finally{dialogOpen=false;transitions.Release();if(!disposed){if(detailsWereOpen&&!openTaggerDownload&&active?.Id==id)Details.IsPaneOpen=true;UpdateDirty();if(PendingAutoSearch&&!openTaggerDownload)searchTimer.Start();}}
         }
+        if(openTaggerDownload&&!disposed)await OpenAIDownloadDialogAsync(preferRole:"tagger");
     }
     private async Task SyncTagReviewAsync(int id)
     {

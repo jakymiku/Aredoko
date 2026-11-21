@@ -20,8 +20,10 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     private bool busy,closing,disposed,populating;
     private string? requestId;
     public bool ApprovalAttempted {get;private set;}
+    public bool SetupRequested {get;private set;}
     public bool Busy=>busy;
     public event Action? CloseReady;
+    public event Action? OpenSetupRequested;
     public TagSuggestionsView(TagReviewClient api,int itemId,bool dirty)
     {
         this.api=api;this.itemId=itemId;this.dirty=dirty;InitializeComponent();UpdateButtons();
@@ -39,6 +41,12 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         if(disposed)return;
         Generate.IsEnabled=!busy&&!closing&&history?.Available==true;
         Generate.Style=Generate.IsEnabled&&Candidates.Items.Count==0?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
+        if(OpenSetup is not null)
+        {
+            OpenSetup.Visibility=history is {Available:false}?Visibility.Visible:Visibility.Collapsed;
+            OpenSetup.IsEnabled=!busy&&!closing;
+            OpenSetup.Style=OpenSetup.IsEnabled?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
+        }
         Refresh.IsEnabled=!busy&&!closing;Older.IsEnabled=!busy&&!closing&&history?.NextBefore is not null;
         Cancel.IsEnabled=busy&&requestId is not null&&!closing;Batches.IsEnabled=!busy;Candidates.IsEnabled=!busy;
         var pending=!busy&&!closing&&batch is {Stale:false}&&candidate is {State:"pending"};
@@ -165,6 +173,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         finally{if(!disposed)UpdateButtons();}
     }
     private async void Cancel_Click(object sender,RoutedEventArgs e)=>await CancelGenerationAsync();
+    private void OpenSetup_Click(object sender,RoutedEventArgs e){if(busy||closing)return;SetupRequested=true;OpenSetupRequested?.Invoke();RequestClose();}
     public void RequestClose(){closing=true;UpdateButtons();if(!busy)CloseReady?.Invoke();else if(requestId is not null)_=CancelGenerationAsync();}
     public void Dispose(){if(disposed)return;disposed=true;lifetime.Cancel();evidenceCancellation?.Cancel();evidenceCancellation?.Dispose();lifetime.Dispose();}
 }

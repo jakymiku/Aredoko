@@ -372,7 +372,7 @@ public sealed partial class MainPage
                 {
                     Header = title,
                     Content = body,
-                    IsExpanded = false,
+                    IsExpanded = true,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     HorizontalContentAlignment = HorizontalAlignment.Stretch
                 };
