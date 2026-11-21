@@ -81,10 +81,8 @@ def _candidate_paths():
     here = Path(__file__).resolve()
     app_dir = here.parent
     repo_or_backend = app_dir.parent
-    root_or_repo = repo_or_backend.parent
     candidates = [
-        root_or_repo / 'bin' / 'aredoko_native.dll',
-        repo_or_backend / 'bin' / 'aredoko_native.dll',
+        repo_or_backend / 'native' / 'aredoko_native.dll',
         repo_or_backend / 'src' / 'aredoko-native' / 'target' / 'x86_64-pc-windows-gnu' / 'release' / 'aredoko_native.dll',
         repo_or_backend / 'src' / 'aredoko-native' / 'target' / 'release' / 'aredoko_native.dll',
     ]

@@ -143,7 +143,8 @@ def package(output_dir, version='1.0.0', skip_build=False, dry_run=False, *, pyt
             if item.suffix.lower() != '.pdb' and item.name.lower() not in ('appx', 'publish'):
                 copy_payload(item, bin_dir / item.name)
     if native_dll is not None:
-        copy_payload(native_dll, bin_dir / 'aredoko_native.dll')
+        native_dir = backend / 'native'; native_dir.mkdir()
+        copy_payload(native_dll, native_dir / 'aredoko_native.dll')
     for item in (REPO / 'app').iterdir():
         if item.is_file() and item.suffix in ('.py', '.json'):
             copy_payload(item, app_dir / item.name)
@@ -259,7 +260,7 @@ def main():
     parser.add_argument('--portable-frontend', type=Path, help='Explicit Portable publish directory with build receipt')
     parser.add_argument('--bootstrap', type=Path, help='Built root Aredoko.exe for the portable channel')
     parser.add_argument('--managed-python-setup', type=Path, help='Explicit native acquisition helper; staging only until first-run integration')
-    parser.add_argument('--native-dll', type=Path, help='Explicit compiled aredoko_native.dll accelerator binary to bundle into bin/')
+    parser.add_argument('--native-dll', type=Path, help='Explicit compiled aredoko_native.dll accelerator binary to bundle into backend/native/')
     args = parser.parse_args()
     package(args.output_dir, args.version, args.skip_build, args.check,
             python_runtime=args.python_runtime, media_tools=args.media_tools, include_ai_runtime=args.include_ai_runtime, frontend_msix=args.frontend_msix,

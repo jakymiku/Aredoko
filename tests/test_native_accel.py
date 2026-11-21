@@ -301,6 +301,37 @@ class NativeAccelTests(unittest.TestCase):
             # Re-verify still passes cleanly
             self.assertEqual(ai_runtime.inspect_runtime(pack, verify=True)['verification'], 'full')
 
+    def test_portable_package_places_native_dll_outside_bin_inventory(self):
+        import test_portable_startup as portable_tests
+        import test_release_staging as staging
+        import portable_frontend as portable
+        import release_runtime as runtime
+
+        fixture = portable_tests.PortableStagingTests()
+        staging.ReleaseStagingTests.setUp(fixture)
+        self.addCleanup(fixture.temp.cleanup)
+        frontend, bootstrap = portable_tests.PortableStagingTests.source(fixture)
+        _, media = staging.ReleaseStagingTests.runtime(fixture)
+        helper = fixture.base / 'PythonSetup.exe'
+        helper.write_bytes(portable_tests.pe_fixture())
+        (fixture.repo / 'tools/prepare_basic_runtime.py').write_text('# generated setup fixture')
+        fake_dll = fixture.base / 'aredoko_native.dll'
+        fake_dll.write_bytes(b'MZ-generated-native-fixture')
+
+        manifest = staging.release.package(
+            fixture.output, skip_build=True, media_tools=media,
+            portable_frontend=frontend, bootstrap=bootstrap,
+            managed_python_setup=helper, native_dll=fake_dll,
+        )
+        paths = {row['path'] for row in manifest['entries']}
+        self.assertIn('backend/native/aredoko_native.dll', paths)
+        self.assertNotIn('bin/aredoko_native.dll', paths)
+        self.assertFalse((fixture.output / 'bin/aredoko_native.dll').exists())
+        runtime.verify_release(fixture.output)
+        portable.inspect_portable(fixture.output / 'bin')
+        pf = portable.PortableFrontend(fixture.output, manifest, 'selftest')
+        self.assertTrue(pf.executable.is_file())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -8,7 +8,7 @@ This document describes the license of Aredoko itself and provides licensing not
 
 - **License**: **MIT License** (see [LICENSE](LICENSE))
 - **Copyright**: Copyright (c) 2026 JAKYMIKU
-- **Scope**: The MIT License applies to Aredoko's own source code and Aredoko-authored binaries (`Aredoko.exe`, `Aredoko.WinUI.exe`, `Aredoko.WinUI.dll`, `Aredoko.Core.dll`, `bin/aredoko_native.dll`, `PythonSetup.exe`, `app/*.py`, `tools/*.py`, `tools/*.ps1`, `config/*` definitions).
+- **Scope**: The MIT License applies to Aredoko's own source code and Aredoko-authored binaries (`Aredoko.exe`, `Aredoko.WinUI.exe`, `Aredoko.WinUI.dll`, `Aredoko.Core.dll`, `backend/native/aredoko_native.dll`, `PythonSetup.exe`, `app/*.py`, `tools/*.py`, `tools/*.ps1`, `config/*` definitions).
 - **Third-Party Components**: Bundled third-party runtimes/binaries (`runtime/media/`, Microsoft `.NET` / `WindowsAppSDK` / `WebView2` / `WinML` in `bin/`) and optional user-downloaded Python/AI packages and model weights remain governed by their own respective licenses listed below.
 - **Unsigned Distribution Notice (`未署名配布`)**: Release executables in the portable ZIP are distributed **without Authenticode code signing**. On Windows systems where Smart App Control is enforced (`VerifiedAndReputablePolicyState = 1`), Windows may block unsigned executables from running.
 
@@ -64,9 +64,9 @@ Self-contained binaries in `bin/` include the following Microsoft runtime and SD
 
 ---
 
-## 3b. Native Rust Accelerator (`bin/aredoko_native.dll`)
+## 3b. Native Rust Accelerator (`backend/native/aredoko_native.dll`)
 
-`src/aredoko-native/` compiles to `bin/aredoko_native.dll` and statically links only permissive pure-Rust crates:
+`src/aredoko-native/` compiles to `backend/native/aredoko_native.dll` and statically links only permissive pure-Rust crates:
 - `sha2` (`0.10`), `rayon` (`1.12`), `image` (`0.25`), `fast_image_resize` (`5.5`), `png` (`0.17`), `windows-sys` (`0.59`) and their transitive pure-Rust crates — **MIT License** and/or **Apache License, Version 2.0** (with `unicode-ident`/`zlib-rs`/`simd-adler32` also under permissive `MIT / Apache-2.0 / Zlib / Unicode-3.0` terms).
 
 ---
