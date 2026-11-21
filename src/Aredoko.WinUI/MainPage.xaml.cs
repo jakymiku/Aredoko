@@ -39,7 +39,7 @@ public sealed partial class MainPage : Page
     [System.Runtime.InteropServices.DllImport("user32.dll")]private static extern int GetSystemMetrics(int index);
     private List<MediaRow> rows=[];
     private readonly Dictionary<int, MediaRow> rowById = new();
-    private double cachedGridCaptionMinHeight = 26;
+    private double cachedGridCaptionMinHeight = 24;
     private MediaRow? active;
     private EditorState saved;
     private bool updatingFavorite;
@@ -724,9 +724,9 @@ public sealed partial class MainPage : Page
         var scale = libraryItemScale / 100d;
         var tileW = LibraryTileLayout.Width(Math.Max(1, availW - 16), libraryItemScale);
         var imgHeight = Math.Min(160 * scale, Math.Max(48, ItemListContainer.ActualHeight - 108));
-        var captionHeight = cachedGridCaptionMinHeight > 0 ? cachedGridCaptionMinHeight : 26;
+        var captionHeight = cachedGridCaptionMinHeight > 0 ? cachedGridCaptionMinHeight : 24;
         wrap.ItemWidth = tileW + 8;
-        wrap.ItemHeight = Math.Ceiling(imgHeight + 26 + captionHeight) + 10;
+        wrap.ItemHeight = Math.Ceiling(imgHeight + 24 + captionHeight) + 10;
     }
 
     private void ItemContainer_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
@@ -831,43 +831,98 @@ public sealed partial class MainPage : Page
     private Border CreateEvidencePill(string icon, string summary, string automationId, string styleKey)
     {
         var normalized = summary.Replace("\r\n", "\n");
-        var lines = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var display = normalized.StartsWith(icon, StringComparison.Ordinal) ? normalized : $"{icon} {normalized}";
         UIElement content;
-        if (tiles && lines.Length > 1)
+        if (tiles)
         {
-            var firstLine = lines[0].StartsWith(icon, StringComparison.Ordinal) ? lines[0] : $"{icon} {lines[0]}";
-            var secondLine = string.Join(" · ", lines.Skip(1));
-            var stack = new StackPanel { Spacing = 1 };
-            stack.Children.Add(new TextBlock
+            var (primary, score, secondary) = Protocol.FormatTileEvidence(icon, summary);
+            if (score is not null || secondary is not null)
             {
-                Text = firstLine,
-                TextWrapping = TextWrapping.NoWrap,
-                MaxLines = 1,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Style = (Style)Resources["CaptionTextBlockStyle"],
-            });
-            stack.Children.Add(new TextBlock
+                var stack = new StackPanel { Spacing = 1 };
+                stack.Children.Add(new TextBlock
+                {
+                    Text = primary,
+                    TextWrapping = TextWrapping.NoWrap,
+                    MaxLines = 1,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Style = (Style)Resources["CaptionTextBlockStyle"],
+                });
+                if (score is not null && secondary is not null)
+                {
+                    var secondRow = new Grid { ColumnSpacing = 6 };
+                    secondRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    secondRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    var scoreBlock = new TextBlock
+                    {
+                        Text = score,
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        TextWrapping = TextWrapping.NoWrap,
+                        MaxLines = 1,
+                        Style = (Style)Resources["CaptionTextBlockStyle"],
+                    };
+                    var secondaryBlock = new TextBlock
+                    {
+                        Text = secondary,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        TextWrapping = TextWrapping.NoWrap,
+                        MaxLines = 1,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        Style = (Style)Resources["MediaMetadataStyle"],
+                    };
+                    Grid.SetColumn(scoreBlock, 0);
+                    Grid.SetColumn(secondaryBlock, 1);
+                    secondRow.Children.Add(scoreBlock);
+                    secondRow.Children.Add(secondaryBlock);
+                    stack.Children.Add(secondRow);
+                }
+                else if (score is not null)
+                {
+                    stack.Children.Add(new TextBlock
+                    {
+                        Text = score,
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        TextWrapping = TextWrapping.NoWrap,
+                        MaxLines = 1,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        Style = (Style)Resources["CaptionTextBlockStyle"],
+                    });
+                }
+                else
+                {
+                    stack.Children.Add(new TextBlock
+                    {
+                        Text = secondary!,
+                        TextWrapping = TextWrapping.NoWrap,
+                        MaxLines = 1,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        Style = (Style)Resources["MediaMetadataStyle"],
+                    });
+                }
+                AutomationProperties.SetAutomationId(stack, automationId);
+                AutomationProperties.SetName(stack, display);
+                ToolTipService.SetToolTip(stack, summary);
+                content = stack;
+            }
+            else
             {
-                Text = secondLine,
-                TextWrapping = TextWrapping.NoWrap,
-                MaxLines = 1,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Style = (Style)Resources["CaptionTextBlockStyle"],
-            });
-            AutomationProperties.SetAutomationId(stack, automationId);
-            AutomationProperties.SetName(stack, display);
-            ToolTipService.SetToolTip(stack, summary);
-            content = stack;
+                var label = new TextBlock
+                {
+                    Text = primary,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxLines = 2,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Style = (Style)Resources["CaptionTextBlockStyle"],
+                };
+                AutomationProperties.SetAutomationId(label, automationId);
+                ToolTipService.SetToolTip(label, summary);
+                content = label;
+            }
         }
         else
         {
-            var singleText = tiles && lines.Length == 1
-                ? (lines[0].StartsWith(icon, StringComparison.Ordinal) ? lines[0] : $"{icon} {lines[0]}")
-                : display;
             var label = new TextBlock
             {
-                Text = singleText,
+                Text = display,
                 TextWrapping = TextWrapping.Wrap,
                 MaxLines = 2,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -880,6 +935,7 @@ public sealed partial class MainPage : Page
         var pill = new Border
         {
             Style = (Style)Resources[styleKey],
+            HorizontalAlignment = tiles ? HorizontalAlignment.Stretch : HorizontalAlignment.Left,
             Child = content,
         };
         ToolTipService.SetToolTip(pill, summary);
@@ -1246,23 +1302,37 @@ public sealed partial class MainPage : Page
             requestedEdge=initialEdge;
         }
     }
+    private static double EstimateTilePillHeight(string icon, string summary)
+    {
+        var (primary, score, secondary) = Protocol.FormatTileEvidence(icon, summary);
+        return score is not null || secondary is not null || primary.Length > 18 ? 44 : 28;
+    }
+
     private double ComputeGridCaptionMinHeight()
     {
-        if(!tiles)return 0;
-        var hasPill=false;
-        var hasMeta=false;
-        var nonDefaultImageCheck=Kind.SelectedIndex is not (0 or 1);
-        foreach(var r in rows)
+        if (!tiles) return 0;
+        var maxHeight = 24.0;
+        var nonDefaultImageCheck = Kind.SelectedIndex is not (0 or 1);
+        foreach (var r in rows)
         {
-            if(r.AIEvidence.Length>0||r.Proposal is not null||r.AIPage is not null||r.PageText is not null||r.Evidence is {AllDirect:false})
-            {
-                hasPill=true;
-                break;
-            }
-            if(!hasMeta&&(r.ShelfIds.Length>0||!string.IsNullOrWhiteSpace(r.Shelf)||r.Tags.Length>0||r.Availability!="present"||r.MatchLabel.Length>0||(r.Kind=="image"&&nonDefaultImageCheck)))
-                hasMeta=true;
+            var h = 22.0;
+            if (r.ShelfIds.Length > 0 || !string.IsNullOrWhiteSpace(r.Shelf) || r.Tags.Length > 0 || (r.Kind == "image" && nonDefaultImageCheck))
+                h += 26;
+            if (r.Availability != "present" || r.MatchLabel.Length > 0)
+                h += 20;
+            if (r.AIEvidence.Length > 0)
+                h += EstimateTilePillHeight(r.Kind == "video" ? "🎬" : r.Kind == "audio" ? "🎵" : "✨", r.AIEvidence);
+            if (r.Proposal is ProposalMatch proposal)
+                h += EstimateTilePillHeight("🎬", proposal.Summary);
+            if (r.AIPage is AIPageMatch aiPage)
+                h += EstimateTilePillHeight("📄", aiPage.Summary);
+            if (r.PageText is PageTextMatch pageText)
+                h += EstimateTilePillHeight("📄", pageText.Summary);
+            if (r.Evidence is { AllDirect: false })
+                h += EstimateTilePillHeight("💬", Protocol.DescribeEvidence(r.Evidence));
+            if (h > maxHeight) maxHeight = h;
         }
-        return hasPill?116:hasMeta?56:30;
+        return maxHeight;
     }
     private double GridCaptionMinHeight()=>tiles?cachedGridCaptionMinHeight:0;
     private void SizeItem(ListViewItem item,Image image)

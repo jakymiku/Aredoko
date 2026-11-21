@@ -358,6 +358,52 @@ public static class Protocol
         return string.Join(" / ", parts);
     }
 
+    public static (string Primary, string? Score, string? Secondary) FormatTileEvidence(string icon, string summary)
+    {
+        var normalized = summary.Replace("\r\n", "\n");
+        var rawLines = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (rawLines.Length == 0) return (icon, null, null);
+        string? primary = null;
+        string? score = null;
+        string? literalPart = null;
+        var extraLines = new List<string>();
+        for (var i = 0; i < rawLines.Length; i++)
+        {
+            var line = rawLines[i];
+            if (i > 0 && line.StartsWith("モデル:", StringComparison.Ordinal)) continue;
+            var parts = line.Split(" · ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var kept = new List<string>(parts.Length);
+            var keepLiteralInline = i != 0 || parts.Any(p => p == "AI候補");
+            foreach (var part in parts)
+            {
+                if (score is null && (part.StartsWith("一致率 ", StringComparison.Ordinal) || part.StartsWith("類似度 ", StringComparison.Ordinal)))
+                {
+                    score = part;
+                    continue;
+                }
+                if (!keepLiteralInline && parts.Length > 1 && literalPart is null && part.StartsWith("文字一致", StringComparison.Ordinal))
+                {
+                    literalPart = part;
+                    continue;
+                }
+                kept.Add(part);
+            }
+            var cleaned = string.Join(" · ", kept);
+            if (i == 0)
+            {
+                primary = cleaned.Length > 0 ? cleaned : line;
+            }
+            else if (cleaned.Length > 0)
+            {
+                extraLines.Add(cleaned);
+            }
+        }
+        var primaryBase = string.IsNullOrEmpty(primary) ? rawLines[0] : primary;
+        var primaryText = primaryBase.StartsWith(icon, StringComparison.Ordinal) ? primaryBase : $"{icon} {primaryBase}";
+        string? secondary = extraLines.Count > 0 ? string.Join(" · ", extraLines) : literalPart;
+        return (primaryText, score, secondary);
+    }
+
     public static string CreateUpdate(int id, IEnumerable<string> tags, string shelf, bool favorite, bool reviewed, IReadOnlyList<long>? shelfIds = null)
     {
         using var stream = new MemoryStream();

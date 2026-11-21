@@ -214,6 +214,14 @@ var evidence=Protocol.ParseSearch("""{"total":1,"score_kind":"cosine","group_bou
 Check(evidence.GroupBoundary==.5&&evidence.OtherTotal==3&&evidence.Items[0].AIEvidence.Contains("文字一致0/1語")&&evidence.Items[0].AIEvidence.Contains("0.800"),"AI groups and relative score parsed without percentages");
 evidence.Items[0].LiteralHits=1;Check(evidence.Items[0].AIEvidence.StartsWith("名前・タグで全語一致"),"literal evidence does not claim character certainty");
 evidence.Items[0].ScoreKind="reciprocal-rank";Check(evidence.Items[0].AIEvidence.Contains("一致率"),"RRF uses separate score label");
+var imageTile = Protocol.FormatTileEvidence("✨", "文字一致0/1語 · AI候補\n一致率 0.0110");
+Check(imageTile.Primary=="✨ 文字一致0/1語 · AI候補"&&imageTile.Score=="一致率 0.0110"&&imageTile.Secondary is null,"tile evidence separates image RRF score onto second line");
+var videoTile = Protocol.FormatTileEvidence("🎬", "動画フレーム一致（0:00） · 文字一致0/1語\n一致率 0.0105");
+Check(videoTile.Primary=="🎬 動画フレーム一致（0:00）"&&videoTile.Score=="一致率 0.0105"&&videoTile.Secondary=="文字一致0/1語","tile evidence keeps video timestamp on first line and moves literal count to secondary");
+var pageTile = Protocol.FormatTileEvidence("📄", "内部ページの意味一致（10ページ） · 類似度 0.710\nモデル: google/embeddinggemma-2 · 元ファイル一致");
+Check(pageTile.Primary=="📄 内部ページの意味一致（10ページ）"&&pageTile.Score=="類似度 0.710"&&pageTile.Secondary is null,"tile evidence surfaces page match score and omits verbose model footer");
+var proposalTile = Protocol.FormatTileEvidence("🎬", "タグ候補の意味一致 · 類似度 0.720\n未承認タグ候補: 少女、制服\nモデル: wd-swinv2");
+Check(proposalTile.Primary=="🎬 タグ候補の意味一致"&&proposalTile.Score=="類似度 0.720"&&proposalTile.Secondary=="未承認タグ候補: 少女、制服","tile evidence keeps semantic score and candidate tags while dropping model footer");
 
 await ImageViewerTests.Run(Check);
 
