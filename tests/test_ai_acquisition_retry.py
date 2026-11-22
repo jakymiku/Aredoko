@@ -1,5 +1,5 @@
 """Transient transfer recovery; real loopback bytes, no external traffic."""
-import hashlib,io,json,ssl,sys,threading,unittest,urllib.request,urllib.error
+import hashlib,http.server,io,json,re,ssl,sys,threading,unittest,urllib.request,urllib.error
 from pathlib import Path
 from unittest.mock import patch
 sys.path[:0]=[str(Path(__file__).resolve().parent),str(Path(__file__).resolve().parents[1]/'app')]
@@ -138,3 +138,86 @@ class TransientTransferTests(unittest.TestCase):
         cert_err=ai_acquisition._winhttp_error('send',12045)
         self.assertIsInstance(cert_err,urllib.error.URLError)
         self.assertFalse(ai_acquisition._transient_transfer(cert_err))
+
+    def test_winhttp_open_loopback_get_range_redirect_and_error(self):
+        if ai_acquisition.os.name!='nt':self.skipTest('Windows only')
+        payload=b'0123456789abcdef'*5000
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self,*args):pass
+            def do_GET(self):
+                if self.path=='/file':
+                    rng=self.headers.get('Range')
+                    if rng:
+                        m=re.fullmatch(r'bytes=(\d+)-',rng)
+                        start=int(m.group(1))
+                        body=payload[start:]
+                        self.send_response(206)
+                        self.send_header('Content-Range',f'bytes {start}-{len(payload)-1}/{len(payload)}')
+                        self.send_header('Content-Length',str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                    else:
+                        self.send_response(200)
+                        self.send_header('Content-Length',str(len(payload)))
+                        self.end_headers()
+                        self.wfile.write(payload)
+                elif self.path=='/redir-ok':
+                    self.send_response(302)
+                    self.send_header('Location','/file')
+                    self.send_header('Content-Length','0')
+                    self.end_headers()
+                elif self.path=='/redir-bad':
+                    self.send_response(302)
+                    self.send_header('Location','https://evil.invalid/x')
+                    self.send_header('Content-Length','0')
+                    self.end_headers()
+                else:
+                    self.send_response(404)
+                    self.send_header('Content-Length','0')
+                    self.end_headers()
+        server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler)
+        thread=threading.Thread(target=server.serve_forever,daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        port=server.server_port
+        doc={'format':'aredoko-acquisition-v1','id':'winhttp-loopback','revision':'a'*40,'kind':'runtime',
+             'license':'MIT','license_url':'https://example.org/license','allowed_hosts':['127.0.0.1'],
+             'entries':[{'path':'runtime/generated.bin','url':f'http://127.0.0.1:{port}/file',
+                         'bytes':len(payload),'sha256':hashlib.sha256(payload).hexdigest(),'role':'runtime'}]}
+        catalog=ai_acquisition.Catalog.parse(json.dumps(doc).encode(),test_loopback=True)
+
+        with ai_acquisition._winhttp_open(f'http://127.0.0.1:{port}/file',{'Accept-Encoding':'identity'},catalog,timeout=10) as resp:
+            self.assertEqual(resp.status,200)
+            self.assertEqual(resp.headers.get('Content-Length'),str(len(payload)))
+            chunks=[];chunk=resp.read(16384)
+            while chunk:
+                chunks.append(chunk)
+                chunk=resp.read(16384)
+            self.assertEqual(b''.join(chunks),payload)
+            self.assertEqual(resp.read(1),b'')
+
+        with ai_acquisition._winhttp_open(f'http://127.0.0.1:{port}/file',{'Accept-Encoding':'identity','Range':'bytes=10-'},catalog,timeout=10) as resp:
+            self.assertEqual(resp.status,206)
+            self.assertEqual(resp.headers.get('Content-Range'),f'bytes 10-{len(payload)-1}/{len(payload)}')
+            chunks=[];chunk=resp.read(65536)
+            while chunk:
+                chunks.append(chunk)
+                chunk=resp.read(65536)
+            self.assertEqual(b''.join(chunks),payload[10:])
+
+        with ai_acquisition._winhttp_open(f'http://127.0.0.1:{port}/redir-ok',{'Accept-Encoding':'identity'},catalog,timeout=10) as resp:
+            self.assertEqual(resp.status,200)
+            self.assertTrue(resp.geturl().endswith('/file'))
+            chunks=[];chunk=resp.read(65536)
+            while chunk:
+                chunks.append(chunk)
+                chunk=resp.read(65536)
+            self.assertEqual(b''.join(chunks),payload)
+
+        with self.assertRaisesRegex(ValueError,'Untrusted source URL'):
+            ai_acquisition._winhttp_open(f'http://127.0.0.1:{port}/redir-bad',{'Accept-Encoding':'identity'},catalog,timeout=10)
+
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            ai_acquisition._winhttp_open(f'http://127.0.0.1:{port}/missing',{'Accept-Encoding':'identity'},catalog,timeout=10)
+        self.assertEqual(ctx.exception.code,404)

@@ -126,7 +126,7 @@ def _winhttp_dll():
     wh=ctypes.WinDLL('winhttp.dll',winmode=0x00000800,use_last_error=True)
     wh.WinHttpOpen.argtypes=[wintypes.LPCWSTR,wintypes.DWORD,wintypes.LPCWSTR,wintypes.LPCWSTR,wintypes.DWORD];wh.WinHttpOpen.restype=ctypes.c_void_p
     wh.WinHttpSetTimeouts.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int];wh.WinHttpSetTimeouts.restype=wintypes.BOOL
-    wh.WinHttpConnect.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.WORD,ctypes.DWORD];wh.WinHttpConnect.restype=ctypes.c_void_p
+    wh.WinHttpConnect.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.WORD,wintypes.DWORD];wh.WinHttpConnect.restype=ctypes.c_void_p
     wh.WinHttpOpenRequest.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.LPCWSTR,wintypes.LPCWSTR,wintypes.LPCWSTR,ctypes.c_void_p,wintypes.DWORD];wh.WinHttpOpenRequest.restype=ctypes.c_void_p
     wh.WinHttpSetOption.argtypes=[ctypes.c_void_p,wintypes.DWORD,ctypes.c_void_p,wintypes.DWORD];wh.WinHttpSetOption.restype=wintypes.BOOL
     wh.WinHttpSendRequest.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.DWORD,ctypes.c_void_p,wintypes.DWORD,wintypes.DWORD,ctypes.c_size_t];wh.WinHttpSendRequest.restype=wintypes.BOOL
