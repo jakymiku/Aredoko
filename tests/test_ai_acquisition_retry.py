@@ -1,8 +1,9 @@
 """Transient transfer recovery; real loopback bytes, no external traffic."""
-import sys,threading,unittest,urllib.request,urllib.error
+import hashlib,io,json,ssl,sys,threading,unittest,urllib.request,urllib.error
 from pathlib import Path
 from unittest.mock import patch
-sys.path.insert(0,str(Path(__file__).resolve().parent))
+sys.path[:0]=[str(Path(__file__).resolve().parent),str(Path(__file__).resolve().parents[1]/'app')]
+import ai_acquisition
 import test_ai_acquisition as fixture
 
 
@@ -72,3 +73,54 @@ class TransientTransferTests(unittest.TestCase):
         result=self.fetch(progress=progress)
         self.assertEqual(self.requests,[None,'bytes=70000-'])
         self.assertEqual((Path(result['root'])/'runtime/generated.bin').read_bytes(),self.content)
+
+    def test_transient_transfer_classifies_ssl_eof_vs_cert_verification(self):
+        self.assertTrue(ai_acquisition._transient_transfer(ssl.SSLEOFError('unexpected eof')))
+        self.assertFalse(ai_acquisition._transient_transfer(urllib.error.URLError(ssl.SSLCertVerificationError('bad cert'))))
+
+    def _https_catalog(self,payload):
+        doc={'format':'aredoko-acquisition-v1','id':'generated-https','revision':'a'*40,'kind':'runtime',
+             'license':'MIT','license_url':'https://example.org/license','allowed_hosts':['example.invalid'],
+             'entries':[{'path':'runtime/generated.bin','url':'https://example.invalid/generated.bin',
+                         'bytes':len(payload),'sha256':hashlib.sha256(payload).hexdigest(),'role':'runtime'}]}
+        return ai_acquisition.Catalog.parse(json.dumps(doc).encode())
+
+    def test_tls_cert_verification_refreshes_windows_roots_once_and_retries(self):
+        payload=b'verified-https-bytes'
+        catalog=self._https_catalog(payload)
+        class FakeResponse:
+            status=200
+            headers={'Content-Length':str(len(payload)),'Content-Encoding':'identity'}
+            def __init__(self):self.buf=io.BytesIO(payload)
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def geturl(self):return catalog.entries[0].url
+            def read(self,n=-1):return self.buf.read(n)
+        cert_err=urllib.error.URLError(ssl.SSLCertVerificationError('unable to get local issuer certificate'))
+        with patch.object(ai_acquisition.os,'name','nt'),\
+             patch.object(ai_acquisition,'_refresh_windows_tls_roots',return_value=True) as refreshed,\
+             patch.object(urllib.request.OpenerDirector,'open',side_effect=[cert_err,FakeResponse()]) as opened:
+            result=ai_acquisition.acquire(catalog,self.base/'https-ok',validate=lambda r,c:None,publish=lambda op:op())
+        refreshed.assert_called_once_with(catalog.hosts)
+        self.assertEqual(opened.call_count,2)
+        self.assertEqual((Path(result['root'])/'runtime/generated.bin').read_bytes(),payload)
+
+    def test_tls_cert_verification_fails_closed_when_refresh_fails_or_persists(self):
+        payload=b'verified-https-bytes'
+        catalog=self._https_catalog(payload)
+        cert_err=urllib.error.URLError(ssl.SSLCertVerificationError('unable to get local issuer certificate'))
+        with patch.object(ai_acquisition.os,'name','nt'),\
+             patch.object(ai_acquisition,'_refresh_windows_tls_roots',return_value=False) as refreshed,\
+             patch.object(urllib.request.OpenerDirector,'open',side_effect=cert_err) as opened:
+            with self.assertRaises(urllib.error.URLError):
+                ai_acquisition.acquire(catalog,self.base/'https-fail1',validate=lambda r,c:None,publish=lambda op:op())
+        refreshed.assert_called_once_with(catalog.hosts)
+        self.assertEqual(opened.call_count,1)
+
+        with patch.object(ai_acquisition.os,'name','nt'),\
+             patch.object(ai_acquisition,'_refresh_windows_tls_roots',return_value=True) as refreshed2,\
+             patch.object(urllib.request.OpenerDirector,'open',side_effect=[cert_err,cert_err]) as opened2:
+            with self.assertRaises(urllib.error.URLError):
+                ai_acquisition.acquire(catalog,self.base/'https-fail2',validate=lambda r,c:None,publish=lambda op:op())
+        refreshed2.assert_called_once_with(catalog.hosts)
+        self.assertEqual(opened2.call_count,2)
