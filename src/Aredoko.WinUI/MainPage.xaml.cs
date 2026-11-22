@@ -716,6 +716,14 @@ public sealed partial class MainPage : Page
         if (updateCaptionHeight) cachedGridCaptionMinHeight = ComputeGridCaptionMinHeight();
     }
 
+    private double ComputeLibraryTileWidth()
+    {
+        var availW = Items.ActualWidth > 0 ? Items.ActualWidth : ItemListContainer.ActualWidth;
+        if (resultScroll is { ViewportWidth: > 0 } && resultScroll.ViewportWidth < availW)
+            availW = resultScroll.ViewportWidth;
+        return Math.Floor(LibraryTileLayout.Width(Math.Max(1, availW - 16), libraryItemScale));
+    }
+
     private void SyncItemsWrapGridSize()
     {
         if (Items.ItemsPanelRoot is not ItemsWrapGrid wrap) return;
@@ -728,7 +736,7 @@ public sealed partial class MainPage : Page
         var availW = Items.ActualWidth > 0 ? Items.ActualWidth : ItemListContainer.ActualWidth;
         if (availW <= 16 || ItemListContainer.ActualHeight <= 48) return;
         var scale = libraryItemScale / 100d;
-        var tileW = LibraryTileLayout.Width(Math.Max(1, availW - 16), libraryItemScale);
+        var tileW = ComputeLibraryTileWidth();
         var imgHeight = Math.Min(160 * scale, Math.Max(48, ItemListContainer.ActualHeight - 108));
         var captionHeight = cachedGridCaptionMinHeight > 0 ? cachedGridCaptionMinHeight : 24;
         wrap.ItemWidth = tileW + 8;
@@ -779,9 +787,8 @@ public sealed partial class MainPage : Page
     private int CurrentThumbnailEdge()
     {
         var scale = libraryItemScale / 100d;
-        var availWidth = Items.ActualWidth > 0 ? Items.ActualWidth : ItemListContainer.ActualWidth;
-        var tileWidth = LibraryTileLayout.Width(Math.Max(1, availWidth - 16), libraryItemScale);
-        var imgW = tiles ? Math.Max(104, tileWidth - 20) : 72 * scale;
+        var tileWidth = ComputeLibraryTileWidth();
+        var imgW = tiles ? Math.Max(64, tileWidth - 20) : 72 * scale;
         var maxH = Math.Max(48, ItemListContainer.ActualHeight - 108);
         var imgH = tiles ? Math.Min(160 * scale, maxH) : 54 * scale;
         return ThumbnailPolicy.EdgeFor(imgW, imgH, XamlRoot?.RasterizationScale ?? 1);
@@ -958,9 +965,9 @@ public sealed partial class MainPage : Page
     private void SizeCardSlot(ListViewItem item, MediaCardSlot slot)
     {
         var scale = libraryItemScale / 100d;
-        var width = LibraryTileLayout.Width(Math.Max(1, (Items.ActualWidth > 0 ? Items.ActualWidth : ItemListContainer.ActualWidth) - 16), libraryItemScale);
+        var width = ComputeLibraryTileWidth();
         var cardWidth = tiles ? Math.Max(1, width - 2) : double.NaN;
-        var imgWidth = tiles ? Math.Max(104, width - 20) : 72 * scale;
+        var imgWidth = tiles ? Math.Max(64, width - 20) : 72 * scale;
         var height = Math.Max(48, ItemListContainer.ActualHeight - 108);
         var imgHeight = tiles ? Math.Min(160 * scale, height) : 54 * scale;
         slot.Root.MinHeight = tiles ? 0 : Math.Max(66, 54 * scale + 12);

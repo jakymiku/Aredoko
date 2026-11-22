@@ -33,6 +33,9 @@
    <DataTemplate x:Key="MediaContainerTemplate"><Border HorizontalAlignment="Stretch"/></DataTemplate>
    <Style x:Key="MediaItemCardStyle" TargetType="ListViewItem">
     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="MinWidth" Value="0"/>
     <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
     <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
@@ -476,7 +479,7 @@
      <Expander x:Name="FavoriteRootArea" Header="お気に入りのフォルダ" IsExpanded="True" Visibility="Collapsed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,0,0,8" AutomationProperties.AutomationId="FavoriteRootArea">
       <ListView x:Name="FavoriteRootList" MaxHeight="144" SelectionMode="None" IsItemClickEnabled="True" ItemClick="FavoriteRoot_ItemClick" ContainerContentChanging="FavoriteRoot_ContainerContentChanging" ItemTemplate="{StaticResource MediaContainerTemplate}" HorizontalContentAlignment="Stretch" AutomationProperties.Name="お気に入りの登録フォルダ" AutomationProperties.AutomationId="FavoriteRootList"/>
      </Expander>
-     <ListView x:Name="Items" Grid.Row="2" SelectionMode="Extended" Loaded="Items_Loaded" PreviewKeyDown="Items_PreviewKeyDown" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.HelpText="Enterで選択した作品を開く。Ctrl/Shiftで複数選択（最大256件）、Ctrl+Homeで先頭、Ctrl+Endで末尾へ移動" AutomationProperties.AutomationId="ItemList"/>
+     <ListView x:Name="Items" Grid.Row="2" SelectionMode="Extended" Loaded="Items_Loaded" SizeChanged="ItemListContainer_SizeChanged" PreviewKeyDown="Items_PreviewKeyDown" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.HelpText="Enterで選択した作品を開く。Ctrl/Shiftで複数選択（最大256件）、Ctrl+Homeで先頭、Ctrl+Endで末尾へ移動" AutomationProperties.AutomationId="ItemList"/>
      <StackPanel Grid.Row="2" Spacing="12" Margin="24" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Visibility, ElementName=Empty}">
       <Image x:Name="EmptyArt" Width="128" Height="112" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_state_no_results_512.png" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
       <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.LiveSetting="Polite" Text="まだ作品がありません" TextWrapping="Wrap" TextAlignment="Center"/>

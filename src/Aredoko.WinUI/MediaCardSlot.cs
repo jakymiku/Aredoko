@@ -341,7 +341,7 @@ internal sealed class MediaCardSlot
 
         Root = new Grid
         {
-            Padding = isTiles ? new Thickness(6) : new Thickness(10, 6, 10, 6),
+            Padding = isTiles ? new Thickness(7) : new Thickness(12, 8, 12, 8),
             ColumnSpacing = 12,
             RowSpacing = isTiles ? 6 : 8,
         };
@@ -353,14 +353,14 @@ internal sealed class MediaCardSlot
             if (CurrentRow is { } row) await onOpenPreview(row.Id);
         };
 
-        PreviewImage = new Image { IsDoubleTapEnabled = true, Stretch = Stretch.Uniform };
+        PreviewImage = new Image { IsDoubleTapEnabled = true, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center };
         PreviewImage.DoubleTapped += async (_, a) =>
         {
             a.Handled = true;
             if (CurrentRow is { } row) await onOpenPreview(row.Id);
         };
 
-        ThumbPlate = new Border { Tag = "ThumbPlate", Style = res.ThumbPlate };
+        ThumbPlate = new Border { Tag = "ThumbPlate", Style = res.ThumbPlate, HorizontalAlignment = HorizontalAlignment.Center };
         Canvas.SetZIndex(ThumbPlate, -1);
 
         placeholderIcon = new SymbolIcon(Symbol.Pictures) { Style = res.PlaceholderIcon };
@@ -591,6 +591,11 @@ internal sealed class MediaCardSlot
 
     public void ConstrainCaption()
     {
+        if (IsTiles)
+        {
+            if (PreviewImage.Width > 0) TextPanel.MaxWidth = Math.Max(1, PreviewImage.Width);
+            return;
+        }
         if (listMetaPanel is not null)
         {
             var cw = Root.ActualWidth;
@@ -615,7 +620,8 @@ internal sealed class MediaCardSlot
         ThumbPlate.Width = imgWidth;
         ThumbPlate.Height = imgHeight;
         TextPanel.MinHeight = IsTiles ? captionMinHeight : 0;
-        ConstrainCaption();
+        if (IsTiles) TextPanel.MaxWidth = Math.Max(1, imgWidth);
+        else ConstrainCaption();
         AppliedLayoutEpoch = layoutEpoch;
     }
 

@@ -269,9 +269,9 @@ public sealed partial class MainPage
     private void SizeShelfItem(ListViewItem item,Grid artwork)
     {
         var scale=libraryItemScale/100d;
-        var width=LibraryTileLayout.Width(Math.Max(1,ShelfList.ActualWidth-16),libraryItemScale);
+        var width=Math.Floor(LibraryTileLayout.Width(Math.Max(1,ShelfList.ActualWidth-16),libraryItemScale));
         item.Width=tiles?Math.Max(1,width-2):double.NaN;
-        artwork.Width=tiles?Math.Max(96,width-32):48*scale;
+        artwork.Width=tiles?Math.Max(64,width-22):48*scale;
         artwork.Height=tiles?Math.Min(144*scale,Math.Max(48,ShelfList.ActualHeight-108)):64*scale;
         if(artwork.Children.OfType<Border>().FirstOrDefault(border=>Equals(border.Tag,"ThumbPlate")) is {} thumbPlate)
         {
