@@ -30,6 +30,7 @@ public sealed partial class MainPage
     private long virtualGeneration;
     private bool browseFailed, extending, browseReflowing, fastScrolling, virtualSessionRefreshing;
     private ScrollViewer? resultScroll;
+    private readonly SmoothWheelScroller smoothWheelScroller = new();
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? scrollSettleTimer;
     private long lastScrollTick;
     private double lastScrollOffset;
@@ -293,9 +294,38 @@ public sealed partial class MainPage
     {
         var scroll = Descendant<ScrollViewer>(Items);
         if (ReferenceEquals(resultScroll, scroll)) return;
-        if (resultScroll is not null) resultScroll.ViewChanged -= ResultScroll_Changed;
+        if (resultScroll is not null)
+        {
+            resultScroll.ViewChanged -= ResultScroll_Changed;
+            smoothWheelScroller.Detach();
+        }
         resultScroll = scroll;
-        if (scroll is not null) scroll.ViewChanged += ResultScroll_Changed;
+        if (scroll is not null)
+        {
+            scroll.ViewChanged += ResultScroll_Changed;
+            smoothWheelScroller.Attach(
+                scroll,
+                canHandleWheel: () => !disposed && ready && Items.IsEnabled && !dialogOpen && !folderHubOpen && !shelfHubOpen && !settingsHubOpen,
+                onVelocityChanged: velocity =>
+                {
+                    if (disposed || resultScroll is not { ViewportHeight: > 0 } currentScroll) return;
+                    var viewportsPerSec = Math.Abs(velocity) / currentScroll.ViewportHeight;
+                    if (!fastScrolling && viewportsPerSec > 3.5)
+                        fastScrolling = true;
+                    else if (fastScrolling && viewportsPerSec < 1.8)
+                    {
+                        fastScrolling = false;
+                        ResumeVisibleContainers();
+                    }
+                },
+                onStopped: () =>
+                {
+                    lastScrollTick = 0;
+                    if (disposed || !fastScrolling) return;
+                    fastScrolling = false;
+                    ResumeVisibleContainers();
+                });
+        }
     }
 
     private void EnsureScrollSettleTimer()
@@ -316,6 +346,7 @@ public sealed partial class MainPage
     {
         fastScrolling = false;
         scrollSettleTimer?.Stop();
+        smoothWheelScroller.Stop();
         lastScrollTick = 0;
         lastScrollOffset = 0;
     }
@@ -328,6 +359,8 @@ public sealed partial class MainPage
             var offset = scroll.VerticalOffset;
             if (args.IsIntermediate)
             {
+                if (smoothWheelScroller.IsActive)
+                    smoothWheelScroller.Stop();
                 var elapsed = now - lastScrollTick;
                 if (lastScrollTick > 0 && elapsed < 300)
                 {
@@ -356,7 +389,7 @@ public sealed partial class MainPage
                     scrollSettleTimer.Start();
                 }
             }
-            else
+            else if (!smoothWheelScroller.IsActive)
             {
                 lastScrollTick = now;
                 lastScrollOffset = offset;
@@ -369,7 +402,7 @@ public sealed partial class MainPage
             }
         }
         if (resultKeys.Count < virtualTotal)
-            _ = TryExtendBrowseWindowAsync(args.IsIntermediate);
+            _ = TryExtendBrowseWindowAsync(args.IsIntermediate || smoothWheelScroller.IsActive);
     }
 
     private (bool Forward, bool Backward) GetNeededBrowseEdge(ScrollViewer scroll, ResultBuffer buffer, bool isIntermediate)
@@ -467,6 +500,7 @@ public sealed partial class MainPage
 
     private async Task JumpBrowseEdgeAsync(bool last)
     {
+        smoothWheelScroller.Stop();
         if (extending || browseReflowing || PendingAutoSearch || resultSession is not { } session || resultWindow is not { } window || session.Total == 0 || !await transitions.WaitAsync(0)) return;
         extending = true; var token = renderCancellation.Token;
         try
@@ -527,6 +561,7 @@ public sealed partial class MainPage
 
     private void ReflowBrowse(Action change)
     {
+        smoothWheelScroller.Stop();
         if (browseReflowing || extending || !ready || disposed || folderHubOpen || shelfHubOpen || Items.Visibility != Visibility.Visible)
         { change(); return; }
         var anchor = CaptureBrowseAnchor();
@@ -566,6 +601,7 @@ public sealed partial class MainPage
 
     private async Task RestoreBrowseAnchorAsync((string Key, double Y)? anchor)
     {
+        smoothWheelScroller.Stop();
         if (anchor is not { } value || resultScroll is null) return;
         // ScrollIntoView and native collection anchoring can finish after this
         // callback. Keep extending=true through layout so those transient offsets

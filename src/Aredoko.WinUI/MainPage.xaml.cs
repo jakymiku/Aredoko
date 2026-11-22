@@ -971,7 +971,7 @@ public sealed partial class MainPage : Page
     {
         pendingOrdinalContainers.Remove(ordinal);
         if (slot.AppliedLayoutEpoch != layoutSizeEpoch) SizeCardSlot(item, slot);
-        slot.BindRow(row, ordinal, MediaKindFilter.DisplayName(row), DetailKindLabel(row), FormatListFileDetails(row));
+        slot.BindRow(row, ordinal, MediaKindFilter.DisplayName(row), DetailKindLabel(row), tiles ? "" : FormatListFileDetails(row));
         item.Tag = row.Id;
         AutomationProperties.SetAutomationId(item, $"Item{row.Id}");
         AutomationProperties.SetName(item, row.Title);
@@ -1162,6 +1162,7 @@ public sealed partial class MainPage : Page
     {
         DetachXamlRoot();
         itemSizeTimer.Stop();
+        smoothWheelScroller.Stop();
     }
     private void UpdateItemSizes()=>ReflowBrowse(UpdateItemSizesCore);
     private void UpdateItemSizesCore()
@@ -1410,6 +1411,7 @@ public sealed partial class MainPage : Page
     }
     private async Task FocusRowAsync(int itemId)
     {
+        smoothWheelScroller.Stop();
         var key = KeyForItem(itemId);
         if(key is null)return;
         for(var attempt=0;attempt<10&&!disposed&&Items.IsEnabled;attempt++)
@@ -2320,6 +2322,10 @@ public sealed partial class MainPage : Page
     { if(active is null)return;e.Handled=true;await OpenPreviewAsync(active.Id); }
     private async void Items_PreviewKeyDown(object sender,KeyRoutedEventArgs e)
     {
+        if(!e.Handled&&e.Key is Windows.System.VirtualKey.Up or Windows.System.VirtualKey.Down
+            or Windows.System.VirtualKey.PageUp or Windows.System.VirtualKey.PageDown
+            or Windows.System.VirtualKey.Home or Windows.System.VirtualKey.End)
+            smoothWheelScroller.Stop();
         if(e.Handled||e.OriginalSource is not ListViewItem { IsSelected:true, Tag:int itemId }
             ||!ready||disposed||saving||dialogOpen||librarySelection.Count!=1||active?.Id!=itemId)return;
         if(IsUnmodifiedEnter(e))
@@ -4290,6 +4296,6 @@ public sealed partial class MainPage : Page
         if(imageViewer is {} activeImage)await activeImage.FlushFavoriteAsync();
         if(videoPlayer is {} activeVideo)await activeVideo.FlushFavoriteAsync();
     }
-    public void Stop(){if(disposed)return;disposed=true;bulkTagGenerationCts?.Cancel();settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();folderFilterTimer.Stop();resultKeepAliveTimer?.Stop();ResetFastScroll();thumbnails.ResetSession();DetachXamlRoot();itemSizeTimer.Stop();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in realizedItems.ToArray())ReleaseContainer(item,detachVisualTree:true);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){if(disposed)return;disposed=true;bulkTagGenerationCts?.Cancel();settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();folderFilterTimer.Stop();resultKeepAliveTimer?.Stop();ResetFastScroll();thumbnails.ResetSession();DetachXamlRoot();itemSizeTimer.Stop();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;smoothWheelScroller.Detach();resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in realizedItems.ToArray())ReleaseContainer(item,detachVisualTree:true);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

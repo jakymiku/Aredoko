@@ -35,6 +35,7 @@ await RootFavoritesTests.Run(Check);
 await LibrarySelectionTests.Run(Check);
 await ResultNavigationTests.Run(Check);
 ResultBufferTests.Run(Check);
+SmoothScrollPhysicsTests.Run(Check);
 NavigationHistoryTests.Run(Check);
 RootShelvesTests.Run(Check);
 await ResultWindowTests.Run(Check);
