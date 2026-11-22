@@ -85,7 +85,7 @@ class TransientTransferTests(unittest.TestCase):
                          'bytes':len(payload),'sha256':hashlib.sha256(payload).hexdigest(),'role':'runtime'}]}
         return ai_acquisition.Catalog.parse(json.dumps(doc).encode())
 
-    def test_tls_cert_verification_refreshes_windows_roots_once_and_retries(self):
+    def test_tls_cert_verification_switches_to_winhttp_and_verifies_digest(self):
         payload=b'verified-https-bytes'
         catalog=self._https_catalog(payload)
         class FakeResponse:
@@ -98,29 +98,43 @@ class TransientTransferTests(unittest.TestCase):
             def read(self,n=-1):return self.buf.read(n)
         cert_err=urllib.error.URLError(ssl.SSLCertVerificationError('unable to get local issuer certificate'))
         with patch.object(ai_acquisition.os,'name','nt'),\
-             patch.object(ai_acquisition,'_refresh_windows_tls_roots',return_value=True) as refreshed,\
-             patch.object(urllib.request.OpenerDirector,'open',side_effect=[cert_err,FakeResponse()]) as opened:
+             patch.object(urllib.request.OpenerDirector,'open',side_effect=cert_err) as opened,\
+             patch.object(ai_acquisition,'_winhttp_open',return_value=FakeResponse()) as winhttp_opened:
             result=ai_acquisition.acquire(catalog,self.base/'https-ok',validate=lambda r,c:None,publish=lambda op:op())
-        refreshed.assert_called_once_with(catalog.hosts)
-        self.assertEqual(opened.call_count,2)
+        self.assertEqual(opened.call_count,1)
+        winhttp_opened.assert_called_once_with(catalog.entries[0].url,{'Accept-Encoding':'identity'},catalog,timeout=30)
         self.assertEqual((Path(result['root'])/'runtime/generated.bin').read_bytes(),payload)
 
-    def test_tls_cert_verification_fails_closed_when_refresh_fails_or_persists(self):
+    def test_tls_cert_verification_fails_closed_when_winhttp_also_fails(self):
         payload=b'verified-https-bytes'
         catalog=self._https_catalog(payload)
         cert_err=urllib.error.URLError(ssl.SSLCertVerificationError('unable to get local issuer certificate'))
+        winhttp_cert_err=urllib.error.URLError(OSError(12045,'WinHTTP send failed (12045)'))
         with patch.object(ai_acquisition.os,'name','nt'),\
-             patch.object(ai_acquisition,'_refresh_windows_tls_roots',return_value=False) as refreshed,\
-             patch.object(urllib.request.OpenerDirector,'open',side_effect=cert_err) as opened:
+             patch.object(urllib.request.OpenerDirector,'open',side_effect=cert_err) as opened,\
+             patch.object(ai_acquisition,'_winhttp_open',side_effect=winhttp_cert_err) as winhttp_opened:
             with self.assertRaises(urllib.error.URLError):
                 ai_acquisition.acquire(catalog,self.base/'https-fail1',validate=lambda r,c:None,publish=lambda op:op())
-        refreshed.assert_called_once_with(catalog.hosts)
         self.assertEqual(opened.call_count,1)
+        self.assertEqual(winhttp_opened.call_count,1)
 
+        http_err=urllib.error.HTTPError(catalog.entries[0].url,403,'Forbidden',None,None)
         with patch.object(ai_acquisition.os,'name','nt'),\
-             patch.object(ai_acquisition,'_refresh_windows_tls_roots',return_value=True) as refreshed2,\
-             patch.object(urllib.request.OpenerDirector,'open',side_effect=[cert_err,cert_err]) as opened2:
-            with self.assertRaises(urllib.error.URLError):
+             patch.object(urllib.request.OpenerDirector,'open',side_effect=cert_err) as opened2,\
+             patch.object(ai_acquisition,'_winhttp_open',side_effect=http_err) as winhttp_opened2:
+            with self.assertRaises(urllib.error.HTTPError):
                 ai_acquisition.acquire(catalog,self.base/'https-fail2',validate=lambda r,c:None,publish=lambda op:op())
-        refreshed2.assert_called_once_with(catalog.hosts)
-        self.assertEqual(opened2.call_count,2)
+        self.assertEqual(opened2.call_count,1)
+        self.assertEqual(winhttp_opened2.call_count,1)
+
+    def test_winhttp_error_classification(self):
+        timeout_err=ai_acquisition._winhttp_error('read',12002)
+        self.assertIsInstance(timeout_err,TimeoutError)
+        self.assertTrue(ai_acquisition._transient_transfer(timeout_err))
+        for code in (12030,12031,12152):
+            conn_err=ai_acquisition._winhttp_error('read',code)
+            self.assertIsInstance(conn_err,ConnectionResetError)
+            self.assertTrue(ai_acquisition._transient_transfer(conn_err))
+        cert_err=ai_acquisition._winhttp_error('send',12045)
+        self.assertIsInstance(cert_err,urllib.error.URLError)
+        self.assertFalse(ai_acquisition._transient_transfer(cert_err))

@@ -1,8 +1,8 @@
 """Trusted, resumable artifact acquisition; no model execution or settings writes."""
 from dataclasses import dataclass
-import ctypes,hashlib,http.client,json,os,re,shutil,ssl,time,urllib.error,urllib.request
+import ctypes,email.parser,hashlib,http.client,json,os,re,shutil,ssl,time,urllib.error,urllib.request
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urljoin,urlsplit
 from ai_runtime import relative,object_pairs,digest,inspect_runtime,files
 from storage_lease import plain_path,storage_parent,storage_lease,identity
 from runtime_archive import RuntimeArchive,unpack_runtime
@@ -115,41 +115,113 @@ def _build_opener(catalog):
     )
 
 
-def _refresh_windows_tls_roots(hosts):
-    if os.name!='nt':return False
-    try:
-        from ctypes import wintypes
-        wh=ctypes.WinDLL('winhttp.dll',winmode=0x00000800)
-        wh.WinHttpOpen.argtypes=[wintypes.LPCWSTR,wintypes.DWORD,wintypes.LPCWSTR,wintypes.LPCWSTR,wintypes.DWORD];wh.WinHttpOpen.restype=ctypes.c_void_p
-        wh.WinHttpSetTimeouts.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int];wh.WinHttpSetTimeouts.restype=wintypes.BOOL
-        wh.WinHttpConnect.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.WORD,ctypes.DWORD];wh.WinHttpConnect.restype=ctypes.c_void_p
-        wh.WinHttpOpenRequest.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.LPCWSTR,wintypes.LPCWSTR,wintypes.LPCWSTR,ctypes.c_void_p,wintypes.DWORD];wh.WinHttpOpenRequest.restype=ctypes.c_void_p
-        wh.WinHttpSetOption.argtypes=[ctypes.c_void_p,wintypes.DWORD,ctypes.c_void_p,wintypes.DWORD];wh.WinHttpSetOption.restype=wintypes.BOOL
-        wh.WinHttpSendRequest.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.DWORD,ctypes.c_void_p,wintypes.DWORD,wintypes.DWORD,ctypes.c_size_t];wh.WinHttpSendRequest.restype=wintypes.BOOL
-        wh.WinHttpReceiveResponse.argtypes=[ctypes.c_void_p,ctypes.c_void_p];wh.WinHttpReceiveResponse.restype=wintypes.BOOL
-        wh.WinHttpCloseHandle.argtypes=[ctypes.c_void_p];wh.WinHttpCloseHandle.restype=wintypes.BOOL
-    except (OSError,AttributeError):return False
+def _winhttp_error(op,code):
+    if code==12002:return TimeoutError(f'WinHTTP {op} timed out ({code})')
+    if code in (12030,12031,12152):return ConnectionResetError(f'WinHTTP {op} connection error ({code})')
+    return urllib.error.URLError(OSError(code,f'WinHTTP {op} failed ({code})'))
+
+
+def _winhttp_dll():
+    from ctypes import wintypes
+    wh=ctypes.WinDLL('winhttp.dll',winmode=0x00000800,use_last_error=True)
+    wh.WinHttpOpen.argtypes=[wintypes.LPCWSTR,wintypes.DWORD,wintypes.LPCWSTR,wintypes.LPCWSTR,wintypes.DWORD];wh.WinHttpOpen.restype=ctypes.c_void_p
+    wh.WinHttpSetTimeouts.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int];wh.WinHttpSetTimeouts.restype=wintypes.BOOL
+    wh.WinHttpConnect.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.WORD,ctypes.DWORD];wh.WinHttpConnect.restype=ctypes.c_void_p
+    wh.WinHttpOpenRequest.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.LPCWSTR,wintypes.LPCWSTR,wintypes.LPCWSTR,ctypes.c_void_p,wintypes.DWORD];wh.WinHttpOpenRequest.restype=ctypes.c_void_p
+    wh.WinHttpSetOption.argtypes=[ctypes.c_void_p,wintypes.DWORD,ctypes.c_void_p,wintypes.DWORD];wh.WinHttpSetOption.restype=wintypes.BOOL
+    wh.WinHttpSendRequest.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR,wintypes.DWORD,ctypes.c_void_p,wintypes.DWORD,wintypes.DWORD,ctypes.c_size_t];wh.WinHttpSendRequest.restype=wintypes.BOOL
+    wh.WinHttpReceiveResponse.argtypes=[ctypes.c_void_p,ctypes.c_void_p];wh.WinHttpReceiveResponse.restype=wintypes.BOOL
+    wh.WinHttpQueryHeaders.argtypes=[ctypes.c_void_p,wintypes.DWORD,wintypes.LPCWSTR,ctypes.c_void_p,ctypes.POINTER(wintypes.DWORD),ctypes.POINTER(wintypes.DWORD)];wh.WinHttpQueryHeaders.restype=wintypes.BOOL
+    wh.WinHttpReadData.argtypes=[ctypes.c_void_p,ctypes.c_void_p,wintypes.DWORD,ctypes.POINTER(wintypes.DWORD)];wh.WinHttpReadData.restype=wintypes.BOOL
+    wh.WinHttpCloseHandle.argtypes=[ctypes.c_void_p];wh.WinHttpCloseHandle.restype=wintypes.BOOL
+    return wh,wintypes
+
+
+class _WinHttpResponse:
+    def __init__(self,wh,wintypes,session,conn,req,url,status,headers):
+        self._wh=wh;self._wintypes=wintypes
+        self._session=session;self._conn=conn;self._req=req
+        self._url=url;self.status=status;self.headers=headers
+    def __enter__(self):return self
+    def __exit__(self,*args):self.close()
+    def geturl(self):return self._url
+    def read(self,size=65536):
+        if size<=0 or not self._req:return b''
+        buf=ctypes.create_string_buffer(size)
+        nread=self._wintypes.DWORD(0)
+        if not self._wh.WinHttpReadData(self._req,buf,size,ctypes.byref(nread)):
+            raise _winhttp_error('read',ctypes.get_last_error())
+        return buf.raw[:nread.value]
+    def close(self):
+        for attr in ('_req','_conn','_session'):
+            handle=getattr(self,attr,None)
+            if handle:
+                setattr(self,attr,None)
+                self._wh.WinHttpCloseHandle(handle)
+
+
+def _winhttp_open(url,headers,catalog,timeout=30):
+    _source(url,catalog.hosts,catalog.test_loopback)
+    wh,wintypes=_winhttp_dll()
     session=wh.WinHttpOpen('Aredoko/1.0',1,None,None,0)
-    if not session:return False
-    refreshed=False
+    if not session:raise _winhttp_error('open',ctypes.get_last_error())
+    conn=req=None
     try:
-        wh.WinHttpSetTimeouts(session,10000,10000,10000,10000)
+        ms=max(1,int(timeout*1000))
+        if not wh.WinHttpSetTimeouts(session,ms,ms,ms,ms):
+            raise _winhttp_error('set_timeouts',ctypes.get_last_error())
+        header_text=''.join(f'{k}: {v}\r\n' for k,v in headers.items())
         policy=ctypes.c_ulong(0)
-        for host in hosts:
-            if not host or host in ('127.0.0.1','localhost'):continue
-            conn=wh.WinHttpConnect(session,host,443,0)
-            if not conn:continue
-            try:
-                req=wh.WinHttpOpenRequest(conn,'HEAD','/',None,None,None,0x00800000)
-                if not req:continue
-                try:
-                    wh.WinHttpSetOption(req,88,ctypes.byref(policy),ctypes.sizeof(policy))
-                    if wh.WinHttpSendRequest(req,None,0,None,0,0,0) and wh.WinHttpReceiveResponse(req,None):
-                        refreshed=True
-                finally:wh.WinHttpCloseHandle(req)
-            finally:wh.WinHttpCloseHandle(conn)
-    finally:wh.WinHttpCloseHandle(session)
-    return refreshed
+        current_url=url
+        for _ in range(11):
+            parsed=urlsplit(current_url)
+            port=parsed.port or (443 if parsed.scheme=='https' else 80)
+            flags=0x00800000 if parsed.scheme=='https' else 0
+            path=(parsed.path or '/')+('?'+parsed.query if parsed.query else '')
+            conn=wh.WinHttpConnect(session,parsed.hostname,port,0)
+            if not conn:raise _winhttp_error('connect',ctypes.get_last_error())
+            req=wh.WinHttpOpenRequest(conn,'GET',path,None,None,None,flags)
+            if not req:raise _winhttp_error('open_request',ctypes.get_last_error())
+            if not wh.WinHttpSetOption(req,88,ctypes.byref(policy),ctypes.sizeof(policy)):
+                raise _winhttp_error('set_option',ctypes.get_last_error())
+            if not wh.WinHttpSendRequest(req,header_text or None,len(header_text),None,0,0,0):
+                raise _winhttp_error('send',ctypes.get_last_error())
+            if not wh.WinHttpReceiveResponse(req,None):
+                raise _winhttp_error('receive',ctypes.get_last_error())
+            status=wintypes.DWORD(0);status_len=wintypes.DWORD(ctypes.sizeof(status))
+            if not wh.WinHttpQueryHeaders(req,19|0x20000000,None,ctypes.byref(status),ctypes.byref(status_len),None):
+                raise _winhttp_error('query_status',ctypes.get_last_error())
+            code=int(status.value)
+            buf_len=wintypes.DWORD(0)
+            wh.WinHttpQueryHeaders(req,22,None,None,ctypes.byref(buf_len),None)
+            err=ctypes.get_last_error()
+            if err!=122 or buf_len.value<2:raise _winhttp_error('query_headers',err)
+            raw_buf=ctypes.create_string_buffer(buf_len.value)
+            if not wh.WinHttpQueryHeaders(req,22,None,raw_buf,ctypes.byref(buf_len),None):
+                raise _winhttp_error('query_headers',ctypes.get_last_error())
+            raw_text=bytes(raw_buf.raw[:buf_len.value]).decode('utf-16-le').rstrip('\x00')
+            header_block=raw_text.split('\r\n',1)[1] if '\r\n' in raw_text else ''
+            resp_headers=email.parser.Parser().parsestr(header_block)
+            if code in (301,302,303,307,308):
+                wh.WinHttpCloseHandle(req);req=None
+                wh.WinHttpCloseHandle(conn);conn=None
+                location=resp_headers.get('Location')
+                if not location:raise urllib.error.HTTPError(current_url,code,'Redirect without Location',resp_headers,None)
+                next_url=urljoin(current_url,location)
+                _source(next_url,catalog.hosts,catalog.test_loopback)
+                current_url=next_url
+                continue
+            if code>=400:
+                raise urllib.error.HTTPError(current_url,code,'',resp_headers,None)
+            _source(current_url,catalog.hosts,catalog.test_loopback)
+            response=_WinHttpResponse(wh,wintypes,session,conn,req,current_url,code,resp_headers)
+            req=conn=session=None
+            return response
+        raise urllib.error.URLError(OSError('Too many redirects'))
+    finally:
+        if req:wh.WinHttpCloseHandle(req)
+        if conn:wh.WinHttpCloseHandle(conn)
+        if session:wh.WinHttpCloseHandle(session)
 
 
 def _transient_transfer(error):
@@ -204,7 +276,7 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
         payload=plain_path(stage/'payload',directory=True);parts=storage_parent(stage/'parts/marker')
         download_payload=plain_path(storage_parent(stage/'transport/marker'),directory=True) if catalog.runtime_archive is not None else payload
         opener=_build_opener(catalog)
-        roots_refreshed=False
+        use_winhttp=False
         done=verified=network_bytes=0;started=time.monotonic()
         for index,item in enumerate(catalog.entries):
             check();destination=download_payload/item.path;storage_parent(destination)
@@ -232,11 +304,11 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
                     try:
                         headers={'Accept-Encoding':'identity'}
                         if offset:headers['Range']='bytes='+str(offset)+'-'
-                        request=urllib.request.Request(item.url,headers=headers)
                         # Large official wheels/models can stall briefly on a
                         # shared connection. Preserve range-resume rather than
                         # failing after the previous aggressive 10-second read.
-                        with opener.open(request,timeout=30) as response:
+                        stream_ctx=_winhttp_open(item.url,headers,catalog,timeout=30) if use_winhttp else opener.open(urllib.request.Request(item.url,headers=headers),timeout=30)
+                        with stream_ctx as response:
                             _source(response.geturl(),catalog.hosts,catalog.test_loopback)
                             if response.status==206:
                                 expected=f'bytes {offset}-{item.size-1}/{item.size}'
@@ -260,13 +332,11 @@ def acquire(catalog,root,*,validate,publish,cancelled=lambda:False,progress=None
                                 stream.flush();os.fsync(stream.fileno())
                         break
                     except Exception as error:
-                        if (not roots_refreshed and not catalog.test_loopback and os.name=='nt'
+                        if (not use_winhttp and not catalog.test_loopback and os.name=='nt'
                                 and isinstance(error,urllib.error.URLError)
                                 and isinstance(error.reason,ssl.SSLCertVerificationError)):
-                            roots_refreshed=True
-                            if _refresh_windows_tls_roots(catalog.hosts):
-                                opener=_build_opener(catalog)
-                                continue
+                            use_winhttp=True
+                            continue
                         if not _transient_transfer(error):raise
                         check()
                         if retries>=2:
