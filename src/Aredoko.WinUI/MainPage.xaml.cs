@@ -44,6 +44,9 @@ public sealed partial class MainPage : Page
     private double cachedGridCaptionMinHeight = 24;
     private MediaRow? active;
     private EditorState saved;
+    private EditorState initialSaved;
+    private int? initialSavedItemId;
+    private string? detailSaveError;
     private bool updatingFavorite;
     private bool ready, populating, saving, dialogOpen, tiles, disposed;
     private int page, lastKind, lastMode;
@@ -176,8 +179,11 @@ public sealed partial class MainPage : Page
         ReferenceEquals(a,b)||(a is not null&&b is not null&&a.SequenceEqual(b));
     private bool PendingSearch => !folderHubOpen&&!shelfHubOpen&&!settingsHubOpen&&(Query.Text!=lastQuery||Kind.SelectedIndex!=lastKind||SearchMode.SelectedIndex!=lastMode||!SameRoots(selectedSearchRoots,lastRoots)||(AIMatchedOnly.IsChecked==true)!=lastLiteralOnly||BoundaryValue()!=lastBoundary||AIResultGroup.SelectedIndex!=lastResultGroup);
     private bool PendingAutoSearch => PendingSearch && SearchMode.SelectedIndex==lastMode && ((similarityOrigin is not null && Query.Text==lastQuery) || !SearchMethod.FromIndex(SearchMode.SelectedIndex).IsAI);
+    private EditorState CurrentCommitted()=>new(string.Join(", ",draftTags),editingShelfIds.Length==0?"":ShelfName(editingShelfIds.Min()),Favorite.IsChecked==true,Reviewed.IsChecked==true){ShelfIds=editingShelfIds.ToArray()};
     private EditorState Current()=>new(string.Join(", ",EffectiveDraftTags()),editingShelfIds.Length==0?"":ShelfName(editingShelfIds.Min()),Favorite.IsChecked==true,Reviewed.IsChecked==true){ShelfIds=editingShelfIds.ToArray()};
     private bool Dirty=>active is not null && EditorState.IsDirty(saved,Current());
+    private bool HasUncommittedDraft=>active is not null && EditorState.IsDirty(saved,CurrentCommitted());
+    private bool CanRevertToInitial=>active is not null && (HasUncommittedDraft || (initialSavedItemId==active.Id && EditorState.IsDirty(initialSaved,saved)));
     private bool FolderDirty=>folderSettingsActive && folderDraft is {IsDirty:true};
     private void Notice(string title,string message="",InfoBarSeverity severity=InfoBarSeverity.Informational,string? details=null) {
         Status.Title=title; Status.Message=message; Status.Severity=severity;
@@ -544,7 +550,7 @@ public sealed partial class MainPage : Page
             var (scopeLabel,scopeWarning)=FolderScopeDescriber.DescribeSearchScope(knownRoots,selectedRoots,origin is not null&&!DirectContentSimilarity||(origin is null&&method.IsAI&&!method.IsDirectContent&&query.Length>0),aiScope);
             UpdateActiveSearchScopeBar();
             SearchOptions.Header="AI検索結果の絞り込み";
-            ResetBrowse(checked(page*pageSize),result);rows=result.Items;SyncRowsState();BindLibrarySelection();active=null; if(!folderSettingsActive&&librarySelection.Count==0){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;} DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();SyncFavoriteToggle(false);Reviewed.IsChecked=false;RenderRows();UpdateBrowseTagsFlyout();
+            ResetBrowse(checked(page*pageSize),result);rows=result.Items;SyncRowsState();BindLibrarySelection();active=null;initialSavedItemId=null; if(!folderSettingsActive&&librarySelection.Count==0){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;} DetailsButton.IsEnabled=false;detailCancellation?.Cancel(); DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed; draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();SyncFavoriteToggle(false);Reviewed.IsChecked=false;RenderRows();UpdateBrowseTagsFlyout();
             ItemTitle.Text="作品を選んでください"; ItemPath.Text=""; EditStatus.Text=""; UpdateDetailSaveBar();
             UpdateLibraryHeading();
             if(settingsHubOpen)settingsReturnCount=$"{result.Total:N0} 件";
@@ -629,7 +635,7 @@ public sealed partial class MainPage : Page
                 }
                 if(resultSession is null)
                 {
-                    resultWindow?.Dispose();resultWindow=null;rows=[];SyncRowsState();active=null;BindLibrarySelection();
+                    resultWindow?.Dispose();resultWindow=null;rows=[];SyncRowsState();active=null;initialSavedItemId=null;BindLibrarySelection();
                     if(!folderSettingsActive){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;}
                     detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
                     ItemTitle.Text="作品を選んでください";ItemPath.Text="";draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();SyncFavoriteToggle(false);Reviewed.IsChecked=false;EditStatus.Text="";UpdateDetailSaveBar();
@@ -661,7 +667,7 @@ public sealed partial class MainPage : Page
                     (ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません"));
                 lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;
                 lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();
-                rows=[];SyncRowsState();active=null;if(!folderSettingsActive){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;}DetailsButton.IsEnabled=false;
+                rows=[];SyncRowsState();active=null;initialSavedItemId=null;if(!folderSettingsActive){Details.IsPaneOpen=false;DetailKindBadge.Visibility=Visibility.Collapsed;}DetailsButton.IsEnabled=false;
                 detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
                 ItemTitle.Text="作品を選んでください";ItemPath.Text="";draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();
                 SyncFavoriteToggle(false);Reviewed.IsChecked=false;EditStatus.Text="";UpdateDetailSaveBar();RenderRows();
@@ -1236,6 +1242,10 @@ public sealed partial class MainPage : Page
         AutomationProperties.SetAutomationId(favoriteAction,"ToggleFavorite"+row.Id);
         favoriteAction.Click+=async(_,_)=>await SetFavoriteAsync(row,!row.Favorite);
         menu.Items.Add(favoriteAction);
+        var editShelvesAction=new MenuFlyoutItem{Text="📚 棚に追加・変更…"};
+        AutomationProperties.SetAutomationId(editShelvesAction,"EditItemShelves"+row.Id);
+        editShelvesAction.Click+=async(_,_)=>await ChooseRowShelvesAsync(row);
+        menu.Items.Add(editShelvesAction);
         if(row.ShelfIds.Length>0)
         {
             var shelfIds=row.ShelfIds.ToArray();
@@ -1483,12 +1493,18 @@ public sealed partial class MainPage : Page
         try
         {
             revertStatusActive=false;
+            detailSaveError=null;
             if(detailScrollItemId!=row.Id)
             {
                 detailScrollItemId=row.Id;
                 detailScrollResetPending=true;
             }
             active=row; editingShelfIds=active.ShelfIds.ToArray();draftTags=active.Tags.ToArray();saved=new(string.Join(", ",draftTags),active.Shelf,active.Favorite,active.Reviewed){ShelfIds=editingShelfIds.ToArray()};
+            if(initialSavedItemId!=row.Id)
+            {
+                initialSavedItemId=row.Id;
+                initialSaved=saved;
+            }
             Tags.Text="";UpdateShelfEditorLabel();SyncFavoriteToggle(saved.Favorite);
             DetailKindBadgeText.Text=DetailKindLabel(active);
             DetailKindBadge.Visibility=Visibility.Visible;
@@ -1534,9 +1550,9 @@ public sealed partial class MainPage : Page
     private void UpdateDetailSaveBar(bool blocked=false)
     {
         if(DetailSaveBar is null||DetailSaveButtons is null)return;
-        var showButtons=active is not null&&Dirty&&!saving&&!blocked;
+        var showButtons=active is not null&&CanRevertToInitial&&!saving&&!blocked;
         DetailSaveButtons.Visibility=showButtons?Visibility.Visible:Visibility.Collapsed;
-        DetailSaveBar.Visibility=active is not null&&(Dirty||blocked||!string.IsNullOrEmpty(EditStatus.Text))
+        DetailSaveBar.Visibility=active is not null&&(showButtons||saving||blocked||!string.IsNullOrEmpty(EditStatus.Text))
             ?Visibility.Visible:Visibility.Collapsed;
     }
     private void UpdateDirty()
@@ -1549,17 +1565,24 @@ public sealed partial class MainPage : Page
         if(blocked)
         {
             revertStatusActive=false;
+            detailSaveError=null;
             EditStatus.Text="タグを確認できません。AI候補を開き直してください";
+            Save.Visibility=Visibility.Collapsed;
             Save.IsEnabled=false;
             RevertEditsButton.Visibility=Visibility.Collapsed;
             RevertEditsButton.IsEnabled=false;
             UpdateDetailSaveBar(blocked:true);
             return;
         }
-        if(Dirty)revertStatusActive=false;
-        EditStatus.Text=Dirty?"● 未保存の変更":revertStatusActive?"変更を取り消しました":"";
-        Save.IsEnabled=active is not null&&Dirty&&!saving;
-        var canRevert=active is not null&&Dirty&&!saving;
+        var canRevert=CanRevertToInitial&&!saving;
+        if(canRevert)revertStatusActive=false;
+        EditStatus.Text=detailSaveError is not null?detailSaveError
+            :saving?"保存しています…"
+            :canRevert?(resultsNeedRefresh?"保存しました（再検索してください）":"✓ 変更は自動保存されました")
+            :revertStatusActive?"変更を元に戻しました"
+            :"";
+        Save.Visibility=Visibility.Collapsed;
+        Save.IsEnabled=false;
         RevertEditsButton.Visibility=canRevert?Visibility.Visible:Visibility.Collapsed;
         RevertEditsButton.IsEnabled=canRevert;
         UpdateDetailSaveBar(blocked:false);
@@ -1686,12 +1709,14 @@ public sealed partial class MainPage : Page
                 ToolTipService.SetToolTip(removeBtn,$"タグ「{tag}」を外す");
                 AutomationProperties.SetAutomationId(removeBtn,$"RemoveDraftTag{index}");
                 AutomationProperties.SetName(removeBtn,$"タグ「{tag}」を外す");
-                removeBtn.Click+=(_,_)=>
+                removeBtn.Click+=async(_,_)=>
                 {
                     if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id)return;
+                    detailSaveError=null;
                     draftTags=draftTags.Where(existing=>existing!=tag).ToArray();
                     UpdateDirty();
                     Tags.Focus(FocusState.Programmatic);
+                    await SaveAsync(commitPendingTagBox:false);
                 };
                 var chipInner=new StackPanel{Orientation=Orientation.Horizontal,Spacing=2};
                 chipInner.Children.Add(tagBtn);
@@ -1714,12 +1739,14 @@ public sealed partial class MainPage : Page
                 var candidateTag=candidateTags[i];
                 var suggestItem=new MenuFlyoutItem{Text=$"＋ {candidateTag}"};
                 AutomationProperties.SetAutomationId(suggestItem,$"SuggestTag{i}");
-                suggestItem.Click+=(_,_)=>
+                suggestItem.Click+=async(_,_)=>
                 {
                     if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id)return;
+                    detailSaveError=null;
                     draftTags=draftTags.Append(candidateTag).Distinct().ToArray();
                     UpdateDirty();
                     Tags.Focus(FocusState.Programmatic);
+                    await SaveAsync(commitPendingTagBox:false);
                 };
                 suggestFlyout.Items.Add(suggestItem);
             }
@@ -1727,25 +1754,35 @@ public sealed partial class MainPage : Page
         }
         else SuggestExistingTagsButton.Flyout=null;
     }
-    private void CommitTagInput()
+    private bool CommitTagInput()
     {
-        if(!ready||disposed||saving||dialogOpen||active is null||tagReviewSyncItem==active.Id)return;
+        if(!ready||disposed||saving||dialogOpen||active is null||tagReviewSyncItem==active.Id)return false;
         var added=ParseTagTokens(Tags.Text);
+        var changed=false;
         if(added.Length>0)
-            draftTags=draftTags.Concat(added).Distinct().ToArray();
+        {
+            var next=draftTags.Concat(added).Distinct().ToArray();
+            changed=!next.SequenceEqual(draftTags);
+            draftTags=next;
+        }
         var previous=populating;populating=true;
         try{Tags.Text="";Tags.SelectionStart=0;}
         finally{populating=previous;}
+        if(changed)detailSaveError=null;
         UpdateDirty();
         Tags.Focus(FocusState.Programmatic);
+        return changed;
     }
-    private void CommitTagInput_Click(object sender,RoutedEventArgs e)=>CommitTagInput();
+    private async void CommitTagInput_Click(object sender,RoutedEventArgs e)
+    {
+        if(CommitTagInput())await SaveAsync(commitPendingTagBox:false);
+    }
     private async void Tags_KeyDown(object sender,KeyRoutedEventArgs e)
     {
         if(IsUnmodifiedEnter(e)&&ready&&!disposed&&!saving&&!dialogOpen)
         {
             e.Handled=true;
-            CommitTagInput();
+            if(CommitTagInput())await SaveAsync(commitPendingTagBox:false);
             return;
         }
         if(e.Key==Windows.System.VirtualKey.Enter&&SelectionKey(Windows.System.VirtualKey.Control)&&!SelectionKey(Windows.System.VirtualKey.Shift)&&!SelectionKey(Windows.System.VirtualKey.Menu)
@@ -1755,7 +1792,11 @@ public sealed partial class MainPage : Page
             await SaveAsync();
         }
     }
-    private void Editor_Changed(object sender,TextChangedEventArgs e)=>UpdateDirty();
+    private void Editor_Changed(object sender,TextChangedEventArgs e)
+    {
+        if(!populating)detailSaveError=null;
+        UpdateDirty();
+    }
     private async void Favorite_Checked(object sender,RoutedEventArgs args)
     {
         if(!ready||populating||updatingFavorite||active is null||Favorite.IsChecked==saved.Favorite)return;
@@ -1792,7 +1833,9 @@ public sealed partial class MainPage : Page
         if(rows.FirstOrDefault(item=>item.Id==row.Id) is {} visibleRow)visibleRow.Favorite=value;
         if(active?.Id==row.Id)
         {
-            saved=saved with {Favorite=value};active.Favorite=value;updatingFavorite=true;
+            saved=saved with {Favorite=value};
+            if(initialSavedItemId==row.Id)initialSaved=initialSaved with {Favorite=value};
+            active.Favorite=value;updatingFavorite=true;
             try
             {
                 SyncFavoriteToggle(value);
@@ -1813,29 +1856,31 @@ public sealed partial class MainPage : Page
         }
         if(active?.Id==row.Id)DetailPreview.ContextFlyout=SimilarityMenu(active);
     }
-    private void Editor_Checked(object sender,RoutedEventArgs e)=>UpdateDirty();
+    private async void Editor_Checked(object sender,RoutedEventArgs e)
+    {
+        if(!ready||populating||disposed||saving||dialogOpen||active is null||tagReviewSyncItem==active.Id)return;
+        detailSaveError=null;
+        UpdateDirty();
+        await SaveAsync(commitPendingTagBox:false);
+    }
     public async Task<bool> ConfirmDiscardAsync() {
         if(saving||dialogOpen)return false;
         RememberCurrentLocation();
-        if(!Dirty&&!FolderDirty)return true;
+        if(!FolderDirty)
+        {
+            if(active is not null&&!string.IsNullOrEmpty(Tags.Text))
+            {
+                var previous=populating;populating=true;
+                try{Tags.Text="";}finally{populating=previous;}
+                UpdateDirty();
+            }
+            return true;
+        }
         var detailsWereOpen=Details.IsPaneOpen;
         dialogOpen=true;
         try {
-            var content=Dirty?active?.Title:FolderTargetTitle.Text;
-            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="変更を破棄しますか？",Content=content,PrimaryButtonText="変更を破棄",CloseButtonText="編集を続ける",DefaultButton=ContentDialogButton.Close};
+            var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="変更を破棄しますか？",Content=FolderTargetTitle.Text,PrimaryButtonText="変更を破棄",CloseButtonText="編集を続ける",DefaultButton=ContentDialogButton.Close};
             var accepted=await dialog.ShowAsync()==ContentDialogResult.Primary;
-            if(accepted&&Dirty)
-            {
-                revertStatusActive=false;
-                var previous=populating;populating=true;
-                try
-                {
-                    draftTags=saved.ParsedTags;Tags.Text="";editingShelfIds=saved.ShelfIds?.ToArray()??[];UpdateShelfEditorLabel();
-                    SyncFavoriteToggle(saved.Favorite);Reviewed.IsChecked=saved.Reviewed;
-                }
-                finally{populating=previous;}
-                UpdateDirty();
-            }
             if(accepted&&FolderDirty&&folderDraft is not null)
             {
                 var ids=folderDraft.TargetIds.ToArray();
@@ -1850,37 +1895,40 @@ public sealed partial class MainPage : Page
             if(!disposed&&detailsWereOpen&&(active is not null||librarySelection.Count>0||folderSettingsActive))Details.IsPaneOpen=true;
         }
     }
-    private async Task SaveAsync() {
-        if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id||!Dirty)return;
-        var snapshot=Current();var error=snapshot.Validate();
-        if(error is not null){EditStatus.Text=error;UpdateDetailSaveBar();return;}
+    private async Task SaveAsync(bool commitPendingTagBox=true,bool isRevert=false) {
+        if(commitPendingTagBox)CommitTagInput();
+        var snapshot=commitPendingTagBox?Current():CurrentCommitted();
+        if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id||!EditorState.IsDirty(saved,snapshot))return;
+        var error=snapshot.Validate();
+        if(error is not null){detailSaveError=error;UpdateDirty();return;}
         // Disabling the editor moves WinUI focus elsewhere. Restore only an
         // editor control, and only if the user has not chosen another control
         // while the request was pending. Never take focus from another window.
         var focused=FocusManager.GetFocusedElement(XamlRoot) as Control;
         var restore=focused==Tags||focused==CommitTagInputButton||focused==SuggestExistingTagsButton||focused==Shelf||focused==ChooseShelvesButton||focused==OpenActiveShelvesButton||focused==Favorite||focused==Reviewed||focused==Save||focused==RevertEditsButton||focused==FilterByActiveTagButton||focused==DetailFindSimilarButton;
         var focusState=focused?.FocusState==FocusState.Keyboard?FocusState.Keyboard:FocusState.Programmatic;
+        detailSaveError=null;
         saving=true;Editor.IsEnabled=false;var id=active.Id;
         var displacedFocus=FocusManager.GetFocusedElement(XamlRoot);
+        UpdateDirty();
         try {
             await api.SaveAsync(id,snapshot);
             saved=snapshot;active.Tags=snapshot.ParsedTags;active.Shelf=snapshot.Shelf;active.ShelfIds=snapshot.ShelfIds?.ToArray()??[];active.Favorite=snapshot.Favorite;active.Reviewed=snapshot.Reviewed;
             draftTags=snapshot.ParsedTags;
-            var beforePopulating=populating;populating=true;
-            try{Tags.Text="";}finally{populating=beforePopulating;}
-            EditStatus.Text="保存しました（一覧を更新中…）";UpdateDetailSaveBar();await RefreshResultRowsAfterEditAsync();
-            EditStatus.Text=resultsNeedRefresh?"保存しました（再検索してください）":"✓ 保存しました";
-            if(!resultsNeedRefresh)Notice("保存しました");
-        }catch(Exception ex){Failure(ex);EditStatus.Text="保存できませんでした（編集内容は残っています）";UpdateDetailSaveBar();}
+            if(commitPendingTagBox||isRevert)
+            {
+                var beforePopulating=populating;populating=true;
+                try{Tags.Text="";}finally{populating=beforePopulating;}
+            }
+            EditStatus.Text=isRevert?"元に戻しました（一覧を更新中…）":"保存しました（一覧を更新中…）";UpdateDetailSaveBar();await RefreshResultRowsAfterEditAsync();
+            if(isRevert)revertStatusActive=true;
+            if(!resultsNeedRefresh)Notice(isRevert?"変更を元に戻しました":"保存しました");
+        }catch(Exception ex){Failure(ex);detailSaveError="保存できませんでした（編集内容は残っています）";}
         finally
         {
             var unchangedFocus=ReferenceEquals(displacedFocus,FocusManager.GetFocusedElement(XamlRoot));
-            saving=false;Editor.IsEnabled=true;Save.IsEnabled=Dirty;
-            var canRevert=active is not null&&Dirty;
-            RevertEditsButton.Visibility=canRevert?Visibility.Visible:Visibility.Collapsed;
-            RevertEditsButton.IsEnabled=canRevert;
-            UpdateDetailActions();
-            UpdateDetailSaveBar();
+            saving=false;Editor.IsEnabled=true;
+            UpdateDirty();
             if(active is not null)DetailPreview.ContextFlyout=SimilarityMenu(active);
             if(!disposed&&active?.Id==id&&Details.IsPaneOpen&&restore&&unchangedFocus)
             {
@@ -1892,19 +1940,30 @@ public sealed partial class MainPage : Page
         }
     }
     private async void Save_Click(object sender,RoutedEventArgs e)=>await SaveAsync();
-    private void RevertEdits_Click(object sender,RoutedEventArgs e)
+    private async void RevertEdits_Click(object sender,RoutedEventArgs e)
     {
-        if(!ready||populating||saving||dialogOpen||active is null||tagReviewSyncItem==active.Id||!Dirty)return;
-        revertStatusActive=true;
+        if(!ready||populating||saving||dialogOpen||active is null||tagReviewSyncItem==active.Id||!CanRevertToInitial)return;
+        var itemId=active.Id;
+        var baseline=initialSavedItemId==itemId?initialSaved:saved;
+        detailSaveError=null;
         var previous=populating;populating=true;
         try
         {
-            draftTags=saved.ParsedTags;Tags.Text="";editingShelfIds=saved.ShelfIds?.ToArray()??[];UpdateShelfEditorLabel();
-            SyncFavoriteToggle(saved.Favorite);Reviewed.IsChecked=saved.Reviewed;
+            draftTags=baseline.ParsedTags;Tags.Text="";editingShelfIds=baseline.ShelfIds?.ToArray()??[];UpdateShelfEditorLabel();
+            Reviewed.IsChecked=baseline.Reviewed;
         }
         finally{populating=previous;}
-        UpdateDirty();
-        Tags.Focus(FocusState.Programmatic);
+        if(EditorState.IsDirty(saved,CurrentCommitted()))
+        {
+            await SaveAsync(commitPendingTagBox:false,isRevert:true);
+        }
+        else
+        {
+            revertStatusActive=true;
+            UpdateDirty();
+            Notice("変更を元に戻しました");
+        }
+        if(!disposed&&active?.Id==itemId&&Details.IsPaneOpen)Tags.Focus(FocusState.Programmatic);
     }
     private async void DetailFindSimilar_Click(object sender,RoutedEventArgs e)
     {
@@ -2751,6 +2810,7 @@ public sealed partial class MainPage : Page
             active.Tags=fresh.Tags;active.Shelf=fresh.Shelf;active.ShelfIds=fresh.ShelfIds.ToArray();active.Favorite=fresh.Favorite;active.Reviewed=fresh.Reviewed;
             editingShelfIds=fresh.ShelfIds.ToArray();draftTags=fresh.Tags.ToArray();Tags.Text="";UpdateShelfEditorLabel();SyncFavoriteToggle(fresh.Favorite);Reviewed.IsChecked=fresh.Reviewed;
             saved=Current();
+            if(initialSavedItemId==id)initialSaved=saved;
         }
         else if(rowById.TryGetValue(id,out var listed))
         {

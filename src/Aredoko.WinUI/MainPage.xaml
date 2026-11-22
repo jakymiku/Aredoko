@@ -254,7 +254,7 @@
        </ScrollViewer>
        <Grid ColumnSpacing="6">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBox x:Name="Tags" PlaceholderText="＋ タグを追加" ToolTipService.ToolTip="タグを入力してEnterまたは＋（カンマ区切り貼り付け可。Ctrl+Sで保存）" TextWrapping="Wrap" MaxHeight="84" ScrollViewer.VerticalScrollBarVisibility="Auto" KeyDown="Tags_KeyDown" TextChanged="Editor_Changed" AutomationProperties.Name="タグを追加" AutomationProperties.AutomationId="TxtTags"/>
+        <TextBox x:Name="Tags" PlaceholderText="＋ タグを追加" ToolTipService.ToolTip="タグを入力してEnterまたは＋で即時追加（カンマ区切り貼り付け可）" TextWrapping="Wrap" MaxHeight="84" ScrollViewer.VerticalScrollBarVisibility="Auto" KeyDown="Tags_KeyDown" TextChanged="Editor_Changed" AutomationProperties.Name="タグを追加" AutomationProperties.AutomationId="TxtTags"/>
         <Button x:Name="CommitTagInputButton" Grid.Column="1" Content="＋" VerticalAlignment="Top" IsEnabled="False" Click="CommitTagInput_Click" ToolTipService.ToolTip="入力したタグを追加（Enter）" AutomationProperties.Name="タグを追加" AutomationProperties.AutomationId="BtnCommitTagInput"/>
         <Button x:Name="SuggestExistingTagsButton" Grid.Column="2" Content="既存から" VerticalAlignment="Top" Visibility="Collapsed" ToolTipService.ToolTip="一覧にあるタグから選んで追加" AutomationProperties.Name="一覧からタグを追加" AutomationProperties.AutomationId="BtnSuggestExistingTags"/>
        </Grid>
@@ -274,11 +274,10 @@
        <Expander x:Name="FileProperties" Header="ファイル情報" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="FileProperties">
         <StackPanel Spacing="8">
          <TextBlock x:Name="FilePropertyText" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="FilePropertyText"/>
-         <Grid ColumnSpacing="8">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+         <StackPanel Spacing="6">
           <Button x:Name="OpenFileLocation" Content="📁 保存場所を開く" HorizontalAlignment="Stretch" IsEnabled="False" Click="OpenFileLocation_Click" AutomationProperties.Name="保存場所を開く" AutomationProperties.AutomationId="OpenFileLocation"/>
-          <Button x:Name="CopySelectedFilePath" Grid.Column="1" Content="📋 パスをコピー" HorizontalAlignment="Stretch" IsEnabled="False" Click="CopySelectedFilePath_Click" AutomationProperties.Name="パスをコピー" AutomationProperties.AutomationId="CopySelectedFilePath"/>
-         </Grid>
+          <Button x:Name="CopySelectedFilePath" Content="📋 パスをコピー" HorizontalAlignment="Stretch" IsEnabled="False" Click="CopySelectedFilePath_Click" AutomationProperties.Name="パスをコピー" AutomationProperties.AutomationId="CopySelectedFilePath"/>
+         </StackPanel>
         </StackPanel>
        </Expander>
        </StackPanel></ScrollViewer>
@@ -287,8 +286,8 @@
          <TextBlock x:Name="EditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtEditStatus"/>
          <Grid x:Name="DetailSaveButtons" ColumnSpacing="8" Visibility="Collapsed">
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <Button x:Name="Save" Content="保存" ToolTipService.ToolTip="タグ・棚の変更を保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.Name="変更を保存" AutomationProperties.AutomationId="BtnSave"/>
-          <Button x:Name="RevertEditsButton" Grid.Column="1" Content="元に戻す" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="未保存の変更を保存前の状態に戻す" Click="RevertEdits_Click" AutomationProperties.Name="未保存の変更を取り消す" AutomationProperties.AutomationId="BtnRevertEdits"/>
+          <Button x:Name="Save" Content="保存" Visibility="Collapsed" ToolTipService.ToolTip="タグ・棚の変更を保存（Ctrl+S）" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="Save_Click" AutomationProperties.Name="変更を保存" AutomationProperties.AutomationId="BtnSave"/>
+          <Button x:Name="RevertEditsButton" Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" Content="変更を元に戻す" Visibility="Collapsed" IsEnabled="False" ToolTipService.ToolTip="この作品を開いた時点のタグ・棚に戻す" Click="RevertEdits_Click" AutomationProperties.Name="変更を元に戻す" AutomationProperties.AutomationId="BtnRevertEdits"/>
          </Grid>
         </StackPanel>
        </Border>
@@ -763,6 +762,16 @@
              <TextBlock Text="通常は内蔵ビューアで開きます。オンにすると既定の外部アプリで開きます" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
             </StackPanel>
             <CheckBox x:Name="SettingsDoubleClickCheck" Grid.Column="1" VerticalAlignment="Center" Content="外部アプリで開く" Checked="SettingsInstantPreference_Changed" Unchecked="SettingsInstantPreference_Changed" AutomationProperties.Name="画像をダブルクリックしたとき外部アプリで開く" AutomationProperties.AutomationId="SettingsDoubleClickViewer"/>
+           </Grid>
+          </Border>
+          <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="6" Padding="14,10">
+           <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Spacing="2" VerticalAlignment="Center">
+             <TextBlock Text="作品クリック時の詳細表示" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+             <TextBlock Text="一覧で作品をクリックして選択したときに右側の詳細パネルを自動で開きます" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
+            </StackPanel>
+            <CheckBox x:Name="SettingsClickOpenDetailsCheck" Grid.Column="1" VerticalAlignment="Center" Content="詳細パネルを開く" Checked="SettingsInstantPreference_Changed" Unchecked="SettingsInstantPreference_Changed" AutomationProperties.Name="作品クリック時に詳細パネルを開く" AutomationProperties.AutomationId="SettingsClickOpenDetails"/>
            </Grid>
           </Border>
           <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="6" Padding="14,10">

@@ -91,7 +91,7 @@ public sealed partial class MainPage
             CloseSettingsHubCore();CloseFolderHubCore();CloseShelfHubCore();ClearSimilarity();
             resultWindow?.Dispose();resultWindow=null;
             var previous=resultSession;resultSession=null;await CloseResultSessionAsync(previous);
-            shelfHubOpen=true;active=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;
+            shelfHubOpen=true;active=null;initialSavedItemId=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;
             MainViewTitle.Text="棚";Count.Text="";
             ItemSearchRow.Visibility=SearchTools.Visibility=ItemListContainer.Visibility=ItemPagerRow.Visibility=Visibility.Collapsed;
             ShelfHubView.Visibility=Visibility.Visible;ShelfList.ItemsSource=shelfKeys;UpdateLayoutToggleVisuals();
@@ -291,17 +291,22 @@ public sealed partial class MainPage
     }
     private void ShelfList_SizeChanged(object sender,SizeChangedEventArgs args)=>UpdateShelfItemSizes();
     private void ShelfSize_Click(object sender,RoutedEventArgs args)=>ItemSizeFlyout.ShowAt((Button)sender);
-    private async void ChooseShelves_Click(object sender,RoutedEventArgs args)
+    private async void ChooseShelves_Click(object sender,RoutedEventArgs args)=>await PickAndSaveActiveShelvesAsync(focusButton:true);
+    private async Task PickAndSaveActiveShelvesAsync(bool focusButton)
     {
-        if(active is null||saving||dialogOpen||!await transitions.WaitAsync(0))return;
+        if(active is null||saving||dialogOpen||tagReviewSyncItem==active.Id||!await transitions.WaitAsync(0))return;
         var detailsWereOpen=Details.IsPaneOpen;
         var itemId=active.Id;
+        var changed=false;
         try
         {
             await RefreshShelfDescriptorsAsync();
             if(disposed||saving||dialogOpen||active?.Id!=itemId)return;
             var ids=await PickShelfIdsAsync("棚を選択",editingShelfIds,"チェックで追加、外すと解除します。");
-            if(ids is not null&&active?.Id==itemId){editingShelfIds=ids;UpdateShelfEditorLabel();UpdateDirty();}
+            if(ids is not null&&active?.Id==itemId&&!ids.Order().SequenceEqual(editingShelfIds.Order()))
+            {
+                editingShelfIds=ids;UpdateShelfEditorLabel();UpdateDirty();changed=true;
+            }
         }
         catch(Exception ex){Failure(ex);}
         finally
@@ -310,9 +315,51 @@ public sealed partial class MainPage
             if(!disposed&&detailsWereOpen&&active?.Id==itemId)
             {
                 Details.IsPaneOpen=true;
-                ChooseShelvesButton.Focus(FocusState.Programmatic);
+                if(focusButton)ChooseShelvesButton.Focus(FocusState.Programmatic);
             }
             transitions.Release();
+        }
+        if(changed&&!disposed&&active?.Id==itemId)await SaveAsync(commitPendingTagBox:false);
+    }
+    private async Task ChooseRowShelvesAsync(MediaRow row)
+    {
+        if(active?.Id==row.Id)
+        {
+            await PickAndSaveActiveShelvesAsync(focusButton:false);
+            return;
+        }
+        if(saving||dialogOpen||tagReviewSyncItem==row.Id||!await transitions.WaitAsync(0))return;
+        var detailsWereOpen=Details.IsPaneOpen;
+        var savedOther=false;
+        try
+        {
+            await RefreshShelfDescriptorsAsync();
+            if(disposed||saving||dialogOpen)return;
+            var ids=await PickShelfIdsAsync($"「{row.Title}」の棚を選択",row.ShelfIds,"チェックで追加、外すと解除します。");
+            dialogOpen=false;
+            if(ids is not null&&!disposed&&!ids.Order().SequenceEqual(row.ShelfIds.Order()))
+            {
+                saving=true;
+                var nextShelf=ids.Length==0?"":ShelfName(ids.Min());
+                var snapshot=new EditorState(string.Join(", ",row.Tags),nextShelf,row.Favorite,row.Reviewed){ShelfIds=ids};
+                await api.SaveAsync(row.Id,snapshot);
+                row.Shelf=nextShelf;row.ShelfIds=ids;
+                if(rowById.TryGetValue(row.Id,out var cached)){cached.Shelf=nextShelf;cached.ShelfIds=ids;}
+                savedOther=true;
+                await RefreshResultRowsAfterEditAsync();
+                if(!resultsNeedRefresh)Notice("保存しました");
+            }
+        }
+        catch(Exception ex){Failure(ex);}
+        finally
+        {
+            saving=false;dialogOpen=false;transitions.Release();
+            if(!disposed)
+            {
+                if(detailsWereOpen&&(active is not null||librarySelection.Count>0))Details.IsPaneOpen=true;
+                UpdateDirty();
+                if(savedOther&&PendingAutoSearch){searchTimer.Stop();searchTimer.Start();}
+            }
         }
     }
     private async Task EditShelfNameAsync(ShelfDescriptor? shelf=null)

@@ -79,7 +79,7 @@ public sealed partial class MainPage
             CloseFolderHubCore();
             CloseShelfHubCore();
             settingsHubOpen=true;
-            active=null;
+            active=null;initialSavedItemId=null;
             Details.IsPaneOpen=false;
             DetailsButton.IsEnabled=false;
             MainViewTitle.Text="設定";
@@ -91,6 +91,7 @@ public sealed partial class MainPage
             {
                 SettingsThemeCombo.SelectedIndex=ViewerOptions.Value.Theme switch{"light"=>1,"dark"=>2,_=>0};
                 SettingsDoubleClickCheck.IsChecked=ViewerOptions.Value.OpenExternally;
+                SettingsClickOpenDetailsCheck.IsChecked=ViewerOptions.Value.OpenDetailsOnClick;
                 SettingsWheelCombo.SelectedIndex=ViewerOptions.Value.WheelUpAdvances?1:0;
                 SettingsInstantStatus.Text="変更した設定はすぐに反映されます";
             }
@@ -261,8 +262,9 @@ public sealed partial class MainPage
     {
         var selectedTheme=SettingsThemeCombo.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};
         var openExternally=SettingsDoubleClickCheck.IsChecked==true;
+        var openDetailsOnClick=SettingsClickOpenDetailsCheck?.IsChecked==true;
         var wheelUp=SettingsWheelCombo.SelectedIndex==1;
-        ViewerOptions.SavePreferences(wheelUp,selectedTheme,ViewerOptions.Value.EnlargeSmallImages,openExternally);
+        ViewerOptions.SavePreferences(wheelUp,selectedTheme,ViewerOptions.Value.EnlargeSmallImages,openExternally,openDetailsOnClick);
         MainWindow.Current.ApplyTheme(selectedTheme);
         RefreshThumbnailTooltips();
         SettingsInstantStatus.Text=statusMessage;
@@ -278,9 +280,10 @@ public sealed partial class MainPage
     private async void SettingsInstantPreference_Changed(object sender,RoutedEventArgs e)
     {
         if(!ready||settingsPopulating||disposed||!settingsHubOpen)return;
-        if(ReferenceEquals(sender,SettingsDoubleClickCheck))
+        if(ReferenceEquals(sender,SettingsDoubleClickCheck)||ReferenceEquals(sender,SettingsClickOpenDetailsCheck))
         {
-            try{SaveInstantViewerOptions("✓ 閲覧設定を反映しました");}
+            var message=ReferenceEquals(sender,SettingsClickOpenDetailsCheck)?"✓ 作品クリック時の詳細表示を反映しました":"✓ 閲覧設定を反映しました";
+            try{SaveInstantViewerOptions(message);}
             catch(Exception ex){SettingsInstantStatus.Text="保存できません: "+ex.Message;}
             return;
         }

@@ -109,10 +109,10 @@ public sealed partial class MainPage
     {
         if(!saving)SetSelectionSaveStatus("");
         var row=librarySelection.Count==1&&rowById.TryGetValue(librarySelection.Ids.First(),out var found)?found:null;
-        if(row is not null){ShowItemDetailsPane();ApplySelectedRow(row);}
+        if(row is not null){ShowItemDetailsPane();if(ViewerOptions.Value.OpenDetailsOnClick)Details.IsPaneOpen=true;ApplySelectedRow(row);}
         else
         {
-            active=null;detailCancellation?.Cancel();DetailPreview.Source=null;Editor.IsEnabled=false;
+            active=null;initialSavedItemId=null;detailCancellation?.Cancel();DetailPreview.Source=null;Editor.IsEnabled=false;
             if(librarySelection.Count>0&&Details.IsPaneOpen)ShowSelectionSummary();
             else if(librarySelection.Count==0&&!folderSettingsActive)Details.IsPaneOpen=false;
         }
@@ -129,7 +129,12 @@ public sealed partial class MainPage
             var selected=Items.SelectedItems.OfType<string>().Select(RowForKey).Where(row=>row is not null).Select(row=>row!.Id).ToArray();
             if(selected.Length==1&&librarySelection.Count==1&&librarySelection.Contains(selected[0]))
             {
-                if(detailsWereOpen&&active is not null)Details.IsPaneOpen=true;
+                if((detailsWereOpen||ViewerOptions.Value.OpenDetailsOnClick)&&active is not null)
+                {
+                    ShowItemDetailsPane();
+                    Details.IsPaneOpen=true;
+                    _ = ShowDetailPreviewAsync(active, preserveExisting:true);
+                }
                 return;
             }
             if(!await ConfirmDiscardAsync())
@@ -218,7 +223,7 @@ public sealed partial class MainPage
     private async void ClearLibrarySelection_Click(object sender,RoutedEventArgs e)
     {
         if(saving||dialogOpen||preparingSelection||!await transitions.WaitAsync(0))return;
-        try{if(await ConfirmDiscardAsync()){librarySelection.Clear();active=null;RestoreSelection();ApplyLibrarySelection();}}
+        try{if(await ConfirmDiscardAsync()){librarySelection.Clear();active=null;initialSavedItemId=null;RestoreSelection();ApplyLibrarySelection();}}
         finally{transitions.Release();}
     }
     private void CancelSelectionPreparation_Click(object sender,RoutedEventArgs e)=>selectionPreparation?.Cancel();
@@ -446,7 +451,9 @@ public sealed partial class MainPage
                 // A one-item selection may still have an unsaved tag/shelf draft.
                 // A retained snapshot needs only the saved favorite flag updated.
                 var value=operation==SelectionOperation.FavoriteAdd;
-                saved=saved with {Favorite=value};selected.Favorite=value;updatingFavorite=true;
+                saved=saved with {Favorite=value};
+                if(initialSavedItemId==selected.Id)initialSaved=initialSaved with {Favorite=value};
+                selected.Favorite=value;updatingFavorite=true;
                 try{SyncFavoriteToggle(value);}finally{updatingFavorite=false;}
             }
             if(detailsWereOpen&&!disposed)Details.IsPaneOpen=true;
