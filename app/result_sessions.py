@@ -451,6 +451,7 @@ class ResultSessions:
             session.check()
         elif session.stop.is_set():
             raise ResultUnavailable(conditions=session.conditions)
+        session.last_used = time.monotonic()
         with session.progress_lock:
             return {'session_id': session_id, 'state': session.state,
                     'total': session.expected_total, 'processed': session.processed,

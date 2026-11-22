@@ -19,7 +19,7 @@ public sealed partial class MainPage
             var ai=await api.GetAsync("api/library/ai/status");
             var profile=ai["profile"]?.GetValue<string>()??throw new InvalidOperationException("モデル設定を確認してください。");
             var choices=new ListView{SelectionMode=ListViewSelectionMode.None,MaxHeight=200,HorizontalContentAlignment=HorizontalAlignment.Stretch};
-            var candidates=new[]{seed}.Concat(rows.Where(ArchiveManifest.CanOpen)).DistinctBy(r=>r.Id).ToList();
+            var candidates=new[]{seed}.Concat(rowByOrdinal.OrderBy(kv=>kv.Key).Select(kv=>kv.Value).Where(ArchiveManifest.CanOpen)).DistinctBy(r=>r.Id).ToList();
             foreach(var row in candidates)
             {
                 var box=new CheckBox{Content=new TextBlock{Text=row.Title,TextWrapping=TextWrapping.Wrap},Tag=row,IsChecked=row.Id==seed.Id,HorizontalAlignment=HorizontalAlignment.Stretch};

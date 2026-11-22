@@ -252,6 +252,15 @@ class ResultSessionTests(unittest.TestCase):
         self.assertTrue(error.exception.expired); self.assertEqual(error.exception.conditions, {'query': '001'})
         self.assertFalse(directory.exists())
 
+    def test_status_refreshes_last_used_and_prevents_idle_expiry(self):
+        self.create(query='001'); session = self.owner.sessions[self.sid]
+        session.last_used -= IDLE_SECONDS - 30
+        status = self.owner.status(self.sid)
+        self.assertEqual(status['state'], 'ready')
+        self.owner._expire()
+        self.assertIn(self.sid, self.owner.sessions)
+        self.assertEqual(self.owner.read(self.sid)['total'], sum('001' in i['title'] for i in self.items))
+
     def test_capacity_never_publishes_a_truncated_result(self):
         self.owner.max_bytes = 65536
         with self.catalog.connect() as db: db.execute('UPDATE items SET title=?', ('x' * 2000,))

@@ -8,7 +8,7 @@ internal static class ResultSessionTests
     public static async Task Run(Action<bool, string> check)
     {
         var conditions = new JsonObject { ["mode"] = "literal", ["query"] = "generated" };
-        string? id = null; var closes = 0; var expired = false;
+        string? id = null; var closes = 0; var touches = 0; var expired = false;
         JsonObject Item(int number) => new()
         {
             ["id"] = number, ["title"] = $"{number}.png", ["kind"] = "image", ["tags"] = new JsonArray(),
@@ -29,6 +29,11 @@ internal static class ResultSessionTests
             check(id == sid, "range and neighbor use one frozen result ID");
             if (request.RequestUri.AbsolutePath.EndsWith("/close")) { closes++; return Reply(new JsonObject { ["closed"] = true }); }
             if (expired) return Reply(new JsonObject { ["conditions"] = conditions.DeepClone(), ["current_id"] = 60 }, HttpStatusCode.Gone);
+            if (request.RequestUri.AbsolutePath.EndsWith("/status"))
+            {
+                touches++;
+                return Reply(new JsonObject { ["session_id"] = id, ["state"] = "ready", ["total"] = 125, ["processed"] = 125, ["conditions"] = conditions.DeepClone() });
+            }
             if (request.RequestUri.AbsolutePath.EndsWith("/neighbor"))
             {
                 check(body["item_id"]!.GetValue<int>() == 60, "neighbor is relative to selected ID");
@@ -47,6 +52,8 @@ internal static class ResultSessionTests
         check(session.Conditions["query"]!.GetValue<string>() == "generated", "result conditions are immutable to callers");
         var range = await session.RangeAsync(60, 60, CancellationToken.None);
         check(range.Items[0].Id == 61 && range.Items.Count == 60, "client range traverses 60/61 without a new search");
+        await session.TouchAsync(CancellationToken.None);
+        check(touches == 1, "client touch sends a status keep-alive for the frozen result ID");
         var neighbor = await session.NeighborAsync(60, 1, CancellationToken.None);
         check(neighbor?.Item.Id == 61 && neighbor.Ordinal == 60, "client neighbor keeps global ordinal");
         expired = true; var preserved = false;

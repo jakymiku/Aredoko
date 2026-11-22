@@ -106,7 +106,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         favorite.Changed+=(id,value,kept)=>FavoriteChanged?.Invoke(id,value,kept);
         favorite.ReturnRequested+=()=>CloseRequested?.Invoke(this,EventArgs.Empty);
         favorite.StateChanged+=()=>{if(favorite.IsSaving)ShowChrome();UpdateControls();};
-        positionTimer = DispatcherQueue.CreateTimer(); positionTimer.Interval = TimeSpan.FromMilliseconds(200);
+        positionTimer = DispatcherQueue.CreateTimer(); positionTimer.Interval = TimeSpan.FromMilliseconds(50);
         positionTimer.Tick += (_, _) => SyncPosition();
         previewTimer=DispatcherQueue.CreateTimer();previewTimer.Interval=TimeSpan.FromMilliseconds(320);previewTimer.IsRepeating=false;
         previewTimer.Tick+=async(_,_)=>await LoadSeekPreviewAsync();
@@ -559,7 +559,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
             {
                 if (Math.Abs((sessionPos - lastTickPosition).TotalMilliseconds) < 5)
                 {
-                    if (++stalledAtEndTicks >= 2) { mediaPlayer.Pause(); HandlePlaybackEnded(); return; }
+                    if (++stalledAtEndTicks >= 8) { mediaPlayer.Pause(); HandlePlaybackEnded(); return; }
                 }
                 else
                 {
@@ -572,7 +572,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
             }
         }
         lastTickPosition = sessionPos;
-        positionText.Text = VideoPlayerPolicy.FormatPosition(position, duration);
+        var formatted = VideoPlayerPolicy.FormatPosition(position, duration);
+        if (positionText.Text != formatted) positionText.Text = formatted;
         SyncSeekBar();
     }
 

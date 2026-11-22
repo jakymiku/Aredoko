@@ -1,5 +1,6 @@
 using Aredoko.Core;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using System.Net;
 using System.Text.Json.Nodes;
 
@@ -11,6 +12,42 @@ public sealed partial class MainPage
     private ResultWindow? resultWindow;
     private int resultPageSize = 60;
     private bool resultsNeedRefresh;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? resultKeepAliveTimer;
+
+    private void EnsureResultKeepAliveTimer()
+    {
+        if (disposed || resultKeepAliveTimer is not null)
+        {
+            if (!disposed && resultSession is not null && resultKeepAliveTimer is { IsRunning: false })
+                resultKeepAliveTimer.Start();
+            return;
+        }
+        resultKeepAliveTimer = DispatcherQueue.CreateTimer();
+        resultKeepAliveTimer.Interval = TimeSpan.FromMinutes(5);
+        resultKeepAliveTimer.IsRepeating = true;
+        resultKeepAliveTimer.Tick += async (_, _) =>
+        {
+            if (disposed || resultsNeedRefresh || resultSession is not { } current) return;
+            await TouchActiveSessionAsync(current);
+        };
+        if (resultSession is not null) resultKeepAliveTimer.Start();
+    }
+
+    private async Task TouchActiveSessionAsync(ResultSession activeSession)
+    {
+        try
+        {
+            await activeSession.TouchAsync(CancellationToken.None);
+        }
+        catch (ResultSessionException)
+        {
+            if (!disposed && ReferenceEquals(resultSession, activeSession))
+                resultsNeedRefresh = true;
+        }
+        catch (ObjectDisposedException) { }
+        catch (OperationCanceledException) { }
+        catch (HttpRequestException) { }
+    }
 
     private async Task RefreshResultRowsAfterEditAsync(bool favoriteOnly=false)
     {
@@ -22,18 +59,31 @@ public sealed partial class MainPage
         {
             var selected=librarySelection.Ids.ToArray();var anchor=CaptureBrowseAnchor();
             var anchorId=anchor is {} point?RowForKey(point.Key)?.Id:null;
-            var oldRows=rows.ToDictionary(row=>row.Id);var oldStart=browseStart;var oldCount=rows.Count;
+            var oldAnchorOrd=anchor is {} aPt&&TryParseOrdinalKey(aPt.Key,out var parsedOrd)?parsedOrd:browseStart;
+            var oldRows=new Dictionary<int,MediaRow>(rowById);
+            var oldStart=browseStart;var oldCount=rows.Count;
             resultWindow?.Dispose();resultWindow=null;resultSession=null;
             await CloseResultSessionAsync(previous);
             replacement=await api.Results.CreateAsync(previous.Conditions, CancellationToken.None);
             var positions=selected.Length>0?await replacement.LocateAsync(selected,CancellationToken.None):[];
             ResultPosition? anchorPosition=positions.FirstOrDefault(row=>row.Id==anchorId);
             if(anchorPosition is null&&anchorId is int known)anchorPosition=(await replacement.LocateAsync([known],CancellationToken.None)).FirstOrDefault();
-            var desired=anchorPosition is not null&&anchorId is int oldAnchor&&oldRows.ContainsKey(oldAnchor)
-                ?anchorPosition.Ordinal-rows.FindIndex(row=>row.Id==oldAnchor):oldStart;
-            var length=Math.Min(BrowseBufferCapacity,Math.Max(resultPageSize,oldCount));
-            var start=Math.Clamp(desired,0,Math.Max(0,replacement.Total-length));
-            var count=Math.Min(length,replacement.Total-start);
+            var useVirtual=replacement.Total<=MaxVirtualSlots;
+            int start,count;
+            if(useVirtual)
+            {
+                var desiredOrd=anchorPosition?.Ordinal??oldAnchorOrd;
+                start=replacement.Total==0?0:Math.Clamp((desiredOrd/VirtualBlockSize)*VirtualBlockSize,0,Math.Max(0,replacement.Total-1));
+                count=Math.Min(VirtualBlockSize,Math.Max(0,replacement.Total-start));
+            }
+            else
+            {
+                var desired=anchorPosition is not null&&anchorId is int oldAnchor&&ordinalById.TryGetValue(oldAnchor,out var prevOrd)
+                    ?anchorPosition.Ordinal-(prevOrd-oldStart):oldStart;
+                var length=Math.Min(BrowseBufferCapacity,Math.Max(resultPageSize,oldCount));
+                start=Math.Clamp(desired,0,Math.Max(0,replacement.Total-length));
+                count=Math.Min(length,replacement.Total-start);
+            }
             var window=new ResultWindow(replacement.Total,replacement.RangeAsync);
             try
             {
@@ -51,31 +101,46 @@ public sealed partial class MainPage
                     &&items.All(row=>!oldRows.TryGetValue(row.Id,out var old)||SameFavoriteCard(old,row));
                 if(keepCards)result.Items=items.Select(row=>oldRows.GetValueOrDefault(row.Id,row)).ToList();
                 resultSession=replacement;resultWindow=window;resultsNeedRefresh=false;
+                EnsureResultKeepAliveTimer();
                 librarySelection.Bind(replacement.Id,replacement.Total,positions);
                 page=start/resultPageSize;ResetBrowse(start,result);rows=result.Items;SyncRowsState();
                 Count.Text=$"{result.Total:N0} 件";
-                UpdateBrowseFooter(FormatLoadedPageRange(start,rows.Count,result.Total),start>0,start+rows.Count<result.Total);
-                Empty.Visibility=rows.Count==0?Visibility.Visible:Visibility.Collapsed;
+                var slotTotal=virtualTotal<=MaxVirtualSlots?virtualTotal:rows.Count;
+                UpdateBrowseFooter(FormatLoadedPageRange(browseStart,slotTotal,virtualTotal),browseStart>0,browseStart+slotTotal<virtualTotal);
+                Empty.Visibility=virtualTotal==0?Visibility.Visible:Visibility.Collapsed;
                 if(!keepCards)RenderRows();
                 else
                 {
                     var before=populating;populating=true;
                     try
                     {
-                        var wanted=rows.Select(row=>RowKey(row.Id)).ToArray();var set=wanted.ToHashSet();
-                        for(var i=resultKeys.Count-1;i>=0;i--)if(!set.Contains(resultKeys[i]))resultKeys.RemoveAt(i);
-                        for(var i=0;i<wanted.Length;i++)
+                        if(resultKeys.Count!=slotTotal)
                         {
-                            if(i<resultKeys.Count&&resultKeys[i]==wanted[i])continue;
-                            var existing=resultKeys.IndexOf(wanted[i]);
-                            if(existing>=0)resultKeys.Move(existing,i);else resultKeys.Insert(i,wanted[i]);
+                            resultKeys.Clear();
+                            for(var i=0;i<slotTotal;i++)resultKeys.Add(OrdinalKey(browseStart+i));
                         }
                     }
                     finally{populating=before;}
+                    foreach(var container in realizedItems.ToArray())
+                    {
+                        if(container.ContentTemplateRoot is Border{Tag:MediaCardSlot{CurrentOrdinal:>=0} slot})
+                        {
+                            if(rowByOrdinal.TryGetValue(slot.CurrentOrdinal,out var freshRow))
+                                HydratePendingOrdinalContainer(container,freshRow,slot.CurrentOrdinal);
+                            else
+                            {
+                                pendingOrdinalContainers[slot.CurrentOrdinal]=container;
+                                _ = EnsureVirtualBlockAsync(slot.CurrentOrdinal/VirtualBlockSize,replacement,virtualGeneration,warmNext:false);
+                            }
+                        }
+                    }
                 }
                 UpdateBrowseTagsFlyout();
                 RestoreSelection();if(active is null)ApplyLibrarySelection();
-                if(anchor is {} retained&&rows.Any(row=>RowKey(row.Id)==retained.Key))await RestoreBrowseAnchorAsync(anchor);
+                var targetAnchor=anchor is not null&&anchorPosition is not null?(OrdinalKey(anchorPosition.Ordinal),anchor.Value.Y)
+                    :anchor is not null&&TryParseOrdinalKey(anchor.Value.Key,out var retainedOrd)&&retainedOrd>=browseStart&&retainedOrd<browseStart+slotTotal?anchor
+                    :null;
+                if(targetAnchor is not null)await RestoreBrowseAnchorAsync(targetAnchor);
             }
             catch{window.Dispose();throw;}
         }
@@ -160,12 +225,13 @@ public sealed partial class MainPage
                 }
                 resultSession = session;
                 resultsNeedRefresh=false;
+                EnsureResultKeepAliveTimer();
                 resultWindow = new ResultWindow(session.Total, session.RangeAsync);
             }
             var window = resultWindow ?? throw new InvalidOperationException("Result window is unavailable");
             var result = await window.ReadAsync(checked(requestedPage * pageSize), pageSize, cancellation);
             cancellation.ThrowIfCancellationRequested();
-            _ = WarmResultWindowAsync(window, cancellation);
+            if(session.Total>MaxVirtualSlots)_ = WarmResultWindowAsync(window, cancellation);
             return result;
         }
         catch(OperationCanceledException) when(reuse&&cancellation.IsCancellationRequested&&
@@ -209,31 +275,41 @@ public sealed partial class MainPage
             RestoreSelection(); await FocusRowAsync(itemId); UpdateLibrarySelectionTools(); return;
         }
         if (Dirty && !await ConfirmDiscardAsync()) return;
-        var targetPage = ordinal / resultPageSize;
-        if (ordinal < browseStart || ordinal >= browseStart + rows.Count)
+        MediaRow? selected;
+        if (browseStart == 0 && resultKeys.Count == virtualTotal)
         {
-            var start = Math.Clamp(targetPage * resultPageSize, 0, Math.Max(0, session.Total - 1));
-            var count = Math.Min(resultPageSize, session.Total - start);
-            if (resultWindow is not { } window || count <= 0) return;
-            var result = await window.ReadAsync(start, count, CancellationToken.None);
-            if (disposed || !ReferenceEquals(resultSession, session)) return;
-            ResetBrowse(start, result);
-            rows = browseBuffer!.Items.ToList();
-            SyncRowsState();
-            page = start / resultPageSize;
-            RenderRows();
-            UpdateBrowseFooter(FormatLoadedPageRange(start, rows.Count, browseBuffer.Total), start > 0, browseBuffer.End < browseBuffer.Total);
+            if (!rowByOrdinal.TryGetValue(ordinal, out selected) || selected.Id != itemId)
+            {
+                await EnsureVirtualBlockAsync(ordinal / VirtualBlockSize, session, virtualGeneration, warmNext: false);
+                if (disposed || !ReferenceEquals(resultSession, session)) return;
+                rowByOrdinal.TryGetValue(ordinal, out selected);
+            }
         }
-        var selected = rows.FirstOrDefault(row => row.Id == itemId);
+        else
+        {
+            var targetPage = ordinal / resultPageSize;
+            if (ordinal < browseStart || ordinal >= browseStart + rows.Count)
+            {
+                var start = Math.Clamp(targetPage * resultPageSize, 0, Math.Max(0, session.Total - 1));
+                var count = Math.Min(resultPageSize, session.Total - start);
+                if (resultWindow is not { } window || count <= 0) return;
+                var result = await window.ReadAsync(start, count, CancellationToken.None);
+                if (disposed || !ReferenceEquals(resultSession, session)) return;
+                ResetBrowse(start, result);
+                rows = browseBuffer!.Items.ToList();
+                SyncRowsState();
+                page = start / resultPageSize;
+                RenderRows();
+                UpdateBrowseFooter(FormatLoadedPageRange(start, rows.Count, browseBuffer.Total), start > 0, browseBuffer.End < browseBuffer.Total);
+            }
+            selected = rowById.TryGetValue(itemId, out var found) ? found : rows.FirstOrDefault(row => row.Id == itemId);
+        }
         if (selected is null) return;
-        if (SelectionPosition(selected.Id) is { } pos)
-        {
-            BindLibrarySelection();
-            librarySelection.Single(pos);
-        }
+        BindLibrarySelection();
+        librarySelection.Single(new ResultPosition(selected.Id, ordinal));
         ApplySelectedRow(selected); RestoreSelection();
         Details.IsPaneOpen = detailsWereOpen;
-        await FocusRowAsync(itemId);
+        await FocusRowAsync(selected.Id);
         UpdateLibrarySelectionTools();
     }
 

@@ -13,7 +13,7 @@ public sealed partial class MainPage
     private bool preparingSelection;
     private static bool SelectionKey(VirtualKey key)=>(Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key)&Windows.UI.Core.CoreVirtualKeyStates.Down)!=0;
     private ResultPosition? SelectionPosition(int id)
-    {var index=rows.FindIndex(row=>row.Id==id);return index<0?null:new(id,browseStart+index);}
+        => ordinalById.TryGetValue(id, out var ord) ? new ResultPosition(id, ord) : null;
     private void BindLibrarySelection()
     {
         if(librarySelection.SessionId==resultSession?.Id)return;
@@ -22,7 +22,7 @@ public sealed partial class MainPage
     private string FormatSelectionSummaryDetails(bool summarizeShelves=true)
     {
         if(librarySelection.Count==0)return "";
-        var selectedRows=rows.Where(row=>librarySelection.Contains(row.Id)).ToArray();
+        var selectedRows=librarySelection.Ids.Select(id=>rowById.GetValueOrDefault(id)).Where(row=>row is not null).Select(row=>row!).ToArray();
         if(selectedRows.Length==0)return $"表示外に {librarySelection.Count:N0} 件選択中";
         var titles=string.Join("、",selectedRows.Take(3).Select(row=>row.Title));
         var extra=librarySelection.Count-Math.Min(3,selectedRows.Length);
@@ -49,7 +49,7 @@ public sealed partial class MainPage
     }
     private void UpdateLibrarySelectionTools()
     {
-        var outside=librarySelection.Ids.Count(id=>rows.All(row=>row.Id!=id));
+        var outside=librarySelection.Ids.Count(id=>!rowById.ContainsKey(id));
         SelectionCountText.Text=preparingSelection?"選択中…":$"{librarySelection.Count:N0} 件選択"+(outside>0?$"（表示外 {outside:N0} 件）":"");
         SelectionTools.Visibility=preparingSelection||librarySelection.Count>1||outside>0?Visibility.Visible:Visibility.Collapsed;
         var canActDirect=!preparingSelection&&librarySelection.Count>0;
@@ -66,11 +66,12 @@ public sealed partial class MainPage
         SelectionBulkActions.IsEnabled=FooterBulkActions.IsEnabled=FooterClearSelection.IsEnabled=!saving&&!dialogOpen&&!preparingSelection;
         if(SelectVisibleItemsMenuItem is not null)
         {
-            var overLimit=rows.Count>LibrarySelection.Maximum;
+            var loadedCount=rowByOrdinal.Count;
+            var overLimit=loadedCount>LibrarySelection.Maximum;
             SelectVisibleItemsMenuItem.Text=overLimit
                 ? $"表示中をすべて選択（上限 {LibrarySelection.Maximum} 件）"
                 : "表示中をすべて選択";
-            SelectVisibleItemsMenuItem.IsEnabled=!overLimit&&!saving&&!dialogOpen&&!preparingSelection&&rows.Count>0&&resultSession is not null;
+            SelectVisibleItemsMenuItem.IsEnabled=!overLimit&&!saving&&!dialogOpen&&!preparingSelection&&loadedCount>0&&resultSession is not null;
             if(SelectFirstMaxItemsMenuItem is not null)
             {
                 SelectFirstMaxItemsMenuItem.Text=$"先頭 {LibrarySelection.Maximum} 件を選択";
@@ -99,7 +100,7 @@ public sealed partial class MainPage
         }
         DetailsButton.IsEnabled=!saving&&!preparingSelection&&(librarySelection.Count>0||active is not null);
         ClearSelectionButton.IsEnabled=!saving&&!preparingSelection&&!dialogOpen;
-        foreach(var container in containerCleanup.Keys.ToArray())
+        foreach(var container in realizedItems.ToArray())
         {
             UpdateSelectionFrame(container);
         }
@@ -107,7 +108,7 @@ public sealed partial class MainPage
     private void ApplyLibrarySelection()
     {
         if(!saving)SetSelectionSaveStatus("");
-        var row=librarySelection.Count==1?rows.FirstOrDefault(item=>librarySelection.Contains(item.Id)):null;
+        var row=librarySelection.Count==1&&rowById.TryGetValue(librarySelection.Ids.First(),out var found)?found:null;
         if(row is not null){ShowItemDetailsPane();ApplySelectedRow(row);}
         else
         {
@@ -119,7 +120,7 @@ public sealed partial class MainPage
     }
     private async Task ChangeLibrarySelectionAsync()
     {
-        foreach(var container in containerCleanup.Keys.ToArray())UpdateSelectionFrame(container);
+        foreach(var container in realizedItems.ToArray())UpdateSelectionFrame(container);
         if(populating||!ready||disposed)return;
         if(saving||preparingSelection||dialogOpen||!await transitions.WaitAsync(0)){RestoreSelection();return;}
         var detailsWereOpen=Details.IsPaneOpen;
@@ -139,7 +140,7 @@ public sealed partial class MainPage
             }
             BindLibrarySelection();
             if(selected.Length==1&&!SelectionKey(VirtualKey.Control)&&!SelectionKey(VirtualKey.Shift))librarySelection.Single(SelectionPosition(selected[0])!);
-            else librarySelection.Visible(rows.Select((row,index)=>new ResultPosition(row.Id,browseStart+index)).ToArray(),selected,!SelectionKey(VirtualKey.Shift)&&selected.Length>0?selected[^1]:null);
+            else librarySelection.Visible(rowByOrdinal.Select(kv=>new ResultPosition(kv.Value.Id,kv.Key)).ToArray(),selected,!SelectionKey(VirtualKey.Shift)&&selected.Length>0?selected[^1]:null);
             ApplyLibrarySelection();
             if(detailsWereOpen&&(active is not null||librarySelection.Count>0))Details.IsPaneOpen=true;
         }
@@ -251,8 +252,9 @@ public sealed partial class MainPage
     private async Task SelectLoadedRowsAsync(bool capToMaximum)
     {
         CloseBrowseMenus();
-        var overLimit=rows.Count>LibrarySelection.Maximum;
-        if(!ready||disposed||saving||dialogOpen||preparingSelection||rows.Count==0||resultSession is null
+        var loadedCount=rowByOrdinal.Count;
+        var overLimit=loadedCount>LibrarySelection.Maximum;
+        if(!ready||disposed||saving||dialogOpen||preparingSelection||loadedCount==0||resultSession is null
             ||(capToMaximum?!overLimit:overLimit)||!await transitions.WaitAsync(0))return;
         var detailsWereOpen=Details.IsPaneOpen;
         try
@@ -263,7 +265,7 @@ public sealed partial class MainPage
                 return;
             }
             BindLibrarySelection();
-            var visiblePositions=rows.Select((row,index)=>new ResultPosition(row.Id,browseStart+index)).ToArray();
+            var visiblePositions=rowByOrdinal.OrderBy(kv=>kv.Key).Select(kv=>new ResultPosition(kv.Value.Id,kv.Key)).ToArray();
             var selectedIds=(capToMaximum?visiblePositions.Take(LibrarySelection.Maximum):visiblePositions).Select(position=>position.Id).ToArray();
             librarySelection.Clear();
             librarySelection.Visible(visiblePositions,selectedIds,selectedIds[^1]);
@@ -287,7 +289,7 @@ public sealed partial class MainPage
         saving=true;searchTimer.Stop();
         var ids=librarySelection.Ids.ToArray();
         var detailsWereOpen=Details.IsPaneOpen;
-        var loadedRows=rows.ToDictionary(r=>r.Id);
+        var loadedRows=new Dictionary<int,MediaRow>(rowById);
         var succeeded=0;var skipped=0;var failed=0;
         string? availabilityError=null;
         var summaryText="";
@@ -434,7 +436,11 @@ public sealed partial class MainPage
             else await session.EditSelectionAsync(ids,operation,shelves,CancellationToken.None);
             committed=true;
             if(!kept)SetSelectionSaveStatus("保存済み・一覧を更新しています…");
-            if(favorite)foreach(var row in rows.Where(row=>ids.Contains(row.Id))){row.Favorite=operation==SelectionOperation.FavoriteAdd;RefreshFavoriteCard(row);}
+            if(favorite)
+            {
+                foreach(var id in ids)if(rowById.TryGetValue(id,out var hit)){hit.Favorite=operation==SelectionOperation.FavoriteAdd;RefreshFavoriteCard(hit);}
+                foreach(var row in rows.Where(row=>ids.Contains(row.Id)))row.Favorite=operation==SelectionOperation.FavoriteAdd;
+            }
             if(favorite&&active is {} selected&&ids.Contains(selected.Id))
             {
                 // A one-item selection may still have an unsaved tag/shelf draft.

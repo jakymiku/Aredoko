@@ -196,6 +196,27 @@ internal sealed class ThumbnailService(LibraryApi api)
         }
     }
 
+    private static async Task<InMemoryRandomAccessStream> CreateMemoryStreamAsync(byte[] png, CancellationToken cancellation)
+    {
+        var stream = new InMemoryRandomAccessStream();
+        try
+        {
+            using (var writer = new DataWriter(stream))
+            {
+                writer.WriteBytes(png);
+                await writer.StoreAsync().AsTask(cancellation).ConfigureAwait(false);
+                writer.DetachStream();
+            }
+            stream.Seek(0);
+            return stream;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+    }
+
     private async Task<byte[]?> FetchBytesAsync(int itemId, int edge, CancellationToken genToken)
     {
         await workers.WaitAsync(genToken).ConfigureAwait(false);
@@ -291,12 +312,7 @@ internal sealed class ThumbnailService(LibraryApi api)
                 PutPng(key.Generation, row.Id, edge, png);
             cancellation.ThrowIfCancellationRequested();
             if (TryGetCached(row, edge) is { } racedHit) return racedHit;
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream))
-            {
-                writer.WriteBytes(png); await writer.StoreAsync(); writer.DetachStream();
-            }
-            stream.Seek(0);
+            using var stream = await CreateMemoryStreamAsync(png, cancellation);
             var image = new BitmapImage { DecodePixelWidth = edge, DecodePixelType = DecodePixelType.Logical };
             await image.SetSourceAsync(stream);
             cancellation.ThrowIfCancellationRequested();

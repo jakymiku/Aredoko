@@ -105,6 +105,13 @@ public sealed class ResultSession(HttpClient client, string id, JsonObject condi
             throw new InvalidDataException("Result identity or conditions changed");
     }
 
+    public async Task TouchAsync(CancellationToken cancellation)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
+        var root = await ResultSessionClient.SendAsync(client, "status", new JsonObject { ["session_id"] = id }, cancellation).ConfigureAwait(false);
+        Validate(root);
+    }
+
     public async Task<SearchResponse> RangeAsync(int offset, int limit, CancellationToken cancellation)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);

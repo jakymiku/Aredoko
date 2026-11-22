@@ -23,10 +23,15 @@ public sealed partial class MainPage
         var anchor=screen=="library"?CaptureBrowseAnchor():null;
         var selected=active?.Id??0;
         var targetPage=page;
-        if(anchor is {} position && int.TryParse(position.Key,out var anchorId))
+        if(anchor is {} position)
         {
-            var index=rows.FindIndex(row=>row.Id==anchorId);
-            if(index>=0)targetPage=(browseStart+index)/resultPageSize;
+            if(TryParseOrdinalKey(position.Key,out var anchorOrd))
+                targetPage=anchorOrd/resultPageSize;
+            else if(int.TryParse(position.Key,out var anchorId))
+            {
+                var index=rows.FindIndex(row=>row.Id==anchorId);
+                if(index>=0)targetPage=(browseStart+index)/resultPageSize;
+            }
         }
         var search=new SearchBookmark(lastQuery,lastKind,lastMode,lastRoots?.ToArray(),lastLiteralOnly,lastBoundary,lastResultGroup,view,targetPage,selected,selectedShelfIds?.ToArray(),selectedTagScope,similarityOriginPage,similarityOriginMs);
         var identity=screen=="settings"
@@ -102,7 +107,7 @@ public sealed partial class MainPage
                     finally{populating=false;}
                     await LoadAsync();
                     if(!startupSearchSucceeded)return;
-                    if(bookmark.Selection>0&&rows.FirstOrDefault(row=>row.Id==bookmark.Selection) is {} selected)
+                    if(bookmark.Selection>0&&rowById.TryGetValue(bookmark.Selection,out var selected))
                     {ApplySelectedRow(selected);RestoreSelection();}
                     Items.UpdateLayout();await RestoreBrowseAnchorAsync(target.Anchor);Details.IsPaneOpen=target.DetailsOpen&&active is not null;
                     moved=true;
