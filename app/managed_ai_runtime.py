@@ -26,7 +26,7 @@ GENERATED={'.gitignore','pyvenv.cfg','aredoko-ai-environment-draft.json',
            'Scripts/python.exe','Scripts/pythonw.exe','Scripts/activate','Scripts/activate.bat',
            'Scripts/activate.fish','Scripts/Activate.ps1','Scripts/deactivate.bat'}
 RECIPE_SHA256 = '2d99a5178762590aabc384ee27aecb66e6614241219b3321365b31631f707858'
-CPU_RECIPE_SHA256 = 'bfe983ed5572b59bbc845c8b200efecdb6fa748726c1de9c81e1ed965a2aa59f'
+CPU_RECIPE_SHA256 = 'ed3fd63b0a92d7dbe7c1d5cbe48df7cb06b7c3ff4cee6c1f0408c0bcb1bc6cad'
 CPYTHON_SHA512 = '0e667928bb4f19573c6cd88f65133b2e07b243a5c716f335b56aa66bb9ec6f82328256d22c3a29e23a0276ac5c6a6d786211feab524890ad1e56629196c6b29c'
 RECIPES = {
     'cuda': {

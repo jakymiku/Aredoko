@@ -1,6 +1,6 @@
 {
   "format": "aredoko-wheel-sizes-v1",
-  "recipe_sha256": "bfe983ed5572b59bbc845c8b200efecdb6fa748726c1de9c81e1ed965a2aa59f",
+  "recipe_sha256": "ed3fd63b0a92d7dbe7c1d5cbe48df7cb06b7c3ff4cee6c1f0408c0bcb1bc6cad",
   "sizes": {
     "annotated_doc-0.0.5-py3-none-any.whl": 5302,
     "anyio-4.16.0-py3-none-any.whl": 134521,

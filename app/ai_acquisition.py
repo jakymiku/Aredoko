@@ -101,6 +101,13 @@ class _Redirect(urllib.request.HTTPRedirectHandler):
 
 def _build_opener(catalog):
     context=ssl.create_default_context()
+    if os.name=='nt':
+        try:
+            for cert,encoding,trust in ssl.enum_certificates('AuthRoot'):
+                if encoding=='x509_asn' and (trust is True or ssl.Purpose.SERVER_AUTH.oid in trust):
+                    try:context.load_verify_locations(cadata=cert)
+                    except ssl.SSLError:pass
+        except (OSError,AttributeError):pass
     return urllib.request.build_opener(
         urllib.request.ProxyHandler({}),
         urllib.request.HTTPSHandler(context=context),
