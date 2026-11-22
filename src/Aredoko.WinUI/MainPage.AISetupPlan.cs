@@ -98,11 +98,16 @@ public sealed partial class MainPage
                 };
                 Grid.SetRow(featureBox,index/2);Grid.SetColumn(featureBox,index%2);choices.Children.Add(featureBox);
             }
-            var step1Header=new Grid{ColumnSpacing=8};
+            var planArt=VisualAssets.Sticker(64);
+            VisualAssets.State(planArt,"greeting");
+            var step1Header=new Grid{ColumnSpacing=10};
+            step1Header.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
             step1Header.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
             step1Header.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-            step1Header.Children.Add(new TextBlock{Text="① 何で探したいですか？（名前・タグ検索はAIなしでOK）",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center});
-            Grid.SetColumn(review,1);step1Header.Children.Add(review);
+            var step1Heading=new TextBlock{Text="① 何で探したいですか？（名前・タグ検索はAIなしでOK）",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center};
+            Grid.SetColumn(step1Heading,1);
+            Grid.SetColumn(review,2);
+            step1Header.Children.Add(planArt);step1Header.Children.Add(step1Heading);step1Header.Children.Add(review);
             var step1Card=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=new StackPanel{Spacing=10,Children={step1Header,choices}}};
             panel.Children.Add(step1Card);
 

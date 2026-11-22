@@ -17,6 +17,7 @@ internal sealed class AudioPreparationPanel : IDisposable
     private readonly Button start=new(){Content="AI検索データを作成",IsEnabled=false};
     private readonly Button cancel=new(){Content="中止",IsEnabled=false};
     private readonly ProgressBar progress=new(){Visibility=Visibility.Collapsed,IsIndeterminate=true};
+    private readonly Image stateArt=VisualAssets.Sticker(64);
     private readonly DispatcherTimer timer=new(){Interval=TimeSpan.FromSeconds(1)};
     private readonly CancellationTokenSource lifetime=new();
     private AudioContentStatus? latest;
@@ -33,7 +34,14 @@ internal sealed class AudioPreparationPanel : IDisposable
         var scopeDesc=new TextBlock{Text=VideoAudio?"現在の範囲の動画（先頭音声）が対象 · 閉じても続行":"現在の範囲の音声が対象 · 閉じても続行",TextWrapping=TextWrapping.Wrap};
         ToolTipService.SetToolTip(scopeDesc,VideoAudio?"作成後は「動画の音（AI）」で探せます（文字起こしは保存しません）。":"作成後は「音声（AI）」で探せます（文字起こしは保存しません）。");
         panel.Children.Add(scopeDesc);
-        panel.Children.Add(currentItem);panel.Children.Add(status);panel.Children.Add(progress);
+        var stateRow=new Grid{ColumnSpacing=12};
+        stateRow.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+        stateRow.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+        var statusStack=new StackPanel{Spacing=6,VerticalAlignment=VerticalAlignment.Center};
+        statusStack.Children.Add(currentItem);statusStack.Children.Add(status);statusStack.Children.Add(progress);
+        Grid.SetColumn(statusStack,1);
+        stateRow.Children.Add(stateArt);stateRow.Children.Add(statusStack);
+        panel.Children.Add(stateRow);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
         actions.Children.Add(start);actions.Children.Add(cancel);panel.Children.Add(actions);
         Content=new Expander{Header=VideoAudio?"動画の音":"音声",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
@@ -80,6 +88,7 @@ internal sealed class AudioPreparationPanel : IDisposable
         progress.Maximum=current?.TotalMs is int total?total:Math.Max(1,value.Target);
         progress.Value=current is {TotalMs:not null} tracked?tracked.PreparedMs:value.Processed;
         AutomationProperties.SetName(progress,current is null?Subject+"の索引作成の進捗":"現在の"+Subject+"の解析進捗。解析済み時刻で、保存前です。");
+        VisualAssets.State(stateArt,!own?null:value.Busy?"indexing":value.State=="failed"?"error":(value.State=="complete"||(value.Target>0&&value.RemainingCandidates==0))?"completed":null);
     }
     private async Task RefreshAsync()
     {

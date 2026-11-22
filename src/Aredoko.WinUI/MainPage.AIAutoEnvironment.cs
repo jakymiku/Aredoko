@@ -31,7 +31,15 @@ public sealed partial class MainPage
             panel.Children.Add(new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=overviewStack});
             var licensesCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=licenses,Visibility=Visibility.Collapsed};
             panel.Children.Add(licensesCard);
-            panel.Children.Add(consent);panel.Children.Add(speedSettings);panel.Children.Add(progress);panel.Children.Add(status);
+            var autoArt=VisualAssets.Sticker(64);
+            var progressRow=new Grid{ColumnSpacing=12};
+            progressRow.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+            progressRow.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            var progressStack=new StackPanel{Spacing=6,VerticalAlignment=VerticalAlignment.Center};
+            progressStack.Children.Add(progress);progressStack.Children.Add(status);
+            Grid.SetColumn(progressStack,1);
+            progressRow.Children.Add(autoArt);progressRow.Children.Add(progressStack);
+            panel.Children.Add(consent);panel.Children.Add(speedSettings);panel.Children.Add(progressRow);
             Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Left}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
             var scroll=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
@@ -55,6 +63,7 @@ public sealed partial class MainPage
                 status.Text=current?["message"]?.GetValue<string>()??"";
                 if(active&&total>0)status.Text+=$"\n{done/1_000_000d:N1} / {total/1_000_000d:N1} MB";
                 if(operationError is not null)status.Text+="\n"+operationError;
+                VisualAssets.State(autoArt,active?"indexing":(current?["saved"]?.GetValue<bool>()==true)?"completed":(current?["state"]?.GetValue<string>()=="failed"||operationError is not null)?"error":null);
             }
             async Task RefreshAsync()
             {

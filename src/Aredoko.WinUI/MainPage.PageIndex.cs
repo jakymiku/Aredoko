@@ -94,13 +94,19 @@ public sealed partial class MainPage
             var coverageText=new TextBlock{TextWrapping=TextWrapping.Wrap};var rangesText=new TextBlock{TextWrapping=TextWrapping.Wrap};
             var ranges=new Expander{Header="準備済みの範囲",HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch,
                 Content=new ScrollViewer{Content=FormScrollContent.Wrap(rangesText),MaxHeight=120,HorizontalScrollMode=ScrollMode.Disabled,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}};
+            var pageArt=VisualAssets.Sticker(64);
             var source=new TextBlock{Text=row.Title,TextWrapping=TextWrapping.Wrap};
             var fields=new Grid{ColumnSpacing=12};
             fields.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});fields.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
             Grid.SetColumn(count,1);fields.Children.Add(first);fields.Children.Add(count);
             AutomationProperties.SetName(first,"開始ページ");AutomationProperties.SetName(count,"ページ数（一度に最大16）");
             var panel=new StackPanel{Spacing=12};foreach(var e in new UIElement[]{mode,ranges,fields,chunkFields})panel.Children.Add(e);
-            var heading=new StackPanel{Spacing=8};heading.Children.Add(source);heading.Children.Add(coverageText);
+            var headingText=new StackPanel{Spacing=6,VerticalAlignment=VerticalAlignment.Center};headingText.Children.Add(source);headingText.Children.Add(coverageText);
+            var heading=new Grid{ColumnSpacing=12};
+            heading.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+            heading.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
+            Grid.SetColumn(headingText,1);
+            heading.Children.Add(pageArt);heading.Children.Add(headingText);
             var actions=new StackPanel{Spacing=8};foreach(var e in new UIElement[]{progress,status,largeWarningCard,next,start,startAll,cancel})actions.Children.Add(e);
             foreach(var(control,id) in new (DependencyObject,string)[]{(mode,"PageAIMode"),(limit,"PageAIChunkLimit"),(prepare,"PageAIChunkPreview"),(planText,"PageAIChunkPlan"),
                 (first,"PageAIStart"),(count,"PageAICount"),(next,"PageAINextRange"),(start,"PageAIAdd"),(startAll,"PageAIAddAll"),(largeWarningCard,"PageAILargeWarning"),(largeConfirm,"PageAILargeConfirm"),(largeCancel,"PageAILargeCancel"),(cancel,"PageAICancel"),(status,"PageAIStatus"),(coverageText,"PageAICoverage"),(ranges,"PageAIRanges"),(rangesText,"PageAIRangesText")})AutomationProperties.SetAutomationId(control,id);
@@ -129,6 +135,7 @@ public sealed partial class MainPage
             void ApplyCoverage(PageImageCoverage value,bool selectNext)
             {
                 coverage=value;coverageText.Text=value.Summary;rangesText.Text=value.RangeSummary;ToolTipService.SetToolTip(coverageText,"モデル: "+value.Model);
+                VisualAssets.State(pageArt,value.RemainingPages==0&&value.IndexedPages>0?"completed":null);
                 if(selectNext)SelectNext();SetActions();
             }
             void InvalidatePlan()
@@ -146,6 +153,7 @@ public sealed partial class MainPage
                 if(busy||coverage?.CanPrepare!=true||coverage.RemainingPages==0)return;
                 largeWarningCard.Visibility=Visibility.Collapsed;
                 busy=true;SetActions();progress.Visibility=Visibility.Visible;progress.Value=0;
+                VisualAssets.State(pageArt,"indexing");
                 try
                 {
                     if(closeRequested)throw new OperationCanceledException("中断しました。");
@@ -168,8 +176,9 @@ public sealed partial class MainPage
                         _=>allStatus.Summary
                     };
                     job=null;ApplyCoverage(await api.PageEvidences.ImageCoverageAsync(row.Id,snapshot.SourceRevision,scope,initial.Profile),false);
+                    if(allStatus.State=="failed")VisualAssets.State(pageArt,"error");
                 }
-                catch(Exception ex){status.Text=ex.Message;coverage=null;coverageText.Text="準備状況を確認できません。閉じて開き直してください。";rangesText.Text="確認できません。";await CancelOwned();}
+                catch(Exception ex){status.Text=ex.Message;coverage=null;coverageText.Text="準備状況を確認できません。閉じて開き直してください。";rangesText.Text="確認できません。";VisualAssets.State(pageArt,"error");await CancelOwned();}
                 finally{busy=false;SetActions();cancel.IsEnabled=false;if(closeRequested)dialog.Hide();}
             }
             mode.SelectionChanged+=(_,_)=>{fields.Visibility=Chunked()?Visibility.Collapsed:Visibility.Visible;chunkFields.Visibility=Chunked()?Visibility.Visible:Visibility.Collapsed;InvalidatePlan();};
@@ -212,6 +221,7 @@ public sealed partial class MainPage
                     ||first.Value<1||count.Value<1||count.Value>16||first.Value+count.Value-1>snapshot.PageCount))
                 {status.Text="有効なページ範囲を指定してください。";return;}
                 busy=true;SetActions();progress.Visibility=Visibility.Visible;progress.Value=0;
+                VisualAssets.State(pageArt,"indexing");
                 try
                 {
                     if(Chunked())
@@ -228,6 +238,7 @@ public sealed partial class MainPage
                             await Task.Delay(500);chunk=await api.PageEvidences.ChunkStatusAsync(chunk);
                         }
                         plan=null;job=null;ApplyCoverage(await api.PageEvidences.ImageCoverageAsync(row.Id,snapshot.SourceRevision,scope,initial.Profile),false);
+                        if(chunk.State=="failed")VisualAssets.State(pageArt,"error");
                     }
                     else
                     {
@@ -242,12 +253,12 @@ public sealed partial class MainPage
                             if(result["job_id"]?.GetValue<string>()!=job)throw new InvalidOperationException("処理状況が変わりました。設定の「AI検索の準備」で確認してください。");
                             var state=result["state"]!.GetValue<string>();progress.Value=result["processed"]!.GetValue<int>();
                             status.Text=state switch{"complete"=>$"追加しました: {result["indexed"]}ページ（再利用 {result["reused"]}）","cancelled"=>"中止しました（前回のデータは使えます）","failed"=>result["error"]!.GetValue<string>(),_=>$"処理中: {result["processed"]}/{result["total"]}ページ"};
-                            if(state is not ("running" or "cancelling")){job=null;ApplyCoverage(await api.PageEvidences.ImageCoverageAsync(row.Id,snapshot.SourceRevision,scope,initial.Profile),state=="complete");break;}
+                            if(state is not ("running" or "cancelling")){job=null;ApplyCoverage(await api.PageEvidences.ImageCoverageAsync(row.Id,snapshot.SourceRevision,scope,initial.Profile),state=="complete");if(state=="failed")VisualAssets.State(pageArt,"error");else if(state=="complete")VisualAssets.State(pageArt,"completed");break;}
                             await Task.Delay(500);result=await api.GetAsync("api/library/ai/status");
                         }
                     }
                 }
-                catch(Exception ex){status.Text=ex.Message;coverage=null;coverageText.Text="準備状況を確認できません。閉じて開き直してください。";rangesText.Text="確認できません。";await CancelOwned();}
+                catch(Exception ex){status.Text=ex.Message;coverage=null;coverageText.Text="準備状況を確認できません。閉じて開き直してください。";rangesText.Text="確認できません。";VisualAssets.State(pageArt,"error");await CancelOwned();}
                 finally{busy=false;SetActions();cancel.IsEnabled=false;if(closeRequested)dialog.Hide();}
             };
             ApplyCoverage(initial,true);

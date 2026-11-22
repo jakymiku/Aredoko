@@ -46,8 +46,15 @@ public sealed partial class MainPage
             var card1=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=new StackPanel{Spacing=10,Children={choice,infoBox,consent}}};
             panel.Children.Add(card1);
 
+            var downloadArt=VisualAssets.Sticker(64);
+            var statusHeader=new Grid{ColumnSpacing=12};
+            statusHeader.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+            statusHeader.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            var statusStack=new StackPanel{Spacing=6,VerticalAlignment=VerticalAlignment.Center,Children={progress,status}};
+            Grid.SetColumn(statusStack,1);
+            statusHeader.Children.Add(downloadArt);statusHeader.Children.Add(statusStack);
             var actionRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8,Children={select,refresh}};
-            var card2=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=new StackPanel{Spacing=8,Children={progress,status,destination,actionRow}}};
+            var card2=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=new StackPanel{Spacing=8,Children={statusHeader,destination,actionRow}}};
             panel.Children.Add(card2);
             panel.Children.Add(downloadSettings);
 
@@ -78,6 +85,7 @@ public sealed partial class MainPage
                     if(current is {State:not "idle"} job)status.Text+=$"\n取得 {job.BytesReceived/1000000d:N1} MB / "+(job.BytesTotal is {} total?$"{total/1000000d:N1} MB":"確認中")+$"（検証済み {job.BytesVerified/1000000d:N1} MB）";
                 }
                 if(operationError is not null)status.Text+="\n"+operationError;
+                VisualAssets.State(downloadArt,active?"indexing":current?.Published==true?"completed":(current?.State=="failed"||operationError is not null)?"error":null);
                 destination.Text=current?.Root??"";destination.Visibility=current?.Published==true&&current.Root is not null?Visibility.Visible:Visibility.Collapsed;
                 select.Visibility=candidate is not null?Visibility.Visible:Visibility.Collapsed;select.IsEnabled=!busy;
                 var needsExplicitActivation=candidate is not null&&candidate.ModelTarget?.Role!="tagger";

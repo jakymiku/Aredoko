@@ -223,6 +223,8 @@ public sealed partial class MainPage
                             SettingsAIIndexButton.Content="AI検索の設定・モデル切替";
                     }
                 }
+                if(SettingsAIStatusArt is not null)
+                    VisualAssets.State(SettingsAIStatusArt,state is "running" or "cancelling"?"indexing":state=="failed"?"error":(!scopeInvalid&&covTarget is int ct&&covFresh==ct&&ct>0)?"completed":"greeting");
             }
             else
             {
@@ -241,6 +243,8 @@ public sealed partial class MainPage
                     SettingsAIStep3Status.Text="待機中";
                     SettingsAINextHint.Text="［AI検索を設定］から検索モデルをダウンロードまたは指定してください。";
                 }
+                if(SettingsAIStatusArt is not null)
+                    VisualAssets.State(SettingsAIStatusArt,state=="failed"?"error":"greeting");
             }
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested){}
@@ -254,6 +258,7 @@ public sealed partial class MainPage
                 SettingsAIStep3Status.Text="—";
                 if(SettingsAIStep4Status is not null)SettingsAIStep4Status.Text="—";
                 SettingsAINextHint.Text="バックエンドに接続できないため状態を取得できませんでした。";
+                if(SettingsAIStatusArt is not null)VisualAssets.State(SettingsAIStatusArt,"error");
             }
         }
     }

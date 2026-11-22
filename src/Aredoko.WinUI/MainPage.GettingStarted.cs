@@ -268,9 +268,8 @@ public sealed partial class MainPage
         try
         {
             var panel = new StackPanel { Spacing = 14, MaxWidth = 600 };
-            var greeting = VisualAssets.Sticker(64);
-            greeting.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri("ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png")) { DecodePixelWidth = 192 };
-            greeting.Visibility = Visibility.Visible;
+            var greeting = VisualAssets.Sticker(80);
+            VisualAssets.State(greeting, "greeting");
             var welcome = new Grid { ColumnSpacing = 12 };
             welcome.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             welcome.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

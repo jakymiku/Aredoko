@@ -557,7 +557,7 @@ public sealed partial class MainPage : Page
             else Count.Text=$"{result.Total:N0} 件";
             var slotTotal=virtualTotal<=MaxVirtualSlots?virtualTotal:rows.Count;
             UpdateBrowseFooter(FormatLoadedPageRange(browseStart,slotTotal,virtualTotal),browseStart>0,browseStart+slotTotal<virtualTotal);
-            VisualAssets.State(EmptyArt,"no_results");Empty.Visibility=virtualTotal==0?Visibility.Visible:Visibility.Collapsed;
+            VisualAssets.State(EmptyArt,!HasActiveSearchConditions()&&knownRoots.Count==0&&view=="all"&&selectedShelfIds is null&&selectedTagScope is null&&selectedSearchRoots is null?"greeting":"no_results");Empty.Visibility=virtualTotal==0?Visibility.Visible:Visibility.Collapsed;
             EmptyResetConditionsButton.Visibility=virtualTotal==0&&HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
             EmptyOpenFoldersButton.Visibility=virtualTotal==0&&!HasActiveSearchConditions()&&view=="all"&&selectedShelfIds is null&&selectedTagScope is null&&selectedSearchRoots is null&&GettingStarted.Visibility!=Visibility.Visible?Visibility.Visible:Visibility.Collapsed;
             Empty.Text=method.IsPageText?(string.IsNullOrWhiteSpace(query)?"ページ内の文字を入力してください":"一致するページ本文はありません")
@@ -3225,6 +3225,7 @@ public sealed partial class MainPage : Page
             ClearFolderFilters.Visibility=FolderFilterBox.Text.Length>0||state!=0?Visibility.Visible:Visibility.Collapsed;
             if(knownRoots.Count==0)
             {
+                VisualAssets.State(FolderEmptyArt,"greeting");
                 FolderEmptyTitle.Text="まだ登録フォルダがありません";
                 FolderEmpty.Text="ここにフォルダをドロップ、または［＋ フォルダを追加］から登録できます（元のファイルは移動・変更しません）。";
                 FolderEmptyAddButton.Visibility=Visibility.Visible;
@@ -3232,6 +3233,7 @@ public sealed partial class MainPage : Page
             }
             else if(!hasNameFilter&&state==0&&!knownRoots.Any(root=>root.Enabled))
             {
+                VisualAssets.State(FolderEmptyArt,"no_results");
                 FolderEmptyTitle.Text="登録中のフォルダはありません";
                 FolderEmpty.Text="解除済みのフォルダは上の表示状態を「すべて」に切り替えると確認できます。";
                 FolderEmptyAddButton.Visibility=Visibility.Visible;
@@ -3239,6 +3241,7 @@ public sealed partial class MainPage : Page
             }
             else
             {
+                VisualAssets.State(FolderEmptyArt,"no_results");
                 FolderEmptyTitle.Text="該当するフォルダはありません";
                 FolderEmpty.Text="絞り込み条件に一致するフォルダはありません。";
                 FolderEmptyAddButton.Visibility=Visibility.Collapsed;
@@ -4001,7 +4004,7 @@ public sealed partial class MainPage : Page
                 } catch(Exception ex) {modelFeedback.Text="設定を保存できません: "+ex.Message;}
                 finally {savingProfile=false;modelChoice.IsEnabled=true;UpdateProfileWarning();}
             };
-            var indexArt=VisualAssets.Sticker();
+            var indexArt=VisualAssets.Sticker(72);
             var status=new TextBlock {TextWrapping=TextWrapping.Wrap};AutomationProperties.SetAutomationId(status,"AIStatus");
             var statusDetailText=new TextBlock {TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true,Style=(Style)Resources["MediaMetadataStyle"]};
             var statusDetailExpander=new Expander {Header="詳細情報",Content=statusDetailText,Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch};
@@ -4285,7 +4288,6 @@ public sealed partial class MainPage : Page
             var scopeCard=MakeCard("AI検索の対象範囲",scopeEditor.Content);
             var mediaCard=MakeCard("動画・音声の個別データ作成",audioPreparation.Content,videoPreparation.Content,videoAudioPreparation.Content);
             var resourceCard=MakeCard("メモリと負荷",release,releaseResult,idleChoice,pauseChoice,saveResource,resourceResult);
-            panel.Children.Add(indexArt);
             panel.Children.Add(modelCard);
             panel.Children.Add(scopeCard);
             panel.Children.Add(mediaCard);
@@ -4342,7 +4344,13 @@ public sealed partial class MainPage : Page
             indexInfo.Children.Add(resumeContinuation);
             indexInfo.Children.Add(resumeBooks);
             indexInfo.Children.Add(resumeChunks);
-            var indexCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=indexInfo};
+            var indexRow=new Grid{ColumnSpacing=12};
+            indexRow.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+            indexRow.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+            Grid.SetColumn(indexInfo,1);
+            indexRow.Children.Add(indexArt);
+            indexRow.Children.Add(indexInfo);
+            var indexCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=indexRow};
             Grid.SetRow(indexCard,2);content.Children.Add(indexCard);
             var actions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
             actions.Children.Add(start);actions.Children.Add(cancel);Grid.SetRow(actions,3);content.Children.Add(actions);

@@ -480,7 +480,7 @@
      </Expander>
      <ListView x:Name="Items" Grid.Row="2" SelectionMode="Extended" Loaded="Items_Loaded" SizeChanged="ItemListContainer_SizeChanged" PreviewKeyDown="Items_PreviewKeyDown" ItemContainerStyle="{StaticResource MediaItemCardStyle}" ItemTemplate="{StaticResource MediaContainerTemplate}" ContainerContentChanging="Items_ContainerContentChanging" SelectionChanged="Items_Changed" HorizontalContentAlignment="Stretch" AutomationProperties.Name="作品一覧" AutomationProperties.HelpText="Enterで選択した作品を開く。Ctrl/Shiftで複数選択（最大256件）、Ctrl+Homeで先頭、Ctrl+Endで末尾へ移動" AutomationProperties.AutomationId="ItemList"/>
      <StackPanel Grid.Row="2" Spacing="12" Margin="24" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Visibility, ElementName=Empty}">
-      <Image x:Name="EmptyArt" Width="128" Height="112" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_state_no_results_512.png" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
+      <Image x:Name="EmptyArt" Width="144" Height="144" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_state_no_results_512.png" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
       <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.LiveSetting="Polite" Text="まだ作品がありません" TextWrapping="Wrap" TextAlignment="Center"/>
       <StackPanel x:Name="EmptyAIRecovery" Visibility="Collapsed" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
        <Button Content="AIを準備" Click="GettingStartedAIPlan_Click" AutomationProperties.AutomationId="EmptyPrepareAI"/>
@@ -505,7 +505,7 @@
      <ScrollViewer x:Name="GettingStarted" Grid.Row="1" Visibility="Collapsed" MaxWidth="660" HorizontalAlignment="Center" VerticalAlignment="Top" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="GettingStarted">
       <StackPanel Margin="24,12,24,16" Spacing="12">
        <StackPanel Orientation="Horizontal" Spacing="12">
-        <Image Source="ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png" Width="64" Height="56" Stretch="Uniform" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
+        <Image Source="ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png" Width="80" Height="80" Stretch="Uniform" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
         <StackPanel VerticalAlignment="Center" Spacing="2">
          <TextBlock Text="どのフォルダを探しますか？" Style="{StaticResource TitleTextBlockStyle}" TextWrapping="Wrap"/>
          <TextBlock x:Name="GettingStartedSummaryText" Text="フォルダを追加するだけで、作品の名前やタグをすぐに探せます。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="GettingStartedSummaryText"/>
@@ -556,7 +556,7 @@
      <ListView x:Name="ShelfList" SizeChanged="ShelfList_SizeChanged" PointerWheelChanged="Library_PointerWheelChanged" ItemTemplate="{StaticResource MediaContainerTemplate}" ItemContainerStyle="{StaticResource MediaItemCardStyle}" Grid.Row="2" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ShelfList_ItemClick" ContainerContentChanging="ShelfList_ContainerContentChanging" HorizontalContentAlignment="Stretch" AutomationProperties.Name="棚一覧" AutomationProperties.AutomationId="ShelfList"/>
      <Border x:Name="ShelfEmptyState" Grid.Row="2" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}" Padding="32,28" Margin="24" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
       <StackPanel Spacing="12" HorizontalAlignment="Center">
-       <FontIcon Glyph="&#xE8F1;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
+       <Image Width="112" Height="112" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png" IsHitTestVisible="False" HorizontalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
        <TextBlock Text="まだ棚がありません" Style="{StaticResource SubtitleTextBlockStyle}" TextAlignment="Center"/>
        <TextBlock x:Name="ShelfHubMessage" Text="お気に入りのシリーズや作業用の素材をテーマごとにまとめられます。「棚を作成」から追加できます（元ファイルは移動しません）。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap" TextAlignment="Center" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="TxtShelfHubMessage"/>
        <Button x:Name="ShelfEmptyCreateButton" Content="＋ 最初の棚を作成" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Center" Margin="0,4,0,0" Click="CreateShelf_Click" AutomationProperties.AutomationId="BtnCreateFirstShelf"/>
@@ -640,7 +640,7 @@
       <ListView x:Name="FolderList" SelectionMode="Single" HorizontalContentAlignment="Stretch" AutomationProperties.Name="登録フォルダ一覧" AutomationProperties.AutomationId="FolderList"/>
       <Border x:Name="FolderEmptyState" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}" Padding="32,28" Margin="24" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
        <StackPanel Spacing="12" HorizontalAlignment="Center">
-        <FontIcon Glyph="&#xE8B7;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
+        <Image x:Name="FolderEmptyArt" Width="112" Height="112" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_mascot_greeting_512.png" IsHitTestVisible="False" HorizontalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
         <TextBlock x:Name="FolderEmptyTitle" Text="まだ登録フォルダがありません" Style="{StaticResource SubtitleTextBlockStyle}" TextAlignment="Center"/>
         <TextBlock x:Name="FolderEmpty" Text="ここにフォルダをドロップ、または［＋ フォルダを追加］から登録できます（元のファイルは移動・変更しません）。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap" TextAlignment="Center" AutomationProperties.AutomationId="TxtFolderEmpty"/>
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,4,0,0">
@@ -706,19 +706,23 @@
             </StackPanel>
            </Border>
           </Grid>
-          <TextBlock x:Name="SettingsAINextHint" Text="AIを使わなくても名前・タグで検索できます。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
-          <StackPanel Spacing="8">
-           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button x:Name="SettingsAIIndexButton" Content="AI検索を設定" Style="{StaticResource AccentButtonStyle}" Click="SettingsAIIndex_Click" AutomationProperties.AutomationId="BtnAIIndex"/>
-            <Button x:Name="SettingsAIMediaPrepButton" Content="🎬 動画・音声のAIデータ" Click="SettingsAIMediaPrep_Click" AutomationProperties.AutomationId="BtnAIMediaPrep"/>
-            <Button x:Name="SettingsAIDownloadTaggerButton" Content="🏷 タグ付けモデルを取得" Click="SettingsAIDownloadTagger_Click" AutomationProperties.AutomationId="BtnAIDownloadTagger"/>
+          <Grid ColumnSpacing="12">
+           <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+           <Image x:Name="SettingsAIStatusArt" Width="72" Height="72" Stretch="Uniform" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
+           <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+            <TextBlock x:Name="SettingsAINextHint" Text="AIを使わなくても名前・タグで検索できます。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+             <Button x:Name="SettingsAIIndexButton" Content="AI検索を設定" Style="{StaticResource AccentButtonStyle}" Click="SettingsAIIndex_Click" AutomationProperties.AutomationId="BtnAIIndex"/>
+             <Button x:Name="SettingsAIMediaPrepButton" Content="🎬 動画・音声のAIデータ" Click="SettingsAIMediaPrep_Click" AutomationProperties.AutomationId="BtnAIMediaPrep"/>
+             <Button x:Name="SettingsAIDownloadTaggerButton" Content="🏷 タグ付けモデルを取得" Click="SettingsAIDownloadTagger_Click" AutomationProperties.AutomationId="BtnAIDownloadTagger"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+             <TextBlock x:Name="SettingsAISetupRowLabel" Text="初回セットアップ・再構成：" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center"/>
+             <Button x:Name="SettingsAIEnvironmentButton" Content="AIの自動セットアップ" Click="SettingsAIEnvironment_Click" AutomationProperties.AutomationId="BtnAIEnvironment"/>
+             <Button x:Name="SettingsAISetupPlanButton" Content="✨ 用途からAI準備を選ぶ" Click="SettingsAISetupPlan_Click" AutomationProperties.AutomationId="BtnAISetupPlan"/>
+            </StackPanel>
            </StackPanel>
-           <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock x:Name="SettingsAISetupRowLabel" Text="初回セットアップ・再構成：" Style="{StaticResource MediaMetadataStyle}" VerticalAlignment="Center"/>
-            <Button x:Name="SettingsAIEnvironmentButton" Content="AIの自動セットアップ" Click="SettingsAIEnvironment_Click" AutomationProperties.AutomationId="BtnAIEnvironment"/>
-            <Button x:Name="SettingsAISetupPlanButton" Content="✨ 用途からAI準備を選ぶ" Click="SettingsAISetupPlan_Click" AutomationProperties.AutomationId="BtnAISetupPlan"/>
-           </StackPanel>
-          </StackPanel>
+          </Grid>
           <CheckBox x:Name="SettingsVerifyAIRuntimeCheck" IsEnabled="False" Content="起動時にAI環境の整合性を確認する" ToolTipService.ToolTip="破損による起動エラーを防ぐため起動時に確認します" Checked="SettingsInstantPreference_Changed" Unchecked="SettingsInstantPreference_Changed" AutomationProperties.Name="起動時にAI環境の確認を行う" AutomationProperties.AutomationId="ChkVerifyAIRuntime"/>
          </StackPanel>
         </Border>

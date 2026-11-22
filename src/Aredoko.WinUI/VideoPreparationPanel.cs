@@ -17,6 +17,7 @@ internal sealed class VideoPreparationPanel : IDisposable
     private readonly Button start=new(){Content="AI検索データを作成",IsEnabled=false};
     private readonly Button cancel=new(){Content="中止",IsEnabled=false};
     private readonly ProgressBar progress=new(){Visibility=Visibility.Collapsed,IsIndeterminate=true};
+    private readonly Image stateArt=VisualAssets.Sticker(64);
     private readonly DispatcherTimer timer=new(){Interval=TimeSpan.FromSeconds(1)};
     private readonly CancellationTokenSource lifetime=new();
     private VideoContentStatus? latest;
@@ -31,7 +32,14 @@ internal sealed class VideoPreparationPanel : IDisposable
         var scopeDesc=new TextBlock{Text="現在の範囲の動画が対象 · 閉じても続行",TextWrapping=TextWrapping.Wrap};
         ToolTipService.SetToolTip(scopeDesc,"作成後は「動画の場面（AI）」で探せます（動画内の音は対象外）。");
         panel.Children.Add(scopeDesc);
-        panel.Children.Add(currentItem);panel.Children.Add(status);panel.Children.Add(progress);
+        var stateRow=new Grid{ColumnSpacing=12};
+        stateRow.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+        stateRow.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+        var statusStack=new StackPanel{Spacing=6,VerticalAlignment=VerticalAlignment.Center};
+        statusStack.Children.Add(currentItem);statusStack.Children.Add(status);statusStack.Children.Add(progress);
+        Grid.SetColumn(statusStack,1);
+        stateRow.Children.Add(stateArt);stateRow.Children.Add(statusStack);
+        panel.Children.Add(stateRow);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
         actions.Children.Add(start);actions.Children.Add(cancel);panel.Children.Add(actions);
         Content=new Expander{Header="動画の場面",Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
@@ -73,6 +81,7 @@ internal sealed class VideoPreparationPanel : IDisposable
         progress.Maximum=current?.TotalMs is int total?total:Math.Max(1,value.Target);
         progress.Value=current is {TotalMs:not null} tracked?tracked.PreparedMs:value.Processed;
         AutomationProperties.SetName(progress,current is null?"動画の索引作成の進捗":"現在の動画の解析進捗。保存完了前のデータです。");
+        VisualAssets.State(stateArt,value.Busy?"indexing":value.State=="failed"?"error":(value.State=="complete"||(value.Target>0&&value.RemainingCandidates==0))?"completed":null);
     }
     private async Task RefreshAsync()
     {
