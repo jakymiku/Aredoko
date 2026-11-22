@@ -2801,6 +2801,13 @@ public sealed partial class MainPage : Page
         HeaderCommands.Margin=headerWrap?new Thickness(0,8,0,0):new Thickness(0);
     }
 
+    private double ComputeFolderTileWidth()
+    {
+        var avail = FolderList is { ActualWidth: > 0 } ? FolderList.ActualWidth
+            : FolderHubView is { ActualWidth: > 0 } ? Math.Min(880, FolderHubView.ActualWidth) : 880;
+        return Math.Clamp(Math.Floor((avail - 28) / 2.0), 340, 424);
+    }
+
     private void FolderHub_SizeChanged(object sender,SizeChangedEventArgs args)=>UpdateFolderLayout();
     private void UpdateFolderLayout()
     {
@@ -2810,6 +2817,11 @@ public sealed partial class MainPage : Page
         var buttons=new[]{SearchSelectedFoldersButton,EditSelectedFoldersButton,UnregisterSelectedFoldersButton,SearchAllFoldersButton};
         for(var i=0;i<buttons.Length;i++){Grid.SetColumn(buttons[i],narrow?i%2:i);Grid.SetRow(buttons[i],narrow?i/2:0);}
         FolderAddScroll.MaxHeight=Math.Max(96,FolderHubView.ActualHeight-FolderHeader.ActualHeight-FolderSelectionPanel.ActualHeight-112);
+        if(folderTiles&&FolderList is not null)
+        {
+            var tileW=ComputeFolderTileWidth();
+            foreach(var item in FolderList.Items.OfType<ListViewItem>())item.Width=tileW;
+        }
     }
 
     private void Details_PaneStateChanged(object sender,object args)
@@ -3206,23 +3218,24 @@ public sealed partial class MainPage : Page
                 info.Children.Add(pathText);
 
                 var actions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=6,VerticalAlignment=VerticalAlignment.Center};
-                var favoriteButton=new Button{Content=row.Favorite?"★":"☆"};
+                var actionPad=folderTiles?new Thickness(10,5,10,5):new Thickness(11,5,11,6);
+                var favoriteButton=new Button{Content=row.Favorite?"★":"☆",Padding=actionPad};
                 AutomationProperties.SetAutomationId(favoriteButton,$"FavoriteFolder{row.Id}");
                 AutomationProperties.SetName(favoriteButton,$"{row.ShortPath}：{(row.Favorite?"お気に入りから外す":"お気に入りに追加")}");
                 ToolTipService.SetToolTip(favoriteButton,row.Favorite?"お気に入りから外す":"お気に入りに追加");
                 favoriteButton.Click+=async(_,_)=>await SetRootFavoriteAsync(row,!row.Favorite);actions.Children.Add(favoriteButton);
                 if(row.Enabled)
                 {
-                    var openBtn=new Button {Content="作品を見る"};
+                    var openBtn=new Button {Content="作品を見る",Padding=actionPad};
                     AutomationProperties.SetAutomationId(openBtn,$"OpenFolder{row.Id}");
                     AutomationProperties.SetName(openBtn,$"{row.ShortPath}の作品を見る");
                     openBtn.Click+=async(_,_)=>await ReturnToLibraryAsync(new[]{row.Id});
-                    var quickScanBtn=new Button {Content="⟳ 更新"};
+                    var quickScanBtn=new Button {Content="⟳ 更新",Padding=actionPad};
                     AutomationProperties.SetAutomationId(quickScanBtn,$"QuickScanFolder{row.Id}");
                     AutomationProperties.SetName(quickScanBtn,$"{row.ShortPath}のファイル一覧を更新");
                     ToolTipService.SetToolTip(quickScanBtn,"このフォルダのファイル一覧を更新");
                     quickScanBtn.Click+=async(_,_)=>await StartScanWithModeAsync(new[]{row.Id},"list");
-                    var configBtn=new Button {Content="設定"};
+                    var configBtn=new Button {Content="設定",Padding=actionPad};
                     AutomationProperties.SetAutomationId(configBtn,$"ConfigFolder{row.Id}");
                     AutomationProperties.SetName(configBtn,$"{row.ShortPath}の設定");
                     configBtn.Click+=async(_,_)=>await SelectFolderForSettingsAsync(new[]{row.Id},false);
@@ -3232,11 +3245,11 @@ public sealed partial class MainPage : Page
                 }
                 else
                 {
-                    var restoreBtn=new Button {Content="再登録"};
+                    var restoreBtn=new Button {Content="再登録",Padding=actionPad};
                     AutomationProperties.SetAutomationId(restoreBtn,$"RestoreFolder{row.Id}");
                     AutomationProperties.SetName(restoreBtn,$"{row.ShortPath}を再登録");
                     restoreBtn.Click+=async(_,_)=>await RestoreRootAsync(row);
-                    var purgeBtn=new Button {Content="記録を完全削除"};
+                    var purgeBtn=new Button {Content="記録を完全削除",Padding=actionPad};
                     AutomationProperties.SetAutomationId(purgeBtn,$"PurgeFolder{row.Id}");
                     AutomationProperties.SetName(purgeBtn,$"{row.ShortPath}の記録を完全削除");
                     purgeBtn.Click+=async(_,_)=>await PurgeInactiveRootAsync(row);
@@ -3269,7 +3282,8 @@ public sealed partial class MainPage : Page
                     Content=card,
                     Style=(Style)Resources["MediaItemCardStyle"],
                     Tag=row.Id,
-                    Width=folderTiles?296:double.NaN,
+                    Width=folderTiles?ComputeFolderTileWidth():double.NaN,
+                    Margin=folderTiles?new Thickness(0,0,8,8):new Thickness(0,0,0,6),
                     HorizontalContentAlignment=HorizontalAlignment.Stretch
                 };
                 item.Tapped+=async(_,args)=>{if(row.Enabled&&!IsFolderActionSource(args.OriginalSource)){args.Handled=true;await SelectFolderForSettingsAsync(new[]{row.Id},false);}};

@@ -561,9 +561,9 @@
       </StackPanel>
      </Border>
     </Grid>
-    <Grid x:Name="FolderHubView" SizeChanged="FolderHub_SizeChanged" AllowDrop="True" DragOver="Folder_DragOver" Drop="Folder_Drop" Grid.Row="1" Grid.RowSpan="3" Margin="0,0,12,0" Visibility="Collapsed" RowSpacing="12">
+    <Grid x:Name="FolderHubView" SizeChanged="FolderHub_SizeChanged" Background="Transparent" AllowDrop="True" DragOver="Folder_DragOver" Drop="Folder_Drop" Grid.Row="1" Grid.RowSpan="3" Margin="0,0,12,0" Visibility="Collapsed" RowSpacing="12">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-     <Grid x:Name="FolderHeader" ColumnSpacing="8" RowSpacing="8">
+     <Grid x:Name="FolderHeader" MaxWidth="880" HorizontalAlignment="Stretch" ColumnSpacing="8" RowSpacing="8">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <TextBox x:Name="FolderFilterBox" PlaceholderText="🔎 フォルダ名・パスで絞り込み" MaxLength="260" TextChanged="FolderFilter_Changed" AutomationProperties.Name="登録フォルダを名前・パスで絞り込み" AutomationProperties.AutomationId="TxtFolderFilter"/>
@@ -592,7 +592,7 @@
        </Button>
       </StackPanel>
      </Grid>
-     <Border x:Name="FolderAddPanel" Grid.Row="1" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
+     <Border x:Name="FolderAddPanel" Grid.Row="1" MaxWidth="880" HorizontalAlignment="Stretch" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
       <ContentControl x:Name="FolderRegistrationEditor" HorizontalContentAlignment="Stretch"><Grid RowSpacing="8">
        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
        <ScrollViewer x:Name="FolderAddScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="フォルダ登録の入力項目" AutomationProperties.AutomationId="FolderAddScroll">
@@ -621,7 +621,7 @@
        </StackPanel>
       </Grid></ContentControl>
      </Border>
-     <Border x:Name="FolderSelectionPanel" Grid.Row="2" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
+     <Border x:Name="FolderSelectionPanel" Grid.Row="2" MaxWidth="880" HorizontalAlignment="Stretch" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
       <StackPanel Spacing="8">
        <TextBlock x:Name="FolderSelectionSummary" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderSelectionSummary"/>
        <Grid x:Name="FolderSelectionButtons" ColumnSpacing="8" RowSpacing="8">
@@ -634,7 +634,7 @@
        </Grid>
       </StackPanel>
      </Border>
-     <Grid Grid.Row="3">
+     <Grid Grid.Row="3" MaxWidth="880" HorizontalAlignment="Stretch">
       <ListView x:Name="FolderList" SelectionMode="Single" HorizontalContentAlignment="Stretch" AutomationProperties.Name="登録フォルダ一覧" AutomationProperties.AutomationId="FolderList"/>
       <Border x:Name="FolderEmptyState" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}" Padding="32,28" Margin="24" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
        <StackPanel Spacing="12" HorizontalAlignment="Center">

@@ -40,12 +40,13 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     {
         if(disposed)return;
         Generate.IsEnabled=!busy&&!closing&&history?.Available==true;
-        Generate.Style=Generate.IsEnabled&&Candidates.Items.Count==0?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
+        var defaultButton=Application.Current.Resources["DefaultButtonStyle"] as Style;
+        Generate.Style=Generate.IsEnabled&&Candidates.Items.Count==0?(Style)Application.Current.Resources["AccentButtonStyle"]:defaultButton;
         if(OpenSetup is not null)
         {
             OpenSetup.Visibility=history is {Available:false}?Visibility.Visible:Visibility.Collapsed;
             OpenSetup.IsEnabled=!busy&&!closing;
-            OpenSetup.Style=OpenSetup.IsEnabled?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
+            OpenSetup.Style=OpenSetup.IsEnabled?(Style)Application.Current.Resources["AccentButtonStyle"]:defaultButton;
         }
         Refresh.IsEnabled=!busy&&!closing;Older.IsEnabled=!busy&&!closing&&history?.NextBefore is not null;
         if(BusyProgress is not null)BusyProgress.Visibility=busy?Visibility.Visible:Visibility.Collapsed;

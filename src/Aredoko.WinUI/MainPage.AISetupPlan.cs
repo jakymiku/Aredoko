@@ -222,7 +222,8 @@ public sealed partial class MainPage
                     automatic.Content=plan.SkipAI?"自動セットアップ":plan.AutomaticSetupSupported?"自動セットアップ":"自動セットアップ（このモデルは非対応）";
                     var allPresent=!plan.SkipAI&&plan.Requirements.Count>0&&plan.Requirements.All(row=>row.FilesPresent);
                     var accent=Application.Current.Resources["AccentButtonStyle"] as Style;
-                    automatic.Style=!plan.SkipAI&&plan.AutomaticSetupSupported&&!allPresent?accent:null;
+                    var defaultButton=Application.Current.Resources["DefaultButtonStyle"] as Style;
+                    automatic.Style=!plan.SkipAI&&plan.AutomaticSetupSupported&&!allPresent?accent:defaultButton;
                     existing.IsEnabled=!plan.SkipAI;
                     download.IsEnabled=!plan.ProfileRestartRequired&&!plan.ProfileSelectionInvalid&&plan.Requirements.Any(row=>row.Id=="embedding-model"&&!row.FilesPresent&&row.CatalogIds.Count>0);
                     dialog.PrimaryButtonText=allPresent?"AI検索の設定へ →":"次へ";

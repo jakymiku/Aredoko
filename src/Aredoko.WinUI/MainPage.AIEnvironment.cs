@@ -76,7 +76,7 @@ public sealed partial class MainPage
                 VisualAssets.State(setupArt,job.Active?"indexing":job.Saved?"completed":job.State=="failed"?"error":null);
                 foreach(var control in new Control[]{chooseRuntime,chooseModels,resetRuntime,resetModels,modelScope})control.IsEnabled=!active;
                 useAcquired.IsEnabled=!active&&acquired is not null&&(acquired.Kind=="runtime"||acquired.ModelTarget is not null)&&!(job.Saved&&job.Id==acquiredJob);
-                useAcquired.Style=useAcquired.IsEnabled?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
+                useAcquired.Style=useAcquired.IsEnabled?(Style)Application.Current.Resources["AccentButtonStyle"]:Application.Current.Resources["DefaultButtonStyle"] as Style;
                 useAcquired.Content=job.Saved&&job.Id==acquiredJob?"次回起動に設定済み":acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う";
                 dialog.IsSecondaryButtonEnabled=job.Active&&!busy&&job.State is not ("cancelling" or "saving");
                 progress.Visibility=job.Active||job.Saved?Visibility.Visible:Visibility.Collapsed;

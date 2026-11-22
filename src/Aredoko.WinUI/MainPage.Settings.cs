@@ -138,14 +138,15 @@ public sealed partial class MainPage
             ApplyRuntimeVerificationSnapshot(statusData);
             var available=statusData["available"]?.GetValue<bool>()==true;
             var accent=ThemeStyle("AccentButtonStyle");
+            var defaultButton=ThemeStyle("DefaultButtonStyle");
             var subtle=ThemeStyle("UnselectedSegmentButtonStyle");
             if(SettingsAIIndexButton is not null)
             {
-                SettingsAIIndexButton.Style=available?accent:null;
+                SettingsAIIndexButton.Style=available?accent:defaultButton;
                 SettingsAIIndexButton.Content="AI検索を設定";
             }
-            if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?null:accent;
-            if(SettingsAISetupPlanButton is not null)SettingsAISetupPlanButton.Style=null;
+            if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?defaultButton:accent;
+            if(SettingsAISetupPlanButton is not null)SettingsAISetupPlanButton.Style=defaultButton;
             if(SettingsAISetupRowLabel is not null)SettingsAISetupRowLabel.Text=available?"環境の再構成・用途選び：":"初回セットアップ：";
             var state=statusData["state"]?.GetValue<string>()??"idle";
             var processed=statusData["processed"]?.GetValue<int>()??0;

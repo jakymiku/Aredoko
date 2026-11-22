@@ -81,7 +81,7 @@ public sealed partial class MainPage
                 destination.Text=current?.Root??"";destination.Visibility=current?.Published==true&&current.Root is not null?Visibility.Visible:Visibility.Collapsed;
                 select.Visibility=candidate is not null?Visibility.Visible:Visibility.Collapsed;select.IsEnabled=!busy;
                 var needsExplicitActivation=candidate is not null&&candidate.ModelTarget?.Role!="tagger";
-                select.Style=needsExplicitActivation&&!busy?(Style)Application.Current.Resources["AccentButtonStyle"]:null;
+                select.Style=needsExplicitActivation&&!busy?(Style)Application.Current.Resources["AccentButtonStyle"]:Application.Current.Resources["DefaultButtonStyle"] as Style;
                 select.Content=candidate?.Kind=="runtime"?"この実行環境を有効化する →":candidate?.ModelTarget?.Role=="tagger"?"保存先を明示設定…":"このモデルを有効化する →";
             }
             async Task RefreshAsync(bool catalogs=false)
