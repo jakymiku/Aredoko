@@ -264,7 +264,7 @@ public sealed partial class MainPage
     private async Task OpenGettingStartedGuideAsync(bool fromSettings=false)
     {
         if (!ready || disposed || dialogOpen || saving || !await transitions.WaitAsync(0)) return;
-        dialogOpen = true;bool setupRequested=false,folderRequested=false,returnToSettings=false;
+        dialogOpen = true;bool setupRequested=false,autoSetupRequested=false,folderRequested=false,returnToSettings=false;
         try
         {
             var panel = new StackPanel { Spacing = 14, MaxWidth = 600 };
@@ -335,16 +335,22 @@ public sealed partial class MainPage
             var hasRegistered = knownRoots.Any(r => r.Enabled);
             var addFolder = new Button { Content = hasRegistered ? "📁 登録フォルダを開く" : "📁 フォルダを追加", HorizontalAlignment = HorizontalAlignment.Stretch, Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
             AutomationProperties.SetAutomationId(addFolder, "GuideAddFolder");
+            var aiAutoSetup = new Button { Content = "✨ AI自動セットアップ", HorizontalAlignment = HorizontalAlignment.Stretch };
+            ToolTipService.SetToolTip(aiAutoSetup, "NVIDIA GPU（CUDA）または軽量 CPU 版を自動判定して実行環境と EmbeddingGemma 2 を一括導入");
+            AutomationProperties.SetAutomationId(aiAutoSetup, "GuideAIAutoSetup");
             Button? backToSettings = fromSettings ? new Button { Content = "設定へ戻る", HorizontalAlignment = HorizontalAlignment.Stretch } : null;
             if (backToSettings is not null) AutomationProperties.SetAutomationId(backToSettings, "BtnBackToSettings");
 
             var quickActions = new Grid { ColumnSpacing = 8 };
             quickActions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            quickActions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(aiAutoSetup, 1);
             quickActions.Children.Add(addFolder);
+            quickActions.Children.Add(aiAutoSetup);
             if (backToSettings is not null)
             {
                 quickActions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                Grid.SetColumn(backToSettings, 1);
+                Grid.SetColumn(backToSettings, 2);
                 quickActions.Children.Add(backToSettings);
             }
             panel.Children.Add(quickActions);
@@ -361,7 +367,7 @@ public sealed partial class MainPage
             {
                 (1, "1. フォルダの追加と更新方法", "左メニューの「登録フォルダ → ＋ フォルダを追加」（またはウィンドウへドラッグ＆ドロップ）から検索したいフォルダを登録します。登録直後に「ファイル一覧を作る（推奨）」または「一覧＋AI検索データ」を選べます。フォルダ内に新しく追加・変更した作品があるときは「⟳ 更新」で再読み込みできます。"),
                 (2, "2. 文字検索・閲覧・タグと棚の整理", "検索欄に名前やタグを入力すると即座に絞り込めます（関連語辞書で表記ゆれ・同義語にも対応）。作品のダブルクリックやEnterで内蔵ビューアが開きます。Spaceキーまたは「詳細」ボタンで右側の詳細ペインを開き、タグの追加（Enter確定）・お気に入り・棚への追加（複数選択時も下のバーから一括操作可能）を行えます。"),
-                (3, "3. AI検索の準備とモデルの選び方（任意）", "曖昧な言葉や画像の見た目・動画の場面・音声の内容で探したいときは、下の「AIで探す方法」または「設定 → AI検索」から用途をチェックしてセットアップします。\n・「自動セットアップ」でAI実行環境＋検索モデル（EmbeddingGemma 2）を一括導入し、再起動後に「AI検索を設定」からAI検索データを作成すると使えます。\n・すでに手元に環境やモデルがある場合は「手元のファイルを使う」から指定できます。"),
+                (3, "3. AI検索の準備とモデルの選び方（任意）", "曖昧な言葉や画像の見た目・動画の場面・音声の内容で探したいときは、上の「✨ AI自動セットアップ」（または「AIで探す方法」／「設定 → AI検索」）から準備できます。\n・「AI自動セットアップ」は NVIDIA GPU（CUDA 版）または非 NVIDIA（軽量 CPU 版）を自動判定し、AI実行環境＋検索モデル（EmbeddingGemma 2）を一括取得します。導入・再起動後に「AI検索を設定」からAI検索データを作成すると使えます。\n・すでに手元に環境やモデルがある場合は「AIで探す方法 → 手元のファイルを使う」から指定できます。"),
                 (4, "4. 似た作品の検索・AIタグ候補（WD Tagger）", "作品を右クリック（または詳細ペインの「≈ 似た作品」）から、見た目が似た画像・本・動画や音が似た曲を探せます。\n\n【画像タグ付け（WD Tagger）の始め方】\n「設定 → 🏷 タグ付けモデルを取得」（または詳細ペインの「✨ AI候補 → 📥 モデルを取得・設定」）から wd-swinv2-v3（約468MB）をダウンロードすると、基本の実行環境でそのまま動作するため再起動なしですぐ使えます。詳細ペインの「✨ AI候補」または複数選択の「まとめて整理」からタグ候補を生成・一括承認できます（確定タグは自動上書きされません）。"),
                 (5, "5. ショートカット一覧とバックアップ", "・Ctrl+F：検索欄へ移動 / Ctrl+S：タグや棚の変更を保存\n・Space：詳細・プレビュー欄を開閉 / Enter：選択した作品を開く\n・Ctrl+Home / Ctrl+End：一覧の先頭・末尾へ移動\n\nタグ・棚・設定の控えの保存と別フォルダへの安全な復元は「設定 → 管理・診断 → 💾 バックアップと復元」で行えます。")
             })
@@ -384,6 +390,7 @@ public sealed partial class MainPage
             dialog.Resources["ContentDialogMaxWidth"] = 680d;
             AutomationProperties.SetAutomationId(dialog, "GettingStartedGuideDialog");
             addFolder.Click+=(_,_)=>{folderRequested=true;dialog.Hide();};
+            aiAutoSetup.Click+=(_,_)=>{autoSetupRequested=true;dialog.Hide();};
             if(backToSettings is not null)backToSettings.Click+=(_,_)=>{returnToSettings=true;dialog.Hide();};
             var closedTcs=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed+=(_,_)=>closedTcs.TrySetResult(true);
@@ -397,6 +404,7 @@ public sealed partial class MainPage
             await OpenFolderHubAsync();
             if(folderHubOpen)FolderAddPanel.Visibility=Visibility.Visible;
         }
+        else if(autoSetupRequested&&!disposed)await OpenAIAutoEnvironmentDialogAsync(fromSettings:fromSettings);
         else if(setupRequested&&!disposed)await OpenAISetupPlanAsync();
         else if(returnToSettings&&!disposed)await OpenSettingsAsync();
     }

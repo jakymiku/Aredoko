@@ -182,7 +182,7 @@ public sealed partial class MainPage
                     Children=
                     {
                         new TextBlock{Text="③ 画像の自動タグ候補（WD Tagger・任意）",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap},
-                        new TextBlock{Text="画像や本の表紙からタグ候補（キャラクター・一般タグ）を自動提案します。基本の実行環境で動作するため、4.8GBのAI検索環境が未導入でもモデル（約468MB）を取得するだけですぐに使えます。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]},
+                        new TextBlock{Text="画像や本の表紙からタグ候補（キャラクター・一般タグ）を自動提案します。基本の実行環境で動作するため、AI検索環境が未導入でもモデル（約468MB）を取得するだけですぐに使えます。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]},
                         taggerBtn
                     }
                 }

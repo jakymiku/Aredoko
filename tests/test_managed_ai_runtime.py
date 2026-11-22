@@ -72,6 +72,28 @@ class ManagedRuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'generated runtime file'):
                 inspect_runtime(self.root,verify=True)
 
+    def test_cpu_recipe_receipt_accepted_and_abi_mismatch_rejected(self):
+        self.value['recipe_sha256']=managed.CPU_RECIPE_SHA256
+        self.value['abi']={'python':'3.13','architecture':'x64','engine':'pytorch','compute':'cpu','torch':'2.9.1+cpu','cuda':None,'modules':list(REQUIRED_MODULES)}
+        checksum=self.write()
+        info=inspect_runtime(self.root,verify=True,expected=checksum)
+        self.assertEqual(info['abi']['compute'],'cpu')
+        self.assertEqual(info['abi']['torch'],'2.9.1+cpu')
+        self.assertIsNone(info['abi']['cuda'])
+        self.value['abi']['compute']='cuda'
+        self.value['abi']['cuda']='12.8'
+        checksum=self.write()
+        with self.assertRaisesRegex(ValueError,'ABI changed'):
+            inspect_runtime(self.root,verify=True,expected=checksum)
+
+class CpuRecipeFileTests(unittest.TestCase):
+    def test_cuda_and_cpu_recipes_verify_against_pinned_hashes(self):
+        cuda_lock=managed.recipe('cuda')
+        cpu_lock=managed.recipe('cpu')
+        self.assertEqual(cuda_lock['target'],'cp313-win_amd64-cu128')
+        self.assertEqual(cpu_lock['target'],'cp313-win_amd64-cpu')
+        self.assertEqual(managed.recipe_spec_by_sha256(managed.CPU_RECIPE_SHA256)[0],'cpu')
+
 class VenvBindingTests(unittest.TestCase):
     def test_unknown_or_case_alias_keys_cannot_enable_user_site_packages(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -26,14 +26,60 @@ GENERATED={'.gitignore','pyvenv.cfg','aredoko-ai-environment-draft.json',
            'Scripts/python.exe','Scripts/pythonw.exe','Scripts/activate','Scripts/activate.bat',
            'Scripts/activate.fish','Scripts/Activate.ps1','Scripts/deactivate.bat'}
 RECIPE_SHA256 = '2d99a5178762590aabc384ee27aecb66e6614241219b3321365b31631f707858'
+CPU_RECIPE_SHA256 = 'bfe983ed5572b59bbc845c8b200efecdb6fa748726c1de9c81e1ed965a2aa59f'
 CPYTHON_SHA512 = '0e667928bb4f19573c6cd88f65133b2e07b243a5c716f335b56aa66bb9ec6f82328256d22c3a29e23a0276ac5c6a6d786211feab524890ad1e56629196c6b29c'
+RECIPES = {
+    'cuda': {
+        'id': 'ai-wheels-cp313-cu128',
+        'file': 'config/ai-runtime-recipes/cp313-cu128-draft.json',
+        'sizes': 'config/ai-runtime-recipes/cp313-cu128-sizes.json',
+        'sha256': RECIPE_SHA256,
+        'compute': 'cuda',
+        'torch': '2.9.1+cu128',
+        'cuda': '12.8',
+        'dir_prefix': 'ai-cu128-',
+        'cache_dir': 'wheels',
+        'recommended_free_bytes': 15_000_000_000,
+        'min_free_bytes': 10 * 1024**3,
+        'allowed_probe_devices': ('cpu', 'cuda', 'dml'),
+    },
+    'cpu': {
+        'id': 'ai-wheels-cp313-cpu',
+        'file': 'config/ai-runtime-recipes/cp313-cpu-draft.json',
+        'sizes': 'config/ai-runtime-recipes/cp313-cpu-sizes.json',
+        'sha256': CPU_RECIPE_SHA256,
+        'compute': 'cpu',
+        'torch': '2.9.1+cpu',
+        'cuda': None,
+        'dir_prefix': 'ai-cpu-',
+        'cache_dir': 'wheels-cpu',
+        'recommended_free_bytes': 6_000_000_000,
+        'min_free_bytes': 4 * 1024**3,
+        'allowed_probe_devices': ('cpu',),
+    },
+}
 
 
-def recipe():
-    path = plain_path(Path(__file__).resolve().parents[1] / 'config/ai-runtime-recipes/cp313-cu128-draft.json')
+def recipe_spec(target='cuda'):
+    spec = RECIPES.get(target)
+    if spec is None:
+        raise ValueError('Unsupported AI runtime recipe target')
+    return spec
+
+
+def recipe_spec_by_sha256(checksum):
+    for target_key, spec in RECIPES.items():
+        if spec['sha256'] == checksum:
+            return target_key, spec
+    raise ValueError('Invalid managed runtime receipt')
+
+
+def recipe(target='cuda'):
+    spec = recipe_spec(target)
+    path = plain_path(Path(__file__).resolve().parents[1] / spec['file'])
     if path.stat().st_size > 1024**2:raise ValueError('AI recipe exceeds limit')
     raw = path.read_bytes()
-    if hashlib.sha256(raw).hexdigest() != RECIPE_SHA256:raise ValueError('AI recipe changed')
+    if hashlib.sha256(raw).hexdigest() != spec['sha256']:raise ValueError('AI recipe changed')
     return json.loads(raw, object_pairs_hook=object_pairs)
 
 
@@ -78,11 +124,12 @@ def verify_binding(root, home):
             raise ValueError('Managed venv launcher changed')
 
 
-def seal(root, artifacts, home, base_package, model_probe, *, cancelled=lambda:False, progress=None):
+def seal(root, artifacts, home, base_package, model_probe, *, target='cuda', cancelled=lambda:False, progress=None):
     """Only the setup owner calls this after a generated model inference probe."""
     from ai_profiles import DEFAULT_PROFILE
+    spec = recipe_spec(target)
     if (model_probe.get('pass') is not True or model_probe.get('profile')!=DEFAULT_PROFILE.key
-            or model_probe.get('device') not in ('cpu','cuda','dml')):
+            or model_probe.get('device') not in spec['allowed_probe_devices']):
         raise ValueError('A successful supported-model probe is required')
     root=plain_path(root,directory=True);home=plain_path(home,directory=True)
     marker=plain_path(root/MARKER,missing=True)
@@ -90,7 +137,7 @@ def seal(root, artifacts, home, base_package, model_probe, *, cancelled=lambda:F
     verify_base(home,base_package,full=True,cancelled=cancelled)
     verify_binding(root,home)
     entries=[]
-    verify_wheels(root,artifacts,recipe(),cancelled=cancelled,progress=progress,inventory=entries)
+    verify_wheels(root,artifacts,recipe(target),cancelled=cancelled,progress=progress,inventory=entries)
     official={entry['path'] for entry in entries}
     for path in files(root,cancelled,include_cache=True):
         name=path.relative_to(root).as_posix()
@@ -101,9 +148,9 @@ def seal(root, artifacts, home, base_package, model_probe, *, cancelled=lambda:F
             raise ValueError('Unexpected generated runtime file: '+name)
         entries.append({'path':name,'bytes':path.stat().st_size,'sha256':digest(path,cancelled)})
     entries.sort(key=lambda entry:entry['path'])
-    document={'format':FORMAT,'recipe_sha256':RECIPE_SHA256,'home':str(home),'base_package':str(Path(base_package).absolute()),'wheel_cache':str(Path(artifacts).absolute()),
+    document={'format':FORMAT,'recipe_sha256':spec['sha256'],'home':str(home),'base_package':str(Path(base_package).absolute()),'wheel_cache':str(Path(artifacts).absolute()),
               'probe':{'profile':model_probe['profile'],'device':model_probe['device']},
-              'abi':{'python':'3.13','architecture':'x64','engine':'pytorch','compute':'cuda','torch':'2.9.1+cu128','cuda':'12.8','modules':list(REQUIRED_MODULES)},
+              'abi':{'python':'3.13','architecture':'x64','engine':'pytorch','compute':spec['compute'],'torch':spec['torch'],'cuda':spec['cuda'],'modules':list(REQUIRED_MODULES)},
               'entries':entries,'files_count':len(entries),'total_bytes':sum(entry['bytes'] for entry in entries)}
     with storage_lease(root.with_name(root.name+'-seal')):
         plain_path(marker,missing=True)
@@ -127,13 +174,15 @@ def inspect(root, *, expected=None, verify=False, cancelled=lambda:False, progre
     if expected is not None and checksum!=expected:raise ValueError('Selected runtime inventory changed')
     value=json.loads(raw,object_pairs_hook=object_pairs)
     if (not isinstance(value,dict) or set(value)!={'format','recipe_sha256','home','base_package','wheel_cache','probe','abi','entries','files_count','total_bytes'}
-            or value['format']!=FORMAT or value['recipe_sha256']!=RECIPE_SHA256):raise ValueError('Invalid managed runtime receipt')
-    lock=recipe();abi=validate_abi(value['abi'])
-    if (abi['python']!='3.13' or abi['torch']!='2.9.1+cu128' or abi['compute']!='cuda'
-            or abi['cuda']!='12.8' or abi['modules']!=list(REQUIRED_MODULES)):raise ValueError('Managed runtime ABI changed')
+            or value['format']!=FORMAT):raise ValueError('Invalid managed runtime receipt')
+    target_key, spec = recipe_spec_by_sha256(value['recipe_sha256'])
+    lock=recipe() if target_key=='cuda' else recipe(target_key)
+    abi=validate_abi(value['abi'])
+    if (abi['python']!='3.13' or abi['torch']!=spec['torch'] or abi['compute']!=spec['compute']
+            or abi['cuda']!=spec['cuda'] or abi['modules']!=list(REQUIRED_MODULES)):raise ValueError('Managed runtime ABI changed')
     from ai_profiles import DEFAULT_PROFILE
     if (not isinstance(value['probe'],dict) or set(value['probe'])!={'profile','device'}
-            or value['probe']['profile']!=DEFAULT_PROFILE.key or value['probe']['device'] not in ('cpu','cuda','dml')):
+            or value['probe']['profile']!=DEFAULT_PROFILE.key or value['probe']['device'] not in spec['allowed_probe_devices']):
         raise ValueError('Managed runtime lacks model probe')
     for field in ('home','base_package','wheel_cache'):
         if not isinstance(value[field],str) or len(value[field])>4096 or any(ord(c)<32 for c in value[field]) or not Path(value[field]).is_absolute():raise ValueError('Invalid managed path')

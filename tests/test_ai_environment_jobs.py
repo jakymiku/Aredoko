@@ -1,6 +1,6 @@
 """Owned setup publication/cancellation; generated fixtures, no downloads/GPU."""
 from contextlib import ExitStack
-import json,sys,tempfile,threading,unittest
+import json,os,sys,tempfile,threading,unittest
 from pathlib import Path
 from unittest.mock import patch,MagicMock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
@@ -92,8 +92,9 @@ class EnvironmentTests(unittest.TestCase):
 
     def test_new_environment_never_replaces_existing_and_is_sealed_after_probe(self):
         self.inspect.side_effect=ValueError('Existing runtime changed')
-        cache=self.data/'runtime-cache/wheels';cache.mkdir(parents=True)
-        for item in self.manager.catalog.entries:(cache/item.path).write_bytes(b'generated')
+        target=self.manager.default_target
+        cache=self.data/'runtime-cache'/jobs.RECIPES[target]['cache_dir'];cache.mkdir(parents=True)
+        for item in self.manager.catalogs[target].entries:(cache/item.path).write_bytes(b'generated')
         order=[]
         self.build.side_effect=lambda *args,**kwargs:order.append('build')
         self.probe.side_effect=lambda *args,**kwargs:(order.append('probe') or {'pass':True,'device':'cpu','profile':DEFAULT_PROFILE.key})
@@ -112,5 +113,41 @@ class EnvironmentTests(unittest.TestCase):
         with patch.object(jobs,'verify_base'):
             self.manager.start({'consent':True});self.assertEqual(self.finish()['state'],'cancelled')
         self.build.assert_not_called();self.probe.assert_not_called();self.preferences.select.assert_not_called()
+
+    def test_detect_nvidia_gpu_and_cpu_target_selection(self):
+        with patch.dict(os.environ,{'AREDOKO_AI_SETUP_TARGET':'cuda'},clear=False):
+            self.assertEqual(jobs.detect_nvidia_gpu()['target'],'cuda')
+        with patch.dict(os.environ,{'AREDOKO_AI_SETUP_TARGET':'cpu'},clear=False):
+            self.assertEqual(jobs.detect_nvidia_gpu()['target'],'cpu')
+        with patch.dict(os.environ,{'CUDA_VISIBLE_DEVICES':'-1'},clear=False):
+            os.environ.pop('AREDOKO_AI_SETUP_TARGET',None)
+            self.assertEqual(jobs.detect_nvidia_gpu()['target'],'cpu')
+            desc=self.manager.describe()
+            self.assertEqual(desc['detected_target'],'cpu')
+            self.assertFalse(desc['nvidia_detected'])
+        with patch.dict(os.environ,{},clear=False):
+            os.environ.pop('AREDOKO_AI_SETUP_TARGET',None)
+            os.environ.pop('AREDOKO_AI_DEVICE',None)
+            os.environ.pop('CUDA_VISIBLE_DEVICES',None)
+            with patch.object(jobs.ctypes,'WinDLL',side_effect=OSError('missing nvcuda')):
+                self.assertEqual(jobs.detect_nvidia_gpu()['target'],'cpu')
+        summary=self.manager.describe()
+        self.assertIn('cuda',summary['targets']);self.assertIn('cpu',summary['targets'])
+        self.assertLess(summary['targets']['cpu']['download_bytes'],summary['targets']['cuda']['download_bytes'])
+
+    def test_cpu_target_uses_lightweight_cache_and_rejects_invalid_target(self):
+        for bad in ('rocm',None,123):
+            with self.assertRaises(ValueError):self.manager.start({'consent':True,'target':bad})
+        self.inspect.side_effect=ValueError('Generated missing runtime')
+        self.build.side_effect=None
+        cache=self.data/'runtime-cache/wheels-cpu';cache.mkdir(parents=True)
+        for item in self.manager.catalogs['cpu'].entries:(cache/item.path).write_bytes(b'generated')
+        with patch.object(jobs,'verify_base'),patch.object(jobs,'seal',return_value={'root':'r','python':'p','manifest_sha256':'a'*64}) as sealed:
+            self.manager.start({'consent':True,'target':'cpu'});result=self.finish()
+        self.assertEqual(result['state'],'complete')
+        self.assertEqual(result['target'],'cpu')
+        self.assertIn('ai-cpu-',self.build.call_args.args[2].name)
+        self.assertEqual(self.build.call_args.args[1],cache)
+        self.assertEqual(sealed.call_args.kwargs['target'],'cpu')
 
 if __name__=='__main__':unittest.main()
