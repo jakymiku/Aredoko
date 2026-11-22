@@ -72,7 +72,7 @@ class LayaProcess:
             raise IntentUnavailable('Incompatible decision worker')
         if hello.get('question_key')!=self.question_key or hello.get('check_order') is not self.check_order:
             raise IntentUnavailable('Decision question contract mismatch')
-        if hello.get('device') not in ('cpu','cuda','cuda:0'):raise IntentUnavailable('Invalid device')
+        if hello.get('device') not in ('cpu','cuda','cuda:0','dml'):raise IntentUnavailable('Invalid device')
         pid=hello.get('worker_pid')
         if isinstance(pid,bool) or not isinstance(pid,int) or pid<=0:raise IntentUnavailable('Invalid worker identity')
         self.worker_pid=pid

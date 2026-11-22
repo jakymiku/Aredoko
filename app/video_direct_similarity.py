@@ -15,6 +15,7 @@ import sys
 from ai_score_spool import ScoreSpool,SearchCancelled
 from ai_process import AIUnavailable
 from ai_vectors import dot
+import native_accel
 from video_direct_index import CONTRACT,MAX_WINDOWS
 from video_direct_search import VideoSearchChanged
 from video_input import MAX_START_MS,MAX_FRAMES,FRAME_INTERVAL_MS
@@ -25,6 +26,7 @@ MAX_FRAME_BYTES=32*1024*1024
 MAX_PAIRS=100_000
 PAIR_VERSION_INTERVAL=64
 MAX_WINDOW_MS=MAX_FRAMES*FRAME_INTERVAL_MS
+_ORIG_DOT=dot
 
 
 class VideoDirectSimilarity:
@@ -107,6 +109,9 @@ class VideoDirectSimilarity:
                   'source':'video-direct','profile':index.profile.key,'score_kind':'cosine',
                   'similarity_status':'ready' if origin_frames else 'unindexed'}
             candidate_total=indexed_total=pair_total=0
+            use_native=dot is _ORIG_DOT and native_accel.available()
+            origin_queries=[query for _,_,query in origin_frames] if use_native and origin_frames else None
+            dim=index.profile.dimension
             def consume(fetch):
                 nonlocal candidate_total,indexed_total,pair_total
                 number=0
@@ -121,13 +126,23 @@ class VideoDirectSimilarity:
                         revision,frames=self._frames(row,monitor,check) if origin_frames else (None,[])
                         if not frames:continue
                         indexed_total+=1;best=None
-                        pair_total+=len(frames)*len(origin_frames)
+                        pair_count=len(frames)*len(origin_frames)
+                        pair_total+=pair_count
                         if pair_total>MAX_PAIRS:
                             raise AIUnavailable('動画の比較範囲が上限を超えました。対象フォルダーや棚を絞って再実行してください。')
-                        for at,end,vector in frames:
-                            for origin_at,origin_end,query in origin_frames:
-                                check(pair=True);score=dot(query,vector)
+                        if use_native:
+                            for _ in range(0,pair_count,PAIR_VERSION_INTERVAL):check()
+                            cand_blobs=b''.join(array('f',vec).tobytes() for _,_,vec in frames)
+                            scores_arr,best_q_arr,valid_arr=native_accel.score_f32_batch(origin_queries,cand_blobs,len(frames),dim,normalize_vec=False)
+                            for idx,(at,end,_) in enumerate(frames):
+                                if not valid_arr[idx]:continue
+                                score=scores_arr[idx];origin_at,origin_end,_=origin_frames[best_q_arr[idx]]
                                 if best is None or score>best[0]:best=(score,at,end,origin_at,origin_end)
+                        else:
+                            for at,end,vector in frames:
+                                for origin_at,origin_end,query in origin_frames:
+                                    check(pair=True);score=dot(query,vector)
+                                    if best is None or score>best[0]:best=(score,at,end,origin_at,origin_end)
                         score,at,end,origin_at,origin_end=best
                         spool.add(row['id'],{'video':score},payload={'item':row,'revision':revision,
                             'video_match_ms':at,'video_match_end_ms':end,

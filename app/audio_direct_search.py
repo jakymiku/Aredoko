@@ -11,6 +11,7 @@ import sys
 from ai_score_spool import ScoreSpool,SearchCancelled
 from ai_vectors import normalized
 from audio_direct_index import CONTRACT,valid_marker,valid_interval
+import native_accel
 from previews import PreviewUnavailable
 
 
@@ -25,6 +26,9 @@ def _score(data,query):
     if not math.isfinite(norm) or abs(norm-1)>1e-4:return None
     divisor=math.sqrt(norm)
     return sum(a*b/divisor for a,b in zip(query,vector))
+
+
+_ORIG_SCORE = _score
 
 
 class AudioDirectSearch:
@@ -104,6 +108,9 @@ class AudioDirectSearch:
                         fresh[item]=(revision,decoded,indexed,frames);counts[item]=0
                 except PreviewUnavailable:continue
             markers.close()
+            use_native=_score is _ORIG_SCORE and native_accel.available()
+            dim=index.profile.dimension
+            batch_meta=[];batch_chunks=[]
             cursor=db.execute('SELECT item_id,ordinal,start_ms,end_ms,vector FROM ai_audio_direct_windows '
                               'WHERE item_id IN ('+','.join('?' for _ in ids)+') ORDER BY item_id,ordinal',ids)
             for item,ordinal,start,end,data in cursor:
@@ -112,13 +119,29 @@ class AudioDirectSearch:
                 revision,decoded,indexed,frames=fresh[item]
                 if counts[item]>=indexed or not valid_interval(ordinal,start,end,decoded,frames):
                     fresh.pop(item);best.pop(item,None);continue
-                value=_score(data,query)
-                if value is None:
-                    fresh.pop(item);best.pop(item,None);continue
-                counts[item]+=1
-                if item not in best or value>best[item][0]:
-                    best[item]=(value,start,end,revision)
+                if use_native:
+                    if type(data) is not bytes or len(data)!=dim*4:
+                        fresh.pop(item);best.pop(item,None);continue
+                    counts[item]+=1
+                    batch_meta.append((item,start,end,revision))
+                    batch_chunks.append(data)
+                else:
+                    value=_score(data,query)
+                    if value is None:
+                        fresh.pop(item);best.pop(item,None);continue
+                    counts[item]+=1
+                    if item not in best or value>best[item][0]:
+                        best[item]=(value,start,end,revision)
             cursor.close()
+            if use_native and batch_meta:
+                scores_arr,_,valid_arr=native_accel.score_f32_batch([query],b''.join(batch_chunks),len(batch_meta),dim,normalize_vec=True)
+                for idx,(item,start,end,revision) in enumerate(batch_meta):
+                    if item not in fresh:continue
+                    if not valid_arr[idx]:
+                        fresh.pop(item,None);best.pop(item,None);continue
+                    value=scores_arr[idx]
+                    if item not in best or value>best[item][0]:
+                        best[item]=(value,start,end,revision)
         for item,(_,_,indexed,_) in tuple(fresh.items()):
             if counts[item]!=indexed:
                 fresh.pop(item);best.pop(item,None)

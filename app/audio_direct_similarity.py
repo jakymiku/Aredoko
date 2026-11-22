@@ -14,12 +14,14 @@ from ai_process import AIUnavailable
 from ai_vectors import dot
 from audio_direct_index import CONTRACT,valid_marker,valid_interval
 from audio_direct_search import AudioSearchChanged
+import native_accel
 from previews import PreviewUnavailable
 
 MAX_FRAME_BYTES=32*1024*1024
 # Bound total exact pair comparisons across all candidates in one request.
 MAX_PAIRS=100_000
 PAIR_VERSION_INTERVAL=64
+_ORIG_DOT=dot
 
 
 def validate_similarity_request(item_id,*,page=0,limit=60,result_sink=None,cancelled=None,**conditions):
@@ -106,6 +108,9 @@ class AudioDirectSimilarity:
                   'source':self.RESULT_SOURCE,'profile':index.profile.key,'score_kind':'cosine',
                   'similarity_status':'ready' if origin_frames else 'unindexed'}
             candidate_total=indexed_total=pair_total=0
+            use_native=dot is _ORIG_DOT and native_accel.available()
+            origin_queries=[query for _,_,query in origin_frames] if use_native and origin_frames else None
+            dim=index.profile.dimension
             def consume(fetch):
                 nonlocal candidate_total,indexed_total,pair_total
                 number=0
@@ -119,13 +124,23 @@ class AudioDirectSimilarity:
                         revision,frames=self._frames(row,monitor,check) if origin_frames else (None,[])
                         if not frames:continue
                         indexed_total+=1;best=None
-                        pair_total+=len(frames)*len(origin_frames)
+                        pair_count=len(frames)*len(origin_frames)
+                        pair_total+=pair_count
                         if pair_total>MAX_PAIRS:
                             raise AIUnavailable('音声の比較範囲が上限を超えました。対象フォルダーや棚を絞って再実行してください。')
-                        for at,end,vector in frames:
-                            for origin_at,origin_end,query in origin_frames:
-                                check(pair=True);score=dot(query,vector)
+                        if use_native:
+                            for _ in range(0,pair_count,PAIR_VERSION_INTERVAL):check()
+                            cand_blobs=b''.join(array('f',vec).tobytes() for _,_,vec in frames)
+                            scores_arr,best_q_arr,valid_arr=native_accel.score_f32_batch(origin_queries,cand_blobs,len(frames),dim,normalize_vec=False)
+                            for idx,(at,end,_) in enumerate(frames):
+                                if not valid_arr[idx]:continue
+                                score=scores_arr[idx];origin_at,origin_end,_=origin_frames[best_q_arr[idx]]
                                 if best is None or score>best[0]:best=(score,at,end,origin_at,origin_end)
+                        else:
+                            for at,end,vector in frames:
+                                for origin_at,origin_end,query in origin_frames:
+                                    check(pair=True);score=dot(query,vector)
+                                    if best is None or score>best[0]:best=(score,at,end,origin_at,origin_end)
                         score,at,end,origin_at,origin_end=best
                         spool.add(row['id'],{'audio':score},payload={'item':row,'revision':revision,
                             'audio_match_ms':at,'audio_match_end_ms':end,

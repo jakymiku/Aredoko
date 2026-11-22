@@ -1,4 +1,5 @@
 """Separate pending-tag embeddings; never promote proposals to confirmed tags."""
+from array import array
 import hashlib
 import json
 import sqlite3
@@ -6,6 +7,7 @@ import time
 
 from ai_process import AIUnavailable
 from ai_vectors import normalized
+import native_accel
 from previews import PreviewUnavailable, PreviewBusyError, ReaderChanged
 
 CONTRACT='pending-raw-tags:v1'
@@ -104,11 +106,18 @@ def semantic_candidates(service,ai,query='',kind='',view='all',page=0,root_ids=N
                 if vectors and query_vector is None:
                     query_vector=normalized(ai.encoder.encode('query',query),ai.profile.dimension)
                 check()
-                for row in rows:
-                    item=row['id']
-                    if item not in vectors:continue
-                    score=sum(a*b for a,b in zip(query_vector,vectors[item]))
-                    spool.add(item,{'text':score},payload={'revision':revision(row),'proposal':snapshots[item]})
+                matched_rows=[row for row in rows if row['id'] in vectors]
+                if matched_rows and native_accel.available():
+                    blobs=b''.join(array('f',vectors[row['id']]).tobytes() for row in matched_rows)
+                    scores_arr,_,valid_arr=native_accel.score_f32_batch([query_vector],blobs,len(matched_rows),ai.profile.dimension,normalize_vec=False)
+                    for idx,row in enumerate(matched_rows):
+                        if valid_arr[idx]:
+                            spool.add(row['id'],{'text':scores_arr[idx]},payload={'revision':revision(row),'proposal':snapshots[row['id']]})
+                else:
+                    for row in matched_rows:
+                        item=row['id']
+                        score=sum(a*b for a,b in zip(query_vector,vectors[item]))
+                        spool.add(item,{'text':score},payload={'revision':revision(row),'proposal':snapshots[item]})
                 check()
             spool.finalize('max')
             def render_page(number):

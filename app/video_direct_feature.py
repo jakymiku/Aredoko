@@ -21,7 +21,8 @@ class VideoDirectFeature:
             profile=video_profile_for(image_ai.profile)
             self.encoder=(encoder_factory(profile) if encoder_factory is not None else
                           EncoderProcess(image_ai.encoder.python,image_ai.encoder.model,profile,
-                              gpu_budget_mib=image_ai.encoder.gpu_budget_mib))
+                              gpu_budget_mib=image_ai.encoder.gpu_budget_mib,
+                              budget_if_cuda=getattr(image_ai.encoder,'budget_if_cuda',False)))
             try:self.inference=group.for_encoder(self.encoder,role='video')
             except BaseException:
                 self.encoder.close()

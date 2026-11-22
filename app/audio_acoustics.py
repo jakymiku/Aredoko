@@ -11,6 +11,7 @@ import operator
 import re
 
 from ai_vectors import normalized
+import native_accel
 
 CONTRACT = 'audio-acoustic-feature:v1'
 ACOUSTIC_DIMENSION = 512
@@ -51,6 +52,9 @@ def unpack(data, dimension=ACOUSTIC_DIMENSION, allocate=True):
 def _is_valid_packed(data, dimension=ACOUSTIC_DIMENSION):
     """Validate stored float32 acoustic vector without allocating a list."""
     return unpack(data, dimension, False)
+
+
+_ORIG_UNPACK = unpack
 
 
 def _score_packed(data, dimension, query):
@@ -321,6 +325,8 @@ class AudioAcousticVectors:
         candidate_ids = list(eligible.keys())
         eval_count = 0
         dimension = self.dimension
+        use_native = unpack is _ORIG_UNPACK and native_accel.available()
+        origin_vecs = [orig_vec for _, orig_vec in origin_frames] if use_native else None
 
         with self.ai.store.connect() as db:
             for i in range(0, len(candidate_ids), ROW_BATCH_SIZE):
@@ -332,6 +338,8 @@ class AudioAcousticVectors:
                        f"FROM ai_audio_acoustics WHERE contract=? AND item_id IN ({placeholders}) "
                        f"ORDER BY item_id, at_ms")
                 records = db.execute(sql, [CONTRACT, *batch_ids]).fetchall()
+                native_meta = []
+                native_chunks = []
 
                 for item_id, src_rev, cand_ms, data in records:
                     eval_count += 1
@@ -342,16 +350,34 @@ class AudioAcousticVectors:
                     if not (type(cand_ms) is int and 0 <= cand_ms <= MAX_DURATION_MS):
                         continue
 
-                    cand_vec = unpack(data, dimension, allocate=True)
-                    if cand_vec is None:
-                        continue
+                    if use_native:
+                        if isinstance(data, (bytes, bytearray, memoryview)) and len(data) == dimension * 4:
+                            native_meta.append((item_id, cand_ms))
+                            native_chunks.append(bytes(data))
+                    else:
+                        cand_vec = unpack(data, dimension, allocate=True)
+                        if cand_vec is None:
+                            continue
 
-                    for orig_ms, orig_vec in origin_frames:
-                        dot = sum(map(operator.mul, orig_vec, cand_vec))
+                        for orig_ms, orig_vec in origin_frames:
+                            dot = sum(map(operator.mul, orig_vec, cand_vec))
+                            prev = scores.get(item_id)
+                            if prev is None or dot > prev:
+                                scores[item_id] = dot
+                                audio_hits[item_id] = cand_ms
+                                origin_hits[item_id] = orig_ms
+                if use_native and native_meta:
+                    scores_arr, best_q_arr, valid_arr = native_accel.score_f32_batch(
+                        origin_vecs, b''.join(native_chunks), len(native_meta), dimension, normalize_vec=True
+                    )
+                    for idx, (item_id, cand_ms) in enumerate(native_meta):
+                        if not valid_arr[idx]:
+                            continue
+                        dot = scores_arr[idx]
                         prev = scores.get(item_id)
                         if prev is None or dot > prev:
                             scores[item_id] = dot
                             audio_hits[item_id] = cand_ms
-                            origin_hits[item_id] = orig_ms
+                            origin_hits[item_id] = origin_frames[best_q_arr[idx]][0]
 
         return scores, audio_hits, origin_hits

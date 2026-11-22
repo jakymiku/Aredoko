@@ -10,6 +10,7 @@ import sys
 
 from ai_score_spool import ScoreSpool,SearchCancelled
 from ai_vectors import normalized
+import native_accel
 from video_direct_index import CONTRACT,MAX_WINDOWS
 from video_input import MAX_START_MS,MAX_FRAMES,FRAME_INTERVAL_MS
 from previews import PreviewUnavailable
@@ -30,6 +31,9 @@ def _score(data,query):
     if not math.isfinite(norm) or abs(norm-1)>1e-4:return None
     divisor=math.sqrt(norm)
     return sum(a*b/divisor for a,b in zip(query,vector))
+
+
+_ORIG_SCORE = _score
 
 
 class VideoDirectSearch:
@@ -111,6 +115,9 @@ class VideoDirectSearch:
                         fresh[item]=(revision,decoded,frames);coverage[item]=[0,0,0]
                 except PreviewUnavailable:continue
             markers.close()
+            use_native=_score is _ORIG_SCORE and native_accel.available()
+            dim=index.profile.dimension
+            batch_meta=[];batch_chunks=[]
             cursor=db.execute('SELECT item_id,ordinal,start_ms,end_ms,vector FROM ai_video_direct_windows '
                               'WHERE item_id IN ('+','.join('?' for _ in ids)+') ORDER BY item_id,ordinal',ids)
             for item,ordinal,start,end,data in cursor:
@@ -121,13 +128,30 @@ class VideoDirectSearch:
                         or start!=expected_start or not start<end<=min(start+MAX_FRAMES*FRAME_INTERVAL_MS,MAX_START_MS)
                         or ordinal<decoded-1 and end-start!=MAX_FRAMES*FRAME_INTERVAL_MS):
                     fresh.pop(item);best.pop(item,None);continue
-                value=_score(data,query)
-                if value is None:
-                    fresh.pop(item);best.pop(item,None);continue
-                coverage[item]=[count+1,end,frame_count+(end-start+FRAME_INTERVAL_MS-1)//FRAME_INTERVAL_MS]
-                if item not in best or value>best[item][0]:
-                    best[item]=(value,start,end,revision)
+                delta=(end-start+FRAME_INTERVAL_MS-1)//FRAME_INTERVAL_MS
+                if use_native:
+                    if type(data) is not bytes or len(data)!=dim*4:
+                        fresh.pop(item);best.pop(item,None);continue
+                    coverage[item]=[count+1,end,frame_count+delta]
+                    batch_meta.append((item,start,end,revision))
+                    batch_chunks.append(data)
+                else:
+                    value=_score(data,query)
+                    if value is None:
+                        fresh.pop(item);best.pop(item,None);continue
+                    coverage[item]=[count+1,end,frame_count+delta]
+                    if item not in best or value>best[item][0]:
+                        best[item]=(value,start,end,revision)
             cursor.close()
+            if use_native and batch_meta:
+                scores_arr,_,valid_arr=native_accel.score_f32_batch([query],b''.join(batch_chunks),len(batch_meta),dim,normalize_vec=True)
+                for idx,(item,start,end,revision) in enumerate(batch_meta):
+                    if item not in fresh:continue
+                    if not valid_arr[idx]:
+                        fresh.pop(item,None);best.pop(item,None);continue
+                    value=scores_arr[idx]
+                    if item not in best or value>best[item][0]:
+                        best[item]=(value,start,end,revision)
         for item,(_,decoded,frames) in tuple(fresh.items()):
             count,_,frame_count=coverage[item]
             if count!=decoded or frame_count!=frames:

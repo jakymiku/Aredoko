@@ -11,6 +11,7 @@ import re
 
 from ai_process import AIUnavailable
 from ai_vectors import normalized
+import native_accel
 
 CONTRACT = 'audio-speech-segment:v1'
 MAX_AUDIO_BYTES = 512 * 1024 * 1024  # 512 MiB
@@ -71,6 +72,9 @@ def _score_packed(data, dimension, query):
         return None
 
 
+_ORIG_SCORE_PACKED = _score_packed
+
+
 class AudioSpeechVectors:
     def __init__(self, ai):
         self.ai = ai
@@ -96,6 +100,7 @@ class AudioSpeechVectors:
 
         candidate_ids = list(eligible.keys())
         seg_count = 0
+        use_native = _score_packed is _ORIG_SCORE_PACKED and native_accel.available()
         with self.ai.store.connect() as db:
             for i in range(0, len(candidate_ids), ROW_BATCH_SIZE):
                 if check:
@@ -106,6 +111,8 @@ class AudioSpeechVectors:
                        f"FROM ai_audio_segments WHERE contract=? AND item_id IN ({placeholders}) "
                        f"ORDER BY item_id, start_ms")
                 records = db.execute(sql, [CONTRACT, *batch_ids]).fetchall()
+                native_meta = []
+                native_chunks = []
 
                 for item_id, src_rev, seg_id, start_ms, end_ms, snippet, data in records:
                     seg_count += 1
@@ -115,17 +122,38 @@ class AudioSpeechVectors:
                         continue
                     if not (type(start_ms) is int and type(end_ms) is int and 0 <= start_ms <= end_ms <= MAX_DURATION_MS):
                         continue
-                    dot = _score_packed(data, dimension, query_vector)
-                    if dot is None:
-                        continue
-                    current_best = scores.get(item_id)
-                    if current_best is None or dot > current_best[0]:
-                        scores[item_id] = (dot, {
-                            'start_ms': start_ms,
-                            'end_ms': end_ms,
-                            'snippet': snippet,
-                            'segment_id': seg_id,
-                        })
+                    if use_native:
+                        if isinstance(data, (bytes, bytearray, memoryview)) and len(data) == dimension * 4:
+                            native_meta.append((item_id, seg_id, start_ms, end_ms, snippet))
+                            native_chunks.append(bytes(data))
+                    else:
+                        dot = _score_packed(data, dimension, query_vector)
+                        if dot is None:
+                            continue
+                        current_best = scores.get(item_id)
+                        if current_best is None or dot > current_best[0]:
+                            scores[item_id] = (dot, {
+                                'start_ms': start_ms,
+                                'end_ms': end_ms,
+                                'snippet': snippet,
+                                'segment_id': seg_id,
+                            })
+                if use_native and native_meta:
+                    scores_arr, _, valid_arr = native_accel.score_f32_batch(
+                        [query_vector], b''.join(native_chunks), len(native_meta), dimension, normalize_vec=True
+                    )
+                    for idx, (item_id, seg_id, start_ms, end_ms, snippet) in enumerate(native_meta):
+                        if not valid_arr[idx]:
+                            continue
+                        dot = scores_arr[idx]
+                        current_best = scores.get(item_id)
+                        if current_best is None or dot > current_best[0]:
+                            scores[item_id] = (dot, {
+                                'start_ms': start_ms,
+                                'end_ms': end_ms,
+                                'snippet': snippet,
+                                'segment_id': seg_id,
+                            })
 
         return scores
 

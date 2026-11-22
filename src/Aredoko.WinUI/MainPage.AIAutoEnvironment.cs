@@ -27,7 +27,7 @@ public sealed partial class MainPage
             var panel=new StackPanel{Spacing=12,MaxWidth=650};
             var overviewStack=new StackPanel{Spacing=8};
             overviewStack.Children.Add(description);
-            overviewStack.Children.Add(new TextBlock{Text="• 画面を閉じても続行します\n• 中止しても元の設定は残ります\n• GPU使用（上限4 GB）",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
+            overviewStack.Children.Add(new TextBlock{Text="• 画面を閉じても続行します\n• 中止しても元の設定は残ります\n• NVIDIA GPU（上限4 GB）またはCPUで自動動作（Radeon等はCPU／手元のDirectML・ROCm環境に対応）",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
             panel.Children.Add(new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=overviewStack});
             var licensesCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=licenses,Visibility=Visibility.Collapsed};
             panel.Children.Add(licensesCard);

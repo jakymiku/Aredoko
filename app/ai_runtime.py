@@ -18,7 +18,7 @@ FORMAT = 'aredoko-ai-runtime-v1'
 MARKER = 'aredoko-ai-runtime.json'
 LIMIT = 32 * 1024**2
 REQUIRED_MODULES = ('torch', 'transformers', 'sentence_transformers', 'numpy', 'PIL')
-OPTIONAL_MODULES = ('onnxruntime', 'laya', 'tokenizers', 'safetensors')
+OPTIONAL_MODULES = ('onnxruntime', 'laya', 'tokenizers', 'safetensors', 'torch_directml')
 
 
 def object_pairs(pairs):
@@ -81,12 +81,15 @@ def validate_abi(value):
         raise ValueError('Invalid runtime ABI')
     if not isinstance(value['python'],str) or not re.fullmatch(r'3\.(1[1-9]|[2-9][0-9])',value['python']):
         raise ValueError('Python 3.11+ is required')
-    if value['architecture']!='x64' or value['engine']!='pytorch' or value['compute'] not in ('cpu','cuda'):
+    if value['architecture']!='x64' or value['engine']!='pytorch' or value['compute'] not in ('cpu','cuda','rocm','dml'):
         raise ValueError('Unsupported runtime ABI')
     if not isinstance(value['torch'],str) or not re.fullmatch(r'[0-9][0-9A-Za-z.+_-]{0,63}',value['torch']):
         raise ValueError('Invalid runtime version')
-    if value['compute']=='cpu':
+    if value['compute'] in ('cpu','dml'):
         if value['cuda'] is not None:raise ValueError('CPU runtime cannot declare CUDA')
+    elif value['compute']=='rocm':
+        if value['cuda'] is not None and (not isinstance(value['cuda'],str) or not re.fullmatch(r'[0-9]{1,2}\.[0-9]{1,2}',value['cuda'])):
+            raise ValueError('Invalid CUDA version')
     elif not isinstance(value['cuda'],str) or not re.fullmatch(r'[0-9]{1,2}\.[0-9]{1,2}',value['cuda']):
         raise ValueError('Invalid CUDA version')
     modules=value['modules']

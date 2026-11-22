@@ -82,7 +82,7 @@ def seal(root, artifacts, home, base_package, model_probe, *, cancelled=lambda:F
     """Only the setup owner calls this after a generated model inference probe."""
     from ai_profiles import DEFAULT_PROFILE
     if (model_probe.get('pass') is not True or model_probe.get('profile')!=DEFAULT_PROFILE.key
-            or model_probe.get('device') not in ('cpu','cuda')):
+            or model_probe.get('device') not in ('cpu','cuda','dml')):
         raise ValueError('A successful supported-model probe is required')
     root=plain_path(root,directory=True);home=plain_path(home,directory=True)
     marker=plain_path(root/MARKER,missing=True)
@@ -133,7 +133,7 @@ def inspect(root, *, expected=None, verify=False, cancelled=lambda:False, progre
             or abi['cuda']!='12.8' or abi['modules']!=list(REQUIRED_MODULES)):raise ValueError('Managed runtime ABI changed')
     from ai_profiles import DEFAULT_PROFILE
     if (not isinstance(value['probe'],dict) or set(value['probe'])!={'profile','device'}
-            or value['probe']['profile']!=DEFAULT_PROFILE.key or value['probe']['device'] not in ('cpu','cuda')):
+            or value['probe']['profile']!=DEFAULT_PROFILE.key or value['probe']['device'] not in ('cpu','cuda','dml')):
         raise ValueError('Managed runtime lacks model probe')
     for field in ('home','base_package','wheel_cache'):
         if not isinstance(value[field],str) or len(value[field])>4096 or any(ord(c)<32 for c in value[field]) or not Path(value[field]).is_absolute():raise ValueError('Invalid managed path')
@@ -193,4 +193,4 @@ def inspect(root, *, expected=None, verify=False, cancelled=lambda:False, progre
             raise ValueError('Unlisted or missing managed runtime files')
     if digest(marker,cancelled)!=checksum:raise ValueError('Managed receipt changed during verification')
     return {'root':str(root),'python':str(root/'Scripts/python.exe'),'manifest_sha256':checksum,'abi':abi,'files':len(entries),'bytes':total,
-            'verification':'full' if verify else 'core_only','model_loaded':False,'driver_tested':value['probe']['device']=='cuda','cache_required':False}
+            'verification':'full' if verify else 'core_only','model_loaded':False,'driver_tested':value['probe']['device'] in ('cuda','dml'),'cache_required':False}

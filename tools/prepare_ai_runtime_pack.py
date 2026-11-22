@@ -24,13 +24,17 @@ def source_abi(source):
             name=node.targets[0].id;value=node.value
         elif isinstance(node,ast.AnnAssign) and isinstance(node.target,ast.Name):name=node.target.id;value=node.value
         else:continue
-        if name in ('__version__','cuda') and isinstance(value,ast.Constant):values[name]=value.value
+        if name in ('__version__','cuda','hip') and isinstance(value,ast.Constant):values[name]=value.value
     if '__version__' not in values or 'cuda' not in values:raise ValueError('Torch version declarations are missing')
     modules=list(REQUIRED_MODULES)
     modules.extend(m for m in OPTIONAL_MODULES if (source/f'Lib/site-packages/{m}/__init__.py').is_file())
+    if values.get('hip') is not None:compute='rocm';cuda_ver=values['cuda']
+    elif values['cuda'] is not None:compute='cuda';cuda_ver=values['cuda']
+    elif 'torch_directml' in modules:compute='dml';cuda_ver=None
+    else:compute='cpu';cuda_ver=None
     abi={'python':'3.'+stem.removeprefix('python3'),'architecture':'x64','engine':'pytorch',
-         'compute':'cuda' if values['cuda'] is not None else 'cpu','torch':values['__version__'],
-         'cuda':values['cuda'],'modules':modules}
+         'compute':compute,'torch':values['__version__'],
+         'cuda':cuda_ver,'modules':modules}
     return validate_abi(abi),stem
 
 

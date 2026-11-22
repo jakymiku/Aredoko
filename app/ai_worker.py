@@ -11,6 +11,25 @@ import time
 
 from ai_profiles import DEFAULT_PROFILE, ModelProfile
 
+def select_device(torch):
+    if os.environ.get('AREDOKO_AI_DEVICE','').strip().lower()=='cpu':
+        return 'cpu','cpu'
+    if torch.cuda.is_available():
+        return 'cuda','cuda'
+    try:
+        import torch_directml
+        if torch_directml.is_available():
+            return torch_directml.device(),'dml'
+    except (ImportError,RuntimeError,OSError,AttributeError):
+        pass
+    return 'cpu','cpu'
+
+def _cuda_bf16_supported(torch):
+    try:
+        return bool(torch.cuda.is_bf16_supported())
+    except (RuntimeError,AttributeError):
+        return False
+
 def configure_gpu_budget(torch,device,budget_mib,*,budget_if_cuda=False):
     """Optional owner-supplied CUDA allocator limit, applied before model load."""
     if budget_mib is None:return
@@ -20,9 +39,18 @@ def configure_gpu_budget(torch,device,budget_mib,*,budget_if_cuda=False):
         if budget_if_cuda:return
         raise RuntimeError('Budgeted GPU worker requires CUDA')
     budget=budget_mib*1024**2
-    free,total=torch.cuda.mem_get_info()
-    if free<budget:raise RuntimeError('Insufficient free GPU memory; defer worker load')
-    torch.cuda.set_per_process_memory_fraction(min(1.,budget/total))
+    if budget_if_cuda and getattr(getattr(torch,'version',None),'hip',None) is not None:
+        try:
+            free,total=torch.cuda.mem_get_info()
+            if free<budget:raise RuntimeError('Insufficient free GPU memory; defer worker load')
+            torch.cuda.set_per_process_memory_fraction(min(1.,budget/total))
+        except (RuntimeError,AttributeError) as err:
+            if 'Insufficient free GPU memory' in str(err):raise
+            return
+    else:
+        free,total=torch.cuda.mem_get_info()
+        if free<budget:raise RuntimeError('Insufficient free GPU memory; defer worker load')
+        torch.cuda.set_per_process_memory_fraction(min(1.,budget/total))
 
 def monitor_parent(pid):
     if os.name != 'nt': return
@@ -57,10 +85,10 @@ def main():
             import torch
             from PIL import Image
             from ai_adapters import load_adapter
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            torch_device,device=select_device(torch)
             configure_gpu_budget(torch,device,args.gpu_budget_mib,budget_if_cuda=args.budget_if_cuda)
-            dtype = torch.bfloat16 if profile.precision=='auto-bf16' and device == 'cuda' and torch.cuda.is_bf16_supported() else torch.float32
-            model=load_adapter(profile,args.model,device,dtype)
+            dtype = torch.bfloat16 if profile.precision=='auto-bf16' and device == 'cuda' and _cuda_bf16_supported(torch) else torch.float32
+            model=load_adapter(profile,args.model,torch_device,dtype)
             actual_dimension=model.dimension
     except Exception as error:
         from inference_errors import startup_error
