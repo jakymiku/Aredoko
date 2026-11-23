@@ -1,0 +1,32 @@
+[
+  {
+    "name": "tokenizers",
+    "version": "0.23.3",
+    "metadata_sha256": "8ec3972b037a30f856c596f5b40c5045a03dc064eb6d4716e64fe5504f3f1ab9",
+    "clears_declared": [],
+    "files": [
+      {
+        "path": "tokenizers-LICENSE",
+        "bytes": 11357,
+        "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "source": "https://raw.githubusercontent.com/huggingface/tokenizers/301277072263fb3830eb66eec7e47adadf76f1dc/LICENSE"
+      }
+    ]
+  },
+  {
+    "name": "flatbuffers",
+    "version": "25.9.23",
+    "metadata_sha256": "b5329200c8a6ddfc62208d1ab4f3a9962900ab1a7cbd9c12b0a13ebd496a15c1",
+    "clears_declared": [
+      "../LICENSE"
+    ],
+    "files": [
+      {
+        "path": "flatbuffers-LICENSE",
+        "bytes": 11358,
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "source": "https://raw.githubusercontent.com/google/flatbuffers/187240970746d00bbd26b0f5873ed54d2477f9f3/LICENSE"
+      }
+    ]
+  }
+]

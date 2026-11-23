@@ -1,0 +1,277 @@
+{
+ "version": "literal-related-v5-holdout",
+ "description": "Frozen 2026-10-13 BEFORE implementing mid-word headword expansion and before any run. Fictional names/tags only; same author as the code and dictionary, so development-adjacent evidence. over-expansion cases have only the literally intended items as qrels: extra related candidates there count against precision-like metrics only via rank.",
+ "items": [
+  {
+   "key": "t01",
+   "file": "lumina_portrait.png",
+   "kind": "image",
+   "tags": [
+    "神楽坂ルミナ",
+    "立ち絵"
+   ]
+  },
+  {
+   "key": "t02",
+   "file": "lumina_sd_icon.png",
+   "kind": "image",
+   "tags": [
+    "神楽坂ルミナ",
+    "アイコン"
+   ]
+  },
+  {
+   "key": "t03",
+   "file": "nagi_portrait.png",
+   "kind": "image",
+   "tags": [
+    "朝霧ナギ",
+    "立ち絵"
+   ]
+  },
+  {
+   "key": "t04",
+   "file": "kagura_dance_photo_ref.png",
+   "kind": "image",
+   "tags": [
+    "神楽",
+    "資料"
+   ]
+  },
+  {
+   "key": "t05",
+   "file": "聖夜のセレナーデ_表紙.png",
+   "kind": "image",
+   "tags": [
+    "表紙"
+   ]
+  },
+  {
+   "key": "t06",
+   "file": "serenade_doujin_01.cbz",
+   "kind": "book",
+   "tags": [
+    "聖夜のセレナーデ",
+    "漫画"
+   ]
+  },
+  {
+   "key": "t07",
+   "file": "serenade_ost_main.wav",
+   "kind": "audio",
+   "tags": [
+    "聖夜のセレナーデ",
+    "BGM"
+   ]
+  },
+  {
+   "key": "t08",
+   "file": "winter_night_bg.png",
+   "kind": "image",
+   "tags": [
+    "背景",
+    "冬",
+    "夜"
+   ]
+  },
+  {
+   "key": "t09",
+   "file": "セレナ_落書き.png",
+   "kind": "image",
+   "tags": [
+    "落書き"
+   ]
+  },
+  {
+   "key": "t10",
+   "file": "坂道_背景.png",
+   "kind": "image",
+   "tags": [
+    "背景",
+    "坂"
+   ]
+  },
+  {
+   "key": "t11",
+   "file": "ナギサ_海辺.png",
+   "kind": "image",
+   "tags": [
+    "海"
+   ]
+  },
+  {
+   "key": "t12",
+   "file": "generic_maid_ref.png",
+   "kind": "image",
+   "tags": [
+    "メイド服",
+    "資料"
+   ]
+  },
+  {
+   "key": "t13",
+   "file": "luminous_effect_brush.material.svg",
+   "kind": "material",
+   "tags": [
+    "ブラシ",
+    "発光"
+   ]
+  }
+ ],
+ "dictionary": [
+  {
+   "term": "神楽坂ルミナ",
+   "aliases": [
+    "ルミナ",
+    "lumina"
+   ],
+   "related": [
+    "聖夜のセレナーデ",
+    "メイド"
+   ]
+  },
+  {
+   "term": "朝霧ナギ",
+   "aliases": [
+    "ナギ",
+    "nagi"
+   ],
+   "related": [
+    "聖夜のセレナーデ",
+    "メイド"
+   ]
+  },
+  {
+   "term": "聖夜のセレナーデ",
+   "aliases": [
+    "せいセレ",
+    "serenade"
+   ],
+   "related": []
+  }
+ ],
+ "cases": [
+  {
+   "id": "v01",
+   "group": "exact-control",
+   "query": "lumina_portrait",
+   "kind": "",
+   "relevance": {
+    "t01": 2
+   }
+  },
+  {
+   "id": "v02",
+   "group": "exact-control",
+   "query": "落書き",
+   "kind": "",
+   "relevance": {
+    "t09": 2
+   }
+  },
+  {
+   "id": "v03",
+   "group": "related",
+   "query": "聖夜のセレナーデ メイド",
+   "kind": "",
+   "relevance": {
+    "t01": 2,
+    "t02": 2,
+    "t03": 2
+   }
+  },
+  {
+   "id": "v04",
+   "group": "related",
+   "query": "セレナーデ メイド",
+   "kind": "image",
+   "relevance": {
+    "t01": 2,
+    "t02": 2,
+    "t03": 2
+   }
+  },
+  {
+   "id": "v05",
+   "group": "related",
+   "query": "セレナーデ 立ち絵",
+   "kind": "",
+   "relevance": {
+    "t01": 2,
+    "t03": 2
+   }
+  },
+  {
+   "id": "v06",
+   "group": "related",
+   "query": "聖夜 漫画",
+   "kind": "book",
+   "relevance": {
+    "t06": 2
+   }
+  },
+  {
+   "id": "v07",
+   "group": "related",
+   "query": "ルミナ アイコン",
+   "kind": "",
+   "relevance": {
+    "t02": 2
+   }
+  },
+  {
+   "id": "v08",
+   "group": "over-expansion",
+   "query": "神楽 資料",
+   "kind": "",
+   "relevance": {
+    "t04": 2
+   }
+  },
+  {
+   "id": "v09",
+   "group": "over-expansion",
+   "query": "坂 背景",
+   "kind": "",
+   "relevance": {
+    "t10": 2
+   }
+  },
+  {
+   "id": "v10",
+   "group": "over-expansion",
+   "query": "ナギ 海",
+   "kind": "",
+   "relevance": {
+    "t11": 1
+   }
+  },
+  {
+   "id": "v11",
+   "group": "multiword",
+   "query": "冬 夜 背景",
+   "kind": "",
+   "relevance": {
+    "t08": 2
+   }
+  },
+  {
+   "id": "v12",
+   "group": "partial",
+   "query": "メイド 立ち絵 資料",
+   "kind": "image",
+   "relevance": {
+    "t12": 2,
+    "t01": 1,
+    "t03": 1
+   }
+  },
+  {
+   "id": "v13",
+   "group": "no-answer",
+   "query": "潜水艦 ソナー",
+   "kind": "",
+   "relevance": {}
+  }
+ ]
+}

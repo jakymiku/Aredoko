@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "ocr-eval-v1",
+  "language": "ja",
+  "pages": [
+    {"id":"page-01","item":"item-01","layout":"horizontal","font_size":40,"contrast":24,"text":"駅前の喫茶店で待ち合わせ\n青い傘を忘れました"},
+    {"id":"page-02","item":"item-02","layout":"horizontal","font_size":36,"contrast":24,"text":"下着のデザインテンプレート\n制作素材 No.１２３"},
+    {"id":"page-03","item":"item-03","layout":"horizontal","font_size":40,"contrast":24,"text":"夕焼けの教室で\n机を探しました"},
+    {"id":"page-04","item":"item-03","layout":"horizontal","font_size":40,"contrast":24,"text":"雨の日の約束を\n忘れません"},
+    {"id":"page-05","item":"item-04","layout":"vertical","font_size":36,"contrast":24,"text":"雨上がりの駅で\n幼なじみと再会した"},
+    {"id":"page-06","item":"item-05","layout":"horizontal","font_size":36,"contrast":24,"text":""},
+    {"id":"page-07","item":"item-06","layout":"horizontal","font_size":22,"contrast":150,"text":"雨上がりの街で\n看板の文字を読む"},
+    {"id":"page-08","item":"item-07","layout":"horizontal","font_size":36,"contrast":24,"text":"ＡＩ素材 PNG／WebP\n背景セット vol.２"}
+  ],
+  "queries": [
+    {"id":"q01","query":"青い 傘","expected_items":["item-01"]},
+    {"id":"q02","query":"ﾃﾝﾌﾟﾚｰﾄ","expected_items":["item-02"]},
+    {"id":"q03","query":"素材 123","expected_items":["item-02"]},
+    {"id":"q04","query":"教室 机","expected_items":["item-03"]},
+    {"id":"q05","query":"幼なじみ 再会","expected_items":["item-04"]},
+    {"id":"q06","query":"青い 教室","expected_items":[]},
+    {"id":"q07","query":"教室 約束","expected_items":[]},
+    {"id":"q08","query":"宇宙船 地下室","expected_items":[]},
+    {"id":"q09","query":"看板 文字","expected_items":["item-06"]},
+    {"id":"q10","query":"ａｉ ＰＮＧ","expected_items":["item-07"]}
+  ]
+}

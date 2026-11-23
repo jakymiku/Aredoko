@@ -1,0 +1,322 @@
+{
+ "version": "literal-related-v3",
+ "description": "Fictional names/tags only. Frozen before any run. Measures literal search mechanics (normalization, multi-word AND, user dictionary expansion); the dictionary was written by the evaluator who also wrote the queries, so it is NOT evidence of real-library quality. Files are placeholders; literal search never reads their content.",
+ "items": [
+  {
+   "key": "r01",
+   "file": "hiyori_standing_01.png",
+   "kind": "image",
+   "tags": [
+    "月守ひより",
+    "立ち絵"
+   ]
+  },
+  {
+   "key": "r02",
+   "file": "hiyori_chibi.png",
+   "kind": "image",
+   "tags": [
+    "月守ひより",
+    "ちびキャラ"
+   ]
+  },
+  {
+   "key": "r03",
+   "file": "a_shrine_maiden_ref.png",
+   "kind": "image",
+   "tags": [
+    "巫女",
+    "資料"
+   ]
+  },
+  {
+   "key": "r04",
+   "file": "hoshiakari_key_visual.png",
+   "kind": "image",
+   "tags": [
+    "星灯りの社",
+    "キービジュアル",
+    "巫女"
+   ]
+  },
+  {
+   "key": "r05",
+   "file": "shizuku_witch_pose.png",
+   "kind": "image",
+   "tags": [
+    "霧野しずく",
+    "魔法使い"
+   ]
+  },
+  {
+   "key": "r06",
+   "file": "ホシアカリ設定資料集.cbz",
+   "kind": "book",
+   "tags": [
+    "設定資料"
+   ]
+  },
+  {
+   "key": "r07",
+   "file": "ＢＧＭ_夜の参道.wav",
+   "kind": "audio",
+   "tags": [
+    "和風",
+    "BGM"
+   ]
+  },
+  {
+   "key": "r08",
+   "file": "yoru_sando_bgm_v2.wav",
+   "kind": "audio",
+   "tags": [
+    "和風"
+   ]
+  },
+  {
+   "key": "r09",
+   "file": "セーラー服_資料.png",
+   "kind": "image",
+   "tags": [
+    "制服",
+    "資料"
+   ]
+  },
+  {
+   "key": "r10",
+   "file": "school_uniform_ref_b.png",
+   "kind": "image",
+   "tags": [
+    "セーラー服"
+   ]
+  },
+  {
+   "key": "r11",
+   "file": "雨の駅_背景.png",
+   "kind": "image",
+   "tags": [
+    "背景",
+    "雨",
+    "夜"
+   ]
+  },
+  {
+   "key": "r12",
+   "file": "night_station_bg.png",
+   "kind": "image",
+   "tags": [
+    "背景"
+   ]
+  },
+  {
+   "key": "r13",
+   "file": "クロネコ_アイコン.png",
+   "kind": "image",
+   "tags": [
+    "黒猫"
+   ]
+  },
+  {
+   "key": "r14",
+   "file": "kuroneko_icon_alt.png",
+   "kind": "image",
+   "tags": []
+  },
+  {
+   "key": "r15",
+   "file": "大正ロマン_着物柄.svg",
+   "kind": "material",
+   "tags": [
+    "和柄"
+   ]
+  }
+ ],
+ "dictionary": [
+  {
+   "term": "月守ひより",
+   "aliases": [
+    "ひより",
+    "hiyori"
+   ],
+   "related": [
+    "星灯りの社",
+    "巫女"
+   ]
+  },
+  {
+   "term": "霧野しずく",
+   "aliases": [
+    "しずく",
+    "shizuku"
+   ],
+   "related": [
+    "星灯りの社",
+    "魔法使い"
+   ]
+  },
+  {
+   "term": "星灯りの社",
+   "aliases": [
+    "ほしあかり",
+    "hoshiakari",
+    "ホシアカリ"
+   ],
+   "related": []
+  },
+  {
+   "term": "黒猫",
+   "aliases": [
+    "クロネコ",
+    "kuroneko"
+   ],
+   "related": []
+  }
+ ],
+ "cases": [
+  {
+   "id": "c01",
+   "group": "exact-control",
+   "query": "hiyori_standing",
+   "kind": "",
+   "relevance": {
+    "r01": 2
+   }
+  },
+  {
+   "id": "c02",
+   "group": "exact-control",
+   "query": "設定資料",
+   "kind": "",
+   "relevance": {
+    "r06": 2
+   }
+  },
+  {
+   "id": "c03",
+   "group": "variant",
+   "query": "ＢＧＭ",
+   "kind": "",
+   "relevance": {
+    "r07": 2,
+    "r08": 2
+   }
+  },
+  {
+   "id": "c04",
+   "group": "variant",
+   "query": "ほしあかり",
+   "kind": "",
+   "relevance": {
+    "r06": 2,
+    "r04": 1
+   }
+  },
+  {
+   "id": "c05",
+   "group": "variant",
+   "query": "くろねこ",
+   "kind": "",
+   "relevance": {
+    "r13": 2,
+    "r14": 2
+   }
+  },
+  {
+   "id": "c06",
+   "group": "multiword",
+   "query": "立ち絵 ひより",
+   "kind": "",
+   "relevance": {
+    "r01": 2
+   }
+  },
+  {
+   "id": "c07",
+   "group": "multiword",
+   "query": "資料 セーラー服",
+   "kind": "",
+   "relevance": {
+    "r09": 2,
+    "r10": 1
+   }
+  },
+  {
+   "id": "c08",
+   "group": "multiword",
+   "query": "背景 夜 雨",
+   "kind": "",
+   "relevance": {
+    "r11": 2,
+    "r12": 1
+   }
+  },
+  {
+   "id": "c09",
+   "group": "multiword",
+   "query": "和風 BGM",
+   "kind": "audio",
+   "relevance": {
+    "r07": 2,
+    "r08": 2
+   }
+  },
+  {
+   "id": "c10",
+   "group": "related",
+   "query": "星灯りの社 巫女",
+   "kind": "",
+   "relevance": {
+    "r04": 2,
+    "r01": 2,
+    "r02": 1
+   }
+  },
+  {
+   "id": "c11",
+   "group": "related",
+   "query": "星灯り 巫女",
+   "kind": "",
+   "relevance": {
+    "r04": 2,
+    "r01": 2,
+    "r02": 1
+   }
+  },
+  {
+   "id": "c12",
+   "group": "related",
+   "query": "星灯りの社 魔法使い",
+   "kind": "",
+   "relevance": {
+    "r05": 2
+   }
+  },
+  {
+   "id": "c13",
+   "group": "related",
+   "query": "ほしあかり 立ち絵",
+   "kind": "",
+   "relevance": {
+    "r01": 2
+   }
+  },
+  {
+   "id": "c14",
+   "group": "related",
+   "query": "巫女 キャラ",
+   "kind": "image",
+   "relevance": {
+    "r01": 2,
+    "r02": 2,
+    "r04": 1
+   }
+  },
+  {
+   "id": "c15",
+   "group": "no-answer",
+   "query": "宇宙船 コックピット",
+   "kind": "",
+   "relevance": {}
+  }
+ ]
+}

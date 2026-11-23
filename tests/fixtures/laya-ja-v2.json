@@ -1,0 +1,478 @@
+[
+  {
+    "id": "ja-01",
+    "query": "青い画像",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-02",
+    "query": "赤い表紙の本",
+    "intent": "cover",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-03",
+    "query": "緑色っぽい壁紙",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-04",
+    "query": "黄色い表紙の漫画",
+    "intent": "cover",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-05",
+    "query": "紫の背景の写真",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-06",
+    "query": "猫が描かれた同人誌の表紙",
+    "intent": "cover",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-07",
+    "query": "白黒のイラスト",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-08",
+    "query": "丸い月が見える画像",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-09",
+    "query": "タイトルに雨が入っていた音楽",
+    "intent": "text",
+    "kind": "audio",
+    "split": "development"
+  },
+  {
+    "id": "ja-10",
+    "query": "作者名で探したい同人誌",
+    "intent": "text",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-11",
+    "query": "ファイル名がsampleだった動画",
+    "intent": "text",
+    "kind": "video",
+    "split": "development"
+  },
+  {
+    "id": "ja-12",
+    "query": "海辺というタグを付けた写真",
+    "intent": "text",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-13",
+    "query": "名前に素材とあるZIP",
+    "intent": "text",
+    "kind": "archive",
+    "split": "development"
+  },
+  {
+    "id": "ja-14",
+    "query": "田中という作者の漫画",
+    "intent": "text",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-15",
+    "query": "曲名が夜の街の音源",
+    "intent": "text",
+    "kind": "audio",
+    "split": "development"
+  },
+  {
+    "id": "ja-16",
+    "query": "お気に入りタグのイラスト",
+    "intent": "text",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-17",
+    "query": "傘が必要な暗い都会の景色",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-18",
+    "query": "夜っぽいやつ",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-19",
+    "query": "前にダウンロードしたあれ",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-20",
+    "query": "落ち着ける感じの音楽",
+    "intent": "mixed",
+    "kind": "audio",
+    "split": "development"
+  },
+  {
+    "id": "ja-21",
+    "query": "ちょっと切ない作品",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-22",
+    "query": "雨というタイトルで青い表紙の本",
+    "intent": "mixed",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-23",
+    "query": "赤い表紙か赤い写真を探したい",
+    "intent": "cover",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-24",
+    "query": "あの感じのやつ",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-25",
+    "query": "紺色で大きな星が描かれた同人誌",
+    "intent": "cover",
+    "kind": "book",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-26",
+    "query": "オレンジ色が目立つ一枚絵",
+    "intent": "cover",
+    "kind": "image",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-27",
+    "query": "表紙に眼鏡の人がいる漫画",
+    "intent": "cover",
+    "kind": "book",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-28",
+    "query": "青い本か青い壁紙だったと思う",
+    "intent": "cover",
+    "kind": "any",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-29",
+    "query": "名前に2024と付いているムービー",
+    "intent": "text",
+    "kind": "video",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-30",
+    "query": "作曲者名をタグにした曲",
+    "intent": "text",
+    "kind": "audio",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-31",
+    "query": "ファイル名に草花を含む素材パック",
+    "intent": "text",
+    "kind": "archive",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-32",
+    "query": "タイトルが冬休みの本",
+    "intent": "text",
+    "kind": "book",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-33",
+    "query": "静かな夕暮れみたいなもの",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-34",
+    "query": "たぶん何かの素材だった",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-35",
+    "query": "元気が出るような動画",
+    "intent": "mixed",
+    "kind": "video",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-36",
+    "query": "本か写真か覚えてない、昨日見たもの",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "legacy-regression"
+  },
+  {
+    "id": "ja-v2-37",
+    "query": "下着のデザインテンプレート",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-v2-38",
+    "query": "下着デザインというタグのPSD",
+    "intent": "text",
+    "kind": "material",
+    "split": "development"
+  },
+  {
+    "id": "ja-v2-39",
+    "query": "青い下着が描かれている画像",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-v2-40",
+    "query": "下着の型紙という名前のPDF",
+    "intent": "text",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-v2-41",
+    "query": "下着のデザイン案をまとめたもの",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-v2-42",
+    "query": "レースの柄が入った白い布の写真",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-v2-43",
+    "query": "調子が上がるBGM",
+    "intent": "mixed",
+    "kind": "audio",
+    "split": "development"
+  },
+  {
+    "id": "ja-v2-44",
+    "query": "元データの拡張子がblendの素材",
+    "intent": "text",
+    "kind": "material",
+    "split": "development"
+  },
+  {
+    "id": "ja-v2-45",
+    "query": "淡いピンクの下着が載っている写真",
+    "intent": "cover",
+    "kind": "image",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-46",
+    "query": "表紙に緑の葉っぱが描かれたコミック",
+    "intent": "cover",
+    "kind": "book",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-47",
+    "query": "グレーの背景に幾何学模様の壁紙",
+    "intent": "cover",
+    "kind": "image",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-48",
+    "query": "袖の長い服の人が映っている画像",
+    "intent": "cover",
+    "kind": "image",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-49",
+    "query": "深い紫色の漫画の表紙",
+    "intent": "cover",
+    "kind": "book",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-50",
+    "query": "表紙に丸い窓のある同人誌",
+    "intent": "cover",
+    "kind": "book",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-51",
+    "query": "白地に黒い線だけのPNG",
+    "intent": "cover",
+    "kind": "image",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-52",
+    "query": "ベージュの本かベージュの写真",
+    "intent": "cover",
+    "kind": "any",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-53",
+    "query": "ファイル名にランジェリーを含むPSDテンプレート",
+    "intent": "text",
+    "kind": "material",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-54",
+    "query": "下着の型紙というタグを付けたPDF",
+    "intent": "text",
+    "kind": "book",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-55",
+    "query": "spring-layoutという名前のSVG",
+    "intent": "text",
+    "kind": "material",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-56",
+    "query": "鈴木という作者名の同人誌",
+    "intent": "text",
+    "kind": "book",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-57",
+    "query": "タイトルが朝の散歩のMP3",
+    "intent": "text",
+    "kind": "audio",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-58",
+    "query": "タグが旅の思い出のMP4",
+    "intent": "text",
+    "kind": "video",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-59",
+    "query": "名前の末尾にパーツが付いたZIP",
+    "intent": "text",
+    "kind": "archive",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-60",
+    "query": "拡張子clipの元データ",
+    "intent": "text",
+    "kind": "material",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-61",
+    "query": "下着をデザインする時の参考になりそうな素材",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-62",
+    "query": "裁縫で使えそうなテンプレート",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-63",
+    "query": "涼しげな雰囲気のもの",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-64",
+    "query": "寝る前に聴きたくなる音楽",
+    "intent": "mixed",
+    "kind": "audio",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-65",
+    "query": "前に気に入った、名前を忘れたファイル",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-66",
+    "query": "花柄の表紙でタイトルに春がある本",
+    "intent": "mixed",
+    "kind": "book",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-67",
+    "query": "にぎやかな街の空気を感じる動画",
+    "intent": "mixed",
+    "kind": "video",
+    "split": "held-out-v2"
+  },
+  {
+    "id": "ja-v2-68",
+    "query": "本と画像の両方で使える参考資料",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "held-out-v2"
+  }
+]

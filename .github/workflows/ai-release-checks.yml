@@ -1,0 +1,16 @@
+name: AI owned-worker release CPU checks
+# Hosted CI is opt-in while the account allowance is blocked.
+# Local checks remain required; do not enable paid usage automatically.
+on:
+  workflow_dispatch:
+jobs:
+  cpu-lifecycle:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Owned worker release / busy / shutdown / localhost auth only
+        run: python -m unittest discover -s tests -p "test_ai_release.py" -v

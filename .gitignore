@@ -4,6 +4,7 @@
 /models/
 /fixtures/generated/
 /private/
+/Aredoko-test/
 .env
 .env.*
 !.env.example
@@ -17,3 +18,10 @@ target/
 dist/
 bin/
 obj/
+# Native GUI comparison generated output (never commit built packages or measured data)
+/experiments/gui-compare/winui3/generated/
+/experiments/gui-compare/tauri-react/package-lock.json
+.venv-ai/
+
+# Kernel-owned local catalog/recovery lease files
+*.owner.lock

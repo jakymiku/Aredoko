@@ -1,0 +1,128 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>Aredoko_WinUI</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon Condition="Exists('Assets\AppIcon.ico')">Assets\AppIcon.ico</ApplicationIcon>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant())</RuntimeIdentifier>
+    <PublishProfile Condition="Exists('Properties\PublishProfiles\win-$(Platform).pubxml')">win-$(Platform).pubxml</PublishProfile>
+    <UseWinUI>true</UseWinUI>
+    <!-- Required by CsWinRT generated ABI vtables; no runtime code generation. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Normal development keeps its existing sparse identity. Explicit Alpha
+       publishing installs beside it, without unregistering development data. -->
+  <PropertyGroup>
+    <AredokoPackageChannel Condition="'$(AredokoPackageChannel)' == ''">Development</AredokoPackageChannel>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(AredokoPackageChannel)' == 'Alpha'">
+    <AppxManifest Include="Package.Alpha.appxmanifest"><SubType>Designer</SubType></AppxManifest>
+  </ItemGroup>
+  <!-- Explicit user-selected ZIP distribution. Keep normal development and
+       historical Alpha MSIX identities unchanged; never register this output. -->
+  <PropertyGroup Condition="'$(AredokoPackageChannel)' == 'Portable'">
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishAppxPackage>false</PublishAppxPackage>
+    <EnableWinAppRunSupport>false</EnableWinAppRunSupport>
+  </PropertyGroup>
+  <!-- The GUI startup acknowledgement uses redirected Console stdio. Keep its
+       runtime dependency in the trimmed publish graph, not just a stray DLL. -->
+  <ItemGroup Condition="'$(AredokoPackageChannel)' == 'Portable'">
+    <TrimmerRootAssembly Include="System.Console" />
+    <!-- Modern picker projections must remain in the managed dependency graph.
+         A loose DLL alone does not make it loadable in the trimmed app. -->
+    <TrimmerRootAssembly Include="Microsoft.Windows.Storage.Pickers.Projection" />
+  </ItemGroup>
+  <Target Name="ValidateAredokoPackageChannel" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(AredokoPackageChannel)' != 'Development' and '$(AredokoPackageChannel)' != 'Alpha' and '$(AredokoPackageChannel)' != 'Portable'"
+           Text="Unknown Aredoko package channel. Use Development, Alpha or Portable." />
+    <Error Condition="'$(AredokoPackageChannel)' == 'Alpha' and '$(PublishAppxPackage)' != 'true'"
+           Text="The Alpha channel is for MSIX publishing. Use winapp package with -p AredokoPackageChannel=Alpha; keep development runs on the default channel." />
+    <Error Condition="'$(AredokoPackageChannel)' == 'Portable' and '$(Configuration)' != 'Portable'"
+           Text="Use -c Portable for the Portable channel to keep packaged build output separate." />
+  </Target>
+
+  <ItemGroup>
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\LockScreenLogo.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\AppIcon.ico" />
+    <Content Include="Assets\Visual\*.png" />
+    <Content Update="Assets\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!--
+    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
+    Tools extension to be activated for this project even if the Windows App SDK Nuget
+    package has not yet been restored.
+  -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix"/>
+  </ItemGroup>
+
+  <!--
+    Microsoft.Windows.SDK.BuildTools.WinApp adds first-class support for
+    `dotnet run` on packaged WinUI apps: it hooks the .NET CLI Run target to
+    register a debug identity via the winapp CLI and launch the app with
+    package identity (AUMID).
+    Set <EnableWinAppRunSupport>false</EnableWinAppRunSupport> in a
+    <PropertyGroup> above to opt out.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.7.1" />
+    <!-- Build-time checks only: no analyzer assets in the app or its consumers. -->
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinUIAnalyzer" Version="0.7.1" PrivateAssets="all" IncludeAssets="analyzers;build;buildTransitive" />
+  </ItemGroup>
+
+  <!--
+    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
+    Explorer "Package and Publish" context menu entry to be enabled for this project even if
+    the Windows App SDK Nuget package has not yet been restored.
+  -->
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <!-- Publish Properties -->
+  <PropertyGroup>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
+    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+  </PropertyGroup>
+  <Target Name="UseCachedRuntimePacks" BeforeTargets="ProcessFrameworkReferences"
+          Condition="!Exists('$(NuGetPackageRoot)microsoft.netcore.app.runtime.win-x64\10.0.13') and Exists('$(NuGetPackageRoot)microsoft.netcore.app.runtime.win-x64\10.0.12')">
+    <ItemGroup>
+      <KnownFrameworkReference Condition="'%(KnownFrameworkReference.LatestRuntimeFrameworkVersion)' == '10.0.13'" LatestRuntimeFrameworkVersion="10.0.12" />
+      <KnownCrossgen2Pack Condition="'%(KnownCrossgen2Pack.Crossgen2PackVersion)' == '10.0.13'" Crossgen2PackVersion="10.0.12" />
+      <KnownILLinkPack Condition="'%(KnownILLinkPack.ILLinkPackVersion)' == '10.0.13'" ILLinkPackVersion="10.0.12" />
+    </ItemGroup>
+  </Target>
+  <ItemGroup>
+    <AssemblyMetadata Include="AredokoChannel" Value="$(AredokoPackageChannel)" />
+    <ProjectReference Include="../Aredoko.Core/Aredoko.Core.csproj" />
+  </ItemGroup>
+</Project>

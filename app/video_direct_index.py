@@ -1,0 +1,195 @@
+"""Atomic, time-grounded direct-video vectors in an explicit video namespace.
+
+Decode/encode stages are private and bounded. The caller supplies an owned
+encoder; this module never selects a model, starts a job, or alters the active
+image/text profile. Only a verified successful whole item becomes visible.
+"""
+from array import array
+from contextlib import closing,contextmanager
+import re
+import math
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+from ai_profiles import VIDEO_VECTOR_CONTRACT
+from ai_vectors import normalized
+from video_input import MAX_FRAMES,MAX_START_MS,validate_video
+from video_previews import MediaDecodeCancelled
+from previews import PreviewReader,ReaderChanged
+
+CONTRACT='direct-video-window:v1'
+TABLES=(
+    '''CREATE TABLE IF NOT EXISTS ai_video_direct_sources(
+        item_id INTEGER PRIMARY KEY,source_revision TEXT NOT NULL,contract TEXT NOT NULL,
+        decoded_windows INTEGER NOT NULL,indexed_windows INTEGER NOT NULL,total_frames INTEGER NOT NULL)''',
+    '''CREATE TABLE IF NOT EXISTS ai_video_direct_windows(
+        item_id INTEGER NOT NULL,ordinal INTEGER NOT NULL,start_ms INTEGER NOT NULL,
+        end_ms INTEGER NOT NULL,vector BLOB NOT NULL,PRIMARY KEY(item_id,ordinal))''')
+MAX_WINDOWS=MAX_START_MS//(MAX_FRAMES*1000)
+# A 24h item stages at most 5400 float32 vectors of the profile dimension.
+STAGE_BYTES=32*1024*1024
+
+
+class VideoDirectIndex:
+    def __init__(self,catalog,encoder,*,reader=None,stage_parent=None,init_cancel=None):
+        profile=encoder.profile
+        if profile.modalities!=('text','video') or profile.vector_contract!=VIDEO_VECTOR_CONTRACT:
+            raise ValueError('An explicit direct-video encoder namespace is required')
+        self.catalog,self.encoder,self.profile=catalog,encoder,profile
+        self.reader=reader if reader is not None else PreviewReader(catalog)
+        self.stage_parent=stage_parent
+        from ai_search import VectorStore
+        # The same catalog guard -> writer fence order as live capture. A backup
+        # cannot discover a newly created sidecar between schema statements.
+        with self._boundary(init_cancel),catalog.writer_fence.write(cancelled=lambda:init_cancel is not None and init_cancel.is_set()):
+            self._check(init_cancel)
+            self.store=VectorStore(profile.store_path(catalog.path),profile,writer_fence=catalog.writer_fence)
+            with self.store.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                for statement in TABLES:db.execute(statement)
+                db.execute('PRAGMA user_version=1')
+                self._check(init_cancel)
+
+    @staticmethod
+    def _check(cancel):
+        if cancel is not None and cancel.is_set():raise MediaDecodeCancelled('Video index cancelled before publication')
+
+    @contextmanager
+    def _boundary(self,cancel):
+        while not self.catalog._guard.acquire(timeout=.05):self._check(cancel)
+        try:self._check(cancel);yield
+        finally:self.catalog._guard.release()
+
+    def fresh(self,item_id,revision,*,cancel=None):
+        # A matching marker alone is not enough: an interrupted repair or a
+        # damaged sidecar must remain eligible for the next explicit rebuild.
+        # Stream one vector at a time, without decoding or starting the model.
+        self._check(cancel)
+        with self.store.connect() as db:
+            marker=db.execute('SELECT decoded_windows,indexed_windows,total_frames FROM ai_video_direct_sources '
+                              'WHERE item_id=? AND source_revision=? AND contract=?',(item_id,revision,CONTRACT)).fetchone()
+            if marker is None:return False
+            decoded,indexed,frames=marker
+            if (any(type(v) is not int for v in marker) or not 1<=decoded==indexed<=MAX_WINDOWS
+                    or not 1<=frames<=MAX_START_MS//1000):return False
+            count=expected_start=frame_count=0
+            for ordinal,start,end,data in db.execute('SELECT ordinal,start_ms,end_ms,vector FROM ai_video_direct_windows '
+                                                   'WHERE item_id=? ORDER BY ordinal',(item_id,)):
+                self._check(cancel)
+                if (any(type(v) is not int for v in (ordinal,start,end)) or ordinal!=count or count>=decoded
+                        or start!=expected_start or not start<end<=min(start+MAX_FRAMES*1000,MAX_START_MS)
+                        or ordinal<decoded-1 and end-start!=MAX_FRAMES*1000
+                        or type(data) is not bytes or len(data)!=self.profile.dimension*4):return False
+                values=array('f');values.frombytes(data)
+                if sys.byteorder!='little':values.byteswap()
+                norm=sum(value*value for value in values)
+                if not math.isfinite(norm) or abs(norm-1)>1e-4:return False
+                count+=1;expected_start=end;frame_count+=(end-start+999)//1000
+            self._check(cancel)
+            return count==decoded and frame_count==frames
+
+    def index_item(self,item_id,revision,*,cancel=None,validate=None,publication_guard=None,on_published=None,progress=None):
+        if type(item_id) is not int or not 1<=item_id<=9223372036854775807:raise ValueError('Invalid video item')
+        if type(revision) is not str or re.fullmatch('[0-9a-f]{64}',revision) is None:raise ValueError('Invalid video revision')
+        self._check(cancel)
+        if validate is not None:
+            if not callable(validate):raise ValueError('Invalid video publication validator')
+            validate()
+        if on_published is not None and (publication_guard is None or not callable(on_published)):
+            raise ValueError('Invalid video publication callback')
+        if progress is not None and not callable(progress):raise ValueError('Invalid video progress callback')
+        if self.encoder.profile.key!=self.profile.key:raise ValueError('Video encoder profile changed')
+        with tempfile.TemporaryDirectory(prefix='aredoko-video-stage-',dir=self.stage_parent) as temporary:
+            path=Path(temporary)/'stage.sqlite'
+            with closing(sqlite3.connect(path)) as stage:
+                stage.execute('PRAGMA page_size=4096')
+                stage.execute('PRAGMA journal_mode=MEMORY')
+                stage.execute('PRAGMA cache_size=-1024')
+                stage.execute('PRAGMA max_page_count='+str(STAGE_BYTES//4096))
+                stage.execute('CREATE TABLE windows(ordinal INTEGER PRIMARY KEY,start_ms INTEGER,end_ms INTEGER,vector BLOB)')
+                decoded=indexed=frames=0;expected_start=prepared_ms=0;short_seen=False
+                def report(phase,total):
+                    if progress is None:return
+                    self._check(cancel)
+                    progress({'item_id':item_id,'prepared_ms':prepared_ms,'total_ms':total,
+                              'prepared_windows':indexed,'phase':phase})
+                    self._check(cancel)
+                with self.reader.video_coverage_stream(item_id,revision,cancel) as windows:
+                    report('decoding',getattr(windows,'total_duration_ms',None))
+                    for window in windows:
+                        self._check(cancel)
+                        validate_video(window)
+                        # One forward coverage from the probed plan: contiguous
+                        # windows, only the final one may be shorter than the
+                        # MAX_FRAMES bound, and no window is ever skipped.
+                        duration=window.end_ms-window.start_ms
+                        if (decoded>=MAX_WINDOWS or short_seen or window.start_ms!=expected_start
+                                or not 1<=duration<=MAX_FRAMES*1000):
+                            raise ValueError('Invalid direct-video window sequence')
+                        short_seen=duration<MAX_FRAMES*1000
+                        expected_start=window.end_ms
+                        decoded+=1;frames+=len(window.frames)
+                        total=getattr(windows,'total_duration_ms',None)
+                        if progress is not None and (type(total) is not int or not window.end_ms<=total<=MAX_START_MS):
+                            raise ValueError('Invalid known duration for video progress')
+                        report('encoding',total)
+                        vector=normalized(self.encoder.encode('video',window),self.profile.dimension)
+                        self._check(cancel)
+                        packed=array('f',vector)
+                        if sys.byteorder!='little':packed.byteswap()
+                        stage.execute('INSERT INTO windows VALUES(?,?,?,?)',
+                            (decoded-1,window.start_ms,window.end_ms,packed.tobytes()))
+                        indexed+=1
+                        prepared_ms=window.end_ms
+                        report('decoding',total)
+                # Exhaustion alone is not proof of completion: the staged
+                # windows must end exactly at the total the producer probed.
+                total=getattr(windows,'total_duration_ms',None)
+                if total is None or expected_start!=total:
+                    raise ValueError('Incomplete video coverage cannot be published')
+                if not decoded:raise ValueError('Empty video coverage cannot be published')
+                stage.commit()
+                report('saving',total)
+                try:self._publish(item_id,revision,path,decoded,indexed,frames,cancel,validate,publication_guard,on_published)
+                except InterruptedError:
+                    self._check(cancel)
+                    raise
+            return {'item_id':item_id,'revision':revision,'decoded_windows':decoded,
+                    'indexed_windows':indexed,'total_frames':frames,'contract':CONTRACT}
+
+    def _publish(self,item_id,revision,path,decoded,indexed,frames,cancel,validate,publication_guard,on_published):
+        def check_source():
+            self._check(cancel)
+            if validate is not None:validate()
+            if self.encoder.profile.key!=self.profile.key:raise ValueError('Video encoder namespace changed')
+            if self.reader.video_manifest(item_id)['revision']!=revision:
+                raise ReaderChanged('Video source changed before index publication')
+            self._check(cancel)
+        with self._boundary(cancel),self.catalog.writer_fence.write(cancelled=lambda:cancel is not None and cancel.is_set()):
+            check_source()
+            with self.store.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                db.execute('DELETE FROM ai_video_direct_windows WHERE item_id=?',(item_id,))
+                db.execute('DELETE FROM ai_video_direct_sources WHERE item_id=?',(item_id,))
+                db.execute('INSERT INTO ai_video_direct_sources VALUES(?,?,?,?,?,?)',
+                           (item_id,revision,CONTRACT,decoded,indexed,frames))
+                # An explicit read-only connection avoids ATTACH inheriting the
+                # primary connection's URI policy on Windows. At most 64 vectors
+                # escape the stage cursor; the target transaction stays atomic.
+                with closing(sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True)) as stage:
+                    cursor=stage.execute('SELECT ordinal,start_ms,end_ms,vector FROM windows ORDER BY ordinal')
+                    while rows:=cursor.fetchmany(64):
+                        self._check(cancel)
+                        db.executemany('INSERT INTO ai_video_direct_windows VALUES(?,?,?,?,?)',
+                                       ((item_id,*row) for row in rows))
+                # Staging and copying do not hold the cancellation gate. The
+                # final check and commit are one decision with job cancellation.
+                def commit():
+                    check_source()
+                    db.commit()
+                    if on_published is not None:on_published()
+                if publication_guard is None:commit()
+                else:
+                    with publication_guard:commit()

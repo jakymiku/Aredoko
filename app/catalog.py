@@ -1,17 +1,31 @@
 """Shared catalog prototype. No media filesystem access; fictional records only."""
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from pathlib import Path
 
 KINDS = ('book', 'image', 'video', 'audio')
 THEMES = ('雨の街', '夜の図書館', '青い海', '森の散歩', '古い紙', '静かな部屋', '夕焼け', '星空')
 
 
+def validate_tags(tags):
+    if not isinstance(tags, list) or len(tags) > 30 or any(not isinstance(t, str) or not 1 <= len(t.strip()) <= 60 for t in tags):
+        raise ValueError('Tags must contain 1 to 60 characters, at most 30 tags')
+    return list(dict.fromkeys(t.strip() for t in tags))
+
+
+CURRENT_SCHEMA_USER_VERSION = 0
+
+
 class Catalog:
-    def __init__(self, path):
+    def __init__(self, path, *, supported_schema=CURRENT_SCHEMA_USER_VERSION):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        if self.path.exists() and self.path.stat().st_size > 0:
+            with closing(sqlite3.connect(self.path, timeout=5)) as check_db:
+                ver = check_db.execute('PRAGMA user_version').fetchone()[0]
+                if ver > supported_schema:
+                    raise ValueError(f'Unsupported database schema user_version {ver} > {supported_schema}; please update Aredoko.')
         with self.connect() as db:
             db.executescript('''
                 PRAGMA journal_mode=WAL;
@@ -88,28 +102,33 @@ class Catalog:
         return {'total': total, 'page': page, 'limit': limit, 'items': [self.item(r) for r in rows]}
 
     def get(self, item_id):
+        if type(item_id) is not int or not 1 <= item_id <= 9223372036854775807:
+            raise ValueError('Invalid item')
         with self.connect() as db:
             row = db.execute('SELECT * FROM items WHERE id=?', (item_id,)).fetchone()
         if row is None:
             raise KeyError(item_id)
         return self.item(row)
 
-    def update(self, ids, changes):
-        if not isinstance(ids, list) or not 1 <= len(ids) <= 120 or any(type(i) is not int for i in ids):
+    @staticmethod
+    def prepare_update(ids,changes):
+        if (not isinstance(ids, list) or not 1 <= len(ids) <= 120
+                or any(type(i) is not int or not 1 <= i <= 9223372036854775807 for i in ids)):
             raise ValueError('Select 1 to 120 valid IDs')
         if not isinstance(changes, dict) or not changes or set(changes) - {'tags', 'shelf', 'favorite', 'reviewed'}:
             raise ValueError('Invalid changes')
         changes = dict(changes)
         if 'tags' in changes:
-            tags = changes['tags']
-            if not isinstance(tags, list) or len(tags) > 30 or any(not isinstance(t, str) or not 1 <= len(t.strip()) <= 60 for t in tags):
-                raise ValueError('Tags must contain 1 to 60 characters, at most 30 tags')
-            changes['tags'] = json.dumps(list(dict.fromkeys(t.strip() for t in tags)), ensure_ascii=False)
+            changes['tags'] = json.dumps(validate_tags(changes['tags']), ensure_ascii=False)
         if 'shelf' in changes and (not isinstance(changes['shelf'], str) or len(changes['shelf']) > 80):
             raise ValueError('Shelf must be 80 characters or less')
         for key in ('favorite', 'reviewed'):
             if key in changes and type(changes[key]) is not bool:
                 raise ValueError('Expected a boolean')
+        return changes
+
+    def update(self, ids, changes):
+        changes=self.prepare_update(ids,changes)
         marks = ','.join('?' for _ in ids)
         with self.connect() as db:
             count = db.execute(f'SELECT count(*) FROM items WHERE id IN ({marks})', ids).fetchone()[0]
@@ -118,3 +137,10 @@ class Catalog:
             assignments = ','.join(f'{key}=?' for key in changes)
             db.execute(f'UPDATE items SET {assignments} WHERE id IN ({marks})', list(changes.values()) + ids)
         return {'updated': count}
+
+    def close(self):
+        try:
+            with self.connect() as db:
+                db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        except Exception:
+            pass

@@ -1,0 +1,254 @@
+[
+  {
+    "id": "ja-01",
+    "query": "青い画像",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-02",
+    "query": "赤い表紙の本",
+    "intent": "cover",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-03",
+    "query": "緑色っぽい壁紙",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-04",
+    "query": "黄色い表紙の漫画",
+    "intent": "cover",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-05",
+    "query": "紫の背景の写真",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-06",
+    "query": "猫が描かれた同人誌の表紙",
+    "intent": "cover",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-07",
+    "query": "白黒のイラスト",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-08",
+    "query": "丸い月が見える画像",
+    "intent": "cover",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-09",
+    "query": "タイトルに雨が入っていた音楽",
+    "intent": "text",
+    "kind": "audio",
+    "split": "development"
+  },
+  {
+    "id": "ja-10",
+    "query": "作者名で探したい同人誌",
+    "intent": "text",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-11",
+    "query": "ファイル名がsampleだった動画",
+    "intent": "text",
+    "kind": "video",
+    "split": "development"
+  },
+  {
+    "id": "ja-12",
+    "query": "海辺というタグを付けた写真",
+    "intent": "text",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-13",
+    "query": "名前に素材とあるZIP",
+    "intent": "text",
+    "kind": "archive",
+    "split": "development"
+  },
+  {
+    "id": "ja-14",
+    "query": "田中という作者の漫画",
+    "intent": "text",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-15",
+    "query": "曲名が夜の街の音源",
+    "intent": "text",
+    "kind": "audio",
+    "split": "development"
+  },
+  {
+    "id": "ja-16",
+    "query": "お気に入りタグのイラスト",
+    "intent": "text",
+    "kind": "image",
+    "split": "development"
+  },
+  {
+    "id": "ja-17",
+    "query": "傘が必要な暗い都会の景色",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-18",
+    "query": "夜っぽいやつ",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-19",
+    "query": "前にダウンロードしたあれ",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-20",
+    "query": "落ち着ける感じの音楽",
+    "intent": "mixed",
+    "kind": "audio",
+    "split": "development"
+  },
+  {
+    "id": "ja-21",
+    "query": "ちょっと切ない作品",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-22",
+    "query": "雨というタイトルで青い表紙の本",
+    "intent": "mixed",
+    "kind": "book",
+    "split": "development"
+  },
+  {
+    "id": "ja-23",
+    "query": "赤い表紙か赤い写真を探したい",
+    "intent": "cover",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-24",
+    "query": "あの感じのやつ",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "development"
+  },
+  {
+    "id": "ja-25",
+    "query": "紺色で大きな星が描かれた同人誌",
+    "intent": "cover",
+    "kind": "book",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-26",
+    "query": "オレンジ色が目立つ一枚絵",
+    "intent": "cover",
+    "kind": "image",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-27",
+    "query": "表紙に眼鏡の人がいる漫画",
+    "intent": "cover",
+    "kind": "book",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-28",
+    "query": "青い本か青い壁紙だったと思う",
+    "intent": "cover",
+    "kind": "any",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-29",
+    "query": "名前に2024と付いているムービー",
+    "intent": "text",
+    "kind": "video",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-30",
+    "query": "作曲者名をタグにした曲",
+    "intent": "text",
+    "kind": "audio",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-31",
+    "query": "ファイル名に草花を含む素材パック",
+    "intent": "text",
+    "kind": "archive",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-32",
+    "query": "タイトルが冬休みの本",
+    "intent": "text",
+    "kind": "book",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-33",
+    "query": "静かな夕暮れみたいなもの",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-34",
+    "query": "たぶん何かの素材だった",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-35",
+    "query": "元気が出るような動画",
+    "intent": "mixed",
+    "kind": "video",
+    "split": "held-out"
+  },
+  {
+    "id": "ja-36",
+    "query": "本か写真か覚えてない、昨日見たもの",
+    "intent": "mixed",
+    "kind": "any",
+    "split": "held-out"
+  }
+]

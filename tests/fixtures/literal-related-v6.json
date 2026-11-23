@@ -1,0 +1,404 @@
+{
+ "version": "literal-related-v6-holdout",
+ "description": "Frozen 2026-10-14 at production b59a4bc BEFORE any v6 retrieval run. Fictional metadata/placeholders only. Same author as the evaluator/dictionary: development-adjacent, not independent real-library quality. Includes absent-target queries whose partial/related candidates count as false answers, plus punctuation controls after the earlier tag-JSON fix. Do not tune retrieval to this set after inspection.",
+ "items": [
+  {
+   "key": "s01",
+   "file": "portrait_a.png",
+   "kind": "image",
+   "tags": [
+    "灰谷カノ",
+    "立ち絵"
+   ]
+  },
+  {
+   "key": "s02",
+   "file": "portrait_b.png",
+   "kind": "image",
+   "tags": [
+    "雨音ナギ",
+    "立ち絵"
+   ]
+  },
+  {
+   "key": "s03",
+   "file": "star_ref.png",
+   "kind": "image",
+   "tags": [
+    "カノープス",
+    "宇宙",
+    "参考資料"
+   ]
+  },
+  {
+   "key": "s04",
+   "file": "classroom.png",
+   "kind": "image",
+   "tags": [
+    "夕焼け",
+    "教室",
+    "背景"
+   ]
+  },
+  {
+   "key": "s05",
+   "file": "evening_school.wav",
+   "kind": "audio",
+   "tags": [
+    "夕焼け",
+    "教室",
+    "BGM"
+   ]
+  },
+  {
+   "key": "s06",
+   "file": "rain_street.mp4",
+   "kind": "video",
+   "tags": [
+    "雨",
+    "街",
+    "夜"
+   ]
+  },
+  {
+   "key": "s07",
+   "file": "rain_street.png",
+   "kind": "image",
+   "tags": [
+    "雨",
+    "街",
+    "夜"
+   ]
+  },
+  {
+   "key": "s08",
+   "file": "book_a.cbz",
+   "kind": "book",
+   "tags": [
+    "潮騒学園",
+    "幼なじみ",
+    "純愛"
+   ]
+  },
+  {
+   "key": "s09",
+   "file": "book_b.cbz",
+   "kind": "book",
+   "tags": [
+    "潮騒学園",
+    "推理"
+   ]
+  },
+  {
+   "key": "s10",
+   "file": "costume.png",
+   "kind": "image",
+   "tags": [
+    "白髪",
+    "赤い眼鏡",
+    "セーラー服"
+   ]
+  },
+  {
+   "key": "s11",
+   "file": "sailor.png",
+   "kind": "image",
+   "tags": [
+    "黒髪",
+    "セーラー服"
+   ]
+  },
+  {
+   "key": "s12",
+   "file": "shrine.png",
+   "kind": "image",
+   "tags": [
+    "巫女",
+    "資料"
+   ]
+  },
+  {
+   "key": "s13",
+   "file": "quote_tag.png",
+   "kind": "image",
+   "tags": [
+    "魔法\"少女"
+   ]
+  },
+  {
+   "key": "s14",
+   "file": "path_tag.png",
+   "kind": "image",
+   "tags": [
+    "C:\\textures"
+   ]
+  },
+  {
+   "key": "s15",
+   "file": "blank.png",
+   "kind": "image",
+   "tags": []
+  },
+  {
+   "key": "s16",
+   "file": "overlay.svg",
+   "kind": "material",
+   "tags": [
+    "星",
+    "透過",
+    "素材"
+   ]
+  }
+ ],
+ "dictionary": [
+  {
+   "term": "灰谷カノ",
+   "aliases": [
+    "カノ",
+    "Kano"
+   ],
+   "related": [
+    "夜空放送",
+    "赤眼鏡"
+   ]
+  },
+  {
+   "term": "雨音ナギ",
+   "aliases": [
+    "ナギ",
+    "Nagi"
+   ],
+   "related": [
+    "潮騒学園",
+    "巫女"
+   ]
+  },
+  {
+   "term": "潮騒学園",
+   "aliases": [
+    "しおさい"
+   ],
+   "related": [
+    "学園"
+   ]
+  },
+  {
+   "term": "夕焼け",
+   "aliases": [
+    "夕暮れ"
+   ],
+   "related": [
+    "夕方"
+   ]
+  }
+ ],
+ "cases": [
+  {
+   "id": "control-bg",
+   "group": "exact-control",
+   "query": "夕焼け",
+   "kind": "image",
+   "relevance": {
+    "s04": 2
+   }
+  },
+  {
+   "id": "control-audio",
+   "group": "exact-control",
+   "query": "BGM",
+   "kind": "audio",
+   "relevance": {
+    "s05": 2
+   }
+  },
+  {
+   "id": "variant-kana",
+   "group": "variant",
+   "query": "ﾅｷﾞ",
+   "kind": "image",
+   "relevance": {
+    "s02": 2
+   }
+  },
+  {
+   "id": "variant-latin",
+   "group": "variant",
+   "query": "KANO",
+   "kind": "image",
+   "relevance": {
+    "s01": 2
+   }
+  },
+  {
+   "id": "words-visual",
+   "group": "multiword",
+   "query": "白髪 赤い眼鏡 セーラー服",
+   "kind": "image",
+   "relevance": {
+    "s10": 2
+   }
+  },
+  {
+   "id": "words-order",
+   "group": "multiword",
+   "query": "教室　夕焼け",
+   "kind": "image",
+   "relevance": {
+    "s04": 2
+   }
+  },
+  {
+   "id": "words-media",
+   "group": "multiword",
+   "query": "夜 雨 街",
+   "kind": "video",
+   "relevance": {
+    "s06": 2
+   }
+  },
+  {
+   "id": "words-book",
+   "group": "multiword",
+   "query": "純愛 幼なじみ",
+   "kind": "book",
+   "relevance": {
+    "s08": 2
+   }
+  },
+  {
+   "id": "related-hints",
+   "group": "related",
+   "query": "夜空放送 赤眼鏡",
+   "kind": "image",
+   "relevance": {
+    "s01": 2
+   }
+  },
+  {
+   "id": "related-alias",
+   "group": "related",
+   "query": "なぎ",
+   "kind": "image",
+   "relevance": {
+    "s02": 2
+   }
+  },
+  {
+   "id": "related-school",
+   "group": "related",
+   "query": "潮騒 巫女",
+   "kind": "image",
+   "relevance": {
+    "s02": 2
+   }
+  },
+  {
+   "id": "related-audio",
+   "group": "related",
+   "query": "夕暮れ 教室",
+   "kind": "audio",
+   "relevance": {
+    "s05": 2
+   }
+  },
+  {
+   "id": "over-fullname",
+   "group": "over-expansion",
+   "query": "灰谷カノ",
+   "kind": "image",
+   "relevance": {
+    "s01": 2
+   }
+  },
+  {
+   "id": "over-star",
+   "group": "over-expansion",
+   "query": "カノープス",
+   "kind": "image",
+   "relevance": {
+    "s03": 2
+   }
+  },
+  {
+   "id": "over-generic",
+   "group": "over-expansion",
+   "query": "夕焼け",
+   "kind": "",
+   "relevance": {
+    "s04": 2,
+    "s05": 1
+   }
+  },
+  {
+   "id": "partial-generic",
+   "group": "partial",
+   "query": "雨 街 写真",
+   "kind": "image",
+   "relevance": {
+    "s07": 2
+   }
+  },
+  {
+   "id": "partial-distractor",
+   "group": "partial",
+   "query": "白髪 セーラー服 青眼鏡",
+   "kind": "image",
+   "relevance": {
+    "s10": 2
+   }
+  },
+  {
+   "id": "tag-quote",
+   "group": "exact-control",
+   "query": "魔法\"少女",
+   "kind": "image",
+   "relevance": {
+    "s13": 2
+   }
+  },
+  {
+   "id": "tag-backslash",
+   "group": "exact-control",
+   "query": "C:\\textures",
+   "kind": "image",
+   "relevance": {
+    "s14": 2
+   }
+  },
+  {
+   "id": "none-unseen",
+   "group": "no-answer",
+   "query": "水中都市",
+   "kind": "",
+   "relevance": {}
+  },
+  {
+   "id": "none-kind",
+   "group": "no-answer",
+   "query": "幼なじみ",
+   "kind": "video",
+   "relevance": {}
+  },
+  {
+   "id": "none-json",
+   "group": "no-answer",
+   "query": "[",
+   "kind": "",
+   "relevance": {}
+  },
+  {
+   "id": "none-near",
+   "group": "no-answer",
+   "query": "潮騒 魔王",
+   "kind": "image",
+   "relevance": {}
+  },
+  {
+   "id": "none-partial",
+   "group": "no-answer",
+   "query": "雨 砂漠",
+   "kind": "image",
+   "relevance": {}
+  }
+ ]
+}

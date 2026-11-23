@@ -1,17 +1,33 @@
 # Aredoko
 
-> **mainは旧プロトタイプの保存地点（2026-10-24時点）。現在の製品コード・起動方法・開発状況はここではない。**
+Aredoko（あれどこ）は、名前や保存場所を忘れた画像・本・同人誌・動画・音声・素材を探す、Windows向けのローカル検索アプリです。登録したフォルダの原本は読み取り専用で扱い、タグや棚、閲覧位置はアプリのカタログに保存します。
 
-## 最新の開発先
-- [Windows製品版の開発ブランチ](https://github.com/jakymiku/Aredoko/tree/feat/winui3-production-mvp-20261011) — WinUI 3 + Python/SQLite、まだ正式安定版ではない
-- [現在の引き継ぎ](https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/current-handoff.md) — 次の実装1件と未検証
-- [開発ロードマップ](https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/polish-roadmap-20261022.md) — P0–P7
-- [長期完成台帳](https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/completion-roadmap.md) — R01–R14、M1/M2
-- [開発中のDraft PR #5](https://github.com/jakymiku/Aredoko/pull/5) — 未マージ・未完成
+## できること
 
-## mainにあるもの
-このブランチは2026年10月9日時点の小規模なWebデモを残している。起動するなら `start-demo.cmd`、または `python app/server.py --open`。これは**生成データ中心の旧試作**であり、現在のWinUI 3製品版ではない。古い操作・当時の機能については[初期README原文](README.history-initial-20261024.md)を参照してね。
+- ファイル名やタグで探す。見つけた作品はタグ・棚・お気に入りで整理できます。
+- 画像・本をページ送りで閲覧し、動画・音声を内蔵プレイヤーで再生する。
+- 任意のAI機能を準備して、曖昧な日本語や画像の見た目で探す。対応する画像・本・動画の類似検索も使えます。
 
-**mainに最新製品実装を取り込むのは、配布版の起動・データ保全・主要機能を受入確認してから。** 現行開発ブランチは476コミット以上進んでいるが、未確認機能を正式安定版として扱わず、Draft PRや他の比較用PRを勝手に統合しない。次回の正式統合時にはPR依存関係・保護ルール・競合・Actionsを再確認する。
+## 試用版の使い方
 
-GitHub Actionsはクォータ保護のため手動起動（`workflow_dispatch`）に限定。通常のPush/PRでは自動実行しない。
+現在の試用候補は **Build 58（Windows x64）** です。試用ZIPは個別共有用で、GitHub Releasesでの配布は準備中です。
+
+1. 受け取ったZIPをすべて解凍し、同梱フォルダと同じ場所にある **Aredoko.exe** を起動します。初回は案内に沿って、基本環境のPythonとPillow（合計約22 MB）を取得します。
+2. **登録フォルダ → フォルダを追加** で探したい場所を登録し、**アイテム一覧だけ取得** を選びます。**ファイル名・タグ** ですぐに検索できます。
+3. AI検索を使う場合は、設定の **AIの自動セットアップ** で実行環境とモデルを取得し、対象フォルダのAI索引を作成します。AI環境には Microsoft Visual C++ 再頒布可能パッケージ（x64）が必要です。CPU版とCUDA版の両方を導入済みなら、設定で選び、再起動して切り替えられます。CUDA版には対応するNVIDIAドライバーが必要です。
+
+試用版は未署名です。Windowsのスマート アプリ コントロールがオンの場合、起動がブロックされることがあります。詳しい操作や初回準備は[利用ガイド](docs/user-guide.md)を参照してください。
+
+Build 58はWindows Sandboxで起動・登録・検索・保存の保持を確認済みです。RTX 30シリーズの新規環境でのCUDA取得とAI検索は確認待ちです。検証条件と結果は[配布設計](docs/lightweight-distribution.md)に記録しています。
+
+## 開発
+
+`main` はWindows製品版のソースです。画面はネイティブWinUI 3、バックエンドはPython・SQLiteと一部Rustで構成しています。
+
+- [WinUIのビルドと開発起動](docs/winui-mvp.md)
+- [現在の開発状況](docs/current-handoff.md)
+- [開発ルール](AGENTS.md)と[ドキュメント一覧](docs/README.md)
+
+## ライセンス
+
+Aredoko本体は[MIT License](LICENSE)です。試用ZIPに同梱するFFmpegとffprobeはGPLv3です。対応するソースの情報、同梱ライブラリ・追加取得するランタイムとモデルの条件は[第三者ライセンス通知](THIRD_PARTY_NOTICES.md)に記載しています。

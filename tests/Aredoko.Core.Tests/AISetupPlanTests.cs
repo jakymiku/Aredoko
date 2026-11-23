@@ -1,0 +1,103 @@
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json.Nodes;
+using Aredoko.Core;
+
+static class AISetupPlanTests
+{
+    private static JsonObject Reply(IReadOnlyList<string> features)
+    {
+        var choices=new JsonArray();foreach(var id in features)choices.Add(new JsonObject{["id"]=id});
+        var dependencies=new JsonArray();
+        if(features.Count>0)
+        {
+            dependencies.Add(new JsonObject{["id"]="embedding-runtime",["files_present"]=false,["action"]="select_existing_environment",["download_candidates"]=new JsonArray()});
+            dependencies.Add(new JsonObject{["id"]="embedding-model",["files_present"]=false,["action"]="review_download",["download_candidates"]=new JsonArray(new JsonObject{["catalog_id"]=new string('a',64)})});
+        }
+        return new(){["version"]=1,["basic_available"]=true,["ai_optional"]=true,["skip_ai"]=features.Count==0,["acquisition_started"]=false,["settings_saved"]=false,
+            ["hardware_checked_by_plan"]=false,["inference_checked_by_plan"]=false,["features"]=choices,["requirements"]=dependencies,
+            ["known_download_bytes"]=features.Count==0?0:100,["total_download_bytes"]=features.Count==0?(JsonNode?)JsonValue.Create(0):null,
+            ["unresolved_features"]=new JsonArray(),["restart_required"]=false};
+    }
+    private sealed class Handler:HttpMessageHandler
+    {
+        public int Calls;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)
+        {
+            if(request.Method!=HttpMethod.Post||request.RequestUri!.AbsolutePath!="/api/library/ai/setup/plan")throw new Exception("Unexpected setup request");
+            var body=JsonNode.Parse(await request.Content!.ReadAsStringAsync(token))!.AsObject();
+            if(body.Count!=1||body["features"] is not JsonArray values)throw new Exception("Setup planning must not send consent/URL/command");
+            Calls++;var features=values.Select(v=>v!.GetValue<string>()).ToArray();
+            return new(HttpStatusCode.OK){Content=new StringContent(Reply(features).ToJsonString(),Encoding.UTF8,"application/json")};
+        }
+    }
+    public static async Task Run(Action<bool,string> check)
+    {
+        using var handler=new Handler();using var http=new HttpClient(handler){BaseAddress=new Uri("http://127.0.0.1:8769/")};
+        var client=new AISetupPlanClient(http);var plan=await client.CreateAsync(15);
+        check(handler.Calls==1&&plan.Requirements.Count==2,"four uses request one shared runtime and model plan");
+        check(plan.KnownBytes==100&&plan.TotalBytes is null&&plan.Summary.Contains("ほかに必要なファイルあり")&&plan.Summary.Contains("個別ダウンロードの目安"),"unknown runtime bytes are not presented as a complete download size");
+        check(plan.Summary.Contains("用意したフォルダを指定してください")&&(plan with{AutomaticSetupSupported=true}).Summary.Contains("自動セットアップを使えます")&&plan.Summary.Contains("取得やAI処理を開始しません"),"runtime guidance distinguishes automatic setup from manual-only and stays read-only");
+        var skip=await client.CreateAsync(0);check(skip.SkipAI&&skip.Requirements.Count==0&&skip.Summary.Contains("AIは使わず"),"AI opt-out keeps basic use available");
+        check(AISetupSelection.FromMask(12).SequenceEqual(new[]{"video","audio"}),"feature flags retain audio/video without implicit extra models");
+        check(AISetupSelection.Normalize(16)==3&&AISetupSelection.Normalize(-1)==3,"invalid stored feature selection uses backward-compatible defaults");
+        var idleDownload=new AIDownloadJob(null,"idle",null,0,0,null,false,null,"",null);
+        var idleEnvironment=new AIEnvironmentJob(null,"idle",false,"",0,null,0,null);
+        var guidance=AISetupGuidance.Describe(plan,12,idleDownload,idleEnvironment);
+        check(guidance.Contains("不足する実行環境")&&guidance.Contains("動画の準備欄")&&guidance.Contains("音声の準備欄")&&!guidance.Contains("意味検索・類似画像："),"next steps use selected media and do not claim missing dependencies are ready");
+        var videoOnly=AISetupGuidance.Describe(plan,4,null,null);
+        check(videoOnly.Contains("動画内の音声")&&videoOnly.Contains("別の索引")&&!videoOnly.Contains("音声・音楽の内容検索："),"video setup explains separate audio evidence without selecting audio-file indexing");
+        var audioOnly=AISetupGuidance.Describe(plan,8,null,null);
+        check(audioOnly.Contains("音声の準備欄")&&!audioOnly.Contains("動画の準備欄"),"audio-file setup does not enable video indexing implicitly");
+        var active=AISetupGuidance.Describe(plan,12,idleDownload with{State="downloading"},idleEnvironment with{State="validating"});
+        check(active.Contains("バックグラウンドで続いて")&&active.Contains("完了してから再起動"),"returning to setup does not stop acquisition or claim placement is complete");
+        var cancelled=AISetupGuidance.Describe(plan,12,idleDownload with{State="cancelled"},idleEnvironment with{State="cancelled"});
+        check(cancelled.Contains("取得は中止")&&cancelled.Contains("再開できます")&&cancelled.Contains("前の設定を保持"),"cancelled acquisition and placement have explicit recovery steps");
+        var published=AISetupGuidance.Describe(plan,15,idleDownload with{State="complete",Published=true},idleEnvironment);
+        check(published.Contains("取得だけでは設定は変わりません")&&!published.Contains("配置を確認しました"),"published download is not an applied environment or inference result");
+        var ready=plan with{Requirements=plan.Requirements.Select(r=>r with{FilesPresent=true}).ToArray()};
+        var pending=AISetupGuidance.Describe(ready with{RestartRequired=true},15,idleDownload,idleEnvironment with{State="complete",Saved=true});
+        check(pending.Contains("いつものAredoko.exe")&&pending.Contains("再起動後")&&!pending.Contains("次は「AI検索を設定」"),"saved environment must restart before current-session indexing instructions");
+        var prepared=AISetupGuidance.Describe(ready,3,idleDownload,idleEnvironment);
+        check(prepared.Contains("動作確認とは別")&&prepared.Contains("AI検索を設定")&&!prepared.Contains("音声の準備欄"),"present files lead to selected indexing without declaring hardware success");
+        check(!AISetupGuidance.Describe(plan with{Requirements=Array.Empty<AISetupRequirement>()},3,null,null).Contains("配置を確認しました"),"an empty dependency response cannot be declared ready");
+        check(!AISetupGuidance.Describe(skip,0,idleDownload with{State="downloading"},idleEnvironment).Contains("バックグラウンド"),"AI opt-out keeps next steps focused on basic use");
+        var mismatch=Reply(AISetupSelection.FromMask(3));mismatch["requirements"]![1]!["state"]="model_revision_mismatch";
+        var mismatchedPlan=AISetupPlan.Parse(mismatch.ToJsonString(),AISetupSelection.FromMask(3));
+        check(mismatchedPlan.Summary.Contains("版が設定と一致")&&AISetupRecovery.Describe(mismatchedPlan).Contains("目印だけを書き換えず"),"wrong model revision has a safe recovery path without bypassing revision guards");
+        var invalid=plan with{Requirements=new[]{new AISetupRequirement("embedding-runtime",false,"select_existing_environment",Array.Empty<string>(),"preferences_invalid")}};
+        check(AISetupRecovery.Describe(invalid).Contains("設定ファイルの削除や初期化は行いません")&&AISetupRecovery.Describe(invalid).Contains("バックアップ"),"invalid settings guide to diagnostics and preserved backups instead of destructive reset");
+        var libraries=plan with{Requirements=new[]{new AISetupRequirement("embedding-runtime",false,"select_existing_environment",Array.Empty<string>(),"ai_libraries_missing")}};
+        check(libraries.Summary.Contains("ライブラリが不足")&&AISetupRecovery.Describe(libraries).Contains("システムPythonやドライバーは変更しません"),"missing AI libraries guide to an Aredoko runtime without changing the machine");
+        var presentRecovery=AISetupRecovery.Describe(ready);
+        check(presentRecovery.Contains("AI検索データの状態")&&presentRecovery.Contains("この確認だけでは判定していません")&&presentRecovery.Contains("自動送信しません"),"present files do not mask missing indexing or promise tested hardware");
+        var unknown=plan with{Requirements=new[]{new AISetupRequirement("embedding-model",false,"select_existing_model",Array.Empty<string>(),"future_state")}};
+        check(!unknown.Summary.Contains("future_state")&&!AISetupRecovery.Describe(unknown).Contains("future_state"),"unknown state uses generic safe guidance rather than raw internal values");
+        var unsupported=plan with{Requirements=Array.Empty<AISetupRequirement>(),Unsupported=new[]{"video"}};
+        check(AISetupRecovery.Describe(unsupported).Contains("対応していません")&&!AISetupRecovery.Describe(unsupported).Contains("配置は確認できています"),"unsupported-only plan does not declare nonexistent dependencies ready");
+        check(AISetupRecovery.Describe(unsupported with{Unsupported=Array.Empty<string>()}).Contains("環境の情報を確認できません"),"missing dependency data does not imply healthy files");
+        var changedProfile=Reply(AISetupSelection.FromMask(3));changedProfile["profile_restart_required"]=true;changedProfile["restart_required"]=true;
+        var changedPlan=AISetupPlan.Parse(changedProfile.ToJsonString(),AISetupSelection.FromMask(3));
+        check(changedPlan.ProfileRestartRequired&&changedPlan.Summary.Contains("起動中のモデル")&&AISetupGuidance.Describe(changedPlan,3,null,null).Contains("再起動後"),"pending profile selection remains distinct from the active namespace and blocks old-model recommendations");
+        changedProfile["profile_override"]=true;
+        check(AISetupPlan.Parse(changedProfile.ToJsonString(),AISetupSelection.FromMask(3)).Summary.Contains("起動引数のモデル指定"),"explicit model override is explained instead of promising the saved selection will apply");
+        var brokenSelection=ready with{ProfileSelectionInvalid=true};
+        check(AISetupGuidance.Describe(brokenSelection,3,null,null).Contains("モデル選択")&&!AISetupGuidance.Describe(brokenSelection,3,null,null).Contains("配置を確認しました"),"damaged profile preferences cannot be presented as ready for indexing");
+        foreach(var mutate in new Action<JsonObject>[]
+        {
+            row=>row["acquisition_started"]=true,row=>row["hardware_checked_by_plan"]=true,
+            row=>row["known_download_bytes"]=-1,row=>row["skip_ai"]=true,
+            row=>row["features"]=new JsonArray(new JsonObject{["id"]="future"}),
+            row=>row["requirements"]!.AsArray()[0]!["action"]="run-pip",
+            row=>row["requirements"]!.AsArray()[1]!["download_candidates"]!.AsArray()[0]!["catalog_id"]="https://example.invalid",
+            row=>row["requirements"]!.AsArray()[0]!["state"]="C:\\private\\runtime",
+            row=>row["profile_restart_required"]=true,
+        })
+        {
+            var bad=Reply(AISetupSelection.FromMask(15));mutate(bad);var rejected=false;
+            try{AISetupPlan.Parse(bad.ToJsonString(),AISetupSelection.FromMask(15));}catch(InvalidDataException){rejected=true;}
+            check(rejected,"setup plan rejects unexpected execution, selection or catalog data");
+        }
+    }
+}

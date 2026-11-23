@@ -1,0 +1,139 @@
+{
+  "format": "aredoko-cpython-notice-sources-v1",
+  "version": "3.11.9",
+  "date": "2026-10-29",
+  "redistribution_approved": false,
+  "source_executed": false,
+  "entries": [
+    {
+      "path": "python-upstream-LICENSE.txt",
+      "bytes": 13936,
+      "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+      "source_url": "https://raw.githubusercontent.com/python/cpython/de54cf5be371a6f5e2e9f208c38def5f81d3ef02/LICENSE",
+      "source_bytes": 13936,
+      "source_sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "python-doc-license.rst",
+      "bytes": 53753,
+      "sha256": "2b734ec5975b21b29ae8b9756a00fc3dfe701abe51687cec4c98a21c51005bca",
+      "source_url": "https://raw.githubusercontent.com/python/cpython/de54cf5be371a6f5e2e9f208c38def5f81d3ef02/Doc/license.rst",
+      "source_bytes": 53753,
+      "source_sha256": "2b734ec5975b21b29ae8b9756a00fc3dfe701abe51687cec4c98a21c51005bca",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "openssl-LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+      "source_url": "https://raw.githubusercontent.com/openssl/openssl/85cf92f55d9e2ac5aacf92bedd33fb890b9f8b4c/LICENSE.txt",
+      "source_bytes": 10175,
+      "source_sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "openssl-AUTHORS.md",
+      "bytes": 990,
+      "sha256": "5076ca441daef7fb35e904c2ac070880c7b3d58300a5a6aecac41e8f525f4412",
+      "source_url": "https://raw.githubusercontent.com/openssl/openssl/85cf92f55d9e2ac5aacf92bedd33fb890b9f8b4c/AUTHORS.md",
+      "source_bytes": 990,
+      "source_sha256": "5076ca441daef7fb35e904c2ac070880c7b3d58300a5a6aecac41e8f525f4412",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "libffi-LICENSE.txt",
+      "bytes": 1132,
+      "sha256": "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388",
+      "source_url": "https://raw.githubusercontent.com/python/cpython-source-deps/73b247f34ef3ae1859b8c2c34d321d34ebc5db15/LICENSE",
+      "source_bytes": 1132,
+      "source_sha256": "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "bzip2-LICENSE.txt",
+      "bytes": 1896,
+      "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+      "source_url": "https://raw.githubusercontent.com/python/cpython-source-deps/05301997b2f9590f49c672cf3dfd3d3dfa7ad521/LICENSE",
+      "source_bytes": 1896,
+      "source_sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "xz-COPYING.txt",
+      "bytes": 2775,
+      "sha256": "bcb02973ef6e87ea73d331b3a80df7748407f17efdb784b61b47e0e610d3bb5c",
+      "source_url": "https://raw.githubusercontent.com/python/cpython-source-deps/c6bc0c612605622aaef101a33a751f9de2ecc193/COPYING",
+      "source_bytes": 2775,
+      "source_sha256": "bcb02973ef6e87ea73d331b3a80df7748407f17efdb784b61b47e0e610d3bb5c",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "zlib-README.txt",
+      "bytes": 5317,
+      "sha256": "d106dcdb2a0b3087cb3a2380b9f00a0bbadc7eb835cd80408f94a2d78d69727d",
+      "source_url": "https://raw.githubusercontent.com/python/cpython-source-deps/4dc98e1909830e2bdc2a9cc2236e3c5d5037335b/README",
+      "source_bytes": 5317,
+      "source_sha256": "d106dcdb2a0b3087cb3a2380b9f00a0bbadc7eb835cd80408f94a2d78d69727d",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "expat-COPYING.txt",
+      "bytes": 1144,
+      "sha256": "122f2c27000472a201d337b9b31f7eb2b52d091b02857061a8880371612d9534",
+      "source_url": "https://raw.githubusercontent.com/python/cpython/de54cf5be371a6f5e2e9f208c38def5f81d3ef02/Modules/expat/COPYING",
+      "source_bytes": 1144,
+      "source_sha256": "122f2c27000472a201d337b9b31f7eb2b52d091b02857061a8880371612d9534",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "mpdecimal-LICENSE.txt",
+      "bytes": 1359,
+      "sha256": "b07528d8b1dbf1e2d2741052996f0876e23342ce2d30d0effa39c5457716c25a",
+      "source_url": "https://raw.githubusercontent.com/python/cpython/de54cf5be371a6f5e2e9f208c38def5f81d3ef02/Modules/_decimal/libmpdec/mpdecimal.h",
+      "source_bytes": 41684,
+      "source_sha256": "ea0b9c6b296c13aed6ecaa50b463e39a9c1bdc059b84f50507fd8247b2e660f9",
+      "extraction": "leading-c-license-comment",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "sqlite-copyright.html",
+      "bytes": 8351,
+      "sha256": "44ca9f793055c8e32fc65f65a4f5bcf813a33f5bdaaa084067dd617a4ed3cc70",
+      "source_url": "https://sqlite.org/copyright.html",
+      "source_bytes": 8351,
+      "source_sha256": "44ca9f793055c8e32fc65f65a4f5bcf813a33f5bdaaa084067dd617a4ed3cc70",
+      "extraction": "none",
+      "mutable_source_snapshot": true
+    },
+    {
+      "path": "tcl-license.terms",
+      "bytes": 2255,
+      "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "source_url": "https://raw.githubusercontent.com/python/cpython-source-deps/ee45625299d55a7caaf6d9d898af3ee3c858cc4a/license.terms",
+      "source_bytes": 2255,
+      "source_sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    },
+    {
+      "path": "tk-license.terms",
+      "bytes": 2267,
+      "sha256": "2cde822b93ca16ae535c954b7dfe658b4ad10df2a193628d1b358f1765e8b198",
+      "source_url": "https://raw.githubusercontent.com/python/cpython-source-deps/0379c463285a9a796a173afeccd40f21ccaf04c4/license.terms",
+      "source_bytes": 2267,
+      "source_sha256": "2cde822b93ca16ae535c954b7dfe658b4ad10df2a193628d1b358f1765e8b198",
+      "extraction": "none",
+      "mutable_source_snapshot": false
+    }
+  ]
+}

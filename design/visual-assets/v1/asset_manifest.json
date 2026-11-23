@@ -1,0 +1,521 @@
+{
+  "name": "Aredoko Visual Assets",
+  "version": "1.0",
+  "theme": "silver-haired chibi mage / midnight navy / cyan magic",
+  "approved_icon": "app_icon/aredoko_app_icon_1024.png",
+  "windows_ico": "app_icon/aredoko_app_icon.ico",
+  "recommended_small_icon": "branding/aredoko_brand_mark_512.png",
+  "status_assets": {
+    "searching": "status/aredoko_state_searching_512.png",
+    "found": "status/aredoko_state_found_512.png",
+    "no_results": "status/aredoko_state_no_results_512.png",
+    "indexing": "status/aredoko_state_indexing_512.png",
+    "completed": "status/aredoko_state_completed_512.png",
+    "error": "status/aredoko_state_error_512.png"
+  },
+  "recommended_usage": {
+    "status_sprite_display_pixels": "96-220",
+    "banner": "branding/aredoko_header_background_1920x640.png",
+    "splash": "branding/aredoko_splash_background_1920x1080.png"
+  },
+  "note": "Status and mascot figures are individually segmented from an illustration board; native detail is approximately 130-180 pixels. 512 canvases are for consistent layout, not guaranteed 512px original detail. Keep UI sticker display sizes moderate. Logos and UI symbols are genuine vector designs. Header and splash are composited PNG, with empty right-hand title space.",
+  "files": [
+    {
+      "path": "CODEX_PROMPT.txt",
+      "bytes": 3682
+    },
+    {
+      "path": "PREVIEW.png",
+      "bytes": 656440,
+      "pixels": [
+        1600,
+        1180
+      ],
+      "mode": "RGB"
+    },
+    {
+      "path": "README_JA.md",
+      "bytes": 4880
+    },
+    {
+      "path": "app_icon/aredoko_app_icon.ico",
+      "bytes": 205494
+    },
+    {
+      "path": "app_icon/aredoko_app_icon_1024.png",
+      "bytes": 1567245,
+      "pixels": [
+        1024,
+        1024
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "app_icon/aredoko_app_icon_128.png",
+      "bytes": 41304,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "app_icon/aredoko_app_icon_16.png",
+      "bytes": 1016,
+      "pixels": [
+        16,
+        16
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "app_icon/aredoko_app_icon_24.png",
+      "bytes": 2021,
+      "pixels": [
+        24,
+        24
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "app_icon/aredoko_app_icon_256.png",
+      "bytes": 138587,
+      "pixels": [
+        256,
+        256
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "app_icon/aredoko_app_icon_32.png",
+      "bytes": 3412,
+      "pixels": [
+        32,
+        32
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "app_icon/aredoko_app_icon_48.png",
+      "bytes": 7105,
+      "pixels": [
+        48,
+        48
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "app_icon/aredoko_app_icon_512.png",
+      "bytes": 464123,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "app_icon/aredoko_app_icon_64.png",
+      "bytes": 11931,
+      "pixels": [
+        64,
+        64
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "branding/aredoko_brand_mark.svg",
+      "bytes": 663
+    },
+    {
+      "path": "branding/aredoko_brand_mark_512.png",
+      "bytes": 19466,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "branding/aredoko_header_background_1920x640.png",
+      "bytes": 776627,
+      "pixels": [
+        1920,
+        640
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "branding/aredoko_library_pattern_1920x1080.png",
+      "bytes": 135619,
+      "pixels": [
+        1920,
+        1080
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "branding/aredoko_splash_background_1920x1080.png",
+      "bytes": 1430722,
+      "pixels": [
+        1920,
+        1080
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_greeting_512.png",
+      "bytes": 285526,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_holding_card_512.png",
+      "bytes": 303682,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_magic_512.png",
+      "bytes": 309574,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_pointing_512.png",
+      "bytes": 304938,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_reading_512.png",
+      "bytes": 281169,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_reading_quietly_512.png",
+      "bytes": 309768,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_sleeping_512.png",
+      "bytes": 274443,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_smile_512.png",
+      "bytes": 271608,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_surprised_512.png",
+      "bytes": 293636,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "mascot/aredoko_mascot_thinking_512.png",
+      "bytes": 300403,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "msix_compatibility/SplashScreen_620x300.png",
+      "bytes": 202574,
+      "pixels": [
+        620,
+        300
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "msix_compatibility/Square150x150Logo.png",
+      "bytes": 54532,
+      "pixels": [
+        150,
+        150
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "msix_compatibility/Square310x310Logo.png",
+      "bytes": 193260,
+      "pixels": [
+        310,
+        310
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "msix_compatibility/Square44x44Logo.png",
+      "bytes": 6098,
+      "pixels": [
+        44,
+        44
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "msix_compatibility/Square71x71Logo.png",
+      "bytes": 14371,
+      "pixels": [
+        71,
+        71
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "msix_compatibility/StoreLogo.png",
+      "bytes": 7642,
+      "pixels": [
+        50,
+        50
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "msix_compatibility/Wide310x150Logo.png",
+      "bytes": 62174,
+      "pixels": [
+        310,
+        150
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "reference/approved_base_image_original.png",
+      "bytes": 1972856,
+      "pixels": [
+        1254,
+        1254
+      ],
+      "mode": "RGB"
+    },
+    {
+      "path": "reference/mascot_status_composition_SOURCE_ONLY.png",
+      "bytes": 3085827,
+      "pixels": [
+        1536,
+        1024
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "status/aredoko_state_completed_512.png",
+      "bytes": 293511,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "status/aredoko_state_error_512.png",
+      "bytes": 280150,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "status/aredoko_state_found_512.png",
+      "bytes": 280026,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "status/aredoko_state_indexing_512.png",
+      "bytes": 282694,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "status/aredoko_state_no_results_512.png",
+      "bytes": 287351,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "status/aredoko_state_searching_512.png",
+      "bytes": 287985,
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_audio.svg",
+      "bytes": 277
+    },
+    {
+      "path": "ui_icons/aredoko_ui_audio_128.png",
+      "bytes": 2393,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_document.svg",
+      "bytes": 242
+    },
+    {
+      "path": "ui_icons/aredoko_ui_document_128.png",
+      "bytes": 1148,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_folder.svg",
+      "bytes": 239
+    },
+    {
+      "path": "ui_icons/aredoko_ui_folder_128.png",
+      "bytes": 1459,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_image.svg",
+      "bytes": 287
+    },
+    {
+      "path": "ui_icons/aredoko_ui_image_128.png",
+      "bytes": 3494,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_library.svg",
+      "bytes": 234
+    },
+    {
+      "path": "ui_icons/aredoko_ui_library_128.png",
+      "bytes": 2161,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_search.svg",
+      "bytes": 224
+    },
+    {
+      "path": "ui_icons/aredoko_ui_search_128.png",
+      "bytes": 2416,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_settings.svg",
+      "bytes": 284
+    },
+    {
+      "path": "ui_icons/aredoko_ui_settings_128.png",
+      "bytes": 3016,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_similar.svg",
+      "bytes": 309
+    },
+    {
+      "path": "ui_icons/aredoko_ui_similar_128.png",
+      "bytes": 2843,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_sparkles.svg",
+      "bytes": 250
+    },
+    {
+      "path": "ui_icons/aredoko_ui_sparkles_128.png",
+      "bytes": 2926,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "ui_icons/aredoko_ui_video.svg",
+      "bytes": 248
+    },
+    {
+      "path": "ui_icons/aredoko_ui_video_128.png",
+      "bytes": 2386,
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA"
+    }
+  ]
+}

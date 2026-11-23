@@ -1,0 +1,181 @@
+"""Bounded private subprocess protocol; no external inference endpoint."""
+import base64
+import json
+import os
+from pathlib import Path
+import queue
+import subprocess
+import sys
+import threading
+import time
+
+from ai_profiles import DEFAULT_PROFILE, REVISION
+from runtime_paths import worker_command
+from ai_vectors import normalized
+from inference_errors import STARTUP_ERRORS
+PROFILE = DEFAULT_PROFILE.key
+class AIUnavailable(RuntimeError): pass
+
+
+class AIWorkerUnavailable(AIUnavailable):
+    def __init__(self,wire_error):
+        self.code,message=STARTUP_ERRORS[wire_error]
+        super().__init__(message)
+
+
+def worker_failure(result):
+    """Private output is not trusted public text, including old worker errors."""
+    code=result.get('error') if type(result) is dict else None
+    if type(code) is str and set(result)=={'error'} and code in STARTUP_ERRORS:
+        return AIWorkerUnavailable(code)
+    return AIUnavailable('AI inference failed')
+class EncoderProcess:
+    def __init__(self, python, model, profile=DEFAULT_PROFILE, *, gpu_budget_mib=None, budget_if_cuda=False):
+        if gpu_budget_mib is not None and (type(gpu_budget_mib) is not int or not 256<=gpu_budget_mib<=65536):
+            raise ValueError('Invalid worker GPU budget')
+        self.python,self.model = Path(python),Path(model)
+        self.profile=profile
+        self.gpu_budget_mib=gpu_budget_mib
+        if type(budget_if_cuda)is not bool:raise ValueError('Invalid conditional GPU budget')
+        self.budget_if_cuda=budget_if_cuda
+        self.process = None
+        self.lock = threading.Lock()
+        self.responses = queue.Queue(maxsize=2)
+        self.protocol_fault = threading.Event()
+        self.device = ''
+        self.telemetry = {}
+        self._closed = False
+        self.last_used = time.monotonic()
+    @property
+    def available(self):
+        marker = self.model/'aredoko-revision.txt'
+        try: return self.python.is_file() and marker.is_file() and marker.read_text(encoding='utf-8').strip()==self.profile.revision
+        except OSError: return False
+    @property
+    def resident(self):
+        return self.process is not None and self.process.poll() is None
+
+    def _read(self, process, responses, fault):
+        def deliver(value):
+            try:responses.put_nowait(value);return True
+            except queue.Full:
+                # A stopped/replaced owner no longer consumes this exact queue.
+                # Never strand a daemon on put(), or poison a later worker.
+                fault.set();return False
+        try:
+            while True:
+                line = process.stdout.readline(100_001)
+                if not line or len(line)>100_000:
+                    deliver({'error':'Worker stopped'})
+                    return
+                if not deliver(json.loads(line)):return
+        except (ValueError,OSError,RecursionError):
+            deliver({'error':'Invalid worker response'})
+    def _response(self, timeout=180):
+        if self.protocol_fault.is_set():
+            self._stop();raise AIUnavailable('Invalid AI worker response')
+        try: result=self.responses.get(timeout=timeout)
+        except queue.Empty:
+            self._stop()
+            raise AIUnavailable('AI worker timed out')
+        if self.protocol_fault.is_set() or type(result) is not dict:
+            self._stop();raise AIUnavailable('Invalid AI worker response')
+        if 'error' in result: raise worker_failure(result)
+        return result
+    def _start(self):
+        if self._closed:
+            raise AIUnavailable('AI worker is closed')
+        if self.process and self.process.poll() is None: return
+        # A previously exited worker must not leave stale CUDA/device telemetry.
+        self.device = ''
+        self.telemetry = {}
+        if not self.available: raise AIUnavailable('AI runtime/model is not installed')
+        env=os.environ.copy()
+        env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',PYTHONIOENCODING='utf-8',PYTHONDONTWRITEBYTECODE='1')
+        self.responses=queue.Queue(maxsize=2)
+        self.protocol_fault=threading.Event()
+        arguments=['--model',str(self.model),'--parent-pid',str(os.getpid()),'--profile-json',json.dumps(self.profile.to_dict())]
+        if self.gpu_budget_mib is not None:arguments.extend(['--gpu-budget-mib',str(self.gpu_budget_mib)])
+        if self.budget_if_cuda:arguments.append('--budget-if-cuda')
+        try:command=worker_command(self.python,Path(__file__).with_name('ai_worker.py'),arguments,cancelled=lambda:self._closed)
+        except (ValueError,OSError,RuntimeError) as error:raise AIUnavailable('AI runtime validation failed') from error
+        if self._closed:raise AIUnavailable('AI worker is closed')
+        self.process=subprocess.Popen(command,
+            stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,text=True,encoding='utf-8',env=env,
+            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        threading.Thread(target=self._read,args=(self.process,self.responses,self.protocol_fault),daemon=True).start()
+        try:
+            hello=self._response()
+            if (hello.get('dimension')!=self.profile.dimension or hello.get('profile')!=self.profile.key
+                    or type(hello.get('device')) is not str):raise AIUnavailable('Incompatible AI worker')
+            self.device=hello['device']
+        except BaseException:
+            # A failed startup must not leave a half-ready resident child/queue.
+            self._stop()
+            raise
+    def encode(self, operation, value):
+        audio_message=None;audio_silent=False
+        video_message=None
+        if operation=='video':
+            if 'video' not in self.profile.modalities:raise AIUnavailable('Selected profile does not support native video')
+            from video_protocol import video_request
+            video_message=video_request(value)
+        if operation=='audio':
+            if 'audio' not in self.profile.modalities:raise AIUnavailable('Selected profile does not support audio input')
+            from audio_input import validate_pcm
+            from audio_protocol import audio_request
+            validate_pcm(value);audio_silent=value.is_digital_silence
+            if not audio_silent:audio_message=audio_request(value)
+        with self.lock:
+            if audio_silent:
+                if self._closed:raise AIUnavailable('AI worker is closed')
+                self.telemetry={};self.last_used=time.monotonic()
+                return None  # No fabricated content vector or model startup.
+            self._start()
+            request=video_message if video_message is not None else audio_message if audio_message is not None else {'operation':operation}
+            if audio_message is None and video_message is None:request['image' if operation=='image' else 'text']=base64.b64encode(value).decode('ascii') if operation=='image' else value
+            try:
+                self.process.stdin.write(json.dumps(request,ensure_ascii=False)+'\n')
+                self.process.stdin.flush()
+                result=self._response()
+                self.telemetry={k:result[k] for k in ('elapsed_ms','peak_memory_mib') if k in result}
+                vector=result.get('vector')
+                if vector is not None:
+                    try: vector=normalized(vector,self.profile.dimension)
+                    except (TypeError,ValueError) as ex:
+                        self._stop();raise AIUnavailable('Invalid embedding from worker') from ex
+                elif not (result.get('skip') is True and (operation=='image' or operation=='audio' and result.get('reason')=='digital_silence')):
+                    raise AIUnavailable('Missing embedding')
+                return vector
+            except (OSError,KeyError) as ex:
+                self._stop();raise AIUnavailable('AI worker disconnected') from ex
+            finally:
+                self.last_used = time.monotonic()
+    def _stop(self):
+        self.device = ''
+        self.telemetry = {}
+        if self.process:
+            process,self.process=self.process,None
+            if process.poll() is None: process.kill()
+            process.wait(timeout=10)
+            process.stdin.close();process.stdout.close()
+    def release(self):
+        """Drop only this owner's idle worker; next encode may relaunch it."""
+        if not self.lock.acquire(blocking=False):
+            raise AIUnavailable('AI worker is busy')
+        try:
+            if self._closed:
+                raise AIUnavailable('AI worker is closed')
+            was_resident = self.resident
+            self._stop()
+            self.last_used = time.monotonic()
+            return {'released': was_resident, 'resident': False}
+        finally:
+            self.lock.release()
+
+    def close(self):
+        """Permanent shutdown: no in-flight encode can relaunch after return."""
+        self._closed = True  # Also interrupt an in-flight pre-launch hash pass.
+        with self.lock:
+            self._stop()
+

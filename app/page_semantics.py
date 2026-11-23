@@ -1,0 +1,528 @@
+"""Explicit, bounded book-page embeddings; no OCR or source-media writes."""
+from array import array
+import copy
+import itertools
+import math
+import operator
+import re
+import secrets
+import threading
+import time
+
+import native_accel
+from ai_process import AIUnavailable
+from ai_vectors import normalized
+from page_index import PageIndex, identifier, token
+from previews import ReaderChanged, PreviewBusyError, PreviewUnavailable
+
+CONTRACT = 'book-page-image:v1'
+MAX_PAGES = 16
+ALL_JOB = 'book-pages-all'
+_HEX64 = re.compile(r'[0-9a-f]{64}').fullmatch
+SCHEMA = '''CREATE TABLE IF NOT EXISTS ai_page_vectors(
+    item_id INTEGER NOT NULL, source_revision TEXT NOT NULL, page_id TEXT NOT NULL,
+    page INTEGER NOT NULL CHECK(page>=0 AND page<10000), vector BLOB NOT NULL,
+    contract TEXT NOT NULL, PRIMARY KEY(item_id,page_id));'''
+
+
+def unpack(data, dimension, allocate=True):
+    try:
+        value = array('f'); value.frombytes(data)
+        if len(value) != dimension:
+            return None if allocate else False
+        squared_norm = sum(map(operator.mul, value, value))
+        # Nonnegative squares propagate every NaN/Inf component into this sum.
+        # Check that one value instead of walking all components a second time;
+        # keep the original sum/sqrt/division arithmetic and tolerance.
+        if not math.isfinite(squared_norm) or abs(squared_norm-1) > 1e-4:
+            return None if allocate else False
+        if not allocate:
+            return True
+        # Reuse the validated sum, retaining the original sum/sqrt/division
+        # arithmetic and float64 scores (including ties), not just unit length.
+        norm = math.sqrt(squared_norm)
+        return list(map(operator.truediv, value, itertools.repeat(norm)))
+    except (ValueError, TypeError, OverflowError):
+        return None if allocate else False
+
+
+def _is_valid_packed(data, dimension):
+    """Validate stored float32 page vector without allocating a decoded list."""
+    return unpack(data, dimension, False)
+
+
+def _score_packed(data, dimension, query):
+    """Unpack, validate and compute the exact float64 dot product without allocating a list."""
+    try:
+        value = array('f'); value.frombytes(data)
+        if len(value) != dimension:
+            return None
+        squared_norm = sum(map(operator.mul, value, value))
+        # Nonnegative squares propagate every NaN/Inf component into this sum.
+        # Check that one value instead of walking all components a second time;
+        # keep the original sum/sqrt/division/dot arithmetic and tolerance.
+        if not math.isfinite(squared_norm) or abs(squared_norm-1) > 1e-4:
+            return None
+        norm = math.sqrt(squared_norm)
+        return sum(map(operator.mul, query, map(operator.truediv, value, itertools.repeat(norm))))
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+_ORIG_SCORE_PACKED = _score_packed
+
+
+class PageVectors:
+    def __init__(self, ai):
+        self.ai = ai
+        self.index = PageIndex(ai.catalog, ai.previews)
+
+    def selection(self, item_id, page_ids, revision):
+        """Caller holds catalog guard; metadata/physical checks, no inference."""
+        with self.ai.catalog.connect() as db:
+            self.index._allowed(db, item_id)
+            head = self.index._head(db, item_id)
+            if head is None or head['source_revision'] != revision:
+                raise ReaderChanged('Page source changed')
+            marks = ','.join('?' for _ in page_ids)
+            pages = [dict(p) for p in db.execute('SELECT page_id,page FROM page_entries '
+                'WHERE snapshot_id=? AND page_id IN ('+marks+') ORDER BY page', [head['id'], *page_ids])]
+        if len(pages) != len(page_ids):
+            raise KeyError('Page source unavailable')
+        if self.index.state(item_id, revision) != 'current':
+            raise ReaderChanged('Page source changed')
+        return pages
+
+    def coverage(self, item_id, revision, scope):
+        """Read-only CPU status. Never refresh a snapshot, decode media or infer."""
+        identifier(item_id); token(revision)
+        ai = self.ai; scope = ai._scope(scope)
+        if scope is None: raise ValueError('Explicit scope required')
+        with ai.guard:
+            if ai._closed: raise AIUnavailable('AI is closing')
+        supported = 'cover' in ai.profile.modalities
+        available = bool(ai.encoder.available)
+        with ai.catalog._guard:
+            ai.catalog._require_idle()
+            row = ai._current_rows([item_id], scope).get(item_id)
+            if row is None or row['kind'] not in ('book', 'archive'):
+                raise KeyError('Page source unavailable')
+            with ai.catalog.connect() as db:
+                self.index._allowed(db, item_id)
+                head = self.index._head(db, item_id)
+                if head is None: raise KeyError('Page source unavailable')
+                if head['source_revision'] != revision:
+                    raise ReaderChanged('Page source changed')
+                entries = {p['page_id']:p['page'] for p in db.execute(
+                    'SELECT page_id,page FROM page_entries WHERE snapshot_id=?', (head['id'],))}
+            count = head['page_count']
+            if len(entries) != count or sorted(entries.values()) != list(range(count)):
+                raise ReaderChanged('Page index changed')
+        # Page snapshots are immutable. Decode the profile's stored vectors
+        # without blocking catalog edits, then revalidate the same snapshot,
+        # current scope and physical source under a fresh short guard hold.
+        ready = set()
+        if supported:
+            # Stream one blob at a time. Matching IDs alone do not make a
+            # malformed, old-revision or old-preprocessing vector ready.
+            with ai.store.connect() as db:
+                for pid, page, data in db.execute(
+                        'SELECT page_id,page,vector FROM ai_page_vectors '
+                        'WHERE item_id=? AND source_revision=? AND contract=?',
+                        (item_id, revision, CONTRACT)):
+                    if entries.get(pid) == page and unpack(data, ai.profile.dimension, False):
+                        ready.add(page)
+        with ai.guard:
+            if ai._closed: raise AIUnavailable('AI is closing')
+        with ai.catalog._guard:
+            ai.catalog._require_idle()
+            current = ai._current_rows([item_id], scope).get(item_id)
+            if current is None or current['kind'] not in ('book', 'archive'):
+                raise KeyError('Page source unavailable')
+            with ai.catalog.connect() as db:
+                self.index._allowed(db, item_id)
+                latest = self.index._head(db, item_id)
+                if latest is None:
+                    raise KeyError('Page source unavailable')
+                if (latest['id'], latest['source_revision'], latest['page_count']) != (
+                        head['id'], revision, count):
+                    raise ReaderChanged('Page index changed')
+            state = self.index.state(item_id, revision)
+            if state != 'current': ready.clear()
+        ranges = []
+        for page in sorted(ready):
+            if ranges and ranges[-1]['start']+ranges[-1]['count'] == page:
+                ranges[-1]['count'] += 1
+            else: ranges.append({'start':page, 'count':1})
+        next_range = None
+        if supported and state == 'current' and len(ready) < count:
+            start = next(p for p in range(count) if p not in ready)
+            stop = start
+            while stop < count and stop not in ready and stop-start < MAX_PAGES: stop += 1
+            next_range = {'start':start, 'count':stop-start}
+        return {'item_id':item_id, 'source_revision':revision, 'source_state':state,
+            'profile':ai.profile.key, 'model':ai.profile.label, 'supported':supported,
+            'available':available, 'page_count':count, 'indexed_pages':len(ready),
+            'remaining_pages':count-len(ready), 'indexed_ranges':ranges, 'next_range':next_range}
+
+    def next_gaps(self, item_id, revision, scope, max_pages=64, chunk_size=MAX_PAGES):
+        """Bounded sequence of consecutive missing ranges, each at most chunk_size (16).
+
+        Read-only CPU status. Never refreshes a snapshot, decodes media or infers.
+        """
+        if type(max_pages) is not int or not 1 <= max_pages <= 128:
+            raise ValueError('Invalid max_pages limit')
+        if type(chunk_size) is not int or not 1 <= chunk_size <= MAX_PAGES:
+            raise ValueError('Invalid chunk_size')
+        cov = self.coverage(item_id, revision, scope)
+        count = cov['page_count']
+        ready = set()
+        for r in cov['indexed_ranges']:
+            ready.update(range(r['start'], r['start'] + r['count']))
+        gaps = []
+        collected = 0
+        if cov['supported'] and cov['source_state'] == 'current':
+            curr = 0
+            while curr < count and collected < max_pages:
+                if curr in ready:
+                    curr += 1
+                    continue
+                start = curr
+                while curr < count and curr not in ready and (curr - start) < chunk_size and collected + (curr - start) < max_pages:
+                    curr += 1
+                chunk_count = curr - start
+                gaps.append({'start': start, 'count': chunk_count})
+                collected += chunk_count
+        return {
+            'item_id': item_id,
+            'source_revision': revision,
+            'source_state': cov['source_state'],
+            'profile': cov['profile'],
+            'model': cov['model'],
+            'supported': cov['supported'],
+            'available': cov['available'],
+            'page_count': count,
+            'indexed_pages': cov['indexed_pages'],
+            'remaining_pages': cov['remaining_pages'],
+            'chunk_size': chunk_size,
+            'max_pages': max_pages,
+            'chunks': gaps,
+            'total_gap_pages': collected,
+        }
+
+    def start_chunked(self, item_id, page_ids, revision, scope, chunk_size=MAX_PAGES):
+        """Compatibility entrypoint; HTTP callers must send an explicit profile."""
+        from page_chunks import start_chunked
+        return start_chunked(self.ai, item_id, page_ids, revision, scope,
+                             self.ai.profile.key, chunk_size=chunk_size)
+
+    def start_all(self, item_id, revision, scope, profile):
+        """Index every remaining page of one book/archive in atomic 16-page ranges."""
+        from ai_search import AIBusy
+        identifier(item_id); token(revision)
+        ai = self.ai
+        if type(profile) is not str or profile != ai.profile.key:
+            raise ValueError('AI profile changed')
+        scope = ai._scope(scope)
+        if scope is None:
+            raise ValueError('Explicit scope required')
+        if not ai.encoder.available or 'cover' not in ai.profile.modalities:
+            raise AIUnavailable('選択中のモデルでは画像のAI検索を利用できません。')
+        with ai.guard:
+            if ai._closed:
+                raise AIUnavailable('AI is closing')
+            if ai.worker and ai.worker.is_alive():
+                raise AIBusy('AI索引を作成中です。')
+            with ai.catalog._guard:
+                ai.catalog._require_idle()
+                row = ai._current_rows([item_id], scope).get(item_id)
+                if row is None or row['kind'] not in ('book', 'archive'):
+                    raise KeyError('Page source unavailable')
+                with ai.catalog.connect() as db:
+                    self.index._allowed(db, item_id)
+                    head = self.index._head(db, item_id)
+                    if head is None:
+                        raise KeyError('Page source unavailable')
+                    if head['source_revision'] != revision:
+                        raise ReaderChanged('Page source changed')
+                    entries = [dict(p) for p in db.execute(
+                        'SELECT page_id,page FROM page_entries WHERE snapshot_id=? ORDER BY page',
+                        (head['id'],))]
+                if self.index.state(item_id, revision) != 'current':
+                    raise ReaderChanged('Page source changed')
+            with ai.store.connect() as db:
+                ready = {
+                    pid for pid, data in db.execute(
+                        'SELECT page_id,vector FROM ai_page_vectors WHERE item_id=? AND source_revision=? AND contract=?',
+                        (item_id, revision, CONTRACT))
+                    if _is_valid_packed(data, ai.profile.dimension)
+                }
+            missing = [p for p in entries if p['page_id'] not in ready]
+            already = len(entries) - len(missing)
+            if not missing:
+                return {
+                    'state': 'complete', 'job': ALL_JOB, 'job_id': secrets.token_hex(16),
+                    'item_id': item_id, 'source_revision': revision, 'profile': profile,
+                    'scope': copy.deepcopy(scope), 'page_count': len(entries),
+                    'already_indexed': already, 'processed': 0, 'total': 0,
+                    'indexed': 0, 'reused': 0, 'skipped': 0,
+                    'chunks_total': 0, 'chunks_completed': 0, 'error': '',
+                }
+            ai.cancel.clear()
+            state = {
+                'state': 'running', 'job': ALL_JOB, 'job_id': secrets.token_hex(16),
+                'item_id': item_id, 'source_revision': revision, 'profile': profile,
+                'scope': copy.deepcopy(scope), 'page_count': len(entries),
+                'already_indexed': already, 'processed': 0, 'total': len(missing),
+                'indexed': 0, 'reused': 0, 'skipped': 0,
+                'chunks_total': (len(missing) + MAX_PAGES - 1) // MAX_PAGES,
+                'chunks_completed': 0, 'error': '',
+            }
+            initial = copy.deepcopy(state)
+            ai.store.save_state(state)
+            ai.worker = threading.Thread(target=self._build_all, args=(missing, state), daemon=True)
+            ai.worker.start()
+        return initial
+
+    def _build_all(self, missing, state):
+        ai = self.ai; item_id = state['item_id']; revision = state['source_revision']
+        try:
+            with ai.inference:
+                for offset in range(0, len(missing), MAX_PAGES):
+                    if ai.cancel.is_set():
+                        raise InterruptedError()
+                    chunk = missing[offset:offset + MAX_PAGES]
+                    with ai.catalog._guard:
+                        ai.catalog._require_idle()
+                        if ai._current_rows([item_id], state['scope']).get(item_id) is None:
+                            raise KeyError('Page source unavailable')
+                        self.selection(item_id, [p['page_id'] for p in chunk], revision)
+                    self._publish_range(chunk, state, item_id, revision)
+                    state['indexed'] += len(chunk)
+                    state['chunks_completed'] += 1
+                    with ai.guard:
+                        ai.store.save_state(state)
+                state['state'] = 'complete'
+        except InterruptedError:
+            state['state'] = 'cancelled'
+        except Exception as ex:
+            state['state'] = 'failed'
+            state['error'] = 'ページ索引を保存できませんでした（'+type(ex).__name__+'）。元ファイル・登録範囲を確認して再実行してください。'
+        finally:
+            ai._last_activity = time.monotonic()
+            with ai.guard:
+                ai.store.save_state(state)
+
+    def start(self, item_id, page_ids, revision, scope):
+        from ai_search import AIBusy
+        identifier(item_id); token(revision)
+        if (type(page_ids) is not list or not 1 <= len(page_ids) <= MAX_PAGES
+                or any(type(p) is not str for p in page_ids) or len(set(page_ids)) != len(page_ids)):
+            raise ValueError('Invalid page selection')
+        for p in page_ids: token(p)
+        ai = self.ai
+        scope = ai._scope(scope)
+        if scope is None: raise ValueError('Explicit scope required')
+        if not ai.encoder.available or 'cover' not in ai.profile.modalities:
+            raise AIUnavailable('選択中のモデルでは画像のAI検索を利用できません。')
+        with ai.guard:
+            if ai._closed: raise AIUnavailable('AI is closing')
+            if ai.worker and ai.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
+            with ai.catalog._guard:
+                ai.catalog._require_idle()
+                row = ai._current_rows([item_id], scope).get(item_id)
+                if row is None or row['kind'] not in ('book', 'archive'):
+                    raise KeyError('Page source unavailable')
+                pages = self.selection(item_id, page_ids, revision)
+            ai.cancel.clear()
+            state = {'state':'running', 'job':'book-pages', 'job_id':secrets.token_hex(16), 'item_id':item_id,
+                'source_revision':revision, 'processed':0, 'total':len(pages),
+                'indexed':0, 'reused':0, 'skipped':0, 'error':'', 'scope':scope}
+            ai.store.save_state(state)
+            ai.worker = threading.Thread(target=self._build, args=(pages, state), daemon=True)
+            ai.worker.start()
+        return ai.status()
+
+    def _build(self, pages, state):
+        ai = self.ai; item_id = state['item_id']; revision = state['source_revision']
+        try:
+            with ai.inference:
+                self._publish_range(pages, state, item_id, revision)
+                state['indexed'] = len(pages)
+                state['state'] = 'complete'
+        except InterruptedError:
+            state['state'] = 'cancelled'
+        except Exception as ex:
+            state['state'] = 'failed'
+            state['error'] = 'ページ索引を保存できませんでした（'+type(ex).__name__+'）。元ファイル・登録範囲を確認して再実行してください。'
+        finally:
+            ai._last_activity = time.monotonic()
+            with ai.guard: ai.store.save_state(state)
+
+    def _publish_range(self, pages, state, item_id, revision, *, save_progress=True):
+        """Caller owns shared inference lock; publish one <=16-page range atomically."""
+        ai = self.ai
+        if ai.cancel.is_set(): raise InterruptedError()
+        with ai.store.connect() as db:
+            cached = {pid: data for pid, data in db.execute(
+                'SELECT page_id,vector FROM ai_page_vectors WHERE item_id=? AND source_revision=? AND contract=? '
+                'AND page_id IN ('+','.join('?' for _ in pages)+')',
+                [item_id, revision, CONTRACT, *[p['page_id'] for p in pages]])
+                if _is_valid_packed(data, ai.profile.dimension)}
+        packed = []
+        for p in pages:
+            if ai.cancel.is_set(): raise InterruptedError()
+            raw_bytes = cached.get(p['page_id'])
+            did_infer = raw_bytes is None
+            if did_infer:
+                payload = self.index.input(item_id, p['page_id'], revision)
+                vector = normalized(ai.encoder.encode('image', payload['data']), ai.profile.dimension)
+                raw_bytes = array('f', vector).tobytes()
+            else:
+                state['reused'] += 1
+            packed.append((item_id, revision, p['page_id'], p['page'], raw_bytes, CONTRACT))
+            state['processed'] += 1
+            if save_progress:
+                with ai.guard: ai.store.save_state(state)
+            if did_infer and state['processed'] < state['total'] and ai._index_pause_ms:
+                if ai.cancel.wait(ai._index_pause_ms/1000): raise InterruptedError()
+        # Never hold the catalog guard while running the model. Publish the
+        # entire selected range only if the root/scope/page revision survived.
+        with ai.catalog._guard:
+            ai.catalog._require_idle()
+            if ai._current_rows([item_id], state['scope']).get(item_id) is None:
+                raise KeyError('Page source unavailable')
+            self.selection(item_id, [p['page_id'] for p in pages], revision)
+            if ai.cancel.is_set(): raise InterruptedError()
+            with ai.store.connect() as db:
+                db.execute('DELETE FROM ai_page_vectors WHERE item_id=? AND (source_revision<>? OR contract<>?)',
+                           (item_id, revision, CONTRACT))
+                db.executemany('INSERT OR REPLACE INTO ai_page_vectors VALUES(?,?,?,?,?,?)', packed)
+
+    def index_all_pages(self, item_id, scope):
+        """Index any uncached internal pages of a book/archive in bounded batches."""
+        ai = self.ai
+        if ai.cancel.is_set():
+            raise InterruptedError()
+        snap = self.index.refresh(item_id, cancelled=ai.cancel.is_set)
+        revision = snap['source_revision']
+        with ai.catalog.connect() as db:
+            self.index._allowed(db, item_id)
+            head = self.index._head(db, item_id)
+            if head is None or head['source_revision'] != revision:
+                raise ReaderChanged('Page source changed')
+            entries = [dict(p) for p in db.execute(
+                'SELECT page_id, page FROM page_entries WHERE snapshot_id=? ORDER BY page',
+                (head['id'],))]
+        if not entries:
+            return False
+        with ai.store.connect() as db:
+            ready = {
+                pid for pid, data in db.execute(
+                    'SELECT page_id, vector FROM ai_page_vectors WHERE item_id=? AND source_revision=? AND contract=?',
+                    (item_id, revision, CONTRACT))
+                if _is_valid_packed(data, ai.profile.dimension)
+            }
+        missing = [p for p in entries if p['page_id'] not in ready]
+        if not missing:
+            return False
+        local_state = {'scope': scope, 'processed': 0, 'total': len(missing), 'reused': 0}
+        for offset in range(0, len(missing), MAX_PAGES):
+            if ai.cancel.is_set():
+                raise InterruptedError()
+            chunk = missing[offset:offset + MAX_PAGES]
+            self._publish_range(chunk, local_state, item_id, revision, save_progress=False)
+        return True
+
+    def rank(self, rows, query, *, check=None):
+        """One best page per current book. Metadata checks only; no image decode."""
+        ai = self.ai; result = {}
+        ids = [r['id'] for r in rows if r['kind'] in ('book', 'archive')]
+        if not ids or 'cover' not in ai.profile.modalities: return result
+        dim = ai.profile.dimension; model_id = ai.profile.model_id
+        model_rev = ai.profile.revision; profile_key = ai.profile.key
+        hex64 = _HEX64
+        expect_bytes = dim * 4
+        use_native = _score_packed is _ORIG_SCORE_PACKED and native_accel.available()
+        def apply_score(item_id, rev, pid, page, score):
+            if item_id not in result or score > result[item_id][0]:
+                result[item_id] = (score, {'source_revision':rev, 'source_state':'current',
+                    'page_id':pid, 'page':page, 'model':model_id,
+                    'model_revision':model_rev, 'profile':profile_key,
+                    'preprocessing':CONTRACT, 'semantic_score':round(score, 6)})
+        with ai.store.connect() as db:
+            for offset in range(0, len(ids), 256):
+                batch = ids[offset:offset+256]
+                # Stream at most a book's best score, never retain all page blobs.
+                records = db.execute('SELECT item_id,source_revision,page_id,page,vector FROM ai_page_vectors '
+                    'WHERE contract=? AND item_id IN ('+','.join('?' for _ in batch)+') ORDER BY item_id,page', [CONTRACT, *batch])
+                pending_meta = []; pending_chunks = []
+                def flush_chunk():
+                    if not pending_meta: return
+                    scores_arr, _, valid_arr = native_accel.score_f32_batch(
+                        [query], b''.join(pending_chunks), len(pending_meta), dim, normalize_vec=True)
+                    for idx, (m_item_id, m_rev, m_pid, m_page) in enumerate(pending_meta):
+                        if valid_arr[idx]:
+                            apply_score(m_item_id, m_rev, m_pid, m_page, scores_arr[idx])
+                    pending_meta.clear(); pending_chunks.clear()
+                for ordinal, (item_id, rev, pid, page, data) in enumerate(records):
+                    if check is not None and ordinal%256==0:check()
+                    if (type(page) is not int or not 0<=page<10000
+                            or type(rev) is not str or hex64(rev) is None
+                            or type(pid) is not str or hex64(pid) is None):
+                        continue
+                    if use_native:
+                        if isinstance(data, (bytes, bytearray, memoryview)) and len(data) == expect_bytes:
+                            pending_meta.append((item_id, rev, pid, page))
+                            pending_chunks.append(bytes(data))
+                            if len(pending_meta) >= 512:
+                                flush_chunk()
+                        continue
+                    score = _score_packed(data, dim, query)
+                    if score is None: continue
+                    apply_score(item_id, rev, pid, page, score)
+                if use_native:
+                    flush_chunk()
+        # A stale or unavailable source is omitted rather than presented as a
+        # current page number. Reader checks the exact revision again on opening.
+        # Keep one short catalog guard hold per candidate book while batching
+        # catalog location SQL reads into 256-book chunks (invalidated immediately
+        # if any root/exclusion/scan mutation increments catalog._state_epoch).
+        candidate_ids = list(result)
+        for offset in range(0, len(candidate_ids), 256):
+            batch = candidate_ids[offset:offset+256]
+            loc_rows = None
+            cached_epoch = None
+            root_cache = {}
+            for pos, item_id in enumerate(batch):
+                if check is not None:check()
+                evidence = result[item_id][1]
+                with ai.catalog._guard:
+                    epoch = getattr(ai.catalog, '_state_epoch', 0)
+                    if loc_rows is None or epoch != cached_epoch:
+                        remaining = batch[pos:]
+                        with ai.catalog.connect() as db:
+                            marks = ','.join('?' for _ in remaining)
+                            loc_rows = {row['item_id']: row for row in db.execute(
+                                'SELECT m.item_id, l.*, r.path, r.excludes_json FROM item_locations m '
+                                'JOIN library_locations l ON l.id=m.location_id '
+                                'JOIN library_roots r ON r.id=l.root_id WHERE m.item_id IN (' + marks + ') AND r.enabled=1',
+                                remaining)}
+                        cached_epoch = epoch
+                        root_cache.clear()
+                    try:
+                        source = self.index.previews._read(
+                            item_id, operation='tag_source', row=loc_rows.get(item_id),
+                            row_loaded=True, root_cache=root_cache)
+                        state = 'current' if source['revision'] == evidence['source_revision'] else 'stale'
+                    except ReaderChanged:
+                        state = 'stale'
+                    except PreviewBusyError:
+                        state = 'unverified'
+                    except (PreviewUnavailable, OSError):
+                        state = 'unavailable'
+                    except Exception:
+                        state = 'unavailable'
+                    if state != 'current':
+                        del result[item_id]
+        return result

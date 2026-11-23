@@ -1,0 +1,862 @@
+{
+  "version": 7,
+  "name": "phase-p0-v7",
+  "description": "Frozen once before rankings; synthetic content, metadata-only SVG/silent audio, explicit aliases, two roots, deliberate pixel/label conflicts. Not real-library accuracy. No product ranking tuning from this suite alone.",
+  "conditions": [
+    "literal",
+    "related",
+    "text",
+    "cover",
+    "all"
+  ],
+  "scope_variants": [
+    "all-roots",
+    "root-A"
+  ],
+  "terms": [
+    {
+      "term": "青い鳥の案内役",
+      "aliases": [
+        "蒼庭リオ"
+      ],
+      "related": []
+    },
+    {
+      "term": "星よみ係",
+      "aliases": [
+        "水宮ナギ"
+      ],
+      "related": []
+    }
+  ],
+  "items": [
+    {
+      "key": "n7_i01",
+      "file": "n7_i01.png",
+      "kind": "image",
+      "root": "A",
+      "tags": [],
+      "scene": {
+        "background": "black",
+        "objects": [
+          {
+            "color": "yellow",
+            "shape": "circle",
+            "x": 90,
+            "y": 120,
+            "sx": 42,
+            "sy": 42
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i02",
+      "file": "n7_i02.png",
+      "kind": "image",
+      "root": "B",
+      "tags": [],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "green",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 70,
+            "sx": 65,
+            "sy": 12
+          },
+          {
+            "color": "green",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 120,
+            "sx": 65,
+            "sy": 12
+          },
+          {
+            "color": "green",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 170,
+            "sx": 65,
+            "sy": 12
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i03",
+      "file": "n7_i03.png",
+      "kind": "image",
+      "root": "A",
+      "tags": [],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "purple",
+            "shape": "circle",
+            "x": 90,
+            "y": 65,
+            "sx": 23,
+            "sy": 23
+          },
+          {
+            "color": "purple",
+            "shape": "circle",
+            "x": 90,
+            "y": 170,
+            "sx": 23,
+            "sy": 23
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i04",
+      "file": "n7_i04.png",
+      "kind": "image",
+      "root": "B",
+      "tags": [],
+      "scene": {
+        "background": "cyan",
+        "objects": [
+          {
+            "color": "orange",
+            "shape": "triangle",
+            "x": 90,
+            "y": 120,
+            "sx": 55,
+            "sy": 60
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i05",
+      "file": "n7_i05.png",
+      "kind": "image",
+      "root": "A",
+      "tags": [],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "blue",
+            "shape": "diamond",
+            "x": 90,
+            "y": 120,
+            "sx": 55,
+            "sy": 70
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i06",
+      "file": "n7_i06.png",
+      "kind": "image",
+      "root": "B",
+      "tags": [],
+      "scene": {
+        "background": "black",
+        "objects": [
+          {
+            "color": "white",
+            "shape": "cross",
+            "x": 90,
+            "y": 120,
+            "sx": 48,
+            "sy": 65
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i07",
+      "file": "n7_i07.png",
+      "kind": "image",
+      "root": "A",
+      "tags": [],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "yellow",
+            "shape": "square",
+            "x": 45,
+            "y": 65,
+            "sx": 22,
+            "sy": 22
+          },
+          {
+            "color": "red",
+            "shape": "circle",
+            "x": 130,
+            "y": 165,
+            "sx": 28,
+            "sy": 28
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i08",
+      "file": "n7_i08.png",
+      "kind": "image",
+      "root": "B",
+      "tags": [],
+      "scene": {
+        "background": "green",
+        "objects": [
+          {
+            "color": "black",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 120,
+            "sx": 22,
+            "sy": 85
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": false,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i09",
+      "file": "n7_i09.png",
+      "kind": "image",
+      "root": "A",
+      "tags": [
+        "オレンジ色",
+        "背景",
+        "黒い十字"
+      ],
+      "scene": {
+        "background": "orange",
+        "objects": [
+          {
+            "color": "black",
+            "shape": "cross",
+            "x": 90,
+            "y": 120,
+            "sx": 45,
+            "sy": 65
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i10",
+      "file": "n7_i10.png",
+      "kind": "image",
+      "root": "B",
+      "tags": [
+        "白い背景",
+        "緑のひし形"
+      ],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "green",
+            "shape": "diamond",
+            "x": 90,
+            "y": 120,
+            "sx": 50,
+            "sy": 65
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i11",
+      "file": "n7_i11.png",
+      "kind": "image",
+      "root": "A",
+      "tags": [
+        "青い円",
+        "青い丸"
+      ],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "red",
+            "shape": "rectangle",
+            "x": 90,
+            "y": 120,
+            "sx": 60,
+            "sy": 30
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_i12",
+      "file": "n7_i12.png",
+      "kind": "image",
+      "root": "B",
+      "tags": [
+        "赤い横長の長方形"
+      ],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "blue",
+            "shape": "circle",
+            "x": 90,
+            "y": 120,
+            "sx": 45,
+            "sy": 45
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_b01",
+      "file": "n7_b01.cbz",
+      "kind": "book",
+      "root": "A",
+      "tags": [
+        "恋愛小説",
+        "幼なじみ",
+        "高校",
+        "文化祭",
+        "両想い"
+      ],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "orange",
+            "shape": "diamond",
+            "x": 80,
+            "y": 110,
+            "sx": 29,
+            "sy": 35
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_b02",
+      "file": "n7_b02.cbz",
+      "kind": "book",
+      "root": "B",
+      "tags": [
+        "解説書",
+        "天体観測",
+        "望遠鏡",
+        "初心者",
+        "星空"
+      ],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "purple",
+            "shape": "rectangle",
+            "x": 85,
+            "y": 110,
+            "sx": 33,
+            "sy": 40
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_b03",
+      "file": "n7_b03.cbz",
+      "kind": "book",
+      "root": "A",
+      "tags": [
+        "物語",
+        "蒼庭リオ",
+        "羽飾り",
+        "森の案内人"
+      ],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "cyan",
+            "shape": "triangle",
+            "x": 90,
+            "y": 110,
+            "sx": 37,
+            "sy": 45
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_b04",
+      "file": "n7_b04.cbz",
+      "kind": "book",
+      "root": "B",
+      "tags": [
+        "物語",
+        "水宮ナギ",
+        "星読の司書",
+        "夜の図書館"
+      ],
+      "scene": {
+        "background": "white",
+        "objects": [
+          {
+            "color": "yellow",
+            "shape": "cross",
+            "x": 95,
+            "y": 110,
+            "sx": 41,
+            "sy": 50
+          }
+        ]
+      },
+      "evidence": {
+        "metadata": true,
+        "pixels": "generated geometry"
+      }
+    },
+    {
+      "key": "n7_m01",
+      "file": "n7_m01.svg",
+      "kind": "material",
+      "root": "A",
+      "tags": [
+        "服飾",
+        "下着",
+        "レース",
+        "肩ひも",
+        "型紙",
+        "デザインテンプレート"
+      ],
+      "scene": null,
+      "evidence": {
+        "metadata": true,
+        "pixels": "metadata only; silent WAV / gray SVG"
+      }
+    },
+    {
+      "key": "n7_m02",
+      "file": "n7_m02.svg",
+      "kind": "material",
+      "root": "B",
+      "tags": [
+        "ゲーム素材",
+        "石畳",
+        "継ぎ目なし",
+        "タイル",
+        "床用テクスチャ"
+      ],
+      "scene": null,
+      "evidence": {
+        "metadata": true,
+        "pixels": "metadata only; silent WAV / gray SVG"
+      }
+    },
+    {
+      "key": "n7_m03",
+      "file": "n7_m03.svg",
+      "kind": "material",
+      "root": "A",
+      "tags": [
+        "動画編集",
+        "字幕",
+        "縦書き",
+        "タイトル枠"
+      ],
+      "scene": null,
+      "evidence": {
+        "metadata": true,
+        "pixels": "metadata only; silent WAV / gray SVG"
+      }
+    },
+    {
+      "key": "n7_m04",
+      "file": "n7_m04.svg",
+      "kind": "material",
+      "root": "B",
+      "tags": [
+        "配信素材",
+        "待機画面",
+        "夜空",
+        "星"
+      ],
+      "scene": null,
+      "evidence": {
+        "metadata": true,
+        "pixels": "metadata only; silent WAV / gray SVG"
+      }
+    },
+    {
+      "key": "n7_a01",
+      "file": "n7_a01.wav",
+      "kind": "audio",
+      "root": "A",
+      "tags": [
+        "環境音",
+        "雨音",
+        "トタン屋根",
+        "ループ"
+      ],
+      "scene": null,
+      "evidence": {
+        "metadata": true,
+        "pixels": "metadata only; silent WAV / gray SVG"
+      }
+    },
+    {
+      "key": "n7_a02",
+      "file": "n7_a02.wav",
+      "kind": "audio",
+      "root": "B",
+      "tags": [
+        "効果音",
+        "木の扉",
+        "きしむ",
+        "ゆっくり開く"
+      ],
+      "scene": null,
+      "evidence": {
+        "metadata": true,
+        "pixels": "metadata only; silent WAV / gray SVG"
+      }
+    },
+    {
+      "key": "n7_a03",
+      "file": "n7_a03.wav",
+      "kind": "audio",
+      "root": "A",
+      "tags": [
+        "BGM",
+        "ピアノ",
+        "穏やか",
+        "読書",
+        "歌なし"
+      ],
+      "scene": null,
+      "evidence": {
+        "metadata": true,
+        "pixels": "metadata only; silent WAV / gray SVG"
+      }
+    },
+    {
+      "key": "n7_a04",
+      "file": "n7_a04.wav",
+      "kind": "audio",
+      "root": "B",
+      "tags": [
+        "音声",
+        "料理の説明",
+        "日本語",
+        "女性ナレーション"
+      ],
+      "scene": null,
+      "evidence": {
+        "metadata": true,
+        "pixels": "metadata only; silent WAV / gray SVG"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "n7_q01",
+      "group": "metadata",
+      "query": "文化祭をきっかけに幼なじみと結ばれる高校の恋愛もの",
+      "kind": "book",
+      "relevance": {
+        "n7_b01": 2
+      },
+      "evidence": "assigned metadata only; books are geometry / audio silent"
+    },
+    {
+      "id": "n7_q02",
+      "group": "metadata",
+      "query": "望遠鏡で星を見るための入門書",
+      "kind": "book",
+      "relevance": {
+        "n7_b02": 2
+      },
+      "evidence": "assigned metadata only; books are geometry / audio silent"
+    },
+    {
+      "id": "n7_q03",
+      "group": "metadata",
+      "query": "肩ひもとレースの配置を考える下着の型紙",
+      "kind": "material",
+      "relevance": {
+        "n7_m01": 2
+      },
+      "evidence": "assigned metadata only; books are geometry / audio silent"
+    },
+    {
+      "id": "n7_q04",
+      "group": "metadata",
+      "query": "ゲームの床に繰り返し敷ける石畳",
+      "kind": "material",
+      "relevance": {
+        "n7_m02": 2
+      },
+      "evidence": "assigned metadata only; books are geometry / audio silent"
+    },
+    {
+      "id": "n7_q05",
+      "group": "metadata",
+      "query": "縦に流す字幕のためのタイトル枠",
+      "kind": "material",
+      "relevance": {
+        "n7_m03": 2
+      },
+      "evidence": "assigned metadata only; books are geometry / audio silent"
+    },
+    {
+      "id": "n7_q06",
+      "group": "metadata",
+      "query": "屋根をたたく雨を繰り返し流したい",
+      "kind": "audio",
+      "relevance": {
+        "n7_a01": 2
+      },
+      "evidence": "assigned metadata only; books are geometry / audio silent"
+    },
+    {
+      "id": "n7_q07",
+      "group": "metadata",
+      "query": "古い木製ドアがゆっくりきしみながら開く音",
+      "kind": "audio",
+      "relevance": {
+        "n7_a02": 2
+      },
+      "evidence": "assigned metadata only; books are geometry / audio silent"
+    },
+    {
+      "id": "n7_q08",
+      "group": "metadata",
+      "query": "本を読むときの静かな歌のないピアノ",
+      "kind": "audio",
+      "relevance": {
+        "n7_a03": 2
+      },
+      "evidence": "assigned metadata only; books are geometry / audio silent"
+    },
+    {
+      "id": "n7_q09",
+      "group": "pixels",
+      "query": "黒い地に黄色の円が一つある絵",
+      "kind": "image",
+      "relevance": {
+        "n7_i01": 2
+      },
+      "evidence": "generated pixels; no descriptive tags"
+    },
+    {
+      "id": "n7_q10",
+      "group": "pixels",
+      "query": "横向きの緑の帯が三本並ぶ白い画像",
+      "kind": "image",
+      "relevance": {
+        "n7_i02": 2
+      },
+      "evidence": "generated pixels; no descriptive tags"
+    },
+    {
+      "id": "n7_q11",
+      "group": "pixels",
+      "query": "紫色の小さな丸が上下に二つ離れている",
+      "kind": "image",
+      "relevance": {
+        "n7_i03": 2
+      },
+      "evidence": "generated pixels; no descriptive tags"
+    },
+    {
+      "id": "n7_q12",
+      "group": "pixels",
+      "query": "水色の地にオレンジ色の三角形がある",
+      "kind": "image",
+      "relevance": {
+        "n7_i04": 2
+      },
+      "evidence": "generated pixels; no descriptive tags"
+    },
+    {
+      "id": "n7_q13",
+      "group": "pixels",
+      "query": "白い地の青色の縦長ひし形",
+      "kind": "image",
+      "relevance": {
+        "n7_i05": 2
+      },
+      "evidence": "generated pixels; no descriptive tags"
+    },
+    {
+      "id": "n7_q14",
+      "group": "pixels",
+      "query": "黒地の白色のプラス記号",
+      "kind": "image",
+      "relevance": {
+        "n7_i06": 2
+      },
+      "evidence": "generated pixels; no descriptive tags"
+    },
+    {
+      "id": "n7_q15",
+      "group": "agreement",
+      "query": "オレンジ背景の黒色プラスの絵",
+      "kind": "image",
+      "relevance": {
+        "n7_i09": 2
+      },
+      "evidence": "pixels and assigned metadata agree"
+    },
+    {
+      "id": "n7_q16",
+      "group": "agreement",
+      "query": "白地に緑色のダイヤ形が描かれた絵",
+      "kind": "image",
+      "relevance": {
+        "n7_i10": 2
+      },
+      "evidence": "pixels and assigned metadata agree"
+    },
+    {
+      "id": "n7_q17",
+      "group": "conflict-pixels",
+      "query": "実際の見た目が赤色の横長四角になっている画像",
+      "kind": "image",
+      "relevance": {
+        "n7_i11": 2
+      },
+      "evidence": "actual pixels; assigned label deliberately contradicts"
+    },
+    {
+      "id": "n7_q18",
+      "group": "conflict-pixels",
+      "query": "実際には青色の円が描かれている画像",
+      "kind": "image",
+      "relevance": {
+        "n7_i12": 2
+      },
+      "evidence": "actual pixels; assigned label deliberately contradicts"
+    },
+    {
+      "id": "n7_q19",
+      "group": "conflict-metadata",
+      "query": "タグに青い円と書いたもの",
+      "kind": "image",
+      "relevance": {
+        "n7_i11": 2
+      },
+      "evidence": "assigned label, not pixels"
+    },
+    {
+      "id": "n7_q20",
+      "group": "conflict-metadata",
+      "query": "赤い横長の長方形という登録タグ",
+      "kind": "image",
+      "relevance": {
+        "n7_i12": 2
+      },
+      "evidence": "assigned label, not pixels"
+    },
+    {
+      "id": "n7_q21",
+      "group": "alias",
+      "query": "青い鳥の案内役",
+      "kind": "book",
+      "relevance": {
+        "n7_b03": 2
+      },
+      "evidence": "explicit fictional user dictionary, not cultural/world knowledge"
+    },
+    {
+      "id": "n7_q22",
+      "group": "alias",
+      "query": "星よみ係",
+      "kind": "book",
+      "relevance": {
+        "n7_b04": 2
+      },
+      "evidence": "explicit fictional user dictionary, not cultural/world knowledge"
+    },
+    {
+      "id": "n7_q23",
+      "group": "no-answer",
+      "query": "フラミンゴの水彩スケッチ",
+      "kind": "image",
+      "relevance": {},
+      "evidence": "absent from generated corpus and assigned labels"
+    },
+    {
+      "id": "n7_q24",
+      "group": "no-answer",
+      "query": "雪山の救助ヘリの録音",
+      "kind": "audio",
+      "relevance": {},
+      "evidence": "absent; no real audio inference"
+    }
+  ]
+}

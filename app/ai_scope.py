@@ -1,0 +1,60 @@
+"""Explicit registered-library scope; no paths, SQL, or model-space changes."""
+from library_index import TYPES
+from media_filters import QUERY_KINDS,kind_clause,normalize_tag_filter,tag_clause
+from shelves import shelf_clause
+
+MAX_ROOTS = 256
+
+
+def validate_scope(value):
+    if not isinstance(value, dict) or set(value) - {'root_ids', 'kind', 'shelf', 'shelf_ids', 'shelf_filter_ids', 'tag', 'book_pages'}:
+        raise ValueError('Invalid AI scope')
+    roots = value.get('root_ids')
+    if roots is not None:
+        if (not isinstance(roots, list) or len(roots) > MAX_ROOTS
+                or any(type(root) is not int or not 1<=root<=9223372036854775807 for root in roots)
+                or len(set(roots)) != len(roots)):
+            raise ValueError('Invalid registered root selection')
+        roots = sorted(roots)  # Copy before an asynchronous job begins.
+    kind = value.get('kind', '')
+    shelf = value.get('shelf')
+    if not isinstance(kind, str) or kind and kind not in QUERY_KINDS:
+        raise ValueError('Invalid scope kind')
+    if shelf is not None and (not isinstance(shelf, str) or len(shelf) > 80):
+        raise ValueError('Invalid scope shelf')
+    shelf_clause(shelf,value.get('shelf_ids'))
+    shelf_clause(shelf_ids=value.get('shelf_filter_ids'))
+    result={'root_ids': roots, 'kind': kind, 'shelf': shelf}
+    if 'shelf_ids' in value:result['shelf_ids']=None if value['shelf_ids'] is None else sorted(value['shelf_ids'])
+    if 'shelf_filter_ids' in value:result['shelf_filter_ids']=None if value['shelf_filter_ids'] is None else sorted(value['shelf_filter_ids'])
+    if 'tag' in value:result['tag']=normalize_tag_filter(value['tag'])
+    if 'book_pages' in value:
+        book_pages=value['book_pages']
+        if type(book_pages) is not str or book_pages not in ('cover_only','all_pages'):
+            raise ValueError('Invalid book_pages scope')
+        result['book_pages']=book_pages
+    return result
+
+
+def scope_clause(scope):
+    """Only called with a validated scope. Values are always SQL parameters."""
+    where, values = [], []
+    if scope is None:
+        return where, values
+    roots = scope['root_ids']
+    if roots is not None:
+        if roots:
+            where.append('l.root_id IN (' + ','.join('?' for _ in roots) + ')')
+            values.extend(roots)
+        else:
+            where.append('0=1')
+    if scope['kind']:
+        clauses,parameters=kind_clause(scope['kind']);where.extend(clauses);values.extend(parameters)
+    clauses,parameters=shelf_clause(scope['shelf'],scope.get('shelf_ids'))
+    where.extend(clauses);values.extend(parameters)
+    # UI shelf browsing narrows, rather than overwrites, the saved AI shelf.
+    clauses,parameters=shelf_clause(shelf_ids=scope.get('shelf_filter_ids'))
+    where.extend(clauses);values.extend(parameters)
+    clauses,parameters=tag_clause(scope.get('tag'))
+    where.extend(clauses);values.extend(parameters)
+    return where, values

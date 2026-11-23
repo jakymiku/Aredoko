@@ -1,0 +1,58 @@
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace Aredoko.Core;
+
+public sealed record RestoreJob(string? Id,string State,double Progress,string Message,bool SwitchSupported,bool RestartRequested=false,string? Source=null,bool? WithoutVectors=null)
+{
+    public bool Active=>State is "queued" or "running";
+    public static RestoreJob Parse(string json)
+    {
+        using var doc=JsonDocument.Parse(json);var root=doc.RootElement;
+        var state=root.GetProperty("state").GetString()??"";
+        if(state is not ("idle" or "queued" or "running" or "completed" or "cancelled" or "failed"))throw new InvalidDataException("Unknown restore state");
+        var id=root.GetProperty("job_id").GetString();
+        if(state!="idle")BackupClient.ValidateId(id);
+        var progress=root.GetProperty("progress_ratio").GetDouble();
+        if(!double.IsFinite(progress)||progress<0||progress>1||state=="completed"&&progress!=1)throw new InvalidDataException("Invalid restore progress");
+        if(!root.GetProperty("staging_supported").GetBoolean())throw new InvalidOperationException(root.GetProperty("message").GetString()??"復元データを確認できません。復旧ガイドを確認してください。");
+        var supported=root.GetProperty("switch_supported").GetBoolean();
+        var restarting=root.TryGetProperty("restart_requested",out var requested)&&requested.GetBoolean();
+        if(restarting&&(!supported||state!="completed"))throw new InvalidDataException("Invalid restore restart acknowledgment");
+        var source=root.TryGetProperty("source",out var original)&&original.ValueKind!=JsonValueKind.Null?original.GetString():null;
+        if(source is not null&&(source.Length>4096||source.Any(char.IsControl)))throw new InvalidDataException("Invalid restore source");
+        bool? without=root.TryGetProperty("without_vectors",out var policy)&&policy.ValueKind!=JsonValueKind.Null?policy.GetBoolean():null;
+        return new(id,state,progress,root.GetProperty("message").GetString()??"",supported,restarting,source,without);
+    }
+}
+
+public sealed class RestoreClient(HttpClient client)
+{
+    public async Task<RestoreJob> StatusAsync(CancellationToken cancellation=default)
+    {using var response=await client.GetAsync("api/library/restore",cancellation);return await ReadAsync(response,cancellation);}
+    public Task<RestoreJob> StartAsync(string source,bool withoutVectors=true,CancellationToken cancellation=default)
+    {
+        if(string.IsNullOrWhiteSpace(source)||!Path.IsPathFullyQualified(source)||source.Length>4096||source.Any(char.IsControl))throw new ArgumentException("復元元のバックアップを選んでください。");
+        return PostAsync("start",new(){["consent"]=true,["source"]=source,["without_vectors"]=withoutVectors},cancellation);
+    }
+    public Task<RestoreJob> CancelAsync(string id,CancellationToken cancellation=default)
+    {BackupClient.ValidateId(id);return PostAsync("cancel",new(){["job_id"]=id},cancellation);}
+    public Task<RestoreJob> DiscardAsync(string id,CancellationToken cancellation=default)
+    {BackupClient.ValidateId(id);return PostAsync("discard",new(){["job_id"]=id,["consent"]=true},cancellation);}
+    public Task<RestoreJob> RestartAsync(string id,CancellationToken cancellation=default)
+    {BackupClient.ValidateId(id);return PostAsync("restart",new(){["job_id"]=id,["consent"]=true},cancellation);}
+    private async Task<RestoreJob> PostAsync(string operation,JsonObject body,CancellationToken cancellation)
+    {
+        using var content=new StringContent(body.ToJsonString(),Encoding.UTF8,"application/json");
+        using var response=await client.PostAsync("api/library/restore/"+operation,content,cancellation);
+        return await ReadAsync(response,cancellation);
+    }
+    private static async Task<RestoreJob> ReadAsync(HttpResponseMessage response,CancellationToken cancellation)
+    {
+        var text=await response.Content.ReadAsStringAsync(cancellation);
+        if(!response.IsSuccessStatusCode)throw new InvalidOperationException(ErrorText.FromResponse(text,(int)response.StatusCode));
+        return RestoreJob.Parse(text);
+    }
+}

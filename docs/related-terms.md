@@ -1,0 +1,118 @@
+# 文字検索の正規化・複数語AND・関連語辞書（2026-10-13）
+
+> 2026-10-14 Windows続行：語別検索根拠`search_evidence`のCore反射不要解析とWinUI一覧表示（`SearchEvidence<id>`）、および`魔法"少女`・`C:\textures`・`[`のタグ検索とサムネイルdouble-clickをWindows実機（Light/Dark、1200×820・700×620）で確認。全Python263 PASS、Core157 PASS、x64 SelfContained Release PASS、`search-evidence-01` 30 checks PASS、`viewer-doubleclick-01` 22 checks PASS。[詳細](literal-search-v6.md)・[実機検証](viewer-reader-validation.md)。
+
+> 2026-10-14 夜：通常検索に作品別の直接一致/関連語一致/欠落語を返すsearch_evidenceを追加。WinUI表示は後続。固定v6では正解を先頭に出しても余分な候補やpartialが残ることを測定し、現在の検索方式は変更していない。[結果と根拠API](literal-search-v6.md)。全Python263 PASS、Windows未検証。
+
+> 2026-10-14 Linux続行：タグは保存JSONから値を復元して照合する。`魔法"少女`や`C:\textures`の見落とし、JSON構文の`[`や`,`だけでヒットする誤判定を修正。実際のタグ/名前にある記号は検索可能。AI検索の文字一致根拠・任意の文字一致フィルターも共通処理へ変更し、ベクトル/モデル/順位統合方式は変更なし。保存済みタグは書き換えない。文字検索10・AI候補4・全Python256 PASS。Windows GUIは今回未検証。
+
+> 2026-10-13 Windows後続：Core97・x64 SelfContained Release・全Python211 PASS。nativeはLight辞書/related/partialまでの部分確認、reader/Dark/pickerは未到達。旧AppX depsのRegex欠落をfresh layout＋windowless probeで修正確認し、GUI再検証は次回。[正確な結果と履歴](windows-hark-followup.md)。
+
+製品ビジョンの「東方 巫女 → 保存済みの博麗霊夢の立ち絵」へ、AIなしの文字検索側から近づける最小実装。**ユーザーが登録した辞書だけ**を使い、知識データの同梱・外部取得・モデル利用はしない。一般的な検索精度や私物ライブラリでの合格を示すものではない。
+
+## 文字検索（名前・タグ）の変更
+
+- 実装: `app/search_terms.py`、`ProductionCatalog.search`（`app/production.py`）。デモ用`Catalog.search`は変更なし。
+- 入力と保存済みの名前・タグを **NFKC＋casefold＋カタカナ→ひらがな** で正規化して比較。`ﾚｲﾑ`/`レイム`/`れいむ`、`ＲＥＩＭＵ`/`reimu` を同一視する。
+- 空白（全角空白・タブ含む）で語に分け、**すべての語**が名前またはタグのどこかに含まれる作品を返す（AND・語順不問）。上限16語、超過は400。従来の連続部分一致で見つかった通常の検索は引き続き見つかる（NFKC合成が部分文字列境界にかかる稀な例、保存JSONの構文文字だけの一致を除く）。`%`や`_`は従来どおりワイルドカードではなく文字。
+- 種類・お気に入り・未確認・棚フィルター、60件paging、除外の扱いは不変。辞書が空ならID順の並びも従来どおり。
+- SQLiteにはper-searchのPython関数`aredoko_match`を登録し、1行の採点を1回にまとめる（正規化は既存LRU20万件）。タグJSONの復元は検索内だけのLRU4096件で再利用し、検索connection終了時に解放。今回の生成50,001件・2語検索は0.193秒（Linux単発）。過去の関連語300見出し（各3表記）の速度は約0.15〜0.65秒。Windows実機・1TB・GUI込みの速度は未測定。
+
+## 関連語辞書
+
+見出し語＝ファイル名やタグに実際にある名前、別名＝表記ゆれ、関連語＝ユーザーが思い出す手がかり。
+
+```json
+{"term": "博麗霊夢", "aliases": ["霊夢", "reimu"], "related": ["東方", "巫女"]}
+```
+
+- 検索語が見出し語/別名に一致 → 見出し語と全別名をOR候補に追加。検索語が関連語に一致 → 見出し語と別名を**候補として**追加。元の語は必ず残り、フィルターは緩めない。
+- 「東方 巫女」は「東方」「巫女」の両方が満たされる必要があるため、関連語`東方`だけの霧雨魔理沙（巫女なし）は出ない。博麗霊夢タグだけの作品は両方の語の展開で一致する。
+- 並び: 入力した語そのものに一致した数が多い作品を先に、同数はID順。関連語だけで一致した作品は応答の`match:"related"`、一覧では「関連語の候補 ·」と表示。
+- 1語の候補は最大256表記。入力語の多くに関係する見出しを優先し、超過は応答の`truncated:true`とGUIの「ほか」で開示する。
+- 保存先は製品DBの`term_relations`（見出し語の正規化キーで一意、最大2000件、1項目16語・1語60文字、空白を含む語は拒否）。元ファイル・タグ・AI索引は変更しない。
+
+### API（既存のloopback・token・Origin保護を継承）
+
+| 要求 | 内容 |
+| --- | --- |
+| `GET /api/library/terms` | `{items:[{term,aliases,related}]}`（X-Aredoko-Token必須） |
+| `POST /api/library/terms` | 1項目を追加/置換。検証エラーは400と理由 |
+| `POST /api/library/terms/delete` | `{term}`のみ。未登録は404 |
+| `GET /api/library/terms/export` | `{format:"aredoko-related-terms",version:1,entries:[…]}`（パス・IDなし） |
+| `POST /api/library/terms/import` | 上記文書を**全件か0件**で統合。同じ見出し語は置換、他は保持。文書内重複（正規化後）・不正項目・2000件超過は400。この経路だけ本文16MiBまで |
+| `GET /api/items?q=…` | 展開があった時だけ`expansions:[{term,added,truncated?}]`と各item`match`を追加。展開なしの応答は従来と同じ形 |
+
+### WinUI
+
+- 「ツール」→「関連語を編集」（`BtnRelatedTerms`）から開く。dialog（`RelatedTermsEditor.cs`）で見出し語・別名・関連語を「、」区切りで保存/削除。登録済みは先頭200件をComboBoxで表示。
+- 既存dialogと同じ`transitions`/`dialogOpen`ガード。辞書はタグを変えないため未保存draftを破棄しない。閉じた後は**未保存draftがなく**名前・タグ検索中のときだけ再検索する。
+- 文字検索の案内に追加された関連語（1語につき3表記まで＋「ほかN語」）を表示。
+- dialogの「ファイルに書き出す」「ファイルから読み込む」は、ユーザーがpickerで選んだ.jsonだけを読み書きする（16MiB上限、送信前にformat/versionを確認、結果「N件を読み込みました（追加・置換）」）。
+- C#契約は`src/Aredoko.Core/RelatedTerms.cs`とProtocolの`Expansions`/`Match`（reflectionなしDOM）。
+
+## 検証（2026-10-13、Linux sandbox）
+
+- Python: `tests/test_search_terms.py`（6件）、`tests/test_term_relations.py`（15件）、`tests/test_literal_eval.py`（2件）を含む全**205 tests PASS**。生成一時ファイル・一時DBのみ。
+- C#: `dotnet run --project tests/Aredoko.Core.Tests -c Release` **93 checks PASS**（Linux、.NET SDK 10.0.401をsandboxにだけ導入）。
+- WinUI: `python tools/compile_check_winui.py` で **C#のみのコンパイルPASS（0 error/0 CS warning）**。XAMLはwell-formedのみ確認。
+- **未検証**: Windows x64 SelfContained Release build、XAMLコンパイル、関連語dialogと案内文のnative表示/操作、狭幅・高DPI・Narrator、Windows実機での速度。AI検索（意味/表紙）には辞書を使っていない。
+
+## 展開規則（2026-10-13 後続で拡張）
+
+1. 語が見出し語・別名と**完全一致**→その表記群を追加。
+2. 語（2文字以上）が見出し語・別名の**先頭部分**→同様に追加（「星灯り」→「星灯りの社」）。1文字は展開しない。
+2b. 語（3文字以上）が見出し語・別名の**途中**にある→同様に追加（「セレナーデ」→「聖夜のセレナーデ」）。2文字の途中一致は展開しない。
+3. 語・その表記群のどれかを`related`に持つ見出し→その表記群を追加（別名「ほしあかり」→見出し「星灯りの社」→関連キャラ）。関連語をさらにたどる連鎖はしない。
+順位：入力した語そのものに一致する作品→より長い表記で一致した作品（「朝霧ナギ」の作品が、短い別名「ナギ」が別名「ナギサ」に含まれるだけの作品より先）→ID順。部分一致フォールバックも同じ順位。
+4. 全語に一致する作品が0件で語が2語以上なら、**1語だけ欠ける作品**を`match:"partial"`、応答`partial:{words,required}`で返す（種類・表示フィルターは不変）。WinUIは「一部の語のみ一致 ·」と案内文で明示。1語欠けでも0件なら通常の0件（`partial`なし）。
+
+## 固定評価 literal-related v5 holdout（2026-10-13 夜）
+
+途中一致展開の**実装前・実行前**に凍結（SHA256 `38f5addb…88f5`）。13問。関連語群MRR：実装前**0.600** → 途中一致＋長い表記優先 **1.000**（Recall@5 0.933→1.000）。過剰展開3問・部分一致1問は前後とも1.000。実装前の実行で「聖夜のセレナーデ メイド」が別名「ナギ」を含む無関係な「ナギサ_海辺」を1位にする**順位バグ**を発見し、長い表記優先で修正した（この修正はv5結果を見た後の設計）。v3/v4/v5はすべてdevelopment evidence。次の判定はv6で。
+
+性能（Linux単発、生成5万件・辞書300見出し）：重い2語検索0.5–0.94秒。1行1回の採点にまとめて最大1.15秒から短縮。Windows実機・1TBは未測定。
+
+## 固定評価 literal-related v4 holdout（2026-10-13）
+
+規則1–3の変更**後・実行前**に凍結（commit `ad05e70`、SHA256 `57a81677…7964`）。別の架空作品、14問（過剰展開を見る短い語2問を含む）。同じ作者が書いたのでdevelopment寄りの証拠。
+
+| 関連語群（5問） | MRR | Recall@5 |
+| --- | --- | --- |
+| 変更前の辞書展開（`baac57e`で1回だけ実行） | 0.400 | 0.300 |
+| 規則1–3 | 0.800 | 0.700 |
+| 規則1–4（**v4結果を見た後に追加**したので参考値） | 0.900 | 0.900 |
+
+過剰展開2問（「蒼い」「白」）は全条件でMRR 1.000・Recall 1.000。残る失敗：「アステリア 漫画」は見出し「蒼穹のアステリア」の**途中部分**で展開しない（別名asteriaは表記が違う）。v3は規則変更の検討に使ったためdevelopment evidence扱い（関連語群MRR 0.800→1.000）。次の改善判定には新しいv5が必要。
+
+## 固定評価 literal-related v3（2026-10-13、Linux）
+
+[manifest](../tests/fixtures/literal-related-v3.json)は**実行前に凍結**（commit `159c202`、SHA256 `c4fa0d94c6ebf4459bf4e9d593af759b39afd8a680404b999d0596f602385091`、LF固定）。架空の作品・キャラクター名15素材、辞書4見出し、15問（完全一致対照2/表記ゆれ3/複数語4/関連語5/正解なし1）。**辞書と質問を同じ評価者が書いたため、辞書条件は仕組みの確認であり実ライブラリの品質ではない。** 結果を見て質問・qrels・辞書・実装を変更していない。
+
+```bash
+python3 tools/evaluate_literal_search.py --manifest v3 --output data/literal-eval/v3-result.json
+python3 tools/evaluate_literal_search.py --manifest v4
+python3 tools/evaluate_literal_search.py --manifest v5
+```
+
+| 群（問） | 旧LIKE MRR / Recall@5 | 新・辞書なし | 新・辞書あり |
+| --- | --- | --- | --- |
+| 完全一致対照（2） | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| 表記ゆれ（3） | 0.333 / 0.167 | 1.000 / 0.667 | 1.000 / 1.000 |
+| 複数語（4） | 0.000 / 0.000 | 1.000 / 0.750 | 1.000 / 0.750 |
+| 関連語（5） | 0.000 / 0.000 | 0.400 / 0.133 | 0.800 / 0.533 |
+
+正解なし1問はどの条件も0件で、平均から除外。テストは「旧LIKEの結果 ⊆ 新・辞書なし ⊆ 新・辞書あり」を全問で検査（点数のgateではない）。
+
+観測された失敗（今後の改善候補。判定には別の凍結セットが必要）:
+
+- 「星灯り 巫女」：辞書は**語の完全一致**でしか展開しないため、見出し「星灯りの社」の一部入力では博麗霊夢型の展開が起きない（キービジュアル1件のみ）。
+- 「ほしあかり 立ち絵」：別名→関連語の**2段の連鎖展開**は未対応で0件。
+- 「資料 セーラー服」「背景 夜 雨」：関連gradeの素材（ref/uniform、night/bg）は語が一致せず、文字検索では拾えない。AI側の役割。
+- 「巫女 キャラ」：「キャラ」が汎用語でANDが厳しすぎ、立ち絵r01・キービジュアルr04が落ちる。
+
+## 次の候補
+
+1. Windowsで関連語dialog・案内文・「関連語の候補」表示と再検索をnative確認。
+2. Windows/GPUでv3にAI text/combinedの条件を追加して文字・辞書と比較（v3 manifestはそのまま、AI結果は別出力）。
+3. 観測された失敗（部分一致での辞書展開、2段展開、汎用語）への改善案を作り、**新しく凍結したholdout**で判定。AI混合検索で辞書展開を文字側の根拠として扱う設計。

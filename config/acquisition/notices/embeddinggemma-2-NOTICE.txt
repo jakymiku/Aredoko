@@ -1,0 +1,12 @@
+EmbeddingGemma 2 — Aredoko model acquisition pack
+Upstream author/publisher: Google
+Model: google/embeddinggemma-2
+Revision: 914f7f89142e33e77833254d9c9b90c3cef7303b
+Source and license declaration: https://huggingface.co/google/embeddinggemma-2/blob/914f7f89142e33e77833254d9c9b90c3cef7303b/README.md
+This fixed revision declares Apache-2.0. Its unmodified model card is retained
+in NOTICE-upstream-model-card.txt; LICENSE.txt contains the complete license.
+The upstream tree contains no separate LICENSE or NOTICE file at this revision.
+The model, tokenizer and configuration assets are downloaded unchanged.
+aredoko-revision.txt and this NOTICE are Aredoko-generated management metadata.
+Python, PyTorch, Transformers, Sentence Transformers and GPU drivers are not
+included in this model pack. Their runtime distribution is separate.

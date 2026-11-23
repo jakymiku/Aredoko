@@ -1,0 +1,33 @@
+tests/fixtures/search-quality-v1.json text eol=lf
+tests/fixtures/search-quality-v2.json text eol=lf
+tests/fixtures/literal-related-v3.json text eol=lf
+tests/fixtures/literal-related-v4.json text eol=lf
+tests/fixtures/literal-related-v5.json text eol=lf
+tests/fixtures/literal-related-v6.json text eol=lf
+tests/fixtures/search-phase-v7.json text eol=lf
+tests/fixtures/cover-empty-v1.json text eol=lf
+tests/fixtures/tag-language-v1.json text eol=lf
+tests/fixtures/combined-fusion-v8.json text eol=lf
+
+# Registry pins the exact profile bytes; keep them identical on every checkout.
+config/tagger-profiles/wd-swinv2-v3.json text eol=lf
+config/acquisition/** text eol=lf
+config/ai-profiles/embeddinggemma-2.json text eol=crlf
+config/ai-runtime-recipes/*.json text eol=lf
+
+# Supplemental license hashes preserve the original upstream bytes.
+config/runtime-notices/** -text
+config/desktop-notices/*.txt -text whitespace=cr-at-eol,-trailing-space,-blank-at-eof
+config/desktop-notices/*.html -text whitespace=cr-at-eol,-trailing-space,-blank-at-eof
+# These upstream files already have normalized Git blobs and CRLF release hashes.
+config/desktop-notices/dotnet-10.0.14-*.txt text eol=crlf
+config/desktop-notices/windowsdesktop-10.0.14-LICENSE.txt text eol=crlf
+config/desktop-notices/windowsappsdk-2.5.1-*.txt text eol=crlf
+config/desktop-notices/winml-2.1.74-*.txt text eol=crlf
+
+# Preserve the supplied visual-asset bytes and manifest sizes across checkouts.
+design/visual-assets/v1/** -text
+
+# These original notice bytes are hash-bound, including upstream whitespace.
+# OpenSSL AUTHORS uses a seven-character Markdown underline, not a merge marker.
+config/runtime-notices/cpython311-20261029/** whitespace=-trailing-space,-blank-at-eof,cr-at-eol conflict-marker-size=32

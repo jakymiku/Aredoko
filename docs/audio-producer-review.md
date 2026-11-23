@@ -1,0 +1,247 @@
+# R07の次の一点レビュー：長時間producerと保存・検索への接続
+
+2026-10-26。**Astraクラスの設計レビューを推奨**。全ロードマップの作り直しや、新しいフロントエンドの選定は不要。回答後の実装はSol/Antigravityが小区分で進める。
+
+## 確定済みの入力
+
+- [予備評価](audio-input-evaluation.md)：既存固定EG2、生成8本/日英11query/類似2問で全Top1。小規模合成素材の結果であり実録音/実曲/ASR比較は未完。
+- [実装済み契約](audio-content-design.md)：検証済みhandleから最大30秒の16kHz mono f32le、取消/原本/登録再確認。text/audio profile・専用key、bounded private worker、完全ゼロだけskip、最大payloadの実CPU pipeも確認済み。
+- 本番text/cover profile、legacy索引、既存512D音響保存、通常DBは維持。新workerを自動索引/GUIへは未接続。
+
+## この範囲だけを決める
+
+1. **worker/namespaceの配置**：専用text/audio workerを必要時だけ所有する方式と、将来の全modality profileへの移行を比較する。queryも対応するnamespaceのencoderへ渡す。画像用workerとの同時VRAM・idle release・取消の所有を定義する。768D直接音声を512D音響や既存transcript列へ無条件に格納しない。
+2. **長い音声の完了境界**：全PCMを保持せず30秒以下の窓へ分割する。逐次decode/backpressureと時刻根拠、512MiB/24時間上限、所有childのdeadline/取消/回収を決める。反復seekで空窓が得られただけでEOFと判定すると、timestamp gap後の音を落としうる。exact30秒境界/partial tail/無音/破損/不明durationも明示する。
+3. **atomic保存と復旧**：1itemの完了後だけ新revisionへ置換し、取消/失敗/解除時は既存索引を保つ。候補0の成功を未処理と区別する。複数namespaceが動く場合のwriter fence・backup snapshot・再起動/restoreとguard順を定義する。
+4. **検索への最小接続**：root/棚/favorite/missing等の共通scopeと安定順を維持し、item単位にbest window/時刻を集約する。直接音声には転写文がないため、架空snippetを表示しない。動画/音声プレイヤーへ時刻を渡す。既存結果sessionや文字/視覚順位を壊さない。
+
+## レビュー後の実装単位
+
+1. 生成65秒/正確60秒/途中gapのCPU fixtureで、bounded窓producer・終了/取消を完成させる。
+2. 選んだprofile/namespaceへatomic保存し、失敗・無音0候補・source変更・backup fenceをCPUで確認する。
+3. 限定検索/時刻根拠へ接続してbuild/関連test。生成音声だけの実GPU一連は、新たに具体的な許可を得てまとめる。
+4. 通常設定/GUIへ明示的な導線を追加する。実録音/曲や比較モデルの取得は別の許可・評価とする。
+
+M1の残受入（HC/物理DPI/clean Windows等）とruntime公開review/hostは独立の残件。R07実装開始をM1/M2/全媒体の完成宣言にはしない。P3の全件snapshot待ちの残改善も[current-handoff](current-handoff.md)から継続する。
+
+## 最初の実装単位：逐次PCM producer（2026-10-26）
+
+長時間decodeの部分だけ先行実装。`audio_stream.PCMStream`は検証済みhandleから1所有FFmpeg/1 readerで30秒以下を逐次出力し、queueは1窓、readerの作業1窓、consumerの受取窓でbackpressureをかける。512MiB原本/24時間decoded上限、入力protocol/format制限、10秒のdecoder待ち/30分session、取消・early break・所有回収を維持。全音声のPCMは保持しない。
+
+`aresample=async=1:first_pts=0`でpresentation時刻のgapを無音として維持する。無音/短い窓をEOFと推測せず、全stdout・float整合性・正常exit・最終source guardまで通った場合だけ`complete=True`。窓は暫定であり、consumerはこれより前に既存索引へ公開してはいけない。`PreviewReader.audio_pcm_stream`は原本版・登録・除外を各yield/EOFに再確認し、audio専用slot1つを所有。HTTPへは追加していない。
+
+生成60/65秒、timestamp gapを持つfragmented MP4、非finite/破損/上限、deadline/取消、戻り値ありの非zero終了、入力変更/登録解除/除外、slot解放をCPUで確認。stream12・source18は開発Python3.14/基本Python3.11の両方PASS、既存preview22 PASS。GPU/モデル/通常DB使用0。**worker配置・新namespaceでのatomic保存/backup fence・検索/GUI接続は未実装で、上記レビューの残りを維持する。**
+
+## 次の実装単位：専用namespaceでのatomic保存（2026-10-26）
+
+`AudioDirectIndex`を内部APIとして追加。呼出元が所有するtext/audio encoderを明示し、そのprofile専用sidecarだけに保存する。選択中のtext/coverや旧768D発話snippet/512D音響とは混在させない。30秒固定の逐次入力をprivate SQLiteへstage（最大16MiB/最大2,880窓）。正常EOF後だけcatalog guard→共有writer fenceの順で予約し、最終原本版・登録/除外・取消を確認して1itemのsource markerと時刻vectorを同一transactionで置換する。silent成功0候補はmarkerへ記録し、未処理と区別する。
+
+新しい`ai_audio_direct_sources`/`ai_audio_direct_windows`のあるaudio sidecarだけ`user_version=1`。既存sidecarは0を維持。backup/restoreの既知schemaとversion確認、inactive root purgeの両table削除も同時更新。decode/encoder待ちではwriter fenceを保持せず、途中のlive backupは以前の完了revisionを見る。vectorのstage読出しは64行ずつで、全window vectorのlistを作らない。検索への公開、通常producer job/GUI、音声workerの起動/idle releaseはまだ未接続。
+
+CPU14（開発/基本Python）PASS：失敗・取消・容量不足・原本変更で旧索引保持、silent marker、名前空間拒否、将来版拒否、stage削除、backup待ち取消、encode中backupの旧revision、旧/新sidecar復元、root purge時の原本保持。既存backup29・profile10もPASS。初回はSQLite接続contextがcloseしない解放漏れと、URI無効のprimary接続からのATTACHを検出し、明示close＋専用read-only接続に修正。次の1 FAILは2窓それぞれで同じroot解除を繰り返したfixtureを1回解除に修正したもの。`data/ai-ui/continuation-20261026b/audio-index/`に診断/修正後ログを保持する。供給PCM/人工vectorによる保存試験であり、実GPU音声検索の精度証拠ではない。
+
+## 内部検索APIの接続（2026-10-26）
+
+`AudioDirectSearch`は同じaudio namespaceのencoderで文章queryを作り、`ProductionCatalog.search`のroot/棚/favorite/除外条件を共通利用する。120itemずつ、vectorはcursorで走査し、1itemのbest window/開始・終了時刻をbounded ScoreSpoolへ保存する。cosine同点はitem ID順、window同点は最初のordinal。追加範囲取得のために再encode/再rankしないresult sinkにも対応する。
+
+各itemの原本版を検証し、登録状態・catalog generation・audio store data_versionが途中変更されたら古い結果を破棄する。結果は`audio_match_ms`/`audio_match_end_ms`/`audio_match_source=direct-audio`で返し、転写していないsnippetを作らない。既存ResultSessions＋IndexStampにも接続でき、音声索引更新時の失効を確認した。通常server/WinUIの検索入口、音声同士の類似、owned workerの設定/idle releaseはまだ未接続。
+
+CPU8（開発は既存7＋追加1、基本Pythonは8）PASS。範囲の継承、1queryから複数range、安定tie、stale/empty/取消、索引途中変更、時刻付きsession保持と更新後失効を確認。供給vectorによる契約試験であり、音声理解の品質評価ではない。
+
+## 所有ジョブとモデル切替の内部基盤（2026-10-26）
+
+`AudioDirectJobs`は明示したaudio encoderを所有し、共通scopeのmissing/fresh判定→既定128件（最大1,000件）のbatch→atomic item保存を行う。次batchはfresh項目を飛ばすため、同じ先頭batchだけを反復しない。件数・対象外/未処理候補・取消/範囲変更を返す。途中の完了itemは保持し、現在のitemは失敗/取消/選択scope変更で公開しない。進捗はbackend lifetime内、再起動後はitem markerで明示batchを再開する。
+
+`InferenceOwnership`はimage/audioの2所有者に限定したlock。明示的に両方へ接続した場合、別ownerのresident workerを解放した後にだけ次を許可する。busy/解放失敗時に同時loadを許可しない。idle release/正常closeも所有範囲で行う。**この段階では通常のproduction handler/WinUIへ未接続**であり、通常アプリが音声用workerを勝手に起動する変更ではない。
+
+所有ジョブ8・所有切替7は開発/基本PythonともPASS。scopeの最終publication validatorも追加1 PASS。待機取消、fresh skip/次batch、未完item保持、scope変更、query busy、切替、idle release、所有closeを人工encoderで確認した。既存実GPU評価の許可は再利用せず、今回の新しい生成2音声pipeline試験は個別回答待ち。
+
+## production APIと実pipelineの限定確認（2026-10-26）
+
+`AudioDirectFeature`をlazyな入口としてhandlerへ接続。status取得だけではaudio DB/workerを作らない。認証済みの`GET audio-ai/status`、明示consent付き`POST audio-ai/start`、cancel/release/searchを追加し、未知field/重複JSONを拒否する。既存AISearchとaudio ownerは同じ所有lockを使う。音声を使わなければ通常のprofile/索引動作を維持する。音声ownerのcloseは画像jobの全batch終了を待たず、音声用の所有encoderだけを停止する。
+
+共通結果sessionの`mode=audio-direct`を追加。条件別のindex stampで音声索引の更新は音声sessionだけを失効させ、文字一覧を無関係に失効させない。score spoolの256MiB予約も行う。resource設定のidle秒をaudio ownerへ継承する。**この時点のWinUI入口は未接続**。
+
+HTTP5（開発4＋修正後対象1、基本Python5）、既存result34/release11/production8 PASS。HTTPの1 FAILはrangeの必須offset/limitをfixtureが省略して400になったものを修正。終了時の画像owner待ちを避ける修正は対象1 PASS。証拠は既存audio-indexディレクトリ。
+
+個別許可後、`check_direct_audio_pipeline.py --gpu`を生成001/002の2音声・日本語2問で1回実施。既存固定EG2のaudio-only adapter→逐次PCM→専用DB atomic保存→時刻付き検索が通り、2問ともTop1。load32.718s、index1.875/0.485s、PyTorch peak allocated1,175,973,888/reserved1,199,570,944bytes（driver/native除く）。3GiB空き条件・allocator約3GiB上限、元生成SHA/mtime不変、終了exit0、追加取得/GUI/通常DB/Alpha変更0。証拠`data/ai-ui/continuation-20261026b/audio-pipeline-gpu01`。実worker processでのGPU一連・長時間・録音/曲・一般品質を証明するものではなく、許可は消費済み。
+
+## WinUI入口の追加（2026-10-26）
+
+既存の検索方法indicesを維持して7へ「音声の内容（AI）」を追加。種類を音声・音楽へ揃え、文字/画像向けのAI scopeやRRF/文字全語一致条件を音声へ流用しない。フォルダ・棚・お気に入りは共通条件で維持する。右詳細・プレイヤーには既存の一致開始時刻を渡し、直接音声の根拠は「発話」ではなく「音声の内容一致」と表示する。
+
+AI準備のscroll領域へ折りたたみ式`AudioPreparationPanel`を追加。展開時のstatusだけではmodel/DBを起動しない。現在の検索フォルダ/棚を対象に、明示作成・中断・進捗・続きのbatchを操作できる。dialogを閉じるとpollだけを終了し、所有jobは続行する。遅いstatus応答が新しいcommandを上書きしない世代と取消を持つ。本文の作業領域は変更しない。
+
+Core全体PASS（旧「7は無効」の試験を新しい境界8へ更新）、Portable build PASS。新しいIL2026はJsonValueの明示生成へ修正済み。既存WUI1001 picker警告3のみ。WinUI reviewで色/配置/bindingの追加差分、所有timer/取消、アクセス名・操作経路を確認。GUI受入は新候補を作成後、個別質問してから実施する。silent成功を未索引と誤表示しないfresh数も追加し、関連CPU検索9/HTTP response1 PASS。
+
+
+## 限定nativeの結果と配布候補（2026-10-26）
+
+frontend01/native01は準備・中断・再開・2item保存を確認後、検索方法popupの重複UIA optionで停止。frontend02/sourcecaee977/native02は展開時StartBringIntoViewによりbody/操作が見えることと同じ準備flowを確認し、popup展開後にcomboのfocus provider取得が失敗して停止した。実キーは未送信。両方exit0/所有process回収、PNGを目視し、**検索方法切替・結果の時刻表示は未検証**。2回目を総合PASSとしない。
+
+harnessはpopupを開く前にfocusを与えるよう修正。`--audio-search-only`で生成2WAVを供給CPU encoderで事前索引化し、成功済みの準備flowを反復せず検索入口だけ確認できる。構文確認のみ、新たなGUI試行には別の回答が必要。証拠`data/ai-ui/continuation-20261026b/audio-native01`/`audio-native02`。
+
+基本ZIP07（sourcecaee977、806files/661,173,728bytes）はfrontend02を収録。全manifest/ZIP照合と同梱Pythonによる基本CPU23・owned EOF exit0 PASS。通常EXE入口GUI/clean Windowsは未検証。生成2音声GPU成功を実private worker/実録音/音楽/音声類似の一般品質合格へ拡張しない。
+
+
+## 音声検索GUIの残確認（2026-10-27）
+
+同じfrontend02/sourcecaee977で個別許可を得た2試行。audio-search01はmode切替と時刻付き結果まで表示したが、debounceによる一覧差替え中に旧SelectionItemPatternを操作してharness停止（正常exit0）。明示検索・AIEvidence待ち・所有画面の実クリックへ修正後、audio-search02は9checks/2PNG目視/正常exit0/原生成SHA・mtime不変でPASS。検索方法が音声へ固定され、2候補・内容一致0:00・明示詳細・音声を再生ボタンを確認した。実際の再生は行わず、CPU供給vectorのGUI接続検証である。成功済み準備flowは反復していない。
+
+目視で詳細に旧「音声内容の自動索引は未対応」が残ることを発見。実装済みの設定→AI検索の準備→音声の内容検索へ案内を修正し、音響類似と文章内容検索の索引を混同しない説明へ分離。Core runner/Portable build PASS、既存WUI1001警告3。旧案内を期待したCore2箇所とMSIX Before hook指定による開発build失敗は修正前ログを保持。証拠`data/ai-ui/continuation-20261027/`。案内文修正後の別GUIは未実施。
+
+
+## 実private workerの限定確認（2026-10-27）
+
+`EncoderProcess`へ任意の明示GPU allocator予算を追加。未指定の通常動作は維持し、設定された音声ownerへ継承する。workerはmodel load前に空き容量とbudgetを確認し、CUDAがない/空き不足ではloadしない。driver/native allocationまでの絶対VRAM上限ではない。CPU契約14件は開発/基本Python双方PASS、既存HTTP5もPASS。
+
+個別回答後、既存生成001/002の2音声だけで `check_direct_audio_pipeline.py --gpu --owned-worker` を1回実行。実production owner→検証済み原本decode→実private audio worker→atomic保存→日本語2問が全Top1。index全体16.156s、child PyTorch peak1121.5MiB、allocator上限3072MiB、画像workerは起動せず。owner.closeでworker停止を確認（既存の所有kill終了方式なのでexit1、graceful終了とは呼ばない）。原生成SHA/mtime不変、追加取得/GUI/再生/通常DB変更0。証拠`data/ai-ui/continuation-20261027/audio-owned-gpu01`。実録音/実曲/音声類似の一般品質や配布先Windowsを証明しない。
+
+
+## 直接音声ベクトル同士の類似検索backend（2026-10-27）
+
+`AudioDirectSimilarity`は別namespaceの768D direct-audio windowだけを比較し、起点自身を除外、全window pairの最大cosineと起点/候補双方の開始・終了時刻を返す。512D音響/画像/文字vectorを混ぜず、推論やPCM再decodeを行わない。起点はroot/棚/除外を守り、候補だけfavorite viewを適用する。保持は2itemのframe集合各32MiB以内＋120metadataと既存score spool。超過時は結果を黙って切らずエラー。全pair比較なので長音声の処理時間改善は今後の課題。
+
+所有audio jobへcached queryを接続。モデル未配置でも既知profileの保存済みvectorから比較可能。`POST audio-ai/similar`と`mode=audio-similar`のfrozen result sessionへ認証/厳密field確認/独自stampを適用。原本・登録/除外・namespace更新・取消を検証し、起点変更後もsessionを失効させる。GUI入口はこの段階では未接続。
+
+新規CPU7（開発/基本Python）＋追加stamp1、HTTP6 PASS。既存spoolの取消済みcontext入場時の解放漏れを検出し、`__enter__`失敗時もcloseするよう修正・focused1 PASS。初回ログは保持。供給vectorによる契約確認であり、実音楽の類似品質評価ではない。
+
+
+## WinUIの直接音声類似入口（2026-10-27）
+
+音声の右クリックへ「内容が似た音声・曲を探す」を追加。既存の音響特徴ルートは維持。新入口は`audio-similar`として通常のroot/棚/favorite条件を保持し、視覚AI scope・runtime整合性確認・モデルloadを要求しない。起点と候補の両時刻をstrict Core parserで検証し、sourceがlegacyと混ざる応答を拒否する。画面履歴にdirect/legacyの別を保持して戻る/進むを復元する。
+
+Core runner/Portable publish PASS。Coreにはroots変数のshadowによる初回compile失敗を保持しaudioRootsへ修正済み。既存WUI1001 picker3とSDK由来IL2104を維持。result sessionの256MiB ranking予約も追加、focused capacity1 PASS。新候補`data/ai-ui/continuation-20261027/frontend01`へreceipt作成済み。GUIは個別質問への回答後、専用生成WAV/CPU供給vector・モデル利用不可の条件で右クリック/両時刻/詳細/画面履歴だけ確認する。音楽の意味品質はこの接続では評価しない。
+
+
+## 直接音声類似の限定native結果（2026-10-27）
+
+frontend01/sourcec8703fdを使用。個別許可後native01でcontext入口・起点除外・両時刻・詳細まで成功。favoriteへ移動した際、種類audioを保持した正しいfilter空案内をharnessが未絞込の案内と比較して停止した。製品FAILではなく、全5PNGを目視しPARTIAL、正常exit0。harnessを現行のfilter案内＋favorite見出し待ちへ修正し、追加許可後native02は9checks/4PNG目視/正常exit0、画面履歴でdirect類似の候補と条件が復元されることまでPASS。
+
+モデル利用不可・resident=falseの供給CPU encoderを用い、cached比較でモデルを起動しないこと、元生成SHA/mtime・タグ不変を確認。GPU・音声再生・通常DB・Alpha変更なし。旧失敗は保持。証拠`data/ai-ui/continuation-20261027/audio-similarity-native01`/`audio-similarity-native02`。実音楽の類似品質・長音声の性能は別途未受入。
+
+
+## 2026-10-27：所有音声jobの取消commit・初期化close競合修正
+
+動画側のreviewで修正した境界を音声側へ照合し、生成WAV＋疑似encoderで二つの実不具合を再現した。旧codeでは最終source checkとDB context退出commitの間にcancelを受理すると、jobはcancelledでも旧公開が新索引に置換された。また初回Feature._ensureがinit_lockを持ってcatalog guardを待つと、Feature.closeが無関係なguard解放を待ち続けた。
+
+修正はAudioDirectIndexの任意publication_guard/on_publishedとinit_cancel、およびJobs/Featureの共有gate・close eventだけ。最終source check→明示db.commit→item進捗/最終completedを短いgateで確定し、cancel/close/ゼロ対象完了も同gateに従う。先に受理した取消は未commit itemをrollbackし、最終itemのcommitが先ならcancel_requested=false。途中batchの既にcommitしたitemは残し次回fresh skip。無音windowのskipと成功marker、profile/namespace/schema/backup/検索を変えない。長いdecode/stage/copyやモデル待ちの間はgateを保持しない。
+
+Feature.closeはinit_lock取得前にclose eventをsetし、Index初期化のcatalog guardとwriter fence待ちを中断する。通常のpaused fast checkを通過直後にbackup pauseが始まるadmission競合もテストした。HTTPの応答shapeとstatus名は維持。
+
+Terra担当のjobs/feature/index/HTTP/similarity/search52 PASS/11.377s、追加admission回帰後のfeature3 PASS/0.350s。親はdiffを独立reviewし、jobs/feature/index/HTTP36 PASS/9.027sとpy_compileを確認。重複runは合算しない。決定的gate回帰はplanning時の先行gateを除外し、copy後commit前に取消を入れる。最終commit後拒否・途中commit後取消/再開・無音成功再利用・catalog/fence待ちcloseを確認。通常DB/実録音/実model/GPU/GUI/外部取得は使っていない。
+
+Windows実workerとnative音声準備画面の最終連動は未確認。次回は通常の開発手順で生成fixture/独立設定に限定し、成功済み全flowを無条件に反復しない。
+
+
+## 2026-10-27：音声cached類似の候補buffer解放と原本変更分類
+
+残量19％の指示でサブエージェントを使わず、AudioDirectSimilarityの局所修正のみ実施。旧実装は新候補の_framesを評価する間に前候補framesと最後のvectorを保持し、起点＋前候補＋新候補の3セットが一時的に生存した。候補を読み込む前に前参照を解除し、weakrefで次読込時の解放を検証した。
+
+renderで起点/候補のaudio_manifestがReaderChanged等のPreviewUnavailableを投げると、音声側はAudioSearchChangedの409ではなく一般ValueErrorの400へ落ちた。check_revisionでPreviewUnavailableとrevision不一致をAudioSearchChangedへ変換し、原本更新/利用不可を再検索の競合として扱う。検索scope・候補favorite・自己除外・無音skip・順位と時間根拠を変更せず、推論/decode/保存変更なし。
+
+旧codeでweakref1 FAIL、起点/候補変更2 ERROR（3件/0.623s）を再現。修正後の類似＋認証HTTP16 PASS/5.959s、py_compile成功。生成WAV/疑似vectorのみ、通常DB/実model/GUI/GPUは使っていない。破損markerの型/時間整合、長音声の全pair比較性能は今回の範囲外で未点検。
+
+
+## 2026-10-27：音声cached類似の破損marker・区間の厳密検証
+
+小単位の追加修正。markerのdecoded/indexed/total_framesとwindowのordinal/start/endを演算前に厳密int検証する。総frame数から期待する30秒window数がdecodedと一致すること、各vectorのendがmin(start+30秒,総frame数の切上げms)と正確に一致することを要求する。値が文字列/小数・時間不整合ならitem全体を索引なしとして除外し、DBの自動変更や推測補完はしない。無音skipによるordinalの穴は引き続き許可する。
+
+旧codeに対して回帰2method（起点/候補両方への破損注入）で8 FAIL/10 ERROR、2.757sを確認。修正後の類似＋認証HTTP19 PASS/7.565s、py_compile成功。件数/frame数の文字列/小数・frame数とdecodedの矛盾、ordinal/時刻の不正型・短すぎるend・過大end、vector長/ゼロnorm/NaNを確認し、正常な先頭無音skip→後続window一致も別回帰で確認。生成WAV/疑似vectorのみであり、実音声の精度評価ではない。原本/通常DB/既存配布を変更せず、サブエージェントなし。
+
+次のCPU候補は長音声の全window pair比較コストと作業量上限の必要性。今回の対策は破損marker/window行の局所検証であり、SQLiteファイル自体の破損や全検索経路の回復を保証するものではない。
+
+
+## 2026-10-27：音声cached類似の全pair比較に上限
+
+音声類似は従来、item別32MiBのvector上限だけで候補間の比較総数を制限していなかった。30秒windowでは1時間120区間、24時間2,880区間となり、24時間同士は候補1件で8,294,400組（768Dで約63.7億乗算）。生成768D float64 arrayの内積＋SQLite PRAGMA data_versionだけをこの環境で単回計測すると1,000組0.046s、10,000組0.411s、100,000組4.080s。catalog/原本検証・全製品処理やWindows性能は含まず、応答時間の保証や厳密な性能評価ではない。無制限のまま全候補を比較する負荷を避けるため、動画既存方式と同じ累計100,000 pair/requestの明示上限を追加した。
+
+有効な起点/候補vectorを検証後に組数を加算し、超過候補のpair loopへ入る前にAIUnavailableを返す。途中でspoolへ保存済み候補があってもfinalize/render/result_sinkへ公開せず、context退出で回収。通常の認証APIは503/ai_unavailableとフォルダーや棚を絞る案内を返す。候補favorite/root/棚/除外・未索引・先頭無音skipの扱いは保持し、推論/decodeや索引DB更新を行わない。
+
+1時間の起点と1時間の候補は各14,400組、6候補86,400組まで通り、7候補100,800組で全検索を拒否する。短い音楽なら5分同士10×10=100組、1,000候補で上限一致。無音skipで有効vectorが減れば実際の組数も減る。単一候補で上限超過の場合はscopeを絞っても解消せず、より短い起点等が必要。capは壁時計の硬い期限ではなく、長音声の速度改善や一般品質受入の完了ではない。
+
+旧codeで追加境界/cumulative/HTTP3回帰がFAIL（0.999s）。修正後 `PYTHONPATH=app:tests:tools python -m unittest test_audio_direct_similarity test_audio_direct_http -q` は23 PASS/8.519s、py_compile成功。上限一致で厳密一致結果、1組以上超過の拒否、複数候補累計、scopeで除外された候補/未索引を非計上、result_sink未呼出・spool回収、認証HTTPの案内とitems非返却を検証。生成WAV/疑似vector/独立DBのみ。実model/GUI/GPU/Windows/.NETは実行せず、サブエージェントなし。
+
+## 2026-10-28：音声・動画の内積ループを同じ計算順で軽量化
+
+両cached類似の`sum(a*b for a,b in zip(...))`を、共通の`sum(map(operator.mul,...))`へ変更。乗算順・sumへの入力順を変えず、Python generatorの各要素処理を減らす。正規化・全pair巡回・tie時刻・100,000pair上限・pairごとの取消/世代/DB検査・private spoolは変更しない。モデル/新依存/再索引も不要。
+
+生成768D float64 arrayの同じseed/1万pairを各Pythonで1回ずつ補助計測：基本Python3.11は0.240486→0.156169秒、開発3.14は0.275385→0.193622秒。内積kernelだけで、catalog/原本検証/DB guard込みの全検索速度や長音楽品質を測った値ではない。新旧scoreのhex一致、1/3/128/512/768D×40pairと小さい値/符号zeroを同一interpreter内でbit一致確認（両Python各2tests）。Python版を跨ぐsumのbit一致を保証するものではない。
+
+音声/動画の既存scope・破損・cap・取消と新たな音声pair中取消は**32 PASS**。初回31件中1件は動画testが旧moduleの`sum`9回目をhookする実装依存のため取消を発生させずFAIL（製品取消の喪失ではない）。normの回数依存をやめ、実際の最初のpair scoreで取消を発生させるよう修正し、次のcheckでSearchCancelled・部分順位非公開・spool回収まで確認。最終log `data/ai-ui/continuation-20261028/similarity-map02.log`。GPU/GUI/実音楽・実動画/通常DBは未使用。
+
+
+## 2026-10-28 Work：文章検索の破損item除外と明示batchによる回復
+
+AudioDirectSimilarityには厳密な破損検証があった一方、AudioDirectSearchはmarkerの型/実window件数を照合せず、不正windowを単にskipして残りを一致として返した。欠落vector・短すぎるtail・ゼロnorm/NaNがあっても旧区間のヒットが残り、文字列件数/時刻はTypeErrorになった。またfreshはmarkerのrevision/contract一致だけを見て、明示的に準備し直しても破損itemを再利用していた。生成fixtureで両問題を再現した。
+
+Indexにvalid_marker/valid_intervalを置いてSearch/Similarityから共用。decoded=ceil(total_frames/480000)、0<=indexed<=decoded<=2880、総frame数は24h以内、厳密int、各vectorのstart=ordinal*30000/end=min(start+30000,ceil(total_frames*1000/16000))を要求する。全無音（indexed=0）は有効、無音によるordinalの穴を許し、動画のようにvector全ordinal連続を要求しない。Searchは各itemの実vector件数とindexedを最後まで照合し、1区間でも不正型/時刻/長さ/非正規化があればそのitemの途中bestとindexed扱いを取り消す。正常候補は同じscope/score/time契約で検索可能。
+
+freshもstored windowを1本ずつ検証し、count/vector長/norm/区間が一致したときだけ再利用する。推論/decodeやDB変更はしない。job planningから取消eventを渡し、検査中も中断可能。破損itemは次の利用者による明示batchで従来の全item stage→source確認→atomic commitを使って再生成する。markerを消して自動修復する経路や新しいschema/backup契約は追加しない。producerについても、30秒未満のwindowの後にさらにwindowが続くと拒否する。短い最終window自体は有効で、途中失敗時は旧公開を保持する。
+
+render中のaudio_manifestがPreviewUnavailable/ReaderChangedを投げた場合はAudioSearchChangedへ変換。既存認証APIのHTTP409/audio_scope_changedで再検索を案内し、一般400へ分類しない。類似検索の10万pair cap・buffer/所有境界と既存float演算は変更していない。
+
+修正前の追加6methodで19 FAIL/6 ERROR/1.501s（破損注入subtestを含む）を再現。6ERROR中、取消引数は旧freshに存在しない新契約の確認であり、それ以外は型比較・原本変更例外の未分類。修正後 `PYTHONPATH=app:tests:tools python -m unittest test_audio_direct_search test_audio_direct_index test_audio_direct_jobs test_audio_direct_similarity test_audio_direct_http test_audio_direct_feature -q` は**70 PASS/13.942s**。有効候補の保持、破損marker/欠落/ordinal/時刻/vectorのitem全除外、indexed_totalの減少、全無音/先頭無音gap、明示jobの再生成、既存取消/commit/close/backup/類似境界を確認。py_compile成功。
+
+その後追加した2件を対象実行し**2 PASS/1.044s**：生成31.25秒/16kHz/mono WAVを本物の既存FFmpeg＋PreviewReader.audio_pcm_streamで読み、2window/500000frames・区間0–30000/30000–31250・fresh成功・原本SHA/mtime不変・一時stage回収を確認（疑似encoderのみ）。実認証loopback HTTPではrank後render前に生成原本を変更し409とitems非返却を確認。70件を無変更で再走させず、件数を重複合算しない。
+
+今回の変更でfreshは従来のmarker照合より多くの保存済みvectorを読む。1itemあたり最大2880windowを逐次処理し、全vectorを保持しないが、長音声/大量itemの準備planning速度は未受入。SQLiteファイル自体の破損や同時に整合値へ書き換えられたデータの真正性を保証するものではない。実録音/音楽品質・実model/Windows/GPU/WinUI/Portableは未実行。
+
+Windowsで必要な限定確認：独立DBに生成音声2件を準備し、停止した専用backendのsidecarコピーだけへ1vector欠落を注入→専用起動でそのitemが文章検索から外れる→明示準備で再生成→正しい時刻付き結果へ戻ることを確認する。通常DBや私物に破損を注入しない。前段一括favoriteのCore/WinUI/native受入は別残件として維持する。
+
+
+## 2026-10-28 Work：音声準備の解析済み時刻を表示（総尺は正常EOFまで不明）
+
+動画に続き、AudioDirectIndexの任意progress callback→Jobsのitem_progress→認証status→Core/WinUI sourceを接続した。fieldはitem_id/prepared_ms/total_ms/prepared_windows/phaseで、prepared_windowsはvector数ではなく完了したPCM区間数（無音を含む）。30秒区間を検証/解析・stageした後だけ時刻を進め、総尺はPCMStreamの正常exhaustionまでnull。短いPCMや無音をEOFと推測しない。正常終了後のsavingだけ実総frame数からtotal_msを確定し、公開commit前は完了件数へ加えない。
+
+Coreは最大24h/2880区間・ceil(prepared_ms/30000)・phase/state/保存前の整合を検証し、旧field省略/nullも受理。WinUI sourceは「何分まで解析済み／総尺確認中・未保存」を表示し、unknown totalのbarはindeterminateにする。stage区間は永続resumeとして扱わず、中断したitemは次回初めから準備する旨をtooltipへ追加。成功markerによる完了item再利用・原本guard・atomic publication・無音skip・namespaceは維持。観測を閉じてもjobが続く既存所有を保つ。
+
+関連index/jobs/認証HTTP/feature **46 PASS/9.404s**。2区間目encoderを止め、statusが30000ms/total null/区間1/公開件数0で応答すること、観測objectがjobを変更しないこと、取消後旧索引保持/current消去→再開始・保存成功後もcurrent消去を確認。無音30秒→有音tailの時刻と区間数は進むがencodeは1回。実生成31.25秒WAVの逐次入力でも最後のsavingだけtotal=31250となる。新しいCore `--audio-content`のparser/文言回帰はsourceのみで、.NET/WinUI/Portable/nativeは未実行。実model/GPU/取得/通常DB/配布変更なし。既存成功flowを無変更で反復しない。
+
+
+## 2026-10-28 Work：音声/動画ownerの初期化失敗・終了cleanup修正
+
+cached動画内音声類似の接続後、共有AudioDirectFeatureと対になるVideoDirectFeatureの失敗経路をreview。生成独立DB＋CPU fake encoder＋thread/monitor失敗注入だけで次を確認した。実model/GUI/GPU/新downloadは使わない。
+
+- Jobsのmain thread.start失敗後のcloseが未開始thread.joinで例外になりcheckpointへ進まない。idle thread.start失敗ではjoin例外がencoder.closeの手前で発生する。audio/video双方に存在した。
+- 未初期化Feature.closeを二度呼ぶとencoder.closeを二度呼ぶ。標準EncoderProcess自体は恒久closeだが、Featureのcaller-owned encoder境界では一度だけ所有回収する契約へ統一する。
+- 音声のrole登録が拒否されたとき、新しく作ったencoderがcloseされない（video側は既に回収）。拒否されたencoderだけを閉じ、既存image/audio/video peersは触らない。
+- audio Featureはmonitor初期化前にownerを公開しており、後段失敗でもinitialized=true/monitor=Noneになりうる。video側も後段失敗でencoderを恒久closeした後、再要求がそのencoderを使えるように見える。新しいterminal失敗契約で再利用を禁止する。
+
+Jobsはstart失敗したidle threadの参照を戻してconfigureの再試行を可能にし、closeではidentがない未開始threadをjoinしない。通常の開始済みthreadは従来どおり停止/回収してからcheckpointする。Featureはlocal ownerをconfigure→monitor構成→閉鎖再確認の後に一括公開する。後段失敗時はlocal monitor/owner/idle thread/encoderを回収し、closed/eventを通知して再利用を拒否。init_lock内の一回だけのcleanupと、lockを待つ前の取消通知を分け、既存catalog guard/writer fence待ちの中断を維持した。
+
+初期化失敗の通常Exceptionはcauseを保って安全なAIUnavailableへ変換し、認証HTTP503を返す。statusはinitialized=false/available=false/state=failed/error_code=audio_initialization_failed（映像はvideo_initialization_failed）。Core sourceではこのerrorを環境未導入より優先して再起動を案内する。通常ライブラリは動き、既存原本/索引を書き換えない。KeyboardInterrupt等のBaseExceptionは変換せず、cleanup後に元例外を再送出する。後段でencoderを閉じる前のDB初期化待ち等は従来の取消/再要求契約を維持する。
+
+旧実装の新6methodはsubtest込み **7 FAIL/4 ERROR・0.455s**。thread joinの実例外と、二重close/公開途中owner/新terminal契約不一致を記録。修正後のfault6＋旧音声Feature3＋旧動画Feature6＋HTTP3は **18 PASS/5.014s**。HTTPではrestart案内/私的な例外文の非公開/同じFeatureの再実行拒否、通常roots APIの応答、close一回、通常video-audio/音声共有owner・cached類似保全を確認した。monitor失敗時に実際に開始済みのidle threadが生存しないことを追加観測した **1 PASS/0.076s**。py_compile成功。重複runは合算しない。
+
+Core `--audio-content`/`--video-content`へavailable=false時も初期化失敗を再起動と表示する回帰sourceを追加。**SDK/Windows不在で未実行**。Windows担当は前段video-audio/Core/build/native確認と併せる。OSがthreadを一切作れない環境全体やcleanup自身のOS I/O障害に対する完全復旧保証ではなく、失敗したAI機能はアプリ再起動まで停止する。通常DB/settings/Alpha/shortcut/ZIPは未更新。
+
+
+### 2026-10-28 ローカル：privateな類似比較のSQLite版問い合わせを削減
+
+音声/動画/動画内音声のcached pair比較で、取消・catalog世代/profileは引き続き全pair確認する。DBの`PRAGMA data_version`だけprivate計算中は最大64pair間隔へまとめ、window取得・候補境界・finalize前・range返却では毎回確認する。途中の外部DB commitは公開前に拒否し、partial rankingを返さない。dotの演算順/厳密最大/同点順/10万pair cap/2item buffer/source revisionの検証は変更しない。
+
+生成vectorと元の検証済みfixtureを使うCPU microcase（768D/10,000pairs/trace有効・各1回）は、旧0.520182s/DB問い合わせ10,012回→新0.467492s/168回。返却ID/score/両区間が同一、spool回収。全検索・実動画品質・端末一般性能の保証ではない。初回性能回帰は旧codeで2 FAILを確認。関連39 unique methodがPASS（runner上はimportしたTestCaseも収集して71実行になったため重複合算しない）。importをmodule aliasへ直し新2件だけを別Pythonで再確認PASS。短い4pair中の別connection commitでも結果sinkへ1件も渡さず拒否することを確認し、既存のpair途中取消もPASS。生証拠`data/ai-ui/work-sync-20261028/pair-version-*.json`/log。
+
+
+### 2026-10-28 準備中のファイル名を表示
+
+owned jobが既に選択したcatalog titleのbasenameを、任意`item_progress.item_title`として返す。追加scan/DB照会・原本変更・namespace変更はない。表示名はcontrol/親pathを除き最大160 UTF-16単位、絵文字を途中で切らず省略。Coreは旧field省略を許容し、過長/path/controlなどの不正応答を拒否する。WinUIは現在処理中のbasenameを1行ellipsis＋tooltipで表示し、別source_kindの処理中や完了/取消/失敗後は消す。CLIや絶対pathを通常画面へ追加しない。
+
+関連jobs32/新label3（2itemで名前とIDの対応、完了時消去を含む）、Audio/Video Core関連、WinUI最小build PASS。`MaxLines`/`TextTrimming`は復元済みproject referencesのAPIで存在を確認。既存picker3警告は保持。GUI質問中のfrontend01/source9b7d91dはこの追加表示より前のbinであり、ファイル名表示のnative受入を完了扱いにしない。生証拠`work-sync-20261028/progress-title-*`と`core-*-title01.log`。
+
+
+### 2026-10-28 追加レビュー：idle解放監視の一時失敗後も継続
+
+audio ownerのidle loopだけ、共有inference枠を取る際のpeer releaseのAIUnavailable/RuntimeErrorを捕捉せず、監視threadが終了する経路を確認（video側は対応済み）。通常のアプリcrash/data損失ではなく、待機モデルの自動解放が次回以降行われなくなる可能性のある不具合。既存0.2秒waitを維持して次回へ進み、無限tight retry/他ownerの強制終了はしない。
+
+初回fault testはAIUnavailable import漏れのharness失敗として保持。import後の旧codeは本来のAIUnavailableで監視終了・resident保持を再現して1 FAIL。修正後は次回取得成功→自分のencoder解放→thread生存/共有lock回収、既存idle/所有初期化cleanupを含む8tests PASS（2.078s）。生成encoderのみ、実model/GPU/GUIなし。証拠`work-sync-20261028/audio-idle-before*.log`/`audio-idle-after01.log`。基本ZIP12にはこの後続修正は未収録。
+
+
+## 2026-10-29 Work軽量修正：不正なcached類似要求は初期化前に拒否
+
+最新5f9ab9fを起点に、AudioDirectFeature.similar/similar_video_audioが_ensureの後でID/page/limit/scopeを検証していた経路を確認。不正要求でもowner/monitorやPCM sidecarが作られうる。scorerの純粋なvalidate_similarity_requestを共用し、Featureで型/値/許可fieldとcatalogのroot/棚scopeを検証してからlazy ownerへ進む。DB guard/pair poll/取消/上限・kind別namespaceの処理は維持する。正常な形式の未知origin IDを事前に全件探索する変更ではない。
+
+生成DB＋疑似encoderの認証HTTPで、音声file/動画内音声両prefixへ不正ID・page・limit・root/shelf型を計20通り投入。旧実装は全て400でもownerを作り、新testで **1 FAIL/0.634s**。修正後、新HTTP＋両cached HTTP＋既存audio similarityは **20 PASS/7.153s**。さらに生成PCM sidecarだけを未作成状態にした新testで、20要求後もowner/monitor/sidecarなし・encode0を **1 PASS/0.577s** 確認。py_compile成功。重複runを合算しない。既存の正常cached検索はモデルavailable=falseのまま成功する。
+
+今回は軽量backend修正のみ。最新ローカルWindows受入/ZIP15や既存成功性能測定は再実施せず、新GUI/GPU/モデル取得/通常DB/settings/Alpha/OS変更なし。次回backendを含む配布候補にはこの修正も含める。

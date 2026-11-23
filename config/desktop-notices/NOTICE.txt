@@ -1,0 +1,21 @@
+Aredoko Bundled Desktop (.NET / Windows App SDK / WebView2 / Windows ML) Notices
+
+These verbatim license and third-party notice files correspond to Microsoft runtime
+and SDK components redistributed inside Aredoko\bin\:
+
+- dotnet-10.0.14-LICENSE.txt (Microsoft .NET 10.0.14 Runtime (MIT), 1139 bytes)
+- dotnet-10.0.14-THIRD-PARTY-NOTICES.txt (Microsoft .NET 10.0.14 Third-Party Notices, 78041 bytes)
+- windowsdesktop-10.0.14-LICENSE.txt (Microsoft Windows Desktop Runtime 10.0.14 (MIT), 1137 bytes)
+- windowsappsdk-2.5.1-license.txt (Microsoft Windows App SDK 2.5.1 License Terms, 12637 bytes)
+- windowsappsdk-2.5.1-NOTICE.txt (Microsoft Windows App SDK 2.5.1 Third-Party Notices, 340893 bytes)
+- webview2-1.0.3719.77-LICENSE.txt (Microsoft WebView2 1.0.3719.77 License (BSD-3-Clause), 1487 bytes)
+- webview2-1.0.3719.77-NOTICE.txt (Microsoft WebView2 1.0.3719.77 Third-Party Notices, 3894 bytes)
+- winml-2.1.74-license.txt (Microsoft Windows ML Runtime 2.1.74 License Terms, 13996 bytes)
+- winml-2.1.74-ThirdPartyNotices.txt (Microsoft Windows ML Runtime 2.1.74 Third-Party Notices, 331175 bytes)
+- windowsappsdk-winui-2.3.9-NOTICE.txt (Microsoft WinUI 2.3.9 Third-Party Notices)
+- windowsappsdk-ml-2.1.94-license.txt (Microsoft Windows App SDK ML 2.1.94 License Terms)
+
+The native accelerator in Aredoko\backend\native\ is accompanied by:
+
+- aredoko-native-dependency-notices.txt (locked Rust crate licenses and notices)
+- rust-standard-library-COPYRIGHT.html (Rust standard library licenses and notices)
