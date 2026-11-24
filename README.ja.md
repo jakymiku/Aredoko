@@ -47,8 +47,6 @@
 
 ## はじめ方
 
-> **お知らせ:** 公開版の配布パッケージは現在準備中です。公開後は [GitHub Releases](https://github.com/jakymiku/Aredoko/releases) から Windows x64 版 ZIP をダウンロードできます。
-
 1. [GitHub Releases](https://github.com/jakymiku/Aredoko/releases) から最新の Windows x64 版 ZIP をダウンロードします。
 2. **ZIP 全体を解凍**し（`Aredoko.exe` だけ移動せず、同梱フォルダを一緒に保持してください）、`Aredoko.exe` を開きます。初回は案内に沿って基本環境（専用 Python）をダウンロードします。
 3. 探したいフォルダを登録し、**アイテム一覧だけ取得**を選ぶと、ファイル名・タグ検索をすぐに使えます。

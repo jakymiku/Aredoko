@@ -47,8 +47,6 @@ Start immediately with fast filename and tag search—no AI setup required. When
 
 ## Getting Started
 
-> **Note:** Public release packages are currently in preparation. Once published, Windows x64 archives will be available on [GitHub Releases](https://github.com/jakymiku/Aredoko/releases).
-
 1. Download the latest Windows x64 archive from [GitHub Releases](https://github.com/jakymiku/Aredoko/releases).
 2. **Extract the entire ZIP archive** (keep `Aredoko.exe` together with all bundled folders) and launch `Aredoko.exe`. On first launch, follow the prompt to download the isolated base Python runtime.
 3. Add the folders you want to manage and choose **Fetch item list only** (`アイテム一覧だけ取得`) to start searching by filename and tags immediately.
