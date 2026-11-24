@@ -3,10 +3,10 @@
 **唯一の正本**。古い完了報告・計画の「次の作業」よりこの文書を優先する。
 
 ## 現行HEAD・最新候補/予備
-- GitHub の `main` は Windows 製品版の現行ソース。開発ブランチの `8a32934` と Build 58 までの変更をまとめて統合。開発ブランチと [Draft PR #5](https://github.com/jakymiku/Aredoko/pull/5) は Build 56 時点の開発記録。
-- 最新試用候補は **Build 58** `dist/portable-managed-20261123-58`。Windows x64 ZIP の SHA-256 は `1fd9092e7079a203c2103d90d5c8c7837fa8cb44bf50d557779ab4c60ff5b66a`。`8a32934` を基点としたローカル差分を梱包したため、マニフェストの `source_revision` は未設定。起動 EXE のセルフテスト、preflight、ZIP・検証キット照合は合格、状態は `staging-only`。
-- Build 57 は過去の試験証拠。友人試用には配布物とビルド出力を見直した Build 58 を使用する。
-- 友人試用セットは `dist/aredoko-build58-friend-trial`。Build 58 ZIP、試用案内、生成素材、FFmpeg対応ソースをまとめた。2,243,239,039 bytes の依存ソースキャッシュは固定BtbN実行の公式 SHA-256 と照合済み。共有時はフォルダ全体を同じ配布先から取得できるようにする。
+- GitHub の `main` は Windows 製品版の現行ソース（旧開発ブランチ 7 本を削除し `main` のみに整理済み）。
+- 最新公開候補は **Build 59** `dist/portable-managed-20261124-59`（`source_revision: e74209c286be83bd74ed3cc444d1d2a02b2db139`、Windows x64 ZIP SHA-256 `1e3ce97596b3bfbdac1142cd287cd9f1080c1dcb5cb2c01fad7f97adf740dc12`）。`Aredoko.WinUI` Portable を `main` 最新ソースで再発行し、セルフテスト・`preflight.json`・ZIP・検証キット照合に合格（状態 `staging-only`）。
+- GitHub Releases 添付用一式は `dist/github-release-build59` に配置（Build 59 ZIP、`validation-kit.zip`、FFmpeg ソース＋2分割済み BtbN 依存キャッシュ `.part001`/`.part002`、`SHA256SUMS.txt`）。
+- 直前予備は Build 58（`dist/portable-managed-20261123-58` / `dist/aredoko-build58-friend-trial`）。Build 57 は過去の試験証拠。
 
 ## 最近確認した変更・利用者にできること
 - CBZ 全ページ一括 AI 索引、動画の一時停止場面からの類似検索、画像・本・動画の横断類似、フローティング操作バー付きビューアを利用できる。
@@ -24,4 +24,4 @@
 - 実 AI モデルでの CBZ 一括索引・動画場面類似・横断ランキング、物理マウス・日本語 IME・DPI・ハイコントラスト。P6-3 の `cp313-cu128` 供給元レビュー・immutable host・`TRUSTED_CATALOGS` 登録。専用 OCR は保留。
 
 ## 次の1件（P6 / UI）
-- **Build 58 の友人試用セットで RTX 30シリーズ実機の初回 CUDA セットアップと AI 検索を確認する**。試用案内に Visual C++ x64・対応 NVIDIA ドライバー・未署名起動の前提を記載済み。
+- **GitHub Releases に `dist/github-release-build59` 一式を公開し、公開ページ・導入案内を最終確認する**（`README.md` / `README.ja.md` と `MainPage.AIEnvironment.cs` の `main` 参照リンクは反映済み。RTX 30 シリーズ実機等での CUDA 新規取得は継続確認）。
