@@ -65,7 +65,7 @@ public sealed partial class MainPage
             panel.Children.Add(modelHint);
             foreach(var control in new UIElement[]{diagnostic,setupArt,progress,status,refresh})panel.Children.Add(control);
             var download=new Button{Content="ダウンロード・進行状況"};AutomationProperties.SetAutomationId(download,"AIEnvironmentDownload");panel.Children.Add(download);
-            var guide=new HyperlinkButton{Content="配置ガイド",NavigateUri=new Uri("https://github.com/jakymiku/Aredoko/blob/feat/winui3-production-mvp-20261011/docs/ai-environment-guide.md")};AutomationProperties.SetAutomationId(guide,"AIEnvironmentGuide");panel.Children.Add(guide);
+            var guide=new HyperlinkButton{Content="配置ガイド",NavigateUri=new Uri("https://github.com/jakymiku/Aredoko/blob/main/docs/ai-environment-guide.md")};AutomationProperties.SetAutomationId(guide,"AIEnvironmentGuide");panel.Children.Add(guide);
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="手元のAIファイルを使う",SecondaryButtonText="確認を中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=FormScrollContent.Wrap(panel),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}};
             AutomationProperties.SetAutomationId(dialog,"AIEnvironmentDialog");
