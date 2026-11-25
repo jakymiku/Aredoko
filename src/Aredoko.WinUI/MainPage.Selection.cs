@@ -23,15 +23,17 @@ public sealed partial class MainPage
     {
         if(librarySelection.Count==0)return "";
         var selectedRows=librarySelection.Ids.Select(id=>rowById.GetValueOrDefault(id)).Where(row=>row is not null).Select(row=>row!).ToArray();
-        if(selectedRows.Length==0)return $"表示外に {librarySelection.Count:N0} 件選択中";
-        var titles=string.Join("、",selectedRows.Take(3).Select(row=>row.Title));
+        if(selectedRows.Length==0)return AppText.L($"表示外に {librarySelection.Count:N0} 件選択中",$"{librarySelection.Count:N0} selected outside view");
+        var titles=string.Join(AppText.L("、",", "),selectedRows.Take(3).Select(row=>row.Title));
         var extra=librarySelection.Count-Math.Min(3,selectedRows.Length);
-        if(extra>0)titles+=$" ほか{extra:N0}件";
+        if(extra>0)titles+=AppText.L($" ほか{extra:N0}件",$" and {extra:N0} more");
         var favorites=selectedRows.Count(row=>row.Favorite);
         var outside=librarySelection.Count-selectedRows.Length;
         var shelves=selectedRows.SelectMany(row=>row.ShelfIds.Length>0?row.ShelfIds.Select(ShelfName):string.IsNullOrWhiteSpace(row.Shelf)?[]:new[]{row.Shelf}).Where(name=>!string.IsNullOrWhiteSpace(name)).Distinct().ToArray();
-        var shelfLabel=shelves.Length>0?"棚: "+ShelfProtocol.SummarizeNames(shelves,maxVisible:summarizeShelves?3:0):"棚なし";
-        return $"対象: {titles}\n現在: お気に入り {favorites:N0}/{selectedRows.Length:N0} 件{(outside>0?$"（一覧外 {outside:N0} 件）":"")} · {shelfLabel}";
+        var shelfLabel=shelves.Length>0?AppText.L("棚: ","Shelves: ")+ShelfProtocol.SummarizeNames(shelves,maxVisible:summarizeShelves?3:0):AppText.L("棚なし","No shelf");
+        return AppText.L(
+            $"対象: {titles}\n現在: お気に入り {favorites:N0}/{selectedRows.Length:N0} 件{(outside>0?$"（一覧外 {outside:N0} 件）":"")} · {shelfLabel}",
+            $"Items: {titles}\nSelected: Favorites {favorites:N0}/{selectedRows.Length:N0}{(outside>0?$" ({outside:N0} outside list)":"")} · {shelfLabel}");
     }
     private void UpdateSelectionSummaryDetails()
     {
@@ -42,25 +44,25 @@ public sealed partial class MainPage
     }
     private void ShowSelectionSummary()
     {
-        folderSettingsActive=false;folderDraft=null;DetailKindBadge.Visibility=Visibility.Collapsed;DetailPaneTitle.Visibility=Visibility.Visible;DetailPaneTitle.Text="選択した作品";
+        folderSettingsActive=false;folderDraft=null;DetailKindBadge.Visibility=Visibility.Collapsed;DetailPaneTitle.Visibility=Visibility.Visible;DetailPaneTitle.Text=AppText.L("選択した作品","Selected items");
         FolderEditorPanel.Visibility=Editor.Visibility=Visibility.Collapsed;SelectionSummaryScroll.Visibility=Visibility.Visible;
-        SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件選択中";
+        SelectionSummaryText.Text=AppText.L($"{librarySelection.Count:N0} 件選択中",$"{librarySelection.Count:N0} selected");
         UpdateSelectionSummaryDetails();
     }
     private void UpdateLibrarySelectionTools()
     {
         var outside=librarySelection.Ids.Count(id=>!rowById.ContainsKey(id));
-        SelectionCountText.Text=preparingSelection?"選択中…":$"{librarySelection.Count:N0} 件選択"+(outside>0?$"（表示外 {outside:N0} 件）":"");
+        SelectionCountText.Text=preparingSelection?AppText.L("選択中…","Selecting…"):AppText.L($"{librarySelection.Count:N0} 件選択",$"{librarySelection.Count:N0} selected")+(outside>0?AppText.L($"（表示外 {outside:N0} 件）",$" ({outside:N0} outside view)"):"");
         SelectionTools.Visibility=preparingSelection||librarySelection.Count>1||outside>0?Visibility.Visible:Visibility.Collapsed;
         var canActDirect=!preparingSelection&&librarySelection.Count>0;
         SelectionDirectFavoriteButton.Visibility=SelectionDirectShelfButton.Visibility=canActDirect?Visibility.Visible:Visibility.Collapsed;
         SelectionDirectFavoriteButton.IsEnabled=SelectionDirectShelfButton.IsEnabled=canActDirect&&!saving&&!dialogOpen;
         SelectionBulkActions.Visibility=librarySelection.Count>1?Visibility.Visible:Visibility.Collapsed;
         CancelSelectionPreparation.Visibility=preparingSelection?Visibility.Visible:Visibility.Collapsed;
-        SelectionSummaryText.Text=$"{librarySelection.Count:N0} 件選択中";
+        SelectionSummaryText.Text=AppText.L($"{librarySelection.Count:N0} 件選択中",$"{librarySelection.Count:N0} selected");
         UpdateSelectionSummaryDetails();
-        FooterSelection.Text=$"{librarySelection.Count:N0} 件選択";
-        ToolTipService.SetToolTip(FooterSelection,librarySelection.Count==1?"Space: 詳細・タグ編集を開閉 / Enter: 作品を開く":null);
+        FooterSelection.Text=AppText.L($"{librarySelection.Count:N0} 件選択",$"{librarySelection.Count:N0} selected");
+        ToolTipService.SetToolTip(FooterSelection,librarySelection.Count==1?AppText.L("Space: 詳細・タグ編集を開閉 / Enter: 作品を開く","Space: Toggle Details & Tag Editor / Enter: Open item"):null);
         FooterSelection.Visibility=librarySelection.Count>0?Visibility.Visible:Visibility.Collapsed;
         FooterSelectionActions.Visibility=Visibility.Collapsed;
         SelectionBulkActions.IsEnabled=FooterBulkActions.IsEnabled=FooterClearSelection.IsEnabled=!saving&&!dialogOpen&&!preparingSelection;
@@ -69,12 +71,12 @@ public sealed partial class MainPage
             var loadedCount=rowByOrdinal.Count;
             var overLimit=loadedCount>LibrarySelection.Maximum;
             SelectVisibleItemsMenuItem.Text=overLimit
-                ? $"表示中をすべて選択（上限 {LibrarySelection.Maximum} 件）"
-                : "表示中をすべて選択";
+                ? AppText.L($"表示中をすべて選択（上限 {LibrarySelection.Maximum} 件）",$"Select all loaded (max {LibrarySelection.Maximum})")
+                : AppText.L("表示中をすべて選択","Select all loaded");
             SelectVisibleItemsMenuItem.IsEnabled=!overLimit&&!saving&&!dialogOpen&&!preparingSelection&&loadedCount>0&&resultSession is not null;
             if(SelectFirstMaxItemsMenuItem is not null)
             {
-                SelectFirstMaxItemsMenuItem.Text=$"先頭 {LibrarySelection.Maximum} 件を選択";
+                SelectFirstMaxItemsMenuItem.Text=AppText.L($"先頭 {LibrarySelection.Maximum} 件を選択",$"Select first {LibrarySelection.Maximum}");
                 SelectFirstMaxItemsMenuItem.Visibility=overLimit?Visibility.Visible:Visibility.Collapsed;
                 SelectFirstMaxItemsMenuItem.IsEnabled=overLimit&&!saving&&!dialogOpen&&!preparingSelection&&resultSession is not null;
             }
@@ -86,14 +88,14 @@ public sealed partial class MainPage
                     var overSpanLimit=spanCount>LibrarySelection.Maximum;
                     SelectRangeSpanMenuItem.Visibility=Visibility.Visible;
                     SelectRangeSpanMenuItem.Text=overSpanLimit
-                        ? $"ここまで範囲選択（{spanCount:N0} 件・上限 {LibrarySelection.Maximum} 件）"
-                        : $"ここまで範囲選択（{spanCount:N0} 件）";
+                        ? AppText.L($"ここまで範囲選択（{spanCount:N0} 件・上限 {LibrarySelection.Maximum} 件）",$"Select range to here ({spanCount:N0}, max {LibrarySelection.Maximum})")
+                        : AppText.L($"ここまで範囲選択（{spanCount:N0} 件）",$"Select range to here ({spanCount:N0})");
                     SelectRangeSpanMenuItem.IsEnabled=!overSpanLimit&&!saving&&!dialogOpen&&!preparingSelection&&resultSession is not null&&resultWindow is not null;
                 }
                 else
                 {
                     SelectRangeSpanMenuItem.Visibility=Visibility.Collapsed;
-                    SelectRangeSpanMenuItem.Text="ここまで範囲選択";
+                    SelectRangeSpanMenuItem.Text=AppText.L("ここまで範囲選択","Select range to here");
                     SelectRangeSpanMenuItem.IsEnabled=false;
                 }
             }
@@ -165,7 +167,7 @@ public sealed partial class MainPage
         var origin=explicitOrigin??librarySelection.Anchor;
         if(origin is not null&&Math.Abs((long)target.Ordinal-origin.Ordinal)+1>LibrarySelection.Maximum)
         {
-            Notice($"一度に {LibrarySelection.Maximum} 件まで","検索や棚で絞り込んでから選択してください",InfoBarSeverity.Warning);
+            Notice(AppText.L($"一度に {LibrarySelection.Maximum} 件まで",$"Up to {LibrarySelection.Maximum} items at once"),AppText.L("検索や棚で絞り込んでから選択してください","Narrow your search or shelves before selecting."),InfoBarSeverity.Warning);
             return;
         }
         if(!await transitions.WaitAsync(0))return;
@@ -236,19 +238,19 @@ public sealed partial class MainPage
     {
         var menu=new MenuFlyout();var expected=librarySelection.Ids.ToArray();var session=resultSession?.Id;
         var enabled=!saving&&!dialogOpen&&!preparingSelection;
-        var summary=new MenuFlyoutItem{Text=$"{expected.Length:N0} 件の詳細",IsEnabled=enabled};AutomationProperties.SetAutomationId(summary,"BulkDetails");
+        var summary=new MenuFlyoutItem{Text=AppText.L($"{expected.Length:N0} 件の詳細",$"Details for {expected.Length:N0}"),IsEnabled=enabled};AutomationProperties.SetAutomationId(summary,"BulkDetails");
         summary.Click+=(_,_)=>{ShowSelectionSummary();Details.IsPaneOpen=true;};menu.Items.Add(summary);
-        foreach(var (label,id,operation) in new[]{("お気に入りに登録","BulkFavoriteAdd",SelectionOperation.FavoriteAdd),("お気に入りを解除","BulkFavoriteRemove",SelectionOperation.FavoriteRemove),("棚に追加…","BulkShelfAdd",SelectionOperation.ShelvesAdd),("棚から外す…","BulkShelfRemove",SelectionOperation.ShelvesRemove)})
+        foreach(var (label,id,operation) in new[]{(AppText.L("お気に入りに登録","Add to favorites"),"BulkFavoriteAdd",SelectionOperation.FavoriteAdd),(AppText.L("お気に入りを解除","Remove from favorites"),"BulkFavoriteRemove",SelectionOperation.FavoriteRemove),(AppText.L("棚に追加…","Add to shelves…"),"BulkShelfAdd",SelectionOperation.ShelvesAdd),(AppText.L("棚から外す…","Remove from shelves…"),"BulkShelfRemove",SelectionOperation.ShelvesRemove)})
         {
             var action=new MenuFlyoutItem{Text=label,IsEnabled=enabled};AutomationProperties.SetAutomationId(action,id);
             action.Click+=async(_,_)=>{if(session==resultSession?.Id&&expected.SequenceEqual(librarySelection.Ids))await EditLibrarySelectionAsync(operation);};menu.Items.Add(action);
         }
-        var bulkTagSuggestions=new MenuFlyoutItem{Text="✨ AIタグ候補をまとめて生成",IsEnabled=enabled};
+        var bulkTagSuggestions=new MenuFlyoutItem{Text=AppText.L("✨ AIタグ候補をまとめて生成","✨ Generate AI tag suggestions"),IsEnabled=enabled};
         AutomationProperties.SetAutomationId(bulkTagSuggestions,"BulkTagSuggestions");
         bulkTagSuggestions.Click+=async(_,_)=>{if(session==resultSession?.Id&&expected.SequenceEqual(librarySelection.Ids))await GenerateSelectionTagSuggestionsAsync();};
         menu.Items.Add(bulkTagSuggestions);
         menu.Items.Add(new MenuFlyoutSeparator());
-        var clear=new MenuFlyoutItem{Text="選択を解除",IsEnabled=enabled};AutomationProperties.SetAutomationId(clear,"BulkClearSelection");
+        var clear=new MenuFlyoutItem{Text=AppText.L("選択を解除","Clear selection"),IsEnabled=enabled};AutomationProperties.SetAutomationId(clear,"BulkClearSelection");
         clear.Click+=ClearLibrarySelection_Click;menu.Items.Add(clear);
         return menu;
     }
@@ -306,7 +308,7 @@ public sealed partial class MainPage
             await Task.Yield();if(disposed)return;
             UpdateLibrarySelectionTools();
             foreach(var button in SelectionSummaryPanel.Children.OfType<Button>())button.IsEnabled=false;
-            SetSelectionSaveStatus($"AIタグ候補の対象を確認中… (0/{ids.Length:N0} 件)");
+            SetSelectionSaveStatus(AppText.L($"AIタグ候補の対象を確認中… (0/{ids.Length:N0} 件)",$"Checking items for AI tag suggestions… (0/{ids.Length:N0})"));
 
             var targets=new List<int>(ids.Length);
             foreach(var id in ids)
@@ -325,17 +327,17 @@ public sealed partial class MainPage
 
             if(targets.Count==0)
             {
-                summaryText="選択した作品にAIタグ候補の対象（画像・本）がありません。";
-                Notice("AIタグ候補の対象がありません",summaryText,InfoBarSeverity.Warning);
+                summaryText=AppText.L("選択した作品にAIタグ候補の対象（画像・本）がありません。","None of the selected items support AI tag suggestions (images/books).");
+                Notice(AppText.L("AIタグ候補の対象がありません","No eligible items for AI tag suggestions"),summaryText,InfoBarSeverity.Warning);
                 return;
             }
 
             var firstHistory=await api.TagReviews.HistoryAsync(targets[0],null,cts.Token);
             if(!firstHistory.Available)
             {
-                availabilityError=firstHistory.Reason;
-                summaryText="AIタグ候補を生成できません";
-                Notice("AIタグ候補を作成できません",availabilityError,InfoBarSeverity.Warning);
+                availabilityError=AppText.TranslateBackend(firstHistory.Reason);
+                summaryText=AppText.L("AIタグ候補を生成できません","Cannot generate AI tag suggestions");
+                Notice(AppText.L("AIタグ候補を作成できません","Cannot create AI tag suggestions"),availabilityError,InfoBarSeverity.Warning);
                 return;
             }
 
@@ -343,7 +345,7 @@ public sealed partial class MainPage
             foreach(var id in targets)
             {
                 if(disposed||cts.IsCancellationRequested)break;
-                SetSelectionSaveStatus($"AIタグ候補を生成中… ({done:N0}/{targets.Count:N0} 件)");
+                SetSelectionSaveStatus(AppText.L($"AIタグ候補を生成中… ({done:N0}/{targets.Count:N0} 件)",$"Generating AI tag suggestions… ({done:N0}/{targets.Count:N0})"));
                 var reqId=Guid.NewGuid().ToString("N");
                 try
                 {
@@ -359,9 +361,9 @@ public sealed partial class MainPage
                 {
                     AppLog.Error(ex);
                     failed++;
-                    if(succeeded==0&&ex.Message.Contains("未導入"))
+                    if(succeeded==0&&(ex.Message.Contains("未導入")||ex.Message.Contains("not installed",StringComparison.OrdinalIgnoreCase)||ex.Message.Contains("missing",StringComparison.OrdinalIgnoreCase)))
                     {
-                        availabilityError=ex.Message;
+                        availabilityError=AppText.TranslateBackend(ex.Message);
                         break;
                     }
                 }
@@ -371,21 +373,21 @@ public sealed partial class MainPage
             if(availabilityError is not null)
             {
                 summaryText=availabilityError;
-                Notice("AIタグ候補を作成できません",availabilityError,InfoBarSeverity.Warning);
+                Notice(AppText.L("AIタグ候補を作成できません","Cannot create AI tag suggestions"),availabilityError,InfoBarSeverity.Warning);
             }
             else
             {
-                var detail=$"{succeeded:N0} 件の候補を作成しました（詳細の「✨ AI候補」または「AIタグ候補（文字）」検索で確認できます）。"
-                    +(skipped>0?$" 対象外 {skipped:N0} 件はスキップ。":"")
-                    +(failed>0?$" 失敗 {failed:N0} 件。":"");
-                summaryText=$"AIタグ候補：{succeeded:N0} 件生成"+(skipped>0?$" · 対象外 {skipped:N0} 件":"")+(failed>0?$" · 失敗 {failed:N0} 件":"");
-                Notice("AIタグ候補を生成しました",detail,failed>0?InfoBarSeverity.Warning:InfoBarSeverity.Success);
+                var detail=AppText.L($"{succeeded:N0} 件の候補を作成しました（詳細の「✨ AI候補」または「AIタグ候補（文字）」検索で確認できます）。",$"Created suggestions for {succeeded:N0} items (review them under \"✨ AI Suggestions\" in Details or \"AI Tag Suggestions (Text)\" search).")
+                    +(skipped>0?AppText.L($" 対象外 {skipped:N0} 件はスキップ。",$" Skipped {skipped:N0} unsupported."):"")
+                    +(failed>0?AppText.L($" 失敗 {failed:N0} 件。",$" Failed {failed:N0}."):"");
+                summaryText=AppText.L($"AIタグ候補：{succeeded:N0} 件生成",$"AI tag suggestions: {succeeded:N0} created")+(skipped>0?AppText.L($" · 対象外 {skipped:N0} 件",$" · {skipped:N0} unsupported"):"")+(failed>0?AppText.L($" · 失敗 {failed:N0} 件",$" · {failed:N0} failed"):"");
+                Notice(AppText.L("AIタグ候補を生成しました","Generated AI tag suggestions"),detail,failed>0?InfoBarSeverity.Warning:InfoBarSeverity.Success);
                 Status.IsOpen=true;
             }
         }
         catch(OperationCanceledException) when(cts.IsCancellationRequested)
         {
-            summaryText="AIタグ候補の生成を中止しました。";
+            summaryText=AppText.L("AIタグ候補の生成を中止しました。","Canceled AI tag suggestion generation.");
         }
         catch(Exception ex)
         {
@@ -421,7 +423,7 @@ public sealed partial class MainPage
     {
         if(disposed||saving||dialogOpen||preparingSelection||librarySelection.Count==0||resultSession is not {} session||librarySelection.SessionId!=session.Id||!await transitions.WaitAsync(0))return;
         saving=true;searchTimer.Stop();var ids=librarySelection.Ids.ToArray();var favorite=operation is SelectionOperation.FavoriteAdd or SelectionOperation.FavoriteRemove;var committed=false;var detailsWereOpen=Details.IsPaneOpen;
-        SetSelectionSaveStatus("保存しています…");
+        SetSelectionSaveStatus(AppText.L("保存しています…","Saving…"));
         try
         {
             // Let the invoking native provider finish before disabling its parent.
@@ -432,15 +434,15 @@ public sealed partial class MainPage
             if(!favorite)
             {
                 shelfDescriptors=(await api.Shelves.ListAsync()).ToList();
-                var picked=await PickShelfIdsAsync(operation==SelectionOperation.ShelvesAdd?"選択した作品を棚に追加":"選択した作品を棚から外す",[],
-                    operation==SelectionOperation.ShelvesAdd?"指定した棚を追加します。ほかの棚への所属はそのまま残ります。":"指定した棚からだけ外します。作品と元ファイルは残ります。","BulkShelfChoice",allowCreate:operation==SelectionOperation.ShelvesAdd);
+                var picked=await PickShelfIdsAsync(operation==SelectionOperation.ShelvesAdd?AppText.L("選択した作品を棚に追加","Add selected items to shelves"):AppText.L("選択した作品を棚から外す","Remove selected items from shelves"),[],
+                    operation==SelectionOperation.ShelvesAdd?AppText.L("指定した棚を追加します。ほかの棚への所属はそのまま残ります。","Adds the selected shelves while keeping other shelf assignments intact."):AppText.L("指定した棚からだけ外します。作品と元ファイルは残ります。","Removes only from the selected shelves. Items and original files remain."),"BulkShelfChoice",allowCreate:operation==SelectionOperation.ShelvesAdd);
                 if(picked is null||picked.Length==0)return;shelves=picked;
             }
             var kept=false;
             if(favorite)kept=await session.EditFavoritesAsync(ids,operation==SelectionOperation.FavoriteAdd,CancellationToken.None);
             else await session.EditSelectionAsync(ids,operation,shelves,CancellationToken.None);
             committed=true;
-            if(!kept)SetSelectionSaveStatus("保存済み・一覧を更新しています…");
+            if(!kept)SetSelectionSaveStatus(AppText.L("保存済み・一覧を更新しています…","Saved — refreshing list…"));
             if(favorite)
             {
                 foreach(var id in ids)if(rowById.TryGetValue(id,out var hit)){hit.Favorite=operation==SelectionOperation.FavoriteAdd;RefreshFavoriteCard(hit);}
@@ -458,7 +460,7 @@ public sealed partial class MainPage
             }
             if(detailsWereOpen&&!disposed)Details.IsPaneOpen=true;
             if(!kept)await RefreshResultRowsAfterEditAsync(favoriteOnly:favorite);
-            UpdateLibrarySelectionTools();if(!resultsNeedRefresh)Notice("保存しました",$"{ids.Length:N0} 件の整理を保存しました。");
+            UpdateLibrarySelectionTools();if(!resultsNeedRefresh)Notice(AppText.L("保存しました","Saved"),AppText.L($"{ids.Length:N0} 件の整理を保存しました。",$"Saved changes for {ids.Length:N0} items."));
         }
         catch(Exception ex){Failure(ex);}
         finally
@@ -467,7 +469,7 @@ public sealed partial class MainPage
             if(!disposed)
             {
                 foreach(var button in SelectionSummaryPanel.Children.OfType<Button>())button.IsEnabled=true;
-                SetSelectionSaveStatus(committed?(resultsNeedRefresh?"保存済みです。一覧を検索し直してください。":$"{ids.Length:N0} 件を保存しました。") : "");
+                SetSelectionSaveStatus(committed?(resultsNeedRefresh?AppText.L("保存済みです。一覧を検索し直してください。","Saved. Run search again to refresh the list."):AppText.L($"{ids.Length:N0} 件を保存しました。",$"Saved {ids.Length:N0} items.")):"");
                 if(detailsWereOpen&&(active is not null||librarySelection.Count>0))
                 {
                     if(active is null)ShowSelectionSummary();

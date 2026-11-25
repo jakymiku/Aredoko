@@ -15,13 +15,13 @@ public sealed record PageImageCoverage(int ItemId,string SourceRevision,string S
     public bool CanPrepare => Supported&&Available&&SourceState=="current";
     public string Summary => SourceState switch
     {
-        "stale"=>"元ファイルが変わりました。閉じて開き直してください。",
-        "unverified"=>"元ファイルを確認できません。少し待って開き直してください。",
-        "unavailable"=>"元ファイルを利用できません。登録先を確認してください。",
-        _=>!Supported?"選択中のモデルは画像検索に対応していません。":
-            $"準備済み: {IndexedPages:N0} / {PageCount:N0}ページ（残り{RemainingPages:N0}）"+(!Available?"\nAI実行環境を確認してください。保存済みの索引は保持しています。":"")
+        "stale"=>AppText.L("元ファイルが変わりました。閉じて開き直してください。", "Source file changed. Close and reopen it."),
+        "unverified"=>AppText.L("元ファイルを確認できません。少し待って開き直してください。", "Cannot verify source file. Wait a moment and reopen it."),
+        "unavailable"=>AppText.L("元ファイルを利用できません。登録先を確認してください。", "Source file unavailable. Check the registered folder."),
+        _=>!Supported?AppText.L("選択中のモデルは画像検索に対応していません。", "The selected model does not support image search."):
+            AppText.L($"準備済み: {IndexedPages:N0} / {PageCount:N0}ページ（残り{RemainingPages:N0}）", $"Ready: {IndexedPages:N0} / {PageCount:N0} pages ({RemainingPages:N0} left)")+(!Available?AppText.L("\nAI実行環境を確認してください。保存済みの索引は保持しています。", "\nCheck your AI environment. Saved index data is kept."):"")
     };
-    public string RangeSummary => IndexedRanges.Count==0?"まだ準備されていません。":string.Join("、",IndexedRanges.Select(r=>r.Label))+"ページ";
+    public string RangeSummary => IndexedRanges.Count==0?AppText.L("まだ準備されていません。", "Not prepared yet."):AppText.L(string.Join("、",IndexedRanges.Select(r=>r.Label))+"ページ", "Pages " + string.Join(", ",IndexedRanges.Select(r=>r.Label)));
 
     public static PageImageCoverage Parse(byte[] json,int expectedItemId,string expectedRevision,string? expectedProfile=null)
     {
@@ -38,21 +38,21 @@ public sealed record PageImageCoverage(int ItemId,string SourceRevision,string S
             if(item!=expectedItemId||revision!=expectedRevision||!TagReviewProtocol.IsRevision(revision)||profile.Length==0||model.Length==0
                 ||expectedProfile is not null&&profile!=expectedProfile||state is not ("current" or "stale" or "unverified" or "unavailable")
                 ||total is <1 or >10000||ready<0||ready>total||remaining!=total-ready)
-                throw new InvalidDataException("ページ索引の準備状況が無効です。開き直してください。");
+                throw new InvalidDataException(AppText.L("ページ索引の準備状況が無効です。開き直してください。", "Invalid page index coverage status. Please reopen."));
             PageImageRange ReadRange(JsonElement value,int maximum)
             {
                 var range=new PageImageRange(value.GetProperty("start").GetInt32(),value.GetProperty("count").GetInt32());
                 if(range.Start<0||range.Start>=total||range.Count<1||range.Count>maximum||range.Count>total-range.Start)
-                    throw new InvalidDataException("ページ索引の範囲が無効です。");
+                    throw new InvalidDataException(AppText.L("ページ索引の範囲が無効です。", "Invalid page index range."));
                 return range;
             }
             var array=root.GetProperty("indexed_ranges");
-            if(array.ValueKind!=JsonValueKind.Array||array.GetArrayLength()>5000)throw new InvalidDataException("ページ索引の範囲数が無効です。");
+            if(array.ValueKind!=JsonValueKind.Array||array.GetArrayLength()>5000)throw new InvalidDataException(AppText.L("ページ索引の範囲数が無効です。", "Invalid page index range count."));
             var ranges=new List<PageImageRange>();var sum=0;
             foreach(var value in array.EnumerateArray())
             {
                 var range=ReadRange(value,total);
-                if(ranges.Count>0&&range.Start<=ranges[^1].End)throw new InvalidDataException("ページ索引の範囲が重複しています。");
+                if(ranges.Count>0&&range.Start<=ranges[^1].End)throw new InvalidDataException(AppText.L("ページ索引の範囲が重複しています。", "Overlapping page index ranges."));
                 ranges.Add(range);sum+=range.Count;
             }
             var nextValue=root.GetProperty("next_range");
@@ -66,10 +66,10 @@ public sealed record PageImageCoverage(int ItemId,string SourceRevision,string S
                 expectedNext=new(missing,Math.Min(PageImageRequests.MaxPages,stop-missing));
             }
             if(sum!=ready||next!=expectedNext||((state!="current"||!supported)&&(ready!=0||ranges.Count!=0)))
-                throw new InvalidDataException("ページ索引の件数または次の範囲が一致しません。");
+                throw new InvalidDataException(AppText.L("ページ索引の件数または次の範囲が一致しません。", "Page index count or next range does not match."));
             return new(item,revision,state,profile,model,supported,available,total,ready,remaining,ranges,next);
         }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
-        {throw new InvalidDataException("ページ索引の準備状況を読み取れません。",ex);}
+        {throw new InvalidDataException(AppText.L("ページ索引の準備状況を読み取れません。", "Unable to read page index coverage."),ex);}
     }
 }

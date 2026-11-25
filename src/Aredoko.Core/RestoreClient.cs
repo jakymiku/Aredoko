@@ -17,14 +17,14 @@ public sealed record RestoreJob(string? Id,string State,double Progress,string M
         if(state!="idle")BackupClient.ValidateId(id);
         var progress=root.GetProperty("progress_ratio").GetDouble();
         if(!double.IsFinite(progress)||progress<0||progress>1||state=="completed"&&progress!=1)throw new InvalidDataException("Invalid restore progress");
-        if(!root.GetProperty("staging_supported").GetBoolean())throw new InvalidOperationException(root.GetProperty("message").GetString()??"復元データを確認できません。復旧ガイドを確認してください。");
+        if(!root.GetProperty("staging_supported").GetBoolean())throw new InvalidOperationException(AppText.TranslateBackend(root.GetProperty("message").GetString()) is { Length: > 0 } msg ? msg : AppText.L("復元データを確認できません。復旧ガイドを確認してください。", "Unable to verify restore data. Check the recovery guide."));
         var supported=root.GetProperty("switch_supported").GetBoolean();
         var restarting=root.TryGetProperty("restart_requested",out var requested)&&requested.GetBoolean();
         if(restarting&&(!supported||state!="completed"))throw new InvalidDataException("Invalid restore restart acknowledgment");
         var source=root.TryGetProperty("source",out var original)&&original.ValueKind!=JsonValueKind.Null?original.GetString():null;
         if(source is not null&&(source.Length>4096||source.Any(char.IsControl)))throw new InvalidDataException("Invalid restore source");
         bool? without=root.TryGetProperty("without_vectors",out var policy)&&policy.ValueKind!=JsonValueKind.Null?policy.GetBoolean():null;
-        return new(id,state,progress,root.GetProperty("message").GetString()??"",supported,restarting,source,without);
+        return new(id,state,progress,AppText.TranslateBackend(root.GetProperty("message").GetString()),supported,restarting,source,without);
     }
 }
 
@@ -34,7 +34,7 @@ public sealed class RestoreClient(HttpClient client)
     {using var response=await client.GetAsync("api/library/restore",cancellation);return await ReadAsync(response,cancellation);}
     public Task<RestoreJob> StartAsync(string source,bool withoutVectors=true,CancellationToken cancellation=default)
     {
-        if(string.IsNullOrWhiteSpace(source)||!Path.IsPathFullyQualified(source)||source.Length>4096||source.Any(char.IsControl))throw new ArgumentException("復元元のバックアップを選んでください。");
+        if(string.IsNullOrWhiteSpace(source)||!Path.IsPathFullyQualified(source)||source.Length>4096||source.Any(char.IsControl))throw new ArgumentException(AppText.L("復元元のバックアップを選んでください。", "Select a backup to restore from."));
         return PostAsync("start",new(){["consent"]=true,["source"]=source,["without_vectors"]=withoutVectors},cancellation);
     }
     public Task<RestoreJob> CancelAsync(string id,CancellationToken cancellation=default)

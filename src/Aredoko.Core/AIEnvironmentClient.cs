@@ -60,7 +60,7 @@ public sealed record AIEnvironmentJob(string? Id,string State,bool Saved,string 
         var files=root.GetProperty("files_done").GetInt32();var filesValue=root.GetProperty("files_total");int? filesTotal=filesValue.ValueKind==JsonValueKind.Null?null:filesValue.GetInt32();
         var saved=root.GetProperty("saved").GetBoolean();
         if(done<0||total<0||done>total||files<0||filesTotal<0||files>filesTotal||state=="complete"&&!saved)throw new InvalidDataException("Invalid AI environment progress/publication");
-        return new(id,state,saved,root.GetProperty("message").GetString()??"",done,total,files,filesTotal);
+        return new(id,state,saved,AppText.TranslateBackend(root.GetProperty("message").GetString()),done,total,files,filesTotal);
     }
 }
 public sealed class AIEnvironmentClient(HttpClient client)
@@ -82,7 +82,7 @@ public sealed class AIEnvironmentClient(HttpClient client)
         return PostAsync("select",new(){["consent"]=true,["models_root"]=root,["model_target"]=target.ToJson()},token);
     }
     private static void ValidateRoot(string? root)
-    {if(root is not null&&(root.Length>4096||!Path.IsPathFullyQualified(root)||root.Any(char.IsControl)))throw new ArgumentException("AI環境のフォルダを選んでください。");}
+    {if(root is not null&&(root.Length>4096||!Path.IsPathFullyQualified(root)||root.Any(char.IsControl)))throw new ArgumentException(AppText.L("AI環境のフォルダを選んでください。","Select an AI environment folder."));}
     private Task<AIEnvironmentJob> SelectAsync(string field,string? root,CancellationToken token)
     {
         ValidateRoot(root);

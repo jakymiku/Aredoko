@@ -1,4 +1,5 @@
 """All filesystem tests use small fictional temporary fixtures, never private media."""
+import errno
 import json
 import os
 import sys
@@ -166,13 +167,91 @@ class LibraryIndexTests(unittest.TestCase):
         scandir = os.scandir
         def break_subdir(path):
             if Path(path).name == 'subdir':
-                raise PermissionError('simulated inaccessible folder')
+                raise OSError(errno.EIO, 'simulated I/O failure')
             return scandir(path)
         with patch('library_index.os.scandir', side_effect=break_subdir):
-            with self.assertRaises(PermissionError):
+            with self.assertRaises(OSError):
                 self.index.scan(root)
         self.assertEqual(self.index.locations(root)['total'], 1)
         self.assertEqual(self.index.locations(root)['items'][0]['size_bytes'], original['size_bytes'])
+
+    def test_permission_error_skips_subdir_and_file_keeps_accessible_and_preserves_existing(self):
+        self.touch('open/ok.png')
+        self.touch('locked_dir/already_known.png')
+        locked_file = self.touch('open/locked_file.png')
+        (self.media / 'locked_stat_dir').mkdir(exist_ok=True)
+        root = self.index.add_root(self.media)
+        self.index.scan(root)
+
+        scandir = os.scandir
+        orig_stat = Path.stat
+        def guard_stat(path_self, *, follow_symlinks=True):
+            if path_self.name == 'locked_stat_dir':
+                raise PermissionError('simulated stat denied')
+            return orig_stat(path_self, follow_symlinks=follow_symlinks)
+
+        class WrappedEntry:
+            def __init__(self, inner):
+                self._inner = inner
+                self.name = inner.name
+                self.path = inner.path
+            def stat(self, *, follow_symlinks=True):
+                if self._inner.name == locked_file.name:
+                    raise PermissionError('simulated file stat denied')
+                return self._inner.stat(follow_symlinks=follow_symlinks)
+            def is_dir(self, *, follow_symlinks=True):
+                return self._inner.is_dir(follow_symlinks=follow_symlinks)
+
+        def guard_scandir(path):
+            if Path(path).name == 'locked_dir':
+                raise PermissionError('simulated folder access denied')
+            cm = scandir(path)
+            class Context:
+                def __enter__(self):
+                    return [WrappedEntry(e) for e in cm.__enter__()]
+                def __exit__(self, *args):
+                    return cm.__exit__(*args)
+            return Context()
+
+        with patch('library_index.os.scandir', side_effect=guard_scandir), patch.object(Path, 'stat', guard_stat):
+            report = self.index.scan(root)
+
+        self.assertEqual(report['skipped_access_denied'], 3)
+        self.assertFalse(report['access_denied_truncated'])
+        self.assertEqual(
+            report['access_denied_entries'],
+            [
+                {'relative_path': 'locked_dir', 'is_dir': True},
+                {'relative_path': 'locked_stat_dir', 'is_dir': True},
+                {'relative_path': 'open/locked_file.png', 'is_dir': False},
+            ],
+        )
+        present = {r['relative_path']: r['status'] for r in self.index.locations(root)['items']}
+        self.assertEqual(present['open/ok.png'], 'present')
+        # Previously indexed item inside skipped folder remains present, not missing.
+        self.assertEqual(present['locked_dir/already_known.png'], 'present')
+
+    def test_permission_error_on_registered_root_still_fails(self):
+        self.touch('a.png')
+        root = self.index.add_root(self.media)
+        self.index.scan(root)
+        scandir = os.scandir
+        def deny_root(path):
+            if Path(path) == self.media:
+                raise PermissionError('root denied')
+            return scandir(path)
+        with patch('library_index.os.scandir', side_effect=deny_root):
+            with self.assertRaises(PermissionError):
+                self.index.scan(root)
+        self.assertEqual(self.index.locations(root, status='present')['total'], 1)
+
+    def test_recycle_bin_excluded_by_default(self):
+        self.touch('$RECYCLE.BIN/S-1-5-21/deleted.png')
+        self.touch('kept.png')
+        root = self.index.add_root(self.media)
+        self.index.scan(root)
+        paths = [r['relative_path'] for r in self.index.locations(root)['items']]
+        self.assertEqual(paths, ['kept.png'])
 
     def test_symlink_files_and_directories_not_followed(self):
         outside = self.base / 'outside'

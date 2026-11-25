@@ -82,18 +82,19 @@ public sealed partial class MainPage
             active=null;initialSavedItemId=null;
             Details.IsPaneOpen=false;
             DetailsButton.IsEnabled=false;
-            MainViewTitle.Text="設定";
+            MainViewTitle.Text=AppText.L("設定","Settings");
             Count.Text="";
             ItemSearchRow.Visibility=SearchTools.Visibility=ItemListContainer.Visibility=ItemPagerRow.Visibility=Visibility.Collapsed;
             SettingsHubView.Visibility=Visibility.Visible;
             settingsPopulating=true;
             try
             {
+                if(SettingsLanguageCombo is not null)SettingsLanguageCombo.SelectedIndex=ViewerOptions.Value.Language switch{"ja"=>1,"en"=>2,_=>0};
                 SettingsThemeCombo.SelectedIndex=ViewerOptions.Value.Theme switch{"light"=>1,"dark"=>2,_=>0};
                 SettingsDoubleClickCheck.IsChecked=ViewerOptions.Value.OpenExternally;
                 SettingsClickOpenDetailsCheck.IsChecked=ViewerOptions.Value.OpenDetailsOnClick;
                 SettingsWheelCombo.SelectedIndex=ViewerOptions.Value.WheelUpAdvances?1:0;
-                SettingsInstantStatus.Text="変更した設定はすぐに反映されます";
+                SettingsInstantStatus.Text=AppText.L("変更した設定はすぐに反映されます","Changes apply immediately");
             }
             finally{settingsPopulating=false;}
             SetSettingsCategory(category??"all");
@@ -122,8 +123,8 @@ public sealed partial class MainPage
             var setup=await setupTask;
             savedVerificationState=setup["verify_ai_runtime"]?.GetValue<bool>()??true;
             var taggerReady=setup["tagger"]?["available"]?.GetValue<bool>()==true;
-            if(SettingsAIStep4Status is not null)SettingsAIStep4Status.Text=taggerReady?"✓ 使用可能 (WD Tagger)":"モデル未導入";
-            if(SettingsAIDownloadTaggerButton is not null)SettingsAIDownloadTaggerButton.Content=taggerReady?"🏷 タグ付けモデルの再取得・設定":"🏷 タグ付けモデルを取得";
+            if(SettingsAIStep4Status is not null)SettingsAIStep4Status.Text=taggerReady?AppText.L("✓ 使用可能 (WD Tagger)","✓ Ready (WD Tagger)"):AppText.L("モデル未導入","Model not installed");
+            if(SettingsAIDownloadTaggerButton is not null)SettingsAIDownloadTaggerButton.Content=taggerReady?AppText.L("🏷 タグ付けモデルの再取得・設定","🏷 Re-download / configure tagger"):AppText.L("🏷 タグ付けモデルを取得","🏷 Download tagger model");
             settingsPopulating=true;
             try
             {
@@ -144,11 +145,11 @@ public sealed partial class MainPage
             if(SettingsAIIndexButton is not null)
             {
                 SettingsAIIndexButton.Style=available?accent:defaultButton;
-                SettingsAIIndexButton.Content="AI検索を設定";
+                SettingsAIIndexButton.Content=AppText.L("AI検索を設定","Configure AI Search");
             }
             if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?defaultButton:accent;
             if(SettingsAISetupPlanButton is not null)SettingsAISetupPlanButton.Style=defaultButton;
-            if(SettingsAISetupRowLabel is not null)SettingsAISetupRowLabel.Text=available?"環境の再構成・用途選び：":"初回セットアップ：";
+            if(SettingsAISetupRowLabel is not null)SettingsAISetupRowLabel.Text=available?AppText.L("環境の再構成・用途選び：","Reconfigure or switch profile:"):AppText.L("初回セットアップ：","Initial setup:");
             var state=statusData["state"]?.GetValue<string>()??"idle";
             var processed=statusData["processed"]?.GetValue<int>()??0;
             var total=statusData["total"]?.GetValue<int>()??0;
@@ -157,8 +158,8 @@ public sealed partial class MainPage
             var errorText=statusData["error"]?.GetValue<string>()??"";
             if(available)
             {
-                SettingsAIStep1Status.Text="✓ 導入済み";
-                SettingsAIStep2Status.Text=string.IsNullOrWhiteSpace(model)?"✓ 使用可能":$"✓ {model}";
+                SettingsAIStep1Status.Text=AppText.L("✓ 導入済み","✓ Installed");
+                SettingsAIStep2Status.Text=string.IsNullOrWhiteSpace(model)?AppText.L("✓ 使用可能","✓ Ready"):$"✓ {model}";
                 int? covTarget=null,covFresh=null;
                 var unscopedPresentTotal=0;
                 var scopeInvalid=false;
@@ -177,7 +178,7 @@ public sealed partial class MainPage
                         else
                         {
                             scopeInvalid=true;
-                            scopeInvalidHint=scopeData["error"]?.GetValue<string>()??aiScopeError;
+                            scopeInvalidHint=AppText.TranslateBackend(scopeData["error"]?.GetValue<string>()??aiScopeError);
                         }
                     }
                     catch(OperationCanceledException) when(token.IsCancellationRequested){throw;}
@@ -207,8 +208,8 @@ public sealed partial class MainPage
                 }
                 if(scopeInvalid)
                 {
-                    SettingsAIStep3Status.Text="対象範囲の要確認";
-                    SettingsAINextHint.Text=string.IsNullOrWhiteSpace(scopeInvalidHint)?"［AI検索を設定］の「対象範囲」を選び直して保存してください。":scopeInvalidHint;
+                    SettingsAIStep3Status.Text=AppText.L("対象範囲の要確認","Scope needs attention");
+                    SettingsAINextHint.Text=string.IsNullOrWhiteSpace(scopeInvalidHint)?AppText.L("［AI検索を設定］の「対象範囲」を選び直して保存してください。","Open \"Configure AI Search\" and re-save your \"Search Scope\"."):scopeInvalidHint;
                 }
                 else
                 {
@@ -218,9 +219,9 @@ public sealed partial class MainPage
                     if(SettingsAIIndexButton is not null)
                     {
                         if(covTarget is int target&&covFresh is int fresh&&target>fresh)
-                            SettingsAIIndexButton.Content=fresh==0?$"✨ AI検索データを作成 ({target:N0}件)":$"✨ 未作成のAIデータを作成 ({target-fresh:N0}件)";
+                            SettingsAIIndexButton.Content=fresh==0?AppText.L($"✨ AI検索データを作成 ({target:N0}件)",$"✨ Build AI index ({target:N0})"):AppText.L($"✨ 未作成のAIデータを作成 ({target-fresh:N0}件)",$"✨ Build remaining AI index ({target-fresh:N0})");
                         else if(state is not ("running" or "cancelling")&&covTarget is int t&&covFresh==t&&t>0)
-                            SettingsAIIndexButton.Content="AI検索の設定・モデル切替";
+                            SettingsAIIndexButton.Content=AppText.L("AI検索の設定・モデル切替","AI Search Settings & Model Switch");
                     }
                 }
                 if(SettingsAIStatusArt is not null)
@@ -228,20 +229,20 @@ public sealed partial class MainPage
             }
             else
             {
-                var needsRuntime=statusCode.Contains("runtime")||errorText.Contains("Python")||errorText.Contains("ライブラリ");
+                var needsRuntime=statusCode.Contains("runtime")||errorText.Contains("Python")||errorText.Contains("ライブラリ")||errorText.Contains("library",StringComparison.OrdinalIgnoreCase);
                 if(needsRuntime)
                 {
-                    SettingsAIStep1Status.Text="未導入";
-                    SettingsAIStep2Status.Text="環境導入後に設定";
-                    SettingsAIStep3Status.Text="待機中";
-                    SettingsAINextHint.Text="［AIの自動セットアップ］または［AI検索を設定］から実行環境を用意してください。";
+                    SettingsAIStep1Status.Text=AppText.L("未導入","Not installed");
+                    SettingsAIStep2Status.Text=AppText.L("環境導入後に設定","Set up after runtime");
+                    SettingsAIStep3Status.Text=AppText.L("待機中","Waiting");
+                    SettingsAINextHint.Text=AppText.L("［AIの自動セットアップ］または［AI検索を設定］から実行環境を用意してください。","Run \"AI Auto-Setup\" or \"Configure AI Search\" to install the runtime.");
                 }
                 else
                 {
-                    SettingsAIStep1Status.Text="✓ 導入済み";
-                    SettingsAIStep2Status.Text="未導入 / 要確認";
-                    SettingsAIStep3Status.Text="待機中";
-                    SettingsAINextHint.Text="［AI検索を設定］から検索モデルをダウンロードまたは指定してください。";
+                    SettingsAIStep1Status.Text=AppText.L("✓ 導入済み","✓ Installed");
+                    SettingsAIStep2Status.Text=AppText.L("未導入 / 要確認","Missing / needs setup");
+                    SettingsAIStep3Status.Text=AppText.L("待機中","Waiting");
+                    SettingsAINextHint.Text=AppText.L("［AI検索を設定］から検索モデルをダウンロードまたは指定してください。","Open \"Configure AI Search\" to download or select a search model.");
                 }
                 if(SettingsAIStatusArt is not null)
                     VisualAssets.State(SettingsAIStatusArt,state=="failed"?"error":"greeting");
@@ -253,33 +254,66 @@ public sealed partial class MainPage
             AppLog.Error(ex);
             if(!token.IsCancellationRequested&&!disposed&&settingsHubOpen)
             {
-                SettingsAIStep1Status.Text="確認できません";
+                SettingsAIStep1Status.Text=AppText.L("確認できません","Unavailable");
                 SettingsAIStep2Status.Text="—";
                 SettingsAIStep3Status.Text="—";
                 if(SettingsAIStep4Status is not null)SettingsAIStep4Status.Text="—";
-                SettingsAINextHint.Text="バックエンドに接続できないため状態を取得できませんでした。";
+                SettingsAINextHint.Text=AppText.L("バックエンドに接続できないため状態を取得できませんでした。","Could not retrieve status because the backend is unreachable.");
                 if(SettingsAIStatusArt is not null)VisualAssets.State(SettingsAIStatusArt,"error");
             }
         }
     }
 
-    private void SaveInstantViewerOptions(string statusMessage)
+    private void SaveInstantViewerOptions(Func<string> statusMessageFactory)
     {
+        var selectedLanguage=SettingsLanguageCombo?.SelectedIndex switch{1=>"ja",2=>"en",_=>"system"};
         var selectedTheme=SettingsThemeCombo.SelectedIndex switch{1=>"light",2=>"dark",_=>"system"};
         var openExternally=SettingsDoubleClickCheck.IsChecked==true;
         var openDetailsOnClick=SettingsClickOpenDetailsCheck?.IsChecked==true;
         var wheelUp=SettingsWheelCombo.SelectedIndex==1;
-        ViewerOptions.SavePreferences(wheelUp,selectedTheme,ViewerOptions.Value.EnlargeSmallImages,openExternally,openDetailsOnClick);
+        var prevResolved=AppText.CurrentLanguage;
+        ViewerOptions.SavePreferences(wheelUp,selectedTheme,ViewerOptions.Value.EnlargeSmallImages,openExternally,openDetailsOnClick,selectedLanguage);
+        var nextResolved=AppText.Apply(selectedLanguage);
         MainWindow.Current.ApplyTheme(selectedTheme);
+        if(prevResolved!=nextResolved)
+        {
+            MainWindow.Current.ApplyLanguage();
+            ApplyLanguage();
+            if(settingsHubOpen)_ = LoadSettingsStatusAsync();
+        }
         RefreshThumbnailTooltips();
-        SettingsInstantStatus.Text=statusMessage;
+        SettingsInstantStatus.Text=statusMessageFactory();
+    }
+
+    private void ApplyLanguage()
+    {
+        UiText.Apply(this);
+        for(var index=0;index<SearchMode.Items.Count;index++)
+            if(SearchMode.Items[index] is ComboBoxItem option)
+            {
+                var hint=SearchModeDescription(index);
+                ToolTipService.SetToolTip(option,hint);
+                AutomationProperties.SetHelpText(option,hint);
+            }
+        if(tagReview is not null)UiText.Apply(tagReview);
+        UpdateSearchMethod();
+        UpdateLibraryHeading();
+        UpdateSelectionSummaryDetails();
+        if(settingsHubOpen)MainViewTitle.Text=AppText.L("設定","Settings");
+        if(folderHubOpen)
+        {
+            RenderFolderHub();
+            UpdateFolderDraftState();
+        }
+        if(shelfHubOpen&&!disposed)_ = ReloadShelfHubAsync();
+        else if(resultSession is not null)RenderRows();
     }
 
     private void SettingsInstantCombo_Changed(object sender,SelectionChangedEventArgs e)
     {
         if(!ready||settingsPopulating||disposed||!settingsHubOpen)return;
-        try{SaveInstantViewerOptions("✓ 表示・操作設定を反映しました");}
-        catch(Exception ex){SettingsInstantStatus.Text="保存できません: "+ex.Message;}
+        try{SaveInstantViewerOptions(()=>ReferenceEquals(sender,SettingsLanguageCombo)?AppText.L("✓ 表示言語を反映しました","✓ Display language updated"):AppText.L("✓ 表示・操作設定を反映しました","✓ Display and control settings updated"));}
+        catch(Exception ex){SettingsInstantStatus.Text=AppText.L("保存できません: ","Failed to save: ")+ex.Message;}
     }
 
     private async void SettingsInstantPreference_Changed(object sender,RoutedEventArgs e)
@@ -287,9 +321,8 @@ public sealed partial class MainPage
         if(!ready||settingsPopulating||disposed||!settingsHubOpen)return;
         if(ReferenceEquals(sender,SettingsDoubleClickCheck)||ReferenceEquals(sender,SettingsClickOpenDetailsCheck))
         {
-            var message=ReferenceEquals(sender,SettingsClickOpenDetailsCheck)?"✓ 作品クリック時の詳細表示を反映しました":"✓ 閲覧設定を反映しました";
-            try{SaveInstantViewerOptions(message);}
-            catch(Exception ex){SettingsInstantStatus.Text="保存できません: "+ex.Message;}
+            try{SaveInstantViewerOptions(()=>ReferenceEquals(sender,SettingsClickOpenDetailsCheck)?AppText.L("✓ 作品クリック時の詳細表示を反映しました","✓ Open details on click updated"):AppText.L("✓ 閲覧設定を反映しました","✓ Viewing settings updated"));}
+            catch(Exception ex){SettingsInstantStatus.Text=AppText.L("保存できません: ","Failed to save: ")+ex.Message;}
             return;
         }
         if(ReferenceEquals(sender,SettingsVerifyAIRuntimeCheck))
@@ -301,11 +334,11 @@ public sealed partial class MainPage
             {
                 await api.PostAsync("api/library/ai/runtime-verification",new System.Text.Json.Nodes.JsonObject{["enabled"]=enabled});
                 savedVerificationState=enabled;
-                SettingsInstantStatus.Text=enabled?"✓ 起動時AIチェックを有効にしました（次回起動から）":"✓ 起動時AIチェックを簡略化しました（次回起動から）";
+                SettingsInstantStatus.Text=enabled?AppText.L("✓ 起動時AIチェックを有効にしました（次回起動から）","✓ Startup AI check enabled (next launch)"):AppText.L("✓ 起動時AIチェックを簡略化しました（次回起動から）","✓ Startup AI check streamlined (next launch)");
             }
             catch(Exception ex)
             {
-                SettingsInstantStatus.Text="保存できません: "+ex.Message;
+                SettingsInstantStatus.Text=AppText.L("保存できません: ","Failed to save: ")+ex.Message;
                 settingsPopulating=true;
                 try{SettingsVerifyAIRuntimeCheck.IsChecked=savedVerificationState??true;}
                 finally{settingsPopulating=false;}
@@ -381,26 +414,34 @@ public sealed partial class MainPage
         try
         {
             var panel=new StackPanel{Spacing=12};
-            panel.Children.Add(new TextBlock{Text="アプリが起動する場合",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]});
+            panel.Children.Add(new TextBlock{Text=AppText.L("アプリが起動する場合","If the app launches"),Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]});
             panel.Children.Add(new TextBlock
             {
-                Text="同じ画面の「バックアップから復元」から復元できます。新しい保存先で検証され、元のライブラリと元ファイルは残ります。自動再起動は対応した配布版の Aredoko.exe から起動した場合に利用できます。\n\n"+
-                     "バックアップにはライブラリ情報と、選択した設定・履歴・読書位置・AI検索データが含まれます。元の画像・動画、モデル、Python環境、サムネイルキャッシュは含みません。",
+                Text=AppText.L(
+                    "同じ画面の「バックアップから復元」から復元できます。新しい保存先で検証され、元のライブラリと元ファイルは残ります。自動再起動は対応した配布版の Aredoko.exe から起動した場合に利用できます。\n\n"+
+                    "バックアップにはライブラリ情報と、選択した設定・履歴・読書位置・AI検索データが含まれます。元の画像・動画、モデル、Python環境、サムネイルキャッシュは含みません。",
+                    "You can restore from \"Restore from backup\" on the same screen. The backup is verified in a new destination while keeping your original library and files intact. Automatic restart is supported when launched via Aredoko.exe.\n\n"+
+                    "Backups contain library metadata and selected settings, history, reading positions, and AI search data. Original images/videos, models, Python environment, and thumbnail caches are not included."),
                 TextWrapping=TextWrapping.Wrap
             });
-            var offline=new Expander{Header="起動できない場合",HorizontalAlignment=HorizontalAlignment.Stretch,Content=new TextBlock
+            var offline=new Expander{Header=AppText.L("起動できない場合","If the app cannot launch"),HorizontalAlignment=HorizontalAlignment.Stretch,Content=new TextBlock
             {
-                Text="アプリを終了してから、復旧ツールで新しい復元先を指定してください。既存のDBや元のメディアへ上書きしないでください。\n\n"+
-                     "バックアップ例：\npython tools/backup_library.py backup --catalog <catalog.sqlite> --output <新バックアップ先>\n\n"+
-                     "復元例：\npython tools/backup_library.py restore --bundle <バックアップ先> --output <新復元先>\n\n"+
-                     "破損したAI検索データを除いて復元する場合は --without-ai を指定します。CLIを使用できる環境が必要です。",
+                Text=AppText.L(
+                    "アプリを終了してから、復旧ツールで新しい復元先を指定してください。既存のDBや元のメディアへ上書きしないでください。\n\n"+
+                    "バックアップ例：\npython tools/backup_library.py backup --catalog <catalog.sqlite> --output <新バックアップ先>\n\n"+
+                    "復元例：\npython tools/backup_library.py restore --bundle <バックアップ先> --output <新復元先>\n\n"+
+                    "破損したAI検索データを除いて復元する場合は --without-ai を指定します。CLIを使用できる環境が必要です。",
+                    "Close the app, then specify a new restore destination using the recovery tool. Do not overwrite an existing DB or original media.\n\n"+
+                    "Backup example:\npython tools/backup_library.py backup --catalog <catalog.sqlite> --output <new_backup_dir>\n\n"+
+                    "Restore example:\npython tools/backup_library.py restore --bundle <backup_dir> --output <new_restore_dir>\n\n"+
+                    "Pass --without-ai to restore without damaged AI search data. Requires a Python CLI environment."),
                 TextWrapping=TextWrapping.Wrap
             }};
             AutomationProperties.SetAutomationId(offline,"BackupRecoveryAdvanced");panel.Children.Add(offline);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="復元の手順",CloseButtonText="閉じる",Content=panel};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=AppText.L("復元の手順","Recovery instructions"),CloseButtonText=AppText.L("閉じる","Close"),Content=panel};
             if(fromBackup)
             {
-                var backBtn=new Button{Content="バックアップと復元へ戻る",HorizontalAlignment=HorizontalAlignment.Left};
+                var backBtn=new Button{Content=AppText.L("バックアップと復元へ戻る","Back to Backup & Restore"),HorizontalAlignment=HorizontalAlignment.Left};
                 AutomationProperties.SetAutomationId(backBtn,"BtnBackToBackup");
                 backBtn.Click+=(_,_)=>{returnToBackup=true;dialog.Hide();};
                 panel.Children.Add(backBtn);
@@ -446,14 +487,14 @@ public sealed partial class MainPage
 
             var copyStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed, Style = (Style)Resources["MediaMetadataStyle"] };
             AutomationProperties.SetAutomationId(copyStatus, "TxtDiagnosticsStatus");
-            var copyBtn = new Button { Content = "診断情報をコピー", HorizontalAlignment = HorizontalAlignment.Left, Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
+            var copyBtn = new Button { Content = AppText.L("診断情報をコピー","Copy diagnostics"), HorizontalAlignment = HorizontalAlignment.Left, Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
             AutomationProperties.SetAutomationId(copyBtn, "BtnCopyDiagnostics");
             copyBtn.Click += (_, _) =>
             {
                 var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
                 package.SetText(report);
                 Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
-                copyStatus.Text = "✓ 診断情報をクリップボードにコピーしました。外部への自動送信は行われません。";
+                copyStatus.Text = AppText.L("✓ 診断情報をクリップボードにコピーしました。外部への自動送信は行われません。","✓ Diagnostics copied to clipboard. Nothing is sent automatically.");
                 copyStatus.Visibility = Visibility.Visible;
             };
             var actions=new Grid{ColumnSpacing=8};
@@ -461,15 +502,15 @@ public sealed partial class MainPage
             actions.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
             var copyRow=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};
             copyRow.Children.Add(copyBtn);
-            copyRow.Children.Add(new TextBlock{Text="共有前に内容を確認",VerticalAlignment=VerticalAlignment.Center,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
+            copyRow.Children.Add(new TextBlock{Text=AppText.L("共有前に内容を確認","Review contents before sharing"),VerticalAlignment=VerticalAlignment.Center,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
             actions.Children.Add(copyRow);
             panel.Children.Add(actions);
             panel.Children.Add(copyStatus);
 
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="診断情報",CloseButtonText="閉じる",Content=panel};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=AppText.L("診断情報","Diagnostics"),CloseButtonText=AppText.L("閉じる","Close"),Content=panel};
             if(fromSettings)
             {
-                var backBtn=new Button{Content="設定へ戻る"};
+                var backBtn=new Button{Content=AppText.L("設定へ戻る","Back to Settings")};
                 AutomationProperties.SetAutomationId(backBtn,"BtnBackToSettings");
                 backBtn.Click+=(_,_)=>{returnToSettings=true;dialog.Hide();};
                 Grid.SetColumn(backBtn,1);

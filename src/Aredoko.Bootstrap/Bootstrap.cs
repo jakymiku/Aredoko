@@ -98,20 +98,47 @@ internal sealed class Bootstrap : Form
             button.FlatAppearance.MouseDownBackColor=Color.FromArgb(232,232,236);
         }
     }
+    static readonly bool En=ResolveIsEnglish();
+    static string L(string ja,string en){return En?en:ja;}
+    static bool ResolveIsEnglish()
+    {
+        try
+        {
+            var local=Environment.GetEnvironmentVariable("LOCALAPPDATA");
+            if(!String.IsNullOrEmpty(local))
+            {
+                var path=Path.Combine(local,"Aredoko","viewer-settings.json");
+                if(File.Exists(path)&&new FileInfo(path).Length<=65536)
+                {
+                    var raw=new JavaScriptSerializer().DeserializeObject(File.ReadAllText(path,Encoding.UTF8)) as Dictionary<string,object>;
+                    object langObj;
+                    if(raw!=null&&raw.TryGetValue("language",out langObj))
+                    {
+                        var lang=langObj as string;
+                        if(String.Equals(lang,"ja",StringComparison.OrdinalIgnoreCase))return false;
+                        if(String.Equals(lang,"en",StringComparison.OrdinalIgnoreCase))return true;
+                    }
+                }
+            }
+        }
+        catch(Exception){}
+        return !CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("ja",StringComparison.OrdinalIgnoreCase);
+    }
+
     Bootstrap(bool check)
     {
-        smoke=check;Text=check?"Aredoko 起動チェック":"Aredoko";
+        smoke=check;Text=check?L("Aredoko 起動チェック","Aredoko Startup Check"):"Aredoko";
         AutoScaleMode=AutoScaleMode.Dpi;ClientSize=new Size(470,230);
         FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
-        Font=new Font("Yu Gothic UI",10);
+        Font=new Font(En?"Segoe UI":"Yu Gothic UI",10);
         try{Icon=System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);}catch(Exception){}
         var dark=IsDarkTheme();
-        var heading=new Label { Text="Aredokoを起動しています",AutoSize=true,Location=new Point(24,20),Font=new Font(Font,FontStyle.Bold) };
-        stage.SetBounds(24,58,420,36);stage.Text=check?"専用の空のライブラリで起動を確認します。":"準備が終わるまでお待ちください。";
+        var heading=new Label { Text=L("Aredokoを起動しています","Starting Aredoko"),AutoSize=true,Location=new Point(24,20),Font=new Font(Font,FontStyle.Bold) };
+        stage.SetBounds(24,58,420,36);stage.Text=check?L("専用の空のライブラリで起動を確認します。","Verifying startup with an isolated empty library."):L("準備が終わるまでお待ちください。","Please wait while Aredoko prepares to start.");
         progress.SetBounds(24,104,420,16);progress.Style=ProgressBarStyle.Marquee;
         count.SetBounds(24,129,420,30);
-        cancel.SetBounds(334,181,110,30);cancel.Text="キャンセル";
-        logs.SetBounds(24,181,130,30);logs.Text="ログを開く";logs.Visible=false;
+        cancel.SetBounds(334,181,110,30);cancel.Text=L("キャンセル","Cancel");
+        logs.SetBounds(24,181,130,30);logs.Text=L("ログを開く","Open Log");logs.Visible=false;
         if(!SystemInformation.HighContrast)
         {
             if(dark)
@@ -134,7 +161,7 @@ internal sealed class Bootstrap : Form
         }
         Controls.AddRange(new Control[]{heading,stage,progress,count,cancel,logs});
         cancel.Click+=delegate { if(finished){allowClose=true;Close();}else CancelStartup(); };
-        logs.Click+=delegate {try{if(logPath!=null&&File.Exists(logPath))Process.Start(new ProcessStartInfo(logPath){UseShellExecute=true});}catch(Exception){stage.Text="ログを開けませんでした。";} };
+        logs.Click+=delegate {try{if(logPath!=null&&File.Exists(logPath))Process.Start(new ProcessStartInfo(logPath){UseShellExecute=true});}catch(Exception){stage.Text=L("ログを開けませんでした。","Could not open log file.");} };
         FormClosing+=delegate(object sender,FormClosingEventArgs e){
             if(e.CloseReason==CloseReason.WindowsShutDown||e.CloseReason==CloseReason.TaskManagerClosing){allowClose=true;return;}
             if(!allowClose&&!finished){if(cancelRequested&&!interactive){allowClose=true;return;}e.Cancel=true;CancelStartup();}
@@ -143,18 +170,18 @@ internal sealed class Bootstrap : Form
         Shown+=delegate { Refresh();new Thread(Run){IsBackground=true,Name="Aredoko owner"}.Start(); };
         timer.Interval=1000;timer.Tick+=delegate {
             if(!finished&&!interactive&&!cancelRequested&&!awaitingConsent&&(Stopwatch.GetTimestamp()-lastFrame)/(double)Stopwatch.Frequency>180)
-            {stage.Text="準備に時間がかかっています。終了処理を待っています。";CancelStartup();}
+            {stage.Text=L("準備に時間がかかっています。終了処理を待っています。","Startup is taking too long. Waiting for shutdown.");CancelStartup();}
         };timer.Start();
     }
     void UI(Action action){try{if(!IsDisposed)BeginInvoke(action);}catch(InvalidOperationException){}}
     void CancelStartup()
     {
         if(interactive||cancelRequested)return;cancelRequested=true;
-        cancel.Enabled=false;stage.Text="終了処理中です。しばらくお待ちください。";
+        cancel.Enabled=false;stage.Text=L("終了処理中です。しばらくお待ちください。","Canceling startup. Please wait.");
         if(setupCancelPath!=null)
         {
             try { using(var marker=new FileStream(setupCancelPath,FileMode.CreateNew,FileAccess.Write,FileShare.Read)){} }
-            catch(IOException error) { count.Text="取消通知を保存できませんでした: "+error.Message; }
+            catch(IOException error) { count.Text=L("取消通知を保存できませんでした: ","Could not save cancel marker: ")+error.Message; }
         }
         new Thread(delegate(){try{Send("cancel");}catch(Exception){}}){IsBackground=true}.Start();
     }
@@ -168,7 +195,7 @@ internal sealed class Bootstrap : Form
         // Match the Python owner. KnownFolder ignores a process-local override,
         // which otherwise scatters bootstrap logs outside that session's data.
         if(String.IsNullOrEmpty(candidate)||!Path.IsPathRooted(candidate)||Path.GetPathRoot(candidate).Length<3)
-            throw new IOException("保存先を確認できません。");
+            throw new IOException(L("保存先を確認できません。","Could not verify local data path."));
         return Path.GetFullPath(candidate);
     }
     static void Ordinary(string path,bool directory)
@@ -178,13 +205,13 @@ internal sealed class Bootstrap : Form
         {
             var attributes=File.GetAttributes(current);
             if((attributes&FileAttributes.ReparsePoint)!=0||((attributes&FileAttributes.Directory)!=0)!=(current!=path||directory))
-                throw new IOException("リンクを含む配置は使用できません。");
+                throw new IOException(L("リンクを含む配置は使用できません。","Paths containing links or junctions are not supported."));
             current=Path.GetDirectoryName(current);
         }
         if(!directory)
         {
             using(var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read))
-            {Native.FileInfo info;if(!Native.GetFileInformationByHandle(file.SafeFileHandle,out info)||info.Links!=1)throw new IOException("通常のファイルを使用してください。");}
+            {Native.FileInfo info;if(!Native.GetFileInformationByHandle(file.SafeFileHandle,out info)||info.Links!=1)throw new IOException(L("通常のファイルを使用してください。","Expected a regular file without hard links."));}
         }
     }
 
@@ -199,7 +226,7 @@ internal sealed class Bootstrap : Form
     static FileStream OpenVerifiedSetupHelper(string root,Dictionary<string,object> metadata)
     {
         const string relative="tools/PythonSetup.exe";
-        const string invalid="基本環境の準備ファイルが配布情報と一致しません。ZIPを確認し、新しいフォルダに展開してください。";
+        string invalid=L("基本環境の準備ファイルが配布情報と一致しません。ZIPを確認し、新しいフォルダに展開してください。","The base setup helper does not match the release manifest. Verify the ZIP and extract to a new folder.");
         object value;
         var entries=metadata.TryGetValue("entries",out value)?value as System.Collections.IEnumerable:null;
         if(entries==null)throw new IOException(invalid);
@@ -232,7 +259,7 @@ internal sealed class Bootstrap : Form
     {
         if(cancelRequested)throw new OperationCanceledException();
         Ordinary(executable,false);
-        UI(delegate {stage.Text=operation+"中です…";count.Text="処理が完了するまでお待ちください。";progress.Style=ProgressBarStyle.Marquee;});
+        UI(delegate {stage.Text=L(operation+"中です…",operation+"…");count.Text=L("処理が完了するまでお待ちください。","Please wait until this step finishes.");progress.Style=ProgressBarStyle.Marquee;});
         var downloading=arguments.StartsWith("--fetch ",StringComparison.Ordinal);
         using(var child=new Process())
         {
@@ -264,7 +291,7 @@ internal sealed class Bootstrap : Form
             while(!child.WaitForExit(100))Interlocked.Exchange(ref lastFrame,Stopwatch.GetTimestamp());
             child.WaitForExit();
             if(cancelRequested)throw new OperationCanceledException();
-            if(child.ExitCode!=0)throw new IOException(operation+"に失敗しました。ログを確認してください。");
+            if(child.ExitCode!=0)throw new IOException(L(operation+"に失敗しました。ログを確認してください。",operation+" failed. Please check the log."));
         }
     }
 
@@ -278,16 +305,16 @@ internal sealed class Bootstrap : Form
             ||!Int64.TryParse(fields[2],NumberStyles.None,CultureInfo.InvariantCulture,out total)
             ||received>limit||total>limit||total>0&&received>total)return null;
         var done=String.Format(CultureInfo.CurrentCulture,"{0:F1} MB",received/1000000.0);
-        if(total==0)return Tuple.Create<string,int?>("取得済み "+done,null);
+        if(total==0)return Tuple.Create<string,int?>(L("取得済み ","Downloaded ")+done,null);
         var expected=String.Format(CultureInfo.CurrentCulture,"{0:F1} MB",total/1000000.0);
-        return Tuple.Create<string,int?>("取得済み "+done+" / "+expected,(int)(received*100/total));
+        return Tuple.Create<string,int?>(L("取得済み ","Downloaded ")+done+" / "+expected,(int)(received*100/total));
     }
 
     string EnsurePython(string root,string local,FileStream log)
     {
         var bundled=Path.Combine(root,"runtime","python","python.exe");
         var manifest=Path.Combine(root,"manifest.json");Ordinary(manifest,false);
-        if(new FileInfo(manifest).Length>32*1024*1024)throw new IOException("配布情報が大きすぎます。");
+        if(new FileInfo(manifest).Length>32*1024*1024)throw new IOException(L("配布情報が大きすぎます。","Release manifest is too large."));
         var metadata=new JavaScriptSerializer {MaxJsonLength=32*1024*1024}.DeserializeObject(File.ReadAllText(manifest,Encoding.UTF8)) as Dictionary<string,object>;
         const string identifier="cpython-3.13.17-pillow-12.3.0-win-x64-v1";
         if(metadata!=null&&!metadata.ContainsKey("managed_python")) {Ordinary(bundled,false);return bundled;}
@@ -296,9 +323,9 @@ internal sealed class Bootstrap : Form
             ||!metadata.ContainsKey("frontend_activation")||!Equals(metadata["frontend_activation"],"portable")
             ||!metadata.ContainsKey("media_tools_bundled")||!Equals(metadata["media_tools_bundled"],true)
             ||!metadata.ContainsKey("ai_runtime_bundled")||!Equals(metadata["ai_runtime_bundled"],false))
-            throw new IOException("同梱Pythonが見つかりません。配布物を確認してください。");
+            throw new IOException(L("同梱Pythonが見つかりません。配布物を確認してください。","Bundled Python was not found. Please verify the release package."));
         if(Directory.Exists(Path.Combine(root,"runtime","python")))
-            throw new IOException("Python非同梱版に予期しないPythonフォルダがあります。別の新規フォルダへ展開してください。");
+            throw new IOException(L("Python非同梱版に予期しないPythonフォルダがあります。別の新規フォルダへ展開してください。","Unexpected Python folder in managed edition. Extract to a clean folder."));
         // The native helper runs before the Python owner's full release preflight.
         using(var verifiedHelper=OpenVerifiedSetupHelper(root,metadata))
             return EnsureManagedPython(root,local,log,identifier,verifiedHelper.Name);
@@ -320,23 +347,23 @@ internal sealed class Bootstrap : Form
         {
             Native.FileInfo ownerInfo;
             if(!Native.GetFileInformationByHandle(owner.SafeFileHandle,out ownerInfo)||ownerInfo.Links!=1||(ownerInfo.Attributes&0x400)!=0)
-                throw new IOException("基本環境の保存先を確認できません。");
+                throw new IOException(L("基本環境の保存先を確認できません。","Could not verify the base runtime location."));
             if(cancelRequested)throw new OperationCanceledException();
             if(!File.Exists(package)||!File.Exists(wheel))
             {
-                if(smoke)throw new IOException("基本環境が未導入です。通常のAredoko.exeから準備してください。");
+                if(smoke)throw new IOException(L("基本環境が未導入です。通常のAredoko.exeから準備してください。","Base runtime is not installed. Launch Aredoko.exe normally first."));
                 DialogResult choice=DialogResult.Cancel;
                 awaitingConsent=true;
-                Invoke((Action)delegate { choice=MessageBox.Show(this,"初回のみ基本ファイル（約22 MB）をダウンロードします。\n空き容量目安：300 MB以上 · 元ファイルやPC環境は変更しません。\n\n詳細：Python 3.13.17・Pillow 12.3.0（AIモデル等は任意のため含みません）\nダウンロードを開始しますか？","Aredoko 初回準備",MessageBoxButtons.OKCancel,MessageBoxIcon.Information); });
+                Invoke((Action)delegate { choice=MessageBox.Show(this,L("初回のみ基本ファイル（約22 MB）をダウンロードします。\n空き容量目安：300 MB以上 · 元ファイルやPC環境は変更しません。\n\n詳細：Python 3.13.17・Pillow 12.3.0（AIモデル等は任意のため含みません）\nダウンロードを開始しますか？","On first run, Aredoko downloads base runtime files (approx. 22 MB).\nRecommended free space: 300 MB+ · Your files and PC settings are never changed.\n\nIncludes: Python 3.13.17 & Pillow 12.3.0 (optional AI models are not included).\nStart download?"),L("Aredoko 初回準備","Aredoko First-Time Setup"),MessageBoxButtons.OKCancel,MessageBoxIcon.Information); });
                 awaitingConsent=false;
                 Interlocked.Exchange(ref lastFrame,Stopwatch.GetTimestamp());
                 if(choice!=DialogResult.OK)throw new OperationCanceledException();
             }
-            if(!File.Exists(package))SetupCommand(helper,"--fetch cpython \""+package+"\"",root,log,"Pythonの取得");
-            if(!File.Exists(wheel))SetupCommand(helper,"--fetch pillow \""+wheel+"\"",root,log,"画像処理ライブラリの取得");
-            SetupCommand(helper,"\""+basePython+"\" \""+package+"\""+(Directory.Exists(basePython)?" --verify":""),root,log,"Pythonの検証と配置");
+            if(!File.Exists(package))SetupCommand(helper,"--fetch cpython \""+package+"\"",root,log,L("Pythonの取得","Downloading Python"));
+            if(!File.Exists(wheel))SetupCommand(helper,"--fetch pillow \""+wheel+"\"",root,log,L("画像処理ライブラリの取得","Downloading Pillow"));
+            SetupCommand(helper,"\""+basePython+"\" \""+package+"\""+(Directory.Exists(basePython)?" --verify":""),root,log,L("Pythonの検証と配置","Verifying & unpacking Python"));
             var script=Path.Combine(root,"tools","prepare_basic_runtime.py");Ordinary(script,false);
-            SetupCommand(Path.Combine(basePython,"tools","python.exe"),"-I -X utf8 -B \""+script+"\" --wheel \""+wheel+"\" --output \""+environment+"\""+(Directory.Exists(environment)?" --verify":""),root,log,"基本環境の構築・確認");
+            SetupCommand(Path.Combine(basePython,"tools","python.exe"),"-I -X utf8 -B \""+script+"\" --wheel \""+wheel+"\" --output \""+environment+"\""+(Directory.Exists(environment)?" --verify":""),root,log,L("基本環境の構築・確認","Setting up & verifying base runtime"));
         }
         return Path.Combine(environment,"Scripts","python.exe");
     }
@@ -362,7 +389,7 @@ internal sealed class Bootstrap : Form
             logPath=Path.Combine(logDirectory,"startup-"+session+".log");
             using(var log=new FileStream(logPath,FileMode.CreateNew,FileAccess.Write,FileShare.Read))
             {
-                Native.FileInfo logInfo;if(!Native.GetFileInformationByHandle(log.SafeFileHandle,out logInfo)||logInfo.Links!=1)throw new IOException("ログの保存先を確認できません。");
+                Native.FileInfo logInfo;if(!Native.GetFileInformationByHandle(log.SafeFileHandle,out logInfo)||logInfo.Links!=1)throw new IOException(L("ログの保存先を確認できません。","Could not verify log destination."));
                 python=EnsurePython(root,local,log);Ordinary(python,false);log.Flush();
                 Stream output;
                 process=Native.Start(python,"\""+python+"\" -I -X utf8 -B -u \""+script+"\" "+(smoke?"--startup-smoke":"--startup-owned"),root,log.SafeFileHandle.DangerousGetHandle(),out input,out output);
@@ -377,10 +404,10 @@ internal sealed class Bootstrap : Form
                         ValidateKeys(frame);
                         var value=json.DeserializeObject(frame) as Dictionary<string,object>;
                         if(value==null||!value.ContainsKey("kind")||!value.ContainsKey("format")||!value.ContainsKey("session_id")
-                            ||!Equals(value["format"],Format)||!Equals(value["session_id"],session))throw new IOException("起動通知を確認できません。");
+                            ||!Equals(value["format"],Format)||!Equals(value["session_id"],session))throw new IOException(L("起動通知を確認できません。","Invalid startup notification."));
                         string kind=value["kind"] as string;
                         if(kind=="hello"&&value.Count==3&&!helloSeen){helloSeen=true;continue;}
-                        if(!helloSeen||resultSeen)throw new IOException("起動通知の順序を確認できません。");
+                        if(!helloSeen||resultSeen)throw new IOException(L("起動通知の順序を確認できません。","Unexpected startup notification order."));
                         if(kind=="progress"&&value.Count==4&&!interactive)
                         {
                             var snapshot=value["progress"] as Dictionary<string,object>;
@@ -394,15 +421,15 @@ internal sealed class Bootstrap : Form
                             string status=value["status"] as string;
                             if(status=="session_complete"&&interactive){}
                             else if(status=="cancelled"&&!interactive)cancelRequested=true;
-                            else throw new IOException("起動を完了できませんでした。");
+                            else throw new IOException(L("起動を完了できませんでした。","Startup did not complete successfully."));
                         }
-                        else throw new IOException("起動通知を確認できません。");
+                        else throw new IOException(L("起動通知を確認できません。","Invalid startup notification."));
                     }
                 }
                 // Retained HANDLE proves this exact child. No PID/name search.
-                if(Native.WaitForSingleObject(process,30000)!=0)throw new IOException("終了処理を待っています。ログを確認してください。");
+                if(Native.WaitForSingleObject(process,30000)!=0)throw new IOException(L("終了処理を待っています。ログを確認してください。","Waiting for process shutdown. Please check the log."));
                 uint exitCode;if(!Native.GetExitCodeProcess(process,out exitCode)||(!cancelRequested&&exitCode!=0)||!resultSeen)
-                    throw new IOException("起動を完了できませんでした。");
+                    throw new IOException(L("起動を完了できませんでした。","Startup did not complete successfully."));
             }
             finished=true;UI(delegate {allowClose=true;Close();});
         }
@@ -415,7 +442,7 @@ internal sealed class Bootstrap : Form
             failed=true;finished=true;
             // Closing only our pipe requests cooperative cleanup before ready.
             lock(inputLock){if(input!=null){input.Dispose();input=null;}}
-            UI(delegate {Show();count.Text="停止した処理: "+stage.Text;stage.Text=error is IOException?error.Message:"起動を完了できませんでした（"+error.Message+"）。";progress.Style=ProgressBarStyle.Continuous;progress.Value=0;cancel.Enabled=true;cancel.Text="閉じる";logs.Visible=logPath!=null&&File.Exists(logPath);});
+            UI(delegate {Show();count.Text=L("停止した処理: ","Stopped step: ")+stage.Text;stage.Text=error is IOException?error.Message:L("起動を完了できませんでした（","Startup failed (")+error.Message+L("）。",").");progress.Style=ProgressBarStyle.Continuous;progress.Value=0;cancel.Enabled=true;cancel.Text=L("閉じる","Close");logs.Visible=logPath!=null&&File.Exists(logPath);});
         }
         finally
         {
@@ -426,8 +453,8 @@ internal sealed class Bootstrap : Form
     static string ReadFrame(Stream stream)
     {
         var bytes=new List<byte>();int value;
-        while((value=stream.ReadByte())!=-1){bytes.Add((byte)value);if(bytes.Count>4096)throw new IOException("起動通知が長すぎます。");if(value==10)return new UTF8Encoding(false,true).GetString(bytes.ToArray());}
-        if(bytes.Count!=0)throw new IOException("起動通知が途切れました。");return null;
+        while((value=stream.ReadByte())!=-1){bytes.Add((byte)value);if(bytes.Count>4096)throw new IOException(L("起動通知が長すぎます。","Startup notification is too long."));if(value==10)return new UTF8Encoding(false,true).GetString(bytes.ToArray());}
+        if(bytes.Count!=0)throw new IOException(L("起動通知が途切れました。","Startup notification was truncated."));return null;
     }
     static void ValidateKeys(string frame)
     {
@@ -436,38 +463,38 @@ internal sealed class Bootstrap : Form
         var scopes=new Stack<HashSet<string>>();
         for(int i=0;i<frame.Length;i++)
         {
-            if(frame[i]=='{'){scopes.Push(new HashSet<string>());if(scopes.Count>8)throw new IOException("起動通知が深すぎます。");}
-            else if(frame[i]=='}'){if(scopes.Count==0)throw new IOException("起動通知を確認できません。");scopes.Pop();}
-            else if(frame[i]=='['||frame[i]==']')throw new IOException("起動通知を確認できません。");
+            if(frame[i]=='{'){scopes.Push(new HashSet<string>());if(scopes.Count>8)throw new IOException(L("起動通知が深すぎます。","Startup notification nesting is too deep."));}
+            else if(frame[i]=='}'){if(scopes.Count==0)throw new IOException(L("起動通知を確認できません。","Invalid startup notification."));scopes.Pop();}
+            else if(frame[i]=='['||frame[i]==']')throw new IOException(L("起動通知を確認できません。","Invalid startup notification."));
             else if(frame[i]=='"')
             {
                 int start=++i;bool escaped=false;
                 for(;i<frame.Length&&frame[i]!='"';i++)if(frame[i]=='\\'){escaped=true;i++;}
-                if(i>=frame.Length)throw new IOException("起動通知が途切れました。");
+                if(i>=frame.Length)throw new IOException(L("起動通知が途切れました。","Startup notification was truncated."));
                 int next=i+1;while(next<frame.Length&&Char.IsWhiteSpace(frame[next]))next++;
                 if(next<frame.Length&&frame[next]==':')
-                {if(escaped||scopes.Count==0||!scopes.Peek().Add(frame.Substring(start,i-start)))throw new IOException("起動通知の項目が重複しています。");}
+                {if(escaped||scopes.Count==0||!scopes.Peek().Add(frame.Substring(start,i-start)))throw new IOException(L("起動通知の項目が重複しています。","Duplicate startup notification key."));}
             }
         }
-        if(scopes.Count!=0)throw new IOException("起動通知が途切れました。");
+        if(scopes.Count!=0)throw new IOException(L("起動通知が途切れました。","Startup notification was truncated."));
     }
     static long Number(object value)
     {
-        if(!(value is int)&&!(value is long))throw new IOException("進捗の数値を確認できません。");
-        long result=Convert.ToInt64(value);if(result<0)throw new IOException("進捗の数値を確認できません。");return result;
+        if(!(value is int)&&!(value is long))throw new IOException(L("進捗の数値を確認できません。","Invalid startup progress value."));
+        long result=Convert.ToInt64(value);if(result<0)throw new IOException(L("進捗の数値を確認できません。","Invalid startup progress value."));return result;
     }
     static Tuple<string,string,int> ProgressText(Dictionary<string,object> p)
     {
         string[] keys={"format","sequence","stage","state","completed_files","total_files","completed_bytes","total_bytes"};
         if(p==null||p.Count!=8||keys.Any(k=>!p.ContainsKey(k))||!Equals(p["format"],"aredoko-startup-progress-v1")||Number(p["sequence"])<1)
-            throw new IOException("進捗を確認できません。");
-        var labels=new Dictionary<string,string>{{"manifest","アプリのファイルを確認しています"},{"file_hashes","アプリのファイルを確認しています"},{"inventory","ファイルの配置を確認しています"},{"runtime_layout","実行環境を準備しています"},{"python_imports","実行環境を準備しています"},{"media_probe","動画の実行環境を確認しています"},{"backend_start","検索の準備をしています"},{"frontend_start","画面を開いています"}};
+            throw new IOException(L("進捗を確認できません。","Invalid startup progress payload."));
+        var labels=new Dictionary<string,string>{{"manifest",L("アプリのファイルを確認しています","Verifying application files")},{"file_hashes",L("アプリのファイルを確認しています","Verifying application files")},{"inventory",L("ファイルの配置を確認しています","Checking file layout")},{"runtime_layout",L("実行環境を準備しています","Preparing runtime environment")},{"python_imports",L("実行環境を準備しています","Preparing runtime environment")},{"media_probe",L("動画の実行環境を確認しています","Checking video playback environment")},{"backend_start",L("検索の準備をしています","Preparing search engine")},{"frontend_start",L("画面を開いています","Opening window")}};
         string name=p["stage"] as string,state=p["state"] as string;
-        if(name==null||!labels.ContainsKey(name)||!new[]{"running","complete","failed","cancelled"}.Contains(state))throw new IOException("処理段階を確認できません。");
+        if(name==null||!labels.ContainsKey(name)||!new[]{"running","complete","failed","cancelled"}.Contains(state))throw new IOException(L("処理段階を確認できません。","Unknown startup stage."));
         long files=Number(p["completed_files"]),bytes=Number(p["completed_bytes"]);
         long? total=p["total_files"]==null?(long?)null:Number(p["total_files"]),totalBytes=p["total_bytes"]==null?(long?)null:Number(p["total_bytes"]);
-        if((total.HasValue&&files>total.Value)||(totalBytes.HasValue&&bytes>totalBytes.Value))throw new IOException("進捗の範囲を確認できません。");
-        string text=total.HasValue?String.Format("ファイルの確認 {0:N0} / {1:N0}　{2:N1} MiB",files,total.Value,bytes/1048576.0):"";
+        if((total.HasValue&&files>total.Value)||(totalBytes.HasValue&&bytes>totalBytes.Value))throw new IOException(L("進捗の範囲を確認できません。","Invalid startup progress range."));
+        string text=total.HasValue?String.Format(CultureInfo.CurrentCulture,L("ファイルの確認 {0:N0} / {1:N0}　{2:N1} MiB","Verifying files {0:N0} / {1:N0} · {2:N1} MiB"),files,total.Value,bytes/1048576.0):"";
         int percent=total.HasValue&&total.Value>0?(int)Math.Min(100,files/(double)total.Value*100):-1;
         return Tuple.Create(labels[name],text,percent);
     }
@@ -503,7 +530,7 @@ internal sealed class Bootstrap : Form
                 Check(CreatePipe(out childIn,out parentIn,ref security,0));Check(CreatePipe(out parentOut,out childOut,ref security,0));
                 Check(SetHandleInformation(parentIn,1,0));Check(SetHandleInformation(parentOut,1,0));Check(SetHandleInformation(stderr,1,1));
                 IntPtr size=IntPtr.Zero;InitializeProcThreadAttributeList(IntPtr.Zero,1,0,ref size);
-                if(size==IntPtr.Zero)throw new IOException("起動情報を準備できません。");
+                if(size==IntPtr.Zero)throw new IOException(L("起動情報を準備できません。","Could not allocate startup attribute list."));
                 list=Marshal.AllocHGlobal(size);Check(InitializeProcThreadAttributeList(list,1,0,ref size));initialized=true;
                 handles=Marshal.AllocHGlobal(IntPtr.Size*3);Marshal.WriteIntPtr(handles,0,childIn);Marshal.WriteIntPtr(handles,IntPtr.Size,childOut);Marshal.WriteIntPtr(handles,IntPtr.Size*2,stderr);
                 Check(UpdateProcThreadAttribute(list,0,new IntPtr(0x20002),handles,new IntPtr(IntPtr.Size*3),IntPtr.Zero,IntPtr.Zero));
@@ -514,7 +541,7 @@ internal sealed class Bootstrap : Form
                 var image=new StringBuilder(32768);uint count=32768;Check(QueryFullProcessImageNameW(pi.Process,0,image,ref count));
                 System.Runtime.InteropServices.ComTypes.FILETIME created,ended,kernel,user;Check(GetProcessTimes(pi.Process,out created,out ended,out kernel,out user));
                 long time=((long)(uint)created.dwHighDateTime<<32)|(uint)created.dwLowDateTime;
-                if(time<started||!String.Equals(Path.GetFullPath(image.ToString()),Path.GetFullPath(exe),StringComparison.OrdinalIgnoreCase))throw new IOException("起動した実行環境を確認できません。");
+                if(time<started||!String.Equals(Path.GetFullPath(image.ToString()),Path.GetFullPath(exe),StringComparison.OrdinalIgnoreCase))throw new IOException(L("起動した実行環境を確認できません。","Could not verify the started Python process."));
                 input=new FileStream(new SafeFileHandle(parentIn,true),FileAccess.Write);parentIn=IntPtr.Zero;
                 output=new FileStream(new SafeFileHandle(parentOut,true),FileAccess.Read);parentOut=IntPtr.Zero;
                 var result=pi.Process;pi.Process=IntPtr.Zero;return result;

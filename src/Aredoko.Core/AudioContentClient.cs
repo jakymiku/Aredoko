@@ -9,9 +9,12 @@ public sealed record AudioItemProgress(int ItemId,int PreparedMs,int? TotalMs,in
 {
     public string? ItemTitle {get;init;}
     private static string Clock(int ms)=>ms>=3600000?$"{ms/3600000}:{ms/60000%60:00}:{ms/1000%60:00}":$"{ms/60000}:{ms/1000%60:00}";
-    public string Message=>Phase=="saving"&&TotalMs is int total?$"現在の音声：{Clock(total)}の解析データを保存しています…"
-        :(TotalMs is int known?$"現在の音声：{Clock(PreparedMs)} / {Clock(known)}（未保存）\n":$"現在の音声：{Clock(PreparedMs)}まで解析済み（総尺確認中・未保存）\n")+
-            (Phase=="encoding"?"内容を解析しています…":"音声の読み取りを続けています…");
+    public string Message=>Phase=="saving"&&TotalMs is int total
+        ?AppText.L($"現在の音声：{Clock(total)}の解析データを保存しています…",$"Current audio: saving analysis data ({Clock(total)})…")
+        :(TotalMs is int known
+            ?AppText.L($"現在の音声：{Clock(PreparedMs)} / {Clock(known)}（未保存）\n",$"Current audio: {Clock(PreparedMs)} / {Clock(known)} (unsaved)\n")
+            :AppText.L($"現在の音声：{Clock(PreparedMs)}まで解析済み（総尺確認中・未保存）\n",$"Current audio: analyzed up to {Clock(PreparedMs)} (checking duration, unsaved)\n"))+
+            (Phase=="encoding"?AppText.L("内容を解析しています…","Analyzing audio content…"):AppText.L("音声の読み取りを続けています…","Reading audio stream…"));
     internal static AudioItemProgress Parse(JsonElement row)
     {
         if(row.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Invalid audio item progress");
@@ -34,22 +37,22 @@ public sealed record AudioContentStatus(bool Supported,bool Available,string Sta
     public AudioItemProgress? ItemProgress {get;init;}
     public string SourceKind {get;init;}="audio";
     public bool Busy=>State is "planning" or "waiting" or "running" or "cancelling";
-    public string Message=>ErrorCode=="audio_initialization_failed"?"AI検索の初期化に失敗しました。アプリを再起動してから、もう一度実行してください。"
+    public string Message=>ErrorCode=="audio_initialization_failed"?AppText.L("AI検索の初期化に失敗しました。アプリを再起動してから、もう一度実行してください。","Failed to initialize AI search. Restart Aredoko and retry.")
         :State=="failed"&&ErrorText.AIWorkerFailure(ErrorCode) is {} failure?failure
-        :!Supported?"現在のAIモデルは音声の内容検索に対応していません。"
-        :!Available?"AI環境を準備すると、音声の内容から検索できます。"
+        :!Supported?AppText.L("現在のAIモデルは音声の内容検索に対応していません。","The selected AI model does not support audio content search.")
+        :!Available?AppText.L("AI環境を準備すると、音声の内容から検索できます。","Set up AI to search audio content by meaning.")
         :State switch
         {
-            "planning"=>"音声の準備状況を確認しています…",
-            "waiting"=>"ほかのAI処理が終わるのを待っています…",
-            "running"=>$"{(SourceKind=="video"?"動画内の音声":"音声")}を準備しています（{Processed:N0} / {Target:N0}件）"+(ItemProgress is {} item?"\n"+item.Message:""),
-            "cancelling"=>"現在の処理を安全に中断しています…",
-            "cancelled"=>$"中断しました。準備済みの{Indexed:N0}件は保持されています。",
-            "failed"=>ErrorCode=="scope_changed"?"検索対象が変更されました。もう一度作成してください。":"音声を準備できませんでした。AI環境とファイルの状態を確認してください。",
-            "completed"=>$"準備完了：{Indexed:N0}件。準備済み{Reused:N0}件は再利用しました。"+
-                (Unavailable>0?$" 読み取れない候補{Unavailable:N0}件。":"")+
-                (RemainingCandidates>0?$" 残りの候補{RemainingCandidates:N0}件は、もう一度作成すると続きへ進みます。":""),
-            _=>"先に音声の索引を作成すると、録音や曲の内容・特徴を文章で探せます。"
+            "planning"=>AppText.L("音声の準備状況を確認しています…","Checking audio index status…"),
+            "waiting"=>AppText.L("ほかのAI処理が終わるのを待っています…","Waiting for another AI task to finish…"),
+            "running"=>AppText.L($"{(SourceKind=="video"?"動画内の音声":"音声")}を準備しています（{Processed:N0} / {Target:N0}件）",$"Indexing {(SourceKind=="video"?"video audio":"audio")} ({Processed:N0} / {Target:N0})")+(ItemProgress is {} item?"\n"+item.Message:""),
+            "cancelling"=>AppText.L("現在の処理を安全に中断しています…","Cancelling safely…"),
+            "cancelled"=>AppText.L($"中断しました。準備済みの{Indexed:N0}件は保持されています。",$"Cancelled. {Indexed:N0} indexed item(s) preserved."),
+            "failed"=>ErrorCode=="scope_changed"?AppText.L("検索対象が変更されました。もう一度作成してください。","Search scope changed. Please retry indexing."):AppText.L("音声を準備できませんでした。AI環境とファイルの状態を確認してください。","Failed to index audio. Check AI runtime and files."),
+            "completed"=>AppText.L($"準備完了：{Indexed:N0}件。準備済み{Reused:N0}件は再利用しました。",$"Complete: {Indexed:N0} indexed, {Reused:N0} reused.")+
+                (Unavailable>0?AppText.L($" 読み取れない候補{Unavailable:N0}件。",$" {Unavailable:N0} unreadable."):"")+
+                (RemainingCandidates>0?AppText.L($" 残りの候補{RemainingCandidates:N0}件は、もう一度作成すると続きへ進みます。",$" {RemainingCandidates:N0} remaining; run again to continue."):""),
+            _=>AppText.L("先に音声の索引を作成すると、録音や曲の内容・特徴を文章で探せます。","Build the audio index to search speech, music, and sound content by text.")
         };
     public static AudioContentStatus Parse(string json)
     {

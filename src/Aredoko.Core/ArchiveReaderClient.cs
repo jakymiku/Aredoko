@@ -14,7 +14,7 @@ public sealed record ArchiveManifest(int ItemId, int PageCount, string Revision)
     {
         if (ItemId < 1 || PageCount is < 1 or > 10000 || Revision is null ||
             Revision.Length != 64 || Revision.Any(c => !(c is >= '0' and <= '9' or >= 'a' and <= 'f')))
-            throw new InvalidDataException("読書情報が無効です。開き直してください。");
+            throw new InvalidDataException(AppText.L("読書情報が無効です。開き直してください。","Reading metadata is invalid. Reopen the item."));
     }
 
     public static ArchiveManifest Parse(byte[] json, int expectedItemId)
@@ -26,23 +26,23 @@ public sealed record ArchiveManifest(int ItemId, int PageCount, string Revision)
             var result = new ArchiveManifest(root.GetProperty("item_id").GetInt32(),
                 root.GetProperty("page_count").GetInt32(), root.GetProperty("revision").GetString()!);
             result.Validate();
-            if (result.ItemId != expectedItemId) throw new InvalidDataException("別の作品の読書情報を受信しました。");
+            if (result.ItemId != expectedItemId) throw new InvalidDataException(AppText.L("別の作品の読書情報を受信しました。","Received reading metadata for a different item."));
             return result;
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
-            throw new InvalidDataException("読書情報を読み取れません。開き直してください。", ex);
+            throw new InvalidDataException(AppText.L("読書情報を読み取れません。開き直してください。","Unable to read book metadata. Reopen the item."), ex);
         }
     }
 }
 
 public sealed class ArchiveReadException(HttpStatusCode status) : Exception(status switch
 {
-    HttpStatusCode.Conflict => "ファイルが更新されました。閉じて再スキャンしてから、開き直してください。",
-    HttpStatusCode.NotFound => "このページは読み取れません。破損・未対応形式・容量制限などを確認してください。",
-    HttpStatusCode.ServiceUnavailable => "ほかの画像を読み込み中です。少し待って再試行してください。",
-    HttpStatusCode.Forbidden => "接続が切れました。閉じてライブラリから再接続してください。",
-    _ => "ページを取得できませんでした。再試行してください。"
+    HttpStatusCode.Conflict => AppText.L("ファイルが更新されました。閉じて再スキャンしてから、開き直してください。","The file was modified. Close, rescan, and reopen it."),
+    HttpStatusCode.NotFound => AppText.L("このページは読み取れません。破損・未対応形式・容量制限などを確認してください。","Cannot read this page. Check for corruption, unsupported format, or size limits."),
+    HttpStatusCode.ServiceUnavailable => AppText.L("ほかの画像を読み込み中です。少し待って再試行してください。","Loading other images. Wait a moment and retry."),
+    HttpStatusCode.Forbidden => AppText.L("接続が切れました。閉じてライブラリから再接続してください。","Connection lost. Close and reconnect from the library."),
+    _ => AppText.L("ページを取得できませんでした。再試行してください。","Could not load the page. Please retry.")
 })
 {
     public HttpStatusCode Status { get; } = status;
@@ -184,7 +184,7 @@ public sealed class ArchiveReaderClient(HttpClient client)
         var (data,_)=await ReadMediaAsync($"api/library/reader/{manifest.ItemId}/progress",4096,null,cancellation,value,5);
         using var doc=JsonDocument.Parse(data);
         if(!doc.RootElement.TryGetProperty("saved",out var saved)||saved.ValueKind!=JsonValueKind.True)
-            throw new InvalidDataException("読書位置の保存を確認できませんでした。");
+            throw new InvalidDataException(AppText.L("読書位置の保存を確認できませんでした。","Could not confirm saving reading position."));
     }
 
     private async Task<(byte[] Data, string Mime)> ReadMediaAsync(string route, int limit, HashSet<string>? allowedTypes, CancellationToken cancellation,string? json=null,int seconds=40)
@@ -213,29 +213,29 @@ public sealed class ArchiveReaderClient(HttpClient client)
         if(response.StatusCode==HttpStatusCode.NotModified)
         {
             if(etag is null||receivedTag!=etag)
-                throw new InvalidDataException("ページの再確認応答が無効です。");
+                throw new InvalidDataException(AppText.L("ページの再確認応答が無効です。","Invalid page revalidation response."));
             await using var unchanged=await response.Content.ReadAsStreamAsync(token);
             if(await unchanged.ReadAsync(new byte[1],token)!=0)
-                throw new InvalidDataException("ページの再確認応答に画像データが混入しています。");
+                throw new InvalidDataException(AppText.L("ページの再確認応答に画像データが混入しています。","Unexpected image payload in 304 response."));
             token.ThrowIfCancellationRequested();
             return new(null,receivedTag,"",true);
         }
         if (!response.IsSuccessStatusCode) throw new ArchiveReadException(response.StatusCode);
         var mime = response.Content.Headers.ContentType?.MediaType;
         if (allowedTypes is not null ? mime is null || !allowedTypes.Contains(mime) : mime != "application/json")
-            throw new InvalidDataException("未対応のページ形式です。");
+            throw new InvalidDataException(AppText.L("未対応のページ形式です。","Unsupported page media format."));
         if (response.Content.Headers.ContentLength is not long size || size < 1 || size > limit)
-            throw new InvalidDataException("ページのデータ量が制限を超えています。");
+            throw new InvalidDataException(AppText.L("ページのデータ量が制限を超えています。","Page size exceeds limit or is empty."));
         await using var source = await response.Content.ReadAsStreamAsync(token);
         using var output = new MemoryStream((int)size);
         var buffer = new byte[16 * 1024];
         int count;
         while ((count = await source.ReadAsync(buffer, token)) != 0)
         {
-            if (output.Length + count > size) throw new InvalidDataException("ページのデータ量が一致しません。");
+            if (output.Length + count > size) throw new InvalidDataException(AppText.L("ページのデータ量が一致しません。","Page size mismatch."));
             output.Write(buffer, 0, count);
         }
-        if (output.Length != size) throw new InvalidDataException("ページを最後まで受信できませんでした。");
+        if (output.Length != size) throw new InvalidDataException(AppText.L("ページを最後まで受信できませんでした。","Incomplete page download."));
         token.ThrowIfCancellationRequested();
         return new(output.ToArray(),receivedTag,mime!,false);
     }

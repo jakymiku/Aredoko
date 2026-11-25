@@ -10,12 +10,12 @@ public static class IndexContinuationRequests
     public const int MaxLimit = 10000;
 
     internal static string Profile(string profile) =>
-        profile.Length is > 0 and <= 256 ? profile : throw new ArgumentException("モデル設定を確認してください。");
+        profile.Length is > 0 and <= 256 ? profile : throw new ArgumentException(AppText.L("モデル設定を確認してください。", "Check the AI model setting."));
 
     public static JsonObject Plan(JsonObject scope, string profile, int limit = 1000, long afterId = 0)
     {
-        if (limit is < 1 or > MaxLimit) throw new ArgumentOutOfRangeException(nameof(limit), "継続索引の上限は1〜10,000件です。");
-        if (afterId < 0) throw new ArgumentOutOfRangeException(nameof(afterId), "カーソル位置が無効です。");
+        if (limit is < 1 or > MaxLimit) throw new ArgumentOutOfRangeException(nameof(limit), AppText.L("継続索引の上限は1〜10,000件です。", "Continuation limit must be between 1 and 10,000 items."));
+        if (afterId < 0) throw new ArgumentOutOfRangeException(nameof(afterId), AppText.L("カーソル位置が無効です。", "Invalid cursor position."));
         var normalizedScope = PageChunkRequests.Scope(scope);
         return new()
         {
@@ -39,7 +39,7 @@ public static class IndexContinuationRequests
 
     public static JsonObject Start(IndexContinuationPlan plan)
     {
-        if (!plan.CanStart) throw new ArgumentException("追加する範囲を確認してください。");
+        if (!plan.CanStart) throw new ArgumentException(AppText.L("追加する範囲を確認してください。", "Check the scope to add."));
         return Start(plan.PlanId, plan.Scope, plan.Profile);
     }
 
@@ -57,7 +57,7 @@ public static class IndexContinuationRequests
     public static JsonObject Resume(IndexContinuationStatus status, JsonObject scope)
     {
         if (!status.CanResume || !status.MatchesScope(scope))
-            throw new ArgumentException("前回と同じ対象範囲を保存してから再開してください。");
+            throw new ArgumentException(AppText.L("前回と同じ対象範囲を保存してから再開してください。", "Save the same target scope as before resuming."));
         return Resume(status.JobId, scope, status.Profile);
     }
 
@@ -84,8 +84,12 @@ public sealed record IndexContinuationPlan(
     int ExpiresInSeconds)
 {
     public bool CanStart => SelectedTotal > 0;
-    public string Summary => SelectedTotal == 0 ? "追加する未準備アイテムはありません。" : $"今回追加: {SelectedTotal:N0}件（未準備 {RemainingTotal:N0}件中）";
-    public string DetailSummary => $"対象 {CandidateTotal:N0}件中、準備済み {FreshTotal:N0}件 · 未準備 {RemainingTotal:N0}件";
+    public string Summary => SelectedTotal == 0
+        ? AppText.L("追加する未準備アイテムはありません。", "No unready items to add.")
+        : AppText.L($"今回追加: {SelectedTotal:N0}件（未準備 {RemainingTotal:N0}件中）", $"To add now: {SelectedTotal:N0} (of {RemainingTotal:N0} unready)");
+    public string DetailSummary => AppText.L(
+        $"対象 {CandidateTotal:N0}件中、準備済み {FreshTotal:N0}件 · 未準備 {RemainingTotal:N0}件",
+        $"Of {CandidateTotal:N0} in scope: {FreshTotal:N0} ready · {RemainingTotal:N0} unready");
 
     public static IndexContinuationPlan Parse(byte[] bytes, string expectedProfile, JsonObject? expectedScope = null)
     {
@@ -96,12 +100,12 @@ public sealed record IndexContinuationPlan(
             var planId = TagReviewProtocol.Text(r, "plan_id", 32);
             PageEvidenceProtocol.ValidateRequestId(planId);
             var profile = TagReviewProtocol.Text(r, "profile", 256);
-            if (profile != expectedProfile) throw new InvalidDataException("モデル設定が一致しません。");
+            if (profile != expectedProfile) throw new InvalidDataException(AppText.L("モデル設定が一致しません。", "AI model setting does not match."));
             var scope = PageChunkRequests.ReadScope(r);
             if (expectedScope is not null && !JsonNode.DeepEquals(scope, PageChunkRequests.Scope(expectedScope)))
-                throw new InvalidDataException("対象範囲が一致しません。");
+                throw new InvalidDataException(AppText.L("対象範囲が一致しません。", "Target scope does not match."));
             var expires = r.GetProperty("expires_in_seconds").GetInt32();
-            if (expires < 1) throw new InvalidDataException("有効期限が無効です。");
+            if (expires < 1) throw new InvalidDataException(AppText.L("有効期限が無効です。", "Invalid expiration time."));
             var candidate = r.GetProperty("candidate_total").GetInt32();
             var fresh = r.GetProperty("fresh_total").GetInt32();
             var remaining = r.GetProperty("remaining_total").GetInt32();
@@ -116,13 +120,13 @@ public sealed record IndexContinuationPlan(
                 || remainingAfter < 0 || remainingAfter > remaining
                 || selected < 0 || selected > limit || selected > remainingAfter || limit is < 1 or > 10000
                 || afterId < 0 || upperId < 0 || nextAfterId < 0)
-                throw new InvalidDataException("索引の計画内容が無効です。");
+                throw new InvalidDataException(AppText.L("索引の計画内容が無効です。", "Invalid indexing plan payload."));
 
             return new(planId, profile, scope, candidate, fresh, remaining, remainingAfter, selected, limit, afterId, upperId, nextAfterId, expires);
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException or ArgumentException)
         {
-            throw new InvalidDataException("索引の計画を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("索引の計画を読み取れません。", "Unable to read the indexing plan."), ex);
         }
     }
 }
@@ -147,7 +151,9 @@ public sealed record IndexContinuationStatus(
 {
     public bool Running => State is "running" or "cancelling";
     public bool CanResume => State is "cancelled" or "interrupted" or "failed";
-    public string Summary => $"継続索引: {Processed:N0}/{Total:N0}件 · 保存 {Indexed:N0} · 再利用 {Reused:N0} · 未準備 {UnreadyTotal:N0}";
+    public string Summary => AppText.L(
+        $"継続索引: {Processed:N0}/{Total:N0}件 · 保存 {Indexed:N0} · 再利用 {Reused:N0} · 未準備 {UnreadyTotal:N0}",
+        $"Continuation index: {Processed:N0}/{Total:N0} · Saved {Indexed:N0} · Reused {Reused:N0} · Unready {UnreadyTotal:N0}");
 
     public bool MatchesScope(JsonObject scope)
     {
@@ -162,20 +168,20 @@ public sealed record IndexContinuationStatus(
             using var doc = JsonDocument.Parse(bytes);
             var r = doc.RootElement;
             if (r.GetProperty("job").GetString() != "library-continuation-v1")
-                throw new InvalidDataException("ジョブの種類が無効です。");
+                throw new InvalidDataException(AppText.L("ジョブの種類が無効です。", "Invalid job type."));
             var jobId = TagReviewProtocol.Text(r, "job_id", 32);
             PageEvidenceProtocol.ValidateRequestId(jobId);
             if (expectedJobId is not null && jobId != expectedJobId)
-                throw new InvalidDataException("ジョブIDが一致しません。");
+                throw new InvalidDataException(AppText.L("ジョブIDが一致しません。", "Job ID does not match."));
             var profile = TagReviewProtocol.Text(r, "profile", 256);
             if (profile != expectedProfile)
-                throw new InvalidDataException("モデル設定が一致しません。");
+                throw new InvalidDataException(AppText.L("モデル設定が一致しません。", "AI model setting does not match."));
             var scope = PageChunkRequests.ReadScope(r);
             if (expectedScope is not null && !JsonNode.DeepEquals(scope, PageChunkRequests.Scope(expectedScope)))
-                throw new InvalidDataException("対象範囲が一致しません。");
+                throw new InvalidDataException(AppText.L("対象範囲が一致しません。", "Target scope does not match."));
             var state = TagReviewProtocol.Text(r, "state", 16);
             if (state is not ("running" or "cancelling" or "complete" or "cancelled" or "interrupted" or "failed"))
-                throw new InvalidDataException("処理状態が無効です。");
+                throw new InvalidDataException(AppText.L("処理状態が無効です。", "Invalid processing state."));
             var total = r.GetProperty("total").GetInt32();
             var processed = r.GetProperty("processed").GetInt32();
             var indexed = r.GetProperty("indexed").GetInt32();
@@ -186,7 +192,7 @@ public sealed record IndexContinuationStatus(
             var afterId = r.GetProperty("after_id").GetInt64();
             var upperId = r.GetProperty("upper_id").GetInt64();
             var nextAfterId = r.GetProperty("next_after_id").GetInt64();
-            var error = r.GetProperty("error").GetString() ?? "";
+            var error = AppText.TranslateBackend(r.GetProperty("error").GetString());
 
             string? resumedFrom = null;
             if (r.TryGetProperty("resumed_from", out var rf) && rf.ValueKind != JsonValueKind.Null)
@@ -204,13 +210,13 @@ public sealed record IndexContinuationStatus(
                 || reused < 0 || reused > processed || selectedTotal != total || unreadyTotal != skipped
                 || afterId < 0 || upperId < 0 || nextAfterId < 0 || error.Length > 1024
                 || (state == "complete" && (processed != total || indexed + skipped != total)))
-                throw new InvalidDataException("継続索引の処理件数が無効です。");
+                throw new InvalidDataException(AppText.L("継続索引の処理件数が無効です。", "Invalid continuation indexing counts."));
 
             return new(jobId, profile, scope, state, total, processed, indexed, skipped, reused, selectedTotal, unreadyTotal, afterId, upperId, nextAfterId, error, resumedFrom);
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException or ArgumentException)
         {
-            throw new InvalidDataException("継続索引の状況を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("継続索引の状況を読み取れません。", "Unable to read continuation indexing status."), ex);
         }
     }
 }
@@ -232,7 +238,7 @@ public sealed class IndexContinuationClient
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(ErrorText.FromResponse(Encoding.UTF8.GetString(bytes), (int)response.StatusCode));
         if (bytes.Length > MaxJsonBytes)
-            throw new InvalidDataException("応答サイズが上限を超えました。");
+            throw new InvalidDataException(AppText.L("応答サイズが上限を超えました。", "Response size exceeded the limit."));
         return bytes;
     }
 
@@ -267,12 +273,12 @@ public sealed class IndexContinuationClient
             var r = doc.RootElement;
             var echoJob = TagReviewProtocol.Text(r, "job_id", 32);
             PageEvidenceProtocol.ValidateRequestId(echoJob);
-            if (echoJob != jobId) throw new InvalidDataException("取消応答のジョブIDが一致しません。");
+            if (echoJob != jobId) throw new InvalidDataException(AppText.L("取消応答のジョブIDが一致しません。", "Cancellation response job ID does not match."));
             return r.GetProperty("cancel_requested").GetBoolean();
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException or ArgumentException)
         {
-            throw new InvalidDataException("取消結果を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("取消結果を読み取れません。", "Unable to read cancellation result."), ex);
         }
     }
 

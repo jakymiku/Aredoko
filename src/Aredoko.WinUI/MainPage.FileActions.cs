@@ -30,7 +30,7 @@ public sealed partial class MainPage
     private void UpdateFileProperties()
     {
         FileProperties.IsExpanded=false;
-        FilePropertyText.Text=active is null?"":LibraryFilePath.Describe(active,knownRoots.FirstOrDefault(r=>r.Id==active.RootId)?.Path??"登録先を確認できません");
+        FilePropertyText.Text=active is null?"":LibraryFilePath.Describe(active,knownRoots.FirstOrDefault(r=>r.Id==active.RootId)?.Path??AppText.L("登録先を確認できません", "Unable to verify folder path"));
         OpenFileLocation.IsEnabled=CopySelectedFilePath.IsEnabled=active is {Availability:"present"};
     }
     private void OpenFileLocation_Click(object sender,RoutedEventArgs e)
@@ -45,12 +45,12 @@ public sealed partial class MainPage
     {
         try
         {
-            var root=knownRoots.FirstOrDefault(r=>r.Id==row.RootId&&r.Enabled)??throw new InvalidOperationException("フォルダを再登録してください。");
-            if(row.Availability!="present")throw new InvalidOperationException("元ファイルにアクセスできません。");
+            var root=knownRoots.FirstOrDefault(r=>r.Id==row.RootId&&r.Enabled)??throw new InvalidOperationException(AppText.L("フォルダを再登録してください。", "Please re-register the folder."));
+            if(row.Availability!="present")throw new InvalidOperationException(AppText.L("元ファイルにアクセスできません。", "Cannot access the source file."));
             var path=LibraryFilePath.Resolve(root.Path,row.Location);
             for(var current=path;current is not null;current=System.IO.Path.GetDirectoryName(current))
             {
-                if((System.IO.File.GetAttributes(current)&System.IO.FileAttributes.ReparsePoint)!=0)throw new InvalidOperationException("リンク先は開けません。登録先を確認してください。");
+                if((System.IO.File.GetAttributes(current)&System.IO.FileAttributes.ReparsePoint)!=0)throw new InvalidOperationException(AppText.L("リンク先は開けません。登録先を確認してください。", "Cannot open reparse points or symbolic links. Check the registered path."));
                 if(string.Equals(System.IO.Path.TrimEndingDirectorySeparator(current),System.IO.Path.TrimEndingDirectorySeparator(root.Path),StringComparison.OrdinalIgnoreCase))break;
             }
             if(explorer&&!System.IO.Directory.Exists(path))
@@ -60,17 +60,17 @@ public sealed partial class MainPage
             else Process.Start(new ProcessStartInfo(path){UseShellExecute=true});
             return true;
         }
-        catch(Exception ex){if(reportFailure)Failure(new InvalidOperationException("外部アプリで開けません。状態と既定のアプリを確認してください",ex));AppLog.Error(ex);return false;}
+        catch(Exception ex){if(reportFailure)Failure(new InvalidOperationException(AppText.L("外部アプリで開けません。状態と既定のアプリを確認してください", "Cannot open in external app. Check file status and default app settings."),ex));AppLog.Error(ex);return false;}
     }
     private void CopyFilePath(MediaRow row)
     {
         try
         {
             var root=knownRoots.FirstOrDefault(r=>r.Id==row.RootId&&r.Enabled)
-                ??throw new InvalidOperationException("登録フォルダを確認してください。");
+                ??throw new InvalidOperationException(AppText.L("登録フォルダを確認してください。", "Check the registered folder."));
             var path=LibraryFilePath.Resolve(root.Path,row.Location);
             var package=new DataPackage();package.SetText(path);Clipboard.SetContent(package);
-            Notice("パスをコピーしました","他のアプリへ貼り付けできます。",InfoBarSeverity.Success);
+            Notice(AppText.L("パスをコピーしました", "Path copied"),AppText.L("他のアプリへ貼り付けできます。", "Ready to paste into other apps."),InfoBarSeverity.Success);
             Status.IsOpen=true;
         }
         catch(Exception ex){Failure(ex);}
@@ -90,9 +90,9 @@ public sealed partial class MainPage
                 return false;
             }
             var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,
-                Title="外部アプリで開けませんでした",
-                Content=$"{row.Title}\n\nAredoko で開きますか？",
-                PrimaryButtonText="Aredokoで開く",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.Close};
+                Title=AppText.L("外部アプリで開けませんでした", "Could not open in external app"),
+                Content=$"{row.Title}\n\n"+AppText.L("Aredoko で開きますか？", "Open inside Aredoko instead?"),
+                PrimaryButtonText=AppText.L("Aredokoで開く", "Open in Aredoko"),CloseButtonText=AppText.L("閉じる", "Close"),DefaultButton=ContentDialogButton.Close};
             AutomationProperties.SetAutomationId(dialog,"ExternalViewerFallback");
             return await dialog.ShowAsync()==ContentDialogResult.Primary;
         }
@@ -113,7 +113,7 @@ public sealed partial class MainPage
             await api.PostAsync("api/library/roots",new System.Text.Json.Nodes.JsonObject{{"path",row.Path},{"consent",true},{"excludes",new System.Text.Json.Nodes.JsonArray(row.Exclusions.Select(s=>(System.Text.Json.Nodes.JsonNode?)System.Text.Json.Nodes.JsonValue.Create(s)).ToArray())},{"default_shelf",row.DefaultShelf},{"folder_books",row.FolderBooks},{"recursive",row.Recursive}});
             thumbnails.ResetSession();
             await RefreshSearchRootsAsync();await LoadAIScopeAsync();RenderFolderHub();
-            Notice("再登録しました","タグ・棚を復元しました。必要に応じて「⟳ 更新」から一覧を更新できます。");
+            Notice(AppText.L("再登録しました", "Re-registered"),AppText.L("タグ・棚を復元しました。必要に応じて「⟳ 更新」から一覧を更新できます。", "Tags and shelves were restored. Click Refresh if you want to update the list."));
         }
         catch(Exception ex){Failure(ex);}
         finally{transitions.Release();}
@@ -128,10 +128,12 @@ public sealed partial class MainPage
             {
                 RequestedTheme=ActualTheme,
                 XamlRoot=XamlRoot,
-                Title="記録を完全に削除しますか？",
-                Content=$"{row.ShortPath}（{row.Path}）\n\n• 削除されるもの：登録履歴・タグ・棚・お気に入り・履歴・読書位置・AI検索データ\n• 残るもの：PC上の元ファイル（変更・削除されません）\n\n⚠ この操作は元に戻せません。",
-                PrimaryButtonText="記録を削除",
-                CloseButtonText="キャンセル",
+                Title=AppText.L("記録を完全に削除しますか？", "Permanently purge catalog records?"),
+                Content=AppText.L(
+                    $"{row.ShortPath}（{row.Path}）\n\n• 削除されるもの：登録履歴・タグ・棚・お気に入り・履歴・読書位置・AI検索データ\n• 残るもの：PC上の元ファイル（変更・削除されません）\n\n⚠ この操作は元に戻せません。",
+                    $"{row.ShortPath} ({row.Path})\n\n• Deleted: registration history, tags, shelves, favorites, history, reading progress, AI index data\n• Kept: original files on your PC (untouched)\n\n⚠ This cannot be undone."),
+                PrimaryButtonText=AppText.L("記録を削除", "Purge Records"),
+                CloseButtonText=AppText.L("キャンセル", "Cancel"),
                 DefaultButton=ContentDialogButton.Close
             };
             var accepted=await dialog.ShowAsync()==ContentDialogResult.Primary;
@@ -141,7 +143,7 @@ public sealed partial class MainPage
             var removed=result["removed_items"]?.GetValue<int>()??0;
             thumbnails.ResetSession();
             await RefreshSearchRootsAsync();await LoadAIScopeAsync();RenderFolderHub();
-            Notice("記録を削除しました",$"{removed:N0}件（元ファイルは変更なし）");
+            Notice(AppText.L("記録を削除しました", "Records purged"),AppText.L($"{removed:N0}件（元ファイルは変更なし）", $"{removed:N0} item(s) removed (source files untouched)"));
         }
         catch(Exception ex){if(!disposed)Failure(ex);}
         finally{dialogOpen=false;transitions.Release();}
@@ -149,7 +151,7 @@ public sealed partial class MainPage
     private void Folder_DragOver(object sender,DragEventArgs args)
     {
         if(args.DataView.Contains(StandardDataFormats.StorageItems))
-        {args.AcceptedOperation=DataPackageOperation.Link;args.DragUIOverride.Caption="フォルダを登録候補にする";args.Handled=true;}
+        {args.AcceptedOperation=DataPackageOperation.Link;args.DragUIOverride.Caption=AppText.L("フォルダを登録候補にする", "Add folder");args.Handled=true;}
     }
     private async void Folder_Drop(object sender,DragEventArgs args)
     {
@@ -159,9 +161,9 @@ public sealed partial class MainPage
         {
             var items=await args.DataView.GetStorageItemsAsync();
             var folders=items.OfType<StorageFolder>().Select(f=>f.Path).Where(p=>!string.IsNullOrWhiteSpace(p)).ToArray();
-            if(folders.Length==0)throw new InvalidOperationException("登録するフォルダをドロップしてください。");
+            if(folders.Length==0)throw new InvalidOperationException(AppText.L("登録するフォルダをドロップしてください。", "Drop folders to register."));
             FolderAddPanel.Visibility=Visibility.Visible;RootPath.Text=string.Join("; ",folders);RootFolderBooks.IsChecked=false;RootRecursive.IsChecked=true;RootPath.Focus(FocusState.Programmatic);
-            Notice("フォルダを受け取りました","設定を確認して「追加」を押してください。");
+            Notice(AppText.L("フォルダを受け取りました", "Folders received"),AppText.L("設定を確認して「追加」を押してください。", "Check the options and click Add."));
         }
         catch(Exception ex){Failure(ex);}
         finally{deferral.Complete();}

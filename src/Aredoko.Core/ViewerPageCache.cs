@@ -6,7 +6,7 @@ public sealed record ViewerSource(byte[]? Data,string? ETag,string Mime,bool Not
     {
         if(value.Length!=68||!value.StartsWith("W/\"",StringComparison.Ordinal)||value[^1]!='"'||
             value.Skip(3).Take(64).Any(c=>!(c is >= '0' and <= '9' or >= 'a' and <= 'f')))
-            throw new InvalidDataException("ページの再確認情報が無効です。");
+            throw new InvalidDataException(AppText.L("ページの再確認情報が無効です。", "Invalid page ETag."));
     }
 }
 
@@ -63,18 +63,18 @@ public sealed class ViewerPageCache<TKey,TValue> : IDisposable where TKey:notnul
         if(response.NotModified)
         {
             if(cached is null||response.ETag!=cached.ETag||response.Data is not null)
-                throw new InvalidDataException("キャッシュの再確認応答が無効です。");
+                throw new InvalidDataException(AppText.L("キャッシュの再確認応答が無効です。", "Invalid cache revalidation response."));
             lock(sync){if(generation==epoch&&entries.TryGetValue(key,out var hit)){order.Remove(hit);order.AddFirst(hit);}}
             return cached.Value;
         }
         if(response.Data is null||response.Data.Length is <1 or >PreviewPolicy.ViewerSourceBytes)
-            throw new InvalidDataException("ページのデータ量が無効です。");
+            throw new InvalidDataException(AppText.L("ページのデータ量が無効です。", "Invalid page data size."));
         lock(sync){if(generation==epoch)Remove(key);}
         if(preload&&response.Data.Length>8*1024*1024)throw new ViewerPreloadSkippedException();
         var decoded=await decode(response.Data,preload,token);
         token.ThrowIfCancellationRequested();
         lock(sync){if(disposed||generation!=epoch)throw new OperationCanceledException(token);}
-        if(decoded.Bytes<1)throw new InvalidDataException("ページのメモリ量が無効です。");
+        if(decoded.Bytes<1)throw new InvalidDataException(AppText.L("ページのメモリ量が無効です。", "Invalid decoded page memory size."));
         if(response.ETag is not null)
         {
             ViewerSource.ValidateETag(response.ETag);

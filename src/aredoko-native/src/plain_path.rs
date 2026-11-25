@@ -1,7 +1,7 @@
 use std::path::Path;
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, FILETIME, HANDLE,
-    INVALID_HANDLE_VALUE,
+    CloseHandle, GetLastError, ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND,
+    FILETIME, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, GetFileAttributesW, GetFileInformationByHandle, GetFullPathNameW,
@@ -12,8 +12,8 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 
 use crate::{
-    ERR_HARDLINK_REJECTED, ERR_INVALID_ARG, ERR_IO, ERR_LINK_REJECTED, ERR_NOT_PLAIN,
-    ERR_PATH_MISSING,
+    ERR_ACCESS_DENIED, ERR_HARDLINK_REJECTED, ERR_INVALID_ARG, ERR_IO, ERR_LINK_REJECTED,
+    ERR_NOT_PLAIN, ERR_PATH_MISSING,
 };
 
 pub struct WinHandle(pub HANDLE);
@@ -82,6 +82,43 @@ pub fn with_nul(w: &[u16]) -> Vec<u16> {
     out.extend_from_slice(w);
     out.push(0);
     out
+}
+
+pub fn to_extended_wide_nul(path_w: &[u16]) -> Vec<u16> {
+    let has_extended_prefix = path_w.len() >= 4
+        && path_w[0] == b'\\' as u16
+        && path_w[1] == b'\\' as u16
+        && (path_w[2] == b'?' as u16 || path_w[2] == b'.' as u16)
+        && path_w[3] == b'\\' as u16;
+    if has_extended_prefix || path_w.len() < 240 {
+        return with_nul(path_w);
+    }
+    if path_w.len() >= 2 && path_w[0] == b'\\' as u16 && path_w[1] == b'\\' as u16 {
+        let prefix: [u16; 8] = [
+            b'\\' as u16,
+            b'\\' as u16,
+            b'?' as u16,
+            b'\\' as u16,
+            b'U' as u16,
+            b'N' as u16,
+            b'C' as u16,
+            b'\\' as u16,
+        ];
+        let mut out = Vec::with_capacity(prefix.len() + path_w.len() - 1);
+        out.extend_from_slice(&prefix);
+        out.extend_from_slice(&path_w[2..]);
+        out.push(0);
+        return out;
+    }
+    if path_w.len() >= 3 && path_w[1] == b':' as u16 && path_w[2] == b'\\' as u16 {
+        let prefix: [u16; 4] = [b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
+        let mut out = Vec::with_capacity(prefix.len() + path_w.len() + 1);
+        out.extend_from_slice(&prefix);
+        out.extend_from_slice(path_w);
+        out.push(0);
+        return out;
+    }
+    with_nul(path_w)
 }
 
 pub fn get_full_path_wide(raw: &str) -> Result<Vec<u16>, i32> {
@@ -342,12 +379,15 @@ pub fn check_rel_path_components(root_w: &[u16], rel_posix: &str) -> Result<Vec<
 }
 
 pub fn check_plain_dir_node(dir_w_no_nul: &[u16]) -> Result<(), i32> {
-    let nul = with_nul(dir_w_no_nul);
+    let nul = to_extended_wide_nul(dir_w_no_nul);
     let attrs = unsafe { GetFileAttributesW(nul.as_ptr()) };
     if attrs == INVALID_FILE_ATTRIBUTES {
         let err = unsafe { GetLastError() };
         if err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND {
             return Err(ERR_PATH_MISSING);
+        }
+        if err == ERROR_ACCESS_DENIED {
+            return Err(ERR_ACCESS_DENIED);
         }
         return Err(ERR_IO);
     }

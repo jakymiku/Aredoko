@@ -150,7 +150,7 @@
   </ResourceDictionary>
  </Page.Resources>
  <Page.KeyboardAccelerators><KeyboardAccelerator Key="Home" Modifiers="Control" Invoked="BrowseEdgeShortcut"/><KeyboardAccelerator Key="End" Modifiers="Control" Invoked="BrowseEdgeShortcut"/><KeyboardAccelerator Key="F" Modifiers="Control" Invoked="SearchShortcut"/><KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveShortcut"/><KeyboardAccelerator Key="Escape" Invoked="CancelSearchShortcut"/><KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="HistoryBackShortcut"/><KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="HistoryForwardShortcut"/></Page.KeyboardAccelerators>
- <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Left" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="180" SelectionChanged="Nav_SelectionChanged" ItemInvoked="Navigation_ItemInvoked" AutomationProperties.AutomationId="Nav">
+ <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Left" IsPaneOpen="False" CompactPaneLength="48" OpenPaneLength="208" SelectionChanged="Nav_SelectionChanged" ItemInvoked="Navigation_ItemInvoked" AutomationProperties.AutomationId="Nav">
   <NavigationView.Resources>
    <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent"/>
    <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent"/>
@@ -339,6 +339,7 @@
        <StackPanel Grid.Row="1" Spacing="4">
         <TextBlock x:Name="FolderEditStatus" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderEditStatus"/>
         <TextBlock x:Name="ScanStatus" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="ScanStatus"/>
+        <Button x:Name="ShowScanAccessDeniedButton" Content="アクセス拒否ログを表示" Visibility="Collapsed" HorizontalAlignment="Left" Click="ShowScanAccessDenied_Click" AutomationProperties.AutomationId="BtnScanAccessDeniedLog"/>
        </StackPanel>
       </Grid></ContentControl>
      </Grid>
@@ -401,8 +402,8 @@
     <Button Grid.Column="2" x:Name="SearchButton" MinHeight="38" Padding="14,6" VerticalAlignment="Center" Style="{StaticResource AccentButtonStyle}" Click="Search_Click" AutomationProperties.Name="検索" AutomationProperties.AutomationId="BtnSearch"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Find"/><TextBlock Text="検索"/></StackPanel></Button>
     <Button Grid.Column="3" x:Name="CancelSearchButton" MinHeight="38" Content="中止" VerticalAlignment="Center" Visibility="Collapsed" Click="CancelSearch_Click" AutomationProperties.Name="検索中止" AutomationProperties.AutomationId="BtnCancelSearch"/>
     <StackPanel x:Name="SearchFilterTools" Grid.Column="4" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Center" SizeChanged="SearchToolbarPart_SizeChanged">
-     <ComboBox x:Name="Kind" ToolTipService.ToolTip="表示するファイルの種類" SelectedIndex="0" SelectionChanged="Kind_Changed" MinWidth="112" AutomationProperties.Name="種類" AutomationProperties.AutomationId="CmbKind"><ComboBoxItem Content="すべての種類"/><ComboBoxItem Content="📖 本"/><ComboBoxItem Content="🖼 画像"/><ComboBoxItem Content="🎬 動画"/><ComboBoxItem Content="🎵 音声"/><ComboBoxItem Content="🗜 圧縮" ToolTipService.ToolTip="ZIP・CBZをまとめて表示"/><ComboBoxItem Content="🧩 素材"/></ComboBox>
-     <ComboBox x:Name="SearchMode" SelectedIndex="0" SelectionChanged="SearchMode_Changed" MinWidth="132" AutomationProperties.Name="検索方法" AutomationProperties.AutomationId="CmbSearchMode"><ComboBoxItem Content="名前・タグ" AutomationProperties.AutomationId="ModeLiteral"/><ComboBoxItem Content="AIおまかせ" AutomationProperties.AutomationId="ModeSemantic"/><ComboBoxItem Content="見た目（AI）" AutomationProperties.AutomationId="ModeVisual"/><ComboBoxItem Content="言葉の意味（AI）" AutomationProperties.AutomationId="ModeText"/><ComboBoxItem Content="AIタグ候補（文字）" AutomationProperties.AutomationId="ModeTagCandidates"/><ComboBoxItem Content="ページ内の文字" AutomationProperties.AutomationId="ModePageText"/><ComboBoxItem Content="AIタグ候補（AI）" AutomationProperties.AutomationId="ModeTagSemantic"/><ComboBoxItem Content="音声・音楽（AI）" AutomationProperties.AutomationId="ModeAudioContent"/><ComboBoxItem Content="動画の映像（AI）" AutomationProperties.AutomationId="ModeVideoContent"/><ComboBoxItem Content="動画内の音（AI）" AutomationProperties.AutomationId="ModeVideoAudioContent"/></ComboBox>
+     <ComboBox x:Name="Kind" ToolTipService.ToolTip="表示するファイルの種類" SelectedIndex="0" SelectionChanged="Kind_Changed" MinWidth="128" AutomationProperties.Name="種類" AutomationProperties.AutomationId="CmbKind"><ComboBoxItem Content="すべての種類"/><ComboBoxItem Content="📖 本"/><ComboBoxItem Content="🖼 画像"/><ComboBoxItem Content="🎬 動画"/><ComboBoxItem Content="🎵 音声"/><ComboBoxItem Content="🗜 圧縮" ToolTipService.ToolTip="ZIP・CBZをまとめて表示"/><ComboBoxItem Content="🧩 素材"/></ComboBox>
+     <ComboBox x:Name="SearchMode" SelectedIndex="0" SelectionChanged="SearchMode_Changed" MinWidth="172" AutomationProperties.Name="検索方法" AutomationProperties.AutomationId="CmbSearchMode"><ComboBoxItem Content="名前・タグ" AutomationProperties.AutomationId="ModeLiteral"/><ComboBoxItem Content="AIおまかせ" AutomationProperties.AutomationId="ModeSemantic"/><ComboBoxItem Content="見た目（AI）" AutomationProperties.AutomationId="ModeVisual"/><ComboBoxItem Content="言葉の意味（AI）" AutomationProperties.AutomationId="ModeText"/><ComboBoxItem Content="AIタグ候補（文字）" AutomationProperties.AutomationId="ModeTagCandidates"/><ComboBoxItem Content="ページ内の文字" AutomationProperties.AutomationId="ModePageText"/><ComboBoxItem Content="AIタグ候補（AI）" AutomationProperties.AutomationId="ModeTagSemantic"/><ComboBoxItem Content="音声・音楽（AI）" AutomationProperties.AutomationId="ModeAudioContent"/><ComboBoxItem Content="動画の映像（AI）" AutomationProperties.AutomationId="ModeVideoContent"/><ComboBoxItem Content="動画内の音（AI）" AutomationProperties.AutomationId="ModeVideoAudioContent"/></ComboBox>
      <Button x:Name="BrowseTagsButton" Content="# タグ絞り込み" Visibility="Collapsed" ToolTipService.ToolTip="一覧でよく使われるタグから絞り込む" AutomationProperties.Name="タグで絞り込む" AutomationProperties.AutomationId="BtnBrowseTags"/>
      <Button x:Name="ClearSearchConditionsButton" Content="条件解除" Visibility="Collapsed" VerticalAlignment="Center" ToolTipService.ToolTip="検索語・種類・検索方法・絞り込みをすべて解除" Click="ClearSearchConditions_Click" AutomationProperties.Name="検索条件を解除" AutomationProperties.AutomationId="BtnClearSearchConditions"/>
     </StackPanel>
@@ -569,7 +570,7 @@
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <TextBox x:Name="FolderFilterBox" PlaceholderText="🔎 フォルダ名・パスで絞り込み" MaxLength="260" TextChanged="FolderFilter_Changed" AutomationProperties.Name="登録フォルダを名前・パスで絞り込み" AutomationProperties.AutomationId="TxtFolderFilter"/>
-      <ComboBox x:Name="FolderStateFilter" Grid.Column="1" SelectedIndex="0" SelectionChanged="FolderStateFilter_Changed" MinWidth="124" ToolTipService.ToolTip="表示するフォルダの状態" AutomationProperties.Name="登録フォルダの表示状態" AutomationProperties.AutomationId="CmbFolderState">
+      <ComboBox x:Name="FolderStateFilter" Grid.Column="1" SelectedIndex="0" SelectionChanged="FolderStateFilter_Changed" MinWidth="140" ToolTipService.ToolTip="表示するフォルダの状態" AutomationProperties.Name="登録フォルダの表示状態" AutomationProperties.AutomationId="CmbFolderState">
        <ComboBoxItem Content="登録中" AutomationProperties.AutomationId="FolderStateActive"/>
        <ComboBoxItem Content="すべて" AutomationProperties.AutomationId="FolderStateAll"/>
        <ComboBoxItem Content="解除済み" AutomationProperties.AutomationId="FolderStateInactive"/>
@@ -735,10 +736,24 @@
            <Grid ColumnSpacing="12">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Spacing="2" VerticalAlignment="Center">
+             <TextBlock Text="言語 / Language" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+             <TextBlock Text="表示言語を切り替えます（自動設定または即時切替）" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
+            </StackPanel>
+            <ComboBox x:Name="SettingsLanguageCombo" Grid.Column="1" MinWidth="240" VerticalAlignment="Center" SelectionChanged="SettingsInstantCombo_Changed" AutomationProperties.Name="アプリの表示言語" AutomationProperties.AutomationId="SettingsLanguage">
+             <ComboBoxItem Content="Windowsの設定に合わせる" Tag="system"/>
+             <ComboBoxItem Content="日本語" Tag="ja"/>
+             <ComboBoxItem Content="English" Tag="en"/>
+            </ComboBox>
+           </Grid>
+          </Border>
+          <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="6" Padding="14,10">
+           <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Spacing="2" VerticalAlignment="Center">
              <TextBlock Text="テーマ" Style="{StaticResource BodyStrongTextBlockStyle}"/>
              <TextBlock Text="アプリ全体の外観（ライト／ダーク）を切り替えます" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
             </StackPanel>
-            <ComboBox x:Name="SettingsThemeCombo" Grid.Column="1" MinWidth="220" VerticalAlignment="Center" SelectionChanged="SettingsInstantCombo_Changed" AutomationProperties.Name="テーマ" AutomationProperties.AutomationId="SettingsTheme">
+            <ComboBox x:Name="SettingsThemeCombo" Grid.Column="1" MinWidth="240" VerticalAlignment="Center" SelectionChanged="SettingsInstantCombo_Changed" AutomationProperties.Name="テーマ" AutomationProperties.AutomationId="SettingsTheme">
              <ComboBoxItem Content="Windowsの設定に合わせる" Tag="system"/>
              <ComboBoxItem Content="ライト" Tag="light"/>
              <ComboBoxItem Content="ダーク" Tag="dark"/>
@@ -752,7 +767,7 @@
              <TextBlock Text="マウスホイール（画像・本）" Style="{StaticResource BodyStrongTextBlockStyle}"/>
              <TextBlock Text="ビューアでホイールを回したときのページ送り方向" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
             </StackPanel>
-            <ComboBox x:Name="SettingsWheelCombo" Grid.Column="1" MinWidth="220" VerticalAlignment="Center" SelectionChanged="SettingsInstantCombo_Changed" AutomationProperties.Name="画像・本表示中のホイール操作" AutomationProperties.AutomationId="SettingsWheel">
+            <ComboBox x:Name="SettingsWheelCombo" Grid.Column="1" MinWidth="240" VerticalAlignment="Center" SelectionChanged="SettingsInstantCombo_Changed" AutomationProperties.Name="画像・本表示中のホイール操作" AutomationProperties.AutomationId="SettingsWheel">
              <ComboBoxItem Content="下回しで次へ（標準）" Tag="down"/>
              <ComboBoxItem Content="上回しで次へ" Tag="up"/>
             </ComboBox>

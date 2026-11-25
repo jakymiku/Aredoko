@@ -16,12 +16,12 @@ public sealed class SearchRequestClient(HttpClient client)
         using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,token).ConfigureAwait(false);
         var limit=response.IsSuccessStatusCode?cap:32768;
         if(response.Content.Headers.ContentType?.MediaType!="application/json"||response.Content.Headers.ContentLength is long n&&(n<0||n>limit))
-            throw new InvalidDataException("検索の応答形式またはサイズが無効です。");
+            throw new InvalidDataException(AppText.L("検索の応答形式またはサイズが無効です。", "Invalid search response format or size."));
         await using var input=await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
         using var output=new MemoryStream();var buffer=new byte[16384];int read;
         while((read=await input.ReadAsync(buffer,token).ConfigureAwait(false))!=0)
-        {if(output.Length+read>limit)throw new InvalidDataException("検索の応答が大きすぎます。");output.Write(buffer,0,read);}
-        if(response.Content.Headers.ContentLength is long expected&&expected!=output.Length)throw new InvalidDataException("検索の応答が途中で切れました。");
+        {if(output.Length+read>limit)throw new InvalidDataException(AppText.L("検索の応答が大きすぎます。", "Search response is too large."));output.Write(buffer,0,read);}
+        if(response.Content.Headers.ContentLength is long expected&&expected!=output.Length)throw new InvalidDataException(AppText.L("検索の応答が途中で切れました。", "Search response was truncated."));
         var bytes=output.ToArray();
         if(!response.IsSuccessStatusCode)throw new InvalidOperationException(ErrorText.FromResponse(Encoding.UTF8.GetString(bytes),(int)response.StatusCode));
         return bytes;
@@ -34,7 +34,7 @@ public sealed class SearchRequestClient(HttpClient client)
         var root=doc.RootElement;
         if(!root.TryGetProperty("request_id",out var id)||id.ValueKind!=JsonValueKind.String||id.GetString()!=requestId||
            !root.TryGetProperty("cancel_requested",out var accepted)||accepted.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-            throw new InvalidDataException("検索中断の応答が要求と一致しません。");
+            throw new InvalidDataException(AppText.L("検索中断の応答が要求と一致しません。", "Search cancellation response does not match request."));
         return accepted.GetBoolean();
     }
     public async Task<byte[]> RunAsync(string route,JsonObject body,CancellationToken cancellation=default,int seconds=120,int cap=2*1024*1024)
@@ -47,7 +47,7 @@ public sealed class SearchRequestClient(HttpClient client)
             using(var prepared=JsonDocument.Parse(await ReadAsync(Route+"/prepare",new(),32768,deadline.Token).ConfigureAwait(false)))
             {
                 var root=prepared.RootElement;
-                if(!root.TryGetProperty("request_id",out var id)||id.ValueKind!=JsonValueKind.String||!IsRequestId(id.GetString()))throw new InvalidDataException("検索の受付IDが無効です。");
+                if(!root.TryGetProperty("request_id",out var id)||id.ValueKind!=JsonValueKind.String||!IsRequestId(id.GetString()))throw new InvalidDataException(AppText.L("検索の受付IDが無効です。", "Invalid search request ID."));
                 requestId=id.GetString();
             }
             deadline.Token.ThrowIfCancellationRequested();
@@ -55,11 +55,11 @@ public sealed class SearchRequestClient(HttpClient client)
             var bytes=await ReadAsync(route,outgoing,cap,deadline.Token).ConfigureAwait(false);
             using var result=JsonDocument.Parse(bytes);
             if(!result.RootElement.TryGetProperty("request_id",out var echo)||echo.ValueKind!=JsonValueKind.String||echo.GetString()!=requestId)
-                throw new InvalidDataException("検索の応答が別の要求のものです。");
+                throw new InvalidDataException(AppText.L("検索の応答が別の要求のものです。", "Search response belongs to another request."));
             deadline.Token.ThrowIfCancellationRequested();completed=true;return bytes;
         }
         catch(OperationCanceledException ex) when(!cancellation.IsCancellationRequested)
-        {throw new TimeoutException("検索が時間内に完了しませんでした。少し待って再検索してください。",ex);}
+        {throw new TimeoutException(AppText.L("検索が時間内に完了しませんでした。少し待って再検索してください。", "Search timed out. Wait a moment and try again."),ex);}
         finally
         {
             if(requestId is not null&&!completed)

@@ -14,17 +14,17 @@ public sealed record VideoManifest(int ItemId,long SizeBytes,string Mime,string 
         "audio/mpeg","audio/flac","audio/wav","audio/ogg","audio/mp4","audio/aac","audio/x-ms-wma"
     ];
     public void Validate()
-    {if(ItemId<1||SizeBytes<1||SizeBytes>MaxBytes||!Mimes.Contains(Mime))throw new InvalidDataException("動画情報が無効です。");new ArchiveManifest(ItemId,1,Revision).Validate();}
+    {if(ItemId<1||SizeBytes<1||SizeBytes>MaxBytes||!Mimes.Contains(Mime))throw new InvalidDataException(AppText.L("動画情報が無効です。", "Invalid video info."));new ArchiveManifest(ItemId,1,Revision).Validate();}
     public static VideoManifest Parse(byte[] bytes,int expectedId)
     {
         try
         {
             using var doc=JsonDocument.Parse(bytes);var root=doc.RootElement;
             var result=new VideoManifest(root.GetProperty("item_id").GetInt32(),root.GetProperty("size_bytes").GetInt64(),root.GetProperty("mime").GetString()!,root.GetProperty("revision").GetString()!);
-            result.Validate();if(result.ItemId!=expectedId)throw new InvalidDataException("別の動画の情報です。");return result;
+            result.Validate();if(result.ItemId!=expectedId)throw new InvalidDataException(AppText.L("別の動画の情報です。", "Video info belongs to a different item."));return result;
         }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
-        {throw new InvalidDataException("動画情報を読み取れません。",ex);}
+        {throw new InvalidDataException(AppText.L("動画情報を読み取れません。", "Unable to read video info."),ex);}
     }
 }
 
@@ -54,12 +54,12 @@ public sealed class VideoRangeSource : IDisposable
             using var req=new HttpRequestMessage(HttpMethod.Get,$"{routePrefix}/{Manifest.ItemId}/range?revision={Manifest.Revision}");req.Headers.Range=new RangeHeaderValue(offset,end);
             using var response=await client.SendAsync(req,HttpCompletionOption.ResponseHeadersRead,token).ConfigureAwait(false);
             if(response.StatusCode!=HttpStatusCode.PartialContent)
-            {if(!response.IsSuccessStatusCode)throw new ArchiveReadException(response.StatusCode);throw new InvalidDataException("範囲取得ではない応答を受信しました。");}
+            {if(!response.IsSuccessStatusCode)throw new ArchiveReadException(response.StatusCode);throw new InvalidDataException(AppText.L("範囲取得ではない応答を受信しました。", "Received a non-range response.")); }
             var range=response.Content.Headers.ContentRange;var tag=response.Headers.ETag;
-            if(response.Content.Headers.ContentLength!=count||response.Content.Headers.ContentType?.MediaType!=Manifest.Mime||range?.Unit!="bytes"||range.From!=offset||range.To!=end||range.Length!=Manifest.SizeBytes||tag is null||tag.IsWeak||tag.Tag!="\""+Manifest.Revision+"\"")throw new InvalidDataException("動画の範囲情報が一致しません。");
+            if(response.Content.Headers.ContentLength!=count||response.Content.Headers.ContentType?.MediaType!=Manifest.Mime||range?.Unit!="bytes"||range.From!=offset||range.To!=end||range.Length!=Manifest.SizeBytes||tag is null||tag.IsWeak||tag.Tag!="\""+Manifest.Revision+"\"")throw new InvalidDataException(AppText.L("動画の範囲情報が一致しません。", "Video range metadata mismatch."));
             await using var body=await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);var result=new byte[count];var read=0;
-            while(read<count){var n=await body.ReadAsync(result.AsMemory(read),token).ConfigureAwait(false);if(n==0)throw new InvalidDataException("動画の範囲が途中で切れました。");read+=n;}
-            var extra=new byte[1];if(await body.ReadAsync(extra,token).ConfigureAwait(false)!=0)throw new InvalidDataException("動画の範囲が上限を超えました。");token.ThrowIfCancellationRequested();return result;
+            while(read<count){var n=await body.ReadAsync(result.AsMemory(read),token).ConfigureAwait(false);if(n==0)throw new InvalidDataException(AppText.L("動画の範囲が途中で切れました。", "Video range stream ended early."));read+=n;}
+            var extra=new byte[1];if(await body.ReadAsync(extra,token).ConfigureAwait(false)!=0)throw new InvalidDataException(AppText.L("動画の範囲が上限を超えました。", "Video range exceeded expected length."));token.ThrowIfCancellationRequested();return result;
         }
         catch(Exception ex) when(!cancellation.IsCancellationRequested && !(ex is OperationCanceledException && caller.IsCancellationRequested))
         {Failure??=ex;throw;}

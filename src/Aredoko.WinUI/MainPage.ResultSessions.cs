@@ -104,7 +104,7 @@ public sealed partial class MainPage
                 EnsureResultKeepAliveTimer();
                 librarySelection.Bind(replacement.Id,replacement.Total,positions);
                 page=start/resultPageSize;ResetBrowse(start,result);rows=result.Items;SyncRowsState();
-                Count.Text=$"{result.Total:N0} 件";
+                Count.Text=AppText.L($"{result.Total:N0} 件", $"{result.Total:N0} item(s)");
                 var slotTotal=virtualTotal<=MaxVirtualSlots?virtualTotal:rows.Count;
                 UpdateBrowseFooter(FormatLoadedPageRange(browseStart,slotTotal,virtualTotal),browseStart>0,browseStart+slotTotal<virtualTotal);
                 Empty.Visibility=virtualTotal==0?Visibility.Visible:Visibility.Collapsed;
@@ -152,7 +152,7 @@ public sealed partial class MainPage
             AppLog.Error(ex);
             // The edit already committed. Never report this as a failed save or
             // discard an unrelated tag/shelf draft (favorite saves only its flag).
-            if(!disposed)Notice("保存しました","検索結果を更新できませんでした。同じ条件で検索し直してください。",Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning);
+            if(!disposed)Notice(AppText.L("保存しました", "Saved"),AppText.L("検索結果を更新できませんでした。同じ条件で検索し直してください。", "Could not refresh search results. Search again with the same filters."),Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning);
         }
     }
     private static bool SameFavoriteCard(MediaRow a,MediaRow b)=>
@@ -205,9 +205,9 @@ public sealed partial class MainPage
                 var progress=new Progress<ResultBuildProgress>(value=>
                 {
                     if(!reporting||disposed||!searches.IsCurrent(version)||cancellation.IsCancellationRequested)return;
-                    Count.Text=value.Total is int total?$"準備中 {value.Processed:N0} / {total:N0}":"準備中…";
+                    Count.Text=value.Total is int total?AppText.L($"準備中 {value.Processed:N0} / {total:N0}", $"Preparing {value.Processed:N0} / {total:N0}"):AppText.L("準備中…", "Preparing...");
                     if(rows.Count==0)Empty.Text=value.Total is int expected
-                        ?$"一覧を準備しています…（{value.Processed:N0} / {expected:N0}件）":"検索結果を準備しています…";
+                        ?AppText.L($"一覧を準備しています…（{value.Processed:N0} / {expected:N0}件）", $"Preparing list... ({value.Processed:N0} / {expected:N0})"):AppText.L("検索結果を準備しています…", "Preparing search results...");
                 });
                 try
                 {

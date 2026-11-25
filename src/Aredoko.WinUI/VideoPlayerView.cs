@@ -34,7 +34,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer previewTimer;
     private readonly Slider seekBar = new() { Minimum=0, Maximum=1, SmallChange=1, LargeChange=10, StepFrequency=0.1, IsThumbToolTipEnabled=false, HorizontalAlignment=HorizontalAlignment.Stretch };
     private readonly Image seekImage = new() { Width=256, Height=144, Stretch=Stretch.Uniform };
-    private readonly TextBlock seekHint = new() { Text="読み込み中…", HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Center };
+    private readonly TextBlock seekHint = new() { Text=AppText.L("読み込み中…", "Loading..."), HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Center };
     private readonly TextBlock seekTime = new() { HorizontalAlignment=HorizontalAlignment.Center };
     private readonly Border seekPreview = new() { Width=272, HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Bottom, Visibility=Visibility.Collapsed, IsHitTestVisible=false, RequestedTheme=ElementTheme.Dark };
     private CancellationTokenSource? previewRequest;
@@ -60,14 +60,14 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
     private readonly Button volumeDown = TextButton("−");
     private readonly Button volumeUp = TextButton("＋");
     private readonly Button retry = IconButton(Symbol.Refresh);
-    private readonly Button openExternal = new() { Content = "外部アプリで開く", Visibility = Visibility.Collapsed, IsEnabled = false, Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(14) };
+    private readonly Button openExternal = new() { Content = AppText.L("外部アプリで開く", "Open in External App"), Visibility = Visibility.Collapsed, IsEnabled = false, Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(14) };
     private readonly Button editDetails = IconButton(Symbol.Edit);
     private readonly Button settings = IconButton(Symbol.More);
     private readonly Microsoft.UI.Xaml.Controls.Primitives.ToggleButton pinButton;
     private readonly Action syncPin;
     private readonly MenuFlyout menu = new();
     private readonly MenuFlyoutItem? findSimilarFrame;
-    private readonly ToggleMenuFlyoutItem alwaysControlsMenuItem = new() { Text = "操作バーを常時表示" };
+    private readonly ToggleMenuFlyoutItem alwaysControlsMenuItem = new() { Text = AppText.L("操作バーを常時表示", "Always show controls") };
     private int menuTargetMs;
     private bool menuOpen;
     private readonly TextBlock positionText = new() { Text = "—", VerticalAlignment = VerticalAlignment.Center };
@@ -130,17 +130,17 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         actions.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         ViewerChromeController.StylePillButton(favorite.Button);
-        (pinButton, syncPin) = ViewerChromeController.CreatePinButton("VideoPinToolbar", () => { alwaysControlsMenuItem.IsChecked = ViewerOptions.Value.AlwaysShowControls; hideTimer?.SyncPinState(); hideTimer?.RefreshHoverHint(); }, ex => { ViewerNotice.Set(status, "設定を保存できませんでした。"); AppLog.Error(ex); });
+        (pinButton, syncPin) = ViewerChromeController.CreatePinButton("VideoPinToolbar", () => { alwaysControlsMenuItem.IsChecked = ViewerOptions.Value.AlwaysShowControls; hideTimer?.SyncPinState(); hideTimer?.RefreshHoverHint(); }, ex => { ViewerNotice.Set(status, AppText.L("設定を保存できませんでした。", "Could not save settings.")); AppLog.Error(ex); });
         var playback=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4};
         foreach(var control in new UIElement[]{playPause,seekBack,seekForward,favorite.Button,editDetails,retry,openExternal})playback.Children.Add(control);
-        Identify(favorite.Button,isAudio?"AudioFavorite":"VideoFavorite","お気に入りを読み込み中");
-        Identify(editDetails,"PlayerEditDetails","詳細で編集");
+        Identify(favorite.Button,isAudio?"AudioFavorite":"VideoFavorite",AppText.L("お気に入りを読み込み中", "Loading favorite state"));
+        Identify(editDetails,"PlayerEditDetails",AppText.L("詳細で編集", "Edit in details"));
         editDetails.Click += (_, _) => EditDetailsRequested?.Invoke();
         var audio=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Right};
         foreach(var control in new UIElement[]{mute,volumeDown,volumeSlider,volumeUp,volumeText,ViewerChromeController.Divider(),settings,pinButton})audio.Children.Add(control);
         ViewerChromeController.ApplySliderTheme(volumeSlider);
         actions.Children.Add(playback); SetColumn(positionText,1); actions.Children.Add(positionText); SetColumn(audio,2); actions.Children.Add(audio);
-        Identify(volumeSlider,"VideoVolume","音量（0〜100）");
+        Identify(volumeSlider,"VideoVolume",AppText.L("音量（0〜100）", "Volume (0-100)"));
         volumeSlider.ValueChanged+=(_,_)=>{if(updatingVolume)return;volume=VideoPlayerPolicy.ClampVolume((int)Math.Round(volumeSlider.Value));if(mediaPlayer is not null)mediaPlayer.Volume=volume/100.0;UpdateControls();ShowChrome();};
         viewport.Tapped+=(_,args)=>
         {
@@ -188,12 +188,12 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
                 ViewerOptions.SavePresentation(ViewerOptions.Value.EnlargeSmallImages,alwaysControlsMenuItem.IsChecked,ViewerOptions.Value.LoopBookPages);
                 syncPin();hideTimer.SyncPinState();
             }
-            catch(Exception ex){alwaysControlsMenuItem.IsChecked=ViewerOptions.Value.AlwaysShowControls;ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);}
+            catch(Exception ex){alwaysControlsMenuItem.IsChecked=ViewerOptions.Value.AlwaysShowControls;ViewerNotice.Set(status,AppText.L("設定を保存できませんでした。", "Could not save settings."));AppLog.Error(ex);}
         };
         if(!isAudio)
         {
-            findSimilarFrame=new MenuFlyoutItem{Text="≈ この場面に似た画像・動画を探す"};
-            Identify(findSimilarFrame,"VideoFindSimilarFrame","この場面に似た画像・動画を探す");
+            findSimilarFrame=new MenuFlyoutItem{Text=AppText.L("≈ この場面に似た画像・動画を探す", "≈ Find similar to this scene")};
+            Identify(findSimilarFrame,"VideoFindSimilarFrame",AppText.L("この場面に似た画像・動画を探す", "Find similar to this scene"));
             findSimilarFrame.Click+=(_,_)=>
             {
                 if(busy||disposed||!loaded||failed)return;
@@ -214,7 +214,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
                 if(pos>position)position=pos;
                 menuTargetMs=(int)Math.Clamp(Math.Round(position.TotalMilliseconds),0,86_400_000);
                 var label=VideoPlayerPolicy.FormatTime(TimeSpan.FromMilliseconds(menuTargetMs));
-                findSimilarFrame.Text=playing?$"≈ 一時停止してこの場面（{label}）に似た画像・動画を探す":$"≈ この場面（{label}）に似た画像・動画を探す";
+                findSimilarFrame.Text=playing?AppText.L($"≈ 一時停止してこの場面（{label}）に似た画像・動画を探す", $"≈ Pause & find similar to this scene ({label})"):AppText.L($"≈ この場面（{label}）に似た画像・動画を探す", $"≈ Find similar to this scene ({label})");
                 AutomationProperties.SetName(findSimilarFrame,findSimilarFrame.Text);
                 findSimilarFrame.IsEnabled=!busy&&!disposed&&loaded&&!failed;
             }
@@ -227,8 +227,8 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         seekHint.Style=(Style)Application.Current.Resources["CaptionTextBlockStyle"];
         var frameHost=new Grid();frameHost.Children.Add(seekImage);frameHost.Children.Add(seekHint);
         var previewContent=new StackPanel { Spacing=4 };previewContent.Children.Add(seekTime);previewContent.Children.Add(frameHost);seekPreview.Child=previewContent;Children.Add(seekPreview);
-        Identify(seekBar,"VideoSeek","再生位置（秒）。左右キーで移動");
-        Identify(seekImage,"VideoSeekImage","シーク先のサムネイル");Identify(seekTime,"VideoSeekTime","シーク先の時刻");Identify(seekPreview,"VideoSeekPreview","シーク先のプレビュー");
+        Identify(seekBar,"VideoSeek",AppText.L("再生位置（秒）。左右キーで移動", "Seek position (seconds). Use Left/Right keys"));
+        Identify(seekImage,"VideoSeekImage",AppText.L("シーク先のサムネイル", "Seek thumbnail"));Identify(seekTime,"VideoSeekTime",AppText.L("シーク先の時刻", "Seek timestamp"));Identify(seekPreview,"VideoSeekPreview",AppText.L("シーク先のプレビュー", "Seek preview"));
         seekBar.AddHandler(PointerPressedEvent,new PointerEventHandler((_,_)=>{seekDragging=true;hideTimer.Show();}),true);
         seekBar.AddHandler(PointerReleasedEvent,new PointerEventHandler((_,_)=>FinishSeekDrag()),true);
         seekBar.PointerCaptureLost+=(_,_)=>FinishSeekDrag();
@@ -254,44 +254,44 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
                 seekImage.Visibility=Visibility.Collapsed;
             }
             else if(previewFrames.TryGetValue(previewWanted,out var cached))
-            {seekImage.Visibility=Visibility.Visible;seekImage.Source=cached;previewDisplayed=previewWanted;seekHint.Visibility=Visibility.Collapsed;AutomationProperties.SetName(seekImage,seekTime.Text+"のサムネイル");}
+            {seekImage.Visibility=Visibility.Visible;seekImage.Source=cached;previewDisplayed=previewWanted;seekHint.Visibility=Visibility.Collapsed;AutomationProperties.SetName(seekImage,AppText.L(seekTime.Text+"のサムネイル", $"Thumbnail at {seekTime.Text}"));}
             else if(previewDisplayed!=previewWanted)
             {
                 seekImage.Visibility=Visibility.Visible;
-                if(seekImage.Source is null){seekHint.Text="読み込み中…";seekHint.Visibility=Visibility.Visible;}
-                else seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(previewDisplayed),duration).Split(" / ")[0]+"（次を準備中）";
+                if(seekImage.Source is null){seekHint.Text=AppText.L("読み込み中…", "Loading...");seekHint.Visibility=Visibility.Visible;}
+                else seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(previewDisplayed),duration).Split(" / ")[0]+AppText.L("（次を準備中）", " (loading...)");
                 if(!previewBusy){previewTimer.Stop();previewTimer.Start();}
             }
             seekPreview.Visibility=Visibility.Visible;
         }),true);
         seekBar.PointerExited+=(_,_)=>{if(!seekDragging){HideSeekPreview();ShowChrome();}};
-        Identify(viewport, "VideoViewport", isAudio ? "音声再生。スペースで再生・一時停止、左右キーで移動" : "動画表示。スペースで再生・一時停止、左右キーで移動");
-        Identify(playerElement, "VideoElement", itemTitle + (isAudio ? "の音声" : "の動画"));
-        Identify(toolbar, "VideoToolbar", (isAudio ? "音声" : "動画") + "の操作");
-        Identify(settings, "VideoSettings", isAudio ? "音声のメニュー" : "動画のメニュー（この場面に似た作品を探す・操作バー設定）");
-        Identify(playPause, "VideoPlayPause", "再生");
-        Identify(seekBack, "VideoSeekBack", "1秒戻る"); Identify(seekForward, "VideoSeekForward", "1秒進む");
-        Identify(mute, "VideoMute", "消音");
-        Identify(volumeDown, "VideoVolumeDown", "音量を下げる"); Identify(volumeUp, "VideoVolumeUp", "音量を上げる");
-        Identify(retry, "VideoRetry", (isAudio ? "音声" : "動画") + "を再試行");
-        Identify(openExternal, "VideoOpenExternal", "既定のアプリで開く");
+        Identify(viewport, "VideoViewport", isAudio ? AppText.L("音声再生。スペースで再生・一時停止、左右キーで移動", "Audio player. Space to play/pause, Left/Right keys to seek") : AppText.L("動画表示。スペースで再生・一時停止、左右キーで移動", "Video player. Space to play/pause, Left/Right keys to seek"));
+        Identify(playerElement, "VideoElement", AppText.L(itemTitle + (isAudio ? "の音声" : "の動画"), (isAudio ? "Audio: " : "Video: ") + itemTitle));
+        Identify(toolbar, "VideoToolbar", isAudio ? AppText.L("音声の操作", "Audio controls") : AppText.L("動画の操作", "Video controls"));
+        Identify(settings, "VideoSettings", isAudio ? AppText.L("音声のメニュー", "Audio menu") : AppText.L("動画のメニュー（この場面に似た作品を探す・操作バー設定）", "Video menu (find similar scene, control bar settings)"));
+        Identify(playPause, "VideoPlayPause", AppText.L("再生", "Play"));
+        Identify(seekBack, "VideoSeekBack", AppText.L("1秒戻る", "Back 1s")); Identify(seekForward, "VideoSeekForward", AppText.L("1秒進む", "Forward 1s"));
+        Identify(mute, "VideoMute", AppText.L("消音", "Mute"));
+        Identify(volumeDown, "VideoVolumeDown", AppText.L("音量を下げる", "Volume down")); Identify(volumeUp, "VideoVolumeUp", AppText.L("音量を上げる", "Volume up"));
+        Identify(retry, "VideoRetry", isAudio ? AppText.L("音声を再試行", "Retry audio") : AppText.L("動画を再試行", "Retry video"));
+        Identify(openExternal, "VideoOpenExternal", AppText.L("既定のアプリで開く", "Open in default app"));
         openExternal.Click += (_, _) => OpenExternalRequested?.Invoke();
         AutomationProperties.SetAutomationId(positionText, "VideoPosition");
         AutomationProperties.SetAutomationId(volumeText, "VideoVolumeStatus");
         AutomationProperties.SetAutomationId(status, "VideoStatus");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        hideTimer.AttachHoverHint(playPause, () => playing ? "一時停止（Space）" : "再生（Space）");
-        hideTimer.AttachHoverHint(seekBack, "1秒戻る（←）");
-        hideTimer.AttachHoverHint(seekForward, "1秒進む（→）");
+        hideTimer.AttachHoverHint(playPause, () => playing ? AppText.L("一時停止（Space）", "Pause (Space)") : AppText.L("再生（Space）", "Play (Space)"));
+        hideTimer.AttachHoverHint(seekBack, AppText.L("1秒戻る（←）", "Back 1s (←)"));
+        hideTimer.AttachHoverHint(seekForward, AppText.L("1秒進む（→）", "Forward 1s (→)"));
         hideTimer.AttachHoverHint(favorite.Button, () => AutomationProperties.GetName(favorite.Button));
-        hideTimer.AttachHoverHint(editDetails, "詳細でタグ・棚を編集（プレーヤーを閉じる）");
-        hideTimer.AttachHoverHint(retry, isAudio ? "音声の読み込みを再試行" : "動画の読み込みを再試行");
-        hideTimer.AttachHoverHint(openExternal, "既定の外部アプリで再生します");
-        hideTimer.AttachHoverHint(mute, () => muted ? "消音解除（M）" : "消音（M）");
-        hideTimer.AttachHoverHint(volumeDown, "音量を下げる");
-        hideTimer.AttachHoverHint(volumeUp, "音量を上げる");
-        hideTimer.AttachHoverHint(settings, isAudio ? "再生メニュー" : "メニュー（この場面に似た作品を探す・操作バー設定）");
-        hideTimer.AttachHoverHint(pinButton, () => ViewerOptions.Value.AlwaysShowControls ? "操作バーの固定を解除" : "操作バーを常に表示（ピン留め）");
+        hideTimer.AttachHoverHint(editDetails, AppText.L("詳細でタグ・棚を編集（プレーヤーを閉じる）", "Edit tags & shelves in details (closes player)"));
+        hideTimer.AttachHoverHint(retry, isAudio ? AppText.L("音声の読み込みを再試行", "Retry loading audio") : AppText.L("動画の読み込みを再試行", "Retry loading video"));
+        hideTimer.AttachHoverHint(openExternal, AppText.L("既定の外部アプリで再生します", "Play in default external app"));
+        hideTimer.AttachHoverHint(mute, () => muted ? AppText.L("消音解除（M）", "Unmute (M)") : AppText.L("消音（M）", "Mute (M)"));
+        hideTimer.AttachHoverHint(volumeDown, AppText.L("音量を下げる", "Volume down"));
+        hideTimer.AttachHoverHint(volumeUp, AppText.L("音量を上げる", "Volume up"));
+        hideTimer.AttachHoverHint(settings, isAudio ? AppText.L("再生メニュー", "Playback menu") : AppText.L("メニュー（この場面に似た作品を探す・操作バー設定）", "Menu (find similar scene, control bar settings)"));
+        hideTimer.AttachHoverHint(pinButton, () => ViewerOptions.Value.AlwaysShowControls ? AppText.L("操作バーの固定を解除", "Unpin control bar") : AppText.L("操作バーを常に表示（ピン留め）", "Always show control bar (Pin)"));
         playPause.Click += (_, _) => TogglePlayPause();
         seekBack.Click += (_, _) => Seek(-1); seekForward.Click += (_, _) => Seek(1);
         mute.Click += (_, _) => ToggleMute();
@@ -343,7 +343,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
             cancellation.ThrowIfCancellationRequested();
             source = MediaSource.CreateFromStream(stream, mime);
             await source.OpenAsync().AsTask(cancellation);
-            if (source.State != MediaSourceState.Opened) throw new InvalidDataException(isAudio ? "音声を開けません。" : "動画を開けません。");
+            if (source.State != MediaSourceState.Opened) throw new InvalidDataException(isAudio ? AppText.L("音声を開けません。", "Cannot open audio.") : AppText.L("動画を開けません。", "Cannot open video."));
             var opened = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             nextPlayer = new MediaPlayer { AutoPlay = false, Volume = volume / 100.0, IsMuted = muted };
             var player = nextPlayer;
@@ -438,7 +438,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         busy = true; failed = loaded = playing = false;
         ClearMedia();
         positionText.Text = "—";
-        ViewerNotice.Set(status, "互換形式で再生を準備しています…");
+        ViewerNotice.Set(status, AppText.L("互換形式で再生を準備しています…", "Preparing playback in compatible format..."));
         hideTimer.Stop(); UpdateControls();
         try
         {
@@ -470,7 +470,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         busy = true; failed = loaded = playing = false;
         ClearMedia();
         positionText.Text = "—";
-        ViewerNotice.Set(status,isAudio ? "音声を読み込んでいます…" : "動画を読み込んでいます…");
+        ViewerNotice.Set(status,isAudio ? AppText.L("音声を読み込んでいます…", "Loading audio...") : AppText.L("動画を読み込んでいます…", "Loading video..."));
         hideTimer.Stop(); UpdateControls();
         try
         {
@@ -485,7 +485,7 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
             AppLog.Error(ex);
             compatAttempted = true;
             ClearMedia();
-            ViewerNotice.Set(status, "互換形式で再生を準備しています…");
+            ViewerNotice.Set(status, AppText.L("互換形式で再生を準備しています…", "Preparing playback in compatible format..."));
             try
             {
                 await OpenRangeStreamAsync(() => api.OpenVideoCompatRangeAsync(itemId, cancellation), 15, isCompat: true, current, cancellation);
@@ -668,14 +668,14 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
                 if(!previewFrames.ContainsKey(wanted)){previewFrameOrder.Enqueue(wanted);previewFrames[wanted]=bitmap;}
                 while(previewFrameOrder.Count>8)previewFrames.Remove(previewFrameOrder.Dequeue());
                 if(seekHover&&previewWanted==wanted)
-                {seekImage.Source=bitmap;seekHint.Visibility=Visibility.Collapsed;previewDisplayed=wanted;seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(wanted),duration).Split(" / ")[0];AutomationProperties.SetName(seekImage,seekTime.Text+"のサムネイル");}
+                {seekImage.Source=bitmap;seekHint.Visibility=Visibility.Collapsed;previewDisplayed=wanted;seekTime.Text=VideoPlayerPolicy.FormatPosition(TimeSpan.FromMilliseconds(wanted),duration).Split(" / ")[0];AutomationProperties.SetName(seekImage,AppText.L(seekTime.Text+"のサムネイル", $"Thumbnail at {seekTime.Text}"));}
             }
         }
         catch(OperationCanceledException) { }
         catch(Exception)
         {
             if(!disposed&&current==version&&seekHover&&previewWanted==wanted)
-            {previewDisplayed=wanted;seekHint.Text="サムネイルなし";seekHint.Visibility=Visibility.Visible;seekImage.Source=null;AutomationProperties.SetName(seekImage,"サムネイルを取得できません。シークは利用できます");}
+            {previewDisplayed=wanted;seekHint.Text=AppText.L("サムネイルなし", "No thumbnail");seekHint.Visibility=Visibility.Visible;seekImage.Source=null;AutomationProperties.SetName(seekImage,AppText.L("サムネイルを取得できません。シークは利用できます", "Cannot load thumbnail. Seeking is still available"));}
         }
         finally
         {
@@ -726,11 +726,11 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         ViewerNotice.Set(status,ex switch
         {
             ArchiveReadException { Status: HttpStatusCode.Conflict } => ex.Message,
-            ArchiveReadException { Status: HttpStatusCode.ServiceUnavailable } => "ほかのメディアを読み込み中です。少し待って再試行してください。",
+            ArchiveReadException { Status: HttpStatusCode.ServiceUnavailable } => AppText.L("ほかのメディアを読み込み中です。少し待って再試行してください。", "Another media file is loading. Wait a moment and retry."),
             ArchiveReadException { Status: HttpStatusCode.Forbidden } => ex.Message,
-            OperationCanceledException => "読み込みがタイムアウトしました。再試行してください。",
-            HttpRequestException => "接続できません。閉じてライブラリから再接続してください。",
-            _ => "この動画は再生できません（未対応の形式・コーデック）"
+            OperationCanceledException => AppText.L("読み込みがタイムアウトしました。再試行してください。", "Loading timed out. Please retry."),
+            HttpRequestException => AppText.L("接続できません。閉じてライブラリから再接続してください。", "Cannot connect. Close and reconnect from the library."),
+            _ => AppText.L("この動画は再生できません（未対応の形式・コーデック）", "Cannot play this media (unsupported format or codec)")
         });
         ShowChrome();
     }
@@ -741,16 +741,16 @@ internal sealed class VideoPlayerView : Grid, IDisposable, IViewerWindowTitle
         seekBar.IsEnabled=!busy&&loaded&&!failed;SyncSeekBar();
         playPause.IsEnabled = !busy && loaded;
         playPause.Content = new SymbolIcon(playing ? Symbol.Pause : Symbol.Play);
-        AutomationProperties.SetName(playPause, playing ? "一時停止" : "再生");
+        AutomationProperties.SetName(playPause, playing ? AppText.L("一時停止", "Pause") : AppText.L("再生", "Play"));
         seekBack.IsEnabled = !busy && loaded && position > TimeSpan.Zero;
         seekForward.IsEnabled = !busy && loaded && position < duration;
         mute.IsEnabled = !busy;
         mute.Content = new SymbolIcon(muted ? Symbol.Mute : Symbol.Volume);
-        AutomationProperties.SetName(mute, muted ? "消音解除" : "消音");
+        AutomationProperties.SetName(mute, muted ? AppText.L("消音解除", "Unmute") : AppText.L("消音", "Mute"));
         volumeDown.IsEnabled = !busy && volume > 0;
         volumeUp.IsEnabled = !busy && volume < 100;
         updatingVolume=true;try{volumeSlider.Value=volume;volumeSlider.IsEnabled=!busy;}finally{updatingVolume=false;}
-        volumeText.Text = muted ? "消音" : $"{volume}%";
+        volumeText.Text = muted ? AppText.L("消音", "Muted") : $"{volume}%";
         retry.Visibility = failed ? Visibility.Visible : Visibility.Collapsed;
         retry.IsEnabled = !busy && failed&&!favorite.IsSaving;
         openExternal.Visibility = !isAudio && failed && !busy ? Visibility.Visible : Visibility.Collapsed;

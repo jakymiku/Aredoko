@@ -25,10 +25,10 @@ public sealed record PageTextMatch(string SourceRevision, string SourceState, in
     }
     public string SourceStateLabel => SourceState switch
     {
-        "current" => "元ファイル一致",
-        "stale" => "元ファイル変更あり",
-        "unverified" => "元ファイル確認待ち",
-        _ => "元ファイル利用不可"
+        "current" => AppText.L("元ファイル一致", "Source matches"),
+        "stale" => AppText.L("元ファイル変更あり", "Source changed"),
+        "unverified" => AppText.L("元ファイル確認待ち", "Verification pending"),
+        _ => AppText.L("元ファイル利用不可", "Source unavailable")
     };
     public string Summary
     {
@@ -37,8 +37,10 @@ public sealed record PageTextMatch(string SourceRevision, string SourceState, in
             var first = Pages.Count > 0 ? Pages[0] : null;
             var snippet = first is null ? "" : (first.Excerpt.Length > 80 ? first.Excerpt[..80] + "…" : first.Excerpt).Replace('\r', ' ').Replace('\n', ' ');
             var model = first?.Producer.Model ?? "";
-            var pageNumbers = string.Join("、", Pages.Select(p => $"{p.Page + 1}ページ"));
-            return $"ページ本文一致（{MatchingPages}ページ: {pageNumbers}）{(snippet.Length > 0 ? $" · 「{snippet}」" : "")}\nモデル: {model} · {SourceStateLabel}";
+            var pageNumbers = string.Join(AppText.L("、", ", "), Pages.Select(p => AppText.L($"{p.Page + 1}ページ", $"p.{p.Page + 1}")));
+            return AppText.L(
+                $"ページ本文一致（{MatchingPages}ページ: {pageNumbers}）{(snippet.Length > 0 ? $" · 「{snippet}」" : "")}\nモデル: {model} · {SourceStateLabel}",
+                $"Page text match ({MatchingPages} pp.: {pageNumbers}){(snippet.Length > 0 ? $" · \"{snippet}\"" : "")}\nModel: {model} · {SourceStateLabel}");
         }
     }
 }
@@ -85,12 +87,12 @@ public static class PageEvidenceProtocol
             var count = root.GetProperty("page_count").GetInt32();
             var reused = root.GetProperty("reused").GetBoolean();
             if (itemId != expectedItemId || !TagReviewProtocol.IsRevision(revision) || !Kinds.Contains(kind) || count is < 1 or > 10000)
-                throw new InvalidDataException("ページ索引の更新結果が無効です。");
+                throw new InvalidDataException(AppText.L("ページ索引の更新結果が無効です。", "Invalid page index refresh result."));
             return new(itemId, revision, kind, count, reused);
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
         {
-            throw new InvalidDataException("ページ索引の応答を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("ページ索引の応答を読み取れません。", "Unable to read page index response."), ex);
         }
     }
 
@@ -110,18 +112,18 @@ public static class PageEvidenceProtocol
             string? rev = revEl.ValueKind == JsonValueKind.Null ? null : revEl.GetString();
             string? kind = kindEl.ValueKind == JsonValueKind.Null ? null : kindEl.GetString();
             if (itemId != expectedItemId || !States.Contains(state) || offset != expectedOffset || limit != expectedLimit)
-                throw new InvalidDataException("ページ一覧のヘッダが無効です。");
+                throw new InvalidDataException(AppText.L("ページ一覧のヘッダが無効です。", "Invalid page list header."));
             var arr = root.GetProperty("pages");
             if (arr.ValueKind != JsonValueKind.Array || arr.GetArrayLength() > limit)
-                throw new InvalidDataException("ページ一覧の件数が無効です。");
+                throw new InvalidDataException(AppText.L("ページ一覧の件数が無効です。", "Invalid page list count."));
             if (state == "unindexed")
             {
                 if (rev is not null || kind is not null || count != 0 || arr.GetArrayLength() != 0)
-                    throw new InvalidDataException("未索引のページ一覧が無効です。");
+                    throw new InvalidDataException(AppText.L("未索引のページ一覧が無効です。", "Invalid unindexed page list."));
                 return new(itemId, null, null, state, 0, offset, limit, []);
             }
             if (rev is null || !TagReviewProtocol.IsRevision(rev) || kind is null || !Kinds.Contains(kind) || count is < 1 or > 10000)
-                throw new InvalidDataException("ページ一覧の版情報が無効です。");
+                throw new InvalidDataException(AppText.L("ページ一覧の版情報が無効です。", "Invalid page list revision."));
             var pages = new List<PageEntry>(arr.GetArrayLength());
             foreach (var p in arr.EnumerateArray())
             {
@@ -130,14 +132,14 @@ public static class PageEvidenceProtocol
                 var mime = TagReviewProtocol.Text(p, "mime", 64);
                 var size = p.GetProperty("size_bytes").GetInt64();
                 if (!TagReviewProtocol.IsRevision(pageId) || num < 0 || num >= count || size < 0)
-                    throw new InvalidDataException("ページ項目が無効です。");
+                    throw new InvalidDataException(AppText.L("ページ項目が無効です。", "Invalid page entry."));
                 pages.Add(new(pageId, num, mime, size));
             }
             return new(itemId, rev, kind, state, count, offset, limit, pages);
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
         {
-            throw new InvalidDataException("ページ一覧を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("ページ一覧を読み取れません。", "Unable to read page list."), ex);
         }
     }
 
@@ -147,11 +149,11 @@ public static class PageEvidenceProtocol
         {
             using var doc = JsonDocument.Parse(bytes);
             var root = doc.RootElement;
-            return new(root.GetProperty("available").GetBoolean(), root.GetProperty("reason").GetString() ?? "");
+            return new(root.GetProperty("available").GetBoolean(), AppText.TranslateBackend(root.GetProperty("reason").GetString()));
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
         {
-            throw new InvalidDataException("文字抽出の状態を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("文字抽出の状態を読み取れません。", "Unable to read text extraction status."), ex);
         }
     }
 
@@ -166,12 +168,12 @@ public static class PageEvidenceProtocol
             var processed = root.GetProperty("processed").GetInt32();
             var reused = root.GetProperty("reused").GetInt32();
             if (itemId != expectedItemId || rev != expectedRevision || processed < 0 || reused < 0 || processed + reused is < 1 or > 16)
-                throw new InvalidDataException("文字抽出の応答が要求と一致しません。");
+                throw new InvalidDataException(AppText.L("文字抽出の応答が要求と一致しません。", "Text extraction response does not match request."));
             return new(itemId, rev, processed, reused);
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
         {
-            throw new InvalidDataException("文字抽出の結果を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("文字抽出の結果を読み取れません。", "Unable to read text extraction result."), ex);
         }
     }
 
@@ -189,33 +191,33 @@ public static class PageEvidenceProtocol
             var revEl = root.GetProperty("source_revision");
             string? rev = revEl.ValueKind == JsonValueKind.Null ? null : revEl.GetString();
             if (itemId != expectedItemId || !States.Contains(state) || offset != expectedOffset || limit != expectedLimit || total < 0)
-                throw new InvalidDataException("ページ本文一覧のヘッダが無効です。");
+                throw new InvalidDataException(AppText.L("ページ本文一覧のヘッダが無効です。", "Invalid page text list header."));
             var arr = root.GetProperty("pages");
             if (arr.ValueKind != JsonValueKind.Array || arr.GetArrayLength() > limit)
-                throw new InvalidDataException("ページ本文一覧の件数が無効です。");
+                throw new InvalidDataException(AppText.L("ページ本文一覧の件数が無効です。", "Invalid page text list count."));
             if (state == "unindexed")
             {
                 if (rev is not null || total != 0 || arr.GetArrayLength() != 0)
-                    throw new InvalidDataException("未索引のページ本文一覧が無効です。");
+                    throw new InvalidDataException(AppText.L("未索引のページ本文一覧が無効です。", "Invalid unindexed page text list."));
                 return new(itemId, null, state, 0, offset, limit, []);
             }
             if (rev is null || !TagReviewProtocol.IsRevision(rev))
-                throw new InvalidDataException("ページ本文一覧の版が無効です。");
+                throw new InvalidDataException(AppText.L("ページ本文一覧の版が無効です。", "Invalid page text list revision."));
             var pages = new List<PageTextEntry>(arr.GetArrayLength());
             foreach (var p in arr.EnumerateArray())
             {
                 var num = p.GetProperty("page").GetInt32();
                 var pageId = TagReviewProtocol.Text(p, "page_id", 64);
-                var text = p.GetProperty("text").GetString() ?? throw new InvalidDataException("ページ本文が無効です。");
+                var text = p.GetProperty("text").GetString() ?? throw new InvalidDataException(AppText.L("ページ本文が無効です。", "Invalid page text."));
                 if (!TagReviewProtocol.IsRevision(pageId) || num is < 0 or > 9999 || text.Length > 20000)
-                    throw new InvalidDataException("ページ本文の項目が無効です。");
+                    throw new InvalidDataException(AppText.L("ページ本文の項目が無効です。", "Invalid page text entry."));
                 pages.Add(new(num, pageId, text, ParseProducer(p.GetProperty("producer"))));
             }
             return new(itemId, rev, state, total, offset, limit, pages);
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
         {
-            throw new InvalidDataException("ページ本文一覧を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("ページ本文一覧を読み取れません。", "Unable to read page text list."), ex);
         }
     }
 
@@ -237,26 +239,26 @@ public static class PageEvidenceProtocol
             if (root.GetProperty("search_mode").GetString() != "page-text" ||
                 root.GetProperty("page").GetInt32() != expectedPage ||
                 root.GetProperty("limit").GetInt32() != 20)
-                throw new InvalidDataException("ページ本文検索の応答が要求と一致しません。");
+                throw new InvalidDataException(AppText.L("ページ本文検索の応答が要求と一致しません。", "Page text search response does not match request."));
             var parsed = Protocol.ParseSearch(text);
             var rawItems = root.GetProperty("items");
             if (parsed.Total < 0 || parsed.Items.Count > 20 || parsed.Items.Count > parsed.Total ||
                 rawItems.GetArrayLength() != parsed.Items.Count ||
                 parsed.Items.Select(x => x.Id).Distinct().Count() != parsed.Items.Count)
-                throw new InvalidDataException("ページ本文検索の件数が無効です。");
+                throw new InvalidDataException(AppText.L("ページ本文検索の件数が無効です。", "Invalid page text search result count."));
             var index = 0;
             foreach (var element in rawItems.EnumerateArray())
             {
                 var row = parsed.Items[index++];
                 if (row.Id < 1 || !element.TryGetProperty("page_text_match", out var match) || match.ValueKind != JsonValueKind.Object)
-                    throw new InvalidDataException("ページ本文検索の根拠情報がありません。");
+                    throw new InvalidDataException(AppText.L("ページ本文検索の根拠情報がありません。", "Missing evidence for page text search result."));
                 var revision = TagReviewProtocol.Text(match, "source_revision", 64);
                 var state = TagReviewProtocol.Text(match, "source_state", 16);
                 var matchingPages = match.GetProperty("matching_pages").GetInt32();
                 var pagesArr = match.GetProperty("pages");
                 if (!TagReviewProtocol.IsRevision(revision) || !States.Contains(state) || state == "unindexed" ||
                     matchingPages < 1 || pagesArr.ValueKind != JsonValueKind.Array || pagesArr.GetArrayLength() is < 1 or > 3)
-                    throw new InvalidDataException("ページ本文検索の一致情報が無効です。");
+                    throw new InvalidDataException(AppText.L("ページ本文検索の一致情報が無効です。", "Invalid page text match details."));
                 var evPages = new List<PageTextEvidencePage>(pagesArr.GetArrayLength());
                 foreach (var p in pagesArr.EnumerateArray())
                 {
@@ -264,7 +266,7 @@ public static class PageEvidenceProtocol
                     var pageNum = p.GetProperty("page").GetInt32();
                     var excerpt = p.GetProperty("excerpt").GetString() ?? "";
                     if (!TagReviewProtocol.IsRevision(pageId) || pageNum is < 0 or > 9999 || excerpt.Length > 240)
-                        throw new InvalidDataException("ページ本文検索の抜粋情報が無効です。");
+                        throw new InvalidDataException(AppText.L("ページ本文検索の抜粋情報が無効です。", "Invalid page text excerpt details."));
                     evPages.Add(new(pageId, pageNum, excerpt, ParseProducer(p.GetProperty("producer"))));
                 }
                 row.PageText = new PageTextMatch(revision, state, matchingPages, evPages);
@@ -273,7 +275,7 @@ public static class PageEvidenceProtocol
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException or ArgumentException)
         {
-            throw new InvalidDataException("ページ本文の検索結果を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("ページ本文の検索結果を読み取れません。", "Unable to read page text search results."), ex);
         }
     }
 }
@@ -291,30 +293,30 @@ public sealed class PageEvidenceClient(HttpClient client)
             if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             if (response.Content.Headers.ContentLength is long contentLength && (contentLength < 1 || contentLength > limit))
-                throw new InvalidDataException("ページ根拠応答のデータ量が無効です。");
+                throw new InvalidDataException(AppText.L("ページ根拠応答のデータ量が無効です。", "Invalid page evidence response size."));
             await using var stream = await response.Content.ReadAsStreamAsync(token);
             using var output = new MemoryStream();
             var buffer = new byte[16384];
             int count;
             while ((count = await stream.ReadAsync(buffer, token)) != 0)
             {
-                if (output.Length + count > limit) throw new InvalidDataException("ページ根拠応答が大きすぎます。");
+                if (output.Length + count > limit) throw new InvalidDataException(AppText.L("ページ根拠応答が大きすぎます。", "Page evidence response is too large."));
                 output.Write(buffer, 0, count);
             }
-            if (output.Length == 0) throw new InvalidDataException("ページ根拠応答が空です。");
+            if (output.Length == 0) throw new InvalidDataException(AppText.L("ページ根拠応答が空です。", "Page evidence response is empty."));
             if (response.Content.Headers.ContentLength is long expected && expected != output.Length)
-                throw new InvalidDataException("ページ根拠応答が途中で切れました。");
+                throw new InvalidDataException(AppText.L("ページ根拠応答が途中で切れました。", "Page evidence response was truncated."));
             var bytes = output.ToArray();
             if (!response.IsSuccessStatusCode)
                 throw new InvalidOperationException(ErrorText.FromResponse(Encoding.UTF8.GetString(bytes), (int)response.StatusCode));
             var mime = response.Content.Headers.ContentType?.MediaType;
             if (image ? mime is not ("image/png" or "image/jpeg" or "image/webp" or "image/gif" or "image/bmp") : mime != "application/json")
-                throw new InvalidDataException("ページ根拠応答の形式が無効です。");
+                throw new InvalidDataException(AppText.L("ページ根拠応答の形式が無効です。", "Invalid page evidence response format."));
             return bytes;
         }
         catch (OperationCanceledException ex) when (!cancellation.IsCancellationRequested)
         {
-            throw new TimeoutException("ページ根拠の処理が時間内に完了しませんでした。", ex);
+            throw new TimeoutException(AppText.L("ページ根拠の処理が時間内に完了しませんでした。", "Page evidence request timed out."), ex);
         }
     }
 
@@ -340,21 +342,21 @@ public sealed class PageEvidenceClient(HttpClient client)
     {
         var bytes=await ReadAsync("api/library/ai/pages/chunked",PageChunkRequests.Start(plan),PageEvidenceProtocol.MaxJsonBytes,cancellation);
         var status=PageChunkStatus.Parse(bytes,plan.Profile,item:plan.ItemId,revision:plan.Revision,scope:plan.Scope);
-        if(!status.PageIds.SequenceEqual(plan.PageIds)||status.ChunkSize!=16)throw new InvalidDataException("追加範囲が変わりました。");
+        if(!status.PageIds.SequenceEqual(plan.PageIds)||status.ChunkSize!=16)throw new InvalidDataException(AppText.L("追加範囲が変わりました。", "The range to add has changed."));
         return status;
     }
     public async Task<PageChunkStatus> ResumeChunksAsync(PageChunkStatus saved,JsonObject scope,CancellationToken cancellation=default)
     {
         var bytes=await ReadAsync("api/library/ai/pages/chunked/resume",PageChunkRequests.Resume(saved,scope),PageEvidenceProtocol.MaxJsonBytes,cancellation);
         var status=PageChunkStatus.Parse(bytes,saved.Profile,item:saved.ItemId,revision:saved.Revision,scope:scope);
-        if(!status.PageIds.SequenceEqual(saved.PageIds)||status.ChunkSize!=saved.ChunkSize)throw new InvalidDataException("前回の選択が変わりました。");
+        if(!status.PageIds.SequenceEqual(saved.PageIds)||status.ChunkSize!=saved.ChunkSize)throw new InvalidDataException(AppText.L("前回の選択が変わりました。", "Previous selection has changed."));
         return status;
     }
     public async Task<PageChunkStatus> ChunkStatusAsync(PageChunkStatus owned,CancellationToken cancellation=default)
     {
         var bytes=await ReadAsync("api/library/ai/status",null,PageEvidenceProtocol.MaxJsonBytes,cancellation);
         var status=PageChunkStatus.Parse(bytes,owned.Profile,owned.JobId,owned.ItemId,owned.Revision,owned.Scope);
-        if(!status.PageIds.SequenceEqual(owned.PageIds)||status.ChunkSize!=owned.ChunkSize)throw new InvalidDataException("処理中のページ選択が変わりました。");
+        if(!status.PageIds.SequenceEqual(owned.PageIds)||status.ChunkSize!=owned.ChunkSize)throw new InvalidDataException(AppText.L("処理中のページ選択が変わりました。", "Active page selection has changed."));
         return status;
     }
 

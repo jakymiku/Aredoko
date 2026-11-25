@@ -281,3 +281,4 @@ foreach(var size in new[]{60,100,180})
 }
 Check(LibraryTileLayout.Width(1200,60)<LibraryTileLayout.Width(1200,180),"smaller tiles increase column count");
 Check(double.IsFinite(LibraryTileLayout.Width(double.NaN,100)),"tile layout handles unavailable width");
+LocalizationTests.Run(Check);

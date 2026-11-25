@@ -17,7 +17,7 @@ from ctypes import (
     c_uint64,
     c_void_p,
 )
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 from pathlib import Path
 import struct
@@ -38,6 +38,7 @@ ERR_TOO_LARGE = -9
 ERR_OUTPUT_TOO_LARGE = -10
 ERR_UNSUPPORTED = -11
 ERR_IO = -12
+ERR_ACCESS_DENIED = -13
 ERR_PANIC = -99
 
 KINDS = ('book', 'archive', 'image', 'video', 'audio', 'material')
@@ -75,6 +76,7 @@ class NativeScanResult:
     skipped_links: int
     items: list
     folder_pages: list
+    skipped_access_denied: list = field(default_factory=list)
 
 
 def _candidate_paths():
@@ -447,6 +449,7 @@ def scan_tree(root, db_path, patterns, *, recursive: bool, folder_books: bool, c
     pos = 8
     items = []
     folder_pages = []
+    skipped_access_denied = []
     unpack_item = struct.Struct('<QqBI').unpack_from
     unpack_u32 = struct.Struct('<I').unpack_from
     unpack_page = struct.Struct('<QqI').unpack_from
@@ -474,6 +477,14 @@ def scan_tree(root, db_path, patterns, *, recursive: bool, folder_books: bool, c
                 pos += nlen
                 pages.append((name, size, mtime_ns))
             folder_pages.append((dir_rel, pages))
+        elif rtype == 3:
+            is_dir = bool(view[pos])
+            pos += 1
+            (rlen,) = unpack_u32(view, pos)
+            pos += 4
+            rel = bytes(view[pos:pos + rlen]).decode('utf-8')
+            pos += rlen
+            skipped_access_denied.append((rel, is_dir))
         else:
             raise ValueError(f'Invalid native scan record type: {rtype}')
     return NativeScanResult(
@@ -481,4 +492,5 @@ def scan_tree(root, db_path, patterns, *, recursive: bool, folder_books: bool, c
         skipped_links=skipped_links,
         items=items,
         folder_pages=folder_pages,
+        skipped_access_denied=skipped_access_denied,
     )

@@ -19,7 +19,8 @@ import native_accel
 
 _ORIG_SCANDIR = os.scandir
 
-DEFAULT_EXCLUDES = ('.git', '.svn', '__pycache__', 'node_modules', 'Thumbs.db', 'desktop.ini')
+DEFAULT_EXCLUDES = ('.git', '.svn', '__pycache__', 'node_modules', 'Thumbs.db', 'desktop.ini', '$RECYCLE.BIN')
+MAX_ACCESS_DENIED_LOG = 500
 TYPES = {
     'book': {'.cbz', '.pdf', '.epub'},
     # A .zip may be a book OR a package of production assets; do not guess.
@@ -124,9 +125,17 @@ class ScanCounts:
     excluded: int = 0
     skipped_links: int = 0
     ignored_files: int = 0
+    skipped_access_denied: int = 0
+    access_denied_entries: tuple = ()
+    access_denied_truncated: bool = False
 
     def as_dict(self):
-        return vars(self).copy()
+        data = vars(self).copy()
+        data['access_denied_entries'] = [
+            {'relative_path': rel, 'is_dir': is_dir}
+            for rel, is_dir in self.access_denied_entries
+        ]
+        return data
 
 
 class LibraryIndex:
@@ -322,7 +331,9 @@ class LibraryIndex:
             patterns = tuple(json.loads(row['excludes_json']))
             folder_books = bool(row['folder_books'])
             counts = dict(discovered=0, added=0, changed=0, unchanged=0,
-                          missing=0, excluded=0, skipped_links=0, ignored_files=0)
+                          missing=0, excluded=0, skipped_links=0, ignored_files=0,
+                          skipped_access_denied=0)
+            skipped_access_denied = []
             seen = _now()
             db.execute('CREATE TEMP TABLE scan_seen(path TEXT PRIMARY KEY) WITHOUT ROWID')
             if os.scandir is _ORIG_SCANDIR and native_accel.available():
@@ -336,6 +347,7 @@ class LibraryIndex:
                     raise InterruptedError('Scan cancelled; previous index preserved') from error
                 counts['skipped_links'] = native_scan.skipped_links
                 counts['ignored_files'] = native_scan.ignored_files
+                skipped_access_denied.extend(native_scan.skipped_access_denied)
                 for rel, kind, size, mtime_ns in native_scan.items:
                     if cancelled and cancelled():
                         raise InterruptedError('Scan cancelled; previous index preserved')
@@ -352,39 +364,60 @@ class LibraryIndex:
                     if cancelled and cancelled():
                         raise InterruptedError('Scan cancelled; previous index preserved')
                     directory = pending.pop()
-                    directory_info = directory.stat(follow_symlinks=False)
+                    is_root_dir = (directory == root)
+                    try:
+                        directory_info = directory.stat(follow_symlinks=False)
+                    except PermissionError:
+                        if is_root_dir:
+                            raise
+                        skipped_access_denied.append((directory.relative_to(root).as_posix(), True))
+                        continue
                     if not stat.S_ISDIR(directory_info.st_mode) or _reparse(directory_info) or directory.is_symlink():
                         raise OSError(f'Directory changed during scan: {directory}')
                     # Finish each book before walking the next directory. Keep only
                     # one folder's page metadata, not every page in the entire root.
                     pages = []
-                    with os.scandir(directory) as entries:
-                        for entry in entries:
-                            if cancelled and cancelled():
-                                raise InterruptedError('Scan cancelled; previous index preserved')
-                            rel = Path(entry.path).relative_to(root).as_posix()
-                            info = entry.stat(follow_symlinks=False)
-                            if stat.S_ISLNK(info.st_mode) or _reparse(info):
-                                counts['skipped_links'] += 1
-                                continue
-                            if _excluded(rel, patterns):
-                                continue
-                            if stat.S_ISDIR(info.st_mode):
-                                if row['recursive']:pending.append(Path(entry.path))
-                                continue
-                            if not stat.S_ISREG(info.st_mode):
-                                continue
-                            # Never index the local SQLite database as a media item.
-                            if Path(entry.path).resolve(strict=False) in (self.path,):
-                                continue
-                            kind = EXT_TYPES.get(Path(entry.name).suffix.casefold())
-                            if kind is None:
-                                counts['ignored_files'] += 1
-                                continue
-                            if folder_books and kind == 'image':
-                                pages.append((entry.name, info.st_size, info.st_mtime_ns))
-                                continue
-                            self._record(db, root_id, rel, kind, info.st_size, info.st_mtime_ns, seen, counts, dry_run, progress)
+                    try:
+                        with os.scandir(directory) as entries:
+                            for entry in entries:
+                                if cancelled and cancelled():
+                                    raise InterruptedError('Scan cancelled; previous index preserved')
+                                rel = Path(entry.path).relative_to(root).as_posix()
+                                try:
+                                    info = entry.stat(follow_symlinks=False)
+                                except PermissionError:
+                                    try:
+                                        entry_is_dir = entry.is_dir(follow_symlinks=False)
+                                    except OSError:
+                                        entry_is_dir = False
+                                    skipped_access_denied.append((rel, entry_is_dir))
+                                    continue
+                                if stat.S_ISLNK(info.st_mode) or _reparse(info):
+                                    counts['skipped_links'] += 1
+                                    continue
+                                if _excluded(rel, patterns):
+                                    continue
+                                if stat.S_ISDIR(info.st_mode):
+                                    if row['recursive']:pending.append(Path(entry.path))
+                                    continue
+                                if not stat.S_ISREG(info.st_mode):
+                                    continue
+                                # Never index the local SQLite database as a media item.
+                                if Path(entry.path).resolve(strict=False) in (self.path,):
+                                    continue
+                                kind = EXT_TYPES.get(Path(entry.name).suffix.casefold())
+                                if kind is None:
+                                    counts['ignored_files'] += 1
+                                    continue
+                                if folder_books and kind == 'image':
+                                    pages.append((entry.name, info.st_size, info.st_mtime_ns))
+                                    continue
+                                self._record(db, root_id, rel, kind, info.st_size, info.st_mtime_ns, seen, counts, dry_run, progress)
+                    except PermissionError:
+                        if is_root_dir:
+                            raise
+                        skipped_access_denied.append((directory.relative_to(root).as_posix(), True))
+                        continue
                     if pages:
                         if cancelled and cancelled():
                             raise InterruptedError('Scan cancelled; previous index preserved')
@@ -394,10 +427,24 @@ class LibraryIndex:
                         self._record(db, root_id, rel, 'book', size, token, seen, counts, dry_run, progress)
             if cancelled and cancelled():
                 raise InterruptedError('Scan cancelled; previous index preserved')
+            unique_denied = sorted(
+                set(skipped_access_denied),
+                key=lambda item: (item[0].casefold(), item[0], not item[1]),
+            )
+            counts['skipped_access_denied'] = len(unique_denied)
+            counts['access_denied_truncated'] = len(unique_denied) > MAX_ACCESS_DENIED_LOG
+            counts['access_denied_entries'] = tuple(unique_denied[:MAX_ACCESS_DENIED_LOG])
+            denied_dirs = tuple(rel.rstrip('/') + '/' for rel, is_dir in unique_denied if is_dir)
+            denied_files = {rel for rel, is_dir in unique_denied if not is_dir}
             # No missing inference happens until a complete, error-free tree walk.
             stale = db.execute('SELECT id,relative_path,status FROM library_locations WHERE root_id=? '
                                'AND relative_path NOT IN (SELECT path FROM scan_seen)', (root_id,)).fetchall()
             for item in stale:
+                item_rel = item['relative_path']
+                if item_rel in denied_files or item_rel in denied_dirs or any(
+                    item_rel.startswith(prefix) for prefix in denied_dirs
+                ):
+                    continue
                 new_status = 'excluded' if _excluded(item['relative_path'], patterns) or (not row['recursive'] and item['relative_path']!='./' and '/' in item['relative_path']) else 'missing'
                 if new_status != item['status']:
                     counts[new_status] += 1

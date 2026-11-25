@@ -56,9 +56,9 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
     private readonly TextBlock zoom = new() { Text = "100%", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock status = new() { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly TextBlock progressStatus=new(){Visibility=Visibility.Collapsed,TextWrapping=TextWrapping.Wrap,HorizontalAlignment=HorizontalAlignment.Center};
-    private readonly MenuFlyoutItem saveProgress=new(){Text="読書位置を保存し直す"};
-    private readonly MenuFlyoutItem findSimilarPage1=new(){Text="≈ このページに似た画像を探す"};
-    private readonly MenuFlyoutItem findSimilarPage2=new(){Text="≈ もう一方のページに似た画像を探す",Visibility=Visibility.Collapsed};
+    private readonly MenuFlyoutItem saveProgress=new(){Text=AppText.L("読書位置を保存し直す", "Save reading progress again")};
+    private readonly MenuFlyoutItem findSimilarPage1=new(){Text=AppText.L("≈ このページに似た画像を探す", "≈ Find similar images to this page")};
+    private readonly MenuFlyoutItem findSimilarPage2=new(){Text=AppText.L("≈ もう一方のページに似た画像を探す", "≈ Find similar images to other page"),Visibility=Visibility.Collapsed};
     private int[] currentPageIndexes=[];
     private bool allowProgressSave=true;
     private readonly MenuFlyout menu;
@@ -89,7 +89,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         progressWriter.StateChanged+=error=>
         {
             if(disposed)return;
-            ViewerNotice.Set(progressStatus,error is null?"":"読書位置を保存できませんでした。設定から保存し直せます。");
+            ViewerNotice.Set(progressStatus,error is null?"":AppText.L("読書位置を保存できませんでした。設定から保存し直せます。", "Could not save reading progress. You can save it again from Settings."));
             if(error is not null){keyboardChrome=true;ShowChrome();}
             if(error is not null)AppLog.Error(error);
         };
@@ -106,8 +106,8 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         };
         scrubberHost=ViewerChromeController.WrapScrubber(pageScrubber,168);
         scrubberHost.Visibility=Visibility.Collapsed;
-        (pinButton,syncPin)=ViewerChromeController.CreatePinButton("ReaderPinToolbar",()=>{hideTimer.SyncPinState();hideTimer.RefreshHoverHint();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
-        menu=ViewerChromeController.Settings(true,()=>{syncPin();hideTimer.SyncPinState();FitImages();UpdateActions();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
+        (pinButton,syncPin)=ViewerChromeController.CreatePinButton("ReaderPinToolbar",()=>{hideTimer.SyncPinState();hideTimer.RefreshHoverHint();},ex=>{ViewerNotice.Set(status,AppText.L("設定を保存できませんでした。", "Could not save settings."));AppLog.Error(ex);});
+        menu=ViewerChromeController.Settings(true,()=>{syncPin();hideTimer.SyncPinState();FitImages();UpdateActions();},ex=>{ViewerNotice.Set(status,AppText.L("設定を保存できませんでした。", "Could not save settings."));AppLog.Error(ex);});
         viewport.Style=(Style)Application.Current.Resources["ImageViewerCanvasStyle"];
         ViewerChromeController.StyleFloatingPill(toolbar);
         pages.Children.Add(image);pages.Children.Add(second);canvas.Children.Add(pages);viewport.Content=canvas;Children.Add(viewport);
@@ -119,7 +119,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
         ViewerChromeController.StylePillButton(favorite.Button);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,HorizontalAlignment=HorizontalAlignment.Center};
         foreach(var control in new UIElement[]{fit,actualSize,zoomOut,zoomIn,zoom,ViewerChromeController.Divider(),previous,count,next,scrubberHost,ViewerChromeController.Divider(),favorite.Button,editDetails,retry,reopen,settings,pinButton})actions.Children.Add(control);
-        Identify(pageScrubber,"ReaderPageSeek","ページ位置の移動");
+        Identify(pageScrubber,"ReaderPageSeek",AppText.L("ページ位置の移動", "Go to page"));
         pageScrubber.AddHandler(PointerPressedEvent,new PointerEventHandler((_,_)=>{scrubberDragging=true;scrubTimer.Stop();hideTimer.Show();}),true);
         pageScrubber.AddHandler(PointerReleasedEvent,new PointerEventHandler((_,_)=>FinishScrubDrag()),true);
         pageScrubber.PointerCaptureLost+=(_,_)=>FinishScrubDrag();
@@ -131,33 +131,33 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
             if(scrubberDragging){count.Text=$"{scrubTargetPage+1} / {manifest.PageCount}";return;}
             scrubTimer.Stop();scrubTimer.Start();
         };
-        Identify(favorite.Button,"ReaderFavorite","お気に入りを読み込み中");
-        Identify(editDetails,"ReaderEditDetails","詳細で編集");
+        Identify(favorite.Button,"ReaderFavorite",AppText.L("お気に入りを読み込み中", "Loading favorite state"));
+        Identify(editDetails,"ReaderEditDetails",AppText.L("詳細で編集", "Edit in details"));
         editDetails.Click+=(_,_)=>EditDetailsRequested?.Invoke();
         toolbar.Child=actions;Children.Add(toolbar);ViewerChromeController.AttachNotices(this,76,status,progressStatus);
-        Identify(actualSize,"ReaderActualSize","本のページを原寸で表示");
+        Identify(actualSize,"ReaderActualSize",AppText.L("本のページを原寸で表示", "View book page at original size"));
         actualSize.Click+=(_,_)=>{if(OriginalZoom()<1){actualPixels=true;FitImages();viewport.ChangeView(0,0,1,true);}else ViewerInputGestures.ZoomCentered(viewport,(float)OriginalZoom());};
-        Identify(viewport,"ReaderViewport","本の表示。左右キーでページ送り、右クリックで表示設定");Identify(image,"ReaderImage","本のページ");Identify(second,"ReaderImageSecond","見開きのもう一方のページ");
-        Identify(previous,"ReaderPrevious","前のページ");Identify(next,"ReaderNext","次のページ");Identify(zoomOut,"ReaderZoomOut","本を縮小");Identify(zoomIn,"ReaderZoomIn","本を拡大");Identify(fit,"ReaderFit","本の表示をリセット");
-        Identify(retry,"ReaderRetry","現在のページを再試行");Identify(reopen,"ReaderReopen","本を最初から開き直す");Identify(settings,"ReaderSettings","本の表示と操作");
-        Identify(toolbar,"ReaderToolbar","本の操作");AutomationProperties.SetAutomationId(count,"ReaderPageNumber");AutomationProperties.SetAutomationId(status,"ReaderStatus");AutomationProperties.SetAutomationId(zoom,"ReaderZoomStatus");
-        Identify(progressStatus,"ReaderProgressStatus","読書位置の保存状態");Identify(saveProgress,"ReaderSaveProgress","読書位置を保存し直す");
-        Identify(findSimilarPage1,"ReaderFindSimilarPage","このページに似た画像を探す");
-        Identify(findSimilarPage2,"ReaderFindSimilarPage2","2枚目のページに似た画像を探す");
+        Identify(viewport,"ReaderViewport",AppText.L("本の表示。左右キーでページ送り、右クリックで表示設定", "Book viewer. Left/Right keys to turn pages, right-click for display settings"));Identify(image,"ReaderImage",AppText.L("本のページ", "Book page"));Identify(second,"ReaderImageSecond",AppText.L("見開きのもう一方のページ", "Opposite spread page"));
+        Identify(previous,"ReaderPrevious",AppText.L("前のページ", "Previous page"));Identify(next,"ReaderNext",AppText.L("次のページ", "Next page"));Identify(zoomOut,"ReaderZoomOut",AppText.L("本を縮小", "Zoom out book"));Identify(zoomIn,"ReaderZoomIn",AppText.L("本を拡大", "Zoom in book"));Identify(fit,"ReaderFit",AppText.L("本の表示をリセット", "Reset book zoom"));
+        Identify(retry,"ReaderRetry",AppText.L("現在のページを再試行", "Retry current page"));Identify(reopen,"ReaderReopen",AppText.L("本を最初から開き直す", "Reopen book from page 1"));Identify(settings,"ReaderSettings",AppText.L("本の表示と操作", "Book display & actions"));
+        Identify(toolbar,"ReaderToolbar",AppText.L("本の操作", "Book controls"));AutomationProperties.SetAutomationId(count,"ReaderPageNumber");AutomationProperties.SetAutomationId(status,"ReaderStatus");AutomationProperties.SetAutomationId(zoom,"ReaderZoomStatus");
+        Identify(progressStatus,"ReaderProgressStatus",AppText.L("読書位置の保存状態", "Reading progress status"));Identify(saveProgress,"ReaderSaveProgress",AppText.L("読書位置を保存し直す", "Save reading progress again"));
+        Identify(findSimilarPage1,"ReaderFindSimilarPage",AppText.L("このページに似た画像を探す", "Find similar images to this page"));
+        Identify(findSimilarPage2,"ReaderFindSimilarPage2",AppText.L("2枚目のページに似た画像を探す", "Find similar images to second page"));
         findSimilarPage1.Click+=(_,_)=>{if(!busy&&!disposed&&loaded&&currentPageIndexes.Length>=1)FindSimilarPageRequested?.Invoke(itemId,currentPageIndexes[0]);};
         findSimilarPage2.Click+=(_,_)=>{if(!busy&&!disposed&&loaded&&currentPageIndexes.Length>=2)FindSimilarPageRequested?.Invoke(itemId,currentPageIndexes[1]);};
         AutomationProperties.SetLiveSetting(progressStatus,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         AutomationProperties.SetLiveSetting(status,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        foreach(var (button,text) in new (FrameworkElement,string)[]{(fit,"画面に合わせる"),(actualSize,"原寸表示（画像の1pxを画面の1pxで表示）"),(zoomOut,"縮小"),(zoomIn,"拡大"),(previous,"前のページ"),(next,"次のページ"),(editDetails,"詳細でタグ・棚を編集（ビューアを閉じる）"),(retry,"再試行"),(reopen,"先頭ページから開き直す"),(settings,"表示設定（単ページ・見開き・類似検索）")})
+        foreach(var (button,text) in new (FrameworkElement,string)[]{(fit,AppText.L("画面に合わせる", "Fit to screen")),(actualSize,AppText.L("原寸表示（画像の1pxを画面の1pxで表示）", "Actual size (1:1 pixels)")),(zoomOut,AppText.L("縮小", "Zoom out")),(zoomIn,AppText.L("拡大", "Zoom in")),(previous,AppText.L("前のページ", "Previous page")),(next,AppText.L("次のページ", "Next page")),(editDetails,AppText.L("詳細でタグ・棚を編集（ビューアを閉じる）", "Edit tags & shelves in details (closes viewer)")),(retry,AppText.L("再試行", "Retry")),(reopen,AppText.L("先頭ページから開き直す", "Reopen from first page")),(settings,AppText.L("表示設定（単ページ・見開き・類似検索）", "Display settings (single / spread / similar)"))})
             hideTimer.AttachHoverHint(button,text);
         hideTimer.AttachHoverHint(favorite.Button,()=>AutomationProperties.GetName(favorite.Button));
-        hideTimer.AttachHoverHint(zoom, () => image.Source is BitmapImage bmp && bmp.PixelWidth > 0 ? $"表示倍率（原寸 {bmp.PixelWidth} × {bmp.PixelHeight} px）" : "表示倍率");
-        hideTimer.AttachHoverHint(count, "ページ位置（左右キーまたはバーで移動）");
-        hideTimer.AttachHoverHint(pinButton,()=>ViewerOptions.Value.AlwaysShowControls?"操作バーの固定を解除":"操作バーを常に表示（ピン留め）");
+        hideTimer.AttachHoverHint(zoom, () => image.Source is BitmapImage bmp && bmp.PixelWidth > 0 ? AppText.L($"表示倍率（原寸 {bmp.PixelWidth} × {bmp.PixelHeight} px）", $"Zoom (original {bmp.PixelWidth} × {bmp.PixelHeight} px)") : AppText.L("表示倍率", "Zoom"));
+        hideTimer.AttachHoverHint(count, AppText.L("ページ位置（左右キーまたはバーで移動）", "Page position (Left/Right keys or slider)"));
+        hideTimer.AttachHoverHint(pinButton,()=>ViewerOptions.Value.AlwaysShowControls?AppText.L("操作バーの固定を解除", "Unpin control bar"):AppText.L("操作バーを常に表示（ピン留め）", "Always show control bar (Pin)"));
         menu.Items.Add(findSimilarPage1);menu.Items.Add(findSimilarPage2);menu.Items.Add(new MenuFlyoutSeparator());
-        foreach(var (value,label,id) in new[]{(ReaderDisplayMode.Single,"単ページ","ReaderSingle"),(ReaderDisplayMode.RightToLeft,"見開き（右→左）","ReaderRtl"),(ReaderDisplayMode.LeftToRight,"見開き（左→右）","ReaderLtr")})
+        foreach(var (value,label,id) in new[]{(ReaderDisplayMode.Single,AppText.L("単ページ", "Single page"),"ReaderSingle"),(ReaderDisplayMode.RightToLeft,AppText.L("見開き（右→左）", "Spread (Right → Left)"),"ReaderRtl"),(ReaderDisplayMode.LeftToRight,AppText.L("見開き（左→右）", "Spread (Left → Right)"),"ReaderLtr")})
         {
-            var option=new RadioMenuFlyoutItem{Text=label,GroupName="ReaderDisplay",IsChecked=value==ReaderDisplayMode.Single};Identify(option,id,label);modes.Add(option);menu.Items.Add(option);
+            var option=new RadioMenuFlyoutItem{Text=label,GroupName="ReaderDisplay",Tag=value,IsChecked=value==ReaderDisplayMode.Single};Identify(option,id,label);modes.Add(option);menu.Items.Add(option);
             option.Click+=async(_,_)=>{if(busy||disposed)return;allowProgressSave=true;mode=value;previous.Content=new SymbolIcon(mode==ReaderDisplayMode.RightToLeft?Symbol.Forward:Symbol.Back);next.Content=new SymbolIcon(mode==ReaderDisplayMode.RightToLeft?Symbol.Back:Symbol.Forward);if(manifest is not null)await LoadAsync(ReaderSpreadPolicy.Anchor(page,manifest.PageCount,mode));};
         }
         menu.Items.Add(new MenuFlyoutSeparator());menu.Items.Add(saveProgress);
@@ -167,17 +167,17 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
             {
                 if(currentPageIndexes.Length==1)
                 {
-                    findSimilarPage1.Text=$"≈ このページ（{currentPageIndexes[0]+1}ページ目）に似た画像・動画を探す";
+                    findSimilarPage1.Text=AppText.L($"≈ このページ（{currentPageIndexes[0]+1}ページ目）に似た画像・動画を探す", $"≈ Find similar to this page (p.{currentPageIndexes[0]+1})");
                     AutomationProperties.SetName(findSimilarPage1,findSimilarPage1.Text);
                     findSimilarPage1.IsEnabled=true;findSimilarPage1.Visibility=Visibility.Visible;
                     findSimilarPage2.Visibility=Visibility.Collapsed;
                 }
                 else
                 {
-                    findSimilarPage1.Text=$"≈ {currentPageIndexes[0]+1}ページ目に似た画像・動画を探す";
+                    findSimilarPage1.Text=AppText.L($"≈ {currentPageIndexes[0]+1}ページ目に似た画像・動画を探す", $"≈ Find similar to p.{currentPageIndexes[0]+1}");
                     AutomationProperties.SetName(findSimilarPage1,findSimilarPage1.Text);
                     findSimilarPage1.IsEnabled=true;findSimilarPage1.Visibility=Visibility.Visible;
-                    findSimilarPage2.Text=$"≈ {currentPageIndexes[1]+1}ページ目に似た画像・動画を探す";
+                    findSimilarPage2.Text=AppText.L($"≈ {currentPageIndexes[1]+1}ページ目に似た画像・動画を探す", $"≈ Find similar to p.{currentPageIndexes[1]+1}");
                     AutomationProperties.SetName(findSimilarPage2,findSimilarPage2.Text);
                     findSimilarPage2.IsEnabled=true;findSimilarPage2.Visibility=Visibility.Visible;
                 }
@@ -242,7 +242,7 @@ internal sealed class ArchiveReaderView : Grid, IDisposable, IViewerWindowTitle
                 await LoadAsync(ReaderSpreadPolicy.Move(page,book.PageCount,mode,direction,true));
                 return;
             }
-            ShowBoundaryNotice(direction<0?"先頭のページです":"最後のページです");
+            ShowBoundaryNotice(direction<0?AppText.L("先頭のページです", "First page"):AppText.L("最後のページです", "Last page"));
             return;
         }
         allowProgressSave=true;
@@ -284,7 +284,7 @@ public void AttachNavigation(UIElement dialog)
     public Task OpenAsync()=>OpenAsync(false);
     private async Task OpenAsync(bool fromBeginning)
     {
-        if(busy||disposed||closing||favorite.IsSaving)return;busy=true;failed=loaded=false;manifest=null;page=0;ClearImages();pageCache.Clear();preload?.Cancel();count.Text="—";ViewerNotice.Set(status,"本を開いています…");hideTimer.Stop();UpdateActions();
+        if(busy||disposed||closing||favorite.IsSaving)return;busy=true;failed=loaded=false;manifest=null;page=0;ClearImages();pageCache.Clear();preload?.Cancel();count.Text="—";ViewerNotice.Set(status,AppText.L("本を開いています…", "Opening book..."));hideTimer.Stop();UpdateActions();
         int start=0;allowProgressSave=true;ViewerNotice.Set(progressStatus);
         try
         {
@@ -297,7 +297,7 @@ public void AttachNavigation(UIElement dialog)
                 if(saved is not null){mode=saved.Mode;start=fromBeginning?0:saved.RestorePage(result);}
             }
             catch(Exception) when(!cancellation.IsCancellationRequested)
-            {allowProgressSave=fromBeginning;ViewerNotice.Set(progressStatus,"読書位置を読み込めないため先頭から表示します");}
+            {allowProgressSave=fromBeginning;ViewerNotice.Set(progressStatus,AppText.L("読書位置を読み込めないため先頭から表示します", "Could not load reading progress; opening from page 1"));}
             if(!fromBeginning&&(initialPageMatch?.InitialReaderPage(result)??initialMatch?.InitialReaderPage(result)) is int requested)
             {
                 start=ReaderSpreadPolicy.Anchor(requested,result.PageCount,mode);
@@ -307,7 +307,7 @@ public void AttachNavigation(UIElement dialog)
                 start=ReaderSpreadPolicy.Anchor(result.PageCount-1,result.PageCount,mode);
             }
             if(cancellation.IsCancellationRequested)return;
-            foreach(var option in modes)option.IsChecked=option.Text== (mode switch{ReaderDisplayMode.RightToLeft=>"見開き（右→左）",ReaderDisplayMode.LeftToRight=>"見開き（左→右）",_=>"単ページ"});
+            foreach(var option in modes)option.IsChecked=option.Tag is ReaderDisplayMode m&&m==mode;
             previous.Content=new SymbolIcon(mode==ReaderDisplayMode.RightToLeft?Symbol.Forward:Symbol.Back);next.Content=new SymbolIcon(mode==ReaderDisplayMode.RightToLeft?Symbol.Back:Symbol.Forward);
         }
         catch(Exception ex){ReportFailure(ex);}finally{busy=false;if(!disposed)UpdateActions();}
@@ -324,7 +324,7 @@ public void AttachNavigation(UIElement dialog)
     {
         closing=true;preload?.Cancel();UpdateActions();
         await favorite.FlushAsync();
-        if(progressWriter.HasPending){ViewerNotice.Set(progressStatus,"読書位置を保存しています…");ShowChrome();}
+        if(progressWriter.HasPending){ViewerNotice.Set(progressStatus,AppText.L("読書位置を保存しています…", "Saving reading progress..."));ShowChrome();}
         await progressWriter.FlushAsync();
     }
     private async Task<BitmapImage> ReadPageAsync(ArchiveManifest book,int index,CancellationToken token)
@@ -358,7 +358,7 @@ public void AttachNavigation(UIElement dialog)
         var target=ReaderSpreadPolicy.Anchor(requestedPage,book.PageCount,mode);
         targetPage=target;
         var indexes=ReaderSpreadPolicy.Pages(target,book.PageCount,mode);
-        ViewerNotice.Set(status,"ページを読み込んでいます…");UpdateActions();
+        ViewerNotice.Set(status,AppText.L("ページを読み込んでいます…", "Loading page..."));UpdateActions();
         try
         {
             // Finish cancelled speculative work before foreground reads.
@@ -368,8 +368,8 @@ public void AttachNavigation(UIElement dialog)
             if(disposed||closing||manifest!=book)return;
             page=target;viewport.ChangeView(0,0,1,true);
             currentPageIndexes=indexes;
-            image.Source=bitmaps[0];AutomationProperties.SetName(image,$"{indexes[0]+1}ページ");
-            if(bitmaps.Length==2){second.Source=bitmaps[1];second.Visibility=Visibility.Visible;AutomationProperties.SetName(second,$"{indexes[1]+1}ページ");}
+            image.Source=bitmaps[0];AutomationProperties.SetName(image,AppText.L($"{indexes[0]+1}ページ", $"Page {indexes[0]+1}"));
+            if(bitmaps.Length==2){second.Source=bitmaps[1];second.Visibility=Visibility.Visible;AutomationProperties.SetName(second,AppText.L($"{indexes[1]+1}ページ", $"Page {indexes[1]+1}"));}
             else{second.Source=null;second.Visibility=Visibility.Collapsed;}
             count.Text=indexes.Length==1?$"{page+1} / {book.PageCount}":$"{page+1}–{page+2} / {book.PageCount}";
             FitImages();loaded=true;ViewerNotice.Set(status);ContentOpened?.Invoke(itemId);
@@ -398,12 +398,12 @@ public void AttachNavigation(UIElement dialog)
             }
         }
     }
-    private void ClearImages(){currentPageIndexes=[];image.Source=second.Source=null;second.Visibility=Visibility.Collapsed;AutomationProperties.SetName(image,"ページ未表示");AutomationProperties.SetName(second,"ページ未表示");}
+    private void ClearImages(){currentPageIndexes=[];image.Source=second.Source=null;second.Visibility=Visibility.Collapsed;AutomationProperties.SetName(image,AppText.L("ページ未表示", "Page not loaded"));AutomationProperties.SetName(second,AppText.L("ページ未表示", "Page not loaded"));}
     private void ReportFailure(Exception ex)
     {
-        if(disposed||cancellation.IsCancellationRequested)return;ClearImages();failed=true;loaded=false;ViewerNotice.Set(progressStatus,"前に読めたページの位置を保持しています");
+        if(disposed||cancellation.IsCancellationRequested)return;ClearImages();failed=true;loaded=false;ViewerNotice.Set(progressStatus,AppText.L("前に読めたページの位置を保持しています", "Keeping previously read page position"));
         if(ex is ArchiveReadException{RequiresReopen:true}){manifest=null;count.Text="—";}
-        ViewerNotice.Set(status,ex switch{ArchiveReadException=>ex.Message,OperationCanceledException=>"読み込みがタイムアウトしました。再試行してください",HttpRequestException=>"接続できません。閉じて再接続してください",_=>"表示できません（未対応形式または破損）"});ShowChrome();
+        ViewerNotice.Set(status,ex switch{ArchiveReadException=>ex.Message,OperationCanceledException=>AppText.L("読み込みがタイムアウトしました。再試行してください", "Loading timed out. Please retry."),HttpRequestException=>AppText.L("接続できません。閉じて再接続してください", "Cannot connect. Close and reconnect."),_=>AppText.L("表示できません（未対応形式または破損）", "Cannot display (unsupported format or corrupted)")});ShowChrome();
     }
     private void UpdateActions()
     {

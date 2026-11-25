@@ -26,7 +26,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     public event Action? OpenSetupRequested;
     public TagSuggestionsView(TagReviewClient api,int itemId,bool dirty)
     {
-        this.api=api;this.itemId=itemId;this.dirty=dirty;InitializeComponent();UpdateButtons();
+        this.api=api;this.itemId=itemId;this.dirty=dirty;InitializeComponent();UiText.Apply(this);UpdateButtons();
     }
     public void Fit(double width,double height)
     {
@@ -63,40 +63,40 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         if(BatchReviewActions is not null)BatchReviewActions.Visibility=pendingCount>0?Visibility.Visible:Visibility.Collapsed;
         if(AcceptAll is not null)
         {
-            AcceptAll.Content=pendingCount>0?$"✓ 未承認をすべて承認 ({pendingCount}件)":"✓ 未承認をすべて承認";
+            AcceptAll.Content=pendingCount>0?AppText.L($"✓ 未承認をすべて承認 ({pendingCount}件)", $"✓ Approve all pending ({pendingCount})"):AppText.L("✓ 未承認をすべて承認", "✓ Approve all pending");
             AcceptAll.IsEnabled=pendingCount>0&&!dirty;
         }
         if(RejectAll is not null)
         {
-            RejectAll.Content=pendingCount>0?$"× 未承認をすべて却下 ({pendingCount}件)":"× 未承認をすべて却下";
+            RejectAll.Content=pendingCount>0?AppText.L($"× 未承認をすべて却下 ({pendingCount}件)", $"× Reject all pending ({pendingCount})"):AppText.L("× 未承認をすべて却下", "× Reject all pending");
             RejectAll.IsEnabled=pendingCount>0;
         }
     }
-    private void Message(string message)=>Status.Text=message+(dirty?"\n⚠ 詳細に未保存の編集があります（保存後に承認できます）":"");
+    private void Message(string message)=>Status.Text=message+(dirty?AppText.L("\n⚠ 詳細に未保存の編集があります（保存後に承認できます）", "\n⚠ Unsaved edits in details (save before approving)"):"");
     private async Task RunAsync(Func<Task> operation)
     {
         if(busy||disposed)return;busy=true;UpdateButtons();
         try{await operation();}
         catch(OperationCanceledException) when(lifetime.IsCancellationRequested){}
-        catch(Exception ex){if(!disposed){Message(ex.Message+"\n最新へ戻して状態を確認できます。");AppLog.Error(ex);}}
+        catch(Exception ex){if(!disposed){Message(ex.Message+AppText.L("\n最新へ戻して状態を確認できます。", "\nClick Refresh to check the latest state."));AppLog.Error(ex);}}
         finally{busy=false;requestId=null;if(!disposed){UpdateButtons();if(closing)CloseReady?.Invoke();}}
     }
-    public Task LoadAsync(){Message("状態を確認しています…");return RunAsync(()=>LoadCoreAsync(null));}
+    public Task LoadAsync(){Message(AppText.L("状態を確認しています…", "Checking status..."));return RunAsync(()=>LoadCoreAsync(null));}
     private async Task LoadCoreAsync(long? before)
     {
         var loaded=await api.HistoryAsync(itemId,before,lifetime.Token);if(disposed)return;
         ModelDetails.Text="";Metadata.IsExpanded=false;Metadata.Visibility=Visibility.Collapsed;
         history=loaded;batch=null;candidate=null;Evidence.Source=null;Evidence.Visibility=Visibility.Collapsed;populating=true;
         Batches.Items.Clear();Candidates.Items.Clear();
-        foreach(var value in loaded.Batches)Batches.Items.Add(new ComboBoxItem{Content=$"履歴 #{value.Id} · {value.Candidates.Count}候補"+(value.Stale?" · 元ファイル変更あり":""),Tag=value});
+        foreach(var value in loaded.Batches)Batches.Items.Add(new ComboBoxItem{Content=AppText.L($"履歴 #{value.Id} · {value.Candidates.Count}候補", $"Batch #{value.Id} · {value.Candidates.Count} candidates")+(value.Stale?AppText.L(" · 元ファイル変更あり", " · Source changed"):""),Tag=value});
         populating=false;Batches.SelectedIndex=loaded.Batches.Count>0?0:-1;
         if(loaded.Batches.Count==0)
         {
-            Provenance.Text=loaded.Available?"まだ候補がありません":"タグ付けモデルが未導入です";
-            Explanation.Text=loaded.Available?"上の［✨ 生成］を押すと、この作品のタグ候補を作成します。":"上の［📥 モデルを取得・設定］からモデルを取得するとすぐ使えます。";
+            Provenance.Text=loaded.Available?AppText.L("まだ候補がありません", "No suggestions yet"):AppText.L("タグ付けモデルが未導入です", "Tagging model is not installed");
+            Explanation.Text=loaded.Available?AppText.L("上の［✨ 生成］を押すと、この作品のタグ候補を作成します。", "Click [✨ Generate] above to create tag suggestions for this item."):AppText.L("上の［📥 モデルを取得・設定］からモデルを取得するとすぐ使えます。", "Click [📥 Get / Configure Model] above to install a model.");
             Edited.Text="";
         }
-        Message(loaded.Available?"［✨ 生成］から候補を作成し、根拠を確認して承認・却下できます。":loaded.Reason);
+        Message(loaded.Available?AppText.L("［✨ 生成］から候補を作成し、根拠を確認して承認・却下できます。", "Click [✨ Generate] to create suggestions, inspect evidence, then approve or reject."):loaded.Reason);
     }
     private void Batch_Changed(object sender,SelectionChangedEventArgs e)
     {
@@ -104,17 +104,17 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         batch=(Batches.SelectedItem as ComboBoxItem)?.Tag as TagBatch;candidate=null;Candidates.Items.Clear();Evidence.Source=null;Evidence.Visibility=Visibility.Collapsed;
         Detail.ChangeView(null,0,null,true);
         if(batch is null){UpdateButtons();return;}
-        Provenance.Text=$"{batch.Model}\n根拠: {(batch.EvidenceKind=="cover"?"本の先頭ページのみ":"画像")}"+(batch.Stale?"\n元ファイルが変わっています。生成し直してください。":"");
-        ModelDetails.Text=$"モデル版: {batch.ModelRevision}\nアダプタ: {batch.Adapter} {batch.AdapterVersion}\n前処理: {batch.Preprocessing}";
+        Provenance.Text=$"{batch.Model}\n"+AppText.L($"根拠: {(batch.EvidenceKind=="cover"?"本の先頭ページのみ":"画像")}", $"Evidence: {(batch.EvidenceKind=="cover"?"First page only":"Image")}")+(batch.Stale?AppText.L("\n元ファイルが変わっています。生成し直してください。", "\nSource file changed. Please regenerate."):"");
+        ModelDetails.Text=AppText.L($"モデル版: {batch.ModelRevision}\nアダプタ: {batch.Adapter} {batch.AdapterVersion}\n前処理: {batch.Preprocessing}", $"Model revision: {batch.ModelRevision}\nAdapter: {batch.Adapter} {batch.AdapterVersion}\nPreprocessing: {batch.Preprocessing}");
         Metadata.Visibility=Visibility.Visible;Metadata.IsExpanded=false;
         foreach(var value in batch.Candidates)
         {
-            var badge=value.State switch{"pending"=>"● 未承認","accepted"=>"✓ 承認済み",_=>"× 却下済み"};
+            var badge=value.State switch{"pending"=>AppText.L("● 未承認", "● Pending"),"accepted"=>AppText.L("✓ 承認済み", "✓ Approved"),_=>AppText.L("× 却下済み", "× Rejected")};
             var row=new ListViewItem{Content=new TextBlock{Text=$"{value.Tag}\n{badge}",TextWrapping=TextWrapping.Wrap},Tag=value};
             AutomationProperties.SetAutomationId(row,$"TagCandidate{value.Id}");AutomationProperties.SetName(row,$"{value.Tag} {value.StateLabel}");Candidates.Items.Add(row);
         }
         Candidates.SelectedIndex=Candidates.Items.Count>0?0:-1;
-        if(Candidates.Items.Count==0){Explanation.Text="この履歴に候補はありません";Edited.Text="";}
+        if(Candidates.Items.Count==0){Explanation.Text=AppText.L("この履歴に候補はありません", "No suggestions in this batch");Edited.Text="";}
         evidenceCancellation?.Cancel();evidenceCancellation?.Dispose();evidenceCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         if(!batch.Stale)_=ShowEvidenceAsync(batch,evidenceCancellation.Token);UpdateButtons();
     }
@@ -129,7 +129,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
             if(!disposed&&ReferenceEquals(batch,selected)){Evidence.Source=image;Evidence.Visibility=Visibility.Visible;}
         }
         catch(OperationCanceledException){}
-        catch(Exception ex){if(!disposed&&!cancellation.IsCancellationRequested&&ReferenceEquals(batch,selected)){Provenance.Text+="\n根拠画像を表示できません。最新へ戻して確認してください。";AppLog.Error(ex);}}
+        catch(Exception ex){if(!disposed&&!cancellation.IsCancellationRequested&&ReferenceEquals(batch,selected)){Provenance.Text+=AppText.L("\n根拠画像を表示できません。最新へ戻して確認してください。", "\nCould not display evidence image. Refresh to verify.");AppLog.Error(ex);}}
     }
     private void Candidate_Changed(object sender,SelectionChangedEventArgs e)
     {
@@ -142,7 +142,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
     private async void Generate_Click(object sender,RoutedEventArgs e)
     {
         if(history?.Available!=true)return;
-        await RunAsync(async()=>{requestId=Guid.NewGuid().ToString("N");UpdateButtons();Message("候補を生成しています… 閉じる操作では生成の終了を待ちます。");await api.GenerateAsync(itemId,requestId,lifetime.Token);await LoadCoreAsync(null);});
+        await RunAsync(async()=>{requestId=Guid.NewGuid().ToString("N");UpdateButtons();Message(AppText.L("候補を生成しています… 閉じる操作では生成の終了を待ちます。", "Generating suggestions... Closing will wait for cancellation."));await api.GenerateAsync(itemId,requestId,lifetime.Token);await LoadCoreAsync(null);});
     }
     private async Task ReviewAsync(bool accept)
     {
@@ -165,7 +165,7 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
                 if(accept)ApprovalAttempted=true;
                 await api.ReviewAsync(itemId,item,accept,item.Tag,lifetime.Token);
                 done++;
-                if(!disposed)Message(accept?$"承認中… ({done}/{pending.Length} 件)":$"却下中… ({done}/{pending.Length} 件)");
+                if(!disposed)Message(accept?AppText.L($"承認中… ({done}/{pending.Length} 件)", $"Approving... ({done}/{pending.Length})"):AppText.L($"却下中… ({done}/{pending.Length} 件)", $"Rejecting... ({done}/{pending.Length})"));
             }
             await LoadCoreAsync(null);
         });
@@ -179,10 +179,10 @@ public sealed partial class TagSuggestionsView : UserControl, IDisposable
         try
         {
             for(var attempt=0;attempt<6&&requestId==id;attempt++)
-            {if(await api.CancelAsync(id,lifetime.Token)){if(!disposed)Message("中止を要求しました。処理の終了を待っています。");break;}await Task.Delay(100,lifetime.Token);}
+            {if(await api.CancelAsync(id,lifetime.Token)){if(!disposed)Message(AppText.L("中止を要求しました。処理の終了を待っています。", "Cancellation requested. Waiting for completion..."));break;}await Task.Delay(100,lifetime.Token);}
         }
         catch(OperationCanceledException){}
-        catch(Exception ex){if(!disposed){Message("中止を確認できません。処理の終了を待っています。 "+ex.Message);AppLog.Error(ex);}}
+        catch(Exception ex){if(!disposed){Message(AppText.L("中止を確認できません。処理の終了を待っています。 ", "Could not confirm cancellation. Waiting... ")+ex.Message);AppLog.Error(ex);}}
         finally{if(!disposed)UpdateButtons();}
     }
     private async void Cancel_Click(object sender,RoutedEventArgs e)=>await CancelGenerationAsync();

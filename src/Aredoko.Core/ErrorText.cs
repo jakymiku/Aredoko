@@ -153,24 +153,45 @@ public static class ErrorText
         _ => null
     };
 
+    private static readonly Dictionary<string, string> ExactEn = new()
+    {
+        ["AI runtime dependencies unavailable"] = "AI runtime components are missing or failed to load. Check Manual Setup under Settings → AI Search. Basic search and viewing remain available.",
+        ["AI runtime architecture incompatible"] = "AI runtime architecture does not match Aredoko (x64 required). Reselect an x64 runtime under Settings → AI Search.",
+        ["AI runtime initialization failed"] = "Failed to start AI runtime. Close other AI tasks, check free memory and settings, and retry. Basic search and viewing remain available.",
+        ["AI inference failed"] = "AI inference failed. Check AI environment and target files, then retry.",
+        ["Invalid AI worker response"] = "Could not verify AI worker response. Restart Aredoko and check AI settings.",
+        ["AI worker timed out"] = "AI worker timed out. Check running AI tasks and free memory, then retry.",
+        ["AI worker disconnected"] = "Lost connection to AI worker. Check AI environment and retry.",
+        ["Invalid session"] = "Lost connection between app and backend. Please restart Aredoko.",
+        ["Invalid host"] = "Lost connection between app and backend. Please restart Aredoko.",
+        ["Explicit folder consent required"] = "Select a folder to register and retry.",
+        ["Folder book mode cannot change after scanning"] = "\"Treat images in folder as a single book\" cannot be changed after scanning. Unregister and re-add the folder with your preferred setting.",
+        ["Explicit folder purge consent required"] = "Confirm deletion in the dialog to purge database records.",
+        ["Unregister the root before purging database records"] = "Unregister this folder before purging its catalog records.",
+        ["The library must not contain the application database"] = "Cannot register a folder that contains Aredoko's application database.",
+    };
+
     private static string Field(string name) => name switch
     {
-        "term" => "見出し語", "aliases" => "別名", "related" => "手がかりの語", _ => name
+        "term" => AppText.L("見出し語", "headword"),
+        "aliases" => AppText.L("別名", "aliases"),
+        "related" => AppText.L("手がかりの語", "related terms"),
+        _ => name
     };
 
     public static string Localize(string message)
     {
-        if (string.IsNullOrWhiteSpace(message)) return "操作を完了できませんでした。";
-        if (Exact.TryGetValue(message, out var known)) return known;
+        if (string.IsNullOrWhiteSpace(message)) return AppText.L("操作を完了できませんでした。", "Could not complete the operation.");
+        if (AppText.IsEnglish ? ExactEn.TryGetValue(message, out var en) : Exact.TryGetValue(message, out en)) return en;
         Match m;
-        if ((m = Regex.Match(message, @"^Entry (\d+): (.+)$")).Success) return $"{m.Groups[1].Value}件目: {Localize(m.Groups[2].Value)}";
-        if ((m = Regex.Match(message, @"^duplicate term (.+)$")).Success) return $"見出し語「{m.Groups[1].Value}」が重複しています。";
-        if ((m = Regex.Match(message, @"^(\w+) must contain 1 to (\d+) characters$")).Success) return $"{Field(m.Groups[1].Value)}は1〜{m.Groups[2].Value}文字にしてください。";
-        if ((m = Regex.Match(message, @"^(\w+) must be a single word without spaces$")).Success) return $"{Field(m.Groups[1].Value)}に空白は入れられません（1語ずつ「、」で区切ってください）。";
-        if ((m = Regex.Match(message, @"^(\w+) must be a list of at most (\d+) words$")).Success) return $"{Field(m.Groups[1].Value)}は{m.Groups[2].Value}語までです。";
-        if ((m = Regex.Match(message, @"^At most (\d+) related-term entries( after import)?$")).Success) return $"関連語は{int.Parse(m.Groups[1].Value):N0}件まで登録できます{(m.Groups[2].Success ? "（読み込み後の合計）" : "")}。";
-        if ((m = Regex.Match(message, @"^Use at most (\d+) search words$")).Success) return $"検索語は{m.Groups[1].Value}語までにしてください。";
-        return message;
+        if ((m = Regex.Match(message, @"^Entry (\d+): (.+)$")).Success) return AppText.L($"{m.Groups[1].Value}件目: {Localize(m.Groups[2].Value)}", $"Entry {m.Groups[1].Value}: {Localize(m.Groups[2].Value)}");
+        if ((m = Regex.Match(message, @"^duplicate term (.+)$")).Success) return AppText.L($"見出し語「{m.Groups[1].Value}」が重複しています。", $"Duplicate headword \"{m.Groups[1].Value}\".");
+        if ((m = Regex.Match(message, @"^(\w+) must contain 1 to (\d+) characters$")).Success) return AppText.L($"{Field(m.Groups[1].Value)}は1〜{m.Groups[2].Value}文字にしてください。", $"The {Field(m.Groups[1].Value)} must contain 1 to {m.Groups[2].Value} characters.");
+        if ((m = Regex.Match(message, @"^(\w+) must be a single word without spaces$")).Success) return AppText.L($"{Field(m.Groups[1].Value)}に空白は入れられません（1語ずつ「、」で区切ってください）。", $"The {Field(m.Groups[1].Value)} must be a single word without spaces.");
+        if ((m = Regex.Match(message, @"^(\w+) must be a list of at most (\d+) words$")).Success) return AppText.L($"{Field(m.Groups[1].Value)}は{m.Groups[2].Value}語までです。", $"The {Field(m.Groups[1].Value)} may contain up to {m.Groups[2].Value} words.");
+        if ((m = Regex.Match(message, @"^At most (\d+) related-term entries( after import)?$")).Success) return AppText.L($"関連語は{int.Parse(m.Groups[1].Value):N0}件まで登録できます{(m.Groups[2].Success ? "（読み込み後の合計）" : "")}。", $"Up to {int.Parse(m.Groups[1].Value):N0} related-term entries are allowed{(m.Groups[2].Success ? " (after import)" : "")}.");
+        if ((m = Regex.Match(message, @"^Use at most (\d+) search words$")).Success) return AppText.L($"検索語は{m.Groups[1].Value}語までにしてください。", $"Use up to {m.Groups[1].Value} search words.");
+        return AppText.IsEnglish ? AppText.TranslateBackend(message) : message;
     }
 
     // Error body {"error": "..."} or anything else (HTML, empty) from a failed response.
@@ -182,6 +203,8 @@ public static class ErrorText
                 return Localize(error);
         }
         catch (JsonException) { }
-        return status >= 500 ? $"バックエンドでエラーが起きました（{status}）。" : $"要求を処理できませんでした（{status}）。";
+        return status >= 500
+            ? AppText.L($"バックエンドでエラーが起きました（{status}）。", $"Backend error occurred ({status}).")
+            : AppText.L($"要求を処理できませんでした（{status}）。", $"Could not process request ({status}).");
     }
 }

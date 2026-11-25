@@ -77,6 +77,9 @@ class ProductionCatalog(Catalog):
         self._scan_completed_roots=()
         self._scan_ai_counts=(0,0)
         self._scan_job_id=0
+        self._scan_access_denied_count=0
+        self._scan_access_denied_entries=[]
+        self._scan_access_denied_truncated=False
         self._scan_finished={}
         self.ai_scan_hook = None
         self.shelf_store=ShelfStore(self.connect)
@@ -597,7 +600,8 @@ class ProductionCatalog(Catalog):
             row=db.execute('SELECT * FROM scan_jobs'+(' ORDER BY id DESC LIMIT 1' if job_id is None else ' WHERE id=?'),() if job_id is None else (job_id,)).fetchone()
         result=dict(row) if row else {'id':0,'state':'idle','discovered':0,'error':''}
         if job_id is not None and job_id!=self._scan_job_id:
-            return {**result,'stage':result['state'],'ai_state':'unknown','mode':'unknown'}
+            return {**result,'stage':result['state'],'ai_state':'unknown','mode':'unknown',
+                    'skipped_access_denied':0,'access_denied_entries':[],'access_denied_truncated':False}
         if result['state'] in ('running','cancelling'):
             result['discovered']=self._progress
         result['mode']=self._scan_mode
@@ -607,6 +611,9 @@ class ProductionCatalog(Catalog):
         result['root_ids']=list(self._scan_roots) if self._scan_roots else ([result['root_id']] if result.get('root_id') else [])
         result['completed_root_ids']=list(self._scan_completed_roots)
         result['ai_processed'],result['ai_total']=self._scan_ai_counts
+        result['skipped_access_denied']=self._scan_access_denied_count
+        result['access_denied_entries']=list(self._scan_access_denied_entries)
+        result['access_denied_truncated']=self._scan_access_denied_truncated
         return result
 
     def _remember_scan(self,job):
@@ -648,6 +655,9 @@ class ProductionCatalog(Catalog):
             self._scan_roots=tuple(target_roots)
             self._scan_completed_roots=()
             self._scan_ai_counts=(0,0)
+            self._scan_access_denied_count=0
+            self._scan_access_denied_entries=[]
+            self._scan_access_denied_truncated=False
             with self.connect() as db:
                 job=db.execute("INSERT INTO scan_jobs(root_id,state) VALUES(?,'running')",(target_roots[0],)).lastrowid
             self._scan_job_id=job
@@ -666,6 +676,24 @@ class ProductionCatalog(Catalog):
                     raise InterruptedError()
                 res=self.index.scan(rid,cancelled=self._cancel.is_set,
                                     progress=lambda n,base=total_discovered:setattr(self,'_progress',base+n))
+                denied_count=int(res.get('skipped_access_denied') or 0)
+                if denied_count>0:
+                    self._scan_access_denied_count+=denied_count
+                    if res.get('access_denied_truncated'):
+                        self._scan_access_denied_truncated=True
+                    with self.connect() as db:
+                        root_row=db.execute('SELECT path FROM library_roots WHERE id=?',(rid,)).fetchone()
+                    root_path=root_row['path'] if root_row else ''
+                    for entry in res.get('access_denied_entries') or ():
+                        if len(self._scan_access_denied_entries)>=500:
+                            self._scan_access_denied_truncated=True
+                            break
+                        self._scan_access_denied_entries.append({
+                            'root_id':rid,
+                            'root_path':root_path,
+                            'relative_path':entry['relative_path'],
+                            'is_dir':bool(entry['is_dir']),
+                        })
                 total_discovered+=res['discovered']
                 self._progress=total_discovered
                 self.sync_index(root_id=rid)

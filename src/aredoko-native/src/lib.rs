@@ -13,6 +13,7 @@ pub const ERR_TOO_LARGE: i32 = -9;
 pub const ERR_OUTPUT_TOO_LARGE: i32 = -10;
 pub const ERR_UNSUPPORTED: i32 = -11;
 pub const ERR_IO: i32 = -12;
+pub const ERR_ACCESS_DENIED: i32 = -13;
 pub const ERR_PANIC: i32 = -99;
 
 mod plain_path;

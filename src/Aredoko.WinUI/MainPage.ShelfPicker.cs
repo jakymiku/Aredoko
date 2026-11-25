@@ -14,12 +14,12 @@ public sealed partial class MainPage
         {
             options=shelfDescriptors.ToList();
             if(fallback is not null&&options.All(s=>s.Id!=fallback.Id))options.Add(fallback);
-            foreach(var id in initial.Where(id=>options.All(s=>s.Id!=id)))options.Add(new(id,"見つからない棚（所属を維持）",0));
+            foreach(var id in initial.Where(id=>options.All(s=>s.Id!=id)))options.Add(new(id,AppText.L("見つからない棚（所属を維持）", "Missing shelf (membership kept)"),0));
         }
         SyncOptions();
         var selected=initial.ToHashSet();
-        var filter=new TextBox{PlaceholderText="棚の名前で絞り込み",MaxLength=128,HorizontalAlignment=HorizontalAlignment.Stretch};
-        AutomationProperties.SetAutomationId(filter,prefix+"Filter");AutomationProperties.SetName(filter,"棚の名前で絞り込み");
+        var filter=new TextBox{PlaceholderText=AppText.L("棚の名前で絞り込み", "Filter by shelf name"),MaxLength=128,HorizontalAlignment=HorizontalAlignment.Stretch};
+        AutomationProperties.SetAutomationId(filter,prefix+"Filter");AutomationProperties.SetName(filter,AppText.L("棚の名前で絞り込み", "Filter by shelf name"));
         var list=new ListView{SelectionMode=ListViewSelectionMode.Multiple,MaxHeight=260,MinHeight=96,HorizontalContentAlignment=HorizontalAlignment.Stretch};
         AutomationProperties.SetAutomationId(list,prefix+"List");AutomationProperties.SetName(list,title);
         var guidance=new TextBlock{TextWrapping=TextWrapping.Wrap};
@@ -30,13 +30,13 @@ public sealed partial class MainPage
         Button? createShelfButton=null;
         TextBlock? createError=null;
         TextBlock? createNote=null;
-        const string createStayNote="作成した棚はキャンセルしても残ります";
+        var createStayNote=AppText.L("作成した棚はキャンセルしても残ります", "Created shelves stay even if you click Cancel");
         if(allowCreate)
         {
-            newShelfBox=new TextBox{PlaceholderText="新しい棚を作成",MaxLength=80,MinWidth=0,HorizontalAlignment=HorizontalAlignment.Stretch};
-            AutomationProperties.SetAutomationId(newShelfBox,prefix+"NewName");AutomationProperties.SetName(newShelfBox,"新しい棚の名前");
-            createShelfButton=new Button{Content="作成して選択",IsEnabled=false,VerticalAlignment=VerticalAlignment.Center};
-            AutomationProperties.SetAutomationId(createShelfButton,prefix+"CreateNew");AutomationProperties.SetName(createShelfButton,"新しい棚を作成して選択");
+            newShelfBox=new TextBox{PlaceholderText=AppText.L("新しい棚を作成", "Create new shelf"),MaxLength=80,MinWidth=0,HorizontalAlignment=HorizontalAlignment.Stretch};
+            AutomationProperties.SetAutomationId(newShelfBox,prefix+"NewName");AutomationProperties.SetName(newShelfBox,AppText.L("新しい棚の名前", "New shelf name"));
+            createShelfButton=new Button{Content=AppText.L("作成して選択", "Create & Select"),IsEnabled=false,VerticalAlignment=VerticalAlignment.Center};
+            AutomationProperties.SetAutomationId(createShelfButton,prefix+"CreateNew");AutomationProperties.SetName(createShelfButton,AppText.L("新しい棚を作成して選択", "Create and select new shelf"));
             createNote=new TextBlock{Text=createStayNote,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             AutomationProperties.SetAutomationId(createNote,prefix+"CreateNote");
             createError=new TextBlock{Visibility=Visibility.Collapsed,TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
@@ -50,17 +50,17 @@ public sealed partial class MainPage
         }
         panel.Children.Add(filter);panel.Children.Add(count);panel.Children.Add(list);
         dialogOpen=true;
-        var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=title,Content=panel,PrimaryButtonText="適用",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Primary};
+        var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=title,Content=panel,PrimaryButtonText=AppText.L("適用", "Apply"),CloseButtonText=AppText.L("キャンセル", "Cancel"),DefaultButton=ContentDialogButton.Primary};
         bool rebuilding=false;
         bool creating=false;
         dialog.Closing+=(_,closing)=>{if(creating)closing.Cancel=true;};
         void UpdateSummary()
         {
             var hidden=selected.Count(id=>!list.Items.OfType<ListViewItem>().Any(row=>(long)row.Tag==id));
-            count.Text=$"{list.Items.Count:N0} 件を表示・{selected.Count:N0} 件を選択"+(hidden>0?$"（表示外 {hidden:N0} 件）":"");
+            count.Text=AppText.L($"{list.Items.Count:N0} 件を表示・{selected.Count:N0} 件を選択", $"Showing {list.Items.Count:N0} · Selected {selected.Count:N0}")+(hidden>0?AppText.L($"（表示外 {hidden:N0} 件）", $" ({hidden:N0} hidden)"):"");
             dialog.IsPrimaryButtonEnabled=!creating&&selected.Count<=64;
-            guidance.Text=selected.Count>64?"棚は64件以内で選択してください。"
-                :options.Count==0?(allowCreate?"棚がありません。上の欄から新しい棚を作成できます。":"棚がありません。左側の「棚」から作成できます。")
+            guidance.Text=selected.Count>64?AppText.L("棚は64件以内で選択してください。", "Select up to 64 shelves.")
+                :options.Count==0?(allowCreate?AppText.L("棚がありません。上の欄から新しい棚を作成できます。", "No shelves yet. Create one using the field above."):AppText.L("棚がありません。左側の「棚」から作成できます。", "No shelves yet. Create one from Shelves on the left."))
                 :description;
         }
         void Rebuild()
@@ -92,14 +92,14 @@ public sealed partial class MainPage
                     await RefreshShelfDescriptorsAsync();
                     SyncOptions(new ShelfDescriptor(createdId,name,0));
                     selected.Add(createdId);resultsNeedRefresh=true;
-                    if(createNote is not null)createNote.Text=$"棚「{name}」を作成しました（キャンセルしても残ります）";
+                    if(createNote is not null)createNote.Text=AppText.L($"棚「{name}」を作成しました（キャンセルしても残ります）", $"Created shelf \"{name}\" (kept even if you click Cancel)");
                     newShelfBox.Text="";filter.Text="";
                     Rebuild();
                 }
                 catch(Exception ex)
                 {
                     AppLog.Error(ex);
-                    createError.Text=string.IsNullOrWhiteSpace(ex.Message)?"棚を作成できませんでした。別の名前で再試行してください。":ex.Message;
+                    createError.Text=string.IsNullOrWhiteSpace(ex.Message)?AppText.L("棚を作成できませんでした。別の名前で再試行してください。", "Could not create shelf. Try again with a different name."):ex.Message;
                     createError.Visibility=Visibility.Visible;
                 }
                 finally

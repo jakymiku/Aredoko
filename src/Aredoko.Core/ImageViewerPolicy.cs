@@ -33,7 +33,7 @@ public sealed record ImageAnimationManifest(
             DurationsMs is null || DurationsMs.Length != FrameCount ||
             DurationsMs.Any(d => d is < 20 or > 60000) ||
             RepresentativeFrame < 0 || RepresentativeFrame >= FrameCount)
-            throw new InvalidDataException("アニメーション画像の情報が無効です。");
+            throw new InvalidDataException(AppText.L("アニメーション画像の情報が無効です。", "Invalid animated image metadata."));
     }
 
     public static ImageAnimationManifest Parse(byte[] json, int expectedItemId)
@@ -44,7 +44,7 @@ public sealed record ImageAnimationManifest(
             var root = document.RootElement;
             var durationsElement = root.GetProperty("durations_ms");
             if (durationsElement.ValueKind != System.Text.Json.JsonValueKind.Array)
-                throw new InvalidDataException("アニメーション時間の形式が無効です。");
+                throw new InvalidDataException(AppText.L("アニメーション時間の形式が無効です。", "Invalid animation frame duration format."));
             var durations = new int[durationsElement.GetArrayLength()];
             var idx = 0;
             foreach (var entry in durationsElement.EnumerateArray())
@@ -61,12 +61,12 @@ public sealed record ImageAnimationManifest(
                 root.GetProperty("representative_frame").GetInt32());
             result.Validate();
             if (result.ItemId != expectedItemId)
-                throw new InvalidDataException("別の画像の情報を受信しました。");
+                throw new InvalidDataException(AppText.L("別の画像の情報を受信しました。", "Received animation info for a different image."));
             return result;
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
         {
-            throw new InvalidDataException("アニメーション画像の情報を読み取れません。", ex);
+            throw new InvalidDataException(AppText.L("アニメーション画像の情報を読み取れません。", "Unable to read animation info."), ex);
         }
     }
 }

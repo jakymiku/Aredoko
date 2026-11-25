@@ -16,34 +16,34 @@ public static class AISearchStatus
 
     public static string Guidance(string statusCode, int candidateTotal = 0, int indexedTotal = 0, string query = "") => statusCode switch
     {
-        ModelMissing => "AI環境（モデル・Python）が未導入です。名前・タグの文字検索、棚・整理、閲覧はそのまま利用できます。",
+        ModelMissing => AppText.L("AI環境（モデル・Python）が未導入です。名前・タグの文字検索、棚・整理、閲覧はそのまま利用できます。", "AI runtime and model are not installed. Name/tag search, shelves, organization, and viewing still work."),
         Unindexed => candidateTotal > 0
-            ? $"選択範囲の作品はAI索引がまだ作成されていません（対象 {candidateTotal:N0}件・未索引）。「設定」→「AI検索の準備」から索引を作成してください。名前・タグ検索は利用できます。"
-            : "選択範囲の作品はAI索引がまだ作成されていません。「設定」→「AI検索の準備」から索引を作成してください。名前・タグ検索は利用できます。",
-        PartiallyIndexed => $"選択範囲の一部のみ索引済みです（{candidateTotal:N0}件中 {indexedTotal:N0}件完了）。残りの作品は「設定」→「AI検索の準備」から索引を追加できます。",
-        OutOfScope => "選択されたフォルダ・絞り込みに対象作品がありません。検索フォルダや種類の条件を確認してください。",
-        WorkerFailed => "AI推論プロセスが停止または失敗しました。文字検索は利用できます。「設定」からAI状態を確認・再開してください。",
-        CorruptProfile => "AIプロファイル設定が無効または破損しています。「設定」からプロファイルを選び直してください。",
-        InsufficientSpace => "検索用の一時作業領域の空き容量が不足しています。ドライブの空き容量を確認してください。",
-        PortConflict => "ポートの競合が発生しました。他のインスタンスが起動していないか確認してください。",
-        StaleIndex => "索引が古くなっています。「設定」→「AI検索の準備」で索引を更新してください。",
-        LimitReached => "検索上限または索引上限に達しました。絞り込み条件を指定してください。",
+            ? AppText.L($"選択範囲の作品はAI索引がまだ作成されていません（対象 {candidateTotal:N0}件・未索引）。「設定」→「AI検索の準備」から索引を作成してください。名前・タグ検索は利用できます。", $"Selected scope has no AI index yet ({candidateTotal:N0} candidate(s) unindexed). Build the index from Settings → AI Search. Name/tag search remains available.")
+            : AppText.L("選択範囲の作品はAI索引がまだ作成されていません。「設定」→「AI検索の準備」から索引を作成してください。名前・タグ検索は利用できます。", "Selected scope has no AI index yet. Build the index from Settings → AI Search. Name/tag search remains available."),
+        PartiallyIndexed => AppText.L($"選択範囲の一部のみ索引済みです（{candidateTotal:N0}件中 {indexedTotal:N0}件完了）。残りの作品は「設定」→「AI検索の準備」から索引を追加できます。", $"Selected scope is partially indexed ({indexedTotal:N0} of {candidateTotal:N0} done). Index remaining items from Settings → AI Search."),
+        OutOfScope => AppText.L("選択されたフォルダ・絞り込みに対象作品がありません。検索フォルダや種類の条件を確認してください。", "No matching items in the selected folder or filter. Check your folder and type filters."),
+        WorkerFailed => AppText.L("AI推論プロセスが停止または失敗しました。文字検索は利用できます。「設定」からAI状態を確認・再開してください。", "The AI worker stopped or failed. Text search remains available. Check or restart AI status in Settings."),
+        CorruptProfile => AppText.L("AIプロファイル設定が無効または破損しています。「設定」からプロファイルを選び直してください。", "AI profile settings are invalid or corrupt. Reselect a profile in Settings."),
+        InsufficientSpace => AppText.L("検索用の一時作業領域の空き容量が不足しています。ドライブの空き容量を確認してください。", "Not enough temporary disk space for search. Check free space on your drive."),
+        PortConflict => AppText.L("ポートの競合が発生しました。他のインスタンスが起動していないか確認してください。", "Port conflict occurred. Make sure another instance is not already running."),
+        StaleIndex => AppText.L("索引が古くなっています。「設定」→「AI検索の準備」で索引を更新してください。", "AI index is out of date. Update the index from Settings → AI Search."),
+        LimitReached => AppText.L("検索上限または索引上限に達しました。絞り込み条件を指定してください。", "Search or index limit reached. Narrow your filters."),
         Ready => string.IsNullOrWhiteSpace(query)
-            ? "探したい内容を文章で入力してください。"
-            : $"「{query}」に一致するAI候補はありませんでした。別の言葉で検索するか、名前・タグ検索をお試しください。",
-        _ => "AI検索の状態を確認してください。名前・タグ検索は引き続き利用できます。"
+            ? AppText.L("探したい内容を文章で入力してください。", "Enter text describing what you are looking for.")
+            : AppText.L($"「{query}」に一致するAI候補はありませんでした。別の言葉で検索するか、名前・タグ検索をお試しください。", $"No AI results matched \"{query}\". Try another query or switch to Name & Tag search."),
+        _ => AppText.L("AI検索の状態を確認してください。名前・タグ検索は引き続き利用できます。", "Check AI search status. Name & tag search remains available.")
     };
 
     public static string StatusLabel(string state) => state switch
     {
-        "idle" => "未作成",
-        "running" => "作成中",
-        "cancelling" => "中断待ち",
-        "complete" => "準備完了",
-        "cancelled" => "中断済み",
-        "interrupted" => "前回中断",
-        "failed" => "失敗",
-        "partial" => "一部完了",
+        "idle" => AppText.L("未作成", "Not built"),
+        "running" => AppText.L("作成中", "Building"),
+        "cancelling" => AppText.L("中断待ち", "Cancelling"),
+        "complete" => AppText.L("準備完了", "Ready"),
+        "cancelled" => AppText.L("中断済み", "Cancelled"),
+        "interrupted" => AppText.L("前回中断", "Interrupted"),
+        "failed" => AppText.L("失敗", "Failed"),
+        "partial" => AppText.L("一部完了", "Partial"),
         _ => state
     };
 
@@ -56,9 +56,11 @@ public static class AISearchStatus
         int unscopedPresentTotal = 0)
     {
         if (jobState == "running")
-            return ($"作成中（{jobProcessed:N0}/{jobTotal:N0}）", "AI検索データを作成しています。完了前でも作成済み分から検索できます。");
+            return (AppText.L($"作成中（{jobProcessed:N0}/{jobTotal:N0}）", $"Building ({jobProcessed:N0}/{jobTotal:N0})"),
+                AppText.L("AI検索データを作成しています。完了前でも作成済み分から検索できます。", "Building AI search index. Already indexed items can be searched right away."));
         if (jobState == "cancelling")
-            return ("中断中", "AI検索データの作成を中断しています。");
+            return (AppText.L("中断中", "Cancelling"),
+                AppText.L("AI検索データの作成を中断しています。", "Cancelling AI index build."));
 
         if (coverageTargetTotal is int target && coverageFreshTotal is int fresh)
         {
@@ -67,28 +69,29 @@ public static class AISearchStatus
             if (target == 0)
             {
                 if (unscopedPresentTotal > 0)
-                    return ($"対象外（全 {unscopedPresentTotal:N0} 件がAI対象外）",
-                        "登録フォルダがAI検索の対象範囲に含まれていません。［AI検索を設定］の「対象範囲」を確認してください。");
-                return ("対象なし（0 件）", "作品を追加すると［AI検索を設定］からAI検索データを作成できます。");
+                    return (AppText.L($"対象外（全 {unscopedPresentTotal:N0} 件がAI対象外）", $"Out of scope ({unscopedPresentTotal:N0} excluded)"),
+                        AppText.L("登録フォルダがAI検索の対象範囲に含まれていません。［AI検索を設定］の「対象範囲」を確認してください。", "Registered folders are excluded from AI search scope. Check Scope in Configure AI."));
+                return (AppText.L("対象なし（0 件）", "No items (0)"),
+                    AppText.L("作品を追加すると［AI検索を設定］からAI検索データを作成できます。", "Add items to build AI search data from Configure AI."));
             }
             if (clampedFresh == 0)
-                return ($"未作成（0 / {target:N0} 件）",
-                    $"対象 {target:N0} 件のAI検索データが未作成です。［AI検索を設定］から作成できます。");
+                return (AppText.L($"未作成（0 / {target:N0} 件）", $"Not built (0 / {target:N0})"),
+                    AppText.L($"対象 {target:N0} 件のAI検索データが未作成です。［AI検索を設定］から作成できます。", $"{target:N0} target item(s) have no AI index yet. Build it in Configure AI."));
             if (remaining > 0)
-                return ($"一部作成（{clampedFresh:N0} / {target:N0} 件・未作成 {remaining:N0} 件）",
-                    $"未作成の作品が {remaining:N0} 件あります。［AI検索を設定］からAI検索データを追加作成できます。");
+                return (AppText.L($"一部作成（{clampedFresh:N0} / {target:N0} 件・未作成 {remaining:N0} 件）", $"Partial ({clampedFresh:N0} / {target:N0}, {remaining:N0} remaining)"),
+                    AppText.L($"未作成の作品が {remaining:N0} 件あります。［AI検索を設定］からAI検索データを追加作成できます。", $"{remaining:N0} unindexed item(s) remaining. Add them from Configure AI."));
             if (unscopedPresentTotal > 0)
-                return ($"対象分は作成済み（{clampedFresh:N0}/{target:N0} · 対象外 {unscopedPresentTotal:N0} 件）",
-                    $"AI対象外のフォルダに {unscopedPresentTotal:N0} 件あります。含める場合は［AI検索を設定］の「対象範囲」を確認してください。");
-            return ($"✓ 作成済み（{clampedFresh:N0}/{target:N0}）",
-                "AI検索の準備が整っています。検索欄の［AI］から使えます。");
+                return (AppText.L($"対象分は作成済み（{clampedFresh:N0}/{target:N0} · 対象外 {unscopedPresentTotal:N0} 件）", $"Scoped ready ({clampedFresh:N0}/{target:N0} · {unscopedPresentTotal:N0} excluded)"),
+                    AppText.L($"AI対象外のフォルダに {unscopedPresentTotal:N0} 件あります。含める場合は［AI検索を設定］の「対象範囲」を確認してください。", $"{unscopedPresentTotal:N0} item(s) are in excluded folders. Update Scope in Configure AI to include them."));
+            return (AppText.L($"✓ 作成済み（{clampedFresh:N0}/{target:N0}）", $"✓ Ready ({clampedFresh:N0}/{target:N0})"),
+                AppText.L("AI検索の準備が整っています。検索欄の［AI］から使えます。", "AI search is ready. Switch to [AI] in the search bar to try it."));
         }
 
         return jobState switch
         {
-            "complete" => ($"✓ 作成済み（{jobProcessed:N0}/{jobTotal:N0}）", "AI検索の準備が整っています。検索欄の［AI］から使えます。"),
-            "partial" or "cancelled" or "interrupted" => ($"一部作成（{jobProcessed:N0}/{jobTotal:N0}）", "［AI検索を設定］から残りのAI検索データを作成できます。"),
-            _ => ("未作成", "［AI検索を設定］から対象フォルダのAI検索データを作成できます。")
+            "complete" => (AppText.L($"✓ 作成済み（{jobProcessed:N0}/{jobTotal:N0}）", $"✓ Ready ({jobProcessed:N0}/{jobTotal:N0})"), AppText.L("AI検索の準備が整っています。検索欄の［AI］から使えます。", "AI search is ready. Switch to [AI] in the search bar to try it.")),
+            "partial" or "cancelled" or "interrupted" => (AppText.L($"一部作成（{jobProcessed:N0}/{jobTotal:N0}）", $"Partial ({jobProcessed:N0}/{jobTotal:N0})"), AppText.L("［AI検索を設定］から残りのAI検索データを作成できます。", "Build the remaining AI search index from Configure AI.")),
+            _ => (AppText.L("未作成", "Not built"), AppText.L("［AI検索を設定］から対象フォルダのAI検索データを作成できます。", "Build the AI search index for target folders from Configure AI."))
         };
     }
 }

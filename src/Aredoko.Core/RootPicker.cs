@@ -29,7 +29,7 @@ public sealed class RootPicker
         var value=ids.Distinct().Order().ToArray();
         if(value.Length>SelectionLimit)throw new ArgumentException("Too many selected roots");
         selected.Clear();
-        foreach(var id in value){choices.TryAdd(id,new(id,$"登録が見つかりません（ID {id}）",false));selected.Add(id);}
+        foreach(var id in value){choices.TryAdd(id,new(id,AppText.L($"登録が見つかりません（ID {id}）", $"Registration not found (ID {id})"),false));selected.Add(id);}
         Filter("");
     }
     public void Filter(string query)

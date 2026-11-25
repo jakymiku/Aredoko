@@ -16,7 +16,9 @@ public sealed record RegisteredRootRow(
     IReadOnlyList<long>? ShelfIds = null,
     string StartupScan = "none")
 {
-    public string ModeLabel => FolderBooks ? "画像フォルダを一冊として扱う" : "画像は1枚ずつ";
+    public string ModeLabel => FolderBooks
+        ? AppText.L("画像フォルダを一冊として扱う", "Folder treated as one book")
+        : AppText.L("画像は1枚ずつ", "Images individually");
 
     public string Name
     {
@@ -42,10 +44,13 @@ public sealed record RegisteredRootRow(
     }
 
     public string StatusLabel => !Enabled
-        ? "登録解除済み（再登録でタグ・棚を復元）"
-        : (Online ? "登録中 · 接続OK" : "登録中 · 未接続") + $" · {PresentCount:N0} 件";
+        ? AppText.L("登録解除済み（再登録でタグ・棚を復元）", "Unregistered (re-add to restore tags & shelves)")
+        : (Online ? AppText.L("登録中 · 接続OK", "Active · Online") : AppText.L("登録中 · 未接続", "Active · Offline"))
+          + AppText.L($" · {PresentCount:N0} 件", $" · {PresentCount:N0} items");
 
-    public string ShelfLabel => string.IsNullOrEmpty(DefaultShelf) ? "初期棚: 棚なし" : $"初期棚: {DefaultShelf}"+(ShelfIds is {Count:>1}?$" ほか{ShelfIds.Count-1}棚":"");
+    public string ShelfLabel => string.IsNullOrEmpty(DefaultShelf)
+        ? AppText.L("初期棚: 棚なし", "Default shelf: None")
+        : AppText.L($"初期棚: {DefaultShelf}", $"Default shelf: {DefaultShelf}") + (ShelfIds is {Count:>1}?AppText.L($" ほか{ShelfIds.Count-1}棚",$" +{ShelfIds.Count-1} more"):"");
 
     public static IReadOnlyList<RegisteredRootRow> ParseList(JsonNode data)
     {
@@ -125,11 +130,11 @@ public sealed class FolderSettingsDraft
 
     public static ShelfSummary SummarizeDefaultShelf(IReadOnlyList<RegisteredRootRow> roots)
     {
-        if (roots.Count == 0) return new(false, "", "棚なし");
+        if (roots.Count == 0) return new(false, "", AppText.L("棚なし", "No shelf"));
         var first = roots[0].DefaultShelf;
         if (roots.All(r => r.DefaultShelf == first && (r.ShelfIds is null || roots[0].ShelfIds is null || r.ShelfIds.Order().SequenceEqual(roots[0].ShelfIds!.Order()))))
-            return new(false, first, first.Length == 0 ? "棚なし" : first+(roots[0].ShelfIds is {Count:>1} ids?$" ほか{ids.Count-1}棚":""));
-        return new(true, null, "複数の設定値");
+            return new(false, first, first.Length == 0 ? AppText.L("棚なし", "No shelf") : first+(roots[0].ShelfIds is {Count:>1} ids?AppText.L($" ほか{ids.Count-1}棚", $" +{ids.Count-1} more"):""));
+        return new(true, null, AppText.L("複数の設定値", "Multiple values"));
     }
 
     public bool IsShelfChanged
@@ -179,9 +184,9 @@ public sealed class FolderSettingsDraft
     {
         var trimmed = (value ?? "").Trim();
         if (requireNonEmpty && trimmed.Length == 0)
-            throw new InvalidOperationException("新しい棚の名前を入力してください。");
+            throw new InvalidOperationException(AppText.L("新しい棚の名前を入力してください。", "Enter a new shelf name."));
         if (trimmed.Length > 80)
-            throw new InvalidOperationException("棚の名前は80文字以内にしてください。");
+            throw new InvalidOperationException(AppText.L("棚の名前は80文字以内にしてください。", "Shelf name must be 80 characters or fewer."));
         return trimmed;
     }
 
@@ -202,32 +207,32 @@ public static class FolderScopeDescriber
         {
             var totalActive = activeById.Count;
             var offlineCount = activeById.Values.Count(r => !r.Online);
-            var summary = $"検索対象: すべての登録フォルダ（{totalActive} フォルダ）";
-            var warning = offlineCount > 0 ? $"未接続のフォルダが {offlineCount} 件あります（登録内容は保持）。" : null;
+            var summary = AppText.L($"検索対象: すべての登録フォルダ（{totalActive} フォルダ）", $"Search scope: All registered folders ({totalActive})");
+            var warning = offlineCount > 0 ? AppText.L($"未接続のフォルダが {offlineCount} 件あります（登録内容は保持）。", $"{offlineCount} folder(s) currently offline (records preserved).") : null;
             return (summary, warning);
         }
         if (selectedRootIds.Count == 0)
-            return ("検索対象: 選択なし（0 フォルダ）", "検索するフォルダを1つ以上選んでください。");
+            return (AppText.L("検索対象: 選択なし（0 フォルダ）", "Search scope: None (0 folders)"), AppText.L("検索するフォルダを1つ以上選んでください。", "Select at least one folder to search."));
 
         var missing = selectedRootIds.Where(id => !activeById.ContainsKey(id)).ToArray();
         var present = selectedRootIds.Where(activeById.ContainsKey).Select(id => activeById[id]).ToArray();
-        var names = string.Join("、", present.Take(3).Select(r => r.ShortPath)) + (present.Length > 3 ? $" ほか{present.Length - 3}件" : "");
+        var names = string.Join(AppText.L("、", ", "), present.Take(3).Select(r => r.ShortPath)) + (present.Length > 3 ? AppText.L($" ほか{present.Length - 3}件", $" +{present.Length - 3} more") : "");
         var label = present.Length == 1
-            ? $"検索対象: {present[0].ShortPath}（1 フォルダ）"
-            : $"検索対象: {names}（{selectedRootIds.Count} フォルダをまとめて検索）";
+            ? AppText.L($"検索対象: {present[0].ShortPath}（1 フォルダ）", $"Search scope: {present[0].ShortPath} (1 folder)")
+            : AppText.L($"検索対象: {names}（{selectedRootIds.Count} フォルダをまとめて検索）", $"Search scope: {names} ({selectedRootIds.Count} folders)");
 
         var notes = new List<string>();
         if (missing.Length > 0)
-            notes.Add($"選択中のフォルダ {missing.Length} 件が登録解除されています。対象を見直してください。");
+            notes.Add(AppText.L($"選択中のフォルダ {missing.Length} 件が登録解除されています。対象を見直してください。", $"{missing.Length} selected folder(s) unregistered. Review your scope."));
         var offline = present.Count(r => !r.Online);
         if (offline > 0)
-            notes.Add($"選択中のフォルダに未接続が {offline} 件あります。");
+            notes.Add(AppText.L($"選択中のフォルダに未接続が {offline} 件あります。", $"{offline} selected folder(s) offline."));
         if (isAiOrSimilar && aiScope?["root_ids"] is JsonArray scopedArray)
         {
             var allowed = scopedArray.Select(n => n!.GetValue<int>()).ToHashSet();
             var effective = selectedRootIds.Count(allowed.Contains);
             if (effective < selectedRootIds.Count)
-                notes.Add($"AI索引の対象設定との共通範囲は {effective}/{selectedRootIds.Count} フォルダです。");
+                notes.Add(AppText.L($"AI索引の対象設定との共通範囲は {effective}/{selectedRootIds.Count} フォルダです。", $"{effective} of {selectedRootIds.Count} selected folder(s) included in AI scope."));
         }
         return (label, notes.Count > 0 ? string.Join(" ", notes) : null);
     }

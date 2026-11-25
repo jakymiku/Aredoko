@@ -75,8 +75,8 @@ public sealed class LibraryApi : IDisposable
         using var doc = JsonDocument.Parse(await client.GetStringAsync("api/session"));
         var startupInstance=Environment.GetEnvironmentVariable("AREDOKO_STARTUP_INSTANCE");
         if(startupInstance is not null&&(!doc.RootElement.TryGetProperty("instance_id",out var instance)||instance.GetString()!=startupInstance))
-            throw new InvalidOperationException("今回起動したバックエンドを確認できません。");
-        if (doc.RootElement.GetProperty("mode").GetString() != "production") throw new InvalidOperationException("製品用APIではありません。start-winui.ps1から起動してください。");
+            throw new InvalidOperationException(AppText.L("今回起動したバックエンドを確認できません。", "Could not verify the backend launched by this session."));
+        if (doc.RootElement.GetProperty("mode").GetString() != "production") throw new InvalidOperationException(AppText.L("製品用APIではありません。start-winui.ps1から起動してください。", "Not a production API. Launch from start-winui.ps1."));
         BasicRuntime=doc.RootElement.TryGetProperty("basic_runtime",out var runtime)
             ?new(runtime.GetProperty("implementation").GetString()!,runtime.GetProperty("version").GetString()!,
                  runtime.GetProperty("bits").GetInt32(),runtime.GetProperty("virtual_environment").GetBoolean())
@@ -100,7 +100,7 @@ public sealed class LibraryApi : IDisposable
     {
         if(view=="history")
         {
-            if(semantic||source!="all")throw new ArgumentException("閲覧履歴は名前・タグ検索を使ってください。");
+            if(semantic||source!="all")throw new ArgumentException(AppText.L("閲覧履歴は名前・タグ検索を使ってください。", "Use Name/Tag search for reading history."));
             return Protocol.ParseSearch(await client.GetStringAsync(FolderSearch.LiteralRouteMulti(q,kind,view,page,rootIds),cancellation));
         }
         if(source is "pending-proposals" or "pending-proposals-semantic")

@@ -26,14 +26,14 @@ internal sealed class ViewerFavoriteAction(ResultSession? session,Action<string>
     {
         itemId=id;var currentVersion=++version;value=null;
         Button.Content=new SymbolIcon(Symbol.OutlineStar);
-        Label("お気に入りを読み込み中");
+        Label(AppText.L("お気に入りを読み込み中", "Loading favorite state"));
         if(session is not null)_=LoadAsync(id,ordinal,currentVersion);
     }
     private void Label(string text){AutomationProperties.SetName(Button,text);}
     private void Update()
     {
         Button.Content=new SymbolIcon(value==true?Symbol.SolidStar:Symbol.OutlineStar);
-        Label(value==true?"お気に入りを解除":"お気に入りに登録");StateChanged?.Invoke();
+        Label(value==true?AppText.L("お気に入りを解除", "Remove from Favorites"):AppText.L("お気に入りに登録", "Add to Favorites"));StateChanged?.Invoke();
     }
     private async Task LoadAsync(int id,int ordinal,int currentVersion)
     {
@@ -41,11 +41,11 @@ internal sealed class ViewerFavoriteAction(ResultSession? session,Action<string>
         {
             var result=await session!.RangeAsync(ordinal,1,lifetime.Token);
             if(disposed||version!=currentVersion)return;
-            if(result.Items.Count!=1||result.Items[0].Id!=id)throw new InvalidDataException("表示中の作品を確認できません。");
+            if(result.Items.Count!=1||result.Items[0].Id!=id)throw new InvalidDataException(AppText.L("表示中の作品を確認できません。", "Cannot verify the displayed item."));
             value=result.Items[0].Favorite;Update();
         }
         catch(OperationCanceledException) when(lifetime.IsCancellationRequested){}
-        catch(Exception ex){if(!disposed&&version==currentVersion){Label("お気に入りの状態を取得できません。一覧で確認してください。");AppLog.Error(ex);}}
+        catch(Exception ex){if(!disposed&&version==currentVersion){Label(AppText.L("お気に入りの状態を取得できません。一覧で確認してください。", "Unable to load favorite state. Check the library list."));AppLog.Error(ex);}}
     }
     private async Task SaveAsync()
     {
@@ -55,10 +55,10 @@ internal sealed class ViewerFavoriteAction(ResultSession? session,Action<string>
         {
             var kept=await session.EditFavoriteAsync(id,target,CancellationToken.None);
             value=target;Changed?.Invoke(id,target,kept);Update();
-            notice(target?"★ お気に入りに追加しました":"☆ お気に入りを解除しました");
-            if(!kept){notice("✓ お気に入りを更新しました");ReturnRequested?.Invoke();}
+            notice(target?AppText.L("★ お気に入りに追加しました", "★ Added to Favorites"):AppText.L("☆ お気に入りを解除しました", "☆ Removed from Favorites"));
+            if(!kept){notice(AppText.L("✓ お気に入りを更新しました", "✓ Favorites updated"));ReturnRequested?.Invoke();}
         }
-        catch(Exception ex){notice("お気に入りを保存できませんでした");AppLog.Error(ex);}
+        catch(Exception ex){notice(AppText.L("お気に入りを保存できませんでした", "Failed to save favorite state"));AppLog.Error(ex);}
         finally{IsSaving=false;if(!disposed)StateChanged?.Invoke();}
     }
     public void Dispose(){if(disposed)return;disposed=true;lifetime.Cancel();lifetime.Dispose();}

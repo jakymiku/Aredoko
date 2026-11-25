@@ -1,3 +1,4 @@
+using Aredoko.Core;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -413,7 +414,7 @@ internal sealed class ViewerChromeController : IDisposable
             {
                 var pinned=ViewerOptions.Value.AlwaysShowControls;
                 button.IsChecked=pinned;
-                var name=pinned?"操作バーの固定を解除":"操作バーを常に表示（ピン留め）";
+                var name=pinned?AppText.L("操作バーの固定を解除", "Unpin control bar"):AppText.L("操作バーを常に表示（ピン留め）", "Always show control bar (Pin)");
                 AutomationProperties.SetName(button,name);
             }
             finally{syncing=false;}
@@ -455,9 +456,9 @@ internal sealed class ViewerChromeController : IDisposable
     public static MenuFlyout Settings(bool book,Action changed,Action<Exception> failed)
     {
         var menu=new MenuFlyout();
-        var enlarge=new ToggleMenuFlyoutItem{Text="小さい画像を画面に合わせる"};
-        var controls=new ToggleMenuFlyoutItem{Text="操作バーを常時表示"};
-        var loop=new ToggleMenuFlyoutItem{Text="末尾から先頭へループ"};
+        var enlarge=new ToggleMenuFlyoutItem{Text=AppText.L("小さい画像を画面に合わせる", "Scale small images to fit")};
+        var controls=new ToggleMenuFlyoutItem{Text=AppText.L("操作バーを常時表示", "Always show controls")};
+        var loop=new ToggleMenuFlyoutItem{Text=AppText.L("末尾から先頭へループ", "Loop from end to start")};
         foreach(var (item,id) in new[]{(enlarge,"ViewerEnlargeImages"),(controls,"ViewerAlwaysControls"),(loop,"ViewerLoopPages")})
             AutomationProperties.SetAutomationId(item,id);
         void Sync(){enlarge.IsChecked=ViewerOptions.Value.EnlargeSmallImages;controls.IsChecked=ViewerOptions.Value.AlwaysShowControls;loop.IsChecked=ViewerOptions.Value.LoopBookPages;}

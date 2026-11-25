@@ -13,7 +13,7 @@ public static class ResultSearchConditions
         if (tag is null) return null;
         var trimmed = tag.Trim();
         if (trimmed.Length is < 1 or > MaxTagLength)
-            throw new ArgumentException($"タグは1～{MaxTagLength}文字で指定してください。", nameof(tag));
+            throw new ArgumentException(AppText.L($"タグは1～{MaxTagLength}文字で指定してください。", $"Tag must be 1–{MaxTagLength} characters."), nameof(tag));
         return trimmed;
     }
 
@@ -62,9 +62,9 @@ public static class ResultSearchConditions
         else if (method.IsDirectContent)
         {
             if (string.IsNullOrWhiteSpace(query))return null;
-            if(method.IsAudioContent && kind is not ("" or "audio"))throw new ArgumentException("音声の内容検索では種類を音声・音楽にしてください。");
-            if(method.IsVideoContent && kind is not ("" or "video"))throw new ArgumentException("動画の内容検索では種類を動画にしてください。");
-            if(method.IsVideoAudioContent && kind is not ("" or "video"))throw new ArgumentException("動画内の音声検索では種類を動画にしてください。");
+            if(method.IsAudioContent && kind is not ("" or "audio"))throw new ArgumentException(AppText.L("音声の内容検索では種類を音声・音楽にしてください。", "Set Kind to Audio / Music when searching audio content."));
+            if(method.IsVideoContent && kind is not ("" or "video"))throw new ArgumentException(AppText.L("動画の内容検索では種類を動画にしてください。", "Set Kind to Video when searching video content."));
+            if(method.IsVideoAudioContent && kind is not ("" or "video"))throw new ArgumentException(AppText.L("動画内の音声検索では種類を動画にしてください。", "Set Kind to Video when searching spoken audio in video."));
             result=new JsonObject{["mode"]=method.Source,["query"]=query,["view"]=view};
         }
         else if (method.IsPageText || method.IsTagCandidates)

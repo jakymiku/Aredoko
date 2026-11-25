@@ -28,7 +28,11 @@ public sealed class MediaRow
     // An image folder registered as one book: the server marks it with a
     // trailing "/" ("./" for the registered folder itself); file paths never end so.
     public bool IsFolderBook => Location.EndsWith('/');
-    public string LocationLabel => Location == "./" ? "登録フォルダ直下の画像（一冊）" : IsFolderBook ? Location + "（画像フォルダを一冊として表示）" : Location;
+    public string LocationLabel => Location == "./"
+        ? AppText.L("登録フォルダ直下の画像（一冊）", "Images directly in folder (as book)")
+        : IsFolderBook
+            ? Location + AppText.L("（画像フォルダを一冊として表示）", " (image folder shown as book)")
+            : Location;
     // Keep relative folders and logical-book context; do not repeat a bare
     // filename immediately below the identical detail title.
     public string DetailLocationLabel => string.Equals(LocationLabel,Title,StringComparison.Ordinal) ? "" : LocationLabel;
@@ -69,24 +73,24 @@ public sealed class MediaRow
     public string AIEvidence => AIPage is not null || Proposal?.SemanticScore is not null ? "" : SemanticScore is double score
         ? (VideoMatchSource=="direct-video" && VideoMatchMs is int directStart && VideoMatchEndMs is int directEnd
              ? (SimilarityOriginId is int && OriginMatchMs is int directOrigin && OriginMatchEndMs is int directOriginEnd
-                ? $"動画の内容一致（起点 {FormatInterval(directOrigin,directOriginEnd)} → 候補 {FormatInterval(directStart,directEnd)}）"
-                : $"動画の内容一致（{FormatInterval(directStart,directEnd)}）")
+                ? AppText.L($"動画の内容一致（起点 {FormatInterval(directOrigin,directOriginEnd)} → 候補 {FormatInterval(directStart,directEnd)}）", $"Video content match (source {FormatInterval(directOrigin,directOriginEnd)} → match {FormatInterval(directStart,directEnd)})")
+                : AppText.L($"動画の内容一致（{FormatInterval(directStart,directEnd)}）", $"Video content match ({FormatInterval(directStart,directEnd)})"))
            : AudioMatchSource=="video-audio" && AudioMatchMs is int audioStart && AudioMatchEndMs is int audioEnd
              ? (SimilarityOriginId is int && OriginMatchMs is int audioOrigin && OriginMatchEndMs is int audioOriginEnd
-                ? $"動画内の音声一致（起点 {FormatInterval(audioOrigin,audioOriginEnd)} → 候補 {FormatInterval(audioStart,audioEnd)}）"
-                : $"動画内の音声一致（{FormatInterval(audioStart,audioEnd)}）")
-           : SimilarityOriginId is int ? (VideoMatchMs is int matchMs ? (OriginMatchMs is int v2vOms ? $"動画一致（起点 {FormatVideoTimestamp(v2vOms)} → 候補 {FormatVideoTimestamp(matchMs)}）" : $"動画フレーム一致（{FormatVideoTimestamp(matchMs)}）")
-                                       : AudioMatchMs is int aMatchMs ? (OriginMatchMs is int a2aOms ? $"音声・音楽一致（起点 {FormatVideoTimestamp(a2aOms)} → 候補 {FormatVideoTimestamp(aMatchMs)}）" : $"音声一致（{FormatVideoTimestamp(aMatchMs)}）")
-                                       : OriginMatchMs is int oms ? (Kind == "audio" ? $"起点の音声（{FormatVideoTimestamp(oms)}）に似た候補" : $"起点の動画（{FormatVideoTimestamp(oms)}）に似た候補")
-                                       : Kind == "audio" ? "起点の音声・曲に似た候補"
-                                       : "起点の画像・表紙に似た候補")
-           : VideoMatchMs is int vms ? $"動画フレーム一致（{FormatVideoTimestamp(vms)}）" + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
-           : AudioMatchMs is int ams ? (AudioMatchSource=="direct-audio"?$"音声の内容一致（{FormatVideoTimestamp(ams)}）":AudioMatchSnippet?.StartsWith("音響特徴") == true ? $"音響特徴一致（{FormatVideoTimestamp(ams)} · 「{AudioMatchSnippet}」）" : $"音声発話一致（{FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · 「{AudioMatchSnippet}」")}）") + (LiteralWords>0 ? $" · 文字一致{LiteralHits}/{LiteralWords}語" : "")
-           : LiteralWords>0 ? (LiteralHits==LiteralWords ? "名前・タグで全語一致" : $"文字一致{LiteralHits}/{LiteralWords}語 · AI候補") : "AI類似候補")
-          + (ScoreKind=="cosine" ? $"\n類似度 {score:F3}" : ScoreKind=="reciprocal-rank" ? $"\n一致率 {score:F4}" : "")
+                ? AppText.L($"動画内の音声一致（起点 {FormatInterval(audioOrigin,audioOriginEnd)} → 候補 {FormatInterval(audioStart,audioEnd)}）", $"Video audio match (source {FormatInterval(audioOrigin,audioOriginEnd)} → match {FormatInterval(audioStart,audioEnd)})")
+                : AppText.L($"動画内の音声一致（{FormatInterval(audioStart,audioEnd)}）", $"Video audio match ({FormatInterval(audioStart,audioEnd)})"))
+           : SimilarityOriginId is int ? (VideoMatchMs is int matchMs ? (OriginMatchMs is int v2vOms ? AppText.L($"動画一致（起点 {FormatVideoTimestamp(v2vOms)} → 候補 {FormatVideoTimestamp(matchMs)}）", $"Video match (source {FormatVideoTimestamp(v2vOms)} → match {FormatVideoTimestamp(matchMs)})") : AppText.L($"動画フレーム一致（{FormatVideoTimestamp(matchMs)}）", $"Video frame match ({FormatVideoTimestamp(matchMs)})"))
+                                       : AudioMatchMs is int aMatchMs ? (OriginMatchMs is int a2aOms ? AppText.L($"音声・音楽一致（起点 {FormatVideoTimestamp(a2aOms)} → 候補 {FormatVideoTimestamp(aMatchMs)}）", $"Audio/music match (source {FormatVideoTimestamp(a2aOms)} → match {FormatVideoTimestamp(aMatchMs)})") : AppText.L($"音声一致（{FormatVideoTimestamp(aMatchMs)}）", $"Audio match ({FormatVideoTimestamp(aMatchMs)})"))
+                                       : OriginMatchMs is int oms ? (Kind == "audio" ? AppText.L($"起点の音声（{FormatVideoTimestamp(oms)}）に似た候補", $"Similar to source audio ({FormatVideoTimestamp(oms)})") : AppText.L($"起点の動画（{FormatVideoTimestamp(oms)}）に似た候補", $"Similar to source video ({FormatVideoTimestamp(oms)})"))
+                                       : Kind == "audio" ? AppText.L("起点の音声・曲に似た候補", "Similar to source audio")
+                                       : AppText.L("起点の画像・表紙に似た候補", "Similar to source image / cover"))
+           : VideoMatchMs is int vms ? AppText.L($"動画フレーム一致（{FormatVideoTimestamp(vms)}）", $"Video frame match ({FormatVideoTimestamp(vms)})") + (LiteralWords>0 ? AppText.L($" · 文字一致{LiteralHits}/{LiteralWords}語", $" · Text match {LiteralHits}/{LiteralWords}") : "")
+           : AudioMatchMs is int ams ? (AudioMatchSource=="direct-audio"?AppText.L($"音声の内容一致（{FormatVideoTimestamp(ams)}）", $"Audio content match ({FormatVideoTimestamp(ams)})"):AudioMatchSnippet?.StartsWith("音響特徴") == true ? AppText.L($"音響特徴一致（{FormatVideoTimestamp(ams)} · 「{AudioMatchSnippet}」）", $"Acoustic match ({FormatVideoTimestamp(ams)} · \"{AppText.TranslateBackend(AudioMatchSnippet)}\")") : AppText.L($"音声発話一致（{FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · 「{AudioMatchSnippet}」")}）", $"Spoken audio match ({FormatVideoTimestamp(ams)}{(string.IsNullOrEmpty(AudioMatchSnippet) ? "" : $" · \"{AudioMatchSnippet}\"")})")) + (LiteralWords>0 ? AppText.L($" · 文字一致{LiteralHits}/{LiteralWords}語", $" · Text match {LiteralHits}/{LiteralWords}") : "")
+           : LiteralWords>0 ? (LiteralHits==LiteralWords ? AppText.L("名前・タグで全語一致", "All words matched in name/tags") : AppText.L($"文字一致{LiteralHits}/{LiteralWords}語 · AI候補", $"Text match {LiteralHits}/{LiteralWords} · AI candidate")) : AppText.L("AI類似候補", "AI similarity match"))
+          + (ScoreKind=="cosine" ? AppText.L($"\n類似度 {score:F3}", $"\nSimilarity {score:F3}") : ScoreKind=="reciprocal-rank" ? AppText.L($"\n一致率 {score:F4}", $"\nMatch score {score:F4}") : "")
         : "";
-    public string MatchLabel => Match switch { "related" => "関連語の候補 · ", "partial" => "一部の語のみ一致 · ", _ => "" };
-    public string KindAndTags => MatchLabel + $"{Kind} · {string.Join("、", Tags)}";
+    public string MatchLabel => Match switch { "related" => AppText.L("関連語の候補 · ", "Related term · "), "partial" => AppText.L("一部の語のみ一致 · ", "Partial match · "), _ => "" };
+    public string KindAndTags => MatchLabel + $"{Kind} · {string.Join(AppText.L("、", ", "), Tags)}";
     // Per-word reason for a literal search row; null for list/AI/old servers.
     public SearchEvidence? Evidence { get; set; }
     // Latest-batch pending tag proposal match when searching in ModeTagCandidates.
@@ -113,20 +117,22 @@ public sealed record ProposalMatch(
 {
     public string SourceStateLabel => SourceState switch
     {
-        "current" => "元ファイル一致",
-        "stale" => "元ファイル変更あり（要再生成）",
-        "unverified" => "元ファイル確認待ち",
-        _ => "元ファイル利用不可"
+        "current" => AppText.L("元ファイル一致", "Source matches"),
+        "stale" => AppText.L("元ファイル変更あり（要再生成）", "Source changed (rebuild required)"),
+        "unverified" => AppText.L("元ファイル確認待ち", "Verification pending"),
+        _ => AppText.L("元ファイル利用不可", "Source unavailable")
     };
-    public string EvidenceLabel => EvidenceKind == "cover" ? "本の先頭ページのみ" : "画像";
+    public string EvidenceLabel => EvidenceKind == "cover" ? AppText.L("本の先頭ページのみ", "Cover / first page only") : AppText.L("画像", "Image");
     public string Summary
     {
         get
         {
-            var shown = string.Join("、", Tags.Take(5));
-            var extra = Tags.Length > 5 ? $" ほか{Tags.Length - 5}件" : "";
-            var meaning=SemanticScore is double score?$"タグ候補の意味一致 · 類似度 {score:F3}\n":"";
-            return meaning+$"未承認タグ候補: {shown}{extra}\nモデル: {Model} ({Adapter} {AdapterVersion}) · 根拠: {EvidenceLabel} · {SourceStateLabel}";
+            var shown = string.Join(AppText.L("、", ", "), Tags.Take(5));
+            var extra = Tags.Length > 5 ? AppText.L($" ほか{Tags.Length - 5}件", $" +{Tags.Length - 5} more") : "";
+            var meaning=SemanticScore is double score?AppText.L($"タグ候補の意味一致 · 類似度 {score:F3}\n", $"Tag candidate semantic match · Similarity {score:F3}\n"):"";
+            return meaning+AppText.L(
+                $"未承認タグ候補: {shown}{extra}\nモデル: {Model} ({Adapter} {AdapterVersion}) · 根拠: {EvidenceLabel} · {SourceStateLabel}",
+                $"Pending tag candidates: {shown}{extra}\nModel: {Model} ({Adapter} {AdapterVersion}) · Evidence: {EvidenceLabel} · {SourceStateLabel}");
         }
     }
 }
@@ -185,14 +191,14 @@ public static class Protocol
         if(root.TryGetProperty("search_complete",out var complete))
         {
             if(complete.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                throw new InvalidDataException("検索範囲の応答が無効です。");
+                throw new InvalidDataException(AppText.L("検索範囲の応答が無効です。", "Invalid search completeness response."));
             result.SearchComplete=complete.GetBoolean();
             if(result.SearchComplete)
             {
                 var candidates=root.GetProperty("search_candidate_total").GetInt32();
                 var indexed=root.GetProperty("indexed_total").GetInt32();
                 if(candidates<0||indexed<0||indexed>candidates||result.Total<0||result.Total>indexed)
-                    throw new InvalidDataException("検索対象の件数が無効です。");
+                    throw new InvalidDataException(AppText.L("検索対象の件数が無効です。", "Invalid search candidate count."));
                 result.SearchCandidateTotal=candidates;result.IndexedTotal=indexed;
                 result.CoverageLimit=null; // Legacy coverage_limit describes index jobs, not search truncation.
             }
@@ -210,9 +216,9 @@ public static class Protocol
             if(root.TryGetProperty("source",out var source) && source.ValueKind==JsonValueKind.String)
             {
                 if(source.GetString()=="video-direct" && row.VideoMatchSource!="direct-video")
-                    throw new InvalidDataException("動画の一致区間がありません。検索をやり直してください。");
+                    throw new InvalidDataException(AppText.L("動画の一致区間がありません。検索をやり直してください。", "Missing video match interval. Please search again."));
                 if(source.GetString()=="video-audio-direct" && row.AudioMatchSource!="video-audio")
-                    throw new InvalidDataException("動画内音声の一致区間がありません。検索をやり直してください。");
+                    throw new InvalidDataException(AppText.L("動画内音声の一致区間がありません。検索をやり直してください。", "Missing video audio match interval. Please search again."));
             }
             row.ScoreKind=root.TryGetProperty("score_kind",out var scoreKind) && scoreKind.ValueKind==JsonValueKind.String ? scoreKind.GetString()??"" : "";
             result.Items.Add(row);
@@ -233,16 +239,20 @@ public static class Protocol
     {
         var parts = expansions.Where(e => e.Added.Length > 0).Take(4).Select(e =>
         {
-            var shown = string.Join("、", e.Added.Take(wordsPerTerm));
+            var shown = string.Join(AppText.L("、", ", "), e.Added.Take(wordsPerTerm));
             var hidden = e.Added.Length - Math.Min(wordsPerTerm, e.Added.Length);
-            return $"{e.Term}→{shown}{(hidden > 0 || e.Truncated ? $" ほか{(hidden > 0 ? $"{hidden}語" : "")}" : "")}";
+            return $"{e.Term}→{shown}{(hidden > 0 || e.Truncated ? AppText.L($" ほか{(hidden > 0 ? $"{hidden}語" : "")}", $" +{(hidden > 0 ? $"{hidden}" : "more")}") : "")}";
         }).ToList();
         if (parts.Count == 0) return "";
-        return "登録した関連語も候補に含めています（" + string.Join(" / ", parts) + "）。入力した語に一致する作品を先に表示します。";
+        return AppText.L(
+            "登録した関連語も候補に含めています（" + string.Join(" / ", parts) + "）。入力した語に一致する作品を先に表示します。",
+            "Including related terms from your dictionary (" + string.Join(" / ", parts) + "). Exact matches appear first.");
     }
 
     public static string DescribePartial(int? words) =>
-        words is int count ? $"{count}語すべてに一致する作品はありません。{count - 1}語に一致する作品を表示しています。" : "";
+        words is int count ? AppText.L(
+            $"{count}語すべてに一致する作品はありません。{count - 1}語に一致する作品を表示しています。",
+            $"No items matched all {count} words. Showing items matching {count - 1} words.") : "";
 
     public static MediaRow ParseItem(string text)
     {
@@ -299,7 +309,7 @@ public static class Protocol
                (hasOrigin && (result.SimilarityOriginId is null || !ValidAudioInterval(result.OriginMatchMs,result.OriginMatchEndMs))) ||
                (!hasOrigin && (row.TryGetProperty("origin_match_ms",out _) || row.TryGetProperty("origin_match_end_ms",out _))) ||
                row.TryGetProperty("video_match_ms",out _) || row.TryGetProperty("video_match_source",out _))
-                throw new InvalidDataException("動画内音声の一致区間が無効です。検索をやり直してください。");
+                throw new InvalidDataException(AppText.L("動画内音声の一致区間が無効です。検索をやり直してください。", "Invalid video audio match interval. Please search again."));
         }
         // Only direct-video rows carry these three fields. Never interpret a
         // missing or malformed interval as a legacy representative frame.
@@ -311,7 +321,7 @@ public static class Protocol
                !ValidInterval(result.VideoMatchMs,result.VideoMatchEndMs) ||
                (hasOrigin && (result.SimilarityOriginId is null || !ValidInterval(result.OriginMatchMs,result.OriginMatchEndMs))) ||
                (!hasOrigin && (row.TryGetProperty("origin_match_ms",out _) || row.TryGetProperty("origin_match_end_ms",out _))))
-                throw new InvalidDataException("動画の一致区間が無効です。検索をやり直してください。");
+                throw new InvalidDataException(AppText.L("動画の一致区間が無効です。検索をやり直してください。", "Invalid video match interval. Please search again."));
         }
         return result;
     }
@@ -349,11 +359,11 @@ public static class Protocol
     {
         if (evidence is null) return "";
         static string Part(string label, string[] words, int limit) =>
-            words.Length == 0 ? "" : label + string.Join("、", words.Take(limit)) + (words.Length > limit ? $" ほか{words.Length - limit}語" : "");
+            words.Length == 0 ? "" : label + string.Join(AppText.L("、", ", "), words.Take(limit)) + (words.Length > limit ? AppText.L($" ほか{words.Length - limit}語", $" +{words.Length - limit} more") : "");
         var parts = new[] {
-            Part("入力語で一致：", evidence.Direct, wordsPerPart),
-            Part("関連語で一致：", evidence.Related, wordsPerPart),
-            Part("一致なし：", evidence.Missing, wordsPerPart)
+            Part(AppText.L("入力語で一致：", "Direct match: "), evidence.Direct, wordsPerPart),
+            Part(AppText.L("関連語で一致：", "Related match: "), evidence.Related, wordsPerPart),
+            Part(AppText.L("一致なし：", "Missing: "), evidence.Missing, wordsPerPart)
         }.Where(part => part.Length > 0);
         return string.Join(" / ", parts);
     }
@@ -370,18 +380,20 @@ public static class Protocol
         for (var i = 0; i < rawLines.Length; i++)
         {
             var line = rawLines[i];
-            if (i > 0 && line.StartsWith("モデル:", StringComparison.Ordinal)) continue;
+            if (i > 0 && (line.StartsWith("モデル:", StringComparison.Ordinal) || line.StartsWith("Model:", StringComparison.Ordinal))) continue;
             var parts = line.Split(" · ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var kept = new List<string>(parts.Length);
-            var keepLiteralInline = i != 0 || parts.Any(p => p == "AI候補");
+            var keepLiteralInline = i != 0 || parts.Any(p => p is "AI候補" or "AI candidate");
             foreach (var part in parts)
             {
-                if (score is null && (part.StartsWith("一致率 ", StringComparison.Ordinal) || part.StartsWith("類似度 ", StringComparison.Ordinal)))
+                if (score is null && (part.StartsWith("一致率 ", StringComparison.Ordinal) || part.StartsWith("類似度 ", StringComparison.Ordinal)
+                    || part.StartsWith("Match score ", StringComparison.Ordinal) || part.StartsWith("Similarity ", StringComparison.Ordinal)))
                 {
                     score = part;
                     continue;
                 }
-                if (!keepLiteralInline && parts.Length > 1 && literalPart is null && part.StartsWith("文字一致", StringComparison.Ordinal))
+                if (!keepLiteralInline && parts.Length > 1 && literalPart is null
+                    && (part.StartsWith("文字一致", StringComparison.Ordinal) || part.StartsWith("Text match", StringComparison.Ordinal)))
                 {
                     literalPart = part;
                     continue;

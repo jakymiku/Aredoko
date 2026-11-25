@@ -483,7 +483,7 @@ internal sealed class MediaCardSlot
 
             FavBtn = new Button { Padding = new Thickness(6, 2, 6, 2), MinWidth = 28, MinHeight = 28, Style = res.UnselectedSegment, Content = "☆" };
             DetailsBtn = new Button { Content = "✎", Padding = new Thickness(6, 2, 6, 2), MinWidth = 28, MinHeight = 28, Style = res.UnselectedSegment, Visibility = Visibility.Collapsed };
-            ToolTipService.SetToolTip(DetailsBtn, "詳細・タグを編集");
+            ToolTipService.SetToolTip(DetailsBtn, AppText.L("詳細・タグを編集", "Edit details & tags"));
             FavBtn.Click += async (_, _) => { if (CurrentRow is { } row) await onToggleFavorite(row); };
             DetailsBtn.Click += async (_, _) => { if (CurrentRow is { } row) await onOpenDetails(row); };
             quickActions.Children.Add(FavBtn);
@@ -539,7 +539,7 @@ internal sealed class MediaCardSlot
             FavBtn = new Button { Padding = new Thickness(8, 4, 8, 4), MinWidth = 34, Style = res.UnselectedSegment, Content = "☆" };
             DetailsBtn = new Button { Content = "✎", Padding = new Thickness(8, 4, 8, 4), MinWidth = 34, Style = res.UnselectedSegment };
             OpenBtn = new Button { Content = "▶", Padding = new Thickness(8, 4, 8, 4), MinWidth = 34, Style = res.UnselectedSegment, Visibility = Visibility.Collapsed };
-            ToolTipService.SetToolTip(DetailsBtn, "詳細・タグを編集");
+            ToolTipService.SetToolTip(DetailsBtn, AppText.L("詳細・タグを編集", "Edit details & tags"));
             FavBtn.Click += async (_, _) => { if (CurrentRow is { } row) await onToggleFavorite(row); };
             DetailsBtn.Click += async (_, _) => { if (CurrentRow is { } row) await onOpenDetails(row); };
             OpenBtn.Click += async (_, _) => { if (CurrentRow is { } row) await onOpenQuick(row); };
@@ -704,7 +704,7 @@ internal sealed class MediaCardSlot
         CurrentOrdinal = ordinal;
         PreviewImage.Tag = row.Id;
         AutomationProperties.SetAutomationId(PreviewImage, $"Preview{row.Id}");
-        AutomationProperties.SetName(PreviewImage, row.Title + "のサムネイル");
+        AutomationProperties.SetName(PreviewImage, AppText.L(row.Title + "のサムネイル", row.Title + " thumbnail"));
 
         var symbol = row.Kind switch
         {
@@ -765,7 +765,7 @@ internal sealed class MediaCardSlot
             UpdateFavoriteButton(row);
             AutomationProperties.SetAutomationId(FavBtn, $"ItemFavToggle{row.Id}");
             AutomationProperties.SetAutomationId(DetailsBtn, $"ItemDetailsQuick{row.Id}");
-            AutomationProperties.SetName(DetailsBtn, $"{row.Title}の詳細を開く");
+            AutomationProperties.SetName(DetailsBtn, AppText.L($"{row.Title}の詳細を開く", $"Open details for {row.Title}"));
             FavBtn.Visibility = Visibility.Visible;
             UpdateQuickActions();
         }
@@ -789,7 +789,7 @@ internal sealed class MediaCardSlot
             UpdateFavoriteButton(row);
             AutomationProperties.SetAutomationId(FavBtn, $"ItemFavToggle{row.Id}");
             AutomationProperties.SetAutomationId(DetailsBtn, $"ItemDetailsQuick{row.Id}");
-            AutomationProperties.SetName(DetailsBtn, $"{row.Title}の詳細を開く");
+            AutomationProperties.SetName(DetailsBtn, AppText.L($"{row.Title}の詳細を開く", $"Open details for {row.Title}"));
             FavBtn.Visibility = Visibility.Visible;
             DetailsBtn.Visibility = Visibility.Visible;
             if (OpenBtn is not null)
@@ -797,7 +797,7 @@ internal sealed class MediaCardSlot
                 if (canOpen)
                 {
                     AutomationProperties.SetAutomationId(OpenBtn, $"ItemOpenQuick{row.Id}");
-                    AutomationProperties.SetName(OpenBtn, $"{row.Title}を開く");
+                    AutomationProperties.SetName(OpenBtn, AppText.L($"{row.Title}を開く", $"Open {row.Title}"));
                     OpenBtn.Visibility = Visibility.Visible;
                 }
                 else
@@ -826,7 +826,7 @@ internal sealed class MediaCardSlot
             var full = formatFullMetadata(row);
             ToolTipService.SetToolTip(BadgeRow, full);
             ToolTipService.SetToolTip(MetaBlock, full);
-            ToolTipService.SetToolTip(FavBtn, row.Favorite ? "お気に入りを解除" : "お気に入りに追加");
+            ToolTipService.SetToolTip(FavBtn, row.Favorite ? AppText.L("お気に入りを解除", "Remove from Favorites") : AppText.L("お気に入りに追加", "Add to Favorites"));
         }
     }
 
@@ -857,7 +857,7 @@ internal sealed class MediaCardSlot
             FavBtn.Style = row.Favorite ? res.CardFavoriteActive : res.UnselectedSegment;
             appliedFavoriteStyle = row.Favorite;
         }
-        AutomationProperties.SetName(FavBtn, $"{row.Title}：{(row.Favorite ? "お気に入りを解除" : "お気に入りに追加")}");
+        AutomationProperties.SetName(FavBtn, $"{row.Title}：{(row.Favorite ? AppText.L("お気に入りを解除", "Remove from Favorites") : AppText.L("お気に入りに追加", "Add to Favorites"))}");
     }
 
     private void BindBadges(MediaRow row, string kindText)
@@ -969,7 +969,7 @@ internal sealed class MediaCardSlot
         pendingMetaTooltip ??= formatFullMetadata(row);
         ToolTipService.SetToolTip(BadgeRow, pendingMetaTooltip);
         ToolTipService.SetToolTip(MetaBlock, pendingMetaTooltip);
-        ToolTipService.SetToolTip(FavBtn, pendingFavoriteTooltip ? "お気に入りを解除" : "お気に入りに追加");
+        ToolTipService.SetToolTip(FavBtn, pendingFavoriteTooltip ? AppText.L("お気に入りを解除", "Remove from Favorites") : AppText.L("お気に入りに追加", "Add to Favorites"));
         if (folderTb is not null) ToolTipService.SetToolTip(folderTb, pendingFolderTooltip);
         if (fileDetailsTb is not null) ToolTipService.SetToolTip(fileDetailsTb, pendingFileDetailsTooltip);
         if (OpenBtn is not null) ToolTipService.SetToolTip(OpenBtn, pendingOpenTooltip);

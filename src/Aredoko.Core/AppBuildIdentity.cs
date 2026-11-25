@@ -9,10 +9,10 @@ public sealed record AppBuildIdentity(string Version,string SourceRevision,strin
     public static AppBuildIdentity FromAssembly(Assembly assembly,string directory)
     {
         var version=assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ??assembly.GetName().Version?.ToString()??"不明";
+            ??assembly.GetName().Version?.ToString()??AppText.L("不明","Unknown");
         var channel=assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(item=>item.Key=="AredokoChannel")?.Value??"不明";
-        var configuration=assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration??"不明";
+            .FirstOrDefault(item=>item.Key=="AredokoChannel")?.Value??AppText.L("不明","Unknown");
+        var configuration=assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration??AppText.L("不明","Unknown");
         return new(version,RevisionFromVersion(version),channel,configuration,directory);
     }
 
@@ -20,17 +20,17 @@ public sealed record AppBuildIdentity(string Version,string SourceRevision,strin
     {
         var split=version.IndexOf('+');
         var revision=split<0?"":version[(split+1)..];
-        return revision.Length is >=7 and <=64&&revision.All(char.IsAsciiHexDigit)?revision:"不明";
+        return revision.Length is >=7 and <=64&&revision.All(char.IsAsciiHexDigit)?revision:AppText.L("不明","Unknown");
     }
 
     public string ToDiagnosticText()
     {
         var text=new StringBuilder();
-        text.AppendLine("--- 実行中のアプリ ---");
-        text.AppendLine($"ビルド元コミット: {SourceRevision}");
-        text.AppendLine($"配布種別: {Channel}");
-        text.AppendLine($"ビルド構成: {Configuration}");
-        text.AppendLine($"実行場所（ユーザー名は伏字）: {DiagnosticsReport.RedactPath(Directory)}");
+        text.AppendLine(AppText.L("--- 実行中のアプリ ---","--- Running Application ---"));
+        text.AppendLine($"{AppText.L("ビルド元コミット","Source Commit")}: {SourceRevision}");
+        text.AppendLine($"{AppText.L("配布種別","Distribution Channel")}: {Channel}");
+        text.AppendLine($"{AppText.L("ビルド構成","Build Configuration")}: {Configuration}");
+        text.AppendLine($"{AppText.L("実行場所（ユーザー名は伏字）","Location (username redacted)")}: {DiagnosticsReport.RedactPath(Directory)}");
         return text.ToString();
     }
 }

@@ -27,7 +27,7 @@ public sealed partial class MainPage
                 else if(destination=="diagnostics")await OpenDiagnosticsDialogAsync();
                 else
                 {
-                    if(destination=="skip")Notice("AIなしで始めます","名前・タグ検索と閲覧が使えます（あとで設定できます）");
+                    if(destination=="skip")Notice(AppText.L("AIなしで始めます", "Starting without AI"),AppText.L("名前・タグ検索と閲覧が使えます（あとで設定できます）", "Name/tag search and browsing are ready to use (you can set up AI anytime)"));
                     return;
                 }
             }
@@ -45,21 +45,21 @@ public sealed partial class MainPage
         {
             var selected=AISetupSelection.Normalize(ViewerOptions.Value.AISetupFeatures);long version=0;
             var panel=new StackPanel{Spacing=12,MaxWidth=600};
-            var summary=new TextBlock{Text="必要な環境を確認しています…",TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]};
+            var summary=new TextBlock{Text=AppText.L("必要な環境を確認しています…", "Checking requirements..."),TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]};
             AutomationProperties.SetAutomationId(summary,"AISetupPlanSummary");
             var nextSteps=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true,Foreground=(Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]};AutomationProperties.SetAutomationId(nextSteps,"AISetupNextSteps");
             var recoveryText=new TextBlock{TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};AutomationProperties.SetAutomationId(recoveryText,"AISetupRecoveryText");
-            var diagnostics=new Button{Content="診断情報",IsEnabled=false};AutomationProperties.SetAutomationId(diagnostics,"AISetupDiagnostics");
+            var diagnostics=new Button{Content=AppText.L("診断情報", "Diagnostics"),IsEnabled=false};AutomationProperties.SetAutomationId(diagnostics,"AISetupDiagnostics");
             var recoveryPanel=new StackPanel{Spacing=8};recoveryPanel.Children.Add(recoveryText);recoveryPanel.Children.Add(diagnostics);
-            var recovery=new Expander{Header="うまく使えないとき",Content=recoveryPanel,Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(recovery,"AISetupRecovery");
-            var review=new Button{Content="⟳ 再確認",Padding=new Thickness(10,4,10,4)};AutomationProperties.SetAutomationId(review,"ReviewAISetupPlan");
+            var recovery=new Expander{Header=AppText.L("うまく使えないとき", "Troubleshooting"),Content=recoveryPanel,Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(recovery,"AISetupRecovery");
+            var review=new Button{Content=AppText.L("⟳ 再確認", "⟳ Re-check"),Padding=new Thickness(10,4,10,4)};AutomationProperties.SetAutomationId(review,"ReviewAISetupPlan");
             var autoReviewTimer=DispatcherQueue.CreateTimer();autoReviewTimer.Interval=TimeSpan.FromMilliseconds(300);autoReviewTimer.IsRepeating=false;
-            var download=new Button{Content="モデルをダウンロード",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(download,"AISetupPlanDownload");
-            var existing=new Button{Content="手元のファイルを使う",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(existing,"AISetupPlanExisting");
-            var automatic=new Button{Content="自動セットアップ",HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(automatic,"AISetupPlanAutomatic");
-            var skip=new Button{Content="あとで（AIなしで使う）",HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(skip,"SkipAISetup");
-            var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(progress,"AISetupPlanProgress");AutomationProperties.SetName(progress,"AI準備の確認中");
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI検索の準備",PrimaryButtonText="次へ",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,IsPrimaryButtonEnabled=false};
+            var download=new Button{Content=AppText.L("モデルをダウンロード", "Download Model"),IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(download,"AISetupPlanDownload");
+            var existing=new Button{Content=AppText.L("手元のファイルを使う", "Use Local Files"),IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(existing,"AISetupPlanExisting");
+            var automatic=new Button{Content=AppText.L("自動セットアップ", "Auto-Setup"),HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(automatic,"AISetupPlanAutomatic");
+            var skip=new Button{Content=AppText.L("あとで（AIなしで使う）", "Later (Use without AI)"),HorizontalAlignment=HorizontalAlignment.Stretch};AutomationProperties.SetAutomationId(skip,"SkipAISetup");
+            var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(progress,"AISetupPlanProgress");AutomationProperties.SetName(progress,AppText.L("AI準備の確認中", "Checking AI setup"));
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=AppText.L("AI検索の準備", "Prepare AI Search"),PrimaryButtonText=AppText.L("次へ", "Next"),CloseButtonText=AppText.L("閉じる", "Close"),DefaultButton=ContentDialogButton.None,IsPrimaryButtonEnabled=false};
             dialog.Resources["ContentDialogMaxWidth"]=680d;
             AutomationProperties.SetAutomationId(dialog,"AISetupPlanDialog");
             var choices=new Grid{ColumnSpacing=8,RowSpacing=8};
@@ -67,10 +67,10 @@ public sealed partial class MainPage
             choices.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
             choices.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});choices.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
             foreach(var (label,description,index) in new[]{
-                ("ファイル名・タグの意味","言い換えや曖昧な言葉で探します。",0),
-                ("画像の見た目・類似検索","画像・表紙・ページの情景や、似た画像を探します。",1),
-                ("動画の内容","映像の場面や、動画内の音声から探します。",2),
-                ("音声・音楽の内容","音声ファイルの話題や音の特徴から探します。",3)})
+                (AppText.L("ファイル名・タグの意味", "Filename & Tag Meaning"),AppText.L("言い換えや曖昧な言葉で探します。", "Search with synonyms and natural-language phrasing."),0),
+                (AppText.L("画像の見た目・類似検索", "Visual & Similarity Search"),AppText.L("画像・表紙・ページの情景や、似た画像を探します。", "Search images, covers, and pages by appearance or visual similarity."),1),
+                (AppText.L("動画の内容", "Video Content"),AppText.L("映像の場面や、動画内の音声から探します。", "Search video scenes and spoken audio inside videos."),2),
+                (AppText.L("音声・音楽の内容", "Audio & Music Content"),AppText.L("音声ファイルの話題や音の特徴から探します。", "Search audio tracks by topic or acoustic characteristics."),3)})
             {
                 var content=new StackPanel{Spacing=2};
                 content.Children.Add(new TextBlock{Text=label,TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]});
@@ -82,7 +82,7 @@ public sealed partial class MainPage
                 {
                     selected=choice.IsChecked==true?selected|(1<<index):selected&~(1<<index);
                     version++;request?.Cancel();download.IsEnabled=false;existing.IsEnabled=false;dialog.IsPrimaryButtonEnabled=false;
-                    summary.Text="構成を確認しています…";nextSteps.Text="";
+                    summary.Text=AppText.L("構成を確認しています…", "Checking configuration...");nextSteps.Text="";
                     recovery.Visibility=Visibility.Collapsed;diagnostics.IsEnabled=false;
                     autoReviewTimer.Stop();autoReviewTimer.Start();
                 }
@@ -104,7 +104,7 @@ public sealed partial class MainPage
             step1Header.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
             step1Header.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
             step1Header.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-            var step1Heading=new TextBlock{Text="① 何で探したいですか？（名前・タグ検索はAIなしでOK）",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center};
+            var step1Heading=new TextBlock{Text=AppText.L("① 何で探したいですか？（名前・タグ検索はAIなしでOK）", "1. How do you want to search? (Name/tag search works without AI)"),Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center};
             Grid.SetColumn(step1Heading,1);
             Grid.SetColumn(review,2);
             step1Header.Children.Add(planArt);step1Header.Children.Add(step1Heading);step1Header.Children.Add(review);
@@ -114,9 +114,9 @@ public sealed partial class MainPage
             var miniStatusGrid=new Grid{ColumnSpacing=8,Visibility=Visibility.Collapsed};
             miniStatusGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
             miniStatusGrid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-            var runtimeBadgeText=new TextBlock{Text="確認中…",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap};
-            var modelBadgeText=new TextBlock{Text="確認中…",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap};
-            foreach(var (col,titleText,valueBlock) in new[]{(0,"① AI実行環境",runtimeBadgeText),(1,"② 検索モデル",modelBadgeText)})
+            var runtimeBadgeText=new TextBlock{Text=AppText.L("確認中…", "Checking..."),Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap};
+            var modelBadgeText=new TextBlock{Text=AppText.L("確認中…", "Checking..."),Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap};
+            foreach(var (col,titleText,valueBlock) in new[]{(0,AppText.L("① AI実行環境", "1. AI Runtime"),runtimeBadgeText),(1,AppText.L("② 検索モデル", "2. Search Model"),modelBadgeText)})
             {
                 var card=new Border
                 {
@@ -162,7 +162,7 @@ public sealed partial class MainPage
                     Spacing=10,
                     Children=
                     {
-                        new TextBlock{Text="② 現在の準備状況とセットアップ",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]},
+                        new TextBlock{Text=AppText.L("② 現在の準備状況とセットアップ", "2. Current Status & Setup"),Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]},
                         progress,
                         miniStatusGrid,
                         statusBox,
@@ -171,7 +171,7 @@ public sealed partial class MainPage
                 }
             };
             panel.Children.Add(step2Card);
-            var taggerBtn=new Button{Content="🏷 タグ付けモデルを取得・設定",HorizontalAlignment=HorizontalAlignment.Left};
+            var taggerBtn=new Button{Content=AppText.L("🏷 タグ付けモデルを取得・設定", "🏷 Get / Configure Tagger Model"),HorizontalAlignment=HorizontalAlignment.Left};
             AutomationProperties.SetAutomationId(taggerBtn,"AISetupPlanTaggerDownload");
             var step3Card=new Border
             {
@@ -181,8 +181,8 @@ public sealed partial class MainPage
                     Spacing=8,
                     Children=
                     {
-                        new TextBlock{Text="③ 画像の自動タグ候補（WD Tagger・任意）",Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap},
-                        new TextBlock{Text="画像や本の表紙からタグ候補（キャラクター・一般タグ）を自動提案します。基本の実行環境で動作するため、AI検索環境が未導入でもモデル（約468MB）を取得するだけですぐに使えます。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]},
+                        new TextBlock{Text=AppText.L("③ 画像の自動タグ候補（WD Tagger・任意）", "3. Automatic Tag Suggestions (WD Tagger · Optional)"),Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"],TextWrapping=TextWrapping.Wrap},
+                        new TextBlock{Text=AppText.L("画像や本の表紙からタグ候補（キャラクター・一般タグ）を自動提案します。基本の実行環境で動作するため、AI検索環境が未導入でもモデル（約468MB）を取得するだけですぐに使えます。", "Suggests character and general tags from images and book covers. Runs on the base runtime, so just downloading the ~468 MB model makes it ready even without full AI search setup."),TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]},
                         taggerBtn
                     }
                 }
@@ -217,25 +217,25 @@ public sealed partial class MainPage
                     var runtimeReq=plan.Requirements.FirstOrDefault(r=>r.Id=="embedding-runtime");
                     var modelReq=plan.Requirements.FirstOrDefault(r=>r.Id=="embedding-model");
                     miniStatusGrid.Visibility=plan.SkipAI||runtimeReq is null||modelReq is null?Visibility.Collapsed:Visibility.Visible;
-                    if(runtimeReq is not null)runtimeBadgeText.Text=runtimeReq.FilesPresent?"✓ 配置済み":"⚠ 要導入";
-                    if(modelReq is not null)modelBadgeText.Text=modelReq.FilesPresent?"✓ 配置済み":"⚠ 要導入";
+                    if(runtimeReq is not null)runtimeBadgeText.Text=runtimeReq.FilesPresent?AppText.L("✓ 配置済み", "✓ Installed"):AppText.L("⚠ 要導入", "⚠ Needed");
+                    if(modelReq is not null)modelBadgeText.Text=modelReq.FilesPresent?AppText.L("✓ 配置済み", "✓ Installed"):AppText.L("⚠ 要導入", "⚠ Needed");
                     divider.Visibility=Visibility.Visible;
                     summary.Text=plan.Summary;
                     nextSteps.Text=AISetupGuidance.Describe(plan,selection,downloadJob,environmentJob);
                     divider.Visibility=string.IsNullOrWhiteSpace(nextSteps.Text)?Visibility.Collapsed:Visibility.Visible;
                     recoveryText.Text=AISetupRecovery.Describe(plan);recovery.Visibility=plan.SkipAI?Visibility.Collapsed:Visibility.Visible;diagnostics.IsEnabled=!plan.SkipAI;
-                    automatic.Content=plan.SkipAI?"自動セットアップ":plan.AutomaticSetupSupported?"自動セットアップ":"自動セットアップ（このモデルは非対応）";
+                    automatic.Content=plan.SkipAI?AppText.L("自動セットアップ", "Auto-Setup"):plan.AutomaticSetupSupported?AppText.L("自動セットアップ", "Auto-Setup"):AppText.L("自動セットアップ（このモデルは非対応）", "Auto-Setup (unsupported for this model)");
                     var allPresent=!plan.SkipAI&&plan.Requirements.Count>0&&plan.Requirements.All(row=>row.FilesPresent);
                     var accent=Application.Current.Resources["AccentButtonStyle"] as Style;
                     var defaultButton=Application.Current.Resources["DefaultButtonStyle"] as Style;
                     automatic.Style=!plan.SkipAI&&plan.AutomaticSetupSupported&&!allPresent?accent:defaultButton;
                     existing.IsEnabled=!plan.SkipAI;
                     download.IsEnabled=!plan.ProfileRestartRequired&&!plan.ProfileSelectionInvalid&&plan.Requirements.Any(row=>row.Id=="embedding-model"&&!row.FilesPresent&&row.CatalogIds.Count>0);
-                    dialog.PrimaryButtonText=allPresent?"AI検索の設定へ →":"次へ";
+                    dialog.PrimaryButtonText=allPresent?AppText.L("AI検索の設定へ →", "Configure AI Search →"):AppText.L("次へ", "Next");
                     dialog.IsPrimaryButtonEnabled=!plan.SkipAI;
                 }
                 catch(OperationCanceledException)when(cancellation.IsCancellationRequested){}
-                catch(Exception ex){if(!lifetime.IsCancellationRequested&&expected==version){miniStatusGrid.Visibility=Visibility.Collapsed;divider.Visibility=Visibility.Collapsed;summary.Text="確認できませんでした。基本機能はそのまま使えます。\n"+ex.Message;}}
+                catch(Exception ex){if(!lifetime.IsCancellationRequested&&expected==version){miniStatusGrid.Visibility=Visibility.Collapsed;divider.Visibility=Visibility.Collapsed;summary.Text=AppText.L("確認できませんでした。基本機能はそのまま使えます。\n", "Unable to verify status. Standard search remains usable.\n")+ex.Message;}}
                 finally{if(!lifetime.IsCancellationRequested&&expected==version){review.IsEnabled=true;progress.Visibility=Visibility.Collapsed;}}
             }
             autoReviewTimer.Tick+=(_,_)=>{if(!lifetime.IsCancellationRequested&&!disposed)reviewing=ReviewAsync();};
@@ -244,7 +244,7 @@ public sealed partial class MainPage
             void MoveTo(string target,int? selection=null)
             {
                 try{ViewerOptions.SaveAISetupFeatures(selection??selected);destination=target;dialog.Hide();}
-                catch(Exception ex){summary.Text="選択を保存できませんでした。\n"+ex.Message;}
+                catch(Exception ex){summary.Text=AppText.L("選択を保存できませんでした。\n", "Could not save selection.\n")+ex.Message;}
             }
             download.Click+=(_,_)=>MoveTo("download");existing.Click+=(_,_)=>MoveTo("existing");
             taggerBtn.Click+=(_,_)=>MoveTo("download-tagger");
@@ -254,7 +254,7 @@ public sealed partial class MainPage
             dialog.PrimaryButtonClick+=(_,args)=>
             {
                 try{ViewerOptions.SaveAISetupFeatures(selected);destination="index";}
-                catch(Exception ex){args.Cancel=true;summary.Text="選択を保存できませんでした。\n"+ex.Message;}
+                catch(Exception ex){args.Cancel=true;summary.Text=AppText.L("選択を保存できませんでした。\n", "Could not save selection.\n")+ex.Message;}
             };
             var closed=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             dialog.Closed+=(_,_)=>{autoReviewTimer.Stop();lifetime.Cancel();closed.TrySetResult(true);};

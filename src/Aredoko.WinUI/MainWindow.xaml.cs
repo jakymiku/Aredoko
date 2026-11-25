@@ -1,3 +1,4 @@
+using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using System.Runtime.InteropServices;
 namespace Aredoko_WinUI;
@@ -9,11 +10,16 @@ public sealed partial class MainWindow : Window
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     public MainWindow() {
         AppLog.Startup("window_constructing");
-        Current=this;InitializeComponent();
+        Current=this;
+        var launchArguments=Environment.GetCommandLineArgs();
+        var langIndex=Array.IndexOf(launchArguments,"--ui-language");
+        var langArg=langIndex>0 && langIndex+1<launchArguments.Length?launchArguments[langIndex+1]:null;
+        AppText.Apply(langArg??ViewerOptions.Value.Language);
+        InitializeComponent();
+        ApplyLanguage();
         AppLog.Startup("window_xaml_loaded");
         // WinUI OnLaunched.Arguments is unsupported; read the actual process args.
         // Only this bounded developer override is handled; normal startup follows Windows.
-        var launchArguments=Environment.GetCommandLineArgs();
         var themeIndex=Array.IndexOf(launchArguments,"--ui-theme");
         var theme=themeIndex>0 && themeIndex+1<launchArguments.Length?launchArguments[themeIndex+1]:"System";
         ExtendsContentIntoTitleBar=true;SetTitleBar(AppTitleBar);
@@ -22,7 +28,7 @@ public sealed partial class MainWindow : Window
         var scale=GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this))/96.0;
         AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1200*scale),(int)(820*scale)));
         AppLog.Startup("page_navigation_starting");
-        if(!RootFrame.Navigate(typeof(MainPage)))throw new InvalidOperationException("ライブラリ画面を開けませんでした。");
+        if(!RootFrame.Navigate(typeof(MainPage)))throw new InvalidOperationException(AppText.L("ライブラリ画面を開けませんでした。","Failed to open the library view."));
         AppLog.Startup("page_navigation_completed");
         AppWindow.Closing+=async(_,e)=>
         {
@@ -45,6 +51,12 @@ public sealed partial class MainWindow : Window
     {
         // Caller already passed the dirty guard and published an owned restart.
         closing=true;Close();
+    }
+    internal void ApplyLanguage()
+    {
+        var title=AppText.L("Aredoko — あれどこ","Aredoko");
+        Title=title;
+        AppTitleBar.Title=title;
     }
     internal void ApplyTheme(string theme)
     {
@@ -83,6 +95,6 @@ public sealed partial class MainWindow : Window
             titleBar.ButtonInactiveForegroundColor=Windows.UI.Color.FromArgb(0x5D,0xFF,0xFF,0xFF);
         }
     }
-    internal Task InitializeOwnedStartupAsync()=>RootFrame.Content is MainPage page?page.InitializeFirstPageAsync():Task.FromException(new InvalidOperationException("ライブラリ画面がありません。"));
+    internal Task InitializeOwnedStartupAsync()=>RootFrame.Content is MainPage page?page.InitializeFirstPageAsync():Task.FromException(new InvalidOperationException(AppText.L("ライブラリ画面がありません。","Library view is unavailable.")));
 
 }

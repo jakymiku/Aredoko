@@ -8,6 +8,7 @@ import operator
 import os
 from pathlib import Path
 import random
+import subprocess
 import sys
 import tempfile
 import threading
@@ -231,6 +232,92 @@ class NativeAccelTests(unittest.TestCase):
 
             with self.assertRaises(InterruptedError):
                 rust_db.scan(r1, cancelled=lambda: True)
+
+    def test_scanner_skips_real_windows_access_denied_and_supports_long_paths(self):
+        if os.name != 'nt':
+            self.skipTest('Windows ACL and \\\\?\\ path test is Windows-only')
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            media = base / 'drive_root'
+            media.mkdir()
+            (media / 'visible.png').write_bytes(b'ok')
+
+            # Create a path > 265 chars using \\?\ so native scanner exercises extended wide paths.
+            seg = 'd' * 75
+            deep_dir_str = str(media / seg / seg / seg / seg)
+            ext_deep_dir = '\\\\?\\' + os.path.abspath(deep_dir_str)
+            os.makedirs(ext_deep_dir, exist_ok=True)
+            ext_deep_file = ext_deep_dir + '\\deep.png'
+            with open(ext_deep_file, 'wb') as fh:
+                fh.write(b'deep')
+            self.assertGreater(len(os.path.abspath(deep_dir_str) + '\\deep.png'), 260)
+
+            def _cleanup_deep():
+                try:
+                    os.remove(ext_deep_file)
+                except OSError:
+                    pass
+                cur = ext_deep_dir
+                for _ in range(4):
+                    try:
+                        os.rmdir(cur)
+                    except OSError:
+                        break
+                    cur = cur.rsplit('\\', 1)[0]
+            self.addCleanup(_cleanup_deep)
+
+            locked = media / 'System Volume Information'
+            locked.mkdir()
+            (locked / 'hidden.png').write_bytes(b'secret')
+
+            # Deny read/list permission on `locked` for Everyone (*S-1-1-0).
+            acl_applied = subprocess.run(
+                ['icacls', str(locked), '/deny', '*S-1-1-0:(OI)(CI)(R)'],
+                capture_output=True, text=True, check=False,
+            )
+            def _restore_acl():
+                subprocess.run(
+                    ['icacls', str(locked), '/remove:d', '*S-1-1-0'],
+                    capture_output=True, text=True, check=False,
+                )
+            self.addCleanup(_restore_acl)
+
+            native_res = native_accel.scan_tree(
+                media, None, (), recursive=True, folder_books=False,
+            )
+            native_rels = {rel for rel, _, _, _ in native_res.items}
+            self.assertIn('visible.png', native_rels)
+            expected_deep_rel = f'{seg}/{seg}/{seg}/{seg}/deep.png'
+            self.assertIn(expected_deep_rel, native_rels)
+
+            if acl_applied.returncode == 0:
+                try:
+                    os.listdir(locked)
+                    acl_enforced = False
+                except PermissionError:
+                    acl_enforced = True
+                if acl_enforced:
+                    self.assertIn(('System Volume Information', True), native_res.skipped_access_denied)
+                    self.assertNotIn('System Volume Information/hidden.png', native_rels)
+
+                    rust_db = LibraryIndex(base / 'rust.sqlite')
+                    py_db = LibraryIndex(base / 'py.sqlite')
+                    r1 = rust_db.add_root(media)
+                    r2 = py_db.add_root(media)
+                    rep_rust = rust_db.scan(r1)
+                    with patch.dict(os.environ, {'AREDOKO_DISABLE_NATIVE_ACCEL': '1'}):
+                        try:
+                            rep_py = py_db.scan(r2)
+                        except OSError:
+                            rep_py = None
+                    self.assertEqual(rep_rust['skipped_access_denied'], 1)
+                    self.assertEqual(
+                        rep_rust['access_denied_entries'],
+                        [{'relative_path': 'System Volume Information', 'is_dir': True}],
+                    )
+                    if rep_py is not None:
+                        self.assertEqual(rep_rust['skipped_access_denied'], rep_py['skipped_access_denied'])
+                        self.assertEqual(rep_rust['access_denied_entries'], rep_py['access_denied_entries'])
 
     def test_runtime_verification_parity_callbacks_and_security_guards(self):
         with tempfile.TemporaryDirectory() as td:

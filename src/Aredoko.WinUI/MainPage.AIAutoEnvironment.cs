@@ -1,3 +1,4 @@
+using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -16,22 +17,22 @@ public sealed partial class MainPage
         try
         {
             JsonNode? summary=null,current=null;string? operationError=null;bool targetInitialized=false;
-            var detectedBanner=new TextBlock{Text="PC環境を判定しています…",TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]};
+            var detectedBanner=new TextBlock{Text=AppText.L("PC環境を判定しています…", "Detecting PC hardware..."),TextWrapping=TextWrapping.Wrap,Style=(Style)Application.Current.Resources["BodyStrongTextBlockStyle"]};
             AutomationProperties.SetAutomationId(detectedBanner,"AIAutoEnvironmentDetected");
             var activeEnvironment=new TextBlock{TextWrapping=TextWrapping.Wrap};
             AutomationProperties.SetAutomationId(activeEnvironment,"AIAutoEnvironmentActive");
-            var cudaItem=new ComboBoxItem{Content="CUDA 版（NVIDIA GPU 向け・高速）",Tag="cuda"};
-            var cpuItem=new ComboBoxItem{Content="軽量 CPU 版（CPU / Radeon 等・省容量）",Tag="cpu"};
-            var targetSelector=new ComboBox{Header="導入する実行環境",HorizontalAlignment=HorizontalAlignment.Stretch,IsEnabled=false};
+            var cudaItem=new ComboBoxItem{Content=AppText.L("CUDA 版（NVIDIA GPU 向け・高速）", "CUDA Edition (NVIDIA GPU · Fast)"),Tag="cuda"};
+            var cpuItem=new ComboBoxItem{Content=AppText.L("軽量 CPU 版（CPU / Radeon 等・省容量）", "Lightweight CPU Edition (CPU / Radeon / Compact)"),Tag="cpu"};
+            var targetSelector=new ComboBox{Header=AppText.L("導入する実行環境", "Runtime to Install"),HorizontalAlignment=HorizontalAlignment.Stretch,IsEnabled=false};
             targetSelector.Items.Add(cudaItem);
             targetSelector.Items.Add(cpuItem);
             AutomationProperties.SetAutomationId(targetSelector,"AIAutoEnvironmentTarget");
-            var description=new TextBlock{Text="取得内容を確認しています…",TextWrapping=TextWrapping.Wrap};
+            var description=new TextBlock{Text=AppText.L("取得内容を確認しています…", "Checking package details..."),TextWrapping=TextWrapping.Wrap};
             var licenses=new StackPanel{Spacing=4};
-            var consent=new CheckBox{Content="提供元・ライセンス・容量を確認し、ダウンロードと動作確認に同意する",IsEnabled=false};
-            var speed=new NumberBox{Header="速度上限（MB/秒、0で無制限）",Value=0,Minimum=0,Maximum=1000000,SmallChange=1};
+            var consent=new CheckBox{Content=AppText.L("提供元・ライセンス・容量を確認し、ダウンロードと動作確認に同意する", "I confirm the sources, licenses, and storage size, and agree to download and verify"),IsEnabled=false};
+            var speed=new NumberBox{Header=AppText.L("速度上限（MB/秒、0で無制限）", "Speed limit (MB/s, 0 = unlimited)"),Value=0,Minimum=0,Maximum=1000000,SmallChange=1};
             AutomationProperties.SetAutomationId(speed,"AIAutoEnvironmentSpeed");
-            var speedSettings=new Expander{Header="速度制限（既定は制限なし）",Content=speed,HorizontalAlignment=HorizontalAlignment.Stretch};
+            var speedSettings=new Expander{Header=AppText.L("速度制限（既定は制限なし）", "Speed Limit (unlimited by default)"),Content=speed,HorizontalAlignment=HorizontalAlignment.Stretch};
             var status=new TextBlock{TextWrapping=TextWrapping.Wrap};
             var progress=new ProgressBar{IsIndeterminate=true,Visibility=Visibility.Collapsed};
             var panel=new StackPanel{Spacing=12,MaxWidth=650};
@@ -40,7 +41,7 @@ public sealed partial class MainPage
             overviewStack.Children.Add(activeEnvironment);
             overviewStack.Children.Add(targetSelector);
             overviewStack.Children.Add(description);
-            overviewStack.Children.Add(new TextBlock{Text="• NVIDIA GPU は CUDA 版、非 NVIDIA（CPU / Radeon 等）は軽量 CPU 版を自動選択します\n• 画面を閉じても続行します\n• 中止しても元の設定は残ります",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
+            overviewStack.Children.Add(new TextBlock{Text=AppText.L("• NVIDIA GPU は CUDA 版、非 NVIDIA（CPU / Radeon 等）は軽量 CPU 版を自動選択します\n• 画面を閉じても続行します\n• 中止しても元の設定は残ります", "• Automatically selects CUDA for NVIDIA GPUs or Lightweight CPU for non-NVIDIA hardware\n• Setup continues in the background if closed\n• Cancelling preserves your existing settings"),TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]});
             panel.Children.Add(new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=overviewStack});
             var licensesCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=licenses,Visibility=Visibility.Collapsed};
             panel.Children.Add(licensesCard);
@@ -53,36 +54,38 @@ public sealed partial class MainPage
             Grid.SetColumn(progressStack,1);
             progressRow.Children.Add(autoArt);progressRow.Children.Add(progressStack);
             panel.Children.Add(consent);panel.Children.Add(speedSettings);panel.Children.Add(progressRow);
-            Button? backToSettings=fromSettings?new Button{Content="設定へ戻る",HorizontalAlignment=HorizontalAlignment.Left}:null;
+            Button? backToSettings=fromSettings?new Button{Content=AppText.L("設定へ戻る", "Back to Settings"),HorizontalAlignment=HorizontalAlignment.Left}:null;
             if(backToSettings is not null){AutomationProperties.SetAutomationId(backToSettings,"BtnBackToSettings");panel.Children.Add(backToSettings);}
             var scroll=new ScrollViewer{Content=panel,MaxHeight=Math.Max(160,ActualHeight-240),Padding=new Thickness(0,0,16,0),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AIの自動セットアップ",PrimaryButtonText="ダウンロードして設定",SecondaryButtonText="中止",CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,Content=scroll,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=AppText.L("AIの自動セットアップ", "AI Auto-Setup"),PrimaryButtonText=AppText.L("ダウンロードして設定", "Download & Set Up"),SecondaryButtonText=AppText.L("中止", "Cancel"),CloseButtonText=AppText.L("閉じる", "Close"),DefaultButton=ContentDialogButton.None,Content=scroll,IsPrimaryButtonEnabled=false,IsSecondaryButtonEnabled=false};
             AutomationProperties.SetAutomationId(dialog,"AIAutoEnvironmentDialog");AutomationProperties.SetAutomationId(consent,"AIAutoEnvironmentConsent");AutomationProperties.SetAutomationId(status,"AIAutoEnvironmentStatus");
             AutomationProperties.SetLiveSetting(status,Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
             string SelectedTarget()=>(targetSelector.SelectedItem as ComboBoxItem)?.Tag as string??summary?["detected_target"]?.GetValue<string>()??"cpu";
             bool UseInstalled()=>summary?["targets"]?[SelectedTarget()]?["installed"]?.GetValue<bool>()==true
                 && !(current?["target"]?.GetValue<string>()==SelectedTarget()&&current?["installed_only"]?.GetValue<bool>()==true&&current?["state"]?.GetValue<string>()=="failed");
-            static string RuntimeLabel(string? target)=>target switch{"cpu"=>"CPU 版","cuda"=>"CUDA 版",_=>"個別設定または未設定"};
+            static string RuntimeLabel(string? target)=>target switch{"cpu"=>AppText.L("CPU 版", "CPU Edition"),"cuda"=>AppText.L("CUDA 版", "CUDA Edition"),_=>AppText.L("個別設定または未設定", "Custom or unconfigured")};
             void UpdateTargetDescription()
             {
                 if(summary is null)return;
                 var supported=summary["supported"]?.GetValue<bool>()??false;
                 if(!supported)
                 {
-                    description.Text="このモデルは自動セットアップ非対応です。「手元のファイルを使う」から指定してください";
+                    description.Text=AppText.L("このモデルは自動セットアップ非対応です。「手元のファイルを使う」から指定してください", "This model does not support auto-setup. Configure it via \"Use Local Files\".");
                     return;
                 }
                 var chosen=SelectedTarget();
                 var targetInfo=summary["targets"]?[chosen];
                 if(UseInstalled())
                 {
-                    description.Text=$"{RuntimeLabel(chosen)}を導入済みです。再ダウンロードせずに続行できます。切り替えは再起動後に反映されます。";
+                    description.Text=AppText.L($"{RuntimeLabel(chosen)}を導入済みです。再ダウンロードせずに続行できます。切り替えは再起動後に反映されます。", $"{RuntimeLabel(chosen)} is already installed. You can continue without re-downloading. Switching takes effect after restart.");
                     return;
                 }
                 var bytes=targetInfo?["download_bytes"]?.GetValue<long>()??summary["download_bytes"]?.GetValue<long>()??0;
                 var freeBytes=targetInfo?["recommended_free_bytes"]?.GetValue<long>()??summary["recommended_free_bytes"]?.GetValue<long>()??15_000_000_000;
                 var label=(targetSelector.SelectedItem as ComboBoxItem)?.Content?.ToString()??chosen;
-                description.Text=$"導入対象：{label}\n対象モデル：EmbeddingGemma 2\n最大取得量：{bytes/1_000_000_000d:N2} GB\n必要な空き：約 {Math.Ceiling(freeBytes/1_000_000_000d):N0} GB以上\n提供元：Python / PyTorch / PyPI / Google (HF)";
+                description.Text=AppText.L(
+                    $"導入対象：{label}\n対象モデル：EmbeddingGemma 2\n最大取得量：{bytes/1_000_000_000d:N2} GB\n必要な空き：約 {Math.Ceiling(freeBytes/1_000_000_000d):N0} GB以上\n提供元：Python / PyTorch / PyPI / Google (HF)",
+                    $"Target: {label}\nModel: EmbeddingGemma 2\nMax download: {bytes/1_000_000_000d:N2} GB\nRequired free space: ~{Math.Ceiling(freeBytes/1_000_000_000d):N0} GB+\nSources: Python / PyTorch / PyPI / Google (HF)");
             }
             bool Active()=>current?["state"]?.GetValue<string>() is "waiting" or "checking_runtime" or "checking_base" or "downloading_runtime" or "building" or "checking_model" or "downloading_model" or "probing" or "saving" or "cancelling";
             void Render()
@@ -97,13 +100,13 @@ public sealed partial class MainPage
                 speedSettings.Visibility=installed?Visibility.Collapsed:Visibility.Visible;
                 speed.IsEnabled=!busy&&!active&&!installed;
                 if(active)speed.Value=(current?["bytes_per_second"]?.GetValue<long>()??0)/1_000_000d;
-                dialog.PrimaryButtonText=installed?"この実行環境を使う":"ダウンロードして設定";
+                dialog.PrimaryButtonText=installed?AppText.L("この実行環境を使う", "Use This Runtime"):AppText.L("ダウンロードして設定", "Download & Set Up");
                 dialog.IsPrimaryButtonEnabled=supported&&!busy&&!active&&(installed||consent.IsChecked==true);
                 dialog.IsSecondaryButtonEnabled=!busy&&active&&!(current?["saved"]?.GetValue<bool>()??false)&&current?["state"]?.GetValue<string>()!="cancelling";
                 progress.Visibility=active?Visibility.Visible:Visibility.Collapsed;
                 var total=current?["bytes_total"]?.GetValue<long>()??0;var done=current?["bytes_done"]?.GetValue<long>()??0;
                 progress.IsIndeterminate=total<=0;progress.Value=total>0?Math.Clamp(100d*done/total,0,100):0;
-                status.Text=current?["message"]?.GetValue<string>()??"";
+                status.Text=AppText.TranslateBackend(current?["message"]?.GetValue<string>());
                 if(active&&total>0)status.Text+=$"\n{done/1_000_000d:N1} / {total/1_000_000d:N1} MB";
                 if(operationError is not null)status.Text+="\n"+operationError;
                 UpdateTargetDescription();
@@ -118,15 +121,15 @@ public sealed partial class MainPage
                     var nvidiaDetected=summary["nvidia_detected"]?.GetValue<bool>()??(detectedTarget=="cuda");
                     var gpuName=summary["detected_gpu"]?.GetValue<string>();
                     detectedBanner.Text=nvidiaDetected
-                        ?$"自動判定：NVIDIA GPU（{(string.IsNullOrWhiteSpace(gpuName)?"CUDA対応":gpuName)}）→ CUDA 版を自動選択"
-                        :"自動判定：NVIDIA GPU なし（CPU / Radeon 等）→ 軽量 CPU 版を自動選択";
+                        ?AppText.L($"自動判定：NVIDIA GPU（{(string.IsNullOrWhiteSpace(gpuName)?"CUDA対応":gpuName)}）→ CUDA 版を自動選択", $"Detected: NVIDIA GPU ({(string.IsNullOrWhiteSpace(gpuName)?"CUDA capable":gpuName)}) → CUDA Edition selected")
+                        :AppText.L("自動判定：NVIDIA GPU なし（CPU / Radeon 等）→ 軽量 CPU 版を自動選択", "Detected: No NVIDIA GPU (CPU / Radeon / integrated) → Lightweight CPU Edition selected");
                     var running=summary["active_target"]?.GetValue<string>();
                     var saved=summary["saved_target"]?.GetValue<string>();
                     var device=summary["active_device"]?.GetValue<string>();
-                    activeEnvironment.Text=$"現在の実行環境：{RuntimeLabel(running)}";
-                    if(!string.IsNullOrEmpty(device))activeEnvironment.Text+=$"（推論デバイス：{device.ToUpperInvariant()}）";
+                    activeEnvironment.Text=AppText.L($"現在の実行環境：{RuntimeLabel(running)}", $"Active runtime: {RuntimeLabel(running)}");
+                    if(!string.IsNullOrEmpty(device))activeEnvironment.Text+=AppText.L($"（推論デバイス：{device.ToUpperInvariant()}）", $" (Device: {device.ToUpperInvariant()})");
                     if(summary["restart_required"]?.GetValue<bool>()==true)
-                        activeEnvironment.Text+=$"\n再起動後：{RuntimeLabel(saved)}";
+                        activeEnvironment.Text+=AppText.L($"\n再起動後：{RuntimeLabel(saved)}", $"\nAfter restart: {RuntimeLabel(saved)}");
                     if(!targetInitialized)
                     {
                         var jobTarget=Active()?current?["target"]?.GetValue<string>():null;
@@ -139,15 +142,15 @@ public sealed partial class MainPage
                         if(summary["licenses"] is JsonArray entries)foreach(var entry in entries)
                             if(Uri.TryCreate(entry?["url"]?.GetValue<string>(),UriKind.Absolute,out var uri))
                             {
-                                licenses.Children.Add(new TextBlock{Text=entry?["name"]?.GetValue<string>()??"ライセンス",TextWrapping=TextWrapping.Wrap});
-                                licenses.Children.Add(new HyperlinkButton{Content="提供元のライセンスを確認",NavigateUri=uri});
+                                licenses.Children.Add(new TextBlock{Text=entry?["name"]?.GetValue<string>()??AppText.L("ライセンス", "License"),TextWrapping=TextWrapping.Wrap});
+                                licenses.Children.Add(new HyperlinkButton{Content=AppText.L("提供元のライセンスを確認", "View source license"),NavigateUri=uri});
                             }
                         licensesCard.Visibility=licenses.Children.Count>0?Visibility.Visible:Visibility.Collapsed;
                     }
                     operationError=null;Render();
                 }
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
-                catch(Exception ex){if(open&&!disposed){status.Text="準備状態を確認できません。閉じてから開き直してください。\n"+ex.Message;dialog.IsPrimaryButtonEnabled=false;}}
+                catch(Exception ex){if(open&&!disposed){status.Text=AppText.L("準備状態を確認できません。閉じてから開き直してください。\n", "Unable to check setup status. Close and reopen.\n")+ex.Message;dialog.IsPrimaryButtonEnabled=false;}}
             }
             targetSelector.SelectionChanged+=(_,_)=>{consent.IsChecked=false;Render();};
             consent.Checked+=(_,_)=>Render();consent.Unchecked+=(_,_)=>Render();
@@ -157,18 +160,18 @@ public sealed partial class MainPage
                 try
                 {
                     var installed=UseInstalled();
-                    if(!installed&&(!double.IsFinite(speed.Value)||speed.Value<0||speed.Value>1000000))throw new ArgumentException("速度上限を確認してください。0は無制限です。");
+                    if(!installed&&(!double.IsFinite(speed.Value)||speed.Value<0||speed.Value>1000000))throw new ArgumentException(AppText.L("速度上限を確認してください。0は無制限です。", "Check the speed limit. Use 0 for unlimited."));
                     long? rate=installed||speed.Value==0?null:checked((long)Math.Round(speed.Value*1000000));
                     current=await api.PostAsync("api/library/ai/setup/build/start",new JsonObject{["consent"]=true,["bytes_per_second"]=rate,["target"]=SelectedTarget(),["installed_only"]=installed});consent.IsChecked=false;
                 }
-                catch(Exception ex){operationError="準備を開始できませんでした。\n"+ex.Message;}
+                catch(Exception ex){operationError=AppText.L("準備を開始できませんでした。\n", "Unable to start setup.\n")+ex.Message;}
                 finally{busy=false;deferral.Complete();Render();}
             };
             dialog.SecondaryButtonClick+=async(_,args)=>
             {
                 args.Cancel=true;if(busy)return;var deferral=args.GetDeferral();busy=true;Render();
                 try{current=await api.PostAsync("api/library/ai/setup/build/cancel",new JsonObject());}
-                catch(Exception ex){operationError="中止の状態を確認できませんでした。\n"+ex.Message;}
+                catch(Exception ex){operationError=AppText.L("中止の状態を確認できませんでした。\n", "Unable to check cancellation status.\n")+ex.Message;}
                 finally{busy=false;deferral.Complete();Render();}
             };
             if(backToSettings is not null)backToSettings.Click+=(_,_)=>{if(!busy){returnToSettings=true;dialog.Hide();}};

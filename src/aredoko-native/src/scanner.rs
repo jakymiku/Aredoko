@@ -1,7 +1,9 @@
 use std::ffi::c_void;
 use std::path::Path;
 
-use windows_sys::Win32::Foundation::{GetLastError, ERROR_NO_MORE_FILES, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Foundation::{
+    GetLastError, ERROR_ACCESS_DENIED, ERROR_NO_MORE_FILES, INVALID_HANDLE_VALUE,
+};
 use windows_sys::Win32::Storage::FileSystem::{
     FindClose, FindFirstFileExW, FindNextFileW, FindExInfoBasic, FindExSearchNameMatch,
     FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FIND_FIRST_EX_LARGE_FETCH,
@@ -10,11 +12,11 @@ use windows_sys::Win32::Storage::FileSystem::{
 
 use crate::plain_path::{
     check_plain_dir, check_plain_dir_node, child_wide, filetime_to_mtime_ns,
-    get_full_path_wide, normalize_case_path_utf16, wide_slice_to_string, with_nul,
+    get_full_path_wide, normalize_case_path_utf16, to_extended_wide_nul, wide_slice_to_string,
 };
 use crate::{
-    clear_out, ffi_guard, vec_to_raw, write_err, ERR_CANCELLED, ERR_CHANGED, ERR_INVALID_ARG,
-    ERR_IO, ERR_LINK_REJECTED, ERR_NOT_PLAIN, ERR_PATH_MISSING, OK,
+    clear_out, ffi_guard, vec_to_raw, write_err, ERR_ACCESS_DENIED, ERR_CANCELLED, ERR_CHANGED,
+    ERR_INVALID_ARG, ERR_IO, ERR_LINK_REJECTED, ERR_NOT_PLAIN, ERR_PATH_MISSING, OK,
 };
 
 pub type CancelCb = Option<unsafe extern "C" fn(*mut c_void) -> i32>;
@@ -197,6 +199,14 @@ fn parse_patterns(raw: &[u8]) -> Result<Vec<Vec<char>>, i32> {
 ///   type `1`: `<1u8><size:u64_le><mtime_ns:i64_le><kind:u8><rel_len:u32_le><rel_utf8>`
 ///   type `2`: `<2u8><dir_rel_len:u32_le><dir_rel_utf8><page_count:u32_le>`
 ///             followed by `page_count` x `<size:u64_le><mtime_ns:i64_le><name_len:u32_le><name_utf8>`
+///   type `3`: `<3u8><is_dir:u8><rel_len:u32_le><rel_utf8>`
+fn push_access_denied(buf: &mut Vec<u8>, is_dir: bool, rel: &str) {
+    buf.push(3u8);
+    buf.push(if is_dir { 1u8 } else { 0u8 });
+    let rb = rel.as_bytes();
+    buf.extend_from_slice(&(rb.len() as u32).to_le_bytes());
+    buf.extend_from_slice(rb);
+}
 #[no_mangle]
 pub unsafe extern "C" fn aredoko_scan_tree(
     root_ptr: *const u8,
@@ -290,16 +300,22 @@ pub unsafe extern "C" fn aredoko_scan_tree(
                 }
             }
             if let Err(code) = check_plain_dir_node(&dir_w) {
+                if code == ERR_ACCESS_DENIED && !rel_prefix.is_empty() {
+                    push_access_denied(&mut records_buf, true, &rel_prefix);
+                    continue;
+                }
                 let msg = String::from_utf16_lossy(&dir_w);
                 write_err(out_err_ptr, out_err_len, &msg);
                 return if code == ERR_LINK_REJECTED || code == ERR_NOT_PLAIN || code == ERR_PATH_MISSING {
                     ERR_CHANGED
+                } else if code == ERR_ACCESS_DENIED {
+                    ERR_IO
                 } else {
                     code
                 };
             }
 
-            let pattern = with_nul(&child_wide(&dir_w, &[b'*' as u16]));
+            let pattern = to_extended_wide_nul(&child_wide(&dir_w, &[b'*' as u16]));
             let mut fd: WIN32_FIND_DATAW = std::mem::zeroed();
             let handle = FindFirstFileExW(
                 pattern.as_ptr(),
@@ -312,6 +328,10 @@ pub unsafe extern "C" fn aredoko_scan_tree(
             if handle == INVALID_HANDLE_VALUE || handle.is_null() {
                 let err = GetLastError();
                 if err == ERROR_NO_MORE_FILES {
+                    continue;
+                }
+                if err == ERROR_ACCESS_DENIED && !rel_prefix.is_empty() {
+                    push_access_denied(&mut records_buf, true, &rel_prefix);
                     continue;
                 }
                 let msg = String::from_utf16_lossy(&dir_w);
@@ -397,6 +417,10 @@ pub unsafe extern "C" fn aredoko_scan_tree(
                     if err == ERROR_NO_MORE_FILES {
                         break;
                     }
+                    if err == ERROR_ACCESS_DENIED && !rel_prefix.is_empty() {
+                        push_access_denied(&mut records_buf, true, &rel_prefix);
+                        break;
+                    }
                     let msg = String::from_utf16_lossy(&dir_w);
                     write_err(out_err_ptr, out_err_len, &msg);
                     return ERR_IO;
@@ -453,5 +477,31 @@ mod tests {
         assert!(m("page_01.png", "page_[0-9][0-9].png"));
         assert!(!m("page_a1.png", "page_[0-9][0-9].png"));
         assert!(m("page_a1.png", "page_[!0-9]?.png"));
+    }
+
+    #[test]
+    fn extended_wide_nul_handles_short_long_unc_and_prefixed() {
+        let to_u16 = |s: &str| s.encode_utf16().collect::<Vec<u16>>();
+        let from_nul = |w: Vec<u16>| {
+            assert_eq!(w.last().copied(), Some(0));
+            String::from_utf16_lossy(&w[..w.len() - 1])
+        };
+
+        assert_eq!(from_nul(to_extended_wide_nul(&to_u16(r"D:\short\path"))), r"D:\short\path");
+
+        let long_drive = format!(r"D:\{}", "a".repeat(250));
+        assert_eq!(
+            from_nul(to_extended_wide_nul(&to_u16(&long_drive))),
+            format!(r"\\?\{}", long_drive)
+        );
+
+        let long_unc = format!(r"\\server\share\{}", "b".repeat(240));
+        assert_eq!(
+            from_nul(to_extended_wide_nul(&to_u16(&long_unc))),
+            format!(r"\\?\UNC\server\share\{}", "b".repeat(240))
+        );
+
+        let already = format!(r"\\?\D:\{}", "c".repeat(250));
+        assert_eq!(from_nul(to_extended_wide_nul(&to_u16(&already))), already);
     }
 }

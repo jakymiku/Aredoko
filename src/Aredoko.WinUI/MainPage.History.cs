@@ -1,4 +1,5 @@
-﻿using Microsoft.UI.Xaml;
+﻿using Aredoko.Core;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System.Text.Json.Nodes;
 
@@ -35,8 +36,8 @@ public sealed partial class MainPage
             if(!await ConfirmDiscardAsync())return;
             await RefreshHistoryGenerationAsync();var generation=historyGeneration;
             dialogOpen=true;
-            var targetTitle=itemId is int id?(rowById.TryGetValue(id,out var found)?found.Title:"選択した作品"):null;
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=targetTitle is not null?"この作品の閲覧履歴を削除しますか？":"すべての閲覧履歴を削除しますか？",Content=(targetTitle is not null?$"対象：{targetTitle}\n":"")+"タグ・棚・お気に入り・本の読書位置・元ファイルは残ります。",PrimaryButtonText="履歴を削除",CloseButtonText="キャンセル",DefaultButton=ContentDialogButton.Close};
+            var targetTitle=itemId is int id?(rowById.TryGetValue(id,out var found)?found.Title:AppText.L("選択した作品", "Selected item")):null;
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=targetTitle is not null?AppText.L("この作品の閲覧履歴を削除しますか？", "Delete reading history for this item?"):AppText.L("すべての閲覧履歴を削除しますか？", "Delete all reading history?"),Content=(targetTitle is not null?AppText.L($"対象：{targetTitle}\n", $"Target: {targetTitle}\n"):"")+AppText.L("タグ・棚・お気に入り・本の読書位置・元ファイルは残ります。", "Tags, shelves, favorites, reading progress, and source files will remain."),PrimaryButtonText=AppText.L("履歴を削除", "Delete history"),CloseButtonText=AppText.L("キャンセル", "Cancel"),DefaultButton=ContentDialogButton.Close};
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(dialog,"HistoryDeleteDialog");
             var accepted=await dialog.ShowAsync()==ContentDialogResult.Primary;dialogOpen=false;
             if(!accepted||disposed)return;
@@ -45,7 +46,7 @@ public sealed partial class MainPage
             var result=await api.PostAsync("api/library/history/delete",request);
             historyGeneration=result["generation"]?.GetValue<string>();
             page=0;await LoadAsync();
-            Notice("閲覧履歴を削除しました",$"{result["removed"]?.GetValue<int>()??0:N0}件の履歴を削除しました。");
+            Notice(AppText.L("閲覧履歴を削除しました", "Reading history deleted"),AppText.L($"{result["removed"]?.GetValue<int>()??0:N0}件の履歴を削除しました。", $"Removed {result["removed"]?.GetValue<int>()??0:N0} history entry(ies)."));
         }
         catch(Exception ex){if(!disposed)Failure(ex);}
         finally{dialogOpen=false;transitions.Release();if(PendingAutoSearch&&!disposed)searchTimer.Start();}

@@ -24,10 +24,10 @@ public sealed record ImageSourceInfo(int ItemId,string Revision,string Mime,long
                 size<1||size>PreviewPolicy.StreamImageBytes||
                 (animation&&mime is not ("image/png" or "image/webp" or "image/gif"))||
                 (mime=="image/gif"&&!animation))
-                throw new InvalidDataException("画像形式の情報が無効です。");
+                throw new InvalidDataException(AppText.L("画像形式の情報が無効です。", "Invalid image format info."));
             return new(item,revision,mime,size,animation);
         }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
-        {throw new InvalidDataException("画像形式の情報を読み取れません。",ex);}
+        {throw new InvalidDataException(AppText.L("画像形式の情報を読み取れません。", "Unable to read image format info."),ex);}
     }
 }

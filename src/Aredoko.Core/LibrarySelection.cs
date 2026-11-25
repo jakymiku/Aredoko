@@ -25,7 +25,7 @@ public sealed class LibrarySelection
     private void Commit(IEnumerable<ResultPosition> values,ResultPosition? anchor)
     {
         var next=values.ToArray();
-        if(next.Length>Maximum)throw new InvalidOperationException($"一度に選択できるのは{Maximum}件までです。");
+        if(next.Length>Maximum)throw new InvalidOperationException(AppText.L($"一度に選択できるのは{Maximum}件までです。", $"You can select up to {Maximum} items at once."));
         foreach(var row in next)Validate(row);
         if(next.Select(row=>row.Id).Distinct().Count()!=next.Length||next.Select(row=>row.Ordinal).Distinct().Count()!=next.Length)
             throw new InvalidDataException("Duplicate selection position");
@@ -65,7 +65,7 @@ public sealed class LibrarySelection
     {
         Validate(target);
         var anchor=Anchor??target;var start=Math.Min(anchor.Ordinal,target.Ordinal);var end=Math.Max(anchor.Ordinal,target.Ordinal);
-        if((long)end-start+1>Maximum)throw new InvalidOperationException($"範囲選択は{Maximum}件以内にしてください。");
+        if((long)end-start+1>Maximum)throw new InvalidOperationException(AppText.L($"範囲選択は{Maximum}件以内にしてください。", $"Range selection cannot exceed {Maximum} items."));
         var expected=version;var range=new List<ResultPosition>();
         for(var offset=start;offset<=end;)
         {

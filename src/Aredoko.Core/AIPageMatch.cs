@@ -8,7 +8,7 @@ public sealed record AIPageMatch(string SourceRevision,string SourceState,string
 {
     public int? InitialReaderPage(ArchiveManifest manifest) =>
         SourceState=="current" && SourceRevision==manifest.Revision && Page>=0 && Page<manifest.PageCount ? Page : null;
-    public string Summary => $"内部ページの意味一致（{Page+1}ページ） · 類似度 {Score:F3}\nモデル: {Model} · 元ファイル一致";
+    public string Summary => AppText.L($"内部ページの意味一致（{Page+1}ページ） · 類似度 {Score:F3}\nモデル: {Model} · 元ファイル一致", $"Matched inner page (p.{Page+1}) · Similarity {Score:F3}\nModel: {Model} · File verified");
     public static AIPageMatch? Read(JsonElement row)
     {
         if(!row.TryGetProperty("ai_page_match",out var value))return null;
@@ -26,11 +26,11 @@ public sealed record AIPageMatch(string SourceRevision,string SourceState,string
             if(!TagReviewProtocol.IsRevision(revision)||!TagReviewProtocol.IsRevision(pid)||state!="current"||page is <0 or >=10000
                 ||modelRevision.Length is not (40 or 64)||modelRevision.Any(c=>!(c is >= '0' and <= '9' or >= 'a' and <= 'f'))
                 ||profile.Length==0||contract!="book-page-image:v1"||!double.IsFinite(score)||score is < -1.000001 or >1.000001)
-                throw new InvalidDataException("内部ページの一致情報が無効です。");
+                throw new InvalidDataException(AppText.L("内部ページの一致情報が無効です。","Invalid inner-page match data."));
             return new(revision,state,pid,page,model,modelRevision,profile,contract,score);
         }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
-        {throw new InvalidDataException("内部ページの一致情報を読み取れません。",ex);}
+        {throw new InvalidDataException(AppText.L("内部ページの一致情報を読み取れません。","Unable to read inner-page match data."),ex);}
     }
 }
 
@@ -40,7 +40,7 @@ public static class PageImageRequests
     public static JsonObject Create(int itemId,IReadOnlyList<string> pageIds,string revision,JsonObject scope)
     {
         PageEvidenceProtocol.ValidateId(itemId);PageEvidenceProtocol.ValidateToken(revision,nameof(revision));
-        if(pageIds.Count is <1 or >MaxPages||pageIds.Distinct().Count()!=pageIds.Count)throw new ArgumentException("1〜16ページを選択してください。");
+        if(pageIds.Count is <1 or >MaxPages||pageIds.Distinct().Count()!=pageIds.Count)throw new ArgumentException(AppText.L("1〜16ページを選択してください。","Select between 1 and 16 pages."));
         foreach(var id in pageIds)PageEvidenceProtocol.ValidateToken(id,nameof(pageIds));
         return new(){{"item_id",itemId},{"page_ids",new JsonArray(pageIds.Select(id=>(JsonNode?)JsonValue.Create(id)).ToArray())},
             {"revision",revision},{"scope",scope.DeepClone()}};

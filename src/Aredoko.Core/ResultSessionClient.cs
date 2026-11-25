@@ -7,7 +7,7 @@ using System.Text.Json.Nodes;
 namespace Aredoko.Core;
 
 public sealed class ResultSessionException(HttpStatusCode status, string? conditions, int? currentId)
-    : Exception("検索結果が更新されたか、有効期限が切れました。条件を保って再検索してください。")
+    : Exception(AppText.L("検索結果が更新されたか、有効期限が切れました。条件を保って再検索してください。", "Search results were updated or expired. Search again while keeping your filters."))
 {
     public HttpStatusCode Status { get; } = status;
     public string? Conditions { get; } = conditions;

@@ -100,7 +100,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         };
         scrubberHost = ViewerChromeController.WrapScrubber(sequenceScrubber, 160);
         scrubberHost.Visibility = sequence.Count > 1 && (!sequence.IsSession || visualAtOrdinal is not null) ? Visibility.Visible : Visibility.Collapsed;
-        (pinButton, syncPin) = ViewerChromeController.CreatePinButton("ImagePinToolbar", () => { hideTimer.SyncPinState(); hideTimer.RefreshHoverHint(); }, ex => { ViewerNotice.Set(status, "設定を保存できませんでした。"); AppLog.Error(ex); });
+        (pinButton, syncPin) = ViewerChromeController.CreatePinButton("ImagePinToolbar", () => { hideTimer.SyncPinState(); hideTimer.RefreshHoverHint(); }, ex => { ViewerNotice.Set(status, AppText.L("設定を保存できませんでした。", "Could not save settings.")); AppLog.Error(ex); });
         ViewerChromeController.StyleFloatingPill(toolbarHost);
         viewport.Style = (Style)Application.Current.Resources["ImageViewerCanvasStyle"];
         canvas.Children.Add(image); viewport.Content = canvas; Children.Add(viewport);
@@ -110,7 +110,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         ViewerChromeController.StylePillButton(favorite.Button);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
         foreach (var control in new UIElement[] { fit, actualSize, zoomOut, zoomIn, zoom, ViewerChromeController.Divider(), previous, count, next, scrubberHost, ViewerChromeController.Divider(), favorite.Button, editDetails, retry, settings, pinButton }) actions.Children.Add(control);
-        Identify(sequenceScrubber, "ImageSequenceSeek", "作品位置の移動");
+        Identify(sequenceScrubber, "ImageSequenceSeek", AppText.L("作品位置の移動", "Go to item"));
         sequenceScrubber.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => { scrubberDragging = true; scrubTimer.Stop(); hideTimer.Show(); }), true);
         sequenceScrubber.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, _) => FinishScrubDrag()), true);
         sequenceScrubber.PointerCaptureLost += (_, _) => FinishScrubDrag();
@@ -122,43 +122,43 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
             if (scrubberDragging) { count.Text = $"{scrubTargetOrdinal + 1} / {sequence.Count}"; return; }
             scrubTimer.Stop(); scrubTimer.Start();
         };
-        Identify(favorite.Button,"ImageFavorite","お気に入りを読み込み中");
-        Identify(editDetails,"ImageEditDetails","詳細で編集");
+        Identify(favorite.Button,"ImageFavorite",AppText.L("お気に入りを読み込み中", "Loading favorite state"));
+        Identify(editDetails,"ImageEditDetails",AppText.L("詳細で編集", "Edit in details"));
         editDetails.Click+=(_,_)=>EditDetailsRequested?.Invoke();
         toolbarHost.Child=actions;Children.Add(toolbarHost);ViewerChromeController.AttachNotices(this,76,status);
         title.Style = count.Style = zoom.Style = status.Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
         ViewerChromeController.FixNumericSlot(zoom, 44);
         ViewerChromeController.FixNumericSlot(count, ViewerChromeController.CountSlotWidth(sequence.Count, spread: false));
-        Identify(viewport, "ImageViewport", "画像表示。左右キーで画像送り、拡大してスクロールできます");
-        Identify(image, "ViewerImage", sequence.Current.Title + "の画像");
-        Identify(toolbarHost, "ImageToolbar", "画像の操作");
-        Identify(previous, "ImagePrevious", "前の画像"); Identify(next, "ImageNext", "次の画像");
-        Identify(zoomOut, "ImageZoomOut", "画像を縮小"); Identify(zoomIn, "ImageZoomIn", "画像を拡大");
-        Identify(actualSize,"ImageActualSize","画像を原寸で表示");
-        Identify(fit, "ImageFit", "画像の表示をリセット"); Identify(retry, "ImageRetry", "画像を再試行");
+        Identify(viewport, "ImageViewport", AppText.L("画像表示。左右キーで画像送り、拡大してスクロールできます", "Image viewer. Left/Right keys to navigate, zoom to scroll"));
+        Identify(image, "ViewerImage", AppText.L(sequence.Current.Title + "の画像", "Image: " + sequence.Current.Title));
+        Identify(toolbarHost, "ImageToolbar", AppText.L("画像の操作", "Image controls"));
+        Identify(previous, "ImagePrevious", AppText.L("前の画像", "Previous image")); Identify(next, "ImageNext", AppText.L("次の画像", "Next image"));
+        Identify(zoomOut, "ImageZoomOut", AppText.L("画像を縮小", "Zoom out image")); Identify(zoomIn, "ImageZoomIn", AppText.L("画像を拡大", "Zoom in image"));
+        Identify(actualSize,"ImageActualSize",AppText.L("画像を原寸で表示", "View image at original size"));
+        Identify(fit, "ImageFit", AppText.L("画像の表示をリセット", "Reset image zoom")); Identify(retry, "ImageRetry", AppText.L("画像を再試行", "Retry image"));
         AutomationProperties.SetAutomationId(title, "ImageTitle"); AutomationProperties.SetAutomationId(count, "ImagePosition");
         AutomationProperties.SetAutomationId(zoom, "ImageZoomStatus"); AutomationProperties.SetAutomationId(status, "ImageStatus");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        Identify(settings,"ImageSettings","画像ビューアの設定");
+        Identify(settings,"ImageSettings",AppText.L("画像ビューアの設定", "Image viewer settings"));
         foreach (var (button, hint) in new (FrameworkElement, string)[] {
-            (fit, "画面に合わせる"),
-            (actualSize, "原寸表示（画像の1pxを画面の1pxで表示）"),
-            (zoomOut, "縮小"),
-            (zoomIn, "拡大"),
-            (previous, "前の画像（←）"),
-            (next, "次の画像（→）"),
-            (editDetails, "詳細でタグ・棚を編集（ビューアを閉じる）"),
-            (retry, "再試行"),
-            (settings, "表示設定・似た画像を探す")
+            (fit, AppText.L("画面に合わせる", "Fit to screen")),
+            (actualSize, AppText.L("原寸表示（画像の1pxを画面の1pxで表示）", "Actual size (1:1 pixels)")),
+            (zoomOut, AppText.L("縮小", "Zoom out")),
+            (zoomIn, AppText.L("拡大", "Zoom in")),
+            (previous, AppText.L("前の画像（←）", "Previous image (←)")),
+            (next, AppText.L("次の画像（→）", "Next image (→)")),
+            (editDetails, AppText.L("詳細でタグ・棚を編集（ビューアを閉じる）", "Edit tags & shelves in details (closes viewer)")),
+            (retry, AppText.L("再試行", "Retry")),
+            (settings, AppText.L("表示設定・似た画像を探す", "Display settings / Find similar"))
         })
             hideTimer.AttachHoverHint(button, hint);
         hideTimer.AttachHoverHint(favorite.Button, () => AutomationProperties.GetName(favorite.Button));
-        hideTimer.AttachHoverHint(zoom, () => loaded ? $"表示倍率（原寸 {imageWidth:0} × {imageHeight:0} px）" : "表示倍率");
-        hideTimer.AttachHoverHint(count, () => sequence.IsSession ? "検索結果内の位置（左右キーまたはバーで移動）" : "現在のページ内の画像位置");
-        hideTimer.AttachHoverHint(pinButton, () => ViewerOptions.Value.AlwaysShowControls ? "操作バーの固定を解除" : "操作バーを常に表示（ピン留め）");
-        var menu=ViewerChromeController.Settings(false,()=>{syncPin();hideTimer.SyncPinState();hideTimer.RefreshHoverHint();FitImage();UpdateControls();},ex=>{ViewerNotice.Set(status,"設定を保存できませんでした。");AppLog.Error(ex);});
-        var findSimilar=new MenuFlyoutItem{Text="≈ この画像に似た画像・動画を探す"};
-        Identify(findSimilar,"ImageFindSimilar","この画像に似た画像・動画を探す");
+        hideTimer.AttachHoverHint(zoom, () => loaded ? AppText.L($"表示倍率（原寸 {imageWidth:0} × {imageHeight:0} px）", $"Zoom (original {imageWidth:0} × {imageHeight:0} px)") : AppText.L("表示倍率", "Zoom"));
+        hideTimer.AttachHoverHint(count, () => sequence.IsSession ? AppText.L("検索結果内の位置（左右キーまたはバーで移動）", "Position in search results (Left/Right keys or slider)") : AppText.L("現在のページ内の画像位置", "Image position on current page"));
+        hideTimer.AttachHoverHint(pinButton, () => ViewerOptions.Value.AlwaysShowControls ? AppText.L("操作バーの固定を解除", "Unpin control bar") : AppText.L("操作バーを常に表示（ピン留め）", "Always show control bar (Pin)"));
+        var menu=ViewerChromeController.Settings(false,()=>{syncPin();hideTimer.SyncPinState();hideTimer.RefreshHoverHint();FitImage();UpdateControls();},ex=>{ViewerNotice.Set(status,AppText.L("設定を保存できませんでした。", "Could not save settings."));AppLog.Error(ex);});
+        var findSimilar=new MenuFlyoutItem{Text=AppText.L("≈ この画像に似た画像・動画を探す", "≈ Find similar images/videos")};
+        Identify(findSimilar,"ImageFindSimilar",AppText.L("この画像に似た画像・動画を探す", "Find similar images/videos"));
         findSimilar.Click+=(_,_)=>{if(!busy&&!navigating&&loaded)FindSimilarRequested?.Invoke(sequence.Current.Id);};
         menu.Items.Insert(0,findSimilar);
         menu.Items.Insert(1,new MenuFlyoutSeparator());
@@ -202,7 +202,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         CurrentItemChanged?.Invoke(sequence.Current.Id, sequence.Position);
         title.Text = sequence.Current.Title;
         count.Text = $"{sequence.Position + 1} / {sequence.Count}";
-        AutomationProperties.SetName(image, title.Text + "の画像");
+        AutomationProperties.SetName(image, AppText.L(title.Text + "の画像", "Image: " + title.Text));
         favorite.Refresh(sequence.Current.Id,sequence.Position);
     }
     private void UpdateControls()
@@ -274,7 +274,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         using (var pixels = animationBitmap.PixelBuffer.AsStream()) pixels.Write(frame.Pixels);
         animationBitmap.Invalidate();
         if(!ReferenceEquals(image.Source,animationBitmap))image.Source = animationBitmap;
-        AutomationProperties.SetName(image, $"{sequence.Current.Title}の画像（アニメーション {frame.Index + 1}）");
+        AutomationProperties.SetName(image, AppText.L($"{sequence.Current.Title}の画像（アニメーション {frame.Index + 1}）", $"Image: {sequence.Current.Title} (animation frame {frame.Index + 1})"));
         var now=System.Diagnostics.Stopwatch.GetTimestamp()*1000d/System.Diagnostics.Stopwatch.Frequency;
         animTimer.Interval = TimeSpan.FromMilliseconds(animationClock.NextDelay(now,frame.DurationMs));
         animTimer.Start();
@@ -324,7 +324,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
             if (!disposed && stamp == version && stream == animationStream)
             {
                 StopAnimation(true); failed = true; UpdateControls();
-                ViewerNotice.Set(status, "アニメーションを読み取れません。開き直してください。"); ShowChrome(); AppLog.Error(ex);
+                ViewerNotice.Set(status, AppText.L("アニメーションを読み取れません。開き直してください。", "Could not read animation. Please reopen.")); ShowChrome(); AppLog.Error(ex);
             }
         }
         finally
@@ -352,7 +352,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
                 if (target is null)
                 {
                     if (direction < 0) visualPrevExhausted = true; else visualNextExhausted = true;
-                    ViewerNotice.Set(status, direction < 0 ? "前の作品はありません" : "次の作品はありません");
+                    ViewerNotice.Set(status, direction < 0 ? AppText.L("前の作品はありません", "No previous item") : AppText.L("次の作品はありません", "No next item"));
                     ShowChrome();
                 }
                 else if (ImageViewerPolicy.CanOpen(target.Item))
@@ -377,8 +377,8 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
             if (disposed) return;
             failed = true; ShowChrome();
             ViewerNotice.Set(status, ex is ResultSessionException
-                ? "結果の有効期限が切れました。閉じて再検索してください"
-                : "次の作品を取得できません。接続を確認して再試行してください");
+                ? AppText.L("結果の有効期限が切れました。閉じて再検索してください", "Results expired. Close and search again.")
+                : AppText.L("次の作品を取得できません。接続を確認して再試行してください", "Could not load next item. Check connection and retry."));
             AppLog.Error(ex);
         }
         finally { navigating = false; if (!disposed && handoffTarget is null) UpdateControls(); }
@@ -396,7 +396,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         }
         if (!moved || disposed) return;
         actualPixels=false;version++; loaded = false; StopAnimation(true); retry.IsEnabled = false;
-        UpdateIdentity(); ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
+        UpdateIdentity(); ViewerNotice.Set(status,AppText.L("画像を読み込んでいます…", "Loading image...")); UpdateControls();
         // New navigation may cancel a slow foreground image while the old
         // pipeline drains; only neighbor lookup itself is single-flight.
         if (busy) { request?.Cancel(); return; }
@@ -422,7 +422,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
                 if (disposed) return;
                 if (target is null)
                 {
-                    ViewerNotice.Set(status, "移動先に画像・本がありません");
+                    ViewerNotice.Set(status, AppText.L("移動先に画像・本がありません", "No image or book at target position"));
                     ShowChrome();
                 }
                 else if (target.Item.Id == sequence.Current.Id)
@@ -447,8 +447,8 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
             if (disposed) return;
             failed = true; ShowChrome();
             ViewerNotice.Set(status, ex is ResultSessionException
-                ? "結果の有効期限が切れました。閉じて再検索してください"
-                : "指定位置の作品を取得できません。接続を確認して再試行してください");
+                ? AppText.L("結果の有効期限が切れました。閉じて再検索してください", "Results expired. Close and search again.")
+                : AppText.L("指定位置の作品を取得できません。接続を確認して再試行してください", "Could not load item at target position. Check connection and retry."));
             AppLog.Error(ex);
         }
         finally { navigating = false; if (!disposed && handoffTarget is null) UpdateControls(); }
@@ -466,7 +466,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
         }
         if (!moved || disposed) return;
         actualPixels=false;version++; loaded = false; StopAnimation(true); retry.IsEnabled = false;
-        UpdateIdentity(); ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
+        UpdateIdentity(); ViewerNotice.Set(status,AppText.L("画像を読み込んでいます…", "Loading image...")); UpdateControls();
         if (busy) { request?.Cancel(); return; }
         await OpenAsync();
     }
@@ -481,7 +481,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
             {
                 requestedVersion = version;
                 loaded = false; failed = false; retry.IsEnabled = false; StopAnimation(true);
-                ViewerNotice.Set(status,"画像を読み込んでいます…"); UpdateControls();
+                ViewerNotice.Set(status,AppText.L("画像を読み込んでいます…", "Loading image...")); UpdateControls();
                 using var loading = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                 request = loading; var cancellation = loading.Token; var item = sequence.Current;
                 var trace=new ViewerLoadTrace("image");
@@ -506,7 +506,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
                             StopAnimation();nativeAnimation=decoded;var bitmap=decoded.Bitmap;
                             imageWidth=Math.Max(1,bitmap.PixelWidth);imageHeight=Math.Max(1,bitmap.PixelHeight);
                             FitImage();image.Source=bitmap;loaded=true;viewport.ChangeView(0,0,1,true);
-                            AutomationProperties.SetName(image,item.Title+"の画像");
+                            AutomationProperties.SetName(image,AppText.L(item.Title+"の画像", "Image: " + item.Title));
                             trace.Mark("assigned");
                             ContentOpened?.Invoke(item.Id);ViewerNotice.Set(status);
                             continue;
@@ -547,7 +547,7 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
                         StopAnimation();
                         imageWidth = Math.Max(1, bitmap.PixelWidth); imageHeight = Math.Max(1, bitmap.PixelHeight);
                         FitImage(); image.Source = bitmap; loaded = true; viewport.ChangeView(0, 0, 1, true);
-                        AutomationProperties.SetName(image,item.Title+"の画像");
+                        AutomationProperties.SetName(image,AppText.L(item.Title+"の画像", "Image: " + item.Title));
                         trace.Mark("assigned");
                         ContentOpened?.Invoke(sequence.Current.Id);
                         ViewerNotice.Set(status);
@@ -559,11 +559,11 @@ internal sealed class ImageViewerView : Grid, IDisposable, IViewerWindowTitle
                     StopAnimation(true);
                     ViewerNotice.Set(status,ex switch
                     {
-                        ArchiveReadException { Status: System.Net.HttpStatusCode.NotFound } => "画像を読み込めません（未接続・破損の可能性）",
+                        ArchiveReadException { Status: System.Net.HttpStatusCode.NotFound } => AppText.L("画像を読み込めません（未接続・破損の可能性）", "Cannot load image (folder may be offline or file damaged)"),
                         ArchiveReadException => ex.Message,
-                        OperationCanceledException => "読み込みがタイムアウトしました。再試行してください",
-                        HttpRequestException => "接続できません。閉じて再接続してください",
-                        _ => "表示できません（未対応形式または破損）"
+                        OperationCanceledException => AppText.L("読み込みがタイムアウトしました。再試行してください", "Loading timed out. Please retry."),
+                        HttpRequestException => AppText.L("接続できません。閉じて再接続してください", "Cannot connect. Close and reconnect."),
+                        _ => AppText.L("表示できません（未対応形式または破損）", "Cannot display (unsupported format or corrupted)")
                     });
                     failed = true; retry.IsEnabled = true; ShowChrome();
                 }

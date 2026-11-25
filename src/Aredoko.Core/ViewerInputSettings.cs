@@ -1,9 +1,10 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Aredoko.Core;
 
-public sealed record ViewerInputSettings(bool WheelUpAdvances=false,int LibraryItemScale=100,string Theme="system",bool EnlargeSmallImages=false,bool AlwaysShowControls=false,bool LoopBookPages=false,bool OpenExternally=false,int AISetupFeatures=3,bool LibraryTiles=false,bool OpenDetailsOnClick=false)
+public sealed record ViewerInputSettings(bool WheelUpAdvances=false,int LibraryItemScale=100,string Theme="system",bool EnlargeSmallImages=false,bool AlwaysShowControls=false,bool LoopBookPages=false,bool OpenExternally=false,int AISetupFeatures=3,bool LibraryTiles=false,bool OpenDetailsOnClick=false,string Language="system")
 {
     public int WheelStep(int delta)=>delta==0?0:(delta>0)==WheelUpAdvances?1:-1;
     public static ViewerInputSettings Load(string path)
@@ -22,13 +23,21 @@ public sealed record ViewerInputSettings(bool WheelUpAdvances=false,int LibraryI
             var features=root.TryGetProperty("ai_setup_features",out var f)&&f.ValueKind==JsonValueKind.Number&&f.TryGetInt32(out var mask)?AISetupSelection.Normalize(mask):3;
             var tiles=root.TryGetProperty("library_view",out var view)&&view.ValueKind==JsonValueKind.String&&view.GetString()=="grid";
             var openDetails=root.TryGetProperty("open_details_on_click",out var od)&&od.ValueKind==JsonValueKind.True;
-            return new(root.GetProperty("wheel_up_advances").GetBoolean(),NormalizeScale(scale),theme,enlarge,controls,loop,external,features,tiles,openDetails);
+            var language=root.TryGetProperty("language",out var lang)&&lang.ValueKind==JsonValueKind.String?NormalizeLanguage(lang.GetString()):"system";
+            return new(root.GetProperty("wheel_up_advances").GetBoolean(),NormalizeScale(scale),theme,enlarge,controls,loop,external,features,tiles,openDetails,language);
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or KeyNotFoundException or FormatException){return new();}
     }
     public static string NormalizeTheme(string? theme)=>theme is "light" or "dark"?theme:"system";
+    public static string NormalizeLanguage(string? language)=>language?.ToLowerInvariant() is "ja" or "en"?language.ToLowerInvariant():"system";
+    public static string ResolveLanguage(string? language,CultureInfo? uiCulture=null)=>NormalizeLanguage(language) switch
+    {
+        "ja"=>"ja",
+        "en"=>"en",
+        _=>(uiCulture??CultureInfo.CurrentUICulture).TwoLetterISOLanguageName.Equals("ja",StringComparison.OrdinalIgnoreCase)?"ja":"en"
+    };
     public static int NormalizeScale(int value)=>value is >=60 and <=180&&value%20==0?value:100;
-    public JsonObject ToJson()=>new(){["version"]=1,["wheel_up_advances"]=WheelUpAdvances,["library_item_scale"]=NormalizeScale(LibraryItemScale),["library_view"]=LibraryTiles?"grid":"list",["theme"]=NormalizeTheme(Theme),["enlarge_small_images"]=EnlargeSmallImages,["always_show_controls"]=AlwaysShowControls,["loop_book_pages"]=LoopBookPages,["double_click_viewer"]=OpenExternally?"external":"internal",["ai_setup_features"]=AISetupSelection.Normalize(AISetupFeatures),["open_details_on_click"]=OpenDetailsOnClick};
+    public JsonObject ToJson()=>new(){["version"]=1,["wheel_up_advances"]=WheelUpAdvances,["library_item_scale"]=NormalizeScale(LibraryItemScale),["library_view"]=LibraryTiles?"grid":"list",["theme"]=NormalizeTheme(Theme),["enlarge_small_images"]=EnlargeSmallImages,["always_show_controls"]=AlwaysShowControls,["loop_book_pages"]=LoopBookPages,["double_click_viewer"]=OpenExternally?"external":"internal",["ai_setup_features"]=AISetupSelection.Normalize(AISetupFeatures),["open_details_on_click"]=OpenDetailsOnClick,["language"]=NormalizeLanguage(Language)};
     public void Save(string path)
     {
         var absolute=Path.GetFullPath(path);Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);

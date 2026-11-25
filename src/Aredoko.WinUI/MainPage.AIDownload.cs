@@ -8,12 +8,12 @@ namespace Aredoko_WinUI;
 public sealed partial class MainPage
 {
     private static string DownloadCatalogLabel(AIDownloadCatalog item)=>item.Kind=="runtime"
-        ?item.Name+"（実行環境）"
+        ?item.Name+AppText.L("（実行環境）", " (Runtime)")
         :item.ModelTarget?.Role switch
         {
-            "tagger"=>"画像タグ付けモデル（"+item.Name+"）",
-            "embedding"=>"内容検索モデル（"+item.Name+"）",
-            _=>item.Name+"（モデル）"
+            "tagger"=>AppText.L("画像タグ付けモデル（"+item.Name+"）", "Image Tagger Model ("+item.Name+")"),
+            "embedding"=>AppText.L("内容検索モデル（"+item.Name+"）", "Semantic Search Model ("+item.Name+")"),
+            _=>item.Name+AppText.L("（モデル）", " (Model)")
         };
 
     private async Task OpenAIDownloadDialogAsync(string? preferRole = null)
@@ -25,21 +25,21 @@ public sealed partial class MainPage
         {
             dialogOpen=true;
             var panel=new StackPanel{Spacing=12,MaxWidth=540};
-            var choice=new ComboBox{Header="取得するモデル・環境",HorizontalAlignment=HorizontalAlignment.Stretch};
-            var information=new TextBlock{Text="取得できる環境を確認しています。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
-            var license=new HyperlinkButton{Content="ライセンスを確認",Visibility=Visibility.Collapsed,Padding=new Thickness(0,2,0,2)};
-            var speed=new NumberBox{Header="速度上限（MB/秒、0で無制限）",Value=0,Minimum=0,Maximum=1000000,SmallChange=1};
-            var consent=new CheckBox{Content="容量とライセンスを確認し、選択したファイルを取得する"};
+            var choice=new ComboBox{Header=AppText.L("取得するモデル・環境", "Model / Runtime to Download"),HorizontalAlignment=HorizontalAlignment.Stretch};
+            var information=new TextBlock{Text=AppText.L("取得できる環境を確認しています。", "Checking available packages."),TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            var license=new HyperlinkButton{Content=AppText.L("ライセンスを確認", "View License"),Visibility=Visibility.Collapsed,Padding=new Thickness(0,2,0,2)};
+            var speed=new NumberBox{Header=AppText.L("速度上限（MB/秒、0で無制限）", "Speed limit (MB/s, 0 = unlimited)"),Value=0,Minimum=0,Maximum=1000000,SmallChange=1};
+            var consent=new CheckBox{Content=AppText.L("容量とライセンスを確認し、選択したファイルを取得する", "I confirm the size and license, and want to download the selected item")};
             var status=new TextBlock{TextWrapping=TextWrapping.Wrap};var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};
-            var destination=new TextBox{Header="保存先フォルダ",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};
-            var select=new Button{Content="配置済みの環境を指定",Visibility=Visibility.Collapsed};var refresh=new Button{Content="⟳ 状態を更新"};
+            var destination=new TextBox{Header=AppText.L("保存先フォルダ", "Destination Folder"),IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};
+            var select=new Button{Content=AppText.L("配置済みの環境を指定", "Select Downloaded Folder"),Visibility=Visibility.Collapsed};var refresh=new Button{Content=AppText.L("⟳ 状態を更新", "⟳ Refresh")};
             foreach(var (control,id) in new (DependencyObject,string)[]{(choice,"AIDownloadCatalog"),(information,"AIDownloadInformation"),(license,"AIDownloadLicense"),(speed,"AIDownloadSpeed"),(consent,"AIDownloadConsent"),(status,"AIDownloadStatus"),(progress,"AIDownloadProgress"),(destination,"AIDownloadDestination"),(select,"AIDownloadSelect"),(refresh,"AIDownloadRefresh")})AutomationProperties.SetAutomationId(control,id);
-            AutomationProperties.SetName(progress,"AI環境の取得進捗");
-            var downloadSettings=new Expander{Header="速度制限（既定は制限なし）",Content=speed,HorizontalAlignment=Microsoft.UI.Xaml.HorizontalAlignment.Stretch,HorizontalContentAlignment=Microsoft.UI.Xaml.HorizontalAlignment.Stretch};
+            AutomationProperties.SetName(progress,AppText.L("AI環境の取得進捗", "AI download progress"));
+            var downloadSettings=new Expander{Header=AppText.L("速度制限（既定は制限なし）", "Speed Limit (unlimited by default)"),Content=speed,HorizontalAlignment=Microsoft.UI.Xaml.HorizontalAlignment.Stretch,HorizontalContentAlignment=Microsoft.UI.Xaml.HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(downloadSettings,"AIDownloadSettings");
-            var introduction=new TextBlock{Text="取得したいモデルを選んでダウンロードします（追加機能は後からでも設定できます）。",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
-            ToolTipService.SetToolTip(introduction,"AI検索には検索モデルと実行環境が必要です。画像タグ付けモデルは追加機能です。");
-            AutomationProperties.SetName(introduction,"AI検索には検索モデルと実行環境が必要です。画像タグ付けモデルは追加機能です。");
+            var introduction=new TextBlock{Text=AppText.L("取得したいモデルを選んでダウンロードします（追加機能は後からでも設定できます）。", "Select a model to download (optional features can also be added later)."),TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            ToolTipService.SetToolTip(introduction,AppText.L("AI検索には検索モデルと実行環境が必要です。画像タグ付けモデルは追加機能です。", "AI search requires a search model and runtime. Image tagging model is an optional add-on."));
+            AutomationProperties.SetName(introduction,AppText.L("AI検索には検索モデルと実行環境が必要です。画像タグ付けモデルは追加機能です。", "AI search requires a search model and runtime. Image tagging model is an optional add-on."));
             AutomationProperties.SetAutomationId(introduction,"AIDownloadIntroduction");panel.Children.Add(introduction);
 
             var infoBox=new Border{Background=(Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],CornerRadius=new CornerRadius(6),Padding=new Thickness(10,8,10,8),Child=new StackPanel{Spacing=4,Children={information,license}}};
@@ -58,7 +58,7 @@ public sealed partial class MainPage
             panel.Children.Add(card2);
             panel.Children.Add(downloadSettings);
 
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="AI環境の取得",PrimaryButtonText="取得・再開",IsPrimaryButtonEnabled=false,SecondaryButtonText="中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=AppText.L("AI環境の取得", "Download AI Models & Runtime"),PrimaryButtonText=AppText.L("取得・再開", "Download / Resume"),IsPrimaryButtonEnabled=false,SecondaryButtonText=AppText.L("中止", "Cancel"),IsSecondaryButtonEnabled=false,CloseButtonText=AppText.L("閉じる", "Close"),DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=FormScrollContent.Wrap(panel),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}};
             dialog.Resources["ContentDialogMaxWidth"]=580d;
             AutomationProperties.SetAutomationId(dialog,"AIDownloadDialog");
@@ -76,13 +76,13 @@ public sealed partial class MainPage
                 if(candidate is not null&&current is {State:not "idle"} verifiedJob)
                 {
                     status.Text=candidate.ModelTarget?.Role=="tagger"
-                        ?$"✓ 準備完了（{verifiedJob.BytesVerified/1000000d:N1} MB 検証済み）\nこのまま閉じて、作品詳細の「✨ AI候補」からすぐ使えます。"
-                        :$"✓ ダウンロード完了（{verifiedJob.BytesVerified/1000000d:N1} MB 検証済み）\n下の青いボタンから設定を保存し、Aredoko を再起動すると反映されます。";
+                        ?AppText.L($"✓ 準備完了（{verifiedJob.BytesVerified/1000000d:N1} MB 検証済み）\nこのまま閉じて、作品詳細の「✨ AI候補」からすぐ使えます。", $"✓ Ready ({verifiedJob.BytesVerified/1000000d:N1} MB verified)\nClose this dialog and use \"✨ AI Suggestions\" in item details right away.")
+                        :AppText.L($"✓ ダウンロード完了（{verifiedJob.BytesVerified/1000000d:N1} MB 検証済み）\n下の青いボタンから設定を保存し、Aredoko を再起動すると反映されます。", $"✓ Download complete ({verifiedJob.BytesVerified/1000000d:N1} MB verified)\nClick the blue button below to save settings, then restart Aredoko.");
                 }
                 else
                 {
-                    status.Text=current?.State is null or "idle"?"取得するモデルを選んでください。":current.Message;
-                    if(current is {State:not "idle"} job)status.Text+=$"\n取得 {job.BytesReceived/1000000d:N1} MB / "+(job.BytesTotal is {} total?$"{total/1000000d:N1} MB":"確認中")+$"（検証済み {job.BytesVerified/1000000d:N1} MB）";
+                    status.Text=current?.State is null or "idle"?AppText.L("取得するモデルを選んでください。", "Select a package to download."):current.Message;
+                    if(current is {State:not "idle"} job)status.Text+=AppText.L($"\n取得 {job.BytesReceived/1000000d:N1} MB / "+(job.BytesTotal is {} total?$"{total/1000000d:N1} MB":"確認中")+$"（検証済み {job.BytesVerified/1000000d:N1} MB）", $"\nDownloaded {job.BytesReceived/1000000d:N1} MB / "+(job.BytesTotal is {} totalEn?$"{totalEn/1000000d:N1} MB":"checking")+$" (verified {job.BytesVerified/1000000d:N1} MB)");
                 }
                 if(operationError is not null)status.Text+="\n"+operationError;
                 VisualAssets.State(downloadArt,active?"indexing":current?.Published==true?"completed":(current?.State=="failed"||operationError is not null)?"error":null);
@@ -90,7 +90,7 @@ public sealed partial class MainPage
                 select.Visibility=candidate is not null?Visibility.Visible:Visibility.Collapsed;select.IsEnabled=!busy;
                 var needsExplicitActivation=candidate is not null&&candidate.ModelTarget?.Role!="tagger";
                 select.Style=needsExplicitActivation&&!busy?(Style)Application.Current.Resources["AccentButtonStyle"]:Application.Current.Resources["DefaultButtonStyle"] as Style;
-                select.Content=candidate?.Kind=="runtime"?"この実行環境を有効化する →":candidate?.ModelTarget?.Role=="tagger"?"保存先を明示設定…":"このモデルを有効化する →";
+                select.Content=candidate?.Kind=="runtime"?AppText.L("この実行環境を有効化する →", "Activate This Runtime →"):candidate?.ModelTarget?.Role=="tagger"?AppText.L("保存先を明示設定…", "Configure Folder Explicitly..."):AppText.L("このモデルを有効化する →", "Activate This Model →");
             }
             async Task RefreshAsync(bool catalogs=false)
             {
@@ -106,12 +106,12 @@ public sealed partial class MainPage
                         foreach(var item in items)choice.Items.Add(new ComboBoxItem{Content=DownloadCatalogLabel(item),Tag=item});
                         var preferredIndex=(!job.Active&&selected is null&&!string.IsNullOrEmpty(preferRole))?items.ToList().FindIndex(item=>item.ModelTarget?.Role==preferRole):-1;
                         var index=preferredIndex>=0?preferredIndex:items.ToList().FindIndex(item=>item.Id==(job.Active?job.CatalogId:selected??job.CatalogId));choice.SelectedIndex=index>=0?index:items.Count>0?0:-1;
-                        if(items.Count==0)information.Text="ダウンロードできるモデルはありません（「自動セットアップ」または「手元のファイルを使う」を利用できます）";
+                        if(items.Count==0)information.Text=AppText.L("ダウンロードできるモデルはありません（「自動セットアップ」または「手元のファイルを使う」を利用できます）", "No downloadable catalog items found (use AI Auto-Setup or Use Local Files).");
                     }
                     current=job;operationError=null;Render();
                 }
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
-                catch(Exception ex){if(open&&!disposed){operationError="状態を確認できません。「状態を更新」で確認してください。\n"+ex.Message;Render();}}
+                catch(Exception ex){if(open&&!disposed){operationError=AppText.L("状態を確認できません。「状態を更新」で確認してください。\n", "Unable to check status. Click Refresh.\n")+ex.Message;Render();}}
             }
             choice.SelectionChanged+=(_,_)=>
             {
@@ -119,13 +119,13 @@ public sealed partial class MainPage
                 if(Selected() is {} selected)
                 {
                     var note=selected.Kind=="model"
-                        ?(selected.ModelTarget?.Role=="tagger"?" · 同梱ランタイムで動作（追加の実行環境は不要）":" · AI検索用の実行環境と組み合わせて使います")
+                        ?(selected.ModelTarget?.Role=="tagger"?AppText.L(" · 同梱ランタイムで動作（追加の実行環境は不要）", " · Uses built-in runtime (no extra runtime needed)"):AppText.L(" · AI検索用の実行環境と組み合わせて使います", " · Requires an AI search runtime"))
                         :"";
                     var capacity=selected.UnpackedBytes is {} expanded
-                        ?$"容量：{selected.Bytes/1000000d:N1} MB ／ 展開後：{expanded/1000000d:N1} MB（{selected.UnpackedFiles:N0}件）· 必要な空き：{(selected.Bytes+expanded)/1000000d:N1} MB以上"
-                        :$"容量：{selected.Bytes/1000000d:N1} MB{note}";
-                    information.Text=capacity+$"\nライセンス：{selected.License} · 提供元：{string.Join(", ",selected.SourceHosts)}";
-                    ToolTipService.SetToolTip(information,$"版（Revision）: {selected.Revision}");
+                        ?AppText.L($"容量：{selected.Bytes/1000000d:N1} MB ／ 展開後：{expanded/1000000d:N1} MB（{selected.UnpackedFiles:N0}件）· 必要な空き：{(selected.Bytes+expanded)/1000000d:N1} MB以上", $"Download: {selected.Bytes/1000000d:N1} MB / Unpacked: {expanded/1000000d:N1} MB ({selected.UnpackedFiles:N0} files) · Required space: {(selected.Bytes+expanded)/1000000d:N1} MB+")
+                        :AppText.L($"容量：{selected.Bytes/1000000d:N1} MB{note}", $"Size: {selected.Bytes/1000000d:N1} MB{note}");
+                    information.Text=capacity+AppText.L($"\nライセンス：{selected.License} · 提供元：{string.Join(", ",selected.SourceHosts)}", $"\nLicense: {selected.License} · Host: {string.Join(", ",selected.SourceHosts)}");
+                    ToolTipService.SetToolTip(information,AppText.L($"版（Revision）: {selected.Revision}", $"Revision: {selected.Revision}"));
                     license.NavigateUri=selected.LicenseUri;license.Visibility=Visibility.Visible;
                 }
                 else
@@ -143,12 +143,12 @@ public sealed partial class MainPage
                 var deferral=args.GetDeferral();busy=true;operationError=null;++revision;Render();
                 try
                 {
-                    if(!double.IsFinite(speed.Value)||speed.Value<0||speed.Value>1000000)throw new ArgumentException("速度上限を確認してください。0は無制限です。");
+                    if(!double.IsFinite(speed.Value)||speed.Value<0||speed.Value>1000000)throw new ArgumentException(AppText.L("速度上限を確認してください。0は無制限です。", "Check the speed limit. Use 0 for unlimited."));
                     long? rate=speed.Value==0?null:checked((long)Math.Round(speed.Value*1000000));
                     current=await api.AIDownloads.StartAsync(selected.Id,rate,lifetime.Token);
                 }
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
-                catch(Exception ex){operationError="開始を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
+                catch(Exception ex){operationError=AppText.L("開始を確認できません。「状態を更新」で確認してください。\n", "Unable to confirm start. Click Refresh.\n")+ex.Message;}
                 finally{busy=false;deferral.Complete();Render();}
             };
             dialog.SecondaryButtonClick+=async(_,args)=>
@@ -157,7 +157,7 @@ public sealed partial class MainPage
                 var deferral=args.GetDeferral();busy=true;operationError=null;++revision;Render();
                 try{current=await api.AIDownloads.CancelAsync(id,lifetime.Token);}
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
-                catch(Exception ex){operationError="中止を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
+                catch(Exception ex){operationError=AppText.L("中止を確認できません。「状態を更新」で確認してください。\n", "Unable to confirm cancellation. Click Refresh.\n")+ex.Message;}
                 finally{busy=false;deferral.Complete();Render();}
             };
             select.Click+=(_,_)=>

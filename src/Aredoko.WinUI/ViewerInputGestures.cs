@@ -20,7 +20,7 @@ internal static class ViewerOptions
     public static string BackupChoicesPath=>path+".backup.json";
     public static ViewerInputSettings Value {get;private set;}=ViewerInputSettings.Load(path);
     public static void Save(bool wheelUpAdvances)=>SaveValue(Value with {WheelUpAdvances=wheelUpAdvances});
-    public static void SavePreferences(bool wheel,string theme,bool enlarge,bool external,bool openDetailsOnClick=false)=>SaveValue(Value with {WheelUpAdvances=wheel,Theme=ViewerInputSettings.NormalizeTheme(theme),EnlargeSmallImages=enlarge,OpenExternally=external,OpenDetailsOnClick=openDetailsOnClick});
+    public static void SavePreferences(bool wheel,string theme,bool enlarge,bool external,bool openDetailsOnClick=false,string? language=null)=>SaveValue(Value with {WheelUpAdvances=wheel,Theme=ViewerInputSettings.NormalizeTheme(theme),EnlargeSmallImages=enlarge,OpenExternally=external,OpenDetailsOnClick=openDetailsOnClick,Language=language is null?Value.Language:ViewerInputSettings.NormalizeLanguage(language)});
     public static void SaveLibraryView(bool tiles)=>SaveValue(Value with {LibraryTiles=tiles});
     public static void SaveLibraryItemScale(int scale)=>SaveValue(Value with {LibraryItemScale=ViewerInputSettings.NormalizeScale(scale)});
     public static void SaveAISetupFeatures(int selection)=>SaveValue(Value with{AISetupFeatures=AISetupSelection.Normalize(selection)});

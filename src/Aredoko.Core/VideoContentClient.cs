@@ -9,10 +9,10 @@ public sealed record VideoItemProgress(int ItemId,int PreparedMs,int? TotalMs,in
 {
     public string? ItemTitle {get;init;}
     private static string Clock(int ms)=>ms>=3600000?$"{ms/3600000}:{ms/60000%60:00}:{ms/1000%60:00}":$"{ms/60000}:{ms/1000%60:00}";
-    public string Message=>TotalMs is not int total?"現在の動画を読み取っています（長さを確認中）…"
-        :Phase=="saving"?$"現在の動画：{Clock(total)}の解析データを保存しています…"
-        :$"現在の動画：{Clock(PreparedMs)} / {Clock(total)}（未保存）\n"+
-            (Phase=="encoding"?"内容を解析しています…":PreparedMs==total?"読み取りの終了を確認しています…":"次の区間を読み取っています…");
+    public string Message=>TotalMs is not int total?AppText.L("現在の動画を読み取っています（長さを確認中）…", "Reading current video (checking duration)...")
+        :Phase=="saving"?AppText.L($"現在の動画：{Clock(total)}の解析データを保存しています…", $"Current video: saving analysis for {Clock(total)}...")
+        :AppText.L($"現在の動画：{Clock(PreparedMs)} / {Clock(total)}（未保存）\n", $"Current video: {Clock(PreparedMs)} / {Clock(total)} (unsaved)\n")+
+            (Phase=="encoding"?AppText.L("内容を解析しています…", "Analyzing content..."):PreparedMs==total?AppText.L("読み取りの終了を確認しています…", "Finalizing read..."):AppText.L("次の区間を読み取っています…", "Reading next segment..."));
     internal static VideoItemProgress Parse(JsonElement row)
     {
         if(row.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Invalid video item progress");
@@ -35,22 +35,22 @@ public sealed record VideoContentStatus(bool Supported,bool Available,string Sta
 {
     public VideoItemProgress? ItemProgress {get;init;}
     public bool Busy=>State is "planning" or "waiting" or "running" or "cancelling";
-    public string Message=>ErrorCode=="video_initialization_failed"?"AI検索の初期化に失敗しました。アプリを再起動してから、もう一度実行してください。"
+    public string Message=>ErrorCode=="video_initialization_failed"?AppText.L("AI検索の初期化に失敗しました。アプリを再起動してから、もう一度実行してください。", "AI search initialization failed. Restart the app and try again.")
         :State=="failed"&&ErrorText.AIWorkerFailure(ErrorCode) is {} failure?failure
-        :!Supported?"現在のAIモデルは動画の内容検索に対応していません。"
-        :!Available?"AI環境を準備すると、動画の内容から検索できます。"
+        :!Supported?AppText.L("現在のAIモデルは動画の内容検索に対応していません。", "The current AI model does not support video content search.")
+        :!Available?AppText.L("AI環境を準備すると、動画の内容から検索できます。", "Prepare the AI environment to search inside videos.")
         :State switch
         {
-            "planning"=>"動画の準備状況を確認しています…",
-            "waiting"=>"ほかのAI処理が終わるのを待っています…",
-            "running"=>$"動画を準備しています（{Processed:N0} / {Target:N0}件）"+(ItemProgress is {} item?"\n"+item.Message:""),
-            "cancelling"=>"現在の処理を安全に中断しています…",
-            "cancelled"=>$"中断しました。準備済みの{Indexed:N0}件は保持されています。",
-            "failed"=>ErrorCode=="scope_changed"?"検索対象が変更されました。もう一度作成してください。":"動画を準備できませんでした。AI環境とファイルの状態を確認してください。",
-            "completed"=>$"準備完了：{Indexed:N0}件。準備済み{Reused:N0}件は再利用しました。"+
-                (Unavailable>0?$" 読み取れない候補{Unavailable:N0}件。":"")+
-                (RemainingCandidates>0?$" 残りの候補{RemainingCandidates:N0}件は、もう一度作成すると続きへ進みます。":""),
-            _=>"先に動画の索引を作成すると、動画内のシーンや内容を文章で探せます。"
+            "planning"=>AppText.L("動画の準備状況を確認しています…", "Checking video preparation status..."),
+            "waiting"=>AppText.L("ほかのAI処理が終わるのを待っています…", "Waiting for another AI task to finish..."),
+            "running"=>AppText.L($"動画を準備しています（{Processed:N0} / {Target:N0}件）", $"Preparing videos ({Processed:N0} / {Target:N0})")+(ItemProgress is {} item?"\n"+item.Message:""),
+            "cancelling"=>AppText.L("現在の処理を安全に中断しています…", "Safely cancelling current task..."),
+            "cancelled"=>AppText.L($"中断しました。準備済みの{Indexed:N0}件は保持されています。", $"Cancelled. {Indexed:N0} prepared items were kept."),
+            "failed"=>ErrorCode=="scope_changed"?AppText.L("検索対象が変更されました。もう一度作成してください。", "Search target changed. Run indexing again."):AppText.L("動画を準備できませんでした。AI環境とファイルの状態を確認してください。", "Could not prepare videos. Check your AI environment and file access."),
+            "completed"=>AppText.L($"準備完了：{Indexed:N0}件。準備済み{Reused:N0}件は再利用しました。", $"Done: {Indexed:N0} prepared ({Reused:N0} already ready reused).")+
+                (Unavailable>0?AppText.L($" 読み取れない候補{Unavailable:N0}件。", $" {Unavailable:N0} unreadable."):"")+
+                (RemainingCandidates>0?AppText.L($" 残りの候補{RemainingCandidates:N0}件は、もう一度作成すると続きへ進みます。", $" Run again to continue with {RemainingCandidates:N0} remaining."):""),
+            _=>AppText.L("先に動画の索引を作成すると、動画内のシーンや内容を文章で探せます。", "Create a video index first to search scenes and content by description.")
         };
     public static VideoContentStatus Parse(string json)
     {

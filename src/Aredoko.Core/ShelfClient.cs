@@ -12,7 +12,7 @@ public static class ShelfProtocol
     public static void ValidateIds(IReadOnlyList<long> ids)
     {
         if(ids.Count>64 || ids.Any(id=>id<1) || ids.Distinct().Count()!=ids.Count)
-            throw new ArgumentException("棚は重複のない64件以内で選択してください。");
+            throw new ArgumentException(AppText.L("棚は重複のない64件以内で選択してください。", "Select up to 64 unique shelves."));
     }
     public static long[] ReadIds(JsonElement value)
     {
@@ -55,8 +55,8 @@ public static class ShelfProtocol
         var list = names.Where(name => !string.IsNullOrWhiteSpace(name)).ToArray();
         if (list.Length == 0) return emptyText;
         return maxVisible > 0 && list.Length > maxVisible
-            ? string.Join("、", list.Take(maxVisible)) + $" ほか{list.Length - maxVisible:N0}棚"
-            : string.Join("、", list);
+            ? string.Join(AppText.L("、", ", "), list.Take(maxVisible)) + AppText.L($" ほか{list.Length - maxVisible:N0}棚", $" +{list.Length - maxVisible:N0} more")
+            : string.Join(AppText.L("、", ", "), list);
     }
 }
 
@@ -83,7 +83,7 @@ public sealed class ShelfClient(HttpClient client)
     }
     private static long ValidId(long id)=>id>0?id:throw new ArgumentOutOfRangeException(nameof(id));
     private static string ValidateName(string name)=>string.IsNullOrWhiteSpace(name)||name.Trim().Length>80
-        ?throw new ArgumentException("棚の名前は1～80文字で入力してください。") :name.Trim();
+        ?throw new ArgumentException(AppText.L("棚の名前は1～80文字で入力してください。", "Shelf name must be 1–80 characters.")) :name.Trim();
     private async Task<JsonObject> PostAsync(string operation,JsonObject body,CancellationToken cancellation)
     {
         using var content=new StringContent(body.ToJsonString(),Encoding.UTF8,"application/json");

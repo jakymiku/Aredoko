@@ -274,4 +274,30 @@ class ProductionTests(unittest.TestCase):
         self.assertEqual(st['ai_state'], 'cancelled')
         self.assertEqual(len(spy.calls), 0)  # Never called AI!
 
+    def test_scan_state_reports_skipped_access_denied_entries(self):
+        import os
+        (self.media / 'accessible').mkdir()
+        (self.media / 'accessible/ok.png').write_bytes(b'ok')
+        (self.media / 'locked').mkdir()
+        root = self.catalog.add_root(str(self.media))
+        orig_scandir = os.scandir
+        def deny_locked(path):
+            if Path(path).name == 'locked':
+                raise PermissionError('denied')
+            return orig_scandir(path)
+        with patch('library_index.native_accel.available', return_value=False), \
+                patch('library_index.os.scandir', side_effect=deny_locked):
+            self.catalog.start_scan(root)
+            self.catalog._worker.join(10)
+        st = self.catalog.scan_state()
+        self.assertEqual(st['state'], 'complete')
+        self.assertEqual(st['skipped_access_denied'], 1)
+        self.assertFalse(st['access_denied_truncated'])
+        self.assertEqual(st['access_denied_entries'], [{
+            'root_id': root,
+            'root_path': str(self.media.resolve()),
+            'relative_path': 'locked',
+            'is_dir': True,
+        }])
+
 if __name__=='__main__':unittest.main()

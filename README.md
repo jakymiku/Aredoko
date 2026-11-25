@@ -49,8 +49,8 @@ Start immediately with fast filename and tag search—no AI setup required. When
 
 1. Download the latest Windows x64 archive from [GitHub Releases](https://github.com/jakymiku/Aredoko/releases).
 2. **Extract the entire ZIP archive** (keep `Aredoko.exe` together with all bundled folders) and launch `Aredoko.exe`. On first launch, follow the prompt to download the isolated base Python runtime.
-3. Add the folders you want to manage and choose **Fetch item list only** (`アイテム一覧だけ取得`) to start searching by filename and tags immediately.
-4. *(Optional)* To use AI search, open **How to Use** (`使い方`) or **Settings → Setup & First Run** (`設定 → 使い方・初回設定`) to run **AI Auto-Setup** (`AI自動セットアップ`), which automatically selects CUDA (NVIDIA GPU) or Lightweight CPU (non-NVIDIA / Radeon, etc.) and sets up the runtime and model, then restart Aredoko and build AI indexes for your folders.
+3. Add the folders you want to manage and choose **Fetch item list only** to start searching by filename and tags immediately.
+4. *(Optional)* To use AI search, open **How to Use** or **Settings → Setup & First Run** to run **AI Auto-Setup**, which automatically selects CUDA (NVIDIA GPU) or Lightweight CPU (non-NVIDIA / Radeon, etc.) and sets up the runtime and model, then restart Aredoko and build AI indexes for your folders.
 
 For detailed usage instructions and troubleshooting, see the [User Guide (Japanese)](docs/user-guide.md).
 
@@ -59,7 +59,7 @@ For detailed usage instructions and troubleshooting, see the [User Guide (Japane
 | Item | Details |
 | --- | --- |
 | **OS** | Windows 10 / 11 (x64) |
-| **UI Language** | Primarily Japanese (English overview is maintained in this README) |
+| **UI Language** | English & Japanese (auto-selected from Windows display language; switchable anytime in **Settings**) |
 | **Visual C++ Runtime (for AI)** | Required for optional local AI search: [Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe). (Not needed for standard filename/tag search.) |
 | **Unsigned Binaries** | Release builds are not code-signed. If Windows **Smart App Control** is set to *On (Enforcement)*, launching `Aredoko.exe` may be blocked. |
 | **Optional AI Storage** | Auto-setup selects **CUDA (NVIDIA GPU)** (up to ~4.5 GB download, ~15 GB free space) or **Lightweight CPU (non-NVIDIA / Radeon)** (~1.74 GB download, ~6 GB free space). After verification, wheel cache (up to ~3 GB) can be cleared from **Settings → Storage & Cache**. |
@@ -67,7 +67,7 @@ For detailed usage instructions and troubleshooting, see the [User Guide (Japane
 ## Feedback & Bug Reports
 
 Found a bug or have a feature suggestion? Please open an issue on [GitHub Issues](https://github.com/jakymiku/Aredoko/issues).  
-When reporting an issue, including the version and environment summary from **Settings → Diagnostics** (`設定 → 診断情報`) helps a lot.
+When reporting an issue, including the version and environment summary from **Settings → Diagnostics** helps a lot.
 
 ## Support
 

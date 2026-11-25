@@ -18,8 +18,8 @@ public sealed partial class MainPage
         {
             dialogOpen=true;
             var panel=new StackPanel{Spacing=12};
-            var modelScope=new ComboBox{Header="保存先を変える範囲",HorizontalAlignment=HorizontalAlignment.Stretch};
-            foreach(var (label,role) in new (string,string?)[]{("すべてのモデル（共通）",null),("用途別：内容検索（文章・画像・動画・音声）","embedding"),("用途別：画像のタグ付け（WD Tagger）","tagger"),("用途別：検索意図の解析","intent")})
+            var modelScope=new ComboBox{Header=AppText.L("保存先を変える範囲", "Scope to Configure"),HorizontalAlignment=HorizontalAlignment.Stretch};
+            foreach(var (label,role) in new (string,string?)[]{(AppText.L("すべてのモデル（共通）", "All models (shared folder)"),null),(AppText.L("用途別：内容検索（文章・画像・動画・音声）", "By role: Semantic / visual / media search"),"embedding"),(AppText.L("用途別：画像のタグ付け（WD Tagger）", "By role: Image tagging (WD Tagger)"),"tagger"),(AppText.L("用途別：検索意図の解析", "By role: Search intent parsing"),"intent")})
                 modelScope.Items.Add(new ComboBoxItem{Content=label,Tag=role});
             var modelTargets=new Dictionary<string,AIModelTarget>();
             void AddModel(AIModelTarget target)
@@ -36,37 +36,37 @@ public sealed partial class MainPage
             AutomationProperties.SetAutomationId(scopeNote,"AIEnvironmentModelScopeNote");
             AIModelTarget? SelectedTarget()=>(modelScope.SelectedItem as ComboBoxItem)?.Tag is string key&&modelTargets.TryGetValue(key,out var target)?target:null;
             string? SelectedRole()=>SelectedTarget()?.Role??(modelScope.SelectedItem as ComboBoxItem)?.Tag as string;
-            static string ModelLabel(AIModelTarget? target)=>target?.Role=="tagger"?"タグ付けモデル":"検索モデル";
-            var runtime=new TextBox{Header="AI実行環境",IsReadOnly=true,TextWrapping=TextWrapping.Wrap};
-            var models=new TextBox{Header="モデルの保存先",IsReadOnly=true,TextWrapping=TextWrapping.Wrap};
-            var chooseRuntime=new Button{Content="実行環境を選ぶ"};var resetRuntime=new Button{Content="標準に戻す"};
-            var chooseModels=new Button{Content="モデルのフォルダを選ぶ"};var resetModels=new Button{Content="標準に戻す"};
-            var diagnostic=new TextBlock{TextWrapping=TextWrapping.Wrap};var status=new TextBlock{Text="状態を確認しています。",TextWrapping=TextWrapping.Wrap};
+            static string ModelLabel(AIModelTarget? target)=>target?.Role=="tagger"?AppText.L("タグ付けモデル", "Tagger Model"):AppText.L("検索モデル", "Search Model");
+            var runtime=new TextBox{Header=AppText.L("AI実行環境", "AI Runtime"),IsReadOnly=true,TextWrapping=TextWrapping.Wrap};
+            var models=new TextBox{Header=AppText.L("モデルの保存先", "Models Folder"),IsReadOnly=true,TextWrapping=TextWrapping.Wrap};
+            var chooseRuntime=new Button{Content=AppText.L("実行環境を選ぶ", "Select Runtime")};var resetRuntime=new Button{Content=AppText.L("標準に戻す", "Reset to Default")};
+            var chooseModels=new Button{Content=AppText.L("モデルのフォルダを選ぶ", "Select Models Folder")};var resetModels=new Button{Content=AppText.L("標準に戻す", "Reset to Default")};
+            var diagnostic=new TextBlock{TextWrapping=TextWrapping.Wrap};var status=new TextBlock{Text=AppText.L("状態を確認しています。", "Checking status."),TextWrapping=TextWrapping.Wrap};
             var setupArt=VisualAssets.Sticker();
-            var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};var refresh=new Button{Content="状態を更新"};
+            var progress=new ProgressBar{Minimum=0,Maximum=100,Visibility=Visibility.Collapsed};var refresh=new Button{Content=AppText.L("状態を更新", "Refresh")};
             foreach(var (control,id) in new (DependencyObject,string)[]{(runtime,"AIEnvironmentRuntime"),(models,"AIEnvironmentModels"),(chooseRuntime,"AIEnvironmentChooseRuntime"),(resetRuntime,"AIEnvironmentResetRuntime"),(chooseModels,"AIEnvironmentChooseModels"),(resetModels,"AIEnvironmentResetModels"),(diagnostic,"AIEnvironmentDiagnostic"),(status,"AIEnvironmentStatus"),(progress,"AIEnvironmentProgress"),(refresh,"AIEnvironmentRefresh")})AutomationProperties.SetAutomationId(control,id);
-            AutomationProperties.SetName(resetRuntime,"AI実行環境を標準に戻す");AutomationProperties.SetName(resetModels,"モデル保存先を標準に戻す");AutomationProperties.SetName(progress,"AI環境の検査進捗");
-            var descTop=new TextBlock{Text="配置済みのフォルダを確認して設定します（ファイルは移動しません）",TextWrapping=TextWrapping.Wrap};
-            ToolTipService.SetToolTip(descTop,"配置済みのフォルダを選ぶと内容を確認し、次回起動の設定として保存します。検査中も通常の閲覧・文字検索を利用できます。");
+            AutomationProperties.SetName(resetRuntime,AppText.L("AI実行環境を標準に戻す", "Reset AI runtime to default"));AutomationProperties.SetName(resetModels,AppText.L("モデル保存先を標準に戻す", "Reset models folder to default"));AutomationProperties.SetName(progress,AppText.L("AI環境の検査進捗", "AI verification progress"));
+            var descTop=new TextBlock{Text=AppText.L("配置済みのフォルダを確認して設定します（ファイルは移動しません）", "Verifies and configures existing local folders (files are not moved)"),TextWrapping=TextWrapping.Wrap};
+            ToolTipService.SetToolTip(descTop,AppText.L("配置済みのフォルダを選ぶと内容を確認し、次回起動の設定として保存します。検査中も通常の閲覧・文字検索を利用できます。", "Select an existing folder to verify and save it for next launch. Standard browsing and text search remain usable during checks."));
             panel.Children.Add(descTop);
-            var acquiredLocation=new TextBox{Header=acquired?.Kind=="runtime"?"取得した実行環境":$"取得した{ModelLabel(acquired?.ModelTarget)}（{acquired?.ModelTarget?.ModelId}）",Text=acquired?.Root??"",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed};
-            var useAcquired=new Button{Content=acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う",Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed,IsEnabled=false};
+            var acquiredLocation=new TextBox{Header=acquired?.Kind=="runtime"?AppText.L("取得した実行環境", "Downloaded Runtime"):AppText.L($"取得した{ModelLabel(acquired?.ModelTarget)}（{acquired?.ModelTarget?.ModelId}）", $"Downloaded {ModelLabel(acquired?.ModelTarget)} ({acquired?.ModelTarget?.ModelId})"),Text=acquired?.Root??"",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed};
+            var useAcquired=new Button{Content=acquired?.Kind=="runtime"?AppText.L("この実行環境を確認して使う", "Verify & Use This Runtime"):AppText.L("このモデルの保存先を使う", "Use This Model Location"),Visibility=acquired is not null?Visibility.Visible:Visibility.Collapsed,IsEnabled=false};
             AutomationProperties.SetAutomationId(acquiredLocation,"AIEnvironmentAcquiredLocation");AutomationProperties.SetAutomationId(useAcquired,"AIEnvironmentUseAcquired");
             panel.Children.Add(acquiredLocation);panel.Children.Add(useAcquired);
             panel.Children.Add(runtime);
             var runtimeActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};runtimeActions.Children.Add(chooseRuntime);runtimeActions.Children.Add(resetRuntime);panel.Children.Add(runtimeActions);
-            var runtimeHint=new TextBlock{Text="aredoko-ai-runtime.json があるフォルダを指定",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
-            ToolTipService.SetToolTip(runtimeHint,"Aredoko用のAI実行環境一式（aredoko-ai-runtime.jsonがあるフォルダ）を指定します。モデルとは別に用意します。");
+            var runtimeHint=new TextBlock{Text=AppText.L("aredoko-ai-runtime.json があるフォルダを指定", "Select the folder containing aredoko-ai-runtime.json"),TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            ToolTipService.SetToolTip(runtimeHint,AppText.L("Aredoko用のAI実行環境一式（aredoko-ai-runtime.jsonがあるフォルダ）を指定します。モデルとは別に用意します。", "Select the Aredoko AI runtime directory containing aredoko-ai-runtime.json (separate from models)."));
             panel.Children.Add(runtimeHint);
             panel.Children.Add(modelScope);panel.Children.Add(models);panel.Children.Add(scopeNote);
             var modelActions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=8};modelActions.Children.Add(chooseModels);modelActions.Children.Add(resetModels);panel.Children.Add(modelActions);
-            var modelHint=new TextBlock{Text="モデル群の親フォルダ（例：models）を指定",TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
-            ToolTipService.SetToolTip(modelHint,"モデル別のフォルダをまとめた親フォルダを指定します。例：models の中に embeddinggemma-2 がある場合は models を選びます。");
+            var modelHint=new TextBlock{Text=AppText.L("モデル群の親フォルダ（例：models）を指定", "Select the parent models directory (e.g., models)"),TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            ToolTipService.SetToolTip(modelHint,AppText.L("モデル別のフォルダをまとめた親フォルダを指定します。例：models の中に embeddinggemma-2 がある場合は models を選びます。", "Select the parent folder containing model subdirectories (e.g., choose 'models' if embeddinggemma-2 is inside it)."));
             panel.Children.Add(modelHint);
             foreach(var control in new UIElement[]{diagnostic,setupArt,progress,status,refresh})panel.Children.Add(control);
-            var download=new Button{Content="ダウンロード・進行状況"};AutomationProperties.SetAutomationId(download,"AIEnvironmentDownload");panel.Children.Add(download);
-            var guide=new HyperlinkButton{Content="配置ガイド",NavigateUri=new Uri("https://github.com/jakymiku/Aredoko/blob/main/docs/ai-environment-guide.md")};AutomationProperties.SetAutomationId(guide,"AIEnvironmentGuide");panel.Children.Add(guide);
-            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title="手元のAIファイルを使う",SecondaryButtonText="確認を中止",IsSecondaryButtonEnabled=false,CloseButtonText="閉じる",DefaultButton=ContentDialogButton.None,
+            var download=new Button{Content=AppText.L("ダウンロード・進行状況", "Downloads & Progress")};AutomationProperties.SetAutomationId(download,"AIEnvironmentDownload");panel.Children.Add(download);
+            var guide=new HyperlinkButton{Content=AppText.L("配置ガイド", "Setup Guide"),NavigateUri=new Uri("https://github.com/jakymiku/Aredoko/blob/main/docs/ai-environment-guide.md")};AutomationProperties.SetAutomationId(guide,"AIEnvironmentGuide");panel.Children.Add(guide);
+            var dialog=new ContentDialog{XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=AppText.L("手元のAIファイルを使う", "Use Local AI Files"),SecondaryButtonText=AppText.L("確認を中止", "Cancel Check"),IsSecondaryButtonEnabled=false,CloseButtonText=AppText.L("閉じる", "Close"),DefaultButton=ContentDialogButton.None,
                 Content=new ScrollViewer{Content=FormScrollContent.Wrap(panel),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}};
             AutomationProperties.SetAutomationId(dialog,"AIEnvironmentDialog");
             void Render(AIEnvironmentJob job)
@@ -77,27 +77,27 @@ public sealed partial class MainPage
                 foreach(var control in new Control[]{chooseRuntime,chooseModels,resetRuntime,resetModels,modelScope})control.IsEnabled=!active;
                 useAcquired.IsEnabled=!active&&acquired is not null&&(acquired.Kind=="runtime"||acquired.ModelTarget is not null)&&!(job.Saved&&job.Id==acquiredJob);
                 useAcquired.Style=useAcquired.IsEnabled?(Style)Application.Current.Resources["AccentButtonStyle"]:Application.Current.Resources["DefaultButtonStyle"] as Style;
-                useAcquired.Content=job.Saved&&job.Id==acquiredJob?"次回起動に設定済み":acquired?.Kind=="runtime"?"この実行環境を確認して使う":"このモデルの保存先を使う";
+                useAcquired.Content=job.Saved&&job.Id==acquiredJob?AppText.L("次回起動に設定済み", "Configured for Next Launch"):acquired?.Kind=="runtime"?AppText.L("この実行環境を確認して使う", "Verify & Use This Runtime"):AppText.L("このモデルの保存先を使う", "Use This Model Location");
                 dialog.IsSecondaryButtonEnabled=job.Active&&!busy&&job.State is not ("cancelling" or "saving");
                 progress.Visibility=job.Active||job.Saved?Visibility.Visible:Visibility.Collapsed;
                 progress.IsIndeterminate=job.Active&&job.BytesTotal is not >0;
                 progress.Value=job.BytesTotal is >0?Math.Clamp(100d*job.BytesDone/job.BytesTotal.Value,0,100):job.Saved?100:0;
-                status.Text=job.State=="idle"?"使用するフォルダを選んでください。":job.Message;
+                status.Text=job.State=="idle"?AppText.L("使用するフォルダを選んでください。", "Select a folder to configure."):job.Message;
                 if(job.Active&&job.BytesTotal is >0)status.Text+=$"\n{job.BytesDone/1048576d:N1} / {job.BytesTotal.Value/1048576d:N1} MB";
                 if(job.Saved)
                 {
                     var role=acquired?.ModelTarget?.Role??SelectedRole();
                     status.Text+=role=="tagger"
-                        ?"\n✓ 設定を保存しました。画像タグ付け（WD Tagger）は再起動なしで今すぐ利用できます。"
-                        :"\n✓ 設定を保存しました。反映するには Aredoko を一度閉じて再起動してください。";
+                        ?AppText.L("\n✓ 設定を保存しました。画像タグ付け（WD Tagger）は再起動なしで今すぐ利用できます。", "\n✓ Saved. Image tagging (WD Tagger) is available immediately without restarting.")
+                        :AppText.L("\n✓ 設定を保存しました。反映するには Aredoko を一度閉じて再起動してください。", "\n✓ Saved. Close and restart Aredoko for changes to take effect.");
                 }
                 if(operationError is not null)status.Text+="\n"+operationError;
             }
             void RenderModelLocation()
             {
-                models.Text=locations?.ModelLocation(SelectedRole(),SelectedTarget())??"標準の場所";
-                resetModels.Content=SelectedTarget() is not null?"このモデルの指定を解除":SelectedRole() is null?"すべて標準に戻す":"この対象を標準に戻す";
-                scopeNote.Text=SelectedTarget() is not null?"このモデルだけ変更（ファイルは移動しません）":SelectedRole() is null?"すべてのモデルを変更（ファイルは移動しません）":"同じ用途のモデルを変更（ファイルは移動しません）";
+                models.Text=locations?.ModelLocation(SelectedRole(),SelectedTarget())??AppText.L("標準の場所", "Default Location");
+                resetModels.Content=SelectedTarget() is not null?AppText.L("このモデルの指定を解除", "Clear Model Override"):SelectedRole() is null?AppText.L("すべて標準に戻す", "Reset All to Default"):AppText.L("この対象を標準に戻す", "Reset Role to Default");
+                scopeNote.Text=SelectedTarget() is not null?AppText.L("このモデルだけ変更（ファイルは移動しません）", "Overrides this model only (no files moved)"):SelectedRole() is null?AppText.L("すべてのモデルを変更（ファイルは移動しません）", "Overrides all models (no files moved)"):AppText.L("同じ用途のモデルを変更（ファイルは移動しません）", "Overrides models for this role (no files moved)");
             }
             modelScope.SelectionChanged+=(_,_)=>RenderModelLocation();
             RenderModelLocation();
@@ -106,15 +106,15 @@ public sealed partial class MainPage
                 var requested=revision;
                 var value=await api.AIEnvironment.StatusAsync(lifetime.Token);
                 if(!open||disposed||requested!=revision||busy)return;
-                locations=value;runtime.Text=value.RuntimeRoot??"標準の場所（または起動時に指定した環境）";
+                locations=value;runtime.Text=value.RuntimeRoot??AppText.L("標準の場所（または起動時に指定した環境）", "Default location (or startup argument)");
                 // Keep existing native items/selection stable. Replacing the
                 // selected item during refresh can reset ComboBox to common.
                 // Only add bounded saved choices; reopening refreshes the set.
                 foreach(var entry in value.ModelLocations??Array.Empty<AIModelLocation>())
                     if(!modelTargets.Values.Contains(entry.Target)&&modelTargets.Count<33)AddModel(entry.Target);
                 RenderModelLocation();
-                diagnostic.Text=(value.RuntimeFilesPresent?"✓ AI実行環境":"⚠ AI実行環境（要確認）")+"　"+(value.ModelFilesPresent?"✓ 検索モデル":"⚠ 検索モデル（要確認）");
-                diagnostic.Text+=value.RestartRequired?"\n再起動後に反映されます":"\n設定変更は次回起動時に反映";
+                diagnostic.Text=(value.RuntimeFilesPresent?AppText.L("✓ AI実行環境", "✓ AI Runtime"):AppText.L("⚠ AI実行環境（要確認）", "⚠ AI Runtime (Check needed)"))+"　"+(value.ModelFilesPresent?AppText.L("✓ 検索モデル", "✓ Search Model"):AppText.L("⚠ 検索モデル（要確認）", "⚠ Search Model (Check needed)"));
+                diagnostic.Text+=value.RestartRequired?AppText.L("\n再起動後に反映されます", "\nTakes effect after restart"):AppText.L("\n設定変更は次回起動時に反映", "\nChanges apply on next launch");
             }
             async Task RefreshAsync(bool locations=false)
             {
@@ -127,7 +127,7 @@ public sealed partial class MainPage
                     if(locations||job.Saved&&savedJob!=job.Id){await LocationsAsync();savedJob=job.Id;}
                 }
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
-                catch(Exception ex){if(open&&!disposed)status.Text="状態を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
+                catch(Exception ex){if(open&&!disposed)status.Text=AppText.L("状態を確認できません。「状態を更新」で確認してください。\n", "Unable to check status. Click Refresh.\n")+ex.Message;}
             }
             async Task SelectAsync(bool forRuntime,bool reset,string? acquiredPath=null,AIModelTarget? target=null)
             {
@@ -149,7 +149,7 @@ public sealed partial class MainPage
                     if(acquiredPath is not null)acquiredJob=current.Id;
                 }
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
-                catch(Exception ex){operationError="開始を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
+                catch(Exception ex){operationError=AppText.L("開始を確認できません。「状態を更新」で確認してください。\n", "Unable to confirm start. Click Refresh.\n")+ex.Message;}
                 finally{busy=false;if(current is not null)Render(current);}
             }
             useAcquired.Click+=async(_,_)=>{if(acquired is not null)await SelectAsync(acquired.Kind=="runtime",false,acquired.Root,acquired.ModelTarget);};
@@ -162,7 +162,7 @@ public sealed partial class MainPage
                 var deferral=args.GetDeferral();busy=true;operationError=null;++revision;Render(current);
                 try{current=await api.AIEnvironment.CancelAsync(id,lifetime.Token);}
                 catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
-                catch(Exception ex){operationError="中止を確認できません。「状態を更新」で確認してください。\n"+ex.Message;}
+                catch(Exception ex){operationError=AppText.L("中止を確認できません。「状態を更新」で確認してください。\n", "Unable to confirm cancellation. Click Refresh.\n")+ex.Message;}
                 finally{busy=false;deferral.Complete();if(current is not null)Render(current);}
             };
             download.Click+=(_,_)=>{if(busy)return;openDownload=true;dialog.Hide();};
@@ -179,7 +179,7 @@ public sealed partial class MainPage
     // resetting preferences itself never needs to load a picker projection.
     private static async Task<string?> PickAIEnvironmentFolderAsync(bool forRuntime)
     {
-        var picker=new FolderPicker(MainWindow.Current.AppWindow.Id){Title=forRuntime?"AI実行環境のフォルダ":"モデルをまとめた親フォルダ",CommitButtonText="このフォルダを確認"};
+        var picker=new FolderPicker(MainWindow.Current.AppWindow.Id){Title=forRuntime?AppText.L("AI実行環境のフォルダ", "AI Runtime Folder"):AppText.L("モデルをまとめた親フォルダ", "Parent Models Folder"),CommitButtonText=AppText.L("このフォルダを確認", "Verify This Folder")};
         return (await picker.PickSingleFolderAsync())?.Path;
     }
 

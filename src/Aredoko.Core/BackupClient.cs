@@ -40,7 +40,7 @@ public sealed record BackupJob(string? Id,string State,bool Published,string Mes
         if(done<0 || total<0 || done>total)throw new InvalidDataException("Invalid backup progress");
         var published=root.GetProperty("published").GetBoolean();if(state=="complete"&&!published)throw new InvalidDataException("Backup completion without publication");
         var selected=root.GetProperty("selection");
-        return new(id,state,published,root.GetProperty("message").GetString()??"",done,total,root.GetProperty("output").GetString(),selected.ValueKind==JsonValueKind.Null?null:BackupSelection.Parse(selected));
+        return new(id,state,published,AppText.TranslateBackend(root.GetProperty("message").GetString()),done,total,root.GetProperty("output").GetString(),selected.ValueKind==JsonValueKind.Null?null:BackupSelection.Parse(selected));
     }
 }
 // Shared data/JSON only. Windows picker and presentation belong to WinUI.
@@ -52,7 +52,7 @@ public sealed class BackupClient(HttpClient client)
     {using var response=await client.GetAsync("api/library/backup",cancellation);return BackupJob.Parse(await ReadAsync(response,cancellation));}
     public Task<BackupJob> StartAsync(string output,BackupSelection selection,ViewerInputSettings viewer,CancellationToken cancellation=default)
     {
-        if(string.IsNullOrWhiteSpace(output)||!Path.IsPathFullyQualified(output)||output.Length>4096||output.Any(char.IsControl))throw new ArgumentException("バックアップの保存先を選んでください。");
+        if(string.IsNullOrWhiteSpace(output)||!Path.IsPathFullyQualified(output)||output.Length>4096||output.Any(char.IsControl))throw new ArgumentException(AppText.L("バックアップの保存先を選んでください。","Select a backup destination folder."));
         var body=new JsonObject{["consent"]=true,["output"]=output,["selection"]=selection.ToJson()};
         if(selection.Settings)body["viewer_settings"]=viewer.ToJson();
         return PostAsync("start",body,cancellation);

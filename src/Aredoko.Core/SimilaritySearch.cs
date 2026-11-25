@@ -4,9 +4,15 @@ namespace Aredoko.Core;
 
 public static class SimilaritySearch
 {
-    public const string AudioIndexingGuidance="内容から探すには、設定 → AI検索の準備 → 音声の内容検索で索引を作成し、検索方法の「音声の内容（AI）」を選んでください。ファイル名・タグ検索と再生はそのまま利用できます。";
-    public const string VideoIndexingGuidance="内容から探すには、設定 → AI検索の準備 → 動画の内容検索で索引を作成してください。ファイル名・タグ検索や代表フレームによる検索も利用できます。";
-    public const string VideoAudioIndexingGuidance="音で似た動画を探すには、設定 → AI検索の準備 → 動画内の音声で索引を作成してください。先頭の音声トラックが対象です。";
+    public static string AudioIndexingGuidance=>AppText.L(
+        "内容から探すには、設定 → AI検索の準備 → 音声の内容検索で索引を作成し、検索方法の「音声の内容（AI）」を選んでください。ファイル名・タグ検索と再生はそのまま利用できます。",
+        "To search inside audio, open Settings → Prepare AI Search → Audio content search, build the index, and choose \"Audio content (AI)\". Filename/tag search and playback remain available.");
+    public static string VideoIndexingGuidance=>AppText.L(
+        "内容から探すには、設定 → AI検索の準備 → 動画の内容検索で索引を作成してください。ファイル名・タグ検索や代表フレームによる検索も利用できます。",
+        "To search inside videos, open Settings → Prepare AI Search → Video content search and build the index. Filename/tag search and keyframe search remain available.");
+    public static string VideoAudioIndexingGuidance=>AppText.L(
+        "音で似た動画を探すには、設定 → AI検索の準備 → 動画内の音声で索引を作成してください。先頭の音声トラックが対象です。",
+        "To find similar videos by sound, open Settings → Prepare AI Search → Video audio and build the index (uses the first audio track).");
     public const int MaxResponseBytes=2*1024*1024;
     public static bool CanStart(MediaRow row) => row.Id > 0 && row.Availability == "present" && row.Kind is "image" or "book" or "archive" or "video" or "audio";
     public static JsonObject Request(int itemId,string kind,string view,int page,JsonObject scope,int? rootId=null,int? originPage=null,int? originMs=null) =>
@@ -24,32 +30,32 @@ public static class SimilaritySearch
         return req;
     }
     public static string Guidance(string status, string originKind = "",bool directAudio=false,bool directVideo=false,bool directVideoAudio=false) => directVideoAudio
-        ? status=="ready"?"動画内の音声・音の特徴が似た候補です。起点自身は除外しています。一致区間から動画を再生できます。類似度は正解率ではありません。"
-            :"この動画の音声索引がないか古くなっています。"+VideoAudioIndexingGuidance
+        ? status=="ready"?AppText.L("動画内の音声・音の特徴が似た候補です。起点自身は除外しています。一致区間から動画を再生できます。類似度は正解率ではありません。", "Matches with similar spoken audio or sound in video (excluding the source item). You can play from the matched interval. Scores are similarity, not accuracy.")
+            :AppText.L("この動画の音声索引がないか古くなっています。", "This video's audio index is missing or outdated. ")+VideoAudioIndexingGuidance
         :directVideo
-        ? status=="ready"?"動画の内容が似た候補です。起点自身は除外しています。一致区間から再生できます。類似度は正解率ではありません。"
-            :"この動画の内容索引がないか古くなっています。"+VideoIndexingGuidance
+        ? status=="ready"?AppText.L("動画の内容が似た候補です。起点自身は除外しています。一致区間から再生できます。類似度は正解率ではありません。", "Matches with similar video content (excluding the source item). You can play from the matched interval. Scores are similarity, not accuracy.")
+            :AppText.L("この動画の内容索引がないか古くなっています。", "This video's content index is missing or outdated. ")+VideoIndexingGuidance
         :directAudio
-        ? status=="ready"?"音声の内容・特徴が似た候補です。起点自身は除外しています。一致時刻から再生できます。類似度は正解率ではありません。"
-            :"この音声の内容索引がないか古くなっています。"+AudioIndexingGuidance
+        ? status=="ready"?AppText.L("音声の内容・特徴が似た候補です。起点自身は除外しています。一致時刻から再生できます。類似度は正解率ではありません。", "Matches with similar audio content (excluding the source item). You can play from the matched time. Scores are similarity, not accuracy.")
+            :AppText.L("この音声の内容索引がないか古くなっています。", "This audio's content index is missing or outdated. ")+AudioIndexingGuidance
         :status switch
     {
         "unindexed" => originKind == "video"
-            ? "この動画の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。"
+            ? AppText.L("この動画の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。", "This video's index is missing or outdated. Check AI Indexing settings to build it, or use Name/Tag search.")
             : originKind == "audio"
-            ? "この音声・曲の類似検索に使える音響特徴がないか古くなっています。文章から探すための索引とは別です。" + AudioIndexingGuidance
-            : "この画像・表紙の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。",
+            ? AppText.L("この音声・曲の類似検索に使える音響特徴がないか古くなっています。文章から探すための索引とは別です。", "Acoustic features for audio similarity are missing or outdated (separate from text-to-audio search). ") + AudioIndexingGuidance
+            : AppText.L("この画像・表紙の索引がないか古くなっています。「AI索引」で対象を確認して索引を作成してください。名前・タグ検索も利用できます。", "This image/cover index is missing or outdated. Check AI Indexing settings to build it, or use Name/Tag search."),
         "unsupported_profile" => originKind == "video"
-            ? "選択中のモデルは動画の類似検索に対応していません。「AI索引」で画像・動画対応モデルを選ぶか、名前・タグ検索を利用してください。"
+            ? AppText.L("選択中のモデルは動画の類似検索に対応していません。「AI索引」で画像・動画対応モデルを選ぶか、名前・タグ検索を利用してください。", "The selected model does not support video similarity. Choose an image/video model in AI Indexing, or use Name/Tag search.")
             : originKind == "audio"
-            ? "この音声・曲の類似検索を利用できません。" + AudioIndexingGuidance
-            : "選択中のモデルは画像・表紙の類似検索に対応していません。「AI索引」で画像対応モデルを選ぶか、名前・タグ検索を利用してください。",
+            ? AppText.L("この音声・曲の類似検索を利用できません。", "Similarity search is unavailable for this audio file. ") + AudioIndexingGuidance
+            : AppText.L("選択中のモデルは画像・表紙の類似検索に対応していません。「AI索引」で画像対応モデルを選ぶか、名前・タグ検索を利用してください。", "The selected model does not support image/cover similarity. Choose an image model in AI Indexing, or use Name/Tag search."),
         "ready" => originKind == "video"
-            ? "動画の内容・シーンが似た候補です。起点自身は除外しています。類似度は正解率ではありません。"
+            ? AppText.L("動画の内容・シーンが似た候補です。起点自身は除外しています。類似度は正解率ではありません。", "Items with similar video scenes (excluding the source item). Scores are similarity, not accuracy.")
             : originKind == "audio"
-            ? "音声・音楽の音響特徴が似た候補です。起点自身は除外しています。類似度は正解率ではありません。"
-            : "画像・表紙の特徴が似た候補です。起点自身は除外しています。類似度は正解率ではありません。",
-        _ => "類似検索を利用できません。元の検索に戻るか、AI索引の設定を確認してください。"
+            ? AppText.L("音声・音楽の音響特徴が似た候補です。起点自身は除外しています。類似度は正解率ではありません。", "Items with similar audio/music characteristics (excluding the source item). Scores are similarity, not accuracy.")
+            : AppText.L("画像・表紙の特徴が似た候補です。起点自身は除外しています。類似度は正解率ではありません。", "Items with similar image/cover features (excluding the source item). Scores are similarity, not accuracy."),
+        _ => AppText.L("類似検索を利用できません。元の検索に戻るか、AI索引の設定を確認してください。", "Similarity search is unavailable. Return to search or check AI Indexing settings.")
     };
 
     public static SearchResponse Parse(string text,int expectedId,int expectedPage,int expectedLimit=60,int? expectedOffset=null,bool directAudio=false,bool directVideo=false,bool directVideoAudio=false)
@@ -74,7 +80,7 @@ public static class SimilaritySearch
                (source == "cover" && originKind is not (null or "image" or "book" or "archive" or "video"))||
                ((source is "video-direct" or "video-audio-direct") && originKind != "video")||
                (source is "acoustic" or "audio-direct" && originKind != "audio"))
-                throw new InvalidDataException("類似検索の応答が要求と一致しません。検索をやり直してください。");
+                throw new InvalidDataException(AppText.L("類似検索の応答が要求と一致しません。検索をやり直してください。", "Similarity search response does not match request. Please search again."));
             var result=Protocol.ParseSearch(text);
             if(result.Total<0||(!result.SearchComplete&&result.Total>10000)||result.Items.Count>expectedLimit||result.Items.Count>result.Total||
                (result.SearchComplete&&result.Total!=result.IndexedTotal)||
@@ -87,12 +93,12 @@ public static class SimilaritySearch
                    (directVideo&&(row.VideoMatchSource!="direct-video"||row.VideoMatchContract!="direct-video-window:v1"||row.VideoMatchEndMs is null||row.OriginMatchEndMs is null))||
                    (directVideoAudio&&(row.AudioMatchSource!="video-audio"||row.AudioMatchContract!="direct-audio-window:v1"||row.AudioMatchEndMs is null||row.OriginMatchEndMs is null))||
                    row.SemanticScore is not double score||score < -1.000001||score > 1.000001))
-                throw new InvalidDataException("類似候補の内容が無効です。検索をやり直してください。");
+                throw new InvalidDataException(AppText.L("類似候補の内容が無効です。検索をやり直してください。", "Invalid similarity match payload. Please search again."));
             return result;
         }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
         {
-            throw new InvalidDataException("類似検索の応答を読み取れません。検索をやり直してください。",ex);
+            throw new InvalidDataException(AppText.L("類似検索の応答を読み取れません。検索をやり直してください。", "Unable to read similarity search response. Please search again."),ex);
         }
     }
 }
