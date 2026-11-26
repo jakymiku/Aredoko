@@ -7,6 +7,7 @@ No source bytes, model weights or all-result metadata lists live in memory.
 from contextlib import ExitStack
 from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -70,6 +71,7 @@ class FrozenResult:
             self.db = sqlite3.connect(self.path, check_same_thread=False)
             self.resources.callback(self.db.close)
             self.db.execute('PRAGMA journal_mode=MEMORY')
+            self.db.execute('PRAGMA synchronous=OFF')
             self.db.execute('PRAGMA cache_size=-2048')
             self.db.execute('PRAGMA temp_store=FILE')
             self.db.execute('PRAGMA max_page_count=' + str(budget // 4096))
@@ -120,17 +122,21 @@ class FrozenResult:
                     items = result['items']
                     if len(items) > 120 or (not items and self.total != expected):
                         raise ResultUnavailable('Incomplete search results', conditions=self.conditions)
+                    batch = []
                     for item in self._currents(items,capture=True):
                         payload = json.dumps(item, ensure_ascii=False, separators=(',', ':'))
                         if len(payload.encode('utf-8')) > 512 * 1024:
                             raise ResultCapacity('Result evidence exceeds workspace limit')
                         rel = item.get('relative_path', '')
+                        suffix = os.path.splitext(rel)[1].casefold()
                         avail = item.get('availability') == 'present'
-                        image = avail and item.get('kind') == 'image' and Path(rel).suffix.casefold() in IMAGE_MIME
-                        is_book = avail and (is_folder_book(rel) or Path(rel).suffix.casefold() in ('.cbz', '.zip'))
+                        image = avail and item.get('kind') == 'image' and suffix in IMAGE_MIME
+                        is_book = avail and (is_folder_book(rel) or suffix in ('.cbz', '.zip'))
                         visual = image or is_book
-                        self.db.execute('INSERT INTO results VALUES(?,?,?,?,?)', (self.total, item['id'], int(image), int(visual), payload))
+                        batch.append((self.total, item['id'], int(image), int(visual), payload))
                         self.total += 1
+                    if batch:
+                        self.db.executemany('INSERT INTO results VALUES(?,?,?,?,?)', batch)
                     self.db.commit()
                     if self.total > expected:
                         raise ResultUnavailable('Invalid result count', conditions=self.conditions)

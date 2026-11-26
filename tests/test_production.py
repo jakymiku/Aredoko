@@ -300,4 +300,33 @@ class ProductionTests(unittest.TestCase):
             'is_dir': True,
         }])
 
+    def test_sync_index_skips_unchanged_updates_and_updates_changed_items(self):
+        self.fixture('01.cbz')
+        self.fixture('02.png')
+        root = self.catalog.add_root(str(self.media))
+        self.scan(root)
+        items = {row['title']: row for row in self.catalog.search()['items']}
+        self.catalog.update([items['01.cbz']['id']], {'tags': ['keep'], 'favorite': True})
+        sql = []
+        original_connect = self.catalog.connect
+        from contextlib import contextmanager
+        @contextmanager
+        def traced():
+            with original_connect() as db:
+                db.set_trace_callback(sql.append)
+                yield db
+        with patch.object(self.catalog, 'connect', side_effect=traced):
+            self.catalog.sync_index()
+        self.assertFalse(any(q.startswith('UPDATE items ') for q in sql), sql)
+        with original_connect() as db:
+            db.execute("UPDATE library_locations SET kind='audio' WHERE relative_path='01.cbz'")
+        sql.clear()
+        with patch.object(self.catalog, 'connect', side_effect=traced):
+            self.catalog.sync_index()
+        self.assertEqual(sum(q.startswith('UPDATE items ') for q in sql), 1)
+        updated = self.catalog.get(items['01.cbz']['id'])
+        self.assertEqual(updated['kind'], 'audio')
+        self.assertEqual(updated['tags'], ['keep'])
+        self.assertTrue(updated['favorite'])
+
 if __name__=='__main__':unittest.main()

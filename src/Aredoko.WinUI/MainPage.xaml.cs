@@ -226,13 +226,15 @@ public sealed partial class MainPage : Page
             AppLog.Startup("session_connected");await LoadAIScopeAsync();
             _ = StartRuntimeVerifyPollingAsync();
             AppLog.Startup("ai_scope_loaded");await RefreshSearchRootsAsync();
-            AppLog.Startup("roots_loaded");await LoadAsync();
-            AppLog.Startup(startupSearchSucceeded?"initial_search_completed":"initial_search_failed");
+            AppLog.Startup("roots_loaded");
             if(StartupReady.Pending)
             {
-                if(!startupSearchSucceeded)await StartupReady.SignalAsync(false);
-                else{AppLog.Startup("window_showing");MainWindow.Current.AppWindow.Show();MainWindow.Current.Activate();await StartupReady.FirstFrameAsync();firstFrameConfirmed=true;}
+                AppLog.Startup("window_showing");MainWindow.Current.AppWindow.Show();MainWindow.Current.Activate();await StartupReady.FirstFrameAsync();firstFrameConfirmed=true;
             }
+            if(disposed)return;
+            ready=true;UpdateNavigationLayout(ActualWidth);
+            await LoadAsync();
+            AppLog.Startup(startupSearchSucceeded?"initial_search_completed":"initial_search_failed");
             if(startupSearchSucceeded&&!startupUpdatesRequested&&knownRoots.Any(root=>root.Enabled&&root.StartupScan!="none"))
             {
                 // This handshake follows a rendered screen, including direct

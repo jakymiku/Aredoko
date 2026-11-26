@@ -133,9 +133,10 @@ class ProductionCatalog(Catalog):
     def sync_index(self, root_id=None):
         with self._guard:
             with self.connect() as db:
-                rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id,r.default_shelf,r.path FROM library_locations l '
+                rows = db.execute('SELECT l.id,l.relative_path,l.kind,m.item_id,i.title AS item_title,i.kind AS item_kind,r.default_shelf,r.path FROM library_locations l '
                                   'JOIN library_roots r ON r.id=l.root_id '
-                                  'LEFT JOIN item_locations m ON m.location_id=l.id'+(' WHERE l.root_id=?' if root_id is not None else ''),() if root_id is None else (root_id,)).fetchall()
+                                  'LEFT JOIN item_locations m ON m.location_id=l.id '
+                                  'LEFT JOIN items i ON i.id=m.item_id'+(' WHERE l.root_id=?' if root_id is not None else ''),() if root_id is None else (root_id,)).fetchall()
                 for row in rows:
                     title = (folder_title(row['path'], row['relative_path']) if is_folder_book(row['relative_path'])
                              else Path(row['relative_path']).name)
@@ -147,7 +148,7 @@ class ProductionCatalog(Catalog):
                             db.execute('INSERT OR IGNORE INTO shelves(name) VALUES(?)',(row['default_shelf'],))
                             db.execute('INSERT OR IGNORE INTO root_shelves SELECT l.root_id,s.id FROM library_locations l JOIN shelves s ON s.name=? WHERE l.id=? AND NOT EXISTS(SELECT 1 FROM root_shelves rs WHERE rs.root_id=l.root_id)',(row['default_shelf'],row['id']))
                         db.execute('INSERT INTO item_shelves SELECT ?,shelf_id FROM root_shelves WHERE root_id=(SELECT root_id FROM library_locations WHERE id=?)',(item_id,row['id']))
-                    else:
+                    elif row['item_title'] != title or row['item_kind'] != row['kind']:
                         # Only source-derived fields; never overwrite user tags/favorites.
                         db.execute('UPDATE items SET title=?,kind=? WHERE id=?',
                                    (title,row['kind'],row['item_id']))
