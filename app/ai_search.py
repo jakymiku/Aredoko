@@ -7,8 +7,10 @@ import math
 import operator
 from pathlib import Path
 import sqlite3
+import sys
 import threading
 import time
+import traceback
 import native_accel
 from ai_process import AIUnavailable
 from ai_profiles import DEFAULT_PROFILE
@@ -683,6 +685,7 @@ class AISearch:
             state['state']='cancelled' if self.cancel.is_set() else 'failed'
             if not self.cancel.is_set():state['error']='索引を完了できませんでした。対象を確認してください。'
         except Exception as ex:
+            traceback.print_exc(file=sys.stderr); sys.stderr.flush()
             state['state']='failed';state['error']='AI索引を作成できませんでした（'+type(ex).__name__+'）。ローカルログを確認してください。'
         finally:
             # Covers both actual inference and cached rebuilds.

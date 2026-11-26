@@ -2,8 +2,10 @@
 import copy
 import re
 import secrets
+import sys
 import threading
 import time
+import traceback
 
 from ai_process import AIUnavailable
 from page_index import identifier, token
@@ -131,8 +133,9 @@ def _build(ai, pages, state):
                     ai.pages.selection(state['item_id'], [p['page_id'] for p in chunk], state['source_revision'])
                 # This existing publisher verifies again after inference and
                 # commits one whole chunk; a cancelled partial chunk is invisible.
+                skipped_before = state.get('skipped', 0)
                 ai.pages._publish_range(chunk, state, state['item_id'], state['source_revision'])
-                state['indexed'] += len(chunk)
+                state['indexed'] += len(chunk) - (state.get('skipped', 0) - skipped_before)
                 state['chunks_completed'] += 1
                 with ai.guard:
                     ai.store.save_state(state)
@@ -140,6 +143,7 @@ def _build(ai, pages, state):
     except InterruptedError:
         state['state'] = 'cancelled'
     except Exception as ex:
+        traceback.print_exc(file=sys.stderr); sys.stderr.flush()
         state['state'] = 'failed'
         state['error'] = 'ページ索引を保存できませんでした（'+type(ex).__name__+'）。元ファイル・登録範囲を確認して再実行してください。'
     finally:

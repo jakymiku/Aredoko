@@ -6,8 +6,10 @@ import math
 import operator
 import re
 import secrets
+import sys
 import threading
 import time
+import traceback
 
 import native_accel
 from ai_process import AIUnavailable
@@ -297,8 +299,9 @@ class PageVectors:
                         if ai._current_rows([item_id], state['scope']).get(item_id) is None:
                             raise KeyError('Page source unavailable')
                         self.selection(item_id, [p['page_id'] for p in chunk], revision)
+                    skipped_before = state.get('skipped', 0)
                     self._publish_range(chunk, state, item_id, revision)
-                    state['indexed'] += len(chunk)
+                    state['indexed'] += len(chunk) - (state.get('skipped', 0) - skipped_before)
                     state['chunks_completed'] += 1
                     with ai.guard:
                         ai.store.save_state(state)
@@ -306,6 +309,7 @@ class PageVectors:
         except InterruptedError:
             state['state'] = 'cancelled'
         except Exception as ex:
+            traceback.print_exc(file=sys.stderr); sys.stderr.flush()
             state['state'] = 'failed'
             state['error'] = 'ページ索引を保存できませんでした（'+type(ex).__name__+'）。元ファイル・登録範囲を確認して再実行してください。'
         finally:
@@ -347,19 +351,21 @@ class PageVectors:
         ai = self.ai; item_id = state['item_id']; revision = state['source_revision']
         try:
             with ai.inference:
+                skipped_before = state.get('skipped', 0)
                 self._publish_range(pages, state, item_id, revision)
-                state['indexed'] = len(pages)
+                state['indexed'] = len(pages) - (state.get('skipped', 0) - skipped_before)
                 state['state'] = 'complete'
         except InterruptedError:
             state['state'] = 'cancelled'
         except Exception as ex:
+            traceback.print_exc(file=sys.stderr); sys.stderr.flush()
             state['state'] = 'failed'
             state['error'] = 'ページ索引を保存できませんでした（'+type(ex).__name__+'）。元ファイル・登録範囲を確認して再実行してください。'
         finally:
             ai._last_activity = time.monotonic()
             with ai.guard: ai.store.save_state(state)
 
-    def _publish_range(self, pages, state, item_id, revision, *, save_progress=True):
+    def _publish_range(self, pages, state, item_id, revision, *, save_progress=True, skip_unavailable=False):
         """Caller owns shared inference lock; publish one <=16-page range atomically."""
         ai = self.ai
         if ai.cancel.is_set(): raise InterruptedError()
@@ -375,8 +381,24 @@ class PageVectors:
             raw_bytes = cached.get(p['page_id'])
             did_infer = raw_bytes is None
             if did_infer:
-                payload = self.index.input(item_id, p['page_id'], revision)
-                vector = normalized(ai.encoder.encode('image', payload['data']), ai.profile.dimension)
+                try:
+                    payload = self.index.input(item_id, p['page_id'], revision)
+                except PreviewUnavailable as ex:
+                    if isinstance(ex, (ReaderChanged, PreviewBusyError)) or not skip_unavailable:
+                        raise
+                    state['skipped'] = state.get('skipped', 0) + 1
+                    state['processed'] += 1
+                    if save_progress:
+                        with ai.guard: ai.store.save_state(state)
+                    continue
+                encoded = ai.encoder.encode('image', payload['data'])
+                if encoded is None:
+                    state['skipped'] = state.get('skipped', 0) + 1
+                    state['processed'] += 1
+                    if save_progress:
+                        with ai.guard: ai.store.save_state(state)
+                    continue
+                vector = normalized(encoded, ai.profile.dimension)
                 raw_bytes = array('f', vector).tobytes()
             else:
                 state['reused'] += 1
@@ -397,7 +419,8 @@ class PageVectors:
             with ai.store.connect() as db:
                 db.execute('DELETE FROM ai_page_vectors WHERE item_id=? AND (source_revision<>? OR contract<>?)',
                            (item_id, revision, CONTRACT))
-                db.executemany('INSERT OR REPLACE INTO ai_page_vectors VALUES(?,?,?,?,?,?)', packed)
+                if packed:
+                    db.executemany('INSERT OR REPLACE INTO ai_page_vectors VALUES(?,?,?,?,?,?)', packed)
 
     def index_all_pages(self, item_id, scope):
         """Index any uncached internal pages of a book/archive in bounded batches."""
@@ -426,12 +449,12 @@ class PageVectors:
         missing = [p for p in entries if p['page_id'] not in ready]
         if not missing:
             return False
-        local_state = {'scope': scope, 'processed': 0, 'total': len(missing), 'reused': 0}
+        local_state = {'scope': scope, 'processed': 0, 'total': len(missing), 'reused': 0, 'skipped': 0}
         for offset in range(0, len(missing), MAX_PAGES):
             if ai.cancel.is_set():
                 raise InterruptedError()
             chunk = missing[offset:offset + MAX_PAGES]
-            self._publish_range(chunk, local_state, item_id, revision, save_progress=False)
+            self._publish_range(chunk, local_state, item_id, revision, save_progress=False, skip_unavailable=True)
         return True
 
     def rank(self, rows, query, *, check=None):

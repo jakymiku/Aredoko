@@ -556,5 +556,59 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         with self.assertRaises(ValueError):
             self.ai.similar(img_id, scope=all_scope, origin_ms=100)
 
+    def test_all_pages_skips_none_encoded_image_without_type_error(self):
+        all_scope = {'root_ids': [self.root], 'book_pages': 'all_pages'}
+        orig_encode = self.encoder.encode
+        def encode_skip_first_page(operation, value):
+            if operation == 'image' and value == self.first:
+                return None
+            return orig_encode(operation, value)
+        with patch.object(self.encoder, 'encode', side_effect=encode_skip_first_page):
+            self.ai.start(scope=all_scope)
+            self.ai.worker.join(10)
+        status = self.ai.status()
+        self.assertEqual(status['state'], 'complete', status)
+        recs = self.records()
+        self.assertEqual([r[3] for r in recs], [1])
+
+    def test_all_pages_skips_unavailable_page_during_library_build(self):
+        all_scope = {'root_ids': [self.root], 'book_pages': 'all_pages'}
+        orig_input = self.ai.pages.index.input
+        def input_fail_first_page(item_id, page_id, revision):
+            if item_id == self.item and page_id == self.page_ids[0]:
+                raise PreviewUnavailable('oversized test page')
+            return orig_input(item_id, page_id, revision)
+        with patch.object(self.ai.pages.index, 'input', side_effect=input_fail_first_page):
+            self.ai.start(scope=all_scope)
+            self.ai.worker.join(10)
+        status = self.ai.status()
+        self.assertEqual(status['state'], 'complete', status)
+        recs = self.records()
+        self.assertEqual([r[3] for r in recs], [1])
+
+    def test_explicit_page_start_skips_none_encoded_image(self):
+        orig_encode = self.encoder.encode
+        def encode_skip_first_page(operation, value):
+            if operation == 'image' and value == self.first:
+                return None
+            return orig_encode(operation, value)
+        with patch.object(self.encoder, 'encode', side_effect=encode_skip_first_page):
+            self.build()
+        status = self.ai.status()
+        self.assertEqual(status['skipped'], 1, status)
+        self.assertEqual(status['indexed'], 1, status)
+        self.assertEqual([r[3] for r in self.records()], [1])
+
+    def test_ai_build_exception_writes_traceback_to_stderr(self):
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf), \
+             patch.object(self.encoder, 'encode', side_effect=RuntimeError('boom')):
+            self.ai.start(scope=self.scope)
+            self.ai.worker.join(10)
+        status = self.ai.status()
+        self.assertEqual(status['state'], 'failed', status)
+        self.assertIn('RuntimeError: boom', buf.getvalue())
+
 
 if __name__=='__main__':unittest.main()
