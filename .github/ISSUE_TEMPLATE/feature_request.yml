@@ -1,0 +1,35 @@
+name: Feature Request / 機能要望・改善提案
+description: Suggest an improvement or new idea / 使いやすさの改善や新機能の提案
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share ideas that would make everyday searching, viewing, or organizing smoother! / 日常の検索・閲覧・整理がもっと便利になるアイデアをお聞かせください。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Background or Pain Point / 背景・困っていること
+      description: What situation felt inconvenient or what workflow would you like to improve? / どのような場面で不便を感じたか、どんな使い方をしたいかを教えてください。
+      placeholder: |
+        e.g. When browsing search results across multiple drives, I want to... / 例：複数のフォルダを横断検索しているときに…
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Idea / 期待する動作・改善案
+      description: How would you expect this feature or UI to work? / どのような動作やUIになると使いやすいか教えてください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Target Media or Screen (Optional) / 対象の媒体・画面（任意）
+      description: Relevant media types (images, books/CBZ, video, audio) or UI area. / 関係するファイル種別（画像・本/CBZ・動画・音声）や画面があれば記載してください。
+    validations:
+      required: false

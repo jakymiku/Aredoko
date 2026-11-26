@@ -1,0 +1,81 @@
+name: Bug Report / 不具合報告
+description: Report a bug, crash, or setup issue / 不具合・起動エラー・セットアップ問題の報告
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing Aredoko! / ご報告ありがとうございます。
+        - **Privacy / プライバシー保護**: You do **not** need to share personal files or private folder contents. Paths copied from **Settings → Diagnostics** (**設定 → 診断情報**) are automatically redacted. / 私物の元ファイルやフォルダ中身の共有は不要です。
+        - **Common checks / よくある確認事項**:
+          - Release binaries are unsigned; Windows **Smart App Control (On)** may block `Aredoko.exe`. / 未署名のため、スマート アプリ コントロールが「オン」の環境では起動がブロックされる場合があります。
+          - Optional AI search requires the [Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe). / AI検索を使う場合は Visual C++ 再頒布可能パッケージ (x64) が必要です。
+
+  - type: input
+    id: version
+    attributes:
+      label: Aredoko Version / バージョン
+      description: Release tag or build number / リリースタグまたはビルド番号
+      placeholder: v0.1.1-alpha (Build 60)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / 発生箇所
+      options:
+        - Launch & First-Run Setup / 起動・初回セットアップ
+        - Folder Registration & Scan / フォルダ登録・スキャン
+        - Filename & Tag Search / ファイル名・タグ検索
+        - AI Auto-Setup & AI Search / AIセットアップ・AI検索
+        - Viewer & Media Playback (Image / Book / Video / Audio) / ビューア・再生
+        - Tags, Shelves & Favorites / タグ・棚・お気に入り
+        - Backup & Restore / バックアップ・復元
+        - UI Layout & Language Switch / 画面表示・言語切替
+        - Other / その他
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened? / 起きた現象
+      description: Describe what went wrong and any message shown on screen. / どのような問題が起きたか、画面に表示された文言があれば記載してください。
+      placeholder: |
+        e.g. Scanning an entire drive stopped with ... / 例：Dドライブを登録して更新ボタンを押したところ…
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce / 再現手順
+      description: Minimal steps to trigger the issue. / 問題が起きるまでの操作手順を教えてください。
+      placeholder: |
+        1. Open Folder Management...
+        2. Click ...
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment & Diagnostics / 環境・診断情報
+      description: Paste output from "Settings → Diagnostics" ("設定 → 診断情報"), or list your Windows version, CPU/GPU, and AI mode (None / CPU / CUDA). / 「設定 → 診断情報」のコピー、または Windows の版・GPU・AI利用有無を記載してください。
+      placeholder: |
+        - OS: Windows 11 24H2 (x64)
+        - GPU: RTX 3060 / Radeon / Integrated
+        - AI Mode: Not used / Lightweight CPU / CUDA
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs-screenshots
+    attributes:
+      label: Error Messages or Screenshots (Optional) / エラー詳細・スクリーンショット（任意）
+      description: Attach screenshots or logs if helpful (please avoid including private filenames). / 差し支えない範囲でスクリーンショットやログがあれば添付してください（私物のファイル名が映らないようご注意ください）。
+    validations:
+      required: false
