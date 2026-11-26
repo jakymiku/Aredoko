@@ -4,11 +4,12 @@
 
 ## 現行HEAD・最新候補/予備
 - GitHub の `main` は Windows 製品版の現行ソース（旧開発ブランチ 7 本を削除し `main` のみに整理済み）。
-- 最新公開候補は **Build 62（`v0.1.2-alpha`）** `dist/portable-managed-20261127-62`（`source_revision: 3dcb27b88738425b3161a9dc5817c6db1daa2edb`、Windows x64 ZIP `199,649,268` bytes、SHA-256 `77d59cbdb4e7e6d80a278946840571af1475dce9b30967dbe3809bb3e540d711`）。`Aredoko.WinUI` Portable（`frontend-product62`）とバックエンド高速化一式を再梱包し、セルフテスト・`verify_release`・`preflight.json`・ZIP 照合（536 ファイル）に合格（状態 `staging-only`）。
-- GitHub Releases `v0.1.2-alpha` 添付用一式は `dist/github-release-build62` に配置（Build 62 ZIP、`validation-kit.zip`、FFmpeg ソース＋2分割済み BtbN 依存キャッシュ `.part001`/`.part002`、`SHA256SUMS.txt`）。
-- 直前予備は **Build 61（`v0.1.1-alpha`）**（`dist/portable-managed-20261126-61` / `dist/github-release-build61`）。Build 60 は旧予備。
+- 最新公開候補は **Build 63（`v0.1.2-alpha`）** `dist/portable-managed-20261127-63`（`source_revision: ad2bece7f530315cac33fa4036f935d870f355d9`、Windows x64 ZIP `217,047,087` bytes、SHA-256 `09126f97024150c4ae74be781c49e2af32858cf27a189761f180335c657ac497`）。`Aredoko.WinUI` Portable（`frontend-product63`）で初期起動タイムアウト修正とバックエンド高速化一式を再梱包し、セルフテスト・`verify_release`・`preflight.json`・ZIP 照合（536 ファイル）・分離 `--startup-check`（`ready_sent` 1.03s・終了コード 0）に合格（状態 `staging-only`）。
+- GitHub Releases `v0.1.2-alpha` 添付用一式は `dist/github-release-build63` に配置（Build 63 ZIP、`validation-kit.zip`、FFmpeg ソース＋2分割済み BtbN 依存キャッシュ `.part001`/`.part002`、`SHA256SUMS.txt`）。
+- 直前予備は **Build 62（旧 `v0.1.2-alpha`）**（`dist/portable-managed-20261127-62` / `dist/github-release-build62`）、**Build 61（`v0.1.1-alpha`）**（`dist/portable-managed-20261126-61` / `dist/github-release-build61`）。
 
 ## 最近確認した変更・利用者にできること
+- 大規模ライブラリ（約 9 万件）での起動時 `Initial screen timed out` を修正：`ConnectAsync()` でフォルダ読込直後に WinUI ウィンドウ表示＋`StartupReady` 完了を返してから初回全件読込（進捗バー表示・操作可能状態）を実行する構成へ変更し、一時スプール `FrozenResult` の `PRAGMA synchronous=OFF` ＋ `executemany` 化と `ProductionCatalog.sync_index()` の不要 `UPDATE` スキップを実装（関連単体 116 件、`Aredoko.Core.Tests`、2k 計測 `sync_index=0.0088s` / `materialize=0.519s` 合格）。
 - AI 索引作成の大幅高速化（テキスト/画像/表紙/動画代表フレームのバッチ推論、ワーカー内並列画像デコード、CBZ/フォルダ本のチャンク一括読み出しによる ZIP 再オープン削減、SQLite バッチコミット `put_many`、動画フレーム抽出時の重複 `ffprobe` 削減）。
 - 初回バッチ索引時の GPU 性能自動計測（`_auto_tune_batch`）によるバッチサイズ自動調整と、**設定 → メモリと負荷** の **索引作成の速度モード**（普段使い `normal` ／ ターボ `turbo`）および自動調整結果表示（`AIAutoTuneSummary`）を追加。RTX 4070 Ti（CUDA）実機生成素材ベンチマークで、テキスト推論 `22.93x`（`460.3/s`）・画像推論 `1.98x`（`17.8/s`、`tuned_image_batch=4`）、32 PNG＋2×32p CBZ（破損 1 ページ安全スキップ、計 63 ページ＋34 表紙/テキスト）の E2E 全工程をコールドロード込み `20.88s`（普段使い）／`19.25s`（ターボ）で完了。
 - CBZ・本の「内部のすべての画像を含む」AI 索引で 1,600 万画素超や破損ページ等がスキップ（`None`／利用不可）された際に `TypeError` で中断せず安全にスキップし、AI 構築失敗時のトレースバックを `backend-error.log`（`stderr`）へ記録するよう修正した（関連テスト追加・合格）。
@@ -25,4 +26,4 @@
 - 実 AI モデルでの CBZ 一括索引・動画場面類似・横断ランキング、物理マウス・日本語 IME・DPI・ハイコントラスト。P6-3 の `cp313-cu128` 供給元レビュー・immutable host・`TRUSTED_CATALOGS` 登録。専用 OCR は保留。
 
 ## 次の1件（P6 / UI）
-- **GitHub Releases `v0.1.1-alpha`（`dist/github-release-build60`）の実環境導入確認と、RTX 30 シリーズ実機等での CUDA 新規取得確認**。
+- **GitHub Releases `v0.1.2-alpha`（Build 63、`dist/github-release-build63`）の大規模ライブラリ（約 9 万件）での実機起動・高速 AI 索引確認**。
