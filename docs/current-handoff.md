@@ -4,11 +4,12 @@
 
 ## 現行HEAD・最新候補/予備
 - GitHub の `main` は Windows 製品版の現行ソース（旧開発ブランチ 7 本を削除し `main` のみに整理済み）。
-- 最新公開候補は **Build 60（`v0.1.1-alpha`）** `dist/portable-managed-20261125-60`（`source_revision: 2c0b7e814169c8d2091990911d01f0b3a9c078d0`、Windows x64 ZIP SHA-256 `eb4a86c632f433becd3ef4f7a39df499828c623df65b93f07ea737ee1c7a7618`）。`Aredoko.WinUI` Portable・`Bootstrap.cs`・`aredoko_native.dll` を再発行し、セルフテスト・`preflight.json`・ZIP・検証キット照合に合格（状態 `staging-only`）。
-- GitHub Releases `v0.1.1-alpha` 添付用一式は `dist/github-release-build60` に配置（Build 60 ZIP、`validation-kit.zip`、FFmpeg ソース＋2分割済み BtbN 依存キャッシュ `.part001`/`.part002`、`SHA256SUMS.txt`）。
-- 直前予備は **Build 59（`v0.1.0-alpha`）**（`dist/portable-managed-20261124-59` / `dist/github-release-build59`）。Build 58 は旧予備。
+- 最新公開候補は **Build 61（`v0.1.1-alpha`）** `dist/portable-managed-20261126-61`（`source_revision: fc87ecf444b52412acab77dc4003097117cf1aa5`、Windows x64 ZIP `199,640,725` bytes、SHA-256 `220b62bdd55310bc60c2200c5bde5af0ef0e5ff05b62143bd744833a501c4575`）。Build 60 の `Aredoko.WinUI` Portable・`Bootstrap.cs`・`aredoko_native.dll` を継承してバックエンド修正（CBZ 全ページ AI 索引のスキップ安全化・`backend-error.log` トレースバック出力）を再梱包し、セルフテスト・`verify_release`・`preflight.json`・ZIP 照合に合格（状態 `staging-only`）。
+- GitHub Releases `v0.1.1-alpha` 添付用一式は `dist/github-release-build61` に配置（Build 61 ZIP、`validation-kit.zip`、FFmpeg ソース＋2分割済み BtbN 依存キャッシュ `.part001`/`.part002`、`SHA256SUMS.txt`）。
+- 直前予備は **Build 60**（`dist/portable-managed-20261125-60` / `dist/github-release-build60`）。Build 59（`v0.1.0-alpha`）は旧予備。
 
 ## 最近確認した変更・利用者にできること
+- CBZ・本の「内部のすべての画像を含む」AI 索引で 1,600 万画素超や破損ページ等がスキップ（`None`／利用不可）された際に `TypeError` で中断せず安全にスキップし、AI 構築失敗時のトレースバックを `backend-error.log`（`stderr`）へ記録するよう修正した（関連テスト追加・合格）。
 - 日本語／英語 UI 対応（Windows の表示言語に自動追従、設定から再起動なしで切替可能、ランチャー `Aredoko.exe`・`README.md` / `README.ja.md` も対応）。
 - ドライブ丸ごと（例：`D:\`）スキャン時の長いパス対応（`\\?\`）・`$RECYCLE.BIN` 既定除外・配下のアクセス拒否スキップ＆既存レコード保持・「登録フォルダ」からのアクセス拒否ログ確認・コピー機能を追加。
 - CBZ 全ページ一括 AI 索引、動画の一時停止場面からの類似検索、画像・本・動画の横断類似、フローティング操作バー付きビューアを利用できる。
