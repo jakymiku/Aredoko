@@ -18,7 +18,17 @@ class SentenceTransformerAdapter:
         options={'prompt_name':name} if name else {'prompt':prefix}
         return self.model.encode(text,normalize_embeddings=True,**options)
 
+    def encode_texts(self,operation,texts,batch_size=32):
+        if not texts:return []
+        name=self.profile.query_prompt_name if operation=='query' else self.profile.document_prompt_name
+        prefix=self.profile.query_prefix if operation=='query' else self.profile.document_prefix
+        options={'prompt_name':name} if name else {'prompt':prefix}
+        return self.model.encode(list(texts),batch_size=batch_size,normalize_embeddings=True,show_progress_bar=False,**options)
+
     def encode_image(self,image):
+        raise ValueError('Unsupported image encoder')
+
+    def encode_images(self,images,batch_size=4):
         raise ValueError('Unsupported image encoder')
 
     def encode_audio(self,window):
@@ -38,6 +48,12 @@ class EmbeddingGemma2Adapter(SentenceTransformerAdapter):
         if 'cover' not in self.profile.modalities:
             raise ValueError('Unsupported image encoder')
         return self.model.encode({'image':image},normalize_embeddings=True)
+
+    def encode_images(self,images,batch_size=4):
+        if 'cover' not in self.profile.modalities:
+            raise ValueError('Unsupported image encoder')
+        if not images:return []
+        return self.model.encode([{'image':image} for image in images],batch_size=batch_size,normalize_embeddings=True,show_progress_bar=False)
 
     def encode_audio(self,window):
         if 'audio' not in self.profile.modalities:raise ValueError('Unsupported audio encoder')

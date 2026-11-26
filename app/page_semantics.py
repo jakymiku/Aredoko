@@ -376,38 +376,73 @@ class PageVectors:
                 [item_id, revision, CONTRACT, *[p['page_id'] for p in pages]])
                 if _is_valid_packed(data, ai.profile.dimension)}
         packed = []
+        to_infer = [p for p in pages if p['page_id'] not in cached]
+        use_batch = (bool(to_infer)
+                     and getattr(self.index.input, '__func__', None) is PageIndex.input
+                     and hasattr(ai.encoder, 'encode_batch')
+                     and not ai._index_pause_ms)
+        inferred_blobs = {}
+        skipped_ids = set()
+        if use_batch:
+            payloads = self.index.inputs(item_id, [p['page_id'] for p in to_infer], revision, skip_unavailable=skip_unavailable)
+            valid_pairs = []
+            for p in to_infer:
+                payload = payloads.get(p['page_id'])
+                if payload is None:
+                    skipped_ids.add(p['page_id'])
+                else:
+                    valid_pairs.append((p, payload['data']))
+            if valid_pairs:
+                if ai.cancel.is_set(): raise InterruptedError()
+                encoded_list = ai.encoder.encode_batch(
+                    'image', [d for _, d in valid_pairs], mode=getattr(ai, '_index_mode', 'normal'))
+                for (p, _), encoded in zip(valid_pairs, encoded_list):
+                    if encoded is None:
+                        skipped_ids.add(p['page_id'])
+                    else:
+                        vector = normalized(encoded, ai.profile.dimension)
+                        inferred_blobs[p['page_id']] = array('f', vector).tobytes()
         for p in pages:
             if ai.cancel.is_set(): raise InterruptedError()
             raw_bytes = cached.get(p['page_id'])
             did_infer = raw_bytes is None
             if did_infer:
-                try:
-                    payload = self.index.input(item_id, p['page_id'], revision)
-                except PreviewUnavailable as ex:
-                    if isinstance(ex, (ReaderChanged, PreviewBusyError)) or not skip_unavailable:
-                        raise
-                    state['skipped'] = state.get('skipped', 0) + 1
-                    state['processed'] += 1
-                    if save_progress:
-                        with ai.guard: ai.store.save_state(state)
-                    continue
-                encoded = ai.encoder.encode('image', payload['data'])
-                if encoded is None:
-                    state['skipped'] = state.get('skipped', 0) + 1
-                    state['processed'] += 1
-                    if save_progress:
-                        with ai.guard: ai.store.save_state(state)
-                    continue
-                vector = normalized(encoded, ai.profile.dimension)
-                raw_bytes = array('f', vector).tobytes()
+                if use_batch:
+                    if p['page_id'] in skipped_ids:
+                        state['skipped'] = state.get('skipped', 0) + 1
+                        state['processed'] += 1
+                        continue
+                    raw_bytes = inferred_blobs[p['page_id']]
+                else:
+                    try:
+                        payload = self.index.input(item_id, p['page_id'], revision)
+                    except PreviewUnavailable as ex:
+                        if isinstance(ex, (ReaderChanged, PreviewBusyError)) or not skip_unavailable:
+                            raise
+                        state['skipped'] = state.get('skipped', 0) + 1
+                        state['processed'] += 1
+                        if save_progress:
+                            with ai.guard: ai.store.save_state(state)
+                        continue
+                    encoded = ai.encoder.encode('image', payload['data'])
+                    if encoded is None:
+                        state['skipped'] = state.get('skipped', 0) + 1
+                        state['processed'] += 1
+                        if save_progress:
+                            with ai.guard: ai.store.save_state(state)
+                        continue
+                    vector = normalized(encoded, ai.profile.dimension)
+                    raw_bytes = array('f', vector).tobytes()
             else:
                 state['reused'] += 1
             packed.append((item_id, revision, p['page_id'], p['page'], raw_bytes, CONTRACT))
             state['processed'] += 1
-            if save_progress:
+            if save_progress and not use_batch:
                 with ai.guard: ai.store.save_state(state)
-            if did_infer and state['processed'] < state['total'] and ai._index_pause_ms:
+            if did_infer and not use_batch and state['processed'] < state['total'] and ai._index_pause_ms:
                 if ai.cancel.wait(ai._index_pause_ms/1000): raise InterruptedError()
+        if save_progress and use_batch:
+            with ai.guard: ai.store.save_state(state)
         # Never hold the catalog guard while running the model. Publish the
         # entire selected range only if the root/scope/page revision survived.
         with ai.catalog._guard:

@@ -610,5 +610,117 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         self.assertEqual(status['state'], 'failed', status)
         self.assertIn('RuntimeError: boom', buf.getvalue())
 
+    def test_bulk_page_inputs_opens_zip_once_and_supports_folder_and_skip(self):
+        import zipfile
+        big_cbz = self.loose / 'bulk_8.cbz'
+        with zipfile.ZipFile(big_cbz, 'w') as zf:
+            for idx in range(8):
+                zf.writestr(f'{idx:03d}.png', png(color=(90, 80, 70) if idx == 5 else (10 + idx, 20, 30)))
+        self.scan()
+        bulk_id = self.ids['bulk_8.cbz']
+        self.pages.refresh(bulk_id)
+        snap = self.pages.list(bulk_id)
+        bulk_rev = snap['source_revision']
+        bulk_pids = [p['page_id'] for p in snap['pages']]
+
+        real_zip = zipfile.ZipFile
+        open_count = 0
+        def counted_zip(*args, **kwargs):
+            nonlocal open_count
+            open_count += 1
+            return real_zip(*args, **kwargs)
+        with patch('previews.zipfile.ZipFile', side_effect=counted_zip):
+            got = self.pages.inputs(bulk_id, bulk_pids, bulk_rev)
+        self.assertEqual(open_count, 1)
+        self.assertEqual(len(got), 8)
+        self.assertEqual(got[bulk_pids[5]]['data'], png(color=(90, 80, 70)))
+
+        # Oversized page skipped when skip_unavailable=True
+        over_cbz = self.loose / 'mixed_over.cbz'
+        small_img = png(width=16, height=16, color=(10, 20, 30))
+        large_img = png(color=(90, 80, 70))
+        with zipfile.ZipFile(over_cbz, 'w') as zf:
+            zf.writestr('000.png', large_img)
+            zf.writestr('001.png', small_img)
+        self.scan()
+        over_id = self.ids['mixed_over.cbz']
+        self.pages.refresh(over_id)
+        osnap = self.pages.list(over_id)
+        opids = [p['page_id'] for p in osnap['pages']]
+        cutoff = (len(small_img) + len(large_img)) // 2
+        with patch('previews.MAX_IMAGE_BYTES', cutoff):
+            ogot = self.pages.inputs(over_id, opids, osnap['source_revision'], skip_unavailable=True)
+        self.assertIsNone(ogot[opids[0]])
+        self.assertEqual(ogot[opids[1]]['data'], small_img)
+
+        folder_id = self.ids['comic/']
+        self.pages.refresh(folder_id)
+        fsnap = self.pages.list(folder_id)
+        fpids = [p['page_id'] for p in fsnap['pages']]
+        fgot = self.pages.inputs(folder_id, fpids, fsnap['source_revision'])
+        self.assertEqual(set(fgot), set(fpids))
+        self.assertIsNotNone(fgot[fpids[1]])
+
+        # Mutate archive -> ReaderChanged
+        self.write_archive([('1.png', png(color=(1, 2, 3)))])
+        with self.assertRaises(ReaderChanged):
+            self.pages.inputs(self.item, self.page_ids, self.revision)
+
+    def test_batch_capable_encoder_indexes_normal_turbo_video_and_skips_none(self):
+        import zipfile
+        class BatchEncoder:
+            available = True
+            device = 'cuda-fake'
+            def __init__(self):
+                self.profile = replace(DEFAULT_PROFILE, dimension=8)
+                self.batch_calls = []
+                self.single_calls = []
+            def encode(self, operation, value):
+                self.single_calls.append(operation)
+                return [float(i == (1 if operation == 'query' else 0)) for i in range(self.profile.dimension)]
+            def encode_batch(self, operation, values, *, mode='normal'):
+                self.batch_calls.append((operation, len(values), mode))
+                out = []
+                for v in values:
+                    if operation == 'image' and v == self.skip_target:
+                        out.append(None)
+                    elif operation == 'image' and v == png(color=(90, 80, 70)):
+                        out.append([float(i == 1) for i in range(self.profile.dimension)])
+                    else:
+                        out.append([float(i == 0) for i in range(self.profile.dimension)])
+                return out
+            def close(self):
+                pass
+
+        enc = BatchEncoder()
+        enc.skip_target = self.first
+        ai = AISearch(self.catalog, enc)
+        self.addCleanup(ai.close)
+        ai.configure(index_mode='turbo')
+        self.assertEqual(ai.status()['index_mode'], 'turbo')
+
+        vid = self.loose / 'vid.mp4'
+        vid.write_bytes(b'ftypmp42' + b'\0' * 128)
+        extra_img = self.loose / 'hero.png'
+        extra_img.write_bytes(png(color=(90, 80, 70)))
+        self.scan()
+        vid_id = self.ids['vid.mp4']
+
+        fake_frames = [(0, self.second), (2500, png(color=(90, 80, 70)))]
+        all_scope = {'root_ids': [self.root], 'book_pages': 'all_pages'}
+        with patch.object(ai.previews, 'video_representative_frames', return_value=fake_frames):
+            ai.start(scope=all_scope)
+            ai.worker.join(10)
+        st = ai.status()
+        self.assertEqual(st['state'], 'complete', st)
+        self.assertTrue(any(op == 'document' and m == 'turbo' for op, _, m in enc.batch_calls))
+        self.assertTrue(any(op == 'image' and m == 'turbo' for op, _, m in enc.batch_calls))
+        # Page 0 of comic.cbz matched skip_target -> skipped; page 1 persisted; video persisted 2 frames
+        with ai.store.connect() as db:
+            cbz_pages = [r[0] for r in db.execute('SELECT page FROM ai_page_vectors WHERE item_id=? ORDER BY page', (self.item,))]
+            vframes = [r[0] for r in db.execute('SELECT at_ms FROM ai_video_frames WHERE item_id=? ORDER BY at_ms', (vid_id,))]
+        self.assertEqual(cbz_pages, [1])
+        self.assertEqual(vframes, [0, 2500])
+
 
 if __name__=='__main__':unittest.main()

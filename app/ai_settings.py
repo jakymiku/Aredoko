@@ -19,9 +19,10 @@ from model_locations import ModelTarget
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json\Z")
 MAX_FILES = 64
 RESOURCE_DEFAULT = {"idle_release_seconds": 0, "index_pause_ms": 0}
+RESOURCE_MODES = ("normal", "turbo")
 
 def validate_resource(value):
-    if not isinstance(value, dict) or set(value) != set(RESOURCE_DEFAULT):
+    if not isinstance(value, dict) or not set(RESOURCE_DEFAULT) <= set(value) or set(value) - (set(RESOURCE_DEFAULT) | {"index_mode"}):
         raise ValueError("Invalid AI resource settings")
     idle = value["idle_release_seconds"]
     pause = value["index_pause_ms"]
@@ -29,7 +30,13 @@ def validate_resource(value):
         raise ValueError("Idle seconds must be 0..3600")
     if type(pause) is not int or pause < 0 or pause > 2000:
         raise ValueError("Index pause must be 0..2000 ms")
-    return {"idle_release_seconds":idle,"index_pause_ms":pause}
+    result = {"idle_release_seconds":idle,"index_pause_ms":pause}
+    if "index_mode" in value:
+        mode = value["index_mode"]
+        if type(mode) is not str or mode not in RESOURCE_MODES:
+            raise ValueError("Index mode must be normal or turbo")
+        result["index_mode"] = mode
+    return result
 
 
 def default_settings_path(repo):

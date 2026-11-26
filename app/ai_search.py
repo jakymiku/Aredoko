@@ -136,30 +136,57 @@ class VectorStore:
         return self.fresh(row['id'],revision(row),source_contract(row,self.profile))
     def text(self,row):
         return self._vector(row,'text')
-    def put(self,item_id,rev,vectors,video_frames=None,*,source_contract=None):
-        # Validate every modality before replacing the previous revision atomically.
-        if not vectors or any(mode not in self.profile.modalities for mode in vectors):
-            raise ValueError('Unsupported vector modality')
-        if source_contract is not None and (source_contract not in (IMAGE_SOURCE_CONTRACT,VIDEO_SOURCE_CONTRACT) or 'cover' not in self.profile.modalities):
-            raise ValueError('Unsupported source preprocessing')
-        packed={mode:array('f',normalized(vec,self.dimension)).tobytes() for mode,vec in vectors.items()}
-        packed_frames=[]
-        if video_frames:
-            if 'cover' not in self.profile.modalities:
-                raise ValueError('Unsupported vector modality')
-            for at_ms,vec in video_frames:
-                if type(at_ms) is not int or not 0<=at_ms<=86_400_000:
-                    raise ValueError('Invalid video frame timestamp')
-                packed_frames.append((item_id,rev,at_ms,array('f',normalized(vec,self.dimension)).tobytes()))
+    def texts(self,rows):
+        if not rows:return {}
+        if len(rows)>ROW_BATCH_SIZE:raise ValueError('Text vector batch exceeds limit')
+        expected={row['id']:revision(row) for row in rows}
         with self.connect() as db:
-            db.execute('DELETE FROM ai_vectors WHERE item_id=?',(item_id,))
-            db.execute('DELETE FROM ai_video_frames WHERE item_id=?',(item_id,))
-            db.execute('DELETE FROM ai_source_contracts WHERE item_id=?',(item_id,))
-            db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',[(item_id,rev,mode,data) for mode,data in packed.items()])
-            if packed_frames:
-                db.executemany('INSERT INTO ai_video_frames VALUES(?,?,?,?)',packed_frames)
-            if source_contract is not None:
-                db.execute('INSERT INTO ai_source_contracts VALUES(?,?,?)',(item_id,rev,source_contract))
+            records=db.execute("SELECT item_id,revision,vector FROM ai_vectors WHERE modality='text' AND item_id IN ("+
+                ','.join('?' for _ in expected)+')',list(expected)).fetchall()
+        out={}
+        for item_id,rev,blob in records:
+            if expected.get(item_id)!=rev:continue
+            try:
+                vec=array('f');vec.frombytes(blob)
+                if len(vec)!=self.dimension or any(not math.isfinite(x) for x in vec) or abs(sum(x*x for x in vec)-1)>1e-4:continue
+                out[item_id]=normalized(vec,self.dimension)
+            except (ValueError,TypeError):continue
+        return out
+    def put(self,item_id,rev,vectors,video_frames=None,*,source_contract=None):
+        self.put_many([(item_id,rev,vectors,video_frames,source_contract)])
+    def put_many(self,records):
+        if not records:return
+        prepared=[]
+        for item_id,rev,vectors,video_frames,source_contract in records:
+            # Validate every modality before replacing any previous revision atomically.
+            if not vectors or any(mode not in self.profile.modalities for mode in vectors):
+                raise ValueError('Unsupported vector modality')
+            if source_contract is not None and (source_contract not in (IMAGE_SOURCE_CONTRACT,VIDEO_SOURCE_CONTRACT) or 'cover' not in self.profile.modalities):
+                raise ValueError('Unsupported source preprocessing')
+            packed={mode:array('f',normalized(vec,self.dimension)).tobytes() for mode,vec in vectors.items()}
+            packed_frames=[]
+            if video_frames:
+                if 'cover' not in self.profile.modalities:
+                    raise ValueError('Unsupported vector modality')
+                for at_ms,vec in video_frames:
+                    if type(at_ms) is not int or not 0<=at_ms<=86_400_000:
+                        raise ValueError('Invalid video frame timestamp')
+                    packed_frames.append((item_id,rev,at_ms,array('f',normalized(vec,self.dimension)).tobytes()))
+            prepared.append((item_id,rev,packed,packed_frames,source_contract))
+        ids=[entry[0] for entry in prepared]
+        marks=','.join('?' for _ in ids)
+        vector_rows=[(item_id,rev,mode,data) for item_id,rev,packed,_,_ in prepared for mode,data in packed.items()]
+        frame_rows=[row for _,_,_,frames,_ in prepared for row in frames]
+        contract_rows=[(item_id,rev,contract) for item_id,rev,_,_,contract in prepared if contract is not None]
+        with self.connect() as db:
+            db.execute('DELETE FROM ai_vectors WHERE item_id IN ('+marks+')',ids)
+            db.execute('DELETE FROM ai_video_frames WHERE item_id IN ('+marks+')',ids)
+            db.execute('DELETE FROM ai_source_contracts WHERE item_id IN ('+marks+')',ids)
+            db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',vector_rows)
+            if frame_rows:
+                db.executemany('INSERT INTO ai_video_frames VALUES(?,?,?,?)',frame_rows)
+            if contract_rows:
+                db.executemany('INSERT INTO ai_source_contracts VALUES(?,?,?)',contract_rows)
     def cover(self,row):
         """Current-profile, current-revision origin; never infer or read media."""
         return self._vector(row,'cover')
@@ -353,20 +380,27 @@ class AISearch:
         self._last_activity=time.monotonic()
         self._idle_seconds=0
         self._index_pause_ms=0
+        self._index_mode='normal'
+        self._index_mode_explicit=False
         self._idle_stop=threading.Event()
         self._idle_wake=threading.Event()
         self._idle_thread=None
 
-    def configure(self,idle_release_seconds=0,index_pause_ms=0):
+    def configure(self,idle_release_seconds=0,index_pause_ms=0,index_mode=None):
         """Runtime resource policy, independent of vector-space identity."""
         if type(idle_release_seconds) is not int or not 0<=idle_release_seconds<=3600:
             raise ValueError('Idle release must be 0..3600 seconds')
         if type(index_pause_ms) is not int or not 0<=index_pause_ms<=2000:
             raise ValueError('Index pause must be 0..2000 milliseconds')
+        if index_mode is not None and (type(index_mode) is not str or index_mode not in ('normal','turbo')):
+            raise ValueError('Index mode must be normal or turbo')
         with self.guard:
             if self._closed: raise AIUnavailable('AI is closing')
             self._idle_seconds=idle_release_seconds
             self._index_pause_ms=index_pause_ms
+            if index_mode is not None:
+                self._index_mode=index_mode
+                self._index_mode_explicit=True
             if idle_release_seconds and self._idle_thread is None:
                 self._idle_thread=threading.Thread(target=self._idle_loop,name='aredoko-ai-idle',daemon=True)
                 self._idle_thread.start()
@@ -374,7 +408,9 @@ class AISearch:
         return self.resource_policy()
 
     def resource_policy(self):
-        return {'idle_release_seconds':self._idle_seconds,'index_pause_ms':self._index_pause_ms}
+        policy={'idle_release_seconds':self._idle_seconds,'index_pause_ms':self._index_pause_ms}
+        if self._index_mode_explicit:policy['index_mode']=self._index_mode
+        return policy
 
     def _idle_loop(self):
         """Cancelable monotonic timer; release() shares the inference guard."""
@@ -556,6 +592,7 @@ class AISearch:
                 'status_code':status_code,
                 'resident':resident,'worker_state':'loaded' if resident else 'unloaded',
                 'device':getattr(self.encoder,'device','') if resident else '',
+                'index_mode':self._index_mode,
                 'limit':MAX_ITEMS,'model':self.profile.label,'model_id':self.profile.model_id,'profile':self.profile.key,
                 'modalities':list(self.profile.modalities),'dimension':self.profile.dimension,'ranking':self.ranking,
                 'telemetry':getattr(self.encoder,'telemetry',{}) if resident else {},
@@ -589,6 +626,154 @@ class AISearch:
                         with self.catalog._guard:self.continuation.check(state,batch)
                     rows=self._current_rows(batch,scope)
                     pending=self.pending_tags.snapshots(list(rows))
+                    if hasattr(self.encoder,'encode_batch') and not self._index_pause_ms:
+                        from concurrent.futures import ThreadPoolExecutor
+                        sub_offset=0
+                        while sub_offset<len(batch):
+                            if self.cancel.is_set():break
+                            mode=self._index_mode
+                            sub_step=32 if mode=='turbo' else 8
+                            sub_ids=batch[sub_offset:sub_offset+sub_step]
+                            sub_offset+=len(sub_ids)
+                            present_rows=[]
+                            for item_id in sub_ids:
+                                row=rows.get(item_id)
+                                if row is None:
+                                    state['skipped']+=1
+                                    state['processed']+=1
+                                else:
+                                    present_rows.append(row)
+                            if not present_rows:
+                                with self.guard:
+                                    self.store.save_state({**saved(),'state':'cancelling' if self.cancel.is_set() else 'running'})
+                                continue
+                            fresh_set=self.store.fresh_ids(present_rows)
+                            unfresh_rows=[r for r in present_rows if r['id'] not in fresh_set]
+                            committed_ids=set();stale_ids=set();contract_skipped_ids=set()
+                            if unfresh_rows:
+                                rev_by_id={r['id']:revision(r) for r in unfresh_rows}
+                                saved_texts=self.store.texts(unfresh_rows)
+                                need_text_rows=[r for r in unfresh_rows if r['id'] not in saved_texts]
+                                text_vecs=dict(saved_texts)
+                                if need_text_rows:
+                                    doc_inputs=[(r['title']+'\n'+r['relative_path']+'\n'+'、'.join(r['tags']))[:4096] for r in need_text_rows]
+                                    encoded_texts=self.encoder.encode_batch('document',doc_inputs,mode=mode)
+                                    for r,vec in zip(need_text_rows,encoded_texts):
+                                        text_vecs[r['id']]=vec
+                                if self.cancel.is_set():break
+                                cover_vecs={};video_frames_by_id={}
+                                if 'cover' in self.profile.modalities:
+                                    cover_rows=[r for r in unfresh_rows if r['kind'] in ('image','book','archive')]
+                                    def _read_cover(iid):
+                                        try:
+                                            src,_=self.previews.read_cover(iid) if hasattr(self.previews,'read_cover') else self.previews.read(iid)
+                                            return src
+                                        except PreviewBusyError:
+                                            time.sleep(0.01)
+                                            try:
+                                                src,_=self.previews.read_cover(iid) if hasattr(self.previews,'read_cover') else self.previews.read(iid)
+                                                return src
+                                            except (PreviewUnavailable,OSError):
+                                                return None
+                                        except (PreviewUnavailable,OSError):
+                                            return None
+                                    if cover_rows:
+                                        if mode=='turbo' and len(cover_rows)>1:
+                                            with ThreadPoolExecutor(max_workers=2) as cover_pool:
+                                                cover_bytes=list(cover_pool.map(_read_cover,[r['id'] for r in cover_rows]))
+                                        else:
+                                            cover_bytes=[_read_cover(r['id']) for r in cover_rows]
+                                        if self.cancel.is_set():break
+                                        valid_covers=[(r['id'],data) for r,data in zip(cover_rows,cover_bytes) if data is not None]
+                                        if valid_covers:
+                                            encoded_covers=self.encoder.encode_batch('image',[data for _,data in valid_covers],mode=mode)
+                                            for (cid,_),vec in zip(valid_covers,encoded_covers):
+                                                if vec is not None:
+                                                    cover_vecs[cid]=vec
+                                    video_rows=[r for r in unfresh_rows if r['kind']=='video']
+                                    if video_rows:
+                                        frame_requests=[]
+                                        for vr in video_rows:
+                                            if self.cancel.is_set():break
+                                            vid=vr['id']
+                                            try:
+                                                extracted=self.previews.video_representative_frames(vid) if hasattr(self.previews,'video_representative_frames') else [(0,self.previews.read(vid)[0])]
+                                                for at_ms,frame_png in extracted:
+                                                    frame_requests.append((vid,at_ms,frame_png))
+                                            except (PreviewUnavailable,OSError):
+                                                pass
+                                        if self.cancel.is_set():break
+                                        if frame_requests:
+                                            encoded_frames=self.encoder.encode_batch('image',[fp for _,_,fp in frame_requests],mode=mode)
+                                            if self.cancel.is_set():break
+                                            for (vid,at_ms,_),vec in zip(frame_requests,encoded_frames):
+                                                if vec is not None:
+                                                    video_frames_by_id.setdefault(vid,[]).append((at_ms,vec))
+                                            for vid,vlist in video_frames_by_id.items():
+                                                if vlist:cover_vecs[vid]=vlist[0][1]
+                                if self.cancel.is_set():break
+                                with self.catalog._guard if continuing else nullcontext():
+                                    if continuing:
+                                        if self.cancel.is_set():raise InterruptedError()
+                                        self.continuation.check(state,[r['id'] for r in unfresh_rows])
+                                    current_map=self._current_rows([r['id'] for r in unfresh_rows],scope)
+                                    to_commit=[]
+                                    for r in unfresh_rows:
+                                        iid=r['id'];rev=rev_by_id[iid]
+                                        current=current_map.get(iid)
+                                        if current is None or revision(current)!=rev:
+                                            stale_ids.add(iid)
+                                            continue
+                                        vectors={'text':text_vecs[iid]}
+                                        if iid in cover_vecs:vectors['cover']=cover_vecs[iid]
+                                        vframes=video_frames_by_id.get(iid)
+                                        expected=source_contract(r,self.profile)
+                                        visual_ready='cover' in vectors and (r['kind']!='video' or bool(vframes))
+                                        if expected is not None and not visual_ready and iid in saved_texts:
+                                            contract_skipped_ids.add(iid)
+                                            continue
+                                        to_commit.append((iid,rev,vectors,vframes,expected if visual_ready else None))
+                                        committed_ids.add(iid)
+                                    if to_commit:
+                                        self.store.put_many(to_commit)
+                            for r in present_rows:
+                                if self.cancel.is_set():break
+                                item_id=r['id']
+                                if item_id in stale_ids:
+                                    state['skipped']+=1
+                                    state['processed']+=1
+                                    continue
+                                did_infer=item_id in committed_ids
+                                indexed_before=state['indexed']
+                                if item_id in contract_skipped_ids:
+                                    state['skipped']+=1
+                                else:
+                                    state['indexed']+=1
+                                tag_ready,tag_inferred=self.pending_tags.build(r,pending.get(item_id),scope,self.cancel.is_set)
+                                did_infer=did_infer or tag_inferred
+                                if not tag_ready and state['indexed']>indexed_before:
+                                    state['indexed']-=1;state['skipped']+=1
+                                if (not self.cancel.is_set()
+                                        and scope and scope.get('book_pages')=='all_pages'
+                                        and 'cover' in self.profile.modalities and r['kind'] in ('book','archive')):
+                                    try:
+                                        if self.pages.index_all_pages(item_id,scope):
+                                            did_infer=True
+                                    except (PreviewUnavailable,ReaderChanged,PreviewBusyError,KeyError,OSError):
+                                        pass
+                                if continuing and not self.cancel.is_set():
+                                    with self.catalog._guard:
+                                        self.continuation.check(state,[item_id])
+                                        current=self._current_rows([item_id],scope).get(item_id)
+                                        snapshots=self.pending_tags.snapshots([item_id])
+                                        if state['indexed']>indexed_before:
+                                            if item_id not in self.continuation.ready([current],snapshots):
+                                                state['indexed']-=1;state['skipped']+=1
+                                            elif not did_infer:state['reused']+=1
+                                state['processed']+=1
+                            with self.guard:
+                                self.store.save_state({**saved(),'state':'cancelling' if self.cancel.is_set() else 'running'})
+                        continue
                     for item_id in batch:
                         if self.cancel.is_set():break
                         did_infer=False

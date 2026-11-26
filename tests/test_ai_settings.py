@@ -183,10 +183,15 @@ class AISettingsTests(unittest.TestCase):
                     {"idle_release_seconds":0,"index_pause_ms":2001},
                     {"idle_release_seconds":0,"index_pause_ms":False},
                     {"idle_release_seconds":0},
+                    {"idle_release_seconds":0,"index_pause_ms":0,"index_mode":"fast"},
+                    {"idle_release_seconds":0,"index_pause_ms":0,"index_mode":True},
                     {"idle_release_seconds":0,"index_pause_ms":0,"identity":"bad"}):
             with self.subTest(bad=bad),self.assertRaises(ValueError):
                 ctrl.set_resource(bad)
         self.assertFalse(self.settings.exists())
+        saved = ctrl.set_resource({"idle_release_seconds":60,"index_pause_ms":0,"index_mode":"turbo"})
+        self.assertEqual(saved,{"idle_release_seconds":60,"index_pause_ms":0,"index_mode":"turbo"})
+        self.assertEqual(self.controller().resource(),saved)
 
     def test_missing_corrupt_and_unsupported_settings_never_import_code(self):
         self.custom("broken.json", adapter="evil.module")

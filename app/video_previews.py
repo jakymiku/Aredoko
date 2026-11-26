@@ -197,16 +197,19 @@ class VideoThumbnailer:
         frames = []
         for at_ms in times:
             try:
-                png = self.read(source, revision, at_ms=at_ms if at_ms > 0 else None)
+                png = self._read_validated(source, revision, at_ms=at_ms if at_ms > 0 else None, probe_dimensions=False)
                 frames.append((at_ms, png))
             except VideoPreviewUnavailable:
                 if at_ms == 0:
                     raise
         if not frames:
-            frames.append((0, self.read(source, revision, at_ms=None)))
+            frames.append((0, self._read_validated(source, revision, at_ms=None, probe_dimensions=False)))
         return frames
 
     def read(self, source, revision, at_ms=None, edge=VIDEO_EDGE):
+        return self._read_validated(source, revision, at_ms=at_ms, edge=edge, probe_dimensions=True)
+
+    def _read_validated(self, source, revision, at_ms=None, edge=VIDEO_EDGE, *, probe_dimensions=True):
         if at_ms is not None and (type(at_ms) is not int or not 0 <= at_ms <= 86_400_000):
             raise ValueError('Invalid video frame time')
         if type(edge) is not int or not MIN_VIDEO_EDGE <= edge <= MAX_VIDEO_EDGE:
@@ -226,10 +229,11 @@ class VideoThumbnailer:
                   '-max_streams', '16', '-max_probe_packets', '512',
                   '-threads', '1', '-max_pixels', str(MAX_VIDEO_PIXELS)]
         input_url = 'fd:'
-        probe = _run([ffprobe, *common, '-select_streams', 'V:0',
-                      '-show_entries', 'stream=width,height', '-of', 'json',
-                      '-i', input_url], source, MAX_PROBE_BYTES, deadline)
-        _dimensions(probe)
+        if probe_dimensions:
+            probe = _run([ffprobe, *common, '-select_streams', 'V:0',
+                          '-show_entries', 'stream=width,height', '-of', 'json',
+                          '-i', input_url], source, MAX_PROBE_BYTES, deadline)
+            _dimensions(probe)
         vf = THUMBNAIL_FILTER if edge == VIDEO_EDGE else _thumbnail_filter(edge)
         png = _run([ffmpeg, '-nostdin', *common, *([] if at_ms is None else ['-ss', f'{at_ms / 1000:.3f}']), '-i', input_url,
                     '-map', '0:V:0', '-an', '-sn', '-dn', '-frames:v', '1',

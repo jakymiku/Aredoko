@@ -64,8 +64,8 @@ class EncoderProcess:
                 fault.set();return False
         try:
             while True:
-                line = process.stdout.readline(100_001)
-                if not line or len(line)>100_000:
+                line = process.stdout.readline(4 * 1024 * 1024 + 1)
+                if not line or len(line)>4 * 1024 * 1024:
                     deliver({'error':'Worker stopped'})
                     return
                 if not deliver(json.loads(line)):return
@@ -113,6 +113,13 @@ class EncoderProcess:
             # A failed startup must not leave a half-ready resident child/queue.
             self._stop()
             raise
+    def _update_telemetry(self, result):
+        merged = {k: v for k, v in self.telemetry.items() if k == 'auto_tune'}
+        for k in ('elapsed_ms', 'peak_memory_mib', 'auto_tune'):
+            if k in result:
+                merged[k] = result[k]
+        self.telemetry = merged
+
     def encode(self, operation, value):
         audio_message=None;audio_silent=False
         video_message=None
@@ -129,7 +136,7 @@ class EncoderProcess:
         with self.lock:
             if audio_silent:
                 if self._closed:raise AIUnavailable('AI worker is closed')
-                self.telemetry={};self.last_used=time.monotonic()
+                self._update_telemetry({});self.last_used=time.monotonic()
                 return None  # No fabricated content vector or model startup.
             self._start()
             request=video_message if video_message is not None else audio_message if audio_message is not None else {'operation':operation}
@@ -138,7 +145,7 @@ class EncoderProcess:
                 self.process.stdin.write(json.dumps(request,ensure_ascii=False)+'\n')
                 self.process.stdin.flush()
                 result=self._response()
-                self.telemetry={k:result[k] for k in ('elapsed_ms','peak_memory_mib') if k in result}
+                self._update_telemetry(result)
                 vector=result.get('vector')
                 if vector is not None:
                     try: vector=normalized(vector,self.profile.dimension)
@@ -149,6 +156,77 @@ class EncoderProcess:
                 return vector
             except (OSError,KeyError) as ex:
                 self._stop();raise AIUnavailable('AI worker disconnected') from ex
+            finally:
+                self.last_used = time.monotonic()
+
+    def encode_batch(self, operation, values, *, mode='normal'):
+        if operation not in ('document', 'image'):
+            raise ValueError('Batch encoding only supports document and image')
+        if mode not in ('normal', 'turbo'):
+            raise ValueError('Invalid batch mode')
+        if not values:
+            return []
+        values = list(values)
+        with self.lock:
+            self._start()
+            out = [None] * len(values)
+            try:
+                if operation == 'document':
+                    step = 64 if mode == 'turbo' else 16
+                    for offset in range(0, len(values), step):
+                        chunk = values[offset:offset + step]
+                        req = {'operation': 'document_batch', 'texts': chunk, 'mode': mode}
+                        self.process.stdin.write(json.dumps(req, ensure_ascii=False) + '\n')
+                        self.process.stdin.flush()
+                        result = self._response(timeout=300)
+                        self._update_telemetry(result)
+                        vectors = result.get('vectors')
+                        if type(vectors) is not list or len(vectors) != len(chunk):
+                            self._stop(); raise AIUnavailable('Invalid batch embedding from worker')
+                        for idx, vec in enumerate(vectors):
+                            try: out[offset + idx] = normalized(vec, self.profile.dimension)
+                            except (TypeError, ValueError) as ex:
+                                self._stop(); raise AIUnavailable('Invalid embedding from worker') from ex
+                else:
+                    # Skip >8 MiB locally, and keep each wire batch <=16 images and <=16 MiB raw bytes.
+                    max_raw = 16 * 1024 * 1024
+                    pos = 0
+                    while pos < len(values):
+                        chunk_indices = []
+                        chunk_b64 = []
+                        chunk_bytes = 0
+                        while pos < len(values) and len(chunk_indices) < 16:
+                            raw = values[pos]
+                            if not isinstance(raw, (bytes, bytearray, memoryview)) or len(raw) > 8 * 1024 * 1024:
+                                pos += 1
+                                continue
+                            raw_len = len(raw)
+                            if chunk_indices and chunk_bytes + raw_len > max_raw:
+                                break
+                            chunk_indices.append(pos)
+                            chunk_b64.append(base64.b64encode(raw).decode('ascii'))
+                            chunk_bytes += raw_len
+                            pos += 1
+                        if not chunk_indices:
+                            continue
+                        req = {'operation': 'image_batch', 'images': chunk_b64, 'mode': mode}
+                        self.process.stdin.write(json.dumps(req, ensure_ascii=False) + '\n')
+                        self.process.stdin.flush()
+                        result = self._response(timeout=300)
+                        self._update_telemetry(result)
+                        vectors = result.get('vectors')
+                        if type(vectors) is not list or len(vectors) != len(chunk_indices):
+                            self._stop(); raise AIUnavailable('Invalid batch embedding from worker')
+                        for slot_idx, vec in zip(chunk_indices, vectors):
+                            if vec is None:
+                                out[slot_idx] = None
+                            else:
+                                try: out[slot_idx] = normalized(vec, self.profile.dimension)
+                                except (TypeError, ValueError) as ex:
+                                    self._stop(); raise AIUnavailable('Invalid embedding from worker') from ex
+                return out
+            except (OSError, KeyError) as ex:
+                self._stop(); raise AIUnavailable('AI worker disconnected') from ex
             finally:
                 self.last_used = time.monotonic()
     def _stop(self):

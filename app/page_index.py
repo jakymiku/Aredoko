@@ -198,3 +198,36 @@ class PageIndex:
             if payload['source']['page_id'] != page_id:
                 raise ReaderChanged('Page identity changed; refresh evidence')
             return payload
+
+    def inputs(self, item_id, page_ids, revision, *, skip_unavailable=False):
+        identifier(item_id)
+        token(revision)
+        if (type(page_ids) is not list or not 1 <= len(page_ids) <= 16
+                or any(type(p) is not str for p in page_ids)
+                or len(set(page_ids)) != len(page_ids)):
+            raise ValueError('Invalid page selection')
+        for pid in page_ids:
+            token(pid)
+        with self.catalog._guard:
+            with self.catalog.connect() as db:
+                self._allowed(db, item_id)
+                head = self._head(db, item_id)
+                if head is None:
+                    raise KeyError('Page index unavailable')
+                if head['source_revision'] != revision:
+                    raise ReaderChanged('Page index changed; refresh evidence')
+                marks = ','.join('?' for _ in page_ids)
+                rows = db.execute(
+                    'SELECT page_id, page FROM page_entries WHERE snapshot_id=? AND page_id IN (' + marks + ')',
+                    [head['id'], *page_ids]).fetchall()
+                num_by_id = {r['page_id']: r['page'] for r in rows}
+            if len(num_by_id) != len(page_ids):
+                raise KeyError('Page unavailable')
+            raw = self.previews.page_inputs(item_id, [num_by_id[pid] for pid in page_ids], revision, skip_unavailable=skip_unavailable)
+            result = {}
+            for pid in page_ids:
+                payload = raw.get(num_by_id[pid])
+                if payload is not None and payload['source']['page_id'] != pid:
+                    raise ReaderChanged('Page identity changed; refresh evidence')
+                result[pid] = payload
+            return result

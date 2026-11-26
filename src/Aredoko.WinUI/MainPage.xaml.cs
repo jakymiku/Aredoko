@@ -4134,6 +4134,11 @@ public sealed partial class MainPage : Page
             AutomationProperties.SetAutomationId(release,"AIRelease");
             var releaseResult=new TextBlock {TextWrapping=TextWrapping.Wrap};
             AutomationProperties.SetAutomationId(releaseResult,"AIReleaseResult");
+            var modeChoice=new ComboBox {Header=AppText.L("索引作成の速度モード","Indexing speed mode"),HorizontalAlignment=HorizontalAlignment.Stretch};
+            AutomationProperties.SetAutomationId(modeChoice,"AIIndexMode");
+            AutomationProperties.SetName(modeChoice,AppText.L("AI索引作成時の速度とPC負荷のバランス","Balance between indexing speed and PC load"));
+            var autoTuneSummary=new TextBlock {Text=AppText.L("初回索引時にGPU性能を自動計測し、最適なバッチサイズに調整します。","Automatically benchmarks your GPU on first batch indexing to tune batch size."),TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
+            AutomationProperties.SetAutomationId(autoTuneSummary,"AIAutoTuneSummary");
             var idleChoice=new ComboBox {Header=AppText.L("未使用時の自動解放","Auto-unload when idle"),HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(idleChoice,"AIIdleRelease");
             AutomationProperties.SetName(idleChoice,AppText.L("使っていないモデルをメモリから外すまでの時間","Delay before unloading unused models from memory"));
@@ -4150,6 +4155,13 @@ public sealed partial class MainPage : Page
                 AutomationProperties.SetAutomationId(option,$"{AutomationProperties.GetAutomationId(control)}_{value}");
                 control.Items.Add(option);
             }
+            void AddStringOption(ComboBox control,string value,string label) {
+                var option=new ComboBoxItem {Content=label,Tag=value};
+                AutomationProperties.SetAutomationId(option,$"{AutomationProperties.GetAutomationId(control)}_{value}");
+                control.Items.Add(option);
+            }
+            AddStringOption(modeChoice,"normal",AppText.L("普段使い（省負荷・バランス）","Everyday (balanced, lower load)"));
+            AddStringOption(modeChoice,"turbo",AppText.L("ターボ（一括作成向け・最大速度）","Turbo (max throughput for bulk indexing)"));
             foreach(var seconds in new[]{0,60,300,900})
                 AddOption(idleChoice,seconds,seconds==0?AppText.L("使わない","Off"):seconds<60?AppText.L($"{seconds}秒",$"{seconds}s"):AppText.L($"{seconds/60}分",$"{seconds/60}m"));
             foreach(var ms in new[]{0,50,200,500,1000})
@@ -4159,10 +4171,15 @@ public sealed partial class MainPage : Page
                 if(match is null) {match=new ComboBoxItem {Content=AppText.L($"{amount}{suffix}（保存済み）",$"{amount}{suffix} (saved)"),Tag=amount};box.Items.Add(match);}
                 box.SelectedItem=match;
             }
+            void SelectStringOption(ComboBox box,string value) {
+                var match=box.Items.OfType<ComboBoxItem>().FirstOrDefault(x=>x.Tag is string s && s==value);
+                box.SelectedItem=match ?? box.Items.OfType<ComboBoxItem>().FirstOrDefault();
+            }
             async Task RefreshResource()
             {
                 try {
                     var policy=await api.GetAsync("api/library/ai/resource");
+                    SelectStringOption(modeChoice,policy["policy"]?["index_mode"]?.GetValue<string>() ?? "normal");
                     SelectOption(idleChoice,policy["policy"]?["idle_release_seconds"]?.GetValue<int>() ?? 0,AppText.L("秒","s"));
                     SelectOption(pauseChoice,policy["policy"]?["index_pause_ms"]?.GetValue<int>() ?? 0,"ms");
                     resourceResult.Text=AppText.L("保存後すぐ適用されます","Applies right away after saving");
@@ -4171,12 +4188,13 @@ public sealed partial class MainPage : Page
             saveResource.Click+=async (_,_)=>{
                 if(idleChoice.SelectedItem is not ComboBoxItem idle || idle.Tag is not int idleValue ||
                    pauseChoice.SelectedItem is not ComboBoxItem pause || pause.Tag is not int pauseValue)return;
-                saveResource.IsEnabled=false;idleChoice.IsEnabled=false;pauseChoice.IsEnabled=false;
+                var modeValue=(modeChoice.SelectedItem as ComboBoxItem)?.Tag as string ?? "normal";
+                saveResource.IsEnabled=false;modeChoice.IsEnabled=false;idleChoice.IsEnabled=false;pauseChoice.IsEnabled=false;
                 try {
-                    await api.PostAsync("api/library/ai/resource",new JsonObject{{"idle_release_seconds",idleValue},{"index_pause_ms",pauseValue}});
-                    resourceResult.Text=AppText.L("✓ 保存しました（次の待機時間から有効）","✓ Saved (takes effect on next idle/step)");
+                    await api.PostAsync("api/library/ai/resource",new JsonObject{{"idle_release_seconds",idleValue},{"index_pause_ms",pauseValue},{"index_mode",modeValue}});
+                    resourceResult.Text=AppText.L("✓ 保存しました（次のバッチ／待機時間から有効）","✓ Saved (takes effect on next batch/idle step)");
                 }catch(Exception ex){resourceResult.Text=AppText.L("保存できません: ","Could not save: ")+AppText.TranslateBackend(ex.Message);}
-                finally{saveResource.IsEnabled=true;idleChoice.IsEnabled=true;pauseChoice.IsEnabled=true;}
+                finally{saveResource.IsEnabled=true;modeChoice.IsEnabled=true;idleChoice.IsEnabled=true;pauseChoice.IsEnabled=true;}
             };
             var scopePagesSummary=new TextBlock {TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             AutomationProperties.SetAutomationId(scopePagesSummary,"AIScopePagesSummary");
@@ -4287,6 +4305,19 @@ public sealed partial class MainPage : Page
                     var resident=data["resident"]?.GetValue<bool>()==true;
                     release.IsEnabled=available&&!running&&resident&&!releasing;
                     if(available)status.Text+=(resident?AppText.L("\nAIはメモリ内で待機中。","\nAI is loaded and ready in memory."):AppText.L("\nAIは待機中・次の検索でモデルを準備します。","\nAI is idle; model loads on next search."));
+                    if(data["telemetry"]?["auto_tune"] is JsonObject tuned)
+                    {
+                        var imgBs=tuned["tuned_image_batch"]?.GetValue<int>() ?? 0;
+                        var txtBs=tuned["tuned_text_batch"]?.GetValue<int>() ?? 0;
+                        var ips=tuned["tuned_images_per_sec"]?.GetValue<double>() ?? 0.0;
+                        var tunedDev=(tuned["device"]?.GetValue<string>() ?? "cpu").ToUpperInvariant();
+                        if(imgBs>0)
+                        {
+                            autoTuneSummary.Text=AppText.L(
+                                $"自動調整済み: 画像バッチ {imgBs}・テキスト {txtBs}"+(ips>0?$"（約 {ips:F1} 枚/秒・{tunedDev}）":$"（{tunedDev}）"),
+                                $"Auto-tuned: image batch {imgBs}, text {txtBs}"+(ips>0?$" (~{ips:F1} img/s · {tunedDev})":$" ({tunedDev})"));
+                        }
+                    }
                     ApplyRuntimeVerificationSnapshot(data);
                 }
                 catch(Exception ex){availableForIndex=false;resumableChunks=null;resumableContinuation=null;ownedPageJob=null;ownedContinuationJob=null;status.Text=AppText.TranslateBackend(ex.Message);start.IsEnabled=resumeChunks.IsEnabled=resumeContinuation.IsEnabled=planContinuation.IsEnabled=startContinuation.IsEnabled=cancel.IsEnabled=false;}
@@ -4391,7 +4422,7 @@ public sealed partial class MainPage : Page
             var modelCard=MakeCard(AppText.L("モデルとセットアップ","Models & Setup"),setupActions,explanation,modelChoice,modelCaps,modelWarning,modelApply,modelFeedback);
             var scopeCard=MakeCard(AppText.L("AI検索の対象範囲","AI Search Scope"),scopeEditor.Content);
             var mediaCard=MakeCard(AppText.L("動画・音声の個別データ作成","Video & Audio Indexing"),audioPreparation.Content,videoPreparation.Content,videoAudioPreparation.Content);
-            var resourceCard=MakeCard(AppText.L("メモリと負荷","Memory & Resource Limits"),release,releaseResult,idleChoice,pauseChoice,saveResource,resourceResult);
+            var resourceCard=MakeCard(AppText.L("メモリと負荷","Memory & Resource Limits"),release,releaseResult,modeChoice,autoTuneSummary,idleChoice,pauseChoice,saveResource,resourceResult);
             panel.Children.Add(modelCard);
             panel.Children.Add(scopeCard);
             panel.Children.Add(mediaCard);

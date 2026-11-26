@@ -376,4 +376,45 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaises(AIUnavailable):proc.encode("query","no")
             self.assertEqual(len(workers),2)
 
+    def test_encoderprocess_encode_batch_preserves_none_slots_and_auto_tune_telemetry(self):
+        from ai_profiles import DEFAULT_PROFILE
+        proc=EncoderProcess("fake-python","fake-model",DEFAULT_PROFILE)
+        tuned={"tuned_image_batch":4,"tuned_text_batch":32,"tuned_images_per_sec":18.0,"vram_free_mib":9000,"device":"cuda","source":"gpu-benchmark"}
+        def spawn(*args,**kw):
+            return FakeProcess()
+        responses=iter([
+            {"profile":DEFAULT_PROFILE.key,"dimension":768,"device":"cuda"},
+            {"vectors":[[1.0]+[0.0]*767,[0.0,1.0]+[0.0]*766],"elapsed_ms":12,"peak_memory_mib":1200,"auto_tune":tuned},
+            {"vectors":[[1.0]+[0.0]*767,None],"elapsed_ms":20,"peak_memory_mib":1300,"auto_tune":tuned},
+            {"vector":[1.0]+[0.0]*767,"elapsed_ms":4,"peak_memory_mib":1300},
+        ])
+        with patch.object(EncoderProcess,"available",property(lambda self:True)), \
+             patch("ai_process.subprocess.Popen",side_effect=spawn), \
+             patch("ai_process.threading.Thread"), \
+             patch.object(proc,"_response",side_effect=lambda *a,**kw:next(responses)):
+            docs=proc.encode_batch("document",["doc a","doc b"],mode="turbo")
+            self.assertEqual(len(docs),2)
+            self.assertEqual(proc.telemetry.get("auto_tune"),tuned)
+            imgs=proc.encode_batch("image",[b"a",b"b",b"x"*(8*1024*1024+1)],mode="normal")
+            self.assertEqual(len(imgs),3)
+            self.assertIsNotNone(imgs[0])
+            self.assertIsNone(imgs[1])
+            self.assertIsNone(imgs[2])
+            proc.encode("query","hello")
+            self.assertEqual(proc.telemetry.get("auto_tune"),tuned)
+            proc.close()
+
+    def test_resource_api_accepts_index_mode_and_updates_status(self):
+        from ai_settings import AIProfileSettings
+        folder=Path(self.catalog.path).parent
+        profiles=AIProfileSettings(folder,folder/"mode-settings.json")
+        server=ThreadingHTTPServer(("127.0.0.1",0),production_handler(self.catalog,"token",self.ai,profiles=profiles))
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        root=f"http://127.0.0.1:{server.server_port}"
+        req=urllib.request.Request(root+"/api/library/ai/resource",json.dumps({"idle_release_seconds":0,"index_pause_ms":0,"index_mode":"turbo"}).encode(),{"X-Aredoko-Token":"token","Origin":root,"Content-Type":"application/json"})
+        with urllib.request.urlopen(req) as resp:
+            self.assertEqual(json.load(resp)["policy"]["index_mode"],"turbo")
+        self.assertEqual(self.ai.status()["index_mode"],"turbo")
+
 if __name__=="__main__":unittest.main()
