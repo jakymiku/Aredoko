@@ -4,11 +4,13 @@
 
 ## 現行HEAD・最新候補/予備
 - GitHub の `main` は Windows 製品版の現行ソース（旧開発ブランチ 7 本を削除し `main` のみに整理済み）。
-- 最新公開候補は **Build 61（`v0.1.1-alpha`）** `dist/portable-managed-20261126-61`（`source_revision: fc87ecf444b52412acab77dc4003097117cf1aa5`、Windows x64 ZIP `199,640,725` bytes、SHA-256 `220b62bdd55310bc60c2200c5bde5af0ef0e5ff05b62143bd744833a501c4575`）。Build 60 の `Aredoko.WinUI` Portable・`Bootstrap.cs`・`aredoko_native.dll` を継承してバックエンド修正（CBZ 全ページ AI 索引のスキップ安全化・`backend-error.log` トレースバック出力）を再梱包し、セルフテスト・`verify_release`・`preflight.json`・ZIP 照合に合格（状態 `staging-only`）。
-- GitHub Releases `v0.1.1-alpha` 添付用一式は `dist/github-release-build61` に配置（Build 61 ZIP、`validation-kit.zip`、FFmpeg ソース＋2分割済み BtbN 依存キャッシュ `.part001`/`.part002`、`SHA256SUMS.txt`）。
-- 直前予備は **Build 60**（`dist/portable-managed-20261125-60` / `dist/github-release-build60`）。Build 59（`v0.1.0-alpha`）は旧予備。
+- 最新公開候補は **Build 62（`v0.1.2-alpha`）** `dist/portable-managed-20261127-62`（`source_revision: 3dcb27b88738425b3161a9dc5817c6db1daa2edb`、Windows x64 ZIP `199,649,268` bytes、SHA-256 `77d59cbdb4e7e6d80a278946840571af1475dce9b30967dbe3809bb3e540d711`）。`Aredoko.WinUI` Portable（`frontend-product62`）とバックエンド高速化一式を再梱包し、セルフテスト・`verify_release`・`preflight.json`・ZIP 照合（536 ファイル）に合格（状態 `staging-only`）。
+- GitHub Releases `v0.1.2-alpha` 添付用一式は `dist/github-release-build62` に配置（Build 62 ZIP、`validation-kit.zip`、FFmpeg ソース＋2分割済み BtbN 依存キャッシュ `.part001`/`.part002`、`SHA256SUMS.txt`）。
+- 直前予備は **Build 61（`v0.1.1-alpha`）**（`dist/portable-managed-20261126-61` / `dist/github-release-build61`）。Build 60 は旧予備。
 
 ## 最近確認した変更・利用者にできること
+- AI 索引作成の大幅高速化（テキスト/画像/表紙/動画代表フレームのバッチ推論、ワーカー内並列画像デコード、CBZ/フォルダ本のチャンク一括読み出しによる ZIP 再オープン削減、SQLite バッチコミット `put_many`、動画フレーム抽出時の重複 `ffprobe` 削減）。
+- 初回バッチ索引時の GPU 性能自動計測（`_auto_tune_batch`）によるバッチサイズ自動調整と、**設定 → メモリと負荷** の **索引作成の速度モード**（普段使い `normal` ／ ターボ `turbo`）および自動調整結果表示（`AIAutoTuneSummary`）を追加。RTX 4070 Ti（CUDA）実機生成素材ベンチマークで、テキスト推論 `22.93x`（`460.3/s`）・画像推論 `1.98x`（`17.8/s`、`tuned_image_batch=4`）、32 PNG＋2×32p CBZ（破損 1 ページ安全スキップ、計 63 ページ＋34 表紙/テキスト）の E2E 全工程をコールドロード込み `20.88s`（普段使い）／`19.25s`（ターボ）で完了。
 - CBZ・本の「内部のすべての画像を含む」AI 索引で 1,600 万画素超や破損ページ等がスキップ（`None`／利用不可）された際に `TypeError` で中断せず安全にスキップし、AI 構築失敗時のトレースバックを `backend-error.log`（`stderr`）へ記録するよう修正した（関連テスト追加・合格）。
 - 日本語／英語 UI 対応（Windows の表示言語に自動追従、設定から再起動なしで切替可能、ランチャー `Aredoko.exe`・`README.md` / `README.ja.md` も対応）。
 - ドライブ丸ごと（例：`D:\`）スキャン時の長いパス対応（`\\?\`）・`$RECYCLE.BIN` 既定除外・配下のアクセス拒否スキップ＆既存レコード保持・「登録フォルダ」からのアクセス拒否ログ確認・コピー機能を追加。
