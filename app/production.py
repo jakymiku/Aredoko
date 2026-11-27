@@ -1,9 +1,11 @@
 """Production catalog: read-only locations + separately editable metadata."""
+import fnmatch
 import json
+import re
 import sqlite3
 import threading
 from contextlib import closing, contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from catalog import Catalog
 from shelves import ShelfStore, shelf_clause
 from root_preferences import RootPreferences
@@ -12,6 +14,35 @@ from writer_fence import WriterFence,ConnectionWriteFence
 from library_index import LibraryIndex, TYPES, is_folder_book, folder_title
 from search_terms import register as register_search_terms, split_terms, explain_matches
 from term_relations import TermRelations
+
+
+def _exclude_matcher(patterns):
+    """Compile exclude patterns once per root; returns None when empty."""
+    if not patterns:
+        return None
+    exact = frozenset(p.casefold() for p in patterns if '/' not in p and not any(c in p for c in '*?['))
+    globs = tuple(re.compile(fnmatch.translate(p.casefold())).match for p in patterns if '/' in p or any(c in p for c in '*?['))
+    if not globs:
+        def match(rel_path):
+            if '/' not in rel_path and rel_path not in ('.', '..'):
+                return rel_path.casefold() in exact
+            return any(part.casefold() in exact for part in PurePosixPath(rel_path).parts)
+        return match
+    def match(rel_path):
+        parts = PurePosixPath(rel_path).parts
+        if not parts:
+            return False
+        if len(parts) == 1:
+            part = parts[0].casefold()
+            return part in exact or any(g(part) is not None for g in globs)
+        partial = ''
+        for i, raw in enumerate(parts):
+            comp = raw.casefold()
+            partial = comp if i == 0 else f'{partial}/{comp}'
+            if comp in exact or any(g(comp) is not None or g(partial) is not None for g in globs):
+                return True
+        return False
+    return match
 
 
 class HistoryChanged(ValueError):
@@ -156,9 +187,15 @@ class ProductionCatalog(Catalog):
 
     @staticmethod
     def item(row):
-        result = Catalog.item(row)
+        result = dict(row)
+        raw_tags = result['tags']
+        result['tags'] = [] if raw_tags == '[]' else json.loads(raw_tags)
+        result['favorite'] = bool(result['favorite'])
+        result['reviewed'] = bool(result['reviewed'])
         result['synthetic'] = False
-        if isinstance(result.get('shelf_ids'),str):result['shelf_ids']=json.loads(result['shelf_ids'])
+        raw_shelves = result.get('shelf_ids')
+        if isinstance(raw_shelves, str):
+            result['shelf_ids'] = [] if raw_shelves == '[]' else json.loads(raw_shelves)
         return result
 
     JOIN = (' FROM items i JOIN item_locations m ON m.item_id=i.id '
@@ -205,10 +242,18 @@ class ProductionCatalog(Catalog):
             alternatives,expansions=self.terms.expand(terms,db)
             where, values = ["l.status='present'",'l.root_id IN (SELECT id FROM library_roots WHERE enabled=1)'], []
             # Exclusions apply immediately, including before the next scan.
-            from library_index import _excluded
             rules={r['id']:tuple(json.loads(r['excludes_json'])) for r in db.execute('SELECT id,excludes_json FROM library_roots WHERE enabled=1')}
-            db.create_function('aredoko_location_visible',2,lambda root,path:int(root in rules and not _excluded(path,rules[root])),deterministic=True)
-            where.append('aredoko_location_visible(l.root_id,l.relative_path)=1')
+            relevant_ids=rules.keys() if selected_roots is None else selected_roots
+            matchers={rid:_exclude_matcher(rules[rid]) for rid in relevant_ids}
+            excluded_roots=[rid for rid,matcher in matchers.items() if matcher is not None]
+            if excluded_roots:
+                db.create_function('aredoko_location_visible',2,lambda root,path:int(root in rules and (matchers.get(root) is None or not matchers[root](path))),deterministic=True)
+                if len(excluded_roots)==len(relevant_ids):
+                    where.append('aredoko_location_visible(l.root_id,l.relative_path)=1')
+                else:
+                    marks=','.join('?' for _ in excluded_roots)
+                    where.append(f'(l.root_id NOT IN ({marks}) OR aredoko_location_visible(l.root_id,l.relative_path)=1)')
+                    values.extend(excluded_roots)
             if terms:
                 register_search_terms(db,alternatives)
                 where.append('aredoko_match(i.title,i.tags)>=0')
@@ -565,11 +610,15 @@ class ProductionCatalog(Catalog):
 
     def shelf_descriptors(self):
         # Same registered-root/exclusion visibility as library search; no source I/O.
-        from library_index import _excluded
         with self._guard, self.connect() as db:
             rules={r['id']:tuple(json.loads(r['excludes_json'])) for r in db.execute('SELECT id,excludes_json FROM library_roots WHERE enabled=1')}
-            db.create_function('aredoko_shelf_visible',2,lambda root,path:int(root in rules and not _excluded(path,rules[root])),deterministic=True)
-            rows=db.execute("WITH visible AS (SELECT sm.shelf_id,i.id,i.kind,l.status FROM item_shelves sm JOIN items i ON i.id=sm.item_id JOIN item_locations m ON m.item_id=i.id JOIN library_locations l ON l.id=m.location_id WHERE l.status='present' AND aredoko_shelf_visible(l.root_id,l.relative_path)=1) SELECT s.id,s.name,count(v.id) item_count,min(CASE WHEN v.status='present' AND v.kind IN ('image','book','archive','video') THEN v.id END) representative_id FROM shelves s LEFT JOIN visible v ON v.shelf_id=s.id GROUP BY s.id ORDER BY s.name,s.id").fetchall()
+            matchers={rid:_exclude_matcher(pats) for rid,pats in rules.items()}
+            if any(matchers.values()):
+                db.create_function('aredoko_shelf_visible',2,lambda root,path:int(root in rules and (matchers.get(root) is None or not matchers[root](path))),deterministic=True)
+                visible_filter='aredoko_shelf_visible(l.root_id,l.relative_path)=1'
+            else:
+                visible_filter='l.root_id IN (SELECT id FROM library_roots WHERE enabled=1)'
+            rows=db.execute(f"WITH visible AS (SELECT sm.shelf_id,i.id,i.kind,l.status FROM item_shelves sm JOIN items i ON i.id=sm.item_id JOIN item_locations m ON m.item_id=i.id JOIN library_locations l ON l.id=m.location_id WHERE l.status='present' AND {visible_filter}) SELECT s.id,s.name,count(v.id) item_count,min(CASE WHEN v.status='present' AND v.kind IN ('image','book','archive','video') THEN v.id END) representative_id FROM shelves s LEFT JOIN visible v ON v.shelf_id=s.id GROUP BY s.id ORDER BY s.name,s.id").fetchall()
             result=[]
             for row in rows:
                 entry=dict(row);representative=entry.pop('representative_id')

@@ -16,13 +16,15 @@ import tempfile
 import threading
 import time
 
-from library_index import _excluded, is_folder_book
+from library_index import is_folder_book
 from previews import _safe_path, IMAGE_MIME, PreviewReader, PreviewUnavailable, ReaderChanged
+from production import _exclude_matcher
 
 MAX_SESSIONS = 3
 MAX_BYTES = 512 * 1024 * 1024
 IDLE_SECONDS = 15 * 60
 _MISSING = object()
+_CURRENT_FIELDS = 'i.id,i.title,i.kind,i.tags,i.shelf,i.favorite,i.reviewed,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns,r.path,r.excludes_json,r.enabled'
 
 
 class ResultUnavailable(ValueError):
@@ -91,6 +93,7 @@ class FrozenResult:
         self.processed = 0
         self.last_used = time.monotonic()
         self.capture_executor = None
+        self._preview_reader = None
 
     def check(self):
         if self.stop.is_set():
@@ -104,6 +107,7 @@ class FrozenResult:
             def consume(page):
                 number = 0
                 expected = None
+                uncommitted = 0
                 while True:
                     self.check()
                     result = page(number)
@@ -125,7 +129,7 @@ class FrozenResult:
                     batch = []
                     for item in self._currents(items,capture=True):
                         payload = json.dumps(item, ensure_ascii=False, separators=(',', ':'))
-                        if len(payload.encode('utf-8')) > 512 * 1024:
+                        if len(payload) > 131072 and len(payload.encode('utf-8')) > 512 * 1024:
                             raise ResultCapacity('Result evidence exceeds workspace limit')
                         rel = item.get('relative_path', '')
                         suffix = os.path.splitext(rel)[1].casefold()
@@ -137,7 +141,10 @@ class FrozenResult:
                         self.total += 1
                     if batch:
                         self.db.executemany('INSERT INTO results VALUES(?,?,?,?,?)', batch)
-                    self.db.commit()
+                        uncommitted += 1
+                        if uncommitted >= 16:
+                            self.db.commit()
+                            uncommitted = 0
                     if self.total > expected:
                         raise ResultUnavailable('Invalid result count', conditions=self.conditions)
                     with self.progress_lock:
@@ -145,6 +152,8 @@ class FrozenResult:
                     if self.total == expected:
                         break
                     number += 1
+                if uncommitted:
+                    self.db.commit()
                 return self.metadata
             try:
                 # Overlap bounded source I/O; publish only after every owned
@@ -175,17 +184,23 @@ class FrozenResult:
         if not items:return
         with self.catalog.connect() as db:
             ids=[item['id'] for item in items]
-            rows=db.execute('SELECT '+self.catalog.FIELDS+',r.path,r.excludes_json,r.enabled'+self.catalog.JOIN+
+            rows=db.execute('SELECT '+_CURRENT_FIELDS+self.catalog.JOIN+
                 'JOIN library_roots r ON r.id=l.root_id WHERE i.id IN ('+','.join('?' for _ in ids)+')',ids).fetchall()
             grouped={}
-            for row in rows:grouped.setdefault(row['id'],[]).append(row)
+            excludes_by_root={}
+            for row in rows:
+                grouped.setdefault(row['id'],[]).append(row)
+                rid=row['root_id']
+                if rid not in excludes_by_root:
+                    raw_ex=row['excludes_json']
+                    excludes_by_root[rid]=_exclude_matcher(() if raw_ex=='[]' else tuple(json.loads(raw_ex)))
             prepared=[]
             for item in items:
                 choices=grouped.get(item['id'],[])
                 if len(choices)>1:
                     # Preserve the exact legacy representative-location query
                     # for the uncommon multiple-location case.
-                    row=db.execute('SELECT '+self.catalog.FIELDS+',r.path,r.excludes_json,r.enabled'+self.catalog.JOIN+
+                    row=db.execute('SELECT '+_CURRENT_FIELDS+self.catalog.JOIN+
                         'JOIN library_roots r ON r.id=l.root_id WHERE i.id=?',(item['id'],)).fetchone()
                 else:row=choices[0] if choices else None
                 prepared.append((item,row))
@@ -196,34 +211,73 @@ class FrozenResult:
                 if roots is not None:
                     if not hasattr(roots,'paths'):roots.paths={}
                     cache=roots.paths
-                return self._current(item,capture=capture,row=row,root_cache=cache)
+                matcher=excludes_by_root.get(row['root_id'],_MISSING) if row is not None else _MISSING
+                return self._current(item,capture=capture,row=row,root_cache=cache,exclude_matcher=matcher)
             if capture and len(prepared)>=16 and self.capture_executor is not None:
-                # At most one provider page (120) is queued; map keeps rank.
-                yield from self.capture_executor.map(validate,prepared)
+                # At most one provider page (120) is queued across 4 workers; keeps rank.
+                step=(len(prepared)+3)//4
+                chunks=[prepared[i:i+step] for i in range(0,len(prepared),step)]
+                abort=threading.Event()
+                def validate_chunk(chunk):
+                    out=[]
+                    try:
+                        for pair in chunk:
+                            if abort.is_set():
+                                raise ResultUnavailable(conditions=self.conditions)
+                            out.append(validate(pair))
+                    except BaseException:
+                        abort.set()
+                        raise
+                    return out
+                futures=[self.capture_executor.submit(validate_chunk,chunk) for chunk in chunks]
+                try:
+                    for future in futures:
+                        yield from future.result()
+                except BaseException:
+                    abort.set()
+                    raise
             else:
                 for pair in prepared:yield validate(pair)
         self.check()
 
-    def _current(self, payload, *, capture=False, for_viewer=False, row=_MISSING, root_cache=None):
+    def _current(self, payload, *, capture=False, for_viewer=False, row=_MISSING, root_cache=None, exclude_matcher=_MISSING):
         # No access cache: registration/exclusion/ancestors/physical version are
         # checked even when the frozen metadata/rank was already read before.
         if self.stop.is_set():raise ResultUnavailable(conditions=self.conditions)
         item_id = payload['id']
         if row is _MISSING:
             with self.catalog.connect() as db:
-                row = db.execute('SELECT ' + self.catalog.FIELDS + ',r.path,r.excludes_json,r.enabled' + self.catalog.JOIN +
+                row = db.execute('SELECT ' + _CURRENT_FIELDS + self.catalog.JOIN +
                     'JOIN library_roots r ON r.id=l.root_id WHERE i.id=?', (item_id,)).fetchone()
-        if row is None or not row['enabled'] or row['availability'] == 'excluded' or _excluded(row['relative_path'], tuple(json.loads(row['excludes_json']))):
+        if row is None or not row['enabled'] or row['availability'] == 'excluded':
             raise ResultUnavailable('Result scope changed; refresh results', conditions=self.conditions)
-        current = self.catalog.item(row)
-        for field in ('id', 'title', 'kind', 'tags', 'shelf', 'favorite', 'reviewed', 'root_id', 'relative_path', 'size_bytes', 'mtime_ns', 'availability'):
-            if current.get(field) != payload.get(field):
-                raise ResultUnavailable('Result metadata changed; refresh results', conditions=self.conditions)
+        if exclude_matcher is _MISSING:
+            raw_excludes = row['excludes_json']
+            exclude_matcher = _exclude_matcher(() if raw_excludes == '[]' else tuple(json.loads(raw_excludes)))
+        if exclude_matcher is not None and exclude_matcher(row['relative_path']):
+            raise ResultUnavailable('Result scope changed; refresh results', conditions=self.conditions)
+        raw_tags = row['tags']
+        tags = [] if raw_tags == '[]' else json.loads(raw_tags)
+        if (row['id'] != payload.get('id')
+                or row['title'] != payload.get('title')
+                or row['kind'] != payload.get('kind')
+                or tags != payload.get('tags')
+                or row['shelf'] != payload.get('shelf')
+                or bool(row['favorite']) != payload.get('favorite')
+                or bool(row['reviewed']) != payload.get('reviewed')
+                or row['root_id'] != payload.get('root_id')
+                or row['relative_path'] != payload.get('relative_path')
+                or row['size_bytes'] != payload.get('size_bytes')
+                or row['mtime_ns'] != payload.get('mtime_ns')
+                or row['availability'] != payload.get('availability')):
+            raise ResultUnavailable('Result metadata changed; refresh results', conditions=self.conditions)
         signature = None
-        if current['availability'] == 'present':
+        if row['availability'] == 'present':
             try:
-                if is_folder_book(current['relative_path']):
-                    signature = PreviewReader(self.catalog).tag_source(item_id)['revision']
+                if is_folder_book(row['relative_path']):
+                    if self._preview_reader is None:
+                        self._preview_reader = PreviewReader(self.catalog, max_slots=4)
+                    signature = self._preview_reader.tag_source(item_id, root_cache=root_cache)['revision']
                 else:
                     # Only parsed/resolved root paths are reused, per thread and
                     # provider page. _safe_path still stats every ancestor and
@@ -241,7 +295,7 @@ class FrozenResult:
             return {**payload, '_source_identity': signature}
         if signature != payload.get('_source_identity'):
             raise ResultUnavailable('Result source identity changed; refresh results', conditions=self.conditions)
-        if for_viewer and (signature == 'unavailable' or current['availability'] != 'present'):
+        if for_viewer and (signature == 'unavailable' or row['availability'] != 'present'):
             raise ResultUnavailable('Result source unavailable; refresh results', conditions=self.conditions)
         result = {key: value for key, value in payload.items() if key != '_source_identity'}
         if signature == 'unavailable':

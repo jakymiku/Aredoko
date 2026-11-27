@@ -212,8 +212,11 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
         raise ValueError('Invalid result search mode')
     image_stamp=IndexStamp(ai) if isinstance(ai,AISearch) else None
     def result_stamp(conditions):
-        if conditions.get('mode') in ('video-direct','video-similar'):return video.stamp()
-        return audio.stamp() if conditions.get('mode') in ('audio-direct','audio-similar','video-audio-direct','video-audio-similar') else image_stamp() if image_stamp is not None else None
+        mode=conditions.get('mode')
+        if mode in ('video-direct','video-similar'):return video.stamp()
+        if mode in ('audio-direct','audio-similar','video-audio-direct','video-audio-similar'):return audio.stamp()
+        if mode in ('semantic','similar','pending-proposals-semantic'):return image_stamp() if image_stamp is not None else None
+        return None
     results=ResultSessions(catalog,result_provider,index_stamp=image_stamp,index_stamp_for=result_stamp)
     resource_updates=threading.Lock()
     suggestions=TagSuggestions(catalog,adapter=tagger if tagger is not None else create_tagger(ai,preferences_path=setup.path),previews=previews)
@@ -754,12 +757,23 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                             return self.send(200,results.cancel(**body))
                         return self.send(404,{'error':'Not found'})
                     except ResultUnavailable as error:
-                        return self.send(410 if error.expired else 409,{'error':'Results expired or changed; refresh search',
+                        payload={'error':'Results expired or changed; refresh search',
                             'error_code':'result_session_expired' if error.expired else 'result_session_changed',
-                            'conditions':error.conditions,'current_id':body.get('item_id')})
+                            'conditions':error.conditions,'current_id':body.get('item_id')}
+                        if (not error.expired and isinstance(error.conditions,dict)
+                                and error.conditions.get('mode') in ('semantic','similar','pending-proposals-semantic')
+                                and ai.status().get('state') in ('running','cancelling')):
+                            payload['ai_indexing']=True
+                        return self.send(410 if error.expired else 409,payload)
                     except (PreviewUnavailable,ReaderChanged,OSError):
-                        return self.send(409,{'error':'Result source unavailable; refresh search','error_code':'result_session_changed',
-                            'conditions':body.get('conditions'),'current_id':body.get('item_id')})
+                        conditions=body.get('conditions')
+                        payload={'error':'Result source unavailable; refresh search','error_code':'result_session_changed',
+                            'conditions':conditions,'current_id':body.get('item_id')}
+                        if (isinstance(conditions,dict)
+                                and conditions.get('mode') in ('semantic','similar','pending-proposals-semantic')
+                                and ai.status().get('state') in ('running','cancelling')):
+                            payload['ai_indexing']=True
+                        return self.send(409,payload)
                     except ResultCapacity:return self.send(503,{'error':'Result workspace busy or full; close another search', 'error_code':'result_session_capacity'})
                 if self.path.startswith('/api/library/animation/'):
                     try:

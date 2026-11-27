@@ -550,5 +550,121 @@ class ResultSessionTests(unittest.TestCase):
         self.assertIsInstance(errors[0], ResultUnavailable)
         self.assertFalse(list(self.base.glob('aredoko-results-*')))
 
+    def test_ai_vector_writes_keep_non_ai_sessions_valid_while_invalidating_ai_sessions(self):
+        encoder = Encoder(); ai = AISearch(self.catalog, encoder); self.addCleanup(ai.close)
+        for item in self.items[:5]:
+            ai.store.put(item['id'], revision(item), {'text': [1.] + [0.] * 7, 'cover': [1.] + [0.] * 7})
+        self.catalog.record_view(self.items[0]['id'])
+        handler = production_handler(self.catalog, 'fixture', ai=ai)
+        server = ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        thread = threading.Thread(target=server.serve_forever); thread.start()
+        origin = f'http://127.0.0.1:{server.server_port}'
+        def post(action, body):
+            req = urllib.request.Request(origin + '/api/library/results/' + action,
+                data=json.dumps(body).encode(), headers={'Origin': origin, 'X-Aredoko-Token': 'fixture'})
+            return urllib.request.urlopen(req, timeout=5)
+        groups = [
+            ([('0' * 31 + '1', {'mode': 'literal'}), ('0' * 31 + '2', {'mode': 'history'})],
+             [('0' * 31 + '5', {'mode': 'semantic', 'query': 'generated', 'source': 'text'})]),
+            ([('0' * 31 + '3', {'mode': 'page-text', 'query': 'generated'}), ('0' * 31 + '4', {'mode': 'pending-proposals', 'query': 'generated'})],
+             [('0' * 31 + '6', {'mode': 'similar', 'item_id': self.items[0]['id']})]),
+            ([], [('0' * 31 + '7', {'mode': 'pending-proposals-semantic', 'query': 'generated'})]),
+        ]
+        try:
+            for idx, (non_ai_group, ai_group) in enumerate(groups):
+                for sid, conditions in non_ai_group + ai_group:
+                    with post('create', {'session_id': sid, 'conditions': conditions}) as resp:
+                        self.assertEqual(resp.status, 200)
+                # Writing a vector to ai_index.sqlite invalidates AI modes only.
+                target = self.items[5 + idx]
+                ai.store.put(target['id'], revision(target), {'text': [0., 1.] + [0.] * 6, 'cover': [0., 1.] + [0.] * 6})
+                for sid, conditions in non_ai_group:
+                    with self.subTest(kept=conditions['mode']):
+                        with post('range', {'session_id': sid, 'offset': 0, 'limit': 10}) as resp:
+                            self.assertEqual(resp.status, 200)
+                for sid, conditions in ai_group:
+                    with self.subTest(invalidated=conditions['mode']):
+                        with self.assertRaises(urllib.error.HTTPError) as caught:
+                            post('range', {'session_id': sid, 'offset': 0, 'limit': 10})
+                        self.assertEqual(caught.exception.code, 409)
+                        payload = json.loads(caught.exception.read())
+                        self.assertEqual(payload['error_code'], 'result_session_changed')
+                        self.assertNotIn('ai_indexing', payload)
+                        caught.exception.close()
+                if idx == 0:
+                    # Catalog mutations still invalidate non-AI sessions.
+                    self.catalog.update([self.items[0]['id']], {'tags': ['updated']})
+                    with self.assertRaises(urllib.error.HTTPError) as caught:
+                        post('range', {'session_id': non_ai_group[0][0], 'offset': 0, 'limit': 10})
+                    self.assertEqual(caught.exception.code, 409)
+                    self.assertEqual(json.loads(caught.exception.read())['error_code'], 'result_session_changed')
+                    caught.exception.close()
+                for sid, _ in non_ai_group + ai_group:
+                    with post('close', {'session_id': sid}) as resp:
+                        self.assertEqual(resp.status, 200)
+        finally:
+            server.shutdown(); server.server_close(); thread.join(5)
+            handler.results.close(); handler.animations.close(); handler.setup_jobs.close()
+
+    def test_ai_mode_conflict_during_active_indexing_includes_ai_indexing_flag(self):
+        encoder = Encoder(); ai = AISearch(self.catalog, encoder); self.addCleanup(ai.close)
+        for item in self.items[:4]:
+            ai.store.put(item['id'], revision(item), {'text': [1.] + [0.] * 7, 'cover': [1.] + [0.] * 7})
+        handler = production_handler(self.catalog, 'fixture', ai=ai)
+        server = ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        thread = threading.Thread(target=server.serve_forever); thread.start()
+        origin = f'http://127.0.0.1:{server.server_port}'
+        def post(action, body):
+            req = urllib.request.Request(origin + '/api/library/results/' + action,
+                data=json.dumps(body).encode(), headers={'Origin': origin, 'X-Aredoko-Token': 'fixture'})
+            return urllib.request.urlopen(req, timeout=5)
+        try:
+            lit_sid = '1' * 32
+            sem_sid = '2' * 32
+            sim_sid = '3' * 32
+            exp_sid = '4' * 32
+            for sid, cond in [(lit_sid, {'mode': 'literal'}),
+                              (sem_sid, {'mode': 'semantic', 'query': 'generated', 'source': 'text'}),
+                              (sim_sid, {'mode': 'similar', 'item_id': self.items[0]['id']})]:
+                with post('create', {'session_id': sid, 'conditions': cond}) as resp:
+                    self.assertEqual(resp.status, 200)
+            # Simulate active AI build writing a vector while state is running / cancelling.
+            ai.store.put(self.items[4]['id'], revision(self.items[4]), {'text': [0., 1.] + [0.] * 6, 'cover': [0., 1.] + [0.] * 6})
+            for state, sid, cond in [
+                ('running', sem_sid, {'mode': 'semantic', 'query': 'generated', 'source': 'text'}),
+                ('cancelling', sim_sid, {'mode': 'similar', 'item_id': self.items[0]['id']}),
+            ]:
+                ai.store.save_state({'state': state, 'processed': 1, 'total': 10, 'indexed': 1, 'skipped': 0, 'error': ''})
+                with self.subTest(state=state, mode=cond['mode']):
+                    with self.assertRaises(urllib.error.HTTPError) as caught:
+                        post('range', {'session_id': sid, 'offset': 0, 'limit': 10})
+                    self.assertEqual(caught.exception.code, 409)
+                    payload = json.loads(caught.exception.read())
+                    self.assertEqual(payload['error_code'], 'result_session_changed')
+                    self.assertEqual(payload['conditions'], cond)
+                    self.assertIsNone(payload['current_id'])
+                    self.assertIs(payload['ai_indexing'], True)
+                    caught.exception.close()
+                # Literal session remains completely valid while AI build is active.
+                with post('range', {'session_id': lit_sid, 'offset': 0, 'limit': 10}) as resp:
+                    self.assertEqual(resp.status, 200)
+            for sid in (lit_sid, sem_sid, sim_sid):
+                with post('close', {'session_id': sid}) as resp:
+                    self.assertEqual(resp.status, 200)
+            # Expired (410) sessions must not be tagged as ai_indexing even while running.
+            with post('create', {'session_id': exp_sid, 'conditions': {'mode': 'semantic', 'query': 'generated', 'source': 'text'}}) as resp:
+                self.assertEqual(resp.status, 200)
+            handler.results.sessions[exp_sid].last_used -= IDLE_SECONDS + 1
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                post('range', {'session_id': exp_sid, 'offset': 0, 'limit': 10})
+            self.assertEqual(caught.exception.code, 410)
+            payload = json.loads(caught.exception.read())
+            self.assertEqual(payload['error_code'], 'result_session_expired')
+            self.assertNotIn('ai_indexing', payload)
+            caught.exception.close()
+        finally:
+            server.shutdown(); server.server_close(); thread.join(5)
+            handler.results.close(); handler.animations.close(); handler.setup_jobs.close()
+
 
 if __name__ == '__main__': unittest.main()

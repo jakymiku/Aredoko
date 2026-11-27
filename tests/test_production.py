@@ -329,4 +329,63 @@ class ProductionTests(unittest.TestCase):
         self.assertEqual(updated['tags'], ['keep'])
         self.assertTrue(updated['favorite'])
 
+    def test_empty_excludes_fast_path_matches_excluded_filtering_identically(self):
+        from contextlib import contextmanager
+        from library_index import _excluded, DEFAULT_EXCLUDES
+        from production import _exclude_matcher
+
+        media2 = self.base / 'media2'; media2.mkdir()
+        (self.media / 'a.png').write_bytes(b'a')
+        (self.media / 'sub').mkdir()
+        (self.media / 'sub' / 'b.png').write_bytes(b'b')
+        (media2 / 'c.png').write_bytes(b'c')
+        (media2 / 'hidden').mkdir()
+        (media2 / 'hidden' / 'd.png').write_bytes(b'd')
+        (media2 / 'skip.tmp').write_bytes(b'tmp')  # ignored by scanner; test with .png below
+        (media2 / 'skip_me.png').write_bytes(b'skip')
+
+        root1 = self.catalog.add_root(str(self.media), excludes=[])
+        root2 = self.catalog.add_root(str(media2), excludes=[])
+        self.scan(root1); self.scan(root2)
+        with self.catalog.connect() as db:
+            db.execute("UPDATE library_roots SET excludes_json='[]'")
+        shelf_id = self.catalog.change_shelf('create', name='Shelf')['id']
+        all_ids = [r['id'] for r in self.catalog.search()['items']]
+        self.catalog.change_shelf('assign', entity='item', object_ids=all_ids, shelf_ids=[shelf_id])
+
+        sql = []
+        original_connect = self.catalog.connect
+        @contextmanager
+        def traced():
+            with original_connect() as db:
+                db.set_trace_callback(sql.append)
+                yield db
+
+        # 1. All enabled roots have empty excludes_json -> skip Python UDF completely.
+        with patch.object(self.catalog, 'connect', side_effect=traced):
+            res_all = self.catalog.search()
+        self.assertEqual(res_all['total'], 5)
+        self.assertFalse(any('aredoko_location_visible' in q for q in sql), sql)
+
+        # 2. Add excludes to root2 only -> root1-only search still skips UDF,
+        #    full search uses exact exclusion rules matching _excluded().
+        self.catalog.set_excludes(root2, ['hidden', '*skip*'])
+        sql.clear()
+        with patch.object(self.catalog, 'connect', side_effect=traced):
+            res_root1 = self.catalog.search(root_id=root1)
+        self.assertEqual(res_root1['total'], 2)
+        self.assertFalse(any('aredoko_location_visible' in q for q in sql), sql)
+
+        res_mixed = self.catalog.search()
+        self.assertEqual({r['title'] for r in res_mixed['items']}, {'a.png', 'b.png', 'c.png'})
+        self.assertEqual(self.catalog.shelf_descriptors()[0]['item_count'], 3)
+
+        # 3. Direct equivalence of _exclude_matcher and _excluded across patterns and paths.
+        samples = ['./', 'a.png', 'Thumbs.db', '.git/config', 'sub/b.png', 'hidden/d.png', 'sub/skip_me.png', 'book/']
+        for patterns in ((), DEFAULT_EXCLUDES, ('hidden', '*skip*'), ('sub/*.png', '[ab].png')):
+            matcher = _exclude_matcher(patterns)
+            for path in samples:
+                actual = bool(matcher is not None and matcher(path))
+                self.assertEqual(actual, _excluded(path, patterns), (patterns, path))
+
 if __name__=='__main__':unittest.main()
