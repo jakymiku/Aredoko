@@ -19,6 +19,7 @@ public sealed partial class MainPage
     private long aiSnapshotGeneration, folderAiLatestRequestId, settingsAiLatestRequestId;
     private JsonNode? lastAiStatusData;
     private int? lastAiCovTarget, lastAiCovFresh;
+    private int lastAiBookPagesRemaining, lastAiBookTargetTotal;
     private int lastAiUnscopedPresentTotal;
     private bool lastAiScopeInvalid, lastAiWasRunning;
     private string lastAiScopeInvalidHint="";
@@ -173,6 +174,8 @@ public sealed partial class MainPage
                     if(gen!=aiSnapshotGeneration||token.IsCancellationRequested||disposed)return false;
                     lastAiCovTarget=covData["target_total"]?.GetValue<int>();
                     lastAiCovFresh=covData["fresh_total"]?.GetValue<int>();
+                    lastAiBookPagesRemaining=covData["book_pages_remaining_total"]?.GetValue<int>()??0;
+                    lastAiBookTargetTotal=covData["book_target_total"]?.GetValue<int>()??0;
                 }
                 catch(OperationCanceledException) when(token.IsCancellationRequested){throw;}
                 catch(Exception covEx){AppLog.Error(covEx);}
@@ -181,6 +184,8 @@ public sealed partial class MainPage
             {
                 lastAiCovTarget=null;
                 lastAiCovFresh=null;
+                lastAiBookPagesRemaining=0;
+                lastAiBookTargetTotal=0;
                 lastAiUnscopedPresentTotal=0;
             }
         }
@@ -190,6 +195,8 @@ public sealed partial class MainPage
             lastAiScopeInvalidHint="";
             lastAiCovTarget=null;
             lastAiCovFresh=null;
+            lastAiBookPagesRemaining=0;
+            lastAiBookTargetTotal=0;
             lastAiUnscopedPresentTotal=0;
         }
         return gen==aiSnapshotGeneration&&!token.IsCancellationRequested&&!disposed;
@@ -205,6 +212,8 @@ public sealed partial class MainPage
         var running=state is "running" or "cancelling";
         var processed=statusData["processed"]?.GetValue<int>()??0;
         var total=statusData["total"]?.GetValue<int>()??0;
+        var indexed=statusData["indexed"]?.GetValue<int>()??0;
+        var reused=statusData["reused"]?.GetValue<int>()??0;
         var model=statusData["model"]?.GetValue<string>()??"";
         var statusCode=statusData["status_code"]?.GetValue<string>()??"";
         var errorText=statusData["error"]?.GetValue<string>()??"";
@@ -221,7 +230,7 @@ public sealed partial class MainPage
         {
             SettingsAIStep1Status.Text=AppText.L("✓ 導入済み","✓ Installed");
             SettingsAIStep2Status.Text=string.IsNullOrWhiteSpace(model)?AppText.L("✓ 使用可能","✓ Ready"):$"✓ {model}";
-            var hasUnindexed=lastAiCovTarget is int target&&lastAiCovFresh is int fresh?target>fresh:(state is "cancelled" or "interrupted" or "failed" or "partial" or "idle");
+            var hasUnindexed=lastAiCovTarget is int target&&lastAiCovFresh is int fresh?(target>fresh||lastAiBookPagesRemaining>0):(state is "cancelled" or "interrupted" or "failed" or "partial" or "idle");
             if(lastAiScopeInvalid)
             {
                 SettingsAIStep3Status.Text=AppText.L("対象範囲の要確認","Scope needs attention");
@@ -229,7 +238,7 @@ public sealed partial class MainPage
             }
             else
             {
-                var (step3Text,nextHint)=AISearchStatus.SettingsDataStatus(state,processed,total,lastAiCovTarget,lastAiCovFresh,lastAiUnscopedPresentTotal);
+                var (step3Text,nextHint)=AISearchStatus.SettingsDataStatus(state,processed,total,lastAiCovTarget,lastAiCovFresh,lastAiUnscopedPresentTotal,reused,indexed,lastAiBookPagesRemaining,lastAiBookTargetTotal);
                 SettingsAIStep3Status.Text=step3Text;
                 SettingsAINextHint.Text=nextHint;
             }
@@ -237,18 +246,14 @@ public sealed partial class MainPage
             {
                 if(!running&&!lastAiScopeInvalid&&hasUnindexed)
                 {
-                    if(lastAiCovTarget is int t&&lastAiCovFresh is int f&&t>f)
-                        SettingsAIBuildButton.Content=f==0?AppText.L($"✨ AI検索データを作成 ({t:N0}件)",$"✨ Build AI index ({t:N0})"):AppText.L($"✨ 未作成のAIデータを作成 ({t-f:N0}件)",$"✨ Build remaining AI index ({t-f:N0})");
-                    else if(state is "cancelled" or "interrupted" or "failed")
-                        SettingsAIBuildButton.Content=AppText.L("✨ 続きからAIデータを作成","✨ Continue AI index");
-                    else
-                        SettingsAIBuildButton.Content=AppText.L("✨ AI検索データを作成","✨ Build AI search index");
+                    ConfigureAIBuildButton(SettingsAIBuildButton,state);
                     SettingsAIBuildButton.Visibility=Visibility.Visible;
                     SettingsAIBuildButton.IsEnabled=!aiActionPending;
                 }
                 else
                 {
                     SettingsAIBuildButton.Visibility=Visibility.Collapsed;
+                    ToolTipService.SetToolTip(SettingsAIBuildButton,null);
                 }
             }
             if(SettingsAICancelButton is not null)
@@ -263,7 +268,7 @@ public sealed partial class MainPage
                 SettingsAIIndexButton.Style=(SettingsAIBuildButton?.Visibility==Visibility.Visible||running)?defaultButton:accent;
             }
             if(SettingsAIStatusArt is not null)
-                VisualAssets.State(SettingsAIStatusArt,running?"indexing":state=="failed"?"error":(!lastAiScopeInvalid&&lastAiCovTarget is int ct&&lastAiCovFresh==ct&&ct>0)?"completed":"greeting");
+                VisualAssets.State(SettingsAIStatusArt,running?"indexing":state=="failed"?"error":(!lastAiScopeInvalid&&lastAiCovTarget is int ct&&lastAiCovFresh==ct&&ct>0&&lastAiBookPagesRemaining==0)?"completed":"greeting");
         }
         else
         {
@@ -373,6 +378,37 @@ public sealed partial class MainPage
         }
     }
 
+    private void ConfigureAIBuildButton(Button button, string state)
+    {
+        if(lastAiCovTarget is int t&&lastAiCovFresh is int f)
+        {
+            if(t>f&&f==0)
+            {
+                button.Content=AppText.L($"✨ AI検索データを作成 ({t:N0}件)",$"✨ Build AI index ({t:N0})");
+                ToolTipService.SetToolTip(button,null);
+                return;
+            }
+            if(t>f&&f>0)
+            {
+                button.Content=lastAiBookPagesRemaining>0
+                    ? AppText.L($"✨ 未作成分を追加作成 (残り {t-f:N0}件・内部ページ {lastAiBookPagesRemaining:N0}冊)",$"✨ Build remaining ({t-f:N0} left · {lastAiBookPagesRemaining:N0} books)")
+                    : AppText.L($"✨ 未作成分を追加作成 (残り {t-f:N0}件)",$"✨ Build remaining AI index ({t-f:N0} left)");
+                ToolTipService.SetToolTip(button,AppText.L($"作成済みの {f:N0} 件は自動でスキップし、未作成分だけを作成します。",$"Already indexed items ({f:N0}) are skipped automatically; only remaining items are built."));
+                return;
+            }
+            if(lastAiBookPagesRemaining>0)
+            {
+                button.Content=AppText.L($"✨ 内部ページのAIデータを作成 ({lastAiBookPagesRemaining:N0}冊)",$"✨ Build book inner pages ({lastAiBookPagesRemaining:N0})");
+                ToolTipService.SetToolTip(button,AppText.L("作成済みの表紙・文字データはスキップし、未作成の本・CBZの内部ページを作成します。","Already indexed covers/text are skipped; only unindexed book/CBZ inner pages are built."));
+                return;
+            }
+        }
+        button.Content=state is "cancelled" or "interrupted" or "failed"
+            ? AppText.L("✨ 続きからAIデータを作成","✨ Continue AI index")
+            : AppText.L("✨ AI検索データを作成","✨ Build AI search index");
+        ToolTipService.SetToolTip(button,null);
+    }
+
     private void UpdateFolderAIStatusUI()
     {
         if(FolderAIStatusText is null||FolderAIBuildButton is null||FolderAIProgressBar is null||FolderAIStatusDetail is null)return;
@@ -389,8 +425,10 @@ public sealed partial class MainPage
         var running=state is "running" or "cancelling";
         var processed=statusData["processed"]?.GetValue<int>()??0;
         var total=statusData["total"]?.GetValue<int>()??0;
+        var indexed=statusData["indexed"]?.GetValue<int>()??0;
+        var reused=statusData["reused"]?.GetValue<int>()??0;
         var errorText=AppText.TranslateBackend(statusData["error"]?.GetValue<string>()??"");
-        FolderAIStatusText.Text=AISearchStatus.FolderSummary(available,state,processed,total,lastAiScopeInvalid,lastAiCovTarget,lastAiCovFresh,lastAiUnscopedPresentTotal);
+        FolderAIStatusText.Text=AISearchStatus.FolderSummary(available,state,processed,total,lastAiScopeInvalid,lastAiCovTarget,lastAiCovFresh,lastAiUnscopedPresentTotal,reused,indexed,lastAiBookPagesRemaining,lastAiBookTargetTotal);
         var detail=lastAiScopeInvalid
             ? (string.IsNullOrWhiteSpace(lastAiScopeInvalidHint)?AppText.L("［⚙ 設定 → AI］で対象範囲を選び直して保存してください。","Open \"⚙ Settings → AI\" to re-save your search scope."):lastAiScopeInvalidHint)
             : state=="failed"&&!string.IsNullOrWhiteSpace(errorText)
@@ -405,6 +443,7 @@ public sealed partial class MainPage
         {
             FolderAIBuildButton.Content=AppText.L("中止","Cancel");
             FolderAIBuildButton.Style=ThemeStyle("DefaultButtonStyle");
+            ToolTipService.SetToolTip(FolderAIBuildButton,null);
             FolderAIBuildButton.IsEnabled=!aiActionPending;
             FolderAIBuildButton.Visibility=Visibility.Visible;
         }
@@ -412,15 +451,13 @@ public sealed partial class MainPage
         {
             FolderAIBuildButton.Content=AppText.L("中断中…","Canceling…");
             FolderAIBuildButton.Style=ThemeStyle("DefaultButtonStyle");
+            ToolTipService.SetToolTip(FolderAIBuildButton,null);
             FolderAIBuildButton.IsEnabled=false;
             FolderAIBuildButton.Visibility=Visibility.Visible;
         }
-        else if(available&&!lastAiScopeInvalid&&(lastAiCovTarget is int target&&lastAiCovFresh is int fresh?target>fresh:(state is "cancelled" or "interrupted" or "failed" or "partial" or "idle")))
+        else if(available&&!lastAiScopeInvalid&&(lastAiCovTarget is int target&&lastAiCovFresh is int fresh?(target>fresh||lastAiBookPagesRemaining>0):(state is "cancelled" or "interrupted" or "failed" or "partial" or "idle")))
         {
-            var remaining=lastAiCovTarget is int t&&lastAiCovFresh is int f?Math.Max(0,t-f):0;
-            FolderAIBuildButton.Content=remaining>0
-                ? (lastAiCovFresh==0?AppText.L($"✨ AI検索データを作成 ({remaining:N0}件)",$"✨ Build AI index ({remaining:N0})"):AppText.L($"✨ 未作成のAIデータを作成 ({remaining:N0}件)",$"✨ Build remaining AI index ({remaining:N0})"))
-                : AppText.L("✨ 続きからAIデータを作成","✨ Continue AI index");
+            ConfigureAIBuildButton(FolderAIBuildButton,state);
             FolderAIBuildButton.Style=ThemeStyle("AccentButtonStyle");
             FolderAIBuildButton.IsEnabled=!aiActionPending;
             FolderAIBuildButton.Visibility=Visibility.Visible;
@@ -428,6 +465,7 @@ public sealed partial class MainPage
         else
         {
             FolderAIBuildButton.Visibility=Visibility.Collapsed;
+            ToolTipService.SetToolTip(FolderAIBuildButton,null);
         }
         if(running&&folderHubOpen)EnsureFolderAIPollTimer();
         else folderAiPollTimer?.Stop();

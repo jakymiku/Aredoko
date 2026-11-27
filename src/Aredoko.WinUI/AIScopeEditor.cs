@@ -244,8 +244,16 @@ public sealed class AIScopeEditor : IDisposable
             counts[1].Text=coverageLimit is >0 and <1_000_000
                 ? AppText.L($"今回の対象枠: {target:N0} 件（上限 {coverageLimit.Value:N0} 件）", $"Target batch size: {target:N0} (limit {coverageLimit.Value:N0})")
                 : AppText.L($"今回の対象枠: {target:N0} 件（全件対象）", $"Target batch size: {target:N0} (all matching)");
+            var remainingTotal=data["remaining_total"]!.GetValue<int>();
+            var bookTarget=data["book_target_total"]?.GetValue<int>()??0;
+            var bookRemaining=data["book_pages_remaining_total"]?.GetValue<int>()??0;
             counts[2].Text=AppText.L($"現在の文字索引: {data["fresh_total"]!.GetValue<int>():N0} 件", $"Current index ready: {data["fresh_total"]!.GetValue<int>():N0}");
-            counts[3].Text=AppText.L($"残り: {data["remaining_total"]!.GetValue<int>():N0} 件 · 確認時点の件数です", $"Remaining: {data["remaining_total"]!.GetValue<int>():N0} · As of check time");
+            counts[3].Text=AppText.L($"残り: {remainingTotal:N0} 件 · 確認時点の件数です", $"Remaining: {remainingTotal:N0} · As of check time")
+                +(bookTarget>0
+                    ? (bookRemaining>0
+                        ? AppText.L($"\n本の内部ページ未作成: {bookRemaining:N0} / {bookTarget:N0} 冊", $"\nBook inner pages remaining: {bookRemaining:N0} / {bookTarget:N0}")
+                        : AppText.L($"\n本の内部ページ: ✓ {bookTarget:N0} 冊作成済み", $"\nBook inner pages: ✓ {bookTarget:N0} ready"))
+                    : "");
             if(Dirty&&!saving)UpdateUnsavedFeedback();
         } catch(Exception ex){if(!closed&&ticket==version){counts[0].Text=AppText.L("件数を確認できません: ", "Unable to check counts: ")+ex.Message;confirmed=false;}}
         finally {counting=false;Sync();}

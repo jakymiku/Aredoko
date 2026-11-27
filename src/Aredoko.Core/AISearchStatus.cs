@@ -53,11 +53,26 @@ public static class AISearchStatus
         int jobTotal,
         int? coverageTargetTotal = null,
         int? coverageFreshTotal = null,
-        int unscopedPresentTotal = 0)
+        int unscopedPresentTotal = 0,
+        int jobReused = 0,
+        int jobIndexed = 0,
+        int bookPagesRemaining = 0,
+        int bookTargetTotal = 0)
     {
         if (jobState == "running")
+        {
+            if (jobReused > 0)
+            {
+                var newlyBuilt = Math.Max(0, jobIndexed - jobReused);
+                var remainingRun = Math.Max(0, jobTotal - jobProcessed);
+                return (
+                    AppText.L($"作成中（{jobProcessed:N0}/{jobTotal:N0} · 新規 {newlyBuilt:N0} / スキップ {jobReused:N0}）", $"Building ({jobProcessed:N0}/{jobTotal:N0} · {newlyBuilt:N0} new / {jobReused:N0} skipped)"),
+                    AppText.L($"未作成分を作成しています（作成済み {jobReused:N0} 件は自動でスキップ・残り {remainingRun:N0} 件）。完了前でも作成済み分から検索できます。", $"Building unindexed items ({jobReused:N0} already indexed skipped automatically · {remainingRun:N0} remaining). Already indexed items can be searched right away.")
+                );
+            }
             return (AppText.L($"作成中（{jobProcessed:N0}/{jobTotal:N0}）", $"Building ({jobProcessed:N0}/{jobTotal:N0})"),
                 AppText.L("AI検索データを作成しています。完了前でも作成済み分から検索できます。", "Building AI search index. Already indexed items can be searched right away."));
+        }
         if (jobState == "cancelling")
             return (AppText.L("中断中", "Cancelling"),
                 AppText.L("AI検索データの作成を中断しています。", "Cancelling AI index build."));
@@ -77,9 +92,15 @@ public static class AISearchStatus
             if (clampedFresh == 0)
                 return (AppText.L($"未作成（0 / {target:N0} 件）", $"Not built (0 / {target:N0})"),
                     AppText.L($"対象 {target:N0} 件のAI検索データが未作成です。［AI検索を設定］から作成できます。", $"{target:N0} target item(s) have no AI index yet. Build it in Configure AI."));
+            if (remaining > 0 && bookPagesRemaining > 0)
+                return (AppText.L($"一部作成（{clampedFresh:N0} / {target:N0} 件・未作成 {remaining:N0} 件 · 内部ページ {bookPagesRemaining:N0} 冊）", $"Partial ({clampedFresh:N0} / {target:N0} · {remaining:N0} remaining · {bookPagesRemaining:N0} book(s) pages)"),
+                    AppText.L($"未作成の作品が {remaining:N0} 件、本・CBZの内部ページが {bookPagesRemaining:N0} 冊あります。下のボタンまたは［AI検索を設定］から追加作成できます。", $"{remaining:N0} item(s) and {bookPagesRemaining:N0} book(s) inner pages remaining. Build them below or in Configure AI."));
             if (remaining > 0)
                 return (AppText.L($"一部作成（{clampedFresh:N0} / {target:N0} 件・未作成 {remaining:N0} 件）", $"Partial ({clampedFresh:N0} / {target:N0}, {remaining:N0} remaining)"),
                     AppText.L($"未作成の作品が {remaining:N0} 件あります。［AI検索を設定］からAI検索データを追加作成できます。", $"{remaining:N0} unindexed item(s) remaining. Add them from Configure AI."));
+            if (bookPagesRemaining > 0)
+                return (AppText.L($"一部作成（基本 {clampedFresh:N0}/{target:N0} · 内部ページ未作成 {bookPagesRemaining:N0} 冊）", $"Partial (base {clampedFresh:N0}/{target:N0} · {bookPagesRemaining:N0} book(s) inner pages remaining)"),
+                    AppText.L($"本・CBZの内部ページが {bookPagesRemaining:N0} 冊未作成です。下のボタンまたは［AI検索を設定］から作成済み分をスキップして追加作成できます。", $"{bookPagesRemaining:N0} book/CBZ item(s) still need inner page indexing. Build them below or in Configure AI (already indexed items are skipped)."));
             if (unscopedPresentTotal > 0)
                 return (AppText.L($"対象分は作成済み（{clampedFresh:N0}/{target:N0} · 対象外 {unscopedPresentTotal:N0} 件）", $"Scoped ready ({clampedFresh:N0}/{target:N0} · {unscopedPresentTotal:N0} excluded)"),
                     AppText.L($"AI対象外のフォルダに {unscopedPresentTotal:N0} 件あります。含める場合は［AI検索を設定］の「対象範囲」を確認してください。", $"{unscopedPresentTotal:N0} item(s) are in excluded folders. Update Scope in Configure AI to include them."));
@@ -103,12 +124,23 @@ public static class AISearchStatus
         bool scopeInvalid,
         int? coverageTargetTotal = null,
         int? coverageFreshTotal = null,
-        int unscopedPresentTotal = 0)
+        int unscopedPresentTotal = 0,
+        int jobReused = 0,
+        int jobIndexed = 0,
+        int bookPagesRemaining = 0,
+        int bookTargetTotal = 0)
     {
         if (!available)
             return AppText.L("AI検索データ: 未設定（設定 → AI から準備できます）", "AI Index: Not set up (configure in Settings → AI)");
         if (jobState == "running")
+        {
+            if (jobReused > 0)
+            {
+                var newlyBuilt = Math.Max(0, jobIndexed - jobReused);
+                return AppText.L($"AI検索データ: 作成中（{jobProcessed:N0} / {jobTotal:N0} 件 · 新規 {newlyBuilt:N0} / スキップ {jobReused:N0}）", $"AI Index: Building ({jobProcessed:N0} / {jobTotal:N0} · {newlyBuilt:N0} new / {jobReused:N0} skipped)");
+            }
             return AppText.L($"AI検索データ: 作成中（{jobProcessed:N0} / {jobTotal:N0} 件）", $"AI Index: Building ({jobProcessed:N0} / {jobTotal:N0})");
+        }
         if (jobState == "cancelling")
             return AppText.L($"AI検索データ: 中断中（{jobProcessed:N0} / {jobTotal:N0} 件）", $"AI Index: Canceling ({jobProcessed:N0} / {jobTotal:N0})");
         if (scopeInvalid)
@@ -125,8 +157,12 @@ public static class AISearchStatus
             }
             if (clampedFresh == 0)
                 return AppText.L($"AI検索データ: 未作成（対象 {target:N0} 件）", $"AI Index: Not built ({target:N0} in scope)");
+            if (remaining > 0 && bookPagesRemaining > 0)
+                return AppText.L($"AI検索データ: {clampedFresh:N0} / {target:N0} 件作成済み（未作成 {remaining:N0} 件 · 内部ページ {bookPagesRemaining:N0} 冊）", $"AI Index: {clampedFresh:N0} / {target:N0} built ({remaining:N0} remaining · {bookPagesRemaining:N0} book(s) pages)");
             if (remaining > 0)
                 return AppText.L($"AI検索データ: {clampedFresh:N0} / {target:N0} 件作成済み（未作成 {remaining:N0} 件）", $"AI Index: {clampedFresh:N0} / {target:N0} built ({remaining:N0} remaining)");
+            if (bookPagesRemaining > 0)
+                return AppText.L($"AI検索データ: 基本作成済み（内部ページ未作成 {bookPagesRemaining:N0} 冊）", $"AI Index: Base ready ({bookPagesRemaining:N0} book(s) inner pages remaining)");
             return unscopedPresentTotal > 0
                 ? AppText.L($"AI検索データ: ✓ 対象分作成済み（{clampedFresh:N0} / {target:N0} 件 · 対象外 {unscopedPresentTotal:N0} 件）", $"AI Index: ✓ Scoped ready ({clampedFresh:N0} / {target:N0} · {unscopedPresentTotal:N0} excluded)")
                 : AppText.L($"AI検索データ: ✓ 作成済み（{clampedFresh:N0} / {target:N0} 件）", $"AI Index: ✓ Ready ({clampedFresh:N0} / {target:N0})");

@@ -4302,9 +4302,19 @@ public sealed partial class MainPage : Page
                     var errorText=AppText.TranslateBackend(data["error"]?.GetValue<string>() ?? "");
                     if(available)
                     {
-                        var unit=data["job"]?.GetValue<string>() is "book-pages" or "book-page-batch" or "book-pages-chunked"?AppText.L("ページ","pages"):AppText.L("件","items");
-                        status.Text=AppText.L($"{model}（対応：{capabilities}）\n作成状況: {label} · {data["processed"]}/{data["total"]} {unit}{(string.IsNullOrEmpty(errorText)?"":$"\n{errorText}")}",
-                            $"{model} ({capabilities})\nStatus: {label} · {data["processed"]}/{data["total"]} {unit}{(string.IsNullOrEmpty(errorText)?"":$"\n{errorText}")}");
+                        var jobName=data["job"]?.GetValue<string>();
+                        var isPageOnlyJob=jobName is "book-pages" or "book-page-batch" or "book-pages-chunked";
+                        var unit=isPageOnlyJob?AppText.L("ページ","pages"):AppText.L("件","items");
+                        var processedCount=data["processed"]?.GetValue<int>()??0;
+                        var totalCount=data["total"]?.GetValue<int>()??0;
+                        var indexedCount=data["indexed"]?.GetValue<int>()??0;
+                        var reusedCount=data["reused"]?.GetValue<int>()??0;
+                        var reusedLine=(running&&!isPageOnlyJob&&reusedCount>0)
+                            ? AppText.L($"\n新規作成: {Math.Max(0,indexedCount-reusedCount):N0} 件 · 作成済みスキップ: {reusedCount:N0} 件（残り {Math.Max(0,totalCount-processedCount):N0} 件）",
+                                $"\nNew: {Math.Max(0,indexedCount-reusedCount):N0} · Skipped (already indexed): {reusedCount:N0} ({Math.Max(0,totalCount-processedCount):N0} left)")
+                            : "";
+                        status.Text=AppText.L($"{model}（対応：{capabilities}）\n作成状況: {label} · {processedCount}/{totalCount} {unit}{reusedLine}{(string.IsNullOrEmpty(errorText)?"":$"\n{errorText}")}",
+                            $"{model} ({capabilities})\nStatus: {label} · {processedCount}/{totalCount} {unit}{reusedLine}{(string.IsNullOrEmpty(errorText)?"":$"\n{errorText}")}");
                         statusDetailText.Text="";statusDetailExpander.Visibility=Visibility.Collapsed;
                     }
                     else

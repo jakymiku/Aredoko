@@ -379,6 +379,10 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         self.ai.start(scope=cover_only_scope)
         self.ai.worker.join(10)
         self.assertEqual(self.records(), [])
+        cov_cover = self.ai.coverage(scope=cover_only_scope)
+        self.assertEqual((cov_cover['book_pages'], cov_cover['book_pages_remaining_total'], cov_cover['coverage_status']), ('cover_only', 0, 'ready'))
+        cov_all_before = self.ai.coverage(scope=all_scope)
+        self.assertEqual((cov_all_before['book_pages'], cov_all_before['book_target_total'], cov_all_before['book_pages_ready_total'], cov_all_before['book_pages_remaining_total'], cov_all_before['coverage_status']), ('all_pages', 1, 0, 1, 'partially_indexed'))
         sim_live = self.ai.similar(self.item, scope=all_scope, origin_page=1)
         self.assertEqual(sim_live['origin_page'], 1)
         self.assertEqual(sim_live['similarity_status'], 'ready')
@@ -389,6 +393,12 @@ class PageSemanticTests(PageFixture, unittest.TestCase):
         self.ai.worker.join(10)
         self.assertEqual(self.ai.status()['state'], 'complete')
         self.assertEqual(len(self.records()), 2)
+        cov_all_after = self.ai.coverage(scope=all_scope)
+        self.assertEqual((cov_all_after['book_target_total'], cov_all_after['book_pages_ready_total'], cov_all_after['book_pages_remaining_total'], cov_all_after['coverage_status']), (1, 1, 0, 'ready'))
+        self.ai.start(scope=cover_only_scope)
+        self.ai.worker.join(10)
+        done_again = self.ai.status()
+        self.assertEqual((done_again['reused'], done_again['indexed']), (done_again['total'], done_again['total']))
 
         # Cached page vector works even with image encoding blocked.
         with patch.object(self.encoder, 'encode', side_effect=AssertionError('should reuse page vector')):

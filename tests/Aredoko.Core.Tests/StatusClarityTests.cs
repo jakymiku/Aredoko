@@ -164,7 +164,17 @@ static class StatusClarityTests
         // 8. FolderSummary mirrors compact AI status across states
         check(AISearchStatus.FolderSummary(false, "idle", 0, 0, false).Contains("未設定"), "FolderSummary reports unconfigured AI");
         check(AISearchStatus.FolderSummary(true, "running", 1200, 95000, false).Contains("1,200 / 95,000"), "FolderSummary reports live running progress");
+        check(AISearchStatus.FolderSummary(true, "running", 1200, 95000, false, jobReused: 1000, jobIndexed: 1150).Contains("新規 150 / スキップ 1,000"), "FolderSummary shows new and skipped counts when reusing existing vectors");
         check(AISearchStatus.FolderSummary(true, "idle", 0, 0, false, coverageTargetTotal: 95000, coverageFreshTotal: 12000).Contains("未作成 83,000"), "FolderSummary reports partial coverage and remaining count");
+        check(AISearchStatus.FolderSummary(true, "complete", 95000, 95000, false, coverageTargetTotal: 95000, coverageFreshTotal: 95000, bookPagesRemaining: 12, bookTargetTotal: 30).Contains("内部ページ未作成 12 冊"), "FolderSummary reports remaining inner book pages even when base is ready");
         check(AISearchStatus.FolderSummary(true, "complete", 95000, 95000, false, coverageTargetTotal: 95000, coverageFreshTotal: 95000).Contains("✓ 作成済み"), "FolderSummary reports ready when all scoped items are indexed");
+
+        // 9. SettingsDataStatus shows reused progress and unindexed inner book pages clearly
+        var reusedRunning = AISearchStatus.SettingsDataStatus("running", 1200, 95000, coverageTargetTotal: 95000, coverageFreshTotal: 1000, jobReused: 1000, jobIndexed: 1150);
+        check(reusedRunning.Step3Status.Contains("新規 150 / スキップ 1,000") && reusedRunning.NextHint.Contains("作成済み 1,000 件は自動でスキップ"), "SettingsDataStatus shows new vs skipped counts while running");
+        var baseReadyBooksPending = AISearchStatus.SettingsDataStatus("complete", 100, 100, coverageTargetTotal: 100, coverageFreshTotal: 100, bookPagesRemaining: 8, bookTargetTotal: 20);
+        check(baseReadyBooksPending.Step3Status.Contains("内部ページ未作成 8 冊") && !baseReadyBooksPending.Step3Status.StartsWith("✓"), "SettingsDataStatus does not show ready checkmark when inner book pages are remaining");
+        var partialPlusBooks = AISearchStatus.SettingsDataStatus("idle", 0, 0, coverageTargetTotal: 100, coverageFreshTotal: 40, bookPagesRemaining: 5, bookTargetTotal: 20);
+        check(partialPlusBooks.Step3Status.Contains("未作成 60 件") && partialPlusBooks.Step3Status.Contains("内部ページ 5 冊"), "SettingsDataStatus reports both remaining items and remaining inner book pages");
     }
 }

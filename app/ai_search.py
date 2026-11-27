@@ -619,7 +619,9 @@ class AISearch:
             raise AIBusy('フォルダのスキャン完了後に確認してください。')
         from production import _exclude_matcher
         excludes_cache={}
+        want_all_pages=bool(scope and scope.get('book_pages')=='all_pages' and 'cover' in self.profile.modalities)
         total=targeted=fresh=0;batch=[]
+        book_target=book_pages_ready=0;book_batch=[]
         with self.catalog.connect() as cat_db, self.store.connect() as vec_db:
             upper=cat_db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
             has_vectors=vec_db.execute("SELECT 1 FROM ai_vectors WHERE modality='text' LIMIT 1").fetchone() is not None
@@ -628,6 +630,8 @@ class AISearch:
                 and cat_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tag_proposals'").fetchone()
                 and cat_db.execute("SELECT 1 FROM tag_proposals WHERE state='pending' LIMIT 1").fetchone()
             )
+            has_page_heads=bool(want_all_pages and cat_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='page_heads'").fetchone())
+            has_page_vectors=bool(want_all_pages and vec_db.execute('SELECT 1 FROM ai_page_vectors LIMIT 1').fetchone())
             def flush(rows_batch):
                 nonlocal fresh
                 if not rows_batch:return
@@ -645,6 +649,27 @@ class AISearch:
                 else:
                     fresh+=len(regular)
                 rows_batch.clear()
+            def flush_books(book_ids):
+                nonlocal book_pages_ready
+                if not book_ids or not has_page_heads or not has_page_vectors:
+                    book_ids.clear();return
+                marks=','.join('?' for _ in book_ids)
+                head_rows=cat_db.execute(
+                    'SELECT h.item_id,s.source_revision,s.page_count FROM page_heads h '
+                    'JOIN page_snapshots s ON s.id=h.snapshot_id WHERE h.item_id IN ('+marks+')',
+                    book_ids).fetchall()
+                expected_books={r[0]:(r[1],r[2]) for r in head_rows}
+                if expected_books:
+                    v_marks=','.join('?' for _ in expected_books)
+                    vec_rows=vec_db.execute(
+                        'SELECT item_id,source_revision,COUNT(*) FROM ai_page_vectors '
+                        'WHERE contract=? AND item_id IN ('+v_marks+') GROUP BY item_id,source_revision',
+                        [PAGE_CONTRACT,*expected_books]).fetchall()
+                    for item_id,rev,cnt in vec_rows:
+                        exp=expected_books.get(item_id)
+                        if exp is not None and exp[0]==rev and cnt>=exp[1]:
+                            book_pages_ready+=1
+                book_ids.clear()
             last=0
             sql=('SELECT i.id,i.title,i.kind,i.tags,l.root_id,l.relative_path,l.size_bytes,l.mtime_ns,r.excludes_json'
                  +join+'WHERE '+where_sql+' AND i.id>? AND i.id<=? ORDER BY i.id LIMIT ?')
@@ -661,6 +686,12 @@ class AISearch:
                     total+=1
                     if targeted<limit:
                         targeted+=1
+                        if want_all_pages and row['kind'] in ('book','archive'):
+                            book_target+=1
+                            if has_page_heads and has_page_vectors:
+                                book_batch.append(row['id'])
+                                if len(book_batch)==ROW_BATCH_SIZE:
+                                    flush_books(book_batch)
                         if has_vectors:
                             raw_tags=row['tags']
                             batch.append({
@@ -672,11 +703,20 @@ class AISearch:
                             if len(batch)==ROW_BATCH_SIZE:
                                 flush(batch)
             flush(batch)
-        cov_status = 'empty_scope' if targeted == 0 else ('ready' if fresh == targeted else ('unindexed' if fresh == 0 else 'partially_indexed'))
+            flush_books(book_batch)
+        book_pages_remaining=max(0,book_target-book_pages_ready)
+        cov_status=('empty_scope' if targeted==0
+                    else ('unindexed' if fresh==0
+                          else ('partially_indexed' if fresh<targeted or book_pages_remaining>0
+                                else 'ready')))
         return {'scope':scope,'candidate_total':total,'target_total':targeted,
                 'fresh_total':fresh,'remaining_total':targeted-fresh,
                 'coverage_limit':MAX_ITEMS,'index_limit':limit,'refresh_required_on_change':True,
-                'coverage_status':cov_status}
+                'coverage_status':cov_status,
+                'book_pages':'all_pages' if want_all_pages else 'cover_only',
+                'book_target_total':book_target,
+                'book_pages_ready_total':book_pages_ready,
+                'book_pages_remaining_total':book_pages_remaining}
 
     def status(self):
         with self.guard: state=self.store.state()
@@ -715,13 +755,13 @@ class AISearch:
             if self.worker and self.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
             if self.catalog.scan_state()['state'] in ('running','cancelling'): raise AIBusy('フォルダのスキャン完了後に実行してください。')
             self.cancel.clear()
-            self.store.save_state({'state':'running','processed':0,'total':total,'indexed':0,'skipped':0,'error':'','scope':scope})
+            self.store.save_state({'state':'running','processed':0,'total':total,'indexed':0,'skipped':0,'reused':0,'error':'','scope':scope})
             self.worker=threading.Thread(target=self._build,args=(None,scope),kwargs={'upper_id':upper_id,'limit':total},daemon=True)
             self.worker.start()
             return self.status()
     def _build(self,ids,scope=None,initial_state=None,*,upper_id=0,limit=0):
         total_hint=len(ids) if ids is not None else (initial_state['total'] if initial_state is not None else limit)
-        state=dict(initial_state) if initial_state is not None else {'state':'running','processed':0,'total':total_hint,'indexed':0,'skipped':0,'error':'','scope':scope}
+        state=dict(initial_state) if initial_state is not None else {'state':'running','processed':0,'total':total_hint,'indexed':0,'skipped':0,'reused':0,'error':'','scope':scope}
         continuing=state.get('job')==CONTINUATION_JOB
         if continuing and state['continuation'].get('version')==1:
             state['_pins']={item:(rev,sig) for item,rev,sig in state['continuation']['entries']}
@@ -775,6 +815,7 @@ class AISearch:
                                     state['skipped']+=len(ready_rows)-len(ready_checked)
                             else:
                                 state['indexed']+=len(ready_rows)
+                                state['reused']=state.get('reused',0)+len(ready_rows)
                             state['processed']+=len(ready_rows)
                         ready_ids={r['id'] for r in ready_rows}
                         work_rows=[r for r in present_rows if r['id'] not in ready_ids]
@@ -904,6 +945,7 @@ class AISearch:
                                 if state['indexed']>indexed_before:
                                     newly_indexed_ids.append(item_id)
                                     if did_infer:did_infer_ids.add(item_id)
+                                    elif not continuing:state['reused']=state.get('reused',0)+1
                                 state['processed']+=1
                             if continuing and newly_indexed_ids and not self.cancel.is_set():
                                 with self.catalog._guard:
@@ -986,6 +1028,8 @@ class AISearch:
                                     did_infer=True
                             except (PreviewUnavailable,ReaderChanged,PreviewBusyError,KeyError,OSError):
                                 pass
+                        if not continuing and not self.cancel.is_set() and state['indexed']>indexed_before and not did_infer:
+                            state['reused']=state.get('reused',0)+1
                         if continuing and not self.cancel.is_set():
                             with self.catalog._guard:
                                 self.continuation.check(state,[item_id])
