@@ -201,6 +201,7 @@ class ProductionCatalog(Catalog):
     JOIN = (' FROM items i JOIN item_locations m ON m.item_id=i.id '
             'JOIN library_locations l ON l.id=m.location_id ')
     FIELDS = 'i.*,(SELECT json_group_array(shelf_id) FROM (SELECT shelf_id FROM item_shelves WHERE item_id=i.id ORDER BY shelf_id)) shelf_ids,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns'
+    FIELDS_NO_SHELVES = "i.*,'[]' AS shelf_ids,l.root_id,l.relative_path,l.status AS availability,l.size_bytes,l.mtime_ns"
 
     def search(self, query='', kind='', view='all', page=0, limit=60, root_id=None, root_ids=None, shelf=None, shelf_ids=None, tag=None, *, result_sink=None, cancelled=None):
         if not isinstance(kind,str) or kind and kind not in QUERY_KINDS or view not in ('all','favorites','unreviewed','shelf','history'):
@@ -271,6 +272,8 @@ class ProductionCatalog(Catalog):
                           'shelf':["i.shelf<>''"],'history':['EXISTS(SELECT 1 FROM view_history h WHERE h.item_id=i.id)'],'all':[]}[view])
             clause=self.JOIN+' WHERE '+' AND '.join(where)
             total=db.execute('SELECT count(*)'+clause,values).fetchone()[0]
+            has_shelves=db.execute('SELECT 1 FROM item_shelves LIMIT 1').fetchone() is not None
+            fields=self.FIELDS if has_shelves else self.FIELDS_NO_SHELVES
             partial=None
             if total==0 and len(terms)>=2:
                 # Nothing has every word: offer items missing exactly one word
@@ -283,13 +286,13 @@ class ProductionCatalog(Catalog):
                 # An empty fallback stays an ordinary empty result, so the UI
                 # never claims to show partial matches it does not have.
                 partial={'words':len(terms),'required':required} if total else None
-                select='SELECT '+self.FIELDS+clause
+                select='SELECT '+fields+clause
                 order=(' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC' if view=='history' else ' ORDER BY aredoko_specific(i.title,i.tags) DESC, i.id')
             elif expansions:
-                select=f'SELECT {self.FIELDS},aredoko_match(i.title,i.tags) AS direct_hits'+clause
+                select=f'SELECT {fields},aredoko_match(i.title,i.tags) AS direct_hits'+clause
                 order=(' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC' if view=='history' else ' ORDER BY direct_hits DESC, aredoko_specific(i.title,i.tags) DESC, i.id')
             else:
-                select='SELECT '+self.FIELDS+clause
+                select='SELECT '+fields+clause
                 order=(' ORDER BY (SELECT opened_ns FROM view_history h WHERE h.item_id=i.id) DESC, i.id DESC' if view=='history' else ' ORDER BY i.id')
             def reply(rows,number):
                 items=[self.item(r) for r in rows]

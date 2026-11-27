@@ -112,26 +112,25 @@ class ResultSessionTests(unittest.TestCase):
             actual=list(session._currents(items,capture=True))
         self.assertEqual(actual,reference);self.assertEqual(connection.call_count,1);self.assertEqual(physical.call_count,len(items))
 
-    def test_creation_resolution_cache_is_thread_local_page_scoped_and_not_used_for_reads(self):
+    def test_creation_skips_per_item_source_checks_and_reads_validate_unshared(self):
         import result_sessions
-        original=result_sessions._safe_path;calls=[];lock=threading.Lock()
+        original=result_sessions._safe_path;calls=[]
         def observed(*args,**kwargs):
-            cache=kwargs.get('root_cache')
-            with lock:calls.append((cache,threading.get_ident(),args[1]))
+            calls.append((kwargs.get('root_cache'),args[1]))
             return original(*args,**kwargs)
         with patch('result_sessions._safe_path',side_effect=observed):self.create()
-        self.assertEqual(len(calls),125);self.assertTrue(all(isinstance(cache,dict) for cache,_,_ in calls))
-        owners={};pages={};item_pages={item['relative_path']:n//60 for n,item in enumerate(self.items)}
-        for cache,thread,path in calls:
-            owners.setdefault(id(cache),set()).add(thread);pages.setdefault(id(cache),set()).add(item_pages[path])
-        # This provider yields 60/60/5 rows: two four-worker pages, then one
-        # sequential page. Production's 120-row pages retain the same bound.
-        self.assertGreaterEqual(len(owners),3);self.assertLessEqual(len(owners),9)
-        self.assertTrue(all(len(threads)==1 for threads in owners.values()))
-        self.assertTrue(all(len(group)==1 for group in pages.values()))
-        calls.clear()
-        with patch('result_sessions._safe_path',side_effect=observed):self.owner.read(self.sid,0,1)
+        self.assertEqual(len(calls),0)
+        with patch('result_sessions._safe_path',side_effect=observed):
+            first=self.owner.read(self.sid,0,1)
         self.assertEqual(len(calls),1);self.assertIsNone(calls[0][0])
+        self.assertNotIn('_source_identity',first['items'][0])
+        stored=json.loads(self.owner.sessions[self.sid].db.execute('SELECT payload FROM results WHERE ordinal=0').fetchone()[0])
+        self.assertIn('_source_identity',stored)
+        calls.clear()
+        with patch('result_sessions._safe_path',side_effect=observed):
+            page=self.owner.read(self.sid,60,60)
+        self.assertEqual(len(calls),60);self.assertEqual(len(page['items']),60)
+        self.assertTrue(all(cache is None for cache,_ in calls))
 
     def test_metadata_write_during_page_validation_never_returns_mixed_rows(self):
         import result_sessions
@@ -152,16 +151,18 @@ class ResultSessionTests(unittest.TestCase):
         with patch('result_sessions._safe_path',side_effect=mutate),self.assertRaises(ResultUnavailable):self.owner.read(self.sid,0,60)
 
     def test_owner_close_waits_for_cancelled_builder_to_release_workspace(self):
-        import result_sessions
-        entered=threading.Event();release=threading.Event();errors=[];closed=[];original=result_sessions._safe_path
-        def held(*args,**kwargs):entered.set();release.wait(3);return original(*args,**kwargs)
+        old=self.owner.provider
+        entered=threading.Event();release=threading.Event();errors=[];closed=[]
+        def held(conditions,consume,cancelled):
+            entered.set();release.wait(3)
+            return old(conditions,consume,cancelled)
+        self.owner.provider=held
         def build():
             try:self.create()
             except Exception as error:errors.append(error)
-        with patch('result_sessions._safe_path',side_effect=held):
-            worker=threading.Thread(target=build);worker.start();self.assertTrue(entered.wait(2))
-            closer=threading.Thread(target=lambda:closed.append(self.owner.close(timeout=3)));closer.start()
-            self.assertTrue(self.owner.stopped.wait(2));release.set();worker.join(4);closer.join(4)
+        worker=threading.Thread(target=build);worker.start();self.assertTrue(entered.wait(2))
+        closer=threading.Thread(target=lambda:closed.append(self.owner.close(timeout=3)));closer.start()
+        self.assertTrue(self.owner.stopped.wait(2));release.set();worker.join(4);closer.join(4)
         self.assertFalse(worker.is_alive());self.assertFalse(closer.is_alive());self.assertTrue(errors);self.assertEqual(closed,[True])
         self.assertFalse(list(self.base.glob('aredoko-results-*')))
 
@@ -191,6 +192,7 @@ class ResultSessionTests(unittest.TestCase):
     def test_replaced_source_with_preserved_metadata_is_rejected(self):
         import os
         self.create()
+        self.owner.read(self.sid, 60, 1)  # Pin observed source identity
         target = self.media / self.items[60]['relative_path']; before = target.stat()
         replacement = self.media / 'replacement.tmp'; replacement.write_bytes(target.read_bytes())
         os.utime(replacement, ns=(before.st_atime_ns, before.st_mtime_ns)); os.replace(replacement, target)
@@ -211,7 +213,9 @@ class ResultSessionTests(unittest.TestCase):
     def test_reconnected_item_requires_refresh_of_unavailable_snapshot(self):
         import os
         path = self.media / self.items[60]['relative_path']; data = path.read_bytes(); before = path.stat()
-        path.unlink(); self.create(); path.write_bytes(data)
+        path.unlink(); self.create()
+        self.assertEqual(self.owner.read(self.sid, 60, 1)['items'][0]['availability'], 'unavailable')
+        path.write_bytes(data)
         os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
         with self.assertRaises(ResultUnavailable): self.owner.read(self.sid, 60, 1)
 
@@ -307,59 +311,45 @@ class ResultSessionTests(unittest.TestCase):
         self.assertNotIn('items', session.metadata)
         self.assertEqual(self.owner.read(self.sid, 120, 120)['total'], 125)
 
-    def test_capture_overlaps_at_most_four_sources_but_keeps_provider_order(self):
-        import result_sessions
-        original=result_sessions.FrozenResult._current
-        lock=threading.Lock();another=threading.Event();active=0;peak=0
-        first=self.items[0]['id'];completed=[]
-        def checked(session,payload,**kwargs):
-            nonlocal active,peak
-            with lock:active+=1;peak=max(peak,active)
-            try:
-                if payload['id']==first:
-                    self.assertTrue(another.wait(3))
-                else:another.set()
-                result=original(session,payload,**kwargs)
-                with lock:completed.append(payload['id'])
-                return result
-            finally:
-                with lock:active-=1
-        with patch.object(result_sessions.FrozenResult,'_current',new=checked):self.create()
+    def test_create_keeps_provider_order_with_zero_upfront_safe_path_calls(self):
+        with patch('result_sessions._safe_path', side_effect=AssertionError('must not scan all sources on create')):
+            self.create()
         session=self.owner.sessions[self.sid]
         self.assertEqual([row[0] for row in session.db.execute('SELECT item_id FROM results ORDER BY ordinal')],[i['id'] for i in self.items])
-        self.assertGreaterEqual(peak,2);self.assertLessEqual(peak,4)
-        self.assertEqual(sorted(completed),sorted(i['id'] for i in self.items))
-        self.assertIsNone(session.capture_executor)
-        self.assertFalse(any(t.name.startswith('result-source') for t in threading.enumerate()))
+        self.assertEqual(len(self.owner.read(self.sid,0,60)['items']),60)
 
-    def test_close_during_parallel_capture_joins_checks_before_workspace_cleanup(self):
-        import result_sessions
-        original=result_sessions.FrozenResult._current;entered=threading.Event();release=threading.Event();errors=[]
-        def held(session,payload,**kwargs):
-            entered.set();release.wait(4)
-            return original(session,payload,**kwargs)
+    def test_close_during_provider_build_joins_before_workspace_cleanup(self):
+        old=self.owner.provider;entered=threading.Event();release=threading.Event();errors=[]
+        def held(conditions,consume,cancelled):
+            def delayed(page):
+                def read_page(number):
+                    if number==1:entered.set();release.wait(4)
+                    return page(number)
+                return consume(read_page)
+            return old(conditions,delayed,cancelled)
+        self.owner.provider=held
         def build():
             try:self.create()
             except Exception as error:errors.append(error)
-        with patch.object(result_sessions.FrozenResult,'_current',new=held):
-            thread=threading.Thread(target=build);thread.start();self.assertTrue(entered.wait(3))
-            try:self.assertFalse(self.owner.close(timeout=.02))
-            finally:release.set();thread.join(6)
+        thread=threading.Thread(target=build);thread.start();self.assertTrue(entered.wait(3))
+        try:self.assertFalse(self.owner.close(timeout=.02))
+        finally:release.set();thread.join(6)
         self.assertFalse(thread.is_alive());self.assertTrue(errors)
         self.assertFalse(list(self.base.glob('aredoko-results-*')))
-        self.assertFalse(any(t.name.startswith('result-source') for t in threading.enumerate()))
 
-    def test_parallel_capture_failure_never_publishes_partial_results(self):
-        import result_sessions
-        original=result_sessions.FrozenResult._current
-        def failed(session,payload,**kwargs):
-            if payload['id']==self.items[2]['id']:raise ResultUnavailable('Generated capture failure')
-            return original(session,payload,**kwargs)
-        with patch.object(result_sessions.FrozenResult,'_current',new=failed):
-            with self.assertRaises(ResultUnavailable):self.create()
+    def test_provider_failure_mid_build_never_publishes_partial_results(self):
+        old=self.owner.provider
+        def failing(conditions,consume,cancelled):
+            def broken(page):
+                def read_page(number):
+                    if number==1:raise ResultUnavailable('Generated provider failure')
+                    return page(number)
+                return consume(read_page)
+            return old(conditions,broken,cancelled)
+        self.owner.provider=failing
+        with self.assertRaises(ResultUnavailable):self.create()
         self.assertNotIn(self.sid,self.owner.sessions)
         self.assertFalse(list(self.base.glob('aredoko-results-*')))
-        self.assertFalse(any(t.name.startswith('result-source') for t in threading.enumerate()))
 
     def test_building_status_reports_committed_count_without_exposing_partial_ranges(self):
         old=self.owner.provider;entered=threading.Event();release=threading.Event();errors=[]

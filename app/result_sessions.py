@@ -5,7 +5,6 @@ spool alive for this consumer). Subsequent range/neighbor reads never rerank.
 No source bytes, model weights or all-result metadata lists live in memory.
 """
 from contextlib import ExitStack
-from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
@@ -92,7 +91,6 @@ class FrozenResult:
         self.expected_total = None
         self.processed = 0
         self.last_used = time.monotonic()
-        self.capture_executor = None
         self._preview_reader = None
 
     def check(self):
@@ -127,7 +125,7 @@ class FrozenResult:
                     if len(items) > 120 or (not items and self.total != expected):
                         raise ResultUnavailable('Incomplete search results', conditions=self.conditions)
                     batch = []
-                    for item in self._currents(items,capture=True):
+                    for item in items:
                         payload = json.dumps(item, ensure_ascii=False, separators=(',', ':'))
                         if len(payload) > 131072 and len(payload.encode('utf-8')) > 512 * 1024:
                             raise ResultCapacity('Result evidence exceeds workspace limit')
@@ -156,14 +154,7 @@ class FrozenResult:
                     self.db.commit()
                 return self.metadata
             try:
-                # Overlap bounded source I/O; publish only after every owned
-                # check has joined. The original physical guards stay intact.
-                with ThreadPoolExecutor(max_workers=4, thread_name_prefix='result-source') as executor:
-                    self.capture_executor = executor
-                    try:
-                        provider(consume)
-                    finally:
-                        self.capture_executor = None
+                provider(consume)
                 self.check()
                 with self.progress_lock:
                     self.state = 'ready'
@@ -177,7 +168,7 @@ class FrozenResult:
     def bytes(self):
         return self.path.stat().st_size
 
-    def _currents(self,items,*,capture=False):
+    def _currents(self,items,*,capture=False,pins=None):
         # One bounded page connection/query, no persistent access cache. The
         # generation is checked before/after and every physical source is probed.
         self.check()
@@ -204,43 +195,12 @@ class FrozenResult:
                         'JOIN library_roots r ON r.id=l.root_id WHERE i.id=?',(item['id'],)).fetchone()
                 else:row=choices[0] if choices else None
                 prepared.append((item,row))
-            roots=threading.local() if capture else None
-            def validate(pair):
-                item,row=pair
-                cache=None
-                if roots is not None:
-                    if not hasattr(roots,'paths'):roots.paths={}
-                    cache=roots.paths
+            for item,row in prepared:
                 matcher=excludes_by_root.get(row['root_id'],_MISSING) if row is not None else _MISSING
-                return self._current(item,capture=capture,row=row,root_cache=cache,exclude_matcher=matcher)
-            if capture and len(prepared)>=16 and self.capture_executor is not None:
-                # At most one provider page (120) is queued across 4 workers; keeps rank.
-                step=(len(prepared)+3)//4
-                chunks=[prepared[i:i+step] for i in range(0,len(prepared),step)]
-                abort=threading.Event()
-                def validate_chunk(chunk):
-                    out=[]
-                    try:
-                        for pair in chunk:
-                            if abort.is_set():
-                                raise ResultUnavailable(conditions=self.conditions)
-                            out.append(validate(pair))
-                    except BaseException:
-                        abort.set()
-                        raise
-                    return out
-                futures=[self.capture_executor.submit(validate_chunk,chunk) for chunk in chunks]
-                try:
-                    for future in futures:
-                        yield from future.result()
-                except BaseException:
-                    abort.set()
-                    raise
-            else:
-                for pair in prepared:yield validate(pair)
+                yield self._current(item,capture=capture,row=row,root_cache=None,exclude_matcher=matcher,pins=pins)
         self.check()
 
-    def _current(self, payload, *, capture=False, for_viewer=False, row=_MISSING, root_cache=None, exclude_matcher=_MISSING):
+    def _current(self, payload, *, capture=False, for_viewer=False, row=_MISSING, root_cache=None, exclude_matcher=_MISSING, pins=None):
         # No access cache: registration/exclusion/ancestors/physical version are
         # checked even when the frozen metadata/rank was already read before.
         if self.stop.is_set():raise ResultUnavailable(conditions=self.conditions)
@@ -279,9 +239,6 @@ class FrozenResult:
                         self._preview_reader = PreviewReader(self.catalog, max_slots=4)
                     signature = self._preview_reader.tag_source(item_id, root_cache=root_cache)['revision']
                 else:
-                    # Only parsed/resolved root paths are reused, per thread and
-                    # provider page. _safe_path still stats every ancestor and
-                    # leaf on every item; no access/identity decision is cached.
                     _, info = _safe_path(row['path'], row['relative_path'], root_cache=root_cache,return_info=True)
                     if not stat.S_ISREG(info.st_mode) or (info.st_size, info.st_mtime_ns) != (row['size_bytes'], row['mtime_ns']):
                         signature = 'unavailable'
@@ -293,14 +250,31 @@ class FrozenResult:
                 signature = 'unavailable'
         if capture:
             return {**payload, '_source_identity': signature}
-        if signature != payload.get('_source_identity'):
-            raise ResultUnavailable('Result source identity changed; refresh results', conditions=self.conditions)
+        if '_source_identity' in payload:
+            if signature != payload['_source_identity']:
+                raise ResultUnavailable('Result source identity changed; refresh results', conditions=self.conditions)
+        elif pins is not None:
+            pins[item_id] = signature
         if for_viewer and (signature == 'unavailable' or row['availability'] != 'present'):
             raise ResultUnavailable('Result source unavailable; refresh results', conditions=self.conditions)
         result = {key: value for key, value in payload.items() if key != '_source_identity'}
         if signature == 'unavailable':
             result.update(availability='unavailable', source_state='unavailable')
         return result
+
+    def _pin_identities(self, raw_by_id, pins):
+        if not pins:
+            return
+        updates = []
+        for item_id, signature in pins.items():
+            payload = dict(raw_by_id[item_id])
+            payload['_source_identity'] = signature
+            serialized = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+            if len(serialized) > 131072 and len(serialized.encode('utf-8')) > 512 * 1024:
+                raise ResultCapacity('Result evidence exceeds workspace limit')
+            updates.append((serialized, item_id))
+        with self.db:
+            self.db.executemany('UPDATE results SET payload=? WHERE item_id=?', updates)
 
     def locate(self,item_ids):
         from selection_edits import selection_ids
@@ -371,8 +345,11 @@ class FrozenResult:
                 raise ResultUnavailable('Result session is still building', conditions=self.conditions)
             if self.origin is not None: self._current(self.origin, for_viewer=True)
             rows = self.db.execute('SELECT payload FROM results WHERE ordinal>=? ORDER BY ordinal LIMIT ?', (offset, limit)).fetchall()
-            items = list(self._currents([json.loads(row[0]) for row in rows]))
+            raw_payloads = [json.loads(row[0]) for row in rows]
+            pins = {}
+            items = list(self._currents(raw_payloads, pins=pins))
             self.check()
+            self._pin_identities({item['id']: item for item in raw_payloads}, pins)
             self.last_used = time.monotonic()
             return {**self.metadata, 'offset': offset, 'limit': limit, 'items': items,
                     'conditions': self.conditions, 'state': 'ready'}
@@ -386,12 +363,19 @@ class FrozenResult:
             origin = self.db.execute('SELECT ordinal,payload FROM results WHERE item_id=?', (item_id,)).fetchone()
             if origin is None:
                 raise ResultUnavailable('Current item is outside this result session', conditions=self.conditions)
-            self._current(json.loads(origin[1]), for_viewer=True)
+            origin_payload = json.loads(origin[1])
+            pins = {}
+            raw_by_id = {origin_payload['id']: origin_payload}
+            self._current(origin_payload, for_viewer=True, pins=pins)
             sign, order = ('>', 'ASC') if direction == 1 else ('<', 'DESC')
             col = 'visual' if include_books else 'image'
             row = self.db.execute(f'SELECT ordinal,payload FROM results WHERE {col}=1 AND ordinal{sign}? ORDER BY ordinal {order} LIMIT 1', (origin[0],)).fetchone()
-            target = None if row is None else {'ordinal': row[0], 'item': self._current(json.loads(row[1]), for_viewer=True)}
+            target_payload = None if row is None else json.loads(row[1])
+            if target_payload is not None:
+                raw_by_id[target_payload['id']] = target_payload
+            target = None if target_payload is None else {'ordinal': row[0], 'item': self._current(target_payload, for_viewer=True, pins=pins)}
             self.check()
+            self._pin_identities(raw_by_id, pins)
             self.last_used = time.monotonic()
             return {'neighbor': target, 'current_id': item_id, 'conditions': self.conditions}
 
