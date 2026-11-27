@@ -4490,11 +4490,15 @@ public sealed partial class MainPage : Page
             content.RowDefinitions.Add(new RowDefinition {Height=new GridLength(1,GridUnitType.Star)});
             content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
             var navBar=new StackPanel {Orientation=Orientation.Horizontal,Spacing=6};
-            Button MakeSectionButton(string label,string autoId,Border targetCard,bool expandMedia=false)
+            Button MakeSectionButton(string label,string autoId,Border targetCard,bool expandScope=false,bool expandMedia=false)
             {
                 var btn=new Button {Content=label,Padding=new Thickness(10,4,10,4)};
                 AutomationProperties.SetAutomationId(btn,autoId);
                 btn.Click+=(_,_)=>{
+                    if(expandScope)
+                    {
+                        scopeEditor.Content.IsExpanded=true;
+                    }
                     if(expandMedia)
                     {
                         audioPreparation.Content.IsExpanded=true;
@@ -4506,7 +4510,7 @@ public sealed partial class MainPage : Page
                 return btn;
             }
             navBar.Children.Add(MakeSectionButton(AppText.L("モデル","Models"),"AISecModel",modelCard));
-            navBar.Children.Add(MakeSectionButton(AppText.L("対象範囲","Scope"),"AISecScope",scopeCard));
+            navBar.Children.Add(MakeSectionButton(AppText.L("対象範囲","Scope"),"AISecScope",scopeCard,expandScope:true));
             navBar.Children.Add(MakeSectionButton(AppText.L("動画・音声","Video/Audio"),"AISecMedia",mediaCard,expandMedia:true));
             navBar.Children.Add(MakeSectionButton(AppText.L("メモリ・負荷","Memory/Load"),"AISecResource",resourceCard));
             content.Children.Add(navBar);

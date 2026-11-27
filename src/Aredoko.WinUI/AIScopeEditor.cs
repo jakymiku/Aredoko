@@ -49,6 +49,15 @@ public sealed class AIScopeEditor : IDisposable
         return copy;
     }
     private bool Dirty=>saved is null || !JsonNode.DeepEquals(NormalizeForCompare(saved),Draft());
+    private bool OnlyBookPagesChanged()
+    {
+        if(saved is null)return false;
+        var baseNormalized=NormalizeForCompare(saved);
+        var draft=(JsonObject)Draft().DeepClone();
+        if(JsonNode.DeepEquals(baseNormalized,draft))return false;
+        draft["book_pages"]=baseNormalized["book_pages"]?.DeepClone();
+        return JsonNode.DeepEquals(baseNormalized,draft);
+    }
 
     public AIScopeEditor(LibraryApi api,Action<JsonObject?> applied)
     {
@@ -85,7 +94,7 @@ public sealed class AIScopeEditor : IDisposable
         }
         kind.SelectedIndex=0;bookPages.SelectedIndex=0;shelfMode.SelectedIndex=0;
         all.Checked+=(_,_)=>Changed();all.Unchecked+=(_,_)=>Changed();
-        kind.SelectionChanged+=(_,_)=>Changed();bookPages.SelectionChanged+=(_,_)=>Changed();shelfMode.SelectionChanged+=(_,_)=>Changed();shelf.TextChanged+=(_,_)=>Changed();
+        kind.SelectionChanged+=(_,_)=>Changed();bookPages.SelectionChanged+=(_,_)=>BookPagesChanged();shelfMode.SelectionChanged+=(_,_)=>Changed();shelf.TextChanged+=(_,_)=>Changed();
         // Bound the expanding settings extent even with hundreds of roots.
         var rootViewport=new ScrollViewer {Content=FormScrollContent.Wrap(rootList),MaxHeight=160,
             HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,
@@ -180,6 +189,16 @@ public sealed class AIScopeEditor : IDisposable
         version++;confirmed=false;target=0;
         foreach(var block in counts)block.Text="";
         counts[0].Text=AppText.L("条件を変更しました。件数を確認してください。", "Filters changed. Click Check Counts.");
+        feedback.Text=Dirty?AppText.L("対象範囲の変更を保存するには「件数を確認」を押してください。", "Click Check Counts before saving scope changes."):"";
+        ScopeEdited?.Invoke();
+        Sync();
+    }
+    private void BookPagesChanged()
+    {
+        if(initializing||closed)return;
+        if(!Dirty)feedback.Text="";
+        else if(confirmed||OnlyBookPagesChanged())feedback.Text=AppText.L("未保存の変更があります。「保存」を押して反映してください。", "Unsaved changes. Click Save to apply.");
+        else feedback.Text=AppText.L("対象範囲の変更を保存するには「件数を確認」を押してください。", "Click Check Counts before saving scope changes.");
         ScopeEdited?.Invoke();
         Sync();
     }
@@ -196,7 +215,7 @@ public sealed class AIScopeEditor : IDisposable
         foreach(var button in pathButtons)button.IsEnabled=!initializing&&!saving;
         shelf.IsEnabled=!initializing&&!saving&&shelfMode.SelectedIndex==1;
         refresh.IsEnabled=!initializing&&!counting&&!saving;
-        save.IsEnabled=!initializing&&!saving&&!counting&&confirmed&&Dirty&&!jobBusy;
+        save.IsEnabled=!initializing&&!saving&&!counting&&Dirty&&!jobBusy&&(confirmed||OnlyBookPagesChanged());
         revert.IsEnabled=!initializing&&!saving&&!counting;
         StateChanged?.Invoke();
     }
@@ -209,10 +228,14 @@ public sealed class AIScopeEditor : IDisposable
             var data=await api.PostAsync("api/library/ai/coverage",AIScopeRequests.Scoped(requested));
             if(closed||ticket!=version)return;
             target=data["target_total"]!.GetValue<int>();confirmed=true;
+            int? coverageLimit=data["coverage_limit"] is JsonValue covVal&&covVal.TryGetValue<int>(out var covInt)?covInt:null;
             counts[0].Text=AppText.L($"条件に合う候補: {data["candidate_total"]!.GetValue<long>():N0} 件", $"Matching candidates: {data["candidate_total"]!.GetValue<long>():N0}");
-            counts[1].Text=AppText.L($"今回の対象枠: {target:N0} 件（最大10,000件）", $"Target batch size: {target:N0} (max 10,000)");
+            counts[1].Text=coverageLimit is >0
+                ? AppText.L($"今回の対象枠: {target:N0} 件（上限 {coverageLimit.Value:N0} 件）", $"Target batch size: {target:N0} (limit {coverageLimit.Value:N0})")
+                : AppText.L($"今回の対象枠: {target:N0} 件（全件対象）", $"Target batch size: {target:N0} (all matching)");
             counts[2].Text=AppText.L($"現在の文字索引: {data["fresh_total"]!.GetValue<int>():N0} 件", $"Current index ready: {data["fresh_total"]!.GetValue<int>():N0}");
             counts[3].Text=AppText.L($"残り: {data["remaining_total"]!.GetValue<int>():N0} 件 · 確認時点の件数です", $"Remaining: {data["remaining_total"]!.GetValue<int>():N0} · As of check time");
+            if(Dirty&&!saving)feedback.Text=AppText.L("未保存の変更があります。「保存」を押して反映してください。", "Unsaved changes. Click Save to apply.");
         } catch(Exception ex){if(!closed&&ticket==version){counts[0].Text=AppText.L("件数を確認できません: ", "Unable to check counts: ")+ex.Message;confirmed=false;}}
         finally {counting=false;Sync();}
     }
@@ -234,10 +257,10 @@ public sealed class AIScopeEditor : IDisposable
                     var actual=await api.GetAsync("api/library/ai/scope");
                     if(closed)return;
                     var verified=actual["valid"]?.GetValue<bool>()==true?actual["scope"] as JsonObject:null;
-                    if(verified is not null&&JsonNode.DeepEquals(verified,requested)) {
+                    if(verified is not null&&JsonNode.DeepEquals(NormalizeForCompare(verified),NormalizeForCompare(requested))) {
                         saved=(JsonObject)verified.DeepClone();applied((JsonObject)saved.DeepClone());
                         feedback.Text=AppText.L("✓ 保存しました（再確認済み）", "✓ Saved (verified)");
-                    } else if(verified is not null&&saved is not null&&JsonNode.DeepEquals(verified,saved)) {
+                    } else if(verified is not null&&saved is not null&&JsonNode.DeepEquals(NormalizeForCompare(verified),NormalizeForCompare(saved))) {
                         feedback.Text=AppText.L("保存できません。保存済みの対象を維持しました。件数を確認して再保存してください: ", "Could not save. Kept previously saved scope. Check counts and retry: ")+ex.Message;
                     } else {
                         saved=null;applied(null);confirmed=false;feedback.Text=AppText.L("保存結果を確認できません。対象の件数を確認して再保存してください。", "Unable to verify save result. Check counts and retry.");
