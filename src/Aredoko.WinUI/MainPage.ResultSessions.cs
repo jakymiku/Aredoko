@@ -152,8 +152,68 @@ public sealed partial class MainPage
             AppLog.Error(ex);
             // The edit already committed. Never report this as a failed save or
             // discard an unrelated tag/shelf draft (favorite saves only its flag).
-            if(!disposed)Notice(AppText.L("保存しました", "Saved"),AppText.L("検索結果を更新できませんでした。同じ条件で検索し直してください。", "Could not refresh search results. Search again with the same filters."),Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning);
+            if(!disposed)Notice(ex is ResultSessionException{AIIndexing:true}?AppText.L("AI検索データを作成中","Building AI search index"):AppText.L("保存しました", "Saved"),
+                ex is ResultSessionException{AIIndexing:true}?ex.Message:AppText.L("検索結果を更新できませんでした。同じ条件で検索し直してください。", "Could not refresh search results. Search again with the same filters."),
+                Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning);
         }
+    }
+    private bool CanRestoreLoadedResultSession(int targetPage, out bool pageInLoadedWindow)
+    {
+        pageInLoadedWindow = false;
+        if (resultSession is null || resultsNeedRefresh || rows.Count == 0 || PendingSearch)
+            return false;
+        try
+        {
+            var method = SearchMethod.FromIndex(SearchMode.SelectedIndex);
+            var origin = similarityOrigin;
+            if ((origin is not null && !DirectContentSimilarity || origin is null && method.IsAI && !method.IsDirectContent && !string.IsNullOrWhiteSpace(Query.Text)) && aiScope is null)
+                return false;
+            var conditions = ResultSearchConditions.Create(
+                Query.Text, KindValue(), view, method, aiScope, selectedSearchRoots?.ToArray(),
+                origin?.Id, AIMatchedOnly.IsChecked == true, BoundaryValue(), ResultGroup(),
+                selectedShelfIds, directAudioSimilarity, directVideoSimilarity, directVideoAudioSimilarity,
+                selectedTagScope, similarityOriginPage, similarityOriginMs);
+            if (conditions is null || !JsonNode.DeepEquals(resultSession.Conditions, conditions))
+                return false;
+            var pageSize = method.IsPageText ? 20 : 60;
+            if (resultPageSize != pageSize) return false;
+            if (resultSession.Total <= MaxVirtualSlots)
+            {
+                pageInLoadedWindow = true;
+                return true;
+            }
+            var offset = checked(targetPage * pageSize);
+            pageInLoadedWindow = offset >= browseStart && offset < browseStart + rows.Count;
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or OverflowException)
+        {
+            return false;
+        }
+    }
+
+    private void RestoreLoadedLibraryView()
+    {
+        if (resultSession is null) return;
+        UpdateLibraryHeading();
+        UpdateSearchMethod();
+        UpdateActiveSearchScopeBar();
+        UpdateFavoriteRootList();
+        EmptyAIRecovery.Visibility = EmptyResetConditionsButton.Visibility = EmptyOpenFoldersButton.Visibility = Visibility.Collapsed;
+        GettingStarted.Visibility = Visibility.Collapsed;
+        Empty.Visibility = Visibility.Collapsed;
+        Count.Text = AppText.L($"{resultSession.Total:N0} 件", $"{resultSession.Total:N0} items");
+        var slotTotal = virtualTotal <= MaxVirtualSlots ? virtualTotal : rows.Count;
+        UpdateBrowseFooter(FormatLoadedPageRange(browseStart, slotTotal, virtualTotal), browseStart > 0, browseStart + slotTotal < virtualTotal);
+        Items.IsEnabled = true;
+        startupSearchSucceeded = true;
+        BindLibrarySelection();
+        if (active is null && librarySelection.Count == 1 && rowById.TryGetValue(librarySelection.Ids.First(), out var selectedRow))
+            ApplySelectedRow(selectedRow);
+        else
+            Editor.IsEnabled = active is not null;
+        RestoreSelection();
+        ResumeVisibleContainers();
     }
     private static bool SameFavoriteCard(MediaRow a,MediaRow b)=>
         a.Id==b.Id&&a.Title==b.Title&&a.Kind==b.Kind&&a.Location==b.Location&&a.Availability==b.Availability

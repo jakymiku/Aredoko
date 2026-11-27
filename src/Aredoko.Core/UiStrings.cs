@@ -262,6 +262,11 @@ internal static class UiStrings
         ["まだ登録フォルダがありません"] = "No registered folders yet",
         ["ここにフォルダをドロップ、または［＋ フォルダを追加］から登録できます（元のファイルは移動・変更しません）。"] = "Drop folders here or click \"+ Add Folder\" to register (original files stay untouched).",
         ["アクセス拒否ログを表示"] = "View access-denied log",
+        ["AI検索データ: 確認中…"] = "AI Index: Checking…",
+        ["✨ AI検索データを作成"] = "✨ Build AI Search Index",
+        ["⚙ 設定 → AI"] = "⚙ Settings → AI",
+        ["AI検索の設定を開く"] = "Open AI search settings",
+        ["設定のAI検索を開く"] = "Open AI settings",
 
         // Settings Hub
         ["← 作品一覧へ戻る"] = "← Back to Library",

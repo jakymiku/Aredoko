@@ -484,7 +484,7 @@
       <Image x:Name="EmptyArt" Width="144" Height="144" Stretch="Uniform" Source="ms-appx:///Assets/Visual/aredoko_state_no_results_512.png" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
       <TextBlock x:Name="Empty" AutomationProperties.AutomationId="TxtEmpty" AutomationProperties.LiveSetting="Polite" Text="まだ作品がありません" TextWrapping="Wrap" TextAlignment="Center"/>
       <StackPanel x:Name="EmptyAIRecovery" Visibility="Collapsed" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
-       <Button Content="AIを準備" Click="GettingStartedAIPlan_Click" AutomationProperties.AutomationId="EmptyPrepareAI"/>
+       <Button x:Name="EmptyPrepareAIButton" Content="AIを準備" Click="GettingStartedAIPlan_Click" AutomationProperties.AutomationId="EmptyPrepareAI"/>
        <Button Content="名前・タグで探す" Click="EmptyLiteralSearch_Click" AutomationProperties.AutomationId="EmptyLiteralSearch"/>
       </StackPanel>
       <Button x:Name="EmptyResetConditionsButton" Content="条件をすべて解除" Visibility="Collapsed" HorizontalAlignment="Center" Click="ClearSearchConditions_Click" AutomationProperties.AutomationId="EmptyResetConditions"/>
@@ -565,7 +565,7 @@
      </Border>
     </Grid>
     <Grid x:Name="FolderHubView" SizeChanged="FolderHub_SizeChanged" Background="Transparent" AllowDrop="True" DragOver="Folder_DragOver" Drop="Folder_Drop" Grid.Row="1" Grid.RowSpan="3" Margin="0,0,12,0" Visibility="Collapsed" RowSpacing="12">
-     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
      <Grid x:Name="FolderHeader" MaxWidth="880" HorizontalAlignment="Stretch" ColumnSpacing="8" RowSpacing="8">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -595,7 +595,20 @@
        </Button>
       </StackPanel>
      </Grid>
-     <Border x:Name="FolderAddPanel" Grid.Row="1" MaxWidth="880" HorizontalAlignment="Stretch" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
+     <Border x:Name="FolderAIStatusBar" Grid.Row="1" MaxWidth="880" HorizontalAlignment="Stretch" Style="{StaticResource AredokoSurfaceStyle}" Padding="12,8" AutomationProperties.AutomationId="FolderAIStatusBar">
+      <Grid ColumnSpacing="10" RowSpacing="6">
+       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+        <TextBlock x:Name="FolderAIStatusText" Text="AI検索データ: 確認中…" TextWrapping="Wrap" Style="{StaticResource BodyStrongTextBlockStyle}" AutomationProperties.AutomationId="TxtFolderAIStatus"/>
+        <TextBlock x:Name="FolderAIStatusDetail" Visibility="Collapsed" TextWrapping="Wrap" Style="{StaticResource MediaMetadataStyle}" AutomationProperties.AutomationId="TxtFolderAIStatusDetail"/>
+       </StackPanel>
+       <Button x:Name="FolderAIBuildButton" Grid.Column="1" VerticalAlignment="Center" Content="✨ AI検索データを作成" Visibility="Collapsed" Click="FolderAIBuild_Click" AutomationProperties.AutomationId="BtnFolderAIBuild"/>
+       <Button x:Name="FolderAISettingsButton" Grid.Column="2" VerticalAlignment="Center" Content="⚙ 設定 → AI" Click="FolderAISettings_Click" ToolTipService.ToolTip="AI検索の設定を開く" AutomationProperties.Name="設定のAI検索を開く" AutomationProperties.AutomationId="BtnFolderAISettings"/>
+       <ProgressBar x:Name="FolderAIProgressBar" Grid.Row="1" Grid.ColumnSpan="3" Minimum="0" Maximum="100" Visibility="Collapsed" AutomationProperties.AutomationId="FolderAIProgressBar"/>
+      </Grid>
+     </Border>
+     <Border x:Name="FolderAddPanel" Grid.Row="2" MaxWidth="880" HorizontalAlignment="Stretch" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
       <ContentControl x:Name="FolderRegistrationEditor" HorizontalContentAlignment="Stretch"><Grid RowSpacing="8">
        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
        <ScrollViewer x:Name="FolderAddScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="フォルダ登録の入力項目" AutomationProperties.AutomationId="FolderAddScroll">
@@ -624,7 +637,7 @@
        </StackPanel>
       </Grid></ContentControl>
      </Border>
-     <Border x:Name="FolderSelectionPanel" Grid.Row="2" MaxWidth="880" HorizontalAlignment="Stretch" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
+     <Border x:Name="FolderSelectionPanel" Grid.Row="3" MaxWidth="880" HorizontalAlignment="Stretch" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}">
       <StackPanel Spacing="8">
        <TextBlock x:Name="FolderSelectionSummary" TextWrapping="Wrap" AutomationProperties.AutomationId="TxtFolderSelectionSummary"/>
        <Grid x:Name="FolderSelectionButtons" ColumnSpacing="8" RowSpacing="8">
@@ -637,7 +650,7 @@
        </Grid>
       </StackPanel>
      </Border>
-     <Grid Grid.Row="3" MaxWidth="880" HorizontalAlignment="Stretch">
+     <Grid Grid.Row="4" MaxWidth="880" HorizontalAlignment="Stretch">
       <ListView x:Name="FolderList" SelectionMode="Single" HorizontalContentAlignment="Stretch" AutomationProperties.Name="登録フォルダ一覧" AutomationProperties.AutomationId="FolderList"/>
       <Border x:Name="FolderEmptyState" Visibility="Collapsed" Style="{StaticResource AredokoSurfaceStyle}" Padding="32,28" Margin="24" MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
        <StackPanel Spacing="12" HorizontalAlignment="Center">
@@ -712,8 +725,14 @@
            <Image x:Name="SettingsAIStatusArt" Width="72" Height="72" Stretch="Uniform" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
            <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
             <TextBlock x:Name="SettingsAINextHint" Text="AIを使わなくても名前・タグで検索できます。" Style="{StaticResource MediaMetadataStyle}" TextWrapping="Wrap"/>
+            <ProgressBar x:Name="SettingsAIBuildProgressBar" Minimum="0" Maximum="100" Visibility="Collapsed" AutomationProperties.AutomationId="SettingsAIBuildProgressBar"/>
             <StackPanel Orientation="Horizontal" Spacing="8">
+             <Button x:Name="SettingsAIBuildButton" Content="✨ AI検索データを作成" Style="{StaticResource AccentButtonStyle}" Visibility="Collapsed" Click="SettingsAIBuild_Click" AutomationProperties.AutomationId="BtnSettingsAIBuild"/>
+             <Button x:Name="SettingsAICancelButton" Content="中止" Visibility="Collapsed" Click="SettingsAICancel_Click" AutomationProperties.AutomationId="BtnSettingsAICancel"/>
              <Button x:Name="SettingsAIIndexButton" Content="AI検索を設定" Style="{StaticResource AccentButtonStyle}" Click="SettingsAIIndex_Click" AutomationProperties.AutomationId="BtnAIIndex"/>
+             <Button x:Name="SettingsAIOpenFoldersButton" Content="📁 登録フォルダを開く" Click="SettingsOpenFolders_Click" AutomationProperties.AutomationId="BtnSettingsAIOpenFolders"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
              <Button x:Name="SettingsAIMediaPrepButton" Content="🎬 動画・音声のAIデータ" Click="SettingsAIMediaPrep_Click" AutomationProperties.AutomationId="BtnAIMediaPrep"/>
              <Button x:Name="SettingsAIDownloadTaggerButton" Content="🏷 タグ付けモデルを取得" Click="SettingsAIDownloadTagger_Click" AutomationProperties.AutomationId="BtnAIDownloadTagger"/>
             </StackPanel>

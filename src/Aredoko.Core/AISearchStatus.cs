@@ -94,4 +94,48 @@ public static class AISearchStatus
             _ => (AppText.L("未作成", "Not built"), AppText.L("［AI検索を設定］から対象フォルダのAI検索データを作成できます。", "Build the AI search index for target folders from Configure AI."))
         };
     }
+
+    public static string FolderSummary(
+        bool available,
+        string jobState,
+        int jobProcessed,
+        int jobTotal,
+        bool scopeInvalid,
+        int? coverageTargetTotal = null,
+        int? coverageFreshTotal = null,
+        int unscopedPresentTotal = 0)
+    {
+        if (!available)
+            return AppText.L("AI検索データ: 未設定（設定 → AI から準備できます）", "AI Index: Not set up (configure in Settings → AI)");
+        if (jobState == "running")
+            return AppText.L($"AI検索データ: 作成中（{jobProcessed:N0} / {jobTotal:N0} 件）", $"AI Index: Building ({jobProcessed:N0} / {jobTotal:N0})");
+        if (jobState == "cancelling")
+            return AppText.L($"AI検索データ: 中断中（{jobProcessed:N0} / {jobTotal:N0} 件）", $"AI Index: Canceling ({jobProcessed:N0} / {jobTotal:N0})");
+        if (scopeInvalid)
+            return AppText.L("AI検索データ: 対象範囲の確認が必要です", "AI Index: Search scope needs attention");
+        if (coverageTargetTotal is int target && coverageFreshTotal is int fresh)
+        {
+            var clampedFresh = Math.Clamp(fresh, 0, Math.Max(0, target));
+            var remaining = Math.Max(0, target - clampedFresh);
+            if (target == 0)
+            {
+                return unscopedPresentTotal > 0
+                    ? AppText.L($"AI検索データ: 対象外（全 {unscopedPresentTotal:N0} 件がAI対象外）", $"AI Index: Out of scope ({unscopedPresentTotal:N0} excluded)")
+                    : AppText.L("AI検索データ: 対象なし（0 件）", "AI Index: No items in scope (0)");
+            }
+            if (clampedFresh == 0)
+                return AppText.L($"AI検索データ: 未作成（対象 {target:N0} 件）", $"AI Index: Not built ({target:N0} in scope)");
+            if (remaining > 0)
+                return AppText.L($"AI検索データ: {clampedFresh:N0} / {target:N0} 件作成済み（未作成 {remaining:N0} 件）", $"AI Index: {clampedFresh:N0} / {target:N0} built ({remaining:N0} remaining)");
+            return unscopedPresentTotal > 0
+                ? AppText.L($"AI検索データ: ✓ 対象分作成済み（{clampedFresh:N0} / {target:N0} 件 · 対象外 {unscopedPresentTotal:N0} 件）", $"AI Index: ✓ Scoped ready ({clampedFresh:N0} / {target:N0} · {unscopedPresentTotal:N0} excluded)")
+                : AppText.L($"AI検索データ: ✓ 作成済み（{clampedFresh:N0} / {target:N0} 件）", $"AI Index: ✓ Ready ({clampedFresh:N0} / {target:N0})");
+        }
+        return jobState switch
+        {
+            "complete" => AppText.L($"AI検索データ: ✓ 作成済み（{jobProcessed:N0} / {jobTotal:N0} 件）", $"AI Index: ✓ Ready ({jobProcessed:N0} / {jobTotal:N0})"),
+            "partial" or "cancelled" or "interrupted" => AppText.L($"AI検索データ: 一部作成（{jobProcessed:N0} / {jobTotal:N0} 件）", $"AI Index: Partial ({jobProcessed:N0} / {jobTotal:N0})"),
+            _ => AppText.L("AI検索データ: 未作成", "AI Index: Not built")
+        };
+    }
 }

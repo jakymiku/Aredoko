@@ -523,7 +523,7 @@ public sealed partial class MainPage : Page
         ToolTipService.SetToolTip(MainViewTitle,selectedShelfIds is not null?ShelfScopeName(summarize:false):MainViewTitle.Text);
     }
     private async Task LoadAsync(bool reuseSession=false) {
-        CloseBrowseMenus();EmptyAIRecovery.Visibility=Visibility.Collapsed;EmptyResetConditionsButton.Visibility=Visibility.Collapsed;EmptyOpenFoldersButton.Visibility=Visibility.Collapsed;
+        CloseBrowseMenus();EmptyAIRecovery.Visibility=Visibility.Collapsed;EmptyPrepareAIButton.Visibility=Visibility.Visible;EmptyResetConditionsButton.Visibility=Visibility.Collapsed;EmptyOpenFoldersButton.Visibility=Visibility.Collapsed;
         // The accepted destination owns the heading even while its request is
         // pending or fails. Never label old, disabled rows as the new results.
         UpdateLibraryHeading();Count.Text=AppText.L("検索中…","Searching…");
@@ -669,7 +669,20 @@ public sealed partial class MainPage : Page
         {
             if(searches.IsCurrent(version))
             {
-                var missingAI=origin is null&&ex is not ResultSessionException&&(selectedMode is >0 and <4 or 7 or 8 or 9)&&
+                var aiIndexingActive=ex is ResultSessionException{AIIndexing:true};
+                var isAiMode=origin is not null||SearchMethod.FromIndex(selectedMode).IsAI;
+                if(!aiIndexingActive&&ex is ResultSessionException rse&&rse.Status==System.Net.HttpStatusCode.Conflict&&isAiMode&&!disposed)
+                {
+                    try
+                    {
+                        using var checkCts=new CancellationTokenSource(TimeSpan.FromMilliseconds(1500));
+                        var statusData=await api.GetAsync("api/library/ai/status",checkCts.Token);
+                        aiIndexingActive=statusData["state"]?.GetValue<string>() is "running" or "cancelling";
+                    }
+                    catch{}
+                }
+                if(!searches.IsCurrent(version)||disposed)return;
+                var missingAI=!aiIndexingActive&&origin is null&&ex is not ResultSessionException&&(selectedMode is >0 and <4 or 7 or 8 or 9)&&
                     (ex.Message.Contains("未導入")||ex.Message.Contains("ai_unavailable")||ex.Message.Contains("モデル設定またはAI索引を開けません")||ex.Message.Contains("not installed",StringComparison.OrdinalIgnoreCase));
                 lastQuery=query;lastKind=selectedKind;lastMode=selectedMode;lastRoots=selectedRoots;
                 lastLiteralOnly=literalOnly;lastBoundary=boundary;lastResultGroup=resultGroup;UpdateActiveSearchScopeBar();
@@ -677,16 +690,19 @@ public sealed partial class MainPage : Page
                 detailCancellation?.Cancel();DetailPreview.Source=null;DetailPreview.Visibility=Visibility.Collapsed;
                 ItemTitle.Text=AppText.L("作品を選んでください","Select an item");ItemPath.Text="";draftTags=[];Tags.Text="";editingShelfIds=[];UpdateShelfEditorLabel();
                 SyncFavoriteToggle(false);Reviewed.IsChecked=false;EditStatus.Text="";UpdateDetailSaveBar();RenderRows();
-                GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,missingAI?"no_results":"error");
+                GettingStarted.Visibility=Visibility.Collapsed;VisualAssets.State(EmptyArt,aiIndexingActive?"indexing":missingAI?"no_results":"error");
                 Empty.Visibility=Visibility.Visible;Count.Text="—";UpdateBrowseFooter("—",false,false);
-                Empty.Text=ex is ResultSessionException?AppText.L("結果の有効期限が切れました。再検索してください","Search results expired. Please search again.")
+                Empty.Text=aiIndexingActive?AppText.L("AI検索データの作成中のため結果が更新されました。完了まで少し待つか、名前・タグ検索をご利用ください。","Search results changed while AI indexing is in progress. Please wait for indexing to finish or use Name & Tag search.")
+                    :ex is ResultSessionException?AppText.L("結果の有効期限が切れました。再検索してください","Search results expired. Please search again.")
                     :origin is not null?AppText.L("類似検索に失敗しました","Similarity search failed")
                     :missingAI?AppText.L("AIが未設定です（名前・タグ検索は使えます）","AI is not configured (filename/tag search works normally)")
                     :selectedMode is >0 and <4 or 7 or 8 or 9?AppText.L($"この条件ではAI検索できません（{AppText.TranslateBackend(ex.Message)}）",$"AI search cannot run with these settings ({AppText.TranslateBackend(ex.Message)})")
                     :AppText.L("検索できませんでした","Search failed");
-                EmptyAIRecovery.Visibility=missingAI?Visibility.Visible:Visibility.Collapsed;
-                EmptyResetConditionsButton.Visibility=!missingAI&&HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
-                if(missingAI){Notice(AppText.L("AIの準備が必要です","AI setup required"));AppLog.Error(ex);}
+                EmptyPrepareAIButton.Visibility=missingAI?Visibility.Visible:Visibility.Collapsed;
+                EmptyAIRecovery.Visibility=missingAI||aiIndexingActive?Visibility.Visible:Visibility.Collapsed;
+                EmptyResetConditionsButton.Visibility=!missingAI&&!aiIndexingActive&&HasActiveSearchConditions()?Visibility.Visible:Visibility.Collapsed;
+                if(aiIndexingActive){Notice(AppText.L("AI検索データを作成中","Building AI search index"),AppText.L("完了まで少し待つか、「名前・タグ」検索をご利用ください。","Please wait for indexing to finish or switch to Name & Tag search."),InfoBarSeverity.Warning);AppLog.Error(ex);}
+                else if(missingAI){Notice(AppText.L("AIの準備が必要です","AI setup required"));AppLog.Error(ex);}
                 else Failure(ex);
             }
         }
@@ -2294,8 +2310,20 @@ public sealed partial class MainPage : Page
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
-            CloseSettingsHubCore();CloseShelfHubCore();SetShelfScope(null);
+            var sameLibraryReturn=(settingsHubOpen||folderHubOpen||shelfHubOpen)&&next==view&&selectedShelfIds is null&&similarityOrigin is null;
+            CloseSettingsHubCore();CloseShelfHubCore();
             CloseFolderHubCore();
+            if(sameLibraryReturn)
+            {
+                RestoreNavigation();UpdateSearchMethod();
+                if(CanRestoreLoadedResultSession(page,out var pageInLoadedWindow)&&pageInLoadedWindow)
+                {
+                    RestoreLoadedLibraryView();
+                    RecordNavigationLocation();
+                    return;
+                }
+            }
+            SetShelfScope(null);
             populating=true;
             if(next=="history"){historyReturnMode=SearchMode.SelectedIndex;SearchMode.SelectedIndex=0;}
             else if(view=="history")SearchMode.SelectedIndex=historyReturnMode;
@@ -2889,7 +2917,7 @@ public sealed partial class MainPage : Page
         for(var i=0;i<4;i++)FolderSelectionButtons.ColumnDefinitions[i].Width=i<2||!narrow?GridLength.Auto:new GridLength(0);
         var buttons=new[]{SearchSelectedFoldersButton,EditSelectedFoldersButton,UnregisterSelectedFoldersButton,SearchAllFoldersButton};
         for(var i=0;i<buttons.Length;i++){Grid.SetColumn(buttons[i],narrow?i%2:i);Grid.SetRow(buttons[i],narrow?i/2:0);}
-        FolderAddScroll.MaxHeight=Math.Max(96,FolderHubView.ActualHeight-FolderHeader.ActualHeight-FolderSelectionPanel.ActualHeight-112);
+        FolderAddScroll.MaxHeight=Math.Max(96,FolderHubView.ActualHeight-FolderHeader.ActualHeight-(FolderAIStatusBar?.ActualHeight??0)-FolderSelectionPanel.ActualHeight-124);
         if(folderTiles&&FolderList is not null)
         {
             var tileW=ComputeFolderTileWidth();
@@ -2935,6 +2963,10 @@ public sealed partial class MainPage : Page
     private void CloseFolderHubCore()
     {
         folderFilterTimer.Stop();
+        folderAiPollTimer?.Stop();
+        folderAiLoadLifetime?.Cancel();
+        folderAiLoadLifetime?.Dispose();
+        folderAiLoadLifetime=null;
         if(emptyLibraryScanJob is null)scanPollTimer.Stop();
         folderHubOpen=false;
         ToolTipService.SetToolTip(Count,null);
@@ -2945,6 +2977,7 @@ public sealed partial class MainPage : Page
         ItemListContainer.Visibility=Visibility.Visible;
         ItemPagerRow.Visibility=Visibility.Visible;
         ShowItemDetailsPane();
+        if(active is null&&librarySelection.Count==0)Details.IsPaneOpen=false;
     }
 
     private async void Roots_Click(object sender,RoutedEventArgs e)
@@ -2970,14 +3003,20 @@ public sealed partial class MainPage : Page
         try
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
-            var changed=!SameRoots(selectedSearchRoots,targetRoots)||selectedShelfIds is not null||allItems;
+            var changed=!SameRoots(selectedSearchRoots,targetRoots)||selectedShelfIds is not null||(allItems&&(view!="all"||similarityOrigin is not null));
             if(allItems){view="all";ClearSimilarity();UpdateSearchMethod();}
             SetShelfScope(null);
             RestoreSearchRoots(targetRoots);
             CloseFolderHubCore();
             RestoreNavigation();
+            if(!changed&&CanRestoreLoadedResultSession(page,out var pageInLoadedWindow)&&pageInLoadedWindow)
+            {
+                RestoreLoadedLibraryView();
+                RecordNavigationLocation();
+                return;
+            }
             if(changed)page=0;
-            await LoadAsync();
+            await LoadAsync(reuseSession:!changed&&CanRestoreLoadedResultSession(page,out _));
         }
         finally{transitions.Release();if(PendingAutoSearch&&!disposed){searchTimer.Stop();searchTimer.Start();}}
     }
@@ -3006,6 +3045,7 @@ public sealed partial class MainPage : Page
             RestoreNavigation();
             RenderFolderHub();
             scanPollTimer.Start();
+            _ = RefreshFolderAIStatusAsync(fetchCoverage:true);
             if(focusRootId is int targetId)
             {
                 var row=knownRoots.FirstOrDefault(r=>r.Id==targetId);
@@ -3125,9 +3165,11 @@ public sealed partial class MainPage : Page
                 FolderAddPanel.Visibility=Visibility.Collapsed;
             }
             else RootPath.Text=string.Join("; ",failedPaths);
+            resultsNeedRefresh=true;
             thumbnails.ResetSession();
             await RefreshSearchRootsAsync();
             await LoadAIScopeAsync();
+            _ = RefreshFolderAIStatusAsync(fetchCoverage:true);
 
             OpenFolderSettingsPanel(addedIds);
             await PromptPostRegistrationScanAsync(addedIds);
@@ -3620,6 +3662,7 @@ public sealed partial class MainPage : Page
             var patterns=new JsonArray(exclusions.Select(s=>(JsonNode?)JsonValue.Create(s)).ToArray());
             await api.PostAsync("api/library/excludes",new JsonObject{{"root_id",rootId},{"patterns",patterns}});
             draft.MarkExclusionsSaved(savedText);
+            resultsNeedRefresh=true;
             knownRoots=knownRoots.Select(root=>root.Id==rootId?root with{Exclusions=exclusions}:root).ToArray();
             ScanStatus.Text=AppText.L("次回の一覧更新で反映されます","Will take effect on the next refresh");
             FolderEditStatus.Text=AppText.L("除外を保存しました","Saved exclusions")+(draft.IsShelfChanged?AppText.L(" · 自動棚は未保存"," · Default shelf unsaved"):"");
@@ -3642,6 +3685,7 @@ public sealed partial class MainPage : Page
             else
                 body["root_ids"]=new JsonArray(targetIds.Select(id=>(JsonNode?)JsonValue.Create(id)).ToArray());
             var started=await api.PostAsync("api/library/scan",body);
+            resultsNeedRefresh=true;
             if(disposed)return;
             if(rows.Count==0&&!knownRoots.Any(root=>root.Enabled&&root.PresentCount>0))
             {
@@ -3740,9 +3784,11 @@ public sealed partial class MainPage : Page
                 var remainingSearch=selectedSearchRoots.Where(id=>!succeeded.Contains(id)).ToArray();
                 if(remainingSearch.Length>0)selectedSearchRoots=remainingSearch;
             }
+            resultsNeedRefresh=true;
             thumbnails.ResetSession();
             await RefreshSearchRootsAsync();
             await LoadAIScopeAsync();
+            _ = RefreshFolderAIStatusAsync(fetchCoverage:true);
             UnregisterConsent.IsChecked=false;
             if(failures.Count==0)
             {
@@ -3843,8 +3889,10 @@ public sealed partial class MainPage : Page
             if(!listRunning && !scanRootsRefreshed)
             {
                 scanRootsRefreshed = true;
+                resultsNeedRefresh = true;
                 thumbnails.ResetSession();
                 await RefreshSearchRootsAsync();
+                _ = RefreshFolderAIStatusAsync(fetchCoverage:true);
                 UpdateGettingStarted();
                 if(phase=="complete"&&lastScanAccessDeniedCount>0)
                     Notice(
@@ -3870,6 +3918,7 @@ public sealed partial class MainPage : Page
             {
                 var prefix = aiState == "cancelling" ? AppText.L("AIデータ作成を中止中","Canceling AI indexing") : AppText.L("AIデータ作成中","Building AI index");
                 ScanStatus.Text = AppText.L($"{prefix} · {aiProcessed}/{aiTotal} 件",$"{prefix} · {aiProcessed}/{aiTotal} items");
+                _ = RefreshFolderAIStatusAsync(fetchCoverage:false);
             }
             else if(phase == "failed")
             {
@@ -4113,7 +4162,7 @@ public sealed partial class MainPage : Page
             var statusDetailText=new TextBlock {TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true,Style=(Style)Resources["MediaMetadataStyle"]};
             var statusDetailExpander=new Expander {Header=AppText.L("詳細情報","Details"),Content=statusDetailText,Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Stretch};
             AutomationProperties.SetAutomationId(statusDetailExpander,"AIIndexErrorDetails");
-            var start=new Button {Content=AppText.L("AI検索データを作成","Build AI search index"),IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
+            var start=new Button {Content=AppText.L("AI検索データを作成","Build AI search index"),Style=(Style)Resources["AccentButtonStyle"],IsEnabled=false};AutomationProperties.SetAutomationId(start,"StartAIIndex");
             var cancel=new Button {Content=AppText.L("中止","Cancel"),IsEnabled=false};AutomationProperties.SetAutomationId(cancel,"CancelAIIndex");
             var resumeBooks=new Button{Content=AppText.L("前回の本の追加を再開","Resume previous book batch"),Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(resumeBooks,"ResumeBookBatch");
             PageBatchStatus? resumableBooks=null;
@@ -4217,7 +4266,6 @@ public sealed partial class MainPage : Page
             scopeEditor.StateChanged+=UpdateStart;
             bool polling=false;
             bool releasing=false;
-            int? indexLimit=null;
             release.Click+=async (_,_)=>{
                 releasing=true;release.IsEnabled=false;
                 try {
@@ -4236,7 +4284,6 @@ public sealed partial class MainPage : Page
                     var state=data["state"]!.GetValue<string>();
                     var running=state is "running" or "cancelling";
                     VisualAssets.State(indexArt,running?"indexing":state=="complete"?"completed":state=="failed"?"error":null);
-                    indexLimit=data["limit"]?.GetValue<int>();
                     var label=state switch {"idle"=>AppText.L("未作成","Not built"),"running"=>AppText.L("作成中","Building"),"cancelling"=>AppText.L("中断待ち","Canceling"),"complete"=>AppText.L("準備完了","Ready"),"cancelled"=>AppText.L("中断済み","Canceled"),"interrupted"=>AppText.L("前回中断","Interrupted"),"failed"=>AppText.L("失敗","Failed"),"partial"=>AppText.L("一部完了","Partial"),_=>state};
                     var model=data["model"]?.GetValue<string>() ?? AppText.L("未選択","None selected");
                     var capabilities=DescribeProfileCapabilities(data["modalities"],data["adapter"]?.GetValue<string>());
@@ -4244,8 +4291,8 @@ public sealed partial class MainPage : Page
                     if(available)
                     {
                         var unit=data["job"]?.GetValue<string>() is "book-pages" or "book-page-batch" or "book-pages-chunked"?AppText.L("ページ","pages"):AppText.L("件","items");
-                        status.Text=AppText.L($"{model}（対応：{capabilities}）{(indexLimit is int cap ? $" · 最大{cap:N0}件" : "")}\n作成状況: {label} · {data["processed"]}/{data["total"]} {unit}{(string.IsNullOrEmpty(errorText)?"":$"\n{errorText}")}",
-                            $"{model} ({capabilities}){(indexLimit is int cap2 ? $" · max {cap2:N0}" : "")}\nStatus: {label} · {data["processed"]}/{data["total"]} {unit}{(string.IsNullOrEmpty(errorText)?"":$"\n{errorText}")}");
+                        status.Text=AppText.L($"{model}（対応：{capabilities}）\n作成状況: {label} · {data["processed"]}/{data["total"]} {unit}{(string.IsNullOrEmpty(errorText)?"":$"\n{errorText}")}",
+                            $"{model} ({capabilities})\nStatus: {label} · {data["processed"]}/{data["total"]} {unit}{(string.IsNullOrEmpty(errorText)?"":$"\n{errorText}")}");
                         statusDetailText.Text="";statusDetailExpander.Visibility=Visibility.Collapsed;
                     }
                     else
@@ -4442,7 +4489,6 @@ public sealed partial class MainPage : Page
             content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
             content.RowDefinitions.Add(new RowDefinition {Height=new GridLength(1,GridUnitType.Star)});
             content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
-            content.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto});
             var navBar=new StackPanel {Orientation=Orientation.Horizontal,Spacing=6};
             Button MakeSectionButton(string label,string autoId,Border targetCard,bool expandMedia=false)
             {
@@ -4468,8 +4514,8 @@ public sealed partial class MainPage : Page
             AutomationProperties.SetAutomationId(modelOptions,"AIOptions");
             AutomationProperties.SetName(modelOptions,AppText.L("モデル・AIリソース設定","Model & AI Resource Settings"));
             Grid.SetRow(modelOptions,1);content.Children.Add(modelOptions);
-            var continuationActions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
-            continuationActions.Children.Add(planContinuation);continuationActions.Children.Add(startContinuation);
+            var indexActions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
+            indexActions.Children.Add(start);indexActions.Children.Add(cancel);indexActions.Children.Add(planContinuation);indexActions.Children.Add(startContinuation);
             var indexInfo=new StackPanel {Spacing=8};
             AutomationProperties.SetAutomationId(indexInfo,"AIIndexSummary");
             indexInfo.Children.Add(new TextBlock {Text=AppText.L("AI検索データ","AI Search Index"),Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]});
@@ -4477,7 +4523,7 @@ public sealed partial class MainPage : Page
             indexInfo.Children.Add(scopePagesSummary);
             indexInfo.Children.Add(statusDetailExpander);
             indexInfo.Children.Add(continuationText);
-            indexInfo.Children.Add(continuationActions);
+            indexInfo.Children.Add(indexActions);
             indexInfo.Children.Add(resumeContinuation);
             indexInfo.Children.Add(resumeBooks);
             indexInfo.Children.Add(resumeChunks);
@@ -4489,8 +4535,6 @@ public sealed partial class MainPage : Page
             indexRow.Children.Add(indexInfo);
             var indexCard=new Border{Style=(Style)Application.Current.Resources["AredokoSurfaceStyle"],Child=indexRow};
             Grid.SetRow(indexCard,2);content.Children.Add(indexCard);
-            var actions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
-            actions.Children.Add(start);actions.Children.Add(cancel);Grid.SetRow(actions,3);content.Children.Add(actions);
             await RefreshProfiles();await RefreshResource();await Refresh();UpdateScopePagesSummary();timer.Start();
             var dialog=new ContentDialog {XamlRoot=XamlRoot,RequestedTheme=ActualTheme,Title=AppText.L("AI検索を設定","Configure AI Search"),Content=content,CloseButtonText=AppText.L("閉じる","Close")};
             dialog.Resources["ContentDialogMaxWidth"]=680d;
@@ -4510,7 +4554,27 @@ public sealed partial class MainPage : Page
             await dialog.ShowAsync();
         }
         catch(Exception ex){Failure(ex);}
-        finally{if(capturedRoot is not null&&rootChanged is not null)capturedRoot.Changed-=rootChanged;timer.Stop();dialogOpen=false;try{if(reload&&!disposed)await LoadAsync();}finally{transitions.Release();}}
+        finally
+        {
+            if(capturedRoot is not null&&rootChanged is not null)capturedRoot.Changed-=rootChanged;
+            timer.Stop();dialogOpen=false;
+            try
+            {
+                if(reload&&!disposed)
+                {
+                    if(settingsHubOpen||folderHubOpen)
+                    {
+                        if(SearchMethod.FromIndex(lastMode).IsAI||similarityOrigin is not null)resultsNeedRefresh=true;
+                        if(folderHubOpen)_ = RefreshFolderAIStatusAsync(fetchCoverage:true);
+                    }
+                    else
+                    {
+                        await LoadAsync();
+                    }
+                }
+            }
+            finally{transitions.Release();}
+        }
         if(openDownload&&!disposed)await OpenAIDownloadDialogAsync();
         else if(openEnvironment&&!disposed)await OpenAIEnvironmentDialogAsync();
     }
@@ -4522,6 +4586,6 @@ public sealed partial class MainPage : Page
         if(imageViewer is {} activeImage)await activeImage.FlushFavoriteAsync();
         if(videoPlayer is {} activeVideo)await activeVideo.FlushFavoriteAsync();
     }
-    public void Stop(){if(disposed)return;disposed=true;bulkTagGenerationCts?.Cancel();settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();folderFilterTimer.Stop();resultKeepAliveTimer?.Stop();ResetFastScroll();thumbnails.ResetSession();DetachXamlRoot();itemSizeTimer.Stop();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;smoothWheelScroller.Detach();resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in realizedItems.ToArray())ReleaseContainer(item,detachVisualTree:true);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
+    public void Stop(){if(disposed)return;disposed=true;bulkTagGenerationCts?.Cancel();settingsAiPollTimer?.Stop();folderAiPollTimer?.Stop();folderAiLoadLifetime?.Cancel();folderAiLoadLifetime?.Dispose();folderAiLoadLifetime=null;settingsLoadLifetime?.Cancel();settingsLoadLifetime?.Dispose();settingsLoadLifetime=null;runtimeVerifyLifetime.Cancel();runtimeVerifyLifetime.Dispose();selectionPreparation?.Cancel();startupUpdateTimer?.Stop();runtimeVerifyTimer.Stop();folderFilterTimer.Stop();resultKeepAliveTimer?.Stop();ResetFastScroll();thumbnails.ResetSession();DetachXamlRoot();itemSizeTimer.Stop();CloseShelfHubCore();if(resultScroll is not null)resultScroll.ViewChanged-=ResultScroll_Changed;smoothWheelScroller.Detach();resultWindow?.Dispose();resultWindow=null;SaveItemSize();tagReview?.Dispose();scanPollTimer.Stop();viewerWindow?.ForceCloseFromOwner();viewerWindow=null;similarityCancellation?.Cancel();renderCancellation.Cancel();foreach(var item in realizedItems.ToArray())ReleaseContainer(item,detachVisualTree:true);detailCancellation?.Cancel();readerView?.Dispose();imageViewer?.Dispose();videoPlayer?.Dispose();searches.Next();searchTimer.Stop();var session=resultSession;resultSession=null;if(session is null)api.Dispose();else _=CloseResultsAndApiAsync(session);}
 }
 

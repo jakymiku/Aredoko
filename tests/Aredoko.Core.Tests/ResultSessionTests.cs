@@ -70,6 +70,41 @@ internal static class ResultSessionTests
         catch (InvalidOperationException error) { explained = error.Message.Contains("未導入"); }
         check(explained, "result creation preserves AI missing guidance rather than reporting image decoder busy");
 
+        using var aiIndexingHandler = new Stub(request => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/close")
+            ? Reply(new JsonObject { ["closed"] = true })
+            : Reply(new JsonObject
+            {
+                ["error"] = "Results expired or changed; refresh search",
+                ["error_code"] = "result_session_changed",
+                ["ai_indexing"] = true,
+                ["conditions"] = new JsonObject { ["mode"] = "semantic", ["query"] = "sunset" },
+                ["current_id"] = 42
+            }, HttpStatusCode.Conflict)));
+        using var aiIndexingHttp = new HttpClient(aiIndexingHandler) { BaseAddress = http.BaseAddress };
+        var aiIndexingFlagged = false;
+        try { await new ResultSessionClient(aiIndexingHttp).CreateAsync(new JsonObject { ["mode"] = "semantic", ["query"] = "sunset" }, CancellationToken.None); }
+        catch (ResultSessionException error)
+        {
+            aiIndexingFlagged = error.Status == HttpStatusCode.Conflict && error.AIIndexing && error.CurrentId == 42 && error.Message.Contains("AI検索データの作成中");
+        }
+        check(aiIndexingFlagged, "result_session_changed with ai_indexing=true surfaces AI indexing guidance");
+
+        using var ordinaryConflictHandler = new Stub(request => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/close")
+            ? Reply(new JsonObject { ["closed"] = true })
+            : Reply(new JsonObject
+            {
+                ["error"] = "Results expired or changed; refresh search",
+                ["error_code"] = "result_session_changed",
+                ["conditions"] = conditions.DeepClone()
+            }, HttpStatusCode.Conflict)));
+        using var ordinaryConflictHttp = new HttpClient(ordinaryConflictHandler) { BaseAddress = http.BaseAddress };
+        var ordinaryConflictNotFlagged = false;
+        try { await new ResultSessionClient(ordinaryConflictHttp).CreateAsync(conditions, CancellationToken.None); }
+        catch (ResultSessionException error)
+        {
+            ordinaryConflictNotFlagged = error.Status == HttpStatusCode.Conflict && !error.AIIndexing;
+        }
+        check(ordinaryConflictNotFlagged, "result_session_changed without ai_indexing keeps AIIndexing false");
     }
     private static HttpResponseMessage Reply(JsonObject body, HttpStatusCode status = HttpStatusCode.OK) => new(status)
     { Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body.ToJsonString())) };

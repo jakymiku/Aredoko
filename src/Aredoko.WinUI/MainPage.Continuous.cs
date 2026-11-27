@@ -227,6 +227,15 @@ public sealed partial class MainPage
                 _ = RecoverExpiredSessionAsync(session);
             }
         }
+        catch (ResultSessionException ex) when (ex.AIIndexing && !disposed && expectedGen == virtualGeneration && ReferenceEquals(session, resultSession))
+        {
+            if (!disposed)
+            {
+                browseFailed = true;
+                resultsNeedRefresh = true;
+                Notice(AppText.L("AI検索データを作成中", "Building AI search index"), ex.Message, InfoBarSeverity.Warning);
+            }
+        }
         catch (Exception ex)
         {
             if (!disposed && expectedGen == virtualGeneration && ReferenceEquals(session, resultSession))
@@ -476,6 +485,15 @@ public sealed partial class MainPage
             if (!fastScrolling && result.Items.Count > 0) _ = thumbnails.PrefetchRowsAsync(result.Items.ToArray(), CurrentThumbnailEdge(), renderCancellation.Token);
         }
         catch (OperationCanceledException) { }
+        catch (ResultSessionException ex) when (ex.AIIndexing)
+        {
+            if (!disposed)
+            {
+                browseFailed = true;
+                resultsNeedRefresh = true;
+                Notice(AppText.L("AI検索データを作成中", "Building AI search index"), ex.Message, InfoBarSeverity.Warning);
+            }
+        }
         catch (Exception ex) { if (!disposed) { browseFailed = true; Failure(ex); } }
         finally
         {

@@ -105,8 +105,16 @@ public sealed partial class MainPage
                         view=bookmark.View;page=bookmark.Page;similarityOrigin=target.Origin;similarityOriginPage=bookmark.OriginPage;similarityOriginMs=bookmark.OriginMs;directAudioSimilarity=target.DirectAudio;directVideoSimilarity=target.DirectVideo;directVideoAudioSimilarity=target.DirectVideoAudio;similarityReturn=target.SimilarityReturn;UpdateSearchMethod();RestoreNavigation();
                     }
                     finally{populating=false;}
-                    await LoadAsync();
-                    if(!startupSearchSucceeded)return;
+                    var reuseSession=CanRestoreLoadedResultSession(bookmark.Page,out var pageInLoadedWindow);
+                    if(reuseSession&&pageInLoadedWindow)
+                    {
+                        RestoreLoadedLibraryView();
+                    }
+                    else
+                    {
+                        await LoadAsync(reuseSession:reuseSession);
+                        if(!startupSearchSucceeded)return;
+                    }
                     if(bookmark.Selection>0&&rowById.TryGetValue(bookmark.Selection,out var selected))
                     {ApplySelectedRow(selected);RestoreSelection();}
                     Items.UpdateLayout();await RestoreBrowseAnchorAsync(target.Anchor);Details.IsPaneOpen=target.DetailsOpen&&active is not null;

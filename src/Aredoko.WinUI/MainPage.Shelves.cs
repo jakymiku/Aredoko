@@ -78,8 +78,11 @@ public sealed partial class MainPage
     }
     private void CloseShelfHubCore()
     {
+        if(!shelfHubOpen&&ShelfHubView?.Visibility!=Visibility.Visible)return;
         shelfHubOpen=false;ShelfHubView.Visibility=Visibility.Collapsed;shelfRealized.Clear();shelfRefresh.Clear();
         foreach(var load in shelfLoads.Values){load.Cancel();load.Dispose();}shelfLoads.Clear();
+        UpdateLibraryHeading();
+        ItemSearchRow.Visibility=SearchTools.Visibility=ItemListContainer.Visibility=ItemPagerRow.Visibility=Visibility.Visible;
     }
     private async Task OpenShelfHubAsync()
     {
@@ -89,9 +92,7 @@ public sealed partial class MainPage
         {
             if(!await ConfirmDiscardAsync()){RestoreNavigation();return;}
             CloseBrowseMenus();searches.Next();similarityCancellation?.Cancel();
-            CloseSettingsHubCore();CloseFolderHubCore();CloseShelfHubCore();ClearSimilarity();
-            resultWindow?.Dispose();resultWindow=null;
-            var previous=resultSession;resultSession=null;await CloseResultSessionAsync(previous);
+            CloseSettingsHubCore();CloseFolderHubCore();CloseShelfHubCore();
             shelfHubOpen=true;active=null;initialSavedItemId=null;Details.IsPaneOpen=false;DetailsButton.IsEnabled=false;
             MainViewTitle.Text=AppText.L("棚","Shelves");Count.Text="";
             ItemSearchRow.Visibility=SearchTools.Visibility=ItemListContainer.Visibility=ItemPagerRow.Visibility=Visibility.Collapsed;

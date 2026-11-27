@@ -2,6 +2,7 @@ using Aredoko.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using System.Text.Json.Nodes;
 
 namespace Aredoko_WinUI;
 
@@ -11,6 +12,15 @@ public sealed partial class MainPage
     private bool? savedVerificationState;
     private string settingsReturnCount="";
     private CancellationTokenSource? settingsLoadLifetime;
+    private CancellationTokenSource? folderAiLoadLifetime;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? settingsAiPollTimer;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? folderAiPollTimer;
+    private bool pollingSettingsAi, pollingFolderAi, aiActionPending;
+    private JsonNode? lastAiStatusData;
+    private int? lastAiCovTarget, lastAiCovFresh;
+    private int lastAiUnscopedPresentTotal;
+    private bool lastAiScopeInvalid, lastAiWasRunning;
+    private string lastAiScopeInvalidHint="";
 
     private async void Navigation_ItemInvoked(NavigationView sender,NavigationViewItemInvokedEventArgs args)
     {
@@ -22,6 +32,7 @@ public sealed partial class MainPage
     private void CloseSettingsHubCore()
     {
         if(!settingsHubOpen&&SettingsHubView?.Visibility!=Visibility.Visible)return;
+        settingsAiPollTimer?.Stop();
         settingsLoadLifetime?.Cancel();
         settingsLoadLifetime?.Dispose();
         settingsLoadLifetime=null;
@@ -105,6 +116,209 @@ public sealed partial class MainPage
         if(settingsHubOpen&&!disposed)_ = LoadSettingsStatusAsync();
     }
 
+    private async Task FetchAISummarySnapshotAsync(bool fetchCoverage, CancellationToken token)
+    {
+        var statusData=await api.GetAsync("api/library/ai/status",token);
+        if(token.IsCancellationRequested||disposed)return;
+        lastAiStatusData=statusData;
+        ApplyRuntimeVerificationSnapshot(statusData);
+        var available=statusData["available"]?.GetValue<bool>()==true;
+        var state=statusData["state"]?.GetValue<string>()??"idle";
+        var running=state is "running" or "cancelling";
+        var transitionedToIdle=lastAiWasRunning&&!running;
+        lastAiWasRunning=running;
+        if(available&&!running&&(fetchCoverage||transitionedToIdle||lastAiCovTarget is null))
+        {
+            var scopeInvalid=false;
+            var scopeInvalidHint="";
+            var unscopedPresentTotal=0;
+            JsonObject? effectiveScope=null;
+            try
+            {
+                var scopeData=await api.GetAsync("api/library/ai/scope",token);
+                if(scopeData["valid"]?.GetValue<bool>()==true&&scopeData["scope"] is JsonObject validScope)
+                {
+                    effectiveScope=(JsonObject)validScope.DeepClone();
+                    aiScope=(JsonObject)effectiveScope.DeepClone();
+                }
+                else
+                {
+                    scopeInvalid=true;
+                    scopeInvalidHint=AppText.TranslateBackend(scopeData["error"]?.GetValue<string>()??aiScopeError);
+                }
+            }
+            catch(OperationCanceledException) when(token.IsCancellationRequested){throw;}
+            catch(Exception scopeEx)
+            {
+                AppLog.Error(scopeEx);
+                effectiveScope=aiScope is not null?(JsonObject)aiScope.DeepClone():null;
+            }
+            if(token.IsCancellationRequested||disposed)return;
+            lastAiScopeInvalid=scopeInvalid;
+            lastAiScopeInvalidHint=scopeInvalidHint;
+            if(!scopeInvalid&&effectiveScope is not null)
+            {
+                if(effectiveScope["root_ids"] is JsonArray scopedRoots)
+                {
+                    var scopedIds=scopedRoots.Select(node=>node?.GetValue<int>()??-1).Where(id=>id>0).ToHashSet();
+                    unscopedPresentTotal=knownRoots.Where(root=>root.Enabled&&!scopedIds.Contains(root.Id)).Sum(root=>root.PresentCount);
+                }
+                lastAiUnscopedPresentTotal=unscopedPresentTotal;
+                try
+                {
+                    var covData=await api.PostAsync("api/library/ai/coverage",AIScopeRequests.Scoped(effectiveScope),token);
+                    if(token.IsCancellationRequested||disposed)return;
+                    lastAiCovTarget=covData["target_total"]?.GetValue<int>();
+                    lastAiCovFresh=covData["fresh_total"]?.GetValue<int>();
+                }
+                catch(OperationCanceledException) when(token.IsCancellationRequested){throw;}
+                catch(Exception covEx){AppLog.Error(covEx);}
+            }
+            else if(scopeInvalid)
+            {
+                lastAiCovTarget=null;
+                lastAiCovFresh=null;
+                lastAiUnscopedPresentTotal=0;
+            }
+        }
+        else if(!available)
+        {
+            lastAiScopeInvalid=false;
+            lastAiScopeInvalidHint="";
+            lastAiCovTarget=null;
+            lastAiCovFresh=null;
+            lastAiUnscopedPresentTotal=0;
+        }
+    }
+
+    private void ApplySettingsAISnapshotToUI()
+    {
+        if(lastAiStatusData is not {} statusData)return;
+        var available=statusData["available"]?.GetValue<bool>()==true;
+        var accent=ThemeStyle("AccentButtonStyle");
+        var defaultButton=ThemeStyle("DefaultButtonStyle");
+        var state=statusData["state"]?.GetValue<string>()??"idle";
+        var running=state is "running" or "cancelling";
+        var processed=statusData["processed"]?.GetValue<int>()??0;
+        var total=statusData["total"]?.GetValue<int>()??0;
+        var model=statusData["model"]?.GetValue<string>()??"";
+        var statusCode=statusData["status_code"]?.GetValue<string>()??"";
+        var errorText=statusData["error"]?.GetValue<string>()??"";
+        if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?defaultButton:accent;
+        if(SettingsAISetupPlanButton is not null)SettingsAISetupPlanButton.Style=defaultButton;
+        if(SettingsAISetupRowLabel is not null)SettingsAISetupRowLabel.Text=available?AppText.L("環境の再構成・用途選び：","Reconfigure or switch profile:"):AppText.L("初回セットアップ：","Initial setup:");
+        if(SettingsAIBuildProgressBar is not null)
+        {
+            SettingsAIBuildProgressBar.Visibility=running?Visibility.Visible:Visibility.Collapsed;
+            SettingsAIBuildProgressBar.IsIndeterminate=total<=0;
+            SettingsAIBuildProgressBar.Value=total>0?Math.Clamp(processed*100.0/total,0.0,100.0):0.0;
+        }
+        if(available)
+        {
+            SettingsAIStep1Status.Text=AppText.L("✓ 導入済み","✓ Installed");
+            SettingsAIStep2Status.Text=string.IsNullOrWhiteSpace(model)?AppText.L("✓ 使用可能","✓ Ready"):$"✓ {model}";
+            var hasUnindexed=lastAiCovTarget is int target&&lastAiCovFresh is int fresh?target>fresh:(state is "cancelled" or "interrupted" or "failed" or "partial" or "idle");
+            if(lastAiScopeInvalid)
+            {
+                SettingsAIStep3Status.Text=AppText.L("対象範囲の要確認","Scope needs attention");
+                SettingsAINextHint.Text=string.IsNullOrWhiteSpace(lastAiScopeInvalidHint)?AppText.L("［AI検索を設定］の「対象範囲」を選び直して保存してください。","Open \"Configure AI Search\" and re-save your \"Search Scope\"."):lastAiScopeInvalidHint;
+            }
+            else
+            {
+                var (step3Text,nextHint)=AISearchStatus.SettingsDataStatus(state,processed,total,lastAiCovTarget,lastAiCovFresh,lastAiUnscopedPresentTotal);
+                SettingsAIStep3Status.Text=step3Text;
+                SettingsAINextHint.Text=nextHint;
+            }
+            if(SettingsAIBuildButton is not null)
+            {
+                if(!running&&!lastAiScopeInvalid&&hasUnindexed)
+                {
+                    if(lastAiCovTarget is int t&&lastAiCovFresh is int f&&t>f)
+                        SettingsAIBuildButton.Content=f==0?AppText.L($"✨ AI検索データを作成 ({t:N0}件)",$"✨ Build AI index ({t:N0})"):AppText.L($"✨ 未作成のAIデータを作成 ({t-f:N0}件)",$"✨ Build remaining AI index ({t-f:N0})");
+                    else if(state is "cancelled" or "interrupted" or "failed")
+                        SettingsAIBuildButton.Content=AppText.L("✨ 続きからAIデータを作成","✨ Continue AI index");
+                    else
+                        SettingsAIBuildButton.Content=AppText.L("✨ AI検索データを作成","✨ Build AI search index");
+                    SettingsAIBuildButton.Visibility=Visibility.Visible;
+                    SettingsAIBuildButton.IsEnabled=!aiActionPending;
+                }
+                else
+                {
+                    SettingsAIBuildButton.Visibility=Visibility.Collapsed;
+                }
+            }
+            if(SettingsAICancelButton is not null)
+            {
+                SettingsAICancelButton.Visibility=running?Visibility.Visible:Visibility.Collapsed;
+                SettingsAICancelButton.IsEnabled=state=="running"&&!aiActionPending;
+                SettingsAICancelButton.Content=state=="cancelling"?AppText.L("中断中…","Canceling…"):AppText.L("中止","Cancel");
+            }
+            if(SettingsAIIndexButton is not null)
+            {
+                SettingsAIIndexButton.Content=AppText.L("AI検索を設定","Configure AI");
+                SettingsAIIndexButton.Style=(SettingsAIBuildButton?.Visibility==Visibility.Visible||running)?defaultButton:accent;
+            }
+            if(SettingsAIStatusArt is not null)
+                VisualAssets.State(SettingsAIStatusArt,running?"indexing":state=="failed"?"error":(!lastAiScopeInvalid&&lastAiCovTarget is int ct&&lastAiCovFresh==ct&&ct>0)?"completed":"greeting");
+        }
+        else
+        {
+            var needsRuntime=statusCode.Contains("runtime")||errorText.Contains("Python")||errorText.Contains("ライブラリ")||errorText.Contains("library",StringComparison.OrdinalIgnoreCase);
+            if(needsRuntime)
+            {
+                SettingsAIStep1Status.Text=AppText.L("未導入","Not installed");
+                SettingsAIStep2Status.Text=AppText.L("環境導入後に設定","Set up after runtime");
+                SettingsAIStep3Status.Text=AppText.L("待機中","Waiting");
+                SettingsAINextHint.Text=AppText.L("［AIの自動セットアップ］または［AI検索を設定］から実行環境を用意してください。","Run \"AI Auto-Setup\" or \"Configure AI Search\" to install the runtime.");
+            }
+            else
+            {
+                SettingsAIStep1Status.Text=AppText.L("✓ 導入済み","✓ Installed");
+                SettingsAIStep2Status.Text=AppText.L("未導入 / 要確認","Missing / needs setup");
+                SettingsAIStep3Status.Text=AppText.L("待機中","Waiting");
+                SettingsAINextHint.Text=AppText.L("［AI検索を設定］から検索モデルをダウンロードまたは指定してください。","Open \"Configure AI Search\" to download or select a search model.");
+            }
+            if(SettingsAIBuildButton is not null)SettingsAIBuildButton.Visibility=Visibility.Collapsed;
+            if(SettingsAICancelButton is not null)SettingsAICancelButton.Visibility=Visibility.Collapsed;
+            if(SettingsAIIndexButton is not null)
+            {
+                SettingsAIIndexButton.Content=AppText.L("AI検索を設定","Configure AI");
+                SettingsAIIndexButton.Style=defaultButton;
+            }
+            if(SettingsAIStatusArt is not null)
+                VisualAssets.State(SettingsAIStatusArt,state=="failed"?"error":"greeting");
+        }
+        if(running)EnsureSettingsAIPollTimer();
+        else settingsAiPollTimer?.Stop();
+    }
+
+    private void EnsureSettingsAIPollTimer()
+    {
+        if(disposed)return;
+        if(settingsAiPollTimer is null)
+        {
+            settingsAiPollTimer=DispatcherQueue.CreateTimer();
+            settingsAiPollTimer.Interval=TimeSpan.FromSeconds(1);
+            settingsAiPollTimer.Tick+=async (_,_)=>await PollSettingsAIStatusAsync();
+        }
+        if(!settingsAiPollTimer.IsRunning)settingsAiPollTimer.Start();
+    }
+
+    private async Task PollSettingsAIStatusAsync()
+    {
+        if(pollingSettingsAi||disposed||!settingsHubOpen)return;
+        pollingSettingsAi=true;
+        try
+        {
+            var token=settingsLoadLifetime?.Token??CancellationToken.None;
+            await FetchAISummarySnapshotAsync(fetchCoverage:false,token);
+            if(!disposed&&settingsHubOpen)ApplySettingsAISnapshotToUI();
+        }
+        catch(OperationCanceledException){}
+        catch(Exception ex){AppLog.Error(ex);}
+        finally{pollingSettingsAi=false;}
+    }
+
     private async Task LoadSettingsStatusAsync()
     {
         settingsLoadLifetime?.Cancel();
@@ -116,8 +330,8 @@ public sealed partial class MainPage
         try
         {
             var setupTask=api.GetAsync("api/library/ai/setup",token);
-            var statusTask=api.GetAsync("api/library/ai/status",token);
-            await Task.WhenAll(setupTask,statusTask);
+            var snapshotTask=FetchAISummarySnapshotAsync(fetchCoverage:true,token);
+            await Task.WhenAll(setupTask,snapshotTask);
             if(token.IsCancellationRequested||disposed||!settingsHubOpen)return;
 
             var setup=await setupTask;
@@ -136,117 +350,7 @@ public sealed partial class MainPage
             }
             finally{settingsPopulating=false;}
 
-            var statusData=await statusTask;
-            ApplyRuntimeVerificationSnapshot(statusData);
-            var available=statusData["available"]?.GetValue<bool>()==true;
-            var accent=ThemeStyle("AccentButtonStyle");
-            var defaultButton=ThemeStyle("DefaultButtonStyle");
-            var subtle=ThemeStyle("UnselectedSegmentButtonStyle");
-            if(SettingsAIIndexButton is not null)
-            {
-                SettingsAIIndexButton.Style=available?accent:defaultButton;
-                SettingsAIIndexButton.Content=AppText.L("AI検索を設定","Configure AI Search");
-            }
-            if(SettingsAIEnvironmentButton is not null)SettingsAIEnvironmentButton.Style=available?defaultButton:accent;
-            if(SettingsAISetupPlanButton is not null)SettingsAISetupPlanButton.Style=defaultButton;
-            if(SettingsAISetupRowLabel is not null)SettingsAISetupRowLabel.Text=available?AppText.L("環境の再構成・用途選び：","Reconfigure or switch profile:"):AppText.L("初回セットアップ：","Initial setup:");
-            var state=statusData["state"]?.GetValue<string>()??"idle";
-            var processed=statusData["processed"]?.GetValue<int>()??0;
-            var total=statusData["total"]?.GetValue<int>()??0;
-            var model=statusData["model"]?.GetValue<string>()??"";
-            var statusCode=statusData["status_code"]?.GetValue<string>()??"";
-            var errorText=statusData["error"]?.GetValue<string>()??"";
-            if(available)
-            {
-                SettingsAIStep1Status.Text=AppText.L("✓ 導入済み","✓ Installed");
-                SettingsAIStep2Status.Text=string.IsNullOrWhiteSpace(model)?AppText.L("✓ 使用可能","✓ Ready"):$"✓ {model}";
-                int? covTarget=null,covFresh=null;
-                var unscopedPresentTotal=0;
-                var scopeInvalid=false;
-                var scopeInvalidHint="";
-                if(state is not ("running" or "cancelling"))
-                {
-                    System.Text.Json.Nodes.JsonObject? effectiveScope=null;
-                    try
-                    {
-                        var scopeData=await api.GetAsync("api/library/ai/scope",token);
-                        if(scopeData["valid"]?.GetValue<bool>()==true&&scopeData["scope"] is System.Text.Json.Nodes.JsonObject validScope)
-                        {
-                            effectiveScope=(System.Text.Json.Nodes.JsonObject)validScope.DeepClone();
-                            aiScope=(System.Text.Json.Nodes.JsonObject)effectiveScope.DeepClone();
-                        }
-                        else
-                        {
-                            scopeInvalid=true;
-                            scopeInvalidHint=AppText.TranslateBackend(scopeData["error"]?.GetValue<string>()??aiScopeError);
-                        }
-                    }
-                    catch(OperationCanceledException) when(token.IsCancellationRequested){throw;}
-                    catch(Exception scopeEx)
-                    {
-                        AppLog.Error(scopeEx);
-                        effectiveScope=aiScope is not null?(System.Text.Json.Nodes.JsonObject)aiScope.DeepClone():null;
-                    }
-                    if(token.IsCancellationRequested||disposed||!settingsHubOpen)return;
-                    if(!scopeInvalid&&effectiveScope is not null)
-                    {
-                        if(effectiveScope["root_ids"] is System.Text.Json.Nodes.JsonArray scopedRoots)
-                        {
-                            var scopedIds=scopedRoots.Select(node=>node?.GetValue<int>()??-1).Where(id=>id>0).ToHashSet();
-                            unscopedPresentTotal=knownRoots.Where(root=>root.Enabled&&!scopedIds.Contains(root.Id)).Sum(root=>root.PresentCount);
-                        }
-                        try
-                        {
-                            var covData=await api.PostAsync("api/library/ai/coverage",AIScopeRequests.Scoped(effectiveScope),token);
-                            covTarget=covData["target_total"]?.GetValue<int>();
-                            covFresh=covData["fresh_total"]?.GetValue<int>();
-                        }
-                        catch(OperationCanceledException) when(token.IsCancellationRequested){throw;}
-                        catch(Exception covEx){AppLog.Error(covEx);}
-                        if(token.IsCancellationRequested||disposed||!settingsHubOpen)return;
-                    }
-                }
-                if(scopeInvalid)
-                {
-                    SettingsAIStep3Status.Text=AppText.L("対象範囲の要確認","Scope needs attention");
-                    SettingsAINextHint.Text=string.IsNullOrWhiteSpace(scopeInvalidHint)?AppText.L("［AI検索を設定］の「対象範囲」を選び直して保存してください。","Open \"Configure AI Search\" and re-save your \"Search Scope\"."):scopeInvalidHint;
-                }
-                else
-                {
-                    var (step3Text,nextHint)=AISearchStatus.SettingsDataStatus(state,processed,total,covTarget,covFresh,unscopedPresentTotal);
-                    SettingsAIStep3Status.Text=step3Text;
-                    SettingsAINextHint.Text=nextHint;
-                    if(SettingsAIIndexButton is not null)
-                    {
-                        if(covTarget is int target&&covFresh is int fresh&&target>fresh)
-                            SettingsAIIndexButton.Content=fresh==0?AppText.L($"✨ AI検索データを作成 ({target:N0}件)",$"✨ Build AI index ({target:N0})"):AppText.L($"✨ 未作成のAIデータを作成 ({target-fresh:N0}件)",$"✨ Build remaining AI index ({target-fresh:N0})");
-                        else if(state is not ("running" or "cancelling")&&covTarget is int t&&covFresh==t&&t>0)
-                            SettingsAIIndexButton.Content=AppText.L("AI検索の設定・モデル切替","AI Search Settings & Model Switch");
-                    }
-                }
-                if(SettingsAIStatusArt is not null)
-                    VisualAssets.State(SettingsAIStatusArt,state is "running" or "cancelling"?"indexing":state=="failed"?"error":(!scopeInvalid&&covTarget is int ct&&covFresh==ct&&ct>0)?"completed":"greeting");
-            }
-            else
-            {
-                var needsRuntime=statusCode.Contains("runtime")||errorText.Contains("Python")||errorText.Contains("ライブラリ")||errorText.Contains("library",StringComparison.OrdinalIgnoreCase);
-                if(needsRuntime)
-                {
-                    SettingsAIStep1Status.Text=AppText.L("未導入","Not installed");
-                    SettingsAIStep2Status.Text=AppText.L("環境導入後に設定","Set up after runtime");
-                    SettingsAIStep3Status.Text=AppText.L("待機中","Waiting");
-                    SettingsAINextHint.Text=AppText.L("［AIの自動セットアップ］または［AI検索を設定］から実行環境を用意してください。","Run \"AI Auto-Setup\" or \"Configure AI Search\" to install the runtime.");
-                }
-                else
-                {
-                    SettingsAIStep1Status.Text=AppText.L("✓ 導入済み","✓ Installed");
-                    SettingsAIStep2Status.Text=AppText.L("未導入 / 要確認","Missing / needs setup");
-                    SettingsAIStep3Status.Text=AppText.L("待機中","Waiting");
-                    SettingsAINextHint.Text=AppText.L("［AI検索を設定］から検索モデルをダウンロードまたは指定してください。","Open \"Configure AI Search\" to download or select a search model.");
-                }
-                if(SettingsAIStatusArt is not null)
-                    VisualAssets.State(SettingsAIStatusArt,state=="failed"?"error":"greeting");
-            }
+            ApplySettingsAISnapshotToUI();
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested){}
         catch(Exception ex)
@@ -260,6 +364,167 @@ public sealed partial class MainPage
                 if(SettingsAIStep4Status is not null)SettingsAIStep4Status.Text="—";
                 SettingsAINextHint.Text=AppText.L("バックエンドに接続できないため状態を取得できませんでした。","Could not retrieve status because the backend is unreachable.");
                 if(SettingsAIStatusArt is not null)VisualAssets.State(SettingsAIStatusArt,"error");
+            }
+        }
+    }
+
+    private void UpdateFolderAIStatusUI()
+    {
+        if(FolderAIStatusText is null||FolderAIBuildButton is null||FolderAIProgressBar is null||FolderAIStatusDetail is null)return;
+        if(lastAiStatusData is not {} statusData)
+        {
+            FolderAIStatusText.Text=AppText.L("AI検索データ: 確認中…","AI Index: Checking…");
+            FolderAIStatusDetail.Visibility=Visibility.Collapsed;
+            FolderAIBuildButton.Visibility=Visibility.Collapsed;
+            FolderAIProgressBar.Visibility=Visibility.Collapsed;
+            return;
+        }
+        var available=statusData["available"]?.GetValue<bool>()==true;
+        var state=statusData["state"]?.GetValue<string>()??"idle";
+        var running=state is "running" or "cancelling";
+        var processed=statusData["processed"]?.GetValue<int>()??0;
+        var total=statusData["total"]?.GetValue<int>()??0;
+        var errorText=AppText.TranslateBackend(statusData["error"]?.GetValue<string>()??"");
+        FolderAIStatusText.Text=AISearchStatus.FolderSummary(available,state,processed,total,lastAiScopeInvalid,lastAiCovTarget,lastAiCovFresh,lastAiUnscopedPresentTotal);
+        var detail=lastAiScopeInvalid
+            ? (string.IsNullOrWhiteSpace(lastAiScopeInvalidHint)?AppText.L("［⚙ 設定 → AI］で対象範囲を選び直して保存してください。","Open \"⚙ Settings → AI\" to re-save your search scope."):lastAiScopeInvalidHint)
+            : state=="failed"&&!string.IsNullOrWhiteSpace(errorText)
+            ? errorText
+            : "";
+        FolderAIStatusDetail.Text=detail;
+        FolderAIStatusDetail.Visibility=string.IsNullOrWhiteSpace(detail)?Visibility.Collapsed:Visibility.Visible;
+        FolderAIProgressBar.Visibility=running?Visibility.Visible:Visibility.Collapsed;
+        FolderAIProgressBar.IsIndeterminate=total<=0;
+        FolderAIProgressBar.Value=total>0?Math.Clamp(processed*100.0/total,0.0,100.0):0.0;
+        if(state=="running")
+        {
+            FolderAIBuildButton.Content=AppText.L("中止","Cancel");
+            FolderAIBuildButton.Style=ThemeStyle("DefaultButtonStyle");
+            FolderAIBuildButton.IsEnabled=!aiActionPending;
+            FolderAIBuildButton.Visibility=Visibility.Visible;
+        }
+        else if(state=="cancelling")
+        {
+            FolderAIBuildButton.Content=AppText.L("中断中…","Canceling…");
+            FolderAIBuildButton.Style=ThemeStyle("DefaultButtonStyle");
+            FolderAIBuildButton.IsEnabled=false;
+            FolderAIBuildButton.Visibility=Visibility.Visible;
+        }
+        else if(available&&!lastAiScopeInvalid&&(lastAiCovTarget is int target&&lastAiCovFresh is int fresh?target>fresh:(state is "cancelled" or "interrupted" or "failed" or "partial" or "idle")))
+        {
+            var remaining=lastAiCovTarget is int t&&lastAiCovFresh is int f?Math.Max(0,t-f):0;
+            FolderAIBuildButton.Content=remaining>0
+                ? (lastAiCovFresh==0?AppText.L($"✨ AI検索データを作成 ({remaining:N0}件)",$"✨ Build AI index ({remaining:N0})"):AppText.L($"✨ 未作成のAIデータを作成 ({remaining:N0}件)",$"✨ Build remaining AI index ({remaining:N0})"))
+                : AppText.L("✨ 続きからAIデータを作成","✨ Continue AI index");
+            FolderAIBuildButton.Style=ThemeStyle("AccentButtonStyle");
+            FolderAIBuildButton.IsEnabled=!aiActionPending;
+            FolderAIBuildButton.Visibility=Visibility.Visible;
+        }
+        else
+        {
+            FolderAIBuildButton.Visibility=Visibility.Collapsed;
+        }
+        if(running&&folderHubOpen)EnsureFolderAIPollTimer();
+        else folderAiPollTimer?.Stop();
+    }
+
+    private void EnsureFolderAIPollTimer()
+    {
+        if(disposed)return;
+        if(folderAiPollTimer is null)
+        {
+            folderAiPollTimer=DispatcherQueue.CreateTimer();
+            folderAiPollTimer.Interval=TimeSpan.FromSeconds(1);
+            folderAiPollTimer.Tick+=async (_,_)=>await RefreshFolderAIStatusAsync(fetchCoverage:false);
+        }
+        if(!folderAiPollTimer.IsRunning)folderAiPollTimer.Start();
+    }
+
+    private async Task RefreshFolderAIStatusAsync(bool fetchCoverage)
+    {
+        if(pollingFolderAi||disposed||!folderHubOpen)return;
+        pollingFolderAi=true;
+        try
+        {
+            if(fetchCoverage)
+            {
+                folderAiLoadLifetime?.Cancel();
+                folderAiLoadLifetime?.Dispose();
+                folderAiLoadLifetime=new CancellationTokenSource();
+            }
+            var token=folderAiLoadLifetime?.Token??CancellationToken.None;
+            await FetchAISummarySnapshotAsync(fetchCoverage,token);
+            if(!disposed&&folderHubOpen)UpdateFolderAIStatusUI();
+        }
+        catch(OperationCanceledException){}
+        catch(Exception ex)
+        {
+            AppLog.Error(ex);
+            if(!disposed&&folderHubOpen&&FolderAIStatusText is not null&&lastAiStatusData is null)
+                FolderAIStatusText.Text=AppText.L("AI検索データ: 状態を確認できません","AI Index: Status unavailable");
+        }
+        finally{pollingFolderAi=false;}
+    }
+
+    private async Task StartScopedAIIndexAsync()
+    {
+        if(aiActionPending||disposed||dialogOpen||saving)return;
+        aiActionPending=true;
+        ApplySettingsAISnapshotToUI();
+        UpdateFolderAIStatusUI();
+        try
+        {
+            if(aiScope is null)await LoadAIScopeAsync();
+            if(aiScope is null)
+            {
+                Notice(AppText.L("AI検索の対象範囲を確認してください","Check AI search scope"),aiScopeError,InfoBarSeverity.Warning);
+                return;
+            }
+            await api.PostAsync("api/library/ai/index",AIScopeRequests.Scoped(aiScope));
+            lastAiWasRunning=true;
+            if(SearchMethod.FromIndex(lastMode).IsAI||similarityOrigin is not null)resultsNeedRefresh=true;
+            if(settingsHubOpen)await LoadSettingsStatusAsync();
+            if(folderHubOpen)await RefreshFolderAIStatusAsync(fetchCoverage:false);
+        }
+        catch(Exception ex){Failure(ex);}
+        finally
+        {
+            aiActionPending=false;
+            if(!disposed)
+            {
+                if(settingsHubOpen)ApplySettingsAISnapshotToUI();
+                if(folderHubOpen)UpdateFolderAIStatusUI();
+            }
+        }
+    }
+
+    private async Task CancelActiveAIIndexAsync()
+    {
+        if(aiActionPending||disposed)return;
+        aiActionPending=true;
+        ApplySettingsAISnapshotToUI();
+        UpdateFolderAIStatusUI();
+        try
+        {
+            var job=lastAiStatusData?["job"]?.GetValue<string>();
+            var jobId=lastAiStatusData?["job_id"]?.GetValue<string>();
+            if(job is "book-pages" or "book-page-batch" or "book-pages-chunked"&&!string.IsNullOrEmpty(jobId))
+                await api.PostAsync("api/library/ai/pages/cancel",new JsonObject{["job_id"]=jobId});
+            else if(job=="library-continuation-v1"&&!string.IsNullOrEmpty(jobId))
+                await api.Continuation.CancelAsync(jobId);
+            else
+                await api.PostAsync("api/library/ai/cancel",new JsonObject());
+            if(settingsHubOpen)await PollSettingsAIStatusAsync();
+            if(folderHubOpen)await RefreshFolderAIStatusAsync(fetchCoverage:false);
+        }
+        catch(Exception ex){Failure(ex);}
+        finally
+        {
+            aiActionPending=false;
+            if(!disposed)
+            {
+                if(settingsHubOpen)ApplySettingsAISnapshotToUI();
+                if(folderHubOpen)UpdateFolderAIStatusUI();
             }
         }
     }
@@ -304,6 +569,7 @@ public sealed partial class MainPage
         {
             RenderFolderHub();
             UpdateFolderDraftState();
+            UpdateFolderAIStatusUI();
         }
         if(shelfHubOpen&&!disposed)_ = ReloadShelfHubAsync();
         else if(resultSession is not null)RenderRows();
@@ -355,7 +621,8 @@ public sealed partial class MainPage
     private async void CloseSettings_Click(object sender,RoutedEventArgs e)
     {
         if(!ready||disposed||dialogOpen||saving||!await transitions.WaitAsync(0))return;
-        var needLoad=resultSession is null||PendingAutoSearch;
+        var needLoad=false;
+        var reuseSession=false;
         try
         {
             RememberCurrentLocation();
@@ -363,16 +630,29 @@ public sealed partial class MainPage
             RestoreNavigation();
             UpdateSearchMethod();
             UpdateLibraryHeading();
-            if(!needLoad)
+            reuseSession=CanRestoreLoadedResultSession(page,out var pageInLoadedWindow);
+            if(reuseSession&&pageInLoadedWindow)
             {
-                Count.Text=settingsReturnCount;
-                RestoreSelection();
+                RestoreLoadedLibraryView();
                 RecordNavigationLocation();
+            }
+            else
+            {
+                needLoad=true;
             }
         }
         finally{transitions.Release();}
-        if(needLoad&&!disposed)await LoadAsync();
+        if(needLoad&&!disposed)await LoadAsync(reuseSession:reuseSession);
     }
+
+    private async void SettingsAIBuild_Click(object sender,RoutedEventArgs e)=>await StartScopedAIIndexAsync();
+    private async void SettingsAICancel_Click(object sender,RoutedEventArgs e)=>await CancelActiveAIIndexAsync();
+    private async void FolderAIBuild_Click(object sender,RoutedEventArgs e)
+    {
+        if(lastAiStatusData?["state"]?.GetValue<string>()=="running")await CancelActiveAIIndexAsync();
+        else await StartScopedAIIndexAsync();
+    }
+    private async void FolderAISettings_Click(object sender,RoutedEventArgs e)=>await OpenSettingsAsync("ai");
 
     private async void SettingsGettingStarted_Click(object sender,RoutedEventArgs e)=>await OpenGettingStartedGuideAsync(fromSettings:true);
     private async void SettingsAIIndex_Click(object sender,RoutedEventArgs e)

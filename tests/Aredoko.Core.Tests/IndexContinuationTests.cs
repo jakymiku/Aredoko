@@ -23,7 +23,10 @@ internal static class IndexContinuationTests
         check(planReq["scope"]!["root_ids"]![0]!.GetValue<long>() == 1, "continuation plan request clones and owns scope");
         scope["root_ids"]![0] = 2;
 
-        foreach (var badLimit in new[] { 0, -1, 10001 })
+        var defaultPlanReq = IndexContinuationRequests.Plan(scope, profile);
+        check(defaultPlanReq["limit"]!.GetValue<int>() == IndexContinuationRequests.MaxLimit && IndexContinuationRequests.MaxLimit == 1_000_000, "continuation plan default limit removes 1,000 cap");
+
+        foreach (var badLimit in new[] { 0, -1, IndexContinuationRequests.MaxLimit + 1 })
         {
             var rejected = false;
             try { IndexContinuationRequests.Plan(scope, profile, badLimit); }
@@ -118,7 +121,7 @@ internal static class IndexContinuationTests
             ("selected greater than remaining_after", o => o["selected_total"] = 7),
             ("selected greater than limit", o => { o["index_limit"] = 1; o["selected_total"] = 2; }),
             ("zero limit", o => o["index_limit"] = 0),
-            ("limit above max", o => o["index_limit"] = 10001),
+            ("limit above max", o => o["index_limit"] = IndexContinuationRequests.MaxLimit + 1),
             ("negative after_id", o => o["after_id"] = -1),
             ("zero expires", o => o["expires_in_seconds"] = 0)
         })
@@ -199,7 +202,7 @@ internal static class IndexContinuationTests
             ("reused above processed", o => o["reused"] = 21),
             ("selected_total mismatch", o => o["selected_total"] = 99),
             ("unready_total mismatch", o => o["unready_total"] = 99),
-            ("total above limit", o => o["total"] = 10001),
+            ("total above limit", o => o["total"] = IndexContinuationRequests.MaxLimit + 1),
             ("incomplete numbers marked complete", o => o["state"] = "complete"),
             ("bad resumed_from", o => o["resumed_from"] = "not_hex")
         })
@@ -294,6 +297,27 @@ internal static class IndexContinuationTests
         var apiStatus = await api.Continuation.StatusAsync(profile, jobHex, scope);
         check(requestedRoute == "/api/library/ai/status" && requestedBody is null, "StatusAsync gets ai/status");
         check(apiStatus.JobId == jobHex, "StatusAsync parses status response");
+
+        // Large-library (>10,000 / 95,000+) plan and status parsing
+        var largePlanJson = ValidPlanJson();
+        largePlanJson["candidate_total"] = 95_500;
+        largePlanJson["fresh_total"] = 500;
+        largePlanJson["remaining_total"] = 95_000;
+        largePlanJson["remaining_after_id"] = 95_000;
+        largePlanJson["selected_total"] = 95_000;
+        largePlanJson["index_limit"] = IndexContinuationRequests.MaxLimit;
+        var largePlan = IndexContinuationPlan.Parse(ToBytes(largePlanJson), profile, scope);
+        check(largePlan.SelectedTotal == 95_000 && largePlan.Summary.Contains("95,000"), "continuation plan parses 95,000+ items without 10,000 cap");
+
+        var largeStatusJson = ValidStatusJson();
+        largeStatusJson["total"] = 95_000;
+        largeStatusJson["selected_total"] = 95_000;
+        largeStatusJson["processed"] = 42_000;
+        largeStatusJson["indexed"] = 41_500;
+        largeStatusJson["skipped"] = 500;
+        largeStatusJson["unready_total"] = 500;
+        var largeStatus = IndexContinuationStatus.Parse(ToBytes(largeStatusJson), profile, jobHex, scope);
+        check(largeStatus.Total == 95_000 && largeStatus.Processed == 42_000, "continuation status parses 95,000+ items without 10,000 cap");
     }
 
     private sealed class Stub(Func<HttpRequestMessage, Task<HttpResponseMessage>> response) : HttpMessageHandler

@@ -160,5 +160,11 @@ static class StatusClarityTests
         var runningOverride = AISearchStatus.SettingsDataStatus("running", 12, 211, coverageTargetTotal: 211, coverageFreshTotal: 6);
         check(runningOverride.Step3Status == "作成中（12/211）",
             "SettingsDataStatus prioritizes live running progress over static coverage");
+
+        // 8. FolderSummary mirrors compact AI status across states
+        check(AISearchStatus.FolderSummary(false, "idle", 0, 0, false).Contains("未設定"), "FolderSummary reports unconfigured AI");
+        check(AISearchStatus.FolderSummary(true, "running", 1200, 95000, false).Contains("1,200 / 95,000"), "FolderSummary reports live running progress");
+        check(AISearchStatus.FolderSummary(true, "idle", 0, 0, false, coverageTargetTotal: 95000, coverageFreshTotal: 12000).Contains("未作成 83,000"), "FolderSummary reports partial coverage and remaining count");
+        check(AISearchStatus.FolderSummary(true, "complete", 95000, 95000, false, coverageTargetTotal: 95000, coverageFreshTotal: 95000).Contains("✓ 作成済み"), "FolderSummary reports ready when all scoped items are indexed");
     }
 }

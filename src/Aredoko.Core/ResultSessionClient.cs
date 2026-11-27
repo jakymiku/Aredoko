@@ -6,12 +6,21 @@ using System.Text.Json.Nodes;
 
 namespace Aredoko.Core;
 
-public sealed class ResultSessionException(HttpStatusCode status, string? conditions, int? currentId)
-    : Exception(AppText.L("検索結果が更新されたか、有効期限が切れました。条件を保って再検索してください。", "Search results were updated or expired. Search again while keeping your filters."))
+public sealed class ResultSessionException(HttpStatusCode status, string? conditions, int? currentId, bool aiIndexing = false)
+    : Exception(BuildMessage(aiIndexing))
 {
     public HttpStatusCode Status { get; } = status;
     public string? Conditions { get; } = conditions;
     public int? CurrentId { get; } = currentId;
+    public bool AIIndexing { get; } = aiIndexing;
+
+    private static string BuildMessage(bool aiIndexing) => aiIndexing
+        ? AppText.L(
+            "AI検索データの作成中に検索結果が更新されました。完了まで少し待つか、名前・タグ検索をご利用ください。",
+            "Search results changed while AI indexing is in progress. Please wait for indexing to finish or use Name & Tag search.")
+        : AppText.L(
+            "検索結果が更新されたか、有効期限が切れました。条件を保って再検索してください。",
+            "Search results were updated or expired. Search again while keeping your filters.");
 }
 
 public sealed record ResultNeighbor(int Ordinal, MediaRow Item);
@@ -83,7 +92,10 @@ public sealed class ResultSessionClient(HttpClient client,HttpClient? creationCl
         var root = JsonNode.Parse(bytes)?.AsObject() ?? throw new InvalidDataException("Invalid result response");
         if (response.StatusCode == HttpStatusCode.Gone ||
             response.StatusCode == HttpStatusCode.Conflict && root["error_code"]?.GetValue<string>() == "result_session_changed")
-            throw new ResultSessionException(response.StatusCode, root["conditions"]?.ToJsonString(), root["current_id"]?.GetValue<int>());
+        {
+            var aiIndexing = root["ai_indexing"] is JsonValue flag && flag.TryGetValue<bool>(out var active) && active;
+            throw new ResultSessionException(response.StatusCode, root["conditions"]?.ToJsonString(), root["current_id"]?.GetValue<int>(), aiIndexing);
+        }
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(ErrorText.FromResponse(root.ToJsonString(), (int)response.StatusCode));
         return root;

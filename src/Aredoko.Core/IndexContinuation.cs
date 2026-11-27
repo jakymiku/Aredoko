@@ -7,14 +7,14 @@ namespace Aredoko.Core;
 
 public static class IndexContinuationRequests
 {
-    public const int MaxLimit = 10000;
+    public const int MaxLimit = 1_000_000;
 
     internal static string Profile(string profile) =>
         profile.Length is > 0 and <= 256 ? profile : throw new ArgumentException(AppText.L("モデル設定を確認してください。", "Check the AI model setting."));
 
-    public static JsonObject Plan(JsonObject scope, string profile, int limit = 1000, long afterId = 0)
+    public static JsonObject Plan(JsonObject scope, string profile, int limit = MaxLimit, long afterId = 0)
     {
-        if (limit is < 1 or > MaxLimit) throw new ArgumentOutOfRangeException(nameof(limit), AppText.L("継続索引の上限は1〜10,000件です。", "Continuation limit must be between 1 and 10,000 items."));
+        if (limit is < 1 or > MaxLimit) throw new ArgumentOutOfRangeException(nameof(limit), AppText.L($"継続索引の上限は1〜{MaxLimit:N0}件です。", $"Continuation limit must be between 1 and {MaxLimit:N0} items."));
         if (afterId < 0) throw new ArgumentOutOfRangeException(nameof(afterId), AppText.L("カーソル位置が無効です。", "Invalid cursor position."));
         var normalizedScope = PageChunkRequests.Scope(scope);
         return new()
@@ -118,7 +118,7 @@ public sealed record IndexContinuationPlan(
 
             if (candidate < 0 || fresh < 0 || fresh > candidate || remaining != candidate - fresh
                 || remainingAfter < 0 || remainingAfter > remaining
-                || selected < 0 || selected > limit || selected > remainingAfter || limit is < 1 or > 10000
+                || selected < 0 || selected > limit || selected > remainingAfter || limit is < 1 or > IndexContinuationRequests.MaxLimit
                 || afterId < 0 || upperId < 0 || nextAfterId < 0)
                 throw new InvalidDataException(AppText.L("索引の計画内容が無効です。", "Invalid indexing plan payload."));
 
@@ -205,7 +205,7 @@ public sealed record IndexContinuationStatus(
                 }
             }
 
-            if (total is < 0 or > 10000 || processed < 0 || processed > total
+            if (total is < 0 or > IndexContinuationRequests.MaxLimit || processed < 0 || processed > total
                 || indexed < 0 || indexed > processed || skipped < 0 || skipped > processed
                 || reused < 0 || reused > processed || selectedTotal != total || unreadyTotal != skipped
                 || afterId < 0 || upperId < 0 || nextAfterId < 0 || error.Length > 1024
@@ -242,7 +242,7 @@ public sealed class IndexContinuationClient
         return bytes;
     }
 
-    public async Task<IndexContinuationPlan> PlanAsync(JsonObject scope, string profile, int limit = 1000, long afterId = 0, CancellationToken cancellation = default)
+    public async Task<IndexContinuationPlan> PlanAsync(JsonObject scope, string profile, int limit = IndexContinuationRequests.MaxLimit, long afterId = 0, CancellationToken cancellation = default)
     {
         var request = IndexContinuationRequests.Plan(scope, profile, limit, afterId);
         var bytes = await SendJsonAsync("api/library/ai/index/plan", request, cancellation);
