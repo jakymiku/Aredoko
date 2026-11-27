@@ -93,4 +93,40 @@ class ScanFollowupTests(unittest.TestCase):
         self.assertEqual(state['state'],'complete');self.assertEqual(state['total'],1)
         self.assertEqual(ai.status()['scope']['root_ids'],self.roots[:1])
 
+    def test_run_scan_ai_processes_beyond_10000_incrementally_skipping_fresh(self):
+        from array import array
+        from dataclasses import replace
+        from ai_profiles import DEFAULT_PROFILE
+        from ai_search import AISearch, revision
+        class BatchEncoder:
+            available=True;device='generated-test-only'
+            profile=replace(DEFAULT_PROFILE,modalities=('text',))
+            def __init__(self):self.encoded=0
+            def encode(self,operation,value):
+                if operation=='document':self.encoded+=1
+                return [1.0]+[0.0]*767
+            def encode_batch(self,operation,values,mode='normal'):
+                if operation=='document':self.encoded+=len(values)
+                return [[1.0]+[0.0]*767 for _ in values]
+            def close(self):pass
+        root=self.roots[0]
+        total=12_500
+        locations=[(i,root,f'scan-{i:05d}.png','image',0,1,'present','2026-11-28','2026-11-28') for i in range(1,total+1)]
+        items=[(i,f'scan-{i:05d}.png','image','[]','',0) for i in range(1,total+1)]
+        mappings=[(i,i) for i in range(1,total+1)]
+        with self.catalog.connect() as db:
+            db.executemany('INSERT INTO library_locations(id,root_id,relative_path,kind,size_bytes,mtime_ns,status,discovered_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?)',locations)
+            db.executemany('INSERT INTO items(id,title,kind,tags,shelf,favorite) VALUES(?,?,?,?,?,?)',items)
+            db.executemany('INSERT INTO item_locations(item_id,location_id) VALUES(?,?)',mappings)
+        encoder=BatchEncoder();ai=AISearch(self.catalog,encoder);self.addCleanup(ai.close)
+        ai.configure(index_mode='turbo')
+        packed=array('f',[1.0]+[0.0]*767).tobytes()
+        fresh_rows=[(i,revision({'root_id':root,'relative_path':f'scan-{i:05d}.png','size_bytes':0,'mtime_ns':1,'title':f'scan-{i:05d}.png','tags':[]}),'text',packed) for i in range(1,11_501)]
+        with ai.store.connect() as db:
+            db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',fresh_rows)
+        _,state,_=self.run_followup({},[root],ai=ai)
+        self.assertEqual((state['state'],state['total'],state['indexed'],state['skipped']),('complete',total,total,0))
+        self.assertEqual(encoder.encoded,1_000)
+        self.assertEqual(ai.coverage({'root_ids':[root]})['fresh_total'],total)
+
 if __name__=='__main__':unittest.main()

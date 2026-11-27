@@ -148,14 +148,14 @@ class AISearchTests(unittest.TestCase):
         self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
         url=f'http://127.0.0.1:{server.server_port}'
         headers={'X-Aredoko-Token':'test-token','Origin':url,'Content-Type':'application/json'}
-        for body,expected in (({},10000),({'limit':2000},2000)):
+        for body,expected in (({},MAX_ITEMS),({'limit':2000},2000)):
             with patch.object(self.ai,'start',wraps=self.ai.start) as start:
                 with urllib.request.urlopen(urllib.request.Request(url+'/api/library/ai/index',json.dumps(body).encode(),headers)) as response:
-                    self.assertEqual(json.load(response)['limit'],10000)
+                    self.assertEqual(json.load(response)['limit'],MAX_ITEMS)
                 start.assert_called_once_with(expected)
             self.ai.worker.join(10)
             self.assertEqual(self.ai.status()['state'],'complete')
-        for invalid in (10001,True):
+        for invalid in (MAX_ITEMS+1,True):
             with self.assertRaises(urllib.error.HTTPError) as error:
                 urllib.request.urlopen(urllib.request.Request(url+'/api/library/ai/index',json.dumps({'limit':invalid}).encode(),headers))
             self.assertEqual(error.exception.code,400);error.exception.close()

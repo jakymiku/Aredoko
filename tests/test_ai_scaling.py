@@ -1,11 +1,15 @@
 """Generated catalogs and deterministic vectors; no GPU/model quality claim."""
+from array import array
 from dataclasses import replace
+import gc
 import hashlib
+import json
 import math
 from pathlib import Path
 import sys
 import tempfile
 import threading
+import tracemalloc
 import unittest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
@@ -59,7 +63,7 @@ class ScalingTests(unittest.TestCase):
         self.assertEqual(ai.store.path,original_path);self.assertEqual(ai.profile.key,original_key)
         result=ai.search('late-target')
         self.assertEqual(result['total'],2105);self.assertEqual(result['items'][0]['id'],late['id'])
-        self.assertEqual(result['coverage_limit'],10000)
+        self.assertEqual(result['coverage_limit'],MAX_ITEMS)
         self.assertEqual(ai.search('late-target',view='favorites')['items'][0]['id'],late['id'])
         self.assertEqual(len(ai.search('late-target',page=1)['items']),60)
         early=ai._rows()[0];catalog.update([early['id']],{'tags':['updated']})
@@ -108,11 +112,73 @@ class ScalingTests(unittest.TestCase):
         self.assertEqual(ai.status()['state'],'complete');self.assertEqual(ai.status()['skipped'],1)
         self.assertFalse(ai.store.fresh(first['id'],revision(first)))
         self.assertEqual(ai.search('late-target')['total'],1)
-    def test_candidate_bounds_are_strict_and_10000_is_allowed(self):
+    def test_candidate_bounds_are_strict_and_max_items_is_allowed(self):
         _,_,ai,_,_=self.make(1)
         for limit in (0,MAX_ITEMS+1,True,1.5):
             with self.assertRaises(ValueError):ai.start(limit)
-        self.build(ai,10000);self.assertEqual(ai.status()['limit'],10000)
+        self.build(ai,10000);self.assertEqual(ai.status()['limit'],MAX_ITEMS)
+        self.build(ai,MAX_ITEMS);self.assertEqual(ai.status()['limit'],MAX_ITEMS)
+
+    def test_ninety_five_thousand_streaming_incremental_index_bounded_memory(self):
+        class BatchEncoder:
+            available=True
+            device='deterministic-test-only'
+            profile=replace(DEFAULT_PROFILE,dimension=4,modalities=('text',))
+            def __init__(self):self.encoded_docs=0
+            def encode(self,operation,value):
+                if operation=='document':self.encoded_docs+=1
+                return [1.0,0.0,0.0,0.0]
+            def encode_batch(self,operation,values,mode='normal'):
+                if operation=='document':self.encoded_docs+=len(values)
+                return [[1.0,0.0,0.0,0.0] for _ in values]
+            def close(self):pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp);media=base/'media';media.mkdir()
+            catalog=ProductionCatalog(base/'catalog.sqlite')
+            try:
+                root=catalog.add_root(str(media))
+                total=95_000
+                locations=[(i,root,f'item-{i:06d}.wav','audio',0,1,'present','2026-11-28','2026-11-28') for i in range(1,total+1)]
+                items=[(i,f'item-{i:06d}.wav','audio','[]','',0) for i in range(1,total+1)]
+                mappings=[(i,i) for i in range(1,total+1)]
+                with catalog.connect() as db:
+                    db.executemany('INSERT INTO library_locations(id,root_id,relative_path,kind,size_bytes,mtime_ns,status,discovered_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?)',locations)
+                    db.executemany('INSERT INTO items(id,title,kind,tags,shelf,favorite) VALUES(?,?,?,?,?,?)',items)
+                    db.executemany('INSERT INTO item_locations(item_id,location_id) VALUES(?,?)',mappings)
+                encoder=BatchEncoder();ai=AISearch(catalog,encoder)
+                try:
+                    ai.configure(index_mode='turbo')
+                    # Mark first 90,000 items fresh so incremental run skips them and indexes tail 5,000 beyond 10k.
+                    packed=array('f',[1.0,0.0,0.0,0.0]).tobytes()
+                    fresh_rows=[]
+                    for i in range(1,90_001):
+                        row={'root_id':root,'relative_path':f'item-{i:06d}.wav','size_bytes':0,'mtime_ns':1,'title':f'item-{i:06d}.wav','tags':[]}
+                        fresh_rows.append((i,revision(row),'text',packed))
+                    with ai.store.connect() as db:
+                        db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',fresh_rows)
+                    fresh_rows.clear()
+                    gc.collect();tracemalloc.start()
+                    try:
+                        started=ai.start(scope={'root_ids':[root]})
+                        self.assertEqual(started['total'],total)
+                        ai.worker.join(60)
+                        self.assertFalse(ai.worker.is_alive())
+                        peak=tracemalloc.get_traced_memory()[1]
+                    finally:
+                        tracemalloc.stop()
+                    status=ai.status()
+                    self.assertEqual((status['state'],status['total'],status['processed'],status['indexed'],status['skipped']),('complete',total,total,total,0))
+                    self.assertEqual(encoder.encoded_docs,5_000)
+                    self.assertLess(peak,32*1024*1024)
+                    # Second run skips all 95,000 fresh items with zero encoder calls.
+                    ai.start(scope={'root_ids':[root]});ai.worker.join(30)
+                    self.assertEqual(encoder.encoded_docs,5_000)
+                    self.assertEqual(ai.coverage({'root_ids':[root]})['fresh_total'],total)
+                finally:
+                    ai.close()
+            finally:
+                catalog.close()
 
 class GlobalFusionTests(unittest.TestCase):
     def test_ranks_span_multiple_vector_batches(self):

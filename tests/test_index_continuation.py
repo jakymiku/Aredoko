@@ -15,7 +15,7 @@ import urllib.request
 REPO=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(REPO/'app'));sys.path.insert(0,str(REPO/'tools'))
 from ai_profiles import DEFAULT_PROFILE
-from ai_search import AISearch, AIBusy, revision
+from ai_search import AISearch, AIBusy, MAX_ITEMS, revision
 from ai_process import AIUnavailable
 from index_continuation import JOB, TTL
 from production import ProductionCatalog
@@ -201,7 +201,7 @@ class ContinuationTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.ai.continuation.resume(old['job_id'],self.scope,self.profile)
 
     def test_strict_arguments_and_busy_scan_checks(self):
-        for limit,after in ((True,0),(0,0),(10001,0),(1,True),(1,-1)):
+        for limit,after in ((True,0),(0,0),(MAX_ITEMS+1,0),(1,True),(1,-1)):
             with self.assertRaises(ValueError):self.plan(limit,after)
         with self.assertRaises(ValueError):self.ai.continuation.prepare(None,self.profile)
         for bad_id in (None, 123, 'short', 'Z'*32):
@@ -322,6 +322,84 @@ class LargeContinuationTests(unittest.TestCase):
                 self.assertEqual(encoder.calls,['document'])
                 self.assertEqual(ai.continuation.prepare({},ai.profile.key,1)['remaining_total'],0)
             finally:ai.close();catalog.close()
+
+    def test_ninety_five_thousand_default_prepare_compact_state_cancel_resume_and_tamper(self):
+        import gc, tracemalloc
+        class BatchEncoder:
+            profile=replace(DEFAULT_PROFILE,dimension=3,modalities=('text',))
+            available=True
+            def __init__(self):self.docs=0;self.on_batch=None
+            def encode(self,op,val):
+                if op=='document':self.docs+=1
+                return [1.,0.,0.]
+            def encode_batch(self,op,vals,mode='normal'):
+                if op=='document':
+                    self.docs+=len(vals)
+                    if self.on_batch:self.on_batch(self.docs)
+                return [[1.,0.,0.] for _ in vals]
+            def close(self):pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp);media=base/'media';media.mkdir()
+            catalog=ProductionCatalog(base/'catalog.sqlite')
+            try:
+                root=catalog.add_root(str(media))
+                total=95_000;fresh_prefix=80_000;expected_selected=total-fresh_prefix
+                locations=[(i,root,f'item-{i:06d}.wav','audio',0,1,'present','2026-11-28','2026-11-28') for i in range(1,total+1)]
+                items=[(i,f'item-{i:06d}.wav','audio','[]','',0) for i in range(1,total+1)]
+                mappings=[(i,i) for i in range(1,total+1)]
+                with catalog.connect() as db:
+                    db.executemany('INSERT INTO library_locations(id,root_id,relative_path,kind,size_bytes,mtime_ns,status,discovered_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?)',locations)
+                    db.executemany('INSERT INTO items(id,title,kind,tags,shelf,favorite) VALUES(?,?,?,?,?,?)',items)
+                    db.executemany('INSERT INTO item_locations(item_id,location_id) VALUES(?,?)',mappings)
+                encoder=BatchEncoder();ai=AISearch(catalog,encoder)
+                try:
+                    ai.configure(index_mode='turbo')
+                    packed=array('f',[1.,0.,0.]).tobytes()
+                    fresh_rows=[(i,revision({'root_id':root,'relative_path':f'item-{i:06d}.wav','size_bytes':0,'mtime_ns':1,'title':f'item-{i:06d}.wav','tags':[]}),'text',packed) for i in range(1,fresh_prefix+1)]
+                    with ai.store.connect() as db:
+                        db.executemany('INSERT INTO ai_vectors VALUES(?,?,?,?)',fresh_rows)
+                    fresh_rows.clear()
+                    gc.collect();tracemalloc.start()
+                    try:
+                        # Default limit (omitted) selects all 15,000 remaining items without multi-MB JSON bloat.
+                        plan=ai.continuation.prepare({},ai.profile.key)
+                        self.assertEqual((plan['candidate_total'],plan['fresh_total'],plan['remaining_total'],plan['selected_total'],plan['index_limit'],plan['next_after_id']),(total,fresh_prefix,expected_selected,expected_selected,MAX_ITEMS,total))
+                        def cancel_mid(count):
+                            if count>=1000:ai.cancel_build()
+                        encoder.on_batch=cancel_mid
+                        started=ai.continuation.start(plan['plan_id'],{},ai.profile.key)
+                        ai.worker.join(30)
+                        cancelled_state=ai.store.state()
+                        self.assertEqual(cancelled_state['state'],'cancelled')
+                        self.assertEqual(cancelled_state['continuation']['version'],2)
+                        state_bytes=len(json.dumps(cancelled_state).encode('utf-8'))
+                        self.assertLess(state_bytes,256*1024)
+                        # Tampered compact continuation record must be rejected before launching.
+                        bad=json.loads(json.dumps(cancelled_state))
+                        bad['continuation']['chunks'][0]='0'*64
+                        ai.store.save_state(bad)
+                        with self.assertRaises(ValueError):ai.continuation.resume(started['job_id'],{},ai.profile.key)
+                        bad=json.loads(json.dumps(cancelled_state))
+                        bad['continuation']['ids_b64']='not-base64!'
+                        ai.store.save_state(bad)
+                        with self.assertRaises(ValueError):ai.continuation.resume(started['job_id'],{},ai.profile.key)
+                        ai.store.save_state(cancelled_state)
+                        encoder.on_batch=None
+                        resumed=ai.continuation.resume(started['job_id'],{},ai.profile.key)
+                        ai.worker.join(30)
+                        peak=tracemalloc.get_traced_memory()[1]
+                    finally:
+                        tracemalloc.stop()
+                    done=ai.status()
+                    self.assertEqual((done['state'],done['indexed'],done['skipped']),('complete',expected_selected,0))
+                    self.assertGreater(done['reused'],0)
+                    self.assertEqual(resumed['resumed_from'],started['job_id'])
+                    self.assertNotIn('continuation',ai.store.state())
+                    self.assertLess(peak,48*1024*1024)
+                    self.assertEqual(ai.continuation.prepare({},ai.profile.key)['remaining_total'],0)
+                finally:ai.close()
+            finally:catalog.close()
 
 
 if __name__=='__main__':unittest.main()

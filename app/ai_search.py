@@ -33,7 +33,7 @@ from page_semantics import CONTRACT as PAGE_CONTRACT, PageVectors, SCHEMA as PAG
 from audio_semantics import AudioSpeechVectors, SCHEMA as AUDIO_SEGMENT_SCHEMA
 from audio_acoustics import AudioAcousticVectors, SCHEMA as AUDIO_ACOUSTIC_SCHEMA
 
-MAX_ITEMS=10_000
+MAX_ITEMS=1_000_000
 ROW_BATCH_SIZE=256
 PROGRESS_INTERVAL=16
 # Input preprocessing is independent of the embedding model/vector space. Old
@@ -440,39 +440,99 @@ class AISearch:
             if count!=len(roots):raise ValueError('Unknown registered root')
         return scope
 
-    def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS,scope=None,*,all_candidates=False,check=None):
+    def _row_query_parts(self,kind='',view='all',scope=None):
         if not isinstance(kind,str) or kind and kind not in QUERY_KINDS or view not in ('all','favorites','unreviewed','shelf'):
             raise ValueError('Invalid filter')
-        if type(limit) is not int or not 1<=limit<=MAX_ITEMS:
-            raise ValueError('Invalid candidate limit')
         scope=self._scope(scope)
         scoped_where,values=scope_clause(scope)
         where=["l.status='present'",'r.enabled=1',*scoped_where]
         clauses,parameters=kind_clause(kind);where.extend(clauses);values.extend(parameters)
         where.extend({'favorites':['i.favorite=1'],'unreviewed':['i.reviewed=0'],'shelf':["i.shelf<>''"],'all':[]}[view])
-        # New records cannot lengthen a running enumeration indefinitely.
-        with self.catalog.connect() as db:
-            upper=db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
         # Multiple root indexes can make SQLite repeatedly sort the whole
         # selected population for each 256-row page. Pin the ID-range driver
         # for multi-root keyset reads; keep the selective single-root plan.
         join=self.catalog.JOIN+'JOIN library_roots r ON r.id=l.root_id '
-        if scope is not None and scope['root_ids'] is not None and len(scope['root_ids'])>1:
+        if scope is not None and scope['root_ids'] is not None:
             join=join.replace(' JOIN ',' CROSS JOIN ')
+        return scope,join,' AND '.join(where),values
+
+    def _iter_rows(self,kind='',view='all',limit=MAX_ITEMS,scope=None,*,all_candidates=False,check=None):
+        if type(limit) is not int or not 1<=limit<=MAX_ITEMS:
+            raise ValueError('Invalid candidate limit')
+        scope,join,where_sql,values=self._row_query_parts(kind,view,scope)
+        # New records cannot lengthen a running enumeration indefinitely.
+        with self.catalog.connect() as db:
+            upper=db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
+        excludes_cache={}
         last=0;yielded=0
         while last<upper and (all_candidates or yielded<limit):
             if check is not None:check()
             with self.catalog.connect() as db:
-                rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+join+'WHERE '+' AND '.join(where)+
+                rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+join+'WHERE '+where_sql+
                     ' AND i.id>? AND i.id<=? ORDER BY i.id LIMIT ?',
                     values+[last,upper,ROW_BATCH_SIZE]).fetchall()
             if not rows:break
             last=rows[-1]['id']
             # Exclusions do not consume eligible coverage, even before a rescan.
             for row in rows:
-                if _excluded(row['relative_path'],tuple(json.loads(row['excludes_json']))):continue
+                ex_json=row['excludes_json']
+                ex=excludes_cache.get(ex_json)
+                if ex is None:
+                    ex=tuple(json.loads(ex_json))
+                    excludes_cache[ex_json]=ex
+                if _excluded(row['relative_path'],ex):continue
                 yield self.catalog.item(row);yielded+=1
                 if not all_candidates and yielded>=limit:break
+
+    def _count_candidates(self,limit=MAX_ITEMS,scope=None):
+        _,join,where_sql,values=self._row_query_parts(scope=scope)
+        excludes_cache={}
+        total=0;last_included=0
+        with self.catalog.connect() as db:
+            upper=db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
+            last=0
+            while last<upper and total<limit:
+                rows=db.execute('SELECT i.id,l.relative_path,r.excludes_json'+join+'WHERE '+where_sql+
+                    ' AND i.id>? AND i.id<=? ORDER BY i.id LIMIT ?',
+                    values+[last,upper,ROW_BATCH_SIZE]).fetchall()
+                if not rows:break
+                last=rows[-1]['id']
+                for row in rows:
+                    ex_json=row['excludes_json']
+                    ex=excludes_cache.get(ex_json)
+                    if ex is None:
+                        ex=tuple(json.loads(ex_json))
+                        excludes_cache[ex_json]=ex
+                    if _excluded(row['relative_path'],ex):continue
+                    total+=1;last_included=row['id']
+                    if total>=limit:break
+        return total,last_included
+
+    def _iter_id_batches(self,limit=MAX_ITEMS,scope=None,*,upper_id=None):
+        _,join,where_sql,values=self._row_query_parts(scope=scope)
+        if upper_id is None:
+            with self.catalog.connect() as db:
+                upper_id=db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
+        excludes_cache={}
+        last=0;yielded=0
+        while last<upper_id and yielded<limit:
+            with self.catalog.connect() as db:
+                rows=db.execute('SELECT i.id,l.relative_path,r.excludes_json'+join+'WHERE '+where_sql+
+                    ' AND i.id>? AND i.id<=? ORDER BY i.id LIMIT ?',
+                    values+[last,upper_id,ROW_BATCH_SIZE]).fetchall()
+            if not rows:break
+            last=rows[-1]['id']
+            batch=[]
+            for row in rows:
+                ex_json=row['excludes_json']
+                ex=excludes_cache.get(ex_json)
+                if ex is None:
+                    ex=tuple(json.loads(ex_json))
+                    excludes_cache[ex_json]=ex
+                if _excluded(row['relative_path'],ex):continue
+                batch.append(row['id']);yielded+=1
+                if yielded>=limit:break
+            if batch:yield batch
     def _rows(self,kind='',view='all',limit=MAX_ITEMS):
         # Legacy bounded metadata helper; full searches use _search_batches.
         return list(self._iter_rows(kind,view,limit))
@@ -481,9 +541,9 @@ class AISearch:
         if len(ids)>ROW_BATCH_SIZE:raise ValueError('Metadata batch exceeds limit')
         scoped_where,values=scope_clause(scope)
         clause=" AND "+" AND ".join(scoped_where) if scoped_where else ''
+        join=self.catalog.JOIN.replace(' JOIN ',' CROSS JOIN ')+'JOIN library_roots r ON r.id=l.root_id'
         with self.catalog.connect() as db:
-            rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+self.catalog.JOIN+
-                'JOIN library_roots r ON r.id=l.root_id WHERE i.id IN ('+
+            rows=db.execute('SELECT '+self.catalog.FIELDS+',r.excludes_json'+join+' WHERE i.id IN ('+
                 ','.join('?' for _ in ids)+") AND l.status='present' AND r.enabled=1"+clause,ids+values).fetchall()
         return {row['id']:self.catalog.item(row) for row in rows
                 if not _excluded(row['relative_path'],tuple(json.loads(row['excludes_json'])))}
@@ -606,49 +666,82 @@ class AISearch:
             if self._closed: raise AIUnavailable('AI is closing')
             if self.worker and self.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
             if self.catalog.scan_state()['state'] in ('running','cancelling'): raise AIBusy('フォルダのスキャン完了後に実行してください。')
-            ids=[row['id'] for row in self._iter_rows(limit=limit,scope=scope)]
+            total,upper_id=self._count_candidates(limit=limit,scope=scope)
             self.cancel.clear()
-            self.store.save_state({'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':'','scope':scope})
-            self.worker=threading.Thread(target=self._build,args=(ids,scope),daemon=True)
+            self.store.save_state({'state':'running','processed':0,'total':total,'indexed':0,'skipped':0,'error':'','scope':scope})
+            self.worker=threading.Thread(target=self._build,args=(None,scope),kwargs={'upper_id':upper_id,'limit':total},daemon=True)
             self.worker.start()
         return self.status()
-    def _build(self,ids,scope=None,initial_state=None):
-        state=dict(initial_state) if initial_state is not None else {'state':'running','processed':0,'total':len(ids),'indexed':0,'skipped':0,'error':'','scope':scope}
+    def _build(self,ids,scope=None,initial_state=None,*,upper_id=0,limit=0):
+        total_hint=len(ids) if ids is not None else (initial_state['total'] if initial_state is not None else limit)
+        state=dict(initial_state) if initial_state is not None else {'state':'running','processed':0,'total':total_hint,'indexed':0,'skipped':0,'error':'','scope':scope}
         continuing=state.get('job')==CONTINUATION_JOB
-        if continuing:state['_pins']={item:(rev,sig) for item,rev,sig in state['continuation']['entries']}
+        if continuing and state['continuation'].get('version')==1:
+            state['_pins']={item:(rev,sig) for item,rev,sig in state['continuation']['entries']}
         def saved():return {k:v for k,v in state.items() if k!='_pins'}
+        def save_progress():
+            with self.guard:
+                self.store.save_state({**saved(),'state':'cancelling' if self.cancel.is_set() else 'running'})
         try:
             with self.inference:
-                for offset in range(0,len(ids),ROW_BATCH_SIZE):
+                if continuing and state['continuation'].get('version')==2:
+                    batch_iter=self.continuation.iter_chunks(state['continuation'])
+                elif ids is not None:
+                    batch_iter=((None,ids[offset:offset+ROW_BATCH_SIZE]) for offset in range(0,len(ids),ROW_BATCH_SIZE))
+                elif limit>0:
+                    batch_iter=((None,batch) for batch in self._iter_id_batches(limit=limit,scope=scope,upper_id=upper_id))
+                else:
+                    batch_iter=()
+                want_all_pages=bool(scope and scope.get('book_pages')=='all_pages' and 'cover' in self.profile.modalities)
+                for chunk_idx,batch in batch_iter:
                     if self.cancel.is_set():break
-                    batch=ids[offset:offset+ROW_BATCH_SIZE]
                     if continuing:
-                        with self.catalog._guard:self.continuation.check(state,batch)
+                        with self.catalog._guard:
+                            if chunk_idx is not None:
+                                self.continuation.check_chunk(state,chunk_idx,batch)
+                            else:
+                                self.continuation.check(state,batch)
                     rows=self._current_rows(batch,scope)
                     pending=self.pending_tags.snapshots(list(rows))
                     if hasattr(self.encoder,'encode_batch') and not self._index_pause_ms:
                         from concurrent.futures import ThreadPoolExecutor
+                        present_rows=[]
+                        for item_id in batch:
+                            row=rows.get(item_id)
+                            if row is None:
+                                state['skipped']+=1
+                                state['processed']+=1
+                            else:
+                                present_rows.append(row)
+                        if not present_rows:
+                            save_progress()
+                            continue
+                        fresh_set=self.store.fresh_ids(present_rows)
+                        ready_rows=[r for r in present_rows if r['id'] in fresh_set and r['id'] not in pending and not (want_all_pages and r['kind'] in ('book','archive'))]
+                        if ready_rows:
+                            if continuing:
+                                with self.catalog._guard:
+                                    self.continuation.check(state,[r['id'] for r in ready_rows])
+                                    ready_checked=self.continuation.ready(ready_rows,{})
+                                    state['indexed']+=len(ready_checked)
+                                    state['reused']+=len(ready_checked)
+                                    state['skipped']+=len(ready_rows)-len(ready_checked)
+                            else:
+                                state['indexed']+=len(ready_rows)
+                            state['processed']+=len(ready_rows)
+                        ready_ids={r['id'] for r in ready_rows}
+                        work_rows=[r for r in present_rows if r['id'] not in ready_ids]
+                        if not work_rows:
+                            save_progress()
+                            continue
                         sub_offset=0
-                        while sub_offset<len(batch):
+                        while sub_offset<len(work_rows):
                             if self.cancel.is_set():break
                             mode=self._index_mode
                             sub_step=32 if mode=='turbo' else 8
-                            sub_ids=batch[sub_offset:sub_offset+sub_step]
-                            sub_offset+=len(sub_ids)
-                            present_rows=[]
-                            for item_id in sub_ids:
-                                row=rows.get(item_id)
-                                if row is None:
-                                    state['skipped']+=1
-                                    state['processed']+=1
-                                else:
-                                    present_rows.append(row)
-                            if not present_rows:
-                                with self.guard:
-                                    self.store.save_state({**saved(),'state':'cancelling' if self.cancel.is_set() else 'running'})
-                                continue
-                            fresh_set=self.store.fresh_ids(present_rows)
-                            unfresh_rows=[r for r in present_rows if r['id'] not in fresh_set]
+                            sub_rows=work_rows[sub_offset:sub_offset+sub_step]
+                            sub_offset+=len(sub_rows)
+                            unfresh_rows=[r for r in sub_rows if r['id'] not in fresh_set]
                             committed_ids=set();stale_ids=set();contract_skipped_ids=set()
                             if unfresh_rows:
                                 rev_by_id={r['id']:revision(r) for r in unfresh_rows}
@@ -736,7 +829,8 @@ class AISearch:
                                         committed_ids.add(iid)
                                     if to_commit:
                                         self.store.put_many(to_commit)
-                            for r in present_rows:
+                            newly_indexed_ids=[];did_infer_ids=set()
+                            for r in sub_rows:
                                 if self.cancel.is_set():break
                                 item_id=r['id']
                                 if item_id in stale_ids:
@@ -754,26 +848,30 @@ class AISearch:
                                 if not tag_ready and state['indexed']>indexed_before:
                                     state['indexed']-=1;state['skipped']+=1
                                 if (not self.cancel.is_set()
-                                        and scope and scope.get('book_pages')=='all_pages'
-                                        and 'cover' in self.profile.modalities and r['kind'] in ('book','archive')):
+                                        and want_all_pages and r['kind'] in ('book','archive')):
                                     try:
                                         if self.pages.index_all_pages(item_id,scope):
                                             did_infer=True
                                     except (PreviewUnavailable,ReaderChanged,PreviewBusyError,KeyError,OSError):
                                         pass
-                                if continuing and not self.cancel.is_set():
-                                    with self.catalog._guard:
-                                        self.continuation.check(state,[item_id])
-                                        current=self._current_rows([item_id],scope).get(item_id)
-                                        snapshots=self.pending_tags.snapshots([item_id])
-                                        if state['indexed']>indexed_before:
-                                            if item_id not in self.continuation.ready([current],snapshots):
-                                                state['indexed']-=1;state['skipped']+=1
-                                            elif not did_infer:state['reused']+=1
+                                if state['indexed']>indexed_before:
+                                    newly_indexed_ids.append(item_id)
+                                    if did_infer:did_infer_ids.add(item_id)
                                 state['processed']+=1
-                            with self.guard:
-                                self.store.save_state({**saved(),'state':'cancelling' if self.cancel.is_set() else 'running'})
+                            if continuing and newly_indexed_ids and not self.cancel.is_set():
+                                with self.catalog._guard:
+                                    self.continuation.check(state,newly_indexed_ids)
+                                    current_verify=self._current_rows(newly_indexed_ids,scope)
+                                    snapshots=self.pending_tags.snapshots(newly_indexed_ids)
+                                    ready_set=self.continuation.ready(list(current_verify.values()),snapshots)
+                                    for item_id in newly_indexed_ids:
+                                        if item_id not in ready_set:
+                                            state['indexed']-=1;state['skipped']+=1
+                                        elif item_id not in did_infer_ids:
+                                            state['reused']+=1
+                            save_progress()
                         continue
+                    fresh_set=self.store.fresh_ids(list(rows.values()))
                     for item_id in batch:
                         if self.cancel.is_set():break
                         did_infer=False
@@ -783,7 +881,7 @@ class AISearch:
                             state['skipped']+=1
                         else:
                             rev=revision(row)
-                            if not self.store.fresh_row(row):
+                            if item_id not in fresh_set:
                                 text=row['title']+'\n'+row['relative_path']+'\n'+'、'.join(row['tags'])
                                 saved_text=self.store.text(row)
                                 vectors={'text':saved_text if saved_text is not None else self.encoder.encode('document',text[:4096])}
@@ -858,14 +956,23 @@ class AISearch:
                                 self.store.save_state({**saved(),'state':'cancelling' if self.cancel.is_set() else 'running'})
                         # Load-shedding is optional and cancelable. Not a GPU
                         # utilization/FPS limit. Never pace interactive search.
-                        if did_infer and state['processed']<len(ids) and self._index_pause_ms:
+                        if did_infer and state['processed']<state['total'] and self._index_pause_ms:
                             if self.cancel.wait(self._index_pause_ms/1000):
                                 break
+                if ids is None and not continuing and not self.cancel.is_set() and state['processed']<state['total']:
+                    missing=state['total']-state['processed']
+                    state['skipped']+=missing;state['processed']+=missing
                 if continuing and not self.cancel.is_set():
                     with self.catalog._guard:
-                        for offset in range(0,len(ids),ROW_BATCH_SIZE):
-                            self.continuation.check(state,ids[offset:offset+ROW_BATCH_SIZE])
+                        if state['continuation'].get('version')==2:
+                            for c_idx,c_ids in self.continuation.iter_chunks(state['continuation']):
+                                self.continuation.check_chunk(state,c_idx,c_ids)
+                        else:
+                            for offset in range(0,len(ids),ROW_BATCH_SIZE):
+                                self.continuation.check(state,ids[offset:offset+ROW_BATCH_SIZE])
                 state['state']='cancelled' if self.cancel.is_set() else 'complete'
+                if state['state']=='complete':
+                    state.pop('continuation',None)
         except InterruptedError:
             state['state']='cancelled' if self.cancel.is_set() else 'failed'
             if not self.cancel.is_set():state['error']='索引を完了できませんでした。対象を確認してください。'
