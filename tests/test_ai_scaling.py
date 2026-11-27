@@ -180,6 +180,39 @@ class ScalingTests(unittest.TestCase):
             finally:
                 catalog.close()
 
+    def test_coverage_matches_exclusions_and_pending_tag_proposals(self):
+        from tag_suggestions import TagSuggestions
+        catalog,_,ai,_,root=self.make(5,excluded_prefix=1)
+        catalog.set_excludes(root,['ignored'])
+        empty_cov=ai.coverage({'root_ids':[root]})
+        self.assertEqual((empty_cov['candidate_total'],empty_cov['target_total'],empty_cov['fresh_total'],empty_cov['remaining_total'],empty_cov['coverage_status']),(4,4,0,4,'unindexed'))
+        self.build(ai,2)
+        part_cov=ai.coverage({'root_ids':[root]})
+        self.assertEqual((part_cov['candidate_total'],part_cov['target_total'],part_cov['fresh_total'],part_cov['remaining_total'],part_cov['coverage_status']),(4,4,2,2,'partially_indexed'))
+        TagSuggestions(catalog)
+        first_item=list(ai._iter_rows(scope={'root_ids':[root]}))[0]
+        with catalog.connect() as db:
+            db.execute("INSERT INTO tag_proposal_batches(item_id,source_revision,producer_key,producer_json,evidence_json,created_at) VALUES(?,?,?,?,?,?)",
+                (first_item['id'],'rev-1','pk-1','{"model":"m"}','{}',1.0))
+            bid=db.execute('SELECT last_insert_rowid()').fetchone()[0]
+            db.execute("INSERT INTO tag_proposals(batch_id,tag,explanation,page,state) VALUES(?,?,?,?,?)",
+                (bid,'tag_pending','why',0,'pending'))
+        unready_cov=ai.coverage({'root_ids':[root]})
+        self.assertEqual((unready_cov['fresh_total'],unready_cov['remaining_total'],unready_cov['coverage_status']),(1,3,'partially_indexed'))
+        snap=ai.pending_tags.snapshots([first_item['id']])[first_item['id']]
+        vec_bytes=array('f',[1.0]+[0.0]*(ai.profile.dimension-1)).tobytes()
+        with ai.store.connect() as db:
+            db.execute('INSERT INTO ai_proposal_vectors VALUES(?,?,?,?,?)',
+                (first_item['id'],snap['batch_id'],snap['source_revision'],snap['signature'],vec_bytes))
+        ready_cov=ai.coverage({'root_ids':[root]})
+        self.assertEqual((ready_cov['fresh_total'],ready_cov['remaining_total'],ready_cov['coverage_status']),(2,2,'partially_indexed'))
+        original_scan=catalog.scan_state
+        try:
+            catalog.scan_state=lambda:{'state':'running'}
+            with self.assertRaises(AIBusy):ai.start(scope={'root_ids':[root]})
+        finally:
+            catalog.scan_state=original_scan
+
 class GlobalFusionTests(unittest.TestCase):
     def test_ranks_span_multiple_vector_batches(self):
         with tempfile.TemporaryDirectory() as tmp:

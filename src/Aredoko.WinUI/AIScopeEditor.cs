@@ -42,6 +42,9 @@ public sealed class AIScopeEditor : IDisposable
     public Expander Content {get;}
     public bool Saving=>saving;
     public bool Ready=>!initializing&&!saving&&!counting&&confirmed&&!Dirty&&saved is not null&&target>0;
+    public bool HasUnsavedChanges=>!initializing&&!closed&&Dirty;
+    public bool CanSave=>save.IsEnabled;
+    public bool JobBusy=>jobBusy;
     private static JsonObject NormalizeForCompare(JsonObject value)
     {
         var copy=(JsonObject)value.DeepClone();
@@ -108,10 +111,13 @@ public sealed class AIScopeEditor : IDisposable
         var scopeNote=new TextBlock {Text=AppText.L("AI検索の対象範囲（文字検索には影響しません）", "AI search target scope (does not affect text search)"),TextWrapping=TextWrapping.Wrap};
         ToolTipService.SetToolTip(scopeNote,AppText.L("AI検索とこれから作るAI検索データに適用します。作成済みデータやモデルは変更しません。", "Applies to AI search and new AI indexes. Does not modify existing indexes or models."));
         panel.Children.Add(scopeNote);
-        panel.Children.Add(fields);panel.Children.Add(refresh);
+        panel.Children.Add(fields);
+        var scopeActions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
+        scopeActions.Children.Add(refresh);scopeActions.Children.Add(save);scopeActions.Children.Add(revert);
+        panel.Children.Add(scopeActions);panel.Children.Add(feedback);
         var countPanel=new StackPanel {Spacing=4};
         for(int i=0;i<counts.Length;i++){AutomationProperties.SetAutomationId(counts[i],$"AIScopeCount{i}");countPanel.Children.Add(counts[i]);}
-        panel.Children.Add(countPanel);panel.Children.Add(save);panel.Children.Add(revert);panel.Children.Add(feedback);
+        panel.Children.Add(countPanel);
         Content=new Expander {Header=AppText.L("AI検索の対象範囲", "AI Search Scope"),Content=panel,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Stretch};
         AutomationProperties.SetAutomationId(Content,"AIScopeOptions");
         Content.Loaded+=async(_,_)=>{if(initializing&&!closed&&!initializationStarted){initializationStarted=true;await InitializeAsync();}};
@@ -183,22 +189,27 @@ public sealed class AIScopeEditor : IDisposable
         if(picker.MatchCount==0)rootList.Children.Add(new TextBlock {Text=AppText.L("一致するフォルダがありません。選択済みの対象は保持しています。", "No matching folders found. Your current selection is preserved."),TextWrapping=TextWrapping.Wrap});
         renderingRoots=false;Sync();
     }
+    private void UpdateUnsavedFeedback()
+    {
+        if(!Dirty)feedback.Text="";
+        else if(jobBusy)feedback.Text=AppText.L("AI索引の作成中は対象範囲を保存できません。完了または中止後に保存してください。", "Cannot save search scope while AI indexing is running. Wait for completion or cancel first.");
+        else if((confirmed&&!counting)||OnlyBookPagesChanged())feedback.Text=AppText.L("未保存の変更があります。「保存」を押して反映してください。", "Unsaved changes. Click Save to apply.");
+        else if(!counting)feedback.Text=AppText.L("対象範囲の変更を保存するには「件数を確認」を押してください。", "Click Check Counts before saving scope changes.");
+    }
     private void Changed()
     {
         if(initializing||closed)return;
         version++;confirmed=false;target=0;
         foreach(var block in counts)block.Text="";
         counts[0].Text=AppText.L("条件を変更しました。件数を確認してください。", "Filters changed. Click Check Counts.");
-        feedback.Text=Dirty?AppText.L("対象範囲の変更を保存するには「件数を確認」を押してください。", "Click Check Counts before saving scope changes."):"";
+        UpdateUnsavedFeedback();
         ScopeEdited?.Invoke();
         Sync();
     }
     private void BookPagesChanged()
     {
         if(initializing||closed)return;
-        if(!Dirty)feedback.Text="";
-        else if(confirmed||OnlyBookPagesChanged())feedback.Text=AppText.L("未保存の変更があります。「保存」を押して反映してください。", "Unsaved changes. Click Save to apply.");
-        else feedback.Text=AppText.L("対象範囲の変更を保存するには「件数を確認」を押してください。", "Click Check Counts before saving scope changes.");
+        UpdateUnsavedFeedback();
         ScopeEdited?.Invoke();
         Sync();
     }
@@ -215,11 +226,11 @@ public sealed class AIScopeEditor : IDisposable
         foreach(var button in pathButtons)button.IsEnabled=!initializing&&!saving;
         shelf.IsEnabled=!initializing&&!saving&&shelfMode.SelectedIndex==1;
         refresh.IsEnabled=!initializing&&!counting&&!saving;
-        save.IsEnabled=!initializing&&!saving&&!counting&&Dirty&&!jobBusy&&(confirmed||OnlyBookPagesChanged());
+        save.IsEnabled=!initializing&&!saving&&Dirty&&!jobBusy&&((confirmed&&!counting)||OnlyBookPagesChanged());
         revert.IsEnabled=!initializing&&!saving&&!counting;
         StateChanged?.Invoke();
     }
-    public void SetJobBusy(bool busy){if(jobBusy!=busy){jobBusy=busy;Sync();}}
+    public void SetJobBusy(bool busy){if(jobBusy!=busy){jobBusy=busy;if(!initializing&&!saving&&Dirty)UpdateUnsavedFeedback();Sync();}}
     public async Task RefreshCountsAsync()
     {
         if(initializing||closed||counting||saving)return;
@@ -230,12 +241,12 @@ public sealed class AIScopeEditor : IDisposable
             target=data["target_total"]!.GetValue<int>();confirmed=true;
             int? coverageLimit=data["coverage_limit"] is JsonValue covVal&&covVal.TryGetValue<int>(out var covInt)?covInt:null;
             counts[0].Text=AppText.L($"条件に合う候補: {data["candidate_total"]!.GetValue<long>():N0} 件", $"Matching candidates: {data["candidate_total"]!.GetValue<long>():N0}");
-            counts[1].Text=coverageLimit is >0
+            counts[1].Text=coverageLimit is >0 and <1_000_000
                 ? AppText.L($"今回の対象枠: {target:N0} 件（上限 {coverageLimit.Value:N0} 件）", $"Target batch size: {target:N0} (limit {coverageLimit.Value:N0})")
                 : AppText.L($"今回の対象枠: {target:N0} 件（全件対象）", $"Target batch size: {target:N0} (all matching)");
             counts[2].Text=AppText.L($"現在の文字索引: {data["fresh_total"]!.GetValue<int>():N0} 件", $"Current index ready: {data["fresh_total"]!.GetValue<int>():N0}");
             counts[3].Text=AppText.L($"残り: {data["remaining_total"]!.GetValue<int>():N0} 件 · 確認時点の件数です", $"Remaining: {data["remaining_total"]!.GetValue<int>():N0} · As of check time");
-            if(Dirty&&!saving)feedback.Text=AppText.L("未保存の変更があります。「保存」を押して反映してください。", "Unsaved changes. Click Save to apply.");
+            if(Dirty&&!saving)UpdateUnsavedFeedback();
         } catch(Exception ex){if(!closed&&ticket==version){counts[0].Text=AppText.L("件数を確認できません: ", "Unable to check counts: ")+ex.Message;confirmed=false;}}
         finally {counting=false;Sync();}
     }

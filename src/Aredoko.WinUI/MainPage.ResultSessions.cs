@@ -213,6 +213,7 @@ public sealed partial class MainPage
         else
             Editor.IsEnabled = active is not null;
         RestoreSelection();
+        DetailsButton.IsEnabled=!saving&&!preparingSelection&&(librarySelection.Count>0||active is not null);
         ResumeVisibleContainers();
     }
     private static bool SameFavoriteCard(MediaRow a,MediaRow b)=>

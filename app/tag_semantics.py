@@ -24,6 +24,7 @@ class PendingTagVectors:
             marks=','.join('?' for _ in ids)
             batches=db.execute('SELECT * FROM tag_proposal_batches b WHERE item_id IN ('+marks+
                 ') AND b.id=(SELECT max(n.id) FROM tag_proposal_batches n WHERE n.item_id=b.item_id)',ids).fetchall()
+            if not batches:return {}
             result={}
             current=self.ai._current_rows(ids)
             for batch in batches:

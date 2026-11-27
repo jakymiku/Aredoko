@@ -16,6 +16,7 @@ public sealed partial class MainPage
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? settingsAiPollTimer;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? folderAiPollTimer;
     private bool pollingSettingsAi, pollingFolderAi, aiActionPending;
+    private long aiSnapshotGeneration, folderAiLatestRequestId, settingsAiLatestRequestId;
     private JsonNode? lastAiStatusData;
     private int? lastAiCovTarget, lastAiCovFresh;
     private int lastAiUnscopedPresentTotal;
@@ -116,10 +117,11 @@ public sealed partial class MainPage
         if(settingsHubOpen&&!disposed)_ = LoadSettingsStatusAsync();
     }
 
-    private async Task FetchAISummarySnapshotAsync(bool fetchCoverage, CancellationToken token)
+    private async Task<bool> FetchAISummarySnapshotAsync(bool fetchCoverage, CancellationToken token)
     {
+        var gen=++aiSnapshotGeneration;
         var statusData=await api.GetAsync("api/library/ai/status",token);
-        if(token.IsCancellationRequested||disposed)return;
+        if(gen!=aiSnapshotGeneration||token.IsCancellationRequested||disposed)return false;
         lastAiStatusData=statusData;
         ApplyRuntimeVerificationSnapshot(statusData);
         var available=statusData["available"]?.GetValue<bool>()==true;
@@ -136,6 +138,7 @@ public sealed partial class MainPage
             try
             {
                 var scopeData=await api.GetAsync("api/library/ai/scope",token);
+                if(gen!=aiSnapshotGeneration||token.IsCancellationRequested||disposed)return false;
                 if(scopeData["valid"]?.GetValue<bool>()==true&&scopeData["scope"] is JsonObject validScope)
                 {
                     effectiveScope=(JsonObject)validScope.DeepClone();
@@ -153,7 +156,7 @@ public sealed partial class MainPage
                 AppLog.Error(scopeEx);
                 effectiveScope=aiScope is not null?(JsonObject)aiScope.DeepClone():null;
             }
-            if(token.IsCancellationRequested||disposed)return;
+            if(gen!=aiSnapshotGeneration||token.IsCancellationRequested||disposed)return false;
             lastAiScopeInvalid=scopeInvalid;
             lastAiScopeInvalidHint=scopeInvalidHint;
             if(!scopeInvalid&&effectiveScope is not null)
@@ -167,7 +170,7 @@ public sealed partial class MainPage
                 try
                 {
                     var covData=await api.PostAsync("api/library/ai/coverage",AIScopeRequests.Scoped(effectiveScope),token);
-                    if(token.IsCancellationRequested||disposed)return;
+                    if(gen!=aiSnapshotGeneration||token.IsCancellationRequested||disposed)return false;
                     lastAiCovTarget=covData["target_total"]?.GetValue<int>();
                     lastAiCovFresh=covData["fresh_total"]?.GetValue<int>();
                 }
@@ -189,6 +192,7 @@ public sealed partial class MainPage
             lastAiCovFresh=null;
             lastAiUnscopedPresentTotal=0;
         }
+        return gen==aiSnapshotGeneration&&!token.IsCancellationRequested&&!disposed;
     }
 
     private void ApplySettingsAISnapshotToUI()
@@ -304,19 +308,20 @@ public sealed partial class MainPage
         if(!settingsAiPollTimer.IsRunning)settingsAiPollTimer.Start();
     }
 
-    private async Task PollSettingsAIStatusAsync()
+    private async Task PollSettingsAIStatusAsync(bool force=false)
     {
-        if(pollingSettingsAi||disposed||!settingsHubOpen)return;
+        if((!force&&pollingSettingsAi)||disposed||!settingsHubOpen)return;
+        var reqId=++settingsAiLatestRequestId;
         pollingSettingsAi=true;
         try
         {
             var token=settingsLoadLifetime?.Token??CancellationToken.None;
-            await FetchAISummarySnapshotAsync(fetchCoverage:false,token);
-            if(!disposed&&settingsHubOpen)ApplySettingsAISnapshotToUI();
+            if(await FetchAISummarySnapshotAsync(fetchCoverage:false,token)&&!disposed&&settingsHubOpen)
+                ApplySettingsAISnapshotToUI();
         }
         catch(OperationCanceledException){}
         catch(Exception ex){AppLog.Error(ex);}
-        finally{pollingSettingsAi=false;}
+        finally{if(reqId==settingsAiLatestRequestId)pollingSettingsAi=false;}
     }
 
     private async Task LoadSettingsStatusAsync()
@@ -350,7 +355,7 @@ public sealed partial class MainPage
             }
             finally{settingsPopulating=false;}
 
-            ApplySettingsAISnapshotToUI();
+            if(await snapshotTask)ApplySettingsAISnapshotToUI();
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested){}
         catch(Exception ex)
@@ -440,21 +445,22 @@ public sealed partial class MainPage
         if(!folderAiPollTimer.IsRunning)folderAiPollTimer.Start();
     }
 
-    private async Task RefreshFolderAIStatusAsync(bool fetchCoverage)
+    private async Task RefreshFolderAIStatusAsync(bool fetchCoverage, bool force=false)
     {
-        if(pollingFolderAi||disposed||!folderHubOpen)return;
+        if((!force&&!fetchCoverage&&pollingFolderAi)||disposed||!folderHubOpen)return;
+        var reqId=++folderAiLatestRequestId;
         pollingFolderAi=true;
         try
         {
-            if(fetchCoverage)
+            if(fetchCoverage||force)
             {
                 folderAiLoadLifetime?.Cancel();
                 folderAiLoadLifetime?.Dispose();
                 folderAiLoadLifetime=new CancellationTokenSource();
             }
             var token=folderAiLoadLifetime?.Token??CancellationToken.None;
-            await FetchAISummarySnapshotAsync(fetchCoverage,token);
-            if(!disposed&&folderHubOpen)UpdateFolderAIStatusUI();
+            if(await FetchAISummarySnapshotAsync(fetchCoverage,token)&&!disposed&&folderHubOpen)
+                UpdateFolderAIStatusUI();
         }
         catch(OperationCanceledException){}
         catch(Exception ex)
@@ -463,7 +469,7 @@ public sealed partial class MainPage
             if(!disposed&&folderHubOpen&&FolderAIStatusText is not null&&lastAiStatusData is null)
                 FolderAIStatusText.Text=AppText.L("AI検索データ: 状態を確認できません","AI Index: Status unavailable");
         }
-        finally{pollingFolderAi=false;}
+        finally{if(reqId==folderAiLatestRequestId)pollingFolderAi=false;}
     }
 
     private async Task StartScopedAIIndexAsync()
@@ -480,11 +486,16 @@ public sealed partial class MainPage
                 Notice(AppText.L("AI検索の対象範囲を確認してください","Check AI search scope"),aiScopeError,InfoBarSeverity.Warning);
                 return;
             }
-            await api.PostAsync("api/library/ai/index",AIScopeRequests.Scoped(aiScope));
+            var started=await api.PostAsync("api/library/ai/index",AIScopeRequests.Scoped(aiScope));
+            ++aiSnapshotGeneration;
+            folderAiLoadLifetime?.Cancel();
+            folderAiLoadLifetime?.Dispose();
+            folderAiLoadLifetime=null;
+            lastAiStatusData=started;
             lastAiWasRunning=true;
             if(SearchMethod.FromIndex(lastMode).IsAI||similarityOrigin is not null)resultsNeedRefresh=true;
-            if(settingsHubOpen)await LoadSettingsStatusAsync();
-            if(folderHubOpen)await RefreshFolderAIStatusAsync(fetchCoverage:false);
+            if(settingsHubOpen)ApplySettingsAISnapshotToUI();
+            if(folderHubOpen)UpdateFolderAIStatusUI();
         }
         catch(Exception ex){Failure(ex);}
         finally
@@ -514,8 +525,8 @@ public sealed partial class MainPage
                 await api.Continuation.CancelAsync(jobId);
             else
                 await api.PostAsync("api/library/ai/cancel",new JsonObject());
-            if(settingsHubOpen)await PollSettingsAIStatusAsync();
-            if(folderHubOpen)await RefreshFolderAIStatusAsync(fetchCoverage:false);
+            if(settingsHubOpen)await PollSettingsAIStatusAsync(force:true);
+            if(folderHubOpen)await RefreshFolderAIStatusAsync(fetchCoverage:false,force:true);
         }
         catch(Exception ex){Failure(ex);}
         finally

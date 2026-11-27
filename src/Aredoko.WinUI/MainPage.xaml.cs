@@ -4075,7 +4075,7 @@ public sealed partial class MainPage : Page
         try
         {
             if(!await ConfirmDiscardAsync())return;
-            dialogOpen=true;reload=true;
+            dialogOpen=true;reload=false;
             var explanation=new TextBlock {Text=AppText.L("モデル・保存先の変更は再起動後に反映されます。","Model and folder changes take effect after restarting."),TextWrapping=TextWrapping.Wrap};
             ToolTipService.SetToolTip(explanation,AppText.L("AI検索には検索モデルと実行環境が必要です。新しいモデルを使うにはAI検索データの作り直しが必要です。","AI search requires a search model and runtime. Switching models requires rebuilding the AI index."));
             var environmentButton=new Button{Content=AppText.L("手元のファイルを使う","Use local files")};AutomationProperties.SetAutomationId(environmentButton,"AIEnvironmentOpen");
@@ -4153,6 +4153,7 @@ public sealed partial class MainPage : Page
                 savingProfile=true;modelApply.IsEnabled=false;modelChoice.IsEnabled=false;
                 try {
                     await api.PostAsync("api/library/ai/profile",new JsonObject{{"id",id}});
+                    reload=true;
                     await RefreshProfiles();
                 } catch(Exception ex) {modelFeedback.Text=AppText.L("設定を保存できません: ","Could not save settings: ")+AppText.TranslateBackend(ex.Message);}
                 finally {savingProfile=false;modelChoice.IsEnabled=true;UpdateProfileWarning();}
@@ -4249,9 +4250,11 @@ public sealed partial class MainPage : Page
             };
             var scopePagesSummary=new TextBlock {TextWrapping=TextWrapping.Wrap,Style=(Style)Resources["MediaMetadataStyle"]};
             AutomationProperties.SetAutomationId(scopePagesSummary,"AIScopePagesSummary");
+            var scopeUnsavedNotice=new TextBlock {TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed,Style=(Style)Resources["MediaMetadataStyle"]};
+            AutomationProperties.SetAutomationId(scopeUnsavedNotice,"AIScopeUnsavedNotice");
             void UpdateScopePagesSummary()=>scopePagesSummary.Text=AppText.L("CBZ・本の対象: ","CBZ & book pages: ")+(aiScope?["book_pages"]?.GetValue<string>()=="all_pages"?AppText.L("内部のすべての画像を含む","Include all inner pages"):AppText.L("表紙のみ","Covers only"));
             UpdateScopePagesSummary();
-            using var scopeEditor=new AIScopeEditor(api,value=>{aiScope=value;aiScopeError=AppText.L("AI検索の対象範囲を選び直して保存してください。","Please re-select and save your AI search scope.");UpdateScopePagesSummary();});
+            using var scopeEditor=new AIScopeEditor(api,value=>{if(!JsonNode.DeepEquals(aiScope,value))reload=true;aiScope=value;aiScopeError=AppText.L("AI検索の対象範囲を選び直して保存してください。","Please re-select and save your AI search scope.");UpdateScopePagesSummary();});
             bool availableForIndex=false,indexRunning=false,starting=false;
             void UpdateStart()
             {
@@ -4261,6 +4264,15 @@ public sealed partial class MainPage : Page
                 resumeBooks.IsEnabled=start.IsEnabled&&resumableBooks?.CanResume==true;
                 resumeChunks.IsEnabled=start.IsEnabled&&resumableChunks?.CanResume==true&&aiScope is not null&&resumableChunks.MatchesScope(aiScope);
                 resumeContinuation.IsEnabled=start.IsEnabled&&resumableContinuation?.CanResume==true&&aiScope is not null&&resumableContinuation.MatchesScope(aiScope);
+                scopeUnsavedNotice.Visibility=scopeEditor.HasUnsavedChanges?Visibility.Visible:Visibility.Collapsed;
+                if(scopeEditor.HasUnsavedChanges)
+                {
+                    scopeUnsavedNotice.Text=scopeEditor.JobBusy
+                        ? AppText.L("⚠ 対象範囲に未保存の変更があります（AI作成中は保存できません）。","⚠ Unsaved scope changes (cannot save while AI indexing is running).")
+                        : scopeEditor.CanSave
+                        ? AppText.L("⚠ 対象範囲に未保存の変更があります。「AI検索の対象範囲」内の「保存」を押してください。","⚠ Unsaved scope changes. Click Save inside \"AI Search Scope\".")
+                        : AppText.L("⚠ 対象範囲に未保存の変更があります。「件数を確認」のあと「保存」を押してください。","⚠ Unsaved scope changes. Click Check Counts, then Save.");
+                }
             }
             scopeEditor.ScopeEdited+=InvalidateContinuationPlan;
             scopeEditor.StateChanged+=UpdateStart;
@@ -4375,7 +4387,7 @@ public sealed partial class MainPage : Page
             start.Click+=async(_,_)=>{
                 if(!start.IsEnabled||aiScope is null)return;
                 starting=true;UpdateStart();
-                try{await api.PostAsync("api/library/ai/index",AIScopeRequests.Scoped(aiScope));await Refresh();}
+                try{await api.PostAsync("api/library/ai/index",AIScopeRequests.Scoped(aiScope));reload=true;await Refresh();}
                 catch(Exception ex){status.Text=AppText.TranslateBackend(ex.Message);}
                 finally{starting=false;UpdateStart();}
             };
@@ -4407,6 +4419,7 @@ public sealed partial class MainPage : Page
                 try
                 {
                     var started=await api.Continuation.StartAsync(continuationPlan);
+                    reload=true;
                     ownedContinuationJob=started.JobId;
                     InvalidateContinuationPlan();
                     await Refresh();
@@ -4417,14 +4430,14 @@ public sealed partial class MainPage : Page
             resumeBooks.Click+=async(_,_)=>{
                 if(!resumeBooks.IsEnabled||resumableBooks is null||aiScope is null)return;
                 starting=true;UpdateStart();
-                try{await api.PageEvidences.ResumeBatchAsync(resumableBooks.JobId,aiScope,resumableBooks.Profile);await Refresh();}
+                try{await api.PageEvidences.ResumeBatchAsync(resumableBooks.JobId,aiScope,resumableBooks.Profile);reload=true;await Refresh();}
                 catch(Exception ex){status.Text=ex.Message;}
                 finally{starting=false;UpdateStart();}
             };
             resumeChunks.Click+=async(_,_)=>{
                 if(!resumeChunks.IsEnabled||resumableChunks is null||aiScope is null)return;
                 starting=true;UpdateStart();
-                try{await api.PageEvidences.ResumeChunksAsync(resumableChunks,aiScope);await Refresh();}
+                try{await api.PageEvidences.ResumeChunksAsync(resumableChunks,aiScope);reload=true;await Refresh();}
                 catch(Exception ex){status.Text=ex.Message;}
                 finally{starting=false;UpdateStart();}
             };
@@ -4434,6 +4447,7 @@ public sealed partial class MainPage : Page
                 try
                 {
                     var resumed=await api.Continuation.ResumeAsync(resumableContinuation,aiScope);
+                    reload=true;
                     ownedContinuationJob=resumed.JobId;
                     InvalidateContinuationPlan();
                     await Refresh();
@@ -4452,6 +4466,7 @@ public sealed partial class MainPage : Page
                         await api.Continuation.CancelAsync(contJob);
                     else
                         await api.PostAsync("api/library/ai/cancel",new JsonObject());
+                    reload=true;
                     await Refresh();
                 }
                 catch(Exception ex){status.Text=ex.Message;}
@@ -4525,6 +4540,7 @@ public sealed partial class MainPage : Page
             indexInfo.Children.Add(new TextBlock {Text=AppText.L("AI検索データ","AI Search Index"),Style=(Style)Application.Current.Resources["SubtitleTextBlockStyle"]});
             indexInfo.Children.Add(status);
             indexInfo.Children.Add(scopePagesSummary);
+            indexInfo.Children.Add(scopeUnsavedNotice);
             indexInfo.Children.Add(statusDetailExpander);
             indexInfo.Children.Add(continuationText);
             indexInfo.Children.Add(indexActions);
@@ -4569,9 +4585,9 @@ public sealed partial class MainPage : Page
                     if(settingsHubOpen||folderHubOpen)
                     {
                         if(SearchMethod.FromIndex(lastMode).IsAI||similarityOrigin is not null)resultsNeedRefresh=true;
-                        if(folderHubOpen)_ = RefreshFolderAIStatusAsync(fetchCoverage:true);
+                        if(folderHubOpen)_ = RefreshFolderAIStatusAsync(fetchCoverage:true,force:true);
                     }
-                    else
+                    else if(SearchMethod.FromIndex(lastMode).IsAI||similarityOrigin is not null)
                     {
                         await LoadAsync();
                     }

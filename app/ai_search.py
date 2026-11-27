@@ -486,6 +486,7 @@ class AISearch:
 
     def _count_candidates(self,limit=MAX_ITEMS,scope=None):
         _,join,where_sql,values=self._row_query_parts(scope=scope)
+        from production import _exclude_matcher
         excludes_cache={}
         total=0;last_included=0
         with self.catalog.connect() as db:
@@ -494,16 +495,15 @@ class AISearch:
             while last<upper and total<limit:
                 rows=db.execute('SELECT i.id,l.relative_path,r.excludes_json'+join+'WHERE '+where_sql+
                     ' AND i.id>? AND i.id<=? ORDER BY i.id LIMIT ?',
-                    values+[last,upper,ROW_BATCH_SIZE]).fetchall()
+                    values+[last,upper,1024]).fetchall()
                 if not rows:break
                 last=rows[-1]['id']
                 for row in rows:
                     ex_json=row['excludes_json']
-                    ex=excludes_cache.get(ex_json)
-                    if ex is None:
-                        ex=tuple(json.loads(ex_json))
-                        excludes_cache[ex_json]=ex
-                    if _excluded(row['relative_path'],ex):continue
+                    if ex_json not in excludes_cache:
+                        excludes_cache[ex_json]=None if ex_json=='[]' else _exclude_matcher(tuple(json.loads(ex_json)))
+                    matcher=excludes_cache[ex_json]
+                    if matcher is not None and matcher(row['relative_path']):continue
                     total+=1;last_included=row['id']
                     if total>=limit:break
         return total,last_included
@@ -612,23 +612,66 @@ class AISearch:
     def coverage(self,scope=None,limit=MAX_ITEMS):
         """CPU-only, refreshable counts. Retains at most one 256-row batch."""
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS:raise ValueError('Invalid index limit')
-        scope=self._scope(scope)
         with self.guard:
             if self._closed:raise AIUnavailable('AI is closing')
+        scope,join,where_sql,values=self._row_query_parts(scope=scope)
         if self.catalog.scan_state()['state'] in ('running','cancelling'):
             raise AIBusy('フォルダのスキャン完了後に確認してください。')
+        from production import _exclude_matcher
+        excludes_cache={}
         total=targeted=fresh=0;batch=[]
-        for row in self._iter_rows(limit=limit,scope=scope,all_candidates=True):
-            total+=1
-            if targeted<limit:
-                targeted+=1;batch.append(row)
-                if len(batch)==ROW_BATCH_SIZE:
-                    pending=self.pending_tags.snapshots([r['id'] for r in batch])
-                    regular=self.store.fresh_ids(batch)
-                    fresh+=len((regular-set(pending)) | (regular & self.pending_tags.ready_ids(pending)));batch.clear()
-        pending=self.pending_tags.snapshots([r['id'] for r in batch])
-        regular=self.store.fresh_ids(batch)
-        fresh+=len((regular-set(pending)) | (regular & self.pending_tags.ready_ids(pending)))
+        with self.catalog.connect() as cat_db, self.store.connect() as vec_db:
+            upper=cat_db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
+            has_vectors=vec_db.execute("SELECT 1 FROM ai_vectors WHERE modality='text' LIMIT 1").fetchone() is not None
+            has_pending=bool(
+                cat_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tag_proposal_batches'").fetchone()
+                and cat_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tag_proposals'").fetchone()
+                and cat_db.execute("SELECT 1 FROM tag_proposals WHERE state='pending' LIMIT 1").fetchone()
+            )
+            def flush(rows_batch):
+                nonlocal fresh
+                if not rows_batch:return
+                eligible={r['id']:(revision(r),source_contract(r,self.profile)) for r in rows_batch}
+                records=vec_db.execute(
+                    "SELECT v.item_id,v.revision,c.revision,c.contract FROM ai_vectors v "
+                    "LEFT JOIN ai_source_contracts c ON c.item_id=v.item_id WHERE v.modality='text' AND v.item_id IN ("
+                    +','.join('?' for _ in eligible)+')',list(eligible)).fetchall()
+                regular={item_id for item_id,rev,source_rev,contract in records
+                         if eligible[item_id][0]==rev and (eligible[item_id][1] is None or
+                            (source_rev==rev and contract==eligible[item_id][1]))}
+                if has_pending and regular:
+                    pending=self.pending_tags.snapshots([r['id'] for r in rows_batch])
+                    fresh+=len((regular-set(pending)) | (regular & self.pending_tags.ready_ids(pending)))
+                else:
+                    fresh+=len(regular)
+                rows_batch.clear()
+            last=0
+            sql=('SELECT i.id,i.title,i.kind,i.tags,l.root_id,l.relative_path,l.size_bytes,l.mtime_ns,r.excludes_json'
+                 +join+'WHERE '+where_sql+' AND i.id>? AND i.id<=? ORDER BY i.id LIMIT ?')
+            while last<upper:
+                rows=cat_db.execute(sql,values+[last,upper,1024]).fetchall()
+                if not rows:break
+                last=rows[-1]['id']
+                for row in rows:
+                    ex_json=row['excludes_json']
+                    if ex_json not in excludes_cache:
+                        excludes_cache[ex_json]=None if ex_json=='[]' else _exclude_matcher(tuple(json.loads(ex_json)))
+                    matcher=excludes_cache[ex_json]
+                    if matcher is not None and matcher(row['relative_path']):continue
+                    total+=1
+                    if targeted<limit:
+                        targeted+=1
+                        if has_vectors:
+                            raw_tags=row['tags']
+                            batch.append({
+                                'id':row['id'],'title':row['title'],'kind':row['kind'],
+                                'tags':[] if raw_tags=='[]' else json.loads(raw_tags),
+                                'root_id':row['root_id'],'relative_path':row['relative_path'],
+                                'size_bytes':row['size_bytes'],'mtime_ns':row['mtime_ns'],
+                            })
+                            if len(batch)==ROW_BATCH_SIZE:
+                                flush(batch)
+            flush(batch)
         cov_status = 'empty_scope' if targeted == 0 else ('ready' if fresh == targeted else ('unindexed' if fresh == 0 else 'partially_indexed'))
         return {'scope':scope,'candidate_total':total,'target_total':targeted,
                 'fresh_total':fresh,'remaining_total':targeted-fresh,
@@ -666,12 +709,16 @@ class AISearch:
             if self._closed: raise AIUnavailable('AI is closing')
             if self.worker and self.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
             if self.catalog.scan_state()['state'] in ('running','cancelling'): raise AIBusy('フォルダのスキャン完了後に実行してください。')
-            total,upper_id=self._count_candidates(limit=limit,scope=scope)
+        total,upper_id=self._count_candidates(limit=limit,scope=scope)
+        with self.guard:
+            if self._closed: raise AIUnavailable('AI is closing')
+            if self.worker and self.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
+            if self.catalog.scan_state()['state'] in ('running','cancelling'): raise AIBusy('フォルダのスキャン完了後に実行してください。')
             self.cancel.clear()
             self.store.save_state({'state':'running','processed':0,'total':total,'indexed':0,'skipped':0,'error':'','scope':scope})
             self.worker=threading.Thread(target=self._build,args=(None,scope),kwargs={'upper_id':upper_id,'limit':total},daemon=True)
             self.worker.start()
-        return self.status()
+            return self.status()
     def _build(self,ids,scope=None,initial_state=None,*,upper_id=0,limit=0):
         total_hint=len(ids) if ids is not None else (initial_state['total'] if initial_state is not None else limit)
         state=dict(initial_state) if initial_state is not None else {'state':'running','processed':0,'total':total_hint,'indexed':0,'skipped':0,'error':'','scope':scope}
