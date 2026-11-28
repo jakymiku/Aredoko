@@ -273,8 +273,13 @@ class FrozenResult:
             if len(serialized) > 131072 and len(serialized.encode('utf-8')) > 512 * 1024:
                 raise ResultCapacity('Result evidence exceeds workspace limit')
             updates.append((serialized, item_id))
-        with self.db:
-            self.db.executemany('UPDATE results SET payload=? WHERE item_id=?', updates)
+        try:
+            with self.db:
+                self.db.executemany('UPDATE results SET payload=? WHERE item_id=?', updates)
+        except sqlite3.Error:
+            if self.stop.is_set():
+                raise ResultUnavailable(conditions=self.conditions)
+            raise ResultCapacity('Result workspace busy or full; close another search')
 
     def locate(self,item_ids):
         from selection_edits import selection_ids
@@ -359,6 +364,8 @@ class FrozenResult:
             raise ValueError('Invalid result neighbor')
         with self.lock:
             self.check()
+            if self.state != 'ready':
+                raise ResultUnavailable('Result session is still building', conditions=self.conditions)
             if self.origin is not None: self._current(self.origin, for_viewer=True)
             origin = self.db.execute('SELECT ordinal,payload FROM results WHERE item_id=?', (item_id,)).fetchone()
             if origin is None:

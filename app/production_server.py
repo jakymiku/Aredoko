@@ -774,6 +774,14 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                                 and ai.status().get('state') in ('running','cancelling')):
                             payload['ai_indexing']=True
                         return self.send(409,payload)
+                    except AIBusy as error:
+                        conditions=body.get('conditions')
+                        payload={'error':str(error),'error_code':'result_session_changed','conditions':conditions,'current_id':body.get('item_id')}
+                        if (isinstance(conditions,dict)
+                                and conditions.get('mode') in ('semantic','similar','pending-proposals-semantic')
+                                and ai.status().get('state') in ('running','cancelling')):
+                            payload['ai_indexing']=True
+                        return self.send(409,payload)
                     except ResultCapacity:return self.send(503,{'error':'Result workspace busy or full; close another search', 'error_code':'result_session_capacity'})
                 if self.path.startswith('/api/library/animation/'):
                     try:
@@ -922,11 +930,20 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     registered={root['id'] for root in catalog.index.roots()}
                     if any(root not in registered for root in scope['root_ids'] or []):
                         raise ValueError('Unknown registered root')
-                    if catalog.scan_state()['state'] in ('running','cancelling') or ai.status()['state'] in ('running','cancelling'):
-                        raise AIBusy('スキャンまたはAI索引の完了後に対象を保存してください。')
-                    try: saved=profiles.set_scope(scope)
-                    except (ValueError,OSError,json.JSONDecodeError):
-                        return self.send(409,{'error':'AI対象を保存できません。保存済みの条件を維持します。'})
+                    guard=getattr(ai,'guard',None)
+                    if guard is not None:
+                        with guard:
+                            if catalog.scan_state()['state'] in ('running','cancelling') or ai.status()['state'] in ('running','cancelling'):
+                                raise AIBusy('スキャンまたはAI索引の完了後に対象を保存してください。')
+                            try: saved=profiles.set_scope(scope)
+                            except (ValueError,OSError,json.JSONDecodeError):
+                                return self.send(409,{'error':'AI対象を保存できません。保存済みの条件を維持します。'})
+                    else:
+                        if catalog.scan_state()['state'] in ('running','cancelling') or ai.status()['state'] in ('running','cancelling'):
+                            raise AIBusy('スキャンまたはAI索引の完了後に対象を保存してください。')
+                        try: saved=profiles.set_scope(scope)
+                        except (ValueError,OSError,json.JSONDecodeError):
+                            return self.send(409,{'error':'AI対象を保存できません。保存済みの条件を維持します。'})
                     return self.send(200,{'scope':saved,'valid':True,'missing_root_ids':[],'error':''})
                 if self.path=='/api/library/ai/coverage':
                     if set(body)-{'scope','limit'}:raise ValueError('Invalid coverage request')
@@ -1103,6 +1120,12 @@ def production_handler(catalog,token,ai=None,intent=None,profiles=None,tagger=No
                     return self.send(200,catalog.unregister_root(body['root_id']))
                 if self.path=='/api/library/roots/purge':
                     if set(body)!={'root_id','consent'}:raise ValueError('Invalid root filter')
+                    guard=getattr(ai,'guard',None)
+                    if guard is not None:
+                        with guard:
+                            if ai.status().get('state') in ('running','cancelling') or suggestions._active is not None or page_text._active is not None:
+                                raise AIBusy('AI処理や候補生成の完了後に削除してください。')
+                            return self.send(200,catalog.purge_inactive_root(body['root_id'],body['consent']))
                     if ai.status().get('state') in ('running','cancelling') or suggestions._active is not None or page_text._active is not None:
                         raise AIBusy('AI処理や候補生成の完了後に削除してください。')
                     return self.send(200,catalog.purge_inactive_root(body['root_id'],body['consent']))

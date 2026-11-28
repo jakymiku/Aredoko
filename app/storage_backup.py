@@ -110,7 +110,7 @@ def _configuration(role,data):
         # version number. Accept legacy subsets and the exact current writer's
         # values; preserve original bytes rather than silently normalizing them.
         required={'version','wheel_up_advances'}
-        allowed=required|{'library_view','library_item_scale','theme','enlarge_small_images','always_show_controls','loop_book_pages','double_click_viewer','ai_setup_features','open_details_on_click'}
+        allowed=required|{'library_view','library_item_scale','theme','enlarge_small_images','always_show_controls','loop_book_pages','double_click_viewer','ai_setup_features','open_details_on_click','language'}
         if (len(data)>2048 or not isinstance(value,dict) or not required<=set(value)
                 or set(value)-allowed or type(value['version']) is not int or value['version']!=1
                 or type(value['wheel_up_advances']) is not bool):
@@ -123,6 +123,8 @@ def _configuration(role,data):
             raise RecoveryError('Invalid library view')
         if 'theme' in value and value['theme'] not in ('system','light','dark'):
             raise RecoveryError('Invalid viewer theme')
+        if 'language' in value and value['language'] not in ('system','ja','en'):
+            raise RecoveryError('Invalid viewer language')
         if 'double_click_viewer' in value and value['double_click_viewer'] not in ('internal','external'):
             raise RecoveryError('Invalid double-click viewer')
         if 'ai_setup_features' in value and (type(value['ai_setup_features']) is not int or not 0<=value['ai_setup_features']<=15):

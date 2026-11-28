@@ -96,7 +96,7 @@ class VectorStore:
             self.save_state({**state,'state':'interrupted','error':'索引作成が中断されました。再実行で保存済み分から続けられます。'})
     @contextmanager
     def connect(self):
-        db=sqlite3.connect(self.path,timeout=2)
+        db=sqlite3.connect(self.path,timeout=10)
         fenced=ConnectionWriteFence(self.writer_fence) if self.writer_fence is not None else None
         if fenced is not None:db.set_authorizer(fenced.authorize)
         try:
@@ -452,7 +452,7 @@ class AISearch:
         # selected population for each 256-row page. Pin the ID-range driver
         # for multi-root keyset reads; keep the selective single-root plan.
         join=self.catalog.JOIN+'JOIN library_roots r ON r.id=l.root_id '
-        if scope is not None and scope['root_ids'] is not None:
+        if scope is not None and scope['root_ids'] is not None and len(scope['root_ids']) > 1:
             join=join.replace(' JOIN ',' CROSS JOIN ')
         return scope,join,' AND '.join(where),values
 
@@ -614,6 +614,7 @@ class AISearch:
         if type(limit) is not int or not 1<=limit<=MAX_ITEMS:raise ValueError('Invalid index limit')
         with self.guard:
             if self._closed:raise AIUnavailable('AI is closing')
+            indexing_active=bool(self.worker and self.worker.is_alive())
         scope,join,where_sql,values=self._row_query_parts(scope=scope)
         if self.catalog.scan_state()['state'] in ('running','cancelling'):
             raise AIBusy('フォルダのスキャン完了後に確認してください。')
@@ -624,14 +625,14 @@ class AISearch:
         book_target=book_pages_ready=0;book_batch=[]
         with self.catalog.connect() as cat_db, self.store.connect() as vec_db:
             upper=cat_db.execute('SELECT COALESCE(MAX(id),0) FROM items').fetchone()[0]
-            has_vectors=vec_db.execute("SELECT 1 FROM ai_vectors WHERE modality='text' LIMIT 1").fetchone() is not None
+            has_vectors=indexing_active or vec_db.execute("SELECT 1 FROM ai_vectors WHERE modality='text' LIMIT 1").fetchone() is not None
             has_pending=bool(
                 cat_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tag_proposal_batches'").fetchone()
                 and cat_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tag_proposals'").fetchone()
                 and cat_db.execute("SELECT 1 FROM tag_proposals WHERE state='pending' LIMIT 1").fetchone()
             )
             has_page_heads=bool(want_all_pages and cat_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='page_heads'").fetchone())
-            has_page_vectors=bool(want_all_pages and vec_db.execute('SELECT 1 FROM ai_page_vectors LIMIT 1').fetchone())
+            has_page_vectors=bool(want_all_pages and (indexing_active or vec_db.execute('SELECT 1 FROM ai_page_vectors LIMIT 1').fetchone()))
             def flush(rows_batch):
                 nonlocal fresh
                 if not rows_batch:return
@@ -648,6 +649,10 @@ class AISearch:
                     fresh+=len((regular-set(pending)) | (regular & self.pending_tags.ready_ids(pending)))
                 else:
                     fresh+=len(regular)
+                if want_all_pages and has_page_heads and has_page_vectors and regular:
+                    fresh_books=[r['id'] for r in rows_batch if r['id'] in regular and r['kind'] in ('book','archive')]
+                    if fresh_books:
+                        flush_books(fresh_books)
                 rows_batch.clear()
             def flush_books(book_ids):
                 nonlocal book_pages_ready
@@ -688,10 +693,6 @@ class AISearch:
                         targeted+=1
                         if want_all_pages and row['kind'] in ('book','archive'):
                             book_target+=1
-                            if has_page_heads and has_page_vectors:
-                                book_batch.append(row['id'])
-                                if len(book_batch)==ROW_BATCH_SIZE:
-                                    flush_books(book_batch)
                         if has_vectors:
                             raw_tags=row['tags']
                             batch.append({
@@ -703,7 +704,6 @@ class AISearch:
                             if len(batch)==ROW_BATCH_SIZE:
                                 flush(batch)
             flush(batch)
-            flush_books(book_batch)
         book_pages_remaining=max(0,book_target-book_pages_ready)
         cov_status=('empty_scope' if targeted==0
                     else ('unindexed' if fresh==0
@@ -754,6 +754,7 @@ class AISearch:
             if self._closed: raise AIUnavailable('AI is closing')
             if self.worker and self.worker.is_alive(): raise AIBusy('AI索引を作成中です。')
             if self.catalog.scan_state()['state'] in ('running','cancelling'): raise AIBusy('フォルダのスキャン完了後に実行してください。')
+            scope=self._scope(scope)
             self.cancel.clear()
             self.store.save_state({'state':'running','processed':0,'total':total,'indexed':0,'skipped':0,'reused':0,'error':'','scope':scope})
             self.worker=threading.Thread(target=self._build,args=(None,scope),kwargs={'upper_id':upper_id,'limit':total},daemon=True)
@@ -809,7 +810,7 @@ class AISearch:
                             if continuing:
                                 with self.catalog._guard:
                                     self.continuation.check(state,[r['id'] for r in ready_rows])
-                                    ready_checked=self.continuation.ready(ready_rows,{})
+                                    ready_checked=self.continuation.ready_for_scope(ready_rows,{},scope)
                                     state['indexed']+=len(ready_checked)
                                     state['reused']+=len(ready_checked)
                                     state['skipped']+=len(ready_rows)-len(ready_checked)
@@ -941,7 +942,8 @@ class AISearch:
                                         if self.pages.index_all_pages(item_id,scope):
                                             did_infer=True
                                     except (PreviewUnavailable,ReaderChanged,PreviewBusyError,KeyError,OSError):
-                                        pass
+                                        if state['indexed']>indexed_before:
+                                            state['indexed']-=1;state['skipped']+=1
                                 if state['indexed']>indexed_before:
                                     newly_indexed_ids.append(item_id)
                                     if did_infer:did_infer_ids.add(item_id)
@@ -952,7 +954,7 @@ class AISearch:
                                     self.continuation.check(state,newly_indexed_ids)
                                     current_verify=self._current_rows(newly_indexed_ids,scope)
                                     snapshots=self.pending_tags.snapshots(newly_indexed_ids)
-                                    ready_set=self.continuation.ready(list(current_verify.values()),snapshots)
+                                    ready_set=self.continuation.ready_for_scope(list(current_verify.values()),snapshots,scope)
                                     for item_id in newly_indexed_ids:
                                         if item_id not in ready_set:
                                             state['indexed']-=1;state['skipped']+=1
@@ -1027,7 +1029,8 @@ class AISearch:
                                 if self.pages.index_all_pages(item_id,scope):
                                     did_infer=True
                             except (PreviewUnavailable,ReaderChanged,PreviewBusyError,KeyError,OSError):
-                                pass
+                                if state['indexed']>indexed_before:
+                                    state['indexed']-=1;state['skipped']+=1
                         if not continuing and not self.cancel.is_set() and state['indexed']>indexed_before and not did_infer:
                             state['reused']=state.get('reused',0)+1
                         if continuing and not self.cancel.is_set():
@@ -1036,7 +1039,7 @@ class AISearch:
                                 current=self._current_rows([item_id],scope).get(item_id)
                                 snapshots=self.pending_tags.snapshots([item_id])
                                 if state['indexed']>indexed_before:
-                                    if item_id not in self.continuation.ready([current],snapshots):
+                                    if item_id not in self.continuation.ready_for_scope([current],snapshots,scope):
                                         state['indexed']-=1;state['skipped']+=1
                                     elif not did_infer:state['reused']+=1
                         state['processed']+=1

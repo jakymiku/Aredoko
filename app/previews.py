@@ -853,12 +853,14 @@ class PreviewReader:
                         _excluded(live['relative_path'],tuple(json.loads(live['excludes_json'])))):
                         raise ReaderChanged('Media scope changed during extraction')
                     if cancel is not None and cancel.is_set():raise audio_input.MediaDecodeCancelled('Media decode cancelled')
-                    if operation=='audio_pcm_source':return os.fdopen(os.dup(file.fileno()),'rb'),result
-                    if operation=='video_coverage_source':return os.fdopen(os.dup(file.fileno()),'rb'),result
+                    if operation=='audio_pcm_source':file.seek(0);return os.fdopen(os.dup(file.fileno()),'rb'),result
+                    if operation=='video_coverage_source':file.seek(0);return os.fdopen(os.dup(file.fileno()),'rb'),result
                     return result
                 if operation == 'video_compat_source':
+                    file.seek(0)
                     return os.fdopen(os.dup(file.fileno()), 'rb'), current_revision
                 if operation == 'animation_source':
+                    file.seek(0)
                     return os.fdopen(os.dup(file.fileno()), 'rb'), result
                 if operation == 'tag_source': return result
                 if operation in ('tag_input', 'page_input'): return {'source': result, 'data': data, 'mime': mime}

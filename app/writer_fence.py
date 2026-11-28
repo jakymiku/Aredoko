@@ -49,8 +49,14 @@ class WriterFence:
 
 class ConnectionWriteFence:
     def __init__(self,fence,observe=None):self.fence=fence;self.observe=observe;self.scope=None
+    _WRITE_ACTIONS=tuple(getattr(sqlite3,name) for name in (
+        'SQLITE_INSERT','SQLITE_UPDATE','SQLITE_DELETE',
+        'SQLITE_CREATE_TABLE','SQLITE_CREATE_INDEX','SQLITE_CREATE_TRIGGER','SQLITE_CREATE_VIEW',
+        'SQLITE_DROP_TABLE','SQLITE_DROP_INDEX','SQLITE_DROP_TRIGGER','SQLITE_DROP_VIEW',
+        'SQLITE_ALTER_TABLE','SQLITE_REINDEX','SQLITE_ANALYZE',
+    ) if hasattr(sqlite3,name))
     def authorize(self,action,first,second,database,trigger):
-        writing=action in (sqlite3.SQLITE_INSERT,sqlite3.SQLITE_UPDATE,sqlite3.SQLITE_DELETE) or action==sqlite3.SQLITE_TRANSACTION and first=='BEGIN' or action==sqlite3.SQLITE_PRAGMA and second is not None
+        writing=action in self._WRITE_ACTIONS or action==sqlite3.SQLITE_TRANSACTION and first=='BEGIN' or action==sqlite3.SQLITE_PRAGMA and second is not None
         if writing and self.scope is None:
             scope=self.fence.write();scope.__enter__();self.scope=scope
         return self.observe(action,first,second,database,trigger) if self.observe is not None else sqlite3.SQLITE_OK

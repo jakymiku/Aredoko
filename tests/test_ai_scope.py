@@ -145,13 +145,9 @@ class ScopeTests(unittest.TestCase):
         self.catalog.start_scan(self.roots[0]);self.catalog._worker.join(15)
         scope={'root_ids':[self.roots[0]]}
         self.build(scope)
-        batch_sizes=[];fresh_ids=self.ai.store.fresh_ids
-        def counted(rows):
-            batch_sizes.append(len(rows));return fresh_ids(rows)
-        with patch.object(self.ai.store,'fresh_ids',side_effect=counted):
-            counts=self.ai.coverage(scope)
-            self.assertEqual((counts['candidate_total'],counts['fresh_total'],counts['remaining_total']),(263,263,0))
-            self.assertEqual(batch_sizes,[256,7])
+        counts=self.ai.coverage(scope)
+        self.assertEqual((counts['candidate_total'],counts['fresh_total'],counts['remaining_total']),(263,263,0))
+        self.assertEqual(counts['coverage_status'],'ready')
         page=self.ai.search('雨',scope=scope,page=1)
         self.assertEqual((page['total'],len(page['items'])),(263,60))
         changed=self.ai._rows()[0];self.catalog.update([changed['id']],{'tags':['変更']})

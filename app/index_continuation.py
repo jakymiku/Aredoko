@@ -145,6 +145,38 @@ class IndexContinuation:
         regular = self.ai.store.fresh_ids(rows)
         return (regular - set(pending)) | (regular & self.ai.pending_tags.ready_ids(pending))
 
+    def ready_for_scope(self, rows, pending, scope=None):
+        from page_semantics import CONTRACT as PAGE_CONTRACT
+        ready_ids = set(self.ready(rows, pending))
+        if (scope and scope.get('book_pages') == 'all_pages'
+                and 'cover' in self.ai.profile.modalities and ready_ids):
+            book_ids = [r['id'] for r in rows if r['id'] in ready_ids and r.get('kind') in ('book', 'archive')]
+            if book_ids:
+                with self.ai.catalog.connect() as cat_db, self.ai.store.connect() as vec_db:
+                    has_heads = cat_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='page_heads'").fetchone()
+                    if not has_heads:
+                        ready_ids -= set(book_ids)
+                    else:
+                        marks = ','.join('?' for _ in book_ids)
+                        head_rows = cat_db.execute(
+                            'SELECT h.item_id,s.source_revision,s.page_count FROM page_heads h '
+                            'JOIN page_snapshots s ON s.id=h.snapshot_id WHERE h.item_id IN (' + marks + ')',
+                            book_ids).fetchall()
+                        expected = {r[0]: (r[1], r[2]) for r in head_rows}
+                        ready_books = set()
+                        if expected:
+                            v_marks = ','.join('?' for _ in expected)
+                            vec_rows = vec_db.execute(
+                                'SELECT item_id,source_revision,COUNT(*) FROM ai_page_vectors '
+                                'WHERE contract=? AND item_id IN (' + v_marks + ') GROUP BY item_id,source_revision',
+                                [PAGE_CONTRACT, *expected]).fetchall()
+                            for item_id, rev, cnt in vec_rows:
+                                exp = expected.get(item_id)
+                                if exp is not None and exp[0] == rev and cnt >= exp[1]:
+                                    ready_books.add(item_id)
+                        ready_ids -= (set(book_ids) - ready_books)
+        return ready_ids
+
     def prepare(self, scope, profile, limit=_UNSET, after_id=0):
         from ai_search import AIBusy, revision
         scope = self.scope_profile(scope, profile)
@@ -187,7 +219,7 @@ class IndexContinuation:
                 nonlocal total, fresh, remaining_after, selected_count, last_selected_id, compact, current_chunk
                 check()
                 pending = self.ai.pending_tags.snapshots([r['id'] for r in rows])
-                ready = self.ready(rows, pending)
+                ready = self.ready_for_scope(rows, pending, scope)
                 total += len(rows)
                 fresh += len(ready)
                 for row in rows:
