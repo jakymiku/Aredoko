@@ -19,8 +19,8 @@ def run_scan_ai(ai, profiles, catalog, target_roots, cancelled, progress):
     if cancelled():return {'state':'cancelled','processed':0,'total':0}
     # Capture worker identity under the service's existing reentrant guard. A
     # later independently started index must never be observed/cancelled as ours.
+    started=ai.start(scope=scope)
     with ai.guard:
-        started=ai.start(scope=scope)
         worker=ai.worker
     if worker is None:return started
     while True:

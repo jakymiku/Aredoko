@@ -258,9 +258,10 @@ def run(output, count):
         # Replace only the worker: exercise the real start selection twice,
         # with no document/image encoding or mutation of persisted vectors.
         plans = []
-        def record_plan(ids, scope):
-            plans.append(ids)
-            ai.store.save_state({'state': 'complete', 'processed': 0, 'total': len(ids),
+        def record_plan(ids, scope, *, upper_id=0, limit=0):
+            selected = list(ids) if ids is not None else [r['id'] for r in ai._iter_rows(limit=limit, scope=scope, all_candidates=True) if r['id'] <= upper_id]
+            plans.append(selected)
+            ai.store.save_state({'state': 'complete', 'processed': 0, 'total': len(selected),
                                  'indexed': 0, 'skipped': 0, 'error': '', 'scope': scope})
         with patch.object(ai, '_build', side_effect=record_plan):
             for _ in range(2):

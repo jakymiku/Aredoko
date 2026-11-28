@@ -59,7 +59,7 @@ class ProductionCatalog(Catalog):
     def __init__(self, path):
         self.writer_fence=WriterFence()
         self._result_generation = 0
-        self._result_generation_lock = threading.Lock()
+        self._result_generation_lock = threading.RLock()
         # Never reinterpret an existing fictional demo database as a real library.
         if Path(path).exists() and Path(path).stat().st_size > 0:
             with closing(sqlite3.connect(path)) as db:
@@ -70,7 +70,7 @@ class ProductionCatalog(Catalog):
                 if 'items' in tables and 'production_marker' not in tables:
                     raise ValueError('Use a separate production database, not the demo database')
         super().__init__(path,supported_schema=3)
-        self.index = LibraryIndex(path)
+        self.index = LibraryIndex(path, writer_fence=self.writer_fence)
         self.terms = TermRelations(self.connect)
         with self.connect() as db:
             db.executescript('''

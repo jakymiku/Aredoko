@@ -139,7 +139,8 @@ class ScanCounts:
 
 
 class LibraryIndex:
-    def __init__(self, db_path):
+    def __init__(self, db_path, *, writer_fence=None):
+        self.writer_fence = writer_fence
         self.path = Path(db_path).expanduser().resolve(strict=False)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
@@ -189,14 +190,22 @@ class LibraryIndex:
 
     @contextmanager
     def connect(self):
+        from writer_fence import ConnectionWriteFence
         db = sqlite3.connect(self.path, timeout=30)
         db.row_factory = sqlite3.Row
         db.execute('PRAGMA foreign_keys=ON')
+        fenced = ConnectionWriteFence(self.writer_fence) if self.writer_fence is not None else None
+        if fenced is not None:
+            db.set_authorizer(fenced.authorize)
         try:
             with db:
                 yield db
         finally:
-            db.close()
+            try:
+                db.close()
+            finally:
+                if fenced is not None:
+                    fenced.close()
 
     def add_root(self, path, excludes=None, default_shelf='', folder_books=None, recursive=None, *, metadata_hook=None):
         if not isinstance(default_shelf,str) or len(default_shelf)>80:
@@ -379,7 +388,7 @@ class LibraryIndex:
                     pages = []
                     try:
                         with os.scandir(directory) as entries:
-                            for entry in entries:
+                            for entry in sorted(entries, key=lambda item: item.name.casefold()):
                                 if cancelled and cancelled():
                                     raise InterruptedError('Scan cancelled; previous index preserved')
                                 rel = Path(entry.path).relative_to(root).as_posix()
